@@ -73,7 +73,7 @@ shapes:
 | the picture | `medium, filters, scene_hold, flourishes, camera, hand, intro, outro, film_frequency` | `filters, intro, outro`                                                                             |
 | its own     | `illustrations`                                                                       | `show, seed, cards, reversals, jumpers`, the writer and painter with their models and efforts, `episode_title, description` |
 
-The voices and the picture are the same components in both, and `TarotEditor._doc_capture` takes the
+The voices and the picture are the same components in both, and `CardsEditor._doc_capture` takes the
 Generative block and erases six keys from it. Open a chapter in Tarot and its voices are not there.
 In a note, `voice:`, `picture:` and `tarot:` are siblings, and a block being present is what
 "attached" means.
@@ -102,7 +102,7 @@ builds its own rows, and every one of the 29 entries in `ScriptMarks.REGISTRY` c
 filter, which becomes a component filter. (23 are Generative's alone and 6 are Generative's and
 Synthesis's; none is Tarot's, so the tarot brief's editor shows an empty palette.)
 
-**Moments exist twice already.** `TarotTable.MOMENTS` (shuffle, jumper, reveal, pirouette, lay,
+**Moments exist twice already.** `CardTable.MOMENTS` (shuffle, jumper, reveal, pirouette, lay,
 close) are what the air effects fire on. In Synthesis "the fishing owns the MOMENTS"
 (`Director._should_change`): a catch or a seed jump cuts the scene. Both are one part telling another
 that something happened - the second through a flag the Director checks for one mode.
@@ -115,7 +115,7 @@ Masking plays on its own bus and never reaches Spectrum, and a film panel is mut
 soundtrack moves the scenes today. Pictures nearly meet in one place too: the Director owns the
 picture settings, and main.gd builds the medium and hands it to `Director.attach`.
 
-**A blackboard already runs.** `TarotEpisode` is one: each step posts a file, a step runs when what it
+**A blackboard already runs.** `CardEpisode` is one: each step posts a file, a step runs when what it
 needs exists, and a redo invalidates what was made from it. That is the shape agents should keep
 when they work for any component.
 
@@ -324,7 +324,7 @@ over show time, and it is read, never delivered: a card that wants the voice's l
 at a time. Moments are not Godot signals either, though they are closer: a scrub and an export must
 find a moment again, so a moment is a row in a schedule, asked for by time, not an event fired once
 and gone. Godot's signals keep the job they have in ghost now: telling whoever listens that
-something happened, as `Director.filters_changed` and `TarotProducer.changed` do, and a control
+something happened, as `Director.filters_changed` and `CardProducer.changed` do, and a control
 telling its card it was moved.
 
 **Modulation is the creative half.** The five points are plumbing: they make a combination work.
@@ -463,7 +463,7 @@ notes the first time the new shell starts, so nothing is lost, and ghost.cfg sto
 
 **Startup.** `main._ready` shows the list where it called `_show_splash`. Flags that open something
 directly keep doing so. `--no-splash` has nothing left to skip and goes; `--note <path>` opens one
-note; and once modes are templates, `--template tarot` replaces `--tarot` and `--synth`. Today
+note; and once modes are templates, `--template tarot` replaces `--cards` and `--synth`. Today
 `--mask-edit` builds its editor before Chrome exists, so a command-line Masking session has none of
 the shared furniture; with one session path, it does.
 
@@ -692,7 +692,7 @@ spread's shape, and code decides the sequence.
 1. **Actions are a registry.** Each verb declares its arguments (which card, which position, face up
    or down, a turn), its rest, its pose and the moments it makes - declared, not branched on, like
    `Medium.USES`. Today's four verbs, and the ones nobody writes (the deck's push, squaring, the
-   lay), are its first entries, and TarotScript's rests, MOMENTS and MOVES derive from it; today
+   lay), are its first entries, and CardReading's rests, MOMENTS and MOVES derive from it; today
    they are hand-kept sums duplicated across two files. Deal, place, flip, a quarter turn (tap),
    show, gather and discard are more entries. This one changes no behavior, and the tarot gates hold
    it to that.
@@ -709,7 +709,7 @@ spread's shape, and code decides the sequence.
    user supplies as well as art an agent paints. A face template draws a card's fields onto its
    front and back, as Anki's card templates do; today's one face is a numeral, a name, an art window
    and a frame - no text box, no stats, no cost.
-5. **The recipe from the guide.** Which agents run and in what order (TarotEpisode's step list is
+5. **The recipe from the guide.** Which agents run and in what order (CardEpisode's step list is
    code), how the script is composed, and the tarot nouns now in every prompt.
 6. **Agents choose.** The producer writes the layout, so the set dresser sees it. A reader may write
    registered marks, and an unknown one is dropped - today nothing guards this: `clean_spoken` keeps
@@ -719,8 +719,8 @@ spread's shape, and code decides the sequence.
    is made, because a rest is spliced into the reading; and `_drawn` stays the only way a card
    reaches a writer.
 7. **The rename comes last**, once the name is settled (below), behind a public staging API for
-   TablePreview, which reaches into about 25 private members of TarotMedium today. It is 736
-   references in 30 files, plus `user://tarot`, `fonts/tarot`, `data/tarot` and `Medium.OWNED`.
+   TablePreview, which reaches into about 25 private members of TableMedium today. It is 736
+   references in 30 files, plus `user://cards`, `fonts/tarot`, `data/tarot` and `Medium.OWNED`.
 
 **Hidden information generalizes.** NO CHEATING - a reader sees only the cards drawn so far - is what
 a card game calls hidden information, and boardgame.io builds it in: a game's `playerView` strips
@@ -741,7 +741,10 @@ TitleCard use the word too. In the code, Deck, Zone and Pile are free; Table, Sl
 Board are taken (the tablet's markdown tables, the voice slots, handwriting, the book and comic
 spreads, Storyboard). My suggestion: call the component **Deck** - "attach a Deck", and the Tarot
 template is a Deck with the tarot guide - and say "positions" for where cards go, because "places"
-is already a meeting point. The user's call.
+is already a meeting point. The user's call - and the user chose **Cards** (2026-10-06): "the
+intent is to later support any kind of card... I want to use 'Card' as the name". The settings card
+keeps its name in the code (`Card`), and the folds moved to `[folds]` so `[cards]` could be the
+component's.
 
 **Prior art.** Tabletop Simulator's objects carry the verbs this needs: `deal`, `shuffle`,
 `takeObject` (with a position and a flip), `flip`, `spread`, `split`, `cut`. boardgame.io declares a
@@ -978,8 +981,8 @@ steps run from sessions in ghost-notes, once its memory has been copied (6, belo
      `--path axis/ghost` or `python axis/ghost/...` strings in about 60 files: the README, docs.py's
      own strings (then regenerate `docs/`), measure_voice.py, the voice host's tests, most test
      headers, a hint `Deps` shows the user, and `mask_marker_tool.gd`.
-   - Three probes reach rift as `../../../rift/` (set_dresser_run_probe, tarot_voice_probe,
-     tarot_episode_probe); it is `../rift/` now. (`storyboards/default.yaml` names `../../tunes/`,
+   - Three probes reach rift as `../../../rift/` (set_dresser_run_probe, cards_voice_probe,
+     episode_probe); it is `../rift/` now. (`storyboards/default.yaml` names `../../tunes/`,
      broken already.)
    - `.gitignore` gains `__pycache__/` (praxis's root rule covered it) and `dist/` (step 1), and
      stops ignoring `*.uid` and `*.import`.
@@ -997,7 +1000,7 @@ steps run from sessions in ghost-notes, once its memory has been copied (6, belo
      of its own (with ghost's lines from `axis/.stignore`).
    - **Permissions.** praxis's `.claude/settings.local.json` has about 60 Godot entries that a
      ghost-notes session will not have; the user carries over the ones they want.
-   - **Pointers.** rift's `CLAUDE.md:9` and `ENTRYPOINT.md:60` name `axis/ghost/next/tarot.md`. In
+   - **Pointers.** rift's `CLAUDE.md:9` and `ENTRYPOINT.md:60` name `axis/ghost/next/cards.md`. In
      praxis: `.gitignore:55-56`, `axis/README.md:9`, and the README and docs index lines generated
      by `praxis/docs.py:151-156` (edit the generator). Godot's project manager lists the old path.
 7. **What does not change: the user's data.** `config/name="ghost"` and no custom user directory,
@@ -1162,7 +1165,7 @@ headless gates. The APK shows the desktop shell until step 11: this step proves 
   all fixed here - youtube_check and agent_effort_check built the Tarot panel synced to the
   author's real show (and DocSource.set_field writes a synced file at once, so they could have
   written into it); bookend_check and seek_check needed `res://01_silence.wav`. One header
-  timeout was stale (tarot_place_check said 180 s and takes 430).
+  timeout was stale (table_place_check said 180 s and takes 430).
 
 ### Step 2: cards
 
@@ -1250,7 +1253,7 @@ that has it. Tarot stops inheriting Generative. One frontmatter shape per compon
 one-time rewrite of rift's documents rather than a reader that accepts both shapes. Settle the
 Cards component's name and block first ([Cards](#cards-tarot-generalized)), so the tarot show is
 rewritten once. **Done when**
-doc_sync_check, multi_voice_check, tarot_check and medium_pick_check pass on the shared cards, and
+doc_sync_check, multi_voice_check, cards_check and medium_pick_check pass on the shared cards, and
 every rift chapter and show comes through the rewrite unchanged outside its block.
 
 **Status, 2026-10-06: done.** One block per component under `ghost:` - `voice`, `picture`,
@@ -1261,7 +1264,7 @@ tarot show) were rewritten once by `tests/rewrite_blocks.gd`: a dry run, then `-
 value checked at its new place, each body byte-identical, and the real files byte-identical to a
 rehearsal on copies; rift holds them as unstaged changes for the user. `ReadingPanel` is the reading
 (the script, cast and voice cards, the stream, the transport's hooks, the export), and both
-`GenerativeEditor` and `TarotEditor` extend it - Tarot no longer inherits Generative. The shared cards
+`GenerativeEditor` and `CardsEditor` extend it - Tarot no longer inherits Generative. The shared cards
 are `LookCard`, `BookendsCard` and `PictureCard` (`KEY`, `capture()`, `apply()`), with
 `IllustrationPanel` keeping its own block inside the Picture card. Declared rather than removed:
 Hesitate shows where the panel's marks have a hesitation, and Ink only where the medium writes by hand
@@ -1274,7 +1277,7 @@ caught it, and step 6's teardown gate will keep it caught; and the rewrite tool'
 caught the illustrations block nested one level too deep before anything was written. Gates:
 doc_sync_check (one block per component, a stranger block carried through, the tarot panel reading
 a chapter's cast and leaving its picture alone), medium_pick_check (the Picture card's rows and the
-panel's Ink together), multi_voice_check, tarot_check, panel_fit_check (its control counts a shared
+panel's Ink together), multi_voice_check, cards_check, panel_fit_check (its control counts a shared
 card's rows), card_fold_check, youtube_check. The full run passes, 101 of 101.
 
 ### Step 6: teardown
@@ -1313,7 +1316,7 @@ the plan says a phone note is its text alone. `src/components.gd` holds the regi
 family - the families moved here from Card - needs, provides, requires, capabilities, mark groups,
 block, card) and the six templates; the home screen builds its rows from the templates, and
 `main.start_template(key, source)` is the one session path for every row and for `--synth`,
-`--tarot` and `--mask-edit`, which now runs after Chrome exists. "+" is `Components.attach_menu`:
+`--cards` and `--mask-edit`, which now runs after Chrome exists. "+" is `Components.attach_menu`:
 impossible components left out, not-ready ones grayed with the reason. Where programs start,
 `Subprocess` and `Deps.execute` refuse when `subprocess` is impossible. Both new files name no
 autoload, so SceneTree gates and Subprocess can ask them; the agent registries are named by class,
@@ -1363,8 +1366,8 @@ The full run passes, 103 of 103.
 Tarot becomes the generic Cards component, in the order of [its primitives](#cards-tarot-generalized):
 the action registry (no change in behavior), positions as data, card state over show time, decks
 and faces from the guide, the recipe from the guide, agents that choose, and the rename last. The
-tarot show's guide carries everything tarot-specific. **Done when** tarot_check, tarot_wash_check
-and tarot_place_check pass unchanged through the action registry; the tarot show plays from its file
+tarot show's guide carries everything tarot-specific. **Done when** cards_check, table_wash_check
+and table_place_check pass unchanged through the action registry; the tarot show plays from its file
 as it does today; a second guide - flashcards, say - makes a show with no code of its own; a dealer
 agent places cards through its tools and a gate finds every position on the cloth, in frame and
 clear; and NO CHEATING still holds two-sided.
@@ -1372,8 +1375,8 @@ clear; and NO CHEATING still holds two-sided.
 **Status, 2026-10-06: done in part.** Built: (1) THE ACTIONS ARE A REGISTRY - `TableActions` holds
 the four written verbs and the three performed between them (push, square, lay), each with its args,
 rest, whether it shows a card, lays the shown one first or ends the showing, and its moments;
-TarotScript's mark pattern, rests and compose and the table's schedule read it, and tarot_check,
-tarot_wash_check and tarot_place_check pass unchanged. (2) POSITIONS ARE DATA - `TablePositions`:
+CardReading's mark pattern, rests and compose and the table's schedule read it, and cards_check,
+table_wash_check and table_place_check pass unchanged. (2) POSITIONS ARE DATA - `TablePositions`:
 `{x, z, yaw, face}` on the cloth, from the plan's spread positions or a dealer's `layout.json` laid
 over them, used only whole and sound, else the seeded presets (the old spread, same draws in the same
 order, kept verbatim in table_positions_check as its oracle). Every position is checked the same way -
@@ -1390,7 +1393,7 @@ recipe from the guide - the prompts' wording is tarot through and through ("read
 "spread" 18, "booklet" 13), so a flashcards show with no code of its own means moving that wording
 into a show's guide, which is the user's brief to write; a dealer run by a real agent (the tools exist,
 no episode step calls them); and (7) the rename. Gates: table_actions_check and table_positions_check
-(new), tarot_check, tarot_wash_check, tarot_place_check (unchanged).
+(new), cards_check, table_wash_check, table_place_check (unchanged).
 
 ### Step 10: portrait
 
@@ -1448,6 +1451,62 @@ rewrites project.godot: portrait orientation, and a portrait canvas for mobile (
 canvas would have drawn the shell at half size on a portrait phone). The trimmed Android preset was
 step 1's. Gate: handheld_check (passed in the full run with steps 9 and 10). `scripts/build.sh
 --install android` builds and installs the APK.
+
+### After the first review (2026-10-06)
+
+The user tried the build and sent a round of revisions. **Status: done; gates below.**
+
+- **The notes list makes notes and nothing else.** The large name and tagline over the main area are
+  gone (the panel keeps them), and so are Open… and the path/URL field ("a URL input panel causes
+  immediate confusion"). A song or a video is a component of a note now: the Song card's Choose…,
+  and Masking's Clip card, which takes a file or a link. New ends on "Existing note…", which brings a
+  markdown file from anywhere into the list (markdown only).
+- **Every note can be deleted.** The list's × and every panel's "⋯" (`Chrome.note_menu`) ask first
+  (`src/delete_dialog.gd`); the note goes to the system's trash (`NoteStore.trash`, with a
+  `discard` seam so a gate never fills the author's trash), or, for a file added by hand, can just
+  leave the list. A note that is open is left first - its panel writes what it holds - then trashed.
+  The phone shell's editor has Delete… too.
+- **Every note starts from nothing** ("every time we enter a note, we should wipe the scene and start
+  fresh"). The medium a note was shown in is freed with it (`main._clear_stage`; it used to stay
+  mounted, so a tablet chapter's desk showed under the next plain note, around Masking's video and as
+  the "scene" of a song), the stage is hidden until a show attaches, the Director's picture settings go
+  back to their defaults as a note opens (`Director.reset_show`) for the note's blocks to set, and a
+  song note opens loaded and stopped at its start. A reading's Stop hides the stage too.
+- **A song is a note's component, and Auto is a medium.** Song notes (Auto, Manual, and any note a
+  song is attached to) are `NotePanel` now - the panel never hides - with the note's components as
+  cards: the Script, the Song (`src/song_card.gd`), the Picture, the Look, the Intro & outro, the
+  Storyboards. Without a Picture the song plays to an empty frame; "+" offers a Picture for it (and
+  grays the Look and storyboards, "Needs a Picture"). The Picture's media are what a song can carry
+  (`Medium.offered`: not the novel, notebook or tablet, which print a reading) with AUTO first
+  (`src/media/auto.gd`, `Medium.BARE`): the original show with nothing to set - the card shows only
+  the picker, picking it puts the dials back to their defaults, and its block is the medium's name
+  alone. A medium picked while a song is loaded is shown at once (`main._restage`). New -> Auto is a
+  song note with a Picture in the Auto medium; New -> Manual adds the Storyboards card
+  (`src/storyboards_card.gd`, the Workspace's list, which is gone) and the dial. "New -> Auto did
+  nothing" was a song session started on an empty path: no audio, no panel, no transport.
+- **Tarot is Cards** ("I don't want Tarot in our refactor; I want to use Card as the name") - step
+  9's (7). The component and template `cards`, the panel `CardsEditor`, the classes `CardEpisode`,
+  `CardProducer`, `CardPrompts`, `CardReading`, `CardDeck`, `CardTable`, `CardFaces`, the medium
+  `table` (`TableMedium`, "Card table"), the block `ghost: cards:` with its range `draw:`, the marks
+  `<!-- table: draw 2 -->`, `--cards`, `user://cards/` (moved from `user://tarot/` once, at the first
+  launch, the episodes' script marks rewritten; `main._adopt_old_episodes`, to delete once it has
+  run), `fonts/cards/`, `data/decks/tarot/`, and the gates `cards_check`, `table_wash_check`,
+  `table_place_check`. The card folds moved to `[folds]`, since `[cards]` is the panel's section now.
+  What stays tarot is the content: the Truthful Tarot show (its one rift document rewritten to
+  `cards:`), the standard 78, and the prompts - the recipe is still the tarot's, which is (5). The
+  seeds' hash salts keep their `tarot-` names, so episodes already made come out the same.
+- **Masking is in the framework.** Its panel is a `SidePanel` like every note's - "‹ Notes", the
+  note's title, its "⋯", a chip per card - with three cards: the Clip (its name, ⬆ Track, Help, the
+  time), the Effect (the key color, the effect and the options: one flat, sortable list, as feedback
+  0011 asked) and the Markers, PINNED under the rest (`SidePanel.add_footer_card`), as the ramp/damp
+  list always was. With no clip, the panel asks for one (a file through the in-window dialog - the
+  native one shows nothing without a portal - or a link), and what is chosen is written into the
+  note's `clip:` block. The stage no longer shows around the video. Masking keeps its own playback
+  (its timeline, Space) - one transport for it too is still to do.
+- **"Edit Script…" is "Edit"**, everywhere - a note's words, a chapter, a show's brief.
+- Removed as finished one-time migrations: `NoteStore.move_drafts` (the drafts became notes on the
+  user's machine) and `tests/rewrite_blocks.gd` (the step-5 document rewrite).
+
 
 ## Questions, answered
 

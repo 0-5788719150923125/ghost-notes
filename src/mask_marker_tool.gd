@@ -1,7 +1,7 @@
 extends SceneTree
 
 ## mask_marker_tool - headless CLI: insert one marker into a mask session file
-## at a given time. See CLAUDE.md's "Marker insertion tool" section.
+## at a given time.
 ##
 ## Built for the assistant dispatch flow (src/assistant.gd): a feedback
 ## record already carries the timestamp the user was looking at when they
@@ -22,6 +22,10 @@ extends SceneTree
 ## one of MaskSession.VECTOR_FIELDS - e.g. effect_a=14 fx_contrast=0.6
 ## view_mode=1 duration=0.5 kind=0. Unknown field names are rejected loudly
 ## rather than silently ignored - a typo here should never save silently wrong.
+##
+## CAUTION: an editor still open on the same session autosaves its OWN copy on the next
+## edit and silently clobbers a marker planted here. It is safe once that session has been
+## reopened (which a new effect needs anyway: a running editor's dropdown will not show it).
 
 func _init() -> void:
 	var argv := OS.get_cmdline_user_args()

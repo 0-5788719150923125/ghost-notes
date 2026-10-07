@@ -18,7 +18,6 @@ var _note_panel: Node = null         # a note with nothing attached (NotePanel)
 var _note := ""                      # the note open now, "" on the list
 var _feedback: Node = null
 var _chrome: Node = null             # shared session furniture (exporter/assistant/feedback)
-var _workspace: Node = null
 var _mask_editor: Node = null
 var _synth_editor: Node = null
 var _synth_active := false           # a synth take is playing as the session
@@ -38,9 +37,10 @@ var _stage: SubViewport = null
 var _stage_view: TextureRect = null
 # WHAT THE SHOW IS CARRIED ON (see medium.gd). Built with the stage and mounted inside
 # it, so the governor above owns it too: stopping the stage stops the medium and every
-# panel viewport nested under it, together. Persists across a session teardown - in the
+# panel viewport nested under it, together. Persists across a note's takes - in the
 # synthesis modes attach/detach run again on every take, and rebuilding the page (and its
-# render targets) per take would throw away the comic on every settings change.
+# render targets) per take would throw away the comic on every settings change - and goes
+# with the note (_clear_stage), so the next one starts on an empty stage.
 var _medium: Medium = null
 # The governor's metric is the cost of STAGE-ACTIVE frames ONLY. The blended
 # frame rate is a LIE while throttling: the skipped frames are cheap, the
@@ -177,9 +177,9 @@ func _ready() -> void:
 	if args.has("--synth"):
 		start_template("synthesis")
 		return
-	# --tarot: straight into the tarot mode (its document is the one it last had open)
-	if args.has("--tarot"):
-		start_template("tarot")
+	# --cards: straight into the Cards mode (its document is the one it last had open)
+	if args.has("--cards"):
+		start_template("cards")
 		return
 	# --note <path>: open one note, run by whatever its blocks say it is
 	if args.has("--note"):
@@ -188,9 +188,7 @@ func _ready() -> void:
 	if _wants_direct_boot():
 		_begin_session()                 # CLI flags: straight into a song session
 	else:
-		# THE DRAFTS BECOME NOTES, once: the unsaved text each mode kept in ghost.cfg, and every
-		# document a panel was synced to, are in the list the first time it opens (NoteStore)
-		NoteStore.move_drafts()
+		_adopt_old_episodes()
 		_show_list()
 
 
@@ -212,12 +210,52 @@ func _show_list() -> void:
 	add_child(list)
 	if _chrome != null and is_instance_valid(_chrome):
 		_chrome.set_home(Callable())
+		_chrome.set_note("")
+
+
+## THE EPISODES MOVE ONCE (2026-10-06, when Tarot became Cards): they were kept under `user://tarot/`,
+## and the first launch after the rename moves that folder to [constant CardEpisode.ROOT] - a rename in
+## place, nothing copied - and rewrites the table's marks in each episode's script (`<!-- table: draw
+## 2 -->`, once `tarot:`). Never in a process that may not write the author's things, and never over a
+## folder already there. Remove once it has run.
+func _adopt_old_episodes() -> void:
+	var old := ProjectSettings.globalize_path("user://tarot")
+	var now := ProjectSettings.globalize_path(CardEpisode.ROOT)
+	if Settings.is_read_only() or CardEpisode.root != CardEpisode.ROOT \
+			or not DirAccess.dir_exists_absolute(old) or DirAccess.dir_exists_absolute(now):
+		return
+	if DirAccess.rename_absolute(old, now) != OK:
+		push_warning("ghost: could not move the episodes from %s to %s" % [old, now])
+		return
+	var mark := RegEx.create_from_string("<!--\\s*tarot\\s*:")
+	var n := 0
+	for show in DirAccess.get_directories_at(now):
+		for ep in DirAccess.get_directories_at(now.path_join(show)):
+			var p := now.path_join(show).path_join(ep).path_join("script.md")
+			if not FileAccess.file_exists(p):
+				continue
+			var text := FileAccess.get_file_as_string(p)
+			var fixed := mark.sub(text, "<!-- table:", true)
+			if fixed == text:
+				continue
+			var f := FileAccess.open(p, FileAccess.WRITE)
+			if f != null:
+				f.store_string(fixed)
+				f.close()
+				n += 1
+	print("ghost: the episodes moved to %s (%d scripts' table marks rewritten)" % [now, n])
 
 
 ## OPEN A NOTE (step 8): what runs it is read off its blocks ([method Components.template_for]) - a
-## show is Tarot, a voice is Generative, a song is Auto, nothing attached is a plain note - and it
+## show is Cards, a voice is Generative, a song is Auto, nothing attached is a plain note - and it
 ## starts through the one session path. A reading's panel is pointed at the note before it is
-## built, so it opens synced to it; a song or a clip is the note's own block's path.
+## built, so it opens synced to it; a clip is the note's own block's path.
+##
+## EVERY NOTE STARTS FROM NOTHING (2026-10-06, the user: "every time we enter a note, we should wipe
+## the scene and start fresh with whatever that new note is trying to do... start from the baseline
+## of off, not played yet, not paused"): the last note's stage went with it ([method _clear_stage]),
+## the picture settings go back to their defaults here ([method Director.reset_show]) for the note's
+## blocks to set, and nothing plays until Play.
 func open_note(path: String) -> void:
 	if path.is_empty() or not FileAccess.file_exists(path):
 		push_warning("ghost: there is no note at '%s'" % path)
@@ -227,25 +265,19 @@ func open_note(path: String) -> void:
 	var key := Components.template_for(blocks)
 	var t: Dictionary = Components.TEMPLATES[key]
 	_note = path
+	Director.reset_show()
+	Films.set_frequency(Films.FREQ_DEFAULT)
 	match String(t["session"]):
-		"text":
-			var panel: Node = preload("res://src/note_panel.gd").new()
-			panel.path = path
-			panel.reopen = reopen_note
-			_note_panel = panel
-			add_child(panel)
-			_entered_mode()
 		"reading":
 			var section := String(t["section"])
 			Settings.write(section, "doc_path", path)
 			Settings.write(section, "sync", true)
-			start_template(key)
-		"song":
-			var song: Variant = blocks.get("song", {})
-			start_template(key, String((song as Dictionary).get("path", "")) if song is Dictionary else "")
+			start_template(key, "", path)
 		"clip":
 			var clip: Variant = blocks.get("clip", {})
-			start_template(key, String((clip as Dictionary).get("path", "")) if clip is Dictionary else "")
+			start_template(key, String((clip as Dictionary).get("path", "")) if clip is Dictionary else "", path)
+		_:
+			start_template(key, "", path)
 
 
 ## The note again, as whatever its blocks now say it is - a component was attached to it.
@@ -254,32 +286,87 @@ func reopen_note(path: String) -> void:
 	open_note(path)
 
 
+## DELETE THE NOTE OPEN NOW (its panel's "⋯", once asked - see [DeleteDialog]): it is left the way the
+## ⌂ leaves it - its panel writing what it holds as it goes - and only then thrown away ([param
+## answer] "trash"), or let go of the list with its file kept ("forget"). The list comes back without it.
+func delete_note(path: String, answer: String) -> void:
+	if not leave_blocker().is_empty():
+		return
+	_end_session(false)
+	var err := ""
+	if answer == "trash":
+		err = NoteStore.trash(path)
+	elif answer == "forget":
+		NoteStore.remove(path)
+	if not err.is_empty():
+		push_warning("ghost: " + err)
+	_show_list()
+
+
 ## START A TEMPLATE THROUGH ONE PATH (next/notes.md step 7): today's modes, as
-## [constant Components.TEMPLATES] declares them - the home screen's rows and the command line's
-## `--synth`, `--tarot` and `--mask-edit` alike. [param source] is the song (a `song` session) or the
-## clip (`clip`). The session the template declares is what is built: a song under the scenes (with
-## the workspace over the default storyboard for Manual), a panel that reads a text, or Masking's
-## editor (which never touches the Director or Spectrum - there is no session in the Auto/Manual
-## sense, just the editor on whatever clip, or none, it was handed).
-func start_template(key: String, source := "") -> void:
+## [constant Components.TEMPLATES] declares them - every note opened, and the command line's
+## `--synth`, `--cards` and `--mask-edit`. [param source] is the clip (a `clip` session); [param note]
+## the note it is, "" from the command line. The session the template declares is what is built: the
+## note's own panel (a plain note, or a song and its show), a panel that reads a text, or Masking's
+## editor (which never touches the Director or Spectrum - just the editor on whatever clip, or none,
+## it was handed).
+func start_template(key: String, source := "", note := "") -> void:
 	var t: Dictionary = Components.TEMPLATES.get(key, {})
 	if t.is_empty():
 		push_warning("ghost: there is no template '%s'" % key)
 		return
 	match String(t["session"]):
-		"song":
-			# a template with a storyboard is played by hand, in the workspace (Manual)
-			var board := String(t.get("storyboard", ""))
-			if not board.is_empty():
-				Director.load_storyboard(board)
-			_begin_session(source)
-			if not board.is_empty():
-				_workspace = preload("res://src/workspace.gd").new()
-				add_child(_workspace)
+		"text", "song":
+			if note.is_empty():
+				push_warning("ghost: the '%s' template is a note's - open one with --note" % key)
+				return
+			_open_note_panel(note)
 		"reading":
 			_open_synth_editor(String(t["mode"]))
 		"clip":
-			_open_mask_editor(source)
+			_open_mask_editor(source, note)
+
+
+## A NOTE'S OWN PANEL ([NotePanel]): a plain note, or a note with a song - which the panel asks for
+## once its cards have applied the note's picture, holds and look ([method _begin_song]).
+func _open_note_panel(path: String) -> void:
+	var panel: Node = preload("res://src/note_panel.gd").new()
+	panel.path = path
+	panel.reopen = reopen_note
+	panel.begin_song = _begin_song
+	panel.restage = _restage
+	_note_panel = panel
+	add_child(panel)
+	_feedback = _chrome.attach_feedback()
+	_entered_mode()
+
+
+## A NOTE'S SONG, loaded and WAITING AT ITS START - a note opens stopped, and the transport plays it.
+## [param picture]: the note has a Picture, so the Director cuts its scenes on the song (on the
+## storyboard [param board], when it names one); without one the song plays to an empty frame.
+func _begin_song(path: String, picture: bool, board: String) -> void:
+	Spectrum.lead_in = Director.intro_hold
+	Spectrum.tail = Director.outro_hold
+	Spectrum.begin(path)
+	if not Spectrum.has_audio():
+		return
+	Spectrum.transport_stop()
+	if picture:
+		if not board.is_empty():
+			Director.load_storyboard(board)
+		Director.attach(_stage_host(), _medium)
+	_attach_subtitles()
+
+
+## THE NOTE'S PICTURE IN ANOTHER MEDIUM, shown at once: the show is set up again on the same song,
+## which carries on where it is. Nothing to do while no show is up (no song chosen yet).
+func _restage(board: String) -> void:
+	if not Director.is_attached():
+		return
+	Director.detach()
+	if not board.is_empty():
+		Director.load_storyboard(board)
+	Director.attach(_stage_host(), _medium)
 
 
 func _begin_session(audio_path := "") -> void:
@@ -341,7 +428,7 @@ func leave_blocker() -> String:
 	if _chrome != null and is_instance_valid(_chrome) and _chrome.exporter != null \
 			and _chrome.exporter.preparing():
 		return "An export is rendering this mode's take - leave once the render has started."
-	for n in [_mask_editor, _synth_editor, _workspace, _note_panel]:
+	for n in [_mask_editor, _synth_editor, _note_panel]:
 		if n != null and is_instance_valid(n) and n.has_method("leave_blocker"):
 			var w := String(n.leave_blocker())
 			if not w.is_empty():
@@ -349,16 +436,19 @@ func leave_blocker() -> String:
 	return ""
 
 
-## A mode is up: the ⌂ in Chrome's row leaves it. (A Masking session from --mask-edit has no Chrome.)
+## A mode is up: the ⌂ in Chrome's row leaves it, and a note's "⋯" deletes it. (A Masking session from
+## --mask-edit has no Chrome.)
 func _entered_mode() -> void:
 	if _chrome != null and is_instance_valid(_chrome):
 		_chrome.set_home(leave_mode, leave_blocker)
+		_chrome.set_note(_note, delete_note if not _note.is_empty() else Callable())
 
 
 ## Tear the session down and return to the notes list - THE ONE TEARDOWN, for every mode (step 6):
-## the ⌂, and a note reopened as what a component attached to it made it ([param home] false). Every mode's nodes are freed (their `_exit_tree` saves and lets go of
-## what they hold: the transport's conductor, Chrome's claims, the tarot's pinned medium, the voice
-## host), the streams end, the Director is detached (which drops a storyboard) and Spectrum stops.
+## the ⌂, and a note reopened as what a component attached to it made it ([param home] false). Every
+## mode's nodes are freed (their `_exit_tree` saves and lets go of what they hold: the transport's
+## conductor, Chrome's claims, the Cards panel's pinned medium, the voice host), the streams end,
+## the Director is detached (which drops a storyboard), Spectrum stops and the stage is wiped.
 ## The persistent exporter is intentionally NOT freed - a render in progress and its status carry
 ## across to the home screen - but what it was asking of the mode is cleared.
 func _end_session(home := true) -> void:
@@ -369,12 +459,11 @@ func _end_session(home := true) -> void:
 		if not _feedback.closed.is_connected(_end_session):
 			_feedback.closed.connect(_end_session.bind(home), CONNECT_ONE_SHOT)
 		return
-	for n in [_workspace, _list, _subtitles, _synth_editor, _mask_editor, _stream, _note_panel]:
+	for n in [_list, _subtitles, _synth_editor, _mask_editor, _stream, _note_panel]:
 		if n != null and is_instance_valid(n):
 			n.queue_free()
 	_chrome.detach_feedback()
 	_feedback = null
-	_workspace = null
 	_subtitles = null
 	_synth_editor = null
 	_generative = null
@@ -388,8 +477,28 @@ func _end_session(home := true) -> void:
 	Director.set_aura(0.0)
 	Director.detach()
 	Spectrum.stop()
+	_clear_stage()
 	if home:
 		_show_list()
+
+
+## WIPE THE STAGE (2026-10-06): the medium a note was shown in goes with the note, and the stage is
+## hidden until a show attaches again. The medium used to stay mounted for the next session - so a
+## tablet chapter's desk showed under a new plain note's panel, around Masking's video, and as the
+## "scene" of a song opened after it, until a Play drew over it.
+func _clear_stage() -> void:
+	Director.medium_override = ""
+	if _medium != null and is_instance_valid(_medium):
+		_medium.release()
+		_medium.queue_free()
+	_medium = null
+	_hide_stage()
+
+
+## Nothing is showing: no picture on the stage until a show attaches ([method _stage_host]).
+func _hide_stage() -> void:
+	if _stage_view != null and is_instance_valid(_stage_view):
+		_stage_view.visible = false
 
 
 ## The exporter as a session with no mode has it: the take, the name and the upload it asked of
@@ -412,6 +521,7 @@ func _release_exporter() -> void:
 func _stage_host() -> Node:
 	if _stage != null:
 		_sync_medium()
+		_stage_view.visible = true
 		return _stage
 	_stage = SubViewport.new()
 	_stage.own_world_3d = true
@@ -555,7 +665,7 @@ func _process(delta: float) -> void:
 	# The same argument for a picture being painted: the job is a subprocess, and the panel
 	# that started it may have been closed or scrolled away long before it finishes.
 	Illustrations.pump()
-	# ...and every other agent's writing and painting (the tarot mode's episodes).
+	# ...and every other agent's writing and painting (the Cards mode's episodes).
 	AgentJobs.pump()
 	# The background render reports its progress (playback position / length) so the
 	# live app's exporter can show a percentage in the status notification.
@@ -717,13 +827,14 @@ func _open_synth_editor(mode := "fishing") -> void:
 	if mode == "neural":
 		_open_generative_editor()
 		return
-	if mode == "tarot":
-		_open_generative_editor(preload("res://src/tarot_editor.gd"))
+	if mode == "cards":
+		_open_generative_editor(preload("res://src/cards_editor.gd"))
 		return
 	# No furniture wiring here: the chrome (exporter + assistant, created in
 	# _ready for every interactive mode) already covers it - a synth take
 	# exports exactly like a song, and ` feedback works over the running show.
 	var editor := preload("res://src/synth_editor.gd").new()
+	editor.note_path = _note
 	editor.begin_stream = _begin_synth_stream
 	editor.end_stream = _end_synth_stream
 	_synth_editor = editor
@@ -746,10 +857,11 @@ func _open_synth_editor(mode := "fishing") -> void:
 ## engine's 25-dimensional genome and a neural backend exposes a speaker id and
 ## three scalars, so one UI cannot serve both. See VOICE_PLAN.md section 6.
 ##
-## [param script] is the panel: the Generative one, or another [ReadingPanel] (the tarot mode's
-## [TarotEditor], whose reading is written by agents) - the same stream, export and subtitles.
+## [param script] is the panel: the Generative one, or another [ReadingPanel] (the Cards mode's
+## [CardsEditor], whose reading is written by agents) - the same stream, export and subtitles.
 func _open_generative_editor(script: Script = preload("res://src/generative_editor.gd")) -> void:
 	var editor: ReadingPanel = script.new()
+	editor.note_path = _note
 	editor.begin_stream = _begin_generative_stream
 	editor.end_stream = _end_generative_stream
 	_synth_editor = editor
@@ -784,6 +896,7 @@ func _open_generative_editor(script: Script = preload("res://src/generative_edit
 func _end_generative_stream() -> void:
 	Director.detach()
 	Spectrum.stop()
+	_hide_stage()
 	if _subtitles != null and is_instance_valid(_subtitles):
 		_subtitles.queue_free()
 	_subtitles = null
@@ -867,6 +980,7 @@ func _end_synth_stream() -> void:
 	Director.set_aura(0.0)
 	Director.detach()
 	Spectrum.stop()
+	_hide_stage()
 	_synth_active = false
 
 
@@ -937,9 +1051,11 @@ func _begin_mask_render(session_path: String) -> void:
 
 
 ## --mask-edit [path]: the interactive editor. `path` is a session .json, a raw
-## source video (transcoded once and cached), or empty (prompts via file dialog).
-func _open_mask_editor(path: String) -> void:
+## source video (transcoded once and cached), or empty (its panel asks for one). [param note] is
+## the note it is, where a clip chosen in the editor is written.
+func _open_mask_editor(path: String, note := "") -> void:
 	var editor := preload("res://src/mask_editor.gd").new()
+	editor.note_path = note
 	_mask_editor = editor
 	add_child(editor)
 	editor.open_source(path)

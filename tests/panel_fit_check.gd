@@ -30,9 +30,9 @@ extends Node
 ## It must not stretch to fill the window, or every mode grows a full-height sidebar.
 ##
 ## AND IT KEEPS ITS WIDTH. The panel is as wide as its widest row, so one control asking for
-## more pushes the whole panel across the stage: opening a tarot show made it 1080 px of a
+## more pushes the whole panel across the stage: opening a card show made it 1080 px of a
 ## 1920 window, because its episode list sized itself to the longest episode title. Checked on
-## every panel, the tarot one holding real long titles; its control is that list sized to its
+## every panel, the Cards one holding real long titles; its control is that list sized to its
 ## items again, which must blow the width out or the titles were never in it.
 ##
 ## THE CONTROL is the retired arrangement, built here from the same content: a bare
@@ -48,7 +48,7 @@ const HEIGHTS := [1920, 1080, 720]
 var _fails: Array = []
 var _ed: GenerativeEditor
 var _synth: SynthEditor
-var _tarot: TarotEditor
+var _cards: CardsEditor
 
 
 func _ready() -> void:
@@ -70,30 +70,30 @@ func _run() -> void:
 	_synth.remove_child(_synth._panel)
 	add_child(_synth._panel)
 
-	_tarot = TarotEditor.new()
-	_tarot._build_panel()
-	_tarot.remove_child(_tarot._panel)
-	add_child(_tarot._panel)
-	_tarot.remove_child(_tarot._repace_timer)
-	add_child(_tarot._repace_timer)
-	_tarot_episodes()
+	_cards = CardsEditor.new()
+	_cards._build_panel()
+	_cards.remove_child(_cards._panel)
+	add_child(_cards._panel)
+	_cards.remove_child(_cards._repace_timer)
+	add_child(_cards._repace_timer)
+	_cards_episodes()
 	# a voice list as the host fills it - its longest name is what a picker sized to its items
 	# would be as wide as
-	for e in [_ed, _tarot]:
+	for e in [_ed, _cards]:
 		(e as ReadingPanel)._voices.add_item("libritts high  (downloads)")
 		(e as ReadingPanel)._voices.add_item("en_GB southern english female medium  (downloads)")
 
 	# OPEN, whatever the person running this has folded: a probe reads their real settings, and
 	# a panel with its cards folded is short enough to fit any window - which would prove nothing.
-	for p in [_ed._panel, _synth._panel, _tarot._panel]:
+	for p in [_ed._panel, _synth._panel, _cards._panel]:
 		for c in (p as SidePanel).cards():
 			(c as Card).folded = false
 	await _check_fits("Generative", _ed._panel)
 	await _check_fits("Synthesis", _synth._panel)
-	await _check_fits("Tarot", _tarot._panel)
+	await _check_fits("Cards", _cards._panel)
 	await _check_width("Generative", _ed._panel)
 	await _check_width("Synthesis", _synth._panel)
-	await _check_width("Tarot", _tarot._panel)
+	await _check_width("Cards", _cards._panel)
 	await _check_long_items_would_widen()
 	await _check_episode_entry_follows()
 	await _check_short_panel_is_not_stretched()
@@ -102,10 +102,10 @@ func _run() -> void:
 
 	_synth._panel.queue_free()
 	_ed._panel.queue_free()
-	_tarot._panel.queue_free()
+	_cards._panel.queue_free()
 	_synth.free()
 	_ed.free()
-	_tarot.free()
+	_cards.free()
 	if _fails.is_empty():
 		print("panel_fit_check: ALL OK")
 		get_tree().quit()
@@ -270,17 +270,17 @@ func _rows_in(body: Control) -> int:
 
 
 ## Two episodes on disk, under a root of the gate's own, with titles as long as a writer makes
-## them, and the tarot panel pointed at them - its episode list and its rows then hold them.
-func _tarot_episodes() -> void:
-	TarotEpisode.root = "user://panel_fit_check_tarot"
+## them, and the Cards panel pointed at them - its episode list and its rows then hold them.
+func _cards_episodes() -> void:
+	CardEpisode.root = "user://panel_fit_check_cards"
 	for seed in [11, 12]:
-		var ep := TarotEpisode.open("fit-check", seed)
+		var ep := CardEpisode.open("fit-check", seed)
 		ep.write_json("plan", {"episode_title": "Why You Keep Waking Up At 4AM (And What The Universe Is "
 			+ "Trying To Tell You - It Is Usually Your Bladder) #%d" % seed,
 			"spread": {"positions": [{"name": "Past"}, {"name": "Present"}, {"name": "Future"}]}})
-	_tarot._knobs["show"] = "fit-check"
-	_tarot._knobs["seed"] = 11
-	_tarot._open_episode()
+	_cards._knobs["show"] = "fit-check"
+	_cards._knobs["seed"] = 11
+	_cards._open_episode()
 
 
 ## AT ITS DECLARED WIDTH, whatever its rows hold - and whatever its buttons say: Play is
@@ -309,37 +309,37 @@ func _check_width(name: String, panel: SidePanel_) -> void:
 ## made yet)... I have to pick a DIFFERENT entry, then return to that one"). The control is the
 ## entry before the panel looks again - the stale one the report was about.
 func _check_episode_entry_follows() -> void:
-	var pick: OptionButton = _tarot._episode_pick
-	var fresh := TarotEpisode.open("fit-check", 13)
+	var pick: OptionButton = _cards._episode_pick
+	var fresh := CardEpisode.open("fit-check", 13)
 	DirAccess.remove_absolute(fresh.file_of("plan"))       # a run before this one made it
-	_tarot._knobs["seed"] = 13
-	_tarot._open_episode()
-	var at := _tarot._episode_seeds.find(13)
+	_cards._knobs["seed"] = 13
+	_cards._open_episode()
+	var at := _cards._episode_seeds.find(13)
 	_ok(at >= 0 and pick.get_item_text(at).ends_with("(not made yet)"),
 		"a fresh episode is listed as not made yet (%s)" % (pick.get_item_text(at) if at >= 0 else "missing"))
-	TarotEpisode.open("fit-check", 13).write_json("plan", {"episode_title": "Made While You Watched",
+	CardEpisode.open("fit-check", 13).write_json("plan", {"episode_title": "Made While You Watched",
 		"spread": {"positions": [{"name": "Past"}]}})
 	_ok(pick.get_item_text(at).ends_with("(not made yet)"), "control: the entry is stale until the panel looks again")
-	_tarot._refresh_rows()
+	_cards._refresh_rows()
 	_ok(pick.get_item_text(at).ends_with("Made While You Watched") and pick.selected == at
 		and pick.text.ends_with("Made While You Watched"),
 		"its entry takes the title once the plan lands, shown on the button (%s)" % pick.text)
 	DirAccess.remove_absolute(fresh.file_of("plan"))
-	_tarot._knobs["seed"] = 11
-	_tarot._open_episode()
+	_cards._knobs["seed"] = 11
+	_cards._open_episode()
 
 
-## THE CONTROL for the tarot panel: its episode list sized to its items again must push the
+## THE CONTROL for the Cards panel: its episode list sized to its items again must push the
 ## panel out, or the long titles never reached it and the width check above proved nothing.
 func _check_long_items_would_widen() -> void:
-	var pick: OptionButton = _tarot._episode_pick
+	var pick: OptionButton = _cards._episode_pick
 	_ok(pick.item_count >= 2 and pick.get_item_text(0).length() > 80,
-		"the control is wrong - the tarot episode list holds %d item(s), not the long titles" % pick.item_count)
+		"the control is wrong - the Cards episode list holds %d item(s), not the long titles" % pick.item_count)
 	pick.fit_to_longest_item = true
 	await _settle()
-	var w := _tarot._panel.get_combined_minimum_size().x
-	_ok(w > _tarot._panel.custom_minimum_size.x + 50.0,
+	var w := _cards._panel.get_combined_minimum_size().x
+	_ok(w > _cards._panel.custom_minimum_size.x + 50.0,
 		"the control is wrong - an episode list sized to its longest title left the panel at %.0f px" % w)
-	print("panel_fit_check: control - an episode list sized to its longest title makes the tarot panel %.0f px" % w)
+	print("panel_fit_check: control - an episode list sized to its longest title makes the Cards panel %.0f px" % w)
 	pick.fit_to_longest_item = false
 	await _settle()

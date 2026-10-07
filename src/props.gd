@@ -136,7 +136,7 @@ static func describe() -> String:
 	lines.append("")
 	lines.append("GROUPS: a part can be a GROUP instead of a shape - {\"parts\": [...], \"at\", \"turn\", \"copies\"} - whose own parts are placed in its space as a thing's are in the thing's; repeat the group and all of it repeats. A candelabra's arm, its cup and its taper are one group copied round in a ring; a group can hold groups, %d deep. A list of materials on a part inside a copied group goes to the group's copies in turn. Every part in every group counts toward the %d a thing may have." % [MAX_DEPTH, MAX_PARTS])
 	lines.append("")
-	lines.append("FLAMES: a thing's flames burn as ONE light, however many it has - a candelabra's tapers, a pillar's three wicks, a dish of tea lights - up to %d on one thing." % TarotTable.MAX_FLAMES)
+	lines.append("FLAMES: a thing's flames burn as ONE light, however many it has - a candelabra's tapers, a pillar's three wicks, a dish of tea lights - up to %d on one thing." % CardTable.MAX_FLAMES)
 	return "\n".join(lines)
 
 

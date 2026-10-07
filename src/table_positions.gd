@@ -10,7 +10,7 @@ class_name TablePositions
 ##
 ## EVERY POSITION IS CHECKED THE SAME WAY, whoever wrote it ([method troubles]): on the cloth, inside
 ## the camera's frame, clear of the deck, and clear of every other card - against the episode's own
-## camera and deck ([method TarotTable.layout_of]), which are a function of its seed, so a plan or a
+## camera and deck ([method CardTable.layout_of]), which are a function of its seed, so a plan or a
 ## dealer is told exactly what the table will do. A set of positions with any trouble is not used:
 ## the table falls back to its preset.
 ##
@@ -34,7 +34,7 @@ const PRESETS := ["row", "arc", "rows", "pyramid"]
 
 ## THE SEEDED SPREAD, as the table has always laid it: a preset picked per episode from [param rng],
 ## within reach of the camera, clear of the deck, each card a hair off true as a hand lays them -
-## for the episode's layout [param lay] ([method TarotTable.layout_of]: its camera and its deck).
+## for the episode's layout [param lay] ([method CardTable.layout_of]: its camera and its deck).
 ## `[{pos: Vector3, yaw: radians}]`. The draws from [param rng] are the table's own, in its own order,
 ## so an episode made before keeps its spread - unless a card of it lay partly outside the camera's
 ## frame: an arc or a row of seven or eight reached the front corners (measured: 2.6% of such
@@ -95,7 +95,7 @@ static func _laid(pos: Array, hand: Array, turned: bool, deck: Vector3) -> Array
 		out.append({"pos": p, "yaw": yaw})
 	# CLEAR OF THE DECK: two rows of eight or a tight arc reach the deck's corner of the table, and
 	# were laid through it - the whole spread steps back, or aside, by the least that clears it
-	var off := TarotTable.clear_of(out, CARD, deck_keep(deck))
+	var off := CardTable.clear_of(out, CARD, deck_keep(deck))
 	for sl in out:
 		(sl as Dictionary)["pos"] = ((sl as Dictionary)["pos"] as Vector3) + Vector3(off.x, 0.0, off.y)
 	return out
@@ -114,7 +114,7 @@ static func _rows(n: int, gap: float) -> Array:
 
 static func _in_frame(slots: Array, lay: Dictionary) -> bool:
 	for s in slots:
-		var foot := TarotTable.footprint(s["pos"], float(s["yaw"]), CARD)
+		var foot := CardTable.footprint(s["pos"], float(s["yaw"]), CARD)
 		if not _frame_trouble(foot, lay).is_empty():
 			return false
 	return true
@@ -153,12 +153,12 @@ static func slot_of(p: Dictionary, i: int) -> Dictionary:
 ## [method notes] says which.
 static func troubles(slots: Array, seed: int) -> PackedStringArray:
 	var out := PackedStringArray()
-	var lay := TarotTable.layout_of(seed)
+	var lay := CardTable.layout_of(seed)
 	var keep := deck_keep(lay["deck"])
 	var feet: Array = []
 	for i in slots.size():
 		var s: Dictionary = slots[i]
-		feet.append(TarotTable.footprint(s["pos"], float(s["yaw"]), CARD))
+		feet.append(CardTable.footprint(s["pos"], float(s["yaw"]), CARD))
 	for i in slots.size():
 		var why := trouble_of(slots[i], feet[i], lay, keep)
 		if not why.is_empty():
@@ -200,7 +200,7 @@ static func trouble_of(slot: Dictionary, foot: Rect2, lay: Dictionary, keep: Rec
 
 static func _frame_trouble(foot: Rect2, lay: Dictionary) -> PackedStringArray:
 	for corner in [foot.position, Vector2(foot.end.x, foot.position.y), foot.end, Vector2(foot.position.x, foot.end.y)]:
-		var at: Variant = TarotTable.project(lay["camera"], float(lay["fov"]), Vector3(corner.x, 0.0, corner.y))
+		var at: Variant = CardTable.project(lay["camera"], float(lay["fov"]), Vector3(corner.x, 0.0, corner.y))
 		if at == null or (at as Vector2).x < FRAME_MARGIN or (at as Vector2).x > 1.0 - FRAME_MARGIN \
 				or (at as Vector2).y < FRAME_MARGIN or (at as Vector2).y > 1.0 - FRAME_MARGIN:
 			return PackedStringArray(["partly out of the camera's frame"])
@@ -210,7 +210,7 @@ static func _frame_trouble(foot: Rect2, lay: Dictionary) -> PackedStringArray:
 ## What a dealer is told about the table it lays on, for episode [param seed]: the cloth, where the
 ## deck is kept, and the stretch of cloth the camera sees.
 static func describe(seed: int) -> String:
-	var lay := TarotTable.layout_of(seed)
+	var lay := CardTable.layout_of(seed)
 	var deck: Vector3 = lay["deck"]
 	var lines := PackedStringArray()
 	lines.append("The cloth is %.2f m across (x from %.2f to %.2f) and %.2f m deep (z from %.2f at the back to %.2f at the front, toward the reader). A card is %.2f m wide and %.2f m tall, lying with its long side running back to front at yaw 0."
@@ -221,7 +221,7 @@ static func describe(seed: int) -> String:
 	var first := true
 	for x in range(-60, 61, 2):
 		for z in range(-38, 35, 2):
-			var at: Variant = TarotTable.project(lay["camera"], float(lay["fov"]), Vector3(x / 100.0, 0.0, z / 100.0))
+			var at: Variant = CardTable.project(lay["camera"], float(lay["fov"]), Vector3(x / 100.0, 0.0, z / 100.0))
 			if at != null and (at as Vector2).x > FRAME_MARGIN and (at as Vector2).x < 1.0 - FRAME_MARGIN \
 					and (at as Vector2).y > FRAME_MARGIN and (at as Vector2).y < 1.0 - FRAME_MARGIN:
 				var pt := Vector2(x / 100.0, z / 100.0)

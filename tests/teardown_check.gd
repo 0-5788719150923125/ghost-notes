@@ -7,6 +7,8 @@ extends Node
 ##   tests/run_boot_probe.sh tests/teardown_check.gd 420
 ##
 ## WHAT IS MEASURED after each return: nodes in the tree and orphan nodes (Godot's own monitors);
+## the stage (wiped - no medium mounted, nothing shown: a tablet chapter's desk used to stay under the
+## next note, 2026-10-06);
 ## Chrome's claims on the bottom of the frame and on the export button (the notes list's own only);
 ## the row (Masking's ⤓ gone, the ⌂ hidden); the transport (no conductor, nothing timed); the
 ## Director (no storyboard, no game pacing, no medium pinned by a mode); the audio buses and their
@@ -21,14 +23,18 @@ extends Node
 ## THE CONTROL: a node a mode "forgets" to free is seen by the same measure, or the comparisons above
 ## prove nothing.
 ##
-## MASKING OPENS ON NO CLIP (its own file dialog): the author's sessions hold hand-placed markers that
+## A NOTE STARTS FROM NOTHING (2026-10-06, the user: "every time we enter a note, we should wipe the
+## scene and start fresh"): a chapter that sets its medium and look hands neither to the note opened
+## after it, and a song note opens stopped at its start. Two-sided: the chapter does set them.
+##
+## MASKING OPENS ON NO CLIP (its panel asks for one): the author's sessions hold hand-placed markers that
 ## cannot be remade, and no gate opens one. A song for Auto and Manual is a fixture of silence. Every
 ## note lives in a folder of the gate's own (`NoteStore.root`), so the author's notes are never made,
 ## listed or opened - and a reading's panel is pointed at a note of the gate's, never their chapter.
 
 const CYCLES := 3
 ## The templates, as the notes list opens them (step 8): a note made from each, opened from the list.
-const MODES := ["note", "auto", "manual", "synthesis", "generative", "tarot", "masking"]
+const MODES := ["note", "auto", "manual", "synthesis", "generative", "cards", "masking"]
 const ROOT := "user://teardown_check_notes"
 
 var _fails: Array = []
@@ -71,6 +77,7 @@ func _run() -> void:
 			var vals := seen.slice(1).map(func(x: Dictionary) -> Variant: return x[k])
 			var same := vals.all(func(v: Variant) -> bool: return str(v) == str(vals[0]))
 			_ok(same, "%s: %s holds steady from the second visit on (%s)" % [mode, k, str(seen.map(func(x): return x[k]))])
+	await _check_fresh(song)
 	await _control(song)
 	_clean()
 	_report()
@@ -105,6 +112,7 @@ func _check_home(mode: String, cycle: int, m: Dictionary, home: Dictionary) -> v
 		% [tag, m["manual"], m["paced"], m["override"]])
 	_ok(m["procs"] == home["procs"], "%s: no background program left running (%d, home %d)" % [tag, m["procs"], home["procs"]])
 	_ok(m["modes"] == 0, "%s: no mode's node is left in the tree (%d)" % [tag, m["modes"]])
+	_ok(not m["stage"] and not m["medium"], "%s: the stage is wiped (shown %s, a medium mounted %s)" % [tag, m["stage"], m["medium"]])
 
 
 ## TWO-SIDED: while an export makes the take, the ⌂ grays with the reason and leaving is refused -
@@ -121,6 +129,34 @@ func _check_refused_while_preparing() -> void:
 	ch.exporter._prepping = false
 	ch._paint_home()
 	_ok(not ch._home_button.disabled, "the ⌂ comes back once the take is made")
+
+
+## A NOTE STARTS FROM NOTHING: what a chapter set is not the next note's, and a song opens stopped.
+func _check_fresh(song: String) -> void:
+	var ch: Chrome = _main._chrome
+	var chapter := NoteStore.create("generative", "teardown fresh", "Words.\n",
+		{"picture": {"medium": "tablet"}, "look": {"filters": {"monochrome": 1.0}}})
+	_main._list._open(chapter)
+	await _frames(20)
+	_ok(Director.medium == "tablet" and Director.filter_amount("monochrome") > 0.0,
+		"a chapter sets its medium and look (%s, %s)" % [Director.medium, str(Director.filters)])
+	ch._home_button.pressed.emit()
+	await _frames(12)
+	var plain := NoteStore.create("note", "teardown plain", "Words.\n")
+	_main._list._open(plain)
+	await _frames(12)
+	_ok(Director.medium == "full" and Director.resolved_filters().is_empty(),
+		"the note opened after it starts from nothing (%s, %s)" % [Director.medium, str(Director.filters)])
+	_ok(not _measure()["stage"], "...with no stage under its panel")
+	ch._home_button.pressed.emit()
+	await _frames(12)
+	var auto := NoteStore.create("auto", "teardown stopped", "", {"song": {"path": song}})
+	_main._list._open(auto)
+	await _frames(20)
+	_ok(Spectrum.has_audio() and not Spectrum.transport_playing() and Spectrum.current.time < 0.05,
+		"a song note opens stopped, at its start (playing %s, %.2fs)" % [Spectrum.transport_playing(), Spectrum.current.time])
+	ch._home_button.pressed.emit()
+	await _frames(12)
 
 
 ## THE CONTROL: a node left behind by a "mode" shows up in the same count.
@@ -145,7 +181,7 @@ func _measure() -> Dictionary:
 		buses.append("%s:%d" % [AudioServer.get_bus_name(i), AudioServer.get_bus_effect_count(i)])
 	var modes := 0
 	for n in _main.get_children():
-		if n is ReadingPanel or n is SynthEditor or n is MaskEditor or n is Workspace or n is NotePanel:
+		if n is ReadingPanel or n is SynthEditor or n is MaskEditor or n is NotePanel:
 			modes += 1
 	return {
 		"list": _main._list != null and is_instance_valid(_main._list),
@@ -163,6 +199,8 @@ func _measure() -> Dictionary:
 		"buses": buses,
 		"procs": Subprocess.tracked(),
 		"modes": modes,
+		"stage": _main._stage_view != null and is_instance_valid(_main._stage_view) and _main._stage_view.visible,
+		"medium": _main._medium != null and is_instance_valid(_main._medium),
 	}
 
 

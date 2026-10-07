@@ -14,7 +14,8 @@ extends Node
 ## THE FRAME: portrait only where the medium has one (full frame); a medium without one plays
 ## landscape whatever was asked.
 ##
-## THE STAGE IS THE FRAME: through the real main scene, a song session's stage is the frame's shape
+## THE STAGE IS THE FRAME: through the real main scene, a song note's stage (a note of the gate's own,
+## with a Picture, opened from the list) is the frame's shape
 ## (16:9, or 9:16 in portrait), as large as the window holds it, centered, black beside it; the filters
 ## are sized to the stage; the subtitles told the frame. Measured against the window as it is - a 16:9
 ## window holds a landscape stage whole, and headless Godot's window is 64x64, so its view is square
@@ -125,7 +126,11 @@ func _stage() -> void:
 	add_child(main)
 	for _i in 10:
 		await get_tree().process_frame
-	main.start_template("auto", song)
+	var keep_root := NoteStore.root
+	NoteStore.root = SONG_DIR
+	var note := NoteStore.create("auto", "frame check", "", {"song": {"path": song}, "picture": {"medium": "full"}})
+	NoteStore.root = keep_root
+	main._list._open(note)
 	for _i in 10:
 		await get_tree().process_frame
 	var vis := get_viewport().get_visible_rect().size
@@ -146,9 +151,9 @@ func _stage() -> void:
 	_ok(Vector2(main._stage.size).is_equal_approx(sv.size), "the stage renders at the frame's size, not the window's")
 	_ok(subs != null and is_instance_valid(subs) and subs.frame_rect == sv.get_rect(),
 		"...and told again when it turns")
-	Director.set_medium("tablet")
+	Director.set_medium("auto")
 	await get_tree().process_frame
-	_ok(_near(sv.get_rect(), land), "a medium without a portrait frame refits the stage to landscape (%s)" % sv.get_rect())
+	_ok(_near(sv.get_rect(), land), "a medium without a portrait frame (Auto) refits the stage to landscape (%s)" % sv.get_rect())
 	main._end_session(false)
 	Director.set_medium(keep_m)
 	Director.set_frame(keep_f)

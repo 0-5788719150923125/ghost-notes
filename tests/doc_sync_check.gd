@@ -427,39 +427,39 @@ func _check_one_block_per_component() -> void:
 		"a block this panel does not own was not carried through: %s" % str(data.get("synthesis")))
 
 
-## THE VOICE IS THE DOCUMENT'S, WHICHEVER PANEL SPEAKS IT: the tarot panel opens this chapter and
-## its cast is the cast written here - it used to keep a `tarot:` copy of its own, and a chapter
-## opened in Tarot had no voices. And what the tarot panel then writes leaves the picture alone.
+## THE VOICE IS THE DOCUMENT'S, WHICHEVER PANEL SPEAKS IT: the cards_panel panel opens this chapter and
+## its cast is the cast written here - it used to keep a copy of its own, and a chapter
+## opened in it had no voices. And what the cards_panel panel then writes leaves the picture alone.
 func _check_the_voice_is_the_documents() -> void:
-	var tarot = load("res://src/tarot_editor.gd").new()
-	tarot._build_panel()
-	tarot.remove_child(tarot._panel)     # in the tree, as the panel above is: sliders emit only there
-	add_child(tarot._panel)
-	tarot._doc._section = SECTION + "_tarot"
-	tarot._doc._sync = false
-	tarot._doc._fields = {}
-	tarot._doc._on_picked(_path)
+	var cards_panel = load("res://src/cards_editor.gd").new()
+	cards_panel._build_panel()
+	cards_panel.remove_child(cards_panel._panel)     # in the tree, as the panel above is: sliders emit only there
+	add_child(cards_panel._panel)
+	cards_panel._doc._section = SECTION + "_cards"
+	cards_panel._doc._sync = false
+	cards_panel._doc._fields = {}
+	cards_panel._doc._on_picked(_path)
 	await get_tree().process_frame
-	# by the CAST, not the tabs: the tarot panel's tabs follow its episode's script, and the
+	# by the CAST, not the tabs: the cards_panel panel's tabs follow its episode's script, and the
 	# cast keeps every voice the document names whether a script cues it or not
-	var cast: Dictionary = tarot._cast_dict()
+	var cast: Dictionary = cards_panel._cast_dict()
 	var mine: Dictionary = _ed._cast_dict()
 	_ok(cast.size() == mine.size() and cast.has("Emily White") and cast.has(Manuscript.NARRATOR),
-		"the tarot panel does not hold the chapter's cast: %s against %s" % [cast.keys(), mine.keys()])
+		"the cards_panel panel does not hold the chapter's cast: %s against %s" % [cast.keys(), mine.keys()])
 	for who in mine:
 		_ok(cast.has(who) and is_equal_approx(float((cast[who] as Dictionary).get("pace", 0.0)),
 			float((mine[who] as Dictionary).get("pace", -1.0))),
-			"the tarot panel's %s is not the chapter's: %s" % [who, str(cast.get(who))])
+			"the cards_panel panel's %s is not the chapter's: %s" % [who, str(cast.get(who))])
 	var before: Dictionary = FrontMatter.read_block(FileAccess.get_file_as_string(_path)).data
-	_ok(tarot._doc.save(), "the tarot panel could not save into the chapter")
+	_ok(cards_panel._doc.save(), "the cards_panel panel could not save into the chapter")
 	var after: Dictionary = FrontMatter.read_block(FileAccess.get_file_as_string(_path)).data
 	_ok(str(after.get("picture")) == str(before.get("picture"))
 		and str(after.get("illustrations")) == str(before.get("illustrations")),
-		"the tarot panel's save touched blocks it has no card for")
-	_ok(after.get("tarot") is Dictionary and not (after["tarot"] as Dictionary).has("voices"),
-		"the show's own block is not the knobs alone: %s" % str(after.get("tarot")))
-	tarot._panel.queue_free()
-	tarot.free()
+		"the cards_panel panel's save touched blocks it has no card for")
+	_ok(after.get("cards") is Dictionary and not (after["cards"] as Dictionary).has("voices"),
+		"the show's own block is not the knobs alone: %s" % str(after.get("cards")))
+	cards_panel._panel.queue_free()
+	cards_panel.free()
 	# and this panel back on the chapter as the file now has it
 	_doc.allow_autosave_for_test()
 	_doc.reload()

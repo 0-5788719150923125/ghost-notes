@@ -99,6 +99,9 @@ const ENSEMBLE_MAX := 2
 const ENSEMBLE_W := 0.45
 
 
+## The note this panel is (set by main before it is added), "" when started without one.
+var note_path := ""
+
 # Who contributed to the current candidate and how much - recorded by
 # _ensemble_traits so the sustain bank can be built from the same combination
 # rather than re-rolling one.
@@ -293,6 +296,7 @@ func _build_panel() -> void:
 	title.add_theme_font_size_override("font_size", 20)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_row.add_child(title)
+	title_row.add_child(Chrome.note_menu(self))
 	var hide := Button.new()
 	hide.text = "–"
 	hide.tooltip_text = "Hide panel (F2)"
@@ -316,6 +320,8 @@ func _build_panel() -> void:
 	box = _panel.add_card("script", "Script", &"paper")
 	_writer = preload("res://src/script_writer.gd").new()
 	_writer.setup("synth", PackedStringArray(["synthesis"]), "synthesis")
+	if not note_path.is_empty():
+		_writer.bind_note()
 	_doc = _writer.doc
 	_doc.capture = _doc_capture
 	_doc.apply = _doc_apply

@@ -3,7 +3,7 @@ class_name LookCard
 
 ## LookCard - the Look: a post-process over the whole picture, one row per filter in
 ## [constant Filters.REGISTRY] (next/notes.md step 5: one card per section, in every panel that has
-## it - the Generative panel built it and the tarot panel borrowed it by inheriting the whole panel).
+## it - the Generative panel built it and the Cards panel borrowed it by inheriting the whole panel).
 ##
 ## IT IS THE DIRECTOR'S, like the medium, so a look set here is the look of every session: a
 ## reading, a synthesis take, a song in Auto mode, and an export render, which boots a second

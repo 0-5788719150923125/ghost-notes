@@ -18,11 +18,11 @@ Registries: `Components.REGISTRY` and `Components.TEMPLATES` in [src/components.
 | Template | Components | What it is |
 | --- | --- | --- |
 | **Note** | Text | Just the words. Attach what it should become - a voice, a picture, a song - with +. |
-| **Auto** | Song, Scenes, Look, Intro & outro | The seeded show - scenes chosen for you, cut on the music. |
-| **Manual** | Song, Scenes, Storyboards, Look, Intro & outro | Orchestrate by hand - the workspace, storyboards, dials. |
+| **Auto** | Text, Song, Picture | A song and the seeded show - every scene chosen from the song itself, nothing to set. |
+| **Manual** | Text, Song, Picture, Storyboards | A song and a show by hand - storyboards and the dial. |
 | **Synthesis** | Text, Voice lab, Scenes | Write a script; Ghost Notes speaks it and the show reacts to the voice. |
 | **Generative** | Text, Voice, Scenes, Picture, Illustrations, Look, Intro & outro | The same, in a small local neural voice - clearer, at the cost of a downloaded model. |
-| **Tarot** | Text, Tarot, Voice, Look, Intro & outro | An automatic tarot reading - agents plan, paint and write each episode one card at a time, and a voice reads it at the table. |
+| **Cards** | Text, Cards, Voice, Look, Intro & outro | A card reading nobody writes - agents plan, deal, paint and write each episode one card at a time, and a voice reads it at the table. Tarot is its first deck. |
 | **Masking** | Clip, Masks | Chroma-key effects over a video - markers, tracks, renders. |
 
 ## Components
@@ -38,8 +38,8 @@ By family - the color a component's card, chip and marks are drawn in.
 
 ### Producer
 
-- **Tarot** (`tarot`) - Agents plan, deal, paint and write a reading, one card at a time, at a table.
-  - needs text; gives text, picture, moments; brings Voice; asks for `forward_plus`, `subprocess`, `agent:writer`, `agent:painter`; kept in `tarot:`
+- **Cards** (`cards`) - Agents plan, deal, paint and write a reading, one card at a time, at a table.
+  - needs text; gives text, picture, moments; brings Voice; asks for `forward_plus`, `subprocess`, `agent:writer`, `agent:painter`; kept in `cards:`
 
 ### Voice
 
@@ -57,10 +57,10 @@ By family - the color a component's card, chip and marks are drawn in.
 
 - **Scenes** (`scenes`) - The visualizer scenes, chosen by the seed and cut on the sound.
   - needs audio; gives picture, moments; asks for `forward_plus`; kept in `scenes:`
-- **Storyboards** (`storyboard`) - The scenes by hand: the workspace's storyboards and dials.
-  - needs audio; gives picture; brings Scenes; asks for `forward_plus`
-- **Picture** (`picture`) - What the show is carried on - full frame, a comic, a book, a notebook, a tablet - and how it cuts.
-  - needs picture; gives places; asks for `forward_plus`; kept in `picture:`
+- **Storyboards** (`storyboard`) - The scenes by hand: a storyboard picks them and the dial plays them.
+  - needs audio, places; gives picture; brings Scenes; asks for `forward_plus`
+- **Picture** (`picture`) - A show for the note, and what it is carried on: Auto (the seeded show, nothing to set), full frame, a comic, a book, a notebook, a tablet.
+  - needs picture; gives places; brings Scenes; asks for `forward_plus`; kept in `picture:`
 - **Illustrations** (`illustrations`) - The book's pictures, painted by an agent from the marks in the text, or imported.
   - needs text, places; gives picture; brings Picture; asks for `forward_plus`; kept in `illustrations:`
 - **Clip** (`clip`) - A video, cut and prepared from a file or a link.

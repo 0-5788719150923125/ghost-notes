@@ -62,9 +62,9 @@ func _run() -> void:
 	if settings != null:
 		settings.set("_read_only", true)
 	var keep_root: String = YouTube.root
-	var keep_tarot := TarotEpisode.root
+	var keep_tarot := CardEpisode.root
 	YouTube.root = ROOT
-	TarotEpisode.root = TAROT
+	CardEpisode.root = TAROT
 	_wipe(ROOT)
 	_wipe(TAROT)
 	_wipe(ROOT + "_files")
@@ -76,7 +76,7 @@ func _run() -> void:
 	_wipe(TAROT)
 	_wipe(ROOT + "_files")
 	YouTube.root = keep_root
-	TarotEpisode.root = keep_tarot
+	CardEpisode.root = keep_tarot
 	print("youtube_check: %s" % ("ALL OK" if _fails == 0 else "%d FAILED" % _fails))
 	quit(0 if _fails == 0 else 1)
 
@@ -304,15 +304,15 @@ func _records() -> bool:
 ## An episode on disk: a plan, a draw of two cards, a script with their marks, and a take whose
 ## words put the spread past the hour.
 func _episode_notes() -> bool:
-	var ep := TarotEpisode.open("youtube-check", 7)
+	var ep := CardEpisode.open("youtube-check", 7)
 	DirAccess.make_dir_recursive_absolute(ep.dir)
 	ep.write_json("plan", {"episode_title": "Why You Keep Waking Up At 4AM",
 		"description": "Hello, my loves.\n\nThis one is for you.", "premise": "unused",
 		"tags": ["tarot", "4am", "timeless reading"],
 		"spread": {"name": "Two", "positions": [{"name": "Past", "asks": ""}, {"name": "Future", "asks": ""}]}})
 	ep.write_json("draw", {"cards": [{"name": "The Tower", "reversed": true}, {"name": "The Star", "reversed": false}]})
-	ep.write_text("script", "<!-- tarot: shuffle -->\n\nHello my loves welcome back.\n\n<!-- tarot: draw 1 -->\n\n"
-		+ "The Tower is here.\n\n<!-- tarot: draw 2 -->\n\nThen the Star.\n\n<!-- tarot: spread -->\n\nThat is the spread.\n")
+	ep.write_text("script", "<!-- table: shuffle -->\n\nHello my loves welcome back.\n\n<!-- table: draw 1 -->\n\n"
+		+ "The Tower is here.\n\n<!-- table: draw 2 -->\n\nThen the Star.\n\n<!-- table: spread -->\n\nThat is the spread.\n")
 	var words: Array = []
 	var at := {0: 1.0, 5: 70.0, 9: 130.0, 12: 3700.0}
 	var t := 1.0
@@ -338,8 +338,8 @@ func _episode_notes() -> bool:
 		_ok(ch[1].ends_with(" Past - The Tower (reversed)") and ch[1].begins_with("1:0"), "a card's chapter names its position and how it fell (%s)" % ch[1])
 		_ok(ch[2].ends_with(" Future - The Star") and ch[2].begins_with("2:0"), "in the order drawn (%s)" % ch[2])
 		_ok(RegEx.create_from_string("^1:0\\d:\\d\\d The spread$").search(ch[3]) != null, "an hour on it reads h:mm:ss (%s)" % ch[3])
-	_ok(TarotEpisode.chapter_clock(0) == "0:00" and TarotEpisode.chapter_clock(65) == "1:05"
-		and TarotEpisode.chapter_clock(3725) == "1:02:05", "chapter clocks read as YouTube reads them")
+	_ok(CardEpisode.chapter_clock(0) == "0:00" and CardEpisode.chapter_clock(65) == "1:05"
+		and CardEpisode.chapter_clock(3725) == "1:02:05", "chapter clocks read as YouTube reads them")
 	ep.write_json("plan", {"episode_title": "T", "description": "", "premise": "The premise."})
 	_ok(ep.upload_notes()["description"] == "The premise.", "no description: the premise stands in")
 	ep.write_json("plan", {"episode_title": "Why You Keep Waking Up At 4AM", "description": "Hello.",
@@ -413,14 +413,14 @@ func _menu() -> bool:
 ## Built by hand, as panel_fit_check builds it: its _ready would start the voice host.
 func _panel_fields() -> bool:
 	# loaded here, not named: the panel's scripts need the autoloads, which are only up by now
-	var ed = load("res://src/tarot_editor.gd").new()
+	var ed = load("res://src/cards_editor.gd").new()
 	ed._build_panel()
 	# NOT THE AUTHOR'S SHOW. A panel comes up synced to whatever document the person running
 	# this has open, and DocSource.set_field writes a synced document at once - so this gate read
 	# the author's real show (and failed on its tags) and could have written into it.
 	ed._doc._sync = false
 	ed._doc._fields = {}
-	var ep := TarotEpisode.open("panel-check", 21)
+	var ep := CardEpisode.open("panel-check", 21)
 	ep.write_json("plan", {"episode_title": "The Producer's Title", "description": "The producer's words.",
 		"tags": ["tarot", "4am"], "premise": "p", "spread": {"positions": [{"name": "Past"}]}})
 	ed._knobs["show"] = "panel-check"
@@ -442,7 +442,7 @@ func _panel_fields() -> bool:
 	var plan: Dictionary = ep.read_json("plan")
 	_ok(plan["episode_title"] == "My Own Title" and plan["premise"] == "p" and (plan["spread"] as Dictionary).has("positions"),
 		"an edited title is written into the episode's plan, the rest of it kept")
-	var doc: Dictionary = ed._doc_capture()["tarot"]
+	var doc: Dictionary = ed._doc_capture()["cards"]
 	_ok(doc.get("episode_title") == "My Own Title" and doc.get("description") == "Mine." and not doc.has("youtube"),
 		"the block holds the show's title and description - one of each, no record per episode")
 	_ok(ed.export_name() == "My Own Title", "and the title names the export")
@@ -486,17 +486,17 @@ func _panel_fields() -> bool:
 	_ok(ed._yt_title.text == "My Own Title" and ed._yt_desc.text == "Mine." and Array(ed._yt_tags.get_tags()) == ["tarot", "satire"],
 		"a new episode shows the show's title, description and tags at once")
 	_ok(not ed._yt_title.editable and ed._yt_desc.editable, "its title waits for its plan; the show's description does not")
-	var other := TarotEpisode.open("panel-check", 23)
+	var other := CardEpisode.open("panel-check", 23)
 	other.write_json("plan", {"episode_title": "Another Episode"})
 	var take := ProjectSettings.globalize_path(ROOT + "_files/take_9.wav")
 	ed._taken = {"take": take, "episode": ep}
 	ed._knobs["seed"] = 23
 	ed._open_episode()
-	_ok(ed._yt_title.text == "Another Episode" and ed._doc_capture()["tarot"].get("episode_title") == "Another Episode"
+	_ok(ed._yt_title.text == "Another Episode" and ed._doc_capture()["cards"].get("episode_title") == "Another Episode"
 		and ed._yt_desc.text == "Mine.", "an episode with a plan overwrites the title, as the seed is; the description stays the show's")
 	_ok(ed.upload_meta(take).get("title") == "My Own Title" and ed.upload_meta("").get("title") == "Another Episode",
 		"an export's upload describes the episode it rendered, not the one picked since")
-	_ok(not DirAccess.dir_exists_absolute(TarotEpisode.open("panel-check", 22).dir), "nothing was written for the new episode")
+	_ok(not DirAccess.dir_exists_absolute(CardEpisode.open("panel-check", 22).dir), "nothing was written for the new episode")
 	_ok(ed.thumbnail_moment(9.0) == 3.6 and ed.thumbnail_moment(3.0) == 1.5 and ed.thumbnail_moment(0.5) == 1.5,
 		"the thumbnail is taken with the name up and the table still out of focus")
 	var args: PackedStringArray = load("res://src/exporter.gd").thumbnail_args("/v/a b.mp4", "/v/a b.thumbnail.jpg", 3.6)
@@ -565,13 +565,13 @@ func _tag_field() -> bool:
 ## A real show file: opened, seeded, its byline set on the card, written by the document's own writer, read
 ## back - and opened again by another panel, whose new episode is filled from it at once.
 func _doc_file() -> bool:
-	var ed = load("res://src/tarot_editor.gd").new()
+	var ed = load("res://src/cards_editor.gd").new()
 	ed._build_panel()
-	var ep := TarotEpisode.open("doc-check", 31)
+	var ep := CardEpisode.open("doc-check", 31)
 	ep.write_json("plan", {"episode_title": "Episode Thirty-One", "description": "First paragraph.\n\nSecond: with a colon.",
 		"tags": ["tarot", "pick a card"], "spread": {"positions": [{"name": "Past"}]}})
 	var body := "# The brief\n\nWhat the show is.\n"
-	var path := _file("show.md", "---\ntitle: Doc Check Show\nghost:\n  tarot:\n    show: doc-check\n    seed: 31\n---\n" + body)
+	var path := _file("show.md", "---\ntitle: Doc Check Show\nghost:\n  cards:\n    show: doc-check\n    seed: 31\n---\n" + body)
 	ed._doc._on_picked(path)
 	_ok(ed._doc.is_sync() and int(ed._knobs["seed"]) == 31 and ed._yt_title.text == "Episode Thirty-One",
 		"the show file opens on its episode")
@@ -586,13 +586,13 @@ func _doc_file() -> bool:
 		and head.find("byline:") < head.find("ghost:"),
 		"the tags and the byline are the file's own lines, above ghost's block, as a chapter keeps them:\n%s" % head)
 	var data: Variant = FrontMatter.read_block(raw).get("data")
-	var tarot: Dictionary = (data as Dictionary).get("tarot", {}) if data is Dictionary else {}
-	_ok(tarot.get("episode_title") == "Episode Thirty-One" and tarot.get("description") == "First paragraph.\n\nSecond: with a colon."
-		and not tarot.has("youtube"), "the block holds the show's title and description, whole, and no record per episode")
+	var show: Dictionary = (data as Dictionary).get("cards", {}) if data is Dictionary else {}
+	_ok(show.get("episode_title") == "Episode Thirty-One" and show.get("description") == "First paragraph.\n\nSecond: with a colon."
+		and not show.has("youtube"), "the block holds the show's title and description, whole, and no record per episode")
 	_ok(raw.ends_with("---\n" + body), "the body is untouched")
 	ed.free()
 	# ANOTHER PANEL OPENS THE FILE, AND MAKES A NEW EPISODE: filled from the file at once
-	var again = load("res://src/tarot_editor.gd").new()
+	var again = load("res://src/cards_editor.gd").new()
 	again._build_panel()
 	again._doc._on_picked(path)
 	again._knobs["seed"] = 99

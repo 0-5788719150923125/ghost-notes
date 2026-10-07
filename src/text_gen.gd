@@ -5,7 +5,7 @@ class_name TextGen
 ##
 ## A backend turns ONE system prompt plus ONE prompt into ONE reply on disk. Everything above
 ## that - what is asked, what the reply is for, where it is kept - belongs to the caller (see
-## [AgentJobs], which queues the work, and [TarotProducer], which asks for it), so a second
+## [AgentJobs], which queues the work, and [CardProducer], which asks for it), so a second
 ## writer is a registry entry and a class here, never a branch at a call site.
 ##
 ## THE CONTRACT is [ImageGen]'s, all on the main thread (spawns go through [Subprocess], whose
@@ -43,7 +43,7 @@ class_name TextGen
 ## fraction of the tokens of the painter's full size.
 const PICTURE_EDGE := 768
 
-## Keys are what `ghost: tarot: writer` (and anything else that asks for words) stores.
+## Keys are what `ghost: cards: writer` (and anything else that asks for words) stores.
 const REGISTRY := {
 	"claude": Claude,
 	"codex": Codex,
@@ -502,9 +502,9 @@ class Bedrock:
 
 	const Catalog := preload("res://src/bedrock_catalog.gd")
 	## The model per tier: Amazon's newest for what is heard, its cheaper one for bookkeeping. Both
-	## see pictures - a tarot card's passage is sent its card.
+	## see pictures - a card's passage is sent its card.
 	const MODELS := {"best": "amazon.nova-2-lite-v1:0", "fast": "amazon.nova-lite-v1:0"}
-	## Nova 1 models stop at 10K output tokens (Nova 2 Lite at 64K); a tarot plan runs to ~6K.
+	## Nova 1 models stop at 10K output tokens (Nova 2 Lite at 64K); a card show's plan runs to ~6K.
 	const MAX_TOKENS := 10000
 	## Nova 2's extended thinking (`reasoningConfig.maxReasoningEffort`), off unless asked for; no
 	## other Amazon model takes it. Its tokens bill as output.

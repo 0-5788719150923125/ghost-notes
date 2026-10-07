@@ -64,13 +64,19 @@ const MASKS_DIR := "res://masks"
 ## scanner must never crawl a venv) and out of git entirely.
 const YT_VENV_DIR := "user://ytdlp_venv"
 const YT_DL_DIR := MASKS_DIR + "/_downloads"   # inside /masks/ = already gitignored
-const PANEL_W := 320
+## The panel's width, as every note's panel has it ([SidePanel]); the video, the timeline and the
+## lanes start past it and its margin on both sides.
+const PANEL_W := 380.0
+const VIDEO_LEFT := PANEL_W + 2.0 * SidePanel.MARGIN
 # Picked via _sort_dropdown - see _apply_sort for what each one does.
 const _SORT_MODES := ["A → Z", "Z → A", "Energy"]
 
 ## Set by main.gd before open_source() for the --mask-render relaunch: skip the
 ## editing panel, autoplay from t=0, quit when the audio finishes.
 var render_mode := false
+## The note this editor is (set by main), where a clip chosen here is written - "" from the
+## command line.
+var note_path := ""
 
 var session: MaskSession = null
 var _session_path := ""       # res://-relative or absolute; wherever it was loaded from
@@ -126,6 +132,9 @@ var _pip_view: TextureRect         # the inset's content - shaded or raw per vie
 var _mask_wrap: PanelContainer     # the inset's border/placement box (holds _pip_view)
 var _view_label: Label     # passive view-mode readout (the old cycle button; V cycles now)
 var _help_panel: PanelContainer
+var _panel: SidePanel              # the editor's panel (see _build_panel)
+var _src_panel: SidePanel          # the panel while no clip is open (see _build_source_panel)
+var _src_link: LineEdit
 var _peek_raw := false     # DISPLAY-ONLY raw override; never touches session data (hold P)
 var _last_inset_show := 0.0   # this frame's resolved inset_show - _sync_tracks reads it too,
                                # so a track's own PiP box respects the same view-mode gate as _mask_wrap
@@ -777,14 +786,19 @@ func _have_ffmpeg() -> bool:
 
 
 ## `path` is either a prepared session .json, a raw source video (transcoded once
-## and cached under masks/<slug>/), or empty (prompt via a native file dialog).
+## and cached under masks/<slug>/), or empty (the panel asks for one - see _build_source_panel).
+## A file opened here is the note's clip from then on ([method _note_clip]).
 func open_source(path: String) -> void:
 	if path.is_empty():
-		_prompt_for_source()
+		if render_mode:
+			return
+		_build_source_panel()
 		return
 	if _is_url(path):
 		_start_url_import(path)   # downloads, then re-enters here with the local file
 		return
+	_close_source_panel()
+	_note_clip(path)
 	if path.get_extension().to_lower() == "json":
 		_session_path = path
 		session = MaskSession.load(path if path.begins_with("res://") else path)
@@ -830,19 +844,124 @@ func open_source(path: String) -> void:
 
 
 func _prompt_for_source() -> void:
+	if _open_dialog != null and is_instance_valid(_open_dialog):
+		return
 	_open_dialog = FileDialog.new()
 	_open_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_open_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	_open_dialog.use_native_dialog = true
-	_open_dialog.title = "Open a clip for mask mode"
-	_open_dialog.filters = PackedStringArray(["*.mp4,*.mov,*.mkv,*.webm ; Video"])
+	# In-window, never native: the portal dialog shows nothing at all on a Linux box without
+	# xdg-desktop-portal - and the notes list learned that first.
+	_open_dialog.use_native_dialog = false
+	_open_dialog.title = "Choose a video for this note"
+	_open_dialog.filters = PackedStringArray(["*.mp4, *.mov, *.mkv, *.webm, *.avi ; Videos", "* ; Every file"])
 	var downloads := OS.get_system_dir(OS.SYSTEM_DIR_DOWNLOADS)
 	if not downloads.is_empty():
 		_open_dialog.current_dir = downloads
-	_open_dialog.size = Vector2i(800, 560)
-	_open_dialog.file_selected.connect(open_source)
+	_open_dialog.size = Vector2i(820, 560)
+	_open_dialog.file_selected.connect(func(p: String) -> void:
+		_open_dialog.queue_free()
+		_open_dialog = null
+		open_source(p))
+	_open_dialog.canceled.connect(func() -> void:
+		_open_dialog.queue_free()
+		_open_dialog = null)
 	add_child(_open_dialog)
 	_open_dialog.popup_centered()
+
+
+## THE PANEL'S HEADER, as every note's panel has it: "‹ Notes", the note's title, its "⋯".
+func _header_row() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.add_child(Chrome.back_button(self))
+	var title := Label.new()
+	title.text = NoteStore.title_of(note_path) if not note_path.is_empty() else "Masking"
+	title.add_theme_font_size_override("font_size", 20)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row.add_child(title)
+	row.add_child(Chrome.note_menu(self))
+	return row
+
+
+## The clip's own name, as the Clip card heads it.
+func _clip_name() -> String:
+	var src := String(session.source_path) if session != null else ""
+	if src.is_empty() and session != null:
+		src = String(session.video_path)
+	return "▶  " + (src.get_file().get_basename() if not src.is_empty() else "the clip")
+
+
+## A NOTE WITH NO CLIP YET (New -> Masking): the panel, with a Clip card asking for one - a video
+## file, or a link to download (2026-10-06: the link field left the notes list for the component it
+## belongs to - "if we want to import an audio file or a video file - then we should add those
+## relevant components/attachments to the note options themselves"). What is chosen is written into
+## the note's `clip:` block once it is a file on disk, so the note opens on it from then on.
+func _build_source_panel() -> void:
+	if _src_panel != null and is_instance_valid(_src_panel):
+		return
+	_src_panel = SidePanel.new(PANEL_W)
+	_src_panel.title = "Masking"
+	_src_panel.card_prefix = "masking"
+	add_child(_src_panel)
+	_src_panel.body.add_theme_constant_override("separation", 8)
+	_src_panel.body.add_child(_header_row())
+	var chips := CardRow.new()
+	_src_panel.body.add_child(chips)
+	_src_panel.card_row = chips
+	var clip: VBoxContainer = _src_panel.add_card("clip", "Clip", &"picture")
+	var none := Label.new()
+	none.text = "No clip yet."
+	none.add_theme_font_size_override("font_size", 14)
+	clip.add_child(none)
+	var choose := Button.new()
+	choose.text = "Choose a video…"
+	choose.focus_mode = Control.FOCUS_NONE
+	choose.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	choose.tooltip_text = "A video file: it is prepared once (a minute or two for a long clip) and kept."
+	choose.pressed.connect(_prompt_for_source)
+	clip.add_child(choose)
+	_src_link = LineEdit.new()
+	_src_link.placeholder_text = "…or paste a link and press Enter"
+	_src_link.tooltip_text = "A YouTube (or any http) link: it is downloaded first, then prepared like a file."
+	_src_link.text_submitted.connect(_on_link)
+	_src_link.text_changed.connect(func(_t: String) -> void: _src_link.remove_theme_color_override("font_color"))
+	clip.add_child(_src_link)
+
+
+## A link pasted into the source panel: downloaded, then opened. Anything that is not URL-shaped turns
+## the field red instead.
+func _on_link(text: String) -> void:
+	var s := text.strip_edges()
+	if s.is_empty():
+		return
+	if not _is_url(s) and (s.begins_with("www.") or s.to_lower().contains("youtu.be") or s.to_lower().contains("youtube.com")):
+		s = "https://" + s       # pasted without a scheme
+	if not _is_url(s):
+		_src_link.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
+		return
+	open_source(s)
+
+
+func _close_source_panel() -> void:
+	if _src_panel != null and is_instance_valid(_src_panel):
+		_src_panel.queue_free()
+	_src_panel = null
+
+
+## The clip this note opens on: [param path], a file on disk, written into the note's `clip:` block
+## when it is not what the block already says.
+func _note_clip(path: String) -> void:
+	if note_path.is_empty() or render_mode or not FileAccess.file_exists(note_path):
+		return
+	var ghost := NoteStore.blocks_of(note_path)
+	var clip: Variant = ghost.get("clip", {})
+	if clip is Dictionary and String((clip as Dictionary).get("path", "")) == path:
+		return
+	ghost["clip"] = {"path": path}
+	var err := FrontMatter.write_block(note_path, ghost)
+	if not err.is_empty():
+		push_warning("ghost mask: could not write the clip into %s - %s" % [note_path.get_file(), err])
 
 
 # --- one-time prep: ffmpeg -> masks/<slug>/{video.ogv, audio.wav} -----------------
@@ -2757,11 +2876,11 @@ func _build_render_view() -> void:
 func _build_editor_ui() -> void:
 	_video_area = AspectRatioContainer.new()
 	_video_area.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_video_area.offset_left = PANEL_W
+	_video_area.offset_left = VIDEO_LEFT
 	# THE CLIP'S OWN SHAPE, not a 16:9 assumption: a portrait clip gets a tall
 	# narrow slot with black bars left and right (pillarbox), a wide one keeps the
 	# bars above and below. AspectRatioContainer centers its single child in
-	# whatever is left after PANEL_W and the lane strip (see _apply_lane_reserved),
+	# whatever is left after VIDEO_LEFT and the lane strip (see _apply_lane_reserved),
 	# so the picture always fits the viewport whole and is never stretched.
 	# _sync_source_size re-fits this once the decoder confirms the real size.
 	_video_area.ratio = _source_aspect()
@@ -2804,7 +2923,7 @@ func _build_chrome() -> void:
 	_timeline.player = _player
 	_timeline.tview = _tview
 	_timeline.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	_timeline.offset_left = PANEL_W
+	_timeline.offset_left = VIDEO_LEFT
 	_timeline.offset_bottom = -90
 	_timeline.offset_top = -90
 	_timeline.scrubbed.connect(_on_scrub)
@@ -2822,7 +2941,7 @@ func _build_chrome() -> void:
 	_lanes_col = VBoxContainer.new()
 	_lanes_col.add_theme_constant_override("separation", 2)
 	_lanes_col.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	_lanes_col.offset_left = PANEL_W
+	_lanes_col.offset_left = VIDEO_LEFT
 	_chrome_host().add_child(_lanes_col)
 	_refresh_lanes()
 
@@ -2870,14 +2989,14 @@ func _capture_workspace() -> void:
 
 ## In the live editor, the mirror's nesting comes for free: the video pane the shader
 ## draws onto is genuinely SMALLER than the captured window (see _video_area's
-## PANEL_W inset + 16:9 letterbox in _build_editor_ui), so sampling the whole capture
+## VIDEO_LEFT inset + 16:9 letterbox in _build_editor_ui), so sampling the whole capture
 ## back onto that smaller surface shrinks it - and since the capture already contained
 ## the previous shrink, each frame nests one level deeper. _build_render_view's own
 ## surface is edge-to-edge (the export must stay a clean, full-bleed video outside a
 ## meta section - see its comment), so that free shrink doesn't exist there: verified
 ## by a standalone Movie-Maker readback test (feedback/0001) that a same-size feedback
 ## quad only ghosts/blurs, never nests. This reproduces the live editor's inset by hand
-## - blit a downscaled copy of the capture into the same PANEL_W/letterbox sub-rect the
+## - blit a downscaled copy of the capture into the same VIDEO_LEFT/letterbox sub-rect the
 ## live video pane occupies, over an unshrunk copy of the capture (so the chrome
 ## painted at its real position, e.g. by _apply_meta_chrome, still reads at full size
 ## around it) - so feeding this back through the SAME edge-to-edge quad reproduces the
@@ -2885,12 +3004,12 @@ func _capture_workspace() -> void:
 func _shrink_into_video_pane(img: Image) -> Image:
 	var w := img.get_width()
 	var h := img.get_height()
-	# PANEL_W is a fraction of the LIVE EDITOR's window (the base 1920-wide canvas
+	# VIDEO_LEFT is a fraction of the LIVE EDITOR's window (the base 1920-wide canvas
 	# it lays out in), applied to whatever width the capture came back at. The pane
 	# inside it fits the CLIP's aspect, same as _video_area does - so a portrait
 	# session mirrors a tall narrow pane, not a 16:9 one.
 	var asp := _source_aspect()
-	var px0 := int(round(w * float(PANEL_W) / 1920.0))
+	var px0 := int(round(w * VIDEO_LEFT / 1920.0))
 	var avail_w := maxi(1, w - px0)
 	var pw := avail_w
 	var ph := int(round(float(avail_w) / asp))
@@ -2980,39 +3099,30 @@ func _feedback_descriptor() -> Dictionary:
 
 
 func _build_panel() -> void:
-	var panel := PanelContainer.new()
-	panel.set_anchors_preset(Control.PRESET_LEFT_WIDE)
-	panel.offset_right = PANEL_W
-	panel.clip_contents = true   # belt-and-suspenders: a child's minimum size can
-	# never visually push the panel past PANEL_W and over the timeline, whatever
-	# happens inside (see the autowrap fix below for the actual root cause this
-	# guards - a long unwrapped Label's natural width was doing exactly that).
-	_chrome_host().add_child(panel)
+	# THE FRAMEWORK'S PANEL (2026-10-06, the user: Masking "doesn't inherit the panel UI or styling...
+	# we need to work on bringing it into the framework, proper"): a [SidePanel] like every other
+	# note's, with "‹ Notes", the note's title and its "⋯" on top, a chip per card, and three cards -
+	# the Clip, the Effect (the marker's key color, effect and options: ONE flat, sortable list, never
+	# titled groups - feedback 0011) and the Markers, PINNED under the rest as the ramp/damp list always was,
+	# so the whole manage-markers workflow stays in view however far the options are scrolled.
+	_panel = SidePanel.new(PANEL_W)
+	_panel.title = "Masking"
+	_panel.card_prefix = "masking"
+	_chrome_host().add_child(_panel)
+	_panel.body.add_theme_constant_override("separation", 8)
+	_panel.body.add_child(_header_row())
+	var chips := CardRow.new()
+	_panel.body.add_child(chips)
+	_panel.card_row = chips
+	var clip: VBoxContainer = _panel.add_card("clip", "Clip", &"picture")
+	var clip_name := Label.new()
+	clip_name.text = _clip_name()
+	clip_name.tooltip_text = String(session.source_path if not session.source_path.is_empty() else session.video_path)
+	clip_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	clip_name.add_theme_font_size_override("font_size", 14)
+	clip.add_child(clip_name)
 
-	# Two independently-scrolling regions, stacked: the controls above (which can
-	# get tall - color pickers, a dozen sliders) scroll in whatever space is left,
-	# and the sequential ramp/damp list is pinned to the bottom with its own fixed-
-	# height scroll, so it's always reachable without paging through everything above.
-	var outer := VBoxContainer.new()
-	outer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	panel.add_child(outer)
-
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	outer.add_child(scroll)
-
-	var margin := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 14)
-	scroll.add_child(margin)
-
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 8)
-	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	margin.add_child(col)
-
-	# Two buttons up here: Help and Import track. Everything ELSE that used to
+	# Two buttons here: Help and Import track. Everything ELSE that used to
 	# be a button (play, view cycle, peek, undo, redo) was pure duplication of
 	# a key and moved to the keyboard + the help overlay. Import stayed a
 	# button on purpose: it's the ONE action with no on-screen equivalent and
@@ -3020,26 +3130,22 @@ func _build_panel() -> void:
 	# clear way to do this" complaint - a keyboard-only import that also
 	# depends on nothing having eaten the keystroke is not good enough for the
 	# single essential action). Both a visible button AND the T key now.
-	var title_row := HBoxContainer.new()
-	title_row.add_theme_constant_override("separation", 6)
-	col.add_child(title_row)
-	var title := Label.new()
-	title.text = "Masking"
-	title.add_theme_font_size_override("font_size", 22)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_row.add_child(title)
+	var tools := HBoxContainer.new()
+	tools.add_theme_constant_override("separation", 6)
+	clip.add_child(tools)
 	var import_btn := Button.new()
 	import_btn.text = "⬆ Track"
 	import_btn.tooltip_text = "Import a second video as a picture-in-picture track (T)"
 	import_btn.focus_mode = Control.FOCUS_NONE
 	import_btn.pressed.connect(_prompt_import_track)
-	title_row.add_child(import_btn)
+	tools.add_child(import_btn)
 	var help_btn := Button.new()
 	help_btn.text = "?  Help"
 	help_btn.tooltip_text = "Keyboard map (F1)"
 	help_btn.focus_mode = Control.FOCUS_NONE
 	help_btn.pressed.connect(_toggle_help)
-	title_row.add_child(help_btn)
+	tools.add_child(help_btn)
+	var col := clip
 
 	var time_row := HBoxContainer.new()
 	time_row.add_theme_constant_override("separation", 10)
@@ -3059,6 +3165,7 @@ func _build_panel() -> void:
 	# layers in the shader, not competing "sides" - so there's no swap control any
 	# more either (swapping meant something when every pixel was forced to one side
 	# or the other; independent channels just re-pick their own colors).
+	col = _panel.add_card("effect", "Effect", &"look")
 	_grp_color = VBoxContainer.new()
 	_grp_color.add_theme_constant_override("separation", 8)
 	col.add_child(_grp_color)
@@ -3469,14 +3576,8 @@ func _build_panel() -> void:
 	# --- own scroll - the whole "manage markers" workflow stays visible together,
 	# --- rather than the create buttons living up in the scrolling edit area where
 	# --- reaching them means scrolling past everything else first.
-	var list_margin := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		list_margin.add_theme_constant_override("margin_" + side, 10)
-	outer.add_child(list_margin)
-
-	var list_col := VBoxContainer.new()
+	var list_col: VBoxContainer = _panel.add_footer_card("markers", "Markers", &"look")
 	list_col.add_theme_constant_override("separation", 4)
-	list_margin.add_child(list_col)
 
 	_marker_label = Label.new()
 	_marker_label.add_theme_font_size_override("font_size", 12)
@@ -7284,7 +7385,7 @@ func _build_help_overlay() -> void:
 	# wrapper ignores the mouse; the box itself still catches its own clicks.
 	var wrap := CenterContainer.new()
 	wrap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	wrap.offset_left = PANEL_W
+	wrap.offset_left = VIDEO_LEFT
 	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(wrap)
 	wrap.add_child(_help_panel)

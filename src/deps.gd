@@ -237,7 +237,7 @@ const TOOLS := [
 		"bins": ["claude"],
 		"version_args": ["--version"],
 		"tier": TIER_EXTRA,
-		"used_for": "A writer for the tarot mode (its plan, booklet and reading), and the Assistant "
+		"used_for": "A writer for the Cards mode (its plan, booklet and reading), and the Assistant "
 			+ "(the 💬 panel's picker): with it chosen, a note left in the ` feedback console is "
 			+ "dispatched to Claude Code as a one-shot fix against this checkout. It keeps its own "
 			+ "login, so it stays yours to install, and it runs only when asked.",
@@ -254,7 +254,7 @@ const TOOLS := [
 		"bins": ["codex"],
 		"version_args": ["--version"],
 		"tier": TIER_EXTRA,
-		"used_for": "The tarot mode's painter (and a writer it can pick), the pictures the book and "
+		"used_for": "The Cards mode's painter (and a writer it can pick), the pictures the book and "
 			+ "notebook media print - both through Codex's built-in image generation - and the "
 			+ "Assistant dropdown's Codex option (a ` feedback note dispatched to Codex as a "
 			+ "one-shot fix against this checkout). It keeps its own login, so it stays yours to "
@@ -273,7 +273,7 @@ const TOOLS := [
 		"version_args": ["--version"],
 		"tier": TIER_EXTRA,
 		"used_for": "Amazon Bedrock, as a writer and a painter: Amazon's own Nova models and the open "
-			+ "models Bedrock hosts for the tarot mode's words, Stability AI's image models for its "
+			+ "models Bedrock hosts for the Cards mode's words, Stability AI's image models for its "
 			+ "pictures and the book's illustrations. Called with your AWS credentials and region (set "
 			+ "them with `aws configure`) and billed per token or per picture to your AWS account, so "
 			+ "it runs only when asked.",

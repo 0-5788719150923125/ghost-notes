@@ -5,12 +5,12 @@ extends Node
 ##   tests/run_boot_probe.sh tests/card_fold_check.gd 120
 ##
 ## next/notes.md step 2: each mode's sections in colored FoldableContainers; "a fold is the
-## viewer's, remembered in ghost.cfg". Checked on the Generative, Synthesis and Tarot panels and on
-## Manual's workspace:
+## viewer's, remembered in ghost.cfg". Checked on the Generative, Synthesis and Cards panels, on a
+## note's own panel (a song played by hand) and on Masking's, before a clip is chosen:
 ##
 ##   EVERY SECTION IS A CARD: a key, a title, a family with a color, and a chip in the row.
 ##   THE CHIP FOLDS ITS CARD, Ctrl-click opens it alone, and the card's own title bar folds it.
-##   A FOLD IS WRITTEN (Settings `[cards]`) and A PANEL BUILT AGAIN COMES BACK FOLDED - the
+##   A FOLD IS WRITTEN (Settings `[folds]`) and A PANEL BUILT AGAIN COMES BACK FOLDED - the
 ##   stored fold is read at build. A probe never flushes Settings to disk, so this runs against
 ##   the in-memory copy, which is the same table the app writes through.
 ##
@@ -28,8 +28,9 @@ func _ready() -> void:
 func _run() -> void:
 	await _panel("Generative", func() -> Node: return GenerativeEditor.new())
 	await _panel("Synthesis", func() -> Node: return SynthEditor.new())
-	await _panel("Tarot", func() -> Node: return TarotEditor.new())
-	await _workspace()
+	await _panel("Cards", func() -> Node: return CardsEditor.new())
+	await _note_panel()
+	await _masking()
 	for k in _restore:
 		Settings.write(Card.SECTION, k, _restore[k])
 	if _fails.is_empty():
@@ -151,24 +152,47 @@ func _panel(name: String, make: Callable) -> void:
 	await get_tree().process_frame
 
 
-## Manual's workspace: one card, the storyboards. Its fold is kept like the panels' cards.
-func _workspace() -> void:
-	var ws := Workspace.new()
-	add_child(ws)
+## A NOTE'S OWN PANEL: a Manual note (a song, a picture, a storyboard), made in a folder of the gate's
+## own. Its components are cards - the Script, the Song, the Picture, the Storyboards - keyed by the
+## note's panel, a chip each, and a fold is kept like the panels' cards.
+func _note_panel() -> void:
+	var keep := NoteStore.root
+	NoteStore.root = "user://card_fold_check"
+	var note := NoteStore.create("manual", "Fold check", "Words.\n")
+	NoteStore.root = keep
+	var np := NotePanel.new()
+	np.path = note
+	add_child(np)
 	await get_tree().process_frame
-	# find_children filters by NATIVE class, and a Card's is FoldableContainer
-	var cards := ws.find_children("*", "FoldableContainer", true, false).filter(
-		func(n: Node) -> bool: return n is Card)
-	_ok(cards.size() == 1 and (cards[0] as Card).key == "manual.storyboards",
-		"Manual: the storyboards are a card (%d)" % cards.size())
-	if cards.size() == 1:
-		var card: Card = cards[0]
+	var cards: Array = np._panel.cards()
+	var titles: Array = cards.map(func(c: Node) -> String: return (c as Card).title)
+	_ok(titles == ["Script", "Song", "Picture", "Storyboards"], "a Manual note: its components are cards (%s)" % str(titles))
+	_ok(cards.all(func(c: Node) -> bool: return (c as Card).key.begins_with("note.")), "...each keyed by the note's panel")
+	_ok(np._panel.card_row.get_child_count() == cards.size(), "...with a chip each")
+	if not cards.is_empty():
+		var card: Card = cards[cards.size() - 1]
 		if not _restore.has(card.key):
 			_restore[card.key] = Settings.read(Card.SECTION, card.key, false)
 		card.folded = false
 		card.fold()
-		_ok(bool(Settings.read(Card.SECTION, card.key, false)), "Manual: its fold is written")
-	ws.queue_free()
+		_ok(bool(Settings.read(Card.SECTION, card.key, false)), "...and a fold is written")
+	np.queue_free()
+	await get_tree().process_frame
+	DirAccess.remove_absolute(note)
+	DirAccess.remove_absolute(note.get_base_dir())
+
+
+## MASKING, before a clip is chosen: the framework's panel with one card, the Clip.
+func _masking() -> void:
+	var me := MaskEditor.new()
+	add_child(me)
+	me.open_source("")
+	await get_tree().process_frame
+	var p: SidePanel = me._src_panel
+	var cards: Array = p.cards() if p != null else []
+	_ok(cards.size() == 1 and (cards[0] as Card).key == "masking.clip",
+		"Masking with no clip: a side panel with a Clip card (%s)" % str(cards.map(func(c: Node) -> String: return (c as Card).key)))
+	me.queue_free()
 	await get_tree().process_frame
 
 

@@ -14,14 +14,14 @@ class_name DealerTools
 ## the dealer gives it a place on the cloth.
 ##
 ## A handed-in layout is `layout.json` in the episode's folder (`{positions: [{card, x, z, yaw,
-## face}]}`); the episode lays its coordinates over the plan's positions ([method TarotEpisode.document])
+## face}]}`); the episode lays its coordinates over the plan's positions ([method CardEpisode.document])
 ## and the table lies its cards there ([method TablePositions.given]). A layout with any trouble is
 ## not accepted, so the table never has to fall back from a submitted one.
 
 ## The file a handed-in layout is written to, in the episode's folder.
 const LAYOUT := "layout.json"
 
-var episode: TarotEpisode
+var episode: CardEpisode
 var plan: Dictionary
 var submitted := false
 
@@ -30,7 +30,7 @@ var _draft := {}            # card (1-based) -> {x, z, yaw, face}
 
 
 ## [param n]: how many cards the episode draws.
-func _init(ep: TarotEpisode, episode_plan: Dictionary, n: int) -> void:
+func _init(ep: CardEpisode, episode_plan: Dictionary, n: int) -> void:
 	episode = ep
 	plan = episode_plan
 	_n = n

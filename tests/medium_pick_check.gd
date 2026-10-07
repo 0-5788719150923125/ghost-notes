@@ -43,8 +43,8 @@ func _run() -> void:
 		print("vpick: FAILED - the picker was never built")
 		fails += 1
 	else:
-		# what a picker offers: every medium no mode owns (Medium.OWNED - the tarot table is the
-		# tarot mode's, pinned for its sessions, and never a choice here)
+		# what a picker offers: every medium no mode owns (Medium.OWNED - the card table is the
+		# Cards mode's, pinned for its sessions, and never a choice here)
 		var keys: Array = Medium.pickable()
 		print("vpick: %d items, selected %d (%s)" % [
 			opt.item_count, opt.selected, opt.get_item_text(maxi(0, opt.selected))])

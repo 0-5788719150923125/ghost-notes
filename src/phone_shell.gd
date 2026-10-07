@@ -11,6 +11,8 @@ class_name PhoneShell
 ## back a `content://` address, which [FileAccess] reads and writes since Godot 4.6). No permission is
 ## asked for. On the desktop (`--handheld`) the picker is the in-window dialog.
 ##
+## A NOTE CAN BE DELETED from its editor (Delete…), asked first ([DeleteDialog]) - to the trash.
+##
 ## THE NOTE IS WRITTEN AS YOU TYPE, on a quiet period ([constant SAVE_MS]), body and title apart:
 ## the body through [method FrontMatter.write_body], which keeps every byte of the frontmatter, and the
 ## title as the note's own `title:` line - the same file a desktop opens, components and all.
@@ -98,6 +100,9 @@ func _build_editor(stack: VBoxContainer) -> void:
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
 	row.add_child(_button("Export…", func() -> void: _pick("export")))
+	row.add_child(_button("Delete…", func() -> void:
+		if not _note.is_empty():
+			DeleteDialog.ask(self, _note, delete_note)))
 	_title = LineEdit.new()
 	_title.placeholder_text = "Title"
 	_title.add_theme_font_size_override("font_size", 30)
@@ -184,6 +189,21 @@ func save() -> void:
 		_title_dirty = false
 		var t := _title.text.strip_edges()
 		FrontMatter.write_block(_note, t if not t.is_empty() else null, "title")
+
+
+## DELETE THE OPEN NOTE (once asked): what was typed is written first, then the note is trashed and
+## the list comes back without it. [param answer] is the dialog's ("trash"; "forget" cannot arise
+## here - every note on a phone is in its own folder).
+func delete_note(answer: String) -> void:
+	if _note.is_empty() or answer != "trash":
+		return
+	save()
+	var err := NoteStore.trash(_note)
+	if not err.is_empty():
+		push_warning("ghost: " + err)
+		return
+	_note = ""
+	show_list()
 
 
 # --- the system's picker ------------------------------------------------------------------------

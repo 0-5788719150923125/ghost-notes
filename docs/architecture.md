@@ -48,7 +48,7 @@ The engine runs one main loop, so a scene that spends 300 ms in a frame blocks i
 
 ## Media and frames
 
-The scenes are drawn on a **medium** - Full frame, Comic book, Novel, Notebook, Tablet, Tarot table ([media.md](media.md)) - in a **frame**: landscape, 1920x1080, or portrait, 1080x1920, for Full frame. The stage is the frame, as large as the window holds it, and the Look ([filters.md](filters.md)) filters the whole picture.
+The scenes are drawn on a **medium** - Auto, Full frame, Comic book, Novel, Notebook, Tablet, Card table ([media.md](media.md)) - in a **frame**: landscape, 1920x1080, or portrait, 1080x1920, for Full frame. The stage is the frame, as large as the window holds it, and the Look ([filters.md](filters.md)) filters the whole picture.
 
 ## Rendering: live and baked
 

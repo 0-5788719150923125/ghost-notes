@@ -70,6 +70,8 @@ var _env_dot: Label
 var _home_button: Button
 var _home_leave := Callable()     # () -> String: "" once it has left, else why not
 var _home_blocker := Callable()   # () -> String: why the mode cannot be left now, "" when it can
+var _note_path := ""             # the note open now, "" on the list
+var _note_delete := Callable()    # (path, answer) -> void: main's delete_note
 var _home_t := 0.0
 
 ## THE PANELS ABOVE THE ROW, one open at a time: the console's log, the Assistant's panel and the
@@ -285,6 +287,52 @@ static func back_button(owner: Node) -> Button:
 		if ch != null:
 			ch.go_home())
 	return b
+
+
+## THE NOTE OPEN NOW, and how to delete it ([param delete]: (path, "trash" or "forget") -> void) -
+## what every panel's "⋯" acts on ([method note_menu]). "" and an invalid Callable on the list.
+func set_note(path: String, delete := Callable()) -> void:
+	_note_path = path
+	_note_delete = delete
+
+
+## "⋯" FOR A PANEL'S HEADER (2026-10-06): what can be done to the note itself - deleting it, asked
+## first ([DeleteDialog]). Grayed, with the reason, while the note cannot be left (an export making
+## its take). A panel built without a Chrome (a probe) gets one that does nothing.
+static func note_menu(owner: Node) -> MenuButton:
+	var m := MenuButton.new()
+	m.text = "⋯"
+	m.flat = true
+	m.focus_mode = Control.FOCUS_NONE
+	m.tooltip_text = "This note"
+	var pop := m.get_popup()
+	pop.add_item("Delete this note…", 0)
+	m.about_to_popup.connect(func() -> void:
+		var ch := Chrome.of(owner)
+		var why := ch.delete_blocker() if ch != null else "No note is open."
+		pop.set_item_disabled(0, not why.is_empty())
+		pop.set_item_tooltip(0, why))
+	pop.id_pressed.connect(func(id: int) -> void:
+		var ch := Chrome.of(owner)
+		if ch != null and id == 0:
+			ch.ask_delete())
+	return m
+
+
+## Why the note open now cannot be deleted this moment, "" when it can.
+func delete_blocker() -> String:
+	if _note_path.is_empty() or not _note_delete.is_valid():
+		return "No note is open."
+	return String(_home_blocker.call()) if _home_blocker.is_valid() else ""
+
+
+## Ask, then delete the note open now - left first, then thrown away (see [DeleteDialog]).
+func ask_delete() -> void:
+	if not delete_blocker().is_empty():
+		return
+	var path := _note_path
+	var del := _note_delete
+	DeleteDialog.ask(self, path, func(answer: String) -> void: del.call(path, answer))
 
 
 func _paint_home() -> void:

@@ -15,14 +15,14 @@ Ghost's own flags follow the Godot separator: `godot --path . -- <ghost flags>`.
 | `--storyboard` | `<name>` | Manual mode: play `storyboards/<name>.yaml` (or `.json`). |  |
 | `--frame` | `landscape\|portrait` | The show's frame for this run - 16:9 or 9:16 - over the remembered one, as `--medium` overrides the medium. A medium without a portrait frame plays landscape. Passed to an export's render, so it renders the frame the session showed. |  |
 | `--handheld` |  | Run the phone shell on the desktop: the notes list and the editor, full screen in a phone's shape, no stage, no transport, nothing downloaded (`GHOST_HANDHELD=1` does the same). A phone runs it always. |  |
-| `--note` | `<path>` | Open one note, run by the template its blocks say it is (a voice is Generative, a show Tarot, a song Auto, nothing attached a plain note) - past the notes list. |  |
+| `--note` | `<path>` | Open one note, run by the template its blocks say it is (a voice is Generative, a show Cards, a song Auto, nothing attached a plain note) - past the notes list. |  |
 | `--deps` |  | Print the environment report - what ghost has installed for itself (FFmpeg, uv, Python, each feature's environment), what it uses from the machine, versions and resolved paths, and an install hint for anything of the machine's that is missing - then exit. Exits non-zero if something a feature needs is absent. Pairs with `--headless`; the same report is the Environment panel, behind the ⚙ in the bottom-right row. |  |
 | `--provision` | `[all\|update]` | Install ghost's own dependencies now, printing each step, then exit: uv, FFmpeg and Python by default, every feature's environment too with `all`, or bring everything installed to its newest release with `update`. The same jobs an ordinary launch runs in the background. Exits non-zero if anything asked for could not be had. Pairs with `--headless`. |  |
 | `--seed` | `<N>` | Override the session seed (default derives from the audio's own content fingerprint, so the same song replays the same show). |  |
 | `--dial-demo` |  | Auto-turn the first Dial hands-free (demos, renders). |  |
 | `--synth` | `[text-file]` | Open the voice-synthesis editor: write or paste a script, sample a voice by seed; each reading renders a WAV take and plays it as a normal session (scenes react to the narration; karaoke subtitles track it). |  |
 | `--say` |  | With `--synth`: speak the loaded text immediately on boot (automation, demos, headless checks). |  |
-| `--tarot` |  | Open the tarot mode: a show's brief, its episodes (planned, painted and written by agents one card at a time) and the Generative voice that reads them at the table. |  |
+| `--cards` |  | Open the Cards mode: a show's brief, its episodes (planned, dealt, painted and written by agents one card at a time) and the Generative voice that reads them at the table. |  |
 | `--mask-edit` | `<session.json>` | Open the Masking editor on a session (also creates one from a video path). |  |
 | `--mask-render` | `<session.json>` | Render a Masking session to video (used with `--write-movie`). | _internal_ |
 | `--export` |  | Marks a Movie Maker render process (set by the exporter; `Boot` shrinks the window early). | _internal_ |

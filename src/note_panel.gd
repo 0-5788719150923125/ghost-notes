@@ -1,44 +1,132 @@
 extends CanvasLayer
 class_name NotePanel
 
-## NotePanel - a note with nothing attached (next/notes.md step 8): "with nothing attached, it is a
-## text editor". The panel holds the note's own words - the Script card, synced to the file, its
-## body edited in place and written back on a quiet period as every panel's is ([DocSource]) - and
-## the component row's "+", which lists what the note could become: a Voice, a Voice lab, Tarot, a
-## song, a clip, each grayed with its reason when it cannot be had here ([Components.attach_menu]).
+## NotePanel - a note's own panel, for every note no specialized panel runs: a note with nothing
+## attached (next/notes.md step 8: "with nothing attached, it is a text editor"), and a note with a
+## song - Auto and Manual, rebuilt 2026-10-06 ("if we load an audio file, allow it to be played. Do
+## not hide the left-hand panel, ever. Then, if we want a scene for that audio file - attach a
+## 'picture' component").
 ##
-## ATTACHING WRITES THE COMPONENT'S BLOCK into the note and opens the note again - now run by the
-## template its blocks name ([method Components.template_for]): attach a Voice and it is read
-## aloud. A component that keeps nothing in the note on its own (a Look with no picture yet) is
-## attached inside the panel that has its card, so "+" here offers only what decides what the note
-## is.
+## ITS CARDS ARE THE NOTE'S COMPONENTS, read off the note's blocks: the Script (the note's words,
+## always), the Song, the Picture (with Auto first among its media - the seeded show, nothing to
+## set), the Look, the Intro & outro and the Storyboards. Each keeps its block in the note through
+## the autosave every panel's frontmatter goes through ([DocSource]); the song's block is written
+## only when another song is chosen.
+##
+## "+" OFFERS WHAT THE NOTE COULD HAVE NEXT ([method Components.attach_menu]): with nothing attached,
+## what decides what it becomes (a Voice, a Voice lab, Cards, a song, a clip); with a song, a Picture
+## for it and what a picture carries - each grayed with its reason when it cannot be had yet ("Needs
+## a Picture"). ATTACHING WRITES THE COMPONENT'S BLOCK into the note and opens the note again, as
+## whatever its blocks now say it is.
+##
+## THE SONG IS THE NOTE'S CLOCK, and main runs it ([member begin_song]): loaded as the panel comes
+## up, after its cards have applied the note's picture, holds and look - and waiting at its start,
+## because a note opens stopped. With no Picture there is no stage; with one, the Director cuts its
+## scenes on the song in the medium the Picture card names, and a medium picked while the note is up
+## is shown at once ([member restage]).
 
 ## The Settings section the script's source lives in (its remembered document).
 const SECTION := "note"
 ## What "+" offers a note with nothing attached: the components that decide what it becomes.
-const DECIDES := ["voice", "voice_lab", "tarot", "song", "clip"]
+const DECIDES := ["voice", "voice_lab", "cards", "song", "clip"]
+## What "+" offers a note with a song: a picture for it, and what a picture carries.
+const WITH_SONG := ["picture", "look", "bookends", "storyboard"]
 
 ## Set by main: the note this panel shows, and how to open it again once a component is attached.
 var path := ""
 var reopen: Callable
+## Set by main: (song: String, picture: bool, storyboard: String) -> void - load the note's song,
+## waiting at its start, with a show for it when the note has a picture.
+var begin_song: Callable
+## Set by main: (storyboard: String) -> void - show the picture again in the medium chosen now.
+var restage: Callable
 
 var _panel: SidePanel
 var _writer: ScriptWriter
 var _plus: MenuButton
+var _status: Label
+var _blocks := {}             # the note's blocks, as it opened
+var _attached: Array = []     # the components it has (Components.attached_of)
+var _cards := {}              # block key -> a card with capture() / apply()
+var _song: SongCard
+var _picture: PictureCard
+var _boards: StoryboardsCard
 
 
 func _ready() -> void:
 	layer = 10
-	# NOTHING TO RENDER: a plain note has no stage, so the ⤓ is not there (released on the way out,
-	# keyed - see Chrome._export_claims)
+	_blocks = NoteStore.blocks_of(path) if not path.is_empty() else {}
+	_attached = Components.attached_of(_blocks)
+	var has_song := _attached.has("song")
+	# NOTHING TO RENDER without a show: a plain note, or a song with no picture yet, has no ⤓
+	# (released on the way out, keyed - see Chrome._export_claims)
 	var ch := Chrome.of(self)
-	if ch != null:
+	if ch != null and not _attached.has("picture"):
 		ch.suppress_export(&"note_panel")
 	_panel = preload("res://src/side_panel.gd").new(380.0)
 	_panel.title = "Note"
 	add_child(_panel)
 	var box: VBoxContainer = _panel.body
 	box.add_theme_constant_override("separation", 8)
+	_build_header(box)
+	_build_component_row(box)
+	_panel.card_prefix = SECTION
+	var script_card: VBoxContainer = _panel.add_card("script", "Script", &"paper")
+	# THE NOTE'S OWN FILE, from the first frame: the source is pointed at it before it is bound
+	Settings.write(SECTION, "doc_path", path)
+	Settings.write(SECTION, "sync", not path.is_empty())
+	_writer = preload("res://src/script_writer.gd").new()
+	_writer.setup(SECTION, PackedStringArray(_doc_blocks()), SECTION)
+	_writer.bind_note()
+	script_card.add_child(_writer)
+	if has_song:
+		_song = SongCard.new(_song_path())
+		_song.chosen.connect(_choose_song)
+		_panel.add_card("song", "Song", &"sound").add_child(_song)
+	if _attached.has("picture"):
+		_picture = PictureCard.new(false)
+		_add_card("Picture", &"picture", _picture)
+	if _attached.has("storyboard"):
+		_boards = StoryboardsCard.new()
+		_add_card("Storyboards", &"picture", _boards)
+		_add_dial()
+	if _attached.has("look"):
+		_add_card("Look", &"look", LookCard.new())
+	if _attached.has("bookends"):
+		_add_card("Intro & outro", &"paper", BookendsCard.new(
+			"Seconds held before the song starts, the picture fading up through them.",
+			"Seconds held after the song ends, picture and sound fading out together."))
+	_status = Label.new()
+	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status.add_theme_font_size_override("font_size", 11)
+	_status.add_theme_color_override("font_color", Color(0.55, 0.95, 0.75, 0.85))
+	box.add_child(_status)
+	# THE NOTE'S BLOCKS REACH THE CARDS as the source binds - the picture, the holds and the look are
+	# set before the song is loaded, because the lead-in is decided as playback starts
+	_writer.doc.capture = _doc_capture
+	_writer.doc.apply = _doc_apply
+	_writer.doc.bind_text(_writer.text_edit)
+	if _picture != null:
+		Director.medium_changed.connect(_on_medium)
+	if has_song and _song.ready_to_play() and begin_song.is_valid():
+		begin_song.call(_song.path(), _picture != null, _boards.active() if _boards != null else "")
+
+
+func _exit_tree() -> void:
+	var ch := Chrome.of(self)
+	if ch != null:
+		ch.release_export(&"note_panel")
+	if Director.medium_changed.is_connected(_on_medium):
+		Director.medium_changed.disconnect(_on_medium)
+
+
+## F2 hides and shows the panel, as every note's panel does.
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F2:
+		_panel.visible = not _panel.visible
+
+
+func _build_header(box: VBoxContainer) -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 6)
 	box.add_child(head)
@@ -49,38 +137,112 @@ func _ready() -> void:
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	head.add_child(title)
-	# THE COMPONENT ROW: nothing attached yet, so only "+"
+	head.add_child(Chrome.note_menu(self))
+	var hide := Button.new()
+	hide.text = "–"
+	hide.tooltip_text = "Hide panel (F2)"
+	hide.focus_mode = Control.FOCUS_NONE
+	hide.custom_minimum_size = Vector2(28, 28)
+	hide.pressed.connect(func() -> void: _panel.visible = false)
+	head.add_child(hide)
+
+
+## THE COMPONENT ROW: "+", then a chip per card ([CardRow]).
+func _build_component_row(box: VBoxContainer) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	box.add_child(row)
 	_plus = MenuButton.new()
 	_plus.text = "+"
 	_plus.flat = false
-	_plus.tooltip_text = "Attach what this note should become - each one grayed, with the reason, when it cannot be had here."
-	_plus.about_to_popup.connect(func() -> void: Components.attach_menu(_plus.get_popup(), ["text"], DECIDES))
+	_plus.tooltip_text = ("Attach what this note should have next - each one grayed, with the reason, "
+		+ "when it cannot be had yet.")
+	_plus.about_to_popup.connect(func() -> void:
+		Components.attach_menu(_plus.get_popup(), _attached, WITH_SONG if _attached.has("song") else DECIDES))
 	_plus.get_popup().id_pressed.connect(_attach)
+	# drawn as a chip, the row's own shape (see CardRow._paint), in no family's color
+	_plus.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_plus.add_theme_font_size_override("font_size", 13)
+	var chip := StyleBoxFlat.new()
+	chip.bg_color = Color(1, 1, 1, 0.08)
+	chip.border_color = Color(1, 1, 1, 0.4)
+	chip.set_border_width_all(1)
+	chip.set_corner_radius_all(9)
+	chip.content_margin_left = 9
+	chip.content_margin_right = 9
+	chip.content_margin_top = 0
+	chip.content_margin_bottom = 1
+	for st in ["normal", "hover", "pressed", "focus"]:
+		_plus.add_theme_stylebox_override(st, chip)
 	row.add_child(_plus)
-	var hint := Label.new()
-	hint.text = "Just the words, for now."
-	hint.add_theme_font_size_override("font_size", 12)
-	hint.modulate = Color(1, 1, 1, 0.6)
-	row.add_child(hint)
-	_panel.card_prefix = SECTION
-	_panel.add_card_row()
-	var card: VBoxContainer = _panel.add_card("script", "Script", &"paper")
-	# THE NOTE'S OWN FILE, from the first frame: the source is pointed at it before it is bound
-	Settings.write(SECTION, "doc_path", path)
-	Settings.write(SECTION, "sync", not path.is_empty())
-	_writer = preload("res://src/script_writer.gd").new()
-	_writer.setup(SECTION, PackedStringArray([]), SECTION)
-	card.add_child(_writer)
-	_writer.doc.bind_text(_writer.text_edit)
+	var chips := CardRow.new()
+	chips.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(chips)
+	_panel.card_row = chips
 
 
-func _exit_tree() -> void:
-	var ch := Chrome.of(self)
-	if ch != null:
-		ch.release_export(&"note_panel")
+## [param card] - a node with `KEY`, `capture()` and `apply(block)` - on a card of its own, its block
+## kept in the note. A card with a `noted` signal speaks on the status line.
+func _add_card(title: String, family: StringName, card: Control) -> void:
+	_panel.add_card(String(card.KEY), title, family).add_child(card)
+	_cards[String(card.KEY)] = card
+	if card.has_signal("noted"):
+		card.noted.connect(_note)
+
+
+## THE DIAL (see [Dial]) for a note played by hand: bottom right, standing on the row of buttons there.
+func _add_dial() -> void:
+	var dial := DialWidget.new()
+	dial.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	dial.offset_right = -20
+	dial.offset_bottom = -Chrome.ROW_TOP - 8.0
+	dial.offset_left = dial.offset_right - 132.0
+	dial.offset_top = dial.offset_bottom - 132.0
+	add_child(dial)
+
+
+func _note(msg: String) -> void:
+	if _status != null:
+		_status.text = msg
+
+
+## The blocks this panel keeps in the note: one per card with settings, in the panel's order.
+func _doc_blocks() -> Array:
+	var out: Array = []
+	for k in ["picture", "scenes", "look", "bookends"]:
+		if _attached.has({"picture": "picture", "scenes": "storyboard", "look": "look", "bookends": "bookends"}[k]):
+			out.append(k)
+	return out
+
+
+func _doc_capture() -> Dictionary:
+	var out := {}
+	for key in _cards:
+		out[key] = (_cards[key] as Object).call("capture")
+	return out
+
+
+func _doc_apply(blocks: Dictionary) -> void:
+	for key in _cards:
+		if blocks.get(key) is Dictionary:
+			(_cards[key] as Object).call("apply", blocks[key] as Dictionary)
+
+
+func _song_path() -> String:
+	var song: Variant = _blocks.get("song", {})
+	return String((song as Dictionary).get("path", "")) if song is Dictionary else ""
+
+
+## The picture's medium changed: shown at once while a song is loaded (a reading's waits for the
+## next reading; a song's has nothing to wait for).
+func _on_medium() -> void:
+	if restage.is_valid():
+		restage.call(_boards.active() if _boards != null else "")
+
+
+## Another song for the note: its block written, and the note opened again around it.
+func _choose_song(song: String) -> void:
+	_write_blocks({"song": {"path": song}})
 
 
 func _attach(id: int) -> void:
@@ -90,13 +252,22 @@ func _attach(id: int) -> void:
 		return
 	var key := String(pop.get_item_metadata(i))
 	var add := Components.attach_blocks(key)
-	if add.is_empty() or path.is_empty():
+	if not add.is_empty():
+		_write_blocks(add)
+
+
+## Lay [param add] over the note's blocks, write them, and open the note again as what it now is.
+func _write_blocks(add: Dictionary) -> void:
+	if path.is_empty():
 		return
+	# what the cards hold now goes in too, so a dial moved a moment ago is not lost to the reopen
 	var ghost := NoteStore.blocks_of(path)
-	ghost.merge(add, false)
+	ghost.merge(_doc_capture(), true)
+	ghost.merge(add, true)
 	var err := FrontMatter.write_block(path, ghost)
 	if not err.is_empty():
-		push_warning("ghost: could not attach %s to %s - %s" % [key, path.get_file(), err])
+		push_warning("ghost: could not write %s into %s - %s" % [str(add.keys()), path.get_file(), err])
+		_note("⚠  " + err)
 		return
 	if reopen.is_valid():
 		reopen.call(path)

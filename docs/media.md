@@ -15,7 +15,17 @@ host_for(incoming)   - the node an arriving scene is added to. `full` returns th
 
 A medium is a Node2D mounted INSIDE the stage SubViewport, so the stage governor still owns it: when the governor stops the stage, it stops the medium and every panel viewport nested under it, together.
 
-Registry: `Medium.REGISTRY` in [src/medium.gd](../src/medium.gd) (6 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
+Registry: `Medium.REGISTRY` in [src/medium.gd](../src/medium.gd) (7 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
+
+## `auto` - Auto
+
+_The original show with nothing to set: scenes chosen by the song's own fingerprint and cut on its beat, at the default pacing - the same song is the same show in every note._
+
+AutoMedium - the original show with nothing to set: one scene at a time, filling the frame, chosen by the song's own fingerprint and cut on its beat (2026-10-06, the user: an "auto" type "which removes all options from the user, and just automatically plays the scene, seeded by the audio, just like the original mode did it").
+
+IT DRAWS EXACTLY WHAT `FullMedium` DRAWS. What makes it a medium of its own is what it takes: no settings at all (`Medium.BARE`). The Picture card shows nothing under it but the picker, picking it puts the Director's dials back to their defaults, and its block in a note is the medium's name alone - so the same song is the same show in every note, whatever another note's dials were left at. The frame is landscape: a portrait show is Full frame's.
+
+Source: [src/media/auto.gd](../src/media/auto.gd)
 
 ## `full` - Full frame
 
@@ -91,20 +101,20 @@ Reuses the book's desk, lamp and springs (`BookMedium`); nothing about pages or 
 
 Source: [src/media/tablet.gd](../src/media/tablet.gd)
 
-## `tarot` - Tarot table
+## `table` - Card table
 
-_A tarot reading at a table, seen from the reader's chair: the deck shuffles while the reader talks, each card is drawn, held up beside its booklet entry, read and laid into the spread. The tarot mode's own medium - its deck, pictures and spread come from the episode the agents produced._
+_A card reading at a table, seen from the reader's chair: the deck shuffles while the reader talks, each card is drawn, held up beside its booklet entry, read and laid into the spread. The Cards mode's own medium - its deck, pictures and spread come from the episode the agents produced._
 
-TarotMedium - a tarot reading at a table, seen from the reader's chair.
+TableMedium - a card reading at a table, seen from the reader's chair.
 
-The tarot mode's own medium (see `Medium.OWNED`): the episode's cloth on a table, its room out of focus beyond the far edge, its candles, and the deck. The reader is a voice, never a pair of hands - the cards move on their own:
+The Cards mode's own medium (see `Medium.OWNED`): the episode's cloth on a table, its room out of focus beyond the far edge, its candles, and the deck. The reader is a voice, never a pair of hands - the cards move on their own:
 
 the intro      the deck shuffles in the middle of the table under the voice, in RUNS - riffles, overhand passes, strings of cuts, now and then a wash across the cloth - with long stretches of nothing between them (`RUNS`) the push       before the first card, the deck is squared and pushed to its side a draw         the deck squares, the top card slides off, turns over, and comes up to the camera on the LEFT; its booklet page opens on the RIGHT - shown, never read the reading    the card and the page float there while the voice talks about it, turning a little on their axes; now and then the card is turned to look at its back the lay        the page closes and the card goes down into its place in the spread a jumper       the first card flies out of the shuffle on its own, lands face up, and is picked up and shown like a drawn one the close      the whole spread lies on the table
 
-EVERYTHING IS A FUNCTION OF SHOW TIME, as the tablet's screen is: the actions are the reading's own marks (`TarotScript`), placed in the rests the voice left for them by a `ReadingFollower`, and every card, page and packet of the deck is posed from that schedule each frame - so a render draws exactly what the live reading drew, and a scrub lands the table where the reading is.
+EVERYTHING IS A FUNCTION OF SHOW TIME, as the tablet's screen is: the actions are the reading's own marks (`CardReading`), placed in the rests the voice left for them by a `ReadingFollower`, and every card, page and packet of the deck is posed from that schedule each frame - so a render draws exactly what the live reading drew, and a scrub lands the table where the reading is.
 
-THE LOOK IS THE EPISODE'S. The cloth, the room, the card back and every face are its pictures; the frame, the type, the props and the light come from its look through `TarotTable`'s registries, and the rest - where the deck sits, how the spread is laid, which shuffles, the camera's height - is sampled from the episode's seed, so no two episodes share a table. A picture still being painted is a placeholder until it lands, live.
+THE LOOK IS THE EPISODE'S. The cloth, the room, the card back and every face are its pictures; the frame, the type, the props and the light come from its look through `CardTable`'s registries, and the rest - where the deck sits, how the spread is laid, which shuffles, the camera's height - is sampled from the episode's seed, so no two episodes share a table. A picture still being painted is a placeholder until it lands, live.
 
 FOIL. The brightest, most colorful parts of each painting - found per picture from its own luminance, never a fixed threshold - are printed as foil: they catch the light as a card tilts, breathe slowly, and now and then a glint sweeps across them, and the scene's bloom lets them bleed. The deck's look says how much foil it was printed with.
 
-Source: [src/media/tarot.gd](../src/media/tarot.gd)
+Source: [src/media/table.gd](../src/media/table.gd)

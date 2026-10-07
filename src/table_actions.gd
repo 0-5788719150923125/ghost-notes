@@ -5,11 +5,11 @@ class_name TableActions
 ## 9, "Actions are a registry"). Each verb declares what it takes (which card), whether it is written
 ## in a reading's marks or performed between them, the rest the voice takes for it, whether it brings
 ## a card up to be shown or puts the shown one down first, and the moments it makes (what the air can
-## burst on, [constant TarotTable.MOMENTS]) - declared, not branched on, the way [constant Medium.USES]
-## is. TarotScript's marks and rests and the table's schedule read it; adding a verb is an entry here
+## burst on, [constant CardTable.MOMENTS]) - declared, not branched on, the way [constant Medium.USES]
+## is. CardReading's marks and rests and the table's schedule read it; adding a verb is an entry here
 ## and its pose where the table draws it.
 ##
-## THE DURATIONS ARE THE TABLE'S, in seconds - the phase constants inside each are [TarotMedium]'s
+## THE DURATIONS ARE THE TABLE'S, in seconds - the phase constants inside each are [TableMedium]'s
 ## own; these are their sums - and the voice rests exactly as long, from the same numbers, so the
 ## voice waits as long as the cards move. The shuffle is the exception that proves it: readers talk
 ## while they shuffle, so its rest is only the moment it takes to begin.
@@ -36,7 +36,7 @@ const JUMP := 5.0
 ## The spread, once the last card is down: a moment to take it in before the close.
 const SETTLE := 1.8
 
-## THE VERBS. `written`: a reading's mark names it (`<!-- tarot: draw 3 -->`); `args`: what the mark
+## THE VERBS. `written`: a reading's mark names it (`<!-- table: draw 3 -->`); `args`: what the mark
 ## takes after the verb; `rest`: the seconds the voice holds for it; `first`: added when it brings up
 ## the reading's first card (the deck's push comes before it); `shows`: it brings a card up to be
 ## shown; `lays`: a card still shown is laid down first (+ the lay's duration); `ends`: nothing is

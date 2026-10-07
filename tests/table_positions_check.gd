@@ -56,7 +56,7 @@ func _presets() -> void:
 	var drift := 0
 	for seed in range(1, 101):
 		for n in range(1, 11):
-			var lay := TarotTable.layout_of(seed)
+			var lay := CardTable.layout_of(seed)
 			var r1 := RandomNumberGenerator.new()
 			r1.seed = hash([seed, "positions-check"])
 			var r2 := RandomNumberGenerator.new()
@@ -101,9 +101,9 @@ func _given() -> void:
 
 func _dealer() -> void:
 	print("-- a dealer lays the cards")
-	TarotEpisode.root = DIR
+	CardEpisode.root = DIR
 	_clean()
-	var ep := TarotEpisode.open("dealer-check", 11)
+	var ep := CardEpisode.open("dealer-check", 11)
 	var plan := {"spread": {"positions": [{"name": "Root"}, {"name": "Crown"}, {"name": "Path"}]}}
 	ep.write_json("plan", plan)
 	ep.write_json("draw", {"cards": [{"key": "tower", "name": "The Tower"}, {"key": "star", "name": "The Star"},
@@ -113,7 +113,7 @@ func _dealer() -> void:
 	_ok(not told.contains("Tower") and not told.contains("Star") and not told.contains("Moon"),
 		"NO CHEATING: nothing a dealer is told names a card")
 	_ok(told.contains("Root") and told.contains("Crown"), "it is told the plan's positions by name")
-	var lay := TarotTable.layout_of(ep.seed)
+	var lay := CardTable.layout_of(ep.seed)
 	var deck: Vector3 = lay["deck"]
 	var r := d.call_tool("place", {"card": 1, "x": 0.9, "z": 0.0})
 	_ok(String(r["text"]).contains("off the cloth"), "placed off the cloth, it is told so (%s)" % r["text"])
@@ -156,7 +156,7 @@ func _clean() -> void:
 	DirAccess.remove_absolute(abs)
 
 
-## THE OLD SPREAD, verbatim (TarotMedium._spread_slots before step 9) - the oracle.
+## THE OLD SPREAD, verbatim (TableMedium._spread_slots before step 9) - the oracle.
 func _old(n: int, rng: RandomNumberGenerator, deck_base: Vector3) -> Array:
 	var out: Array = []
 	if n <= 0:
@@ -203,7 +203,7 @@ func _old(n: int, rng: RandomNumberGenerator, deck_base: Vector3) -> Array:
 		out.append({"pos": p, "yaw": yaw})
 	var keep := Rect2(deck_base.x - CARD.x * 0.5 - DECK_CLEAR, deck_base.z - CARD.y * 0.5 - DECK_CLEAR,
 		CARD.x + DECK_CLEAR * 2.0, CARD.y + DECK_CLEAR * 2.0)
-	var off := TarotTable.clear_of(out, CARD, keep)
+	var off := CardTable.clear_of(out, CARD, keep)
 	for sl in out:
 		sl["pos"] = sl["pos"] + Vector3(off.x, 0.0, off.y)
 	return out

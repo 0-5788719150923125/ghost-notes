@@ -2,7 +2,7 @@ extends CanvasLayer
 class_name ReadingPanel
 
 ## ReadingPanel - a reading of a document in the neural voice: the script, the cast, the voice,
-## the stream, the transport's hooks, the export (VOICE_PLAN.md P4). The Generative and Tarot
+## the stream, the transport's hooks, the export (VOICE_PLAN.md P4). The Generative and Cards
 ## panels are both one (next/notes.md step 5): each adds the cards its picture is made of
 ## ([method _build_cards]) and the blocks it keeps in a document ([method _doc_blocks]); neither
 ## inherits the other any more, so neither spends its effort removing what the other built.
@@ -32,7 +32,7 @@ class_name ReadingPanel
 ## heard in; what is read comes from the document a [ScriptWriter] holds, and what it is SEEN in is
 ## the cards a mode adds. A mode extends this class and overrides the few seams below (`_section`,
 ## [method _build_cards], [method _doc_blocks], [method _reading_body], [method _reading_of],
-## [method _has_reading]) - [GenerativeEditor] for a chapter, [TarotEditor] for a reading written by
+## [method _has_reading]) - [GenerativeEditor] for a chapter, [CardsEditor] for a reading written by
 ## agents at the table - so the voice pipeline, the cast, the export and the scrubbing exist once.
 
 ## Set by main: open ONE generator session for the whole chapter.
@@ -454,6 +454,8 @@ var _repace_timer: Timer
 var _medium_rows := {}
 ## THE CARDS THAT KEEP A BLOCK of the document's frontmatter, by block (see [method _add_block_card]):
 ## each answers `capture() -> Dictionary` and `apply(block)`. The voice is this panel's own.
+## The note this panel is (set by main before it is added), "" when started without one.
+var note_path := ""
 var _block_cards := {}
 var _lead_in := 0.0        # the intro seeded into _pending by _plan, in seconds
 var _dirty := false
@@ -692,6 +694,7 @@ func _build_header(box: VBoxContainer) -> void:
 	title.add_theme_font_size_override("font_size", 20)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_row.add_child(title)
+	title_row.add_child(Chrome.note_menu(self))
 	var hide := Button.new()
 	hide.text = "–"
 	hide.tooltip_text = "Hide panel (F2)"
@@ -713,6 +716,8 @@ func _build_header(box: VBoxContainer) -> void:
 func _build_source(box: VBoxContainer) -> void:
 	_writer = preload("res://src/script_writer.gd").new()
 	_writer.setup(_section, _doc_blocks(), _section)
+	if not note_path.is_empty():
+		_writer.bind_note()
 	_doc = _writer.doc
 	_doc.capture = _doc_capture
 	_doc.apply = _doc_apply
@@ -820,7 +825,7 @@ func _build_cast(box: VBoxContainer) -> void:
 	_hesitate.value_changed.connect(on_hesitate)
 	_hesitate_on.toggled.connect(on_hesitate)
 	# SHOWN WHERE THE SCRIPT CAN CARRY THE MARK: a panel whose palette has no hesitation mark
-	# (the tarot's - its agents write none) keeps the values in the voice block and shows no row.
+	# (the Cards panel's - its agents write none) keeps the values in the voice block and shows no row.
 	hrow.visible = ScriptMarks.for_mode(_section).has("hesitation")
 
 	# THE TABS - one per name the script cues, derived rather than managed (see the note on
@@ -1222,7 +1227,7 @@ func _load_persisted() -> void:
 
 ## THE BLOCKS THIS PANEL KEEPS under the document's `ghost:` key, one per card with settings, in
 ## the panel's order - the order a fresh document gets them in (see [DocSource]). A block is the
-## COMPONENT'S, not the panel's: the Generative and tarot panels read and write the same `voice:`,
+## COMPONENT'S, not the panel's: the Generative and Cards panels read and write the same `voice:`,
 ## `look:` and `bookends:`, so a chapter's voices are there whichever panel opens it.
 func _doc_blocks() -> PackedStringArray:
 	return PackedStringArray(["voice"])
@@ -2152,7 +2157,7 @@ func _build_ink_row(box: VBoxContainer) -> void:
 		_ink_raw = "" if i == 0 else String(NotebookLayout.INKS.keys()[i])
 		_capture_slot())
 	row.add_child(_ink_pick)
-	# ONLY WHERE THE MEDIUM WRITES BY HAND: it showed on the tarot table, which writes nothing
+	# ONLY WHERE THE MEDIUM WRITES BY HAND: it showed on the card table, which writes nothing
 	(_medium_rows.get_or_add("handwriting", []) as Array).append(row)
 
 
@@ -3807,7 +3812,7 @@ func export_name() -> String:
 
 
 ## What an upload of the take at [param take] says (see [member Exporter.upload_provider]); {}
-## here - a reading of this panel offers no upload yet. The tarot mode describes its episodes.
+## here - a reading of this panel offers no upload yet. The Cards mode describes its episodes.
 func upload_meta(_take: String) -> Dictionary:
 	return {}
 

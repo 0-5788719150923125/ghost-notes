@@ -263,7 +263,7 @@ var hand := "kalam"
 ## deliberately not the remembered setting).
 var medium := "full"
 ## A MEDIUM PINNED BY THE MODE THAT IS UP, for its sessions only: "" when the author's [member
-## medium] applies. Never saved - the tarot mode shows every reading on its table, and leaving it
+## medium] applies. Never saved - the Cards mode shows every reading on its table, and leaving it
 ## must hand the next session back the medium the author chose. [method resolved_medium] honors
 ## it under an explicit `--medium`, and the exporter passes what that resolves to, so a render of
 ## a pinned session is drawn in the same medium.
@@ -484,8 +484,11 @@ const INTRO_MIN := 0.0
 const INTRO_MAX := 60.0
 const OUTRO_MIN := 0.0
 const OUTRO_MAX := 60.0
-var intro_hold := 5.0
-var outro_hold := 6.0
+## A note that names no holds gets these ([method reset_show]).
+const INTRO_DEFAULT := 5.0
+const OUTRO_DEFAULT := 6.0
+var intro_hold := INTRO_DEFAULT
+var outro_hold := OUTRO_DEFAULT
 ## A LIVE reading's own fade-out, 0..1 - the outro mark's, driven by the Generative panel from
 ## the sample being heard. 1 always in a render, where the take's own length and bookend do it.
 var live_fade := 1.0
@@ -517,6 +520,32 @@ func set_pacing(v: float) -> void:
 	pacing = p
 	_save_pacing()
 
+
+
+## A NOTE STARTS FROM NOTHING (2026-10-06, the user: "every time we enter a note, we should wipe the
+## scene and start fresh with whatever that new note is trying to do"). The picture settings are
+## the show's, and a note that names none must not inherit the last note's - a tablet chapter's
+## medium came up under a song. So the medium, the frame, the Look, the holds and the dials go back
+## to their defaults as a note opens, and the note's own blocks then set what it asks for. Each
+## goes through its setter, so the signals fire and the settings file an export render reads says
+## the same.
+func reset_show() -> void:
+	medium_override = ""
+	set_medium("full")
+	set_frame("landscape")
+	set_pacing(1.0)
+	set_flourish(1.0)
+	set_camera(1.0)
+	set_hand("kalam")
+	set_intro_hold(INTRO_DEFAULT)
+	set_outro_hold(OUTRO_DEFAULT)
+	for k in filters.keys():
+		set_filter(String(k), 0.0)
+
+
+## Is a session attached - is there a show for a cut, a restage or the transport to act on?
+func is_attached() -> bool:
+	return _host != null
 
 
 ## The intro / outro holds, in seconds.

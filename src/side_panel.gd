@@ -26,6 +26,10 @@ class_name SidePanel
 ## resize handler alone would miss until the next resize.
 ##
 ## Add rows to [member body], never to the panel: the panel's own child is the scroll view.
+##
+## A FOOTER CAN BE PINNED under the scrolling body ([method add_footer_card]): a card that stays in
+## view however far the body is scrolled, taken off the room the body has. Masking's marker list
+## lives there - "the whole manage-markers workflow stays visible together", as its own panel kept it.
 
 ## Distance from the window's edge, and the gap left at the bottom. The panel is placed here
 ## rather than by the caller so that "how much room is there" has one answer.
@@ -51,7 +55,7 @@ var body: VBoxContainer
 ## [method add_card_row] is called.
 var card_row: CardRow
 ## The panel's own name in its cards' fold keys ("<prefix>.<card>", see [Card]). One per mode,
-## so the Generative panel's Voice and the Tarot panel's Voice fold separately.
+## so the Generative panel's Voice and the Cards panel's Voice fold separately.
 var card_prefix := ""
 ## What the restore button says - the panel's own name, so it is clear what comes back.
 var title := ""
@@ -61,8 +65,11 @@ var title := ""
 ## panel is hidden. A SIBLING, not a child - a child would be hidden with the panel.
 var _restore: Button
 
+var _col: VBoxContainer
 var _scroll: ScrollContainer
 var _pad: MarginContainer
+var _footer: VBoxContainer
+var _foot_pad: MarginContainer      # the footer's own margin, matched to the body's (see _apply)
 ## Controls already named for making the panel too wide (see [method _check_width]).
 var _warned := {}
 
@@ -70,6 +77,9 @@ var _warned := {}
 func _init(width := 380.0) -> void:
 	position = Vector2(MARGIN, MARGIN)
 	custom_minimum_size = Vector2(width, 0)
+	_col = VBoxContainer.new()
+	_col.add_theme_constant_override("separation", 6)
+	add_child(_col)
 	_scroll = ScrollContainer.new()
 	# HORIZONTAL SCROLLING OFF, deliberately: with it on, the scroll view's minimum width
 	# collapses and the panel narrows to nothing rather than staying as wide as its widest
@@ -78,7 +88,7 @@ func _init(width := 380.0) -> void:
 	# Tabbing to a control below the fold scrolls to it rather than moving focus somewhere
 	# invisible.
 	_scroll.follow_focus = true
-	add_child(_scroll)
+	_col.add_child(_scroll)
 	# The content sits inside a margin so the scrollbar has somewhere of its own to be.
 	_pad = MarginContainer.new()
 	_pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -86,6 +96,12 @@ func _init(width := 380.0) -> void:
 	body = VBoxContainer.new()
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_pad.add_child(body)
+	_foot_pad = MarginContainer.new()
+	_foot_pad.visible = false
+	_col.add_child(_foot_pad)
+	_footer = VBoxContainer.new()
+	_footer.add_theme_constant_override("separation", 6)
+	_foot_pad.add_child(_footer)
 
 
 ## What other furniture keeps clear of: the scrub bar starts to the right of an open panel.
@@ -113,9 +129,24 @@ func add_card(key: String, card_title: String, family: StringName) -> VBoxContai
 	return card.body
 
 
-## Every card on the panel, top to bottom.
+## A card PINNED UNDER the scrolling body, with a chip in [member card_row]; returns the card's body.
+## It stays in view however far the body is scrolled, and the body gets the room that is left.
+func add_footer_card(key: String, card_title: String, family: StringName) -> VBoxContainer:
+	var card: Card = CardScript.new(("%s.%s" % [card_prefix, key]) if not card_prefix.is_empty() else "",
+		card_title, family)
+	_footer.add_child(card)
+	if not _foot_pad.visible:
+		_foot_pad.visible = true
+		_footer.minimum_size_changed.connect(_fit)
+	if card_row != null:
+		card_row.track(card)
+	_fit()
+	return card.body
+
+
+## Every card on the panel, top to bottom, the pinned ones last.
 func cards() -> Array:
-	return body.get_children().filter(func(c: Node) -> bool: return c is Card)
+	return (body.get_children() + _footer.get_children()).filter(func(c: Node) -> bool: return c is Card)
 
 
 func _ready() -> void:
@@ -181,7 +212,10 @@ func _apply() -> void:
 	var bar := _scroll.get_v_scroll_bar()
 	var w: int = int(bar.get_combined_minimum_size().x + GUTTER) if bar != null else int(GUTTER)
 	_pad.add_theme_constant_override("margin_right", w)
+	_foot_pad.add_theme_constant_override("margin_right", w)     # the pinned cards line up with the body's
 	var room: float = get_viewport().get_visible_rect().size.y - position.y - MARGIN
+	if _foot_pad.visible:
+		room -= _foot_pad.get_combined_minimum_size().y + float(_col.get_theme_constant("separation"))
 	var want: float = _pad.get_combined_minimum_size().y
 	# `want` when it fits, the room when it does not, and never below the floor. Taking the
 	# minimum is what keeps a short panel short: this must not become a full-height sidebar

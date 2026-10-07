@@ -44,7 +44,7 @@ class Standing:
 
 ## A producer that records the job it would have submitted instead of starting it.
 class Spy:
-	extends TarotProducer
+	extends CardProducer
 
 	var sent := {}
 
@@ -71,23 +71,23 @@ func _run() -> void:
 	quit(1 if _fails > 0 else 0)
 
 
-func _episode() -> TarotEpisode:
-	TarotEpisode.root = ROOT
-	var ep := TarotEpisode.open("check-show", 5150)
+func _episode() -> CardEpisode:
+	CardEpisode.root = ROOT
+	var ep := CardEpisode.open("check-show", 5150)
 	if DirAccess.dir_exists_absolute(ep.dir):
 		for f in DirAccess.get_files_at(ep.dir):
 			DirAccess.remove_absolute(ep.dir.path_join(f))
 	ep.write_json("plan", {"episode_title": "A Table Set On Purpose", "audience": "everyone", "topic": "tables",
 		"premise": "the premise", "reader_mood": "calm", "spread": {"name": "Three", "positions": [{"name": "One"},
-		{"name": "Two"}, {"name": "Three"}]}, "look": TarotTable.sanitize_look({"deck_name": "The Test Deck", "candles": 2})})
+		{"name": "Two"}, {"name": "Three"}]}, "look": CardTable.sanitize_look({"deck_name": "The Test Deck", "candles": 2})})
 	var cards: Array = []
-	for c in TarotDeck.shuffled(TarotDeck.standard(), ep.seed, true).slice(0, 3):
+	for c in CardDeck.shuffled(CardDeck.standard(), ep.seed, true).slice(0, 3):
 		cards.append(c)
 	ep.write_json("draw", {"seed": ep.seed, "cards": cards})
 	return ep
 
 
-func _tools(ep: TarotEpisode) -> SetDresserTools:
+func _tools(ep: CardEpisode) -> SetDresserTools:
 	return SetDresserTools.new(ep, ep.read_json("plan"), ep.job_dir("table"))
 
 
@@ -150,7 +150,7 @@ func _put_reports() -> bool:
 	_ok((t.draft()["things"] as Array).size() == 3 and text.contains("the table now holds 3") and text.contains("4 x 12 x 4 cm"),
 		"a thing put again under its name was not replaced (%d things):\n%s" % [(t.draft()["things"] as Array).size(), text])
 	_ok(text.contains("2 lit things (2 asked for)"), "the tally does not count lit things against the ask:\n%s" % text)
-	var room := int(TarotTable.headroom(ep.seed)["back"])
+	var room := int(CardTable.headroom(ep.seed)["back"])
 	r = await t.call_tool("put", {"things": [{"name": "a tall jar", "place": "back", "parts": [{"shape": "box",
 		"size": [6, room + 10, 6], "material": "beeswax"}]}]})
 	_ok(String(r["text"]).contains("\"back\" shows only %d cm" % room), "a thing taller than its place was not reported:\n%s" % r["text"])
@@ -239,7 +239,7 @@ func _title() -> bool:
 	_ok(not bool(r.get("error", false)) and String(r["text"]).contains("#1d2f5c") and String(r["text"]).contains("cannot be shown in this run")
 		and (r.get("images", []) as Array).is_empty(), "choosing the name's color with no renderer did not say so: %s" % r)
 	_ok(t.draft().get("title") == {"color": "#1d2f5c", "why": "deep ink on a pale cloth"}, "the draft does not carry the name's color: %s" % str(t.draft()))
-	_ok(TarotTable.title_ink(TarotTable.sanitize_table(t.draft(), {})).to_html(false) == "1d2f5c", "the table does not print the name in the color chosen")
+	_ok(CardTable.title_ink(CardTable.sanitize_table(t.draft(), {})).to_html(false) == "1d2f5c", "the table does not print the name in the color chosen")
 	for junk in ["navy", "#1d2f5", 12, ""]:
 		r = await t.call_tool("title", {"color": junk})
 		_ok(bool(r.get("error", false)) and String((t.draft()["title"] as Dictionary)["color"]) == "#1d2f5c",
@@ -278,18 +278,18 @@ func _producer() -> bool:
 		and String((plain.sent["prompt"] as Dictionary)["prompt"]).contains("Reply with ONLY a JSON object"),
 		"a writer that takes no tools was not asked for the table in one reply")
 	# A HANDED-IN TABLE LANDS whatever the run's last words, even a run that ended badly
-	var prod := TarotProducer.new(ep, {"title": "Test Tarot", "brief": "A brief."})
+	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief."})
 	var given := SetDresserTools.new(ep, ep.read_json("plan"), ep.job_dir("table"))
 	prod._tools["table"] = {"url": AgentTools.open(ep.job_dir("table"), given), "set": given}
-	TextGen.put(ep.job_dir("table").path_join(SetDresserTools.SUBMITTED), TarotPrompts.SET_EXAMPLE)
+	TextGen.put(ep.job_dir("table").path_join(SetDresserTools.SUBMITTED), CardPrompts.SET_EXAMPLE)
 	prod._land("table", {"ok": false, "error": "timed out after 1500 s"})
 	_ok(ep.has("table") and String(((ep.read_json("table") as Dictionary)["things"][0] as Dictionary)["name"]) == "a boxwood chess pawn",
 		"a table handed in with a tool did not land")
 	# ...but a run WITHOUT tools is answered by its own reply, never by a table some earlier run left
 	ep.invalidate("table")
-	TextGen.put(ep.job_dir("table").path_join(SetDresserTools.SUBMITTED), TarotPrompts.SET_EXAMPLE)
-	var plain_land := TarotProducer.new(ep, {"title": "Test Tarot", "brief": "A brief."})
-	plain_land._tries["table"] = TarotProducer.RETRIES + 1
+	TextGen.put(ep.job_dir("table").path_join(SetDresserTools.SUBMITTED), CardPrompts.SET_EXAMPLE)
+	var plain_land := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief."})
+	plain_land._tries["table"] = CardProducer.RETRIES + 1
 	plain_land._land("table", {"ok": true, "text": "no table here"})
 	_ok(not ep.has("table") and plain_land.error_of("table") == "the table was not JSON",
 		"a run without tools landed a table an earlier run had handed in")
@@ -301,7 +301,7 @@ func _producer() -> bool:
 	ep.invalidate("table")
 	var tools := SetDresserTools.new(ep, ep.read_json("plan"), ep.job_dir("table"))
 	prod._tools["table"] = {"url": AgentTools.open(ep.job_dir("table"), tools), "set": tools}
-	prod._tries["table"] = TarotProducer.RETRIES + 1
+	prod._tries["table"] = CardProducer.RETRIES + 1
 	prod._land("table", {"ok": true, "text": "Done."})
 	_ok(prod.error_of("table") == "the set dresser stopped without handing its table in" and prod._tools.is_empty(),
 		"a run with tools that handed nothing in failed as '%s'" % prod.error_of("table"))
@@ -310,12 +310,12 @@ func _producer() -> bool:
 
 func _prompts() -> bool:
 	var ep := _episode()
-	var head := TarotTable.headroom(ep.seed)
-	var size := TarotPrompts.table_size(ep.seed)
-	_ok(TarotPrompts.set_dresser("T", "B", ep.read_json("plan"), ep.seed, head, [], true, 0, ["sea mist (fog)"])["prompt"].contains("EARLIER EPISODES' AIR was this. Give this table its own, or none: sea mist (fog)"),
+	var head := CardTable.headroom(ep.seed)
+	var size := CardPrompts.table_size(ep.seed)
+	_ok(CardPrompts.set_dresser("T", "B", ep.read_json("plan"), ep.seed, head, [], true, 0, ["sea mist (fog)"])["prompt"].contains("EARLIER EPISODES' AIR was this. Give this table its own, or none: sea mist (fog)"),
 		"the set dresser is not told what air earlier tables had")
 	for looks in [0, SetDresserTools.LOOKS]:
-		var p := TarotPrompts.set_dresser("Test Tarot", "A brief.", ep.read_json("plan"), ep.seed, head, [], true, looks)
+		var p := CardPrompts.set_dresser("Test Tarot", "A brief.", ep.read_json("plan"), ep.seed, head, [], true, looks)
 		var text := String(p["prompt"])
 		var tag := "with tools" if looks > 0 else "in one reply"
 		_ok(text.contains("cannot make a BODY") and text.contains("it has no body"), "the set dresser %s is not told it builds no bodies" % tag)
@@ -323,14 +323,14 @@ func _prompts() -> bool:
 			"the set dresser %s is not told what the table holds" % tag)
 		for k in Props.SHAPES:
 			_ok(text.contains("- %s:" % k), "the set dresser %s is not told the shape %s" % [tag, k])
-		for z in TarotTable.ZONES:
-			_ok(text.contains("\"%s\": %s; up to %d cm" % [z, String((TarotTable.ZONES[z] as Dictionary)["about"]), int(head[z])]),
+		for z in CardTable.ZONES:
+			_ok(text.contains("\"%s\": %s; up to %d cm" % [z, String((CardTable.ZONES[z] as Dictionary)["about"]), int(head[z])]),
 				"the set dresser %s is not told the zone %s" % [tag, z])
-		_ok(text.contains(TarotPrompts.SET_EXAMPLE), "the set dresser %s is not shown the format" % tag)
+		_ok(text.contains(CardPrompts.SET_EXAMPLE), "the set dresser %s is not shown the format" % tag)
 		_ok(text.contains("THE AIR:"), "the set dresser %s is not told about the air" % tag)
 		for k in Effects.KINDS.keys() + Effects.MOTES.keys() + Effects.BURSTS.keys():
 			_ok(text.contains("- %s:" % k), "the set dresser %s is not told the effect word %s" % [tag, k])
-		for k in TarotTable.AIR.keys() + TarotTable.MOMENTS.keys():
+		for k in CardTable.AIR.keys() + CardTable.MOMENTS.keys():
 			_ok(text.contains("- \"%s\":" % k), "the set dresser %s is not told the place or moment %s" % [tag, k])
 		_ok(text.contains("HOW YOU WORK") == (looks > 0) and text.contains("Reply with ONLY a JSON object") == (looks == 0),
 			"the set dresser %s is told the other way of working" % tag)
@@ -340,7 +340,7 @@ func _prompts() -> bool:
 			"the set dresser %s is not told of the opening and its thumbnail" % tag)
 		_ok(text.contains("`title` chooses the color") == (looks > 0) and text.contains("\"title\": {\"color\": \"#rrggbb\"") == (looks == 0),
 			"the set dresser %s is not told how to give the name's color" % tag)
-	_ok(not String(TarotPrompts.set_dresser("Test Tarot", "A brief.", ep.read_json("plan"), ep.seed, head, [], true)["prompt"]).contains("and under it"),
+	_ok(not String(CardPrompts.set_dresser("Test Tarot", "A brief.", ep.read_json("plan"), ep.seed, head, [], true)["prompt"]).contains("and under it"),
 		"a show with no byline is told of one")
 	return true
 
@@ -407,7 +407,7 @@ func _air() -> bool:
 	r = await t.call_tool("submit", {})
 	var handed: Variant = JSON.parse_string(FileAccess.get_file_as_string(ep.job_dir("table").path_join(SetDresserTools.SUBMITTED)))
 	_ok(handed is Dictionary and ((handed as Dictionary).get("effects", []) as Array).size() == 3, "the air was not handed in with the table")
-	_ok((TarotTable.sanitize_table(handed, TarotTable.sanitize_look({}))["effects"] as Array).size() == 3, "the air handed in does not build")
+	_ok((CardTable.sanitize_table(handed, CardTable.sanitize_look({}))["effects"] as Array).size() == 3, "the air handed in does not build")
 	t.release()
 	return true
 

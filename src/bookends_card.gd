@@ -2,7 +2,7 @@ extends VBoxContainer
 class_name BookendsCard
 
 ## BookendsCard - the intro and the outro: seconds held before the first word and after the last
-## (next/notes.md step 5: one card per section, in every panel that has it - the tarot panel used
+## (next/notes.md step 5: one card per section, in every panel that has it - the Cards panel used
 ## to declare both sliders a second time). Its block in a document is `bookends:`.
 ##
 ## Like the Look they are the DIRECTOR'S, so they hold in every session a picture is made in. What

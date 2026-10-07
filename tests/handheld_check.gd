@@ -13,7 +13,7 @@ extends Node
 ## MAKES, EDITS AND KEEPS A NOTE ACROSS RESTARTS: New makes a note in the folder; its title and body,
 ## typed, are written on the quiet period (the frontmatter kept byte for byte); the shell torn down and
 ## built again lists it under its new title and opens it with its words. Import… and Export… copy a
-## note in and out.
+## note in and out, and Delete… (once asked) sends the open note away and shows the list.
 ##
 ## THE SETTINGS A PHONE DEPENDS ON ARE THERE - Godot drops a value equal to its default when it
 ## rewrites project.godot, which is how monotone's first APK came up sideways: portrait orientation, a
@@ -71,6 +71,12 @@ func _run() -> void:
 	var copy := shell.import_from(out)
 	_ok(not copy.is_empty() and copy != path and FileAccess.get_file_as_string(copy) == raw,
 		"Import… copies a note into the folder and opens it")
+	# DELETE…, once asked: the open note goes (to the trash - here the gate's seam, a plain delete)
+	NoteStore.discard = func(p: String) -> int: return DirAccess.remove_absolute(p)
+	shell.delete_note("trash")
+	NoteStore.discard = Callable()
+	_ok(not FileAccess.file_exists(copy) and shell._note.is_empty() and shell._list_view.visible,
+		"Delete… sends the open note away and shows the list")
 	main.queue_free()
 	await _frames(4)
 	Boot.handheld_for_test = false

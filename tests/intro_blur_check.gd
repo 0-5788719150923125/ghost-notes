@@ -1,8 +1,8 @@
 extends SceneTree
 
-## intro_blur_check - that the tarot intro's blur (`shaders/tarot_intro.gdshader`) is the blur it is
+## intro_blur_check - that the card table's intro blur (`shaders/table_intro.gdshader`) is the blur it is
 ## asked for, in pixels: as wide as asked at any frame size, round, smooth and in place - and at the
-## title screen's width ([constant TarotTable.TITLE_BLUR]) between the user's verdicts (2026-10-06):
+## title screen's width ([constant CardTable.TITLE_BLUR]) between the user's verdicts (2026-10-06):
 ## stronger than the lens's softest bokeh, which showed "too much table detail" ("an extremely strong
 ## blur, such that nothing is really visible in the scene except for the colors"), and softer than
 ## 0.0825 - itself 0.11, "just a smidge too blurry", less 25% - which was cut "another 50%".
@@ -20,7 +20,7 @@ extends SceneTree
 ## TWO-SIDED: the instrument reads the unblurred edge as sharp and the first guess's blur as too
 ## wide, and the title screen's band rejects both widths judged against it.
 
-const SHADER := preload("res://shaders/tarot_intro.gdshader")
+const SHADER := preload("res://shaders/table_intro.gdshader")
 ## A 10 cm thing on the table stands about this share of the frame's height (the set dresser is told
 ## so), and the title screen spreads an outline over between SPREAD.x and SPREAD.y times that. The
 ## widths judged against it: the lens's softest bokeh as a Gaussian (a sigma of 6.2 px whatever the
@@ -53,7 +53,7 @@ func _run() -> void:
 		# THE INSTRUMENT: an unblurred edge reads as sharp
 		var bare := await _render(edge, size, -1.0)
 		_ok(_sigma(bare, size, false) < 1.0, "%s: the unblurred edge reads %.1f px wide - the instrument cannot see a sharp edge" % [size, _sigma(bare, size, false)])
-		for w in [0.02, 0.05, TarotTable.TITLE_BLUR]:
+		for w in [0.02, 0.05, CardTable.TITLE_BLUR]:
 			var want: float = w
 			var img := await _render(edge, size, want)
 			var got := _sigma(img, size, false) / size.y
@@ -75,7 +75,7 @@ func _run() -> void:
 	# SPREAD.x and SPREAD.y things' heights - and both widths judged against it fall outside
 	var size := Vector2i(1280, 720)
 	var edge := _edge(size, false)
-	var things := _rise(await _render(edge, size, TarotTable.TITLE_BLUR), size) / size.y / THING
+	var things := _rise(await _render(edge, size, CardTable.TITLE_BLUR), size) / size.y / THING
 	_ok(things >= SPREAD.x and things <= SPREAD.y, "the title screen spreads an outline over %.2f things' heights, outside %.2f-%.2f" % [things, SPREAD.x, SPREAD.y])
 	var sharp := _rise(await _render(edge, size, TOO_SHARP), size) / size.y / THING
 	var soft := _rise(await _render(edge, size, TOO_SOFT), size) / size.y / THING

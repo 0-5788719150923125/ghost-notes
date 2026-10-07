@@ -6,6 +6,11 @@ class_name PictureCard
 ## scene hold, flourishes, camera, handwriting (next/notes.md step 5: one card per section). Its
 ## block in a document is `picture:`; the pictures keep their own, `illustrations:`.
 ##
+## WHAT IT OFFERS FOLLOWS THE NOTE: a note with only a song gets the media that need nothing but a
+## sound to cut on ([method Medium.offered] - not the novel, the notebook or the tablet, which print a
+## reading), and AUTO - the original show with nothing to set ([AutoMedium]) - is first, and shows
+## nothing under the picker at all.
+##
 ## A ROW A MEDIUM CANNOT USE IS HIDDEN, by [constant Medium.USES] rather than by branching here:
 ## "there are a number of settings currently being displayed that ONLY work with the comic book
 ## medium" - a control that does nothing teaches nothing. The rows move the moment the medium
@@ -37,12 +42,23 @@ var _film_cutting := -1     # windows being cut last frame, so the status line o
 var _film_dialog: FileDialog = null
 ## Rows only some media use, by the [constant Medium.USES] tag they answer to.
 var _medium_rows := {}
+## Rows every medium that takes settings uses: hidden only under one that takes none (Auto).
+var _setting_rows: Array = []
+## The media this card offers, in the picker's order ([method Medium.offered]).
+var _keys: Array = []
+## Whether the note is a reading: a medium picked then lands on the next one (a song's is shown at once).
+var _reading := true
 
 
-func _init() -> void:
+## [param reading]: whether the note is a reading (a voice reads its text), which every medium can
+## show, or a song alone, which the media that print a reading cannot.
+func _init(reading := true) -> void:
+	_reading = reading
+	_keys = Medium.offered(["audio", "reading"] if reading else ["audio"])
 	add_theme_constant_override("separation", 8)
 	_medium_pick = _medium_option()
 	_frame_pick = _frame_option()
+	_setting_rows.append(_frame_pick.get_parent())
 	_build_films()
 	# THE BOOK'S PICTURES, under the medium picker for the reason the films are: they only
 	# mean something to the medium that prints them, and they appear the moment it is picked.
@@ -56,12 +72,14 @@ func _init() -> void:
 		+ "lands, so the variety is kept - the whole range just moves. Nothing to do with the "
 		+ "speaking voice.",
 		func(v: float) -> void: Director.set_pacing(v))
+	_setting_rows.append(_scene_hold.get_parent())
 	_flourish = Card.slider_row(self, "Flourishes", Director.FLOURISH_MIN, Director.FLOURISH_MAX, 0.05,
 		Director.flourish,
 		"How often the show breaks its rhythm - a burst of two or three quick cuts, or a run of "
 		+ "beat-synced punches on the current scene. 0 turns them off entirely, 1 is the default. "
 		+ "Set this to 0 first if the cutting feels busy: it separates 'too often' from 'too fast'.",
 		func(v: float) -> void: Director.set_flourish(v))
+	_setting_rows.append(_flourish.get_parent())
 	_camera = Card.slider_row(self, "Camera", Director.CAMERA_MIN, Director.CAMERA_MAX, 0.05,
 		Director.camera,
 		"How severe the camera is on the Comic book medium - one knob over the whole "
@@ -81,8 +99,28 @@ func _init() -> void:
 ## has the signal without the index - and `resolved_medium` also knows a run launched with
 ## `--medium comic`, which the picker cannot.
 func sync_medium() -> void:
-	Medium.show_rows(_medium_rows, Director.resolved_medium())
+	var key := Director.resolved_medium()
+	var bare := not Medium.takes_settings(key)
+	for row in _setting_rows:
+		(row as Control).visible = not bare
+	Medium.show_rows(_medium_rows, key)
+	if bare:
+		for tag in _medium_rows:
+			for row in _medium_rows[tag] as Array:
+				if is_instance_valid(row):
+					(row as Control).visible = false
+	if _keys.has(Director.medium):
+		_medium_pick.select(_keys.find(Director.medium))
 	_sync_frames()
+
+
+## A MEDIUM THAT TAKES NO SETTINGS WAS PICKED: the dials go back to their defaults, so what it shows
+## is the same for every note (see [AutoMedium]).
+func _to_defaults() -> void:
+	_scene_hold.value = 1.0
+	_flourish.value = 1.0
+	_camera.value = 1.0
+	Director.set_frame("landscape")
 
 
 ## The chapter's text, whenever the panel reads it: the pictures list follows it.
@@ -95,8 +133,10 @@ func illustrations() -> IllustrationPanel:
 	return _illustrations
 
 
-## The block for a document.
+## The block for a document: under a medium that takes no settings, its name alone.
 func capture() -> Dictionary:
+	if not Medium.takes_settings(Director.medium):
+		return {"medium": Director.medium}
 	return {"medium": Director.medium, "frame": Director.frame,
 		"scene_hold": snappedf(Director.pacing, 0.01), "flourishes": snappedf(Director.flourish, 0.01),
 		"camera": snappedf(Director.camera, 0.01), "hand": Director.hand,
@@ -107,9 +147,12 @@ func capture() -> Dictionary:
 ## card shows it and the Director saves it; a key it does not name is left alone.
 func apply(block: Dictionary) -> void:
 	var med := String(block.get("medium", ""))
-	if Medium.pickable().has(med) and med != Director.medium:
+	if _keys.has(med) and med != Director.medium:
 		Director.set_medium(med)
-		_medium_pick.select(maxi(0, Medium.pickable().find(med)))
+		_medium_pick.select(_keys.find(med))
+		if not Medium.takes_settings(med):
+			_to_defaults()
+			return
 	if Medium.FRAME_SIZES.has(String(block.get("frame", ""))):
 		Director.set_frame(String(block["frame"]))
 		_sync_frames()
@@ -146,9 +189,9 @@ func _medium_option() -> OptionButton:
 	var opt := OptionButton.new()
 	opt.focus_mode = Control.FOCUS_NONE
 	opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var keys: Array = Medium.pickable()
-	var tip := ("What the show is drawn ON, as opposed to what drives it - every mode gets "
-		+ "every medium. Takes effect on the next reading, not the one already playing.\n")
+	var keys: Array = _keys
+	var tip := ("What the show is drawn ON, as opposed to what drives it." + (" Takes effect on the "
+		+ "next reading, not the one already playing." if _reading else "") + "\n")
 	for k in keys:
 		opt.add_item(String(Medium.LABELS.get(k, k)))
 		tip += "\n%s - %s" % [Medium.LABELS.get(k, k), Medium.BLURBS.get(k, "")]
@@ -158,8 +201,11 @@ func _medium_option() -> OptionButton:
 	# and the setter is what persists it, through Settings like every other one.
 	opt.select(maxi(0, keys.find(Director.medium)))
 	opt.item_selected.connect(func(i: int) -> void:
-		Director.set_medium(String(keys[i]))
-		noted.emit("Medium: %s - takes effect on the next reading." % Medium.LABELS.get(keys[i], keys[i])))
+		var k := String(keys[i])
+		if not Medium.takes_settings(k):
+			_to_defaults()
+		Director.set_medium(k)
+		noted.emit("Medium: %s%s" % [Medium.LABELS.get(k, k), " - takes effect on the next reading." if _reading else "."]))
 	row.add_child(opt)
 	return opt
 

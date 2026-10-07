@@ -41,11 +41,11 @@ func _ok(cond: bool, what: String) -> void:
 		print("  FAIL: " + what)
 
 
-## A stage like the tarot table's: a camera looking down across a table, the air's regions round it,
+## A stage like the card table's: a camera looking down across a table, the air's regions round it,
 ## and its lens - sharp over the table, blurring past it to the room's 1% of the frame at 3.2 m, the air
-## ending short of the room (as TarotMedium._air_stage reckons them).
+## ending short of the room (as TableMedium._air_stage reckons them).
 func _stage() -> Dictionary:
-	var lay := TarotTable.layout_of(1234)
+	var lay := CardTable.layout_of(1234)
 	var cam: Transform3D = lay["camera"]
 	var table := AABB(Vector3(-0.95, -0.05, -0.405), Vector3(1.9, 0.05, 0.85))
 	var near := INF
@@ -54,7 +54,7 @@ func _stage() -> Dictionary:
 		var d := (table.get_endpoint(i) - cam.origin).dot(-cam.basis.z)
 		near = minf(near, d)
 		far = maxf(far, d)
-	return {"regions": TarotTable.AIR, "camera": cam, "fov": float(lay["fov"]), "aspect": 16.0 / 9.0,
+	return {"regions": CardTable.AIR, "camera": cam, "fov": float(lay["fov"]), "aspect": 16.0 / 9.0,
 		"occluders": [table], "sharp": Vector2(near, far), "defocus": 0.01 / (1.0 / far - 1.0 / 3.2), "deep": 2.88}
 
 
@@ -73,7 +73,7 @@ func _run() -> void:
 
 
 func _clean(raw: Array) -> Array:
-	return Effects.sanitize(raw, ["#102030", "#aabbcc"], TarotTable.AIR.keys(), TarotTable.MOMENTS.keys())
+	return Effects.sanitize(raw, ["#102030", "#aabbcc"], CardTable.AIR.keys(), CardTable.MOMENTS.keys())
 
 
 func _sanitize() -> bool:
@@ -302,7 +302,7 @@ func _homes() -> bool:
 	var stage := _stage()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 11
-	var box: AABB = (TarotTable.AIR["beyond the table"] as Dictionary)["motes"]
+	var box: AABB = (CardTable.AIR["beyond the table"] as Dictionary)["motes"]
 	var seen := 0
 	var hidden := 0
 	for i in 200:

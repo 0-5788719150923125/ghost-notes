@@ -2,7 +2,7 @@ extends Node
 
 ## NOT a gate. The table's AIR ([Effects]) over a real episode, photographed: a COPY of the episode
 ## (the author's own is never touched) with effects laid into its table, read with a synthetic voice
-## (tarot_look_probe's), and frames written at the times asked for - or around every moment a burst
+## (table_look_probe's), and frames written at the times asked for - or around every moment a burst
 ## can mark, with `--moments 1`.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/air_look_probe.gd 400 \
@@ -46,9 +46,9 @@ func _run() -> void:
 			"--clip":
 				var ab := String(args[i + 1]).split(",")
 				clip = Vector2(float(ab[0]), float(ab[1]))
-	var source := TarotEpisode.open(show, seed)
-	TarotEpisode.root = ROOT
-	var ep := TarotEpisode.open(show, seed)
+	var source := CardEpisode.open(show, seed)
+	CardEpisode.root = ROOT
+	var ep := CardEpisode.open(show, seed)
 	DirAccess.make_dir_recursive_absolute(ep.dir)
 	for f in DirAccess.get_files_at(source.dir):
 		DirAccess.copy_absolute(source.dir.path_join(f), ep.dir.path_join(f))
@@ -69,17 +69,17 @@ func _run() -> void:
 	stage.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(stage)
 	Director.detach()
-	var medium: Medium = Medium.make("tarot")
+	var medium: Medium = Medium.make("table")
 	medium.mount(stage)
 	Director.attach(stage, medium)
 	Director.hold(true)
 	var subs: Subtitles = preload("res://src/subtitles.gd").new()
-	var parse := TarotScript.parse(script)
-	subs.words = preload("res://tests/tarot_look_probe.gd").timeline(parse, 0.33, Director.intro_hold)
-	subs.document = {"source": script, "title": "Truthful Tarot", "tarot": ep.document()}
+	var parse := CardReading.parse(script)
+	subs.words = preload("res://tests/table_look_probe.gd").timeline(parse, 0.33, Director.intro_hold)
+	subs.document = {"source": script, "title": "Truthful Tarot", "table": ep.document()}
 	add_child(subs)
 	medium.bind_captions(subs)
-	var tm := medium as TarotMedium
+	var tm := medium as TableMedium
 	var end := float((subs.words.back() as Dictionary)["t1"]) + 4.0
 	# one step, so the table and its air are built and the schedule placed
 	var t := 0.0

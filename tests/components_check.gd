@@ -14,9 +14,14 @@ extends SceneTree
 ## component is impossible, with a reason, and Subprocess starts nothing.
 ##
 ## "+" GRAYS WHAT IS NOT READY, WITH THE REASON: an agent made missing in `Deps._resolved` (the cache
-## a launch reads - never a seam) grays the Tarot component and its tooltip says why; asked as
+## a launch reads - never a seam) grays the Cards component and its tooltip says why; asked as
 ## Android, the menu offers nothing but what is possible there; a component already attached is
-## not offered again.
+## not offered again. AND WHAT A NOTE CANNOT USE YET: a Look on a note with no picture is grayed and
+## says to attach a Picture first (two-sided: with a song and a Picture it is lit).
+##
+## A NOTE'S COMPONENTS ARE READ OFF ITS BLOCKS, and a new note from a template has the template's
+## (an Auto note: its text, its song, a Picture in the Auto medium). A note with only a song is not
+## offered the media that print a reading (the novel, the notebook, the tablet).
 
 ## The programs every agent resolves - the same list splash_agents_check hides.
 const AGENT_PROGRAMS := ["claude", "codex", "aws"]
@@ -60,7 +65,7 @@ func _registry() -> void:
 			_ok(not blocks.has(b), "%s: its block '%s' is its own (also %s)" % [k, b, blocks.get(b, "-")])
 			blocks[b] = k
 	# the blocks the panels keep are the components' blocks
-	for b in ["voice", "picture", "illustrations", "look", "bookends", "tarot", "synthesis"]:
+	for b in ["voice", "picture", "illustrations", "look", "bookends", "cards", "synthesis", "song", "clip", "scenes"]:
 		_ok(blocks.has(b), "the document block '%s' belongs to a component" % b)
 	var gives := {"song": "audio", "reading": "reading", "clip": "picture"}
 	for t in Components.TEMPLATES:
@@ -74,7 +79,23 @@ func _registry() -> void:
 		_ok(provided.has(need), "%s: a %s session has something that gives %s" % [t, tpl["session"], need])
 	_ok(Components.unmet(["text", "voice"]).is_empty(), "text + voice needs nothing more")
 	_ok(Components.unmet(["voice"]) == ["text"], "a voice alone needs a text (%s)" % str(Components.unmet(["voice"])))
-	_ok(Components.with_required(["tarot"]).has("voice"), "Tarot brings a voice with it")
+	_ok(Components.with_required(["cards"]).has("voice"), "Cards brings a voice with it")
+	# a note's components, read off its blocks - a new note's are its template's
+	for t in Components.TEMPLATES:
+		var got := Components.attached_of(Components.marker_blocks(t))
+		_ok(Components.template_for(Components.marker_blocks(t)) == t, "a new %s note opens as %s" % [t, t])
+		if t in ["note", "auto", "manual"]:
+			var want: Array = (Components.TEMPLATES[t]["components"] as Array)
+			_ok(got == want, "a new %s note has its template's components (%s, not %s)" % [t, str(got), str(want)])
+	_ok(String((Components.marker_blocks("auto")["picture"] as Dictionary).get("medium", "")) == "auto",
+		"an Auto note's Picture is the Auto medium")
+	var song_media := Medium.offered(["audio"])
+	_ok(song_media.has("auto") and song_media.has("full") and song_media.has("comic")
+		and not song_media.has("book") and not song_media.has("notebook") and not song_media.has("tablet")
+		and not song_media.has("table"), "a song alone is offered the media that need nothing more (%s)" % str(song_media))
+	_ok(Medium.offered(["audio", "reading"]).has("tablet") and not Medium.offered(["audio", "reading"]).has("table"),
+		"a reading is offered every pickable medium")
+	_ok(not Medium.takes_settings("auto") and Medium.takes_settings("full"), "Auto takes no settings; Full frame does")
 
 
 func _desktop() -> void:
@@ -119,17 +140,26 @@ func _menu() -> void:
 		Deps._resolved[prog] = ""
 	_ok(not Capabilities.not_ready("agent:writer").is_empty(), "the control: with %s gone, no writer is ready" % str(AGENT_PROGRAMS))
 	Components.attach_menu(menu, ["text"])
-	var tarot := _item(menu, "tarot")
-	_ok(tarot >= 0 and menu.is_item_disabled(tarot), "with no writer, Tarot is offered GRAYED")
-	_ok(tarot >= 0 and menu.get_item_tooltip(tarot).contains("writer"),
-		"...and its tooltip says why ('%s')" % (menu.get_item_tooltip(tarot).get_slice("\n\n", 1) if tarot >= 0 else ""))
+	var cards := _item(menu, "cards")
+	_ok(cards >= 0 and menu.is_item_disabled(cards), "with no writer, Cards is offered GRAYED")
+	_ok(cards >= 0 and menu.get_item_tooltip(cards).contains("writer"),
+		"...and its tooltip says why ('%s')" % (menu.get_item_tooltip(cards).get_slice("\n\n", 1) if cards >= 0 else ""))
 	_ok(_item(menu, "text") < 0, "the text, attached already, is not offered again")
-	_ok(_item(menu, "look") >= 0 and not menu.is_item_disabled(_item(menu, "look")), "the Look is offered, lit")
+	var look := _item(menu, "look")
+	_ok(look >= 0 and menu.is_item_disabled(look) and menu.get_item_tooltip(look).contains("Picture"),
+		"a Look on a note with no picture is grayed, and says to attach a Picture (%s)" % (menu.get_item_tooltip(look).get_slice("\n\n", 1) if look >= 0 else ""))
+	Components.attach_menu(menu, ["text", "song", "picture"])
+	look = _item(menu, "look")
+	_ok(look >= 0 and not menu.is_item_disabled(look), "...and lit once the note has a song and a Picture")
+	_ok(_item(menu, "picture") < 0, "a Picture already attached is not offered again")
+	Components.attach_menu(menu, ["text", "song"])
+	var board := _item(menu, "storyboard")
+	_ok(board >= 0 and menu.is_item_disabled(board), "storyboards need a Picture too")
 	Deps._resolved = keep
 	Components.attach_menu(menu, ["text"])
-	tarot = _item(menu, "tarot")
-	_ok(tarot >= 0 and menu.is_item_disabled(tarot) == not Components.not_ready("tarot").is_empty(),
-		"and with the agents back, Tarot is lit exactly when this machine has a writer and a painter")
+	cards = _item(menu, "cards")
+	_ok(cards >= 0 and menu.is_item_disabled(cards) == not Components.not_ready("cards").is_empty(),
+		"and with the agents back, Cards is lit exactly when this machine has a writer and a painter")
 	# asked as Android: nothing but what a phone can do
 	Deps.platform_override = "android"
 	Components.attach_menu(menu, [])

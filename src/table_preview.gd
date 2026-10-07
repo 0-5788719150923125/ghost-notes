@@ -11,7 +11,7 @@ class_name TablePreview
 ## flames lit. One thing from four sides (front, its right, above, and as the episode's camera looks
 ## down at the table), or several side by side, one tile each, each tile captioned.
 ##
-## THE TABLE IS THE SHOW'S OWN: a [TarotMedium] built on the episode's seed and pictures - its
+## THE TABLE IS THE SHOW'S OWN: a [TableMedium] built on the episode's seed and pictures - its
 ## camera, its lamp, where the deck sits, the spread the cards are laid in (face down: the set dresser
 ## knows no card) - with the description being tried standing in for the episode's table. Where a
 ## thing stands, what is made smaller or left off for want of room, which light leads: the answers
@@ -38,7 +38,7 @@ const AIR_AT := 40.0
 const OPENING_AT := 2.0
 ## The episode's table medium, by class name: looked up when it is needed, never compiled in - it
 ## needs ghost's autoloads, and so would anything naming it (see the class note).
-const MEDIUM := "TarotMedium"
+const MEDIUM := "TableMedium"
 ## The pictures of the episode the table is built on - copied beside the description being tried,
 ## never its card faces: the set dresser knows no card.
 const PICTURES := ["surface.png", "backdrop.png", "backdrop.json", "back.png"]
@@ -70,7 +70,7 @@ void fragment() {
 }
 """
 
-## A candle's flame, as the table draws one ([constant TarotMedium.FLAME_SHADER]), turned to face
+## A candle's flame, as the table draws one ([constant TableMedium.FLAME_SHADER]), turned to face
 ## whichever side the studio shoots from.
 const FLAME_SHADER := """
 shader_type spatial;
@@ -97,7 +97,7 @@ class Doc:
 	var document := {}
 
 
-var episode: TarotEpisode
+var episode: CardEpisode
 var plan: Dictionary
 ## The show's name and byline, set over the table at the opening ([method opening]).
 var show_name := ""
@@ -112,19 +112,19 @@ var _held: Node3D
 var _flame_mat: ShaderMaterial
 
 var _table: SubViewport = null
-var _medium = null               # a TarotMedium, loaded by class name
+var _medium = null               # a TableMedium, loaded by class name
 var _doc: Doc
 
 
 ## [param dir]: the folder the preview keeps its copies in (inside the job's own). [param name] and
 ## [param line]: the show's name and byline.
-func _init(ep: TarotEpisode, episode_plan: Dictionary, dir: String, name := "", line := "") -> void:
+func _init(ep: CardEpisode, episode_plan: Dictionary, dir: String, name := "", line := "") -> void:
 	episode = ep
 	plan = episode_plan
 	_dir = dir
 	show_name = name
 	byline = line
-	_pitch = float(TarotTable.layout_of(ep.seed)["pitch"])
+	_pitch = float(CardTable.layout_of(ep.seed)["pitch"])
 
 
 ## Whether this process can take a picture at all.
@@ -372,14 +372,14 @@ func table(raw: Dictionary) -> Dictionary:
 		return {"error": err}
 	_pose_spread()
 	_medium._tick_air(AIR_AT)
-	var out := _placed(TarotTable.sanitize_table(raw, TarotTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {})))
+	var out := _placed(CardTable.sanitize_table(raw, CardTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {})))
 	out["image"] = await _render(_table, TABLE_FRAMES)
 	return out
 
 
 ## ONE EFFECT IN MOTION: the effect named [param name] in [param raw]'s `effects`, on the episode's
 ## table, photographed four times - a burst a moment after the thing it marks happens (a card leaping
-## from the deck, one held up and twirled, one laid down...: [constant TarotTable.MOMENTS], staged
+## from the deck, one held up and twirled, one laid down...: [constant CardTable.MOMENTS], staged
 ## here as the table stages them), fog or motes a few seconds apart, so their roll and their wander
 ## show. A sheet of four, `{image, frames: [seconds after]}`; `error` when it cannot be shown.
 func watch(raw: Dictionary, name: String) -> Dictionary:
@@ -388,7 +388,7 @@ func watch(raw: Dictionary, name: String) -> Dictionary:
 		return {"error": err}
 	var air = _medium._air
 	var fx := {}
-	for e in (TarotTable.sanitize_table(raw, TarotTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {}))["effects"] as Array):
+	for e in (CardTable.sanitize_table(raw, CardTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {}))["effects"] as Array):
 		if String((e as Dictionary).get("name", "")) == name:
 			fx = e
 	if air == null or fx.is_empty():
@@ -442,7 +442,7 @@ func opening(raw: Dictionary) -> Dictionary:
 	m._lens(1.0)
 	if img == null or bare == null:
 		return {"error": "no picture could be taken"}
-	var lay := TarotTable.title_layout(title.face, title.italic, String(title.channel), String(title.byline), Vector2(SHEET))
+	var lay := CardTable.title_layout(title.face, title.italic, String(title.channel), String(title.byline), Vector2(SHEET))
 	return {"image": img, "contrast": title_contrast(bare, title.ink, lay, title.face)}
 
 
@@ -457,14 +457,14 @@ static func title_contrast(frame: Image, ink: Color, lay: Dictionary, face: Font
 			continue
 		var size := int(d["size"])
 		var w := face.get_string_size(String(d["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-		var top := float(d["y"]) - size * TarotTable.TITLE_CAP
+		var top := float(d["y"]) - size * CardTable.TITLE_CAP
 		for third in 3:
 			var x0 := (frame.get_width() - w) * 0.5 + w * third / 3.0
-			var r := Rect2i(Vector2i(roundi(x0), roundi(top)), Vector2i(roundi(w / 3.0), roundi(size * TarotTable.TITLE_CAP)))
+			var r := Rect2i(Vector2i(roundi(x0), roundi(top)), Vector2i(roundi(w / 3.0), roundi(size * CardTable.TITLE_CAP)))
 			r = r.intersection(Rect2i(Vector2i.ZERO, frame.get_size()))
 			if r.size.x <= 0 or r.size.y <= 0:
 				continue
-			worst = minf(worst, TarotTable.contrast(ink, _mean(frame, r)))
+			worst = minf(worst, CardTable.contrast(ink, _mean(frame, r)))
 	return worst if worst < INF else 0.0
 
 
@@ -510,7 +510,7 @@ func _stand(raw: Dictionary) -> String:
 		if FileAccess.file_exists(_dir.path_join(k + ".png")):
 			images[k] = _dir.path_join(k + ".png")
 	# the show's name stands over the table only at the opening: its alpha is 0 for every other picture
-	_doc.document = {"source": "", "title": show_name, "byline": byline, "tarot": {"show": episode.show, "seed": episode.seed,
+	_doc.document = {"source": "", "title": show_name, "byline": byline, "table": {"show": episode.show, "seed": episode.seed,
 		"dir": _dir, "plan": plan, "images": images, "cards": cards}}
 	_medium._key = ""
 	_medium._ensure_doc()
@@ -518,7 +518,7 @@ func _stand(raw: Dictionary) -> String:
 
 
 ## A MOMENT STAGED for a burst `on` [param on], at [constant AIR_AT], the way the table stages it: where
-## its emitter is through it (`moments`, as [method TarotMedium._air_moments] gives them) and how the
+## its emitter is through it (`moments`, as [method TableMedium._air_moments] gives them) and how the
 ## card in it moves (`card`: `[[t, Transform3D], ...]`, empty for none).
 func _staged(on: String) -> Dictionary:
 	var m = _medium

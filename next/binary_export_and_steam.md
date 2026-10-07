@@ -236,12 +236,12 @@ fine-tuning chain.
 
 - **Godot** (MIT) and the libraries it bundles - Godot's "Complying with licenses" page lists the
   ones that need credit.
-- **Fonts:** 11 OFL families - `fonts/hands/` (Caveat, Kalam, Patrick Hand) and `fonts/tarot/`
+- **Fonts:** 11 OFL families - `fonts/hands/` (Caveat, Kalam, Patrick Hand) and `fonts/cards/`
   (Bungee, Cinzel, Courier Prime, EB Garamond, IM Fell English, Limelight, Uncial Antiqua,
   UnifrakturMaguntia). OFL is fine in a commercial app; its text must travel with the fonts.
 - **`data/cmudict.dict`:** CMU's BSD-style license - the notice reproduced in the documentation.
 - **`data/libritts_speakers.json`:** derived from LibriTTS-P (LINE), CC BY 4.0 - credit.
-- **`data/tarot/meanings.json`:** CC0 (Corpora) over an uncopyrighted source (McElroy). Nothing
+- **`data/decks/tarot/meanings.json`:** CC0 (Corpora) over an uncopyrighted source (McElroy). Nothing
   owed; credit anyway.
 - **The libritts voice:** fetched, not shipped, but credit LibriTTS (Google LLC, CC BY 4.0) in the
   same place. Whether a model trained on it counts as "sharing" it is unsettled; a credit line costs

@@ -9,7 +9,7 @@ class_name Card
 ## hue is drawn at one saturation and value (as Blockly fixes its categories'), so any hue fits
 ## the set; and the color never stands alone - the title says what the card is.
 ##
-## THE FOLD IS THE VIEWER'S. It is kept in ghost.cfg (`[cards]`, one key per panel and card),
+## THE FOLD IS THE VIEWER'S. It is kept in ghost.cfg (`[folds]`, one key per panel and card),
 ## never in the note: folding changes nothing the show does, so it must not churn the author's
 ## files. A fold made by a click (or by the chips, through [method fold] / [method expand])
 ## arrives as `folding_changed` and is written; the stored fold is put back by assigning
@@ -28,8 +28,9 @@ const VAL := 0.82
 ## The paper's gray, at the same value.
 const PAPER := Color(0.72, 0.74, 0.78)
 
-## The [Settings] section that holds every card's fold.
-const SECTION := "cards"
+## The [Settings] section that holds every card's fold (`[cards]` until 2026-10-06, when the Cards
+## panel took that name for its own settings).
+const SECTION := "folds"
 
 ## Which panel and which card, for the stored fold: "<panel>.<key>".
 var key := ""

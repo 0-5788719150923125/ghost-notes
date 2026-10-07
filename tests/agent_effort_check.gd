@@ -1,6 +1,6 @@
 extends SceneTree
 
-## agent_effort_check - the REASONING EFFORT a tarot show sets for its writer and its painter
+## agent_effort_check - the REASONING EFFORT a card show sets for its writer and its painter
 ## (2026-10-06, the user: "if they do - I think we should make that an option that we would be able
 ## to set"), each CLI's own setting, with no agent run.
 ##
@@ -124,7 +124,7 @@ func _nova() -> bool:
 
 
 func _panel() -> bool:
-	var ed = load("res://src/tarot_editor.gd").new()
+	var ed = load("res://src/cards_editor.gd").new()
 	ed._build_panel()
 	# NOT THE AUTHOR'S SHOW. A panel comes up synced to whatever document the person running
 	# this has open, and DocSource.set_field writes a synced document at once - so this gate read

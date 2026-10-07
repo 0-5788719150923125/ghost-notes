@@ -38,7 +38,7 @@ core. The commitments:
 
 - [Components and templates](components.md) (13 components, 7 templates) - what a note can carry, the templates **New** makes from it, and what each part asks of the platform.
 - [Scenes](scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
-- [Media](media.md) (6) - what the show is carried on.
+- [Media](media.md) (7) - what the show is carried on.
 - [Look filters](filters.md) (8) - the post-process over the whole picture.
 - [Layers](layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](forces.md) (8) - the physics primitives particles compose.
@@ -60,10 +60,10 @@ core. The commitments:
 - **[`src/`](../src/)** - All GDScript. Per-script map in [docs/index.md](../docs/index.md); the subsystem groups are described there too.
 - **[`src/scenes/`](../src/scenes/)** - The visualizer scene catalog - one class per scene. See [docs/scenes.md](../docs/scenes.md).
 - **[`src/media/`](../src/media/)** - The media - what the show is carried on. See [docs/media.md](../docs/media.md).
-- **[`shaders/`](../shaders/)** - The GPU shaders: the Look, every Masking effect, the tarot table and a few scenes.
+- **[`shaders/`](../shaders/)** - The GPU shaders: the Look, every Masking effect, the card table and a few scenes.
 - **[`storyboards/`](../storyboards/)** - Manual-mode scene scores (YAML; JSON accepted). [storyboards/README.md](../storyboards/README.md) is the data spec.
-- **[`data/`](../data/)** - Data the code reads - pronunciation (CMUdict, `english.yml`), the LibriTTS speaker table, the tarot's - each license beside its file.
-- **[`fonts/`](../fonts/)** - Faces the media draw with: the notebook's handwriting and the tarot's lettering.
+- **[`data/`](../data/)** - Data the code reads - pronunciation (CMUdict, `english.yml`), the LibriTTS speaker table, the decks (the tarot's meanings) - each license beside its file.
+- **[`fonts/`](../fonts/)** - Faces the media draw with: the notebook's handwriting and the card table's lettering.
 - **[`hosts/`](../hosts/)** - The Python hosts ghost spawns, each in an environment of its own the Provisioner builds (`src/deps.gd`): `voice/` the neural voice, `face/` Masking's face and body pre-passes, `capture/` the tablet's page capture. Kept out of the exported .pck.
 - **[`scripts/`](../scripts/)** - Build and check scripts: `scripts/check.sh` runs every gate (`--gpu` adds the ones that need a real renderer), `scripts/build.sh` exports a target into `dist/`.
 - **[`tests/`](../tests/)** - The gates (`*_check.gd`), probes (`*_probe.gd`) and their runners; `scripts/check.sh` runs them all.
@@ -90,7 +90,7 @@ From a song file to the typed per-frame `AudioFeatures` every scene consumes - l
 
 ### Direction & session
 
-The lifecycle around the scenes: boot, the notes list, the Director's scheduling/transitions, the manual Workspace, and the Dial performance controls.
+The lifecycle around the scenes: boot, the notes list and a note's own panel, the Director's scheduling/transitions, the storyboards card, and the Dial performance controls.
 
 - [`main.gd`](../src/main.gd) **main** - ghost entry point.
 - [`boot.gd`](../src/boot.gd) **boot** - Boot - the earliest hook (first autoload), for things that must happen before the window is ever drawn into. In export-render mode (--export) it keeps the render window out of the way as early as GDScript can - off-screen, no focus - so it barely flickers into view before the render takes over. ...
@@ -106,13 +106,16 @@ The lifecycle around the scenes: boot, the notes list, the Director's scheduling
 - [`side_panel.gd`](../src/side_panel.gd) **SidePanel** - a mode's control panel, which CANNOT outgrow the window.
 - [`card.gd`](../src/card.gd) **Card** - one component's settings on a side panel: a titled box that folds, bordered in its FAMILY's color (next/notes.md, "A card").
 - [`card_row.gd`](../src/card_row.gd) **CardRow** - the chips under a panel's title, one per `Card` in its color (next/notes.md, "The component row"). A click opens or closes that card; Ctrl-click opens it alone and folds the rest, as Blender's panel headers do. A chip shows ● while its card is open and ○ while it is folded, so the row also answers ...
-- [`look_card.gd`](../src/look_card.gd) **LookCard** - the Look: a post-process over the whole picture, one row per filter in `Filters.REGISTRY` (next/notes.md step 5: one card per section, in every panel that has it - the Generative panel built it and the tarot panel borrowed it by inheriting the whole panel).
-- [`bookends_card.gd`](../src/bookends_card.gd) **BookendsCard** - the intro and the outro: seconds held before the first word and after the last (next/notes.md step 5: one card per section, in every panel that has it - the tarot panel used to declare both sliders a second time). Its block in a document is `bookends:`.
+- [`look_card.gd`](../src/look_card.gd) **LookCard** - the Look: a post-process over the whole picture, one row per filter in `Filters.REGISTRY` (next/notes.md step 5: one card per section, in every panel that has it - the Generative panel built it and the Cards panel borrowed it by inheriting the whole panel).
+- [`bookends_card.gd`](../src/bookends_card.gd) **BookendsCard** - the intro and the outro: seconds held before the first word and after the last (next/notes.md step 5: one card per section, in every panel that has it - the Cards panel used to declare both sliders a second time). Its block in a document is `bookends:`.
 - [`picture_card.gd`](../src/picture_card.gd) **PictureCard** - the picture a reading is shown in: the MEDIUM (what the show is carried on), the FILMS a comic cuts to, the book's PICTURES (`IllustrationPanel`), and the Director's dials - scene hold, flourishes, camera, handwriting (next/notes.md step 5: one card per section). Its block in a document is ...
+- [`song_card.gd`](../src/song_card.gd) **SongCard** - the note's song (2026-10-06): which file it is, and a way to choose one. Importing a song is a component of a note, not a button on the notes list - "if we want to import an audio file or a video file - then we should add those relevant components/attachments to the note".
+- [`storyboards_card.gd`](../src/storyboards_card.gd) **StoryboardsCard** - the scenes by hand: the storyboards in `storyboards/`, one a click away, in a note with a song and a Picture (the Manual template). It was the Workspace, a panel of its own beside the show; a note's panel holds it now, as a card like every other component's, and the board picked is the note's - ...
 - [`console.gd`](../src/console.gd) **ConsoleView** - The in-app console - a live tail of Godot's own log file. print(), push_warning(), push_error() and engine SCRIPT ERRORs all land in user://logs/godot*.log via the engine's default file logging, but anyone launching ghost as a compiled app or from the Godot launcher never sees that stream - it used ...
-- [`notes_list.gd`](../src/notes_list.gd) **NotesList** - where Ghost Notes opens (next/notes.md step 8, "No home screen"): a notes app opens on its notes. The left panel lists them - the default folder and every folder or file the user added (`NoteStore`), newest first - with New (the templates: today's modes, and a plain note) and Open…; the main area ...
+- [`notes_list.gd`](../src/notes_list.gd) **NotesList** - where Ghost Notes opens (next/notes.md step 8, "No home screen"): a notes app opens on its notes. The left panel lists them - the default folder and every folder or file the user added (`NoteStore`), newest first - under the name and the tagline, with New: the templates (today's modes, and a plain ...
+- [`delete_dialog.gd`](../src/delete_dialog.gd) **DeleteDialog** - "Delete this note?", asked before a note goes (2026-10-06, the user: "add a delete option to every note, and probably an x to each note on the home screen. If we click the x, prompt for confirmation to delete the note"). Asked from the notes list's × and from every note's own "⋯" (see [method ...
 - [`phone_shell.gd`](../src/phone_shell.gd) **PhoneShell** - Ghost Notes on a phone (next/notes.md step 11, "Platforms: desktop and Android"): a notes app and nothing more. A list of the notes in `user://notes/` (`NoteStore`), and the editor - full screen, in portrait - with no stage, no transport, no Chrome furniture and no agent: on a phone a note has one ...
-- [`note_panel.gd`](../src/note_panel.gd) **NotePanel** - a note with nothing attached (next/notes.md step 8): "with nothing attached, it is a text editor". The panel holds the note's own words - the Script card, synced to the file, its body edited in place and written back on a quiet period as every panel's is (`DocSource`) - and the component row's "+", ...
+- [`note_panel.gd`](../src/note_panel.gd) **NotePanel** - a note's own panel, for every note no specialized panel runs: a note with nothing attached (next/notes.md step 8: "with nothing attached, it is a text editor"), and a note with a song - Auto and Manual, rebuilt 2026-10-06 ("if we load an audio file, allow it to be played. Do not hide the left-hand ...
 - [`note_store.gd`](../src/note_store.gd) **NoteStore** - where notes live (next/notes.md step 8, "Where do notes live?"): a DEFAULT FOLDER, and every other folder or file the user points Ghost Notes at - "it's not realistic to prevent people from sourcing their own content from other projects, git repos, etc." One small interface (list, create, add, and ...
 - [`director.gd`](../src/director.gd) **director** - 
 - [`settings.gd`](../src/settings.gd) **settings** - Settings - the one owner of `user://ghost.cfg` (autoload).
@@ -128,7 +131,6 @@ The lifecycle around the scenes: boot, the notes list, the Director's scheduling
 - [`illustrations.gd`](../src/illustrations.gd) **Illustrations** - the library of generated pictures a book prints.
 - [`image_gen.gd`](../src/image_gen.gd) **ImageGen** - who paints the pictures. The backend axis of `Illustrations`.
 - [`illustration_panel.gd`](../src/illustration_panel.gd) **IllustrationPanel** - the Generative panel's controls for a book's pictures (`Illustrations`).
-- [`workspace.gd`](../src/workspace.gd) **Workspace** - the manual-mode authoring surface (scaffolding).
 - [`dial.gd`](../src/dial.gd) **Dial** - the first live performance control (the semi-automatic mode's first lever).
 - [`dial_widget.gd`](../src/dial_widget.gd) **DialWidget** - the on-screen face of a `Dial` (see that class for what turning does).
 - [`volume_knob.gd`](../src/volume_knob.gd) **VolumeKnob** - A pull-rope volume control. Click-and-HOLD the knob, then drag AWAY from it: a rope stretches from the knob (the anchor) to your cursor, and the farther you pull the louder it gets - but the ceiling is ASYMPTOTIC (v = 1 - e^(-d/D0)), so "max" is approached, never reached. Let go and the level is ...
@@ -229,27 +231,27 @@ Text to narrated audio in two paths: ghost's own source-filter synthesizer (no m
 - [`script_writer.gd`](../src/script_writer.gd) **ScriptWriter** - where a voice panel's script is written: a card in the panel, and an editor window it opens.
 - [`subtitles.gd`](../src/subtitles.gd) **Subtitles** - the karaoke overlay, session-owned rather than editor-owned.
 - [`voice_host.gd`](../src/voice_host.gd) **VoiceHost** - Godot's end of the neural voice subprocess (see VOICE_PLAN.md).
-- [`reading_panel.gd`](../src/reading_panel.gd) **ReadingPanel** - a reading of a document in the neural voice: the script, the cast, the voice, the stream, the transport's hooks, the export (VOICE_PLAN.md P4). The Generative and Tarot panels are both one (next/notes.md step 5): each adds the cards its picture is made of (`_build_cards`) and the blocks it ...
+- [`reading_panel.gd`](../src/reading_panel.gd) **ReadingPanel** - a reading of a document in the neural voice: the script, the cast, the voice, the stream, the transport's hooks, the export (VOICE_PLAN.md P4). The Generative and Cards panels are both one (next/notes.md step 5): each adds the cards its picture is made of (`_build_cards`) and the blocks it ...
 - [`generative_editor.gd`](../src/generative_editor.gd) **GenerativeEditor** - the Generative mode: a chapter read aloud in the neural voice, shown in the medium the author picks. Everything that reads is `ReadingPanel`'s; this panel adds the cards a chapter's picture is made of (next/notes.md step 5) - the Picture (`PictureCard`: the medium, the films, the book's pictures, ...
 - [`voice_readers.gd`](../src/voice_readers.gd) **VoiceReaders** - who a multi-speaker voice's speaker NUMBER actually is.
 - [`voice_fx.gd`](../src/voice_fx.gd) **VoiceFX** - the ambience from Synthesis, over any PCM.
 - [`room_fx.gd`](../src/room_fx.gd) **RoomFX** - THE ROOM, decided once and rendered twice.
 
-### Tarot
+### Cards
 
-An automatic tarot reading: a show's brief, its episodes - each planned, painted and written by agents one card at a time, kept on disk step by step - and the table they are read at, in the Generative voice, with the things on it modeled from a written description (Props). Design: next/tarot.md.
+A card reading nobody writes: a show's brief, its episodes - each planned, dealt, painted and written by agents one card at a time, kept on disk step by step - and the table they are read at, in the Generative voice, with the things on it modeled from a written description (Props). Tarot is the first deck and, so far, the only recipe. Design: next/cards.md.
 
-- [`tarot_editor.gd`](../src/tarot_editor.gd) **TarotEditor** - the tarot mode: a reading nobody writes by hand.
+- [`cards_editor.gd`](../src/cards_editor.gd) **CardsEditor** - the Cards mode: a card reading nobody writes by hand. Its first deck, and so far its only recipe, is the tarot.
 - [`table_actions.gd`](../src/table_actions.gd) **TableActions** - the verbs a card show performs at the table, as ONE REGISTRY (next/notes.md step 9, "Actions are a registry"). Each verb declares what it takes (which card), whether it is written in a reading's marks or performed between them, the rest the voice takes for it, whether it brings a card up to be ...
 - [`table_positions.gd`](../src/table_positions.gd) **TablePositions** - where cards lie on the table, as DATA (next/notes.md step 9, "Positions are data"). A position is `{x, z, yaw, face}` on the cloth - meters, x to the reader's right and z toward the reader; yaw in degrees; face "up" or "down" - written by the producer's plan (a spread position may carry coordinates ...
 - [`dealer_tools.gd`](../src/dealer_tools.gd) **DealerTools** - what a dealer can do while it lays an episode's cards out (next/notes.md step 9, "Agents choose"): PLACE a card where it should lie, FLIP it face up or down, LOOK at the whole layout as the table will check it, and SUBMIT it. Served as tools (`AgentTools`), as the set dresser's are ...
-- [`tarot_producer.gd`](../src/tarot_producer.gd) **TarotProducer** - makes whatever an episode is missing, in the order a reading happens.
-- [`tarot_episode.gd`](../src/tarot_episode.gd) **TarotEpisode** - one episode of a tarot show, as it lies on disk.
-- [`tarot_prompts.gd`](../src/tarot_prompts.gd) **TarotPrompts** - what each agent behind a tarot episode is told. Pure: strings in, strings out, so a gate can hold every prompt to the rules (see tests/tarot_check.gd).
-- [`tarot_script.gd`](../src/tarot_script.gd) **TarotScript** - a tarot reading as the voice reads it and the table performs it.
-- [`tarot_deck.gd`](../src/tarot_deck.gd) **TarotDeck** - the cards a show reads with, and how an episode's deck is shuffled.
-- [`tarot_table.gd`](../src/tarot_table.gd) **TarotTable** - what an episode's look may name, and how a look is made safe to draw.
-- [`tarot_cards.gd`](../src/tarot_cards.gd) **TarotCards** - a card's face, its back and its booklet page, composed in 2D for the table.
+- [`card_producer.gd`](../src/card_producer.gd) **CardProducer** - makes whatever an episode is missing, in the order a reading happens.
+- [`card_episode.gd`](../src/card_episode.gd) **CardEpisode** - one episode of a card show, as it lies on disk.
+- [`card_prompts.gd`](../src/card_prompts.gd) **CardPrompts** - what each agent behind a card episode is told. Pure: strings in, strings out, so a gate can hold every prompt to the rules (see tests/cards_check.gd).
+- [`card_reading.gd`](../src/card_reading.gd) **CardReading** - a card reading as the voice reads it and the table performs it.
+- [`card_deck.gd`](../src/card_deck.gd) **CardDeck** - the cards a show reads with, and how an episode's deck is shuffled.
+- [`card_table.gd`](../src/card_table.gd) **CardTable** - what an episode's look may name, and how a look is made safe to draw.
+- [`card_faces.gd`](../src/card_faces.gd) **CardFaces** - a card's face, its back and its booklet page, composed in 2D for the table.
 - [`props.gd`](../src/props.gd) **Props** - things BUILT FROM A DESCRIPTION. A thing is a few PARTS, each one SHAPE with real sizes and one MATERIAL whose surface is procedural, with an ORNAMENT worked into it if it has one - or a GROUP of parts, placed and repeated as one (a candelabra's arm, cup and taper, copied round). An agent writes ...
 - [`effects.gd`](../src/effects.gd) **Effects** - air that moves and light that bursts: FOG that rolls through a stretch of the scene, MOTES that wander about it (pixies, fireflies, flies, embers, dust) and leave and come back, and BURSTS of sparks, glitter, embers, flame, smoke or stars at a moment. An agent describes them as data - the ...
 - [`set_dresser_tools.gd`](../src/set_dresser_tools.gd) **SetDresserTools** - what the set dresser can do while it sets a tarot reader's table: MAKE a thing, LOOK at it, FIX it, and see the whole table as the camera will before handing it in.
@@ -284,7 +286,7 @@ The video chroma-key masking editor - a second app surface inside ghost. See [ma
 - [`mask_timeline.gd`](../src/mask_timeline.gd) **MaskTimeline** - the mask editor's scrub strip.
 - [`timeline_view.gd`](../src/timeline_view.gd) **TimelineView** - the shared pixel<->time mapping for the mask editor's whole timeline stack: the primary clip's trim lane, any imported track's lane, and the marker-editing strip all read the SAME zoom/pan state, so a second's position agrees across every row.
 - [`track_lane.gd`](../src/track_lane.gd) **TrackLane** - one clip's block on the shared timeline: drag its LEFT/RIGHT edges to trim (in/out points), drag its BODY to shift where it sits on the master timeline. Used for both the primary clip's own trim block (offset fixed at 0 - it IS master time, so `movable` is false there) and one lane per imported ...
-- [`mask_marker_tool.gd`](../src/mask_marker_tool.gd) **mask_marker_tool** - mask_marker_tool - headless CLI: insert one marker into a mask session file at a given time. See CLAUDE.md's "Marker insertion tool" section.
+- [`mask_marker_tool.gd`](../src/mask_marker_tool.gd) **mask_marker_tool** - mask_marker_tool - headless CLI: insert one marker into a mask session file at a given time.
 
 ### Export
 

@@ -10,7 +10,7 @@ class_name NoteStore
 ## A NOTE IS A MARKDOWN FILE, as a rift chapter already is: frontmatter, then a body, and its
 ## components are the blocks under `ghost:` ([Components.template_for] reads which template runs
 ## it). Creating a note writes only the block that says what it is - `voice:` for a Generative
-## note, `tarot:` for a show, `song:` for a song - and leaves every other block to the panel, which
+## note, `cards:` for a show, `song:` for a song - and leaves every other block to the panel, which
 ## writes one the first time its card is changed: an empty block is not "the defaults" to every card
 ## (an empty `illustrations:` would wipe the pictures' look), and a block nobody set is no block.
 
@@ -18,9 +18,12 @@ class_name NoteStore
 const DEFAULT := "user://notes"
 ## Where notes are made and listed from: [constant DEFAULT], or a gate's own folder.
 static var root := DEFAULT
-## [Settings] section: `sources` (the folders and files the user added) and `drafts_moved`.
+## [Settings] section: `sources`, the folders and files the user added.
 const SECTION := "notes"
 const EXTS := ["md", "markdown"]
+## How a deleted note is thrown away, when set: a gate's seam, so a check never fills the author's
+## trash. Unset, a note goes to the system's trash ([method trash]).
+static var discard: Callable = Callable()
 
 
 ## The default folder, absolute, made if it is not there.
@@ -56,7 +59,7 @@ static func add(path: String) -> bool:
 ## Forget [param path] as a source. The file itself is left exactly as it is.
 static func remove(path: String) -> void:
 	var list := sources()
-	var i := list.find(path)
+	var i := list.find(path.simplify_path())
 	if i >= 0:
 		list.remove_at(i)
 		Settings.write(SECTION, "sources", Array(list))
@@ -157,55 +160,27 @@ static func _safe(name: String) -> String:
 	s = s.strip_edges()
 	return s if not s.is_empty() else "Untitled"
 
-## THE DRAFTS BECOME NOTES, ONCE (step 8). ghost.cfg kept one unsaved script per mode (`[generative]
-## text`, `[tarot] text`, `[synth] text`) and nowhere to put a second. The first time the list opens,
-## each unsynced draft is written into the default folder as a note - its words, its title, and the
-## voice its panel held for it - and every document a panel was synced to joins the list, so the
-## chapters and shows already in use are there. ghost.cfg is left as it was; it just stops being
-## where text lives. Refused in a process that may not write the author's things (a render, a
-## probe) - unless the folder is a gate's own. Returns the notes it made.
-static func move_drafts() -> Array:
-	if bool(Settings.read(SECTION, "drafts_moved", false)):
-		return []
-	if Settings.is_read_only() and root == DEFAULT:
-		return []
-	var made: Array = []
-	for row in [["generative", "generative"], ["tarot", "tarot"], ["synth", "synthesis"]]:
-		var section: String = row[0]
-		var key: String = row[1]
-		var doc := String(Settings.read(section, "doc_path", ""))
-		if not doc.is_empty() and FileAccess.file_exists(doc):
-			add(doc)
-		var text := String(Settings.read(section, "text", ""))
-		var synced := bool(Settings.read(section, "sync", false)) and not doc.is_empty()
-		if text.strip_edges().is_empty() or synced:
-			continue
-		var fields: Variant = Settings.read(section, "fields", {})
-		var title := String((fields as Dictionary).get("title", "")) if fields is Dictionary else ""
-		if title.is_empty():
-			title = "%s draft" % String(Components.TEMPLATES[key]["label"])
-		var p := create(key, title, text, _draft_blocks(section, key))
-		if not p.is_empty():
-			made.append(p)
-	Settings.write(SECTION, "drafts_moved", true)
-	return made
+
+## DELETE A NOTE (2026-10-06): to the system's trash - a mistaken yes is a trip to the trash, not a
+## loss - and out of the sources if it was added by hand. Returns "" once it is gone, or why not.
+static func trash(path: String) -> String:
+	var p := path.simplify_path()
+	if not FileAccess.file_exists(p):
+		return "There is no note at %s." % p
+	var err: int = int(discard.call(p)) if discard.is_valid() \
+		else OS.move_to_trash(ProjectSettings.globalize_path(p))
+	if err != OK:
+		return "%s could not be moved to the trash (error %d)." % [p.get_file(), err]
+	remove(p)
+	return ""
 
 
-## What a mode's panel kept for its unsynced draft, as the blocks its note carries.
-static func _draft_blocks(section: String, key: String) -> Dictionary:
-	var out := {}
-	if key in ["generative", "tarot"]:
-		var cast: Variant = Settings.read(section, "cast", {})
-		if cast is Dictionary and not (cast as Dictionary).is_empty():
-			out["voice"] = {"turn": Settings.read(section, "turn", 1.0), "tab": Settings.read(section, "tab_name", ""),
-				"voices": cast, "hesitate": Settings.read(section, "hesitate", 1.5),
-				"hesitate_on": Settings.read(section, "hesitate_on", true)}
-	if key == "tarot":
-		var knobs: Variant = Settings.read(section, "knobs", {})
-		out["tarot"] = knobs if knobs is Dictionary else {}
-	if key == "synthesis":
-		var lineage: Variant = Settings.read(section, "lineage", [])
-		if lineage is Array and not (lineage as Array).is_empty():
-			out["synthesis"] = {"lineage": lineage, "traits": Settings.read(section, "traits", {}),
-				"genome": Settings.read(section, "adreno", {}), "reception": Settings.read(section, "loc", {})}
-	return out
+## Is [param path] in the list only because it was added by hand, on its own - so it can leave the
+## list without leaving the disk? (A note in an added folder is listed with its folder.)
+static func is_added(path: String) -> bool:
+	return sources().has(path.simplify_path())
+
+
+## Is [param path] in the default folder - a note Ghost Notes made?
+static func is_own(path: String) -> bool:
+	return path.simplify_path().get_base_dir() == folder().simplify_path()

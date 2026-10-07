@@ -61,7 +61,7 @@ func _ready() -> void:
 	_check_outro_mark()
 	_check_scrub()
 	_check_delivery_marks()
-	_check_tarot_familiar()
+	_check_cards_familiar()
 	_check_voice_colors()
 	_ed.free()
 	if _fails.is_empty():
@@ -489,21 +489,21 @@ func _check_turn_rest() -> void:
 	_ed._turn.value = 1.0
 
 
-## A TAROT READING IN TWO VOICES - the reader, and a familiar on their shoulder with a quip now
-## and then: the script the tarot panel hands this voice ([method TarotScript.speakable]) splits at
+## A CARD READING IN TWO VOICES - the reader, and a familiar on their shoulder with a quip now
+## and then: the script the Cards panel hands this voice ([method CardReading.speakable]) splits at
 ## the familiar's lines, the card after a quip opens in the reader's voice again, and every rest
 ## the table moves in (the shuffle, each draw, the spread) survives the split as a hold. A rest
 ## left alone on a passage with no words is dropped, and the cards would move while the voice ran on.
-func _check_tarot_familiar() -> void:
+func _check_cards_familiar() -> void:
 	_cast([Manuscript.NARRATOR, "Familiar"])
-	var script := TarotScript.compose([
+	var script := CardReading.compose([
 		{"kind": "shuffle", "card": 0, "text": "Hello, my loves.\n<!-- speaker: Familiar -->\nHere we go again.\n<!-- speaker: Narrator -->\nShush. Let's shuffle."},
 		{"kind": "draw", "card": 1, "text": "The Tower. Big changes for you.\n<!-- speaker: Familiar -->\nThere is always a tower."},
 		{"kind": "draw", "card": 2, "text": "The Star. Hope, my loves."},
 		{"kind": "spread", "card": 0, "text": "That is the reading. Go and do the thing."}])
-	var segs: Array = _ed._split_speakers(TarotScript.speakable(script))
+	var segs: Array = _ed._split_speakers(CardReading.speakable(script))
 	var n := Manuscript.NARRATOR
-	_ok(_who(segs) == [n, "Familiar", n, "Familiar", n], "a tarot reading's voices go %s" % str(_who(segs)))
+	_ok(_who(segs) == [n, "Familiar", n, "Familiar", n], "a card reading's voices go %s" % str(_who(segs)))
 	var star := ""
 	for sg in segs:
 		if String((sg as Dictionary)["text"]).contains("Star"):

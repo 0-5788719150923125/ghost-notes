@@ -25,9 +25,9 @@ class_name ScriptWriter
 ## card, never in the editor. Each is read by something: the label, its tooltip, the panels
 ## that use it.
 const FIELDS := {
-	"title": {"label": "Title", "modes": ["generative", "tarot", "note"],
-		"tip": "The chapter's title. Read aloud first, by the voice that opens the chapter, and set at the head of the chapter in the Novel and Notebook. For a tarot show, the channel's name."},
-	"byline": {"label": "Byline", "modes": ["tarot"],
+	"title": {"label": "Title", "modes": ["generative", "cards", "note"],
+		"tip": "The chapter's title. Read aloud first, by the voice that opens the chapter, and set at the head of the chapter in the Novel and Notebook. For a card show, the channel's name."},
+	"byline": {"label": "Byline", "modes": ["cards"],
 		"tip": "A line under the channel's name on the title screen while the intro holds - \"with Pen & Ink\". Empty, the name stands alone."},
 	"author": {"label": "Author", "modes": ["generative"],
 		"tip": "Who wrote it. Printed on the cover in the Novel and Notebook."},
@@ -35,10 +35,10 @@ const FIELDS := {
 		"tip": "The book this chapter belongs to. Printed on the cover in the Novel and Notebook."},
 }
 
-## WHAT THE DOCUMENT IS CALLED, where it is not a script: a tarot show's body is the BRIEF its
+## WHAT THE DOCUMENT IS CALLED, where it is not a script: a card show's body is the BRIEF its
 ## agents work from - written by hand, never read aloud.
 const WORDING := {
-	"tarot": {"edit": "Edit brief…", "window": "Brief",
+	"cards": {"window": "Brief",
 		"edit_tip": "Open the show's brief in an editor: what the show is, who reads it and by what rules. Every agent behind every episode is handed it word for word.",
 		"placeholder": "What is this show? Who reads it, how, and by what rules?"},
 }
@@ -62,6 +62,8 @@ var _speakers_head: Label
 var _timer: Timer
 var _speaker_names := PackedStringArray()
 var _field_edits := {}          # key -> LineEdit
+var _open_btn: Button
+var _clear_btn: Button
 
 
 func _wording(key: String, dflt: String) -> String:
@@ -84,16 +86,20 @@ func setup(section: String, blocks: PackedStringArray, mode: String) -> void:
 	_name.add_theme_font_size_override("font_size", 14)
 	row.add_child(_name)
 	var open := Button.new()
+	_open_btn = open
 	open.text = "Open…"
 	open.pressed.connect(func() -> void: doc.open())
 	row.add_child(open)
 	var clear := Button.new()
+	_clear_btn = clear
 	clear.text = "Clear"
 	clear.pressed.connect(func() -> void: doc.clear())
 	row.add_child(clear)
 	var edit := Button.new()
-	edit.text = String(_wording("edit", "Edit script…"))
-	edit.tooltip_text = String(_wording("edit_tip", "Open the script in an editor, with every mark "
+	# "EDIT", WHATEVER THE TEXT IS (2026-10-06, the user: "I feel like this button should be renamed to
+	# just 'Edit' globally"): a note's words, a chapter or a show's brief - the tooltip says which.
+	edit.text = "Edit"
+	edit.tooltip_text = String(_wording("edit_tip", "Open the text in an editor, with every mark "
 		+ "this panel understands listed beside it - speakers, hesitations, pictures, "
 		+ "pronunciations - ready to insert at the cursor."))
 	edit.pressed.connect(open_editor)
@@ -128,6 +134,14 @@ func setup(section: String, blocks: PackedStringArray, mode: String) -> void:
 	text_edit.text_changed.connect(_recount_soon)
 	text_edit.text_set.connect(_recount_soon)
 	_refresh()
+
+
+## THE CARD IS A NOTE'S (2026-10-06): the note IS the file, so Open… (sync to another file) and Clear
+## (let go of this one) are not offered - the same legacy the notes list's Open… was, there to work
+## with modes that opened documents. A panel started without a note (`--cards`, `--synth`) keeps them.
+func bind_note() -> void:
+	_open_btn.visible = false
+	_clear_btn.visible = false
 
 
 ## The FIELDS this panel uses, as a two-column form under the summary. An edit is committed on

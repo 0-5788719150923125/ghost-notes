@@ -34,12 +34,12 @@ class_name DocSource
 ## there: the reader, the tone, the room, the whole cast of a multi-speaker chapter.
 ##
 ## ONE BLOCK PER COMPONENT, NOT PER PANEL (next/notes.md step 5). Under `ghost:` a document keeps
-## `voice:`, `picture:`, `illustrations:`, `look:`, `bookends:`, `tarot:`, `synthesis:` as
+## `voice:`, `picture:`, `illustrations:`, `look:`, `bookends:`, `cards:`, `synthesis:` as
 ## siblings, and a panel reads and writes the ones it has cards for ([method setup]'s
 ## [code]blocks[/code]) - so a chapter's voices are there in every panel that speaks, and a block
-## no panel open now owns is carried through untouched. It used to be one block per panel
-## (`generative:`, `tarot:`), and the tarot panel erased six keys from the Generative block to
-## make its own; a document in that shape was rewritten once (tests/rewrite_blocks.gd).
+## no panel open now owns is carried through untouched. It used to be one block per panel, and
+## the show's panel erased six keys from the Generative block to make its own; the documents in
+## that shape were rewritten once, by a tool that went when its run was done.
 ##
 ## BOTH DIRECTIONS FOLLOW THE AUTHOR, with no button for either. SAVING is automatic - a
 ## dial moved is a dial written, on a quiet period, exactly the way the rest of ghost saves

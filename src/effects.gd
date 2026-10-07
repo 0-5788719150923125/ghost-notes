@@ -7,7 +7,7 @@ class_name Effects
 ## the registries' words are what it reads ([method describe]) - [method sanitize] makes whatever it
 ## wrote buildable, and [method build] makes the nodes. Generic: a host names its REGIONS (boxes in
 ## its own space) and its MOMENTS (a time, how long, and where the emitter is through it), and the
-## tarot table is the first host.
+## card table is the first host.
 ##
 ## EVERYTHING IS A FUNCTION OF SHOW TIME ([method Air.tick]): a mote's place, a spark's flight and the
 ## fog's roll are computed from the time and the seed, never stepped frame by frame - so a render and

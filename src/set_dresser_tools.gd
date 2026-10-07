@@ -23,7 +23,7 @@ class_name SetDresserTools
 ##           of that opening - the table thrown out of focus, the name over it - with how far the
 ##           color stands out from what is behind it ([method TablePreview.opening])
 ##   submit  hand the draft in: written beside the job ([constant SUBMITTED]) for the producer to land
-##           exactly as an answer in words would have landed ([method TarotProducer._land_table])
+##           exactly as an answer in words would have landed ([method CardProducer._land_table])
 ##
 ## Every picture counts against [constant LOOKS]; words cost nothing. A picture comes with the
 ## question to ask of it ([constant JUDGE_THING], [constant JUDGE_TABLE]): told only to fix what was
@@ -45,7 +45,7 @@ const JUDGE_TITLE := "Say what the picture shows: can the name be read at a glan
 const LOOKS := 30
 const TIMEOUT := 1500
 
-var episode: TarotEpisode
+var episode: CardEpisode
 var plan: Dictionary
 var dir := ""                    # the job's folder: its prompt, its reply, its tool log
 var submitted := false
@@ -64,11 +64,11 @@ var _preview: TablePreview
 
 
 ## [param name] and [param byline]: the show's, set over the table at the opening.
-func _init(ep: TarotEpisode, episode_plan: Dictionary, job_dir: String, name := "", byline := "") -> void:
+func _init(ep: CardEpisode, episode_plan: Dictionary, job_dir: String, name := "", byline := "") -> void:
 	episode = ep
 	plan = episode_plan
 	dir = job_dir
-	_look = TarotTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {})
+	_look = CardTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {})
 	_preview = TablePreview.new(ep, plan, dir.path_join("preview"), name, byline)
 	# A RUN STARTS CLEAN: a rerun works in the folder the last run left, and its handed-in table or
 	# its pictures must not pass for this run's
@@ -339,7 +339,7 @@ func _watch(args: Dictionary) -> Dictionary:
 ## opening photographed with it, and how far it stands out from what is behind it.
 func _choose_title(args: Dictionary) -> Dictionary:
 	var c := String(args["color"]).strip_edges() if args.get("color") is String else ""
-	if not TarotTable._is_color(c):
+	if not CardTable._is_color(c):
 		return {"text": "\"%s\" is not a color: give `color` as #rrggbb." % str(args.get("color", "")), "error": true}
 	_title = {"color": c, "why": String(args["why"]).strip_edges() if args.get("why") is String else ""}
 	var lines := PackedStringArray(["The show's name is printed in %s." % c])
@@ -389,14 +389,14 @@ func _submit() -> Dictionary:
 
 ## The draft made safe, as the table will build it.
 func _safe() -> Dictionary:
-	return TarotTable.sanitize_table(draft(), _look)
+	return CardTable.sanitize_table(draft(), _look)
 
 
 ## One block per thing named: its place, its size, its flames - and everything the builder could
 ## not make as written.
 func _describe(names: Array) -> PackedStringArray:
 	var safe := _safe()
-	var head := TarotTable.headroom(episode.seed)
+	var head := CardTable.headroom(episode.seed)
 	var out := PackedStringArray()
 	for nm in names:
 		var at := _index_of(String(nm))
@@ -430,7 +430,7 @@ func _describe(names: Array) -> PackedStringArray:
 			if p is Dictionary:
 				wrote += _flames_written(p as Dictionary)
 		if wrote > flames:
-			troubles.append("%d of its flames stay unlit: a table lights at most %d things, %d flames on one" % [wrote - flames, TarotTable.MAX_CANDLES, TarotTable.MAX_FLAMES])
+			troubles.append("%d of its flames stay unlit: a table lights at most %d things, %d flames on one" % [wrote - flames, CardTable.MAX_CANDLES, CardTable.MAX_FLAMES])
 		var room := int(head.get(place, 99))
 		if box.size.y * 100.0 > float(room) + 0.5:
 			troubles.append("%s cm tall, and \"%s\" shows only %d cm: it will be made smaller or left off" % [TablePreview._cm(box.size.y), place, room])
@@ -447,7 +447,7 @@ func _troubles(t: Dictionary) -> PackedStringArray:
 		return out
 	_part_troubles(t["parts"], 0, [Props.MAX_PARTS], "", out)
 	var place := String(t.get("place", "")).strip_edges().to_lower()
-	if not place.is_empty() and not TarotTable.ZONES.has(place):
+	if not place.is_empty() and not CardTable.ZONES.has(place):
 		out.append("\"%s\" is not a place: it will stand at the back" % place)
 	return out
 
@@ -546,8 +546,8 @@ func _tally() -> String:
 			f += Props.flames_of(p as Dictionary)
 		lit += 1 if f > 0 else 0
 	var others := (safe["things"] as Array).size() - lit
-	var asked := clampi(int(_look.get("candles", 1)), 0, TarotTable.MAX_CANDLES)
-	var size := TarotPrompts.table_size(episode.seed)
+	var asked := clampi(int(_look.get("candles", 1)), 0, CardTable.MAX_CANDLES)
+	var size := CardPrompts.table_size(episode.seed)
 	return "The table: %d lit thing%s (%d asked for), %d other thing%s (%d to %d asked for)." % [lit, "" if lit == 1 else "s",
 		asked, others, "" if others == 1 else "s", size.x, size.y]
 
@@ -592,8 +592,8 @@ func _air_troubles(e: Dictionary) -> PackedStringArray:
 		return out
 	if kind == "fog" or kind == "motes":
 		var where := String(e.get("where", "")).strip_edges().to_lower()
-		if not TarotTable.AIR.has(where):
-			out.append("\"%s\" is not a place in the air: %s" % [where, ", ".join(PackedStringArray(TarotTable.AIR.keys()))])
+		if not CardTable.AIR.has(where):
+			out.append("\"%s\" is not a place in the air: %s" % [where, ", ".join(PackedStringArray(CardTable.AIR.keys()))])
 	if kind == "motes" or kind == "burst":
 		var look := String(e.get("look", "")).strip_edges().to_lower()
 		var looks: Dictionary = Effects.MOTES if kind == "motes" else Effects.BURSTS
@@ -607,8 +607,8 @@ func _air_troubles(e: Dictionary) -> PackedStringArray:
 			out.append("a %s is a dark speck and carries no light: it was left unlit" % look)
 	if kind == "burst":
 		var on := String(e.get("on", "")).strip_edges().to_lower()
-		if not TarotTable.MOMENTS.has(on):
-			out.append("\"%s\" is not a moment: %s" % [on, ", ".join(PackedStringArray(TarotTable.MOMENTS.keys()))])
+		if not CardTable.MOMENTS.has(on):
+			out.append("\"%s\" is not a moment: %s" % [on, ", ".join(PackedStringArray(CardTable.MOMENTS.keys()))])
 	return out
 
 

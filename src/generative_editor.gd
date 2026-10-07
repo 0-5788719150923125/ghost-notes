@@ -24,7 +24,7 @@ func _panel_title() -> String:
 
 
 func _panel_hint() -> String:
-	return "Write or open a chapter. It is spoken in chunks, so the show starts while the rest is still being made. Edit script… lists every mark the reading understands - speakers, hesitations, pictures, pronunciations."
+	return "Write or open a chapter. It is spoken in chunks, so the show starts while the rest is still being made. Edit lists every mark the reading understands - speakers, hesitations, pictures, pronunciations."
 
 
 ## A chapter's blocks: the voice, the picture, its pictures, the Look and the bookends.

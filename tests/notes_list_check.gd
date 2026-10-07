@@ -6,8 +6,9 @@ extends Node
 ##
 ##   tests/run_boot_probe.sh tests/notes_list_check.gd 300
 ##
-## THE DRAFTS ARRIVE AS NOTES: an unsynced draft in a mode's Settings section becomes a note with its
-## words and its voice, a synced document joins the list, and it happens once.
+## THE LIST MAKES NOTES AND NOTHING ELSE (2026-10-06, the user: "the launch screen should be clean"):
+## no path or URL field, no Open…, and the name and tagline once - in the panel, not again in large
+## type over the main area. New ends on "Existing note…", which asks for markdown alone.
 ##
 ## THE APP STARTS ON THE LIST: the list is up, no home screen, the ⌂ hidden, the ⤓ export not there
 ## at all and no claim on the bottom of the frame (the row sits where it sits in every note), nothing
@@ -16,19 +17,28 @@ extends Node
 ##
 ## NEW IS GATED ON AGENTS, as the home screen's rows were (splash_agents_check's contract, moved
 ## here): with every agent's program hidden in `Deps._resolved` - the cache a launch reads, never a
-## seam - Tarot is grayed, and its tooltip says what is missing, lists every supported agent from the
-## registries, names the one that does both, suggests installing one or several, and is written as
-## paragraphs that survive Boot's re-flow; restored, it is lit exactly when the machine has both.
+## seam - Cards is grayed, and its tooltip says what is missing, lists every supported agent from the
+## registries, suggests installing one or several, and is written as paragraphs that survive Boot's
+## re-flow; restored, it is lit exactly when the machine has both roles.
 ##
-## THE ROUND TRIP: New makes a note from a template and opens it; it plays through the transport; the
-## ⌂ leaves it; the list opens another; a plain note's "+" attaches a Voice and the note reopens as a
-## reading; and back on the list nothing is left behind (the claims, the row, the conductor, the
-## background programs, no mode node).
+## A NOTE GOES WHEN ASKED (2026-10-06): the list's × asks first ([DeleteDialog]) - canceled, the note
+## stays; confirmed, it goes to the trash (here the gate's seam, `NoteStore.discard`: a plain delete,
+## never the author's trash) and out of the list. A note's own "⋯" does the same from inside it, and
+## the list comes back.
+##
+## THE ROUND TRIP: New -> Auto makes a song note with no song yet, and nothing is stuck - its panel is
+## up with a Song card asking for one, a Picture in the Auto medium, nothing timed, no stage; choosing
+## a song writes it into the note and opens the note again around it, loaded and WAITING at its start
+## ("start from the baseline of off, not played yet"); it plays through the transport; the ⌂ leaves
+## it; New -> Note's "+" attaches a Voice and the note reopens as a reading; and back on the list
+## nothing is left behind (the claims, the row, the conductor, the stage, the background programs,
+## no mode node).
 
 var _fails: Array = []
 var _main: Node
 const ROOT := "user://notes_list_check"
 const AGENT_PROGRAMS := ["claude", "codex", "aws"]
+const FixtureAudio := preload("res://tests/fixture_audio.gd")
 
 
 func _ready() -> void:
@@ -38,7 +48,7 @@ func _ready() -> void:
 func _run() -> void:
 	_clean()
 	NoteStore.root = ROOT
-	_check_drafts()
+	NoteStore.discard = func(p: String) -> int: return DirAccess.remove_absolute(p)
 	_main = preload("res://scenes/main.tscn").instantiate()
 	add_child(_main)
 	await _frames(20)
@@ -48,63 +58,45 @@ func _run() -> void:
 	if list == null:
 		return _report()
 	_ok(_find(_main, "Splash") == null, "there is no home screen")
+	_check_clean(list)
 	await _check_furniture(list)
 	list = _main._list
 	await _check_gating(list)
+	await _check_delete()
 	await _check_round_trip()
+	NoteStore.discard = Callable()
 	_clean()
 	_report()
 
 
-# --- the drafts --------------------------------------------------------------------------------
+# --- the list itself -----------------------------------------------------------------------------
 
-func _check_drafts() -> void:
-	print("-- the drafts arrive as notes")
-	var keep := {}
-	var absent: Array = []
-	for k in [["generative", "text"], ["generative", "sync"], ["generative", "doc_path"], ["generative", "cast"],
-			["synth", "text"], ["synth", "sync"], ["tarot", "text"], ["tarot", "sync"], ["tarot", "doc_path"],
-			["notes", "drafts_moved"], ["notes", "sources"]]:
-		if Settings._cfg.has_section_key(k[0], k[1]):
-			keep[k] = Settings._cfg.get_value(k[0], k[1])
-		else:
-			absent.append(k)
-	# a Generative draft with a voice, a Tarot section synced to a document, nothing for Synthesis
-	var doc := ProjectSettings.globalize_path(ROOT).path_join("elsewhere/show.md")
-	DirAccess.make_dir_recursive_absolute(doc.get_base_dir())
-	var f := FileAccess.open(doc, FileAccess.WRITE)
-	f.store_string("---\ntitle: A Show Elsewhere\n---\n\nThe brief.\n")
-	f.close()
-	Settings._cfg.set_value("generative", "text", "A draft nobody saved.\n")
-	Settings._cfg.set_value("generative", "sync", false)
-	Settings._cfg.set_value("generative", "cast", {"Narrator": {"voice": "en_US-libritts-high", "speaker": 3}})
-	Settings._cfg.set_value("synth", "text", "")
-	Settings._cfg.set_value("tarot", "text", "")
-	Settings._cfg.set_value("tarot", "doc_path", doc)
-	Settings._cfg.set_value("tarot", "sync", true)
-	if Settings._cfg.has_section_key("notes", "drafts_moved"):
-		Settings._cfg.erase_section_key("notes", "drafts_moved")
-	Settings._cfg.set_value("notes", "sources", [])
-	var made := NoteStore.move_drafts()
-	_ok(made.size() == 1, "one unsynced draft made one note (%s)" % str(made))
-	if made.size() == 1:
-		var raw := FileAccess.get_file_as_string(String(made[0]))
-		_ok(raw.contains("A draft nobody saved."), "the note holds the draft's words")
-		var blocks: Dictionary = NoteStore.blocks_of(String(made[0]))
-		_ok(blocks.get("voice") is Dictionary and (blocks["voice"] as Dictionary).get("voices") is Dictionary,
-			"...and the voice its panel kept for it (%s)" % str(blocks.keys()))
-		_ok(Components.template_for(blocks) == "generative", "...so it opens as a Generative note")
-	_ok(NoteStore.list().any(func(n: Dictionary) -> bool: return String(n["path"]) == doc),
-		"the document Tarot was synced to is in the list")
-	_ok(NoteStore.move_drafts().is_empty(), "and it happens once")
-	# put the in-memory settings back (a probe never writes the file)
-	for k in absent:
-		if Settings._cfg.has_section_key(k[0], k[1]):
-			Settings._cfg.erase_section_key(k[0], k[1])
-	for k in keep:
-		Settings._cfg.set_value(k[0], k[1], keep[k])
-	Settings._cfg.set_value("notes", "drafts_moved", true)   # the run below must not move the author's
-	Settings._cfg.set_value("notes", "sources", [doc])
+func _check_clean(list: NotesList) -> void:
+	print("-- the list makes notes and nothing else")
+	# (a PopupMenu carries a search field of its own - Godot's, not ours)
+	var fields := list._panel.find_children("*", "LineEdit", true, false).filter(func(f: Node) -> bool:
+		var n := f.get_parent()
+		while n != null and n != list:
+			if n is PopupMenu:
+				return false
+			n = n.get_parent()
+		return true)
+	_ok(fields.is_empty(), "there is no path or URL field (%s)" % str(fields.map(func(f: Node) -> String: return str(f.get_path()))))
+	var opens := list.find_children("*", "Button", true, false).filter(
+		func(b: Node) -> bool: return (b as Button).text.begins_with("Open"))
+	_ok(opens.is_empty(), "there is no Open… button")
+	var names := list.find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).text == Boot.NAME)
+	_ok(names.size() == 1 and list._panel.is_ancestor_of(names[0]), "the name is shown once, in the panel")
+	var pop := list._new.get_popup()
+	var last := pop.item_count - 1
+	_ok(pop.get_item_id(last) == NotesList.EXISTING_ID and pop.get_item_text(last).begins_with("Existing note"),
+		"New ends on Existing note…")
+	list._on_new(NotesList.EXISTING_ID)
+	var dlg: FileDialog = list._dialog
+	_ok(dlg != null and Array(dlg.filters).size() == 1 and String(dlg.filters[0]).contains("*.md"),
+		"...which asks for a markdown note and nothing else")
+	list._close_dialog()
 
 
 # --- the furniture -------------------------------------------------------------------------------
@@ -158,17 +150,17 @@ func _check_furniture(list: NotesList) -> void:
 func _check_gating(list: NotesList) -> void:
 	print("-- New is gated on agents")
 	list._gate_templates()
-	var tarot := _item(list, "tarot")
-	_ok(tarot >= 0, "New offers Tarot")
-	if tarot < 0:
+	var cards := _item(list, "cards")
+	_ok(cards >= 0, "New offers Cards")
+	if cards < 0:
 		return
 	var pop := list._new.get_popup()
 	var keep := Deps._resolved.duplicate()
 	for prog in AGENT_PROGRAMS:
 		Deps._resolved[prog] = ""
 	list._gate_templates()
-	var tip := pop.get_item_tooltip(tarot)
-	_ok(pop.is_item_disabled(tarot), "with no agent installed, Tarot is grayed")
+	var tip := pop.get_item_tooltip(cards)
+	_ok(pop.is_item_disabled(cards), "with no agent installed, Cards is grayed")
 	_ok(tip.contains("No AI writer or painter is installed."), "its tooltip says what is missing")
 	for role in ["writer", "painter"]:
 		for label in (Capabilities.registry(role).LABELS as Dictionary).values():
@@ -179,27 +171,101 @@ func _check_gating(list: NotesList) -> void:
 	_ok(Boot.wrap_tip(tip).split("\n\n").size() == paras.size(), "the paragraphs survive Boot's re-flow")
 	# a press on a grayed item makes nothing
 	var before := NoteStore.list().size()
-	list._on_new(pop.get_item_id(tarot))
+	list._on_new(pop.get_item_id(cards))
 	_ok(NoteStore.list().size() == before and _main._list == list, "a grayed template makes no note")
 	Deps._resolved = keep
 	list._gate_templates()
 	var lit := Capabilities.missing_roles(["writer", "painter"]).is_empty()
-	_ok(pop.is_item_disabled(tarot) == not lit, "with the agents back, Tarot is lit exactly when both roles are filled")
+	_ok(pop.is_item_disabled(cards) == not lit, "with the agents back, Cards is lit exactly when both roles are filled")
+
+
+# --- deleting ------------------------------------------------------------------------------------
+
+func _check_delete() -> void:
+	print("-- a note goes when asked")
+	var list: NotesList = _main._list
+	var path := NoteStore.create("note", "Delete me", "Words.\n")
+	list.refresh()
+	_ok(_row_of(list, path), "a new note is listed")
+	list._ask_delete(path)
+	await _frames(2)
+	var dlg := _dialog_in(list)
+	_ok(dlg != null and dlg.visible, "its × asks first")
+	if dlg != null:
+		dlg.canceled.emit()
+		await _frames(2)
+	_ok(FileAccess.file_exists(path), "canceled, the note stays")
+	list._ask_delete(path)
+	await _frames(2)
+	dlg = _dialog_in(list)
+	if dlg != null:
+		dlg.confirmed.emit()
+		await _frames(3)
+	_ok(not FileAccess.file_exists(path), "confirmed, it goes")
+	list.refresh()
+	_ok(not _row_of(list, path), "...and leaves the list")
+	# FROM INSIDE THE NOTE: its own "⋯", asked first, and the list comes back
+	var inside := NoteStore.create("note", "Delete me from inside", "Words.\n")
+	list._open(inside)
+	await _frames(12)
+	var ch: Chrome = _main._chrome
+	_ok(_main._note == inside and ch.delete_blocker().is_empty(), "an open note can be deleted")
+	ch.ask_delete()
+	await _frames(2)
+	dlg = _dialog_in(ch)
+	_ok(dlg != null, "its ⋯ asks first")
+	if dlg != null:
+		dlg.confirmed.emit()
+		await _frames(12)
+	_ok(not FileAccess.file_exists(inside), "...and once asked, the note goes")
+	_ok(_main._list != null and is_instance_valid(_main._list) and _main._note.is_empty(), "...and the list comes back")
+
+
+func _row_of(list: NotesList, path: String) -> bool:
+	for r in list._rows.get_children():
+		for b in (r as Node).find_children("*", "Button", true, false):
+			if (b as Button).tooltip_text == path:
+				return true
+	return false
+
+
+func _dialog_in(n: Node) -> DeleteDialog:
+	for c in n.get_children():
+		if c is DeleteDialog and not (c as Node).is_queued_for_deletion():
+			return c
+	return null
 
 
 # --- the round trip ------------------------------------------------------------------------------
 
 func _check_round_trip() -> void:
-	print("-- new, play, leave, open another")
+	print("-- New -> Auto, a song, play, leave")
 	var ch: Chrome = _main._chrome
 	var home := _measure()
-	# New -> Auto, with a song: the field routes a song into an Auto note
-	var song: String = preload("res://tests/fixture_audio.gd").silence(8.0)
 	var list: NotesList = _main._list
-	list._take(song)
+	list._on_new(list._new.get_popup().get_item_id(_item(list, "auto")))
+	await _frames(12)
+	var panel: NotePanel = _main._note_panel
+	_ok(panel != null and is_instance_valid(panel), "New -> Auto opens the note's own panel - nothing is stuck")
+	if panel == null:
+		return
+	var note: String = panel.path
+	_ok(panel._song != null and not panel._song.ready_to_play(), "...a Song card asking for a song")
+	_ok(panel._picture != null and Director.medium == "auto", "...a Picture in the Auto medium (%s)" % Director.medium)
+	_ok(not Spectrum.timed() and not _stage_up(), "...nothing timed and no stage until there is a song")
+	# twenty seconds, as teardown_check's: the eight-second silence opens on spires, whose worker-thread
+	# builds trip Godot's own teardown fault after the verdict (tests/run_scene_smoke.sh) - this gate is
+	# about the list, not about that scene
+	var song := FixtureAudio.silence(20.0)
+	panel._song.chosen.emit(song)
 	await _frames(20)
-	_ok(_main._note.begins_with(ProjectSettings.globalize_path(ROOT)), "the song made a note in the notes folder (%s)" % _main._note)
-	_ok(Spectrum.has_audio(), "the note's song is loaded")
+	var song_block: Variant = NoteStore.blocks_of(note).get("song", {})
+	_ok(song_block is Dictionary and String((song_block as Dictionary).get("path", "")) == song,
+		"choosing a song writes it into the note")
+	_ok(_main._note == note and Spectrum.has_audio(), "...and the note opens again around it, loaded")
+	_ok(not Spectrum.transport_playing(), "...WAITING at its start: a note opens stopped")
+	_ok(Director.is_attached() and _main._medium != null and _main._medium.key == "auto" and _stage_up(),
+		"its picture is up, in the Auto medium")
 	Spectrum.transport_play()
 	await _frames(10)
 	_ok(Spectrum.transport_playing(), "and it plays through the transport")
@@ -212,10 +278,10 @@ func _check_round_trip() -> void:
 	list = _main._list
 	list._on_new(list._new.get_popup().get_item_id(_item(list, "note")))
 	await _frames(12)
-	var panel: Node = _main._note_panel
+	panel = _main._note_panel
 	_ok(panel != null and is_instance_valid(panel), "New -> Note opens a plain note")
 	if panel != null:
-		var note: String = panel.path
+		var plain: String = panel.path
 		var menu: PopupMenu = panel._plus.get_popup()
 		Components.attach_menu(menu, ["text"], NotePanel.DECIDES)
 		var voice := -1
@@ -226,13 +292,18 @@ func _check_round_trip() -> void:
 		if voice >= 0:
 			panel._attach(menu.get_item_id(voice))
 			await _frames(20)
-			_ok(NoteStore.blocks_of(note).get("voice") is Dictionary, "attaching wrote the voice block into the note")
-			_ok(_main._generative != null and is_instance_valid(_main._generative) and _main._note == note,
+			_ok(NoteStore.blocks_of(plain).get("voice") is Dictionary, "attaching wrote the voice block into the note")
+			_ok(_main._generative != null and is_instance_valid(_main._generative) and _main._note == plain,
 				"...and the note reopened as a reading of itself")
 			ch._home_button.pressed.emit()
 			await _frames(12)
 			await _quiet(int(home["procs"]))
 			_check_home("after the reading", home)
+
+
+## The stage is showing a picture.
+func _stage_up() -> bool:
+	return _main._stage_view != null and is_instance_valid(_main._stage_view) and _main._stage_view.visible
 
 
 func _check_home(tag: String, home: Dictionary) -> void:
@@ -244,13 +315,14 @@ func _check_home(tag: String, home: Dictionary) -> void:
 	_ok(not m["conductor"], "%s: nothing conducts" % tag)
 	_ok(m["modes"] == 0, "%s: no note's node is left (%d)" % [tag, m["modes"]])
 	_ok(m["procs"] == home["procs"], "%s: no background program left (%d, list %d)" % [tag, m["procs"], home["procs"]])
+	_ok(not _stage_up() and _main._medium == null, "%s: the stage is wiped" % tag)
 
 
 func _measure() -> Dictionary:
 	var ch: Chrome = _main._chrome
 	var modes := 0
 	for n in _main.get_children():
-		if n is ReadingPanel or n is SynthEditor or n is MaskEditor or n is Workspace or n is NotePanel:
+		if n is ReadingPanel or n is SynthEditor or n is MaskEditor or n is NotePanel:
 			modes += 1
 	return {"list": _main._list != null and is_instance_valid(_main._list),
 		"bottom": ch._bottom_claims.keys(), "export": ch._export_claims.keys(),
@@ -261,7 +333,7 @@ func _measure() -> Dictionary:
 func _item(list: NotesList, key: String) -> int:
 	var pop := list._new.get_popup()
 	for i in pop.item_count:
-		if String(pop.get_item_metadata(i)) == key:
+		if str(pop.get_item_metadata(i)) == key:
 			return i
 	return -1
 

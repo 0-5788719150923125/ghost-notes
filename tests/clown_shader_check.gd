@@ -3,8 +3,7 @@ extends SceneTree
 ## One-shot GPU compile check for mask_split.gdshader's clown branch (effect 16):
 ##   godot --path . --headless --script res://tests/clown_shader_check.gd
 ## `--editor --quit` only validates GDScript - a .gdshader edit needs an actual
-## compile with realistic values on every uniform the branch reads (CLAUDE.md's
-## validation discipline). The caller judges the output by grepping for
+## compile with realistic values on every uniform the branch reads. The caller judges the output by grepping for
 ## SHADER ERROR / Invalid; the one known-harmless line is crystal's
 ## custom_samplers complaint (a function-parameter sampler - not a bug).
 

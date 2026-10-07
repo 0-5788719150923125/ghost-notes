@@ -40,7 +40,7 @@ func _run() -> void:
 			"--seed": seed = int(args[i + 1])
 			"--spec": spec_path = args[i + 1]
 			"--out": _out = args[i + 1]
-	var ep := TarotEpisode.open(show, seed)
+	var ep := CardEpisode.open(show, seed)
 	if spec_path.is_empty():
 		spec_path = ep.file_of("table")
 	var table: Variant = JSON.parse_string(FileAccess.get_file_as_string(spec_path))
@@ -72,7 +72,7 @@ func _run() -> void:
 	await _call(tools, "set", {}, "set")
 	if ink.is_empty():
 		var own: Variant = (table as Dictionary).get("title", {})
-		ink = String((own as Dictionary).get("color", TarotTable.TITLE_INK)) if own is Dictionary else TarotTable.TITLE_INK
+		ink = String((own as Dictionary).get("color", CardTable.TITLE_INK)) if own is Dictionary else CardTable.TITLE_INK
 	await _call(tools, "title", {"color": ink, "why": "the probe's"}, "title")
 	print("set_dresser_look_probe: done in %.1f s" % [(Time.get_ticks_msec() - t0) / 1000.0])
 	tools.release()

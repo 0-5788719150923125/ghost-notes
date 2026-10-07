@@ -39,22 +39,24 @@ class_name Medium
 ##
 ## Keys are what `--medium NAME` and `[director] medium` in `user://ghost.cfg` take.
 const REGISTRY := {
+	"auto": "res://src/media/auto.gd",
 	"full": "res://src/media/full.gd",
 	"comic": "res://src/media/comic.gd",
 	"book": "res://src/media/book.gd",
 	"notebook": "res://src/media/notebook.gd",
 	"tablet": "res://src/media/tablet.gd",
-	"tarot": "res://src/media/tarot.gd",
+	"table": "res://src/media/table.gd",
 }
 
 ## Display names for the registry keys, in registry order - for the settings surface.
 const LABELS := {
+	"auto": "Auto",
 	"full": "Full frame",
 	"comic": "Comic book",
 	"book": "Novel",
 	"notebook": "Notebook",
 	"tablet": "Tablet",
-	"tarot": "Tarot table",
+	"table": "Card table",
 }
 
 ## WHICH OPTIONAL SETTINGS EACH MEDIUM ACTUALLY USES, as a list of tags per key.
@@ -74,22 +76,55 @@ const LABELS := {
 ## Tags are the panel's own group names - a setting that EVERY medium uses (scene hold,
 ## flourishes, the Look filters, the bookend holds) needs no tag and is never listed.
 const USES := {
+	"auto": [],
 	"full": [],
 	"comic": ["camera", "films"],
 	"book": ["camera", "illustrations"],
 	"notebook": ["camera", "illustrations", "handwriting"],
 	"tablet": ["camera", "illustrations"],
-	"tarot": [],
+	"table": [],
 }
 
-## MEDIA THAT BELONG TO A MODE: key -> the mode that shows its readings in it. The tarot table
-## is drawn from an episode the tarot mode produced - its deck, its pictures, its spread - so a
+## MEDIA THAT BELONG TO A MODE: key -> the mode that shows its readings in it. The card table
+## is drawn from an episode the Cards mode produced - its deck, its pictures, its spread - so a
 ## chapter read in any other mode has nothing to put on it. Such a medium is never offered by a
 ## picker ([method pickable]) and never becomes the remembered setting; its mode pins it for the
 ## session instead (see [member Director.medium_override]).
 const OWNED := {
-	"tarot": "tarot",
+	"table": "cards",
 }
+
+## MEDIA THAT TAKE NO SETTINGS: the Picture card shows nothing under the picker for these, and
+## picking one puts the Director's dials back to their defaults (see [AutoMedium]).
+const BARE := ["auto"]
+
+## WHAT A MEDIUM NEEDS FROM THE NOTE beyond a sound to cut on: the novel, the notebook and the tablet
+## print a READING - its words, timed by the voice - so a note with only a song has nothing to put
+## on their pages, and its Picture card does not offer them.
+const NEEDS := {
+	"book": ["reading"],
+	"notebook": ["reading"],
+	"tablet": ["reading"],
+}
+
+
+## Does [param key]'s medium take any settings? (See [constant BARE].)
+static func takes_settings(key: String) -> bool:
+	return not BARE.has(key)
+
+
+## The media a picker offers a note that provides [param have] (a note with a song provides
+## "audio"; a reading, "reading" too), in registry order - [method pickable] less what needs more.
+static func offered(have: Array) -> Array:
+	var out: Array = []
+	for k in pickable():
+		var ok := true
+		for n in NEEDS.get(k, []) as Array:
+			if not have.has(n):
+				ok = false
+		if ok:
+			out.append(k)
+	return out
 
 
 ## The keys a picker offers, in registry order: every medium no mode owns.
@@ -112,15 +147,16 @@ static func uses(key: String, feature: String) -> bool:
 ## THE FRAMES EACH PRESENTATION CAN BE SHOWN IN (next/notes.md, "Two frames: landscape and
 ## portrait"): landscape 16:9 for every one, portrait 9:16 only where it was measured to work. The
 ## full-frame show does - scenes size everything off the frame's short side. The tablet needs its
-## camera distances fitted on both axes first, and the comic, the book, the notebook and the tarot
+## camera distances fitted on both axes first, and the comic, the book, the notebook and the card
 ## table frame a spread or a table that a 9:16 view cannot hold: design work of their own.
 const FRAMES := {
+	"auto": ["landscape"],
 	"full": ["landscape", "portrait"],
 	"comic": ["landscape"],
 	"book": ["landscape"],
 	"notebook": ["landscape"],
 	"tablet": ["landscape"],
-	"tarot": ["landscape"],
+	"table": ["landscape"],
 }
 ## Each frame's size at 1080p, in pixels.
 const FRAME_SIZES := {"landscape": Vector2i(1920, 1080), "portrait": Vector2i(1080, 1920)}
@@ -151,12 +187,13 @@ static func show_rows(rows: Dictionary, key: String) -> void:
 ## literal per entry, not a `+` continuation: docs.py reads this table with a regex and a
 ## continuation silently truncates the blurb at the first line.
 const BLURBS := {
+	"auto": "The original show with nothing to set: scenes chosen by the song's own fingerprint and cut on its beat, at the default pacing - the same song is the same show in every note.",
 	"full": "One scene at a time, filling the frame. The original show.",
 	"book": "The chapter itself, typeset into the pages of an open novel on a desk, with each word lit as it is spoken and the leaf turning as the reading reaches the next spread. Pictures come from the chapter's image markers.",
 	"notebook": "The chapter handwritten into a ruled research notebook - margin times, underlined emphasis, photos paper-clipped over the writing at an angle, and sketches (`<!-- sketch: ... -->`) drawn onto the page in the same ink. For a chapter drafted as a journal or a lab report.",
 	"tablet": "Somebody browsing on a tablet lying on a desk: the chapter is web pages (`<!-- url: -->`), read aloud as they are scrolled, with searches, new tabs, a turn to landscape and links followed between them - every tap and keystroke timed into the rests the voice leaves for it.",
 	"comic": "The same scenes drawn into the panels of an open comic book - two facing pages, flown over by a real perspective camera. Each cut fills the next panel; a full spread turns the leaf on its spine.",
-	"tarot": "A tarot reading at a table, seen from the reader's chair: the deck shuffles while the reader talks, each card is drawn, held up beside its booklet entry, read and laid into the spread. The tarot mode's own medium - its deck, pictures and spread come from the episode the agents produced.",
+	"table": "A card reading at a table, seen from the reader's chair: the deck shuffles while the reader talks, each card is drawn, held up beside its booklet entry, read and laid into the spread. The Cards mode's own medium - its deck, pictures and spread come from the episode the agents produced.",
 }
 
 

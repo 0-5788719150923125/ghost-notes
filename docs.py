@@ -89,9 +89,9 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
     ),
     (
         "Direction & session",
-        "The lifecycle around the scenes: boot, the notes list, the Director's "
-        "scheduling/transitions, the manual Workspace, and the Dial "
-        "performance controls.",
+        "The lifecycle around the scenes: boot, the notes list and a note's own "
+        "panel, the Director's scheduling/transitions, the storyboards card, and "
+        "the Dial performance controls.",
         [
             "main.gd",
             "boot.gd",
@@ -110,8 +110,11 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
             "look_card.gd",
             "bookends_card.gd",
             "picture_card.gd",
+            "song_card.gd",
+            "storyboards_card.gd",
             "console.gd",
             "notes_list.gd",
+            "delete_dialog.gd",
             "phone_shell.gd",
             "note_panel.gd",
             "note_store.gd",
@@ -129,7 +132,6 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
             "illustrations.gd",
             "image_gen.gd",
             "illustration_panel.gd",
-            "workspace.gd",
             "dial.gd",
             "dial_widget.gd",
             "volume_knob.gd",
@@ -259,24 +261,25 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
         ],
     ),
     (
-        "Tarot",
-        "An automatic tarot reading: a show's brief, its episodes - each "
-        "planned, painted and written by agents one card at a time, kept on "
-        "disk step by step - and the table they are read at, in the Generative "
+        "Cards",
+        "A card reading nobody writes: a show's brief, its episodes - each "
+        "planned, dealt, painted and written by agents one card at a time, kept "
+        "on disk step by step - and the table they are read at, in the Generative "
         "voice, with the things on it modeled from a written description "
-        "(Props). Design: next/tarot.md.",
+        "(Props). Tarot is the first deck and, so far, the only recipe. "
+        "Design: next/cards.md.",
         [
-            "tarot_editor.gd",
+            "cards_editor.gd",
             "table_actions.gd",
             "table_positions.gd",
             "dealer_tools.gd",
-            "tarot_producer.gd",
-            "tarot_episode.gd",
-            "tarot_prompts.gd",
-            "tarot_script.gd",
-            "tarot_deck.gd",
-            "tarot_table.gd",
-            "tarot_cards.gd",
+            "card_producer.gd",
+            "card_episode.gd",
+            "card_prompts.gd",
+            "card_reading.gd",
+            "card_deck.gd",
+            "card_table.gd",
+            "card_faces.gd",
             "props.gd",
             "effects.gd",
             "set_dresser_tools.gd",
@@ -417,7 +420,7 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
         "--note",
         "<path>",
         "Open one note, run by the template its blocks say it is (a voice is Generative, a show "
-        "Tarot, a song Auto, nothing attached a plain note) - past the notes list.",
+        "Cards, a song Auto, nothing attached a plain note) - past the notes list.",
         False,
     ),
     (
@@ -465,10 +468,10 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
         False,
     ),
     (
-        "--tarot",
+        "--cards",
         "",
-        "Open the tarot mode: a show's brief, its episodes (planned, painted and written by "
-        "agents one card at a time) and the Generative voice that reads them at the table.",
+        "Open the Cards mode: a show's brief, its episodes (planned, dealt, painted and written "
+        "by agents one card at a time) and the Generative voice that reads them at the table.",
         False,
     ),
     (
@@ -540,7 +543,7 @@ ENGINE_FLAGS = {
     "--resume",
     "--skip-git-repo-check",
     "--verbose",
-    # ...and TextGen's bare writers (the tarot mode's agents): no tools, no project, no session
+    # ...and TextGen's bare writers (the Cards mode's agents): no tools, no project, no session
     "--safe-mode",
     "--tools",
     "--system-prompt-file",
@@ -634,7 +637,7 @@ TOP_LEVEL: List[Tuple[str, str]] = [
     ),
     (
         "shaders/",
-        "The GPU shaders: the Look, every Masking effect, the tarot table and a few scenes.",
+        "The GPU shaders: the Look, every Masking effect, the card table and a few scenes.",
     ),
     (
         "storyboards/",
@@ -644,9 +647,9 @@ TOP_LEVEL: List[Tuple[str, str]] = [
     (
         "data/",
         "Data the code reads - pronunciation (CMUdict, `english.yml`), the LibriTTS speaker "
-        "table, the tarot's - each license beside its file.",
+        "table, the decks (the tarot's meanings) - each license beside its file.",
     ),
-    ("fonts/", "Faces the media draw with: the notebook's handwriting and the tarot's lettering."),
+    ("fonts/", "Faces the media draw with: the notebook's handwriting and the card table's lettering."),
     (
         "hosts/",
         "The Python hosts ghost spawns, each in an environment of its own the Provisioner builds "
@@ -1226,7 +1229,7 @@ def _render_script_doc(marks: Script) -> str:
         "# Writing a script",
         "",
         "Every mark a Generative or Synthesis script may carry - the list the "
-        "script editor's palette (**Edit script…** on either panel) is built "
+        "script editor's palette (**Edit** on either panel) is built "
         "from, and the patterns it highlights with. A script is Markdown; "
         "YAML frontmatter at the top is the panel's and never shown in the "
         "editor or spoken.",

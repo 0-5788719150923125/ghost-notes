@@ -316,9 +316,13 @@ func _row(im: Dictionary) -> Control:
 		meta.tooltip_text = "Made under a different style or reference set. Still used; regenerate to repaint it."
 	col.add_child(meta)
 	# THE BUTTONS ARE A LINE OF THEIR OWN under the text, not beside it: side by side they were
-	# the panel's minimum width (thumbnail + label + five buttons), and the side panel grew
-	var acts := HBoxContainer.new()
-	acts.add_theme_constant_override("separation", 4)
+	# the panel's minimum width (thumbnail + label + five buttons), and the side panel grew. And the
+	# line FLOWS: a picture with versions adds ‹ › to it, and as one row that was 356 px - the
+	# Generative panel 10 px past its 380 (2026-10-06, the log named the Picture card). A flow is as
+	# narrow as its widest button and wraps the rest.
+	var acts := HFlowContainer.new()
+	acts.add_theme_constant_override("h_separation", 4)
+	acts.add_theme_constant_override("v_separation", 4)
 	col.add_child(acts)
 
 	if vs.size() > 1:

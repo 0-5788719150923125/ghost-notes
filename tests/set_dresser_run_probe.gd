@@ -31,12 +31,12 @@ func _run() -> void:
 		return
 	var raw := FileAccess.get_file_as_string(spec_path)
 	var block: Dictionary = FrontMatter.read_block(raw)["data"]
-	var knobs: Dictionary = block.get("tarot", {}) if block.get("tarot") is Dictionary else {}
+	var knobs: Dictionary = block.get("cards", {}) if block.get("cards") is Dictionary else {}
 	var title := BookLayout.field_of(raw, "title")
-	var show := String(knobs.get("show", "")) if not String(knobs.get("show", "")).is_empty() else TarotEpisode.slug(title)
-	var source := TarotEpisode.open(show, seed)
-	TarotEpisode.root = ROOT
-	var ep := TarotEpisode.open(show, seed)
+	var show := String(knobs.get("show", "")) if not String(knobs.get("show", "")).is_empty() else CardEpisode.slug(title)
+	var source := CardEpisode.open(show, seed)
+	CardEpisode.root = ROOT
+	var ep := CardEpisode.open(show, seed)
 	# the copy is made again each run: a table left from the last would be a step already made
 	DirAccess.make_dir_recursive_absolute(ep.dir)
 	DirAccess.remove_absolute(ep.file_of("table"))
@@ -49,7 +49,7 @@ func _run() -> void:
 		return
 	AgentJobs.allow_for_tool()
 	var body := Manuscript.strip_frontmatter(raw)
-	var prod := TarotProducer.new(ep, {"title": title, "brief": TarotDeck.strip(body), "deck": TarotDeck.of(body),
+	var prod := CardProducer.new(ep, {"title": title, "brief": CardDeck.strip(body), "deck": CardDeck.of(body),
 		"writer": "claude", "writer_model": model})
 	print("set_dresser_run_probe: %s #%d (a copy, %s) with %s" % [show, seed, ep.dir, model])
 	var t0 := Time.get_ticks_msec()

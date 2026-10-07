@@ -1515,7 +1515,7 @@ func _on_sign_close() -> void:
 ## leaves it resumable - and goes up once the sign-in settles (see the `upload_wait` state).
 func _queue_upload() -> void:
 	_upload_this = false
-	# THE THUMBNAIL FIRST, when the mode names a moment for one (the tarot's title screen): a frame of
+	# THE THUMBNAIL FIRST, when the mode names a moment for one (the card table's title screen): a frame of
 	# the saved video itself, so it is exactly what the video shows. A frame that cannot be taken
 	# only costs the thumbnail.
 	var thumb := ""
