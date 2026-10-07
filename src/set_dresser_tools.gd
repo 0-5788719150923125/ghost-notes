@@ -116,8 +116,8 @@ func list_tools() -> Array:
 				"idea": {"type": "string", "description": "two or three sentences: this table, and the reader who set it"},
 				"top": {"type": "object", "description": "the table's top: {shape, size, corner, sides, scallops, thickness, edge, material, boards, tiles, pattern, inlay, relief, why} - replaces the top before"},
 				"layers": {"type": "array", "items": {"type": "object"}, "description": "cloths laid on the top, bottom first: each {name, what, outline, size, drop, at, turn, fabric, pattern, border, fringe, relief, sheen}, replacing a layer of the same name (a new one goes on top)"},
-				"light": {"type": "object", "description": "the table's light, {why, sky, sun, through, clouds, birds, lamps}: each part given replaces that part (null takes it away); in `through` and `lamps` an entry replaces the one of the same name (an empty list takes them all away)"}}}},
-		{"name": "remove", "description": "Take things - or effects of its air, layers, or parts of its light (what the sun falls through or a lamp, by name; or \"sun\", \"clouds\", \"birds\", or \"light\" for all of it) - off the table you are setting, by name.",
+				"light": {"type": "object", "description": "the table's light, {why, sky, sun, through, clouds, birds, lamps, shadows}: each part given replaces that part (null takes it away); in `through`, `lamps` and `shadows` an entry replaces the one of the same name (an empty list takes them all away)"}}}},
+		{"name": "remove", "description": "Take things - or effects of its air, layers, or parts of its light (what the sun falls through, a lamp or a shadow, by name; or \"sun\", \"clouds\", \"birds\", or \"light\" for all of it) - off the table you are setting, by name.",
 			"inputSchema": {"type": "object", "properties": {"names": {"type": "array", "items": {"type": "string"}}}, "required": ["names"]}},
 		{"name": "look", "description": "Look at one thing close up, from four sides - its front, its right side, from above, and as the camera at the reader's chair sees it - on a centimeter grid (a brighter line every 5 cm).",
 			"inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
@@ -125,7 +125,7 @@ func list_tools() -> Array:
 			"inputSchema": {"type": "object", "properties": {}}},
 		{"name": "overhead", "description": "Photograph the table from straight above, lit as the show lights it: the top, its edge and its layers as laid, the things on it and the cards face down in their spread, the reader's side at the bottom, and a yellow line round the stretch the camera sees. A plan, for laying cloths square or as a diamond and seeing what hangs over the edge.",
 			"inputSchema": {"type": "object", "properties": {}}},
-		{"name": "watch", "description": "Watch something on this episode's own table in motion - one effect of its air, or a moving part of its light: a burst photographed four times in the second after the moment it marks (a card leaping from the deck, one held up and twirled...), fog or motes four times a few seconds apart; \"clouds\" as one passes over the sun, \"birds\" as a shadow crosses, what the sun falls through as it stirs, a lamp as it flickers, flashes or passes (by name). A sheet of four pictures.",
+		{"name": "watch", "description": "Watch something on this episode's own table in motion - one effect of its air, or a moving part of its light: a burst photographed four times in the second after the moment it marks (a card leaping from the deck, one held up and twirled...), fog or motes four times a few seconds apart; \"clouds\" as one passes over the sun, \"birds\" as a shadow crosses, what the sun falls through as it stirs, a lamp as it flickers, flashes or passes, a shadow as it swings, turns or ripples (by name). A sheet of four pictures.",
 			"inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
 		{"name": "title", "description": "Choose the color the show's name is printed in at the opening, over this table thrown far out of focus - the video's first seconds, and its thumbnail. Answers with a picture of that opening and how far the color stands out from the table behind the name.",
 			"inputSchema": {"type": "object", "properties": {
@@ -506,8 +506,8 @@ func _submit() -> Dictionary:
 # --- the light ----------------------------------------------------------------------------------------
 
 ## THE LIGHT PUT, part by part ([Lights]): each part given replaces the last, and null takes it away;
-## what the sun falls through and the lamps go in by name - an entry replaces the one of its name - and
-## an empty list takes them all away.
+## what the sun falls through, the lamps and the shadows go in by name - an entry replaces the one of its
+## name - and an empty list takes them all away.
 func _merge_light(d: Dictionary) -> void:
 	_light_put = true
 	for k in d:
@@ -515,7 +515,7 @@ func _merge_light(d: Dictionary) -> void:
 		var v: Variant = d[k]
 		if v == null:
 			_light.erase(key)
-		elif key in ["through", "lamps"] and v is Array:
+		elif key in ["through", "lamps", "shadows"] and v is Array:
 			if (v as Array).is_empty():
 				_light[key] = []
 				continue
@@ -536,8 +536,8 @@ func _merge_light(d: Dictionary) -> void:
 			_light[key] = (v as Dictionary).duplicate(true) if v is Dictionary else v
 
 
-## A part of the light taken off by [param name]: what the sun falls through or a lamp, by its name; or
-## "sun", "sky", "clouds", "birds" - or "light", all of it (the table then lit as every table was).
+## A part of the light taken off by [param name]: what the sun falls through, a lamp or a shadow, by its
+## name; or "sun", "sky", "clouds", "birds" - or "light", all of it (the table then lit as every table was).
 func _unlight(name: String) -> bool:
 	if not _light_put:
 		return false
@@ -548,7 +548,7 @@ func _unlight(name: String) -> bool:
 	if low in ["sun", "sky", "clouds", "birds"] and _light.has(low):
 		_light.erase(low)
 		return true
-	for key in ["through", "lamps"]:
+	for key in ["through", "lamps", "shadows"]:
 		var list: Array = _light.get(key, []) if _light.get(key) is Array else []
 		for i in list.size():
 			if list[i] is Dictionary and String((list[i] as Dictionary).get("name", "")).strip_edges() == name:
@@ -598,12 +598,69 @@ func _describe_light() -> PackedStringArray:
 	if not (light["birds"] as Dictionary).is_empty():
 		out.append("Birds: %d crossing%s in the first ten minutes, each shadow over the table for about %.1f s." % [int(w["birds"]),
 			"" if int(w["birds"]) == 1 else "s", float(w["over"])])
+	var in_shot := func(at: Vector3) -> bool: return CardTable.in_shot(cam, fov, at)
+	var lamps_at := {}
 	for l in light["lamps"]:
-		var place := Lights.lamp_place(l, middle, func(at: Vector3) -> bool: return CardTable.in_shot(cam, fov, at))
+		var place := Lights.lamp_place(l, middle, in_shot)
+		lamps_at[String((l as Dictionary)["name"])] = place["at"]
 		if bool(place["moved"]):
 			out.append("  - \"%s\" would be seen where it was put: moved up out of the shot, to %d cm over the table." % [String((l as Dictionary)["name"]),
 				roundi((place["at"] as Vector3).y * 100.0)])
+	out.append_array(_describe_shadows(light, lamps_at, in_shot))
 	return out
+
+
+## WHERE EACH SHADOW OUT OF THE SHOT FALLS, in words: how much of the table the camera sees, and of where
+## the cards lie, its outline covers, on which part of the table, whether it moves - and whether it was
+## raised along its light's ray to stay out of the shot and clear of the table.
+func _describe_shadows(light: Dictionary, lamps_at: Dictionary, in_shot: Callable) -> PackedStringArray:
+	var out := PackedStringArray()
+	var casters: Array = light.get("shadows", [])
+	if casters.is_empty():
+		return out
+	var lay := CardTable.layout_of(episode.seed)
+	var seen := CardTable.seen_points(lay["camera"], float(lay["fov"]), _safe()["top"])
+	var cards := CardTable.card_points()
+	var middle := Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y)
+	var stage := {"middle": middle, "bounds": AABB(Vector3(-1.0, -0.1, -0.7), Vector3(2.0, 0.65, 1.3)), "in_shot": in_shot}
+	var s := Lights.sun_dir(light["sun"]) if not (light["sun"] as Dictionary).is_empty() else Vector3.UP
+	out.append("Shadows out of the shot:")
+	for c in casters:
+		var d: Dictionary = c
+		var meshes := Lights.caster_meshes(d["parts"])
+		var place := Lights.caster_place(d, meshes, light, stage, lamps_at)
+		var by := String(d["around"]) if not String(d["around"]).is_empty() else String(d["by"])
+		var outlines := Lights.caster_outlines(meshes, place["xform"], s, lamps_at.get(by) if by != "sun" else null)
+		var on := 0
+		var sum := Vector2.ZERO
+		for p in seen:
+			if Lights.in_outlines(outlines, Vector2(p.x, p.z)):
+				on += 1
+				sum += Vector2(p.x, p.z)
+		var on_cards := 0
+		for p in cards:
+			if Lights.in_outlines(outlines, Vector2(p.x, p.z)):
+				on_cards += 1
+		var kind := String((d["move"] as Dictionary)["kind"])
+		var line := "- \"%s\" (%s, %s): " % [String(d["name"]), kind, ("round " + by) if not String(d["around"]).is_empty() else ("the sun's" if by == "sun" else by + "'s")]
+		if on == 0:
+			line += "its shadow misses the table the camera sees - aim it nearer the middle, or let it hang lower"
+		else:
+			var at := sum / float(on)
+			line += "its shadow covers %d%% of the table the camera sees, %s, and %d%% of where the cards lie" % [
+				roundi(100.0 * on / maxf(float(seen.size()), 1.0)), _where_on_table(at - Vector2(middle.x, middle.z)),
+				roundi(100.0 * on_cards / maxf(float(cards.size()), 1.0))]
+		if bool(place["moved"]):
+			line += "; raised along its light to %d cm, out of the shot and clear of the table" % roundi((place["middle"] as Vector3).y * 100.0)
+		out.append(line + ".")
+	return out
+
+
+## Where on the table a point (x, z from the middle of the reading, meters) is, in words.
+static func _where_on_table(p: Vector2) -> String:
+	var side := "the left" if p.x < -0.18 else ("the right" if p.x > 0.18 else "the middle")
+	var depth := "far " if p.y < -0.2 else ("near " if p.y > 0.12 else "")
+	return "over %s%s" % [depth, side]
 
 
 ## The light in a line, for the table's own picture: what it is, and what moves in it that a still
@@ -633,7 +690,7 @@ func _light_part(name: String) -> bool:
 		return not (light["clouds"] as Dictionary).is_empty()
 	if name.to_lower() == "birds":
 		return not (light["birds"] as Dictionary).is_empty()
-	for key in ["through", "lamps"]:
+	for key in ["through", "lamps", "shadows"]:
 		for e in light[key]:
 			if String((e as Dictionary)["name"]) == name:
 				return true
@@ -656,6 +713,9 @@ func _light_names() -> String:
 		for l in light["lamps"]:
 			if String((Lights.LAMPS[String((l as Dictionary)["look"])] as Dictionary)["flicker"]) != "steady":
 				out.append(String((l as Dictionary)["name"]))
+		for c in light.get("shadows", []):
+			if String(((c as Dictionary)["move"] as Dictionary)["kind"]) != "still":
+				out.append(String((c as Dictionary)["name"]))
 	return ", ".join(out) if not out.is_empty() else "nothing that moves"
 
 

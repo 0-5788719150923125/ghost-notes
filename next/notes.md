@@ -1402,6 +1402,14 @@ to the show's; the producer names the deck's `kind`, which the designer and pain
 seed (`CardDeck.chooses`). First show: `rift/tarot/the-shoebox.md`. The recipe's verbs and its
 words in code are still the tarot's; the guide maps them. Gate: cards_choose_check (next/cards.md).
 
+**2026-10-07: (3) and (6) in part - the staging.** Card state over show time is each card's own
+timeline (arrive, show, lay, turn), and the producer chooses how the cards come and are shown: a deck or
+a box (cards filed on edge), the text in a booklet or on the card's back (held alone, turned over),
+printings with their own backs, and per position dealt, swept (a waterfall), sideways, stacked and
+tapped later. New verbs `open`, `deal`, `fan`, `show`, `tap`, `untap`, `flip`. Still not built: the
+card's size and face template, `flip` for the producer, more than one card held up at once, and the
+dealer run by a real agent. Gate: table_staging_check (next/cards.md, "The staging").
+
 ### Step 10: portrait
 
 Independent of steps 2-9: it can start any time after step 1. In order: the `frame` setting and

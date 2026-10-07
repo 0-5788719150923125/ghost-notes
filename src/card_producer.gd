@@ -268,6 +268,12 @@ func _make_draw() -> String:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([episode.seed, "tarot-jumper"])
 	var jumper := bool(spec.get("jumpers", true)) and rng.randf() < JUMPER_CHANCE
+	# A JUMPER flies out of a shuffle: never out of a box, and never into a card not drawn by hand
+	var staging := CardTable.staging_of(plan)
+	var first_pos: Variant = ((plan.get("spread", {}) as Dictionary).get("positions", []) as Array)[0]
+	if not bool((TableActions.SOURCES[staging["source"]] as Dictionary)["jumpers"]) \
+			or (first_pos is Dictionary and String((first_pos as Dictionary).get("comes", "drawn")) != "drawn"):
+		jumper = false
 	var cards: Array = []
 	for i in n:
 		var c: Dictionary = (deck[i] as Dictionary).duplicate()
@@ -307,7 +313,8 @@ func _drawn(upto: int) -> Array:
 func _make_design(k: int) -> void:
 	var card := _card(k)
 	var p := CardPrompts.designer(String(spec.get("title", "")), String(spec.get("brief", "")),
-		_look(), card, bool(spec.get("reversals", true)), CardEpisode.archive(episode.show, episode.seed))
+		CardTable.look_of(_look(), card), card, bool(spec.get("reversals", true)), CardEpisode.archive(episode.show, episode.seed),
+		String(CardTable.staging_of(_plan())["text"]))
 	_submit_text("design:%d" % k, p, "fast")
 
 
@@ -317,27 +324,41 @@ func _make_image(step: String) -> void:
 	# whole (see AgentJobs.paint_target)
 	var target := AgentJobs.paint_target(episode.job_dir(step))
 	var parts := step.split(":")
-	if parts.size() == 3:
+	var printed := String(CardTable.staging_of(_plan())["text"]) == "back"
+	if parts.size() == 3 and String(parts[1]) == "card":
 		var k := int(parts[2])
 		var design: Variant = episode.read_json("design:%d" % k)
 		var art := String((design as Dictionary).get("art", "")) if design is Dictionary else ""
 		var refs: Array = []
-		var has_back := episode.has("image:back")
+		# IN ITS OWN PRINTING'S HAND: that printing's back, and the cards drawn before it in that printing
+		var key := episode.printing_of(k)
+		var back := "image:back" if key.is_empty() else "image:back:%s" % key
+		var has_back := episode.has(back)
 		if has_back:
-			refs.append(episode.file_of("image:back"))
+			refs.append(episode.file_of(back))
 		var chain: Array = []
 		for j in range(1, k):
-			if episode.has("image:card:%d" % j):
+			if episode.has("image:card:%d" % j) and episode.printing_of(j) == key:
 				chain.append(episode.file_of("image:card:%d" % j))
 		if chain.size() > CHAIN_MAX:
 			chain = [chain[0]] + chain.slice(chain.size() - (CHAIN_MAX - 1))
 		refs.append_array(chain)
-		_submit_image(step, CardPrompts.card_image(look, _card(k), art, target, has_back,
+		_submit_image(step, CardPrompts.card_image(CardTable.look_of(look, _card(k)), _card(k), art, target, has_back,
 			chain.size()), refs)
+		return
+	if parts.size() == 3 and String(parts[1]) == "back":
+		# a printing's own back: the card of that printing stands for it in the look
+		var name := ""
+		for k in range(1, episode.card_count() + 1):
+			if episode.printing_of(k) == String(parts[2]):
+				name = CardTable.series_of(look, _card(k))
+				break
+		_submit_image(step, CardPrompts.back_image(CardTable.look_of(look, {"series": name}), target,
+			bool(spec.get("reversals", true)), printed), [])
 		return
 	match String(parts[1]):
 		"back":
-			_submit_image(step, CardPrompts.back_image(look, target), [])
+			_submit_image(step, CardPrompts.back_image(look, target, bool(spec.get("reversals", true)), printed), [])
 		"surface":
 			_submit_image(step, CardPrompts.surface_image(look, target), [])
 		"height":
@@ -440,12 +461,13 @@ func say_prompt(who: String) -> Dictionary:
 	else:
 		var k := int(who)
 		said = _said(k - 1)
-		drawn = _drawn(k)
+		# THE CARDS ON THE TABLE by now: up to this one - or, swept out in a waterfall, up to its last
+		drawn = _drawn(episode.reveal_of(k))
 	var images: Array = []
 	if who != "intro":
 		var plan_pos: Array = ((_plan().get("spread", {}) as Dictionary).get("positions", [])) as Array
 		var first := 1 if who == "close" else int(who)
-		for k in range(first, drawn.size() + 1):
+		for k in range(first, (drawn.size() if who == "close" else first) + 1):
 			var c: Dictionary = drawn[k - 1]
 			var pos: Variant = plan_pos[k - 1] if k - 1 < plan_pos.size() else {}
 			var where := String((pos as Dictionary).get("name", "")) if pos is Dictionary else ""
@@ -474,13 +496,58 @@ func _said(upto: int) -> Array:
 
 func _make_script() -> String:
 	var n := episode.card_count()
-	var passages: Array = [{"kind": "shuffle", "card": 0, "text": episode.read_text("say:intro")}]
-	for k in range(1, n + 1):
-		var c := _card(k)
-		passages.append({"kind": "jumper" if bool(c.get("jumper", false)) else "draw", "card": k,
-			"text": episode.read_text("say:%d" % k)})
-	passages.append({"kind": "spread", "card": 0, "text": episode.read_text("say:close")})
+	var passages: Array = []
+	for m in choreography(_plan(), _drawn(n)):
+		var mv: Dictionary = m
+		var text := episode.read_text(String(mv["say"])) if not String(mv.get("say", "")).is_empty() else ""
+		passages.append({"kind": mv["kind"], "card": mv.get("card", 0), "last": mv.get("last", mv.get("card", 0)), "text": text})
 	return episode.write_text("script", CardReading.compose(passages))
+
+
+## THE MOVES OF AN EPISODE, in order, from its [param plan]'s staging and positions and its [param cards]
+## as drawn: `[{kind, card, last, say}]` - each a written verb ([TableActions]) and the passage read after
+## it (`say`, a step's name, or "" for a move with no words of its own). The opening (the shuffle, or the
+## box opened) and the intro; then each card as its position says it comes - drawn (a jumper when it flew
+## out), dealt, or swept out with the swept positions after it, each then shown - and the moves its
+## position makes after its passage (`then`: tap, untap); the spread and the close.
+static func choreography(plan: Dictionary, cards: Array) -> Array:
+	var staging := CardTable.staging_of(plan)
+	var pos: Array = ((plan.get("spread", {}) as Dictionary).get("positions", [])) as Array if plan.get("spread") is Dictionary else []
+	var out: Array = [{"kind": String((TableActions.SOURCES[staging["source"]] as Dictionary)["opens"]), "card": 0, "say": "say:intro"}]
+	var n := cards.size()
+	var k := 1
+	var at := func(i: int) -> Dictionary: return pos[i - 1] if i >= 1 and i <= pos.size() and pos[i - 1] is Dictionary else {}
+	while k <= n:
+		var p: Dictionary = at.call(k)
+		var comes := String(p.get("comes", "drawn"))
+		if comes == "swept":
+			var last := k
+			while last < n and String((at.call(last + 1) as Dictionary).get("comes", "")) == "swept":
+				last += 1
+			out.append({"kind": "fan", "card": k, "last": last, "say": ""})
+			for j in range(k, last + 1):
+				out.append({"kind": "show", "card": j, "say": "say:%d" % j})
+				out.append_array(_then_moves(at.call(j), j))
+			k = last + 1
+			continue
+		var kind := "deal" if comes == "dealt" else ("jumper" if bool((cards[k - 1] as Dictionary).get("jumper", false)) else "draw")
+		out.append({"kind": kind, "card": k, "say": "say:%d" % k})
+		out.append_array(_then_moves(p, k))
+		k += 1
+	out.append({"kind": "spread", "card": 0, "say": "say:close"})
+	return out
+
+
+## The moves position [param p] makes after its passage: `then`'s `tap N`, `untap N`, each naming a card
+## already on the table - one of 1..[param n].
+static func _then_moves(p: Dictionary, n: int) -> Array:
+	var out: Array = []
+	for m in p.get("then", []) if p.get("then") is Array else []:
+		var parts := String(m).strip_edges().to_lower().split(" ", false)
+		if parts.size() == 2 and parts[0] in ["tap", "untap"] and parts[1].is_valid_int() \
+				and int(parts[1]) >= 1 and int(parts[1]) <= n:
+			out.append({"kind": String(parts[0]), "card": int(parts[1]), "say": ""})
+	return out
 
 
 # --- landing a job -------------------------------------------------------------------------
@@ -551,7 +618,7 @@ func _land_plan(text: String) -> String:
 	var pos: Array = []
 	for q in (spread.get("positions", []) if spread.get("positions") is Array else []):
 		if q is Dictionary:
-			pos.append({"name": _str((q as Dictionary).get("name", "")), "asks": _str((q as Dictionary).get("asks", ""))})
+			pos.append(_land_position(q as Dictionary, pos.size() + 1, n))
 		elif not _str(q).is_empty():
 			pos.append({"name": _str(q), "asks": ""})
 	spread["name"] = _str(spread.get("name", ""))
@@ -569,6 +636,7 @@ func _land_plan(text: String) -> String:
 	if not (plan.get("look") is Dictionary):
 		return "the plan has no look"
 	plan["look"] = CardTable.sanitize_look(plan["look"] as Dictionary)
+	plan["staging"] = CardTable.staging_of(plan)
 	if (plan["look"] as Dictionary).has("kind"):
 		plan["look"]["kind"] = _str(plan["look"]["kind"])
 	if bool(spec.get("chooses", false)):
@@ -581,6 +649,30 @@ func _land_plan(text: String) -> String:
 	plan["seed"] = episode.seed
 	plan["dice"] = CardPrompts.dice(episode.seed)
 	return episode.write_json("plan", plan)
+
+
+## A SPREAD POSITION AS IT LANDS: its name and question, and how its card comes and lies
+## ([constant TablePositions.COMES]) - only what the table knows, and only where it can be: the first card
+## stacks on nothing, and `then` turns only a card already on the table by then (one of 1..[param k], or
+## of its waterfall's) among the reading's [param n].
+func _land_position(q: Dictionary, k: int, n: int) -> Dictionary:
+	var out := {"name": _str(q.get("name", "")), "asks": _str(q.get("asks", ""))}
+	var comes := _str(q.get("comes", "")).to_lower()
+	if comes in TablePositions.COMES and comes != "drawn":
+		out["comes"] = comes
+	if _str(q.get("lies", "")).to_lower() == "sideways":
+		out["lies"] = "sideways"
+	if q.get("on") == true and k > 1:
+		out["on"] = true
+	var then: Array = []
+	for m in q.get("then", []) if q.get("then") is Array else ([q.get("then")] if q.get("then") is String else []):
+		var parts := _str(m).to_lower().split(" ", false)
+		if parts.size() == 2 and parts[0] in ["tap", "untap"] and parts[1].is_valid_int() and int(parts[1]) >= 1 \
+				and int(parts[1]) <= mini(n, k):
+			then.append("%s %d" % [parts[0], int(parts[1])])
+	if not then.is_empty():
+		out["then"] = then
+	return out
 
 
 ## THE BOX A PRODUCER CHOSE, in the shape [method CardDeck.parse] gives a listed deck - `{key, name,

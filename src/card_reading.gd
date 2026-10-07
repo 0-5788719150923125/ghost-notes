@@ -14,6 +14,9 @@ class_name CardReading
 ##                                own, lands, and is picked up and held up as a drawn card is
 ##     <!-- table: spread -->     the last card goes down; the whole spread lies on the table
 ##
+## and the rest of [TableActions]' written verbs - `open` (the cards come out of a box, not a deck),
+## `deal 2`, `fan 3-5` (a run of cards in one waterfall), `show 4`, `tap 2`, `untap 2`, `flip 2`.
+##
 ## THE READING IS WRITTEN FOR THE TABLE, by [CardProducer], one passage per mark - the intro
 ## after `shuffle`, one passage per card after its `draw`, the close after `spread` - and a
 ## hand-written one works the same way.
@@ -49,9 +52,9 @@ static func _rx(pattern: String) -> RegEx:
 
 
 ## AN OWN-LINE MARK, for the verbs the registry says are written: group 1 is the verb, 2 the card's
-## place in the reading (1-based).
+## place in the reading (1-based), 3 the last card of a run (`fan 3-5`).
 static func mark_pattern() -> String:
-	return "^\\s*<!--\\s*table\\s*:\\s*(%s)\\s*(\\d+)?\\s*-->\\s*$" % "|".join(PackedStringArray(TableActions.written()))
+	return "^\\s*<!--\\s*table\\s*:\\s*(%s)\\s*(\\d+)?(?:\\s*-\\s*(\\d+))?\\s*-->\\s*$" % "|".join(PackedStringArray(TableActions.written()))
 
 
 ## What makes a document a card reading: a mark naming one of the written verbs.
@@ -75,7 +78,9 @@ static func speakable(body: String) -> String:
 
 ## THE WALK. Returns:
 ##   passages  - [{kind, card, text}]: each mark and the words read after it, in order
-##   actions   - [{kind, card, after, dur}]: `after` = how many spoken words precede the mark
+##   actions   - [{kind, card, last, after, dur}]: `after` = how many spoken words precede the mark;
+##               `last` the run's last card (`card` for one)
+##   source    - where the cards come from: the opening verb's ([constant TableActions.SOURCES])
 ##   spoken    - PackedStringArray: every spoken word, normalized ([method TabletScript.norm])
 ##   speakable - the text the voice reads
 ##   cards     - how many cards the reading draws
@@ -93,7 +98,9 @@ static func parse(body: String) -> Dictionary:
 			continue
 		passages.append(cur)
 		var num := m.get_string(2)
-		cur = {"kind": m.get_string(1), "card": int(num) if not num.is_empty() else 0, "lines": []}
+		var to := m.get_string(3)
+		cur = {"kind": m.get_string(1), "card": int(num) if not num.is_empty() else 0, "lines": [],
+			"last": int(to) if not to.is_empty() else (int(num) if not num.is_empty() else 0)}
 	passages.append(cur)
 	var out_passages: Array = []
 	var actions: Array = []
@@ -101,6 +108,8 @@ static func parse(body: String) -> Dictionary:
 	var speak := PackedStringArray()
 	var showing := false
 	var cards := 0
+	var moved := false
+	var source := "deck"
 	var who := Manuscript.NARRATOR
 	for p in passages:
 		var kind := String((p as Dictionary)["kind"])
@@ -110,18 +119,26 @@ static func parse(body: String) -> Dictionary:
 		var voiced := _voice_marks(text)
 		text = Manuscript._rx(Manuscript.COMMENT).sub(text, "", true).strip_edges()
 		if not kind.is_empty():
-			var dur := rest_of(kind, showing)
-			actions.append({"kind": kind, "card": int((p as Dictionary)["card"]),
-				"after": spoken.size(), "dur": dur})
+			if not TableActions.source_of(kind).is_empty():
+				source = TableActions.source_of(kind)
+			var card := int((p as Dictionary)["card"])
+			var last := maxi(int((p as Dictionary).get("last", card)), card)
+			var takes := TableActions.takes_from_source(kind)
+			var dur := TableActions.rest_of(kind, showing, takes and not moved,
+				bool((TableActions.SOURCES[source] as Dictionary)["pushes"]), last - card + 1)
+			actions.append({"kind": kind, "card": card, "last": last, "after": spoken.size(), "dur": dur})
 			speak.append("<!-- action-hold: %s -->" % String.num(dur, 2))
+			moved = moved or takes
 			if TableActions.shows(kind):
 				showing = true
-				cards = maxi(cards, int((p as Dictionary)["card"]))
-			elif TableActions.ends(kind):
+			elif TableActions.ends(kind) or (showing and TableActions.REGISTRY[kind]["lays"]):
 				showing = false
+			if TableActions.takes_card(kind):
+				cards = maxi(cards, last)
 		if kind.is_empty() and text.is_empty():
 			continue
-		out_passages.append({"kind": kind, "card": int((p as Dictionary)["card"]), "text": text})
+		out_passages.append({"kind": kind, "card": int((p as Dictionary)["card"]),
+			"last": int((p as Dictionary).get("last", (p as Dictionary)["card"])), "text": text})
 		for w in text.split(" ", false):
 			for piece in String(w).split("\n", false):
 				var n := TabletScript.norm(piece)
@@ -138,7 +155,7 @@ static func parse(body: String) -> Dictionary:
 				if not cued.is_empty():
 					who = cued
 	return {"passages": out_passages, "actions": actions, "spoken": spoken,
-		"speakable": "\n\n".join(speak), "cards": cards}
+		"speakable": "\n\n".join(speak), "cards": cards, "source": source}
 
 
 ## [param text] with every comment taken out but the ones the voice acts on: a delivery, a
@@ -172,7 +189,7 @@ static func chapters(body: String, words: Array) -> Array:
 	var out: Array = [{"t": 0.0, "kind": "intro", "card": 0}]
 	for e in f.place(p["actions"], 0.0, 0.25, 0.2):
 		var a: Dictionary = (e as Dictionary)["a"]
-		if String(a["kind"]) == "shuffle":
+		if not TableActions.chapter(String(a["kind"])):
 			continue
 		out.append({"t": maxf(0.0, float((e as Dictionary)["t0"])), "kind": String(a["kind"]),
 			"card": int(a["card"])})
@@ -186,9 +203,13 @@ static func compose(passages: Array) -> String:
 	for p in passages:
 		var kind := String((p as Dictionary).get("kind", ""))
 		var card := int((p as Dictionary).get("card", 0))
+		var last := int((p as Dictionary).get("last", card))
 		if not kind.is_empty():
-			parts.append("<!-- table: %s %d -->" % [kind, card] if TableActions.takes_card(kind)
-				else "<!-- table: %s -->" % kind)
+			if TableActions.takes_range(kind) and last > card:
+				parts.append("<!-- table: %s %d-%d -->" % [kind, card, last])
+			else:
+				parts.append("<!-- table: %s %d -->" % [kind, card] if TableActions.takes_card(kind)
+					else "<!-- table: %s -->" % kind)
 		var text := String((p as Dictionary).get("text", "")).strip_edges()
 		if not text.is_empty():
 			parts.append(text)

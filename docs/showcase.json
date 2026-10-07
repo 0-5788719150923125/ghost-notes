@@ -1,5 +1,5 @@
 {
-	"digest": "46983a0eb729db1fdcd182c3a831524033b352e5c13f46261901af183f1757e8",
+	"digest": "066446be45f7b42db07a0b3e5005cac466832961abcb67f09f561c658a5e39e4",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -12,6 +12,7 @@
 		"res://shaders/flame.gdshader",
 		"res://shaders/fractal_field.gdshader",
 		"res://shaders/light_bird.gdshader",
+		"res://shaders/light_caster.gdshader",
 		"res://shaders/light_noise.gdshaderinc",
 		"res://shaders/light_screen.gdshader",
 		"res://shaders/mask_split.gdshader",

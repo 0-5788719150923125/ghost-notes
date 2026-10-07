@@ -33,7 +33,10 @@ const DAY := {"sky": {"color": "#b8c8d8", "strength": 0.6},
 	"through": [{"name": "the window", "kind": "window", "size": [120, 160], "panes": [2, 3]}],
 	"clouds": {"cover": 0.5, "size": 0.3, "speed": 0.8, "thickness": 0.9},
 	"birds": {"look": "crow", "every": 20},
-	"lamps": [{"name": "a torch", "look": "torch", "from": "left", "shadows": true}, {"name": "a lantern", "look": "lantern", "from": "right"}]}
+	"lamps": [{"name": "a torch", "look": "torch", "from": "left", "shadows": true}, {"name": "a lantern", "look": "lantern", "from": "right"}],
+	"shadows": [{"name": "a beam", "parts": [{"shape": "box", "size": [300, 15, 15]}], "shadow": [0, -10], "height": 200},
+		{"name": "a rope", "parts": [{"shape": "tube", "path": [[0, 0, 0], [0, -120, 0]], "radius": 1.5}], "shadow": [-20, 0], "height": 140,
+			"move": {"kind": "swing", "amount": 0.6}}]}
 
 var _fails := 0
 var medium: TableMedium
@@ -85,6 +88,11 @@ func _run() -> void:
 		cast_screens += 1 if (((l as Dictionary)["light"] as Light3D).shadow_caster_mask & Lights.SCREEN_LAYER) != 0 else 0
 	cast_screens += 1 if (medium._lamp.shadow_caster_mask & Lights.SCREEN_LAYER) != 0 else 0
 	_ok(cast_screens == 0 and not medium._lights.is_empty(), "no light but the sun casts with its screens (%d do)" % cast_screens)
+	var shadow_casters := 0
+	for l in rig.lamps:
+		shadow_casters += 1 if (((l as Dictionary)["light"] as Light3D).shadow_caster_mask & Lights.CASTER_LAYER) != 0 else 0
+	_ok(rig.casters.size() == 2 and shadow_casters == rig.lamps.size() and (medium._lamp.shadow_caster_mask & Lights.CASTER_LAYER) != 0,
+		"the shadows out of the shot are built and every lamp casts with them (%d built, %d of %d lamps)" % [rig.casters.size(), shadow_casters, rig.lamps.size()])
 	_ok(medium._backdrop.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "the room's picture casts no shadow")
 	_ok(not medium._seen.is_empty(), "the table the camera sees is sampled")
 
@@ -109,8 +117,10 @@ func _run() -> void:
 	medium._tick_light(77.7)
 	var a := _energies()
 	medium._tick_light(12.0)
+	var swung := ((rig.casters[1] as Dictionary)["pivot"] as Node3D).basis
 	medium._tick_light(77.7)
 	_ok(a == _energies(), "the same moment twice is the same light")
+	_ok(not swung.is_equal_approx(((rig.casters[1] as Dictionary)["pivot"] as Node3D).basis), "the rope hangs the same at 12 s and at 77.7 s - it does not swing")
 
 	print("its exposure follows the cloth")
 	var dark_sun: float = rig.sun_energy
@@ -155,6 +165,8 @@ func _energies() -> Array:
 			out.append(((l as Dictionary)["light"] as Light3D).position)
 		for b in medium._rig.bird_nodes:
 			out.append((b as MeshInstance3D).visible)
+		for c in medium._rig.casters:
+			out.append(((c as Dictionary)["pivot"] as Node3D).transform)
 	return out
 
 

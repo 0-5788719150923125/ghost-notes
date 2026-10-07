@@ -115,8 +115,51 @@ cards, or Pokemon cards, and they just want to show them to people"). Two parts 
 
 First such show: `rift/tarot/the-shoebox.md` (a collector opening a different box each episode;
 every card invented). Gate: `cards_choose_check`. Still the tarot's: the card's size and shape
-(a baseball card is 6.3 x 8.8 cm, a tarot card 7 x 12), the face (a numeral, a name, an art
-window - no stat box), and the recipe's verbs (shuffle, draw, lay) - step 9's (3) and (4).
+(a baseball card is 6.3 x 8.8 cm, a tarot card 7 x 12) and the face (a numeral, a name, an art
+window - no stat box).
+
+**The staging** (2026-10-07; the user: a collector "might have a box... and just draw cards at
+random from it", cards in a box "stand vertical... like files in a filing cabinet", a card "tapped...
+turned sideways", "a waterfall... presenting several at once", cards "stacked vertically, like land in
+MTG", a baseball card "held in the center of the screen, alone", a box mixing printings whose "front
+and backs would be different"). Every choice is the producer's, in the plan, steered by the brief, and
+every one is data the table reads:
+
+- `plan.staging.source` (`TableActions.SOURCES`): `deck` - shuffled in the middle, pushed aside, a
+  jumper possible - or `box`: one of the set dresser's things marked `holds_cards` (`CardPrompts.box_rule`;
+  a plain box of the deck's stock when it built none), stood where the deck would be
+  (`TablePositions.box_at`, no bigger than `CardTable.BOX_MAX`, the spread kept clear of it), the cards
+  filed in it on edge - upright, on a long edge, or flat in a shallow tin - most of its length full and
+  the last few leaning into the gap (`TableMedium._build_file`, a MultiMesh per printing). A drawn card
+  waits standing in the file and is pulled straight up past the rim. The reading opens with `open`
+  instead of `shuffle`, and no first card waits for a push.
+- `plan.staging.text` (`CardTable.TEXTS`): `booklet` - the page beside the card, held up on the left -
+  or `back`: the card's text printed in a panel over its printing's back (`CardFaces.Face.printed`), the
+  card held up ALONE in the middle and turned over to show it, every time, long enough to read
+  (`TableMedium._looks`). The designer writes the back's facts and text; the painter leaves the back's
+  middle plain for them.
+- `look.series`: the PRINTINGS a deck mixes, each a name and what it prints otherwise (style, back,
+  palette, frame); a card's `series` (or its group's name) picks one (`CardTable.look_of`). Each printing
+  is painted its own back (`image:back:<key>`, `back_<key>.png`), each card in its own printing's hand
+  (the chain of references is that printing's).
+- Each spread position: `comes` - `drawn` (held up), `dealt` (straight to its place, never held up) or
+  `swept` (a run of swept positions goes out in one waterfall, overlapping, then each is picked up);
+  `lies` `sideways` (a quarter turn); `on` (stacked on the card before, a step behind so its name shows);
+  `then` - `tap N`, `untap N` after its passage. `TablePositions.staged` lays the piles (a card alone, a
+  stack, a waterfall) in a row or two, checked like every position; a spread asking none of it is the
+  seeded preset, draw for draw.
+
+**The verbs.** `TableActions` holds them all, each with its rest: `open`, `deal`, `fan` (`fan 3-5`, a
+run), `show` (a card lying on the table picked up and held as a drawn one is), `tap`, `untap`, `flip`.
+`CardProducer.choreography` writes the reading's marks from the plan; `CardPrompts.after` tells each
+reader what moves after its words (the same order). The table poses each card from its own TIMELINE
+(`TableMedium._times` `events`, `_card_pose`): arrive (draw, jumper, deal, fan), show, lay, turn - still
+a pure function of show time, and tarot's draw, jumper and lay keep their exact phases. NO CHEATING holds
+for a waterfall: the cards swept out together are revealed together (`CardEpisode.reveal_of`), so the
+reader of its first card is handed them all, and no card past them. Gate: `table_staging_check` (the
+marks, the layouts over 40 seeds, the choreography, a deck show and a box show posed, the printings'
+backs), `table_actions_check` (the rests). `flip` has no producer field yet (a face-down card's reveal
+needs its own rule for the reader), and the dealer's tools do not take the new fields.
 
 ## The episode
 
@@ -463,6 +506,29 @@ The set dresser now writes `light` beside its things (`Lights`, `src/lights.gd`;
   it (`Lights.lamp_place`, `CardTable.in_shot`), flickering its own way as a pure function of show time
   (a torch's dancing light and shadows, a sign's stutters, a screen's cuts, a strike's two to four
   flickers lighting the room).
+- SHADOWS OUT OF THE SHOT (`shadows`, at most 4; the user, the same night: "a beam or a pillar might cast
+  a permanent shadow over the table... a hanging rope might be gently swaying in the wind - casting a
+  shadow that truly would be in constant motion (or better yet, nonlinear periodic motion)... a
+  chandelier might cast shadows"): things the camera never sees, built of SILHOUETTES in centimeters up
+  to six meters (`Lights.CASTER_SHAPES`: box, cylinder, ball, ring, tube along a path, sheet, grille;
+  grouped two deep and copied round the upright or along a step - a chandelier's six arms, a row of roof
+  beams), shadow-only on `Lights.CASTER_LAYER`, which every light that casts casts with. NOT [Props]:
+  those clamp to 60 cm and are surfaces. Aimed by where the middle of the shadow falls (`shadow`, at
+  `height`) and set up the ray of the light that throws it - the sun, or a lamp that casts (`by`) - then
+  raised along that same ray, the shadow staying put, until it is clear of the table and out of the shot
+  (`Lights.caster_place`). ROUND A LAMP (`around`) its own origin is the lamp's flame: what hangs below it
+  throws its shadow down. Measured: a candles lamp inside a chandelier with a boss and cups just under
+  the flame threw a blot over the whole table (each magnified five to eight times); the same iron
+  chandelier under a ceiling lamp threw its six arms as spokes across the cards. It is still, or
+  SWINGS - a pendulum stepped at 120 Hz from show time 0 and kept every 30th of a second, pulled back by
+  the sine of its angle and pushed by a wind's lean, slow turns, gusts and turbulence near its own pace
+  (`Lights.swing_at`): any time is the same swing whatever order it is asked in, and a rope swings at its
+  length's period (1.43 s at half a meter, 2.13 s at one, against 1.42 and 2.01 by theory) a gentle 8 to
+  10 degrees at `amount` 0.6 - or spins (a fan's blades), or ripples (a sheet's vertices waved in
+  `shaders/light_caster.gdshader`, more the further they hang from its top). `put` reports what each
+  shadow covers, part by part (a convex outline round two beams had claimed the sun between them was
+  shade; a hoop's outline is its rim, not its disc), where on the table, and any raise; `watch` takes a
+  moving one by name.
 - THE EXPOSURE (`Lights.Rig.fit`): the sun and the sky brought down TOGETHER until the palest thing in
   the light (the 97th percentile of the cloth the camera sees, or the card stock) takes no more than
   `SUN_HEAT` - the day keeps its contrast, sun to shade four or five to one on a clear day. The first cut
@@ -476,7 +542,7 @@ The set dresser now writes `light` beside its things (`Lights`, `src/lights.gd`;
 - THE SET DRESSER: told the vocabulary (`Lights.describe`), to build the plan's light and make it agree
   with the room - whose PAINTING now comes with its prompt, the table step waiting for it (softly: a new
   room keeps the table) - and earlier episodes' lights (`CardEpisode.archive` -> `light`). `put` takes
-  `light` part by part (a part replaces that part; screens and lamps by name; null and `[]` take away)
+  `light` part by part (a part replaces that part; screens, lamps and shadows by name; null and `[]` take away)
   and answers with where the sun falls - how much of the table the camera sees, and of where the cards
   lie - by the CPU's own reckoning (`Lights._pattern`, line for line the shader's, on integer-hashed
   noise both reckon alike; `light_screen_check` holds them together at 99% and more), how the weather
@@ -489,7 +555,9 @@ Seen on real episodes before it shipped (`set_dresser_look_probe --light`): the 
 across the leather toward the viewer, as its painted room has them; a ferry's awning shade with the day
 spilling past its scalloped edge, a cloud taking the sunlit strip and giving it back; moonlight through
 blinds with a neon sign's red glow; a 2 a.m. kitchen by one candle and a street lamp's long shadows; a
-gull's shadow sweeping the palm mat. Gates `tests/lights_check.gd`, `tests/table_light_check.gd` (boot),
+gull's shadow sweeping the palm mat; then roof beams' bars and a pillar's stripe across the shoebox's
+cloth, a bell rope swinging, a chandelier's spokes, laundry rippling and a fan turning. Gates
+`tests/lights_check.gd`, `tests/table_light_check.gd` (boot),
 `tests/light_screen_check.gd` (GPU), set_dresser_tools_check `_light`, cards_check (archive, the table step).
 
 BUILT IN THE ENGINE (`src/props.gd`, `Props.build`): meshes in meters, base on y = 0, each

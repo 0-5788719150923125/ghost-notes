@@ -12,6 +12,7 @@ extends Node
 ## `--dark 0,2` puts out those lights (a lit thing's one light; -1 the lamp), to find which light does something.
 ## `--name N --byline B` set the title screen's name and byline (the show's own); `--ink #rrggbb` prints
 ## the name in that color, as a set dresser's choice would.
+## `--root user://somewhere` reads the episode from another root than the author's (a copy restaged to look at).
 ## `--looks 1` prints when each held card looks at its back, and which looks are pirouettes - to
 ## aim a `--clip` at one.
 ## `--wash W` makes the shuffle one wash (seed W, its longest) and `--clip A,B` writes EVERY frame
@@ -56,6 +57,7 @@ func _run() -> void:
 		match args[i]:
 			"--out": _out = args[i + 1]
 			"--show": _show = args[i + 1]
+			"--root": CardEpisode.root = args[i + 1]
 			"--seed": _seed = int(args[i + 1])
 			"--word": _word = float(args[i + 1])
 			"--every": _every = float(args[i + 1])

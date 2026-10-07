@@ -31,6 +31,9 @@ var seed := 0
 ## Absolute.
 var dir := ""
 var _script_cache := {}
+var _cards_stamp := "-"           # the plan and draw files the printings and waterfalls were last read from
+var _printing_keys: Array = []      # per drawn card: its printing's file key, "" the deck's own
+var _swept: Array = []              # per spread position: swept out in a waterfall
 var _height_stamp := "-"          # the table file the height map's wanting was last read from
 var _height_wanted := false
 
@@ -230,7 +233,11 @@ func steps() -> Array:
 	var n := card_count()
 	for k in range(1, n + 1):
 		out.append("design:%d" % k)
-	out.append_array(["image:back", "image:surface", "image:backdrop", "table"])
+	out.append("image:back")
+	# A BACK PER PRINTING the drawn cards are in, beside the deck's own (CardTable.look_of)
+	for key in printings():
+		out.append("image:back:%s" % key)
+	out.append_array(["image:surface", "image:backdrop", "table"])
 	if wants_height():
 		out.append("image:height")
 	for k in range(1, n + 1):
@@ -254,14 +261,18 @@ func needs(step: String) -> Array:
 		"design":
 			return ["draw"]
 		"image":
-			if parts.size() == 3:
-				# a card's picture is painted in the deck's hand: after the back, and after the
+			if parts.size() == 3 and String(parts[1]) == "card":
+				# a card's picture is painted in the deck's hand: after its printing's back, and after the
 				# card before it (they are sent to it as references - see CardProducer)
 				var k := int(parts[2])
-				var out := ["design:%d" % k, "image:back"]
+				var key := printing_of(k)
+				var out := ["design:%d" % k, "image:back" if key.is_empty() else "image:back:%s" % key]
 				if k > 1:
 					out.append("image:card:%d" % (k - 1))
 				return out
+			if parts.size() == 3 and String(parts[1]) == "back":
+				# a printing's back waits for the shuffle, which says which printings are drawn
+				return ["draw"]
 			if String(parts[1]) == "height":
 				# the painting's depth is painted FROM the painting, once the table says it is wanted
 				return ["image:surface", "table"]
@@ -275,7 +286,11 @@ func needs(step: String) -> Array:
 			# a card's passage is written LOOKING AT the card: it waits for its picture, and a
 			# card painted again is a passage written again (see CardProducer.say_prompt)
 			var k := int(who)
-			return ["design:%d" % k, "image:card:%d" % k, "say:intro" if k == 1 else "say:%d" % (k - 1)]
+			var out := ["design:%d" % k, "image:card:%d" % k, "say:intro" if k == 1 else "say:%d" % (k - 1)]
+			# a card swept out in a waterfall is read with the cards that came out with it: their entries too
+			for j in range(k + 1, reveal_of(k) + 1):
+				out.append("design:%d" % j)
+			return out
 		"script":
 			return ["say:close"]
 		"table":
@@ -309,7 +324,7 @@ func dependents(step: String) -> Array:
 ## the card before it, because it is sent them as references, but it is not made from them; and
 ## the table waits for the cloth and the room to look at, but a new cloth or room keeps the table.
 static func _soft(from: String, to: String) -> bool:
-	return (to.begins_with("image:card:") and (from.begins_with("image:card:") or from == "image:back")) \
+	return (to.begins_with("image:card:") and (from.begins_with("image:card:") or from.begins_with("image:back"))) \
 		or (to == "table" and (from == "image:surface" or from == "image:backdrop")) \
 		or (to == "image:height" and from == "table")
 
@@ -323,8 +338,8 @@ func invalidate(step: String) -> Array:
 		for f in DirAccess.get_files_at(dir):
 			var fs := String(f)
 			if fs.begins_with("design_") or fs.begins_with("card_") or fs.begins_with("say_") \
-					or fs == "script.md" or (step == "plan" and fs in ["draw.json", "back.png", "surface.png",
-					"backdrop.png", "height.png", "height.json"]):
+					or fs == "script.md" or (step == "plan" and (fs in ["draw.json", "back.png", "surface.png",
+					"backdrop.png", "height.png", "height.json"] or fs.begins_with("back_"))):
 				DirAccess.remove_absolute(dir.path_join(fs))
 	for s in gone:
 		var p := file_of(String(s))
@@ -334,6 +349,58 @@ func invalidate(step: String) -> Array:
 		if String(s) == "image:height" and FileAccess.file_exists(dir.path_join("height.json")):
 			DirAccess.remove_absolute(dir.path_join("height.json"))
 	return gone
+
+
+## THE PRINTINGS the drawn cards are in, besides the deck's own, as file keys (`back_<key>.png`), in the
+## order they are first drawn ([method CardTable.look_of]).
+func printings() -> Array:
+	var out: Array = []
+	for k in range(1, card_count() + 1):
+		var key := printing_of(k)
+		if not key.is_empty() and not out.has(key):
+			out.append(key)
+	return out
+
+
+## Card [param k]'s printing as a file key, or "" for the deck's own.
+func printing_of(k: int) -> String:
+	_read_cards()
+	return String(_printing_keys[k - 1]) if k >= 1 and k <= _printing_keys.size() else ""
+
+
+## THE LAST CARD THE READER OF CARD [param k]'s PASSAGE HAS SEEN: [param k] itself - or, when it was swept
+## out in a waterfall ([constant TablePositions.COMES] `swept`), the last card of that waterfall, which
+## all lie face up on the table together.
+func reveal_of(k: int) -> int:
+	_read_cards()
+	var swept := func(i: int) -> bool: return i >= 1 and i <= _swept.size() and bool(_swept[i - 1])
+	if not swept.call(k):
+		return k
+	var last := k
+	while swept.call(last + 1):
+		last += 1
+	return last
+
+
+## The printings and the waterfalls, read again only when the plan or the draw changes.
+func _read_cards() -> void:
+	var stamp := ""
+	for f in [file_of("plan"), file_of("draw")]:
+		stamp += "%d|%d;" % [FileAccess.get_modified_time(f), FileAccess.get_size(f)] if FileAccess.file_exists(f) else "-;"
+	if stamp == _cards_stamp:
+		return
+	_cards_stamp = stamp
+	_printing_keys = []
+	_swept = []
+	var p: Variant = read_json("plan")
+	var d: Variant = read_json("draw")
+	var plan: Dictionary = p if p is Dictionary else {}
+	var look: Dictionary = plan.get("look", {}) if plan.get("look") is Dictionary else {}
+	for pos in (((plan.get("spread", {}) as Dictionary).get("positions", [])) as Array) if plan.get("spread") is Dictionary else []:
+		_swept.append(pos is Dictionary and String((pos as Dictionary).get("comes", "")) == "swept")
+	for c in (d as Dictionary).get("cards", []) if d is Dictionary else []:
+		var name := CardTable.series_of(look, c as Dictionary) if c is Dictionary else ""
+		_printing_keys.append(CardTable.series_key(name) if not name.is_empty() else "")
 
 
 ## WHETHER THE PAINTING'S HEIGHT MAP IS WANTED: the table is set and lays the painting where its depth
@@ -413,7 +480,7 @@ func upload_notes(take := "") -> Dictionary:
 		var d: Dictionary = c
 		var label := "Intro"
 		match String(d["kind"]):
-			"draw", "jumper":
+			"draw", "jumper", "deal", "show":
 				var k := int(d["card"])
 				var card: Dictionary = cards[k - 1] if k >= 1 and k <= cards.size() else {}
 				var pos := String((card.get("position", {}) as Dictionary).get("name", ""))

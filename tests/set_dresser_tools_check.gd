@@ -339,8 +339,9 @@ func _prompts() -> bool:
 		_ok(text.contains(CardPrompts.SET_EXAMPLE), "the set dresser %s is not shown the format" % tag)
 		_ok(text.contains("THE AIR:"), "the set dresser %s is not told about the air" % tag)
 		_ok(text.contains("THE LIGHT:") and text.contains(CardPrompts.LIGHT_EXAMPLE), "the set dresser %s is not told about the light, or shown its format" % tag)
-		for k in Lights.SCREENS.keys() + Lights.BIRDS.keys() + Lights.LAMPS.keys() + Lights.SUNS.keys():
+		for k in Lights.SCREENS.keys() + Lights.BIRDS.keys() + Lights.LAMPS.keys() + Lights.SUNS.keys() + Lights.CASTER_SHAPES.keys() + Lights.CASTER_MOVES.keys():
 			_ok(text.contains("- %s:" % k), "the set dresser %s is not told the light's word %s" % [tag, k])
+		_ok(text.contains("- shadows:") and text.contains("a rope or a lantern swinging"), "the set dresser %s is not told of shadows out of the shot" % tag)
 		for k in Effects.KINDS.keys() + Effects.MOTES.keys() + Effects.BURSTS.keys():
 			_ok(text.contains("- %s:" % k), "the set dresser %s is not told the effect word %s" % [tag, k])
 		for k in CardTable.AIR.keys() + CardTable.MOMENTS.keys():
@@ -494,6 +495,21 @@ func _light() -> bool:
 		"watching the light with no renderer did not say so: %s" % r)
 	await t.call_tool("put", {"light": {"lamps": []}})
 	_ok(((t.draft()["light"] as Dictionary)["lamps"] as Array).is_empty(), "`lamps: []` does not take them all away")
+	# SHADOWS OUT OF THE SHOT: reported, put by name, taken off by name, watched by name
+	r = await t.call_tool("put", {"light": {"shadows": [
+		{"name": "the beam", "parts": [{"shape": "box", "size": [300, 15, 20]}], "shadow": [0, -10], "height": 200},
+		{"name": "the rope", "parts": [{"shape": "tube", "path": [[0, 0, 0], [0, -100, 0]]}, {"shape": "kettle"}], "shadow": [-20, 0], "height": 140, "move": {"kind": "swing"}},
+		{"name": "far off", "parts": [{"shape": "box", "size": [20, 20, 20]}], "shadow": [90, -60], "height": 30}]}})
+	text = String(r["text"])
+	_ok(text.contains("Shadows out of the shot:") and text.contains("\"the beam\" (still, the sun's): its shadow covers"), "a shadow out of the shot was not reported:\n%s" % text)
+	_ok(text.contains("\"kettle\" is not a shape a shadow is made of"), "a shadow's unknown shape was not reported:\n%s" % text)
+	await t.call_tool("put", {"light": {"shadows": [{"name": "the rope", "parts": [{"shape": "tube", "path": [[0, 0, 0], [0, -60, 0]]}], "move": {"kind": "flutter"}}]}})
+	var shadows: Array = (t.draft()["light"] as Dictionary)["shadows"]
+	_ok(shadows.size() == 3 and String(((shadows[1] as Dictionary)["move"] as Dictionary)["kind"]) == "flutter", "shadows are not put by name: %s" % str(shadows))
+	r = await t.call_tool("watch", {"name": "the rope"})
+	_ok(not bool(r.get("error", false)) and String(r["text"]).contains("cannot be watched"), "watching a shadow with no renderer did not say so: %s" % r)
+	gone = await t.call_tool("remove", {"names": ["far off"]})
+	_ok(not bool(gone.get("error", false)) and ((t.draft()["light"] as Dictionary)["shadows"] as Array).size() == 2, "a shadow is not taken off by name")
 	# HANDED IN with the table, and built from it
 	await t.call_tool("put", {"things": [_candle("a pillar", 9.0)], "materials": {"beeswax": {"kind": "wax", "color": "#e8d9a8"}}})
 	await t.call_tool("title", {"color": "#e9dcc0"})

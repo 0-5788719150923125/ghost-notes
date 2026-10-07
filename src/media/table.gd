@@ -63,6 +63,13 @@ const ROOM_REACH := 3.2
 ## away). The page sits a hair farther back so the card always reads as in front.
 const PRESENT_DIST := 0.23
 const PRESENT := Vector2(-0.087, 0.012)
+## A card whose text is on its own back ([constant CardTable.TEXTS]) is held up ALONE, in the middle and
+## a little nearer: there is no page beside it.
+const PRESENT_ALONE := Vector2(0.0, 0.006)
+const PRESENT_ALONE_DIST := 0.205
+## ...and it is turned over to show that text: first this long after it is up, held there this long.
+const BACK_LOOK := Vector2(3.5, 5.5)
+const BACK_HOLD := Vector2(5.0, 8.0)
 const PAGE := Vector2(0.088, 0.012)
 const PAGE_H := 0.126
 const VFOV := CardTable.VFOV
@@ -86,6 +93,27 @@ const JUMP_FLY := Vector2(1.15, 2.25)
 const JUMP_REST := 3.3
 const JUMP_RISE := 4.3
 const JUMP_PAGE := Vector2(4.2, 5.0)
+## A CARD DEALT (TableActions.DEAL): off its source and turned over, then down into its place.
+const DEAL_TURN := 0.9
+const DEAL_END := 1.9
+## A WATERFALL (TableActions.FAN): each card leaves a beat behind the one before (TableActions.FAN_EACH)
+## and slides out to its place, turning face up as it goes.
+const FAN_MOVE := 1.45
+## A CARD SHOWN from where it lies (TableActions.SHOW): it lifts and comes up; its page opens.
+const SHOW_RISE := 1.1
+const SHOW_PAGE := Vector2(0.9, 1.6)
+## A card TURNED where it lies (TableActions.TURN, FLIP): the turn's own seconds.
+const TURN_END := 0.8
+const FLIP_END_LAY := 1.1
+## THE BOX THE CARDS ARE KEPT IN: how thick its walls are taken to be (meters), and the cards filed in
+## it - their pitch (a card and the air beside it), how much of the box they fill at least, and how far
+## the last of them lean into the gap they leave.
+const BOX_WALL := 0.006
+const FILE_PITCH := 0.0011
+const FILE_FILL := Vector2(0.7, 0.97)
+const FILE_LEAN := 0.35
+## A card pulled from the box rises this far above the rim before it turns to the camera.
+const PULL_CLEAR := 0.02
 ## Lead and tail around each action group, as the tablet's: a beat after the last word before
 ## the cards move, and they are still a beat before the next word.
 ## HOW A READER SHUFFLES: in RUNS - several riffles, a string of cuts, a few overhand passes,
@@ -337,6 +365,13 @@ var _key := ""
 var _now := 0.0
 var _seed := 0
 var _look: Dictionary = {}
+var _staging: Dictionary = CardTable.STAGING.duplicate()   # how the cards come and are shown (CardTable.staging_of)
+var _cards_from := "deck"                 # where they come from: the reading's opening verb's, else the staging's
+var _alone := false                   # a drawn card is held up alone and turned to show its printed back
+var _backs := {}                      # printing name ("" the deck's own) -> {vp, canvas, mat}: each printing's back
+var _printed: Array = []              # per drawn card, when its text is on its back: {vp, canvas, mat}
+var _box := {}                        # the box the cards are kept in, stood: {node, at, inner (AABB, world), upright, lie}
+var _file: Array = []                 # the cards filed in it: MultiMeshInstance3D, one per printing
 
 var _placeholder: GhostScene
 var _root3: Node3D
@@ -728,6 +763,9 @@ func _ensure_doc() -> void:
 	_look = CardTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {})
 	_seed = int(pay.get("seed", 0))
 	_foil = float(_look.get("foil", 0.6))
+	_staging = CardTable.staging_of(plan)
+	_cards_from = String(_parse.get("source", _staging["source"])) if not _parse.is_empty() else String(_staging["source"])
+	_alone = String(_staging["text"]) == "back"
 	# A READING STARTED MID-WAY (a scrub) begins where its first words are: everything before them
 	# happened long ago, spaced as a voice would have said it, so the cards drawn by then are
 	# already down (or up) on the first frame
@@ -809,6 +847,9 @@ func _build_episode() -> void:
 		(c as Node).queue_free()
 	for v in _faces:
 		(v as Node).queue_free()
+	for pb in _printed:
+		((pb as Dictionary)["vp"] as Node).queue_free()
+	_printed = []
 	_cards = []
 	_faces = []
 	_face_canvas = []
@@ -821,9 +862,11 @@ func _build_episode() -> void:
 			_textures.erase(k)
 			_mtimes.erase(String(k))
 	var cards: Array = _pay.get("cards", [])
+	_build_backs(cards)
 	for i in cards.size():
 		var canvas := CardFaces.Face.new()
-		canvas.look = _look
+		# EACH CARD IN ITS OWN PRINTING: a box may mix sets, each with its own front and back
+		canvas.look = CardTable.look_of(_look, cards[i])
 		canvas.card = cards[i]
 		canvas.seed = _seed
 		var vp := CardFaces.viewport(self, canvas, CardFaces.FACE_PX)
@@ -832,7 +875,7 @@ func _build_episode() -> void:
 		var m := MeshInstance3D.new()
 		m.mesh = _card_mesh
 		m.set_surface_override_material(0, mat)
-		m.set_surface_override_material(1, _back_mat)
+		m.set_surface_override_material(1, _back_of(i, cards[i]))
 		m.set_surface_override_material(2, _edge_mat)
 		m.visible = false
 		_root3.add_child(m)
@@ -850,9 +893,9 @@ func _build_episode() -> void:
 	# THE SPREAD: where the cards were given to lie (a plan's coordinates, a dealer's layout - checked
 	# on the cloth, in the frame and clear of the deck), else the seeded preset. The preset is drawn
 	# either way, so every draw after it lands where it always has.
-	var seeded := TablePositions.seeded(cards.size(), rng, CardTable.layout_of(_seed))
+	var seeded := TablePositions.staged(cards, rng, CardTable.layout_of(_seed), _box_keep())
 	var spec := _table_spec()
-	var given := TablePositions.given(cards, _seed, spec["top"])
+	var given := TablePositions.given(cards, _seed, spec["top"], _box_keep())
 	_slots = given if not given.is_empty() else seeded
 	# a jumper flies out of the deck in the middle and lands on the far side from where the deck
 	# is about to go
@@ -864,6 +907,72 @@ func _build_episode() -> void:
 	for vp in _faces:
 		CardFaces.redraw(vp)
 	CardFaces.redraw(_back_vp)
+	for pb in _printed:
+		CardFaces.redraw((pb as Dictionary)["vp"])
+
+
+## THE BACKS: the deck's own ([member _back_vp]), and one more per printing the drawn cards (and the box,
+## when the producer chose it) are printed in ([method CardTable.look_of]).
+func _build_backs(cards: Array) -> void:
+	for key in _backs:
+		if String(key) != "":
+			((_backs[key] as Dictionary)["vp"] as Node).queue_free()
+	_backs = {"": {"vp": _back_vp, "canvas": _back_canvas, "mat": _back_mat}}
+	for name in _printings(cards):
+		if String(name).is_empty() or _backs.has(name):
+			continue
+		var canvas := CardFaces.Face.new()
+		canvas.back = true
+		canvas.look = CardTable.look_of(_look, {"series": name})
+		canvas.seed = _seed
+		var vp := CardFaces.viewport(self, canvas, CardFaces.FACE_PX)
+		var mat := _foil_material(vp.get_texture())
+		mat.set_shader_parameter("lift", 0.06)
+		mat.set_shader_parameter("window", Vector4(0.0, 0.0, 1.0, 1.0))
+		_backs[name] = {"vp": vp, "canvas": canvas, "mat": mat}
+
+
+## Every printing the episode's cards are in, the deck's own ("") among them when any card is in it: the
+## drawn cards', and the whole box's when the producer chose one.
+func _printings(cards: Array) -> Array:
+	var out: Array = []
+	var plan: Dictionary = _pay.get("plan", {}) if _pay.get("plan") is Dictionary else {}
+	var all: Array = cards.duplicate()
+	all.append_array(plan.get("deck", []) if plan.get("deck") is Array else [])
+	for c in all:
+		var name := CardTable.series_of(_look, c as Dictionary) if c is Dictionary else ""
+		if not out.has(name):
+			out.append(name)
+	if out.is_empty():
+		out.append("")
+	return out
+
+
+## Card [param i]'s back: its printing's - or, when its text is printed on its back, its very own.
+func _back_of(i: int, card: Dictionary) -> Material:
+	var name := CardTable.series_of(_look, card)
+	if not _alone:
+		return (_backs.get(name, _backs[""]) as Dictionary)["mat"]
+	var canvas := CardFaces.Face.new()
+	canvas.back = true
+	canvas.printed = true
+	canvas.look = CardTable.look_of(_look, card)
+	canvas.card = card
+	canvas.seed = _seed
+	var vp := CardFaces.viewport(self, canvas, CardFaces.FACE_PX)
+	var mat := _foil_material(vp.get_texture())
+	mat.set_shader_parameter("lift", 0.06)
+	mat.set_shader_parameter("window", Vector4(0.0, 0.0, 1.0, 1.0))
+	while _printed.size() <= i:
+		_printed.append({})
+	_printed[i] = {"vp": vp, "canvas": canvas, "mat": mat, "series": name}
+	return mat
+
+
+## Where the box the cards are kept in may stand, across and deep - kept clear by the spread - or zero
+## when they come from a deck.
+func _box_keep() -> Vector2:
+	return Vector2(CardTable.BOX_MAX.x, CardTable.BOX_MAX.z) if _cards_from == "box" else Vector2.ZERO
 
 
 ## The part of a face that is the painting, in UV - foil is keyed inside it (the frame's foil is
@@ -892,15 +1001,30 @@ func _poll_pictures(force := false) -> void:
 			CardFaces.redraw(_faces[i])
 		(_face_mats[i] as ShaderMaterial).set_shader_parameter("accent", Vector3(accent.r, accent.g, accent.b))
 		(_face_mats[i] as ShaderMaterial).set_shader_parameter("foil", _foil)
-	var back := _picture(dir.path_join("back.png"), force)
-	if back != null and _back_canvas.art != back:
-		_back_canvas.art = back
-		var key: Vector2 = _textures.get(dir.path_join("back.png") + "|key", Vector2(0.8, 0.95))
-		_back_mat.set_shader_parameter("lo", key.x)
-		_back_mat.set_shader_parameter("hi", key.y)
-		CardFaces.redraw(_back_vp)
-	_back_mat.set_shader_parameter("accent", Vector3(accent.r, accent.g, accent.b))
-	_back_mat.set_shader_parameter("foil", _foil * 0.8)
+	# EACH PRINTING'S BACK (`back.png` the deck's own, `back_<printing>.png` the others'), and every back
+	# printed with a card's text over its printing's
+	for name in _backs:
+		var file := "back.png" if String(name).is_empty() else "back_%s.png" % CardTable.series_key(String(name))
+		var back := _picture(dir.path_join(file), force)
+		if back == null and not String(name).is_empty():
+			back = _picture(dir.path_join("back.png"), force)
+		var bk: Dictionary = _backs[name]
+		var pkey: Vector2 = _textures.get(dir.path_join(file) + "|key", Vector2(0.8, 0.95))
+		if back != null and (bk["canvas"] as CardFaces.Face).art != back:
+			(bk["canvas"] as CardFaces.Face).art = back
+			(bk["mat"] as ShaderMaterial).set_shader_parameter("lo", pkey.x)
+			(bk["mat"] as ShaderMaterial).set_shader_parameter("hi", pkey.y)
+			CardFaces.redraw(bk["vp"])
+		(bk["mat"] as ShaderMaterial).set_shader_parameter("accent", Vector3(accent.r, accent.g, accent.b))
+		(bk["mat"] as ShaderMaterial).set_shader_parameter("foil", _foil * 0.8)
+		for pb in _printed:
+			if String((pb as Dictionary).get("series", "")) != String(name):
+				continue
+			if back != null and ((pb as Dictionary)["canvas"] as CardFaces.Face).art != back:
+				((pb as Dictionary)["canvas"] as CardFaces.Face).art = back
+				CardFaces.redraw((pb as Dictionary)["vp"])
+			# a printed back is read, not shone: its foil kept low
+			((pb as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("foil", _foil * 0.25)
 	# THE PAINTING of the episode's surface, laid wherever the table takes it ([Tables]: its cloth, its
 	# top, a runner...) - or each such surface's own color until it is painted
 	var cloth := _picture(dir.path_join("surface.png"), force)
@@ -1102,11 +1226,13 @@ func _backdrop_view() -> Dictionary:
 
 
 ## Card [param i]'s pose lying in the spread, the way it came out of the deck - face up, unless the
-## position it was given lies it face down.
-func _slot_xf(i: int) -> Transform3D:
+## position it was given lies it face down - turned [param quarter] quarter turns sideways since (tapped,
+## [constant TablePositions.SIDEWAYS] each) and turned over when [param over].
+func _slot_xf(i: int, quarter := 0, over := false) -> Transform3D:
 	var s: Dictionary = _slots[i] if i < _slots.size() else {"pos": Vector3.ZERO, "yaw": 0.0}
-	var yaw := float(s["yaw"]) + (PI if _reversed(i) else 0.0)
-	var face := _face_up() if String(s.get("face", "up")) != "down" else Basis.IDENTITY
+	var yaw := float(s["yaw"]) + (PI if _reversed(i) else 0.0) + TablePositions.SIDEWAYS * float(quarter)
+	var down := String(s.get("face", "up")) == "down"
+	var face := _face_up() if down == over else Basis.IDENTITY
 	return Transform3D(Basis(Vector3.UP, yaw) * face, s["pos"] as Vector3 + Vector3(0, CARD_T * 0.5, 0))
 
 
@@ -1154,15 +1280,153 @@ func _build_table(spec: Dictionary = {}) -> void:
 	_title.queue_redraw()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([_seed, "tarot-things"])
-	var things: Array = spec["things"]
+	var things: Array = (spec["things"] as Array).duplicate()
 	var built: Array = []
 	for i in things.size():
 		built.append(Props.build(things[i], spec["materials"], hash([_seed, i, "thing"])))
+	# THE BOX THE CARDS ARE KEPT IN stands first, where the deck would be: the rest go round it
+	_stand_box(things, built)
 	_place_things(things, built, rng)
 	_build_light(spec)
 	_light_the_table()
 	_reflect()
 	_build_air(spec)
+
+
+## THE BOX THE CARDS ARE KEPT IN, for a show whose cards come from one ([member _cards_from] `box`): the set
+## dresser's thing that `holds_cards` - taken out of [param things] and [param built] - or, when it made
+## none, a plain box of the deck's own stock. Turned so its long side runs front to back, stood no bigger
+## than [constant CardTable.BOX_MAX] where the deck would be ([method TablePositions.box_at]), and the
+## cards filed in it ([method _build_file]). A box on a table whose cards come from a deck is a thing like
+## any other.
+func _stand_box(things: Array, built: Array) -> void:
+	for f in _file:
+		(f as Node).queue_free()
+	_file = []
+	_box = {}
+	if _cards_from != "box":
+		return
+	var t := {}
+	var b := {}
+	for i in things.size():
+		if bool((things[i] as Dictionary).get("holds_cards", false)):
+			t = things[i]
+			b = built[i]
+			things.remove_at(i)
+			built.remove_at(i)
+			break
+	if t.is_empty():
+		var stock := CardTable.color(String((_look.get("frame", {}) as Dictionary).get("stock", "#c9b38a")))
+		t = {"name": "the box the cards are kept in", "place": "by the deck", "holds_cards": true, "parts": [
+			{"shape": "extrude", "outline": "rect", "size": [9.6, 17.0], "height": 9.0, "wall": 0.5, "material": "card box"}]}
+		var mats := {"card box": Props.sanitize_material({"kind": "paper", "color": "#" + stock.darkened(0.25).to_html(false)}, "#a08060")}
+		b = Props.build(Props.sanitize({"things": [t], "materials": mats}, [])["things"][0], mats, hash([_seed, "card box"]))
+	var size: AABB = b["size"]
+	if size.size.x <= 0.0 or size.size.z <= 0.0:
+		return
+	var across := size.size.z > size.size.x
+	var turn := 0.0 if across or is_equal_approx(size.size.x, size.size.z) else PI * 0.5
+	var w := size.size.z if turn != 0.0 else size.size.x
+	var d := size.size.x if turn != 0.0 else size.size.z
+	var k := minf(1.0, minf(CardTable.BOX_MAX.x / w, minf(CardTable.BOX_MAX.z / d, CardTable.BOX_MAX.y / maxf(size.size.y, 0.001))))
+	var basis := Basis(Vector3.UP, turn).scaled(Vector3(k, k, k))
+	var want := TablePositions.box_at(_deck_base)
+	var mid := basis * size.get_center()
+	var at := Vector2(want.x - mid.x, want.z - mid.z)
+	var shape := _translated(_turned(b["outline"], basis), at)
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for q in shape:
+		lo = lo.min(q)
+		hi = hi.max(q)
+	var corners := PackedVector3Array()
+	for cx in [size.position.x, size.end.x]:
+		for cy in [size.position.y, size.end.y]:
+			for cz in [size.position.z, size.end.z]:
+				corners.append(basis * Vector3(cx, cy, cz))
+	var lens := Vector2(tan(deg_to_rad(_cam.fov * 0.5)) * (16.0 / 9.0), tan(deg_to_rad(_cam.fov * 0.5)))
+	var rect := _screen_rect_fast(corners, Vector3(at.x, 0.0, at.y), _cam_base.affine_inverse(), lens)
+	_put(t, b, {"at": at, "outline": shape, "bb": Rect2(lo, hi - lo), "rect": rect}, basis, "#the box")
+	var world := Transform3D(basis, Vector3(at.x, 0.0, at.y)) * size
+	var inner := AABB(world.position + Vector3(BOX_WALL, BOX_WALL, BOX_WALL),
+		world.size - Vector3(BOX_WALL * 2.0, BOX_WALL, BOX_WALL * 2.0))
+	_box = {"node": b["node"], "inner": inner, "world": world}
+	_build_file()
+
+
+## THE CARDS FILED IN THE BOX, standing on edge front to back as collectors keep them - upright when the
+## box is deep enough, on a long edge when only that fits, lying flat in a shallow tin - filling most of
+## it ([constant FILE_FILL]), the last few leaning back into the gap they leave. The drawn cards stand
+## among them where they are pulled from ([member _box] `at_k`); the rest are one instance each of a
+## MultiMesh per printing.
+func _build_file() -> void:
+	var inner: AABB = _box["inner"]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([_seed, "card file"])
+	var upright := inner.size.x >= CARD.x * 0.95 and inner.size.y >= 0.07
+	var lie := not upright and inner.size.x >= CARD.y * 0.95 and inner.size.y >= 0.04
+	_box["upright"] = upright
+	_box["lie"] = lie
+	_box["at_k"] = []
+	if not upright and not lie:
+		# a shallow tin: the deck lies flat on its floor
+		_box["flat"] = true
+		return
+	var v := CARD.y if upright else CARD.x
+	var stand := Basis(Vector3.UP, PI) * Basis(Vector3(1, 0, 0), PI * 0.5)
+	if lie:
+		stand = stand * Basis(Vector3.UP, PI * 0.5)
+	var fill := rng.randf_range(FILE_FILL.x, FILE_FILL.y)
+	var count := maxi(int(inner.size.z * fill / FILE_PITCH), _cards.size() + 4)
+	var tail := mini(6, count / 4)
+	var xfs: Array = []
+	for i in count:
+		# from the front wall back; the last few lean back into the gap
+		var z := inner.end.z - FILE_PITCH * (float(i) + 0.5)
+		var lean := 0.0
+		if fill < 0.96 and i >= count - tail:
+			lean = FILE_LEAN * float(i - (count - tail) + 1) / float(tail)
+		var bottom := Vector3(inner.get_center().x + rng.randf_range(-0.002, 0.002), inner.position.y, z)
+		var b := Basis(Vector3(1, 0, 0), -lean) * Basis(Vector3.UP, deg_to_rad(rng.randf_range(-1.2, 1.2))) * stand
+		xfs.append(Transform3D(b, bottom + Basis(Vector3(1, 0, 0), -lean) * Vector3(0.0, v * 0.5, 0.0)))
+	# THE DRAWN CARDS' PLACES in the file, away from the leaning tail
+	var free: Array = range(0, count - tail)
+	for k in _cards.size():
+		var j := int(free.pop_at(rng.randi_range(0, free.size() - 1)))
+		(_box["at_k"] as Array).append(xfs[j])
+		xfs[j] = null
+	# one MultiMesh per printing, its cards shared out among them
+	var names: Array = _backs.keys()
+	var per := {}
+	for n in names:
+		per[n] = []
+	for xf in xfs:
+		if xf != null:
+			(per[names[rng.randi_range(0, names.size() - 1)]] as Array).append(xf)
+	for n in names:
+		var list: Array = per[n]
+		if list.is_empty():
+			continue
+		var mesh := _card_mesh.duplicate() as ArrayMesh
+		# a filed card faces either way: the front one shows its printing's back, whichever way it stands
+		mesh.surface_set_material(0, (_backs[n] as Dictionary)["mat"])
+		mesh.surface_set_material(1, (_backs[n] as Dictionary)["mat"])
+		mesh.surface_set_material(2, _edge_mat)
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = mesh
+		mm.instance_count = list.size()
+		for i in list.size():
+			mm.set_instance_transform(i, list[i])
+		var inst := MultiMeshInstance3D.new()
+		inst.multimesh = mm
+		_root3.add_child(inst)
+		_file.append(inst)
+
+
+## The cards come out of a box they are filed in (on edge, not lying flat in a tin).
+func _filed() -> bool:
+	return not _box.is_empty() and not bool(_box.get("flat", false)) and (_box.get("at_k", []) as Array).size() > 0
 
 
 ## Catch the table again for the things to reflect: a probe that updates once does so again when
@@ -1229,7 +1493,12 @@ func _keep_out() -> Array:
 	for sl in _slots:
 		out.append(CardTable.footprint((sl as Dictionary)["pos"], float((sl as Dictionary)["yaw"]), CARD).grow(0.03))
 	out.append(Rect2(_deck_base.x - 0.08, _deck_base.z - 0.1, 0.16, 0.2))
+	# the middle, where the deck is shuffled - and, whatever the source, where the spread lies
 	out.append(Rect2(_mid.x - 0.22, _mid.z - 0.14, 0.44, 0.28))
+	if _cards_from == "box":
+		# nothing stands where the box would, nor where a pulled card rises past it
+		out.append(TablePositions.deck_keep(_deck_base, _box_keep()))
+		return out
 	out.append(Rect2(_jump_land.x - 0.07, _jump_land.z - 0.09, 0.14, 0.18))
 	return out
 
@@ -2017,57 +2286,76 @@ func _air_moments() -> Dictionary:
 		var ts := float(tm["shuffle"])
 		(out["shuffle"] as Array).append({"t": ts, "dur": 0.5, "from": "point",
 			"path": [[ts, Transform3D(Basis.IDENTITY, _mid + Vector3(0.0, DECK_T * DECK_N, 0.0))]]})
-	var draws: Array = tm["draw"]
-	var lays: Array = tm["lay"]
+	var all_events: Array = tm["events"]
+	var wj0 := _wash_jump(maxf(float(tm["shuffle"]), minf(0.0, _now)))
 	for k in _cards.size():
-		var d: Array = draws[k]
-		var td := float(d[0])
-		if td == INF:
-			continue
-		var s := maxf(float(d[1]), 0.05)
-		var kind := String(d[2])
-		var off := float(d[3])
-		var up_at := td + (off + (JUMP_RISE if kind == "jumper" else RISE_END)) * s
-		var tl := float((lays[k] as Array)[0])
-		if kind == "jumper":
-			# ALONG ITS FLIGHT, from springing off the riffle - or being thrown out of the wash - to
-			# landing
-			var wj := _wash_jump(maxf(float(tm["shuffle"]), minf(0.0, _now))) if k == 0 else {}
-			var t0 := td + (off + JUMP_FLY.x) * s
-			var t1 := td + (off + JUMP_FLY.y) * s
-			if not wj.is_empty():
-				t0 = float(wj["eject"])
-				t1 = float(wj["land"])
-			var path: Array = []
-			for i in 9:
-				var tt := lerpf(t0, t1, float(i) / 8.0)
-				_cur_base = _deck_at(tt, tm, wj)
-				var u := (tt - td) / s - off
-				path.append([tt, _wash_jump_xf(u, tt, td + JUMP_REST * s, Transform3D.IDENTITY, wj) if not wj.is_empty()
-					else _jump_xf(k, u, Transform3D.IDENTITY)])
-			(out["jumper"] as Array).append({"t": t0, "dur": t1 - t0, "from": "card", "path": path})
-		(out["reveal"] as Array).append({"t": up_at, "dur": 0.3, "from": "card",
-			"path": [[up_at, _present_xf(k, up_at, up_at, tl)]]})
-		for l in _looks(k, up_at, tl):
-			var look: Dictionary = (l as Dictionary)["look"]
-			if float(look["twirl"]) <= 0.0:
+		var ev: Array = all_events[k]
+		for i in ev.size():
+			var e: Dictionary = ev[i]
+			var td := float(e["t0"])
+			if td == INF:
 				continue
-			# THROUGH THE TWIRL, the card's edges spinning with it
-			var a0 := float((l as Dictionary)["at"]) + float(look["turn"]) + float(look["hold"])
-			var dur := float(look["twirl"])
-			var path: Array = []
-			for i in 17:
-				var tt := a0 + dur * float(i) / 16.0
-				path.append([tt, _present_xf(k, tt, up_at, tl)])
-			(out["pirouette"] as Array).append({"t": a0, "dur": dur, "from": "card", "path": path})
-		if tl < INF:
-			var land := tl + LAY_END * maxf(float((lays[k] as Array)[1]), 0.05)
-			(out["lay"] as Array).append({"t": land, "dur": 0.2, "from": "card", "path": [[land, _slot_xf(k)]]})
+			var s := maxf(float(e["s"]), 0.05)
+			var off := float(e["off"])
+			var kind := String(e["k"])
+			var how := String(e.get("how", ""))
+			var tl := float((ev[i + 1] as Dictionary)["t0"]) if i + 1 < ev.size() and String((ev[i + 1] as Dictionary)["k"]) == "lay" else INF
+			var up_at := INF
+			if kind == "arrive" and how in ["draw", "jumper"]:
+				up_at = td + (off + (JUMP_RISE if how == "jumper" else RISE_END)) * s
+			elif kind == "show":
+				up_at = td + (off + SHOW_RISE) * s
+			if how == "jumper":
+				# ALONG ITS FLIGHT, from springing off the riffle - or being thrown out of the wash - to
+				# landing
+				var wj: Dictionary = wj0 if k == 0 else {}
+				var t0 := td + (off + JUMP_FLY.x) * s
+				var t1 := td + (off + JUMP_FLY.y) * s
+				if not wj.is_empty():
+					t0 = float(wj["eject"])
+					t1 = float(wj["land"])
+				var path: Array = []
+				for j in 9:
+					var tt := lerpf(t0, t1, float(j) / 8.0)
+					_cur_base = _deck_at(tt, tm, wj)
+					var u := (tt - td) / s - off
+					path.append([tt, _wash_jump_xf(u, tt, td + JUMP_REST * s, Transform3D.IDENTITY, wj) if not wj.is_empty()
+						else _jump_xf(k, u, Transform3D.IDENTITY)])
+				(out["jumper"] as Array).append({"t": t0, "dur": t1 - t0, "from": "card", "path": path})
+			if up_at < INF:
+				(out["reveal"] as Array).append({"t": up_at, "dur": 0.3, "from": "card",
+					"path": [[up_at, _present_xf(k, up_at, up_at, tl)]]})
+				for l in _looks(k, up_at, tl):
+					var look: Dictionary = (l as Dictionary)["look"]
+					if float(look["twirl"]) <= 0.0:
+						continue
+					# THROUGH THE TWIRL, the card's edges spinning with it
+					var a0 := float((l as Dictionary)["at"]) + float(look["turn"]) + float(look["hold"])
+					var dur := float(look["twirl"])
+					var path: Array = []
+					for j in 17:
+						var tt := a0 + dur * float(j) / 16.0
+						path.append([tt, _present_xf(k, tt, up_at, tl)])
+					(out["pirouette"] as Array).append({"t": a0, "dur": dur, "from": "card", "path": path})
+			# WHERE IT LANDS: laid from the hand, dealt, or swept out
+			var land := INF
+			match kind:
+				"lay":
+					land = td + LAY_END * s
+				"arrive":
+					if how == "deal":
+						land = td + (off + DEAL_END) * s
+					elif how == "fan":
+						land = td + (off + TableActions.FAN_EACH * float(e.get("i", 0)) + FAN_MOVE) * s
+			if land < INF:
+				(out["lay"] as Array).append({"t": land, "dur": 0.2, "from": "card",
+					"path": [[land, _card_pose(k, land + 0.01, ev, wj0)["xf"]]]})
 	_cur_base = keep
 	if float(tm["spread"]) < INF:
 		var tc := float(tm["spread"])
 		for k in _cards.size():
-			(out["close"] as Array).append({"t": tc, "dur": 0.8, "from": "card", "path": [[tc, _slot_xf(k)]]})
+			(out["close"] as Array).append({"t": tc, "dur": 0.8, "from": "card",
+				"path": [[tc, _card_pose(k, tc + LAY_END * 2.0, (tm["events"] as Array)[k], wj0)["xf"]]]})
 	return out
 
 
@@ -2113,45 +2401,72 @@ func _jumper_wash() -> void:
 
 
 ## When each card is drawn and laid, and when the shuffle starts and stops, from the placed
-## schedule: `{shuffle, end, draw: [t0, s, kind], lay: [t0, s]}` - a time of INF is one the voice
-## has not reached yet.
+## schedule: `{shuffle, end, draw: [t0, s, kind, lead], lay: [t0, s], spread, first, events}` - a time
+## of INF is one the voice has not reached yet. `events` is EACH CARD'S TIMELINE, in order: `{k: arrive
+## (how: draw, jumper, deal, fan - `i` its place in the waterfall), show, lay, turn (how: tap, untap,
+## flip), t0, s, off}` - `off` the seconds (at speed 1) its own phases wait for what goes first: the
+## card up before it laid, or the deck pushed aside.
 func _times() -> Dictionary:
 	var n := _cards.size()
 	var draw: Array = []
 	var lay: Array = []
+	var events: Array = []
 	for i in n:
 		draw.append([INF, 1.0, "draw", 0.0])
 		lay.append([INF, 1.0])
+		events.append([])
 	var shuffle := INF
 	var first := INF
 	var spread := INF
-	var prev := -1
+	var up := -1
+	var moved := false
+	var pushes := bool((TableActions.SOURCES.get(_cards_from, TableActions.SOURCES["deck"]) as Dictionary)["pushes"])
 	var first_act: Array = []
 	for e in _sched:
 		var a: Dictionary = e["a"]
 		var t0 := float(e["t0"])
 		var s := float(e["s"])
 		var kind := String(a["kind"])
-		if kind == "shuffle":
-			shuffle = t0
+		if not TableActions.source_of(kind).is_empty():
+			if kind == "shuffle":
+				shuffle = t0
 			continue
-		if prev >= 0 and prev < n:
-			lay[prev] = [t0, s]
-		# a card's own phases start once the card before is down - or, for the first card, once
-		# the deck has been pushed to its side (the registry's lead: TableActions.lead_of)
-		var lay_off := TableActions.lead_of(kind, prev < 0)
-		if first_act.is_empty() and TableActions.shows(kind):
+		var showing := up >= 0
+		if showing and bool((TableActions.REGISTRY.get(kind, {}) as Dictionary).get("lays", false)):
+			lay[up] = [t0, s]
+			(events[up] as Array).append({"k": "lay", "t0": t0, "s": s, "off": 0.0})
+			up = -1
+		var takes := TableActions.takes_from_source(kind)
+		var off := TableActions.lead_of(kind, takes and not moved, showing, pushes)
+		if takes and first_act.is_empty():
 			first_act = [t0, s, kind]
-		if TableActions.shows(kind):
-			var k := int(a["card"]) - 1
-			if k >= 0 and k < n:
-				draw[k] = [t0, s, kind, lay_off]
-				first = minf(first, t0)
-				prev = k
-		elif TableActions.ends(kind):
-			spread = t0
-			prev = -1
-	return {"shuffle": shuffle, "end": first, "draw": draw, "lay": lay, "spread": spread, "first": first_act}
+			first = t0
+		var k := int(a.get("card", 0)) - 1
+		var last := maxi(int(a.get("last", k + 1)) - 1, k)
+		match kind:
+			"draw", "jumper", "deal":
+				if k >= 0 and k < n:
+					draw[k] = [t0, s, kind, off]
+					(events[k] as Array).append({"k": "arrive", "how": kind, "t0": t0, "s": s, "off": off})
+					if TableActions.shows(kind):
+						up = k
+			"fan":
+				for j in range(maxi(k, 0), mini(last + 1, n)):
+					draw[j] = [t0, s, kind, off]
+					(events[j] as Array).append({"k": "arrive", "how": "fan", "i": j - k, "t0": t0, "s": s, "off": off})
+			"show":
+				if k >= 0 and k < n:
+					(events[k] as Array).append({"k": "show", "t0": t0, "s": s, "off": off})
+					up = k
+			"tap", "untap", "flip":
+				if k >= 0 and k < n:
+					(events[k] as Array).append({"k": "turn", "how": kind, "t0": t0, "s": s, "off": off})
+			_:
+				if TableActions.ends(kind):
+					spread = t0
+		moved = moved or takes
+	return {"shuffle": shuffle, "end": first, "draw": draw, "lay": lay, "spread": spread, "first": first_act,
+		"events": events}
 
 
 ## Where the deck is at [param t]: in the middle while it is shuffled, then pushed to its side
@@ -2159,11 +2474,15 @@ func _times() -> Dictionary:
 ## A jumper flies out of a riffle in the middle, and the deck goes once that riffle is done - or,
 ## out of a wash ([param wj], [method _wash_jump]), once the wash is gathered.
 func _deck_at(t: float, tm: Dictionary, wj := {}) -> Vector3:
+	if _cards_from == "box":
+		# IN THE BOX: a tin's deck lies flat on its floor (a box's cards are filed, the deck unseen)
+		var inner: AABB = _box.get("inner", AABB(_deck_base, Vector3.ZERO))
+		return Vector3(inner.get_center().x, inner.position.y, inner.get_center().z) if not _box.is_empty() else _deck_base
 	var first: Array = tm["first"]
 	if first.is_empty():
 		return _mid
 	var s := maxf(float(first[1]), 0.05)
-	var go := SQUARE if String(first[2]) == "draw" else JUMP_RIFFLE
+	var go := SQUARE if String(first[2]) != "jumper" else JUMP_RIFFLE
 	if not wj.is_empty():
 		go = (float(wj["end"]) - float(first[0])) / s
 	var u := clampf(((t - float(first[0])) / s - go) / PUSH_SLIDE, 0.0, 1.0)
@@ -2208,74 +2527,219 @@ func _pose(t: float) -> void:
 				xf = _shuffle_xf(i, te - ts).interpolate_with(_rest_xf(i), _ease((t - te) / SQUARE))
 		var dm: MeshInstance3D = _deck[i]
 		dm.transform = xf
-		dm.visible = i != gone
-	# THE CARDS
+		# a box's cards are filed in it: the deck is seen only lying flat in a tin
+		dm.visible = i != gone and (_cards_from != "box" or bool(_box.get("flat", false)))
+	# THE CARDS, each from its own timeline
 	var showing := -1
 	var page_in := 0.0
-	var draws: Array = tm["draw"]
-	var lays: Array = tm["lay"]
+	var all_events: Array = tm["events"]
 	var glint_t := t
 	for k in _cards.size():
 		var m: MeshInstance3D = _cards[k]
-		var d: Array = draws[k]
-		var td := float(d[0])
-		if t < td or td == INF:
-			m.visible = false
+		var pose := _card_pose(k, t, all_events[k], wj)
+		m.visible = bool(pose["visible"])
+		if not m.visible:
 			continue
-		m.visible = true
-		var s := maxf(float(d[1]), 0.05)
-		var kind := String(d[2])
-		var local := (t - td) / s - float(d[3])
-		var l: Array = lays[k]
-		var tl := float(l[0])
-		var up_at := td + (float(d[3]) + (JUMP_RISE if kind == "jumper" else RISE_END)) * s
-		var pres := _present_xf(k, t, up_at, tl)
-		if local < 0.0:
-			# the card before is still going down: this one is in the deck
-			m.transform = _deck_top_xf(k)
+		m.transform = pose["xf"]
+		if float(pose["page"]) > 0.0:
+			showing = k
+			page_in = float(pose["page"])
+		if not bool(pose["up"]):
 			continue
-		if tl < INF and t >= tl:
-			var u := (t - tl) / maxf(float(l[1]), 0.05)
-			var from := _present_xf(k, tl, up_at, tl)
-			if u < LAY_END:
-				var e := _ease(clampf((u - LAY_MOVE.x) / (LAY_MOVE.y - LAY_MOVE.x), 0.0, 1.0))
-				var to := _slot_xf(k)
-				var xf := from.interpolate_with(to, e)
-				xf.origin.y += sin(PI * e) * 0.05
-				if u > LAY_MOVE.y:
-					xf.origin.y += (1.0 - clampf((u - LAY_MOVE.y) / (LAY_END - LAY_MOVE.y), 0.0, 1.0)) * 0.002
-				m.transform = xf
-				if u < LAY_PAGE_OUT:
-					showing = k
-					page_in = 1.0 - _ease(u / LAY_PAGE_OUT)
-			else:
-				m.transform = _slot_xf(k)
-			continue
-		if kind == "jumper":
-			if not wj.is_empty():
-				# out of a wash: in it, as one of its cards, until it is thrown
-				if t < float(wj["eject"]):
-					m.visible = false
-					continue
-				m.transform = _wash_jump_xf(local, t, td + JUMP_REST * s, pres, wj)
-			else:
-				m.transform = _jump_xf(k, local, pres)
-			if local >= JUMP_PAGE.x:
-				showing = k
-				page_in = _ease(clampf((local - JUMP_PAGE.x) / (JUMP_PAGE.y - JUMP_PAGE.x), 0.0, 1.0))
-		else:
-			m.transform = _draw_xf(k, local, pres)
-			if local >= PAGE_IN.x:
-				showing = k
-				page_in = _ease(clampf((local - PAGE_IN.x) / (PAGE_IN.y - PAGE_IN.x), 0.0, 1.0))
 		# THE FOIL breathes while a card is held up, and now and then a glint crosses it
 		var mat: ShaderMaterial = _face_mats[k]
 		mat.set_shader_parameter("pulse", 0.5 + 0.5 * sin(glint_t * TAU / 5.5 + float(k)))
-		var cyc := fmod(maxf(glint_t - td, 0.0), 7.0)
+		var cyc := fmod(maxf(glint_t - float(pose["since"]), 0.0), 7.0)
 		mat.set_shader_parameter("glint", -1.0 if cyc > 1.4 else lerpf(-0.25, 1.25, cyc / 1.4))
+	# a card held alone shows its text on its back: no page beside it
+	if _alone:
+		showing = -1
 	_pose_page(showing, page_in, t)
 	# the laid cards keep a slow breath of foil; the back's own glint rides the shuffle
 	_back_mat.set_shader_parameter("pulse", 0.5 + 0.5 * sin(t * TAU / 7.0))
+
+
+## CARD [param k] AT [param t], from its timeline [param ev] ([method _times]): `{xf, visible, up (held
+## up), page (how far its booklet page is open), since (when its last event began)}`. The state the
+## events before the one under way left it in - lying (its quarter turns, turned over or not) or held
+## up - and the event under way posed from it. A card no event has reached waits in its source: unseen
+## in a deck, standing in its place in a box's file.
+func _card_pose(k: int, t: float, ev: Array, wj: Dictionary) -> Dictionary:
+	var out := {"xf": Transform3D.IDENTITY, "visible": false, "up": false, "page": 0.0, "since": 0.0}
+	var cur := -1
+	for i in ev.size():
+		if t >= float((ev[i] as Dictionary)["t0"]) and float((ev[i] as Dictionary)["t0"]) < INF:
+			cur = i
+	if cur < 0:
+		if _filed() and k < (_box["at_k"] as Array).size():
+			out["visible"] = true
+			out["xf"] = (_box["at_k"] as Array)[k]
+		return out
+	out["visible"] = true
+	# the state the events before the current one left - a card laid sideways can be untapped upright
+	var cards: Array = _pay.get("cards", [])
+	var least := -1 if k < cards.size() and TablePositions.lies_sideways(cards[k]) else 0
+	var quarter := 0
+	var over := false
+	var up_at := INF
+	var up_ev := -1
+	for i in cur:
+		var e: Dictionary = ev[i]
+		var s := maxf(float(e["s"]), 0.05)
+		match String(e["k"]):
+			"arrive":
+				if String(e["how"]) in ["draw", "jumper"]:
+					up_at = float(e["t0"]) + (float(e["off"]) + (JUMP_RISE if String(e["how"]) == "jumper" else RISE_END)) * s
+					up_ev = i
+			"show":
+				up_at = float(e["t0"]) + (float(e["off"]) + SHOW_RISE) * s
+				up_ev = i
+			"turn":
+				match String(e["how"]):
+					"tap":
+						quarter += 1
+					"untap":
+						quarter = maxi(quarter - 1, least)
+					"flip":
+						over = not over
+	var e: Dictionary = ev[cur]
+	var s := maxf(float(e["s"]), 0.05)
+	var t0 := float(e["t0"])
+	var u := (t - t0) / s - float(e["off"])
+	out["since"] = t0
+	var lying := _slot_xf(k, quarter, over)
+	# when the card held up now goes down: the next event's start, if it is a lay
+	var until := INF
+	if cur + 1 < ev.size() and String((ev[cur + 1] as Dictionary)["k"]) == "lay":
+		until = float((ev[cur + 1] as Dictionary)["t0"])
+	match String(e["k"]):
+		"arrive":
+			var how := String(e["how"])
+			if u < 0.0 and how != "fan":
+				# the card before is still going down: this one waits in its source
+				out["xf"] = _source_xf(k)
+				return out
+			match how:
+				"draw":
+					var at := t0 + (float(e["off"]) + RISE_END) * s
+					out["xf"] = _take_xf(k, u, _present_xf(k, t, at, until), RISE_END)
+					out["up"] = true
+					if u >= PAGE_IN.x:
+						out["page"] = _ease(clampf((u - PAGE_IN.x) / (PAGE_IN.y - PAGE_IN.x), 0.0, 1.0))
+				"jumper":
+					var at := t0 + (float(e["off"]) + JUMP_RISE) * s
+					var pres := _present_xf(k, t, at, until)
+					if not wj.is_empty():
+						# out of a wash: in it, as one of its cards, until it is thrown
+						if t < float(wj["eject"]):
+							out["visible"] = false
+							return out
+						out["xf"] = _wash_jump_xf(u, t, t0 + JUMP_REST * s, pres, wj)
+					else:
+						out["xf"] = _jump_xf(k, u, pres)
+					out["up"] = true
+					if u >= JUMP_PAGE.x:
+						out["page"] = _ease(clampf((u - JUMP_PAGE.x) / (JUMP_PAGE.y - JUMP_PAGE.x), 0.0, 1.0))
+				"deal":
+					out["xf"] = _take_xf(k, u, lying, DEAL_END)
+				"fan":
+					var v := u - TableActions.FAN_EACH * float(e.get("i", 0))
+					if v < 0.0:
+						# still in its source: one of the deck's own until it leaves (a box's stands in its file)
+						out["xf"] = _source_xf(k)
+						out["visible"] = _filed()
+					else:
+						out["xf"] = _sweep_xf(k, v, lying)
+		"show":
+			var at := t0 + (float(e["off"]) + SHOW_RISE) * s
+			var pres := _present_xf(k, t, at, until)
+			if u < 0.0:
+				out["xf"] = lying
+			elif u < SHOW_RISE:
+				var f := _ease(u / SHOW_RISE)
+				var xf := lying.interpolate_with(pres, f)
+				xf.origin.y += sin(PI * f) * 0.025
+				out["xf"] = xf
+			else:
+				out["xf"] = pres
+			out["up"] = u >= 0.0
+			if u >= SHOW_PAGE.x:
+				out["page"] = _ease(clampf((u - SHOW_PAGE.x) / (SHOW_PAGE.y - SHOW_PAGE.x), 0.0, 1.0))
+		"lay":
+			# the card held up goes down into its place
+			var from := _present_xf(k, t0, up_at, t0)
+			var lay_u := (t - t0) / s
+			if lay_u < LAY_END:
+				var f := _ease(clampf((lay_u - LAY_MOVE.x) / (LAY_MOVE.y - LAY_MOVE.x), 0.0, 1.0))
+				var xf := from.interpolate_with(lying, f)
+				xf.origin.y += sin(PI * f) * 0.05
+				if lay_u > LAY_MOVE.y:
+					xf.origin.y += (1.0 - clampf((lay_u - LAY_MOVE.y) / (LAY_END - LAY_MOVE.y), 0.0, 1.0)) * 0.002
+				out["xf"] = xf
+				if lay_u < LAY_PAGE_OUT:
+					out["page"] = 1.0 - _ease(lay_u / LAY_PAGE_OUT)
+			else:
+				out["xf"] = lying
+		"turn":
+			var how := String(e["how"])
+			var to := _slot_xf(k, quarter + (1 if how == "tap" else (-1 if how == "untap" and quarter > least else 0)),
+				not over if how == "flip" else over)
+			var span := FLIP_END_LAY if how == "flip" else TURN_END
+			var f := _ease(clampf(u / span, 0.0, 1.0))
+			var xf := lying.interpolate_with(to, f)
+			xf.origin.y += sin(PI * f) * (0.03 if how == "flip" else 0.003)
+			out["xf"] = xf if u > 0.0 else lying
+	if up_ev >= 0 and String(e["k"]) == "lay":
+		out["since"] = float((ev[up_ev] as Dictionary)["t0"])
+	return out
+
+
+## WHERE CARD [param k] WAITS before it is taken: on top of the deck, or standing in the box's file (on
+## top of a tin's flat deck).
+func _source_xf(k: int) -> Transform3D:
+	if _filed() and k < (_box["at_k"] as Array).size():
+		return (_box["at_k"] as Array)[k]
+	return _deck_top_xf(k)
+
+
+## CARD [param k] TAKEN FROM ITS SOURCE to [param to], [param u] seconds into a taking of [param span]
+## seconds - a draw's own phases ([method _draw_xf]) at its pace: off the top of the deck and turned
+## over, or pulled straight up out of the box's file ([method _pull_xf]); then on to [param to].
+func _take_xf(k: int, u: float, to: Transform3D, span: float) -> Transform3D:
+	var r := u * RISE_END / maxf(span, 0.05)
+	if _filed():
+		return _pull_xf(k, r, to)
+	return _draw_xf(k, r, to)
+
+
+## A card PULLED FROM THE BOX at [param r] (a draw's phases): still in the file while the hand finds it,
+## then up along its own plane until it clears the rim, then on to [param to].
+func _pull_xf(k: int, r: float, to: Transform3D) -> Transform3D:
+	var at: Transform3D = (_box["at_k"] as Array)[k]
+	if r < SQUARE:
+		return at
+	var inner: AABB = _box["inner"]
+	var v := CARD.y if bool(_box.get("upright", true)) else CARD.x
+	var raised := Transform3D(at.basis, Vector3(at.origin.x, maxf(inner.end.y, (_box["world"] as AABB).end.y) + v * 0.5 + PULL_CLEAR, at.origin.z))
+	if r < FLIP_END:
+		return at.interpolate_with(raised, _ease((r - SQUARE) / (FLIP_END - SQUARE)))
+	if r < RISE_END:
+		return raised.interpolate_with(to, _ease((r - FLIP_END) / (RISE_END - FLIP_END)))
+	return to
+
+
+## A card IN A WATERFALL at [param v] seconds of its own slide ([constant FAN_MOVE]): off the deck and
+## along the cloth to [param to], low, turning face up as it goes - or pulled up out of the box first.
+func _sweep_xf(k: int, v: float, to: Transform3D) -> Transform3D:
+	if _filed():
+		return _pull_xf(k, v * RISE_END / FAN_MOVE, to)
+	var from := _deck_top_xf(k)
+	if v >= FAN_MOVE:
+		return to
+	var f := _ease(clampf(v / FAN_MOVE, 0.0, 1.0))
+	var xf := from.interpolate_with(to, f)
+	xf.origin.y += sin(PI * f) * 0.018
+	return xf
 
 
 ## Deck slot [param i] at rest - the squared deck, a hair off true per slot.
@@ -2302,10 +2766,15 @@ func _present_xf(k: int, t: float, up_at := INF, until := INF) -> Transform3D:
 		+ sin(t * 0.21 + rng_k * 2.0) * deg_to_rad(1.8)
 	var roll := deg_to_rad(lerpf(-2.5, 2.5, fmod(rng_k * 7.3, 1.0))) + sin(t * 0.37 + 1.0) * deg_to_rad(1.3)
 	var tilt := sin(t * 0.29 + rng_k * 4.0) * deg_to_rad(2.6)
+	if _alone:
+		# held alone in the middle: square to the lens, the hand's sway smaller
+		yaw *= 0.45
 	b = Basis(c.y, yaw + _turn_of(k, t, up_at, until)) * Basis(c.x, tilt) * Basis(c.z, roll) * b
 	if _reversed(k):
 		b = Basis(c.z, PI) * b
-	var off := Vector3(PRESENT.x + sin(t * 0.7 + rng_k) * 0.0012, PRESENT.y + sin(t * 0.9 + 1.3) * 0.0015, -PRESENT_DIST)
+	var at := PRESENT_ALONE if _alone else PRESENT
+	var off := Vector3(at.x + sin(t * 0.7 + rng_k) * 0.0012, at.y + sin(t * 0.9 + 1.3) * 0.0015,
+		-(PRESENT_ALONE_DIST if _alone else PRESENT_DIST))
 	return Transform3D(b, _cam_base * off)
 
 
@@ -2335,9 +2804,32 @@ func _looks(k: int, up_at: float, until: float) -> Array:
 		return out
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([_seed, k, "turn"])
-	if rng.randf() > TURN_CHANCE:
-		return out
-	var at := up_at + rng.randf_range(5.0, 9.0)
+	var at := 0.0
+	if _alone:
+		# ITS TEXT IS ON ITS BACK: turned over to show it every time, a few seconds after it is up, and
+		# held there long enough to read
+		var back := RandomNumberGenerator.new()
+		back.seed = hash([_seed, k, "back"])
+		var turn := back.randf_range(TURN.x, TURN.y)
+		var look := {"way": 1.0 if back.randf() < 0.5 else -1.0, "turn": turn,
+			"hold": back.randf_range(BACK_HOLD.x, BACK_HOLD.y), "twirl": 0.0, "back": back.randf_range(TURN.x, TURN.y)}
+		look["total"] = float(look["turn"]) + float(look["hold"]) + float(look["back"])
+		at = up_at + back.randf_range(BACK_LOOK.x, BACK_LOOK.y)
+		if at + float(look["total"]) > until - 1.0:
+			# a short passage: turned over at once, and back as it ends
+			at = up_at + 0.4
+			look["hold"] = maxf(until - 1.0 - at - turn - float(look["back"]), 0.0)
+			look["total"] = float(look["turn"]) + float(look["hold"]) + float(look["back"])
+			if look["hold"] <= 0.5:
+				return out
+		out.append({"at": at, "look": look})
+		if rng.randf() > LOOK_AGAIN:
+			return out
+		at += float(look["total"]) + rng.randf_range(LOOK_GAP.x, LOOK_GAP.y)
+	else:
+		if rng.randf() > TURN_CHANCE:
+			return out
+		at = up_at + rng.randf_range(5.0, 9.0)
 	var spun := false
 	for i in 64:
 		var look := _look_of(rng, not spun)

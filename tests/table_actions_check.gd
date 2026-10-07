@@ -38,13 +38,14 @@ func _initialize() -> void:
 	for m in CardTable.MOMENTS:
 		_ok(TableActions.moments().has(m), "the air's '%s' is made by some verb" % m)
 	print("-- the marks")
-	_ok(TableActions.written() == ["shuffle", "draw", "jumper", "spread"], "the written verbs are the tarot recipe's four (%s)" % str(TableActions.written()))
+	_ok(TableActions.written() == ["shuffle", "open", "draw", "jumper", "spread", "deal", "fan", "show", "tap", "untap", "flip"],
+		"the written verbs are the registry's eleven: tarot's four and a collection's seven (%s)" % str(TableActions.written()))
 	for v in TableActions.written():
 		var line := "<!-- table: %s 2 -->" % v if TableActions.takes_card(v) else "<!-- table: %s -->" % v
 		var p := CardReading.parse(line + "\n\nWords.\n")
 		_ok((p["passages"] as Array).any(func(x: Dictionary) -> bool: return String(x["kind"]) == v),
 			"'%s' is read as a mark" % line)
-	for v in ["lay", "push", "flip"]:
+	for v in ["lay", "push", "square", "gather"]:
 		var p := CardReading.parse("<!-- table: %s -->\n\nWords.\n" % v)
 		_ok((p["actions"] as Array).is_empty(), "'%s' is not a mark a reading writes" % v)
 	_ok(CardReading.is_reading("<!-- table: spread -->") and not CardReading.is_reading("<!-- table: lay -->"),

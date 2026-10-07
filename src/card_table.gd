@@ -97,6 +97,23 @@ const MOMENTS := {
 	"close": "when the last card is down and the reading closes - from every card in the spread",
 }
 
+## THE STAGING: how an episode's cards come and are shown, the producer's choice ([method staging_of]).
+## `source` - where they come from ([constant TableActions.SOURCES]); `text` - where a card's text is
+## printed ([constant TEXTS]).
+const STAGING := {"source": "deck", "text": "booklet"}
+## WHERE A CARD'S TEXT IS, and so how a drawn card is shown: beside its page in the deck's little
+## booklet (held up on the left, the page open on the right), or printed on its own back - held up
+## alone in the middle, and turned over to show it.
+const TEXTS := {
+	"booklet": "a page of the deck's little booklet, shown beside the card while it is held up (a reading deck's, an oracle's)",
+	"back": "printed on the card's own back - stats, a bio, rules, an answer - and the card is held up alone in the middle and turned over to show it (a baseball card's, a trading card's)",
+}
+## THE BOX THE CARDS ARE KEPT IN, at its largest (x across, z front to back, meters) and tallest: a box
+## the set dresser made bigger is stood smaller, so the spread is laid clear of where it can stand.
+const BOX_MAX := Vector3(0.15, 0.12, 0.22)
+## How many printings a deck may mix ([method look_of]).
+const MAX_SERIES := 6
+
 ## A look's colors when the producer's are missing or not colors at all.
 const FALLBACK_PALETTE := ["#1d1a2b", "#c9a227", "#e8dcc0", "#7a2e3a", "#2f5d62"]
 
@@ -311,7 +328,81 @@ static func sanitize_look(look: Dictionary) -> Dictionary:
 	for k in ["deck_name", "deck_style", "card_back", "surface", "setting"]:
 		out[k] = String(look.get(k, ""))
 	out["foil"] = clampf(float(look.get("foil", 0.6)) if (look.get("foil") is float or look.get("foil") is int) else 0.6, 0.0, 1.0)
+	# THE PRINTINGS a deck mixes, each a name and what it prints otherwise ([method look_of])
+	var series: Array = []
+	for sv in look.get("series", []) if look.get("series") is Array else []:
+		if sv is Dictionary and not str((sv as Dictionary).get("name", "")).strip_edges().is_empty() and series.size() < MAX_SERIES \
+				and not series.any(func(o: Variant) -> bool: return str((o as Dictionary)["name"]).to_lower() == str((sv as Dictionary)["name"]).strip_edges().to_lower()):
+			var e := {"name": str((sv as Dictionary)["name"]).strip_edges()}
+			for k in ["deck_style", "card_back", "title_face"]:
+				if (sv as Dictionary).get(k) is String:
+					e[k] = String((sv as Dictionary)[k])
+			if (sv as Dictionary).get("palette") is Array:
+				e["palette"] = (sv as Dictionary)["palette"]
+			if (sv as Dictionary).get("frame") is Dictionary:
+				e["frame"] = (sv as Dictionary)["frame"]
+			if (sv as Dictionary).get("foil") is float or (sv as Dictionary).get("foil") is int:
+				e["foil"] = (sv as Dictionary)["foil"]
+			series.append(e)
+	if series.is_empty():
+		out.erase("series")
+	else:
+		out["series"] = series
 	return out
+
+
+## THE STAGING OF [param plan], made safe: [constant STAGING]'s keys, each one of its own registry's.
+static func staging_of(plan: Dictionary) -> Dictionary:
+	var st: Dictionary = plan.get("staging", {}) if plan.get("staging") is Dictionary else {}
+	var source := str(st.get("source", "")).strip_edges().to_lower()
+	var text := str(st.get("text", "")).strip_edges().to_lower()
+	return {"source": source if TableActions.SOURCES.has(source) else String(STAGING["source"]),
+		"text": text if TEXTS.has(text) else String(STAGING["text"])}
+
+
+## THE PRINTING [param card] belongs to, by name, in [param look]'s `series` - its own `series`, or its
+## group's name when a printing is called that - or "" for the deck's own.
+static func series_of(look: Dictionary, card: Dictionary) -> String:
+	var names: Array = []
+	for s in look.get("series", []) if look.get("series") is Array else []:
+		if s is Dictionary and not str((s as Dictionary).get("name", "")).strip_edges().is_empty():
+			names.append(str((s as Dictionary)["name"]).strip_edges())
+	for want in [str(card.get("series", "")), str(card.get("group", ""))]:
+		for n in names:
+			if String(n).to_lower() == want.strip_edges().to_lower() and not want.strip_edges().is_empty():
+				return String(n)
+	return ""
+
+
+## A printing's name as a file's key: `back_<key>.png`.
+static func series_key(name: String) -> String:
+	return CardEpisode.slug(name)
+
+
+## THE LOOK [param card] IS PRINTED IN: [param look], with its printing's own written over it (its
+## style, its back, its palette, its frame - a frame's colors one by one - its title face, its foil), made
+## safe. A deck of one printing is every card's look.
+static func look_of(look: Dictionary, card: Dictionary) -> Dictionary:
+	var name := series_of(look, card)
+	if name.is_empty():
+		return look
+	var out := look.duplicate(true)
+	for s in look["series"]:
+		if not (s is Dictionary) or str((s as Dictionary).get("name", "")).strip_edges() != name:
+			continue
+		for k in (s as Dictionary):
+			var v: Variant = (s as Dictionary)[k]
+			if k == "name":
+				continue
+			if k == "frame" and v is Dictionary:
+				var f: Dictionary = (out.get("frame", {}) as Dictionary).duplicate() if out.get("frame") is Dictionary else {}
+				f.merge(v as Dictionary, true)
+				out["frame"] = f
+			elif k in ["deck_style", "card_back", "palette", "title_face", "foil"]:
+				out[k] = v
+		break
+	out.erase("series")
+	return sanitize_look(out)
 
 
 ## THE TABLE MADE SAFE: the set dresser's reply as [Props] can build it, its `top` and `layers` as
@@ -333,6 +424,9 @@ static func sanitize_table(spec: Dictionary, look: Dictionary) -> Dictionary:
 		var g: Variant = thing.get("group", "")
 		thing["group"] = str(int(g)) if (g is float or g is int) else String(g if g is String else "").strip_edges()
 		thing["turn"] = Props._num(thing.get("turn"), 0.0, -180.0, 180.0)
+		# THE BOX THE CARDS ARE KEPT IN: one thing at most, stood where the deck would be
+		var holds: bool = thing.get("holds_cards") == true and not things.any(func(o: Variant) -> bool: return bool((o as Dictionary).get("holds_cards", false)))
+		thing["holds_cards"] = holds
 		var flames := 0
 		for p in thing["parts"]:
 			var n := Props.flames_of(p as Dictionary)

@@ -121,6 +121,9 @@ class Face:
 	var card: Dictionary = {}
 	var art: Texture2D = null
 	var back := false
+	## A BACK WITH THE CARD'S TEXT ON IT ([constant CardTable.TEXTS] `back`): [member card]'s booklet
+	## printed in a panel over the printing's back, as a baseball card's stats are.
+	var printed := false
 	var seed := 0
 
 	func _draw() -> void:
@@ -142,6 +145,53 @@ class Face:
 		_frame(style, win, ink, accent, sz)
 		if not back:
 			_lettering(win, ink, sz)
+		elif printed:
+			_printed_back(win, stock, ink, accent)
+
+	## THE CARD'S TEXT ON ITS BACK: a panel of the card's stock over the back's design - its name, its
+	## facts (the booklet's keywords) and its text, set to fill the panel.
+	func _printed_back(win: Rect2, stock: Color, ink: Color, accent: Color) -> void:
+		var panel := win.grow(-win.size.x * 0.07)
+		var paper := stock
+		paper.a = 0.94
+		CardFaces._box(self, panel, paper, win.size.x * 0.03)
+		CardFaces._box(self, panel.grow(-6.0), accent, win.size.x * 0.025, false, 3.0)
+		var text_ink := CardTable.legible_ink(ink, stock, CardTable.TEXT_CONTRAST)
+		var face := CardTable.font(String(look.get("title_face", "roman")))
+		var book := CardTable.font(CardTable.BOOK_FACE)
+		var italic := CardTable.font(CardTable.BOOK_ITALIC)
+		var m := panel.size.x * 0.08
+		var x := panel.position.x + m
+		var w := panel.size.x - 2.0 * m
+		var y := panel.position.y + m
+		var name := String(card.get("name", ""))
+		var ns := CardFaces._fit(face, name, 46, w)
+		y += face.get_ascent(ns)
+		draw_string(face, Vector2(x, y), name, HORIZONTAL_ALIGNMENT_CENTER, w, ns, text_ink)
+		y += face.get_descent(ns) + 8.0
+		var b: Dictionary = card.get("booklet", {}) if card.get("booklet") is Dictionary else {}
+		var kw := CardPrompts.strings(b.get("keywords", []))
+		if not kw.is_empty():
+			draw_line(Vector2(x, y), Vector2(x + w, y), accent, 2.0, true)
+			y += 8.0
+			# the facts one to a line, as a card's back lists them
+			for line in kw.slice(0, 6):
+				var ks := CardFaces._fit(italic, String(line), 28, w)
+				y += italic.get_ascent(ks)
+				draw_string(italic, Vector2(x, y), String(line), HORIZONTAL_ALIGNMENT_LEFT, w, ks, text_ink)
+				y += italic.get_descent(ks) + 4.0
+			y += 6.0
+			draw_line(Vector2(x, y), Vector2(x + w, y), accent, 2.0, true)
+			y += 12.0
+		var text := String(b.get("upright", "")).strip_edges()
+		if text.is_empty():
+			return
+		var room := panel.end.y - m - y
+		var size := 30
+		while size > 14 and book.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, w, size).y > room:
+			size -= 1
+		draw_multiline_string(book, Vector2(x, y + book.get_ascent(size)), text, HORIZONTAL_ALIGNMENT_LEFT, w,
+			size, -1, text_ink)
 
 	func _frame(style: String, win: Rect2, ink: Color, accent: Color, sz: Vector2) -> void:
 		var r := sz.x * 0.02

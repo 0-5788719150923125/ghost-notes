@@ -4,9 +4,10 @@ class_name Lights
 ## Lights - what lights a scene, and how that light moves: the SKY that fills it, a SUN (or the moon)
 ## that throws its shadows, what the sun falls THROUGH on its way (a window and its panes, blinds, a
 ## pierced screen, leaves, fronds or bare branches overhead, a pergola's slats, an awning, a
-## parasol), the WEATHER between it and the table (clouds passing over it, birds crossing it), and
-## LAMPS out of the shot (candles, a torch, a fire, a lantern, a lamp, fluorescent tubes, neon, a
-## screen's glow, a street lamp, passing headlights, a lighthouse's beam, lightning). An agent
+## parasol), the WEATHER between it and the table (clouds passing over it, birds crossing it), LAMPS
+## out of the shot (candles, a torch, a fire, a lantern, a lamp, fluorescent tubes, neon, a screen's
+## glow, a street lamp, passing headlights, a lighthouse's beam, lightning), and SHADOWS of things out
+## of the shot (a roof beam, a pillar, a rope swinging, a chandelier, laundry on a line). An agent
 ## describes it as data - the registries' words are what it reads ([method describe]) - [method
 ## sanitize] makes whatever it wrote buildable, and [method build] makes the nodes. Generic: a host
 ## gives its STAGE ([method build]: its camera, the middle of its set, what stands there, what is in
@@ -33,13 +34,28 @@ class_name Lights
 ## THE CPU KNOWS WHAT IS DRAWN: every screen's pattern is [method _pattern], line for line the
 ## shader's, on noise both reckon alike ([method noise], shaders/light_noise.gdshaderinc) - so the
 ## set dresser is told how much of the table, and of where the cards lie, the sun reaches.
+##
+## A SHADOW OUT OF THE SHOT (`shadows`, the user, 2026-10-07: "a beam or a pillar might cast a permanent
+## shadow over the table... a hanging rope might be gently swaying in the wind... a chandelier might cast
+## shadows") is a thing built of silhouettes ([constant CASTER_SHAPES]: blocks, posts, balls, hoops,
+## tubes, sheets, grilles, grouped and copied round or along), shadow-only on [constant CASTER_LAYER],
+## which every light that casts casts with - the sun, a lamp. It is aimed by where its shadow falls and
+## placed up its light's ray to throw it there ([method caster_place]), out of the shot and clear of the
+## table. It stands still, SWINGS (a pendulum pushed by gusts - the sine of its angle, not the angle,
+## pulls it back, so a big swing is slower than a small one: [method swing_at]), spins, or ripples
+## (shaders/light_caster.gdshader). Not [Props]: those are a thing's surfaces at most 60 cm across; these
+## are silhouettes that run to meters.
 
 const SCREEN_SHADER := preload("res://shaders/light_screen.gdshader")
 const BIRD_SHADER := preload("res://shaders/light_bird.gdshader")
+const CASTER_SHADER := preload("res://shaders/light_caster.gdshader")
 
 ## The render layer the sun's screens and the birds are on: the sun casts with them, no other light
 ## does, and nothing draws them.
 const SCREEN_LAYER := 1 << 18
+## The render layer of the shadows out of the shot: every light that casts casts with them - the sun, a
+## lamp of the light's own, the old lamp - and nothing draws them.
+const CASTER_LAYER := 1 << 17
 
 ## WHERE A LIGHT COMES FROM, by name: degrees round the table seen from above, clockwise from the
 ## reader's own side - 0 from behind the reader, over their shoulder; 90 from their right; 180 from
@@ -136,12 +152,43 @@ const LAMPS := {
 		"height": 400.0, "every": 25.0},
 }
 
+## A SHADOW OUT OF THE SHOT is made of these silhouettes, in centimeters, up to [constant CASTER_SIZE]
+## (a roof beam runs six meters). A part's `at` is where its middle goes.
+const CASTER_SHAPES := {
+	"box": "a block {\"size\": [x, y, z]} - a beam, a plank, a sign, a shelf, a fan's blade",
+	"cylinder": "an upright post {\"radius\", \"height\", \"radius2\" (its top - a taper, a cone)} - a pillar, a pole, a lampshade, a bell, a bucket",
+	"ball": "{\"size\": [x, y, z]} - a globe, a gourd, a hanging ball, a cage's dome",
+	"ring": "a hoop lying flat {\"radius\", \"thickness\"} - a chandelier's hoop, a wreath, a dreamcatcher",
+	"tube": "a rope, a chain, a cord, an arm or a vine along {\"path\": [[x, y, z], ...], \"radius\"}",
+	"sheet": "a thin panel standing upright {\"size\": [width, height]} - laundry on a line, a flag, a banner, a sign (it can ripple)",
+	"grille": "a flat grid of bars standing upright {\"size\": [width, height], \"cell\", \"bars\"} - a cage's side, a gate, a rack, a lantern's pierced wall",
+}
+## HOW A SHADOW OUT OF THE SHOT MOVES.
+const CASTER_MOVES := {
+	"still": "it does not move - a beam, a pillar, a sign",
+	"swing": "it hangs from its top and swings in the wind as a pendulum does - a rope, a lantern or a chandelier on its chain, a hanging basket, a cage; `amount` from barely stirring (0.1) to swinging hard (1)",
+	"spin": "it turns about its middle, upright - a ceiling fan's blades, a mobile, a weathervane; `speed` from a slow turn to a fan's blur",
+	"flutter": "its sheets ripple - laundry, a flag, a banner, prayer flags; `amount` from a stir to a snapping wind",
+}
+
 ## The most of each: screens the sun falls through, lamps, lamps that cast (a shadow each - a cube of
 ## six passes for a point of light), and birds in the air at once.
 const MAX_SCREENS := 3
 const MAX_LAMPS := 4
 const MAX_SHADOWED := 2
 const MAX_BIRDS := 16
+## ...shadows out of the shot, the parts one is written with (every part in every group), the parts it is
+## built with (every copy of every part), the copies a part makes, and how big a silhouette may be (cm).
+const MAX_CASTERS := 4
+const MAX_CASTER_PARTS := 24
+const MAX_CASTER_MESHES := 96
+const MAX_CASTER_COPIES := 16
+const CASTER_SIZE := 600.0
+## A SWING, simulated ([method swing_at]): its step (seconds), how often a step is kept, and how fast a
+## swing dies away (1/s) - slowly, so the wind's pushes build it up.
+const SWING_STEP := 1.0 / 120.0
+const SWING_KEEP := 4
+const SWING_DAMP := 0.3
 ## A sun through a wall stands no higher than this (degrees): a higher sun hardly reaches into a room,
 ## and its wall would stand over the table.
 const WALL_SUN := 65.0
@@ -186,7 +233,7 @@ const CANOPY := 40.0
 ## THE VOCABULARY, as an agent reads it.
 static func describe() -> String:
 	var lines := PackedStringArray()
-	lines.append("THE LIGHT (`light`): {\"why\", \"sky\", \"sun\", \"through\", \"clouds\", \"birds\", \"lamps\"} - every part may be left out. Light never shows in the picture as a thing: only what it does to the table.")
+	lines.append("THE LIGHT (`light`): {\"why\", \"sky\", \"sun\", \"through\", \"clouds\", \"birds\", \"lamps\", \"shadows\"} - every part may be left out. Light never shows in the picture as a thing: only what it does to the table.")
 	lines.append("- why: a few words - what lights this table, where, and when.")
 	lines.append("- sky: {\"color\": \"#rrggbb\", \"strength\" 0-1} - the light that fills everything and throws no shadow. Outdoors the open sky: by day bright (0.5 to 1), its color the sky's - pale blue, white under cloud, apricot at dawn. Within a room the room's own light: dim (0.1 to 0.4), the color of its walls. At night 0 to 0.1.")
 	lines.append("- sun: {\"look\", \"from\", \"height\", \"color\", \"strength\" 0-1, \"softness\" 0-1} - the light that throws the shadows. Leave it out for a table no sun reaches: an overcast day (the sky alone), a room lit by its lamps, night. look:")
@@ -205,6 +252,13 @@ static func describe() -> String:
 	lines.append("- lamps: [lights round the table, out of the shot - at most %d], each {\"name\", \"look\", \"from\", \"distance\" (cm from the middle of the table), \"height\" (cm above it), \"color\", \"strength\" 0-1, \"shadows\" true or false (at most %d cast), \"every\" (seconds, for what comes and goes)} - never seen, only felt: their light, its color and flicker and, when they cast them, their shadows across the table. A lamp the camera could see is moved up out of the shot. looks:" % [MAX_LAMPS, MAX_SHADOWED])
 	for k in LAMPS:
 		lines.append("  - %s: %s" % [k, String((LAMPS[k] as Dictionary)["about"])])
+	lines.append("- shadows: [things out of the shot that throw a shadow on the table - at most %d], each {\"name\", \"what\", \"parts\", \"shadow\": [x, z] (cm from the middle of the reading - where the middle of its shadow falls), \"height\" (cm over the table - how high its middle is: a roof beam 200, a lantern on its chain 120), \"turn\" (degrees about the upright), \"by\" (\"sun\", or the name of a lamp that casts: whose shadow it is - the sun when left out), \"around\" (the name of a lamp it hangs round - a chandelier round its candles, a pierced lantern round its flame: that lamp's own light throws its shadow, from the origin [0, 0, 0] of its parts, so draw the thing round the flame: what hangs below it - a hoop, arms, a cage's bars - throws its shadow down on the table), \"move\": {\"kind\", \"amount\" 0-1, \"speed\" 0-1}} - never seen, only its shadow: a beam's bar of shade, a pillar's long stripe, a rope swinging across the cloth, a chandelier's arms spread over the table. It is set up its light's ray, out of the shot and clear of the table, so its shadow falls where it is aimed." % MAX_CASTERS)
+	lines.append("  Its parts are silhouettes in centimeters, at most %d: each {\"shape\", \"at\": [x, y, z] (where its middle goes), \"turn\" ([x, y, z] degrees, or one number about the upright), \"copies\"} - or a group {\"parts\": [...], \"at\", \"turn\", \"copies\"}, two deep at most. \"copies\": {\"around\": {\"count\", \"radius\"}} repeats it round the upright (a chandelier's arms, a fan's blades), {\"line\": {\"count\", \"step\": [x, y, z]}} in a row (beams across a ceiling, a railing's posts, laundry on a line). Up is +y; a hanging thing hangs from its highest point. shapes:" % MAX_CASTER_PARTS)
+	for k in CASTER_SHAPES:
+		lines.append("  - %s: %s" % [k, String(CASTER_SHAPES[k])])
+	lines.append("  move:")
+	for k in CASTER_MOVES:
+		lines.append("  - %s: %s" % [k, String(CASTER_MOVES[k])])
 	lines.append("The candles on the table burn in this light whatever it is: by day small and warm, at dusk and at night they lead.")
 	return "\n".join(lines)
 
@@ -213,8 +267,9 @@ static func describe() -> String:
 
 ## WHATEVER AN AGENT WROTE as `light`, as something [method build] can make: known looks and kinds only,
 ## every number in range, every color a color, every direction in degrees ([constant FROM]), the caps
-## kept (screens, lamps, lamps that cast, birds). Not written - or not an object - is `{}`: no light of
-## its own (a host lights itself as it always did). What had to change is said in [param notes].
+## kept (screens, lamps, lamps that cast, birds, shadows and their parts), every shadow given a light to
+## throw it. Not written - or not an object - is `{}`: no light of its own (a host lights itself as it
+## always did). What had to change is said in [param notes].
 static func sanitize(raw: Variant, notes: PackedStringArray = PackedStringArray()) -> Dictionary:
 	if raw == null:
 		return {}
@@ -290,6 +345,18 @@ static func sanitize(raw: Variant, notes: PackedStringArray = PackedStringArray(
 				cast += 1
 		lamps.append(l)
 	out["lamps"] = lamps
+	var casters: Array = []
+	for e in (d.get("shadows", []) if d.get("shadows") is Array else []):
+		if not (e is Dictionary):
+			notes.append("a shadow that was not an object {name, parts, ...} was left out")
+			continue
+		if casters.size() >= MAX_CASTERS:
+			notes.append("past %d shadows: \"%s\" and the rest left out" % [MAX_CASTERS, str((e as Dictionary).get("name", ""))])
+			break
+		var c := _caster(e as Dictionary, out, notes)
+		if not c.is_empty():
+			casters.append(c)
+	out["shadows"] = casters
 	return out
 
 
@@ -384,6 +451,142 @@ static func _lamp(e: Dictionary, notes: PackedStringArray) -> Dictionary:
 	return l
 
 
+## A SHADOW OUT OF THE SHOT, made safe: its parts as silhouettes ([method _caster_parts]), where its
+## shadow is aimed and how high it hangs, how it moves - and the light that throws it: round a lamp, that
+## lamp's (`around`); else the one named in `by` when it is a lamp that casts, else the sun, else the first
+## lamp that casts. With none, it is left out. [param light] is the light made safe so far (its sun and lamps).
+static func _caster(e: Dictionary, light: Dictionary, notes: PackedStringArray) -> Dictionary:
+	var name := Props._text(e.get("name", ""), 80)
+	if name.is_empty():
+		name = "a shadow"
+	var parts := _caster_parts(e.get("parts"), 0, [MAX_CASTER_PARTS], name, notes)
+	if parts.is_empty():
+		notes.append("\"%s\" has nothing that can throw a shadow - left out" % name)
+		return {}
+	var mv: Variant = e.get("move", {})
+	var move: Dictionary = mv if mv is Dictionary else ({"kind": mv} if mv is String else {})
+	var kind := String(move.get("kind", "still")).strip_edges().to_lower() if move.get("kind") is String else "still"
+	if not CASTER_MOVES.has(kind):
+		notes.append("\"%s\": \"%s\" is not a way to move (%s) - still" % [name, kind, ", ".join(PackedStringArray(CASTER_MOVES.keys()))])
+		kind = "still"
+	var c := {"name": name, "what": Props._text(e.get("what", ""), 160), "parts": parts, "shadow": _at(e.get("shadow")),
+		"height": Props._num(e.get("height"), 160.0, 10.0, CASTER_SIZE), "turn": Props._num(e.get("turn"), 0.0, -180.0, 180.0),
+		"move": {"kind": kind, "amount": Props._num(move.get("amount"), 0.3, 0.0, 1.0), "speed": Props._num(move.get("speed"), 0.3, 0.0, 1.0)},
+		"by": "", "around": ""}
+	var around := _lamp_named(light, e.get("around"))
+	if not around.is_empty():
+		c["around"] = String(around["name"])
+		if not bool(around["shadows"]):
+			notes.append("\"%s\" hangs round \"%s\", which casts no shadows: its shade throws none until that lamp's `shadows` is true" % [name, String(around["name"])])
+		return c
+	if e.get("around") is String and not String(e["around"]).strip_edges().is_empty():
+		notes.append("\"%s\": there is no lamp called \"%s\" to hang round" % [name, String(e["around"])])
+	var sun: Dictionary = light.get("sun", {})
+	var by := String(e.get("by", "")).strip_edges() if e.get("by") is String else ""
+	if not by.is_empty() and by.to_lower() != "sun":
+		var l := _lamp_named(light, by)
+		if not l.is_empty() and bool(l["shadows"]):
+			c["by"] = String(l["name"])
+			return c
+		notes.append("\"%s\": \"%s\" is not a lamp that casts - %s throws its shadow" % [name, by, "the sun" if not sun.is_empty() else "another light"])
+	if not sun.is_empty():
+		c["by"] = "sun"
+		return c
+	for l in light.get("lamps", []):
+		if bool((l as Dictionary)["shadows"]):
+			c["by"] = String((l as Dictionary)["name"])
+			return c
+	notes.append("\"%s\": no light throws its shadow - give the table a sun, or a lamp with `shadows`; left out" % name)
+	return {}
+
+
+## The lamp of [param light] named [param v] (any case), or {}.
+static func _lamp_named(light: Dictionary, v: Variant) -> Dictionary:
+	var want := String(v).strip_edges().to_lower() if v is String else ""
+	if want.is_empty():
+		return {}
+	for l in light.get("lamps", []):
+		if String((l as Dictionary)["name"]).to_lower() == want:
+			return l
+	return {}
+
+
+## A SHADOW'S PARTS made safe: known shapes only, every size in range ([constant CASTER_SIZE]), groups two
+## deep at most, and no more parts than [param budget] (one number in an array, spent as parts are kept).
+static func _caster_parts(raw: Variant, depth: int, budget: Array, name: String, notes: PackedStringArray) -> Array:
+	var out: Array = []
+	for p in (raw if raw is Array else []):
+		if int(budget[0]) <= 0:
+			notes.append("\"%s\": past %d parts - the rest left out" % [name, MAX_CASTER_PARTS])
+			break
+		if not (p is Dictionary):
+			notes.append("\"%s\": a part that was not an object {shape, ...} was left out" % name)
+			continue
+		var d: Dictionary = p
+		var part := {"at": Props._vec3(d.get("at"), Vector3.ZERO, CASTER_SIZE), "turn": Props._turn(d.get("turn")),
+			"copies": _caster_copies(d.get("copies"))}
+		if d.get("parts") is Array:
+			if depth >= 2:
+				notes.append("\"%s\": a group more than two deep was left out" % name)
+				continue
+			part["parts"] = _caster_parts(d["parts"], depth + 1, budget, name, notes)
+			if not (part["parts"] as Array).is_empty():
+				out.append(part)
+			continue
+		var shape := String(d.get("shape", "")).strip_edges().to_lower() if d.get("shape") is String else ""
+		if not CASTER_SHAPES.has(shape):
+			notes.append("\"%s\": \"%s\" is not a shape a shadow is made of (%s) - left out" % [name, shape, ", ".join(PackedStringArray(CASTER_SHAPES.keys()))])
+			continue
+		part["shape"] = shape
+		match shape:
+			"box":
+				part["size"] = Props._vec3(d.get("size"), Vector3(100.0, 10.0, 10.0), CASTER_SIZE, 0.2)
+			"cylinder":
+				part["radius"] = Props._num(d.get("radius"), 5.0, 0.1, CASTER_SIZE * 0.5)
+				part["height"] = Props._num(d.get("height"), 100.0, 0.2, CASTER_SIZE)
+				part["radius2"] = Props._num(d.get("radius2"), float(part["radius"]), 0.0, CASTER_SIZE * 0.5)
+			"ball":
+				part["size"] = Props._vec3(d.get("size"), Vector3(12.0, 12.0, 12.0), CASTER_SIZE, 0.2)
+			"ring":
+				part["radius"] = Props._num(d.get("radius"), 30.0, 0.5, CASTER_SIZE * 0.5)
+				part["thickness"] = Props._num(d.get("thickness"), 2.0, 0.2, 60.0)
+			"tube":
+				var path := Props._points3(d.get("path"), CASTER_SIZE)
+				if path.size() < 2:
+					notes.append("\"%s\": a tube's path needs two [x, y, z] points or more - left out" % name)
+					continue
+				part["path"] = path
+				part["radius"] = Props._num(d.get("radius"), 1.0, 0.1, 40.0)
+			"sheet":
+				var sz := _pair(d.get("size"), Vector2(80.0, 60.0), Vector2(1.0, 1.0), Vector2(CASTER_SIZE, CASTER_SIZE))
+				part["size"] = Vector2(float(sz[0]), float(sz[1]))
+			"grille":
+				var gz := _pair(d.get("size"), Vector2(60.0, 60.0), Vector2(2.0, 2.0), Vector2(CASTER_SIZE, CASTER_SIZE))
+				part["size"] = Vector2(float(gz[0]), float(gz[1]))
+				part["cell"] = Props._num(d.get("cell"), 10.0, 1.0, CASTER_SIZE)
+				part["bars"] = minf(Props._num(d.get("bars"), 1.0, 0.2, 30.0), float(part["cell"]) * 0.8)
+		budget[0] = int(budget[0]) - 1
+		out.append(part)
+	return out
+
+
+## A part's copies made safe: {kind: "around" (round the upright, `radius` out) or "line" (each `step`
+## on), count}; {} for one.
+static func _caster_copies(v: Variant) -> Dictionary:
+	if not (v is Dictionary):
+		return {}
+	var d: Dictionary = v
+	if d.get("around") is Dictionary:
+		var a: Dictionary = d["around"]
+		return {"kind": "around", "count": int(Props._num(a.get("count"), 6.0, 1.0, float(MAX_CASTER_COPIES))),
+			"radius": Props._num(a.get("radius"), 0.0, 0.0, CASTER_SIZE)}
+	if d.get("line") is Dictionary:
+		var l: Dictionary = d["line"]
+		return {"kind": "line", "count": int(Props._num(l.get("count"), 3.0, 1.0, float(MAX_CASTER_COPIES))),
+			"step": Props._vec3(l.get("step"), Vector3(50.0, 0.0, 0.0), CASTER_SIZE)}
+	return {}
+
+
 ## A direction as degrees round the table ([constant FROM]): a name, or a number; [param fallback]
 ## (said in [param notes], about [param what]) when it is neither.
 static func _from(v: Variant, fallback: float, what: String, notes: PackedStringArray) -> float:
@@ -450,6 +653,11 @@ static func summary(light: Dictionary) -> String:
 	for l in light.get("lamps", []):
 		var d: Dictionary = l
 		parts.append("%s (%s, %s%s)" % [String(d["name"]), String(d["look"]), from_name(float(d["from"])), ", casting" if bool(d["shadows"]) else ""])
+	for c in light.get("shadows", []):
+		var d: Dictionary = c
+		var kind := String((d["move"] as Dictionary)["kind"])
+		parts.append("the shadow of %s (%s%s)" % [String(d["name"]), {"still": "still", "swing": "swinging", "spin": "turning", "flutter": "rippling"}[kind],
+			(", round " + String(d["around"])) if not String(d["around"]).is_empty() else ((", by " + String(d["by"])) if String(d["by"]) != "sun" else "")])
 	return "; ".join(parts)
 
 
@@ -755,6 +963,314 @@ static func threshold(kind: String, cover: float) -> float:
 		_quantiles[kind] = vals
 	var v: PackedFloat32Array = _quantiles[kind]
 	return v[clampi(int((1.0 - cover) * v.size()), 0, v.size() - 1)]
+
+
+# --- shadows out of the shot ----------------------------------------------------------------------------
+
+## A SHADOW'S MESHES: every part of [param parts] placed, its groups opened and copied - `[{mesh, xform,
+## sheet}]`, in meters, in the thing's own space (`sheet`: a sheet's height, for its ripple; 0 otherwise),
+## at most [constant MAX_CASTER_MESHES].
+static func caster_meshes(parts: Array, base := Transform3D.IDENTITY, out: Array = []) -> Array:
+	for p in parts:
+		var d: Dictionary = p
+		var own := base * Transform3D(Basis.from_euler((d["turn"] as Vector3) * (PI / 180.0)), (d["at"] as Vector3) * 0.01)
+		for cx in _copy_xforms(d.get("copies", {})):
+			var here: Transform3D = own * (cx as Transform3D)
+			if d.has("parts"):
+				caster_meshes(d["parts"], here, out)
+				continue
+			for m in _shape_meshes(d):
+				if out.size() >= MAX_CASTER_MESHES:
+					return out
+				out.append({"mesh": (m as Dictionary)["mesh"], "xform": here * ((m as Dictionary)["xform"] as Transform3D),
+					"sheet": float((m as Dictionary).get("sheet", 0.0))})
+	return out
+
+
+## Each copy's place in its part's own frame: round the upright (`radius` out first), or along `step`.
+static func _copy_xforms(c: Dictionary) -> Array:
+	var out: Array = []
+	match String(c.get("kind", "")):
+		"around":
+			var n := int(c["count"])
+			for k in n:
+				out.append(Transform3D(Basis(Vector3.UP, TAU * float(k) / float(n)), Vector3.ZERO)
+					* Transform3D(Basis.IDENTITY, Vector3(float(c["radius"]) * 0.01, 0.0, 0.0)))
+		"line":
+			for k in int(c["count"]):
+				out.append(Transform3D(Basis.IDENTITY, (c["step"] as Vector3) * 0.01 * float(k)))
+		_:
+			out.append(Transform3D.IDENTITY)
+	return out
+
+
+## One silhouette part as meshes, each with its place in the part's frame (meters).
+static func _shape_meshes(d: Dictionary) -> Array:
+	match String(d["shape"]):
+		"box":
+			var b := BoxMesh.new()
+			b.size = (d["size"] as Vector3) * 0.01
+			return [{"mesh": b, "xform": Transform3D.IDENTITY}]
+		"cylinder":
+			var c := CylinderMesh.new()
+			c.bottom_radius = float(d["radius"]) * 0.01
+			c.top_radius = float(d["radius2"]) * 0.01
+			c.height = float(d["height"]) * 0.01
+			c.radial_segments = 16
+			c.rings = 1
+			return [{"mesh": c, "xform": Transform3D.IDENTITY}]
+		"ball":
+			var s := SphereMesh.new()
+			s.radius = 0.5
+			s.height = 1.0
+			s.radial_segments = 16
+			s.rings = 8
+			return [{"mesh": s, "xform": Transform3D(Basis.from_scale((d["size"] as Vector3) * 0.01), Vector3.ZERO)}]
+		"ring":
+			var t := TorusMesh.new()
+			var r := float(d["radius"]) * 0.01
+			var th := float(d["thickness"]) * 0.01
+			t.inner_radius = maxf(r - th * 0.5, 0.0005)
+			t.outer_radius = r + th * 0.5
+			t.rings = 32
+			t.ring_segments = 8
+			return [{"mesh": t, "xform": Transform3D.IDENTITY}]
+		"tube":
+			# a post along each stretch of the path, and a ball at every bend, so a rope has no gaps
+			var out: Array = []
+			var path: Array = d["path"]
+			var rad := float(d["radius"]) * 0.01
+			for i in path.size() - 1:
+				var a: Vector3 = (path[i] as Vector3) * 0.01
+				var b: Vector3 = (path[i + 1] as Vector3) * 0.01
+				var along := b - a
+				if along.length() < 1e-4:
+					continue
+				var seg := CylinderMesh.new()
+				seg.top_radius = rad
+				seg.bottom_radius = rad
+				seg.height = along.length()
+				seg.radial_segments = 8
+				seg.rings = 1
+				out.append({"mesh": seg, "xform": Transform3D(Basis(Quaternion(Vector3.UP, along.normalized())), (a + b) * 0.5)})
+				if i > 0:
+					var joint := SphereMesh.new()
+					joint.radius = rad
+					joint.height = rad * 2.0
+					joint.radial_segments = 8
+					joint.rings = 4
+					out.append({"mesh": joint, "xform": Transform3D(Basis.IDENTITY, a)})
+			return out
+		"sheet":
+			var sh := BoxMesh.new()
+			var sz: Vector2 = d["size"]
+			sh.size = Vector3(sz.x, sz.y, 0.4) * 0.01
+			sh.subdivide_width = 24
+			sh.subdivide_height = 12
+			return [{"mesh": sh, "xform": Transform3D.IDENTITY, "sheet": sz.y * 0.01}]
+		"grille":
+			# its bars, upright and across, no more than a couple of dozen each way
+			var out: Array = []
+			var sz: Vector2 = (d["size"] as Vector2) * 0.01
+			var cell := maxf(float(d["cell"]) * 0.01, maxf(sz.x, sz.y) / 24.0)
+			var bar := float(d["bars"]) * 0.01
+			var nx := maxi(1, roundi(sz.x / cell))
+			var ny := maxi(1, roundi(sz.y / cell))
+			for i in nx + 1:
+				var up := BoxMesh.new()
+				up.size = Vector3(bar, sz.y, bar)
+				out.append({"mesh": up, "xform": Transform3D(Basis.IDENTITY, Vector3(-sz.x * 0.5 + sz.x * float(i) / float(nx), 0.0, 0.0))})
+			for j in ny + 1:
+				var across := BoxMesh.new()
+				across.size = Vector3(sz.x, bar, bar)
+				out.append({"mesh": across, "xform": Transform3D(Basis.IDENTITY, Vector3(0.0, -sz.y * 0.5 + sz.y * float(j) / float(ny), 0.0))})
+			return out
+	return []
+
+
+## The bounds of [param meshes] ([method caster_meshes]) in the thing's own space.
+static func meshes_box(meshes: Array) -> AABB:
+	var box := AABB()
+	var first := true
+	for m in meshes:
+		var b: AABB = ((m as Dictionary)["xform"] as Transform3D) * ((m as Dictionary)["mesh"] as Mesh).get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+	return box
+
+
+## WHERE A SHADOW OUT OF THE SHOT HANGS: [param c] (made safe; built as [param meshes]) set so the light
+## that throws it ([param light]: the sun's direction is [method sun_dir]; a lamp's place is in [param
+## lamps_at], by name) throws its middle's shadow where it is aimed - up the sun's ray, or on the line from
+## the aim to the lamp - at its height. Then, along that same ray (so its shadow stays where it was
+## aimed), it is raised clear of everything on the table ([param stage] `bounds`) and out of the shot
+## (`in_shot`). ROUND ITS LAMP, its own origin - [0, 0, 0] of its parts - is the lamp's flame: a
+## chandelier's hoop drawn round the origin has its candles' light at its heart, and its arms' shadows
+## spread from there. `{xform (its own space to the world), middle, top, box, moved}` - `top` its highest
+## point, what it hangs from.
+static func caster_place(c: Dictionary, meshes: Array, light: Dictionary, stage: Dictionary, lamps_at: Dictionary) -> Dictionary:
+	var box := meshes_box(meshes)
+	var mid_local := box.get_center()
+	var turn := Basis(Vector3.UP, deg_to_rad(float(c["turn"])))
+	var middle: Vector3 = stage.get("middle", Vector3.ZERO)
+	var aim := middle + Vector3(float((c["shadow"] as Array)[0]) * 0.01, 0.0, float((c["shadow"] as Array)[1]) * 0.01)
+	var h := float(c["height"]) * 0.01
+	var mid := aim + Vector3(0.0, h, 0.0)
+	var moved := false
+	if not String(c["around"]).is_empty():
+		var flame: Vector3 = lamps_at.get(String(c["around"]), mid)
+		var round_xf := Transform3D(turn, flame)
+		return {"xform": round_xf, "middle": round_xf * mid_local, "top": round_xf * Vector3(mid_local.x, box.end.y, mid_local.z),
+			"box": round_xf * box, "moved": false}
+	else:
+		var by := String(c["by"])
+		var lamp: Variant = lamps_at.get(by) if by != "sun" else null
+		var s := sun_dir(light.get("sun", {})) if by == "sun" else Vector3.UP
+		var bounds: AABB = stage.get("bounds", AABB(middle - Vector3(1.0, 0.1, 0.6), Vector3(2.0, 0.6, 1.2)))
+		var in_shot: Callable = stage.get("in_shot", Callable())
+		for i in 80:
+			if lamp is Vector3:
+				# on the line from the aim to the lamp, a little short of the lamp
+				var ly := maxf((lamp as Vector3).y - middle.y, 0.05)
+				mid = aim + ((lamp as Vector3) - aim) * clampf(h / ly, 0.0, 0.92)
+			else:
+				mid = aim + s * (h / maxf(s.y, 0.05))
+			var placed := Transform3D(turn, mid - turn * mid_local) * box
+			if not placed.intersects(bounds.grow(0.04)) and not _box_seen(placed, in_shot):
+				break
+			h += 0.1
+			moved = true
+	var xf := Transform3D(turn, mid - turn * mid_local)
+	return {"xform": xf, "middle": mid, "top": xf * Vector3(mid_local.x, box.end.y, mid_local.z), "box": xf * box, "moved": moved}
+
+
+## Whether any of [param box] is in the shot: its corners, its edges' middles and its middle tried.
+static func _box_seen(box: AABB, in_shot: Callable) -> bool:
+	if not in_shot.is_valid():
+		return false
+	for ix in 3:
+		for iy in 3:
+			for iz in 3:
+				if bool(in_shot.call(box.position + box.size * Vector3(ix, iy, iz) * 0.5)):
+					return true
+	return false
+
+
+## THE OUTLINES OF A SHADOW on the table (x by z, meters): each placed part's box ([param meshes] under
+## [param xf]) thrown along its light - the sun's direction [param s], or from the lamp at [param from] -
+## onto the table's top (y = [param floor_y]), the convex hull of where it lands; one outline a part, so
+## two beams are two bars of shade with the sun between them. A part that falls nowhere on the table's
+## plane has none.
+static func caster_outlines(meshes: Array, xf: Transform3D, s: Vector3, from: Variant = null, floor_y := 0.0) -> Array:
+	var out: Array = []
+	for m in meshes:
+		var mesh: Mesh = (m as Dictionary)["mesh"]
+		var to_world: Transform3D = xf * ((m as Dictionary)["xform"] as Transform3D)
+		var boxes: Array = []
+		if mesh is TorusMesh:
+			# A HOOP IS HOLLOW: its outline is the segments round its circle, not the disc they enclose
+			var tm := mesh as TorusMesh
+			var mid_r := (tm.inner_radius + tm.outer_radius) * 0.5
+			var half := (tm.outer_radius - tm.inner_radius) * 0.5
+			for k in 24:
+				var a0 := TAU * float(k) / 24.0
+				var a1 := TAU * float(k + 1) / 24.0
+				var p0 := Vector3(cos(a0), 0.0, sin(a0)) * mid_r
+				var p1 := Vector3(cos(a1), 0.0, sin(a1)) * mid_r
+				boxes.append(to_world * AABB(p0.min(p1) - Vector3(half, half, half), (p1 - p0).abs() + Vector3(half, half, half) * 2.0))
+		else:
+			boxes.append(to_world * mesh.get_aabb())
+		for b in boxes:
+			out.append_array(_box_outline(b, s, from, floor_y))
+	return out
+
+
+## One box's shadow on the table's plane, as an outline in an array - empty when it falls nowhere.
+static func _box_outline(b: AABB, s: Vector3, from: Variant, floor_y: float) -> Array:
+	var pts := PackedVector2Array()
+	for k in 8:
+		var p := b.get_endpoint(k)
+		if from is Vector3:
+			var l: Vector3 = from
+			if p.y >= l.y - 1e-3:
+				continue
+			var q := l + (p - l) * ((l.y - floor_y) / (l.y - p.y))
+			pts.append(Vector2(q.x, q.z))
+		elif s.y > 1e-3:
+			var q := p - s * ((p.y - floor_y) / s.y)
+			pts.append(Vector2(q.x, q.z))
+	return [Geometry2D.convex_hull(pts)] if pts.size() >= 3 else []
+
+
+## Whether [param p] (x, z) lies in any of [param outlines] ([method caster_outlines]).
+static func in_outlines(outlines: Array, p: Vector2) -> bool:
+	for o in outlines:
+		if (o as PackedVector2Array).size() >= 3 and Geometry2D.is_point_in_polygon(p, o):
+			return true
+	return false
+
+
+## A SWING, made ready: a pendulum [param length] meters from what it hangs from to its middle, pushed by a
+## wind of [param amount] (0-1) whose gusts come from [param salt]. [method swing_at] steps it on.
+static func swing_of(length: float, amount: float, salt: int) -> Dictionary:
+	var n := FastNoiseLite.new()
+	n.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	n.frequency = 1.0
+	n.seed = salt & 0x7FFF
+	var r := RandomNumberGenerator.new()
+	r.seed = salt
+	return {"g_l": 9.81 / maxf(length, 0.05), "amount": amount, "noise": n, "dir": r.randf() * TAU,
+		"theta": Vector2.ZERO, "omega": Vector2.ZERO, "t": 0.0, "steps": 0, "kept": PackedVector2Array([Vector2.ZERO])}
+
+
+## THE SWING'S ANGLES at show time [param t] (radians: toward +x, toward +z). A pendulum: the SINE of its
+## angle pulls it back, so a wide swing is slower than a narrow one - nonlinear, as a rope or a chandelier
+## really swings - lightly damped, and pushed by the wind's lean, its slow turns and its gusts, which
+## build the swing up and let it die back. STEPPED from show time 0 at a fixed step and kept every
+## [constant SWING_KEEP] steps, extended only as far as it has been asked: any time is the same swing,
+## whatever order the times are asked in - a render, a scrub and a picture see the same rope.
+static func swing_at(sw: Dictionary, t: float) -> Vector2:
+	var kept: PackedVector2Array = sw["kept"]
+	var dt_keep := SWING_STEP * float(SWING_KEEP)
+	var want := clampf(t, 0.0, HORIZON)
+	var need := floori(want / dt_keep) + 2
+	if need > kept.size():
+		var theta: Vector2 = sw["theta"]
+		var omega: Vector2 = sw["omega"]
+		var tt := float(sw["t"])
+		var steps := int(sw["steps"])
+		var g_l := float(sw["g_l"])
+		while kept.size() < need:
+			for k in SWING_KEEP:
+				var r := theta.length()
+				var pull := theta * (sin(r) / r) if r > 1e-6 else theta
+				var acc := -g_l * pull - SWING_DAMP * omega + g_l * _wind(sw, tt)
+				omega += acc * SWING_STEP
+				theta = (theta + omega * SWING_STEP).limit_length(1.2)
+				tt += SWING_STEP
+				steps += 1
+			kept.append(theta)
+		sw["theta"] = theta
+		sw["omega"] = omega
+		sw["t"] = tt
+		sw["steps"] = steps
+		sw["kept"] = kept
+	var u := want / dt_keep
+	var i := mini(floori(u), kept.size() - 2)
+	return kept[i].lerp(kept[i + 1], u - float(i))
+
+
+## The wind's push on a swing at [param t] (radians it would lean the thing in a steady wind): a breeze
+## whose lean and direction drift slowly, gusts now and then, and a little turbulence near the pendulum's
+## own pace - the push that sets a hanging thing swinging.
+static func _wind(sw: Dictionary, t: float) -> Vector2:
+	var n: FastNoiseLite = sw["noise"]
+	var a := float(sw["amount"])
+	var dir := float(sw["dir"]) + 0.9 * n.get_noise_1d(t * 0.013)
+	var lean := 0.12 * (0.55 + 0.45 * n.get_noise_1d(t * 0.05 + 100.0))
+	var gust := pow(maxf(n.get_noise_1d(t * 0.21 + 300.0), 0.0), 2.0) * 0.35
+	var turb := Vector2(n.get_noise_1d(t * 0.9 + 500.0), n.get_noise_1d(t * 1.1 + 700.0)) * 0.05
+	return (Vector2(cos(dir), sin(dir)) * (lean + gust) + turb) * a
 
 
 # --- the weather ---------------------------------------------------------------------------------------
@@ -1226,6 +1742,54 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 			energy = LAMP_IRR * 2.5 * float(l["strength"]) * dist
 		rig.lamps.append({"spec": l, "light": node, "base": at, "energy": energy, "asked": energy, "moved": place["moved"],
 			"fk": flicker_of(l, hash([seed, i, String(l["name"]), "lamp"])), "dist": dist, "slant": slant})
+	# THE SHADOWS OUT OF THE SHOT, set up their lights' rays
+	var lamps_at := {}
+	for l in rig.lamps:
+		lamps_at[String(((l as Dictionary)["spec"] as Dictionary)["name"])] = (l as Dictionary)["base"]
+	var casters: Array = light.get("shadows", [])
+	for i in casters.size():
+		var c: Dictionary = casters[i]
+		var meshes := caster_meshes(c["parts"])
+		if meshes.is_empty():
+			continue
+		var place := caster_place(c, meshes, light, stage, lamps_at)
+		var kind := String((c["move"] as Dictionary)["kind"])
+		var xf: Transform3D = place["xform"]
+		# what it moves about: its top for a swing (what it hangs from), its middle for a spin
+		var pivot_at: Vector3 = place["middle"] if kind == "spin" else place["top"]
+		var pivot := Node3D.new()
+		pivot.name = "Shadow%d" % i
+		pivot.position = pivot_at
+		var body := Node3D.new()
+		body.transform = Transform3D(xf.basis, xf.origin - pivot_at)
+		pivot.add_child(body)
+		var wave := float((c["move"] as Dictionary)["amount"]) * 0.06 if kind == "flutter" else 0.0
+		var mats: Array = []
+		for m in meshes:
+			var mi := MeshInstance3D.new()
+			mi.mesh = (m as Dictionary)["mesh"]
+			mi.transform = (m as Dictionary)["xform"]
+			mi.layers = CASTER_LAYER
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+			var mat := ShaderMaterial.new()
+			mat.shader = CASTER_SHADER
+			var span := float((m as Dictionary)["sheet"])
+			if span > 0.0 and wave > 0.0:
+				mat.set_shader_parameter("wave", wave)
+				mat.set_shader_parameter("top", span * 0.5)
+				mat.set_shader_parameter("span", span)
+				mat.set_shader_parameter("phase", float(mats.size()) * 1.7)
+				mats.append(mat)
+			mi.material_override = mat
+			body.add_child(mi)
+		rig.root.add_child(pivot)
+		var mid_local := meshes_box(meshes).get_center()
+		var top_y := meshes_box(meshes).end.y
+		rig.casters.append({"spec": c, "pivot": pivot, "kind": kind, "mats": mats, "moved": place["moved"],
+			"swing": swing_of(maxf(top_y - mid_local.y, 0.05) * 2.0 * 0.667, float((c["move"] as Dictionary)["amount"]),
+				hash([seed, i, String(c["name"]), "swing"]) & 0x7FFFFFFF) if kind == "swing" else {},
+			"spin": 0.3 * pow(40.0, float((c["move"] as Dictionary)["speed"])), "turn": deg_to_rad(float(c["turn"])),
+			"meshes": meshes, "xform": xf})
 	rig.apply_sky()
 	return rig
 
@@ -1255,6 +1819,7 @@ class Rig:
 	var flights: Array = []             # the birds' crossings ([method Lights.crossings])
 	var bird_nodes: Array = []
 	var lamps: Array = []               # [{spec, light, base, energy, asked, moved, fk, dist, slant}]
+	var casters: Array = []             # the shadows out of the shot: [{spec, pivot, kind, mats, moved, swing, spin, turn, meshes, xform}]
 	var flash := 0.0                    # lightning, this frame
 
 	## THE SKY in the environment: its ambient, and the light from above - and, now, a flash of lightning
@@ -1379,6 +1944,7 @@ class Rig:
 			elif kind == "lightning":
 				flash = maxf(flash, float(f["bright"]) * float(spec["strength"]))
 		apply_sky(flash, glow)
+		_tick_casters(t)
 		var room: ShaderMaterial = stage.get("room")
 		if room != null:
 			# the room's picture holds the sun's light as well as the sky's: under a cloud it is lit as the
@@ -1393,6 +1959,22 @@ class Rig:
 		var direct := sun_energy * sin(deg_to_rad(sun_height))
 		var full := maxf(direct + sky_energy, 0.01)
 		return (direct * tau + sky_energy + Lights.CLOUD_GLOW * (1.0 - tau) * direct) / full
+
+	## The shadows out of the shot at [param t]: a swing's pendulum, a spin's turn, a sheet's ripple.
+	func _tick_casters(t: float) -> void:
+		for c in casters:
+			var d: Dictionary = c
+			var pivot: Node3D = d["pivot"]
+			match String(d["kind"]):
+				"swing":
+					var th := Lights.swing_at(d["swing"], t)
+					pivot.basis = Basis(Vector3(0.0, 0.0, 1.0), -th.x) * Basis(Vector3(1.0, 0.0, 0.0), th.y)
+				"spin":
+					var w := float(d["spin"])
+					pivot.basis = Basis(Vector3.UP, w * t + 0.08 * sin(t * 0.7))
+				"flutter":
+					for m in d["mats"]:
+						(m as ShaderMaterial).set_shader_parameter("show_time", t)
 
 	func _tick_birds(t: float) -> void:
 		if bird_nodes.is_empty():

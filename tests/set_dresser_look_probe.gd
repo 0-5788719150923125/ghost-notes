@@ -104,7 +104,7 @@ func _run() -> void:
 			moving.append("clouds")
 		if not (safe.get("birds", {}) as Dictionary).is_empty():
 			moving.append("birds")
-		for e in safe.get("through", []) + safe.get("lamps", []):
+		for e in safe.get("through", []) + safe.get("lamps", []) + safe.get("shadows", []):
 			moving.append(String((e as Dictionary)["name"]))
 		for nm in moving:
 			await _call(tools, "watch", {"name": String(nm)}, "watch_" + String(nm).replace(" ", "_"))

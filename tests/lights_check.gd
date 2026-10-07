@@ -27,6 +27,16 @@ extends SceneTree
 ## - BUILT: a sun that casts, its screens and birds shadow-only on SCREEN_LAYER, no lamp casting with that
 ##   layer, at most MAX_SHADOWED lamps casting; a cloud over the sun dims it; fitted, the palest thing in
 ##   the light takes no more than SUN_HEAT - against the same light unfitted, which is over it.
+## - SHADOWS OUT OF THE SHOT: unknown shapes and moves dropped and said, sizes held to CASTER_SIZE, the cap
+##   kept; each given a light to throw it (round a lamp, a lamp named that casts, the sun, the first lamp
+##   that casts) and left out with none. Built: copies round the upright and along a step, never past
+##   MAX_CASTER_MESHES. Placed: the sun throws its middle's shadow where it was aimed; raised clear of the
+##   table and out of the shot along that ray, the shadow staying put - against one asked to hang low,
+##   which had to be; round a lamp, its origin at the flame. Outlined a part at a time, so two beams leave
+##   the sun between them (against one outline round both, which does not). SWUNG: the same time is the
+##   same swing whatever order it is asked in; no wind, no swing; bounded; and a pendulum four times as
+##   long swings about twice as slowly, as the sine-pulled pendulum does. Built on CASTER_LAYER, drawn
+##   nowhere, every lamp casting with it.
 
 var _fails := 0
 var _rng := RandomNumberGenerator.new()
@@ -44,7 +54,7 @@ func _ok(cond: bool, what: String) -> void:
 
 func _run() -> void:
 	_rng.seed = 4242
-	for check in [_sanitize, _vocabulary, _noise, _window, _screens, _clouds, _birds, _lamps, _built]:
+	for check in [_sanitize, _vocabulary, _noise, _window, _screens, _clouds, _birds, _lamps, _built, _shadows]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("lights_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -439,3 +449,160 @@ func _built() -> bool:
 	root.queue_free()
 	await process_frame
 	return true
+
+
+## SHADOWS OUT OF THE SHOT.
+func _shadows() -> bool:
+	var notes := PackedStringArray()
+	var l := Lights.sanitize({"sun": {"from": "back left", "height": 35},
+		"lamps": [{"name": "glow", "look": "lantern", "shadows": true}, {"name": "dim", "look": "lamp", "shadows": false}],
+		"shadows": [
+			{"name": "junk", "parts": [{"shape": "teapot"}, "x"]},
+			{"name": "beam", "parts": [{"shape": "box", "size": [900, 20, 20]}], "move": {"kind": "still"}},
+			{"name": "rope", "parts": [{"shape": "tube", "path": [[0, 0, 0]]}, {"shape": "tube", "path": [[0, 0, 0], [0, -100, 0]]}], "move": {"kind": "wobble"}},
+			{"name": "lantern", "around": "glow", "parts": [{"shape": "grille", "size": [20, 30]}]},
+			{"name": "by dim", "by": "dim", "parts": [{"shape": "ball"}]},
+			{"name": "fifth", "parts": [{"shape": "ring"}]}]}, notes)
+	var cs: Array = l["shadows"]
+	var names: Array = cs.map(func(c: Dictionary) -> String: return String(c["name"]))
+	_ok(names == ["beam", "rope", "lantern", "by dim"], "shadows kept: %s (nothing to build, and past the cap, left out)" % str(names))
+	_ok(((cs[0] as Dictionary)["parts"][0]["size"] as Vector3).x == Lights.CASTER_SIZE, "a beam past the largest size is not held to it")
+	_ok(((cs[1] as Dictionary)["parts"] as Array).size() == 1 and String(((cs[1] as Dictionary)["move"] as Dictionary)["kind"]) == "still",
+		"a one-point tube was kept, or an unknown move not stilled")
+	_ok(String((cs[2] as Dictionary)["around"]) == "glow" and String((cs[3] as Dictionary)["by"]) == "sun",
+		"round a lamp, or by a lamp that casts no shadows: not settled (%s, %s)" % [(cs[2] as Dictionary)["around"], (cs[3] as Dictionary)["by"]])
+	for what in ["teapot", "wobble", "\"dim\" is not a lamp that casts", "past %d shadows" % Lights.MAX_CASTERS, "path needs two"]:
+		var said := false
+		for n in notes:
+			said = said or String(n).contains(what)
+		_ok(said, "nothing was said about %s: %s" % [what, str(notes)])
+	var lit_by_lamp := Lights.sanitize({"lamps": [{"name": "torch", "look": "torch", "shadows": true}], "shadows": [{"name": "x", "parts": [{"shape": "box"}]}]})
+	_ok(String((lit_by_lamp["shadows"][0] as Dictionary)["by"]) == "torch", "with no sun, the lamp that casts does not throw it")
+	var dark_notes := PackedStringArray()
+	_ok((Lights.sanitize({"sky": {}, "shadows": [{"name": "x", "parts": [{"shape": "box"}]}]}, dark_notes)["shadows"] as Array).is_empty()
+		and str(dark_notes).contains("no light throws its shadow"), "a shadow with no light to throw it was kept, or not said")
+	# BUILT: copies round and along, and never past the cap
+	var arms := Lights.caster_meshes(Lights.sanitize({"sun": {}, "shadows": [{"name": "c", "parts": [{"shape": "ring", "radius": 30},
+		{"parts": [{"shape": "tube", "path": [[0, 0, 0], [30, 0, 0]], "radius": 1}], "copies": {"around": {"count": 6}}}]}]})["shadows"][0]["parts"])
+	var angles := {}
+	for m in arms.slice(1):
+		var at: Vector3 = ((m as Dictionary)["xform"] as Transform3D).origin
+		angles[snappedf(rad_to_deg(atan2(at.z, at.x)), 1.0)] = true
+	_ok(arms.size() == 7 and angles.size() == 6, "a hoop and six arms round it built as %d parts at %d angles" % [arms.size(), angles.size()])
+	var row := Lights.caster_meshes(Lights.sanitize({"sun": {}, "shadows": [{"name": "r", "parts": [{"shape": "box", "copies": {"line": {"count": 4, "step": [50, 0, 0]}}}]}]})["shadows"][0]["parts"])
+	_ok(row.size() == 4 and is_equal_approx(((row[3] as Dictionary)["xform"] as Transform3D).origin.x, 1.5), "a row of four, half a meter apart, built wrong")
+	var long_path: Array = []
+	for i in 40:
+		long_path.append([float(i) * 5.0, 0.0, 0.0])
+	var many := Lights.caster_meshes(Lights.sanitize({"sun": {}, "shadows": [{"name": "m", "parts": [{"shape": "tube", "path": long_path,
+		"copies": {"around": {"count": 16}}}]}]})["shadows"][0]["parts"])
+	_ok(many.size() == Lights.MAX_CASTER_MESHES, "a shadow built past the cap: %d parts" % many.size())
+	# PLACED by where its shadow falls
+	var lay := CardTable.layout_of(1234)
+	var cam: Transform3D = lay["camera"]
+	var fov := float(lay["fov"])
+	var stage := {"middle": Vector3(0.0, 0.0, -0.02), "bounds": _bounds(), "in_shot": func(at: Vector3) -> bool: return CardTable.in_shot(cam, fov, at)}
+	var sunny := Lights.sanitize({"sun": {"from": "right", "height": 40}, "lamps": [{"name": "glow", "look": "lantern", "shadows": true}],
+		"shadows": [{"name": "b", "parts": [{"shape": "box", "size": [300, 15, 15]}], "shadow": [20, -10], "height": 200},
+			{"name": "low", "parts": [{"shape": "box", "size": [40, 15, 15]}], "shadow": [0, 0], "height": 15},
+			{"name": "ring", "around": "glow", "parts": [{"shape": "ring", "radius": 20, "at": [0, -10, 0]}]}]})
+	var s := Lights.sun_dir(sunny["sun"])
+	var lamps_at := {"glow": Vector3(0.3, 0.8, 0.5)}
+	for i in 2:
+		var c: Dictionary = sunny["shadows"][i]
+		var meshes := Lights.caster_meshes(c["parts"])
+		var place := Lights.caster_place(c, meshes, sunny, stage, lamps_at)
+		var mid: Vector3 = place["middle"]
+		var lands := mid - s * (mid.y / s.y)
+		var aim := Vector3(0.0, 0.0, -0.02) + Vector3(float(c["shadow"][0]) * 0.01, 0.0, float(c["shadow"][1]) * 0.01)
+		_ok(lands.distance_to(aim) < 0.002, "\"%s\": the sun throws its middle's shadow %.1f cm from where it was aimed" % [c["name"], lands.distance_to(aim) * 100.0])
+		_ok(not (place["box"] as AABB).intersects(_bounds()) and not Lights._box_seen(place["box"], stage["in_shot"]),
+			"\"%s\" stands in the table or in the shot" % c["name"])
+		_ok(bool(place["moved"]) == (i == 1), "\"%s\": raised %s (only the one asked to hang low should be)" % [c["name"], place["moved"]])
+	var rc: Dictionary = sunny["shadows"][2]
+	var rp := Lights.caster_place(rc, Lights.caster_meshes(rc["parts"]), sunny, stage, lamps_at)
+	_ok(((rp["xform"] as Transform3D).origin).distance_to(lamps_at["glow"]) < 1e-4, "a thing round its lamp is not centered on the flame")
+	# OUTLINED a part at a time: two beams leave the sun between them
+	var two := Lights.sanitize({"sun": {"from": "front", "height": 70}, "shadows": [{"name": "two", "parts": [{"shape": "box", "size": [300, 10, 10],
+		"copies": {"line": {"count": 2, "step": [0, 0, 60]}}}], "shadow": [0, 0], "height": 200}]})
+	var tc: Dictionary = two["shadows"][0]
+	var tm := Lights.caster_meshes(tc["parts"])
+	var tp := Lights.caster_place(tc, tm, two, {"middle": Vector3(0.0, 0.0, -0.02), "bounds": _bounds()}, {})
+	var outlines := Lights.caster_outlines(tm, tp["xform"], Lights.sun_dir(two["sun"]))
+	# where the sun throws the middle (between the beams) and one beam (30 cm off it, toward the reader's far side)
+	var between := Vector2(0.0, -0.02)
+	var under := Vector2(0.0, -0.32)
+	_ok(outlines.size() == 2 and Lights.in_outlines(outlines, under) and not Lights.in_outlines(outlines, between),
+		"two beams' outlines do not leave the sun between them (%d outlines)" % outlines.size())
+	var all_pts := PackedVector2Array()
+	for o in outlines:
+		all_pts.append_array(o)
+	_ok(Geometry2D.is_point_in_polygon(between, Geometry2D.convex_hull(all_pts)), "control: one outline round both does not take in the sun between them")
+	# SWUNG
+	var sw := Lights.swing_of(1.0, 0.5, 4242)
+	var later := Lights.swing_of(1.0, 0.5, 4242)
+	Lights.swing_at(later, 90.0)
+	_ok(Lights.swing_at(sw, 30.0) == Lights.swing_at(later, 30.0), "the same time is another swing when later times were asked first")
+	var calm := Lights.swing_of(1.0, 0.0, 4242)
+	var stirred := 0.0
+	for i in 600:
+		stirred = maxf(stirred, Lights.swing_at(calm, float(i) * 0.1).length())
+	_ok(stirred < 1e-6, "with no wind it swings (%.4f rad)" % stirred)
+	var most := 0.0
+	var spread := 0.0
+	for i in 1200:
+		var th := Lights.swing_at(sw, float(i) * 0.05)
+		most = maxf(most, th.length())
+		spread += th.length_squared()
+	_ok(most < 0.8 and sqrt(spread / 1200.0) > 0.01, "a breeze swings it %.3f rad at most, %.3f typically" % [most, sqrt(spread / 1200.0)])
+	var short_t := _period(Lights.swing_of(1.0, 0.6, 77))
+	var long_t := _period(Lights.swing_of(4.0, 0.6, 77))
+	_ok(long_t / short_t > 1.5 and long_t / short_t < 2.7, "a pendulum four times as long swings %.2fx as slowly (%.2f s, %.2f s) - about twice" % [long_t / short_t, short_t, long_t])
+	# BUILT on its layer, drawn nowhere, cast by every lamp
+	var root := Node3D.new()
+	get_root().add_child(root)
+	var rig := Lights.build(sunny, {"middle": Vector3(0.0, 0.0, -0.02), "bounds": _bounds(), "seen": _seen(), "env": Environment.new(), "room": null,
+		"in_shot": stage["in_shot"]}, 5)
+	root.add_child(rig.root)
+	var cast_meshes := 0
+	var wrong := 0
+	for c in rig.casters:
+		for n in ((c as Dictionary)["pivot"] as Node).find_children("*", "MeshInstance3D", true, false):
+			cast_meshes += 1
+			var mi := n as MeshInstance3D
+			wrong += 0 if mi.layers == Lights.CASTER_LAYER and mi.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY else 1
+	_ok(cast_meshes > 0 and wrong == 0, "%d of %d shadow parts are drawn or off their layer" % [wrong, cast_meshes])
+	for lp in rig.lamps:
+		_ok((((lp as Dictionary)["light"] as Light3D).shadow_caster_mask & Lights.CASTER_LAYER) != 0, "a lamp does not cast with the shadows out of the shot")
+	rig.release()
+	root.queue_free()
+	await process_frame
+	return true
+
+
+## A swing's typical period (seconds) over two minutes: twice the mean time between its crossings of its
+## own slow middle (a 4 s running mean taken out), along the way it swings most.
+func _period(sw: Dictionary) -> float:
+	var xs := PackedFloat32Array()
+	var ys := PackedFloat32Array()
+	for i in 2400:
+		var th := Lights.swing_at(sw, 20.0 + float(i) * 0.05)
+		xs.append(th.x)
+		ys.append(th.y)
+	var vx := 0.0
+	var vy := 0.0
+	for i in xs.size():
+		vx += xs[i] * xs[i]
+		vy += ys[i] * ys[i]
+	var v := xs if vx >= vy else ys
+	var crossings := 0
+	var was := 0.0
+	for i in range(40, v.size() - 40):
+		var mean := 0.0
+		for k in range(i - 40, i + 40):
+			mean += v[k]
+		var d := v[i] - mean / 80.0
+		if was != 0.0 and signf(d) != signf(was):
+			crossings += 1
+		was = d
+	return 2.0 * (float(v.size() - 80) * 0.05) / maxf(float(crossings), 1.0)

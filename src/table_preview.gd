@@ -501,6 +501,18 @@ func _light_moment(rig, name: String) -> Dictionary:
 			if not bool((g as Dictionary)["moves"]):
 				return {"error": "\"%s\" does not move: set shows it" % name}
 			return {"times": [AIR_AT, AIR_AT + 1.5, AIR_AT + 3.0, AIR_AT + 4.5], "what": "\"%s\" stirring, a second and a half apart." % name}
+	for c in rig.casters:
+		var cs: Dictionary = (c as Dictionary)["spec"]
+		if String(cs["name"]) != name:
+			continue
+		match String((c as Dictionary)["kind"]):
+			"swing":
+				return {"times": [AIR_AT, AIR_AT + 0.6, AIR_AT + 1.2, AIR_AT + 1.8], "what": "\"%s\" swinging, six tenths of a second apart." % name}
+			"spin":
+				return {"times": [AIR_AT, AIR_AT + 0.12, AIR_AT + 0.24, AIR_AT + 0.36], "what": "\"%s\" turning, an eighth of a second apart." % name}
+			"flutter":
+				return {"times": [AIR_AT, AIR_AT + 0.25, AIR_AT + 0.5, AIR_AT + 0.75], "what": "\"%s\" rippling, a quarter of a second apart." % name}
+		return {"error": "\"%s\" does not move: set shows its shadow" % name}
 	for l in rig.lamps:
 		var spec: Dictionary = (l as Dictionary)["spec"]
 		if String(spec["name"]) != name:

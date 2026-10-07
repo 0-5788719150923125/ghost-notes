@@ -938,6 +938,7 @@ func _redo(step: String) -> void:
 ## One row per stage of the episode, each card its own; rebuilt when the card count changes.
 var _row_widgets: Array = []      # [{label, steps, status: Label, text: Label}]
 var _rows_for := -1
+var _rows_backs := ""            # the printings the rows were built for (each prints its own back)
 
 func _rebuild_rows() -> void:
 	if _rows_box == null or _episode == null:
@@ -947,9 +948,16 @@ func _rebuild_rows() -> void:
 	_row_widgets = []
 	var n := _episode.card_count()
 	_rows_for = n
+	_rows_backs = ",".join(_episode.printings())
 	for r in ROWS:
 		var label := String(r[0])
-		if label == "Card":
+		if label == "Table":
+			# a back per printing the drawn cards are in, beside the deck's own (CardEpisode.printings)
+			var steps: Array = (r[1] as Array).duplicate()
+			for key in _episode.printings():
+				steps.insert(1, "image:back:%s" % key)
+			_add_row(label, label, steps, 0)
+		elif label == "Card":
 			for k in range(1, n + 1):
 				var steps: Array = []
 				for s in r[1]:
@@ -1048,7 +1056,7 @@ func _refresh_rows() -> void:
 			String((plan as Dictionary).get("episode_title", "")) if plan is Dictionary else "")
 		if _episode_pick.get_item_text(at) != label:
 			_episode_pick.set_item_text(at, label)
-	if _episode.card_count() != _rows_for:
+	if _episode.card_count() != _rows_for or ",".join(_episode.printings()) != _rows_backs:
 		_rebuild_rows()
 		return
 	var doc := {}
