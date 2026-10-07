@@ -1395,6 +1395,13 @@ into a show's guide, which is the user's brief to write; a dealer run by a real 
 no episode step calls them); and (7) the rename. Gates: table_actions_check and table_positions_check
 (new), cards_check, table_wash_check, table_place_check (unchanged).
 
+**2026-10-07: (5) in part - a second guide makes a show with no code of its own.** A guide's
+`## Format` section takes "tarot" out of every prompt (the shared context maps the recipe's words
+to the show's; the producer names the deck's `kind`, which the designer and painter use), and a
+`## Cards` section of prose alone lets each episode's producer choose its box, drawn from by the
+seed (`CardDeck.chooses`). First show: `rift/tarot/the-shoebox.md`. The recipe's verbs and its
+words in code are still the tarot's; the guide maps them. Gate: cards_choose_check (next/cards.md).
+
 ### Step 10: portrait
 
 Independent of steps 2-9: it can start any time after step 1. In order: the `frame` setting and

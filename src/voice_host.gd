@@ -166,8 +166,8 @@ func _spawn_host() -> void:
 	# diagnostic the host prints AND risks the child blocking once the pipe
 	# fills, which presents as "the voice host exited unexpectedly" with no
 	# explanation anywhere. Drained every frame and echoed with print(), so it
-	# lands in the terminal ghost was launched from - copy-pasteable, unlike the
-	# in-game console.
+	# lands in the app's log and the console (`>_`), as a [Subprocess.start]
+	# child's output does.
 	_stderr = info.get("stderr")
 	_rx = ""
 	_erx = ""
@@ -199,7 +199,7 @@ func _process(delta: float) -> void:
 			if _pid > 0 and not Subprocess.alive(_pid):
 				_drain_stderr()          # whatever it managed to say on the way out
 				_fail("host", "the voice host exited unexpectedly - see the "
-					+ "ghost/voice lines above in the terminal")
+					+ "ghost/voice lines above in the console")
 
 
 ## Read whatever the host has written and dispatch complete lines. Partial lines

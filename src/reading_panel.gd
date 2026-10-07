@@ -155,6 +155,7 @@ const SLOT_DEFAULTS := {
 	"voice": "", "speaker": 0, "tone": 0, "pace": 1.0, "pause": 1.0,
 	"dynamics": 0.5, "arc": 0.4, "effort": 0.35,
 	"echo": 0.0, "room": 0.0, "resonance": 0.0, "presence": 1.0, "ambience": 0.0,
+	"lean": 0.0,
 	# the pen this voice writes in, in a medium that writes by hand - a name from
 	# NotebookLayout.INKS or a hex color; "" is the default black
 	"ink": "",
@@ -362,7 +363,7 @@ var _test_parts := {}          # chunk index -> wav path, as they arrive
 var _test_chunks: Array = []
 var _test_name := ""           # the voice being auditioned, fixed when it was pressed
 var _test_next := 0            # the next sentence to join onto the audition's stream
-var _test_hold := PackedFloat32Array()   # joined audio not yet pushed (before playback starts)
+var _test_hold := PackedVector2Array()   # wet frames not yet pushed (before playback starts)
 var _test_pushed := 0
 var _test_read := 0            # cursor into _test_hold: what has been pushed
 var _test_tasks := {}          # chunk index -> {box, task}: decoding on a worker
@@ -406,6 +407,7 @@ var _effort: HSlider
 var _fx_res: HSlider
 var _fx_room: HSlider
 var _fx_presence: HSlider
+var _fx_lean: HSlider
 var _fx_pad: HSlider
 var _tone: OptionButton
 var _speaker: SpinBox
@@ -534,15 +536,10 @@ func _process(_delta: float) -> void:
 		return
 	# the ambience runs HERE rather than in the host: it is stateful across
 	# chunk boundaries, so a seam must not reset the echo tail or the ring
-	var mono: PackedFloat32Array = _fx.process(_pending.slice(_read, _read + n))
+	var buf: PackedVector2Array = _fx.process_stereo(_pending.slice(_read, _read + n))
 	if _fade_at >= 0:
 		for i in n:
-			mono[i] *= _fade_gain(_pushed + i)
-	var buf := PackedVector2Array()
-	buf.resize(n)
-	for i in n:
-		var v := mono[i]
-		buf[i] = Vector2(v, v)
+			buf[i] *= _fade_gain(_pushed + i)
 	_playback.push_buffer(buf)
 	_pushed += n
 	_read += n
@@ -1109,6 +1106,13 @@ func _build_voice(box: VBoxContainer) -> void:
 		"How close the reader is. 1 is right here; lower moves them away, dulling the high end "
 		+ "first the way air does and only then dropping the level. Distance is a filter before it "
 		+ "is a volume, which is why this is not a master gain.")
+	_fx_lean = _fx_slider(box, "Lean", 0.0,
+		"The reader leaning toward one side of a microphone in the middle and back, the way an "
+		+ "ASMR recording moves between your ears. Only the voice moves; the room and the bed stay "
+		+ "put. 0 is still. Low settings rest at center and lean now and then, holding a side for "
+		+ "a while; higher, the rests and holds get shorter and the reader crosses straight to the "
+		+ "other side more often, until at 1 it is a slow, constant sway. The far ear always keeps "
+		+ "at least 30% of the voice. It is in the exported take as well.")
 	_fx_pad = _fx_slider(box, "Ambience", 0.0,
 		"A sustained ambient bed underneath, in the reader's own key - long tones that keep "
 		+ "sounding through the pauses, rather than reverb of the voice. It ducks under speech and "
@@ -1482,7 +1486,7 @@ func _capture_slot() -> void:
 		"tone": _tone.selected, "pace": _rate.value, "pause": _pause.value,
 		"dynamics": _dynamics.value, "arc": _arc.value, "effort": _effort.value,
 		"echo": _fx_echo.value, "room": _fx_room.value, "resonance": _fx_res.value,
-		"presence": _fx_presence.value, "ambience": _fx_pad.value,
+		"presence": _fx_presence.value, "ambience": _fx_pad.value, "lean": _fx_lean.value,
 		"ink": _ink_value(),
 	}
 	_refresh_tab_labels()
@@ -1511,6 +1515,7 @@ func _apply_slot(i: int) -> void:
 	_fx_res.value = float(s["resonance"])
 	_fx_presence.value = float(s["presence"])
 	_fx_pad.value = float(s["ambience"])
+	_fx_lean.value = float(s["lean"])
 	_show_ink(String(s["ink"]))
 	# After the voice, because it is what sets the Speaker row's range - and a
 	# speaker id is only meaningful against the model that holds it.
@@ -1831,7 +1836,7 @@ func _on_test() -> void:
 	_test_dry = PackedFloat32Array()
 	_test_fx_task = {}
 	_test_next = 0
-	_test_hold = PackedFloat32Array()
+	_test_hold = PackedVector2Array()
 	_test_read = 0
 	_test_pushed = 0
 	_test_fx = null
@@ -1859,7 +1864,7 @@ func _stop_test() -> void:
 	_test_dry = PackedFloat32Array()
 	_test_req = {}          # replies still in flight are dropped on arrival
 	_test_parts = {}
-	_test_hold = PackedFloat32Array()
+	_test_hold = PackedVector2Array()
 	_test_read = 0
 	if _test_player != null:
 		_test_player.stop()
@@ -1945,10 +1950,10 @@ func _pump_test_fx() -> void:
 	_test_dry = _test_dry.slice(n)
 	var fx := _test_fx
 	var cfg := _cfg_of(_test_name)
-	var box := [PackedFloat32Array()]
+	var box := [PackedVector2Array()]
 	_test_fx_task = {"box": box, "task": WorkerThreadPool.add_task(func() -> void:
 		_apply_fx(fx, cfg)
-		box[0] = fx.process(piece))}
+		box[0] = fx.process_stereo(piece))}
 	_start_test_playback()
 
 
@@ -1990,12 +1995,7 @@ func _tick_test() -> void:
 		return
 	var n := mini(_test_hold.size() - _test_read, pb.get_frames_available())
 	if n > 0:
-		var wet := _test_hold.slice(_test_read, _test_read + n)
-		var buf := PackedVector2Array()
-		buf.resize(n)
-		for k in n:
-			buf[k] = Vector2(wet[k], wet[k])
-		pb.push_buffer(buf)
+		pb.push_buffer(_test_hold.slice(_test_read, _test_read + n))
 		_test_pushed += n
 		_test_read += n
 		# reclaim the consumed head only when it is worth it, not every frame
@@ -2224,6 +2224,7 @@ func _apply_fx(fx: VoiceFX, s: Dictionary) -> void:
 	fx.resonance = float(s["resonance"])
 	fx.presence = _presence_of(s)
 	fx.pad = _pad_level_of(s)
+	fx.lean = clampf(float(s["lean"]), 0.0, 1.0)
 	# One dial, so [RoomFX] does the collapsing: size and wet open together, and
 	# Resonance colors the tail the same way it does on Masking's bus.
 	fx.room.from_dial(float(s["room"]), float(s["resonance"]))
@@ -3984,24 +3985,28 @@ func export_take() -> String:
 	for m in marks:
 		(m as Dictionary)["at"] = int((m as Dictionary)["at"]) + head
 	(marks[0] as Dictionary)["at"] = 0        # the first voice owns the intro
-	var wet := PackedFloat32Array()
+	# STEREO ONLY WHEN SOMEBODY LEANS: a take where nobody moves is the same mono file it
+	# always was, at half the size.
+	var leans := false
+	var wet := PackedVector2Array()
 	for k in marks.size():
 		var a := int((marks[k] as Dictionary)["at"])
 		var b := pcm.size() if k == marks.size() - 1 else int((marks[k + 1] as Dictionary)["at"])
 		if b <= a:
 			continue
-		_apply_fx(fx, _cfg_of(String((marks[k] as Dictionary)["speaker"])))
-		wet.append_array(fx.process(pcm.slice(a, b)))
-	pcm = wet
+		var cfg := _cfg_of(String((marks[k] as Dictionary)["speaker"]))
+		leans = leans or float(cfg["lean"]) > 0.0
+		_apply_fx(fx, cfg)
+		wet.append_array(fx.process_stereo(pcm.slice(a, b)))
 	# ...faded AFTER the effects, so the room and the ambience bed go down with the voice
 	if fade_start >= 0:
 		var f0 := head + fade_start
-		for i in range(f0, pcm.size()):
+		for i in range(f0, wet.size()):
 			var u := float(i - f0) / maxf(1.0, float(fade_n))
-			pcm[i] *= 0.0 if u >= 1.0 else 0.5 + 0.5 * cos(PI * u)
+			wet[i] *= 0.0 if u >= 1.0 else 0.5 + 0.5 * cos(PI * u)
 
 	var path := TAKE_DIR + "/take_%d.wav" % stamp
-	var abs_path := _write_wav(path, pcm)
+	var abs_path := _write_wav(path, wet, 2 if leans else 1)
 	# ALWAYS written now, words or not: the book medium reads the chapter from it.
 	var side := FileAccess.open(path.get_basename() + ".json", FileAccess.WRITE)
 	if side != null:
@@ -4025,22 +4030,26 @@ func export_take() -> String:
 	return abs_path
 
 
-## PCM16 mono WAV, written atomically - the exporter's render process may open
+## PCM16 WAV, written atomically - the exporter's render process may open
 ## this file while we are still writing it otherwise, which is how a truncated
-## take once made a render record silence forever.
-func _write_wav(path: String, pcm: PackedFloat32Array) -> String:
+## take once made a render record silence forever. One channel writes each frame's
+## left (with no lean the two are the same), two write both.
+func _write_wav(path: String, frames: PackedVector2Array, channels: int) -> String:
 	var tmp := path + ".part"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
 		return ""
 	var bytes := PackedByteArray()
-	bytes.resize(pcm.size() * 2)
-	for i in pcm.size():
-		bytes.encode_s16(i * 2, int(clampf(pcm[i], -1.0, 1.0) * 32767.0))
+	bytes.resize(frames.size() * 2 * channels)
+	for i in frames.size():
+		var v := frames[i]
+		bytes.encode_s16(i * 2 * channels, int(clampf(v.x, -1.0, 1.0) * 32767.0))
+		if channels == 2:
+			bytes.encode_s16(i * 4 + 2, int(clampf(v.y, -1.0, 1.0) * 32767.0))
 	f.store_buffer("RIFF".to_ascii_buffer()); f.store_32(36 + bytes.size())
 	f.store_buffer("WAVE".to_ascii_buffer()); f.store_buffer("fmt ".to_ascii_buffer())
-	f.store_32(16); f.store_16(1); f.store_16(1); f.store_32(_sr)
-	f.store_32(_sr * 2); f.store_16(2); f.store_16(16)
+	f.store_32(16); f.store_16(1); f.store_16(channels); f.store_32(_sr)
+	f.store_32(_sr * 2 * channels); f.store_16(2 * channels); f.store_16(16)
 	f.store_buffer("data".to_ascii_buffer()); f.store_32(bytes.size())
 	f.store_buffer(bytes)
 	f.close()

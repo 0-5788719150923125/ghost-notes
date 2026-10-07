@@ -12,6 +12,13 @@ class_name Props
 ## exists.
 ## Geometry is built here rather than from CSG nodes because a part's lobes, twist and wax drips
 ## displace it as it is built, which a spun polygon cannot do.
+##
+## FREE FORM, NOT FREE TRIANGLES. An agent draws its own curves - a lathe's profile, a tube's or a
+## loft's path, an extrude's or a section's outline, any point of them rounded or kept crisp - and
+## any part can be WARPED whole (bent, twisted, tapered, leaned, scaled, wobbled). It never writes
+## vertices: typed out by hand they come back inside out, holed and unshaded, and skip the foot and
+## the heaps that every built shape feeds. A smooth curve keeps a flat base and top flat ([method
+## _lathe]); a set dresser's teapot drawn through every point came out a ball.
 
 ## The most parts a thing has (every part in every group counted), points a profile or path has,
 ## copies a part makes, groups deep a part may sit, parts a thing makes in all (every copy of every
@@ -22,6 +29,11 @@ const MAX_COPIES := 24
 const MAX_DEPTH := 3
 const MAX_INSTANCES := 96
 const MAX_WICKS := 6
+## The most cross-sections a loft has.
+const MAX_SECTIONS := 12
+## How far apart a warped part's points may be, meters: a warp moves the points a shape has, and a
+## candle's wall drawn top and bottom only stayed straight however far it was bent.
+const WARP_STEP := 0.005
 ## The largest anything may be, centimeters: a thing past it is scaled down whole.
 const MAX_SIZE := 60.0
 ## How high above the cloth a thing's FOOT is measured (meters): what a card sliding across the
@@ -32,21 +44,27 @@ const CLEAR := 0.8
 
 ## THE SHAPES a part can be, and what they are for.
 const SHAPES := {
-	"lathe": "a solid turned about the vertical axis, as on a lathe: vessels, candles, candlesticks, cups, bowls, bottles, vases, stems, bells, finials, coins. `profile`: [radius, height] points from the middle of the bottom outward and up the outside; a HOLLOW thing goes on over its rim and back down the inside to the middle of its inner floor - a bowl is [[0,0],[3,0],[6,4],[6.4,4.2],[5.8,4],[2.8,0.6],[0,0.6]]. Optional: `smooth` true curves through the points instead of joining them straight; `sides` 3-12 cuts it flat-sided (6 is hexagonal); `lobes` bulges round it (a scalloped bowl, a melon, a fluted column) with `lobe_depth` 0.05-0.4; `twist` in degrees from bottom to top (a twisted taper). A candle's wax has `wick` true - its flame is lit at the middle of its top, which is melted into a shallow pool - or `wicks` 2-6, set round the top (three make a triangle), or `wicks` [[x, z], ...] placing each, centimeters from the middle; and `drips` 0-1.",
+	"lathe": "a solid turned about the vertical axis, as on a lathe: vessels, candles, candlesticks, cups, bowls, bottles, vases, stems, bells, finials, coins. `profile`: [radius, height] points from the middle of the bottom outward and up the outside; a HOLLOW thing goes on over its rim and back down the inside to the middle of its inner floor - a bowl is [[0,0],[3,0],[6,4],[6.4,4.2],[5.8,4],[2.8,0.6],[0,0.6]]. Optional: `smooth` true curves through the points instead of joining them straight (a flat base and a flat top stay flat); a point written [radius, height, r] has its corner rounded r centimeters, and [radius, height, 0] keeps a crisp corner in a smooth profile - a foot, a rim, the edge where a lid sits; `sides` 3-12 cuts it flat-sided (6 is hexagonal); `lobes` bulges round it (a scalloped bowl, a melon, a fluted column) with `lobe_depth` 0.05-0.4; `twist` in degrees from bottom to top (a twisted taper). A candle's wax has `wick` true - its flame is lit at the middle of its top, which is melted into a shallow pool - or `wicks` 2-6, set round the top (three make a triangle), or `wicks` [[x, z], ...] placing each, centimeters from the middle; and `drips` 0-1.",
 	"box": "a block with rounded edges: books, boxes, tins, slabs, trays, a plinth. `size` [width, height, depth]; `round` the edges' radius; `taper` 0-0.9 narrows it toward the top.",
 	"ball": "a sphere, stretched to `size` [width, height, depth]: crystal balls, beads, fruit, eggs, orbs, pebbles, tumbled stones. `lumpy` 0-1 makes it irregular like a tumbled stone or a fruit; `facets` true cuts it into flat faces like a rough, raw stone.",
 	"point": "one crystal: a prism with a pointed end, standing up from its base - a tower, a single point. `radius`, `length` (the prism), `tip` (the point), `sides` (6 for quartz).",
 	"cluster": "a crystal cluster: points growing out of one rough rock. `count` 3-24, `radius` (the rock), `length` [shortest, longest], `spread` (degrees the outer points lean out), `thickness` (a point's width over its length, 0.1-0.3), `base` (the rock's material, if not the crystal's).",
 	"geode": "a geode broken open: a rough round rock, hollow, the hollow lined with crystal points growing in toward its middle. It lies open side up; `turn` [30, 0, 0] tips the opening toward the reader. `radius` (the rock's), `rind` (the thickness of its shell), `length` (the crystals'), `base` (the rock's material; plain gray rock if not given). The part's own material is the crystals'.",
 	"ring": "a ring lying flat round the vertical axis, resting on whatever is under it: rims, rings, bangles, a coiled rope. `radius` (to the middle of the band), `thickness` (the band's), `arc` (degrees, less than 360 for an open ring).",
-	"tube": "a round rod along a path: handles, stems, incense sticks, wands, branches, wire, a feather's quill. `path` [[x,y,z], ...] in the thing's own space, `radius` (or `radii`, one per point), `smooth` (default true).",
+	"tube": "a round rod along a path: handles, stems, incense sticks, wands, branches, wire, a feather's quill, a pipe. `path` [[x,y,z], ...] in the thing's own space, `radius` (or `radii`, one per point, to taper or swell it). It curves through its points (`smooth` false: joined straight, every bend a crisp elbow, like a bent wire); a point written [x, y, z, r] bends round r centimeters there (a pipe's elbow), and [x, y, z, 0] is a crisp kink in a smooth path. `wall` (centimeters) makes it hollow and open at both ends: a pipe, a straw, a spout.",
+	"loft": "a form swept along a path through CROSS-SECTIONS that change as it goes - what a lathe, a tube or an extrude cannot make: a spout wide at the body and narrow at its lip, a blade of a snake plant or an aloe, a cactus pad, a horn, a spoon's handle, a shell's whorl, a curling leaf with real thickness. `path` [[x,y,z], ...] as a tube's (with its corners), or none: it rises straight up `height`. `sections` [{`at` 0-1 along the path, `outline` (as an extrude's, or `points` [[x, z], ...]), `size` [width, thickness] or one number, `sides`, `scale`, `turn` (degrees about the path), `shift` [x, z]}, ...]: the form blends smoothly from each section to the next (`smooth` false: straight); a section of `size` 0 closes to a point. Width runs across the path and thickness the other way - the thing's x and z while the path runs up. An outline, size or sides written on the part itself is every section's unless it says otherwise. `wall` makes it hollow and open at both ends.",
+	"coil": "a band wound round the vertical axis: an incense coil, a spring, a coiled cord, a curling tendril, a spiral of wire. `turns`, `radius` (where it starts) and `radius2` (where it ends: larger for a flat spiral), `height` (how far it climbs over all its turns; 0 lies flat), `thickness` (the band's, as a ring's).",
 	"sheet": "a thin flat piece lying on the cloth unless turned, placed by its middle: a leaf, a petal, a feather, a page, a scrap of cloth. `outline` (leaf, petal, feather, oval or rect - or `points` [[x,z], ...] for any outline), `size` [width, length] (its length runs front to back), `bend` -1..1 (the tip curls up), `fold` 0-1 (the sides lift).",
 	"bloom": "a flower head, petals in rings round a small middle: `petals`, `layers` 1-4, `radius`, `cup` 0 (open flat) to 1 (a closed bud), `width` (a petal's width over its length).",
-	"extrude": "an outline raised straight up: trays, tiles, plaques, tablets, boxes, dishes and candles of any plan - a star, a hexagon, a heart. `outline` (polygon with `sides` 3-12, star with `sides` points, circle, rect or heart - or `points` [[x, z], ...] for any outline, which may go in and out), `size` [width, depth], `height`; optional `taper` 0-0.9 (narrower at the top), `bevel` (centimeters cut off the top edge), `wall` (centimeters: hollow, as a tray or a dish is, its floor as thick as its wall). A wax extrude takes `wick` or `wicks` as a turned candle does.",
+	"extrude": "an outline raised straight up: trays, tiles, plaques, tablets, boxes, dishes and candles of any plan - a star, a hexagon, a heart. `outline` (polygon with `sides` 3-12, star with `sides` points, circle, rect, heart, lens (pointed at both ends, as a leaf or an eye is) or drop (round behind, pointed in front) - or `points` [[x, z], ...] for any outline, which may go in and out), `size` [width, depth], `height`; optional `taper` 0-0.9 (narrower at the top), `bevel` (centimeters cut off the top edge), `wall` (centimeters: hollow, as a tray or a dish is, its floor as thick as its wall). A wax extrude takes `wick` or `wicks` as a turned candle does.",
 }
 
-## AN EXTRUDE's named outlines.
-const EXTRUDE_OUTLINES := ["polygon", "star", "circle", "rect", "heart"]
+## AN EXTRUDE's (and a loft section's) named outlines.
+const EXTRUDE_OUTLINES := ["polygon", "star", "circle", "rect", "heart", "lens", "drop"]
+
+## A WARP's numbers and their ranges (`scale` and `lean` are vectors, made safe on their own).
+const WARPS := {"taper": Vector2(-1.0, 0.95), "twist": Vector2(-1080.0, 1080.0), "bend": Vector2(-270.0, 270.0),
+	"bend_to": Vector2(-360.0, 360.0), "wobble": Vector2(0.0, 1.0)}
 
 ## THE MATERIALS, each with its shader `code` and its defaults. `polish` is how smooth it is,
 ## `wear` how used, `pattern` how strong its natural pattern, `clarity` how far light goes into
@@ -135,6 +153,10 @@ static func describe() -> String:
 	lines.append("COPIES: a part's `copies` repeats it - \"copies\": {\"ring\": {\"count\": 5, \"radius\": 4}} round the vertical axis (`arc` less than 360 makes it an arc, from `start` degrees: 0 the thing's right, 90 its front, 270 its back), {\"line\": {\"count\": 3, \"step\": [x, y, z]}}, {\"scatter\": {\"count\": 9, \"radius\": 6}} strewn about, never touching (stones set out on the cloth), or {\"heap\": {\"count\": 12, \"radius\": 3}} piled up, each resting on the ones under it (stones heaped in a dish or a shell, a pile of coins) - with `jitter` 0-1 so the copies differ a little. A copied part's `material` can be a LIST of names, which its copies take in turn: a handful of stones of five kinds, books in three bindings. A copied candle's wax lights a flame on every copy.")
 	lines.append("")
 	lines.append("GROUPS: a part can be a GROUP instead of a shape - {\"parts\": [...], \"at\", \"turn\", \"copies\"} - whose own parts are placed in its space as a thing's are in the thing's; repeat the group and all of it repeats. A candelabra's arm, its cup and its taper are one group copied round in a ring; a group can hold groups, %d deep. A list of materials on a part inside a copied group goes to the group's copies in turn. Every part in every group counts toward the %d a thing may have." % [MAX_DEPTH, MAX_PARTS])
+	lines.append("")
+	lines.append("WARP: any part, whatever its shape, can be reshaped whole by its `warp` - {\"scale\" [x, y, z] (stretched or squashed: an oval dish is a turned bowl with scale [1, 1, 0.7]), \"taper\" -1 to 0.95 (narrower toward its top; below 0, wider), \"twist\" (degrees it turns about its upright middle from bottom to top), \"lean\" [x, z] (its top moved that many centimeters, its base kept), \"bend\" (degrees: it bows along its height until its top has turned that far, toward \"bend_to\" - 0 its right, 90 its front, 180 its left, 270 its back), \"wobble\" 0-1 (the unevenness of a thing made by hand - a hand-thrown pot, a gnarled root, a misshapen fruit; 0.1-0.3 is plenty)}, applied in that order. A bend is a banana's curve, a candle slumped in the heat, a horn's sweep; a whole bent rod with kinks in it is a tube's path.")
+	lines.append("")
+	lines.append("WHERE PARTS MEET: a spout, a handle, an arm, a stem or a branch grows OUT of what it joins - start it a little inside that part, so no gap or seam of light shows. A thing is a few parts that join well, not many small ones floating side by side. A vessel's profile carries its character - foot, belly, shoulder, neck, lip - and most stand on a flat base. A spout leaves the body wide and low and narrows as it rises to a lip about level with the rim; a handle is a rod bent round, both ends sunk into the body; a lid is its own part, sitting in or on the rim, with a knob.")
 	lines.append("")
 	lines.append("FLAMES: a thing's flames burn as ONE light, however many it has - a candelabra's tapers, a pillar's three wicks, a dish of tea lights - up to %d on one thing." % CardTable.MAX_FLAMES)
 	return "\n".join(lines)
@@ -252,6 +274,7 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			if prof.size() < 2:
 				return {}
 			out["profile"] = prof
+			out["rounds"] = _rounds(p.get("profile"), 2)
 			out["smooth"] = _flag(p.get("smooth"))
 			var sides := int(_num(p.get("sides"), 0.0, 0.0, 16.0))
 			out["sides"] = sides if sides >= 3 else 0
@@ -322,6 +345,7 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			if path.size() < 2:
 				return {}
 			out["path"] = path
+			out["rounds"] = _rounds(p.get("path"), 3)
 			out["radius"] = _num(p.get("radius"), 0.3, 0.03, 10.0)
 			var radii := PackedFloat32Array()
 			if p.get("radii") is Array:
@@ -329,6 +353,21 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 					radii.append(_num(x, float(out["radius"]), 0.0, 10.0))
 			out["radii"] = radii
 			out["smooth"] = _flag(p.get("smooth"), true)
+			out["wall"] = _num(p.get("wall"), 0.0, 0.0, 10.0)
+		"loft":
+			var path := _points3(p.get("path"), MAX_SIZE)
+			out["path"] = path if path.size() >= 2 else []
+			out["rounds"] = _rounds(p.get("path"), 3) if path.size() >= 2 else PackedFloat32Array()
+			out["height"] = _num(p.get("height"), 10.0, 0.1, MAX_SIZE)
+			out["smooth"] = _flag(p.get("smooth"), true)
+			out["wall"] = _num(p.get("wall"), 0.0, 0.0, 10.0)
+			out["sections"] = _sections(p)
+		"coil":
+			out["radius"] = _num(p.get("radius"), 2.0, 0.1, MAX_SIZE * 0.5)
+			out["radius2"] = _num(p.get("radius2"), float(out["radius"]), 0.0, MAX_SIZE * 0.5)
+			out["turns"] = _num(p.get("turns"), 3.0, 0.25, 20.0)
+			out["height"] = _num(p.get("height"), 0.0, 0.0, MAX_SIZE)
+			out["thickness"] = _num(p.get("thickness"), 0.3, 0.03, 5.0)
 		"sheet":
 			var outline := String(p.get("outline", "leaf")).strip_edges().to_lower()
 			out["outline"] = outline if OUTLINES.has(outline) else "leaf"
@@ -346,6 +385,92 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			out["width"] = _num(p.get("width"), 0.55, 0.2, 1.2)
 	out["ornament"] = _sanitize_ornament(p.get("ornament"))
 	out["copies"] = _copies_of(p)
+	out["warp"] = _sanitize_warp(p.get("warp"))
+	return out
+
+
+## A LOFT'S SECTIONS made safe, sorted along its path: each `{outline, points, size, sides, scale,
+## turn, shift, at}`. A section names its own outline or takes the part's; a section written as a
+## bare number is a size. One with no `at` is set between its neighbors, the first at 0 and the last
+## at 1 when they have none.
+static func _sections(p: Dictionary) -> Array:
+	var base := _section(p, {"outline": "circle", "points": [], "size": Vector2(2.0, 2.0), "sides": 6})
+	var out: Array = []
+	for s in ((p["sections"] as Array).slice(0, MAX_SECTIONS) if p.get("sections") is Array else []):
+		if s is Dictionary:
+			out.append(_section(s as Dictionary, base))
+		elif s is float or s is int:
+			out.append(_section({"size": s}, base))
+	if out.is_empty():
+		base["at"] = 0.0
+		return [base]
+	var n := out.size()
+	if float((out[0] as Dictionary)["at"]) < 0.0:
+		out[0]["at"] = 0.0
+	if n > 1 and float((out[n - 1] as Dictionary)["at"]) < 0.0:
+		out[n - 1]["at"] = 1.0
+	var i := 1
+	while i < n:
+		if float((out[i] as Dictionary)["at"]) >= 0.0:
+			i += 1
+			continue
+		var j := i
+		while float((out[j] as Dictionary)["at"]) < 0.0:
+			j += 1
+		var a := float((out[i - 1] as Dictionary)["at"])
+		var b := float((out[j] as Dictionary)["at"])
+		for k in range(i, j):
+			out[k]["at"] = lerpf(a, b, float(k - i + 1) / float(j - i + 1))
+		i = j
+	out.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return float(x["at"]) < float(y["at"]))
+	return out
+
+
+static func _section(d: Dictionary, base: Dictionary) -> Dictionary:
+	var outline := String(d.get("outline", base.get("outline", "circle"))).strip_edges().to_lower()
+	var pts := _points2(d.get("points"), Vector2(-MAX_SIZE, -MAX_SIZE), Vector2(MAX_SIZE, MAX_SIZE))
+	if pts.size() < 3:
+		pts = [] if d.has("outline") else base.get("points", [])
+	var size: Vector2 = base.get("size", Vector2(2.0, 2.0))
+	if d.get("size") is float or d.get("size") is int:
+		var s := _num(d["size"], 2.0, 0.0, MAX_SIZE)
+		size = Vector2(s, s)
+	else:
+		var sz := _points2([d.get("size")], Vector2.ZERO, Vector2(MAX_SIZE, MAX_SIZE))
+		if not sz.is_empty():
+			size = sz[0]
+	var shift := _points2([d.get("shift")], Vector2(-MAX_SIZE, -MAX_SIZE), Vector2(MAX_SIZE, MAX_SIZE))
+	var at: Variant = d.get("at")
+	return {"outline": outline if EXTRUDE_OUTLINES.has(outline) else "circle", "points": pts, "size": size,
+		"sides": int(_num(d.get("sides"), float(base.get("sides", 6)), 3.0, 12.0)),
+		"scale": _num(d.get("scale"), 1.0, 0.0, 10.0), "turn": _num(d.get("turn"), 0.0, -1080.0, 1080.0),
+		"shift": shift[0] if not shift.is_empty() else Vector2.ZERO,
+		"at": clampf(float(at), 0.0, 1.0) if (at is float or at is int) else -1.0}
+
+
+## A part's WARP made safe: only what it changes, each in range.
+static func _sanitize_warp(w: Variant) -> Dictionary:
+	if not (w is Dictionary):
+		return {}
+	var d: Dictionary = w
+	var out := {}
+	if d.get("scale") is float or d.get("scale") is int:
+		var s := _num(d["scale"], 1.0, 0.1, 4.0)
+		out["scale"] = Vector3(s, s, s)
+	elif d.get("scale") is Array:
+		out["scale"] = _vec3(d["scale"], Vector3.ONE, 4.0, 0.1)
+	if out.get("scale", Vector3.ONE) == Vector3.ONE:
+		out.erase("scale")
+	for k in WARPS:
+		var r: Vector2 = WARPS[k]
+		var x := _num(d.get(k), 0.0, r.x, r.y)
+		if x != 0.0:
+			out[k] = x
+	var lean := _points2([d.get("lean")], Vector2(-MAX_SIZE, -MAX_SIZE), Vector2(MAX_SIZE, MAX_SIZE))
+	if not lean.is_empty() and lean[0] != Vector2.ZERO:
+		out["lean"] = lean[0]
+	if not out.has("bend"):
+		out.erase("bend_to")
 	return out
 
 
@@ -504,6 +629,25 @@ static func _points2(v: Variant, lo: Vector2, hi: Vector2) -> Array:
 			break
 		if q is Array and (q as Array).size() >= 2 and (q[0] is float or q[0] is int) and (q[1] is float or q[1] is int):
 			out.append(Vector2(float(q[0]), float(q[1])).clamp(lo, hi))
+	return out
+
+
+## Each kept point's ROUNDING, one for one with [method _points2] ([param dims] 2) or [method
+## _points3] (3): the number an agent wrote after the point's coordinates - the radius its corner
+## is rounded to, in centimeters, 0 a crisp corner - or -1 where it wrote none.
+static func _rounds(v: Variant, dims: int) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	if not (v is Array):
+		return out
+	for q in (v as Array):
+		if out.size() >= MAX_POINTS:
+			break
+		if not (q is Array) or (q as Array).size() < dims:
+			continue
+		var a: Array = q
+		if dims == 2 and not ((a[0] is float or a[0] is int) and (a[1] is float or a[1] is int)):
+			continue
+		out.append(clampf(float(a[dims]), 0.0, 20.0) if a.size() > dims and (a[dims] is float or a[dims] is int) else -1.0)
 	return out
 
 
@@ -741,10 +885,10 @@ static func see_through(m: Dictionary) -> bool:
 ## Whether a part is SOLID rather than a vessel: a ball, a crystal, a rod - or a turned part whose
 ## profile never goes back down (a hollow one climbs its outside and comes down its inside).
 static func _solid(part: Dictionary) -> bool:
-	if String(part.get("shape", "")) == "extrude":
+	if String(part.get("shape", "")) in ["extrude", "tube", "loft"]:
 		return float(part.get("wall", 0.0)) <= 0.0
 	if String(part.get("shape", "")) != "lathe":
-		return String(part.get("shape", "")) in ["ball", "point", "cluster", "geode", "tube", "ring"]
+		return String(part.get("shape", "")) in ["ball", "point", "cluster", "geode", "ring", "coil"]
 	var prof: Array = part.get("profile", [])
 	var top := -INF
 	for q in prof:
@@ -1168,8 +1312,16 @@ static func _bounds(geos: Array, own: Transform3D) -> Dictionary:
 
 
 ## The part's geometry, in its own space (meters): `[{geo, material?}]` - a cluster's rock is a
-## second entry when it has a material of its own.
+## second entry when it has a material of its own - reshaped by its WARP, all of it as one.
 static func _geometry(p: Dictionary, rng: RandomNumberGenerator) -> Array:
+	var geos := _shaped(p, rng)
+	var w: Dictionary = p.get("warp", {})
+	if not w.is_empty() and not geos.is_empty():
+		_warp(geos, w, rng.randi())
+	return geos
+
+
+static func _shaped(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 	match String(p["shape"]):
 		"lathe":
 			return [{"geo": _lathe(p, rng)}]
@@ -1202,7 +1354,98 @@ static func _geometry(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 			return [{"geo": _bloom(p, rng)}]
 		"extrude":
 			return [{"geo": _extrude(p)}]
+		"loft":
+			return [{"geo": _loft(p)}]
+		"coil":
+			return [{"geo": _coil(p)}]
 	return []
+
+
+## A WARP on a part's geometry [param geos], all of it as one: every point moved ([method
+## _warped]), its normal turned as the surface round it was (by the inverse transpose of the
+## warp's own slope there, measured), and the part's top and wicks moved with it. Heights are
+## measured from the part's own bottom, and the middle it narrows, twists and leans about is the
+## middle of what it covers seen from above. [param salt] seeds the wobble.
+static func _warp(geos: Array, w: Dictionary, salt: int) -> void:
+	var box := AABB()
+	var first := true
+	for e in geos:
+		for q in ((e as Dictionary)["geo"] as Tris).v:
+			box = AABB(q, Vector3.ZERO) if first else box.expand(q)
+			first = false
+	if first:
+		return
+	var noise: FastNoiseLite = null
+	var ext := maxf(box.size.x, maxf(box.size.y, box.size.z))
+	if float(w.get("wobble", 0.0)) > 0.0:
+		noise = FastNoiseLite.new()
+		noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+		noise.seed = salt
+		noise.frequency = 1.6 / maxf(ext, 0.005)
+	var frame := {"mid": Vector3(box.get_center().x, box.position.y, box.get_center().z), "h": maxf(box.size.y, 0.0005),
+		"ext": ext, "noise": noise}
+	var done := {}
+	var e := 0.0001
+	for g in geos:
+		var t: Tris = (g as Dictionary)["geo"]
+		for i in t.v.size():
+			var q := t.v[i]
+			if not done.has(q):
+				# the slope of the warp here, from a step either way along each axis
+				var jx := (_warped(q + Vector3(e, 0, 0), w, frame) - _warped(q - Vector3(e, 0, 0), w, frame)) / (2.0 * e)
+				var jy := (_warped(q + Vector3(0, e, 0), w, frame) - _warped(q - Vector3(0, e, 0), w, frame)) / (2.0 * e)
+				var jz := (_warped(q + Vector3(0, 0, e), w, frame) - _warped(q - Vector3(0, 0, e), w, frame)) / (2.0 * e)
+				var jac := Basis(jx, jy, jz)
+				done[q] = [_warped(q, w, frame), jac.inverse().transposed() if absf(jac.determinant()) > 1e-9 else Basis()]
+			var hit: Array = done[q]
+			t.v[i] = hit[0]
+			var nn: Vector3 = (hit[1] as Basis) * t.n[i]
+			if nn.length() > 1e-9:
+				t.n[i] = nn.normalized()
+		t.top = _warped(t.top, w, frame)
+		for k in t.wicks.size():
+			t.wicks[k] = _warped(t.wicks[k], w, frame)
+
+
+## Where point [param q] goes under warp [param w], in this order: scaled about the middle of the
+## part's base, narrowed (or widened) toward its top, twisted about its middle, its top leaned over,
+## bent along its height toward `bend_to` as a rod is bent round a drum (each slice turned square to
+## the curve, so its thickness is kept), and wobbled by a smooth field that depends only on where the
+## point was (so seams and crisp corners move together and never open).
+static func _warped(q: Vector3, w: Dictionary, frame: Dictionary) -> Vector3:
+	var mid: Vector3 = frame["mid"]
+	var h: float = frame["h"]
+	var sc: Vector3 = w.get("scale", Vector3.ONE)
+	var p := mid + (q - mid) * sc
+	var f := (q.y - mid.y) / h
+	var taper := float(w.get("taper", 0.0))
+	if taper != 0.0:
+		var k := 1.0 - taper * f
+		p = Vector3(mid.x + (p.x - mid.x) * k, p.y, mid.z + (p.z - mid.z) * k)
+	var twist := deg_to_rad(float(w.get("twist", 0.0))) * f
+	if twist != 0.0:
+		var r := Vector2(p.x - mid.x, p.z - mid.z).rotated(twist)
+		p = Vector3(mid.x + r.x, p.y, mid.z + r.y)
+	var lean: Vector2 = w.get("lean", Vector2.ZERO)
+	p += Vector3(lean.x, 0.0, lean.y) * 0.01 * f
+	var bend := deg_to_rad(float(w.get("bend", 0.0)))
+	if absf(bend) > 1e-4:
+		# toward bend_to: its own x there, bent round a center that far out, back again
+		var to := deg_to_rad(float(w.get("bend_to", 0.0)))
+		var d := Vector2(p.x - mid.x, p.z - mid.z)
+		var lx := d.x * cos(to) + d.y * sin(to)
+		var lz := -d.x * sin(to) + d.y * cos(to)
+		var R := h * sc.y / bend
+		var phi := (p.y - mid.y) / R
+		var bx := R - (R - lx) * cos(phi)
+		var by := (R - lx) * sin(phi)
+		p = Vector3(mid.x + bx * cos(to) - lz * sin(to), mid.y + by, mid.z + bx * sin(to) + lz * cos(to))
+	var noise: FastNoiseLite = frame["noise"]
+	if noise != null:
+		var amp := float(w.get("wobble", 0.0)) * 0.05 * float(frame["ext"])
+		p += Vector3(noise.get_noise_3dv(q), noise.get_noise_3dv(q + Vector3(31.4, 0.0, 0.0)),
+			noise.get_noise_3dv(q + Vector3(0.0, 0.0, 47.3))) * amp
+	return p
 
 
 # --- the shapes -------------------------------------------------------------------------------
@@ -1216,8 +1459,20 @@ static func _lathe(p: Dictionary, rng: RandomNumberGenerator) -> Tris:
 	var pts: Array = []
 	for q in (p["profile"] as Array):
 		pts.append((q as Vector2) * 0.01)
-	if bool(p.get("smooth", false)) and pts.size() >= 3:
-		pts = _smooth2(pts)
+	var rounds := _rounds_m(p, pts.size())
+	var smooth := bool(p.get("smooth", false))
+	# A FLAT BASE AND A FLAT TOP STAY FLAT in a smooth profile: curved through, a teapot's base sagged
+	# below the cloth and its top domed up, and the pot came out a ball
+	if smooth and pts.size() >= 3:
+		var m := pts.size()
+		if rounds[1] < 0.0 and (pts[0] as Vector2).x <= 0.0002 and absf((pts[1] as Vector2).y - (pts[0] as Vector2).y) < 0.0001:
+			rounds[1] = 0.0
+		if rounds[m - 2] < 0.0 and (pts[m - 1] as Vector2).x <= 0.0002 and absf((pts[m - 2] as Vector2).y - (pts[m - 1] as Vector2).y) < 0.0001:
+			rounds[m - 2] = 0.0
+	if pts.size() >= 3:
+		pts = _curve(pts, rounds, smooth, 6)["pts"]
+		for i in pts.size():
+			pts[i] = Vector2(maxf((pts[i] as Vector2).x, 0.0), (pts[i] as Vector2).y)
 	if (pts[0] as Vector2).x > 0.0002:
 		pts.insert(0, Vector2(0.0, (pts[0] as Vector2).y))
 	if (pts[-1] as Vector2).x > 0.0002:
@@ -1230,7 +1485,7 @@ static func _lathe(p: Dictionary, rng: RandomNumberGenerator) -> Tris:
 		pts = _pool(pts)
 	var twist := deg_to_rad(float(p.get("twist", 0.0)))
 	var drips := float(p.get("drips", 0.0))
-	if absf(twist) > 0.01 or drips > 0.0:
+	if absf(twist) > 0.01 or drips > 0.0 or _fine(p):
 		pts = _subdivide(pts, 0.004)
 	var y0 := INF
 	var y1 := -INF
@@ -1420,29 +1675,108 @@ static func _subdivide(pts: Array, step: float) -> Array:
 	return out
 
 
-## A curve through [param pts] (Catmull-Rom), its ends kept.
-static func _smooth2(pts: Array) -> Array:
-	var out: Array = []
-	var n := pts.size()
-	for i in n - 1:
-		var p0: Vector2 = pts[maxi(i - 1, 0)]
-		var p1: Vector2 = pts[i]
-		var p2: Vector2 = pts[i + 1]
-		var p3: Vector2 = pts[mini(i + 2, n - 1)]
-		var steps := 6
-		for k in steps:
-			var t := float(k) / float(steps)
-			out.append(_cr(p0, p1, p2, p3, t))
-	out.append(pts[n - 1])
-	for i in out.size():
-		out[i] = Vector2(maxf((out[i] as Vector2).x, 0.0), (out[i] as Vector2).y)
+## A part's corner roundings in meters, one per point of its profile or path (-1 where none was
+## written).
+static func _rounds_m(p: Dictionary, n: int) -> PackedFloat32Array:
+	var src: PackedFloat32Array = p.get("rounds", PackedFloat32Array())
+	var out := PackedFloat32Array()
+	for i in n:
+		var r := src[i] if i < src.size() else -1.0
+		out.append(r * 0.01 if r >= 0.0 else -1.0)
 	return out
 
 
-static func _cr(p0: Variant, p1: Variant, p2: Variant, p3: Variant, t: float) -> Variant:
-	var t2 := t * t
-	var t3 := t2 * t
-	return 0.5 * ((2.0 * p1) + (-p0 + p2) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
+## A LINE THROUGH POINTS (Vector2 or Vector3), as a profile or a path is drawn: `pts`, each one's
+## place among the points it was drawn from (`src`, fractional between them, for anything given per
+## point - a tube's radii) and whether it is a `corner`. A point with a rounding ([param rounds],
+## the same units, -1 for none) has its corner cut by an arc that far round; one rounded 0 is a crisp
+## corner. The rest are curved through when [param smooth] - a centripetal Catmull-Rom, which never
+## loops or overshoots between points far apart and close together as the uniform one did - and
+## are crisp corners when not. [param steps] is how many pieces the longest span is cut into.
+static func _curve(pts: Array, rounds: PackedFloat32Array, smooth: bool, steps := 8) -> Dictionary:
+	var P: Array = []
+	var R := PackedFloat32Array()
+	var I := PackedFloat32Array()
+	for i in pts.size():
+		if not P.is_empty() and (pts[i] - P[-1]).length() < 1e-6:
+			continue
+		P.append(pts[i])
+		R.append(rounds[i] if i < rounds.size() else -1.0)
+		I.append(float(i))
+	var n := P.size()
+	var ctl: Array = []
+	var src := PackedFloat32Array()
+	var mark := PackedByteArray()
+	for i in n:
+		var r := R[i]
+		if i > 0 and i < n - 1 and r > 0.0:
+			var la: float = (P[i - 1] - P[i]).length()
+			var lb: float = (P[i + 1] - P[i]).length()
+			var u: Variant = (P[i - 1] - P[i]) / la
+			var v: Variant = (P[i + 1] - P[i]) / lb
+			var half := acos(clampf(u.dot(v), -1.0, 1.0)) * 0.5
+			if half > 0.02 and half < PI * 0.5 - 0.02:
+				# THE ROUNDING: from where an arc of radius r would leave one side to where it meets the
+				# other, never more than half of either side
+				var d := minf(r / tan(half), 0.5 * minf(la, lb))
+				var a1: Variant = P[i] + u * d
+				var b1: Variant = P[i] + v * d
+				var sa := I[i] - d / la * (I[i] - I[i - 1])
+				var sb := I[i] + d / lb * (I[i + 1] - I[i])
+				for k in 7:
+					var t := float(k) / 6.0
+					ctl.append(a1 * (1.0 - t) * (1.0 - t) + P[i] * 2.0 * t * (1.0 - t) + b1 * t * t)
+					src.append(lerpf(sa, sb, t))
+					mark.append(0)
+				continue
+		ctl.append(P[i])
+		src.append(I[i])
+		mark.append(1 if i > 0 and i < n - 1 and (r == 0.0 or (r < 0.0 and not smooth)) else 0)
+	var m := ctl.size()
+	if not smooth or m < 3:
+		return {"pts": ctl, "src": src, "corner": mark}
+	var mean := 0.0
+	for i in m - 1:
+		mean += (ctl[i + 1] - ctl[i]).length()
+	mean = maxf(mean / float(m - 1), 1e-6)
+	var out: Array = []
+	var os := PackedFloat32Array()
+	var oc := PackedByteArray()
+	var a := 0
+	while a < m - 1:
+		# a RUN, from corner to corner, curved through; its ends continue straight on past themselves
+		var b := a + 1
+		while b < m - 1 and mark[b] == 0:
+			b += 1
+		for i in range(a, b):
+			var p0: Variant = ctl[i - 1] if i > a else ctl[a] * 2.0 - ctl[a + 1]
+			var p3: Variant = ctl[i + 2] if i + 1 < b else ctl[b] * 2.0 - ctl[b - 1]
+			var k_n := clampi(ceili(float(steps) * (ctl[i + 1] - ctl[i]).length() / mean), 1, steps)
+			for k in k_n:
+				var t := float(k) / float(k_n)
+				out.append(_ccr(p0, ctl[i], ctl[i + 1], p3, t))
+				os.append(lerpf(src[i], src[i + 1], t))
+				oc.append(mark[i] if k == 0 else 0)
+		a = b
+	out.append(ctl[m - 1])
+	os.append(src[m - 1])
+	oc.append(0)
+	return {"pts": out, "src": os, "corner": oc}
+
+
+## A point [param t] (0..1) of the way from [param p1] to [param p2] on a centripetal Catmull-Rom
+## curve (Barry and Goldman's form).
+static func _ccr(p0: Variant, p1: Variant, p2: Variant, p3: Variant, t: float) -> Variant:
+	var t1: float = sqrt(maxf((p1 - p0).length(), 1e-6))
+	var t2: float = t1 + sqrt(maxf((p2 - p1).length(), 1e-6))
+	var t3: float = t2 + sqrt(maxf((p3 - p2).length(), 1e-6))
+	var tt := lerpf(t1, t2, t)
+	var a1: Variant = p0 * ((t1 - tt) / t1) + p1 * (tt / t1)
+	var a2: Variant = p1 * ((t2 - tt) / (t2 - t1)) + p2 * ((tt - t1) / (t2 - t1))
+	var a3: Variant = p2 * ((t3 - tt) / (t3 - t2)) + p3 * ((tt - t2) / (t3 - t2))
+	var b1: Variant = a1 * ((t2 - tt) / t2) + a2 * (tt / t2)
+	var b2: Variant = a2 * ((t3 - tt) / (t3 - t1)) + a3 * ((tt - t1) / (t3 - t1))
+	return b1 * ((t2 - tt) / (t2 - t1)) + b2 * ((tt - t1) / (t2 - t1))
 
 
 ## A BLOCK WITH ROUNDED EDGES, its base at y = 0: a cube's six faces, each a grid that crowds toward
@@ -1454,12 +1788,19 @@ static func _box(p: Dictionary) -> Tris:
 	var r := minf(float(p["round"]) * 0.01, minf(h.x, minf(h.y, h.z)))
 	var taper := float(p["taper"])
 	var g := Tris.new()
+	var fine := _fine(p)
 	var axis_samples := func(half: float) -> PackedFloat32Array:
 		var out := PackedFloat32Array([-half])
 		if r > 0.0001:
 			for k in [0.15, 0.4, 0.7]:
 				out.append(-half + r * (1.0 - cos(float(k) * PI * 0.5)) / (1.0 - cos(PI * 0.5)) * 1.0)
 			out.append(-half + r)
+		# a warped block is cut across its flat faces too, so it can bend
+		var flat := 2.0 * (half - r)
+		var cuts := ceili(flat / WARP_STEP) if fine and flat > WARP_STEP else 1
+		for k in range(1, cuts):
+			out.append(-half + r + flat * float(k) / float(cuts))
+		if r > 0.0001:
 			out.append(half - r)
 			for k in [0.7, 0.4, 0.15]:
 				out.append(half - r * (1.0 - cos(float(k) * PI * 0.5)))
@@ -1779,40 +2120,330 @@ static func _ring(radius: float, thick: float, arc_deg: float) -> Tris:
 	return g
 
 
-## A ROD along a path: curved through its points (Catmull-Rom) unless told not to, its frame carried
-## along without twisting, its radius following `radii` if given, closed at both ends.
+## A ROD along a path: a circle swept along it ([method _sweep]), its radius following `radii` if
+## given, closed at both ends - or, with a `wall`, hollow and open, a pipe.
 static func _tube(p: Dictionary) -> Tris:
 	var raw: Array = []
 	for q in (p["path"] as Array):
 		raw.append((q as Vector3) * 0.01)
+	var c := _curve(raw, _rounds_m(p, raw.size()), bool(p.get("smooth", true)), 8)
+	if _fine(p):
+		c = _densify_by(c, WARP_STEP)
 	var radii: PackedFloat32Array = p.get("radii", PackedFloat32Array())
 	var base_r := float(p["radius"]) * 0.01
+	var src: PackedFloat32Array = c["src"]
+	var rings: Array = []
+	var hollow := PackedFloat32Array()
+	var wall := float(p.get("wall", 0.0)) * 0.01
+	for i in src.size():
+		var f := src[i]
+		var k := floori(f)
+		var r := lerpf(_radius_at(radii, k, base_r), _radius_at(radii, k + 1, base_r), f - float(k))
+		var ring: Array = []
+		for j in 12:
+			var a := TAU * float(j) / 12.0
+			ring.append(Vector2(cos(a), sin(a)) * r)
+		rings.append(ring)
+		hollow.append(clampf(1.0 - wall / maxf(r, 1e-5), 0.1, 0.95) if wall > 0.0 else 0.0)
+	var sharp := PackedByteArray()
+	sharp.resize(12)
+	return _sweep(c["pts"], c["corner"], rings, sharp, hollow)
+
+
+static func _radius_at(radii: PackedFloat32Array, i: int, fallback: float) -> float:
+	if radii.is_empty():
+		return fallback
+	return maxf(radii[clampi(i, 0, radii.size() - 1)] * 0.01, 0.0002)
+
+
+## A LOFT: its sections ([method _sections]) blended along its path - or straight up its height -
+## and swept ([method _sweep]). Sections drawn from the same outline keep its points one for one (a
+## square stays crisp); different outlines are each walked round from the same side and cut into as
+## many points, so a circle becomes a star without twisting.
+static func _loft(p: Dictionary) -> Tris:
 	var path: Array = []
-	var rs := PackedFloat32Array()
-	if bool(p.get("smooth", true)) and raw.size() >= 3:
-		for i in raw.size() - 1:
-			for k in 8:
-				var t := float(k) / 8.0
-				path.append(_cr(raw[maxi(i - 1, 0)], raw[i], raw[i + 1], raw[mini(i + 2, raw.size() - 1)], t))
-				rs.append(lerpf(_radius_at(radii, i, base_r), _radius_at(radii, i + 1, base_r), t))
-		path.append(raw[-1])
-		rs.append(_radius_at(radii, raw.size() - 1, base_r))
+	for q in (p.get("path", []) as Array):
+		path.append((q as Vector3) * 0.01)
+	var smooth := bool(p.get("smooth", true))
+	var spine: Array
+	var corner: PackedByteArray
+	if path.size() >= 2:
+		var c := _curve(path, _rounds_m(p, path.size()), smooth, 8)
+		spine = c["pts"]
+		corner = c["corner"]
 	else:
-		path = raw
-		for i in raw.size():
-			rs.append(_radius_at(radii, i, base_r))
+		spine = [Vector3.ZERO, Vector3(0.0, float(p.get("height", 10.0)) * 0.01, 0.0)]
+		corner = PackedByteArray([0, 0])
+	var secs: Array = p.get("sections", [])
+	if secs.is_empty():
+		secs = [{"outline": "circle", "points": [], "size": Vector2(2, 2), "sides": 6, "scale": 1.0, "turn": 0.0, "shift": Vector2.ZERO, "at": 0.0}]
+	# enough rings for the sections to blend smoothly (and for a warp to bend)
+	var want := maxi(24, secs.size() * 10)
+	if _fine(p):
+		want = maxi(want, ceili(_lengths(spine)[spine.size() - 1] / WARP_STEP) + 1)
+	var d := _densify(spine, corner, want)
+	spine = d["pts"]
+	corner = d["corner"]
+	var along := _lengths(spine)
+	var total := maxf(along[along.size() - 1], 1e-6)
+	# THE OUTLINES: one for one when every section is drawn from the same one
+	var outs: Array = []
+	var sig := {}
+	for sd in secs:
+		var o := _section_outline(sd as Dictionary)
+		outs.append(o)
+		var own := (sd["points"] as Array).size()
+		sig["points:%d" % own if own >= 3 else "%s:%d" % [String(sd["outline"]), int(sd["sides"])]] = true
+	if sig.size() > 1:
+		for i in outs.size():
+			outs[i] = _resample(outs[i], 48)
+	var m := (outs[0] as Array).size()
+	for o in outs:
+		m = mini(m, (o as Array).size())
+	var sharp := PackedByteArray()
+	var first: Array = outs[0]
+	for k in m:
+		var a: Vector2 = first[(k - 1 + m) % m]
+		var b: Vector2 = first[k]
+		var c2: Vector2 = first[(k + 1) % m]
+		var turn := 0.0
+		if (b - a).length() > 1e-7 and (c2 - b).length() > 1e-7:
+			turn = absf((b - a).angle_to(c2 - b))
+		sharp.append(1 if turn > deg_to_rad(35.0) else 0)
+	var ats := PackedFloat32Array()
+	for sd in secs:
+		ats.append(float(sd["at"]))
+	var wall := float(p.get("wall", 0.0)) * 0.01
+	var rings: Array = []
+	var hollow := PackedFloat32Array()
+	for i in spine.size():
+		var s := along[i] / total
+		var turn := deg_to_rad(float(_blend(ats, secs.map(func(x: Dictionary) -> float: return float(x["turn"])), s, smooth)))
+		var shift: Vector2 = _blend(ats, secs.map(func(x: Dictionary) -> Vector2: return (x["shift"] as Vector2) * 0.01), s, smooth)
+		var ring: Array = []
+		var reach := 0.0
+		for k in m:
+			var q: Vector2 = _blend(ats, outs.map(func(o: Array) -> Vector2: return o[k]), s, smooth)
+			ring.append(q.rotated(turn) + shift)
+			reach += q.length()
+		rings.append(ring)
+		reach /= float(m)
+		hollow.append(clampf(1.0 - wall / maxf(reach, 1e-5), 0.1, 0.95) if wall > 0.0 else 0.0)
+	return _sweep(spine, corner, rings, sharp, hollow)
+
+
+## A loft section's outline in meters about the path, its scale applied: drawn at a unit size of
+## its own proportions and then scaled, so a section of size 0 keeps its points (all at the path).
+static func _section_outline(sd: Dictionary) -> Array:
+	var size: Vector2 = sd["size"]
+	var big := maxf(size.x, size.y)
+	var k := float(sd.get("scale", 1.0))
+	var own: Array = sd.get("points", [])
+	var out: Array
+	if own.size() >= 3:
+		out = _outline2({"points": own})
+	else:
+		var unit := (size / big).max(Vector2(0.02, 0.02)) if big > 1e-4 else Vector2(1.0, 1.0)
+		out = _outline2({"outline": sd["outline"], "size": unit, "sides": sd["sides"]})
+		k *= big
+	for i in out.size():
+		out[i] = (out[i] as Vector2) * k
+	return out
+
+
+## An outline walked round from where a line from its middle toward the back (-z) leaves it, cut
+## into [param m] points evenly along its length.
+static func _resample(poly: Array, m: int) -> Array:
+	var n := poly.size()
+	if n < 3:
+		return poly
+	var mid := Vector2.ZERO
+	for q in poly:
+		mid += q
+	mid /= float(n)
+	var start_i := 0
+	var start_p: Vector2 = poly[0]
+	var best := -1.0
+	for i in n:
+		var hit: Variant = Geometry2D.segment_intersects_segment(mid, mid + Vector2(0.0, -10.0), poly[i], poly[(i + 1) % n])
+		if hit != null and (hit as Vector2).distance_to(mid) > best:
+			best = (hit as Vector2).distance_to(mid)
+			start_i = i
+			start_p = hit
+	var walk: Array = [start_p]
+	for j in range(1, n + 1):
+		walk.append(poly[(start_i + j) % n])
+	walk.append(start_p)
+	var lens := _lengths(walk)
+	var total := lens[lens.size() - 1]
+	if total < 1e-9:
+		var same: Array = []
+		for k in m:
+			same.append(start_p)
+		return same
+	var out: Array = []
+	var seg := 0
+	for k in m:
+		var want := total * float(k) / float(m)
+		while seg < walk.size() - 2 and lens[seg + 1] < want:
+			seg += 1
+		var span := maxf(lens[seg + 1] - lens[seg], 1e-12)
+		out.append((walk[seg] as Vector2).lerp(walk[seg + 1], (want - lens[seg]) / span))
+	return out
+
+
+## Whether part [param p]'s warp bends its shape rather than only scaling it: then its shape is
+## built with points no further apart than [constant WARP_STEP].
+static func _fine(p: Dictionary) -> bool:
+	var w: Dictionary = p.get("warp", {})
+	for k in ["taper", "twist", "lean", "bend", "wobble"]:
+		if w.has(k):
+			return true
+	return false
+
+
+## A curve's points ([method _curve]) no further apart than [param step], each new point's place among
+## the points it was drawn from between its neighbors'.
+static func _densify_by(c: Dictionary, step: float) -> Dictionary:
+	var pts: Array = c["pts"]
+	var src: PackedFloat32Array = c["src"]
+	var corner: PackedByteArray = c["corner"]
+	var out: Array = []
+	var os := PackedFloat32Array()
+	var oc := PackedByteArray()
+	for i in pts.size() - 1:
+		var n := maxi(1, ceili((pts[i + 1] - pts[i]).length() / step))
+		for k in n:
+			var t := float(k) / float(n)
+			out.append(pts[i] + (pts[i + 1] - pts[i]) * t)
+			os.append(lerpf(src[i], src[i + 1], t))
+			oc.append(corner[i] if k == 0 else 0)
+	out.append(pts[-1])
+	os.append(src[src.size() - 1])
+	oc.append(0)
+	return {"pts": out, "src": os, "corner": oc}
+
+
+## The distance along [param pts] to each of them.
+static func _lengths(pts: Array) -> PackedFloat32Array:
+	var out := PackedFloat32Array([0.0])
+	for i in range(1, pts.size()):
+		out.append(out[i - 1] + (pts[i] - pts[i - 1]).length())
+	return out
+
+
+## A path with at least [param want] points: its longest spans cut evenly, its corners kept.
+static func _densify(pts: Array, corner: PackedByteArray, want: int) -> Dictionary:
+	if pts.size() >= want or pts.size() < 2:
+		return {"pts": pts, "corner": corner}
+	var lens := _lengths(pts)
+	var step := maxf(lens[lens.size() - 1] / float(want - 1), 1e-6)
+	var out: Array = []
+	var oc := PackedByteArray()
+	for i in pts.size() - 1:
+		var n := maxi(1, ceili((lens[i + 1] - lens[i]) / step - 0.001))
+		for k in n:
+			out.append((pts[i] as Vector3).lerp(pts[i + 1], float(k) / float(n)))
+			oc.append(corner[i] if k == 0 and i < corner.size() else 0)
+	out.append(pts[-1])
+	oc.append(0)
+	return {"pts": out, "corner": oc}
+
+
+## The value at [param s] (0..1 along a loft) of [param vals] (floats or Vector2s) given at
+## [param ats]: held before the first and after the last, and between them a cubic through each
+## (its slope from the neighbors on either side - a straight taper stays straight), or a straight
+## line when not [param smooth].
+static func _blend(ats: PackedFloat32Array, vals: Array, s: float, smooth: bool) -> Variant:
+	var n := ats.size()
+	if n == 1 or s <= ats[0]:
+		return vals[0]
+	if s >= ats[n - 1]:
+		return vals[n - 1]
+	var j := 0
+	while j < n - 2 and s > ats[j + 1]:
+		j += 1
+	var h := ats[j + 1] - ats[j]
+	if h < 1e-6:
+		return vals[j + 1]
+	var t := (s - ats[j]) / h
+	if not smooth:
+		return vals[j] + (vals[j + 1] - vals[j]) * t
+	var slope := func(i: int) -> Variant:
+		var a := maxi(i - 1, 0)
+		var b := mini(i + 1, n - 1)
+		return (vals[b] - vals[a]) / maxf(ats[b] - ats[a], 1e-6)
+	var t2 := t * t
+	var t3 := t2 * t
+	return vals[j] * (2.0 * t3 - 3.0 * t2 + 1.0) + slope.call(j) * h * (t3 - 2.0 * t2 + t) \
+		+ vals[j + 1] * (-2.0 * t3 + 3.0 * t2) + slope.call(j + 1) * h * (t3 - t2)
+
+
+## A COIL: a band wound round the vertical axis from `radius` to `radius2`, climbing `height` over
+## its turns, its underside on y = 0.
+static func _coil(p: Dictionary) -> Tris:
+	var turns := float(p["turns"])
+	var r0 := float(p["radius"]) * 0.01
+	var r1 := float(p["radius2"]) * 0.01
+	var h := float(p["height"]) * 0.01
+	var th := float(p["thickness"]) * 0.01
+	var n := clampi(ceili(turns * 32.0), 12, 640)
+	var spine: Array = []
+	var rings: Array = []
+	var ring: Array = []
+	for j in 12:
+		var a := TAU * float(j) / 12.0
+		ring.append(Vector2(cos(a), sin(a)) * th)
+	for i in n + 1:
+		var f := float(i) / float(n)
+		var a := TAU * turns * f
+		var r := lerpf(r0, r1, f)
+		spine.append(Vector3(cos(a) * r, th + h * f, sin(a) * r))
+		rings.append(ring)
+	var none := PackedByteArray()
+	none.resize(n + 1)
+	var sharp := PackedByteArray()
+	sharp.resize(12)
+	var hollow := PackedFloat32Array()
+	hollow.resize(n + 1)
+	return _sweep(spine, none, rings, sharp, hollow)
+
+
+## A SWEEP: an outline carried along [param spine] (meters). [param rings] holds each spine point's
+## outline (Vector2s in meters, as many in each, all wound the same way), drawn across the path -
+## its x across, its y the other way: the thing's x and z where the path runs up; the outline's
+## frame is carried along the path without twisting. [param corner] marks the path's crisp corners,
+## whose rings are mitered (laid in the plane halfway between the two directions and stretched
+## across it, so the rod keeps its width round the bend instead of pinching); [param sharp] marks
+## the outline's own corners, kept crisp along their length. A [param hollow] above 0 is the inner
+## outline's size (as a part of the outer one) there: hollow and open, a pipe - otherwise solid,
+## closed at both ends. Faces' normals come from the surface itself, so a twist or a flare shades
+## as it is shaped.
+static func _sweep(spine: Array, corner: PackedByteArray, rings: Array, sharp: PackedByteArray, hollow: PackedFloat32Array) -> Tris:
 	var g := Tris.new()
-	var sides := 12
-	var n := path.size()
+	var n := spine.size()
+	if n < 2:
+		return g
+	var m := (rings[0] as Array).size()
+	var dirs: Array = []
+	for i in n - 1:
+		var dv: Vector3 = (spine[i + 1] as Vector3) - (spine[i] as Vector3)
+		dirs.append(dv.normalized() if dv.length() > 1e-9 else (dirs[-1] if not dirs.is_empty() else Vector3.UP))
 	var tans: Array = []
 	for i in n:
-		var d: Vector3 = (path[mini(i + 1, n - 1)] as Vector3) - (path[maxi(i - 1, 0)] as Vector3)
-		tans.append(d.normalized() if d.length() > 1e-9 else Vector3.UP)
+		if i == 0:
+			tans.append(dirs[0])
+		elif i == n - 1:
+			tans.append(dirs[n - 2])
+		elif i < corner.size() and corner[i] == 1 and ((dirs[i - 1] as Vector3) + (dirs[i] as Vector3)).length() > 1e-3:
+			tans.append(((dirs[i - 1] as Vector3) + (dirs[i] as Vector3)).normalized())
+		else:
+			var dv: Vector3 = (spine[i + 1] as Vector3) - (spine[i - 1] as Vector3)
+			tans.append(dv.normalized() if dv.length() > 1e-9 else dirs[i])
+	# THE FRAME: across starts as the thing's x (its z for a path that starts along x) and is carried
 	var t0: Vector3 = tans[0]
-	var nrm := t0.cross(Vector3.UP)
-	if nrm.length() < 0.1:
-		nrm = t0.cross(Vector3.RIGHT)
-	nrm = nrm.normalized()
+	var side := Vector3.RIGHT if absf(t0.dot(Vector3.RIGHT)) < 0.9 else Vector3.BACK
+	side = (side - t0 * side.dot(t0)).normalized()
 	var frames: Array = []
 	for i in n:
 		var t: Vector3 = tans[i]
@@ -1820,56 +2451,122 @@ static func _tube(p: Dictionary) -> Tris:
 			var prev: Vector3 = tans[i - 1]
 			var ax := prev.cross(t)
 			if ax.length() > 1e-6:
-				nrm = nrm.rotated(ax.normalized(), prev.angle_to(t))
-		nrm = (nrm - t * nrm.dot(t)).normalized()
-		frames.append([nrm, t.cross(nrm).normalized()])
-	var arc := PackedFloat32Array([0.0])
-	for i in range(1, n):
-		arc.append(arc[i - 1] + (path[i] as Vector3).distance_to(path[i - 1]))
-	var total := maxf(arc[n - 1], 1e-6)
-	var ymin := INF
-	var ymax := -INF
-	for q in path:
-		ymin = minf(ymin, (q as Vector3).y)
-		ymax = maxf(ymax, (q as Vector3).y)
-	var hgt := maxf(ymax - ymin, 1e-4)
-	var ringpt := func(i: int, k: int) -> Array:
-		var a := TAU * float(k % sides) / float(sides)
+				side = side.rotated(ax.normalized(), prev.angle_to(t))
+		side = (side - t * side.dot(t)).normalized()
+		frames.append([side, side.cross(t).normalized()])
+	var place := func(i: int, q: Vector2) -> Vector3:
 		var f: Array = frames[i]
-		var dir: Vector3 = (f[0] as Vector3) * cos(a) + (f[1] as Vector3) * sin(a)
-		return [(path[i] as Vector3) + dir * rs[i], dir]
-	for i in n - 1:
-		for k in sides:
-			var a: Array = ringpt.call(i, k)
-			var b: Array = ringpt.call(i, k + 1)
-			var c: Array = ringpt.call(i + 1, k + 1)
-			var d: Array = ringpt.call(i + 1, k)
-			var v0 := arc[i] / total
-			var v1 := arc[i + 1] / total
-			g.quad(a[0], b[0], c[0], d[0], a[1], b[1], c[1], d[1], Vector2(float(k) / sides, v0), Vector2(float(k + 1) / sides, v0),
-				Vector2(float(k + 1) / sides, v1), Vector2(float(k) / sides, v1), ((a[0] as Vector3).y - ymin) / hgt,
-				((b[0] as Vector3).y - ymin) / hgt, ((c[0] as Vector3).y - ymin) / hgt, ((d[0] as Vector3).y - ymin) / hgt)
+		var off: Vector3 = (f[0] as Vector3) * q.x + (f[1] as Vector3) * q.y
+		if i > 0 and i < n - 1 and i < corner.size() and corner[i] == 1:
+			var w: Vector3 = (dirs[i] as Vector3) - (dirs[i - 1] as Vector3)
+			if w.length() > 1e-6:
+				w = w.normalized()
+				var c := maxf((tans[i] as Vector3).dot(dirs[i - 1]), 0.25)
+				off += w * off.dot(w) * (1.0 / c - 1.0)
+		return (spine[i] as Vector3) + off
+	var outer: Array = []
+	var inner: Array = []
+	var is_hollow := false
+	for i in n:
+		var ring: Array = rings[i]
+		var row := PackedVector3Array()
+		var row_in := PackedVector3Array()
+		var mid := Vector2.ZERO
+		for q in ring:
+			mid += q
+		mid /= float(m)
+		for k in m:
+			row.append(place.call(i, ring[k]))
+			if hollow[i] > 0.0:
+				is_hollow = true
+				row_in.append(place.call(i, mid + ((ring[k] as Vector2) - mid) * hollow[i]))
+		outer.append(row)
+		inner.append(row_in)
+	var along := _lengths(spine)
+	var total := maxf(along[n - 1], 1e-6)
+	var around := PackedFloat32Array([0.0])
+	for k in m:
+		around.append(around[k] + ((rings[0] as Array)[(k + 1) % m] as Vector2).distance_to((rings[0] as Array)[k]))
+	var perim := maxf(around[m], 1e-9)
+	_sweep_skin(g, outer, tans, corner, sharp, along, total, around, perim, 1.0)
+	if is_hollow:
+		_sweep_skin(g, inner, tans, corner, sharp, along, total, around, perim, -1.0)
 	for end in [0, n - 1]:
-		var t: Vector3 = tans[end] * (-1.0 if end == 0 else 1.0)
-		var center: Vector3 = path[end]
-		for k in sides:
-			var a: Array = ringpt.call(end, k)
-			var b: Array = ringpt.call(end, k + 1)
-			var yf := (center.y - ymin) / hgt
-			g.tri(center, a[0], b[0], t, t, t, Vector2(0.5, 0.5), Vector2(0, 0), Vector2(1, 0), Vector2(yf, 0), Vector2(yf, 0), Vector2(yf, 0))
-	var rmax := 0.0
-	for r in rs:
-		rmax = maxf(rmax, r)
-	g.girth = TAU * rmax * 100.0
+		var t: Vector3 = (tans[end] as Vector3) * (-1.0 if end == 0 else 1.0)
+		var o: PackedVector3Array = outer[end]
+		var v := float(end) / float(n - 1)
+		if is_hollow:
+			var ins: PackedVector3Array = inner[end]
+			for k in m:
+				var k2 := (k + 1) % m
+				g.quad(o[k], o[k2], ins[k2], ins[k], t, t, t, t, Vector2(around[k] / perim, v), Vector2(around[k + 1] / perim, v),
+					Vector2(around[k + 1] / perim, v), Vector2(around[k] / perim, v), v, v, v, v)
+			continue
+		# THE END, closed: the outline cut into triangles - or fanned from the path, one that crosses itself
+		var flat := PackedVector2Array()
+		for q in rings[end]:
+			flat.append(q)
+		var tris := Geometry2D.triangulate_polygon(flat)
+		if tris.is_empty():
+			for k in m:
+				tris.append_array([-1, k, (k + 1) % m])
+		for j in range(0, tris.size() - 2, 3):
+			var pa: Vector3 = spine[end] if tris[j] < 0 else o[tris[j]]
+			g.tri(pa, o[tris[j + 1]], o[tris[j + 2]], t, t, t, Vector2(0.5, 0.5), Vector2(0.5, 0.5), Vector2(0.5, 0.5),
+				Vector2(v, 0.0), Vector2(v, 0.0), Vector2(v, 0.0))
+	var big := 0.0
+	for ring in rings:
+		var per := 0.0
+		for k in m:
+			per += ((ring as Array)[(k + 1) % m] as Vector2).distance_to((ring as Array)[k])
+		big = maxf(big, per)
+	g.girth = maxf(big * 100.0, 0.5)
 	g.height = total * 100.0
-	g.top = path[-1]
+	g.top = spine[n - 1]
 	return g
 
 
-static func _radius_at(radii: PackedFloat32Array, i: int, fallback: float) -> float:
-	if radii.is_empty():
-		return fallback
-	return maxf(radii[mini(i, radii.size() - 1)] * 0.01, 0.0002)
+## One skin of a sweep, its faces turned out ([param side] 1) or in (-1): a quad between each pair of
+## rings, each corner's normal from the surface round it - from one side only across a crisp corner
+## of the outline or the path. UV is (round the outline, along the path), and the second UV's x is
+## how far along the path, which is where an ornament's band lies.
+static func _sweep_skin(g: Tris, rows: Array, tans: Array, corner: PackedByteArray, sharp: PackedByteArray,
+		along: PackedFloat32Array, total: float, around: PackedFloat32Array, perim: float, side: float) -> void:
+	var n := rows.size()
+	var m := (rows[0] as PackedVector3Array).size()
+	var at := func(i: int, k: int) -> Vector3:
+		return (rows[clampi(i, 0, n - 1)] as PackedVector3Array)[(k + m) % m]
+	# a corner's normal, for the face beyond it in [param di] (+1 ahead along the path, -1 behind) and
+	# [param dk] (+1 the next point round, -1 the one before)
+	var normal := func(i: int, k: int, di: int, dk: int) -> Vector3:
+		var crisp_i := i == 0 or i == n - 1 or (i < corner.size() and corner[i] == 1)
+		var a: Vector3
+		if crisp_i:
+			a = (at.call(i + 1, k) - at.call(i, k)) if di > 0 else (at.call(i, k) - at.call(i - 1, k))
+			if a.length() < 1e-9:
+				a = (at.call(i + 1, k) - at.call(i - 1, k))
+		else:
+			a = at.call(i + 1, k) - at.call(i - 1, k)
+		var b: Vector3
+		if sharp[(k + m) % m] == 1:
+			b = (at.call(i, k + 1) - at.call(i, k)) if dk > 0 else (at.call(i, k) - at.call(i, k - 1))
+		else:
+			b = at.call(i, k + 1) - at.call(i, k - 1)
+		# every outline is wound the same way, so along x round is always out (a point - a tip - faces
+		# along the path, out of the end it is nearer)
+		var nn := a.cross(b) * side
+		if nn.length() < 1e-12:
+			return (tans[i] as Vector3) * (1.0 if i * 2 >= n else -1.0)
+		return nn.normalized()
+	for i in n - 1:
+		var v0 := along[i] / total
+		var v1 := along[i + 1] / total
+		for k in m:
+			var u0 := around[k] / perim
+			var u1 := around[k + 1] / perim
+			g.quad(at.call(i, k), at.call(i, k + 1), at.call(i + 1, k + 1), at.call(i + 1, k),
+				normal.call(i, k, 1, 1), normal.call(i, k + 1, 1, -1), normal.call(i + 1, k + 1, -1, -1), normal.call(i + 1, k, -1, 1),
+				Vector2(u0, v0), Vector2(u1, v0), Vector2(u1, v1), Vector2(u0, v1), v0, v0, v1, v1)
 
 
 ## A SHEET into [param g]: its outline (a named one, or `points`), its base at the origin and its
@@ -2057,8 +2754,14 @@ static func _extrude(p: Dictionary) -> Tris:
 	for i in n:
 		along.append(along[i] + (pts[i] as Vector2).distance_to(pts[(i + 1) % n]))
 	var perim := maxf(along[n], 1e-6)
+	# a warped extrude's walls are cut into bands, so they can bend
+	var bands := ceili(h / WARP_STEP) if _fine(p) else 1
+	var walls := func(k: float, y0: float, y1: float, side: float) -> void:
+		for b in bands:
+			_extrude_wall(g, ring.call(k, lerpf(y0, y1, float(b) / bands)), ring.call(k, lerpf(y0, y1, float(b + 1) / bands)),
+				along, perim, h, side)
 	if wall <= 0.0:
-		_extrude_wall(g, ring.call(1.0, 0.0), ring.call(1.0, h - bevel), along, perim, h, 1.0)
+		walls.call(1.0, 0.0, h - bevel, 1.0)
 		if bevel > 0.0:
 			_extrude_wall(g, ring.call(1.0, h - bevel), ring.call(1.0 - bevel / reach, h), along, perim, h, 1.0)
 		_extrude_face(g, ring.call(1.0 - bevel / reach, h), 1.0, h)
@@ -2066,8 +2769,8 @@ static func _extrude(p: Dictionary) -> Tris:
 	else:
 		var k_in := clampf(1.0 - wall / reach, 0.15, 0.95)
 		var floor_y := minf(wall, h * 0.5)
-		_extrude_wall(g, ring.call(1.0, 0.0), ring.call(1.0, h), along, perim, h, 1.0)
-		_extrude_wall(g, ring.call(k_in, floor_y), ring.call(k_in, h), along, perim, h, -1.0)
+		walls.call(1.0, 0.0, h, 1.0)
+		walls.call(k_in, floor_y, h, -1.0)
 		_extrude_rim(g, ring.call(1.0, h), ring.call(k_in, h), h)
 		_extrude_face(g, ring.call(k_in, floor_y), 1.0, h)
 		_extrude_face(g, ring.call(1.0, 0.0), -1.0, h)
@@ -2100,6 +2803,16 @@ static func _outline2(p: Dictionary) -> Array:
 					var a := -PI * 0.5 + PI * float(i) / float(n)
 					var r := 1.0 if i % 2 == 0 else 0.48
 					out.append(Vector2(cos(a) * half.x * r, sin(a) * half.y * r))
+			"lens":
+				# two arcs meeting in a point at each side: a leaf's cross-section, an eye
+				for i in 48:
+					var a := TAU * float(i) / 48.0
+					out.append(Vector2(cos(a) * half.x, sin(a) * absf(sin(a)) * half.y))
+			"drop":
+				# round behind, drawn to a point toward the reader
+				for i in 48:
+					var a := TAU * float(i) / 48.0
+					out.append(Vector2(sin(a) * pow(absf(sin(a * 0.5)), 1.4) * half.x * 1.3, cos(a) * half.y))
 			"heart":
 				# the heart curve, its point toward the reader
 				for i in 48:

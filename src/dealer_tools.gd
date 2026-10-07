@@ -40,7 +40,7 @@ func instructions() -> String:
 	return ("You lay out the cards of one reading on the table. Place each card - card 1 to card %d, in the order they are drawn - "
 		% _n + "where it should lie, then look at the layout, fix what the table objects to, and submit it. "
 		+ "You are never told which card is which: the shuffle decides that.\n\n" + TablePositions.describe(episode.seed)
-		+ "\n\n" + _spread_line())
+		+ _top_line() + "\n\n" + _spread_line())
 
 
 func list_tools() -> Array:
@@ -126,10 +126,30 @@ func _look() -> String:
 	return "\n".join(lines)
 
 
+## THE TABLE'S TOP, once the set dresser has set it ([Tables], made safe), or {} before: a round or an
+## oval top may not reach every corner of the cloth, and a card off it is refused as the table builds.
+func _top() -> Dictionary:
+	var t: Variant = episode.read_json("table")
+	if not (t is Dictionary):
+		return {}
+	var td: Dictionary = t
+	return Tables.sanitize(td.get("top"), td.get("layers"), Props.sanitize(td, [])["materials"], [])["top"]
+
+
+func _top_line() -> String:
+	var top := _top()
+	if top.is_empty() or String(top.get("shape", "rect")) == "rect":
+		return ""
+	var size: Array = top["size"]
+	return "\nThe table's top is %s, %d x %d cm, its middle %d cm toward the reader from the middle of the cloth: keep every card on it, a few centimeters in from its edge." % [
+		"round" if String(top["shape"]) == "round" else ("an oval" if String(top["shape"]) == "oval" else "a %d-sided polygon" % int(top.get("sides", 8))),
+		roundi(float(size[0])), roundi(float(size[1])), roundi(Tables.TOP_AT.y * 100.0)]
+
+
 ## What the table objects to in the draft as it stands.
 func troubles() -> PackedStringArray:
 	var placed := slots()
-	var raw := TablePositions.troubles(placed, episode.seed)
+	var raw := TablePositions.troubles(placed, episode.seed, _top())
 	# the slots are the placed cards in order: put each trouble back on its own card's number
 	var out := PackedStringArray()
 	for line in raw:

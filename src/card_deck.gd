@@ -17,6 +17,9 @@ class_name CardDeck
 ## A `###` heading inside the section names the group the cards under it belong to (a suit, an
 ## arcana). Prose in the section is kept as instructions; only the list is the deck.
 ##
+## A Cards section of prose alone, listing no card, leaves the deck to each episode's producer
+## ([method chooses]): the prose says what kind of cards they are.
+##
 ## A show that defines no cards reads the STANDARD deck: the twenty-two Major Arcana in their
 ## Rider-Waite-Smith order (Strength 8, Justice 11) and four suits of Ace to King, generated here
 ## because the structure is closed, with meanings from the CC0 corpus ([constant CORPUS]).
@@ -194,10 +197,19 @@ static func parse(body: String) -> Array:
 	return out
 
 
-## The deck [param body]'s show reads with: its own cards, or the standard 78.
+## The deck [param body]'s show reads with: its own cards, or the standard 78 - or none, when the
+## producer chooses each episode's ([method chooses]).
 static func of(body: String) -> Array:
 	var own := parse(body)
-	return own if not own.is_empty() else standard()
+	return own if not own.is_empty() else ([] if chooses(body) else standard())
+
+
+## THE PRODUCER CHOOSES THE CARDS: [param body]'s Cards section says what kind of cards the show
+## shows and lists none - a collection shown off, a box of whatever the episode finds. Each
+## episode's producer makes its deck ([method CardProducer._land_plan]) and the seed still decides
+## which of them come out, so no agent picks a card here either.
+static func chooses(body: String) -> bool:
+	return not _section(body).is_empty() and parse(body).is_empty()
 
 
 ## [param body] as the agents are handed it: the Cards section's LIST taken out (each card's
@@ -205,7 +217,7 @@ static func of(body: String) -> Array:
 ## many cards the deck has.
 static func strip(body: String) -> String:
 	var span := _section(body)
-	if span.is_empty():
+	if span.is_empty() or chooses(body):
 		return body
 	var item := _rx(ITEM)
 	var kept := PackedStringArray()

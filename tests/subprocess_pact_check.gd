@@ -22,6 +22,12 @@ extends SceneTree
 ##
 ## Linux only, because PR_SET_PDEATHSIG is; elsewhere it reports the registry half and says
 ## the pact was unavailable rather than failing.
+##
+## THE ECHO HALF holds the log's parity with the terminal: what a `start()` child prints must
+## reach the app's loggers (the file the console tails), because it used to inherit the terminal
+## and nobody without one ever saw it. Its control is a child started the old way
+## (`start_detached`, inherited stdio): its line reaches the terminal and must NOT reach the
+## loggers, or catching the other proves nothing.
 
 const PID_FILE := "user://subprocess_pact_probe.txt"
 const SLEEP_S := "120"
@@ -35,6 +41,7 @@ func _init() -> void:
 		return
 	_registry_half()
 	_logged_half()
+	_echo_half()
 	_pact_half()
 	if _fails.is_empty():
 		print("subprocess_pact_check: ALL OK")
@@ -140,6 +147,56 @@ func _logged_half() -> void:
 	OS.delay_msec(300)
 	_check(not _running(sleeper), "and it is gone")
 	DirAccess.remove_absolute(log_path)
+
+
+# --- start: what a child prints reaches the app's log -------------------------------------
+class _Catch extends Logger:
+	var lock := Mutex.new()
+	var said: Array[String] = []
+
+	func _log_message(message: String, error: bool) -> void:
+		lock.lock()
+		said.append(("ERR " if error else "OUT ") + message.strip_edges(false, true))
+		lock.unlock()
+
+
+func _echo_half() -> void:
+	print("ECHO (start: a child's output lands in the app's log, as the console reads it)")
+	var catch := _Catch.new()
+	OS.add_logger(catch)
+	# stdout, stderr, a progress line rewritten in place with \r, and a last line with no end
+	var script := "echo 'parity out'; echo 'parity err' >&2; " \
+		+ "printf 'parity tick 1\\rparity tick 2\\r'; printf 'parity last'"
+	var pid := Subprocess.start("sh", ["-c", script], "parity")
+	_check(pid > 0, "a child started (pid %d)" % pid)
+	var loose := Subprocess.start_detached("sh", ["-c", "echo 'parity loose'"])
+	var waited := 0
+	while Subprocess.alive(pid) and waited < 5000:
+		OS.delay_msec(20)
+		waited += 20
+	OS.delay_msec(300)                   # the detached child's line has long been written
+	OS.remove_logger(catch)
+	catch.lock.lock()
+	var said := catch.said.duplicate()
+	catch.lock.unlock()
+	for want in ["OUT [parity] parity out", "ERR [parity] parity err", "OUT [parity] parity tick 1",
+			"OUT [parity] parity tick 2", "OUT [parity] parity last"]:
+		_check(said.has(want), "the log has `%s`" % want)
+	_check(loose > 0 and not said.any(func(l: String) -> bool: return l.contains("parity loose")),
+		"CONTROL: a child on the terminal (start_detached) does not reach the log")
+	# A Godot child of this project gets a log file of its own, never the app's
+	var own := Subprocess.own_log("probe")
+	var live := ProjectSettings.globalize_path(String(ProjectSettings.get_setting(
+		"debug/file_logging/log_path", "user://logs/godot.log")))
+	_check(own.size() == 2 and own[0] == "--log-file" and own[1] != live,
+		"own_log() names a file other than the app's log (%s)" % own[1])
+	# RELEASE BUILDS: the raw settings, since a debug run reads the `.debug` override instead
+	var cfg := ConfigFile.new()
+	cfg.load("res://project.godot")
+	_check(cfg.get_value("application", "run/flush_stdout_on_print", false) == true,
+		"release builds flush the log on every line (ghost quits by SIGKILL)")
+	_check(cfg.get_value("debug", "file_logging/enable_file_logging", false) == true,
+		"every platform keeps a log file, Android too")
 
 
 # --- the pact, across a hard kill -------------------------------------------------------

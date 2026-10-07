@@ -66,7 +66,7 @@ seeds' hash salts keep their old `tarot-` names, so every episode already made c
 | `src/effects.gd` | `Effects`: the AIR - fog, motes, bursts - as data an agent writes (registries it reads, `sanitize`, `build`), posed from show time. Generic; the tarot table names its regions and moments (`CardTable.AIR`, `MOMENTS`). Shaders `effect_fog.gdshader`, `effect_sprite.gdshader`, `effect_smoke.gdshader`. |
 | `src/lights.gd` | `Lights`: the table's LIGHT built from a description - its sky, its sun (or the moon) and what the sun falls through (a window, blinds, a lattice, leaves, fronds, branches, slats, an awning, a parasol), clouds and birds, lamps out of the shot; registries an agent reads, `sanitize`, `build`, and the CPU's reckoning of where the sun falls. Shaders `light_screen.gdshader`, `light_bird.gdshader`, `light_noise.gdshaderinc` (the noise both reckon alike). See "THE LIGHT" below. |
 | `src/tables.gd` | `Tables`: the table itself built from a description - its top (shape, edge profile, material, boards, tiles, inlay) and the layers laid on it (fabric, pattern, border, fringe), each surface's relief; registries an agent reads, `sanitize`, `build`. Shaders `table_top.gdshader`, `table_textile.gdshader`, `table_common.gdshaderinc`, `table_relief.gdshaderinc` (and `noise_common.gdshaderinc`, shared with the props). |
-| `src/props.gd` | `Props`: things built from a description - shapes, materials, ornaments (registries an agent reads), `sanitize`, `build`. Generic; the tarot table is its first user. Shaders `prop.gdshader`, `prop_glass.gdshader`, `prop_lens.gdshader`, `prop_common.gdshaderinc`. |
+| `src/props.gd` | `Props`: things built from a description - shapes (lathe, loft, tube, coil, extrude...), corners as data, a warp on any part, materials, ornaments (registries an agent reads), `sanitize`, `build`. Generic; the tarot table is its first user. Shaders `prop.gdshader`, `prop_glass.gdshader`, `prop_lens.gdshader`, `prop_common.gdshaderinc`. |
 | `src/card_faces.gd` | `CardFaces`: faces, backs and booklet pages, composed in 2D into stopped SubViewports. |
 | `src/media/table.gd` | `TableMedium`: the table. Pinned by the mode (`Medium.OWNED`, `Director.medium_override`). |
 | `src/cards_editor.gd` | `CardsEditor extends GenerativeEditor`: the panel. |
@@ -96,6 +96,27 @@ drawn. **No agent ever picks a card**: an episode's cards are a shuffle of the d
 seed, and a new episode's seed comes from the OS's cryptographic randomness
 (`CardDeck.true_seed`) and is kept, so the episode can be made again exactly. The draw writes the
 cards themselves into `draw.json`, so an episode keeps what it drew whatever the deck becomes.
+
+**A show that is not a tarot reading** (2026-10-07; the user: "somebody has a box of baseball
+cards, or Pokemon cards, and they just want to show them to people"). Two parts of the guide:
+
+- A `## Format` (or `## The format`) section says what the show is. With one, no agent is told
+  "tarot": the shared context says only that it is a show of cards at a table, and maps the
+  recipe's working words (reader, reading, spread, positions, booklet) to the show's own, which
+  the section defines (`CardPrompts.show_context`). The producer names the deck's `kind`
+  ("minor-league baseball card set"), and the designer, the card, the back and the room are
+  painted as that (`CardPrompts.deck_noun`); the set dresser's reasons and stones are a reader's
+  only without one. A show with no Format section is told exactly what it always was.
+- A `## Cards` section of PROSE ALONE, with no card listed, leaves the deck to each episode's
+  producer (`CardDeck.chooses`): it lists a box in the plan's `deck`, at least twice the spread
+  and twelve, at most thirty (`CardPrompts.BOX`), and the seed draws from it as it draws from a
+  listed deck. The producer picks what is in the box, never what comes out; a box the size of the
+  spread is refused. NO CHEATING holds: a reader is handed cards 1..K, never the rest of the box.
+
+First such show: `rift/tarot/the-shoebox.md` (a collector opening a different box each episode;
+every card invented). Gate: `cards_choose_check`. Still the tarot's: the card's size and shape
+(a baseball card is 6.3 x 8.8 cm, a tarot card 7 x 12), the face (a numeral, a name, an art
+window - no stat box), and the recipe's verbs (shuffle, draw, lay) - step 9's (3) and (4).
 
 ## The episode
 
@@ -373,6 +394,29 @@ tooling"). The set dresser now writes `top` and `layers` beside its things (`Tab
 Gate `tests/tables_check.gd`; look with `set_dresser_look_probe --spec` (a spec with `top`/`layers` is
 put first and seen from above).
 
+THE PAINTING'S DEPTH, PAINTED (2026-10-07; the user: "the painter-made height map, especially, sounds
+like a novel idea - if you think it can truly work"). A step of its own, `image:height` (`height.png`),
+listed only once the table lays the painting where its depth is read - as a layer or as the top, its
+relief `painting` or its own (`CardEpisode.wants_height`, `Tables.wants_height`); it waits for the
+table and is made FROM the painting (a new cloth clears it, a new table does not). The painter is
+handed the painting and asked for the same image redrawn as gray height, every edge on its edge
+(`CardPrompts.height_image`). AN IMAGE MODEL MAY MOVE, ZOOM OR INVENT WHAT IT REDRAWS, so the map is
+MEASURED before it is used (`Tables.height_fit`, `CardProducer._land_height`): both images' structure
+(the size of their gradients, blind to which way round the gray runs) at 96 px across, correlated at
+every shift up to 4 px; the best is kept in `height.json` with its shift, and under 0.35 the map is
+removed and the step fails (retried once) - the painting's own detail stands in. The map only
+deepens the table: an episode is complete without it (`CardEpisode.complete`), the Table row counts it
+only while it is made or when it failed, and an episode made before gets one from ⟳ "Paint the cloth's
+depth again". The shaders read it
+in place of that detail (its fine relief whole, its broad rise and fall at half), and a painted
+surface whose relief is its own takes it too. First real runs (Codex, on copies of two episodes): a
+calligrapher's felt at 0.83 and a red linen at 0.75, both unshifted, ~55 s each; on the linen the
+threads went from soft to crisp knubs with hollows between them. A synthetic unrelated picture scores
+0.18. NOT CHECKED: alignment finer than 96 px (a thread off by a pixel at 1536 does not show; a carved
+line might), and other painters (Bedrock's take a reference as a style, and will likely be refused).
+Probes take `--root <dir>` now (`episode_probe`, `set_dresser_look_probe`) to work on a COPY of an
+episode.
+
 THE LIGHT (2026-10-07; the user: "we sometimes have indoor scenes, and we sometimes have outdoor
 scenes... it would be nice to bring the agents into this loop, giving them a way to control both
 lighting and shadow"; a bright day's strong light, dusk with torches round the perimeter out of the
@@ -503,6 +547,33 @@ an outline (polygon, star, circle, rect, heart, or its own `points` going in and
 up with `taper`, `bevel` and a `wall` that makes it a tray. Gate: cards_check `_candles`;
 table_place_check counts lights and flames apart (the pair of pillars is one light, two flames). A
 tall candelabra fits only where the frame has headroom - the set dresser is told each zone's.
+
+FREE FORM: LOFTS, COILS, CORNERS AND WARPS (2026-10-07; the user: "do we literally allow them to
+draw abstract geometry, in order to produce truly novel things?", "if we have a pipe shape - do agents
+have the ability to create bends/kinks in that pipe?", and "I've seen a teapot that looked a bit
+bulbous and strange"). The agents already drew their own curves - a lathe's profile, a tube's path, an
+extrude's and a sheet's outline - so the answer is more of that, never raw vertices (typed by hand
+they come back inside out and holed, and skip the foot and the heaps every built shape feeds).
+THE TEAPOT (episode 882) was a `smooth` lathe: a uniform Catmull-Rom through every point sagged its
+flat base below the cloth and domed its flat top, and the pot came out a ball. Now a smooth profile
+keeps a flat base and a flat top flat, the curve is CENTRIPETAL (no overshoot between points far
+apart and close together) and its ends run on straight. CORNERS AS DATA: any point of a profile or a
+path can carry one more number, its corner's rounding in centimeters - 0 a crisp corner in a smooth
+curve (a foot, a rim, the seat of a lid), r an arc that far round (a pipe's elbow) - `Props._curve`
+for all of them. A crisp kink in a rod is MITERED (`_sweep`: the ring laid halfway between the two
+directions and stretched across it) - it used to pinch to 0.71 of its width inside the bend. A tube
+takes a `wall` (a pipe, a straw, an open spout). THE LOFT: sections (any outline, `size`, `scale`,
+`turn`, `shift`, `at`) blended along a path or straight up - a spout wide at the body, a snake plant's
+twisting blade (outline `lens`, to a point), an aloe, a horn, a spoon's handle; the same outline
+keeps its points one for one, different ones are walked round from the same side. THE COIL: incense
+coils, springs, a tendril. New outlines `lens` and `drop`, for extrudes and sections. THE WARP, on any
+part: `scale`, `taper`, `twist`, `lean`, `bend` (toward `bend_to`, as a rod round a drum), `wobble` (a
+field of where a point was, so crisp seams move together and never open); normals turned by the
+warp's measured slope; a part warped past scaling is built with points 5 mm apart (`WARP_STEP`) - a
+candle drawn top and bottom only stayed straight however far it was bent. The set dresser is told
+how parts meet (a spout or handle starts inside the body) and that living plants are things the
+parts make; the show's guide asks for them. Gate `tests/props_check.gd`; cards_check builds a thing
+of every new shape.
 
 WHERE A THING STANDS IS FOUND (`_place_things`, `_stand`): groups biggest first, a group's tallest
 nearest its zone's middle, the rest round it - the shorter toward the reader; on the CLOTH (on the
@@ -817,7 +888,10 @@ every future login"). `src/youtube.gd` is generic; the tarot mode opts in throug
 - `tests/episode_probe.gd` - make an episode headlessly (real quota); `--only table` sets
   just the table.
 - `tests/run_quiet.sh -- res://tests/props_look_probe.gd --spec <table.json> --out x.png` - a
-  table description's things side by side under candlelight, no tarot table around them.
+  table description's things side by side under candlelight, no tarot table around them (the camera
+  backs off to show the tallest whole).
+- `godot --headless --path . --script res://tests/props_check.gd` - the shapes themselves: flat ends,
+  corners, elbows, kinks, lofts, coils and warps.
 - `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table_look_probe.gd 400 --show S --seed N --marks 1`
   - the table over an episode with a synthetic voice. `--times 3.6 --name "Show" --byline "with X"
   --ink "#1d2f5c"` photographs the title screen with a set dresser's color.
@@ -851,14 +925,17 @@ every future login"). `src/youtube.gd` is generic; the tarot mode opts in throug
   water's caustics on the table (a harbor's light). Lightning's own shadows (a second directional light).
   The camera opening up under a cloud over a few seconds, as an automatic exposure would.
 
-- The table itself, next (2026-10-06): no real set dresser has built one yet - the first run will
-  show whether it builds tables that read, and how much of its 36 pictures they take. Legs, an apron
-  or a pedestal (the camera sees none from the reader's chair, but a lower camera would). A height
-  map the painter paints beside the painting (the painting's detail stands in for one). Lace's
-  holes show what is under them, but no shadow of them. A dark velvet or a bare dark top lets a
-  candle burn as the key beside pale cards, which bloom (the HEAT cap reads the cloth, not the cards).
-  The dealer (`DealerTools`) checks its layout against the cloth, not yet the top it will lie on.
+- The table itself, next: the first real table (episode 882, 2026-10-07) was elm boards with the
+  painting as one felt mat - nearly the old table; the prompt now says a dressed table is most often
+  more than one layer, and each set dresser sees the tables before it. Legs, an apron or a pedestal
+  (the camera sees none from the reader's chair, but a lower camera would). A dark velvet or a bare
+  dark top lets a candle burn as the key beside pale cards, which bloom (the HEAT cap reads the
+  cloth, not the cards) - counting the cards would take most candles off the key: the user's call.
+  The dealer is told a round or oval top and its layout is checked against it once the table is set.
 
+- Free form, next (2026-10-07): no real set dresser has used lofts, coils, corners or warps yet. A
+  rounding on an extrude's or a sheet's own outline (a rounded tray); a loft whose path is a coil (a
+  conch's whorl); a warp on a crystal bends its flat faces like any other.
 - Pick-a-pile episodes (three piles, "all four piles say the same thing").
 - Moving `Illustrations`' own job pump onto `AgentJobs`.
 - Porting the tablet's follower onto `ReadingFollower`.

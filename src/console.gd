@@ -10,11 +10,17 @@ class_name ConsoleView
 ## ⤓, assistant bubble) opens a panel tailing the newest log live.
 ##
 ## Part of the shared Chrome (see chrome.gd), so every mode carries it.
-## Subprocess output does NOT land here by itself - a subprocess writes its
-## own log file, and its owner echoes the interesting lines into godot's log
-## when a step finishes (see mask_editor._yt_echo_log for the yt-dlp
-## example). That convention is what makes this window worth opening when a
-## download misbehaves.
+## WHAT THE TERMINAL SHOWS, THIS SHOWS: a child started with Subprocess.start
+## has its output echoed into godot's log as `[tag] line` (it used to inherit
+## the terminal, and the README recording's summary never reached here), and
+## a Godot child of this project logs to a file of its own
+## (Subprocess.own_log) rather than truncating this one. A child with a log
+## file of its own (Subprocess.start_logged / start_redirected) never wrote to
+## the terminal either; its owner echoes the interesting lines into godot's
+## log when a step finishes (see mask_editor._yt_echo_log for the yt-dlp
+## example). Release builds flush the log on every line
+## (application/run/flush_stdout_on_print): ghost quits by SIGKILL, and the
+## tail of an unflushed log - the lines a crash report needs - went with it.
 
 const _TAIL_BYTES := 16384
 const _REFRESH_EVERY := 0.5

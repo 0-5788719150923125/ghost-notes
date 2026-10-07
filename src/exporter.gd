@@ -752,7 +752,7 @@ func _start_bake() -> void:
 	Bake.write_progress(0.0)
 	var exe := OS.get_executable_path()
 	var project := ProjectSettings.globalize_path("res://")
-	_bake_pid = Subprocess.start(exe, PackedStringArray([
+	_bake_pid = Subprocess.start(exe, Subprocess.own_log("bake") + PackedStringArray([
 		"--headless", "--path", project, "--script", "res://src/bake_runner.gd",
 		"--", "--bake-song", _song, "--bake-out", _cache]), "bake")
 	if _bake_pid > 0:
@@ -778,7 +778,7 @@ func _start_render() -> void:
 	_write_override(_render_w(), _render_h())
 	var exe := OS.get_executable_path()
 	var project := ProjectSettings.globalize_path("res://")
-	var args := PackedStringArray([
+	var args := Subprocess.own_log("render") + PackedStringArray([
 		"--path", project, "--write-movie", _avi, "--fixed-fps", str(_quality.fps),
 		"--", "--export", "--bake-file", _cache, "--audio", _song])
 	# THE SEED: pin it only when there is a live session to reproduce. Without

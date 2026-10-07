@@ -4,6 +4,10 @@
 // The whole height field at [param p], millimeters below the surface (<= 0).
 float height_mm(vec2 p, float aa, float lod, float hem) {
 	float h = natural(p, aa) * natural_depth;
+	// a painted surface's own relief, where the painter drew its height: the painting's depth
+	if (relief == 1 && has_height > 0.5) {
+		h += (painting_detail(p, lod) - 1.0) * natural_depth;
+	}
 	if (relief >= 2) {
 		h += shaped(p, aa, lod, hem) * relief_depth;
 	}
@@ -12,7 +16,7 @@ float height_mm(vec2 p, float aa, float lod, float hem) {
 
 // The deepest the field goes, millimeters.
 float depth_mm() {
-	return natural_depth + (relief >= 2 ? relief_depth : 0.0);
+	return natural_depth * (relief == 1 && has_height > 0.5 ? 2.0 : 1.0) + (relief >= 2 ? relief_depth : 0.0);
 }
 
 // THE SURFACE'S OWN FRAME in view space, from how its flat space (UV, cm) runs across the screen -

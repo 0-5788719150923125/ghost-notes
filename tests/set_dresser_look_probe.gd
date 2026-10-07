@@ -49,6 +49,7 @@ func _run() -> void:
 			"--seed": seed = int(args[i + 1])
 			"--spec": spec_path = args[i + 1]
 			"--out": _out = args[i + 1]
+			"--root": CardEpisode.root = args[i + 1]
 	var ep := CardEpisode.open(show, seed)
 	if spec_path.is_empty():
 		spec_path = ep.file_of("table")

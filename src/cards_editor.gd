@@ -28,7 +28,7 @@ const KNOBS := {"show": "", "seed": 1, "draw": [3, 6], "reversals": true, "jumpe
 const ROWS := [
 	["Plan", ["plan"]],
 	["Shuffle", ["draw"]],
-	["Table", ["image:back", "image:surface", "image:backdrop", "table"]],
+	["Table", ["image:back", "image:surface", "image:backdrop", "table", "image:height"]],
 	["Intro", ["say:intro"]],
 	["Card", ["design:K", "image:card:K", "say:K"]],
 	["Close", ["say:close", "script"]],
@@ -40,7 +40,8 @@ const ROWS := [
 const REDO := {
 	"Plan": [["Make a new plan (clears the cards and the reading)", "plan"]],
 	"Table": [["Paint a new card back", "image:back"], ["Paint a new cloth", "image:surface"],
-		["Paint a new room", "image:backdrop"], ["Set the table again", "table"]],
+		["Paint a new room", "image:backdrop"], ["Set the table again", "table"],
+		["Paint the cloth's depth again", "image:height"]],
 	"Intro": [["Rewrite the intro (clears the readings after it)", "say:intro"]],
 	"Card": [["Paint this card again (clears its reading and the ones after)", "image:card:K"],
 		["Rewrite this card's reading (clears the ones after it)", "say:K"],
@@ -298,13 +299,14 @@ func _show_title() -> String:
 
 
 ## What the producer works from, read fresh: the title and byline, the brief (its card LIST taken out - see
-## [method CardDeck.strip]), the deck the brief defines (or the standard 78), the show's voices
+## [method CardDeck.strip]), the deck the brief defines (or the standard 78, or none when the producer
+## chooses each episode's - `chooses`), the show's voices
 ## (every one its document names - the reader's and any other, a familiar's - for the reader to
 ## hand lines to), and the knobs.
 func _spec() -> Dictionary:
 	var body := Manuscript.strip_frontmatter(_doc.pull())
 	return {"title": _show_title(), "byline": _show_byline(), "brief": CardDeck.strip(body), "deck": CardDeck.of(body),
-		"voices": _cast_dict().keys(),
+		"chooses": CardDeck.chooses(body), "voices": _cast_dict().keys(),
 		"draw": _knobs["draw"], "reversals": _knobs["reversals"], "jumpers": _knobs["jumpers"],
 		"writer": _knobs["writer"], "writer_model": _knobs["writer_model"], "writer_effort": _knobs["writer_effort"],
 		"painter": _knobs["painter"], "painter_model": _knobs["painter_model"], "painter_effort": _knobs["painter_effort"]}
@@ -990,6 +992,11 @@ func _add_row(title: String, kind: String, steps: Array, k: int) -> void:
 		menu.add_item(String(items[i][0]), i)
 	menu.id_pressed.connect(func(id: int) -> void:
 		_redo(String(items[id][1]).replace("K", str(k))))
+	# the painting's depth is offered only where the table wants it
+	menu.about_to_popup.connect(func() -> void:
+		for i in items.size():
+			if String(items[i][1]) == "image:height":
+				menu.set_item_disabled(menu.get_item_index(i), _episode == null or not _episode.wants_height()))
 	redo.modulate.a = 1.0 if not items.is_empty() else 0.0
 	redo.disabled = items.is_empty()
 	row.add_child(redo)
@@ -1049,7 +1056,13 @@ func _refresh_rows() -> void:
 		var states := {}
 		var why := ""
 		for s in (w as Dictionary)["steps"]:
+			# the painting's height map is a step only where the table wants one (CardEpisode.wants_height)
+			if String(s) == "image:height" and not _episode.wants_height():
+				continue
 			var st := _producer.state_of(String(s))
+			# ...and a height map not made yet holds nothing back: it shows only while it is made, or why not
+			if String(s) == "image:height" and st == "missing":
+				continue
 			states[st] = true
 			if st == "failed" and why.is_empty():
 				why = _producer.error_of(String(s))
@@ -1073,6 +1086,8 @@ func _refresh_rows() -> void:
 				for s in ["back", "surface", "backdrop"]:
 					if _episode.has("image:" + s):
 						have.append({"back": "back", "surface": "cloth", "backdrop": "room"}[s])
+				if _episode.has("image:height"):
+					have.append("depth")
 				var things := _table_things()
 				if not things.is_empty():
 					have.append("%d thing%s" % [things.size(), "" if things.size() == 1 else "s"])
@@ -1103,7 +1118,8 @@ func _refresh_rows() -> void:
 		_deck_seen = _text.get_version()
 		var own := CardDeck.parse(_text.text)
 		_deck_note.text = ("Deck: %d cards, from the brief's Cards." % own.size()) if not own.is_empty() \
-			else "Deck: the standard 78 (the brief defines no Cards)."
+			else ("Deck: the producer's choice, each episode (the brief's Cards lists none)."
+				if CardDeck.chooses(_text.text) else "Deck: the standard 78 (the brief defines no Cards).")
 	var busy := _producer.running or _producer.busy()
 	_gen_btn.disabled = busy or _episode.complete()
 	_halt_btn.disabled = not busy

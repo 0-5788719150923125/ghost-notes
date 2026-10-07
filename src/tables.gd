@@ -576,14 +576,112 @@ static func build(spec: Dictionary, seed: int) -> Dictionary:
 
 ## THE PAINTING laid on every surface that takes it - its pixels square there, the part of it that
 ## fits ([method CardTable.cloth_crop]) - or taken off ([param tex] null: the surface's own color).
-static func apply_painting(built: Dictionary, tex: Texture2D) -> void:
+## [param height]: the painting's HEIGHT MAP, when the painter made one that lines up with it
+## ([method height_fit]) - the depth under the painting, shifted by [param shift] (UV) onto it - or null:
+## the painting's own detail stands in.
+static func apply_painting(built: Dictionary, tex: Texture2D, height: Texture2D = null, shift := Vector2.ZERO) -> void:
 	for p in built.get("painted", []):
 		var mat: ShaderMaterial = (p as Dictionary)["mat"]
 		mat.set_shader_parameter("painting", tex)
 		mat.set_shader_parameter("has_painting", 1.0 if tex != null else 0.0)
+		mat.set_shader_parameter("height_map", height if tex != null else null)
+		mat.set_shader_parameter("has_height", 1.0 if tex != null and height != null else 0.0)
+		mat.set_shader_parameter("height_shift", shift)
 		if tex != null:
 			var crop := CardTable.cloth_crop(Vector2(tex.get_width(), tex.get_height()), (p as Dictionary)["size"])
 			mat.set_shader_parameter("crop", Vector4(crop.position.x, crop.position.y, crop.size.x, crop.size.y))
+
+
+# --- the painter's height map -----------------------------------------------------------------------
+
+## THE PAINTING'S DEPTH, PAINTED (2026-10-07; the user: "the painter-made height map, especially, sounds
+## like a novel idea - if you think it can truly work"). The painter is handed the painting and asked
+## for the same surface as a gray height map (`image:height`); an image model may move, zoom or invent
+## what it redraws, and a relief that does not lie under its picture is worse than none - so the map
+## is MEASURED against the painting before it is used: the two images' STRUCTURE (where each changes,
+## its gradient's size - blind to which way round the gray runs) at [constant FIT_W] across,
+## correlated at every shift up to [constant FIT_SHIFT] pixels either way. The best is its score (1 the
+## same structure, about 0 unrelated) and its shift; under [constant FIT_LEAST] it is refused.
+const FIT_W := 96
+const FIT_SHIFT := 4
+const FIT_LEAST := 0.35
+
+
+## Whether a table made safe ([param spec], `{top, layers}`) lays the painting where a height map
+## would be read: a layer or a top that IS the painting, its relief its own (natural) or the painting's.
+static func wants_height(spec: Dictionary) -> bool:
+	var top: Dictionary = spec.get("top", {})
+	if String(top.get("material", "")) == "painting" and String((top.get("relief", {}) as Dictionary).get("kind", "")) in ["natural", "painting"]:
+		return true
+	for l in spec.get("layers", []):
+		var d: Dictionary = l
+		if String((d.get("pattern", {}) as Dictionary).get("kind", "")) == "painting" \
+				and String((d.get("relief", {}) as Dictionary).get("kind", "")) in ["natural", "painting"]:
+			return true
+	return false
+
+
+## HOW WELL [param height] LIES UNDER [param painting]: `{score, shift}` - the best correlation of
+## their structure over the shifts tried, and the shift that gave it (UV: where in the map a point of
+## the painting is found, less where it is in the painting).
+static func height_fit(painting: Image, height: Image) -> Dictionary:
+	var w := FIT_W
+	var h := maxi(8, roundi(float(FIT_W) * float(painting.get_height()) / float(maxi(painting.get_width(), 1))))
+	var a := _structure(painting, w, h)
+	var b := _structure(height, w, h)
+	var best := -1.0
+	var at := Vector2i.ZERO
+	for dy in range(-FIT_SHIFT, FIT_SHIFT + 1):
+		for dx in range(-FIT_SHIFT, FIT_SHIFT + 1):
+			var sab := 0.0
+			var saa := 0.0
+			var sbb := 0.0
+			for y in range(maxi(1, 1 - dy), mini(h - 1, h - 1 - dy)):
+				var ra := y * w
+				var rb := (y + dy) * w + dx
+				for x in range(maxi(1, 1 - dx), mini(w - 1, w - 1 - dx)):
+					var va := a[ra + x]
+					var vb := b[rb + x]
+					sab += va * vb
+					saa += va * va
+					sbb += vb * vb
+			var r := sab / sqrt(maxf(saa * sbb, 1e-12))
+			if r > best:
+				best = r
+				at = Vector2i(dx, dy)
+	return {"score": best, "shift": Vector2(float(at.x) / float(w), float(at.y) / float(h))}
+
+
+## An image's STRUCTURE at [param w] x [param h]: the size of its lightness's gradient, softened by a
+## pixel, less its mean - where it changes, not which way.
+static func _structure(img: Image, w: int, h: int) -> PackedFloat32Array:
+	var im := img.duplicate() as Image
+	if im.is_compressed():
+		im.decompress()
+	im.clear_mipmaps()
+	im.convert(Image.FORMAT_RGB8)
+	im.resize(w, h, Image.INTERPOLATE_LANCZOS)
+	var l := PackedFloat32Array()
+	l.resize(w * h)
+	for y in h:
+		for x in w:
+			var c := im.get_pixel(x, y)
+			l[y * w + x] = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722
+	var g := PackedFloat32Array()
+	g.resize(w * h)
+	var mean := 0.0
+	for y in range(1, h - 1):
+		for x in range(1, w - 1):
+			var i := y * w + x
+			var gx := (l[i + 1] - l[i - 1]) * 2.0 + (l[i + 1 - w] - l[i - 1 - w]) + (l[i + 1 + w] - l[i - 1 + w])
+			var gy := (l[i + w] - l[i - w]) * 2.0 + (l[i + w - 1] - l[i - w - 1]) + (l[i + w + 1] - l[i - w + 1])
+			g[i] = sqrt(gx * gx + gy * gy)
+			mean += g[i]
+	mean /= float(maxi((w - 2) * (h - 2), 1))
+	for y in range(1, h - 1):
+		for x in range(1, w - 1):
+			g[y * w + x] -= mean
+	return g
 
 
 ## The top: its face (cut into a mesh fine enough to carry its hem's distance), and its edge cut to

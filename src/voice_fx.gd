@@ -153,6 +153,36 @@ const BASS_ROOT_LO := 41.0               # the bass root sits in [LO, 2 LO)
 # much: a key that followed each phrase's pitch hopped between keys phrase to phrase.
 const KEY_HYSTERESIS := 3.0
 
+# --- lean: the reader moving around a microphone in the middle -------------------
+#
+# What an ASMR reader does on purpose: lean toward one side of the microphone, hold there,
+# drift back. Only the DIRECT voice moves. The echo, the room's tail, the resonance and the
+# bed stay centered, because the room does not move when the person in it does - and a bed
+# that swung with the reader would sound like the whole recording being panned, which is
+# a balance knob, not a person.
+#
+# THE DIAL IS HOW OFTEN, NOT HOW FAR. Every lean goes most of the way toward the limit,
+# so a rare lean at a low setting is still one you hear (dead travel at the bottom of a
+# dial is the failure ECHO_TAPER was written about). What the dial buys is fewer and
+# shorter rests at center, shorter holds at a side, and more crossings straight to the
+# other side instead of back through the middle - until at 1 it never rests and never
+# returns, which is a slow, continuous sway.
+#
+# LEVEL ONLY, NO DELAY. A head moving is also an arrival-time difference between the
+# ears, and adding one is what headphones would like - but a varying sub-millisecond
+# delay between two channels turns into a moving comb filter the moment they are summed,
+# and a phone speaker, a mono bluetooth earbud and the bake's own analysis all sum them.
+## The near ear's share of the voice at the deepest lean: 70/30 and never further, so the
+## far ear always hears the reader (about 7.4 dB apart at the limit).
+const LEAN_SHARE := 0.7
+const LEAN_DEPTH_MIN := 0.55            # a lean goes at least this far toward the limit
+const LEAN_TRAVEL_MIN := 1.4            # seconds per move, eased at both ends
+const LEAN_TRAVEL_MAX := 3.2
+const LEAN_HOLD_MIN := 0.8              # how long a lean is held, at the bottom of the dial
+const LEAN_HOLD_MAX := 6.0
+const LEAN_HOLD_FLOOR := 0.15           # the turn at the top of the dial: a sway, not a wobble
+const LEAN_REST_MAX := 45.0             # the longest rest at center, at the bottom of the dial
+
 var sample_rate := 22050
 var echo_wet := 0.0            # 0..1
 var echo_feedback := 0.42
@@ -177,6 +207,7 @@ var pad_seed := 0              # same text, same music
 # full range spans "just there" to "clearly part of the piece".
 var pad_level := 0.022
 var pad_duck := PAD_DUCK       # how far the bed steps back under speech
+var lean := 0.0                # 0..1 how often the reader leans to one side (see LEAN_SHARE)
 
 var _echo := PackedFloat32Array()
 var _echo_i := 0
@@ -224,6 +255,16 @@ var _bass_ph := 0.0
 var _bass_w := 0.0
 var _bass_env := 0.0
 var _bass_rise := false
+# The lean: a position in [-1, 1] (right is positive), eased from one place to the next.
+var _lean_rng := RandomNumberGenerator.new()
+var _lean_from := 0.0
+var _lean_to := 0.0
+var _lean_pos := 0.0
+var _lean_t := 0.0                      # seconds into the current move
+var _lean_dur := 0.0                    # its length; 0 = resting where it is
+var _lean_hold := 0.0                   # seconds of rest left before the next move
+var _lean_k := -1.0                     # the dial the hold was drawn for
+var _lp_v := 0.0                        # presence on the direct voice alone, for the lean
 
 func setup(sr: int) -> void:
 	sample_rate = sr
@@ -259,6 +300,16 @@ func setup(sr: int) -> void:
 	_bass_cool = 0.0
 	_bass_env = 0.0
 	_bass_rise = false
+	# its own generator, like the events: moving the Lean dial re-rolls nothing else
+	_lean_rng.seed = pad_seed + 104729
+	_lean_from = 0.0
+	_lean_to = 0.0
+	_lean_pos = 0.0
+	_lean_t = 0.0
+	_lean_dur = 0.0
+	_lean_k = -1.0
+	_lean_hold = 0.0
+	_lp_v = 0.0
 	room.setup(sr)
 
 
@@ -345,7 +396,18 @@ func _resolve_echo() -> void:
 
 ## Process in place. `buf` is mono float samples; returns the same array so the
 ## copy-on-write semantics of PackedFloat32Array cannot silently drop the work.
+## This is the centered mix - what [method process_stereo] gives both ears with no lean.
 func process(buf: PackedFloat32Array) -> PackedFloat32Array:
+	return _run(buf, false)[0]
+
+
+## The same chain, as left/right frames, with the direct voice placed by the lean. With
+## [member lean] at 0 and the reader at center, both channels are [method process]'s output.
+func process_stereo(buf: PackedFloat32Array) -> PackedVector2Array:
+	return _run(buf, true)[1]
+
+
+func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 	if _echo.is_empty():
 		setup(sample_rate)
 	_resolve_echo()
@@ -354,6 +416,12 @@ func process(buf: PackedFloat32Array) -> PackedFloat32Array:
 	room.prepare()
 	var room_on := room.is_active()
 	var n := buf.size()
+	var out := PackedVector2Array()
+	var direct_g := room.dry_gain() if room_on else 1.0
+	var pres_a := 1.0 - exp(-TAU * 900.0 * pow(2.0, 4.0 * presence) / sample_rate)
+	if stereo:
+		out.resize(n)
+		_resolve_lean()
 	var res_step := PackedFloat32Array()
 	res_step.resize(TONES)
 	for i in n:
@@ -460,12 +528,106 @@ func process(buf: PackedFloat32Array) -> PackedFloat32Array:
 
 		# --- presence: distance is a filter first, a gain second ---
 		if presence < 0.995:
-			var cut := 900.0 * pow(2.0, 4.0 * presence)
-			_lp += (1.0 - exp(-TAU * cut / sample_rate)) * (wet - _lp)
+			_lp += pres_a * (wet - _lp)
 			wet = _lp * maxf(presence, 0.05)
 
 		buf[i] = clampf(wet, -1.0, 1.0)
-	return buf
+
+		# --- lean: the direct voice, moved between the ears ---
+		# Everything above is linear, so the direct voice's share of `wet` is the dry
+		# sample through the room's dry gain and the same presence filter - and moving
+		# only that share leaves the room, the echo and the bed where they were.
+		if stereo:
+			var direct := dry * direct_g
+			if presence < 0.995:
+				_lp_v += pres_a * (direct - _lp_v)
+				direct = _lp_v * maxf(presence, 0.05)
+			var p := _tick_lean()
+			if p == 0.0:
+				out[i] = Vector2(buf[i], buf[i])
+			else:
+				var g := lean_gains(p)
+				out[i] = Vector2(clampf(wet + direct * (g.x - 1.0), -1.0, 1.0),
+					clampf(wet + direct * (g.y - 1.0), -1.0, 1.0))
+	return [buf, out]
+
+
+## The voice's gain in each ear at lean position [param p] (-1 left .. 1 right): the near
+## ear's share of the voice runs from a half to [constant LEAN_SHARE], and the pair keeps
+## constant power, so a lean moves the voice without making it louder or quieter overall.
+static func lean_gains(p: float) -> Vector2:
+	var r := 0.5 + (LEAN_SHARE - 0.5) * clampf(p, -1.0, 1.0)
+	var l := 1.0 - r
+	var norm := sqrt((l * l + r * r) * 0.5)
+	return Vector2(l / norm, r / norm)
+
+
+## The dial moved since the rest was drawn: a rest drawn for a sparser setting is cut to
+## the longest the new one would draw, so turning Lean up is heard in seconds rather than
+## after a rest the old setting chose - and turning it to 0 sends the reader home now.
+func _resolve_lean() -> void:
+	var k := clampf(lean, 0.0, 1.0)
+	if is_equal_approx(k, _lean_k):
+		return
+	# The reading opens at rest, at center: the first rest is drawn here, for the first
+	# dial the chain is given, rather than the reader leaning on the first word.
+	if _lean_k < 0.0:
+		_lean_hold = _lean_rng.randf_range(0.4, 1.0) * LEAN_REST_MAX * pow(1.0 - k, 1.5)
+	_lean_k = k
+	if _lean_dur <= 0.0:
+		var longest := LEAN_REST_MAX * pow(1.0 - k, 1.5) if absf(_lean_pos) < 0.01 \
+			else LEAN_HOLD_MAX * (1.0 - k) + LEAN_HOLD_FLOOR
+		_lean_hold = minf(_lean_hold, 0.0 if k <= 0.0 else longest)
+
+
+## One sample of the reader's movement: the position, eased (raised cosine, so every move
+## starts and ends at rest - a person leaning, not a pan sweep).
+func _tick_lean() -> float:
+	var dt := 1.0 / sample_rate
+	if _lean_dur > 0.0:
+		_lean_t += dt
+		if _lean_t >= _lean_dur:
+			_lean_pos = _lean_to
+			_lean_dur = 0.0
+		else:
+			var u := _lean_t / _lean_dur
+			_lean_pos = lerpf(_lean_from, _lean_to, 0.5 - 0.5 * cos(PI * u))
+		return _lean_pos
+	_lean_hold -= dt
+	if _lean_hold <= 0.0:
+		_next_lean()
+	return _lean_pos
+
+
+## Where the reader goes next, and how long they stay there.
+##   at center: lean to a side, then hold it a while (shorter as the dial rises);
+##   at a side: cross straight to the other side (lean^2 of the time) or come home,
+##              and rest at center (less, and less often, as the dial rises).
+## At 0 the only move left is home.
+func _next_lean() -> void:
+	var k := clampf(lean, 0.0, 1.0)
+	var home := absf(_lean_pos) < 0.01
+	var to := 0.0
+	var hold := 0.0
+	if k <= 0.0:
+		if home:
+			_lean_pos = 0.0
+			_lean_hold = 0.25                   # nothing to do: look again shortly
+			return
+	elif home or _lean_rng.randf() < k * k:
+		# a side: the other one after a crossing, either one from center
+		var side := -signf(_lean_pos) if not home else (-1.0 if _lean_rng.randf() < 0.5 else 1.0)
+		to = side * _lean_rng.randf_range(lerpf(LEAN_DEPTH_MIN, 0.85, k), 1.0)
+		hold = _lean_rng.randf_range(LEAN_HOLD_MIN, LEAN_HOLD_MAX) * (1.0 - k) + LEAN_HOLD_FLOOR
+	else:
+		hold = _lean_rng.randf_range(0.4, 1.0) * LEAN_REST_MAX * pow(1.0 - k, 1.5)
+	var dist := absf(to - _lean_pos)
+	_lean_from = _lean_pos
+	_lean_to = to
+	_lean_t = 0.0
+	# a crossing covers twice the ground of a lean, and takes a little longer to
+	_lean_dur = _lean_rng.randf_range(LEAN_TRAVEL_MIN, LEAN_TRAVEL_MAX) * (0.75 + 0.25 * dist)
+	_lean_hold = hold
 
 
 ## The key's root in Hz, or 0 before there is one.

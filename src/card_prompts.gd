@@ -33,6 +33,14 @@ class_name CardPrompts
 ## choices it has never seen - and the habits are in the form (every deck a human figure on every
 ## card, every running bit a status revised at each card), not in the subjects, which do vary.
 
+## A brief that says what its show is: a `## Format` or `## The format` section. Without one the show
+## is a tarot reading, as every agent is told ([method show_context]); with one, every agent is told
+## only that it is a show of cards at a table, and the brief says the rest.
+const FORMAT_HEADING := "(?im)^#{1,6}\\s*(?:the\\s+)?format\\s*:?\\s*$"
+## How many cards a producer who chooses the deck puts in the box, at least, and at most; never fewer
+## than twice the cards drawn, so the seed, not the producer, decides which come out.
+const BOX := [12, 30]
+
 ## How many words each passage runs to - the length of a tarot reading video comes from these.
 const WORDS := {"intro": [130, 190], "card": [110, 170], "close": [90, 140]}
 
@@ -116,8 +124,53 @@ static func deck_line(deck: Array) -> String:
 	return "THE DECK is this show's own, %d cards: %s." % [deck.size(), ", ".join(names)]
 
 
+## THE PRODUCER MAKES THE DECK ([method CardDeck.chooses]): what it is told, for a spread of
+## [param n] cards.
+static func chosen_deck_line(n: int) -> String:
+	var r := box_range(n)
+	return ("THE DECK is yours to choose for this episode: the brief's Cards section says what kind of cards "
+		+ "this show shows. Choose one deck, box or collection that fits it and this episode, and list its "
+		+ "cards in `deck` - between %d and %d of them, every one a card that collection would really hold, "
+		+ "each with what it is. You choose what is in the box, never what comes out: the deck is shuffled "
+		+ "from this episode's seed and %d cards come up, in an order nobody knows - so plan nothing that "
+		+ "depends on any one card coming up.") % [int(r[0]), int(r[1]), n]
+
+
+## How many cards a chosen deck holds for a spread of [param n]: `[least, most]`.
+static func box_range(n: int) -> Array:
+	var lo := maxi(int(BOX[0]), 2 * n)
+	return [lo, maxi(lo, int(BOX[1]))]
+
+
+## The brief says what its show is ([constant FORMAT_HEADING]).
+static func has_format(brief: String) -> bool:
+	return Manuscript._rx(FORMAT_HEADING).search(brief) != null
+
+
+## What the deck is, for a picture or a role: the kind the producer named ("baseball card set"), or
+## the tarot deck a show with no Format section reads.
+static func deck_noun(look: Dictionary) -> String:
+	return _s(look.get("kind", "")) if kind_named(look) else "tarot deck"
+
+
+## The producer named what kind of cards these are: the show is not a tarot reading.
+static func kind_named(look: Dictionary) -> bool:
+	return not _s(look.get("kind", "")).is_empty()
+
+
 ## The context every agent shares: which show, and its brief.
 static func show_context(title: String, brief: String) -> String:
+	if has_format(brief):
+		return ("You are part of the team behind a YouTube channel called \"%s\". Each episode is one "
+			+ "video filmed from the host's chair at a table: a deck of cards is shuffled on a cloth, cards "
+			+ "come up one at a time and are held up to the camera beside a page of text about each, then laid "
+			+ "down in a row or a pattern while the host talks. The brief's Format section says what kind of "
+			+ "show this is. The team's working words are a card reader's, whatever the show: the READER is the "
+			+ "host, the voice of the video; a READING is an episode; the SPREAD is the cards laid out, and its "
+			+ "POSITIONS the order they come up in; the BOOKLET is the page of text shown beside each card. "
+			+ "The brief says what each of those is on this show, and where it says otherwise, the brief wins.\n\n"
+			+ "THE SHOW'S BRIEF, from its creator. It governs everything you write:\n<brief>\n%s\n</brief>") \
+			% [title, brief.strip_edges()]
 	return ("You are part of the team behind a YouTube tarot channel called \"%s\". Each episode is "
 		+ "one tarot reading video, filmed from the reader's chair: the deck is shuffled on a cloth, "
 		+ "cards are drawn one at a time and held up to the camera beside the deck's little booklet, "
@@ -148,7 +201,7 @@ static func dice(seed: int) -> Dictionary:
 ## are set in and the frames round them. Passed in by the caller so this file names no asset.
 ## [param history] is the show's other episodes, newest first ([method CardEpisode.archive]).
 static func producer(title: String, brief: String, seed: int, cards: int, reversals: bool,
-		faces: Dictionary, frames: Dictionary, history: Array, deck: Array = []) -> Dictionary:
+		faces: Dictionary, frames: Dictionary, history: Array, deck: Array = [], chooses := false) -> Dictionary:
 	var d := dice(seed)
 	var past := PackedStringArray()
 	for i in mini(history.size(), PAST_FULL + PAST_LINES):
@@ -160,9 +213,11 @@ static func producer(title: String, brief: String, seed: int, cards: int, revers
 	if reversals:
 		lines.append("This show reads reversals: some cards will come up upside down.")
 	lines.append("")
-	lines.append(deck_line(deck))
+	lines.append(chosen_deck_line(cards) if chooses else deck_line(deck))
 	lines.append("")
-	lines.append("THE LOOK is a tarot deck that has never existed, and the table it is read on. Make it specific enough that an illustrator could paint every card in one consistent hand: what the cards picture (their cast) and how it is drawn, the medium and its influences, linework, texture, palette. Then the card back (a design that reads the same when the card is turned upside down - exactly symmetric under a half turn), how much of the deck is printed in metallic foil (`foil`, 0 for matte ink to 1 for gold leaf everywhere), the surface the cards lie on (seen from directly above: the bare material, dry and clean of anything spilled or strewn - the table's shape, any other cloth laid on it and whatever stands on it are set separately), the place the table stands in (seen past the far edge of the table, out of focus), the light - indoors or out, the hour and the weather, and what it comes through on its way to the table - and how many lights burn on the table - a candle in its holder, a candelabra, a dish of tea lights each count as one (what they are, and the rest of what stands on the table, is set separately). The card's frame, its name and its numeral are printed by the deck itself, so the illustrations carry no lettering.")
+	var shown := has_format(brief)
+	lines.append(("THE LOOK is how this deck is drawn and printed - a printing that has never existed - and the table it is shown on." if shown
+		else "THE LOOK is a tarot deck that has never existed, and the table it is read on.") + " Make it specific enough that an illustrator could paint every card in one consistent hand: what the cards picture (their cast) and how it is drawn, the medium and its influences, linework, texture, palette. Then the card back (a design that reads the same when the card is turned upside down - exactly symmetric under a half turn), how much of the deck is printed in metallic foil (`foil`, 0 for matte ink to 1 for gold leaf everywhere), the surface the cards lie on (seen from directly above: the bare material, dry and clean of anything spilled or strewn - the table's shape, any other cloth laid on it and whatever stands on it are set separately), the place the table stands in (seen past the far edge of the table, out of focus), the light - indoors or out, the hour and the weather, and what it comes through on its way to the table - and how many lights burn on the table - a candle in its holder, a candelabra, a dish of tea lights each count as one (what they are, and the rest of what stands on the table, is set separately). The card's frame, its name and its numeral are printed by the deck itself, so the illustrations carry no lettering.")
 	lines.append("THE CARD STOCK is the card's own color: it shows all round every picture and behind its name, and the deck's booklet is printed in the same colors. Decks are printed on stock of every color, dark and saturated as well as pale - choose the one that best sets off this deck's paintings, with an ink and accent that read on it.")
 	if not past.is_empty():
 		lines.append("")
@@ -185,9 +240,9 @@ static func producer(title: String, brief: String, seed: int, cards: int, revers
   "premise": "the episode's angle, in one or two sentences",
   "reader_mood": "how the reader is today",
   "running_bit": "any running bit for this episode - a bit the reader SAYS, never a thing done or an object shown (the viewer sees the table and the cards, never the reader), and never a way of speaking (the show's voice is fixed: no whispering, accents or singing)",
-  "spread": {"name": "the spread's name", "positions": [{"name": "position name", "asks": "what it asks"}]},
+  "spread": {"name": "the spread's name", "positions": [{"name": "position name", "asks": "what it asks"}]},%s
   "look": {
-    "deck_name": "the deck's name",
+    "deck_name": "the deck's name",%s
     "deck_style": "a paragraph an illustrator paints every card from",
     "palette": ["#rrggbb", "four to six colors"],
     "card_back": "the back design, symmetric under a half turn",
@@ -199,7 +254,11 @@ static func producer(title: String, brief: String, seed: int, cards: int, revers
     "light": {"kind": "what lights the table and how it moves: indoors or out, the hour, the weather (a clear sky, passing clouds, overcast, a storm), what the sun comes through (a window, blinds, leaves, an awning), any lamps or torches round the room", "color": "#rrggbb", "warmth": "warm or cool"},
     "candles": 2
   }
-}""" % [", ".join(frames.keys()), ", ".join(faces.keys())])
+}""" % [("""
+  "deck": [{"name": "the name printed on the card", "group": "its set, team, suit or type, if it has one", "meaning": "what the card is and why it is in this box, one or two sentences"}],""" if chooses else ""),
+		("""
+    "kind": "what these cards are, as a noun phrase with no article: baseball card set, flashcard deck, ...",""" if shown else ""),
+		", ".join(frames.keys()), ", ".join(faces.keys())])
 	return {"system": show_context(title, brief), "prompt": "\n".join(lines), "dice": d}
 
 
@@ -208,7 +267,7 @@ static func producer(title: String, brief: String, seed: int, cards: int, revers
 static func designer(title: String, brief: String, look: Dictionary, card: Dictionary,
 		reversals: bool, history: Array = []) -> Dictionary:
 	var lines := PackedStringArray()
-	lines.append("You are the DESIGNER of the tarot deck \"%s\", used on this show. Its look:" % String(look.get("deck_name", "")))
+	lines.append("You are the DESIGNER of the %s \"%s\", used on this show. Its look:" % [deck_noun(look), String(look.get("deck_name", ""))])
 	lines.append(String(look.get("deck_style", "")))
 	lines.append("Palette: %s." % ", ".join(PackedStringArray(look.get("palette", []))))
 	lines.append("")
@@ -220,7 +279,8 @@ static func designer(title: String, brief: String, look: Dictionary, card: Dicti
 	if not meaning.is_empty():
 		lines.append("What it means in this deck - grounding, not text to copy: %s" % meaning)
 	lines.append("")
-	lines.append("1. THE ILLUSTRATION: what this card shows, for the illustrator who paints the whole deck - subject, composition, the traditional symbolism of this card reinterpreted in this deck's world. Whatever it pictures is its own, described so it could not be mistaken for another card's. Tall portrait format. No words, letters or numbers anywhere in the picture: the card's frame and name are printed separately.")
+	lines.append("1. THE ILLUSTRATION: what this card shows, for the illustrator who paints the whole deck - subject, composition, %s. Whatever it pictures is its own, described so it could not be mistaken for another card's. Tall portrait format. No words, letters or numbers anywhere in the picture: the card's frame and name are printed separately." % (
+		"what this card is, as this deck pictures it" if kind_named(look) else "the traditional symbolism of this card reinterpreted in this deck's world"))
 	lines.append("2. ITS ENTRY IN THE DECK'S LITTLE BOOKLET, which is shown on screen beside the card. Write it the way the brief says this deck's booklet speaks (if it does not say, in the earnest, slightly old-fashioned voice decks' booklets use). It stands alone: never mention another card.")
 	var before := _pictured_before(history, String(card.get("name", "")))
 	if not before.is_empty():
@@ -275,22 +335,25 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 	lines.append("The light: %s." % String(light.get("kind", "candlelight")))
 	lines.append("")
 	lines.append("THE TABLE ITSELF")
-	lines.append("The table is yours too: its top, and what is laid over it. Most readers read at a plain rectangular table; some at a round or an oval one, a few at an octagonal one; some tables are bare boards, some ornate - a molded edge, an inlaid band, a marble slab, a scalloped rim. Over the top go its LAYERS, from the bottom up: a tablecloth hanging over the edge, a runner across it, a square laid as a diamond, a mat or a tapestry under the cards - none, one, or several at different turns. Build the table this reader of this world would own.")
+	lines.append("The table is yours too: its top, and what is laid over it. Most readers read at a plain rectangular table; some at a round or an oval one, a few at an octagonal one; some tables are bare boards, some ornate - a molded edge, an inlaid band, a marble slab, a scalloped rim. Over the top go its LAYERS, from the bottom up: a tablecloth hanging over the edge, a runner across it, a square laid as a diamond, a mat or a tapestry under the cards - none, one, or several at different turns. A dressed table is most often more than one layer: a cloth or a runner, and something laid over it that lets it show round the edges - each in its own fabric and pattern; a single mat lying where the old cloth lay is the least a table can be. Build the table this reader of this world would own.")
 	lines.append("THE PAINTING is this episode's surface, painted for it%s: give it its place - as the top itself (boards or a slab, as it is painted), as the tablecloth, or as a layer laid over the rest (pattern \"painting\") - and build the rest round it in colors that belong with it. A table that leaves `top` and `layers` out is the plain board table with the painting as a cloth on it, as every earlier table was." % (" (attached)" if cloth else ""))
 	lines.append("DEPTH: the light is low and rakes across the table, so relief reads - the threads of a burlap, the grain of brushed oak, a quilt's puffed diamonds, a brocade's raised figures, the seams between boards. Give the surfaces that would really have it their relief; a smooth silk or a polished slab has little.")
 	lines.append("The camera looks down across the top from the reader's chair: it sees the top's far edge and the room past it, and a little of the sides; what hangs over the near edge is under the lens.")
 	lines.append("")
 	lines.append(Tables.describe())
 	lines.append("")
+	var tarot := not kind_named(look)
 	lines.append("THE TABLE A READER SETS")
-	lines.append("A reader sets the table on purpose, before every reading, and each thing on it has a reason in the reading's world - light to read by, protection, the four elements the suits stand for, the reading's own subject, devotion, comfort. Give each thing its reason in a few words.")
+	lines.append("A reader sets the table on purpose, before every reading, and each thing on it has a reason in the reading's world - light to read by, protection, the four elements the suits stand for, the reading's own subject, devotion, comfort. Give each thing its reason in a few words." if tarot
+		else "The host sets the table on purpose, before every episode, and each thing on it has a reason in the show's world, as the brief tells it - light to see the cards by, the episode's own subject, what someone who keeps these cards keeps within reach, comfort. Give each thing its reason in a few words.")
 	lines.append("This table belongs to this episode: its place, its era, its materials and its palette - the things a reader of that world would own and set out. Invent them; never reach for the same few things every time.")
-	lines.append("Many readers keep stones on the table: one large piece - a cluster, a geode, a sphere, a tower - or small tumbled ones of several kinds, set straight on the cloth in a loose handful, a row or an arc, or heaped in a dish or a shell; each for what it is said to hold. Give each stone its own colors, and its play of light if it has one.")
+	if tarot:
+		lines.append("Many readers keep stones on the table: one large piece - a cluster, a geode, a sphere, a tower - or small tumbled ones of several kinds, set straight on the cloth in a loose handful, a row or an arc, or heaped in a dish or a shell; each for what it is said to hold. Give each stone its own colors, and its play of light if it has one.")
 	lines.append("Exactly %d lit thing%s - a candle in its holder, a candelabra, a dish of tea lights: each burns as one light, however many flames it has (a flame is a wax part's `wick` or `wicks`) - and %d to %d other things." % [candles, "" if candles == 1 else "s", lo, hi])
 	lines.append("Candles take every form a reader of this world would light: a taper in a tall stick, a squat pillar with two or three wicks, tea lights in their tins, a votive in glass, a church candle on a pricket, an oil lamp, a candelabra with a taper in each cup. Make this table's its own, not always a pillar.")
 	lines.append("Compose it as a reader does: a few groups and a few things alone, never a row of things evenly spaced. Heights vary within a group, and odd numbers sit well. The middle of the cloth stays bare: the deck is shuffled there, and the cards drawn and laid.")
 	lines.append("Every thing is a real object, set out in earnest. Nothing on the table carries words, letters, numbers or labels.")
-	lines.append("WHAT THE PARTS CAN MAKE: things of simple, solid form - vessels, candles and their holders, lamps, tools, boxes, books, bottles, bowls and dishes, stones and crystals, dried flowers and herbs. They cannot make a BODY: nothing with a head or limbs - no animal, fish, bird, insect or person, living or dead, no figurine, statue, doll or carving of one, and no fish or meat laid out as food. Built from balls and rods, a body reads as a crude toy or a monster. Where the reading's subject is a creature, a thing from its world stands for it - the tool that catches it, the vessel it is kept or served in, the stone named after it.")
+	lines.append("WHAT THE PARTS CAN MAKE: things of solid form - vessels, teapots and cups, candles and their holders, lamps, tools, boxes, books, bottles, bowls and dishes, stones and crystals, shells, living plants in their pots (a cactus, a snake plant, a fern, a flower) and cut, dried flowers and herbs. They cannot make a BODY: nothing with a head or limbs - no animal, fish, bird, insect or person, living or dead, no figurine, statue, doll or carving of one, and no fish or meat laid out as food. Built from balls and rods, a body reads as a crude toy or a monster. Where the reading's subject is a creature, a thing from its world stands for it - the tool that catches it, the vessel it is kept or served in, the stone named after it.")
 	lines.append("")
 	lines.append("WHERE THINGS STAND - each thing's `place`, and the tallest a thing there can be and still be seen whole:")
 	for z in CardTable.ZONES:
@@ -305,7 +368,7 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 	lines.append(Props.describe())
 	lines.append("")
 	lines.append("DETAIL: the camera sees a thing 10 cm tall at about a sixth of the picture's height, so anything under a few millimeters is lost - engraving, glaze, grain and pattern belong in the material and its ornament, not in extra parts. Most things need 1 to 5 parts; none more than %d." % Props.MAX_PARTS)
-	lines.append("SIZES are the real sizes of the real things. For scale, a tarot card here is 7 x 12 cm, and the deck stands 3 cm high.")
+	lines.append("SIZES are the real sizes of the real things. For scale, a card here is 7 x 12 cm, and the deck stands 3 cm high.")
 	lines.append("")
 	lines.append("THE AIR: beside its things, a table can have air that moves - fog rolling in behind it, a few points of light drifting through, a burst of sparks or glitter at a moment of the reading. It goes in `effects`, a list beside `things` and `materials`. The air is part of the table's world as its things are, and the brief says what this show wants of it; a table may have none.")
 	lines.append(Effects.describe(air_regions(), CardTable.MOMENTS))
@@ -550,6 +613,8 @@ static func _past(e: Dictionary) -> String:
 		lines.append("  Running bit: %s" % clip(_s(p.get("running_bit", "")), 30))
 	lines.append("  Spread: %s" % _s(_d(p.get("spread")).get("name", "")))
 	lines.append("  Deck \"%s\": %s" % [_s(look.get("deck_name", "")), clip(_s(look.get("deck_style", "")), 40)])
+	if kind_named(look):
+		lines.append("  Its cards were a %s%s" % [_s(look.get("kind", "")), (": " + clip(", ".join(_box_names(p)), 30)) if not _box_names(p).is_empty() else ""])
 	var pictured := PackedStringArray()
 	for c in e.get("cards", []) if e.get("cards") is Array else []:
 		var art := _s(_d(c).get("art", ""))
@@ -564,6 +629,14 @@ static func _past(e: Dictionary) -> String:
 	lines.append("  Cloth: %s | Room: %s | Light: %s, %s lit on the table" % [clip(_s(look.get("surface", "")), 14),
 		clip(_s(look.get("setting", "")), 16), clip(_s(light.get("kind", "")), 12), _s(look.get("candles", ""))])
 	return "\n".join(lines)
+
+
+## The cards a producer put in its box ([method chosen_deck_line]), by name.
+static func _box_names(plan: Dictionary) -> PackedStringArray:
+	var out := PackedStringArray()
+	for c in plan.get("deck", []) if plan.get("deck") is Array else []:
+		out.append(_s(_d(c).get("name", "")))
+	return out
 
 
 ## An episode past the first [constant PAST_FULL], in a line.
@@ -703,8 +776,8 @@ static func _deck_line(look: Dictionary) -> String:
 static func card_image(look: Dictionary, card: Dictionary, art: String, target: String,
 		has_back: bool, chain: int) -> String:
 	var lines := PackedStringArray([_paint_head(target), ""])
-	lines.append("THE PICTURE: the illustration for %s in the tarot deck \"%s\": %s" % [
-		String(card.get("name", "")), String(look.get("deck_name", "")), art.strip_edges()])
+	lines.append("THE PICTURE: the illustration for %s in the %s \"%s\": %s" % [
+		String(card.get("name", "")), deck_noun(look), String(look.get("deck_name", "")), art.strip_edges()])
 	lines.append("")
 	lines.append(_deck_line(look))
 	lines.append("FORMAT: PORTRAIT 2:3 (1024x1536). The card's picture only, composed for a tall card and running to every edge: no border, no frame, no panel, no title, no numbers, no letters or writing of any kind - the frame and the card's name are printed around it separately. Keep the important things away from the outer tenth on each side.")
@@ -726,8 +799,8 @@ static func card_image(look: Dictionary, card: Dictionary, art: String, target: 
 
 static func back_image(look: Dictionary, target: String) -> String:
 	var lines := PackedStringArray([_paint_head(target), ""])
-	lines.append("THE PICTURE: the BACK of the tarot deck \"%s\" - the side every card shows face down. %s" % [
-		String(look.get("deck_name", "")), String(look.get("card_back", ""))])
+	lines.append("THE PICTURE: the BACK of the %s \"%s\" - the side every card shows face down. %s" % [
+		deck_noun(look), String(look.get("deck_name", "")), String(look.get("card_back", ""))])
 	lines.append("It must be EXACTLY SYMMETRIC under a half turn (180 degrees), so a card lying upside down cannot be told from one the right way up.")
 	lines.append("")
 	lines.append(_deck_line(look))
@@ -750,10 +823,22 @@ static func surface_image(look: Dictionary, target: String) -> String:
 	return "\n".join(lines)
 
 
+## THE PAINTING'S HEIGHT MAP: the same surface redrawn as depth, from the cloth's painting attached -
+## for the relief the table's light rakes ([method Tables.height_fit] checks it lies under it).
+static func height_image(look: Dictionary, target: String) -> String:
+	var lines := PackedStringArray([_paint_head(target), ""])
+	lines.append("THE ATTACHED IMAGE is a texture photographed straight down: %s. Make its HEIGHT MAP - the depth map a 3D renderer lays under that texture." % String(look.get("surface", "a reading cloth")))
+	lines.append("THE SAME IMAGE, REDRAWN AS HEIGHT: every board, seam, thread, knot, crack, stitch, carving and pattern exactly where it is in the attached image, the same size and the same shape - the frame unmoved: no crop, no zoom, no turn, no flip, nothing added or left out. Laid over the attached image, every edge must fall on its edge.")
+	lines.append("GRAY ONLY, and gray means height: white where the surface stands highest, black its deepest hollows (gaps between boards, cuts, the spaces between threads), middle gray the general surface. A flat print or dye on a smooth surface has no height and is not drawn. No color, no light, no shadow or shading from any side, no highlights - height alone.")
+	lines.append("FORMAT: the same size and shape as the attached image (LANDSCAPE 3:2, 1536x1024). No border, no text, no watermark.")
+	return "\n".join(lines)
+
+
 static func backdrop_image(look: Dictionary, target: String) -> String:
 	var light: Dictionary = look.get("light", {}) if look.get("light") is Dictionary else {}
 	var lines := PackedStringArray([_paint_head(target), ""])
-	lines.append("THE PICTURE: a photograph of the room or the world a tarot reader sits in, taken from the reader's chair: %s. Lit by %s." % [
+	lines.append("THE PICTURE: a photograph of the room or the world %s sits in, taken from %s chair: %s. Lit by %s." % [
+		"a tarot reader" if not kind_named(look) else "the host of a show of cards", "the reader's" if not kind_named(look) else "the host's",
 		String(look.get("setting", "a quiet room")), String(light.get("kind", "low lamplight"))])
 	lines.append("THE CAMERA IS LEVEL, at a seated person's eye height - about 110 cm above the floor - looking straight ahead through a wide %d mm lens: the eye's height (the horizon) runs straight across the exact middle of the picture, and every upright line stays upright, none leaning in." % int(CardTable.BACKDROP_LENS))
 	lines.append("ONLY THE LOWER THIRD WILL BE SEEN, just past the far edge of a table and out of focus. So the lower half carries the place: the floor or the ground and what stands or lies on it - rugs, the feet of furniture, low shelves, baskets, a hearth, a doorway's sill, the ground or water running away outdoors - one place, its broad shapes and its light. Do NOT show a table, cards, hands or people: the table stands in front of this picture separately.")

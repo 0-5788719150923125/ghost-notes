@@ -483,13 +483,13 @@ func _flicker() -> void:
 ## The retired measure: the cloth's mean lightness within [param r] meters of [param at].
 func _mean_lum(at: Vector3, r: float) -> float:
 	var g := TableMedium.LUM_GRID
-	var cell := Vector2(TableMedium.CLOTH.x / g.x, TableMedium.CLOTH.y / g.y)
+	var rect := TableMedium.LUM_RECT
+	var cell := rect.size / Vector2(g)
 	var sum := 0.0
 	var n := 0
 	for gy in g.y:
 		for gx in g.x:
-			var c := Vector2(medium._cloth.position.x + (gx + 0.5 - g.x * 0.5) * cell.x,
-				medium._cloth.position.z + (gy + 0.5 - g.y * 0.5) * cell.y)
+			var c := Vector2(rect.position.x + (gx + 0.5) * cell.x, rect.position.y + (gy + 0.5) * cell.y)
 			if c.distance_to(Vector2(at.x, at.z)) <= r:
 				sum += medium._lum[gy * g.x + gx]
 				n += 1

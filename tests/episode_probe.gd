@@ -4,13 +4,14 @@ extends SceneTree
 ## episode directory the Tarot panel uses, driven from the command line.
 ##
 ##   godot --headless --path . --script res://tests/episode_probe.gd -- \
-##       --spec ../rift/tarot/truthful-tarot.md --seed 2 [--only plan,draw] [--redo say:3]
+##       --spec ../rift/tarot/truthful-tarot.md --seed 2 [--only plan,draw] [--redo say:3] [--root <dir>]
 ##
 ## NOT A GATE: it spends real quota, writes into the author's own episodes
 ## (user://cards/<show>/<seed>/) and takes minutes. It exists to make an episode headlessly - for
 ## a look probe to render, or to compare seeds - and it prints every step as it lands.
 ## `--only` stops once the named steps exist; `--redo` deletes a step (and what was made from it)
-## first, as the panel's redo menu does.
+## first, as the panel's redo menu does. `--root` keeps the episodes in another folder - a copy of an
+## episode, so a probe's step never touches the author's.
 
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -30,6 +31,10 @@ func _init() -> void:
 	var seed_arg := _arg(args, "--seed", str(knobs.get("seed", 1)))
 	var seed := CardDeck.true_seed() if seed_arg == "new" else int(seed_arg)
 	AgentJobs.allow_for_tool()
+	# `--root <dir>`: episodes kept there instead of the author's own (a COPY to work on)
+	var root := _arg(args, "--root")
+	if not root.is_empty():
+		CardEpisode.root = root
 	var ep := CardEpisode.open(show, seed)
 	var redo := _arg(args, "--redo")
 	if not redo.is_empty():
@@ -37,7 +42,7 @@ func _init() -> void:
 	var only := _arg(args, "--only")
 	var want: Array = Array(only.split(",", false)) if not only.is_empty() else []
 	var body := Manuscript.strip_frontmatter(raw)
-	var prod := CardProducer.new(ep, {"title": title, "brief": CardDeck.strip(body), "deck": CardDeck.of(body),
+	var prod := CardProducer.new(ep, {"title": title, "brief": CardDeck.strip(body), "deck": CardDeck.of(body), "chooses": CardDeck.chooses(body),
 		"draw": knobs.get("draw", [3, 6]), "reversals": bool(knobs.get("reversals", true)),
 		"jumpers": bool(knobs.get("jumpers", true)), "writer": String(knobs.get("writer", "claude")),
 		"writer_model": String(knobs.get("writer_model", "")), "painter": String(knobs.get("painter", "codex")),

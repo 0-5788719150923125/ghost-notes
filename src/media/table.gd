@@ -350,6 +350,7 @@ var _furniture := {}                 # the table itself, built (Tables.build): i
 var _top := {}                       # ...its top, made safe: where cards and things may lie
 var _top_o := Tables.top_outline({})  # ...its outline, read once (Tables.sdf), for the thousands of spots a thing is tried at
 var _painting_tex: Texture2D = null  # the episode's surface painting, as laid on the table
+var _height_tex: Texture2D = null    # ...the painter's height map of it, when one lined up with it
 var _backdrop: MeshInstance3D
 var _backdrop_mat: ShaderMaterial
 var _rest_plan: Dictionary = {}     # the wash plan [member _rest_steps] are of
@@ -903,11 +904,17 @@ func _poll_pictures(force := false) -> void:
 	# THE PAINTING of the episode's surface, laid wherever the table takes it ([Tables]: its cloth, its
 	# top, a runner...) - or each such surface's own color until it is painted
 	var cloth := _picture(dir.path_join("surface.png"), force)
-	if cloth != _painting_tex:
+	# ...and its DEPTH, where the painter drew a height map that lies under it (`height.json` beside it
+	# is its fit: CardProducer._land_height)
+	var depth := _picture(dir.path_join("height.png"), force) if FileAccess.file_exists(dir.path_join("height.json")) else null
+	if cloth != _painting_tex or depth != _height_tex:
+		var relit := cloth != _painting_tex
 		_painting_tex = cloth
-		Tables.apply_painting(_furniture, cloth)
-		_lum = _surface_lum()
-		_heat_cells = {}
+		_height_tex = depth
+		_apply_painting()
+		if relit:
+			_lum = _surface_lum()
+			_heat_cells = {}
 	# a cloth that landed after the candles stood (live, it is painted while a reading can already
 	# be playing) lights the table again
 	if _painting_tex != _lit_cloth:
@@ -931,6 +938,18 @@ func _poll_pictures(force := false) -> void:
 	elif _backdrop_mat.get_shader_parameter("picture") == null:
 		var pal2: Array = _look.get("palette", CardTable.FALLBACK_PALETTE)
 		_backdrop_mat.set_shader_parameter("tint", CardTable.color(String(pal2[0])).darkened(0.25))
+
+
+## The painting and its height map laid on whatever surfaces of the table take them, the map shifted
+## onto the painting as its fit found (`height.json`).
+func _apply_painting() -> void:
+	var shift := Vector2.ZERO
+	var fit_path := String(_pay.get("dir", "")).path_join("height.json")
+	if _height_tex != null and FileAccess.file_exists(fit_path):
+		var fit: Variant = JSON.parse_string(FileAccess.get_file_as_string(fit_path))
+		if fit is Dictionary and (fit as Dictionary).get("shift") is Array and ((fit as Dictionary)["shift"] as Array).size() == 2:
+			shift = Vector2(float(fit["shift"][0]), float(fit["shift"][1]))
+	Tables.apply_painting(_furniture, _painting_tex, _height_tex, shift)
 
 
 ## THE PAINTING SMALL, in linear light - what [method Tables.surface_lum] reads the table's lightness
@@ -1120,7 +1139,7 @@ func _build_table(spec: Dictionary = {}) -> void:
 	_top = spec["top"]
 	_top_o = Tables.top_outline(_top)
 	_root3.add_child(_furniture["node"])
-	Tables.apply_painting(_furniture, _painting_tex)
+	_apply_painting()
 	# its lightness before anything stands on it: a candle looks for dark cloth
 	_lum = _surface_lum()
 	_lights = []

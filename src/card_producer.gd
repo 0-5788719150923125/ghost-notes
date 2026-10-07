@@ -226,8 +226,12 @@ func _cards_range() -> Array:
 
 
 ## The deck the show reads with (see [CardDeck]): handed over in the spec, the standard 78 when
-## the spec has none.
+## the spec has none - or, when the producer chooses it (`chooses`, [method CardDeck.chooses]), the
+## one in this episode's plan, and none before the plan is made.
 func _deck() -> Array:
+	if bool(spec.get("chooses", false)):
+		var box: Variant = _plan().get("deck", [])
+		return box if box is Array else []
 	var d: Variant = spec.get("deck", [])
 	return d if d is Array and not (d as Array).is_empty() else CardDeck.standard()
 
@@ -236,14 +240,16 @@ func _deck() -> Array:
 ## deck holds.
 func _spread_n() -> int:
 	var r := _cards_range()
-	return mini(spread_size(episode.seed, int(r[0]), int(r[1])), _deck().size())
+	var n := spread_size(episode.seed, int(r[0]), int(r[1]))
+	# a deck the producer chooses is made for the spread, at least twice its size (CardPrompts.box_range)
+	return n if bool(spec.get("chooses", false)) else mini(n, _deck().size())
 
 
 func _make_plan() -> void:
 	var n := _spread_n()
 	var p := CardPrompts.producer(String(spec.get("title", "")), String(spec.get("brief", "")),
 		episode.seed, n, bool(spec.get("reversals", true)), CardTable.FACES,
-		CardTable.FRAMES, CardEpisode.archive(episode.show, episode.seed), _deck())
+		CardTable.FRAMES, CardEpisode.archive(episode.show, episode.seed), _deck(), bool(spec.get("chooses", false)))
 	_submit_text("plan", p, "best")
 
 
@@ -334,6 +340,9 @@ func _make_image(step: String) -> void:
 			_submit_image(step, CardPrompts.back_image(look, target), [])
 		"surface":
 			_submit_image(step, CardPrompts.surface_image(look, target), [])
+		"height":
+			# the painting's depth, redrawn FROM the painting - an edit of it, checked as it lands
+			_submit_image(step, CardPrompts.height_image(look, target), [episode.file_of("image:surface")])
 		"backdrop":
 			# THE VIEW IT IS ASKED FOR, kept beside it: the table projects a level picture from the
 			# camera's eye, and keeps a picture made before (none beside it) as it always stood
@@ -497,6 +506,8 @@ func _land(step: String, res: Dictionary) -> void:
 					else episode.write_text(step, t)
 			"image":
 				err = "" if episode.has(step) else "the picture did not arrive"
+				if err.is_empty() and step == "image:height":
+					err = _land_height()
 			"table":
 				err = _land_table(String(res.get("text", "")))
 				if not err.is_empty() and had_tools:
@@ -507,6 +518,24 @@ func _land(step: String, res: Dictionary) -> void:
 	push_warning("ghost: cards %s - %s" % [step, err])
 	if int(_tries.get(step, 0)) > RETRIES:
 		_errors[step] = err
+
+
+## THE HEIGHT MAP, KEPT ONLY IF IT LIES UNDER THE PAINTING ([method Tables.height_fit]): its score
+## and shift written beside it (`height.json`, which the table reads), or the map removed and why.
+func _land_height() -> String:
+	var paint := Image.load_from_file(episode.file_of("image:surface")) if episode.has("image:surface") else null
+	var h := Image.load_from_file(episode.file_of("image:height"))
+	if paint == null or h == null or paint.is_empty() or h.is_empty():
+		DirAccess.remove_absolute(episode.file_of("image:height"))
+		return "the height map or the painting could not be read"
+	var fit := Tables.height_fit(paint, h)
+	var score := float(fit["score"])
+	print("ghost: cards image:height - lies under the painting at %.2f, shifted %s" % [score, str(fit["shift"])])
+	if score < Tables.FIT_LEAST:
+		DirAccess.remove_absolute(episode.file_of("image:height"))
+		return "the height map did not line up with the painting (%.2f, %.2f needed): the painting's own detail stands in" % [score, Tables.FIT_LEAST]
+	var shift: Vector2 = fit["shift"]
+	return TextGen.put(episode.dir.path_join("height.json"), JSON.stringify({"score": score, "shift": [shift.x, shift.y]}, "\t"))
 
 
 func _land_plan(text: String) -> String:
@@ -540,9 +569,43 @@ func _land_plan(text: String) -> String:
 	if not (plan.get("look") is Dictionary):
 		return "the plan has no look"
 	plan["look"] = CardTable.sanitize_look(plan["look"] as Dictionary)
+	if (plan["look"] as Dictionary).has("kind"):
+		plan["look"]["kind"] = _str(plan["look"]["kind"])
+	if bool(spec.get("chooses", false)):
+		var box := _land_box(plan.get("deck"), n)
+		if box.is_empty():
+			return "the plan's deck has fewer than the %d cards the box needs" % int(CardPrompts.box_range(n)[0])
+		plan["deck"] = box
+	else:
+		plan.erase("deck")
 	plan["seed"] = episode.seed
 	plan["dice"] = CardPrompts.dice(episode.seed)
 	return episode.write_json("plan", plan)
+
+
+## THE BOX A PRODUCER CHOSE, in the shape [method CardDeck.parse] gives a listed deck - `{key, name,
+## numeral, group, meaning}`, keys unique - or empty when it holds fewer than the box's least
+## ([method CardPrompts.box_range]): a box the size of the spread would be the producer's pick of the
+## cards, not the seed's. More than the most are cut.
+func _land_box(v: Variant, n: int) -> Array:
+	var r := CardPrompts.box_range(n)
+	var out: Array = []
+	var keys := {}
+	for c in v if v is Array else []:
+		var d: Dictionary = c if c is Dictionary else {"name": c}
+		var name := _str(d.get("name", ""))
+		if name.is_empty() or out.size() >= int(r[1]):
+			continue
+		var key := CardEpisode.slug(name)
+		var k := key
+		var i := 2
+		while keys.has(k):
+			k = "%s-%d" % [key, i]
+			i += 1
+		keys[k] = true
+		out.append({"key": k, "name": name, "numeral": "", "group": _str(d.get("group", "")),
+			"meaning": _str(d.get("meaning", ""))})
+	return out if out.size() >= int(r[0]) else []
 
 
 func _land_design(step: String, text: String) -> String:

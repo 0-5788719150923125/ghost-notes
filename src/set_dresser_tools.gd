@@ -773,6 +773,12 @@ func _part_troubles(list: Array, depth: int, budget: Array, path: String, out: P
 		if shape == "tube" and Props._points3(d.get("path"), Props.MAX_SIZE).size() < 2:
 			out.append("part %s: a tube's path needs two [x, y, z] points or more - left out" % where)
 			continue
+		if d.has("warp") and not (d["warp"] is Dictionary):
+			out.append("part %s: its warp is not {\"bend\": ..., ...} - not warped" % where)
+		elif d.get("warp") is Dictionary:
+			for k in (d["warp"] as Dictionary):
+				if not (Props.WARPS.has(String(k)) or String(k) in ["scale", "lean"]):
+					out.append("part %s: \"%s\" is not a warp - ignored" % [where, String(k)])
 		budget[0] = int(budget[0]) - 1
 		var names: Array = d["material"] if d.get("material") is Array else [d.get("material", "")]
 		for m in names:

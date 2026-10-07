@@ -49,7 +49,7 @@ func _run() -> void:
 		return
 	AgentJobs.allow_for_tool()
 	var body := Manuscript.strip_frontmatter(raw)
-	var prod := CardProducer.new(ep, {"title": title, "brief": CardDeck.strip(body), "deck": CardDeck.of(body),
+	var prod := CardProducer.new(ep, {"title": title, "brief": CardDeck.strip(body), "deck": CardDeck.of(body), "chooses": CardDeck.chooses(body),
 		"writer": "claude", "writer_model": model})
 	print("set_dresser_run_probe: %s #%d (a copy, %s) with %s" % [show, seed, ep.dir, model])
 	var t0 := Time.get_ticks_msec()

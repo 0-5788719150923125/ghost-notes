@@ -28,7 +28,8 @@ extends SceneTree
 ##   a new plan takes it, no card reaches the set dresser, and its prompt names every shape,
 ##   material, ornament and zone the builder knows, with the headroom of each zone.
 ## - WHAT IS BUILT is safe whatever was written: junk is dropped or clamped, flames are capped, a
-##   thing stands on y = 0 with a foot to go round, and a candle's flame is lit at its wax's top.
+##   thing stands on y = 0 with a foot to go round (every shape, lofts, coils and warps among them),
+##   and a candle's flame is lit at its wax's top.
 ## - CANDLES of every form: wicks set round a top or placed by hand, a candelabra written once as a
 ##   GROUP copied round, groups nested only so deep, extruded outlines standing sound - and a table
 ##   lights no more things, and no thing more flames, than it may.
@@ -838,10 +839,20 @@ func _things_built() -> bool:
 					"copies": {"heap": {"count": 9, "radius": 1.5}, "jitter": 0.8}, "at": [0, 0, 12]},
 				{"shape": "lathe", "profile": [[0, 0], [3, 0], [3.5, 5], [0, 5]], "sides": 6, "lobes": 5, "twist": 90,
 					"ornament": {"kind": "stars", "count": 6, "color": "#ffcc00"}, "copies": {"scatter": {"count": 4, "radius": 5}, "jitter": 1}}]},
+			{"name": "every new shape", "parts": [
+				{"shape": "loft", "path": [[0, 0, 0], [2, 4, 0, 1], [3, 8, 1]], "wall": 0.2,
+					"sections": [{"size": 2}, {"outline": "lens", "size": [3, 1], "turn": 30}, {"size": 0}]},
+				{"shape": "loft", "height": 6, "outline": "drop", "sections": [3, {"size": [2, 4], "turn": 90}], "at": [8, 0, 0]},
+				{"shape": "coil", "turns": 3, "radius": 1, "radius2": 3, "thickness": 0.2, "at": [-8, 0, 0]},
+				{"shape": "tube", "path": [[0, 0, 0], [3, 0, 0, 1], [3, 3, 0, 0], [5, 4, 0]], "smooth": false, "wall": 0.1,
+					"warp": {"wobble": 0.3}, "at": [0, 0, 8]},
+				{"shape": "box", "size": [2, 8, 2], "at": [0, 0, -8],
+					"warp": {"bend": 45, "bend_to": 270, "twist": 30, "lean": [1, 0], "taper": 0.2, "scale": [1, 1, 0.5]}},
+				{"shape": "extrude", "outline": "lens", "size": [4, 2], "height": 3, "warp": {"twist": 60}, "at": [8, 0, 8]}]},
 		]}
 	var safe := CardTable.sanitize_table(junk, {"palette": ["#112233", "#445566", "#778899"]})
 	var things: Array = safe["things"]
-	_ok(things.size() == 3, "junk did not lose exactly the thing with nothing buildable (%d things left)" % things.size())
+	_ok(things.size() == 4, "junk did not lose exactly the thing with nothing buildable (%d things left)" % things.size())
 	var mats: Dictionary = safe["materials"]
 	_ok(String((mats["m"] as Dictionary)["kind"]) == "painted" and String((mats["m"] as Dictionary)["color"]).begins_with("#")
 		and float((mats["m"] as Dictionary)["polish"]) <= 1.0, "a junk material was kept as written: %s" % str(mats["m"]))
@@ -1431,8 +1442,8 @@ func _candles() -> bool:
 		((b as Dictionary)["node"] as Node).free()
 	# the set dresser is told all of it
 	var words := Props.describe()
-	_ok(words.contains("- extrude:") and words.contains("GROUPS:") and words.contains("`wicks`") and words.contains("FLAMES:"),
-		"the set dresser is not told of extrudes, groups, wicks and one light a thing")
+	_ok(words.contains("- extrude:") and words.contains("GROUPS:") and words.contains("`wicks`") and words.contains("FLAMES:")
+		and words.contains("WARP:"), "the set dresser is not told of extrudes, groups, wicks, one light a thing and the warp")
 	return true
 
 

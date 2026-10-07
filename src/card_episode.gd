@@ -31,6 +31,8 @@ var seed := 0
 ## Absolute.
 var dir := ""
 var _script_cache := {}
+var _height_stamp := "-"          # the table file the height map's wanting was last read from
+var _height_wanted := false
 
 
 static func open(show_key: String, seed_value: int) -> CardEpisode:
@@ -219,14 +221,18 @@ func card_count() -> int:
 
 
 ## EVERY STEP, in the order it is made: `plan`, `draw`, `design:K`, `image:back`,
-## `image:surface`, `image:backdrop`, `table`, `image:card:K`, `say:intro`, `say:K`,
-## `say:close`, `script`. Card steps exist only once the plan says how many cards there are.
+## `image:surface`, `image:backdrop`, `table`, `image:height`, `image:card:K`, `say:intro`, `say:K`,
+## `say:close`, `script`. Card steps exist only once the plan says how many cards there are; the
+## painting's height map only once the table lays the painting where it would be read
+## ([method wants_height]).
 func steps() -> Array:
 	var out := ["plan", "draw"]
 	var n := card_count()
 	for k in range(1, n + 1):
 		out.append("design:%d" % k)
 	out.append_array(["image:back", "image:surface", "image:backdrop", "table"])
+	if wants_height():
+		out.append("image:height")
 	for k in range(1, n + 1):
 		out.append("image:card:%d" % k)
 	out.append("say:intro")
@@ -256,6 +262,9 @@ func needs(step: String) -> Array:
 				if k > 1:
 					out.append("image:card:%d" % (k - 1))
 				return out
+			if String(parts[1]) == "height":
+				# the painting's depth is painted FROM the painting, once the table says it is wanted
+				return ["image:surface", "table"]
 			return ["plan"]
 		"say":
 			var who := String(parts[1])
@@ -301,7 +310,8 @@ func dependents(step: String) -> Array:
 ## the table waits for the cloth and the room to look at, but a new cloth or room keeps the table.
 static func _soft(from: String, to: String) -> bool:
 	return (to.begins_with("image:card:") and (from.begins_with("image:card:") or from == "image:back")) \
-		or (to == "table" and (from == "image:surface" or from == "image:backdrop"))
+		or (to == "table" and (from == "image:surface" or from == "image:backdrop")) \
+		or (to == "image:height" and from == "table")
 
 
 ## REDO [param step]: delete it and everything made from it. Returns what went.
@@ -314,13 +324,32 @@ func invalidate(step: String) -> Array:
 			var fs := String(f)
 			if fs.begins_with("design_") or fs.begins_with("card_") or fs.begins_with("say_") \
 					or fs == "script.md" or (step == "plan" and fs in ["draw.json", "back.png", "surface.png",
-					"backdrop.png"]):
+					"backdrop.png", "height.png", "height.json"]):
 				DirAccess.remove_absolute(dir.path_join(fs))
 	for s in gone:
 		var p := file_of(String(s))
 		if not p.is_empty() and FileAccess.file_exists(p):
 			DirAccess.remove_absolute(p)
+		# the height map's fit goes with it
+		if String(s) == "image:height" and FileAccess.file_exists(dir.path_join("height.json")):
+			DirAccess.remove_absolute(dir.path_join("height.json"))
 	return gone
+
+
+## WHETHER THE PAINTING'S HEIGHT MAP IS WANTED: the table is set and lays the painting where its depth
+## is read ([method Tables.wants_height]). Read again only when the table's file changes.
+func wants_height() -> bool:
+	var p := file_of("table")
+	var stamp := "%d|%d" % [FileAccess.get_modified_time(p), FileAccess.get_size(p)] if FileAccess.file_exists(p) else ""
+	if stamp != _height_stamp:
+		_height_stamp = stamp
+		_height_wanted = false
+		var t: Variant = read_json("table")
+		if t is Dictionary:
+			var td: Dictionary = t
+			_height_wanted = Tables.wants_height(Tables.sanitize(td.get("top"), td.get("layers"),
+				Props.sanitize(td, [])["materials"], []))
+	return _height_wanted
 
 
 ## DELETE THE EPISODE: its whole folder - plan, draw, designs, pictures, passages, script, upload
@@ -351,10 +380,11 @@ func script() -> String:
 	return String(_script_cache["text"])
 
 
-## Every step is made.
+## Every step made - but the painting's height map, which only deepens the table: one refused (it did not
+## line up with the painting) leaves the episode whole, its painting's own detail standing in.
 func complete() -> bool:
 	for s in steps():
-		if not has(String(s)):
+		if String(s) != "image:height" and not has(String(s)):
 			return false
 	return true
 

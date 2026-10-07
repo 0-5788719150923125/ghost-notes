@@ -19,6 +19,10 @@ extends SceneTree
 ## - A LAYER HANGS OVER THE EDGE: every point of a cloth past the top's edge is below the top and
 ##   outside its outline; every point on the top lies flat at its layer's height - and a layer
 ##   wholly on the top hangs nowhere (the control). Layers stack upward, all under where a card rests.
+## - A PAINTED HEIGHT MAP IS USED ONLY WHERE IT LIES UNDER THE PAINTING: a map of the painting's own
+##   structure is accepted - shifted (and the shift found), or drawn the other way round (white low) -
+##   and an unrelated picture refused (two-sided); the episode lists the step only once the table lays
+##   the painting where its depth is read, a new cloth clears it and a new table does not.
 ## - THE LIGHT READS WHAT LIES UPPERMOST: a pale runner over a dark cloth is pale under the runner and
 ##   dark beside it; past the top, the floor.
 
@@ -32,6 +36,7 @@ func _initialize() -> void:
 	_outlines()
 	_drape()
 	_lightness()
+	_height_map()
 	if _fails.is_empty():
 		print("tables_check: ALL OK")
 		quit(0)
@@ -246,3 +251,70 @@ func _lightness() -> void:
 	var bare := Tables.surface_lum({"top": top, "layers": []}, null, rect, grid, Color.GRAY)
 	_ok(absf(bare[int((-0.1 - rect.position.y) / rect.size.y * grid.y) * grid.x + int((0.0 - rect.position.x) / rect.size.x * grid.x)] - beside) > 0.005,
 		"a bare top is its wood's lightness, not a cloth's")
+
+
+## A surface photographed from above, made: boards with a grain and knots, from [param seed].
+func _boards(seed: int, w: int, h: int) -> Image:
+	var img := Image.create(w, h, false, Image.FORMAT_RGB8)
+	var n := FastNoiseLite.new()
+	n.seed = seed
+	n.frequency = 0.02
+	for y in h:
+		for x in w:
+			var board := float(int(y / 64) % 2) * 0.12
+			var seam := 0.35 if y % 64 < 3 else 0.0
+			var grain := 0.5 + 0.5 * sin(float(x) * 0.05 + n.get_noise_2d(x, y) * 6.0)
+			var v := clampf(0.35 + board + grain * 0.3 - seam, 0.0, 1.0)
+			img.set_pixel(x, y, Color(v, v * 0.8, v * 0.6))
+	return img
+
+
+## The height map of [param img]: its lightness as gray, moved [param shift] pixels, [param flip]
+## drawn the other way round.
+func _gray_of(img: Image, shift: Vector2i, flip: bool) -> Image:
+	var out := Image.create(img.get_width(), img.get_height(), false, Image.FORMAT_RGB8)
+	for y in img.get_height():
+		for x in img.get_width():
+			var sx := clampi(x - shift.x, 0, img.get_width() - 1)
+			var sy := clampi(y - shift.y, 0, img.get_height() - 1)
+			var v := img.get_pixel(sx, sy).get_luminance()
+			v = 1.0 - v if flip else v
+			out.set_pixel(x, y, Color(v, v, v))
+	return out
+
+
+func _height_map() -> void:
+	print("-- a painted height map is used only where it lies under the painting")
+	var paint := _boards(3, 768, 512)
+	var same := Tables.height_fit(paint, _gray_of(paint, Vector2i(16, -8), false))
+	var flipped := Tables.height_fit(paint, _gray_of(paint, Vector2i.ZERO, true))
+	var other := Tables.height_fit(paint, _gray_of(_boards(91, 768, 512), Vector2i(5, 9), false))
+	var want := Vector2(16.0 / 768.0, -8.0 / 512.0)
+	_ok(float(same["score"]) >= Tables.FIT_LEAST and (same["shift"] as Vector2).distance_to(want) < 0.012,
+		"its own height map, moved, is accepted (%.2f) and the move found (%s against %s)" % [float(same["score"]), str(same["shift"]), str(want)])
+	_ok(float(flipped["score"]) >= Tables.FIT_LEAST, "drawn the other way round it is accepted too (%.2f)" % float(flipped["score"]))
+	_ok(float(other["score"]) < Tables.FIT_LEAST, "an unrelated picture is refused (%.2f)" % float(other["score"]))
+	# THE STEP, on an episode of the gate's own
+	CardEpisode.root = "user://tables_check"
+	var ep := CardEpisode.open("tables-check", 7)
+	DirAccess.make_dir_recursive_absolute(ep.dir)
+	ep.write_json("plan", {"look": {}, "spread": {"positions": [{}]}})
+	_ok(not ep.steps().has("image:height"), "no height map before the table is set")
+	ep.write_json("table", {"things": [], "layers": [{"name": "cloth", "pattern": {"kind": "painting"}, "relief": {"kind": "quilted"}}]})
+	_ok(not ep.steps().has("image:height"), "nor where the painting's relief is not its own (quilted)")
+	ep.write_json("table", {"things": [], "top": {"material": "painting"}, "layers": []})
+	_ok(ep.steps().has("image:height") and ep.needs("image:height").has("image:surface"), "a painted top wants it, from the painting")
+	paint.save_png(ep.file_of("image:surface"))
+	paint.save_png(ep.file_of("image:height"))
+	var f := FileAccess.open(ep.dir.path_join("height.json"), FileAccess.WRITE)
+	f.store_string("{}")
+	f.close()
+	ep.invalidate("table")
+	_ok(ep.has("image:height"), "a new table keeps the height map")
+	ep.write_json("table", {"things": [], "top": {"material": "painting"}, "layers": []})
+	ep.invalidate("image:surface")
+	_ok(not ep.has("image:height") and not FileAccess.file_exists(ep.dir.path_join("height.json")), "a new cloth clears it and its fit")
+	for fn in DirAccess.get_files_at(ep.dir):
+		DirAccess.remove_absolute(ep.dir.path_join(fn))
+	CardEpisode.root = CardEpisode.ROOT
+

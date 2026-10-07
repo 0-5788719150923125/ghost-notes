@@ -41,7 +41,7 @@ const OPENING_AT := 2.0
 const MEDIUM := "TableMedium"
 ## The pictures of the episode the table is built on - copied beside the description being tried,
 ## never its card faces: the set dresser knows no card.
-const PICTURES := ["surface.png", "backdrop.png", "backdrop.json", "back.png"]
+const PICTURES := ["surface.png", "height.png", "height.json", "backdrop.png", "backdrop.json", "back.png"]
 ## The studio's four sides of one thing: a direction from its middle toward the camera, and a caption.
 const SIDES := [["front", Vector3(0.0, 0.14, 1.0)], ["its right side", Vector3(1.0, 0.14, 0.0)],
 	["from above (its front at the bottom)", Vector3(0.0, 1.0, 0.0)], ["as the camera sees it", Vector3.ZERO]]

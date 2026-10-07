@@ -8157,7 +8157,7 @@ func _on_export_path(out_path: String) -> void:
 	_write_render_override(rsz)
 	var exe := OS.get_executable_path()
 	var project := ProjectSettings.globalize_path("res://")
-	var args := PackedStringArray([
+	var args := Subprocess.own_log("mask_render") + PackedStringArray([
 		"--path", project, "--write-movie", _avi, "--fixed-fps", "25",
 		"--", "--mask-render", _session_path])
 	_render_pid = Subprocess.start(exe, args, "mask render")

@@ -48,6 +48,7 @@ func _ready() -> void:
 	_check_chunks_carry_their_voice()
 	_check_settings_reach_the_request()
 	_check_room_is_per_voice()
+	_check_take_channels()
 	_check_silent_tabs_stay_silent()
 	_check_turn_rest()
 	_check_handover_is_sample_accurate()
@@ -322,6 +323,33 @@ func _check_room_is_per_voice() -> void:
 	_ok(fx.echo_wet > dry_echo + 0.5 and fx.pad > dry_pad + 0.2,
 		"one chain did not re-dial between voices (echo %.2f->%.2f, pad %.2f->%.2f)"
 		% [dry_echo, fx.echo_wet, dry_pad, fx.pad])
+	# the lean too: one reader may move while the other sits still
+	_ed._slots[1]["lean"] = 0.6
+	_ed._apply_fx(fx, _ed._cfg(1))
+	var leaning := fx.lean
+	_ed._apply_fx(fx, _ed._cfg(0))
+	_ok(absf(leaning - 0.6) < 0.001 and fx.lean == 0.0,
+		"the lean did not follow the voice (%.2f, then %.2f)" % [leaning, fx.lean])
+
+
+## THE TAKE IS STEREO WHEN SOMEBODY LEANS, and the same mono file it always was when
+## nobody does. Read back by the loader the render uses, not by our own header code.
+func _check_take_channels() -> void:
+	var frames := PackedVector2Array()
+	frames.resize(_ed._sr)
+	for i in frames.size():
+		var v := 0.3 * sin(TAU * 200.0 * float(i) / float(_ed._sr))
+		frames[i] = Vector2(v * 0.6, v * 1.3)
+	for ch in [1, 2]:
+		var path := "user://_lean_probe_%d.wav" % ch
+		var abs_path: String = _ed._write_wav(path, frames, ch)
+		var wav := AudioStreamWAV.load_from_file(abs_path)
+		DirAccess.remove_absolute(abs_path)
+		_ok(wav != null and wav.stereo == (ch == 2) and wav.mix_rate == _ed._sr,
+			"a %d-channel take did not load as one" % ch)
+		if wav != null:
+			_ok(wav.get_length() > 0.99 and wav.get_length() < 1.01,
+				"a %d-channel take is %.2f s long, not 1" % [ch, wav.get_length()])
 
 
 ## THE HANDOVER LANDS ON A FRAME. The marks are scheduled seconds before the

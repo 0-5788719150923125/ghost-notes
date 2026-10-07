@@ -144,22 +144,30 @@ const _SH_LAUNCHER := "cd \"$1\" || exit 1; in=\"$2\"; out=\"$3\"; err=\"$4\"; s
 
 
 ## Start `path` with `args`, bound to this process, and return its pid (<= 0 on failure).
-## `tag` is a human label for the shutdown log; it defaults to the program's own name.
+## `tag` is a human label for the shutdown log and the echo; it defaults to the program's name.
+##
+## WHAT THE CHILD SAYS LANDS IN THE APP'S LOG, line by line, as `[tag] line` (stderr through
+## printerr). It used to inherit the terminal, so a child's output reached whoever had one open
+## and nobody else: the README recording's "Done recording movie ... 257 frames" summary was in
+## the terminal and never in the console (`>_`), and an end user running the app from a launcher
+## has no terminal at all - a child failing there left nothing to send. The child's stdin is a
+## pipe nobody writes, as in [method start_logged].
 static func start(path: String, args: PackedStringArray, tag := "") -> int:
-	var prog := _program(path)
-	if prog.is_empty():
+	_sweep_pumps()
+	var info := start_with_pipe(path, args, tag)
+	if info.is_empty():
 		return -1
-	var bin := _pact_bin()
-	var pid := -1
-	if bin == "-":
-		pid = OS.create_process(prog, args)
-	else:
-		var full := PackedStringArray(["--pdeathsig", "KILL", "--", prog])
-		full.append_array(args)
-		pid = OS.create_process(bin, full)
-	if pid > 0:
-		_tracked[pid] = tag if tag != "" else path.get_file()
-	return pid
+	return _attach_pumps(info, null, "[%s] " % (tag if tag != "" else path.get_file()))
+
+
+## The words that give a Godot child of THIS project a log file of its own -
+## `--log-file user://logs/<name>.log` - to go before its `--`. Without them it opens
+## user://logs/godot.log, and Godot opens its log TRUNCATED: under a session that is running, the
+## app's lines up to then survive only in the rotated copy, and the rest land in the child's file
+## after a run of NUL bytes (measured) - while the console tails that file. What the child prints
+## still reaches the app's log through [method start].
+static func own_log(name: String) -> PackedStringArray:
+	return PackedStringArray(["--log-file", ProjectSettings.globalize_path("user://logs/%s.log" % name)])
 
 
 ## Start `path` with `args` and keep a pipe to its stdio - the `OS.execute_with_pipe` form,
@@ -210,12 +218,17 @@ static func start_detached(path: String, args: PackedStringArray) -> int:
 ## The child's stdin is a pipe this process never writes: fine for uv, yt-dlp, python and a
 ## headless Godot, wrong for anything that reads stdin (use [method start_redirected]).
 static func start_logged(path: String, args: PackedStringArray, log_path: String, tag := "") -> int:
-	_join_finished_pumps()
+	_sweep_pumps()
 	var info := start_with_pipe(path, args, tag)
 	if info.is_empty():
 		return -1
 	# A log that cannot be opened still gets drained - an unread pipe stalls the child.
-	var sink := FileAccess.open(log_path, FileAccess.WRITE)
+	return _attach_pumps(info, FileAccess.open(log_path, FileAccess.WRITE), "")
+
+
+# One reader thread per stream of a [method start_with_pipe] child: into `sink` when there is
+# one, otherwise echoed into the app's log behind `echo`. Returns the child's pid.
+static func _attach_pumps(info: Dictionary, sink: FileAccess, echo: String) -> int:
 	var lock := Mutex.new()
 	var threads: Array[Thread] = []
 	for key in ["stdio", "stderr"]:
@@ -223,7 +236,7 @@ static func start_logged(path: String, args: PackedStringArray, log_path: String
 		if pipe == null:
 			continue
 		var t := Thread.new()
-		t.start(_pump.bind(pipe, sink, lock))
+		t.start(_pump.bind(pipe, sink, lock, echo, key == "stderr"))
 		threads.append(t)
 	var pid := int(info.get("pid", -1))
 	_pumps[pid] = {"threads": threads, "exited_ms": 0}
@@ -398,7 +411,7 @@ static func tracked() -> int:
 	return _tracked.size()
 
 
-# One stream of a [method start_logged] child, copied into the shared log until EOF. A
+# One stream of a child, copied into its log (or echoed into the app's) until EOF. A
 # blocking read returns whatever is available, and nothing only at EOF - or, rarely, when
 # a signal interrupts it, which is why one empty read is not believed until it repeats.
 ##
@@ -409,7 +422,7 @@ static func tracked() -> int:
 ## line end back until the line is finished. A carriage return ends a line too, or yt-dlp's progress
 ## line - rewritten in place with `\r` - would not reach a caller tailing the log until the download
 ## finished; and a "line" grown past [constant _LINE_MAX] goes out as it is.
-static func _pump(pipe: FileAccess, sink: FileAccess, lock: Mutex) -> void:
+static func _pump(pipe: FileAccess, sink: FileAccess, lock: Mutex, echo: String, err: bool) -> void:
 	var empty := 0
 	var held := PackedByteArray()          # the unfinished line, waiting for its end
 	while empty < 3:
@@ -425,17 +438,34 @@ static func _pump(pipe: FileAccess, sink: FileAccess, lock: Mutex) -> void:
 			continue
 		var whole := held if cut < 0 else held.slice(0, cut + 1)
 		held = PackedByteArray() if cut < 0 else held.slice(cut + 1)
-		_store(sink, lock, whole)
-	_store(sink, lock, held)                # what was left when the stream ended
+		_store(sink, lock, whole, echo, err)
+	_store(sink, lock, held, echo, err)     # what was left when the stream ended
 
 
-static func _store(sink: FileAccess, lock: Mutex, bytes: PackedByteArray) -> void:
-	if sink == null or bytes.is_empty():
+static func _store(sink: FileAccess, lock: Mutex, bytes: PackedByteArray, echo: String, err: bool) -> void:
+	if bytes.is_empty():
+		return
+	if sink == null:
+		if not echo.is_empty():
+			_echo(bytes, echo, err)
 		return
 	lock.lock()
 	sink.store_buffer(bytes)
 	sink.flush()
 	lock.unlock()
+
+
+# Whole lines into the app's log, one print each (one write each, so the two streams cannot
+# splice). A line rewritten in place with `\r` is a line of its own here.
+static func _echo(bytes: PackedByteArray, echo: String, err: bool) -> void:
+	var lines := bytes.get_string_from_utf8().replace("\r\n", "\n").replace("\r", "\n").split("\n")
+	if lines.size() > 1 and lines[-1].is_empty():
+		lines.resize(lines.size() - 1)     # the end of the last line, not a line
+	for line in lines:
+		if err:
+			printerr(echo + line)
+		else:
+			print(echo + line)
 
 
 # Is an exited child's output still on its way into the log? Gives up after _DRAIN_MS.
@@ -454,6 +484,18 @@ static func _draining(pid: int) -> bool:
 			return true
 	_release_pumps(pid)
 	return false
+
+
+# Let go of the readers of children nobody asks after any more (a caller may start one and never
+# call [method alive] again); a finished reader has drained its pipe, so nothing is lost.
+static func _sweep_pumps() -> void:
+	for pid in _pumps.keys():
+		var done := true
+		for t in _pumps[pid].threads:
+			done = done and not (t as Thread).is_alive()
+		if done:
+			_release_pumps(int(pid))
+	_join_finished_pumps()
 
 
 static func _release_pumps(pid: int) -> void:

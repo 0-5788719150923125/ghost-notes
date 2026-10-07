@@ -69,6 +69,7 @@ func _run() -> void:
 	world.add_child(cloth)
 	# the things in a row, widest apart as they need
 	var x := 0.0
+	var tall := 0.0
 	var built: Array = []
 	var i := 0
 	for t in spec["things"]:
@@ -81,6 +82,7 @@ func _run() -> void:
 		world.add_child(node)
 		built.append([node, w, b])
 		x += w
+		tall = maxf(tall, size.size.y)
 		print("  %-46s %5.1f x %5.1f x %5.1f cm, %d meshes, foot %d pts, %d wicks" % [String((t as Dictionary)["name"]).substr(0, 46),
 			size.size.x * 100.0, size.size.y * 100.0, size.size.z * 100.0, (b["meshes"] as Array).size(),
 			(b["foot"] as PackedVector2Array).size(), (b["wicks"] as Array).size()])
@@ -165,10 +167,11 @@ func _run() -> void:
 	var cam := Camera3D.new()
 	cam.environment = env
 	cam.fov = 30.0
-	var dist := maxf(x * 0.95, 0.4)
+	# far enough back to see the row whole, and the tallest thing in it (a house plant) to its top
+	var dist := maxf(maxf(x * 0.95, tall * 2.4), 0.4)
 	cam.position = Vector3(0.0, cam_h * dist / 0.5, dist)
 	world.add_child(cam)
-	cam.look_at(Vector3(0, 0.04, 0), Vector3.UP)
+	cam.look_at(Vector3(0, maxf(0.04, tall * 0.4), 0), Vector3.UP)
 	for _f in 12:
 		await process_frame
 	var img := vp.get_texture().get_image()
