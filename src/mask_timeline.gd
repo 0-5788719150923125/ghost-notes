@@ -3,7 +3,7 @@ class_name MaskTimeline
 
 ## MaskTimeline - the mask editor's scrub strip.
 ##
-## A bespoke-drawn instrument, same idiom as [DialWidget]: click-drag on the body
+## A bespoke-drawn instrument: click-drag on the body
 ## to scrub (emits `scrubbed`). Marker moves are TWO-STEP, to stop the misclick
 ## where aiming to select a marker dragged it off its time in the same gesture: a
 ## marker's triangle HANDLE (the top band only - grabbing anywhere on the full tick

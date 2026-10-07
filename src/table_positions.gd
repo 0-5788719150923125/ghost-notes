@@ -11,7 +11,8 @@ class_name TablePositions
 ## EVERY POSITION IS CHECKED THE SAME WAY, whoever wrote it ([method troubles]): on the cloth, inside
 ## the camera's frame, clear of the deck, and clear of every other card - against the episode's own
 ## camera and deck ([method CardTable.layout_of]), which are a function of its seed, so a plan or a
-## dealer is told exactly what the table will do. A set of positions with any trouble is not used:
+## dealer is told exactly what the table will do. Once the table is set, ON ITS TOP too ([Tables]: a
+## round or oval top may not reach every corner of the cloth) - checked again as it is built. A set of positions with any trouble is not used:
 ## the table falls back to its preset.
 ##
 ## Free of autoload names, so a SceneTree gate and a toolset can ask it.
@@ -128,15 +129,16 @@ static func deck_keep(deck: Vector3) -> Rect2:
 
 ## THE POSITIONS THE CARDS WERE GIVEN, as slots (`[{pos, yaw}]`) - each card's `position` carrying
 ## `x` and `z` (a plan's, or a dealer's laid over it) - or [] when any card has none or the set has a
-## trouble ([method troubles]): the table then lays its preset.
-static func given(cards: Array, seed: int) -> Array:
+## trouble ([method troubles]) - [param top], the table's top made safe, when it is set: the table
+## then lays its preset.
+static func given(cards: Array, seed: int, top: Dictionary = {}) -> Array:
 	var out: Array = []
 	for i in cards.size():
 		var p: Variant = (cards[i] as Dictionary).get("position", {}) if cards[i] is Dictionary else {}
 		if not (p is Dictionary) or not _numeric((p as Dictionary).get("x")) or not _numeric((p as Dictionary).get("z")):
 			return []
 		out.append(slot_of(p as Dictionary, i))
-	if out.is_empty() or not troubles(out, seed).is_empty():
+	if out.is_empty() or not troubles(out, seed, top).is_empty():
 		return []
 	return out
 
@@ -149,9 +151,9 @@ static func slot_of(p: Dictionary, i: int) -> Dictionary:
 
 ## WHAT IS WRONG WITH THESE SLOTS for episode [param seed], card by card - `["card 2: off the cloth
 ## at the back", ...]` - empty when every card lies on the cloth, inside the camera's frame and clear
-## of the deck. Cards may lie over each other - a pile, a fan, the pyramid's rows do - and
-## [method notes] says which.
-static func troubles(slots: Array, seed: int) -> PackedStringArray:
+## of the deck - and on [param top] ([Tables]), when the table is set. Cards may lie over each other -
+## a pile, a fan, the pyramid's rows do - and [method notes] says which.
+static func troubles(slots: Array, seed: int, top: Dictionary = {}) -> PackedStringArray:
 	var out := PackedStringArray()
 	var lay := CardTable.layout_of(seed)
 	var keep := deck_keep(lay["deck"])
@@ -161,6 +163,11 @@ static func troubles(slots: Array, seed: int) -> PackedStringArray:
 		feet.append(CardTable.footprint(s["pos"], float(s["yaw"]), CARD))
 	for i in slots.size():
 		var why := trouble_of(slots[i], feet[i], lay, keep)
+		if not top.is_empty():
+			for c in corners(slots[i]):
+				if not Tables.inside(top, c, HEM):
+					why.append("off the edge of the table's top")
+					break
 		if not why.is_empty():
 			out.append("card %d: %s" % [i + 1, ", ".join(why)])
 	return out

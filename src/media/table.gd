@@ -26,7 +26,8 @@ class_name TableMedium
 ## table where the reading is.
 ##
 ## THE LOOK IS THE EPISODE'S. The cloth, the room, the card back and every face are its
-## pictures; the frame, the type, the props and the light come from its look through
+## pictures; THE TABLE ITSELF - its top's shape, edge and wood, and the cloths laid on it - is the set
+## dresser's, built by [Tables] (the old board table and its painted cloth when it wrote none); the frame, the type, the props and the light come from its look through
 ## [CardTable]'s registries, and the rest - where the deck sits, how the spread is laid, which
 ## shuffles, the camera's height - is sampled from the episode's seed, so no two episodes share a
 ## table. A picture still being painted is a placeholder until it lands, live.
@@ -45,7 +46,9 @@ const DECK_N := 26
 ## How much table a laid card leaves between itself and the deck.
 const DECK_CLEAR := TablePositions.DECK_CLEAR
 const DECK_T := 0.0012
-## The table (width, thickness, depth), centered at TABLE_Z, its top at y = 0; the cloth on it.
+## The table every episode had before (width, thickness, depth), centered at TABLE_Z, its top at y = 0
+## ([constant Tables.DEFAULT_TOP]; the room's old placement still measures from its far edge); the
+## cloth on it.
 const TABLE := Vector3(1.9, 0.05, 0.85)
 const TABLE_Z := 0.02
 const CLOTH := TablePositions.CLOTH
@@ -111,7 +114,7 @@ const WASH_ROOM := 9.0
 ## the card lying across it. The cloth's top, how far over it a spread card lies, a spread card's
 ## thickness, and the hair between a card and the one under it (so two faces never fight for one
 ## depth).
-const CLOTH_TOP := 0.0006
+const CLOTH_TOP := Tables.LAYERS_UNDER
 const FLOOR_GAP := 0.0001
 const WASH_T := 0.0003
 const STACK_GAP := 0.0001
@@ -232,16 +235,21 @@ const FOOT_MARGIN := 0.004
 ## (0.64) the same light flooded half the frame through the bloom, and a cream stripe just behind a
 ## candle on a near-black blanket blew out though the cloth round it was dark on average.
 const HEAT := 2.0
-## ...looked for this far round the candle, meters, on the cloth's lightness at this grid; and the
-## flame height a candle's place is judged at.
+## ...looked for this far round the candle, meters, on the table's lightness at this grid over the
+## stretch of table the camera can see (x z, meters; 4 cm cells); and the flame height a candle's
+## place is judged at.
 const HEAT_R := 0.25
-const LUM_GRID := Vector2i(30, 18)
+const LUM_RECT := CardTable.SEEN_RECT
+const LUM_GRID := CardTable.SEEN_GRID
 const HEAT_H := 0.13
 ## The key candle's light, the least a candle must be allowed to be the key, and every other
 ## candle's.
 const KEY_ENERGY := 1.5
 const KEY_MIN := 1.0
 const FILL_ENERGY := 0.35
+## A table with a light of its own ([Lights]) whose sun and lamps light the cards less than this, and
+## which no candle can lead, has the lamp hung over it after all.
+const LAMP_FALLBACK := 0.12
 ## The render layer of the first candle's body (the next is the next bit), so each flame can leave
 ## its own candle out of its shadows - and only its own: a candle stands in the key's light.
 const CANDLE_LAYER := 1 << 12
@@ -259,8 +267,6 @@ const FOCUS_BLUR := 0.16
 const INTRO_SHADER := preload("res://shaders/table_intro.gdshader")
 const INTRO_LIFT := 0.5
 const INTRO_SHARP := 0.0005
-## How deep a pictured surface's relief is (Image.bump_map_to_normal_map's scale).
-const RELIEF := 3.5
 const LEAD := 0.25
 const TAIL := 0.2
 
@@ -340,9 +346,10 @@ var _env: Environment
 var _attrs: CameraAttributesPractical
 var _lamp: SpotLight3D
 var _fill: DirectionalLight3D
-var _table: MeshInstance3D
-var _cloth: MeshInstance3D
-var _cloth_mat: StandardMaterial3D
+var _furniture := {}                 # the table itself, built (Tables.build): its top and its layers
+var _top := {}                       # ...its top, made safe: where cards and things may lie
+var _top_o := Tables.top_outline({})  # ...its outline, read once (Tables.sdf), for the thousands of spots a thing is tried at
+var _painting_tex: Texture2D = null  # the episode's surface painting, as laid on the table
 var _backdrop: MeshInstance3D
 var _backdrop_mat: ShaderMaterial
 var _rest_plan: Dictionary = {}     # the wash plan [member _rest_steps] are of
@@ -355,10 +362,10 @@ var _flame_n := 0                     # flames lit so far on this table, each wi
 var _glows: Array = []              # [{light, base, energy, flicker}] - candles in the room, out of shot
 var _lamp_base := 1.6                 # the lamp's light before a candle takes the key from it
 var _key_flame := -1                  # the key: the flame that leads the light, or -1 for the lamp
-var _lum := PackedFloat32Array()      # the cloth's linear luminance, coarse (see _cloth_lum); empty: no picture
+var _lum := PackedFloat32Array()      # the table's linear luminance where candles may stand (LUM_RECT); empty: not yet built
 var _heat_cells := {}                 # grid cell -> its heat at HEAT_H, for this build
 var _contact_tex: Texture2D = null
-var _lit_cloth: Texture2D = null      # the cloth the table was last lit for
+var _lit_cloth: Texture2D = null      # the painting the table was last lit for
 var _shuffle_room := INF             # how long the shuffle has, from its start to the first card
 var _jump_room := -1.0                # ...when that first card is a jumper (-1: it is not, or not placed yet)
 var _jump_scale := 1.0                # ...and the speed its action is performed at
@@ -408,6 +415,9 @@ var _poll_t := 0.0
 var _textures := {}
 var _air = null                     # the set dresser's effects, built (Effects.Air), or null
 var _air_key := ""                  # the schedule its bursts were last planned on
+var _rig = null                     # the set dresser's light, built (Lights.Rig), or null: the lamp and the room's candles
+var _ambient := {}                  # the room's own ambient, for a table with no light of its own
+var _seen := PackedVector3Array()   # the table the camera sees, sampled (for the light), this build
 
 
 # --- mount -----------------------------------------------------------------------------------
@@ -496,38 +506,15 @@ func _build_world() -> void:
 	# glare off a geode's rim facing it.
 	_lamp.shadow_bias = 0.005
 	_lamp.shadow_normal_bias = 0.15
+	# the sun's screens and birds ([Lights]) are the sun's alone
+	_lamp.shadow_caster_mask = 0xFFFFFFFF & ~Lights.SCREEN_LAYER
 	_root3.add_child(_lamp)
 	_fill = DirectionalLight3D.new()
 	_fill.light_energy = 0.12
 	_fill.rotation_degrees = Vector3(-60.0, 25.0, 0.0)
 	_root3.add_child(_fill)
 
-	_table = MeshInstance3D.new()
-	var tm := BoxMesh.new()
-	tm.size = TABLE
-	_table.mesh = tm
-	_table.position = Vector3(0.0, -TABLE.y * 0.5, TABLE_Z)
-	var wood := StandardMaterial3D.new()
-	wood.albedo_color = Color(0.36, 0.22, 0.13)
-	wood.albedo_texture = BookMedium._grime(0x51A7, 0.018, 5, 0.22)
-	wood.uv1_scale = Vector3(3.0, 3.0, 1.0)
-	wood.normal_enabled = true
-	wood.normal_texture = _relief("table-wood", wood.albedo_texture)
-	wood.normal_scale = 0.6
-	wood.roughness = 0.55
-	_table.material_override = wood
-	_root3.add_child(_table)
-
-	_cloth = MeshInstance3D.new()
-	var cm := PlaneMesh.new()
-	cm.size = CLOTH
-	_cloth.mesh = cm
-	_cloth.position = Vector3(0.0, 0.0006, -0.02)
-	_cloth_mat = StandardMaterial3D.new()
-	_cloth_mat.roughness = 0.92
-	_cloth.material_override = _cloth_mat
-	_root3.add_child(_cloth)
-
+	# THE TABLE ITSELF is built with its things, from the set dresser's description ([method _build_table])
 	_backdrop = MeshInstance3D.new()
 	var bq := QuadMesh.new()
 	bq.size = Vector2(1.0, 1.0)
@@ -535,6 +522,8 @@ func _build_world() -> void:
 	_backdrop_mat = ShaderMaterial.new()
 	_backdrop_mat.shader = ROOM_SHADER
 	_backdrop.material_override = _backdrop_mat
+	# A PICTURE CASTS NO SHADOW: a sun low behind the table would throw the room's picture over it
+	_backdrop.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_root3.add_child(_backdrop)
 
 	_props = Node3D.new()
@@ -713,6 +702,7 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_tick_focus(_now)
 	_tick_camera(_now)
 	_tick_props(_now)
+	_tick_light(_now)
 	_tick_air(_now)
 	_title.alpha = _title_alpha(_now)
 	_title.queue_redraw()
@@ -802,6 +792,7 @@ func _build_episode() -> void:
 	var dark := CardTable.color(String(pal[0]))
 	_env.background_color = dark.darkened(0.6)
 	_env.ambient_light_color = Color(0.5, 0.5, 0.5).lerp(dark.lightened(0.4), 0.35)
+	_ambient = {"color": _env.ambient_light_color, "energy": 0.18}
 	_fill.light_color = Color(0.75, 0.8, 1.0) if String((_look.get("light", {}) as Dictionary).get("warmth", "warm")) == "warm" else lc
 	# THE DECK, squared where the reader keeps it
 	_deck_base = lay["deck"]
@@ -859,14 +850,13 @@ func _build_episode() -> void:
 	# on the cloth, in the frame and clear of the deck), else the seeded preset. The preset is drawn
 	# either way, so every draw after it lands where it always has.
 	var seeded := TablePositions.seeded(cards.size(), rng, CardTable.layout_of(_seed))
-	var given := TablePositions.given(cards, _seed)
+	var spec := _table_spec()
+	var given := TablePositions.given(cards, _seed, spec["top"])
 	_slots = given if not given.is_empty() else seeded
 	# a jumper flies out of the deck in the middle and lands on the far side from where the deck
 	# is about to go
 	_jump_land = _mid + Vector3(-signf(_deck_base.x) * 0.16, 0.0, 0.035)
-	# the cloth's lightness before anything stands on it: a candle looks for dark cloth
-	_lum = _cloth_lum(String(_pay.get("dir", "")).path_join("surface.png"))
-	_build_table()
+	_build_table(spec)
 	_plan_moves()
 	_place_backdrop()
 	_poll_pictures()
@@ -910,27 +900,17 @@ func _poll_pictures(force := false) -> void:
 		CardFaces.redraw(_back_vp)
 	_back_mat.set_shader_parameter("accent", Vector3(accent.r, accent.g, accent.b))
 	_back_mat.set_shader_parameter("foil", _foil * 0.8)
+	# THE PAINTING of the episode's surface, laid wherever the table takes it ([Tables]: its cloth, its
+	# top, a runner...) - or each such surface's own color until it is painted
 	var cloth := _picture(dir.path_join("surface.png"), force)
-	if cloth != null:
-		_cloth_mat.albedo_texture = cloth
-		_cloth_mat.albedo_color = Color(1, 1, 1)
-		_cloth_mat.normal_enabled = true
-		_cloth_mat.normal_texture = _relief(dir.path_join("surface.png"), cloth)
-		_cloth_mat.normal_scale = 1.0
-		# its pixels square on the cloth: the part of the picture that fits, never the picture stretched
-		var crop := CardTable.cloth_crop(Vector2(cloth.get_width(), cloth.get_height()), CLOTH)
-		_cloth_mat.uv1_scale = Vector3(crop.size.x, crop.size.y, 1.0)
-		_cloth_mat.uv1_offset = Vector3(crop.position.x, crop.position.y, 0.0)
-		_lum = _cloth_lum(dir.path_join("surface.png"))
-	elif _cloth_mat.albedo_texture == null:
-		_cloth_mat.albedo_color = _cloth_fallback()
-		_cloth_mat.albedo_texture = BookMedium._grime(hash([_seed, "cloth"]) & 0xFFFF, 0.05, 4, 0.12)
-		_cloth_mat.uv1_scale = Vector3.ONE
-		_cloth_mat.uv1_offset = Vector3.ZERO
-		_lum = PackedFloat32Array()
+	if cloth != _painting_tex:
+		_painting_tex = cloth
+		Tables.apply_painting(_furniture, cloth)
+		_lum = _surface_lum()
+		_heat_cells = {}
 	# a cloth that landed after the candles stood (live, it is painted while a reading can already
 	# be playing) lights the table again
-	if _cloth_mat.albedo_texture != _lit_cloth:
+	if _painting_tex != _lit_cloth:
 		_light_the_table()
 		_reflect()
 	# THE TABLE, set while a reading can already be playing (live, the set dresser works beside the
@@ -953,62 +933,35 @@ func _poll_pictures(force := false) -> void:
 		_backdrop_mat.set_shader_parameter("tint", CardTable.color(String(pal2[0])).darkened(0.25))
 
 
-## THE RELIEF OF A PICTURED SURFACE, from the picture itself: a weave or a grain photographed from
-## above is dark in its hollows and light on its ridges, so its luminance stands in for its height,
-## and Godot turns that into a normal map natively. Laid under the cloth, the light low across the
-## table picks the texture out as it would on a real one. Made once per picture.
-func _relief(path: String, tex: Texture2D) -> Texture2D:
-	var key := path + "|relief"
-	if _textures.has(key) and int(_mtimes.get(key, -1)) == int(_mtimes.get(path, -2)):
-		return _textures[key]
-	var img := tex.get_image()
-	if img == null:
-		return null
-	img = img.duplicate() as Image
-	if img.is_compressed():
-		img.decompress()
-	img.clear_mipmaps()
-	img.convert(Image.FORMAT_L8)
-	# at half size: the photograph's finest grain is noise, not relief
-	img.resize(maxi(8, img.get_width() / 2), maxi(8, img.get_height() / 2), Image.INTERPOLATE_BILINEAR)
-	img.convert(Image.FORMAT_RGBA8)
-	img.bump_map_to_normal_map(RELIEF)
-	img.generate_mipmaps()
-	var nt := ImageTexture.create_from_image(img)
-	_textures[key] = nt
-	_mtimes[key] = _mtimes.get(path, -2)
-	return nt
-
-
-## THE CLOTH'S LIGHTNESS where candles stand: its picture's linear luminance, averaged down to
-## [constant LUM_GRID] (a few centimeters a cell), row by row, for [method _heat]. Made once per
-## picture, from the file rather than read back from the GPU (which a probe's dummy renderer cannot
-## do). Empty when there is no picture.
-func _cloth_lum(path: String) -> PackedFloat32Array:
-	var key := path + "|lum"
+## THE PAINTING SMALL, in linear light - what [method Tables.surface_lum] reads the table's lightness
+## from. Made once per picture, from the file rather than read back from the GPU (which a probe's
+## dummy renderer cannot do). Null when there is no picture.
+func _painting_small(path: String) -> Image:
+	var key := path + "|small"
 	if _textures.has(key) and int(_mtimes.get(key, -1)) == int(_mtimes.get(path, -2)):
 		return _textures[key]
 	var img := Image.load_from_file(path) if FileAccess.file_exists(path) else null
 	if img == null or img.is_empty():
-		return PackedFloat32Array()
+		return null
 	if img.is_compressed():
 		img.decompress()
 	img.clear_mipmaps()
-	# the part of the picture the cloth shows, as its material is laid out
-	var crop := CardTable.cloth_crop(Vector2(img.get_width(), img.get_height()), CLOTH)
-	var size := Vector2(img.get_width(), img.get_height())
-	img = img.get_region(Rect2i(Vector2i((crop.position * size).round()), Vector2i((crop.size * size).round())))
 	img.convert(Image.FORMAT_RGB8)
 	img.srgb_to_linear()
-	img.resize(LUM_GRID.x, LUM_GRID.y, Image.INTERPOLATE_LANCZOS)
-	var out := PackedFloat32Array()
-	for y in LUM_GRID.y:
-		for x in LUM_GRID.x:
-			var c := img.get_pixel(x, y)
-			out.append(c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722)
-	_textures[key] = out
+	img.resize(96, 64, Image.INTERPOLATE_LANCZOS)
+	_textures[key] = img
 	_mtimes[key] = _mtimes.get(path, -2)
-	return out
+	return img
+
+
+## THE TABLE'S LIGHTNESS where candles may stand ([constant LUM_RECT], row by row, linear): whatever
+## lies uppermost there - a layer, the top - for [method _heat].
+func _surface_lum() -> PackedFloat32Array:
+	if _furniture.is_empty():
+		return PackedFloat32Array()
+	var path := String(_pay.get("dir", "")).path_join("surface.png")
+	return Tables.surface_lum(_furniture["spec"], _painting_small(path) if _painting_tex != null else null, LUM_RECT, LUM_GRID,
+		_cloth_fallback())
 
 
 ## The cloth an episode gets while its own is not painted: a dark shade of its palette.
@@ -1152,10 +1105,24 @@ static func _face_up() -> Basis:
 
 ## THE TABLE'S THINGS: what the set dresser described for this episode (`table.json` in its folder,
 ## made safe by [method CardTable.sanitize_table]), or the look's candles alone until it has -
-## each built ([Props]), stood where [method _place_things] finds it room, its wicks lit.
-func _build_table() -> void:
+## each built ([Props]), stood where [method _place_things] finds it room, its wicks lit - on THE
+## TABLE ITSELF, built first ([Tables]): its top and the layers laid on it, the painting on whatever
+## takes it. [param spec]: the table made safe, when it was just read.
+func _build_table(spec: Dictionary = {}) -> void:
 	for c in _props.get_children():
 		c.queue_free()
+	if spec.is_empty():
+		spec = _table_spec()
+	if not _furniture.is_empty():
+		(_furniture["node"] as Node).queue_free()
+	_furniture = Tables.build({"top": spec["top"], "layers": spec["layers"]}, _seed)
+	_furniture["spec"] = {"top": spec["top"], "layers": spec["layers"]}
+	_top = spec["top"]
+	_top_o = Tables.top_outline(_top)
+	_root3.add_child(_furniture["node"])
+	Tables.apply_painting(_furniture, _painting_tex)
+	# its lightness before anything stands on it: a candle looks for dark cloth
+	_lum = _surface_lum()
 	_lights = []
 	_flame_n = 0
 	_standing = []
@@ -1163,7 +1130,6 @@ func _build_table() -> void:
 	_standing_r = PackedFloat32Array()
 	_things = []
 	_heat_cells = {}
-	var spec := _table_spec()
 	# the name over this table is printed in the color the set dresser chose to stand out from it
 	_title.ink = CardTable.title_ink(spec)
 	_title.queue_redraw()
@@ -1174,7 +1140,7 @@ func _build_table() -> void:
 	for i in things.size():
 		built.append(Props.build(things[i], spec["materials"], hash([_seed, i, "thing"])))
 	_place_things(things, built, rng)
-	_build_glows()
+	_build_light(spec)
 	_light_the_table()
 	_reflect()
 	_build_air(spec)
@@ -1290,17 +1256,29 @@ func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, kee
 		var best_score := -INF
 		var cam_inv := _cam_base.affine_inverse()
 		var lens := Vector2(tan(deg_to_rad(_cam.fov * 0.5)) * (16.0 / 9.0), tan(deg_to_rad(_cam.fov * 0.5)))
-		var z := -0.4
+		# from the back of the top - a deep one reaches further back than the old table did
+		var top_back := Tables.ORIGIN.y + Tables.TOP_AT.y - float((_top.get("size", [0.0, 85.0]) as Array)[1]) * 0.005 + Tables.THING_EDGE
+		var z := minf(-0.4, top_back)
+		# the old cloth's back edge, unless the top goes well past it
+		var back := -0.02 - CLOTH.y * 0.48
+		if top_back < back - 0.02:
+			back = top_back
 		while z <= front:
 			var x := -0.62
 			while x <= 0.62:
 				var at := Vector2(x + rng.randf_range(-0.004, 0.004), z + rng.randf_range(-0.004, 0.004))
 				x += 0.02
 				var bb := Rect2(lo + at, hi - lo)
-				# ON THE CLOTH: a thing past its edge, on the bare wood by the table's rim, read as about
-				# to fall off
-				if bb.position.x < -CLOTH.x * 0.49 or bb.end.x > CLOTH.x * 0.49 or bb.position.y < -0.02 - CLOTH.y * 0.48 \
+				# WITHIN THE READER'S REACH - the old cloth's stretch, the width the camera sees, further
+				# back only where a deep top goes further back (a thing let out to the old table's whole
+				# width stood where a wash's card then clipped its foot) - and ON THE TOP, well in from its
+				# edge: a thing by the rim read as about to fall off
+				if bb.position.x < -CLOTH.x * 0.49 or bb.end.x > CLOTH.x * 0.49 or bb.position.y < back \
 						or bb.end.y > -0.02 + CLOTH.y * 0.48:
+					continue
+				if Tables.sdf(_top_o, bb.position) > -Tables.THING_EDGE or Tables.sdf(_top_o, bb.end) > -Tables.THING_EDGE \
+						or Tables.sdf(_top_o, Vector2(bb.position.x, bb.end.y)) > -Tables.THING_EDGE \
+						or Tables.sdf(_top_o, Vector2(bb.end.x, bb.position.y)) > -Tables.THING_EDGE:
 					continue
 				# the outline itself only where the boxes meet: most spots are judged by box alone
 				var placed := PackedVector2Array()
@@ -1457,7 +1435,7 @@ func _light_flames(flames: Array, own: int) -> void:
 	light.light_color = Color(1.0, 0.7, 0.4)
 	light.omni_range = 1.4
 	light.light_energy = 0.35
-	light.shadow_caster_mask = 0xFFFFFFFF & ~own
+	light.shadow_caster_mask = 0xFFFFFFFF & ~own & ~Lights.SCREEN_LAYER
 	light.light_cull_mask = 0xFFFFFFFF & ~own
 	# a flame is a couple of centimeters across: the shadows it throws are soft at their ends. The
 	# biases are for a TABLETOP: at their defaults a deck's shadow began centimeters in front of it
@@ -1625,12 +1603,87 @@ func _build_glows() -> void:
 ## Whether [param at] is inside the camera's picture (with a margin) - a light there would light
 ## the table from a place where nothing is burning.
 func _in_shot(at: Vector3) -> bool:
-	var l: Vector3 = _cam_base.affine_inverse() * at
-	if l.z > -0.01:
-		return false
-	var k := tan(deg_to_rad(_cam.fov * 0.5))
-	var sp := Vector2(0.5 + l.x / (-l.z * k * (16.0 / 9.0)) * 0.5, 0.5 - l.y / (-l.z * k) * 0.5)
-	return sp.x > -0.1 and sp.x < 1.1 and sp.y > -0.1 and sp.y < 1.1
+	return CardTable.in_shot(_cam_base, _cam.fov, at)
+
+
+## THE LIGHT: the set dresser's (its table's `light`, [Lights]) - a sky, a sun and what it falls through,
+## clouds, birds, lamps out of the shot - in place of the lamp and the room's out-of-shot candles; or,
+## for a table that wrote none (every table set before 2026-10-07), those, as every table had them.
+func _build_light(spec: Dictionary) -> void:
+	if _rig != null:
+		_rig.release()
+		_rig = null
+	var light: Dictionary = spec.get("light", {}) if spec.get("light") is Dictionary else {}
+	_lamp.visible = light.is_empty()
+	_fill.visible = light.is_empty()
+	if light.is_empty():
+		_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		_env.ambient_light_color = _ambient.get("color", Color(0.5, 0.46, 0.44))
+		_env.ambient_light_energy = float(_ambient.get("energy", 0.18))
+		_build_glows()
+		return
+	_glows = []
+	_seen = _seen_points()
+	_rig = Lights.build(light, _light_stage(), hash([_seed, "light"]))
+	_root3.add_child(_rig.root)
+
+
+## Where the light stands ([method Lights.build]): the camera, the middle of the reading, the table and
+## everything standing on it (a wall stands past them, a canopy over them), the table the camera sees,
+## the environment, the room's picture, and what is in the shot.
+func _light_stage() -> Dictionary:
+	var bounds: AABB = _furniture.get("bounds", AABB(Vector3(-TABLE.x * 0.5, -TABLE.y, TABLE_Z - TABLE.z * 0.5), TABLE))
+	for th in _things:
+		bounds = bounds.merge((th as Dictionary)["box"] as AABB)
+	return {"camera": _cam_base, "fov": _cam.fov, "aspect": 16.0 / 9.0, "middle": Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y),
+		"bounds": bounds, "seen": _seen, "env": _env, "room": _backdrop_mat, "in_shot": _in_shot}
+
+
+## THE TABLE THE CAMERA SEES, sampled ([method CardTable.seen_points]).
+func _seen_points() -> PackedVector3Array:
+	return CardTable.seen_points(_cam_base, _cam.fov, _top)
+
+
+## HOW PALE THE PALEST THING THE LIGHT FALLS ON IS (linear luminance): the cloth where it is lightest
+## that the camera sees (its 97th percentile - one pale thread is not the cloth) and the card stock, which
+## lies in the spread under the same light.
+func _hot_lum() -> float:
+	var lums := PackedFloat32Array()
+	if not _lum.is_empty():
+		var cell := LUM_RECT.size / Vector2(LUM_GRID)
+		for p in _seen:
+			var gx := clampi(floori((p.x - LUM_RECT.position.x) / cell.x), 0, LUM_GRID.x - 1)
+			var gy := clampi(floori((p.z - LUM_RECT.position.y) / cell.y), 0, LUM_GRID.y - 1)
+			lums.append(_lum[gy * LUM_GRID.x + gx])
+	var hot := 0.0
+	if lums.is_empty():
+		var c := _cloth_fallback().srgb_to_linear()
+		hot = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722
+	else:
+		lums.sort()
+		hot = lums[clampi(int(lums.size() * 0.97), 0, lums.size() - 1)]
+	var stock := CardTable.color(String((_look.get("frame", {}) as Dictionary).get("stock", "#efe6d2"))).srgb_to_linear()
+	return maxf(hot, (stock.r * 0.2126 + stock.g * 0.7152 + stock.b * 0.0722) * 0.85)
+
+
+## The light at show time [param t].
+func _tick_light(t: float) -> void:
+	if _rig != null:
+		_rig.tick(t)
+
+
+## WHAT LEADS THE LIGHT, in words: a candle (by its thing's name), the sun or a lamp of the table's own
+## light, or the lamp.
+func lead_name(by_light: Dictionary = {}) -> String:
+	if _key_flame >= 0:
+		return String(by_light.get(_key_flame, "a candle"))
+	if _rig != null:
+		if _rig.leads():
+			return _rig.key_name()
+		if not _lamp.visible:
+			var name: String = _rig.key_name()
+			return ("%s, faintly - nothing in the light leads it" % name) if not name.is_empty() else "nothing but the sky - the table is dim"
+	return "the lamp"
 
 
 ## EVERY LIGHT THROWS ITS OWN SHADOW (the user, 2026-10-05: "most scenes have multiple light
@@ -1646,6 +1699,12 @@ func _in_shot(at: Vector3) -> bool:
 ## the bloom). A candle the cloth cannot let burn at [constant KEY_MIN] is never the key - with
 ## none that can, the lamp is.
 func _light_the_table() -> void:
+	# A LIGHT OF THE TABLE'S OWN ([Lights]) is fitted to how pale the table is; where its sun or a lamp
+	# leads, every candle burns as a fill
+	var leads := false
+	if _rig != null:
+		_rig.fit(_hot_lum())
+		leads = _rig.leads()
 	var fields: Array = []
 	var key := -1
 	var best := INF
@@ -1655,7 +1714,7 @@ func _light_the_table() -> void:
 		var field := _heat_field(Vector3(base.x, 0.0, base.z), lb.y)
 		fields.append(field)
 		var d := (base * Vector3(1, 0, 1)).length()
-		if HEAT / maxf(_field_max(field), 0.05) >= KEY_MIN and d < best:
+		if not leads and HEAT / maxf(_field_max(field), 0.05) >= KEY_MIN and d < best:
 			best = d
 			key = i
 	# A LIGHT IS AS BRIGHT AS ITS FLAMES: a pillar's three wicks give three flames' light, a
@@ -1690,9 +1749,15 @@ func _light_the_table() -> void:
 	for i in _lights.size():
 		var f: Dictionary = _lights[i]
 		f["energy"] = energy[i] if i == key else minf(energy[i], FILL_ENERGY * flames[i])
-	# the candle has to carry much of the light at the cards, or its shadow is lost under the lamp's
-	_lamp.light_energy = _lamp_base * (1.0 if key < 0 else 0.4)
-	_lit_cloth = _cloth_mat.albedo_texture
+	if _rig == null:
+		# the candle has to carry much of the light at the cards, or its shadow is lost under the lamp's
+		_lamp.light_energy = _lamp_base * (1.0 if key < 0 else 0.4)
+	else:
+		# A TABLE WITH A LIGHT OF ITS OWN has no lamp - unless nothing in that light reaches the cards and no
+		# candle can lead: then the lamp hangs over it, so a reading is never read in the dark
+		_lamp.visible = not leads and key < 0 and _rig.lead_level() < LAMP_FALLBACK
+		_lamp.light_energy = _lamp_base * 0.7
+	_lit_cloth = _painting_tex
 
 
 ## The cloth's HOTTEST SPOT under a flame [param hf] above [param at] (see [method _heat_field]).
@@ -1707,14 +1772,14 @@ static func _field_max(field: Dictionary) -> float:
 	return m
 
 
-## HOW HOT A FLAME [param hf] above [param at] LIGHTS THE CLOTH, cell by cell within [constant
-## HEAT_R] ([constant LUM_GRID], keyed by cell): each cell's lightness over the flame's falloff -
-## height over distance squared, which is the slant of the light times an omni light's 1/d at
-## Godot's default attenuation. A cloth with no picture yet is its color.
+## HOW HOT A FLAME [param hf] above [param at] LIGHTS THE TABLE, cell by cell within [constant
+## HEAT_R] ([constant LUM_GRID] over [constant LUM_RECT], keyed by cell): each cell's lightness over
+## the flame's falloff - height over distance squared, which is the slant of the light times an omni
+## light's 1/d at Godot's default attenuation. A table not yet built is its cloth's color.
 func _heat_field(at: Vector3, hf: float) -> Dictionary:
 	var out := {}
-	var cell := Vector2(CLOTH.x / LUM_GRID.x, CLOTH.y / LUM_GRID.y)
-	var g := Vector2((at.x - _cloth.position.x) / cell.x + LUM_GRID.x * 0.5, (at.z - _cloth.position.z) / cell.y + LUM_GRID.y * 0.5)
+	var cell := LUM_RECT.size / Vector2(LUM_GRID)
+	var g := Vector2((at.x - LUM_RECT.position.x) / cell.x, (at.z - LUM_RECT.position.y) / cell.y)
 	var reach := Vector2i(ceili(HEAT_R / cell.x), ceili(HEAT_R / cell.y))
 	var flat := 0.0
 	if _lum.is_empty():
@@ -1732,13 +1797,12 @@ func _heat_field(at: Vector3, hf: float) -> Dictionary:
 ## [method _heat] at a grid cell's middle for a flame of [constant HEAT_H], kept for the build -
 ## a candle's place is judged at hundreds of spots.
 func _heat_cell(at: Vector3) -> float:
-	var cell := Vector2(CLOTH.x / LUM_GRID.x, CLOTH.y / LUM_GRID.y)
-	var gx := clampi(floori((at.x - _cloth.position.x) / cell.x + LUM_GRID.x * 0.5), 0, LUM_GRID.x - 1)
-	var gy := clampi(floori((at.z - _cloth.position.z) / cell.y + LUM_GRID.y * 0.5), 0, LUM_GRID.y - 1)
+	var cell := LUM_RECT.size / Vector2(LUM_GRID)
+	var gx := clampi(floori((at.x - LUM_RECT.position.x) / cell.x), 0, LUM_GRID.x - 1)
+	var gy := clampi(floori((at.z - LUM_RECT.position.y) / cell.y), 0, LUM_GRID.y - 1)
 	var k := gy * LUM_GRID.x + gx
 	if not _heat_cells.has(k):
-		_heat_cells[k] = _heat(Vector3(_cloth.position.x + (gx + 0.5 - LUM_GRID.x * 0.5) * cell.x, 0.0,
-			_cloth.position.z + (gy + 0.5 - LUM_GRID.y * 0.5) * cell.y), HEAT_H)
+		_heat_cells[k] = _heat(Vector3(LUM_RECT.position.x + (gx + 0.5) * cell.x, 0.0, LUM_RECT.position.y + (gy + 0.5) * cell.y), HEAT_H)
 	return float(_heat_cells[k])
 
 
@@ -1882,6 +1946,8 @@ func _build_air(spec: Dictionary) -> void:
 	_lamp.light_volumetric_fog_energy = 1.6 if foggy else 1.0
 	for l in _lights:
 		((l as Dictionary)["light"] as OmniLight3D).light_volumetric_fog_energy = 2.0 if foggy else 1.0
+	if _rig != null:
+		_rig.set_fog(foggy)
 	_air_key = ""
 
 
@@ -1891,7 +1957,7 @@ func _build_air(spec: Dictionary) -> void:
 ## [constant ROOM_BLUR] of the frame's width, [constant ROOM_REACH] out - and the air ending just short
 ## of the room's picture.
 func _air_stage() -> Dictionary:
-	var table := AABB(Vector3(-TABLE.x * 0.5, -TABLE.y, TABLE_Z - TABLE.z * 0.5), TABLE)
+	var table: AABB = _furniture.get("bounds", AABB(Vector3(-TABLE.x * 0.5, -TABLE.y, TABLE_Z - TABLE.z * 0.5), TABLE))
 	var under: Array = [table]
 	for th in _things:
 		under.append((th as Dictionary)["box"])
@@ -3764,7 +3830,7 @@ func _may_land(i: int, from: Vector2, to: Vector2, yaw: float, up: bool, flights
 	var cloth := Rect2(-CLOTH.x * 0.5 + 0.01, -0.02 - CLOTH.y * 0.5 + 0.01, CLOTH.x - 0.02, CLOTH.y - 0.02)
 	var frame := Rect2(0.1, 0.1, 0.8, 0.8) if up else Rect2(0.03, 0.03, 0.94, 0.94)
 	for c: Vector2 in card:
-		if not cloth.has_point(c):
+		if not cloth.has_point(c) or Tables.sdf(_top_o, c) > -Tables.EDGE:
 			return false
 		var sc: Variant = CardTable.project(_cam_base, _cam.fov, Vector3(c.x, WASH_FLOOR, c.y))
 		if sc == null or not frame.has_point(sc as Vector2):

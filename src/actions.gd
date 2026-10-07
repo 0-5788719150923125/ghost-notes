@@ -267,7 +267,9 @@ class Sprout extends Action:
 ## (the tissue resists in jerks) up to the SNAP, where the membrane tears: both eyes
 ## recoil on a damped spring the rest of the way to their slots, droplets spatter,
 ## and only then does the newborn's iris surface - followed by its first blink.
-## args: into (actor id), slots ([[x,y,z],[x,y,z]]).
+## A prism divides the same way, with cold shards and a flash in place of the tissue.
+## args: into (actor id), slots ([[x,y,z],[x,y,z]]), hue (the newborn's, reached by
+## the snap; default the parent's).
 class Split extends Action:
 	var _from_pos := Vector3.ZERO
 	var _R := 0.3                     # the parent's whole volume, as a radius
@@ -280,11 +282,15 @@ class Split extends Action:
 	var _drops := 4
 	var _seed := 0
 	var _snapped := false
+	var _hue0 := 0.6                  # the newborn's hue at the bud, and at the snap
+	var _hue1 := 0.6
 
 	func begin(stage, actors: Array) -> void:
 		var src = actors[0]
 		var into = stage.actor(String(args.get("into", "")))
 		_from_pos = src.pos
+		_hue0 = src.hue
+		_hue1 = num("hue", src.hue)
 		_R = src.scale
 		_slots = args.get("slots", [])
 		_tense_k = rng.randf_range(0.26, 0.36)
@@ -340,6 +346,9 @@ class Split extends Action:
 		src.home = src.pos
 		into.home = into.pos
 		into.fade = smoothstep(0.0, 1.0, clampf(k / (_tense_k * 0.8), 0.0, 1.0))
+		# A newborn of another hue takes it on through the pull, the short way round the wheel.
+		var dh := wrapf(_hue1 - _hue0, -0.5, 0.5)
+		into.hue = fposmod(_hue0 + dh * smoothstep(0.0, 1.0, clampf(k / _snap_k, 0.0, 1.0)), 1.0)
 		# Strain: the tremble channel gives the jiggle AND gathers light around the eye.
 		if k < _snap_k:
 			src.state["tremble"] = clampf(0.30 * kt + 0.35 * kp, 0.0, 0.6)
@@ -360,7 +369,14 @@ class Split extends Action:
 		if k >= _snap_k and not _snapped:
 			_snapped = true
 			src.state["mit"]["snap"] = 0.0
-			stage.spatter(_from_pos.lerp(s0.lerp(s1, 0.5), sep), _drops, rng)
+			var at := _from_pos.lerp(s0.lerp(s1, 0.5), sep)
+			if into.body is PrismBody:
+				# a crystal tears clean: shards in both colors and a flash on the newborn
+				stage.spatter(at, _drops, rng, Color.from_hsv(_hue0, 0.35, 1.0))
+				stage.spatter(at, _drops, rng, Color.from_hsv(_hue1, 0.35, 1.0))
+				stage.flash(into, Color.from_hsv(_hue1, 0.45, 1.0))
+			else:
+				stage.spatter(at, _drops, rng)
 		# The aftermath: the newborn's iris surfaces once it has torn free.
 		if _snapped and into.body is EyeBody:
 			(into.body as EyeBody).iris_fade = smoothstep(0.0, 1.0, clampf((ks - 0.25) / 0.6, 0.0, 1.0))
@@ -381,6 +397,7 @@ class Split extends Action:
 				into.home = into.pos
 			into.scale = half
 			into.fade = 1.0
+			into.hue = _hue1
 			if into.body is EyeBody:
 				(into.body as EyeBody).iris_fade = 1.0
 

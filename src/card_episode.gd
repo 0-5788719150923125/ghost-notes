@@ -73,10 +73,11 @@ static func history(show_key: String) -> Array:
 
 ## WHAT THE SHOW HAS ALREADY MADE, for a later episode's agents to go somewhere else (see
 ## [CardPrompts]): every other episode of [param show_key] with a plan, newest first, at most
-## [param most] - `{seed, plan, cards: [{name, reversed, jumper, art, said}], things, air, intro,
-## close}`: the cards it drew, what each pictured and what the reader said as it turned over, the
-## things on its table and its air, and its first and last passages. What an episode has not made is
-## empty.
+## [param most] - `{seed, plan, cards: [{name, reversed, jumper, art, said}], things, air, furniture,
+## light, intro, close}`: the cards it drew, what each pictured and what the reader said as it turned
+## over, the things on its table, its air, the table itself ([method Tables.summary], "" for the old board
+## table) and its light ([method Lights.summary], "" for the lamp every table had), and its first and
+## last passages. What an episode has not made is empty.
 static func archive(show_key: String, except: int, most := 40) -> Array:
 	var out: Array = []
 	for h in history(show_key):
@@ -112,8 +113,18 @@ static func archive(show_key: String, except: int, most := 40) -> Array:
 				if fx is Dictionary:
 					var d: Dictionary = fx
 					air.append("%s (%s)" % [str(d.get("name", "")).strip_edges(), str(d.get("look", d.get("kind", ""))).strip_edges()])
-		out.append({"seed": s, "plan": (h as Dictionary)["plan"], "cards": cards, "things": things, "air": air,
-			"intro": ep.read_text("say:intro"), "close": ep.read_text("say:close")})
+		# THE TABLE ITSELF, in a line - only one the set dresser built: the old board table is no habit
+		var furniture := ""
+		if table is Dictionary and ((table as Dictionary).has("top") or (table as Dictionary).has("layers")):
+			var td: Dictionary = table
+			furniture = Tables.summary(Tables.sanitize(td.get("top"), td.get("layers"),
+				Props.sanitize(td, [])["materials"], []))
+		# ITS LIGHT, in a line - only one the set dresser wrote
+		var light := ""
+		if table is Dictionary and (table as Dictionary).get("light") is Dictionary:
+			light = Lights.summary(Lights.sanitize((table as Dictionary)["light"]))
+		out.append({"seed": s, "plan": (h as Dictionary)["plan"], "cards": cards, "things": things, "air": air, "furniture": furniture,
+			"light": light, "intro": ep.read_text("say:intro"), "close": ep.read_text("say:close")})
 	return out
 
 
@@ -259,8 +270,9 @@ func needs(step: String) -> Array:
 		"script":
 			return ["say:close"]
 		"table":
-			# the table is set from the plan, LOOKING AT the cloth it stands on
-			return ["plan", "image:surface"]
+			# the table is set from the plan, LOOKING AT the cloth it stands on - and at the room, which
+			# its light must agree with (where the windows are, which side the sun comes from)
+			return ["plan", "image:surface", "image:backdrop"]
 	return []
 
 
@@ -286,10 +298,10 @@ func dependents(step: String) -> Array:
 
 ## The edges [method needs] lists only for ORDER: a card's picture waits for the back and for
 ## the card before it, because it is sent them as references, but it is not made from them; and
-## the table waits for the cloth to look at, but a new cloth keeps the table.
+## the table waits for the cloth and the room to look at, but a new cloth or room keeps the table.
 static func _soft(from: String, to: String) -> bool:
 	return (to.begins_with("image:card:") and (from.begins_with("image:card:") or from == "image:back")) \
-		or (to == "table" and from == "image:surface")
+		or (to == "table" and (from == "image:surface" or from == "image:backdrop"))
 
 
 ## REDO [param step]: delete it and everything made from it. Returns what went.

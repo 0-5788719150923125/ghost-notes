@@ -19,7 +19,6 @@ Ghost's own flags follow the Godot separator: `godot --path . -- <ghost flags>`.
 | `--deps` |  | Print the environment report - what ghost has installed for itself (FFmpeg, uv, Python, each feature's environment), what it uses from the machine, versions and resolved paths, and an install hint for anything of the machine's that is missing - then exit. Exits non-zero if something a feature needs is absent. Pairs with `--headless`; the same report is the Environment panel, behind the ⚙ in the bottom-right row. |  |
 | `--provision` | `[all\|update]` | Install ghost's own dependencies now, printing each step, then exit: uv, FFmpeg and Python by default, every feature's environment too with `all`, or bring everything installed to its newest release with `update`. The same jobs an ordinary launch runs in the background. Exits non-zero if anything asked for could not be had. Pairs with `--headless`. |  |
 | `--seed` | `<N>` | Override the session seed (default derives from the audio's own content fingerprint, so the same song replays the same show). |  |
-| `--dial-demo` |  | Auto-turn the first Dial hands-free (demos, renders). |  |
 | `--synth` | `[text-file]` | Open the voice-synthesis editor: write or paste a script, sample a voice by seed; each reading renders a WAV take and plays it as a normal session (scenes react to the narration; karaoke subtitles track it). |  |
 | `--say` |  | With `--synth`: speak the loaded text immediately on boot (automation, demos, headless checks). |  |
 | `--cards` |  | Open the Cards mode: a show's brief, its episodes (planned, dealt, painted and written by agents one card at a time) and the Generative voice that reads them at the table. |  |
@@ -29,5 +28,7 @@ Ghost's own flags follow the Godot separator: `godot --path . -- <ghost flags>`.
 | `--synth-autopilot` |  | With `--export`: open the Synthesis panel over the take and let the fishing game play itself (random Throw/Pull/reel/hold-or-fold), so the UI is recorded into the video. Generates no audio and persists nothing (set by the exporter's 'Automate the Synthesis game' toggle). | _internal_ |
 | `--use-bake` |  | Drive `Spectrum` from the song's cached bake instead of the live analyzer. | _internal_ |
 | `--bake-file` | `<path>` | Explicit spectrum-bake cache for a render (implies `--use-bake`). | _internal_ |
+| `--showcase-now` |  | Record the README's animation (`docs/showcase.webp`) now, stale or not, and quit; pairs with `--headless`. A development launch records it by itself when what it shows has changed (`src/showcase.gd`). |  |
+| `--showcase` | `<work dir>` | Marks the README animation's Movie Maker recording (set by `Showcase`): plays the showcase note read-only and quits. | _internal_ |
 | `--bake-song` | `<path>` | `bake_runner`: the song to analyze. | _internal_ |
 | `--bake-out` | `<path>` | `bake_runner`: where to write the bake cache. | _internal_ |

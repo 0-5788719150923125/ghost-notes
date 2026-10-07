@@ -58,9 +58,11 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	# The two subprocesses an export spawns: the Movie Maker render (--export, which also
 	# carries --bake-file) and the offline analyzer (--bake-song / --bake-out, see
-	# bake_runner.gd). Both boot the whole app against the user's own settings file.
+	# bake_runner.gd). Both boot the whole app against the user's own settings file. The
+	# README's recording (--showcase, see showcase.gd) runs on a user:// of its own, and is a
+	# render all the same.
 	var why := ""
-	if args.has("--export") or args.has("--bake-file") or args.has("--bake-song"):
+	if args.has("--export") or args.has("--bake-file") or args.has("--bake-song") or args.has("--showcase"):
 		why = "a render"
 	# A TEST PROBE MUST NOT EDIT THE USER'S SETTINGS. run_boot_probe.sh boots the real app
 	# at a scene under tests/, so a gate that pokes a setter - or merely reads a default

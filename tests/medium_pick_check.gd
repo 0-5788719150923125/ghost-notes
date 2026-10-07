@@ -15,15 +15,14 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	var ed := preload("res://src/generative_editor.gd").new()
-	add_child(ed)
-	await get_tree().process_frame
 	var fails := 0
-	# THE PICKER MUST AGREE WITH THE FILE, not merely with whatever the Director happens to
-	# hold. Those came apart the moment Settings was added as an autoload listed AFTER
-	# Director: Director read its remembered values before the file had been loaded, got
-	# defaults, and the picker faithfully showed them. Nothing errored - a default is a
-	# valid value - and the only visible symptom was a setting quietly reverting.
+	# THE DIRECTOR MUST HOLD WHAT THE FILE SAYS, not merely whatever it happens to hold. Those
+	# came apart the moment Settings was added as an autoload listed AFTER Director: Director
+	# read its remembered values before the file had been loaded, got defaults, and the picker
+	# faithfully showed them. Nothing errored - a default is a valid value - and the only visible
+	# symptom was a setting quietly reverting. Asked BEFORE the panel is built: the panel syncs
+	# to the chapter it last had open and applies that chapter's picture block, and since every
+	# note resets the show (2026-10-06) the file holds the LAST note's medium, not that chapter's.
 	var on_disk := ConfigFile.new()
 	if on_disk.load(Settings.PATH) == OK:
 		var want := String(on_disk.get_value("director", "medium", on_disk.get_value("director", "vehicle", "full")))
@@ -31,6 +30,9 @@ func _run() -> void:
 			print("vpick: FAILED - file says '%s' but Director holds '%s' (autoload order?)"
 				% [want, Director.medium])
 			fails += 1
+	var ed := preload("res://src/generative_editor.gd").new()
+	add_child(ed)
+	await get_tree().process_frame
 	# THE PICTURE IS A CARD (next/notes.md step 5): its controls, and the rows that follow the
 	# medium - the card's and the panel's own (the Ink) - asked of both
 	var pic: PictureCard = ed._picture

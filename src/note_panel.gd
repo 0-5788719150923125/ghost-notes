@@ -89,7 +89,6 @@ func _ready() -> void:
 	if _attached.has("storyboard"):
 		_boards = StoryboardsCard.new()
 		_add_card("Storyboards", &"picture", _boards)
-		_add_dial()
 	if _attached.has("look"):
 		_add_card("Look", &"look", LookCard.new())
 	if _attached.has("bookends"):
@@ -188,17 +187,6 @@ func _add_card(title: String, family: StringName, card: Control) -> void:
 	_cards[String(card.KEY)] = card
 	if card.has_signal("noted"):
 		card.noted.connect(_note)
-
-
-## THE DIAL (see [Dial]) for a note played by hand: bottom right, standing on the row of buttons there.
-func _add_dial() -> void:
-	var dial := DialWidget.new()
-	dial.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	dial.offset_right = -20
-	dial.offset_bottom = -Chrome.ROW_TOP - 8.0
-	dial.offset_left = dial.offset_right - 132.0
-	dial.offset_top = dial.offset_bottom - 132.0
-	add_child(dial)
 
 
 func _note(msg: String) -> void:

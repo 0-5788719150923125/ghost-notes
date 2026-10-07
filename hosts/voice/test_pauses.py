@@ -625,21 +625,33 @@ def test_the_floor_goes_on_the_space_after_a_mark():
     ok(all(ids[i] == space for i in want), "two ids past each mark is its word-space")
     got = {i: float(f) for i, f in enumerate(floor) if f > 0.0}
     frame = HOP_LENGTH / float(SR)
+    # The same input also carries the opening word's vowel floor (`OPENING_VOWEL`) - one id,
+    # in the first word, never a space; `test_expression.py` holds what it is.
+    opening = {i: f for i, f in got.items() if ids[i] != space}
     eq(
-        got,
+        {i: f for i, f in got.items() if ids[i] == space},
         {
             i: float(round(_rest_floor(m, {"pause_scale": 1.0}) / frame))
             for i, m in want.items()
         },
         "frames on the space after , and : only",
     )
+    ok(
+        len(opening) == 1 and min(opening) < min(want),
+        "and one more floor, before the first mark: the opening vowel's",
+    )
+    def rests(run):
+        """The floors on word-spaces: rests, as against the opening vowel's floor."""
+        ids, floor = run
+        return [] if floor is None else [i for i, f in enumerate(floor) if f > 0 and ids[i] == space]
+
     eq(
-        runs[1][1],
-        None,
-        "the sentence after the full stop has no paused mark: nothing fed",
+        rests(runs[1]),
+        [],
+        "the sentence after the full stop has no paused mark: no rest floored",
     )
     _, runs = fed(_FloorSession(), {"pause_scale": 0.0})
-    ok(all(f is None for _, f in runs), "nothing at Pause 0")
+    ok(all(not rests(r) for r in runs), "no rest floored at Pause 0")
 
     class _Plain(_FakeSession):
         fed: list = []
@@ -689,7 +701,7 @@ def test_the_patch_on_a_small_graph():
     except ImportError as exc:
         print("    -- onnx/onnxruntime missing (%s); skipping" % exc)
         return
-    from backends.piper import REST_FLOOR_INPUT, PiperBackend
+    from backends.piper import DUR_SCALE_INPUT, REST_FLOOR_INPUT, PiperBackend
 
     graph = helper.make_graph(
         [
@@ -713,9 +725,9 @@ def test_the_patch_on_a_small_graph():
         s = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
     eq([o.name for o in s.get_outputs()], ["total", "w"], "the plan is an output")
     eq(
-        [i.name for i in s.get_overridable_initializers()],
-        [REST_FLOOR_INPUT],
-        "the floor is optional",
+        sorted(i.name for i in s.get_overridable_initializers()),
+        sorted([REST_FLOOR_INPUT, DUR_SCALE_INPUT]),
+        "the floor and the duration scale are optional",
     )
     total, w = s.run(None, {"x": x})
     eq(
@@ -728,6 +740,15 @@ def test_the_patch_on_a_small_graph():
     )
     eq(np.asarray(w).ravel().tolist(), [1.0, 5.0, 2.0], "fed, the plan is floored")
     eq(float(total), 8.0, "and the graph's own reader of the plan sees the floor")
+    total, w = s.run(
+        None, {"x": x, DUR_SCALE_INPUT: np.array([1.0, 2.0, 1.0], np.float32)}
+    )
+    eq(
+        np.asarray(w).ravel().tolist(),
+        [1.0, 4.0, 2.0],
+        "the scale is applied to the ceiled plan",
+    )
+    eq(float(total), 7.0, "and the graph's own reader of the plan sees it")
 
 
 @check

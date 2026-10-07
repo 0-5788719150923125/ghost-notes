@@ -255,6 +255,77 @@ def _rest_floor(mark: str, params: dict) -> float:
 
 # The graph input `_ensure_patched` adds: per-id frames the duration plan may not fall below.
 REST_FLOOR_INPUT = "rest_floor"
+# ...and the other one: a per-id multiplier on the planned frames, after the Ceil and before
+# the floor. How a word is leaned on (`EMPHASIS`).
+DUR_SCALE_INPUT = "dur_scale"
+
+# A WORD LEANED ON, by the level the script marks it with (`*italic*` 1, `**bold**` 2, both 3):
+# its stressed vowel held longer, through the duration plan, and the word a little louder. The
+# model renders the longer vowel itself, with its own transitions in and out; only the level
+# is a gain. Pitch, the third cue of stress, has no input in a VITS graph.
+#
+# Small on purpose. Contrastive stress lengthens a stressed vowel by roughly a third in read
+# English, and a voice that hits every italic like a drum reads as sarcastic.
+EMPHASIS: dict[int, tuple[float, float]] = {
+    # level: (vowel duration multiplier, gain on the word in dB)
+    1: (1.30, 1.5),
+    2: (1.50, 3.0),
+    3: (1.50, 3.0),
+}
+# How quickly the emphasis gain comes and goes at the word's edges.
+EMPHASIS_RAMP = 0.030
+
+# THE OPENING WORD'S VOWEL, in seconds at the request's own length scale: the least it may be
+# rendered. en_US-libritts-high clips the first word of a sentence even with LEAD_IN_SPACES -
+# measured over the 40 opening sentences of a Cards reading, "A" came out 12 ms long and
+# "If", "It" and "The" 46 ms, where the same words mid-sentence run about twice that (also
+# reported upstream, rhasspy/piper#296). A floor rather than a stretch, so a first word the
+# model already gave its length is left exactly as it was.
+OPENING_VOWEL = 0.05
+
+# The vowels of eSpeak's IPA (and of `arpabet.to_symbols`), and the marks that belong to one.
+_VOWELS = frozenset("aeiouyæɑɐɒɔəɚɛɜɝɪʊʌʏɘɵɨʉøœɤɯᵻ")
+_VOWEL_MARKS = frozenset("ː")
+_STRESS = "ˈ"
+
+
+def _nuclei(symbols: list) -> set:
+    """Positions in `symbols` that are each source's NUCLEUS: the run of vowels (and their
+    length marks) after the source's primary stress, or its first vowel run if it carries
+    none. A diphthong is one run, so both halves are held together.
+
+    The stress mark directly before the run belongs to it. Piper spreads a syllable's time
+    over every id that spells it - the mark, the vowel and the blanks between them - and the
+    vowel's own id is often a single frame (measured: "officially" ˈ:4 ·:2 ɪ:1 ·:2), so a
+    stretch that misses the mark and the blanks moves almost nothing."""
+    by_src: dict = {}
+    for j, (sym, src) in enumerate(symbols):
+        if src >= 0:
+            by_src.setdefault(src, []).append((j, sym))
+    out: set = set()
+    for items in by_src.values():
+        start = 0
+        for k, (j, sym) in enumerate(items):
+            if sym == _STRESS:
+                start = k + 1
+                break
+        run: list = []
+        for j, sym in items[start:]:
+            if sym in _VOWELS or (run and sym in _VOWEL_MARKS):
+                run.append(j)
+            elif run:
+                break
+        if run and start > 0 and run[0] == items[start - 1][0] + 1:
+            run.insert(0, items[start - 1][0])
+        if not run and start > 0:
+            # a stress mark with no vowel after it in this word: fall back to the first run
+            for j, sym in items:
+                if sym in _VOWELS or (run and sym in _VOWEL_MARKS):
+                    run.append(j)
+                elif run:
+                    break
+        out.update(run)
+    return out
 
 
 # Click avoidance for spliced silence - see _splice_pauses.
@@ -513,23 +584,99 @@ def _effort(a, sr: int, tilt: float, gain_db: float):
     return np.clip(a, -1.0, 1.0).astype(np.float32)
 
 
-def _resample(a, ratio: float):
-    """Play `a` back `ratio` times faster - the same trick the Tone pitch shift uses.
+# The band-limited resampler's kernel: taps either side of the read position, and the Kaiser
+# window's shape. 16 a side with beta 8.6 puts the stopband near -80 dB, under the voice's own
+# noise floor, at a cost of 32 multiply-adds a sample.
+RESAMPLE_TAPS = 16
+RESAMPLE_BETA = 8.6
+# The passband edge as a share of the lower Nyquist: what is above it is filtered out rather
+# than folded back. Speech at 22.05 kHz has little left up there to lose.
+RESAMPLE_CUTOFF = 0.94
+# Fractional read positions are rounded to this many steps between two samples. Measured on
+# pure tones at the Tone presets' ratios: 1024 left spurs at -68 dB by 8 kHz (the rounding is a
+# timing jitter, worse the higher the tone), 4096 holds every spur under -80 dB. 10 s of audio
+# resamples in 0.14 s.
+RESAMPLE_PHASES = 4096
 
-    Linear is enough: the arc is a couple of semitones, well inside where a
-    higher-order kernel would be audible (the editor's own resampler says the
-    same thing for the same reason).
+
+def _emphasize(audio, edges: dict, group: list, sr: int):
+    """The level half of `EMPHASIS`: each leaned-on word a little louder, eased in and out.
+
+    `edges` is {token: (first sound, last sound)} in seconds - the word's own sounds, so the
+    lift starts with the word rather than in the rest before it.
+    """
+    import numpy as np
+
+    lifts = [
+        (edges[ti], EMPHASIS[int(t.get("emph", 0) or 0)][1])
+        for ti, t in enumerate(group)
+        if int(t.get("emph", 0) or 0) in EMPHASIS and ti in edges
+    ]
+    if not lifts or audio.size == 0:
+        return audio
+    gain = np.ones(audio.size, dtype=np.float64)
+    ramp = max(1, int(round(EMPHASIS_RAMP * sr)))
+    for (a, b), db in lifts:
+        lo = max(0, int(round(a * sr)) - ramp)
+        hi = min(audio.size, int(round(b * sr)) + ramp)
+        if hi <= lo:
+            continue
+        g = np.full(hi - lo, 10.0 ** (db / 20.0))
+        n = min(ramp, (hi - lo) // 2)
+        if n > 0:
+            ease = 0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, n))
+            g[:n] = 1.0 + (g[:n] - 1.0) * ease
+            g[-n:] = 1.0 + (g[-n:] - 1.0) * ease[::-1]
+        gain[lo:hi] = np.maximum(gain[lo:hi], g)
+    return np.clip(audio * gain, -1.0, 1.0).astype(np.float32)
+
+
+def _resample(a, ratio: float):
+    """Play `a` back `ratio` times faster - how both pitch moves are bought (the Tone and the arc).
+
+    BAND-LIMITED, because linear interpolation was not enough. Linear is a triangle filter: it
+    lets the images of the spectrum through and droops the top end, by 1.8 dB at a quarter of
+    the sample rate and 4 dB at 8 kHz, and a playback faster than the source folds what lies
+    above the new Nyquist back down as alias. Every sentence went through it twice - the arc
+    here and the Tone in the editor - so the dulling compounded. The raw model, played with no
+    pitch move at all, was heard as the nicer-sounding of the two (2026-10-07).
+
+    Measured at +1.5 semitones (Dreamy) on pure tones, linear left images at -27 dB by 4 kHz and
+    -14 dB by 8 kHz, with the 8 kHz tone itself 4.9 dB down; this keeps every spur under -80 dB
+    and the passband within about a dB to 8 kHz.
+
+    A Kaiser-windowed sinc, cut off at the lower of the two Nyquists, read at exactly the
+    positions the linear version read (the first sample to the last, `n` evenly spaced), so
+    every timing computed against the old one still lands.
     """
     import numpy as np
 
     if abs(ratio - 1.0) < 1e-4 or a.size < 2:
         return a
     n = max(1, int(round(a.size / ratio)))
-    idx = np.linspace(0.0, a.size - 1.0, n)
-    lo = np.floor(idx).astype(np.int64)
-    hi = np.minimum(lo + 1, a.size - 1)
-    frac = (idx - lo).astype(np.float32)
-    return (a[lo] * (1.0 - frac) + a[hi] * frac).astype(np.float32)
+    if n < 2:
+        return a[:1].astype(np.float32)
+    step = (a.size - 1.0) / (n - 1.0)
+    fc = RESAMPLE_CUTOFF * min(1.0, 1.0 / step)
+    w = RESAMPLE_TAPS
+    k = np.arange(-w + 1, w + 1)
+    # POLYPHASE: the kernel tabulated once per call at RESAMPLE_PHASES fractional offsets, and
+    # each output sample reads the nearest row - computing the window per sample cost a
+    # quarter of a second per second of audio, and every sentence goes through here twice.
+    frac = np.arange(RESAMPLE_PHASES + 1) / RESAMPLE_PHASES
+    d = frac[:, None] - k[None, :]
+    win = np.i0(RESAMPLE_BETA * np.sqrt(np.clip(1.0 - (d / (w + 1.0)) ** 2, 0.0, 1.0)))
+    table = (fc * np.sinc(fc * d) * win / np.i0(RESAMPLE_BETA)).astype(np.float32)
+    src = np.pad(a.astype(np.float32), (w, w + 1))
+    out = np.empty(n, dtype=np.float32)
+    block = 16384
+    for s in range(0, n, block):
+        pos = np.arange(s, min(n, s + block)) * step
+        base = np.floor(pos).astype(np.int64)
+        phase = np.rint((pos - base) * RESAMPLE_PHASES).astype(np.int64)
+        taps = src[base[:, None] + k[None, :] + w]
+        out[s : s + pos.size] = np.einsum("ij,ij->i", taps, table[phase])
+    return out
 
 
 # --- THE SOURCE AND THE FILTER, SEPARATED -----------------------------------
@@ -1628,7 +1775,13 @@ class PiperBackend(Backend):
         FLOOR: an optional input, REST_FLOOR_INPUT (frames per id, default none), that the
         plan may not fall below, between the duration predictor's ceiling and everything
         that reads it - how a mark gets a rest the model renders itself (`_rest_floor`).
-        Without the input fed, the graph computes exactly what it did before.
+        Without the input fed, the graph computes exactly what it did before. THE DURATION
+        SCALE: a second optional input, DUR_SCALE_INPUT (a multiplier per id, default 1), on
+        the planned frames after the Ceil and before the floor - how a word is leaned on
+        (`EMPHASIS`). Unfed, a multiply by one.
+
+        Each is added on its own, so a voice patched before one of them existed gets the
+        missing one and keeps the rest.
 
         Patching belongs here, where a voice is first used, not in a script someone has to
         remember to run. Idempotent and cheap: the check is one session open, and a graph
@@ -1643,11 +1796,11 @@ class PiperBackend(Backend):
             str(onnx), sess_options=opts, providers=["CPUExecutionProvider"]
         )
         aligned = len(probe.get_outputs()) > 1
-        floored = REST_FLOOR_INPUT in {
-            i.name for i in probe.get_overridable_initializers()
-        }
+        inputs = {i.name for i in probe.get_overridable_initializers()}
+        floored = REST_FLOOR_INPUT in inputs
+        scaled = DUR_SCALE_INPUT in inputs
         del probe
-        if aligned and floored:
+        if aligned and floored and scaled:
             return
         try:
             import numpy as np
@@ -1659,7 +1812,9 @@ class PiperBackend(Backend):
                 f"ghost/voice: {onnx.name} is unpatched and the `onnx` package is "
                 "missing - "
                 + (
-                    "subtitles unavailable" if not aligned else "no rest floor at marks"
+                    "subtitles unavailable"
+                    if not aligned
+                    else "no rest floor at marks or emphasis"
                 ),
                 file=sys.stderr,
             )
@@ -1676,18 +1831,47 @@ class PiperBackend(Backend):
             return
         ceil = graph.node[at[0]]
         tensor = ceil.output[0]
+        if not scaled:
+            # A Mul AFTER the Ceil, taking the name the Ceil gave its output, so everything
+            # downstream - the floor's Max if there is one, the path, the alignment output -
+            # reads the scaled plan. After rather than before, because most of a syllable's
+            # ids are predicted under one frame and `ceil(d * 1.3)` lands back on the same
+            # whole frame: measured on en_US-libritts-high, a stretch before the Ceil moved a
+            # stressed word by 0 to 30 ms. The path is a mask against the plan's running sum,
+            # so fractional frames are taken as they are.
+            out = ceil.output[0]
+            ceil.output[0] = out + "_unscaled"
+            graph.node.insert(
+                at[0] + 1,
+                helper.make_node(
+                    "Mul",
+                    [out + "_unscaled", DUR_SCALE_INPUT],
+                    [out],
+                    name="ghost_dur_scale",
+                ),
+            )
+            graph.initializer.append(
+                numpy_helper.from_array(np.ones(1, np.float32), DUR_SCALE_INPUT)
+            )
+            graph.input.append(
+                helper.make_tensor_value_info(
+                    DUR_SCALE_INPUT, onnx_mod.TensorProto.FLOAT, None
+                )
+            )
         if not aligned:
             graph.output.append(
                 helper.make_tensor_value_info(tensor, onnx_mod.TensorProto.FLOAT, None)
             )
         if not floored:
-            # The ceiling is renamed and a Max takes its old name, so the graph's own
-            # consumers and the alignment output all read the floored plan. One-dimensional,
-            # so it broadcasts along the ids whatever rank the plan has.
+            # Whatever now produces the plan (the Ceil, or the scale after it) is renamed and a
+            # Max takes its old name, so the graph's own consumers and the alignment output all
+            # read the floored plan. One-dimensional, so it broadcasts along the ids whatever
+            # rank the plan has.
             planned = tensor + "_planned"
-            ceil.output[0] = planned
+            k = next(i for i, n in enumerate(graph.node) if tensor in n.output)
+            graph.node[k].output[0] = planned
             graph.node.insert(
-                at[0] + 1,
+                k + 1,
                 helper.make_node(
                     "Max",
                     [planned, REST_FLOOR_INPUT],
@@ -2237,6 +2421,7 @@ class PiperBackend(Backend):
             group_rests = list(self._last_rests)
             edges = dict(self._last_edges)
             frame = HOP_LENGTH / float(sr)
+            audio = _emphasize(audio, edges, group, sr)
             # SAY WHICH WORDS CAME BACK WITHOUT A SPAN. ghost keeps them in the karaoke line
             # either way now (it interpolates their timing - see
             # GenerativeEditor._bridge_words), but a token the aligner cannot place is a real
@@ -2383,6 +2568,17 @@ class PiperBackend(Backend):
                     chunks.append(np.zeros(pad, dtype=np.float32))
                     cursor += pad / sr
         joined = np.concatenate(chunks) if chunks else np.zeros(1, dtype=np.float32)
+        # THE TONE, played back here rather than in the editor: the same render-slower,
+        # play-faster trade as the arc, through the same band-limited resampler (the editor's
+        # was linear, the arc's too - see `_resample`). Every time handed back is in the
+        # played audio's own seconds, so the editor has no ratio left to apply.
+        played = float(params.get("play_ratio", 1.0) or 1.0)
+        if abs(played - 1.0) > 1e-4 and joined.size > 1:
+            joined = _resample(joined, played)
+            for row in times:
+                for key in ("t0", "t1", "rest"):
+                    if key in row:
+                        row[key] = round(row[key] / played, 4)
         self._write_wav(out_path, joined, sr)
         return {
             "wav": out_path,
@@ -2391,6 +2587,7 @@ class PiperBackend(Backend):
             "tokens": times,
             "aligned": bool(times),
             "sentences": len(groups),
+            "played": played,
         }
 
     @staticmethod
@@ -2452,10 +2649,24 @@ class PiperBackend(Backend):
             ti: _rest_floor(str(t.get("punct", "")), params)
             for ti, t in enumerate(group)
         }
-        return self._render_symbols(symbols, cfg, sess, params, floors)
+        stretch = {
+            ti: EMPHASIS[int(t.get("emph", 0) or 0)][0]
+            for ti, t in enumerate(group)
+            if int(t.get("emph", 0) or 0) in EMPHASIS
+        }
+        return self._render_symbols(
+            symbols, cfg, sess, params, floors, stretch, opening=OPENING_VOWEL
+        )
 
     def _render_symbols(
-        self, symbols: list, cfg: dict, sess, params: dict, floors: dict | None = None
+        self,
+        symbols: list,
+        cfg: dict,
+        sess,
+        params: dict,
+        floors: dict | None = None,
+        stretch: dict | None = None,
+        opening: float = 0.0,
     ):
         """(symbol, source) pairs -> audio, plus a time span per source.
 
@@ -2466,6 +2677,12 @@ class PiperBackend(Backend):
 
         `floors` is {source: seconds} of rest the model renders on the word-space after
         that source's mark (`_rest_floor`), fed to the graph when it takes one.
+
+        `stretch` is {source: multiplier} on that source's stressed vowel (`EMPHASIS`), and
+        `opening` the seconds the first word's vowel may not fall below (`OPENING_VOWEL`),
+        at the request's length scale. Both act on the duration plan, through the graph's
+        inputs; a graph without them renders as it always did. The vowel probe passes
+        neither - it measures vowels, and must get the model's own.
         """
         import numpy as np
 
@@ -2473,6 +2690,24 @@ class PiperBackend(Backend):
         frame_s = HOP_LENGTH / float(cfg["audio"]["sample_rate"])
         # eSpeak is where U+0329 comes from, so this is the call that matters.
         symbols, folded = self._fold_syllabic(symbols, pmap)
+        # THE NUCLEUS of each source: the vowel run after its primary stress, or its first
+        # vowel run where it has no stress mark. What a stretch lengthens and what the
+        # opening floor holds up.
+        nucleus = _nuclei(symbols)
+        first = next(
+            (
+                src
+                for sym, src in symbols
+                if src >= 0 and sym != " " and sym not in _MARK_SYMBOLS
+            ),
+            None,
+        )
+        ls = float(
+            params.get("length_scale", cfg.get("inference", {}).get("length_scale", 1.0))
+        )
+        open_frames = (
+            float(math.ceil(opening * ls / frame_s - 1e-9)) if opening > 0.0 else 0.0
+        )
         ids: list[int] = [BOS]
         owner: list[int] = [-1]
         missing: list[str] = []
@@ -2491,8 +2726,11 @@ class PiperBackend(Backend):
         # Frames each id's duration may not fall below - nonzero only on the word-space
         # right after a mark that has a floor (`_rest_floor`), so never the lead-in spaces.
         floor: list[float] = [0.0]
+        # The multiplier on each id's predicted duration - 1 everywhere but a leaned-on vowel.
+        scale: list[float] = [1.0]
         marked = -1  # the source whose mark is the latest symbol, until its word-space
-        for sym, src in symbols:
+        opened = False  # the opening floor goes on the first id of the first nucleus only
+        for j, (sym, src) in enumerate(symbols):
             mapped = pmap.get(sym)
             if mapped is None:
                 missing.append(sym)
@@ -2500,28 +2738,45 @@ class PiperBackend(Backend):
             rest = 0.0
             if sym == " " and src == marked and floors:
                 rest = float(round(float(floors.get(src, 0.0)) / frame_s))
+            core = j in nucleus
+            mul = float(stretch.get(src, 1.0)) if stretch and core else 1.0
+            # the blank before a nucleus symbol is inside the syllable unless it opens it, and
+            # the blank right after the nucleus is the vowel's release - both are stretched
+            prev_core = (j - 1) in nucleus and symbols[j - 1][1] == src
+            pad_mul = (
+                float(stretch.get(src, 1.0))
+                if stretch and prev_core
+                else 1.0
+            )
+            if core and src == first and open_frames > 0.0 and not opened and sym != _STRESS:
+                rest = max(rest, open_frames)
+                opened = True
             ids.append(PAD)
             owner.append(src)
             rest_of.append(-1)
             sound.append(False)
             floor.append(0.0)
+            scale.append(pad_mul)
             for k, m in enumerate(mapped):
                 ids.append(int(m))
                 owner.append(src)
                 rest_of.append(src if sym == " " else -2)
                 sound.append(sym != " " and sym not in _MARK_SYMBOLS)
                 floor.append(rest if k == 0 else 0.0)
+                scale.append(mul)
             marked = src if sym in _MARK_SYMBOLS else (-1 if sym == " " else marked)
         ids.append(PAD)
         owner.append(-1)
         rest_of.append(-1)
         sound.append(False)
         floor.append(0.0)
+        scale.append(1.0)
         ids.append(EOS)
         owner.append(-1)
         rest_of.append(-2)
         sound.append(False)
         floor.append(0.0)
+        scale.append(1.0)
         if folded and SYLLABIC not in self._warned_symbols:
             self._warned_symbols.add(SYLLABIC)
             print(
@@ -2567,11 +2822,12 @@ class PiperBackend(Backend):
         if int(cfg.get("num_speakers", 1)) > 1:
             feeds["sid"] = np.array([int(params.get("speaker", 0))], dtype=np.int64)
         fed = None
-        if any(floor) and REST_FLOOR_INPUT in {
-            i.name for i in getattr(sess, "get_overridable_initializers", list)()
-        }:
+        takes = {i.name for i in getattr(sess, "get_overridable_initializers", list)()}
+        if any(floor) and REST_FLOOR_INPUT in takes:
             fed = np.array(floor, dtype=np.float32)
             feeds[REST_FLOOR_INPUT] = fed
+        if any(m != 1.0 for m in scale) and DUR_SCALE_INPUT in takes:
+            feeds[DUR_SCALE_INPUT] = np.array(scale, dtype=np.float32)
         out = sess.run(None, feeds)
         audio = np.asarray(out[0]).squeeze().astype(np.float32)
 

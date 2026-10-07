@@ -49,7 +49,7 @@ const REGISTRY := {
 		"needs": ["audio"], "provides": ["picture", "moments"], "requires": [],
 		"capabilities": ["forward_plus"], "marks": [], "block": "scenes", "card": ""},
 	"storyboard": {"label": "Storyboards", "family": &"picture",
-		"blurb": "The scenes by hand: a storyboard picks them and the dial plays them.",
+		"blurb": "The scenes by hand: a storyboard picks them and plays them on the song.",
 		"needs": ["audio", "places"], "provides": ["picture"], "requires": ["scenes"],
 		"capabilities": ["forward_plus"], "marks": [], "block": "", "card": "storyboards"},
 	"voice": {"label": "Voice", "family": &"voice",
@@ -109,7 +109,7 @@ const TEMPLATES := {
 		"blurb": "A song and the seeded show - every scene chosen from the song itself, nothing to set.", "uses": ""},
 	"manual": {"label": "Manual", "session": "song", "mode": "manual", "storyboard": "default",
 		"components": ["text", "song", "picture", "storyboard"],
-		"blurb": "A song and a show by hand - storyboards and the dial.", "uses": ""},
+		"blurb": "A song and a show by hand - a storyboard.", "uses": ""},
 	# Two templates rather than one with a sub-choice: the paths are not variants of each other.
 	# Synthesis has a genome, a belt and a fishing loop; Generative has a speaker id and three
 	# scalars (VOICE_PLAN.md section 6).

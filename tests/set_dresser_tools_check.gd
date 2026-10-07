@@ -22,9 +22,19 @@ extends SceneTree
 ##   last words, says so when a run with tools handed nothing in, and closes the tools when it stops.
 ## - CLAUDE WITH TOOLS loads no settings instead of `--safe-mode` (which drops every MCP server) and is
 ##   pointed at the toolset by a config file; without tools its argv is as it was.
+## - THE TABLE ITSELF: a top and layers put are said back as the table will be built (a top grown to
+##   hold the cards says so), kept in the draft only once put (no `layers` is the old cloth, `[]` a bare
+##   top), a layer put again under its name replaced, taken off by name; OVERHEAD with no renderer says
+##   there is no picture and takes none.
 ## - THE AIR: effects put beside things are reported - what was built, and every kind, place, look or
 ##   moment the builder does not know, a size kept within its look's range - replaced and removed by
 ##   name, handed in with the table, and watched by name (with no renderer, said so).
+## - THE LIGHT ([Lights]): put part by part - a part put again replaces that part alone, a screen or a
+##   lamp replaces the one of its name, null takes a part away, an empty list all of its kind - and
+##   reported: what it is, what the builder does not know, where the sun falls (on the table, and where
+##   the cards lie), how the weather runs, a lamp moved up out of the shot; parts taken off by name (or
+##   "clouds", "birds", "light"), watched by name (with no renderer, said so), handed in with the table;
+##   both prompts tell the set dresser of it, its vocabulary, its format and earlier episodes' light.
 
 const ROOT := "user://set_dresser_check"
 
@@ -64,7 +74,7 @@ func _ok(cond: bool, what: String) -> void:
 
 func _run() -> void:
 	AgentJobs.allow_for_tool()
-	for check in [_fresh_start, _tools_listed, _put_reports, _remove_look_set, _submit, _title, _producer, _prompts, _claude_argv, _air]:
+	for check in [_fresh_start, _tools_listed, _put_reports, _remove_look_set, _submit, _title, _producer, _prompts, _claude_argv, _air, _table_itself, _light]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("set_dresser_tools_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -118,10 +128,10 @@ func _tools_listed() -> bool:
 		names.append(String((d as Dictionary)["name"]))
 		shaped = shaped and String(((d as Dictionary)["inputSchema"] as Dictionary).get("type", "")) == "object" \
 			and not String((d as Dictionary).get("description", "")).is_empty()
-	_ok(names == ["put", "remove", "look", "set", "watch", "title", "submit"], "the set dresser's tools are %s" % str(names))
+	_ok(names == ["put", "remove", "look", "set", "overhead", "watch", "title", "submit"], "the set dresser's tools are %s" % str(names))
 	_ok(shaped, "a tool has no description or no object schema")
 	var r: Dictionary = await t.call_tool("paint", {})
-	_ok(bool(r.get("error", false)) and String(r["text"]).contains("put, remove, look, set, watch, title and submit"),
+	_ok(bool(r.get("error", false)) and String(r["text"]).contains("put, remove, look, overhead, set, watch, title and submit"),
 		"an unknown tool did not name the real ones: %s" % r)
 	t.release()
 	return true
@@ -328,6 +338,9 @@ func _prompts() -> bool:
 				"the set dresser %s is not told the zone %s" % [tag, z])
 		_ok(text.contains(CardPrompts.SET_EXAMPLE), "the set dresser %s is not shown the format" % tag)
 		_ok(text.contains("THE AIR:"), "the set dresser %s is not told about the air" % tag)
+		_ok(text.contains("THE LIGHT:") and text.contains(CardPrompts.LIGHT_EXAMPLE), "the set dresser %s is not told about the light, or shown its format" % tag)
+		for k in Lights.SCREENS.keys() + Lights.BIRDS.keys() + Lights.LAMPS.keys() + Lights.SUNS.keys():
+			_ok(text.contains("- %s:" % k), "the set dresser %s is not told the light's word %s" % [tag, k])
 		for k in Effects.KINDS.keys() + Effects.MOTES.keys() + Effects.BURSTS.keys():
 			_ok(text.contains("- %s:" % k), "the set dresser %s is not told the effect word %s" % [tag, k])
 		for k in CardTable.AIR.keys() + CardTable.MOMENTS.keys():
@@ -342,6 +355,12 @@ func _prompts() -> bool:
 			"the set dresser %s is not told how to give the name's color" % tag)
 	_ok(not String(CardPrompts.set_dresser("Test Tarot", "A brief.", ep.read_json("plan"), ep.seed, head, [], true)["prompt"]).contains("and under it"),
 		"a show with no byline is told of one")
+	var lit := String(CardPrompts.set_dresser("T", "B", ep.read_json("plan"), ep.seed, head, [], true, 0, [], "", [],
+		["the sun from the left, 20 degrees up through a blind"], true)["prompt"])
+	_ok(lit.contains("EARLIER EPISODES WERE LIT LIKE THIS") and lit.contains("through a blind"), "the set dresser is not told how earlier tables were lit")
+	_ok(lit.contains("ITS PAINTING attached") and lit.contains("agree with the room (its painting attached)"), "the set dresser is not told the room's painting comes with it")
+	_ok(not String(CardPrompts.set_dresser("T", "B", ep.read_json("plan"), ep.seed, head, [], true)["prompt"]).contains("ITS PAINTING attached"),
+		"a set dresser with no room's painting is told it has one")
 	return true
 
 
@@ -398,7 +417,7 @@ func _air() -> bool:
 	r = await t.call_tool("remove", {"names": ["rain", "lost", "odd", "flies"]})
 	_ok((t.draft()["effects"] as Array).size() == 3, "effects were not removed by name: %s" % str(t.draft()["effects"]))
 	r = await t.call_tool("watch", {"name": "snow"})
-	_ok(bool(r.get("error", false)) and String(r["text"]).contains("In it: sea mist, wisps, sparks"), "watching an effect not there was not refused with what is: %s" % r)
+	_ok(bool(r.get("error", false)) and String(r["text"]).contains("In its air: sea mist, wisps, sparks"), "watching an effect not there was not refused with what is: %s" % r)
 	r = await t.call_tool("watch", {"name": "sparks"})
 	_ok(not bool(r.get("error", false)) and String(r["text"]).contains("cannot be watched") and (r.get("images", []) as Array).is_empty(),
 		"watching with no renderer did not say so: %s" % r)
@@ -411,3 +430,80 @@ func _air() -> bool:
 	t.release()
 	return true
 
+
+func _table_itself() -> bool:
+	var ep := _episode()
+	var t := _tools(ep)
+	_ok(not t.draft().has("top") and not t.draft().has("layers"), "a draft with no table put carries none (the old table)")
+	var r: Dictionary = await t.call_tool("put", {"top": {"shape": "round", "size": [60], "material": "oak", "edge": "ogee"},
+		"materials": {"oak": {"kind": "wood", "color": "#8a6a3a"}},
+		"layers": [{"name": "the cloth", "outline": "top", "drop": 20, "fabric": "linen", "pattern": {"kind": "checks"}},
+			{"name": "a square", "outline": "rect", "size": [50, 50], "turn": 45, "pattern": {"kind": "painting"}}]})
+	var text := String(r["text"])
+	_ok(not bool(r.get("error", false)) and text.contains("a round top of oak") and text.contains("made") and text.contains("larger"),
+		"a top put is said back, and that it was grown to hold the cards: %s" % text)
+	_ok((t.draft()["layers"] as Array).size() == 2 and String((t.draft()["top"] as Dictionary)["shape"]) == "round", "the top and layers are in the draft")
+	await t.call_tool("put", {"layers": [{"name": "a square", "outline": "rect", "size": [40, 40], "fabric": "velvet"}]})
+	var layers: Array = t.draft()["layers"]
+	_ok(layers.size() == 2 and String((layers[1] as Dictionary)["fabric"]) == "velvet", "a layer put again under its name replaces it")
+	var gone: Dictionary = await t.call_tool("remove", {"names": ["the cloth"]})
+	_ok(not bool(gone.get("error", false)) and (t.draft()["layers"] as Array).size() == 1, "a layer is taken off by name")
+	await t.call_tool("put", {"layers": []})
+	_ok(t.draft().has("layers") and (t.draft()["layers"] as Array).is_empty()
+		and (CardTable.sanitize_table(t.draft(), {})["layers"] as Array).is_empty(), "`layers: []` is a bare top")
+	var o: Dictionary = await t.call_tool("overhead", {})
+	_ok(String(o["text"]).contains("cannot be stood") and (o.get("images", []) as Array).is_empty(), "overhead with no renderer says so and takes no picture")
+	t.release()
+	return true
+
+
+func _light() -> bool:
+	var ep := _episode()
+	var t := _tools(ep)
+	_ok(not t.draft().has("light"), "a draft with no light put carries one (no light is the lamp, as every table had)")
+	var r: Dictionary = await t.call_tool("put", {"light": {"sky": {"color": "#b0c4d8", "strength": 0.6},
+		"sun": {"look": "sun", "from": "back left", "height": 30},
+		"through": [{"name": "the west window", "kind": "window", "panes": [3, 2]}, {"name": "a chandelier", "kind": "chandelier"}],
+		"clouds": {"cover": 0.4, "size": 0.3, "speed": 0.7},
+		"birds": {"look": "gull", "every": 30},
+		"lamps": [{"name": "a torch", "look": "torch", "from": "left"}, {"name": "the lantern", "look": "lantern", "from": "back", "distance": 60, "height": 5}]}})
+	var text := String(r["text"])
+	_ok(not bool(r.get("error", false)) and text.contains("The light: the sun from the back left, 30 degrees up through the west window"),
+		"a light put was not said back:\n%s" % text)
+	_ok(text.contains("\"chandelier\" is not something the sun falls through"), "a screen the builder does not know was not reported:\n%s" % text)
+	_ok(text.contains("The sun reaches") and text.contains("of where the cards lie"), "where the sun falls was not reported:\n%s" % text)
+	_ok(text.contains("Clouds: the sun is behind cloud") and text.contains("Birds: "), "the weather was not reported:\n%s" % text)
+	_ok(text.contains("\"the lantern\" would be seen where it was put: moved up out of the shot"), "a lamp in the shot was not reported moved:\n%s" % text)
+	# PART BY PART
+	await t.call_tool("put", {"light": {"sun": {"look": "sun", "from": "right", "height": 50}}})
+	var l: Dictionary = t.draft()["light"]
+	_ok(float((Lights.sanitize(l)["sun"] as Dictionary)["from"]) == 90.0 and (l["through"] as Array).size() == 2 and l.has("clouds"),
+		"a part put again does not replace that part alone: %s" % str(l))
+	await t.call_tool("put", {"light": {"lamps": [{"name": "a torch", "look": "fire", "from": "left"}, {"name": "a sign", "look": "neon", "from": "back right"}]}})
+	var lamps: Array = (t.draft()["light"] as Dictionary)["lamps"]
+	_ok(lamps.size() == 3 and String((lamps[0] as Dictionary)["look"]) == "fire", "lamps are not put by name: %s" % str(lamps))
+	await t.call_tool("put", {"light": {"clouds": null}})
+	_ok(not (t.draft()["light"] as Dictionary).has("clouds"), "null does not take a part away")
+	var gone: Dictionary = await t.call_tool("remove", {"names": ["birds", "the lantern"]})
+	var after: Dictionary = t.draft()["light"]
+	_ok(not bool(gone.get("error", false)) and not after.has("birds") and (after["lamps"] as Array).size() == 2, "parts of the light are not taken off by name: %s" % str(after))
+	r = await t.call_tool("watch", {"name": "clouds"})
+	_ok(bool(r.get("error", false)) and String(r["text"]).contains("In its light: a torch, a sign"), "watching clouds that are gone was not refused with what moves: %s" % r)
+	r = await t.call_tool("watch", {"name": "a torch"})
+	_ok(not bool(r.get("error", false)) and String(r["text"]).contains("cannot be watched") and (r.get("images", []) as Array).is_empty(),
+		"watching the light with no renderer did not say so: %s" % r)
+	await t.call_tool("put", {"light": {"lamps": []}})
+	_ok(((t.draft()["light"] as Dictionary)["lamps"] as Array).is_empty(), "`lamps: []` does not take them all away")
+	# HANDED IN with the table, and built from it
+	await t.call_tool("put", {"things": [_candle("a pillar", 9.0)], "materials": {"beeswax": {"kind": "wax", "color": "#e8d9a8"}}})
+	await t.call_tool("title", {"color": "#e9dcc0"})
+	await t.call_tool("submit", {})
+	var handed: Variant = JSON.parse_string(FileAccess.get_file_as_string(ep.job_dir("table").path_join(SetDresserTools.SUBMITTED)))
+	var built: Dictionary = CardTable.sanitize_table(handed if handed is Dictionary else {}, CardTable.sanitize_look({}))["light"]
+	_ok(not built.is_empty() and float((built["sun"] as Dictionary)["from"]) == 90.0 and (built["through"] as Array).size() == 1,
+		"the light was not handed in with the table, or does not build: %s" % str(built))
+	# ALL OF IT taken off: the table is lit as every table was
+	await t.call_tool("remove", {"names": ["light"]})
+	_ok((CardTable.sanitize_table(t.draft(), CardTable.sanitize_look({}))["light"] as Dictionary).is_empty(), "removing \"light\" leaves a light")
+	t.release()
+	return true

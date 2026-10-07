@@ -370,6 +370,7 @@ func table(raw: Dictionary) -> Dictionary:
 	var err := _stand(raw)
 	if not err.is_empty():
 		return {"error": err}
+	# THE TABLE AS IT MOSTLY IS: its light with the sun out and no bird crossing ([method Lights.Rig.quiet_near])
 	_pose_spread()
 	_medium._tick_air(AIR_AT)
 	var out := _placed(CardTable.sanitize_table(raw, CardTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {})))
@@ -413,6 +414,201 @@ func watch(raw: Dictionary, name: String) -> Dictionary:
 	return {"image": sheet, "frames": steps, "burst": burst}
 
 
+## A MOVING PART OF THE LIGHT ([Lights]) photographed four times on the episode's table: "clouds" as one
+## passes over the sun - the sun out, the cloud coming over it, under it, the sun back; "birds" as a
+## shadow crosses the table; something the sun falls through as it stirs; a lamp as it flickers, stutters,
+## cuts, passes or flashes. `{image, frames: [seconds], what}`; `error` when it cannot be shown.
+func watch_light(raw: Dictionary, name: String) -> Dictionary:
+	var err := _stand(raw)
+	if not err.is_empty():
+		return {"error": err}
+	var m = _medium
+	var rig = m._rig
+	if rig == null:
+		return {"error": "the table has no light of its own"}
+	var plan := _light_moment(rig, name)
+	if plan.has("error"):
+		return plan
+	var steps: Array = plan["times"]
+	var sheet := Image.create(SHEET.x, SHEET.y, false, Image.FORMAT_RGB8)
+	sheet.fill(Color(0.06, 0.06, 0.07))
+	for i in steps.size():
+		var t := float(steps[i])
+		_pose_spread(t)
+		m._tick_props(t)
+		m._tick_air(t)
+		var img: Image = await _render(_table, TABLE_FRAMES)
+		if img == null:
+			return {"error": "no picture could be taken"}
+		img.resize(SHEET.x / 2 - 2, SHEET.y / 2 - 2, Image.INTERPOLATE_LANCZOS)
+		sheet.blit_rect(img, Rect2i(Vector2i.ZERO, img.get_size()), Vector2i((i % 2) * (SHEET.x / 2) + 1, (i / 2) * (SHEET.y / 2) + 1))
+	return {"image": sheet, "frames": steps, "what": plan["what"]}
+
+
+## WHEN TO PHOTOGRAPH [param name] of [param rig]'s light: `{times: [four seconds], what}`, or `{error}`.
+func _light_moment(rig, name: String) -> Dictionary:
+	var low := name.to_lower()
+	if low == "clouds":
+		var field: Dictionary = rig.field
+		if field.is_empty():
+			return {"error": "the sky has no clouds"}
+		if float(field["thr"]) < -0.5:
+			return {"times": [AIR_AT, AIR_AT + 4.0, AIR_AT + 8.0, AIR_AT + 12.0],
+				"what": "The sky is covered: the sun is behind cloud all the while, four seconds apart."}
+		# the first cloud over the sun from a clear sky: the last clear moment, half way in, deepest, back out
+		var t := 0.0
+		var clear_at := -1.0
+		while t < 1200.0:
+			var c := Lights.cloud_at(field, t)
+			if c < 0.02:
+				clear_at = t
+			elif c > 0.98 and clear_at >= 0.0:
+				var into := t
+				var out := into
+				while out < into + 300.0 and Lights.cloud_at(field, out) > 0.02:
+					out += 0.25
+				var mid := (clear_at + into) * 0.5
+				return {"times": [maxf(clear_at - 1.0, 0.0), mid, minf(into + 3.0, (into + out) * 0.5), out + 1.0],
+					"what": "A cloud passing over the sun, %.0f s in: the sun out, the cloud coming over it, under it, the sun back (it is in cloud for %.0f s)." % [into, out - mid]}
+			t += 0.25
+		return {"error": "no cloud crosses the sun in the first twenty minutes - give the clouds more cover"}
+	if low == "birds":
+		var flights: Array = rig.flights
+		for c in flights:
+			var tc := float((c as Dictionary)["t"])
+			var over: Array = []
+			var tt := tc - 2.0
+			var until := tc + (float((c as Dictionary)["dur"]) + 2.0 if String((c as Dictionary)["path"]) == "circle" else 2.0)
+			var middle: Vector3 = rig.stage.get("middle", Vector3.ZERO)
+			while tt < until:
+				for b in Lights.birds_at(flights, rig.bird_look, tt):
+					var at: Vector2 = (b as Dictionary)["at"]
+					# over the table where the sun reaches it: a shadow inside a shade is not seen
+					if absf(at.x) < 0.55 and at.y > -0.55 and at.y < 0.35 \
+							and Lights.sunlit(rig.geom, rig.sun_vec, middle + Vector3(at.x, 0.0, at.y), tt):
+						over.append(tt)
+						break
+				tt += 0.01
+			if over.size() >= 4:
+				var a := float(over[0])
+				var z := float(over[over.size() - 1])
+				return {"times": [a, lerpf(a, z, 0.33), lerpf(a, z, 0.66), z],
+					"what": "A bird's shadow crossing the table, %.1f s in - over it for %.2f s." % [a, z - a]}
+		return {"error": "no bird's shadow crosses the table in the reading"}
+	for g in rig.screens:
+		var sc: Dictionary = ((g as Dictionary)["g"] as Dictionary)["screen"]
+		if String(sc["name"]) == name:
+			if not bool((g as Dictionary)["moves"]):
+				return {"error": "\"%s\" does not move: set shows it" % name}
+			return {"times": [AIR_AT, AIR_AT + 1.5, AIR_AT + 3.0, AIR_AT + 4.5], "what": "\"%s\" stirring, a second and a half apart." % name}
+	for l in rig.lamps:
+		var spec: Dictionary = (l as Dictionary)["spec"]
+		if String(spec["name"]) != name:
+			continue
+		var fk: Dictionary = (l as Dictionary)["fk"]
+		var style := String((Lights.LAMPS[String(spec["look"])] as Dictionary)["flicker"])
+		match style:
+			"pass", "lightning":
+				for e in (fk["events"] as PackedFloat32Array):
+					if e >= 1.0:
+						var span := 3.2 if style == "pass" else 0.9
+						return {"times": [e - 0.5, e + span * 0.2, e + span * 0.5, e + span * 0.8],
+							"what": "\"%s\" at %.1f s: before, and as it %s." % [name, e, "passes" if style == "pass" else "flashes"]}
+				return {"error": "\"%s\" never comes in the reading" % name}
+			"beam":
+				var every := float(fk["every"])
+				var t0 := (floorf(AIR_AT / every + float(fk["seed"])) + 0.5 - float(fk["seed"])) * every
+				if t0 < AIR_AT:
+					t0 += every
+				return {"times": [t0 - 0.3, t0 - 0.1, t0 + 0.1, t0 + 0.3], "what": "\"%s\" sweeping across the table." % name}
+			"steady":
+				return {"error": "\"%s\" is steady: set shows it" % name}
+			"fluorescent", "neon":
+				var t := AIR_AT
+				while t < AIR_AT + 600.0:
+					if float(Lights.flicker(String(spec["look"]), fk, t)["bright"]) < 0.5:
+						return {"times": [t - 0.6, t, t + 0.05, t + 0.7], "what": "\"%s\" stuttering, %.1f s in." % [name, t]}
+					t += 0.02
+				return {"times": [AIR_AT, AIR_AT + 1.0, AIR_AT + 2.0, AIR_AT + 3.0], "what": "\"%s\", steady." % name}
+			"screen":
+				return {"times": [AIR_AT, AIR_AT + 2.5, AIR_AT + 5.0, AIR_AT + 7.5], "what": "\"%s\" through its cuts, two and a half seconds apart." % name}
+			_:
+				return {"times": [AIR_AT, AIR_AT + 0.3, AIR_AT + 0.6, AIR_AT + 0.9], "what": "\"%s\" flickering, a third of a second apart." % name}
+	return {"error": "nothing called \"%s\" moves in the light" % name}
+
+
+## THE TABLE FROM STRAIGHT ABOVE - its top, its edge and its layers as they are laid, the things on it
+## and the cards in their spread, the reader at the bottom - with the stretch the camera sees outlined:
+## a plan, for laying a runner square or a cloth as a diamond. Lit as the show lights it. `{image}`;
+## `error` when the table cannot be stood here.
+func overhead(raw: Dictionary) -> Dictionary:
+	var err := _stand(raw)
+	if not err.is_empty():
+		return {"error": err}
+	_pose_spread()
+	var m = _medium
+	var bounds: AABB = (m._furniture as Dictionary).get("bounds", AABB(Vector3(-0.95, 0.0, -0.4), Vector3(1.9, 0.05, 0.85)))
+	var mid := bounds.get_center()
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.keep_aspect = Camera3D.KEEP_HEIGHT
+	var aspect := float(SHEET.x) / float(SHEET.y)
+	cam.size = maxf(bounds.size.z, bounds.size.x / aspect) * 1.08
+	cam.near = 0.05
+	cam.far = 6.0
+	cam.environment = (m._cam as Camera3D).environment
+	(m._root3 as Node3D).add_child(cam)
+	cam.transform = Transform3D(Basis.looking_at(Vector3.DOWN, Vector3(0.0, 0.0, -1.0)), Vector3(mid.x, 2.0, mid.z))
+	var seen := _frame_on_table(m)
+	seen.position.y = 0.002
+	(m._root3 as Node3D).add_child(seen)
+	cam.make_current()
+	var img: Image = await _render(_table, TABLE_FRAMES)
+	(m._cam as Camera3D).make_current()
+	cam.queue_free()
+	seen.queue_free()
+	if img == null:
+		return {"error": "no picture could be taken"}
+	return {"image": img}
+
+
+## The stretch of the table the episode's camera sees, as a thin line laid on it.
+func _frame_on_table(m) -> MeshInstance3D:
+	var pts := PackedVector3Array()
+	var cam: Transform3D = m._cam_base
+	var fov: float = (m._cam as Camera3D).fov
+	var k := tan(deg_to_rad(fov * 0.5))
+	var edge: Array = []
+	for i in 41:
+		var u := float(i) / 40.0
+		edge.append(Vector2(u * 2.0 - 1.0, 1.0))
+	for i in 41:
+		edge.append(Vector2(1.0, 1.0 - float(i) / 20.0))
+	for i in 41:
+		edge.append(Vector2(1.0 - float(i) / 20.0, -1.0))
+	for i in 41:
+		edge.append(Vector2(-1.0, -1.0 + float(i) / 20.0))
+	for e in edge:
+		var d := (cam.basis * Vector3((e as Vector2).x * k * 16.0 / 9.0, (e as Vector2).y * k, -1.0)).normalized()
+		if d.y < -0.02:
+			var t := -cam.origin.y / d.y
+			pts.append(cam.origin + d * minf(t, 3.0))
+		else:
+			pts.append(cam.origin + Vector3(d.x, 0.0, d.z).normalized() * 3.0 - Vector3(0.0, cam.origin.y, 0.0))
+	var im := ImmediateMesh.new()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(1.0, 0.85, 0.2)
+	im.surface_begin(Mesh.PRIMITIVE_LINE_STRIP, mat)
+	for q in pts:
+		im.surface_add_vertex(Vector3(q.x, 0.0, q.z))
+	im.surface_end()
+	var mi := MeshInstance3D.new()
+	mi.mesh = im
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
+
+
 ## THE OPENING - the video's first seconds, and its thumbnail - over this table: the deck squared in
 ## the middle, the flames lit, the whole frame thrown out of focus as the intro throws it, and the
 ## show's name over it in the color [param raw]'s `title` names. `{image, contrast}`: `contrast` is
@@ -427,6 +623,7 @@ func opening(raw: Dictionary) -> Dictionary:
 	m._pose(OPENING_AT)
 	m._tick_camera(0.0)
 	m._tick_props(OPENING_AT)
+	m._tick_light(_quiet(OPENING_AT))
 	m._tick_air(OPENING_AT)
 	(m._env as Environment).adjustment_brightness = 1.0
 	m._lens(0.0)
@@ -599,8 +796,9 @@ func _sync_pictures() -> void:
 
 
 ## The table at the end of a reading: every card down in the spread, face down; the deck squared at
-## its side; the flames burning; the channel's title off.
-func _pose_spread() -> void:
+## its side; the flames burning; its light at [param light_at] - or, unless told, as it mostly is (the sun
+## out, no bird crossing); the channel's title off.
+func _pose_spread(light_at := -1.0) -> void:
 	var m = _medium
 	var card_t := float((m.get_script() as Script).get_script_constant_map().get("CARD_T", 0.0007))
 	m._cur_base = m._deck_base
@@ -614,8 +812,16 @@ func _pose_spread() -> void:
 	(m._page as Node3D).visible = false
 	m._tick_camera(0.0)
 	m._tick_props(30.0)
+	m._tick_light(light_at if light_at >= 0.0 else _quiet(AIR_AT))
 	(m._env as Environment).adjustment_brightness = 1.0
 	m._lens(1.0)
+
+
+## A moment at or after [param t] when the table's light is as it mostly is: the sun out, no bird
+## crossing - [param t] itself for a table with no light of its own.
+func _quiet(t: float) -> float:
+	var rig = _medium._rig if _medium != null else null
+	return rig.quiet_near(t) if rig != null else t
 
 
 ## What the medium made of [param spec] (the table made safe): where each thing stood, what found no
@@ -642,13 +848,11 @@ func _placed(spec: Dictionary) -> Dictionary:
 		var node: Node3D = th["node"]
 		var rect: Rect2 = th["rect"]
 		stood.append({"name": name, "place": String(th["place"]),
-			"at": Vector2(node.position.x * 100.0, (node.position.z - float((m._cloth as Node3D).position.z)) * 100.0),
+			"at": Vector2(node.position.x * 100.0, (node.position.z - Tables.ORIGIN.y) * 100.0),
 			"k": node.transform.basis.get_scale().x, "tall": rect.size.y})
 		for li in th.get("lights", []):
 			by_light[int(li)] = name
-	var key := "the lamp"
-	if int(m._key_flame) >= 0:
-		key = String(by_light.get(int(m._key_flame), "a candle"))
+	var key: String = m.lead_name(by_light)
 	var held: Array = []
 	for i in (m._lights as Array).size():
 		var l: Dictionary = m._lights[i]

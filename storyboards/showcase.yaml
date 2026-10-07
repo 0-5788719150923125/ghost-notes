@@ -1,0 +1,88 @@
+# showcase - the README's animation (src/showcase.gd records it): one blue prism
+# flies in, divides into a blue one and a red one, the pair lock and turn as one,
+# then break and take opposite highways, looping back to the middle as the picture
+# fades - so the recording loops on an empty void. Short on purpose: every second
+# is frames in the README.
+#
+# Changing this file re-records the animation at the next development launch.
+name: showcase
+loop: true
+transition: cut
+sensitivity: 1.0
+
+defs:
+  front-camera: {eye: [0, 0, 4.0], look: [0, 0, 0], fov: 48}
+
+sequence:
+  # ---- arrive: the blue prism swoops in from off the frame and lands ----------
+  - scene: stage
+    behavior: static
+    shot: centered
+    hold: 3
+    camera: {use: front-camera}
+    cast:
+      - {id: blue, kind: prism, at: [0, 0, 0], scale: 0.44, hue: 0.6, hidden: true}
+    track:
+      nominal: 3
+      spans:
+        - {from: 0.2, to: 2.4, action: arrive, target: blue, ease: linear}
+
+  # ---- divide: it buds a twin, which warms to red as it pulls away, and tears free
+  - scene: stage
+    behavior: static
+    shot: centered
+    hold: 4
+    camera: {use: front-camera}
+    cast:
+      - {id: blue, kind: prism, at: [0, 0, 0], hue: 0.6}                 # carried in live
+      - {id: red, kind: prism, at: [0.6, 0, 0], hue: 0.6, hidden: true}
+    track:
+      nominal: 4
+      spans:
+        - from: 0.2
+          to: 3.8
+          ease: linear                       # the verb shapes its own phases
+          action: split
+          target: blue
+          args: {into: red, hue: 0.0, slots: [[-0.6, 0, 0], [0.6, 0, 0]]}
+
+  # ---- lock: the pair snap into phase and turn as one, then the red holds still
+  - scene: stage
+    behavior: static
+    shot: centered
+    hold: 4
+    camera: {use: front-camera}
+    cast:
+      - {id: blue, kind: prism, at: [-0.6, 0, 0], hue: 0.6}              # carried in live
+      - {id: red, kind: prism, at: [0.6, 0, 0], hue: 0.0}                # carried in live
+    track:
+      nominal: 4
+      spans:
+        - {from: 0.0, to: 4.0, action: sway, target: [blue, red]}
+        - {from: 0.3, to: 2.8, action: lock, target: red, args: {to: blue, snap: 0.1}}
+        - {at: 2.8, action: desync, target: red}
+        - {from: 2.8, to: 4.0, action: hold_still, target: red}
+
+  # ---- counterflow: opposite highways, passing mid-frame, looping off to the middle
+  - scene: stage
+    behavior: static
+    shot: centered
+    hold: 4
+    camera: {use: front-camera}
+    cast:
+      - {id: blue, kind: prism, at: [-0.6, 0, 0], hue: 0.6}              # carried in live
+      - {id: red, kind: prism, at: [0.6, 0, 0], hue: 0.0}                # carried in live
+    track:
+      nominal: 4
+      spans:
+        - {from: 0.0, to: 4.0, action: counterflow, target: [blue, red], ease: linear}
+        - from: 0.6
+          to: 3.0
+          action: specialize
+          target: blue
+          args: {size: 1.4, tempo: 0.55}
+        - from: 0.6
+          to: 3.0
+          action: specialize
+          target: red
+          args: {size: 0.6, tempo: 1.8, pulse: {amp: 0.06, rate: 6.5}}

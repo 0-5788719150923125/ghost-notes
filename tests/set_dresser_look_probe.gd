@@ -6,13 +6,16 @@ extends Node
 ## answered with.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/set_dresser_look_probe.gd 300 \
-##       --show truthful-tarot --seed 26551 [--spec <table.json>] [--air <effects.json>] [--out /tmp/sd/look]
+##       --show truthful-tarot --seed 26551 [--spec <table.json>] [--air <effects.json>] [--light <light.json>] [--out /tmp/sd/look]
 ##
-## The description is the episode's own `table.json` unless `--spec` names another; `--air` puts a
-## list of effects (or a table's `effects`) beside it, and every one of them is watched. Last, the
-## name's color is chosen (`--ink`, else the description's own `title`, else cream) and the OPENING is
-## shown under `--name`/`--byline`. The episode is only read: the tools work in a folder of their own
-## (`user://set_dresser_look`), never its jobs.
+## The description is the episode's own `table.json` unless `--spec` names another - its `top` and
+## `layers`, when it has them, put first and seen from above (`overhead`); `--air` puts a
+## list of effects (or a table's `effects`) beside it, and every one of them is watched; `--light` puts a
+## light ([Lights] - an object, or a table carrying `light`; else the description's own, if it has one)
+## and every part of it that moves is watched (`--watch 0`: none). Last, the name's color is chosen
+## (`--ink`, else the description's own `title`, else cream) and the OPENING is shown under
+## `--name`/`--byline`; `--quick 1` skips the close look at a thing and the opening. The episode is only
+## read: the tools work in a folder of their own (`user://set_dresser_look/<show>_<seed>`), never its jobs.
 
 var _out := "user://set_dresser_look/look"
 
@@ -27,12 +30,18 @@ func _run() -> void:
 	var seed := 0
 	var spec_path := ""
 	var air_path := ""
+	var light_path := ""
+	var watch := true
+	var quick := false
 	var ink := ""
 	var name := "Truthful Tarot"
 	var byline := ""
 	for i in args.size() - 1:
 		match args[i]:
 			"--air": air_path = args[i + 1]
+			"--light": light_path = args[i + 1]
+			"--watch": watch = args[i + 1] != "0"
+			"--quick": quick = args[i + 1] == "1"
 			"--ink": ink = args[i + 1]
 			"--name": name = args[i + 1]
 			"--byline": byline = args[i + 1]
@@ -49,7 +58,9 @@ func _run() -> void:
 		print("set_dresser_look_probe: no table at %s, or no plan for %s #%d" % [spec_path, show, seed])
 		get_tree().quit(2)
 		return
-	var dir := ProjectSettings.globalize_path("user://set_dresser_look")
+	# A FOLDER PER EPISODE: the preview copies an episode's pictures only when they are newer than the
+	# copies it has, so two episodes sharing one would show the first one's cloth and room
+	var dir := ProjectSettings.globalize_path("user://set_dresser_look/%s_%d" % [show, seed])
 	DirAccess.make_dir_recursive_absolute(_out.get_base_dir() if _out.is_absolute_path() else ProjectSettings.globalize_path(_out).get_base_dir())
 	var tools := SetDresserTools.new(ep, plan as Dictionary, dir, name, byline)
 	print("set_dresser_look_probe: %s #%d, %d things; sees %s, stands %s" % [show, seed,
@@ -58,6 +69,15 @@ func _run() -> void:
 	var t0 := Time.get_ticks_msec()
 	# a few at a time, as the set dresser is told to put them
 	var half := ceili(things.size() / 2.0)
+	# THE TABLE ITSELF first, as the set dresser is told to build it, and seen from above
+	var td: Dictionary = table
+	if td.has("top") or td.has("layers"):
+		var built := {"materials": td.get("materials", {})}
+		for k in ["top", "layers"]:
+			if td.has(k):
+				built[k] = td[k]
+		await _call(tools, "put", built, "table")
+		await _call(tools, "overhead", {}, "overhead")
 	await _call(tools, "put", {"things": things.slice(0, half), "materials": (table as Dictionary).get("materials", {}),
 		"idea": String((table as Dictionary).get("idea", ""))}, "put1")
 	await _call(tools, "put", {"things": things.slice(half)}, "put2")
@@ -67,9 +87,31 @@ func _run() -> void:
 		await _call(tools, "put", {"effects": effects}, "air")
 		for e in effects:
 			await _call(tools, "watch", {"name": String((e as Dictionary).get("name", ""))}, "watch_" + String((e as Dictionary).get("name", "")).replace(" ", "_"))
-	if not things.is_empty():
+	var lv: Variant = JSON.parse_string(FileAccess.get_file_as_string(light_path)) if not light_path.is_empty() else (table as Dictionary).get("light")
+	var light: Dictionary = {}
+	if lv is Dictionary:
+		light = ((lv as Dictionary)["light"] as Dictionary) if (lv as Dictionary).get("light") is Dictionary else lv as Dictionary
+	if not light.is_empty():
+		await _call(tools, "put", {"light": light}, "light")
+	if not things.is_empty() and not quick:
 		await _call(tools, "look", {"name": String((things[0] as Dictionary).get("name", ""))}, "look")
 	await _call(tools, "set", {}, "set")
+	if not light.is_empty() and watch:
+		var moving: Array = []
+		var safe := Lights.sanitize(light)
+		if not (safe.get("clouds", {}) as Dictionary).is_empty():
+			moving.append("clouds")
+		if not (safe.get("birds", {}) as Dictionary).is_empty():
+			moving.append("birds")
+		for e in safe.get("through", []) + safe.get("lamps", []):
+			moving.append(String((e as Dictionary)["name"]))
+		for nm in moving:
+			await _call(tools, "watch", {"name": String(nm)}, "watch_" + String(nm).replace(" ", "_"))
+	if quick:
+		print("set_dresser_look_probe: done in %.1f s" % [(Time.get_ticks_msec() - t0) / 1000.0])
+		tools.release()
+		get_tree().quit(0)
+		return
 	if ink.is_empty():
 		var own: Variant = (table as Dictionary).get("title", {})
 		ink = String((own as Dictionary).get("color", CardTable.TITLE_INK)) if own is Dictionary else CardTable.TITLE_INK

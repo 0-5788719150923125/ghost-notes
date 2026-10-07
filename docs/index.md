@@ -90,7 +90,7 @@ From a song file to the typed per-frame `AudioFeatures` every scene consumes - l
 
 ### Direction & session
 
-The lifecycle around the scenes: boot, the notes list and a note's own panel, the Director's scheduling/transitions, the storyboards card, and the Dial performance controls.
+The lifecycle around the scenes: boot, the notes list and a note's own panel, the Director's scheduling/transitions, and the storyboards card.
 
 - [`main.gd`](../src/main.gd) **main** - ghost entry point.
 - [`boot.gd`](../src/boot.gd) **boot** - Boot - the earliest hook (first autoload), for things that must happen before the window is ever drawn into. In export-render mode (--export) it keeps the render window out of the way as early as GDScript can - off-screen, no focus - so it barely flickers into view before the render takes over. ...
@@ -131,8 +131,6 @@ The lifecycle around the scenes: boot, the notes list and a note's own panel, th
 - [`illustrations.gd`](../src/illustrations.gd) **Illustrations** - the library of generated pictures a book prints.
 - [`image_gen.gd`](../src/image_gen.gd) **ImageGen** - who paints the pictures. The backend axis of `Illustrations`.
 - [`illustration_panel.gd`](../src/illustration_panel.gd) **IllustrationPanel** - the Generative panel's controls for a book's pictures (`Illustrations`).
-- [`dial.gd`](../src/dial.gd) **Dial** - the first live performance control (the semi-automatic mode's first lever).
-- [`dial_widget.gd`](../src/dial_widget.gd) **DialWidget** - the on-screen face of a `Dial` (see that class for what turning does).
 - [`volume_knob.gd`](../src/volume_knob.gd) **VolumeKnob** - A pull-rope volume control. Click-and-HOLD the knob, then drag AWAY from it: a rope stretches from the knob (the anchor) to your cursor, and the farther you pull the louder it gets - but the ceiling is ASYMPTOTIC (v = 1 - e^(-d/D0)), so "max" is approached, never reached. Let go and the level is ...
 - [`transport.gd`](../src/transport.gd) **Transport** - play, pause, stop and the scrub rail along the bottom of the stage: ONE for every mode (next/notes.md, "The transport"). It grew out of the Scrubber, Chrome's seek bar.
 - [`tag_field.gd`](../src/tag_field.gd) **tag_field** - TagField - tags as chips, the way YouTube Studio shows them: every tag visible, wrapping onto as many lines as it needs, each with an × that removes it, and a box at the end where a comma (or Enter, or leaving the box, or pasting "a, b, c") turns what was typed into chips. Backspace in the empty ...
@@ -239,7 +237,7 @@ Text to narrated audio in two paths: ghost's own source-filter synthesizer (no m
 
 ### Cards
 
-A card reading nobody writes: a show's brief, its episodes - each planned, dealt, painted and written by agents one card at a time, kept on disk step by step - and the table they are read at, in the Generative voice, with the things on it modeled from a written description (Props). Tarot is the first deck and, so far, the only recipe. Design: next/cards.md.
+A card reading nobody writes: a show's brief, its episodes - each planned, dealt, painted and written by agents one card at a time, kept on disk step by step - and the table they are read at, in the Generative voice, with the table itself and the things on it modeled from a written description (Tables, Props), its air (Effects) and its light (Lights). Tarot is the first deck and, so far, the only recipe. Design: next/cards.md.
 
 - [`cards_editor.gd`](../src/cards_editor.gd) **CardsEditor** - the Cards mode: a card reading nobody writes by hand. Its first deck, and so far its only recipe, is the tarot.
 - [`table_actions.gd`](../src/table_actions.gd) **TableActions** - the verbs a card show performs at the table, as ONE REGISTRY (next/notes.md step 9, "Actions are a registry"). Each verb declares what it takes (which card), whether it is written in a reading's marks or performed between them, the rest the voice takes for it, whether it brings a card up to be ...
@@ -253,7 +251,9 @@ A card reading nobody writes: a show's brief, its episodes - each planned, dealt
 - [`card_table.gd`](../src/card_table.gd) **CardTable** - what an episode's look may name, and how a look is made safe to draw.
 - [`card_faces.gd`](../src/card_faces.gd) **CardFaces** - a card's face, its back and its booklet page, composed in 2D for the table.
 - [`props.gd`](../src/props.gd) **Props** - things BUILT FROM A DESCRIPTION. A thing is a few PARTS, each one SHAPE with real sizes and one MATERIAL whose surface is procedural, with an ORNAMENT worked into it if it has one - or a GROUP of parts, placed and repeated as one (a candelabra's arm, cup and taper, copied round). An agent writes ...
+- [`tables.gd`](../src/tables.gd) **Tables** - THE TABLE ITSELF, BUILT FROM A DESCRIPTION. Its TOP: an outline (a rectangle, round, an oval, a many-sided polygon, its rim scalloped if it likes), a thickness, the profile its edge is cut to (bevel, bullnose, ogee...), and what it is made of - boards of a wood, a slab of stone, metal, lacquer, ...
 - [`effects.gd`](../src/effects.gd) **Effects** - air that moves and light that bursts: FOG that rolls through a stretch of the scene, MOTES that wander about it (pixies, fireflies, flies, embers, dust) and leave and come back, and BURSTS of sparks, glitter, embers, flame, smoke or stars at a moment. An agent describes them as data - the ...
+- [`lights.gd`](../src/lights.gd) **Lights** - what lights a scene, and how that light moves: the SKY that fills it, a SUN (or the moon) that throws its shadows, what the sun falls THROUGH on its way (a window and its panes, blinds, a pierced screen, leaves, fronds or bare branches overhead, a pergola's slats, an awning, a parasol), the WEATHER ...
 - [`set_dresser_tools.gd`](../src/set_dresser_tools.gd) **SetDresserTools** - what the set dresser can do while it sets a tarot reader's table: MAKE a thing, LOOK at it, FIX it, and see the whole table as the camera will before handing it in.
 - [`table_preview.gd`](../src/table_preview.gd) **TablePreview** - a table described but not yet set, SEEN: each thing alone in a studio, and the whole table standing on the episode's own cloth, photographed from the camera's own place. It is what the set dresser looks through (`SetDresserTools`): it makes a thing, looks at it, and fixes what it sees.
 
@@ -290,10 +290,12 @@ The video chroma-key masking editor - a second app surface inside ghost. See [ma
 
 ### Export
 
-Rendering a session to video (bake + Movie Maker, background processes), and uploading it to YouTube.
+Rendering a session to video (bake + Movie Maker, background processes), uploading it to YouTube, and recording the README's animation from the real app.
 
 - [`exporter.gd`](../src/exporter.gd) **Exporter** - render the visualization to a video, in the background, in two steps.
 - [`youtube.gd`](../src/youtube.gd) **youtube** - YouTube - sign in to the author's YouTube channel and upload a finished export to it.
+- [`showcase.gd`](../src/showcase.gd) **Showcase** - the README's animation, recorded from the real app: a Manual note playing `storyboards/showcase.yaml` (a blue prism flies in and divides into a blue one and a red one, the pair lock, then take opposite highways), with the note's panel, the row and the transport around it - the UI as a person sees ...
+- [`showcase_recorder.gd`](../src/showcase_recorder.gd) **ShowcaseRecorder** - the README's recording, inside the second ghost that `Showcase` starts under Movie Maker with `--showcase <work>`. It makes what a person would - a Manual note with a song, on the showcase storyboard - opens it the way the notes list does, presses Play, and quits once `Showcase.frames` ...
 
 ### Feedback & assistant
 

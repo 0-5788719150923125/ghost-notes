@@ -19,7 +19,7 @@ class_name MaskEditor
 ##                         when the audio ends - mirrors --export/_export_mode).
 ##
 ## Widget choices mirror the rest of ghost: the timeline is a bespoke-drawn Control
-## ([MaskTimeline], the [DialWidget] idiom), the export button/status/FileDialog are
+## ([MaskTimeline]), the export button/status/FileDialog are
 ## the exact pattern from exporter.gd, color entry is Godot's native
 ## ColorPickerButton (precision input, not an "instrument" worth hand-drawing).
 ##

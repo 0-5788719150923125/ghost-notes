@@ -61,6 +61,7 @@ func _ready() -> void:
 	_check_outro_mark()
 	_check_scrub()
 	_check_delivery_marks()
+	_check_stress_reaches_the_voice()
 	_check_cards_familiar()
 	_check_voice_colors()
 	_ed.free()
@@ -290,6 +291,13 @@ func _check_settings_reach_the_request() -> void:
 	_ok(absf(_ed._pitch_ratio_of(_ed._cfg(1)) - 1.0) > 0.05
 		and absf(_ed._pitch_ratio_of(_ed._cfg(0)) - 1.0) < 0.001,
 		"the tone's pitch shift did not follow the tab")
+	# THE HOST PLAYS THE TONE BACK (piper.py `_resample`, band-limited), so the request has to
+	# carry the ratio: without it the pitch move is silently lost, the model having been asked
+	# to speak r times slower for nothing.
+	_ok(absf(float(b.get("play_ratio", 0.0)) - _ed._pitch_ratio_of(_ed._cfg(1))) < 1e-6
+		and absf(float(a.get("play_ratio", 0.0)) - 1.0) < 1e-6,
+		"the tone's playback ratio did not reach the request: %s / %s"
+		% [a.get("play_ratio"), b.get("play_ratio")])
 	# ...and the seam between sentences is the incoming voice's own rest
 	_ok(_ed._seam_gap_of(_ed._cfg(1)) > _ed._seam_gap_of(_ed._cfg(0)),
 		"the seam did not follow the tab")
@@ -1022,6 +1030,30 @@ func _check_ink_travels() -> void:
 ## like somebody else. Two-sided throughout: the leaned sentence is quicker, higher on the
 ## formant-locked path and less paused than the plain one - by a LITTLE (a lean, not a voice);
 ## an unknown word is nothing; and the voice's own pitch ratio, its size, is never touched.
+## A WORD LEANED ON IS SENT LEANED ON: `*never*` reaches the host as `emph` on that token, and
+## `**must**` as the stronger level - while an italic run longer than a stress (a paragraph in
+## italics, a title) is typography and is sent plain. The control is the plain sentence, whose
+## tokens must carry no `emph` at all (an unmarked request stays the request it always was).
+func _check_stress_reaches_the_voice() -> void:
+	_slots(1)
+	var emph := func(text: String) -> Dictionary:
+		var out := {}
+		for c in _ed._build_chunks(text):
+			for t in (c as Dictionary)["tokens"]:
+				var d: Dictionary = t
+				if d.has("emph"):
+					out[String(d["text"])] = int(d["emph"])
+		return out
+	var leaned: Dictionary = emph.call("It was *never* about the card. You **must** rest.")
+	_ok(int(leaned.get("never", 0)) == 1 and int(leaned.get("must", 0)) == 2 and leaned.size() == 2,
+		"stress did not reach the request as marked: %s" % [leaned])
+	var plain: Dictionary = emph.call("It was never about the card. You must rest.")
+	_ok(plain.is_empty(), "an unmarked sentence sent emphasis: %s" % [plain])
+	var long: Dictionary = emph.call("*It was a long time ago. The house was still there.* Then *she* came.")
+	_ok(long.size() == 1 and int(long.get("she", 0)) == 1,
+		"a long italic run was sent as stress, or the short one after it was not: %s" % [long])
+
+
 func _check_delivery_marks() -> void:
 	_slots(1)
 	_ed._slots[0]["pace"] = 1.0

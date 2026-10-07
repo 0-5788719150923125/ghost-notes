@@ -223,7 +223,10 @@ var upload_provider := Callable()
 
 func _ready() -> void:
 	layer = 250          # above the notes list (200), so status shows there too
-	_clear_override()    # remove a stale override.cfg left by a crashed/killed render
+	# remove a stale override.cfg left by a crashed/killed render - never from a read-only process
+	# (a probe, the README's recording), which may be running beside the author's own export
+	if not Settings.is_read_only():
+		_clear_override()
 	_build_ui()
 	_place_status()
 	get_viewport().size_changed.connect(_place_status)
@@ -867,7 +870,8 @@ func _start_render() -> void:
 ## The argv that runs `exe args` on a virtual display of its own (see [method _start_render]), or
 ## [] without xvfb-run. `-a` picks a free display number; the screen must be at least the size of
 ## the WINDOW (the 480x270 floater), never of the recorded viewport - the movie records the
-## viewport, which is independent of the window in "viewport" stretch mode.
+## viewport, which is independent of the window in "viewport" stretch mode. [param screen] is for
+## a caller that records the window itself ([Showcase]).
 ##
 ## GODOT DIES WITH ITS WRAPPER. Subprocess binds xvfb-run's shell to ghost, but a pact does not
 ## pass to the shell's children: stopping a render killed the shell and left Godot rendering and
@@ -875,11 +879,11 @@ func _start_render() -> void:
 ## scratch nothing reads. So Godot gets a pact with the shell, and Xvfb ends [constant
 ## XVFB_LINGER] seconds after its last client leaves (the delay covers any connection a client
 ## opens and closes before its own).
-static func virtual_display(exe: String, args: PackedStringArray) -> PackedStringArray:
+static func virtual_display(exe: String, args: PackedStringArray, screen := Vector2i(960, 540)) -> PackedStringArray:
 	var xvfb := Deps.resolve("xvfb-run")
 	if xvfb.is_empty():
 		return PackedStringArray()
-	var argv := PackedStringArray([xvfb, "-a", "-s", "-screen 0 960x540x24 -terminate %d" % XVFB_LINGER])
+	var argv := PackedStringArray([xvfb, "-a", "-s", "-screen 0 %dx%dx24 -terminate %d" % [screen.x, screen.y, XVFB_LINGER]])
 	argv.append_array(Subprocess.pact_prefix())
 	argv.append(exe)
 	argv.append_array(args)

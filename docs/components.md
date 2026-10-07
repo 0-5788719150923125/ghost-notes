@@ -19,7 +19,7 @@ Registries: `Components.REGISTRY` and `Components.TEMPLATES` in [src/components.
 | --- | --- | --- |
 | **Note** | Text | Just the words. Attach what it should become - a voice, a picture, a song - with +. |
 | **Auto** | Text, Song, Picture | A song and the seeded show - every scene chosen from the song itself, nothing to set. |
-| **Manual** | Text, Song, Picture, Storyboards | A song and a show by hand - storyboards and the dial. |
+| **Manual** | Text, Song, Picture, Storyboards | A song and a show by hand - a storyboard. |
 | **Synthesis** | Text, Voice lab, Scenes | Write a script; Ghost Notes speaks it and the show reacts to the voice. |
 | **Generative** | Text, Voice, Scenes, Picture, Illustrations, Look, Intro & outro | The same, in a small local neural voice - clearer, at the cost of a downloaded model. |
 | **Cards** | Text, Cards, Voice, Look, Intro & outro | A card reading nobody writes - agents plan, deal, paint and write each episode one card at a time, and a voice reads it at the table. Tarot is its first deck. |
@@ -57,7 +57,7 @@ By family - the color a component's card, chip and marks are drawn in.
 
 - **Scenes** (`scenes`) - The visualizer scenes, chosen by the seed and cut on the sound.
   - needs audio; gives picture, moments; asks for `forward_plus`; kept in `scenes:`
-- **Storyboards** (`storyboard`) - The scenes by hand: a storyboard picks them and the dial plays them.
+- **Storyboards** (`storyboard`) - The scenes by hand: a storyboard picks them and plays them on the song.
   - needs audio, places; gives picture; brings Scenes; asks for `forward_plus`
 - **Picture** (`picture`) - A show for the note, and what it is carried on: Auto (the seeded show, nothing to set), full frame, a comic, a book, a notebook, a tablet.
   - needs picture; gives places; brings Scenes; asks for `forward_plus`; kept in `picture:`

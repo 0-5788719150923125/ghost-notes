@@ -195,8 +195,7 @@ runs entirely on `stage` data now.
 
 ## Roadmap
 
-The stage spec is the foundation the manual editor writes to (JSON), and the
-semi-automatic mode's dials are its sampled parameters surfaced live. Next rungs:
+The stage spec is the foundation the manual editor writes to (JSON). Next rungs:
 per-entry parameter dials in the Workspace, more actor kinds (rock, terrain,
 layers-as-actors), verb-level `on:` cues throughout, and a `kind: stage` group
 actor if a board ever needs true nesting.

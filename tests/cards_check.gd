@@ -742,13 +742,16 @@ func _table_step() -> bool:
 	var steps := ep.steps()
 	_ok(steps.has("table") and steps.find("table") > steps.find("image:backdrop") and steps.find("table") < steps.find("say:intro"),
 		"the table is not a step between the room and the reading: %s" % str(steps))
-	_ok(ep.needs("table") == ["plan", "image:surface"], "the table is made from %s" % str(ep.needs("table")))
+	_ok(ep.needs("table") == ["plan", "image:surface", "image:backdrop"], "the table is made from %s" % str(ep.needs("table")))
 	for s in ["image:back", "image:surface", "image:backdrop"]:
 		ep.write_text(s, "png")
 	ep.write_json("table", {"things": [{"name": "a cup", "parts": [{"shape": "lathe", "profile": [[0, 0], [3, 0], [3, 5], [0, 5]]}]}]})
 	ep.invalidate("image:surface")
 	_ok(ep.has("table"), "painting a new cloth took the table with it")
 	ep.write_text("image:surface", "png")
+	ep.invalidate("image:backdrop")
+	_ok(ep.has("table"), "painting a new room took the table with it")
+	ep.write_text("image:backdrop", "png")
 	ep.invalidate("table")
 	_ok(not ep.has("table") and ep.has("say:intro") and ep.has("image:surface"), "setting the table again took more than the table")
 	ep.write_json("table", {"things": []})
@@ -1586,10 +1589,15 @@ func _archive() -> bool:
 	old.write_text("say:2", "OLD-JUMPER, it flew right out.")
 	old.write_text("say:3", "The Sun. OLD-REACTION again.")
 	old.write_text("say:close", "So overall, OLD-CLOSING. <!-- hesitation --> Go and do the thing.")
-	old.write_json("table", {"things": [{"name": "OLD-THING"}]})
+	old.write_json("table", {"things": [{"name": "OLD-THING"}], "light": {"sun": {"look": "sun", "from": "left", "height": 20},
+		"through": [{"name": "OLD-BLINDS", "kind": "blinds"}]}})
 	var past := CardEpisode.archive(show, 4242)
 	_ok(past.size() == 1 and int((past[0] as Dictionary)["seed"]) == 1111, "the archive is not the other episode alone: %s" % str(past))
 	_ok(((past[0] as Dictionary)["things"] as Array) == ["OLD-THING"], "the archive does not hold the earlier table's things")
+	_ok(String((past[0] as Dictionary)["light"]).contains("OLD-BLINDS") and String((past[0] as Dictionary)["light"]).contains("from the left"),
+		"the archive does not hold the earlier table's light: %s" % String((past[0] as Dictionary)["light"]))
+	ep.write_json("table", {"things": [{"name": "THIS-THING"}]})
+	_ok(String((CardEpisode.archive(show, 1111)[0] as Dictionary)["light"]).is_empty(), "a table with no light of its own is archived with one")
 	_ok(CardEpisode.archive(show, 1111).size() == 1 and int((CardEpisode.archive(show, 1111)[0] as Dictionary)["seed"]) == 4242,
 		"an episode is its own history")
 	# THE PRODUCER: every choice the earlier one made, and the habits asked for

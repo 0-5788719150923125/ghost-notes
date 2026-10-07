@@ -197,7 +197,9 @@ const LIVE_PREROLL := 2.5
 # The pitch shift is done by RESAMPLING, and the model compensates: to raise the
 # voice by r we ask it to speak r times SLOWER, then play back r times faster.
 # The two cancel in duration and leave only the pitch change, which avoids a
-# phase vocoder entirely and is artifact-free at these depths. It does shift the
+# phase vocoder entirely. The host does the playback (`play_ratio` in
+# [method _request_args]), band-limited - this editor's own was linear, which dulled
+# the top end and folded images back into it. It does shift the
 # formants with the pitch, so the speaker reads as a different SIZE - which is
 # exactly what "spooky" (larger, lower) and "excited" (smaller, higher) want.
 ## THE DELIVERY A SCRIPT MARKS (`<!-- delivery: quicker, brighter -->`, [constant
@@ -1873,22 +1875,18 @@ func _on_test_part(id: int, result: Dictionary) -> void:
 	_test_parts[i] = String(result.get("wav", ""))
 	_sr = int(result.get("sample_rate", _sr))
 	var s := _cfg_of(_test_name)
-	var ratio := _pitch_ratio_of(s)
 	if _test_fx == null:
 		_test_fx = VoiceFX.new()
 		_test_fx.pad_seed = hash(_test_passage())
 		_test_fx.setup(_sr)
 		_apply_fx(_test_fx, s)
-	# DECODE AND RESAMPLE OFF THE MAIN THREAD. Both are per-sample GDScript loops, and a long
-	# sentence is several hundred thousand samples - measured at a 0.3 s frame on arrival.
-	# Pure functions of the file, so a worker can do them; the join below waits for it.
+	# DECODE OFF THE MAIN THREAD. It is a per-sample GDScript loop, and a long sentence is
+	# several hundred thousand samples - measured at a 0.3 s frame on arrival. A pure function
+	# of the file, so a worker can do it; the join below waits for it.
 	var box := [PackedFloat32Array()]
 	var path := String(_test_parts[i])
 	_test_tasks[i] = {"box": box, "task": WorkerThreadPool.add_task(func() -> void:
-		var pcm := ReadingPanel._decode_wav(path)
-		if absf(ratio - 1.0) > 0.001:
-			pcm = ReadingPanel._resample_static(pcm, ratio)
-		box[0] = pcm)}
+		box[0] = ReadingPanel._decode_wav(path))}
 	_join_test_parts()
 
 
@@ -2802,8 +2800,12 @@ func _cut(body: String, sentence_no: int) -> Dictionary:
 	var words: Array = []
 	var holds: Array = []          # [{tok, sec, before}] - see _splice_holds
 	var sentences := 0
-	for sentence in Phonemes.parse(body):
+	var parsed := Phonemes.parse(body)
+	var stressed_at := _stressed_words(parsed)
+	var flat := -1
+	for sentence in parsed:
 		for w in sentence:
+			flat += 1
 			var ph: Array = w.phones
 			var st: Array = w.get("stress", [])
 			var start := toks.size()
@@ -2868,6 +2870,11 @@ func _cut(body: String, sentence_no: int) -> Dictionary:
 			var tok := {"text": String(w.text), "punct": punct, "fallback": arpa}
 			if bool(w.get("literal", false)):
 				tok["arpa"] = arpa
+			# A WORD LEANED ON (`*so*`, `**so**`) is SPOKEN leaned on: the host holds its stressed
+			# vowel longer and lifts the word a little (piper.py `EMPHASIS`). Sent only when set,
+			# so an unmarked sentence is the request it always was.
+			if stressed_at.has(flat):
+				tok["emph"] = int(stressed_at[flat])
 			toks.append(tok)
 			# ONE SUBTITLE ENTRY PER SOURCE RUN. `2009` is three spoken words and
 			# one thing on the page, so the words after the first in a rewritten
@@ -2897,6 +2904,38 @@ func _cut(body: String, sentence_no: int) -> Dictionary:
 	if not toks.is_empty():
 		out.append({"tokens": toks, "words": words, "holds": holds})
 	return {"chunks": out, "sentence_no": sentence_no}
+
+
+## THE LONGEST RUN OF EMPHASIZED WORDS THAT IS STRESS. Italics also mark things that are not
+## said harder: a paragraph in italics is a change of time or place ([ScriptMarks] "italic"), a
+## thought, a title. A word or a few is a reader leaning on them; a longer run is typography,
+## and stressing every word of it would drawl the whole paragraph.
+const STRESS_RUN_MAX := 3
+
+
+## {flat word index: emphasis level} for the words of [param parsed] ([method Phonemes.parse])
+## that are spoken with stress - each run of emphasized words no longer than
+## [constant STRESS_RUN_MAX], counted across sentence ends, so an italic paragraph of short
+## sentences is still one long run.
+static func _stressed_words(parsed: Array) -> Dictionary:
+	var levels: Array = []
+	for sentence in parsed:
+		for w in sentence:
+			levels.append(int((w as Dictionary).get("emph", 0)))
+	var out := {}
+	var i := 0
+	while i < levels.size():
+		if int(levels[i]) <= 0:
+			i += 1
+			continue
+		var j := i
+		while j < levels.size() and int(levels[j]) > 0:
+			j += 1
+		if j - i <= STRESS_RUN_MAX:
+			for k in range(i, j):
+				out[k] = int(levels[k])
+		i = j
+	return out
 
 
 ## A slot's preset, and the resample ratio it implies.
@@ -3122,6 +3161,9 @@ func _request_args(s: Dictionary, ch: Dictionary) -> Dictionary:
 		"effort": d["effort"],
 		"plan_u": float(ch.get("plan_u", 0.0)),
 		"plan_v": float(ch.get("plan_v", 0.0)),
+		# ...and the host plays it back r times faster, band-limited, so every time it returns
+		# is already in the heard audio's seconds (piper.py `_resample`)
+		"play_ratio": r,
 		"tokens": ch["tokens"],
 	}
 
@@ -3213,11 +3255,12 @@ func _drain_ready() -> void:
 			who = String((_chunks[idx] as Dictionary).get("speaker", ""))
 			holds = (_chunks[idx] as Dictionary).get("holds", [])
 		var s := _cfg_of(who)
-		var ratio := _pitch_ratio_of(s)
-		if absf(ratio - 1.0) > 0.001:
-			pcm = _resample(pcm, ratio)
-		# THE HESITATIONS go in now, after the resample, in the chunk's own time - so the
-		# word timings below can be moved by exactly what was inserted before them.
+		# THE TONE IS ALREADY IN IT: the host played the take back at the preset's ratio, and
+		# every time it returned is in the take's own seconds (`play_ratio`), so nothing here
+		# has a ratio left to apply.
+		var ratio := 1.0
+		# THE HESITATIONS go in now, in the chunk's own time - so the word timings below can be
+		# moved by exactly what was inserted before them.
 		var spliced := _splice_holds(pcm, holds, take.get("spans", []), ratio)
 		pcm = spliced["pcm"]
 		if _next_to_play > 1:
@@ -3250,8 +3293,7 @@ func _drain_ready() -> void:
 		# the model timed each chunk from zero; shift into stream time
 		for w in take["words"]:
 			var d: Dictionary = (w as Dictionary).duplicate()
-			# the model timed this at its own (slower) rate; resampling divided
-			# every duration by the ratio, so the timings must follow
+			# moved by the hesitations spliced in before it
 			d["t0"] = _shifted(float(d["t0"]), spliced["cuts"], ratio, true) + _elapsed
 			d["t1"] = _shifted(float(d["t1"]), spliced["cuts"], ratio, false) + _elapsed
 			_sub_words.append(d)
@@ -3755,37 +3797,13 @@ static func _shifted(t: float, cuts: Array, ratio: float, is_start: bool) -> flo
 	return t / ratio + add
 
 
-## Linear-interpolating resample. Reading at `ratio` samples per output sample
-## raises the pitch by that factor and shortens the audio by it; the model was
-## asked to speak proportionally slower, so the two cancel and only the pitch
-## moves. Linear is enough here - the ratios are within a few semitones, so the
-## interpolation error sits far below the voice.
-func _resample(src: PackedFloat32Array, ratio: float) -> PackedFloat32Array:
-	return _resample_static(src, ratio)
-
-
-## The same, static, so a worker thread can run it (the audition decodes off the main thread).
-static func _resample_static(src: PackedFloat32Array, ratio: float) -> PackedFloat32Array:
-	var n := int(float(src.size()) / ratio)
-	if n <= 1:
-		return src
-	var out := PackedFloat32Array()
-	out.resize(n)
-	for i in n:
-		var pos := float(i) * ratio
-		var a := int(pos)
-		var b := mini(a + 1, src.size() - 1)
-		out[i] = lerpf(src[a], src[b], pos - float(a))
-	return out
-
-
 ## PCM16 mono, as written by the voice host. The 44-byte canonical header is
 ## ours, so this does not need to be a general WAV parser.
 func _read_wav(path: String) -> PackedFloat32Array:
 	return _decode_wav(path)
 
 
-## The same, static, for a worker thread - see [method _resample_static].
+## The same, static, for a worker thread (the audition decodes off the main thread).
 static func _decode_wav(path: String) -> PackedFloat32Array:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
@@ -3856,7 +3874,7 @@ func export_take() -> String:
 		# that was auditioned, which is the one thing the render must never be.
 		var who := String((chunks[i] as Dictionary).get("speaker", ""))
 		var s := _cfg_of(who)
-		var ratio := _pitch_ratio_of(s)
+		var ratio := 1.0  # the host has played the Tone back already - see _drain_ready
 		var id := _host.request("", _voice_id_of(s),
 			TAKE_DIR + "/export_%d_%d.wav" % [stamp, i], _request_args(s, chunks[i]), null)
 		var res: Array = []
@@ -3870,8 +3888,6 @@ func export_take() -> String:
 			continue
 		var part := _read_wav(wav)
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(wav))
-		if absf(ratio - 1.0) > 0.001:
-			part = _resample(part, ratio)
 		# The same splice the live window makes, from the same function.
 		var spliced := _splice_holds(part, (chunks[i] as Dictionary).get("holds", []),
 			out.get("tokens", []), ratio)

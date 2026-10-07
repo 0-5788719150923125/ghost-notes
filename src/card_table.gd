@@ -135,6 +135,10 @@ const TITLE_BLUR := 0.04125
 
 ## THE LENS: the camera's vertical field of view, degrees, before an episode's own small turn of it.
 const VFOV := 42.0
+## The stretch of the table the camera can see (x z, meters), and the grid it is sampled on: where the
+## table's lightness is read ([constant TableMedium.LUM_RECT]) and its light is counted.
+const SEEN_RECT := Rect2(-0.7, -0.8, 1.4, 1.24)
+const SEEN_GRID := Vector2i(35, 31)
 ## THE ROOM'S PICTURE is asked for as a LEVEL photograph from a seated reader's eye, its horizon
 ## across its middle, through a lens this wide (millimeters, on a 36 x 24 frame) - the photograph an
 ## image model makes most reliably - and projected from the camera's own eye, so the room past the
@@ -182,6 +186,35 @@ static func sample_layout(rng: RandomNumberGenerator) -> Dictionary:
 	return out
 
 
+## THE TABLE THE CAMERA SEES, sampled: the middle of every cell of [constant SEEN_GRID] over [constant
+## SEEN_RECT] that lies on [param top] (a top made safe, [Tables]) and in the picture of a camera at
+## [param cam] with [param fov] - where a light's report counts the sun ([Lights]), and the table's own
+## light is fitted ([TableMedium]).
+static func seen_points(cam: Transform3D, fov: float, top: Dictionary) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	var cell := SEEN_RECT.size / Vector2(SEEN_GRID)
+	for gy in SEEN_GRID.y:
+		for gx in SEEN_GRID.x:
+			var p := Vector3(SEEN_RECT.position.x + (gx + 0.5) * cell.x, 0.0, SEEN_RECT.position.y + (gy + 0.5) * cell.y)
+			if not Tables.inside(top, Vector2(p.x, p.z), 0.0):
+				continue
+			var sp: Variant = project(cam, fov, p)
+			if sp != null and (sp as Vector2).x > 0.0 and (sp as Vector2).x < 1.0 and (sp as Vector2).y > 0.0 and (sp as Vector2).y < 1.0:
+				out.append(p)
+	return out
+
+
+## Where the cards go - the deck, the shuffle, the spread ([constant Tables.HOLDS]) - sampled every few
+## centimeters, on the table.
+static func card_points() -> PackedVector3Array:
+	var out := PackedVector3Array()
+	var r := Tables.HOLDS
+	for gy in 12:
+		for gx in 18:
+			out.append(Vector3(r.position.x + (gx + 0.5) * r.size.x / 18.0, 0.0, r.position.y + (gy + 0.5) * r.size.y / 12.0))
+	return out
+
+
 ## Episode [param seed]'s layout (see [method sample_layout]).
 static func layout_of(seed: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
@@ -197,6 +230,16 @@ static func project(cam: Transform3D, fov: float, at: Vector3) -> Variant:
 		return null
 	var k := tan(deg_to_rad(fov * 0.5))
 	return Vector2(0.5 + l.x / (-l.z * k * (16.0 / 9.0)) * 0.5, 0.5 - l.y / (-l.z * k) * 0.5)
+
+
+## Whether [param at] is in the picture of a camera at [param cam] with [param fov] (16:9), with a margin
+## of a tenth all round - a light there would light the table from where nothing is seen burning.
+static func in_shot(cam: Transform3D, fov: float, at: Vector3) -> bool:
+	var sp: Variant = project(cam, fov, at)
+	if sp == null:
+		return false
+	var v: Vector2 = sp
+	return v.x > -0.1 and v.x < 1.1 and v.y > -0.1 and v.y < 1.1
 
 
 ## HOW TALL A THING CAN STAND AND BE SEEN WHOLE, centimeters, in each of [constant ZONES] for
@@ -271,12 +314,14 @@ static func sanitize_look(look: Dictionary) -> Dictionary:
 	return out
 
 
-## THE TABLE MADE SAFE: the set dresser's reply as [Props] can build it, every thing standing in a
+## THE TABLE MADE SAFE: the set dresser's reply as [Props] can build it, its `top` and `layers` as
+## [Tables] can (the old table when it wrote neither), every thing standing in a
 ## zone the table knows ("back" when it named none), things sharing a `group` kept together, no
 ## more lit things than [constant MAX_CANDLES] and no more than [constant MAX_FLAMES] flames on one
 ## - the first written keep their flames, the rest stand unlit - its `effects` as [Effects] can
-## build them, in the table's [constant AIR] and at its [constant MOMENTS], and its `title` (the
-## color the show's name is printed in over it) when that is a color.
+## build them, in the table's [constant AIR] and at its [constant MOMENTS], its `light` as [Lights]
+## can build it (`{}` when it wrote none: the lamp and the room's candles, as every table had), and its
+## `title` (the color the show's name is printed in over it) when that is a color.
 static func sanitize_table(spec: Dictionary, look: Dictionary) -> Dictionary:
 	var out := Props.sanitize(spec, look.get("palette", FALLBACK_PALETTE) if look.get("palette") is Array else FALLBACK_PALETTE)
 	var things: Array = []
@@ -301,9 +346,17 @@ static func sanitize_table(spec: Dictionary, look: Dictionary) -> Dictionary:
 			lit += 1
 		things.append(thing)
 	out["things"] = things
+	# THE TABLE ITSELF - its top and the layers laid on it ([Tables]): the table every episode had
+	# before when the set dresser wrote neither
+	var furniture := Tables.sanitize(spec.get("top"), spec.get("layers"), out["materials"],
+		look.get("palette", FALLBACK_PALETTE) if look.get("palette") is Array else FALLBACK_PALETTE)
+	out["top"] = furniture["top"]
+	out["layers"] = furniture["layers"]
 	# THE AIR: fog, motes and bursts the set dresser wrote beside its things
 	out["effects"] = Effects.sanitize(spec.get("effects", []), look.get("palette", FALLBACK_PALETTE) if look.get("palette") is Array else FALLBACK_PALETTE,
 		AIR.keys(), MOMENTS.keys())
+	# THE LIGHT: the sky, the sun and what it falls through, the weather, lamps out of the shot
+	out["light"] = Lights.sanitize(spec.get("light"))
 	# THE TITLE'S COLOR, chosen to stand out from this table: kept when it is a color at all
 	var title: Dictionary = spec.get("title", {}) if spec.get("title") is Dictionary else {}
 	out["title"] = {}

@@ -112,6 +112,11 @@ func _ready() -> void:
 	if args.has("--provision"):
 		_provision(_arg_value(args, "--provision"))
 		return
+	# `--showcase-now`: record the README's animation now and quit (see showcase.gd) - from a
+	# terminal, so it needs nothing else to come up
+	if args.has("--showcase-now"):
+		add_child(Showcase.new())
+		return
 	# THE PHONE SHELL (next/notes.md step 11): on a phone - or --handheld - Ghost Notes is a notes app
 	# and nothing more: the list and the editor, no stage, no transport, no furniture, no agent
 	if Boot.handheld():
@@ -165,6 +170,17 @@ func _ready() -> void:
 	# churn and the return to the home screen.
 	_chrome = preload("res://src/chrome.gd").new()
 	add_child(_chrome)
+	# THE README'S RECORDING: this process is the second ghost Showcase started, so it plays the
+	# showcase note under Movie Maker and quits (showcase_recorder.gd)
+	if args.has("--showcase"):
+		var rec := ShowcaseRecorder.new()
+		rec.main = self
+		rec.work = _arg_value(args, "--showcase")
+		add_child(rec)
+		return
+	# ...and in a development launch, the README's animation recorded again when what it shows
+	# has changed (it decides for itself, and does nothing in an exported build)
+	add_child(Showcase.new())
 	# When the current song finishes: an AUTO session returns to the home screen;
 	# MANUAL and SYNTH sessions are endless - handled inside _on_song_finished.
 	Spectrum.song_finished.connect(_on_song_finished)
@@ -693,7 +709,10 @@ func _process(delta: float) -> void:
 	# Escalation is fast; de-escalation needs the ACTIVE frames themselves
 	# to have been cheap for a sustained stretch - a still-heavy scene keeps
 	# measuring heavy at any level, so the loop cannot oscillate.
-	if _stage == null:
+	# NOT WHILE MOVIE MAKER RECORDS: every frame is one fixed step of show time however long it
+	# took to draw, so a slow frame costs nothing in the film - and the governor, reading that
+	# fixed delta as a heavy frame, would skip stage frames the film then holds as stills
+	if _stage == null or not Engine.get_write_movie_path().is_empty():
 		return
 	var ms := delta * 1000.0
 	if _stage_was_active:

@@ -33,7 +33,7 @@ Load a clip, key two colors apart (per-pixel hue classification, see shaders/mas
 
 Standalone by design: a mask session is tied to one specific external clip, not the audio-reactive show, so this does NOT route through Director/Spectrum. Two entry points (see main.gd): --mask-edit [path]    interactive editor (this file's normal mode) --mask-render <json>  the export relaunch's headless-ish render mode (`render_mode` = true; no panel, autoplay, quits when the audio ends - mirrors --export/_export_mode).
 
-Widget choices mirror the rest of ghost: the timeline is a bespoke-drawn Control (`MaskTimeline`, the `DialWidget` idiom), the export button/status/FileDialog are the exact pattern from exporter.gd, color entry is Godot's native ColorPickerButton (precision input, not an "instrument" worth hand-drawing).
+Widget choices mirror the rest of ghost: the timeline is a bespoke-drawn Control (`MaskTimeline`), the export button/status/FileDialog are the exact pattern from exporter.gd, color entry is Godot's native ColorPickerButton (precision input, not an "instrument" worth hand-drawing).
 
 The preview's view modes (see MaskSession.VIEW_MODES + _build_video_composition) are the main screen and the inset as independent axes - raw, inset-raw, inset-fx, both-fx, full-fx - cycled in that "evolution" order by one button (VIEW_CYCLE). Only one video ever decodes (`_player`, always raw); the fx layers just re-draw its decoded texture through [const SHADER], each only while visible - so "raw" costs no shader pass at all.
 

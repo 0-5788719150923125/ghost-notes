@@ -354,10 +354,17 @@ func _make_image(step: String) -> void:
 func _make_table() -> void:
 	var seen: Array = []
 	var airs: Array = []
+	var tables: Array = []
+	var lights: Array = []
 	for e in CardEpisode.archive(episode.show, episode.seed):
 		seen.append_array((e as Dictionary)["things"])
 		airs.append_array((e as Dictionary).get("air", []))
+		if not String((e as Dictionary).get("furniture", "")).is_empty():
+			tables.append((e as Dictionary)["furniture"])
+		if not String((e as Dictionary).get("light", "")).is_empty():
+			lights.append((e as Dictionary)["light"])
 	var cloth := episode.has("image:surface")
+	var room := episode.has("image:backdrop")
 	_close_tools("table")
 	# a table an earlier run handed in is not this run's answer, whoever writes this one
 	DirAccess.remove_absolute(episode.job_dir("table").path_join(SetDresserTools.SUBMITTED))
@@ -373,9 +380,16 @@ func _make_table() -> void:
 			toolset.release()
 	var p := CardPrompts.set_dresser(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(),
 		episode.seed, CardTable.headroom(episode.seed), seen.slice(0, 40), cloth,
-		SetDresserTools.LOOKS if not extra.is_empty() else 0, airs.slice(0, 24), String(spec.get("byline", "")))
+		SetDresserTools.LOOKS if not extra.is_empty() else 0, airs.slice(0, 24), String(spec.get("byline", "")),
+		tables.slice(0, 10), lights.slice(0, 10), room)
+	var images: Array = []
 	if cloth:
-		p["images"] = [{"path": episode.file_of("image:surface"), "label": "The cloth, seen from above:", "flip": false}]
+		images.append({"path": episode.file_of("image:surface"), "label": "The painting of this episode's surface, seen from above:", "flip": false})
+	# THE ROOM, so the light agrees with it: where its windows are, which side its sun comes from
+	if room:
+		images.append({"path": episode.file_of("image:backdrop"), "label": "The painting of the room past the table, as the reader sees it (only its lower part shows, out of focus):", "flip": false})
+	if not images.is_empty():
+		p["images"] = images
 	_submit_text("table", p, "best", extra)
 
 

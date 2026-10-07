@@ -168,7 +168,7 @@ func _run() -> void:
 		% [st["heat_at"], st["heat_aim"], SEEDS - st["lamp_keys"], SEEDS])
 	# the measure itself, at the stripe's near edge: the cloth's AVERAGE round a candle there (the
 	# retired measure) let a key burn; its hottest spot does not
-	var edge := Vector3(0.27, 0.0, (0.26 - 0.5) * TableMedium.CLOTH.y + medium._cloth.position.z)
+	var edge := Vector3(0.27, 0.0, (0.26 - 0.5) * TableMedium.CLOTH.y + Tables.ORIGIN.y)
 	var old_cap := 0.27 / maxf(_mean_lum(edge, 0.1), 0.02)
 	var new_cap := TableMedium.HEAT / maxf(medium._heat(edge, 0.13), 0.05)
 	_ok(old_cap >= TableMedium.KEY_ENERGY and new_cap < TableMedium.KEY_MIN,

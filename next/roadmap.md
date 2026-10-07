@@ -55,9 +55,6 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **Spectral determinism, phase 2**
       A perceptual fingerprint that survives a re-encode, so like-sounding audio maps to the same imagery. The seed is the exact file's today; `Echo` already keeps a manual session aligned to its content.
 
-- [ ] **Semi-automatic mode, continued**
-      The Dial is the first lever on the autopilot. Next: more dials, each with a signature of its own; dials that reach into auto-mode scenes and layers; and the scene-spec's sampled parameters as addressable controls.
-
 - [ ] **Terrain and city specs**
       Texture as modulation everywhere (`Field` beyond terrain), erosion and rivers, vegetation by slope and mask, roads and districts along low-curvature contours, Gouraud shading under a moving sun, and weather composed onto terrain.
 
@@ -85,8 +82,14 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **Cards, generalized**
       Built: the rename (Cards, 2026-10-06), the table's verbs as one registry, positions as data, a dealer's tools and the reader's guard (step 9). Open: card state over show time; decks, faces and the recipe read from the show's guide - the prompts are still the tarot's, so a baseball or a flashcards show has no recipe of its own yet; a dealer run by a real agent (the tools exist, and no episode step calls them yet); pick-a-pile episodes.
 
+- [ ] **The neural voice steered through its duration plan**
+      Begun 2026-10-07: `dur_scale` patched in beside `rest_floor`, `*italic*` and `**bold**` spoken as stress, the clipped opening vowel floored, and both pitch moves band-limited and played back in the host. Open: rests rendered instead of spliced, final lengthening on the last words, `dur_cap`, a pitch accent on a stressed word, then a Kokoro-82M prototype whose decoder takes an F0 curve. See [voice_engines.md](voice_engines.md).
+
 - [ ] **The scene-spec pipeline**
       The north star, "cattle, not pets": a declarative spec that samples a configuration of geometry families, modifiers, materials, motion and lighting and composes them, so lifelike scenes come from integrating many sampled domains rather than from code written per scene. `rocks` and `bloom` sample small specs already, and the storyboard `stage` spec is the same idea for choreography; next is pushing the spec down into the bodies' own geometry and material numbers, the `eye`'s hand-tuned constants first. Every tunable constant is a candidate for sampling.
+
+- [ ] **The card table's light, in real episodes**
+      Built 2026-10-07: the set dresser lights its table (`Lights`) - a sky, a sun or the moon and what it falls through (a window, blinds, a lattice, leaves, an awning, a parasol...), clouds passing over the sun, birds' shadows, lamps out of the shot - and watches what moves in it. Open: the first real set dresser run with it (how it reads the plan's light and the room's painting, and how many of its 40 pictures the light takes); a screen for a lamp at night (a street lamp through a window's bars); rain on a window; water's caustics. See [cards.md](cards.md), "THE LIGHT".
 
 - [ ] **Model the physical sciences**
       The long arc: grow the primitive kit until the catalog spans the natural world, alone or in combination. Open, by domain: weather (wind streaks, hail, heat shimmer, a lightning storm); light (a moving light casting real shadows, day and night, god rays, caustics, refraction); crystals (mineral lattices, accretion); geology (erosion, rivers, plate motion, volcanoes); structures (bridges, lattices, ruins, roads); botany (vines, flowers, undergrowth); fluids (smoke, whirlpools); the sky (n-body systems, rings, galaxies, comets); mechanics (springs and chains, harmonographs, explosions); biology (cells, reaction-diffusion, predator-prey, ant trails, slime molds); fields (EM and gravitational, interference); chemistry (molecules, crystallization, phase changes, combustion).
@@ -146,7 +149,7 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
       Held silence before the first sound and after the last, on one session clock, with picture and sound fading together.
 
 - [x] **Manual mode**
-      The storyboard data spec, the Workspace, the Dial, and `Echo` keeping an endless session aligned to its content.
+      The storyboard data spec, the Workspace, and `Echo` keeping an endless session aligned to its content.
 
 - [x] **The Look**
       Combinable post-process filters over the whole picture, owned by the Director and inherited by a render.

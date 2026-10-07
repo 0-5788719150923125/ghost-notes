@@ -90,8 +90,7 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
     (
         "Direction & session",
         "The lifecycle around the scenes: boot, the notes list and a note's own "
-        "panel, the Director's scheduling/transitions, the storyboards card, and "
-        "the Dial performance controls.",
+        "panel, the Director's scheduling/transitions, and the storyboards card.",
         [
             "main.gd",
             "boot.gd",
@@ -132,8 +131,6 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
             "illustrations.gd",
             "image_gen.gd",
             "illustration_panel.gd",
-            "dial.gd",
-            "dial_widget.gd",
             "volume_knob.gd",
             "transport.gd",
             "tag_field.gd",
@@ -265,8 +262,9 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
         "A card reading nobody writes: a show's brief, its episodes - each "
         "planned, dealt, painted and written by agents one card at a time, kept "
         "on disk step by step - and the table they are read at, in the Generative "
-        "voice, with the things on it modeled from a written description "
-        "(Props). Tarot is the first deck and, so far, the only recipe. "
+        "voice, with the table itself and the things on it modeled from a "
+        "written description (Tables, Props), its air (Effects) and its light (Lights). "
+        "Tarot is the first deck and, so far, the only recipe. "
         "Design: next/cards.md.",
         [
             "cards_editor.gd",
@@ -281,7 +279,9 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
             "card_table.gd",
             "card_faces.gd",
             "props.gd",
+            "tables.gd",
             "effects.gd",
+            "lights.gd",
             "set_dresser_tools.gd",
             "table_preview.gd",
         ],
@@ -325,8 +325,9 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
     (
         "Export",
         "Rendering a session to video (bake + Movie Maker, background "
-        "processes), and uploading it to YouTube.",
-        ["exporter.gd", "youtube.gd"],
+        "processes), uploading it to YouTube, and recording the README's "
+        "animation from the real app.",
+        ["exporter.gd", "youtube.gd", "showcase.gd", "showcase_recorder.gd"],
     ),
     (
         "Feedback & assistant",
@@ -451,7 +452,6 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
         "content fingerprint, so the same song replays the same show).",
         False,
     ),
-    ("--dial-demo", "", "Auto-turn the first Dial hands-free (demos, renders).", False),
     (
         "--synth",
         "[text-file]",
@@ -514,6 +514,21 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
         "Explicit spectrum-bake cache for a render (implies `--use-bake`).",
         True,
     ),
+    (
+        "--showcase-now",
+        "",
+        "Record the README's animation (`docs/showcase.webp`) now, stale or "
+        "not, and quit; pairs with `--headless`. A development launch records "
+        "it by itself when what it shows has changed (`src/showcase.gd`).",
+        False,
+    ),
+    (
+        "--showcase",
+        "<work dir>",
+        "Marks the README animation's Movie Maker recording (set by "
+        "`Showcase`): plays the showcase note read-only and quits.",
+        True,
+    ),
     ("--bake-song", "<path>", "`bake_runner`: the song to analyze.", True),
     ("--bake-out", "<path>", "`bake_runner`: where to write the bake cache.", True),
 ]
@@ -522,6 +537,7 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
 # excluded from the drift check.
 ENGINE_FLAGS = {
     "--headless",
+    "--log-file",
     # the window arguments a launch can give, which Boot.fit_window then leaves alone
     "--resolution",
     "--position",

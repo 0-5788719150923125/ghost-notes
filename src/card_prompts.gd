@@ -54,12 +54,32 @@ const MOVES := """THE CARDS MOVE ONLY BETWEEN PASSAGES. Your passage is spoken w
 
 const SPOKEN_RULES := """FORMAT - everything you write is spoken aloud by a voice over the video, word for word:
 - Spoken words only. No stage directions, no headings, no lists, no emoji, no markdown, no quotation marks around the passage, no sound effects in brackets.
-- You may put single asterisks around ONE word you lean on - *this* - and only now and then.
+- You may put single asterisks around ONE word you lean on - *this* - and only now and then. The voice says that word with stress, a touch longer and louder, so mark the word a reader would really hit ("it was *never* about the card"), never a whole phrase. Double asterisks - **this** - hit harder still; keep them for the rare word that has to land.
 - Write numbers, symbols and abbreviations the way they are said ("eleven eleven", "twenty percent", "okay").
 - Plain paragraphs. Short sentences land; vary the rhythm.
 - The viewer sees the table, not you. Never describe your own hands or face.
 
 HOW YOU SAY IT - the voice reading your words has a steady delivery of its own, and you can lean it a little, the way a real reader speeds up as they get going, goes graver for a hard card, or barely pauses when they are on a roll. Put a mark on a line of its own before the stretch: <!-- delivery: quicker, brighter -->. The words: quicker or slower; brighter or graver (a touch higher and livelier, or lower and flatter); tighter or looser (shorter pauses, as when you are on a roll, or longer ones, letting a moment sit); louder or softer (projecting, or leaning in); or one of excited, serious, hushed, urgent, playful, tender, dry. It lasts to the end of its paragraph and eases in and out over a few sentences. Where you would really stop - a beat before a reveal - put <!-- hesitation --> at that exact spot (<!-- hesitation: 2 --> for two seconds). Sparingly: most paragraphs carry no mark at all, and a passage seldom more than one or two. These marks are never read aloud, so never also describe the delivery in words."""
+
+
+## THE TABLE ITSELF as the set dresser writes it, a shape to copy - a table no episode is set at.
+const TABLE_EXAMPLE := """"top": {"shape": "polygon", "sides": 6, "size": [130, 110], "thickness": 4, "edge": "bead", "material": "slate",
+  "inlay": {"width": 1.5, "inset": 4, "color": "#b08d57"}, "relief": {"kind": "natural", "depth": 0.6}, "why": "a word or two"},
+"layers": [
+  {"name": "a burlap runner", "what": "a market runner, front to back", "outline": "rect", "size": [200, 40], "at": [0, -6], "turn": 90,
+   "fabric": "burlap", "pattern": {"kind": "ikat", "colors": ["#d9c7a0", "#3b4a6b"], "scale": 7}, "fringe": 6},
+  {"name": "a quilted square", "outline": "rect", "size": [60, 60], "turn": 45, "fabric": "cotton",
+   "pattern": {"kind": "painting"}, "relief": {"kind": "quilted", "depth": 2.5, "scale": 8}, "border": {"width": 3, "color": "#7a2e3a"}}
+]"""
+
+
+## THE LIGHT as the set dresser writes it, a shape to copy - a light no episode is lit by.
+const LIGHT_EXAMPLE := """"light": {"why": "a glasshouse in winter, mid-afternoon: low sun through the panes, clouds now and then",
+  "sky": {"color": "#dfe6ea", "strength": 0.6},
+  "sun": {"look": "sun", "from": "back left", "height": 18, "color": "#ffd9a8", "strength": 0.75, "softness": 0.2},
+  "through": [{"name": "the glasshouse panes", "kind": "window", "at": [0, -5], "size": [240, 200], "panes": [4, 3], "bars": 3}],
+  "clouds": {"cover": 0.35, "size": 0.6, "speed": 0.3, "thickness": 0.8},
+  "lamps": [{"name": "a paraffin heater's glow", "look": "fire", "from": "front left", "distance": 150, "height": 20, "strength": 0.2, "shadows": false}]}"""
 
 
 ## The set dresser's reply, as a shape to copy - one thing no table would hold.
@@ -142,7 +162,7 @@ static func producer(title: String, brief: String, seed: int, cards: int, revers
 	lines.append("")
 	lines.append(deck_line(deck))
 	lines.append("")
-	lines.append("THE LOOK is a tarot deck that has never existed, and the table it is read on. Make it specific enough that an illustrator could paint every card in one consistent hand: what the cards picture (their cast) and how it is drawn, the medium and its influences, linework, texture, palette. Then the card back (a design that reads the same when the card is turned upside down - exactly symmetric under a half turn), how much of the deck is printed in metallic foil (`foil`, 0 for matte ink to 1 for gold leaf everywhere), the surface the cards lie on (seen from directly above: the bare material, dry and clean of anything spilled or strewn - whatever stands on the table is set separately), the place the table stands in (seen past the far edge of the table, out of focus), the light, and how many lights burn on the table - a candle in its holder, a candelabra, a dish of tea lights each count as one (what they are, and the rest of what stands on the table, is set separately). The card's frame, its name and its numeral are printed by the deck itself, so the illustrations carry no lettering.")
+	lines.append("THE LOOK is a tarot deck that has never existed, and the table it is read on. Make it specific enough that an illustrator could paint every card in one consistent hand: what the cards picture (their cast) and how it is drawn, the medium and its influences, linework, texture, palette. Then the card back (a design that reads the same when the card is turned upside down - exactly symmetric under a half turn), how much of the deck is printed in metallic foil (`foil`, 0 for matte ink to 1 for gold leaf everywhere), the surface the cards lie on (seen from directly above: the bare material, dry and clean of anything spilled or strewn - the table's shape, any other cloth laid on it and whatever stands on it are set separately), the place the table stands in (seen past the far edge of the table, out of focus), the light - indoors or out, the hour and the weather, and what it comes through on its way to the table - and how many lights burn on the table - a candle in its holder, a candelabra, a dish of tea lights each count as one (what they are, and the rest of what stands on the table, is set separately). The card's frame, its name and its numeral are printed by the deck itself, so the illustrations carry no lettering.")
 	lines.append("THE CARD STOCK is the card's own color: it shows all round every picture and behind its name, and the deck's booklet is printed in the same colors. Decks are printed on stock of every color, dark and saturated as well as pale - choose the one that best sets off this deck's paintings, with an ink and accent that read on it.")
 	if not past.is_empty():
 		lines.append("")
@@ -176,7 +196,7 @@ static func producer(title: String, brief: String, seed: int, cards: int, revers
     "foil": 0.6,
     "surface": "the cloth or tabletop the cards lie on, seen from above: the bare material, dry",
     "setting": "the place beyond the table",
-    "light": {"kind": "what lights the table", "color": "#rrggbb", "warmth": "warm or cool"},
+    "light": {"kind": "what lights the table and how it moves: indoors or out, the hour, the weather (a clear sky, passing clouds, overcast, a storm), what the sun comes through (a window, blinds, leaves, an awning), any lamps or torches round the room", "color": "#rrggbb", "warmth": "warm or cool"},
     "candles": 2
   }
 }""" % [", ".join(frames.keys()), ", ".join(faces.keys())])
@@ -227,9 +247,13 @@ static func designer(title: String, brief: String, look: Dictionary, card: Dicti
 ## picture goes with the prompt. [param looks] > 0: the set dresser works with tools and SEES what it
 ## builds ([SetDresserTools], that many pictures) - it is told how to work, and hands the table in
 ## with a tool instead of replying with it. [param airs]: earlier episodes' effects, to vary from.
-## [param byline]: the show's, under its name at the opening ([method title_rule]).
+## [param byline]: the show's, under its name at the opening ([method title_rule]). [param tables]:
+## earlier episodes' tables themselves ([method Tables.summary]), to build otherwise. [param lights]:
+## earlier episodes' light ([method Lights.summary]), to light otherwise; [param room] says the room's
+## painting goes with the prompt.
 static func set_dresser(title: String, brief: String, plan: Dictionary, seed: int, headroom: Dictionary,
-		seen: Array, cloth: bool, looks := 0, airs: Array = [], byline := "") -> Dictionary:
+		seen: Array, cloth: bool, looks := 0, airs: Array = [], byline := "", tables: Array = [], lights: Array = [],
+		room := false) -> Dictionary:
 	var look: Dictionary = plan.get("look", {}) if plan.get("look") is Dictionary else {}
 	var light: Dictionary = look.get("light", {}) if look.get("light") is Dictionary else {}
 	var candles := clampi(int(look.get("candles", 1)), 0, CardTable.MAX_CANDLES)
@@ -237,7 +261,7 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 	var lo := size.x
 	var hi := size.y
 	var lines := PackedStringArray()
-	lines.append("You are the SET DRESSER. Before the camera rolls on episode #%d you set the reader's table: you choose every thing that stands on it, describe each exactly enough for a model maker to build it, and say where it stands. The cloth, the deck and the cards are not yours - only what stands round them." % seed)
+	lines.append("You are the SET DRESSER. Before the camera rolls on episode #%d you set the reader's table: you build the table itself and lay its cloths, choose every thing that stands on it, describe each exactly enough for a model maker to build it, and say where it stands. The deck and the cards are not yours - only the table and what stands round them." % seed)
 	lines.append("")
 	lines.append("THIS EPISODE")
 	lines.append("Title: %s" % String(plan.get("episode_title", "")))
@@ -246,9 +270,17 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 	lines.append("Angle: %s" % String(plan.get("premise", "")))
 	lines.append("The deck: \"%s\" - %s" % [String(look.get("deck_name", "")), String(look.get("deck_style", ""))])
 	lines.append("Palette: %s." % ", ".join(PackedStringArray(look.get("palette", []))))
-	lines.append("The cloth: %s%s" % [String(look.get("surface", "")), " (the picture attached, seen from above)" if cloth else ""])
-	lines.append("The room past the table: %s" % String(look.get("setting", "")))
+	lines.append("The surface, as the producer described it: %s%s" % [String(look.get("surface", "")), " - THE PAINTING attached, seen from above, painted for this episode" if cloth else ""])
+	lines.append("The room past the table: %s%s" % [String(look.get("setting", "")), " - ITS PAINTING attached, as painted for this episode" if room else ""])
 	lines.append("The light: %s." % String(light.get("kind", "candlelight")))
+	lines.append("")
+	lines.append("THE TABLE ITSELF")
+	lines.append("The table is yours too: its top, and what is laid over it. Most readers read at a plain rectangular table; some at a round or an oval one, a few at an octagonal one; some tables are bare boards, some ornate - a molded edge, an inlaid band, a marble slab, a scalloped rim. Over the top go its LAYERS, from the bottom up: a tablecloth hanging over the edge, a runner across it, a square laid as a diamond, a mat or a tapestry under the cards - none, one, or several at different turns. Build the table this reader of this world would own.")
+	lines.append("THE PAINTING is this episode's surface, painted for it%s: give it its place - as the top itself (boards or a slab, as it is painted), as the tablecloth, or as a layer laid over the rest (pattern \"painting\") - and build the rest round it in colors that belong with it. A table that leaves `top` and `layers` out is the plain board table with the painting as a cloth on it, as every earlier table was." % (" (attached)" if cloth else ""))
+	lines.append("DEPTH: the light is low and rakes across the table, so relief reads - the threads of a burlap, the grain of brushed oak, a quilt's puffed diamonds, a brocade's raised figures, the seams between boards. Give the surfaces that would really have it their relief; a smooth silk or a polished slab has little.")
+	lines.append("The camera looks down across the top from the reader's chair: it sees the top's far edge and the room past it, and a little of the sides; what hangs over the near edge is under the lens.")
+	lines.append("")
+	lines.append(Tables.describe())
 	lines.append("")
 	lines.append("THE TABLE A READER SETS")
 	lines.append("A reader sets the table on purpose, before every reading, and each thing on it has a reason in the reading's world - light to read by, protection, the four elements the suits stand for, the reading's own subject, devotion, comfort. Give each thing its reason in a few words.")
@@ -279,22 +311,39 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 	lines.append(Effects.describe(air_regions(), CardTable.MOMENTS))
 	lines.append("The cards are always seen: fog lies behind the table or low on the cloth, never thick over the cards, and a burst is over in a second or two. Its colors belong to the deck's palette or to the light of the episode's world.")
 	lines.append("")
+	lines.append("THE LIGHT: what lights this table and how that light moves - the sky, the sun or the moon and what it falls through on its way, clouds and birds between it and the table, lamps round the room. It goes in `light`, beside `things`. The plan says what the light is (above): build that light, and make it agree with the room%s - where its windows are, which side its sun comes from, how bright its day is. Indoors or out, the hour and the weather decide it: outdoors by day a bright sky and a sun, its shadows crisp or hazy; a porch or a market stall the shade of an awning, the bright day beyond its edge; a room in the afternoon the sun slanting through a window onto the table, the rest in the room's own dim light; dusk a low red sun or none, and torches or lanterns round the edges; night the moon, or only the lamps and the candles." % (" (its painting attached)" if room else ""))
+	lines.append("Light moves, as the world's does: a cloud crosses the sun and every shadow on the table fades and comes back, leaves stir, a bird's shadow flicks across, a torch's light dances, a sign stutters. Give this table the moving light of its world, sparingly - most tables take one or two moving things, some none, and never a light show. Every card must be read in it: the cards and the deck lie in light, never deep in a shade, and the light is never so strong it washes the table out. A table with no `light` is lit as every earlier table was - a lamp over it, candles in the room.")
+	lines.append(Lights.describe())
+	lines.append("")
 	lines.append(title_rule(title, byline))
 	if not seen.is_empty():
 		lines.append("")
 		lines.append("EARLIER EPISODES' TABLES held these. Set none of them again: %s." % ", ".join(PackedStringArray(seen)))
 	if not airs.is_empty():
 		lines.append("EARLIER EPISODES' AIR was this. Give this table its own, or none: %s." % ", ".join(PackedStringArray(airs)))
+	if not tables.is_empty():
+		lines.append("EARLIER EPISODES WERE READ AT THESE TABLES. Build this one otherwise - its shape, its wood or stone, its cloths and their patterns:")
+		for t in tables:
+			lines.append("- " + clip(String(t), 60))
+	if not lights.is_empty():
+		lines.append("EARLIER EPISODES WERE LIT LIKE THIS. Light this one as its own plan says, in a way of its own - what the sun falls through, what moves, the lamps:")
+		for l in lights:
+			lines.append("- " + clip(String(l), 50))
 	lines.append("")
 	var check := "it has no body - no head, no limbs, real or carved; every part rests on the cloth or on another part (nothing floats, nothing sinks through); it stands as it would really stand - a thing with a pointed or round bottom lies on its side or sits in a stand, a ring or a bowl, never balanced on its point; the lowest point is at height 0; the sizes are real and fit the place's height; a hollow vessel's profile goes up the outside and back down the inside; every candle's wax has `wick` or `wicks`, and a candle in a cup or a holder stands on its floor."
 	if looks > 0:
-		lines.append("HOW YOU WORK: you build this table with tools, and you SEE what you build. `put` puts things (and the materials they use, and the air's effects) on the table and answers with what was built - each thing's real size, anything the builder could not make as written - and a picture of them on a centimeter grid; `look` shows one thing close up from four sides; `set` stands everything on this episode's own table and photographs it from the camera's place, as the viewer will see it, its air with it, saying what was made smaller or left off for want of room and which light leads; `watch` shows one effect of the air in motion - a burst at the moment it marks; `title` chooses the color the show's name is printed in and shows you the opening with it, saying how far the color stands out from the table behind the name; `remove` takes things or effects off; `submit` hands the table in.")
+		lines.append("HOW YOU WORK: you build this table with tools, and you SEE what you build. `put` builds the table itself (`top`, `layers`), puts things (and the materials they use, and the air's effects) on it and lights it (`light`), and answers with what was built - each thing's real size, anything the builder could not make as written, where the sun falls - and a picture of the things on a centimeter grid; `look` shows one thing close up from four sides; `overhead` shows the whole table from straight above - its top, its cloths as laid, the things and the cards - with the stretch the camera sees outlined; `set` stands everything on this episode's own table and photographs it from the camera's place, as the viewer will see it, its air with it, saying what was made smaller or left off for want of room and which light leads; `watch` shows one effect of the air, or a moving part of the light, in motion - a burst at the moment it marks, a cloud passing over the sun, a bird's shadow crossing, a lamp flickering; `title` chooses the color the show's name is printed in and shows you the opening with it, saying how far the color stands out from the table behind the name; `remove` takes things, effects, layers or parts of the light off; `submit` hands the table in.")
+		lines.append("Build the table first - its top and its layers - and look at it from above; then make the things; then light the table (`put` its `light`), set it, and watch what moves in its light.")
 		lines.append("Make a thing, look at it, and fix whatever does not read as the thing you meant - a part floating or sunk, a proportion off, a material that reads as another, anything that reads as a body. When the things read, set the table and look at the frame: fix what was made smaller or left off, a group hidden behind another, a light that should lead and does not. Set it again after a fix. Once the table is set, choose the title's color and look at the opening; submit when both are right. Every picture counts against the %d you have; put a few things at a time, and fix a thing by putting it again under the same name." % looks)
 		lines.append("")
 		lines.append("CHECK each thing as you look at it: " + check)
 		lines.append("")
 		lines.append("THE FORMAT of the things and materials you put - shown as a whole table with one thing, a chess pawn, which never belongs on this table:")
 		lines.append(SET_EXAMPLE)
+		lines.append("...and of the table itself, put as `top` and `layers` (a material the top names goes in `materials`) - a table no episode is set at, never this one:")
+		lines.append(TABLE_EXAMPLE)
+		lines.append("...and of its light, put as `light` - a light no episode is lit by, never this one's:")
+		lines.append(LIGHT_EXAMPLE)
 		lines.append("")
 		lines.append("Finish by calling submit. After it, your last message can be a single line.")
 	else:
@@ -302,6 +351,10 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 		lines.append("")
 		lines.append("Reply with ONLY a JSON object, no other text. The format, shown with one thing - a chess pawn, which never belongs on this table:")
 		lines.append(SET_EXAMPLE)
+		lines.append("Beside `things` and `materials` go `top` and `layers` - shown here on a table no episode is set at, never this one (a material the top names goes in `materials`):")
+		lines.append(TABLE_EXAMPLE)
+		lines.append("...and `light` - shown here as a light no episode is lit by, never this one's:")
+		lines.append(LIGHT_EXAMPLE)
 		lines.append("Beside `things` and `materials` (and `effects`, if the table has air), the reply carries the name's color: `\"title\": {\"color\": \"#rrggbb\", \"why\": \"a few words: what it stands out against\"}`.")
 	return {"system": show_context(title, brief), "prompt": "\n".join(lines)}
 

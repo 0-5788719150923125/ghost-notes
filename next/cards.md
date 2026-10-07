@@ -64,6 +64,8 @@ seeds' hash salts keep their old `tarot-` names, so every episode already made c
 | `src/set_dresser_tools.gd` | `SetDresserTools`: the set dresser's tools - `put`, `remove`, `look`, `set`, `watch`, `title`, `submit` - over a draft table. |
 | `src/table_preview.gd` | `TablePreview`: what those tools show - a thing in a studio on a centimeter grid (four sides, or several in tiles), the draft on the episode's own table from the show's camera, and the opening (the show's name over that table thrown out of focus). |
 | `src/effects.gd` | `Effects`: the AIR - fog, motes, bursts - as data an agent writes (registries it reads, `sanitize`, `build`), posed from show time. Generic; the tarot table names its regions and moments (`CardTable.AIR`, `MOMENTS`). Shaders `effect_fog.gdshader`, `effect_sprite.gdshader`, `effect_smoke.gdshader`. |
+| `src/lights.gd` | `Lights`: the table's LIGHT built from a description - its sky, its sun (or the moon) and what the sun falls through (a window, blinds, a lattice, leaves, fronds, branches, slats, an awning, a parasol), clouds and birds, lamps out of the shot; registries an agent reads, `sanitize`, `build`, and the CPU's reckoning of where the sun falls. Shaders `light_screen.gdshader`, `light_bird.gdshader`, `light_noise.gdshaderinc` (the noise both reckon alike). See "THE LIGHT" below. |
+| `src/tables.gd` | `Tables`: the table itself built from a description - its top (shape, edge profile, material, boards, tiles, inlay) and the layers laid on it (fabric, pattern, border, fringe), each surface's relief; registries an agent reads, `sanitize`, `build`. Shaders `table_top.gdshader`, `table_textile.gdshader`, `table_common.gdshaderinc`, `table_relief.gdshaderinc` (and `noise_common.gdshaderinc`, shared with the props). |
 | `src/props.gd` | `Props`: things built from a description - shapes, materials, ornaments (registries an agent reads), `sanitize`, `build`. Generic; the tarot table is its first user. Shaders `prop.gdshader`, `prop_glass.gdshader`, `prop_lens.gdshader`, `prop_common.gdshaderinc`. |
 | `src/card_faces.gd` | `CardFaces`: faces, backs and booklet pages, composed in 2D into stopped SubViewports. |
 | `src/media/table.gd` | `TableMedium`: the table. Pinned by the mode (`Medium.OWNED`, `Director.medium_override`). |
@@ -103,7 +105,7 @@ cards themselves into `draw.json`, so an episode keeps what it drew whatever the
 | `draw` | ghost | the show's deck and the seed (shuffle, spread size, jumper) |
 | `design:K` | deck designer (fast tier), one card per run | the look, card K, its traditional meaning, how earlier decks pictured card K |
 | `image:back/surface/backdrop` | painter | the look |
-| `table` | set dresser (best tier), with tools when its writer takes them | the plan, the cloth's painting, earlier episodes' tables - no card; and, with tools, pictures of what it builds, of the table set and of the opening with the name in its color |
+| `table` | set dresser (best tier), with tools when its writer takes them | the plan, the cloth's painting and the room's (its light must agree with the room), earlier episodes' tables and lights - no card; and, with tools, pictures of what it builds, of the table set, of what moves in its light and of the opening with the name in its color |
 | `image:card:K` | painter | design K; the back + first + previous card as references |
 | `say:intro` | reader (best tier) | the plan - no card; how earlier episodes opened |
 | `say:K` | reader | the plan, every passage before, cards 1..K, and card K's PAINTING; how earlier episodes met a card |
@@ -311,6 +313,140 @@ The set dresser sees it: `set` shows the air at a moment some way in; `watch` ph
 four times (a burst just after its staged moment, fog and motes 3 s apart). The show's taste is in the
 brief's "The table and its air". Gates `tests/effects_check.gd`, `tests/set_dresser_tools_check.gd`;
 look with `tests/air_look_probe.gd` on a COPY of an episode.
+
+THE TABLE ITSELF (2026-10-06; the user: "right now, the table is just a flat rectangular surface, with
+a texture crudely drawn onto it... give the agents the proper tools and instructions to construct their
+own table, with optional tapestries, tablecloths, runners, etc. And of course, item placement changes a
+bit as well, depending upon the geometry of the table"; then "the table would really benefit from some
+depth mapping... normal mapping, tesselation, whatever - make such things available to the agents'
+tooling"). The set dresser now writes `top` and `layers` beside its things (`Tables`, `src/tables.gd`):
+- THE TOP: rect (with rounded corners), round, oval or a regular polygon, a scalloped rim if it likes;
+  1.5-9 cm thick; its edge cut to a profile (square, eased, bevel, bullnose, ogee, bead) as real
+  geometry - the far edge is all of the table's side the camera sees; made of one of the table's
+  materials (boards with staggered ends and cut seams, tiles in grout, a stone slab, metal, lacquer
+  worn at the edge, leather, a baize) or of THE PAINTING itself, with a pattern inlaid in it
+  (marquetry, parquetry) and a band inlaid along its edge.
+- THE LAYERS, bottom first, at most 4: each a fabric (linen, cotton, wool, felt, velvet, silk, brocade,
+  lace, burlap), a pattern (stripes, checks, plaid, diamonds, dots, a generative medallion, dyed clouds,
+  ikat - or the painting), a border along its hem, a fringe on its ends; an outline of its own placed by
+  `at` and `turn` (45 lays a square as a diamond) or the top's own outline grown by a `drop` - a
+  tablecloth. WHEREVER A LAYER RUNS PAST THE TOP'S EDGE IT HANGS OVER IT (`Tables._drape`): rolled over
+  where the top's face ends, straight down, folds deepening as it falls, outward only (a fold swung
+  inward put the edge through the cloth). Rows of points follow the top's outline through the roll
+  (the grid alone drew it in steps), each a hair off its row: concentric rows are all but co-circular,
+  and Godot's Delaunay took a second on them (now 0.25 s for a big round tablecloth).
+- THE PAINTING goes wherever the set dresser lays it - the top, the cloth, a runner, a diamond - its
+  pixels square there (`CardTable.cloth_crop`). NO `top` AND NO `layers` IS THE OLD TABLE: a 190 x 85 cm
+  board table with the painting as a 120 x 72 cm cloth exactly where the old cloth lay; `layers: []` is
+  a bare top. Every table set before keeps its look, drawn by the new shaders.
+- DEPTH (the RELIEF, `table_common.gdshaderinc`): every surface has a height field below it - its own
+  (threads, grain, pebble, seams and grout) and what the agent asks for (`relief`: raised or sunk
+  figures, quilted, tufted, the painting's own detail). Godot 4 has no tessellation, and lifting the
+  geometry would lift the cards off the cloth or sink them into it, so the field is never above the
+  surface (the cards and things rest on its highest points) and is SEEN three ways: a normal from its
+  own slope at every pixel (finite differences of the field, in a tangent frame taken from how the
+  cloth's flat space crosses the screen - exact per triangle; the old cloth's normal map came from
+  its whole luminance, every pale patch a hill), PARALLAX OCCLUSION (6-22 steps by the angle, one
+  refinement: the hollows lie below the surface and the ridges in front hide them) and their shade
+  (ambient occlusion, a little darker albedo). The painting's depth is its DETAIL - its lightness less
+  its lightness blurred 3.5 mips - so threads and grain stand up and broad light and dark do not. The
+  drape and the edge profile are the real geometry. A quilt's section rises all the way from the
+  stitch (a flat-topped puff showed only seams, lost on a busy painting).
+- THE TOP HOLDS THE CARDS: the deck, every preset spread, the shuffle and the wash lie in
+  `Tables.HOLDS` (measured over 300 layouts in `tables_check`); a top that does not hold it 2 cm in
+  from its edge is grown, its proportions kept - a round table comes out at least ~1.18 m across, its
+  far edge curving across the frame. Cards given positions are refused off the top
+  (`TablePositions.given(..., top)`, then the preset), a card thrown in a wash lands only on it, and
+  things stand on the top 3.5 cm in from its edge, within the old cloth's stretch (the width the camera
+  sees) and further back only where a deep top reaches further (`_stand`). Let out to the old table's
+  whole width, or with their back edge 0.6 mm forward of the old cloth's (a 4 cm margin), the old
+  table's things moved and a wash's card clipped a foot (84 of 292,240 samples in table_place_check,
+  against 0 at HEAD): on the old table they stand exactly where they stood.
+- THE LIGHT READS WHAT LIES UPPERMOST: the HEAT cap's lightness grid (`TableMedium.LUM_RECT`, 4 cm
+  cells over the table the camera can see) is now whatever is on top at each cell
+  (`Tables.surface_lum`): the painting's pixels, a pattern's colors, the top's material, the floor.
+- THE SET DRESSER: told the vocabulary (`Tables.describe`), that the painting must be given a place,
+  about depth, and the earlier episodes' tables (`CardEpisode.archive` -> `furniture`); `put` takes
+  `top` and `layers` (answered with the table in words and whatever had to change); `remove` takes
+  layers; `overhead` photographs the table from straight above with the camera's view outlined; `set`
+  says the table in a line. 36 pictures, 1800 s.
+Gate `tests/tables_check.gd`; look with `set_dresser_look_probe --spec` (a spec with `top`/`layers` is
+put first and seen from above).
+
+THE LIGHT (2026-10-07; the user: "we sometimes have indoor scenes, and we sometimes have outdoor
+scenes... it would be nice to bring the agents into this loop, giving them a way to control both
+lighting and shadow"; a bright day's strong light, dusk with torches round the perimeter out of the
+camera's view, a window hidden to one side, clouds - sparse and moving, or heavy with breaks the light
+peeks through - and "shadows from birds... a simple, fast shadow that crosses the scene"; "I would want
+to give the agents proper tooling, to create these vibes on its own"). The plans had described it all
+along - "bright overhead noon sun diffused through a white canvas awning", "warm afternoon sunlight
+slanting low through tall windows from one side", "cool early-morning daylight from the open sky, with
+no flame on the table" - and every table was drawn alike: a dark room, a spot lamp, candles out of shot.
+The set dresser now writes `light` beside its things (`Lights`, `src/lights.gd`; `CardTable.sanitize_table`
+-> `light`, `{}` when it wrote none):
+- THE SKY: an ambient light, and a share of it from above (a light with no shadow, so things are modeled
+  from the top as an open sky models them) - its color and strength.
+- THE SUN, or the moon: a DirectionalLight3D from a direction named round the table (front = from behind
+  the reader, right, back = from across the table toward the camera, left, the four between, or degrees)
+  at a height in degrees. Soft by its shadow filter's blur, NOT by PCSS: a sun's PCSS searches as far as
+  its farthest caster (a wall a meter and more up its ray), and the blocker search then misses a
+  stone's small shadow.
+- WHAT IT FALLS THROUGH, at most 3: a window (panes, bars), blinds, a lattice (grid, diamonds, hexes,
+  circles, stars) - each in a wall standing past everything on the set, on the sun's side, its patch of
+  sun landing where it is aimed (`at`) - or leaves, fronds, branches, slats, an awning (the share of the
+  table it shades is asked and its edge solved to it; straight or scalloped; its canvas tints the light
+  under it), a parasol overhead. SHADOW-ONLY geometry up the sun's ray on `Lights.SCREEN_LAYER`, which no
+  other light casts with; holes cut by `discard` in `shaders/light_screen.gdshader`, posed from show time
+  (leaves stir, blinds sway, an awning's edge ripples). In fog the sun's shafts follow them. A sun
+  through a wall stands no higher than 65 degrees (`WALL_SUN`).
+- CLOUDS: two octaves of noise drifting past the sun; a cloud over it dims the sun, softens its shadows
+  (a thin one) and gives a quarter of what it holds back to the sky (`CLOUD_GLOW`: a sunlit cloud is the
+  brightest thing in the sky), so a thick one leaves the table about a stop darker, its shadows gone; the
+  room's picture dims alike (`shade` in `table_room.gdshader`). NOT A SHADOW, measured first: Godot 4.7
+  refuses a ViewportTexture as a light's projector, a DirectionalLight3D ignores a projector, and a
+  DITHERED caster averaged by the shadow filter read as camouflage mottle at every quality. A real
+  cloud's edge is tens of meters wide, so at a table's scale it is a dimming over seconds, not a line
+  across the cloth. Four octaves let wisps cross the sun in under a second - a flicker (lights_check,
+  two-sided).
+- BIRDS: crossings at about the asked interval, each over the table, a flock flying together, a hawk
+  circling so its shadow wheels back over the table; level quads (a level bird throws its true shape on a
+  level table), wings beating or gliding by look, a little smeared along the way (`light_bird.gdshader`).
+  At a pigeon's real 12 m/s its shadow is over the table for two frames, so `speed` runs from a third of
+  the bird's real speed (0) to all of it (1).
+- LAMPS out of the shot, at most 4, 2 casting: candles, a torch, a fire, a lantern, a lamp, a hanging lamp,
+  fluorescent tubes, neon, a screen's glow, a street lamp, headlights passing, a lighthouse's beam,
+  lightning - each by direction, distance and height, moved up out of the shot when the camera would see
+  it (`Lights.lamp_place`, `CardTable.in_shot`), flickering its own way as a pure function of show time
+  (a torch's dancing light and shadows, a sign's stutters, a screen's cuts, a strike's two to four
+  flickers lighting the room).
+- THE EXPOSURE (`Lights.Rig.fit`): the sun and the sky brought down TOGETHER until the palest thing in
+  the light (the 97th percentile of the cloth the camera sees, or the card stock) takes no more than
+  `SUN_HEAT` - the day keeps its contrast, sun to shade four or five to one on a clear day. The first cut
+  capped them apart: the sky held its own and a ferry's awning shade was barely darker than its sun.
+  A lamp is held to `LAMP_HEAT` where its light is strongest.
+- WHO LEADS: a sun or a lamp lighting the cards at least `LEAD_MIN` leads, and every candle burns as a
+  fill; with nothing reaching the cards and no candle to lead, the old lamp hangs over the table after
+  all (`TableMedium.LAMP_FALLBACK`). A table with no `light` - every table set before - is lit exactly as
+  it was: the lamp, the fill, the room's out-of-shot candles. The room's picture now casts no shadow (a
+  low sun behind the table would throw it over the cards).
+- THE SET DRESSER: told the vocabulary (`Lights.describe`), to build the plan's light and make it agree
+  with the room - whose PAINTING now comes with its prompt, the table step waiting for it (softly: a new
+  room keeps the table) - and earlier episodes' lights (`CardEpisode.archive` -> `light`). `put` takes
+  `light` part by part (a part replaces that part; screens and lamps by name; null and `[]` take away)
+  and answers with where the sun falls - how much of the table the camera sees, and of where the cards
+  lie - by the CPU's own reckoning (`Lights._pattern`, line for line the shader's, on integer-hashed
+  noise both reckon alike; `light_screen_check` holds them together at 99% and more), how the weather
+  runs in the first ten minutes, and any lamp moved; `set` photographs the light as it mostly is (the sun
+  out, no bird crossing) and names what leads; `watch` takes `clouds`, `birds`, a stirring screen or a
+  lamp and finds the moment - a cloud's passing (the sun out, coming over, under it, back), a bird over
+  sunlit table, a sign's stutter, a strike. 40 pictures, 2100 s. The producer's `light.kind` asks for
+  indoors or out, the hour, the weather and what the sun comes through, and the room's painter is told it.
+Seen on real episodes before it shipped (`set_dresser_look_probe --light`): the library's window bars
+across the leather toward the viewer, as its painted room has them; a ferry's awning shade with the day
+spilling past its scalloped edge, a cloud taking the sunlit strip and giving it back; moonlight through
+blinds with a neon sign's red glow; a 2 a.m. kitchen by one candle and a street lamp's long shadows; a
+gull's shadow sweeping the palm mat. Gates `tests/lights_check.gd`, `tests/table_light_check.gd` (boot),
+`tests/light_screen_check.gd` (GPU), set_dresser_tools_check `_light`, cards_check (archive, the table step).
 
 BUILT IN THE ENGINE (`src/props.gd`, `Props.build`): meshes in meters, base on y = 0, each
 part's surface laid out for its own girth and height so a motif keeps its shape. A candle's wax
@@ -690,7 +826,15 @@ every future login"). `src/youtube.gd` is generic; the tarot mode opts in throug
   - the panel, the real voice and the table, end to end, and the export take.
 - `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/set_dresser_look_probe.gd 300 --show S --seed N`
   - what the set dresser's tools show, with no agent: an episode's table put, looked at and set, and
-  the opening (`--ink`, `--name`, `--byline`).
+  the opening (`--ink`, `--name`, `--byline`). A `--spec` with `top`/`layers` builds the table itself first and shows
+  it from above.
+- `godot --headless --path . --script res://tests/tables_check.gd` - the table itself (`Tables`).
+- `godot --headless --path . --script res://tests/lights_check.gd` - the light (`Lights`);
+  `tests/run_boot_probe.sh tests/table_light_check.gd 300` - the table's own light in the medium;
+  `tests/run_quiet.sh light_screen_check` - what the screens draw is what `Lights` reckons.
+- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/set_dresser_look_probe.gd 380 --show S --seed N --light <light.json> --quick 1`
+  - a light put on an episode's table through the set dresser's own tools, set, and every moving part
+  watched (`--watch 0`: none).
 - `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/set_dresser_run_probe.gd 1600 --spec <md> --seed N [--model haiku]`
   - the real set dresser at work through its tools (quota), on a COPY of an episode.
 - `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/air_look_probe.gd 400 --show S --seed N --spec <effects.json> --moments 1`
@@ -699,6 +843,21 @@ every future login"). `src/youtube.gd` is generic; the tarot mode opts in throug
   Claude CLI reaches ghost's tools and sees their pictures (one short run).
 
 ## Not built yet
+
+- The light, next (2026-10-07): no real set dresser has lit a table yet. A cloud's edge ACROSS the table
+  (it dims everything at once - right at a table's scale for a real cloud, but a slow low cloud's gradient
+  would need the sun's light shaped in every table shader's own `light()`). A screen for a LAMP (a street
+  lamp through a window's bars at night: screens are the sun's alone). Rain running down a window, and
+  water's caustics on the table (a harbor's light). Lightning's own shadows (a second directional light).
+  The camera opening up under a cloud over a few seconds, as an automatic exposure would.
+
+- The table itself, next (2026-10-06): no real set dresser has built one yet - the first run will
+  show whether it builds tables that read, and how much of its 36 pictures they take. Legs, an apron
+  or a pedestal (the camera sees none from the reader's chair, but a lower camera would). A height
+  map the painter paints beside the painting (the painting's detail stands in for one). Lace's
+  holes show what is under them, but no shadow of them. A dark velvet or a bare dark top lets a
+  candle burn as the key beside pale cards, which bloom (the HEAT cap reads the cloth, not the cards).
+  The dealer (`DealerTools`) checks its layout against the cloth, not yet the top it will lie on.
 
 - Pick-a-pile episodes (three piles, "all four piles say the same thing").
 - Moving `Illustrations`' own job pump onto `AgentJobs`.
