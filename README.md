@@ -1,8 +1,10 @@
-# Ghost Notes: A Spectral Experience
+# Ghost Notes
 
-<p align="center"><img src="./icon.svg" width="96" alt="Ghost Notes"></p>
+_A spectral experience_
 
-_Notes that perform: a note becomes a show, drawn from its sound and read in its own voice._
+---
+
+<p align="center"><img src="./docs/showcase.webp" alt="Ghost Notes: a Manual note playing its storyboard - a blue prism divides into a blue one and a red one"></p>
 
 ---
 
