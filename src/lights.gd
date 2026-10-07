@@ -185,10 +185,11 @@ const MAX_CASTER_MESHES := 96
 const MAX_CASTER_COPIES := 16
 const CASTER_SIZE := 600.0
 ## A SWING, simulated ([method swing_at]): its step (seconds), how often a step is kept, and how fast a
-## swing dies away (1/s) - slowly, so the wind's pushes build it up.
+## swing dies away (the share of critical damping: well under 1 so a gust still swings it, but high enough
+## that a push leans it to one side and it settles there, instead of ringing back and forth for a minute).
 const SWING_STEP := 1.0 / 120.0
 const SWING_KEEP := 4
-const SWING_DAMP := 0.3
+const SWING_DAMP := 0.55
 ## A sun through a wall stands no higher than this (degrees): a higher sun hardly reaches into a room,
 ## and its wall would stand over the table.
 const WALL_SUN := 65.0
@@ -1244,7 +1245,7 @@ static func swing_at(sw: Dictionary, t: float) -> Vector2:
 			for k in SWING_KEEP:
 				var r := theta.length()
 				var pull := theta * (sin(r) / r) if r > 1e-6 else theta
-				var acc := -g_l * pull - SWING_DAMP * omega + g_l * _wind(sw, tt)
+				var acc := -g_l * pull - 2.0 * SWING_DAMP * sqrt(g_l) * omega + g_l * _wind(sw, tt)
 				omega += acc * SWING_STEP
 				theta = (theta + omega * SWING_STEP).limit_length(1.2)
 				tt += SWING_STEP
@@ -1261,15 +1262,15 @@ static func swing_at(sw: Dictionary, t: float) -> Vector2:
 
 
 ## The wind's push on a swing at [param t] (radians it would lean the thing in a steady wind): a breeze
-## whose lean and direction drift slowly, gusts now and then, and a little turbulence near the pendulum's
-## own pace - the push that sets a hanging thing swinging.
+## whose lean and direction drift slowly, gusts now and then, and a little slow turbulence (kept well off the pendulum's
+## own pace, which it would drive to ringing) - the push that sets a hanging thing swinging.
 static func _wind(sw: Dictionary, t: float) -> Vector2:
 	var n: FastNoiseLite = sw["noise"]
 	var a := float(sw["amount"])
 	var dir := float(sw["dir"]) + 0.9 * n.get_noise_1d(t * 0.013)
 	var lean := 0.12 * (0.55 + 0.45 * n.get_noise_1d(t * 0.05 + 100.0))
 	var gust := pow(maxf(n.get_noise_1d(t * 0.21 + 300.0), 0.0), 2.0) * 0.35
-	var turb := Vector2(n.get_noise_1d(t * 0.9 + 500.0), n.get_noise_1d(t * 1.1 + 700.0)) * 0.05
+	var turb := Vector2(n.get_noise_1d(t * 0.3 + 500.0), n.get_noise_1d(t * 0.37 + 700.0)) * 0.02
 	return (Vector2(cos(dir), sin(dir)) * (lean + gust) + turb) * a
 
 

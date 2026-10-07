@@ -557,7 +557,19 @@ func _shadows() -> bool:
 	_ok(most < 0.8 and sqrt(spread / 1200.0) > 0.01, "a breeze swings it %.3f rad at most, %.3f typically" % [most, sqrt(spread / 1200.0)])
 	var short_t := _period(Lights.swing_of(1.0, 0.6, 77))
 	var long_t := _period(Lights.swing_of(4.0, 0.6, 77))
-	_ok(long_t / short_t > 1.5 and long_t / short_t < 2.7, "a pendulum four times as long swings %.2fx as slowly (%.2f s, %.2f s) - about twice" % [long_t / short_t, short_t, long_t])
+	_ok(long_t / short_t > 1.1 and long_t / short_t < 2.7, "a pendulum four times as long swings %.2fx as slowly (%.2f s, %.2f s) - slower (the wind sets more of its pace now it is well damped)" % [long_t / short_t, short_t, long_t])
+	# a push leans it to one side and it settles: it crosses its rest at most twice, not ringing for a minute
+	var kick := Lights.swing_of(1.0, 0.0, 5)
+	kick["omega"] = Vector2(1.0, 0.0)
+	var crosses := 0
+	var prev := 0.0
+	for i in 1200:
+		var x := Lights.swing_at(kick, float(i) * 0.05).x
+		if absf(x) > 1e-3:
+			if x * prev < 0.0:
+				crosses += 1
+			prev = x
+	_ok(crosses <= 2, "a push rings back and forth %d times (well damped: at most 2)" % crosses)
 	# BUILT on its layer, drawn nowhere, cast by every lamp
 	var root := Node3D.new()
 	get_root().add_child(root)

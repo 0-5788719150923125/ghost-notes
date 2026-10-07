@@ -272,6 +272,13 @@ func _dispatch(entry: Dictionary, prompt: String) -> void:
 	entry.out_path = "%s/%04d.out.json" % [base, int(entry.index)]
 	entry.err_path = "%s/%04d.err.log" % [base, int(entry.index)]
 	var prompt_path := "%s/%04d.prompt.txt" % [base, int(entry.index)]
+	# A RUN READS ONLY ITS OWN STREAM. A run the app died under leaves its files behind (_finish
+	# never ran), and feedback numbering restarts, so a new run can share their name. The shell
+	# truncates them once it gets going - but this frame's _poll_progress can open the old one
+	# first and read it as this run's, or read it short as the shell cuts it ("Condition
+	# r != len" from get_as_text, the first poll after a submission).
+	_delete_file(entry.out_path)
+	_delete_file(entry.err_path)
 	# Pinned on first dispatch: a follow-up or resume must reach the SAME CLI whatever the
 	# dropdown says now.
 	var backend := _backend_of(entry)
@@ -374,22 +381,9 @@ func _process(_dt: float) -> void:
 func _poll_progress(entry: Dictionary) -> void:
 	if not FileAccess.file_exists(entry.out_path):
 		return
-	var fa := FileAccess.open(entry.out_path, FileAccess.READ)
-	if fa == null:
-		return
-	var offset := int(entry.get("read_offset", 0))
-	var total := fa.get_length()
-	if offset >= total:
-		fa.close()
-		return
-	fa.seek(offset)
-	var chunk := fa.get_as_text()
-	fa.close()
-	var last_nl := chunk.rfind("\n")
-	if last_nl < 0:
-		return # nothing complete yet - the line currently being written doesn't count
-	entry.read_offset = offset + last_nl + 1
-	for line in chunk.substr(0, last_nl).split("\n"):
+	var since := Backends.lines_since(entry.out_path, int(entry.get("read_offset", 0)))
+	entry.read_offset = since.offset
+	for line in since.lines:
 		line = line.strip_edges()
 		if line == "":
 			continue

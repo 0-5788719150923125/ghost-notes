@@ -208,6 +208,33 @@ static func events_in(text: String) -> Array:
 	return out
 
 
+## The lines of a run's stream finished since byte [param offset], for a reader tailing it while
+## it is written: `{lines, offset}`, where `offset` is past the last line end. A line still being
+## written waits for the next call. BYTES FROM THE OFFSET, NOT get_as_text(), which reads the
+## whole file from its start whatever the seek: the old reader added every re-read to the offset,
+## ran it past the end and stopped seeing new lines, and counted a String index as bytes, which
+## it is not once the stream holds anything outside ASCII. A file now shorter than [param offset]
+## was replaced, and is read from its start.
+static func lines_since(path: String, offset: int) -> Dictionary:
+	var fa := FileAccess.open(path, FileAccess.READ)
+	if fa == null:
+		return {"lines": PackedStringArray(), "offset": offset}
+	var total := fa.get_length()
+	if offset > total:
+		offset = 0                       # shorter than what was read: a new file, from its start
+	var none := {"lines": PackedStringArray(), "offset": offset}
+	if offset >= total:
+		return none
+	fa.seek(offset)
+	var chunk := fa.get_buffer(total - offset)
+	fa.close()
+	var last_nl := chunk.rfind(10)
+	if last_nl < 0:
+		return none
+	return {"lines": chunk.slice(0, last_nl).get_string_from_utf8().split("\n"),
+		"offset": offset + last_nl + 1}
+
+
 static func json_object(line: String) -> Variant:
 	if not line.begins_with("{"):
 		return null

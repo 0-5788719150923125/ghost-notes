@@ -18,6 +18,13 @@ extends SceneTree
 ##   is also read with the OTHER backend's rules and must NOT come out as a clean result,
 ##   which is the mix-up the registry exists to prevent.
 ##
+##   THE TAIL - the Assistant reads a run's stream WHILE it is written, from a byte offset
+##   (lines_since). Two reads of one growing file, with text outside ASCII before the cut: the
+##   second must see the line finished since, and each offset must be a byte count. The old
+##   reader, get_as_text() after a seek, fails both: it reads the whole file whatever the seek,
+##   and took a String index for a byte offset. And a file shorter than the offset (a new run's
+##   stream where an old one was) is read from its start.
+##
 ##   godot --headless --path . --script tests/assistant_backend_check.gd
 
 const B := preload("res://src/assistant_backends.gd")
@@ -31,6 +38,7 @@ func _init() -> void:
 	_launcher()
 	_claude_stream()
 	_codex_stream()
+	_tail()
 	_crossed()
 	if _fails.is_empty():
 		print("assistant_backend_check: ALL OK")
@@ -133,6 +141,44 @@ func _claude_stream() -> void:
 	_check(bool(r.ok) and String(r.response) == "Fixed the fade in comic.gd.", "final result read")
 	_check(is_equal_approx(float(r.cost_usd), 0.4213) and String(r.usage) == "$0.421",
 		"cost in dollars")
+
+
+func _tail() -> void:
+	print("-- the tail (a stream read while it grows)")
+	var lines := FileAccess.get_file_as_string(FIX + "claude_run.jsonl").split("\n", false)
+	var path := OS.get_temp_dir().path_join("assistant_tail_%d.jsonl" % OS.get_process_id())
+	var said := "Faded it\u2026 caf\u00e9."    # three bytes, then two, for one character each
+	var wide := JSON.stringify({"type": "assistant", "session_id": "s",
+		"message": {"content": [{"type": "text", "text": said}]}})
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(lines[0] + "\n" + lines[1] + "\n" + wide + "\n" + lines[3].substr(0, 40))
+	f.close()
+	var one: Dictionary = B.lines_since(path, 0)
+	var got: PackedStringArray = one.lines
+	_check(got.size() == 3 and B.describe("claude_cli", B.json_object(got[2])) == said,
+		"first read: the complete lines, the half-written one held back (%d)" % got.size())
+	var first := (lines[0] + "\n" + lines[1] + "\n" + wide + "\n").to_utf8_buffer().size()
+	_check(int(one.offset) == first, "the offset counts BYTES (%d, want %d)" % [int(one.offset), first])
+	f = FileAccess.open(path, FileAccess.READ_WRITE)
+	f.seek_end()
+	f.store_string(lines[3].substr(40) + "\n")
+	f.close()
+	var two: Dictionary = B.lines_since(path, int(one.offset))
+	got = two.lines
+	_check(got.size() == 1 and B.describe("claude_cli", B.json_object(got[0])) == "Fixed the fade in comic.gd.",
+		"second read, from the offset: the line finished since (%d line(s))" % got.size())
+	_check(int(two.offset) == FileAccess.get_file_as_bytes(path).size(), "and the offset is at the end")
+	_check((B.lines_since(path, int(two.offset)).lines as PackedStringArray).is_empty(),
+		"a third read with nothing new reads nothing")
+	# A FILE REPLACED under the reader (a new run's stream where an old one was): shorter than
+	# the offset, so it is read from its start rather than waited on past its end
+	f = FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(lines[0] + "\n")
+	f.close()
+	var three: Dictionary = B.lines_since(path, int(two.offset))
+	_check((three.lines as PackedStringArray).size() == 1 and int(three.offset) == lines[0].length() + 1,
+		"a file shorter than the offset is read from its start")
+	DirAccess.remove_absolute(path)
 
 
 func _codex_stream() -> void:
