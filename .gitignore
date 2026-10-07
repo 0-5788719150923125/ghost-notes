@@ -1,0 +1,57 @@
+# CLAUDE.md is the agents' map of this project and stays out of the repository (the user's call,
+# 2026-10-06) - ignored here too, not only by a global rule some machine may not have.
+/CLAUDE.md
+
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Python bytecode (hosts/, docs.py)
+__pycache__/
+
+# Transient: the exporter writes override.cfg to set the render's output resolution,
+# then removes it when the render finishes (see src/exporter.gd).
+override.cfg
+
+# Imported translations (automatically generated from CSV files)
+*.translation
+
+# Mono-specific ignores
+.mono/
+data_*/
+mono_crash.*.json
+
+# Exported builds: scripts/build.sh writes them to dist/
+/dist/
+*.exe
+*.pck
+*.zip
+
+# Hand-written bench and probe scripts, kept local
+/build/
+
+# tests/run_boot_probe.sh's private scene (and copied probe) for one run, removed on exit
+/tests/_probe_*
+
+# Authoring feedback channel (scene records + screenshots written by the feedback
+# console - a working comms channel between author and tooling, not an artifact).
+/feedback/
+
+# Recorded output and source audio (drop your own song.wav in audio/)
+/audio/
+
+# Mask-mode working data: transcoded video/audio derivatives + session JSON per
+# source clip (see src/mask_session.gd). Large, personal, regenerable from the
+# original source file - never ships.
+/masks/
+*.avi
+*.mp4
+*.png.import.bak
+
+# *.uid and *.import are TRACKED (Godot's advice since 4.4): a .uid is what lets a reference by
+# UID survive a move or a clean clone, and an .import keeps an asset's import settings.
+
+# ghost voice listening probes (regenerated on demand, never committed).
+# Numbered NN_name.wav at this directory's root - the earlier `0*.wav` missed
+# everything from 10 onward.
+/[0-9][0-9]_*.wav

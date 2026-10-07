@@ -1,0 +1,51 @@
+// Syncthing ignore list for ghost-notes, for when this repository is shared as a Syncthing folder
+// of its own (it was part of praxis's shared `axis` folder until 2026-10-06; these are ghost's
+// lines from axis/.stignore).
+//
+// Everything here is either regenerable on the machine that needs it, or media far too large to
+// be worth a phone's storage. Patterns without a leading slash match at any depth; a leading
+// slash anchors to this folder's root. The (?d) prefix marks a pattern as deletable, so Syncthing
+// may clean these up rather than refusing to remove a directory that contains them.
+
+// --- big media and render artifacts -------------------------------------
+// ghost exports its renders next to the project. ghost_4k.avi alone is 4.8G.
+(?d)*.avi
+(?d)*.mp4
+(?d)*.mkv
+(?d)*.mov
+
+// The Mask Lab's working clips: Godot-transcoded .ogv plus extracted audio, ~3.2G. Regenerated
+// by re-importing the source. Drop the three lines below to run the mask editor from the phone.
+(?d)*.ogv
+(?d)*.webm
+(?d)*.wav
+
+// yt-dlp's download cache for the YouTube import feature (~425M).
+(?d)/masks/_downloads
+
+// The feedback loop's per-iteration console dumps.
+(?d)/feedback
+
+// Builds (scripts/build.sh) and the hand-written bench scripts.
+(?d)/dist
+(?d)/build
+
+// --- Godot ---------------------------------------------------------------
+// Import cache, shader cache, editor layout, export credentials. Regenerated on first open.
+(?d).godot
+(?d)*.apk
+(?d)*.aab
+(?d)*.jks
+(?d)*.keystore
+
+// --- Python --------------------------------------------------------------
+(?d)__pycache__
+(?d)*.pyc
+(?d).venv
+(?d)venv
+
+// --- editors and OS junk -------------------------------------------------
+(?d).idea
+(?d).vscode
+(?d).DS_Store
+(?d)Thumbs.db
