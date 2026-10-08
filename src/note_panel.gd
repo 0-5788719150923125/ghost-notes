@@ -15,9 +15,9 @@ class_name NotePanel
 ##
 ## "+" OFFERS WHAT THE NOTE COULD HAVE NEXT ([method Components.attach_menu]): with nothing attached,
 ## what decides what it becomes (a Voice, a Voice lab, Cards, a song, a clip); with a song, a Picture
-## for it and what a picture carries - each grayed with its reason when it cannot be had yet ("Needs
-## a Picture"). ATTACHING WRITES THE COMPONENT'S BLOCK into the note and opens the note again, as
-## whatever its blocks now say it is.
+## for it, what a picture carries and where its video goes (YouTube) - each grayed with its reason
+## when it cannot be had yet ("Needs a Picture"). ATTACHING WRITES THE COMPONENT'S BLOCK into the
+## note and opens the note again, as whatever its blocks now say it is.
 ##
 ## THE SONG IS THE NOTE'S CLOCK, and main runs it ([member begin_song]): loaded as the panel comes
 ## up, after its cards have applied the note's picture, holds and look - and waiting at its start,
@@ -29,8 +29,8 @@ class_name NotePanel
 const SECTION := "note"
 ## What "+" offers a note with nothing attached: the components that decide what it becomes.
 const DECIDES := ["voice", "voice_lab", "cards", "song", "clip"]
-## What "+" offers a note with a song: a picture for it, and what a picture carries.
-const WITH_SONG := ["picture", "look", "bookends", "storyboard"]
+## What "+" offers a note with a song: a picture for it, what a picture carries, and where its video goes.
+const WITH_SONG := ["picture", "look", "bookends", "storyboard", "youtube"]
 
 ## Set by main: the note this panel shows, and how to open it again once a component is attached.
 var path := ""
@@ -43,7 +43,6 @@ var restage: Callable
 
 var _panel: SidePanel
 var _writer: ScriptWriter
-var _plus: MenuButton
 var _status: Label
 var _blocks := {}             # the note's blocks, as it opened
 var _attached: Array = []     # the components it has (Components.attached_of)
@@ -51,6 +50,7 @@ var _cards := {}              # block key -> a card with capture() / apply()
 var _song: SongCard
 var _picture: PictureCard
 var _boards: StoryboardsCard
+var _youtube: YouTubeCard
 
 
 func _ready() -> void:
@@ -95,6 +95,10 @@ func _ready() -> void:
 		_add_card("Intro & outro", &"paper", BookendsCard.new(
 			"Seconds held before the song starts, the picture fading up through them.",
 			"Seconds held after the song ends, picture and sound fading out together."))
+	if _attached.has("youtube"):
+		_youtube = YouTubeCard.new()
+		_youtube.values = func() -> Dictionary: return {"title": _title()}
+		_add_card("YouTube", &"publish", _youtube)
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.add_theme_font_size_override("font_size", 11)
@@ -132,7 +136,7 @@ func _build_header(_box: VBoxContainer) -> void:
 	_panel.pin_header(head)
 	head.add_child(Chrome.back_button(self))
 	var title := Label.new()
-	title.text = NoteStore.title_of(path) if not path.is_empty() else "Note"
+	title.text = _title()
 	title.add_theme_font_size_override("font_size", 20)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -147,38 +151,14 @@ func _build_header(_box: VBoxContainer) -> void:
 	head.add_child(hide)
 
 
-## THE COMPONENT ROW: "+", then a chip per card ([CardRow]).
-func _build_component_row(box: VBoxContainer) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	box.add_child(row)
-	_plus = MenuButton.new()
-	_plus.text = "+"
-	_plus.flat = false
-	_plus.tooltip_text = ("Attach what this note should have next - each one grayed, with the reason, "
-		+ "when it cannot be had yet.")
-	_plus.about_to_popup.connect(func() -> void:
-		Components.attach_menu(_plus.get_popup(), _attached, WITH_SONG if _attached.has("song") else DECIDES))
-	_plus.get_popup().id_pressed.connect(_attach)
-	# drawn as a chip, the row's own shape (see CardRow._paint), in no family's color
-	_plus.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_plus.add_theme_font_size_override("font_size", 13)
-	var chip := StyleBoxFlat.new()
-	chip.bg_color = Color(1, 1, 1, 0.08)
-	chip.border_color = Color(1, 1, 1, 0.4)
-	chip.set_border_width_all(1)
-	chip.set_corner_radius_all(9)
-	chip.content_margin_left = 9
-	chip.content_margin_right = 9
-	chip.content_margin_top = 0
-	chip.content_margin_bottom = 1
-	for st in ["normal", "hover", "pressed", "focus"]:
-		_plus.add_theme_stylebox_override(st, chip)
-	row.add_child(_plus)
-	var chips := CardRow.new()
-	chips.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(chips)
-	_panel.card_row = chips
+## THE COMPONENT ROW: "+", then a chip per card ([method SidePanel.add_component_row]).
+func _build_component_row(_box: VBoxContainer) -> void:
+	_panel.add_component_row(func() -> Array:
+		return [_attached, WITH_SONG if _attached.has("song") else DECIDES], _attach)
+
+
+func _title() -> String:
+	return NoteStore.title_of(path) if not path.is_empty() else "Note"
 
 
 ## [param card] - a node with `KEY`, `capture()` and `apply(block)` - on a card of its own, its block
@@ -198,8 +178,9 @@ func _note(msg: String) -> void:
 ## The blocks this panel keeps in the note: one per card with settings, in the panel's order.
 func _doc_blocks() -> Array:
 	var out: Array = []
-	for k in ["picture", "scenes", "look", "bookends"]:
-		if _attached.has({"picture": "picture", "scenes": "storyboard", "look": "look", "bookends": "bookends"}[k]):
+	for k in ["picture", "scenes", "look", "bookends", "youtube"]:
+		if _attached.has({"picture": "picture", "scenes": "storyboard", "look": "look", "bookends": "bookends",
+				"youtube": "youtube"}[k]):
 			out.append(k)
 	return out
 
@@ -234,12 +215,13 @@ func _choose_song(song: String) -> void:
 	_write_blocks({"song": {"path": song}})
 
 
-func _attach(id: int) -> void:
-	var pop := _plus.get_popup()
-	var i := pop.get_item_index(id)
-	if i < 0 or pop.is_item_disabled(i):
-		return
-	var key := String(pop.get_item_metadata(i))
+## What an upload of this note's export says (see [member Exporter.upload_provider]): the YouTube
+## card's title, visibility and playlist; {} without a card, or with its box clear.
+func upload_meta(_take: String) -> Dictionary:
+	return _youtube.meta({"tags": []}) if _youtube != null else {}
+
+
+func _attach(key: String) -> void:
 	var add := Components.attach_blocks(key)
 	if not add.is_empty():
 		_write_blocks(add)

@@ -29,7 +29,7 @@ func _panel_hint() -> String:
 
 ## A chapter's blocks: the voice, the picture, its pictures, the Look and the bookends.
 func _doc_blocks() -> PackedStringArray:
-	return PackedStringArray(["voice", "picture", "illustrations", "look", "bookends"])
+	return PackedStringArray(["voice", "picture", "illustrations", "look", "bookends", "youtube"])
 
 
 func _build_cards() -> void:

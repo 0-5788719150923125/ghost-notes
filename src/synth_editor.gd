@@ -186,6 +186,7 @@ var end_stream: Callable            # set by main: () -> void, tears the session
 var _panel: PanelContainer
 var _writer: ScriptWriter
 var _doc: DocSource
+var _youtube: YouTubeCard       # where the video goes, when the note has one
 var _text: TextEdit
 var _status: Label
 var _stream: VoiceStream = null
@@ -315,12 +316,12 @@ func _build_panel() -> void:
 	# THE CARDS (next/notes.md, step 2): the script, the water and the Collection, each a card
 	# that folds, with its chip under the heading.
 	_panel.card_prefix = "synth"
-	_panel.add_card_row()
+	_panel.add_component_row(_offer, _attach)
 	# THE SCRIPT: a card here, the writing in the editor window it opens. Its source is a
 	# draft or a file on disk re-read at every cast; see ScriptWriter and DocSource.
 	box = _panel.add_card("script", "Script", &"paper")
 	_writer = preload("res://src/script_writer.gd").new()
-	_writer.setup("synth", PackedStringArray(["synthesis"]), "synthesis")
+	_writer.setup("synth", PackedStringArray(["synthesis", "youtube"]), "synthesis")
 	if not note_path.is_empty():
 		_writer.bind_note()
 	_doc = _writer.doc
@@ -473,6 +474,40 @@ func _build_panel() -> void:
 	_belt_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_belt_rows.add_theme_constant_override("separation", 4)
 	scroll.add_child(_belt_rows)
+	# ...and where the video goes, when the note says so
+	if not note_path.is_empty() and NoteStore.blocks_of(note_path).get("youtube") is Dictionary:
+		_add_youtube()
+
+
+## THE "+" MENU's question ([method SidePanel.add_component_row]): the template's components and
+## what has been attached since, and what this panel can take while it is up - where the video goes.
+func _offer() -> Array:
+	var have: Array = (Components.TEMPLATES["synthesis"]["components"] as Array).duplicate()
+	if _youtube != null:
+		have.append("youtube")
+	return [have, ["youtube"]]
+
+
+## A component picked from "+": its card, at once - the autosave writes its block into the note.
+func _attach(key: String) -> void:
+	if key == "youtube" and _youtube == null:
+		_add_youtube()
+
+
+## The YouTube card, after the Collection.
+func _add_youtube() -> void:
+	_youtube = YouTubeCard.new()
+	_youtube.values = func() -> Dictionary:
+		var t := _doc.field("title").strip_edges() if _doc != null else ""
+		return {"title": t if not t.is_empty() or note_path.is_empty() else NoteStore.title_of(note_path), "episode": ""}
+	_panel.add_card("youtube", "YouTube", &"publish").add_child(_youtube)
+	_youtube.noted.connect(func(msg: String) -> void: _status.text = msg)
+
+
+## What an upload of the take says (see [member Exporter.upload_provider]): the YouTube card's
+## title, visibility and playlist; {} without a card, or with its box clear.
+func upload_meta(_take: String) -> Dictionary:
+	return _youtube.meta({"tags": []}) if _youtube != null else {}
 
 
 ## The exporter's take provider: render the CURRENT text through the voice
@@ -2248,17 +2283,22 @@ func _load_persisted() -> void:
 ## time it was opened. What a document owns is the voice it is read IN: the lineage that
 ## names it, the traits that are it, the genome it carries and the reception it is heard at.
 func _doc_capture() -> Dictionary:
-	return {"synthesis": {
+	var out := {"synthesis": {
 		"lineage": _lineage.duplicate(),
 		"traits": _traits.duplicate(),
 		"genome": _working_genome.duplicate(),
 		"reception": _working_loc.duplicate(),
 	}}
+	if _youtube != null:
+		out["youtube"] = _youtube.capture()
+	return out
 
 
 ## ...and back, when a document that carries one is opened. A block with no lineage is a
 ## document that has never been given a voice, and leaves the water exactly as it was.
 func _doc_apply(blocks: Dictionary) -> void:
+	if _youtube != null and blocks.get("youtube") is Dictionary:
+		_youtube.apply(blocks["youtube"] as Dictionary)
 	var cfg: Dictionary = blocks["synthesis"] if blocks.get("synthesis") is Dictionary else {}
 	var lineage: Variant = cfg.get("lineage", null)
 	if not (lineage is Array) or (lineage as Array).is_empty():

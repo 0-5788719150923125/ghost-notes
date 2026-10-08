@@ -2,7 +2,7 @@ extends SceneTree
 
 ## youtube_check - the YouTube upload's pieces that hold without a network: the client file, the
 ## sign-in's parts, what a video says, the records, the tarot episode's upload notes and the
-## export menu's items.
+## YouTube card.
 ##
 ##   godot --headless --path . --script res://tests/youtube_check.gd
 ##
@@ -16,14 +16,19 @@ extends SceneTree
 ##   words.
 ## - WHAT A VIDEO SAYS: `<`/`>` made safe, the title one line of at most 100 characters cut at a
 ##   word, the description at most 5000 bytes, tags split as a document writes them, each once,
-##   counted as YouTube counts them and fitted to 500; unlisted, not for kids, synthetic, no paid
-##   promotion, People & Blogs.
+##   counted as YouTube counts them and fitted to 500; private unless asked otherwise (a privacy
+##   YouTube does not know is private), not for kids, synthetic, no paid promotion, People & Blogs.
 ## - RECORDS: an upload recorded and read back; a queued upload pending, owner-only; a missing file
 ##   refused.
 ## - THE TAROT EPISODE: its upload notes from the plan, with a chapter per card timed from a take's
 ##   word timings (an hour on, `h:mm:ss`), and `upload.md` with the show's tags first.
-## - THE EXPORT MENU: "Upload to YouTube" only when the mode describes something, unticked, "again"
-##   once uploaded; a resume while an upload waits on a file that exists; a sign-out while signed in.
+## - THE EXPORT MENU says nothing of YouTube (2026-10-07: the upload moved to a component's card).
+## - THE YOUTUBE CARD: a new one goes up nothing and privately, its block round-trips (an unknown
+##   privacy reads as private); unticked it describes no upload whatever the panel has, ticked it lays
+##   its title - the template's macros filled, nothing dangling, no name twice - privacy and playlist
+##   over the panel's part, and nothing when the panel has nothing; a sign-in that may only upload
+##   lacks the playlists' scope; a resume while an upload waits on a file that exists, not once it
+##   is gone; Sign in / Sign out and Import / Replace follow the files.
 ## - THE TAG FIELD (tag_field.gd, 2026-10-06, the user: "show all of the tags, with the ability to
 ##   click an 'x' to remove them on each one... comma-delimited splits the tags into the button with
 ##   the x"): a chip per tag, filled without a change signal; a comma, Enter or a paste of "a, b, c"
@@ -35,8 +40,9 @@ extends SceneTree
 ##   one value the picked episode overwrites (and an edit writes into its plan; an emptied one is
 ##   not); a show with none takes the picked episode's once; a NEW EPISODE shows them at once; the
 ##   byline on the document card right under Title (the user: "right under the title field"); the
-##   upload described from all that, with the title screen's thumbnail moment, for the episode an
-##   export rendered even after another is picked.
+##   upload described from all that - once the note has a YouTube card and its box is ticked -
+##   with the title screen's thumbnail moment, for the episode an export rendered even after another
+##   is picked. The description and tags are the YouTube card's; the title stays on the Episode card.
 ## - A REAL SHOW FILE: the tags and the byline land as top-level lines above ghost's block - the
 ##   chapter format - the block holds the show's title and description and no record per episode, the
 ##   rest of the file is untouched, and a panel opening it fills a new episode from it at once.
@@ -69,7 +75,7 @@ func _run() -> void:
 	_wipe(TAROT)
 	_wipe(ROOT + "_files")
 	for check in [_client, _import, _pkce, _auth_url, _query, _wire, _fit, _body, _records, _episode_notes, _menu,
-			_tag_field, _panel_fields, _doc_file]:
+			_card, _tag_field, _panel_fields, _doc_file]:
 		if not bool(check.call()):
 			_ok(false, "a check stopped part way (script error?)")
 	_wipe(ROOT)
@@ -272,8 +278,12 @@ func _body() -> bool:
 		"the snippet is fitted, the category People & Blogs")
 	_ok(b.get("paidProductPlacementDetails") == {"hasPaidProductPlacement": false},
 		"no paid promotion is declared, not left unanswered")
-	_ok(b["status"] == {"privacyStatus": "unlisted", "selfDeclaredMadeForKids": false, "containsSyntheticMedia": true},
-		"unlisted, not made for kids, disclosed as synthetic")
+	_ok(b["status"] == {"privacyStatus": "private", "selfDeclaredMadeForKids": false, "containsSyntheticMedia": true},
+		"private, not made for kids, disclosed as synthetic")
+	_ok(YouTube.video_body({"privacy": "public"})["status"]["privacyStatus"] == "public"
+		and YouTube.video_body({"privacy": "unlisted"})["status"]["privacyStatus"] == "unlisted"
+		and YouTube.video_body({"privacy": "everyone"})["status"]["privacyStatus"] == "private",
+		"the privacy asked for, and private for one YouTube does not know")
 	_ok(YouTube.video_body({}, "Episode 7")["snippet"]["title"] == "Episode 7"
 		and YouTube.video_body({})["snippet"]["title"] == "Untitled", "a video always has a title")
 	_ok(YouTube.video_body({"tags": ["a", "b"]})["snippet"]["tags"] == ["a", "b"], "tags as an Array too")
@@ -360,52 +370,84 @@ func _menu() -> bool:
 	var ex = load("res://src/exporter.gd").new()
 	ex._build_ui()            # not added to the tree: its _ready would clear a live render's override.cfg
 	var menu: PopupMenu = ex._quality_menu
-	ex.upload_provider = Callable()
-	ex._refresh_upload_items()
-	_ok(menu.get_item_index(ex.UPLOAD_ID) < 0, "no upload offered when the mode describes nothing")
-	ex.upload_provider = func(_take: String) -> Dictionary: return {}
-	ex._refresh_upload_items()
-	_ok(menu.get_item_index(ex.UPLOAD_ID) < 0, "nor when it describes nothing yet (no plan)")
-	var rec := ProjectSettings.globalize_path(ROOT + "_files/menu/youtube.json")
-	ex.upload_provider = func(_take: String) -> Dictionary: return {"title": "An <Episode>", "record": rec}
-	ex._refresh_upload_items()
-	var at: int = menu.get_item_index(ex.UPLOAD_ID)
-	_ok(at >= 0 and menu.is_item_checkable(at) and not menu.is_item_checked(at)
-		and menu.get_item_text(at) == "Upload to YouTube (unlisted)", "a mode with something to upload offers the box, unticked")
-	_ok(menu.get_item_tooltip(at).contains("An ‹Episode›") and menu.get_item_tooltip(at).contains("client file"),
-		"its tooltip names the video and, with no client yet, the file it will ask for")
-	ex._upload = true
-	ex._refresh_upload_items()
-	_ok(menu.is_item_checked(menu.get_item_index(ex.UPLOAD_ID)), "the box shows the choice it holds")
-	YouTube.record_upload(rec, {"id": "z", "url": "https://youtu.be/z", "privacy": "unlisted", "at": "2026-10-06T01:02:03"})
-	ex._refresh_upload_items()
-	at = menu.get_item_index(ex.UPLOAD_ID)
-	_ok(menu.get_item_text(at) == "Upload to YouTube again (unlisted)" and menu.get_item_tooltip(at).contains("https://youtu.be/z"),
-		"once uploaded, the box says so and where")
-	_ok(menu.get_item_index(ex.RESUME_ID) < 0 and menu.get_item_index(ex.SIGN_OUT_ID) < 0, "no resume or sign-out with nothing waiting")
-	_ok(menu.get_item_index(ex.CLIENT_ID) < 0, "no other client file offered before one is kept")
-	var video := _file("menu.mp4", "abc")
+	ex.upload_provider = func(_take: String) -> Dictionary: return {"title": "An Episode"}
+	ex._label_qualities()
+	var said: Array = []
+	for i in menu.item_count:
+		said.append(menu.get_item_text(i))
+	_ok(not said.any(func(t: String) -> bool: return t.contains("YouTube") or t.contains("Google")),
+		"the export menu says nothing of YouTube, whatever the mode describes (%s)" % str(said))
+	ex.free()
+	return true
+
+
+func _card() -> bool:
+	var ex = load("res://src/exporter.gd").new()
+	ex._build_ui()
+	var card = load("res://src/youtube_card.gd").new()
+	card.exporter = ex
+	var cap: Dictionary = card.capture()
+	_ok(cap == {"upload": false, "title": "%title%: %episode%", "privacy": "private", "playlist": "", "playlist_title": ""},
+		"a new card uploads nothing, privately, titled by the template (%s)" % str(cap))
+	card.values = func() -> Dictionary: return {"title": "Truthful Tarot", "episode": "The Tower"}
+	_ok(card.meta({"tags": ["a"]}).is_empty(), "unticked, it describes no upload whatever the panel has")
+	card.apply({"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted", "playlist": "PL1",
+		"playlist_title": "Readings"})
+	_ok(card.capture() == {"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted",
+		"playlist": "PL1", "playlist_title": "Readings"}, "its block round-trips (%s)" % str(card.capture()))
+	var m: Dictionary = card.meta({"tags": ["a"], "record": "r.json"})
+	_ok(m.get("title") == "Truthful Tarot - The Tower (%s)" % Time.get_date_string_from_system() and m.get("privacy") == "unlisted"
+		and m.get("playlist") == "PL1" and m.get("tags") == ["a"] and m.get("record") == "r.json",
+		"ticked, it lays its title, privacy and playlist over the panel's part (%s)" % str(m))
+	_ok(card.meta({}).is_empty(), "...and describes nothing when the panel has nothing")
+	_ok(card.meta({"values": {"title": "Show", "episode": "Rendered One"}}).get("title").begins_with("Show - Rendered One")
+		and not card.meta({"values": {"title": "S"}}).has("values"),
+		"the values a panel hands with its part (the episode an export rendered) win, and do not go up")
+	_ok(card._playlist.get_item_text(card._playlist.selected) == "Readings", "the block's playlist is shown before the list is loaded")
+	card.apply({"privacy": "everyone"})
+	_ok(card.capture()["privacy"] == "private", "a privacy YouTube does not know reads as private")
+	# the title's macros
+	var v := {"title": "Truthful Tarot", "episode": "The Tower"}
+	_ok(YouTube.expand_title("%title%: %episode%", v) == "Truthful Tarot: The Tower", "the default template")
+	_ok(YouTube.expand_title("%title%: %episode%", {"title": "A Note"}) == "A Note", "no episode leaves nothing dangling")
+	_ok(YouTube.expand_title("%title%: %episode%", {"episode": "Bare"}) == "Bare", "no title neither")
+	_ok(YouTube.expand_title("%title%: %episode%", {"title": "Truthful Tarot", "episode": "truthful tarot: Named"})
+		== "truthful tarot: Named", "a name is never said twice")
+	_ok(YouTube.expand_title("%title% - %episode% - %date%", {"title": "T", "date": "D"}) == "T - D",
+		"a gap in the middle closes up (%s)" % YouTube.expand_title("%title% - %episode% - %date%", {"title": "T", "date": "D"}))
+	_ok(YouTube.expand_title("%title% #%seed% %what%", {"title": "T", "seed": "7"}) == "T #7 %what%", "an unknown macro is left as written")
+	# the scopes and the account rows
+	YouTube.forget_client()
+	card._refresh_account()
+	_ok(card._client.text == "Import client…" and not card._sign.visible, "with no client, it offers to import one")
+	YouTube.import_client(_file("card_client.json", _client_json()))
+	card._seen = []
+	card._refresh_account()
+	_ok(card._client.text == "Replace client…" and card._sign.visible and card._sign.text == "Sign in", "a kept client, no sign-in")
+	YouTube._write(YouTube._path("token.json"), JSON.stringify({"refresh_token": "rt"}), true)
+	_ok(YouTube.granted(YouTube.SCOPE) and not YouTube.granted(YouTube.PLAYLIST_SCOPE),
+		"a sign-in kept before scopes were written down may upload, and only that")
+	card._seen = []
+	card._refresh_account()
+	_ok(card._sign.text == "Sign out" and card._account.text.contains("uploads only"), "signed in, it says what the sign-in may do")
+	YouTube._write(YouTube._path("token.json"), JSON.stringify({"refresh_token": "rt",
+		"scope": YouTube.SCOPE + " " + YouTube.PLAYLIST_SCOPE}), true)
+	_ok(YouTube.granted(YouTube.PLAYLIST_SCOPE) and YouTube.missing_scopes([YouTube.SCOPE, YouTube.PLAYLIST_SCOPE]).is_empty(),
+		"one granted both may see playlists")
+	_ok(ex.scopes_for({"playlist": "PL1"}) == [YouTube.SCOPE, YouTube.PLAYLIST_SCOPE] and ex.scopes_for({}) == [YouTube.SCOPE],
+		"an upload joining a playlist asks for the playlists' scope, one without asks for uploads alone")
+	var video := _file("card.mp4", "abc")
 	YouTube.queue(video, {}, "")
-	ex._refresh_upload_items()
-	at = menu.get_item_index(ex.RESUME_ID)
-	_ok(at >= 0 and menu.get_item_text(at).ends_with("menu.mp4"), "a waiting upload can be resumed")
+	card._seen = []
+	card._refresh_account()
+	_ok(card._resume.visible and card._resume.text.ends_with("card.mp4"), "a waiting upload can be resumed")
 	DirAccess.remove_absolute(video)
-	ex._refresh_upload_items()
-	_ok(menu.get_item_index(ex.RESUME_ID) < 0, "not once its file is gone")
+	card._seen = []
+	card._refresh_account()
+	_ok(not card._resume.visible, "not once its file is gone")
 	YouTube.forget_pending()
-	YouTube._write(YouTube._path("token.json"), JSON.stringify({"refresh_token": "rt"}), true)
-	ex._refresh_upload_items()
-	_ok(menu.get_item_index(ex.SIGN_OUT_ID) >= 0, "a kept sign-in can be signed out of")
-	_ok(menu.get_item_tooltip(menu.get_item_index(ex.UPLOAD_ID)).contains("client file"),
-		"with no client the tooltip still asks for one first")
-	YouTube.import_client(_file("menu_client.json", _client_json()))
-	YouTube._write(YouTube._path("token.json"), JSON.stringify({"refresh_token": "rt"}), true)
-	ex._upload = false
-	ex._refresh_upload_items()
-	ex._toggle_upload()
-	_ok(ex._upload and menu.is_item_checked(menu.get_item_index(ex.UPLOAD_ID)), "with a client kept, the box simply ticks")
-	_ok(menu.get_item_tooltip(menu.get_item_index(ex.UPLOAD_ID)).contains("signed in"), "and says it is signed in")
-	_ok(menu.get_item_index(ex.CLIENT_ID) >= 0, "a kept client can be replaced from the menu")
+	YouTube.forget_client()
+	card.free()
 	ex.free()
 	return true
 
@@ -415,6 +457,23 @@ func _panel_fields() -> bool:
 	# loaded here, not named: the panel's scripts need the autoloads, which are only up by now
 	var ed = load("res://src/cards_editor.gd").new()
 	ed._build_panel()
+	_ok(ed._youtube == null and ed._yt_desc == null and ed.upload_meta("").is_empty(),
+		"a show with no YouTube card has no description or tags to edit, and uploads nothing")
+	ed._panel.plus.about_to_popup.emit()
+	var pop: PopupMenu = ed._panel.plus.get_popup()
+	var at := -1
+	for i in pop.item_count:
+		if String(pop.get_item_metadata(i)) == "youtube":
+			at = i
+	_ok(at >= 0 and pop.item_count == 1, "its \"+\" offers YouTube, and only that (%d items)" % pop.item_count)
+	if at >= 0:
+		pop.id_pressed.emit(pop.get_item_id(at))
+	_ok(ed._youtube != null and ed._yt_desc != null and ed._yt_desc.get_parent() == ed._youtube.extra,
+		"attached, the YouTube card holds the show's description and tags")
+	ed._panel.plus.about_to_popup.emit()
+	_ok(pop.item_count == 1 and pop.is_item_disabled(0) and String(pop.get_item_metadata(0)).is_empty(),
+		"and \"+\" does not offer it twice - it says nothing else can be attached")
+	ed._youtube._upload.set_pressed_no_signal(true)
 	# NOT THE AUTHOR'S SHOW. A panel comes up synced to whatever document the person running
 	# this has open, and DocSource.set_field writes a synced document at once - so this gate read
 	# the author's real show (and failed on its tags) and could have written into it.
@@ -465,7 +524,7 @@ func _panel_fields() -> bool:
 	_ok(ed.upload_meta("").get("title") == "Truthful Tarot: My Own Title" and ed.export_name() == "My Own Title",
 		"the upload's title is the show's name, then the episode's - the file keeps the episode's alone")
 	ed._refresh_upload_note()
-	_ok(ed._yt_note.text.begins_with("Goes up as \"Truthful Tarot: My Own Title\""), "the note shows the title as it goes up")
+	_ok(ed._youtube._preview.text.begins_with("Goes up as \"Truthful Tarot: My Own Title\""), "the card shows the title as it goes up")
 	_ok(ed.upload_title("Truthful Tarot", "truthful tarot: Already Named") == "truthful tarot: Already Named"
 		and ed.upload_title("", "Bare") == "Bare" and ed.upload_title("Show", "") == "Show",
 		"no name twice, none when the show has no title, the name alone when the episode has none")
@@ -567,6 +626,7 @@ func _tag_field() -> bool:
 func _doc_file() -> bool:
 	var ed = load("res://src/cards_editor.gd").new()
 	ed._build_panel()
+	ed._attach("youtube")
 	var ep := CardEpisode.open("doc-check", 31)
 	ep.write_json("plan", {"episode_title": "Episode Thirty-One", "description": "First paragraph.\n\nSecond: with a colon.",
 		"tags": ["tarot", "pick a card"], "spread": {"positions": [{"name": "Past"}]}})
@@ -589,11 +649,15 @@ func _doc_file() -> bool:
 	var show: Dictionary = (data as Dictionary).get("cards", {}) if data is Dictionary else {}
 	_ok(show.get("episode_title") == "Episode Thirty-One" and show.get("description") == "First paragraph.\n\nSecond: with a colon."
 		and not show.has("youtube"), "the block holds the show's title and description, whole, and no record per episode")
+	var yt: Variant = (data as Dictionary).get("youtube") if data is Dictionary else null
+	_ok(yt is Dictionary and (yt as Dictionary).get("privacy") == "private" and (yt as Dictionary).get("upload") == false,
+		"the YouTube card's block is the file's too, beside the show's (%s)" % str(yt))
 	_ok(raw.ends_with("---\n" + body), "the body is untouched")
 	ed.free()
 	# ANOTHER PANEL OPENS THE FILE, AND MAKES A NEW EPISODE: filled from the file at once
 	var again = load("res://src/cards_editor.gd").new()
 	again._build_panel()
+	again._attach("youtube")
 	again._doc._on_picked(path)
 	again._knobs["seed"] = 99
 	again._open_episode()

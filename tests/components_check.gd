@@ -17,7 +17,8 @@ extends SceneTree
 ## a launch reads - never a seam) grays the Cards component and its tooltip says why; asked as
 ## Android, the menu offers nothing but what is possible there; a component already attached is
 ## not offered again. AND WHAT A NOTE CANNOT USE YET: a Look on a note with no picture is grayed and
-## says to attach a Picture first (two-sided: with a song and a Picture it is lit).
+## says to attach a Picture first (two-sided: with a song and a Picture it is lit); so is YouTube,
+## which needs a picture and a sound to make a video of - lit on a reading, never offered twice.
 ##
 ## A NOTE'S COMPONENTS ARE READ OFF ITS BLOCKS, and a new note from a template has the template's
 ## (an Auto note: its text, its song, a Picture in the Auto medium). A note with only a song is not
@@ -65,7 +66,7 @@ func _registry() -> void:
 			_ok(not blocks.has(b), "%s: its block '%s' is its own (also %s)" % [k, b, blocks.get(b, "-")])
 			blocks[b] = k
 	# the blocks the panels keep are the components' blocks
-	for b in ["voice", "picture", "illustrations", "look", "bookends", "cards", "synthesis", "song", "clip", "scenes"]:
+	for b in ["voice", "picture", "illustrations", "look", "bookends", "cards", "synthesis", "song", "clip", "scenes", "youtube"]:
 		_ok(blocks.has(b), "the document block '%s' belongs to a component" % b)
 	var gives := {"song": "audio", "reading": "reading", "clip": "picture"}
 	for t in Components.TEMPLATES:
@@ -152,6 +153,19 @@ func _menu() -> void:
 	look = _item(menu, "look")
 	_ok(look >= 0 and not menu.is_item_disabled(look), "...and lit once the note has a song and a Picture")
 	_ok(_item(menu, "picture") < 0, "a Picture already attached is not offered again")
+	var yt := _item(menu, "youtube")
+	_ok(yt >= 0 and not menu.is_item_disabled(yt), "YouTube is lit on a song with a Picture")
+	Components.attach_menu(menu, ["text", "song"], ["youtube"])
+	yt = _item(menu, "youtube")
+	_ok(yt >= 0 and menu.is_item_disabled(yt) and menu.get_item_tooltip(yt).contains("Picture"),
+		"...and grayed on a song with none, saying to attach a Picture (%s)" % (menu.get_item_tooltip(yt).get_slice("\n\n", 1) if yt >= 0 else ""))
+	Components.attach_menu(menu, Components.TEMPLATES["generative"]["components"], ["youtube"])
+	yt = _item(menu, "youtube")
+	_ok(yt >= 0 and not menu.is_item_disabled(yt) and menu.item_count == 1, "a reading's \"+\" offers YouTube alone, lit")
+	var with_yt: Array = Components.attached_of({"voice": {}, "youtube": {}})
+	Components.attach_menu(menu, with_yt, ["youtube"])
+	_ok(with_yt.has("youtube") and _item(menu, "youtube") < 0, "a note with a youtube block has it, and is not offered it again")
+	_ok(Components.attach_blocks("youtube") == {"youtube": {}}, "attaching YouTube writes its block")
 	Components.attach_menu(menu, ["text", "song"])
 	var board := _item(menu, "storyboard")
 	_ok(board >= 0 and menu.is_item_disabled(board), "storyboards need a Picture too")

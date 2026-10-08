@@ -24,7 +24,7 @@ class_name Components
 ## (Scratch's categories, Blender's sockets, TouchDesigner's operator families), because hues run out
 ## near eight. The order is the order cards stand in on a panel - read top to bottom, it says what
 ## happens to the note: the text, what produces a reading, the voice, sound, pictures, the
-## presentation, the Look last.
+## presentation, the Look, and where the finished video goes.
 const FAMILIES := {
 	&"paper": {"label": "Text", "hue": -1.0},
 	&"producer": {"label": "Producer", "hue": 275.0},
@@ -33,6 +33,7 @@ const FAMILIES := {
 	&"picture": {"label": "Picture", "hue": 32.0},
 	&"medium": {"label": "Presentation", "hue": 128.0},
 	&"look": {"label": "Look", "hue": 322.0},
+	&"publish": {"label": "Publish", "hue": 2.0},
 }
 
 const REGISTRY := {
@@ -90,6 +91,12 @@ const REGISTRY := {
 		"blurb": "Chroma-key effects over a clip: markers, tracks and renders.",
 		"needs": ["picture"], "provides": [], "requires": ["clip"],
 		"capabilities": ["forward_plus", "subprocess", "ffmpeg"], "marks": [], "block": "", "card": ""},
+	# AN EXPORT'S DESTINATION (2026-10-07): it needs what a video is made of, and the exporter that
+	# makes one - Masking's own export is a relaunch of its editor, so its panel offers no "+".
+	"youtube": {"label": "YouTube", "family": &"publish",
+		"blurb": "Uploads the exported video to your YouTube channel: its title, who may see it and the playlist it joins.",
+		"needs": ["picture", "audio"], "provides": [], "requires": [],
+		"capabilities": ["movie_export", "subprocess", "ffmpeg"], "marks": [], "block": "youtube", "card": "youtube"},
 }
 
 ## TODAY'S MODES, AS TEMPLATES: each a set of components and the session that runs them (`song`, a
@@ -201,6 +208,9 @@ static func attach_blocks(key: String) -> Dictionary:
 			return {"look": {}}
 		"bookends":
 			return {"bookends": {}}
+		# its card fills its defaults (nothing goes up until "Upload after export" is ticked)
+		"youtube":
+			return {"youtube": {}}
 	return {}
 
 

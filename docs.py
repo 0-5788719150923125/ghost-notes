@@ -327,7 +327,7 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
         "Rendering a session to video (bake + Movie Maker, background "
         "processes), uploading it to YouTube, and recording the README's "
         "animation from the real app.",
-        ["exporter.gd", "youtube.gd", "showcase.gd", "showcase_recorder.gd"],
+        ["exporter.gd", "youtube.gd", "youtube_card.gd", "showcase.gd", "showcase_recorder.gd"],
     ),
     (
         "Feedback & assistant",

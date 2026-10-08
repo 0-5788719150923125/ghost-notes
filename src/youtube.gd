@@ -9,9 +9,12 @@ extends Node
 ## SIGNING IN is Google's flow for installed apps ([method sign_in]): the system browser opens
 ## Google's consent page, Google sends the browser back to a one-shot listener on 127.0.0.1 (a port
 ## the system picks) with a code, and the code is traded for tokens together with its PKCE verifier.
-## Only the upload scope is asked for. The refresh token is kept beside the client, owner
-## read/write only, so later uploads need no browser until it lapses - after 7 days while the Cloud
-## project's consent screen is in "Testing".
+## Only the upload scope is asked for, until a note's YouTube card wants a playlist: listing the
+## channel's playlists and adding a video to one take the wider [constant PLAYLIST_SCOPE], asked
+## for by a sign-in of its own at that moment and never before ([method granted]). The refresh
+## token is kept beside the client, owner read/write only, with the scopes Google granted, so later
+## uploads need no browser until it lapses - after 7 days while the Cloud project's consent screen
+## is in "Testing".
 ##
 ## AN UPLOAD IS RESUMABLE ([method resume], Google's protocol): a session is opened with the video's
 ## metadata, the file goes up in chunks, a chunk that fails asks YouTube how much arrived and carries
@@ -19,17 +22,25 @@ extends Node
 ## `pending.json` from the moment it is queued ([method queue]) until the video is up, so one cut
 ## off by a quit or a dropped connection is resumed rather than repeated.
 ##
-## It knows nothing of any mode: a mode says what its video is called and what it says (see
+## It knows nothing of any mode: a note's YouTube card ([YouTubeCard]) and its panel say what the
+## video is called, what it says, who may see it and the playlist it joins (see
 ## [member Exporter.upload_provider]), and [method video_body] turns that into the request. Loaded
 ## by path (no class_name), so a launch from a terminal never waits on the editor's class cache.
 
 const SCOPE := "https://www.googleapis.com/auth/youtube.upload"
+## What a playlist needs on top: `playlists.list` (mine) and `playlistItems.insert` take nothing
+## narrower than managing the account.
+const PLAYLIST_SCOPE := "https://www.googleapis.com/auth/youtube"
 const ROOT := "user://youtube"
-## Every upload is unlisted, says it is not made for kids, declares itself altered or synthetic
-## content (the voice is synthesized, and a mode's pictures may be painted by a model), and declares
-## NO PAID PROMOTION - left unsaid, YouTube Studio showed the question unanswered (2026-10-06). The
-## category is People & Blogs.
-const PRIVACY := "unlisted"
+## Every upload goes up private unless the note's card says otherwise, says it is not made for kids,
+## declares itself altered or synthetic content (the voice is synthesized, and a mode's pictures may
+## be painted by a model), and declares NO PAID PROMOTION - left unsaid, YouTube Studio showed the
+## question unanswered (2026-10-06). The category is People & Blogs.
+const PRIVACY := "private"
+## Who may see an upload, in the order the card offers them: YouTube's own words, and ours.
+const PRIVACIES := {"private": "Private", "unlisted": "Unlisted", "public": "Public"}
+## THE TITLE A NEW YOUTUBE CARD STARTS WITH: macros the panel fills ([method expand_title]).
+const TITLE_TEMPLATE := "%title%: %episode%"
 const CATEGORY := "22"
 const PAID_PROMOTION := false
 ## YouTube's limits: the title in characters, the description in bytes of UTF-8, and the tags in
@@ -55,6 +66,8 @@ static var root := ROOT
 static var upload_url := "https://www.googleapis.com/upload/youtube/v3/videos"
 static var revoke_url := "https://oauth2.googleapis.com/revoke"
 static var thumbnail_url := "https://www.googleapis.com/upload/youtube/v3/thumbnails/set"
+static var playlists_url := "https://www.googleapis.com/youtube/v3/playlists"
+static var playlist_items_url := "https://www.googleapis.com/youtube/v3/playlistItems"
 static var chunk := CHUNK
 ## Seconds per step of the wait between failures; a gate shortens it.
 static var backoff_unit := 1.0
@@ -163,6 +176,22 @@ static func forget_token() -> void:
 	DirAccess.remove_absolute(_path("token.json"))
 
 
+## WHETHER THE KEPT SIGN-IN MAY DO [param scope]: Google says which scopes it granted with every
+## token, and they are kept with it. A sign-in kept before that was written down asked for the
+## upload scope alone, so that is all it has.
+static func granted(scope: String) -> bool:
+	if not signed_in():
+		return false
+	var t := _token()
+	var have := str(t.get("scope", SCOPE)).split(" ", false)
+	return have.has(scope)
+
+
+## [param scopes] that the kept sign-in lacks.
+static func missing_scopes(scopes: Array) -> Array:
+	return scopes.filter(func(s: String) -> bool: return not granted(s))
+
+
 static func _token() -> Dictionary:
 	return _read_json(_path("token.json"))
 
@@ -185,11 +214,13 @@ static func base64url(bytes: PackedByteArray) -> String:
 	return Marshalls.raw_to_base64(bytes).replace("+", "-").replace("/", "_").replace("=", "")
 
 
-## Google's consent page for client [param c], answered at [param redirect]. Offline access with the
-## consent screen always shown, because only that returns a refresh token every time.
-static func auth_url(c: Dictionary, redirect: String, code_challenge: String, state: String) -> String:
+## Google's consent page for client [param c], answered at [param redirect], asking for
+## [param scopes]. Offline access with the consent screen always shown, because only that returns a
+## refresh token every time.
+static func auth_url(c: Dictionary, redirect: String, code_challenge: String, state: String,
+		scopes: Array = [SCOPE]) -> String:
 	return String(c["auth_uri"]) + "?" + form({"client_id": c["client_id"], "redirect_uri": redirect,
-		"response_type": "code", "scope": SCOPE, "code_challenge": code_challenge,
+		"response_type": "code", "scope": " ".join(PackedStringArray(scopes)), "code_challenge": code_challenge,
 		"code_challenge_method": "S256", "state": state, "access_type": "offline", "prompt": "consent"})
 
 
@@ -214,14 +245,15 @@ static func query_of(path: String) -> Dictionary:
 	return out
 
 
-## Sign in through the browser and keep the tokens: "" once signed in, else why not. The browser is
-## waited for up to [constant SIGN_IN_TIMEOUT]; [method stop_sign_in] ends the wait.
+## Sign in through the browser, asking for [param scopes] (the upload's alone unless a playlist is
+## wanted), and keep the tokens: "" once signed in, else why not. The browser is waited for up to
+## [constant SIGN_IN_TIMEOUT]; [method stop_sign_in] ends the wait.
 ##
 ## A NEWER SIGN-IN REPLACES ONE STILL WAITING. Google's "Access blocked" page (an account that is
 ## not one of a Testing project's test users) is a dead end that never comes back here, and a page
 ## can open behind another window - refusing a second attempt left nothing to do but wait out the
 ## first one.
-func sign_in() -> String:
+func sign_in(scopes: Array = [SCOPE]) -> String:
 	var c := client()
 	if c.has("error"):
 		return String(c["error"])
@@ -235,7 +267,7 @@ func sign_in() -> String:
 	var redirect := "http://127.0.0.1:%d" % tcp.get_local_port()
 	var v := verifier()
 	var state := Crypto.new().generate_random_bytes(16).hex_encode()
-	sign_in_url = auth_url(c, redirect, challenge(v), state)
+	sign_in_url = auth_url(c, redirect, challenge(v), state, scopes)
 	phase = "signing_in"
 	reopen_sign_in()
 	print("ghost: YouTube - signing in through the browser (Google answers on %s)" % redirect)
@@ -260,8 +292,10 @@ func sign_in() -> String:
 	var tok: Dictionary = j
 	if str(tok.get("refresh_token", "")).is_empty():
 		return "Google signed in without a refresh token - sign in again"
+	# what Google granted, which may be less than was asked: the consent page lets a scope be unticked
 	var err := _write(_path("token.json"), JSON.stringify({"refresh_token": tok["refresh_token"],
 		"access_token": str(tok.get("access_token", "")),
+		"scope": str(tok.get("scope", " ".join(PackedStringArray(scopes)))),
 		"expires_at": _now() + float(tok.get("expires_in", 0)) - 60.0}, "\t"), true)
 	if err.is_empty():
 		print("ghost: YouTube - signed in")
@@ -397,6 +431,8 @@ func access_token() -> Dictionary:
 	t["expires_at"] = _now() + float(j.get("expires_in", 3600)) - 60.0
 	if not str(j.get("refresh_token", "")).is_empty():
 		t["refresh_token"] = str(j["refresh_token"])
+	if not str(j.get("scope", "")).is_empty():
+		t["scope"] = str(j["scope"])
 	_write(_path("token.json"), JSON.stringify(t, "\t"), true)
 	return {"token": str(t["access_token"])}
 
@@ -438,15 +474,16 @@ static func forget_pending() -> void:
 
 
 ## Queue [param file] to go up as [param body] (see [method video_body]), its result recorded in
-## [param record] and [param thumbnail] (an image) set as its thumbnail, when those are given: the
-## pending upload, or `{error}`. Queued before anything is sent, so an upload stopped at any point -
-## even before the sign-in - waits to be resumed.
-static func queue(file: String, body: Dictionary, record := "", thumbnail := "") -> Dictionary:
+## [param record], [param thumbnail] (an image) set as its thumbnail and the video added to the
+## playlist [param playlist], when those are given: the pending upload, or `{error}`. Queued before
+## anything is sent, so an upload stopped at any point - even before the sign-in - waits to be
+## resumed.
+static func queue(file: String, body: Dictionary, record := "", thumbnail := "", playlist := "") -> Dictionary:
 	var size := _size_of(file)
 	if size <= 0:
 		return {"error": "the video file is missing or empty"}
 	var p := {"file": file, "size": size, "body": body, "record": record, "thumbnail": thumbnail,
-		"session": "", "at": _now()}
+		"playlist": playlist, "session": "", "at": _now()}
 	var err := _write(_path("pending.json"), JSON.stringify(p, "\t"), true)
 	return {"error": err} if not err.is_empty() else p
 
@@ -630,8 +667,9 @@ func _status(session: String, size: int) -> Dictionary:
 	return {"error": error_text(code, r["body"])}
 
 
-## The upload is done: forget it, set its thumbnail, record it, and say what YouTube made of it -
-## `thumbnail_error` saying why a thumbnail was not set (the video is up either way).
+## The upload is done: forget it, set its thumbnail, add it to its playlist, record it, and say what
+## YouTube made of it - `thumbnail_error` and `playlist_error` saying why a thumbnail was not set or
+## the playlist not joined (the video is up either way).
 func _finish(p: Dictionary, video: Variant) -> Dictionary:
 	forget_pending()
 	var v: Dictionary = video if video is Dictionary else {}
@@ -647,6 +685,10 @@ func _finish(p: Dictionary, video: Variant) -> Dictionary:
 	if not thumb.is_empty():
 		out["thumbnail_error"] = await set_thumbnail(id, thumb)
 		out["thumbnail"] = String(out["thumbnail_error"]).is_empty()
+	var list := str(p.get("playlist", ""))
+	if not list.is_empty():
+		out["playlist_error"] = await add_to_playlist(id, list)
+		out["playlist"] = list if String(out["playlist_error"]).is_empty() else ""
 	var rec := str(p.get("record", ""))
 	if not rec.is_empty():
 		var err := record_upload(rec, out)
@@ -688,6 +730,76 @@ func set_thumbnail(video_id: String, path: String) -> String:
 	return "YouTube refused the sign-in"
 
 
+## THE CHANNEL'S PLAYLISTS, every page of them: `{playlists: [{id, title, privacy, count}]}` in
+## YouTube's order, or `{error}` - with `scope` when the kept sign-in may not list them (sign in
+## again with [constant PLAYLIST_SCOPE]) and `signed_out` when there is no sign-in at all.
+func playlists() -> Dictionary:
+	if not granted(PLAYLIST_SCOPE):
+		return {"error": "the YouTube sign-in may upload but not see playlists", "scope": true,
+			"signed_out": not signed_in()}
+	var out: Array = []
+	var page := ""
+	for attempt in 40:              # 50 a page: two thousand playlists is past any channel's
+		var tok: Dictionary = await access_token()
+		if tok.has("error"):
+			return tok
+		var url := playlists_url + "?" + form({"part": "snippet,status,contentDetails", "mine": "true",
+			"maxResults": 50}) + (("&pageToken=" + page.uri_encode()) if not page.is_empty() else "")
+		var r: Dictionary = await _send(url, PackedStringArray(["Authorization: Bearer " + str(tok["token"])]),
+			HTTPClient.METHOD_GET, PackedByteArray(), 30.0)
+		if r.has("error"):
+			return {"error": "YouTube could not be reached (%s)" % r["error"]}
+		var code := int(r["code"])
+		if code == 401:
+			_expire()
+			continue
+		if code == 403 and error_text(code, r["body"]).contains("insufficient"):
+			return {"error": "the YouTube sign-in may upload but not see playlists", "scope": true}
+		var j: Variant = r.get("json")
+		if code != 200 or not (j is Dictionary):
+			return {"error": error_text(code, r["body"])}
+		for item in (j as Dictionary).get("items", []):
+			if not (item is Dictionary):
+				continue
+			var it: Dictionary = item
+			var snip: Dictionary = it.get("snippet", {}) if it.get("snippet") is Dictionary else {}
+			var stat: Dictionary = it.get("status", {}) if it.get("status") is Dictionary else {}
+			var det: Dictionary = it.get("contentDetails", {}) if it.get("contentDetails") is Dictionary else {}
+			out.append({"id": str(it.get("id", "")), "title": str(snip.get("title", "")),
+				"privacy": str(stat.get("privacyStatus", "")), "count": int(det.get("itemCount", 0))})
+		page = str((j as Dictionary).get("nextPageToken", ""))
+		if page.is_empty():
+			return {"playlists": out}
+	return {"playlists": out}
+
+
+## Add video [param video_id] to the end of playlist [param playlist_id]: "" when it is there, else
+## why not.
+func add_to_playlist(video_id: String, playlist_id: String) -> String:
+	if not granted(PLAYLIST_SCOPE):
+		return "the YouTube sign-in may upload but not add to playlists - sign in again from the YouTube card"
+	var body := JSON.stringify({"snippet": {"playlistId": playlist_id,
+		"resourceId": {"kind": "youtube#video", "videoId": video_id}}}).to_utf8_buffer()
+	for attempt in 2:
+		var tok: Dictionary = await access_token()
+		if tok.has("error"):
+			return str(tok["error"])
+		var r: Dictionary = await _send(playlist_items_url + "?part=snippet", PackedStringArray([
+			"Authorization: Bearer " + str(tok["token"]), "Content-Type: application/json; charset=UTF-8"]),
+			HTTPClient.METHOD_POST, body, 60.0)
+		if r.has("error"):
+			return "YouTube could not be reached (%s)" % r["error"]
+		var code := int(r["code"])
+		if code == 401 and attempt == 0:
+			_expire()
+			continue
+		if code == 200:
+			print("ghost: YouTube - %s added to playlist %s" % [video_id, playlist_id])
+			return ""
+		return error_text(code, r["body"])
+	return "YouTube refused the sign-in"
+
+
 ## The uploads recorded in [param path] - a mode's record file - oldest first:
 ## `[{id, url, privacy, title, channel, file, at}]`.
 static func uploads_in(path: String) -> Array:
@@ -703,21 +815,51 @@ static func record_upload(path: String, entry: Dictionary) -> String:
 
 # --- what the video says -------------------------------------------------------------------------
 
-## The upload's `video` resource from a mode's `{title, description, tags}`: fitted to YouTube's
-## limits, with the constants above. [param fallback] is the title when the mode gives none.
+## The upload's `video` resource from a mode's `{title, description, tags, privacy}`: fitted to
+## YouTube's limits, with the constants above (a privacy YouTube does not know is [constant PRIVACY]).
+## [param fallback] is the title when the mode gives none.
 static func video_body(meta: Dictionary, fallback := "") -> Dictionary:
 	var title := fit_title(str(meta.get("title", "")))
 	if title.is_empty():
 		title = fit_title(fallback)
 	var raw: Variant = meta.get("tags", [])
 	var tags: Array = Array(raw) if raw is Array or raw is PackedStringArray else []
+	var privacy := str(meta.get("privacy", PRIVACY))
 	return {
 		"snippet": {"title": title if not title.is_empty() else "Untitled",
 			"description": fit_description(str(meta.get("description", ""))),
 			"tags": Array(fit_tags(tags)), "categoryId": CATEGORY},
-		"status": {"privacyStatus": PRIVACY, "selfDeclaredMadeForKids": false, "containsSyntheticMedia": true},
+		"status": {"privacyStatus": privacy if PRIVACIES.has(privacy) else PRIVACY,
+			"selfDeclaredMadeForKids": false, "containsSyntheticMedia": true},
 		"paidProductPlacementDetails": {"hasPaidProductPlacement": PAID_PROMOTION},
 	}
+
+
+## THE TITLE FROM ITS TEMPLATE: each `%name%` in [param template] replaced by [param values]'
+## `name` - `%title%` the note's (a show's) title, `%episode%` the episode's, `%seed%` its seed,
+## `%date%` today's - and an unknown one left as written. What a missing value leaves dangling (": " at either end, a
+## doubled space) goes, so "%title%: %episode%" on a note with no episode is the title alone. NO
+## NAME TWICE: an episode whose title already begins with the show's ("Truthful Tarot: ...") stands
+## for both (the user, 2026-10-06).
+static func expand_title(template: String, values: Dictionary) -> String:
+	var v := {"title": "", "episode": "", "seed": "", "date": Time.get_date_string_from_system()}
+	v.merge(values, true)
+	var name := str(v.get("title", "")).strip_edges()
+	var ep := str(v.get("episode", "")).strip_edges()
+	if not name.is_empty() and ep.to_lower().begins_with(name.to_lower()) and template.contains("%episode%"):
+		v["title"] = ""
+	var out := template
+	for k in v:
+		out = out.replace("%" + str(k) + "%", str(v[k]).strip_edges())
+	# a separator left between two (a gap where a value was) stands once
+	out = RegEx.create_from_string("([:|·–-])(\\s*[:|·–-])+").sub(out, "$1", true)
+	out = " ".join(out.split(" ", false))
+	var trim := " :-|·–,/"
+	while not out.is_empty() and trim.contains(out[0]):
+		out = out.substr(1)
+	while not out.is_empty() and trim.contains(out[out.length() - 1]):
+		out = out.left(-1)
+	return out.strip_edges()
 
 
 ## [param text] as YouTube takes it: `<` and `>` (which it refuses) become `‹` and `›`, and control

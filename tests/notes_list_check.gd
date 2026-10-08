@@ -282,15 +282,15 @@ func _check_round_trip() -> void:
 	_ok(panel != null and is_instance_valid(panel), "New -> Note opens a plain note")
 	if panel != null:
 		var plain: String = panel.path
-		var menu: PopupMenu = panel._plus.get_popup()
-		Components.attach_menu(menu, ["text"], NotePanel.DECIDES)
+		var menu: PopupMenu = panel._panel.plus.get_popup()
+		panel._panel.plus.about_to_popup.emit()
 		var voice := -1
 		for i in menu.item_count:
 			if String(menu.get_item_metadata(i)) == "voice":
 				voice = i
 		_ok(voice >= 0, "its \"+\" offers a Voice")
 		if voice >= 0:
-			panel._attach(menu.get_item_id(voice))
+			menu.id_pressed.emit(menu.get_item_id(voice))
 			await _frames(20)
 			_ok(NoteStore.blocks_of(plain).get("voice") is Dictionary, "attaching wrote the voice block into the note")
 			_ok(_main._generative != null and is_instance_valid(_main._generative) and _main._note == plain,

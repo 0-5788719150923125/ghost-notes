@@ -11,7 +11,7 @@ THE STAGE IS A CAPABILITY: anything shown on it asks for `forward_plus`, the des
 
 Static and free of autoload names, like `Capabilities`, so a gate can read it under `--script`.
 
-Registries: `Components.REGISTRY` and `Components.TEMPLATES` in [src/components.gd](../src/components.gd) (13 components, 7 templates).
+Registries: `Components.REGISTRY` and `Components.TEMPLATES` in [src/components.gd](../src/components.gd) (14 components, 7 templates).
 
 ## Templates
 
@@ -72,6 +72,11 @@ By family - the color a component's card, chip and marks are drawn in.
   - needs picture; asks for `forward_plus`; kept in `look:`
 - **Masks** (`masks`) - Chroma-key effects over a clip: markers, tracks and renders.
   - needs picture; brings Clip; asks for `forward_plus`, `subprocess`, `ffmpeg`
+
+### Publish
+
+- **YouTube** (`youtube`) - Uploads the exported video to your YouTube channel: its title, who may see it and the playlist it joins.
+  - needs picture, audio; asks for `movie_export`, `subprocess`, `ffmpeg`; kept in `youtube:`
 
 ## Capabilities
 

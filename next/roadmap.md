@@ -31,14 +31,17 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **Light crossing terrain**
       A moving light sweeping a landscape and casting traveling shadows - true occlusion under `Lens3D`.
 
-- [ ] **YouTube uploads from every template**
-      Only Tarot describes its exports for an upload (`upload_meta`); a reading or a song could describe itself the same way.
+- [ ] **A new playlist from the YouTube card**
+      The card picks one of the channel's playlists; making one there (`playlists.insert`, 50 units of quota) is not built.
 
 - [ ] **The tablet on ReadingFollower**
       The tablet carries its own copy of the reading follower the tarot table shares; port it, gated by tablet_check and tablet_camera_check.
 
 - [ ] **One renderer**
       Move the remaining 2D scenes onto `Scene3D` and drive every scene through one modulation surface, so any scene renders under one set of camera and light controls.
+
+- [ ] **A description and tags for every note's upload**
+      Only Cards gives its uploads a description and tags (the show's, on the YouTube card); a reading or a song goes up with its title alone.
 
 - [ ] **The tablet, continued**
       Switching between open tabs and a forward button, a visible finger instead of a touch dot, and the keyboard's number and shift layers. See [tablet.md](tablet.md).
@@ -102,6 +105,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 
 - [x] **Tarot, now Cards (2026-10-04 to 10-06)**
       An automatic tarot reading: agents plan, paint and write each episode one card at a time, the table shuffles, deals and lights itself, a set dresser builds the reader's table through Ghost Notes' own tools, and an export can go straight to YouTube.
+
+- [x] **YouTube uploads from every template**
+      A YouTube component (2026-10-07): "+" on every note's panel attaches it, and its card holds the upload - after export or not, a title template, the visibility, a playlist - with the Google client and the sign-in. Masking's own export does not upload.
 
 - [x] **Pronunciation as data**
       A `names:` block, homographs decided by part of speech and clause tense (eSpeak asked again, no word lists), `pronounce_audit.gd` before a render, and a probe that asks each voice checkpoint whether it says `read` right.

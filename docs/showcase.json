@@ -1,5 +1,5 @@
 {
-	"digest": "7d3f2585e6eaa9ce77020765d8653706ffeeb699ccf9c924d138311561f31dcd",
+	"digest": "8e7064db6a1808f616cf6dcbad19617480838a5f7834ad944e3e413d0f1be10e",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -226,6 +226,7 @@
 		"res://src/wave_field.gd",
 		"res://src/yaml.gd",
 		"res://src/youtube.gd",
+		"res://src/youtube_card.gd",
 		"res://storyboards/showcase.yaml"
 	],
 	"frames": 248

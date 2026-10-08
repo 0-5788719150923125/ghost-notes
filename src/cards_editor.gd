@@ -81,9 +81,10 @@ var _table_log := {}
 ## {episode, body, doc, title}, or empty.
 var _export_pin := {}
 ## The take the last export rendered and the episode it is of: the upload describes them (see
-## [method upload_meta]) after the pin is let go. {take, episode}, or empty.
+## [method _upload_base]) after the pin is let go. {take, episode}, or empty.
 var _taken := {}
-## THE YOUTUBE FIELDS: the picked episode's title, description and tags, edited in place in its plan.
+## THE YOUTUBE FIELDS: the picked episode's title (on the Episode card, edited in place in its plan),
+## and the show's description and tags (on the YouTube card - null without one).
 var _yt_title: LineEdit
 var _yt_desc: TextEdit
 var _yt_tags: TagField
@@ -220,19 +221,22 @@ func export_take() -> String:
 	_export_pin = {}
 	if not path.is_empty():
 		_taken = {"take": path, "episode": ep}
-		var err := ep.write_upload_notes(path, _show_tags(), _cur_desc,
-			upload_title(_doc.field("title"), String(ep.upload_notes()["title"])))
+		var show := _doc.field("title")
+		var ep_title := String(ep.upload_notes()["title"])
+		var err := ep.write_upload_notes(path, _show_tags(), _cur_desc, _youtube.title_now(
+			{"title": show.strip_edges(), "episode": ep_title}) if _youtube != null else upload_title(show, ep_title))
 		_set_status(("Rendered the take; upload notes are in the episode's folder (upload.md)." if err.is_empty()
 			else "Rendered the take; the upload notes failed: " + err))
 	return path
 
 
-## WHAT AN UPLOAD SAYS (see [member Exporter.upload_provider]): the episode's title and description
-## with a chapter per card timed from [param take], the SHOW'S tags (its document's `tags:` line),
-## the moment of the title screen to take the thumbnail from, and the file its uploads are recorded
-## in. For the take an export just rendered it describes THAT episode, whichever is picked now; with
-## no take, the picked one. {} while the episode has no plan.
-func upload_meta(take: String) -> Dictionary:
+## WHAT AN UPLOAD SAYS, under the YouTube card's title, visibility and playlist (see
+## [member Exporter.upload_provider]): the episode's description with a chapter per card timed from
+## [param take], the SHOW'S tags (its document's `tags:` line), the moment of the title screen to take
+## the thumbnail from, the file its uploads are recorded in, and the show's and the episode's titles
+## for the card's `%title%` and `%episode%`. For the take an export just rendered it describes THAT
+## episode, whichever is picked now; with no take, the picked one. {} while the episode has no plan.
+func _upload_base(take: String) -> Dictionary:
 	var ep: CardEpisode = _episode
 	if not take.is_empty() and String(_taken.get("take", "")) == take:
 		ep = _taken["episode"]
@@ -245,13 +249,22 @@ func upload_meta(take: String) -> Dictionary:
 	var chapters: PackedStringArray = n["chapters"]
 	if not chapters.is_empty():
 		desc += "\n\n" + "\n".join(chapters)
-	return {"title": upload_title(_doc.field("title"), String(n["title"])), "description": desc, "tags": Array(_show_tags()),
-		"thumbnail_at": thumbnail_moment(_take_intro(take)), "record": ep.file_of("youtube")}
+	return {"values": {"title": _doc.field("title").strip_edges(), "episode": String(n["title"]), "seed": str(ep.seed)},
+		"description": desc, "tags": Array(_show_tags()), "thumbnail_at": thumbnail_moment(_take_intro(take)),
+		"record": ep.file_of("youtube")}
 
 
-## THE UPLOAD'S TITLE: the show's name, then the episode's - "Truthful Tarot: My Episode Name" (the
-## user, 2026-10-06) - unless the episode's already begins with the name, or the show has none.
-## YouTube's 100 characters are cut from the end ([method YouTube.fit_title]), so the name stands.
+## The macros of the YouTube card's title as the panel stands: the show's title and the picked
+## episode's.
+func _upload_values() -> Dictionary:
+	return {"title": _doc.field("title").strip_edges() if _doc != null else "", "episode": _cur_title,
+		"seed": str(_episode.seed) if _episode != null else ""}
+
+
+## THE UPLOAD'S TITLE as the YouTube card's default template makes it: the show's name, then the
+## episode's - "Truthful Tarot: My Episode Name" (the user, 2026-10-06) - unless the episode's
+## already begins with the name, or the show has none. YouTube's 100 characters are cut from the end
+## ([method YouTube.fit_title]), so the name stands.
 static func upload_title(show: String, episode: String) -> String:
 	var name := show.strip_edges()
 	var t := episode.strip_edges()
@@ -316,7 +329,7 @@ func _spec() -> Dictionary:
 ## voice, the Look and the bookends, which are the same blocks a chapter keeps. No `picture:` -
 ## the table is the only medium here - and no `illustrations:`.
 func _doc_blocks() -> PackedStringArray:
-	return PackedStringArray(["cards", "voice", "look", "bookends"])
+	return PackedStringArray(["cards", "voice", "look", "bookends", "youtube"])
 
 
 ## The show's own block: the knobs, and its YouTube title and description.
@@ -602,7 +615,7 @@ func _build_source(script_box: VBoxContainer) -> void:
 	_episode_note.add_theme_font_size_override("font_size", 11)
 	_episode_note.modulate = Color(1, 1, 1, 0.7)
 	box.add_child(_episode_note)
-	_build_upload_fields(box)
+	_build_title_field(box)
 	_show_knobs()
 
 
@@ -1149,29 +1162,34 @@ func _refresh_rows() -> void:
 
 # --- the YouTube fields ------------------------------------------------------------------------
 
-## WHAT THE EPISODE GOES UP TO YOUTUBE AS. The title and description are the episode's - its plan's,
-## edited here and written straight back into the plan, so the export's file name, the episode picker
-## and `upload.md` all say what the panel says. THE TAGS ARE THE SHOW'S: its document's own `tags:`
-## line, the way North Star's chapters keep theirs, edited here as chips and going up with every
-## episode. Nothing of any one episode is kept in the document but the picked one's title, overwritten
-## as the seed is (the user, 2026-10-06: "I just don't want to store a bunch of episode-specific logic
-## in the frontmatter of a markdown file").
-func _build_upload_fields(box: VBoxContainer) -> void:
+## WHAT THE EPISODE GOES UP TO YOUTUBE AS. The title is the episode's - its plan's, edited on the
+## Episode card and written straight back into the plan, so the export's file name, the episode
+## picker, `upload.md` and the YouTube card's `%episode%` all say what the panel says. The
+## description and THE TAGS ARE THE SHOW'S, on the YouTube card when the note has one (2026-10-07):
+## the description in the show's block, the tags its document's own `tags:` line, the way North
+## Star's chapters keep theirs, edited as chips and going up with every episode. Nothing of any one
+## episode is kept in the document but the picked one's title, overwritten as the seed is (the user,
+## 2026-10-06: "I just don't want to store a bunch of episode-specific logic in the frontmatter of a
+## markdown file").
+func _build_title_field(box: VBoxContainer) -> void:
 	box.add_child(HSeparator.new())
-	var head := Label.new()
-	head.text = "YouTube"
-	head.add_theme_font_size_override("font_size", 14)
-	head.tooltip_text = ("What this episode goes up as when the export's \"Upload to YouTube\" is ticked. "
-		+ "The producer writes the title and description with the plan, and an edit here is saved into "
-		+ "the plan; the tags are the show's own, kept in its document. Uploads are unlisted.")
-	head.mouse_filter = Control.MOUSE_FILTER_STOP
-	box.add_child(head)
 	_yt_title = LineEdit.new()
 	_yt_title.max_length = YouTube.TITLE_MAX
-	_yt_title.placeholder_text = "Title"
-	_yt_title.tooltip_text = "The video's title, at most 100 characters. It names the exported file too."
+	_yt_title.placeholder_text = "Episode title"
+	_yt_title.tooltip_text = ("The episode's title, at most 100 characters - the producer writes it with the "
+		+ "plan, and an edit is saved into the plan. It names the exported file, and is %episode% in the "
+		+ "YouTube card's title.")
 	_yt_title.text_changed.connect(func(_t: String) -> void: _upload_edited())
 	box.add_child(_yt_title)
+
+
+## The show's description and tags, on the YouTube card ([member YouTubeCard.extra]).
+func _youtube_built(card: YouTubeCard) -> void:
+	_build_upload_fields(card.extra)
+	_fill_upload_fields(true)
+
+
+func _build_upload_fields(box: VBoxContainer) -> void:
 	_yt_desc = TextEdit.new()
 	_yt_desc.placeholder_text = "Description"
 	_yt_desc.tooltip_text = ("The video's description. A chapter per card, timed from the export itself, "
@@ -1201,7 +1219,7 @@ func _upload_edited() -> void:
 
 
 func _upload_focused() -> bool:
-	return _yt_title != null and (_yt_title.has_focus() or _yt_desc.has_focus())
+	return _yt_title != null and (_yt_title.has_focus() or (_yt_desc != null and _yt_desc.has_focus()))
 
 
 static func _mtime(path: String) -> int:
@@ -1236,12 +1254,11 @@ func _fill_upload_fields(force := false) -> void:
 	_syncing = true
 	if _yt_title.text != _cur_title:
 		_yt_title.text = _cur_title
-	if _yt_desc.text != _cur_desc:
+	if _yt_desc != null and _yt_desc.text != _cur_desc:
 		_yt_desc.text = _cur_desc
 	_syncing = was
 	# the title is the episode's (an edit is written into its plan), so it waits for a plan
 	_yt_title.editable = mt >= 0
-	_yt_desc.editable = true
 	_refresh_show_fields()
 
 
@@ -1263,7 +1280,8 @@ func _seed_globals() -> void:
 
 
 func _seed_from_plan() -> void:
-	if _episode == null or not _episode.has("plan") or _doc == null:
+	# the description and tags are the YouTube card's: a note without one is not given them
+	if _episode == null or not _episode.has("plan") or _doc == null or _yt_desc == null:
 		return
 	if _cur_desc.is_empty() and _yt_dirty <= 0.0 and not _yt_desc.has_focus():
 		var d := String(_episode.upload_notes()["description"]).strip_edges()
@@ -1287,7 +1305,8 @@ func _flush_upload_fields(force := false) -> void:
 	_yt_dirty = 0.0
 	if _yt_title == null:
 		return
-	_cur_desc = _yt_desc.text.strip_edges()
+	if _yt_desc != null:
+		_cur_desc = _yt_desc.text.strip_edges()
 	var title := _yt_title.text.strip_edges()
 	var plan: Variant = _episode.read_json("plan") if _episode != null else null
 	if title.is_empty() or not (plan is Dictionary):
@@ -1316,8 +1335,11 @@ func _save_tags() -> void:
 
 
 ## Under the fields: what goes up as tags against YouTube's limit, and where the episode already is
-## on YouTube. A tag past the limit is dimmed in the field, saying so.
+## on YouTube. A tag past the limit is dimmed in the field, saying so. The card's own line - the
+## title as it goes up - follows the episode's title.
 func _refresh_upload_note() -> void:
+	if _youtube != null:
+		_youtube.refresh()
 	if _yt_note == null:
 		return
 	var own := _yt_tags.get_tags() if _yt_tags != null else PackedStringArray()
@@ -1337,10 +1359,9 @@ func _refresh_upload_note() -> void:
 	if _episode == null or not _episode.has("plan"):
 		_yt_note.text = "Generate the plan first: the producer writes the episode's title."
 		return
-	var t := "Goes up as \"%s\"" % YouTube.fit_title(upload_title(_doc.field("title"), _cur_title))
-	t += (", with the show's %d tag%s, %d of YouTube's %d characters." % [fitted.size(),
+	var t := ("The show's %d tag%s, %d of YouTube's %d characters." % [fitted.size(),
 		"" if fitted.size() == 1 else "s", YouTube.tags_length(fitted), YouTube.TAGS_MAX]) if not fitted.is_empty() \
-		else ". No tags yet: the ones added here are the show's, and go up with every episode."
+		else "No tags yet: the ones added here are the show's, and go up with every episode."
 	var ups := _episode.uploads()
 	if not ups.is_empty():
 		var last: Dictionary = ups[ups.size() - 1]

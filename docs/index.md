@@ -36,7 +36,7 @@ core. The commitments:
 
 ## Feature registries
 
-- [Components and templates](components.md) (13 components, 7 templates) - what a note can carry, the templates **New** makes from it, and what each part asks of the platform.
+- [Components and templates](components.md) (14 components, 7 templates) - what a note can carry, the templates **New** makes from it, and what each part asks of the platform.
 - [Scenes](scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
 - [Media](media.md) (7) - what the show is carried on.
 - [Look filters](filters.md) (8) - the post-process over the whole picture.
@@ -294,6 +294,7 @@ Rendering a session to video (bake + Movie Maker, background processes), uploadi
 
 - [`exporter.gd`](../src/exporter.gd) **Exporter** - render the visualization to a video, in the background, in two steps.
 - [`youtube.gd`](../src/youtube.gd) **youtube** - YouTube - sign in to the author's YouTube channel and upload a finished export to it.
+- [`youtube_card.gd`](../src/youtube_card.gd) **YouTubeCard** - the YouTube component's card (2026-10-07, the user: "add a little '+' button near those labels... 'youtube' should be an option. When we add it, a new card is created"): whether an export goes up, what it is called, who may see it and the playlist it joins - and the Google client and the sign-in an ...
 - [`showcase.gd`](../src/showcase.gd) **Showcase** - the README's animation, recorded from the real app: a Manual note playing `storyboards/showcase.yaml` (a blue prism flies in and divides into a blue one and a red one, the pair lock, then take opposite highways), with the note's panel, the row and the transport around it - the UI as a person sees ...
 - [`showcase_recorder.gd`](../src/showcase_recorder.gd) **ShowcaseRecorder** - the README's recording, inside the second ghost that `Showcase` starts under Movie Maker with `--showcase <work>`. It makes what a person would - a Manual note with a song, on the showcase storyboard - opens it the way the notes list does, presses Play, and quits once `Showcase.frames` ...
 

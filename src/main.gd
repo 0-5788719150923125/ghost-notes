@@ -353,6 +353,9 @@ func _open_note_panel(path: String) -> void:
 	panel.restage = _restage
 	_note_panel = panel
 	add_child(panel)
+	# a song note's export goes up as its YouTube card says (nothing without one)
+	if _chrome.exporter != null:
+		_chrome.exporter.upload_provider = panel.upload_meta
 	_feedback = _chrome.attach_feedback()
 	_entered_mode()
 
@@ -864,7 +867,7 @@ func _open_synth_editor(mode := "fishing") -> void:
 		_chrome.exporter.take_provider = editor.export_take
 		_chrome.exporter.take_ready = editor.can_export_take
 		_chrome.exporter.name_provider = Callable()
-		_chrome.exporter.upload_provider = Callable()
+		_chrome.exporter.upload_provider = editor.upload_meta
 		_chrome.exporter.automation_available = true
 	_feedback = _chrome.attach_feedback()
 	_entered_mode()

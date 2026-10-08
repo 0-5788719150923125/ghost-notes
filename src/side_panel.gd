@@ -58,6 +58,8 @@ var body: VBoxContainer
 ## The chips for this panel's cards, under its heading ([CardRow]); null until
 ## [method add_card_row] is called.
 var card_row: CardRow
+## The "+" before the chips ([method add_component_row]); null on a panel without one.
+var plus: MenuButton
 ## The panel's own name in its cards' fold keys ("<prefix>.<card>", see [Card]). One per mode,
 ## so the Generative panel's Voice and the Cards panel's Voice fold separately.
 var card_prefix := ""
@@ -127,6 +129,54 @@ const CardRowScript := preload("res://src/card_row.gd")
 func add_card_row() -> CardRow:
 	card_row = CardRowScript.new()
 	body.add_child(card_row)
+	return card_row
+
+
+## THE COMPONENT ROW: "+", then the chips ([CardRow]), under the heading - every note's panel has it
+## (the note's own, the readings', Synthesis'). "+" offers what [param offer] says - `() -> [attached,
+## only]`, asked as the menu opens ([method Components.attach_menu]: the impossible left out, the
+## not-ready and the unmet grayed with the reason, nothing attached twice) - and hands the key of
+## the one picked to [param attach].
+func add_component_row(offer: Callable, attach: Callable) -> CardRow:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	body.add_child(row)
+	plus = MenuButton.new()
+	plus.text = "+"
+	plus.flat = false
+	plus.tooltip_text = ("Attach what this note should have next - each one grayed, with the reason, "
+		+ "when it cannot be had yet.")
+	plus.about_to_popup.connect(func() -> void:
+		var o: Array = offer.call()
+		var pop := plus.get_popup()
+		Components.attach_menu(pop, o[0], o[1])
+		if pop.item_count == 0:
+			pop.add_item("Nothing else can be attached here")
+			pop.set_item_metadata(0, "")
+			pop.set_item_disabled(0, true))
+	plus.get_popup().id_pressed.connect(func(id: int) -> void:
+		var pop := plus.get_popup()
+		var i := pop.get_item_index(id)
+		if i >= 0 and not pop.is_item_disabled(i):
+			attach.call(String(pop.get_item_metadata(i))))
+	# drawn as a chip, the row's own shape (see CardRow._paint), in no family's color
+	plus.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	plus.add_theme_font_size_override("font_size", 13)
+	var chip := StyleBoxFlat.new()
+	chip.bg_color = Color(1, 1, 1, 0.08)
+	chip.border_color = Color(1, 1, 1, 0.4)
+	chip.set_border_width_all(1)
+	chip.set_corner_radius_all(9)
+	chip.content_margin_left = 9
+	chip.content_margin_right = 9
+	chip.content_margin_top = 0
+	chip.content_margin_bottom = 1
+	for st in ["normal", "hover", "pressed", "focus"]:
+		plus.add_theme_stylebox_override(st, chip)
+	row.add_child(plus)
+	card_row = CardRowScript.new()
+	card_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(card_row)
 	return card_row
 
 

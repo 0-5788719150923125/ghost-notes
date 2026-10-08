@@ -39,9 +39,9 @@ seeds' hash salts keep their old `tarot-` names, so every episode already made c
    own and is saved in the show's frontmatter; **Test** auditions it.
 4. **Export** renders the video, named after the episode's title; the episode's folder then holds
    `upload.md` - the title, a description, chapters timed per card from the take, and tags (the
-   show's own `tags:` line first). Tick **Upload to YouTube (unlisted)** in the export menu and the
-   saved video goes up to your channel - see "YouTube" below. The panel's **YouTube** fields edit
-   the title, description and tags the producer wrote (saved into the plan).
+   show's own `tags:` line first). Attach **YouTube** with "+" and tick its **Upload after export**,
+   and the saved video goes up to your channel - see "YouTube" below. The Episode card's title and
+   the YouTube card's description and tags edit what the producer wrote (the title saved into the plan).
 5. Any earlier episode is one pick away in the episode list, exactly as it was made.
 6. **Delete…** removes the picked episode, after asking: its whole folder goes to the system
    trash (restorable from there); exported videos and the other episodes are untouched. The
@@ -875,16 +875,25 @@ draw the same frames.
 
 Built 2026-10-06 (user: "upload them unlisted... an optional flag, selected when we press the
 export button"; "have Ghost Notes prompt for a credentials file... and cache those credentials for
-every future login"). `src/youtube.gd` is generic; the tarot mode opts in through
-`Exporter.upload_provider` (`CardsEditor.upload_meta`).
+every future login"). `src/youtube.gd` is generic. MOVED TO A COMPONENT 2026-10-07 (the user: "The
+placement of the YouTube upload button is not in a good spot"): "+" on any note's panel attaches
+YouTube, and `YouTubeCard` (block `youtube:`) holds the choice; every panel's `upload_meta` is the
+card's title, visibility and playlist over the mode's own part (`_upload_base`: here the episode's
+description, chapters, tags, thumbnail moment and record). The export menu has no YouTube items.
 
-- **The flow**: ⤓ -> tick "Upload to YouTube (unlisted)" -> (first time only: a file dialog for the
-  Google Cloud "Desktop app" OAuth client JSON, kept in `user://youtube/client.json`) -> (while no
+- **The flow**: "+" -> YouTube -> tick "Upload after export" -> (first time only: a file dialog for
+  the Google Cloud "Desktop app" OAuth client JSON, kept in `user://youtube/client.json`) -> (while no
   sign-in is kept: the browser opens Google's consent page beside a "Sign in to YouTube" dialog -
-  Open the page again / Copy the link / Cancel) -> the menu comes back ticked -> quality -> save
-  path -> render -> transcode -> upload, with progress on the status line; the link is copied. A
-  sign-in that lapsed (7 days in Testing) opens the same dialog as the export starts, beside the
-  render. "Use a different Google client file…" replaces the kept one.
+  Open the page again / Copy the link / Cancel) -> the box ticks -> ⤓ -> quality -> save path ->
+  render -> transcode -> upload, with progress on the status line; the link is copied. A sign-in
+  that lapsed (7 days in Testing) opens the same dialog as the export starts, beside the render. The
+  card's "Replace client…" replaces the kept one; "Sign out" forgets the sign-in.
+- **The card**: the title is a template, `%title%: %episode%` by default (`%seed%`, `%date%` too;
+  `YouTube.expand_title` drops what a missing value leaves dangling and never says the show's name
+  twice); Visibility is Private, Unlisted or Public (private by default); Playlist is None or one
+  of the channel's, loaded with ↻ - listing them and adding a video take the `youtube` scope, so
+  the first ↻ signs in again for it (`YouTube.granted` reads the scopes kept with the token). A
+  playlist YouTube refuses leaves the video up, and the status line says why.
 - **Google's "Access blocked"** (fixed 2026-10-06): an account that is not one of a Testing
   project's test users gets a dead-end page that never comes back to Ghost Notes, so the dialog
   names it; add the account under Google Auth Platform > Audience > Test users, then "Open the page
@@ -937,16 +946,17 @@ every future login"). `src/youtube.gd` is generic; the tarot mode opts in throug
   from the take, the show's tags fitted to YouTube's 500 characters, and a THUMBNAIL:
   a 1280x720 frame of the saved video at the title screen - the name fully up over the out-of-focus
   table - set once the video is up (needs a verified channel; refused, the video stays up and the
-  status line says why). Constants: unlisted, not made for kids, `containsSyntheticMedia`, no paid
-  promotion (`paidProductPlacementDetails`), category 22 (People & Blogs).
+  status line says why). Constants: not made for kids, `containsSyntheticMedia`, no paid
+  promotion (`paidProductPlacementDetails`), category 22 (People & Blogs); the privacy is the card's.
 - **Resilient**: the upload is queued (`pending.json`) the moment the video is saved, so a quit, a
-  lapsed sign-in or a dropped connection leaves "Resume the YouTube upload of ..." in the menu;
-  resumable sessions live about a week. Each upload is recorded in `<episode>/youtube.json`; the
-  menu then says "Upload to YouTube again" and the panel's note shows the link.
+  lapsed sign-in or a dropped connection leaves "Resume the upload of ..." on every YouTube card;
+  resumable sessions live about a week. Each upload is recorded in `<episode>/youtube.json`, and the
+  YouTube card's note shows the link.
 - **Google's side**: in "Testing" the sign-in lasts 7 days, then the browser opens again. Until the
   Cloud project passes YouTube's API audit, YouTube keeps API uploads private whatever was asked
   (the status line says so when that happens). Uploads have their own quota: 100 a day.
-- **Not built**: Generative mode's provider (its chapters already carry `title` and `tags`).
+- **Not built**: a description and tags for a reading's or a song's upload (they go up with the
+  card's title alone), and making a new playlist from the card.
 
 ## Probes and gates
 

@@ -474,6 +474,7 @@ var _medium_rows := {}
 ## The note this panel is (set by main before it is added), "" when started without one.
 var note_path := ""
 var _block_cards := {}
+var _youtube: YouTubeCard
 var _lead_in := 0.0        # the intro seeded into _pending by _plan, in seconds
 var _dirty := false
 var _last_edit_ms := 0
@@ -650,7 +651,7 @@ func _build_panel() -> void:
 	# row under the heading. The order is the families': the text, what produces it, the voice,
 	# the picture, the Look - read top to bottom, the panel says what happens to the note.
 	_panel.card_prefix = _section
-	_panel.add_card_row()
+	_panel.add_component_row(_offer, _attach)
 	_build_source(_panel.add_card("script", "Script", &"paper"))
 	# The voice card: the cast rows (Turn, Hesitate, the list of speakers) are global; every row
 	# below the list belongs to the speaker that is selected in it.
@@ -659,6 +660,9 @@ func _build_panel() -> void:
 	_build_voice(voice)
 	# THE PICTURE'S CARDS are the mode's (the Picture, the Look, the bookends...)
 	_build_cards()
+	# ...and where the video goes, when the note says so
+	if not note_path.is_empty() and NoteStore.blocks_of(note_path).get("youtube") is Dictionary:
+		_add_youtube()
 	# rows only some media use (the Ink) follow the medium the moment it changes
 	_sync_medium_rows()
 	Director.medium_changed.connect(_sync_medium_rows)
@@ -691,6 +695,55 @@ func _add_block_card(title: String, family: StringName, card: Control) -> Contro
 	body.add_child(card)
 	_add_block(card)
 	return card
+
+
+## THE "+" MENU's question ([method SidePanel.add_component_row]): what this note has - its
+## template's components and what has been attached since - and what this panel can take while it
+## is up, which is what changes no part of the show: where the video goes.
+func _offer() -> Array:
+	var have: Array = []
+	for t in Components.TEMPLATES:
+		if String((Components.TEMPLATES[t] as Dictionary).get("section", "")) == _section:
+			have = (Components.TEMPLATES[t]["components"] as Array).duplicate()
+	if _youtube != null:
+		have.append("youtube")
+	return [have, ["youtube"]]
+
+
+## A component picked from "+": its card, at once - the autosave writes its block into the note.
+func _attach(key: String) -> void:
+	if key == "youtube" and _youtube == null:
+		_add_youtube()
+		_set_status("YouTube attached: tick \"Upload after export\" to send this note's exports to your channel.")
+
+
+## THE YOUTUBE CARD, last of the cards (the families' order ends where the video goes). One attached
+## while the panel is up is moved above the status line, where a card built with the panel stands.
+func _add_youtube() -> void:
+	_youtube = YouTubeCard.new()
+	_youtube.values = _upload_values
+	_panel.add_card(YouTubeCard.KEY, "YouTube", &"publish").add_child(_youtube)
+	_block_cards[YouTubeCard.KEY] = _youtube
+	_youtube.noted.connect(_set_status)
+	var card: Node = _youtube.get_parent()
+	while card != null and not (card is Card):
+		card = card.get_parent()
+	if card != null and _status != null and _status.get_parent() == card.get_parent():
+		card.get_parent().move_child(card, _status.get_index())
+	_youtube_built(_youtube)
+
+
+## What the YouTube title's macros are worth now (see [method YouTube.expand_title]).
+func _upload_values() -> Dictionary:
+	var t := _doc.field("title").strip_edges() if _doc != null else ""
+	if t.is_empty() and not note_path.is_empty():
+		t = NoteStore.title_of(note_path)
+	return {"title": t, "episode": ""}
+
+
+## A mode's own rows on the YouTube card ([member YouTubeCard.extra]), once it is built.
+func _youtube_built(_card: YouTubeCard) -> void:
+	pass
 
 
 ## Keep [param card]'s block in the document without a card of its own (one shown inside another).
@@ -1262,7 +1315,7 @@ func _load_persisted() -> void:
 ## COMPONENT'S, not the panel's: the Generative and Cards panels read and write the same `voice:`,
 ## `look:` and `bookends:`, so a chapter's voices are there whichever panel opens it.
 func _doc_blocks() -> PackedStringArray:
-	return PackedStringArray(["voice"])
+	return PackedStringArray(["voice", "youtube"])
 
 
 ## Every block this panel keeps, for [DocSource] to store in a document's frontmatter.
@@ -3934,10 +3987,17 @@ func export_name() -> String:
 	return ""
 
 
-## What an upload of the take at [param take] says (see [member Exporter.upload_provider]); {}
-## here - a reading of this panel offers no upload yet. The Cards mode describes its episodes.
-func upload_meta(_take: String) -> Dictionary:
-	return {}
+## What an upload of the take at [param take] says (see [member Exporter.upload_provider]): the
+## YouTube card's title, visibility and playlist over what the mode adds ([method _upload_base]);
+## {} without a card, or with its box clear.
+func upload_meta(take: String) -> Dictionary:
+	return _youtube.meta(_upload_base(take)) if _youtube != null else {}
+
+
+## The mode's part of an upload of [param take] - a description, tags, a thumbnail's moment, a
+## record - or {} when it has nothing to upload yet. A reading has no more than its title.
+func _upload_base(_take: String) -> Dictionary:
+	return {"tags": []}
 
 
 ## Gate for the export button. The procedural path asks whether a seed has been
