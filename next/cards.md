@@ -984,6 +984,57 @@ every future login"). `src/youtube.gd` is generic; the tarot mode opts in throug
 - `godot --headless --path . --script res://tests/agent_tools_claude_probe.gd` - that the installed
   Claude CLI reaches ghost's tools and sees their pictures (one short run).
 
+## 2026-10-07: the reading's rhythm, the printed card, strands and bones, bursts
+
+- THE READER STOPS ANNOUNCING. Episode 834225 ended every card on "let me set this one down", opened
+  every card on "Oh, the ...", and described four paintings of five - the prompt itself gave "let me set
+  this one down" as the example of how to lead into a move, and sent every painting. Now `MOVES` says the
+  viewer watches every card come and go and a reader almost never says what their hands are doing; a
+  card's passage may stop on its painting only when `CardPrompts.remarks` (seeded, 15-40% of the cards,
+  never most) says so - the rest are sent no painting and no description. Each passage after the first
+  is told not to open or end the way the last one did. Not yet tried on a real episode.
+- THE PRINTED CARD varies: `frame.window` (rect, rounded, arch - the "window-shaped" border - gothic,
+  oval, notched, octagon), `frame.corners` (square, rounded, round: the card's slab is cut to them),
+  `frame.ornament` round the card's edge (vine, serpent, laurel, beads, rope, stars, scallops) and the
+  booklet's `page` (classic, drop, banner, ledger). The producer chooses; the archive shows each episode's
+  choice so habits are named. Foil skips the stock showing in a shaped window's corners.
+- STRANDS (`Props` shape `strand`): rope (three-strand lay), cord, wire, vine (leaves), beads, chain;
+  laid as a coil, a flemish spiral, a heap, a path, or DRAPED across the table in its own coordinates
+  and over the top's edge - hanging as far as the path runs past it, to the floor. A strand rests on
+  itself where it crosses. Draped strands stand first; the rest stand clear of them, and one that runs
+  where the cards go is left off.
+- BONES (`bone`: femur, long, rib, small, wishbone) and SKULLS (`skull`: human, horned with straight,
+  curved or curled horns, bird) - the one exception to "no body", bone only. The brief's "things on it"
+  now names both.
+- SCULPT (`Props` shape `sculpt`; asked the same day: "grant the agents the ability to draw their own
+  geometry ... pass a list of points ... and provide the agents with a way to check their work"). The
+  first bird skull was a ball and a cone with a dot for an eye: one surface found along rays from inside,
+  which can make no hole. A sculpt is STROKES in order - rods through [x, y, z, r] points (round cones,
+  smooth through their joints), or a ball stretched to a `size` - each melted into what came before
+  (`blend`) or `carve`d out of it, `mirror`ed across x = 0 if asked. It is a distance field meshed by
+  surface nets on a grid cut from its thinnest stroke (72-144 cells across), sampled only near the
+  surface (blocks, then pieces) from the strokes near each block; each point carries how shut in it is
+  (`uv2.y`, looked up out along its normal and leaning off it), which `prop.gdshader` darkens. Built once
+  a process (`SCULPT_KEPT`). THE SKULLS ARE SCULPTS NOW (`SKULL_FORMS`): a crow's with orbits open
+  through a thin wall, nostrils through the beak, the bars under the eyes and a two-branched jaw; a
+  person's with free cheek arches, deep sockets and nose, teeth and jaw; a cow's as found, without its
+  jaw. The dark linings are gone. Checking their work was already there - `put` answers with a picture,
+  `look` shows a thing from four sides - and `put` now also warns of a stroke finer than its sculpt is
+  cut. Costs: a person's skull ~4 s to build the first time (89k triangles), a crow's ~2 s.
+- BURSTS WERE NEVER SEEN: a pirouette happened to about one card in forty, a jumper in 30% of readings
+  (the set dresser was not told which), and reveal/lay burst at every card, which the brief forbids. Now
+  a burst on the pirouette makes the table twirl one card (`SPIN_ROOM`), the set dresser is offered the
+  jumper's moment only when a card jumps, and `which` (every, first, last, [n]) picks the times a moment
+  is marked. Checked on 834225's copy: glitter on the forced twirl, stars on the first card up only.
+- THE GLITCH SUBTITLES WRITE AS THEY ARE SPOKEN (reported the same day: "every single new subtitle
+  starts with a whole sentence of glitching text"): a letter not yet reached is not drawn, a few letters
+  past the front are noise, and the reach grows a letter at a time and falls back (`glitch_reach`), as
+  vortex's label pushed and popped its ghosts. Each row's plate covers only what is drawn.
+- Next: the vine's leaves could hang off a draped vine's edge more loosely; a strand could knot; the
+  serpent ornament's tail falls a few pixels short of its mouth; a sculpt's build could be faster (a
+  person's skull is ~4 s of GDScript), or its grid could be coarser where nothing is thin; no real set
+  dresser has sculpted yet.
+
 ## Not built yet
 
 - The light, next (2026-10-07): no real set dresser has lit a table yet. A cloud's edge ACROSS the table

@@ -859,6 +859,34 @@ func _looks() -> void:
 	_ok(never > cards * 0.6, "most held cards are never turned (%d of %d)" % [never, cards])
 	_ok(many <= cards / 40, "hardly any card looks at its back more than twice (%d of %d)" % [many, cards])
 	_ok(twice_spun == 0, "no card pirouettes twice (%d did)" % twice_spun)
+	# A BURST ON THE PIROUETTE makes one happen (2026-10-07: one card in forty by chance, so sparks on
+	# it were never seen): the card chosen twirls, smoothly, however short its hold - two-sided, the
+	# same cards unforced mostly do not
+	var forced_seen := 0
+	var free_seen := 0
+	for k in 40:
+		var until := 9.0 + 0.5 * float(k)
+		for forced in [true, false]:
+			medium._spin_wanted = forced
+			medium._spin_key = "%d|%d" % [medium._built_n, medium._sched.size()]
+			medium._spin_k = k if forced else -1
+			var spun := false
+			var prev2 := 0.0
+			for f in int(until * 30.0):
+				var a := medium._turn_of(k, float(f) / 30.0, 0.0, until)
+				worst = maxf(worst, absf(wrapf(a - prev2, -PI, PI)))
+				spun = spun or absf(a) > TAU
+				prev2 = a
+			if spun:
+				if forced:
+					forced_seen += 1
+				else:
+					free_seen += 1
+	medium._spin_wanted = false
+	medium._spin_key = ""
+	_ok(forced_seen == 40, "a card chosen for a pirouette burst twirls (%d of 40)" % forced_seen)
+	_ok(free_seen < 10, "control: the same cards left to chance twirl %d of 40" % free_seen)
+	_ok(worst < 0.8, "a forced twirl never jumps (%.2f rad a frame at most)" % worst)
 	# the measure can see a snap: a pirouette half a turn short snaps from its back to its face
 	var short := absf(wrapf(5.0 * PI - 0.0, -PI, PI))
 	_ok(short > 3.0, "control: a twirl half a turn short is a snap of %.2f rad" % short)

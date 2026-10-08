@@ -31,7 +31,9 @@ extends Node
 ##     the table thrown out of focus all the while the name is up, the thumbnail's moment included,
 ##     the blur lifting as the focus pulls and off for the reading.
 ##
-##   tests/run_boot_probe.sh tests/table_place_check.gd 600
+##   tests/run_boot_probe.sh tests/table_place_check.gd 900
+##
+## (900 s: it took 563-608 s alone on 2026-10-07, at HEAD as with that day's changes - 600 timed it out.)
 ##
 ## A BOOT probe (the medium reaches the Director); no GPU needed - placement is projection
 ## arithmetic and the cloth's lightness is read from its file.

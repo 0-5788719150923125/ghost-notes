@@ -282,6 +282,9 @@ var frame := "landscape"
 ## with no flag to pass and nothing to keep in sync. `--filter KEY=AMOUNT,...` (or
 ## `--filter none`) overrides it for one run.
 var filters: Dictionary = {}
+## HOW THE SUBTITLES REVEAL A LINE ([constant Subtitles.REVEALS]): the show's, like its look, so an export
+## render draws them the same way.
+var subtitle_reveal := "karaoke"
 const FLOURISH_MIN := 0.0
 const FLOURISH_MAX := 4.0
 ## Bounds on the camera severity. 0 really is "as gentle as it goes" - a camera that drifts
@@ -653,6 +656,16 @@ func set_filter(key: String, amount: float) -> void:
 	filters_changed.emit()
 
 
+## The subtitles reveal their words as [param key] says ([constant Subtitles.REVEALS]); an unknown key is
+## the karaoke line.
+func set_subtitle_reveal(key: String) -> void:
+	var k := key if Subtitles.REVEALS.has(key) else "karaoke"
+	if k == subtitle_reveal:
+		return
+	subtitle_reveal = k
+	_save_pacing()
+
+
 ## How strongly [param key] is applied right now, 0 when it is off.
 func filter_amount(key: String) -> float:
 	return float(filters.get(key, 0.0))
@@ -699,6 +712,8 @@ func _load_pacing() -> void:
 	# as a key nothing declares a uniform for, and writing one is a silent no-op rather than
 	# an error - so it is discarded here instead of being carried around forever.
 	filters = Filters.sanitize(Settings.read("director", "filters", {}))
+	var rv := String(Settings.read("director", "subtitle_reveal", "karaoke"))
+	subtitle_reveal = rv if Subtitles.REVEALS.has(rv) else "karaoke"
 
 
 ## Hand the current values to [Settings], which owns the file and the flushing. There is no
@@ -714,6 +729,7 @@ func _save_pacing() -> void:
 	Settings.write("director", "medium", medium)
 	Settings.write("director", "frame", frame)
 	Settings.write("director", "filters", filters)
+	Settings.write("director", "subtitle_reveal", subtitle_reveal)
 
 
 func attach(host: Node, medium: Medium = null) -> void:

@@ -155,7 +155,7 @@ const SLOT_DEFAULTS := {
 	"voice": "", "speaker": 0, "tone": 0, "pace": 1.0, "pause": 1.0,
 	"dynamics": 0.5, "arc": 0.4, "effort": 0.35,
 	"echo": 0.0, "room": 0.0, "resonance": 0.0, "presence": 1.0, "ambience": 0.0,
-	"lean": 0.0,
+	"lean": 0.0, "near": 0.0,
 	# the pen this voice writes in, in a medium that writes by hand - a name from
 	# NotebookLayout.INKS or a hex color; "" is the default black
 	"ink": "",
@@ -229,6 +229,9 @@ const LEAN_LIVELY := 0.07
 const LEAN_PAUSE := 1.3
 ## Volume is effort alone - the spectral tilt and the level, no pitch.
 const LEAN_LOUD := 0.12
+## A hushed approach is this many "softer" steps of effort - the tilt of a dropped voice; the
+## level itself is VoiceFX's ([constant VoiceFX.NEAR_HUSH_DB]).
+const NEAR_SOFTER := 2.0
 ## How much of the way to a new delivery each sentence goes: a change eases in over two or three
 ## sentences, and back out the same way after its paragraph.
 const LEAN_EASE := 0.5
@@ -371,6 +374,10 @@ var _test_dry := PackedFloat32Array()   # joined audio waiting for the room (see
 var _test_fx_task := {}        # the one piece going through the room right now: {box, task}
 var _test_cap := 0             # the generator's ring, measured empty
 var _test_fx: VoiceFX = null
+var _test_marks: Array = []    # [{at, near}] in frames of the audition's dry audio (see _near_mark)
+var _test_near := {}           # the last distance marked
+var _test_dry_at := 0          # the frame _test_dry[0] is
+var _test_dry_end := 0         # frames joined so far
 var _status: Label
 var _rate: HSlider
 var _rate_row: HBoxContainer
@@ -408,6 +415,7 @@ var _fx_res: HSlider
 var _fx_room: HSlider
 var _fx_presence: HSlider
 var _fx_lean: HSlider
+var _fx_near: HSlider
 var _fx_pad: HSlider
 var _tone: OptionButton
 var _speaker: SpinBox
@@ -436,7 +444,12 @@ var _syncing := false          # writing controls from a slot must not re-plan
 # without cutting the first one's tail off mid-decay. What they get instead is
 # the same chain re-dialed at the exact frame their first sample is heard,
 # which is what a live slider move already does, just scheduled.
-var _fx_marks: Array = []      # [{at: int, speaker: String}], ascending, absolute
+var _fx_marks: Array = []      # [{at: int, speaker: String} or {at, near}], ascending, absolute
+var _fx_queued_near := {}      # the last distance a mark was written for (see _near_mark)
+# Whether this reading has written its first mark. NOT `_fx_marks.is_empty()`: the push
+# consumes the list, so mid-reading it is empty again, and a handover written then at 0 was
+# dialed at once - the next voice's room seconds before the next voice.
+var _fx_marked := false
 var _fx_live_name := ""        # which voice the live chain is currently dialed to
 var _fx_queued_name := ""      # ...and the last one a mark was written for
 # WHAT THE LAST PLAN NOTICED about the script - a speaker cue with no tab, a
@@ -565,8 +578,11 @@ func _process(_delta: float) -> void:
 func _fx_admit(avail: int) -> int:
 	while not _fx_marks.is_empty() and int((_fx_marks[0] as Dictionary)["at"]) <= _pushed:
 		var m: Dictionary = _fx_marks.pop_front()
-		_fx_live_name = String(m["speaker"])
-		_apply_fx(_fx, _cfg_of(_fx_live_name))
+		if m.has("speaker"):
+			_fx_live_name = String(m["speaker"])
+			_apply_fx(_fx, _cfg_of(_fx_live_name))
+		if m.has("near"):
+			_near_to(_fx, m["near"])
 	if _fx_marks.is_empty():
 		return avail
 	return mini(avail, maxi(0, int((_fx_marks[0] as Dictionary)["at"]) - _pushed))
@@ -1113,6 +1129,14 @@ func _build_voice(box: VBoxContainer) -> void:
 		+ "a while; higher, the rests and holds get shorter and the reader crosses straight to the "
 		+ "other side more often, until at 1 it is a slow, constant sway. The far ear always keeps "
 		+ "at least 30% of the voice. It is in the exported take as well.")
+	_fx_near = _fx_slider(box, "Near", 0.0,
+		"The reader coming in close to the microphone, or backing off, a sentence at a time. Closer, "
+		+ "the voice gains warmth and the room falls away; backed off, the reverse. Often the reader "
+		+ "drops their voice to come in - hushed, or a soft whisper - so closer is not always louder. "
+		+ "0 is still. Low settings stay put and come in now and then for a sentence or three; "
+		+ "higher, more often and for less long, until at 1 the reader is always moving in or out. "
+		+ "A whisper is chosen when a sentence is made, so a move takes effect from the sentences "
+		+ "not yet made.")
 	_fx_pad = _fx_slider(box, "Ambience", 0.0,
 		"A sustained ambient bed underneath, in the reader's own key - long tones that keep "
 		+ "sounding through the pauses, rather than reverb of the voice. It ducks under speech and "
@@ -1487,6 +1511,7 @@ func _capture_slot() -> void:
 		"dynamics": _dynamics.value, "arc": _arc.value, "effort": _effort.value,
 		"echo": _fx_echo.value, "room": _fx_room.value, "resonance": _fx_res.value,
 		"presence": _fx_presence.value, "ambience": _fx_pad.value, "lean": _fx_lean.value,
+		"near": _fx_near.value,
 		"ink": _ink_value(),
 	}
 	_refresh_tab_labels()
@@ -1516,6 +1541,7 @@ func _apply_slot(i: int) -> void:
 	_fx_presence.value = float(s["presence"])
 	_fx_pad.value = float(s["ambience"])
 	_fx_lean.value = float(s["lean"])
+	_fx_near.value = float(s["near"])
 	_show_ink(String(s["ink"]))
 	# After the voice, because it is what sets the Speaker row's range - and a
 	# speaker id is only meaningful against the model that holds it.
@@ -1830,6 +1856,11 @@ func _on_test() -> void:
 	var passage := _test_passage()
 	_test_chunks = _cut(passage, 0)["chunks"]
 	_place_chunks(_test_chunks, passage)
+	_plan_near(_test_chunks, 0, _test_name)
+	_test_marks = []
+	_test_near = {}
+	_test_dry_at = 0
+	_test_dry_end = 0
 	_test_parts = {}
 	_test_req = {}
 	_test_tasks = {}
@@ -1862,6 +1893,7 @@ func _stop_test() -> void:
 		WorkerThreadPool.wait_for_task_completion(int(_test_fx_task["task"]))
 	_test_fx_task = {}
 	_test_dry = PackedFloat32Array()
+	_test_marks = []
 	_test_req = {}          # replies still in flight are dropped on arrival
 	_test_parts = {}
 	_test_hold = PackedVector2Array()
@@ -1910,6 +1942,9 @@ func _join_test_parts() -> void:
 		if not wav.is_empty():
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(wav))
 		var part: PackedFloat32Array = (t["box"] as Array)[0]
+		if not part.is_empty():
+			_near_mark(_test_marks, (_test_chunks[_test_next] as Dictionary).get("near", {}),
+				_test_dry_end, _test_near)
 		if _test_next > 0 and not part.is_empty():
 			var gap := PackedFloat32Array()
 			gap.resize(int(_seam_gap_of(s) * float(_sr)))
@@ -1923,6 +1958,7 @@ func _join_test_parts() -> void:
 			part.append_array(tail)
 		if not part.is_empty():
 			_test_dry.append_array(part)
+			_test_dry_end += part.size()
 	_pump_test_fx()
 
 
@@ -1946,13 +1982,22 @@ func _pump_test_fx() -> void:
 		_start_test_playback()
 		return
 	var n := mini(_test_dry.size(), int(TEST_FX_PIECE * float(_sr)))
+	# a distance the piece has reached goes in before it; a piece stops at the next one
+	var near := {}
+	while not _test_marks.is_empty() and int((_test_marks[0] as Dictionary)["at"]) <= _test_dry_at:
+		near = (_test_marks.pop_front() as Dictionary)["near"]
+	if not _test_marks.is_empty():
+		n = mini(n, int((_test_marks[0] as Dictionary)["at"]) - _test_dry_at)
 	var piece := _test_dry.slice(0, n)
 	_test_dry = _test_dry.slice(n)
+	_test_dry_at += n
 	var fx := _test_fx
 	var cfg := _cfg_of(_test_name)
 	var box := [PackedVector2Array()]
 	_test_fx_task = {"box": box, "task": WorkerThreadPool.add_task(func() -> void:
 		_apply_fx(fx, cfg)
+		if not near.is_empty():
+			ReadingPanel._near_to(fx, near)
 		box[0] = fx.process_stereo(piece))}
 	_start_test_playback()
 
@@ -2230,6 +2275,43 @@ func _apply_fx(fx: VoiceFX, s: Dictionary) -> void:
 	fx.room.from_dial(float(s["room"]), float(s["resonance"]))
 
 
+## WHERE THE READER IS, sentence by sentence ([method VoiceFX.near_plan]), written into
+## each chunk from [param from] on as `near` - read by [method _request_args] (the whisper,
+## the softer voice) and by the marks that ease the chain there. Taken when a chunk is
+## REQUESTED, from the dials as they are then, and never rewritten behind a request: a
+## sentence already made has its whisper in it, and its distance has to match.
+## [param voice] reads every chunk as that voice (the audition's chunks carry none).
+func _plan_near(chunks: Array, from: int, voice := "") -> void:
+	var ks := PackedFloat32Array()
+	var who := PackedStringArray()
+	var text := ""
+	for c in chunks:
+		var name := voice if not voice.is_empty() else String((c as Dictionary).get("speaker", ""))
+		ks.append(float(_cfg_of(name)["near"]))
+		who.append(name)
+		for w in (c as Dictionary).get("words", []):
+			text += String((w as Dictionary).get("text", "")) + " "
+	# same words, same moves - in the reading, the audition of it and the export alike
+	var plan := VoiceFX.near_plan(ks, who, hash("near " + text))
+	for i in range(maxi(from, 0), chunks.size()):
+		(chunks[i] as Dictionary)["near"] = plan[i]
+
+
+## A distance mark at frame [param at], unless it is where the reader already is ([param last],
+## the last one written to [param marks], kept up to date here; empty is home).
+static func _near_mark(marks: Array, near: Dictionary, at: int, last: Dictionary) -> void:
+	var want := {"c": float(near.get("c", 0.0)), "hush": float(near.get("hush", 0.0))}
+	if want == last or (last.is_empty() and want["c"] == 0.0):
+		return
+	last.clear()
+	last.merge(want)
+	marks.append({"at": at, "near": want})
+
+
+static func _near_to(fx: VoiceFX, near: Dictionary) -> void:
+	fx.near_to(float(near.get("c", 0.0)), float(near.get("hush", 0.0)))
+
+
 ## A dial moved on the panel, applied to the LIVE chain - but only if the tab
 ## being edited is the voice currently sounding. Turning up the reverb on a
 ## character who has not spoken yet must not put the narrator in a cathedral;
@@ -2495,6 +2577,8 @@ func _reset_playback() -> void:
 	_fx_marks = []
 	_fx_live_name = ""
 	_fx_queued_name = ""
+	_fx_queued_near.clear()
+	_fx_marked = false
 	# The intro silence belongs to a reading that is STARTING, so it is seeded in _plan and
 	# only cleared here. `_elapsed` is the clock every word span and every seam is measured
 	# against, so starting it at the end of that silence offsets the whole reading, subtitles
@@ -3146,6 +3230,7 @@ func _speaker_of(s: Dictionary) -> int:
 func _request_args(s: Dictionary, ch: Dictionary) -> Dictionary:
 	var t := _preset_of(s)
 	var lean: Vector4 = ch.get("lean", Vector4.ZERO)
+	var near: Dictionary = ch.get("near", {})
 	# length_scale = r / pace: the model speaks r times slower so that
 	# playing back r times faster restores the intended pace
 	var r := _pitch_ratio_of(s)
@@ -3153,8 +3238,12 @@ func _request_args(s: Dictionary, ch: Dictionary) -> Dictionary:
 	return {
 		"length_scale": r / maxf(float(s["pace"]) * float(t["pace"]), 0.1) * (1.0 - LEAN_PACE * lean.x),
 		"noise_scale": float(t["noise"]) * (1.0 + LEAN_LIVELY * lean.y), "noise_w": float(t["noise_w"]),
-		"lean_semis": LEAN_SEMIS * lean.y, "lean_effort": LEAN_EFFORT * lean.y + LEAN_LOUD * lean.w,
-		"whisper": float(t["whisper"]), "muffle": float(t["muffle"]),
+		"lean_semis": LEAN_SEMIS * lean.y,
+		"lean_effort": LEAN_EFFORT * lean.y + LEAN_LOUD * (lean.w - NEAR_SOFTER * float(near.get("hush", 0.0))),
+		# COMING IN HUSHED is a softer voice as well as a quieter one (VoiceFX drops the level),
+		# and sometimes a whisper - the most of the Tone's own and the sentence's
+		"whisper": maxf(float(t["whisper"]), float(near.get("whisper", 0.0))),
+		"muffle": float(t["muffle"]),
 		"speaker": _speaker_of(s),
 		"sentence_gap": SENTENCE_GAP, "pause_scale": _pause_scale_of(s) * pow(LEAN_PAUSE, lean.z),
 		"dynamics": d["dynamics"],
@@ -3218,9 +3307,13 @@ func _pump() -> void:
 	# all ("at 9 the video breaks, at 7 it works"). Only the SPEECH queued counts; the intro
 	# still to be pushed is taken off (an underestimate once it plays, so it stays safe).
 	var intro_left := maxf(0.0, _lead_in - float(_pushed) / float(maxi(_sr, 1)))
+	var planned := false
 	while _in_flight < LOOKAHEAD and _next_to_request < _chunks.size() \
 			and _buffered_seconds() - intro_left < LOOKAHEAD_SECONDS:
 		var idx := _next_to_request
+		if not planned:
+			planned = true
+			_plan_near(_chunks, idx)
 		_next_to_request += 1
 		_in_flight += 1
 		var s := _cfg_of(String((_chunks[idx] as Dictionary).get("speaker", "")))
@@ -3264,6 +3357,13 @@ func _drain_ready() -> void:
 		# moved by exactly what was inserted before them.
 		var spliced := _splice_holds(pcm, holds, take.get("spans", []), ratio)
 		pcm = spliced["pcm"]
+		# THE READER MOVES IN THE PAUSE before the sentence they come in for - so this
+		# mark goes BEFORE the gap (the first one follows the voice's, which opens the chain)
+		var near: Dictionary = (_chunks[idx] as Dictionary).get("near", {}) \
+			if idx >= 0 and idx < _chunks.size() else {}
+		var near_first := _fx_marked
+		if near_first:
+			_near_mark(_fx_marks, near, _pushed + _pending.size() - _read, _fx_queued_near)
 		if _next_to_play > 1:
 			# a breath between sentences, at the seam the host cannot see.
 			# Scaled by Pause like every other rest, or the control would do
@@ -3289,8 +3389,12 @@ func _drain_ready() -> void:
 		if who != _fx_queued_name:
 			_fx_queued_name = who
 			_fx_marks.append({
-				"at": 0 if _fx_marks.is_empty() else _pushed + _pending.size() - _read,
+				"at": 0 if not _fx_marked else _pushed + _pending.size() - _read,
 				"speaker": who})
+			_fx_marked = true
+		if not near_first:
+			_near_mark(_fx_marks, near, _pushed + _pending.size() - _read, _fx_queued_near)
+			_fx_marked = true
 		# the model timed each chunk from zero; shift into stream time
 		for w in take["words"]:
 			var d: Dictionary = (w as Dictionary).duplicate()
@@ -3357,7 +3461,7 @@ func _drain_ready() -> void:
 			# every dial onto the fresh chain, in one call - the preset's own nudge
 			# to the bed included: a mood is carried by the room as much as by the
 			# reading. The opening voice's, not the tab on screen's.
-			_fx_live_name = String((_fx_marks[0] as Dictionary)["speaker"]) \
+			_fx_live_name = String((_fx_marks[0] as Dictionary).get("speaker", who)) \
 				if not _fx_marks.is_empty() else who
 			_apply_fx(_fx, _cfg_of(_fx_live_name))
 			# the session opens on the FIRST chunk and never again - that is the
@@ -3866,6 +3970,8 @@ func export_take() -> String:
 	# same way at the bottom of this function.
 	var marks: Array = []
 	var last_who := ""
+	var last_near := {}
+	_plan_near(chunks, 0)
 
 	var fade_start := -1          # the outro mark's fade, as a sample of the reading (-1: none)
 	for i in chunks.size():
@@ -3893,6 +3999,10 @@ func export_take() -> String:
 		var spliced := _splice_holds(part, (chunks[i] as Dictionary).get("holds", []),
 			out.get("tokens", []), ratio)
 		part = spliced["pcm"]
+		# the reader moves in the pause before the sentence, as in _drain_ready
+		var near: Dictionary = (chunks[i] as Dictionary).get("near", {})
+		if not marks.is_empty():
+			_near_mark(marks, near, pcm.size(), last_near)
 		if i > 0:
 			var seam := _gap_before(chunks, i, s)
 			var gap := PackedFloat32Array()
@@ -3900,9 +4010,12 @@ func export_take() -> String:
 			pcm.append_array(gap)
 			elapsed += seam
 		# after the gap, for the reason spelled out in _drain_ready
-		if marks.is_empty() or who != last_who:
+		var opening := marks.is_empty()
+		if opening or who != last_who:
 			last_who = who
 			marks.append({"at": pcm.size(), "speaker": who})
+		if opening:
+			_near_mark(marks, near, pcm.size(), last_near)
 		var by_index := {}
 		for sp in out.get("tokens", []):
 			by_index[int((sp as Dictionary).get("index", -1))] = sp
@@ -3989,15 +4102,21 @@ func export_take() -> String:
 	# always was, at half the size.
 	var leans := false
 	var wet := PackedVector2Array()
+	var cfg: Dictionary = _cfg_of(String((marks[0] as Dictionary)["speaker"]))
 	for k in marks.size():
-		var a := int((marks[k] as Dictionary)["at"])
+		var m: Dictionary = marks[k]
+		# every mark is applied, even one with no audio before the next: a distance and a
+		# voice can change at the same frame
+		if m.has("speaker"):
+			cfg = _cfg_of(String(m["speaker"]))
+			leans = leans or float(cfg["lean"]) > 0.0
+			_apply_fx(fx, cfg)
+		if m.has("near"):
+			_near_to(fx, m["near"])
+		var a := int(m["at"])
 		var b := pcm.size() if k == marks.size() - 1 else int((marks[k + 1] as Dictionary)["at"])
-		if b <= a:
-			continue
-		var cfg := _cfg_of(String((marks[k] as Dictionary)["speaker"]))
-		leans = leans or float(cfg["lean"]) > 0.0
-		_apply_fx(fx, cfg)
-		wet.append_array(fx.process_stereo(pcm.slice(a, b)))
+		if b > a:
+			wet.append_array(fx.process_stereo(pcm.slice(a, b)))
 	# ...faded AFTER the effects, so the room and the ambience bed go down with the voice
 	if fade_start >= 0:
 		var f0 := head + fade_start

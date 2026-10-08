@@ -833,6 +833,18 @@ func _part_troubles(list: Array, depth: int, budget: Array, path: String, out: P
 		if shape == "tube" and Props._points3(d.get("path"), Props.MAX_SIZE).size() < 2:
 			out.append("part %s: a tube's path needs two [x, y, z] points or more - left out" % where)
 			continue
+		if shape == "sculpt":
+			var strokes := Props._strokes(d.get("strokes"))
+			if strokes.is_empty():
+				out.append("part %s: a sculpt needs `strokes`, each with `points` [[x, y, z, r], ...] - left out" % where)
+				continue
+			# A ROD THINNER THAN THE SCULPT IS CUT comes out broken: said before it is built, with how thick to make it
+			var cut := Props.sculpt_cut({"strokes": strokes, "mirror": Props._flag(d.get("mirror"))})
+			var thin: Array = cut["thin"]
+			for si in thin.size():
+				if float(thin[si]) < float(cut["cell"]) * 0.6:
+					out.append("part %s: stroke %d is %s cm thick at its thinnest, finer than this sculpt is cut (about %s cm) - it may come out broken or vanish: make it thicker, or the sculpt smaller" % [where, si + 1,
+						str(snappedf(float(thin[si]), 0.01)), str(snappedf(float(cut["cell"]), 0.01))])
 		if d.has("warp") and not (d["warp"] is Dictionary):
 			out.append("part %s: its warp is not {\"bend\": ..., ...} - not warped" % where)
 		elif d.get("warp") is Dictionary:
@@ -937,7 +949,10 @@ func _describe_air(names: Array) -> PackedStringArray:
 				what = "%s %s, %s mm%s" % [Effects.count_of(String(built["look"]), int(built["count"])), String(built["where"]),
 					Effects._mm(float(built["size"])), ", lit" if bool(built["light"]) else ""]
 			"burst":
-				what = "%s on %s, %d of them, %s mm" % [String(built["look"]), String(built["on"]), int(built["count"]), Effects._mm(float(built["size"]))]
+				var which: Variant = built.get("which", "every")
+				what = "%s on %s (%s), %d of them, %s mm" % [String(built["look"]), String(built["on"]),
+					("times " + ", ".join(PackedStringArray((which as Array).map(func(x: Variant) -> String: return str(x))))) if which is Array else String(which),
+					int(built["count"]), Effects._mm(float(built["size"]))]
 		out.append("- %s: %s" % [String(nm), what])
 		for tr in troubles:
 			out.append("   - " + tr)
@@ -970,7 +985,17 @@ func _air_troubles(e: Dictionary) -> PackedStringArray:
 		var on := String(e.get("on", "")).strip_edges().to_lower()
 		if not CardTable.MOMENTS.has(on):
 			out.append("\"%s\" is not a moment: %s" % [on, ", ".join(PackedStringArray(CardTable.MOMENTS.keys()))])
+		elif on == "jumper" and not _jumps():
+			out.append("no card leaps out of the deck in this reading: a burst on \"jumper\" would never be seen")
 	return out
+
+
+## A card leaps out of this episode's shuffle: its draw says so, once drawn; else the seed does.
+func _jumps() -> bool:
+	var draw: Variant = episode.read_json("draw")
+	if draw is Dictionary and (draw as Dictionary).get("cards") is Array and not ((draw as Dictionary)["cards"] as Array).is_empty():
+		return bool((((draw as Dictionary)["cards"] as Array)[0] as Dictionary).get("jumper", false))
+	return CardProducer.jumps(episode.seed, true, plan)
 
 
 ## The air in a line, for the table's own picture: what is in it, and that a burst is watched.

@@ -252,6 +252,11 @@ const TURN_HOLD := Vector2(0.6, 5.0)
 const PIROUETTE_CHANCE := 0.1
 const PIROUETTE_HOLD := Vector2(1.6, 4.0)
 const TWIRL := Vector2(1.5, 2.1)
+## A BURST ON THE PIROUETTE makes one happen: about one card in forty twirled by chance, so a set
+## dresser's sparks on it (seen in its own preview, which stages one) went unseen in nearly every
+## reading (2026-10-07, "I have yet to see that occur even one time"). The card twirled is a held
+## one with at least this long in the hand (seconds), seeded - the longest-held when none has.
+const SPIN_ROOM := 12.0
 ## How far apart things stand on the table (meters): any two, and two of one group.
 const THING_GAP := 0.014
 const GROUP_GAP := 0.004
@@ -306,6 +311,7 @@ uniform vec4 window = vec4(0.0, 0.0, 1.0, 1.0);   // the picture's part of the f
 uniform float lo = 0.8;                            // the picture's own foil key (luminance)
 uniform float hi = 0.95;
 uniform vec3 accent = vec3(0.79, 0.64, 0.15);      // the frame's foil color
+uniform vec3 stock = vec3(-1.0);                   // the card's stock: a shaped window's corners are stock, never foil
 uniform float foil = 0.6;                          // how much foil the deck was printed with
 uniform float pulse = 0.5;                         // the slow breath, 0..1
 uniform float glint = -1.0;                        // the sweep's place along the diagonal
@@ -318,7 +324,7 @@ void fragment() {
 	float mn = min(c.r, min(c.g, c.b));
 	float sat = (mx - mn) / max(mx, 0.0001);
 	float inside = step(window.x, UV.x) * step(UV.x, window.z) * step(window.y, UV.y) * step(UV.y, window.w);
-	float key = inside * smoothstep(lo, hi, lum) * mix(0.45, 1.0, sat);
+	float key = inside * smoothstep(lo, hi, lum) * mix(0.45, 1.0, sat) * smoothstep(0.03, 0.09, distance(c.rgb, stock));
 	// the frame's own accent prints as foil too - on the FRAME only: inside the painting the same
 	// color may be the whole ground of the picture
 	key = max(key, (1.0 - inside) * (1.0 - smoothstep(0.06, 0.16, distance(c.rgb, accent))));
@@ -432,6 +438,7 @@ var _page_for := -1
 var _blur: IntroBlur
 var _title: TitleCard
 var _card_mesh: ArrayMesh
+var _meshes := {}                   # "radius|thickness" -> a card's slab cut to it ([method _mesh_for])
 var _edge_mat: StandardMaterial3D
 
 # the episode's table, sampled from its seed
@@ -451,6 +458,9 @@ var _poll_t := 0.0
 var _textures := {}
 var _air = null                     # the set dresser's effects, built (Effects.Air), or null
 var _air_key := ""                  # the schedule its bursts were last planned on
+var _spin_wanted := false           # a burst marks a pirouette: one card is twirled ([method _spin_card])
+var _spin_key := ""                 # ...the schedule it was chosen on
+var _spin_k := -1                   # ...and the card
 var _rig = null                     # the set dresser's light, built (Lights.Rig), or null: the lamp and the room's candles
 var _ambient := {}                  # the room's own ambient, for a table with no light of its own
 var _seen := PackedVector3Array()   # the table the camera sees, sampled (for the light), this build
@@ -871,9 +881,10 @@ func _build_episode() -> void:
 		canvas.seed = _seed
 		var vp := CardFaces.viewport(self, canvas, CardFaces.FACE_PX)
 		var mat := _foil_material(vp.get_texture())
-		mat.set_shader_parameter("window", _face_window())
+		mat.set_shader_parameter("window", _face_window(canvas.look))
+		_foil_stock(mat, canvas.look)
 		var m := MeshInstance3D.new()
-		m.mesh = _card_mesh
+		m.mesh = _mesh_for(canvas.look)
 		m.set_surface_override_material(0, mat)
 		m.set_surface_override_material(1, _back_of(i, cards[i]))
 		m.set_surface_override_material(2, _edge_mat)
@@ -885,6 +896,10 @@ func _build_episode() -> void:
 		_face_mats.append(mat)
 	_back_canvas.look = _look
 	_back_canvas.seed = _seed
+	_foil_stock(_back_mat, _look)
+	var deck_mesh := _mesh_for(_look, DECK_T)
+	for d in _deck:
+		(d as MeshInstance3D).mesh = deck_mesh
 	_back_mat.set_shader_parameter("window", Vector4(0.0, 0.0, 1.0, 1.0))
 	_edge_mat.albedo_color = CardTable.color(String((_look.get("frame", {}) as Dictionary).get("stock", "#efe6d2"))).darkened(0.08)
 	_page_canvas.look = _look
@@ -929,6 +944,7 @@ func _build_backs(cards: Array) -> void:
 		var mat := _foil_material(vp.get_texture())
 		mat.set_shader_parameter("lift", 0.06)
 		mat.set_shader_parameter("window", Vector4(0.0, 0.0, 1.0, 1.0))
+		_foil_stock(mat, canvas.look)
 		_backs[name] = {"vp": vp, "canvas": canvas, "mat": mat}
 
 
@@ -977,10 +993,27 @@ func _box_keep() -> Vector2:
 
 ## The part of a face that is the painting, in UV - foil is keyed inside it (the frame's foil is
 ## keyed by its color instead).
-func _face_window() -> Vector4:
+func _face_window(look: Dictionary = {}) -> Vector4:
 	var sz := Vector2(CardFaces.FACE_PX)
-	var w := CardFaces.window()
+	var w := CardFaces.window(false, look)
 	return Vector4(w.position.x / sz.x, w.position.y / sz.y, w.end.x / sz.x, w.end.y / sz.y)
+
+
+## The card's stock, for the foil to leave alone where a shaped window's corners show it.
+static func _foil_stock(mat: ShaderMaterial, look: Dictionary) -> void:
+	var f: Dictionary = look.get("frame", {}) if look.get("frame") is Dictionary else {}
+	var c := CardTable.color(String(f.get("stock", "#efe6d2")))
+	mat.set_shader_parameter("stock", Vector3(c.r, c.g, c.b))
+
+
+## THE CARD'S SLAB for [param look], cut to its corners ([method CardTable.corner_radius]) - one mesh per
+## radius and thickness, shared.
+func _mesh_for(look: Dictionary, t := CARD_T) -> ArrayMesh:
+	var r := CardTable.corner_radius(look)
+	var key := "%.5f|%.5f" % [r, t]
+	if not _meshes.has(key):
+		_meshes[key] = _make_card_mesh(CARD, t, r)
+	return _meshes[key]
 
 
 ## Pictures that have landed since last looked - live, a reading can start while the deck is
@@ -1283,7 +1316,12 @@ func _build_table(spec: Dictionary = {}) -> void:
 	var things: Array = (spec["things"] as Array).duplicate()
 	var built: Array = []
 	for i in things.size():
-		built.append(Props.build(things[i], spec["materials"], hash([_seed, i, "thing"])))
+		if Props.draped(things[i]):
+			# LAID ACROSS THE TABLE ITSELF: built in its space, over the edge of this top
+			things[i] = _grounded(things[i])
+			built.append(Props.build(things[i], spec["materials"], hash([_seed, i, "thing"]), true))
+		else:
+			built.append(Props.build(things[i], spec["materials"], hash([_seed, i, "thing"])))
 	# THE BOX THE CARDS ARE KEPT IN stands first, where the deck would be: the rest go round it
 	_stand_box(things, built)
 	_place_things(things, built, rng)
@@ -1407,7 +1445,7 @@ func _build_file() -> void:
 		var list: Array = per[n]
 		if list.is_empty():
 			continue
-		var mesh := _card_mesh.duplicate() as ArrayMesh
+		var mesh := _mesh_for((_backs[n] as Dictionary)["canvas"].look).duplicate() as ArrayMesh
 		# a filed card faces either way: the front one shows its printing's back, whichever way it stands
 		mesh.surface_set_material(0, (_backs[n] as Dictionary)["mat"])
 		mesh.surface_set_material(1, (_backs[n] as Dictionary)["mat"])
@@ -1457,8 +1495,14 @@ func _table_spec() -> Dictionary:
 ## off the table.
 func _place_things(things: Array, built: Array, rng: RandomNumberGenerator) -> void:
 	var keep_out := _keep_out()
+	# THE DRAPED FIRST: where they lie is written, and the rest stand clear of them
+	for i in things.size():
+		if Props.draped(things[i]):
+			_drape(things[i], built[i], keep_out)
 	var groups := {}
 	for i in things.size():
+		if Props.draped(things[i]):
+			continue
 		var g := String((things[i] as Dictionary).get("group", ""))
 		var key := g if not g.is_empty() else "#%d" % i
 		if not groups.has(key):
@@ -1484,6 +1528,56 @@ func _place_things(things: Array, built: Array, rng: RandomNumberGenerator) -> v
 				((built[i] as Dictionary)["node"] as Node).free()
 			elif anchor.is_empty():
 				anchor = stood
+
+
+## THING [param t] (its strand laid `drape`) with the ground it falls over: this top's edge ([method
+## Tables.sdf]), the middle of the reading its path is written from, and the floor.
+func _grounded(t: Dictionary) -> Dictionary:
+	var out := t.duplicate(true)
+	var o := _top_o
+	var ground := {"sdf": func(p: Vector2) -> float: return Tables.sdf(o, p),
+		"normal": func(p: Vector2) -> Vector2: return Tables.normal(o, p),
+		"origin": Tables.ORIGIN, "drop": Tables.DROP_MOST}
+	for p in out["parts"]:
+		(p as Dictionary)["ground"] = ground
+	return out
+
+
+## A STRAND DRAPED ACROSS THE TABLE ([param t], built as [param b] in the table's own space): laid where it was
+## written - unless it runs where the cards go ([param keep_out]), when it is left off - and the stretches of
+## the table it covers kept out for the things that stand after it.
+func _drape(t: Dictionary, b: Dictionary, keep_out: Array) -> void:
+	var node: Node3D = b["node"]
+	var line := PackedVector2Array()
+	for m in b["meshes"]:
+		var arr := ((m as MeshInstance3D).mesh as ArrayMesh).surface_get_arrays(0)
+		var vs: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		for i in range(0, vs.size(), 7):
+			if vs[i].y > -0.01:
+				line.append(Vector2(vs[i].x, vs[i].z))
+	var pieces: Array = []
+	var cell := 0.06
+	var cells := {}
+	for q in line:
+		var c := Vector2i(floori(q.x / cell), floori(q.y / cell))
+		if not cells.has(c):
+			cells[c] = Rect2(q, Vector2.ZERO)
+		cells[c] = (cells[c] as Rect2).expand(q)
+	for c in cells:
+		pieces.append((cells[c] as Rect2).grow(0.004))
+	for r in pieces:
+		for k in keep_out:
+			if (r as Rect2).intersects(k as Rect2):
+				print("ghost: card table - %s runs where the cards go; left off" % String(t.get("name", "a strand")))
+				node.free()
+				return
+	var bb := Rect2()
+	for r in pieces:
+		bb = (r as Rect2) if bb.size == Vector2.ZERO else bb.merge(r as Rect2)
+	var flat := b.duplicate()
+	flat["foot"] = PackedVector2Array()
+	_put(t, flat, {"at": Vector2.ZERO, "rect": Rect2(), "bb": bb, "outline": PackedVector2Array()}, Basis(), "")
+	keep_out.append_array(pieces)
 
 
 ## Where nothing may stand: everywhere the cards go - the spread, the deck, the middle where the
@@ -2225,6 +2319,9 @@ func _build_air(spec: Dictionary) -> void:
 		_air.release()
 		_air = null
 	var fx: Array = spec.get("effects", []) if spec.get("effects") is Array else []
+	_spin_wanted = fx.any(func(e: Variant) -> bool:
+		return e is Dictionary and String((e as Dictionary).get("kind", "")) == "burst" and String((e as Dictionary).get("on", "")) == "pirouette")
+	_spin_key = ""
 	if not fx.is_empty():
 		_air = Effects.build(fx, _air_stage(), hash([_seed, "air"]))
 		_root3.add_child(_air.root)
@@ -2805,6 +2902,7 @@ func _looks(k: int, up_at: float, until: float) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([_seed, k, "turn"])
 	var at := 0.0
+	var forced := k == _spin_card()
 	if _alone:
 		# ITS TEXT IS ON ITS BACK: turned over to show it every time, a few seconds after it is up, and
 		# held there long enough to read
@@ -2823,17 +2921,20 @@ func _looks(k: int, up_at: float, until: float) -> Array:
 			if look["hold"] <= 0.5:
 				return out
 		out.append({"at": at, "look": look})
-		if rng.randf() > LOOK_AGAIN:
+		if rng.randf() > LOOK_AGAIN and not forced:
 			return out
 		at += float(look["total"]) + rng.randf_range(LOOK_GAP.x, LOOK_GAP.y)
 	else:
-		if rng.randf() > TURN_CHANCE:
+		if rng.randf() > TURN_CHANCE and not forced:
 			return out
 		at = up_at + rng.randf_range(5.0, 9.0)
 	var spun := false
 	for i in 64:
-		var look := _look_of(rng, not spun)
+		var look := _look_of(rng, not spun, forced)
 		spun = spun or float(look["twirl"]) > 0.0
+		if forced and float(look["twirl"]) > 0.0 and at + float(look["total"]) > until - 1.0:
+			# THE TWIRL A BURST MARKS fits in somewhere while the card is held, or it is not done
+			at = maxf(up_at + 1.5, until - 1.0 - float(look["total"]))
 		if at + float(look["total"]) > until - 1.0:
 			return out
 		out.append({"at": at, "look": look})
@@ -2843,15 +2944,72 @@ func _looks(k: int, up_at: float, until: float) -> Array:
 	return out
 
 
+## THE CARD TWIRLED for a burst on the pirouette ([constant SPIN_ROOM]), or -1 when no burst marks one -
+## chosen again whenever the schedule moves.
+func _spin_card() -> int:
+	if not _spin_wanted:
+		return -1
+	var key := "%d|%d" % [_built_n, _sched.size()]
+	if key == _spin_key:
+		return _spin_k
+	_spin_key = key
+	_spin_k = -1
+	var tm := _times()
+	var order: Array = range(_cards.size())
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([_seed, "spin"])
+	for i in range(order.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp: Variant = order[i]
+		order[i] = order[j]
+		order[j] = tmp
+	var longest := 0.0
+	for k in order:
+		var span := _held_span(int(k), tm)
+		var room := span.y - span.x
+		if room >= SPIN_ROOM:
+			_spin_k = int(k)
+			return _spin_k
+		if room > longest and room > 1.0 + PIROUETTE_HOLD.x + TURN.x + TWIRL.y + 2.5:
+			longest = room
+			_spin_k = int(k)
+	return _spin_k
+
+
+## WHEN CARD [param k] IS HELD UP: from the moment it faces the camera to the moment it goes down (INF
+## when it is never laid) - `Vector2(INF, INF)` for a card never held up - as [method _air_moments]
+## reads them off [param tm] ([method _times]).
+func _held_span(k: int, tm: Dictionary) -> Vector2:
+	var ev: Array = (tm["events"] as Array)[k] if k < (tm["events"] as Array).size() else []
+	for i in ev.size():
+		var e: Dictionary = ev[i]
+		var td := float(e["t0"])
+		if td == INF:
+			continue
+		var s := maxf(float(e["s"]), 0.05)
+		var off := float(e["off"])
+		var kind := String(e["k"])
+		var how := String(e.get("how", ""))
+		var up_at := INF
+		if kind == "arrive" and how in ["draw", "jumper"]:
+			up_at = td + (off + (JUMP_RISE if how == "jumper" else RISE_END)) * s
+		elif kind == "show":
+			up_at = td + (off + SHOW_RISE) * s
+		if up_at < INF:
+			var tl := float((ev[i + 1] as Dictionary)["t0"]) if i + 1 < ev.size() and String((ev[i + 1] as Dictionary)["k"]) == "lay" else INF
+			return Vector2(up_at, tl)
+	return Vector2(INF, INF)
+
+
 ## ONE LOOK AT A HELD CARD'S BACK, drawn: which way it turns (`way`, 1 or -1 - a hand turns a card
 ## either way), how long the turn over takes (`turn`), how long the back is held (`hold`), then
 ## either how long the turn back takes (`back`) or, for a PIROUETTE, the twirl on round (`twirl`) -
 ## the other 0; `total` its seconds. A card that has already pirouetted does not again
 ## ([param may_spin] false).
-static func _look_of(rng: RandomNumberGenerator, may_spin := true) -> Dictionary:
+static func _look_of(rng: RandomNumberGenerator, may_spin := true, force := false) -> Dictionary:
 	var way := 1.0 if rng.randf() < 0.5 else -1.0
 	var turn := rng.randf_range(TURN.x, TURN.y)
-	var spin := rng.randf() < PIROUETTE_CHANCE and may_spin
+	var spin := (rng.randf() < PIROUETTE_CHANCE or force) and may_spin
 	var hold := rng.randf_range(PIROUETTE_HOLD.x, PIROUETTE_HOLD.y) if spin \
 		else exp(rng.randf_range(log(TURN_HOLD.x), log(TURN_HOLD.y)))
 	var twirl := rng.randf_range(TWIRL.x, TWIRL.y) if spin else 0.0

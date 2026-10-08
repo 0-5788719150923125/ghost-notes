@@ -1,5 +1,5 @@
 {
-	"digest": "d6294428a8666935862b0d29b73f7d2fcb6c8b3fc0ea9d02f1b430146bcdcb0f",
+	"digest": "e5c2e6a70abe94f2bf9011621db50d180005bcbdbcc6c364036853662a2125c2",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -45,6 +45,7 @@
 		"res://src/card.gd",
 		"res://src/card_deck.gd",
 		"res://src/card_episode.gd",
+		"res://src/card_faces.gd",
 		"res://src/card_producer.gd",
 		"res://src/card_prompts.gd",
 		"res://src/card_reading.gd",

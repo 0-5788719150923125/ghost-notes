@@ -56,8 +56,117 @@ const SHAPES := {
 	"coil": "a band wound round the vertical axis: an incense coil, a spring, a coiled cord, a curling tendril, a spiral of wire. `turns`, `radius` (where it starts) and `radius2` (where it ends: larger for a flat spiral), `height` (how far it climbs over all its turns; 0 lies flat), `thickness` (the band's, as a ring's).",
 	"sheet": "a thin flat piece lying on the cloth unless turned, placed by its middle: a leaf, a petal, a feather, a page, a scrap of cloth. `outline` (leaf, petal, feather, oval or rect - or `points` [[x,z], ...] for any outline), `size` [width, length] (its length runs front to back), `bend` -1..1 (the tip curls up), `fold` 0-1 (the sides lift).",
 	"bloom": "a flower head, petals in rings round a small middle: `petals`, `layers` 1-4, `radius`, `cup` 0 (open flat) to 1 (a closed bud), `width` (a petal's width over its length).",
+	"strand": "something long and limp laid down: a rope, a cord, a wire, a vine, a string of beads, a chain. `kind` (rope, cord, wire, vine, beads or chain), `length` (centimeters along it), `thickness` (how wide it is), and how it lies, `lay`: \"coil\" (coiled down, loop piled on loop, as a rope is - `radius` the loops'), \"flemish\" (wound flat in a spiral from the middle out), \"heap\" (dropped in a loose tangle, crossing over itself - within `radius`), \"path\" (laid along `path` [[x, z], ...], centimeters from the thing's middle, its length the path's) or \"drape\" (laid across the table itself and over its edge - DRAPED, below). `loose` 0-1: how unkempt it lies, 0 laid neatly, 1 thrown down. A vine carries leaves - `leaf` their length (centimeters) and `leaves` their material, if not the stem's. It rests on the cloth, and on itself wherever it crosses itself.",
+	"bone": "a bone, lying on its side along x: `kind` \"femur\" (a thigh bone: a ball on a neck at one end, two knuckles at the other), \"long\" (an arm or leg bone, knobbed at both ends), \"rib\" (a curved, flattened bar), \"small\" (a chicken's or a small animal's - thin, knobbed, a little bent: copy it in a `heap` for a pile of them) or \"wishbone\"; `length` and `thickness` (the shaft's, centimeters). Its material is most often `bone`.",
+	"skull": "a skull, resting on its jaw and facing the thing's front: `kind` \"human\", \"horned\" (a cow's, a goat's or a ram's, long-snouted, with `horns` \"straight\", \"curved\" or \"curled\", or \"none\") or \"bird\" (a long beak); `length` (centimeters, front to back - a person's is about 19). Its sockets are deep and its openings go through. It is bone, not a head: no eyes, no skin, nothing living.",
+	"sculpt": "a form modeled freely, as clay is, from STROKES - for what no other shape makes: the skull or the jaw of a creature not listed, a shell, an antler, a gnarled root, a seed pod, a mushroom, a stone worn into a shape, a carved charm. `strokes` [{`points` [[x, y, z, r], ...]}, ...] in order: each stroke a rod through its points (curving through them; `smooth` false joins them straight), r its thickness there (a radius, centimeters), so it swells and narrows as it goes; one point is a ball, stretched to `size` [width, height, depth] if given. Each stroke melts into what came before it, `blend` centimeters soft (0 a crisp seam); `carve` true cuts it out of what came before instead - a socket, a groove, a hollow, a hole right through, the gap under an arch. `mirror` true makes it the same on both sides of x = 0: draw only its middle and its right side. It is one surface, its hollows shut in from the light; a rod much thinner than a hundredth of the whole comes out broken. Draw it blind and you will not get it right first: look at it from every side, and put it again.",
 	"extrude": "an outline raised straight up: trays, tiles, plaques, tablets, boxes, dishes and candles of any plan - a star, a hexagon, a heart. `outline` (polygon with `sides` 3-12, star with `sides` points, circle, rect, heart, lens (pointed at both ends, as a leaf or an eye is) or drop (round behind, pointed in front) - or `points` [[x, z], ...] for any outline, which may go in and out), `size` [width, depth], `height`; optional `taper` 0-0.9 (narrower at the top), `bevel` (centimeters cut off the top edge), `wall` (centimeters: hollow, as a tray or a dish is, its floor as thick as its wall). A wax extrude takes `wick` or `wicks` as a turned candle does.",
 }
+
+## THE STRANDS: what a strand can be, and the width it is when none is given (centimeters).
+const STRANDS := {"rope": {"thickness": 1.2}, "cord": {"thickness": 0.5}, "wire": {"thickness": 0.15},
+	"vine": {"thickness": 0.45}, "beads": {"thickness": 0.8}, "chain": {"thickness": 0.7}}
+## How a strand lies ([method _strand_line]).
+const LAYS := ["coil", "flemish", "heap", "path", "drape"]
+## The longest a strand is (centimeters), how far from the middle of the reading a draped one's path may
+## run (centimeters - past the edge of the largest top), and the most points it is cut into.
+const MAX_STRAND := 600.0
+const DRAPE_REACH := 220.0
+const STRAND_SAMPLES := 1400
+## THE BONES: each kind's length and shaft thickness when none is given (centimeters).
+const BONES := {"femur": Vector2(44.0, 2.6), "long": Vector2(30.0, 2.0), "rib": Vector2(24.0, 1.2),
+	"small": Vector2(9.0, 0.6), "wishbone": Vector2(6.0, 0.35)}
+## THE SKULLS: each kind's length front to back when none is given (centimeters).
+const SKULLS := {"human": 19.0, "horned": 40.0, "bird": 8.0}
+## THE SKULLS AS SCULPTS ([method _skull]), their right halves (mirrored), centimeters, facing +z - each
+## sized to its length when built. Drawn by hand from the bone: a crow's (a braincase, orbits open to the side
+## and through a thin wall between them, a beak with its nostrils through, the bars under the eyes, a jaw of
+## two thin branches), a person's (a vault, brow, cheekbones and the arches behind them standing free, sockets,
+## the nose's opening, the teeth, and the jaw) and a cow's or a goat's as it is found - no jaw - long-faced,
+## its sockets at the sides in raised rims.
+const SKULL_FORMS := {
+	"bird": [
+		{"points": [[0, 2.0, -1.9]], "size": [3.0, 2.6, 3.1]},
+		{"points": [[0, 2.2, -0.3]], "size": [2.7, 2.0, 2.9], "blend": 1.0},
+		{"points": [[0, 2.05, 1.0, 0.72], [0, 1.8, 2.4, 0.52], [0, 1.45, 4.0, 0.32], [0, 1.12, 5.6, 0.12], [0, 0.98, 6.35, 0.03]], "blend": 0.5},
+		{"points": [[1.1, 1.95, 0.1]], "size": [2.0, 1.9, 2.1], "carve": true, "blend": 0.15},
+		{"points": [[0, 1.9, 0.3]], "size": [0.6, 0.9, 1.1], "carve": true, "blend": 0.05},
+		{"points": [[0, 1.95, 2.0]], "size": [2.0, 0.32, 0.75], "carve": true, "blend": 0.05},
+		{"points": [[0, 1.05, -3.0]], "size": [0.6, 0.6, 0.8], "carve": true, "blend": 0.1},
+		{"points": [[1.35, 1.6, -1.25]], "size": [0.4, 0.5, 0.4], "carve": true, "blend": 0.05},
+		{"points": [[0.55, 1.25, 1.6, 0.09], [0.95, 1.05, 0.2, 0.08], [1.12, 1.05, -1.25, 0.11]], "blend": 0.12},
+		{"points": [[0.25, 1.35, 1.4, 0.08], [0.35, 1.25, -0.3, 0.09], [0.3, 1.35, -1.2, 0.12]], "blend": 0.12},
+		{"points": [[1.1, 1.0, -1.35]], "size": [0.4, 0.5, 0.4], "blend": 0.12},
+		{"points": [[0.04, 0.9, 6.0, 0.06], [0.28, 0.92, 4.2, 0.13], [0.62, 0.95, 2.2, 0.15], [0.98, 0.95, 0.2, 0.14], [1.15, 1.0, -1.35, 0.15]], "blend": 0.1},
+	],
+	"human": [
+		{"points": [[0, 12.4, -1.8]], "size": [14.0, 13.2, 18.0]},
+		{"points": [[0, 11.5, 4.5]], "size": [11.5, 8.5, 8.0], "blend": 2.0},
+		{"points": [[0, 10.6, 8.1, 0.9], [2.6, 10.9, 7.9, 0.85], [4.6, 10.4, 7.0, 0.8]], "blend": 0.8},
+		{"points": [[0, 6.6, 6.0]], "size": [9.6, 6.6, 6.2], "blend": 1.5},
+		{"points": [[4.6, 7.3, 6.0]], "size": [2.6, 2.8, 3.0], "blend": 1.0},
+		{"points": [[5.6, 7.2, -2.2, 0.9], [5.4, 5.6, -2.0, 0.6]], "blend": 0.8},
+		{"points": [[6.4, 9.0, 3.2]], "size": [3.0, 4.0, 3.5], "carve": true, "blend": 1.0},
+		{"points": [[4.9, 7.4, 5.5, 0.6], [6.2, 7.6, 2.8, 0.45], [6.5, 7.9, 0.2, 0.45]], "blend": 0.4},
+		{"points": [[3.3, 8.7, 9.6, 1.95], [3.1, 8.6, 7.6, 1.75], [2.6, 8.4, 4.6, 0.9]], "carve": true, "blend": 0.4},
+		{"points": [[0, 6.9, 9.8, 0.8], [0, 6.7, 7.0, 0.8], [0, 6.6, 3.5, 0.6]], "carve": true, "blend": 0.3},
+		{"points": [[0, 5.9, 9.8, 1.25], [0, 5.9, 7.0, 1.15], [0, 6.0, 3.5, 0.8]], "carve": true, "blend": 0.3},
+		{"points": [[6.6, 8.3, -0.9]], "size": [1.6, 0.9, 0.9], "carve": true, "blend": 0.2},
+		{"points": [[0, 4.0, 7.6, 0.9], [2.2, 4.1, 6.6, 0.9], [2.8, 4.3, 4.0, 0.9]], "blend": 0.8},
+		{"points": [[0.45, 3.2, 8.1]], "size": [0.8, 1.1, 0.55], "blend": 0.1},
+		{"points": [[1.25, 3.25, 7.8]], "size": [0.75, 1.0, 0.55], "blend": 0.1},
+		{"points": [[1.9, 3.2, 7.3]], "size": [0.75, 1.15, 0.7], "blend": 0.1},
+		{"points": [[2.3, 3.3, 6.6]], "size": [0.75, 0.9, 0.75], "blend": 0.1},
+		{"points": [[2.55, 3.35, 5.9]], "size": [0.75, 0.9, 0.75], "blend": 0.1},
+		{"points": [[2.75, 3.4, 5.1]], "size": [0.95, 0.85, 0.95], "blend": 0.1},
+		{"points": [[2.9, 3.45, 4.2]], "size": [0.95, 0.85, 0.95], "blend": 0.1},
+		{"points": [[0, 1.0, 7.6, 1.0], [2.4, 1.0, 6.6, 0.9], [4.4, 1.4, 3.8, 0.8], [5.0, 1.6, 1.2, 0.85]], "blend": 0.6},
+		{"points": [[0, 0.9, 7.7]], "size": [3.0, 1.8, 1.6], "blend": 0.6},
+		{"points": [[5.0, 1.6, 1.2, 0.75], [5.3, 4.5, 0.6, 0.6], [5.6, 7.0, -0.3, 0.5]], "blend": 0.5},
+		{"points": [[5.6, 7.4, -0.4]], "size": [1.8, 0.9, 1.0], "blend": 0.3},
+		{"points": [[5.1, 4.4, 1.3, 0.45], [5.0, 6.4, 2.4, 0.3]], "blend": 0.4},
+		{"points": [[0, 2.0, 7.5, 0.75], [2.3, 2.1, 6.4, 0.75], [2.8, 2.2, 4.0, 0.75]], "blend": 0.5},
+		{"points": [[0.4, 2.65, 7.85]], "size": [0.7, 0.95, 0.5], "blend": 0.1},
+		{"points": [[1.15, 2.65, 7.6]], "size": [0.7, 0.95, 0.5], "blend": 0.1},
+		{"points": [[1.8, 2.7, 7.1]], "size": [0.7, 1.0, 0.65], "blend": 0.1},
+		{"points": [[2.2, 2.75, 6.4]], "size": [0.7, 0.85, 0.7], "blend": 0.1},
+		{"points": [[2.45, 2.75, 5.7]], "size": [0.7, 0.85, 0.7], "blend": 0.1},
+		{"points": [[2.65, 2.8, 4.9]], "size": [0.9, 0.8, 0.95], "blend": 0.1},
+		{"points": [[2.8, 2.85, 4.0]], "size": [0.9, 0.8, 0.95], "blend": 0.1},
+	],
+	"horned": [
+		{"points": [[0, 9.5, -6.0]], "size": [12.0, 10.0, 9.0]},
+		{"points": [[0, 12.0, -2.0]], "size": [17.0, 6.0, 16.0], "blend": 2.0},
+		{"points": [[0, 14.3, -8.6, 2.2], [7.6, 14.0, -8.6, 2.7]], "blend": 2.0},
+		{"points": [[2.8, 10.5, 2.0, 3.6], [2.6, 9.2, 12.0, 2.8], [2.0, 7.6, 20.0, 2.2], [1.3, 6.2, 27.0, 1.4]], "blend": 2.5},
+		{"points": [[0, 9.0, 2.0, 3.6], [0, 7.8, 12.0, 2.8], [0, 6.4, 20.0, 2.1], [0, 5.4, 27.5, 1.3]], "blend": 2.0},
+		{"points": [[5.0, 8.0, 4.0, 1.0], [4.2, 6.6, 12.0, 0.8]], "blend": 1.5},
+		{"points": [[7.5, 9.5, -3.0]], "size": [3.0, 4.0, 4.0], "carve": true, "blend": 1.0},
+		{"points": [[6.8, 10.8, 1.5]], "size": [3.2, 4.6, 4.6], "blend": 1.2},
+		{"points": [[7.6, 10.8, 1.7]], "size": [2.6, 3.6, 3.6], "carve": true, "blend": 0.3},
+		{"points": [[3.4, 4.6, 4.0, 1.0], [3.2, 4.8, 14.0, 0.9]], "blend": 1.0},
+		{"points": [[0, 7.0, 30.0, 1.8], [0, 7.2, 22.0, 1.3]], "carve": true, "blend": 0.4},
+		{"points": [[2.0, 6.5, -10.5]], "size": [2.2, 2.8, 2.2], "blend": 0.5},
+		{"points": [[0, 7.5, -11.5]], "size": [2.6, 2.6, 3.0], "carve": true, "blend": 0.3},
+	],
+}
+## A SCULPT's limits: its strokes, the points in all of them, the cells across its longest side (at least, and
+## at most - [method _cut_of]), the short pieces a smooth rod is cut into between two of its points, a grid
+## block's cells a side ([method _grid]), and how many built sculpts a process keeps ([method _sculpt]).
+const MAX_STROKES := 48
+const MAX_SCULPT_POINTS := 320
+const SCULPT_CELLS := Vector2(72.0, 144.0)
+const SCULPT_STEPS := 4
+const SCULPT_BLOCK := 6
+const SCULPT_PIECE := 2
+## How much further than a block's (or a piece's) reach its middle may be from the surface before it is
+## skipped: a tapered rod's field overstates its distance a little.
+const SCULPT_SLACK := 1.15
+const SCULPT_KEPT := 24
+const _CORNERS := [Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(1, 1, 0), Vector3(0, 0, 1),
+	Vector3(1, 0, 1), Vector3(0, 1, 1), Vector3(1, 1, 1)]
+const _CUBE_EDGES := [0, 1, 2, 3, 4, 5, 6, 7, 0, 2, 1, 3, 4, 6, 5, 7, 0, 4, 1, 5, 2, 6, 3, 7]
+static var _sculpted := {}
 
 ## AN EXTRUDE's (and a loft section's) named outlines.
 const EXTRUDE_OUTLINES := ["polygon", "star", "circle", "rect", "heart", "lens", "drop"]
@@ -131,6 +240,15 @@ const _GLASS := preload("res://shaders/prop_glass.gdshader")
 const _LENS := preload("res://shaders/prop_lens.gdshader")
 
 
+## A THING DRAPED ACROSS THE TABLE: one whose strand is laid `drape` - built in the table's own space and
+## standing nowhere else.
+static func draped(thing: Dictionary) -> bool:
+	for p in thing.get("parts", []):
+		if p is Dictionary and String((p as Dictionary).get("shape", "")) == "strand" and String((p as Dictionary).get("lay", "")) == "drape":
+			return true
+	return false
+
+
 ## THE VOCABULARY, as an agent reads it: every shape, material and ornament with its words.
 static func describe() -> String:
 	var lines := PackedStringArray()
@@ -157,6 +275,8 @@ static func describe() -> String:
 	lines.append("WARP: any part, whatever its shape, can be reshaped whole by its `warp` - {\"scale\" [x, y, z] (stretched or squashed: an oval dish is a turned bowl with scale [1, 1, 0.7]), \"taper\" -1 to 0.95 (narrower toward its top; below 0, wider), \"twist\" (degrees it turns about its upright middle from bottom to top), \"lean\" [x, z] (its top moved that many centimeters, its base kept), \"bend\" (degrees: it bows along its height until its top has turned that far, toward \"bend_to\" - 0 its right, 90 its front, 180 its left, 270 its back), \"wobble\" 0-1 (the unevenness of a thing made by hand - a hand-thrown pot, a gnarled root, a misshapen fruit; 0.1-0.3 is plenty)}, applied in that order. A bend is a banana's curve, a candle slumped in the heat, a horn's sweep; a whole bent rod with kinks in it is a tube's path.")
 	lines.append("")
 	lines.append("WHERE PARTS MEET: a spout, a handle, an arm, a stem or a branch grows OUT of what it joins - start it a little inside that part, so no gap or seam of light shows. A thing is a few parts that join well, not many small ones floating side by side. A vessel's profile carries its character - foot, belly, shoulder, neck, lip - and most stand on a flat base. A spout leaves the body wide and low and narrows as it rises to a lip about level with the rim; a handle is a rod bent round, both ends sunk into the body; a lid is its own part, sitting in or on the rim, with a knob.")
+	lines.append("")
+	lines.append("DRAPED: a strand laid `drape` is laid across the TABLE ITSELF, not in a thing's own space: its `path` is in the table's centimeters, from the middle of the reading (as a layer's `at`), x to the reader's right and z toward the reader. Where the path runs past the top's edge the strand rolls over the edge and hangs straight down as far as it ran past - a path ending 30 cm past the right edge hangs 30 cm down the side, to the floor at most. It is its thing's only part, its thing's `place` is not used, and it keeps clear of the middle of the cloth, where the deck and the cards go: along the back, round a corner, across one side and over an edge. The camera sees the far edge and a little of the sides; what hangs over the near edge is under the lens.")
 	lines.append("")
 	lines.append("FLAMES: a thing's flames burn as ONE light, however many it has - a candelabra's tapers, a pillar's three wicks, a dish of tea lights - up to %d on one thing." % CardTable.MAX_FLAMES)
 	return "\n".join(lines)
@@ -210,6 +330,10 @@ static func _sanitize_thing(t: Dictionary, mats: Dictionary, pal: Array) -> Dict
 	out["name"] = _text(t.get("name", "a thing"), 100)
 	out["why"] = _text(t.get("why", ""), 200)
 	out["parts"] = _sanitize_parts(t.get("parts"), mats, pal, 0, [MAX_PARTS])
+	if draped(out):
+		# a draped strand is its thing's only part ([method draped])
+		out["parts"] = (out["parts"] as Array).filter(func(q: Variant) -> bool:
+			return q is Dictionary and String((q as Dictionary).get("lay", "")) == "drape").slice(0, 1)
 	return out
 
 
@@ -377,6 +501,40 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			out["bend"] = _num(p.get("bend"), 0.0, -1.0, 1.0)
 			out["fold"] = _num(p.get("fold"), 0.0, 0.0, 1.0)
 			out["thickness"] = _num(p.get("thickness"), 0.08, 0.02, 1.0)
+		"strand":
+			var kind := String(p.get("kind", "")).strip_edges().to_lower()
+			out["kind"] = kind if STRANDS.has(kind) else "cord"
+			var lay := String(p.get("lay", "")).strip_edges().to_lower()
+			out["lay"] = lay if LAYS.has(lay) else "coil"
+			out["thickness"] = _num(p.get("thickness"), float((STRANDS[out["kind"]] as Dictionary)["thickness"]), 0.05, 5.0)
+			out["length"] = _num(p.get("length"), 120.0, 5.0, MAX_STRAND)
+			out["loose"] = _num(p.get("loose"), 0.3, 0.0, 1.0)
+			# none given: the lay chooses one from the length ([method _strand_flat])
+			out["radius"] = _num(p["radius"], 6.0, 0.5, MAX_SIZE * 0.5) if (p.get("radius") is float or p.get("radius") is int) else -1.0
+			var far := DRAPE_REACH if out["lay"] == "drape" else MAX_SIZE
+			out["path"] = _points2(p.get("path"), Vector2(-far, -far), Vector2(far, far)).slice(0, MAX_POINTS)
+			if out["lay"] in ["path", "drape"] and (out["path"] as Array).size() < 2:
+				out["lay"] = "heap"
+			out["leaf"] = _num(p.get("leaf"), 3.0, 0.5, 15.0)
+			var lm := String(p.get("leaves", "")).strip_edges() if p.get("leaves") is String else ""
+			out["leaves"] = lm if mats.has(lm) else ""
+		"bone":
+			var kind := String(p.get("kind", "")).strip_edges().to_lower()
+			out["kind"] = kind if BONES.has(kind) else "long"
+			var dl: Vector2 = BONES[out["kind"]]
+			out["length"] = _num(p.get("length"), dl.x, 1.0, MAX_SIZE)
+			out["thickness"] = _num(p.get("thickness"), dl.y * float(out["length"]) / dl.x, 0.1, 8.0)
+		"skull":
+			var kind := String(p.get("kind", "")).strip_edges().to_lower()
+			out["kind"] = kind if SKULLS.has(kind) else "human"
+			out["length"] = _num(p.get("length"), float(SKULLS[out["kind"]]), 2.0, 40.0)
+			var horns := String(p.get("horns", "curved")).strip_edges().to_lower() if p.get("horns") is String else "curved"
+			out["horns"] = horns if horns in ["straight", "curved", "curled", "none"] else "curved"
+		"sculpt":
+			out["strokes"] = _strokes(p.get("strokes"))
+			if (out["strokes"] as Array).is_empty():
+				return {}
+			out["mirror"] = _flag(p.get("mirror"))
 		"bloom":
 			out["petals"] = int(_num(p.get("petals"), 8.0, 3.0, 24.0))
 			out["layers"] = int(_num(p.get("layers"), 2.0, 1.0, 4.0))
@@ -671,7 +829,9 @@ static func _points3(v: Variant, lim: float) -> Array:
 ## (where its flames are lit), `glows` (each wick's wax material, whose `flame` the table sets as
 ## the flame flickers) and `meshes` (every MeshInstance3D in it). [param materials] are the
 ## sanitized materials; [param seed] varies drips, scatter, lumps and the patterns' noise.
-static func build(thing: Dictionary, materials: Dictionary, seed: int) -> Dictionary:
+## [param keep]: built where it was written, neither moved to stand on the origin nor made smaller - a strand
+## draped across the table is laid in the table's own space ([method TableMedium._drape]).
+static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := false) -> Dictionary:
 	var inner := Node3D.new()
 	var all := PackedVector3Array()
 	var wicks: Array = []
@@ -743,8 +903,8 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int) -> Dictio
 	for p in all:
 		box = box.expand(p)
 	# TOO BIG IS SCALED DOWN WHOLE: an agent's 2-meter vase is a mistake in units, not a vase
-	var k := minf(1.0, MAX_SIZE * 0.01 / maxf(box.size.x, maxf(box.size.y, box.size.z)))
-	var shift := Vector3(-box.get_center().x, -box.position.y, -box.get_center().z)
+	var k := minf(1.0, MAX_SIZE * 0.01 / maxf(box.size.x, maxf(box.size.y, box.size.z))) if not keep else 1.0
+	var shift := Vector3(-box.get_center().x, -box.position.y, -box.get_center().z) if not keep else Vector3.ZERO
 	inner.scale = Vector3(k, k, k)
 	inner.position = shift * k
 	var placed := PackedVector3Array()
@@ -1358,6 +1518,14 @@ static func _shaped(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 			return [{"geo": _loft(p)}]
 		"coil":
 			return [{"geo": _coil(p)}]
+		"strand":
+			return _strand(p, rng)
+		"bone":
+			return [{"geo": _bone(p, rng)}]
+		"skull":
+			return _skull(p, rng)
+		"sculpt":
+			return [{"geo": _sculpt(p)}]
 	return []
 
 
@@ -2407,6 +2575,1041 @@ static func _coil(p: Dictionary) -> Tris:
 	var hollow := PackedFloat32Array()
 	hollow.resize(n + 1)
 	return _sweep(spine, none, rings, sharp, hollow)
+
+
+# --- bones --------------------------------------------------------------------------------------
+
+## A BONE lying on its side along x, resting on its knobs (asked 2026-10-07: "Chicken bones in a pile, a skull
+## upon the table, or even a large femur just sitting there"): a shaft swept along a slight bow, flaring at its
+## ends, and the knobs of its joints - built of the rods and balls every other thing is, in its own
+## proportions, so a set dresser writes a kind and a length and never draws one.
+static func _bone(p: Dictionary, rng: RandomNumberGenerator) -> Tris:
+	var L := float(p["length"])
+	var r := float(p["thickness"]) * 0.5
+	var g := Tris.new()
+	var shaft := func(from: Vector3, to: Vector3, bow: Vector3, flare: float, r0 := -1.0, r1 := -1.0) -> void:
+		var path: Array = []
+		var radii := PackedFloat32Array()
+		for i in 9:
+			var u := float(i) / 8.0
+			path.append(from.lerp(to, u) + bow * sin(u * PI))
+			var end := pow(absf(u - 0.5) * 2.0, 4.0)
+			var base := lerpf(r0 if r0 > 0.0 else r, r1 if r1 > 0.0 else r, u)
+			radii.append(base * (1.0 + flare * end))
+		g.append(_tube({"path": path, "rounds": PackedFloat32Array(), "radius": r, "radii": radii, "smooth": true, "wall": 0.0}))
+	match String(p["kind"]):
+		"femur":
+			shaft.call(Vector3(-0.40 * L, r, 0.0), Vector3(0.40 * L, r, 0.0), Vector3(0.0, 0.0, 0.035 * L), 0.9)
+			# the knee's two knuckles, the hip's ball on its neck and the knob beside it
+			_knob(g, Vector3(0.43 * L, r * 1.1, 0.85 * r), Vector3(2.3, 2.1, 2.1) * r, rng)
+			_knob(g, Vector3(0.43 * L, r * 1.1, -0.85 * r), Vector3(2.3, 2.1, 2.1) * r, rng)
+			shaft.call(Vector3(-0.38 * L, r, 0.0), Vector3(-0.44 * L, r * 1.2, -2.0 * r), Vector3.ZERO, 0.2, r * 1.0, r * 0.9)
+			_knob(g, Vector3(-0.45 * L, r * 1.3, -2.3 * r), Vector3.ONE * 2.5 * r, rng, 0.05)
+			_knob(g, Vector3(-0.42 * L, r * 1.1, 0.7 * r), Vector3(2.0, 1.7, 1.7) * r, rng)
+		"long":
+			shaft.call(Vector3(-0.42 * L, r, 0.0), Vector3(0.42 * L, r, 0.0), Vector3(0.0, 0.0, 0.02 * L), 0.8)
+			_knob(g, Vector3(-0.45 * L, r * 1.2, 0.2 * r), Vector3.ONE * 2.3 * r, rng, 0.08)
+			_knob(g, Vector3(0.45 * L, r * 1.0, 0.6 * r), Vector3(1.7, 1.6, 1.6) * r, rng)
+			_knob(g, Vector3(0.45 * L, r * 1.0, -0.6 * r), Vector3(1.7, 1.6, 1.6) * r, rng)
+		"rib":
+			# a flattened bar bowed round in an arc, lying flat, thinning toward its end
+			var path: Array = []
+			var radii := PackedFloat32Array()
+			var R := L * 0.62
+			for i in 13:
+				var u := float(i) / 12.0
+				var a := lerpf(-0.95, 0.95, u)
+				path.append(Vector3(sin(a) * R, r * 0.5, R - cos(a) * R * 0.9))
+				radii.append(r * lerpf(1.1, 0.55, u))
+			var bar := _tube({"path": path, "rounds": PackedFloat32Array(), "radius": r, "radii": radii, "smooth": true, "wall": 0.0})
+			_xf_append(g, bar, Transform3D(Basis().scaled(Vector3(1.0, 0.5, 1.0)), Vector3.ZERO))
+			_knob(g, path[0] as Vector3, Vector3(1.6, 1.0, 1.6) * r, rng)
+		"wishbone":
+			for side in [-1.0, 1.0]:
+				shaft.call(Vector3(-0.45 * L, r, 0.0), Vector3(0.45 * L, r, side * 0.42 * L), Vector3(0.0, 0.0, side * 0.04 * L), 0.4)
+				_knob(g, Vector3(0.46 * L, r * 0.9, side * 0.43 * L), Vector3.ONE * 2.0 * r, rng, 0.2)
+			_knob(g, Vector3(-0.47 * L, r * 0.9, 0.0), Vector3(2.6, 1.4, 2.2) * r, rng, 0.2)
+		_:
+			# a small bone - a chicken's: thin, a little bent, its knobs uneven
+			var bend := rng.randf_range(-0.05, 0.05) * L
+			shaft.call(Vector3(-0.42 * L, r, 0.0), Vector3(0.42 * L, r, 0.0), Vector3(0.0, 0.0, bend), 0.7)
+			_knob(g, Vector3(-0.45 * L, r * 1.1, 0.0), Vector3(2.4, 2.0, 2.2) * r, rng, 0.35)
+			_knob(g, Vector3(0.45 * L, r * 1.1, 0.0), Vector3(2.6, 1.9, 2.6) * r, rng, 0.3)
+	_rest(g)
+	return g
+
+
+## A knob of bone at [param c] (centimeters), of [param size], [param lumpy] as a joint's end is.
+static func _knob(g: Tris, c: Vector3, size: Vector3, rng: RandomNumberGenerator, lumpy := 0.15) -> void:
+	var b := _ball(size, lumpy, false, rng)
+	_xf_append(g, b, Transform3D(Basis(), c * 0.01 - Vector3(0.0, size.y * 0.005, 0.0)))
+
+
+## [param g] moved to rest: its lowest point on y = 0, its middle over the origin.
+static func _rest(g: Tris) -> void:
+	if g.v.is_empty():
+		return
+	var box := AABB(g.v[0], Vector3.ZERO)
+	for q in g.v:
+		box = box.expand(q)
+	var shift := Vector3(-box.get_center().x, -box.position.y, -box.get_center().z)
+	for i in g.v.size():
+		g.v[i] = g.v[i] + shift
+	g.measure()
+
+
+## A SKULL ([constant SKULLS]), facing +z and resting on its jaw: a SCULPT ([constant SKULL_FORMS]) built as an
+## agent's is ([method _sculpt]) - its openings holes right through, its sockets shut in and so darkened - and
+## scaled to its length; a horned one's horns swept on. Asked 2026-10-07, of the first skulls (one surface
+## found along rays from inside, which can make no hole, with dark lumps for sockets): "The bird-like skull
+## I'm seeing does look rather cartoonish".
+static func _skull(p: Dictionary, _rng: RandomNumberGenerator) -> Array:
+	var kind := String(p["kind"])
+	var bone := _sculpt({"strokes": _strokes(SKULL_FORMS[kind]), "mirror": true})
+	var k := float(p["length"]) / maxf(_bounds_of(bone).size.z * 100.0, 1e-3)
+	if kind == "horned" and String(p.get("horns", "curved")) != "none":
+		for side in [-1.0, 1.0]:
+			bone.append(_horn(String(p["horns"]), side))
+	var out := Tris.new()
+	_xf_append(out, bone, Transform3D(Basis().scaled(Vector3.ONE * k), Vector3.ZERO))
+	# resting where the bone rests
+	var box := _bounds_of(out)
+	var shift := Vector3(-box.get_center().x, -box.position.y, -box.get_center().z)
+	for i in out.v.size():
+		out.v[i] = out.v[i] + shift
+		out.uv2[i] = Vector2(clampf(out.v[i].y / maxf(box.size.y, 1e-4), 0.0, 1.0), out.uv2[i].y)
+	out.measure()
+	return [{"geo": out}]
+
+
+## A horn on side [param side] of a horned skull's poll (written in centimeters, built in meters, before the
+## skull is scaled): straight, curved up and forward, or curled round as a ram's.
+static func _horn(how: String, side: float) -> Tris:
+	var path: Array = []
+	var radii := PackedFloat32Array()
+	# started inside the poll, so no end of it shows
+	var root := Vector3(side * 6.4, 14.1, -8.6)
+	match how:
+		"straight":
+			for i in 7:
+				var u := float(i) / 6.0
+				path.append(root + Vector3(side * 16.0 * u, 5.0 * u, -2.0 * u))
+		"curled":
+			# up off the poll, back, down beside the head and round forward under the ear, as a ram's
+			for i in 17:
+				var u := float(i) / 16.0
+				var a := u * TAU * 0.95
+				var rr := lerpf(6.0, 3.2, u)
+				path.append(root + Vector3(side * (1.0 + 5.0 * u), sin(a) * rr, -(1.0 - cos(a)) * rr))
+		_:
+			for i in 9:
+				var u := float(i) / 8.0
+				path.append(root + Vector3(side * 15.0 * u, 2.0 * u + 9.0 * u * u, -2.5 * u + 7.0 * u * u))
+	for i in path.size():
+		var u := float(i) / float(path.size() - 1)
+		radii.append(lerpf(2.6, 0.25, pow(u, 0.9)))
+	return _tube({"path": path, "rounds": PackedFloat32Array(), "radius": 2.0, "radii": radii, "smooth": true, "wall": 0.0})
+
+
+static func _bounds_of(g: Tris) -> AABB:
+	if g.v.is_empty():
+		return AABB()
+	var box := AABB(g.v[0], Vector3.ZERO)
+	for q in g.v:
+		box = box.expand(q)
+	return box
+
+
+# --- sculpt ---------------------------------------------------------------------------------------
+
+## A SCULPT's strokes made safe ([constant SHAPES]): each {points (centimeters), radii, size (a ball's, or
+## zero), carve, blend (-1: chosen from its thickness), smooth} - [constant MAX_STROKES] strokes and
+## [constant MAX_SCULPT_POINTS] points in all at most. A stroke with no point is dropped.
+static func _strokes(v: Variant) -> Array:
+	var out: Array = []
+	var left := MAX_SCULPT_POINTS
+	for s in (v if v is Array else []):
+		if out.size() >= MAX_STROKES or left <= 0:
+			break
+		if not (s is Dictionary):
+			continue
+		var d: Dictionary = s
+		var r0 := _num(d.get("radius"), 0.5, 0.02, MAX_SIZE * 0.5)
+		var pts := PackedVector3Array()
+		var radii := PackedFloat32Array()
+		for q in (d["points"] as Array if d.get("points") is Array else []):
+			if pts.size() >= mini(MAX_POINTS, left):
+				break
+			if not (q is Array) or (q as Array).size() < 3:
+				continue
+			var a: Array = q
+			if not ((a[0] is float or a[0] is int) and (a[1] is float or a[1] is int) and (a[2] is float or a[2] is int)):
+				continue
+			pts.append(_vec3(a, Vector3.ZERO, MAX_SIZE))
+			radii.append(_num(a[3], r0, 0.02, MAX_SIZE * 0.5) if a.size() > 3 else r0)
+		if pts.is_empty():
+			continue
+		left -= pts.size()
+		var size := Vector3.ZERO
+		if pts.size() == 1 and d.get("size") is Array:
+			size = _vec3(d["size"], Vector3.ONE * r0 * 2.0, MAX_SIZE, 0.04)
+		elif pts.size() == 1 and (d.get("size") is float or d.get("size") is int):
+			size = Vector3.ONE * _num(d["size"], r0 * 2.0, 0.04, MAX_SIZE)
+		out.append({"points": pts, "radii": radii, "size": size, "carve": _flag(d.get("carve")),
+			"blend": _num(d["blend"], 0.0, 0.0, 10.0) if (d.get("blend") is float or d.get("blend") is int) else -1.0,
+			"smooth": _flag(d.get("smooth"), true)})
+	return out
+
+
+## A SCULPT, built ([constant SHAPES] `sculpt`): its strokes as one surface ([method _carved]), in meters,
+## each point carrying how shut in it is (uv2.y, [method _cavity]). The same sculpt is built once in a
+## process ([constant SCULPT_KEPT]): a skull is a second or two of arithmetic, and a table builds its things
+## more than once.
+static func _sculpt(p: Dictionary) -> Tris:
+	var mirror := bool(p.get("mirror", false))
+	var key := hash([p["strokes"], mirror])
+	if not _sculpted.has(key):
+		if _sculpted.size() >= SCULPT_KEPT:
+			_sculpted.erase(_sculpted.keys()[0])
+		_sculpted[key] = _carved(_field_of(p["strokes"], mirror))
+	var g := Tris.new()
+	g.append(_sculpted[key])
+	g.measure()
+	return g
+
+
+## A SCULPT'S FIELD (centimeters; below 0 inside): its strokes in order, each melted into what came before it
+## (`k`, centimeters: soft as clay smoothed over, 0 a crisp seam) or, carved, cut out of it - a carve cuts only
+## what came before it. A rod is a run of tapered segments (a smooth one cut short along a curve through its
+## points), a ball an ellipsoid. Mirrored, it is sampled at |x|, so what is drawn on the right is drawn on the
+## left too (a stroke drawn wholly on the left is moved to the right). Each stroke's bounds (`box`, its right
+## side when mirrored), each segment's (`lo`, `hi`) and its thinnest (`thin`) are kept for what samples it.
+static func _field_of(strokes: Array, mirror: bool) -> Dictionary:
+	var A := PackedVector3Array()
+	var B := PackedVector3Array()
+	var RA := PackedFloat32Array()
+	var RB := PackedFloat32Array()
+	var LO := PackedVector3Array()
+	var HI := PackedVector3Array()
+	var carve := PackedByteArray()
+	var ell := PackedByteArray()
+	var K := PackedFloat32Array()
+	var EC := PackedVector3Array()
+	var ER := PackedVector3Array()
+	var list: Array = []
+	for s in strokes:
+		var pts: PackedVector3Array = (s["points"] as PackedVector3Array).duplicate()
+		var radii: PackedFloat32Array = s["radii"]
+		if mirror:
+			var right := false
+			for q in pts:
+				right = right or q.x >= 0.0
+			if not right:
+				for i in pts.size():
+					pts[i] = Vector3(-pts[i].x, pts[i].y, pts[i].z)
+		var e := {"carve": bool(s["carve"]), "from": A.size(), "to": A.size()}
+		var box := AABB()
+		var thin := INF
+		var size: Vector3 = s["size"]
+		if pts.size() == 1:
+			var r: Vector3 = size * 0.5 if size != Vector3.ZERO else Vector3.ONE * radii[0]
+			box = AABB(pts[0] - r, r * 2.0)
+			thin = minf(r.x, minf(r.y, r.z))
+			ell.append(1)
+			EC.append(pts[0])
+			ER.append(r)
+		else:
+			var line: Array = []
+			for i in pts.size():
+				line.append(Vector4(pts[i].x, pts[i].y, pts[i].z, radii[i]))
+			if bool(s["smooth"]) and line.size() >= 3:
+				var fine: Array = [line[0]]
+				for i in line.size() - 1:
+					for st in range(1, SCULPT_STEPS + 1):
+						fine.append(_ccr(line[maxi(i - 1, 0)], line[i], line[i + 1], line[mini(i + 2, line.size() - 1)], float(st) / float(SCULPT_STEPS)))
+				line = fine
+			for i in line.size() - 1:
+				var a: Vector4 = line[i]
+				var b: Vector4 = line[i + 1]
+				var pa := Vector3(a.x, a.y, a.z)
+				var pb := Vector3(b.x, b.y, b.z)
+				var ra := maxf(a.w, 0.02)
+				var rb := maxf(b.w, 0.02)
+				A.append(pa)
+				B.append(pb)
+				RA.append(ra)
+				RB.append(rb)
+				var sb := AABB(pa, Vector3.ZERO).expand(pb).grow(maxf(ra, rb))
+				LO.append(sb.position)
+				HI.append(sb.end)
+				box = sb if i == 0 else box.merge(sb)
+				thin = minf(thin, minf(ra, rb))
+			e["to"] = A.size()
+			ell.append(0)
+			EC.append(Vector3.ZERO)
+			ER.append(Vector3.ONE)
+		var k := float(s["blend"])
+		if k < 0.0:
+			k = thin * (0.1 if bool(e["carve"]) else 0.3)
+		K.append(k)
+		carve.append(1 if bool(e["carve"]) else 0)
+		e["box"] = box.grow(k)
+		e["thin"] = thin
+		list.append(e)
+	return {"a": A, "b": B, "ra": RA, "rb": RB, "lo": LO, "hi": HI, "carve": carve, "ell": ell, "k": K, "ec": EC,
+		"er": ER, "strokes": list, "mirror": mirror}
+
+
+## Where a sculpt is, and how finely it is cut: [box (centimeters, both sides when mirrored), cell], the cell
+## from its thinnest added stroke - fine enough for it, within [constant SCULPT_CELLS] across its longest
+## side. A rod much thinner than a cell comes out broken ([method SetDresserTools._part_troubles] says so).
+static func _cut_of(f: Dictionary) -> Array:
+	var box := AABB()
+	var any := false
+	var thin := INF
+	for e in f["strokes"]:
+		if bool(e["carve"]):
+			continue
+		var b: AABB = e["box"]
+		if bool(f["mirror"]):
+			b = b.merge(AABB(Vector3(-b.end.x, b.position.y, b.position.z), b.size))
+		box = b if not any else box.merge(b)
+		any = true
+		thin = minf(thin, float(e["thin"]))
+	if not any:
+		return [AABB(), 0.0]
+	var longest := box.get_longest_axis_size()
+	return [box, clampf(thin * 0.8, longest / SCULPT_CELLS.y, longest / SCULPT_CELLS.x)]
+
+
+## The finest a sculpt part ([method _sanitize_part]) is cut, centimeters (0 for none), and each of its
+## strokes' thinnest - what [SetDresserTools] warns of before it is built.
+static func sculpt_cut(p: Dictionary) -> Dictionary:
+	var f := _field_of(p.get("strokes", []), bool(p.get("mirror", false)))
+	var thin: Array = []
+	for e in f["strokes"]:
+		thin.append(INF if bool(e["carve"]) else float(e["thin"]))
+	return {"cell": float(_cut_of(f)[1]), "thin": thin}
+
+
+## THE STROKES NEAR [param box] (centimeters): [ids, segments] - each stroke's place in the list whose bounds
+## reach it, and for a rod the segments of it that do. Mirrored, the box is folded onto the right side.
+static func _near(f: Dictionary, box: AABB) -> Array:
+	var lo := box.position
+	var hi := box.end
+	if bool(f["mirror"]):
+		var x0 := 0.0 if lo.x <= 0.0 and hi.x >= 0.0 else minf(absf(lo.x), absf(hi.x))
+		var x1 := maxf(absf(lo.x), absf(hi.x))
+		lo.x = x0
+		hi.x = x1
+	var folded := AABB(lo, hi - lo)
+	var ids := PackedInt32Array()
+	var segs: Array = []
+	var LO: PackedVector3Array = f["lo"]
+	var HI: PackedVector3Array = f["hi"]
+	var K: PackedFloat32Array = f["k"]
+	var list: Array = f["strokes"]
+	for si in list.size():
+		var e: Dictionary = list[si]
+		if not (e["box"] as AABB).intersects(folded):
+			continue
+		var mine := PackedInt32Array()
+		var g := K[si]
+		for j in range(int(e["from"]), int(e["to"])):
+			if LO[j].x - g <= hi.x and HI[j].x + g >= lo.x and LO[j].y - g <= hi.y and HI[j].y + g >= lo.y \
+					and LO[j].z - g <= hi.z and HI[j].z + g >= lo.z:
+				mine.append(j)
+		if int(e["to"]) > int(e["from"]) and mine.is_empty():
+			continue
+		ids.append(si)
+		segs.append(mine)
+	return [ids, segs]
+
+
+## The field at each of [param pts] (centimeters), from the strokes [param near] ([method _near]).
+static func _sample(f: Dictionary, near: Array, pts: PackedVector3Array) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(pts.size())
+	var ids: PackedInt32Array = near[0]
+	var segs: Array = near[1]
+	var A: PackedVector3Array = f["a"]
+	var B: PackedVector3Array = f["b"]
+	var RA: PackedFloat32Array = f["ra"]
+	var RB: PackedFloat32Array = f["rb"]
+	var carve: PackedByteArray = f["carve"]
+	var ell: PackedByteArray = f["ell"]
+	var K: PackedFloat32Array = f["k"]
+	var EC: PackedVector3Array = f["ec"]
+	var ER: PackedVector3Array = f["er"]
+	var mirror := bool(f["mirror"])
+	for pi in pts.size():
+		var q := pts[pi]
+		if mirror:
+			q.x = absf(q.x)
+		var d := 1e9
+		for ni in ids.size():
+			var si := ids[ni]
+			var s := 1e9
+			if ell[si] == 1:
+				s = _ell(q - EC[si], ER[si])
+			else:
+				for j in (segs[ni] as PackedInt32Array):
+					s = minf(s, _cone(q, A[j], B[j], RA[j], RB[j]))
+			d = -_smin(-d, s, K[si]) if carve[si] == 1 else _smin(d, s, K[si])
+		out[pi] = d
+	return out
+
+
+## THE FIELD ON A GRID: [param dims] points from [param origin], [param cell] apart (centimeters), sampled a
+## block of [constant SCULPT_BLOCK] cells at a time from the strokes near the block alone. With [param band],
+## only near the surface: a block whose middle is further from it than the block is wide is skipped, and in
+## the rest only the pieces of [constant SCULPT_PIECE] cells the surface can reach are sampled - the points
+## left NAN (a person's skull sampled whole block by block was 850,000 points and seven seconds). {vals,
+## blocks: each sampled piece's first and last cells, six numbers a piece}.
+static func _grid(f: Dictionary, origin: Vector3, cell: float, dims: Vector3i, band: bool) -> Dictionary:
+	var vals := PackedFloat32Array()
+	vals.resize(dims.x * dims.y * dims.z)
+	vals.fill(NAN)
+	var queued := PackedByteArray()
+	queued.resize(vals.size())
+	var blocks := PackedInt32Array()
+	var cells := dims - Vector3i.ONE
+	var reach := float(SCULPT_BLOCK) * cell * 0.5 * sqrt(3.0)
+	var piece_reach := float(SCULPT_PIECE) * cell * 0.5 * sqrt(3.0)
+	var sx := dims.x
+	var sxy := dims.x * dims.y
+	var per := SCULPT_BLOCK / SCULPT_PIECE
+	for bz in ceili(float(cells.z) / float(SCULPT_BLOCK)):
+		for by in ceili(float(cells.y) / float(SCULPT_BLOCK)):
+			for bx in ceili(float(cells.x) / float(SCULPT_BLOCK)):
+				var c0 := Vector3i(bx, by, bz) * SCULPT_BLOCK
+				var c1 := (c0 + Vector3i.ONE * SCULPT_BLOCK).min(cells)
+				var lo := origin + Vector3(c0) * cell
+				var hi := origin + Vector3(c1) * cell
+				var near := _near(f, AABB(lo, hi - lo).grow(cell))
+				var pieces: Array = [[c0, c1]]
+				if band:
+					if (near[0] as PackedInt32Array).is_empty():
+						continue
+					if absf(_sample(f, near, PackedVector3Array([(lo + hi) * 0.5]))[0]) > reach * SCULPT_SLACK + cell:
+						continue
+					# the pieces of it the surface can reach
+					var mids := PackedVector3Array()
+					var spans: Array = []
+					for pz in per:
+						for py in per:
+							for px in per:
+								var p0 := c0 + Vector3i(px, py, pz) * SCULPT_PIECE
+								if p0.x >= c1.x or p0.y >= c1.y or p0.z >= c1.z:
+									continue
+								var p1 := (p0 + Vector3i.ONE * SCULPT_PIECE).min(c1)
+								mids.append(origin + (Vector3(p0) + Vector3(p1)) * 0.5 * cell)
+								spans.append([p0, p1])
+					var got := _sample(f, near, mids)
+					pieces = []
+					for i in spans.size():
+						if absf(got[i]) <= piece_reach * SCULPT_SLACK + cell * 0.5:
+							pieces.append(spans[i])
+				var pts := PackedVector3Array()
+				var idx := PackedInt32Array()
+				for pc in pieces:
+					var q0: Vector3i = pc[0]
+					var q1: Vector3i = pc[1]
+					for k in range(q0.z, q1.z + 1):
+						for j in range(q0.y, q1.y + 1):
+							for i in range(q0.x, q1.x + 1):
+								var id := i + sx * j + sxy * k
+								if queued[id] == 0:
+									queued[id] = 1
+									pts.append(origin + Vector3(i, j, k) * cell)
+									idx.append(id)
+					blocks.append_array([q0.x, q0.y, q0.z, q1.x, q1.y, q1.z])
+				var got := _sample(f, near, pts)
+				for t in idx.size():
+					vals[idx[t]] = got[t]
+	return {"vals": vals, "blocks": blocks}
+
+
+## A SCULPT'S SURFACE ([method _field_of]), meters: the field sampled on a grid ([method _cut_of], [method
+## _grid]), a point in every cell the surface passes through - the middle of where it crosses the cell's edges
+## - and a face across every edge it crosses, joining the four cells round that edge (surface nets: what
+## marching cubes makes, without its table, and as smooth). Each point's normal is its faces' together; its
+## uv2.y how shut in it is ([method _cavity]).
+static func _carved(f: Dictionary) -> Tris:
+	var g := Tris.new()
+	var cut := _cut_of(f)
+	var cell := float(cut[1])
+	if cell <= 0.0:
+		return g
+	var box: AABB = cut[0]
+	var origin := box.position - Vector3.ONE * cell * 2.0
+	var dims := Vector3i((box.size / cell).ceil()) + Vector3i(5, 5, 5)
+	var grid := _grid(f, origin, cell, dims, true)
+	var vals: PackedFloat32Array = grid["vals"]
+	var bl: PackedInt32Array = grid["blocks"]
+	var cells := dims - Vector3i.ONE
+	var sx := dims.x
+	var sxy := dims.x * dims.y
+	var csx := cells.x
+	var csxy := cells.x * cells.y
+	var at := PackedInt32Array()
+	at.resize(cells.x * cells.y * cells.z)
+	at.fill(-1)
+	var verts := PackedVector3Array()
+	var surf := PackedInt32Array()          # each point's cell: i, j, k
+	var cv := PackedFloat32Array()
+	cv.resize(8)
+	for b in range(0, bl.size(), 6):
+		for k in range(bl[b + 2], bl[b + 5]):
+			for j in range(bl[b + 1], bl[b + 4]):
+				for i in range(bl[b], bl[b + 3]):
+					var p0 := i + sx * j + sxy * k
+					cv[0] = vals[p0]
+					cv[1] = vals[p0 + 1]
+					cv[2] = vals[p0 + sx]
+					cv[3] = vals[p0 + sx + 1]
+					cv[4] = vals[p0 + sxy]
+					cv[5] = vals[p0 + sxy + 1]
+					cv[6] = vals[p0 + sxy + sx]
+					cv[7] = vals[p0 + sxy + sx + 1]
+					var inside := 0
+					for c in 8:
+						if cv[c] < 0.0:
+							inside += 1
+					if inside == 0 or inside == 8:
+						continue
+					var ci := i + csx * j + csxy * k
+					if at[ci] >= 0:
+						continue
+					var sum := Vector3.ZERO
+					var crossings := 0
+					for e in range(0, 24, 2):
+						var ca: int = _CUBE_EDGES[e]
+						var cb: int = _CUBE_EDGES[e + 1]
+						if (cv[ca] < 0.0) == (cv[cb] < 0.0):
+							continue
+						var t := cv[ca] / (cv[ca] - cv[cb])
+						sum += (_CORNERS[ca] as Vector3).lerp(_CORNERS[cb], t)
+						crossings += 1
+					at[ci] = verts.size()
+					verts.append(origin + (Vector3(i, j, k) + sum / float(crossings)) * cell)
+					surf.append_array([i, j, k])
+	# THE FACES: across each edge from a cell's first corner that the surface crosses, wound so they face out
+	var quads := PackedInt32Array()
+	var acc := PackedVector3Array()
+	acc.resize(verts.size())
+	for vi in verts.size():
+		var i := surf[vi * 3]
+		var j := surf[vi * 3 + 1]
+		var k := surf[vi * 3 + 2]
+		if i == 0 or j == 0 or k == 0:
+			continue
+		var p0 := i + sx * j + sxy * k
+		var inner := vals[p0] < 0.0
+		var ci := i + csx * j + csxy * k
+		for axis in 3:
+			var p1 := p0 + (1 if axis == 0 else (sx if axis == 1 else sxy))
+			if is_nan(vals[p1]) or (vals[p1] < 0.0) == inner:
+				continue
+			# the four cells round the edge, in order about it: a, a + u, a + u + w, a + w (u, w the other axes)
+			var du := csx if axis == 0 else (csxy if axis == 1 else 1)
+			var dw := csxy if axis == 0 else (1 if axis == 1 else csx)
+			var q := [at[ci - du - dw], at[ci - dw], at[ci], at[ci - du]]
+			if q.has(-1):
+				continue
+			if not inner:
+				q.reverse()
+			quads.append_array(q)
+			var n := (verts[q[1]] - verts[q[0]]).cross(verts[q[3]] - verts[q[0]]) + (verts[q[2]] - verts[q[1]]).cross(verts[q[3]] - verts[q[1]])
+			for c in 4:
+				acc[q[c]] += n
+	var normals := PackedVector3Array()
+	normals.resize(verts.size())
+	for vi in verts.size():
+		normals[vi] = acc[vi].normalized() if acc[vi].length() > 1e-9 else Vector3.UP
+	var cave := _cavity(f, verts, normals, cell)
+	var lo_y := box.position.y
+	var span := maxf(box.size.y, 1e-3)
+	var pm := PackedVector3Array()
+	var tv := PackedVector2Array()
+	var sv := PackedVector2Array()
+	for vi in verts.size():
+		var p := verts[vi]
+		pm.append(p * 0.01)
+		tv.append(Vector2(atan2(p.x, p.z) / TAU + 0.5, (p.y - lo_y) / span))
+		sv.append(Vector2(clampf((p.y - lo_y) / span, 0.0, 1.0), cave[vi]))
+	# each quad as two triangles across its shorter diagonal, written straight in - wound as [method Tris.tri]
+	# winds them: the quads face out, and Godot's fronts are clockwise
+	var tri := PackedInt32Array()
+	for qi in range(0, quads.size(), 4):
+		var o := 0 if (verts[quads[qi]] - verts[quads[qi + 2]]).length_squared() <= (verts[quads[qi + 1]] - verts[quads[qi + 3]]).length_squared() else 1
+		var a := quads[qi + o]
+		var b := quads[qi + o + 1]
+		var c := quads[qi + (o + 2) % 4]
+		var d := quads[qi + (o + 3) % 4]
+		tri.append_array([a, c, b, a, d, c])
+	for i in tri:
+		g.v.append(pm[i])
+		g.n.append(normals[i])
+		g.uv.append(tv[i])
+		g.uv2.append(sv[i])
+	g.measure()
+	return g
+
+
+## HOW SHUT IN each of [param pts] is (0 open, 1 deep in a hollow), with [param normals]: the field looked up
+## a few steps out from it along its normal, on a grid three cells to one of the surface's - a point the
+## surface stays close to as it steps out (a socket's floor, a groove, the hollow under an arch) sees less of
+## the room. What the material darkens and takes the room's light from ([code]prop.gdshader[/code]).
+static func _cavity(f: Dictionary, pts: PackedVector3Array, normals: PackedVector3Array, cell: float) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(pts.size())
+	var cut := _cut_of(f)
+	var box: AABB = cut[0]
+	var c3 := cell * 3.0
+	var origin := box.position - Vector3.ONE * c3 * 3.0
+	var dims := Vector3i((box.size / c3).ceil()) + Vector3i(7, 7, 7)
+	var vals: PackedFloat32Array = _grid(f, origin, c3, dims, false)["vals"]
+	# out along the normal, then leaning 50 degrees off it four ways: a well's wall faces across the well, and
+	# only a look up and down it finds the walls round it
+	var steps := [[3.0, 0.2], [6.0, 0.2]]
+	var leaned := [[10.0, 0.08], [20.0, 0.07]]
+	for i in pts.size():
+		var n := normals[i]
+		var t1 := n.cross(Vector3.UP if absf(n.y) < 0.9 else Vector3.RIGHT).normalized()
+		var t2 := n.cross(t1)
+		var occ := 0.0
+		for st in steps:
+			var h := float(st[0]) * cell
+			var d := _trilinear(vals, dims, (pts[i] + n * h - origin) / c3)
+			occ += float(st[1]) * clampf(1.0 - d / h, 0.0, 1.0)
+		for st in leaned:
+			var h := float(st[0]) * cell
+			for dir in [t1, -t1, t2, -t2]:
+				# against how far it would stand off a flat surface: a dome's leaning look is open
+				var d := _trilinear(vals, dims, (pts[i] + (n * 0.64 + (dir as Vector3) * 0.77) * h - origin) / c3)
+				occ += float(st[1]) * clampf(1.0 - d / (0.64 * h), 0.0, 1.0)
+		out[i] = clampf(occ * 1.3, 0.0, 1.0)
+	return out
+
+
+static func _trilinear(vals: PackedFloat32Array, dims: Vector3i, g: Vector3) -> float:
+	var b := Vector3i(g.floor()).clamp(Vector3i.ZERO, dims - Vector3i(2, 2, 2))
+	var t := (g - Vector3(b)).clamp(Vector3.ZERO, Vector3.ONE)
+	var sx := dims.x
+	var sxy := dims.x * dims.y
+	var p := b.x + sx * b.y + sxy * b.z
+	var x00 := lerpf(minf(vals[p], 1e3), minf(vals[p + 1], 1e3), t.x)
+	var x10 := lerpf(minf(vals[p + sx], 1e3), minf(vals[p + sx + 1], 1e3), t.x)
+	var x01 := lerpf(minf(vals[p + sxy], 1e3), minf(vals[p + sxy + 1], 1e3), t.x)
+	var x11 := lerpf(minf(vals[p + sxy + sx], 1e3), minf(vals[p + sxy + sx + 1], 1e3), t.x)
+	return lerpf(lerpf(x00, x10, t.y), lerpf(x01, x11, t.y), t.z)
+
+
+static func _ell(q: Vector3, r: Vector3) -> float:
+	return ((q / r).length() - 1.0) * minf(r.x, minf(r.y, r.z))
+
+
+## The distance from [param q] to a ROUND CONE: two balls (radius [param ra] at [param a], [param rb] at [param b])
+## and the cone touching both - exact (Inigo Quilez's), so a rod of them is smooth through its joints, where a
+## radius blended along the segment left a ring at every one.
+static func _cone(q: Vector3, a: Vector3, b: Vector3, ra: float, rb: float) -> float:
+	var ba := b - a
+	var l2 := ba.dot(ba)
+	var rr := ra - rb
+	var a2 := l2 - rr * rr
+	var pa := q - a
+	if l2 < 1e-12 or a2 <= 1e-9:
+		# one ball inside the other
+		return minf(pa.length() - ra, (q - b).length() - rb)
+	var il2 := 1.0 / l2
+	var y := pa.dot(ba)
+	var z := y - l2
+	var x2 := (pa * l2 - ba * y).length_squared()
+	var y2 := y * y * l2
+	var z2 := z * z * l2
+	var k := signf(rr) * rr * rr * x2
+	if signf(z) * a2 * z2 > k:
+		return sqrt(x2 + z2) * il2 - rb
+	if signf(y) * a2 * y2 < k:
+		return sqrt(x2 + y2) * il2 - ra
+	return (sqrt(x2 * a2 * il2) + y * rr) * il2 - ra
+
+
+static func _smin(a: float, b: float, k: float) -> float:
+	if k <= 0.0:
+		return minf(a, b)
+	var h := clampf(0.5 + 0.5 * (b - a) / k, 0.0, 1.0)
+	return lerpf(b, a, h) - k * h * (1.0 - h)
+
+
+# --- strands --------------------------------------------------------------------------------------
+
+## A STRAND: its centerline as it lies ([method strand_line]), and what is built along it - a rope's
+## twisted strands, a cord, a wire, a vine and its leaves, beads on a thread, a chain's links.
+## Asked 2026-10-07: "a coil of rope ... a vine with leaves ... a wire ... layed into a nice, coiled pile -
+## or they might be layed chaotically, unkempt ... or "draped" across the table, such that the item spills
+## over one or both sides of the table".
+static func _strand(p: Dictionary, rng: RandomNumberGenerator) -> Array:
+	var line := strand_line(p, rng)
+	var t := float(p["thickness"]) * 0.01
+	var n := line.size()
+	if n < 2:
+		return []
+	var kind := String(p["kind"])
+	var none := PackedByteArray()
+	none.resize(n)
+	var hollow := PackedFloat32Array()
+	hollow.resize(n)
+	var spine: Array = Array(line)
+	match kind:
+		"beads", "chain":
+			var g := Tris.new()
+			var along := _lengths(spine)
+			if kind == "beads":
+				# the thread, then a bead every bead's width along it
+				g.append(_sweep(spine, none, _rings_of(n, t * 0.1, 8), _sharp(8), hollow))
+				var bead := _ball(Vector3.ONE * t * 100.0, 0.08, false, rng)
+				var each := t * 1.08
+				var s := each * 0.5
+				while s < along[along.size() - 1] and g.v.size() < 400000:
+					var at := _at_length(spine, along, s)
+					_xf_append(g, bead, Transform3D(Basis(), (at[0] as Vector3) - Vector3(0.0, t * 0.5, 0.0)))
+					s += each
+			else:
+				var R := t * 0.36
+				var wire := t * 0.13
+				var link := _ring(R, wire, 360.0)
+				link.lift(-wire)
+				var pitch := (2.0 * R - wire) * 1.45
+				var s := pitch * 0.5
+				var k := 0
+				while s < along[along.size() - 1] and k < 360:
+					var at := _at_length(spine, along, s)
+					var tan: Vector3 = at[1]
+					var side := tan.cross(Vector3.UP)
+					side = side.normalized() if side.length() > 1e-4 else Vector3.RIGHT
+					var up := side.cross(tan).normalized()
+					# every other link stands on edge, turned a quarter round its way
+					var b := Basis(tan * 1.45, up, side) if k % 2 == 0 else Basis(tan * 1.45, side, -up)
+					# a flat one lies on what is under it; one on edge stands on it
+					var lift := Vector3.ZERO if k % 2 == 1 else -up * (t * 0.5 - wire)
+					_xf_append(g, link, Transform3D(b, (at[0] as Vector3) + lift))
+					s += pitch
+					k += 1
+			g.measure()
+			return [{"geo": g}]
+		"rope":
+			# THREE STRANDS LAID ROUND EACH OTHER: a three-lobed section turning along it, a full turn every
+			# few widths
+			var rings: Array = []
+			var along := _lengths(spine)
+			for i in n:
+				var ph := TAU * along[i] / maxf(t * 3.4, 1e-4)
+				var ring: Array = []
+				for j in 18:
+					var a := TAU * float(j) / 18.0
+					ring.append(Vector2(cos(a), sin(a)) * t * 0.5 * (0.84 + 0.16 * cos(3.0 * (a - ph))))
+				rings.append(ring)
+			var g := _sweep(spine, none, rings, _sharp(18), hollow)
+			g.measure()
+			return [{"geo": g}]
+		"vine":
+			var radii: Array = []
+			for i in n:
+				radii.append(t * 0.5 * lerpf(1.0, 0.45, pow(float(i) / float(n - 1), 2.0)))
+			var rings: Array = []
+			for i in n:
+				rings.append(_circle(float(radii[i]), 10))
+			var stem := _sweep(spine, none, rings, _sharp(10), hollow)
+			stem.measure()
+			var leaves := Tris.new()
+			var along := _lengths(spine)
+			var lf := float(p["leaf"]) * 0.01
+			var each := lf * 0.85
+			var s := each * 0.6
+			var k := 0
+			while s < along[along.size() - 1] - lf * 0.2 and k < 200:
+				var at := _at_length(spine, along, s)
+				var tan: Vector3 = at[1]
+				var flat := Vector3(tan.x, 0.0, tan.z)
+				var side := flat.cross(Vector3.UP).normalized() if flat.length() > 1e-3 else Vector3.RIGHT
+				var sgn := 1.0 if k % 2 == 0 else -1.0
+				var dir := (flat.normalized() * 0.6 + side * sgn * 0.8).normalized() if flat.length() > 1e-3 else side * sgn
+				dir = (dir + Vector3.UP * rng.randf_range(-0.05, 0.12)).normalized()
+				var xb := dir.cross(Vector3.UP).normalized()
+				var yb := dir.cross(xb).normalized() * -1.0
+				var size := Vector2(lf * 55.0, lf * 100.0) * rng.randf_range(0.8, 1.15)
+				var leaf := Tris.new()
+				_sheet(leaf, {"outline": "leaf", "points": [], "size": size, "bend": rng.randf_range(0.05, 0.3),
+					"fold": rng.randf_range(0.1, 0.4), "thickness": 0.06}, Transform3D.IDENTITY)
+				_xf_append(leaves, leaf, Transform3D(Basis(xb, yb, dir), (at[0] as Vector3) + side * sgn * float(radii[0]) * 0.6
+					- Vector3(0.0, float(radii[0]) * 0.6, 0.0)))
+				s += each * rng.randf_range(0.75, 1.25)
+				k += 1
+			leaves.measure()
+			var own := String(p.get("leaves", ""))
+			if own.is_empty():
+				stem.append(leaves)
+				stem.measure()
+				return [{"geo": stem}]
+			return [{"geo": stem}, {"geo": leaves, "material": own}]
+	var g := _sweep(spine, none, _rings_of(n, t * 0.5, 12 if kind != "wire" else 8), _sharp(12 if kind != "wire" else 8), hollow)
+	g.measure()
+	return [{"geo": g}]
+
+
+## A STRAND'S CENTERLINE (meters): laid out flat as `lay` says ([method _strand_flat]), raised to rest on the
+## cloth and on itself wherever it crosses ([method _strand_rest]) - and, draped over the table's edge, falling
+## down past it ([method _draped]), when the table has given it its `ground`.
+static func strand_line(p: Dictionary, rng: RandomNumberGenerator) -> PackedVector3Array:
+	var t := float(p["thickness"]) * 0.01
+	var flat := _strand_flat(p, rng)
+	var ys := _strand_rest(flat, t)
+	var out := PackedVector3Array()
+	for i in flat.size():
+		out.append(Vector3(flat[i].x, ys[i], flat[i].y))
+	if String(p["lay"]) == "drape" and p.get("ground") is Dictionary:
+		out = _draped(out, p["ground"], t)
+	return out
+
+
+## THE STRAND LAID FLAT, as `lay` says - points evenly spaced along it (meters, x z).
+static func _strand_flat(p: Dictionary, rng: RandomNumberGenerator) -> PackedVector2Array:
+	var t := float(p["thickness"]) * 0.01
+	var L := float(p["length"]) * 0.01
+	var loose := float(p["loose"])
+	var lay := String(p["lay"])
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.seed = rng.randi()
+	var pts := PackedVector2Array()
+	var ds := maxf(t * 0.5, 0.002)
+	if lay in ["path", "drape"]:
+		var raw: Array = []
+		var origin: Vector2 = ((p.get("ground", {}) as Dictionary).get("origin", Vector2.ZERO)) if lay == "drape" else Vector2.ZERO
+		for q in p["path"]:
+			raw.append(origin + (q as Vector2) * 0.01)
+		var c := _curve(raw, PackedFloat32Array(), true, 12)
+		var line := PackedVector2Array()
+		for q in c["pts"]:
+			line.append(q as Vector2)
+		pts = _even(line, ds)
+		# unkempt: it wanders off the line a little, as a dropped cord does
+		if loose > 0.0 and pts.size() > 2:
+			var along := 0.0
+			var bent := PackedVector2Array()
+			for i in pts.size():
+				var tan := (pts[mini(i + 1, pts.size() - 1)] - pts[maxi(i - 1, 0)]).normalized()
+				var off := noise.get_noise_1d(along * 40.0) * loose * maxf(t * 3.0, 0.01)
+				bent.append(pts[i] + tan.orthogonal() * off)
+				along += ds
+			pts = bent
+		return pts
+	var n := clampi(ceili(L / ds), 8, STRAND_SAMPLES)
+	ds = L / float(n)
+	var R := float(p["radius"]) * 0.01
+	match lay:
+		"coil":
+			if R <= 0.0:
+				R = clampf(0.1 * sqrt(L), t * 5.0, 0.26)
+			var tail := int(float(n) * lerpf(0.06, 0.16, loose))
+			var a := rng.randf() * TAU
+			var mid := Vector2.ZERO
+			var r := R
+			var loop_left := TAU
+			for i in n - tail:
+				pts.append(mid + Vector2(cos(a), sin(a)) * r)
+				var da := ds / maxf(r, 1e-3)
+				a += da
+				loop_left -= da
+				if loop_left <= 0.0:
+					# each loop lands a little off the last, the more so the looser it was coiled
+					loop_left = TAU
+					mid += Vector2(rng.randf_range(-1, 1), rng.randf_range(-1, 1)) * R * 0.06 * (0.3 + loose)
+					r = R * (1.0 + rng.randf_range(-0.1, 0.1) * (0.3 + loose))
+			_trail(pts, a + PI * 0.5, n - pts.size(), ds, noise, loose)
+		"flemish":
+			var a := rng.randf() * TAU
+			var r0 := t * 1.5
+			var grow := t * (1.02 + loose * 0.4) / TAU
+			var r := r0
+			var tail := int(float(n) * 0.06)
+			for i in n - tail:
+				pts.append(Vector2(cos(a), sin(a)) * (r + noise.get_noise_1d(a * 3.0) * loose * t * 0.6))
+				var da := ds / maxf(r, 1e-3)
+				a += da
+				r += grow * da
+			_trail(pts, a + PI * 0.5, n - pts.size(), ds, noise, loose)
+		_:
+			# A TANGLE: a wandering line that turns about and back on itself inside its radius
+			if R <= 0.0:
+				R = clampf(0.08 * sqrt(L), t * 4.0, 0.22)
+			var at := Vector2(rng.randf_range(-0.3, 0.3), rng.randf_range(-0.3, 0.3)) * R
+			var h := rng.randf() * TAU
+			var bendy := lerpf(2.0, 7.0, loose) / R
+			for i in n:
+				pts.append(at)
+				var k := noise.get_noise_1d(float(i) * ds / R * 18.0) * bendy
+				var out := at.length() / R
+				if out > 0.75:
+					# turned back toward the middle, the harder the further out
+					var back := wrapf(atan2(-at.y, -at.x) - h, -PI, PI)
+					k += signf(back) * (out - 0.75) * 14.0 / R
+				h += k * ds
+				at += Vector2(cos(h), sin(h)) * ds
+	return pts
+
+
+## A LOOSE END running on from where the coiling stopped: [param n] more points heading [param heading].
+static func _trail(pts: PackedVector2Array, heading: float, n: int, ds: float, noise: FastNoiseLite, loose: float) -> void:
+	var at := pts[pts.size() - 1] if not pts.is_empty() else Vector2.ZERO
+	var h := heading
+	for i in n:
+		h += noise.get_noise_1d(float(i) * 2.0 + 77.0) * ds * lerpf(8.0, 25.0, loose)
+		at += Vector2(cos(h), sin(h)) * ds
+		pts.append(at)
+
+
+## [param line] cut into points [param ds] apart along it.
+static func _even(line: PackedVector2Array, ds: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	if line.is_empty():
+		return out
+	out.append(line[0])
+	var carry := 0.0
+	for i in range(1, line.size()):
+		var a := line[i - 1]
+		var b := line[i]
+		var seg := a.distance_to(b)
+		var s := ds - carry
+		while s <= seg and out.size() < STRAND_SAMPLES:
+			out.append(a.lerp(b, s / maxf(seg, 1e-9)))
+			s += ds
+		carry = seg - (s - ds)
+	if out[out.size() - 1].distance_to(line[line.size() - 1]) > ds * 0.3:
+		out.append(line[line.size() - 1])
+	return out
+
+
+## THE HEIGHT EACH POINT OF A STRAND RESTS AT (its middle, meters): on the cloth, or over whatever of
+## itself it crosses - a round section of width [param t] riding on another - and easing up and down to it
+## over a few widths, never a step.
+static func _strand_rest(flat: PackedVector2Array, t: float) -> PackedFloat32Array:
+	var n := flat.size()
+	var ys := PackedFloat32Array()
+	ys.resize(n)
+	if n == 0:
+		return ys
+	var ds := flat[0].distance_to(flat[mini(1, n - 1)]) if n > 1 else t
+	var skip := ceili(1.6 * t / maxf(ds, 1e-5)) + 1
+	var slope := 0.45 * ds
+	var cell := maxf(t, 1e-4)
+	var grid := {}
+	for i in n:
+		var p := flat[i]
+		var y := t * 0.5
+		var c := Vector2i(floori(p.x / cell), floori(p.y / cell))
+		for dx in [-1, 0, 1]:
+			for dz in [-1, 0, 1]:
+				for j in grid.get(c + Vector2i(dx, dz), []):
+					if int(j) >= i - skip:
+						continue
+					var d := p.distance_to(flat[int(j)])
+					if d < t:
+						y = maxf(y, ys[int(j)] + sqrt(t * t - d * d))
+		if i > 0:
+			y = maxf(y, ys[i - 1] - slope)
+		ys[i] = y
+		var need := y - slope
+		var k := i - 1
+		while k >= 0 and ys[k] < need:
+			ys[k] = need
+			need -= slope
+			k -= 1
+		if not grid.has(c):
+			grid[c] = []
+		(grid[c] as Array).append(i)
+	return ys
+
+
+## A STRAND DRAPED OVER THE TABLE'S EDGE: where [param line] runs past the top ([param ground]'s `sdf`, its
+## outward `normal`), it rolls over the edge and hangs straight down as far as it ran past - to the floor
+## (`drop` below the top) at most, and on along the floor beyond that.
+static func _draped(line: PackedVector3Array, ground: Dictionary, t: float) -> PackedVector3Array:
+	var sdf: Callable = ground["sdf"]
+	var normal: Callable = ground["normal"]
+	var drop := float(ground.get("drop", 0.7))
+	var rho := 0.012 + t * 0.5
+	var clear := t * 0.5 + 0.012
+	var out := PackedVector3Array()
+	for q in line:
+		var xz := Vector2(q.x, q.z)
+		var d := float(sdf.call(xz))
+		if d <= -rho:
+			out.append(q)
+			continue
+		var nn: Vector2 = normal.call(xz)
+		var e := xz - nn * d
+		var u := d + rho
+		if u <= rho * PI * 0.5:
+			var th := u / rho
+			var h := e - nn * rho + nn * (rho + clear) * sin(th)
+			out.append(Vector3(h.x, q.y - rho + rho * cos(th), h.y))
+			continue
+		var rest := u - rho * PI * 0.5
+		var y := q.y - rho - rest
+		var h := e + nn * clear
+		if y < -drop + t * 0.5:
+			# on the floor, running on out from under the table
+			h += nn * (-drop + t * 0.5 - y)
+			y = -drop + t * 0.5
+		out.append(Vector3(h.x, y, h.y))
+	return out
+
+
+## [param n] circles of radius [param r], [param m] points each.
+static func _rings_of(n: int, r: float, m: int) -> Array:
+	var ring := _circle(r, m)
+	var out: Array = []
+	for i in n:
+		out.append(ring)
+	return out
+
+
+static func _circle(r: float, m: int) -> Array:
+	var ring: Array = []
+	for j in m:
+		var a := TAU * float(j) / float(m)
+		ring.append(Vector2(cos(a), sin(a)) * r)
+	return ring
+
+
+static func _sharp(m: int) -> PackedByteArray:
+	var b := PackedByteArray()
+	b.resize(m)
+	return b
+
+
+## Where [param s] (meters along [param spine], its lengths [param along]) is: `[point, tangent]`.
+static func _at_length(spine: Array, along: PackedFloat32Array, s: float) -> Array:
+	var i := clampi(along.bsearch(s), 1, along.size() - 1)
+	var a: Vector3 = spine[i - 1]
+	var b: Vector3 = spine[i]
+	var f := clampf((s - along[i - 1]) / maxf(along[i] - along[i - 1], 1e-9), 0.0, 1.0)
+	var tan := (b - a).normalized() if (b - a).length() > 1e-9 else Vector3.RIGHT
+	return [a.lerp(b, f), tan]
+
+
+## [param src] moved by [param xf] onto the end of [param dst] (its copies' marks left off: the part's own
+## placing gives them).
+static func _xf_append(dst: Tris, src: Tris, xf: Transform3D) -> void:
+	var nb := xf.basis.inverse().transposed()
+	for i in src.v.size():
+		dst.v.append(xf * src.v[i])
+		dst.n.append((nb * src.n[i]).normalized())
+	dst.uv.append_array(src.uv)
+	dst.uv2.append_array(src.uv2)
 
 
 ## A SWEEP: an outline carried along [param spine] (meters). [param rings] holds each spine point's

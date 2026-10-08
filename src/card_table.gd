@@ -45,6 +45,44 @@ const FRAMES := {
 	"deco": "a border with stepped Art Deco corners",
 }
 
+## THE CARD ITSELF, beyond its frame's rules (2026-10-07, the user: "Every single card we generate right
+## now has a plain, rectangular border ... sometimes that border has rounded corners. Sometimes the cards
+## themselves have rounded borders ... the border around the image was... window-shaped"): the shape of
+## the picture's WINDOW, the card's CORNERS (the slab is cut to them - [method corner_radius]) and an
+## ORNAMENT printed round the card's edge. Each drawn by [CardFaces], chosen by the producer.
+const WINDOWS := {
+	"rect": "a plain rectangle",
+	"rounded": "a rectangle with softly rounded corners",
+	"arch": "an arched window: straight sides and bottom, the top corners stepped in and a round arch over them",
+	"gothic": "a pointed Gothic arch over straight sides, as a church window",
+	"oval": "an oval, as a cameo or a portrait medallion",
+	"notched": "a rectangle with its corners cut in, in quarter circles, as an old label",
+	"octagon": "a rectangle with its corners cut off straight",
+}
+## The card's corners, each its radius (meters - a card is 70 mm wide).
+const CORNERS := {
+	"square": {"r": 0.0012, "about": "all but square, as an old playing card or a trade card"},
+	"rounded": {"r": 0.0045, "about": "rounded, as most decks are"},
+	"round": {"r": 0.009, "about": "well rounded, as a modern oracle deck or a game card"},
+}
+const ORNAMENTS := {
+	"none": "nothing round the edge",
+	"vine": "a vine winding round the card's edge, leaves along it and a curl of tendril now and then",
+	"serpent": "a serpent round the card's edge, its scales drawn, its tail in its mouth",
+	"laurel": "a laurel of paired leaves running round the card's edge",
+	"beads": "a string of beads, large and small, round the card's edge",
+	"rope": "a twisted cord round the card's edge",
+	"stars": "small four-pointed stars set round the card's edge",
+	"scallops": "a scalloped lace edge, a dot in every scallop",
+}
+## THE BOOKLET'S PAGE, laid out as its printer set it: the same entry, set four ways.
+const PAGES := {
+	"classic": "centered: the numeral, the name, the keywords in one line, a small ornament, the text justified",
+	"drop": "a heading set to the left over a rule, the text opening on a large drop capital, the keywords listed at the foot",
+	"banner": "the name printed out of a band of the accent color across the top, the keywords under it, the text centered",
+	"ledger": "the name and numeral on one line over a heavy rule, the keywords listed down the page, then the text, ragged",
+}
+
 ## THE CANDLES: the most LIT THINGS on a table - a candle in its stick, a candelabra, a dish of tea
 ## lights - each burning as ONE light however many flames it has (a light each is a shadow each, six
 ## passes a frame), the brightest the key (see [method TableMedium._light_the_table]); and the most
@@ -91,9 +129,9 @@ const AIR := {
 const MOMENTS := {
 	"shuffle": "as the shuffling begins, at the deck in the middle of the cloth",
 	"jumper": "a card leaping out of the deck on its own during a shuffle - thrown along its flight",
-	"reveal": "each card as it comes up to the camera and faces the viewer - from its edges",
-	"pirouette": "a held card twirling round in the reader's fingers, a showman's flourish - from its edges as it spins",
-	"lay": "each card as it lands in the spread - from its edges",
+	"reveal": "each card as it comes up to the camera and faces the viewer - from its edges; every card's, unless `which` picks one",
+	"pirouette": "a held card twirled round in the reader's fingers, a showman's flourish - from its edges as it spins. Cards are seldom twirled; a burst on it makes the reader twirl one",
+	"lay": "each card as it lands in the spread - from its edges; every card's, unless `which` picks one",
 	"close": "when the last card is down and the reading closes - from every card in the spread",
 }
 
@@ -128,8 +166,10 @@ const TEXT_CONTRAST := 4.5
 ## a line of it fits across TITLE_WIDTH of the frame, and no larger than TITLE_SIZE of its height;
 ## a name that would come out under TITLE_TWO_LINES of that on one line is set on two. The byline
 ## is TITLE_BYLINE of the name's size, and the whole block is centered TITLE_MIDDLE down the frame.
+## Then (2026-10-07) "a little too large. It basically touches the left and the right side of the screen":
+## the width it may fill came in from 0.86 to 0.74, a margin of an eighth of the frame each side.
 const TITLE_SIZE := 0.15
-const TITLE_WIDTH := 0.86
+const TITLE_WIDTH := 0.74
 const TITLE_TWO_LINES := 0.7
 const TITLE_BYLINE := 0.4
 const TITLE_MIDDLE := 0.45
@@ -302,6 +342,9 @@ static func sanitize_look(look: Dictionary) -> Dictionary:
 	f["stock"] = String(frame.get("stock", "")) if _is_color(String(frame.get("stock", ""))) else "#efe6d2"
 	f["ink"] = String(frame.get("ink", "")) if _is_color(String(frame.get("ink", ""))) else String(pal[0])
 	f["accent"] = String(frame.get("accent", "")) if _is_color(String(frame.get("accent", ""))) else String(pal[1])
+	for k in [["window", WINDOWS, "rect"], ["corners", CORNERS, "rounded"], ["ornament", ORNAMENTS, "none"]]:
+		var v := String(frame.get(k[0], "") if frame.get(k[0]) is String else "").strip_edges().to_lower()
+		f[k[0]] = v if (k[1] as Dictionary).has(v) else String(k[2])
 	# the producer may print on any stock, black to white: the name must read on it
 	var ink := color(f["ink"])
 	var readable := legible_ink(ink, color(f["stock"]))
@@ -310,6 +353,8 @@ static func sanitize_look(look: Dictionary) -> Dictionary:
 	out["frame"] = f
 	var face := String(look.get("title_face", "")).strip_edges().to_lower()
 	out["title_face"] = face if FACES.has(face) else "roman"
+	var page := String(look.get("page", "") if look.get("page") is String else "").strip_edges().to_lower()
+	out["page"] = page if PAGES.has(page) else "classic"
 	# the candles: a count - an older look named props, and its candles carry over
 	var candles := 1
 	var nc: Variant = look.get("candles")
@@ -349,6 +394,12 @@ static func sanitize_look(look: Dictionary) -> Dictionary:
 	else:
 		out["series"] = series
 	return out
+
+
+## HOW ROUND [param look]'s CARDS ARE CUT at the corners, meters ([constant CORNERS]).
+static func corner_radius(look: Dictionary) -> float:
+	var f: Dictionary = look.get("frame", {}) if look.get("frame") is Dictionary else {}
+	return float((CORNERS.get(String(f.get("corners", "rounded")), CORNERS["rounded"]) as Dictionary)["r"])
 
 
 ## THE STAGING OF [param plan], made safe: [constant STAGING]'s keys, each one of its own registry's.

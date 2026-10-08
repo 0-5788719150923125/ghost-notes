@@ -16,13 +16,15 @@ class_name LookCard
 ## vanishes takes its value with it as far as anyone looking can tell, and the value is kept.
 ##
 ## Its block in a document is `look:` - every filter named, off ones at 0, so the block says
-## exactly which look the chapter is shown in.
+## exactly which look the chapter is shown in - and `subtitles:`, how the line reveals its words
+## ([constant Subtitles.REVEALS]).
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "look"
 
 var _filter_summary: Label
 var _filter_rows := {}     # filter key -> {box: CheckBox, slider: HSlider}
+var _reveal: OptionButton  # how the subtitles reveal a line ([constant Subtitles.REVEALS])
 
 
 func _init() -> void:
@@ -82,6 +84,27 @@ func _init() -> void:
 			Director.set_filter(k, v)
 			refresh())
 		_filter_rows[k] = {"box": cb, "slider": sl}
+	# THE SUBTITLES: how a line's words appear - over the look, never under it
+	var srow := HBoxContainer.new()
+	srow.add_theme_constant_override("separation", 8)
+	add_child(srow)
+	var sl := Label.new()
+	sl.text = "Subtitles"
+	sl.custom_minimum_size = Vector2(128, 0)
+	sl.add_theme_font_size_override("font_size", 12)
+	srow.add_child(sl)
+	_reveal = OptionButton.new()
+	_reveal.fit_to_longest_item = false
+	_reveal.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_reveal.add_theme_font_size_override("font_size", 12)
+	for key in Subtitles.REVEALS:
+		_reveal.add_item(String(key).capitalize())
+		_reveal.set_item_tooltip(_reveal.item_count - 1, String(Subtitles.REVEALS[key]))
+	_reveal.tooltip_text = "How the subtitles reveal each line. " + "; ".join(PackedStringArray(Subtitles.REVEALS.keys().map(
+		func(key: Variant) -> String: return "%s: %s" % [String(key).capitalize(), Subtitles.REVEALS[key]])))
+	_reveal.select(Subtitles.REVEALS.keys().find(Director.subtitle_reveal))
+	_reveal.item_selected.connect(func(i: int) -> void: Director.set_subtitle_reveal(String(Subtitles.REVEALS.keys()[i])))
+	srow.add_child(_reveal)
 	refresh()
 
 
@@ -108,6 +131,8 @@ func sync_rows() -> void:
 		sl.editable = amt > 0.0
 		if amt > 0.0:
 			sl.set_value_no_signal(amt)
+	if _reveal != null:
+		_reveal.select(Subtitles.REVEALS.keys().find(Director.subtitle_reveal))
 	refresh()
 
 
@@ -116,7 +141,7 @@ func capture() -> Dictionary:
 	var looks := {}
 	for k in Filters.REGISTRY:
 		looks[k] = snappedf(Director.filter_amount(k), 0.01)
-	return {"filters": looks}
+	return {"filters": looks, "subtitles": Director.subtitle_reveal}
 
 
 ## ...and back: every filter the block names set, every one it leaves out off.
@@ -124,4 +149,7 @@ func apply(block: Dictionary) -> void:
 	if block.get("filters") is Dictionary:
 		for k in Filters.REGISTRY:
 			Director.set_filter(k, float((block["filters"] as Dictionary).get(k, 0.0)))
+	if block.get("subtitles") is String:
+		Director.set_subtitle_reveal(String(block["subtitles"]))
+	if block.get("filters") is Dictionary or block.get("subtitles") is String:
 		sync_rows()

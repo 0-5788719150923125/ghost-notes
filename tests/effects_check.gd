@@ -12,7 +12,8 @@ extends SceneTree
 ##   is away is where it went (out of the picture); a firefly blinks; an ember rises through its
 ##   region and round again; nothing sinks under the air's floor (the room's, not its region's).
 ## - BURSTS are born the same way from the same moments - within their moment, most at its start, at
-##   the emitter - and a moved moment is born again; one not moved is left alone.
+##   the emitter - and a moved moment is born again; one not moved is left alone. A burst marks every
+##   time its moment happens, or only the first, the last or the times it names.
 ## - A MOTE'S HOME IS SEEN: in the picture, in front of the stage's occluders and short of where the air
 ##   ends. Two-sided: homes drawn from the region's volume alone are hidden behind the table often, and
 ##   without the limit some lie past the room's picture. Away, a mote is out of the picture or off in
@@ -62,6 +63,15 @@ func _stage() -> Dictionary:
 func _depth(stage: Dictionary, p: Vector3) -> float:
 	var cam: Transform3D = stage["camera"]
 	return (p - cam.origin).dot(-cam.basis.z)
+
+
+## The times of [param moments] a burst written with [param which] marks.
+func _marked(moments: Array, which: Variant) -> Array:
+	var w: Variant = (_clean([{"kind": "burst", "look": "stars", "on": "reveal", "which": which}])[0] as Dictionary)["which"]
+	var out: Array = []
+	for m in Effects.picked(moments, w):
+		out.append(float((m as Dictionary)["t"]))
+	return out
 
 
 func _run() -> void:
@@ -294,6 +304,22 @@ func _bursts() -> bool:
 	_ok(int((air.bursts[0] as Dictionary)["plans"]) == 1 and mm.instance_count == 80, "an unmoved moment was planned again")
 	air.plan({"jumper": [{"t": 20.0, "dur": 1.0, "from": "card", "path": path}]})
 	_ok(int((air.bursts[0] as Dictionary)["plans"]) == 2, "a moved moment was not planned again")
+	root.free()
+	# WHICH TIMES IT MARKS: a moment that comes with every card is marked at every card only when asked -
+	# the first, the last, or the times named (2026-10-07: "reveal" and "lay" could only burst at every
+	# card, which a show that wants bursts "never every card" cannot use)
+	var five: Array = []
+	for i in 5:
+		five.append({"t": 10.0 * float(i + 1), "dur": 0.3, "from": "card", "path": path})
+	_ok(_marked(five, "first") == [10.0] and _marked(five, "last") == [50.0] and _marked(five, [2, 4]) == [20.0, 40.0]
+		and _marked(five, 3) == [30.0], "a burst does not mark the times of its moment it names")
+	_ok(_marked(five, null).size() == 5 and _marked(five, "whenever").size() == 5 and _marked(five, [0, -2]).size() == 5,
+		"control: a burst naming no time (or junk) does not mark every time")
+	var once := Effects.build(_clean([{"kind": "burst", "look": "stars", "on": "reveal", "which": "last", "count": 30}]), _stage(), 5)
+	root = Node3D.new()
+	root.add_child(once.root)
+	once.plan({"reveal": five})
+	_ok(((once.bursts[0] as Dictionary)["layer"] as Dictionary)["mm"].instance_count == 30, "a burst on the last reveal is not born once")
 	root.free()
 	return true
 

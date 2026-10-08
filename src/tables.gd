@@ -431,6 +431,11 @@ static func sdf_local(o: Dictionary, l: Vector2) -> float:
 	return d - float(o.get("grow", 0.0))
 
 
+## The way out of outline [param o] at [param p] (on the table, x z): across its edge, outward.
+static func normal(o: Dictionary, p: Vector2) -> Vector2:
+	return _turn2(_grad_local(o, to_local(o, p)), float(o["turn"]))
+
+
 ## Whether [param p] (on the table, x z) lies on [param top], [param margin] meters in from its edge.
 static func inside(top: Dictionary, p: Vector2, margin := 0.0) -> bool:
 	return sdf(top_outline(top), p) <= -margin

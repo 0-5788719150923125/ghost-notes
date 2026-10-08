@@ -43,6 +43,65 @@ const HANG := 0.7
 ## a line that snapped on at full brightness would be the only hard cut in the frame.
 const FADE := 0.3
 
+## HOW A LINE'S WORDS ARE REVEALED (the user, 2026-10-07: "allow for other forms of subtitle text revealing,
+## and make the options available to the user"), the Director's choice ([member Director.subtitle_reveal]):
+## a key and the words the Look card shows for it.
+const REVEALS := {
+	"karaoke": "the whole line shown, each word lit as it is spoken",
+	"glitch": "the words appear as they are spoken, a few scrambled glyphs running just ahead of the voice - reaching on, falling back, reaching again",
+}
+## THE GLITCH ([constant REVEALS] `glitch`, after the vortex chat's GlitchedLabel, which revealed a few
+## characters past its front and pushed and popped ghosts beside them): the line is WRITTEN AS IT IS SPOKEN.
+## A word's letters settle one after another over its first GLITCH_SETTLE seconds (or the whole word, if it is
+## shorter), from GLITCH_EARLY before its own time - so the word the voice is saying is never the scrambled
+## one. Past the last settled letter, a few letters' places show NOISE ([method glitch_reach]: it reaches on a
+## letter at a time, then falls back and reaches again, as a guess retracted); beyond that, nothing yet. The
+## noise is a glyph from the sets below, changed GLITCH_RATE times a second - the simple set nearest the
+## front, as the old label's last steps were - now and then with a faint ghost beside it. A pure function of
+## show time and the line: a render and a scrub see the same noise. Asked 2026-10-07, of the first glitch
+## (every letter of the line scrambled until spoken): "the glitching would only happen a few characters ahead
+## of the text ... It could predict ahead, then retract, then predict again."
+const GLITCH_SETTLE := 0.28
+const GLITCH_EARLY := 0.06
+const GLITCH_RATE := 16.0
+## How often the noise's reach moves (steps a second), the most letters it reaches past the front, and the
+## fewest its farthest reach in a run may be.
+const GLITCH_STEPS := 9.0
+const GLITCH_AHEAD := 6
+const GLITCH_LEAST := 2
+const GLITCH_SIMPLE := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?#$%^&*<>-_/\\[]{}|="
+const GLITCH_COMPLEX := "┌┐└┘├┤┬┴┼━┃┏┓┗┛┣┫┳┻╋※×○◎●△▲▽▼☉♠♡♢♣♤♥♦♧"
+
+
+## WHEN LETTER [param ch] of [param n] in a word spoken from [param t0] to [param t1] settles into itself
+## ([constant GLITCH_SETTLE]): never after the word has begun to be spoken by more than the settle.
+static func settle_at(t0: float, t1: float, ch: int, n: int) -> float:
+	var span := clampf(t1 - t0, 0.05, GLITCH_SETTLE)
+	return t0 - GLITCH_EARLY + span * float(ch) / float(maxi(n, 1))
+
+
+## HOW MANY LETTERS PAST THE FRONT the noise reaches at [param t] in line [param line]: a run that grows a
+## letter every step ([constant GLITCH_STEPS]) up to its own farthest ([constant GLITCH_LEAST] to [constant
+## GLITCH_AHEAD]), holds there, and falls back to one when the next run starts - a run lasting a third of a
+## second to a little over a second.
+static func glitch_reach(line: int, t: float) -> int:
+	var step := floori(t * GLITCH_STEPS)
+	var start := step
+	# runs start where the hash says, and at every tenth step besides, so the search back always ends
+	while posmod(start, 10) != 0 and hash([line, start, "reach"]) % 4 != 0:
+		start -= 1
+	var most := GLITCH_LEAST + hash([line, start, "most"]) % (GLITCH_AHEAD - GLITCH_LEAST + 1)
+	return mini(1 + step - start, most)
+
+
+## THE GLYPH letter [param ch] of word [param wi] shows at [param t], [param ahead] letters past the front: a
+## glyph of [param simple] (always, at the front itself) or [param complex], changed [constant GLITCH_RATE]
+## times a second.
+static func glitch_glyph(wi: int, ch: int, t: float, ahead: int, simple: String, complex: String) -> String:
+	var h := hash([wi, ch, floori(t * GLITCH_RATE)])
+	var pool := simple if (ahead <= 0 or complex.is_empty() or h % 3 != 0) else complex
+	return pool[(h >> 4) % pool.length()]
+
 var words: Array = []               # [{text, t0, t1, sentence}] - may still be GROWING
                                     # (a live VoiceStream shares its array by reference)
 var loop_length := 0.0              # >0 once a streamed take loops: wrap time by this
@@ -335,6 +394,7 @@ class Overlay:
 	## 0.22 is about 12 degrees, which is what a real italic face runs at.
 	const SLANT := 0.22
 	var _faces := {}                 # level -> Font
+	var _glitch_sets := {}           # Font -> [simple, complex]: the glitch glyphs it can draw
 
 	## The face for an emphasis level: 0 plain, 1 italic, 2 bold, 3 both.
 	func _face(base: Font, level: int) -> Font:
@@ -395,6 +455,7 @@ class Overlay:
 		# the cursor as a CHARACTER position within this sentence, so the lit
 		# front and the lingering trail are both measured in glyphs, not words
 		var ccur: float = _char_cursor(line_words)
+		var glitch := Director.subtitle_reveal == "glitch"
 		var base_y: float = box["base_y"]
 		var y: float = base_y - (lines.size() - 1) * lh
 		# THE PLATE: scenes range from black voids to white-hot fields, so
@@ -403,14 +464,38 @@ class Overlay:
 		# broadcast furniture and cover the show), and every glyph is drawn
 		# once in near-black underneath - the plate carries most of the
 		# contrast, the shadow catches the edges over bright content.
+		# WRITTEN AS IT IS SPOKEN (the glitch): the first letter not yet settled, and how far past it the noise
+		# reaches; a letter beyond that is not drawn yet, and its row's plate stops short of it
+		var front := 1 << 30
+		var reach := 0
+		if glitch:
+			for item in line_words:
+				var wt: String = item.word.text
+				for ch in wt.length():
+					if now < Subtitles.settle_at(float(item.word.get("t0", 0.0)), float(item.word.get("t1", 0.0)), ch, wt.length()):
+						front = mini(front, int(item.cstart) + ch)
+						break
+			reach = Subtitles.glitch_reach(int(line_words[0].idx), now)
 		for row in lines:
 			var total := -gap
 			for item in row:
 				total += item.w + gap
-			var pad := 12.0 * k
-			var plate := Rect2(cx - total * 0.5 - pad, y - float(fs) - 4.0 * k,
-				total + pad * 2.0, lh + 2.0 * k)
-			draw_rect(plate, Color(0.04, 0.04, 0.05, 0.72 * vis), true)
+			var shown := total
+			if glitch:
+				# up to the last letter drawn in this row
+				shown = 0.0
+				var px := 0.0
+				for item in row:
+					var wt: String = item.word.text
+					if int(item.cstart) < front + reach:
+						var seen := mini(wt.length(), front + reach - int(item.cstart))
+						shown = px + (item.w if seen >= wt.length() else _face(font, int(item.word.get("emph", 0))).get_string_size(wt.substr(0, seen), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x)
+					px += item.w + gap
+			if shown > 0.0:
+				var pad := 12.0 * k
+				var plate := Rect2(cx - total * 0.5 - pad, y - float(fs) - 4.0 * k,
+					shown + pad * 2.0, lh + 2.0 * k)
+				draw_rect(plate, Color(0.04, 0.04, 0.05, 0.72 * vis), true)
 			y += lh
 		y = base_y - (lines.size() - 1) * lh
 		# the pen advances glyph by glyph so the gradient can turn WITHIN a word,
@@ -432,6 +517,35 @@ class Overlay:
 					var pos := Vector2(x, y)
 					var col := _glyph_color(base_hue, ci + ch, ccur, now, order)
 					col.a *= vis
+					var ahead := ci + ch - front
+					if glitch and ahead >= reach:
+						# NOT REACHED YET: nothing, in the letter's own place
+						x += cw
+						continue
+					if glitch and glyph != " " and ahead >= 0 and now < Subtitles.settle_at(float(item.word.get("t0", 0.0)), float(item.word.get("t1", 0.0)), ch, text.length()):
+						# NOT SAID YET: a glyph of noise in the letter's own place, centered on it so
+						# the line never reflows, flickering - and now and then a ghost beside it
+						var sets: Array = _glitch_set(face)
+						var g := Subtitles.glitch_glyph(int(item.idx), ch, now, ahead, sets[0], sets[1])
+						var gs := fs
+						var gw := face.get_string_size(g, HORIZONTAL_ALIGNMENT_LEFT, -1, gs).x
+						if gw > cw * 1.25:
+							# a wide glyph in a narrow letter's place is set smaller, not spilled on its neighbors
+							gs = maxi(int(float(fs) * cw * 1.25 / gw), int(fs * 0.5))
+							gw = face.get_string_size(g, HORIZONTAL_ALIGNMENT_LEFT, -1, gs).x
+						var gp := pos + Vector2((cw - gw) * 0.5, 0.0)
+						var h := hash([int(item.idx), ch, floori(now * Subtitles.GLITCH_RATE), "ghost"])
+						col.a *= 0.55 + 0.35 * float(h % 7) / 6.0
+						draw_string(face, gp + Vector2(1.5 * k, 1.5 * k), g, HORIZONTAL_ALIGNMENT_LEFT, -1, gs, Color(0, 0, 0, 0.85 * vis))
+						draw_string(face, gp, g, HORIZONTAL_ALIGNMENT_LEFT, -1, gs, col)
+						# a ghost beside it, most often at the far end of the reach, where the guess is newest
+						if h % (3 if ahead == reach - 1 else 11) == 0:
+							var ghost := Subtitles.glitch_glyph(int(item.idx), ch + 97, now, ahead + 1, sets[0], sets[1])
+							var gc := col
+							gc.a *= 0.35
+							draw_string(face, gp + Vector2(cw * (0.6 if h % 2 == 0 else -0.6), 0.0), ghost, HORIZONTAL_ALIGNMENT_LEFT, -1, gs, gc)
+						x += cw
+						continue
 					# the shadow, under every state - the edge that survives a
 					# bright frame bleeding past the plate
 					draw_string(face, pos + Vector2(1.5 * k, 1.5 * k), glyph,
@@ -505,6 +619,23 @@ class Overlay:
 			if int(all[k].sentence) == si:
 				out.append({"idx": k, "word": all[k], "w": 0.0, "cstart": cstart})
 				cstart += String(all[k].text).length() + 1   # +1 for the inter-word gap
+		return out
+
+	## The glitch glyphs [param face] can draw, of [constant Subtitles.GLITCH_SIMPLE] and
+	## [constant Subtitles.GLITCH_COMPLEX]: a font without box drawing shows none of it rather than tofu.
+	func _glitch_set(face: Font) -> Array:
+		if _glitch_sets.has(face):
+			return _glitch_sets[face]
+		var out: Array = []
+		for pool in [Subtitles.GLITCH_SIMPLE, Subtitles.GLITCH_COMPLEX]:
+			var kept := ""
+			for c in pool:
+				if face.has_char(c.unicode_at(0)):
+					kept += c
+			out.append(kept)
+		if String(out[0]).is_empty():
+			out[0] = "#*+=-/\\|"
+		_glitch_sets[face] = out
 		return out
 
 	## Greedy wrap into rows that fit max_w at the given font size; also fills

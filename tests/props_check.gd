@@ -26,6 +26,20 @@ extends SceneTree
 ## - A WOBBLE OPENS NO SEAM: a wobbled vessel is as closed as it was, and the same seed wobbles it the
 ##   same - the control, pushed out along its normals instead, splits at its crisp corners.
 ## - WHATEVER IS WRITTEN IS BUILDABLE: junk sections, warps and roundings come out in range.
+## - A STRAND RESTS ON ITSELF (2026-10-07, ropes, vines and wires asked for): wherever a coil or a tangle
+##   crosses itself the crossing rides over, never through - no two points of it further apart along it
+##   than its width come closer than nine tenths of a width - and it never lies below the cloth or jumps
+##   up a step. Two-sided: the same tangle laid flat, every point on the cloth, passes through itself.
+## - A STRAND DRAPED over the table's edge hangs down past it as far as it ran past, to the floor at most,
+##   and never into the table: every point over the top lies on it. Two-sided: with no ground it lies flat.
+## - BONES AND SKULLS rest on the cloth, are the length asked, and a draped thing keeps only its strand.
+## - A SCULPT (2026-10-07: "grant the agents the ability to draw their own geometry") is one closed surface;
+##   a carve goes right through - a line through a ball carved by a rod meets no face, and through the same
+##   ball uncarved it does; mirrored, a stroke drawn on the right is on the left too, and unmirrored it is
+##   not; its hollows are shut in - a well carved into a ball is darker inside than its outside, and a ball's is open
+##   all round; a stroke finer than the sculpt is cut is found before it is built, and a thick one is not.
+##   And THE SKULLS ARE SCULPTS: a bird's orbits are open right through it, where a line through its
+##   braincase is not.
 ## - THE SET DRESSER IS TOLD all of it.
 
 var _fails: Array = []
@@ -43,6 +57,10 @@ func _initialize() -> void:
 	_warp_normals()
 	_wobble()
 	_junk()
+	_strands()
+	_draped()
+	_bones()
+	_sculpts()
 	_told()
 	if _fails.is_empty():
 		print("props_check: ALL OK")
@@ -315,7 +333,180 @@ func _junk() -> void:
 	_ok(not g.v.is_empty() and bad == 0, "a junk loft built %d bad points or normals" % bad)
 
 
+## The closest two points of [param line] come that lie further than [param apart] from each other along it.
+func _closest_apart(line: PackedVector3Array, apart: float) -> float:
+	var along := PackedFloat32Array([0.0])
+	for i in range(1, line.size()):
+		along.append(along[i - 1] + line[i].distance_to(line[i - 1]))
+	var best := INF
+	for i in line.size():
+		for j in range(i + 1, line.size()):
+			if along[j] - along[i] > apart:
+				best = minf(best, line[i].distance_to(line[j]))
+	return best
+
+
+func _strands() -> void:
+	for lay in ["coil", "heap", "flemish"]:
+		for kind in ["rope", "cord", "wire"]:
+			var p := _part({"shape": "strand", "kind": kind, "lay": lay, "length": 160, "thickness": 1.0, "loose": 0.6})
+			var rng := RandomNumberGenerator.new()
+			rng.seed = 11
+			var line := Props.strand_line(p, rng)
+			var t := float(p["thickness"]) * 0.01
+			var low := INF
+			var step := 0.0
+			for i in line.size():
+				low = minf(low, line[i].y)
+				if i > 0:
+					step = maxf(step, absf(line[i].y - line[i - 1].y))
+			_ok(_closest_apart(line, t * 2.0) >= t * 0.9, "a %s %s passes through itself (%.2f of its width)" % [lay, kind, _closest_apart(line, t * 2.0) / t])
+			_ok(low >= t * 0.5 - 1e-5, "a %s %s lies below the cloth" % [lay, kind])
+			_ok(step <= t * 0.5, "a %s %s jumps up a step of %.1f mm" % [lay, kind, step * 1000.0])
+	# TWO-SIDED: the same tangle on the cloth throughout passes through itself
+	var p := _part({"shape": "strand", "kind": "cord", "lay": "heap", "length": 160, "thickness": 1.0, "loose": 0.6})
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var flat := Props._strand_flat(p, rng)
+	var flat3 := PackedVector3Array()
+	for q in flat:
+		flat3.append(Vector3(q.x, 0.005, q.y))
+	_ok(_closest_apart(flat3, 0.02) < 0.009, "control: a tangle laid flat does not cross itself, so the measure sees nothing")
+	# every kind builds, and what it builds stands on the cloth
+	for kind in Props.STRANDS:
+		var b := Props.build(Props.sanitize({"things": [{"name": "s", "parts": [{"shape": "strand", "kind": kind, "lay": "coil", "length": 80}]}]}, PAL)["things"][0], {}, 3)
+		_ok(not (b["meshes"] as Array).is_empty() and absf((b["size"] as AABB).position.y) < 1e-4, "a %s strand did not build on the cloth" % kind)
+		(b["node"] as Node).free()
+
+
+func _draped() -> void:
+	# a round top 1 m across: the path runs 30 cm past its right edge
+	var o := Tables.top_outline({"shape": "round", "size": [100.0, 100.0]})
+	var ground := {"sdf": func(q: Vector2) -> float: return Tables.sdf(o, q), "normal": func(q: Vector2) -> Vector2: return Tables.normal(o, q),
+		"origin": Tables.ORIGIN, "drop": Tables.DROP_MOST}
+	var c: Vector2 = o["center"]
+	var from := (c - Tables.ORIGIN) * 100.0
+	var p := _part({"shape": "strand", "kind": "rope", "lay": "drape", "path": [[from.x - 20.0, from.y], [from.x + 80.0, from.y]], "thickness": 1.0, "loose": 0.0})
+	p["ground"] = ground
+	var line := Props.strand_line(p, RandomNumberGenerator.new())
+	var lowest := INF
+	var inside_low := INF
+	for q in line:
+		lowest = minf(lowest, q.y)
+		if Tables.sdf(o, Vector2(q.x, q.z)) < -0.001:
+			inside_low = minf(inside_low, q.y)
+	_ok(lowest < -0.2 and lowest > -0.32, "a strand run 30 cm past the edge hangs %.0f cm down, not about 30 - the bend round the edge taken" % (-lowest * 100.0))
+	_ok(inside_low > 0.0, "a draped strand goes into the table (%.1f mm under its top)" % (-inside_low * 1000.0))
+	var long := _part({"shape": "strand", "kind": "rope", "lay": "drape", "path": [[from.x, from.y], [from.x + 200.0, from.y]], "thickness": 1.0, "loose": 0.0})
+	long["ground"] = ground
+	var floor_low := INF
+	for q in Props.strand_line(long, RandomNumberGenerator.new()):
+		floor_low = minf(floor_low, q.y)
+	_ok(floor_low >= -Tables.DROP_MOST, "a long draped strand hangs through the floor")
+	# control: with no ground it lies on the cloth
+	p.erase("ground")
+	var flat_low := INF
+	for q in Props.strand_line(p, RandomNumberGenerator.new()):
+		flat_low = minf(flat_low, q.y)
+	_ok(flat_low > 0.0, "control: a drape with no table under it does not lie flat")
+	var thing: Dictionary = Props.sanitize({"things": [{"name": "d", "parts": [{"shape": "box"}, {"shape": "strand", "lay": "drape", "path": [[0, 0], [10, 0]]}]}]}, PAL)["things"][0]
+	_ok(Props.draped(thing) and (thing["parts"] as Array).size() == 1, "a draped thing kept parts beside its strand")
+
+
+func _bones() -> void:
+	for kind in Props.BONES:
+		var g := _geo({"shape": "bone", "kind": kind, "length": 20})
+		var box := AABB(g.v[0], Vector3.ZERO)
+		for q in g.v:
+			box = box.expand(q)
+		_ok(absf(box.position.y) < 1e-4, "a %s bone does not rest on the cloth" % kind)
+		_ok(maxf(box.size.x, box.size.z) > 0.15 and maxf(box.size.x, box.size.z) < 0.3, "a %s bone of 20 cm is %.0f cm long" % [kind, maxf(box.size.x, box.size.z) * 100.0])
+	for kind in Props.SKULLS:
+		var rng := RandomNumberGenerator.new()
+		var geos := Props._geometry(_part({"shape": "skull", "kind": kind, "length": 18}), rng)
+		var g: Props.Tris = (geos[0] as Dictionary)["geo"]
+		var box := AABB(g.v[0], Vector3.ZERO)
+		for q in g.v:
+			box = box.expand(q)
+		_ok(absf(box.position.y) < 1e-4, "a %s skull does not rest on the cloth" % kind)
+		_ok(box.size.z > 0.12 and box.size.z < 0.26, "a %s skull of 18 cm is %.0f cm front to back" % [kind, box.size.z * 100.0])
+		_ok(_open_edges(g) == 0 or kind == "horned", "a %s skull is not closed: %d open edges" % [kind, _open_edges(g)])
+	# a bird's orbits, open through the thin wall between them; its braincase is not
+	var f := Props._field_of(Props._strokes(Props.SKULL_FORMS["bird"]), true)
+	var near := Props._near(f, AABB(Vector3(-4, -1, -5), Vector3(8, 6, 13)))
+	var orbit := PackedVector3Array()
+	var brain := PackedVector3Array()
+	for i in 61:
+		var x := -3.0 + 0.1 * float(i)
+		orbit.append(Vector3(x, 1.9, 0.3))
+		brain.append(Vector3(x, 2.0, -1.9))
+	var through := true
+	for d in Props._sample(f, near, orbit):
+		through = through and d > 0.0
+	var solid := false
+	for d in Props._sample(f, near, brain):
+		solid = solid or d < 0.0
+	_ok(through, "a bird skull's orbits are not open through it")
+	_ok(solid, "control: a line through a bird's braincase meets no bone")
+
+
+func _sculpts() -> void:
+	var ball := {"points": [[0, 3, 0]], "size": [6, 6, 6]}
+	var bore := {"points": [[0, 3, -5, 1.0], [0, 3, 5, 1.0]], "carve": true}
+	var carved := _geo({"shape": "sculpt", "strokes": [ball, bore]})
+	var whole := _geo({"shape": "sculpt", "strokes": [ball]})
+	_ok(not carved.v.is_empty() and _open_edges(carved) == 0, "a carved sculpt is not closed: %d open edges" % _open_edges(carved))
+	_ok(not whole.v.is_empty() and _open_edges(whole) == 0, "a sculpted ball is not closed: %d open edges" % _open_edges(whole))
+	_ok(_hits(carved, Vector3(0.0013, 0.0307, -0.1), Vector3(0, 0, 1)) == 0, "a carve does not go through: a line down the bore meets %d faces" % _hits(carved, Vector3(0.0013, 0.0307, -0.1), Vector3(0, 0, 1)))
+	_ok(_hits(whole, Vector3(0.0013, 0.0307, -0.1), Vector3(0, 0, 1)) > 0, "control: the uncarved ball is open through its middle")
+	# mirrored
+	var arm := {"points": [[0, 2, 0, 1.0], [4, 2, 0, 0.6]]}
+	var both := _geo({"shape": "sculpt", "mirror": true, "strokes": [arm]})
+	var one := _geo({"shape": "sculpt", "strokes": [arm]})
+	var bb := Props._bounds_of(both)
+	var ob := Props._bounds_of(one)
+	_ok(absf(bb.position.x + bb.end.x) < 0.002 and bb.size.x > 0.08, "a mirrored stroke is not on both sides: x %.3f..%.3f" % [bb.position.x, bb.end.x])
+	_ok(ob.position.x > -0.015, "control: an unmirrored stroke on the right reaches the left")
+	# a well carved into a ball is darker inside than out; a ball is open all round
+	var cup := _geo({"shape": "sculpt", "strokes": [{"points": [[0, 3, 0]], "size": [6, 6, 6]}, {"points": [[0, 7, 0, 1.2], [0, 1.5, 0, 1.2]], "carve": true}]})
+	var inside := []
+	var outside := []
+	for i in cup.v.size():
+		var p := cup.v[i] * 100.0
+		if Vector2(p.x, p.z).length() < 1.3 and p.y > 1.0 and p.y < 4.5:
+			inside.append(cup.uv2[i].y)
+		elif p.y < 2.0:
+			outside.append(cup.uv2[i].y)
+	_ok(not inside.is_empty() and _mean(inside) > _mean(outside) + 0.3, "a cup's inside is not shut in: %.2f inside, %.2f out" % [_mean(inside), _mean(outside)])
+	var open := []
+	for s in whole.uv2:
+		open.append(s.y)
+	_ok(_mean(open) < 0.05, "a ball's outside reads as a hollow: %.2f" % _mean(open))
+	# a stroke too fine for its sculpt is found
+	var fine := Props.sculpt_cut({"strokes": Props._strokes([{"points": [[0, 0, 0]], "size": [40, 10, 10]}, {"points": [[0, 6, 0, 0.04], [5, 6, 0, 0.04]]}])})
+	_ok(float(fine["thin"][1]) < float(fine["cell"]) * 0.6, "a hair-thin rod on a 40 cm sculpt is not found too fine (cell %.2f cm)" % float(fine["cell"]))
+	_ok(float(fine["thin"][0]) > float(fine["cell"]) * 0.6, "control: the 10 cm body itself is found too fine")
+	_ok(Props._sanitize_part({"shape": "sculpt", "strokes": [{"points": "x"}]}, {}, PAL).is_empty(), "a sculpt with no stroke is kept")
+
+
+## How many faces of [param g] a line from [param from] along [param dir] meets - in centimeters: Godot's test
+## takes a triangle under a millimeter for one lying along the line.
+func _hits(g: Props.Tris, from: Vector3, dir: Vector3) -> int:
+	var n := 0
+	for t in range(0, g.v.size(), 3):
+		if Geometry3D.ray_intersects_triangle(from * 100.0, dir, g.v[t] * 100.0, g.v[t + 1] * 100.0, g.v[t + 2] * 100.0) != null:
+			n += 1
+	return n
+
+
+func _mean(a: Array) -> float:
+	var s := 0.0
+	for x in a:
+		s += float(x)
+	return s / maxf(float(a.size()), 1.0)
+
+
 func _told() -> void:
 	var words := Props.describe()
-	for k in ["- loft:", "- coil:", "WARP:", "\"bend\"", "\"wobble\"", "[x, y, z, r]", "[radius, height, 0]", "WHERE PARTS MEET:", "lens", "drop"]:
+	for k in ["- strand:", "- bone:", "- skull:", "- sculpt:", "`carve`", "`mirror`", "DRAPED:", "- loft:", "- coil:", "WARP:", "\"bend\"", "\"wobble\"", "[x, y, z, r]", "[radius, height, 0]", "WHERE PARTS MEET:", "lens", "drop"]:
 		_ok(words.contains(k), "the set dresser is not told %s" % k)

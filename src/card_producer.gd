@@ -265,21 +265,29 @@ func _make_draw() -> String:
 	if deck.size() < n:
 		return "the deck has %d cards and this spread needs %d (the plan was made for a bigger deck: New episode)" \
 			% [deck.size(), n]
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([episode.seed, "tarot-jumper"])
-	var jumper := bool(spec.get("jumpers", true)) and rng.randf() < JUMPER_CHANCE
-	# A JUMPER flies out of a shuffle: never out of a box, and never into a card not drawn by hand
-	var staging := CardTable.staging_of(plan)
-	var first_pos: Variant = ((plan.get("spread", {}) as Dictionary).get("positions", []) as Array)[0]
-	if not bool((TableActions.SOURCES[staging["source"]] as Dictionary)["jumpers"]) \
-			or (first_pos is Dictionary and String((first_pos as Dictionary).get("comes", "drawn")) != "drawn"):
-		jumper = false
+	var jumper := jumps(episode.seed, bool(spec.get("jumpers", true)), plan)
 	var cards: Array = []
 	for i in n:
 		var c: Dictionary = (deck[i] as Dictionary).duplicate()
 		c["jumper"] = jumper and i == 0
 		cards.append(c)
 	return episode.write_json("draw", {"seed": episode.seed, "cards": cards})
+
+
+## WHETHER A CARD JUMPS in episode [param seed] - a show that [param allowed] them, staged by [param plan] -
+## from the seed alone: how the reading goes, never which card. A JUMPER flies out of a shuffle: never
+## out of a box, and never into a card not drawn by hand.
+static func jumps(seed: int, allowed: bool, plan: Dictionary) -> bool:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed, "tarot-jumper"])
+	var jumper := allowed and rng.randf() < JUMPER_CHANCE
+	var staging := CardTable.staging_of(plan)
+	var listed: Array = ((plan.get("spread", {}) as Dictionary).get("positions", []) as Array) if plan.get("spread") is Dictionary else []
+	var first_pos: Variant = listed[0] if not listed.is_empty() else {}
+	if not bool((TableActions.SOURCES[staging["source"]] as Dictionary)["jumpers"]) \
+			or (first_pos is Dictionary and String((first_pos as Dictionary).get("comes", "drawn")) != "drawn"):
+		jumper = false
+	return jumper
 
 
 ## Card [param k] (1-based) as drawn: the deck's card, the way up it came, its place in the
@@ -411,7 +419,7 @@ func _make_table() -> void:
 	var p := CardPrompts.set_dresser(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(),
 		episode.seed, CardTable.headroom(episode.seed), seen.slice(0, 40), cloth,
 		SetDresserTools.LOOKS if not extra.is_empty() else 0, airs.slice(0, 24), String(spec.get("byline", "")),
-		tables.slice(0, 10), lights.slice(0, 10), room)
+		tables.slice(0, 10), lights.slice(0, 10), room, jumps(episode.seed, bool(spec.get("jumpers", true)), _plan()))
 	var images: Array = []
 	if cloth:
 		images.append({"path": episode.file_of("image:surface"), "label": "The painting of this episode's surface, seen from above:", "flip": false})
@@ -446,7 +454,8 @@ func _make_say(who: String) -> void:
 
 ## THE READER'S PROMPT for passage [param who] ("intro", "1".."N", "close"): the passages before it
 ## and [method _drawn] up to its card - nothing else reaches it - and `images`, the PAINTINGS it
-## talks about: card K's own for card K, every card's for the close, none for the intro. A
+## talks about: card K's own for card K when K is one it may stop on ([method CardPrompts.remarks]),
+## every card's for the close, none for the intro. A
 ## reversed card is sent upside down, as the viewer sees it. Public so the gate can hold the
 ## producer itself, not only the prompt builder, to all of that.
 func say_prompt(who: String) -> Dictionary:
@@ -463,8 +472,14 @@ func say_prompt(who: String) -> Dictionary:
 		said = _said(k - 1)
 		# THE CARDS ON THE TABLE by now: up to this one - or, swept out in a waterfall, up to its last
 		drawn = _drawn(episode.reveal_of(k))
+	# THE PAINTINGS go with a passage only where the reader may stop on one ([method CardPrompts.remarks]):
+	# a card left out reaches it by name and meaning alone
+	var remark := true
+	if who != "intro" and who != "close":
+		var shares := CardPrompts.remarks(episode.seed, n)
+		remark = int(who) - 1 < shares.size() and bool(shares[int(who) - 1])
 	var images: Array = []
-	if who != "intro":
+	if who != "intro" and remark:
 		var plan_pos: Array = ((_plan().get("spread", {}) as Dictionary).get("positions", [])) as Array
 		var first := 1 if who == "close" else int(who)
 		for k in range(first, (drawn.size() if who == "close" else first) + 1):
@@ -481,7 +496,7 @@ func say_prompt(who: String) -> Dictionary:
 		names.append(String((c as Dictionary).get("name", "")))
 	var p := CardPrompts.reader(String(spec.get("title", "")), String(spec.get("brief", "")),
 		_plan(), who, said, drawn, n, not images.is_empty(), CardEpisode.archive(episode.show, episode.seed), names,
-		_voices())
+		_voices(), remark)
 	p["images"] = images
 	return p
 

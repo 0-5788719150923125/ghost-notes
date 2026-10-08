@@ -49,6 +49,7 @@ func _ready() -> void:
 	_check_settings_reach_the_request()
 	_check_room_is_per_voice()
 	_check_take_channels()
+	_check_near_reaches_the_request()
 	_check_silent_tabs_stay_silent()
 	_check_turn_rest()
 	_check_handover_is_sample_accurate()
@@ -330,6 +331,48 @@ func _check_room_is_per_voice() -> void:
 	_ed._apply_fx(fx, _ed._cfg(0))
 	_ok(absf(leaning - 0.6) < 0.001 and fx.lean == 0.0,
 		"the lean did not follow the voice (%.2f, then %.2f)" % [leaning, fx.lean])
+
+
+## NEAR IS PLANNED PER SENTENCE AND REACHES THE REQUEST: a voice at Near 0 never moves, and
+## the one that comes in asks the host for its whisper and its softer voice on exactly the
+## sentences the plan hushed - and on no others.
+func _check_near_reaches_the_request() -> void:
+	_slots(2)
+	_ed._slots[1]["near"] = 0.8
+	var chunks: Array = []
+	for i in 200:
+		chunks.append({"speaker": Manuscript.NARRATOR if i % 2 == 0 else "Voice 2",
+			"words": [{"text": "word%d" % i}], "tokens": []})
+	_ed._plan_near(chunks, 0)
+	var still := 0
+	var whispers := 0
+	var mismatched := 0
+	var softer := 0
+	for i in chunks.size():
+		var ch: Dictionary = chunks[i]
+		var near: Dictionary = ch["near"]
+		var s: Dictionary = _ed._cfg_of(String(ch["speaker"]))
+		var args: Dictionary = _ed._request_args(s, ch)
+		var plain: Dictionary = _ed._request_args(s, {"tokens": []})
+		if i % 2 == 0 and float(near["c"]) != 0.0:
+			still += 1
+		if float(near["whisper"]) > 0.0:
+			whispers += 1
+		if absf(float(args["whisper"]) - maxf(float(plain["whisper"]), float(near["whisper"]))) > 1e-6:
+			mismatched += 1
+		if float(near["hush"]) > 0.0 and float(args["lean_effort"]) < float(plain["lean_effort"]) - 1e-6:
+			softer += 1
+		elif float(near["hush"]) <= 0.0 and absf(float(args["lean_effort"]) - float(plain["lean_effort"])) > 1e-6:
+			mismatched += 1
+	_ok(still == 0, "a voice at Near 0 moved (%d sentences)" % still)
+	_ok(whispers > 0 and softer > 0, "the moving voice never whispered or hushed (%d, %d)" % [whispers, softer])
+	_ok(mismatched == 0, "%d requests did not carry their sentence's plan" % mismatched)
+	# a plan is never rewritten behind a request: only from `from` on
+	var before: Dictionary = chunks[10]["near"]
+	_ed._slots[1]["near"] = 0.0
+	_ed._plan_near(chunks, 50)
+	_ok(chunks[10]["near"] == before, "re-planning rewrote a sentence already requested")
+	_ok(float((chunks[51] as Dictionary)["near"]["c"]) == 0.0, "re-planning did not take the new dial")
 
 
 ## THE TAKE IS STEREO WHEN SOMEBODY LEANS, and the same mono file it always was when

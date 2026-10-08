@@ -23,7 +23,8 @@ extends SceneTree
 ## - A PART ASKED FOR IS THE PART MADE: a redo makes that step (and the free steps that follow it),
 ##   never the whole episode - that is Generate's.
 ## - THE READER SEES THE PAINTING: a card's passage waits for its picture and is sent it (upside
-##   down when reversed), the close is sent them all, and nothing is sent a picture not yet drawn.
+##   down when reversed) when it is one of the few the reader may stop on, the close is sent them all,
+##   and nothing is sent a picture not yet drawn. No passage is asked to announce a move.
 ## - THE TABLE is its own step, set from the plan while looking at the cloth: a new cloth keeps it,
 ##   a new plan takes it, no card reaches the set dresser, and its prompt names every shape,
 ##   material, ornament and zone the builder knows, with the headroom of each zone.
@@ -54,6 +55,7 @@ func _init() -> void:
 	# nothing, and it used to leave a gate that had checked half of something reading ALL OK
 	for check in [_deck, _shuffle, _script, _schedule, _no_cheating, _redo, _helpers, _landing,
 			_lanes, _rerun_clears, _scrub_near, _clear_of_deck, _trash_episode, _pictures, _only_what_was_asked, _no_objects, _moves_after_words,
+			_few_remarks, _burst_moments,
 			_table_step, _things_built, _stones, _card_stock, _candles, _room_prompt, _cloth_prompt, _familiar, _archive,
 			_title_screen, _card_frame]:
 		_ok((check as Callable).call() == true, "%s stopped part way (a script error - see above)"
@@ -366,7 +368,8 @@ func _no_cheating() -> bool:
 				print("  card %d (%s) is in the producer's prompt for %s" % [j, names[j - 1], step])
 		if step.is_valid_int():
 			_ok(text.contains(String(names[upto - 1])), "the producer's prompt for card %d does not name it" % upto)
-		# THE PAINTINGS SENT: card K's own for card K, all of them for the close, none before
+		# THE PAINTINGS SENT: card K's own for card K when it is one the reader may stop on, all of them for
+		# the close, none before
 		var sent: Array = []
 		for im in p.get("images", []):
 			sent.append(String((im as Dictionary)["path"]).get_file())
@@ -374,7 +377,7 @@ func _no_cheating() -> bool:
 		if step == "close":
 			for j in range(1, n + 1):
 				want.append("card_%d.png" % j)
-		elif step.is_valid_int():
+		elif step.is_valid_int() and bool(CardPrompts.remarks(ep.seed, n)[upto - 1]):
 			want = ["card_%d.png" % upto]
 		_ok(sent == want, "the reader's prompt for %s is sent the paintings %s, not %s" % [step, str(sent), str(want)])
 		_ok(want.is_empty() == not (text.contains("painting above") or text.contains("paintings above")),
@@ -706,6 +709,63 @@ func _moves_after_words() -> bool:
 		var text := String(CardPrompts.reader("Test Tarot", "A brief.", plan, step, said, prod._drawn(upto), n)["prompt"])
 		_ok(text.contains(CardPrompts.MOVES), "the %s prompt does not say when the cards move" % step)
 		_ok(not text.contains("End on the moment"), "the %s prompt asks for a passage that ends ON a move" % step)
+	return true
+
+
+## A READER STOPS ON A FEW PAINTINGS, AND ANNOUNCES NO MOVE: the share of cards whose painting may be
+## remarked on is seeded and never most of them; a card outside it is sent no painting and no
+## description of one, and is told not to describe it. No prompt asks the reader to lead into a move.
+## Two-sided: a card inside the share is sent its painting and told it may stop on it.
+## (2026-10-07: 834225 described four paintings of five and closed every card on "let me set this one down".)
+func _few_remarks() -> bool:
+	var total := 0
+	var most := 0
+	for seed in range(1, 401):
+		var r := CardPrompts.remarks(seed, 5)
+		var c := r.count(true)
+		total += c
+		most = maxi(most, c)
+		_ok(r == CardPrompts.remarks(seed, 5), "the remarks are not a function of the seed")
+	_ok(most <= 3, "an episode of five may remark on %d paintings" % most)
+	var mean := float(total) / 400.0
+	_ok(mean > 0.6 and mean < 2.2, "the paintings remarked on average %.2f of five" % mean)
+	var n := 3
+	var ep := _episode(n)
+	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief."})
+	var plan: Dictionary = ep.read_json("plan")
+	var drawn := prod._drawn(2)
+	(drawn[1] as Dictionary)["art"] = "ART-OF-CARD-TWO"
+	var quiet := String(CardPrompts.reader("T", "B", plan, "2", prod._said(1), drawn, n, false, [], [], [], false)["prompt"])
+	_ok(not quiet.contains("ART-OF-CARD-TWO") and quiet.contains("you do not describe it"),
+		"a card outside the share is told what its painting shows, or not told to leave it")
+	var free := String(CardPrompts.reader("T", "B", plan, "2", prod._said(1), drawn, n, true, [], [], [], true)["prompt"])
+	_ok(free.contains("MAY stop on its picture") and not free.contains("you do not describe it"),
+		"control: a card inside the share is not told it may stop on its picture")
+	for step in ["intro", "1", "2", "close"]:
+		var text := String(CardPrompts.reader("T", "B", plan, step, prod._said(0 if step == "intro" else 1), prod._drawn(1 if step == "intro" else 2), n)["prompt"])
+		_ok(not text.contains("lead into"), "the %s prompt asks the reader to lead into a move" % step)
+	return true
+
+
+## A BURST'S MOMENTS ARE ONES THAT HAPPEN: the set dresser of a reading with no jumper is not offered the
+## jumper's moment, and is told so; one with a jumper is (the control). Whether a card jumps comes from the
+## seed alone, as the draw has it.
+func _burst_moments() -> bool:
+	var ep := _episode(3)
+	var plan: Dictionary = ep.read_json("plan")
+	var head := CardTable.headroom(ep.seed)
+	var without := String(CardPrompts.set_dresser("T", "B", plan, ep.seed, head, [], true, 0, [], "", [], [], false, false)["prompt"])
+	var with := String(CardPrompts.set_dresser("T", "B", plan, ep.seed, head, [], true, 0, [], "", [], [], false, true)["prompt"])
+	_ok(not without.contains("- \"jumper\":") and without.contains("no card leaps out of the deck"),
+		"a reading with no jumper is offered a burst on one")
+	_ok(with.contains("- \"jumper\":") and with.contains("the first card leaps out"), "control: a reading with a jumper is not offered its moment")
+	_ok(with.contains("\"which\""), "the set dresser is not told a burst can pick which time it marks")
+	var jumped := 0
+	for seed in range(1, 201):
+		var j := CardProducer.jumps(seed, true, plan)
+		jumped += 1 if j else 0
+		_ok(not CardProducer.jumps(seed, false, plan), "a show without jumpers jumps")
+	_ok(jumped > 30 and jumped < 90, "about %d%% of readings jump, not %d of 200" % [roundi(CardProducer.JUMPER_CHANCE * 100.0), jumped])
 	return true
 
 
@@ -1279,7 +1339,11 @@ func _title_screen() -> bool:
 	_ok(lines.size() == 2 and not bool(lines[0]["italic"]) and bool(lines[1]["italic"]),
 		"the name and its byline are not set as two lines, the name first: %s" % str(lines))
 	var size := int(lines[0]["size"])
-	_ok(size >= int(84 * 1.7), "the name is set at %d px on a 1080 frame - hardly over the old 84" % size)
+	# large enough to read on a phone (it was 84 px: "too small"), short of the frame's sides (it was 162:
+	# "basically touches the left and the right side of the screen", 2026-10-07)
+	_ok(size >= int(84 * 1.5), "the name is set at %d px on a 1080 frame - hardly over the old 84" % size)
+	_ok(face.get_string_size(String(lines[0]["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= hd.x * 0.8,
+		"the name runs within a tenth of the frame's sides")
 	_ok(face.get_string_size("Trustworthy Tarot", HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= room,
 		"the name runs wider than the frame allows")
 	_ok(size == cap or face.get_string_size("Trustworthy Tarot", HORIZONTAL_ALIGNMENT_LEFT, -1, size + 1).x > room,

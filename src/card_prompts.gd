@@ -57,8 +57,18 @@ const HEARD := {"intro": [6, 40], "card": [10, 14], "jumper": [6, 24], "close": 
 ## WHEN THE CARDS MOVE, for every reader prompt. A passage is spoken whole and the table acts only
 ## after it, in the silence before the next - so a passage that ended "And there. That's the first
 ## one." announced a card the viewer had not seen yet (2026-10-05, "she's signaling the draw before
-## it even happened").
-const MOVES := """THE CARDS MOVE ONLY BETWEEN PASSAGES. Your passage is spoken whole, and nothing on the table moves until your last word. Then, in silence, the table makes the moves that come after it - AFTER YOUR LAST WORD, below, says which. The next passage begins with them done, in front of the viewer. So whatever you say happens BEFORE the next move: lead into it ("let's see what comes", "let me set this one down"), never report it as done ("there", "there it is", "here it is", "that's the first one", "beside the others") - those words belong to the passage after it, when the viewer can see it. Do not try to time a move inside your passage with a pause: nothing moves until you finish."""
+## it even happened"). AND NOBODY ANNOUNCES THEM: told to "lead into" the next move with "let me set
+## this one down" as the example, every card passage of episode 834225 ended on that line, and opened
+## on "Oh, the ..." (2026-10-07, "Real tarot readers don't do that ... never announcing their arrival
+## or departure").
+const MOVES := """THE CARDS MOVE ONLY BETWEEN PASSAGES. Your passage is spoken whole, and nothing on the table moves until your last word. Then, in silence, the table makes the moves that come after it - AFTER YOUR LAST WORD, below, says which - and the next passage begins with them done, in front of the viewer.
+THE VIEWER WATCHES EVERY CARD COME AND GO, so nobody has to announce one. A real reader talks straight through the handling - pulling a card, showing it, setting it down - in one running train of thought, and almost never says what their hands are doing: no "let me set this one down", no "let's see what comes next", no "one card left", no "here it is". End your passage on your thought, not on the move. Never report a move before it happens either ("there", "that's the first one", "beside the others"): the viewer has not seen it yet. Do not try to time a move inside your passage with a pause: nothing moves until you finish."""
+
+## THE PAINTINGS A READER STOPS ON: a share of an episode's cards, at least none and at most this many of
+## every card drawn. Told the art was OPTIONAL and shown every painting, the reader of 834225 still
+## walked into four pictures of five ("See that little ant", "Look at the old tortoise"); a card left out
+## of this share reaches the reader without its painting or its description, so it cannot.
+const REMARKS := Vector2(0.15, 0.4)
 
 const SPOKEN_RULES := """FORMAT - everything you write is spoken aloud by a voice over the video, word for word:
 - Spoken words only. No stage directions, no headings, no lists, no emoji, no markdown, no quotation marks around the passage, no sound effects in brackets.
@@ -167,6 +177,26 @@ static func staging_rule() -> String:
 	return "\n".join(lines)
 
 
+## THE PRINTED CARD, for the producer: what a deck's printer chooses beyond its painting - the frame's
+## rules, the window's shape, the corners, an ornament round the edge, the booklet's page - each registry's
+## own words ([constant CardTable.FRAMES], [constant CardTable.WINDOWS], [constant CardTable.CORNERS],
+## [constant CardTable.ORNAMENTS], [constant CardTable.PAGES]).
+static func printed_card_rule() -> String:
+	var lines := PackedStringArray()
+	lines.append("THE PRINTED CARD: real decks differ in how they are printed as much as in what they picture - choose what this deck's printer would, in `frame` and `page`:")
+	for reg in [["`frame.style`, the rules round the picture", CardTable.FRAMES], ["`frame.window`, the picture's shape", CardTable.WINDOWS],
+			["`frame.ornament`, printed round the card's edge", CardTable.ORNAMENTS], ["`page`, how the booklet's page is set", CardTable.PAGES]]:
+		var opts := PackedStringArray()
+		for k in reg[1]:
+			opts.append("\"%s\" (%s)" % [k, String((reg[1] as Dictionary)[k])])
+		lines.append("- %s: %s." % [reg[0], "; ".join(opts)])
+	var corners := PackedStringArray()
+	for k in CardTable.CORNERS:
+		corners.append("\"%s\" (%s)" % [k, String((CardTable.CORNERS[k] as Dictionary)["about"])])
+	lines.append("- `frame.corners`, how the card is cut: %s." % "; ".join(corners))
+	return "\n".join(lines)
+
+
 ## The brief says what its show is ([constant FORMAT_HEADING]).
 static func has_format(brief: String) -> bool:
 	return Manuscript._rx(FORMAT_HEADING).search(brief) != null
@@ -222,6 +252,26 @@ static func dice(seed: int) -> Dictionary:
 	}
 
 
+## WHICH CARDS' PAINTINGS THE READER MAY STOP ON in episode [param seed]'s reading of [param n]: one bool per
+## card, in drawing order - a [constant REMARKS] share of them, seeded, and never most of them.
+static func remarks(seed: int, n: int) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed, "cards-remarks"])
+	var count := clampi(roundi(float(n) * rng.randf_range(REMARKS.x, REMARKS.y)), 0, (n + 1) / 2)
+	var order: Array = range(n)
+	for i in range(n - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp: Variant = order[i]
+		order[i] = order[j]
+		order[j] = tmp
+	var out: Array = []
+	out.resize(n)
+	out.fill(false)
+	for i in count:
+		out[int(order[i])] = true
+	return out
+
+
 ## The registry keys a look may name, for the producer to choose from: the faces the card titles
 ## are set in and the frames round them. Passed in by the caller so this file names no asset.
 ## [param history] is the show's other episodes, newest first ([method CardEpisode.archive]).
@@ -245,6 +295,7 @@ static func producer(title: String, brief: String, seed: int, cards: int, revers
 	var shown := has_format(brief)
 	lines.append(("THE LOOK is how this deck is drawn and printed - a printing that has never existed - and the table it is shown on." if shown
 		else "THE LOOK is a tarot deck that has never existed, and the table it is read on.") + " Make it specific enough that an illustrator could paint every card in one consistent hand: what the cards picture (their cast) and how it is drawn, the medium and its influences, linework, texture, palette. Then the card back (a design that reads the same when the card is turned upside down - exactly symmetric under a half turn), how much of the deck is printed in metallic foil (`foil`, 0 for matte ink to 1 for gold leaf everywhere), the surface the cards lie on (seen from directly above: the bare material, dry and clean of anything spilled or strewn - the table's shape, any other cloth laid on it and whatever stands on it are set separately), the place the table stands in (seen past the far edge of the table, out of focus), the light - indoors or out, the hour and the weather, and what it comes through on its way to the table - and how many lights burn on the table - a candle in its holder, a candelabra, a dish of tea lights each count as one (what they are, and the rest of what stands on the table, is set separately). The card's frame, its name and its numeral are printed by the deck itself, so the illustrations carry no lettering.")
+	lines.append(printed_card_rule())
 	lines.append("THE CARD STOCK is the card's own color: it shows all round every picture and behind its name, and the deck's booklet is printed in the same colors. Decks are printed on stock of every color, dark and saturated as well as pale - choose the one that best sets off this deck's paintings, with an ink and accent that read on it.")
 	if chooses or shown:
 		lines.append("THE PRINTINGS: a box may mix printings - sets, years, generations, even games - and each prints its own front and its own back. If this deck does, list them in `look.series`, each with its `name` and what it prints otherwise (`deck_style`, `card_back`, `palette`, `frame`), and give every card of the deck its `series`%s. A deck of one printing leaves `series` out." % (" (a card listed in the brief belongs to the printing named like its group)" if not chooses else ""))
@@ -253,7 +304,7 @@ static func producer(title: String, brief: String, seed: int, cards: int, revers
 		lines.append("EARLIER EPISODES of this show, newest first: what each was about and how it was told, what its deck pictured and how it was painted, and what it was printed and read on.")
 		lines.append("\n".join(past))
 		lines.append("")
-		lines.append("THE SHOW'S HABITS. Read those episodes for what they share - not their subjects, which differ, but the formulas under them: the shape of the titles, the kind of angle, the kind of running bit, who or what the cards picture and how they are composed, the way the decks are painted, the card stocks, the cloths, the rooms, the hour and the light. Name each one in `habits`, with how many of the episodes fell into it. Then plan an episode that falls into none of them, in its form as well as its subject, and repeats none of their topics, title formulas, angles, running bits, casts, painting styles, palettes, card stocks, cloths or rooms.")
+		lines.append("THE SHOW'S HABITS. Read those episodes for what they share - not their subjects, which differ, but the formulas under them: the shape of the titles, the kind of angle, the kind of running bit, who or what the cards picture and how they are composed, the way the decks are painted, the way the cards are printed (frame, window, corners, ornament, booklet page), the card stocks, the cloths, the rooms, the hour and the light. Name each one in `habits`, with how many of the episodes fell into it. Then plan an episode that falls into none of them, in its form as well as its subject, and repeats none of their topics, title formulas, angles, running bits, casts, painting styles, palettes, card stocks, cloths or rooms.")
 	lines.append("")
 	lines.append("INSPIRATION. These numbers were drawn for this episode. Let them push the episode somewhere this show has never been - a culture, a period, a material, a mood - without being literal about them: a place %s; a year %d; a hue %d degrees; the hour %d:00. Before deciding, brainstorm twelve sharply different directions for the episode (topic, angle and look together)%s, then commit to direction number %d." % [String(d["place"]), int(d["year"]), int(d["hue"]), int(d["hour"]), ", none of them in one of the show's habits" if not past.is_empty() else "", int(d["direction"])])
 	lines.append("")
@@ -276,7 +327,8 @@ static func producer(title: String, brief: String, seed: int, cards: int, revers
     "deck_style": "a paragraph an illustrator paints every card from",
     "palette": ["#rrggbb", "four to six colors"],
     "card_back": "the back design, symmetric under a half turn",
-    "frame": {"style": "one of: %s", "stock": "#rrggbb card stock", "ink": "#rrggbb border and lettering", "accent": "#rrggbb"},
+    "frame": {"style": "one of: %s", "window": "one of: %s", "corners": "one of: %s", "ornament": "one of: %s", "stock": "#rrggbb card stock", "ink": "#rrggbb border and lettering", "accent": "#rrggbb"},
+    "page": "one of: %s",
     "title_face": "one of: %s",
     "foil": 0.6,
     "surface": "the cloth or tabletop the cards lie on, seen from above: the bare material, dry",
@@ -288,7 +340,8 @@ static func producer(title: String, brief: String, seed: int, cards: int, revers
   "deck": [{"name": "the name printed on the card", "group": "its set, team, suit or type, if it has one", "series": "its printing's name, when the deck mixes printings", "meaning": "what the card is and why it is in this box, one or two sentences"}],""" if chooses else ""),
 		("""
     "kind": "what these cards are, as a noun phrase with no article: baseball card set, flashcard deck, ...",""" if shown else ""),
-		", ".join(frames.keys()), ", ".join(faces.keys())])
+		", ".join(frames.keys()), ", ".join(CardTable.WINDOWS.keys()), ", ".join(CardTable.CORNERS.keys()),
+		", ".join(CardTable.ORNAMENTS.keys()), ", ".join(CardTable.PAGES.keys()), ", ".join(faces.keys())])
 	return {"system": show_context(title, brief), "prompt": "\n".join(lines), "dice": d}
 
 
@@ -343,10 +396,11 @@ static func designer(title: String, brief: String, look: Dictionary, card: Dicti
 ## [param byline]: the show's, under its name at the opening ([method title_rule]). [param tables]:
 ## earlier episodes' tables themselves ([method Tables.summary]), to build otherwise. [param lights]:
 ## earlier episodes' light ([method Lights.summary]), to light otherwise; [param room] says the room's
-## painting goes with the prompt.
+## painting goes with the prompt. [param jumps]: a card leaps out of this episode's shuffle
+## ([method CardProducer.jumps]) - without one, a burst has no `jumper` moment to mark, and is not offered it.
 static func set_dresser(title: String, brief: String, plan: Dictionary, seed: int, headroom: Dictionary,
 		seen: Array, cloth: bool, looks := 0, airs: Array = [], byline := "", tables: Array = [], lights: Array = [],
-		room := false) -> Dictionary:
+		room := false, jumps := true) -> Dictionary:
 	var look: Dictionary = plan.get("look", {}) if plan.get("look") is Dictionary else {}
 	var light: Dictionary = look.get("light", {}) if look.get("light") is Dictionary else {}
 	var candles := clampi(int(look.get("candles", 1)), 0, CardTable.MAX_CANDLES)
@@ -386,7 +440,7 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 	lines.append("Candles take every form a reader of this world would light: a taper in a tall stick, a squat pillar with two or three wicks, tea lights in their tins, a votive in glass, a church candle on a pricket, an oil lamp, a candelabra with a taper in each cup. Make this table's its own, not always a pillar.")
 	lines.append("Compose it as a reader does: a few groups and a few things alone, never a row of things evenly spaced. Heights vary within a group, and odd numbers sit well. The middle of the cloth stays bare: the deck is shuffled there, and the cards drawn and laid.")
 	lines.append("Every thing is a real object, set out in earnest. Nothing on the table carries words, letters, numbers or labels.")
-	lines.append("WHAT THE PARTS CAN MAKE: things of solid form - vessels, teapots and cups, candles and their holders, lamps, tools, boxes, books, bottles, bowls and dishes, stones and crystals, shells, living plants in their pots (a cactus, a snake plant, a fern, a flower) and cut, dried flowers and herbs. They cannot make a BODY: nothing with a head or limbs - no animal, fish, bird, insect or person, living or dead, no figurine, statue, doll or carving of one, and no fish or meat laid out as food. Built from balls and rods, a body reads as a crude toy or a monster. Where the reading's subject is a creature, a thing from its world stands for it - the tool that catches it, the vessel it is kept or served in, the stone named after it.")
+	lines.append("WHAT THE PARTS CAN MAKE: things of solid form - vessels, teapots and cups, candles and their holders, lamps, tools, boxes, books, bottles, bowls and dishes, stones and crystals, shells, living plants in their pots (a cactus, a snake plant, a fern, a flower) and cut, dried flowers and herbs. Things that are LONG AND LIMP, as strands - a rope coiled down, a tangle of red thread, a wire, a vine trailing across the cloth with its leaves, a string of beads, a chain - laid neatly or thrown down, or draped across the table and over its edge. And BONES, as their own shapes: a skull (a person's, a horned beast's, a bird's), a femur, a rib, a wishbone, a heap of small bones - bone, bleached and dry. And whatever of solid form no other shape makes - a shell, an antler, a gnarled root, a seed pod, the skull or jaw of a creature the skull shape does not know - SCULPTED stroke by stroke, as clay is. They cannot make a BODY: nothing with a head or limbs, flesh, eyes or skin - no animal, fish, bird, insect or person, living or dead, no figurine, statue, doll or carving of one, and no fish or meat laid out as food. Built from balls and rods, a body reads as a crude toy or a monster. Bones are the one exception - bare bone only, built with the bone and skull shapes or sculpted. Where the reading's subject is a creature, a thing from its world stands for it - the tool that catches it, the vessel it is kept or served in, the stone named after it, its bones.")
 	if String(CardTable.staging_of(plan)["source"]) == "box":
 		lines.append("")
 		lines.append(box_rule())
@@ -407,7 +461,13 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 	lines.append("SIZES are the real sizes of the real things. For scale, a card here is 7 x 12 cm, and the deck stands 3 cm high.")
 	lines.append("")
 	lines.append("THE AIR: beside its things, a table can have air that moves - fog rolling in behind it, a few points of light drifting through, a burst of sparks or glitter at a moment of the reading. It goes in `effects`, a list beside `things` and `materials`. The air is part of the table's world as its things are, and the brief says what this show wants of it; a table may have none.")
-	lines.append(Effects.describe(air_regions(), CardTable.MOMENTS))
+	var moments := CardTable.MOMENTS.duplicate()
+	if not jumps:
+		moments.erase("jumper")
+	lines.append(Effects.describe(air_regions(), moments))
+	lines.append("In this reading %s." % ("the first card leaps out of the deck on its own while it is shuffled - a jumper" if jumps
+		else "no card leaps out of the deck: every one is drawn by hand"))
+	lines.append("A burst is theater, and the genre makes theater of a few moments: a card leaping from the deck, a card twirled in the fingers, the first card up, the last card down, the close. Mark one of them now and then, never every card - a burst `on` a moment that comes with every card picks its time with `which`.")
 	lines.append("The cards are always seen: fog lies behind the table or low on the cloth, never thick over the cards, and a burst is over in a second or two. Its colors belong to the deck's palette or to the light of the episode's world.")
 	lines.append("")
 	lines.append("THE LIGHT: what lights this table and how that light moves - the sky, the sun or the moon and what it falls through on its way, clouds and birds between it and the table, lamps round the room. It goes in `light`, beside `things`. The plan says what the light is (above): build that light, and make it agree with the room%s - where its windows are, which side its sun comes from, how bright its day is. Indoors or out, the hour and the weather decide it: outdoors by day a bright sky and a sun, its shadows crisp or hazy; a porch or a market stall the shade of an awning, the bright day beyond its edge; a room in the afternoon the sun slanting through a window onto the table, the rest in the room's own dim light; dusk a low red sun or none, and torches or lanterns round the edges; night the moon, or only the lamps and the candles." % (" (its painting attached)" if room else ""))
@@ -429,7 +489,7 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 		for l in lights:
 			lines.append("- " + clip(String(l), 50))
 	lines.append("")
-	var check := "it has no body - no head, no limbs, real or carved; every part rests on the cloth or on another part (nothing floats, nothing sinks through); it stands as it would really stand - a thing with a pointed or round bottom lies on its side or sits in a stand, a ring or a bowl, never balanced on its point; the lowest point is at height 0; the sizes are real and fit the place's height; a hollow vessel's profile goes up the outside and back down the inside; every candle's wax has `wick` or `wicks`, and a candle in a cup or a holder stands on its floor."
+	var check := "it has no body - no head, no limbs, real or carved (a skull or a bone - made with its own shape, or sculpted as bare bone - is bone, not a body); every part rests on the cloth or on another part (nothing floats, nothing sinks through); it stands as it would really stand - a thing with a pointed or round bottom lies on its side or sits in a stand, a ring or a bowl, never balanced on its point; the lowest point is at height 0; the sizes are real and fit the place's height; a hollow vessel's profile goes up the outside and back down the inside; every candle's wax has `wick` or `wicks`, and a candle in a cup or a holder stands on its floor."
 	if looks > 0:
 		lines.append("HOW YOU WORK: you build this table with tools, and you SEE what you build. `put` builds the table itself (`top`, `layers`), puts things (and the materials they use, and the air's effects) on it and lights it (`light`), and answers with what was built - each thing's real size, anything the builder could not make as written, where the sun falls - and a picture of the things on a centimeter grid; `look` shows one thing close up from four sides; `overhead` shows the whole table from straight above - its top, its cloths as laid, the things and the cards - with the stretch the camera sees outlined; `set` stands everything on this episode's own table and photographs it from the camera's place, as the viewer will see it, its air with it, saying what was made smaller or left off for want of room and which light leads; `watch` shows one effect of the air, or a moving part of the light, in motion - a burst at the moment it marks, a cloud passing over the sun, a bird's shadow crossing, a lamp flickering; `title` chooses the color the show's name is printed in and shows you the opening with it, saying how far the color stands out from the table behind the name; `remove` takes things, effects, layers or parts of the light off; `submit` hands the table in.")
 		lines.append("Build the table first - its top and its layers - and look at it from above; then make the things; then light the table (`put` its `light`), set it, and watch what moves in its light.")
@@ -510,9 +570,12 @@ static func box_rule() -> String:
 ## [param voices] are the show's OTHER voices (a familiar on the reader's shoulder), by the names
 ## its document gives them: the reader writes their lines too and hands each one over with a
 ## speaker cue ([method voices_rule]). Who they are and when they speak is the brief's to say.
+##
+## [param remark]: this card is one of the few whose painting the reader may stop on ([method remarks]).
+## A card that is not reaches it by name and meaning only - no painting, no description of one.
 static func reader(title: String, brief: String, plan: Dictionary, step: String, said: Array,
 		drawn: Array, spread_size: int, pictured := false, history: Array = [],
-		names: Array = [], voices: Array = []) -> Dictionary:
+		names: Array = [], voices: Array = [], remark := true) -> Dictionary:
 	var lines := PackedStringArray()
 	var positions: Array = ((plan.get("spread", {}) as Dictionary).get("positions", [])) as Array
 	lines.append("You are the READER: the voice of the video. You speak every word of it." if voices.is_empty()
@@ -559,16 +622,16 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 	if step == "intro":
 		lo_hi = WORDS["intro"]
 		if boxed:
-			lines.append("NOW: the video opens. The box the cards are kept in stands open beside you, the cards filed in it on edge. Welcome the viewer to \"%s\", and set up this episode and who it is for. You do not know which cards will come out - none has been pulled yet - so name none and predict none. End as you reach into the box: the first card comes out after your last word, so lead into it and never say it is out." % title)
+			lines.append("NOW: the video opens. The box the cards are kept in stands open beside you, the cards filed in it on edge. Welcome the viewer to \"%s\", and set up this episode and who it is for. You do not know which cards will come out - none has been pulled yet - so name none and predict none. The first card comes out after your last word, and the viewer sees it come: end on your thought, never on an announcement, and never say it is out." % title)
 		else:
-			lines.append("NOW: the video opens. You are shuffling the deck while you talk. Welcome the viewer to \"%s\", set up this episode and who it is for, and keep the patter going while the cards are mixed. You do not know any card yet - none has been drawn - so name none and predict none. End as you stop shuffling and reach for the first card: it comes out after your last word, so lead into it and never say it is out." % title)
+			lines.append("NOW: the video opens. You are shuffling the deck while you talk. Welcome the viewer to \"%s\", set up this episode and who it is for, and keep the patter going while the cards are mixed. You do not know any card yet - none has been drawn - so name none and predict none. The first card comes out after your last word, and the viewer sees it come: end on your thought, never on an announcement, and never say it is out." % title)
 	if step == "intro":
 		lines.append("AFTER YOUR LAST WORD: %s" % after(plan, 0, spread_size))
 	elif step == "close":
 		lo_hi = WORDS["close"]
 		lines.append("NOW: the last card has just been laid down, and all %d cards are face up on the table. Pull the reading together - the whole spread, in the light of everything you have said - and close the episode the way the brief says the show closes." % spread_size)
 		if pictured:
-			lines.append("The paintings above are those cards as they lie on the table, in the order they were drawn (a reversed card upside down) - the viewer sees them as you do. Draw on what is painted only if it helps you tie the reading together; you do not have to.")
+			lines.append("The paintings above are those cards as they lie on the table, in the order they were drawn (a reversed card upside down) - the viewer sees them as you do. The close is about what the cards said, not what they picture: most closes never mention a painting, and none tours them.")
 		lines.append("AFTER YOUR LAST WORD: nothing moves - the episode ends.")
 	else:
 		var k := int(step)
@@ -597,12 +660,14 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 			lines.append("What it means in this deck: %s" % means)
 		lines.append("It sits in position %d, \"%s\" - %s." % [k, String(pos.get("name", "")), String(pos.get("asks", ""))])
 		var art := String(c.get("art", "")).strip_edges()
-		if pictured and not held:
-			lines.append("The viewer sees it lying on the table: it is the painting above, so anything you say about it must be what is actually painted there.")
+		if not remark:
+			lines.append("The viewer is looking at its picture%s. This time you do not describe it or point at anything in it: read the card by its name, its meaning and its place in the spread, and carry your train of thought on - real readers stop on a detail of a picture only now and then, and this is not one of those cards." % (" lying on the table" if not held else ", held up to the camera"))
+		elif pictured and not held:
+			lines.append("The viewer sees it lying on the table: it is the painting above, so anything you say about it must be what is actually painted there. This is one of the few cards of the reading where you MAY stop on its picture, if a detail serves what you are saying - one detail, a sentence or two, never a tour of the painting.")
 		elif pictured:
-			lines.append("The viewer is looking at its picture, held up to the camera: it is the painting above%s, so anything you say about it must be what is actually painted there. Remarking on the art is OPTIONAL, and usually you will not: real readers mostly name the card and carry their train of thought on through several cards, stopping on a detail of a picture only now and then, when it serves what they are saying. If you have already remarked on a card's art in what you have said so far, do not do it again here." % (", upside down, because it came up reversed" if bool(c.get("reversed", false)) else ""))
+			lines.append("The viewer is looking at its picture, held up to the camera: it is the painting above%s, so anything you say about it must be what is actually painted there. This is one of the few cards of the reading where you MAY stop on its picture, if a detail serves what you are saying - one detail, a sentence or two, never a tour of the painting. If you have already remarked on a card's art in what you have said so far, let this one go by." % (", upside down, because it came up reversed" if bool(c.get("reversed", false)) else ""))
 		elif not art.is_empty():
-			lines.append("The viewer is looking at its picture, held up to the camera. For you, not to recite - this deck paints it as: %s. Mention it only if it serves what you are saying." % art)
+			lines.append("The viewer is looking at its picture, held up to the camera. For you, not to recite - this deck paints it as: %s. Mention one detail only if it serves what you are saying." % art)
 		var b: Dictionary = c.get("booklet", {}) if c.get("booklet") is Dictionary else {}
 		if not b.is_empty() and on_back:
 			lines.append("Its back is printed with this - the viewer reads it when the card is turned over in your hand. Refer to it if you like, never read it all out:")
@@ -617,7 +682,9 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 			lines.append(String(b.get("reversed" if bool(c.get("reversed", false)) and b.has("reversed") else "upright", "")))
 			lines.append("</booklet>")
 		lines.append("Read this card for the viewer, in this position, carrying the story on from what you have already said - the reading builds as the cards come. You know only the cards on the table; never guess at what comes next.")
-		lines.append("AFTER YOUR LAST WORD: %s So lead into that, and never say it has happened - the next passage opens with it done." % after(plan, k, spread_size))
+		if k > 1:
+			lines.append("Meet it in your own way, not the way you met the card before: if your last passages opened alike (\"Oh, the ...\", \"Ooh, ...\") or ended alike, this one opens and ends otherwise - mid-thought, with what the position asks, with the card's name inside a sentence.")
+		lines.append("AFTER YOUR LAST WORD: %s The viewer watches it happen, so you need not say it will - and never say it has: the next passage opens with it done." % after(plan, k, spread_size))
 	var kind := step if step == "intro" or step == "close" \
 		else ("jumper" if not drawn.is_empty() and bool((drawn[drawn.size() - 1] as Dictionary).get("jumper", false)) else "card")
 	var heard_before := _heard_before(history, kind, brief, names)
@@ -767,9 +834,10 @@ static func _past(e: Dictionary) -> String:
 			pictured.append("%s - %s" % [_s(_d(c).get("name", "")), clip(art, 26)])
 	if not pictured.is_empty():
 		lines.append("  Its cards pictured: %s" % "; ".join(pictured))
-	lines.append("  Card stock %s, ink %s, accent %s; %s frame, titles in %s, foil %s; palette %s" % [
+	lines.append("  Card stock %s, ink %s, accent %s; %s frame, %s window, %s corners, ornament %s, booklet page %s, titles in %s, foil %s; palette %s" % [
 		_s(frame.get("stock", "")), _s(frame.get("ink", "")), _s(frame.get("accent", "")),
-		_s(frame.get("style", "")), _s(look.get("title_face", "")), _s(look.get("foil", "")),
+		_s(frame.get("style", "")), _s(frame.get("window", "rect")), _s(frame.get("corners", "rounded")),
+		_s(frame.get("ornament", "none")), _s(look.get("page", "classic")), _s(look.get("title_face", "")), _s(look.get("foil", "")),
 		" ".join(strings(look.get("palette", [])))])
 	lines.append("  Cloth: %s | Room: %s | Light: %s, %s lit on the table" % [clip(_s(look.get("surface", "")), 14),
 		clip(_s(look.get("setting", "")), 16), clip(_s(light.get("kind", "")), 12), _s(look.get("candles", ""))])
@@ -926,6 +994,7 @@ static func card_image(look: Dictionary, card: Dictionary, art: String, target: 
 	lines.append("")
 	lines.append(_deck_line(look))
 	lines.append("FORMAT: PORTRAIT 2:3 (1024x1536). The card's picture only, composed for a tall card and running to every edge: no border, no frame, no panel, no title, no numbers, no letters or writing of any kind - the frame and the card's name are printed around it separately. Keep the important things away from the outer tenth on each side.")
+	lines.append("The engine cuts the picture to the card's window (%s): paint the WHOLE rectangle, the scene running into every corner - never an arch, oval or panel of your own on a white or blank ground, no white or empty corners." % String(CardTable.WINDOWS.get(CardFaces.window_of(look), "a plain rectangle")))
 	# The attachments arrive in this order - the back, then the earlier cards - so each group is
 	# named by its place in it.
 	if has_back:

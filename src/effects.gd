@@ -156,7 +156,7 @@ static func describe(regions: Dictionary, moments: Dictionary) -> String:
 		lines.append("- %s: %s (%s mm, %s to %s)" % [k, String(mo["about"]), _mm(float(mo["size"])),
 			_mm((mo["sizes"] as Vector2).x), _mm((mo["sizes"] as Vector2).y)])
 	lines.append("")
-	lines.append("BURSTS: {\"name\", \"kind\": \"burst\", \"look\", \"on\" (the moment), \"colors\" [\"#rrggbb\", ...], \"count\", \"size\" (millimeters, within the look's range), \"speed\" 0-1, \"spread\" (degrees round the way they are thrown), \"life\" (seconds), \"glow\" 0-1 (within the look's range)}. Looks, each with its size and the sizes it can be:")
+	lines.append("BURSTS: {\"name\", \"kind\": \"burst\", \"look\", \"on\" (the moment), \"colors\" [\"#rrggbb\", ...], \"count\", \"size\" (millimeters, within the look's range), \"speed\" 0-1, \"spread\" (degrees round the way they are thrown), \"life\" (seconds), \"glow\" 0-1 (within the look's range), \"which\" (the times its moment happens it marks: \"every\", \"first\", \"last\", or a list like [2] counted in the order they happen - a moment that comes with every card is marked at every card unless this says otherwise)}. Looks, each with its size and the sizes it can be:")
 	for k in BURSTS:
 		var bo: Dictionary = BURSTS[k]
 		lines.append("- %s: %s (%s mm, %s to %s)" % [k, String(bo["about"]), _mm(float(bo["size"])),
@@ -240,10 +240,42 @@ static func sanitize(raw: Variant, palette: Array, regions: Array, moments: Arra
 				fx["spread"] = Props._num(d.get("spread"), float(base["spread"]), 0.0, 180.0)
 				fx["life"] = Props._num(d.get("life"), float(base["life"]), 0.15, 6.0)
 				fx["glow"] = Props._num(d.get("glow"), 0.6, 0.0, 1.0)
+				fx["which"] = _which(d.get("which", "every"))
 			_:
 				continue
 		out.append(fx)
 	return out
+
+
+## WHICH TIMES A MOMENT HAPPENS a burst marks, made safe: "every", "first", "last", or a list of times
+## counted from 1 in the order they happen.
+static func _which(v: Variant) -> Variant:
+	if v is Array:
+		var nums: Array = []
+		for x in v:
+			if (x is float or x is int) and int(x) >= 1 and not nums.has(int(x)) and nums.size() < 12:
+				nums.append(int(x))
+		return nums if not nums.is_empty() else "every"
+	if v is float or v is int:
+		return [int(v)] if int(v) >= 1 else "every"
+	var w := String(v if v is String else "").strip_edges().to_lower()
+	return w if w in ["first", "last"] else "every"
+
+
+## The times of [param moments] a burst marks ([method _which]).
+static func picked(moments: Array, which: Variant) -> Array:
+	if which is Array:
+		var out: Array = []
+		for i in moments.size():
+			if (which as Array).has(i + 1):
+				out.append(moments[i])
+		return out
+	match String(which):
+		"first":
+			return moments.slice(0, 1)
+		"last":
+			return moments.slice(moments.size() - 1) if not moments.is_empty() else []
+	return moments
 
 
 ## [param n] of mote look [param look], as a report writes it: "1 pixie", "7 flies".
@@ -914,7 +946,7 @@ class Air:
 	func plan(moments: Dictionary) -> void:
 		for b in bursts:
 			var fx: Dictionary = b["fx"]
-			var mine: Array = moments.get(String(fx["on"]), [])
+			var mine: Array = Effects.picked(moments.get(String(fx["on"]), []), fx.get("which", "every"))
 			var key := str(mine.map(func(m: Dictionary) -> String: return "%.3f/%.3f" % [float(m["t"]), float(m.get("dur", 0.0))]))
 			if key == String(b["planned"]):
 				continue

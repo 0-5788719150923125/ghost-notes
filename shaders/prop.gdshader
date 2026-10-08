@@ -219,6 +219,12 @@ void fragment() {
 		metal = mix(metal, kind == 1 ? 0.3 : 0.0, m);
 		rough = mix(rough, 0.45, m);
 	}
+	// HOW SHUT IN THE SURFACE IS (a sculpt's UV2.y, Props._cavity; 0 on every other shape): a socket's
+	// depths, a groove, the hollow under an arch see less of the room, and gather the dust of years
+	float cave = smoothstep(0.05, 0.75, UV2.y);
+	albedo *= 1.0 - 0.7 * cave;
+	AO = 1.0 - 0.9 * cave;
+	AO_LIGHT_AFFECT = 0.8;
 	// few real surfaces reflect more than this much of the light: a white wax at its full value
 	// blew out beside a flame
 	ALBEDO = albedo * 0.84;
