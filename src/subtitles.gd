@@ -152,8 +152,9 @@ static func glitch_reach(line: int, t: float) -> int:
 ## glyph of [param simple] (always, at the front itself) or [param complex]. Each letter keeps its own time, as
 ## each of the label's letters stepped on its own: it holds a glyph [constant GLITCH_HOLD] seconds (its own
 ## length in that range, from its own moment), and at the end of a hold changes only GLITCH_CHANGE of the
-## time - where every letter turning over together 16 times a second read as a boil.
-static func glitch_glyph(wi: int, ch: int, t: float, ahead: int, simple: String, complex: String) -> String:
+## time - where every letter turning over together 16 times a second read as a boil. [param pick] chooses again
+## from the same moment (the overlay's way past a glyph too wide for its letter's place).
+static func glitch_glyph(wi: int, ch: int, t: float, ahead: int, simple: String, complex: String, pick := 0) -> String:
 	var own := hash([wi, ch, "hold"])
 	var hold := lerpf(GLITCH_HOLD.x, GLITCH_HOLD.y, float(own % 1000) / 999.0)
 	var tick := floori(t / hold + float((own >> 10) % 1000) / 999.0)
@@ -162,7 +163,7 @@ static func glitch_glyph(wi: int, ch: int, t: float, ahead: int, simple: String,
 		if hash([wi, ch, tick, "turn"]) % 100 < int(GLITCH_CHANGE * 100.0):
 			break
 		tick -= 1
-	var h := hash([wi, ch, tick])
+	var h := hash([wi, ch, tick, pick])
 	var pool := simple if (ahead <= 0 or complex.is_empty() or h % 3 != 0) else complex
 	return pool[(h >> 4) % pool.length()]
 
@@ -586,12 +587,17 @@ class Overlay:
 						# NOT SAID YET: a glyph of noise in the letter's own place, centered on it so
 						# the line never reflows, flickering - and now and then a ghost beside it
 						var sets: Array = _glitch_set(face)
+						# ALWAYS THE LINE'S OWN SIZE (2026-10-07: "extremely tiny text in the glitched characters"):
+						# a glyph much wider than its letter's place is chosen again, never shrunk to fit -
+						# shrunk, an "i" or a comma's noise came out at half size
 						var g := Subtitles.glitch_glyph(int(item.idx), ch, now, ahead, sets[0], sets[1])
 						var gs := fs
 						var gw := face.get_string_size(g, HORIZONTAL_ALIGNMENT_LEFT, -1, gs).x
-						if gw > cw * 1.25:
-							# a wide glyph in a narrow letter's place is set smaller, not spilled on its neighbors
-							gs = maxi(int(float(fs) * cw * 1.25 / gw), int(fs * 0.5))
+						var room := maxf(cw * 1.35, float(fs) * 0.45)
+						for again in range(1, 6):
+							if gw <= room:
+								break
+							g = Subtitles.glitch_glyph(int(item.idx), ch, now, ahead, sets[0], sets[1], again)
 							gw = face.get_string_size(g, HORIZONTAL_ALIGNMENT_LEFT, -1, gs).x
 						var gp := pos + Vector2((cw - gw) * 0.5, 0.0)
 						var h := hash([int(item.idx), ch, floori(now * Subtitles.GLITCH_STEPS), "ghost"])

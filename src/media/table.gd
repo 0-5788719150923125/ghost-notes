@@ -1401,8 +1401,8 @@ func _build_file() -> void:
 	var inner: AABB = _box["inner"]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([_seed, "card file"])
-	var upright := inner.size.x >= CARD.x * 0.95 and inner.size.y >= 0.07
-	var lie := not upright and inner.size.x >= CARD.y * 0.95 and inner.size.y >= 0.04
+	var upright := inner.size.x >= CARD.x * 1.03 and inner.size.y >= 0.07
+	var lie := not upright and inner.size.x >= CARD.y * 1.03 and inner.size.y >= 0.04
 	_box["upright"] = upright
 	_box["lie"] = lie
 	_box["at_k"] = []

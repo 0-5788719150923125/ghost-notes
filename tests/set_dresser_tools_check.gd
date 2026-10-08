@@ -36,6 +36,10 @@ extends SceneTree
 ##   "clouds", "birds", "light"), watched by name (with no renderer, said so), handed in with the table;
 ##   both prompts tell the set dresser of it, its vocabulary, its format and earlier episodes' light.
 
+## - ONE CALL AT A TIME (reported 2026-10-07: the table's job ended while a call was photographing, and
+##   every picture after it was "a previously freed instance"): two calls made together run one after the
+##   other, a release during a call gives the stages back only when it is done, and a call after it is
+##   turned away - the control, the same two calls straight into the toolset's own work, overlap.
 const ROOT := "user://set_dresser_check"
 
 var _fails := 0
@@ -50,6 +54,18 @@ class Standing:
 
 	func _can_see() -> bool:
 		return false
+
+
+## A toolset whose every call takes a few frames, as a picture does, and logs when it starts and ends.
+class Slow:
+	extends SetDresserTools
+	var log: Array = []
+	func _call(name: String, _args: Dictionary) -> Dictionary:
+		log.append("start " + name)
+		for i in 3:
+			await TablePreview._tree().process_frame
+		log.append("end " + name)
+		return {"text": name}
 
 
 ## A producer that records the job it would have submitted instead of starting it.
@@ -74,7 +90,7 @@ func _ok(cond: bool, what: String) -> void:
 
 func _run() -> void:
 	AgentJobs.allow_for_tool()
-	for check in [_fresh_start, _tools_listed, _put_reports, _remove_look_set, _submit, _title, _producer, _prompts, _claude_argv, _air, _table_itself, _light]:
+	for check in [_fresh_start, _tools_listed, _put_reports, _remove_look_set, _submit, _title, _producer, _prompts, _claude_argv, _air, _table_itself, _light, _one_at_a_time]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("set_dresser_tools_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -522,4 +538,42 @@ func _light() -> bool:
 	await t.call_tool("remove", {"names": ["light"]})
 	_ok((CardTable.sanitize_table(t.draft(), CardTable.sanitize_look({}))["light"] as Dictionary).is_empty(), "removing \"light\" leaves a light")
 	t.release()
+	return true
+
+
+func _one_at_a_time() -> bool:
+	var ep := _episode()
+	var tools := Slow.new(ep, ep.read_json("plan"), ep.job_dir("table"))
+	var a := {}
+	var b := {}
+	var run := func(n: String, into: Dictionary) -> void:
+		into.merge(await tools.call_tool(n, {}))
+	run.call("look", a)
+	run.call("title", b)
+	for i in 20:
+		await process_frame
+	_ok(tools.log == ["start look", "end look", "start title", "end title"], "two calls made together overlapped: %s" % [tools.log])
+	# released mid-call: the call finishes, and the stages are given back after it
+	tools.log.clear()
+	var c := {}
+	run.call("set", c)
+	await process_frame
+	tools.release()
+	_ok(tools._busy, "the call was over before the release - the test proves nothing")
+	_ok(tools._preview._studio == null and tools._preview._table == null, "the stages were built in a run with no renderer")
+	for i in 10:
+		await process_frame
+	_ok(tools.log == ["start set", "end set"] and String(c.get("text", "")) == "set", "a call released part way did not finish: %s" % [tools.log])
+	var after: Dictionary = await tools.call_tool("look", {})
+	_ok(bool(after.get("error", false)) and tools.log.size() == 2, "a call after the release was not turned away")
+	# control: straight into the work, the same two calls overlap
+	var raw := Slow.new(ep, ep.read_json("plan"), ep.job_dir("table"))
+	var noop := func(n: String) -> void:
+		await raw._call(n, {})
+	noop.call("look")
+	noop.call("title")
+	for i in 10:
+		await process_frame
+	_ok(raw.log[1] == "start title", "control: two calls straight into the work did not overlap: %s" % [raw.log])
+	raw.release()
 	return true

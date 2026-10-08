@@ -75,6 +75,8 @@ var _title := {}                 # the name's color over this table: {color, why
 var _light := {}                 # the table's light as written, part by part, once put
 var _light_put := false
 var _looks := 0
+var _busy := false               # a call is in hand ([method call_tool])
+var _released := false
 var _set_since_change := false
 var _warned := false
 var _warned_title := false
@@ -97,9 +99,11 @@ func _init(ep: CardEpisode, episode_plan: Dictionary, job_dir: String, name := "
 			DirAccess.remove_absolute(dir.path_join(fs))
 
 
-## Give back the pictures' stages.
+## Give back the pictures' stages - once the call in hand, if any, has finished with them ([method call_tool]).
 func release() -> void:
-	_preview.release()
+	_released = true
+	if not _busy:
+		_preview.release()
 
 
 func instructions() -> String:
@@ -136,7 +140,25 @@ func list_tools() -> Array:
 	]
 
 
+## ONE CALL AT A TIME, and none once the tools are closed. Reported 2026-10-07: the table's job ended while a
+## call was photographing (an agent's last `title`), its stages were freed under it, and every picture after
+## that was "a previously freed instance"; two calls at once share one studio and its camera. So a call waits
+## for the one before it, a call after [method release] is turned away, and a release during a call gives the
+## stages back when the call is done.
 func call_tool(name: String, args: Dictionary) -> Dictionary:
+	while _busy and not _released:
+		await TablePreview._tree().process_frame
+	if _released:
+		return {"text": "The table has been handed in and its tools are closed.", "error": true}
+	_busy = true
+	var out: Dictionary = await _call(name, args)
+	_busy = false
+	if _released:
+		_preview.release()
+	return out
+
+
+func _call(name: String, args: Dictionary) -> Dictionary:
 	match name:
 		"put":
 			return await _put(args)

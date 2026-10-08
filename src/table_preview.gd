@@ -332,7 +332,7 @@ func _hold(t: Dictionary, materials: Dictionary, salt: int) -> AABB:
 
 
 func _clear_held() -> void:
-	if _held == null:
+	if _held == null or not is_instance_valid(_held):
 		return
 	for c in _held.get_children():
 		c.queue_free()
@@ -341,6 +341,8 @@ func _clear_held() -> void:
 ## One picture of what the studio holds: framed to [param box], seen from [param side] (a direction
 ## from its middle toward the camera), at [param size], captioned.
 func _shot(box: AABB, side: Vector3, size: Vector2i, caption: String) -> Image:
+	if _studio == null or not is_instance_valid(_studio):
+		return null
 	_studio.size = size
 	var c := box.get_center()
 	var r := maxf(box.size.length() * 0.5, 0.01)
@@ -643,9 +645,13 @@ func opening(raw: Dictionary) -> Dictionary:
 	title.alpha = 0.0
 	title.queue_redraw()
 	var bare: Image = await _render(_table, TABLE_FRAMES)
+	if bare == null or not is_instance_valid(title):
+		return {"error": "no picture could be taken"}
 	title.alpha = 1.0
 	title.queue_redraw()
 	var img: Image = await _render(_table, TABLE_FRAMES)
+	if not is_instance_valid(title):
+		return {"error": "no picture could be taken"}
 	title.alpha = 0.0
 	title.queue_redraw()
 	m._lens(1.0)
@@ -879,10 +885,15 @@ func _placed(spec: Dictionary) -> Dictionary:
 # --- the shutter ------------------------------------------------------------------------------------
 
 ## [param vp] drawn for [param frames] frames, read back, then stopped again.
+## null when the stage is given back while it waits ([method release]).
 func _render(vp: SubViewport, frames: int) -> Image:
+	if vp == null or not is_instance_valid(vp):
+		return null
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	for i in frames:
 		await RenderingServer.frame_post_draw
+		if not is_instance_valid(vp):
+			return null
 	var img := vp.get_texture().get_image()
 	vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	if img == null or img.is_empty():
