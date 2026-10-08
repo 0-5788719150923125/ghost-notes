@@ -104,7 +104,8 @@ timeout_of() {
 
 # -- what runs ------------------------------------------------------------------
 
-gates=(parse)
+## `docs` is a second long, so it runs second: a stale generated doc fails before any slow gate starts.
+gates=(parse docs)
 for f in tests/*_check.gd; do
 	name=$(basename "$f" .gd)
 	if is_gpu "$name" && [ "$gpu" -eq 0 ] && [ -z "$only" ]; then
@@ -112,7 +113,7 @@ for f in tests/*_check.gd; do
 	fi
 	gates+=("$name")
 done
-gates+=(scene_smoke docs)
+gates+=(scene_smoke)
 if [ -n "$only" ]; then
 	picked=()
 	for g in "${gates[@]}"; do in_list "$g" "$only" && picked+=("$g"); done
@@ -266,12 +267,13 @@ if [ "$jobs" -le 1 ]; then
 else
 	say "$jobs at a time"
 	set -m
-	## `parse` first and alone: it registers the class names every other gate loads.
+	## `parse` first and alone (it registers the class names every other gate loads), then `docs`.
 	queue=()
 	for g in "${gates[@]}"; do
-		if [ "$g" = parse ]; then
-			run_one parse
-			settle parse || { [ "$fail_fast" -eq 0 ] || queue=(); }
+		if [ "$g" = parse ] || [ "$g" = docs ]; then
+			[ "${#failed[@]}" -gt 0 ] && [ "$fail_fast" -eq 1 ] && continue
+			run_one "$g"
+			settle "$g"
 		else
 			queue+=("$g")
 		fi

@@ -246,7 +246,7 @@ A card reading nobody writes: a show's brief, its episodes - each planned, dealt
 - [`dealer_tools.gd`](../src/dealer_tools.gd) **DealerTools** - what a dealer can do while it lays an episode's cards out (next/notes.md step 9, "Agents choose"): PLACE a card where it should lie, FLIP it face up or down, LOOK at the whole layout as the table will check it, and SUBMIT it. Served as tools (`AgentTools`), as the set dresser's are ...
 - [`card_producer.gd`](../src/card_producer.gd) **CardProducer** - makes whatever an episode is missing, in the order a reading happens.
 - [`card_episode.gd`](../src/card_episode.gd) **CardEpisode** - one episode of a card show, as it lies on disk.
-- [`card_prompts.gd`](../src/card_prompts.gd) **CardPrompts** - what each agent behind a card episode is told. Pure: strings in, strings out, so a gate can hold every prompt to the rules (see tests/cards_check.gd).
+- [`card_prompts.gd`](../src/card_prompts.gd) **CardPrompts** - what each agent behind a card episode is told. Pure: strings in, strings out, so a gate can hold every prompt to the rules (see tests/cards_check.gd). THE WORDS ARE IN rules/cards/ (producer, designer, set_dresser, reader, painter, show - read by `Rules`); here is what decides which of them apply ...
 - [`card_reading.gd`](../src/card_reading.gd) **CardReading** - a card reading as the voice reads it and the table performs it.
 - [`card_deck.gd`](../src/card_deck.gd) **CardDeck** - the cards a show reads with, and how an episode's deck is shuffled.
 - [`card_table.gd`](../src/card_table.gd) **CardTable** - what an episode's look may name, and how a look is made safe to draw.
