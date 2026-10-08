@@ -2,13 +2,15 @@
 #
 # THIS FILE HOLDS NO BUILD LOGIC. Every step calls a script under scripts/ with arguments, so
 # the same commands run on a developer machine: build.sh (Godot setup, export, Linux launch
-# check), check.sh (the gates), smoke-export.sh (launch an export from an empty profile),
+# check), check.sh (the gatekeeping), smoke-export.sh (launch an export from an empty profile),
 # package_release.py (archives, SHA256SUMS, manifest.json). Plan and open questions:
 # next/ci_builds.md.
 #
-# Pull requests build and test but never publish. A push to main publishes, and only when the
-# gates, both exports and the Windows launch check are all green (a manual run on main may
-# set skip_gates to publish past a red gates job). The release is one per commit:
+# The gatekeeping runs first and stops at the first red gate (--fail-fast), so a red commit spends no
+# export or Windows compute. Pull requests build and test but never publish. A push to main
+# publishes, and only when the
+# gatekeeping, both exports and the Windows launch check are all green (a manual run on main may
+# set skip_gatekeeping to publish past a red gatekeeping job). The release is one per commit:
 # tag build-<full commit sha>, never replaced - a rerun of a published commit changes nothing.
 name: build
 
@@ -18,8 +20,8 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      skip_gates:
-        description: Publish even if the gates job fails (a deliberate override; it still runs and reports)
+      skip_gatekeeping:
+        description: Publish even if the gatekeeping job fails (a deliberate override; it still runs and reports)
         type: boolean
         default: false
 
@@ -32,14 +34,14 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  gates:
-    name: Gates (headless)
+  gatekeeping:
+    name: Gatekeeping (headless)
     runs-on: ubuntu-24.04
-    continue-on-error: ${{ inputs.skip_gates == true }}
+    continue-on-error: ${{ inputs.skip_gatekeeping == true }}
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
         with:
           path: |
             build/tools
@@ -49,23 +51,28 @@ jobs:
           key: godot-${{ hashFiles('scripts/setup_godot.py') }}
       - name: Install Godot
         run: echo "GODOT=$(python3 scripts/setup_godot.py --target linux --print-godot)" >> "$GITHUB_ENV"
-      - name: Run the gates
-        run: scripts/check.sh
-      - name: Gate logs
+      # mask_portrait_check builds its video fixture with ffmpeg.
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      # The first red gate fails the run: nothing after it spends compute.
+      - name: Run the gatekeeping
+        run: scripts/check.sh --fail-fast
+      - name: Gatekeeping logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: gate-logs
+          name: gatekeeping-logs
           path: dist/check
           retention-days: 7
 
   export:
     name: Export Linux and Windows
+    needs: gatekeeping
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
         with:
           path: |
             build/tools
@@ -73,7 +80,6 @@ jobs:
           # Godot's editor and templates come from scripts/setup_godot.py (pinned, checksummed);
           # cached, keyed on that file, so a runner downloads them once per Godot version.
           key: godot-${{ hashFiles('scripts/setup_godot.py') }}
-      # The gates run in their own job, in parallel; publication needs both to be green.
       - name: Export (release), with the Linux launch check
         run: scripts/build.sh --release --no-check linux windows
       - name: Package
@@ -82,7 +88,7 @@ jobs:
           python3 scripts/package_release.py archive windows
           python3 scripts/package_release.py finalize
           ls -l dist/release
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release
           path: dist/release
@@ -95,8 +101,8 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: release
           path: release
@@ -109,7 +115,7 @@ jobs:
 
   publish:
     name: Publish release
-    needs: [gates, export, windows-launch]
+    needs: [gatekeeping, export, windows-launch]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -118,7 +124,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release
           path: release

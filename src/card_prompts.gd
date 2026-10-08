@@ -163,7 +163,7 @@ static func box_range(n: int) -> Array:
 ## [constant CardTable.TEXTS], [constant TablePositions.COMES]).
 static func staging_rule() -> String:
 	var lines := PackedStringArray()
-	lines.append("THE STAGING: how this episode's cards come to the table and are shown, in `staging`. Choose what this show's kind of cards calls for, and what the brief says. THE DEFAULT IS `source` \"deck\": a reading deck (tarot, oracle, any deck made to be shuffled and drawn from) is shuffled on the table, and a reading never starts from a box. Choose \"box\" only when the brief says the cards are kept in one, or the show is of a collection that is filed away and pulled from (baseball or trading cards, a recipe tin, an archive) - never merely because a box would look nice.")
+	lines.append("THE STAGING: how this episode's cards come to the table and are shown, in `staging`. Choose what this show's kind of cards calls for, and what the brief says. THE DEFAULT IS `source` \"deck\": a reading deck (oracle, any deck made to be shuffled and drawn from) is shuffled on the table, and a reading never starts from a box. Choose \"box\" only when the brief says the cards are kept in one, or the show is of a collection that is filed away and pulled from (baseball or trading cards, a recipe tin, an archive) - never merely because a box would look nice.")
 	for k in TableActions.SOURCES:
 		lines.append("- `source` \"%s\": %s." % [k, String((TableActions.SOURCES[k] as Dictionary)["about"])])
 	for k in CardTable.TEXTS:

@@ -4,11 +4,11 @@ Researched 2026-10-07. Scaffolded the same day (below); the first real Actions r
 
 ## Status: scaffolded 2026-10-07
 
-- `.github/workflows/build.yml`: jobs `gates` (`scripts/check.sh`, headless), `export` (`scripts/build.sh --release --no-check linux windows`, which includes the Linux launch check; then `scripts/package_release.py`), `windows-launch` (a `windows-2022` runner unpacks the zip and runs `scripts/smoke-export.sh` on the `.exe`), `publish` (push to `main` or a manual run on `main`; `contents: write` only here; needs all three). Pull requests build and test, never publish. A manual run has a `skip_gates` input to publish past a red gates job.
+- `.github/workflows/build.yml`: jobs `gatekeeping` (`scripts/check.sh`, headless), `export` (`scripts/build.sh --release --no-check linux windows`, which includes the Linux launch check; then `scripts/package_release.py`), `windows-launch` (a `windows-2022` runner unpacks the zip and runs `scripts/smoke-export.sh` on the `.exe`), `publish` (push to `main` or a manual run on `main`; `contents: write` only here; needs all three). Pull requests build and test, never publish. A manual run has a `skip_gatekeeping` input to publish past a red gatekeeping job.
 - Release: tag `build-<full sha>`, title `Build <short sha>`, one-line notes, assets `ghost-notes-linux-x86_64.tar.gz`, `ghost-notes-windows-x86_64.zip`, `SHA256SUMS`, `manifest.json`. An existing tag is left alone on a rerun.
 - `scripts/package_release.py` (`archive <target>`, `finalize`; honors `OUT`). `scripts/smoke-export.sh` also takes a Windows `.exe` from Git Bash (reads the engine's `--log-file`; `APPDATA` isolates the profile).
 - Verified locally: both exports from a clean clone of HEAD (fresh import included), the Linux launch check, archive contents, checksums.
-- NOT verified: anything on a GitHub runner (the gates job on a clean Ubuntu image, the Windows launch check, the publish job); the full gate suite is not known green (`cards_choose_check` was failing); the Windows `.exe` has never been run.
+- NOT verified: anything on a GitHub runner (the gatekeeping job on a clean Ubuntu image, the Windows launch check, the publish job); the full gate suite is not known green (`cards_choose_check` was failing); the Windows `.exe` has never been run.
 
 ## Original request and agreed order
 

@@ -5,6 +5,7 @@
 #   scripts/check.sh --gpu           # ...and the gates that need a real renderer (xvfb + GPU)
 #   scripts/check.sh --only a,b      # just these (gate names without .gd; parse/docs/scene_smoke too)
 #   scripts/check.sh --skip a,b      # everything but these
+#   scripts/check.sh --fail-fast     # stop at the first failing gate (CI: no compute spent on a red run)
 #   scripts/check.sh --list          # what would run, and how
 #
 # Logs go to dist/check/<gate>.log; a passing gate's log is removed unless --keep.
@@ -47,6 +48,7 @@ GPU=(clown_anchor_check clown_coat_check clown_controls_check clown_coverage_che
 
 gpu=0
 keep=0
+fail_fast=0
 list=0
 only=""
 skip=""
@@ -54,6 +56,7 @@ while [ "$#" -gt 0 ]; do
 	case "$1" in
 		--gpu) gpu=1 ;;
 		--keep) keep=1 ;;
+		--fail-fast) fail_fast=1 ;;
 		--list) list=1 ;;
 		--only) only="${2:-}"; shift ;;
 		--only=*) only="${1#--only=}" ;;
@@ -216,6 +219,11 @@ for g in "${gates[@]}"; do
 		printf '  FAIL   %-28s %4ds   exit %d - %s\n' "$g" "$dt" "$rc" "$log"
 		grep -E 'FAIL|ERROR|Error|TIMED OUT' "$log" | grep -vE '^\s*at:' | head -5 | sed 's/^/           /'
 		failed+=("$g")
+		if [ "$fail_fast" -eq 1 ]; then
+			echo "  --- $log (first 80 lines) ---"
+			head -n 80 "$log" | sed 's/^/  | /'
+			break
+		fi
 	fi
 done
 
@@ -228,5 +236,5 @@ if [ "${#failed[@]}" -eq 0 ]; then
 	say "all ${#gates[@]} gate(s) passed in $((t_total / 60))m$((t_total % 60))s$([ "$gpu" -eq 0 ] && echo ' (GPU gates not run: --gpu)')"
 	exit 0
 fi
-bad "${#failed[@]} of ${#gates[@]} gate(s) FAILED: ${failed[*]}"
+bad "${#failed[@]} of ${#gates[@]} gate(s) FAILED: ${failed[*]}$([ "$fail_fast" -eq 1 ] && echo " (--fail-fast: the rest did not run)")"
 exit 1

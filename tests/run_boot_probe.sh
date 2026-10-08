@@ -83,14 +83,15 @@ EOF
 # all. GHOST_PROBE_GPU=1 boots this same probe scene on the real GPU inside a
 # VIRTUAL DISPLAY, so it still never puts a window on screen. Needs
 # xorg-server-xvfb, exactly like run_quiet.sh.
-RUNNER=(godot --headless)
+GODOT="${GODOT:-godot}"   # scripts/check.sh and build.sh pass theirs
+RUNNER=("$GODOT" --headless)
 if [[ "${GHOST_PROBE_GPU:-0}" != "0" ]]; then
   if command -v xvfb-run >/dev/null 2>&1; then
-    RUNNER=(xvfb-run -a -s "-screen 0 1280x1024x24" godot)
+    RUNNER=(xvfb-run -a -s "-screen 0 1280x1024x24" "$GODOT")
   else
     echo "run_boot_probe: GHOST_PROBE_GPU set but xvfb-run not found -" \
          "falling back to a VISIBLE window." >&2
-    RUNNER=(godot)
+    RUNNER=("$GODOT")
   fi
 fi
 

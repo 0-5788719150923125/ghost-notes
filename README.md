@@ -8,6 +8,10 @@ _A spectral experience_
 
 ---
 
+**Download:** [the latest Linux and Windows builds](https://github.com/0-5788719150923125/ghost-notes/releases/latest) ([all releases](https://github.com/0-5788719150923125/ghost-notes/releases)) - one per green commit, built by [GitHub Actions](.github/workflows/build.yml).
+
+---
+
 ## description
 
 Ghost Notes is a notes app made with [Godot](https://godotengine.org/) 4.7, in which a note becomes whatever is attached to it. With a song it is a spectral audio visualizer - procedural and deterministic, so the same song always draws the same show, with no generative model in the render path. With a script it is a reading, in a voice synthesized from first principles or a small local neural one; with a show's brief, a card reading made by AI agents - a tarot deck, for now; with a clip, a chroma-key effects editor. Any show exports to video. On a phone, it is a notes app and nothing more.
