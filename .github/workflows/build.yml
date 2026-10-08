@@ -52,8 +52,14 @@ jobs:
       - name: Install Godot
         run: echo "GODOT=$(python3 scripts/setup_godot.py --target linux --print-godot)" >> "$GITHUB_ENV"
       # mask_portrait_check builds its video fixture with ffmpeg.
+      # Without `apt-get update` first: it is the slow part (a mirror can stall for minutes) and
+      # the runner image's package lists are recent enough. Update only if the install fails.
       - name: Install ffmpeg
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+        timeout-minutes: 5
+        run: |
+          apt_get() { sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 "$@"; }
+          apt_get install -y -qq --no-install-recommends ffmpeg \
+            || { apt_get update -qq && apt_get install -y -qq --no-install-recommends ffmpeg; }
       # The first red gate fails the run: nothing after it spends compute.
       - name: Run the gatekeeping
         run: scripts/check.sh --fail-fast
