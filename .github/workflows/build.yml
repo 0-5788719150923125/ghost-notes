@@ -1,0 +1,136 @@
+# Build Ghost Notes for Linux and Windows and publish each green commit as a Release.
+#
+# THIS FILE HOLDS NO BUILD LOGIC. Every step calls a script under scripts/ with arguments, so
+# the same commands run on a developer machine: build.sh (Godot setup, export, Linux launch
+# check), check.sh (the gates), smoke-export.sh (launch an export from an empty profile),
+# package_release.py (archives, SHA256SUMS, manifest.json). Plan and open questions:
+# next/ci_builds.md.
+#
+# Pull requests build and test but never publish. A push to main publishes, and only when the
+# gates, both exports and the Windows launch check are all green (a manual run on main may
+# set skip_gates to publish past a red gates job). The release is one per commit:
+# tag build-<full commit sha>, never replaced - a rerun of a published commit changes nothing.
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      skip_gates:
+        description: Publish even if the gates job fails (a deliberate override; it still runs and reports)
+        type: boolean
+        default: false
+
+# Build jobs read; only the publish job below is granted more.
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  gates:
+    name: Gates (headless)
+    runs-on: ubuntu-24.04
+    continue-on-error: ${{ inputs.skip_gates == true }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            build/tools
+            ~/.local/share/godot/export_templates
+          # Godot's editor and templates come from scripts/setup_godot.py (pinned, checksummed);
+          # cached, keyed on that file, so a runner downloads them once per Godot version.
+          key: godot-${{ hashFiles('scripts/setup_godot.py') }}
+      - name: Install Godot
+        run: echo "GODOT=$(python3 scripts/setup_godot.py --target linux --print-godot)" >> "$GITHUB_ENV"
+      - name: Run the gates
+        run: scripts/check.sh
+      - name: Gate logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-logs
+          path: dist/check
+          retention-days: 7
+
+  export:
+    name: Export Linux and Windows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            build/tools
+            ~/.local/share/godot/export_templates
+          # Godot's editor and templates come from scripts/setup_godot.py (pinned, checksummed);
+          # cached, keyed on that file, so a runner downloads them once per Godot version.
+          key: godot-${{ hashFiles('scripts/setup_godot.py') }}
+      # The gates run in their own job, in parallel; publication needs both to be green.
+      - name: Export (release), with the Linux launch check
+        run: scripts/build.sh --release --no-check linux windows
+      - name: Package
+        run: |
+          python3 scripts/package_release.py archive linux
+          python3 scripts/package_release.py archive windows
+          python3 scripts/package_release.py finalize
+          ls -l dist/release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: dist/release
+          retention-days: 14
+          if-no-files-found: error
+
+  windows-launch:
+    name: Launch the Windows build
+    needs: export
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: release
+      - name: Unpack
+        shell: pwsh
+        run: Expand-Archive release/ghost-notes-windows-x86_64.zip -DestinationPath unpacked
+      - name: Launch from an empty profile
+        shell: bash
+        run: scripts/smoke-export.sh unpacked/ghost-notes/ghost-notes.exe
+
+  publish:
+    name: Publish release
+    needs: [gates, export, windows-launch]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: release
+      - name: Create the release for this commit
+        run: |
+          tag="build-${GITHUB_SHA}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists; leaving its assets as they are."
+            exit 0
+          fi
+          gh release create "$tag" release/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Build ${GITHUB_SHA::7}" \
+            --notes "Automated build of ${GITHUB_SHA}."

@@ -1,6 +1,26 @@
 # CI builds and releases
 
-Researched 2026-10-07. Planning note only; no GitHub Actions or release automation is implemented yet.
+Researched 2026-10-07. Scaffolded the same day (below); the first real Actions run has not happened yet.
+
+## Status: scaffolded 2026-10-07
+
+- `.github/workflows/build.yml`: jobs `gates` (`scripts/check.sh`, headless), `export` (`scripts/build.sh --release --no-check linux windows`, which includes the Linux launch check; then `scripts/package_release.py`), `windows-launch` (a `windows-2022` runner unpacks the zip and runs `scripts/smoke-export.sh` on the `.exe`), `publish` (push to `main` or a manual run on `main`; `contents: write` only here; needs all three). Pull requests build and test, never publish. A manual run has a `skip_gates` input to publish past a red gates job.
+- Release: tag `build-<full sha>`, title `Build <short sha>`, one-line notes, assets `ghost-notes-linux-x86_64.tar.gz`, `ghost-notes-windows-x86_64.zip`, `SHA256SUMS`, `manifest.json`. An existing tag is left alone on a rerun.
+- `scripts/package_release.py` (`archive <target>`, `finalize`; honors `OUT`). `scripts/smoke-export.sh` also takes a Windows `.exe` from Git Bash (reads the engine's `--log-file`; `APPDATA` isolates the profile).
+- Verified locally: both exports from a clean clone of HEAD (fresh import included), the Linux launch check, archive contents, checksums.
+- NOT verified: anything on a GitHub runner (the gates job on a clean Ubuntu image, the Windows launch check, the publish job); the full gate suite is not known green (`cards_choose_check` was failing); the Windows `.exe` has never been run.
+
+## Original request and agreed order
+
+The user asked for:
+
+- **GitHub Actions builds for Linux and Windows only for now.** macOS and mobile support will be needed later, but are outside this first CI phase.
+- **A fully autonomous build:** fetch the pinned Godot editor and matching export templates as needed, with no manual template installation or other preparatory clicks on a runner.
+- **Immediate GitHub Releases publication after successful builds**, using a version/tag derived from the source commit hash and attaching the binaries. Detailed release notes are not wanted now. The user may later prefer at most one release per day; defer that decision rather than designing the first pipeline around it.
+- **Reusable local scripts under `scripts/`.** The same commands should work on a developer machine and in CI; workflows should invoke them with arguments instead of duplicating build logic in YAML.
+- **A future in-app update path.** Determine whether the app can discover a GitHub Release, download its platform asset and replace the installed binary. The user prefers a simple app-driven flow over a persistent sidecar. On exported Godot builds, use `OS.get_executable_path().get_base_dir()` for the real installation directory and `user://` for writable downloads; `res://` is packed and cannot serve as a native executable directory.
+
+The user then authorized implementation **in stages**: make a functional local Linux export first, and do not start GitHub Actions until that is working. The local Linux export now works. The user has since asked to stop before the remaining CI/release implementation and leave this document as a handoff for another agent.
 
 ## Current base
 

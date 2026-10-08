@@ -502,6 +502,12 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
         True,
     ),
     (
+        "--export-smoke-note",
+        "PATH",
+        "With `--export-smoke`: also check that this note is recognized as a Cards note.",
+        True,
+    ),
+    (
         "--synth-autopilot",
         "",
         "With `--export`: open the Synthesis panel over the take and let the "
