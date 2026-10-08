@@ -167,6 +167,8 @@ const _CORNERS := [Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3
 	Vector3(1, 0, 1), Vector3(0, 1, 1), Vector3(1, 1, 1)]
 const _CUBE_EDGES := [0, 1, 2, 3, 4, 5, 6, 7, 0, 2, 1, 3, 4, 6, 5, 7, 0, 4, 1, 5, 2, 6, 3, 7]
 static var _sculpted := {}
+## ...guarded: the set dresser's table is built on a worker thread while the show may build its own
+static var _sculpted_lock := Mutex.new()
 
 ## AN EXTRUDE's (and a loft section's) named outlines.
 const EXTRUDE_OUTLINES := ["polygon", "star", "circle", "rect", "heart", "lens", "drop"]
@@ -2768,12 +2770,18 @@ static func _strokes(v: Variant) -> Array:
 static func _sculpt(p: Dictionary) -> Tris:
 	var mirror := bool(p.get("mirror", false))
 	var key := hash([p["strokes"], mirror])
-	if not _sculpted.has(key):
+	_sculpted_lock.lock()
+	var made: Variant = _sculpted.get(key)
+	_sculpted_lock.unlock()
+	if made == null:
+		made = _carved(_field_of(p["strokes"], mirror))
+		_sculpted_lock.lock()
 		if _sculpted.size() >= SCULPT_KEPT:
 			_sculpted.erase(_sculpted.keys()[0])
-		_sculpted[key] = _carved(_field_of(p["strokes"], mirror))
+		_sculpted[key] = made
+		_sculpted_lock.unlock()
 	var g := Tris.new()
-	g.append(_sculpted[key])
+	g.append(made)
 	g.measure()
 	return g
 

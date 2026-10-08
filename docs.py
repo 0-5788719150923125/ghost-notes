@@ -264,7 +264,8 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
         "planned, dealt, painted and written by agents one card at a time, kept "
         "on disk step by step - and the table they are read at, in the Generative "
         "voice, with the table itself and the things on it modeled from a "
-        "written description (Tables, Props), its air (Effects) and its light (Lights). "
+        "written description (Tables, Props), its air (Effects, and what the wind carries: Drifts), "
+        "its light (Lights) and the one wind both share (Winds). "
         "Tarot is the first deck and, so far, the only recipe. "
         "Design: next/cards.md.",
         [
@@ -282,7 +283,9 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
             "props.gd",
             "tables.gd",
             "effects.gd",
+            "drifts.gd",
             "lights.gd",
+            "winds.gd",
             "set_dresser_tools.gd",
             "table_preview.gd",
         ],
@@ -291,6 +294,7 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
         "Agents",
         "Every piece of writing and painting ghost asks an AI for: who writes "
         "(TextGen) and who paints (ImageGen), one queue for both (AgentJobs), "
+        "what each is told (Rules, reading rules/), "
         "the tools ghost serves an agent while it works (AgentTools), "
         "which Amazon Bedrock models an AWS account can call (BedrockCatalog), "
         "and where a reading's voice is in its document (ReadingFollower).",
@@ -298,6 +302,7 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
             "text_gen.gd",
             "agent_jobs.gd",
             "agent_tools.gd",
+            "rules.gd",
             "bedrock_catalog.gd",
             "reading_follower.gd",
         ],

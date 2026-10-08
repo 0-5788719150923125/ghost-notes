@@ -24,6 +24,14 @@ class_name TablePreview
 ## RENDERED IN THIS PROCESS, off screen: a SubViewport per stage, drawn only while a picture is being
 ## taken, then stopped. A process with no renderer (headless) takes no pictures ([method can_see]),
 ## and the tools work from their reports alone.
+##
+## THE TABLE IS BUILT OFF THE MAIN THREAD ([method _stand]): built where the app draws, each picture of it
+## froze the whole app for five or six seconds (measured 2026-10-08: placing the things 2.4 s, the top
+## 1.3 s, the things 1.2 s). A fresh stage and medium are built on a worker thread, OUTSIDE the scene tree
+## - where Godot lets a thread build nodes - and swapped in once built; nothing the main thread touches is
+## shared with the build while it runs (rebuilding the stage in the tree would free its old nodes on the
+## main thread under the worker). Its report and its picture are the ones a main-thread build gives,
+## pixel for pixel.
 
 ## The size of every picture handed back, and how wide the studio's lens is (degrees, vertical).
 const SHEET := Vector2i(1280, 720)
@@ -114,6 +122,7 @@ var _flame_mat: ShaderMaterial
 var _table: SubViewport = null
 var _medium = null               # a TableMedium, loaded by class name
 var _doc: Doc
+var _releases := 0               # how many times it was given back ([method release]): a table built across one is dropped
 
 
 ## [param dir]: the folder the preview keeps its copies in (inside the job's own). [param name] and
@@ -137,8 +146,10 @@ static func can_set() -> bool:
 	return can_see() and _tree().root.has_node("Director")
 
 
-## Give back everything this preview built.
+## Give back everything this preview built - and, when a table is being built, the stage it is built on
+## once it is done ([method _stand]).
 func release() -> void:
+	_releases += 1
 	if _studio != null and is_instance_valid(_studio):
 		_studio.queue_free()
 	if _table != null and is_instance_valid(_table):
@@ -369,7 +380,7 @@ func _shot(box: AABB, side: Vector3, size: Vector2i, caption: String) -> Image:
 ## how far it was made smaller (1 = not at all), `tall` its share of the picture's height. `error`
 ## when the table cannot be stood here.
 func table(raw: Dictionary) -> Dictionary:
-	var err := _stand(raw)
+	var err: String = await _stand(raw)
 	if not err.is_empty():
 		return {"error": err}
 	# THE TABLE AS IT MOSTLY IS: its light with the sun out and no bird crossing ([method Lights.Rig.quiet_near])
@@ -386,7 +397,7 @@ func table(raw: Dictionary) -> Dictionary:
 ## here as the table stages them), fog or motes a few seconds apart, so their roll and their wander
 ## show. A sheet of four, `{image, frames: [seconds after]}`; `error` when it cannot be shown.
 func watch(raw: Dictionary, name: String) -> Dictionary:
-	var err := _stand(raw)
+	var err: String = await _stand(raw)
 	if not err.is_empty():
 		return {"error": err}
 	var air = _medium._air
@@ -399,6 +410,10 @@ func watch(raw: Dictionary, name: String) -> Dictionary:
 	var burst := String(fx["kind"]) == "burst"
 	var on := String(fx.get("on", ""))
 	var steps: Array = [0.08, 0.3, 0.6, 1.0] if burst else [0.0, 3.0, 6.0, 9.0]
+	if String(fx["kind"]) == "drift":
+		# WHAT DRIFTS, through the strongest gust of the next two minutes: falling as it comes, lifted, carried
+		var g := _strongest_gust(_medium._wind, AIR_AT, AIR_AT + 120.0)
+		steps = [0.0, 0.8, 1.6, 2.4] if g.x < 0.0 else [g.x - 1.0 - AIR_AT, g.z - AIR_AT, g.z + 1.0 - AIR_AT, g.x + g.y - AIR_AT]
 	var moment := _staged(on) if burst else {}
 	if burst:
 		air.plan({on: moment["moments"]})
@@ -421,7 +436,7 @@ func watch(raw: Dictionary, name: String) -> Dictionary:
 ## shadow crosses the table; something the sun falls through as it stirs; a lamp as it flickers, stutters,
 ## cuts, passes or flashes. `{image, frames: [seconds], what}`; `error` when it cannot be shown.
 func watch_light(raw: Dictionary, name: String) -> Dictionary:
-	var err := _stand(raw)
+	var err: String = await _stand(raw)
 	if not err.is_empty():
 		return {"error": err}
 	var m = _medium
@@ -447,9 +462,29 @@ func watch_light(raw: Dictionary, name: String) -> Dictionary:
 	return {"image": sheet, "frames": steps, "what": plan["what"]}
 
 
+## THE STRONGEST GUST of [param wind] ([method Winds.plan]) between [param t0] and [param t1]: its start, how
+## long it blows and its peak's time - x below 0 when none blows.
+static func _strongest_gust(wind: Dictionary, t0: float, t1: float) -> Vector3:
+	if wind.is_empty():
+		return Vector3(-1.0, 0.0, 0.0)
+	var starts: PackedFloat32Array = wind["starts"]
+	var peaks: PackedFloat32Array = wind["peaks"]
+	var best := -1
+	for i in range(starts.bsearch(t0), starts.bsearch(t1)):
+		if best < 0 or peaks[i] > peaks[best]:
+			best = i
+	return Winds.gust_span(wind, best) if best >= 0 else Vector3(-1.0, 0.0, 0.0)
+
+
 ## WHEN TO PHOTOGRAPH [param name] of [param rig]'s light: `{times: [four seconds], what}`, or `{error}`.
 func _light_moment(rig, name: String) -> Dictionary:
 	var low := name.to_lower()
+	if low == "wind":
+		var g := _strongest_gust(rig.wind, AIR_AT, AIR_AT + 300.0)
+		if g.x < 0.0:
+			return {"error": "the light has no wind, or it never gusts"}
+		return {"times": [maxf(g.x - 0.5, 0.0), g.x + (g.z - g.x) * 0.5, g.z, g.z + (g.x + g.y - g.z) * 0.6],
+			"what": "The strongest gust of the first five minutes, %.0f s in: before it, rising, at its height, dying away." % g.x}
 	if low == "clouds":
 		var field: Dictionary = rig.field
 		if field.is_empty():
@@ -556,7 +591,7 @@ func _light_moment(rig, name: String) -> Dictionary:
 ## a plan, for laying a runner square or a cloth as a diamond. Lit as the show lights it. `{image}`;
 ## `error` when the table cannot be stood here.
 func overhead(raw: Dictionary) -> Dictionary:
-	var err := _stand(raw)
+	var err: String = await _stand(raw)
 	if not err.is_empty():
 		return {"error": err}
 	_pose_spread()
@@ -630,7 +665,7 @@ func _frame_on_table(m) -> MeshInstance3D:
 ## middle and right of its lines - read off the same frame without the name. `error` when the table
 ## cannot be stood here.
 func opening(raw: Dictionary) -> Dictionary:
-	var err := _stand(raw)
+	var err: String = await _stand(raw)
 	if not err.is_empty():
 		return {"error": err}
 	var m = _medium
@@ -694,24 +729,11 @@ static func _mean(img: Image, r: Rect2i) -> Color:
 	return Color(sum.r / n, sum.g / n, sum.b / n) if n > 0 else Color.BLACK
 
 
-## The episode's table built over [param raw] (the medium mounted the first time): "" when it stands.
+## The episode's table built over [param raw] on a stage of its own, built on a worker thread and swapped
+## in for the last one (see the class note): "" when it stands. Awaited.
 func _stand(raw: Dictionary) -> String:
 	if not can_set():
 		return "this process cannot stand the table (%s)" % ("no renderer" if not can_see() else "no ghost session")
-	if _table == null or not is_instance_valid(_table):
-		_table = SubViewport.new()
-		_table.own_world_3d = true
-		_table.size = SHEET
-		_table.render_target_update_mode = SubViewport.UPDATE_DISABLED
-		_tree().root.add_child(_table)
-		_medium = TablePreview._load(MEDIUM)
-		if _medium == null:
-			_table.queue_free()
-			_table = null
-			return "the table medium could not be loaded"
-		_medium.mount(_table)
-		_doc = Doc.new()
-		_medium.bind_captions(_doc)
 	_sync_pictures()
 	var err := TextGen.put(_dir.path_join("table.json"), JSON.stringify(raw, "\t"))
 	if not err.is_empty():
@@ -724,11 +746,42 @@ func _stand(raw: Dictionary) -> String:
 	for k in ["back", "surface", "backdrop"]:
 		if FileAccess.file_exists(_dir.path_join(k + ".png")):
 			images[k] = _dir.path_join(k + ".png")
+	var doc := Doc.new()
 	# the show's name stands over the table only at the opening: its alpha is 0 for every other picture
-	_doc.document = {"source": "", "title": show_name, "byline": byline, "table": {"show": episode.show, "seed": episode.seed,
+	doc.document = {"source": "", "title": show_name, "byline": byline, "table": {"show": episode.show, "seed": episode.seed,
 		"dir": _dir, "plan": plan, "images": images, "cards": cards}}
-	_medium._key = ""
-	_medium._ensure_doc()
+	var vp := SubViewport.new()
+	vp.own_world_3d = true
+	vp.size = SHEET
+	vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	var m = TablePreview._load(MEDIUM)
+	if m == null:
+		vp.free()
+		return "the table medium could not be loaded"
+	# THE PICTURES ALREADY DECODED are handed on: decoding the cloth and the room again is seconds of work
+	if _medium != null and is_instance_valid(_medium):
+		m._textures = (_medium._textures as Dictionary).duplicate()
+		m._mtimes = (_medium._mtimes as Dictionary).duplicate()
+	m.aside = true
+	var build := func() -> void:
+		m.mount(vp)
+		m.bind_captions(doc)
+		m._key = ""
+		m._ensure_doc()
+	var releases := _releases
+	var task := WorkerThreadPool.add_task(build, false, "the set dresser's table")
+	while not WorkerThreadPool.is_task_completed(task):
+		await _tree().process_frame
+	WorkerThreadPool.wait_for_task_completion(task)
+	if _releases != releases:
+		vp.free()
+		return "the table's stage was given back while it was built"
+	_tree().root.add_child(vp)
+	if _table != null and is_instance_valid(_table):
+		_table.queue_free()
+	_table = vp
+	_medium = m
+	_doc = doc
 	return ""
 
 

@@ -1,0 +1,203 @@
+# THE PRODUCER - what it is told (CardPrompts.producer fills it in; src/rules.gd says how a rules
+# file reads). It plans an episode BEFORE the shuffle: its title and angle, the spread, the staging and
+# a whole deck's look. It knows no card, because no card has been drawn.
+#
+# WHAT THE SHOW HAS ALREADY MADE reaches it cut short (CardEpisode.archive): every earlier episode's
+# angle, running bit, deck (what its cards pictured, and how) and cloth and room - and it NAMES THE
+# HABITS they share before it plans. An agent told only to vary drifts back to the likeliest choice,
+# because it cannot steer away from choices it has never seen; the habits are in the form (every deck a
+# human figure on every card, every running bit a status revised at each card), not in the subjects.
+#
+# THE DICE are numbers drawn from the seed (CardPrompts.dice) - a place, a year, a hue, an hour - so the
+# space they draw from is the whole world rather than a list someone typed.
+#
+# The code gives: {{seed}}, {{cards}} (the spread's size), the flags `reversals`, `chooses` (the producer
+# chooses the deck), `shown` (the brief has a Format section: not a tarot reading) and `habits` (there
+# are earlier episodes, given as `past`), the dice ({{place}}, {{year}}, {{hue}}, {{hour}},
+# {{direction}}), the deck as the standard tarot or the show's own ({{deck_size}}, {{deck_names}}) or
+# the box's range ({{box_lo}} to {{box_hi}}), and the registries' keys for the reply's `frame` and
+# `page` ({{frame_styles}}, {{windows}}, {{corners}}, {{ornaments}}, {{pages}}, {{faces}}).
+prompt:
+  - >-
+      You are the PRODUCER. Plan episode #{{seed}} before the camera rolls. Nobody knows which cards
+      will come up - the deck has not been shuffled - so plan nothing that depends on a card.
+  - ""
+  - >-
+      THE SPREAD has exactly {{cards}} positions. Name the spread and each position, and say in a
+      short phrase what each position asks. Positions are asked in order: position 1 is the first
+      card drawn.
+  - when: reversals
+    say: "This show reads reversals: some cards will come up upside down."
+  - ""
+  - include: staging
+  - ""
+  - when: chooses
+    include: chosen_deck
+  - when: ["!chooses", standard]
+    include: standard_deck
+  - when: ["!chooses", "!standard"]
+    include: own_deck
+  - ""
+  # THE CLOTH IS BARE: a painting of a moment (beads of seawater, things strewn) has no depth under the
+  # table's own lights (feedback 0006); the table and what stands on it are the set dresser's
+  - >-
+      {{#shown}}THE LOOK is how this deck is drawn and printed - a printing that has never existed -
+      and the table it is shown on.{{/shown}}{{^shown}}THE LOOK is a tarot deck that has never
+      existed, and the table it is read on.{{/shown}} Make it specific enough that an illustrator
+      could paint every card in one consistent hand: what the cards picture (their cast) and how it
+      is drawn, the medium and its influences, linework, texture, palette. Then the card back (a
+      design that reads the same when the card is turned upside down - exactly symmetric under a
+      half turn), how much of the deck is printed in metallic foil (`foil`, 0 for matte ink to 1 for
+      gold leaf everywhere), the surface the cards lie on (seen from directly above: the bare
+      material, dry and clean of anything spilled or strewn - the table's shape, any other cloth
+      laid on it and whatever stands on it are set separately), the place the table stands in (seen
+      past the far edge of the table, out of focus), the light - indoors or out, the hour and the
+      weather, and what it comes through on its way to the table - and how many lights burn on the
+      table - a candle in its holder, a candelabra, a dish of tea lights each count as one (what
+      they are, and the rest of what stands on the table, is set separately). The card's frame, its
+      name and its numeral are printed by the deck itself, so the illustrations carry no lettering.
+  - include: printed_card
+  - >-
+      THE CARD STOCK is the card's own color: it shows all round every picture and behind its name,
+      and the deck's booklet is printed in the same colors. Decks are printed on stock of every
+      color, dark and saturated as well as pale - choose the one that best sets off this deck's
+      paintings, with an ink and accent that read on it.
+  - when: printings
+    say: >-
+          THE PRINTINGS: a box may mix printings - sets, years, generations, even games - and each
+          prints its own front and its own back. If this deck does, list them in `look.series`, each
+          with its `name` and what it prints otherwise (`deck_style`, `card_back`, `palette`,
+          `frame`), and give every card of the deck its `series`{{^chooses}} (a card listed in the
+          brief belongs to the printing named like its group){{/chooses}}. A deck of one printing
+          leaves `series` out.
+  - when: habits
+    say: ""
+  - when: habits
+    say: >-
+          EARLIER EPISODES of this show, newest first: what each was about and how it was told, what
+          its deck pictured and how it was painted, and what it was printed and read on.
+  - when: habits
+    insert: past
+  - when: habits
+    say: ""
+  - when: habits
+    say: >-
+          THE SHOW'S HABITS. Read those episodes for what they share - not their subjects, which
+          differ, but the formulas under them: the shape of the titles, the kind of angle, the kind
+          of running bit, who or what the cards picture and how they are composed, the way the decks
+          are painted, the way the cards are printed (frame, window, corners, ornament, booklet
+          page), the card stocks, the cloths, the rooms, the hour and the light. Name each one in
+          `habits`, with how many of the episodes fell into it. Then plan an episode that falls into
+          none of them, in its form as well as its subject, and repeats none of their topics, title
+          formulas, angles, running bits, casts, painting styles, palettes, card stocks, cloths or
+          rooms.
+  - ""
+  - >-
+      INSPIRATION. These numbers were drawn for this episode. Let them push the episode somewhere
+      this show has never been - a culture, a period, a material, a mood - without being literal
+      about them: a place {{place}}; a year {{year}}; a hue {{hue}} degrees; the hour {{hour}}:00.
+      Before deciding, brainstorm twelve sharply different directions for the episode (topic, angle
+      and look together){{#habits}}, none of them in one of the show's habits{{/habits}}, then
+      commit to direction number {{direction}}.
+  - ""
+  - "Reply with ONLY a JSON object, no other text:"
+  - include: reply
+
+# THE REPLY: a JSON object - the brainstorm first, so the plan is chosen from twelve directions and not
+# the first that comes; `habits` first of all when there are earlier episodes
+reply: |-
+  {
+  {{#habits}}
+    "habits": ["one habit of the earlier episodes per line, and how many of them fell into it"],
+  {{/habits}}
+    "brainstorm": ["twelve one-line directions"],
+    "episode_title": "the video's title, as it appears on YouTube",
+    "description": "the video's YouTube description, in the genre's own shape (a greeting, what this reading covers, the usual disclaimers and calls to action) and told the show's way; three short paragraphs, no emoji, no links",
+    "tags": ["eight to twelve search tags, the genre's own"],
+    "audience": "who this collective reading says it is for",
+    "topic": "what the reading is about, in a few words",
+    "premise": "the episode's angle, in one or two sentences",
+    "reader_mood": "how the reader is today",
+    "running_bit": "any running bit for this episode - a bit the reader SAYS, never a thing done or an object shown (the viewer sees the table and the cards, never the reader), and never a way of speaking (the show's voice is fixed: no whispering, accents or singing)",
+    "staging": {"source": "deck or box", "text": "booklet or back"},
+    "spread": {"name": "the spread's name", "positions": [{"name": "position name", "asks": "what it asks", "comes": "drawn, dealt or swept - optional", "lies": "sideways - optional", "on": false, "then": []}]},
+  {{#chooses}}
+    "deck": [{"name": "the name printed on the card", "group": "its set, team, suit or type, if it has one", "series": "its printing's name, when the deck mixes printings", "meaning": "what the card is and why it is in this box, one or two sentences"}],
+  {{/chooses}}
+    "look": {
+      "deck_name": "the deck's name",
+  {{#shown}}
+      "kind": "what these cards are, as a noun phrase with no article: baseball card set, flashcard deck, ...",
+  {{/shown}}
+      "deck_style": "a paragraph an illustrator paints every card from",
+      "palette": ["#rrggbb", "four to six colors"],
+      "card_back": "the back design, symmetric under a half turn",
+      "frame": {"style": "one of: {{frame_styles}}", "window": "one of: {{windows}}", "corners": "one of: {{corners}}", "ornament": "one of: {{ornaments}}", "stock": "#rrggbb card stock", "ink": "#rrggbb border and lettering", "accent": "#rrggbb"},
+      "page": "one of: {{pages}}",
+      "title_face": "one of: {{faces}}",
+      "foil": 0.6,
+      "surface": "the cloth or tabletop the cards lie on, seen from above: the bare material, dry",
+      "setting": "the place beyond the table",
+      "light": {"kind": "what lights the table and how it moves: indoors or out, the hour, the weather (a clear sky, passing clouds, overcast, a storm), what the sun comes through (a window, blinds, leaves, an awning), any lamps or torches round the room", "color": "#rrggbb", "warmth": "warm or cool"},
+      "candles": 2
+    }
+  }
+
+# THE STAGING: where the cards come from and where their text is (TableActions.SOURCES, CardTable.TEXTS
+# - the registries' own words, as `sources` and `texts`), and how each position's card comes and lies
+staging:
+  - >-
+      THE STAGING: how this episode's cards come to the table and are shown, in `staging`. Choose
+      what this show's kind of cards calls for, and what the brief says. THE DEFAULT IS `source`
+      "deck": a reading deck (oracle, any deck made to be shuffled and drawn from) is shuffled on
+      the table, and a reading never starts from a box. Choose "box" only when the brief says the
+      cards are kept in one, or the show is of a collection that is filed away and pulled from
+      (baseball or trading cards, a recipe tin, an archive) - never merely because a box would look
+      nice.
+  - each: sources
+    say: '- `source` "{{key}}": {{about}}.'
+  - each: texts
+    say: '- `text` "{{key}}": {{about}}.'
+  - >-
+      EACH POSITION can say how its card comes and lies; leave these out for the usual, a card
+      drawn, held up while it is read, and laid down in a row:
+  - >-
+      - `comes` "dealt": put straight down in its place, face up, and read lying there - small on
+      screen, so for a card that needs no close look. "swept": positions next to each other that are
+      all swept go out together in one waterfall, overlapping in a line or an arc so the viewer sees
+      the run at once; then each is picked up in turn and read.
+  - '- `lies` "sideways": laid with a quarter turn, as a tapped card lies.'
+  - >-
+      - `on` true: laid on the card before it, a little behind so that card's name still shows - a
+      stack, as a player keeps lands.
+  - >-
+      - `then`: moves made after this card's passage - "tap 2" turns card 2 sideways where it lies,
+      "untap 2" turns it back - naming a card already on the table.
+  - >-
+      Use them when this kind of card is handled that way (a game's cards played, tapped and
+      stacked; a collector fanning a run of a set out); a reading that needs none is the usual one.
+
+# THE PRINTED CARD: what a deck's printer chooses beyond its painting - the frame's rules, the window's
+# shape, the ornament round the edge, the booklet's page (`printed`, each with its registry's options),
+# and the corners (CardTable.FRAMES, WINDOWS, ORNAMENTS, PAGES, CORNERS)
+printed_card:
+  - >-
+      THE PRINTED CARD: real decks differ in how they are printed as much as in what they picture -
+      choose what this deck's printer would, in `frame` and `page`:
+  - each: printed
+    say: '- {{what}}: {{options}}.'
+  - '- `frame.corners`, how the card is cut: {{corner_options}}.'
+
+# THE PRODUCER MAKES THE DECK (CardDeck.chooses): what is in the box is its choice, never what comes out
+chosen_deck: >-
+  THE DECK is yours to choose for this episode: the brief's Cards section says what kind of cards
+  this show shows. Choose one deck, box or collection that fits it and this episode, and list its
+  cards in `deck` - between {{box_lo}} and {{box_hi}} of them, every one a card that collection
+  would really hold, each with what it is. You choose what is in the box, never what comes out: the
+  deck is shuffled from this episode's seed and {{cards}} cards come up, in an order nobody knows -
+  so plan nothing that depends on any one card coming up.
+
+# THE DECK the producer is told of: the standard tarot, or the show's own cards by name (their meanings
+# reach a writer only as each is drawn)
+standard_deck: "THE DECK is the standard tarot: the 78 cards of the Rider-Waite-Smith tradition."
+own_deck: "THE DECK is this show's own, {{deck_size}} cards: {{deck_names}}."

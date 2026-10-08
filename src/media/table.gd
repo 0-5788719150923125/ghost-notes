@@ -462,6 +462,10 @@ var _spin_wanted := false           # a burst marks a pirouette: one card is twi
 var _spin_key := ""                 # ...the schedule it was chosen on
 var _spin_k := -1                   # ...and the card
 var _rig = null                     # the set dresser's light, built (Lights.Rig), or null: the lamp and the room's candles
+## BUILT ASIDE, on a worker thread ([method TablePreview._stand]): its long loops then [method _breathe]
+var aside := false
+var _breaths := 0
+var _wind := {}                     # the table's wind (Winds.plan): its light's, or still air - shared by the light and the air
 var _ambient := {}                  # the room's own ambient, for a table with no light of its own
 var _seen := PackedVector3Array()   # the table the camera sees, sampled (for the light), this build
 
@@ -553,7 +557,7 @@ func _build_world() -> void:
 	_lamp.shadow_bias = 0.005
 	_lamp.shadow_normal_bias = 0.15
 	# the sun's screens and birds ([Lights]) are the sun's alone
-	_lamp.shadow_caster_mask = 0xFFFFFFFF & ~Lights.SCREEN_LAYER
+	_lamp.shadow_caster_mask = 0xFFFFFFFF & ~Lights.SCREEN_MASK
 	_root3.add_child(_lamp)
 	_fill = DirectionalLight3D.new()
 	_fill.light_energy = 0.12
@@ -834,7 +838,11 @@ func _build_episode() -> void:
 	var lc := CardTable.color(String((_look.get("light", {}) as Dictionary).get("color", "#ffb36b")))
 	_lamp.light_color = Color(1, 1, 1).lerp(lc, 0.55)
 	_lamp.position = lay["lamp"]
-	_lamp.look_at(Vector3(0.0, 0.0, -0.1), Vector3.UP)
+	# AIMED BY ITS OWN TRANSFORM, what look_at does under _root3 (never moved): look_at needs the tree, and
+	# the set dresser's table is built out of it, on a worker thread ([method TablePreview._stand])
+	var lamp_scale := _lamp.scale
+	_lamp.transform = Transform3D(Basis.looking_at(Vector3(0.0, 0.0, -0.1) - _lamp.position, Vector3.UP), _lamp.position)
+	_lamp.scale = lamp_scale
 	_lamp.light_energy = float(lay["lamp_energy"])
 	_lamp_base = _lamp.light_energy
 	var pal: Array = _look.get("palette", CardTable.FALLBACK_PALETTE)
@@ -999,10 +1007,12 @@ func _face_window(look: Dictionary = {}) -> Vector4:
 	return Vector4(w.position.x / sz.x, w.position.y / sz.y, w.end.x / sz.x, w.end.y / sz.y)
 
 
-## The card's stock, for the foil to leave alone where a shaped window's corners show it.
+## The card's stock, for the foil to leave alone where a shaped window's corners show it. LINEAR, as
+## the face's texture is sampled: in sRGB a pale stock missed by ~0.2 and an oval's corners blazed
+## white as foil (feedback 0005).
 static func _foil_stock(mat: ShaderMaterial, look: Dictionary) -> void:
 	var f: Dictionary = look.get("frame", {}) if look.get("frame") is Dictionary else {}
-	var c := CardTable.color(String(f.get("stock", "#efe6d2")))
+	var c := CardTable.color(String(f.get("stock", "#efe6d2"))).srgb_to_linear()
 	mat.set_shader_parameter("stock", Vector3(c.r, c.g, c.b))
 
 
@@ -1648,6 +1658,7 @@ func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, kee
 		while z <= front:
 			var x := -0.62
 			while x <= 0.62:
+				_breathe()
 				var at := Vector2(x + rng.randf_range(-0.004, 0.004), z + rng.randf_range(-0.004, 0.004))
 				x += 0.02
 				var bb := Rect2(lo + at, hi - lo)
@@ -1723,6 +1734,18 @@ func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, kee
 			_put(t, b, best, basis, group)
 			return {"at": best["at"], "height": box.size.y * k, "k": k}
 	return {}
+
+
+## A BREATH for the app, in a table built [member aside]: a worker in a long loop of GDScript calls holds
+## the engine's object locks so tightly that the main thread drew at four frames a second (measured
+## 2026-10-08); a moment given up now and then gave it back its frames, and the build got no slower. It
+## changes nothing built.
+func _breathe() -> void:
+	if not aside:
+		return
+	_breaths += 1
+	if _breaths % 64 == 0:
+		OS.delay_usec(0)
 
 
 ## Thing [param t] stood at the chosen spot: in the scene, its wicks lit, a soft shade where it meets
@@ -1817,7 +1840,7 @@ func _light_flames(flames: Array, own: int) -> void:
 	light.light_color = Color(1.0, 0.7, 0.4)
 	light.omni_range = 1.4
 	light.light_energy = 0.35
-	light.shadow_caster_mask = 0xFFFFFFFF & ~own & ~Lights.SCREEN_LAYER
+	light.shadow_caster_mask = 0xFFFFFFFF & ~own & ~Lights.SCREEN_MASK
 	light.light_cull_mask = 0xFFFFFFFF & ~own
 	# a flame is a couple of centimeters across: the shadows it throws are soft at their ends. The
 	# biases are for a TABLETOP: at their defaults a deck's shadow began centimeters in front of it
@@ -1996,6 +2019,8 @@ func _build_light(spec: Dictionary) -> void:
 		_rig.release()
 		_rig = null
 	var light: Dictionary = spec.get("light", {}) if spec.get("light") is Dictionary else {}
+	# ONE WIND for the light and the air: what stirs the leaves overhead blows the petals off the cloth
+	_wind = Winds.plan(light.get("wind", {}) if light.get("wind") is Dictionary else {}, hash([_seed, "wind"]))
 	_lamp.visible = light.is_empty()
 	_fill.visible = light.is_empty()
 	if light.is_empty():
@@ -2018,7 +2043,7 @@ func _light_stage() -> Dictionary:
 	for th in _things:
 		bounds = bounds.merge((th as Dictionary)["box"] as AABB)
 	return {"camera": _cam_base, "fov": _cam.fov, "aspect": 16.0 / 9.0, "middle": Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y),
-		"bounds": bounds, "seen": _seen, "env": _env, "room": _backdrop_mat, "in_shot": _in_shot}
+		"bounds": bounds, "seen": _seen, "env": _env, "room": _backdrop_mat, "in_shot": _in_shot, "wind": _wind}
 
 
 ## THE TABLE THE CAMERA SEES, sampled ([method CardTable.seen_points]).
@@ -2337,7 +2362,8 @@ func _build_air(spec: Dictionary) -> void:
 
 
 ## Where the air may be, the camera it is seen through, and what stands in it - the table and the
-## things on it, which motes are homed in front of and fly over. And THE LENS: sharp over the table
+## things on it, which motes are homed in front of and fly over; the wind, and the table's top, where
+## what drifts can lie. And THE LENS: sharp over the table
 ## (its nearest corner to its farthest, along the camera's axis), blurring past it as the room is -
 ## [constant ROOM_BLUR] of the frame's width, [constant ROOM_REACH] out - and the air ending just short
 ## of the room's picture.
@@ -2353,38 +2379,49 @@ func _air_stage() -> Dictionary:
 		var d := (table.get_endpoint(i) - _cam_base.origin).dot(fwd)
 		near = minf(near, d)
 		far = maxf(far, d)
+	var top: Dictionary = (_furniture.get("spec", {}) as Dictionary).get("top", Tables.DEFAULT_TOP)
 	return {"regions": CardTable.AIR, "camera": _cam_base, "fov": _cam.fov, "aspect": 16.0 / 9.0, "occluders": under,
+		"wind": _wind, "on_top": func(p: Vector2) -> bool: return Tables.inside(top, p, 0.01),
 		"sharp": Vector2(near, far), "defocus": 2.0 * ROOM_BLUR / maxf(1.0 / far - 1.0 / ROOM_REACH, 1e-3),
 		"deep": ROOM_REACH * 0.9}
 
 
-## The air at show time [param t] - its bursts planned again whenever the schedule moved.
+## The air at show time [param t] - its bursts planned again whenever the schedule moved (and only
+## then: a word heard that moves no action plans nothing, as tracing every card's path is not free).
 func _tick_air(t: float) -> void:
 	if _air == null:
 		return
-	var key := "%d|%d" % [_built_n, _sched.size()]
+	var key := str(hash(_sched.map(func(e: Dictionary) -> Vector2: return Vector2(float(e["t0"]), float(e["s"])))))
 	if key != _air_key:
 		_air_key = key
 		_air.plan(_air_moments())
 	_air.tick(t)
 
 
-## THE MOMENTS THE AIR CAN MARK, from the schedule: `{name: [{t, dur, path, from}]}` (see
-## [constant CardTable.MOMENTS]) - each with the time it starts, how long it lasts, and where its
-## emitter is through it (`path`, `[[t, Transform3D], ...]`), read off the same poses the table draws.
-## A moment the voice has not reached yet is not here.
+## THE MOMENTS THE AIR CAN MARK, from the schedule: `{name: [{t, dur, path, from, card}]}` (see
+## [constant CardTable.MOMENTS]) - each with the time it starts, how long it lasts, the card it is on
+## (-1 for none), and where its emitter is through it (`path`, `[[t, Transform3D], ...]`). A card's
+## moment is timed by when the card really gets there - faces the viewer, lands, is down for the close
+## - and its path is the card as the table draws it over the whole window its particles are born in
+## ([method _card_path]), never a pose it has yet to reach: the close was once marked at the spread's
+## mark from where each card would lie, and burst on the empty cloth beside the last card while it was
+## still held up on the left, about to be laid there (2026-10-08). A moment the voice has not reached
+## yet is not here.
 func _air_moments() -> Dictionary:
 	var out := {}
 	for m in CardTable.MOMENTS:
 		out[m] = []
 	var tm := _times()
-	var keep := _cur_base
 	if float(tm["shuffle"]) < INF:
 		var ts := float(tm["shuffle"])
-		(out["shuffle"] as Array).append({"t": ts, "dur": 0.5, "from": "point",
+		(out["shuffle"] as Array).append({"t": ts, "dur": 0.5, "from": "point", "card": -1,
 			"path": [[ts, Transform3D(Basis.IDENTITY, _mid + Vector3(0.0, DECK_T * DECK_N, 0.0))]]})
 	var all_events: Array = tm["events"]
 	var wj0 := _wash_jump(maxf(float(tm["shuffle"]), minf(0.0, _now)))
+	# THE CLOSE waits for the last card down: the spread's mark lays a card still held up, and a turn
+	# under way finishes
+	var tc := float(tm["spread"])
+	var down := tc
 	for k in _cards.size():
 		var ev: Array = all_events[k]
 		for i in ev.size():
@@ -2405,23 +2442,16 @@ func _air_moments() -> Dictionary:
 			if how == "jumper":
 				# ALONG ITS FLIGHT, from springing off the riffle - or being thrown out of the wash - to
 				# landing
-				var wj: Dictionary = wj0 if k == 0 else {}
 				var t0 := td + (off + JUMP_FLY.x) * s
 				var t1 := td + (off + JUMP_FLY.y) * s
-				if not wj.is_empty():
-					t0 = float(wj["eject"])
-					t1 = float(wj["land"])
-				var path: Array = []
-				for j in 9:
-					var tt := lerpf(t0, t1, float(j) / 8.0)
-					_cur_base = _deck_at(tt, tm, wj)
-					var u := (tt - td) / s - off
-					path.append([tt, _wash_jump_xf(u, tt, td + JUMP_REST * s, Transform3D.IDENTITY, wj) if not wj.is_empty()
-						else _jump_xf(k, u, Transform3D.IDENTITY)])
-				(out["jumper"] as Array).append({"t": t0, "dur": t1 - t0, "from": "card", "path": path})
+				if k == 0 and not wj0.is_empty():
+					t0 = float(wj0["eject"])
+					t1 = float(wj0["land"])
+				(out["jumper"] as Array).append({"t": t0, "dur": t1 - t0, "from": "card", "card": k,
+					"path": _card_path(k, t0, t1 - t0, tm, wj0)})
 			if up_at < INF:
-				(out["reveal"] as Array).append({"t": up_at, "dur": 0.3, "from": "card",
-					"path": [[up_at, _present_xf(k, up_at, up_at, tl)]]})
+				(out["reveal"] as Array).append({"t": up_at, "dur": 0.3, "from": "card", "card": k,
+					"path": _card_path(k, up_at, 0.3, tm, wj0)})
 				for l in _looks(k, up_at, tl):
 					var look: Dictionary = (l as Dictionary)["look"]
 					if float(look["twirl"]) <= 0.0:
@@ -2429,11 +2459,8 @@ func _air_moments() -> Dictionary:
 					# THROUGH THE TWIRL, the card's edges spinning with it
 					var a0 := float((l as Dictionary)["at"]) + float(look["turn"]) + float(look["hold"])
 					var dur := float(look["twirl"])
-					var path: Array = []
-					for j in 17:
-						var tt := a0 + dur * float(j) / 16.0
-						path.append([tt, _present_xf(k, tt, up_at, tl)])
-					(out["pirouette"] as Array).append({"t": a0, "dur": dur, "from": "card", "path": path})
+					(out["pirouette"] as Array).append({"t": a0, "dur": dur, "from": "card", "card": k,
+						"path": _card_path(k, a0, dur, tm, wj0)})
 			# WHERE IT LANDS: laid from the hand, dealt, or swept out
 			var land := INF
 			match kind:
@@ -2445,15 +2472,44 @@ func _air_moments() -> Dictionary:
 					elif how == "fan":
 						land = td + (off + TableActions.FAN_EACH * float(e.get("i", 0)) + FAN_MOVE) * s
 			if land < INF:
-				(out["lay"] as Array).append({"t": land, "dur": 0.2, "from": "card",
-					"path": [[land, _card_pose(k, land + 0.01, ev, wj0)["xf"]]]})
-	_cur_base = keep
-	if float(tm["spread"]) < INF:
-		var tc := float(tm["spread"])
+				(out["lay"] as Array).append({"t": land, "dur": 0.2, "from": "card", "card": k,
+					"path": _card_path(k, land, 0.2, tm, wj0)})
+			var still := land
+			if kind == "turn":
+				still = td + (off + (FLIP_END_LAY if how == "flip" else TURN_END)) * s
+			if td <= tc and still < INF:
+				down = maxf(down, still)
+	if tc < INF:
 		for k in _cards.size():
-			(out["close"] as Array).append({"t": tc, "dur": 0.8, "from": "card",
-				"path": [[tc, _card_pose(k, tc + LAY_END * 2.0, (tm["events"] as Array)[k], wj0)["xf"]]]})
+			(out["close"] as Array).append({"t": down, "dur": 0.8, "from": "card", "card": k,
+				"path": _card_path(k, down, 0.8, tm, wj0)})
 	return out
+
+
+## How often a burst's emitter is sampled along its card's path (seconds): a frame's time at 30 - a
+## twirl turns well under half a turn between two, so a card's edges eased between them are where
+## they are drawn.
+const AIR_STEP := 1.0 / 30.0
+
+## CARD [param k] AS THE TABLE DRAWS IT from [param t0] through [param dur] seconds - or through the
+## window a moment's particles are born in ([constant Effects.BIRTH]) when that is longer: its pose
+## ([method _card_pose]) with the deck where [method _pose] has it, every [constant AIR_STEP]. What a
+## burst on it rides: `[[t, Transform3D], ...]`.
+func _card_path(k: int, t0: float, dur: float, tm: Dictionary, wj: Dictionary) -> Array:
+	var keep := _cur_base
+	var keep_gone := _deck_gone
+	var span := maxf(dur, Effects.BIRTH)
+	var n := maxi(ceili(span / AIR_STEP), 1)
+	var ev: Array = (tm["events"] as Array)[k]
+	var path: Array = []
+	for j in n + 1:
+		var t := t0 + span * float(j) / float(n)
+		_cur_base = _deck_at(t, tm, wj)
+		_deck_gone = 1 if not wj.is_empty() and t >= float(wj["end"]) else 0
+		path.append([t, _card_pose(k, t, ev, wj)["xf"]])
+	_cur_base = keep
+	_deck_gone = keep_gone
+	return path
 
 
 # --- the schedule ----------------------------------------------------------------------------------------
@@ -3111,7 +3167,11 @@ func _jump_xf(k: int, u: float, pres: Transform3D) -> Transform3D:
 		var e := clampf((u - JUMP_FLY.x) / (JUMP_FLY.y - JUMP_FLY.x), 0.0, 1.0)
 		var pos := top.origin.lerp(land.origin, e) + Vector3(0, sin(PI * e) * 0.13, 0)
 		var b := Basis(Vector3.UP, 0.6 * e + 1.3 * PI * e) * top.basis * Basis(Vector3(0, 0, 1), 3.0 * PI * e)
-		return Transform3D(b, pos)
+		# ...COMING DOWN AS IT LIES: the tumble alone ends a third of a turn off the card's landing (it
+		# snapped round as it touched the cloth), so what is left over is taken up along the flight
+		var end := Basis(Vector3.UP, 0.6 + 1.3 * PI) * top.basis.orthonormalized() * Basis(Vector3(0, 0, 1), 3.0 * PI)
+		var left := Quaternion(land.basis * end.orthonormalized().inverse())
+		return Transform3D(Basis(Quaternion.IDENTITY.slerp(left, e)) * b, pos)
 	var settle := land
 	settle.origin += Vector3(0.006, 0, 0.004) * clampf((u - JUMP_FLY.y) / 0.4, 0.0, 1.0)
 	if u < JUMP_REST:
@@ -4031,6 +4091,7 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 	var last_pos := pos.duplicate()        # where each card was at the step before (for meetings between steps)
 	var last_yaw := yaw.duplicate()
 	for step in range(s_from, steps):
+		_breathe()
 		var t := float(step) * dt
 		last_pos = pos.duplicate()
 		last_yaw = yaw.duplicate()

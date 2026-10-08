@@ -413,7 +413,7 @@ func _make_table() -> void:
 		var url := AgentTools.open(episode.job_dir("table"), toolset)
 		if not url.is_empty():
 			_tools["table"] = {"url": url, "set": toolset}
-			extra = {"tools_url": url, "timeout": SetDresserTools.TIMEOUT}
+			extra = {"tools_url": url}
 		else:
 			toolset.release()
 	var p := CardPrompts.set_dresser(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(),
@@ -429,6 +429,12 @@ func _make_table() -> void:
 	if not images.is_empty():
 		p["images"] = images
 	_submit_text("table", p, "best", extra)
+
+
+## How many pictures the set dresser has taken so far, -1 while none is working with tools.
+func table_looks() -> int:
+	var t: Dictionary = _tools.get("table", {})
+	return (t["set"] as SetDresserTools).looks_used() if not t.is_empty() else -1
 
 
 ## A step's tools stop answering, and what they built is given back.

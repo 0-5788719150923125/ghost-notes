@@ -20,6 +20,14 @@ extends Node
 ##     card waits standing in the file and rises out past the rim, is held up ALONE in the middle with no
 ##     page and turned over to show its printed back; the waterfall's cards lie overlapping. A box mixing
 ##     printings gives each printing its own back.
+##   - THE AIR'S BURSTS COME FROM THE CARD (2026-10-08, the user: a burst of sparkles came "just BEFORE"
+##     a card held up on the left was laid, "detached from the card itself"): over a deck show, a show
+##     whose spread lays the card still held, a box show and a jumper's, with a pirouette asked for,
+##     every particle a burst on a card moment would throw is born at that card as the table draws it
+##     at its birth time - its middle and its edges - and the close waits until every card is down.
+##     Two-sided: the close as it was planned (at the spread's mark, from where each card would lie)
+##     is far from the card the spread is still laying. A jumper comes down as it lies: its flight
+##     ends where it lands, turned as it lands (it snapped a third of a turn round as it touched).
 ##
 ##   tests/run_boot_probe.sh tests/table_staging_check.gd 300
 ##
@@ -61,6 +69,7 @@ func _run() -> void:
 	_deck_show()
 	_box_show()
 	_printings()
+	_bursts()
 	Director.hold(false)
 	Director.detach()
 	print("table_staging_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -86,7 +95,8 @@ func _marks() -> void:
 func _cards(positions: Array) -> Array:
 	var out: Array = []
 	for i in positions.size():
-		out.append({"key": "c%d" % i, "name": "Card %d" % (i + 1), "numeral": "", "reversed": false, "jumper": false,
+		out.append({"key": "c%d" % i, "name": "Card %d" % (i + 1), "numeral": "", "reversed": false,
+			"jumper": bool((positions[i] as Dictionary).get("jumper", false)),
 			"position": positions[i], "booklet": {"keywords": ["Shortstop", "Bats left"], "upright": "A kid with a glove."}, "art": ""})
 	return out
 
@@ -155,7 +165,8 @@ func _choreography() -> void:
 
 
 ## Load [param positions] as an episode with [param staging], timed as a voice would read it.
-func _load(seed: int, positions: Array, plan: Dictionary, series: Array = []) -> void:
+func _load(seed: int, positions: Array, plan: Dictionary, series: Array = [],
+		say := "Some words said about it, at an easy pace, for a while.") -> void:
 	var cards := _cards(positions)
 	for i in mini(series.size(), cards.size()):
 		if not String(series[i]).is_empty():
@@ -164,7 +175,7 @@ func _load(seed: int, positions: Array, plan: Dictionary, series: Array = []) ->
 	var passages: Array = []
 	for m in CardProducer.choreography(plan, cards):
 		passages.append({"kind": m["kind"], "card": m.get("card", 0), "last": m.get("last", m.get("card", 0)),
-			"text": "Some words said about it, at an easy pace, for a while." if not String(m.get("say", "")).is_empty() else ""})
+			"text": say if not String(m.get("say", "")).is_empty() else ""})
 	var script := CardReading.compose(passages)
 	var doc := {"show": "staging-check", "seed": seed, "dir": "", "plan": plan, "cards": cards}
 	subs.words = load("res://tests/table_look_probe.gd").timeline(CardReading.parse(script), 0.36, Director.intro_hold)
@@ -272,3 +283,100 @@ func _printings() -> void:
 		backs.append((medium._cards[k] as MeshInstance3D).get_surface_override_material(1))
 	_ok(backs[0] != backs[1] and backs[0] != backs[2] and backs[1] != backs[2], "each printing has its own back, the deck's own a third")
 	_ok(medium._backs.size() == 3, "three backs are printed (%d)" % medium._backs.size())
+
+
+## How far the emitter [param e] is from card [param card] as drawn (meters): its middle, or its edges
+## (a card's half length round from where they are drawn) when further.
+func _off_card(e: Transform3D, card: MeshInstance3D) -> float:
+	var d := card.transform.origin.distance_to(e.origin)
+	for ax in [0, 2]:
+		d = maxf(d, (card.transform.basis[ax].normalized() - e.basis[ax].normalized()).length() * TablePositions.CARD.y * 0.5)
+	return d if card.visible else INF
+
+
+## The worst [method _off_card] over every particle a burst on [param moments] throws, posed at its birth:
+## `[meters, what]`.
+func _worst_off(moments: Array, fx: Dictionary) -> Array:
+	var worst := [0.0, "nothing"]
+	for m in moments:
+		var mo: Dictionary = m
+		for p in Effects.births(fx, [mo], 7):
+			var born := float((p as Dictionary)["born"])
+			_posed(born)
+			var off := _off_card(Effects._along(mo["path"], born), medium._cards[int(mo["card"])])
+			if off > float(worst[0]):
+				worst = [off, "card %d at %.2f s (its moment at %.2f)" % [int(mo["card"]) + 1, born, float(mo["t"])]]
+	return worst
+
+
+func _bursts() -> void:
+	print("-- the air's bursts")
+	var fx: Dictionary = Effects.sanitize([{"kind": "burst", "look": "stars", "on": "reveal", "count": 40}], ["#ffe9b0"],
+		CardTable.AIR.keys(), CardTable.MOMENTS.keys())[0]
+	var long := "Some words said about it, at an easy pace, for a while, and then some more of them, slowly, " \
+		+ "about the card and what it holds, and what it might mean tonight."
+	var deck := {"look": {"candles": 0}, "staging": {"source": "deck", "text": "booklet"}}
+	var episodes := [
+		["a deck show", 11, [{}, {"on": true}, {"comes": "dealt", "lies": "sideways"}, {"then": ["tap 1"]}], deck, long],
+		["a spread that lays the card still held", 12, [{}, {}, {}], deck, long],
+		["a box show", 23, [{}, {"comes": "swept"}, {"comes": "swept"}], {"look": {"candles": 0}, "staging": {"source": "box", "text": "back"}}, long],
+		["a jumper's show", 14, [{"jumper": true}, {}], deck, long],
+	]
+	for epi in episodes:
+		var plan: Dictionary = (epi[3] as Dictionary).duplicate(true)
+		_load(int(epi[1]), epi[2], plan, [], String(epi[4]))
+		medium._spin_wanted = true
+		medium._spin_key = ""
+		# planned as a frame plans it: the table posed first (its shuffle's and jumper's rooms), then the air
+		_posed(1.0)
+		var moments := medium._air_moments()
+		var seen := PackedStringArray()
+		var worst := [0.0, "nothing"]
+		for name in moments:
+			var on: Array = (moments[name] as Array).filter(func(m: Dictionary) -> bool: return int(m.get("card", -1)) >= 0)
+			if on.is_empty():
+				continue
+			seen.append("%d %s" % [on.size(), name])
+			var w := _worst_off(on, fx)
+			if float(w[0]) > float(worst[0]):
+				worst = [w[0], "%s, %s" % [name, w[1]]]
+		_ok(float(worst[0]) < 0.002, "%s: every burst is born at its card as drawn (%s; worst %.2f mm, %s)"
+			% [epi[0], ", ".join(seen), float(worst[0]) * 1000.0, worst[1]])
+		# THE CLOSE WAITS for every card to be down: from its first birth, each lies where it stays
+		var close: Array = moments["close"]
+		var still := 0.0
+		if not close.is_empty():
+			var tc := float((close[0] as Dictionary)["t"])
+			_posed(tc + 6.0)
+			var after: Array = medium._cards.map(func(c: MeshInstance3D) -> Vector3: return c.transform.origin)
+			_posed(tc)
+			for k in medium._cards.size():
+				still = maxf(still, (medium._cards[k] as MeshInstance3D).transform.origin.distance_to(after[k]))
+		_ok(not close.is_empty() and still < 0.0005, "%s: the close waits until every card is down (%.1f mm still to go)" % [epi[0], still * 1000.0])
+		if String(epi[0]) == "a jumper's show":
+			var ev: Dictionary = ((medium._times()["events"] as Array)[0] as Array)[0]
+			var touch := float(ev["t0"]) + (float(ev["off"]) + TableMedium.JUMP_FLY.y) * float(ev["s"])
+			_posed(touch - 0.002)
+			var flying: Transform3D = (medium._cards[0] as MeshInstance3D).transform
+			_posed(touch + 0.002)
+			var snap := _off_card(flying, medium._cards[0])
+			_ok(String(ev["how"]) == "jumper" and snap < 0.002, "a jumper comes down as it lies: %.1f mm between its flight's end and its landing" % (snap * 1000.0))
+			# THE CONTROL: the tumble alone, as it was flown, ends off the landing
+			var top := medium._jump_ride(0, TableMedium.JUMP_FLY.x)
+			var tumbled := Basis(Vector3.UP, 0.6 + 1.3 * PI) * top.basis * Basis(Vector3(0, 0, 1), 3.0 * PI)
+			var old := _off_card(Transform3D(tumbled, flying.origin), medium._cards[0])
+			_ok(old > 0.03, "control: the tumble alone ends %.0f mm off its landing" % (old * 1000.0))
+		if String(epi[0]) == "a spread that lays the card still held":
+			# THE CONTROL: the close as it was planned - at the spread's mark, from where each card would lie
+			var tm := medium._times()
+			var ts := float(tm["spread"])
+			var wj0 := medium._wash_jump(maxf(float(tm["shuffle"]), minf(0.0, medium._now)))
+			var old: Array = []
+			for k in medium._cards.size():
+				old.append({"t": ts, "dur": 0.8, "from": "card", "card": k,
+					"path": [[ts, medium._card_pose(k, ts + TableMedium.LAY_END * 2.0, (tm["events"] as Array)[k], wj0)["xf"]]]})
+			var w := _worst_off(old, fx)
+			_ok(float(w[0]) > 0.02, "control: the close planned at the spread's mark from where the cards would lie is %.0f mm off (%s)"
+				% [float(w[0]) * 1000.0, w[1]])
+	medium._spin_wanted = false
+	medium._spin_key = ""

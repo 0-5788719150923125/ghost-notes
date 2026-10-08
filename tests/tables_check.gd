@@ -68,7 +68,7 @@ func _vocabulary() -> void:
 	_ok(prompt.contains(Tables.describe()), "the set dresser is told the table's vocabulary")
 	_ok(prompt.contains("a round top of oak"), "the set dresser is told the earlier tables")
 	_ok(prompt.contains("`overhead`"), "the set dresser is told it can look from above")
-	var ex: Variant = JSON.parse_string("{" + CardPrompts.TABLE_EXAMPLE + "}")
+	var ex: Variant = JSON.parse_string("{" + Rules.say("cards/set_dresser.table_example") + "}")
 	_ok(ex is Dictionary, "the table's example is JSON")
 	if ex is Dictionary:
 		var notes := PackedStringArray()

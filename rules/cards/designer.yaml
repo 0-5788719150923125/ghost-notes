@@ -1,0 +1,67 @@
+# THE DESIGNER - the deck's creator, once per drawn card: that card's illustration and its entry in the
+# deck's little booklet (or what is printed on its back). One card per run - it never learns what else
+# was drawn (CardPrompts.designer fills it in; src/rules.gd says how a rules file reads).
+#
+# The code gives: {{deck_noun}} ("tarot deck", or the kind the producer named), {{deck_name}},
+# {{deck_style}}, {{palette}}; the card's {{name}}, {{group}} and {{element}}, {{meaning}}; the flags
+# `kind_named` (not a tarot reading), `on_back` (its text printed on its back), `ledger` (the booklet
+# page lists keywords in two columns), `reversals`; and `before`, how earlier decks pictured it.
+prompt:
+  - 'You are the DESIGNER of the {{deck_noun}} "{{deck_name}}", used on this show. Its look:'
+  - "{{deck_style}}"
+  - "Palette: {{palette}}."
+  - ""
+  - >-
+      Design ONE card of the deck: {{name}}{{#group}} ({{group}}{{#element}}, element of
+      {{element}}{{/element}}){{/group}}.
+  - when: meaning
+    say: "What it means in this deck - grounding, not text to copy: {{meaning}}"
+  # THE KEYWORDS ARE ITS OWN: copied whole, every deck's booklet read alike
+  - when: [meaning, "!on_back"]
+    say: >-
+          The keywords above are the traditional ones, for reference. Choose your own for this
+          deck's entry, as many as the entry wants: keep some, and put a synonym or a fresher word
+          in place of others now and then, so the entry is yours and not a copy.
+  - ""
+  - >-
+      1. THE ILLUSTRATION: what this card shows, for the illustrator who paints the whole deck -
+      subject, composition, {{#kind_named}}what this card is, as this deck pictures
+      it{{/kind_named}}{{^kind_named}}the traditional symbolism of this card reinterpreted in this
+      deck's world{{/kind_named}}. Whatever it pictures is its own, described so it could not be
+      mistaken for another card's. Tall portrait format. No words, letters or numbers anywhere in
+      the picture: the card's frame and name are printed separately.
+  - when: on_back
+    say: >-
+          2. WHAT IS PRINTED ON ITS BACK, which the viewer reads when the card is turned over - in
+          `booklet`: its short facts in `keywords` (one each, as that kind of card's back lists
+          them: a position and a team, a type and a weakness, a set number, a year), and its text in
+          `upright` (a bio, rules, flavor text, an answer). Write it exactly the way that kind of
+          card's back is written, as the brief says the backs read. It stands alone: never mention
+          another card.
+  - when: "!on_back"
+    say: >-
+          2. ITS ENTRY IN THE DECK'S LITTLE BOOKLET, which is shown on screen beside the card, with
+          its `keywords`{{#ledger}} (this deck's page lists them in two columns: give an EVEN
+          number, four or six){{/ledger}}. Write it the way the brief says this deck's booklet
+          speaks (if it does not say, in the earnest, slightly old-fashioned voice decks' booklets
+          use). It stands alone: never mention another card.
+  # AN EARLIER DECK'S PICTURE of this card, so this one pictures it otherwise
+  - when: before
+    say: ""
+  - when: before
+    say: >-
+          EARLIER DECKS on this show pictured this card like this. Picture it some other way, in its
+          subject and its composition both:
+  - when: before
+    insert: before
+  - ""
+  - "Reply with ONLY a JSON object, no other text:"
+  - |-
+    {
+      "art": "the illustration, in two to four sentences",
+      "booklet": {
+        "keywords": ["{{#ledger_booklet}}four or six{{/ledger_booklet}}{{#plain_booklet}}three to six{{/plain_booklet}}{{#on_back}}three to five{{/on_back}} words or short phrases"],
+        "upright": "the meaning, forty to seventy words"{{#reversals}},
+        "reversed": "the meaning reversed, twenty-five to forty-five words"{{/reversals}}
+      }
+    }

@@ -3,6 +3,7 @@
 
   python3 scripts/package_release.py archive linux      # dist/ghost-notes-linux.x86_64 -> dist/release/
   python3 scripts/package_release.py archive windows    # dist/ghost-notes-windows.exe
+  python3 scripts/package_release.py archive android    # dist/ghost-notes-android.apk, copied as-is
   python3 scripts/package_release.py finalize           # SHA256SUMS + manifest.json over dist/release/
 
 The same commands run on a developer machine and in CI (.github/workflows/build.yml); the
@@ -22,6 +23,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -35,6 +37,7 @@ FOLDER = "ghost-notes"
 EPOCH = 315532800  # 1980-01-01
 
 TARGETS = {
+    "android": {"asset": "ghost-notes-android-arm64.apk", "files": {"ghost-notes-android.apk": None}},
     "linux": {"asset": "ghost-notes-linux-x86_64.tar.gz", "files": {"ghost-notes-linux.x86_64": "ghost-notes"}},
     "windows": {
         "asset": "ghost-notes-windows-x86_64.zip",
@@ -67,7 +70,10 @@ def archive(target: str) -> None:
         path = DIST / source
         if not path.is_file() or path.stat().st_size < 1_000_000:
             fail(f"{path} is missing or too small to be an export. Run scripts/build.sh --release {target}.")
-    if target == "linux":
+    if target == "android":
+        # An APK is already the archive: copied, named for its architecture.
+        shutil.copyfile(DIST / "ghost-notes-android.apk", out)
+    elif target == "linux":
         with tarfile.open(out, "w:gz") as bundle:
             for source, inside in spec["files"].items():
                 info = bundle.gettarinfo(DIST / source, f"{FOLDER}/{inside}")

@@ -32,6 +32,11 @@ uniform float radius = 1.1;              // a parasol's
 uniform float ribs = 8.0;
 uniform uint salt = 0u;
 uniform float show_time = 0.0;
+// a soft screen's copy: its shade grown (or, below 0, shrunk) by this - meters for an edge or a bar,
+// noise levels for a canopy, the share of a gap for blinds and slats (Lights.grow_of)
+uniform float grow = 0.0;
+// how hard the wind gusts now, 0-1: what stirs, stirs harder
+uniform float gust = 0.0;
 
 varying vec2 plane;
 
@@ -49,7 +54,7 @@ vec2 stir(vec2 q, float t) {
 	vec2 swing = vec2(sin(0.53 * t + 1.3) + 0.5 * sin(1.37 * t + 0.4), sin(0.41 * t + 0.2) + 0.5 * sin(1.13 * t + 2.1));
 	vec2 flutter = vec2(lnoise(q / size * 1.7 + vec2(t * 0.9, 0.0), salt + 7u),
 		lnoise(q / size * 1.7 + vec2(0.0, t * 0.8), salt + 11u)) - 0.5;
-	return sway * size * (0.22 * swing + 0.45 * flutter);
+	return sway * size * (0.22 * swing + 0.45 * flutter) * (1.0 + 1.5 * gust);
 }
 
 bool lattice_bar(vec2 q) {
@@ -59,30 +64,31 @@ bool lattice_bar(vec2 q) {
 	if (lattice <= 1) {
 		vec2 m = q - cell * floor(q / cell);
 		vec2 d = min(m, vec2(cell) - m);
-		return min(d.x, d.y) < bars * 0.5;
+		return min(d.x, d.y) < bars * 0.5 + grow;
 	}
 	if (lattice == 2) {
 		vec2 s = vec2(1.0, 1.7320508) * cell;
 		vec2 a = q - s * floor(q / s + 0.5);
 		vec2 b = (q - s * 0.5) - s * floor((q - s * 0.5) / s + 0.5);
 		vec2 g = abs(dot(a, a) < dot(b, b) ? a : b);
-		return max(g.x, dot(g, vec2(0.5, 0.8660254))) > cell * 0.5 - bars * 0.5;
+		return max(g.x, dot(g, vec2(0.5, 0.8660254))) > cell * 0.5 - bars * 0.5 - grow;
 	}
 	vec2 m = q - cell * (floor(q / cell) + 0.5);
 	if (lattice == 3) {
-		return length(m) > cell * 0.5 - bars * 0.5;
+		return length(m) > cell * 0.5 - bars * 0.5 - grow;
 	}
 	float sq = max(abs(m.x), abs(m.y));
 	float di = (abs(m.x) + abs(m.y)) * 0.70710678;
-	return min(sq, di) > (cell * 0.5 - bars) * 0.82;
+	return min(sq, di) > (cell * 0.5 - bars) * 0.82 - grow;
 }
 
 bool shaded(vec2 q, float t) {
+	float gusting = 1.0 + 1.5 * gust;
 	if (kind <= 2) {
 		if (abs(q.x) > opening.x * 0.5 || abs(q.y) > opening.y * 0.5) {
 			return true;
 		}
-		if (min(opening.x * 0.5 - abs(q.x), opening.y * 0.5 - abs(q.y)) < bars * 0.5) {
+		if (min(opening.x * 0.5 - abs(q.x), opening.y * 0.5 - abs(q.y)) < bars * 0.5 + grow) {
 			return true;
 		}
 		if (kind == 0) {
@@ -90,17 +96,17 @@ bool shaded(vec2 q, float t) {
 			vec2 c = opening / max(panes, vec2(1.0));
 			vec2 m = r - c * floor(r / c);
 			vec2 d = min(m, c - m);
-			return min(d.x, d.y) < bars * 0.5;
+			return min(d.x, d.y) < bars * 0.5 + grow;
 		}
 		if (kind == 1) {
 			vec2 r = turned(q, turn);
-			float y = r.y + sway * spacing * 0.15 * sin(0.9 * t + r.x * 2.0);
-			return fract(y / spacing) >= open;
+			float y = r.y + sway * gusting * spacing * 0.15 * sin(0.9 * t + r.x * 2.0);
+			return fract(y / spacing) >= open - grow;
 		}
 		return lattice_bar(q);
 	}
 	if (kind == 3) {
-		return lfbm((q + stir(q, t)) / size, salt) > thr;
+		return lfbm((q + stir(q, t)) / size, salt) > thr - grow;
 	}
 	if (kind == 4) {
 		vec2 p = q + stir(q, t);
@@ -109,16 +115,16 @@ bool shaded(vec2 q, float t) {
 			vec2 r = turned(p, float(k) * 1.0471976 + 0.4);
 			best = max(best, lfbm(vec2(r.x / (size * 3.0), r.y / (size * 0.6)), salt + uint(k) * 77u));
 		}
-		return best > thr;
+		return best > thr - grow;
 	}
 	if (kind == 5) {
-		return 1.0 - abs(2.0 * lfbm((q + stir(q, t) * 0.4) / size, salt) - 1.0) > thr;
+		return 1.0 - abs(2.0 * lfbm((q + stir(q, t) * 0.4) / size, salt) - 1.0) > thr - grow;
 	}
 	if (kind == 6) {
-		return fract(turned(q, turn).y / spacing) >= open;
+		return fract(turned(q, turn).y / spacing) >= open - grow;
 	}
 	if (kind == 7) {
-		float e = edge + sway * 0.012 * sin(2.3 * t + q.x * 4.0);
+		float e = edge + sway * gusting * 0.012 * sin(2.3 * t + q.x * 4.0) - grow;
 		if (scallop > 0.0) {
 			float u = (q.x - scallop * floor(q.x / scallop)) / scallop * 2.0 - 1.0;
 			e -= scallop * 0.35 * sqrt(max(1.0 - u * u, 0.0));
@@ -130,8 +136,8 @@ bool shaded(vec2 q, float t) {
 	float local = a - sector * (floor(a / sector) + 0.5);
 	float r = radius * cos(sector * 0.5) / cos(local);
 	r -= radius * 0.04 * cos(local / (sector * 0.5) * 1.5707963);
-	r += sway * 0.01 * sin(1.7 * t + a * 3.0);
-	return length(q) < r;
+	r += sway * gusting * 0.01 * sin(1.7 * t + a * 3.0);
+	return length(q) < r + grow;
 }
 
 void fragment() {

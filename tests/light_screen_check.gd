@@ -7,7 +7,9 @@ extends SceneTree
 ## Lights.build] over a white ground lit by its sun alone, photographed from straight above, and read
 ## at a grid of points away from the pattern's edges (where the shadow filter blurs it): lit where the CPU
 ## says lit, dark where it says shaded. Two-sided: the same pictures read against the pattern on another
-## salt - another noise - disagree; and a screen moving in time is read at a time that is not 0.
+## salt - another noise - disagree; and a screen moving in time is read at a time that is not 0. A soft
+## screen's copy (its shade grown or shrunk) in a gust is read too, both forced on the shader and the
+## reckoning alike.
 ##
 ##   tests/run_quiet.sh light_screen_check
 ##
@@ -35,8 +37,11 @@ func _run() -> void:
 	var sun := {"look": "sun", "from": "right", "height": 50, "strength": 1.0, "softness": 0.0}
 	var cases := [
 		["a window", {"name": "w", "kind": "window", "at": [5, -8], "size": [70, 70], "panes": [3, 2], "bars": 4}, 0.0],
-		["leaves, stirring", {"name": "l", "kind": "leaves", "cover": 0.5, "size": 10, "sway": 0.5}, 7.3],
-		["fronds", {"name": "f", "kind": "fronds", "cover": 0.5, "size": 8, "sway": 0.3}, 2.1],
+		["leaves, stirring", {"name": "l", "kind": "leaves", "cover": 0.5, "size": 10, "sway": 0.5, "soft": 0}, 7.3],
+		["fronds", {"name": "f", "kind": "fronds", "cover": 0.5, "size": 8, "sway": 0.3, "soft": 0}, 2.1],
+		# a soft copy's shade grown, in a gust: what each of a soft screen's suns casts, stirred harder
+		["leaves, grown, in a gust", {"name": "l", "kind": "leaves", "cover": 0.5, "size": 10, "sway": 0.5, "soft": 0}, 7.3, {"grow": 0.05, "gust": 0.8}],
+		["blinds, shrunk, in a gust", {"name": "b", "kind": "blinds", "size": [200, 200], "slats": 14, "open": 0.5, "turn": 20, "sway": 0.4}, 3.0, {"grow": -0.15, "gust": 1.0}],
 		["a lattice of stars", {"name": "x", "kind": "lattice", "size": [200, 200], "pattern": "stars", "cell": 12, "bars": 2}, 0.0],
 		["a lattice of hexes", {"name": "x", "kind": "lattice", "size": [200, 200], "pattern": "hexes", "cell": 16, "bars": 4}, 0.0],
 		["blinds", {"name": "b", "kind": "blinds", "size": [200, 200], "slats": 14, "open": 0.5, "turn": 20, "sway": 0.4}, 3.0],
@@ -44,12 +49,12 @@ func _run() -> void:
 		["a parasol", {"name": "p", "kind": "parasol", "at": [-10, -10], "size": 110, "ribs": 8}, 0.0],
 	]
 	for c in cases:
-		await _case(String(c[0]), sun, c[1] as Dictionary, float(c[2]))
+		await _case(String(c[0]), sun, c[1] as Dictionary, float(c[2]), c[3] if (c as Array).size() > 3 else {})
 	print("light_screen_check: %s" % ("ALL OK" if _fails == 0 else "%d FAILED" % _fails))
 	quit(0 if _fails == 0 else 1)
 
 
-func _case(what: String, sun: Dictionary, screen: Dictionary, t: float) -> void:
+func _case(what: String, sun: Dictionary, screen: Dictionary, t: float, force: Dictionary = {}) -> void:
 	var vp := SubViewport.new()
 	vp.size = Vector2i(W, H)
 	vp.own_world_3d = true
@@ -91,6 +96,12 @@ func _case(what: String, sun: Dictionary, screen: Dictionary, t: float) -> void:
 	world.add_child(rig.root)
 	rig.fit(0.3)
 	rig.tick(t)
+	# FORCED on the shader and on the reckoning alike
+	for sc in rig.screens:
+		for k in force:
+			((sc as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter(String(k), force[k])
+	for g in rig.geom:
+		((g as Dictionary)["u"] as Dictionary).merge(force, true)
 	rig.sun.shadow_blur = 0.5
 	rig.sun.directional_shadow_max_distance = 6.0
 	rig.sun.light_energy = 1.0

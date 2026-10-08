@@ -17,10 +17,14 @@ class_name MiniYaml
 ##     `"double"` quoted strings (`\\`, `\"`, `\n`, `\r`, `\t` escapes in double quotes)
 ##   - a list item may open an inline map (`- {id: x}`) or a block map (`- id: x`
 ##     with further keys aligned beneath)
+##   - block scalars, for prose (the agents' rules, rules/): `|` keeps its lines, `>` folds
+##     them - joined by spaces, a blank line a line break - and `-` after either drops the
+##     final line break. Lines inside one are text: a `#` there is not a comment.
 ##
 ## Rejected (with a line-numbered error): anchors/aliases (`&`, `*`), tags (`!`),
-## multi-document (`---`), directives (`%`), block scalars (`|`, `>`), merge keys
-## (`<<`), flow collections spanning lines, duplicate keys, tabs in indentation.
+## multi-document (`---`), directives (`%`), keep-chomping block scalars (`|+`, `>+`) and
+## indentation indicators (`|2`), merge keys (`<<`), flow collections spanning lines,
+## duplicate keys, tabs in indentation.
 ##
 ## `parse(text)` returns `{ok: bool, data: Variant, error: String}`. Numbers parse as
 ## int when integral, float otherwise (JSON parses everything as float; every consumer
@@ -36,6 +40,7 @@ static func parse(text: String) -> Dictionary:
 
 class _Parser:
 	var lines: Array = []        # {n: line number, indent: int, text: String} - non-blank only
+	var raw := PackedStringArray()   # the text's own lines, as written: a block scalar's are read here
 	var i := 0                   # cursor into lines
 	var err := ""
 
@@ -44,7 +49,7 @@ class _Parser:
 			err = "line %d: %s" % [n, msg]
 
 	func parse_document(text: String) -> Variant:
-		var raw := text.split("\n")
+		raw = text.split("\n")
 		for k in raw.size():
 			var n := k + 1
 			var line := _strip_comment(raw[k])
@@ -57,10 +62,11 @@ class _Parser:
 			var body := line.substr(j).strip_edges(false, true)
 			if body.is_empty():
 				continue
-			if body.begins_with("---") or body.begins_with("..."):
+			# a document's markers and directives are at the start of a line (indented, they are text)
+			if j == 0 and (body.begins_with("---") or body.begins_with("...")):
 				fail(n, "multi-document markers are not supported")
 				return null
-			if body.begins_with("%"):
+			if j == 0 and body.begins_with("%"):
 				fail(n, "directives are not supported")
 				return null
 			lines.append({"n": n, "indent": j, "text": body})
@@ -127,7 +133,10 @@ class _Parser:
 				s += 1
 			var content := after.substr(s)
 			var content_indent := indent + 1 + s
-			if content.begins_with("- ") or content == "-" or _find_key_colon(content) >= 0:
+			if _block_head(content):
+				i += 1
+				out.append(block_scalar(content, indent, int(ln.n)))
+			elif content.begins_with("- ") or content == "-" or _find_key_colon(content) >= 0:
 				lines[i] = {"n": ln.n, "indent": content_indent, "text": content}
 				out.append(parse_block(content_indent))
 			else:
@@ -161,6 +170,9 @@ class _Parser:
 				break
 			var rest := t.substr(ci + 1).strip_edges()
 			i += 1
+			if _block_head(rest):
+				out[key] = block_scalar(rest, indent, int(ln.n))
+				continue
 			if rest.is_empty():
 				if i < lines.size() and int(lines[i].indent) > indent:
 					out[key] = parse_block(int(lines[i].indent))
@@ -172,6 +184,55 @@ class _Parser:
 			else:
 				out[key] = parse_value(rest, int(ln.n))
 		return out
+
+	# Whether [param s] opens a block scalar: `|` or `>`, and `-` after it.
+	func _block_head(s: String) -> bool:
+		return s in ["|", ">", "|-", ">-"]
+
+	# A BLOCK SCALAR whose header [param head] ends line [param n] (1-based) of an entry at
+	# [param parent]'s indentation: the raw lines after it that are blank or indented further,
+	# their common indentation cut, kept (`|`) or folded (`>`), with one final line break
+	# unless `-`. The lines it took are skipped.
+	func block_scalar(head: String, parent: int, n: int) -> String:
+		var body := PackedStringArray()
+		var ind := -1
+		var last := n
+		var k := n
+		while k < raw.size():
+			var line := raw[k].strip_edges(false, true)
+			if line.strip_edges().is_empty():
+				body.append("")
+				k += 1
+				continue
+			var j := 0
+			while j < line.length() and line[j] == " ":
+				j += 1
+			if j <= parent:
+				break
+			if ind < 0:
+				ind = j
+			elif j < ind:
+				fail(k + 1, "a block scalar's line is indented less than its first")
+				return ""
+			body.append(line.substr(ind))
+			last = k + 1
+			k += 1
+		while not body.is_empty() and body[body.size() - 1] == "":
+			body.remove_at(body.size() - 1)
+		while i < lines.size() and int(lines[i].n) <= last:
+			i += 1
+		var text := ""
+		if head.begins_with(">"):
+			for ln in body:
+				if ln.is_empty():
+					text += "\n"
+				else:
+					if not text.is_empty() and not text.ends_with("\n"):
+						text += " "
+					text += ln
+		else:
+			text = "\n".join(body)
+		return text if head.ends_with("-") or text.is_empty() else text + "\n"
 
 	# Index of the colon that separates a block-map key from its value: at bracket
 	# depth 0, outside quotes, followed by a space or the end of the line. -1 = none.
@@ -363,7 +424,7 @@ class _Parser:
 			fail(n, "tags are not supported")
 			return null
 		if c0 == "|" or c0 == ">":
-			fail(n, "block scalars are not supported")
+			fail(n, "this block scalar's header is not supported (only |, >, |- and >-)")
 			return null
 		match t:
 			"true", "True":

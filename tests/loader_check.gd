@@ -107,7 +107,7 @@ seq:
 	expect_err("anchor rejected", "a: &x 1")
 	expect_err("alias rejected", "a: *x")
 	expect_err("tag rejected", "a: !!int 3")
-	expect_err("block scalar rejected", "a: |\n  text")
+	expect_err("keep-chomping block scalar rejected", "a: |+\n  text")
 	expect_err("multi-doc rejected", "---\na: 1")
 	expect_err("merge key rejected", "<<: {a: 1}")
 	expect_err("duplicate key rejected", "a: 1\na: 2", "duplicate")

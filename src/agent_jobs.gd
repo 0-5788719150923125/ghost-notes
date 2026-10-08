@@ -26,8 +26,8 @@ class_name AgentJobs
 ## the job lands, as it always did. Its timeout counts from the first step.
 ##
 ## A JOB MAY WORK WITH TOOLS ghost serves ([AgentTools], a text job's `tools_url`): it then runs as
-## a loop of calls rather than one reply, and takes as long as the loop does - so it names its own
-## `timeout`. The tool server is polled from [method pump] with everything else.
+## a loop of calls rather than one reply, and takes as long as the loop does - and so may name its own
+## `timeout`, if it wants one. The tool server is polled from [method pump] with everything else.
 ##
 ## Polled from `main._process`, the [Films] / [Illustrations] rule: a job is a subprocess, and
 ## something with a frame has to see it end. NOTHING STARTS ON ITS OWN - a job runs because a
@@ -37,8 +37,10 @@ class_name AgentJobs
 ## How many runs of each kind at once. Each mostly waits on a network round trip, so more than
 ## one is cheap; more than a couple is a burst against the author's quota.
 const LIMITS := {"text": 2, "image": 2}
-## A run that takes longer than this is abandoned rather than watched forever.
-const TIMEOUT_S := {"text": 420, "image": 600}
+## NO RUN HAS A TIME LIMIT BY DEFAULT. A writer that is still running is still working - a long
+## plan, a set dresser looking at its own pictures - and killing it for the clock threw away work
+## the person was waiting for (a cards plan was cut at 420 s). The person ends a run with [method
+## cancel]; a caller that wants a limit asks for one with `timeout`.
 
 ## id -> the job as submitted, while it waits: [{id, kind, ...}], in submission order.
 static var _queue: Array = []
@@ -110,7 +112,7 @@ static func clear_outputs(job: Dictionary) -> String:
 ##   lane     - optional: jobs sharing a lane run one at a time, in order
 ##   label    - optional: a few words for logs and status lines
 ##   tools_url - text only, optional: the [AgentTools] endpoint whose tools the writer may call
-##   timeout  - optional: seconds before the run is abandoned, when not [constant TIMEOUT_S]'s
+##   timeout  - optional: seconds before the run is abandoned; none by default
 static func submit(spec: Dictionary) -> String:
 	if read_only():
 		return ""
@@ -178,8 +180,8 @@ static func pump() -> void:
 		var job: Dictionary = _running[id]
 		var pid := int(job["pid"])
 		if Subprocess.alive(pid):
-			var limit := int(job.get("timeout", TIMEOUT_S[String(job["kind"])]))
-			if int(Time.get_unix_time_from_system()) - int(job["started"]) > limit:
+			var limit := int(job.get("timeout", 0))
+			if limit > 0 and int(Time.get_unix_time_from_system()) - int(job["started"]) > limit:
 				Subprocess.stop(pid)
 				_running.erase(id)
 				_ended[id] = {"ok": false, "text": "", "path": "", "label": job.get("label", ""),

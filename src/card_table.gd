@@ -685,12 +685,17 @@ static func legible_ink(ink: Color, stock: Color, least := INK_CONTRAST) -> Colo
 
 
 static var _fonts := {}
+## ...guarded: the set dresser's table is built on a worker thread while the show may build its own
+static var _fonts_lock := Mutex.new()
 
 ## The [Font] for a face key (or a font path), loaded once. A variable face is set at the
 ## weight the registry names.
 static func font(key: String) -> Font:
-	if _fonts.has(key):
-		return _fonts[key]
+	_fonts_lock.lock()
+	var known: Font = _fonts.get(key)
+	_fonts_lock.unlock()
+	if known != null:
+		return known
 	var entry: Dictionary = FACES.get(key, {})
 	var path := String(entry.get("file", key))
 	var f: Font = null
@@ -711,5 +716,7 @@ static func font(key: String) -> Font:
 		f = fv
 	if f == null:
 		f = ThemeDB.fallback_font
+	_fonts_lock.lock()
 	_fonts[key] = f
+	_fonts_lock.unlock()
 	return f

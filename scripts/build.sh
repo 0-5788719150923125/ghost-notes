@@ -8,6 +8,8 @@
 #   scripts/build.sh --no-setup linux    # use an already installed Godot and templates
 #   scripts/build.sh --no-smoke linux    # skip the exported Linux launch check
 #   scripts/build.sh --install android  # and put the APK on a connected phone
+#                                       # (setup fetches a minimal Android SDK into build/tools/android;
+#                                       #  see scripts/setup_android.py - it accepts Google's SDK licenses)
 #   scripts/build.sh --no-check         # skip the gates. The build is then not known to work.
 #   scripts/build.sh --list             # what targets exist
 #
@@ -47,6 +49,7 @@ install=0
 list=0
 setup=1
 smoke=1
+need_android=0
 wanted=()
 for arg in "$@"; do
 	case "$arg" in
@@ -160,6 +163,7 @@ if [ "$setup" -eq 1 ]; then
 			case "${platforms[$i]:-}" in
 				Linux|"Linux/X11") setup_args+=(--target linux) ;;
 				"Windows Desktop") setup_args+=(--target windows) ;;
+				Android) setup_args+=(--target android); need_android=1 ;;
 			esac
 		done
 	fi
@@ -236,6 +240,17 @@ fi
 say "building $stamp, $mode, Godot $short"
 mkdir -p "$OUT"
 
+# An Android target with setup on builds against its own minimal SDK, JDK-checked keystore and
+# Godot config (build/tools/android), never the developer's Android Studio. --no-setup keeps the
+# machine's own SDK and editor settings, as before.
+if [ "$need_android" -eq 1 ]; then
+	if ! android_env=$(python3 scripts/setup_android.py --accept-licenses --print-env); then
+		bad "could not prepare the Android SDK."
+		exit 2
+	fi
+	eval "$android_env"
+fi
+
 # -- build ------------------------------------------------------------------------
 
 ## The Android SDK Godot will use: the editor's own setting first, then ANDROID_HOME. On this
@@ -296,7 +311,7 @@ for target in "${wanted[@]}"; do
 	status=$?
 	# Only what is worth reading; the whole log is printed if the build fails.
 	grep -iE 'error|warning|failed' "$log" \
-		| grep -viE 'daemon at tcp:|^[[:space:]]*at: ' \
+		| grep -viE 'daemon at tcp:|^[[:space:]]*at: |_update_scan_actions' \
 		| sed 's/^/    /' | head -20
 	size=0
 	[ -f "$artifact" ] && size=$(stat -c%s "$artifact" 2>/dev/null || echo 0)
@@ -312,6 +327,13 @@ for target in "${wanted[@]}"; do
 	if [ "$smoke" -eq 1 ] && { [ "$platform" = "Linux" ] || [ "$platform" = "Linux/X11" ]; }; then
 		if ! scripts/smoke-export.sh "$artifact"; then
 			bad "$name exported, but its standalone launch check failed."
+			rm -f "$artifact"
+			exit 1
+		fi
+	fi
+	if [ "$platform" = "Android" ] && [ "$need_android" -eq 1 ]; then
+		if ! python3 scripts/setup_android.py --verify "$artifact"; then
+			bad "$name exported, but its signature does not verify."
 			rm -f "$artifact"
 			exit 1
 		fi

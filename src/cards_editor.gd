@@ -1114,7 +1114,10 @@ func _refresh_rows() -> void:
 					have.append("%d thing%s" % [things.size(), "" if things.size() == 1 else "s"])
 				text = ", ".join(have)
 				if _producer.state_of("table") == "running" and not _table_progress().is_empty():
-					text = "setting the table - " + _table_progress()
+					# THE BUDGET IN VIEW: a run with no clock ends at its last picture, and the row says how near that is
+					var looked := _producer.table_looks()
+					text = "setting the table - %s%s" % ["%d of %d looks - " % [looked, SetDresserTools.LOOKS] if looked >= 0 else "",
+						_table_progress()]
 			"Card":
 				if doc.is_empty():
 					doc = _episode.document()

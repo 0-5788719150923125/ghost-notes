@@ -83,10 +83,10 @@ func _run() -> void:
 	_ok(rig.leads() and medium._key_flame == -1 and medium.lead_name() == "the sun", "the sun leads, every candle a fill (%s)" % medium.lead_name())
 	var cast_screens := 0
 	for l in medium._lights:
-		cast_screens += 1 if (((l as Dictionary)["light"] as OmniLight3D).shadow_caster_mask & Lights.SCREEN_LAYER) != 0 else 0
+		cast_screens += 1 if (((l as Dictionary)["light"] as OmniLight3D).shadow_caster_mask & Lights.SCREEN_MASK) != 0 else 0
 	for l in rig.lamps:
-		cast_screens += 1 if (((l as Dictionary)["light"] as Light3D).shadow_caster_mask & Lights.SCREEN_LAYER) != 0 else 0
-	cast_screens += 1 if (medium._lamp.shadow_caster_mask & Lights.SCREEN_LAYER) != 0 else 0
+		cast_screens += 1 if (((l as Dictionary)["light"] as Light3D).shadow_caster_mask & Lights.SCREEN_MASK) != 0 else 0
+	cast_screens += 1 if (medium._lamp.shadow_caster_mask & Lights.SCREEN_MASK) != 0 else 0
 	_ok(cast_screens == 0 and not medium._lights.is_empty(), "no light but the sun casts with its screens (%d do)" % cast_screens)
 	var shadow_casters := 0
 	for l in rig.lamps:

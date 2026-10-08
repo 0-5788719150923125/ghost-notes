@@ -6,6 +6,7 @@
 #   scripts/check.sh --only a,b      # just these (gate names without .gd; parse/docs/scene_smoke too)
 #   scripts/check.sh --skip a,b      # everything but these
 #   scripts/check.sh --fail-fast     # stop at the first failing gate (CI: no compute spent on a red run)
+#   scripts/check.sh --jobs 4        # run four gates at once (`auto` = one per core); the default is 1
 #   scripts/check.sh --list          # what would run, and how
 #
 # Logs go to dist/check/<gate>.log; a passing gate's log is removed unless --keep.
@@ -31,6 +32,14 @@
 
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
+declare -A running=()   # pid -> gate, while --jobs runs several at once
+## A gate runs in a process group of its own under --jobs (set -m), so a stop reaches its Godot and
+## everything below it. Exact groups, by the pid this script started; never a pattern.
+stop_running() {
+	local p
+	for p in "${!running[@]}"; do kill -TERM -- "-$p" 2>/dev/null; done
+}
+trap stop_running EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
@@ -44,11 +53,12 @@ GPU=(clown_anchor_check clown_coat_check clown_controls_check clown_coverage_che
 	rain_check umbra_shader_check umbra_sim_check intro_blur_check stage_filter_check
 	ambience_severity_check feedback_ask_check film_clock_check fractal_depth_check
 	strata_band_check tunnel_face_check tunnel_smooth_check vapor_check portrait_render_check
-	light_screen_check)
+	light_screen_check table_thread_check)
 
 gpu=0
 keep=0
 fail_fast=0
+jobs=1
 list=0
 only=""
 skip=""
@@ -57,6 +67,8 @@ while [ "$#" -gt 0 ]; do
 		--gpu) gpu=1 ;;
 		--keep) keep=1 ;;
 		--fail-fast) fail_fast=1 ;;
+		--jobs|-j) jobs="${2:-1}"; shift ;;
+		--jobs=*) jobs="${1#--jobs=}" ;;
 		--list) list=1 ;;
 		--only) only="${2:-}"; shift ;;
 		--only=*) only="${1#--only=}" ;;
@@ -197,12 +209,21 @@ say "${#gates[@]} gate(s)$([ "$gpu" -eq 1 ] && echo ', GPU included')"
 failed=()
 dirty=()
 t_all=$(date +%s)
-for g in "${gates[@]}"; do
-	log="$OUT/$g.log"
+
+## Run one gate; leave its exit code and seconds in $OUT/.res.<gate> for settle.
+run_one() {
+	local g="$1" t0 rc
 	t0=$(date +%s)
-	run_gate "$g" "$log"
+	run_gate "$g" "$OUT/$g.log"
 	rc=$?
-	dt=$(( $(date +%s) - t0 ))
+	echo "$rc $(( $(date +%s) - t0 ))" >"$OUT/.res.$g"
+}
+
+## Print one finished gate's verdict. Returns 1 when it failed.
+settle() {
+	local g="$1" log="$OUT/$1.log" rc dt
+	read -r rc dt <"$OUT/.res.$g"
+	rm -f "$OUT/.res.$g"
 	# a shader compile check reports through its output, not its exit code
 	if [ "$rc" -eq 0 ] && grep -q 'SHADER ERROR' "$log"; then
 		rc=98
@@ -226,10 +247,66 @@ for g in "${gates[@]}"; do
 		if [ "$fail_fast" -eq 1 ]; then
 			echo "  --- $log (first 80 lines) ---"
 			head -n 80 "$log" | sed 's/^/  | /'
-			break
 		fi
+		return 1
 	fi
-done
+}
+
+[ "$jobs" = auto ] && jobs=$(nproc 2>/dev/null || echo 1)
+if ! [[ "$jobs" =~ ^[1-9][0-9]*$ ]]; then
+	bad "--jobs wants a positive number or 'auto', not '$jobs'."
+	exit 2
+fi
+
+if [ "$jobs" -le 1 ]; then
+	for g in "${gates[@]}"; do
+		run_one "$g"
+		settle "$g" || [ "$fail_fast" -eq 0 ] || break
+	done
+else
+	say "$jobs at a time"
+	set -m
+	## `parse` first and alone: it registers the class names every other gate loads.
+	queue=()
+	for g in "${gates[@]}"; do
+		if [ "$g" = parse ]; then
+			run_one parse
+			settle parse || { [ "$fail_fast" -eq 0 ] || queue=(); }
+		else
+			queue+=("$g")
+		fi
+	done
+	[ "${#failed[@]}" -gt 0 ] && [ "$fail_fast" -eq 1 ] && queue=()
+	## The long gates start first, so none of them is left running alone at the end.
+	SLOW=(sand_settle_check comic_motion_check song_check fractal_travel_check table_wash_check
+		doc_sync_check sand_warm_check scene_smoke sampler_check voice_check)
+	ordered=()
+	for g in "${SLOW[@]}"; do in_list "$g" "${queue[*]}" && ordered+=("$g"); done
+	for g in "${queue[@]}"; do in_list "$g" "${ordered[*]}" || ordered+=("$g"); done
+	queue=("${ordered[@]}")
+	stop=0
+	while [ "${#queue[@]}" -gt 0 ] || [ "${#running[@]}" -gt 0 ]; do
+		while [ "$stop" -eq 0 ] && [ "${#queue[@]}" -gt 0 ] && [ "${#running[@]}" -lt "$jobs" ]; do
+			g="${queue[0]}"
+			queue=("${queue[@]:1}")
+			run_one "$g" &
+			running[$!]="$g"
+		done
+		[ "${#running[@]}" -gt 0 ] || break
+		done_pid=""
+		wait -n -p done_pid
+		g="${running[$done_pid]:-}"
+		[ -n "$g" ] || continue
+		unset "running[$done_pid]"
+		if ! settle "$g" && [ "$fail_fast" -eq 1 ] && [ "$stop" -eq 0 ]; then
+			stop=1
+			stop_running
+			wait 2>/dev/null
+			for g in "${running[@]}"; do rm -f "$OUT/.res.$g"; done
+			running=()
+		fi
+	done
+fi
 
 echo
 t_total=$(( $(date +%s) - t_all ))

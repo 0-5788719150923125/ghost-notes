@@ -3,7 +3,8 @@ class_name Effects
 
 ## Effects - air that moves and light that bursts: FOG that rolls through a stretch of the scene,
 ## MOTES that wander about it (pixies, fireflies, flies, embers, dust) and leave and come back, and BURSTS
-## of sparks, glitter, embers, flame, smoke or stars at a moment. An agent describes them as data -
+## of sparks, glitter, embers, flame, smoke or stars at a moment - and what the wind carries, DRIFTING
+## down and across, settling and carried off again ([Drifts]). An agent describes them as data -
 ## the registries' words are what it reads ([method describe]) - [method sanitize] makes whatever it
 ## wrote buildable, and [method build] makes the nodes. Generic: a host names its REGIONS (boxes in
 ## its own space) and its MOMENTS (a time, how long, and where the emitter is through it), and the
@@ -26,6 +27,7 @@ const KINDS := {
 	"fog": "a bank or a layer of fog or smoke, rolling slowly through one stretch of the scene, lit by the lights in it",
 	"motes": "a few points of light or dust that wander about one stretch of the scene, now and then leaving it and coming back",
 	"burst": "a burst of particles at a moment of the reading - sparks, glitter, embers, flame, smoke or stars - thrown from where that moment happens",
+	"drift": "what the wind carries - petals, blossoms, leaves, seeds, keys, feathers - falling from overhead or blown across, settling on the table and carried off it again by a gust",
 }
 
 ## What a mote can be: its shape, its size (millimeters - its core; its halo is wider) and the range
@@ -162,11 +164,13 @@ static func describe(regions: Dictionary, moments: Dictionary) -> String:
 		lines.append("- %s: %s (%s mm, %s to %s)" % [k, String(bo["about"]), _mm(float(bo["size"])),
 			_mm((bo["sizes"] as Vector2).x), _mm((bo["sizes"] as Vector2).y)])
 	lines.append("")
+	lines.append_array(Drifts.describe())
+	lines.append("")
 	lines.append("MOMENTS a burst can be `on`:")
 	for m in moments:
 		lines.append("- \"%s\": %s" % [m, String(moments[m])])
 	lines.append("")
-	lines.append("At most %d effects, %d of them fog; leave out any field to take the look's own." % [MAX_EFFECTS, MAX_FOG])
+	lines.append("At most %d effects, %d of them fog and %d drifts; leave out any field to take the look's own." % [MAX_EFFECTS, MAX_FOG, Drifts.MAX_DRIFTS])
 	return "\n".join(lines)
 
 
@@ -179,6 +183,7 @@ static func sanitize(raw: Variant, palette: Array, regions: Array, moments: Arra
 	var out: Array = []
 	var fogs := 0
 	var motes := 0
+	var drifts := 0
 	var pal: Array = palette if not palette.is_empty() else ["#ffe9a8"]
 	for e in (raw if raw is Array else []):
 		if out.size() >= MAX_EFFECTS:
@@ -241,6 +246,13 @@ static func sanitize(raw: Variant, palette: Array, regions: Array, moments: Arra
 				fx["life"] = Props._num(d.get("life"), float(base["life"]), 0.15, 6.0)
 				fx["glow"] = Props._num(d.get("glow"), 0.6, 0.0, 1.0)
 				fx["which"] = _which(d.get("which", "every"))
+			"drift":
+				if drifts >= Drifts.MAX_DRIFTS:
+					continue
+				fx = Drifts.sanitize(d)
+				if fx.is_empty():
+					continue
+				drifts += 1
 			_:
 				continue
 		out.append(fx)
@@ -358,6 +370,8 @@ static func build(effects: Array, stage: Dictionary, seed: int) -> Air:
 				air.motes.append(m)
 			"burst":
 				air.bursts.append(_burst(fx, salt, air.root))
+			"drift":
+				air.drifts.append(Drifts.build(fx, stage, salt, air.root))
 	return air
 
 
@@ -937,17 +951,20 @@ class Air:
 	var fogs: Array = []
 	var motes: Array = []
 	var bursts: Array = []
+	var drifts: Array = []              # what the wind carries ([Drifts])
 
 	func has_fog() -> bool:
 		return not fogs.is_empty()
 
 	## The moments each burst is `on` have changed (or are first known): its particles are born again
-	## from [param moments] (`{name: [{t, dur, path, from}]}`) - only where its own moments changed.
+	## from [param moments] (`{name: [{t, dur, path, from}]}`) - only where its own moments changed: a
+	## time, a length, or the path its emitter rides (a card's pose can move while its moment's time
+	## stands).
 	func plan(moments: Dictionary) -> void:
 		for b in bursts:
 			var fx: Dictionary = b["fx"]
 			var mine: Array = Effects.picked(moments.get(String(fx["on"]), []), fx.get("which", "every"))
-			var key := str(mine.map(func(m: Dictionary) -> String: return "%.3f/%.3f" % [float(m["t"]), float(m.get("dur", 0.0))]))
+			var key := str(mine.map(func(m: Dictionary) -> String: return "%.3f/%.3f/%d" % [float(m["t"]), float(m.get("dur", 0.0)), hash(m.get("path", []))]))
 			if key == String(b["planned"]):
 				continue
 			b["planned"] = key
@@ -969,6 +986,8 @@ class Air:
 			(f["mat"] as ShaderMaterial).set_shader_parameter("show_time", t)
 		for b in bursts:
 			((b["layer"] as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("show_time", t)
+		for d in drifts:
+			Drifts.tick(d, t)
 		for pop in motes:
 			var mm: MultiMesh = (pop["layer"] as Dictionary)["mm"]
 			var each: Array = pop["each"]

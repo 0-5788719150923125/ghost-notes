@@ -36,7 +36,7 @@ class_name SetDresserTools
 ##           exactly as an answer in words would have landed ([method CardProducer._land_table])
 ##
 ## Every picture counts against [constant LOOKS]; words cost nothing. A picture comes with the
-## question to ask of it ([constant JUDGE_THING], [constant JUDGE_TABLE]): told only to fix what was
+## question to ask of it ([constant JUDGE_THING], [constant JUDGE_TABLE], [constant JUDGE_SET]): told only to fix what was
 ## wrong, a model looked at a 1 cm disc it had named an oil lamp and called it perfect. Before it is handed in the
 ## table is SET at least once since its last change, wherever a table can be stood - the one look the
 ## old single reply never had.
@@ -49,13 +49,17 @@ const SUBMITTED := "submitted.json"
 ## What to ask of a picture before going on: say what it shows, then judge it against what was meant.
 const JUDGE_THING := "Before you go on, say what each picture actually shows - its shape and proportions against the grid (1 cm squares, a brighter line every 5), its material - and whether a stranger would name it as you did. Put again what does not read: a part floating or sunk, a thing too flat or too small to read, a vessel that reads as a plate, a bundle that reads as a stick."
 const JUDGE_TABLE := "Before you submit, say what the frame actually shows: can each thing be told for what it is at this size, is any hidden, crowded or left off, and does the light come from where you meant? Fix what does not, and set the table again."
+## ...and when every thing stood in the shot: THE TABLE IS SET, and it is told so. Told only to fix what was
+## wrong, a set dresser read a thing made 88% of its size as a fault and set the table round after round
+## chasing it, the shot holding no layout where nothing is made smaller. The table makes a thing smaller
+## only as far as it still reads (see TableMedium._stand), and leaves off what will not fit even so.
+const JUDGE_SET := "Every thing stands in the shot. Say what the frame actually shows: can each thing be told for what it is, and does the light come from where you meant? If so, the table is set - %s. Set it again only to fix what is plainly wrong."
 const JUDGE_AIR := "Say what the pictures show of it: is it where you meant, as thick or as bright as you meant, in colors that belong to this table - and can every card still be seen through it? Put it again to change it."
 const JUDGE_OVERHEAD := "Say what the plan shows: the top's shape and edge, each layer where you meant it and turned as you meant, what hangs over the edge, and whether the cloths, the things and the cards sit together as one table. Put again what does not."
 const JUDGE_TITLE := "Say what the picture shows: can the name be read at a glance - and would it still be, shrunk to a thumbnail the size of a stamp? Does its color stand clear of every part of the table behind it, and belong to this table's world? Choose again if not."
 const JUDGE_LIGHT := "Say what the pictures show of the light: where it comes from, what it falls through and where its shade lies, whether it moves as you meant - and whether it is the light of this episode's world and hour, with every card still readable in it. Put it again to change it."
-## How many pictures one set dresser may take, and how long its whole run may last (seconds).
+## How many pictures one set dresser may take. Its run has no time limit (see AgentJobs).
 const LOOKS := 40
-const TIMEOUT := 2100
 
 var episode: CardEpisode
 var plan: Dictionary
@@ -116,12 +120,12 @@ func list_tools() -> Array:
 			"inputSchema": {"type": "object", "properties": {
 				"things": {"type": "array", "items": {"type": "object"}, "description": "things, each {name, why, place, group, turn, parts}"},
 				"materials": {"type": "object", "description": "materials by name, each {kind, color, ...}"},
-				"effects": {"type": "array", "items": {"type": "object"}, "description": "the air: fog, motes and bursts, each {name, kind, ...}"},
+				"effects": {"type": "array", "items": {"type": "object"}, "description": "the air: fog, motes, bursts and drifts, each {name, kind, ...}"},
 				"idea": {"type": "string", "description": "two or three sentences: this table, and the reader who set it"},
 				"top": {"type": "object", "description": "the table's top: {shape, size, corner, sides, scallops, thickness, edge, material, boards, tiles, pattern, inlay, relief, why} - replaces the top before"},
 				"layers": {"type": "array", "items": {"type": "object"}, "description": "cloths laid on the top, bottom first: each {name, what, outline, size, drop, at, turn, fabric, pattern, border, fringe, relief, sheen}, replacing a layer of the same name (a new one goes on top)"},
-				"light": {"type": "object", "description": "the table's light, {why, sky, sun, through, clouds, birds, lamps, shadows}: each part given replaces that part (null takes it away); in `through`, `lamps` and `shadows` an entry replaces the one of the same name (an empty list takes them all away)"}}}},
-		{"name": "remove", "description": "Take things - or effects of its air, layers, or parts of its light (what the sun falls through, a lamp or a shadow, by name; or \"sun\", \"clouds\", \"birds\", or \"light\" for all of it) - off the table you are setting, by name.",
+				"light": {"type": "object", "description": "the table's light, {why, sky, sun, through, clouds, wind, birds, lamps, shadows}: each part given replaces that part (null takes it away); in `through`, `lamps` and `shadows` an entry replaces the one of the same name (an empty list takes them all away)"}}}},
+		{"name": "remove", "description": "Take things - or effects of its air, layers, or parts of its light (what the sun falls through, a lamp or a shadow, by name; or \"sun\", \"clouds\", \"wind\", \"birds\", or \"light\" for all of it) - off the table you are setting, by name.",
 			"inputSchema": {"type": "object", "properties": {"names": {"type": "array", "items": {"type": "string"}}}, "required": ["names"]}},
 		{"name": "look", "description": "Look at one thing close up, from four sides - its front, its right side, from above, and as the camera at the reader's chair sees it - on a centimeter grid (a brighter line every 5 cm).",
 			"inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
@@ -129,7 +133,7 @@ func list_tools() -> Array:
 			"inputSchema": {"type": "object", "properties": {}}},
 		{"name": "overhead", "description": "Photograph the table from straight above, lit as the show lights it: the top, its edge and its layers as laid, the things on it and the cards face down in their spread, the reader's side at the bottom, and a yellow line round the stretch the camera sees. A plan, for laying cloths square or as a diamond and seeing what hangs over the edge.",
 			"inputSchema": {"type": "object", "properties": {}}},
-		{"name": "watch", "description": "Watch something on this episode's own table in motion - one effect of its air, or a moving part of its light: a burst photographed four times in the second after the moment it marks (a card leaping from the deck, one held up and twirled...), fog or motes four times a few seconds apart; \"clouds\" as one passes over the sun, \"birds\" as a shadow crosses, what the sun falls through as it stirs, a lamp as it flickers, flashes or passes, a shadow as it swings, turns or ripples (by name). A sheet of four pictures.",
+		{"name": "watch", "description": "Watch something on this episode's own table in motion - one effect of its air, or a moving part of its light: a burst photographed four times in the second after the moment it marks (a card leaping from the deck, one held up and twirled...), fog or motes four times a few seconds apart, a drift through a gust; \"clouds\" as one passes over the sun, \"wind\" through its strongest gust, \"birds\" as a shadow crosses, what the sun falls through as it stirs, a lamp as it flickers, flashes or passes, a shadow as it swings, turns or ripples (by name). A sheet of four pictures.",
 			"inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
 		{"name": "title", "description": "Choose the color the show's name is printed in at the opening, over this table thrown far out of focus - the video's first seconds, and its thumbnail. Answers with a picture of that opening and how far the color stands out from the table behind the name.",
 			"inputSchema": {"type": "object", "properties": {
@@ -379,16 +383,8 @@ func _set_table() -> Dictionary:
 	_set_since_change = true
 	var lines := PackedStringArray(["The table, from the camera's place - the deck at the %s, %d cards face down in their spread:" %
 		[String(got["deck"]), int(got["cards"])]])
-	for s in got["stood"]:
-		var d: Dictionary = s
-		var at: Vector2 = d["at"]
-		var where := "%d cm %s of the middle, %d cm %s" % [roundi(absf(at.x)), "right" if at.x >= 0.0 else "left",
-			roundi(absf(at.y)), "toward the camera" if at.y >= 0.0 else "back"]
-		var small := (" - made smaller, to %d%%, to fit" % roundi(float(d["k"]) * 100.0)) if float(d["k"]) < 0.995 else ""
-		lines.append("- %s (%s): %s; %d%% of the picture's height%s" % [String(d["name"]), String(d["place"]), where,
-			roundi(float(d["tall"]) * 100.0), small])
-	for n in got["left_off"]:
-		lines.append("- %s: LEFT OFF - no room for it in its place, clear of the cards, in the shot and not in front of another group" % String(n))
+	var stood := stood_lines(got)
+	lines.append_array(stood["lines"])
 	lines.append("The light is led by %s." % String(got["key"]) + (" Held down by pale cloth near it: %s." % ", ".join(PackedStringArray(got["held_down"])) if not (got["held_down"] as Array).is_empty() else ""))
 	var lit := _light_line(safe)
 	if not lit.is_empty():
@@ -398,9 +394,41 @@ func _set_table() -> Dictionary:
 		lines.append(air)
 	lines.append("The table: %s." % Tables.summary(safe))
 	if got.get("image") != null:
-		lines.append(JUDGE_TABLE)
+		lines.append(judge_of(int(stood["faults"]), not _title.is_empty()))
 	lines.append(_looks_line(got.get("image") != null))
 	return {"text": "\n".join(lines), "images": [got["image"]] if got.get("image") != null else []}
+
+
+## Where each thing [param got] ([method TablePreview.table]) stood, and what was left off: `lines`, and `faults` -
+## how many were left off. A thing made smaller to fit is said at the size it is shown, not as a fault.
+static func stood_lines(got: Dictionary) -> Dictionary:
+	var lines := PackedStringArray()
+	for s in got["stood"]:
+		var d: Dictionary = s
+		var at: Vector2 = d["at"]
+		var where := "%d cm %s of the middle, %d cm %s" % [roundi(absf(at.x)), "right" if at.x >= 0.0 else "left",
+			roundi(absf(at.y)), "toward the camera" if at.y >= 0.0 else "back"]
+		var k := float(d["k"])
+		var small := (" - shown at %d%% of its size, to fit (as it may be)" % roundi(k * 100.0)) if k < 0.995 else ""
+		lines.append("- %s (%s): %s; %d%% of the picture's height%s" % [String(d["name"]), String(d["place"]), where,
+			roundi(float(d["tall"]) * 100.0), small])
+	for n in got["left_off"]:
+		lines.append("- %s: LEFT OFF - no room for it in its place, clear of the cards, in the shot and not in front of another group" % String(n))
+	return {"lines": lines, "faults": (got["left_off"] as Array).size()}
+
+
+## What to ask of a set table's picture: to fix what is wrong while [param faults] remain ([method
+## stood_lines]), else that THE TABLE IS SET - and what is left to do: the title's color, unless
+## [param titled], then submit.
+static func judge_of(faults: int, titled: bool) -> String:
+	if faults > 0:
+		return JUDGE_TABLE
+	return JUDGE_SET % ("submit it" if titled else "choose the title's color and look at the opening, then submit")
+
+
+## How many pictures this set dresser has taken, of [constant LOOKS].
+func looks_used() -> int:
+	return _looks
 
 
 ## THE TABLE FROM ABOVE: a plan of the draft on the episode's own table.
@@ -559,7 +587,7 @@ func _merge_light(d: Dictionary) -> void:
 
 
 ## A part of the light taken off by [param name]: what the sun falls through, a lamp or a shadow, by its
-## name; or "sun", "sky", "clouds", "birds" - or "light", all of it (the table then lit as every table was).
+## name; or "sun", "sky", "clouds", "wind", "birds" - or "light", all of it (the table then lit as every table was).
 func _unlight(name: String) -> bool:
 	if not _light_put:
 		return false
@@ -567,7 +595,7 @@ func _unlight(name: String) -> bool:
 	if low == "light":
 		_light = {}
 		return true
-	if low in ["sun", "sky", "clouds", "birds"] and _light.has(low):
+	if low in ["sun", "sky", "clouds", "wind", "birds"] and _light.has(low):
 		_light.erase(low)
 		return true
 	for key in ["through", "lamps", "shadows"]:
@@ -620,6 +648,7 @@ func _describe_light() -> PackedStringArray:
 	if not (light["birds"] as Dictionary).is_empty():
 		out.append("Birds: %d crossing%s in the first ten minutes, each shadow over the table for about %.1f s." % [int(w["birds"]),
 			"" if int(w["birds"]) == 1 else "s", float(w["over"])])
+	out.append_array(_describe_wind(light))
 	var in_shot := func(at: Vector3) -> bool: return CardTable.in_shot(cam, fov, at)
 	var lamps_at := {}
 	for l in light["lamps"]:
@@ -704,6 +733,41 @@ func _light_line(safe: Dictionary) -> String:
 
 ## Whether [param name] is a part of the light that moves: "clouds", "birds", or something the sun falls
 ## through or a lamp, by its name.
+## THE WIND IN WORDS: how often it gusts in the first ten minutes and how hard, and - for what drifts in
+## the air - how many of those gusts lift what lies on the cloth.
+func _describe_wind(light: Dictionary) -> PackedStringArray:
+	var out := PackedStringArray()
+	var wind: Dictionary = light.get("wind", {})
+	var drifts: Array = []
+	for e in _safe().get("effects", []):
+		if String((e as Dictionary)["kind"]) == "drift":
+			drifts.append(e)
+	if wind.is_empty() and drifts.is_empty():
+		return out
+	var p := Winds.plan(wind, hash([episode.seed, "wind"]))
+	var n := 0
+	var most := 0.0
+	for i in (p["starts"] as PackedFloat32Array).size():
+		if float((p["starts"] as PackedFloat32Array)[i]) < 600.0:
+			n += 1
+			most = maxf(most, float((p["peaks"] as PackedFloat32Array)[i]))
+	out.append("The wind%s: %d gust%s in the first ten minutes, the strongest %.1f m/s over a breeze of %.1f." % ["" if not wind.is_empty() else " (none written: still air, a faint breath)",
+		n, "" if n == 1 else "s", most, float(p["breeze"])])
+	for d in drifts:
+		var e: Dictionary = d
+		if float(e["grip"]) >= 0.999:
+			out.append("  - \"%s\": nothing lying is ever lifted (grip 1)." % String(e["name"]))
+			continue
+		var lift := Drifts.LIFT.x + (Drifts.LIFT.y - Drifts.LIFT.x) * float(e["grip"])
+		var lifts := 0
+		for i in (p["starts"] as PackedFloat32Array).size():
+			if float((p["starts"] as PackedFloat32Array)[i]) < 600.0 and float((p["peaks"] as PackedFloat32Array)[i]) >= lift:
+				lifts += 1
+		out.append("  - \"%s\": %d of those gusts blow hard enough (%.1f m/s) to lift what lies on the cloth%s." % [String(e["name"]), lifts, lift,
+			" - none will: lower its grip, or give the wind more gusts" if lifts == 0 else ""])
+	return out
+
+
 func _light_part(name: String) -> bool:
 	var light := Lights.sanitize(_light)
 	if light.is_empty():
@@ -712,6 +776,8 @@ func _light_part(name: String) -> bool:
 		return not (light["clouds"] as Dictionary).is_empty()
 	if name.to_lower() == "birds":
 		return not (light["birds"] as Dictionary).is_empty()
+	if name.to_lower() == "wind":
+		return not (light["wind"] as Dictionary).is_empty()
 	for key in ["through", "lamps", "shadows"]:
 		for e in light[key]:
 			if String((e as Dictionary)["name"]) == name:
@@ -729,6 +795,8 @@ func _light_names() -> String:
 			out.append("clouds")
 		if not (light["birds"] as Dictionary).is_empty():
 			out.append("birds")
+		if not (light["wind"] as Dictionary).is_empty():
+			out.append("wind")
 		for g in light["through"]:
 			if float((g as Dictionary).get("sway", 0.0)) > 0.0 and String((g as Dictionary)["kind"]) in ["blinds", "leaves", "fronds", "branches", "awning", "parasol"]:
 				out.append(String((g as Dictionary)["name"]))
@@ -975,6 +1043,11 @@ func _describe_air(names: Array) -> PackedStringArray:
 				what = "%s on %s (%s), %d of them, %s mm" % [String(built["look"]), String(built["on"]),
 					("times " + ", ".join(PackedStringArray((which as Array).map(func(x: Variant) -> String: return str(x))))) if which is Array else String(which),
 					int(built["count"]), Effects._mm(float(built["size"]))]
+			"drift":
+				what = "%s %s, %d in the air at once, %s mm, %d%% settling, grip %.1f%s" % [String(built["look"]),
+					"falling from overhead" if String(built["from"]) == "above" else "blown in on the wind", int(built["count"]),
+					Effects._mm(float(built["size"])), roundi(float(built["settle"]) * 100.0), float(built["grip"]),
+					(", %d lying at the start" % int(built["lying"])) if int(built["lying"]) > 0 else ""]
 		out.append("- %s: %s" % [String(nm), what])
 		for tr in troubles:
 			out.append("   - " + tr)
@@ -986,7 +1059,7 @@ func _air_troubles(e: Dictionary) -> PackedStringArray:
 	var out := PackedStringArray()
 	var kind := String(e.get("kind", "")).strip_edges().to_lower()
 	if not Effects.KINDS.has(kind):
-		out.append("\"%s\" is not a kind of effect (fog, motes, burst)" % kind)
+		out.append("\"%s\" is not a kind of effect (%s)" % [kind, ", ".join(PackedStringArray(Effects.KINDS.keys()))])
 		return out
 	if kind == "fog" or kind == "motes":
 		var where := String(e.get("where", "")).strip_edges().to_lower()
@@ -1003,6 +1076,17 @@ func _air_troubles(e: Dictionary) -> PackedStringArray:
 				out.append("a %s is %s to %s mm: its size was kept within that" % [look, Effects._mm(r.x), Effects._mm(r.y)])
 		if kind == "motes" and looks.has(look) and String((looks[look] as Dictionary)["shape"]) == "speck" and Props._flag(e.get("light"), false):
 			out.append("a %s is a dark speck and carries no light: it was left unlit" % look)
+	if kind == "drift":
+		var look := String(e.get("look", "")).strip_edges().to_lower()
+		if not Drifts.LOOKS.has(look):
+			out.append("\"%s\" is not a look of drift: %s" % [look, ", ".join(PackedStringArray(Drifts.LOOKS.keys()))])
+		elif e.has("size") and (e["size"] is float or e["size"] is int):
+			var r: Vector2 = (Drifts.LOOKS[look] as Dictionary)["sizes"]
+			if float(e["size"]) < r.x or float(e["size"]) > r.y:
+				out.append("%s are %s to %s mm: their size was kept within that" % [look, Effects._mm(r.x), Effects._mm(r.y)])
+		var from := String(e.get("from", "above")).strip_edges().to_lower()
+		if not Drifts.FROMS.has(from):
+			out.append("\"%s\" is not where a drift comes from (%s): above" % [from, ", ".join(PackedStringArray(Drifts.FROMS.keys()))])
 	if kind == "burst":
 		var on := String(e.get("on", "")).strip_edges().to_lower()
 		if not CardTable.MOMENTS.has(on):
@@ -1033,6 +1117,9 @@ func _air_line(safe: Dictionary) -> String:
 				parts.append("%s (%s, %s)" % [String(d["name"]), Effects.count_of(String(d["look"]), int(d["count"])), String(d["where"])])
 			"burst":
 				bursts += 1
+			"drift":
+				parts.append("%s (%s, %d in the air%s)" % [String(d["name"]), String(d["look"]), int(d["count"]),
+					(", %d lying" % int(d["lying"])) if int(d["lying"]) > 0 else ""])
 	if parts.is_empty() and bursts == 0:
 		return ""
 	return "The air in this picture: %s.%s" % [", ".join(parts) if not parts.is_empty() else "none still", (" Its %d burst%s only show at %s moment - watch %s." % [bursts,

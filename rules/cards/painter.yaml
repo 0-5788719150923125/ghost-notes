@@ -1,0 +1,151 @@
+# THE PAINTER - the deck's pictures and the table's, an image agent told in words to make ONE image and
+# put it at an exact path (ImageGen); never shown the reading (CardPrompts.card_image, back_image,
+# surface_image, height_image and backdrop_image fill these in; src/rules.gd says how a rules file
+# reads). Every picture's prompt opens with `head`.
+#
+# The code gives: {{target}}, the path; the look's {{deck_noun}}, {{deck_name}}, {{deck_style}},
+# {{palette}}, {{card_back}}, {{surface}}, {{setting}}, {{light_kind}}; and for each picture its own.
+head: >-
+  Use your built-in image generation tool to create exactly ONE image, then save it as a PNG at this
+  exact path: {{target}}
+
+  Do not create or modify any other file. Reply with the saved path only.
+
+# THE WHOLE DECK IN ONE HAND
+style: "STYLE (the whole deck is painted in this one hand): {{deck_style}} Palette: {{palette}}."
+
+# A CARD'S FACE: its illustration only - the engine prints the frame and the name around it. The
+# attachments arrive in this order - the back, then the earlier cards ({{chain}} of them) - so each group
+# is named by its place in it.
+card:
+  - include: head
+  - ""
+  - 'THE PICTURE: the illustration for {{name}} in the {{deck_noun}} "{{deck_name}}": {{art}}'
+  - ""
+  - include: style
+  - >-
+      FORMAT: PORTRAIT 2:3 (1024x1536). The card's picture only, composed for a tall card and
+      running to every edge: no border, no frame, no panel, no title, no numbers, no letters or
+      writing of any kind - the frame and the card's name are printed around it separately. Keep the
+      important things away from the outer tenth on each side.
+  - >-
+      The engine cuts the picture to the card's window ({{window}}): paint the WHOLE rectangle, the
+      scene running into every corner - never an arch, oval or panel of your own on a white or blank
+      ground, no white or empty corners.
+  - when: has_back
+    say: >-
+          THE FIRST ATTACHED IMAGE is the BACK of this deck: match its palette, materials and hand.
+          Do NOT copy its pattern or its symmetry.
+  - when: chain
+    say: >-
+          {{#has_back}}THE LAST{{/has_back}}{{^has_back}}THE{{/has_back}} {{chain}} ATTACHED
+          IMAGE{{#chain_many}}S ARE{{/chain_many}}{{^chain_many}} IS{{/chain_many}}
+          {{#chain_many}}earlier cards{{/chain_many}}{{^chain_many}}an earlier card{{/chain_many}}
+          from this same deck: match the rendering exactly - medium, palette, linework, texture,
+          level of detail - so every card reads as one artist's. Do NOT reuse compositions or
+          subjects; the content comes only from THE PICTURE above.
+  - when: chain
+    say: >-
+          The earlier cards set the HAND, not the CAST: this card's people and creatures are its
+          own, as the description gives them - a figure from an earlier card appears again only if
+          the description asks for it.
+  - "Every real animal named is drawn as that animal, with its true anatomy."
+  - >-
+      ALWAYS: no text, no captions, no lettering, no numbers, no borders, no watermark, no
+      signature.
+
+# THE BACK: the side every card of a printing shows face down - EXACTLY SYMMETRIC under a half turn when
+# cards come up `reversed` (one upside down must not be told from one the right way up), and, when each
+# card's text is `printed` over it (CardTable.TEXTS `back`), a design round a plain middle for that text.
+back:
+  - include: head
+  - ""
+  - >-
+      THE PICTURE: the BACK of the {{deck_noun}} "{{deck_name}}" - the side every card shows face
+      down. {{card_back}}
+  - when: reversed
+    say: >-
+          It must be EXACTLY SYMMETRIC under a half turn (180 degrees), so a card lying upside down
+          cannot be told from one the right way up.
+  - when: printed
+    say: >-
+          EACH CARD'S OWN TEXT IS PRINTED OVER THE MIDDLE of this back (its name, its facts, a few
+          lines): keep the middle three quarters a calm, even field of one tone, the design round it
+          - a border, a band, corner ornaments, a printer's mark.
+  - ""
+  - include: style
+  - >-
+      FORMAT: PORTRAIT 2:3 (1024x1536). The design runs to every edge: no outer border or frame (the
+      card's frame is printed separately), no text, no numbers, no watermark, no signature.
+
+# THE CLOTH: a texture, not a photograph of a moment - the table under it is lit by the scene's own
+# lights, so anything the picture carries of light, wet or things lying on it is painted flat onto the
+# cloth (feedback 0006: seawater beads that "have no depth"). Asked for at its true scale ({{width}} x
+# {{height}} cm, CardTable.CLOTH_PICTURE), landscape like the cloth.
+surface:
+  - include: head
+  - ""
+  - >-
+      THE PICTURE: a photograph looking STRAIGHT DOWN at {{surface}}, laid flat on a reading table
+      and filling the whole frame edge to edge. True colors; the texture of the material sharp.
+  - >-
+      THE SCALE: the frame shows {{width}} cm of the surface from side to side and {{height}} cm
+      from top to bottom - as wide as the whole reading table, running on past every edge of the
+      picture - so its weave, grain, boards, knots, scratches and stains are at their true size for
+      that span, never a close-up.
+  - >-
+      IT IS A TEXTURE: a 3D table is built under it and lit by the scene's own lamp and candles, so
+      the picture holds the material and nothing else - lit flat and even from every side, with no
+      reflections, highlights, glare, sheen, shadows or light falling off toward the edges, even
+      where the material is metal, glass or polished.
+  - >-
+      DRY AND BARE, whatever the description says: no water, droplets, beads, puddles, spills or wet
+      patches, and nothing lying on it - no cards, objects, scraps, crumbs, petals, scales, string,
+      hands or text.
+  - "Its colors belong to this palette: {{palette}}."
+  - "FORMAT: LANDSCAPE 3:2 (1536x1024). No border, no vignette, no watermark, no text."
+
+# THE PAINTING'S HEIGHT MAP: the same surface redrawn as depth, from the cloth's painting attached - for
+# the relief the table's light rakes (Tables.height_fit checks it lies under it)
+height:
+  - include: head
+  - ""
+  - >-
+      THE ATTACHED IMAGE is a texture photographed straight down: {{surface}}. Make its HEIGHT MAP -
+      the depth map a 3D renderer lays under that texture.
+  - >-
+      THE SAME IMAGE, REDRAWN AS HEIGHT: every board, seam, thread, knot, crack, stitch, carving and
+      pattern exactly where it is in the attached image, the same size and the same shape - the
+      frame unmoved: no crop, no zoom, no turn, no flip, nothing added or left out. Laid over the
+      attached image, every edge must fall on its edge.
+  - >-
+      GRAY ONLY, and gray means height: white where the surface stands highest, black its deepest
+      hollows (gaps between boards, cuts, the spaces between threads), middle gray the general
+      surface. A flat print or dye on a smooth surface has no height and is not drawn. No color, no
+      light, no shadow or shading from any side, no highlights - height alone.
+  - >-
+      FORMAT: the same size and shape as the attached image (LANDSCAPE 3:2, 1536x1024). No border,
+      no text, no watermark.
+
+# THE ROOM past the table: only its lower third is seen, out of focus, through a level lens of
+# {{lens}} mm (CardTable.BACKDROP_LENS)
+backdrop:
+  - include: head
+  - ""
+  - >-
+      THE PICTURE: a photograph of the room or the world {{^kind_named}}a tarot
+      reader{{/kind_named}}{{#kind_named}}the host of a show of cards{{/kind_named}} sits in, taken
+      from {{^kind_named}}the reader's{{/kind_named}}{{#kind_named}}the host's{{/kind_named}} chair:
+      {{setting}}. Lit by {{light_kind}}.
+  - >-
+      THE CAMERA IS LEVEL, at a seated person's eye height - about 110 cm above the floor - looking
+      straight ahead through a wide {{lens}} mm lens: the eye's height (the horizon) runs straight
+      across the exact middle of the picture, and every upright line stays upright, none leaning in.
+  - >-
+      ONLY THE LOWER THIRD WILL BE SEEN, just past the far edge of a table and out of focus. So the
+      lower half carries the place: the floor or the ground and what stands or lies on it - rugs,
+      the feet of furniture, low shelves, baskets, a hearth, a doorway's sill, the ground or water
+      running away outdoors - one place, its broad shapes and its light. Do NOT show a table, cards,
+      hands or people: the table stands in front of this picture separately.
+  - "Its colors belong to this palette: {{palette}}."
+  - "FORMAT: LANDSCAPE 3:2 (1536x1024). No text, no watermark, no signature."

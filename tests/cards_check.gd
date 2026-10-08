@@ -707,7 +707,7 @@ func _moves_after_words() -> bool:
 		var upto := 0 if step == "intro" else (n if step == "close" else int(step))
 		var said: Array = [] if step == "intro" else prod._said(n if step == "close" else int(step) - 1)
 		var text := String(CardPrompts.reader("Test Tarot", "A brief.", plan, step, said, prod._drawn(upto), n)["prompt"])
-		_ok(text.contains(CardPrompts.MOVES), "the %s prompt does not say when the cards move" % step)
+		_ok(text.contains(Rules.say("cards/reader.moves")), "the %s prompt does not say when the cards move" % step)
 		_ok(not text.contains("End on the moment"), "the %s prompt asks for a passage that ends ON a move" % step)
 	return true
 
@@ -857,14 +857,14 @@ func _table_step() -> bool:
 		"the set dresser is not told that the parts cannot make a body")
 	_ok(int(head["back"]) < int(head["left"]) and int(head["back"]) > 3, "the back holds less height than the sides: %s" % str(head))
 	# THE EXAMPLE IS BUILDABLE, and the format it shows is the format read
-	var ex: Variant = TextGen.extract_json(CardPrompts.SET_EXAMPLE)
+	var ex: Variant = TextGen.extract_json(CardPrompts.set_example())
 	_ok(ex is Dictionary and (CardTable.sanitize_table(ex as Dictionary, {})["things"] as Array).size() == 1,
 		"the format the set dresser is shown does not read back as one thing")
 	# LANDING: junk is refused; a buildable reply is kept as it was written
 	_ok(prod._land_table("no table here") != "", "a reply with no JSON landed as a table")
 	_ok(prod._land_table("{\"things\": [{\"name\": \"a hat\", \"parts\": [{\"shape\": \"hat\"}]}]}") != "",
 		"a table with nothing buildable on it landed")
-	_ok(prod._land_table(CardPrompts.SET_EXAMPLE) == "" and ep.has("table")
+	_ok(prod._land_table(CardPrompts.set_example()) == "" and ep.has("table")
 		and String(((ep.read_json("table") as Dictionary)["things"][0] as Dictionary)["name"]) == "a boxwood chess pawn",
 		"a buildable table did not land as written")
 	return true

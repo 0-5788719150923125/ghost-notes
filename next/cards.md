@@ -56,7 +56,8 @@ seeds' hash salts keep their old `tarot-` names, so every episode already made c
 | `src/reading_follower.gd` | `ReadingFollower`: where the voice is in a document - the tablet's sequential word match, and the schedule that puts actions in the voice's rests. |
 | `src/card_episode.gd` | `CardEpisode`: an episode on disk, one file per step, under `user://cards/<show>/<seed>/`. A redo is a delete. |
 | `src/card_producer.gd` | `CardProducer`: makes whatever is missing, in drawing order. |
-| `src/card_prompts.gd` | `CardPrompts`: what each agent is told. Pure. |
+| `src/card_prompts.gd` | `CardPrompts`: which rules each agent is told, and what fills them in. Pure. |
+| `rules/cards/*.yaml`, `src/rules.gd` | The words themselves, one file per role (producer, designer, set_dresser, reader, painter, show), each rule's reason a comment above it; `Rules` reads them (items in order, `when` flags, `insert`, Mustache sections). Moved out of the code 2026-10-08 with every prompt byte for byte the same (227 prompts over three real episodes, compared before and after). |
 | `src/card_reading.gd` | `CardReading`: the reading's marks; one walk gives the voice its text and the table its actions. |
 | `src/card_deck.gd` | `CardDeck`: the show's deck, parsed from its brief's `## Cards` section (or the standard 78, generated, meanings from `data/decks/tarot/meanings.json`, CC0); the seeded shuffle; true-random seeds. |
 | `src/card_table.gd` | `CardTable`: what a look may name - title faces (`fonts/cards/`, OFL), frames, the zones things stand in - `sanitize_look`, `sanitize_table`, and the layout a prompt can know ahead (`layout_of`, `headroom`). |
@@ -65,6 +66,8 @@ seeds' hash salts keep their old `tarot-` names, so every episode already made c
 | `src/table_preview.gd` | `TablePreview`: what those tools show - a thing in a studio on a centimeter grid (four sides, or several in tiles), the draft on the episode's own table from the show's camera, and the opening (the show's name over that table thrown out of focus). |
 | `src/effects.gd` | `Effects`: the AIR - fog, motes, bursts - as data an agent writes (registries it reads, `sanitize`, `build`), posed from show time. Generic; the tarot table names its regions and moments (`CardTable.AIR`, `MOMENTS`). Shaders `effect_fog.gdshader`, `effect_sprite.gdshader`, `effect_smoke.gdshader`. |
 | `src/lights.gd` | `Lights`: the table's LIGHT built from a description - its sky, its sun (or the moon) and what the sun falls through (a window, blinds, a lattice, leaves, fronds, branches, slats, an awning, a parasol), clouds and birds, lamps out of the shot; registries an agent reads, `sanitize`, `build`, and the CPU's reckoning of where the sun falls. Shaders `light_screen.gdshader`, `light_bird.gdshader`, `light_noise.gdshaderinc` (the noise both reckon alike). See "THE LIGHT" below. |
+| `src/winds.gd` | `Winds`: the table's one wind - a breeze and planned gusts, its carry in closed form - shared by the light and the air. See "SHADE, WIND AND WHAT IT CARRIES" below. |
+| `src/drifts.gd` | `Drifts`: what the wind carries (the air's `drift`) - petals, leaves, seeds - each piece's life planned from its own dice: falling, lying, skidding, carried off. Shader `air_drift.gdshader`. |
 | `src/tables.gd` | `Tables`: the table itself built from a description - its top (shape, edge profile, material, boards, tiles, inlay) and the layers laid on it (fabric, pattern, border, fringe), each surface's relief; registries an agent reads, `sanitize`, `build`. Shaders `table_top.gdshader`, `table_textile.gdshader`, `table_common.gdshaderinc`, `table_relief.gdshaderinc` (and `noise_common.gdshaderinc`, shared with the props). |
 | `src/props.gd` | `Props`: things built from a description - shapes (lathe, loft, tube, coil, extrude...), corners as data, a warp on any part, materials, ornaments (registries an agent reads), `sanitize`, `build`. Generic; the tarot table is its first user. Shaders `prop.gdshader`, `prop_glass.gdshader`, `prop_lens.gdshader`, `prop_common.gdshaderinc`. |
 | `src/card_faces.gd` | `CardFaces`: faces, backs and booklet pages, composed in 2D into stopped SubViewports. |
@@ -559,6 +562,53 @@ gull's shadow sweeping the palm mat; then roof beams' bars and a pillar's stripe
 cloth, a bell rope swinging, a chandelier's spokes, laundry rippling and a fan turning. Gates
 `tests/lights_check.gd`, `tests/table_light_check.gd` (boot),
 `tests/light_screen_check.gd` (GPU), set_dresser_tools_check `_light`, cards_check (archive, the table step).
+
+SHADE, WIND AND WHAT IT CARRIES (2026-10-08; the user: "a diffuse shadow, which is softer and blurrier.
+Today, it sort of feels like most shadows more or less are of the same 'quality'"; "a table under a tree,
+where the shadows cast upon the table would look like those cast through foliage, gently moving in the
+wind"; "petals could fall from that tree ... either blowing through the scene, or settling on the table,
+or getting carried-off from the table again after another gust"):
+- A SOFT SCREEN (`soft` 0-1 on anything the sun falls through; leaves 0.5, fronds 0.4, branches 0.35 when
+  not said, the rest crisp): the sun is cast `Lights.SOFT_SUNS` (3) times from the one place, each a third
+  of its light, each with a screen layer of its own (`SCREEN_LAYERS`, `SCREEN_MASK`); a soft screen is
+  drawn once on each, its shade grown a step on one and shrunk a step on another (`grow` in the shader,
+  `Lights.grow_of`: meters for an edge, noise levels for a canopy, a gap's share for slats), so its edge
+  falls in thirds and the filter blurs them into a gradient. Every near thing's shadow stays crisp: the
+  three suns are one direction. Rejected: a sun's PCSS (loses a stone's shadow to a far caster, as
+  before), jittered sun directions (triple copies of a window's bars), a dithered caster (mottle). The
+  CPU's reckoning follows (`Lights.sun_share`, and `coverage` its mean). Seen side by side on episode
+  482104 under a cherry: crisp, hard cow-print blobs; soft, blurred dapples that read as a tree's shade.
+- THE SKY'S SHADOW (`sky.shadows` 0-1, `from`, `height`): the diffuse shade of a big soft light is
+  AMBIENT OCCLUSION - more of the sky fills from everywhere (`SKY_TOP_SHADOWED` from above at full) and
+  the stage's SSAO (`SKY_REACH`, `SKY_AO`) darkens the fill in folds and where things meet the cloth; off
+  again when the rig is released. Tried first and dropped: a PCSS shadow from the light above, 28 degrees
+  wide - a high light's shade lies under the thing, so no pool showed, and it printed a faint moire on
+  the cloth. Seen on 482104 overcast: the rope's coils and the pot gain depth; on a table a candle leads,
+  the cloth's own pool stays faint (the fill is a small share of its light).
+- THE WIND (`light.wind`: from, strength, gusts, every; `src/winds.gd`, `Winds`): a breeze of slow sines
+  and gusts planned over the horizon from the seed - each a raised cosine, quick to rise and slow to fall,
+  veering a little - so how far the air has carried a thing is closed form (`Winds.carried`), never
+  stepped. One plan per table (`TableMedium._wind`), shared: a gust stirs the screens harder (`gust` in
+  the shader and `Lights._pattern`), swings what hangs (the swing's push is the table's wind when it has
+  one), snaps what flutters, and carries what drifts. A table that wrote no wind keeps its old light;
+  what drifts there falls through a faint breath (`Winds.STILL`).
+- WHAT DRIFTS (`effects` kind `drift`; `src/drifts.gd`, `Drifts`, `shaders/air_drift.gdshader`): petals,
+  rose petals, blossoms, leaves, green leaves, seeds, spinners, feathers - falling from above or blown
+  in from the wind's side; `count` in the air at once, `settle`, `grip` (the gust that lifts one lying),
+  `lying` at the start. Real geometry - a cupped quad cut to its outline, lit, glowing through
+  (`BACKLIGHT`), casting, blurred by the lens. Each piece lives a planned life on dice of its own: falls
+  with the air, swaying and rocking as a falling leaf does, turns flat as it lands, lies trembling in
+  the breeze, and each gust past its grip skids it across the cloth (short of what stands there) or,
+  past the edge, carries it off - lifted, then sinking once clear of the table (and of a cloth hanging
+  over it). A fall that would pass through a thing or the table's side is thrown again from elsewhere.
+  Lives are filed in ten-second bins and planned only as far as asked (about 2.4 ms a show-second for
+  ten in the air; a scrub ten minutes ahead plans those ten minutes once). It lies on the cloth, not on
+  the cards: a card laid later lies over it, one already there has it at its edge - the table does not
+  say where its cards are. `put` reports how many gusts lift what lies; `watch` takes a drift through
+  the strongest gust ahead, and `wind` through its strongest gust.
+Gates: `tests/drifts_check.gd` (the wind's closed-form carry against a summed one, gust rate, purity in
+any order, never through a thing, gusts lift and grip 1 holds, no jump between frames), lights_check
+`_shade`, light_screen_check (a grown copy in a gust, GPU).
 
 BUILT IN THE ENGINE (`src/props.gd`, `Props.build`): meshes in meters, base on y = 0, each
 part's surface laid out for its own girth and height so a motif keeps its shape. A candle's wax

@@ -31,6 +31,14 @@ class_name Lights
 ## does at a table's scale: its edge is tens of meters wide and passes in seconds, the light sinking,
 ## the shadows softening and fading, not a line sweeping the cloth. The room's picture dims with it.
 ##
+## SHADE OF TWO QUALITIES (the user, 2026-10-08: "most shadows more or less are of the same 'quality'"):
+## the sun's is crisp, a canopy's dapples SOFT - the sun cast [constant SOFT_SUNS] times from one place,
+## a soft screen's shade grown on one copy and shrunk on another, so its edge falls in steps blurred into
+## a gradient while every near thing's shadow stays sharp - and THE SKY'S OWN SHADOW is diffuse: a big
+## soft light (overcast, a big window) is the fill's ambient occlusion, dark at a thing's foot and
+## blurring away from it. THE WIND ([Winds], `wind`) stirs the screens harder in a gust, swings what
+## hangs and snaps what flutters - the same wind that carries the air's petals ([Effects]).
+##
 ## THE CPU KNOWS WHAT IS DRAWN: every screen's pattern is [method _pattern], line for line the
 ## shader's, on noise both reckon alike ([method noise], shaders/light_noise.gdshaderinc) - so the
 ## set dresser is told how much of the table, and of where the cards lie, the sun reaches.
@@ -53,6 +61,16 @@ const CASTER_SHADER := preload("res://shaders/light_caster.gdshader")
 ## The render layer the sun's screens and the birds are on: the sun casts with them, no other light
 ## does, and nothing draws them.
 const SCREEN_LAYER := 1 << 18
+## A SOFT SHADE: the sun is cast by [constant SOFT_SUNS] lights from the one place, each with a third of
+## its light and a layer of its own here (the first is [constant SCREEN_LAYER]); a soft screen is drawn
+## once on each, its shade grown by a step on one and shrunk by one on another ([method grow_of]) - so
+## where its edge falls the table gets none, a third, two thirds or all of the sun, blurred into a
+## gradient. A shadow-only caster can only hold the sun back or not (a dithered one mottles), and a
+## sun's PCSS loses a stone's shadow to a far caster; three shadow maps of one direction keep every
+## near thing's shadow crisp and still let a canopy's dapples go soft.
+const SCREEN_LAYERS := [1 << 18, 1 << 19, 1 << 16]
+const SCREEN_MASK := (1 << 18) | (1 << 19) | (1 << 16)
+const SOFT_SUNS := 3
 ## The render layer of the shadows out of the shot: every light that casts casts with them - the sun, a
 ## lamp of the light's own, the old lamp - and nothing draws them.
 const CASTER_LAYER := 1 << 17
@@ -193,6 +211,24 @@ const SWING_DAMP := 0.55
 ## A sun through a wall stands no higher than this (degrees): a higher sun hardly reaches into a room,
 ## and its wall would stand over the table.
 const WALL_SUN := 65.0
+## HOW SOFT A SCREEN'S SHADE IS when none is said (`soft`, 0-1): a canopy high over the table throws
+## soft dapples, a window's bars a meter off crisp ones. At `soft` 1 its shade grows and shrinks by
+## [constant GROW]'s step - meters for an edge or a bar, noise levels for a canopy, the share of a gap
+## for slats.
+const SOFT := {"leaves": 0.5, "fronds": 0.4, "branches": 0.35}
+const GROW := {"edge": 0.03, "noise": 0.07, "gap": 0.22}
+## THE SKY'S OWN SHADOW (`sky.shadows`): the diffuse shade of a big soft light - an overcast sky, a big
+## window on a gray day - is AMBIENT OCCLUSION: at full shadows only [constant SKY_TOP_SHADOWED] of the
+## sky falls from above, the rest fills from everywhere, and the stage's SSAO darkens that fill where a
+## thing meets the cloth and in its folds, reaching [constant SKY_REACH] meters out at its strongest
+## [constant SKY_AO] - dark in folds and at a thing's foot. Measured 2026-10-08: a PCSS
+## shadow from the light above (a source 28 degrees wide) left no pool round anything - a high light's
+## shade lies under the thing - and printed a faint moire across the cloth. The light from above comes
+## from [constant SKY_UP] degrees up when no side is said.
+const SKY_UP := 80.0
+const SKY_TOP_SHADOWED := 0.15
+const SKY_REACH := 0.25
+const SKY_AO := 8.0
 
 ## THE LIGHT'S STRENGTH, in the engine's terms (calibrated by eye on the card table, 2026-10-07): the
 ## sun's energy at strength 1; the sky's at strength 1, and the share of it that comes from above (a
@@ -234,9 +270,9 @@ const CANOPY := 40.0
 ## THE VOCABULARY, as an agent reads it.
 static func describe() -> String:
 	var lines := PackedStringArray()
-	lines.append("THE LIGHT (`light`): {\"why\", \"sky\", \"sun\", \"through\", \"clouds\", \"birds\", \"lamps\", \"shadows\"} - every part may be left out. Light never shows in the picture as a thing: only what it does to the table.")
+	lines.append("THE LIGHT (`light`): {\"why\", \"sky\", \"sun\", \"through\", \"clouds\", \"wind\", \"birds\", \"lamps\", \"shadows\"} - every part may be left out. Light never shows in the picture as a thing: only what it does to the table.")
 	lines.append("- why: a few words - what lights this table, where, and when.")
-	lines.append("- sky: {\"color\": \"#rrggbb\", \"strength\" 0-1} - the light that fills everything and throws no shadow. Outdoors the open sky: by day bright (0.5 to 1), its color the sky's - pale blue, white under cloud, apricot at dawn. Within a room the room's own light: dim (0.1 to 0.4), the color of its walls. At night 0 to 0.1.")
+	lines.append("- sky: {\"color\": \"#rrggbb\", \"strength\" 0-1, \"shadows\" 0-1, \"from\", \"height\"} - the light that fills everything. Outdoors the open sky: by day bright (0.5 to 1), its color the sky's - pale blue, white under cloud, apricot at dawn. Within a room the room's own light: dim (0.1 to 0.4), the color of its walls. At night 0 to 0.1. shadows: the DIFFUSE shadow of a big soft light - an overcast day, the shade of a tree or a porch, a room lit by a big window on a gray day: everything on the table sits in a soft pool of shade, darkest where it meets the cloth and blurring away a hand's width out; 0 none (the sky fills everything evenly, as it does at night or in a lamp-lit room), 1 deep. A sun's shadows are crisp beside them. from and height: where most of that light comes from - the open sky overhead (height 70 to 90, the default), a big window's or a doorway's side (height 20 to 45).")
 	lines.append("- sun: {\"look\", \"from\", \"height\", \"color\", \"strength\" 0-1, \"softness\" 0-1} - the light that throws the shadows. Leave it out for a table no sun reaches: an overcast day (the sky alone), a room lit by its lamps, night. look:")
 	for k in SUNS:
 		lines.append("  - %s: %s" % [k, String((SUNS[k] as Dictionary)["about"])])
@@ -245,8 +281,10 @@ static func describe() -> String:
 	for k in SCREENS:
 		lines.append("  - %s: %s" % [k, String((SCREENS[k] as Dictionary)["about"])])
 	lines.append("  A window, blinds or a lattice: {\"at\": [x, z] (cm from the middle of the reading - where the middle of its patch of sun lands), \"size\": [width, height] (cm, the opening), and for a window \"panes\": [across, up] and \"bars\" (cm); for blinds \"slats\" (cm apart), \"open\" 0-1 and \"turn\" (0 slats across, 90 upright); for a lattice \"pattern\" (%s), \"cell\" (cm) and \"bars\" (cm)}. Its wall stands on the sun's side: a low sun throws a long patch, a high one a short one; a sun through a wall stands no higher than %d." % [", ".join(PackedStringArray(LATTICES.keys())), int(WALL_SUN)])
-	lines.append("  Leaves, fronds or branches: {\"cover\" 0-1 (how much of the sun they hold back), \"size\" (cm - a cluster of leaves, a blade, how far apart the twigs are), \"sway\" 0-1 (how much they stir: 0 still air, 1 a gusty breeze)}. Slats: {\"slats\" (cm apart), \"open\" 0-1, \"turn\" (degrees, their run: 0 side to side)}. An awning: {\"cover\" 0-1 (how much of the table you see lies in its shade - 1 all of it), \"turn\" (degrees: its edge's line), \"edge\" (\"straight\" or \"scalloped\"), \"color\" (its canvas, which tints the light under it), \"sway\" 0-1}. A parasol: {\"at\" (the middle of its shade), \"size\" (cm across), \"ribs\", \"color\", \"sway\"}.")
+	lines.append("  Any of them may be soft: \"soft\" 0-1 - how diffuse its shade is: a tree's crown high overhead throws soft, blurred dapples (0.5 to 1); a trellis, slats or blinds close by crisp ones (0 to 0.2); a window's bars a little soft (0.1 to 0.3). Left out, a canopy is soft (leaves %.1f, fronds %.1f, branches %.2f) and the rest crisp." % [float(SOFT["leaves"]), float(SOFT["fronds"]), float(SOFT["branches"])])
+	lines.append("  Leaves, fronds or branches: {\"cover\" 0-1 (how much of the sun they hold back), \"size\" (cm - a cluster of leaves, a blade, how far apart the twigs are), \"sway\" 0-1 (how much they stir: 0 not at all, 1 a lot - and a gust of the `wind` stirs them harder)}. Slats: {\"slats\" (cm apart), \"open\" 0-1, \"turn\" (degrees, their run: 0 side to side)}. An awning: {\"cover\" 0-1 (how much of the table you see lies in its shade - 1 all of it), \"turn\" (degrees: its edge's line), \"edge\" (\"straight\" or \"scalloped\"), \"color\" (its canvas, which tints the light under it), \"sway\" 0-1}. A parasol: {\"at\" (the middle of its shade), \"size\" (cm across), \"ribs\", \"color\", \"sway\"}.")
 	lines.append("- clouds: {\"cover\" 0-1 (how much of the sky they fill: 0.1 a few passing, 0.5 broken, 0.9 heavy with breaks the sun comes through, 1 overcast), \"size\" 0-1 (small puffs to great banks: how long each passing lasts), \"speed\" 0-1 (drifting to racing), \"thickness\" 0-1 (a thin veil the shadows soften under, to a thick cloud they vanish under)}. As a cloud passes over the sun the whole table dims over a few seconds, its shadows softening and fading, then the sun comes back - what a real cloud does to a table. Leave clouds out for a clear sky.")
+	lines.append(Winds.describe())
 	lines.append("- birds: {\"look\", \"every\" (seconds between them, about), \"flock\" (how many fly together), \"speed\" 0-1, \"from\" (where they mostly fly from; left out, anywhere)} - now and then a bird's shadow flicks across the table and is gone; the bird is never seen. looks:")
 	for k in BIRDS:
 		lines.append("  - %s: %s" % [k, String((BIRDS[k] as Dictionary)["about"])])
@@ -282,7 +320,9 @@ static func sanitize(raw: Variant, notes: PackedStringArray = PackedStringArray(
 		return {}
 	var out := {"why": Props._text(d.get("why", ""), 200)}
 	var sky: Dictionary = d.get("sky", {}) if d.get("sky") is Dictionary else {}
-	out["sky"] = {"color": Props._color(sky.get("color", ""), "#8f9bb0"), "strength": Props._num(sky.get("strength"), 0.3, 0.0, 1.0)}
+	out["sky"] = {"color": Props._color(sky.get("color", ""), "#8f9bb0"), "strength": Props._num(sky.get("strength"), 0.3, 0.0, 1.0),
+		"shadows": Props._num(sky.get("shadows"), 0.0, 0.0, 1.0), "from": _from(sky.get("from"), -1.0, "the sky", notes) if sky.get("from") != null else -1.0,
+		"height": Props._num(sky.get("height"), SKY_UP, 10.0, 90.0)}
 	if d.has("sky") and not (d.get("sky") is Dictionary) and d.get("sky") != null:
 		notes.append("the sky was not an object {color, strength} - a dim gray one stands in")
 	out["sun"] = {}
@@ -311,6 +351,7 @@ static func sanitize(raw: Variant, notes: PackedStringArray = PackedStringArray(
 	if walls and float((out["sun"] as Dictionary)["height"]) > WALL_SUN:
 		notes.append("a sun through a wall stands no higher than %d degrees: lowered from %d" % [int(WALL_SUN), roundi(float((out["sun"] as Dictionary)["height"]))])
 		(out["sun"] as Dictionary)["height"] = WALL_SUN
+	out["wind"] = Winds.sanitize(d.get("wind"), notes)
 	out["clouds"] = {}
 	if d.get("clouds") is Dictionary:
 		var c: Dictionary = d["clouds"]
@@ -379,7 +420,8 @@ static func _screen(e: Dictionary, notes: PackedStringArray) -> Dictionary:
 		notes.append("\"%s\" is not something the sun falls through: %s" % [kind, ", ".join(PackedStringArray(SCREENS.keys()))])
 		return {}
 	var s := {"name": Props._text(e.get("name", kind), 80), "kind": kind, "at": _at(e.get("at")),
-		"sway": Props._num(e.get("sway"), 0.35 if kind in ["leaves", "fronds"] else 0.15, 0.0, 1.0)}
+		"sway": Props._num(e.get("sway"), 0.35 if kind in ["leaves", "fronds"] else 0.15, 0.0, 1.0),
+		"soft": Props._num(e.get("soft"), float(SOFT.get(kind, 0.0)), 0.0, 1.0)}
 	if String(s["name"]).is_empty():
 		s["name"] = kind
 	match kind:
@@ -637,14 +679,20 @@ static func summary(light: Dictionary) -> String:
 	if not sun.is_empty():
 		var through := PackedStringArray()
 		for s in light.get("through", []):
-			through.append("%s (%s)" % [String((s as Dictionary)["name"]), String((s as Dictionary)["kind"])])
+			through.append("%s (%s%s)" % [String((s as Dictionary)["name"]), String((s as Dictionary)["kind"]), ", soft" if float((s as Dictionary).get("soft", 0.0)) >= 0.3 else ""])
 		parts.append("the %s from the %s, %d degrees up%s%s" % [String(sun["look"]), from_name(float(sun["from"])), roundi(float(sun["height"])),
 			", soft" if float(sun["softness"]) > 0.55 else "", (" through " + ", ".join(through)) if not through.is_empty() else ""])
 	else:
 		parts.append("no sun")
 	var sky: Dictionary = light.get("sky", {})
 	var k := float(sky.get("strength", 0.3))
-	parts.append("a %s sky, %s" % ["bright" if k >= 0.6 else ("dim" if k < 0.25 else "soft"), String(sky.get("color", ""))])
+	parts.append("a %s sky, %s%s" % ["bright" if k >= 0.6 else ("dim" if k < 0.25 else "soft"), String(sky.get("color", "")),
+		", its shadows diffuse" if float(sky.get("shadows", 0.0)) >= 0.2 else ""])
+	var wind: Dictionary = light.get("wind", {})
+	if not wind.is_empty():
+		var ws := float(wind["strength"])
+		parts.append("%s from the %s%s" % ["still air" if ws < 0.05 else ("a breath of wind" if ws < 0.3 else ("a breeze" if ws < 0.7 else "a strong wind")),
+			from_name(float(wind["from"])), ", gusting" if float(wind["gusts"]) >= 0.4 else ""])
 	var clouds: Dictionary = light.get("clouds", {})
 	if not clouds.is_empty():
 		parts.append("clouds over %d%% of the sky" % roundi(float(clouds["cover"]) * 100.0))
@@ -711,6 +759,7 @@ static func screens_of(light: Dictionary, middle: Vector3, bounds: AABB, seen: P
 				g["bx"] = Vector3.RIGHT
 				g["by"] = Vector3.FORWARD
 		g["u"] = _uniforms(sc, hash([seed, i, String(sc["name"])]) & 0x7FFFFFFF)
+		g["grows"] = [grow_of(sc, 0), grow_of(sc, 1), grow_of(sc, 2)]
 		if String(sc["kind"]) == "awning":
 			(g["u"] as Dictionary)["edge"] = _awning_edge(g, s, seen, float(sc["cover"]))
 		out.append(g)
@@ -723,7 +772,8 @@ static func _uniforms(sc: Dictionary, salt: int) -> Dictionary:
 	var kind := String(sc["kind"])
 	var u := {"kind": int((SCREENS[kind] as Dictionary)["code"]), "salt": salt, "sway": float(sc.get("sway", 0.0)),
 		"opening": Vector2(1.1, 1.4), "panes": Vector2(2.0, 3.0), "bars": 0.04, "spacing": 0.06, "open": 0.5, "turn": 0.0,
-		"lattice": 0, "cell": 0.1, "thr": 2.0, "size": 0.12, "edge": 0.0, "scallop": 0.0, "radius": 1.1, "ribs": 8.0}
+		"lattice": 0, "cell": 0.1, "thr": 2.0, "size": 0.12, "edge": 0.0, "scallop": 0.0, "radius": 1.1, "ribs": 8.0,
+		"grow": 0.0, "gust": 0.0}
 	match kind:
 		"window", "blinds", "lattice":
 			u["opening"] = Vector2(float((sc["size"] as Array)[0]), float((sc["size"] as Array)[1])) * 0.01
@@ -750,6 +800,24 @@ static func _uniforms(sc: Dictionary, salt: int) -> Dictionary:
 			u["radius"] = float(sc["size"]) * 0.005
 			u["ribs"] = float(sc["ribs"])
 	return u
+
+
+## A SOFT SCREEN'S COPY [param k] of [constant SOFT_SUNS]: how much its shade is grown ([constant
+## SCREEN_LAYERS]) - not at all on the first, a step on the second, a step less on the third ([constant
+## GROW]'s, times the screen's `soft`). 0 on every copy of a crisp one.
+static func grow_of(sc: Dictionary, k: int) -> float:
+	var kind := String(sc["kind"])
+	var unit := "noise" if kind in ["leaves", "fronds", "branches"] else ("gap" if kind in ["blinds", "slats"] else "edge")
+	var step := float(sc.get("soft", 0.0)) * float(GROW[unit])
+	return [0.0, step, -step][k % 3]
+
+
+## Whether any screen of [param geom] is soft - and so the sun is cast [constant SOFT_SUNS] times.
+static func any_soft(geom: Array) -> bool:
+	for g in geom:
+		if absf(float((g["grows"] as Array)[1])) > 1e-6:
+			return true
+	return false
 
 
 ## AN AWNING'S EDGE, along its own y: where it lies so that [param cover] of the table the camera sees
@@ -786,14 +854,33 @@ static func sunlit(geom: Array, s: Vector3, p: Vector3, t: float) -> bool:
 	return true
 
 
-## THE SHARE OF [param points] the sun reaches at [param t] ([method sunlit]).
+## HOW MUCH OF THE SUN REACHES [param p] at [param t], 0-1: through crisp screens all or none
+## ([method sunlit]); where a soft one's edge falls, the share of its [constant SOFT_SUNS] copies that
+## let it through.
+static func sun_share(geom: Array, s: Vector3, p: Vector3, t: float) -> float:
+	if not any_soft(geom):
+		return 1.0 if sunlit(geom, s, p, t) else 0.0
+	var n := 0
+	for k in SOFT_SUNS:
+		var lit := true
+		for g in geom:
+			var u: Dictionary = (g["u"] as Dictionary).duplicate()
+			u["grow"] = float((g["grows"] as Array)[k])
+			if _pattern(u, _plane_q(g, s, p), t):
+				lit = false
+				break
+		n += 1 if lit else 0
+	return float(n) / float(SOFT_SUNS)
+
+
+## THE SHARE OF [param points] the sun reaches at [param t] ([method sun_share]).
 static func coverage(geom: Array, s: Vector3, points: PackedVector3Array, t: float) -> float:
 	if points.is_empty():
 		return 1.0
-	var n := 0
+	var n := 0.0
 	for p in points:
-		n += 1 if sunlit(geom, s, p, t) else 0
-	return float(n) / float(points.size())
+		n += sun_share(geom, s, p, t)
+	return n / float(points.size())
 
 
 ## A SCREEN'S PATTERN at [param q] (its own coordinates, meters) and show time [param t]: true where it
@@ -803,39 +890,41 @@ static func _pattern(u: Dictionary, q: Vector2, t: float) -> bool:
 	var opening: Vector2 = u["opening"]
 	var bars := float(u["bars"])
 	var salt := int(u["salt"])
+	var grow := float(u.get("grow", 0.0))
+	var gusting := 1.0 + 1.5 * float(u.get("gust", 0.0))
 	if kind <= 2:
 		if absf(q.x) > opening.x * 0.5 or absf(q.y) > opening.y * 0.5:
 			return true
-		if minf(opening.x * 0.5 - absf(q.x), opening.y * 0.5 - absf(q.y)) < bars * 0.5:
+		if minf(opening.x * 0.5 - absf(q.x), opening.y * 0.5 - absf(q.y)) < bars * 0.5 + grow:
 			return true
 		if kind == 0:
 			var r := q + opening * 0.5
 			var c := opening / (u["panes"] as Vector2).max(Vector2.ONE)
 			var m := r - c * (r / c).floor()
 			var dd := m.min(c - m)
-			return minf(dd.x, dd.y) < bars * 0.5
+			return minf(dd.x, dd.y) < bars * 0.5 + grow
 		if kind == 1:
 			var r := _turned(q, float(u["turn"]))
 			var spacing := float(u["spacing"])
-			var y := r.y + float(u["sway"]) * spacing * 0.15 * sin(0.9 * t + r.x * 2.0)
-			return _fract(y / spacing) >= float(u["open"])
+			var y := r.y + float(u["sway"]) * gusting * spacing * 0.15 * sin(0.9 * t + r.x * 2.0)
+			return _fract(y / spacing) >= float(u["open"]) - grow
 		return _lattice_bar(u, q)
 	var size := float(u["size"])
 	if kind == 3:
-		return fbm((q + _stir(u, q, t)) / size, salt) > float(u["thr"])
+		return fbm((q + _stir(u, q, t)) / size, salt) > float(u["thr"]) - grow
 	if kind == 4:
 		var p := q + _stir(u, q, t)
 		var best := 0.0
 		for k in 3:
 			var r := _turned(p, float(k) * 1.0471976 + 0.4)
 			best = maxf(best, fbm(Vector2(r.x / (size * 3.0), r.y / (size * 0.6)), (salt + k * 77) & 0xFFFFFFFF))
-		return best > float(u["thr"])
+		return best > float(u["thr"]) - grow
 	if kind == 5:
-		return 1.0 - absf(2.0 * fbm((q + _stir(u, q, t) * 0.4) / size, salt) - 1.0) > float(u["thr"])
+		return 1.0 - absf(2.0 * fbm((q + _stir(u, q, t) * 0.4) / size, salt) - 1.0) > float(u["thr"]) - grow
 	if kind == 6:
-		return _fract(_turned(q, float(u["turn"])).y / float(u["spacing"])) >= float(u["open"])
+		return _fract(_turned(q, float(u["turn"])).y / float(u["spacing"])) >= float(u["open"]) - grow
 	if kind == 7:
-		var e := float(u["edge"]) + float(u["sway"]) * 0.012 * sin(2.3 * t + q.x * 4.0)
+		var e := float(u["edge"]) + float(u["sway"]) * gusting * 0.012 * sin(2.3 * t + q.x * 4.0) - grow
 		var sc := float(u["scallop"])
 		if sc > 0.0:
 			var w := (q.x - sc * floorf(q.x / sc)) / sc * 2.0 - 1.0
@@ -847,32 +936,33 @@ static func _pattern(u: Dictionary, q: Vector2, t: float) -> bool:
 	var radius := float(u["radius"])
 	var rr := radius * cos(sector * 0.5) / cos(local)
 	rr -= radius * 0.04 * cos(local / (sector * 0.5) * 1.5707963)
-	rr += float(u["sway"]) * 0.01 * sin(1.7 * t + a * 3.0)
-	return q.length() < rr
+	rr += float(u["sway"]) * gusting * 0.01 * sin(1.7 * t + a * 3.0)
+	return q.length() < rr + grow
 
 
 static func _lattice_bar(u: Dictionary, q: Vector2) -> bool:
 	var lattice := int(u["lattice"])
 	var cell := float(u["cell"])
 	var bars := float(u["bars"])
+	var grow := float(u.get("grow", 0.0))
 	if lattice == 1:
 		q = _turned(q, 0.78539816)
 	if lattice <= 1:
 		var m := q - Vector2(cell, cell) * (q / cell).floor()
 		var dd := m.min(Vector2(cell, cell) - m)
-		return minf(dd.x, dd.y) < bars * 0.5
+		return minf(dd.x, dd.y) < bars * 0.5 + grow
 	if lattice == 2:
 		var s := Vector2(1.0, 1.7320508) * cell
 		var a := q - s * (q / s + Vector2(0.5, 0.5)).floor()
 		var b := (q - s * 0.5) - s * ((q - s * 0.5) / s + Vector2(0.5, 0.5)).floor()
 		var g := (a if a.dot(a) < b.dot(b) else b).abs()
-		return maxf(g.x, g.dot(Vector2(0.5, 0.8660254))) > cell * 0.5 - bars * 0.5
+		return maxf(g.x, g.dot(Vector2(0.5, 0.8660254))) > cell * 0.5 - bars * 0.5 - grow
 	var mm := q - Vector2(cell, cell) * ((q / cell).floor() + Vector2(0.5, 0.5))
 	if lattice == 3:
-		return mm.length() > cell * 0.5 - bars * 0.5
+		return mm.length() > cell * 0.5 - bars * 0.5 - grow
 	var sq := maxf(absf(mm.x), absf(mm.y))
 	var di := (absf(mm.x) + absf(mm.y)) * 0.70710678
-	return minf(sq, di) > (cell * 0.5 - bars) * 0.82
+	return minf(sq, di) > (cell * 0.5 - bars) * 0.82 - grow
 
 
 static func _stir(u: Dictionary, q: Vector2, t: float) -> Vector2:
@@ -881,7 +971,7 @@ static func _stir(u: Dictionary, q: Vector2, t: float) -> Vector2:
 	var swing := Vector2(sin(0.53 * t + 1.3) + 0.5 * sin(1.37 * t + 0.4), sin(0.41 * t + 0.2) + 0.5 * sin(1.13 * t + 2.1))
 	var flutter := Vector2(noise(q / size * 1.7 + Vector2(t * 0.9, 0.0), (salt + 7) & 0xFFFFFFFF),
 		noise(q / size * 1.7 + Vector2(0.0, t * 0.8), (salt + 11) & 0xFFFFFFFF)) - Vector2(0.5, 0.5)
-	return (swing * 0.22 + flutter * 0.45) * float(u["sway"]) * size
+	return (swing * 0.22 + flutter * 0.45) * float(u["sway"]) * size * (1.0 + 1.5 * float(u.get("gust", 0.0)))
 
 
 static func _turned(p: Vector2, a: float) -> Vector2:
@@ -932,6 +1022,8 @@ static func fbm(p: Vector2, salt: int, octaves := 4) -> float:
 
 
 static var _quantiles := {}
+## ...guarded: the set dresser's table is built on a worker thread while the show may build its own
+static var _quantiles_lock := Mutex.new()
 
 ## THE NOISE LEVEL ABOVE WHICH [param cover] OF A CANOPY IS SHADE, for [param kind]'s pattern (leaves,
 ## fronds, branches, or "clouds"): read off the pattern's own spread of values, sampled once.
@@ -940,7 +1032,10 @@ static func threshold(kind: String, cover: float) -> float:
 		return 2.0
 	if cover >= 0.999:
 		return -1.0
-	if not _quantiles.has(kind):
+	_quantiles_lock.lock()
+	var known: Variant = _quantiles.get(kind)
+	_quantiles_lock.unlock()
+	if known == null:
 		var r := RandomNumberGenerator.new()
 		r.seed = 7331
 		var vals := PackedFloat32Array()
@@ -961,8 +1056,11 @@ static func threshold(kind: String, cover: float) -> float:
 				_:
 					vals.append(fbm(p, salt))
 		vals.sort()
+		_quantiles_lock.lock()
 		_quantiles[kind] = vals
-	var v: PackedFloat32Array = _quantiles[kind]
+		_quantiles_lock.unlock()
+		known = vals
+	var v: PackedFloat32Array = known
 	return v[clampi(int((1.0 - cover) * v.size()), 0, v.size() - 1)]
 
 
@@ -1212,15 +1310,16 @@ static func in_outlines(outlines: Array, p: Vector2) -> bool:
 
 
 ## A SWING, made ready: a pendulum [param length] meters from what it hangs from to its middle, pushed by a
-## wind of [param amount] (0-1) whose gusts come from [param salt]. [method swing_at] steps it on.
-static func swing_of(length: float, amount: float, salt: int) -> Dictionary:
+## wind of [param amount] (0-1) - the table's [param wind] ([method Winds.plan]) when it has one, else a
+## wind of its own whose gusts come from [param salt]. [method swing_at] steps it on.
+static func swing_of(length: float, amount: float, salt: int, wind: Dictionary = {}) -> Dictionary:
 	var n := FastNoiseLite.new()
 	n.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	n.frequency = 1.0
 	n.seed = salt & 0x7FFF
 	var r := RandomNumberGenerator.new()
 	r.seed = salt
-	return {"g_l": 9.81 / maxf(length, 0.05), "amount": amount, "noise": n, "dir": r.randf() * TAU,
+	return {"g_l": 9.81 / maxf(length, 0.05), "amount": amount, "noise": n, "dir": r.randf() * TAU, "wind": wind,
 		"theta": Vector2.ZERO, "omega": Vector2.ZERO, "t": 0.0, "steps": 0, "kept": PackedVector2Array([Vector2.ZERO])}
 
 
@@ -1267,6 +1366,12 @@ static func swing_at(sw: Dictionary, t: float) -> Vector2:
 static func _wind(sw: Dictionary, t: float) -> Vector2:
 	var n: FastNoiseLite = sw["noise"]
 	var a := float(sw["amount"])
+	var w: Dictionary = sw.get("wind", {})
+	if not w.is_empty():
+		# THE TABLE'S WIND: its lean the way the air goes, as hard as it blows - a gust the gust
+		var wd: Vector2 = (w["dir"] as Vector2).rotated(0.25 * n.get_noise_1d(t * 0.013))
+		var turb_w := Vector2(n.get_noise_1d(t * 0.3 + 500.0), n.get_noise_1d(t * 0.37 + 700.0)) * 0.02
+		return (wd * (0.06 + 0.4 * Winds.strength_at(w, t)) + turb_w) * a
 	var dir := float(sw["dir"]) + 0.9 * n.get_noise_1d(t * 0.013)
 	var lean := 0.12 * (0.55 + 0.45 * n.get_noise_1d(t * 0.05 + 100.0))
 	var gust := pow(maxf(n.get_noise_1d(t * 0.21 + 300.0), 0.0), 2.0) * 0.35
@@ -1612,6 +1717,11 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 	var rig := Rig.new()
 	rig.light = light
 	rig.stage = stage
+	# THE WIND, when the light wrote one: the host's plan (shared with what drifts in its air), or its own
+	var written: Dictionary = light.get("wind", {})
+	if not written.is_empty():
+		rig.wind = stage["wind"] if stage.get("wind") is Dictionary and not (stage["wind"] as Dictionary).is_empty() \
+			else Winds.plan(written, seed)
 	rig.root = Node3D.new()
 	rig.root.name = "Light"
 	var middle: Vector3 = stage.get("middle", Vector3.ZERO)
@@ -1625,54 +1735,84 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 	rig.top.light_color = Color.html(rig.sky_color)
 	rig.top.rotation_degrees = Vector3(-80.0, 20.0, 0.0)
 	rig.top.light_specular = 0.2
+	# THE SKY'S DIFFUSE SHADOW: more of it fills from everywhere, and the fill is occluded where things
+	# meet the cloth (SSAO, on the stage's environment until the rig is released)
+	var shade := float(sky.get("shadows", 0.0))
+	rig.sky_top = lerpf(SKY_TOP, SKY_TOP_SHADOWED, shade)
+	if float(sky.get("from", -1.0)) >= 0.0:
+		var sd := sun_dir({"from": sky["from"], "height": sky.get("height", SKY_UP)})
+		rig.top.basis = Basis.looking_at(-sd, Vector3.UP if absf(sd.y) < 0.999 else Vector3.FORWARD)
+	var env: Environment = stage.get("env")
+	if shade > 0.0 and env != null:
+		env.ssao_enabled = true
+		env.ssao_radius = SKY_REACH
+		env.ssao_intensity = SKY_AO * shade
+		env.ssao_power = 1.5
+		env.ssao_detail = 0.5
+		env.ssao_horizon = 0.06
+		env.ssao_sharpness = 0.98
+		env.ssao_light_affect = 0.0
+		env.ssao_ao_channel_affect = 0.0
+		rig.occludes = true
 	rig.root.add_child(rig.top)
 	# THE SUN
 	var sun: Dictionary = light.get("sun", {})
 	if not sun.is_empty():
 		var s := sun_dir(sun)
 		rig.sun_vec = s
-		rig.sun = DirectionalLight3D.new()
-		rig.sun.name = "Sun"
-		rig.sun.light_color = Color.html(String(sun["color"]))
-		rig.sun.shadow_enabled = true
-		rig.sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
-		rig.sun.directional_shadow_max_distance = 2.0
-		rig.sun.directional_shadow_fade_start = 0.95
-		# A TABLETOP'S BIASES (cards are 0.7 mm thick), and SOFTNESS BY THE FILTER, not by PCSS: a sun's
-		# PCSS searches as far as its farthest caster (a wall a meter and more off), and the blocker search
-		# then misses a stone's small shadow
-		rig.sun.shadow_bias = 0.015
-		rig.sun.shadow_normal_bias = 0.35
-		rig.sun.light_angular_distance = 0.0
+		# WHAT IT FALLS THROUGH - and whether any of it is soft, and so the sun cast three times
+		var seen: PackedVector3Array = stage.get("seen", PackedVector3Array())
+		rig.geom = screens_of(light, middle, stage.get("bounds", AABB(middle - Vector3(1, 0, 1), Vector3(2, 0.4, 2))), seen, seed)
+		var n_suns := SOFT_SUNS if any_soft(rig.geom) else 1
 		rig.sun_blur = lerpf(0.9, 4.0, float(sun["softness"]))
-		rig.sun.shadow_blur = rig.sun_blur
-		rig.sun.light_specular = 0.7
-		rig.root.add_child(rig.sun)
-		rig.sun.basis = Basis.looking_at(-s, Vector3.UP if absf(s.y) < 0.999 else Vector3.FORWARD)
+		for k in n_suns:
+			var sn := DirectionalLight3D.new()
+			sn.name = "Sun" if k == 0 else "Sun%d" % k
+			sn.light_color = Color.html(String(sun["color"]))
+			sn.shadow_enabled = true
+			sn.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+			sn.directional_shadow_max_distance = 2.0
+			sn.directional_shadow_fade_start = 0.95
+			# A TABLETOP'S BIASES (cards are 0.7 mm thick), and SOFTNESS BY THE FILTER, not by PCSS: a sun's
+			# PCSS searches as far as its farthest caster (a wall a meter and more off), and the blocker search
+			# then misses a stone's small shadow
+			sn.shadow_bias = 0.015
+			sn.shadow_normal_bias = 0.35
+			sn.light_angular_distance = 0.0
+			sn.shadow_blur = rig.sun_blur
+			sn.light_specular = 0.7 / float(n_suns)
+			# each casts everything but the other suns' copies of a soft screen
+			if n_suns > 1:
+				sn.shadow_caster_mask = 0xFFFFFFFF & ~SCREEN_MASK | int(SCREEN_LAYERS[k])
+			rig.root.add_child(sn)
+			sn.basis = Basis.looking_at(-s, Vector3.UP if absf(s.y) < 0.999 else Vector3.FORWARD)
+			rig.suns.append(sn)
+		rig.sun = rig.suns[0]
 		rig.sun_asked = SUN_MAX * float(sun["strength"])
 		rig.sun_energy = rig.sun_asked
 		rig.sun_height = float(sun["height"])
-		# WHAT IT FALLS THROUGH
-		var seen: PackedVector3Array = stage.get("seen", PackedVector3Array())
-		rig.geom = screens_of(light, middle, stage.get("bounds", AABB(middle - Vector3(1, 0, 1), Vector3(2, 0.4, 2))), seen, seed)
 		for g in rig.geom:
-			var mi := MeshInstance3D.new()
-			var q := QuadMesh.new()
 			var wall := bool((SCREENS[String((g["screen"] as Dictionary)["kind"])] as Dictionary)["wall"])
-			q.size = WALL if wall else Vector2(CANOPY, CANOPY)
-			mi.mesh = q
-			mi.layers = SCREEN_LAYER
-			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
-			var mat := ShaderMaterial.new()
-			mat.shader = SCREEN_SHADER
-			for k in g["u"]:
-				mat.set_shader_parameter(String(k), (g["u"] as Dictionary)[k])
-			mi.material_override = mat
-			mi.transform = Transform3D(Basis(g["bx"], g["by"], (g["bx"] as Vector3).cross(g["by"])), g["origin"])
-			rig.root.add_child(mi)
 			var moves := float((g["u"] as Dictionary)["sway"]) > 0.0 and int((g["u"] as Dictionary)["kind"]) != 0 \
 				and int((g["u"] as Dictionary)["kind"]) != 2 and int((g["u"] as Dictionary)["kind"]) != 6
-			rig.screens.append({"node": mi, "mat": mat, "moves": moves, "g": g})
+			# A CRISP SCREEN is one caster every sun casts with; a soft one a copy for each, grown or shrunk
+			var soft := n_suns > 1 and absf(float((g["grows"] as Array)[1])) > 1e-6
+			for k in (n_suns if soft else 1):
+				var mi := MeshInstance3D.new()
+				var q := QuadMesh.new()
+				q.size = WALL if wall else Vector2(CANOPY, CANOPY)
+				mi.mesh = q
+				mi.layers = int(SCREEN_LAYERS[k]) if soft else SCREEN_MASK
+				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+				var mat := ShaderMaterial.new()
+				mat.shader = SCREEN_SHADER
+				for key in g["u"]:
+					mat.set_shader_parameter(String(key), (g["u"] as Dictionary)[key])
+				mat.set_shader_parameter("grow", float((g["grows"] as Array)[k]))
+				mi.material_override = mat
+				mi.transform = Transform3D(Basis(g["bx"], g["by"], (g["bx"] as Vector3).cross(g["by"])), g["origin"])
+				rig.root.add_child(mi)
+				rig.screens.append({"node": mi, "mat": mat, "moves": moves, "g": g})
 			# A CANVAS'S COLOR tints the light under it
 			var sc: Dictionary = g["screen"]
 			if sc.has("color") and String(sc["kind"]) in ["awning", "parasol"]:
@@ -1690,7 +1830,7 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 				var span := float((BIRDS[rig.bird_look] as Dictionary)["span"])
 				bq.size = Vector2(span * 1.15, span * 1.0 + 0.2)
 				b.mesh = bq
-				b.layers = SCREEN_LAYER
+				b.layers = SCREEN_MASK
 				b.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 				var bm := ShaderMaterial.new()
 				bm.shader = BIRD_SHADER
@@ -1730,7 +1870,7 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 		node.light_color = Color.html(String(l["color"]))
 		node.light_size = minf(float(info["size"]) * 0.01, 0.06)
 		node.shadow_enabled = bool(l["shadows"])
-		node.shadow_caster_mask = 0xFFFFFFFF & ~SCREEN_LAYER
+		node.shadow_caster_mask = 0xFFFFFFFF & ~SCREEN_MASK
 		node.light_specular = 0.5
 		rig.root.add_child(node)
 		node.transform = Transform3D(Basis.looking_at(-to, Vector3.UP if absf(to.normalized().y) < 0.999 else Vector3.FORWARD)
@@ -1786,9 +1926,9 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 		rig.root.add_child(pivot)
 		var mid_local := meshes_box(meshes).get_center()
 		var top_y := meshes_box(meshes).end.y
-		rig.casters.append({"spec": c, "pivot": pivot, "kind": kind, "mats": mats, "moved": place["moved"],
+		rig.casters.append({"spec": c, "pivot": pivot, "kind": kind, "mats": mats, "moved": place["moved"], "wave": wave,
 			"swing": swing_of(maxf(top_y - mid_local.y, 0.05) * 2.0 * 0.667, float((c["move"] as Dictionary)["amount"]),
-				hash([seed, i, String(c["name"]), "swing"]) & 0x7FFFFFFF) if kind == "swing" else {},
+				hash([seed, i, String(c["name"]), "swing"]) & 0x7FFFFFFF, rig.wind) if kind == "swing" else {},
 			"spin": 0.3 * pow(40.0, float((c["move"] as Dictionary)["speed"])), "turn": deg_to_rad(float(c["turn"])),
 			"meshes": meshes, "xform": xf})
 	rig.apply_sky()
@@ -1805,7 +1945,11 @@ class Rig:
 	var sky_color := "#8f9bb0"
 	var sky_energy := 0.3
 	var top: DirectionalLight3D
-	var sun: DirectionalLight3D = null
+	var sun: DirectionalLight3D = null  # the first of the suns
+	var suns: Array = []                # the sun cast once, or SOFT_SUNS times for a soft screen - each a share of its light
+	var sky_top := Lights.SKY_TOP       # the share of the sky that falls from above ([constant Lights.SKY_TOP_SHADOWED] when it shadows)
+	var occludes := false               # the sky's shadow turned the stage's SSAO on: off again at release
+	var wind := {}                      # the wind ([method Winds.plan]) when the light wrote one, else {}
 	var sun_vec := Vector3.UP
 	var sun_asked := 0.0                # the sun's energy as its strength asked
 	var sun_energy := 0.0               # ...and as the palest thing it falls on allows ([method fit])
@@ -1832,9 +1976,9 @@ class Rig:
 		if env != null:
 			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 			env.ambient_light_color = c
-			env.ambient_light_energy = e * (1.0 - Lights.SKY_TOP) + flash_now * 0.6
+			env.ambient_light_energy = e * (1.0 - sky_top) + flash_now * 0.6
 		top.light_color = c
-		top.light_energy = e * Lights.SKY_TOP + flash_now * 0.4
+		top.light_energy = e * sky_top + flash_now * 0.4
 
 	## FITTED TO THE TABLE: [param hot] is the lightness (linear) of the palest thing the light falls on
 	## where the camera looks - the cloth's hottest stretch, the card stock. The sun and the sky are
@@ -1892,8 +2036,8 @@ class Rig:
 
 	## In fog, the sun is seen: shafts through what it falls through.
 	func set_fog(foggy: bool) -> void:
-		if sun != null:
-			sun.light_volumetric_fog_energy = 1.4 if foggy else 1.0
+		for sn in suns:
+			(sn as DirectionalLight3D).light_volumetric_fog_energy = 1.4 if foggy else 1.0
 		for l in lamps:
 			((l as Dictionary)["light"] as Light3D).light_volumetric_fog_energy = 1.6 if foggy else 1.0
 
@@ -1917,14 +2061,18 @@ class Rig:
 		var tau := transmission(t)
 		var glow := 0.0
 		if sun != null:
-			sun.light_energy = sun_energy * tau
 			glow = Lights.CLOUD_GLOW * (1.0 - tau) * sun_energy * sin(deg_to_rad(sun_height))
 			# under a thin cloud the shadows soften before they fade
 			var cloud := 1.0 - tau
-			sun.shadow_blur = sun_blur * (1.0 + 3.0 * cloud * float(field.get("thin", 0.0)))
+			for sn in suns:
+				(sn as DirectionalLight3D).light_energy = sun_energy * tau / float(suns.size())
+				(sn as DirectionalLight3D).shadow_blur = sun_blur * (1.0 + 3.0 * cloud * float(field.get("thin", 0.0)))
+			# what stirs, stirs harder in a gust
+			var gust := Winds.gust_at(wind, t) if not wind.is_empty() else 0.0
 			for s in screens:
 				if bool((s as Dictionary)["moves"]):
 					((s as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("show_time", t)
+					((s as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("gust", gust)
 			_tick_birds(t)
 		flash = 0.0
 		for l in lamps:
@@ -1974,8 +2122,11 @@ class Rig:
 					var w := float(d["spin"])
 					pivot.basis = Basis(Vector3.UP, w * t + 0.08 * sin(t * 0.7))
 				"flutter":
+					# a gust snaps it harder
+					var k := 0.6 + 1.2 * Winds.strength_at(wind, t) if not wind.is_empty() else 1.0
 					for m in d["mats"]:
 						(m as ShaderMaterial).set_shader_parameter("show_time", t)
+						(m as ShaderMaterial).set_shader_parameter("wave", float(d["wave"]) * k)
 
 	func _tick_birds(t: float) -> void:
 		if bird_nodes.is_empty():
@@ -2006,6 +2157,9 @@ class Rig:
 		var room: ShaderMaterial = stage.get("room")
 		if room != null:
 			room.set_shader_parameter("shade", 1.0)
+		var env: Environment = stage.get("env")
+		if occludes and env != null:
+			env.ssao_enabled = false
 		if root != null and is_instance_valid(root):
 			root.queue_free()
 		root = null

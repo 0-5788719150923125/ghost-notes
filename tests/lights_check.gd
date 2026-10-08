@@ -24,8 +24,9 @@ extends SceneTree
 ## - LAMPS stand out of the shot - one asked for in it is moved up out of it, one asked for outside it
 ##   stays; each flickers its own way as a function of the time: lightning dark but for its flashes, a
 ##   sign steady but for its stutters, headlights only as they pass, a screen changing with its cuts.
-## - BUILT: a sun that casts, its screens and birds shadow-only on SCREEN_LAYER, no lamp casting with that
-##   layer, at most MAX_SHADOWED lamps casting; a cloud over the sun dims it; fitted, the palest thing in
+## - BUILT: a sun that casts, its screens and birds shadow-only on SCREEN_LAYERS, no lamp casting with
+##   them; a soft canopy casts the sun SOFT_SUNS times, each sun its own copy of it and every crisp screen
+##   and bird (against crisp screens alone: one sun, one caster each); at most MAX_SHADOWED lamps casting; a cloud over the sun dims it; fitted, the palest thing in
 ##   the light takes no more than SUN_HEAT - against the same light unfitted, which is over it.
 ## - SHADOWS OUT OF THE SHOT: unknown shapes and moves dropped and said, sizes held to CASTER_SIZE, the cap
 ##   kept; each given a light to throw it (round a lamp, a lamp named that casts, the sun, the first lamp
@@ -37,6 +38,13 @@ extends SceneTree
 ##   same swing whatever order it is asked in; no wind, no swing; bounded; and a pendulum four times as
 ##   long swings about twice as slowly, as the sine-pulled pendulum does. Built on CASTER_LAYER, drawn
 ##   nowhere, every lamp casting with it.
+## - SHADE OF TWO QUALITIES: a crisp screen's copies are all one, a soft one's grown on one and shrunk on
+##   another; where a soft canopy's edge falls the table gets a share of the sun (a third, two thirds) -
+##   against the same canopy crisp, which gives all or none - and about as much of the sun in all. THE
+##   SKY'S SHADOW: asked for, the fill from everywhere takes more of the sky and the stage's SSAO
+##   occludes it, off again when the light is released - against none asked, which occludes nothing. THE WIND: a gust
+##   stirs a swaying canopy (the pattern moves), and not one with no sway; a light that wrote a wind has
+##   it, one that did not has none; a swing in the table's wind is the same swing asked twice.
 
 var _fails := 0
 var _rng := RandomNumberGenerator.new()
@@ -54,7 +62,7 @@ func _ok(cond: bool, what: String) -> void:
 
 func _run() -> void:
 	_rng.seed = 4242
-	for check in [_sanitize, _vocabulary, _noise, _window, _screens, _clouds, _birds, _lamps, _built, _shadows]:
+	for check in [_sanitize, _vocabulary, _noise, _window, _screens, _clouds, _birds, _lamps, _built, _shadows, _shade]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("lights_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -411,17 +419,35 @@ func _built() -> bool:
 	var rig := Lights.build(light, stage, 11)
 	root.add_child(rig.root)
 	_ok(rig.sun != null and rig.sun.shadow_enabled, "the sun casts no shadow")
+	# THE LEAVES ARE SOFT (their default): the sun cast SOFT_SUNS times, each with a layer of its own
+	_ok(rig.suns.size() == Lights.SOFT_SUNS, "a soft canopy's sun is cast %d times, not %d" % [rig.suns.size(), Lights.SOFT_SUNS])
 	var screens := 0
+	var per_sun: Array = []
+	per_sun.resize(rig.suns.size())
+	per_sun.fill(0)
 	for n in rig.root.get_children():
 		if n is MeshInstance3D:
 			var mi: MeshInstance3D = n
-			_ok(mi.layers == Lights.SCREEN_LAYER and mi.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY,
-				"%s is drawn, or off the screens' layer" % mi.name)
+			_ok(mi.layers != 0 and (mi.layers & ~Lights.SCREEN_MASK) == 0 and mi.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY,
+				"%s is drawn, or off the screens' layers" % mi.name)
 			screens += 1
-	_ok(screens == 2 + Lights.MAX_BIRDS, "%d screens and birds built" % screens)
+			for k in rig.suns.size():
+				if (mi.layers & (rig.suns[k] as DirectionalLight3D).shadow_caster_mask) != 0:
+					per_sun[k] = int(per_sun[k]) + 1
+	_ok(screens == 1 + Lights.SOFT_SUNS + Lights.MAX_BIRDS, "%d screens and birds built" % screens)
+	for k in rig.suns.size():
+		# each sun: the window, its own copy of the leaves, every bird
+		_ok(int(per_sun[k]) == 2 + Lights.MAX_BIRDS, "sun %d casts %d screens and birds" % [k, int(per_sun[k])])
 	for l in rig.lamps:
 		var node: Light3D = (l as Dictionary)["light"]
-		_ok((node.shadow_caster_mask & Lights.SCREEN_LAYER) == 0, "a lamp casts with the sun's screens")
+		_ok((node.shadow_caster_mask & Lights.SCREEN_MASK) == 0, "a lamp casts with the sun's screens")
+	# the control: crisp screens alone - one sun, one caster each
+	var crisp := Lights.build(_light({"through": [{"name": "w", "kind": "window"}, {"name": "l", "kind": "leaves", "cover": 0.3, "soft": 0}]}), stage, 11)
+	var crisp_n := 0
+	for n in crisp.root.get_children():
+		crisp_n += 1 if n is MeshInstance3D else 0
+	_ok(crisp.suns.size() == 1 and crisp_n == 2, "crisp screens: %d suns, %d casters (want 1, 2)" % [crisp.suns.size(), crisp_n])
+	crisp.root.free()
 	# a cloud dims the sun
 	var clear := -1.0
 	var cloudy := -1.0
@@ -618,3 +644,68 @@ func _period(sw: Dictionary) -> float:
 			crossings += 1
 		was = d
 	return 2.0 * (float(v.size() - 80) * 0.05) / maxf(float(crossings), 1.0)
+
+
+func _shade() -> bool:
+	# a screen's copies
+	var crisp := Lights.sanitize({"sun": {"look": "sun"}, "through": [{"name": "w", "kind": "window", "soft": 0}]})["through"][0] as Dictionary
+	_ok(Lights.grow_of(crisp, 1) == 0.0 and Lights.grow_of(crisp, 2) == 0.0, "a crisp window's copies are grown")
+	var soft_l := _light({"through": [{"name": "c", "kind": "leaves", "cover": 0.5, "soft": 0.8}]})
+	var crisp_l := _light({"through": [{"name": "c", "kind": "leaves", "cover": 0.5, "soft": 0.0}]})
+	var sc := (soft_l["through"] as Array)[0] as Dictionary
+	_ok(Lights.grow_of(sc, 1) > 0.0 and is_equal_approx(Lights.grow_of(sc, 2), -Lights.grow_of(sc, 1)) and Lights.grow_of(sc, 0) == 0.0,
+		"a soft canopy's copies are not grown, shrunk and left: %s" % str([Lights.grow_of(sc, 0), Lights.grow_of(sc, 1), Lights.grow_of(sc, 2)]))
+	# SHARES OF THE SUN where a soft edge falls - against all or none under a crisp one
+	var s := Lights.sun_dir(soft_l["sun"])
+	var gs := _geom(soft_l)
+	var gc := _geom(crisp_l)
+	var partial := 0
+	var crisp_partial := 0
+	var pts := _seen()
+	for p in pts:
+		var v := Lights.sun_share(gs, s, p, 3.0)
+		partial += 1 if v > 0.01 and v < 0.99 else 0
+		var c := Lights.sun_share(gc, s, p, 3.0)
+		crisp_partial += 1 if c > 0.01 and c < 0.99 else 0
+	_ok(partial > pts.size() / 20, "%d of %d points in a soft canopy's half light" % [partial, pts.size()])
+	_ok(crisp_partial == 0, "%d points in a crisp canopy's half light" % crisp_partial)
+	var cov_s := Lights.coverage(gs, s, pts, 3.0)
+	var cov_c := Lights.coverage(gc, s, pts, 3.0)
+	_ok(absf(cov_s - cov_c) < 0.12, "softening moved the sun reaching the table from %.2f to %.2f" % [cov_c, cov_s])
+	# THE SKY'S SHADOW
+	var stage := {"middle": Vector3(0.0, 0.0, -0.02), "bounds": _bounds(), "seen": _seen(), "env": Environment.new(), "room": null, "in_shot": Callable()}
+	var env: Environment = stage["env"]
+	var shaded := Lights.build(_light({"sky": {"color": "#c8ccd0", "strength": 0.7, "shadows": 0.7}}), stage, 5)
+	_ok(env.ssao_enabled and env.ssao_intensity > 1.0 and env.ssao_radius > 0.05, "the sky's shadow asked for, its fill is not occluded")
+	_ok(shaded.sky_top < Lights.SKY_TOP, "a shadowing sky fills no more from everywhere (%.2f from above)" % shaded.sky_top)
+	shaded.release()
+	_ok(not env.ssao_enabled, "released, the sky's shadow left the stage occluded")
+	var plain := Lights.build(_light({"sky": {"color": "#c8ccd0", "strength": 0.7}}), stage, 5)
+	_ok(not env.ssao_enabled and plain.sky_top == Lights.SKY_TOP, "a sky asked for no shadow occludes its fill")
+	plain.root.free()
+	# THE WIND stirs what sways
+	var u: Dictionary = (gc[0] as Dictionary)["u"]
+	var calm := u.duplicate()
+	var gusty := u.duplicate()
+	gusty["gust"] = 1.0
+	var differ := 0
+	for i in 400:
+		var q := Vector2(float(i % 20) * 0.031, float(i / 20) * 0.027)
+		differ += 1 if Lights._pattern(calm, q, 7.0) != Lights._pattern(gusty, q, 7.0) else 0
+	_ok(differ > 0, "a gust does not stir the leaves")
+	var still := u.duplicate()
+	still["sway"] = 0.0
+	var still_gust := still.duplicate()
+	still_gust["gust"] = 1.0
+	var moved := 0
+	for i in 400:
+		var q := Vector2(float(i % 20) * 0.031, float(i / 20) * 0.027)
+		moved += 1 if Lights._pattern(still, q, 7.0) != Lights._pattern(still_gust, q, 7.0) else 0
+	_ok(moved == 0, "a gust stirs leaves with no sway")
+	var windy := Lights.build(_light({"wind": {"from": "left", "strength": 0.5}}), stage, 5)
+	_ok(not windy.wind.is_empty() and plain.wind.is_empty(), "a written wind is not the light's, or an unwritten one is")
+	var sw := Lights.swing_of(0.6, 0.6, 9, windy.wind)
+	var a := Lights.swing_at(sw, 30.0)
+	_ok(a.length() > 1e-4 and Lights.swing_at(Lights.swing_of(0.6, 0.6, 9, windy.wind), 30.0) == a, "a swing in the table's wind does not swing, or swings two ways")
+	windy.root.free()
+	return true

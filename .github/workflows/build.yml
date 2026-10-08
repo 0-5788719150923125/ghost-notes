@@ -1,4 +1,4 @@
-# Build Ghost Notes for Linux and Windows and publish each green commit as a Release.
+# Build Ghost Notes for Linux, Windows and Android and publish each green commit as a Release.
 #
 # THIS FILE HOLDS NO BUILD LOGIC. Every step calls a script under scripts/ with arguments, so
 # the same commands run on a developer machine: build.sh (Godot setup, export, Linux launch
@@ -44,7 +44,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: |
-            build/tools
+            build/tools/godot
             ~/.local/share/godot/export_templates
           # Godot's editor and templates come from scripts/setup_godot.py (pinned, checksummed);
           # cached, keyed on that file, so a runner downloads them once per Godot version.
@@ -62,7 +62,7 @@ jobs:
             || { apt_get update -qq && apt_get install -y -qq --no-install-recommends ffmpeg; }
       # The first red gate fails the run: nothing after it spends compute.
       - name: Do the gatekeeping
-        run: scripts/check.sh --fail-fast
+        run: scripts/check.sh --fail-fast --jobs auto
       - name: Gatekeeping logs
         if: failure()
         uses: actions/upload-artifact@v7
@@ -72,7 +72,7 @@ jobs:
           retention-days: 7
 
   export:
-    name: Export Linux and Windows
+    name: Export Linux, Windows and Android
     needs: gatekeeping
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -81,17 +81,30 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: |
-            build/tools
+            build/tools/godot
             ~/.local/share/godot/export_templates
           # Godot's editor and templates come from scripts/setup_godot.py (pinned, checksummed);
           # cached, keyed on that file, so a runner downloads them once per Godot version.
           key: godot-${{ hashFiles('scripts/setup_godot.py') }}
-      - name: Export (release), with the Linux launch check
-        run: scripts/build.sh --release --no-check linux windows
+      # The Android SDK scripts/setup_android.py fetches (about 680 MB unpacked), cached the same way.
+      - uses: actions/cache@v6
+        with:
+          path: build/tools/android/sdk
+          key: android-sdk-${{ hashFiles('scripts/setup_android.py') }}
+      # The debug keystore on its own fixed key, so every build is signed with the same debug key and
+      # one APK installs over the last. (A cache can be evicted after a week unused; the next build
+      # then makes a new key, and that one phone needs an uninstall first.)
+      - uses: actions/cache@v6
+        with:
+          path: build/tools/android/debug.keystore
+          key: android-debug-keystore-v1
+      - name: Export (release), with the Linux launch check and the APK's signature check
+        run: scripts/build.sh --release --no-check linux windows android
       - name: Package
         run: |
           python3 scripts/package_release.py archive linux
           python3 scripts/package_release.py archive windows
+          python3 scripts/package_release.py archive android
           python3 scripts/package_release.py finalize
           ls -l dist/release
       - uses: actions/upload-artifact@v7

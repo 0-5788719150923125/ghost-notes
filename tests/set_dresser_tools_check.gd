@@ -40,6 +40,11 @@ extends SceneTree
 ##   every picture after it was "a previously freed instance"): two calls made together run one after the
 ##   other, a release during a call gives the stages back only when it is done, and a call after it is
 ##   turned away - the control, the same two calls straight into the toolset's own work, overlap.
+## - THE TABLE IS SET, AND IS TOLD SO (reported 2026-10-08: a set dresser set its table 14 times chasing
+##   things made 88% of their size): a thing made smaller to fit is said at its size, not as a fault, and
+##   with nothing left off the frame's question says the table is set and what is left (the title's color,
+##   then submit) - the control, a thing left off, is still sent to fix it; the producer says how many
+##   pictures its set dresser has taken while its tools are open, and the prompt says a shrink is fine.
 const ROOT := "user://set_dresser_check"
 
 var _fails := 0
@@ -90,7 +95,7 @@ func _ok(cond: bool, what: String) -> void:
 
 func _run() -> void:
 	AgentJobs.allow_for_tool()
-	for check in [_fresh_start, _tools_listed, _put_reports, _remove_look_set, _submit, _title, _producer, _prompts, _claude_argv, _air, _table_itself, _light, _one_at_a_time]:
+	for check in [_fresh_start, _tools_listed, _put_reports, _remove_look_set, _submit, _title, _producer, _prompts, _claude_argv, _air, _table_itself, _light, _one_at_a_time, _verdict]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("set_dresser_tools_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -290,12 +295,14 @@ func _producer() -> bool:
 	_ok(prompt.contains("\"Test Tarot\", set large across the middle of the frame, and under it \"with Pen & Ink\""),
 		"the set dresser is not told the name and byline over its table")
 	var url := String(extra.get("tools_url", ""))
-	_ok(url.begins_with("http://127.0.0.1:") and int(extra.get("timeout", 0)) == SetDresserTools.TIMEOUT,
+	_ok(url.begins_with("http://127.0.0.1:") and not extra.has("timeout"),
 		"a writer that takes tools was not given them: %s" % extra)
 	_ok(prompt.contains("HOW YOU WORK") and prompt.contains("submit") and not prompt.contains("Reply with ONLY a JSON object"),
 		"a writer given tools was not told how to work with them")
 	_ok(AgentTools.calls(url) == 0 and spy._tools.has("table"), "the toolset was not opened for the step")
+	_ok(spy.table_looks() == 0, "the producer does not say how many pictures its set dresser has taken: %d" % spy.table_looks())
 	spy.stop()
+	_ok(spy.table_looks() == -1, "the producer says its set dresser is looking after its tools closed")
 	_ok(AgentTools.calls(url) == -1 and spy._tools.is_empty(), "stopping the producer left the tools answering")
 	# WITHOUT: the one-reply prompt, no tools
 	var plain := Spy.new(ep, {"title": "Test Tarot", "brief": "A brief.", "writer": "bedrock"})
@@ -307,13 +314,13 @@ func _producer() -> bool:
 	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief."})
 	var given := SetDresserTools.new(ep, ep.read_json("plan"), ep.job_dir("table"))
 	prod._tools["table"] = {"url": AgentTools.open(ep.job_dir("table"), given), "set": given}
-	TextGen.put(ep.job_dir("table").path_join(SetDresserTools.SUBMITTED), CardPrompts.SET_EXAMPLE)
+	TextGen.put(ep.job_dir("table").path_join(SetDresserTools.SUBMITTED), CardPrompts.set_example())
 	prod._land("table", {"ok": false, "error": "timed out after 1500 s"})
 	_ok(ep.has("table") and String(((ep.read_json("table") as Dictionary)["things"][0] as Dictionary)["name"]) == "a boxwood chess pawn",
 		"a table handed in with a tool did not land")
 	# ...but a run WITHOUT tools is answered by its own reply, never by a table some earlier run left
 	ep.invalidate("table")
-	TextGen.put(ep.job_dir("table").path_join(SetDresserTools.SUBMITTED), CardPrompts.SET_EXAMPLE)
+	TextGen.put(ep.job_dir("table").path_join(SetDresserTools.SUBMITTED), CardPrompts.set_example())
 	var plain_land := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief."})
 	plain_land._tries["table"] = CardProducer.RETRIES + 1
 	plain_land._land("table", {"ok": true, "text": "no table here"})
@@ -352,9 +359,9 @@ func _prompts() -> bool:
 		for z in CardTable.ZONES:
 			_ok(text.contains("\"%s\": %s; up to %d cm" % [z, String((CardTable.ZONES[z] as Dictionary)["about"]), int(head[z])]),
 				"the set dresser %s is not told the zone %s" % [tag, z])
-		_ok(text.contains(CardPrompts.SET_EXAMPLE), "the set dresser %s is not shown the format" % tag)
+		_ok(text.contains(CardPrompts.set_example()), "the set dresser %s is not shown the format" % tag)
 		_ok(text.contains("THE AIR:"), "the set dresser %s is not told about the air" % tag)
-		_ok(text.contains("THE LIGHT:") and text.contains(CardPrompts.LIGHT_EXAMPLE), "the set dresser %s is not told about the light, or shown its format" % tag)
+		_ok(text.contains("THE LIGHT:") and text.contains(Rules.say("cards/set_dresser.light_example")), "the set dresser %s is not told about the light, or shown its format" % tag)
 		for k in Lights.SCREENS.keys() + Lights.BIRDS.keys() + Lights.LAMPS.keys() + Lights.SUNS.keys() + Lights.CASTER_SHAPES.keys() + Lights.CASTER_MOVES.keys():
 			_ok(text.contains("- %s:" % k), "the set dresser %s is not told the light's word %s" % [tag, k])
 		_ok(text.contains("- shadows:") and text.contains("a rope or a lantern swinging"), "the set dresser %s is not told of shadows out of the shot" % tag)
@@ -366,6 +373,8 @@ func _prompts() -> bool:
 			"the set dresser %s is told the other way of working" % tag)
 		if looks > 0:
 			_ok(text.contains("against the %d you have" % looks), "the set dresser is not told how many pictures it has")
+			_ok(text.contains("A thing shown smaller to fit is only the room") and text.contains("when set says the table is set, it is"),
+				"the set dresser is not told a thing made smaller to fit is fine, or that a set table is set")
 		_ok(text.contains("THE TITLE:") and text.contains("\"Test Tarot\"") and text.contains("thumbnail"),
 			"the set dresser %s is not told of the opening and its thumbnail" % tag)
 		_ok(text.contains("`title` chooses the color") == (looks > 0) and text.contains("\"title\": {\"color\": \"#rrggbb\"") == (looks == 0),
@@ -576,4 +585,31 @@ func _one_at_a_time() -> bool:
 		await process_frame
 	_ok(raw.log[1] == "start title", "control: two calls straight into the work did not overlap: %s" % [raw.log])
 	raw.release()
+	return true
+
+
+## The frame's verdict on what [method TablePreview.table] stood ([method SetDresserTools.stood_lines],
+## [method SetDresserTools.judge_of]).
+func _verdict() -> bool:
+	var thing := func(name: String, k: float) -> Dictionary:
+		return {"name": name, "place": "back left", "at": Vector2(-16.0, -23.0), "k": k, "tall": 0.25}
+	# all in the shot, two shown smaller (as far as the table shrinks a thing): SET
+	var st := SetDresserTools.stood_lines({"stood": [thing.call("a candle", 1.0), thing.call("an aloe", 0.88),
+		thing.call("a mug", 0.76)], "left_off": []})
+	var text := "\n".join(st["lines"] as PackedStringArray)
+	_ok(int(st["faults"]) == 0, "a thing made smaller to fit counts as a fault: %s" % text)
+	_ok(text.contains("an aloe (back left): 16 cm left of the middle, 23 cm back; 25% of the picture's height - shown at 88% of its size, to fit (as it may be)")
+		and text.contains("shown at 76%") and not text.contains("a candle (back left): 16 cm left of the middle, 23 cm back; 25% of the picture's height -"),
+		"a thing made smaller is not said at its size, or one at full size is: %s" % text)
+	var judge := SetDresserTools.judge_of(int(st["faults"]), false)
+	_ok(judge.contains("the table is set") and judge.contains("choose the title's color") and judge.contains("submit"),
+		"a table with everything in the shot is not told it is set: %s" % judge)
+	judge = SetDresserTools.judge_of(int(st["faults"]), true)
+	_ok(judge.contains("the table is set") and judge.contains("submit it") and not judge.contains("choose the title's color"),
+		"a set table whose title is chosen is not told only to submit: %s" % judge)
+	# THE CONTROL: a thing left off is a fault, and the table is sent to be fixed
+	st = SetDresserTools.stood_lines({"stood": [thing.call("a candle", 1.0)], "left_off": ["an aloe"]})
+	text = "\n".join(st["lines"] as PackedStringArray)
+	_ok(int(st["faults"]) == 1 and text.contains("an aloe: LEFT OFF"), "a thing left off is not a fault: %s" % text)
+	_ok(SetDresserTools.judge_of(int(st["faults"]), true) == SetDresserTools.JUDGE_TABLE, "a table with a thing left off is told it is set")
 	return true

@@ -8,7 +8,7 @@ _A spectral experience_
 
 ---
 
-**Download:** [the latest Linux and Windows builds](https://github.com/0-5788719150923125/ghost-notes/releases/latest) ([all releases](https://github.com/0-5788719150923125/ghost-notes/releases)) - one per green commit, built by [GitHub Actions](.github/workflows/build.yml).
+**Download:** [the latest Linux, Windows and Android builds](https://github.com/0-5788719150923125/ghost-notes/releases/latest) ([all releases](https://github.com/0-5788719150923125/ghost-notes/releases)).
 
 ---
 
@@ -109,6 +109,7 @@ Every flag is in [docs/cli.md](docs/cli.md). Keys: `Space` play/pause, `N` next 
 scripts/check.sh                       # every gate (--gpu adds the ones that need a real renderer)
 scripts/build.sh                       # the gates, then every target exported into dist/
 scripts/build.sh --release linux       # checked Linux release export and standalone launch check
+scripts/build.sh --release android     # the phone build; fetches its own minimal Android SDK (debug-signed)
 scripts/build.sh --install android     # the phone build, onto a connected phone
 python docs.py                         # regenerate docs/ and this README's lists
 ```

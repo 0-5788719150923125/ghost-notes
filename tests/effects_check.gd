@@ -12,8 +12,9 @@ extends SceneTree
 ##   is away is where it went (out of the picture); a firefly blinks; an ember rises through its
 ##   region and round again; nothing sinks under the air's floor (the room's, not its region's).
 ## - BURSTS are born the same way from the same moments - within their moment, most at its start, at
-##   the emitter - and a moved moment is born again; one not moved is left alone. A burst marks every
-##   time its moment happens, or only the first, the last or the times it names.
+##   the emitter - and a moved moment is born again (in time, or its emitter's path); one not moved is
+##   left alone. A burst marks every time its moment happens, or only the first, the last or the times
+##   it names.
 ## - A MOTE'S HOME IS SEEN: in the picture, in front of the stage's occluders and short of where the air
 ##   ends. Two-sided: homes drawn from the region's volume alone are hidden behind the table often, and
 ##   without the limit some lie past the room's picture. Away, a mote is out of the picture or off in
@@ -304,6 +305,10 @@ func _bursts() -> bool:
 	_ok(int((air.bursts[0] as Dictionary)["plans"]) == 1 and mm.instance_count == 80, "an unmoved moment was planned again")
 	air.plan({"jumper": [{"t": 20.0, "dur": 1.0, "from": "card", "path": path}]})
 	_ok(int((air.bursts[0] as Dictionary)["plans"]) == 2, "a moved moment was not planned again")
+	# A CARD'S POSE CAN MOVE WHILE ITS MOMENT'S TIME STANDS: born again from where its emitter now is
+	var shifted := [[10.0, (path[0][1] as Transform3D).translated(Vector3(0.0, 0.0, 0.1))], [11.0, path[1][1]]]
+	air.plan({"jumper": [{"t": 20.0, "dur": 1.0, "from": "card", "path": shifted}]})
+	_ok(int((air.bursts[0] as Dictionary)["plans"]) == 3, "a moment whose emitter moved (its time the same) was not planned again")
 	root.free()
 	# WHICH TIMES IT MARKS: a moment that comes with every card is marked at every card only when asked -
 	# the first, the last, or the times named (2026-10-07: "reveal" and "lay" could only burst at every

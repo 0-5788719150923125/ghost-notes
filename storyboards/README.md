@@ -31,8 +31,10 @@ outside it is **rejected with a line number**, never silently misparsed:
 - `#` comments; block maps and lists nested by indentation (spaces only);
 - single-line flow collections `[a, b]` / `{k: v}`, nestable;
 - scalars: int, float, `true`/`false`, `null`/`~`, bare and quoted strings;
-- NOT supported: anchors/aliases/tags, multi-document, block scalars (`|`, `>`),
-  merge keys, flow collections spanning lines, tabs in indentation.
+- block scalars for prose: `|` keeps its lines, `>` folds them, `-` after either drops
+  the final line break;
+- NOT supported: anchors/aliases/tags, multi-document, `|+`/`>+` and indentation
+  indicators, merge keys, flow collections spanning lines, tabs in indentation.
 
 ## Top level
 
