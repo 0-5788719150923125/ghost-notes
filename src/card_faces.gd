@@ -863,6 +863,8 @@ class Page:
 		# the keywords in two columns, filled down the left one first
 		var kw: PackedStringArray = f["kw"]
 		var shown := kw.slice(0, 6)
+		if shown.size() % 2 == 1 and shown.size() > 1:
+			shown = shown.slice(0, shown.size() - 1)  # two columns stay even
 		var rows := (shown.size() + 1) / 2
 		var cw := w * 0.5
 		var row_end := y

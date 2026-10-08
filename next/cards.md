@@ -1029,7 +1029,15 @@ every future login"). `src/youtube.gd` is generic; the tarot mode opts in throug
 - THE GLITCH SUBTITLES WRITE AS THEY ARE SPOKEN (reported the same day: "every single new subtitle
   starts with a whole sentence of glitching text"): a letter not yet reached is not drawn, a few letters
   past the front are noise, and the reach grows a letter at a time and falls back (`glitch_reach`), as
-  vortex's label pushed and popped its ghosts. Each row's plate covers only what is drawn.
+  vortex's label pushed and popped its ghosts. Then (the same day: it "stops/pauses at comma boundaries,
+  waiting for the hesitation", and "center the text based upon the total amount of it currently
+  revealed"): the front is ONE STEADY SWEEP through the line, pauses and all (`glitch_front`: the upper
+  hull of each word's must-be-written-by moment - never behind the voice, never speeding up), and each
+  row is centered on what is written of it, so the words come out of the middle of the screen. Then
+  ("the glitching is extremely fast ... holding transitions for a minimum number of frames?"): each noise
+  letter holds its glyph 45-110 ms on its own clock and changes 70% of the time, as the label's letters
+  stepped; the reach runs further (4-10 letters) and BACKS OFF a letter at a time part way, reaches again,
+  and backs off to one (`glitch_reach`, a run of 48 steps at 12 a second).
 - Next: the vine's leaves could hang off a draped vine's edge more loosely; a strand could knot; the
   serpent ornament's tail falls a few pixels short of its mouth; a sculpt's build could be faster (a
   person's skull is ~4 s of GDScript), or its grid could be coarser where nothing is thin; no real set

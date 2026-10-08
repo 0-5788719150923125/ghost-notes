@@ -182,6 +182,18 @@ const LEAN_HOLD_MIN := 0.8              # how long a lean is held, at the bottom
 const LEAN_HOLD_MAX := 6.0
 const LEAN_HOLD_FLOOR := 0.15           # the turn at the top of the dial: a sway, not a wobble
 const LEAN_REST_MAX := 45.0             # the longest rest at center, at the bottom of the dial
+## LEFT AND NEARER AT ONCE. The two dials are one reader, so they compose two ways:
+##   - an approach ([method near_to]) takes the reader toward one side this often, when Lean is
+##     up at all - the side they are already on, or either from center - at the approach's own
+##     pace, held for as long as they stay in, and brought back to center when they leave;
+##   - closeness is what lets a lean reach the limit. With a microphone in the middle, the same
+##     offset to one side is a wider angle up close, so a lean from where the reader sits
+##     reaches LEAN_REACH_HOME of the way to 70/30 (about 67/33), all of it fully in, and less
+##     backed off. 70/30 is still the most there ever is.
+const LEAN_WITH_NEAR := 0.6
+const LEAN_JOINT_TRAVEL := 2.0          # seconds: the approach's own pace (NEAR_TAU, two stages)
+const LEAN_REACH_HOME := 0.85
+const LEAN_REACH_BACK := 0.7
 
 # --- near: the reader coming in to the microphone, and backing off -------------------
 #
@@ -190,16 +202,21 @@ const LEAN_REST_MAX := 45.0             # the longest rest at center, at the bot
 # the microphone's proximity effect lifts the low end - the warmth that says "right at your
 # ear" more than loudness does. Further, the reverse.
 #
-# A READER WHO COMES IN OFTEN DROPS THEIR VOICE, sometimes to a whisper. Then the direct sound
+# A READER WHO COMES IN OFTEN DROPS THEIR VOICE. Then the direct sound
 # stays about as loud as before while the room falls away and the bass comes up: closer without
 # being louder. So the VOCAL LEVEL is its own quantity here - it feeds the whole chain, room
 # included - and the DISTANCE is applied to the direct voice alone. A hushed approach is a
 # voice dropped by about what the distance gives back.
 #
-# PER SENTENCE, NOT PER SECOND. A whisper is the voice host's (the request's `whisper`), so the
-# choice to come in is made when a sentence is planned ([method near_plan]); this chain only
-# eases the distance there, starting in the pause before it, the way a reader moves between
-# phrases. Two one-pole stages in series, so a move starts and ends without a corner.
+# PER SENTENCE, NOT PER SECOND. A hushed voice is softer as well as quieter - its spectral tilt
+# is the voice host's (the request's effort) - so the choice to come in is made when a sentence
+# is planned ([method near_plan]); this chain only eases the distance there, starting in the
+# pause before it, the way a reader moves between phrases. Two one-pole stages in series, so a
+# move starts and ends without a corner.
+#
+# NO WHISPER. A hushed approach asked the host for a partial whisper once (piper `_whisper`:
+# every frame rebuilt as noise through its own envelope, blended with the voice), and the blend
+# was heard as "a garbled mess". It stays out until the whisper itself is good on its own.
 const NEAR_TAU := 0.45                  # seconds per stage: about two seconds to arrive
 const NEAR_IN_DB := 4.5                 # the direct voice, fully in
 const NEAR_BACK_DB := 5.0               # ...and fully backed off
@@ -213,11 +230,8 @@ const NEAR_STEP := 32                   # samples between gain updates: the move
 const NEAR_MOVE_POW := 1.2
 const NEAR_RUN_MAX := 3
 const NEAR_BACK_CHANCE := 0.2           # of the moves from home, how many back off rather than come in
-## When the reader comes in: plainly (louder), hushed (the voice dropped), or whispered (hushed,
-## and the host's whisper at NEAR_WHISPER). Cumulative: under the first is plain, under the
-## second hushed, the rest whispered.
-const NEAR_MANNER := [0.35, 0.75]
-const NEAR_WHISPER := Vector2(0.35, 0.7)
+## Of the approaches, how many are hushed (the voice dropped); the rest are plain (louder).
+const NEAR_HUSHED := 0.6
 
 var sample_rate := 22050
 var echo_wet := 0.0            # 0..1
@@ -300,6 +314,7 @@ var _lean_t := 0.0                      # seconds into the current move
 var _lean_dur := 0.0                    # its length; 0 = resting where it is
 var _lean_hold := 0.0                   # seconds of rest left before the next move
 var _lean_k := -1.0                     # the dial the hold was drawn for
+var _lean_joint := false                # held at a side for an approach (see LEAN_WITH_NEAR)
 var _lp_v := 0.0                        # presence on the direct voice alone, for the lean
 # The distance: targets from [method near_to], each eased through two one-pole stages.
 var _near_to := 0.0                     # -1 backed off .. 1 fully in
@@ -355,6 +370,7 @@ func setup(sr: int) -> void:
 	_lean_dur = 0.0
 	_lean_k = -1.0
 	_lean_hold = 0.0
+	_lean_joint = false
 	_lp_v = 0.0
 	_near_to = 0.0
 	_hush_to = 0.0
@@ -627,7 +643,10 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 			if p == 0.0:
 				out[i] = Vector2(buf[i], buf[i])
 			else:
-				var g := lean_gains(p)
+				var c := _near_b.x
+				var reach := lerpf(LEAN_REACH_HOME, 1.0, c) if c >= 0.0 \
+					else lerpf(LEAN_REACH_HOME, LEAN_REACH_BACK, -c)
+				var g := lean_gains(p * reach)
 				out[i] = Vector2(clampf(wet + direct * (g.x - 1.0), -1.0, 1.0),
 					clampf(wet + direct * (g.y - 1.0), -1.0, 1.0))
 	return [buf, out]
@@ -638,8 +657,35 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 ## only coming in, since nobody leans back to speak more quietly. Eased from wherever the
 ## reader is now ([constant NEAR_TAU]).
 func near_to(c: float, hush: float) -> void:
+	var was := _near_to
 	_near_to = clampf(c, -1.0, 1.0)
 	_hush_to = clampf(hush, 0.0, 1.0) * maxf(_near_to, 0.0)
+	_join_lean(was)
+
+
+## An approach that takes the reader to one side as well (see [constant LEAN_WITH_NEAR]), and
+## the way back from it. Draws from the lean's own generator, so the same marks make the same
+## moves in the reading, the audition and the export.
+func _join_lean(was: float) -> void:
+	var k := clampf(lean, 0.0, 1.0)
+	if _near_to > 0.0 and was <= 0.0:
+		if k > 0.0 and _lean_rng.randf() < LEAN_WITH_NEAR:
+			var side := signf(_lean_pos) if absf(_lean_pos) > 0.01 \
+				else (-1.0 if _lean_rng.randf() < 0.5 else 1.0)
+			_lean_move(side * _lean_rng.randf_range(lerpf(LEAN_DEPTH_MIN, 0.85, k), 1.0))
+			_lean_hold = INF
+			_lean_joint = true
+	elif _near_to <= 0.0 and _lean_joint:
+		_lean_joint = false
+		_lean_move(0.0)
+		_lean_hold = _lean_rng.randf_range(0.4, 1.0) * LEAN_REST_MAX * pow(1.0 - k, 1.5)
+
+
+func _lean_move(to: float) -> void:
+	_lean_from = _lean_pos
+	_lean_to = to
+	_lean_t = 0.0
+	_lean_dur = LEAN_JOINT_TRAVEL
 
 
 ## The gains for where the reader is now: dB, so a move is even to the ear.
@@ -652,7 +698,7 @@ func _near_gains() -> void:
 	_near_bg = db_to_linear(NEAR_BASS_DB * in_ - 0.5 * NEAR_BASS_DB * back)
 
 
-## WHERE THE READER IS FOR EACH SENTENCE: `{c, hush, whisper}` per entry of [param ks], the
+## WHERE THE READER IS FOR EACH SENTENCE: `{c, hush}` per entry of [param ks], the
 ## Near dial of the voice reading that sentence, keyed by [param who] (the speaker, so each
 ## voice moves on its own). Seeded, and every sentence takes the same five draws whatever
 ## the dial, so moving the dial changes how often the same moments are taken rather than
@@ -660,8 +706,8 @@ func _near_gains() -> void:
 static func near_plan(ks: PackedFloat32Array, who: PackedStringArray, seed: int) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
-	var state := {}                     # speaker -> [current {c, hush, whisper}, sentences left]
-	var home := {"c": 0.0, "hush": 0.0, "whisper": 0.0}
+	var state := {}                     # speaker -> [current {c, hush}, sentences left]
+	var home := {"c": 0.0, "hush": 0.0}
 	var out: Array = []
 	for i in ks.size():
 		var k := clampf(ks[i], 0.0, 1.0)
@@ -690,13 +736,9 @@ static func near_plan(ks: PackedFloat32Array, who: PackedStringArray, seed: int)
 				left = int(float(u[2]) * lerpf(float(NEAR_RUN_MAX), 1.0, k))
 				var depth := lerpf(0.6, 1.0, float(u[3]))
 				if go < 0:
-					cur = {"c": -depth, "hush": 0.0, "whisper": 0.0}
+					cur = {"c": -depth, "hush": 0.0}
 				else:
-					var m := float(u[4])
-					var hush := 0.0 if m < float(NEAR_MANNER[0]) else 1.0
-					var whisper := 0.0 if m < float(NEAR_MANNER[1]) \
-						else lerpf(NEAR_WHISPER.x, NEAR_WHISPER.y, float(u[3]))
-					cur = {"c": depth, "hush": hush, "whisper": whisper}
+					cur = {"c": depth, "hush": 1.0 if float(u[4]) < NEAR_HUSHED else 0.0}
 		state[who[i]] = [cur, left]
 		out.append(cur)
 	return out
@@ -721,9 +763,15 @@ func _resolve_lean() -> void:
 		return
 	# The reading opens at rest, at center: the first rest is drawn here, for the first
 	# dial the chain is given, rather than the reader leaning on the first word.
-	if _lean_k < 0.0:
+	if _lean_k < 0.0 and not _lean_joint:
 		_lean_hold = _lean_rng.randf_range(0.4, 1.0) * LEAN_REST_MAX * pow(1.0 - k, 1.5)
 	_lean_k = k
+	if _lean_joint:
+		# an approach's lean is the approach's to end - unless the dial is gone
+		if k <= 0.0:
+			_lean_joint = false
+			_lean_hold = 0.0
+		return
 	if _lean_dur <= 0.0:
 		var longest := LEAN_REST_MAX * pow(1.0 - k, 1.5) if absf(_lean_pos) < 0.01 \
 			else LEAN_HOLD_MAX * (1.0 - k) + LEAN_HOLD_FLOOR

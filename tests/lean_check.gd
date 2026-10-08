@@ -14,6 +14,9 @@ extends SceneTree
 ##   - only the voice moves: where the dry input is silent, the room's and the bed's tails
 ##     are the same in both ears even mid-lean.
 ##   - same seed, same moves.
+##   - it composes with Near: an approach often takes the reader to one side and holds them
+##     there, and only up close does a lean reach 70/30 (control: with Lean at 0, an approach
+##     never moves the reader sideways).
 
 const SR := 1000          # the motion alone runs at a low rate: it is a function of time
 
@@ -28,6 +31,7 @@ func _initialize() -> void:
 	_check_eased()
 	_check_only_the_voice_moves()
 	_check_seeded()
+	_check_composes_with_near()
 	if _fails.is_empty():
 		print("lean_check: ALL OK")
 		quit(0)
@@ -125,8 +129,21 @@ func _check_balance_limit() -> void:
 	var st := fx.process_stereo(_tone(sr * 60, sr))
 	var worst := _worst_share(st, sr)
 	print("lean_check: deepest measured balance %.1f/%.1f" % [worst * 100.0, (1.0 - worst) * 100.0])
-	_ok(worst <= VoiceFX.LEAN_SHARE + 0.005, "the balance went past 70/30 (%.3f)" % worst)
-	_ok(worst >= 0.66, "a minute at full lean never got near the limit (%.3f)" % worst)
+	var home_cap := 0.5 + (VoiceFX.LEAN_SHARE - 0.5) * VoiceFX.LEAN_REACH_HOME
+	_ok(worst <= home_cap + 0.005, "from where the reader sits, a lean went past %.3f (%.3f)"
+		% [home_cap, worst])
+	_ok(worst >= home_cap - 0.01, "a minute at full lean never got near its reach (%.3f)" % worst)
+	# fully in, the same lean reaches the limit and no further
+	var close := VoiceFX.new()
+	close.pad_seed = 3
+	close.setup(sr)
+	close.lean = 1.0
+	close.near_to(1.0, 0.0)
+	var st_in := close.process_stereo(_tone(sr * 60, sr))
+	var worst_in := _worst_share(st_in, sr)
+	print("lean_check: deepest measured balance up close %.1f/%.1f" % [worst_in * 100.0, (1.0 - worst_in) * 100.0])
+	_ok(worst_in <= VoiceFX.LEAN_SHARE + 0.005, "up close, the balance went past 70/30 (%.3f)" % worst_in)
+	_ok(worst_in > worst + 0.01, "up close, a lean reaches no further (%.3f vs %.3f)" % [worst_in, worst])
 	# the law itself, past the ends of its travel
 	var g := VoiceFX.lean_gains(5.0)
 	_ok(absf(g.y / (g.x + g.y) - VoiceFX.LEAN_SHARE) < 1e-4, "lean_gains does not clamp")
@@ -239,3 +256,44 @@ func _check_seeded() -> void:
 	var c := _track(0.5, 120.0, 12)
 	_ok(a == b, "the same seed made different moves")
 	_ok(a != c, "control: a different seed made the same moves")
+
+
+## The fraction of time off center while the reader is in, and while they are not, over many
+## approaches (in for 8 s, home for 12 s), with Lean at [param k].
+func _joint(k: float) -> Vector2:
+	var fx := VoiceFX.new()
+	fx.pad_seed = 21
+	fx.setup(SR)
+	fx.lean = k
+	var block := PackedFloat32Array()
+	block.resize(SR / 10)
+	var in_off := 0
+	var in_n := 0
+	var out_off := 0
+	var out_n := 0
+	for cycle in 60:
+		fx.near_to(1.0, 0.0)
+		for b in 80:
+			fx.process_stereo(block.duplicate())
+			if b >= 25:                   # once the approach has arrived
+				in_n += 1
+				if absf(fx._lean_pos) > 0.05:
+					in_off += 1
+		fx.near_to(0.0, 0.0)
+		for b in 120:
+			fx.process_stereo(block.duplicate())
+			if b >= 25:
+				out_n += 1
+				if absf(fx._lean_pos) > 0.05:
+					out_off += 1
+	return Vector2(float(in_off) / in_n, float(out_off) / out_n)
+
+
+func _check_composes_with_near() -> void:
+	var j := _joint(0.2)
+	print("lean_check: at Lean 0.2, off center %.0f%% of the time in, %.0f%% otherwise"
+		% [j.x * 100.0, j.y * 100.0])
+	_ok(j.x > 0.45, "an approach seldom takes the reader to a side (%.2f)" % j.x)
+	_ok(j.x > j.y + 0.2, "leaning is no likelier up close than anywhere else (%.2f vs %.2f)" % [j.x, j.y])
+	var none := _joint(0.0)
+	_ok(none.x == 0.0 and none.y == 0.0, "control: with Lean at 0 an approach moved the reader sideways")

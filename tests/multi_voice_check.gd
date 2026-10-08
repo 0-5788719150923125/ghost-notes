@@ -334,8 +334,8 @@ func _check_room_is_per_voice() -> void:
 
 
 ## NEAR IS PLANNED PER SENTENCE AND REACHES THE REQUEST: a voice at Near 0 never moves, and
-## the one that comes in asks the host for its whisper and its softer voice on exactly the
-## sentences the plan hushed - and on no others.
+## the one that comes in asks the host for its softer voice on exactly the sentences the plan
+## hushed - and on no others - and never for a whisper the Tone did not ask for.
 func _check_near_reaches_the_request() -> void:
 	_slots(2)
 	_ed._slots[1]["near"] = 0.8
@@ -345,7 +345,6 @@ func _check_near_reaches_the_request() -> void:
 			"words": [{"text": "word%d" % i}], "tokens": []})
 	_ed._plan_near(chunks, 0)
 	var still := 0
-	var whispers := 0
 	var mismatched := 0
 	var softer := 0
 	for i in chunks.size():
@@ -356,16 +355,14 @@ func _check_near_reaches_the_request() -> void:
 		var plain: Dictionary = _ed._request_args(s, {"tokens": []})
 		if i % 2 == 0 and float(near["c"]) != 0.0:
 			still += 1
-		if float(near["whisper"]) > 0.0:
-			whispers += 1
-		if absf(float(args["whisper"]) - maxf(float(plain["whisper"]), float(near["whisper"]))) > 1e-6:
+		if float(args["whisper"]) != float(plain["whisper"]):
 			mismatched += 1
 		if float(near["hush"]) > 0.0 and float(args["lean_effort"]) < float(plain["lean_effort"]) - 1e-6:
 			softer += 1
 		elif float(near["hush"]) <= 0.0 and absf(float(args["lean_effort"]) - float(plain["lean_effort"])) > 1e-6:
 			mismatched += 1
 	_ok(still == 0, "a voice at Near 0 moved (%d sentences)" % still)
-	_ok(whispers > 0 and softer > 0, "the moving voice never whispered or hushed (%d, %d)" % [whispers, softer])
+	_ok(softer > 0, "the moving voice never hushed")
 	_ok(mismatched == 0, "%d requests did not carry their sentence's plan" % mismatched)
 	# a plan is never rewritten behind a request: only from `from` on
 	var before: Dictionary = chunks[10]["near"]

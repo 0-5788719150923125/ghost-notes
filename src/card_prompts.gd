@@ -361,13 +361,16 @@ static func designer(title: String, brief: String, look: Dictionary, card: Dicti
 	var meaning := String(card.get("meaning", "")).strip_edges()
 	if not meaning.is_empty():
 		lines.append("What it means in this deck - grounding, not text to copy: %s" % meaning)
+		if text != "back":
+			lines.append("The keywords above are the traditional ones, for reference. Choose your own for this deck's entry, as many as the entry wants: keep some, and put a synonym or a fresher word in place of others now and then, so the entry is yours and not a copy.")
 	lines.append("")
 	lines.append("1. THE ILLUSTRATION: what this card shows, for the illustrator who paints the whole deck - subject, composition, %s. Whatever it pictures is its own, described so it could not be mistaken for another card's. Tall portrait format. No words, letters or numbers anywhere in the picture: the card's frame and name are printed separately." % (
 		"what this card is, as this deck pictures it" if kind_named(look) else "the traditional symbolism of this card reinterpreted in this deck's world"))
 	if text == "back":
 		lines.append("2. WHAT IS PRINTED ON ITS BACK, which the viewer reads when the card is turned over - in `booklet`: its short facts in `keywords` (one each, as that kind of card's back lists them: a position and a team, a type and a weakness, a set number, a year), and its text in `upright` (a bio, rules, flavor text, an answer). Write it exactly the way that kind of card's back is written, as the brief says the backs read. It stands alone: never mention another card.")
 	else:
-		lines.append("2. ITS ENTRY IN THE DECK'S LITTLE BOOKLET, which is shown on screen beside the card. Write it the way the brief says this deck's booklet speaks (if it does not say, in the earnest, slightly old-fashioned voice decks' booklets use). It stands alone: never mention another card.")
+		lines.append("2. ITS ENTRY IN THE DECK'S LITTLE BOOKLET, which is shown on screen beside the card, with its `keywords`%s. Write it the way the brief says this deck's booklet speaks (if it does not say, in the earnest, slightly old-fashioned voice decks' booklets use). It stands alone: never mention another card." % (
+			" (this deck's page lists them in two columns: give an EVEN number, four or six)" if String(look.get("page", "")) == "ledger" else ""))
 	var before := _pictured_before(history, String(card.get("name", "")))
 	if not before.is_empty():
 		lines.append("")
@@ -378,10 +381,10 @@ static func designer(title: String, brief: String, look: Dictionary, card: Dicti
 	lines.append("""{
   "art": "the illustration, in two to four sentences",
   "booklet": {
-    "keywords": ["three to five words or short phrases"],
+    "keywords": [%s],
     "upright": "the meaning, forty to seventy words"%s
   }
-}""" % (",\n    \"reversed\": \"the meaning reversed, twenty-five to forty-five words\"" if reversals else ""))
+}""" % ["\"%s words or short phrases\"" % ("four or six" if text != "back" and String(look.get("page", "")) == "ledger" else "three to six" if text != "back" else "three to five"), ",\n    \"reversed\": \"the meaning reversed, twenty-five to forty-five words\"" if reversals else ""])
 	return {"system": show_context(title, brief), "prompt": "\n".join(lines)}
 
 

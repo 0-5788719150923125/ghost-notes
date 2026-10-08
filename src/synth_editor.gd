@@ -289,7 +289,8 @@ func _build_panel() -> void:
 	box.add_theme_constant_override("separation", 8)
 
 	var title_row := HBoxContainer.new()
-	box.add_child(title_row)
+	# pinned over the scrolling body, so "⋯" and "–" never scroll away (SidePanel.pin_header)
+	(_panel as SidePanel).pin_header(title_row)
 	title_row.add_child(Chrome.back_button(self))
 	var title := Label.new()
 	title.text = "Synthesis"

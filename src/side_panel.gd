@@ -27,6 +27,10 @@ class_name SidePanel
 ##
 ## Add rows to [member body], never to the panel: the panel's own child is the scroll view.
 ##
+## A HEADER IS PINNED over the scrolling body ([method pin_header]): the panel's title row - "‹ Notes", its
+## "⋯" and its "–" - stays in view however far the body is scrolled (asked 2026-10-07: "I have to keep
+## scrolling to the top, to click those buttons"), and goes with the panel when it is hidden.
+##
 ## A FOOTER CAN BE PINNED under the scrolling body ([method add_footer_card]): a card that stays in
 ## view however far the body is scrolled, taken off the room the body has. Masking's marker list
 ## lives there - "the whole manage-markers workflow stays visible together", as its own panel kept it.
@@ -69,6 +73,8 @@ var _col: VBoxContainer
 var _scroll: ScrollContainer
 var _pad: MarginContainer
 var _footer: VBoxContainer
+var _head: VBoxContainer
+var _head_pad: MarginContainer      # the header's own margin, matched to the body's (see _apply)
 var _foot_pad: MarginContainer      # the footer's own margin, matched to the body's (see _apply)
 ## Controls already named for making the panel too wide (see [method _check_width]).
 var _warned := {}
@@ -88,6 +94,12 @@ func _init(width := 380.0) -> void:
 	# Tabbing to a control below the fold scrolls to it rather than moving focus somewhere
 	# invisible.
 	_scroll.follow_focus = true
+	_head_pad = MarginContainer.new()
+	_head_pad.visible = false
+	_col.add_child(_head_pad)
+	_head = VBoxContainer.new()
+	_head.add_theme_constant_override("separation", 6)
+	_head_pad.add_child(_head)
 	_col.add_child(_scroll)
 	# The content sits inside a margin so the scrollbar has somewhere of its own to be.
 	_pad = MarginContainer.new()
@@ -142,6 +154,18 @@ func add_footer_card(key: String, card_title: String, family: StringName) -> VBo
 		card_row.track(card)
 	_fit()
 	return card.body
+
+
+## [param row] PINNED OVER the scrolling body (taken out of wherever it was): in view however far the body is
+## scrolled, the body getting the room that is left. Rows pinned later go under the first.
+func pin_header(row: Control) -> void:
+	if row.get_parent() != null:
+		row.get_parent().remove_child(row)
+	_head.add_child(row)
+	if not _head_pad.visible:
+		_head_pad.visible = true
+		_head.minimum_size_changed.connect(_fit)
+	_fit()
 
 
 ## Every card on the panel, top to bottom, the pinned ones last.
@@ -213,7 +237,10 @@ func _apply() -> void:
 	var w: int = int(bar.get_combined_minimum_size().x + GUTTER) if bar != null else int(GUTTER)
 	_pad.add_theme_constant_override("margin_right", w)
 	_foot_pad.add_theme_constant_override("margin_right", w)     # the pinned cards line up with the body's
+	_head_pad.add_theme_constant_override("margin_right", w)
 	var room: float = get_viewport().get_visible_rect().size.y - position.y - MARGIN
+	if _head_pad.visible:
+		room -= _head_pad.get_combined_minimum_size().y + float(_col.get_theme_constant("separation"))
 	if _foot_pad.visible:
 		room -= _foot_pad.get_combined_minimum_size().y + float(_col.get_theme_constant("separation"))
 	var want: float = _pad.get_combined_minimum_size().y

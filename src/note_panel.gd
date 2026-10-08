@@ -125,10 +125,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_panel.visible = not _panel.visible
 
 
-func _build_header(box: VBoxContainer) -> void:
+func _build_header(_box: VBoxContainer) -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 6)
-	box.add_child(head)
+	# pinned over the scrolling body, so "⋯" and "–" never scroll away (SidePanel.pin_header)
+	_panel.pin_header(head)
 	head.add_child(Chrome.back_button(self))
 	var title := Label.new()
 	title.text = NoteStore.title_of(path) if not path.is_empty() else "Note"

@@ -26,6 +26,9 @@ extends Node
 ##   panel must be inside the panel's own rectangle. That is what fails on the build this
 ##   replaces - there was no scroll at all - and it is what a height cap alone would not give.
 ##
+## AND ITS TITLE ROW STAYS: pinned over the body, "‹ Notes", "⋯" and "–" are in view scrolled to the bottom,
+## where the body's own first row is not.
+##
 ## Plus the property that makes it safe to apply everywhere: A PANEL THAT FITS IS UNCHANGED.
 ## It must not stretch to fill the window, or every mode grows a full-height sidebar.
 ##
@@ -186,6 +189,18 @@ func _check_fits(name: String, panel: SidePanel_) -> void:
 		# them, which is what the right-aligned value readouts were running into. An assertion
 		# that only forbade overlap was therefore true before the gutter existed and passed on
 		# a build with no gutter at all; it proved nothing. This one fails on that build.
+		# THE HEADER STAYS (asked 2026-10-07: "I have to keep scrolling to the top, to click those buttons"):
+		# scrolled to the bottom, the title row with its "⋯" and "–" is still inside the panel, above the
+		# scrolled body - and the body's first row, the control, has scrolled out of view
+		var head: Control = panel._head.get_child(0) if panel._head.get_child_count() > 0 else null
+		_ok(head != null, "%s: no title row is pinned over the body" % name)
+		if head != null:
+			var hr: Rect2 = head.get_global_rect()
+			_ok(hr.position.y >= panel.get_global_rect().position.y - 1.0 and hr.end.y <= view.position.y + 1.0 and head.is_visible_in_tree(),
+				"%s at window %d: scrolled down, the title row is at %.0f..%.0f, not over the body at %.0f" % [name, h, hr.position.y, hr.end.y, view.position.y])
+			_ok(head.find_children("*", "MenuButton", true, false).size() > 0, "%s: the pinned row has no \"⋯\"" % name)
+		var top_row: Control = panel.body.get_child(0)
+		_ok(top_row.get_global_rect().end.y < view.position.y + 1.0, "control: %s at window %d: scrolled to the bottom, the body's first row is still in view" % [name, h])
 		var bar_rect: Rect2 = bar.get_global_rect()
 		var content: Rect2 = panel.body.get_global_rect()
 		_ok(bar.visible, "the control is wrong - the bar is not showing, so there is nothing "

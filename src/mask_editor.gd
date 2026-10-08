@@ -905,7 +905,7 @@ func _build_source_panel() -> void:
 	_src_panel.card_prefix = "masking"
 	add_child(_src_panel)
 	_src_panel.body.add_theme_constant_override("separation", 8)
-	_src_panel.body.add_child(_header_row())
+	_src_panel.pin_header(_header_row())
 	var chips := CardRow.new()
 	_src_panel.body.add_child(chips)
 	_src_panel.card_row = chips
@@ -3110,7 +3110,7 @@ func _build_panel() -> void:
 	_panel.card_prefix = "masking"
 	_chrome_host().add_child(_panel)
 	_panel.body.add_theme_constant_override("separation", 8)
-	_panel.body.add_child(_header_row())
+	_panel.pin_header(_header_row())
 	var chips := CardRow.new()
 	_panel.body.add_child(chips)
 	_panel.card_row = chips

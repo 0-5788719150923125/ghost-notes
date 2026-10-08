@@ -702,7 +702,8 @@ func _add_block(card: Object) -> void:
 
 func _build_header(box: VBoxContainer) -> void:
 	var title_row := HBoxContainer.new()
-	box.add_child(title_row)
+	# pinned over the scrolling body, so "⋯" and "–" never scroll away (SidePanel.pin_header)
+	(_panel as SidePanel).pin_header(title_row)
 	title_row.add_child(Chrome.back_button(self))
 	var title := Label.new()
 	title.text = _panel_title()
@@ -1132,11 +1133,12 @@ func _build_voice(box: VBoxContainer) -> void:
 	_fx_near = _fx_slider(box, "Near", 0.0,
 		"The reader coming in close to the microphone, or backing off, a sentence at a time. Closer, "
 		+ "the voice gains warmth and the room falls away; backed off, the reverse. Often the reader "
-		+ "drops their voice to come in - hushed, or a soft whisper - so closer is not always louder. "
+		+ "drops their voice to come in, softer and quieter, so closer is not always louder. "
 		+ "0 is still. Low settings stay put and come in now and then for a sentence or three; "
 		+ "higher, more often and for less long, until at 1 the reader is always moving in or out. "
-		+ "A whisper is chosen when a sentence is made, so a move takes effect from the sentences "
-		+ "not yet made.")
+		+ "With Lean up too, an approach often goes toward one side, and a lean reaches furthest "
+		+ "up close. The softer voice is chosen when a sentence is made, so a move takes effect "
+		+ "from the sentences not yet made.")
 	_fx_pad = _fx_slider(box, "Ambience", 0.0,
 		"A sustained ambient bed underneath, in the reader's own key - long tones that keep "
 		+ "sounding through the pauses, rather than reverb of the voice. It ducks under speech and "
@@ -2276,10 +2278,10 @@ func _apply_fx(fx: VoiceFX, s: Dictionary) -> void:
 
 
 ## WHERE THE READER IS, sentence by sentence ([method VoiceFX.near_plan]), written into
-## each chunk from [param from] on as `near` - read by [method _request_args] (the whisper,
-## the softer voice) and by the marks that ease the chain there. Taken when a chunk is
+## each chunk from [param from] on as `near` - read by [method _request_args] (the softer
+## voice) and by the marks that ease the chain there. Taken when a chunk is
 ## REQUESTED, from the dials as they are then, and never rewritten behind a request: a
-## sentence already made has its whisper in it, and its distance has to match.
+## sentence already made has its softer voice in it, and its distance has to match.
 ## [param voice] reads every chunk as that voice (the audition's chunks carry none).
 func _plan_near(chunks: Array, from: int, voice := "") -> void:
 	var ks := PackedFloat32Array()
@@ -3239,11 +3241,9 @@ func _request_args(s: Dictionary, ch: Dictionary) -> Dictionary:
 		"length_scale": r / maxf(float(s["pace"]) * float(t["pace"]), 0.1) * (1.0 - LEAN_PACE * lean.x),
 		"noise_scale": float(t["noise"]) * (1.0 + LEAN_LIVELY * lean.y), "noise_w": float(t["noise_w"]),
 		"lean_semis": LEAN_SEMIS * lean.y,
+		# COMING IN HUSHED is a softer voice as well as a quieter one (VoiceFX drops the level)
 		"lean_effort": LEAN_EFFORT * lean.y + LEAN_LOUD * (lean.w - NEAR_SOFTER * float(near.get("hush", 0.0))),
-		# COMING IN HUSHED is a softer voice as well as a quieter one (VoiceFX drops the level),
-		# and sometimes a whisper - the most of the Tone's own and the sentence's
-		"whisper": maxf(float(t["whisper"]), float(near.get("whisper", 0.0))),
-		"muffle": float(t["muffle"]),
+		"whisper": float(t["whisper"]), "muffle": float(t["muffle"]),
 		"speaker": _speaker_of(s),
 		"sentence_gap": SENTENCE_GAP, "pause_scale": _pause_scale_of(s) * pow(LEAN_PAUSE, lean.z),
 		"dynamics": d["dynamics"],

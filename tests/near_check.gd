@@ -11,8 +11,8 @@ extends SceneTree
 ##     room falls away and the low end comes up (the control is the plain approach).
 ##   - backing off is quieter and thinner against an unchanged room.
 ##   - a move is eased: no step in level from one 10 ms to the next.
-##   - the plan: 0 never moves; how often rises with the dial; 1 never rests; every manner
-##     occurs; only an approach is hushed or whispered; each voice moves on its own dial;
+##   - the plan: 0 never moves; how often rises with the dial; 1 never rests; plain and hushed
+##     both occur, nothing is whispered, only an approach is hushed; each voice on its own dial;
 ##     same words, same moves.
 
 const SR := 8000
@@ -204,30 +204,27 @@ func _check_plan() -> void:
 	_ok(low > 0.02 and low < 0.25, "0.1 is not sparse (%.2f)" % low)
 	_ok(low < mid and mid < top, "how often does not rise with the dial")
 	_ok(top > 0.95, "1.0 rests at home (%.2f)" % top)
-	# the manners, over the approaches at mid
+	# the manners, over the approaches at mid: plain and hushed, and never a whisper (piper's,
+	# blended, was heard as "a garbled mess"); only an approach is hushed
 	var plain := 0
 	var hushed := 0
-	var whispered := 0
 	var wrong := 0
 	for p in _plan(0.6, n):
 		var d: Dictionary = p
-		var c := float(d["c"])
-		if c > 0.0:
-			if float(d["whisper"]) > 0.0:
-				whispered += 1
-			elif float(d["hush"]) > 0.0:
+		if d.has("whisper"):
+			wrong += 1
+		if float(d["c"]) > 0.0:
+			if float(d["hush"]) > 0.0:
 				hushed += 1
 			else:
 				plain += 1
-			if float(d["whisper"]) > 0.0 and float(d["hush"]) <= 0.0:
-				wrong += 1
-		elif float(d["hush"]) > 0.0 or float(d["whisper"]) > 0.0:
+		elif float(d["hush"]) > 0.0:
 			wrong += 1
-	print("near_check: approaches plain %d, hushed %d, whispered %d" % [plain, hushed, whispered])
-	var all := maxi(1, plain + hushed + whispered)
-	for row in [["plain", plain], ["hushed", hushed], ["whispered", whispered]]:
-		_ok(float(row[1]) / all > 0.1, "%s approaches are missing (%d of %d)" % [row[0], row[1], all])
-	_ok(wrong == 0, "%d sentences hushed or whispered without coming in" % wrong)
+	print("near_check: approaches plain %d, hushed %d" % [plain, hushed])
+	var all := maxi(1, plain + hushed)
+	_ok(float(plain) / all > 0.2 and float(hushed) / all > 0.2,
+		"one manner is missing (plain %d, hushed %d)" % [plain, hushed])
+	_ok(wrong == 0, "%d sentences whispered, or hushed without coming in" % wrong)
 	# each voice on its own dial
 	var ks := PackedFloat32Array()
 	var who := PackedStringArray()
