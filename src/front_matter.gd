@@ -65,7 +65,9 @@ const CONFLICT := "conflict: "
 ## rewrite) and [code]bom[/code] whether it opened with a byte-order mark.
 static func split(raw: String) -> Dictionary:
 	var nl := "\r\n" if raw.contains("\r\n") else "\n"
-	var bom := raw.begins_with("﻿")
+	# A literal U+FEFF in GDScript source is stripped from exported scripts, making
+	# begins_with("") true for every note and eating the first '-' of its fence.
+	var bom := not raw.is_empty() and raw.unicode_at(0) == 0xFEFF
 	var text := raw.substr(1) if bom else raw
 	var lines := _lines(text)
 	var out := {"has": false, "head": "", "body": text, "open": -1, "close": -1,
@@ -144,9 +146,9 @@ static func put_block(raw: String, value: Variant, key := KEY) -> String:
 			return raw
 		var kept: Array = [String(parts.open_fence)] + _without(h, sp) + [String(parts.fence)]
 		kept.append_array(_lines(String(parts.body)))
-		return ("﻿" if parts.bom else "") + nl.join(kept)
+		return (String.chr(0xFEFF) if parts.bom else "") + nl.join(kept)
 	var block := _block_lines(value, key)
-	var prefix := "﻿" if parts.bom else ""
+	var prefix := String.chr(0xFEFF) if parts.bom else ""
 	if not parts.has:
 		# A fresh frontmatter, and a blank line under it so the first line of the
 		# document is not welded to the closing fence.

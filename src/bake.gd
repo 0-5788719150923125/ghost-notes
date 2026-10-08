@@ -21,6 +21,33 @@ const WIN := 2048        # FFT window (≈21 Hz bins - enough low-end for bass/b
 ## They share the project's user:// dir, so this works across the separate processes.
 const STATUS_PATH := "user://export_status.txt"
 
+# Shared by the editor's --script runner and an exported executable's main-scene CLI.
+const CLI_BANDS := 64
+const CLI_FREQ_MIN := 30.0
+const CLI_FREQ_MAX := 16000.0
+const CLI_DB_FLOOR := 60.0
+const CLI_FPS := 30
+
+
+static func run_cli(args: PackedStringArray) -> int:
+	var song := ""
+	var out := ""
+	for i in args.size():
+		if args[i] == "--bake-song" and i + 1 < args.size():
+			song = args[i + 1]
+		elif args[i] == "--bake-out" and i + 1 < args.size():
+			out = args[i + 1]
+	if song.is_empty() or out.is_empty():
+		push_error("bake_runner: need --bake-song and --bake-out")
+		return 1
+	var frames := bake(song, CLI_FPS, CLI_BANDS, CLI_FREQ_MIN, CLI_FREQ_MAX, CLI_DB_FLOOR)
+	if frames.is_empty():
+		push_error("bake_runner: bake failed (is ffmpeg on PATH?)")
+		return 1
+	save_cache(out, frames, CLI_BANDS)
+	print("bake_runner: wrote %s (%d frames)" % [out, frames.size()])
+	return 0
+
 
 static func write_progress(frac: float) -> void:
 	# Write to a temp file then rename: rename is atomic, so a reader in another

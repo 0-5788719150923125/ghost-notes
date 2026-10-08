@@ -126,7 +126,7 @@ func _venv_python() -> String:
 
 
 func _host_script() -> String:
-	return ProjectSettings.globalize_path("res://" + HOST_REL)
+	return BundledHosts.path("res://" + HOST_REL)
 
 
 ## Start the host once the environment is ready; until then, say what its install is

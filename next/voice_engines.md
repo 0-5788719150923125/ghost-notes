@@ -90,12 +90,54 @@ the resampler against the linear control, an old patch upgraded), `test_pauses.p
 check and the patch check say what they hold now), `tests/multi_voice_check.gd`
 (`_check_stress_reaches_the_voice`, and `play_ratio` in `_check_settings_reach_the_request`).
 
+## Built (2026-10-07): the word before a rest, and the next word's hiss
+
+Reported: "the end of a statement (most commonly at a comma) can sound a bit strange, and truncated
+... clipped", and then "Wait until the end, sweet souls" heard as "ends ... sweet". Status: built,
+gated, and confirmed by ear - "the best they have ever sounded" (2026-10-07; files: `8_commas_before.wav` against `9_commas_after.wav` and
+`10_commas_after_trail2.wav`, the opening 30 sentences; `11_sweet_souls_before.wav` against
+`12_sweet_souls_after.wav`, three short s-initial cases).
+
+**What was measured.** The model ends every word at full level and drops it: the steepest 20 ms of
+a word's end is 15 dB before a comma, 17 before a full stop, 17 mid-sentence (37 commas). It is the
+same everywhere; a comma is where a rest of up to a second and a level pitch leave it standing alone.
+And the word-space the rest floor lengthens takes the NEXT word's sound with it: before an /s/ the
+model's lead (40-75 ms unfloored, its own coarticulation) grew to 165-195 ms of a 210-290 ms rest, so
+the splice cut through hiss and left a burst on the word before (medians of five draws; 0-25 ms before
+vowels, stops and most other fricatives). A second or third word-space after the mark only halved it,
+and made other cases worse.
+
+- **The trail** (`TRAIL_*`, `_trail_weight`) - the word before `, ; :` is held and lets go: its final
+  rime (`_final_rimes`) rendered 1.25x through `dur_scale`; the level eased down 16 dB over the last
+  120 ms to the voice's own end (found in the waveform: the plan is 50 ms early to 80 ms late) and held
+  there through the rest; the pitch sagged 1.5 semitones over the last 90 ms (`_glide`, a slower read
+  with the length kept; measured -0.13 / -0.70 / -1.31 semitones over three 30 ms windows into the
+  tip). Weighted by the rest (full from 0.5 s), none at Pause 0; `trail` in the request scales it
+  (0 off, 2 double; not on the panel yet). Full stops are left to the model and `_discourse_plan`.
+- **The lead** (`LEAD_*`, `_quiet_lead`) - in a floored rest, the next word's hiss is kept to its last
+  80 ms, coming in over 30 ms; what is earlier is silenced, so the splice always cuts in silence. In
+  the finished audio: the burst left on the word before went from 20-60 ms to none, the "sss" before
+  "sweet" / "so" from 195-265 ms to about 120 (the 80 kept plus the /s/'s own).
+- `_resample`'s kernel and read are `_sinc_table` / `_read_at` now, shared with the glide
+  (byte-identical to the old resampler, 35 cases).
+
+Gates: `hosts/voice/test_trail.py` (new: the rime, the weight, the hold, the fade, the sag, the lead,
+each with its control); `test_pauses.py` runs its splice and floor checks with `trail` 0, so turning
+the trail off is pinned byte-identical to the old audio.
+
+**Splitting chunks at commas as well** was weighed for the leak: the model would never see the next
+word. Set aside because it takes more than it fixes - each clause would open at an utterance's pitch
+and close with an utterance's fall (the comma's continuation contour is why a sentence is rendered
+whole), and every clause's first word would be clipped the way a sentence's is (`OPENING_VOWEL`). The
+leak is local and the plan says exactly where it is, so it is fixed there. If the ear still hears the
+next word in a rest, splitting is the experiment to run next.
+
 ## Still proposed
 
 1. **Rests rendered, not spliced** - the comma rest whole from `rest_floor`, no digital silence
    (`2_native_rests.wav`). Needs the ear first.
-2. **Final lengthening where it belongs** - on the last word or two before a boundary
-   (`dur_scale`), instead of slowing the whole sentence as `_discourse_plan` does now.
+2. **Final lengthening where it belongs** - done before a comma (the trail, above); a full stop
+   still slows the whole sentence through `_discourse_plan`.
 3. **`dur_cap`** - a per-id ceiling after the floor, so the bimodal blank `_trim_rests` cuts out
    is capped before the audio exists.
 4. **A pitch accent on a stressed word** - the one cue of stress this graph cannot render. A

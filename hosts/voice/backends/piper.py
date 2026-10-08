@@ -30,6 +30,7 @@ dataset AND its derivation chain. Adding a voice means reading its MODEL_CARD.
 
 from __future__ import annotations
 
+import functools
 import json
 import math
 import os
@@ -283,10 +284,79 @@ EMPHASIS_RAMP = 0.030
 # model already gave its length is left exactly as it was.
 OPENING_VOWEL = 0.05
 
+# THE WORD BEFORE A REST TRAILS OFF. A speaker who is about to pause on a comma holds the last
+# word a little, lets it fall away in level, and often lets the pitch sag at the very end. The
+# model ends every word at full level and then drops it: measured over 37 commas of a Cards
+# reading, the steepest 20 ms of a word's end is 15 dB before a comma, 17 before a full stop and
+# 17 mid-sentence. Mid-sentence the next word covers it and a full stop falls in pitch as well;
+# at a comma, with a rest of up to a second and a pitch that stays level, the cliff stands alone
+# and reads as the word cut off. Three small moves, scaled together by `_trail_weight`:
+#
+#   THE HOLD, through the duration plan: the word's final rime (its last vowel and what follows
+#   it) is rendered `1 + TRAIL_STRETCH` times longer, so the model draws the longer ending itself.
+#   THE FADE, on the waveform: for TRAIL_TIP seconds up to the voice's own end the level eases
+#   down (quadratic in dB, so it gathers speed toward the tip) to TRAIL_DB below, and stays there
+#   through the model's own rest until the next word is about to start - which also takes the
+#   word-final releases that stand in a long rest down with it.
+#   THE SAG, on the waveform: the last TRAIL_SAG_SPAN seconds are read slower, easing to
+#   TRAIL_SAG semitones lower, with the length kept (see `_glide`).
+#
+# Full sentence ends are left to the model's own finality and `_discourse_plan`.
+TRAIL_STRETCH = 0.25
+TRAIL_TIP = 0.12
+TRAIL_DB = 16.0
+TRAIL_SAG = 1.5
+TRAIL_SAG_SPAN = 0.09
+# A rest this long is a strong enough boundary for the whole trail; a shorter one gets a share of
+# it. Boundary strength is what pre-boundary lengthening follows, and the rest is the strength.
+TRAIL_REST_FULL = 0.5
+# How far under the final rime's own peak the voice still counts as sounding (`_trail` looks for
+# its end in the waveform: the model keeps voicing through the mark, so the plan's last sound is
+# 50 ms early to 80 ms late), how long the level takes to come back before the next word, and how
+# far past the voice's end the sag keeps reading slow (inside the rest, where the join is silent).
+TRAIL_VOICED_DB = 12.0
+TRAIL_BACK = 0.03
+TRAIL_SAG_TAIL = 0.03
+# The sag's join back to the unmoved audio.
+TRAIL_JOIN = 0.002
+
+# THE NEXT WORD'S HISS, LEAKED INTO A REST. The model starts a fricative early - an /s/ 40 to 75
+# ms before its word, which is its own coarticulation and sounds right - but the word-space the
+# rest floor lengthens takes the next word's sound with it, and before an /s/ the lead grew to
+# 165-195 ms of a 210-290 ms rest (median of five draws, en_US-libritts-high; 0-25 ms before a
+# vowel, a stop or most other fricatives). With the rest that full of hiss the splice had no
+# silence to cut in and cut through the hiss: a burst stayed on the word before ("the end, sweet
+# souls" heard as "ends ... ssweet"). `_quiet_lead` keeps LEAD_KEEP seconds of it before the next
+# word, coming in over LEAD_RAMP, and silences what is earlier. A frame is hiss when more than
+# LEAD_HF of its energy is above 4 kHz and it is louder than LEAD_FLOOR (of the take's peak).
+LEAD_KEEP = 0.08
+LEAD_RAMP = 0.03
+LEAD_HF = 0.5
+LEAD_FLOOR = 0.005
+LEAD_FRAME = 0.005
+
 # The vowels of eSpeak's IPA (and of `arpabet.to_symbols`), and the marks that belong to one.
 _VOWELS = frozenset("aeiouyæɑɐɒɔəɚɛɜɝɪʊʌʏɘɵɨʉøœɤɯᵻ")
 _VOWEL_MARKS = frozenset("ː")
 _STRESS = "ˈ"
+
+
+def _trail_weight(mark: str, params: dict) -> float:
+    """How much of the trail the word before `mark` gets: 0 where it gets none.
+
+    None at a sentence end or a mark with no rest, and none at Pause 0, where the mark is no
+    boundary at all. Otherwise the share of TRAIL_REST_FULL the mark's rest reaches, times the
+    request's own `trail` (1 by default; 0 turns the whole thing off, 2 doubles it).
+    """
+    m = str(mark)
+    if m in SENTENCE_END or PAUSE_AFTER.get(m, 0.0) <= 0.0:
+        return 0.0
+    try:
+        k = min(max(float(params.get("trail", 1.0)), 0.0), 2.0)
+    except (TypeError, ValueError):
+        k = 1.0
+    rest = (_dwell_for(m) + _top_up(m, params)) * _pause_multiplier(params)
+    return k * min(1.0, rest / TRAIL_REST_FULL)
 
 
 def _nuclei(symbols: list) -> set:
@@ -325,6 +395,34 @@ def _nuclei(symbols: list) -> set:
                 elif run:
                     break
         out.update(run)
+    return out
+
+
+def _final_rimes(symbols: list, want) -> set:
+    """Positions in `symbols` of the FINAL RIME of each source in `want`: its last vowel run (with
+    the stress mark right before it and the length mark after) and the consonants that follow it,
+    up to the mark and the space that end the word. What a pre-boundary lengthening stretches.
+
+    A word with no vowel at all ("hmm") is held on its last sound.
+    """
+    by_src: dict = {}
+    for j, (sym, src) in enumerate(symbols):
+        if src in want and sym != " " and sym not in _MARK_SYMBOLS:
+            by_src.setdefault(src, []).append((j, sym))
+    out: set = set()
+    for items in by_src.values():
+        last = next(
+            (k for k in range(len(items) - 1, -1, -1) if items[k][1] in _VOWELS), None
+        )
+        if last is None:
+            out.add(items[-1][0])
+            continue
+        first = last
+        while first > 0 and items[first - 1][1] in _VOWELS:
+            first -= 1
+        if first > 0 and items[first - 1][1] == _STRESS:
+            first -= 1
+        out.update(j for j, _ in items[first:])
     return out
 
 
@@ -631,6 +729,177 @@ def _emphasize(audio, edges: dict, group: list, sr: int):
     return np.clip(audio * gain, -1.0, 1.0).astype(np.float32)
 
 
+def _rms_envelope(a, n: int):
+    """Moving RMS of `a` over `n` samples, centered, one value per sample (an edge uses what
+    is there)."""
+    import numpy as np
+
+    c = np.concatenate(([0.0], np.cumsum(np.square(a, dtype=np.float64))))
+    i = np.arange(a.size)
+    lo = np.clip(i - n // 2, 0, a.size)
+    hi = np.clip(i - n // 2 + n, 0, a.size)
+    return np.sqrt((c[hi] - c[lo]) / np.maximum(hi - lo, 1))
+
+
+def _glide(audio, a: int, b: int, c: int, fall: float, stop: int, sr: int) -> bool:
+    """Lower the pitch of audio[a:b] in place by up to `fall` semitones, keeping the length.
+
+    The pitch is bought the way the arc's is, by reading slower: at rate 1 at `a`, easing
+    (smoothstep) to 2^(-fall/12) at `b`, and at that rate on to `c`. Reading slower is longer by
+    a few milliseconds, and the audio after it must not move - the plan's times, the splices and
+    the karaoke stand on it - so the glided read runs on over the samples it displaced, and
+    TRAIL_JOIN seconds of it are crossfaded back into the original. That is in a word's last
+    moments and the rest after it (`c` is inside the rest), where a join is silent. `stop` is the
+    first sample it may not write: the next word is never touched. Returns False, having touched
+    nothing, where it does not fit.
+
+    The formants go down with the pitch (8% at 1.5 semitones) and `_restore_formants` is not
+    used: the move is made under the fade at the end of the word, where the vowel only darkens a
+    little as it falls, which a larynx does as well.
+    """
+    import numpy as np
+
+    join = max(1, int(round(TRAIL_JOIN * sr)))
+    if fall <= 0.0 or b - a < 8 or c < b or a < 0 or c + join >= audio.size:
+        return False
+    r_end = 2.0 ** (-fall / 12.0)
+    pos = np.arange(a, c + 1, dtype=np.float64)
+    f = np.clip((pos - a) / float(b - a), 0.0, 1.0)
+    rate = 1.0 - (1.0 - r_end) * f * f * (3.0 - 2.0 * f)
+    # the output sample at which each source position is reached
+    t = np.concatenate(([0.0], np.cumsum(1.0 / rate[:-1])))
+    n_out = int(t[-1])
+    if a + n_out + join > stop:
+        return False
+    u = np.interp(np.arange(n_out), t, pos)
+    u_on = u[-1] + r_end * np.arange(1, join + 1)
+    src = np.pad(audio.astype(np.float32), (RESAMPLE_TAPS, RESAMPLE_TAPS + 1))
+    y = _read_at(src, np.concatenate((u, u_on)), _sinc_table(RESAMPLE_CUTOFF))
+    ease = 0.5 - 0.5 * np.cos(np.pi * (np.arange(join) + 0.5) / join)
+    at = a + n_out
+    y[n_out:] = y[n_out:] * (1.0 - ease) + audio[at : at + join] * ease
+    audio[a : at + join] = y
+    return True
+
+
+def _hiss_from(audio, lo: int, hi: int, sr: int, peak: float) -> int:
+    """Where the run of hiss that ends at sample `hi` begins, walked back from it frame by frame
+    and never before `lo`; `hi` itself where the frame before it is not hiss (`LEAD_HF`)."""
+    import numpy as np
+
+    w = max(8, int(round(LEAD_FRAME * sr)))
+    f = np.fft.rfftfreq(w, 1.0 / sr)
+    window = np.hanning(w)
+    k = int(hi)
+    while k - w >= lo:
+        x = audio[k - w : k].astype(np.float64)
+        if np.sqrt(np.mean(x * x)) < peak * LEAD_FLOOR:
+            break
+        spec = np.abs(np.fft.rfft(x * window)) ** 2
+        tot = float(spec.sum())
+        if tot <= 0.0 or float(spec[f >= 4000.0].sum()) / tot <= LEAD_HF:
+            break
+        k -= w
+    return k
+
+
+def _quiet_lead(audio, edges: dict, group: list, params: dict, sr: int):
+    """The next word's hiss in a floored rest held to LEAD_KEEP seconds (see LEAD_KEEP).
+
+    Only where the rest was floored (`_rest_floor`): that is what lengthens the lead, and an
+    unfloored boundary is the model's own. The plan says where the rest is - from the word's last
+    sound to the next one's first - so a word's own final fricative is never looked at. Returns a
+    copy, or `audio` itself where nothing is changed.
+    """
+    import numpy as np
+
+    peak = float(np.max(np.abs(audio))) if audio.size else 0.0
+    out = None
+    for ti, tok in enumerate(group):
+        nxt = edges.get(ti + 1)
+        if ti not in edges or nxt is None or peak <= 0.0:
+            continue
+        if _rest_floor(str(tok.get("punct", "")), params) <= 0.0:
+            continue
+        lo = int(round(float(edges[ti][1]) * sr))
+        hi = min(audio.size, int(round(float(nxt[0]) * sr)))
+        start = _hiss_from(audio, lo, hi, sr, peak)
+        keep = hi - int(round(LEAD_KEEP * sr))
+        if start >= keep:
+            continue
+        if out is None:
+            out = np.array(audio, dtype=np.float32, copy=True)
+        ramp = min(int(round(LEAD_RAMP * sr)), hi - keep)
+        fade = max(1, int(round(SPLICE_FADE_MS * sr / 1000.0)))
+        # out over a few ms where the hiss starts, nothing until the kept lead, then back in
+        n = min(fade, keep - start)
+        out[start : start + n] *= np.linspace(1.0, 0.0, n, dtype=np.float32)
+        out[start + n : keep] = 0.0
+        if ramp > 0:
+            out[keep : keep + ramp] *= (
+                0.5 - 0.5 * np.cos(np.pi * (np.arange(ramp) + 0.5) / ramp)
+            ).astype(np.float32)
+    return audio if out is None else out
+
+
+def _trail(audio, edges: dict, group: list, params: dict, sr: int):
+    """The fade and the sag of `TRAIL_*`, on each word that comes before a mid-sentence mark.
+
+    `edges` is {token: (first sound, last sound)} in seconds. The voice's own end is looked for
+    in the waveform - the last point within TRAIL_VOICED_DB of the final rime's peak - because
+    the plan puts it 50 ms early to 80 ms late. The fade ends there, so the model's own drop
+    lands in the part of the word that is already down. Returns a copy with the words changed,
+    or `audio` itself where none is.
+    """
+    import numpy as np
+
+    todo = [
+        (ti, _trail_weight(str(t.get("punct", "")), params))
+        for ti, t in enumerate(group)
+        if ti in edges
+    ]
+    todo = [(ti, w) for ti, w in todo if w > 0.0]
+    peak = float(np.max(np.abs(audio))) if audio.size else 0.0
+    if not todo or peak <= 0.0:
+        return audio
+    out = np.array(audio, dtype=np.float32, copy=True)
+    n_env = max(1, int(round(0.010 * sr)))
+    guard = int(round(0.010 * sr))
+    for ti, w in todo:
+        first, last = (int(round(float(x) * sr)) for x in edges[ti])
+        nxt = edges.get(ti + 1)
+        limit = out.size if nxt is None else min(out.size, int(round(float(nxt[0]) * sr)))
+        # the next word starts where its lead hiss does (`_quiet_lead`): never faded, and never
+        # mistaken for this word's voice
+        limit = _hiss_from(audio, last, limit, sr, peak)
+        lo = max(first, last - int(round(0.12 * sr)))
+        hi = min(limit - guard, last + int(round(0.25 * sr)))
+        if hi - lo < 4 * n_env:
+            continue
+        env = _rms_envelope(audio[lo:hi], n_env)
+        top = float(env[: max(1, last + int(round(0.08 * sr)) - lo)].max())
+        if top < peak * 0.01:
+            continue
+        end = lo + int(np.flatnonzero(env >= top * 10.0 ** (-TRAIL_VOICED_DB / 20.0))[-1])
+        tip = min(int(round(TRAIL_TIP * sr)), end - first)
+        if tip < int(round(0.03 * sr)):
+            continue
+        stop = max(end, limit - guard)
+        span = min(int(round(TRAIL_SAG_SPAN * sr)), end - first)
+        c = min(end + int(round(TRAIL_SAG_TAIL * sr)), stop)
+        if not _glide(out, end - span, end, c, TRAIL_SAG * w, stop, sr):
+            _glide(out, end - span, end, end, TRAIL_SAG * w, stop, sr)
+        depth = TRAIL_DB * w
+        n = stop - (end - tip)
+        g = np.full(n, -depth)
+        g[:tip] = -depth * (np.arange(tip) / float(tip)) ** 2
+        back = min(int(round(TRAIL_BACK * sr)), stop - end)
+        if back > 0:
+            g[n - back :] = -depth * (1.0 - np.arange(back) / float(back))
+        out[end - tip : stop] *= (10.0 ** (g / 20.0)).astype(np.float32)
+    return out
+
+
 def _resample(a, ratio: float):
     """Play `a` back `ratio` times faster - how both pitch moves are bought (the Tone and the arc).
 
@@ -657,26 +926,44 @@ def _resample(a, ratio: float):
     if n < 2:
         return a[:1].astype(np.float32)
     step = (a.size - 1.0) / (n - 1.0)
-    fc = RESAMPLE_CUTOFF * min(1.0, 1.0 / step)
-    w = RESAMPLE_TAPS
-    k = np.arange(-w + 1, w + 1)
-    # POLYPHASE: the kernel tabulated once per call at RESAMPLE_PHASES fractional offsets, and
-    # each output sample reads the nearest row - computing the window per sample cost a
-    # quarter of a second per second of audio, and every sentence goes through here twice.
-    frac = np.arange(RESAMPLE_PHASES + 1) / RESAMPLE_PHASES
-    d = frac[:, None] - k[None, :]
-    win = np.i0(RESAMPLE_BETA * np.sqrt(np.clip(1.0 - (d / (w + 1.0)) ** 2, 0.0, 1.0)))
-    table = (fc * np.sinc(fc * d) * win / np.i0(RESAMPLE_BETA)).astype(np.float32)
-    src = np.pad(a.astype(np.float32), (w, w + 1))
+    table = _sinc_table(RESAMPLE_CUTOFF * min(1.0, 1.0 / step))
+    src = np.pad(a.astype(np.float32), (RESAMPLE_TAPS, RESAMPLE_TAPS + 1))
     out = np.empty(n, dtype=np.float32)
     block = 16384
     for s in range(0, n, block):
         pos = np.arange(s, min(n, s + block)) * step
-        base = np.floor(pos).astype(np.int64)
-        phase = np.rint((pos - base) * RESAMPLE_PHASES).astype(np.int64)
-        taps = src[base[:, None] + k[None, :] + w]
-        out[s : s + pos.size] = np.einsum("ij,ij->i", taps, table[phase])
+        out[s : s + pos.size] = _read_at(src, pos, table)
     return out
+
+
+@functools.lru_cache(maxsize=8)
+def _sinc_table(fc: float):
+    """The resampler's kernel, tabulated at RESAMPLE_PHASES fractional offsets (POLYPHASE: each
+    output sample reads the nearest row - computing the window per sample cost a quarter of a
+    second per second of audio, and every sentence goes through here twice)."""
+    import numpy as np
+
+    w = RESAMPLE_TAPS
+    k = np.arange(-w + 1, w + 1)
+    frac = np.arange(RESAMPLE_PHASES + 1) / RESAMPLE_PHASES
+    d = frac[:, None] - k[None, :]
+    win = np.i0(RESAMPLE_BETA * np.sqrt(np.clip(1.0 - (d / (w + 1.0)) ** 2, 0.0, 1.0)))
+    table = (fc * np.sinc(fc * d) * win / np.i0(RESAMPLE_BETA)).astype(np.float32)
+    table.flags.writeable = False
+    return table
+
+
+def _read_at(src, pos, table):
+    """`src` read at the fractional sample positions `pos`. `src` is padded by RESAMPLE_TAPS
+    before it and RESAMPLE_TAPS + 1 after, so a position `p` of the unpadded audio is `p` here."""
+    import numpy as np
+
+    w = RESAMPLE_TAPS
+    k = np.arange(-w + 1, w + 1)
+    base = np.floor(pos).astype(np.int64)
+    phase = np.rint((pos - base) * RESAMPLE_PHASES).astype(np.int64)
+    taps = src[base[:, None] + k[None, :] + w]
+    return np.einsum("ij,ij->i", taps, table[phase])
 
 
 # --- THE SOURCE AND THE FILTER, SEPARATED -----------------------------------
@@ -2422,6 +2709,8 @@ class PiperBackend(Backend):
             edges = dict(self._last_edges)
             frame = HOP_LENGTH / float(sr)
             audio = _emphasize(audio, edges, group, sr)
+            audio = _quiet_lead(audio, edges, group, params, sr)
+            audio = _trail(audio, edges, group, params, sr)
             # SAY WHICH WORDS CAME BACK WITHOUT A SPAN. ghost keeps them in the karaoke line
             # either way now (it interpolates their timing - see
             # GenerativeEditor._bridge_words), but a token the aligner cannot place is a real
@@ -2654,8 +2943,14 @@ class PiperBackend(Backend):
             for ti, t in enumerate(group)
             if int(t.get("emph", 0) or 0) in EMPHASIS
         }
+        # the word before a rest is held (`TRAIL_STRETCH`): its final rime, by this much
+        held = {}
+        for ti, t in enumerate(group):
+            w = _trail_weight(str(t.get("punct", "")), params)
+            if w > 0.0:
+                held[ti] = 1.0 + TRAIL_STRETCH * w
         return self._render_symbols(
-            symbols, cfg, sess, params, floors, stretch, opening=OPENING_VOWEL
+            symbols, cfg, sess, params, floors, stretch, opening=OPENING_VOWEL, hold=held
         )
 
     def _render_symbols(
@@ -2667,6 +2962,7 @@ class PiperBackend(Backend):
         floors: dict | None = None,
         stretch: dict | None = None,
         opening: float = 0.0,
+        hold: dict | None = None,
     ):
         """(symbol, source) pairs -> audio, plus a time span per source.
 
@@ -2680,9 +2976,10 @@ class PiperBackend(Backend):
 
         `stretch` is {source: multiplier} on that source's stressed vowel (`EMPHASIS`), and
         `opening` the seconds the first word's vowel may not fall below (`OPENING_VOWEL`),
-        at the request's length scale. Both act on the duration plan, through the graph's
-        inputs; a graph without them renders as it always did. The vowel probe passes
-        neither - it measures vowels, and must get the model's own.
+        at the request's length scale. `hold` is {source: multiplier} on that source's final
+        rime (`TRAIL_STRETCH`), multiplied with the stress where the two meet. All act on the
+        duration plan, through the graph's inputs; a graph without them renders as it always
+        did. The vowel probe passes none - it measures vowels, and must get the model's own.
         """
         import numpy as np
 
@@ -2694,6 +2991,7 @@ class PiperBackend(Backend):
         # vowel run where it has no stress mark. What a stretch lengthens and what the
         # opening floor holds up.
         nucleus = _nuclei(symbols)
+        rime = _final_rimes(symbols, set(hold)) if hold else set()
         first = next(
             (
                 src
@@ -2748,6 +3046,13 @@ class PiperBackend(Backend):
                 if stretch and prev_core
                 else 1.0
             )
+            # a held word's final rime the same way: its sounds, the blanks inside it, and the
+            # one after it
+            if hold:
+                if j in rime:
+                    mul *= float(hold.get(src, 1.0))
+                if (j - 1) in rime and symbols[j - 1][1] == src:
+                    pad_mul *= float(hold.get(src, 1.0))
             if core and src == first and open_frames > 0.0 and not opened and sym != _STRESS:
                 rest = max(rest, open_frames)
                 opened = True

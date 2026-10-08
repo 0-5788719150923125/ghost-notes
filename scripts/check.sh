@@ -30,6 +30,8 @@
 
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 GODOT="${GODOT:-godot}"
 OUT="dist/check"
@@ -150,7 +152,8 @@ run_gate() {  # run_gate <name> <log>; returns the raw exit code
 			# The editor's own scan: every script parsed, every class registered, every UID
 			# resolved. It also refreshes the class cache, which a `--script` gate needs for a
 			# class_name added since the editor last ran.
-			timeout 600 "$GODOT" --headless --path . --editor --quit >"$log" 2>&1
+			# Keep Godot in the terminal's process group so Ctrl+C reaches it.
+			timeout --foreground 600 "$GODOT" --headless --path . --editor --quit >"$log" 2>&1
 			local rc=$?
 			if grep -qiE 'Parse Error|Failed to load script|Failed loading resource|invalid UID|Unrecognized UID|SCRIPT ERROR|Compile Error' "$log"; then
 				return 1
@@ -162,11 +165,11 @@ run_gate() {  # run_gate <name> <log>; returns the raw exit code
 			t=$(timeout_of "$g")
 			if [ "$(kind_of "$g")" = script ]; then
 				if is_gpu "$g"; then
-					timeout "$t" tests/run_quiet.sh "$g" >"$log" 2>&1
+					timeout --foreground "$t" tests/run_quiet.sh "$g" >"$log" 2>&1
 				else
 					local plog
 					plog=$(mktemp)
-					timeout "$t" "$GODOT" --headless --log-file "$plog" --path . --script "res://tests/$g.gd" >"$log" 2>&1
+					timeout --foreground "$t" "$GODOT" --headless --log-file "$plog" --path . --script "res://tests/$g.gd" >"$log" 2>&1
 					local rc=$?
 					rm -f "$plog"
 					return "$rc"

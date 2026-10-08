@@ -64,6 +64,10 @@ const MASKS_DIR := "res://masks"
 ## scanner must never crawl a venv) and out of git entirely.
 const YT_VENV_DIR := "user://ytdlp_venv"
 const YT_DL_DIR := MASKS_DIR + "/_downloads"   # inside /masks/ = already gitignored
+
+
+static func _masks_dir() -> String:
+	return MASKS_DIR if OS.has_feature("editor") else "user://masks"
 ## The panel's width, as every note's panel has it ([SidePanel]); the video, the timeline and the
 ## lanes start past it and its margin on both sides.
 const PANEL_W := 380.0
@@ -808,7 +812,7 @@ func open_source(path: String) -> void:
 			_set_status("⚠  Could not read session: " + path)
 		return
 	var slug := _slugify(path)
-	var dir := MASKS_DIR + "/" + slug
+	var dir := _masks_dir() + "/" + slug
 	var video := dir + "/video.ogv"
 	var audio := dir + "/audio.wav"
 	_session_path = dir + "/session.json"
@@ -1290,7 +1294,8 @@ func _yt_bin(tool_name: String) -> String:
 
 
 func _yt_dl_dir() -> String:
-	return ProjectSettings.globalize_path(YT_DL_DIR)
+	return ProjectSettings.globalize_path(YT_DL_DIR if OS.has_feature("editor")
+		else _masks_dir() + "/_downloads")
 
 
 ## Resolve a binary. [Deps] owns this for the whole app - a GUI-launched Godot
@@ -5497,7 +5502,7 @@ func _ft_wait_for_env() -> void:
 
 
 func _ft_start_track() -> void:
-	var script := ProjectSettings.globalize_path("res://hosts/face/face_track.py")
+	var script := BundledHosts.path("res://hosts/face/face_track.py")
 	if not FileAccess.file_exists(script):
 		_ft_fail("hosts/face/face_track.py is missing")
 		return
@@ -5850,7 +5855,7 @@ func _pt_poll_job(here: int) -> void:
 
 
 func _pt_start_chunk(k: int) -> void:
-	var script := ProjectSettings.globalize_path("res://hosts/face/pose_track.py")
+	var script := BundledHosts.path("res://hosts/face/pose_track.py")
 	if not FileAccess.file_exists(script):
 		_pt_fail("hosts/face/pose_track.py is missing")
 		return
@@ -6560,11 +6565,13 @@ func _do_restart() -> void:
 	# syntax error, and relaunching into it would leave the app unable to open. Validate
 	# headless first (same check as src/scratchpad.py compile); _process reads the
 	# result and only then restarts, or reports the errors and stays put.
+	if not OS.has_feature("editor"):
+		_restart_now()
+		return
 	var exe := OS.get_executable_path()
-	var proj := ProjectSettings.globalize_path("res://")
 	_reload_check_log = ProjectSettings.globalize_path("user://reload_compile_check.log")
 	_reload_check_pid = Subprocess.start_logged(exe,
-		PackedStringArray(["--headless", "--path", proj, "--editor", "--quit"]),
+		PackedStringArray(["--headless"]) + Boot.project_args() + PackedStringArray(["--editor", "--quit"]),
 		_reload_check_log, "reload check")
 	if _reload_check_pid <= 0:
 		_set_status("⚠  Couldn't run the pre-reload compile check - NOT reloading (edits left as-is)")
@@ -8156,9 +8163,8 @@ func _on_export_path(out_path: String) -> void:
 	var rsz := _render_size()
 	_write_render_override(rsz)
 	var exe := OS.get_executable_path()
-	var project := ProjectSettings.globalize_path("res://")
-	var args := Subprocess.own_log("mask_render") + PackedStringArray([
-		"--path", project, "--write-movie", _avi, "--fixed-fps", "25",
+	var args := Subprocess.own_log("mask_render") + Boot.project_args() + PackedStringArray([
+		"--write-movie", _avi, "--fixed-fps", "25",
 		"--", "--mask-render", _session_path])
 	_render_pid = Subprocess.start(exe, args, "mask render")
 	if _render_pid > 0:
@@ -8239,7 +8245,7 @@ static func _even(v: float) -> int:
 
 
 func _override_path() -> String:
-	return ProjectSettings.globalize_path("res://override.cfg")
+	return Boot.project_dir().path_join("override.cfg")
 
 
 func _write_render_override(sz: Vector2i) -> void:

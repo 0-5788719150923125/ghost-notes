@@ -734,10 +734,12 @@ func _start_bake() -> void:
 	_pct = 0
 	Bake.write_progress(0.0)
 	var exe := OS.get_executable_path()
-	var project := ProjectSettings.globalize_path("res://")
-	_bake_pid = Subprocess.start(exe, Subprocess.own_log("bake") + PackedStringArray([
-		"--headless", "--path", project, "--script", "res://src/bake_runner.gd",
-		"--", "--bake-song", _song, "--bake-out", _cache]), "bake")
+	var args := Subprocess.own_log("bake") + PackedStringArray(["--headless"])
+	args.append_array(Boot.project_args())
+	if OS.has_feature("editor"):
+		args.append_array(PackedStringArray(["--script", "res://src/bake_runner.gd"]))
+	args.append_array(PackedStringArray(["--", "--bake-song", _song, "--bake-out", _cache]))
+	_bake_pid = Subprocess.start(exe, args, "bake")
 	if _bake_pid > 0:
 		_state = "baking"
 		print("ghost: analyzing audio (pid ", _bake_pid, ") -> ", _cache)
@@ -760,9 +762,8 @@ func _start_render() -> void:
 	# Kept EVEN, because yuv420p needs even dimensions and a half-pixel would be rejected.
 	_write_override(_render_w(), _render_h())
 	var exe := OS.get_executable_path()
-	var project := ProjectSettings.globalize_path("res://")
-	var args := Subprocess.own_log("render") + PackedStringArray([
-		"--path", project, "--write-movie", _avi, "--fixed-fps", str(_quality.fps),
+	var args := Subprocess.own_log("render") + Boot.project_args() + PackedStringArray([
+		"--write-movie", _avi, "--fixed-fps", str(_quality.fps),
 		"--", "--export", "--bake-file", _cache, "--audio", _song])
 	# THE SEED: pin it only when there is a live session to reproduce. Without
 	# one (exporting a take straight from the belt - no cast, no show watched
@@ -1190,7 +1191,7 @@ func _file_size(path: String) -> int:
 # it at startup to override project.godot (here: the export's output resolution + stretch
 # mode). _ready() also clears any stale copy left by a render that never exited cleanly.
 func _override_path() -> String:
-	return ProjectSettings.globalize_path("res://override.cfg")
+	return Boot.project_dir().path_join("override.cfg")
 
 
 ## The size the SCENE is rendered at - the output size times the preset's supersample factor,

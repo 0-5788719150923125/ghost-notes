@@ -99,6 +99,7 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
             "deps_panel.gd",
             "provision.gd",
             "provisioner.gd",
+            "bundled_hosts.gd",
             "provision_badge.gd",
             "chrome.gd",
             "capabilities.gd",
@@ -494,6 +495,13 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
         True,
     ),
     (
+        "--export-smoke",
+        "",
+        "Check that an exported desktop app starts and can unpack its bundled Python hosts, "
+        "then exit. Used by `scripts/smoke-export.sh`.",
+        True,
+    ),
+    (
         "--synth-autopilot",
         "",
         "With `--export`: open the Synthesis panel over the take and let the "
@@ -529,8 +537,8 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
         "`Showcase`): plays the showcase note read-only and quits.",
         True,
     ),
-    ("--bake-song", "<path>", "`bake_runner`: the song to analyze.", True),
-    ("--bake-out", "<path>", "`bake_runner`: where to write the bake cache.", True),
+    ("--bake-song", "<path>", "Export subprocess: the song to analyze.", True),
+    ("--bake-out", "<path>", "Export subprocess: where to write the bake cache.", True),
 ]
 
 # Flags that belong to the Godot engine itself (or are argument separators),

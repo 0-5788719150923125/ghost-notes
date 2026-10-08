@@ -694,15 +694,21 @@ static func font(key: String) -> Font:
 	var entry: Dictionary = FACES.get(key, {})
 	var path := String(entry.get("file", key))
 	var f: Font = null
-	if ResourceLoader.exists(path) or FileAccess.file_exists(path):
+	# Imported fonts live in the PCK as resources. load_dynamic_font() reads the raw
+	# .ttf from FileAccess, which is absent from a normal Godot export.
+	if ResourceLoader.exists(path):
+		var imported := ResourceLoader.load(path)
+		if imported is Font:
+			f = imported
+	if f == null and FileAccess.file_exists(path):
 		var ff := FontFile.new()
 		if ff.load_dynamic_font(path) == OK:
 			f = ff
-			if entry.has("weight"):
-				var fv := FontVariation.new()
-				fv.base_font = ff
-				fv.variation_opentype = {"wght": int(entry["weight"])}
-				f = fv
+	if f != null and entry.has("weight"):
+		var fv := FontVariation.new()
+		fv.base_font = f
+		fv.variation_opentype = {"wght": int(entry["weight"])}
+		f = fv
 	if f == null:
 		f = ThemeDB.fallback_font
 	_fonts[key] = f

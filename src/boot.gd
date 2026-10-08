@@ -34,6 +34,18 @@ const NAME := "Ghost Notes"
 const TAGLINE := "A Spectral Experience"
 const TITLE := NAME + ": " + TAGLINE
 
+
+## Editor projects have a source directory. Exported projects run from an embedded pack;
+## override.cfg must sit beside the executable for the next process to read it.
+static func project_dir() -> String:
+	return ProjectSettings.globalize_path("res://") if OS.has_feature("editor") \
+		else OS.get_executable_path().get_base_dir()
+
+
+static func project_args() -> PackedStringArray:
+	return PackedStringArray(["--path", project_dir()]) if OS.has_feature("editor") \
+		else PackedStringArray()
+
 ## How much of its screen the window opens on, each way.
 const WINDOW_SHARE := 0.75
 ## Engine arguments that say where or how big the window is - a launch that gives one keeps it.

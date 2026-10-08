@@ -150,7 +150,7 @@ static func _fail(why: String) -> void:
 
 
 static func _abs(p: String) -> String:
-	return ProjectSettings.globalize_path(p)
+	return BundledHosts.path(p) if p.begins_with("res://hosts/") else ProjectSettings.globalize_path(p)
 
 
 static func _log(step: String) -> String:

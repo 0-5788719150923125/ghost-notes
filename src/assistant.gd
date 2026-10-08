@@ -51,6 +51,10 @@ const COL_USES := Color(0.42, 0.48, 0.58)
 ## construction, not by coincidence, so don't move one without the other.
 
 const DIR := "res://feedback"
+
+
+static func _feedback_dir() -> String:
+	return DIR if OS.has_feature("editor") else "user://feedback"
 const PANEL_W := 380
 ## How many dispatched subprocesses may be live at once - past this, entries
 ## queue same as before. Kept small: these are permission-bypassed agents
@@ -130,12 +134,12 @@ func _missing_cli(entry: Dictionary) -> String:
 ## ghost's project root IS the repository (ghost-notes), so the subprocess runs from
 ## res:// and sees the same CLAUDE.md / git context an interactive session would.
 func _resolve_repo_root() -> void:
-	_repo_root = ProjectSettings.globalize_path("res://").simplify_path()
+	_repo_root = Boot.project_dir().simplify_path()
 
 
 func _ensure_dir() -> void:
-	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(DIR)):
-		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(DIR))
+	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(_feedback_dir())):
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_feedback_dir()))
 
 
 # --- public API ----------------------------------------------------------------
@@ -268,7 +272,7 @@ func _dispatch(entry: Dictionary, prompt: String) -> void:
 	entry.started_at = Time.get_ticks_msec()
 	entry.read_offset = 0
 	entry.progress = "starting…"
-	var base := ProjectSettings.globalize_path(DIR)
+	var base := ProjectSettings.globalize_path(_feedback_dir())
 	entry.out_path = "%s/%04d.out.json" % [base, int(entry.index)]
 	entry.err_path = "%s/%04d.err.log" % [base, int(entry.index)]
 	var prompt_path := "%s/%04d.prompt.txt" % [base, int(entry.index)]
@@ -502,7 +506,7 @@ func _save_entry(entry: Dictionary) -> void:
 ## so that's surfaced honestly as an error rather than silently vanishing or
 ## claiming to still be "running" forever.
 func _load_existing() -> void:
-	var dir := DirAccess.open(DIR)
+	var dir := DirAccess.open(_feedback_dir())
 	if dir == null:
 		return
 	var loaded := []
@@ -510,7 +514,7 @@ func _load_existing() -> void:
 	for fn in dir.get_files():
 		if not fn.ends_with(".assistant.json"):
 			continue
-		var fa := FileAccess.open("%s/%s" % [DIR, fn], FileAccess.READ)
+		var fa := FileAccess.open("%s/%s" % [_feedback_dir(), fn], FileAccess.READ)
 		if fa == null:
 			continue
 		var data = JSON.parse_string(fa.get_as_text())
@@ -538,7 +542,7 @@ func _load_existing() -> void:
 				status = "error"
 				error_text = "interrupted - the editor closed before this run could be identified"
 		loaded.append({
-			"index": idx, "query": str(data.get("query", "")), "stem": "%s/%04d" % [DIR, idx],
+			"index": idx, "query": str(data.get("query", "")), "stem": "%s/%04d" % [_feedback_dir(), idx],
 			"status": status, "session_id": sid,
 			"response": str(data.get("response", "")), "cost_usd": float(data.get("cost_usd", 0.0)),
 			"pid": - 1, "out_path": "", "err_path": "", "error_text": error_text, "expanded": false,
@@ -564,7 +568,7 @@ func _load_existing() -> void:
 		var idx := int(stem_name)
 		if has_record.has(idx):
 			continue
-		var fa := FileAccess.open("%s/%s" % [DIR, fn], FileAccess.READ)
+		var fa := FileAccess.open("%s/%s" % [_feedback_dir(), fn], FileAccess.READ)
 		if fa == null:
 			continue
 		var data = JSON.parse_string(fa.get_as_text())
@@ -573,7 +577,7 @@ func _load_existing() -> void:
 		if query == "":
 			continue
 		loaded.append({
-			"index": idx, "query": query, "stem": "%s/%04d" % [DIR, idx],
+			"index": idx, "query": query, "stem": "%s/%04d" % [_feedback_dir(), idx],
 			"status": "orphaned", "session_id": "", "response": "", "cost_usd": 0.0,
 			"pid": - 1, "out_path": "", "err_path": "", "error_text": "", "expanded": false,
 			"pending_prompt": "", "backend": "", "usage": "",

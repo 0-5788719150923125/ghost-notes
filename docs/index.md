@@ -99,6 +99,7 @@ The lifecycle around the scenes: boot, the notes list and a note's own panel, th
 - [`deps_panel.gd`](../src/deps_panel.gd) **DepsPanel** - the environment readout above the bottom-right row, behind its ⚙ (Chrome).
 - [`provision.gd`](../src/provision.gd) **Provision** - what ghost installs for itself, and the one door every feature asks through.
 - [`provisioner.gd`](../src/provisioner.gd) **provisioner** - Provisioner (autoload) - installs, updates and reports on everything ghost fetches for itself.
+- [`bundled_hosts.gd`](../src/bundled_hosts.gd) **BundledHosts** - External Python processes cannot read the exported res:// pack. The build includes one archive of hosts/ in that pack; on first use, copy it to a versioned user:// directory. The editor keeps using the source tree directly.
 - [`provision_badge.gd`](../src/provision_badge.gd) **provision_badge** - ProvisionBadge - a small notice at the top of the frame while ghost is installing or updating its own dependencies, in every mode. Chrome furniture, because an install can start from anywhere: the voice's environment from the Generative panel, FFmpeg from a clip opened on a first run, an update at ...
 - [`chrome.gd`](../src/chrome.gd) **Chrome** - the shared session furniture every mode of ghost carries.
 - [`capabilities.gd`](../src/capabilities.gd) **Capabilities** - what this platform can do, and what is ready now (next/notes.md, "Platforms: desktop and Android"). One table, two questions per entry, each answered with a reason:

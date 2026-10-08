@@ -41,6 +41,8 @@ cd "$(dirname "$0")/.."          # the project root
 TIMEOUT="${1:-600}"
 LOG=$(mktemp)
 trap 'rm -f "$LOG"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 tests/run_boot_probe.sh tests/scene_smoke.gd "$TIMEOUT" 2>&1 | tee "$LOG" \
   | grep -Ev '^\s*at:|GDScript backtrace|^\s*\[[0-9]+\]|handle_crash|Load address|^=+$|Dumping the backtrace|Engine version'

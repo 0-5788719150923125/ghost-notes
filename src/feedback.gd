@@ -6,7 +6,8 @@ class_name FeedbackConsole
 ## The visualizer is built by eye, but "this shape feels wrong" is hard to act on
 ## from a written note alone. This console closes that loop: press the toggle key,
 ## type what feels off about the scene on screen, hit Enter, and it writes a
-## self-contained record to `res://feedback/`:
+## self-contained record to `res://feedback/` in the editor or `user://feedback/`
+## in an exported app:
 ##
 ##   feedback/NNNN.json  - the typed scene descriptor (name / behavior / shot / seed
 ##                         / params / the audio frame) plus your query.
@@ -15,7 +16,7 @@ class_name FeedbackConsole
 ##
 ## That pair is everything needed to understand and reproduce a complaint - the
 ## seed makes the scene deterministic, and the image shows what "wrong" looked like.
-## The directory is git-ignored; it is a working comms channel, not an artifact.
+## The editor directory is git-ignored; records in an export live in app data.
 
 ## Emitted whenever the console closes (submit or cancel). The session lifecycle
 ## listens for this so it can wait, rather than tearing the console out from under a
@@ -54,6 +55,14 @@ var _ask: CheckBox
 var _open := false
 var _shot_img: Image = null      # the frame snapshotted the instant the console opened
 var _shot_desc: Dictionary = {}  # the scene descriptor at that same instant
+
+
+static func default_dir() -> String:
+	return DIR if OS.has_feature("editor") else "user://feedback"
+
+
+func _init() -> void:
+	dir = default_dir()
 
 
 func _ready() -> void:

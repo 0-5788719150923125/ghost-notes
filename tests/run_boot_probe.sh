@@ -55,7 +55,9 @@ cleanup() {
   rm -f "$SCENE"
   if [[ -n "$COPY" ]]; then rm -f "$COPY" "$COPY.uid"; fi
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 ROOT=$(pwd -P)
 SRC=$(realpath "$PROBE_SRC")
@@ -96,7 +98,7 @@ fi
 # one truncates it under a session that is running - the author's live log lost its lines to
 # the probes run beside it. Its output still comes here, on stdout.
 PROBE_LOG=$(mktemp)
-trap 'cleanup; rm -f "$PROBE_LOG"' EXIT INT TERM
+trap 'cleanup; rm -f "$PROBE_LOG"' EXIT
 RUNNER+=(--log-file "$PROBE_LOG")
 # SILENT, on the real renderer: `--headless` already implies the Dummy audio driver, but a GPU
 # probe that plays a reading would otherwise speak it out of the author's speakers.
@@ -108,7 +110,8 @@ fi
 
 # Anything after the timeout is handed to the PROBE as user args (read them with
 # OS.get_cmdline_user_args), so a probe can take options the way clown_look_probe does.
-timeout "$TIMEOUT" "${RUNNER[@]}" --path . "res://$SCENE" -- "${@:3}" 2>&1
+# Keep the runner in the terminal's process group so Ctrl+C reaches Godot too.
+timeout --foreground "$TIMEOUT" "${RUNNER[@]}" --path . "res://$SCENE" -- "${@:3}" 2>&1
 status=$?
 if [[ $status -eq 124 ]]; then
   echo "run_boot_probe: TIMED OUT after ${TIMEOUT}s (probe never quit)" >&2

@@ -1,0 +1,30 @@
+# CI builds and releases
+
+Researched 2026-10-07. Planning note only; no GitHub Actions or release automation is implemented yet.
+
+## Current base
+
+- `scripts/build.sh --release linux` runs project checks, obtains the pinned Godot 4.7.2 editor and templates through `scripts/setup_godot.py`, packages the Python hosts, exports Linux, then runs `scripts/smoke-export.sh` against the standalone binary. `scripts/build.sh --release --no-check linux` produces a working local export, but is not a release gate.
+- `scripts/setup_godot.py` can install **Linux and Windows export templates on Linux**. Native Windows editor setup and a Windows smoke runner still need work. Godot supports command-line exports from named presets with installed templates. [Godot export documentation](https://docs.godotengine.org/en/4.7/tutorials/export/exporting_projects.html)
+- `export_presets.cfg` has Linux, Windows and Android presets. The current release scope is Linux and Windows. Export smoke already checks bundled Python hosts, a Cards note's frontmatter and imported card fonts. More real workflows should be added only where they catch export-specific failures.
+- The full `scripts/check.sh` gate currently fails at `cards_choose_check`; fix that before allowing automatic publication. A green export with `--no-check` alone must not publish.
+- The official 4.7.2 Linux release template emits `focus_entered` / `tree_exited` disconnect errors when UI controls are used. Godot's [confirmed issue](https://github.com/godotengine/godot/issues/89657) and [open engine fix](https://github.com/godotengine/godot/pull/123998) trace this to callable hashing in optimized engine builds. Recheck with a fixed official template before treating it as a project signal-wiring failure or publishing a release.
+
+## Recommended next steps
+
+1. **Finish local validation.** Resolve the failing gate. Run a checked Linux release build and its smoke test from a clean checkout. Cross-export Windows locally with `scripts/build.sh --release windows`; then run the resulting `.exe` on a Windows machine or runner, including a clean-profile smoke check. Check that no runtime resources are missing from either PCK.
+2. **Add reusable packaging scripts.** Put release staging in `scripts/`: make a Linux `tar.gz` that retains executable permissions, a Windows ZIP, a SHA-256 checksum file, and a small JSON manifest with the full source commit, Godot version, platform and asset names. Keep the existing build scripts as the source of truth; CI should pass target and mode arguments to them. Add a Windows smoke script or cross-platform smoke helper rather than embedding application checks in workflow YAML.
+3. **Add Actions jobs.** On pull requests, run the checks and builds without publishing. On pushes to the chosen release branch, run the same gates, export both targets from pinned Godot/templates, upload temporary workflow artifacts, and run a Windows job that downloads and launches the `.exe` headlessly. Make release publication depend on all required jobs. Godot can cross-export Windows from Linux; a Windows runner is still useful for native validation. Keep GPU-only gates as a separately declared policy until a reliable CI renderer is available. [GitHub workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax), [workflow artifacts](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts)
+4. **Publish one immutable result per commit.** Use a tag such as `build-<full-commit-sha>` and a short title such as `Build <short-sha>`. Create the release against that exact SHA and attach both archives, checksums and manifest. A one-line body is enough; generated release notes are unnecessary. Grant `contents: write` only to the publication job; build jobs need read access. Publish only for trusted branch pushes, not pull requests. Make reruns recognize an existing tag/release without replacing published assets. `gh release create` supports an exact target commit, asset files and explicit notes. [GitHub CLI release create](https://cli.github.com/manual/gh_release_create), [token permissions](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions)
+
+The possible **one release per day** limit can be added later by changing the release trigger or selection rule. Keep the commit hash in the tag and manifest even if a daily selector is introduced. Decide then whether the chosen commit is the first or last green commit of the day; a mutable daily tag would undermine reproducibility.
+
+## Later platforms and updates
+
+- macOS needs its own export validation and distribution/signing decisions. Android needs signing credentials and a mobile distribution path. Add each as a new target of the same local scripts and a new validation job, rather than branching build logic inside one workflow.
+- In-app update checks are feasible: query GitHub's latest published release, inspect its assets, download the appropriate archive into `user://`, verify its digest, then stage it beside the installed app. GitHub exposes release assets and `browser_download_url`; Godot has `HTTPRequest.download_file`. [GitHub release API](https://docs.github.com/en/rest/releases/releases), [release assets API](https://docs.github.com/en/rest/releases/assets), [Godot HTTPRequest](https://docs.godotengine.org/en/4.5/classes/class_httprequest.html)
+- Use `OS.get_executable_path().get_base_dir()` for the installation location and keep user data in `user://`. An update may download while the app runs, but replacing a running Windows executable requires the app to exit and a small one-shot updater/launcher or installer to complete the swap. Linux can also use a staged, atomic switch after exit. Keep rollback to the prior version. This is a later feature; release archives and a manifest make it possible without committing to an updater now.
+
+## Scope boundary
+
+No workflow, automatic GitHub Release, updater, macOS build or mobile build is part of the current local-export work.

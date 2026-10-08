@@ -5,6 +5,8 @@
 #   scripts/build.sh android            # only that one (linux, windows, android, all)
 #   scripts/build.sh linux android      # or several
 #   scripts/build.sh --release          # release mode instead of debug
+#   scripts/build.sh --no-setup linux    # use an already installed Godot and templates
+#   scripts/build.sh --no-smoke linux    # skip the exported Linux launch check
 #   scripts/build.sh --install android  # and put the APK on a connected phone
 #   scripts/build.sh --no-check         # skip the gates. The build is then not known to work.
 #   scripts/build.sh --list             # what targets exist
@@ -29,8 +31,11 @@
 
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
-GODOT="${GODOT:-godot}"
+godot_requested="${GODOT:-}"
+GODOT="${godot_requested:-godot}"
 OUT="${OUT:-dist}"
 PRESETS="export_presets.cfg"
 ## Below this, in bytes, an "artifact" is a failure with a filename on it.
@@ -40,12 +45,16 @@ mode="debug"
 check=1
 install=0
 list=0
+setup=1
+smoke=1
 wanted=()
 for arg in "$@"; do
 	case "$arg" in
 		--release) mode="release" ;;
 		--debug) mode="debug" ;;
 		--no-check) check=0 ;;
+		--no-setup) setup=0 ;;
+		--no-smoke) smoke=0 ;;
 		--install) install=1 ;;
 		--list) list=1 ;;
 		-h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -133,6 +142,35 @@ index_of() {
 
 # -- what it takes to build -------------------------------------------------------
 
+# Fetch the pinned editor and matching templates on a fresh machine. The same helper can
+# be called directly, and a caller-supplied GODOT remains authoritative.
+if [ "$setup" -eq 1 ]; then
+	setup_args=()
+	if [ -n "$godot_requested" ]; then
+		setup_args+=(--godot "$godot_requested")
+	fi
+	if [ "$explicit" -eq 0 ]; then
+		setup_args+=(--target linux)
+	else
+		for target in "${wanted[@]}"; do
+			if ! i=$(index_of "$target"); then
+				bad "no preset called '$target'. Try --list."
+				exit 2
+			fi
+			case "${platforms[$i]:-}" in
+				Linux|"Linux/X11") setup_args+=(--target linux) ;;
+				"Windows Desktop") setup_args+=(--target windows) ;;
+			esac
+		done
+	fi
+	if [ "${#setup_args[@]}" -gt 0 ]; then
+		if ! GODOT=$(python3 scripts/setup_godot.py "${setup_args[@]}" --print-godot); then
+			bad "could not prepare Godot and its export templates."
+			exit 2
+		fi
+	fi
+fi
+
 if ! command -v "$GODOT" >/dev/null 2>&1; then
 	bad "no '$GODOT' on PATH. Set GODOT=/path/to/godot."
 	exit 2
@@ -158,7 +196,14 @@ fi
 # full of unresolved identifiers. Import first; it costs a minute, once.
 if [ ! -d .godot ]; then
 	say "no .godot/ (a fresh clone): importing the project first"
-	"$GODOT" --headless --path . --import >/dev/null 2>&1 || true
+	import_log=$(mktemp)
+	if ! "$GODOT" --headless --path . --import >"$import_log" 2>&1; then
+		bad "the fresh project could not be imported. Log:"
+		sed 's/^/    /' "$import_log" >&2
+		rm -f "$import_log"
+		exit 1
+	fi
+	rm -f "$import_log"
 fi
 
 if [ "$check" -eq 1 ]; then
@@ -170,6 +215,16 @@ if [ "$check" -eq 1 ]; then
 	fi
 else
 	say "SKIPPING the gates (--no-check). This build is not known to work."
+fi
+
+# Python subprocesses need real files. Export this small, deterministic archive inside the
+# PCK; the app expands it into user:// when a host is first needed.
+if ! python3 scripts/package_hosts.py; then
+	bad "could not bundle the Python hosts."
+	exit 1
+fi
+if [ "$smoke" -eq 0 ]; then
+	say "SKIPPING the standalone Linux launch check (--no-smoke)."
 fi
 
 # What this was built from, printed but NOT put in the filename: one artifact per target,
@@ -245,13 +300,22 @@ for target in "${wanted[@]}"; do
 		| sed 's/^/    /' | head -20
 	size=0
 	[ -f "$artifact" ] && size=$(stat -c%s "$artifact" 2>/dev/null || echo 0)
-	if [ "$size" -lt "$FLOOR" ]; then
-		bad "$name did not build (godot exited $status, wrote $size bytes). Log:"
+	if [ "$status" -ne 0 ] || [ "$size" -lt "$FLOOR" ] || \
+			grep -qiE 'SCRIPT ERROR:|Parse Error:|ERROR:|Failed to export' "$log"; then
+		bad "$name did not build cleanly (godot exited $status, wrote $size bytes). Log:"
 		sed 's/^/    /' "$log" >&2
 		rm -f "$log"
+		rm -f "$artifact"
 		exit 1
 	fi
 	rm -f "$log"
+	if [ "$smoke" -eq 1 ] && { [ "$platform" = "Linux" ] || [ "$platform" = "Linux/X11" ]; }; then
+		if ! scripts/smoke-export.sh "$artifact"; then
+			bad "$name exported, but its standalone launch check failed."
+			rm -f "$artifact"
+			exit 1
+		fi
+	fi
 	printf '    %s MB\n' "$((size / 1048576))"
 	built+=("$artifact:$platform")
 done

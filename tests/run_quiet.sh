@@ -33,7 +33,9 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
 RUNNER=(godot)
 # its own log, never the live session's user://logs/godot.log (see run_boot_probe.sh)
 PROBE_LOG=$(mktemp)
-trap 'rm -f "$PROBE_LOG"' EXIT INT TERM
+trap 'rm -f "$PROBE_LOG"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 if command -v xvfb-run >/dev/null 2>&1; then
 	# -a picks a free display number; -s sets a screen big enough that a gate
 	# requesting a window never has it clamped.

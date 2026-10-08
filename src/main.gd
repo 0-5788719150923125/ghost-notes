@@ -97,6 +97,51 @@ func _ready() -> void:
 	# button must run our teardown, not the engine's default instant quit
 	get_tree().set_auto_accept_quit(false)
 	var args := OS.get_cmdline_user_args()
+	# Export templates ignore --script. The exported app enters its offline analyzer
+	# through the main scene instead; the editor keeps using bake_runner.gd.
+	if args.has("--bake-song"):
+		get_tree().quit(SpectrumBake.run_cli(args))
+		return
+	if args.has("--export-smoke"):
+		var note_path := _arg_value(args, "--export-smoke-note")
+		if not note_path.is_empty():
+			var raw := FileAccess.get_file_as_string(note_path)
+			var block := FrontMatter.read_block(raw)
+			if raw.is_empty() or not block.ok or Components.template_for(block.data) != "cards":
+				printerr("ghost/export-smoke: could not recognize a Cards note: ", note_path,
+					" (", block.error, ")")
+				get_tree().quit(1)
+				return
+		var paths := ["res://hosts/voice/host.py", "res://hosts/voice/requirements.txt",
+			"res://hosts/capture/capture.py", "res://hosts/face/face_track.py"]
+		for path in paths:
+			if BundledHosts.path(path).is_empty():
+				printerr("ghost/export-smoke: missing ", path)
+				get_tree().quit(1)
+				return
+		for face in CardTable.FACES:
+			if CardTable.font(String(face)) == ThemeDB.fallback_font:
+				printerr("ghost/export-smoke: missing card font ", face)
+				get_tree().quit(1)
+				return
+		for path in [CardTable.BOOK_FACE, CardTable.BOOK_ITALIC]:
+			if CardTable.font(path) == ThemeDB.fallback_font:
+				printerr("ghost/export-smoke: missing card font ", path)
+				get_tree().quit(1)
+				return
+		var feedback_probe := FeedbackConsole.new()
+		var feedback_dir := feedback_probe.dir
+		feedback_probe.free()
+		if Boot.project_dir() != OS.get_executable_path().get_base_dir() \
+				or not Boot.project_args().is_empty() \
+				or feedback_dir != "user://feedback" \
+				or MaskEditor._masks_dir() != "user://masks":
+			printerr("ghost/export-smoke: exported paths are not physical/user data paths")
+			get_tree().quit(1)
+			return
+		print("ghost/export-smoke: PASS")
+		get_tree().quit(0)
+		return
 	# `--deps` before everything: it is the thing you run when nothing else works,
 	# so it must not depend on a mode, a window or an audio device coming up. Pairs
 	# with `--headless`, and exits non-zero when something a feature needs is

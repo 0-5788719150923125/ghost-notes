@@ -154,7 +154,9 @@ PHONES_MARKS = [
 CASES = {
     "tok_one_sentence_scale0": ("tokens", TOKENS_ONE, {"pause_scale": 0.0}),
     "tok_two_sentences_default": ("tokens", TOKENS_TWO, {}),
-    "tok_marks_scale1": ("tokens", TOKENS_MARKS, {"pause_scale": 1.0}),
+    # `trail` off: the word before a mark is held now (`test_trail.py`), and what is pinned
+    # here is that turning it off is the audio this file always made
+    "tok_marks_scale1": ("tokens", TOKENS_MARKS, {"pause_scale": 1.0, "trail": 0.0}),
     "ph_one_sentence_scale0": ("phones", PHONES_ONE, {"pause_scale": 0.0}),
     "ph_marks_scale1": ("phones", PHONES_MARKS, {"pause_scale": 1.0}),
 }
@@ -172,7 +174,8 @@ def _result(data: bytes, res: dict) -> dict:
 
 
 def synth(tokens: list, params: dict) -> dict:
-    """Run the real _synth_tokens against the fake voice."""
+    """Run the real _synth_tokens against the fake voice, the trail off: these checks are
+    about the splice, and a held word changes the silence it measures."""
     from backends.piper import PiperBackend
 
     be = PiperBackend()
@@ -182,7 +185,7 @@ def synth(tokens: list, params: dict) -> dict:
             list(tokens),
             "fake",
             out,
-            {"phonemizer": "ghost", **params},
+            {"phonemizer": "ghost", "trail": 0.0, **params},
             _cfg(),
             _FakeSession(),
         )
@@ -1230,6 +1233,8 @@ def check_real_voice_comma():
         "noise_scale": 0.78,
         "noise_w": 0.52,
         "pause_scale": 6.5,
+        # the floor alone: the trail's fade quiets the voice before the cut too (test_trail.py)
+        "trail": 0.0,
     }
     toks = [_tok("Hello", ",", []), _tok("my", "", []), _tok("loves", ".", [])]
     seen: list = []
@@ -1310,6 +1315,8 @@ def check_real_voice_rests_at_a_mark():
         "noise_scale": 0.78,
         "noise_w": 0.52,
         "pause_scale": 6.5,
+        # the floor alone: the trail's fade quiets the voice before the cut too (test_trail.py)
+        "trail": 0.0,
     }
     sentences = [
         [

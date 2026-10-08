@@ -511,7 +511,11 @@ func _env_job(key: String, action: String) -> void:
 		args.append("--upgrade")
 	var req := String(row.get("requirements", ""))
 	if not req.is_empty():
-		args.append_array(PackedStringArray(["-r", ProjectSettings.globalize_path(req)]))
+		var req_path := BundledHosts.path(req)
+		if req_path.is_empty():
+			_end(key, false, "the bundled requirements file is missing: " + req)
+			return
+		args.append_array(PackedStringArray(["-r", req_path]))
 	for p in row.get("packages", []):
 		args.append(String(p))
 	args.append_array(Provision.uv_args())
