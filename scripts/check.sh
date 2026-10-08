@@ -210,6 +210,10 @@ for g in "${gates[@]}"; do
 	if [ "$rc" -eq 0 ]; then
 		printf '  ok     %-28s %4ds\n' "$g" "$dt"
 		[ "$keep" -eq 1 ] || rm -f "$log"
+	elif [ "$rc" -eq 137 ] && said_pass "$g" "$log"; then
+		# the probe ended itself with a SIGKILL after its verdict, to skip the engine's teardown
+		printf '  ok     %-28s %4ds   (hard exit after its verdict)\n' "$g" "$dt"
+		[ "$keep" -eq 1 ] || rm -f "$log"
 	elif { [ "$rc" -eq 124 ] || [ "$rc" -ge 128 ]; } && said_pass "$g" "$log"; then
 		printf '  ok*    %-28s %4ds   passed, then the engine %s in teardown (exit %d)\n' "$g" "$dt" \
 			"$([ "$rc" -eq 124 ] && echo 'hung' || echo 'crashed')" "$rc"

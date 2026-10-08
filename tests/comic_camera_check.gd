@@ -109,7 +109,11 @@ func _run() -> void:
 	else:
 		for f in _fails:
 			print("comic_camera_check: FAIL - %s" % f)
-	get_tree().quit(0 if _fails.is_empty() else 1)
+	# THE VERDICT IS PRINTED, SO END HERE. This probe built and freed real scenes, and the engine's
+	# own shutdown then dies or hangs until the timeout (tests/run_scene_smoke.sh has the
+	# measurements; one pinned core aborts, a CI runner hung for 120 s). A SIGKILL on ourselves, as
+	# main._shutdown does, skips it. check.sh reads the verdict from the log, never the exit code.
+	OS.kill(OS.get_process_id())
 
 
 ## Plan SHOTS shots at the current setting and report what the planner chose.
