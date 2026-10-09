@@ -126,8 +126,8 @@ card:
   - when: now_jumper
     say: >-
           NOW: before you could draw, a card flew out of the deck on its own while you were
-          shuffling - a jumper. It landed on the table and you have picked it up. Readers treat a
-          jumper as a card that insists. React to that first.
+          shuffling - a jumper. It landed on the table and you have picked it up. React to that
+          first, as this show would.
   - when: now_dealt
     say: >-
           NOW: you have just {{#box}}taken{{/box}}{{^box}}dealt{{/box}} card {{k}} of

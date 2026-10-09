@@ -610,6 +610,13 @@ static func apply_painting(built: Dictionary, tex: Texture2D, height: Texture2D 
 const FIT_W := 96
 const FIT_SHIFT := 4
 const FIT_LEAST := 0.35
+## A FLAT MAP lies under anything: a surface with no relief - a cutting mat, its grid printed on
+## smooth vinyl - comes back nearly one gray, as the painter is told to draw a flat print, and its
+## faint scratches correlate with nothing (0.03, measured 2026-10-08, refused and asked for again).
+## A map whose lightness spans less than this (2nd to 98th percentile, at [constant FIT_W] across) is
+## that answer, kept as it is: the surface lies smooth, its print not raised. The maps that lined up
+## spanned 0.043 to 0.24; that cutting mat's, 0.015.
+const FLAT_SPAN := 0.025
 
 
 ## Whether a table made safe ([param spec], `{top, layers}`) lays the painting where a height map
@@ -655,6 +662,24 @@ static func height_fit(painting: Image, height: Image) -> Dictionary:
 				best = r
 				at = Vector2i(dx, dy)
 	return {"score": best, "shift": Vector2(float(at.x) / float(w), float(at.y) / float(h))}
+
+
+## HOW MUCH [param height] RISES AND FALLS: its lightness's spread, 2nd to 98th percentile, at
+## [constant FIT_W] across (see [constant FLAT_SPAN]).
+static func height_span(height: Image) -> float:
+	var im := height.duplicate() as Image
+	if im.is_compressed():
+		im.decompress()
+	im.clear_mipmaps()
+	im.convert(Image.FORMAT_RGB8)
+	var h := maxi(8, roundi(float(FIT_W) * float(im.get_height()) / float(maxi(im.get_width(), 1))))
+	im.resize(FIT_W, h, Image.INTERPOLATE_LANCZOS)
+	var v := PackedFloat32Array()
+	for y in h:
+		for x in FIT_W:
+			v.append(im.get_pixel(x, y).get_luminance())
+	v.sort()
+	return v[int(v.size() * 0.98)] - v[int(v.size() * 0.02)]
 
 
 ## An image's STRUCTURE at [param w] x [param h]: the size of its lightness's gradient, softened by a

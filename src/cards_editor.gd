@@ -1,8 +1,8 @@
 extends ReadingPanel
 class_name CardsEditor
 
-## CardsEditor - the Cards mode: a card reading nobody writes by hand. Its first deck, and so far
-## its only recipe, is the tarot.
+## CardsEditor - the Cards mode: a show of cards nobody writes by hand. What kind of cards, and what
+## the show is, are the brief's to say.
 ##
 ## A SHOW is a document: its title is the channel, its body is the BRIEF - what the show is,
 ## its voice, its rules - and its `ghost: cards:` block holds the knobs and the reader's voice.
@@ -342,8 +342,8 @@ func _show_title() -> String:
 
 
 ## What the producer works from, read fresh: the title and byline, the brief (its card LIST taken out - see
-## [method CardDeck.strip]), the deck the brief defines (or the standard 78, or none when the producer
-## chooses each episode's - `chooses`), the show's voices
+## [method CardDeck.strip]), the deck the brief lists (or none, when the producer chooses each
+## episode's - `chooses`), the show's voices
 ## (every one its document names - the reader's and any other, a familiar's - for the reader to
 ## hand lines to), and the knobs.
 func _spec() -> Dictionary:
@@ -648,9 +648,9 @@ func _build_source(script_box: VBoxContainer) -> void:
 	_deck_note.modulate = Color(1, 1, 1, 0.7)
 	_deck_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_deck_note.tooltip_text = ("THE DECK IS THE SHOW'S: a `## Cards` section in the brief, one card per "
-		+ "list item - `- XVI. The Tower: what it means` - with `###` headings for its suits. Without "
-		+ "one, the show reads the standard 78. Each episode's cards are a shuffle of it, from a seed "
-		+ "drawn from the system's own randomness; no agent ever picks a card.")
+		+ "list item - `- XVI. The Tower: what it means` - with `###` headings for its suits. A brief "
+		+ "that lists none leaves each episode's deck to its producer. Each episode's cards are a "
+		+ "shuffle of the deck, from a seed drawn from the system's own randomness; no agent ever picks a card.")
 	_deck_note.mouse_filter = Control.MOUSE_FILTER_STOP
 	box.add_child(_deck_note)
 	_rows_box = VBoxContainer.new()
@@ -1189,8 +1189,7 @@ func _refresh_rows() -> void:
 		_deck_seen = _text.get_version()
 		var own := CardDeck.parse(_text.text)
 		_deck_note.text = ("Deck: %d cards, from the brief's Cards." % own.size()) if not own.is_empty() \
-			else ("Deck: the producer's choice, each episode (the brief's Cards lists none)."
-				if CardDeck.chooses(_text.text) else "Deck: the standard 78 (the brief defines no Cards).")
+			else "Deck: the producer's choice, each episode (the brief lists no cards)."
 	var busy := _producer.running or _producer.busy()
 	_gen_btn.disabled = busy or _episode.complete()
 	_halt_btn.disabled = not busy

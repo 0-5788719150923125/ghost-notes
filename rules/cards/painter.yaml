@@ -86,11 +86,11 @@ surface:
   - include: head
   - ""
   - >-
-      THE PICTURE: a photograph looking STRAIGHT DOWN at {{surface}}, laid flat on a reading table
+      THE PICTURE: a photograph looking STRAIGHT DOWN at {{surface}}, laid flat on a table
       and filling the whole frame edge to edge. True colors; the texture of the material sharp.
   - >-
       THE SCALE: the frame shows {{width}} cm of the surface from side to side and {{height}} cm
-      from top to bottom - as wide as the whole reading table, running on past every edge of the
+      from top to bottom - as wide as the whole table, running on past every edge of the
       picture - so its weave, grain, boards, knots, scratches and stains are at their true size for
       that span, never a close-up.
   - >-
@@ -133,10 +133,8 @@ backdrop:
   - include: head
   - ""
   - >-
-      THE PICTURE: a photograph of the room or the world {{^kind_named}}a tarot
-      reader{{/kind_named}}{{#kind_named}}the host of a show of cards{{/kind_named}} sits in, taken
-      from {{^kind_named}}the reader's{{/kind_named}}{{#kind_named}}the host's{{/kind_named}} chair:
-      {{setting}}. Lit by {{light_kind}}.
+      THE PICTURE: a photograph of the room or the world the host of a show of cards sits in, taken
+      from the host's chair: {{setting}}. Lit by {{light_kind}}.
   - >-
       THE CAMERA IS LEVEL, at a seated person's eye height - about 110 cm above the floor - looking
       straight ahead through a wide {{lens}} mm lens: the eye's height (the horizon) runs straight

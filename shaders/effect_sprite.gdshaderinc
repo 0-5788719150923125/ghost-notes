@@ -3,7 +3,10 @@
 // it is now: its place, its size in the custom data's w, its brightness in the color's alpha, and -
 // for a speck - its velocity in the transform's first column). A burst's particle FLIES: born at a
 // time and place with a velocity (the transform's first column - nothing else is in it), pulled by
-// gravity and slowed by the air in closed form, so any time can be asked for and none is stepped to.
+// gravity and slowed by the air in closed form, so any time can be asked for and none is stepped to -
+// and, in a wind, CARRIED by it: slowed toward the air's own speed as it is slowed, it has gone the air's
+// run since it was born (the transform's second column: how far the air had gone then) less what it has
+// yet to catch up of the air's speed now.
 // Included by effect_sprite.gdshader, effect_smoke.gdshader and effect_speck.gdshader, all with
 // render_mode skip_vertex_transform: VERTEX is set in view space here.
 
@@ -19,6 +22,8 @@ uniform float waver = 0.0;                     // meters a second of sideways wa
 uniform float twinkle = 0.0;                   // how much its brightness flutters
 uniform vec2 sharp = vec2(0.01, 1000.0);       // the depths the lens has sharp, meters along its axis
 uniform float defocus = 0.0;                   // past them, a speck's blur: a share of the frame's width per 1/m
+uniform vec3 air_carried = vec3(0.0);          // how far the wind has carried the air since show time 0, meters
+uniform vec3 air_vel = vec3(0.0);              // the wind's velocity now, m/s (none in still air)
 
 varying vec4 tint;
 varying vec2 corner;
@@ -53,6 +58,10 @@ void vertex() {
 		float e = exp(-k * age);
 		pos = p0 + v0 * (1.0 - e) / k + gravity * (age - (1.0 - e) / k) / k;
 		vel = v0 * e + gravity * (1.0 - e) / k;
+		// THE WIND, with the same drag: the air's run since its birth, less the lag still to make up (the
+		// air's speed changes over seconds, a particle catches up in a fraction of one)
+		pos += air_carried - MODEL_MATRIX[1].xyz - air_vel * (1.0 - e) / k;
+		vel += air_vel * (1.0 - e);
 		pos += waver * age * vec3(sin(age * 6.3 + seed * 40.0), 0.4 * sin(age * 4.1 + seed * 13.0), cos(age * 5.7 + seed * 23.0));
 		size *= 1.0 + grow * u;
 		fade = smoothstep(0.0, 0.06, u) * (1.0 - smoothstep(0.5, 1.0, u));

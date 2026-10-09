@@ -148,11 +148,15 @@ const MAX_TURN_SCALE := 6.0
 # ...and a ceiling on the whole rest, the seam included. Past a few seconds a
 # handover stops reading as a beat and starts reading as the file having ended.
 const TURN_CEILING := 4.0
+## The voice a new tab reads in, and the one picked when a tab names none: 904 readers under one
+## checkpoint, so a cast can be voiced from one model (the user, 2026-10-08: "make 'libritts high' the
+## default voice option"). Before, the default was whatever the host listed first.
+const DEFAULT_VOICE := "en_US-libritts-high"
 ## One tab's worth of settings. Also the schema: [method _cfg] merges a stored
 ## slot onto this, so a slot saved by an older build is missing keys rather than
 ## broken, and a key added later arrives with a sane value everywhere at once.
 const SLOT_DEFAULTS := {
-	"voice": "", "speaker": 0, "tone": 0, "pace": 1.0, "pause": 1.0,
+	"voice": DEFAULT_VOICE, "speaker": 0, "tone": 0, "pace": 1.0, "pause": 1.0,
 	"dynamics": 0.5, "arc": 0.4, "effort": 0.35,
 	"echo": 0.0, "room": 0.0, "resonance": 0.0, "presence": 1.0, "ambience": 0.0,
 	"lean": 0.0, "near": 0.0,
@@ -2519,11 +2523,11 @@ func _fill_voices(voices: Array) -> void:
 	if voices.is_empty():
 		_set_status("No voices available - see the >_ log.")
 		return
-	if not _want_voice.is_empty():
-		for i in voices.size():
-			if String((voices[i] as Dictionary).get("id", "")) == _want_voice:
-				_voices.select(i)
-				break
+	var want := _want_voice if not _want_voice.is_empty() else DEFAULT_VOICE
+	for i in voices.size():
+		if String((voices[i] as Dictionary).get("id", "")) == want:
+			_voices.select(i)
+			break
 	_test.disabled = false
 	_refresh_tab_labels()           # model names are known now, not just ids
 	_can_play = true            # from here on Play is always live

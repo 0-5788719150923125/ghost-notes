@@ -134,6 +134,14 @@ const IDLE_RANGE := Vector2(1.6, 18.0)
 const LINGER_CHANCE := 0.15
 ## A wash is sampled at this rate once, when it is planned, and posed by lookup.
 const WASH_HZ := 20.0
+## THE FAN-OUT CALMED (the user, 2026-10-08: as the cards fan out they "wobble and vibrate, which
+## is a thing cards shouldn't do"): under the palm, each card's tilt is the mean of its resting tilt
+## over CALM_REACH steps of CALM_HZ either side - a card sliding off another's edge tipped in a frame
+## (576 deg/s, measured) and back - and it is set down on its highest support at that tilt, so it
+## never floats nor dips. Calm until the cards are out, easing to the bare rest over CALM_SETTLE.
+const CALM_HZ := 20.0
+const CALM_REACH := 2
+const CALM_SETTLE := 0.5
 ## The least time a wash needs to spread, mix a little and gather (seconds): with less before the
 ## first card, the deck is not washed at all.
 const WASH_ROOM := 9.0
@@ -425,6 +433,10 @@ var _probe: ReflectionProbe
 var _probe_nudge := 1.0
 var _lights: Array = []             # a light per lit thing: {light, base, light_base, energy, flames: [{mesh, base, flicker, glow}]}
 var _flame_n := 0                     # flames lit so far on this table, each with its own flicker
+## A candle's flame: how tall it burns (meters - what a draft must blow against, [method Winds.flame]) and
+## the quad it is drawn on, standing on its wick.
+const FLAME_H := 0.03
+const FLAME_QUAD := 0.03
 var _glows: Array = []              # [{light, base, energy, flicker}] - candles in the room, out of shot
 var _lamp_base := 1.6                 # the lamp's light before a candle takes the key from it
 var _key_flame := -1                  # the key: the flame that leads the light, or -1 for the lamp
@@ -444,6 +456,7 @@ var _standing_c := PackedVector2Array()   # ...their middles
 var _standing_r := PackedFloat32Array()   # ...and how far they reach from them
 var _habit := {}                     # how this episode's reader sets out their things (_habit_of)
 var _layer_os: Array = []             # the layers' outlines (Tables.layer_outline), for a foot across a hem
+var wash_calm := true                # the fan-out calmed (CALM_HZ); a gate's control turns it off
 var _deck_far := Vector3.ZERO         # where the deck is slid aside to, when the spread crowds it
 var _aside_card := -1                 # the card it is slid aside for (-1: it stays)
 var _things: Array = []               # what stood: [{name, group, place, node, outline, bb, rect, foot, lit, flames, meshes}]
@@ -1849,7 +1862,10 @@ func _put(t: Dictionary, b: Dictionary, spot: Dictionary, basis: Basis, group: S
 	if not wicks.is_empty():
 		var flames: Array = []
 		for i in wicks.size():
-			flames.append(_flame(node.transform * (wicks[i] as Vector3), own, glows[i] if i < glows.size() else null))
+			var wick: Vector3 = node.transform * (wicks[i] as Vector3)
+			var f := _flame(wick, own, glows[i] if i < glows.size() else null)
+			f["open"] = Props.open_to_air(wick, node, b["meshes"])
+			flames.append(f)
 		_light_flames(flames, own)
 	var foot := _translated(_turned(b["foot"], basis), at)
 	if foot.size() >= 3:
@@ -1904,7 +1920,7 @@ func _flame(at: Vector3, own: int, glow: Variant = null) -> Dictionary:
 	flame.position = at + Vector3(0, 0.016, 0)
 	_props.add_child(flame)
 	_flame_n += 1
-	return {"mesh": flame, "base": flame.position, "flicker": _flicker_of(_flame_n - 1), "glow": glow}
+	return {"mesh": flame, "base": flame.position, "flicker": _flicker_of(_flame_n - 1), "glow": glow, "open": 1.0}
 
 
 ## A LIT THING'S ONE LIGHT, for every flame on it: a candelabra's tapers or a pillar's three wicks
@@ -2308,8 +2324,9 @@ func _flicker_of(salt: Variant) -> Dictionary:
 ## A flame at show time [param t]: (brightness about 1, height about 1, lean). Mostly a steady burn
 ## - a slow sway and a fine shiver at the flame's own tempo - and now and then a DRAFT: for a second
 ## or two it gutters, dims and leans. A draft is drawn per slot of the flame's own length from a
-## hash, so this is a pure function of time and a render and a scrub see the same flame.
-func _flame_at(fk: Dictionary, t: float) -> Vector3:
+## hash, so this is a pure function of time and a render and a scrub see the same flame. The room's
+## drafts are still air's ([param drafts]): in the light's wind the wind is the draft ([method _tick_props]).
+func _flame_at(fk: Dictionary, t: float, drafts := true) -> Vector3:
 	var s := float(fk["seed"])
 	var r := float(fk["rate"])
 	var calm := float(fk["calm"])
@@ -2320,7 +2337,7 @@ func _flame_at(fk: Dictionary, t: float) -> Vector3:
 	var h := hash([int(fk["salt"]), k])
 	var env := 0.0
 	var strength := 0.0
-	if float(h & 0xFFFF) / 65535.0 < float(fk["drafts"]):
+	if drafts and float(h & 0xFFFF) / 65535.0 < float(fk["drafts"]):
 		var dur := 0.7 + 1.8 * float((h >> 16) & 0xFF) / 255.0
 		var start := float(k) * slot + (slot - dur) * float((h >> 24) & 0xFF) / 255.0
 		var u := (t - start) / dur
@@ -2350,21 +2367,40 @@ func _contact_texture() -> Texture2D:
 	return _contact_tex
 
 
+## THE CANDLES AT SHOW TIME [param t]: each flame flickering in its own time, and IN THE LIGHT'S WIND
+## ([method Winds.flame], as much of it as reaches the flame - [method Props.open_to_air]) leaning downwind,
+## flickering in its eddies and guttering in a gust; its thing's light leans and dims with its flames,
+## so the shadows round it lean and dance with them.
 func _tick_props(t: float) -> void:
+	var blows := Winds.blows(_wind)
 	for l in _lights:
 		# EACH FLAME IN ITS OWN TIME, and their light as bright as they are together
 		var bright := 0.0
 		var leans := Vector3.ZERO
 		for f in (l as Dictionary)["flames"]:
-			var fl := _flame_at(f["flicker"], t)
+			var fl := _flame_at(f["flicker"], t, not blows)
 			var fast := _noise.get_noise_2d(t * 9.0 * float((f["flicker"] as Dictionary)["rate"]), float((f["flicker"] as Dictionary)["seed"]) + 91.0)
 			var lean := Vector3(fl.z * 0.0015, 0, 0)
+			var axis := Vector3.UP
+			var tall := 1.0
+			if blows:
+				var w := Winds.flame(_wind, t, f["base"] as Vector3, FLAME_H, float(f.get("open", 1.0)))
+				axis = w["axis"]
+				tall = float(w["tall"])
+				fl.x *= float(w["bright"])
+				lean += w["mid"] as Vector3
 			var mesh: MeshInstance3D = f["mesh"]
-			mesh.scale = Vector3(1.0 + 0.06 * fast, fl.y, 1.0)
-			mesh.position = (f["base"] as Vector3) + lean
-			# a flame is a sprite facing the reader
-			mesh.look_at(mesh.global_position + (_cam.global_position - mesh.global_position) * Vector3(1, 0, 1), Vector3.UP)
-			mesh.rotate_object_local(Vector3.UP, PI)
+			# A SPRITE FACING THE READER, standing on its wick: turned about the upright to the camera, then
+			# tipped in its own plane as far as its lean shows from there, and foreshortened by what of it
+			# leans toward or away from the lens
+			var root := (f["base"] as Vector3) - Vector3(0.0, FLAME_QUAD * 0.5, 0.0)
+			var face := (_cam.global_position - root) * Vector3(1, 0, 1)
+			face = face.normalized() if face.length() > 1e-5 else Vector3.BACK
+			var across := Vector3.UP.cross(face)
+			var shown := Vector2(axis.dot(across), axis.y)
+			var b := Basis(across, Vector3.UP, face) * Basis(Vector3.BACK, -atan2(shown.x, shown.y)) \
+				* Basis.from_scale(Vector3(1.0 + 0.06 * fast, fl.y * tall * shown.length(), 1.0))
+			mesh.transform = Transform3D(b, root + b * Vector3(0.0, FLAME_QUAD * 0.5, 0.0) + Vector3(lean.x, 0.0, 0.0) * (0.0 if blows else 1.0))
 			if f.get("glow") is ShaderMaterial:
 				(f["glow"] as ShaderMaterial).set_shader_parameter("flame", fl.x)
 			bright += fl.x
@@ -3727,16 +3763,38 @@ static func _tipped(yaw: float, slope: Vector2) -> Basis:
 ## edge for a frame - in the order of the step that ends the moment (a pair parting keeps its order
 ## a step after it parts, so a pair touching at the moment is in the order it touches in). Kept for
 ## the frames that ask again. Each card `Vector3(height of its middle, slope
-## across x, slope across z)`; a card in the air rests on nothing and nothing on it.
-func _wash_rest_at(plan: Dictionary, v: float) -> Array:
+## across x, slope across z)`; a card in the air rests on nothing and nothing on it. Under the palm,
+## as the cards fan out, each tilt is calmed ([constant CALM_HZ]); [param bare] is the rest without.
+func _wash_rest_at(plan: Dictionary, v: float, bare := false) -> Array:
 	if not is_same(plan, _rest_plan):
 		_rest_plan = plan
 		_rest_steps = {}
 	var key := int(round(v * 4000.0))
+	key = -key - 1 if bare else key
 	if _rest_steps.has(key):
 		return _rest_steps[key]
-	if _rest_steps.size() > 12:
+	if _rest_steps.size() > 40:
 		_rest_steps = {}
+	# THE FAN-OUT'S TILTS, calmed: each card's bare tilt averaged over a window on a fixed grid (so
+	# the frames after reuse it), between the two grid points round the moment
+	var calm := 0.0 if bare or not wash_calm else \
+		1.0 - clampf((v - float((plan["mix"] as Vector2).x)) / CALM_SETTLE, 0.0, 1.0)
+	var calmed: Array = []
+	if calm > 0.0:
+		var g := v * CALM_HZ
+		var g0 := int(floor(g))
+		var bares: Array = []
+		for k in range(g0 - CALM_REACH, g0 + CALM_REACH + 2):
+			bares.append(_wash_rest_at(plan, float(k) / CALM_HZ, true))
+		for i in (plan["tracks"] as Array).size():
+			var a := Vector2.ZERO
+			var b := Vector2.ZERO
+			for k in CALM_REACH * 2 + 1:
+				var r0: Vector3 = (bares[k] as Array)[i]
+				var r1: Vector3 = (bares[k + 1] as Array)[i]
+				a += Vector2(r0.y, r0.z)
+				b += Vector2(r1.y, r1.z)
+			calmed.append(a.lerp(b, g - float(g0)) / float(CALM_REACH * 2 + 1))
 	var tracks: Array = plan["tracks"]
 	var n := tracks.size()
 	var last := (tracks[0] as PackedVector4Array).size() - 1
@@ -3789,6 +3847,13 @@ func _wash_rest_at(plan: Dictionary, v: float) -> Array:
 					hs.append(ur.x + ug.dot(p - umid) + lift)
 		var rest := Vector3(hs[0], 0.0, 0.0) if pts.size() == 4 and hs[0] == hs[1] and hs[1] == hs[2] and hs[2] == hs[3] \
 			else _rest_on(pts, hs)
+		if calm > 0.0:
+			# its calmed tilt, set down on the highest of its supports at that tilt
+			var gc := Vector2(rest.y, rest.z).lerp(calmed[i], calm)
+			var h := -INF
+			for k in pts.size():
+				h = maxf(h, hs[k] - gc.dot(pts[k]))
+			rest = Vector3(h, gc.x, gc.y)
 		out[i] = rest
 		under.append([corners, mid, rest, th, s, qi.w])
 	_rest_steps[key] = out

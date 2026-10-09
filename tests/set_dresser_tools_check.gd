@@ -47,6 +47,8 @@ extends SceneTree
 ##   pictures its set dresser has taken while its tools are open, and the prompt says a shrink is fine.
 const ROOT := "user://set_dresser_check"
 
+const FixtureDeck := preload("res://tests/fixture_deck.gd")
+
 var _fails := 0
 
 
@@ -112,7 +114,7 @@ func _episode() -> CardEpisode:
 		"premise": "the premise", "reader_mood": "calm", "spread": {"name": "Three", "positions": [{"name": "One"},
 		{"name": "Two"}, {"name": "Three"}]}, "look": CardTable.sanitize_look({"deck_name": "The Test Deck", "candles": 2})})
 	var cards: Array = []
-	for c in CardDeck.shuffled(CardDeck.standard(), ep.seed, true).slice(0, 3):
+	for c in CardDeck.shuffled(FixtureDeck.cards(), ep.seed, true).slice(0, 3):
 		cards.append(c)
 	ep.write_json("draw", {"seed": ep.seed, "cards": cards})
 	return ep
@@ -311,7 +313,7 @@ func _producer() -> bool:
 		and String((plain.sent["prompt"] as Dictionary)["prompt"]).contains("Reply with ONLY a JSON object"),
 		"a writer that takes no tools was not asked for the table in one reply")
 	# A HANDED-IN TABLE LANDS whatever the run's last words, even a run that ended badly
-	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief."})
+	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards()})
 	var given := SetDresserTools.new(ep, ep.read_json("plan"), ep.job_dir("table"))
 	prod._tools["table"] = {"url": AgentTools.open(ep.job_dir("table"), given), "set": given}
 	TextGen.put(ep.job_dir("table").path_join(SetDresserTools.SUBMITTED), CardPrompts.set_example())
@@ -321,7 +323,7 @@ func _producer() -> bool:
 	# ...but a run WITHOUT tools is answered by its own reply, never by a table some earlier run left
 	ep.invalidate("table")
 	TextGen.put(ep.job_dir("table").path_join(SetDresserTools.SUBMITTED), CardPrompts.set_example())
-	var plain_land := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief."})
+	var plain_land := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards()})
 	plain_land._tries["table"] = CardProducer.RETRIES + 1
 	plain_land._land("table", {"ok": true, "text": "no table here"})
 	_ok(not ep.has("table") and plain_land.error_of("table") == "the table was not JSON",

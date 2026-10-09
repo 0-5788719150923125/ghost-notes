@@ -825,6 +825,35 @@ static func _points3(v: Variant, lim: float) -> Array:
 
 # --- building -----------------------------------------------------------------------------
 
+## HOW MUCH OF A DRAFT REACHES A FLAME lit at [param at] (a wick's top, world) on thing [param node]: all of
+## it in the open; little in a chimney, a lantern or a hurricane glass - any of the thing's [param meshes]
+## standing round the flame (its middle over the flame, seen from above, and wider than a wick) and
+## rising past it, the less the higher it rises over the wick ([constant SHELTER]). A candelabra's stem
+## stands beside its arms' flames, not round them, and a candle's own wax ends at its wick.
+static func open_to_air(at: Vector3, node: Node3D, meshes: Array) -> float:
+	var open := 1.0
+	for m in meshes:
+		if not (m is MeshInstance3D) or (m as MeshInstance3D).mesh == null:
+			continue
+		var xf := (m as MeshInstance3D).transform
+		var up := (m as Node3D).get_parent()
+		while up != null and up != node and up is Node3D:
+			xf = (up as Node3D).transform * xf
+			up = up.get_parent()
+		var box: AABB = node.transform * xf * (m as MeshInstance3D).mesh.get_aabb()
+		var half := minf(box.size.x, box.size.z) * 0.5
+		var mid := box.get_center()
+		if half < 0.008 or Vector2(mid.x - at.x, mid.z - at.z).length() > 0.35 * half or box.position.y > at.y:
+			continue
+		open = minf(open, clampf(1.0 - (box.end.y - at.y) / SHELTER.x, SHELTER.y, 1.0))
+	return open
+
+
+## A FLAME SHELTERED: walls round it this far over its wick (meters) keep off all of a draft they can, and
+## that is all but this share of it - a chimney draws air of its own.
+const SHELTER := Vector2(0.05, 0.1)
+
+
 ## A THING, BUILT: `node` (its meshes, in meters: base on y = 0, centered over what it stands on,
 ## front toward +z), `size` (its bounds), `foot` (the convex outline of where it meets the cloth,
 ## up to [constant FOOT_H], x by z), `outline` (its whole outline seen from above), `wicks`

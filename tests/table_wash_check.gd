@@ -264,6 +264,9 @@ func _resting() -> void:
 		var tracks: Array = plan["tracks"]
 		var last := (tracks[0] as PackedVector4Array).size() - 1
 		for st in range(1, last, 7):
+			# AS IT PLAYS, the step before made first: a calmed fan-out step reuses the bare rests round
+			# it (TableMedium.CALM_HZ), and only a seek lands on none of them (seven rests, ~20 ms, once)
+			medium._wash_rest(plan, st - 1)
 			var t0 := Time.get_ticks_usec()
 			var rest: Array = medium._wash_rest(plan, st)
 			worst_ms = maxf(worst_ms, float(Time.get_ticks_usec() - t0) / 1000.0)
@@ -326,7 +329,8 @@ func _resting() -> void:
 				for k in hs.size():
 					held = minf(held, (r.x + g.dot(pts[k])) - hs[k])
 				afloat += 1 if held > 1e-5 else 0
-				if pts.size() > 4 and cards % 3 == 0:
+				# (under the palm, as the cards fan out, a tilt is calmed, not the lowest: TableMedium.CALM_HZ)
+				if pts.size() > 4 and cards % 3 == 0 and v > float((plan["mix"] as Vector2).x) + TableMedium.CALM_SETTLE:
 					var lowest := _held_up(pts, hs)
 					judged += 1
 					off_low += 1 if absf(r.x - lowest) > 2e-6 else 0
@@ -356,7 +360,8 @@ func _resting() -> void:
 ## them, between the plan's steps. Wherever two cards lie over one another their faces never cross,
 ## the upper never dips into the lower, and the pair never swaps which is on top from one frame to
 ## the next; no card on the cloth dips into it. Mixing cards tip a few degrees at most and their tilt
-## does not jump about. Control: posed as two steps' rests blended, cards pass through one another.
+## does not jump about; nor, under the palm, do the cards fanning out (2026-10-08: they "wobble and
+## vibrate") - against the bare rest as the control, which does. Control: posed as two steps' rests blended, cards pass through one another.
 func _posed() -> void:
 	var fps := 15.0
 	var crossings := 0
@@ -368,6 +373,7 @@ func _posed() -> void:
 	var mix_frames := 0
 	var worst := 0.0
 	var blended := 0
+	var fan := {true: [0, 0], false: [0, 0]}
 	for s in range(1, 4):
 		var doc := {"show": "wash-check", "seed": s, "dir": "", "plan": {"look": {"candles": 2}}, "cards": []}
 		subs.document = {"source": CardReading.compose([{"kind": "shuffle", "card": 0, "text": "Shuffle."}]), "title": "Wash Check", "table": doc}
@@ -378,6 +384,20 @@ func _posed() -> void:
 		var plan: Dictionary = medium._wash_plan(6000 + s, dur)
 		var m := {"kind": "wash", "t0": 0.0, "dur": dur, "pause": 0.0, "seed": 6000 + s, "plan": plan}
 		var mix: Vector2 = plan["mix"]
+		# THE FAN-OUT, at 30 frames a second: how often a card turns faster than 60 deg/s - calmed, and
+		# the bare rest as the control
+		for calm in [true, false]:
+			medium.wash_calm = calm
+			var was: Array = []
+			for f in int((mix.x + 0.5) * 30.0):
+				var now: Array = []
+				for i in TableMedium.DECK_N:
+					now.append(medium._wash(i, float(f) / 30.0, m).basis.y.normalized())
+					if not was.is_empty():
+						(fan[calm] as Array)[0] += 1
+						(fan[calm] as Array)[1] += 1 if rad_to_deg(acos(clampf((now[i] as Vector3).dot(was[i]), -1.0, 1.0))) * 30.0 > 60.0 else 0
+				was = now
+		medium.wash_calm = true
 		var prev: Array = []
 		var prev_top := {}
 		var prev_up: Array = []
@@ -418,6 +438,10 @@ func _posed() -> void:
 					old.append(_blended(plan, m, i, v))
 				blended += int(_overlaps(old, {})["crossings"])
 			prev = xfs
+	var calm_share := float((fan[true] as Array)[1]) / maxf(float((fan[true] as Array)[0]), 1.0)
+	var bare_share := float((fan[false] as Array)[1]) / maxf(float((fan[false] as Array)[0]), 1.0)
+	_ok(calm_share < 0.01, "the fan-out is calm: %.2f%% of its frames turn a card faster than 60 deg/s" % (calm_share * 100.0))
+	_ok(bare_share > calm_share * 4.0, "control: the bare rest wobbles as the cards fan out (%.2f%%)" % (bare_share * 100.0))
 	mix_tilts.sort()
 	var p99 := float(mix_tilts[int(mix_tilts.size() * 0.99)]) if not mix_tilts.is_empty() else 0.0
 	var jerk_share := float(jerks) / maxf(float(mix_frames), 1.0)

@@ -241,8 +241,6 @@ fine-tuning chain.
   UnifrakturMaguntia). OFL is fine in a commercial app; its text must travel with the fonts.
 - **`data/cmudict.dict`:** CMU's BSD-style license - the notice reproduced in the documentation.
 - **`data/libritts_speakers.json`:** derived from LibriTTS-P (LINE), CC BY 4.0 - credit.
-- **`data/decks/tarot/meanings.json`:** CC0 (Corpora) over an uncopyrighted source (McElroy). Nothing
-  owed; credit anyway.
 - **The libritts voice:** fetched, not shipped, but credit LibriTTS (Google LLC, CC BY 4.0) in the
   same place. Whether a model trained on it counts as "sharing" it is unsettled; a credit line costs
   nothing.

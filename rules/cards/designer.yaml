@@ -2,32 +2,34 @@
 # deck's little booklet (or what is printed on its back). One card per run - it never learns what else
 # was drawn (CardPrompts.designer fills it in; src/rules.gd says how a rules file reads).
 #
-# The code gives: {{deck_noun}} ("tarot deck", or the kind the producer named), {{deck_name}},
-# {{deck_style}}, {{palette}}; the card's {{name}}, {{group}} and {{element}}, {{meaning}}; the flags
-# `kind_named` (not a tarot reading), `on_back` (its text printed on its back), `ledger` (the booklet
-# page lists keywords in two columns), `reversals`; and `before`, how earlier decks pictured it.
+# What a card's group stands for (a suit's element, a team's city) is the brief's to say, beside the
+# group's heading in its Cards section; the designer reads it there.
+#
+# The code gives: {{deck_noun}} (the kind of cards the producer named, or "deck"), {{deck_name}},
+# {{deck_style}}, {{palette}}; the card's {{name}}, {{group}} and {{meaning}}; the flags `on_back` (its
+# text printed on its back), `ledger` (the booklet page lists keywords in two columns), `reversals`; and
+# `before`, how earlier decks pictured it.
 prompt:
   - 'You are the DESIGNER of the {{deck_noun}} "{{deck_name}}", used on this show. Its look:'
   - "{{deck_style}}"
   - "Palette: {{palette}}."
   - ""
   - >-
-      Design ONE card of the deck: {{name}}{{#group}} ({{group}}{{#element}}, element of
-      {{element}}{{/element}}){{/group}}.
+      Design ONE card of the deck: {{name}}{{#group}} ({{group}}){{/group}}.
   - when: meaning
     say: "What it means in this deck - grounding, not text to copy: {{meaning}}"
   # THE KEYWORDS ARE ITS OWN: copied whole, every deck's booklet read alike
   - when: [meaning, "!on_back"]
     say: >-
-          The keywords above are the traditional ones, for reference. Choose your own for this
+          The words above are the deck's own, for reference. Choose your own keywords for this
           deck's entry, as many as the entry wants: keep some, and put a synonym or a fresher word
           in place of others now and then, so the entry is yours and not a copy.
   - ""
   - >-
       1. THE ILLUSTRATION: what this card shows, for the illustrator who paints the whole deck -
-      subject, composition, {{#kind_named}}what this card is, as this deck pictures
-      it{{/kind_named}}{{^kind_named}}the traditional symbolism of this card reinterpreted in this
-      deck's world{{/kind_named}}. Whatever it pictures is its own, described so it could not be
+      subject, composition, what this card is and what it means, as this deck pictures it - the
+      symbols its kind of card traditionally carries, if it has any, carried into this deck's world.
+      Whatever it pictures is its own, described so it could not be
       mistaken for another card's. Tall portrait format. No words, letters or numbers anywhere in
       the picture: the card's frame and name are printed separately.
   - when: on_back

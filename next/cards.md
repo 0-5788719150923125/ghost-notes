@@ -59,7 +59,7 @@ seeds' hash salts keep their old `tarot-` names, so every episode already made c
 | `src/card_prompts.gd` | `CardPrompts`: which rules each agent is told, and what fills them in. Pure. |
 | `rules/cards/*.yaml`, `src/rules.gd` | The words themselves, one file per role (producer, designer, set_dresser, reader, painter, show), each rule's reason a comment above it; `Rules` reads them (items in order, `when` flags, `insert`, Mustache sections). Moved out of the code 2026-10-08 with every prompt byte for byte the same (227 prompts over three real episodes, compared before and after). |
 | `src/card_reading.gd` | `CardReading`: the reading's marks; one walk gives the voice its text and the table its actions. |
-| `src/card_deck.gd` | `CardDeck`: the show's deck, parsed from its brief's `## Cards` section (or the standard 78, generated, meanings from `data/decks/tarot/meanings.json`, CC0); the seeded shuffle; true-random seeds. |
+| `src/card_deck.gd` | `CardDeck`: the show's deck, parsed from its brief's `## Cards` section (none built in: a brief that lists no card leaves each episode's to its producer); the seeded shuffle; true-random seeds. |
 | `src/card_table.gd` | `CardTable`: what a look may name - title faces (`fonts/cards/`, OFL), frames, the zones things stand in - `sanitize_look`, `sanitize_table`, and the layout a prompt can know ahead (`layout_of`, `headroom`). |
 | `src/agent_tools.gd` | `AgentTools`: tools ghost serves an agent WHILE it works - an MCP server (HTTP, JSON) inside the ghost process, a URL per job, every call logged beside the prompt (`tools.jsonl`, `look_NN.jpg`). Claude takes them (`TextGen.Backend.takes_tools`); Codex and Bedrock are still one reply. |
 | `src/set_dresser_tools.gd` | `SetDresserTools`: the set dresser's tools - `put`, `remove`, `look`, `set`, `watch`, `title`, `submit` - over a draft table. |
@@ -115,6 +115,21 @@ cards, or Pokemon cards, and they just want to show them to people"). Two parts 
   and twelve, at most thirty (`CardPrompts.BOX`), and the seed draws from it as it draws from a
   listed deck. The producer picks what is in the box, never what comes out; a box the size of the
   spread is refused. NO CHEATING holds: a reader is handed cards 1..K, never the rest of the box.
+
+**One set of rules for every show** (2026-10-08; the user: "there shouldn't be ANY tarot-gated rules
+or logic in the 'rules/' files ... for anything else that tarot might need - declare it in the markdown
+files"). The Format switch above is gone: every show gets the same shared context
+(`rules/cards/show.yaml`, `context`), every producer names the deck's `kind` from the brief, and a look
+with no `kind` is a plain "deck". What was the tarot's moved into `rift/cards/true-tarot.md`: its 78
+(it always listed them; `CardDeck.standard` and its generated deck are gone, and
+`data/decks/tarot/` was removed), the suits' elements (prose in its Cards section,
+which every writer reads), the stones and the reader's reasons (its table section), and what a jumper
+means to the genre. A brief that lists no card - no Cards section at all included - leaves the deck to
+the producer. The JUST-IN-TIME rules are the brief itself, handed verbatim to every writer; the
+painter, who never reads it, learns it through the producer's `kind`, `deck_style` and `card_back`.
+No separate rule-writing step: it would restate the brief in another agent's words. Gates:
+`rules_check` (no rules file names a kind of card, against a control part that does) and
+`cards_choose_check` (the same context around any brief; "tarot" only from the brief or the `kind`).
 
 First such show: `rift/tarot/the-shoebox.md` (a collector opening a different box each episode;
 every card invented). Gate: `cards_choose_check`. Still the tarot's: the card's size and shape
@@ -592,6 +607,27 @@ or getting carried-off from the table again after another gust"):
   the shader and `Lights._pattern`), swings what hangs (the swing's push is the table's wind when it has
   one), snaps what flutters, and carries what drifts. A table that wrote no wind keeps its old light;
   what drifts there falls through a faint breath (`Winds.STILL`).
+- THE WIND REACHES EVERYTHING IN THE AIR (2026-10-08; the user: "you might expect wind to effect the
+  flame from candles, causing flickering (which would also chain into shadows moving) ... when there are
+  little flying pixies/particles, you would expect wind to make those move"). ONLY A WRITTEN WIND moves
+  them (`Winds.blows`): a room with its windows shut has still air, and STILL moves no flame or mote. The
+  air is turbulent - EDDIES of 50 and 8 cm carried past on it, churning by 0.3 of its speed
+  (`Winds.eddy`, `air_at`). A FLAME leans as tan(tilt) = draft / draw, its draw sqrt(g x its height) (a
+  candle's 3 cm, half a meter a second), never past 69 degrees; gutters (dimmer, shorter) past 1.8 to 5
+  draws (`Winds.flame`). A table candle's sprite tips on its wick and its light leans with it, so the
+  shadows lean and dance; in still air the old room drafts stay. A flame inside glass, a chimney or a
+  lantern - any part of its thing standing round it and rising past it - gets a tenth of the draft
+  (`Props.open_to_air`). Lamps out of the shot (`Lights.flame_in_wind`): candles and torches lean (a
+  torch's taller flame less), a lantern hardly, a fire is fanned brighter. MOTES: `airspeed` 0 (dust,
+  snow, embers) rides the air, tossed by the big eddies, round a stretch of air the picture's size at its
+  depth (`Effects._stretch`), so the shot keeps about as many; a flier (pixie 1.2 m/s, firefly 0.5, wisp
+  0.25, fly 1.8) holds its place, slipping only near its limit, is carried off by what is more and flies
+  home at its `back` (`Winds.pushed`, a weighted sum over the wind it remembers - pure), trembling as it
+  works. BURSTS: the GPU carries each particle by the air's run since its birth less the lag still to
+  make up (`air_carried`, `air_vel`; its birth's run in the transform's second column,
+  `Effects.particle_xform`) - within a centimeter of a stepped integration. FOG rolls with the wind in
+  place of its own `drift`. Gate: `tests/wind_reach_check.gd`. Open: a tablecloth's hanging edge in a
+  gust; the cards themselves stay put (a 2 g card lifts at about 2 m/s - the reading must stay readable).
 - WHAT DRIFTS (`effects` kind `drift`; `src/drifts.gd`, `Drifts`, `shaders/air_drift.gdshader`): petals,
   rose petals, leaves, green leaves, seeds, spinners, feathers - falling from above or blown in from the
   wind's side. RARE (2026-10-08, the user: a tree "coming down all at once"; "it takes days or even weeks
@@ -1132,6 +1168,15 @@ enforced:
   not all at once as it is squared. A card slid up onto the taller pile tips ~20 degrees, where
   `_tipped`'s skewed long side dipped 0.1 mm into the card under it (table_wash_check): the long side
   is now the one kept true.
+- The fan-out "wobbles and vibrates": a card sliding off another's edge tipped in a frame and back
+  (4.6% of fan-out frames turned a card faster than 60 deg/s, at worst 576). Under the palm each tilt
+  is now the mean of the bare rest's over a quarter second (`CALM_HZ`, `CALM_REACH`), set down on its
+  highest support so it neither floats nor dips, easing to the bare rest over `CALM_SETTLE` after the
+  cards are out: 0.09%, gated against the bare rest (`wash_calm = false`) as the control.
+- A cutting mat's height map was refused ("did not line up", 0.03) though it was right: a printed grid
+  on smooth vinyl is drawn flat, and faint scratches correlate with nothing. A map spanning under
+  `Tables.FLAT_SPAN` of gray is now kept as flat (`height.json` `flat: true`) - the print lies smooth
+  rather than raised by the painting's-own-detail fallback, and no image job is spent asking again.
 - Next: the set dresser's prompt still names the zones as before; it could be told the table may run
   off the frame's sides and that the middle may stay free. A first look at real episodes is pending.
 
@@ -1177,7 +1222,16 @@ the agents, then simply draw their attention to it".
   (27 dB/s). Now the log of the speed is smoothed through two stages (an S-curve, as a fade), no rise
   faster than `RISE_MOST`, with gentler powers on the rush and the rumble; and since the plan is known
   ahead, the wind is heard `LEAD` (0.8 s) early, so the slow entry still peaks with the leaves.
-  Gated: under 8 dB/s over a second, where the plan's raw gusts climb far faster. The fire roars, the rain thickens and the sea slaps harder in a gust.
+  Gated: under 8 dB/s over a second, where the plan's raw gusts climb far faster.
+- THE UNCANNY VALLEY ("it sounds ALMOST natural ... which is almost worse"), against a list of the
+  usual wind recipes: the body of the wind was ONE band of white noise with a moving center - the
+  "filtered noise sweep" an ear knows. Now three EDDIES, each pink noise (high-passed at 60 Hz: pink
+  is heaviest at the bottom, and with nothing under it the darkest eddy churned) through a 24 dB
+  low-pass, drifting on its own slow course in cutoff and level at its own wandering place; a gust's
+  brightening is given back in level so it does not come in as loudness too. And a SPACE round every
+  place (a four-line feedback delay network, dark, ~1.1 s, ~9 dB under the dry sound, wetter as the
+  dial falls): nothing arrived dry at the ears before. The gust's rise limit is on loudness now, at
+  every dial setting. Recorded or AI-generated wind was the other road - files to license or make. The fire roars, the rain thickens and the sea slaps harder in a gust.
 - The set dresser writes `sound` beside `light` (rules/cards/set_dresser.yaml, `insert: sounds`,
   `sound_example`); `put` / `remove "sound"` in its tools, and `put` answers with the sound in words.
 - HEARD UNDER THE READING: `ReadingPanel` mixes it after the voice's own effects (`_environment()` is

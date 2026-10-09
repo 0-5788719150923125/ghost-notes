@@ -13,7 +13,7 @@ class_name Rules
 ##   - ""                                 an empty line
 ##   - >-                                 a paragraph, folded from as many lines of the file as it takes
 ##       You are the SET DRESSER ...
-##   - {when: tarot, say: ...}            only when the code's flag is true; "!tarot" only when it is not;
+##   - {when: box, say: ...}              only when the code's flag is true; "!box" only when it is not;
 ##                                        a list, only when all are
 ##   - {insert: tables}                   a block the code makes - a registry's words, a list of earlier
 ##                                        episodes

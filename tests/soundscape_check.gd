@@ -18,6 +18,8 @@ extends SceneTree
 ## - A GUST COMES IN AS A FADE DOES: the place's loudness (over a second) never climbs faster than
 ##   8 dB a second - against the plan's own gusts heard raw (their speed through the same loudness law),
 ##   which climb far faster.
+## - A SPACE: a sound at one point (a fire's crackles) comes back from round about - its ears less
+##   alike, and its tail lasting past each crackle - against the same fire with no space, dry.
 ## - IT FOLLOWS THE WIND: with every strong gust of the table's wind the trees' sound rises, from just
 ##   before it starts to just after its height - against the same place heard on another seed's wind.
 ## - WHERE IT IS HEARD: a wind from the right is louder in the right ear, from the left in the left;
@@ -46,7 +48,7 @@ func _ok(cond: bool, what: String) -> void:
 
 
 func _run() -> void:
-	for check in [_sanitize, _table_wind, _floor, _churn, _entry, _follows, _sides, _sliced, _dial, _duck, _every]:
+	for check in [_sanitize, _table_wind, _floor, _churn, _entry, _space, _follows, _sides, _sliced, _dial, _duck, _every]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("soundscape_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -220,6 +222,31 @@ func _entry() -> bool:
 		var b := _steepest(raw)
 		_ok(a < 8.0, "at %.1f a gust comes in at %.1f dB/s" % [d, a])
 		_ok(b > a * 1.5, "the control: the plan's raw gusts climb only %.1f dB/s against %.1f" % [b, a])
+	return true
+
+
+static func _likeness(pcm: PackedVector2Array) -> float:
+	var lr := 0.0
+	var ll := 0.0
+	var rr := 0.0
+	for v in pcm:
+		lr += v.x * v.y
+		ll += v.x * v.x
+		rr += v.y * v.y
+	return lr / sqrt(maxf(1e-12, ll * rr))
+
+
+func _space() -> bool:
+	var place := {"fire": {"size": 0.7, "from": "front", "distance": 0.0}}
+	var roomy := _make(place, {}).render(SR * 20)
+	var dry_sc := _make(place, {})
+	var dry := PackedVector2Array()
+	while dry.size() < SR * 20:
+		dry_sc._wet = 0.0
+		dry.append_array(dry_sc.render(4096))
+	var a := _likeness(roomy)
+	var b := _likeness(dry)
+	_ok(b - a > 0.05, "the space leaves a sound at one point as alike in both ears (%.2f) as dry (%.2f)" % [a, b])
 	return true
 
 

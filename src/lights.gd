@@ -37,7 +37,8 @@ class_name Lights
 ## a gradient while every near thing's shadow stays sharp - and THE SKY'S OWN SHADOW is diffuse: a big
 ## soft light (overcast, a big window) is the fill's ambient occlusion, dark at a thing's foot and
 ## blurring away from it. THE WIND ([Winds], `wind`) stirs the screens harder in a gust, swings what
-## hangs and snaps what flutters - the same wind that carries the air's petals ([Effects]).
+## hangs, snaps what flutters and leans a lamp's open flame ([method flame_in_wind]) - the same wind that
+## carries the air's petals ([Effects]).
 ##
 ## THE CPU KNOWS WHAT IS DRAWN: every screen's pattern is [method _pattern], line for line the
 ## shader's, on noise both reckon alike ([method noise], shaders/light_noise.gdshaderinc) - so the
@@ -170,6 +171,12 @@ const LAMPS := {
 		"height": 400.0, "every": 25.0},
 }
 
+## A LAMP'S FLAME IN THE WIND ([method flame_in_wind]), by how it flickers: how tall the flame is (meters
+## - what sets how hard a draft must blow to lean it, [method Winds.flame]) and the share of a draft that
+## reaches it (a lantern's glass keeps most of it off). A fire is FANNED by the wind - brighter, more
+## ragged - where a candle gutters. Lamps with no flame feel no wind.
+const FLAMES := {"candle": [0.03, 1.0], "torch": [0.2, 1.0], "fire": [0.4, 1.0], "lantern": [0.03, 0.12]}
+
 ## A SHADOW OUT OF THE SHOT is made of these silhouettes, in centimeters, up to [constant CASTER_SIZE]
 ## (a roof beam runs six meters). A part's `at` is where its middle goes.
 const CASTER_SHAPES := {
@@ -243,6 +250,9 @@ const SKY_TOP := 0.35
 const SUN_HEAT := 1.05
 const LAMP_IRR := 1.3
 const LAMP_HEAT := 1.25
+## The most a lamp's reflection may ask of a polished surface ([member Light3D.light_specular] times the
+## lamp's energy): past it a far lamp's image blooms at the table's rim.
+const LAMP_GLINT := 0.12
 ## What leads the light: a sun or a lamp lighting the table at least this much (its energy where the
 ## cards are) leads it, and the candles burn as fills.
 const LEAD_MIN := 0.35
@@ -1633,6 +1643,22 @@ static func flicker(look: String, fk: Dictionary, t: float) -> Dictionary:
 	return out
 
 
+## LAMP [param look]'s FLAME, standing at [param at], in [param wind] at [param t] ([method Winds.flame]):
+## `{mid: Vector3 (how far its light has moved, leaning with the flame - so the shadows lean too), bright
+## (its brightness against still air)}` - `{}` for a lamp with no flame. A fire fanned is brighter, a
+## candle in a gust dimmer.
+static func flame_in_wind(look: String, wind: Dictionary, t: float, at: Vector3) -> Dictionary:
+	var kind := String((LAMPS[look] as Dictionary)["flicker"])
+	if not FLAMES.has(kind) or not Winds.blows(wind):
+		return {}
+	var fl: Array = FLAMES[kind]
+	var f := Winds.flame(wind, t, at, float(fl[0]), float(fl[1]))
+	var bright := float(f["bright"])
+	if kind == "fire":
+		bright = 1.0 + 0.25 * minf(float(f["draft"]) / sqrt(9.81 * float(fl[0])), 1.5)
+	return {"mid": f["mid"], "bright": bright}
+
+
 ## The dice a lamp's flicker reads ([method flicker]): its noise and seed, the cuts of a screen's
 ## pictures, the times headlights pass and lightning strikes, and its stutters - all over [constant
 ## HORIZON], from [param salt].
@@ -1871,7 +1897,6 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 		node.light_size = minf(float(info["size"]) * 0.01, 0.06)
 		node.shadow_enabled = bool(l["shadows"])
 		node.shadow_caster_mask = 0xFFFFFFFF & ~SCREEN_MASK
-		node.light_specular = 0.5
 		rig.root.add_child(node)
 		node.transform = Transform3D(Basis.looking_at(-to, Vector3.UP if absf(to.normalized().y) < 0.999 else Vector3.FORWARD)
 			if node is SpotLight3D else Basis.IDENTITY, at)
@@ -1881,6 +1906,10 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 		if String(info["flicker"]) == "lightning":
 			# a flash lights the whole room: as bright as it is far
 			energy = LAMP_IRR * 2.5 * float(l["strength"]) * dist
+		# A FAR LAMP IS NEVER SEEN: its energy grows with its distance to light the cloth as asked, and a
+		# polished edge (a desk's rim) mirrors that energy as a hot spot that blooms - the lamp itself, in
+		# the picture. So what it gives the specular is what it takes to light the cloth, inversely.
+		node.light_specular = clampf(LAMP_GLINT / maxf(energy, 0.01), 0.02, 0.5)
 		rig.lamps.append({"spec": l, "light": node, "base": at, "energy": energy, "asked": energy, "moved": place["moved"],
 			"fk": flicker_of(l, hash([seed, i, String(l["name"]), "lamp"])), "dist": dist, "slant": slant})
 	# THE SHADOWS OUT OF THE SHOT, set up their lights' rays
@@ -2083,6 +2112,11 @@ class Rig:
 			var base: Vector3 = d["base"]
 			node.light_energy = float(d["energy"]) * float(f["bright"])
 			node.position = base + (f["jitter"] as Vector3)
+			# AN OPEN FLAME IN THE WIND leans, and its light with it
+			var fw := Lights.flame_in_wind(String(spec["look"]), wind, t, base)
+			if not fw.is_empty():
+				node.light_energy *= float(fw["bright"])
+				node.position += fw["mid"] as Vector3
 			node.light_color = Color.html(String(spec["color"])) * (f["tint"] as Color)
 			var kind := String((Lights.LAMPS[String(spec["look"])] as Dictionary)["flicker"])
 			if kind == "pass" or kind == "beam":

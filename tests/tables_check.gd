@@ -294,6 +294,18 @@ func _height_map() -> void:
 		"its own height map, moved, is accepted (%.2f) and the move found (%s against %s)" % [float(same["score"]), str(same["shift"]), str(want)])
 	_ok(float(flipped["score"]) >= Tables.FIT_LEAST, "drawn the other way round it is accepted too (%.2f)" % float(flipped["score"]))
 	_ok(float(other["score"]) < Tables.FIT_LEAST, "an unrelated picture is refused (%.2f)" % float(other["score"]))
+	# A FLAT MAP (a cutting mat's: one gray and a few faint scratches) is the right answer for a surface
+	# with no relief - it correlates with nothing, and is kept by its span; a real map is not flat
+	var mat := Image.create(768, 512, false, Image.FORMAT_RGB8)
+	mat.fill(Color(0.5, 0.5, 0.5))
+	for k in 6:
+		for t in 120:
+			mat.set_pixel(100 + k * 90 + t, 80 + k * 50 + t / 3, Color(0.53, 0.53, 0.53))
+	var mat_fit := Tables.height_fit(paint, mat)
+	_ok(float(mat_fit["score"]) < Tables.FIT_LEAST and Tables.height_span(mat) < Tables.FLAT_SPAN,
+		"a flat map fits nothing (%.2f) and is known flat (%.3f)" % [float(mat_fit["score"]), Tables.height_span(mat)])
+	_ok(Tables.height_span(_gray_of(paint, Vector2i.ZERO, false)) > Tables.FLAT_SPAN * 2.0,
+		"control: a real height map is not flat (%.3f)" % Tables.height_span(_gray_of(paint, Vector2i.ZERO, false)))
 	# THE STEP, on an episode of the gate's own
 	CardEpisode.root = "user://tables_check"
 	var ep := CardEpisode.open("tables-check", 7)

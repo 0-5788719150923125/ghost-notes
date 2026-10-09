@@ -1402,6 +1402,12 @@ to the show's; the producer names the deck's `kind`, which the designer and pain
 seed (`CardDeck.chooses`). First show: `rift/tarot/the-shoebox.md`. The recipe's verbs and its
 words in code are still the tarot's; the guide maps them. Gate: cards_choose_check (next/cards.md).
 
+**2026-10-08: (5) - one set of rules for every show.** The `## Format` switch is gone: the rules name
+no kind of card (no `tarot` flag, no built-in 78, no suit's element in code); a tarot show is a brief
+that says it is one and lists its deck, and every producer names the deck's `kind`. Details and gates
+in next/cards.md ("One set of rules for every show"). Still the tarot's: the card's size and face, and
+the hash salts (kept by design).
+
 **2026-10-07: (3) and (6) in part - the staging.** Card state over show time is each card's own
 timeline (arrive, show, lay, turn), and the producer chooses how the cards come and are shown: a deck or
 a box (cards filed on edge), the text in a booklet or on the card's back (held alone, turned over),

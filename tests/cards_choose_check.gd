@@ -1,23 +1,26 @@
 extends SceneTree
 
-## A SHOW THAT IS NOT A TAROT READING, from its document alone: a box of cards shown off, a deck
-## the producer chooses each episode.
+## A SHOW OF ANY KIND OF CARD, from its document alone: a box of cards shown off, a deck the producer
+## chooses each episode - and a tarot reading, told by the same rules.
 ##
 ##   godot --headless --path . --script res://tests/cards_choose_check.gd
 ##
-## - THE PRODUCER CHOOSES THE DECK when the brief's Cards section is prose and lists no card
-##   ([method CardDeck.chooses]); a listed deck, or no section (the standard 78), is the show's.
+## - THE PRODUCER CHOOSES THE DECK when the brief lists no card - a Cards section of prose, or none
+##   ([method CardDeck.chooses]); a listed deck is the show's (the control). No deck is built in.
 ## - THE BOX IS BIGGER THAN THE DRAW: a plan's deck lands only with at least twice the spread (and
 ##   [constant CardPrompts.BOX]'s least), so the seed, not the producer, decides what comes out; a
 ##   box the size of the spread is refused. The draw comes from that box.
 ## - NO CHEATING holds for a chosen deck: the reader of card K is handed cards 1..K and no other
 ##   card of the box. Two-sided: the close names every card drawn.
-## - A FORMAT SECTION TAKES THE TAROT OUT of what every agent is told - the shared context, the
-##   designer, the painter's card, back and room - and a show without one is told exactly what a
-##   tarot show always was (the controls).
+## - THE RULES ARE EVERY SHOW'S (the user, 2026-10-08: "there shouldn't be ANY tarot-gated rules"): the
+##   shared context is the same words around any brief, and "tarot" reaches the producer, the designer
+##   and the painter only from the brief or the deck's `kind` the producer named - two-sided: a look whose
+##   kind is a tarot deck is painted and designed as one, and a brief that says tarot is handed whole.
 
 var _fails := 0
 const ROOT := "user://cards_choose_check"
+
+const FixtureDeck := preload("res://tests/fixture_deck.gd")
 
 const BRIEF := """# Show and Tell
 
@@ -53,34 +56,37 @@ func _chooses() -> bool:
 	_ok(CardDeck.strip(BRIEF) == BRIEF, "the prose that says what the cards are did not reach the agents whole")
 	var listed := BRIEF + "\n- Ace: one.\n- Two: two.\n"
 	_ok(not CardDeck.chooses(listed) and CardDeck.of(listed).size() == 2, "control: a listed deck was left to the producer")
-	_ok(not CardDeck.chooses("# A show\n\nNo cards here.") and CardDeck.of("No cards here.").size() == 78,
-		"control: a show with no Cards section does not read the standard 78")
-	print("cards_choose_check: chooses - prose alone leaves the deck to the producer")
+	_ok(CardDeck.chooses("# A show\n\nNo cards here.") and CardDeck.of("No cards here.").is_empty(),
+		"a show with no Cards section was given a deck the app keeps")
+	print("cards_choose_check: chooses - a brief that lists no card leaves the deck to the producer")
 	return true
 
 
 func _framing() -> bool:
-	var shown := CardPrompts.show_context("Show and Tell", BRIEF)
-	var tarot := CardPrompts.show_context("T", "A tarot brief.")
-	_ok(not shown.to_lower().contains("tarot") and shown.contains("Format section"),
-		"a show with a Format section is still told it is a tarot channel")
-	_ok(tarot.contains("YouTube tarot channel"), "control: a show without a Format section is no longer told it is tarot")
-	_ok(not CardPrompts.has_format("The format of a reading is fixed."), "a sentence about the format was taken for its section")
-	var p := CardPrompts.producer("Show and Tell", BRIEF, 7, 4, false, CardTable.FACES, CardTable.FRAMES, [], [], true)
-	var pr := String(p["prompt"])
-	_ok(pr.contains("THE DECK is yours to choose") and pr.contains("\"deck\": [{") and pr.contains("\"kind\": \"what these cards are")
-		and not pr.contains("tarot"), "the producer is not asked for its box and its kind, or still hears of tarot")
-	var std := String(CardPrompts.producer("T", "B", 7, 4, true, CardTable.FACES, CardTable.FRAMES, [], CardDeck.standard())["prompt"])
-	_ok(std.contains("standard tarot") and not std.contains("\"deck\": [{") and not std.contains("\"kind\": \"what these cards are"),
-		"control: a tarot producer is asked for a box or a kind")
-	var look := {"deck_name": "Sandlot", "kind": "minor-league baseball card set"}
-	var card := {"name": "Rookie Shortstop", "meaning": "a kid with a glove"}
-	var d := String(CardPrompts.designer("S", BRIEF, look, card, false)["prompt"])
-	_ok(d.contains("minor-league baseball card set \"Sandlot\"") and not d.contains("traditional symbolism"),
-		"the designer still designs a tarot card")
-	var dt := String(CardPrompts.designer("S", "B", {"deck_name": "X"}, card, false)["prompt"])
-	_ok(dt.contains("tarot deck \"X\"") and dt.contains("traditional symbolism"), "control: a tarot designer lost the tarot")
-	print("cards_choose_check: framing - a Format section takes the tarot out; without one it stays")
+	# THE SAME WORDS AROUND ANY BRIEF: take each brief out of its context and nothing else differs
+	var tarot_brief := "# True Tarot\n\nA tarot channel that tells the truth."
+	var shown := CardPrompts.show_context("S", BRIEF)
+	var tarot := CardPrompts.show_context("S", tarot_brief)
+	_ok(shown.replace(BRIEF.strip_edges(), "") == tarot.replace(tarot_brief, "") and not shown.to_lower().contains("tarot"),
+		"the shared context is not the same words for every show")
+	_ok(tarot.contains("A tarot channel that tells the truth."), "control: a tarot brief did not reach the agents whole")
+	# THE PRODUCER asks every show for its kind of cards, and names none of its own
+	var chosen := String(CardPrompts.producer("Show and Tell", BRIEF, 7, 4, false, CardTable.FACES, CardTable.FRAMES, [], [], true)["prompt"])
+	var listed := String(CardPrompts.producer("T", "B", 7, 4, true, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards())["prompt"])
+	for pr in [chosen, listed]:
+		_ok(String(pr).contains("\"kind\": \"what these cards are") and not String(pr).to_lower().contains("tarot"),
+			"a producer is not asked for its deck's kind, or is told of tarot by the rules")
+	_ok(chosen.contains("THE DECK is yours to choose") and chosen.contains("\"deck\": [{"), "the producer is not asked for its box")
+	_ok(not listed.contains("\"deck\": [{") and listed.contains("78 cards: The Fool, The Magician"),
+		"control: a show with its own deck is asked for a box, or not told its cards")
+	# THE DESIGNER takes the kind the producer named; no suit's element is the code's
+	var card := {"name": "Ace of Wands", "group": "Wands", "meaning": "a spark"}
+	var d := String(CardPrompts.designer("S", BRIEF, {"deck_name": "Sandlot", "kind": "minor-league baseball card set"}, card, false)["prompt"])
+	_ok(d.contains("minor-league baseball card set \"Sandlot\"") and not d.to_lower().contains("tarot") and not d.contains("element"),
+		"the designer still designs a tarot card, or is told a suit's element by the code")
+	var dt := String(CardPrompts.designer("S", "B", {"deck_name": "X", "kind": "tarot deck"}, card, true)["prompt"])
+	_ok(dt.contains("tarot deck \"X\"") and dt.contains("Ace of Wands (Wands)"), "control: a look whose kind is a tarot deck lost it")
+	print("cards_choose_check: framing - one set of rules; the brief and the deck's kind say what the cards are")
 	return true
 
 
@@ -113,7 +119,7 @@ func _box() -> bool:
 		"the draw did not come from the box: %s" % str(drawn))
 	# control: the same plan for a show that does not choose keeps no box
 	ep.invalidate("plan")
-	var fixed := CardProducer.new(ep, {"title": "S", "brief": "B", "deck": CardDeck.standard(), "draw": [4, 4]})
+	var fixed := CardProducer.new(ep, {"title": "S", "brief": "B", "deck": FixtureDeck.cards(), "draw": [4, 4]})
 	_ok(fixed._land_plan(_plan_with(12)).is_empty() and not (ep.read_json("plan") as Dictionary).has("deck"),
 		"control: a show with its own deck kept a producer's box")
 	ep.invalidate("plan")
@@ -153,11 +159,14 @@ func _painter() -> bool:
 	var room := CardPrompts.backdrop_image(look, "/x.png")
 	_ok(not (face + back + room).to_lower().contains("tarot") and face.contains("baseball card set \"Sandlot\""),
 		"the painter is still told it paints a tarot deck")
-	var old := {"deck_name": "Sandlot", "setting": "a garage"}
-	_ok(CardPrompts.card_image(old, {"name": "Rookie"}, "a kid", "/x.png", false, 0).contains("tarot deck \"Sandlot\"")
-		and CardPrompts.backdrop_image(old, "/x.png").contains("a tarot reader"),
-		"control: a look with no kind is no longer painted as tarot")
-	print("cards_choose_check: painter - the card, back and room take the deck's kind")
+	var bare := {"deck_name": "Sandlot", "setting": "a garage"}
+	var all := CardPrompts.card_image(bare, {"name": "Rookie"}, "a kid", "/x.png", false, 0) + CardPrompts.back_image(bare, "/x.png") \
+		+ CardPrompts.backdrop_image(bare, "/x.png") + CardPrompts.surface_image(bare, "/x.png")
+	_ok(not all.to_lower().contains("tarot") and all.contains("the deck \"Sandlot\""), "a look with no kind is painted as tarot")
+	var tarot := {"deck_name": "Sandlot", "kind": "tarot deck", "setting": "a garage"}
+	_ok(CardPrompts.card_image(tarot, {"name": "Rookie"}, "a kid", "/x.png", false, 0).contains("tarot deck \"Sandlot\""),
+		"control: a look whose kind is a tarot deck is not painted as one")
+	print("cards_choose_check: painter - the card, back and room take the deck's kind, and only it")
 	return true
 
 

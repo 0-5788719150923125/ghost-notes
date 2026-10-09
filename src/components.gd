@@ -133,7 +133,7 @@ const TEMPLATES := {
 	# it is not a script but a show's brief.
 	"cards": {"label": "Cards", "session": "reading", "mode": "cards", "section": "cards",
 		"components": ["text", "cards", "voice", "look", "bookends"],
-		"blurb": "A card reading nobody writes - agents plan, deal, paint and write each episode one card at a time, and a voice reads it at the table. Tarot is its first deck.",
+		"blurb": "A show of cards nobody writes - agents plan, deal, paint and write each episode one card at a time, and a voice reads it at the table. The show's brief says what the cards are.",
 		"uses": ""},
 	"masking": {"label": "Masking", "session": "clip", "mode": "masking",
 		"components": ["clip", "masks"],

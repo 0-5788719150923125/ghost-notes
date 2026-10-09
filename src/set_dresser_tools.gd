@@ -1,7 +1,7 @@
 extends RefCounted
 class_name SetDresserTools
 
-## SetDresserTools - what the set dresser can do while it sets a tarot reader's table: MAKE a thing,
+## SetDresserTools - what the set dresser can do while it sets the reader's table: MAKE a thing,
 ## LOOK at it, FIX it, and see the whole table as the camera will before handing it in.
 ##
 ## Written as one reply, a table was ~5,000 tokens of geometry its author never saw: a squid of balls
@@ -113,7 +113,7 @@ func release() -> void:
 
 
 func instructions() -> String:
-	return "Tools for setting a tarot reader's table: build the table itself and lay its cloths, put things on it, light it, look at them, see it from above and as the camera will film it, watch what moves, and submit it."
+	return "Tools for setting the reader's table: build the table itself and lay its cloths, put things on it, light it, look at them, see it from above and as the camera will film it, watch what moves, and submit it."
 
 
 func list_tools() -> Array:

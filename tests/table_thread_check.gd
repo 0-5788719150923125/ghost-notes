@@ -179,7 +179,7 @@ func _fixture() -> CardEpisode:
 		DirAccess.remove_absolute(ep.dir.path_join(f))
 	ep.write_json("plan", {"episode_title": "A Table Built Aside", "spread": {"name": "Three", "positions": [{"name": "One"},
 		{"name": "Two"}, {"name": "Three"}]}, "look": CardTable.sanitize_look({"deck_name": "The Test Deck", "candles": 1})})
-	ep.write_json("draw", {"seed": ep.seed, "cards": CardDeck.shuffled(CardDeck.standard(), ep.seed, true).slice(0, 3)})
+	ep.write_json("draw", {"seed": ep.seed, "cards": CardDeck.shuffled(preload("res://tests/fixture_deck.gd").cards(), ep.seed, true).slice(0, 3)})
 	var surf := Image.create(192, 128, false, Image.FORMAT_RGB8)
 	surf.fill(Color(0.2, 0.12, 0.1))
 	surf.save_png(ep.file_of("image:surface"))

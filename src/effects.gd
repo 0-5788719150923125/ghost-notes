@@ -16,6 +16,14 @@ class_name Effects
 ## [constant FOG_SHADER]): lights in it light it, so candles glow through it, and a mote that carries a
 ## light makes a colored glow in the fog around it. Sparks fly on the GPU from where and when they
 ## were born ([constant SPRITE_SHADER]); motes are placed on the CPU, which also moves their lights.
+##
+## THE WIND MOVES THE AIR ([Winds], the stage's `wind`, when the light wrote one - [method Winds.blows]):
+## what rides the air - dust, snow, embers - is carried through the shot and tossed in its eddies, and
+## the shot keeps about as many as it had, each gone downwind coming in again upwind; what flies - a
+## pixie, a firefly, a wisp, a fly - holds its place against it as hard as it can fly ([method
+## Winds.pushed]), trembling as it works, and a gust past its strength carries it off for a moment before
+## it flies home; a burst's sparks and smoke are carried off downwind as the air slows them (in closed
+## form on the GPU: the air's run since each was born); fog rolls along with it. Still air moves nothing.
 
 const FOG_SHADER := preload("res://shaders/effect_fog.gdshader")
 const SPRITE_SHADER := preload("res://shaders/effect_sprite.gdshader")
@@ -37,29 +45,31 @@ const KINDS := {
 ## and `drift`s for those shares of what it does next), whether it blinks (fireflies), flickers (embers), rises
 ## (embers) or falls (snow, ash), whether it carries a little light (so fog glows round it and the
 ## table takes its color) and its color when none is given. A "speck" is DARK: laid over what is
-## behind it, never added to it, and never lit.
+## behind it, never added to it, and never lit. In a wind ([method _blown]): `airspeed`, how hard it
+## flies against it (m/s - a house fly's two, a firefly's half; none, it rides the air), and `back`,
+## how quickly it flies home once a gust has passed (the share of the way a second).
 const MOTES := {
 	"pixie": {"about": "tiny bright points of colored light that dart and drift, alone or in twos and threes", "shape": "orb",
 		"size": 3.0, "sizes": Vector2(1.5, 8.0), "glows": Vector2(0.4, 1.3), "speed": 1.0, "wander": 1.0, "blink": 0.0,
-		"flicker": 0.15, "rise": 0.0, "light": true, "flight": "dart", "color": "#ffe9a8"},
+		"flicker": 0.15, "rise": 0.0, "light": true, "flight": "dart", "airspeed": 1.2, "back": 0.8, "color": "#ffe9a8"},
 	"firefly": {"about": "slow, low-flying sparks that blink on for a moment and off for longer, yellow-green", "shape": "orb",
 		"size": 2.5, "sizes": Vector2(1.2, 6.0), "glows": Vector2(0.6, 1.8), "speed": 0.45, "wander": 0.7, "blink": 1.0,
-		"flicker": 0.0, "rise": 0.0, "light": true, "flight": "drift", "color": "#d8ff6e"},
+		"flicker": 0.0, "rise": 0.0, "light": true, "flight": "drift", "airspeed": 0.5, "back": 0.5, "color": "#d8ff6e"},
 	"wisp": {"about": "large, faint, slow glows that hang and drift like will-o'-the-wisps", "shape": "orb",
 		"size": 14.0, "sizes": Vector2(6.0, 40.0), "glows": Vector2(0.3, 1.0), "speed": 0.25, "wander": 0.8, "blink": 0.0,
-		"flicker": 0.3, "rise": 0.0, "light": true, "flight": "drift", "color": "#a8e6ff"},
+		"flicker": 0.3, "rise": 0.0, "light": true, "flight": "drift", "airspeed": 0.25, "back": 0.3, "color": "#a8e6ff"},
 	"ember": {"about": "sparks rising from a fire, flickering, winking out at the top", "shape": "orb",
 		"size": 1.6, "sizes": Vector2(0.8, 4.0), "glows": Vector2(0.8, 2.2), "speed": 0.6, "wander": 0.3, "blink": 0.0,
-		"flicker": 0.8, "rise": 1.0, "light": false, "flight": "drift", "color": "#ff9a3c"},
+		"flicker": 0.8, "rise": 1.0, "light": false, "flight": "drift", "airspeed": 0.0, "back": 0.0, "color": "#ff9a3c"},
 	"dust": {"about": "motes of dust drifting through the light, barely there", "shape": "orb",
 		"size": 1.0, "sizes": Vector2(0.5, 3.0), "glows": Vector2(0.15, 0.5), "speed": 0.15, "wander": 0.5, "blink": 0.0,
-		"flicker": 0.2, "rise": 0.0, "light": false, "flight": "drift", "color": "#fff1d6"},
+		"flicker": 0.2, "rise": 0.0, "light": false, "flight": "drift", "airspeed": 0.0, "back": 0.0, "color": "#fff1d6"},
 	"snow": {"about": "flakes falling slowly, drifting as they fall - snow, ash, pollen", "shape": "flake",
 		"size": 3.0, "sizes": Vector2(1.5, 8.0), "glows": Vector2(0.3, 0.8), "speed": 0.35, "wander": 0.4, "blink": 0.0,
-		"flicker": 0.0, "rise": -1.0, "light": false, "flight": "drift", "color": "#f4f6ff"},
+		"flicker": 0.0, "rise": -1.0, "light": false, "flight": "drift", "airspeed": 0.0, "back": 0.0, "color": "#f4f6ff"},
 	"fly": {"about": "dark specks that zip about in sudden zig-zags, stop to hover a moment, drift, fly off and come back - flies, gnats; a market's, a summer room's. Past the table they are out of focus, as the room is", "shape": "speck",
 		"size": 5.0, "sizes": Vector2(1.5, 9.0), "glows": Vector2(0.8, 1.0), "speed": 1.0, "wander": 1.0, "blink": 0.0,
-		"flicker": 0.0, "rise": 0.0, "light": false, "flight": "zigzag", "hover": 0.2, "drift": 0.08, "color": "#16130f"},
+		"flicker": 0.0, "rise": 0.0, "light": false, "flight": "zigzag", "hover": 0.2, "drift": 0.08, "airspeed": 1.8, "back": 1.2, "color": "#16130f"},
 }
 
 ## What a burst can be: its sprite's shape, how many, how fast they leave (m/s), how widely (the
@@ -136,6 +146,14 @@ const LEG_STILL := 1
 const LEG_DRIFT := 2
 const LEG_OUT := 3
 const SPECK_SHUTTER := 1.0 / 500.0
+## IN A WIND ([method _blown]): the share of the wind it beats that a flier still gives way to (none holds
+## perfectly still in a breeze); how far the eddies toss what rides the air, a second of their churn at
+## most [constant TOSS] meters; and the stretch of air a carried mote goes round in ([method _stretch]) -
+## the picture at its depth, this much wider, and a little more - faded out and in at its ends.
+const GIVE := 0.12
+const TOSS := 0.12
+const WRAP := 1.15
+const WRAP_MORE := 0.15
 
 
 ## THE VOCABULARY, as an agent reads it. [param regions] and [param moments] are the host's names:
@@ -150,9 +168,9 @@ static func describe(regions: Dictionary, moments: Dictionary) -> String:
 	for r in regions:
 		lines.append("- \"%s\": %s" % [r, String(regions[r])])
 	lines.append("")
-	lines.append("FOG: {\"name\", \"kind\": \"fog\", \"where\", \"color\", \"density\" 0-1 (a whisper of haze to a thick bank), \"rolls\" 0-1 (how much it billows and turns over), \"drift\" -1..1 (its slow wind, left to right), \"height\" (centimeters it reaches above its floor), \"grain\" (centimeters: the size of its swirls), \"glow\" 0-1 (light of its own, for fog that should show without a light in it)}.")
+	lines.append("FOG: {\"name\", \"kind\": \"fog\", \"where\", \"color\", \"density\" 0-1 (a whisper of haze to a thick bank), \"rolls\" 0-1 (how much it billows and turns over), \"drift\" -1..1 (its slow drift in still air, left to right - in the light's wind it rolls along with that instead), \"height\" (centimeters it reaches above its floor), \"grain\" (centimeters: the size of its swirls), \"glow\" 0-1 (light of its own, for fog that should show without a light in it)}.")
 	lines.append("")
-	lines.append("MOTES: {\"name\", \"kind\": \"motes\", \"look\", \"where\", \"count\" 1-%d, \"colors\" [\"#rrggbb\", ...] (each mote takes one), \"size\" (millimeters: the look's own unless given, kept within its range), \"glow\" 0-1 (how bright - for a dark look, how dark - within the look's range), \"speed\" 0-1, \"away\" 0-1 (how much of the time each is gone from the scene), \"light\" true or false (a lit mote glows in the fog round it and tints what it passes; a dark one never does)}. Looks, each with its size and the sizes it can be:" % MAX_MOTES)
+	lines.append("MOTES: {\"name\", \"kind\": \"motes\", \"look\", \"where\", \"count\" 1-%d, \"colors\" [\"#rrggbb\", ...] (each mote takes one), \"size\" (millimeters: the look's own unless given, kept within its range), \"glow\" 0-1 (how bright - for a dark look, how dark - within the look's range), \"speed\" 0-1, \"away\" 0-1 (how much of the time each is gone from the scene), \"light\" true or false (a lit mote glows in the fog round it and tints what it passes; a dark one never does)}. In the light's wind dust, snow and embers are carried through the shot, and pixies, fireflies, wisps and flies hold their place against it until a gust too strong for them pushes them off a while. Looks, each with its size and the sizes it can be:" % MAX_MOTES)
 	for k in MOTES:
 		var mo: Dictionary = MOTES[k]
 		lines.append("- %s: %s (%s mm, %s to %s)" % [k, String(mo["about"]), _mm(float(mo["size"])),
@@ -357,6 +375,8 @@ static func build(effects: Array, stage: Dictionary, seed: int) -> Air:
 	air.root = Node3D.new()
 	air.root.name = "Air"
 	air.stage = stage
+	var wind: Dictionary = stage.get("wind", {}) if stage.get("wind") is Dictionary else {}
+	air.wind = wind if Winds.blows(wind) else {}
 	var lights := 0
 	for i in effects.size():
 		var fx: Dictionary = effects[i]
@@ -412,7 +432,9 @@ static func _fog(fx: Dictionary, stage: Dictionary, root: Node3D) -> Dictionary:
 	var hides := 0.9 * float(fx["density"])
 	mat.set_shader_parameter("density", -log(1.0 - hides) / maxf(float(info["sight"]), 0.02) / 0.45)
 	mat.set_shader_parameter("rolls", float(fx["rolls"]))
-	mat.set_shader_parameter("wind", Vector3(float(fx["drift"]) * 0.12, 0.012, -0.02 * absf(float(fx["drift"]))))
+	# ITS OWN SLOW DRIFT in still air; in a wind it goes with the wind ([member Air.wind]), rising as slowly
+	mat.set_shader_parameter("wind", Vector3(0.0, 0.012, 0.0) if Winds.blows(stage.get("wind", {})) \
+		else Vector3(float(fx["drift"]) * 0.12, 0.012, -0.02 * absf(float(fx["drift"]))))
 	mat.set_shader_parameter("grain", float(fx["grain"]) * 0.01)
 	mat.set_shader_parameter("floor_y", float(info["floor"]))
 	# a layer thinner than the fog's own grain cannot be seen: a few centimeters at least
@@ -515,6 +537,13 @@ static func _motes(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D, l
 			var far: Variant = _deep_of(stage, deep)
 			if far != null:
 				m["exit"] = far
+		# ITS SHARE OF THE WIND ([method _blown]), on dice of its own too: how strong a flier it is against
+		# its look's own and how closely it rides the air - and, riding it, the stretch of air it goes round
+		var gust := RandomNumberGenerator.new()
+		gust.seed = hash([salt, i, "wind"])
+		m["strong"] = gust.randf_range(0.6, 1.4)
+		m["carry"] = gust.randf_range(0.85, 1.15)
+		m.merge(_stretch(home, depth, frame_h, stage))
 		if String(look["flight"]) == "zigzag":
 			m.merge(_flight_plan(m, look, float(fx["away"]), stage))
 		each.append(m)
@@ -535,9 +564,38 @@ static func _motes(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D, l
 	# THE AIR'S FLOOR is the lowest of the stage's regions (the room's), not this one's: what stands in
 	# the air lifts motes over itself, and past a table's edge a mote leaving into the room may go down
 	var floor_y := minf(_air_floor(stage), box.position.y)
+	var wind: Dictionary = stage.get("wind", {}) if stage.get("wind") is Dictionary else {}
 	return {"fx": fx, "look": look, "box": box, "each": each, "layer": layer, "lights": lights,
 		"glow": float(fx["glow"]), "away": float(fx["away"]), "under": stage.get("occluders", []),
-		"clear": LIT_CLEAR if bool(fx["light"]) else CLEAR, "floor": floor_y}
+		"clear": LIT_CLEAR if bool(fx["light"]) else CLEAR, "floor": floor_y,
+		"wind": wind if Winds.blows(wind) else {}, "felt": {}}
+
+
+## THE STRETCH OF AIR a mote at [param home] goes round as it rides the wind ([method _blown]): the
+## picture at its depth ([param depth], [param frame_h] tall), seen from above - as wide as the frame
+## across, and as deep as the frame's height reaches over the ground looking down - measured along the
+## wind's way and across it, [constant WRAP] times that and [constant WRAP_MORE] more, its middle the
+## picture's middle at that depth. `{spans: Vector2 (along, across), mid: Vector2 (the home from that
+## middle, along and across)}`; `{}` in still air.
+static func _stretch(home: Vector3, depth: float, frame_h: float, stage: Dictionary) -> Dictionary:
+	var wind: Dictionary = stage.get("wind", {}) if stage.get("wind") is Dictionary else {}
+	if not Winds.blows(wind):
+		return {}
+	var cam: Transform3D = stage.get("camera", Transform3D.IDENTITY)
+	var fwd := -cam.basis.z
+	var right := Vector2(cam.basis.x.x, cam.basis.x.z).normalized()
+	var ahead := Vector2(fwd.x, fwd.z).normalized() if Vector2(fwd.x, fwd.z).length() > 1e-4 else Vector2(0.0, -1.0)
+	var wide := frame_h * float(stage.get("aspect", 16.0 / 9.0))
+	var deep := frame_h / maxf(-fwd.y, 0.3)
+	var d: Vector2 = wind["dir"]
+	var side := Vector2(-d.y, d.x)
+	var spans := Vector2.ZERO
+	for k in 2:
+		var u := d if k == 0 else side
+		spans[k] = (absf(u.dot(right)) * wide + absf(u.dot(ahead)) * deep) * WRAP + WRAP_MORE
+	var mid := cam.origin + fwd * depth
+	var off := Vector2(home.x - mid.x, home.z - mid.z)
+	return {"spans": spans, "mid": Vector2(off.dot(d), off.dot(side))}
 
 
 ## A HOME FOR A MOTE, spread over the PICTURE rather than the region's volume: a spot on screen, and a
@@ -706,6 +764,11 @@ static func mote_at(pop: Dictionary, m: Dictionary, t: float) -> Dictionary:
 	if rise != 0.0:
 		var u2 := fposmod(float(m["lift"]) + absf(rise) * float(look["speed"]) * 0.08 * (0.7 + 0.6 * float(m["lift"])) * t / maxf(box.size.y, 0.05), 1.0)
 		bright *= smoothstep(0.0, 0.12, u2) * (1.0 - smoothstep(0.75, 1.0, u2))
+	# IN THE WIND: carried along it, or holding its place against it
+	if not (pop.get("wind", {}) as Dictionary).is_empty():
+		var bl := _blown(pop, m, t)
+		p += bl["off"] as Vector3
+		bright *= float(bl["fade"])
 	# VISITS: here for most of its round, then away out of the picture and back (a fly flies its own)
 	var away := float(pop["away"])
 	var presence := 1.0
@@ -742,6 +805,49 @@ static func mote_at(pop: Dictionary, m: Dictionary, t: float) -> Dictionary:
 		var s := float(m["seed"])
 		bright *= 1.0 - flicker * 0.5 * (0.5 + 0.5 * sin(t * 11.0 + s)) * (0.5 + 0.5 * sin(t * 6.7 + s * 2.3))
 	return {"pos": p, "bright": bright, "presence": presence}
+
+
+## WHAT THE WIND DOES TO MOTE [param m] of [param pop] at [param t]: `{off: Vector3 (meters, from where it
+## would be in still air), fade, strain}`. A look with no `airspeed` RIDES THE AIR: carried along it
+## ([method Winds.carried], as closely as the mote's `carry`) and tossed in the eddy it rides in ([method
+## Winds.eddy], the big swirls); round a stretch of air as wide as the picture at its depth and more
+## ([method _stretch], along the wind and across it), so as it goes out of the shot downwind it comes in
+## again upwind - faded out and in at the stretch's ends, which lie out of the picture - and the shot keeps
+## about as many as it held. A look
+## that FLIES holds its place against the wind as hard as it can ([method Winds.pushed], its look's
+## `airspeed` times its own `strong`): a breeze it beats barely moves it, a gust past it carries it off,
+## and it flies home after; the harder it works, the more it trembles (`strain`, 0 at ease to 1 flat out),
+## and the small eddies it does not fight jostle it.
+static func _blown(pop: Dictionary, m: Dictionary, t: float) -> Dictionary:
+	var wind: Dictionary = pop["wind"]
+	var look: Dictionary = pop["look"]
+	var home: Vector3 = m["home"]
+	var airspeed := float(look.get("airspeed", 0.0)) * float(m["strong"])
+	if airspeed <= 0.0:
+		var c := Winds.carried(wind, t) * float(m["carry"])
+		var d: Vector2 = wind["dir"]
+		var side := Vector2(-d.y, d.x)
+		var spans: Vector2 = m["spans"]
+		var mid: Vector2 = m["mid"]
+		# from the stretch's middle, carried and come round: where it is, and how far it was carried
+		var r := Vector2(fposmod(mid.x + c.dot(d) + spans.x * 0.5, spans.x) - spans.x * 0.5,
+			fposmod(mid.y + c.dot(side) + spans.y * 0.5, spans.y) - spans.y * 0.5)
+		var v := Winds.velocity_at(wind, t).length()
+		var toss := Winds.eddy(wind, t, home + Vector3(c.x, 0.0, c.y), false) * minf(Winds.TURBULENCE * v, TOSS)
+		var flat := d * (r.x - mid.x) + side * (r.y - mid.y)
+		return {"off": Vector3(flat.x, 0.0, flat.y) + toss, "strain": 0.0,
+			"fade": (1.0 - smoothstep(0.8, 1.0, absf(r.x) / (spans.x * 0.5))) * (1.0 - smoothstep(0.8, 1.0, absf(r.y) / (spans.y * 0.5)))}
+	var back := float(look["back"])
+	var felt: PackedVector2Array = (pop["felt"] as Dictionary).get(t, PackedVector2Array())
+	if felt.is_empty():
+		felt = Winds.memory(wind, t, back)
+	var push := Winds.pushed(felt, back, airspeed, GIVE)
+	var now := Winds.velocity_at(wind, t).length()
+	var strain := clampf(now / airspeed, 0.0, 1.0)
+	var sd := float(m["seed"])
+	var tremble := ((m["ax"] as Vector3) * sin(t * 23.0 + sd) + (m["ay"] as Vector3) * cos(t * 19.0 + sd * 1.3)) * 0.1 * strain * strain
+	var jostle := Winds.eddy(wind, t, home) * Winds.TURBULENCE * now * GIVE
+	return {"off": Vector3(push.x, 0.0, push.y) + tremble + jostle, "strain": strain, "fade": 1.0}
 
 
 ## A FLY'S FLIGHT, planned once and then read by time ([method _zigzag]): [constant ZIG_PLAN] seconds,
@@ -916,6 +1022,14 @@ static func births(fx: Dictionary, moments: Array, salt: int) -> Array:
 	return out
 
 
+## A PARTICLE born of [param p] ([method births]) as its sprite holds it: its place, its velocity in the
+## transform's first column, which nothing else uses, and in its second how far [param wind] had carried
+## the air when it was born (none in still air, `{}`) - the shader carries it by the air's run since.
+static func particle_xform(p: Dictionary, wind: Dictionary) -> Transform3D:
+	var c0 := Winds.carried(wind, float(p["born"])) if not wind.is_empty() else Vector2.ZERO
+	return Transform3D(Basis(p["vel"] as Vector3, Vector3(c0.x, 0.0, c0.y), Vector3.BACK), p["pos"] as Vector3)
+
+
 ## The emitter at [param t] along [param path] (`[[t, Transform3D], ...]`): between two samples, its
 ## place and turn eased between them.
 static func _along(path: Array, t: float) -> Transform3D:
@@ -952,6 +1066,7 @@ class Air:
 	var motes: Array = []
 	var bursts: Array = []
 	var drifts: Array = []              # what the wind carries ([Drifts])
+	var wind := {}                      # the light's wind ([method Winds.plan]) when it wrote one, else {}: still air
 
 	func has_fog() -> bool:
 		return not fogs.is_empty()
@@ -974,24 +1089,43 @@ class Air:
 			mm.instance_count = born.size()
 			for i in born.size():
 				var p: Dictionary = born[i]
-				# the velocity rides in the transform's first column, which nothing else uses
-				mm.set_instance_transform(i, Transform3D(Basis(p["vel"] as Vector3, Vector3.UP, Vector3.BACK), p["pos"] as Vector3))
+				mm.set_instance_transform(i, Effects.particle_xform(p, wind))
 				# sprite colors are read as linear: an agent's colors are sRGB
 				mm.set_instance_color(i, (p["color"] as Color).srgb_to_linear())
 				mm.set_instance_custom_data(i, Color(float(p["born"]), float(p["life"]), float(p["seed"]), float(p["size"])))
 
 	## Everything as it is at show time [param t].
 	func tick(t: float) -> void:
+		# THE AIR'S RUN AND ITS SPEED NOW, for the fog it rolls and the particles it carries
+		var run := Vector3.ZERO
+		var vel := Vector3.ZERO
+		if not wind.is_empty():
+			var c := Winds.carried(wind, t)
+			var v := Winds.velocity_at(wind, t)
+			run = Vector3(c.x, 0.0, c.y)
+			vel = Vector3(v.x, 0.0, v.y)
 		for f in fogs:
 			(f["mat"] as ShaderMaterial).set_shader_parameter("show_time", t)
+			(f["mat"] as ShaderMaterial).set_shader_parameter("carried", run)
 		for b in bursts:
-			((b["layer"] as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("show_time", t)
+			var bm: ShaderMaterial = (b["layer"] as Dictionary)["mat"]
+			bm.set_shader_parameter("show_time", t)
+			bm.set_shader_parameter("air_carried", run)
+			bm.set_shader_parameter("air_vel", vel)
 		for d in drifts:
 			Drifts.tick(d, t)
 		for pop in motes:
 			var mm: MultiMesh = (pop["layer"] as Dictionary)["mm"]
 			var each: Array = pop["each"]
 			var speck := String((pop["look"] as Dictionary)["shape"]) == "speck"
+			# THE WIND A FLIER FEELS, once for the population (and a shutter before, for a speck's smear)
+			var felt := {}
+			var back := float((pop["look"] as Dictionary).get("back", 0.0))
+			if not (pop["wind"] as Dictionary).is_empty() and float((pop["look"] as Dictionary).get("airspeed", 0.0)) > 0.0:
+				felt[t] = Winds.memory(pop["wind"], t, back)
+				if speck:
+					felt[t - Effects.SPECK_SHUTTER] = Winds.memory(pop["wind"], t - Effects.SPECK_SHUTTER, back)
+			pop["felt"] = felt
 			var lit := {}
 			for l in pop["lights"]:
 				lit[int((l as Dictionary)["mote"])] = (l as Dictionary)["light"]

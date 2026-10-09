@@ -5,7 +5,9 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script res://tests/cards_check.gd
 ##
-## - THE DECK: 78 cards, the Rider-Waite-Smith order, numerals, a meaning for every card.
+## - THE DECK is the brief's: a Cards section of 78 (tests/fixture_deck.gd) reads back in order, with its
+##   numerals, groups and meanings; NO DECK IS BUILT IN - a brief that lists none leaves it to the
+##   producer, against a listed one, which does not.
 ## - THE SHUFFLE is a pure function of the seed.
 ## - ONE WALK, TWO READERS: the voice's text and the table's actions come from the same parse, and
 ##   the rest the voice takes for each action is the one the table performs it in.
@@ -49,6 +51,8 @@ extends SceneTree
 ##   proportion at any frame size; the set dresser's color kept and junk dropped for the default; a
 ##   shade round the name that its color always reads against.
 
+const FixtureDeck := preload("res://tests/fixture_deck.gd")
+
 var _fails := 0
 
 
@@ -74,34 +78,31 @@ func _ok(cond: bool, what: String) -> void:
 
 
 func _deck() -> bool:
-	var cards := CardDeck.standard()
-	_ok(cards.size() == 78, "the standard deck has %d cards, not 78" % cards.size())
+	var cards := FixtureDeck.cards()
+	_ok(cards.size() == 78, "a Cards section of 78 read as %d cards" % cards.size())
 	var keys := {}
 	var by := {}
 	for c in cards:
 		keys[String((c as Dictionary)["key"])] = true
 		by[String((c as Dictionary)["name"])] = c
 	_ok(keys.size() == 78, "card keys are not unique")
-	_ok(String((cards[8] as Dictionary)["name"]) == "Strength", "major 8 is not Strength (RWS order)")
-	_ok(String((cards[11] as Dictionary)["name"]) == "Justice", "major 11 is not Justice (RWS order)")
-	_ok(by.has("King of Pentacles"), "there is no King of Pentacles")
+	_ok(String((cards[8] as Dictionary)["name"]) == "Strength" and String((cards[11] as Dictionary)["name"]) == "Justice",
+		"the deck's order is not the list's")
+	_ok(by.has("King of Pentacles") and String((by["King of Pentacles"] as Dictionary)["group"]) == "Pentacles",
+		"a card lost its group")
 	_ok(String((by["The Fool"] as Dictionary)["numeral"]) == "0", "the Fool's numeral is not 0")
 	_ok(String((by["The Sun"] as Dictionary)["numeral"]) == "XIX", "the Sun's numeral is not XIX")
-	_ok(String((by["Four of Cups"] as Dictionary)["numeral"]) == "IV", "a pip's numeral is not its rank")
-	_ok(String((by["Queen of Swords"] as Dictionary)["numeral"]).is_empty(), "a court card carries a numeral")
-	_ok(String((by["Ace of Wands"] as Dictionary)["numeral"]).is_empty(), "an Ace carries a numeral")
+	_ok(String((by["Four of Cups"] as Dictionary)["numeral"]) == "IV", "a pip's numeral was lost")
+	_ok(String((by["Queen of Swords"] as Dictionary)["numeral"]).is_empty(), "a card listed with no numeral carries one")
 	var missing := 0
 	for c in cards:
 		if String((c as Dictionary)["meaning"]).strip_edges().is_empty():
 			missing += 1
-	_ok(missing == 0, "%d standard cards have no meaning from the corpus" % missing)
-	# THE STANDARD DECK WRITTEN OUT reads back as itself
-	var back := CardDeck.parse(CardDeck.standard_section())
-	var same := back.size() == 78
-	for i in mini(back.size(), 78):
-		for k in ["name", "numeral", "group", "meaning"]:
-			same = same and (back[i] as Dictionary)[k] == (cards[i] as Dictionary)[k]
-	_ok(same, "the standard deck written out does not read back as itself")
+	_ok(missing == 0, "%d listed cards lost their meaning" % missing)
+	# NO DECK IS BUILT IN: a brief that lists none leaves the deck to the producer
+	_ok(CardDeck.of("No cards here.").is_empty() and CardDeck.chooses("No cards here."),
+		"a brief that lists no card was given a deck the app keeps")
+	_ok(not CardDeck.chooses(FixtureDeck.section()), "control: a listed deck was left to the producer")
 	# AN ALTERNATIVE DECK, defined in a show's brief
 	var body := "# A show\n\nSome brief.\n\n## The Cards\n\nRead these upside down too.\n\n### The Feed\n" \
 		+ "- 1. The Algorithm: what you were shown, and why it was you\n" \
@@ -133,20 +134,19 @@ func _deck() -> bool:
 	var looks := "## The Deck\n\n- Style: woodcut\n- Colors: ink and rust\n"
 	_ok(CardDeck.parse(looks).is_empty() and CardDeck.strip(looks) == looks,
 		"a '## The Deck' section of bullets was read as a deck of its bullets")
-	_ok(CardDeck.of(body).size() == 6 and CardDeck.of("No cards here.").size() == 78,
-		"a show without a Cards section does not read the standard deck")
+	_ok(CardDeck.of(body).size() == 6, "a show's own deck is not the deck it reads")
 	var stripped := CardDeck.strip(body)
 	_ok(not stripped.contains("The Algorithm") and not stripped.contains("nine thousand"),
 		"the brief handed to agents still lists the cards")
 	_ok(stripped.contains("Read these upside down too.") and stripped.contains("This deck has 6 cards")
 		and stripped.contains("## After") and stripped.contains("- not a card"),
 		"stripping the cards took the rest of the brief with it")
-	print("cards_check: deck - standard %d, %d without meanings; an alternative deck of %d" % [cards.size(), missing, own.size()])
+	print("cards_check: deck - a listed %d, %d without meanings; an alternative deck of %d" % [cards.size(), missing, own.size()])
 	return true
 
 
 func _shuffle() -> bool:
-	var deck := CardDeck.standard()
+	var deck := FixtureDeck.cards()
 	var a := CardDeck.shuffled(deck, 7, true)
 	var b := CardDeck.shuffled(deck, 7, true)
 	var c := CardDeck.shuffled(deck, 8, true)
@@ -305,7 +305,7 @@ func _episode(n: int) -> CardEpisode:
 		"spread": {"name": "The Spread", "positions": positions},
 		"look": CardTable.sanitize_look({"deck_name": "The Test Deck", "props": ["candle"]})})
 	var cards: Array = []
-	var deck := CardDeck.shuffled(CardDeck.standard(), ep.seed, true)
+	var deck := CardDeck.shuffled(FixtureDeck.cards(), ep.seed, true)
 	for i in n:
 		var card := (deck[i] as Dictionary).duplicate()
 		card["jumper"] = false
@@ -323,7 +323,7 @@ func _episode(n: int) -> CardEpisode:
 func _no_cheating() -> bool:
 	var n := 5
 	var ep := _episode(n)
-	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief."})
+	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards()})
 	var names: Array = []
 	for k in range(1, n + 1):
 		names.append(String(prod._card(k)["name"]))
@@ -466,7 +466,7 @@ func _landing() -> bool:
 	CardEpisode.root = "user://cards_check"
 	var ep := CardEpisode.open("check-show", 777)
 	ep.invalidate("plan")
-	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "draw": [3, 3]})
+	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards(), "draw": [3, 3]})
 	var err := prod._land_plan(JSON.stringify({"episode_title": "T", "tags": "one, two",
 		"spread": {"name": "S", "positions": ["Past", {"name": "Present", "asks": "now"}, 7]},
 		"look": {"deck_name": "D"}}))
@@ -483,7 +483,7 @@ func _landing() -> bool:
 		and ((design as Dictionary)["booklet"] as Dictionary)["keywords"] == ["love", "union"],
 		"keywords as one string were not split: %s" % str(design))
 	# the draw, then a reader's prompt from what landed - it used to fail inside the builder
-	prod.spec["deck"] = CardDeck.standard()
+	prod.spec["deck"] = FixtureDeck.cards()
 	prod._finish("draw", prod._make_draw())
 	var p := prod.say_prompt("1")
 	_ok(String(p.get("prompt", "")).contains("Past") and String(p.get("prompt", "")).contains("love, union"),
@@ -621,7 +621,7 @@ func _pictures() -> bool:
 		_ok(not ep.has(s), "painting card 3 again kept %s" % s)
 	for s in ["image:card:4", "say:2", "image:card:2", "design:3"]:
 		_ok(ep.has(s), "painting card 3 again took %s with it" % s)
-	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief."})
+	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards()})
 	var plan: Dictionary = ep.read_json("plan")
 	var told := CardPrompts.reader("T", "B", plan, "2", prod._said(1), prod._drawn(2), n, true)
 	_ok(String(told["prompt"]).contains("painting above") and not String(told["prompt"]).contains("art for card 2"),
@@ -692,7 +692,7 @@ func _no_objects() -> bool:
 	var objects := ep.steps().filter(func(st: Variant) -> bool: return String(st).contains("object"))
 	_ok(objects.is_empty(), "a plan naming objects still makes steps for them: %s" % str(objects))
 	_ok(ep.steps().has("image:card:3") and ep.steps().has("image:surface"), "the plan's other steps went too: %s" % str(ep.steps()))
-	var p := CardPrompts.producer("T", "B", 7, 3, true, CardTable.FACES, CardTable.FRAMES, [], CardDeck.standard())
+	var p := CardPrompts.producer("T", "B", 7, 3, true, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards())
 	_ok(p.has("prompt") and not String(p["prompt"]).contains("\"objects\""), "the planner is still asked for objects")
 	return true
 
@@ -703,7 +703,7 @@ func _no_objects() -> bool:
 func _moves_after_words() -> bool:
 	var n := 3
 	var ep := _episode(n)
-	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief."})
+	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards()})
 	var plan: Dictionary = ep.read_json("plan")
 	for step in ["intro", "1", str(n), "close"]:
 		var upto := 0 if step == "intro" else (n if step == "close" else int(step))
@@ -733,7 +733,7 @@ func _few_remarks() -> bool:
 	_ok(mean > 0.6 and mean < 2.2, "the paintings remarked on average %.2f of five" % mean)
 	var n := 3
 	var ep := _episode(n)
-	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief."})
+	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards()})
 	var plan: Dictionary = ep.read_json("plan")
 	var drawn := prod._drawn(2)
 	(drawn[1] as Dictionary)["art"] = "ART-OF-CARD-TWO"
@@ -779,12 +779,12 @@ func _only_what_was_asked() -> bool:
 	for f in DirAccess.get_files_at(ep.dir):
 		if not String(f).begins_with("plan"):
 			DirAccess.remove_absolute(ep.dir.path_join(f))
-	var prod := CardProducer.new(ep, {"title": "T", "brief": "B", "deck": CardDeck.standard(), "draw": [3, 3]})
+	var prod := CardProducer.new(ep, {"title": "T", "brief": "B", "deck": FixtureDeck.cards(), "draw": [3, 3]})
 	prod.start(["design:2"])
 	_ok(prod._tries.keys() == ["design:2"], "asked for design 2, the producer tried %s" % str(prod._tries.keys()))
 	_ok(ep.has("draw"), "the shuffle a design needs, which costs nothing, was not made on the way")
 	_ok(not prod.running, "a run asked for one step is still running after it")
-	var all := CardProducer.new(ep, {"title": "T", "brief": "B", "deck": CardDeck.standard(), "draw": [3, 3]})
+	var all := CardProducer.new(ep, {"title": "T", "brief": "B", "deck": FixtureDeck.cards(), "draw": [3, 3]})
 	all.start()
 	for s in ["design:1", "design:3", "image:back", "image:surface", "say:intro"]:
 		_ok(all._tries.has(s), "Generate did not try %s (it tried %s)" % [s, str(all._tries.keys())])
@@ -823,7 +823,7 @@ func _table_step() -> bool:
 	# NO CARD REACHES THE SET DRESSER, through the producer itself
 	ep = _episode(n)
 	ep.write_text("image:surface", "png")
-	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief."})
+	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards()})
 	var names: Array = []
 	for k in range(1, n + 1):
 		names.append(String(prod._card(k)["name"]))
@@ -1297,7 +1297,7 @@ func _card_stock() -> bool:
 ## edge, cropped to the card's shape, the name and numeral on plates over it, the name running off its
 ## plate - "It looks nothing like other cards, from other episodes"): every style keeps a border of
 ## stock, a look naming the old style is drawn as `line`, the picture's window leaves a band above it
-## and below it, and every standard card's name fits the band below at a readable size in every face.
+## and below it, and every name of the fixture deck's 78 fits the band below at a readable size in every face.
 func _card_frame() -> bool:
 	_ok(not CardTable.FRAMES.has("bleed"), "a frameless card style is still offered to the producer")
 	_ok(String((CardTable.sanitize_look({"frame": {"style": "bleed"}})["frame"] as Dictionary)["style"]) == "line",
@@ -1310,7 +1310,7 @@ func _card_frame() -> bool:
 	var worst := {"size": 999, "name": "", "face": ""}
 	for f in CardTable.FACES:
 		var face := CardTable.font(String(f))
-		for c in CardDeck.standard():
+		for c in FixtureDeck.cards():
 			# set as the card sets it: the capital faces in capitals
 			var name := String((c as Dictionary)["name"])
 			if String(f) in ["roman", "deco", "sign", "typed"]:
@@ -1558,7 +1558,7 @@ func _cloth_prompt() -> bool:
 		and p.contains("no reflections") and p.contains("LANDSCAPE 3:2"),
 		"the cloth's picture is not asked for dry, bare, flat-lit and landscape")
 	_ok(p.contains("%d cm of the surface from side to side" % int(CardTable.CLOTH_PICTURE.x)), "the cloth's picture is not told its scale")
-	var plan := String(CardPrompts.producer("T", "B", 7, 3, true, CardTable.FACES, CardTable.FRAMES, [], CardDeck.standard())["prompt"])
+	var plan := String(CardPrompts.producer("T", "B", 7, 3, true, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards())["prompt"])
 	_ok(plan.contains("the bare material, dry"), "the producer is not told the surface is the bare material, dry")
 	var cloth := Vector2(1.2, 0.72)
 	for pic in [Vector2(1024, 1024), Vector2(1536, 1024), Vector2(1024, 1536), Vector2(2048, 800)]:
@@ -1584,12 +1584,12 @@ func _cloth_prompt() -> bool:
 ## joined, which gave the next card's reading to the familiar.
 func _familiar() -> bool:
 	var ep := _episode(2)
-	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "voices": ["Narrator", "Familiar"]})
+	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards(), "voices": ["Narrator", "Familiar"]})
 	var told := String(prod.say_prompt("1")["prompt"])
 	_ok(told.contains("OTHER VOICES: Familiar.") and told.contains("<!-- speaker: Familiar -->")
 		and told.contains("<!-- speaker: %s -->" % Manuscript.NARRATOR) and told.contains("write every word of it - your own"),
 		"the reader is not told the show's other voice and how to hand it a line")
-	var alone := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "voices": ["Narrator"]})
+	var alone := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards(), "voices": ["Narrator"]})
 	_ok(not String(alone.say_prompt("1")["prompt"]).contains("speaker:"), "control: a show with one voice is told about speaker cues")
 	# LANDING: the show's own spelling, and no voice the show does not have
 	var landed := CardProducer.own_voices("Hello.\n<!-- speaker: familiar -->\nOh no.\n<!-- speaker: Spirit -->\nBoo. <!-- speaker: NARRATOR --> Hush.", ["Familiar"])
@@ -1640,7 +1640,7 @@ func _archive() -> bool:
 	if DirAccess.dir_exists_absolute(base):
 		_remove_tree(base)
 	var brief := "A brief. \"Hello, my loves\" opens every episode. Its last words are \"Go and do the thing.\""
-	var deck := CardDeck.standard()
+	var deck := FixtureDeck.cards()
 	var names: Array = []
 	for c in deck:
 		names.append(String((c as Dictionary)["name"]))
@@ -1743,7 +1743,7 @@ func _archive() -> bool:
 		"card names are not masked whole: %s" % CardPrompts.mask_cards("Oh. The Tower, and the Ace of Cups.", ["The Tower", "Ace of Cups", "Ace"]))
 	# A PLAN LANDS WITH ITS HABITS AND ITS RUNNING BIT in the shape their readers expect
 	var fresh := CardEpisode.open(show, 2222)
-	var lp := CardProducer.new(fresh, {"title": "T", "brief": brief, "draw": [3, 3]})
+	var lp := CardProducer.new(fresh, {"title": "T", "brief": brief, "deck": FixtureDeck.cards(), "draw": [3, 3]})
 	_ok(lp._land_plan(JSON.stringify({"episode_title": "T", "habits": "titles end in brackets, decks show people",
 		"running_bit": 7, "spread": {"positions": ["a", "b", "c"]}, "look": {}})).is_empty(), "a plan with habits did not land")
 	var landed: Dictionary = fresh.read_json("plan")

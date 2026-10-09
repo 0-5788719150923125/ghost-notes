@@ -7,11 +7,13 @@ class_name CardPrompts
 ## what decides which of them apply and what fills them in: who knows what, when, and how much of
 ## what the show has already made.
 ##
-## THE RECIPE IS HERE; THE SHOW IS THE BRIEF. Everything here is the tarot's recipe - the only one the
-## Cards mode has yet (moving it into a show's guide is next/notes.md step 9's open part): how a
-## reading video is built, who knows what when, what a spoken line may contain, what the
-## painter must leave off a card. What THIS show is - its premise, its humor, its rules, its
-## catchphrases - is the brief, the body of the show's document, handed to every agent verbatim.
+## THE RECIPE IS HERE; THE SHOW IS THE BRIEF. Here is how a show of cards at a table is made, the same
+## for every show: who knows what when, what a spoken line may contain, what the painter must leave off
+## a card. What THIS show is - its kind of cards, its premise, its humor, its rules, its catchphrases -
+## is the brief, the body of the show's document, handed to every writer verbatim; the producer names
+## the deck's `kind` from it, which is how the painter, who never reads the brief, learns it. Nothing
+## here knows tarot (the user, 2026-10-08: "for anything else that tarot might need - declare it in the
+## markdown files"): a tarot show is a brief that says it is one, and lists its 78.
 ##
 ## FIVE ROLES, and each is told only what its job needs:
 ##
@@ -36,15 +38,11 @@ class_name CardPrompts
 ## choices it has never seen - and the habits are in the form (every deck a human figure on every
 ## card, every running bit a status revised at each card), not in the subjects, which do vary.
 
-## A brief that says what its show is: a `## Format` or `## The format` section. Without one the show
-## is a tarot reading, as every agent is told ([method show_context]); with one, every agent is told
-## only that it is a show of cards at a table, and the brief says the rest.
-const FORMAT_HEADING := "(?im)^#{1,6}\\s*(?:the\\s+)?format\\s*:?\\s*$"
 ## How many cards a producer who chooses the deck puts in the box, at least, and at most; never fewer
 ## than twice the cards drawn, so the seed, not the producer, decides which come out.
 const BOX := [12, 30]
 
-## How many words each passage runs to - the length of a tarot reading video comes from these.
+## How many words each passage runs to - the length of an episode comes from these.
 const WORDS := {"intro": [130, 190], "card": [110, 170], "close": [90, 140]}
 
 ## How many earlier episodes the producer reads in full, and how many more in a line each.
@@ -62,21 +60,17 @@ const HEARD := {"intro": [6, 40], "card": [10, 14], "jumper": [6, 24], "close": 
 ## of this share reaches the reader without its painting or its description, so it cannot.
 const REMARKS := Vector2(0.15, 0.4)
 
-## What the producer is told about the deck: the standard tarot, or the show's own cards by name
-## (their meanings reach a writer only as each is drawn).
+## What the producer is told about the show's own deck: its cards by name (their meanings reach a
+## writer only as each is drawn).
 static func deck_line(deck: Array) -> String:
-	return Rules.say("cards/producer.standard_deck" if _standard(deck) else "cards/producer.own_deck", _deck_vars(deck))
-
-
-static func _standard(deck: Array) -> bool:
-	return deck.is_empty() or (deck.size() == 78 and String((deck[0] as Dictionary).get("key", "")) == "major_00")
+	return Rules.say("cards/producer.own_deck", _deck_vars(deck))
 
 
 static func _deck_vars(deck: Array) -> Dictionary:
 	var names := PackedStringArray()
 	for c in deck:
 		names.append(String((c as Dictionary).get("name", "")))
-	return {"standard": _standard(deck), "deck_size": deck.size(), "deck_names": ", ".join(names)}
+	return {"deck_size": deck.size(), "deck_names": ", ".join(names)}
 
 
 ## THE PRODUCER MAKES THE DECK ([method CardDeck.chooses]): what it is told, for a spread of
@@ -135,25 +129,16 @@ static func _printed_vars() -> Dictionary:
 	return {"printed": printed, "corner_options": "; ".join(corners)}
 
 
-## The brief says what its show is ([constant FORMAT_HEADING]).
-static func has_format(brief: String) -> bool:
-	return Manuscript._rx(FORMAT_HEADING).search(brief) != null
-
-
-## What the deck is, for a picture or a role: the kind the producer named ("baseball card set"), or
-## the tarot deck a show with no Format section reads.
+## What the deck is, for a picture or a role: the kind the producer named from the brief ("tarot deck",
+## "baseball card set"), or a plain "deck" for a look that names none.
 static func deck_noun(look: Dictionary) -> String:
-	return _s(look.get("kind", "")) if kind_named(look) else "tarot deck"
+	var kind := _s(look.get("kind", ""))
+	return kind if not kind.is_empty() else "deck"
 
 
-## The producer named what kind of cards these are: the show is not a tarot reading.
-static func kind_named(look: Dictionary) -> bool:
-	return not _s(look.get("kind", "")).is_empty()
-
-
-## The context every agent shares: which show, and its brief.
+## The context every agent shares: which show, and its brief - the same words for every show.
 static func show_context(title: String, brief: String) -> String:
-	return Rules.say("cards/show.format" if has_format(brief) else "cards/show.tarot", {"title": title, "brief": brief.strip_edges()})
+	return Rules.say("cards/show.context", {"title": title, "brief": brief.strip_edges()})
 
 
 ## THE DICE: numbers drawn from the seed that push an episode somewhere the show has not been.
@@ -203,9 +188,8 @@ static func producer(title: String, brief: String, seed: int, cards: int, revers
 	var past := PackedStringArray()
 	for i in mini(history.size(), PAST_FULL + PAST_LINES):
 		past.append(_past(_d(history[i])) if i < PAST_FULL else _past_line(_d(history[i])))
-	var shown := has_format(brief)
-	var vars := {"seed": seed, "cards": cards, "reversals": reversals, "chooses": chooses, "shown": shown,
-		"printings": chooses or shown, "habits": not past.is_empty(), "past": "\n".join(past),
+	var vars := {"seed": seed, "cards": cards, "reversals": reversals, "chooses": chooses,
+		"habits": not past.is_empty(), "past": "\n".join(past),
 		"place": String(d["place"]), "year": int(d["year"]), "hue": int(d["hue"]), "hour": int(d["hour"]), "direction": int(d["direction"]),
 		"frame_styles": ", ".join(frames.keys()), "windows": ", ".join(CardTable.WINDOWS.keys()), "corners": ", ".join(CardTable.CORNERS.keys()),
 		"ornaments": ", ".join(CardTable.ORNAMENTS.keys()), "pages": ", ".join(CardTable.PAGES.keys()), "faces": ", ".join(faces.keys())}
@@ -223,8 +207,7 @@ static func designer(title: String, brief: String, look: Dictionary, card: Dicti
 	var ledger := String(look.get("page", "")) == "ledger"
 	var vars := {"deck_noun": deck_noun(look), "deck_name": String(look.get("deck_name", "")), "deck_style": String(look.get("deck_style", "")),
 		"palette": ", ".join(PackedStringArray(look.get("palette", []))), "name": String(card.get("name", "")), "group": group,
-		"element": String(CardDeck.ELEMENTS.get(group, "")), "meaning": String(card.get("meaning", "")).strip_edges(),
-		"kind_named": kind_named(look), "on_back": on_back, "ledger": ledger, "ledger_booklet": ledger and not on_back,
+		"meaning": String(card.get("meaning", "")).strip_edges(), "on_back": on_back, "ledger": ledger, "ledger_booklet": ledger and not on_back,
 		"plain_booklet": not ledger and not on_back, "reversals": reversals,
 		"before": "\n".join(_pictured_before(history, String(card.get("name", ""))))}
 	return {"system": show_context(title, brief), "prompt": Rules.say("cards/designer.prompt", vars)}
@@ -262,7 +245,7 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 		"deck_name": String(look.get("deck_name", "")), "deck_style": String(look.get("deck_style", "")),
 		"palette": ", ".join(PackedStringArray(look.get("palette", []))), "surface": String(look.get("surface", "")),
 		"setting": String(look.get("setting", "")), "light_kind": String(light.get("kind", "candlelight")),
-		"cloth": cloth, "room": room, "tarot": not kind_named(look), "jumps": jumps, "tools": looks > 0, "looks": looks,
+		"cloth": cloth, "room": room, "jumps": jumps, "tools": looks > 0, "looks": looks,
 		"box": String(CardTable.staging_of(plan)["source"]) == "box",
 		"candles": candles, "one_candle": candles == 1, "lo": size.x, "hi": size.y, "zones": zones,
 		"max_parts": Props.MAX_PARTS, "check": Rules.say("cards/set_dresser.check"),
@@ -556,7 +539,7 @@ static func _past(e: Dictionary) -> String:
 		lines.append("  Staged: from a %s, text %s%s" % [st["source"], "in a booklet" if st["text"] == "booklet" else "on the backs",
 			("; " + "; ".join(moves)) if not moves.is_empty() else ""])
 	lines.append("  Deck \"%s\": %s" % [_s(look.get("deck_name", "")), clip(_s(look.get("deck_style", "")), 40)])
-	if kind_named(look):
+	if not _s(look.get("kind", "")).is_empty():
 		lines.append("  Its cards were a %s%s" % [_s(look.get("kind", "")), (": " + clip(", ".join(_box_names(p)), 30)) if not _box_names(p).is_empty() else ""])
 	var pictured := PackedStringArray()
 	for c in e.get("cards", []) if e.get("cards") is Array else []:
@@ -715,7 +698,7 @@ static func _look_vars(look: Dictionary, target: String) -> Dictionary:
 	var light: Dictionary = look.get("light", {}) if look.get("light") is Dictionary else {}
 	return {"target": target, "deck_noun": deck_noun(look), "deck_name": String(look.get("deck_name", "")),
 		"deck_style": String(look.get("deck_style", "")), "palette": ", ".join(PackedStringArray(look.get("palette", []))),
-		"card_back": String(look.get("card_back", "")), "kind_named": kind_named(look),
+		"card_back": String(look.get("card_back", "")),
 		"surface": String(look.get("surface", "a reading cloth")), "setting": String(look.get("setting", "a quiet room")),
 		"light_kind": String(light.get("kind", "low lamplight"))}
 

@@ -225,15 +225,12 @@ func _cards_range() -> Array:
 	return [3, 6]
 
 
-## The deck the show reads with (see [CardDeck]): handed over in the spec, the standard 78 when
-## the spec has none - or, when the producer chooses it (`chooses`, [method CardDeck.chooses]), the
-## one in this episode's plan, and none before the plan is made.
+## The deck the show reads with (see [CardDeck]): the one its brief lists, handed over in the spec -
+## or, when the producer chooses it (`chooses`, [method CardDeck.chooses]), the one in this episode's
+## plan, and none before the plan is made. No deck is built in.
 func _deck() -> Array:
-	if bool(spec.get("chooses", false)):
-		var box: Variant = _plan().get("deck", [])
-		return box if box is Array else []
-	var d: Variant = spec.get("deck", [])
-	return d if d is Array and not (d as Array).is_empty() else CardDeck.standard()
+	var d: Variant = _plan().get("deck", []) if bool(spec.get("chooses", false)) else spec.get("deck", [])
+	return d if d is Array else []
 
 
 ## How many cards this episode draws: the seed's pick in the show's range, never more than the
@@ -608,14 +605,20 @@ func _land(step: String, res: Dictionary) -> void:
 		_errors[step] = err
 
 
-## THE HEIGHT MAP, KEPT ONLY IF IT LIES UNDER THE PAINTING ([method Tables.height_fit]): its score
-## and shift written beside it (`height.json`, which the table reads), or the map removed and why.
+## THE HEIGHT MAP, KEPT ONLY IF IT LIES UNDER THE PAINTING ([method Tables.height_fit]) - or is flat,
+## which lies under anything ([constant Tables.FLAT_SPAN]): its score and shift written beside it
+## (`height.json`, which the table reads), or the map removed and why.
 func _land_height() -> String:
 	var paint := Image.load_from_file(episode.file_of("image:surface")) if episode.has("image:surface") else null
 	var h := Image.load_from_file(episode.file_of("image:height"))
 	if paint == null or h == null or paint.is_empty() or h.is_empty():
 		DirAccess.remove_absolute(episode.file_of("image:height"))
 		return "the height map or the painting could not be read"
+	var span := Tables.height_span(h)
+	if span < Tables.FLAT_SPAN:
+		# a surface with no relief, drawn flat as asked: it lies under anything, as it is
+		print("ghost: cards image:height - flat (spans %.3f): the surface lies smooth" % span)
+		return TextGen.put(episode.dir.path_join("height.json"), JSON.stringify({"score": 1.0, "shift": [0.0, 0.0], "flat": true}, "\t"))
 	var fit := Tables.height_fit(paint, h)
 	var score := float(fit["score"])
 	print("ghost: cards image:height - lies under the painting at %.2f, shifted %s" % [score, str(fit["shift"])])

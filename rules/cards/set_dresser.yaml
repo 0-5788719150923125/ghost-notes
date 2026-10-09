@@ -7,7 +7,7 @@
 # The code gives: {{seed}}, the plan's {{episode_title}}, {{audience}}, {{topic}}, {{premise}},
 # {{deck_name}}, {{deck_style}}, {{palette}}, {{surface}}, {{setting}} and {{light_kind}}; how many
 # lit things ({{candles}}) and other things ({{lo}} to {{hi}}); the flags `cloth` and `room` (their
-# paintings go with the prompt), `tarot` (no Format section: a tarot reading), `box` (the cards come
+# paintings go with the prompt), `box` (the cards come
 # out of a box), `jumps` (a card leaps out of the shuffle) and `tools` (it works with tools and sees
 # what it builds, {{looks}} pictures); the registries' vocabularies as `tables`, `props`, `air`,
 # `lights` and `sounds`; `zones`, where things stand; and what earlier episodes' tables held.
@@ -63,28 +63,21 @@ prompt:
   - insert: tables
   - ""
   - THE TABLE A READER SETS
-  - when: tarot
-    say: >-
-          A reader sets the table on purpose, before every reading, and each thing on it has a
-          reason in the reading's world - light to read by, protection, the four elements the suits
-          stand for, the reading's own subject, devotion, comfort. Give each thing its reason in a
-          few words.
-  - when: "!tarot"
-    say: >-
-          The host sets the table on purpose, before every episode, and each thing on it has a
-          reason in the show's world, as the brief tells it - light to see the cards by, the
-          episode's own subject, what someone who keeps these cards keeps within reach, comfort.
-          Give each thing its reason in a few words.
+  # WHAT A KIND OF SHOW KEEPS ON ITS TABLE (a tarot reader's stones, a collector's top-loaders) is the
+  # brief's to say: the rules are every show's (show.yaml)
+  - >-
+      The host sets the table on purpose, before every episode, and each thing on it has a reason in
+      the show's world, as the brief tells it - light to see the cards by, the episode's own subject,
+      what someone who keeps these cards keeps within reach, comfort. Give each thing its reason in a
+      few words.
   - >-
       This table belongs to this episode: its place, its era, its materials and its palette - the
       things a reader of that world would own and set out. Invent them; never reach for the same few
       things every time.
-  - when: tarot
-    say: >-
-          Many readers keep stones on the table: one large piece - a cluster, a geode, a sphere, a
-          tower - or small tumbled ones of several kinds, set straight on the cloth in a loose
-          handful, a row or an arc, or heaped in a dish or a shell; each for what it is said to
-          hold. Give each stone its own colors, and its play of light if it has one.
+  - >-
+      Small things of a kind - stones, shells, beads, coins - can stand as one large piece or as a
+      handful of small ones, set straight on the cloth in a loose handful, a row or an arc, or heaped
+      in a dish or a shell. Give each its own colors, and a stone its play of light if it has one.
   - >-
       Exactly {{candles}} lit thing{{^one_candle}}s{{/one_candle}} - a candle in its holder, a
       candelabra, a dish of tea lights: each burns as one light, however many flames it has (a flame
@@ -207,8 +200,10 @@ prompt:
       ITS QUALITIES as light does: a clear sun's shadows are crisp; a tree's crown high overhead
       throws soft, blurred dapples; under an overcast sky or by a big window on a gray day the shade
       is diffuse - a soft pool round each thing's foot (the sky's `shadows`). The WIND, if this
-      table has one, stirs what the sun falls through, swings what hangs, and carries whatever
-      drifts in its air. Give this table the moving light of its world, sparingly - most tables take
+      table has one, stirs what the sun falls through, swings what hangs, carries whatever drifts
+      in its air, and leans and flickers every open flame - the candles' too, and their shadows
+      with them. A room with its windows and doors shut has no wind; an open window or door lets
+      in a breath, and only the open air blows harder. Give this table the moving light of its world, sparingly - most tables take
       one or two moving things, some none, and never a light show. Every card must be read in it:
       the cards and the deck lie in light, never deep in a shade, and the light is never so strong
       it washes the table out. A table with no `light` is lit as every earlier table was - a lamp
@@ -268,7 +263,10 @@ check: >-
   or sculpted as bare bone - is bone, not a body); every part rests on the cloth or on another part
   (nothing floats, nothing sinks through); it stands as it would really stand - a thing with a
   pointed or round bottom lies on its side or sits in a stand, a ring or a bowl, never balanced on
-  its point; the lowest point is at height 0; the sizes are real and fit the place's height; a
+  its point, and a thing that would touch the cloth at only two points or along one line (dividers or
+  a compass on their two tips, a pair of tongs, a tall thin frame) lies flat, leans on something or
+  has a third foot that is really there - what stands has three or more points of contact round the
+  spot under its weight; the lowest point is at height 0; the sizes are real and fit the place's height; a
   hollow vessel's profile goes up the outside and back down the inside; every candle's wax has
   `wick` or `wicks`, and a candle in a cup or a holder stands on its floor.
 

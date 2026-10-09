@@ -12,12 +12,20 @@ extends SceneTree
 ##   reader's intro, card and close, and every picture, over a fixture plan, leave nothing unfilled
 ##   ([member Rules.missing] empty, no `{{` left) - against a part asked for a name nobody gives, which is
 ##   said.
+## - THE RULES ARE EVERY SHOW'S (the user, 2026-10-08: "there shouldn't be ANY tarot-gated rules or logic in
+##   the 'rules/' files"): no word of any rules file, a flag's name included, names a kind of card - tarot,
+##   its arcana, its suits - and no prompt rendered over a fixture that names none says one; what a show's
+##   cards are is its brief's. The control: a part that says "tarot" is found.
 ## - THE WORDS' OWN MARKS: a value filled in, a section kept only when its flag holds and an inverted one
 ##   only when it does not, a list of lines walked, a tag alone on its line taking its line with it, a
 ##   flag on an item and its negation - each against the other side.
 ## - BLOCK SCALARS: `>-` folds lines with spaces and keeps a blank line as a break, `|` keeps lines and one
 ##   final break, a `#` inside one is text and `...` indented is text; `|+` is refused, and `...` at the
 ##   start of a line is still a document's end - the controls.
+
+const FixtureDeck := preload("res://tests/fixture_deck.gd")
+## What only a kind of card's own show may say: the rules name none of them.
+const KINDS := ["tarot", "arcana", "rider-waite", "pentacle"]
 
 var _fails := 0
 
@@ -33,7 +41,7 @@ func _ok(cond: bool, what: String) -> void:
 
 
 func _run() -> void:
-	for check in [_blocks, _marks, _files, _prompts]:
+	for check in [_blocks, _marks, _files, _every_show, _prompts]:
 		var done: Variant = (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("rules_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -91,6 +99,36 @@ func _files() -> bool:
 	return true
 
 
+## THE RULES ARE EVERY SHOW'S: every word of every file, flags and comments' neighbors alike (a comment is
+## the reason, not a rule, and MiniYaml drops it).
+func _every_show() -> bool:
+	for f in _rules_files("res://rules"):
+		var got := MiniYaml.parse(FileAccess.get_file_as_string(f))
+		if bool(got["ok"]):
+			for hit in _kinds_named(got["data"]):
+				_ok(false, "%s names a kind of card: %s" % [f.trim_prefix("res://rules/"), hit])
+	# the control: a part that says it, in a flag and in its words
+	_ok(_kinds_named({"p": ["a line", {"when": "!tarot", "say": "a Rider-Waite deck"}]}).size() == 2, "a part naming tarot was not found")
+	return true
+
+
+func _kinds_named(v: Variant) -> PackedStringArray:
+	var out := PackedStringArray()
+	if v is String:
+		for k in KINDS:
+			var at := (v as String).to_lower().find(k)
+			if at >= 0:
+				out.append("%s, in \"...%s...\"" % [k, (v as String).substr(maxi(0, at - 30), 70).replace("\n", " ")])
+				break
+	elif v is Array:
+		for x in v:
+			out.append_array(_kinds_named(x))
+	elif v is Dictionary:
+		for k in v:
+			out.append_array(_kinds_named(v[k]))
+	return out
+
+
 func _part_problems(data: Dictionary, part: Variant) -> PackedStringArray:
 	var out := PackedStringArray()
 	if part is String or part == null:
@@ -131,11 +169,11 @@ func _prompts() -> bool:
 	var plan := {"episode_title": "An Episode", "audience": "you", "topic": "a topic", "premise": "an angle", "reader_mood": "calm",
 		"running_bit": "a bit", "look": look, "spread": {"name": "Three", "positions": [{"name": "past", "asks": "what was"},
 			{"name": "now", "asks": "what is", "comes": "swept"}, {"name": "next", "asks": "what comes", "comes": "swept"}]}}
-	var card := {"name": "The Fool", "group": "", "meaning": "a leap", "art": "a cliff", "reversed": true, "jumper": false,
+	var card := {"name": "The Moth", "group": "Night", "meaning": "a leap", "art": "a cliff", "reversed": true, "jumper": false,
 		"booklet": {"keywords": ["a", "b"], "upright": "up", "reversed": "down"}}
 	var texts: Array = []
 	for chooses in [false, true]:
-		texts.append(CardPrompts.producer("Show", "a brief", 7, 3, true, CardTable.FACES, CardTable.FRAMES, [], CardDeck.standard(), chooses)["prompt"])
+		texts.append(CardPrompts.producer("Show", "a brief", 7, 3, true, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards().slice(0, 12), chooses)["prompt"])
 	for text in ["booklet", "back"]:
 		texts.append(CardPrompts.designer("Show", "## Format\na show", look, card, true, [], text)["prompt"])
 	for looks in [0, 40]:
@@ -149,7 +187,10 @@ func _prompts() -> bool:
 	texts.append(CardPrompts.surface_image(look, "/x.png"))
 	texts.append(CardPrompts.height_image(look, "/x.png"))
 	texts.append(CardPrompts.backdrop_image(look, "/x.png"))
+	texts.append(CardPrompts.show_context("Show", "a brief"))
 	_ok(Rules.missing.is_empty(), "rendering every prompt left these unfilled: %s" % str(Rules.missing.slice(0, 6)))
+	for t in texts:
+		_ok(_kinds_named(t).is_empty(), "a prompt over a fixture naming no kind of card names one: %s" % ", ".join(_kinds_named(t)))
 	for t in texts:
 		_ok(not String(t).contains("{{") and String(t).length() > 200, "a prompt with a mark left in it, or empty: %s" % String(t).left(120))
 	# the control: a part asked for with a name nobody gives

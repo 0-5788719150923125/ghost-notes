@@ -1,5 +1,5 @@
 // Fog of an effect (see src/effects.gd): one FogVolume's density, rolling through its box as a
-// function of SHOW TIME - the noise is carried by a slow wind and turns over itself - thickest at its
+// function of SHOW TIME - the noise is carried by a slow wind (the light's own, when it has one) and turns over itself - thickest at its
 // floor and thinning toward its height, soft at its sides. The scene's lights light it (Godot's own
 // volumetric fog), so candles and lit motes glow inside it.
 shader_type fog;
@@ -9,6 +9,7 @@ uniform vec3 color : source_color = vec3(0.75, 0.78, 0.82);
 uniform float density = 1.0;
 uniform float rolls = 0.5;
 uniform vec3 wind = vec3(0.03, 0.01, 0.0);   // m/s the fog is carried
+uniform vec3 carried = vec3(0.0);            // how far the light's wind has carried the air, meters (none in still air)
 uniform float grain = 0.25;                  // meters: the size of its swirls
 uniform float floor_y = 0.0;                 // its floor, world meters
 uniform float height = 0.25;                 // how high it reaches above its floor, meters
@@ -44,7 +45,7 @@ float fog_fbm(vec3 p) {
 
 void fog() {
 	vec3 w = WORLD_POSITION;
-	vec3 q = (w - wind * show_time) / max(grain, 0.02);
+	vec3 q = (w - wind * show_time - carried) / max(grain, 0.02);
 	// ROLLING: the noise's own space turns slowly over itself, so the fog billows as it drifts
 	float t = show_time;
 	q += rolls * 1.2 * vec3(sin(q.y * 0.71 + t * 0.13), sin(q.z * 0.63 + t * 0.11) * 0.6, sin(q.x * 0.52 + t * 0.17));

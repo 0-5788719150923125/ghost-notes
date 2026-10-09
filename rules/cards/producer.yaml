@@ -11,12 +11,15 @@
 # THE DICE are numbers drawn from the seed (CardPrompts.dice) - a place, a year, a hue, an hour - so the
 # space they draw from is the whole world rather than a list someone typed.
 #
+# WHAT KIND OF CARDS these are is the brief's to say, and the producer names it in the look's `kind`
+# ("tarot deck", "minor-league baseball card set"): the designer and the painter are told that, and no
+# rule here names a kind of card.
+#
 # The code gives: {{seed}}, {{cards}} (the spread's size), the flags `reversals`, `chooses` (the producer
-# chooses the deck), `shown` (the brief has a Format section: not a tarot reading) and `habits` (there
-# are earlier episodes, given as `past`), the dice ({{place}}, {{year}}, {{hue}}, {{hour}},
-# {{direction}}), the deck as the standard tarot or the show's own ({{deck_size}}, {{deck_names}}) or
-# the box's range ({{box_lo}} to {{box_hi}}), and the registries' keys for the reply's `frame` and
-# `page` ({{frame_styles}}, {{windows}}, {{corners}}, {{ornaments}}, {{pages}}, {{faces}}).
+# chooses the deck: the brief lists none) and `habits` (there are earlier episodes, given as `past`), the
+# dice ({{place}}, {{year}}, {{hue}}, {{hour}}, {{direction}}), the show's own deck ({{deck_size}},
+# {{deck_names}}) or the box's range ({{box_lo}} to {{box_hi}}), and the registries' keys for the reply's
+# `frame` and `page` ({{frame_styles}}, {{windows}}, {{corners}}, {{ornaments}}, {{pages}}, {{faces}}).
 prompt:
   - >-
       You are the PRODUCER. Plan episode #{{seed}} before the camera rolls. Nobody knows which cards
@@ -33,21 +36,19 @@ prompt:
   - ""
   - when: chooses
     include: chosen_deck
-  - when: ["!chooses", standard]
-    include: standard_deck
-  - when: ["!chooses", "!standard"]
+  - when: "!chooses"
     include: own_deck
   - ""
   # THE CLOTH IS BARE: a painting of a moment (beads of seawater, things strewn) has no depth under the
   # table's own lights (feedback 0006); the table and what stands on it are the set dresser's
   - >-
-      {{#shown}}THE LOOK is how this deck is drawn and printed - a printing that has never existed -
-      and the table it is shown on.{{/shown}}{{^shown}}THE LOOK is a tarot deck that has never
-      existed, and the table it is read on.{{/shown}} Make it specific enough that an illustrator
-      could paint every card in one consistent hand: what the cards picture (their cast) and how it
-      is drawn, the medium and its influences, linework, texture, palette. Then the card back (a
-      design that reads the same when the card is turned upside down - exactly symmetric under a
-      half turn), how much of the deck is printed in metallic foil (`foil`, 0 for matte ink to 1 for
+      THE LOOK is what kind of cards these are, as the brief has them, how this deck is drawn and
+      printed - a printing that has never existed - and the table it is shown on. Make it specific
+      enough that an illustrator could paint every card in one consistent hand: what the cards
+      picture (their cast) and how it is drawn, the medium and its influences, linework, texture,
+      palette. Then the card back{{#reversals}} (a design that reads the same when the card is
+      turned upside down - exactly symmetric under a half turn){{/reversals}}, how much of the deck
+      is printed in metallic foil (`foil`, 0 for matte ink to 1 for
       gold leaf everywhere), the surface the cards lie on (seen from directly above: the bare
       material, dry and clean of anything spilled or strewn - the table's shape, any other cloth
       laid on it and whatever stands on it are set separately), the place the table stands in (seen
@@ -62,14 +63,13 @@ prompt:
       and the deck's booklet is printed in the same colors. Decks are printed on stock of every
       color, dark and saturated as well as pale - choose the one that best sets off this deck's
       paintings, with an ink and accent that read on it.
-  - when: printings
-    say: >-
-          THE PRINTINGS: a box may mix printings - sets, years, generations, even games - and each
-          prints its own front and its own back. If this deck does, list them in `look.series`, each
-          with its `name` and what it prints otherwise (`deck_style`, `card_back`, `palette`,
-          `frame`), and give every card of the deck its `series`{{^chooses}} (a card listed in the
-          brief belongs to the printing named like its group){{/chooses}}. A deck of one printing
-          leaves `series` out.
+  - >-
+      THE PRINTINGS: a box may mix printings - sets, years, generations, even games - and each
+      prints its own front and its own back. If the brief says this deck does, list them in
+      `look.series`, each with its `name` and what it prints otherwise (`deck_style`, `card_back`,
+      `palette`, `frame`), and give every card of the deck its `series`{{^chooses}} (a card listed
+      in the brief belongs to the printing named like its group){{/chooses}}. A deck of one
+      printing, as most are, leaves `series` out.
   - when: habits
     say: ""
   - when: habits
@@ -114,7 +114,7 @@ reply: |-
     "episode_title": "the video's title, as it appears on YouTube",
     "description": "the video's YouTube description, in the genre's own shape (a greeting, what this reading covers, the usual disclaimers and calls to action) and told the show's way; three short paragraphs, no emoji, no links",
     "tags": ["eight to twelve search tags, the genre's own"],
-    "audience": "who this collective reading says it is for",
+    "audience": "who this episode says it is for",
     "topic": "what the reading is about, in a few words",
     "premise": "the episode's angle, in one or two sentences",
     "reader_mood": "how the reader is today",
@@ -126,12 +126,10 @@ reply: |-
   {{/chooses}}
     "look": {
       "deck_name": "the deck's name",
-  {{#shown}}
-      "kind": "what these cards are, as a noun phrase with no article: baseball card set, flashcard deck, ...",
-  {{/shown}}
+      "kind": "what these cards are, as the brief has them, a noun phrase with no article",
       "deck_style": "a paragraph an illustrator paints every card from",
       "palette": ["#rrggbb", "four to six colors"],
-      "card_back": "the back design, symmetric under a half turn",
+      "card_back": "the back design{{#reversals}}, symmetric under a half turn{{/reversals}}",
       "frame": {"style": "one of: {{frame_styles}}", "window": "one of: {{windows}}", "corners": "one of: {{corners}}", "ornament": "one of: {{ornaments}}", "stock": "#rrggbb card stock", "ink": "#rrggbb border and lettering", "accent": "#rrggbb"},
       "page": "one of: {{pages}}",
       "title_face": "one of: {{faces}}",
@@ -190,14 +188,13 @@ printed_card:
 
 # THE PRODUCER MAKES THE DECK (CardDeck.chooses): what is in the box is its choice, never what comes out
 chosen_deck: >-
-  THE DECK is yours to choose for this episode: the brief's Cards section says what kind of cards
-  this show shows. Choose one deck, box or collection that fits it and this episode, and list its
+  THE DECK is yours to choose for this episode: the brief says what kind of cards this show
+  shows. Choose one deck, box or collection that fits it and this episode, and list its
   cards in `deck` - between {{box_lo}} and {{box_hi}} of them, every one a card that collection
   would really hold, each with what it is. You choose what is in the box, never what comes out: the
   deck is shuffled from this episode's seed and {{cards}} cards come up, in an order nobody knows -
   so plan nothing that depends on any one card coming up.
 
-# THE DECK the producer is told of: the standard tarot, or the show's own cards by name (their meanings
+# THE DECK the producer is told of: the show's own cards by name, as its brief lists them (their meanings
 # reach a writer only as each is drawn)
-standard_deck: "THE DECK is the standard tarot: the 78 cards of the Rider-Waite-Smith tradition."
 own_deck: "THE DECK is this show's own, {{deck_size}} cards: {{deck_names}}."

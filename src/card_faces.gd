@@ -744,6 +744,21 @@ class Page:
 		y += 26.0
 		_text(f, x, y, w, sz.y - m * 1.1, HORIZONTAL_ALIGNMENT_FILL)
 
+	## How far a glyph's ink rises above its baseline (x) and hangs below it (y), per unit of font size.
+	static func _ink_extent(font: Font, ch: String) -> Vector2:
+		var rids := font.get_rids()
+		if rids.is_empty() or ch.is_empty():
+			return Vector2.ZERO
+		var ts := TextServerManager.get_primary_interface()
+		var gi := ts.font_get_glyph_index(rids[0], 100, ch.unicode_at(0), 0)
+		var pts: PackedVector3Array = ts.font_get_glyph_contours(rids[0], 100, gi).get("points", PackedVector3Array())
+		var lo := 0.0
+		var hi := 0.0
+		for p in pts:
+			lo = minf(lo, p.y)
+			hi = maxf(hi, p.y)
+		return Vector2(-lo, hi) / 100.0
+
 	## A HEADING TO THE LEFT over a rule, the text opening on a drop capital, the keywords at the foot.
 	func _drop(f: Dictionary) -> void:
 		var sz: Vector2 = f["sz"]
@@ -794,8 +809,18 @@ class Page:
 			size -= 1
 		# THE CAPITAL stands as tall as the three lines beside it
 		var cs := int(book.get_height(size) * 3.3)
+		var base := y + book.get_height(size) * 2.0 + book.get_ascent(size)
+		# A capital that hangs below its baseline (J, Q) must not reach the fourth line: it is raised
+		# by the overhang past the room under the third line and shrunk so its top stays put.
+		var ext := _ink_extent(face, cap)
+		if ext.y > 0.0:
+			var room := maxf(book.get_height(size) - size * 0.75 - 2.0, 0.0)
+			if ext.y * cs > room:
+				var scaled := (ext.x * cs + room) / (ext.x + ext.y)
+				base -= ext.y * scaled - room
+				cs = int(scaled)
 		var cw := face.get_string_size(cap, HORIZONTAL_ALIGNMENT_LEFT, -1, cs).x + 12.0
-		draw_string(face, Vector2(x, y + book.get_height(size) * 2.0 + book.get_ascent(size)), cap, HORIZONTAL_ALIGNMENT_LEFT, -1, cs, accent)
+		draw_string(face, Vector2(x, base), cap, HORIZONTAL_ALIGNMENT_LEFT, -1, cs, accent)
 		# the first lines run beside the capital, the rest under it
 		var lh := book.get_height(size)
 		var words := rest.split(" ", false)

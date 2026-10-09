@@ -74,6 +74,25 @@ const FADE := 1.5
 ## churned like a washing machine (measured: 5 dB of wobble against the rush's 1.4).
 const BROWN := 0.977
 const BROWN_IN := 0.2
+## THE WIND'S BODY IS EDDIES, never one band: real wind is many uncorrelated eddies arriving from a
+## little apart, and one band of noise with a moving center is the "filtered noise sweep" an ear knows
+## for a synthesizer (the user, 2026-10-08: "it sounds ALMOST natural ... the uncanny valley"). Each
+## eddy is pink noise through a steep (24 dB) low-pass, its cutoff and level drifting on its own slow
+## random course (seconds), at its own slowly wandering place. Their cutoffs, as fractions of the wind's.
+## (None very low: a low-passed noise with a low cutoff is a narrow band, and a narrow band's loudness
+## wobbles - the darkest eddy at ~110 Hz rumbled like a motor.)
+const EDDIES := [1.0, 1.6, 2.6]
+## How long each eddy takes to drift (seconds), and how far its place wanders.
+const EDDY_DRIFT := [2.0, 3.5, 6.0]
+const EDDY_WANDER := 0.45
+## THE SPACE: every place heard in a little of its own room - a short, dark, diffuse tail (a feedback
+## delay network: four lines mixed into each other), wetter as the dial comes down (further away). Dry,
+## a sound arrives at the ears as no outdoor sound does. Its tail (seconds to fall 60 dB), its darkness
+## (Hz), and how wet it is at the dial's bottom and top.
+const SPACE_TAIL := 1.1
+const SPACE_DARK := 2600.0
+const SPACE_WET := Vector2(0.5, 0.22)
+const SPACE_LINES := [1031, 1327, 1523, 1801]
 ## The most one ear is under the other (dB), for a sound wholly to one side.
 const MOST_APART := 7.0
 ## How far the place is pulled down under speech, at most (a gain of 1 - DUCK).
@@ -314,6 +333,21 @@ class Band:
 		e2 += amount / peak
 
 
+## ONE EDDY of the wind's body: pink noise, a 24 dB low-pass (two state-variable stages), its own slow
+## drift of cutoff and level and its own place.
+class Eddy:
+	var share := 1.0       # its cutoff, beside the wind's (EDDIES)
+	var tau := 2.0         # how slowly it drifts (EDDY_DRIFT)
+	var drift := 0.0       # its course, smoothed noise of unit size
+	var place := 0.0       # where it wanders, -1 to 1
+	var fc := 600.0
+	var gl := 0.0
+	var gr := 0.0
+	var gl0 := 0.0
+	var gr0 := 0.0
+	var s := PackedFloat64Array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])   # two svf stages, three pink poles
+
+
 var _sr := 22050.0
 var _t0 := 0.0
 var _n := 0                       # samples rendered, whole blocks
@@ -333,6 +367,12 @@ var _snap := 1.0
 var _bright := 1.0
 var _lp := Vector2.ZERO
 var _limit := 1.0
+var _wet := 0.3                   # how much of the place is its space (SPACE_WET)
+var _lines: Array[PackedFloat32Array] = []
+var _line_at := PackedInt32Array()
+var _line_g := PackedFloat32Array()
+var _line_lp := PackedFloat32Array()
+var _line_a := 0.5
 var _floor := 0.3                 # how far a place may ebb below its typical loudness (see _ebb)
 var _task := -1                   # the worker rendering ahead ([method prefetch]), or -1
 var _fresh_l := PackedFloat32Array()
@@ -396,6 +436,7 @@ func _init(sound: Dictionary, wind: Dictionary, seed: int, sample_rate: int, t0 
 	_vl.resize(VOICES)
 	_vr.resize(VOICES)
 	_table()
+	_space()
 	_setup()
 	set_level(0.5)
 
@@ -414,6 +455,7 @@ func set_level(d: float) -> void:
 	_snap = lerpf(0.4, 1.25, d)
 	# the floor sinks as the dial rises - more contrast, never silence: -6 dB low, -11 dB at the top
 	_floor = db_to_linear(lerpf(FLOOR_DB.x, FLOOR_DB.y, d))
+	_wet = lerpf(SPACE_WET.x, SPACE_WET.y, d)
 	var fc := lerpf(2400.0, 12000.0, d)
 	_bright = 1.0 - exp(-TAU * minf(fc, _sr * 0.45) / _sr)
 	if _n == 0:
@@ -591,7 +633,15 @@ func _setup() -> void:
 		mean = mean / float(peaks.size()) * 0.75 if not peaks.is_empty() else 0.0
 		_w = {"level": float(w["level"]), "through": through, "at": w.get("from"),
 			"ref": maxf(0.03, (float(_wind["breeze"]) + mean) / Winds.FULL),
-			"rush": _band(0, 1, 500.0, 0.9, true), "low": _band(1, 0, 200.0, 0.7, false)}
+			"low": _band(1, 0, 200.0, 0.7, false)}
+		var eddies: Array = []
+		for i in EDDIES.size():
+			var e := Eddy.new()
+			e.share = float(EDDIES[i])
+			e.tau = float(EDDY_DRIFT[i])
+			e.place = _rand() * 2.0 - 1.0
+			eddies.append(e)
+		_w["eddies"] = eddies
 		match through:
 			"trees", "grass":
 				_w["leaves"] = _band(0, 1, 3000.0, 0.6 if through == "trees" else 0.7, true)
@@ -715,7 +765,11 @@ func _block() -> void:
 		_insects_block(t, dt)
 	for b in _bands:
 		_run(b)
+	if _w.has("eddies"):
+		for e in _w["eddies"]:
+			_run_eddy(e)
 	_run_voices()
+	_run_space()
 	# the dial: level eased across the block, then the brightness of distance
 	# the dial's level, and the fade in at the start (a smoothstep, eased across the block)
 	var fn := FADE * _sr
@@ -778,7 +832,8 @@ func _air(t: float, dt: float) -> void:
 	_log1 += (target - _log1) * k
 	var was := _log2
 	_log2 += (_log1 - _log2) * k
-	_log2 = minf(_log2, was + RISE_MOST * dt)
+	# the dial's contrast steepens the loudness a speed makes: the limit is on the loudness, at every setting
+	_log2 = minf(_log2, was + RISE_MOST / maxf(1.0, _contrast) * dt)
 	_held = exp(_log2)
 	var breath := 1.0 + BREATH * (0.5 * sin(TAU * t / float(BREATHS[0]) + _breath.x)
 		+ 0.3 * sin(TAU * t / float(BREATHS[1]) + _breath.y) + 0.2 * sin(TAU * t / float(BREATHS[2]) + _breath.z))
@@ -828,23 +883,39 @@ func _wind_block(dt: float) -> void:
 	var rel := w / ref
 	var size := sqrt(minf(ref, 1.3))
 	var through := String(_w["through"])
-	var rush: Band = _w["rush"]
 	var low: Band = _w["low"]
 	# WHERE IT IS HEARD: at the opening it gets in by, or louder on the side it blows from
 	var at: Variant = _w.get("at")
 	var ears := _ears(float(at), 0.85) if at != null else _pan(0.55 * _side)
 	var rg := lvl * 0.3 * size * _ebb(rel, 0.9 * c, _floor)
-	rush.fc = 280.0 + 1000.0 * minf(w, 1.3)
+	# the wind's cutoff: brighter as it blows harder, darker through walls and in a passage
+	var curve := Vector2(380.0, 900.0)
 	if through == "eaves":
-		rush.fc = 180.0 + 420.0 * minf(w, 1.3)
+		curve = Vector2(260.0, 380.0)
 	elif through == "tunnel":
-		rush.fc = 150.0 + 520.0 * minf(w, 1.3)
+		curve = Vector2(220.0, 450.0)
 	elif through in ["trees", "grass"]:
 		rg *= 0.6
-	if through == "eaves":
-		rg *= 1.4
-	rush.gl = rg * ears.x
-	rush.gr = rg * ears.y
+	var fw := curve.x + curve.y * minf(w, 1.3)
+	# A GUST BRIGHTENS AS MUCH AS IT SWELLS: a low-pass on pink noise passes more as its cutoff rises,
+	# so the eddies give some of that back, or a gust's brightening came in as loudness on top of its own
+	rg *= pow(fw / (curve.x + curve.y * minf(ref, 1.3)), -0.35)
+	# THE EDDIES: each drifting on its own course round the wind's cutoff and level, at its own place
+	# round where the wind is heard
+	var centre := (float(at) if at != null else 0.0)
+	for e in _w["eddies"]:
+		var ed: Eddy = e
+		var k := 1.0 - exp(-dt / ed.tau)
+		ed.drift += (_rand() * 2.0 - 1.0 - ed.drift) * k
+		var m := clampf(ed.drift / sqrt(k / 6.0), -2.0, 2.0)
+		ed.place = clampf(ed.place + (_rand() * 2.0 - 1.0) * sqrt(dt) * 0.25, -1.0, 1.0)
+		# slow and shallow: a quick, deep drift was itself a gust, and came in faster than the gusts may
+		ed.fc = fw * ed.share * pow(2.0, 0.35 * m)
+		var eg := rg * 0.45 / sqrt(float(EDDIES.size())) * (1.0 + 0.15 * m)
+		var pe := _pan(clampf(0.55 * _side + EDDY_WANDER * ed.place, -1.0, 1.0)) if at == null \
+			else _pan(clampf(sin(deg_to_rad(centre)) * 0.85 + 0.15 * ed.place, -1.0, 1.0))
+		ed.gl = eg * pe.x
+		ed.gr = eg * pe.y
 	# THE RUMBLE: under the rush, and up only in a real gust
 	low.fc = 220.0 + 160.0 * minf(w, 1.3)
 	var lg := lvl * (0.16 if through == "tunnel" else 0.09) * size * _ebb(rel, 1.3 * c, _floor * 0.3)
@@ -1235,6 +1306,144 @@ func _bubble(f: float, decay: float, rise: float, amp: float, ears: Vector2, att
 	_vph[i] = 0.0
 	_vl[i] = ears.x
 	_vr[i] = ears.y
+
+
+## ONE EDDY over the block: pink noise (two of Kellet's poles), a high-pass at ~60 Hz, two low-pass
+## stages, its ears eased. Pink noise is heaviest at the very bottom and a low-pass keeps all of that:
+## with the third pole and no high-pass the darkest eddy was mostly near-subsonic and churned (3.4 dB
+## of wobble against 1.6), as the old rumble had.
+func _run_eddy(e: Eddy) -> void:
+	if maxf(maxf(e.gl, e.gr), maxf(e.gl0, e.gr0)) < 1e-7:
+		e.gl0 = e.gl
+		e.gr0 = e.gr
+		return
+	var g := tan(PI * clampf(e.fc, 20.0, _sr * 0.45) / _sr)
+	var k := 1.0 / 0.75           # a little resonance: hollow, never a whistle
+	var a1 := 1.0 / (1.0 + g * (g + k))
+	var a2 := g * a1
+	var a3 := g * a2
+	var s := e.s
+	var s1 := s[0]
+	var s2 := s[1]
+	var s3 := s[2]
+	var s4 := s[3]
+	var p0 := s[4]
+	var p1 := s[5]
+	var p2 := s[6]
+	var gl := e.gl0
+	var gr := e.gr0
+	var dgl := (e.gl - e.gl0) / float(CR)
+	var dgr := (e.gr - e.gr0) / float(CR)
+	var nz := _noise
+	var o := int(_rand() * 65536.0)
+	var obl := _bl
+	var obr := _br
+	var hk := 1.0 - exp(-TAU * 60.0 / _sr)
+	for i in CR:
+		var x := nz[(o + i) & _NM]
+		p1 = 0.96300 * p1 + x * 0.2965164
+		p2 = 0.57000 * p2 + x * 1.0526913
+		x = (p1 + p2 + x * 0.1848) * 0.42
+		p0 += hk * (x - p0)
+		x -= p0
+		var v3 := x - s2
+		var v1 := a1 * s1 + a2 * v3
+		var v2 := s2 + a2 * s1 + a3 * v3
+		s1 = 2.0 * v1 - s1
+		s2 = 2.0 * v2 - s2
+		var w3 := v2 - s4
+		var w1 := a1 * s3 + a2 * w3
+		var w2 := s4 + a2 * s3 + a3 * w3
+		s3 = 2.0 * w1 - s3
+		s4 = 2.0 * w2 - s4
+		obl[i] += w2 * gl
+		obr[i] += w2 * gr
+		gl += dgl
+		gr += dgr
+	s[0] = s1
+	s[1] = s2
+	s[2] = s3
+	s[3] = s4
+	s[4] = p0
+	s[5] = p1
+	s[6] = p2
+	e.gl0 = e.gl
+	e.gr0 = e.gr
+
+
+func _space() -> void:
+	var scale := _sr / 22050.0
+	for n in SPACE_LINES:
+		var line := PackedFloat32Array()
+		line.resize(maxi(16, int(float(n) * scale)))
+		_lines.append(line)
+		_line_at.append(0)
+		_line_g.append(pow(10.0, -3.0 * float(line.size()) / (_sr * SPACE_TAIL)))
+		_line_lp.append(0.0)
+	_line_a = 1.0 - exp(-TAU * SPACE_DARK / _sr)
+
+
+## THE SPACE over the block: four delay lines, each fed back through a mix of all four (a Hadamard
+## matrix - every line hears every other, so the tail is dense and never rings) and darkened on the way;
+## the left feeds two lines and the right two, and each ear hears its own two back, so even a sound
+## at one point comes back from round about.
+func _run_space() -> void:
+	var wet := _wet
+	if wet <= 0.0:
+		return
+	var l0: PackedFloat32Array = _lines[0]
+	var l1: PackedFloat32Array = _lines[1]
+	var l2: PackedFloat32Array = _lines[2]
+	var l3: PackedFloat32Array = _lines[3]
+	var n0 := l0.size()
+	var n1 := l1.size()
+	var n2 := l2.size()
+	var n3 := l3.size()
+	var i0 := _line_at[0]
+	var i1 := _line_at[1]
+	var i2 := _line_at[2]
+	var i3 := _line_at[3]
+	var g0 := _line_g[0]
+	var g1 := _line_g[1]
+	var g2 := _line_g[2]
+	var g3 := _line_g[3]
+	var d0 := _line_lp[0]
+	var d1 := _line_lp[1]
+	var d2 := _line_lp[2]
+	var d3 := _line_lp[3]
+	var a := _line_a
+	var obl := _bl
+	var obr := _br
+	for i in CR:
+		# what each line gives back, darkened
+		d0 += a * (l0[i0] - d0)
+		d1 += a * (l1[i1] - d1)
+		d2 += a * (l2[i2] - d2)
+		d3 += a * (l3[i3] - d3)
+		var x := obl[i]
+		var y := obr[i]
+		var h0 := d0 + d1
+		var h1 := d0 - d1
+		var h2 := d2 + d3
+		var h3 := d2 - d3
+		l0[i0] = (h0 + h2) * 0.5 * g0 + x * 0.5
+		l1[i1] = (h1 + h3) * 0.5 * g1 + x * 0.5
+		l2[i2] = (h0 - h2) * 0.5 * g2 + y * 0.5
+		l3[i3] = (h1 - h3) * 0.5 * g3 + y * 0.5
+		obl[i] = x + wet * (d0 + d2)
+		obr[i] = y + wet * (d1 + d3)
+		i0 = (i0 + 1) % n0
+		i1 = (i1 + 1) % n1
+		i2 = (i2 + 1) % n2
+		i3 = (i3 + 1) % n3
+	_line_at[0] = i0
+	_line_at[1] = i1
+	_line_at[2] = i2
+	_line_at[3] = i3
+	_line_lp[0] = d0
+	_line_lp[1] = d1
+	_line_lp[2] = d2
+	_line_lp[3] = d3
 
 
 func _run_voices() -> void:

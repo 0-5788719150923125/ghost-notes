@@ -260,13 +260,14 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
     ),
     (
         "Cards",
-        "A card reading nobody writes: a show's brief, its episodes - each "
+        "A show of cards nobody writes: a show's brief, its episodes - each "
         "planned, dealt, painted and written by agents one card at a time, kept "
         "on disk step by step - and the table they are read at, in the Generative "
         "voice, with the table itself and the things on it modeled from a "
         "written description (Tables, Props), its air (Effects, and what the wind carries: Drifts), "
         "its light (Lights) and the one wind both share (Winds). "
-        "Tarot is the first deck and, so far, the only recipe. "
+        "The rules are every show's; the brief says what the cards are - tarot, baseball or trading cards, "
+        "a card game's deck, flashcards, recipe cards - and lists them, or leaves each episode's deck to its producer. "
         "Design: next/cards.md.",
         [
             "cards_editor.gd",
@@ -683,7 +684,7 @@ TOP_LEVEL: List[Tuple[str, str]] = [
     (
         "data/",
         "Data the code reads - pronunciation (CMUdict, `english.yml`), the LibriTTS speaker "
-        "table, the decks (the tarot's meanings) - each license beside its file.",
+        "table - each license beside its file.",
     ),
     ("fonts/", "Faces the media draw with: the notebook's handwriting and the card table's lettering."),
     (

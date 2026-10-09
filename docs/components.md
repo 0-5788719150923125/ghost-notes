@@ -22,7 +22,7 @@ Registries: `Components.REGISTRY` and `Components.TEMPLATES` in [src/components.
 | **Manual** | Text, Song, Picture, Storyboards | A song and a show by hand - a storyboard. |
 | **Synthesis** | Text, Voice lab, Scenes | Write a script; Ghost Notes speaks it and the show reacts to the voice. |
 | **Generative** | Text, Voice, Scenes, Picture, Illustrations, Look, Intro & outro | The same, in a small local neural voice - clearer, at the cost of a downloaded model. |
-| **Cards** | Text, Cards, Voice, Look, Intro & outro | A card reading nobody writes - agents plan, deal, paint and write each episode one card at a time, and a voice reads it at the table. Tarot is its first deck. |
+| **Cards** | Text, Cards, Voice, Look, Intro & outro | A show of cards nobody writes - agents plan, deal, paint and write each episode one card at a time, and a voice reads it at the table. The show's brief says what the cards are. |
 | **Masking** | Clip, Masks | Chroma-key effects over a video - markers, tracks, renders. |
 
 ## Components
