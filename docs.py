@@ -286,6 +286,7 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
             "drifts.gd",
             "lights.gd",
             "winds.gd",
+            "soundscape.gd",
             "set_dresser_tools.gd",
             "table_preview.gd",
         ],

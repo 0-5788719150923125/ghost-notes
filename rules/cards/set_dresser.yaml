@@ -9,8 +9,8 @@
 # lit things ({{candles}}) and other things ({{lo}} to {{hi}}); the flags `cloth` and `room` (their
 # paintings go with the prompt), `tarot` (no Format section: a tarot reading), `box` (the cards come
 # out of a box), `jumps` (a card leaps out of the shuffle) and `tools` (it works with tools and sees
-# what it builds, {{looks}} pictures); the registries' vocabularies as `tables`, `props`, `air` and
-# `lights`; `zones`, where things stand; and what earlier episodes' tables held.
+# what it builds, {{looks}} pictures); the registries' vocabularies as `tables`, `props`, `air`,
+# `lights` and `sounds`; `zones`, where things stand; and what earlier episodes' tables held.
 prompt:
   - >-
       You are the SET DRESSER. Before the camera rolls on episode #{{seed}} you set the reader's
@@ -216,6 +216,26 @@ prompt:
   # the sky, the sun and what it falls through, the wind, birds, lamps, shadows: Lights.describe()
   - insert: lights
   - ""
+  # THE SOUND: the user, 2026-10-08 - "a lot of scenes take place in places where pure environmental
+  # silence feels inappropriate"; "the sound of wind might come from the right-hand side, where the
+  # window is ... wind in a tunnel is different from wind in the open" - the choices are the agent's
+  - >-
+      THE SOUND: what the place sounds like behind the reader's voice - the wind, the sea, rain, a
+      fire, a stream, insects. It goes in `sound`, beside `light`. Hear the place the plan and the
+      room describe: a boat at sea has the sea against its hull and the wind in its rigging; a dock
+      the water lapping at its pilings and the wind off the water; a table under a tree the leaves
+      stirring in every gust that brings the petals down; a room by a hearth the fire, and perhaps
+      rain on the roof or a storm moaning round the eaves. The table's own wind, if its light has
+      one, is heard only when the sound has a `wind` - give it one whenever that wind should be
+      heard, and it is heard as it moves the light and the air. Say what it blows through (leaves,
+      rigging, canvas, a tunnel's hollow), and where it is heard from when walls stand between it
+      and the reader: through an open window on the right, it is heard on the right. Out in the open it
+      is heard on the side it blows from, and moves as the gusts veer, with nothing to write. Give
+      each sound where it is (`from`) and how far off. A quiet room has no sound, and most places
+      only one or two; the reader's voice always leads.
+  # the wind, water, rain, fire, a stream, insects: Soundscape.describe()
+  - insert: sounds
+  - ""
   - include: title
   - when: seen
     say: ""
@@ -256,7 +276,7 @@ with_tools:
   - >-
       HOW YOU WORK: you build this table with tools, and you SEE what you build. `put` builds the
       table itself (`top`, `layers`), puts things (and the materials they use, and the air's
-      effects) on it and lights it (`light`), and answers with what was built - each thing's real
+      effects) on it, lights it (`light`) and gives it its sound (`sound`), and answers with what was built - each thing's real
       size, anything the builder could not make as written, where the sun falls - and a picture of
       the things on a centimeter grid; `look` shows one thing close up from four sides; `overhead`
       shows the whole table from straight above - its top, its cloths as laid, the things and the
@@ -270,7 +290,8 @@ with_tools:
       layers or parts of the light off; `submit` hands the table in.
   - >-
       Build the table first - its top and its layers - and look at it from above; then make the
-      things; then light the table (`put` its `light`), set it, and watch what moves in its light.
+      things; then light the table (`put` its `light`), set it, and watch what moves in its light;
+      then give it the sound of its place (`put` its `sound`).
   - >-
       Make a thing, look at it, and fix whatever does not read as the thing you meant - a part
       floating or sunk, a proportion off, a material that reads as another, anything that reads as a
@@ -293,6 +314,8 @@ with_tools:
   - include: table_example
   - "...and of its light, put as `light` - a light no episode is lit by, never this one's:"
   - include: light_example
+  - "...and of its sound, put as `sound` - a place no episode is set in, never this one's:"
+  - include: sound_example
   - ""
   - "Finish by calling submit. After it, your last message can be a single line."
 
@@ -309,6 +332,8 @@ in_one_reply:
   - include: table_example
   - "...and `light` - shown here as a light no episode is lit by, never this one's:"
   - include: light_example
+  - "...and `sound` - shown here as a place no episode is set in, never this one's:"
+  - include: sound_example
   - >-
       Beside `things` and `materials` (and `effects`, if the table has air), the reply carries the
       name's color: `"title": {"color": "#rrggbb", "why": "a few words: what it stands out
@@ -361,6 +386,12 @@ light_example: |-
         {"shape": "ball", "size": [40, 26, 40], "at": [0, 13, 0]},
         {"parts": [{"shape": "tube", "path": [[14, 24, 0], [0, 70, 0]], "radius": 0.4}], "copies": {"around": {"count": 3}}}],
         "shadow": [-35, 5], "height": 130, "move": {"kind": "swing", "amount": 0.3}}]}
+
+sound_example: |-
+  "sound": {"why": "a lighthouse keeper's room in a gale, the sea at the foot of the rocks",
+    "wind": {"through": "eaves", "from": "back left", "strength": 0.8, "gusts": 0.9, "every": 9},
+    "water": {"kind": "shore", "size": 0.9, "from": "back", "distance": 0.7},
+    "fire": {"size": 0.3, "from": "right", "distance": 0.4}}
 
 # THE TITLE over the table at the opening, and the color it is printed in (CardTable.title_ink)
 title: >-

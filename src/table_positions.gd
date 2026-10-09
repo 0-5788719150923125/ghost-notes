@@ -31,6 +31,9 @@ const FRAME_MARGIN := 0.0
 ## The presets, the layouts the readers' videos actually use - rows, never a cross (measured: rows of
 ## three to ten, often two).
 const PRESETS := ["row", "arc", "rows", "pyramid"]
+## How often a row or an arc of six or more is laid as two rows instead - half that at five (a long row
+## also crowds the deck, which is then put aside: [constant TableMedium.DECK_CROWD]).
+const SPLIT_LONG := 0.5
 ## HOW A CARD LIES AND WITH WHAT, as a plan's position says it ([method staged]): `comes` - drawn (taken
 ## and held up), dealt (put straight down), swept (out in one waterfall with the swept positions next
 ## to it); `lies` - upright, or sideways (a quarter turn, as a tapped card); `on` - it lies on the card
@@ -70,6 +73,13 @@ static func seeded(n: int, rng: RandomNumberGenerator, lay: Dictionary) -> Array
 	var kind := String(kinds[rng.randi_range(0, kinds.size() - 1)])
 	if n * gap > 0.66:
 		kind = "rows"
+	# A LONG ROW SPLIT IN TWO, now and then (the user, 2026-10-08: "At 6 cards, that row is quite long"),
+	# on a die of its own so every draw after lands where it did
+	elif kind in ["row", "arc"] and n >= 5:
+		var split := RandomNumberGenerator.new()
+		split.seed = hash([rng.seed, "tarot-long-row"])
+		if split.randf() < SPLIT_LONG * (0.5 if n == 5 else 1.0):
+			kind = "rows"
 	var pos: Array = []
 	match kind:
 		"rows":

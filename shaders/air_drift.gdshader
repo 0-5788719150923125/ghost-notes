@@ -1,12 +1,12 @@
-// WHAT DRIFTS IN THE AIR (src/drifts.gd): a petal, a rose petal, a blossom, a leaf, a seed's tuft, a
-// maple key or a feather - one quad of a MultiMesh, cupped, cut to its outline here, lit by every light on
+// WHAT DRIFTS IN THE AIR (src/drifts.gd): a petal, a rose petal, a leaf, a seed's tuft, a maple key or a
+// feather - one quad of a MultiMesh, cupped, cut to its outline here, lit by every light on
 // the table and glowing where a light is behind it. The quad is the plane mesh's (x across, z along,
 // -0.5..0.5, its face +y); a piece's size and turn are its transform's, its color the instance's, and
 // INSTANCE_CUSTOM is (how cupped it is, a seed of its own). Cut by `discard`, so its shadow is its shape.
 shader_type spatial;
 render_mode cull_disabled;
 
-// Drifts.LOOKS' shapes: 0 petal, 1 rose petal, 2 blossom, 3 leaf, 4 tuft, 5 key, 6 feather
+// Drifts.LOOKS' shapes: 0 petal, 1 rose petal, 2 leaf, 3 tuft, 4 key, 5 feather
 uniform int shape = 0;
 // how much light comes through it (BACKLIGHT, a share of its color)
 uniform float through = 0.5;
@@ -34,7 +34,6 @@ void fragment() {
 	float round_ = sqrt(max(1.0 - p.y * p.y, 0.0));
 	bool keep = false;
 	vec3 tint = vec3(1.0);
-	vec3 heart = vec3(-1.0);              // a color of its own, where it has one (a blossom's middle)
 	if (shape == 0) {
 		// A PETAL: narrow at its base, notched at its tip, faint veins fanning from the base
 		float hw = round_ * mix(0.42, 1.0, sqrt(t));
@@ -46,16 +45,6 @@ void fragment() {
 		keep = ax < min(hw, 1.0);
 		tint = vec3(mix(0.62, 1.0, smoothstep(0.0, 0.55, t)));
 	} else if (shape == 2) {
-		// A BLOSSOM: five petals round a golden middle
-		float r = length(p);
-		float a = atan(p.y, p.x) + seed * 6.2831853;
-		float reach = 0.6 + 0.4 * pow(abs(cos(2.5 * a)), 0.6);
-		keep = r < reach * 0.98;
-		tint = vec3(mix(0.88, 1.03, smoothstep(0.1, 0.7, r)));
-		if (r < 0.17) {
-			heart = vec3(0.93, 0.74, 0.22) * (0.8 + 0.2 * hash1(floor(p.x * 40.0) + floor(p.y * 40.0) * 7.0));
-		}
-	} else if (shape == 3) {
 		// A LEAF: pointed, its edge toothed, a midrib and veins, its stalk at its base
 		float hw = 0.55 * pow(max(1.0 - p.y * p.y, 0.0), 0.75) * (1.0 + 0.07 * sin(p.y * 30.0 + seed * 20.0));
 		keep = ax < hw || (ax < 0.035 && p.y < -0.8);
@@ -63,7 +52,7 @@ void fragment() {
 		tint = vec3(1.0 - 0.28 * step(ax, 0.022) - 0.12 * vein);
 		// the edge browns and curls first
 		tint *= mix(1.0, 0.78, smoothstep(0.7, 1.0, ax / max(hw, 1e-3)));
-	} else if (shape == 4) {
+	} else if (shape == 3) {
 		// A SEED'S TUFT: a dark seed in the middle, fine fluff spread round it
 		float r = length(p);
 		float a = atan(p.y, p.x);
@@ -71,7 +60,7 @@ void fragment() {
 		float rim = 0.86 + 0.14 * hash1(floor(a / 6.2831853 * 18.0 + seed));
 		keep = r < 0.14 || (r < rim && (r < 0.3 || rays < 0.16 + 0.1 * (1.0 - r)));
 		tint = r < 0.14 ? vec3(0.55, 0.47, 0.36) : vec3(1.0);
-	} else if (shape == 5) {
+	} else if (shape == 4) {
 		// A MAPLE KEY: its seed at the base, its veined wing reaching to one side
 		bool nut = length((p - vec2(0.0, -0.72)) * vec2(1.0, 1.35)) < 0.28;
 		float s = clamp((p.y + 0.72) / 1.7, 0.0, 1.0);
@@ -89,7 +78,7 @@ void fragment() {
 	if (!keep) {
 		discard;
 	}
-	vec3 c = heart.r >= 0.0 ? heart : COLOR.rgb * tint;
+	vec3 c = COLOR.rgb * tint;
 	ALBEDO = c;
 	ROUGHNESS = 0.7;
 	SPECULAR = 0.25;

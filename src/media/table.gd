@@ -260,6 +260,30 @@ const SPIN_ROOM := 12.0
 ## How far apart things stand on the table (meters): any two, and two of one group.
 const THING_GAP := 0.014
 const GROUP_GAP := 0.004
+## HOW A READER SETS OUT THEIR THINGS, a habit drawn per episode (the user, 2026-10-08: "props are
+## most often placed in a kind of arc along the top, with more or less equal spacing"; a real reader
+## "will often have an entire table of stuff", much of it cut by the frame's edge, and "push the props
+## to the left and right edges, such that the middle of the table remains more free"). Patterns
+## guided toward, never enforced ([method _habit_of]): how far each group's spot wanders off its
+## zone's middle (meters, x and z), how far the things are pushed out to the sides at the most, and
+## the least share of a thing's picture the frame may keep when it cuts it - an unlit thing only; a
+## lit one is the light and stands wholly in the shot.
+const AIM_WANDER := Vector2(0.08, 0.05)
+const EDGE_PUSH := 0.2
+const SEEN_LEAST := 0.55
+## A THING ACROSS A CLOTH'S EDGE - half on the cloth, half on the bare top - reads as set down
+## carelessly (the user, 2026-10-08), unless it is large: a book, a tray may lie across a hem. So a
+## spot whose foot crosses a layer's edge scores this much worse (as many meters from its aim, over 4),
+## and a thing wider than STRADDLE_BIG only a third of it.
+const STRADDLE := 0.5
+const STRADDLE_BIG := 0.18
+## THE DECK PUT ASIDE (the user, 2026-10-08: a long row comes "oddly close to the deck ... TOO close"):
+## when a card of the spread would lie within DECK_CROWD of the deck (meters, edge to edge), the reader
+## slides the deck further out before drawing it - in an episode that draws DECK_ASIDE or under - over
+## ASIDE_S seconds, ending as that card is taken.
+const DECK_CROWD := 0.07
+const DECK_ASIDE := 0.75
+const ASIDE_S := 0.45
 ## How far a card sliding across the cloth keeps from a thing's foot (meters).
 const FOOT_MARGIN := 0.004
 ## HOW HOT A CANDLE'S POOL MAY BURN: its light times the hottest spot of cloth round it - the
@@ -418,6 +442,10 @@ var _deck_gone := 0                   # deck meshes gone from the deck (a jumper
 var _standing: Array = []             # what stands on the table: convex feet (x by z), for a wash to go round
 var _standing_c := PackedVector2Array()   # ...their middles
 var _standing_r := PackedFloat32Array()   # ...and how far they reach from them
+var _habit := {}                     # how this episode's reader sets out their things (_habit_of)
+var _layer_os: Array = []             # the layers' outlines (Tables.layer_outline), for a foot across a hem
+var _deck_far := Vector3.ZERO         # where the deck is slid aside to, when the spread crowds it
+var _aside_card := -1                 # the card it is slid aside for (-1: it stays)
 var _things: Array = []               # what stood: [{name, group, place, node, outline, bb, rect, foot, lit, flames, meshes}]
 var _collide := true                  # cards go round what stands (off only for a gate's control)
 var _table_mt := -2                   # the table file's time when it was last built (-1: none)
@@ -920,6 +948,7 @@ func _build_episode() -> void:
 	var spec := _table_spec()
 	var given := TablePositions.given(cards, _seed, spec["top"], _box_keep())
 	_slots = given if not given.is_empty() else seeded
+	_plan_aside(spec["top"])
 	# a jumper flies out of the deck in the middle and lands on the far side from where the deck
 	# is about to go
 	_jump_land = _mid + Vector3(-signf(_deck_base.x) * 0.16, 0.0, 0.035)
@@ -1307,6 +1336,10 @@ func _build_table(spec: Dictionary = {}) -> void:
 	_furniture["spec"] = {"top": spec["top"], "layers": spec["layers"]}
 	_top = spec["top"]
 	_top_o = Tables.top_outline(_top)
+	_layer_os = []
+	for l in (spec["layers"] if spec["layers"] is Array else []):
+		if l is Dictionary and String((l as Dictionary).get("outline", "rect")) != "top":
+			_layer_os.append(Tables.layer_outline(l, _top))
 	_root3.add_child(_furniture["node"])
 	_apply_painting()
 	# its lightness before anything stands on it: a candle looks for dark cloth
@@ -1505,6 +1538,7 @@ func _table_spec() -> Dictionary:
 ## off the table.
 func _place_things(things: Array, built: Array, rng: RandomNumberGenerator) -> void:
 	var keep_out := _keep_out()
+	_habit = _habit_of(_seed)
 	# THE DRAPED FIRST: where they lie is written, and the rest stand clear of them
 	for i in things.size():
 		if Props.draped(things[i]):
@@ -1538,6 +1572,43 @@ func _place_things(things: Array, built: Array, rng: RandomNumberGenerator) -> v
 				((built[i] as Dictionary)["node"] as Node).free()
 			elif anchor.is_empty():
 				anchor = stood
+
+
+## THIS EPISODE'S HABIT ([constant AIM_WANDER]), from its own die so no other draw moves: `push` - how
+## far out to the sides its things lean (0 keeps the zones' own middles, as before; often well out, so
+## the middle stays free), and `wander`, `side` - each group's own step off its zone's middle and the side
+## a "back" group leans to, by the group's name.
+static func _habit_of(seed: int) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed, "tarot-things-habit"])
+	return {"push": pow(rng.randf(), 0.7), "salt": rng.randi()}
+
+
+## Where group [param group] of zone [param zone] aims, the deck kept at [param deck]: the zone's middle,
+## pushed out to its side by the habit and wandered off by the group's own step.
+func _habit_aim(zone: String, group: String, deck: Vector3) -> Vector2:
+	var aim := CardTable.zone_aim(zone, deck)
+	if _habit.is_empty():
+		return aim
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([int(_habit["salt"]), group])
+	var step := Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)) * AIM_WANDER
+	var side := signf(aim.x) if absf(aim.x) > 0.01 else (-1.0 if rng.randf() < 0.5 else 1.0)
+	# a "back" thing leans out less (it stands where the frame is narrowest), by the deck not at all
+	var push := float(_habit["push"]) * EDGE_PUSH * (0.0 if zone == "by the deck" else (0.8 if absf(aim.x) < 0.01 else 1.0))
+	return aim + step + Vector2(side * push, 0.0)
+
+
+## How much worse a spot is for a foot [param bb] (x by z) that crosses a layer's edge ([constant STRADDLE]).
+func _straddle(bb: Rect2) -> float:
+	var pts := [bb.position, bb.end, Vector2(bb.position.x, bb.end.y), Vector2(bb.end.x, bb.position.y), bb.get_center()]
+	for o in _layer_os:
+		var inside := 0
+		for q in pts:
+			inside += 1 if Tables.sdf(o, q) < 0.0 else 0
+		if inside > 0 and inside < pts.size():
+			return STRADDLE * (1.0 / 3.0 if maxf(bb.size.x, bb.size.y) > STRADDLE_BIG else 1.0)
+	return 0.0
 
 
 ## THING [param t] (its strand laid `drape`) with the ground it falls over: this top's edge ([method
@@ -1597,6 +1668,8 @@ func _keep_out() -> Array:
 	for sl in _slots:
 		out.append(CardTable.footprint((sl as Dictionary)["pos"], float((sl as Dictionary)["yaw"]), CARD).grow(0.03))
 	out.append(Rect2(_deck_base.x - 0.08, _deck_base.z - 0.1, 0.16, 0.2))
+	if _aside_card >= 0:
+		out.append(Rect2(_deck_far.x - 0.08, _deck_far.z - 0.1, 0.16, 0.2))
 	# the middle, where the deck is shuffled - and, whatever the source, where the spread lies
 	out.append(Rect2(_mid.x - 0.22, _mid.z - 0.14, 0.44, 0.28))
 	if _cards_from == "box":
@@ -1610,8 +1683,10 @@ func _keep_out() -> Array:
 ## ONE THING STOOD: the best free spot for [param t] (built as [param b]) on a grid over the table,
 ## at full size or, failing that, a little smaller. Every spot is ON THE TABLE, off everywhere the
 ## cards go, clear of what already stands (by [constant THING_GAP], or [constant GROUP_GAP] within
-## its own group), WHOLLY IN THE SHOT (its whole box, projected), and - between groups - not in
-## front of another in the picture. A lit thing stands only behind the middle (in front of the
+## its own group), IN THE SHOT (its whole box, projected: never cut by the frame's top, and a lit thing
+## not at all - any other may run off a side, [constant SEEN_LEAST]), and - between groups - not in
+## front of another in the picture. Aimed where the episode's habit puts its zone ([method _habit_aim]),
+## and kept off a cloth's edge where it can be ([method _straddle]). A lit thing stands only behind the middle (in front of the
 ## cards its flame blew out the card held up to the lens) and looks for dark cloth. The spot
 ## chosen ({at, k, group, height}), or empty when there is none.
 func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, keep_out: Array,
@@ -1620,7 +1695,7 @@ func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, kee
 	var lit := not (b["wicks"] as Array).is_empty()
 	var yaw := deg_to_rad(float(t.get("turn", 0.0)) + rng.randf_range(-8.0, 8.0))
 	var zone := String(t.get("place", "back"))
-	var aim := CardTable.zone_aim(zone, _deck_base)
+	var aim := _habit_aim(zone, group, _deck_base)
 	var front := (_deck_base.z + 0.03) if zone in ["by the deck", "left", "right"] else _mid.z + 0.03
 	# a LOW thing may lie nearer the reader, where it hides no card and nothing behind it
 	if box.size.y < 0.04:
@@ -1696,9 +1771,15 @@ func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, kee
 				if not clear:
 					continue
 				var rect := _screen_rect_fast(corners, Vector3(at.x, 0.0, at.y), cam_inv, lens)
-				# wholly in the shot: a thing cut off by the frame's edge reads as one standing in the
-				# room, not on the table
-				if rect.position.x < 0.02 or rect.end.x > 0.98 or rect.position.y < 0.02 or rect.end.y > 0.97:
+				# never cut by the frame's TOP: a thing cut there reads as one standing in the room, not on
+				# the table. A lit thing is the light, and stands wholly in the shot; any other may run off
+				# a side or the foot of the frame, as a crowded table's do, so long as SEEN_LEAST of it shows
+				if rect.position.y < 0.02:
+					continue
+				if lit:
+					if rect.position.x < 0.02 or rect.end.x > 0.98 or rect.end.y > 0.97:
+						continue
+				elif rect.intersection(Rect2(0.0, 0.0, 1.0, 1.0)).get_area() < rect.get_area() * SEEN_LEAST:
 					continue
 				# not in front of another in the picture: apart between groups, and within one only a
 				# little in front - a group seen one thing through another read as a stack
@@ -1725,6 +1806,7 @@ func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, kee
 				if lit:
 					# by dark cloth, where it can burn as the key: by pale, its light is held down
 					score -= 0.8 * maxf(0.0, _heat_cell(Vector3(at.x, 0.0, at.y)) * KEY_ENERGY / HEAT - 1.0)
+				score -= _straddle(bb)
 				score += rng.randf() * 0.05
 				if score > best_score:
 					best_score = score
@@ -2362,8 +2444,8 @@ func _build_air(spec: Dictionary) -> void:
 
 
 ## Where the air may be, the camera it is seen through, and what stands in it - the table and the
-## things on it, which motes are homed in front of and fly over; the wind, and the table's top, where
-## what drifts can lie. And THE LENS: sharp over the table
+## things on it (the cards' box too), which motes are homed in front of and fly over; the wind, the
+## table's top, where what drifts can lie, and what covers it at a time ([method _cover_at]). And THE LENS: sharp over the table
 ## (its nearest corner to its farthest, along the camera's axis), blurring past it as the room is -
 ## [constant ROOM_BLUR] of the frame's width, [constant ROOM_REACH] out - and the air ending just short
 ## of the room's picture.
@@ -2372,6 +2454,8 @@ func _air_stage() -> Dictionary:
 	var under: Array = [table]
 	for th in _things:
 		under.append((th as Dictionary)["box"])
+	if not _box.is_empty():
+		under.append(_box["world"])
 	var fwd := -_cam_base.basis.z
 	var near := INF
 	var far := 0.0
@@ -2381,9 +2465,50 @@ func _air_stage() -> Dictionary:
 		far = maxf(far, d)
 	var top: Dictionary = (_furniture.get("spec", {}) as Dictionary).get("top", Tables.DEFAULT_TOP)
 	return {"regions": CardTable.AIR, "camera": _cam_base, "fov": _cam.fov, "aspect": 16.0 / 9.0, "occluders": under,
-		"wind": _wind, "on_top": func(p: Vector2) -> bool: return Tables.inside(top, p, 0.01),
+		"wind": _wind, "on_top": func(p: Vector2) -> bool: return Tables.inside(top, p, 0.01), "cover": _cover_at,
 		"sharp": Vector2(near, far), "defocus": 2.0 * ROOM_BLUR / maxf(1.0 / far - 1.0 / ROOM_REACH, 1e-3),
 		"deep": ROOM_REACH * 0.9}
+
+
+## WHAT LIES ON THE CLOTH at [param p] (xz, [param r] round it) at show time [param t]: the top of the deck
+## or of a card lying there, or -INF - where what drifts may not come down, skid or lie uncovered (a
+## flower once fell through the deck and lay under it, 2026-10-08). A card held up, or still in the
+## deck, covers nothing; a deck being shuffled or washed spreads wider than it lies.
+func _cover_at(p: Vector2, t: float, r: float) -> float:
+	var tm := _times()
+	var wj := _wash_jump(maxf(float(tm["shuffle"]), minf(0.0, _now)))
+	var keep := _cur_base
+	var keep_gone := _deck_gone
+	_cur_base = _deck_at(t, tm, wj)
+	_deck_gone = 1 if not wj.is_empty() and t >= float(wj["end"]) else 0
+	var top := -INF
+	if _cards_from != "box":
+		var loose := 0.0
+		if t >= float(tm["shuffle"]) and t < float(tm["end"]) + SQUARE:
+			loose = 0.1
+		if not wj.is_empty() and t >= float(wj["base"]) and t < float(wj["end"]):
+			loose = 0.12
+		if _under_card(_rest_xf(DECK_N - 1), p, r + loose):
+			top = _cur_base.y + float(DECK_N - _deck_gone) * DECK_T
+	var events: Array = tm["events"]
+	for k in _cards.size():
+		var pose := _card_pose(k, t, events[k], wj)
+		var xf: Transform3D = pose["xf"]
+		if bool(pose["visible"]) and not bool(pose["up"]) and xf.origin.y < _cur_base.y + DECK_UP_AIR and _under_card(xf, p, r):
+			top = maxf(top, xf.origin.y + CARD_T)
+	_cur_base = keep
+	_deck_gone = keep_gone
+	return top
+
+
+## How high over the deck's place a card can be and still lie on the cloth, to the air (meters).
+const DECK_UP_AIR := 0.05
+
+
+## Whether [param p] (xz) is within [param r] of a card posed [param xf].
+static func _under_card(xf: Transform3D, p: Vector2, r: float) -> bool:
+	var l := xf.affine_inverse() * Vector3(p.x, xf.origin.y, p.y)
+	return absf(l.x) <= CARD.x * 0.5 + r and absf(l.z) <= CARD.y * 0.5 + r
 
 
 ## The air at show time [param t] - its bursts planned again whenever the schedule moved (and only
@@ -2639,7 +2764,67 @@ func _deck_at(t: float, tm: Dictionary, wj := {}) -> Vector3:
 	if not wj.is_empty():
 		go = (float(wj["end"]) - float(first[0])) / s
 	var u := clampf(((t - float(first[0])) / s - go) / PUSH_SLIDE, 0.0, 1.0)
+	if u >= 1.0 and _aside_card >= 0:
+		# PUT ASIDE before the card that would crowd it is taken ([method _plan_aside])
+		var d: Array = (tm["draw"] as Array)[_aside_card]
+		var taken := float(d[0]) + float(d[3]) * float(d[1])
+		var v := clampf((t - (taken - ASIDE_S)) / ASIDE_S, 0.0, 1.0)
+		return _deck_base.lerp(_deck_far, _ease(v)) + Vector3(0.0, sin(PI * v) * 0.003, 0.0)
 	return _mid.lerp(_deck_base, _ease(u)) + Vector3(0.0, sin(PI * u) * 0.004, 0.0)
+
+
+## THE DECK PUT ASIDE ([constant DECK_CROWD]): the first card of the spread that would lie that near
+## the deck, and the spot further out - in the frame, on the top, as far from the spread as it can be,
+## by the least slide - it is moved to before that card is drawn. None when nothing crowds it, the die
+## says it stays, the cards come from a box, or there is nowhere better; the first card itself crowding
+## it puts the deck there from the start.
+func _plan_aside(top: Dictionary) -> void:
+	_aside_card = -1
+	_deck_far = _deck_base
+	if _cards_from == "box" or _slots.is_empty():
+		return
+	var gap := func(a: Rect2, b: Rect2) -> float:
+		return Vector2(maxf(0.0, maxf(a.position.x - b.end.x, b.position.x - a.end.x)),
+			maxf(0.0, maxf(a.position.y - b.end.y, b.position.y - a.end.y))).length()
+	var feet: Array = []
+	for sl in _slots:
+		feet.append(CardTable.footprint((sl as Dictionary)["pos"], float((sl as Dictionary)["yaw"]), CARD))
+	var keep := TablePositions.deck_keep(_deck_base)
+	var crowd := -1
+	for i in feet.size():
+		if float(gap.call(keep, feet[i])) < DECK_CROWD:
+			crowd = i
+			break
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([_seed, "tarot-deck-aside"])
+	if crowd < 0 or rng.randf() >= DECK_ASIDE:
+		return
+	var lay := CardTable.layout_of(_seed)
+	var side := signf(_deck_base.x)
+	var best := -INF
+	for dx in range(4, 17):
+		for dz in range(-3, 3):
+			var at := _deck_base + Vector3(side * float(dx) * 0.01, 0.0, float(dz) * 0.02)
+			var r := TablePositions.deck_keep(at)
+			if not TablePositions._frame_trouble(r, lay).is_empty():
+				continue
+			if not (Tables.inside(top, r.position, Tables.EDGE) and Tables.inside(top, r.end, Tables.EDGE)
+					and Tables.inside(top, Vector2(r.position.x, r.end.y), Tables.EDGE) and Tables.inside(top, Vector2(r.end.x, r.position.y), Tables.EDGE)):
+				continue
+			var near := INF
+			for f in feet:
+				near = minf(near, float(gap.call(r, f)))
+			# room enough wins; past it, the shorter slide
+			var score := minf(near, DECK_CROWD + 0.03) - at.distance_to(_deck_base) * 0.1
+			if near > float(gap.call(keep, feet[crowd])) + 0.02 and score > best:
+				best = score
+				_deck_far = at
+	if best == -INF:
+		return
+	if crowd == 0:
+		_deck_base = _deck_far
+	else:
+		_aside_card = crowd
 
 
 # --- posing everything --------------------------------------------------------------------------------------
@@ -3520,8 +3705,11 @@ static func _tipped(yaw: float, slope: Vector2) -> Basis:
 	var x := flat.x + Vector3.UP * slope.dot(Vector2(flat.x.x, flat.x.z))
 	var z := flat.z + Vector3.UP * slope.dot(Vector2(flat.z.x, flat.z.z))
 	var up := z.cross(x).normalized()
-	x = x.normalized()
-	return Basis(x, up, x.cross(up).normalized())
+	# THE LONG SIDE KEPT TRUE to the plane's own line under it, the short side squared to it: the
+	# card's corners on a steep slope (a card slid up onto the gathered deck tips 20 degrees) stray
+	# least from where its rest was reckoned, its long side's arm being the longer
+	z = z.normalized()
+	return Basis(up.cross(z).normalized(), up, z)
 
 
 ## CARDS IN A WASH REST ON ONE ANOTHER (the user: they rest "upon each other with a gentle tilt").
@@ -3762,7 +3950,7 @@ func _wash_jump(ts: float) -> Dictionary:
 
 ## How spread out card [param i] is at [param v]: 0 a deck slot's thickness, flush in the deck, 1 a
 ## card's own on the cloth - thinned as the deck is flattened ([constant WASH_FLATTEN]), thickened
-## as the pile is squared.
+## as it lands in the pile.
 func _wash_spread_at(plan: Dictionary, i: int, v: float) -> float:
 	var t_out := float((plan["out"] as PackedFloat32Array)[i])
 	var t_in := float((plan["in"] as PackedFloat32Array)[i])
@@ -4440,14 +4628,17 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 		if not airborne.has(c):
 			airborne[c] = []
 		(airborne[c] as Array).append(f)
-	# EVERY CARD IS ITS OWN THICKNESS from the moment the palm comes down on the deck until the pile
-	# is squared ([method _wash_spread_at]): the deck flattens as it is spread and the pile builds
-	# flat, so nothing slides off, or up onto, a deck's height
+	# EVERY CARD IS ITS OWN THICKNESS from the moment the palm comes down on the deck until it is in
+	# the pile for good ([method _wash_spread_at]): the deck flattens as it is spread, and the pile
+	# BUILDS TO THE DECK'S HEIGHT as it is gathered - each card thickened as it lands - or as it is
+	# squared at the latest. Thickened all at once as the pile was squared, the gathered pile stood a
+	# quarter of the deck's height and then "suddenly just grows by 2x or 3x" (the user, 2026-10-08).
 	var thin_at := PackedFloat32Array()
 	var thick_at := PackedFloat32Array()
 	for i in n:
 		thin_at.append(0.0)
-		thick_at.append(INF if taken[i] == 1 else dur - square)
+		var piled := t_in[i] if t_in[i] > 0.0 and t_in[i] < INF else dur - square
+		thick_at.append(INF if taken[i] == 1 else minf(piled, dur - square))
 	return {"tracks": tracks, "out": thin_at, "in": thick_at, "order": order, "mix": Vector2(out_end, mix_end),
 		"gather": gather_t0, "dur": dur, "hands": hands["log"], "flights": flights, "airborne": airborne,
 		"jumper": jumper, "jumper_flight": jumper_flight}

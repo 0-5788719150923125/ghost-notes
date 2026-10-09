@@ -1,23 +1,34 @@
 extends RefCounted
 class_name Drifts
 
-## Drifts - what the wind carries: petals, blossoms, leaves, seeds, keys and feathers, falling from a
-## tree overhead or blowing through the scene, settling on the table and lifted off it again by a gust
-## (the user, 2026-10-08: "petals could fall from that tree ... either blowing through the scene, or
-## settling on the table, or getting carried-off from the table again after another gust"). The air's
-## `drift` ([Effects]): its registry, made safe there, built and posed here.
+## Drifts - what the wind carries: petals, leaves, seeds, keys and feathers, falling from a tree
+## overhead or blowing through the scene, settling on the table and lifted off it again by a gust (the
+## user, 2026-10-08: "petals could fall from that tree ... either blowing through the scene, or settling
+## on the table, or getting carried-off from the table again after another gust"). The air's `drift`
+## ([Effects]): its registry, made safe there, built and posed here.
+##
+## RARE, AND SHAKEN LOOSE BY THE WIND (the user, the same day, of a tree that shed all the time: "falling
+## petals should be a rare event - because it takes days or even weeks for all of the foliage to fall"):
+## now and then one comes loose in the breeze (`every`, seconds between, about), and a gust shakes a few
+## more loose as it blows (`shake`). Never whole flowers - "whole flowers rarely, if ever, fall from
+## trees" - only their petals.
 ##
 ## EVERYTHING IS A FUNCTION OF SHOW TIME. Each piece LIVES a planned life ([method _live]): it falls -
-## drifting with the air ([method Winds.carried], in closed form), swaying side to side and rocking as a
-## falling leaf does, turning and tumbling - lands flat on the cloth, lies there shivering in the breeze,
-## and each gust strong enough to beat its grip skids it across the cloth or carries it off over the
-## edge. Lives are planned on dice of their own (a slot and a number), as far as they have been asked
-## and no further, so any time, asked in any order, poses every piece the same way.
+## drifting with the air ([method Winds.carried], in closed form), in one of its look's WAYS: flat,
+## barely rocking; fluttering side to side as a falling leaf does; tumbling over and over, gliding off to
+## one side; or twirling down round a small circle, tipped in to it - and a gust sets any of them
+## turning over, harder the harder it blows ([method Winds.gust_run]), so nothing sails flat on the wind
+## like a thrown disc (the user: "they fly like frisbies. But petals should twirl and spin ... in some
+## cases. Not all"). It lands flat on the cloth, lies there shivering in the breeze, and each gust
+## strong enough to beat its grip skids it across the cloth or carries it off over the edge, turning
+## over as it goes. Lives are planned on dice of their own, as far as they have been asked and no
+## further, so any time, asked in any order, poses every piece the same way.
 ##
 ## NEVER THROUGH A THING: a fall whose path would pass through the table's edge or anything standing on
-## it is thrown again from elsewhere; a skid stops short of what it runs into. A piece lies on the cloth,
-## not on the cards: a card laid later lies over it, and one that lands where a card already lies slips
-## under its edge - the table does not say where its cards are a piece could rest on.
+## it is thrown again from elsewhere; a skid stops short of what it runs into. NOR THROUGH THE CARDS: the
+## table says where the deck and every card lying on the cloth are at any time (its `cover`); a piece
+## never comes down where one lies (one once fell through the deck and lay under it), never skids into
+## one, and one laid over it later pins it there - a gust cannot reach it.
 ##
 ## A piece is real geometry - a cupped quad cut to its outline in the shader (shaders/air_drift.gdshader),
 ## lit by every light on the table, glowing through where the sun is behind it, casting its small
@@ -27,35 +38,45 @@ const SHADER := preload("res://shaders/air_drift.gdshader")
 
 ## WHAT CAN DRIFT: its outline (the shader's `shape`), its length (mm) and the range an agent may set it
 ## in, its width against its length, how fast it falls through still air (m/s), how closely it follows
-## the air (1 a petal, more a seed's tuft, which a breath lifts), how far it sways and rocks as it falls
-## (meters, radians) and how often (a second), how fast it tumbles end over end and turns about the
-## upright (radians a second), how deep it is cupped, how much light comes through it, its colors when
-## none are given, and how readily it settles where it lands.
+## the air (1 a petal, more a seed's tuft, which a breath lifts), how far it sways (meters) and how often
+## (a second), how far it rocks as it flutters (radians), how fast it turns over when it tumbles, turns
+## about the upright, and goes round when it twirls (radians a second), how far a gust turns it over
+## (radians a meter of gust), the share of pieces falling each WAY, how deep it is cupped, how much light
+## comes through it, its colors when none are given, and how readily it settles where it lands.
 const LOOKS := {
-	"petals": {"about": "blossom petals - cherry, apple, almond, plum - small and pale, fluttering and tumbling down", "shape": 0,
+	"petals": {"about": "blossom petals - cherry, apple, almond, plum - small and pale, fluttering, tumbling or twirling down", "shape": 0,
 		"size": 13.0, "sizes": Vector2(6.0, 25.0), "aspect": 0.78, "fall": 0.45, "carry": 1.0, "sway": 0.05, "beat": 0.9,
-		"rock": 0.6, "tumble": 1.6, "spin": 1.2, "curl": 0.35, "through": 0.55, "colors": ["#f7d9e2", "#fbe9ee", "#f1c4d2"], "settle": 0.7},
-	"rose petals": {"about": "rose or peony petals - broad, curled, deep-colored, heavier, falling faster", "shape": 1,
+		"rock": 0.6, "tumble": 7.0, "spin": 0.5, "twirl": 4.0, "whirl": 5.0,
+		"ways": {"flat": 0.2, "flutter": 0.35, "tumble": 0.25, "twirl": 0.2},
+		"curl": 0.35, "through": 0.55, "colors": ["#f7d9e2", "#fbe9ee", "#f1c4d2"], "settle": 0.7},
+	"rose petals": {"about": "rose, peony or camellia petals - broad, curled, deep-colored, heavier, falling faster, often twirling", "shape": 1,
 		"size": 35.0, "sizes": Vector2(20.0, 55.0), "aspect": 0.95, "fall": 0.7, "carry": 0.75, "sway": 0.06, "beat": 0.7,
-		"rock": 0.45, "tumble": 0.7, "spin": 0.8, "curl": 0.6, "through": 0.4, "colors": ["#9e1530", "#b5203d", "#7d0f25"], "settle": 0.85},
-	"blossoms": {"about": "whole small flowers - jasmine, frangipani, orange blossom - dropping and turning slowly as they fall", "shape": 2,
-		"size": 26.0, "sizes": Vector2(12.0, 60.0), "aspect": 1.0, "fall": 0.85, "carry": 0.6, "sway": 0.03, "beat": 0.6,
-		"rock": 0.25, "tumble": 0.2, "spin": 0.9, "curl": 0.3, "through": 0.35, "colors": ["#fbf6e8", "#fff1d6"], "settle": 0.85},
-	"leaves": {"about": "autumn leaves - gold, rust, brown, curled - rocking down side to side as a falling leaf does", "shape": 3,
+		"rock": 0.45, "tumble": 5.0, "spin": 0.4, "twirl": 3.0, "whirl": 3.5,
+		"ways": {"flat": 0.15, "flutter": 0.25, "tumble": 0.25, "twirl": 0.35},
+		"curl": 0.6, "through": 0.4, "colors": ["#9e1530", "#b5203d", "#7d0f25"], "settle": 0.85},
+	"leaves": {"about": "autumn leaves - gold, rust, brown, curled - rocking down side to side as a falling leaf does", "shape": 2,
 		"size": 60.0, "sizes": Vector2(30.0, 120.0), "aspect": 0.6, "fall": 0.95, "carry": 0.85, "sway": 0.12, "beat": 0.55,
-		"rock": 1.0, "tumble": 0.4, "spin": 0.7, "curl": 0.45, "through": 0.45, "colors": ["#c8862b", "#9b3d1c", "#d9a441", "#7a5226"], "settle": 0.8},
-	"green leaves": {"about": "green leaves torn off by the wind - a summer storm, a tree being shaken", "shape": 3,
+		"rock": 1.0, "tumble": 5.0, "spin": 0.4, "twirl": 2.5, "whirl": 3.0,
+		"ways": {"flat": 0.1, "flutter": 0.55, "tumble": 0.2, "twirl": 0.15},
+		"curl": 0.45, "through": 0.45, "colors": ["#c8862b", "#9b3d1c", "#d9a441", "#7a5226"], "settle": 0.8},
+	"green leaves": {"about": "green leaves torn off by the wind - a summer storm, a tree being shaken", "shape": 2,
 		"size": 50.0, "sizes": Vector2(25.0, 110.0), "aspect": 0.55, "fall": 1.0, "carry": 0.85, "sway": 0.1, "beat": 0.6,
-		"rock": 0.9, "tumble": 0.6, "spin": 0.8, "curl": 0.25, "through": 0.6, "colors": ["#5d7f2e", "#7a9a3a", "#4a6b25"], "settle": 0.75},
-	"seeds": {"about": "dandelion seeds or thistledown - white tufts floating slowly, lifted again by any breath", "shape": 4,
+		"rock": 0.9, "tumble": 6.0, "spin": 0.5, "twirl": 3.0, "whirl": 3.5,
+		"ways": {"flat": 0.1, "flutter": 0.4, "tumble": 0.35, "twirl": 0.15},
+		"curl": 0.25, "through": 0.6, "colors": ["#5d7f2e", "#7a9a3a", "#4a6b25"], "settle": 0.75},
+	"seeds": {"about": "dandelion seeds or thistledown - white tufts floating slowly, lifted again by any breath", "shape": 3,
 		"size": 14.0, "sizes": Vector2(8.0, 25.0), "aspect": 1.0, "fall": 0.14, "carry": 1.25, "sway": 0.03, "beat": 0.35,
-		"rock": 0.1, "tumble": 0.0, "spin": 0.3, "curl": 0.0, "through": 0.7, "colors": ["#f6f3ec"], "settle": 0.35},
-	"spinners": {"about": "maple or sycamore keys - spinning down like little rotors", "shape": 5,
+		"rock": 0.1, "tumble": 0.0, "spin": 0.3, "twirl": 0.0, "whirl": 0.0, "ways": {"flat": 1.0},
+		"curl": 0.0, "through": 0.7, "colors": ["#f6f3ec"], "settle": 0.35},
+	"spinners": {"about": "maple or sycamore keys - spinning down like little rotors", "shape": 4,
 		"size": 35.0, "sizes": Vector2(22.0, 50.0), "aspect": 0.38, "fall": 0.9, "carry": 0.55, "sway": 0.0, "beat": 0.5,
-		"rock": 0.0, "tumble": 0.0, "spin": 14.0, "curl": 0.1, "through": 0.5, "colors": ["#b58b4c", "#9c7a3f", "#c9a066"], "settle": 0.9},
-	"feathers": {"about": "small downy feathers - drifting, rocking slowly, lifted by a breath", "shape": 6,
+		"rock": 0.0, "tumble": 0.0, "spin": 14.0, "twirl": 0.0, "whirl": 0.0, "ways": {"rotor": 1.0},
+		"curl": 0.1, "through": 0.5, "colors": ["#b58b4c", "#9c7a3f", "#c9a066"], "settle": 0.9},
+	"feathers": {"about": "small downy feathers - drifting, rocking slowly, lifted by a breath", "shape": 5,
 		"size": 40.0, "sizes": Vector2(15.0, 90.0), "aspect": 0.45, "fall": 0.3, "carry": 1.0, "sway": 0.07, "beat": 0.45,
-		"rock": 0.7, "tumble": 0.25, "spin": 0.5, "curl": 0.25, "through": 0.5, "colors": ["#efe9e0", "#d9d2c6"], "settle": 0.6},
+		"rock": 0.7, "tumble": 3.0, "spin": 0.4, "twirl": 2.0, "whirl": 2.0,
+		"ways": {"flat": 0.3, "flutter": 0.55, "twirl": 0.15},
+		"curl": 0.25, "through": 0.5, "colors": ["#efe9e0", "#d9d2c6"], "settle": 0.6},
 }
 ## WHERE THEY COME FROM.
 const FROMS := {
@@ -63,10 +84,14 @@ const FROMS := {
 	"wind": "blown in from the side the wind comes from, across the shot, some landing on the table on the way",
 }
 
-## The most pieces in the air at once an agent may ask for, of one drift; the most lying on the table at
-## the start; the most drawn at once (in the air and lying), and drifts in one air.
-const MAX_AIR := 40
+## HOW OFTEN: the seconds between one piece coming loose in the breeze and the next (about - the
+## default, and the range an agent may set), and the most a gust at its strongest shakes loose.
+const EVERY := Vector3(60.0, 6.0, 600.0)
+const SHAKE := Vector2(1.0, 6.0)
+## The most lying on the table at the start, and at once; the most drawn at once (in the air and lying),
+## and drifts in one air.
 const MAX_LYING := 60
+const LYING_AT_ONCE := 40
 const MAX_SHOWN := 160
 const MAX_DRIFTS := 2
 ## How far past the time asked lives are planned (seconds: a life is planned whole when it starts), and
@@ -83,6 +108,9 @@ const REST_UP := 0.0018
 const STACK := 0.00015
 ## The least and the most a gust must blow (m/s) to lift a piece at grip 0 and 1 (and at 1, none does).
 const LIFT := Vector2(0.12, 1.4)
+## How high a lying piece is lifted by a gust before the deck no longer stands in its way (meters: the
+## deck's height and a little).
+const DECK_UP := 0.04
 ## The share of a fall it spends turning flat before it lands (seconds).
 const LANDING := 0.45
 ## A lift: how high it hops (meters, at most), and how quickly.
@@ -97,7 +125,8 @@ const BEYOND := 0.3
 ## THE VOCABULARY, as an agent reads it: [method Effects.describe]'s lines for a drift.
 static func describe() -> PackedStringArray:
 	var lines := PackedStringArray()
-	lines.append("DRIFT: {\"name\", \"kind\": \"drift\", \"look\", \"from\", \"count\" 1-%d (how many are in the air at once), \"colors\" [\"#rrggbb\", ...] (each piece takes one), \"size\" (millimeters long, within the look's range), \"settle\" 0-1 (how many of those that land on the table stay there; the rest skid off with the next breath), \"grip\" 0-1 (how hard a gust must blow to lift one lying on the cloth and carry it off: 0 any breath, 1 none ever), \"lying\" 0-%d (how many already lie on the table when the reading begins)} - what the wind carries: they fall, sway and tumble, land flat on the cloth and lie there trembling in the breeze, and a gust skids them across it or carries them off over the edge. The light's `wind` blows them (still air when it has none). Looks, each with its size and the sizes it can be:" % [MAX_AIR, MAX_LYING])
+	lines.append("DRIFT: {\"name\", \"kind\": \"drift\", \"look\", \"from\", \"every\" %d-%d (seconds, about, between one piece coming loose in the breeze and the next; %d when left out), \"shake\" 0-%d (how many a gust at its strongest shakes loose; %d when left out), \"colors\" [\"#rrggbb\", ...] (each piece takes one), \"size\" (millimeters long, within the look's range), \"settle\" 0-1 (how many of those that land on the table stay there; the rest skid off with the next breath), \"grip\" 0-1 (how hard a gust must blow to lift one lying on the cloth and carry it off: 0 any breath, 1 none ever), \"lying\" 0-%d (how many already lie on the table when the reading begins)} - what the wind carries: now and then one comes loose and falls - flat, fluttering, tumbling over or twirling round - lands on the cloth (never on the deck or a card) and lies there trembling in the breeze, and a gust shakes a few more loose, sets those in the air turning over, and skids what lies across the cloth or carries it off over the edge. The light's `wind` blows them (still air when it has none). Looks, each with its size and the sizes it can be:" % [
+		int(EVERY.y), int(EVERY.z), int(EVERY.x), int(SHAKE.y), int(SHAKE.x), MAX_LYING])
 	for k in LOOKS:
 		var d: Dictionary = LOOKS[k]
 		lines.append("- %s: %s (%s mm, %s to %s)" % [k, String(d["about"]), Effects._mm(float(d["size"])), Effects._mm((d["sizes"] as Vector2).x),
@@ -105,7 +134,7 @@ static func describe() -> PackedStringArray:
 	lines.append("  from:")
 	for k in FROMS:
 		lines.append("  - %s: %s" % [k, String(FROMS[k])])
-	lines.append("  A few pieces read as a moment of the world - a tree in blossom shedding, a gust bringing leaves; dozens at once read as a storm. A lying piece never covers a card for long: the cards are laid over them.")
+	lines.append("  A tree sheds over days and weeks: a piece every minute or so, and one or two with a gust, reads as a tree in blossom on a breezy day; what lies on the cloth already (`lying`) says how long it has been shedding. A piece every few seconds, and a gust shaking loose six, is a storm stripping the tree. Petals fall, never whole flowers. The cards are laid over what lies on the cloth.")
 	return lines
 
 
@@ -117,7 +146,8 @@ static func sanitize(d: Dictionary) -> Dictionary:
 	var base: Dictionary = LOOKS[look]
 	var from := String(d.get("from", "above")).strip_edges().to_lower() if d.get("from") is String else "above"
 	return {"kind": "drift", "name": Props._text(d.get("name", look), 80), "look": look, "from": from if FROMS.has(from) else "above",
-		"count": int(Props._num(d.get("count"), 8.0, 1.0, float(MAX_AIR))),
+		"every": Props._num(d.get("every"), EVERY.x, EVERY.y, EVERY.z),
+		"shake": Props._num(d.get("shake"), SHAKE.x, 0.0, SHAKE.y),
 		"colors": Effects._colors(d.get("colors", d.get("color")), base["colors"]),
 		"size": Props._num(d.get("size"), float(base["size"]), (base["sizes"] as Vector2).x, (base["sizes"] as Vector2).y),
 		"settle": Props._num(d.get("settle"), float(base["settle"]), 0.0, 1.0),
@@ -158,21 +188,17 @@ static func build(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D) ->
 	var wind: Dictionary = stage.get("wind", {}) if stage.get("wind") is Dictionary else {}
 	if wind.is_empty():
 		wind = Winds.plan({}, salt)
-	var n_air := int(fx["count"])
 	var pop := {"fx": fx, "look": look, "mm": mm, "node": mi, "mat": mat, "salt": salt, "wind": wind, "stage": stage,
 		"table": table, "things": occ.slice(1), "rest_y": table.end.y + REST_UP,
-		"on_top": stage.get("on_top", Callable()), "floor": Effects._air_floor(stage),
+		"on_top": stage.get("on_top", Callable()), "cover": stage.get("cover", Callable()), "floor": Effects._air_floor(stage),
 		"size": float(fx["size"]) * 0.001, "lift": LIFT.x + (LIFT.y - LIFT.x) * float(fx["grip"]),
-		# a slot falls nearly all the time: as many as are asked for in the air, and a few more for the gaps
-		"slots": ceili(float(n_air) * 1.3), "next": [], "made": [], "lives": [], "bins": {}, "planned": -INF, "ongoing": [],
-		"resting": [], "cap": maxi(1, int(float(MAX_SHOWN - n_air * 2) / ceilf(float(n_air) * 1.3)))}
-	for i in int(pop["slots"]):
-		# THE SLOTS START STAGGERED, some already part way down when the show begins
-		var r := RandomNumberGenerator.new()
-		r.seed = hash([salt, i, "drift-start"])
-		(pop["next"] as Array).append(-r.randf_range(0.0, 1.0) * _fall_time(pop))
-		(pop["made"] as Array).append(0)
-		(pop["resting"] as Array).append([])
+		"lives": [], "bins": {}, "planned": -INF, "ongoing": [], "resting": [], "made": 0,
+		# the breeze's next piece and its number, the next gust to shake some loose, and those shaken loose
+		# that start past the plan
+		"calm_t": 0.0, "calm_n": 0, "gust_i": 0, "pending": []}
+	# THE FIRST may already be on its way down when the show begins
+	var r := _dice(pop, 0, -1, "calm")
+	pop["calm_t"] = -r.randf() * _fall_time(pop) + r.randf() * float(fx["every"]) * 0.5
 	# WHAT ALREADY LIES on the table when the reading begins
 	for j in int(fx["lying"]):
 		var lv := _lying(pop, j)
@@ -217,26 +243,40 @@ static func tick(pop: Dictionary, t: float) -> void:
 
 # --- the lives ---------------------------------------------------------------------------------------
 
-## Every slot's lives planned until [param until], each filed in the bins of the times it spans.
+## Every life that starts before [param until] planned, in the order they start, each filed in the bins
+## of the times it spans: now and then one comes loose in the breeze, and each gust shakes a few loose -
+## more the harder it blows - as it blows hardest.
 static func _plan_to(pop: Dictionary, until: float) -> void:
 	if until <= float(pop["planned"]):
 		return
-	var next: Array = pop["next"]
-	var made: Array = pop["made"]
-	var guard := 0
-	while guard < 100000:
-		guard += 1
-		# the slot whose next piece starts first: lives are made in the order they start
-		var k := -1
-		for i in next.size():
-			if float(next[i]) < until and (k < 0 or float(next[i]) < float(next[k])):
-				k = i
-		if k < 0:
-			break
-		var lv := _live(pop, k, int(made[k]), float(next[k]))
-		made[k] = int(made[k]) + 1
-		next[k] = float(lv["air_end"]) + float(lv["gap"])
-		_add(pop, lv)
+	var fx: Dictionary = pop["fx"]
+	var pending: Array = pop["pending"]
+	while float(pop["calm_t"]) < until:
+		pending.append([float(pop["calm_t"]), 0, int(pop["calm_n"])])
+		var r := _dice(pop, 0, int(pop["calm_n"]), "calm")
+		# how long till the next: as a thing that comes loose at random does - mostly soon, now and then long
+		pop["calm_t"] = float(pop["calm_t"]) + float(fx["every"]) * clampf(-log(1.0 - r.randf() * 0.98), 0.1, 4.0)
+		pop["calm_n"] = int(pop["calm_n"]) + 1
+	var wind: Dictionary = pop["wind"]
+	var starts: PackedFloat32Array = wind["starts"]
+	while int(pop["gust_i"]) < starts.size() and starts[int(pop["gust_i"])] < until:
+		var g := int(pop["gust_i"])
+		var r := _dice(pop, 1, g, "shake")
+		var hard := clampf(float((wind["peaks"] as PackedFloat32Array)[g]) / Winds.FULL, 0.0, 1.0)
+		var span := Winds.gust_span(wind, g)
+		for m in floori(float(fx["shake"]) * hard * r.randf_range(0.4, 1.3) + r.randf()):
+			pending.append([span.z + r.randf_range(-0.5, 0.5) * (span.z - span.x) + r.randf() * span.y * 0.3, 1 + g, m])
+		pop["gust_i"] = g + 1
+	pending.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+	var later: Array = []
+	for e in pending:
+		if float(e[0]) >= until:
+			later.append(e)
+			continue
+		var lv := _live(pop, int(e[1]), int(e[2]), float(e[0]))
+		if not lv.is_empty():
+			_add(pop, lv)
+	pop["pending"] = later
 	# EVERY LIFE STILL GOING is filed into the bins it spans as far as the plan now runs
 	var lives: Array = pop["lives"]
 	var bins: Dictionary = pop["bins"]
@@ -283,43 +323,88 @@ static func _blocked(pop: Dictionary, p: Vector3) -> bool:
 	return false
 
 
-## THE RNG of life [param j] of slot [param k]: dice of its own.
+## THE RNG of piece [param j] of [param k]: dice of its own.
 static func _dice(pop: Dictionary, k: int, j: int, what: String) -> RandomNumberGenerator:
 	var r := RandomNumberGenerator.new()
 	r.seed = hash([int(pop["salt"]), k, j, what])
 	return r
 
 
-## A PIECE'S OWN WAYS: its size, its color, how it falls, sways, rocks, turns and tumbles.
+## A PIECE'S OWN WAYS: its size, its color, how it falls - its WAY ([constant LOOKS]' `ways`) - and how
+## it sways, rocks, turns, tumbles, twirls and is turned over by a gust.
 static func _body(pop: Dictionary, r: RandomNumberGenerator) -> Dictionary:
 	var look: Dictionary = pop["look"]
 	var fx: Dictionary = pop["fx"]
 	var colors: Array = fx["colors"]
 	var size := float(pop["size"]) * r.randf_range(0.8, 1.2)
-	var sway_ax := Vector2.from_angle(r.randf() * TAU)
-	var tumble_ax := Vector3(r.randf_range(-1.0, 1.0), 0.0, r.randf_range(-1.0, 1.0)).normalized()
-	return {"size": size, "color": Effects._col(String(colors[r.randi_range(0, colors.size() - 1)])),
-		"fall": float(look["fall"]) * r.randf_range(0.8, 1.2), "c": float(look["carry"]) * r.randf_range(0.85, 1.1),
-		"sway": float(look["sway"]) * r.randf_range(0.6, 1.3), "beat": float(look["beat"]) * r.randf_range(0.8, 1.25),
-		"phase": r.randf() * TAU, "sway_ax": sway_ax, "rock": float(look["rock"]) * r.randf_range(0.7, 1.2),
-		"tumble": float(look["tumble"]) * r.randf_range(0.5, 1.4) * (1.0 if r.randf() < 0.5 else -1.0), "tumble_ax": tumble_ax,
+	var way := _way(look, r.randf())
+	var sway := float(look["sway"]) * r.randf_range(0.6, 1.3)
+	var rock := float(look["rock"]) * r.randf_range(0.7, 1.2)
+	var fall := float(look["fall"]) * r.randf_range(0.8, 1.2)
+	var tumble := 0.0
+	var glide := Vector2.ZERO
+	match way:
+		"flat":
+			# all but level, only a little sway
+			rock *= 0.2
+			sway *= 0.5
+		"tumble":
+			# over and over, slower down, gliding off to one side as a tumbling card does
+			tumble = float(look["tumble"]) * r.randf_range(0.7, 1.3)
+			rock *= 0.25
+			fall *= 0.8
+			glide = Vector2.from_angle(r.randf() * TAU) * r.randf_range(0.03, 0.1)
+		"twirl":
+			rock = 0.0
+	# turned over about its length or across it, a little off either
+	var over := Vector3(r.randf_range(-0.3, 0.3), 0.0, 1.0) if r.randf() < 0.5 else Vector3(1.0, 0.0, r.randf_range(-0.3, 0.3))
+	var sign := 1.0 if r.randf() < 0.5 else -1.0
+	return {"size": size, "color": Effects._col(String(colors[r.randi_range(0, colors.size() - 1)])), "way": way,
+		"fall": fall, "c": float(look["carry"]) * r.randf_range(0.85, 1.1),
+		"sway": sway, "beat": float(look["beat"]) * r.randf_range(0.8, 1.25),
+		"phase": r.randf() * TAU, "sway_ax": Vector2.from_angle(r.randf() * TAU), "rock": rock,
+		"tumble": tumble * sign, "over": over.normalized(), "glide": glide,
+		"whirl": float(look["whirl"]) * r.randf_range(0.6, 1.4) * sign,
+		"twirl": float(look["twirl"]) * r.randf_range(0.7, 1.3) * (1.0 if r.randf() < 0.5 else -1.0), "bank": r.randf_range(0.45, 0.85),
 		"spin": float(look["spin"]) * r.randf_range(0.6, 1.4) * (1.0 if r.randf() < 0.5 else -1.0), "yaw": r.randf() * TAU,
 		"curl": float(look["curl"]) * r.randf_range(0.6, 1.3), "seed": r.randf(), "aspect": float(look["aspect"]) * r.randf_range(0.85, 1.15),
 		"flip": r.randf() < 0.35, "rest_yaw": r.randf() * TAU, "shiver_ax": Vector3(r.randf_range(-1.0, 1.0), 0.0, r.randf_range(-1.0, 1.0)).normalized(),
 		"lift": float(pop["lift"]) * r.randf_range(0.8, 1.25)}
 
 
-## LIFE [param j] OF SLOT [param k], its fall starting at [param t0]: where it starts so that it comes
-## down where it was meant to (over the table or past it, or across the shot from the wind's side), and
-## all it does after - landing, lying, skidding, carried off - planned to its end.
+## The way of a piece of [param look] whose die is [param u]: one of its `ways`, as often as its share.
+static func _way(look: Dictionary, u: float) -> String:
+	var ways: Dictionary = look["ways"]
+	var total := 0.0
+	for w in ways:
+		total += float(ways[w])
+	var at := u * total
+	for w in ways:
+		at -= float(ways[w])
+		if at < 0.0:
+			return String(w)
+	return String(ways.keys()[ways.size() - 1])
+
+
+## What lies on the cloth at [param p] at [param t] - the deck or a card, its top's height - or -INF
+## where nothing does ([method Effects.build]'s `cover`, the table's; none, nothing anywhere).
+static func _cover(pop: Dictionary, p: Vector3, t: float) -> float:
+	var f: Callable = pop["cover"]
+	return float(f.call(Vector2(p.x, p.z), t, float(pop["size"]) * 0.5)) if f.is_valid() else -INF
+
+
+## PIECE [param j] OF [param k] (0 the breeze's, 1 + a gust's own), its fall starting at [param t0]: where
+## it starts so that it comes down where it was meant to (over the table or past it, or across the shot
+## from the wind's side), and all it does after - landing, lying, skidding, carried off - planned to its
+## end. `{}` when no fall clear of everything on the table is found.
 static func _live(pop: Dictionary, k: int, j: int, t0: float) -> Dictionary:
 	var r := _dice(pop, k, j, "drift")
 	var lv := _body(pop, r)
 	lv["t0"] = t0
-	lv["slot"] = k
 	var wind: Dictionary = pop["wind"]
 	var fx: Dictionary = pop["fx"]
-	var rest_y := float(pop["rest_y"]) + STACK * float(j % 12)
+	var rest_y := float(pop["rest_y"]) + STACK * float(int(pop["made"]) % 12)
+	pop["made"] = int(pop["made"]) + 1
 	var blown := String(fx["from"]) == "wind" and float(wind["breeze"]) > 0.05
 	var stage: Dictionary = pop["stage"]
 	if blown:
@@ -358,35 +443,34 @@ static func _live(pop: Dictionary, k: int, j: int, t0: float) -> Dictionary:
 		lv["t1"] = land
 		if land < INF:
 			lv["land"] = _fall_pos(pop, lv, land, false)
-		var ok := not _hits(pop, lv, rest_y)
-		if ok or attempt == THROWS - 1:
+		var ok := not _hits(pop, lv, rest_y) and not _on_cards(pop, lv, rest_y)
+		if ok:
 			break
+		if attempt == THROWS - 1:
+			return {}
 	# AFTER IT LANDS
 	var segs: Array = []
 	if float(lv["t1"]) < INF:
 		var p: Vector3 = lv["land"]
 		p.y = rest_y
-		# a slot keeps only so many lying at once: past that, it does not settle
-		var resting: Array = (pop["resting"] as Array)[k]
+		# only so many lie at once: past that, it does not settle
+		var resting: Array = pop["resting"]
 		var lying := 0
 		for e in resting:
 			lying += 1 if float(e) > float(lv["t1"]) else 0
-		var settles := r.randf() < float(fx["settle"]) and lying < int(pop["cap"])
+		var settles := r.randf() < float(fx["settle"]) and lying < LYING_AT_ONCE
 		lv["settled"] = settles
 		var lift := float(lv["lift"]) if settles else LIFT.x * 0.5
 		if float(fx["grip"]) >= 0.999 and settles:
 			lift = INF
 		segs = _after(pop, lv, p, float(lv["t1"]), lift, r)
-		lv["air_end"] = float(lv["t1"])
 		if settles:
 			resting.append(float(segs[segs.size() - 1]["end"]) if not segs.is_empty() else Lights.HORIZON)
 	else:
-		lv["air_end"] = _gone_at(pop, lv)
-		lv["end"] = lv["air_end"]
+		lv["end"] = _gone_at(pop, lv)
 	lv["segs"] = segs
 	if not segs.is_empty():
 		lv["end"] = float((segs[segs.size() - 1] as Dictionary)["end"])
-	lv["gap"] = r.randf_range(0.0, 0.35) * _fall_time(pop)
 	return lv
 
 
@@ -399,16 +483,14 @@ static func _lying(pop: Dictionary, j: int) -> Dictionary:
 	for i in 24:
 		var p := _target(pop, r, false)
 		p.y = rest_y
-		if _on_top(pop, Vector2(p.x, p.z)) and not _blocked(pop, p + Vector3(0.0, 0.002, 0.0)):
+		if _on_top(pop, Vector2(p.x, p.z)) and not _blocked(pop, p + Vector3(0.0, 0.002, 0.0)) and _cover(pop, p, 0.0) == -INF:
 			lv["t0"] = -Lights.HORIZON
 			lv["t1"] = -Lights.HORIZON
 			lv["p0"] = p
 			lv["land"] = p
-			lv["slot"] = -1
 			var lift := float(lv["lift"]) if float((pop["fx"] as Dictionary)["grip"]) < 0.999 else INF
 			lv["segs"] = _after(pop, lv, p, -Lights.HORIZON, lift, r)
 			lv["end"] = float((lv["segs"][(lv["segs"] as Array).size() - 1] as Dictionary)["end"])
-			lv["air_end"] = -Lights.HORIZON
 			return lv
 	return {}
 
@@ -439,15 +521,23 @@ static func _xz3(v: Vector2) -> Vector3:
 	return Vector3(v.x, 0.0, v.y)
 
 
-## WHERE A FALLING PIECE IS at [param t]: carried by the air from where it started, swaying, sinking at
-## its own pace with a little lift at the ends of each sway; [param lands] eases the lift out before it
-## lands, so it comes down on the cloth at its landing time exactly.
+## WHERE A FALLING PIECE IS at [param t]: carried by the air from where it started, swaying - or going
+## round its small circle as it twirls, or gliding off to one side as it tumbles - sinking at its own
+## pace with a little lift at the ends of each sway; [param lands] eases the lift out before it lands,
+## so it comes down on the cloth at its landing time exactly.
 static func _fall_pos(pop: Dictionary, lv: Dictionary, t: float, lands := true) -> Vector3:
 	var dt := t - float(lv["t0"])
 	var w := TAU * float(lv["beat"]) * dt + float(lv["phase"])
-	var sway := (lv["sway_ax"] as Vector2) * float(lv["sway"]) * (sin(w) - sin(float(lv["phase"])))
-	var xz := Vector2((lv["p0"] as Vector3).x, (lv["p0"] as Vector3).z) + Winds.carried_between(pop["wind"], float(lv["t0"]), t) * float(lv["c"]) + sway
-	var bob := float(lv["sway"]) * 0.25 * sin(w) * sin(w)
+	var sway: Vector2
+	var bob := 0.0
+	if String(lv["way"]) == "twirl":
+		var a0 := float(lv["phase"])
+		sway = (Vector2.from_angle(a0 + float(lv["twirl"]) * dt) - Vector2.from_angle(a0)) * float(lv["sway"]) * 0.6
+	else:
+		sway = (lv["sway_ax"] as Vector2) * float(lv["sway"]) * (sin(w) - sin(float(lv["phase"])))
+		bob = float(lv["sway"]) * 0.25 * sin(w) * sin(w)
+	var xz := Vector2((lv["p0"] as Vector3).x, (lv["p0"] as Vector3).z) + Winds.carried_between(pop["wind"], float(lv["t0"]), t) * float(lv["c"]) \
+		+ sway + (lv["glide"] as Vector2) * dt
 	if lands and float(lv.get("t1", INF)) < INF:
 		bob *= clampf((float(lv["t1"]) - t) / 0.5, 0.0, 1.0)
 	return Vector3(xz.x, (lv["p0"] as Vector3).y - float(lv["fall"]) * dt + bob, xz.y)
@@ -491,6 +581,21 @@ static func _hits(pop: Dictionary, lv: Dictionary, rest_y: float) -> bool:
 	return false
 
 
+## Whether a fall comes down where the deck or a card lies, or through the deck on its way down.
+static func _on_cards(pop: Dictionary, lv: Dictionary, rest_y: float) -> bool:
+	var t1 := float(lv["t1"])
+	if t1 >= INF:
+		return false
+	if _cover(pop, lv["land"], t1) > -INF:
+		return true
+	for up in [0.01, 0.02, DECK_UP]:
+		var t: float = t1 - float(up) / float(lv["fall"])
+		var p := _fall_pos(pop, lv, t)
+		if _cover(pop, p, t) >= p.y:
+			return true
+	return false
+
+
 ## When a piece that came down past the table is gone: under the air's floor, or far off.
 static func _gone_at(pop: Dictionary, lv: Dictionary) -> float:
 	var t := float(lv["t0"]) + ((lv["p0"] as Vector3).y - float(pop["floor"])) / float(lv["fall"])
@@ -499,23 +604,28 @@ static func _gone_at(pop: Dictionary, lv: Dictionary) -> float:
 
 ## ALL IT DOES ONCE IT IS DOWN at [param p] at [param t]: it lies there until a gust blows past
 ## [param lift] (m/s); the gust skids it across the cloth to where the gust alone would take it - short
-## of anything in the way - or, when that is past the table's edge, carries it off. Lying, skidding,
-## carried off: `[{kind, t, end, from, to, gust}]`.
+## of anything in the way, the deck and the cards too - or, when that is past the table's edge, carries
+## it off. A card laid over it pins it: no gust reaches it there. Lying, skidding, carried off:
+## `[{kind, t, end, from, to, gust}]`.
 static func _after(pop: Dictionary, lv: Dictionary, p: Vector3, t: float, lift: float, r: RandomNumberGenerator) -> Array:
 	var wind: Dictionary = pop["wind"]
 	var segs: Array = []
 	var here := p
 	var now := t
+	var after := t
 	var flip := bool(lv["flip"])
 	var yaw := float(lv["rest_yaw"])
 	for n in 64:
-		var g := Winds.next_gust(wind, maxf(now, 0.0), lift) if lift < INF else -1
+		var g := Winds.next_gust(wind, maxf(after, 0.0), lift) if lift < INF else -1
 		if g < 0:
-			segs.append({"kind": "rest", "t": now, "end": Lights.HORIZON, "from": here, "flip": flip, "yaw": yaw})
-			return segs
+			break
 		var span := Winds.gust_span(wind, g)
 		# it lets go as the gust nears its height
 		var go := span.x + (span.z - span.x) * 0.6
+		after = span.x + 1e-3
+		if _cover(pop, here, go) > -INF:
+			# UNDER A CARD: the gust cannot reach it
+			continue
 		segs.append({"kind": "rest", "t": now, "end": go, "from": here, "flip": flip, "yaw": yaw})
 		var stop := span.x + span.y
 		var shift := Winds.gust_carried(wind, g, go, stop) * float(lv["c"])
@@ -527,6 +637,14 @@ static func _after(pop: Dictionary, lv: Dictionary, p: Vector3, t: float, lift: 
 			var h: Variant = box.intersects_segment(here + Vector3(0.0, 0.004, 0.0), to + Vector3(0.0, 0.004, 0.0))
 			if h != null:
 				hit = minf(hit, maxf(((h as Vector3) - here).length() / maxf(shift.length(), 1e-5) - 0.05, 0.0))
+		# and the deck or a card lying on its line
+		for i in range(1, 9):
+			var u := float(i) / 8.0
+			if u >= hit:
+				break
+			if _cover(pop, here.lerp(to, u), lerpf(go, stop, u)) > -INF:
+				hit = maxf(u - 0.125 - 0.05, 0.0)
+				break
 		var turn := r.randf() < 0.4
 		if hit >= 1.0 and not _over_table(pop, Vector2(to.x, to.z)):
 			# CARRIED OFF, over the edge and away
@@ -558,6 +676,7 @@ static func _after(pop: Dictionary, lv: Dictionary, p: Vector3, t: float, lift: 
 		yaw += r.randf_range(-1.2, 1.2)
 		here = to
 		now = stop
+		after = stop
 	segs.append({"kind": "rest", "t": now, "end": Lights.HORIZON, "from": here, "flip": flip, "yaw": yaw})
 	return segs
 
@@ -591,7 +710,7 @@ static func _off_plan(pop: Dictionary, lv: Dictionary, s: Dictionary) -> Variant
 		var p := _off_pos(pop, lv, s, t)
 		if not _over_table(pop, Vector2(p.x, p.z)):
 			break
-		if _blocked(pop, p):
+		if _blocked(pop, p) or (p.y < float(pop["rest_y"]) + DECK_UP and _cover(pop, p, t) >= p.y - 0.003):
 			return Vector3(last.x, (s["from"] as Vector3).y, last.z)
 		last = p
 		t += 0.05
@@ -642,8 +761,14 @@ static func pose(pop: Dictionary, lv: Dictionary, t: float) -> Transform3D:
 						b = Basis(axis.normalized(), PI * along) * flat
 				return Transform3D(b * scale, at)
 			"off":
+				# TURNING OVER as the gust carries it, harder the harder it blows; a key spins as it falls
 				var dt := t - float(d["t"])
-				var b := Basis(Vector3.UP, float(lv["spin"]) * 2.0 * dt) * Basis(lv["tumble_ax"], (absf(float(lv["tumble"])) + 2.0) * dt) * flat
+				var b := flat
+				if String(lv["way"]) == "rotor":
+					b = Basis(Vector3.UP, float(lv["spin"]) * dt) * flat
+				elif float(lv["whirl"]) != 0.0:
+					var roll := float(lv["whirl"]) * Winds.gust_run(pop["wind"], float(d["t"]), t) + signf(float(lv["whirl"])) * 2.0 * dt
+					b = Basis(Vector3.UP, float(lv["spin"]) * dt) * flat * Basis(lv["over"], roll)
 				return Transform3D(b * scale, _off_pos(pop, lv, d, t))
 	return Transform3D(Basis.from_scale(Vector3.ONE * 1e-4), Vector3(0.0, -50.0, 0.0))
 
@@ -653,19 +778,25 @@ static func _lying_basis(flip: bool, yaw: float) -> Basis:
 	return Basis(Vector3.UP, yaw) * (Basis(Vector3.FORWARD, PI) if flip else Basis.IDENTITY)
 
 
-## HOW A FALLING PIECE IS TURNED at [param t]: turning about the upright, rocking with its sway (tipped
-## toward the way it swings, as a falling leaf rocks), and tumbling end over end; a seed's tuft keeps
-## upright, its fluff to the sky.
+## HOW A FALLING PIECE IS TURNED at [param t], by its way: turning slowly about the upright; rocking
+## with its sway (tipped toward the way it swings, as a falling leaf rocks); tumbling over and over; or
+## twirling round, tipped in toward the circle it goes round. Whatever its way, a gust turns it over,
+## harder the harder it blows. A seed's tuft keeps upright, its fluff to the sky; a key spins on its own.
 static func _falling_basis(pop: Dictionary, lv: Dictionary, t: float) -> Basis:
 	var dt := t - float(lv["t0"])
-	var w := TAU * float(lv["beat"]) * dt + float(lv["phase"])
-	var ax2: Vector2 = lv["sway_ax"]
-	var rock_axis := Vector3(-ax2.y, 0.0, ax2.x)
 	var b := Basis(Vector3.UP, float(lv["yaw"]) + float(lv["spin"]) * dt)
-	b = Basis(rock_axis, float(lv["rock"]) * cos(w)) * b
-	if absf(float(lv["tumble"])) > 0.0:
-		b = b * Basis(Vector3.RIGHT, float(lv["tumble"]) * dt)
-	if int((pop["look"] as Dictionary)["shape"]) == 5:
-		# A KEY'S WING tips down from its seed as it spins
-		b = b * Basis(Vector3.RIGHT, 0.35)
+	match String(lv["way"]):
+		"rotor":
+			# A KEY'S WING tips down from its seed as it spins
+			return b * Basis(Vector3.RIGHT, 0.35)
+		"twirl":
+			var a := float(lv["phase"]) + float(lv["twirl"]) * dt
+			b = Basis(Vector3(-sin(a), 0.0, cos(a)), float(lv["bank"])) * b
+		_:
+			var w := TAU * float(lv["beat"]) * dt + float(lv["phase"])
+			var ax2: Vector2 = lv["sway_ax"]
+			b = Basis(Vector3(-ax2.y, 0.0, ax2.x), float(lv["rock"]) * cos(w)) * b
+	var roll := float(lv["tumble"]) * dt + float(lv["whirl"]) * Winds.gust_run(pop["wind"], float(lv["t0"]), t)
+	if roll != 0.0:
+		b = b * Basis(lv["over"], roll)
 	return b

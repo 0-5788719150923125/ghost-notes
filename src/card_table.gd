@@ -502,6 +502,8 @@ static func sanitize_table(spec: Dictionary, look: Dictionary) -> Dictionary:
 		AIR.keys(), MOMENTS.keys())
 	# THE LIGHT: the sky, the sun and what it falls through, the weather, lamps out of the shot
 	out["light"] = Lights.sanitize(spec.get("light"))
+	# THE SOUND: what the place sounds like behind the reader ([Soundscape]) - heard, never seen
+	out["sound"] = Soundscape.sanitize(spec.get("sound"))
 	# THE TITLE'S COLOR, chosen to stand out from this table: kept when it is a color at all
 	var title: Dictionary = spec.get("title", {}) if spec.get("title") is Dictionary else {}
 	out["title"] = {}

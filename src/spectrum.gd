@@ -659,6 +659,12 @@ func _clock_offset() -> float:
 	return 0.0 if bookend_baked else lead_in
 
 
+## THE SHOW TIME OF A STREAM'S FIRST SAMPLE: pushed frame N is heard at this plus N / rate - what a
+## sound made to go with the picture ([Soundscape]) starts its clock at.
+func stream_origin() -> float:
+	return _clock_offset()
+
+
 ## The audio's own length, without the bookend - what the player is actually playing.
 func _content_length() -> float:
 	if _streaming:

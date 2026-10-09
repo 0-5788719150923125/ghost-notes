@@ -27,7 +27,7 @@ const KINDS := {
 	"fog": "a bank or a layer of fog or smoke, rolling slowly through one stretch of the scene, lit by the lights in it",
 	"motes": "a few points of light or dust that wander about one stretch of the scene, now and then leaving it and coming back",
 	"burst": "a burst of particles at a moment of the reading - sparks, glitter, embers, flame, smoke or stars - thrown from where that moment happens",
-	"drift": "what the wind carries - petals, blossoms, leaves, seeds, keys, feathers - falling from overhead or blown across, settling on the table and carried off it again by a gust",
+	"drift": "what the wind carries - petals, leaves, seeds, keys, feathers - now and then falling from overhead or blown across, more in a gust, settling on the table and carried off it again by a gust",
 }
 
 ## What a mote can be: its shape, its size (millimeters - its core; its halo is wider) and the range

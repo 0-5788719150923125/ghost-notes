@@ -593,21 +593,28 @@ or getting carried-off from the table again after another gust"):
   one), snaps what flutters, and carries what drifts. A table that wrote no wind keeps its old light;
   what drifts there falls through a faint breath (`Winds.STILL`).
 - WHAT DRIFTS (`effects` kind `drift`; `src/drifts.gd`, `Drifts`, `shaders/air_drift.gdshader`): petals,
-  rose petals, blossoms, leaves, green leaves, seeds, spinners, feathers - falling from above or blown
-  in from the wind's side; `count` in the air at once, `settle`, `grip` (the gust that lifts one lying),
-  `lying` at the start. Real geometry - a cupped quad cut to its outline, lit, glowing through
-  (`BACKLIGHT`), casting, blurred by the lens. Each piece lives a planned life on dice of its own: falls
-  with the air, swaying and rocking as a falling leaf does, turns flat as it lands, lies trembling in
-  the breeze, and each gust past its grip skids it across the cloth (short of what stands there) or,
-  past the edge, carries it off - lifted, then sinking once clear of the table (and of a cloth hanging
-  over it). A fall that would pass through a thing or the table's side is thrown again from elsewhere.
-  Lives are filed in ten-second bins and planned only as far as asked (about 2.4 ms a show-second for
-  ten in the air; a scrub ten minutes ahead plans those ten minutes once). It lies on the cloth, not on
-  the cards: a card laid later lies over it, one already there has it at its edge - the table does not
-  say where its cards are. `put` reports how many gusts lift what lies; `watch` takes a drift through
-  the strongest gust ahead, and `wind` through its strongest gust.
+  rose petals, leaves, green leaves, seeds, spinners, feathers - falling from above or blown in from the
+  wind's side. RARE (2026-10-08, the user: a tree "coming down all at once"; "it takes days or even weeks
+  for all of the foliage to fall"): `every` seconds between one coming loose in the breeze and the next
+  (60 when left out, 6-600), `shake` how many a gust at its strongest shakes loose (1, 0-6); `settle`,
+  `grip` (the gust that lifts one lying), `lying` at the start. No whole flowers ("blossoms" is gone:
+  "whole flowers rarely, if ever, fall"). Real geometry - a cupped quad cut to its outline, lit, glowing
+  through (`BACKLIGHT`), casting, blurred by the lens. Each piece lives a planned life on dice of its
+  own: falls with the air in one of its look's WAYS (`ways`: flat, fluttering as a falling leaf does,
+  tumbling over and over with a glide, twirling round a small circle tipped in to it), and a gust turns
+  any of them over, harder the harder it blows (`Winds.gust_run`; the user saw them "fly like
+  frisbies"); turns flat as it lands, lies trembling in the breeze, and each gust past its grip skids it
+  across the cloth (short of what stands there) or, past the edge, carries it off - lifted, turning
+  over, then sinking once clear of the table (and of a cloth hanging over it). A fall that would pass
+  through a thing or the table's side is thrown again from elsewhere. Lives are filed in ten-second bins
+  and planned only as far as asked. NEVER ON OR UNDER THE CARDS (a flower fell through the deck and lay
+  under it): the table's `cover` (`TableMedium._cover_at`) says where the deck and every card lying on
+  the cloth are at a time; a piece never comes down or skids there, and a card laid over one later pins
+  it - no gust reaches it. `put` reports how many gusts lift what lies; `watch` takes a drift through the
+  strongest gust ahead, and `wind` through its strongest gust.
 Gates: `tests/drifts_check.gd` (the wind's closed-form carry against a summed one, gust rate, purity in
-any order, never through a thing, gusts lift and grip 1 holds, no jump between frames), lights_check
+any order, never through a thing, gusts lift and grip 1 holds, no jump between frames, how often both
+ways, gust shaking, the ways, a gust turning a flat one over, never on or under the cards), lights_check
 `_shade`, light_screen_check (a grown copy in a gust, GPU).
 
 BUILT IN THE ENGINE (`src/props.gd`, `Props.build`): meshes in meters, base on y = 0, each
@@ -1103,6 +1110,86 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
   person's skull is ~4 s of GDScript), or its grid could be coarser where nothing is thin; no real set
   dresser has sculpted yet.
 
+## 2026-10-08: where things stand, the long row, the deck put aside, the wash's pile
+
+The user: props stood "in a kind of arc along the top, with more or less equal spacing", 5 to 8 of
+them, every one wholly in the shot, often across a cloth's edge; a row of six lay "oddly close to the
+deck"; and a wash's gathered pile "suddenly just grows by 2x or 3x". Patterns guided toward, never
+enforced:
+
+- A HABIT per episode (`TableMedium._habit_of`, its own die): how far out to the sides its things lean
+  (`EDGE_PUSH`, often well out, the middle left freer), and each group's own step off its zone's middle
+  (`AIM_WANDER`) - so the zones' fixed aims no longer make an arc of evenly spaced things.
+- The frame may CUT an unlit thing at a side or the foot, so long as `SEEN_LEAST` of its picture shows;
+  never at the top (it reads as standing in the room), and a lit thing still stands wholly in the shot.
+- A foot across a layer's edge scores worse (`STRADDLE`), a third of that for something large
+  (`STRADDLE_BIG`: a book, a tray may lie across a hem).
+- A row or arc of five or more is laid as two rows now and then (`TablePositions.SPLIT_LONG`, its own
+  die); and when a card of the spread would lie within `DECK_CROWD` of the deck, the reader slides the
+  deck further out (`_plan_aside`, `DECK_ASIDE` of such episodes) just before that card is taken.
+  About a quarter of 5-8 card spreads; gated in tests/table_positions_check.gd.
+- The wash's pile builds to the deck's height as it is gathered (each card thickened as it lands),
+  not all at once as it is squared. A card slid up onto the taller pile tips ~20 degrees, where
+  `_tipped`'s skewed long side dipped 0.1 mm into the card under it (table_wash_check): the long side
+  is now the one kept true.
+- Next: the set dresser's prompt still names the zones as before; it could be told the table may run
+  off the frame's sides and that the middle may stay free. A first look at real episodes is pending.
+
+## 2026-10-08: the place, heard (the sound)
+
+The user: "a lot of scenes take place in places where pure environmental silence feels inappropriate.
+One scene was on a boat at sea ... others are outside, with petals falling, where the wind is
+literally blowing ... another was on a dock" - and "if the wind gusts strongly, the sound increases in
+strength accordingly". Then: the wind heard from where a window is, stronger on the side it blows
+from, and wind in a tunnel unlike wind in the open - "make the configuration features available to
+the agents, then simply draw their attention to it".
+
+- `Soundscape` (src/soundscape.gd): synthesized, no recordings - filtered noise, struck envelopes and
+  rising sines (bubbles). Wind through open air, trees, grass, rigging, eaves, canvas or a tunnel; the
+  sea on a shore, against a hull, at a dock; rain on leaves, a roof, canvas, a window, the ground,
+  water; a fire; a stream; crickets or cicadas. Each with where it is (`from`) and how far off.
+- THE WIND IS THE TABLE'S: `Soundscape.of_table` plans the light's `wind` on the episode's seed exactly
+  as `TableMedium` does, so a gust is heard as the leaves, shadows and petals move (level vs wind speed
+  r = 0.97 on trees, gated). Out in the open it is louder on the side it blows from, the balance moving
+  as each gust veers; `wind.from` holds it at an opening instead. THE AGENT DECIDES: a light's wind is
+  heard only when the sound has a `wind` (a default open-air wind was dropped the same day - "we
+  should defer to the agents"); a sound's wind with `strength` and no light wind is a wind outside,
+  felt by nothing on the table.
+- NEVER TO NOTHING (episode 709583, a breeze through eaves: "a big gust of sound, which drops to 0"):
+  loudness was a power of the wind's speed, and a breeze between gusts is a quarter of a gust - 33 to
+  46 dB between gusts and silence. Now a place ebbs and flows beside its OWN typical gust or wave
+  (`Soundscape._ebb`: a floor 6 dB under it at the dial's bottom, 11 at the top, a soft swell above
+  it), the wind's strength sets its level only by a square root, and what sounds in a gust waits for
+  this wind's gusts. That breeze now sits about 10 dB under its loud moments.
+- BOTH EARS ("100% of the waves/wind is in the right ear"): a pan law had a sound at one side 18 dB
+  down in the far ear; now no sound is more than `MOST_APART` (7 dB) apart, as the voice's Lean.
+- THE GUST'S SHAPE ("comes on VERY strong ... a dishwasher or a washing machine ... the ramp up and
+  down seems rather fast, while the hold at volume is short"): the churn was the rumble, brown noise
+  cornered near 10 Hz (5 dB of wobble against the rush's 1.4) - cornered at ~80 Hz now and under the
+  rush; the 4 Hz, 60% "turbulence" became a slow drift and a little shimmer. The wind heard rises in
+  ~0.5 s and lets go over ~3.5 s (`HOLD`), and breathes on three slow unrelated swells (`BREATHS`);
+  the shore's breakers and the hull's swell hold and drift likewise. Clicks: a struck sound's ears ease
+  across the block, a new bubble takes the quietest voice, a place fades in over 1.5 s. On episode
+  709583 the 10 ms wobble went 4.3 -> 1.6 dB, and the loudest moment sits 5 dB over its loud tenth
+  (was 12).
+- IN DECIBELS ("are you increasing the volume in a linear fashion, or a logarithmic one?"): linear -
+  one smoothing stage on the speed, steepest at its first instant, so every gust began with a jump
+  (27 dB/s). Now the log of the speed is smoothed through two stages (an S-curve, as a fade), no rise
+  faster than `RISE_MOST`, with gentler powers on the rush and the rumble; and since the plan is known
+  ahead, the wind is heard `LEAD` (0.8 s) early, so the slow entry still peaks with the leaves.
+  Gated: under 8 dB/s over a second, where the plan's raw gusts climb far faster. The fire roars, the rain thickens and the sea slaps harder in a gust.
+- The set dresser writes `sound` beside `light` (rules/cards/set_dresser.yaml, `insert: sounds`,
+  `sound_example`); `put` / `remove "sound"` in its tools, and `put` answers with the sound in words.
+- HEARD UNDER THE READING: `ReadingPanel` mixes it after the voice's own effects (`_environment()` is
+  the seam; `CardsEditor` reads the episode's `table.json`), live in the push loop and into the export
+  take (made stereo), on a worker in both. Its clock is the show's (`Spectrum.stream_origin()` + pushed
+  frames), and a table handed in mid-reading is picked up within two seconds.
+- ONE DIAL, Environment (the Cards card, knob `environment`, 0.5): level on a curve (-30 to -2 dB),
+  how hard gusts and crashes strike, and brightness (distance). It ducks up to 4.7 dB under speech and
+  a slow limiter holds a place alone under -5 dBFS. At 0.5 every part sits near -32 dBFS RMS.
+- Listening: `tests/soundscape_probe.gd` writes a dozen places to dist/soundscape/*.wav. Gate:
+  tests/soundscape_check.gd.
+
 ## Not built yet
 
 - The light, next (2026-10-07): no real set dresser has lit a table yet. A cloud's edge ACROSS the table
@@ -1123,6 +1210,11 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
 - Free form, next (2026-10-07): no real set dresser has used lofts, coils, corners or warps yet. A
   rounding on an extrude's or a sheet's own outline (a rounded tray); a loft whose path is a coil (a
   conch's whorl); a warp on a crystal bends its flat faces like any other.
+- The sound, next (2026-10-08): no real set dresser has written a `sound` yet, and nobody has listened
+  to one under a real reading. A boat's timbers creaking with the swell; birdsong (the light's birds
+  are silent); a crowd or a market's murmur; thunder with the light's lightning; the sea's size
+  following the wind's strength more than a little. A dial change is heard after the few seconds the
+  ring already holds.
 - Pick-a-pile episodes (three piles, "all four piles say the same thing").
 - Moving `Illustrations`' own job pump onto `AgentJobs`.
 - Porting the tablet's follower onto `ReadingFollower`.

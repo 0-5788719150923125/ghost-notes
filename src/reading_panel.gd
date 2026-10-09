@@ -406,6 +406,12 @@ var subtitles: Node            # set by main; its clock is re-based here
 var _pushed := 0               # frames handed to the ring, for the played-time clock
 var _ring_capacity := 0        # measured, never computed - see _drain_ready
 var _fx := VoiceFX.new()
+## THE PLACE UNDER THE VOICE ([Soundscape]): the wind, the sea, the rain of where the reading is, mixed
+## in after the voice's own effects - live here, and into the exported take by [method export_take]. A
+## mode that knows where its reading is says so through [method _environment]; null when it does not.
+var _env: Soundscape = null
+var _env_key := ""             # the place it was made from, to notice the place changing mid-reading
+var _env_poll := 0.0
 var _fx_echo: HSlider
 var _dynamics: HSlider
 var _arc: HSlider
@@ -512,6 +518,7 @@ func _process(_delta: float) -> void:
 	# with nothing playing would otherwise never be noticed to have finished.
 	if _playback == null:
 		return
+	_tick_environment(_delta)
 	# THE PICTURE FADES WITH THE VOICE: the gain of the sample being heard right now, so the
 	# outro mark's fade is one fade, in sound and picture, whatever the buffer holds ahead
 	if _fade_at >= 0 and _ring_capacity > 0:
@@ -546,11 +553,18 @@ func _process(_delta: float) -> void:
 		return
 	var avail := _fx_admit(_pending.size() - _read)
 	var n := mini(room, avail)
+	# the place is rendered ahead on a worker ([method Soundscape.prefetch]); a frame takes at most half
+	# a second of it, so filling the ring at the start is spread over frames rather than one long one
+	if _env != null:
+		n = mini(n, _sr / 2)
 	if n <= 0:
 		return
 	# the ambience runs HERE rather than in the host: it is stateful across
 	# chunk boundaries, so a seam must not reset the echo tail or the ring
 	var buf: PackedVector2Array = _fx.process_stereo(_pending.slice(_read, _read + n))
+	# ...and the place after it, so the room and the bed are the voice's and the wind is not
+	if _env != null:
+		buf = _env.mix(buf)
 	if _fade_at >= 0:
 		for i in n:
 			buf[i] *= _fade_gain(_pushed + i)
@@ -1202,6 +1216,59 @@ func _build_voice(box: VBoxContainer) -> void:
 
 
 # --- the seams a mode built on this panel overrides ---------------------------
+
+
+## WHERE THE READING IS, heard: `{sound, wind, seed, key}` (`{key}` alone while it has none yet) - a [Soundscape] to make ([method
+## Soundscape.of_table] gives `sound` and `wind`), the seed it is made on, and a key that changes when
+## the place does (it is asked again every couple of seconds while a reading plays). `{}` for none,
+## which is every mode that does not know: a chapter has no place. [param export]: for the take an
+## export is rendering, which may be of another episode than the one on screen.
+func _environment(_export := false) -> Dictionary:
+	return {}
+
+
+## The Environment dial, 0-1 (see [method Soundscape.set_level]).
+func _environment_level() -> float:
+	return 0.0
+
+
+func _open_environment(t0: float) -> void:
+	_close_environment()
+	var place := _environment()
+	_env_key = String(place.get("key", ""))
+	_env_poll = 0.0
+	if not place.has("sound"):
+		return
+	var env := Soundscape.new(place["sound"], place["wind"], int(place["seed"]), _sr, t0)
+	if not env.active():
+		return
+	env.set_level(_environment_level())
+	env.prefetch()
+	_env = env
+
+
+func _close_environment() -> void:
+	if _env != null:
+		_env.finish()
+	_env = null
+
+
+## Every frame of a reading: keep the place rendered ahead, follow the dial, and every couple of
+## seconds see whether the place itself changed (live, the set dresser can hand a table in mid-reading),
+## and if so carry on from here with the new one.
+func _tick_environment(delta: float) -> void:
+	if _env != null:
+		_env.set_level(_environment_level())
+		_env.prefetch()
+	if not _stream_open:
+		return
+	_env_poll += delta
+	if _env_poll < 2.0:
+		return
+	_env_poll = 0.0
+	var place := _environment()
+	if String(place.get("key", "")) != _env_key:
+		_open_environment(Spectrum.stream_origin() + float(_pushed) / float(_sr))
 
 
 ## THE WORDS TO READ, fresh: what Play, a scrub and an export read. Here the document's own
@@ -2641,6 +2708,7 @@ func _reset_playback() -> void:
 	# first sentence - the audition spoke its opening line, went quiet for five seconds, then
 	# carried on.
 	_lead_in = 0.0
+	_close_environment()
 	_outro_queued = false
 	_fade_at = -1
 	_fade_done = false
@@ -3523,6 +3591,9 @@ func _drain_ready() -> void:
 			_stream_open = true
 			if begin_stream.is_valid():
 				_playback = begin_stream.call(hash(_fingerprint_text()), _sr, _sub_words)
+			# the place opens with the stream: its first sample is the stream's first, at the show
+			# time the stream's frame 0 is heard at
+			_open_environment(Spectrum.stream_origin())
 			# NO SCRUB HOOKS HERE. Seeking a live generator was implemented and is
 			# WITHDRAWN - see the note above _seek_take.
 			# MEASURE the ring, do not compute it. Godot sizes a generator's
@@ -4177,6 +4248,22 @@ func export_take() -> String:
 		var b := pcm.size() if k == marks.size() - 1 else int((marks[k + 1] as Dictionary)["at"])
 		if b > a:
 			wet.append_array(fx.process_stereo(pcm.slice(a, b)))
+	# THE PLACE, under the whole take - its first sample at show time 0, since the take carries its own
+	# bookend - so the export hears the gusts the render shows. Rendered on a worker: minutes of take are
+	# a long while of GDScript, and the panel stays live through an export.
+	var place := _environment(true)
+	if place.has("sound"):
+		var env := Soundscape.new(place["sound"], place["wind"], int(place["seed"]), _sr, 0.0)
+		if env.active():
+			env.set_level(_environment_level())
+			_set_status("Mixing in the place's sound...")
+			var box := [wet]
+			var task := WorkerThreadPool.add_task(func() -> void: box[0] = env.mix(box[0]), false, "soundscape export")
+			while not WorkerThreadPool.is_task_completed(task):
+				await get_tree().process_frame
+			WorkerThreadPool.wait_for_task_completion(task)
+			wet = box[0]
+			leans = true          # the place is stereo
 	# ...faded AFTER the effects, so the room and the ambience bed go down with the voice
 	if fade_start >= 0:
 		var f0 := head + fade_start

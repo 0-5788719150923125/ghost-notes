@@ -1,5 +1,5 @@
 {
-	"digest": "6bc9c4a947cccd3c116d7e9e7ad9c8c72833b54ea126f8a12bf63636bef42806",
+	"digest": "ec4e33680db44b943cc75144b3bd6888ef6b965e108ff7ae5aaf0e9d110b0458",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -198,6 +198,7 @@
 		"res://src/side_panel.gd",
 		"res://src/sim_clock.gd",
 		"res://src/song_card.gd",
+		"res://src/soundscape.gd",
 		"res://src/spectrum.gd",
 		"res://src/storyboard.gd",
 		"res://src/storyboards_card.gd",

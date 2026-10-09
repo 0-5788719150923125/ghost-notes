@@ -11,7 +11,8 @@ extends Node
 ##   - every candle a look asks for stands, up to the most a look may ask for; a set dresser's
 ##     table stands nearly whole - on the cloth, off everywhere the cards go, nothing standing in
 ##     another, no group in front of another in the picture;
-##   - no lit thing nearer the reader than the middle of the table, all wholly in the frame;
+##   - no lit thing nearer the reader than the middle of the table, all wholly in the frame; any
+##     other thing never cut by the frame's top, mostly in it - and some cut by its side;
 ##   - every thing throws a shadow from every light but its own (it floated, casting none), and a
 ##     lit thing is ONE light however many wicks it has (every wick still burns);
 ##   - candles standing together light the cloth no hotter than it takes, all at once - against
@@ -127,7 +128,9 @@ func _run() -> void:
 	_ok(set["candles"] == 2 * SEEDS, "each lit thing is one light, the pair of pillars too (%d of %d)" % [set["candles"], 2 * SEEDS])
 	_ok(set["off_cloth"] == 0 and set["on_cards"] == 0, "all on the cloth, none where the cards go (%d off, %d on)" % [set["off_cloth"], set["on_cards"]])
 	_ok(set["touching"] == 0, "none standing in another (%d)" % set["touching"])
-	_ok(set["out"] == 0 and set["overlap"] == 0, "all wholly in the frame, no group in front of another (%d, %d)" % [set["out"], set["overlap"]])
+	_ok(set["out"] == 0 and set["overlap"] == 0, "lit things wholly in the frame, the rest mostly, no group in front of another (%d, %d)" % [set["out"], set["overlap"]])
+	# two-sided: a table pushed out to its sides runs off the frame now and then (2026-10-08)
+	_ok(set["cut"] > 0, "some things run off the frame's side (%d)" % set["cut"])
 	_ok(set["front"] == 0, "no lit thing in front of the middle (%d)" % set["front"])
 	_ok(set["own_shadow"] == 0 and set["no_shadow"] == 0, "every thing in every flame's shadows but its own (%d own, %d left out)"
 		% [set["own_shadow"], set["no_shadow"]])
@@ -209,7 +212,7 @@ func _sweep(cloth: String, candles: int, table := {}) -> Dictionary:
 	var n := {"candles": 0, "flames": 0, "front": 0, "out": 0, "overlap": 0, "over_cap": 0, "bad_key": 0,
 		"casters": 0, "old_over": 0, "lamp_keys": 0, "full_keys": 0, "heat_at": 0.0, "heat_aim": 0.0,
 		"own_shadow": 0, "no_shadow": 0, "things": 0, "off_cloth": 0, "on_cards": 0, "touching": 0,
-		"over_joint": 0, "alone_over": 0, "behind": 0, "lit_things": 0}
+		"over_joint": 0, "alone_over": 0, "behind": 0, "lit_things": 0, "cut": 0}
 	for s in range(1, SEEDS + 1):
 		var doc := {"show": "place-check", "seed": s, "dir": dir, "images": {"surface": dir.path_join("surface.png")},
 			"plan": {"look": {"candles": candles}}, "cards": cards}
@@ -222,7 +225,13 @@ func _sweep(cloth: String, candles: int, table := {}) -> Dictionary:
 			var t: Dictionary = th
 			var node: Node3D = t["node"]
 			var r: Rect2 = t["rect"]
-			n["out"] += 0 if _inside(r) else 1
+			# a lit thing wholly in the frame; any other never cut by its top, and SEEN_LEAST of it shown
+			var shown := r.intersection(Rect2(0.0, 0.0, 1.0, 1.0)).get_area() / maxf(r.get_area(), 1e-9)
+			if int(t["lit"]) > 0:
+				n["out"] += 0 if _inside(r) else 1
+			else:
+				n["out"] += 0 if r.position.y >= 0.0 and shown >= TableMedium.SEEN_LEAST - 0.001 else 1
+				n["cut"] += 0 if _inside(r) else 1
 			if int(t["lit"]) > 0:
 				n["lit_things"] += 1
 				n["front"] += 1 if node.position.z > medium._mid.z + 0.001 else 0

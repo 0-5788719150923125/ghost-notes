@@ -58,7 +58,8 @@ static func sanitize(raw: Variant, notes: PackedStringArray = PackedStringArray(
 ## THE WIND PLANNED for [param wind] (made safe; `{}` is [constant STILL]) on [param seed]: the way it
 ## blows (`dir`, a unit vector in the table's xz, where the air goes), the breeze, and every gust over the
 ## [constant Lights.HORIZON] - starts, peaks, rises, falls, how hard (m/s) and which way - with the air
-## each carried, summed, so [method carried] is a lookup. Pure: the same wind and seed, the same gusts.
+## each carried, summed (and how far, `runs`), so [method carried] and [method gust_run] are lookups.
+## Pure: the same wind and seed, the same gusts.
 static func plan(wind: Dictionary, seed: int) -> Dictionary:
 	var w: Dictionary = wind if not wind.is_empty() else STILL
 	var a := deg_to_rad(float(w["from"]))
@@ -75,6 +76,7 @@ static func plan(wind: Dictionary, seed: int) -> Dictionary:
 	var peaks := PackedFloat32Array()
 	var dirs := PackedVector2Array()
 	var sums := PackedVector2Array([Vector2.ZERO])
+	var runs := PackedFloat32Array([0.0])
 	var t := r.randf_range(0.2, 1.0) * every
 	while t < Lights.HORIZON and peak > 0.001:
 		var rise := r.randf_range(RISE.x, RISE.y)
@@ -87,10 +89,11 @@ static func plan(wind: Dictionary, seed: int) -> Dictionary:
 		peaks.append(p)
 		dirs.append(g)
 		sums.append(sums[sums.size() - 1] + g * p * (rise + fall) * 0.5)
+		runs.append(runs[runs.size() - 1] + p * (rise + fall) * 0.5)
 		t += every * r.randf_range(0.3, 1.7)
 	var phases := PackedFloat32Array([r.randf() * TAU, r.randf() * TAU])
 	return {"dir": dir, "breeze": strength * BREEZE, "phases": phases, "starts": starts, "rises": rises, "falls": falls,
-		"peaks": peaks, "dirs": dirs, "sums": sums, "written": not wind.is_empty()}
+		"peaks": peaks, "dirs": dirs, "sums": sums, "runs": runs, "written": not wind.is_empty()}
 
 
 ## THE BREEZE'S SPEED at [param t] (m/s), gusts aside.
@@ -179,6 +182,21 @@ static func carried(p: Dictionary, t: float) -> Vector2:
 
 static func carried_between(p: Dictionary, t0: float, t1: float) -> Vector2:
 	return carried(p, t1) - carried(p, t0)
+
+
+## HOW MUCH GUST HAS BLOWN between [param t0] and [param t1]: the air every gust carried, as a length
+## (meters, whichever way each went) - what sets a piece in the air turning, harder the harder it blows.
+static func gust_run(p: Dictionary, t0: float, t1: float) -> float:
+	return _run(p, t1) - _run(p, t0)
+
+
+static func _run(p: Dictionary, t: float) -> float:
+	var span := _blowing(p, t)
+	var out := float((p["runs"] as PackedFloat32Array)[span.x])
+	var peaks: PackedFloat32Array = p["peaks"]
+	for i in range(span.x, span.y):
+		out += peaks[i] * swell_carry(p, i, t)
+	return out
 
 
 ## How far gust [param i] alone carried the air between [param t0] and [param t1] (meters, xz).

@@ -21,7 +21,7 @@ const TagField := preload("res://src/tag_field.gd")
 
 ## The knobs a show keeps beside its voice. Also the schema: a stored value of the wrong shape
 ## falls back to these.
-const KNOBS := {"show": "", "seed": 1, "draw": [3, 6], "reversals": true, "jumpers": true,
+const KNOBS := {"show": "", "seed": 1, "draw": [3, 6], "reversals": true, "jumpers": true, "environment": 0.5,
 	"writer": "claude", "writer_model": "", "writer_effort": "", "painter": "codex", "painter_model": "",
 	"painter_effort": ""}
 ## The rows of the episode list: a label and the steps it covers ("K" is each card).
@@ -68,6 +68,7 @@ var _cards_lo: SpinBox
 var _cards_hi: SpinBox
 var _reversals: CheckBox
 var _jumpers: CheckBox
+var _environment_dial: HSlider
 var _rows_box: VBoxContainer
 var _episode_note: Label
 var _row_t := 0.0
@@ -164,6 +165,35 @@ func _cast_text() -> String:
 
 func _fingerprint_text() -> String:
 	return _cast_text()
+
+
+## WHERE THE READING IS: the episode's table (`table.json`), heard - its `sound` and its light's wind,
+## on the episode's seed as the table plans it ([method Soundscape.of_table]). An export's is the
+## episode pinned for it.
+func _environment(export := false) -> Dictionary:
+	var dir := ""
+	var seed := 0
+	if export and not _export_pin.is_empty():
+		dir = String((_export_pin["doc"] as Dictionary).get("dir", ""))
+		seed = int((_export_pin["doc"] as Dictionary).get("seed", 0))
+	elif _episode != null:
+		dir = _episode.dir
+		seed = _episode.seed
+	var path := dir.path_join("table.json")
+	if dir.is_empty() or not FileAccess.file_exists(path):
+		return {}
+	var key := "%s|%d" % [path, FileAccess.get_modified_time(path)]
+	var table: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if not (table is Dictionary):
+		return {"key": key}
+	var made := Soundscape.of_table(table as Dictionary, seed)
+	if (made["sound"] as Dictionary).is_empty():
+		return {"key": key}
+	return {"sound": made["sound"], "wind": made["wind"], "seed": seed, "key": key}
+
+
+func _environment_level() -> float:
+	return float(_knobs["environment"])
 
 
 func _has_reading() -> bool:
@@ -435,6 +465,8 @@ func _take_knobs(src: Dictionary) -> void:
 					_knobs[k] = [clampi(int(v[0]), 1, 10), clampi(int(v[1]), 1, 10)]
 			"reversals", "jumpers":
 				_knobs[k] = bool(v)
+			"environment":
+				_knobs[k] = clampf(float(v), 0.0, 1.0) if (v is float or v is int) else float(KNOBS[k])
 			"writer":
 				_knobs[k] = String(v) if TextGen.has(String(v)) else "claude"
 			"painter":
@@ -536,6 +568,20 @@ func _build_source(script_box: VBoxContainer) -> void:
 		_knobs["jumpers"] = on
 		_touch())
 	orow.add_child(_jumpers)
+	# THE PLACE, HEARD: what the set dresser wrote as the table's `sound`, and its wind ([Soundscape])
+	_environment_dial = Card.slider_row(box, "Environment", 0.0, 1.0, 0.05, float(_knobs["environment"]),
+		("The place the reading is in, heard under the voice: the wind, the sea, rain, a fire - whatever "
+		+ "the set dresser gave the episode's table, and its wind whenever the table has one, every gust "
+		+ "heard as it moves the leaves, the shadows and the petals. 0 is off. Low is far and steady, a "
+		+ "bed behind the reader; higher is closer and more vivid - louder, brighter, the gusts and the "
+		+ "breakers and the crackles hitting harder. It steps back a little whenever the reader speaks. "
+		+ "In the exported take too; while a reading plays, a change is heard after the few seconds "
+		+ "already queued."),
+		func(v: float) -> void:
+			if _syncing:
+				return
+			_knobs["environment"] = v
+			_touch())
 
 	# WHO WRITES AND WHO PAINTS: an agent CLI each, from the registries - the plan, the booklet and
 	# the reading are words, the deck and the table are pictures
@@ -769,6 +815,7 @@ func _show_knobs() -> void:
 	_cards_hi.value = int((_knobs["draw"] as Array)[1])
 	_reversals.button_pressed = bool(_knobs["reversals"])
 	_jumpers.button_pressed = bool(_knobs["jumpers"])
+	_environment_dial.value = float(_knobs["environment"])
 	_writer_pick.select(maxi(0, TextGen.REGISTRY.keys().find(String(_knobs["writer"]))))
 	_painter_pick.select(maxi(0, ImageGen.REGISTRY.keys().find(String(_knobs["painter"]))))
 	_fill_models(_writer_model, String(_knobs["writer"]))

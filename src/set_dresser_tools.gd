@@ -78,6 +78,8 @@ var _idea := ""
 var _title := {}                 # the name's color over this table: {color, why}
 var _light := {}                 # the table's light as written, part by part, once put
 var _light_put := false
+var _sound := {}                 # what the place sounds like ([Soundscape]), part by part, once put
+var _sound_put := false
 var _looks := 0
 var _busy := false               # a call is in hand ([method call_tool])
 var _released := false
@@ -124,8 +126,9 @@ func list_tools() -> Array:
 				"idea": {"type": "string", "description": "two or three sentences: this table, and the reader who set it"},
 				"top": {"type": "object", "description": "the table's top: {shape, size, corner, sides, scallops, thickness, edge, material, boards, tiles, pattern, inlay, relief, why} - replaces the top before"},
 				"layers": {"type": "array", "items": {"type": "object"}, "description": "cloths laid on the top, bottom first: each {name, what, outline, size, drop, at, turn, fabric, pattern, border, fringe, relief, sheen}, replacing a layer of the same name (a new one goes on top)"},
-				"light": {"type": "object", "description": "the table's light, {why, sky, sun, through, clouds, wind, birds, lamps, shadows}: each part given replaces that part (null takes it away); in `through`, `lamps` and `shadows` an entry replaces the one of the same name (an empty list takes them all away)"}}}},
-		{"name": "remove", "description": "Take things - or effects of its air, layers, or parts of its light (what the sun falls through, a lamp or a shadow, by name; or \"sun\", \"clouds\", \"wind\", \"birds\", or \"light\" for all of it) - off the table you are setting, by name.",
+				"light": {"type": "object", "description": "the table's light, {why, sky, sun, through, clouds, wind, birds, lamps, shadows}: each part given replaces that part (null takes it away); in `through`, `lamps` and `shadows` an entry replaces the one of the same name (an empty list takes them all away)"},
+				"sound": {"type": "object", "description": "what the place sounds like behind the reader, {why, wind, water, rain, fire, stream, insects}: each part given replaces that part (null takes it away)"}}}},
+		{"name": "remove", "description": "Take things - or effects of its air, layers, or parts of its light (what the sun falls through, a lamp or a shadow, by name; or \"sun\", \"clouds\", \"wind\", \"birds\", or \"light\" for all of it), or its sound (\"sound\") - off the table you are setting, by name.",
 			"inputSchema": {"type": "object", "properties": {"names": {"type": "array", "items": {"type": "string"}}}, "required": ["names"]}},
 		{"name": "look", "description": "Look at one thing close up, from four sides - its front, its right side, from above, and as the camera at the reader's chair sees it - on a centimeter grid (a brighter line every 5 cm).",
 			"inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
@@ -196,6 +199,8 @@ func draft() -> Dictionary:
 		out["layers"] = _layers.duplicate(true)
 	if _light_put:
 		out["light"] = _light.duplicate(true)
+	if _sound_put:
+		out["sound"] = _sound.duplicate(true)
 	return out
 
 
@@ -217,11 +222,20 @@ func _put(args: Dictionary) -> Dictionary:
 	# `layers: []` is a bare top: the cloth every table had before taken off
 	var any_table: bool = new_top is Dictionary or new_layers is Array
 	var any_light: bool = args.get("light") is Dictionary
+	var any_sound: bool = args.get("sound") is Dictionary
 	if not (raw is Array) or ((raw as Array).is_empty() and mats.is_empty() and not any_air and not any_table and not any_light
-			and not (args.get("idea") is String)):
-		return {"text": "Nothing was put: give `things` (a list of things), `materials`, `effects`, the table's `top` or `layers`, its `light`, or an `idea`.", "error": true}
+			and not any_sound and not (args.get("idea") is String)):
+		return {"text": "Nothing was put: give `things` (a list of things), `materials`, `effects`, the table's `top` or `layers`, its `light`, its `sound`, or an `idea`.", "error": true}
 	if any_light:
 		_merge_light(args["light"] as Dictionary)
+	if any_sound:
+		_sound_put = true
+		for k in args["sound"]:
+			var v: Variant = (args["sound"] as Dictionary)[k]
+			if v == null:
+				_sound.erase(String(k))
+			else:
+				_sound[String(k)] = (v as Dictionary).duplicate(true) if v is Dictionary else v
 	if new_top is Dictionary:
 		_top = (new_top as Dictionary).duplicate(true)
 		_top_put = true
@@ -296,6 +310,8 @@ func _put(args: Dictionary) -> Dictionary:
 		lines.append_array(_describe_table())
 	if any_light:
 		lines.append_array(_describe_light())
+	if any_sound or (any_light and _sound_put):
+		lines.append_array(_describe_sound())
 	if junk > 0:
 		lines.append("%d of the things given %s not an object {name, parts, ...} - left out." % [junk, "was" if junk == 1 else "were"])
 	if not notes.is_empty():
@@ -334,6 +350,9 @@ func _remove(args: Dictionary) -> Dictionary:
 			_layers.remove_at(li)
 			gone.append(String(n))
 		elif _unlight(String(n).strip_edges()):
+			gone.append(String(n))
+		elif String(n).strip_edges().to_lower() == "sound" and not _sound.is_empty():
+			_sound = {}
 			gone.append(String(n))
 		else:
 			missing.append(String(n))
@@ -584,6 +603,25 @@ func _merge_light(d: Dictionary) -> void:
 			_light[key] = list
 		else:
 			_light[key] = (v as Dictionary).duplicate(true) if v is Dictionary else v
+
+
+## THE SOUND IN WORDS, as it will be heard: what it is, everything that had to change, and the wind it
+## follows - the light's, heard in open air when the sound says nothing of it.
+func _describe_sound() -> PackedStringArray:
+	var notes := PackedStringArray()
+	Soundscape.sanitize(_sound, notes)
+	var light: Dictionary = _light.duplicate(true) if _light_put else {}
+	var made := Soundscape.of_table({"sound": _sound, "light": light}, episode.seed)
+	var out := PackedStringArray()
+	if (made["sound"] as Dictionary).is_empty():
+		out.append("The sound: none - the reader alone, in a quiet room.")
+	else:
+		out.append("The sound: %s." % Soundscape.summary(made["sound"]))
+	if not _sound.has("wind") and ((Lights.sanitize(light) if not light.is_empty() else {}).get("wind", {}) as Dictionary).size() > 0:
+		out.append("  - the light's wind blows silently: give the sound a `wind` if it should be heard")
+	for n in notes:
+		out.append("  - " + n)
+	return out
 
 
 ## A part of the light taken off by [param name]: what the sun falls through, a lamp or a shadow, by its
@@ -1044,8 +1082,8 @@ func _describe_air(names: Array) -> PackedStringArray:
 					("times " + ", ".join(PackedStringArray((which as Array).map(func(x: Variant) -> String: return str(x))))) if which is Array else String(which),
 					int(built["count"]), Effects._mm(float(built["size"]))]
 			"drift":
-				what = "%s %s, %d in the air at once, %s mm, %d%% settling, grip %.1f%s" % [String(built["look"]),
-					"falling from overhead" if String(built["from"]) == "above" else "blown in on the wind", int(built["count"]),
+				what = "%s %s, one every %d s or so and up to %d a gust, %s mm, %d%% settling, grip %.1f%s" % [String(built["look"]),
+					"falling from overhead" if String(built["from"]) == "above" else "blown in on the wind", roundi(float(built["every"])), roundi(float(built["shake"])),
 					Effects._mm(float(built["size"])), roundi(float(built["settle"]) * 100.0), float(built["grip"]),
 					(", %d lying at the start" % int(built["lying"])) if int(built["lying"]) > 0 else ""]
 		out.append("- %s: %s" % [String(nm), what])
@@ -1118,7 +1156,7 @@ func _air_line(safe: Dictionary) -> String:
 			"burst":
 				bursts += 1
 			"drift":
-				parts.append("%s (%s, %d in the air%s)" % [String(d["name"]), String(d["look"]), int(d["count"]),
+				parts.append("%s (%s, one every %d s or so%s)" % [String(d["name"]), String(d["look"]), roundi(float(d["every"])),
 					(", %d lying" % int(d["lying"])) if int(d["lying"]) > 0 else ""])
 	if parts.is_empty() and bursts == 0:
 		return ""

@@ -267,7 +267,7 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 		"candles": candles, "one_candle": candles == 1, "lo": size.x, "hi": size.y, "zones": zones,
 		"max_parts": Props.MAX_PARTS, "check": Rules.say("cards/set_dresser.check"),
 		"tables": Tables.describe(), "props": Props.describe(), "air": Effects.describe(air_regions(), moments),
-		"lights": Lights.describe(),
+		"lights": Lights.describe(), "sounds": Soundscape.describe(),
 		"title": title.strip_edges(), "byline": byline.strip_edges(),
 		"seen": ", ".join(PackedStringArray(seen)), "airs": ", ".join(PackedStringArray(airs)),
 	}

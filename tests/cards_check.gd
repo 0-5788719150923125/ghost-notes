@@ -42,7 +42,9 @@ extends SceneTree
 ## - WHAT THE SHOW HAS ALREADY MADE reaches each agent in the part it decides (the producer names the
 ##   show's habits), never the episode being made, and never a card name through a reader's record.
 ## - THE CARD'S FRAME keeps a border: no frameless style, an old look naming one drawn as `line`,
-##   and every card's name fits the stock below its picture, in every face.
+##   and every card's name fits the stock below its picture, in every face. A picture still to come is
+##   drawn in every window shape with nothing the renderer cannot triangulate - against the sliver an
+##   oval window once left, which is refused.
 ## - THE TITLE SCREEN: the name as large as the frame's width allows (two lines for a long one), in
 ##   proportion at any frame size; the set dresser's color kept and junk dropped for the default; a
 ##   shade round the name that its color always reads against.
@@ -1318,6 +1320,31 @@ func _card_frame() -> bool:
 				worst = {"size": size, "name": name, "face": f}
 			_ok(face.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= room, "%s in %s runs past the band" % [name, f])
 	_ok(int(worst["size"]) >= int(sz.y * 0.035), "%s in %s is set at %d px on a %d px card - too small to read" % [worst["name"], worst["face"], worst["size"], int(sz.y)])
+	# A PICTURE STILL TO COME, in every window: nothing the renderer cannot triangulate
+	# the control: the disc that grazed an oval window (episode true-tarot 336151's, seed 253) leaves a
+	# sliver no renderer can fill, and it is refused
+	var oval_r := Rect2(56, 128, 448, 675.2)
+	var oval := CardFaces.outline("oval", oval_r)
+	var disc := PackedVector2Array()
+	for j in 24:
+		disc.append(Vector2(497.28116, 634.99677) + Vector2.from_angle(TAU * float(j) / 24.0) * 69.68580055236816 * (1.0 - 4.0 * 0.17))
+	var slivers := Geometry2D.intersect_polygons(disc, oval).filter(func(q: PackedVector2Array) -> bool:
+		return Geometry2D.triangulate_polygon(q).is_empty())
+	_ok(not slivers.is_empty(), "the control: the grazing disc no longer leaves a sliver - find another")
+	for q in slivers:
+		_ok(not CardFaces.drawable(q), "the sliver an oval window left is called drawable")
+	_ok(CardFaces.placeholder_pieces(oval_r, [], 253, oval).all(func(e: Array) -> bool: return CardFaces.drawable(e[0])),
+		"the picture still to come on that oval draws the sliver")
+	_ok(CardFaces.drawable(PackedVector2Array([Vector2.ZERO, Vector2(10, 0), Vector2(0, 10)])), "a plain triangle is not drawable")
+	var undrawable := 0
+	for shape in CardTable.WINDOWS:
+		var look := CardTable.sanitize_look({"window": shape})
+		for back in [false, true]:
+			var r := CardFaces.window(back, look)
+			for seed in 200:
+				for piece in CardFaces.placeholder_pieces(r, [], seed, CardFaces.outline(String(shape), r)):
+					undrawable += 0 if CardFaces.drawable(piece[0]) else 1
+	_ok(undrawable == 0, "%d pieces of a picture still to come cannot be drawn" % undrawable)
 	print("cards_check: card frame - a border always; the smallest name %s in %s at %d px" % [worst["name"], worst["face"], worst["size"]])
 	return true
 

@@ -5,7 +5,7 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script tests/table_positions_check.gd
 ##
-## THE PRESETS ARE THE OLD SPREADS: over a thousand seeded spreads, each identical to the old
+## THE PRESETS ARE THE OLD SPREADS: over four thousand seeded spreads, each identical to the old
 ## algorithm's (kept below, verbatim, as the oracle) unless that one had a card partly outside the
 ## camera's frame - and every spread, after, lies on the cloth, in the frame and clear of the deck.
 ## Two-sided: the oracle itself must have cut some card off, or the fallback is tested by nothing.
@@ -18,6 +18,9 @@ extends SceneTree
 ## is objected to, then its layout written into the episode, laid over the plan's positions by the
 ## episode's document, and taken by the table - every position on the cloth, in the frame and clear.
 ## And NO CHEATING: nothing a dealer is told names a card.
+##
+## THE DECK PUT ASIDE (2026-10-08): a long spread that crowds the deck has it slid further out now and
+## then - always into the frame and clear of every card; a lone card, which crowds nothing, never.
 
 const DIR := "user://table_positions_check"
 const CARD := Vector2(0.07, 0.12)
@@ -28,6 +31,7 @@ var _fails: Array = []
 
 func _initialize() -> void:
 	_presets()
+	_aside()
 	_given()
 	_dealer()
 	_clean()
@@ -54,7 +58,7 @@ func _presets() -> void:
 	var relaid_sound := 0
 	var troubled := 0
 	var drift := 0
-	for seed in range(1, 101):
+	for seed in range(1, 401):
 		for n in range(1, 11):
 			var lay := CardTable.layout_of(seed)
 			var r1 := RandomNumberGenerator.new()
@@ -81,6 +85,36 @@ func _presets() -> void:
 	_ok(relaid_sound == 0, "a spread is re-laid only when the old one had a card cut off (%d re-laid, %d of them sound)" % [relaid, relaid_sound])
 	_ok(relaid > 0, "the control: the old algorithm did cut some card off (%d of %d), so the fallback is exercised" % [relaid, same + relaid])
 	_ok(troubled == 0, "every spread lies on the cloth, in the frame and clear of the deck (%d not)" % troubled)
+
+
+func _aside() -> void:
+	print("-- the deck put aside")
+	var m = load("res://src/media/table.gd").new()
+	var moved := 0
+	var bad := 0
+	var lone := 0
+	for seed in range(1, 101):
+		for n in [1, 5, 6, 7, 8]:
+			var lay := CardTable.layout_of(seed)
+			var rng := RandomNumberGenerator.new()
+			rng.seed = hash([seed, "aside-check"])
+			m._seed = seed
+			m._cards_from = "deck"
+			m._deck_base = lay["deck"]
+			m._slots = TablePositions.seeded(n, rng, lay)
+			m._plan_aside({})
+			if m._aside_card < 0 and m._deck_far == lay["deck"]:
+				continue
+			moved += 1
+			lone += 1 if n == 1 else 0
+			var r := TablePositions.deck_keep(m._deck_far)
+			bad += 0 if TablePositions._frame_trouble(r, lay).is_empty() else 1
+			for sl in m._slots:
+				bad += 1 if CardTable.footprint(sl["pos"], float(sl["yaw"]), CARD).intersects(r) else 0
+	m.free()
+	_ok(moved > 0, "a crowded deck is put aside now and then (%d of 400 long spreads)" % (moved - lone))
+	_ok(bad == 0, "always in the frame and clear of every card (%d not)" % bad)
+	_ok(lone == 0, "the control: a lone card never moves it (%d)" % lone)
 
 
 func _given() -> void:
@@ -156,7 +190,7 @@ func _clean() -> void:
 	DirAccess.remove_absolute(abs)
 
 
-## THE OLD SPREAD, verbatim (TableMedium._spread_slots before step 9) - the oracle.
+## THE OLD SPREAD, verbatim (TableMedium._spread_slots before step 9), with the long row's split - the oracle.
 func _old(n: int, rng: RandomNumberGenerator, deck_base: Vector3) -> Array:
 	var out: Array = []
 	if n <= 0:
@@ -170,6 +204,12 @@ func _old(n: int, rng: RandomNumberGenerator, deck_base: Vector3) -> Array:
 	var kind := String(kinds[rng.randi_range(0, kinds.size() - 1)])
 	if n * gap > 0.66:
 		kind = "rows"
+	# ...and, since 2026-10-08, a long row or arc split in two on a die of its own (no draw moves)
+	elif kind in ["row", "arc"] and n >= 5:
+		var split := RandomNumberGenerator.new()
+		split.seed = hash([rng.seed, "tarot-long-row"])
+		if split.randf() < TablePositions.SPLIT_LONG * (0.5 if n == 5 else 1.0):
+			kind = "rows"
 	var pos: Array = []
 	match kind:
 		"rows":

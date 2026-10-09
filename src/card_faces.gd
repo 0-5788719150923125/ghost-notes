@@ -99,6 +99,14 @@ static func _cover_shape(ci: CanvasItem, tex: Texture2D, dst: Rect2, hole: Packe
 ## A picture not painted yet: a soft field of the deck's own colors, seeded per card - a
 ## picture still arriving, never a gray broken plate - inside the window [param hole] when it has one.
 static func _placeholder(ci: CanvasItem, r: Rect2, palette: Array, seed: int, hole := PackedVector2Array()) -> void:
+	for piece in placeholder_pieces(r, palette, seed, hole):
+		ci.draw_colored_polygon(piece[0], piece[1])
+
+
+## [method _placeholder]'s field as `[[polygon, color], ...]`: the window filled, then soft discs cut to
+## it. Only what can be drawn: a disc grazing a curved window (an oval) leaves a sliver of three points
+## all but in a line, which the renderer cannot triangulate ("Invalid polygon data", 2026-10-08).
+static func placeholder_pieces(r: Rect2, palette: Array, seed: int, hole := PackedVector2Array()) -> Array:
 	if palette.is_empty():
 		palette = CardTable.FALLBACK_PALETTE
 	if hole.is_empty():
@@ -106,7 +114,7 @@ static func _placeholder(ci: CanvasItem, r: Rect2, palette: Array, seed: int, ho
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
 	var a := CardTable.color(String(palette[0])) if not palette.is_empty() else Color(0.2, 0.2, 0.3)
-	ci.draw_colored_polygon(hole, a.darkened(0.2))
+	var out: Array = [[hole, a.darkened(0.2)]]
 	for i in 9:
 		var c := CardTable.color(String(palette[rng.randi_range(0, maxi(0, palette.size() - 1))]))
 		c.a = 0.22
@@ -117,7 +125,14 @@ static func _placeholder(ci: CanvasItem, r: Rect2, palette: Array, seed: int, ho
 			for j in 24:
 				disc.append(p + Vector2.from_angle(TAU * float(j) / 24.0) * rad * (1.0 - float(k) * 0.17))
 			for piece in Geometry2D.intersect_polygons(disc, hole):
-				ci.draw_colored_polygon(piece, c)
+				if drawable(piece):
+					out.append([piece, c])
+	return out
+
+
+## Whether [param poly] can be drawn as a filled polygon: the renderer triangulates it as this does.
+static func drawable(poly: PackedVector2Array) -> bool:
+	return poly.size() >= 3 and not Geometry2D.triangulate_polygon(poly).is_empty()
 
 
 ## THE ORNAMENT ROUND THE CARD'S EDGE ([constant CardTable.ORNAMENTS]), along [method edge_path] - in the
