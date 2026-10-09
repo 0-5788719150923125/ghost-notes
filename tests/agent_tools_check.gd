@@ -91,6 +91,18 @@ func _run() -> void:
 	_ok(String(res.get("instructions", "")) == "Tools for the gate.", "the toolset's instructions were not passed on")
 	_ok(String(r["text"]).contains("\"id\":1,") or String(r["text"]).contains("\"id\":1}"),
 		"the id did not come back as the integer sent: %s" % r["text"])
+	# THE TOKEN AS A BEARER, to the bare endpoint - the way Codex sends it, from an environment variable
+	var bare := "/mcp/"
+	var hello := JSON.stringify({"jsonrpc": "2.0", "id": 9, "method": "ping"})
+	_ok(AgentTools.endpoint(url) == "http://127.0.0.1:%d/mcp/" % AgentTools.port() and AgentTools.token_of(url) == url.get_file(),
+		"the endpoint and token a bearer client is given are not the URL's halves: %s %s" % [AgentTools.endpoint(url), AgentTools.token_of(url)])
+	r = await _send(_raw("POST", bare, hello, {"Authorization": "Bearer " + url.get_file()}))
+	_ok(int(r["status"]) == 200 and r["json"] is Dictionary and (r["json"] as Dictionary).has("result"),
+		"the job's token as a bearer was not answered: %d %s" % [r["status"], r["text"]])
+	r = await _send(_raw("POST", bare, hello, {"Authorization": "Bearer " + "0".repeat(32)}))
+	_ok(int(r["status"]) == 404, "a bearer token no job holds was answered: %d" % r["status"])
+	r = await _send(_raw("POST", bare, hello))
+	_ok(int(r["status"]) == 404, "the control: the bare endpoint with no token was answered: %d" % r["status"])
 	r = await _post(path, {"jsonrpc": "2.0", "method": "notifications/initialized"})
 	_ok(int(r["status"]) == 202 and String(r["text"]).is_empty(), "a notification was answered %d '%s'" % [r["status"], r["text"]])
 	r = await _post(path, {"jsonrpc": "2.0", "id": "a", "method": "tools/list"})

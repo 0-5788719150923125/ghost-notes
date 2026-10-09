@@ -40,6 +40,9 @@ extends SceneTree
 ##   all round; a stroke finer than the sculpt is cut is found before it is built, and a thick one is not.
 ##   And THE SKULLS ARE SCULPTS: a bird's orbits are open right through it, where a line through its
 ##   braincase is not.
+## - A HEAP OF COINS NEVER SHARES SPACE (feedback 0008, coins in a dish cut through each other): fourteen
+##   coins heaped on seven seeds lie flat, and no two discs overlap in plan and in height. Two-sided: two
+##   coins laid on the same spot are found overlapping.
 ## - THE SET DRESSER IS TOLD all of it.
 
 var _fails: Array = []
@@ -61,6 +64,7 @@ func _initialize() -> void:
 	_draped()
 	_bones()
 	_sculpts()
+	_coins()
 	_told()
 	if _fails.is_empty():
 		print("props_check: ALL OK")
@@ -491,6 +495,39 @@ func _sculpts() -> void:
 
 ## How many faces of [param g] a line from [param from] along [param dir] meets - in centimeters: Godot's test
 ## takes a triangle under a millimeter for one lying along the line.
+## Whether any two of the coins [param laid] (transforms: a unit-thickness-scaled disc of half-width
+## [param a], half-thickness [param b]) share space: overlapping in plan, and in height.
+func _coins_touch(laid: Array, a: float, b: float) -> bool:
+	for i in laid.size():
+		for j in range(i + 1, laid.size()):
+			var ti: Transform3D = laid[i]
+			var tj: Transform3D = laid[j]
+			var ri := a * ti.basis.get_scale().x
+			var rj := a * tj.basis.get_scale().x
+			var hi := b * ti.basis.get_scale().y
+			var hj := b * tj.basis.get_scale().y
+			var d := ti.origin - tj.origin
+			if Vector2(d.x, d.z).length() < (ri + rj) * 0.97 and absf(d.y) < (hi + hj) * 0.97:
+				return true
+	return false
+
+
+func _coins() -> void:
+	var a := 0.012
+	var b := 0.001
+	var bounds := {"reach": a, "girth": a, "low": -b, "high": b}
+	for seed in 7:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed + 1
+		var laid := Props._strewn(true, 14, 1.0, 0.03, Transform3D.IDENTITY, Vector3.ZERO, bounds, rng)
+		_ok(laid.size() == 14, "seed %d: all fourteen coins are laid" % seed)
+		_ok(not _coins_touch(laid, a, b), "seed %d: two coins in a heap share space" % seed)
+		for t in laid:
+			_ok((t as Transform3D).basis.y.normalized().dot(Vector3.UP) > 0.9999, "seed %d: a coin lies flat" % seed)
+	var same := [Transform3D(Basis(), Vector3(0, b, 0)), Transform3D(Basis(), Vector3(0.005, b, 0))]
+	_ok(_coins_touch(same, a, b), "the control: two coins on one spot are found overlapping")
+
+
 func _hits(g: Props.Tris, from: Vector3, dir: Vector3) -> int:
 	var n := 0
 	for t in range(0, g.v.size(), 3):

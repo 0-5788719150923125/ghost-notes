@@ -22,7 +22,8 @@ class_name Soundscape
 ##     the plunk of a lapping wave, the babble of a stream, the plink of rain falling on water.
 ##   - RAIN is a hiss and many drops, each a click through a resonance tuned by what it falls on.
 ##   - FIRE is a low roar, a flickering hiss and crackles - very short bursts, often in clusters.
-##   - A CRICKET is a few short tone pulses, chirp after chirp; cicadas a band of noise buzzing.
+##   - A CRICKET is a few short tone pulses, chirp after chirp; cicadas a chorus - several broad bands
+##     of noise, each pulsing shallowly at its own rate, so the pulses blur into a shimmer.
 ##
 ## THE WIND IS THE TABLE'S OWN ([Winds], the light's `wind`, planned on the same seed as [TableMedium]
 ## plans it): its speed is read at every block of samples from the same closed-form plan the leaves,
@@ -145,6 +146,10 @@ const RAINS := {
 	"ground": {"about": "the ground, stones, a street - a broad, fine patter", "fc": 2600.0, "spread": 0.9, "q": 0.8, "ring": 0.006, "hiss": 3000.0},
 	"water": {"about": "water - a pond, the sea, a puddle: drops plinking as they land", "fc": 2500.0, "spread": 0.6, "q": 1.0, "ring": 0.008, "hiss": 3500.0},
 }
+## Cicadas in each of the two groups that swell and fade in turn, and their level at full strength:
+## a chorus some way off, under the voice (see the cicadas in [method _init]).
+const CICADAS := 4
+const CICADA_GAIN := 0.2
 const INSECTS := {
 	"crickets": "crickets in the grass - chirp after chirp, each at its own pace",
 	"cicadas": "cicadas in the trees - a dry buzz that swells and fades",
@@ -730,12 +735,21 @@ func _setup() -> void:
 					"next": _range(0.0, 1.0), "sing": _range(4.0, 20.0)})
 			_in = {"crickets": crickets, "strength": strength}
 		else:
+			# A CHORUS IN THE TREES, never two whines: each of two groups swelling and fading in turn is
+			# several cicadas at once, each its own broad band and its own shallow pulse, so the pulses
+			# blur into the shimmer of a chorus some way off. They were two narrow bands (Q 5), each
+			# chopped 12:1 at one rate near 200 Hz, and the first episode with them (#761227) was "a
+			# horrible screeching sound throughout" (the user, 2026-10-09).
 			var bands: Array = []
 			for c in 2:
-				var b := _band(0, 1, _range(4300.0, 6000.0), 5.0, false)
-				b.am_rate = _range(150.0, 220.0)
-				b.am_depth = 0.85
-				bands.append({"band": b, "ears": _ears(_range(0.0, 360.0), 0.8), "t": _range(-8.0, 0.0), "rise": 3.0,
+				var from := _range(0.0, 360.0)
+				var voices: Array = []
+				for v in CICADAS:
+					var b := _band(0, 1, _range(4000.0, 6500.0), _range(1.4, 2.2), false)
+					b.am_rate = _range(110.0, 420.0)
+					b.am_depth = _range(0.25, 0.45)
+					voices.append({"band": b, "ears": _ears(from + _range(-40.0, 40.0), 0.8)})
+				bands.append({"voices": voices, "t": _range(-8.0, 0.0), "rise": 3.0,
 					"hold": _range(4.0, 10.0), "fall": 2.5, "rest": _range(5.0, 18.0)})
 			_in = {"cicadas": bands, "strength": strength}
 
@@ -1260,7 +1274,6 @@ func _insects_block(t: float, dt: float) -> void:
 	if _in.has("cicadas"):
 		for c in _in["cicadas"]:
 			var d: Dictionary = c
-			var b: Band = d["band"]
 			var u := t - float(d["t"])
 			var rise := float(d["rise"])
 			var hold := float(d["hold"])
@@ -1278,10 +1291,13 @@ func _insects_block(t: float, dt: float) -> void:
 				d["t"] = t
 				d["hold"] = _range(4.0, 10.0)
 				d["rest"] = _range(5.0, 18.0)
-			var e: Vector2 = d["ears"]
-			var gg := 0.6 * strength * g
-			b.gl = gg * e.x
-			b.gr = gg * e.y
+			var voices: Array = d["voices"]
+			var gg := CICADA_GAIN * strength * g / sqrt(float(voices.size()))
+			for v in voices:
+				var e: Vector2 = (v as Dictionary)["ears"]
+				var b: Band = (v as Dictionary)["band"]
+				b.gl = gg * e.x
+				b.gr = gg * e.y
 
 
 ## A SINE THAT RISES AS IT DIES: [param f] Hz, decaying over [param decay] seconds while its pitch

@@ -43,6 +43,7 @@ var _status: Label
 var _dialog: FileDialog = null
 var _thumbs := {}                  # path|mtime|px -> ImageTexture, so a rebuild does not re-decode
 var _seen := ""                    # what the list last drew, so it rebuilds only on change
+var _live := {}                    # key -> [its status label, the line under the status] while it paints
 
 
 func _ready() -> void:
@@ -231,9 +232,17 @@ func _refresh() -> void:
 		Illustrations.current_signature("sketch"), _images.size()]
 	for im in _images:
 		sig += "|" + Illustrations.status(String(im["key"]))
+	# a picture being painted says what its painter is doing, updated in place: the list is rebuilt
+	# only when something else changes
+	for key in _live:
+		var live: Array = _live[key]
+		if is_instance_valid(live[0]):
+			var doing := Illustrations.activity(String(key))
+			(live[0] as Label).text = String(live[1]) + (("  -  painter " + doing) if not doing.is_empty() else "")
 	if sig == _seen:
 		return
 	_seen = sig
+	_live.clear()
 	for c in _list.get_children():
 		c.queue_free()
 	var missing := 0
@@ -302,6 +311,8 @@ func _row(im: Dictionary) -> Control:
 	if Illustrations.is_imported(key):
 		parts.append("imported")
 	meta.text = "  ·  ".join(parts)
+	if st in ["queued", "running"]:
+		_live[key] = [meta, meta.text]
 	meta.add_theme_font_size_override("font_size", 10)
 	# WRAPS, ALWAYS: a status line that does not wrap sets the WHOLE panel's width - every tag
 	# added to it ("imported") widened the side panel by its length

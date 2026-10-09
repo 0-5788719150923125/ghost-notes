@@ -73,9 +73,6 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **Portrait beyond full frame**
       Full frame shows and exports at 9:16 (step 10). Open: `cloth` and `two_eyes` tuned for the tall frame (cloth leaves most of it empty, two_eyes sits against its edges), the tablet's distances, the tarot's 16:9 values, and single-page comic, book and notebook layouts and a portrait tarot table - each design work of its own.
 
-- [ ] **Tools for every agent**
-      Only Claude takes Ghost Notes' tools (`AgentTools`), and only the set dresser uses them. Proposed: a painter checked by a vision pass and repainted with notes, a reader's `check_passage`, a producer that can read any earlier episode whole, and Codex and Bedrock as tool-taking writers. See [cards.md](cards.md), "Not built yet".
-
 - [ ] **A desktop build that runs everything**
       An exported build cannot yet run the Python hosts, relaunch itself to render, or write into `res://`, and the Steam list is open: URL import left out of a store build, the export's excludes, a GPL FFmpeg on Linux, the Assistant stripped, third-party notices. See [binary_export_and_steam.md](binary_export_and_steam.md).
 
@@ -93,6 +90,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 
 - [ ] **The card table's light, in real episodes**
       Built 2026-10-07: the set dresser lights its table (`Lights`) - a sky, a sun or the moon and what it falls through (a window, blinds, a lattice, leaves, an awning, a parasol...), clouds passing over the sun, birds' shadows, lamps out of the shot - and watches what moves in it. Open: the first real set dresser run with it (how it reads the plan's light and the room's painting, and how many of its 40 pictures the light takes); a screen for a lamp at night (a street lamp through a window's bars); rain on a window; water's caustics. See [cards.md](cards.md), "THE LIGHT".
+
+- [ ] **Tools for every agent**
+      Only Claude takes Ghost Notes' tools (`AgentTools`), and only the set dresser uses them. Proposed: a painter checked by a vision pass and repainted with notes, a reader's `check_passage`, a producer that can read any earlier episode whole, and Bedrock as a tool-taking writer. Grok and Codex take them since 2026-10-09 (Codex with its token in its environment, sent as a bearer) (`TextGen.Grok`; a real set dresser run built, looked at and fixed a seven-thing table over 32 calls and 27 pictures, stopped by the machine's memory before `submit`): what is open is a whole run to `submit`, and its pace - at Grok's default high effort it thought ~11 minutes before its first call. See [cards.md](cards.md), "Not built yet".
 
 - [ ] **Model the physical sciences**
       The long arc: grow the primitive kit until the catalog spans the natural world, alone or in combination. Open, by domain: weather (wind streaks, hail, heat shimmer, a lightning storm); light (a moving light casting real shadows, day and night, god rays, caustics, refraction); crystals (mineral lattices, accretion); geology (erosion, rivers, plate motion, volcanoes); structures (bridges, lattices, ruins, roads); botany (vines, flowers, undergrowth); fluids (smoke, whirlpools); the sky (n-body systems, rings, galaxies, comets); mechanics (springs and chains, harmonographs, explosions); biology (cells, reaction-diffusion, predator-prey, ant trails, slime molds); fields (EM and gravitational, interference); chemistry (molecules, crystallization, phase changes, combustion).

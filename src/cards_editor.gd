@@ -24,6 +24,8 @@ const TagField := preload("res://src/tag_field.gd")
 const KNOBS := {"show": "", "seed": 1, "draw": [3, 6], "reversals": true, "jumpers": true, "environment": 0.5,
 	"writer": "claude", "writer_model": "", "writer_effort": "", "painter": "codex", "painter_model": "",
 	"painter_effort": ""}
+## Who makes each kind of step (a step's name up to its first ":"), as a row's status names them.
+const MAKERS := {"plan": "producer", "design": "designer", "image": "painter", "table": "set dresser", "say": "reader"}
 ## The rows of the episode list: a label and the steps it covers ("K" is each card).
 const ROWS := [
 	["Plan", ["plan"]],
@@ -1160,11 +1162,6 @@ func _refresh_rows() -> void:
 				if not things.is_empty():
 					have.append("%d thing%s" % [things.size(), "" if things.size() == 1 else "s"])
 				text = ", ".join(have)
-				if _producer.state_of("table") == "running" and not _table_progress().is_empty():
-					# THE BUDGET IN VIEW: a run with no clock ends at its last picture, and the row says how near that is
-					var looked := _producer.table_looks()
-					text = "setting the table - %s%s" % ["%d of %d looks - " % [looked, SetDresserTools.LOOKS] if looked >= 0 else "",
-						_table_progress()]
 			"Card":
 				if doc.is_empty():
 					doc = _episode.document()
@@ -1178,6 +1175,23 @@ func _refresh_rows() -> void:
 				var step := "say:intro" if String(w["kind"]) == "Intro" else "say:close"
 				var said := _episode.read_text(step) if _episode.has(step) else ""
 				text = "%d words" % said.split(" ", false).size() if not said.is_empty() else ""
+		# WHAT ITS AGENTS ARE DOING, while any of its steps is being made: who, doing what, for how long
+		# (CardProducer.activity_of) - a step of many minutes showed only its glyph, and could not be
+		# told from one stuck
+		var doing := PackedStringArray()
+		for s in (w as Dictionary)["steps"]:
+			var a := _producer.activity_of(String(s))
+			if a.is_empty():
+				continue
+			var piece := "%s %s" % [String(MAKERS.get(String(s).get_slice(":", 0), "agent")), a]
+			if String(s) == "table" and not _table_progress().is_empty():
+				# THE BUDGET IN VIEW: a run with no clock ends at its last picture, and the row says how near that is
+				var looked := _producer.table_looks()
+				piece += " - %s%s" % ["%d of %d looks - " % [looked, SetDresserTools.LOOKS] if looked >= 0 else "",
+					_table_progress()]
+			doing.append(piece)
+		if not doing.is_empty():
+			text = (text + " - " if not text.is_empty() else "") + "; ".join(doing)
 		if not why.is_empty():
 			text = why
 		(w["text"] as Label).text = text

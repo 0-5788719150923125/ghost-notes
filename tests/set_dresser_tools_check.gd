@@ -21,7 +21,9 @@ extends SceneTree
 ##   prompt) and one that does not the one-reply prompt; it lands a handed-in table whatever the run's
 ##   last words, says so when a run with tools handed nothing in, and closes the tools when it stops.
 ## - CLAUDE WITH TOOLS loads no settings instead of `--safe-mode` (which drops every MCP server) and is
-##   pointed at the toolset by a config file; without tools its argv is as it was.
+##   pointed at the toolset by a config file; without tools its argv is as it was. CODEX WITH TOOLS is
+##   pointed at ghost's endpoint by config overrides, its token in its environment (never in argv), its
+##   calls approved, and told its tools are neither commands nor files; without tools, no server.
 ## - THE TABLE ITSELF: a top and layers put are said back as the table will be built (a top grown to
 ##   hold the cards says so), kept in the draft only once put (no `layers` is the old cloth, `[]` a bare
 ##   top), a layer put again under its name replaced, taken off by name; OVERHEAD with no renderer says
@@ -412,8 +414,24 @@ func _claude_argv() -> bool:
 	var none := TextGen.Claude.argv({"dir": dir, "tier": "best"}, dir.path_join("system.txt"), TextGen.Claude.tool_args({"dir": dir}))
 	_ok(none.has("--safe-mode") and not none.has("--setting-sources") and not none.has("--mcp-config") and none[none.find("--tools") + 1] == "",
 		"a writer without tools is not run as before: %s" % str(none))
-	_ok(TextGen.make("claude").takes_tools() and not TextGen.make("codex").takes_tools() and not TextGen.make("bedrock").takes_tools(),
-		"the writers that take tools are not Claude alone")
+	_ok(TextGen.make("claude").takes_tools() and TextGen.make("grok").takes_tools() and TextGen.make("codex").takes_tools()
+		and not TextGen.make("bedrock").takes_tools(),
+		"the writers that take tools are not Claude, Grok and Codex (Grok's own argv: tests/grok_agent_check.gd)")
+	# CODEX: ghost's server named in its config overrides, the token in its environment and never in argv
+	var cx_url := "http://127.0.0.1:4242/mcp/" + "ab".repeat(16)
+	var cx: PackedStringArray = TextGen.Codex.argv({"dir": dir, "tier": "best", "tools_url": cx_url}, [])
+	var joined := " ".join(cx)
+	_ok(joined.contains("mcp_servers.ghost.url=\"http://127.0.0.1:4242/mcp/\"")
+		and joined.contains("mcp_servers.ghost.bearer_token_env_var=\"%s\"" % TextGen.Codex.TOKEN_ENV)
+		and joined.contains("mcp_servers.ghost.default_tools_approval_mode=\"approve\"")
+		and joined.contains("mcp_servers.ghost.tool_timeout_sec=%d" % TextGen.Codex.TOOL_TIMEOUT)
+		and not joined.contains("ab".repeat(16)) and cx[cx.size() - 1] == "-",
+		"Codex with tools is not pointed at ghost's alone, its calls approved, its token out of argv: %s" % joined)
+	_ok(TextGen.Codex.compose({"dir": dir, "prompt": "Set it.", "tools_url": cx_url})["prompt"].contains("MCP server \"ghost\"")
+		and not TextGen.Codex.compose({"dir": dir, "prompt": "Set it."})["prompt"].contains("MCP server"),
+		"Codex with tools is not told its tools are no commands or files (or one without is)")
+	_ok(not " ".join(TextGen.Codex.argv({"dir": dir, "tier": "best"}, [])).contains("mcp_servers"),
+		"the control: Codex without tools was given a server")
 	return true
 
 

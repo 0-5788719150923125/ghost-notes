@@ -22,6 +22,7 @@ that statically (no Godot boot required) and writes:
   docs/script.md       - every mark a script may carry.
   docs/architecture.md - how the show is made, from the audio to a video file.
   docs/environment.md  - what Ghost Notes installs itself, and what stays the machine's.
+  docs/agents.md       - the AI agents: who writes, who paints, the assistant, how to install one.
   docs/cli.md          - every ghost command-line flag.
 
 The README is stubs and lists that link here: docs.py patches it between
@@ -586,6 +587,7 @@ ENGINE_FLAGS = {
     "--system-prompt-file",
     "--no-session-persistence",
     "--input-format",
+    "--include-partial-messages",
     "--effort",
     "--ephemeral",
     # ...and a writer working with ghost's own tools (AgentTools): their config, nothing else's
@@ -593,6 +595,17 @@ ENGINE_FLAGS = {
     "--strict-mcp-config",
     "--allowedTools",
     "--setting-sources",
+    # the Grok Build CLI's (TextGen.Grok and ImageGen.Grok), not ghost flags
+    "--agent",
+    "--prompt-file",
+    "--verbatim",
+    "--disallowed-tools",
+    "--no-memory",
+    "--no-subagents",
+    "--disable-web-search",
+    "--cwd",
+    "--allow",
+    "--always-approve",
     # the AWS CLI's (bedrock_catalog.gd and the Bedrock writer and painter), not ghost flags
     "--region",
     "--output",
@@ -1863,6 +1876,168 @@ def _render_environment_doc(deps: Script) -> str:
 
 
 # ---------------------------------------------------------------------------
+# The agents
+# ---------------------------------------------------------------------------
+
+
+def _sentence(text: str) -> str:
+    """`text` with its first letter capitalized: a class one-liner begins lower case once its
+    name is stripped ("TextGen - who writes the words")."""
+    return text[:1].upper() + text[1:]
+
+
+def _class_body(text: str, name: str) -> str:
+    """An inner class's body: from `class Name:` to the next top-level class, or the end."""
+    m = re.search(rf"^class {name}:\n(.*?)(?=^class \w+|\Z)", text, re.S | re.M)
+    return m.group(1) if m else ""
+
+
+def _agent_backends(script: Script) -> List[Dict[str, str]]:
+    """A TextGen / ImageGen registry as one record per backend, in registry order: its key, label,
+    blurb and class doc, the Deps row its CLI resolves through (the `Deps.has` in its class), and
+    whether it takes Ghost Notes' own tools (`takes_tools` returning true)."""
+    labels = {k: _gd_string(v) for k, v in re.findall(rf'"(\w+)":\s*{_STR}', _const_block(script.text, "LABELS"))}
+    blurbs = {k: _gd_string(v) for k, v in re.findall(rf'"(\w+)":\s*{_STR}', _const_block(script.text, "BLURBS"))}
+    docs = _inner_class_docs(script.text)
+    out = []
+    for key, cls in _parse_registry_dict(script.text):
+        body = _class_body(script.text, cls)
+        dep = _first(body, r'Deps\.has\("(\w+)"\)') or ""
+        if not dep:
+            warn(f"{script.rel}: {cls} names no Deps row (Deps.has) - docs/agents.md cannot say what to install")
+        if key not in labels or key not in blurbs:
+            warn(f"{script.rel}: '{key}' has no LABELS or BLURBS entry")
+        doc, line = docs.get(cls, ("", None))
+        out.append({"key": key, "label": labels.get(key, key), "blurb": blurbs.get(key, ""), "doc": doc,
+                    "line": str(line or ""), "dep": dep,
+                    "tools": "yes" if re.search(r"func takes_tools\(\) -> bool:\s*\n\s*return true", body) else ""})
+    return out
+
+
+def _render_agents_doc(text_gen: Script, image_gen: Script, assistant: Script, deps: Script) -> str:
+    """docs/agents.md, from TextGen.REGISTRY, ImageGen.REGISTRY and AssistantBackends.REGISTRY - each
+    backend's label, blurb and class doc - and the Deps.TOOLS row of every CLI they run, for the
+    install lines. Nothing here names an agent: the table is whatever the registries hold."""
+    writers = _agent_backends(text_gen)
+    painters = _agent_backends(image_gen)
+    helpers = [
+        {"key": k, "label": _gd_text(b, "label"), "dep": _gd_text(b, "dep")}
+        for k, b in _gd_entries(assistant.text, "REGISTRY")
+    ]
+    tools = {_gd_text(b, "key"): b for b in _gd_rows(deps.text, "TOOLS")}
+    clis: List[str] = []
+    for a in writers + painters + helpers:
+        if a["dep"] and a["dep"] not in clis:
+            clis.append(a["dep"])
+    for dep in clis:
+        if dep not in tools:
+            warn(f"an agent runs '{dep}', which no Deps.TOOLS row describes")
+
+    def cli_name(dep: str) -> str:
+        return _gd_text(tools.get(dep, ""), "name") or dep
+
+    def role(group: List[Dict[str, str]], dep: str) -> str:
+        return ", ".join(a["label"] for a in group if a["dep"] == dep) or "-"
+
+    lines = [
+        AUTOGEN_HEADER,
+        "# Agents: who writes, paints and fixes",
+        "",
+        "Ghost Notes hands three kinds of work to AI agents. A **writer** writes the words: a card "
+        "show's plan, its deck's booklet, the set dresser's table and every reading. A **painter** "
+        "paints the pictures: a deck's cards, the table's cloth and room, and the book's and the "
+        "notebook's illustrations. The **assistant** takes a note left in the feedback console "
+        "(the backtick key) and makes the fix in the copy of Ghost Notes it runs from.",
+        "",
+        "Every agent is a command-line tool you install yourself, and each keeps its own sign-in, "
+        "which Ghost Notes never handles: it finds the tool, runs it only when you ask, and keeps "
+        "what each run was sent and what it said beside the result. Install one or several. Until "
+        "one is installed, a template that needs a writer or a painter is grayed in **New**, its "
+        "tooltip naming every agent that would do; the Environment panel (the ⚙ in the bottom-right "
+        "row) lists each tool with the command that installs it.",
+        "",
+        "## Which tool does what",
+        "",
+        "| Command-line tool | Writer | Painter | Assistant | Ghost Notes' own tools |",
+        "|---|---|---|---|---|",
+    ]
+    for dep in clis:
+        site = _gd_text(tools.get(dep, ""), "site")
+        name = f"[{cli_name(dep)}]({site})" if site else cli_name(dep)
+        lines.append(
+            f"| {name} | {role(writers, dep)} | {role(painters, dep)} | {role(helpers, dep)} | "
+            f"{'yes' if any(w['dep'] == dep and w['tools'] for w in writers) else '-'} |"
+        )
+    lines.extend(
+        [
+            "",
+            "A writer that takes **Ghost Notes' own tools** works in a loop: it calls a tool Ghost "
+            "Notes serves while the app runs (build a thing, stand it on the table, photograph it), "
+            "looks at what comes back and goes on (`AgentTools`). The card table's set dresser works "
+            "that way when its writer can; any other writer is asked once and answers once.",
+            "",
+            "Where each is chosen: a card show's **Writer** and **Painter** rows, each with its own "
+            "model and reasoning effort; the illustration panel's painter, for the book and the "
+            "notebook; and the assistant picker in the 💬 panel. What every agent is told is in "
+            "[rules/](../rules), one YAML file per role.",
+            "",
+            f"## Writers ({len(writers)})",
+            "",
+            f"`TextGen.REGISTRY` in {_source_link(text_gen.rel)}. {_sentence(_one_liner(text_gen.doc, 'TextGen'))}",
+            "",
+        ]
+    )
+    for kind, group, script in (("writer", writers, text_gen), ("painter", painters, image_gen)):
+        if kind == "painter":
+            lines.extend(
+                [
+                    f"## Painters ({len(painters)})",
+                    "",
+                    f"`ImageGen.REGISTRY` in {_source_link(image_gen.rel)}. {_sentence(_one_liner(image_gen.doc, 'ImageGen'))}",
+                    "",
+                ]
+            )
+        for a in group:
+            lines.extend([f"### `{a['key']}` - {a['label']}", ""])
+            if a["blurb"]:
+                lines.extend([f"_{_md(a['blurb'])}_", ""])
+            if a["doc"]:
+                lines.extend([a["doc"], ""])
+            else:
+                warn(f"{script.rel}: the {kind} '{a['key']}' has no doc comment")
+            lines.extend(
+                [f"Runs the {cli_name(a['dep'])}. Source: {_source_link(script.rel, int(a['line']) if a['line'] else None)}", ""]
+            )
+    lines.extend(
+        [
+            f"## The assistant ({len(helpers)})",
+            "",
+            f"`AssistantBackends.REGISTRY` in {_source_link(assistant.rel)}. "
+            f"{_sentence(_one_liner(assistant.doc, 'AssistantBackends'))} It runs in the folder Ghost Notes "
+            "runs from and edits it, so it is for working on Ghost Notes itself.",
+            "",
+        ]
+    )
+    for a in helpers:
+        lines.append(f"- **{a['label']}** (`{a['key']}`)")
+    lines.extend(["", "## Installing one", ""])
+    for dep in clis:
+        body = tools.get(dep, "")
+        site = _gd_text(body, "site")
+        lines.append(f"- **{cli_name(dep)}**" + (f" - {site}" if site else ""))
+        for plat, hint in _gd_map(body, "install"):
+            lines.append(f"  - {PLATFORMS.get(plat, plat)}: `{hint}`")
+    lines.extend(
+        [
+            "",
+            f"Source: the registries above, and `Deps.TOOLS` in {_source_link(deps.rel)}, which the "
+            "Environment panel and every launch resolve through - see [environment.md](environment.md).",
+        ]
+    )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+# ---------------------------------------------------------------------------
 # How the show is made
 # ---------------------------------------------------------------------------
 
@@ -2343,6 +2518,15 @@ def main() -> int:
             str(len(_script_entries(scripts["script_marks"]))),
             "every mark a script may carry - the script editor's palette.",
         ),
+        (
+            "agents",
+            "Agents",
+            f"{len(_parse_registry_dict(scripts['text_gen'].text))} writers, "
+            f"{len(_parse_registry_dict(scripts['image_gen'].text))} painters, "
+            f"{len(_gd_entries(scripts['assistant_backends'].text, 'REGISTRY'))} assistants",
+            "the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which "
+            "does what, how each is run, and how to install one.",
+        ),
     ]
 
     _write_if_changed(
@@ -2385,6 +2569,12 @@ def main() -> int:
         _render_architecture_doc(_class_index(), scenes, layer, prims, scripts["medium"]),
     )
     _write_if_changed(DOCS / "environment.md", _render_environment_doc(scripts["deps"]))
+    _write_if_changed(
+        DOCS / "agents.md",
+        _render_agents_doc(
+            scripts["text_gen"], scripts["image_gen"], scripts["assistant_backends"], scripts["deps"]
+        ),
+    )
     _write_if_changed(DOCS / "cli.md", _render_cli_doc(_scan_flags()))
     _write_if_changed(DOCS / "index.md", _render_index(scripts, scenes, features))
 

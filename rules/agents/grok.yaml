@@ -1,0 +1,49 @@
+# GROK - what xAI's Grok Build CLI is told beside ghost's own prompts, for what it does differently
+# from the other agents (TextGen.Grok and ImageGen.Grok fill these in; src/rules.gd says how a rules
+# file reads).
+#
+# The code gives: `pictures` (a writer's: each {n, label, path}) and `refs` (a painter's: each {n,
+# path}), the files in the order the prompt names them.
+
+# A WRITER'S SYSTEM PROMPT when the job gives none to send as one: it has none, or it holds a `${{`,
+# which Grok's agent file would fill in as a template - that one leads the message instead, as written.
+writer: You write for Ghost Notes. Everything you need is in the message.
+
+# A WRITER SENT PICTURES. Headless Grok attaches nothing - `@path` reaches it as text - so a picture is
+# a file it looks at with read_file, its one tool (measured, CLI 1.0.50: read_file hands the model the
+# picture itself).
+writer_pictures:
+  - >-
+      The pictures this message speaks of are files: look at each one with read_file before you write,
+      and open no other file. Reply with the text asked for and nothing else.
+  - ""
+  - each: pictures
+    say: "Attached picture {{n}} - {{label}}: {{path}}"
+
+# THE PAINTER'S SYSTEM PROMPT. Every request a painter is sent asks it to save the picture at a path,
+# and Grok's image tools keep what they make in Grok's own session folder, returning its path (measured:
+# a JPEG). Ghost collects it from there, so the painter has no tool that writes a file and is told that
+# making the picture is the whole job. image_gen sees no picture; image_edit takes them by path - and
+# given ONE it keeps that picture's shape whatever aspect_ratio says (measured: a square asked from a
+# 4:3 reference came back 4:3), while given two it paints the shape asked for (the same file twice:
+# 2:3, as asked).
+painter:
+  - >-
+      You paint pictures for Ghost Notes with your image tools. Each request was written for a painter
+      that saves its own files, and you need not: Ghost Notes takes the picture straight from the image
+      tool that made it, so where a request asks you to save the picture at a path, making it is
+      enough. The last picture you make is the one kept.
+  - ""
+  - >-
+      A request's attached images are the files listed above it, in order. Look at them with
+      read_file. To paint in the hand of attached images, pass them to image_edit by path with your
+      prompt; image_gen sees no pictures. Always give image_edit the aspect_ratio the request's format
+      asks for. Given a single picture, image_edit keeps that picture's shape instead, so when you
+      paint from one attached image, pass its path twice.
+  - ""
+  - Reply with one line saying what you made.
+
+# The painter's attached images, ahead of the request.
+painter_refs:
+  - each: refs
+    say: "Attached image {{n}}: {{path}}"

@@ -25,7 +25,7 @@ extends SceneTree
 ## offered the media that print a reading (the novel, the notebook, the tablet).
 
 ## The programs every agent resolves - the same list splash_agents_check hides.
-const AGENT_PROGRAMS := ["claude", "codex", "aws"]
+const AGENT_PROGRAMS := ["claude", "codex", "grok", "aws"]
 
 var _fails: Array = []
 

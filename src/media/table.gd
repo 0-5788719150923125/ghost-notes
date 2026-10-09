@@ -342,7 +342,7 @@ uniform sampler2D tex : source_color, filter_linear_mipmap, repeat_disable;
 uniform vec4 window = vec4(0.0, 0.0, 1.0, 1.0);   // the picture's part of the face, in UV
 uniform float lo = 0.8;                            // the picture's own foil key (luminance)
 uniform float hi = 0.95;
-uniform vec3 accent = vec3(0.79, 0.64, 0.15);      // the frame's foil color
+uniform vec3 accent = vec3(0.58, 0.36, 0.02);      // the frame's foil color, linear as tex is sampled
 uniform vec3 stock = vec3(-1.0);                   // the card's stock: a shaped window's corners are stock, never foil
 uniform float foil = 0.6;                          // how much foil the deck was printed with
 uniform float pulse = 0.5;                         // the slow breath, 0..1
@@ -1058,6 +1058,16 @@ static func _foil_stock(mat: ShaderMaterial, look: Dictionary) -> void:
 	mat.set_shader_parameter("stock", Vector3(c.r, c.g, c.b))
 
 
+## The frame's accent, for the foil to find on the frame's lines. LINEAR too: in sRGB a line's own
+## color missed it by ~0.4 and the texels of its edge, half blended toward the stock, hit it - a dark
+## line with a bright, stair-stepped foil fringe down each side (the corners' aliasing in the 1327
+## export, tests/card_foil_check.gd).
+static func _foil_accent(mat: ShaderMaterial, look: Dictionary) -> void:
+	var f: Dictionary = look.get("frame", {}) if look.get("frame") is Dictionary else {}
+	var c := CardTable.color(String(f.get("accent", "#c9a227"))).srgb_to_linear()
+	mat.set_shader_parameter("accent", Vector3(c.r, c.g, c.b))
+
+
 ## THE CARD'S SLAB for [param look], cut to its corners ([method CardTable.corner_radius]) - one mesh per
 ## radius and thickness, shared.
 func _mesh_for(look: Dictionary, t := CARD_T) -> ArrayMesh:
@@ -1074,7 +1084,6 @@ func _poll_pictures(force := false) -> void:
 	var dir := String(_pay.get("dir", ""))
 	if dir.is_empty():
 		return
-	var accent := CardTable.color(String((_look.get("frame", {}) as Dictionary).get("accent", "#c9a227")))
 	for i in _cards.size():
 		var tex := _picture(dir.path_join("card_%d.png" % (i + 1)), force)
 		if tex != null and (_face_canvas[i] as CardFaces.Face).art != tex:
@@ -1084,7 +1093,7 @@ func _poll_pictures(force := false) -> void:
 			mat.set_shader_parameter("lo", key.x)
 			mat.set_shader_parameter("hi", key.y)
 			CardFaces.redraw(_faces[i])
-		(_face_mats[i] as ShaderMaterial).set_shader_parameter("accent", Vector3(accent.r, accent.g, accent.b))
+		_foil_accent(_face_mats[i], _look)
 		(_face_mats[i] as ShaderMaterial).set_shader_parameter("foil", _foil)
 	# EACH PRINTING'S BACK (`back.png` the deck's own, `back_<printing>.png` the others'), and every back
 	# printed with a card's text over its printing's
@@ -1100,7 +1109,7 @@ func _poll_pictures(force := false) -> void:
 			(bk["mat"] as ShaderMaterial).set_shader_parameter("lo", pkey.x)
 			(bk["mat"] as ShaderMaterial).set_shader_parameter("hi", pkey.y)
 			CardFaces.redraw(bk["vp"])
-		(bk["mat"] as ShaderMaterial).set_shader_parameter("accent", Vector3(accent.r, accent.g, accent.b))
+		_foil_accent(bk["mat"], _look)
 		(bk["mat"] as ShaderMaterial).set_shader_parameter("foil", _foil * 0.8)
 		for pb in _printed:
 			if String((pb as Dictionary).get("series", "")) != String(name):

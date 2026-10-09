@@ -118,6 +118,7 @@ $psi.CreateNoWindow = $true
 $psi.RedirectStandardInput = $true
 $psi.RedirectStandardOutput = $true
 $psi.RedirectStandardError = $true
+if ($s.env) { foreach ($v in $s.env.PSObject.Properties) { $psi.EnvironmentVariables[$v.Name] = [string]$v.Value } }
 try { $p = [System.Diagnostics.Process]::Start($psi) } catch {
 	$b = [Text.Encoding]::UTF8.GetBytes("ghost launcher: " + $_.Exception.Message + "`n")
 	$err.Write($b, 0, $b.Length); $out.Close(); $err.Close(); exit 127
@@ -136,10 +137,12 @@ $out.Close(); $err.Close()
 exit $p.ExitCode
 """
 
-## The Unix half: `cd`, then exec with the redirects, so the pid the caller holds IS the
-## program's (and a `setpriv` pact on the shell carries over the exec). Every value is a
-## positional parameter; nothing is interpolated into the script.
-const _SH_LAUNCHER := "cd \"$1\" || exit 1; in=\"$2\"; out=\"$3\"; err=\"$4\"; shift 4; " \
+## The Unix half: `cd`, export the `env` entries (their count, then each `NAME=value`), then
+## exec with the redirects, so the pid the caller holds IS the program's (and a `setpriv` pact on
+## the shell carries over the exec). Every value is a positional parameter; nothing is
+## interpolated into the script.
+const _SH_LAUNCHER := "cd \"$1\" || exit 1; in=\"$2\"; out=\"$3\"; err=\"$4\"; n=\"$5\"; shift 5; " \
+	+ "while [ \"$n\" -gt 0 ]; do export \"$1\"; shift; n=$((n - 1)); done; " \
 	+ "exec \"$@\" < \"$in\" > \"$out\" 2> \"$err\""
 
 
@@ -247,6 +250,7 @@ static func _attach_pumps(info: Dictionary, sink: FileAccess, echo: String) -> i
 ##   cwd   - working directory ("" keeps this process's)
 ##   stdin - a file whose bytes are the child's whole stdin ("" = empty, closed at once)
 ##   out, err - where stdout and stderr go; must be two different files
+##   env   - `{NAME: value}` set for this child alone, over what it inherits from this process
 ## Registered and bound like [method start]; with `detached` true it is neither, exactly as
 ## [method start_detached]. Returns the pid, <= 0 on failure.
 ##
@@ -263,13 +267,14 @@ static func start_redirected(path: String, args: PackedStringArray, io: Dictiona
 	if out.is_empty() or err.is_empty() or out == err:
 		push_error("Subprocess.start_redirected: `out` and `err` must be two different files")
 		return -1
+	var env: Dictionary = io.get("env", {})
 	var shell := ""
 	var full := PackedStringArray()
 	if _is_windows():
 		shell = _powershell()
 		var spec := _write_ps_spec({"program": prog, "args": Array(args),
 			"cwd": String(io.get("cwd", "")), "stdin": String(io.get("stdin", "")),
-			"out": out, "err": err})
+			"out": out, "err": err, "env": env})
 		if shell.is_empty() or spec.is_empty():
 			return -1
 		full = PackedStringArray(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
@@ -280,7 +285,10 @@ static func start_redirected(path: String, args: PackedStringArray, io: Dictiona
 		var stdin := String(io.get("stdin", ""))
 		full = PackedStringArray(["-c", _SH_LAUNCHER, "sh",
 			cwd if not cwd.is_empty() else ".",
-			stdin if not stdin.is_empty() else "/dev/null", out, err, prog])
+			stdin if not stdin.is_empty() else "/dev/null", out, err, str(env.size())])
+		for k in env:
+			full.append("%s=%s" % [String(k), String(env[k])])
+		full.append(prog)
 		full.append_array(args)
 	if detached:
 		return start_detached(shell, full)

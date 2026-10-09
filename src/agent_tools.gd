@@ -16,8 +16,10 @@ class_name AgentTools
 ##
 ## EACH JOB GETS ITS OWN URL, with a random token in its path ([method open]): the token says which
 ## toolset answers, so a job can only ever reach its own tools, and what those tools let it see is
-## the toolset's decision (a reader's could stop at the cards drawn so far). Requests carrying a
-## browser's Origin are refused, as the protocol asks of a local server.
+## the toolset's decision (a reader's could stop at the cards drawn so far). The token may come the
+## standard way instead, as `Authorization: Bearer <token>` to the bare endpoint ([method endpoint],
+## [method token_of]): a client that reads it from an environment variable (Codex) keeps it out of
+## every argv. Requests carrying a browser's Origin are refused, as the protocol asks of a local server.
 ##
 ## EVERY CALL IS KEPT in the job's folder beside its prompt and reply: `tools.jsonl`, one line per
 ## call (the tool, what it was given, what it said), and each picture it returned as `look_NN.jpg`.
@@ -61,6 +63,17 @@ static func open(dir: String, toolset: Object) -> String:
 	s._jobs[token] = {"toolset": toolset, "dir": dir, "calls": 0, "images": 0}
 	DirAccess.make_dir_recursive_absolute(dir)
 	return "http://127.0.0.1:%d%s%s" % [s._port, PATH, token]
+
+
+## [param url] without its token - `http://127.0.0.1:<port>/mcp/` - for a client that sends the token
+## as a bearer ([method token_of]).
+static func endpoint(url: String) -> String:
+	return url.get_base_dir() + "/"
+
+
+## The token in [param url], which says whose tools answer.
+static func token_of(url: String) -> String:
+	return url.get_file()
 
 
 ## Stop answering for the job behind [param url] (its token alone works too).
@@ -155,6 +168,10 @@ func _respond(req: Dictionary) -> Dictionary:
 		return {"status": 403, "body": ""}
 	var path := String(req["path"]).get_slice("?", 0)
 	var token := path.trim_prefix(PATH) if path.begins_with(PATH) else ""
+	if token.is_empty() and path.begins_with(PATH.trim_suffix("/")):
+		var auth := String((req["headers"] as Dictionary).get("authorization", ""))
+		if auth.to_lower().begins_with("bearer "):
+			token = auth.substr(7).strip_edges()
 	if token.is_empty() or not _jobs.has(token):
 		return {"status": 404, "body": ""}
 	var job: Dictionary = _jobs[token]

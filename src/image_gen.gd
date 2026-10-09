@@ -21,17 +21,20 @@ class_name ImageGen
 ## Keys are what `[illustrations] backend` in `user://ghost.cfg` stores.
 const REGISTRY := {
 	"codex": Codex,
+	"grok": Grok,
 	"bedrock": Bedrock,
 }
 
 const LABELS := {
 	"codex": "OpenAI (Codex CLI)",
+	"grok": "xAI (Grok Build CLI)",
 	"bedrock": "Amazon Bedrock (AWS CLI)",
 }
 
 ## One string literal per entry, for the picker's tooltip - same rule as Medium.BLURBS.
 const BLURBS := {
 	"codex": "OpenAI's image model, driven through the Codex CLI's built-in image tool. Uses the Codex login, not an API key. About a minute per picture.",
+	"grok": "xAI's image model, driven through the Grok Build CLI's built-in image tools: it looks at the reference pictures and paints from them by path. Uses the Grok login. About half a minute per picture.",
 	"bedrock": "Image models on Amazon Bedrock - Stability AI's (Amazon retired its own in 2026) - through the AWS CLI with your AWS credentials, billed per picture to your AWS account. An Amazon Nova model reads each request and its reference pictures and writes the image model's prompt. A Stability model subscribes the account to it through AWS Marketplace on first use.",
 }
 
@@ -69,6 +72,10 @@ class Backend:
 	## [method TextGen.Backend.efforts]); the default alone where there is no such setting.
 	static func efforts(_model := "") -> Array:
 		return [{"key": "", "label": "Default"}]
+
+	## WHAT THE PAINTER IS DOING NOW (see [method TextGen.Backend.activity]).
+	func activity(job: Dictionary) -> Dictionary:
+		return TextGen.now_of(job, "working")
 
 
 ## OPENAI THROUGH THE CODEX CLI.
@@ -137,6 +144,11 @@ class Codex:
 
 	static func efforts(model := "") -> Array:
 		return TextGen.effort_list(Codex.levels(model), "Default (low)")
+
+	## Off its events, as the Codex writer's are read: the image tool's own work is between items,
+	## and says nothing.
+	func activity(job: Dictionary) -> Dictionary:
+		return TextGen.follow(job, String(job.get("events", "")), TextGen.Codex.read)
 
 	func resolve(job: Dictionary) -> String:
 		var target := String(job.get("target", ""))
@@ -262,6 +274,173 @@ class Codex:
 				out.append(j.data)
 		return out
 
+
+## XAI'S GROK THROUGH THE GROK BUILD CLI, painting with its built-in image tools.
+##
+## Run as the writer is ([TextGen.Grok]: an agent file whose body is the system prompt, the message a
+## file read as written, none of the setup it would borrow, no session kept), with a system prompt of
+## its own (Rules `agents/grok.painter`). Every request asks a painter to save the picture itself, and
+## Grok's `image_gen` / `image_edit` already keep what they make: in the run's session folder, with the
+## path in the tool's result (measured, CLI 1.0.50: a JPEG, 832x1248 for 2:3, ~25 s a picture). Ghost
+## reads that path off the event stream and saves the PNG itself ([method collect]) before the session
+## is deleted, so the painter needs, and has, no tool that writes a file - an agent that was given a
+## shell converted the picture with Python, which another machine may not have. Its tools are the two
+## image tools and `read_file`, for looking at the references, which are files listed ahead of the
+## request ("Attached image 1: ..."), the name the requests give them.
+##
+## The effort is LOW unless one is chosen, as Codex's painter: the agent writes a prompt and calls one
+## tool; the picture is the image model's.
+class Grok:
+	extends Backend
+
+	const IMAGE_TOOLS := ["image_gen", "image_edit"]
+
+	func binary() -> String:
+		var p := Deps.resolve("grok")
+		return p if not p.is_empty() else "grok"
+
+	func available() -> bool:
+		return Deps.has("grok")
+
+	## The models of the AGENT that calls the image tools (see [method TextGen.Grok.models]).
+	static func models() -> Array:
+		return TextGen.Grok.models()
+
+	static func efforts(model := "") -> Array:
+		return TextGen.effort_list(TextGen.Grok.levels(model), "Default (low)")
+
+	## The files a job writes, named once. The picture itself goes to `job.target`.
+	static func paths(job: Dictionary) -> Dictionary:
+		var dir := String(job["dir"])
+		return {"prompt": dir.path_join("prompt.txt"), "events": dir.path_join("events.jsonl"),
+			"log": dir.path_join("stderr.log")}
+
+	func start(job: Dictionary) -> int:
+		var dir := String(job["dir"])
+		DirAccess.make_dir_recursive_absolute(dir)
+		var p := Grok.paths(job)
+		job["events"] = p["events"]
+		job["log"] = p["log"]
+		var m := Grok.compose(job)
+		if not String(m["error"]).is_empty():
+			job["error"] = m["error"]
+			return -1
+		for pair in [[p["prompt"], m["message"]],
+				[TextGen.Grok.agent_path(job), TextGen.Grok.agent_file("painter", Rules.say("agents/grok.painter"), false)]]:
+			var err := TextGen.put(String(pair[0]), String(pair[1]))
+			if not err.is_empty():
+				job["error"] = err
+				return -1
+		job["step"] = "paint"
+		var pid := Subprocess.start_redirected(binary(), Grok.argv(job), {"cwd": dir,
+			"out": String(p["events"]), "err": String(p["log"]), "env": TextGen.Grok.ISOLATION}, "grok painter")
+		if pid <= 0:
+			job["error"] = "could not start grok (is the Grok Build CLI installed and logged in?)"
+		return pid
+
+	## THE MESSAGE: which attached image is which file, then the request (`message`, exactly what the
+	## CLI reads). `error` names a reference that cannot be read: a painter told to match a picture it
+	## cannot see would make one up.
+	static func compose(job: Dictionary) -> Dictionary:
+		var refs: Array = []
+		for r in job.get("refs", []):
+			if not FileAccess.file_exists(String(r)):
+				return {"error": "could not read the reference %s" % String(r).get_file(), "message": ""}
+			refs.append({"n": refs.size() + 1, "path": String(r)})
+		var prompt := String(job.get("prompt", ""))
+		if refs.is_empty():
+			return {"error": "", "message": prompt}
+		return {"error": "", "message": Rules.say("agents/grok.painter_refs", {"refs": refs}) + "\n\n---\n\n" + prompt}
+
+	## Flags and paths only - the message is in its file. The two MCP tools every allowlist keeps are
+	## taken back.
+	static func argv(job: Dictionary) -> PackedStringArray:
+		var args := PackedStringArray(["--agent", TextGen.Grok.agent_path(job),
+			"--prompt-file", String(Grok.paths(job)["prompt"]), "--verbatim",
+			"--tools", ",".join(PackedStringArray(IMAGE_TOOLS + ["read_file"])), "--disallowed-tools", "search_tool,use_tool"])
+		# its calls approved: its tools are these three, and Grok's headless auto mode judges each call
+		# with a classifier - it refused ghost's MCP tools in one run of three
+		args.append("--always-approve")
+		args.append_array(TextGen.Grok.common(job, "low"))
+		args.append_array(["--output-format", "streaming-json"])
+		return args
+
+	## Off its stream, as the Grok writer's is read.
+	func activity(job: Dictionary) -> Dictionary:
+		var now := TextGen.follow(job, String(job.get("events", "")), TextGen.Grok.read)
+		if String(job.get("step", "")) == "forget":
+			now["doing"] = "finishing"
+		return now
+
+	## After the painting: the picture saved, then the session forgotten (see [method TextGen.Grok.forget]).
+	func advance(job: Dictionary) -> int:
+		if String(job.get("step", "")) == "paint":
+			Grok.collect(job)
+			job["sessions"] = TextGen.Grok.sessions_of(String(job["dir"]), Grok.session_id(String(job.get("events", ""))))
+		return TextGen.Grok.forget(job, binary())
+
+	## THE PICTURE: the last one an image tool made, loaded from where Grok put it and saved as a PNG at
+	## `job.target`. Nothing when no call made one (see [method failure]).
+	static func collect(job: Dictionary) -> void:
+		var made := Grok.made(String(job.get("events", "")))
+		var img := Image.load_from_file(made) if not made.is_empty() else null
+		if img == null or img.is_empty():
+			return
+		var target := String(job.get("target", ""))
+		if target.is_empty():
+			target = String(job["dir"]).path_join("image.png")
+		if img.save_png(target) == OK:
+			print("ghost: grok painted %dx%d" % [img.get_width(), img.get_height()])
+
+	## The path of the last picture an image tool reported making in a `--output-format streaming-json`
+	## log, when it is there; "". A tool's name is on its `tool_call` event, its result (JSON text with a
+	## `path`) on the `tool_call_update` that completes it.
+	static func made(events_path: String) -> String:
+		var names := {}
+		var last := ""
+		for ev in TextGen.Grok.events(events_path):
+			var id := TextGen.Grok.field(ev, "toolCallId")
+			match TextGen.Grok.field(ev, "type"):
+				"tool_call":
+					names[id] = TextGen.Grok.field(ev, "toolName")
+				"tool_call_update":
+					if TextGen.Grok.field(ev, "status") != "completed" or not IMAGE_TOOLS.has(String(names.get(id, ""))):
+						continue
+					for c in (ev["content"] if ev.get("content") is Array else []):
+						var inner: Variant = (c as Dictionary).get("content", {}) if c is Dictionary else {}
+						if not (inner is Dictionary) or TextGen.Grok.field(inner, "type") != "text":
+							continue
+						# quietly: a refusal's result is words, not JSON
+						var j := JSON.new()
+						if j.parse(TextGen.Grok.field(inner, "text")) == OK and j.data is Dictionary \
+								and FileAccess.file_exists(TextGen.Grok.field(j.data, "path")):
+							last = String((j.data as Dictionary)["path"])
+		return last
+
+	## The run's session id, from the stream's `end` event; "".
+	static func session_id(events_path: String) -> String:
+		return String(TextGen.Grok.outcome(events_path)["session"])
+
+	func resolve(job: Dictionary) -> String:
+		var target := String(job.get("target", ""))
+		if target.is_empty():
+			target = String(job["dir"]).path_join("image.png")
+		return target if FileAccess.file_exists(target) and FileAccess.get_file_as_bytes(target).size() > 0 else ""
+
+	## Why there is no picture: the stream's error, else what the agent said after its last tool call
+	## (a refused prompt is explained there), else the CLI's last complaint.
+	func failure(job: Dictionary) -> String:
+		if job.has("error"):
+			return String(job["error"])
+		var o := TextGen.Grok.outcome(String(job.get("events", "")))
+		for msg in [o["error"], o["said"]]:
+			if not String(msg).strip_edges().is_empty():
+				return String(msg).strip_edges().substr(0, 240)
+		var err := FileAccess.get_file_as_string(String(job.get("log", ""))).strip_edges()
+		if not err.is_empty():
+			var lines := err.split("\n")
+			return String(lines[lines.size() - 1]).substr(0, 240)
+		return "grok finished without a picture"
 
 
 ## IMAGE MODELS ON AMAZON BEDROCK, THROUGH THE AWS CLI - Stability AI's, today (Amazon retired
@@ -400,6 +579,13 @@ Ignore anything in the request about tools, files, paths or saving."""
 				job["brief"] = brief
 				return _paint(job)
 		return 0
+
+	## WHAT IT IS DOING: each step answers all at once, so its step is all there is to say.
+	func activity(job: Dictionary) -> Dictionary:
+		var now := TextGen.now_of(job, "working")
+		now["doing"] = String({"lookup": "looking up its models", "direct": "writing the picture's prompt",
+			"paint": "painting"}.get(String(job.get("step", "")), "working"))
+		return now
 
 	## THE DIRECTOR'S MESSAGE: each reference under the name the request gives it ("Attached image
 	## 1:" - the requests say "the first attached image"), then the request; and the record a

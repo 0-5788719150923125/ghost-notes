@@ -1,0 +1,11 @@
+# CODEX - what OpenAI's Codex CLI is told beside ghost's own prompts, for what it does differently from
+# the other agents (TextGen.Codex fills these in; src/rules.gd says how a rules file reads). Its own words
+# before every message (work from the message alone, run nothing, read no file) are
+# TextGen.Codex.ONLY_THIS, in the code.
+
+# A WRITER GIVEN GHOST'S TOOLS: they are MCP tools on the server `ghost`, called as tools - neither a
+# command nor a file - so the words that forbid both must not be read as forbidding them (measured,
+# codex-cli 0.157.0: it found and called ghost's tool, and was shown its picture).
+with_tools: >-
+  The tools of the MCP server "ghost" are yours to call, as this message asks: they are neither
+  commands nor files.

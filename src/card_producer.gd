@@ -111,6 +111,11 @@ func error_of(step: String) -> String:
 	return String(_errors.get(step, ""))
 
 
+## What [param step]'s agent is doing now ([method AgentJobs.activity]); "" when it is not being made.
+func activity_of(step: String) -> String:
+	return AgentJobs.activity(String(_jobs[step])) if _jobs.has(step) else ""
+
+
 ## Land what ended; start what can start.
 func tick() -> void:
 	var moved := false

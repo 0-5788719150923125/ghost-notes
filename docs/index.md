@@ -45,6 +45,7 @@ core. The commitments:
 - [Stage actors and verbs](stage.md) (3 actors, 22 verbs) - what a storyboard's `stage` entries are made of.
 - [Masking effects](masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
 - [Script marks](script.md) (29) - every mark a script may carry - the script editor's palette.
+- [Agents](agents.md) (4 writers, 3 painters, 2 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.
 
 ## Subsystems
 

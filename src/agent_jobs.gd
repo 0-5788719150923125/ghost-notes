@@ -150,6 +150,18 @@ static func result(id: String) -> Dictionary:
 	return (_ended.get(id, {}) as Dictionary).duplicate()
 
 
+## WHAT A JOB'S AGENT IS DOING NOW, as a status line - "thinking (~11K tokens) · 6:30", "calling look
+## · 14:02" - read off its run's own stream ([method TextGen.status_of]); "waiting its turn" while it
+## is queued; "" for a job this queue is not holding.
+static func activity(id: String) -> String:
+	if _running.has(id):
+		return TextGen.status_of(_running[id])
+	for q in _queue:
+		if String((q as Dictionary)["id"]) == id:
+			return "waiting its turn"
+	return ""
+
+
 ## Drop an ended job's outcome once the caller has taken it.
 static func forget(id: String) -> void:
 	_ended.erase(id)

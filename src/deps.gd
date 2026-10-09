@@ -267,6 +267,23 @@ const TOOLS := [
 		"site": "https://developers.openai.com/codex/cli",
 	},
 	{
+		"key": "grok",
+		"name": "Grok Build CLI (xAI)",
+		"bins": ["grok"],
+		"version_args": ["--version"],
+		"tier": TIER_EXTRA,
+		"used_for": "xAI's Grok as a writer and a painter: the Cards mode's words, and its pictures and "
+			+ "the book's and notebook's through Grok's built-in image tools. Run with no memory and none "
+			+ "of the setup it would borrow from Claude, Cursor or Codex, and each run's session deleted "
+			+ "once it ends. It keeps its own login, so it stays yours to install, and it runs only when asked.",
+		"install": {
+			"linux": "curl -fsSL https://x.ai/cli/install.sh | bash",
+			"macos": "curl -fsSL https://x.ai/cli/install.sh | bash",
+			"windows": "irm https://x.ai/cli/install.ps1 | iex   (PowerShell)",
+		},
+		"site": "https://docs.x.ai/build/overview",
+	},
+	{
 		"key": "aws",
 		"name": "AWS CLI",
 		"bins": ["aws"],
@@ -391,6 +408,7 @@ static func search_dirs() -> PackedStringArray:
 				"/opt/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin",
 				home.path_join(".local/bin"), home.path_join("bin"),
 				home.path_join("homebrew/bin"),
+				home.path_join(".grok/bin"),                     # the Grok Build installer
 			])
 		"windows":
 			var local := OS.get_environment("LOCALAPPDATA")
@@ -399,6 +417,7 @@ static func search_dirs() -> PackedStringArray:
 			extra = PackedStringArray([
 				local.path_join("Microsoft/WindowsApps"),
 				home.path_join(".local/bin"),                   # Claude Code's native installer
+				home.path_join(".grok/bin"),                    # the Grok Build installer
 				home.path_join("scoop/shims"),                  # scoop
 				"C:/ProgramData/chocolatey/bin",                # chocolatey
 				local.path_join("Microsoft/WinGet/Links"),      # winget shims
@@ -418,6 +437,7 @@ static func search_dirs() -> PackedStringArray:
 				home.path_join(".local/share/flatpak/exports/bin"),
 				home.path_join(".nix-profile/bin"), "/nix/var/nix/profiles/default/bin",
 				home.path_join(".cargo/bin"), home.path_join(".deno/bin"),
+				home.path_join(".grok/bin"),                     # the Grok Build installer
 				"/opt/bin",
 			])
 	for d in extra:

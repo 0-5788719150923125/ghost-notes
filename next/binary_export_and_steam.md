@@ -32,6 +32,7 @@ only with no monetization at all.
 | Research-only (Blizzard 2013: lessac and all fine-tuned from it) | Still no - a consumer app is not research | No |
 | Anthropic | Commercial Terms, unmodified binary, never touch credentials | Same |
 | OpenAI (Codex on a ChatGPT login) | Its closest docs treat open-source apps apart from paid ones; a free build of MIT code sits nearer the open-source side | Premium is the paid-app side (an interest form) |
+| xAI (Grok Build on a grok.com login) | Not read yet | Not read yet |
 | Steam AI disclosure, guardrails, third-party account notice | Required | Required |
 | Anti-circumvention (YouTube import) | Price-blind: DMCA §1201 bans offering a circumvention tool, sold or not | Same |
 
@@ -213,7 +214,7 @@ ghost never sees credentials; it runs the CLIs the user installed and logged int
 | playwright + Chromium | Apache-2.0, BSD-style | |
 | Piper voices | per voice, below | |
 
-The AI CLIs (claude, codex, aws) are the user's own installs, not fetched.
+The AI CLIs (claude, codex, grok, aws) are the user's own installs, not fetched.
 
 **Piper voices, read MODEL_CARD by MODEL_CARD** (repo `rhasspy/piper-voices`, tagged MIT; each
 voice's card governs it):
@@ -270,6 +271,8 @@ fine-tuning chain.
 - **Valve:** does bring-your-own-account tarot pass review? (**ASK** Steamworks support.)
 - **Lawyer:** the YouTube import, if it stays.
 - **OpenAI:** Codex on a ChatGPT login inside a paid app - the interest form.
+- **xAI:** Grok Build on a grok.com login, spawned headless by an app (added 2026-10-08) - its terms
+  not read yet.
 - **Steam Linux Runtime:** can a Steam-launched ghost see the host's xvfb-run, setpriv and
   fallocate? A containerized runtime may hide host programs; renders depend on xvfb-run.
 - **macOS:** signing and notarization for a Steam build - not researched.

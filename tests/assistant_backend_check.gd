@@ -10,7 +10,8 @@ extends SceneTree
 ##   in none of them, and that Subprocess.start_redirected really delivers a hostile prompt
 ##   on stdin byte for byte. That last one is RUN, not inspected: `cat` stands in for the
 ##   CLI, and the captured output must be the prompt exactly. A `$(...)` that expanded would
-##   show. It launches detached, exactly as the dispatch does.
+##   show. It launches detached, exactly as the dispatch does. An `env` given to the launcher
+##   reaches that child alone, its value byte for byte - against the same run without it.
 ##
 ##   THE STREAM - recorded output (tests/fixtures/assistant/; the codex files are real
 ##   `codex exec --json` runs from codex-cli 0.150.0, one a resume of the other and one a
@@ -110,6 +111,15 @@ func _launcher() -> void:
 		and FileAccess.get_file_as_string(err_p) == "to-err\n", "stdout and stderr are separate")
 	_check(Subprocess.start_redirected("cat", [], {"out": out_p, "err": out_p}) <= 0,
 		"one file for both streams is refused, not silently interleaved")
+	# `env` reaches this child alone, value byte for byte (the Grok writer's switches): the control
+	# is the same run without it, and this process's own environment stays as it was.
+	var probe := "GHOST_ENV_PROBE"
+	var value := "a b=c 'd' \"e\" $(echo INJECTED)"
+	_run("sh", ["-c", "printf %s \"$" + probe + "\""], {"out": out_p, "err": err_p, "env": {probe: value}})
+	_check(FileAccess.get_file_as_string(out_p) == value, "env: the child sees the variable, byte for byte")
+	_run("sh", ["-c", "printf %s \"$" + probe + "\""], {"out": out_p, "err": err_p})
+	_check(FileAccess.get_file_as_string(out_p).is_empty() and OS.get_environment(probe).is_empty(),
+		"the control: without env the child sees none, and this process never had it")
 	for p in [out_p, err_p, in_p]:
 		DirAccess.remove_absolute(p)
 

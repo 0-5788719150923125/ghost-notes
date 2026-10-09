@@ -30,6 +30,10 @@ extends SceneTree
 ## - THE DIAL: 0 is silence; louder as it rises; never past the ceiling alone.
 ## - IT STEPS BACK FOR THE VOICE: under speech the place is quieter than in the gaps - against the
 ##   same place with no voice, which is not.
+## - CICADAS ARE A CHORUS: their loudness over 2 ms wobbles little round its 50 ms average while they
+##   sing (each of several cicadas pulsing at its own rate, shallow) - against the recipe that was "a
+##   horrible screeching sound throughout" (the user, 2026-10-09): one narrow band a group, chopped deep at
+##   one rate, which is rough.
 ## - EVERY PART SOUNDS: each part and kind alone is heard at the dial's middle, in a sane range, and
 ##   none is NaN.
 
@@ -48,7 +52,7 @@ func _ok(cond: bool, what: String) -> void:
 
 
 func _run() -> void:
-	for check in [_sanitize, _table_wind, _floor, _churn, _entry, _space, _follows, _sides, _sliced, _dial, _duck, _every]:
+	for check in [_sanitize, _table_wind, _floor, _churn, _entry, _space, _follows, _sides, _sliced, _dial, _duck, _every, _cicadas]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("soundscape_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -182,6 +186,56 @@ func _churn() -> bool:
 
 
 ## The old rumble's level: 3 times the new one (0.28 against 0.09), as it was when it churned.
+## HOW ROUGH A SOUND IS: its loudness over 2 ms, against its own 50 ms average, while it is sounding at
+## all (above a third of its loudest) - the rasp of a fast, deep pulse.
+static func _rough(pcm: PackedVector2Array) -> float:
+	var w := SR / 500
+	var env := PackedFloat32Array()
+	for k in pcm.size() / w:
+		env.append(_rms(pcm, k * w, (k + 1) * w).length())
+	var slow := PackedFloat32Array()
+	slow.resize(env.size())
+	var most := 0.0
+	for k in env.size():
+		var m := 0.0
+		var n := 0
+		for j in range(maxi(0, k - 12), mini(env.size(), k + 13)):
+			m += env[j]
+			n += 1
+		slow[k] = m / float(n)
+		most = maxf(most, slow[k])
+	var dev := 0.0
+	var mean := 0.0
+	var n := 0
+	for k in env.size():
+		if slow[k] > most * 0.3:
+			dev += pow(env[k] - slow[k], 2.0)
+			mean += slow[k]
+			n += 1
+	return sqrt(dev / float(maxi(n, 1))) / maxf(mean / float(maxi(n, 1)), 1e-9)
+
+
+## The cicadas as they were: one narrow band a group, its pulse deep and at one rate.
+static func _one_whine(sc: Soundscape) -> Soundscape:
+	for g in sc._in["cicadas"]:
+		var voices: Array = (g as Dictionary)["voices"]
+		var b: Soundscape.Band = (voices[0] as Dictionary)["band"]
+		b.q = 5.0
+		b.am_depth = 0.85
+		b.am_rate = 185.0
+		(g as Dictionary)["voices"] = [voices[0]]
+	return sc
+
+
+func _cicadas() -> bool:
+	var place := {"insects": {"kind": "cicadas", "strength": 0.5}}
+	var chorus := _rough(_make(place, {}, 5).render(SR * 20))
+	var whine := _rough(_one_whine(_make(place, {}, 5)).render(SR * 20))
+	_ok(chorus < 0.3, "cicadas rasp: %.2f of their loudness wobbles in 2 ms (a chorus is under 0.3)" % chorus)
+	_ok(whine > 0.4, "the control: one deep-pulsed narrow band a group is not found rough (%.2f)" % whine)
+	return true
+
+
 static func _louder_low(sc: Soundscape) -> Soundscape:
 	(sc._w["low"] as Soundscape.Band).steady = 3.1
 	return sc

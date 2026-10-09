@@ -1193,6 +1193,7 @@ static func _strewn(heap: bool, n: int, jit: float, radius: float, own: Transfor
 	var wide_of := PackedFloat32Array()
 	var high_of := PackedFloat32Array()
 	var out: Array = []
+	var flat := heap and girth >= tall * 0.5 * FLAT
 	for i in n:
 		var s := 1.0 + rng.randf_range(-0.15, 0.15) * jit
 		var r := reach * s
@@ -1200,7 +1201,8 @@ static func _strewn(heap: bool, n: int, jit: float, radius: float, own: Transfor
 		var spot := Vector2.ZERO
 		var mid := hh
 		if heap:
-			var rest: Variant = _heaped(girth * s, hh, radius, mids, wide_of, high_of, walls, rng)
+			var rest: Variant = (_stacked(girth * s, hh, radius, mids, wide_of, high_of, walls, rng) if flat
+			else _heaped(girth * s, hh, radius, mids, wide_of, high_of, walls, rng))
 			if rest == null:
 				continue
 			var p: Vector3 = rest
@@ -1230,7 +1232,8 @@ static func _strewn(heap: bool, n: int, jit: float, radius: float, own: Transfor
 				continue
 		laid.append([spot, r])
 		var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s, s))
-		if mid > hh * 1.2:
+		# a flat lump (a coin) lies flat: a tipped disc's rim swings through its neighbors
+		if mid > hh * 1.2 and not flat:
 			b = Basis(Vector3(rng.randf_range(-1.0, 1.0), 0.0, rng.randf_range(-1.0, 1.0)).normalized(), rng.randf_range(0.1, 0.35)) * b
 		# turned and tipped about its own middle, so a tipped lump stays in the pocket it was laid in
 		out.append(Transform3D(Basis(), at) * Transform3D(b, Vector3(spot.x, mid, spot.y))
@@ -1283,6 +1286,36 @@ static func _heaped(a: float, b: float, radius: float, mids: PackedVector3Array,
 			return Vector3(q.x, b, q.y)
 	# no room anywhere: a vessel leaves it out, the open cloth takes it where it fell
 	return null if not walls.is_empty() else Vector3(q.x, b, q.y)
+
+
+## WHERE A HEAPED FLAT LUMP (a coin) COMES TO REST, sizes as in [method _heaped]. Coins are discs,
+## not the rounded lumps [method _free] and [method _pockets] treat as ellipsoids, whose rims pass
+## through each other where they overlap and which settle into pockets no disc fits: a coin is
+## dropped at several places in the circle, falls to the top of the highest coin whose disc it
+## overlaps (lying flat, one thickness above it), and takes the lowest of them - so the dish floor
+## fills before the heap rises, and no two coins ever share space (feedback 0008). Null when the
+## vessel has no room left for it.
+static func _stacked(a: float, b: float, radius: float, mids: PackedVector3Array, wide_of: PackedFloat32Array,
+		high_of: PackedFloat32Array, walls: Dictionary, rng: RandomNumberGenerator) -> Variant:
+	var inside := INF if walls.is_empty() else float(walls["radius"]) - a
+	var rim := INF if walls.is_empty() else float(walls["top"])
+	if inside <= 0.0:
+		return null
+	var drop := minf(radius, inside)
+	var best: Variant = null
+	for k in 24:
+		var q := Vector2.from_angle(rng.randf() * TAU) * drop * sqrt(rng.randf())
+		var y := b
+		for i in mids.size():
+			var d := Vector2(q.x - mids[i].x, q.y - mids[i].z).length()
+			# 1.03: a disc cut in flat sides reaches a little past its mean half-width
+			if d < (a + wide_of[i]) * 1.03:
+				y = maxf(y, mids[i].y + high_of[i] + b + 0.00005)
+		if best == null or y < (best as Vector3).y - 1e-6:
+			best = Vector3(q.x, y, q.y)
+	if (best as Vector3).y - b >= rim:
+		return null
+	return best
 
 
 ## THE WALL ROUND A HEAP, when it lies in a vessel - a dish, a bowl, a tray among the thing's other

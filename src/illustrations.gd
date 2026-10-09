@@ -635,6 +635,17 @@ static func status(key: String) -> String:
 	return "ready" if current_index(key) >= 0 else "missing"
 
 
+## What [param key]'s painter is doing now ([method TextGen.status_of]); "waiting its turn" while it
+## is queued; "" otherwise.
+static func activity(key: String) -> String:
+	if _jobs.has(key):
+		return TextGen.status_of(_jobs[key])
+	for q in _queue:
+		if String((q as Dictionary)["key"]) == key:
+			return "waiting its turn"
+	return ""
+
+
 static func error_of(key: String) -> String:
 	var e := String(_errors.get(key, ""))
 	return e if not e.is_empty() else PageCapture.error_of(key)

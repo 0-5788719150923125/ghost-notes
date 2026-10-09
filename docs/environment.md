@@ -45,6 +45,10 @@ A few programs are part of the system or keep their own logins, so they stay you
   - Linux: `curl -fsSL https://chatgpt.com/codex/install.sh | sh`
   - macOS: `curl -fsSL https://chatgpt.com/codex/install.sh | sh`
   - Windows: `npm install -g @openai/codex   (needs Node.js)`
+- **Grok Build CLI (xAI)** - xAI's Grok as a writer and a painter: the Cards mode's words, and its pictures and the book's and notebook's through Grok's built-in image tools. Run with no memory and none of the setup it would borrow from Claude, Cursor or Codex, and each run's session deleted once it ends. It keeps its own login, so it stays yours to install, and it runs only when asked.
+  - Linux: `curl -fsSL https://x.ai/cli/install.sh | bash`
+  - macOS: `curl -fsSL https://x.ai/cli/install.sh | bash`
+  - Windows: `irm https://x.ai/cli/install.ps1 | iex   (PowerShell)`
 - **AWS CLI** - Amazon Bedrock, as a writer and a painter: Amazon's own Nova models and the open models Bedrock hosts for the Cards mode's words, Stability AI's image models for its pictures and the book's illustrations. Called with your AWS credentials and region (set them with `aws configure`) and billed per token or per picture to your AWS account, so it runs only when asked.
   - Linux: `curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip && unzip awscliv2.zip && sudo ./aws/install   ·   Arch: sudo pacman -S aws-cli-v2`
   - macOS: `brew install awscli   ·   or the installer: https://awscli.amazonaws.com/AWSCLIV2.pkg`

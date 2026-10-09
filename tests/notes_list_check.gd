@@ -37,7 +37,7 @@ extends Node
 var _fails: Array = []
 var _main: Node
 const ROOT := "user://notes_list_check"
-const AGENT_PROGRAMS := ["claude", "codex", "aws"]
+const AGENT_PROGRAMS := ["claude", "codex", "grok", "aws"]
 const FixtureAudio := preload("res://tests/fixture_audio.gd")
 
 
