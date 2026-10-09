@@ -791,6 +791,13 @@ func attach(host: Node, medium: Medium = null) -> void:
 func _handover(outgoing: GhostScene) -> GhostScene:
 	if _medium == null or not is_instance_valid(_medium) or not _medium.owns_cast():
 		return null
+	# THE CLOCK RESTARTS BEFORE THE MEDIUM IS ASKED. take_over plans the incoming shot from
+	# hold_remaining() ([ComicMedium] sizes its move to a share of it), and with the clock still
+	# on the scene being left that is the leftover of a hold that is over: measured at camera 1,
+	# a median of 4.9 s left for scenes that ran 21, so half the moves sat on the 1.8 s floor.
+	# _arm() resets it again after; this only lets the medium see the hold it is planning for.
+	_elapsed = 0.0
+	_cue_prev = 0.0
 	var sc := _medium.take_over(outgoing)
 	if sc == null or not is_instance_valid(sc):
 		return null

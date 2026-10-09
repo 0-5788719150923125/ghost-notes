@@ -2,7 +2,12 @@ extends Node
 
 ## WHAT THE EYE ACTUALLY SEES, measured on the OUTPUT rather than on the plan.
 ##
-##   tests/run_boot_probe.sh tests/comic_motion_check.gd 400
+##   tests/run_boot_probe.sh tests/comic_motion_check.gd 400 --seed 2491232026
+##
+## THE SEED IS PINNED, and scripts/check.sh passes it from the line above. Without it there is
+## no audio, so every run rolled a fresh show and the numbers below described a different comic
+## each time: they could not be compared across builds, and a bar near the edge on one seed was
+## a coin toss in CI. 2491232026 is the seed that went red there.
 ##
 ## THIS EXISTS BECAUSE EVERY OTHER GATE HERE WAS GREEN THROUGH A NIGHT OF REPORTS.
 ## comic_camera_check measures the PLAN - does a move finish before the cut, does a chain go
@@ -212,8 +217,17 @@ func _drive(comic: ComicMedium, sev: float) -> void:
 	var moves: Array = []          # per-frame screen displacement
 	var areas: Array = []          # per-frame silhouette area, for the zoom direction
 	var panels: Array = []         # per-frame framing panel, to tell a jump's subject
-	var live: GhostScene = null
 	var cuts := 0
+	# THE SCENE ENDS WHEN ITS HOLD IS UP, and that length is fixed when the scene starts.
+	# hold_remaining() is the time LEFT, and this loop used to compare the clock against it
+	# directly - a number that shrinks as the clock grows - so every cut landed at HALF the hold
+	# the medium had been told to plan for: under the Director's own minimum, earlier than any
+	# cut the app can make. A camera-1 shot is given 38% of the hold and lands near that
+	# halfway mark, so whether most shots arrived came down to the random seed (CI went red on
+	# 2491232026, 5 of 9 never arriving). The median is when the Director expects the cut and
+	# what the medium plans against, so the scene runs that long.
+	Director._elapsed = 0.0
+	var due := Director.hold_remaining()
 	# HOW LONG A SHOT TAKES TO ARRIVE is what `held` is made of, and measuring it directly is
 	# the difference between knowing and guessing. A shot that never reaches its target holds
 	# for none of its scene however gentle the slider says it is.
@@ -239,15 +253,17 @@ func _drive(comic: ComicMedium, sev: float) -> void:
 		# adopt what it hands back, and build or free nothing. The panels were cast when the
 		# page turned and they all stay on the paper - freeing "the outgoing scene" here would
 		# delete a panel out of the comic.
-		if Director._elapsed >= Director.hold_remaining():
-			# THE CLOCK IS RESET BEFORE THE HANDOVER, NOT AFTER. The medium sizes its shot
-			# from Director.hold_remaining() at the moment it is asked to take over, so
-			# resetting afterwards hands it the exhausted hold it is being cut out of and it
-			# plans for a scene that is already over.
-			Director._elapsed = 0.0
-			var handed := comic.take_over(live)
-			if handed != null:
-				live = handed
+		if Director._elapsed >= due:
+			# THE APP'S OWN CUT, not an imitation of it. This loop used to reset the clock and
+			# call take_over itself, in the order the medium needs - while the Director asked
+			# the medium first and reset the clock after, so the app planned every shot against
+			# the leftover of the scene being left and this gate never saw it.
+			Director._begin_transition()
+			if Director._transitioning:
+				_fails.append("camera %.2f: the comic declined a handover and the Director built a scene"
+					% sev)
+				return
+			due = Director.hold_remaining()
 			cuts += 1
 		comic.advance(Spectrum.current, dt, 0.0)
 		# SAMPLED EVERY FRAME, because _begin_shot replaces `_shot` with a fresh dict AND bumps
@@ -319,11 +335,11 @@ func _drive(comic: ComicMedium, sev: float) -> void:
 	# so the bar is that arriving is the NORM. It was 100% never-arriving once, which is the
 	# failure this is really guarding against.
 	#
-	# THE BAR STOPS AT CAMERA 1.0. At the slider's maximum (2.0) most shots are cut before they
-	# arrive, measured on every seed tried (6-8 of 9), which the camera there does by design:
-	# it is the busy end, and the numbers are still printed above. Held back to 1.0 until the
-	# comic camera is reworked; tighten it again then.
-	if sev <= 1.0 and shots > 0 and float(never) / float(shots) > 0.5:
+	# EVERY SETTING, camera 2 included. It was held back to camera 1 when 6-8 of 9 shots at 2
+	# never arrived on every seed tried - but that was this loop cutting at half the hold (see
+	# `due` above), not the busy end of the camera. Cut when the hold is up, none of them miss
+	# at any setting (seeds 2491232026, 4023042664, 404, 7).
+	if shots > 0 and float(never) / float(shots) > 0.5:
 		_fails.append("camera %.2f: %d of %d shots never reached their target"
 			% [sev, never, shots])
 	_report(sev, moves, areas, panels)

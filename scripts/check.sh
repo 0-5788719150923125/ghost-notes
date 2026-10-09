@@ -28,7 +28,7 @@
 # alone, and neither is silence.
 #
 # THE TIMEOUT is the one in the gate's own run line (`run_boot_probe.sh tests/<name>.gd 120`),
-# else 300 s.
+# else 300 s; anything after it on that line is handed to the probe as its args.
 
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
@@ -101,6 +101,11 @@ timeout_of() {
 	t=$(grep -m1 -oE "run_boot_probe\.sh tests/$1\.gd [0-9]+" "tests/$1.gd" | grep -oE '[0-9]+$')
 	echo "${t:-300}"
 }
+## ...and the rest of that line is the probe's args (`... 400 --seed 2491232026`), so the
+## documented command and the gatekeeping run the same show.
+args_of() {
+	grep -m1 -oE "run_boot_probe\.sh tests/$1\.gd [0-9]+.*" "tests/$1.gd" | cut -d' ' -f4-
+}
 
 # -- what runs ------------------------------------------------------------------
 
@@ -139,7 +144,9 @@ how() {
 			if [ "$k" = script ]; then
 				if is_gpu "$1"; then echo "tests/run_quiet.sh (xvfb)"; else echo "godot --headless --script, ${t}s"; fi
 			else
-				if is_gpu "$1"; then echo "boot probe on the GPU (xvfb), ${t}s"; else echo "boot probe, ${t}s"; fi
+				local a
+				a=$(args_of "$1")
+				if is_gpu "$1"; then echo "boot probe on the GPU (xvfb), ${t}s${a:+, $a}"; else echo "boot probe, ${t}s${a:+, $a}"; fi
 			fi ;;
 	esac
 }
@@ -191,10 +198,12 @@ run_gate() {  # run_gate <name> <log>; returns the raw exit code
 					return "$rc"
 				fi
 			else
+				local -a pa=()
+				read -ra pa <<<"$(args_of "$g")"
 				if is_gpu "$g"; then
-					GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 tests/run_boot_probe.sh "tests/$g.gd" "$t" >"$log" 2>&1
+					GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 tests/run_boot_probe.sh "tests/$g.gd" "$t" "${pa[@]}" >"$log" 2>&1
 				else
-					tests/run_boot_probe.sh "tests/$g.gd" "$t" >"$log" 2>&1
+					tests/run_boot_probe.sh "tests/$g.gd" "$t" "${pa[@]}" >"$log" 2>&1
 				fi
 			fi ;;
 	esac
