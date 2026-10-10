@@ -263,10 +263,11 @@ func export_take() -> String:
 
 
 ## WHAT AN UPLOAD SAYS, under the YouTube card's title, visibility and playlist (see
-## [member Exporter.upload_provider]): the episode's description with a chapter per card timed from
-## [param take], the SHOW'S tags (its document's `tags:` line), the moment of the title screen to take
-## the thumbnail from, the file its uploads are recorded in, and the show's and the episode's titles
-## for the card's `%title%` and `%episode%`. For the take an export just rendered it describes THAT
+## [member Exporter.upload_provider]): the episode's description and a chapter per card timed from
+## [param take] (apart, so the playlist goes between them - [method YouTube.description_of]), the
+## SHOW'S tags (its document's `tags:` line), the moment of the title screen to take the thumbnail
+## from, the file its uploads are recorded in, and the show's and the episode's titles for the
+## card's `%title%` and `%episode%`. For the take an export just rendered it describes THAT
 ## episode, whichever is picked now; with no take, the picked one. {} while the episode has no plan.
 func _upload_base(take: String) -> Dictionary:
 	var ep: CardEpisode = _episode
@@ -278,11 +279,8 @@ func _upload_base(take: String) -> Dictionary:
 	if String(n["title"]).is_empty():
 		return {}
 	var desc := _cur_desc if not _cur_desc.is_empty() else String(n["description"])
-	var chapters: PackedStringArray = n["chapters"]
-	if not chapters.is_empty():
-		desc += "\n\n" + "\n".join(chapters)
 	return {"values": {"title": _doc.field("title").strip_edges(), "episode": String(n["title"]), "seed": str(ep.seed)},
-		"description": desc, "tags": Array(_show_tags()), "thumbnail_at": thumbnail_moment(_take_intro(take)),
+		"description": desc, "chapters": Array(n["chapters"] as PackedStringArray), "tags": Array(_show_tags()), "thumbnail_at": thumbnail_moment(_take_intro(take)),
 		"record": ep.file_of("youtube")}
 
 
@@ -307,7 +305,7 @@ static func upload_title(show: String, episode: String) -> String:
 
 ## WHERE THE THUMBNAIL IS TAKEN, seconds into the video: the title screen with the show's name fully
 ## up over the out-of-focus table - after the name fades in (by 1.4 s) and before the focus pull,
-## which starts 1.4 s before the shuffle at the intro's end (see the table medium's `_title_alpha`
+## which starts 1.4 s before the reading opens at the intro's end (see the table medium's `_title_alpha`
 ## and `_tick_focus`). [param intro] is the take's intro hold.
 static func thumbnail_moment(intro: float) -> float:
 	return clampf(intro * 0.4, 1.5, maxf(1.5, intro - 1.6))

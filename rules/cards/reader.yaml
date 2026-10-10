@@ -34,6 +34,12 @@ prompt:
   - >-
       The deck: "{{deck_name}}". On the table: {{surface}}. Also on it: {{on_the_table}}, set out
       before the reading. The viewer sees the table, never you.
+  - when: box_count
+    say: >-
+          FOR CONSISTENCY ONLY: this box contains {{box_count}} cards in all; the spread is only the
+          cards shown today. Usually do not mention the total. Never invent a delivery schedule or
+          a count from the size of the spread; any count or cadence you say must fit this inventory
+          and the episode's established story.
   - ""
   - when: said
     say: "WHAT YOU HAVE SAID SO FAR, in order (the viewer heard all of it):"
@@ -190,6 +196,16 @@ card:
       Facts: {{keywords}}
       {{text}}
       </back>
+  - when: on_front
+    say: >-
+          Its picture and these printed details share the front the viewer is looking at. Refer to
+          the details if they serve the story, but do not read them all out:
+  - when: on_front
+    say: |-
+      <front>
+      Facts: {{keywords}}
+      {{text}}
+      </front>
   - when: in_booklet
     say: >-
           The deck's booklet entry for it is on screen beside the card - the viewer can read it.

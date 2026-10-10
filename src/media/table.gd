@@ -63,8 +63,8 @@ const ROOM_REACH := 3.2
 ## away). The page sits a hair farther back so the card always reads as in front.
 const PRESENT_DIST := 0.23
 const PRESENT := Vector2(-0.087, 0.012)
-## A card whose text is on its own back ([constant CardTable.TEXTS]) is held up ALONE, in the middle and
-## a little nearer: there is no page beside it.
+## A card with its text on either face ([constant CardTable.TEXTS]) is held up alone, in the middle
+## and a little nearer: there is no page beside it.
 const PRESENT_ALONE := Vector2(0.0, 0.006)
 const PRESENT_ALONE_DIST := 0.205
 ## ...and it is turned over to show that text: first this long after it is up, held there this long.
@@ -106,14 +106,24 @@ const SHOW_PAGE := Vector2(0.9, 1.6)
 const TURN_END := 0.8
 const FLIP_END_LAY := 1.1
 ## THE BOX THE CARDS ARE KEPT IN: how thick its walls are taken to be (meters), and the cards filed in
-## it - their pitch (a card and the air beside it), how much of the box they fill at least, and how far
-## the last of them lean into the gap they leave.
+## it - their pitch (a card and the air beside it), and how far the last of them lean into the gap.
 const BOX_WALL := 0.006
 const FILE_PITCH := 0.0011
-const FILE_FILL := Vector2(0.7, 0.97)
 const FILE_LEAN := 0.35
 ## A card pulled from the box rises this far above the rim before it turns to the camera.
 const PULL_CLEAR := 0.02
+## A card laid down arcs this high over the cloth on its way (meters) - and is lifted higher while the
+## box stands in its way ([method _lay_lift]): sampled in LAY_SAMPLES steps, the lift eased away over
+## LAY_EASE of the way after the box and over the last LAY_LAND of it.
+const LAY_ARC := 0.05
+const LAY_LIFT_MAX := 0.3
+const LAY_SAMPLES := 32
+const LAY_EASE := 0.08
+const LAY_LAND := 0.04
+## A card's edge may lie this far over the box's rim (meters) before the arc lifts it: the last of its
+## descent, tilted still, reaches a few millimeters past where it lies, and the spread leaves the box
+## more than this (TablePositions.DECK_CLEAR).
+const BOX_GRAZE := 0.008
 ## Lead and tail around each action group, as the tablet's: a beat after the last word before
 ## the cards move, and they are still a beat before the next word.
 ## HOW A READER SHUFFLES: in RUNS - several riffles, a string of cuts, a few overhand passes,
@@ -321,7 +331,7 @@ const CANDLE_LAYER := 1 << 12
 ## The render layer of a thing with no flame: off the cloth's layer, so the shade a thing presses
 ## into the cloth falls on the cloth alone.
 const THING_LAYER := 1 << 1
-## The intro's focus pull: it starts this long before the shuffle and takes this long after it
+## The intro's focus pull: it starts this long before the reading opens and takes this long after it
 ## (seconds), from a lens this soft (CameraAttributesPractical.dof_blur_amount).
 const FOCUS_PULL := Vector2(1.4, 1.6)
 const FOCUS_BLUR := 0.16
@@ -338,7 +348,7 @@ const TAIL := 0.2
 const FOIL_SHADER := """
 shader_type spatial;
 render_mode blend_mix, cull_back, diffuse_burley, specular_schlick_ggx;
-uniform sampler2D tex : source_color, filter_linear_mipmap, repeat_disable;
+uniform sampler2D tex : source_color, filter_linear, repeat_disable;
 uniform vec4 window = vec4(0.0, 0.0, 1.0, 1.0);   // the picture's part of the face, in UV
 uniform float lo = 0.8;                            // the picture's own foil key (luminance)
 uniform float hi = 0.95;
@@ -350,7 +360,20 @@ uniform float glint = -1.0;                        // the sweep's place along th
 uniform float lift = 0.14;                         // a little self-light, so the art reads
 uniform float dim = 1.0;                           // the bookend
 void fragment() {
-	vec4 c = texture(tex, UV);
+	// A face is a viewport's texture and has no mip chain, so a card seen smaller than its 560 x 960
+	// (always, and more so at a grazing angle) was sampled with plain bilinear taps that skip texels:
+	// a thin line came out as two offset, half-strength copies (feedback 0012, the back's ring and
+	// keys). The pixel's footprint is averaged by hand instead: a 4 x 4 box across it.
+	vec2 ddx = dFdx(UV);
+	vec2 ddy = dFdy(UV);
+	vec4 c = vec4(0.0);
+	for (int i = 0; i < 4; i++) {
+		for (int j = 0; j < 4; j++) {
+			vec2 o = vec2(float(i), float(j)) * 0.25 - 0.375;
+			c += texture(tex, UV + ddx * o.x + ddy * o.y);
+		}
+	}
+	c *= 0.0625;
 	float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
 	float mx = max(c.r, max(c.g, c.b));
 	float mn = min(c.r, min(c.g, c.b));
@@ -405,7 +428,7 @@ var _seed := 0
 var _look: Dictionary = {}
 var _staging: Dictionary = CardTable.STAGING.duplicate()   # how the cards come and are shown (CardTable.staging_of)
 var _cards_from := "deck"                 # where they come from: the reading's opening verb's, else the staging's
-var _alone := false                   # a drawn card is held up alone and turned to show its printed back
+var _alone := false                   # a drawn card with text on either face is held up alone
 var _backs := {}                      # printing name ("" the deck's own) -> {vp, canvas, mat}: each printing's back
 var _printed: Array = []              # per drawn card, when its text is on its back: {vp, canvas, mat}
 var _box := {}                        # the box the cards are kept in, stood: {node, at, inner (AABB, world), upright, lie}
@@ -820,7 +843,7 @@ func _ensure_doc() -> void:
 	_foil = float(_look.get("foil", 0.6))
 	_staging = CardTable.staging_of(plan)
 	_cards_from = String(_parse.get("source", _staging["source"])) if not _parse.is_empty() else String(_staging["source"])
-	_alone = String(_staging["text"]) == "back"
+	_alone = String(_staging["text"]) != "booklet"
 	# A READING STARTED MID-WAY (a scrub) begins where its first words are: everything before them
 	# happened long ago, spaced as a voice would have said it, so the cards drawn by then are
 	# already down (or up) on the first frame
@@ -927,10 +950,11 @@ func _build_episode() -> void:
 		# EACH CARD IN ITS OWN PRINTING: a box may mix sets, each with its own front and back
 		canvas.look = CardTable.look_of(_look, cards[i])
 		canvas.card = cards[i]
+		canvas.details = String(_staging["text"]) == "front"
 		canvas.seed = _seed
 		var vp := CardFaces.viewport(self, canvas, CardFaces.FACE_PX)
 		var mat := _foil_material(vp.get_texture())
-		mat.set_shader_parameter("window", _face_window(canvas.look))
+		mat.set_shader_parameter("window", _face_window(canvas.look, canvas.details))
 		_foil_stock(mat, canvas.look)
 		var m := MeshInstance3D.new()
 		m.mesh = _mesh_for(canvas.look)
@@ -1009,6 +1033,11 @@ func _printings(cards: Array) -> Array:
 		var name := CardTable.series_of(_look, c as Dictionary) if c is Dictionary else ""
 		if not out.has(name):
 			out.append(name)
+	var inventory: Dictionary = plan.get("inventory", {}) if plan.get("inventory") is Dictionary else {}
+	var counts: Dictionary = inventory.get("printings", {}) if inventory.get("printings") is Dictionary else {}
+	for name in counts:
+		if int(counts[name]) > 0 and not out.has(String(name)):
+			out.append(String(name))
 	if out.is_empty():
 		out.append("")
 	return out
@@ -1017,7 +1046,7 @@ func _printings(cards: Array) -> Array:
 ## Card [param i]'s back: its printing's - or, when its text is printed on its back, its very own.
 func _back_of(i: int, card: Dictionary) -> Material:
 	var name := CardTable.series_of(_look, card)
-	if not _alone:
+	if String(_staging["text"]) != "back":
 		return (_backs.get(name, _backs[""]) as Dictionary)["mat"]
 	var canvas := CardFaces.Face.new()
 	canvas.back = true
@@ -1043,9 +1072,9 @@ func _box_keep() -> Vector2:
 
 ## The part of a face that is the painting, in UV - foil is keyed inside it (the frame's foil is
 ## keyed by its color instead).
-func _face_window(look: Dictionary = {}) -> Vector4:
+func _face_window(look: Dictionary = {}, details := false) -> Vector4:
 	var sz := Vector2(CardFaces.FACE_PX)
-	var w := CardFaces.window(false, look)
+	var w := CardFaces.front_window(look, details)
 	return Vector4(w.position.x / sz.x, w.position.y / sz.y, w.end.x / sz.x, w.end.y / sz.y)
 
 
@@ -1458,10 +1487,9 @@ func _stand_box(things: Array, built: Array) -> void:
 
 
 ## THE CARDS FILED IN THE BOX, standing on edge front to back as collectors keep them - upright when the
-## box is deep enough, on a long edge when only that fits, lying flat in a shallow tin - filling most of
-## it ([constant FILE_FILL]), the last few leaning back into the gap they leave. The drawn cards stand
-## among them where they are pulled from ([member _box] `at_k`); the rest are one instance each of a
-## MultiMesh per printing.
+## box is deep enough, on a long edge when only that fits, lying flat in a shallow tin. The count and
+## printing mix come from the planned collection. The drawn cards stand among them where they are
+## pulled from ([member _box] `at_k`); the rest are one instance each of a MultiMesh per printing.
 func _build_file() -> void:
 	var inner: AABB = _box["inner"]
 	var rng := RandomNumberGenerator.new()
@@ -1479,8 +1507,9 @@ func _build_file() -> void:
 	var stand := Basis(Vector3.UP, PI) * Basis(Vector3(1, 0, 0), PI * 0.5)
 	if lie:
 		stand = stand * Basis(Vector3.UP, PI * 0.5)
-	var fill := rng.randf_range(FILE_FILL.x, FILE_FILL.y)
-	var count := maxi(int(inner.size.z * fill / FILE_PITCH), _cards.size() + 4)
+	var undrawn := _file_inventory()
+	var count := _cards.size() + undrawn.size()
+	var fill := minf(1.0, float(count) * FILE_PITCH / maxf(inner.size.z, FILE_PITCH))
 	var tail := mini(6, count / 4)
 	var xfs: Array = []
 	for i in count:
@@ -1499,14 +1528,14 @@ func _build_file() -> void:
 		(_box["at_k"] as Array).append(xfs[j])
 		xfs[j] = null
 	# one MultiMesh per printing, its cards shared out among them
-	var names: Array = _backs.keys()
 	var per := {}
-	for n in names:
+	for n in _backs:
 		per[n] = []
 	for xf in xfs:
-		if xf != null:
-			(per[names[rng.randi_range(0, names.size() - 1)]] as Array).append(xf)
-	for n in names:
+		if xf != null and not undrawn.is_empty():
+			var name: String = undrawn.pop_at(rng.randi_range(0, undrawn.size() - 1))
+			(per[name] as Array).append(xf)
+	for n in per:
 		var list: Array = per[n]
 		if list.is_empty():
 			continue
@@ -1525,6 +1554,35 @@ func _build_file() -> void:
 		inst.multimesh = mm
 		_root3.add_child(inst)
 		_file.append(inst)
+
+
+## The planned cards still in the box, by printing. Older plans have `deck` but no `inventory`;
+## a document with neither can at least show its drawn cards without inventing hundreds more.
+func _file_inventory() -> Array:
+	var plan: Dictionary = _pay.get("plan", {}) if _pay.get("plan") is Dictionary else {}
+	var names: Array = []
+	var deck: Array = plan.get("deck", []) if plan.get("deck") is Array else []
+	if not deck.is_empty():
+		for card in deck:
+			if card is Dictionary:
+				names.append(CardTable.series_of(_look, card as Dictionary))
+	else:
+		var inventory: Dictionary = plan.get("inventory", {}) if plan.get("inventory") is Dictionary else {}
+		var counts: Dictionary = inventory.get("printings", {}) if inventory.get("printings") is Dictionary else {}
+		for name in counts:
+			for i in maxi(0, int(counts[name])):
+				names.append(String(name))
+	if names.is_empty():
+		for card in _pay.get("cards", []) if _pay.get("cards") is Array else []:
+			if card is Dictionary:
+				names.append(CardTable.series_of(_look, card as Dictionary))
+	for card in _pay.get("cards", []) if _pay.get("cards") is Array else []:
+		if not (card is Dictionary) or names.is_empty():
+			continue
+		var name := CardTable.series_of(_look, card as Dictionary)
+		var at := names.find(name)
+		names.remove_at(at if at >= 0 else 0)
+	return names
 
 
 ## The cards come out of a box they are filed in (on edge, not lying flat in a tin).
@@ -2433,12 +2491,12 @@ func _tick_camera(_t: float) -> void:
 
 
 ## THE INTRO IS OUT OF FOCUS: the whole frame thrown far out of focus while the channel's name is
-## up - nothing on the table to be made out, only its colors - then the focus PULLS as the shuffle
-## starts: the wide blur lifts, and the lens carries on near to far, the cloth in front of the
-## reader first, and is off for the reading. The end card leaves it alone.
+## up - nothing on the table to be made out, only its colors - then the focus PULLS as the reading
+## opens (the deck's shuffle, the box's opening): the wide blur lifts, and the lens carries on near
+## to far, the cloth in front of the reader first, and is off for the reading. The end card leaves it alone.
 func _tick_focus(t: float) -> void:
-	var ts := float(_times()["shuffle"])
-	var pull := 1.0                      # a reading with no shuffle placed: nothing to wait for
+	var ts := float(_times()["opening"])
+	var pull := 1.0                      # a reading with no opening placed: nothing to wait for
 	if ts < INF:
 		pull = clampf((t - (ts - FOCUS_PULL.x)) / (FOCUS_PULL.x + FOCUS_PULL.y), 0.0, 1.0)
 	elif _sched.is_empty():
@@ -2724,8 +2782,10 @@ func _jumper_wash() -> void:
 
 
 ## When each card is drawn and laid, and when the shuffle starts and stops, from the placed
-## schedule: `{shuffle, end, draw: [t0, s, kind, lead], lay: [t0, s], spread, first, events}` - a time
-## of INF is one the voice has not reached yet. `events` is EACH CARD'S TIMELINE, in order: `{k: arrive
+## schedule: `{shuffle, opening, end, draw: [t0, s, kind, lead], lay: [t0, s], spread, first, events}` -
+## a time of INF is one the voice has not reached yet. `opening` is when the reading opens, whatever
+## its source - the deck's shuffle or the box's opening: the intro's end, where the name goes and the
+## focus pulls (a box has no shuffle, and its episodes lost both). `events` is EACH CARD'S TIMELINE, in order: `{k: arrive
 ## (how: draw, jumper, deal, fan - `i` its place in the waterfall), show, lay, turn (how: tap, untap,
 ## flip), t0, s, off}` - `off` the seconds (at speed 1) its own phases wait for what goes first: the
 ## card up before it laid, or the deck pushed aside.
@@ -2739,6 +2799,7 @@ func _times() -> Dictionary:
 		lay.append([INF, 1.0])
 		events.append([])
 	var shuffle := INF
+	var opening := INF
 	var first := INF
 	var spread := INF
 	var up := -1
@@ -2751,6 +2812,7 @@ func _times() -> Dictionary:
 		var s := float(e["s"])
 		var kind := String(a["kind"])
 		if not TableActions.source_of(kind).is_empty():
+			opening = minf(opening, t0)
 			if kind == "shuffle":
 				shuffle = t0
 			continue
@@ -2788,8 +2850,8 @@ func _times() -> Dictionary:
 				if TableActions.ends(kind):
 					spread = t0
 		moved = moved or takes
-	return {"shuffle": shuffle, "end": first, "draw": draw, "lay": lay, "spread": spread, "first": first_act,
-		"events": events}
+	return {"shuffle": shuffle, "opening": opening, "end": first, "draw": draw, "lay": lay, "spread": spread,
+		"first": first_act, "events": events}
 
 
 ## Where the deck is at [param t]: in the middle while it is shuffled, then pushed to its side
@@ -3055,7 +3117,7 @@ func _card_pose(k: int, t: float, ev: Array, wj: Dictionary) -> Dictionary:
 			if lay_u < LAY_END:
 				var f := _ease(clampf((lay_u - LAY_MOVE.x) / (LAY_MOVE.y - LAY_MOVE.x), 0.0, 1.0))
 				var xf := from.interpolate_with(lying, f)
-				xf.origin.y += sin(PI * f) * 0.05
+				xf.origin.y += _lay_lift(from, lying, f)
 				if lay_u > LAY_MOVE.y:
 					xf.origin.y += (1.0 - clampf((lay_u - LAY_MOVE.y) / (LAY_END - LAY_MOVE.y), 0.0, 1.0)) * 0.002
 				out["xf"] = xf
@@ -3075,6 +3137,38 @@ func _card_pose(k: int, t: float, ev: Array, wj: Dictionary) -> Dictionary:
 	if up_ev >= 0 and String(e["k"]) == "lay":
 		out["since"] = float((ev[up_ev] as Dictionary)["t0"])
 	return out
+
+
+## HOW HIGH A CARD LAID DOWN IS LIFTED at [param f] of its way (0..1, eased) from [param from] (held up)
+## to [param to] (lying): the usual [constant LAY_ARC]'s arc, or - when the straight way there carries
+## the card across the box the cards are kept in - enough to hold its lowest edge [constant PULL_CLEAR]
+## over the box's top for every step it is over it, kept there until it has passed the rim and eased
+## down after (the card's footprint, turned as it is at each step; [constant LAY_SAMPLES] steps), and
+## gone by the time it lies. Feedback 0010: a card laid behind the box went down through it.
+func _lay_lift(from: Transform3D, to: Transform3D, f: float) -> float:
+	var lift := sin(PI * f) * LAY_ARC
+	if _box.is_empty():
+		return lift
+	var world: AABB = _box["world"]
+	var rim := Rect2(world.position.x, world.position.z, world.size.x, world.size.z).grow(-BOX_GRAZE)
+	var step := 1.0 / float(LAY_SAMPLES)
+	for s in range(1, LAY_SAMPLES):
+		var fs := float(s) * step
+		var xf := from.interpolate_with(to, fs)
+		var b := xf.basis
+		# half the card's extent along each world axis, turned as it is
+		var half := Vector3(
+			CARD.x * absf(b.x.x) + CARD.y * absf(b.z.x) + CARD_T * absf(b.y.x),
+			CARD.x * absf(b.x.y) + CARD.y * absf(b.z.y) + CARD_T * absf(b.y.y),
+			CARD.x * absf(b.x.z) + CARD.y * absf(b.z.z) + CARD_T * absf(b.y.z)) * 0.5
+		if not Rect2(xf.origin.x - half.x, xf.origin.z - half.z, half.x * 2.0, half.z * 2.0).intersects(rim):
+			continue
+		var need := world.end.y + PULL_CLEAR + half.y - xf.origin.y
+		# held for the step either side, eased away over LAY_EASE after
+		var held := 1.0 - smoothstep(0.0, LAY_EASE, absf(f - fs) - step)
+		lift = maxf(lift, need * held)
+	# set down: nothing is left of it where the card lies
+	return minf(lift, LAY_LIFT_MAX) * smoothstep(1.0, 1.0 - LAY_LAND, f)
 
 
 ## WHERE CARD [param k] WAITS before it is taken: on top of the deck, or standing in the box's file (on
@@ -3189,7 +3283,7 @@ func _looks(k: int, up_at: float, until: float) -> Array:
 	rng.seed = hash([_seed, k, "turn"])
 	var at := 0.0
 	var forced := k == _spin_card()
-	if _alone:
+	if String(_staging["text"]) == "back":
 		# ITS TEXT IS ON ITS BACK: turned over to show it every time, a few seconds after it is up, and
 		# held there long enough to read
 		var back := RandomNumberGenerator.new()
@@ -5275,10 +5369,11 @@ static func _ease(x: float) -> float:
 
 # --- the title -------------------------------------------------------------------------------------------
 
-## The channel's name over the table while the intro holds, gone as the shuffle starts - and
-## only then: the reading ends on the table fading to black, not on the name again.
+## The channel's name over the table while the intro holds, gone as the reading opens (the deck's
+## shuffle, the box's opening) - and only then: the reading ends on the table fading to black, not
+## on the name again.
 func _title_alpha(t: float) -> float:
-	var ts := float(_times()["shuffle"])
+	var ts := float(_times()["opening"])
 	var a := clampf((t - 0.3) / 1.1, 0.0, 1.0)
 	if ts < INF:
 		a *= 1.0 - clampf((t - (ts - 0.6)) / 0.9, 0.0, 1.0)

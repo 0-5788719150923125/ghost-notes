@@ -9,6 +9,11 @@ extends Node
 ## nothing over anything else, one bottom edge, the right end ROW_MARGIN from the corner - and a
 ## claim on the bottom of the frame lifts the whole row as one.
 ##
+## THE ROW CLEARS THE TRANSPORT'S RAIL: while the show is timed the row stands above the rail's
+## whole click zone (`Transport.room()`), not merely above its pixels - a click on a button's bottom
+## edge once seeked instead - and settles back when the show is untimed (a reported repeat,
+## 2026-10-09). The control: a row on the margin alone is inside that zone.
+##
 ## ONE PANEL ABOVE THE ROW AT A TIME: the Environment, the console's log and the Assistant's panel,
 ## each opened in turn by its own button, and every other one closed by it.
 ##
@@ -120,6 +125,7 @@ func _geometry(ch: Chrome) -> void:
 	ch.release_bottom(&"row_check")
 	ch.release_export(&"row_check")
 	await _frames(3)
+	await _clears_transport(ch, vp)
 	# the Environment panel stands above the row
 	ch.set_environment_open(true, false)
 	await _frames(3)
@@ -129,6 +135,28 @@ func _geometry(ch: Chrome) -> void:
 		if (b as Control).get_global_rect().intersects(env):
 			over = true
 	_ok(not over and env.end.y <= vp.y - Chrome.ROW_TOP, "the Environment panel stands above the row, over nothing")
+
+
+func _clears_transport(ch: Chrome, vp: Vector2) -> void:
+	print("-- the transport's rail")
+	var zone_top := vp.y - Transport.PAD - Transport.HIT
+	var rest := (_shown(ch)[0] as Control).get_global_rect().end.y
+	_ok(rest > zone_top, "control: on the margin alone the row's bottom edge (%.0f) is inside the rail's zone (%.0f)" % [rest, zone_top])
+	Spectrum.conduct(self, {"stale": Callable()})   # a hook that is not there: timed, and nothing plays
+	await _frames(4)
+	var lifted := true
+	var gap := INF
+	for b in _shown(ch):
+		var r := (b as Control).get_global_rect()
+		gap = minf(gap, zone_top - r.end.y)
+		if r.end.y > zone_top - Transport.CLEARANCE + 0.5:
+			lifted = false
+	_ok(not Spectrum.conductor().is_empty() and ch.transport._root.visible, "a timed show shows the transport")
+	_ok(lifted, "and every button stands above the rail's click zone with room to spare (%.0f px clear)" % gap)
+	Spectrum.release_conductor(self)
+	await _frames(4)
+	var back := (_shown(ch)[0] as Control).get_global_rect().end.y
+	_ok(absf(back - (vp.y - Chrome.ROW_MARGIN)) < 0.5, "untimed again, the row settles back to its margin (%.0f)" % back)
 
 
 func _one_at_a_time(ch: Chrome) -> void:

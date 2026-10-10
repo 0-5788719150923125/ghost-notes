@@ -18,6 +18,8 @@ extends SceneTree
 ##   word, the description at most 5000 bytes, tags split as a document writes them, each once,
 ##   counted as YouTube counts them and fitted to 500; private unless asked otherwise (a privacy
 ##   YouTube does not know is private), not for kids, synthetic, no paid promotion, People & Blogs.
+##   The playlist a video joins is named and linked between the description and the chapters (the
+##   control: no playlist, no line).
 ## - RECORDS: an upload recorded and read back; a queued upload pending, owner-only; a missing file
 ##   refused.
 ## - THE TAROT EPISODE: its upload notes from the plan, with a chapter per card timed from a take's
@@ -287,6 +289,15 @@ func _body() -> bool:
 	_ok(YouTube.video_body({}, "Episode 7")["snippet"]["title"] == "Episode 7"
 		and YouTube.video_body({})["snippet"]["title"] == "Untitled", "a video always has a title")
 	_ok(YouTube.video_body({"tags": ["a", "b"]})["snippet"]["tags"] == ["a", "b"], "tags as an Array too")
+	# THE PLAYLIST, BEFORE THE TIMESTAMPS: the stand-in for the end screen the API cannot write
+	var listed: String = YouTube.video_body({"description": "Hello", "playlist": "PL-1", "playlist_title": "Truthful <Tarot>",
+		"chapters": PackedStringArray(["0:00 Intro", "0:40 The Tower"])})["snippet"]["description"]
+	_ok(listed == "Hello\n\nPlaylist: Truthful ‹Tarot›\nhttps://www.youtube.com/playlist?list=PL-1\n\n0:00 Intro\n0:40 The Tower",
+		"the playlist is named and linked between the description and the chapters (%s)" % listed)
+	_ok(YouTube.video_body({"description": "Hello", "chapters": ["0:00 Intro"]})["snippet"]["description"] == "Hello\n\n0:00 Intro",
+		"no playlist, no line")
+	_ok(YouTube.video_body({"playlist": "PL-1"})["snippet"]["description"] == "Playlist: https://www.youtube.com/playlist?list=PL-1",
+		"a video with nothing else to say still links its playlist, by its link alone while its title is unknown")
 	return true
 
 
@@ -397,8 +408,8 @@ func _card() -> bool:
 		"playlist": "PL1", "playlist_title": "Readings"}, "its block round-trips (%s)" % str(card.capture()))
 	var m: Dictionary = card.meta({"tags": ["a"], "record": "r.json"})
 	_ok(m.get("title") == "Truthful Tarot - The Tower (%s)" % Time.get_date_string_from_system() and m.get("privacy") == "unlisted"
-		and m.get("playlist") == "PL1" and m.get("tags") == ["a"] and m.get("record") == "r.json",
-		"ticked, it lays its title, privacy and playlist over the panel's part (%s)" % str(m))
+		and m.get("playlist") == "PL1" and m.get("playlist_title") == "Readings" and m.get("tags") == ["a"]
+		and m.get("record") == "r.json", "ticked, it lays its title, privacy and playlist over the panel's part (%s)" % str(m))
 	_ok(card.meta({}).is_empty(), "...and describes nothing when the panel has nothing")
 	_ok(card.meta({"values": {"title": "Show", "episode": "Rendered One"}}).get("title").begins_with("Show - Rendered One")
 		and not card.meta({"values": {"title": "S"}}).has("values"),
@@ -515,7 +526,7 @@ func _panel_fields() -> bool:
 	ed._yt_tags.remove("4am")
 	_ok(ed._doc.field("tags") == "tarot, satire", "the chips write the show's tags line (%s)" % ed._doc.field("tags"))
 	var meta: Dictionary = ed.upload_meta("")
-	_ok(meta.get("title") == "My Own Title" and meta.get("description") == "Mine."
+	_ok(meta.get("title") == "My Own Title" and meta.get("description") == "Mine." and meta.get("chapters") == []
 		and meta.get("tags") == ["tarot", "satire"] and String(meta.get("record", "")).ends_with("/21/youtube.json"),
 		"the upload: the episode's title, the show's description and tags")
 	_ok(is_equal_approx(float(meta.get("thumbnail_at", -1.0)), ed.thumbnail_moment(ed._take_intro(""))),

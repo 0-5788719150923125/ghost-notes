@@ -218,7 +218,8 @@ func title_now(given := {}) -> String:
 ## WHAT AN UPLOAD SAYS (see [member Exporter.upload_provider]): [param base] - the panel's own part,
 ## its description, tags, thumbnail moment and record, and the macros' `values` when they are not the
 ## panel's as it stands now (an episode an export rendered) - with this card's title, privacy and
-## playlist laid over it. {} when nothing is to go up: the box is clear, or the panel has nothing ({}).
+## playlist (its id and title, which the description names) laid over it. {} when nothing is to go
+## up: the box is clear, or the panel has nothing ({}).
 func meta(base: Dictionary) -> Dictionary:
 	if not ticked() or base.is_empty():
 		return {}
@@ -228,6 +229,7 @@ func meta(base: Dictionary) -> Dictionary:
 	out["title"] = title_now(given if given is Dictionary else {})
 	out["privacy"] = _privacy_key()
 	out["playlist"] = String(_list["id"])
+	out["playlist_title"] = String(_list["title"])
 	return out
 
 

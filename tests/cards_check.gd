@@ -59,7 +59,7 @@ var _fails := 0
 func _init() -> void:
 	# EVERY CHECK MUST REACH ITS END: a script error inside one stops it part way and returns
 	# nothing, and it used to leave a gate that had checked half of something reading ALL OK
-	for check in [_deck, _shuffle, _script, _schedule, _no_cheating, _redo, _helpers, _landing,
+	for check in [_deck, _shuffle, _script, _schedule, _no_cheating, _redo, _helpers, _landing, _printing_inventory,
 			_lanes, _rerun_clears, _scrub_near, _clear_of_deck, _trash_episode, _pictures, _only_what_was_asked, _no_objects, _moves_after_words,
 			_few_remarks, _burst_moments,
 			_table_step, _things_built, _stones, _card_stock, _candles, _room_prompt, _cloth_prompt, _familiar, _archive,
@@ -500,6 +500,31 @@ func _landing() -> bool:
 	_ok(not short._make_draw().is_empty() and not ep.has("draw"), "a draw ran past the end of a small deck")
 	ep.invalidate("plan")
 	print("cards_check: landing - reshaped plan, booklet and a reader's prompt from them")
+	return true
+
+
+func _printing_inventory() -> bool:
+	CardEpisode.root = "user://cards_check"
+	var ep := CardEpisode.open("printing-inventory", 778)
+	ep.invalidate("plan")
+	var deck: Array = []
+	for i in 12:
+		deck.append({"name": "Card %d" % i, "series": "First" if i < 8 else "Second"})
+	var prod := CardProducer.new(ep, {"title": "Box", "brief": "A mixed box.", "chooses": true, "draw": [3, 3]})
+	var err := prod._land_plan(JSON.stringify({"spread": {"positions": [{}, {}, {}]},
+		"look": {"series": [{"name": "First", "card_back": "red"}, {"name": "Second", "card_back": "blue"}]},
+		"deck": deck}))
+	_ok(err.is_empty(), "a mixed box plan did not land: %s" % err)
+	if not err.is_empty():
+		return true
+	var plan: Dictionary = ep.read_json("plan")
+	var inventory: Dictionary = plan.get("inventory", {})
+	_ok(int(inventory.get("count", 0)) == 12 and int((inventory.get("printings", {}) as Dictionary).get("Second", 0)) == 4,
+		"the box's count and printing mix were not kept")
+	var cards: Array = (plan["deck"] as Array).slice(0, 3)
+	ep.write_json("draw", {"cards": cards})
+	_ok(ep.steps().has("image:back:second"), "an undrawn printing's back was not scheduled")
+	ep.invalidate("plan")
 	return true
 
 
@@ -1306,6 +1331,19 @@ func _card_frame() -> bool:
 	var win := CardFaces.window()
 	_ok(win.position.x > 0.0 and win.end.x < sz.x and win.position.y >= sz.y * 0.075 and sz.y - win.end.y >= sz.y * 0.105,
 		"the picture's window leaves no border or no band for the numeral and the name: %s" % str(win))
+	# THE ORNAMENT'S ROOM (feedback 0009, 2026-10-09: "the image border is a bit too close to the outer
+	# border around the card"): with every frame style, the window leaves the ornament's line, its own
+	# band and the frame's outermost rule - the picture's rules never touch the ornament
+	for style in CardTable.FRAMES:
+		var orn := {"frame": {"style": style, "ornament": "beads"}}
+		var ow := CardFaces.window(false, orn)
+		var need := sz.x * (CardFaces.ORNAMENT_INSET + CardFaces.ORNAMENT_BAND + CardFaces.frame_reach(orn))
+		_ok(ow.position.x >= need - 0.01 and sz.x - ow.end.x >= need - 0.01,
+			"%s: the window keeps %.1f px from the card's edge, the ornament and its rules need %.1f" % [style, ow.position.x, need])
+		_ok(ow.position.x > CardFaces.window().position.x, "%s: an ornament leaves the window no narrower than a plain border" % style)
+	_ok(CardFaces.window(false, {"frame": {"style": "deco", "ornament": "beads"}}).position.x
+		> CardFaces.window(false, {"frame": {"style": "line", "ornament": "beads"}}).position.x,
+		"control: a wider frame keeps no more room than a thin one")
 	var room := win.size.x - sz.x * 0.06 * 2.0
 	var worst := {"size": 999, "name": "", "face": ""}
 	for f in CardTable.FACES:

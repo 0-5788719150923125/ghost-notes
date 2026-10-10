@@ -147,18 +147,21 @@ every one is data the table reads:
   jumper possible - or `box`: one of the set dresser's things marked `holds_cards` (`CardPrompts.box_rule`;
   a plain box of the deck's stock when it built none), stood where the deck would be
   (`TablePositions.box_at`, no bigger than `CardTable.BOX_MAX`, the spread kept clear of it), the cards
-  filed in it on edge - upright, on a long edge, or flat in a shallow tin - most of its length full and
-  the last few leaning into the gap (`TableMedium._build_file`, a MultiMesh per printing). A drawn card
+  filed in it on edge - upright, on a long edge, or flat in a shallow tin - as many as the planned
+  collection contains, with each printing's actual share and the last few leaning into the gap
+  (`TableMedium._build_file`, a MultiMesh per printing). A drawn card
   waits standing in the file and is pulled straight up past the rim. The reading opens with `open`
   instead of `shuffle`, and no first card waits for a push.
-- `plan.staging.text` (`CardTable.TEXTS`): `booklet` - the page beside the card, held up on the left -
-  or `back`: the card's text printed in a panel over its printing's back (`CardFaces.Face.printed`), the
-  card held up ALONE in the middle and turned over to show it, every time, long enough to read
-  (`TableMedium._looks`). The designer writes the back's facts and text; the painter leaves the back's
-  middle plain for them.
-- `look.series`: the PRINTINGS a deck mixes, each a name and what it prints otherwise (style, back,
+- `plan.staging.text` (`CardTable.TEXTS`): `booklet` - the page beside the card, held up on the left;
+  `back` - the card's text printed in a panel over its printing's back (`CardFaces.Face.printed`), the
+  card held up alone and turned over long enough to read (`TableMedium._looks`); or `front` - the art,
+  name, facts and text printed together on the front (`CardFaces.Face.details`), the card held up alone
+  with its printing's shared artwork on the back. The painter leaves a back's middle plain only for
+  `back` staging.
+- `look.series`: the PRINTINGS a box mixes, each a name and what it prints otherwise (style, back,
   palette, frame); a card's `series` (or its group's name) picks one (`CardTable.look_of`). Each printing
-  is painted its own back (`image:back:<key>`, `back_<key>.png`), each card in its own printing's hand
+  in the full collection is painted its own back (`image:back:<key>`, `back_<key>.png`), even if none of its
+  cards is drawn. Each card is painted in its own printing's hand
   (the chain of references is that printing's).
 - Each spread position: `comes` - `drawn` (held up), `dealt` (straight to its place, never held up) or
   `swept` (a run of swept positions goes out in one waterfall, overlapping, then each is picked up);

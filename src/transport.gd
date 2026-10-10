@@ -26,6 +26,14 @@ class_name Transport
 ## IT NEVER APPEARS IN AN EXPORT, and not by a check: the render process returns out of main
 ## before Chrome is built. HOVERING THE RAIL SHOWS THE TIME under the pointer, so a click can be
 ## aimed.
+##
+## THE ROW STEPS UP FOR IT (2026-10-09, reported as a repeat: "a half dozen times"). The rail runs
+## under the bottom-right row and its click zone reaches [constant HIT] px above it, so the row's
+## lower edge sat inside the zone - a click on a button's bottom edge seeked instead, and the two
+## drew a pixel apart. The transport is the one that knows its own reach ([method room]), so it
+## CLAIMS it from Chrome ([method Chrome.claim_bottom]) while it is timed, like any other surface
+## at the bottom edge; nothing positions the row by a figure of its own. Change PAD, HIT or the
+## rail's height and the row follows.
 
 const BAR_H := 4.0                  # the resting rail, px
 const BAR_H_ACTIVE := 8.0           # while the pointer is over it
@@ -33,6 +41,9 @@ const PAD := 26.0                   # distance from the bottom edge to the rail
 const FADE := 7.0                   # per-second ease on the reveal
 const BTN := 28.0                   # the play and stop buttons, square
 const GAP := 8.0
+const HIT := 10.0                   # how far past the rail a pointer still counts as on it, px
+const CLEARANCE := 8.0              # kept between that zone and anything above it, px
+const CLAIM := &"transport"         # the key of its claim on the bottom of the frame
 const PLAY_TIP := "Play / pause (Space)"
 const STALE_TIP := ("\n\nThe script changed after this reading began. ■ then ▶ reads it again "
 	+ "with the new words.")
@@ -47,6 +58,7 @@ var _play: Button
 var _stop: Button
 var _painter: Control
 var _stale_tip := false
+var _claimed := false               # holds a claim on Chrome's bottom edge now
 
 
 func _ready() -> void:
@@ -82,6 +94,32 @@ func _ready() -> void:
 		_hover_x = -1.0)
 
 
+## How much of the frame's bottom edge the transport takes while it shows: from the edge up past
+## the rail's click zone, with [constant CLEARANCE] to spare. Static so a gate can read it.
+static func room() -> float:
+	return PAD + HIT + CLEARANCE
+
+
+## Hold (or drop) the claim on the bottom of the frame that lifts Chrome's row above the rail. Only
+## the part beyond the row's own margin is asked for: the claim is an inset ON TOP of it.
+func _claim_room(on: bool) -> void:
+	if on == _claimed:
+		return
+	var ch := Chrome.of(self)
+	if ch == null:
+		return
+	_claimed = on
+	if on:
+		ch.claim_bottom(CLAIM, room() - Chrome.ROW_MARGIN)
+	else:
+		ch.release_bottom(CLAIM)
+
+
+func _exit_tree() -> void:
+	if _claimed:
+		_claim_room(false)
+
+
 func _button(glyph: String, tip: String) -> Button:
 	var b := Button.new()
 	b.text = glyph
@@ -95,6 +133,7 @@ func _button(glyph: String, tip: String) -> Button:
 
 func _process(delta: float) -> void:
 	var want := 1.0 if Spectrum.timed() else 0.0
+	_claim_room(want > 0.0)
 	_shown = lerpf(_shown, want, 1.0 - exp(-FADE * delta))
 	# Snapped to zero only on the way OUT: a frame of a fraction of a millisecond (a headless run)
 	# eases in by less than the threshold, and snapping then kept the bar hidden for good.
@@ -141,7 +180,7 @@ func _input(event: InputEvent) -> void:
 	if not Spectrum.seekable():
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		var inside := _rail().grow(10.0).has_point(event.position)
+		var inside := _rail().grow(HIT).has_point(event.position)
 		if event.pressed and inside:
 			_dragging = true
 			_seek_to(event.position.x)
@@ -150,7 +189,7 @@ func _input(event: InputEvent) -> void:
 			_dragging = false
 			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion:
-		var over: bool = _mouse_in and _rail().grow(10.0).has_point(event.position)
+		var over: bool = _mouse_in and _rail().grow(HIT).has_point(event.position)
 		_hover_x = event.position.x if over or _dragging else -1.0
 		if _dragging:
 			_seek_to(event.position.x)

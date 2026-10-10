@@ -357,11 +357,11 @@ func _make_image(step: String) -> void:
 			chain.size()), refs)
 		return
 	if parts.size() == 3 and String(parts[1]) == "back":
-		# a printing's own back: the card of that printing stands for it in the look
+		# A printing's own back, even when none of its cards happened to be drawn.
 		var name := ""
-		for k in range(1, episode.card_count() + 1):
-			if episode.printing_of(k) == String(parts[2]):
-				name = CardTable.series_of(look, _card(k))
+		for s in look.get("series", []) if look.get("series") is Array else []:
+			if s is Dictionary and CardTable.series_key(String((s as Dictionary).get("name", ""))) == String(parts[2]):
+				name = String((s as Dictionary)["name"])
 				break
 		_submit_image(step, CardPrompts.back_image(CardTable.look_of(look, {"series": name}), target,
 			bool(spec.get("reversals", true)), printed), [])
@@ -675,6 +675,13 @@ func _land_plan(text: String) -> String:
 		plan["deck"] = box
 	else:
 		plan.erase("deck")
+	# The table needs the full collection's size and printing mix, including cards never drawn.
+	var inventory: Array = plan.get("deck", []) if bool(spec.get("chooses", false)) else _deck()
+	var printings := {}
+	for card in inventory:
+		var name := CardTable.series_of(plan["look"], card as Dictionary)
+		printings[name] = int(printings.get(name, 0)) + 1
+	plan["inventory"] = {"count": inventory.size(), "printings": printings}
 	plan["seed"] = episode.seed
 	plan["dice"] = CardPrompts.dice(episode.seed)
 	return episode.write_json("plan", plan)
@@ -724,8 +731,11 @@ func _land_box(v: Variant, n: int) -> Array:
 			k = "%s-%d" % [key, i]
 			i += 1
 		keys[k] = true
-		out.append({"key": k, "name": name, "numeral": "", "group": _str(d.get("group", "")),
-			"meaning": _str(d.get("meaning", ""))})
+		var card := {"key": k, "name": name, "numeral": "", "group": _str(d.get("group", "")),
+			"meaning": _str(d.get("meaning", ""))}
+		if not _str(d.get("series", "")).is_empty():
+			card["series"] = _str(d["series"])
+		out.append(card)
 	return out if out.size() >= int(r[0]) else []
 
 

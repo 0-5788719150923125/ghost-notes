@@ -292,19 +292,38 @@ static func ornament(ci: CanvasItem, look: Dictionary, ink: Color, accent: Color
 
 ## WHERE THE PICTURE GOES on a card face (pixels, [constant FACE_PX]): inside a border of stock, with
 ## a band above it for the numeral and below it for the name - a back has no bands. A card printed with an
-## ornament round its edge ([constant CardTable.ORNAMENTS]) keeps a wider border for it.
+## ornament round its edge ([constant CardTable.ORNAMENTS]) keeps a wider border for it: the ornament's
+## line, its own width, then the frame's outermost rule ([method frame_reach]) - so the rules never crowd it.
 static func window(back := false, look: Dictionary = {}) -> Rect2:
 	var sz := Vector2(FACE_PX)
-	var m := sz.x * (ORNATE_MARGIN if ornament_of(look) != "none" else 0.06)
+	var m := sz.x * 0.06
+	if ornament_of(look) != "none":
+		m = sz.x * (ORNAMENT_INSET + ORNAMENT_BAND + frame_reach(look))
 	var top := 0.0 if back else sz.y * 0.075
 	var bottom := 0.0 if back else sz.y * 0.105
 	return Rect2(Vector2(m, m + top), Vector2(sz.x - 2.0 * m, sz.y - 2.0 * m - top - bottom))
 
 
-## The border a card printed with an ornament keeps (a share of its width), and where the ornament runs:
-## this far in from the card's edge.
-const ORNATE_MARGIN := 0.1
+## A card with details on its front reserves the lower part of the face for its printed text.
+static func front_window(look: Dictionary, details := false) -> Rect2:
+	var full := window(false, look)
+	return Rect2(full.position, Vector2(full.size.x, full.size.y * 0.48)) if details else full
+
+
+## Where the ornament runs, this far in from the card's edge, and the room it takes itself (shares of the
+## card's width).
 const ORNAMENT_INSET := 0.045
+const ORNAMENT_BAND := 0.04
+
+## How far each frame style's outermost mark stands outside the picture's window (a share of the card's
+## width, the stroke's own width included) - what [method Face._frame] draws, so the room kept round the
+## window and the type set under it clears it. Keep each entry at or over what its branch draws.
+const FRAME_REACH := {"line": 0.021, "double": 0.028, "corners": 0.039, "deco": 0.038}
+
+
+static func frame_reach(look: Dictionary) -> float:
+	var f: Dictionary = look.get("frame", {}) if look.get("frame") is Dictionary else {}
+	return float(FRAME_REACH.get(String(f.get("style", "line")), FRAME_REACH["line"]))
 
 
 static func ornament_of(look: Dictionary) -> String:
@@ -500,6 +519,7 @@ class Face:
 	var card: Dictionary = {}
 	var art: Texture2D = null
 	var back := false
+	var details := false
 	## A BACK WITH THE CARD'S TEXT ON IT ([constant CardTable.TEXTS] `back`): [member card]'s booklet
 	## printed in a panel over the printing's back, as a baseball card's stats are.
 	var printed := false
@@ -514,7 +534,7 @@ class Face:
 		var accent := CardTable.color(String(frame.get("accent", "#c9a227")))
 		# the whole face is stock: the card's slab is cut to its corners ([method CardTable.corner_radius])
 		draw_rect(Rect2(Vector2.ZERO, sz), stock)
-		var win := CardFaces.window(back, look)
+		var win := CardFaces.window(true, look) if back else CardFaces.front_window(look, details)
 		var shape := CardFaces.window_of(look)
 		var hole := CardFaces.outline(shape, win)
 		if art != null:
@@ -525,10 +545,59 @@ class Face:
 				hash([seed, String(card.get("key", "back"))]), hole)
 		_frame(style, shape, win, ink, accent, sz)
 		CardFaces.ornament(self, look, ink, accent)
-		if not back:
+		if details and not back:
+			_printed_front(win, stock, ink, accent)
+		elif not back:
 			_lettering(win, ink, sz)
 		elif printed:
 			_printed_back(win, stock, ink, accent)
+
+	## The illustration and the card's facts share its front. The name and text are type, not
+	## part of the generated picture, so they stay consistent across a printing.
+	func _printed_front(win: Rect2, stock: Color, ink: Color, accent: Color) -> void:
+		var full := CardFaces.window(false, look)
+		# the frame's rules stand outside the window: the type starts clear of them, not under them
+		var reach := CardFaces.frame_reach(look) * float(CardFaces.FACE_PX.x)
+		var below := reach + 12.0
+		var panel := Rect2(Vector2(win.position.x, win.end.y + below),
+			Vector2(win.size.x, Vector2(CardFaces.FACE_PX).y - full.position.x - win.end.y - below))
+		var text_ink := CardTable.legible_ink(ink, stock, CardTable.TEXT_CONTRAST)
+		var face := CardTable.font(String(look.get("title_face", "roman")))
+		var book := CardTable.font(CardTable.BOOK_FACE)
+		var italic := CardTable.font(CardTable.BOOK_ITALIC)
+		var x := panel.position.x + 12.0
+		var w := panel.size.x - 24.0
+		var y := panel.position.y + 5.0
+		var name := String(card.get("name", ""))
+		var ns := CardFaces._fit(face, name, 42, w)
+		var number := String(card.get("numeral", ""))
+		if not number.is_empty():
+			var top := CardFaces.window(false, look).position.y
+			var num_size := CardFaces._fit(face, number, 34, w)
+			draw_string(face, Vector2(x, top - below), number, HORIZONTAL_ALIGNMENT_CENTER, w,
+				num_size, text_ink)
+		y += face.get_ascent(ns)
+		draw_string(face, Vector2(x, y), name, HORIZONTAL_ALIGNMENT_CENTER, w, ns, text_ink)
+		y += face.get_descent(ns) + 10.0
+		draw_line(Vector2(x, y), Vector2(x + w, y), accent, 2.0, true)
+		y += 9.0
+		var b: Dictionary = card.get("booklet", {}) if card.get("booklet") is Dictionary else {}
+		var facts := CardPrompts.strings(b.get("keywords", [])).slice(0, 3)
+		for fact in facts:
+			var fs := CardFaces._fit(italic, String(fact), 24, w)
+			y += italic.get_ascent(fs)
+			draw_string(italic, Vector2(x, y), String(fact), HORIZONTAL_ALIGNMENT_LEFT, w, fs, text_ink)
+			y += italic.get_descent(fs) + 3.0
+		var body := String(b.get("upright", "")).strip_edges()
+		if body.is_empty():
+			return
+		y += 6.0
+		var room := panel.end.y - y - 5.0
+		var size := 26
+		while size > 13 and book.get_multiline_string_size(body, HORIZONTAL_ALIGNMENT_LEFT, w, size).y > room:
+			size -= 1
+		draw_multiline_string(book, Vector2(x, y + book.get_ascent(size)), body,
+			HORIZONTAL_ALIGNMENT_LEFT, w, size, -1, text_ink)
 
 	## THE CARD'S TEXT ON ITS BACK: a panel of the card's stock over the back's design - its name, its
 	## facts (the booklet's keywords) and its text, set to fill the panel.

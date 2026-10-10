@@ -30,7 +30,8 @@ extends Node
 ##   - the outro: lit while the voice speaks, fading to black after its last word and black as the
 ##     outro runs out; the channel's name over the intro and never again (it came back at the end);
 ##     the table thrown out of focus all the while the name is up, the thumbnail's moment included,
-##     the blur lifting as the focus pulls and off for the reading.
+##     the blur lifting as the focus pulls and off for the reading - a box's reading as a deck's,
+##     though a box is never shuffled (control: its shuffle time is none).
 ##
 ##   tests/run_boot_probe.sh tests/table_place_check.gd 900
 ##
@@ -611,6 +612,27 @@ func _outro() -> void:
 		on += 1 if medium._blur.visible else 0
 		t1 += 0.5
 	_ok(on == 0, "and is off for the reading (%d moments on)" % on)
+	# A BOX OPENS, IT IS NOT SHUFFLED: the name and the blur were timed off the shuffle, and a box
+	# reading (The Shoebox, 2026-10-09) came up from black on a sharp table with no name at all
+	var box := CardReading.compose([{"kind": "open", "card": 0, "text": "Open the box."},
+		{"kind": "draw", "card": 1, "text": "One."}, {"kind": "draw", "card": 2, "text": "Two."},
+		{"kind": "draw", "card": 3, "text": "Three."}, {"kind": "spread", "card": 0, "text": "Done."}])
+	subs.words = load("res://tests/table_look_probe.gd").timeline(CardReading.parse(box), 0.36, Director.intro_hold)
+	subs.document = {"source": box, "title": "Place Check", "table": doc}
+	medium._ensure_doc()
+	medium._follow.extend(subs.words)
+	medium._sched = medium._follow.place(medium._parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
+	var tb := medium._times()
+	var to := float(tb["opening"])
+	# control: a box reading has no shuffle, so the old timing had nothing to hold the name up by
+	_ok(medium._cards_from == "box" and float(tb["shuffle"]) == INF and to < INF,
+		"control: a box reading opens (%.2f s) with no shuffle (%s)" % [to, str(tb["shuffle"])])
+	medium._tick_focus(thumb)
+	_ok(medium._title_alpha(thumb) > 0.999 and medium._blur.visible and is_equal_approx(_blur_sigma(), wide),
+		"a box's thumbnail moment (%.1f s) has the name fully up over the table out of focus (%.2f)" % [thumb, medium._title_alpha(thumb)])
+	medium._tick_focus(to + TableMedium.FOCUS_PULL.y + 0.1)
+	_ok(medium._title_alpha(to + 1.0) < 0.001 and not medium._blur.visible,
+		"and the name is gone and the table sharp once the box is open")
 	Director.outro_hold = outro_was
 
 

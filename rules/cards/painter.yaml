@@ -57,6 +57,9 @@ card:
 # THE BACK: the side every card of a printing shows face down - EXACTLY SYMMETRIC under a half turn when
 # cards come up `reversed` (one upside down must not be told from one the right way up), and, when each
 # card's text is `printed` over it (CardTable.TEXTS `back`), a design round a plain middle for that text.
+# A picture is never made symmetric by blending it with its own half turn: asked for an exact symmetry the
+# generator cannot draw, the painter averaged the picture with its rotated copy and every mark came out
+# twice, a little apart - "blurry, as if two copies shifted" (feedback 0012, #710606's back.png).
 back:
   - include: head
   - ""
@@ -66,7 +69,12 @@ back:
   - when: reversed
     say: >-
           It must be EXACTLY SYMMETRIC under a half turn (180 degrees), so a card lying upside down
-          cannot be told from one the right way up.
+          cannot be told from one the right way up. Draw it symmetric about the exact center of the
+          canvas: one simple motif and its half-turn partners, every mark single and sharp. NEVER make
+          it symmetric by blending, averaging or overlaying the picture with a rotated or flipped copy
+          of itself - that prints every mark twice, a little apart, and the back reads as blurred.
+          Save the picture as it was drawn; if it is not quite symmetric, make the bottom half the
+          half turn of the top half (one half replaces the other, nothing is laid over anything).
   - when: printed
     say: >-
           EACH CARD'S OWN TEXT IS PRINTED OVER THE MIDDLE of this back (its name, its facts, a few

@@ -114,7 +114,8 @@ static func seeded(n: int, rng: RandomNumberGenerator, lay: Dictionary) -> Array
 
 ## THE STAGED SPREAD: [param cards]' positions (`comes`, `lies`, `on`, [constant COMES]) laid as piles -
 ## a card alone, a stack, a waterfall - in a row (two rows when one would not fit), clear of the deck
-## and in the camera's frame for the episode's layout [param lay]. A spread with none of them is the
+## and in the camera's frame for the episode's layout [param lay] - and, with a [param box] the cards
+## are kept in, off its whole column (a long row that will not fit beside it is two). A spread with none of them is the
 ## seeded preset itself ([method seeded]), draw for draw. `[{pos, yaw, face}]`.
 static func staged(cards: Array, rng: RandomNumberGenerator, lay: Dictionary, box := Vector2.ZERO) -> Array:
 	var n := cards.size()
@@ -153,9 +154,16 @@ static func staged(cards: Array, rng: RandomNumberGenerator, lay: Dictionary, bo
 	for i in n:
 		hand.append([Vector3(rng.randf_range(-0.002, 0.002), (float(i) + 1.0) * 0.0002, rng.randf_range(-0.002, 0.002)),
 			deg_to_rad(rng.randf_range(-2.0, 2.0))])
+	# A BOX STANDS TALL, and a card tucked behind it is hidden by it and has to be carried over it: the
+	# spread keeps off its whole column, back to the cloth's far edge, so a row that will not fit beside
+	# it becomes two (feedback 0010: a seventh card laid down behind the box)
+	var keep := deck_keep(deck, box)
+	if box != Vector2.ZERO:
+		var far := CLOTH_MIDDLE.y - CLOTH.y * 0.5
+		keep = Rect2(keep.position.x, far, keep.size.x, keep.end.y - far)
 	for rows in [1, 2]:
 		var out := _piles_laid(piles, shapes, hand, rows, n)
-		var off := CardTable.clear_of(out, CARD, deck_keep(deck, box))
+		var off := CardTable.clear_of(out, CARD, keep)
 		for sl in out:
 			(sl as Dictionary)["pos"] = ((sl as Dictionary)["pos"] as Vector3) + Vector3(off.x, 0.0, off.y)
 		if rows == 2 or _in_frame(out, lay):

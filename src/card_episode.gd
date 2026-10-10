@@ -351,14 +351,30 @@ func invalidate(step: String) -> Array:
 	return gone
 
 
-## THE PRINTINGS the drawn cards are in, besides the deck's own, as file keys (`back_<key>.png`), in the
-## order they are first drawn ([method CardTable.look_of]).
+## THE PRINTINGS in the full collection, including ones none of tonight's cards came from,
+## besides the deck's own, as file keys (`back_<key>.png`).
 func printings() -> Array:
 	var out: Array = []
 	for k in range(1, card_count() + 1):
 		var key := printing_of(k)
 		if not key.is_empty() and not out.has(key):
 			out.append(key)
+	var plan: Variant = read_json("plan")
+	if plan is Dictionary:
+		var look: Dictionary = (plan as Dictionary).get("look", {}) if (plan as Dictionary).get("look") is Dictionary else {}
+		for card in (plan as Dictionary).get("deck", []) if (plan as Dictionary).get("deck") is Array else []:
+			if card is Dictionary:
+				var name := CardTable.series_of(look, card as Dictionary)
+				var key := CardTable.series_key(name) if not name.is_empty() else ""
+				if not key.is_empty() and not out.has(key):
+					out.append(key)
+		var inventory: Dictionary = (plan as Dictionary).get("inventory", {}) if (plan as Dictionary).get("inventory") is Dictionary else {}
+		var counts: Dictionary = inventory.get("printings", {}) if inventory.get("printings") is Dictionary else {}
+		for name in counts:
+			if int(counts[name]) > 0 and not String(name).is_empty():
+				var key := CardTable.series_key(String(name))
+				if not out.has(key):
+					out.append(key)
 	return out
 
 

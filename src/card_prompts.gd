@@ -204,11 +204,13 @@ static func designer(title: String, brief: String, look: Dictionary, card: Dicti
 		reversals: bool, history: Array = [], text := "booklet") -> Dictionary:
 	var group := String(card.get("group", ""))
 	var on_back := text == "back"
+	var on_front := text == "front"
 	var ledger := String(look.get("page", "")) == "ledger"
 	var vars := {"deck_noun": deck_noun(look), "deck_name": String(look.get("deck_name", "")), "deck_style": String(look.get("deck_style", "")),
 		"palette": ", ".join(PackedStringArray(look.get("palette", []))), "name": String(card.get("name", "")), "group": group,
-		"meaning": String(card.get("meaning", "")).strip_edges(), "on_back": on_back, "ledger": ledger, "ledger_booklet": ledger and not on_back,
-		"plain_booklet": not ledger and not on_back, "reversals": reversals,
+		"meaning": String(card.get("meaning", "")).strip_edges(), "on_back": on_back, "on_front": on_front,
+		"in_booklet": not on_back and not on_front, "ledger": ledger, "ledger_booklet": ledger and not on_back and not on_front,
+		"plain_booklet": not ledger and not on_back and not on_front, "reversals": reversals,
 		"before": "\n".join(_pictured_before(history, String(card.get("name", ""))))}
 	return {"system": show_context(title, brief), "prompt": Rules.say("cards/designer.prompt", vars)}
 
@@ -336,6 +338,9 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 	var look: Dictionary = plan.get("look", {})
 	var staging := CardTable.staging_of(plan)
 	var boxed := String(staging["source"]) == "box"
+	var inventory: Dictionary = plan.get("inventory", {}) if plan.get("inventory") is Dictionary else {}
+	var box_count := int(inventory.get("count", 0)) if not inventory.is_empty() else \
+		((plan.get("deck", []) as Array).size() if plan.get("deck") is Array else 0)
 	var listed: Array = []
 	for i in positions.size():
 		var pos: Dictionary = positions[i] if positions[i] is Dictionary else {"name": str(positions[i])}
@@ -354,7 +359,8 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		"running_bit": _s(plan.get("running_bit", "")), "spread_name": String((plan.get("spread", {}) as Dictionary).get("name", "")),
 		"spread_size": spread_size, "positions": listed, "deck_name": String(look.get("deck_name", "")), "surface": String(look.get("surface", "")),
 		"on_the_table": CardTable.on_the_table(look), "said": spoken, "on_table": on_table, "box": boxed, "pictured": pictured,
-		"intro": step == "intro", "close": step == "close", "card": step != "intro" and step != "close", "voices": not voices.is_empty()}
+		"intro": step == "intro", "close": step == "close", "card": step != "intro" and step != "close", "voices": not voices.is_empty(),
+		"box_count": box_count if boxed else 0}
 	var lo_hi: Array = WORDS["card"]
 	if step == "intro":
 		lo_hi = WORDS["intro"]
@@ -362,7 +368,7 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 	elif step == "close":
 		lo_hi = WORDS["close"]
 	else:
-		vars.merge(_card_now(plan, positions, drawn, int(step), spread_size, boxed, pictured, remark, String(staging["text"]) == "back"))
+		vars.merge(_card_now(plan, positions, drawn, int(step), spread_size, boxed, pictured, remark, String(staging["text"])))
 	var kind := step if step == "intro" or step == "close" \
 		else ("jumper" if not drawn.is_empty() and bool((drawn[drawn.size() - 1] as Dictionary).get("jumper", false)) else "card")
 	var heard_before := _heard_before(history, kind, brief, names)
@@ -379,7 +385,7 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 ## first of a waterfall, the next of one, out of a box, drawn), what may be said of its picture, and its
 ## printed text - the flags and words of rules/cards/reader.yaml's `card`.
 static func _card_now(plan: Dictionary, positions: Array, drawn: Array, k: int, n: int, boxed: bool, pictured: bool,
-		remark: bool, on_back: bool) -> Dictionary:
+		remark: bool, text_side: String) -> Dictionary:
 	var c: Dictionary = drawn[k - 1] if k - 1 < drawn.size() else drawn[drawn.size() - 1]
 	var pos: Dictionary = positions[k - 1] if k - 1 < positions.size() and positions[k - 1] is Dictionary else {}
 	var comes := String(pos.get("comes", "drawn"))
@@ -415,9 +421,9 @@ static func _card_now(plan: Dictionary, positions: Array, drawn: Array, k: int, 
 		out["pic_art"] = true
 	var b: Dictionary = c.get("booklet", {}) if c.get("booklet") is Dictionary else {}
 	if not b.is_empty():
-		out[("on_back" if on_back else "in_booklet")] = true
+		out["on_back" if text_side == "back" else ("on_front" if text_side == "front" else "in_booklet")] = true
 		out["keywords"] = ", ".join(strings(b.get("keywords", [])))
-		out["text"] = String(b.get("upright", "")) if on_back \
+		out["text"] = String(b.get("upright", "")) if text_side != "booklet" \
 			else String(b.get("reversed" if bool(c.get("reversed", false)) and b.has("reversed") else "upright", ""))
 	return out
 
@@ -536,7 +542,8 @@ static func _past(e: Dictionary) -> String:
 			var how := _how_note(_d(listed[i]), i + 1).strip_edges().trim_prefix("(").trim_suffix(")")
 			if not how.is_empty() and not moves.has(how):
 				moves.append(how)
-		lines.append("  Staged: from a %s, text %s%s" % [st["source"], "in a booklet" if st["text"] == "booklet" else "on the backs",
+		var where := "in a booklet" if st["text"] == "booklet" else ("on the fronts" if st["text"] == "front" else "on the backs")
+		lines.append("  Staged: from a %s, text %s%s" % [st["source"], where,
 			("; " + "; ".join(moves)) if not moves.is_empty() else ""])
 	lines.append("  Deck \"%s\": %s" % [_s(look.get("deck_name", "")), clip(_s(look.get("deck_style", "")), 40)])
 	if not _s(look.get("kind", "")).is_empty():

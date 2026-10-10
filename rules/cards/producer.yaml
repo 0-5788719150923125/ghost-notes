@@ -65,7 +65,8 @@ prompt:
       paintings, with an ink and accent that read on it.
   - >-
       THE PRINTINGS: a box may mix printings - sets, years, generations, even games - and each
-      prints its own front and its own back. If the brief says this deck does, list them in
+      prints its own front and its own back. Sharing one box does not make the cards one printing.
+      When the collection spans releases or generations, list the printings in
       `look.series`, each with its `name` and what it prints otherwise (`deck_style`, `card_back`,
       `palette`, `frame`), and give every card of the deck its `series`{{^chooses}} (a card listed
       in the brief belongs to the printing named like its group){{/chooses}}. A deck of one
@@ -119,7 +120,7 @@ reply: |-
     "premise": "the episode's angle, in one or two sentences",
     "reader_mood": "how the reader is today",
     "running_bit": "any running bit for this episode - a bit the reader SAYS, never a thing done or an object shown (the viewer sees the table and the cards, never the reader), and never a way of speaking (the show's voice is fixed: no whispering, accents or singing)",
-    "staging": {"source": "deck or box", "text": "booklet or back"},
+    "staging": {"source": "deck or box", "text": "booklet, back or front"},
     "spread": {"name": "the spread's name", "positions": [{"name": "position name", "asks": "what it asks", "comes": "drawn, dealt or swept - optional", "lies": "sideways - optional", "on": false, "then": []}]},
   {{#chooses}}
     "deck": [{"name": "the name printed on the card", "group": "its set, team, suit or type, if it has one", "series": "its printing's name, when the deck mixes printings", "meaning": "what the card is and why it is in this box, one or two sentences"}],
@@ -193,7 +194,10 @@ chosen_deck: >-
   cards in `deck` - between {{box_lo}} and {{box_hi}} of them, every one a card that collection
   would really hold, each with what it is. You choose what is in the box, never what comes out: the
   deck is shuffled from this episode's seed and {{cards}} cards come up, in an order nobody knows -
-  so plan nothing that depends on any one card coming up.
+  so plan nothing that depends on any one card coming up. These listed cards are the collection
+  shown in the box. Usually leave its total unstated in the title, description, premise and
+  spoken story. If a number or delivery cadence matters, make it consistent with the number of
+  listed cards, accounting explicitly for any extras or duplicates.
 
 # THE DECK the producer is told of: the show's own cards by name, as its brief lists them (their meanings
 # reach a writer only as each is drawn)

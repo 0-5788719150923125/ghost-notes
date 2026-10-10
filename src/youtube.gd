@@ -42,6 +42,8 @@ const PRIVACIES := {"private": "Private", "unlisted": "Unlisted", "public": "Pub
 ## THE TITLE A NEW YOUTUBE CARD STARTS WITH: macros the panel fills ([method expand_title]).
 const TITLE_TEMPLATE := "%title%: %episode%"
 const CATEGORY := "22"
+## A playlist's page, as the description links it: the playlist's id follows.
+const PLAYLIST_LINK := "https://www.youtube.com/playlist?list="
 const PAID_PROMOTION := false
 ## YouTube's limits: the title in characters, the description in bytes of UTF-8, and the tags in
 ## characters counted as YouTube counts them (see [method tags_length]).
@@ -815,9 +817,9 @@ static func record_upload(path: String, entry: Dictionary) -> String:
 
 # --- what the video says -------------------------------------------------------------------------
 
-## The upload's `video` resource from a mode's `{title, description, tags, privacy}`: fitted to
-## YouTube's limits, with the constants above (a privacy YouTube does not know is [constant PRIVACY]).
-## [param fallback] is the title when the mode gives none.
+## The upload's `video` resource from a mode's `{title, description, chapters, tags, privacy,
+## playlist, playlist_title}`: fitted to YouTube's limits, with the constants above (a privacy YouTube
+## does not know is [constant PRIVACY]). [param fallback] is the title when the mode gives none.
 static func video_body(meta: Dictionary, fallback := "") -> Dictionary:
 	var title := fit_title(str(meta.get("title", "")))
 	if title.is_empty():
@@ -827,12 +829,32 @@ static func video_body(meta: Dictionary, fallback := "") -> Dictionary:
 	var privacy := str(meta.get("privacy", PRIVACY))
 	return {
 		"snippet": {"title": title if not title.is_empty() else "Untitled",
-			"description": fit_description(str(meta.get("description", ""))),
+			"description": fit_description(description_of(meta)),
 			"tags": Array(fit_tags(tags)), "categoryId": CATEGORY},
 		"status": {"privacyStatus": privacy if PRIVACIES.has(privacy) else PRIVACY,
 			"selfDeclaredMadeForKids": false, "containsSyntheticMedia": true},
 		"paidProductPlacementDetails": {"hasPaidProductPlacement": PAID_PROMOTION},
 	}
+
+
+## THE DESCRIPTION AS IT GOES UP: the mode's own, then THE PLAYLIST the video joins - its title and
+## a link, standing in for the end screen the API cannot write (the user, 2026-10-09: "placed BEFORE
+## the timestamps") - then the chapters, a paragraph each; a part that is empty is left out.
+static func description_of(meta: Dictionary) -> String:
+	var parts := PackedStringArray()
+	var own := str(meta.get("description", "")).strip_edges()
+	if not own.is_empty():
+		parts.append(own)
+	var list := str(meta.get("playlist", "")).strip_edges()
+	if not list.is_empty():
+		var named := str(meta.get("playlist_title", "")).strip_edges()
+		var url := PLAYLIST_LINK + list.uri_encode()
+		parts.append(("Playlist: %s\n%s" % [named, url]) if not named.is_empty() else "Playlist: " + url)
+	var raw: Variant = meta.get("chapters", [])
+	var chapters: Array = Array(raw) if raw is Array or raw is PackedStringArray else []
+	if not chapters.is_empty():
+		parts.append("\n".join(PackedStringArray(chapters)))
+	return "\n\n".join(parts)
 
 
 ## THE TITLE FROM ITS TEMPLATE: each `%name%` in [param template] replaced by [param values]'

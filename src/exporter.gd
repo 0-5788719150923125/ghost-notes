@@ -210,11 +210,12 @@ var name_provider := Callable()
 ## "record the game" there is noise.
 var automation_available := false
 
-## What an upload of the take at the given path says: `{title, description, tags, privacy,
-## playlist, record}` - `record` is a file the upload's result is kept in - or {} when nothing is to
-## go up (no YouTube card, or its "Upload after export" not ticked). Asked with "" as the save path
-## is chosen, which decides whether this export goes up; asked again with the take once it is
-## rendered, so a mode can time chapters from it and describe the episode the take was made of.
+## What an upload of the take at the given path says: `{title, description, chapters, tags, privacy,
+## playlist, playlist_title, record}` - `record` is a file the upload's result is kept in - or {}
+## when nothing is to go up (no YouTube card, or its "Upload after export" not ticked). Asked with ""
+## as the save path is chosen, which decides whether this export goes up; asked again with the take
+## once it is rendered, so a mode can time chapters from it and describe the episode the take was
+## made of.
 var upload_provider := Callable()
 
 

@@ -175,16 +175,36 @@ func _prompts() -> bool:
 	var texts: Array = []
 	for chooses in [false, true]:
 		texts.append(CardPrompts.producer("Show", "a brief", 7, 3, true, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards().slice(0, 12), chooses)["prompt"])
-	for text in ["booklet", "back"]:
+	_ok(String(texts[0]).contains("`text` \"front\""), "the producer can choose details on the front")
+	for text in ["booklet", "back", "front"]:
 		texts.append(CardPrompts.designer("Show", "## Format\na show", look, card, true, [], text)["prompt"])
+	var front_prompt := String(texts[texts.size() - 1])
+	_ok(front_prompt.contains("PRINTED WITH THE ART ON ITS FRONT") and front_prompt.contains("shared artwork"),
+		"the designer is told how to write a card with front details and a shared back")
 	for looks in [0, 40]:
 		texts.append(CardPrompts.set_dresser("Show", "a brief", plan, 7, CardTable.headroom(7), ["a bell"], true, looks, ["fog"], "by me",
 			["a table"], ["a light"], true, false)["prompt"])
 	for step in ["intro", "1", "2", "close"]:
 		var upto := 0 if step == "intro" else (3 if step == "close" else int(step))
 		texts.append(CardPrompts.reader("Show", "a brief", plan, step, ["hello"], [card, card, card].slice(0, upto), 3, true, [], [], ["Moth"])["prompt"])
+	var front_plan := plan.duplicate(true)
+	front_plan["staging"] = {"source": "box", "text": "front"}
+	front_plan["inventory"] = {"count": 12, "printings": {"": 12}}
+	var front_reader := String(CardPrompts.reader("Show", "a brief", front_plan, "1", ["hello"], [card], 3,
+		true, [], [], ["Moth"])["prompt"])
+	_ok(front_reader.contains("share the front") and not front_reader.contains("<back>"),
+		"the reader sees the details on the front")
+	_ok(front_reader.contains("12 cards in all") and front_reader.contains("Usually do not mention the total"),
+		"the reader can check the story against the box without announcing a count")
 	texts.append(CardPrompts.card_image(look, card, "a cliff", "/x.png", true, 2))
 	texts.append(CardPrompts.back_image(look, "/x.png", true, true))
+	# a symmetric back is never made by blending the picture with its half turn (feedback 0012: every
+	# mark printed twice); the control is a back that is not asked to be symmetric
+	var symmetric := CardPrompts.back_image(look, "/x.png", true)
+	_ok(symmetric.contains("EXACTLY SYMMETRIC") and symmetric.contains("NEVER make it symmetric by blending"),
+		"a back asked to be symmetric is told never to blend the picture with a rotated copy")
+	_ok(not CardPrompts.back_image(look, "/x.png", false).contains("blending"),
+		"control: a back not asked to be symmetric is not told about blending")
 	texts.append(CardPrompts.surface_image(look, "/x.png"))
 	texts.append(CardPrompts.height_image(look, "/x.png"))
 	texts.append(CardPrompts.backdrop_image(look, "/x.png"))

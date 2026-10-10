@@ -19,7 +19,7 @@ prompt:
   - when: meaning
     say: "What it means in this deck - grounding, not text to copy: {{meaning}}"
   # THE KEYWORDS ARE ITS OWN: copied whole, every deck's booklet read alike
-  - when: [meaning, "!on_back"]
+  - when: [meaning, in_booklet]
     say: >-
           The words above are the deck's own, for reference. Choose your own keywords for this
           deck's entry, as many as the entry wants: keep some, and put a synonym or a fresher word
@@ -40,7 +40,14 @@ prompt:
           `upright` (a bio, rules, flavor text, an answer). Write it exactly the way that kind of
           card's back is written, as the brief says the backs read. It stands alone: never mention
           another card.
-  - when: "!on_back"
+  - when: on_front
+    say: >-
+          2. WHAT IS PRINTED WITH THE ART ON ITS FRONT, in `booklet`: one to three short facts in
+          `keywords`, and twenty to forty words of rules, stats, instructions or flavor text in
+          `upright`. These fit in the panel beneath the picture. Write them as this kind of card
+          would print them. The back carries the printing's shared artwork, with no card-specific
+          text. The entry stands alone: never mention another card.
+  - when: in_booklet
     say: >-
           2. ITS ENTRY IN THE DECK'S LITTLE BOOKLET, which is shown on screen beside the card, with
           its `keywords`{{#ledger}} (this deck's page lists them in two columns: give an EVEN
@@ -62,8 +69,8 @@ prompt:
     {
       "art": "the illustration, in two to four sentences",
       "booklet": {
-        "keywords": ["{{#ledger_booklet}}four or six{{/ledger_booklet}}{{#plain_booklet}}three to six{{/plain_booklet}}{{#on_back}}three to five{{/on_back}} words or short phrases"],
-        "upright": "the meaning, forty to seventy words"{{#reversals}},
+        "keywords": ["{{#ledger_booklet}}four or six{{/ledger_booklet}}{{#plain_booklet}}three to six{{/plain_booklet}}{{#on_back}}three to five{{/on_back}}{{#on_front}}one to three{{/on_front}} words or short phrases"],
+        "upright": "the card's text{{#on_front}}, twenty to forty words{{/on_front}}{{^on_front}}, forty to seventy words{{/on_front}}"{{#reversals}},
         "reversed": "the meaning reversed, twenty-five to forty-five words"{{/reversals}}
       }
     }

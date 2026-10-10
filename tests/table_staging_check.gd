@@ -18,8 +18,8 @@ extends Node
 ##     card is never held up, a tap turns a lying card a quarter turn, a drawn card is held up LEFT of
 ##     the middle with its page open. A box show: the box stands with the cards filed in it on edge, a
 ##     card waits standing in the file and rises out past the rim, is held up ALONE in the middle with no
-##     page and turned over to show its printed back; the waterfall's cards lie overlapping. A box mixing
-##     printings gives each printing its own back.
+##     page and turned over to show its printed back; the waterfall's cards lie overlapping. The file
+##     holds the planned count, and a mixed box keeps each printing's own back and share of the cards.
 ##   - THE AIR'S BURSTS COME FROM THE CARD (2026-10-08, the user: a burst of sparkles came "just BEFORE"
 ##     a card held up on the left was laid, "detached from the card itself"): over a deck show, a show
 ##     whose spread lays the card still held, a box show and a jumper's, with a pirouette asked for,
@@ -68,7 +68,9 @@ func _run() -> void:
 	medium.bind_captions(subs)
 	_deck_show()
 	_box_show()
+	_laid_over_box()
 	_printings()
+	_front_details()
 	_bursts()
 	Director.hold(false)
 	Director.detach()
@@ -235,15 +237,18 @@ func _deck_show() -> void:
 
 func _box_show() -> void:
 	print("-- a box show")
+	var deck: Array = []
+	for i in 12:
+		deck.append({"key": "c%d" % i, "name": "Card %d" % i})
 	_load(23, [{}, {"comes": "swept"}, {"comes": "swept"}],
-		{"look": {"candles": 0}, "staging": {"source": "box", "text": "back"}})
+		{"look": {"candles": 0}, "staging": {"source": "box", "text": "back"}, "deck": deck})
 	_ok(medium._cards_from == "box" and not medium._box.is_empty(), "the cards come from a box, and it stands")
 	if medium._box.is_empty():
 		return
 	var filed := 0
 	for f in medium._file:
 		filed += ((f as MultiMeshInstance3D).multimesh as MultiMesh).instance_count
-	_ok(filed > 40, "the box is filled with cards on edge (%d)" % filed)
+	_ok(filed + medium._cards.size() == deck.size(), "the box shows its twelve planned cards, including the drawn ones (%d)" % (filed + medium._cards.size()))
 	var inner: AABB = medium._box["inner"]
 	_posed(0.5)
 	var waiting: Transform3D = (medium._cards[0] as MeshInstance3D).transform
@@ -273,6 +278,90 @@ func _box_show() -> void:
 	_ok(TablePositions.overlaps(a, b), "the waterfall's cards lie overlapping")
 
 
+## A CARD LAID BEHIND THE BOX (feedback 0010: "the seventh card... clips through the card box on the
+## right... A real human would probably have started a new row by this point"): the spread keeps off the
+## box's whole column - a long row becomes two rather than reaching behind the box - and a card that is
+## given a place behind it is carried over its rim, never through it. Two-sided: the same cards laid with
+## no box do reach into the column (the oracle), and the old flat arc over the box does clip it.
+func _laid_over_box() -> void:
+	print("-- laid over the box")
+	var size := Vector2(CardTable.BOX_MAX.x, CardTable.BOX_MAX.z)
+	var behind := 0
+	var oracle := 0
+	var rows_of_two := 0
+	for s in range(1, SEEDS + 1):
+		var lay := CardTable.layout_of(s)
+		var col := TablePositions.deck_keep(lay["deck"], size)
+		for n in [6, 7, 8]:
+			var rng := RandomNumberGenerator.new()
+			rng.seed = hash([s, n, "behind-box"])
+			var boxed := TablePositions.staged(_cards(_plain(n)), rng, lay, size)
+			var zs := {}
+			for sl in boxed:
+				var foot := CardTable.footprint(sl["pos"], float(sl["yaw"]), TablePositions.CARD)
+				zs[snappedf(foot.get_center().y, 0.05)] = true
+				if foot.position.x < col.end.x - 0.001 and foot.end.x > col.position.x + 0.001 and foot.position.y < col.end.y:
+					behind += 1
+			if zs.size() >= 2:
+				rows_of_two += 1
+			rng.seed = hash([s, n, "behind-box"])
+			for sl in TablePositions.seeded(n, rng, lay):
+				var foot := CardTable.footprint(sl["pos"], float(sl["yaw"]), TablePositions.CARD)
+				if foot.position.x < col.end.x - 0.001 and foot.end.x > col.position.x + 0.001 and foot.position.y < col.end.y:
+					oracle += 1
+	_ok(behind == 0, "no card lies in the box's column, in front of it or behind (%d did)" % behind)
+	_ok(rows_of_two > 0, "a long row that would reach it is two rows (%d of %d spreads)" % [rows_of_two, SEEDS * 3])
+	_ok(oracle > 0, "control: with no box the same spreads do lie in its column (%d cards)" % oracle)
+	# THE FLIGHT: from held up in front of the lens to a place right behind the box
+	if medium._box.is_empty():
+		_ok(false, "a box stands to lay over")
+		return
+	var world: AABB = medium._box["world"]
+	var from := medium._present_xf(0, 0.0)
+	var to := Transform3D(Basis(), Vector3(world.get_center().x, TableMedium.CARD_T * 0.5, world.position.z - 0.08))
+	var lifted := func(f: float) -> float: return medium._lay_lift(from, to, f)
+	var flat := func(f: float) -> float: return sin(PI * f) * TableMedium.LAY_ARC
+	var clipped := _clips_box(from, to, lifted, world)
+	var control := _clips_box(from, to, flat, world)
+	var high := 0.0
+	for s in 65:
+		high = maxf(high, from.interpolate_with(to, float(s) / 64.0).origin.y + float(lifted.call(float(s) / 64.0)))
+	_ok(clipped == 0, "laid behind the box it is carried over the rim (%d steps through it)" % clipped)
+	_ok(control > 0, "control: the usual %.2f m arc clips the box (%d steps)" % [TableMedium.LAY_ARC, control])
+	_ok(high < from.origin.y + 0.05, "and it is never lifted past where it was held up (%.2f m, held at %.2f)" % [high, from.origin.y])
+	_ok(is_zero_approx(float(lifted.call(1.0))) and is_zero_approx(float(lifted.call(0.0))), "set down it is lifted nowhere")
+	var free := Transform3D(Basis(), Vector3(-0.2, TableMedium.CARD_T * 0.5, 0.0))
+	_ok(is_equal_approx(medium._lay_lift(from, free, 0.5), TableMedium.LAY_ARC), "a card laid clear of the box keeps the usual arc")
+
+
+## How many of 64 steps of a laying from [param from] to [param to], lifted as [param lift] says, have
+## the card's corners under the rim of the box [param world] while over it ([param lift]: f -> meters).
+func _clips_box(from: Transform3D, to: Transform3D, lift: Callable, world: AABB) -> int:
+	var rim := Rect2(world.position.x, world.position.z, world.size.x, world.size.z).grow(-TableMedium.BOX_GRAZE)
+	var n := 0
+	for s in 65:
+		var f := float(s) / 64.0
+		var xf := from.interpolate_with(to, f)
+		xf.origin.y += float(lift.call(f))
+		var lo := Vector3(INF, INF, INF)
+		var hi := Vector3(-INF, -INF, -INF)
+		for cx in [-0.5, 0.5]:
+			for cz in [-0.5, 0.5]:
+				var p := xf * Vector3(cx * TablePositions.CARD.x, 0.0, cz * TablePositions.CARD.y)
+				lo = lo.min(p)
+				hi = hi.max(p)
+		if Rect2(lo.x, lo.z, hi.x - lo.x, hi.z - lo.z).intersects(rim) and lo.y < world.end.y:
+			n += 1
+	return n
+
+
+func _plain(n: int) -> Array:
+	var out: Array = []
+	for i in n:
+		out.append({})
+	return out
+
+
 func _printings() -> void:
 	print("-- printings")
 	var plan := {"look": {"candles": 0, "series": [{"name": "1959 Set", "card_back": "red"}, {"name": "1987 Set", "card_back": "blue"}]},
@@ -283,6 +372,32 @@ func _printings() -> void:
 		backs.append((medium._cards[k] as MeshInstance3D).get_surface_override_material(1))
 	_ok(backs[0] != backs[1] and backs[0] != backs[2] and backs[1] != backs[2], "each printing has its own back, the deck's own a third")
 	_ok(medium._backs.size() == 3, "three backs are printed (%d)" % medium._backs.size())
+
+
+func _front_details() -> void:
+	print("-- front details")
+	var deck: Array = []
+	for i in 12:
+		deck.append({"key": "d%d" % i, "name": "Card %d" % i, "series": "First" if i < 8 else "Second"})
+	var plan := {"look": {"candles": 0, "series": [{"name": "First", "card_back": "red star"},
+		{"name": "Second", "card_back": "blue moon"}]}, "staging": {"source": "box", "text": "front"}, "deck": deck}
+	_load(32, [{}, {}, {}], plan, ["First", "First", "Second"])
+	var first := (medium._cards[0] as MeshInstance3D).get_surface_override_material(1)
+	var same := (medium._cards[1] as MeshInstance3D).get_surface_override_material(1)
+	var other := (medium._cards[2] as MeshInstance3D).get_surface_override_material(1)
+	_ok(first == same and first != other, "front text keeps a shared back for each printing")
+	_ok(medium._printed.is_empty() and medium._alone, "the cards are shown alone with no card-specific backs")
+	_ok((medium._face_canvas[0] as CardFaces.Face).details and
+		CardFaces.front_window({}, true).size.y < CardFaces.window().size.y,
+		"the face reserves room below the picture for printed details")
+	var filed := {"First": 0, "Second": 0}
+	for inst in medium._file:
+		var mm: MultiMesh = (inst as MultiMeshInstance3D).multimesh
+		for name in filed:
+			if mm.mesh.surface_get_material(0) == (medium._backs[name] as Dictionary)["mat"]:
+				filed[name] += mm.instance_count
+	_ok(filed["First"] == 6 and filed["Second"] == 3,
+		"the nine undrawn cards keep the planned printing mix, six first and three second (%s)" % str(filed))
 
 
 ## How far the emitter [param e] is from card [param card] as drawn (meters): its middle, or its edges

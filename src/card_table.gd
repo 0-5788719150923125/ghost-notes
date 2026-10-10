@@ -139,12 +139,12 @@ const MOMENTS := {
 ## `source` - where they come from ([constant TableActions.SOURCES]); `text` - where a card's text is
 ## printed ([constant TEXTS]).
 const STAGING := {"source": "deck", "text": "booklet"}
-## WHERE A CARD'S TEXT IS, and so how a drawn card is shown: beside its page in the deck's little
-## booklet (held up on the left, the page open on the right), or printed on its own back - held up
-## alone in the middle, and turned over to show it.
+## WHERE A CARD'S TEXT IS, and so how a drawn card is shown: in a booklet beside it,
+## on its own back, or with its illustration on the front.
 const TEXTS := {
 	"booklet": "a page of the deck's little booklet, shown beside the card while it is held up (a reading deck's, an oracle's)",
-	"back": "printed on the card's own back - stats, a bio, rules, an answer - and the card is held up alone in the middle and turned over to show it (a baseball card's, a trading card's)",
+	"back": "printed on the card's own back - stats, a bio, rules or an answer - and the card is held up alone in the middle and turned over to show it",
+	"front": "printed with the picture on the card's front - stats, attacks, rules or flavor text below the art; the card is held up alone, with its printing's shared design on the back",
 }
 ## THE BOX THE CARDS ARE KEPT IN, at its largest (x across, z front to back, meters) and tallest: a box
 ## the set dresser made bigger is stood smaller, so the spread is laid clear of where it can stand.
