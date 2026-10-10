@@ -205,6 +205,15 @@ func _prompts() -> bool:
 		"a back asked to be symmetric is told never to blend the picture with a rotated copy")
 	_ok(not CardPrompts.back_image(look, "/x.png", false).contains("blending"),
 		"control: a back not asked to be symmetric is not told about blending")
+	# a back cut to a shaped window is told to keep its marks off the edge (feedback 0015: an arch sliced the
+	# wings the painter ran to the border); the control is a plain rectangle
+	var arched := look.duplicate(true)
+	arched["frame"] = {"window": "arch"}
+	var shaped_back := CardPrompts.back_image(arched, "/x.png", true)
+	_ok(shaped_back.contains("an arched window") and shaped_back.contains("outer sixth"),
+		"a back cut to an arch is told the window and to keep its marks inside it")
+	_ok(not CardPrompts.back_image(look, "/x.png", true).contains("outer sixth"),
+		"control: a back with a plain rectangle window is not told to keep clear of its edge")
 	texts.append(CardPrompts.surface_image(look, "/x.png"))
 	texts.append(CardPrompts.height_image(look, "/x.png"))
 	texts.append(CardPrompts.backdrop_image(look, "/x.png"))

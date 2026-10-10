@@ -38,8 +38,11 @@ func _initialize() -> void:
 	for m in CardTable.MOMENTS:
 		_ok(TableActions.moments().has(m), "the air's '%s' is made by some verb" % m)
 	print("-- the marks")
-	_ok(TableActions.written() == ["shuffle", "open", "draw", "jumper", "spread", "deal", "fan", "show", "tap", "untap", "flip"],
-		"the written verbs are the registry's eleven: tarot's four and a collection's seven (%s)" % str(TableActions.written()))
+	_ok(TableActions.written() == ["shuffle", "open", "draw", "jumper", "spread", "deal", "fan", "show", "rummage", "linger", "tap", "untap", "flip"],
+		"the written verbs include searching and a silent hold (%s)" % str(TableActions.written()))
+	_ok(CardReading.rest_of("linger", true) == TableActions.LINGER and
+		CardReading.rest_of("rummage", true) == TableActions.LAY + TableActions.RUMMAGE,
+		"a silent hold preserves the shown card, while a search puts it down first")
 	for v in TableActions.written():
 		var line := "<!-- table: %s 2 -->" % v if TableActions.takes_card(v) else "<!-- table: %s -->" % v
 		var p := CardReading.parse(line + "\n\nWords.\n")

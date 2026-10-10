@@ -79,6 +79,14 @@ func _framing() -> bool:
 		"a natural-language show brief is not framed as the creator's intent")
 	_ok(plain_prompt.contains("box_style: \"shoebox\"") and plain_prompt.contains("destination: \"box\""),
 		"the producer is not told how to translate a shoebox brief into available presentation choices")
+	var aside_plan := {"spread": {"positions": [{"name": "First", "asks": "?"},
+		{"name": "Second", "asks": "?", "comment": "aside", "destination": "box"}]},
+		"staging": {"source": "box", "text": "front"}, "look": {"deck_name": "D"}}
+	var aside_prompt := String(CardPrompts.reader("S", BRIEF, aside_plan, "2", ["I was telling you about the old alley."],
+		[{"name": "Earlier"}, {"name": "HIDDEN CARD", "booklet": {"upright": "HIDDEN DETAILS"}}], 2)["prompt"])
+	_ok(aside_prompt.contains("Continue the thought") and not aside_prompt.contains("HIDDEN CARD")
+		and not aside_prompt.contains("HIDDEN DETAILS"),
+		"an aside leaves the held card entirely out of the writer's prompt")
 	# THE PRODUCER asks every show for its kind of cards, and names none of its own
 	var chosen := String(CardPrompts.producer("Show and Tell", BRIEF, 7, 4, false, CardTable.FACES, CardTable.FRAMES, [], [], true)["prompt"])
 	var listed := String(CardPrompts.producer("T", "B", 7, 4, true, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards())["prompt"])

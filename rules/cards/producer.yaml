@@ -121,7 +121,7 @@ reply: |-
     "reader_mood": "how the reader is today",
     "running_bit": "any running bit for this episode - a bit the reader SAYS, never a thing done or an object shown (the viewer sees the table and the cards, never the reader), and never a way of speaking (the show's voice is fixed: no whispering, accents or singing)",
     "staging": {"source": "deck or box", "text": "booklet, back or front", "box_style": "open or shoebox, when source is box", "contents": "file, piles or loose, when source is box", "keepsakes": ["optional coin, button, marble or ticket inside the box, at most three"], "pace": "reflective, mixed or quick"},
-    "spread": {"name": "the spread's name", "positions": [{"name": "position name", "asks": "what it asks", "comes": "drawn, dealt or swept - optional", "destination": "row, stack or box - optional", "comment": "none, brief or story - optional", "lies": "sideways - optional", "on": false, "then": []}]},
+    "spread": {"name": "the spread's name", "positions": [{"name": "position name", "asks": "what it asks", "comes": "drawn, dealt, swept or searched - optional", "destination": "row, stack or box - optional", "comment": "none, brief, story or aside - optional", "linger": false, "lies": "sideways - optional", "on": false, "then": []}]},
   {{#chooses}}
     "deck": [{"name": "the name printed on the card", "group": "its set, team, suit or type, if it has one", "series": "its printing's name, when the deck mixes printings", "meaning": "what the card is and why it is in this box, one or two sentences"}],
   {{/chooses}}
@@ -170,6 +170,19 @@ staging:
       others, or `"quick"` for a short look at each. A position may set `comment: "none"` for
       a silent look, `"brief"` for a few words, or `"story"` for a longer memory. Put drawn cards
       at `destination: "stack"` to pile them beside the box, or `destination: "box"` to return them to it.
+      Decide why the collector keeps a card out before assigning destinations. Use a consistent
+      handling pattern for an ordinary browse: a row of distinct finds, or one growing keep pile,
+      or cards returned after viewing. Mix those outcomes only for a stated purpose such as comparing
+      candidates or searching for a particular card. A run of quick checks can establish a search;
+      a single return can instead be a deliberately unresolved quiet beat. Consecutive `stack` positions grow one
+      pile; after a card goes back in the box, a new `stack` position begins a new pile.
+      For an occasional puzzling pause, pair `comment: "none"` with `linger: true`: hold the
+      revealed card silently in view for roughly eighteen seconds, then put it back or down. The
+      host need not explain the card. Reserve this for a moment when the quiet has a purpose in
+      the episode's rhythm; quick checks during a search should stay quick.
+      To keep talking while ignoring the revealed card, choose `comment: "aside"` for a box card.
+      The card remains in view during a short continuation of the preceding thought, with no
+      mention of this card or its printed details, then goes back into the box. Use this rarely.
   - >-
       EACH POSITION can say how its card comes and lies; leave these out for the usual, a card
       drawn, held up while it is read, and laid down in a row:
@@ -177,7 +190,11 @@ staging:
       - `comes` "dealt": put straight down in its place, face up, and read lying there - small on
       screen, so for a card that needs no close look. "swept": positions next to each other that are
       all swept go out together in one waterfall, overlapping in a line or an arc so the viewer sees
-      the run at once; then each is picked up in turn and read.
+      the run at once; then each is picked up in turn and read. "searched": only for a box; before
+      this position's card is revealed, quickly lift, check and return several anonymous cards while
+      hunting. Give the hunt an object, but do not promise the next random draw will be it. The host
+      can be distracted by another find or continue the hunt later. The seed chooses the card after
+      the plan is written.
   - '- `lies` "sideways": laid with a quarter turn, as a tapped card lies.'
   - >-
       - `on` true: laid on the card before it, a little behind so that card's name still shows - a

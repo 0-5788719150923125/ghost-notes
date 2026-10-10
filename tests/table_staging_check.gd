@@ -70,6 +70,7 @@ func _run() -> void:
 	_placement_drift()
 	_box_show()
 	_shoebox_show()
+	_search_and_linger()
 	_laid_over_box()
 	_loose_box()
 	_printings()
@@ -167,6 +168,46 @@ func _choreography() -> void:
 	_ok(got == want, "the positions become the verbs in order (%s)" % ", ".join(got))
 	plan["staging"] = {"source": "box"}
 	_ok(String((CardProducer.choreography(plan, cards)[0] as Dictionary)["kind"]) == "open", "a box's reading opens the box")
+	plan["spread"] = {"positions": [{"comment": "none", "linger": true, "destination": "box"},
+		{"comes": "searched", "destination": "stack"}]}
+	var search := CardProducer.choreography(plan, _cards([{}, {}]))
+	_ok(search.map(func(m: Dictionary) -> String: return String(m["kind"])) ==
+		["open", "draw", "linger", "rummage", "draw", "spread"],
+		"a wordless hold precedes the search and its eventual reveal")
+
+
+func _search_and_linger() -> void:
+	print("-- a wordless hold and a search")
+	var pos := [{"comment": "none", "linger": true, "destination": "box"},
+		{"comes": "searched", "destination": "stack"}, {"destination": "stack", "on": true}]
+	_load(48, pos, {"look": {"candles": 0, "card_size": "trading"},
+		"staging": {"source": "box", "text": "front", "box_style": "shoebox", "contents": "loose"}})
+	var tm := medium._times()
+	var holds := medium._sched.filter(func(e: Dictionary) -> bool: return String(e["a"]["kind"]) == "linger")
+	_ok(holds.size() == 1, "the silent hold is scheduled once")
+	if holds.is_empty():
+		return
+	var hold: Dictionary = holds[0]
+	var during := float(hold["t0"]) + TableActions.LINGER * float(hold["s"]) * 0.8
+	_posed(during)
+	_ok((medium._cards[0] as MeshInstance3D).visible and
+		bool(medium._card_pose(0, during, (tm["events"] as Array)[0], {})["up"]),
+		"the ignored card remains revealed through the long hold")
+	var searches: Array = tm["rummages"]
+	_ok(searches.size() == 1, "one search follows the held card")
+	if searches.is_empty():
+		return
+	var e: Dictionary = searches[0]
+	var start := float(e["t0"]) + float(e["off"]) * float(e["s"])
+	var span := TableActions.RUMMAGE * float(e["s"])
+	for i in 3:
+		_posed(start + span * (float(i) + 0.5) / 3.0)
+		_ok(medium._rummage_card.visible and
+			medium._rummage_card.position.y > (medium._box["world"] as AABB).end.y,
+			"anonymous search card %d rises clear of the box" % (i + 1))
+	_posed(start + span + 0.02)
+	_ok(not medium._rummage_card.visible and _at(1, "arrive", "draw") >= start + span - 0.01,
+		"the search ends before the selected card is drawn (%.2f / %.2f)" % [_at(1, "arrive", "draw"), start + span])
 
 
 ## Load [param positions] as an episode with [param staging], timed as a voice would read it.

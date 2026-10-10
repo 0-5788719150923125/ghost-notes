@@ -53,6 +53,10 @@ const FAN := 1.6
 const FAN_EACH := 0.32
 ## A card lying on the table picked up and held up to be shown.
 const SHOW := 1.6
+## Three quick checks of anonymous cards in an open box, each returned before the chosen card is drawn.
+const RUMMAGE := 3.6
+## A revealed card stays in the hand through an unspoken beat before it is returned or laid down.
+const LINGER := 18.0
 ## A card turned where it lies: a quarter turn (tap, untap), or over (flip).
 const TURN := 0.9
 const FLIP := 1.2
@@ -90,6 +94,12 @@ const REGISTRY := {
 	"show": {"written": true, "args": ["card"], "rest": SHOW, "shows": true, "lays": true,
 		"ends": false, "moments": ["reveal", "pirouette"], "chapter": true,
 		"about": "the card on display goes down (if one is up), then the named card, lying on the table, is picked up and held up as a drawn card is"},
+	"rummage": {"written": true, "args": [], "rest": RUMMAGE, "shows": false, "lays": true,
+		"ends": false, "moments": [],
+		"about": "three cards are quickly lifted from the open box, glanced at and returned while the host searches; the next draw reveals another card"},
+	"linger": {"written": true, "args": [], "rest": LINGER, "shows": false, "lays": false,
+		"ends": false, "moments": [],
+		"about": "the revealed card remains held in view for a long, unspoken beat before the next action moves it"},
 	"tap": {"written": true, "args": ["card"], "rest": TURN, "shows": false, "lays": true, "turns": true,
 		"ends": false, "moments": [],
 		"about": "the card on display goes down (if one is up), then the named card, lying on the table, is turned a quarter turn, sideways"},

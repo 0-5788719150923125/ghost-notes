@@ -36,9 +36,9 @@ const PRESETS := ["row", "arc", "rows", "pyramid"]
 const SPLIT_LONG := 0.5
 ## HOW A CARD LIES AND WITH WHAT, as a plan's position says it ([method staged]): `comes` - drawn (taken
 ## and held up), dealt (put straight down), swept (out in one waterfall with the swept positions next
-## to it); `lies` - upright, or sideways (a quarter turn, as a tapped card); `on` - it lies on the card
+## to it), searched (drawn after a quick hunt through a box); `lies` - upright, or sideways (a quarter turn, as a tapped card); `on` - it lies on the card
 ## before it, shifted back so that card's name still shows (a stack, as a player keeps lands).
-const COMES := ["drawn", "dealt", "swept"]
+const COMES := ["drawn", "dealt", "swept", "searched"]
 const LIES := ["upright", "sideways"]
 ## A stacked card lies this far behind the one under it (meters): its name, printed in the band at the
 ## foot of the face, stays in sight. A swept card lies this far along from the one before, and turns

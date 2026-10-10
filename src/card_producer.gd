@@ -550,6 +550,8 @@ static func choreography(plan: Dictionary, cards: Array) -> Array:
 	while k <= n:
 		var p: Dictionary = at.call(k)
 		var comes := String(p.get("comes", "drawn"))
+		if comes == "searched" and String(staging["source"]) == "box":
+			out.append({"kind": "rummage", "card": 0, "say": ""})
 		if comes == "swept":
 			var last := k
 			while last < n and String((at.call(last + 1) as Dictionary).get("comes", "")) == "swept":
@@ -562,6 +564,8 @@ static func choreography(plan: Dictionary, cards: Array) -> Array:
 			continue
 		var kind := "deal" if comes == "dealt" else ("jumper" if bool((cards[k - 1] as Dictionary).get("jumper", false)) else "draw")
 		out.append({"kind": kind, "card": k, "say": "say:%d" % k})
+		if bool(p.get("linger", false)) and String(p.get("comment", "")) == "none" and kind == "draw":
+			out.append({"kind": "linger", "card": 0, "say": ""})
 		out.append_array(_then_moves(p, k))
 		k += 1
 	out.append({"kind": "spread", "card": 0, "say": "say:close"})
@@ -673,6 +677,24 @@ func _land_plan(text: String) -> String:
 		return "the plan has no look"
 	plan["look"] = CardTable.sanitize_look(plan["look"] as Dictionary)
 	plan["staging"] = CardTable.staging_of(plan)
+	for i in pos.size():
+		var p: Dictionary = pos[i]
+		if String((plan["staging"] as Dictionary)["source"]) != "box" and String(p.get("comes", "")) == "searched":
+			p.erase("comes")
+		if String(p.get("comment", "")) == "aside":
+			if String((plan["staging"] as Dictionary)["source"]) == "box" and i > 0:
+				p["destination"] = "box"
+				if String(p.get("comes", "")) in ["dealt", "swept"]:
+					p.erase("comes")
+			else:
+				p.erase("comment")
+		# A side pile grows only from the card immediately beneath this one. A returned card
+		# cannot become the base of a pile just because an earlier card was kept.
+		if String(p.get("destination", "")) == "stack":
+			if i > 0 and String((pos[i - 1] as Dictionary).get("destination", "")) == "stack":
+				p["on"] = true
+			else:
+				p.erase("on")
 	if (plan["look"] as Dictionary).has("kind"):
 		plan["look"]["kind"] = _str(plan["look"]["kind"])
 	if bool(spec.get("chooses", false)):
@@ -710,11 +732,11 @@ func _land_position(q: Dictionary, k: int, n: int) -> Dictionary:
 	var destination := _str(q.get("destination", "")).to_lower()
 	if destination in ["stack", "box"]:
 		out["destination"] = destination
-		if destination == "stack" and k > 1:
-			out["on"] = true
 	var comment := _str(q.get("comment", "")).to_lower()
-	if comment in ["none", "brief", "story"]:
+	if comment in ["none", "brief", "story", "aside"]:
 		out["comment"] = comment
+	if q.get("linger") == true and comment == "none" and comes not in ["dealt", "swept"]:
+		out["linger"] = true
 	var then: Array = []
 	for m in q.get("then", []) if q.get("then") is Array else ([q.get("then")] if q.get("then") is String else []):
 		var parts := _str(m).to_lower().split(" ", false)

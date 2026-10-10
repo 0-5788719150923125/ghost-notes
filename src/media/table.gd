@@ -488,6 +488,7 @@ var _collide := true                  # cards go round what stands (off only for
 var _table_mt := -2                   # the table file's time when it was last built (-1: none)
 var _stage_was := {}                  # the stage's own settings, given back on leaving it
 var _deck: Array = []               # DECK_N MeshInstance3D, bottom first
+var _rummage_card: MeshInstance3D    # anonymous card checked during a box search
 var _cards: Array = []              # one MeshInstance3D per drawn card
 var _faces: Array = []              # one SubViewport per drawn card's face
 var _face_canvas: Array = []
@@ -677,6 +678,9 @@ func _build_world() -> void:
 		m.set_surface_override_material(2, _edge_mat)
 		_root3.add_child(m)
 		_deck.append(m)
+	_rummage_card = MeshInstance3D.new()
+	_rummage_card.visible = false
+	_root3.add_child(_rummage_card)
 
 	_page = MeshInstance3D.new()
 	var pq := QuadMesh.new()
@@ -976,6 +980,10 @@ func _build_episode() -> void:
 	var deck_mesh := _mesh_for(_look, DECK_T)
 	for d in _deck:
 		(d as MeshInstance3D).mesh = deck_mesh
+	_rummage_card.mesh = _mesh_for(_look)
+	_rummage_card.set_surface_override_material(0, _back_mat)
+	_rummage_card.set_surface_override_material(1, _back_mat)
+	_rummage_card.set_surface_override_material(2, _edge_mat)
 	_back_mat.set_shader_parameter("window", Vector4(0.0, 0.0, 1.0, 1.0))
 	_edge_mat.albedo_color = CardTable.color(String((_look.get("frame", {}) as Dictionary).get("stock", "#efe6d2"))).darkened(0.08)
 	_page_canvas.look = _look
@@ -2996,6 +3004,7 @@ func _times() -> Dictionary:
 	var draw: Array = []
 	var lay: Array = []
 	var events: Array = []
+	var rummages: Array = []
 	for i in n:
 		draw.append([INF, 1.0, "draw", 0.0])
 		lay.append([INF, 1.0])
@@ -3031,6 +3040,8 @@ func _times() -> Dictionary:
 		var k := int(a.get("card", 0)) - 1
 		var last := maxi(int(a.get("last", k + 1)) - 1, k)
 		match kind:
+			"rummage":
+				rummages.append({"t0": t0, "s": s, "off": off})
 			"draw", "jumper", "deal":
 				if k >= 0 and k < n:
 					draw[k] = [t0, s, kind, off]
@@ -3053,7 +3064,7 @@ func _times() -> Dictionary:
 					spread = t0
 		moved = moved or takes
 	return {"shuffle": shuffle, "opening": opening, "end": first, "draw": draw, "lay": lay, "spread": spread,
-		"first": first_act, "events": events}
+		"first": first_act, "events": events, "rummages": rummages}
 
 
 ## Where the deck is at [param t]: in the middle while it is shuffled, then pushed to its side
@@ -3180,9 +3191,38 @@ func _pose_box(t: float, tm: Dictionary) -> void:
 	lid_shade.size = Vector3(box_bounds.size.x * 1.7, 0.03, box_bounds.size.z * 1.7)
 	lid_shade.modulate.a = 0.6 * away
 
+
+## A search checks three anonymous cards in quick succession. The same back stock stands in for
+## each unselected card; none becomes an episode draw or reveals a face the producer did not make.
+func _pose_rummage(t: float, tm: Dictionary) -> void:
+	_rummage_card.visible = false
+	if _cards_from != "box" or _box.is_empty():
+		return
+	for e in tm["rummages"] as Array:
+		var start := float(e["t0"]) + float(e["off"]) * float(e["s"])
+		var span := TableActions.RUMMAGE * float(e["s"])
+		if t < start or t >= start + span:
+			continue
+		var beat := fmod((t - start) / span * 3.0, 1.0)
+		if beat < 0.05 or beat > 0.95:
+			return
+		var inner: AABB = _box["inner"]
+		var world: AABB = _box["world"]
+		var idx := int(floor((t - start) / span * 3.0))
+		var from := inner.get_center() + Vector3(float(idx - 1) * inner.size.x * 0.18,
+			world.end.y + CARD_T * 0.5 - inner.get_center().y, 0.0)
+		var lift := smoothstep(0.05, 0.32, beat) * (1.0 - smoothstep(0.68, 0.95, beat))
+		var toward := smoothstep(0.12, 0.42, beat) * (1.0 - smoothstep(0.58, 0.9, beat))
+		var at := from + Vector3(0.0, (world.end.y + CARD.y * 0.52 + 0.014 - from.y) * lift,
+			world.size.z * 0.2 * toward)
+		_rummage_card.transform = Transform3D(Basis(Vector3.RIGHT, -0.26 * toward), at)
+		_rummage_card.visible = true
+		return
+
 func _pose(t: float) -> void:
 	var tm := _times()
 	_pose_box(t, tm)
+	_pose_rummage(t, tm)
 	# a shuffle that began in the replayed past of a mid-way start is under way NOW, not a hundred
 	# thousand seconds in (the chain of moves is only made so far)
 	var ts := maxf(float(tm["shuffle"]), minf(0.0, _now))

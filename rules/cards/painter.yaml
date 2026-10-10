@@ -85,6 +85,13 @@ back:
   - >-
       FORMAT: PORTRAIT 2:3 (1024x1536). The design runs to every edge: no outer border or frame (the
       card's frame is printed separately), no text, no numbers, no watermark, no signature.
+  - when: shaped
+    say: >-
+          THE ENGINE CUTS THE BACK TO THE CARD'S WINDOW ({{window}}), and the frame's rules are printed
+          hard against its edge: the ground runs to every edge, but the design's own marks (wings,
+          leaves, petals, flourishes) stay clear of the outer sixth of every side and a good deal
+          further in from the corners, where the window cuts the picture away. A mark that reaches
+          the edge is sliced off by the window and reads as crowded.
 
 # THE CLOTH: a texture, not a photograph of a moment - the table under it is lit by the scene's own
 # lights, so anything the picture carries of light, wet or things lying on it is painted flat onto the

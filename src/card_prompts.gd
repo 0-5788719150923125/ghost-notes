@@ -374,8 +374,13 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		vars.merge(_card_now(plan, positions, drawn, int(step), spread_size, boxed, pictured, remark, String(staging["text"])))
 		var p: Dictionary = positions[int(step) - 1] if int(step) - 1 < positions.size() and positions[int(step) - 1] is Dictionary else {}
 		var comment := String(p.get("comment", ""))
+		if comment == "aside" and boxed:
+			vars["card"] = false
+			vars["aside"] = true
 		var pace := String(staging.get("pace", "reflective"))
-		if comment == "brief" or (comment.is_empty() and pace == "quick"):
+		if comment == "aside":
+			lo_hi = [45, 75]
+		elif comment == "brief" or (comment.is_empty() and pace == "quick"):
 			lo_hi = [5, 35]
 		elif comment.is_empty() and pace == "mixed" and int(step) % 3 == 0:
 			lo_hi = [55, 110]
@@ -419,6 +424,8 @@ static func _card_now(plan: Dictionary, positions: Array, drawn: Array, k: int, 
 		out["last"] = mini(last, n)
 	elif comes == "swept":
 		out["now_swept"] = true
+	elif comes == "searched" and boxed:
+		out["now_searched"] = true
 	elif boxed:
 		out["now_boxed"] = true
 	else:
@@ -453,6 +460,8 @@ static func after(plan: Dictionary, k: int, n: int) -> String:
 	var held: bool = k >= 1 and comes.call(k) != "dealt"
 	if held:
 		var destination := String((at.call(k) as Dictionary).get("destination", "row"))
+		if bool((at.call(k) as Dictionary).get("linger", false)):
+			parts.append("this card stays visible for a long, wordless moment")
 		parts.append("this card goes back into the box" if destination == "box" else
 			("this card joins a stack at the side" if destination == "stack" else
 			("this card goes back down into its place in the waterfall" if comes.call(k) == "swept" else "this card goes down into its place")))
@@ -477,7 +486,8 @@ static func after(plan: Dictionary, k: int, n: int) -> String:
 					parts.append(("cards %d to %d are swept out together in one waterfall, and card %d is picked up" % [next, last, next])
 						if last > next else "the next card is swept out and picked up")
 			_:
-				parts.append("the next card is pulled out of the box and held up to the camera" if boxed
+				parts.append("a few cards are quickly checked and returned during a hunt; then the next card is pulled out and held up" if boxed and comes.call(next) == "searched" else
+					"the next card is pulled out of the box and held up to the camera" if boxed
 					else "the next card is drawn, turned over and held up to the camera")
 	var text := "; then ".join(parts)
 	return text.substr(0, 1).to_upper() + text.substr(1) + "."
@@ -491,14 +501,18 @@ static func _how_note(p: Dictionary, i: int) -> String:
 			notes.append("dealt straight down")
 		"swept":
 			notes.append("swept out in a waterfall")
+		"searched":
+			notes.append("drawn after a quick search through the box")
 	if String(p.get("lies", "")) == "sideways":
 		notes.append("laid sideways")
 	if p.get("on") == true and i > 1:
 		notes.append("laid on card %d" % (i - 1))
 	if String(p.get("destination", "")) in ["box", "stack"]:
 		notes.append("goes to " + String(p["destination"]))
-	if String(p.get("comment", "")) in ["none", "brief", "story"]:
+	if String(p.get("comment", "")) in ["none", "brief", "story", "aside"]:
 		notes.append(String(p["comment"]) + " comment")
+	if bool(p.get("linger", false)):
+		notes.append("held silently for a long moment")
 	if p.get("then") is Array and not (p["then"] as Array).is_empty():
 		notes.append("then: " + ", ".join(PackedStringArray(p["then"] as Array)))
 	return (" (" + "; ".join(notes) + ")") if not notes.is_empty() else ""
@@ -744,7 +758,10 @@ static func card_image(look: Dictionary, card: Dictionary, art: String, target: 
 ## when cards come up [param reversed], and a plain middle when each card's text is [param printed] over it.
 static func back_image(look: Dictionary, target: String, reversed := true, printed := false) -> String:
 	var vars := _look_vars(look, target)
-	vars.merge({"reversed": reversed, "printed": printed}, true)
+	# the window cuts the back as it cuts a face: a shaped one slices what the painting runs to its edge with
+	var shape := CardFaces.window_of(look)
+	vars.merge({"reversed": reversed, "printed": printed, "shaped": shape != "rect" and CardTable.WINDOWS.has(shape),
+		"window": String(CardTable.WINDOWS.get(shape, "a plain rectangle"))}, true)
 	return Rules.say("cards/painter.back", vars)
 
 

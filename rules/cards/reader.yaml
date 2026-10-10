@@ -62,6 +62,8 @@ prompt:
     include: close
   - when: card
     include: card
+  - when: aside
+    include: aside
   # WHAT THE AUDIENCE HAS ALREADY HEARD at this point of an episode, every card's name masked: an agent
   # told only to vary drifts back to the likeliest opening
   - when: heard
@@ -96,6 +98,15 @@ prompt:
   - include: spoken
 
 # THE INTRO: the video opens - nobody knows a card yet
+aside:
+  - >-
+      A card has just been drawn and is plainly visible in the host's hand. Continue the thought
+      you were already speaking about while leaving this card entirely unaddressed. Do not name,
+      describe, read, interpret, or hint at it. The viewer will watch it return to the box after
+      your words, with no explanation. Use {{lo}} to {{hi}} words, enough for the card to remain
+      in view for a while. Write only what the host says, in the show's voice.
+  - "AFTER YOUR LAST WORD: {{after}}"
+
 intro:
   - when: box
     say: >-
@@ -157,6 +168,12 @@ card:
     say: >-
           NOW: you have just pulled card {{k}} of {{spread_size}} out of the box and turned it to
           the camera.
+  - when: now_searched
+    say: >-
+          NOW: you have rapidly checked and returned several other cards while looking for a
+          particular one. You have just pulled card {{k}} of {{spread_size}} from the box and
+          turned it to the camera. React to what actually came up. It may be the card you sought,
+          a distraction, or another miss; you could not know before you pulled it.
   - when: now_drawn
     say: "NOW: you have just drawn card {{k}} of {{spread_size}} and turned it over."
   - "It is {{card_line}}."
@@ -225,6 +242,10 @@ card:
       Respond to this card as the show's host would. A common card can pass with one observation;
       a card with a personal story may hold your attention. Follow the requested word range.
       You know only the cards already taken; never guess at what comes next.
+      Treat the printed facts as evidence, not lines to recite. If one detail matters, use it to
+      tell an incident, make an observation, or admit what you do not know. For a collection of
+      people, distinguish someone you knew personally from someone you watched, heard about, or
+      have never heard of. Do not invent a personal acquaintance for every person on a card.
   # NOT MET THE SAME WAY TWICE: every card passage of episode 834225 opened on "Oh, the ..." (2026-10-07)
   - when: not_first
     say: >-
