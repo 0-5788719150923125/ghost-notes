@@ -110,20 +110,54 @@ vec2 painting_uv(vec2 p) {
 	return crop.xy + (p / (2.0 * max(half_size, vec2(0.1))) + 0.5) * crop.zw;
 }
 
+// A MAP READ WHOSE SLOPE IS SMOOTH. The relief's normal is the slope of what a map holds, and
+// a bilinear read has one constant slope in every texel and a jump at its edge: up close (a texel
+// wider than a pixel) the light then shows the map's own grid as tiny squares - plainest in a low
+// light grazing the cloth (feedback 0016). The cubic B-spline read (four bilinear fetches, one
+// per pair of texels' weights) is continuous in its slope. It only matters magnified: from a texel
+// to the pixel ([param lod] 1) up, the mips are smooth already and it is the plain read. [param up]
+// is how many levels coarser than [param lod] the map is read (the broad part of a height).
+vec4 smooth_tex(sampler2D tex, vec2 uv, float lod, float up) {
+	float level = lod + up;
+	if (lod >= 1.0) {
+		return textureLod(tex, uv, level);
+	}
+	vec2 ts = vec2(textureSize(tex, clamp(int(floor(level)), 0, textureQueryLevels(tex) - 1)));
+	vec2 c = uv * ts;
+	vec2 i = floor(c - 0.5);
+	vec2 f = c - 0.5 - i;
+	vec2 f2 = f * f;
+	vec2 f3 = f2 * f;
+	vec2 w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0;
+	vec2 w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0;
+	vec2 w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) / 6.0;
+	vec2 w3 = f3 / 6.0;
+	vec2 g0 = w0 + w1;
+	vec2 g1 = w2 + w3;
+	vec2 h0 = (i + 0.5 - 1.0 + w1 / g0) / ts;
+	vec2 h1 = (i + 0.5 + 1.0 + w3 / g1) / ts;
+	float kx = g0.x / (g0.x + g1.x);
+	float ky = g0.y / (g0.y + g1.y);
+	vec4 a = mix(textureLod(tex, vec2(h1.x, h0.y), level), textureLod(tex, vec2(h0.x, h0.y), level), kx);
+	vec4 b = mix(textureLod(tex, vec2(h1.x, h1.y), level), textureLod(tex, vec2(h0.x, h1.y), level), kx);
+	// the last level up to a plain read: no step where the cubic hands over
+	return mix(mix(b, a, ky), textureLod(tex, uv, level), lod);
+}
+
 // THE PAINTING'S DEPTH, 0..1: the painter's height map when there is one - its fine relief whole, its
 // broad rise and fall at half (a map's slow gradient across a cloth would tilt it) - else the
 // painting's own DETAIL, its lightness less its lightness blurred, so a weave's threads or a board's
 // grain stand up and the broad light and dark of the picture do not (taken whole, as the old cloth's
-// relief was, every pale patch was a hill). 0.5 flat.
+// relief was, every pale patch was a hill). 0.5 flat. Read smoothly ([method smooth_tex]).
 float painting_detail(vec2 p, float lod) {
 	vec2 uv = painting_uv(p);
 	if (has_height > 0.5) {
-		float fine_h = textureLod(height_map, uv + height_shift, lod).r;
-		float broad_h = textureLod(height_map, uv + height_shift, lod + 4.0).r;
+		float fine_h = smooth_tex(height_map, uv + height_shift, lod, 0.0).r;
+		float broad_h = smooth_tex(height_map, uv + height_shift, lod, 4.0).r;
 		return clamp(fine_h - (broad_h - 0.5) * 0.5, 0.0, 1.0);
 	}
-	float fine = lum(textureLod(painting, uv, lod).rgb);
-	float broad = lum(textureLod(painting, uv, lod + 3.5).rgb);
+	float fine = lum(smooth_tex(painting, uv, lod, 0.0).rgb);
+	float broad = lum(smooth_tex(painting, uv, lod, 3.5).rgb);
 	return clamp(0.5 + (fine - broad) * 3.0, 0.0, 1.0);
 }
 

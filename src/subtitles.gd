@@ -15,8 +15,9 @@ class_name Subtitles
 ## words run ahead, drifts when it is close, and comes to REST at pauses and
 ## hesitations (the target holds at a word boundary, so the eye settles there
 ## and waits for the voice) - weaving around the exact timing the way a
-## storyteller's finger weaves over a page. Highlight hue rides the live
-## harmonic signature.
+## storyteller's finger weaves over a page. The base hue rides the live harmonic
+## signature; individual glyphs pulse from separate FFT bands, with their own
+## attack and release, in live playback and baked exports alike.
 ##
 ## Timing comes from a **sidecar JSON** written next to a voice take by
 ## [SynthEditor] (`take_N.wav` + `take_N.json`), so the same overlay works
@@ -207,6 +208,11 @@ static func text_area(frame: Rect2) -> Dictionary:
 	return {"k": k, "max_w": area.size.x, "cx": area.position.x + area.size.x * 0.5, "base_y": area.end.y, "area": area}
 var _cursor := 0.0                  # the narrator's eye: global word progress, eased
 var _hue_sm := 0.6
+## Eight independent spectral lights. Each has a different release time, so a
+## vowel's low harmonics and a consonant's high harmonics leave different trails.
+const SPECTRAL_LIGHTS := 8
+var _spectral_levels := PackedFloat32Array()
+var _spectral_time := -1.0
 var _overlay: Control
 var _order := {}                    # speaker -> its place among the reading's voices
 var _order_of: Array = []           # ...in this words array
@@ -388,6 +394,7 @@ func _presence_target(t: float) -> float:
 
 
 func _process(delta: float) -> void:
+	_advance_spectral(Spectrum.current, delta)
 	if words.is_empty():
 		presence = 0.0
 		return
@@ -418,6 +425,25 @@ func _process(delta: float) -> void:
 	_overlay.queue_redraw()
 
 
+## Follow actual FFT bands, including the baked bands during export. The band
+## centers cover the useful speech range on Spectrum's logarithmic 30..16000 Hz
+## axis. A quick attack catches a syllable; progressively longer releases let
+## different components persist after it. Silence drains every light to zero.
+func _advance_spectral(f: AudioFeatures, delta: float) -> void:
+	if _spectral_levels.size() != SPECTRAL_LIGHTS:
+		_spectral_levels.resize(SPECTRAL_LIGHTS)
+	if _spectral_time >= 0.0 and (f.time < _spectral_time - 0.05 or f.time - _spectral_time > 2.0):
+		_spectral_levels.fill(0.0)  # seek, loop, or a new take
+	_spectral_time = f.time
+	for i in SPECTRAL_LIGHTS:
+		var x := lerpf(0.23, 0.88, float(i) / float(SPECTRAL_LIGHTS - 1))
+		var raw := (f.sample(x - 0.014) + f.sample(x) + f.sample(x + 0.014)) / 3.0
+		var target := clampf((raw - 0.10) * 2.5, 0.0, 1.0)
+		var old := _spectral_levels[i]
+		var tau := 0.055 if target > old else lerpf(0.35, 1.15, float(i) / float(SPECTRAL_LIGHTS - 1))
+		_spectral_levels[i] = lerpf(old, target, 1.0 - exp(-maxf(delta, 0.0) / tau))
+
+
 class Overlay:
 	extends Control
 	var owner_node: Subtitles
@@ -440,14 +466,9 @@ class Overlay:
 	const HUE_SPAN := 0.011          # hue turned per character (band tightness)
 	const HUE_DRIFT := 0.02          # hue slid per second (the band flows)
 	const LINGER := 24.0             # characters a spoken glyph stays lit behind the cursor
-	# A SECOND channel: SATURATION ebbs and flows in slow bands along the text, at
-	# a tighter, differently-timed rhythm than the hue (two incommensurate waves so
-	# the pattern never quite repeats). It pulls the color down toward a grounded,
-	# near-gray calm in the valleys and lets it burn full in the peaks - so the line
-	# is not a solid rainbow but stable regions with color activity between them.
-	const SAT_SPAN := 0.17           # saturation band spatial frequency (a valley ~every 37 glyphs)
-	const SAT_DRIFT := 0.09          # the bands drift per second (their own rhythm)
-	const SAT_FLOOR := 0.14          # how far the grounded valleys desaturate (0 = gray)
+	# Three neighboring glyphs share a frequency component. Those small pools
+	# light independently instead of one whole word pulsing with overall volume.
+	const GLYPHS_PER_LIGHT := 3
 	# EMPHASIS IS DRAWN, NOT SPELLED. `*I will never hurt you*` reaches here as a level on
 	# the word (see TextNorm's emphasis sentinels), never as asterisks - printing the
 	# markers would be showing the reader the source code of the typography. Godot can
@@ -641,32 +662,26 @@ class Overlay:
 				w += cw * clampf(upto - float(c0 + ch), 0.0, 1.0)
 		return w
 
-	## A single glyph's color: a hue that drifts by position AND time (the band
-	## flowing through the sentence) - on the whole wheel, or across the band of the
-	## voice saying it ([param order], see [method Subtitles.voice_hue]) - and a
-	## brightness that tells the reading state - a muted preview ahead of the voice,
-	## a vivid flare as it is spoken, then a slow cool over LINGER characters behind
-	## so the color stays to be looked at rather than snapping dim the instant the
-	## word ends.
+	## A glyph has a position and voice hue, plus the independent spectral light
+	## assigned to its place in the sentence. The narrator's eye still determines
+	## the spoken flare and lingering trail; the FFT determines how saturated,
+	## bright, and shifted each part of that trail is at this instant.
 	func _glyph_color(base_hue: float, ci: int, ccur: float, t: float, order := 0) -> Color:
-		var hue := Subtitles.voice_hue(base_hue + float(ci) * HUE_SPAN - t * HUE_DRIFT, order)
-		# the saturation band at this glyph: two incommensurate waves -> organic,
-		# non-repeating valleys (grounded) and peaks (colorful). Scales the state's
-		# own saturation from a near-gray floor up to full.
-		var s1 := sin(float(ci) * SAT_SPAN - t * SAT_DRIFT)
-		var s2 := sin(float(ci) * SAT_SPAN * 1.73 + t * SAT_DRIFT * 0.5)
-		var sat_env := clampf(0.5 + 0.35 * s1 + 0.15 * s2, 0.0, 1.0)
-		var sm := lerpf(SAT_FLOOR, 1.0, sat_env)        # saturation multiplier
+		var band := (ci / GLYPHS_PER_LIGHT) % Subtitles.SPECTRAL_LIGHTS
+		var level: float = owner_node._spectral_levels[band] if owner_node._spectral_levels.size() == Subtitles.SPECTRAL_LIGHTS else 0.0
+		var phase := base_hue + float(ci) * HUE_SPAN - t * HUE_DRIFT
+		var hue := Subtitles.voice_hue(phase + (float(band) - 3.5) * 0.024 * level, order)
+		var sm := lerpf(0.25, 1.0, level)
 		var d := ccur - float(ci)                       # >0 spoken (behind), <=0 waiting (ahead)
 		if d <= 0.0:
 			# ahead of the voice: dim but present, faintly tinted so the coming
 			# color is previewed rather than a wall of gray
-			return Color.from_hsv(hue, 0.22 * sm, 0.6, 0.92)
+			return Color.from_hsv(hue, 0.16 + 0.16 * level, 0.58 + 0.08 * level, 0.92)
 		# spoken: full flare at the front, cooling to a resting tint over LINGER
 		var glow := clampf(1.0 - (d - 1.0) / LINGER, 0.0, 1.0)
-		var rest := Color.from_hsv(hue, 0.34 * sm, 0.7)
-		var vivid := Color.from_hsv(hue, 0.9 * sm, 1.0)
-		return rest.lerp(vivid, glow)
+		var rest := Color.from_hsv(hue, 0.38 * sm, 0.68 + 0.12 * level)
+		var vivid := Color.from_hsv(hue, 0.95 * sm, 0.82 + 0.18 * level)
+		return rest.lerp(vivid, glow * (0.55 + 0.45 * level))
 
 	## The cursor expressed as a CHARACTER position within the current sentence:
 	## the word-level eye (owner._cursor) resolved through the per-word character

@@ -38,7 +38,7 @@ fi
 # Only build releases are eligible. Other releases and tags are untouched.
 # Pagination is needed once the repository has more than 100 releases.
 gh api --paginate "repos/$repo/releases?per_page=100" \
-	--jq '.[] | select(.draft == false and .published_at != null and (.tag_name | test("^build-[0-9a-f]{7}$"))) | [.published_at, .tag_name] | @tsv' \
+	--jq '.[] | select(.draft == false and .published_at != null and (.tag_name | test("^build-[0-9a-f]+$"))) | [.published_at, .tag_name] | @tsv' \
 	| sort -r | tail -n "+$((keep + 1))" \
 	| while IFS=$'\t' read -r published old_tag; do
 		echo "Removing old build release and tag: $old_tag (published $published)"
