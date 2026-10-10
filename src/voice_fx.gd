@@ -701,8 +701,8 @@ func _near_gains() -> void:
 ## WHERE THE READER IS FOR EACH SENTENCE: `{c, hush}` per entry of [param ks], the
 ## Near dial of the voice reading that sentence, keyed by [param who] (the speaker, so each
 ## voice moves on its own). Seeded, and every sentence takes the same five draws whatever
-## the dial, so moving the dial changes how often the same moments are taken rather than
-## rolling different ones. At 0 the reader never moves.
+## the dial, so moving the dial changes how often and how far the same moments move rather than
+## rolling different ones. The softer delivery scales with the move too. At 0 the reader never moves.
 static func near_plan(ks: PackedFloat32Array, who: PackedStringArray, seed: int) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
@@ -734,11 +734,11 @@ static func near_plan(ks: PackedFloat32Array, who: PackedStringArray, seed: int)
 				cur = home
 			else:
 				left = int(float(u[2]) * lerpf(float(NEAR_RUN_MAX), 1.0, k))
-				var depth := lerpf(0.6, 1.0, float(u[3]))
+				var depth := k * lerpf(0.6, 1.0, float(u[3]))
 				if go < 0:
 					cur = {"c": -depth, "hush": 0.0}
 				else:
-					cur = {"c": depth, "hush": 1.0 if float(u[4]) < NEAR_HUSHED else 0.0}
+					cur = {"c": depth, "hush": depth if float(u[4]) < NEAR_HUSHED else 0.0}
 		state[who[i]] = [cur, left]
 		out.append(cur)
 	return out

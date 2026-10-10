@@ -1205,8 +1205,8 @@ func _build_voice(box: VBoxContainer) -> void:
 		"The reader coming in close to the microphone, or backing off, a sentence at a time. Closer, "
 		+ "the voice gains warmth and the room falls away; backed off, the reverse. Often the reader "
 		+ "drops their voice to come in, softer and quieter, so closer is not always louder. "
-		+ "0 is still. Low settings stay put and come in now and then for a sentence or three; "
-		+ "higher, more often and for less long, until at 1 the reader is always moving in or out. "
+		+ "0 is still. Low settings make occasional, subtle moves; higher settings move farther "
+		+ "and more often, with shorter rests, until at 1 the reader is always moving in or out. "
 		+ "With Lean up too, an approach often goes toward one side, and a lean reaches furthest "
 		+ "up close. The softer voice is chosen when a sentence is made, so a move takes effect "
 		+ "from the sentences not yet made.")
@@ -4409,5 +4409,4 @@ func _words_for(idx: int, spans: Array) -> Array:
 			"t1": 0.0 if tail == null else float((tail as Dictionary).get("t1", 0.0)),
 			"ok": span != null})
 	return _bridge_words(rows, "chunk %d" % idx)
-
 

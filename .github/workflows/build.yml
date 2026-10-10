@@ -1,17 +1,17 @@
 # Build Ghost Notes for Linux, Windows and Android and publish each green commit as a Release.
 #
-# THIS FILE HOLDS NO BUILD LOGIC. Every step calls a script under scripts/ with arguments, so
+# THIS FILE HOLDS NO BUILD OR RELEASE LOGIC. Every step calls a script under scripts/ with arguments, so
 # the same commands run on a developer machine: build.sh (Godot setup, export, Linux launch
 # check), check.sh (the gatekeeping), smoke-export.sh (launch an export from an empty profile),
-# package_release.py (archives, SHA256SUMS, manifest.json). Plan and open questions:
+# package_release.py (archives, SHA256SUMS, manifest.json), publish_release.sh. Plan and open questions:
 # next/ci_builds.md.
 #
 # The gatekeeping runs first and stops at the first red gate (--fail-fast), so a red commit spends no
 # export or Windows compute. Pull requests build and test but never publish. A push to main
 # publishes, and only when the
 # gatekeeping, both exports and the Windows launch check are all green (a manual run on main may
-# set skip_gatekeeping to publish past a red gatekeeping job). The release is one per commit:
-# tag build-<full commit sha>, never replaced - a rerun of a published commit changes nothing.
+# set skip_gatekeeping to publish past a red gatekeeping job). New releases use build-<short sha>
+# tags. Reruns keep published assets unchanged; only the three newest build releases remain.
 name: build
 
 on:
@@ -111,7 +111,7 @@ jobs:
         with:
           name: release
           path: dist/release
-          retention-days: 14
+          retention-days: 1
           if-no-files-found: error
 
   windows-launch:
@@ -143,19 +143,10 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           name: release
           path: release
-      - name: Create the release for this commit
-        run: |
-          tag="build-${GITHUB_SHA}"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $tag already exists; leaving its assets as they are."
-            exit 0
-          fi
-          gh release create "$tag" release/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --title "Build ${GITHUB_SHA::7}" \
-            --notes "Automated build of ${GITHUB_SHA}."
+      - name: Publish this commit and retain the latest three builds
+        run: scripts/publish_release.sh "$GITHUB_REPOSITORY" "$GITHUB_SHA" release 3

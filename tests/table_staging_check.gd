@@ -67,6 +67,8 @@ func _run() -> void:
 	add_child(subs)
 	medium.bind_captions(subs)
 	_deck_show()
+	_deck_reversals()
+	_table_edge()
 	_placement_drift()
 	_box_show()
 	_shoebox_show()
@@ -277,6 +279,62 @@ func _deck_show() -> void:
 	_posed(draw + 5.0)
 	var held: Transform3D = (medium._cards[3] as MeshInstance3D).transform
 	_ok(_across(held) < 0.42 and medium._page.visible, "a drawn card is held up left of the middle, its page open (%.2f across)" % _across(held))
+
+
+func _deck_reversals() -> void:
+	print("-- reversals on the deck")
+	_load(12, [{}, {}, {}], {"look": {"candles": 0}, "staging": {"source": "deck", "text": "booklet"}})
+	var cards: Array = medium._pay["cards"]
+	(cards[1] as Dictionary)["reversed"] = true
+	var draws: Array = medium._times()["draw"]
+	var first := float((draws[0] as Array)[0])
+	var second := float((draws[1] as Array)[0])
+	var top := medium._deck[TableMedium.DECK_N - 1] as MeshInstance3D
+	_posed(first - 0.01)
+	_ok(top.transform.basis.x.dot(medium._rest_xf(TableMedium.DECK_N - 1).basis.x) > 0.99,
+		"the first upright card's back is upright before its draw")
+	_posed(first + 0.01)
+	_ok(top.transform.basis.x.dot(medium._rest_xf(TableMedium.DECK_N - 1).basis.x) < -0.99,
+		"the next reversed card is already reversed under the first card")
+	_posed(second - 0.01)
+	_ok(top.transform.basis.x.dot(medium._deck_top_xf(1).basis.x) > 0.99,
+		"the reversed back stays reversed while waiting on the deck")
+	var waiting := top.transform.basis.x
+	_posed(second + 0.01)
+	_ok((medium._cards[1] as MeshInstance3D).transform.basis.x.dot(waiting) > 0.99,
+		"the reversed draw starts with the back's waiting orientation")
+	_ok(top.transform.basis.x.dot(medium._rest_xf(TableMedium.DECK_N - 1).basis.x) > 0.99,
+		"the following upright card is ready under the reversed card")
+
+
+func _table_edge() -> void:
+	print("-- a thing at the edge of a wide table")
+	_load(585418, [{}, {}, {}], {"look": {"candles": 0}, "staging": {"source": "deck", "text": "booklet"}})
+	medium._top = Tables.DEFAULT_TOP.duplicate()
+	medium._top["size"] = [190.0, 116.0]
+	medium._top_o = Tables.top_outline(medium._top)
+	var spec := Props.sanitize({"things": [{"name": "edge box", "place": "left", "parts": [
+		{"shape": "box", "size": [30, 4, 8]}]}]}, [])
+	var thing: Dictionary = (spec["things"] as Array)[0]
+	var built := Props.build(thing, spec["materials"], 12)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 12
+	# The middle is occupied; on this top there is still clear room outside the old cloth.
+	var spot := medium._stand(thing, built, "#edge", {}, [Rect2(-0.31, -1.0, 0.62, 2.0)], rng)
+	var bb: Rect2 = (medium._things[-1] as Dictionary)["bb"] if not spot.is_empty() else Rect2()
+	var frame: Rect2 = (medium._things[-1] as Dictionary)["rect"] if not spot.is_empty() else Rect2()
+	_ok(not spot.is_empty() and maxf(absf(bb.position.x), absf(bb.end.x)) > TableMedium.CLOTH.x * 0.5
+		and (frame.position.x < 0.0 or frame.end.x > 1.0),
+		"a prop can stand on the table's side margin while partly outside the picture")
+	medium._things.clear()
+	var flame_spec := Props.sanitize({"things": [{"name": "edge candle", "place": "left", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [15, 0], [15, 4], [0, 4]], "wick": true}]}]}, [])
+	var candle: Dictionary = (flame_spec["things"] as Array)[0]
+	var candle_built := Props.build(candle, flame_spec["materials"], 13)
+	var candle_spot := medium._stand(candle, candle_built, "#flame", {}, [Rect2(-0.31, -1.0, 0.62, 2.0)], rng)
+	var candle_frame: Rect2 = (medium._things[-1] as Dictionary)["rect"] if not candle_spot.is_empty() else Rect2()
+	_ok(not candle_spot.is_empty() and (candle_frame.position.x < 0.0 or candle_frame.end.x > 1.0),
+		"a lit prop may use the side margin when its flame remains in view")
 
 
 func _box_show() -> void:

@@ -11,7 +11,7 @@ extends SceneTree
 ##     room falls away and the low end comes up (the control is the plain approach).
 ##   - backing off is quieter and thinner against an unchanged room.
 ##   - a move is eased: no step in level from one 10 ms to the next.
-##   - the plan: 0 never moves; how often rises with the dial; 1 never rests; plain and hushed
+##   - the plan: 0 never moves; how often and how far rise with the dial; 1 never rests; plain and hushed
 ##     both occur, nothing is whispered, only an approach is hushed; each voice on its own dial;
 ##     same words, same moves.
 
@@ -192,18 +192,37 @@ func _away(plan: Array) -> float:
 	return float(n) / float(plan.size())
 
 
+func _reach(plan: Array, key: String) -> float:
+	var far := 0.0
+	for p in plan:
+		far = maxf(far, absf(float((p as Dictionary)[key])))
+	return far
+
+
 func _check_plan() -> void:
 	var n := 2000
+	var low_plan := _plan(0.1, n)
+	var mid_plan := _plan(0.5, n)
+	var top_plan := _plan(1.0, n)
 	var off := _away(_plan(0.0, n))
-	var low := _away(_plan(0.1, n))
-	var mid := _away(_plan(0.5, n))
-	var top := _away(_plan(1.0, n))
+	var low := _away(low_plan)
+	var mid := _away(mid_plan)
+	var top := _away(top_plan)
 	print("near_check: sentences away from home: 0.1 %.0f%%, 0.5 %.0f%%, 1.0 %.0f%%"
 		% [low * 100.0, mid * 100.0, top * 100.0])
 	_ok(off == 0.0, "Near 0 moved the reader")
 	_ok(low > 0.02 and low < 0.25, "0.1 is not sparse (%.2f)" % low)
 	_ok(low < mid and mid < top, "how often does not rise with the dial")
 	_ok(top > 0.95, "1.0 rests at home (%.2f)" % top)
+	var low_reach := _reach(low_plan, "c")
+	var mid_reach := _reach(mid_plan, "c")
+	var top_reach := _reach(top_plan, "c")
+	_ok(low_reach > 0.05 and low_reach <= 0.1 and low_reach < mid_reach and mid_reach <= 0.5
+		and mid_reach < top_reach and top_reach > 0.9,
+		"distance does not grow with Near (%.2f / %.2f / %.2f)" % [low_reach, mid_reach, top_reach])
+	_ok(_reach(low_plan, "hush") <= 0.1 and _reach(mid_plan, "hush") <= 0.5
+		and _reach(top_plan, "hush") > 0.9,
+		"soft delivery stays at full strength when Near is low")
 	# the manners, over the approaches at mid: plain and hushed, and never a whisper (piper's,
 	# blended, was heard as "a garbled mess"); only an approach is hushed
 	var plain := 0

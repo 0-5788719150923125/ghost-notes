@@ -284,8 +284,8 @@ const GROUP_GAP := 0.004
 ## to the left and right edges, such that the middle of the table remains more free"). Patterns
 ## guided toward, never enforced ([method _habit_of]): how far each group's spot wanders off its
 ## zone's middle (meters, x and z), how far the things are pushed out to the sides at the most, and
-## the least share of a thing's picture the frame may keep when it cuts it - an unlit thing only; a
-## lit one is the light and stands wholly in the shot.
+## the least share of a thing's picture the frame may keep when it cuts it. Lit things first seek a
+## whole view; when that fails, their body may cross a side edge while every flame stays visible.
 const AIM_WANDER := Vector2(0.08, 0.05)
 const EDGE_PUSH := 0.2
 const SEEN_LEAST := 0.55
@@ -1969,14 +1969,15 @@ func _keep_out() -> Array:
 ## ONE THING STOOD: the best free spot for [param t] (built as [param b]) on a grid over the table,
 ## at full size or, failing that, a little smaller. Every spot is ON THE TABLE, off everywhere the
 ## cards go, clear of what already stands (by [constant THING_GAP], or [constant GROUP_GAP] within
-## its own group), IN THE SHOT (its whole box, projected: never cut by the frame's top, and a lit thing
-## not at all - any other may run off a side, [constant SEEN_LEAST]), and - between groups - not in
-## front of another in the picture. Aimed where the episode's habit puts its zone ([method _habit_aim]),
+## its own group), IN THE SHOT (its projected box never cut by the frame's top, with at least
+## [constant SEEN_LEAST] visible). A lit thing first seeks a whole view; if none fits, its sides
+## may be cut while every flame stays in view. Between groups, things do not overlap in the picture.
+## Aimed where the episode's habit puts its zone ([method _habit_aim]),
 ## and kept off a cloth's edge where it can be ([method _straddle]). A lit thing stands only behind the middle (in front of the
 ## cards its flame blew out the card held up to the lens) and looks for dark cloth. The spot
 ## chosen ({at, k, group, height}), or empty when there is none.
 func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, keep_out: Array,
-		rng: RandomNumberGenerator) -> Dictionary:
+		rng: RandomNumberGenerator, edge_light := false) -> Dictionary:
 	var box: AABB = b["size"]
 	var lit := not (b["wicks"] as Array).is_empty()
 	var yaw := deg_to_rad(float(t.get("turn", 0.0)) + rng.randf_range(-8.0, 8.0))
@@ -1989,6 +1990,9 @@ func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, kee
 	if lit:
 		front = minf(front, _mid.z)
 	var outline: PackedVector2Array = b["outline"]
+	var top_center: Vector2 = _top_o["center"]
+	var top_half: Vector2 = _top_o["half"]
+	var shot := Rect2(0.0, 0.0, 1.0, 1.0)
 	for k in [1.0, 0.88, 0.76]:
 		var basis := Basis(Vector3.UP, yaw).scaled(Vector3(k, k, k))
 		var shape := PackedVector2Array()
@@ -2009,27 +2013,16 @@ func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, kee
 		var best_score := -INF
 		var cam_inv := _cam_base.affine_inverse()
 		var lens := Vector2(tan(deg_to_rad(_cam.fov * 0.5)) * (16.0 / 9.0), tan(deg_to_rad(_cam.fov * 0.5)))
-		# from the back of the top - a deep one reaches further back than the old table did
-		var top_back := Tables.ORIGIN.y + Tables.TOP_AT.y - float((_top.get("size", [0.0, 85.0]) as Array)[1]) * 0.005 + Tables.THING_EDGE
-		var z := minf(-0.4, top_back)
-		# the old cloth's back edge, unless the top goes well past it
-		var back := -0.02 - CLOTH.y * 0.48
-		if top_back < back - 0.02:
-			back = top_back
+		var z := top_center.y - top_half.y
 		while z <= front:
-			var x := -0.62
-			while x <= 0.62:
+			var x := top_center.x - top_half.x
+			while x <= top_center.x + top_half.x:
 				_breathe()
 				var at := Vector2(x + rng.randf_range(-0.004, 0.004), z + rng.randf_range(-0.004, 0.004))
 				x += 0.02
 				var bb := Rect2(lo + at, hi - lo)
-				# WITHIN THE READER'S REACH - the old cloth's stretch, the width the camera sees, further
-				# back only where a deep top goes further back (a thing let out to the old table's whole
-				# width stood where a wash's card then clipped its foot) - and ON THE TOP, well in from its
-				# edge: a thing by the rim read as about to fall off
-				if bb.position.x < -CLOTH.x * 0.49 or bb.end.x > CLOTH.x * 0.49 or bb.position.y < back \
-						or bb.end.y > -0.02 + CLOTH.y * 0.48:
-					continue
+				# The actual top, including its side margins, is available. Its outline below keeps
+				# every foot safely in from the rim; the picture test decides what the viewer sees.
 				if Tables.sdf(_top_o, bb.position) > -Tables.THING_EDGE or Tables.sdf(_top_o, bb.end) > -Tables.THING_EDGE \
 						or Tables.sdf(_top_o, Vector2(bb.position.x, bb.end.y)) > -Tables.THING_EDGE \
 						or Tables.sdf(_top_o, Vector2(bb.end.x, bb.position.y)) > -Tables.THING_EDGE:
@@ -2057,27 +2050,39 @@ func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, kee
 				if not clear:
 					continue
 				var rect := _screen_rect_fast(corners, Vector3(at.x, 0.0, at.y), cam_inv, lens)
-				# never cut by the frame's TOP: a thing cut there reads as one standing in the room, not on
-				# the table. A lit thing is the light, and stands wholly in the shot; any other may run off
-				# a side or the foot of the frame, as a crowded table's do, so long as SEEN_LEAST of it shows
+				var seen := rect.intersection(shot)
+				# Never cut by the frame's TOP: that reads as a thing standing in the room. Lit things
+				# seek a whole view first; everything may run off a side if enough of it remains visible.
 				if rect.position.y < 0.02:
 					continue
-				if lit:
-					if rect.position.x < 0.02 or rect.end.x > 0.98 or rect.end.y > 0.97:
-						continue
-				elif rect.intersection(Rect2(0.0, 0.0, 1.0, 1.0)).get_area() < rect.get_area() * SEEN_LEAST:
+				if seen.get_area() < rect.get_area() * SEEN_LEAST:
 					continue
+				if lit:
+					if rect.end.y > 0.97:
+						continue
+					if not edge_light and (rect.position.x < 0.02 or rect.end.x > 0.98):
+						continue
+					if edge_light:
+						var wick_seen := true
+						for wick in b["wicks"]:
+							var flame: Variant = CardTable.project(_cam_base, _cam.fov,
+								basis * (wick as Vector3) + Vector3(at.x, 0.0, at.y))
+							if flame == null or (flame as Vector2).x < 0.02 or (flame as Vector2).x > 0.98:
+								wick_seen = false
+								break
+						if not wick_seen:
+							continue
 				# not in front of another in the picture: apart between groups, and within one only a
 				# little in front - a group seen one thing through another read as a stack
 				var hidden := 0.0
 				for th in _things:
-					var other: Rect2 = (th as Dictionary)["rect"]
+					var other: Rect2 = ((th as Dictionary)["rect"] as Rect2).intersection(shot)
 					if String((th as Dictionary)["group"]) != group:
-						if other.grow(0.008).intersects(rect):
+						if other.grow(0.008).intersects(seen):
 							clear = false
 							break
-					elif other.intersects(rect):
-						hidden = maxf(hidden, other.intersection(rect).get_area() / maxf(minf(other.get_area(), rect.get_area()), 1e-6))
+					elif other.intersects(seen):
+						hidden = maxf(hidden, other.intersection(seen).get_area() / maxf(minf(other.get_area(), seen.get_area()), 1e-6))
 				if not clear or hidden > 0.3:
 					continue
 				var score := -hidden * 2.0
@@ -2101,6 +2106,8 @@ func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, kee
 		if not best.is_empty():
 			_put(t, b, best, basis, group)
 			return {"at": best["at"], "height": box.size.y * k, "k": k}
+	if lit and not edge_light:
+		return _stand(t, b, group, anchor, keep_out, rng, true)
 	return {}
 
 
@@ -2217,10 +2224,14 @@ func _light_flames(flames: Array, own: int) -> void:
 	light.shadow_caster_mask = 0xFFFFFFFF & ~own & ~Lights.SCREEN_MASK
 	light.light_cull_mask = 0xFFFFFFFF & ~own
 	# a flame is a couple of centimeters across: the shadows it throws are soft at their ends. The
-	# biases are for a TABLETOP: at their defaults a deck's shadow began centimeters in front of it
+	# biases are for a TABLETOP: at their defaults a deck's shadow began centimeters in front of it.
+	# The NORMAL bias is what holds the cloth smooth: a flame stands a few centimeters over it, so
+	# the cloth is lit at a grazing angle, and at 0.08 the cube map's texels printed themselves on
+	# it as rings and radial lines (feedback 0016) and dimmed the pool. 0.3 is about a millimeter
+	# there; the depth bias stays small, which is what keeps a card's own shadow.
 	light.light_size = 0.015
 	light.shadow_bias = 0.004
-	light.shadow_normal_bias = 0.08
+	light.shadow_normal_bias = 0.3
 	light.omni_shadow_mode = OmniLight3D.SHADOW_CUBE
 	light.shadow_enabled = true
 	light.position = at + Vector3(0, 0.016, 0)
@@ -3255,6 +3266,10 @@ func _pose(t: float) -> void:
 				xf = _jump_riffle(i, (t - te) / jump_s, _shuffle_xf(i, te - ts))
 			elif t < te + SQUARE and te < INF and jump_s == 0.0:
 				xf = _shuffle_xf(i, te - ts).interpolate_with(_rest_xf(i), _ease((t - te) / SQUARE))
+		# The top of the stack is the next card the viewer will see. Give its back that
+		# card's orientation before it is uncovered; the draw mesh takes its place at t0.
+		if i == DECK_N - 1 and _cards_from == "deck" and _top_deck_reversed(t, tm):
+			xf.basis = xf.basis * Basis(Vector3.UP, PI)
 		var dm: MeshInstance3D = _deck[i]
 		dm.transform = xf
 		# a box's cards are filed in it: the deck is seen only lying flat in a tin
@@ -3289,6 +3304,16 @@ func _pose(t: float) -> void:
 	_pose_page(showing, page_in, t)
 	# the laid cards keep a slow breath of foil; the back's own glint rides the shuffle
 	_back_mat.set_shader_parameter("pulse", 0.5 + 0.5 * sin(t * TAU / 7.0))
+
+
+## The card waiting on top of the deck. Advance while the current card covers the stack at the
+## start of its draw, so the newly exposed back never changes orientation between draws.
+func _top_deck_reversed(t: float, tm: Dictionary) -> bool:
+	var draws: Array = tm["draw"]
+	for k in mini(draws.size(), _cards.size()):
+		if t < float((draws[k] as Array)[0]):
+			return _reversed(k)
+	return not _cards.is_empty() and _reversed(_cards.size() - 1)
 
 
 ## CARD [param k] AT [param t], from its timeline [param ev] ([method _times]): `{xf, visible, up (held
