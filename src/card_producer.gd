@@ -457,6 +457,13 @@ func _handed_in(step: String) -> String:
 
 
 func _make_say(who: String) -> void:
+	if who.is_valid_int():
+		var positions: Array = ((_plan().get("spread", {}) as Dictionary).get("positions", []) as Array)
+		var k := int(who) - 1
+		if k >= 0 and k < positions.size() and positions[k] is Dictionary \
+				and String((positions[k] as Dictionary).get("comment", "")) == "none":
+			_finish("say:" + who, episode.write_text("say:" + who, ""))
+			return
 	_submit_text("say:" + who, say_prompt(who), "best")
 
 
@@ -592,7 +599,7 @@ func _land(step: String, res: Dictionary) -> void:
 				err = _land_design(step, String(res.get("text", "")))
 			"say":
 				var t := own_voices(clean_spoken(String(res.get("text", ""))), _voices())
-				err = "the reader wrote nothing speakable" if t.split(" ", false).size() < 20 \
+				err = "the reader wrote nothing speakable" if t.split(" ", false).size() < (1 if step.split(":")[1].is_valid_int() else 20) \
 					else episode.write_text(step, t)
 			"image":
 				err = "" if episode.has(step) else "the picture did not arrive"
@@ -700,6 +707,14 @@ func _land_position(q: Dictionary, k: int, n: int) -> Dictionary:
 		out["lies"] = "sideways"
 	if q.get("on") == true and k > 1:
 		out["on"] = true
+	var destination := _str(q.get("destination", "")).to_lower()
+	if destination in ["stack", "box"]:
+		out["destination"] = destination
+		if destination == "stack" and k > 1:
+			out["on"] = true
+	var comment := _str(q.get("comment", "")).to_lower()
+	if comment in ["none", "brief", "story"]:
+		out["comment"] = comment
 	var then: Array = []
 	for m in q.get("then", []) if q.get("then") is Array else ([q.get("then")] if q.get("then") is String else []):
 		var parts := _str(m).to_lower().split(" ", false)

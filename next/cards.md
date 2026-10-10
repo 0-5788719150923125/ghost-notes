@@ -132,9 +132,8 @@ No separate rule-writing step: it would restate the brief in another agent's wor
 `cards_choose_check` (the same context around any brief; "tarot" only from the brief or the `kind`).
 
 First such show: `rift/tarot/the-shoebox.md` (a collector opening a different box each episode;
-every card invented). Gate: `cards_choose_check`. Still the tarot's: the card's size and shape
-(a baseball card is 6.3 x 8.8 cm, a tarot card 7 x 12) and the face (a numeral, a name, an art
-window - no stat box).
+every card invented). Gate: `cards_choose_check`. The producer now selects a physical card size;
+the face still uses the same shared frame system, with a text panel when it is printed on a card.
 
 **The staging** (2026-10-07; the user: a collector "might have a box... and just draw cards at
 random from it", cards in a box "stand vertical... like files in a filing cabinet", a card "tapped...
@@ -181,6 +180,23 @@ reader of its first card is handed them all, and no card past them. Gate: `table
 marks, the layouts over 40 seeds, the choreography, a deck show and a box show posed, the printings'
 backs), `table_actions_check` (the rests). `flip` has no producer field yet (a face-down card's reveal
 needs its own rule for the reader), and the dealer's tools do not take the new fields.
+
+**Shoebox branch** (2026-10-09): The show guide describes the desired presentation in ordinary
+prose; the shared agent context directs each role to translate that prose using its own production
+rules and available choices. `staging.box_style: shoebox` builds a larger cardboard box with a lid;
+the box slides to the center, turns its long side across the table, and stays there while the lid
+is lifted off and placed beside it before the first card comes out.
+`staging.contents` chooses filed cards, neat piles, or loose flat cards. Up to three simple objects
+from `staging.keepsakes` (coin, button, marble, ticket) sit inside and appear with the contents.
+`look.card_size` chooses a 70 × 120 mm large card or 63.5 × 88.9 mm trading/baseball stock; the mesh
+and printed face share that aspect ratio. All cards in one episode have the same physical size.
+Positions may set `destination: stack` for a tight pile on the table or `box` to return a card to
+the contents, and `comment: none`, `brief`, or `story`. `staging.pace` sets the default length of
+spoken comments; `none` writes a genuinely silent card step. Each laid card gets its own small
+hand offset, including cards in a dealer's exact row. The shuffle's resting point wanders
+a few millimeters between moves on a seeded path, including cuts; it is still reproducible when
+scrubbing or exporting. The shoebox, small cards, destinations and drift are exercised in
+`table_staging_check`; silent and short comments in `cards_choose_check`.
 
 ## The episode
 

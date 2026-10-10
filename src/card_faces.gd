@@ -16,6 +16,10 @@ class_name CardFaces
 ## A tarot card's proportions: 70 x 120 mm.
 const ASPECT := 70.0 / 120.0
 const FACE_PX := Vector2i(560, 960)
+
+static func face_px(look: Dictionary) -> Vector2i:
+	var size := CardTable.card_size(look)
+	return Vector2i(FACE_PX.x, roundi(float(FACE_PX.x) * size.y / size.x))
 ## The booklet page: a little white booklet's page, a touch narrower than the card is tall.
 const PAGE_PX := Vector2i(660, 940)
 const PAGE_ASPECT := float(PAGE_PX.x) / float(PAGE_PX.y)
@@ -141,7 +145,7 @@ static func ornament(ci: CanvasItem, look: Dictionary, ink: Color, accent: Color
 	var kind := ornament_of(look)
 	if kind == "none":
 		return
-	var sz := Vector2(FACE_PX)
+	var sz := Vector2(face_px(look))
 	var w := walk(edge_path(look, sz.x * ORNAMENT_INSET))
 	var L := float(w["length"])
 	var u := sz.x / 560.0          # sizes below are written for a 560 px face
@@ -295,7 +299,7 @@ static func ornament(ci: CanvasItem, look: Dictionary, ink: Color, accent: Color
 ## ornament round its edge ([constant CardTable.ORNAMENTS]) keeps a wider border for it: the ornament's
 ## line, its own width, then the frame's outermost rule ([method frame_reach]) - so the rules never crowd it.
 static func window(back := false, look: Dictionary = {}) -> Rect2:
-	var sz := Vector2(FACE_PX)
+	var sz := Vector2(face_px(look))
 	var m := sz.x * 0.06
 	if ornament_of(look) != "none":
 		m = sz.x * (ORNAMENT_INSET + ORNAMENT_BAND + frame_reach(look))
@@ -420,7 +424,7 @@ static func closed(pts: PackedVector2Array) -> PackedVector2Array:
 ## THE CARD'S OWN EDGE, [param inset] pixels in: a rectangle rounded as the card is cut ([method
 ## CardTable.corner_radius]) - the line an ornament runs along.
 static func edge_path(look: Dictionary, inset: float) -> PackedVector2Array:
-	var sz := Vector2(FACE_PX)
+	var sz := Vector2(face_px(look))
 	var r := Rect2(Vector2(inset, inset), sz - Vector2(inset, inset) * 2.0)
 	var cr := maxf(CardTable.corner_radius(look) / 0.07 * sz.x - inset, sz.x * 0.03)
 	var pts := PackedVector2Array()
@@ -526,7 +530,7 @@ class Face:
 	var seed := 0
 
 	func _draw() -> void:
-		var sz := Vector2(CardFaces.FACE_PX)
+		var sz := Vector2(CardFaces.face_px(look))
 		var frame: Dictionary = look.get("frame", {})
 		var style := String(frame.get("style", "line"))
 		var stock := CardTable.color(String(frame.get("stock", "#efe6d2")))
@@ -557,10 +561,10 @@ class Face:
 	func _printed_front(win: Rect2, stock: Color, ink: Color, accent: Color) -> void:
 		var full := CardFaces.window(false, look)
 		# the frame's rules stand outside the window: the type starts clear of them, not under them
-		var reach := CardFaces.frame_reach(look) * float(CardFaces.FACE_PX.x)
+		var reach := CardFaces.frame_reach(look) * float(CardFaces.face_px(look).x)
 		var below := reach + 12.0
 		var panel := Rect2(Vector2(win.position.x, win.end.y + below),
-			Vector2(win.size.x, Vector2(CardFaces.FACE_PX).y - full.position.x - win.end.y - below))
+			Vector2(win.size.x, Vector2(CardFaces.face_px(look)).y - full.position.x - win.end.y - below))
 		var text_ink := CardTable.legible_ink(ink, stock, CardTable.TEXT_CONTRAST)
 		var face := CardTable.font(String(look.get("title_face", "roman")))
 		var book := CardTable.font(CardTable.BOOK_FACE)

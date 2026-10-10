@@ -256,7 +256,8 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 		"title": title.strip_edges(), "byline": byline.strip_edges(),
 		"seen": ", ".join(PackedStringArray(seen)), "airs": ", ".join(PackedStringArray(airs)),
 	}
-	vars.merge(_box_size())
+	vars.merge(_box_size(String(CardTable.staging_of(plan)["box_style"]) == "shoebox",
+		String(CardTable.staging_of(plan)["contents"])))
 	# earlier episodes' tables and lights, each cut short
 	var earlier_tables: Array = []
 	for t in tables:
@@ -305,9 +306,10 @@ static func box_rule() -> String:
 
 
 ## The box's largest, in centimeters ([constant CardTable.BOX_MAX]), as the rules say it.
-static func _box_size() -> Dictionary:
-	var most := CardTable.BOX_MAX * 100.0
-	return {"box_x": roundi(most.x), "box_z": roundi(most.z), "box_y": roundi(most.y)}
+static func _box_size(shoebox := false, contents := "file") -> Dictionary:
+	var most := (CardTable.SHOEBOX_MAX if shoebox else CardTable.BOX_MAX) * 100.0
+	return {"box_x": roundi(most.x), "box_z": roundi(most.z), "box_y": roundi(most.y),
+		"shoebox": shoebox, "filed": contents == "file", "piled": contents == "piles", "loose": contents == "loose"}
 
 
 ## THE READER, one passage. [param step] is "intro", "close", or a card's place in the reading
@@ -352,7 +354,8 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 	var at := int(step) if step.is_valid_int() else 0
 	var on_table: Array = []
 	for i in drawn.size():
-		if i + 1 != at:
+		var where: Dictionary = positions[i] if i < positions.size() and positions[i] is Dictionary else {}
+		if i + 1 != at and String(where.get("destination", "")) != "box":
 			on_table.append({"line": _card_line(drawn[i] as Dictionary), "swept": at > 0 and i + 1 > at})
 	var vars := {"title": title, "episode_title": String(plan.get("episode_title", "")), "audience": String(plan.get("audience", "")),
 		"topic": String(plan.get("topic", "")), "premise": String(plan.get("premise", "")), "reader_mood": String(plan.get("reader_mood", "")),
@@ -369,6 +372,15 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		lo_hi = WORDS["close"]
 	else:
 		vars.merge(_card_now(plan, positions, drawn, int(step), spread_size, boxed, pictured, remark, String(staging["text"])))
+		var p: Dictionary = positions[int(step) - 1] if int(step) - 1 < positions.size() and positions[int(step) - 1] is Dictionary else {}
+		var comment := String(p.get("comment", ""))
+		var pace := String(staging.get("pace", "reflective"))
+		if comment == "brief" or (comment.is_empty() and pace == "quick"):
+			lo_hi = [5, 35]
+		elif comment.is_empty() and pace == "mixed" and int(step) % 3 == 0:
+			lo_hi = [55, 110]
+		elif comment.is_empty() and pace == "mixed":
+			lo_hi = [8, 40]
 	var kind := step if step == "intro" or step == "close" \
 		else ("jumper" if not drawn.is_empty() and bool((drawn[drawn.size() - 1] as Dictionary).get("jumper", false)) else "card")
 	var heard_before := _heard_before(history, kind, brief, names)
@@ -440,13 +452,16 @@ static func after(plan: Dictionary, k: int, n: int) -> String:
 	var parts := PackedStringArray()
 	var held: bool = k >= 1 and comes.call(k) != "dealt"
 	if held:
-		parts.append("this card goes back down into its place in the waterfall" if comes.call(k) == "swept" else "this card goes down into its place")
+		var destination := String((at.call(k) as Dictionary).get("destination", "row"))
+		parts.append("this card goes back into the box" if destination == "box" else
+			("this card joins a stack at the side" if destination == "stack" else
+			("this card goes back down into its place in the waterfall" if comes.call(k) == "swept" else "this card goes down into its place")))
 	for m in (at.call(k) as Dictionary).get("then", []) if k >= 1 and (at.call(k) as Dictionary).get("then") is Array else []:
 		var w := String(m).split(" ", false)
 		if w.size() == 2:
 			parts.append("card %s is turned %s where it lies" % [w[1], "sideways" if w[0] == "tap" else "back upright"])
 	if k >= n:
-		parts.append("the whole spread lies on the table")
+		parts.append("the shown cards and the box settle" if boxed else "the whole spread lies on the table")
 	else:
 		var next := k + 1
 		match String(comes.call(next)):
@@ -480,6 +495,10 @@ static func _how_note(p: Dictionary, i: int) -> String:
 		notes.append("laid sideways")
 	if p.get("on") == true and i > 1:
 		notes.append("laid on card %d" % (i - 1))
+	if String(p.get("destination", "")) in ["box", "stack"]:
+		notes.append("goes to " + String(p["destination"]))
+	if String(p.get("comment", "")) in ["none", "brief", "story"]:
+		notes.append(String(p["comment"]) + " comment")
 	if p.get("then") is Array and not (p["then"] as Array).is_empty():
 		notes.append("then: " + ", ".join(PackedStringArray(p["then"] as Array)))
 	return (" (" + "; ".join(notes) + ")") if not notes.is_empty() else ""
@@ -543,8 +562,10 @@ static func _past(e: Dictionary) -> String:
 			if not how.is_empty() and not moves.has(how):
 				moves.append(how)
 		var where := "in a booklet" if st["text"] == "booklet" else ("on the fronts" if st["text"] == "front" else "on the backs")
-		lines.append("  Staged: from a %s, text %s%s" % [st["source"], where,
+		lines.append("  Staged: from a %s, %s box, %s contents, %s pace, text %s%s" % [st["source"],
+			st["box_style"], st["contents"], st["pace"], where,
 			("; " + "; ".join(moves)) if not moves.is_empty() else ""])
+	lines.append("  Card size: %s" % _s(look.get("card_size", "large")))
 	lines.append("  Deck \"%s\": %s" % [_s(look.get("deck_name", "")), clip(_s(look.get("deck_style", "")), 40)])
 	if not _s(look.get("kind", "")).is_empty():
 		lines.append("  Its cards were a %s%s" % [_s(look.get("kind", "")), (": " + clip(", ".join(_box_names(p)), 30)) if not _box_names(p).is_empty() else ""])

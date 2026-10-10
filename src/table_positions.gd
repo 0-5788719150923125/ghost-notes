@@ -50,6 +50,8 @@ const SWEEP_TURN := 0.07
 const PILE_GAP := 0.018
 ## A quarter turn, as a tapped card lies: clockwise seen from above, as a player turns one.
 const SIDEWAYS := -PI * 0.5
+## Where a lidded shoebox stays after it is brought in: centered across the table, toward the far edge.
+const SHOEBOX_AT := Vector3(0.0, 0.0, -0.17)
 
 
 ## THE SEEDED SPREAD, as the table has always laid it: a preset picked per episode from [param rng],
@@ -117,7 +119,8 @@ static func seeded(n: int, rng: RandomNumberGenerator, lay: Dictionary) -> Array
 ## and in the camera's frame for the episode's layout [param lay] - and, with a [param box] the cards
 ## are kept in, off its whole column (a long row that will not fit beside it is two). A spread with none of them is the
 ## seeded preset itself ([method seeded]), draw for draw. `[{pos, yaw, face}]`.
-static func staged(cards: Array, rng: RandomNumberGenerator, lay: Dictionary, box := Vector2.ZERO) -> Array:
+static func staged(cards: Array, rng: RandomNumberGenerator, lay: Dictionary, box := Vector2.ZERO,
+		box_center := Vector3.ZERO) -> Array:
 	var n := cards.size()
 	var piles := piles_of(cards)
 	if piles.size() == n and not _any_sideways(cards) and box == Vector2.ZERO:
@@ -136,12 +139,13 @@ static func staged(cards: Array, rng: RandomNumberGenerator, lay: Dictionary, bo
 			var at := Vector2.ZERO
 			match String(pile["kind"]):
 				"stack":
-					at = Vector2(0.0, -STACK_STEP * float(j))
+					at = Vector2(0.0, -(0.004 if String(_position(cards[i]).get("destination", "")) == "stack" else STACK_STEP) * float(j))
 				"sweep":
 					at = Vector2(SWEEP_STEP * float(j), (absf(float(j) - float((pile["cards"] as Array).size() - 1) * 0.5) * 0.006) if arc else 0.0)
 					if arc:
 						yaw += -SWEEP_TURN * (float(j) - float((pile["cards"] as Array).size() - 1) * 0.5)
-			offs.append({"at": at, "yaw": yaw})
+			offs.append({"at": at, "yaw": yaw,
+				"stacked": String(_position(cards[i]).get("destination", "")) == "stack"})
 			var half := Vector2(CARD.x, CARD.y) * 0.5 if absf(sin(yaw)) < 0.5 else Vector2(CARD.y, CARD.x) * 0.5
 			lo = Vector2(minf(lo.x, at.x - half.x), minf(lo.y, at.y - half.y))
 			hi = Vector2(maxf(hi.x, at.x + half.x), maxf(hi.y, at.y + half.y))
@@ -157,12 +161,14 @@ static func staged(cards: Array, rng: RandomNumberGenerator, lay: Dictionary, bo
 	# A BOX STANDS TALL, and a card tucked behind it is hidden by it and has to be carried over it: the
 	# spread keeps off its whole column, back to the cloth's far edge, so a row that will not fit beside
 	# it becomes two (feedback 0010: a seventh card laid down behind the box)
-	var keep := deck_keep(deck, box)
+	var keep := deck_keep(deck, box, box_center)
 	if box != Vector2.ZERO:
 		var far := CLOTH_MIDDLE.y - CLOTH.y * 0.5
 		keep = Rect2(keep.position.x, far, keep.size.x, keep.end.y - far)
 	for rows in [1, 2]:
-		var out := _piles_laid(piles, shapes, hand, rows, n)
+		var front := box_center.z + box.y * 0.5 + DECK_CLEAR + CARD.y * 0.5 + 0.02 \
+			if box_center != Vector3.ZERO else NAN
+		var out := _piles_laid(piles, shapes, hand, rows, n, front)
 		var off := CardTable.clear_of(out, CARD, keep)
 		for sl in out:
 			(sl as Dictionary)["pos"] = ((sl as Dictionary)["pos"] as Vector3) + Vector3(off.x, 0.0, off.y)
@@ -178,7 +184,9 @@ static func piles_of(cards: Array) -> Array:
 	for i in cards.size():
 		var p := _position(cards[i])
 		var comes := String(p.get("comes", "drawn"))
-		if i > 0 and bool(p.get("on", false)) and not out.is_empty():
+		var before := _position(cards[i - 1]) if i > 0 else {}
+		if i > 0 and bool(p.get("on", false)) and not out.is_empty() \
+				and String(before.get("destination", "")) != "box":
 			var last: Dictionary = out[-1]
 			if String(last["kind"]) != "sweep":
 				last["kind"] = "stack"
@@ -208,11 +216,11 @@ static func _position(c: Variant) -> Dictionary:
 
 ## The piles laid in [param rows] rows across the cloth, each card where its pile puts it: one row a
 ## little behind the cloth's middle, as the preset's; two from the preset's first row toward the reader.
-static func _piles_laid(piles: Array, shapes: Array, hand: Array, rows: int, n: int) -> Array:
+static func _piles_laid(piles: Array, shapes: Array, hand: Array, rows: int, n: int, front := NAN) -> Array:
 	var out: Array = []
 	out.resize(n)
 	var per := int(ceil(float(piles.size()) / float(rows)))
-	var back := -0.085 if rows == 1 else -0.165 - CARD.y * 0.5
+	var back := front if not is_nan(front) else (-0.085 if rows == 1 else -0.165 - CARD.y * 0.5)
 	for r in rows:
 		var members := range(r * per, mini((r + 1) * per, piles.size()))
 		var width := 0.0
@@ -231,7 +239,7 @@ static func _piles_laid(piles: Array, shapes: Array, hand: Array, rows: int, n: 
 				var i := int(((piles[q] as Dictionary)["cards"] as Array)[j])
 				var at: Vector2 = (offs[j] as Dictionary)["at"]
 				var h: Array = hand[i]
-				out[i] = {"pos": Vector3(cx + at.x, 0.0, z + at.y) + (h[0] as Vector3),
+				out[i] = {"pos": Vector3(cx + at.x, float(j) * 0.00085 if bool((offs[j] as Dictionary).get("stacked", false)) else 0.0, z + at.y) + (h[0] as Vector3),
 					"yaw": float((offs[j] as Dictionary)["yaw"]) + float(h[1]), "face": "up"}
 			x += sz.x + PILE_GAP
 		back += depth + PILE_GAP
@@ -275,9 +283,9 @@ static func _in_frame(slots: Array, lay: Dictionary) -> bool:
 
 ## The rectangle (x by z) round the deck kept at [param deck] that no card may lie in - or round the box
 ## the cards are kept in there, [param box] across and deep ([method box_at]).
-static func deck_keep(deck: Vector3, box := Vector2.ZERO) -> Rect2:
+static func deck_keep(deck: Vector3, box := Vector2.ZERO, box_center := Vector3.ZERO) -> Rect2:
 	if box != Vector2.ZERO:
-		var mid := box_at(deck)
+		var mid := box_center if box_center != Vector3.ZERO else box_at(deck)
 		return Rect2(mid.x - box.x * 0.5 - DECK_CLEAR, mid.z - box.y * 0.5 - DECK_CLEAR,
 			box.x + DECK_CLEAR * 2.0, box.y + DECK_CLEAR * 2.0)
 	return Rect2(deck.x - CARD.x * 0.5 - DECK_CLEAR, deck.z - CARD.y * 0.5 - DECK_CLEAR,
@@ -294,14 +302,15 @@ static func box_at(deck: Vector3) -> Vector3:
 ## `x` and `z` (a plan's, or a dealer's laid over it) - or [] when any card has none or the set has a
 ## trouble ([method troubles]) - [param top], the table's top made safe, when it is set: the table
 ## then lays its preset.
-static func given(cards: Array, seed: int, top: Dictionary = {}, box := Vector2.ZERO) -> Array:
+static func given(cards: Array, seed: int, top: Dictionary = {}, box := Vector2.ZERO,
+		box_center := Vector3.ZERO) -> Array:
 	var out: Array = []
 	for i in cards.size():
 		var p: Variant = (cards[i] as Dictionary).get("position", {}) if cards[i] is Dictionary else {}
 		if not (p is Dictionary) or not _numeric((p as Dictionary).get("x")) or not _numeric((p as Dictionary).get("z")):
 			return []
 		out.append(slot_of(p as Dictionary, i))
-	if out.is_empty() or not troubles(out, seed, top, box).is_empty():
+	if out.is_empty() or not troubles(out, seed, top, box, box_center).is_empty():
 		return []
 	return out
 
@@ -316,10 +325,11 @@ static func slot_of(p: Dictionary, i: int) -> Dictionary:
 ## at the back", ...]` - empty when every card lies on the cloth, inside the camera's frame and clear
 ## of the deck - and on [param top] ([Tables]), when the table is set. Cards may lie over each other -
 ## a pile, a fan, the pyramid's rows do - and [method notes] says which.
-static func troubles(slots: Array, seed: int, top: Dictionary = {}, box := Vector2.ZERO) -> PackedStringArray:
+static func troubles(slots: Array, seed: int, top: Dictionary = {}, box := Vector2.ZERO,
+		box_center := Vector3.ZERO) -> PackedStringArray:
 	var out := PackedStringArray()
 	var lay := CardTable.layout_of(seed)
-	var keep := deck_keep(lay["deck"], box)
+	var keep := deck_keep(lay["deck"], box, box_center)
 	var feet: Array = []
 	for i in slots.size():
 		var s: Dictionary = slots[i]

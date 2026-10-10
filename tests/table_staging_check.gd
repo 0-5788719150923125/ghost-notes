@@ -67,8 +67,11 @@ func _run() -> void:
 	add_child(subs)
 	medium.bind_captions(subs)
 	_deck_show()
+	_placement_drift()
 	_box_show()
+	_shoebox_show()
 	_laid_over_box()
+	_loose_box()
 	_printings()
 	_front_details()
 	_bursts()
@@ -276,6 +279,166 @@ func _box_show() -> void:
 	var a := {"pos": medium._slot_xf(1).origin, "yaw": medium._slots[1]["yaw"]}
 	var b := {"pos": medium._slot_xf(2).origin, "yaw": medium._slots[2]["yaw"]}
 	_ok(TablePositions.overlaps(a, b), "the waterfall's cards lie overlapping")
+
+
+func _shoebox_show() -> void:
+	print("-- a lidded shoebox with small cards")
+	var deck: Array = []
+	for i in 12:
+		deck.append({"key": "s%d" % i, "name": "Small card %d" % i})
+	var pos := [{"destination": "stack"}, {"destination": "stack", "on": true},
+		{"destination": "box"}]
+	_load(45, pos, {"look": {"candles": 0, "card_size": "trading"},
+		"staging": {"source": "box", "text": "front", "box_style": "shoebox", "contents": "piles",
+			"keepsakes": ["coin", "ticket"]},
+		"deck": deck})
+	_ok(medium._box.has("lid") and medium._file.size() > 0, "the shoebox has a lid and visible contents")
+	_ok(medium._box_objects.size() == 2, "two small keepsakes rest among the cards")
+	if not medium._box.has("lid"):
+		return
+	var mesh: ArrayMesh = (medium._cards[0] as MeshInstance3D).mesh
+	var extent := mesh.get_aabb().size
+	_ok(absf(extent.x - 0.0635) < 0.001 and absf(extent.z - 0.0889) < 0.001,
+		"trading cards are 63.5 by 88.9 mm, not the large card slab")
+	_ok(CardFaces.face_px(medium._look).y < CardFaces.FACE_PX.y,
+		"the printed face matches the trading card's aspect ratio")
+	var first: Transform3D = medium._box["at_k"][0]
+	_ok(absf(first.basis.z.y) < 0.1, "the cards lie flat in their piles")
+	var start := float(medium._times()["opening"])
+	_posed(start + 0.1)
+	_ok((medium._box_objects[0] as Node3D).position.y < (medium._box["world"] as AABB).end.y and
+		(medium._box["lid"] as Node3D).position.x == (medium._box["lid_rest"] as Vector3).x,
+		"the keepsakes wait inside the closed box")
+	var before: Vector3 = (medium._box["node"] as Node3D).position
+	var before_basis: Basis = (medium._box["node"] as Node3D).basis
+	var lid_before: Vector3 = (medium._box["lid"] as Node3D).position
+	var shade_before := (medium._box["shadow"] as Decal).position
+	var file_before := (medium._file[0] as Node3D).position
+	_posed(start + 2.9)
+	var center: Vector3 = (medium._box["node"] as Node3D).position
+	var center_basis: Basis = (medium._box["node"] as Node3D).basis
+	var shade_center := (medium._box["shadow"] as Decal).position
+	var file_center := (medium._file[0] as Node3D).position
+	_posed(start + 4.2)
+	var lid_raised: Vector3 = (medium._box["node"] as Node3D).transform * (medium._box["lid"] as Node3D).position
+	_posed(start + 6.0)
+	_ok((medium._box_objects[0] as Node3D).visible, "the keepsakes appear when the box is open")
+	var after: Vector3 = (medium._box["node"] as Node3D).position
+	var after_basis: Basis = (medium._box["node"] as Node3D).basis
+	var lid_after: Vector3 = (medium._box["lid"] as Node3D).position
+	_ok(absf(before.x) > 0.2 and absf(center.x) < 0.03 and center.distance_to(after) < 0.001 and
+		absf(before_basis.z.z) > absf(before_basis.z.x) and
+		absf(center_basis.z.x) > absf(center_basis.z.z) and center_basis.is_equal_approx(after_basis),
+		"the shoebox arrives vertical, turns horizontal, and stays centered after opening")
+	_ok(shade_before.distance_to(shade_center) > 0.2 and file_before.distance_to(file_center) > 0.2,
+		"the soft shade and the cards travel with the shoebox")
+	_ok(lid_raised.y > (medium._box["world"] as AABB).end.y + 0.03,
+		"the lid clears the rim before sliding aside")
+	_ok(lid_after.distance_to(lid_before) > 0.2 and lid_after.y < lid_before.y,
+		"the lid lifts off and settles beside the centered box")
+	var lid_world := (medium._box["lid"] as Node3D).global_position
+	var box_bounds: AABB = medium._box["world"]
+	_ok(absf(lid_world.x - box_bounds.get_center().x) > box_bounds.size.x + 0.01,
+		"the lid clears the side of the box")
+	var lid_layers := true
+	for panel in (medium._box["lid"] as Node3D).get_children():
+		lid_layers = lid_layers and ((panel as MeshInstance3D).layers & 1) == 0
+	_ok(lid_layers, "the tabletop's contact shade cannot project onto the lid")
+	_ok((medium._cards[0] as MeshInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+		"a card pulled near the box wall cannot cast a jagged shadow across it")
+	_ok((medium._file[0] as MultiMeshInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+		"the shoebox inventory cannot cast a hard shadow into the lid")
+	var keep := TablePositions.deck_keep(medium._deck_base, medium._box_keep(), medium._box_center())
+	var clear := true
+	for s in medium._slots:
+		var slot: Dictionary = s
+		if CardTable.footprint(slot["pos"], float(slot["yaw"]), CardTable.card_size(medium._look)).intersects(keep):
+			clear = false
+	_ok(clear, "laid cards keep clear of the centered shoebox")
+	var front := true
+	for slot in medium._slots:
+		front = front and (slot["pos"] as Vector3).z > (medium._box["world"] as AABB).end.z + 0.02
+	_ok(front, "shoebox cards land in front of its near wall")
+	_ok((medium._slots[0]["pos"] as Vector3).distance_to(medium._slots[1]["pos"]) < 0.015,
+		"shown cards form a small stack")
+	var returned := medium._slot_xf(2).origin
+	_ok((medium._box["inner"] as AABB).grow(0.01).has_point(returned) and
+		returned.y > (medium._box["at_k"][2] as Transform3D).origin.y,
+		"a returned card lands on top of the contents inside the box")
+	var events: Array = medium._times()["events"]
+	var once := true
+	for card_events in events:
+		var lays := 0
+		for event in card_events:
+			lays += 1 if String(event["k"]) == "lay" else 0
+		once = once and lays == 1
+	_ok(once, "each shown card has one return movement")
+
+
+func _placement_drift() -> void:
+	print("-- the deck's resting places")
+	_ok(medium._lay_jit.size() == medium._cards.size() and
+		(medium._lay_jit[0] as Vector3).distance_to(medium._lay_jit[1]) > 0.0001,
+		"cards laid in a row have different small, repeatable hand offsets")
+	medium._move_at(45.0)
+	var rests: Array = []
+	for m in medium._moves:
+		var d: Dictionary = m
+		if float(d["t0"]) + float(d["dur"]) < 45.0:
+			rests.append(medium._shuffle_wander(float(d["t0"]) + float(d["dur"]) + 0.01))
+	var changed := 0
+	for i in range(1, rests.size()):
+		if (rests[i] as Vector3).distance_to(rests[i - 1]) > 0.001:
+			changed += 1
+	_ok(changed >= 2, "successive shuffles and cuts settle in different places (%d changed)" % changed)
+	if not rests.is_empty():
+		var at: Vector3 = rests[-1]
+		_ok(at.is_equal_approx(medium._shuffle_wander(float((medium._moves[rests.size() - 1] as Dictionary)["t0"]) +
+			float((medium._moves[rests.size() - 1] as Dictionary)["dur"]) + 0.01)),
+			"a scrub returns to the same resting place")
+
+
+func _loose_box() -> void:
+	print("-- loose cards inside a box")
+	var deck: Array = []
+	for i in 12:
+		deck.append({"key": "l%d" % i, "name": "Loose card %d" % i})
+	_load(46, [{}, {}, {}], {"look": {"candles": 0, "card_size": "trading"},
+		"staging": {"source": "box", "box_style": "shoebox", "contents": "loose"}, "deck": deck})
+	var poses: Array = (_box_poses())
+	var xs: Array = []
+	var angles: Array = []
+	for xf in poses:
+		var t: Transform3D = xf
+		xs.append(t.origin.x)
+		angles.append(atan2(t.basis.x.z, t.basis.x.x))
+	xs.sort()
+	angles.sort()
+	var spread := float(xs[-1]) - float(xs[0])
+	var turn := float(angles[-1]) - float(angles[0])
+	_ok(poses.size() == CardTable.SHOEBOX_FILL and spread > 0.09 and turn > 0.1,
+		"loose cards occupy varied spots and angles, with the whole inventory present (%d cards, %.1f mm, %.2f rad)" %
+		[poses.size(), spread * 1000.0, turn])
+	var source: Array = medium._box["at_k"]
+	var return_at: Vector3 = medium._box["return_at"]
+	var top_down := true
+	var separate := true
+	for k in source.size():
+		var at: Transform3D = source[k]
+		if k > 0:
+			top_down = top_down and at.origin.y < (source[k - 1] as Transform3D).origin.y
+		separate = separate and return_at.x - at.origin.x > CardTable.card_size(medium._look).length() + 0.007
+	_ok(top_down and separate and return_at.y > (source[0] as Transform3D).origin.y + 0.0007,
+		"loose cards are drawn from the exposed top in order and returned to a clear higher spot")
+
+
+func _box_poses() -> Array:
+	var out: Array = (medium._box["at_k"] as Array).duplicate()
+	for f in medium._file:
+		var mm: MultiMesh = (f as MultiMeshInstance3D).multimesh
+		for i in mm.instance_count:
+			out.append(mm.get_instance_transform(i))
+	return out
 
 
 ## A CARD LAID BEHIND THE BOX (feedback 0010: "the seventh card... clips through the card box on the

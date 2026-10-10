@@ -99,8 +99,8 @@ prompt:
 intro:
   - when: box
     say: >-
-          NOW: the video opens. The box the cards are kept in stands open beside you, the cards
-          filed in it on edge. Welcome the viewer to "{{title}}", and set up this episode and who it
+          NOW: the video opens. The box is brought into view and opened if it has a lid;
+          the cards may be filed, stacked or loose inside. Welcome the viewer to "{{title}}", and set up this episode and who it
           is for. You do not know which cards will come out - none has been pulled yet - so name
           none and predict none. The first card comes out after your last word, and the viewer sees
           it come: end on your thought, never on an announcement, and never say it is out.
@@ -115,13 +115,18 @@ intro:
 
 # THE CLOSE: every card face up on the table
 close:
-  - >-
-      NOW: the last card has just been laid down, and all {{spread_size}} cards are face up on the
-      table. Pull the reading together - the whole spread, in the light of everything you have said
+  - when: box
+    say: >-
+      NOW: the last card has been handled. Some cards may have been returned to the box and others
+      stacked beside it. Pull the reading together in the light of everything you have said
       - and close the episode the way the brief says the show closes.
+  - when: "!box"
+    say: >-
+      NOW: the last card has been laid down. Pull the reading together in the light of everything
+      you have said, and close the episode the way the brief says the show closes.
   - when: pictured
     say: >-
-          The paintings above are those cards as they lie on the table, in the order they were drawn
+          The paintings above are the cards handled tonight, in the order they were drawn
           (a reversed card upside down) - the viewer sees them as you do. The close is about what
           the cards said, not what they picture: most closes never mention a painting, and none
           tours them.
@@ -217,9 +222,9 @@ card:
       {{text}}
       </booklet>
   - >-
-      Read this card for the viewer, in this position, carrying the story on from what you have
-      already said - the reading builds as the cards come. You know only the cards on the table;
-      never guess at what comes next.
+      Respond to this card as the show's host would. A common card can pass with one observation;
+      a card with a personal story may hold your attention. Follow the requested word range.
+      You know only the cards already taken; never guess at what comes next.
   # NOT MET THE SAME WAY TWICE: every card passage of episode 834225 opened on "Oh, the ..." (2026-10-07)
   - when: not_first
     say: >-

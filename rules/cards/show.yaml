@@ -8,13 +8,14 @@
 # The code gives: {{title}} and {{brief}}.
 context: >-
   You are part of the team behind a YouTube channel called "{{title}}". Each episode is one video
-  filmed from the host's chair at a table: a deck of cards is shuffled on a cloth, cards come up one
-  at a time and are held up to the camera beside a page of text about each, then laid down in a row
-  or a pattern while the host talks. The brief says what kind of show this is and what its cards
-  are. The team's working words are a card reader's, whatever the show: the READER is the host, the
-  voice of the video; a READING is an episode; the SPREAD is the cards laid out, and its POSITIONS
-  the order they come up in; the BOOKLET is the page of text shown beside each card. The brief says
-  what each of those is on this show, and where it says otherwise, the brief wins.
+  filmed from the host's chair at a table. The brief says what kind of show this is, what its cards
+  are, and how the host handles them. The team's working words are a card reader's, whatever the
+  show: the READER is the host, the voice of the video; a READING is an episode; the SPREAD is the
+  sequence of cards handled, and its POSITIONS are their order; the BOOKLET is the page of text
+  shown beside a card when the show uses one. Treat the brief as a description of style and behavior,
+  written by a creator who does not need to know the production system. Read your role's instructions
+  for the available choices and output format, then translate the brief's intent into those choices.
+  Where the brief describes a different presentation from a default in your role, follow the brief.
 
 
   THE SHOW'S BRIEF, from its creator. It governs everything you write:

@@ -70,6 +70,15 @@ func _framing() -> bool:
 	_ok(shown.replace(BRIEF.strip_edges(), "") == tarot.replace(tarot_brief, "") and not shown.to_lower().contains("tarot"),
 		"the shared context is not the same words for every show")
 	_ok(tarot.contains("A tarot channel that tells the truth."), "control: a tarot brief did not reach the agents whole")
+	var plain_brief := "A collector opens a big lidded shoebox, then puts some cards back and makes a small pile of the rest."
+	var plain := CardPrompts.producer("S", plain_brief, 7, 4, false, CardTable.FACES, CardTable.FRAMES, [], [], true)
+	var plain_context := String(plain["system"])
+	var plain_prompt := String(plain["prompt"])
+	_ok(plain_context.contains(plain_brief) and plain_context.contains("Read your role's instructions")
+		and not plain_context.contains("deck of cards is shuffled"),
+		"a natural-language show brief is not framed as the creator's intent")
+	_ok(plain_prompt.contains("box_style: \"shoebox\"") and plain_prompt.contains("destination: \"box\""),
+		"the producer is not told how to translate a shoebox brief into available presentation choices")
 	# THE PRODUCER asks every show for its kind of cards, and names none of its own
 	var chosen := String(CardPrompts.producer("Show and Tell", BRIEF, 7, 4, false, CardTable.FACES, CardTable.FRAMES, [], [], true)["prompt"])
 	var listed := String(CardPrompts.producer("T", "B", 7, 4, true, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards())["prompt"])
@@ -117,6 +126,14 @@ func _box() -> bool:
 	var drawn: Array = (ep.read_json("draw") as Dictionary)["cards"]
 	_ok(drawn.size() == 4 and drawn.all(func(c: Variant) -> bool: return names.has(String((c as Dictionary)["name"]))),
 		"the draw did not come from the box: %s" % str(drawn))
+	(plan["spread"]["positions"][0] as Dictionary)["comment"] = "none"
+	plan["staging"] = {"source": "box", "pace": "mixed"}
+	ep.write_json("plan", plan)
+	prod._make_say("1")
+	_ok(ep.has("say:1") and ep.read_text("say:1").is_empty(),
+		"a card with no comment passes silently without a writer job")
+	var short_prompt := String(prod.say_prompt("2")["prompt"])
+	_ok(short_prompt.contains("Write 8 to 40 words"), "mixed pacing asks for a short comment")
 	# control: the same plan for a show that does not choose keeps no box
 	ep.invalidate("plan")
 	var fixed := CardProducer.new(ep, {"title": "S", "brief": "B", "deck": FixtureDeck.cards(), "draw": [4, 4]})

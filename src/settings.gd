@@ -141,6 +141,11 @@ func read(section: String, key: String, dflt: Variant) -> Variant:
 	return _own(_cfg.get_value(section, key, dflt))
 
 
+## Whether this key has ever been stored. An empty string is still a user's stored choice.
+func has(section: String, key: String) -> bool:
+	return _cfg.has_section_key(section, key)
+
+
 ## Remember [param value]. Writing an unchanged value is a no-op, so this is safe to call
 ## from a signal that fires every frame of a drag.
 func write(section: String, key: String, value: Variant) -> void:

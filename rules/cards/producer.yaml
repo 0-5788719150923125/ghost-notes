@@ -120,14 +120,15 @@ reply: |-
     "premise": "the episode's angle, in one or two sentences",
     "reader_mood": "how the reader is today",
     "running_bit": "any running bit for this episode - a bit the reader SAYS, never a thing done or an object shown (the viewer sees the table and the cards, never the reader), and never a way of speaking (the show's voice is fixed: no whispering, accents or singing)",
-    "staging": {"source": "deck or box", "text": "booklet, back or front"},
-    "spread": {"name": "the spread's name", "positions": [{"name": "position name", "asks": "what it asks", "comes": "drawn, dealt or swept - optional", "lies": "sideways - optional", "on": false, "then": []}]},
+    "staging": {"source": "deck or box", "text": "booklet, back or front", "box_style": "open or shoebox, when source is box", "contents": "file, piles or loose, when source is box", "keepsakes": ["optional coin, button, marble or ticket inside the box, at most three"], "pace": "reflective, mixed or quick"},
+    "spread": {"name": "the spread's name", "positions": [{"name": "position name", "asks": "what it asks", "comes": "drawn, dealt or swept - optional", "destination": "row, stack or box - optional", "comment": "none, brief or story - optional", "lies": "sideways - optional", "on": false, "then": []}]},
   {{#chooses}}
     "deck": [{"name": "the name printed on the card", "group": "its set, team, suit or type, if it has one", "series": "its printing's name, when the deck mixes printings", "meaning": "what the card is and why it is in this box, one or two sentences"}],
   {{/chooses}}
     "look": {
       "deck_name": "the deck's name",
       "kind": "what these cards are, as the brief has them, a noun phrase with no article",
+      "card_size": "large, trading or baseball",
       "deck_style": "a paragraph an illustrator paints every card from",
       "palette": ["#rrggbb", "four to six colors"],
       "card_back": "the back design{{#reversals}}, symmetric under a half turn{{/reversals}}",
@@ -157,6 +158,18 @@ staging:
     say: '- `source` "{{key}}": {{about}}.'
   - each: texts
     say: '- `text` "{{key}}": {{about}}.'
+  - >-
+      For a box, `box_style: "shoebox"` means a lidded cardboard shoebox brought in and opened
+      before the first card. `box_style: "open"` means an already open container such as a tin.
+      `contents: "file"` stands cards on edge; `"piles"` lays them in neat groups; `"loose"`
+      leaves them irregular inside. Choose what the collection would actually look like.
+      `keepsakes` may name up to three small things from coin, button, marble or ticket, when
+      those small things belong in the collection. They are hidden until the box opens.
+      Choose `look.card_size` from large, trading or baseball to match the physical cards.
+      Choose `pace: "mixed"` for a collector who lingers on some cards and moves quickly past
+      others, or `"quick"` for a short look at each. A position may set `comment: "none"` for
+      a silent look, `"brief"` for a few words, or `"story"` for a longer memory. Put drawn cards
+      at `destination: "stack"` to pile them beside the box, or `destination: "box"` to return them to it.
   - >-
       EACH POSITION can say how its card comes and lies; leave these out for the usual, a card
       drawn, held up while it is read, and laid down in a row:
@@ -194,10 +207,11 @@ chosen_deck: >-
   cards in `deck` - between {{box_lo}} and {{box_hi}} of them, every one a card that collection
   would really hold, each with what it is. You choose what is in the box, never what comes out: the
   deck is shuffled from this episode's seed and {{cards}} cards come up, in an order nobody knows -
-  so plan nothing that depends on any one card coming up. These listed cards are the collection
-  shown in the box. Usually leave its total unstated in the title, description, premise and
-  spoken story. If a number or delivery cadence matters, make it consistent with the number of
-  listed cards, accounting explicitly for any extras or duplicates.
+  so plan nothing that depends on any one card coming up. These listed cards are the possible
+  draws for this episode. A shoebox can visibly hold many more cards from those printings.
+  Usually leave its total unstated in the title, description, premise and spoken story. If a
+  number or delivery cadence matters, make it plausible for the container and account for
+  duplicates or other unseen cards.
 
 # THE DECK the producer is told of: the show's own cards by name, as its brief lists them (their meanings
 # reach a writer only as each is drawn)

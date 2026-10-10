@@ -499,6 +499,8 @@ func _build_cards() -> void:
 
 func _build_source(script_box: VBoxContainer) -> void:
 	super._build_source(script_box)
+	# The bundled brief is an editable unsynced first draft, used only before a user draft exists.
+	_doc.default_text = FileAccess.get_file_as_string("res://rules/cards/starter.md")
 	_doc.opened.connect(_on_show_opened)
 	_doc.mode_changed.connect(_on_doc_mode)
 	# THE EPISODE is the producer's card, not the script's: the brief above is what every agent

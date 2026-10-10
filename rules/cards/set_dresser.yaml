@@ -403,12 +403,19 @@ title: >-
 
 # THE BOX THE CARDS ARE KEPT IN, when they come out of one (TableMedium._stand_box stands it where the
 # deck would be); its largest from CardTable.BOX_MAX
-box: >-
-  THE BOX THE CARDS ARE KEPT IN is yours to build too: this episode's cards come out of a box, not a
-  deck, filed in it on edge the way collectors keep them. Make it one of your things, with
-  "holds_cards": true - from this world: a shoebox, a cigar box, a recipe tin, a card-sleeve box, a
-  wooden file drawer. OPEN, with no lid on it (a lid can lean beside it as a thing of its own): an
-  `extrude` with a `wall`, its inside at least 8 cm across and 13 cm front to back and 8 to 11 cm
-  tall, so the cards stand upright in it; no bigger than {{box_x}} x {{box_z}} cm and {{box_y}} cm
-  tall. It stands where the deck would, to one side of the cloth, its long side running front to
-  back - its `place` is not used - and the cards are filed in it for you.
+box:
+  - >-
+      THE BOX THE CARDS ARE KEPT IN is yours to build too. Make it one of your things with
+      "holds_cards": true, an open `extrude` with a `wall`, no lid in the geometry.
+      The table handles its lid when this is a shoebox. Its maximum is {{box_x}} x {{box_z}} cm
+      and {{box_y}} cm tall.
+  - when: shoebox
+    say: "This episode calls for a substantial cardboard shoebox with a removable lid. It starts to one side, then stays in the center with its long side across the table."
+  - when: "!shoebox"
+    say: "The open box stands to one side with its long side front to back."
+  - when: filed
+    say: "Leave enough depth and height for the cards to stand on edge."
+  - when: piled
+    say: "The cards lie in tidy piles inside."
+  - when: loose
+    say: "The cards lie at mixed angles inside."

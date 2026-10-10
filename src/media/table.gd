@@ -433,6 +433,7 @@ var _backs := {}                      # printing name ("" the deck's own) -> {vp
 var _printed: Array = []              # per drawn card, when its text is on its back: {vp, canvas, mat}
 var _box := {}                        # the box the cards are kept in, stood: {node, at, inner (AABB, world), upright, lie}
 var _file: Array = []                 # the cards filed in it: MultiMeshInstance3D, one per printing
+var _box_objects: Array = []          # optional small keepsakes inside the box
 
 var _placeholder: GhostScene
 var _root3: Node3D
@@ -512,6 +513,7 @@ var _cur_base := Vector3.ZERO       # where it is at the moment being posed (see
 var _slots: Array = []              # per card: Transform3D where it lies in the spread
 var _jump_land := Vector3.ZERO
 var _slot_jit: Array = []           # per deck slot: Vector3(x, z, yaw)
+var _lay_jit: Array = []            # per shown card: a small, repeatable placement difference
 var _moves: Array = []              # the shuffle: [{kind, t0, dur, seed}]
 var _move_rng := RandomNumberGenerator.new()
 var _pitch := 45.0
@@ -952,7 +954,7 @@ func _build_episode() -> void:
 		canvas.card = cards[i]
 		canvas.details = String(_staging["text"]) == "front"
 		canvas.seed = _seed
-		var vp := CardFaces.viewport(self, canvas, CardFaces.FACE_PX)
+		var vp := CardFaces.viewport(self, canvas, CardFaces.face_px(canvas.look))
 		var mat := _foil_material(vp.get_texture())
 		mat.set_shader_parameter("window", _face_window(canvas.look, canvas.details))
 		_foil_stock(mat, canvas.look)
@@ -968,6 +970,7 @@ func _build_episode() -> void:
 		_face_canvas.append(canvas)
 		_face_mats.append(mat)
 	_back_canvas.look = _look
+	_back_vp.size = CardFaces.face_px(_look)
 	_back_canvas.seed = _seed
 	_foil_stock(_back_mat, _look)
 	var deck_mesh := _mesh_for(_look, DECK_T)
@@ -981,10 +984,16 @@ func _build_episode() -> void:
 	# THE SPREAD: where the cards were given to lie (a plan's coordinates, a dealer's layout - checked
 	# on the cloth, in the frame and clear of the deck), else the seeded preset. The preset is drawn
 	# either way, so every draw after it lands where it always has.
-	var seeded := TablePositions.staged(cards, rng, CardTable.layout_of(_seed), _box_keep())
+	var seeded := TablePositions.staged(cards, rng, CardTable.layout_of(_seed), _box_keep(), _box_center())
 	var spec := _table_spec()
-	var given := TablePositions.given(cards, _seed, spec["top"], _box_keep())
+	var given := TablePositions.given(cards, _seed, spec["top"], _box_keep(), _box_center())
 	_slots = given if not given.is_empty() else seeded
+	_lay_jit = []
+	var placement := RandomNumberGenerator.new()
+	placement.seed = hash([_seed, "lay by hand"])
+	for i in cards.size():
+		_lay_jit.append(Vector3(placement.randf_range(-0.0015, 0.0015),
+			placement.randf_range(-0.0015, 0.0015), deg_to_rad(placement.randf_range(-1.2, 1.2))))
 	_plan_aside(spec["top"])
 	# a jumper flies out of the deck in the middle and lands on the far side from where the deck
 	# is about to go
@@ -1014,7 +1023,7 @@ func _build_backs(cards: Array) -> void:
 		canvas.back = true
 		canvas.look = CardTable.look_of(_look, {"series": name})
 		canvas.seed = _seed
-		var vp := CardFaces.viewport(self, canvas, CardFaces.FACE_PX)
+		var vp := CardFaces.viewport(self, canvas, CardFaces.face_px(canvas.look))
 		var mat := _foil_material(vp.get_texture())
 		mat.set_shader_parameter("lift", 0.06)
 		mat.set_shader_parameter("window", Vector4(0.0, 0.0, 1.0, 1.0))
@@ -1054,7 +1063,7 @@ func _back_of(i: int, card: Dictionary) -> Material:
 	canvas.look = CardTable.look_of(_look, card)
 	canvas.card = card
 	canvas.seed = _seed
-	var vp := CardFaces.viewport(self, canvas, CardFaces.FACE_PX)
+	var vp := CardFaces.viewport(self, canvas, CardFaces.face_px(canvas.look))
 	var mat := _foil_material(vp.get_texture())
 	mat.set_shader_parameter("lift", 0.06)
 	mat.set_shader_parameter("window", Vector4(0.0, 0.0, 1.0, 1.0))
@@ -1067,13 +1076,18 @@ func _back_of(i: int, card: Dictionary) -> Material:
 ## Where the box the cards are kept in may stand, across and deep - kept clear by the spread - or zero
 ## when they come from a deck.
 func _box_keep() -> Vector2:
-	return Vector2(CardTable.BOX_MAX.x, CardTable.BOX_MAX.z) if _cards_from == "box" else Vector2.ZERO
+	var most := CardTable.SHOEBOX_MAX if String(_staging.get("box_style", "open")) == "shoebox" else CardTable.BOX_MAX
+	return Vector2(most.x, most.z) if _cards_from == "box" else Vector2.ZERO
+
+
+func _box_center() -> Vector3:
+	return TablePositions.SHOEBOX_AT if _cards_from == "box" and String(_staging.get("box_style", "open")) == "shoebox" else Vector3.ZERO
 
 
 ## The part of a face that is the painting, in UV - foil is keyed inside it (the frame's foil is
 ## keyed by its color instead).
 func _face_window(look: Dictionary = {}, details := false) -> Vector4:
-	var sz := Vector2(CardFaces.FACE_PX)
+	var sz := Vector2(CardFaces.face_px(look))
 	var w := CardFaces.front_window(look, details)
 	return Vector4(w.position.x / sz.x, w.position.y / sz.y, w.end.x / sz.x, w.end.y / sz.y)
 
@@ -1100,10 +1114,11 @@ static func _foil_accent(mat: ShaderMaterial, look: Dictionary) -> void:
 ## THE CARD'S SLAB for [param look], cut to its corners ([method CardTable.corner_radius]) - one mesh per
 ## radius and thickness, shared.
 func _mesh_for(look: Dictionary, t := CARD_T) -> ArrayMesh:
-	var r := CardTable.corner_radius(look)
-	var key := "%.5f|%.5f" % [r, t]
+	var size := CardTable.card_size(look)
+	var r := minf(CardTable.corner_radius(look), size.x * 0.12)
+	var key := "%.5f|%.5f|%.5f|%.5f" % [size.x, size.y, r, t]
 	if not _meshes.has(key):
-		_meshes[key] = _make_card_mesh(CARD, t, r)
+		_meshes[key] = _make_card_mesh(size, t, r)
 	return _meshes[key]
 
 
@@ -1352,11 +1367,25 @@ func _backdrop_view() -> Dictionary:
 ## position it was given lies it face down - turned [param quarter] quarter turns sideways since (tapped,
 ## [constant TablePositions.SIDEWAYS] each) and turned over when [param over].
 func _slot_xf(i: int, quarter := 0, over := false) -> Transform3D:
+	var cards: Array = _pay.get("cards", [])
+	if _filed() and i < cards.size() and cards[i] is Dictionary:
+		var p: Dictionary = (cards[i] as Dictionary).get("position", {}) if (cards[i] as Dictionary).get("position") is Dictionary else {}
+		if String(p.get("destination", "")) == "box" and i < (_box["at_k"] as Array).size():
+			var placed: Transform3D = (_box["at_k"] as Array)[i]
+			if _box.has("return_at"):
+				placed.origin = (_box["return_at"] as Vector3) + Vector3(0.0, float(i) * CARD_T * 1.1, 0.0)
+				placed.basis = Basis(Vector3.UP, PI if i % 2 == 0 else 0.0)
+			elif String(_staging.get("contents", "file")) != "file":
+				var inner: AABB = _box["inner"]
+				placed.origin.y = minf(inner.end.y - CARD_T, placed.origin.y + CARD_T * 2.0)
+			return placed
 	var s: Dictionary = _slots[i] if i < _slots.size() else {"pos": Vector3.ZERO, "yaw": 0.0}
-	var yaw := float(s["yaw"]) + (PI if _reversed(i) else 0.0) + TablePositions.SIDEWAYS * float(quarter)
+	var hand: Vector3 = _lay_jit[i] if i < _lay_jit.size() else Vector3.ZERO
+	var yaw := float(s["yaw"]) + hand.z + (PI if _reversed(i) else 0.0) + TablePositions.SIDEWAYS * float(quarter)
 	var down := String(s.get("face", "up")) == "down"
 	var face := _face_up() if down == over else Basis.IDENTITY
-	return Transform3D(Basis(Vector3.UP, yaw) * face, s["pos"] as Vector3 + Vector3(0, CARD_T * 0.5, 0))
+	return Transform3D(Basis(Vector3.UP, yaw) * face,
+		s["pos"] as Vector3 + Vector3(hand.x, CARD_T * 0.5, hand.y))
 
 
 func _reversed(i: int) -> bool:
@@ -1427,14 +1456,16 @@ func _build_table(spec: Dictionary = {}) -> void:
 
 ## THE BOX THE CARDS ARE KEPT IN, for a show whose cards come from one ([member _cards_from] `box`): the set
 ## dresser's thing that `holds_cards` - taken out of [param things] and [param built] - or, when it made
-## none, a plain box of the deck's own stock. Turned so its long side runs front to back, stood no bigger
-## than [constant CardTable.BOX_MAX] where the deck would be ([method TablePositions.box_at]), and the
-## cards filed in it ([method _build_file]). A box on a table whose cards come from a deck is a thing like
-## any other.
+## none, a plain box of the deck's own stock. An open box stands by the deck; a shoebox settles across
+## the center. Both are scaled to their allotted space, with their contents built inside ([method
+## _build_file]). A box on a table whose cards come from a deck is a thing like any other.
 func _stand_box(things: Array, built: Array) -> void:
 	for f in _file:
 		(f as Node).queue_free()
 	_file = []
+	for o in _box_objects:
+		(o as Node).queue_free()
+	_box_objects = []
 	_box = {}
 	if _cards_from != "box":
 		return
@@ -1447,22 +1478,25 @@ func _stand_box(things: Array, built: Array) -> void:
 			things.remove_at(i)
 			built.remove_at(i)
 			break
+	var shoebox := String(_staging.get("box_style", "open")) == "shoebox"
 	if t.is_empty():
 		var stock := CardTable.color(String((_look.get("frame", {}) as Dictionary).get("stock", "#c9b38a")))
 		t = {"name": "the box the cards are kept in", "place": "by the deck", "holds_cards": true, "parts": [
-			{"shape": "extrude", "outline": "rect", "size": [9.6, 17.0], "height": 9.0, "wall": 0.5, "material": "card box"}]}
+			{"shape": "extrude", "outline": "rect", "size": [22.0, 33.0] if shoebox else [9.6, 17.0],
+				"height": 11.0 if shoebox else 9.0, "wall": 0.5, "material": "card box"}]}
 		var mats := {"card box": Props.sanitize_material({"kind": "paper", "color": "#" + stock.darkened(0.25).to_html(false)}, "#a08060")}
 		b = Props.build(Props.sanitize({"things": [t], "materials": mats}, [])["things"][0], mats, hash([_seed, "card box"]))
 	var size: AABB = b["size"]
 	if size.size.x <= 0.0 or size.size.z <= 0.0:
 		return
 	var across := size.size.z > size.size.x
-	var turn := 0.0 if across or is_equal_approx(size.size.x, size.size.z) else PI * 0.5
+	var turn := (PI * 0.5 if across else 0.0) if shoebox else (0.0 if across or is_equal_approx(size.size.x, size.size.z) else PI * 0.5)
 	var w := size.size.z if turn != 0.0 else size.size.x
 	var d := size.size.x if turn != 0.0 else size.size.z
-	var k := minf(1.0, minf(CardTable.BOX_MAX.x / w, minf(CardTable.BOX_MAX.z / d, CardTable.BOX_MAX.y / maxf(size.size.y, 0.001))))
+	var most := CardTable.SHOEBOX_MAX if shoebox else CardTable.BOX_MAX
+	var k := minf(1.0, minf(most.x / w, minf(most.z / d, most.y / maxf(size.size.y, 0.001))))
 	var basis := Basis(Vector3.UP, turn).scaled(Vector3(k, k, k))
-	var want := TablePositions.box_at(_deck_base)
+	var want := _box_center() if shoebox else TablePositions.box_at(_deck_base)
 	var mid := basis * size.get_center()
 	var at := Vector2(want.x - mid.x, want.z - mid.z)
 	var shape := _translated(_turned(b["outline"], basis), at)
@@ -1482,37 +1516,138 @@ func _stand_box(things: Array, built: Array) -> void:
 	var world := Transform3D(basis, Vector3(at.x, 0.0, at.y)) * size
 	var inner := AABB(world.position + Vector3(BOX_WALL, BOX_WALL, BOX_WALL),
 		world.size - Vector3(BOX_WALL * 2.0, BOX_WALL, BOX_WALL * 2.0))
-	_box = {"node": b["node"], "inner": inner, "world": world}
+	_box = {"node": b["node"], "inner": inner, "world": world, "local_bounds": size,
+		"rest": (b["node"] as Node3D).transform}
+	if shoebox:
+		for m in b["meshes"]:
+			(m as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var lid := Node3D.new()
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = CardTable.color(String((_look.get("frame", {}) as Dictionary).get("stock", "#c9b38a"))).darkened(0.3)
+		mat.roughness = 0.9
+		var lx := size.size.x + 0.016
+		var lz := size.size.z + 0.016
+		_lid_piece(lid, mat, Vector3(lx, 0.003, lz), Vector3.ZERO)
+		for sx in [-1.0, 1.0]:
+			_lid_piece(lid, mat, Vector3(0.003, 0.028, lz), Vector3(sx * (lx - 0.003) * 0.5, -0.0155, 0.0))
+		for sz in [-1.0, 1.0]:
+			_lid_piece(lid, mat, Vector3(lx - 0.006, 0.028, 0.003), Vector3(0.0, -0.0155, sz * (lz - 0.003) * 0.5))
+		(b["node"] as Node3D).add_child(lid)
+		_box["lid"] = lid
+		_box["lid_rest"] = Vector3(size.get_center().x, size.end.y + 0.009, size.get_center().z)
+		_box["shadow"] = _contact(shape)
+		_box["lid_shadow"] = _contact(shape)
 	_build_file()
+	_build_box_objects()
+	if shoebox:
+		# A card passing close to these walls throws a large, stair-stepped shadow
+		# across them in the positional atlas. The box keeps its soft tabletop shade.
+		for card in _cards:
+			(card as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
-## THE CARDS FILED IN THE BOX, standing on edge front to back as collectors keep them - upright when the
-## box is deep enough, on a long edge when only that fits, lying flat in a shallow tin. The count and
-## printing mix come from the planned collection. The drawn cards stand among them where they are
-## pulled from ([member _box] `at_k`); the rest are one instance each of a MultiMesh per printing.
+static func _lid_piece(parent: Node3D, mat: Material, dimensions: Vector3, at: Vector3) -> void:
+	var part := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = dimensions
+	part.mesh = mesh
+	part.material_override = mat
+	part.position = at
+	part.layers = THING_LAYER
+	part.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(part)
+
+
+## THE CARDS IN THE BOX: an open box keeps the planned collection; a shoebox fills out its
+## printings with physical copies so it reads as a collection accumulated over time. The drawn
+## cards have their own places near the accessible top. Undrawn cards share one MultiMesh per printing.
 func _build_file() -> void:
 	var inner: AABB = _box["inner"]
+	var content := String(_staging.get("contents", "file"))
+	var size := CardTable.card_size(_look)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([_seed, "card file"])
-	var upright := inner.size.x >= CARD.x * 1.03 and inner.size.y >= 0.07
-	var lie := not upright and inner.size.x >= CARD.y * 1.03 and inner.size.y >= 0.04
+	var under_lid := _box.has("lid")
+	var upright := content == "file" and inner.size.x >= size.x * 1.03 and inner.size.y >= size.y * (1.03 if under_lid else 0.6)
+	var lie := content == "file" and not upright and inner.size.x >= size.y * 1.03 and inner.size.y >= size.x * (1.03 if under_lid else 0.6)
 	_box["upright"] = upright
 	_box["lie"] = lie
 	_box["at_k"] = []
-	if not upright and not lie:
+	if content == "file" and not upright and not lie:
 		# a shallow tin: the deck lies flat on its floor
 		_box["flat"] = true
 		return
-	var v := CARD.y if upright else CARD.x
+	var v := size.y if upright else size.x
 	var stand := Basis(Vector3.UP, PI) * Basis(Vector3(1, 0, 0), PI * 0.5)
 	if lie:
 		stand = stand * Basis(Vector3.UP, PI * 0.5)
 	var undrawn := _file_inventory()
 	var count := _cards.size() + undrawn.size()
+	var shoebox := _box.has("lid")
+	_box["count"] = count
+	if shoebox and content == "loose":
+		_box["return_at"] = Vector3(inner.end.x - size.x * 0.5 - 0.008,
+			inner.end.y + 0.004, inner.get_center().z)
 	var fill := minf(1.0, float(count) * FILE_PITCH / maxf(inner.size.z, FILE_PITCH))
 	var tail := mini(6, count / 4)
 	var xfs: Array = []
 	for i in count:
+		if shoebox:
+			if content == "file":
+				var rows := maxi(1, int(floor(inner.size.x / (size.x + 0.006))))
+				var row := i % rows
+				var layer := i / rows
+				var pitch := minf(CARD_T * 1.02, (inner.size.z - size.x * 0.1) / float(maxi(int(ceil(float(count) / rows)), 1)))
+				var x := inner.position.x + inner.size.x * (float(row) + 0.5) / float(rows)
+				var z := inner.end.z - pitch * (float(layer) + 0.5) - 0.004
+				xfs.append(Transform3D(stand, Vector3(x, inner.position.y + v * 0.5, z)))
+				continue
+			if content == "loose" and i >= count - 8:
+				var radius := size.length() * 0.5 + 0.002
+				var x_min := inner.position.x + radius
+				var x_max := minf(inner.end.x - radius,
+					(_box["return_at"] as Vector3).x - radius * 2.0 - 0.008)
+				var dz := maxf(inner.size.z * 0.5 - radius, 0.0)
+				xfs.append(Transform3D(Basis(Vector3.UP, rng.randf_range(-PI, PI)),
+					Vector3(rng.randf_range(x_min, maxf(x_min, x_max)),
+						inner.end.y - 0.003 + float(i - (count - 8)) * 0.0008,
+						inner.get_center().z + rng.randf_range(-dz, dz))))
+				continue
+			var cols := maxi(1, int(floor(inner.size.x / (size.x + 0.006))))
+			var rows := maxi(1, int(floor(inner.size.z / (size.y + 0.006))))
+			var cells := cols * rows
+			var cell := i % cells
+			var layer := i / cells
+			var layers := maxi(1, int(ceil(float(count) / float(cells))))
+			var pitch := minf(CARD_T * 1.02, (inner.size.y - 0.004) / float(layers))
+			var x := inner.position.x + inner.size.x * (float(cell % cols) + 0.5) / float(cols)
+			var z := inner.position.z + inner.size.z * (float(cell / cols) + 0.5) / float(rows)
+			var loose := content == "loose"
+			var angle := rng.randf_range(-0.08, 0.08) if loose else 0.0
+			if loose and layer >= layers - 3:
+				angle = rng.randf_range(-0.13, 0.13)
+			if hash([_seed, cell, "pile direction"]) & 1:
+				angle += PI
+			xfs.append(Transform3D(Basis(Vector3.UP, angle), Vector3(x, inner.position.y + 0.001 + (float(layer) + 0.5) * pitch, z)))
+			continue
+		if content == "loose":
+			var radius := size.length() * 0.5
+			var dx := maxf(inner.size.x * 0.5 - radius - 0.003, 0.0)
+			var dz := maxf(inner.size.z * 0.5 - radius - 0.003, 0.0)
+			xfs.append(Transform3D(Basis(Vector3.UP, rng.randf_range(-PI, PI)),
+				Vector3(inner.get_center().x + rng.randf_range(-dx, dx),
+					inner.position.y + 0.001 + 0.004 * float(i) / float(maxi(count, 1)),
+					inner.get_center().z + rng.randf_range(-dz, dz))))
+			continue
+		if content == "piles":
+			var groups := 2 if inner.size.z >= size.y * 2.05 else 1
+			var group := i % groups
+			var layer := i / groups
+			var z_flat := inner.position.z + inner.size.z * (0.5 if groups == 1 else (0.25 if group == 0 else 0.75))
+			var x_flat := inner.get_center().x
+			var y_flat := inner.position.y + 0.001 + float(layer) * (CARD_T + 0.00025)
+			xfs.append(Transform3D(Basis.IDENTITY, Vector3(x_flat, y_flat, z_flat)))
+			continue
 		# from the front wall back; the last few lean back into the gap
 		var z := inner.end.z - FILE_PITCH * (float(i) + 0.5)
 		var lean := 0.0
@@ -1523,8 +1658,12 @@ func _build_file() -> void:
 		xfs.append(Transform3D(b, bottom + Basis(Vector3(1, 0, 0), -lean) * Vector3(0.0, v * 0.5, 0.0)))
 	# THE DRAWN CARDS' PLACES in the file, away from the leaning tail
 	var free: Array = range(0, count - tail)
+	if shoebox:
+		free = range(maxi(0, count - maxi(_cards.size() * 4, 24)), count)
+		if content == "loose":
+			free = range(maxi(0, count - maxi(_cards.size(), 8)), count)
 	for k in _cards.size():
-		var j := int(free.pop_at(rng.randi_range(0, free.size() - 1)))
+		var j := int(free.pop_back()) if shoebox and content == "loose" else int(free.pop_at(rng.randi_range(0, free.size() - 1)))
 		(_box["at_k"] as Array).append(xfs[j])
 		xfs[j] = null
 	# one MultiMesh per printing, its cards shared out among them
@@ -1552,12 +1691,61 @@ func _build_file() -> void:
 			mm.set_instance_transform(i, list[i])
 		var inst := MultiMeshInstance3D.new()
 		inst.multimesh = mm
+		if shoebox:
+			inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_root3.add_child(inst)
 		_file.append(inst)
 
 
-## The planned cards still in the box, by printing. Older plans have `deck` but no `inventory`;
-## a document with neither can at least show its drawn cards without inventing hundreds more.
+## A few ordinary small keepsakes rest in the open space at the back of the container.
+## They are not cards, so they never enter the draw or the file's inventory.
+func _build_box_objects() -> void:
+	var inner: AABB = _box["inner"]
+	_box["objects_rest"] = []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([_seed, "box keepsakes"])
+	for item in _staging.get("keepsakes", []) if _staging.get("keepsakes") is Array else []:
+		var kind := String(item)
+		var mesh: PrimitiveMesh
+		var color := Color(0.72, 0.65, 0.49)
+		match kind:
+			"coin", "button":
+				var round_mesh := CylinderMesh.new()
+				round_mesh.top_radius = 0.008 if kind == "coin" else 0.006
+				round_mesh.bottom_radius = round_mesh.top_radius
+				round_mesh.height = 0.0015 if kind == "coin" else 0.0025
+				mesh = round_mesh
+				color = Color(0.68, 0.54, 0.29) if kind == "coin" else Color(0.47, 0.35, 0.3)
+			"marble":
+				var round_mesh := SphereMesh.new()
+				round_mesh.radius = 0.006
+				round_mesh.height = 0.012
+				mesh = round_mesh
+				color = Color(0.21, 0.47, 0.56)
+			"ticket":
+				var paper := BoxMesh.new()
+				paper.size = Vector3(0.024, 0.0007, 0.014)
+				mesh = paper
+				color = Color(0.78, 0.72, 0.58)
+			_:
+				continue
+		var obj := MeshInstance3D.new()
+		obj.mesh = mesh
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = color
+		mat.roughness = 0.55 if kind == "marble" else 0.85
+		obj.material_override = mat
+		var x := inner.get_center().x + rng.randf_range(-0.28, 0.28) * inner.size.x
+		var z := inner.position.z + inner.size.z * rng.randf_range(0.07, 0.13)
+		obj.position = Vector3(x, inner.position.y + (0.006 if kind == "marble" else 0.002), z)
+		obj.rotation.y = rng.randf_range(-0.25, 0.25)
+		_root3.add_child(obj)
+		_box_objects.append(obj)
+		(_box["objects_rest"] as Array).append(obj.transform)
+
+
+## The planned cards still in the box, by printing. A shoebox repeats those printings to fill
+## the physical container without asking the producer to enumerate every unseen card.
 func _file_inventory() -> Array:
 	var plan: Dictionary = _pay.get("plan", {}) if _pay.get("plan") is Dictionary else {}
 	var names: Array = []
@@ -1576,6 +1764,10 @@ func _file_inventory() -> Array:
 		for card in _pay.get("cards", []) if _pay.get("cards") is Array else []:
 			if card is Dictionary:
 				names.append(CardTable.series_of(_look, card as Dictionary))
+	if _box.has("lid") and not names.is_empty():
+		var printings := names.duplicate()
+		while names.size() < CardTable.SHOEBOX_FILL:
+			names.append(printings[names.size() % printings.size()])
 	for card in _pay.get("cards", []) if _pay.get("cards") is Array else []:
 		if not (card is Dictionary) or names.is_empty():
 			continue
@@ -1754,7 +1946,13 @@ func _keep_out() -> Array:
 	out.append(Rect2(_mid.x - 0.22, _mid.z - 0.14, 0.44, 0.28))
 	if _cards_from == "box":
 		# nothing stands where the box would, nor where a pulled card rises past it
-		out.append(TablePositions.deck_keep(_deck_base, _box_keep()))
+		out.append(TablePositions.deck_keep(_deck_base, _box_keep(), _box_center()))
+		if _box.has("lid"):
+			var world: AABB = _box["world"]
+			var side := signf(_deck_base.x)
+			var x := world.get_center().x + side * (world.size.x + 0.025)
+			out.append(Rect2(x - world.size.x * 0.5 - 0.025, world.position.z + 0.08 - 0.025,
+				world.size.x + 0.05, world.size.z + 0.05))
 		return out
 	out.append(Rect2(_jump_land.x - 0.07, _jump_land.z - 0.09, 0.14, 0.18))
 	return out
@@ -1936,8 +2134,11 @@ func _put(t: Dictionary, b: Dictionary, spot: Dictionary, basis: Basis, group: S
 		_light_flames(flames, own)
 	var foot := _translated(_turned(b["foot"], basis), at)
 	if foot.size() >= 3:
-		_contact(foot)
-		_foot_shadow(foot, own)
+		# A moving shoebox gets its own moving soft shade. A fixed decal projects onto
+		# its walls as it passes, and a fixed shadow slab leaves a ghost at its destination.
+		if not (group == "#the box" and String(_staging.get("box_style", "open")) == "shoebox"):
+			_contact(foot)
+			_foot_shadow(foot, own)
 		var grown := _grown(foot, FOOT_MARGIN)
 		_standing.append(grown)
 		var c := Vector2.ZERO
@@ -2047,7 +2248,7 @@ func _foot_shadow(foot: PackedVector2Array, layer: int) -> void:
 
 ## A soft shade on the cloth under [param foot] (a thing's outline where it meets it): what
 ## anything standing presses into the cloth.
-func _contact(foot: PackedVector2Array) -> void:
+func _contact(foot: PackedVector2Array) -> Decal:
 	var lo := Vector2(INF, INF)
 	var hi := Vector2(-INF, -INF)
 	for q in foot:
@@ -2062,6 +2263,7 @@ func _contact(foot: PackedVector2Array) -> void:
 	contact.position = Vector3((lo.x + hi.x) * 0.5, 0.0, (lo.y + hi.y) * 0.5)
 	contact.cull_mask = 1
 	_props.add_child(contact)
+	return contact
 
 
 ## The rectangle in the picture that [param corners] (a thing's box, turned and sized) cover
@@ -2863,9 +3065,12 @@ func _deck_at(t: float, tm: Dictionary, wj := {}) -> Vector3:
 		# IN THE BOX: a tin's deck lies flat on its floor (a box's cards are filed, the deck unseen)
 		var inner: AABB = _box.get("inner", AABB(_deck_base, Vector3.ZERO))
 		return Vector3(inner.get_center().x, inner.position.y, inner.get_center().z) if not _box.is_empty() else _deck_base
+	var ts := float(tm["shuffle"])
+	var te := float(tm["end"])
+	var wander := _shuffle_wander(minf(maxf(t - ts, 0.0), maxf(te - ts, 0.0))) if ts < INF else Vector3.ZERO
 	var first: Array = tm["first"]
 	if first.is_empty():
-		return _mid
+		return _mid + wander
 	var s := maxf(float(first[1]), 0.05)
 	var go := SQUARE if String(first[2]) != "jumper" else JUMP_RIFFLE
 	if not wj.is_empty():
@@ -2876,8 +3081,8 @@ func _deck_at(t: float, tm: Dictionary, wj := {}) -> Vector3:
 		var d: Array = (tm["draw"] as Array)[_aside_card]
 		var taken := float(d[0]) + float(d[3]) * float(d[1])
 		var v := clampf((t - (taken - ASIDE_S)) / ASIDE_S, 0.0, 1.0)
-		return _deck_base.lerp(_deck_far, _ease(v)) + Vector3(0.0, sin(PI * v) * 0.003, 0.0)
-	return _mid.lerp(_deck_base, _ease(u)) + Vector3(0.0, sin(PI * u) * 0.004, 0.0)
+		return _deck_base.lerp(_deck_far, _ease(v)) + Vector3(0.0, sin(PI * v) * 0.003, 0.0) + wander
+	return _mid.lerp(_deck_base, _ease(u)) + Vector3(0.0, sin(PI * u) * 0.004, 0.0) + wander
 
 
 ## THE DECK PUT ASIDE ([constant DECK_CROWD]): the first card of the spread that would lie that near
@@ -2936,8 +3141,48 @@ func _plan_aside(top: Dictionary) -> void:
 
 # --- posing everything --------------------------------------------------------------------------------------
 
+## A lidded shoebox arrives from the side and settles at the center, broad side across the
+## table. It stays there while the lid is lifted and set beside it. The contents are built at
+## that settled position and travel with it. Scrubbing uses the same poses.
+func _pose_box(t: float, tm: Dictionary) -> void:
+	if not _box.has("lid"):
+		return
+	var open_at := float(tm["opening"])
+	var u := maxf(t - open_at, 0.0) if open_at < INF else 0.0
+	var rest: Transform3D = _box["rest"]
+	var side := signf(_deck_base.x)
+	var arrival := _ease(clampf(u / 2.7, 0.0, 1.0))
+	var turn := _ease(clampf((u - 0.7) / 2.0, 0.0, 1.0))
+	var node: Node3D = _box["node"]
+	node.transform = Transform3D(rest.basis * Basis(Vector3.UP, -side * (1.0 - turn) * PI * 0.5),
+		rest.origin + Vector3(side * 0.30 * (1.0 - arrival), 0.0, 0.015 * (1.0 - arrival)))
+	var lift := _ease(clampf((u - 3.0) / 0.8, 0.0, 1.0))
+	var away := _ease(clampf((u - 3.8) / 1.2, 0.0, 1.0))
+	var lid: Node3D = _box["lid"]
+	var lid_rest: Vector3 = _box["lid_rest"]
+	var box_bounds: AABB = _box["world"]
+	var lower := _ease(clampf((u - 5.0) / 0.9, 0.0, 1.0))
+	lid.position = Vector3(lid_rest.x, lerpf(lid_rest.y + 0.065 * lift, 0.003, lower), lid_rest.z) \
+		+ rest.basis.inverse() * Vector3(side * (box_bounds.size.x + 0.025) * away, 0.0, 0.08 * away)
+	lid.rotation.x = PI * _ease(clampf((u - 4.4) / 1.4, 0.0, 1.0))
+	var contents_move := node.transform * rest.affine_inverse()
+	for f in _file:
+		(f as Node3D).transform = contents_move
+	for i in _box_objects.size():
+		(_box_objects[i] as Node3D).transform = contents_move * ((_box["objects_rest"] as Array)[i] as Transform3D)
+	var shade: Decal = _box["shadow"]
+	var moved: AABB = node.transform * (_box["local_bounds"] as AABB)
+	shade.position = Vector3(moved.get_center().x, 0.0, moved.get_center().z)
+	shade.size = Vector3(moved.size.x * 1.7, 0.03, moved.size.z * 1.7)
+	var lid_shade: Decal = _box["lid_shadow"]
+	var lid_at: Vector3 = node.transform * lid.position
+	lid_shade.position = Vector3(lid_at.x, 0.0, lid_at.z)
+	lid_shade.size = Vector3(box_bounds.size.x * 1.7, 0.03, box_bounds.size.z * 1.7)
+	lid_shade.modulate.a = 0.6 * away
+
 func _pose(t: float) -> void:
 	var tm := _times()
+	_pose_box(t, tm)
 	# a shuffle that began in the replayed past of a mid-way start is under way NOW, not a hundred
 	# thousand seconds in (the chain of moves is only made so far)
 	var ts := maxf(float(tm["shuffle"]), minf(0.0, _now))
@@ -2986,6 +3231,8 @@ func _pose(t: float) -> void:
 		if not m.visible:
 			continue
 		m.transform = pose["xf"]
+		if _box.has("lid") and float(tm["opening"]) < INF and t < float(tm["opening"]) + 2.7:
+			m.transform = (_box["node"] as Node3D).transform * (_box["rest"] as Transform3D).affine_inverse() * m.transform
 		if float(pose["page"]) > 0.0:
 			showing = k
 			page_in = float(pose["page"])
@@ -3196,7 +3443,9 @@ func _pull_xf(k: int, r: float, to: Transform3D) -> Transform3D:
 	if r < SQUARE:
 		return at
 	var inner: AABB = _box["inner"]
-	var v := CARD.y if bool(_box.get("upright", true)) else CARD.x
+	var v := CardTable.card_size(_look).y if bool(_box.get("upright", true)) else CardTable.card_size(_look).x
+	if String(_staging.get("contents", "file")) != "file":
+		v = 0.0
 	var raised := Transform3D(at.basis, Vector3(at.origin.x, maxf(inner.end.y, (_box["world"] as AABB).end.y) + v * 0.5 + PULL_CLEAR, at.origin.z))
 	if r < FLIP_END:
 		return at.interpolate_with(raised, _ease((r - SQUARE) / (FLIP_END - SQUARE)))
@@ -3527,6 +3776,24 @@ func _pose_page(k: int, amount: float, t: float) -> void:
 
 
 # --- the shuffle ------------------------------------------------------------------------------------------
+
+## The resting spot after each shuffle move drifts a few millimeters. It is computed from the
+## move's seed and eased over that move, so repeated cuts do not snap to an identical spot.
+func _shuffle_wander(u: float) -> Vector3:
+	_move_at(u)
+	var from := Vector3.ZERO
+	for m in _moves:
+		var d: Dictionary = m
+		var start := float(d["t0"])
+		if u < start:
+			break
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash([int(d["seed"]), "resting place"])
+		var to := Vector3(rng.randf_range(-0.004, 0.004), 0.0, rng.randf_range(-0.004, 0.004))
+		if u < start + float(d["dur"]):
+			return from.lerp(to, _ease(clampf((u - start) / maxf(float(d["dur"]), 0.01), 0.0, 1.0)))
+		from = to
+	return from
 
 ## Deck slot [param i] at [param u] seconds into the shuffle, posed about where the deck is
 ## ([member _cur_base]). The shuffle is a chain of RUNS (see [constant RUNS], [method _move_at]).

@@ -139,6 +139,15 @@ const MOMENTS := {
 ## `source` - where they come from ([constant TableActions.SOURCES]); `text` - where a card's text is
 ## printed ([constant TEXTS]).
 const STAGING := {"source": "deck", "text": "booklet"}
+const BOX_STYLES := ["open", "shoebox"]
+const BOX_CONTENTS := ["file", "piles", "loose"]
+const BOX_OBJECTS := ["coin", "button", "marble", "ticket"]
+const PACES := ["reflective", "mixed", "quick"]
+const CARD_SIZES := {
+	"large": Vector2(0.07, 0.12),
+	"trading": Vector2(0.0635, 0.0889),
+	"baseball": Vector2(0.0635, 0.0889),
+}
 ## WHERE A CARD'S TEXT IS, and so how a drawn card is shown: in a booklet beside it,
 ## on its own back, or with its illustration on the front.
 const TEXTS := {
@@ -149,6 +158,9 @@ const TEXTS := {
 ## THE BOX THE CARDS ARE KEPT IN, at its largest (x across, z front to back, meters) and tallest: a box
 ## the set dresser made bigger is stood smaller, so the spread is laid clear of where it can stand.
 const BOX_MAX := Vector3(0.15, 0.12, 0.22)
+const SHOEBOX_MAX := Vector3(0.34, 0.14, 0.23)
+## A full shoebox can show many physical copies of the collection's named cards.
+const SHOEBOX_FILL := 1000
 ## How many printings a deck may mix ([method look_of]).
 const MAX_SERIES := 6
 
@@ -351,6 +363,8 @@ static func sanitize_look(look: Dictionary) -> Dictionary:
 	if readable != ink:
 		f["ink"] = "#" + readable.to_html(false)
 	out["frame"] = f
+	var size_name := String(look.get("card_size", "large")).strip_edges().to_lower()
+	out["card_size"] = size_name if CARD_SIZES.has(size_name) else "large"
 	var face := String(look.get("title_face", "")).strip_edges().to_lower()
 	out["title_face"] = face if FACES.has(face) else "roman"
 	var page := String(look.get("page", "") if look.get("page") is String else "").strip_edges().to_lower()
@@ -407,8 +421,24 @@ static func staging_of(plan: Dictionary) -> Dictionary:
 	var st: Dictionary = plan.get("staging", {}) if plan.get("staging") is Dictionary else {}
 	var source := str(st.get("source", "")).strip_edges().to_lower()
 	var text := str(st.get("text", "")).strip_edges().to_lower()
+	var box_style := str(st.get("box_style", "open")).strip_edges().to_lower()
+	var contents := str(st.get("contents", "file")).strip_edges().to_lower()
+	var pace := str(st.get("pace", "reflective")).strip_edges().to_lower()
+	var objects: Array = []
+	for item in st.get("keepsakes", []) if st.get("keepsakes") is Array else []:
+		var name := str(item).strip_edges().to_lower()
+		if name in BOX_OBJECTS and objects.size() < 3:
+			objects.append(name)
 	return {"source": source if TableActions.SOURCES.has(source) else String(STAGING["source"]),
-		"text": text if TEXTS.has(text) else String(STAGING["text"])}
+		"text": text if TEXTS.has(text) else String(STAGING["text"]),
+		"box_style": box_style if box_style in BOX_STYLES else "open",
+		"contents": contents if contents in BOX_CONTENTS else "file",
+		"pace": pace if pace in PACES else "reflective", "keepsakes": objects}
+
+
+static func card_size(look: Dictionary) -> Vector2:
+	var key := String(look.get("card_size", "large")).strip_edges().to_lower()
+	return CARD_SIZES.get(key, CARD_SIZES["large"])
 
 
 ## THE PRINTING [param card] belongs to, by name, in [param look]'s `series` - its own `series`, or its

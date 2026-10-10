@@ -80,6 +80,8 @@ func _ready() -> void:
 	add_child(_ed._panel)
 	_ed.remove_child(_ed._repace_timer)
 	add_child(_ed._repace_timer)
+	_ed.remove_child(_ed._cast_timer)
+	add_child(_ed._cast_timer)
 	# Re-point the source at a section of its own, BEFORE it is bound to the box: setup()
 	# has already read the author's real remembered document and this gate must not open it.
 	_doc = _ed._doc
@@ -88,6 +90,7 @@ func _ready() -> void:
 	_doc._sync = false
 	_doc._refresh_row()
 	_doc.bind_text(_ed._text)
+	_check_cards_starter()
 
 	_check_input_mode()
 	await _check_opening_a_document()
@@ -107,6 +110,8 @@ func _ready() -> void:
 	await _check_sync_to()
 	await _check_unattended_processes_never_autosave()
 
+	_ed._cast_timer.stop()
+	_ed._cast_timer.queue_free()
 	_ed.free()
 	DirAccess.remove_absolute(_path)
 	DirAccess.remove_absolute(DIR)
@@ -123,6 +128,48 @@ func _ready() -> void:
 func _ok(cond: bool, what: String) -> void:
 	if not cond:
 		_fails.append(what)
+
+
+## A fresh Cards show starts with bundled prose in the actual Edit field. A saved draft,
+## an intentional empty field, and a synced document each keep their own text.
+func _check_cards_starter() -> void:
+	var sample := FileAccess.get_file_as_string("res://rules/cards/starter.md")
+	_ok(sample.contains("# The Penalty Box") and sample.contains("## The host"),
+		"the bundled Cards brief is missing or incomplete")
+	var cards := CardsEditor.new()
+	cards._build_panel()
+	cards.remove_child(cards._cast_timer)
+	add_child(cards._cast_timer)
+	var source := cards._doc
+	var section := "cards_starter_probe_%d" % Time.get_ticks_usec()
+	source._section = section
+	source._sync = false
+	source._path = ""
+	source.bind_text(cards._text)
+	_ok(not source.is_sync() and cards._text.text == sample,
+		"a fresh Cards editor did not open on the bundled, unsynced brief")
+	_ok(not Settings.has(section, "text"),
+		"opening the bundled brief wrote it over an unsynced draft")
+	Settings.write(section, "text", "My own show.\n")
+	source.bind_text(cards._text)
+	_ok(cards._text.text == "My own show.\n", "a saved draft was overwritten by the bundled brief")
+	Settings.write(section, "text", "")
+	source.bind_text(cards._text)
+	_ok(cards._text.text.is_empty(), "an intentionally empty draft was refilled")
+	var path := DIR + "/starter.md"
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file != null:
+		file.store_string("# My file\n\nThe cards I chose.\n")
+		file.close()
+	source._path = path
+	source._sync = true
+	source.bind_text(cards._text)
+	_ok(source.is_sync() and cards._text.text == "# My file\n\nThe cards I chose.\n",
+		"a synced brief was replaced by the bundled one")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	cards._cast_timer.stop()
+	cards._cast_timer.queue_free()
+	cards.free()
 
 
 ## THE CONTROL FOR EVERYTHING BELOW: synced to nothing, the panel is exactly what it was,

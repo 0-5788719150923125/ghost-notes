@@ -103,6 +103,10 @@ var _blocks := PackedStringArray(["voice"])
 ## not be shown with that window closed, and Open… is on the panel's card too.
 var dialog_host: Node = null
 
+## An unsynced editor's first draft, used only before this section has stored any text.
+## A stored empty string means the author deliberately cleared it and stays empty.
+var default_text := ""
+
 var _text: TextEdit              # the panel's box, driven by this widget in sync mode
 var _sync := false               # synced to _path
 var _fields := {}                # top-level frontmatter fields (title...) of an UNSYNCED script
@@ -207,7 +211,7 @@ func bind_text(te: TextEdit) -> void:
 		# gone shows nothing and says so; Clear or Open moves on from it.
 		reload()
 	else:
-		_show(str(Settings.read(_section, "text", "")))
+		_show(str(Settings.read(_section, "text", "")) if Settings.has(_section, "text") else default_text)
 	_apply_editable()
 
 

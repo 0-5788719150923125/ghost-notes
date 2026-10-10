@@ -40,6 +40,7 @@ var _dark: Array = []   # --dark 0,2: put out those flames' lights (the flames s
 var _wash := -1         # --wash W: the shuffle is one wash, of seed W
 var _clip := Vector2(-1.0, -1.0)   # --clip A,B: every frame from A to B seconds (into the wash, with --wash)
 var _looks := false     # --looks 1: print each held card's looks at its back
+var _events := false    # --events 1: print the card timeline and landing slots
 var _name := "Truthful Tarot"
 var _byline := ""
 var _ink := ""          # --ink #rrggbb: the name's color, as a set dresser's choice
@@ -72,6 +73,7 @@ func _run() -> void:
 					_dark.append(int(x))
 			"--wash": _wash = int(args[i + 1])
 			"--looks": _looks = args[i + 1] == "1"
+			"--events": _events = args[i + 1] == "1"
 			"--name": _name = args[i + 1]
 			"--byline": _byline = args[i + 1]
 			"--ink": _ink = args[i + 1]
@@ -202,6 +204,11 @@ func _run() -> void:
 			print("table_look_probe: lamp energy %.2f shadows %s" % [tm._lamp.light_energy, str(tm._lamp.shadow_enabled)])
 		if want == _times[0] and _looks:
 			_print_looks(medium as TableMedium)
+		if want == _times[0] and _events:
+			var table := medium as TableMedium
+			print("table_look_probe: schedule ", table._sched)
+			print("table_look_probe: events ", table._times()["events"])
+			print("table_look_probe: slots ", table._slots)
 		if want == _times[0]:
 			var tmed := medium as TableMedium
 			var cur := stage.get_camera_3d()
@@ -295,4 +302,3 @@ func _print_looks(tm: TableMedium) -> void:
 				print("table_look_probe: card %d looks at its back %.1f-%.1f s%s" % [k + 1, from, t, " - a PIROUETTE" if most > TAU else ""])
 				from = -1.0
 			t += 1.0 / 30.0
-
