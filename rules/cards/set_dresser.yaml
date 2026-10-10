@@ -127,6 +127,13 @@ prompt:
       The camera is the reader's eye, about half a meter from the middle of the cloth and looking
       down across it; the top of the frame passes low over the back of the cloth, which is why the
       back holds only short things. Candles stand at the back or the sides, never by the deck.
+  # the user, 2026-10-10: a low thing stood at the bottom middle, "just in front of the speaker",
+  # with open cloth to either side (src/media/table.gd WORKSPACE scores such a spot worse)
+  - >-
+      THE NEAR MIDDLE OF THE CLOTH, in front of the cards, is the reader's own workspace - their
+      hands work there. Nothing of yours stands in it, however low: use the sides and the back, and
+      push things out toward the edges. A thing that must be by the deck stands beside it, never in
+      front of it.
   - >-
       Things that share a `group` (any word) stand together, the tallest behind; a thing with no
       group stands on its own. `turn` (degrees) turns a thing about its middle; at 0 its front faces

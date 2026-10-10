@@ -62,7 +62,8 @@ func _ready() -> void:
 	# README's recording (--showcase, see showcase.gd) runs on a user:// of its own, and is a
 	# render all the same.
 	var why := ""
-	if args.has("--export") or args.has("--bake-file") or args.has("--bake-song") \
+	if args.has("--apply-update") or args.has("--update-smoke-hold") or args.has("--export") \
+			or args.has("--bake-file") or args.has("--bake-song") \
 			or args.has("--showcase") or args.has("--export-smoke"):
 		why = "a render"
 	# A TEST PROBE MUST NOT EDIT THE USER'S SETTINGS. run_boot_probe.sh boots the real app

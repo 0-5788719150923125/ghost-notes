@@ -295,6 +295,16 @@ const SEEN_LEAST := 0.55
 ## and a thing wider than STRADDLE_BIG only a third of it.
 const STRADDLE := 0.5
 const STRADDLE_BIG := 0.18
+## THE READER'S WORKSPACE (the user, 2026-10-10: a low thing stood "at the bottom and in the middle -
+## just in front of the speaker ... when there are open areas elsewhere"): the strip of the cloth
+## nearest the reader, in front of where the cards are shuffled and laid, is where their hands work.
+## A spot there scores this much worse (as many meters from its aim, over 4), a low thing's too - the
+## near ground a low thing may lie on ([method _stand]) is for a crowded table, not the first choice.
+## Soft: a table with no other room still stands its thing there. WORKSPACE_HALF is the strip's
+## half-width from the middle of the reading; it begins where [method _keep_out]'s middle ends.
+const WORKSPACE := 2.0
+const WORKSPACE_HALF := 0.25
+const WORKSPACE_FROM := 0.14
 ## THE DECK PUT ASIDE (the user, 2026-10-08: a long row comes "oddly close to the deck ... TOO close"):
 ## when a card of the spread would lie within DECK_CROWD of the deck (meters, edge to edge), the reader
 ## slides the deck further out before drawing it - in an episode that draws DECK_ASIDE or under - over
@@ -1993,6 +2003,7 @@ func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, kee
 	var top_center: Vector2 = _top_o["center"]
 	var top_half: Vector2 = _top_o["half"]
 	var shot := Rect2(0.0, 0.0, 1.0, 1.0)
+	var workspace := Rect2(_mid.x - WORKSPACE_HALF, _mid.z + WORKSPACE_FROM, WORKSPACE_HALF * 2.0, 1.0)
 	for k in [1.0, 0.88, 0.76]:
 		var basis := Basis(Vector3.UP, yaw).scaled(Vector3(k, k, k))
 		var shape := PackedVector2Array()
@@ -2098,6 +2109,8 @@ func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, kee
 					# by dark cloth, where it can burn as the key: by pale, its light is held down
 					score -= 0.8 * maxf(0.0, _heat_cell(Vector3(at.x, 0.0, at.y)) * KEY_ENERGY / HEAT - 1.0)
 				score -= _straddle(bb)
+				if bb.intersects(workspace):
+					score -= WORKSPACE
 				score += rng.randf() * 0.05
 				if score > best_score:
 					best_score = score

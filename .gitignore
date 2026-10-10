@@ -23,6 +23,7 @@ mono_crash.*.json
 
 # Exported builds: scripts/build.sh writes them to dist/
 /dist/
+/data/build_info.json
 *.exe
 *.pck
 *.zip

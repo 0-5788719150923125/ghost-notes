@@ -104,7 +104,7 @@ const ZONES := {
 	"back right": {"aim": Vector2(0.3, -0.27), "about": "the far right of the cloth, behind where the cards are laid"},
 	"left": {"aim": Vector2(-0.31, -0.1), "about": "the left side, beside where the cards are laid"},
 	"right": {"aim": Vector2(0.31, -0.1), "about": "the right side, beside where the cards are laid"},
-	"by the deck": {"aim": Vector2.ZERO, "about": "beside the deck, near the front of the cloth on the side the reader keeps it"},
+	"by the deck": {"aim": Vector2.ZERO, "about": "beside the deck, on the side the reader keeps it - never in front of it, where the reader works"},
 }
 
 ## WHERE THE AIR IS: the stretches of the scene an effect ([Effects]) may fill - boxes in the table's

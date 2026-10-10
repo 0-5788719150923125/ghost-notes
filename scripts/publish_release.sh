@@ -19,11 +19,8 @@ if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]] || [[ ! "$keep" =~ ^[1-9][0-9]*$ ]]; then
 fi
 
 tag="build-${sha:0:7}"
-legacy_tag="build-$sha"
 if gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
 	echo "Release $tag already exists; leaving its assets as they are."
-elif gh release view "$legacy_tag" --repo "$repo" >/dev/null 2>&1; then
-	echo "Release $legacy_tag already exists; leaving its assets as they are."
 else
 	shopt -s nullglob
 	assets=("$assets_dir"/*)
@@ -38,10 +35,10 @@ else
 		--notes "Automated build of $sha."
 fi
 
-# Include old full-SHA tags until they age out. Other releases and tags are untouched.
+# Only build releases are eligible. Other releases and tags are untouched.
 # Pagination is needed once the repository has more than 100 releases.
 gh api --paginate "repos/$repo/releases?per_page=100" \
-	--jq '.[] | select(.draft == false and .published_at != null and (.tag_name | test("^build-([0-9a-f]{7}|[0-9a-f]{40})$"))) | [.published_at, .tag_name] | @tsv' \
+	--jq '.[] | select(.draft == false and .published_at != null and (.tag_name | test("^build-[0-9a-f]{7}$"))) | [.published_at, .tag_name] | @tsv' \
 	| sort -r | tail -n "+$((keep + 1))" \
 	| while IFS=$'\t' read -r published old_tag; do
 		echo "Removing old build release and tag: $old_tag (published $published)"

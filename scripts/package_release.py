@@ -9,10 +9,11 @@
 The same commands run on a developer machine and in CI (.github/workflows/build.yml); the
 workflow passes arguments and holds no packaging logic. Asset names carry no version, so the
 latest release always has the same filenames (the in-app update path, next/ci_builds.md, can
-pick an asset by platform). The version lives in the tag and the manifest: the full commit.
+pick an asset by platform). The tag uses the short commit hash; the manifest keeps the full hash.
 
 A Linux archive is a tar.gz that keeps the executable bit; a Windows archive is a zip. Each
-holds one folder, `ghost-notes/`, with the program in it.
+holds one folder, `ghost-notes/`, with the program in it. Desktop releases also carry a raw
+executable for the in-app updater, which avoids relying on an external archive tool.
 """
 
 from __future__ import annotations
@@ -38,9 +39,10 @@ EPOCH = 315532800  # 1980-01-01
 
 TARGETS = {
     "android": {"asset": "ghost-notes-android-arm64.apk", "files": {"ghost-notes-android.apk": None}},
-    "linux": {"asset": "ghost-notes-linux-x86_64.tar.gz", "files": {"ghost-notes-linux.x86_64": "ghost-notes"}},
+    "linux": {"asset": "ghost-notes-linux-x86_64.tar.gz", "update_asset": "ghost-notes-linux-x86_64.bin", "files": {"ghost-notes-linux.x86_64": "ghost-notes"}},
     "windows": {
         "asset": "ghost-notes-windows-x86_64.zip",
+        "update_asset": "ghost-notes-windows-x86_64.exe",
         "files": {
             "ghost-notes-windows.exe": "ghost-notes.exe",
         },
@@ -87,6 +89,10 @@ def archive(target: str) -> None:
                 info.compress_type = zipfile.ZIP_DEFLATED
                 info.external_attr = 0o755 << 16
                 bundle.writestr(info, (DIST / source).read_bytes())
+    if target != "android":
+        update_asset = spec["update_asset"]
+        source = next(iter(spec["files"]))
+        shutil.copyfile(DIST / source, STAGE / update_asset)
     print(f"package_release: {out} ({out.stat().st_size // 1048576} MB)")
 
 
@@ -113,7 +119,7 @@ def finalize() -> None:
     sha = commit()
     manifest = {
         "commit": sha,
-        "tag": f"build-{sha}",
+        "tag": f"build-{sha[:7]}",
         "godot": godot_version(),
         "assets": [{"name": p.name, "sha256": sha256(p), "bytes": p.stat().st_size} for p in assets],
     }

@@ -50,6 +50,9 @@ var _detail_link: LinkButton
 var _retry: Button
 var _checked: Label
 var _check_now: Button
+var _app_update: AppUpdate
+var _app_version: Label
+var _app_action: Button
 var _open_key := ""
 var _ui := {}                    # key -> {button, glyph, name, value, bar}
 var _reprobe := false            # a job finished while a probe was running
@@ -58,6 +61,10 @@ var _tick := 0.0
 
 func _ready() -> void:
 	_build_ui()
+	_app_update = AppUpdate.new()
+	_app_update.changed.connect(_refresh_app_update)
+	add_child(_app_update)
+	_refresh_app_update()
 	var agent := Provision.agent()
 	if agent != null:
 		agent.connect("changed", _on_changed)
@@ -162,6 +169,17 @@ func _build_ui() -> void:
 	hint.add_theme_font_size_override("font_size", 10)
 	hint.add_theme_color_override("font_color", COL_IDLE)
 	_body.add_child(hint)
+	var app_row := HBoxContainer.new()
+	app_row.add_theme_constant_override("separation", 8)
+	_body.add_child(app_row)
+	_app_version = Label.new()
+	_app_version.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_app_version.clip_text = true
+	_app_version.add_theme_font_size_override("font_size", 11)
+	_app_version.add_theme_color_override("font_color", COL_TEXT)
+	app_row.add_child(_app_version)
+	_app_action = _action_button("check app", "Check GitHub for a newer Ghost Notes build", _on_app_action)
+	app_row.add_child(_app_action)
 
 	_list = VBoxContainer.new()
 	_list.add_theme_constant_override("separation", 1)
@@ -202,10 +220,13 @@ func _build_ui() -> void:
 	var auto := CheckBox.new()
 	auto.text = "keep up to date"
 	auto.focus_mode = Control.FOCUS_NONE
-	auto.tooltip_text = "Once a day at launch, bring everything above to its newest release."
+	auto.tooltip_text = "Automatically check for new app builds and dependency releases."
 	auto.add_theme_font_size_override("font_size", 10)
 	auto.add_theme_color_override("font_color", COL_DIM)
 	Settings.bind(auto, "deps", "auto_update", true)
+	auto.toggled.connect(func(on: bool) -> void:
+		if on and _app_update != null:
+			_app_update.check_now())
 	foot.add_child(auto)
 	_checked = Label.new()
 	_checked.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -461,6 +482,9 @@ func _refresh_title() -> void:
 	elif not problem.is_empty():
 		_title.text = "Environment  ·  " + problem
 		_title.add_theme_color_override("font_color", COL_BAD)
+	elif _app_update != null and _app_update.update_ready:
+		_title.text = "Environment  ·  app update ready"
+		_title.add_theme_color_override("font_color", COL_RUN)
 	elif _pending() > 0:
 		_title.text = "Environment  ·  %d to download" % _pending()
 		_title.add_theme_color_override("font_color", COL_DIM)
@@ -468,6 +492,24 @@ func _refresh_title() -> void:
 		_title.text = "Environment  ·  all present"
 		_title.add_theme_color_override("font_color", COL_OK)
 	state_changed.emit()
+
+
+func _refresh_app_update() -> void:
+	if _app_update == null or _app_version == null:
+		return
+	_app_version.text = "Ghost Notes  ·  " + _app_update.status
+	_app_action.visible = _app_update.enabled
+	_app_action.text = "restart" if _app_update.update_ready else "check app"
+	_app_action.tooltip_text = "Restart to install the verified update" if _app_update.update_ready \
+		else "Check GitHub for a newer Ghost Notes build"
+	_refresh_title()
+
+
+func _on_app_action() -> void:
+	if _app_update.update_ready:
+		_app_update.restart_now()
+	else:
+		_app_update.check_now()
 
 
 ## The panel's state in one line - the row's ⚙ tooltip.
@@ -657,6 +699,3 @@ func _restyle(key: String) -> void:
 	var ui: Dictionary = _ui.get(key, {})
 	if not ui.is_empty() and is_instance_valid(ui["button"]):
 		_style_row(ui["button"] as Button, key == _open_key)
-
-
-

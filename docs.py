@@ -98,6 +98,7 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
             "subprocess.gd",
             "deps.gd",
             "deps_panel.gd",
+            "app_update.gd",
             "provision.gd",
             "provisioner.gd",
             "bundled_hosts.gd",
@@ -513,6 +514,24 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
         "--export-smoke-note",
         "PATH",
         "With `--export-smoke`: also check that this note is recognized as a Cards note.",
+        True,
+    ),
+    (
+        "--app-version",
+        "",
+        "Print the embedded app build version as JSON, then exit (release diagnostics).",
+        True,
+    ),
+    (
+        "--apply-update",
+        "<target> <parent PID> <staged path> <sha256> <restart>",
+        "Internal helper: after the parent exits, replace the portable executable with a verified update.",
+        True,
+    ),
+    (
+        "--update-smoke-hold",
+        "",
+        "Keep the exported app running briefly while the updater's replacement path is tested.",
         True,
     ),
     (

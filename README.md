@@ -10,6 +10,8 @@ _A spectral experience_
 
 **Download:** [the latest Linux, Windows and Android builds](https://github.com/0-5788719150923125/ghost-notes/releases/latest) ([all releases](https://github.com/0-5788719150923125/ghost-notes/releases)).
 
+Portable Linux and Windows release builds check for newer builds automatically. The Environment panel (⚙) shows the running commit and update status. A verified update replaces the executable in its current folder when you close the app; use **restart** there to install and reopen immediately. Source and debug runs do not update themselves.
+
 ---
 
 ## description

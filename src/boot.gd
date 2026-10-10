@@ -125,6 +125,9 @@ const TIP_MAX_PX := 480.0
 
 
 func _ready() -> void:
+	if OS.get_cmdline_user_args().has("--apply-update") \
+			or OS.get_cmdline_user_args().has("--update-smoke-hold"):
+		return
 	# HERE, not in _enter_tree: autoloads all ENTER the tree before any is ready, so Settings has
 	# not yet decided whether this process is a render or a probe when Boot enters it
 	if handheld():

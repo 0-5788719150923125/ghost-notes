@@ -97,6 +97,17 @@ func _ready() -> void:
 	# button must run our teardown, not the engine's default instant quit
 	get_tree().set_auto_accept_quit(false)
 	var args := OS.get_cmdline_user_args()
+	if args.has("--apply-update"):
+		get_tree().quit(AppUpdate.run_helper(args))
+		return
+	if args.has("--update-smoke-hold"):
+		await get_tree().create_timer(3.0).timeout
+		get_tree().quit()
+		return
+	if args.has("--app-version"):
+		print(JSON.stringify(AppUpdate.build_info()))
+		get_tree().quit()
+		return
 	# Export templates ignore --script. The exported app enters its offline analyzer
 	# through the main scene instead; the editor keeps using bake_runner.gd.
 	if args.has("--bake-song"):

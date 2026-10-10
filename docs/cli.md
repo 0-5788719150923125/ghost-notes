@@ -27,6 +27,9 @@ Ghost's own flags follow the Godot separator: `godot --path . -- <ghost flags>`.
 | `--export` |  | Marks a Movie Maker render process (set by the exporter; `Boot` shrinks the window early). | _internal_ |
 | `--export-smoke` |  | Check that an exported desktop app starts and can unpack its bundled Python hosts, then exit. Used by `scripts/smoke-export.sh`. | _internal_ |
 | `--export-smoke-note` | `PATH` | With `--export-smoke`: also check that this note is recognized as a Cards note. | _internal_ |
+| `--app-version` |  | Print the embedded app build version as JSON, then exit (release diagnostics). | _internal_ |
+| `--apply-update` | `<target> <parent PID> <staged path> <sha256> <restart>` | Internal helper: after the parent exits, replace the portable executable with a verified update. | _internal_ |
+| `--update-smoke-hold` |  | Keep the exported app running briefly while the updater's replacement path is tested. | _internal_ |
 | `--synth-autopilot` |  | With `--export`: open the Synthesis panel over the take and let the fishing game play itself (random Throw/Pull/reel/hold-or-fold), so the UI is recorded into the video. Generates no audio and persists nothing (set by the exporter's 'Automate the Synthesis game' toggle). | _internal_ |
 | `--use-bake` |  | Drive `Spectrum` from the song's cached bake instead of the live analyzer. | _internal_ |
 | `--bake-file` | `<path>` | Explicit spectrum-bake cache for a render (implies `--use-bake`). | _internal_ |

@@ -98,6 +98,7 @@ The lifecycle around the scenes: boot, the notes list and a note's own panel, th
 - [`subprocess.gd`](../src/subprocess.gd) **Subprocess** - every external program ghost starts, in one place, with one promise: A CHILD NEVER OUTLIVES THE APP THAT STARTED IT.
 - [`deps.gd`](../src/deps.gd) **Deps** - every external program and environment ghost uses, in one place, with one promise: RESOLUTION AND REPORTING ARE THE SAME CODE.
 - [`deps_panel.gd`](../src/deps_panel.gd) **DepsPanel** - the environment readout above the bottom-right row, behind its ⚙ (Chrome).
+- [`app_update.gd`](../src/app_update.gd) **AppUpdate** - Portable desktop updater. The release executable is copied beside the running one while it can still be written, then that same downloaded executable starts headlessly on exit to swap the files after the old process closes. No installer or system Python is needed.
 - [`provision.gd`](../src/provision.gd) **Provision** - what ghost installs for itself, and the one door every feature asks through.
 - [`provisioner.gd`](../src/provisioner.gd) **provisioner** - Provisioner (autoload) - installs, updates and reports on everything ghost fetches for itself.
 - [`bundled_hosts.gd`](../src/bundled_hosts.gd) **BundledHosts** - External Python processes cannot read the exported res:// pack. The build includes one archive of hosts/ in that pack; on first use, copy it to a versioned user:// directory. The editor keeps using the source tree directly.

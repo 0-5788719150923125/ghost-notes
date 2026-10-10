@@ -121,6 +121,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
       - uses: actions/download-artifact@v8
         with:
           name: release
@@ -131,6 +134,9 @@ jobs:
       - name: Launch from an empty profile
         shell: bash
         run: scripts/smoke-export.sh unpacked/ghost-notes/ghost-notes.exe
+      - name: Verify portable update after the Windows app exits
+        shell: pwsh
+        run: python scripts/smoke_update.py unpacked/ghost-notes/ghost-notes.exe
 
   publish:
     name: Publish release

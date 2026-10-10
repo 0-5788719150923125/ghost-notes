@@ -240,6 +240,15 @@ fi
 say "building $stamp, $mode, Godot $short"
 mkdir -p "$OUT"
 
+# Embed the exact source version in exported builds; editor runs have no generated version.
+# Remove the file after all targets are exported so source runs cannot mistake it for their version.
+build_info=data/build_info.json
+build_sha=${GITHUB_SHA:-$(git rev-parse HEAD)}
+build_dirty=false
+if ! git diff --quiet || ! git diff --cached --quiet; then build_dirty=true; fi
+printf '{"commit":"%s","dirty":%s}\n' "$build_sha" "$build_dirty" > "$build_info"
+trap 'rm -f "$build_info"' EXIT
+
 # An Android target with setup on builds against its own minimal SDK, JDK-checked keystore and
 # Godot config (build/tools/android), never the developer's Android Studio. --no-setup keeps the
 # machine's own SDK and editor settings, as before.
