@@ -141,7 +141,7 @@ func _box() -> bool:
 	_ok(ep.has("say:1") and ep.read_text("say:1").is_empty(),
 		"a card with no comment passes silently without a writer job")
 	var short_prompt := String(prod.say_prompt("2")["prompt"])
-	_ok(short_prompt.contains("Write 8 to 40 words"), "mixed pacing asks for a short comment")
+	_ok(short_prompt.contains("Write 35 to 75 words"), "mixed pacing asks for a short comment")
 	# control: the same plan for a show that does not choose keeps no box
 	ep.invalidate("plan")
 	var fixed := CardProducer.new(ep, {"title": "S", "brief": "B", "deck": FixtureDeck.cards(), "draw": [4, 4]})
