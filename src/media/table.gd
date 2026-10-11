@@ -468,6 +468,7 @@ var _backdrop: MeshInstance3D
 var _backdrop_mat: ShaderMaterial
 var _rest_plan: Dictionary = {}     # the wash plan [member _rest_steps] are of
 var _rest_steps := {}               # plan step -> every card at rest there ([method _wash_rest])
+var _rest_lifts := {}               # ...and how far a steep card is lifted so its posed corners clear ([method _wash_rise])
 var _props: Node3D
 var _probe: ReflectionProbe
 var _probe_nudge := 1.0
@@ -4325,10 +4326,11 @@ func _wash(i: int, v: float, m: Dictionary) -> Transform3D:
 	var th := lerpf(DECK_T, WASH_T, _wash_spread_at(plan, i, v))
 	var r: Vector3 = (_wash_rest_at(plan, v) as Array)[i]
 	var b := _tipped(q.w, Vector2(r.y, r.z))
+	var rise := _wash_rise(plan, v, i)
 	# the jumper, down: over about its long side, face up on what it lies on
 	if int(plan.get("jumper", -1)) == i and v >= float((plan["jumper_flight"] as Dictionary)["t1"]):
 		b = b * Basis(Vector3(0.0, 0.0, 1.0), PI)
-	return Transform3D(b * Basis.from_scale(Vector3(1.0, th / DECK_T, 1.0)), _cur_base + Vector3(q.x, r.x, q.z))
+	return Transform3D(b * Basis.from_scale(Vector3(1.0, th / DECK_T, 1.0)), _cur_base + Vector3(q.x, r.x + rise, q.z))
 
 
 ## Card [param i]'s track at [param v] seconds into the wash, between the plan's steps: x, z and its
@@ -4420,13 +4422,14 @@ func _flight_clear(plan: Dictionary, i: int, v: float, xf: Transform3D) -> float
 		var r: Vector3 = rests[j]
 		var g := Vector2(r.y, r.z)
 		var top := lerpf(DECK_T, WASH_T, _wash_spread_at(plan, j, v)) * 0.5 + STACK_GAP
+		var rise := _wash_rise(plan, v, j)
 		if not flat:
-			need = maxf(need, r.x + g.length() * reach * 0.5 + top - (xf.origin.y - drop))
+			need = maxf(need, r.x + rise + g.length() * reach * 0.5 + top - (xf.origin.y - drop))
 			continue
-		for piece in Geometry2D.intersect_polygons(foot, _card_corners(mj, q.w)):
+		for piece in Geometry2D.intersect_polygons(foot, _card_foot(mj, q.w, g)):
 			for p: Vector2 in piece:
 				var low := face.y - (n.x * (p.x - face.x) + n.z * (p.y - face.z)) / n.y
-				need = maxf(need, r.x + g.dot(p - mj) + top - low)
+				need = maxf(need, r.x + rise + g.dot(p - mj) + top - low)
 	return maxf(need, 0.0)
 
 
@@ -4456,6 +4459,14 @@ static func _tipped(yaw: float, slope: Vector2) -> Basis:
 ## flush, the bottom one sunk into the cloth as the squared deck is, spread cards a hair apart and a
 ## hair over it.
 ##
+## THE CORNERS POSED DRAW IN. A card tipped twenty degrees pulls its corners in along the slope, and
+## the flat yaw rectangle the rest is reckoned on sits outside the mesh. Two deck slots squared on
+## the pile, a fraction out of parallel, cleared that rectangle and still passed through each other
+## by a tenth of a millimeter (one frame of wash-check). The rest itself stays the flat one - it is
+## the lowest plane, and what the step gate measures. A steep card is then lifted, in
+## [member _rest_lifts], by however much its posed corners would sink into the cloth or a card under
+## it. Under a few degrees the draw-in is less than the gates allow, and nothing is lifted.
+##
 ## AT THE MOMENT ITSELF, [param v] seconds into the wash, the cards where their tracks have them
 ## between the plan's steps - two steps' rests blended pass a card sliding onto another through its
 ## edge for a frame - in the order of the step that ends the moment (a pair parting keeps its order
@@ -4467,12 +4478,14 @@ func _wash_rest_at(plan: Dictionary, v: float, bare := false) -> Array:
 	if not is_same(plan, _rest_plan):
 		_rest_plan = plan
 		_rest_steps = {}
+		_rest_lifts = {}
 	var key := int(round(v * 4000.0))
 	key = -key - 1 if bare else key
 	if _rest_steps.has(key):
 		return _rest_steps[key]
 	if _rest_steps.size() > 40:
 		_rest_steps = {}
+		_rest_lifts = {}
 	# THE FAN-OUT'S TILTS, calmed: each card's bare tilt averaged over a window on a fixed grid (so
 	# the frames after reuse it), between the two grid points round the moment
 	var calm := 0.0 if bare or not wash_calm else \
@@ -4554,6 +4567,50 @@ func _wash_rest_at(plan: Dictionary, v: float, bare := false) -> Array:
 			rest = Vector3(h, gc.x, gc.y)
 		out[i] = rest
 		under.append([corners, mid, rest, th, s, qi.w])
+	# A STEEP CARD'S MESH draws in off the flat rectangle just rested ([method _card_foot]). Lift it
+	# so those corners stay above the cloth and above every card under them. Shallow cards skip it.
+	if not bare:
+		var lifts := PackedFloat32Array()
+		lifts.resize(n)
+		var feet: Array = []
+		feet.resize(n)
+		for i in order:
+			if _off_cloth(plan, i, v):
+				continue
+			var base: Vector3 = out[i]
+			var slope := Vector2(base.y, base.z)
+			var qi: Vector4 = at[i]
+			var mid := Vector2(qi.x, qi.z)
+			var s := _wash_spread_at(plan, i, v)
+			var th := lerpf(DECK_T, WASH_T, s)
+			var foot := _card_foot(mid, qi.w, slope)
+			feet[i] = foot
+			if _foot_flat(slope):
+				continue
+			var low := lerpf(0.0, CLOTH_TOP + FLOOR_GAP, s) + th * 0.5
+			var extra := 0.0
+			for c in foot:
+				extra = maxf(extra, low - (base.x + slope.dot(c - mid)))
+			for j in order:
+				if j == i:
+					break
+				var fj: Variant = feet[j]
+				if fj == null:
+					continue
+				var qj: Vector4 = at[j]
+				var mj := Vector2(qj.x, qj.z)
+				if mj.distance_squared_to(mid) > reach * reach:
+					continue
+				var bj: Vector3 = out[j]
+				var sj := _wash_spread_at(plan, j, v)
+				var gap_h := lerpf(DECK_T, WASH_T, sj) * 0.5 + STACK_GAP * maxf(s, sj) + th * 0.5
+				var ug := Vector2(bj.y, bj.z)
+				for piece in Geometry2D.intersect_polygons(foot, fj):
+					for p in piece:
+						var need: float = bj.x + lifts[j] + ug.dot(p - mj) + gap_h
+						extra = maxf(extra, need - (base.x + slope.dot(p - mid)))
+			lifts[i] = maxf(extra, 0.0)
+		_rest_lifts[key] = lifts
 	_rest_steps[key] = out
 	return out
 
@@ -4563,11 +4620,41 @@ func _wash_rest(plan: Dictionary, k: int) -> Array:
 	return _wash_rest_at(plan, float(k) / WASH_HZ)
 
 
+## How far card [param i] is lifted at [param v] so its posed corners clear ([member _rest_lifts]).
+## The rest itself stays the flat plane. [method _wash_rest_at] fills the lift; ask it first.
+func _wash_rise(plan: Dictionary, v: float, i: int) -> float:
+	var key := int(round(v * 4000.0))
+	var lifts: Variant = _rest_lifts.get(key, null)
+	if lifts == null:
+		return 0.0
+	return (lifts as PackedFloat32Array)[i]
+
+
 ## A card's four corners on the cloth, its middle at [param mid], turned [param yaw].
 static func _card_corners(mid: Vector2, yaw: float) -> PackedVector2Array:
 	var ax := Vector2(cos(yaw), -sin(yaw)) * CARD.x * 0.5
 	var az := Vector2(sin(yaw), cos(yaw)) * CARD.y * 0.5
 	return PackedVector2Array([mid - ax - az, mid + ax - az, mid + ax + az, mid - ax + az])
+
+
+## Under this steepness (about three degrees) a tipped corner draws in by less than the thickness
+## the wash gates allow, and [method _card_foot] keeps the flat rectangle.
+static func _foot_flat(slope: Vector2) -> bool:
+	return slope.length_squared() < 0.0025
+
+
+## [method _card_corners] as [method _tipped] poses them: drawn in along [param slope], so a rest
+## reckoned on them is a rest of the mesh. Shallow tilts stay the flat rectangle ([method _foot_flat]).
+static func _card_foot(mid: Vector2, yaw: float, slope: Vector2) -> PackedVector2Array:
+	if _foot_flat(slope):
+		return _card_corners(mid, yaw)
+	var b := _tipped(yaw, slope)
+	var out := PackedVector2Array()
+	for sv in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+		var s: Vector2 = sv
+		var p := b.x * (CARD.x * 0.5 * s.x) + b.z * (CARD.y * 0.5 * s.y)
+		out.append(mid + Vector2(p.x, p.z))
+	return out
 
 
 ## THE LOWEST A RIGID CARD CAN LIE on supports [param hs] high at [param pts] (about its middle):

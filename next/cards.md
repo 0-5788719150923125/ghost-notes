@@ -894,7 +894,10 @@ with a gentle tilt"): every card - in the deck, spread, or gathered in the pile 
 the order the plan has them lying in, up, is a rigid card at the LOWEST it can lie: the plane over
 the cloth under its corners and over the faces of the cards under it wherever they cross it
 (`Geometry2D.intersect_polygons`), lowest at its middle - the upper hull's face over the middle,
-walked to from the highest support (`TableMedium._rest_on`). So a card tips: on a card at one end,
+walked to from the highest support (`TableMedium._rest_on`). A card tipped twenty degrees draws
+its corners in along the slope, off that flat rectangle, and two steep cards squared on the pile
+were passing through each other by a tenth of a millimeter there. The rest stays the flat plane;
+the mesh is lifted by however much those posed corners would sink. A shallow tilt is not lifted. So a card tips: on a card at one end,
 on the cloth at the other, over the deck's edge as it slides off it, up onto the pile as it is swept
 in. Exact against a brute-force hull on every card the gate judges; the plan's flat layers sit higher
 on two cards in three. A wash the first card would cut short is replanned to fit, the same wash up
