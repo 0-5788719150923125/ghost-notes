@@ -166,9 +166,19 @@ staging:
       `keepsakes` may name up to three small things from coin, button, marble or ticket, when
       those small things belong in the collection. They are hidden until the box opens.
       Choose `look.card_size` from large, trading or baseball to match the physical cards.
+      Set `text` to "front" when facts and a short description are printed beneath the art,
+      or "back" when they replace the shared artwork on each card's reverse. For collectible,
+      game, study and recipe cards, use one of those two unless the brief explicitly describes
+      a separate booklet that accompanies the collection. A card's printed details are never
+      a second card beside it.
       Choose `pace: "mixed"` for a collector who lingers on some cards and moves quickly past
       others, or `"quick"` for a short look at each. A position may set `comment: "none"` for
-      a silent look, `"brief"` for a few words, or `"story"` for a longer memory. Put drawn cards
+      a silent look, `"brief"` for a few words, or `"story"` for a longer memory.
+      Leave `comment` unset for most positions so the host has room to talk; use `brief` for
+      a purposeful quick check, not as the episode's default. Give at least one card a story
+      when the spread has four or more positions. A short episode is fine when its idea calls
+      for one, but do not hurry through every card.
+      Put drawn cards
       at `destination: "stack"` to pile them beside the box, or `destination: "box"` to return them to it.
       Decide why the collector keeps a card out before assigning destinations. Use a consistent
       handling pattern for an ordinary browse: a row of distinct finds, or one growing keep pile,
@@ -176,10 +186,10 @@ staging:
       candidates or searching for a particular card. A run of quick checks can establish a search;
       a single return can instead be a deliberately unresolved quiet beat. Consecutive `stack` positions grow one
       pile; after a card goes back in the box, a new `stack` position begins a new pile.
-      For an occasional puzzling pause, pair `comment: "none"` with `linger: true`: hold the
-      revealed card silently in view for roughly eighteen seconds, then put it back or down. The
-      host need not explain the card. Reserve this for a moment when the quiet has a purpose in
-      the episode's rhythm; quick checks during a search should stay quick.
+      A `comment: "none"` card is a quick silent look, then put away or laid down. Do not
+      set `linger` for a silent card: a long silent display interrupts a spoken episode.
+      Use `comment: "aside"` when the card should remain visible while the host talks
+      about something else.
       To keep talking while ignoring the revealed card, choose `comment: "aside"` for a box card.
       The card remains in view during a short continuation of the preceding thought, with no
       mention of this card or its printed details, then goes back into the box. Use this rarely.

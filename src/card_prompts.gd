@@ -381,11 +381,11 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		if comment == "aside":
 			lo_hi = [45, 75]
 		elif comment == "brief" or (comment.is_empty() and pace == "quick"):
-			lo_hi = [5, 35]
+			lo_hi = [15, 40]
 		elif comment.is_empty() and pace == "mixed" and int(step) % 3 == 0:
-			lo_hi = [55, 110]
+			lo_hi = [90, 140]
 		elif comment.is_empty() and pace == "mixed":
-			lo_hi = [8, 40]
+			lo_hi = [35, 75]
 	var kind := step if step == "intro" or step == "close" \
 		else ("jumper" if not drawn.is_empty() and bool((drawn[drawn.size() - 1] as Dictionary).get("jumper", false)) else "card")
 	var heard_before := _heard_before(history, kind, brief, names)

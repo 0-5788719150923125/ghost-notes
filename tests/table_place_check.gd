@@ -254,14 +254,15 @@ func _sweep(cloth: String, candles: int, table := {}) -> Dictionary:
 		n["candles"] += medium._lights.size()
 		for l in medium._lights:
 			n["flames"] += ((l as Dictionary)["flames"] as Array).size()
-		# the light: each candle's thing is left out of its own light's shadows, and only its own
+		# the light: the holder under each wick is left out of its own shadows;
+		# separate accessories in that thing still catch and cast its light
 		for th in things:
 			var t: Dictionary = th
 			for i in medium._lights.size():
 				var mask: int = ((medium._lights[i] as Dictionary)["light"] as OmniLight3D).shadow_caster_mask
 				for m in t["meshes"]:
 					var cast := (mask & (m as MeshInstance3D).layers) != 0
-					if (t["lights"] as Array).has(i) and cast:
+					if (t["lights"] as Array).has(i) and cast and (m as MeshInstance3D).layers != TableMedium.THING_LAYER:
 						n["own_shadow"] += 1
 					elif not (t["lights"] as Array).has(i) and not cast:
 						n["no_shadow"] += 1

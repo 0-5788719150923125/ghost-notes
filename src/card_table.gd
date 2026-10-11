@@ -429,8 +429,12 @@ static func staging_of(plan: Dictionary) -> Dictionary:
 		var name := str(item).strip_edges().to_lower()
 		if name in BOX_OBJECTS and objects.size() < 3:
 			objects.append(name)
-	return {"source": source if TableActions.SOURCES.has(source) else String(STAGING["source"]),
-		"text": text if TEXTS.has(text) else String(STAGING["text"]),
+	var safe_source := source if TableActions.SOURCES.has(source) else String(STAGING["source"])
+	# A collection drawn from a box normally carries its own printing. A separate
+	# booklet remains available when the plan explicitly chooses one.
+	var default_text := "front" if safe_source == "box" else String(STAGING["text"])
+	return {"source": safe_source,
+		"text": text if TEXTS.has(text) else default_text,
 		"box_style": box_style if box_style in BOX_STYLES else "open",
 		"contents": contents if contents in BOX_CONTENTS else "file",
 		"pace": pace if pace in PACES else "reflective", "keepsakes": objects}

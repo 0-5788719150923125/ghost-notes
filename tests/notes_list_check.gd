@@ -64,6 +64,7 @@ func _run() -> void:
 	await _check_gating(list)
 	await _check_delete()
 	await _check_round_trip()
+	await _check_new_card_starter()
 	NoteStore.discard = Callable()
 	_clean()
 	_report()
@@ -299,6 +300,27 @@ func _check_round_trip() -> void:
 			await _frames(12)
 			await _quiet(int(home["procs"]))
 			_check_home("after the reading", home)
+
+
+func _check_new_card_starter() -> void:
+	print("-- New -> Cards starts with the bundled brief")
+	var list: NotesList = _main._list
+	var pop := list._new.get_popup()
+	var item := _item(list, "cards")
+	if item < 0:
+		_ok(false, "New offers Cards")
+		return
+	# The template gate is about installed agents; this probe is about the new file.
+	pop.set_item_disabled(item, false)
+	list._on_new(pop.get_item_id(item))
+	await _frames(12)
+	var path: String = _main._note
+	var starter := FileAccess.get_file_as_string("res://rules/cards/starter.md")
+	_ok(not path.is_empty() and FileAccess.get_file_as_string(path).contains(starter),
+		"New -> Cards writes the full starter into the note")
+	var editor := _main._generative as CardsEditor
+	_ok(editor != null and editor._text.text == starter,
+		"Edit shows the starter brief from the new note")
 
 
 ## The stage is showing a picture.

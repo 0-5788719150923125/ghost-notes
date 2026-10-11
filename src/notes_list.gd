@@ -139,8 +139,18 @@ func _on_new(id: int) -> void:
 	var i := pop.get_item_index(id)
 	if i < 0 or pop.is_item_disabled(i):
 		return
-	var path := NoteStore.create(String(pop.get_item_metadata(i)))
+	var key := String(pop.get_item_metadata(i))
+	# A new Card is a synced document immediately, so the editor's unsynced starter
+	# fallback cannot fill it. Put the starter in the new file's body instead.
+	var body := FileAccess.get_file_as_string("res://rules/cards/starter.md") if key == "cards" else ""
+	var path := NoteStore.create(key, "", body)
 	if not path.is_empty():
+		# FrontMatter.create separates a new head and body with a blank line. The
+		# starter is the editor's actual text, so remove that separator from the body.
+		if key == "cards" and not body.is_empty():
+			var err := FrontMatter.write_body(path, body, "\n" + body)
+			if not err.is_empty():
+				push_warning("ghost: could not fill the new Card brief - " + err)
 		_open(path)
 
 

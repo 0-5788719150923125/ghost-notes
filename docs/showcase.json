@@ -1,5 +1,5 @@
 {
-	"digest": "95138e4776602f5c291f1e19aa459a7fab8cbfe74d158da445addefaf92d78b9",
+	"digest": "781b01803ef750b3fb60e84c6b99045a21431ce6d72a46b63e28f502fba5bf5f",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -32,6 +32,7 @@
 		"res://src/activation.gd",
 		"res://src/agent_jobs.gd",
 		"res://src/agent_tools.gd",
+		"res://src/app_update.gd",
 		"res://src/assistant.gd",
 		"res://src/assistant_backends.gd",
 		"res://src/audio_features.gd",

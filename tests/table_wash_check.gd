@@ -222,7 +222,10 @@ func _jumper() -> void:
 		for i in TableMedium.DECK_N:
 			var at: Transform3D = (medium._deck[i] as MeshInstance3D).transform
 			var rest := medium._rest_xf(i)
-			n += 1 if at.origin.distance_to(rest.origin) > 0.004 or not at.basis.is_equal_approx(rest.basis) else 0
+			# a card of the deck may lie half a turn round (tests/deck_turns_check.gd): still at rest
+			var turned := rest.basis * Basis(Vector3.UP, PI)
+			var still := at.basis.is_equal_approx(rest.basis) or at.basis.is_equal_approx(turned)
+			n += 1 if at.origin.distance_to(rest.origin) > 0.004 or not still else 0
 		return n
 	var before: int = moving.call(te - 0.3)
 	var at_spring: int = moving.call(te + TableMedium.JUMP_FLY.x * sc)
@@ -314,7 +317,7 @@ func _resting() -> void:
 							least = minf(least, gap)
 					# what the table rests it on: where they cross - or, lying squared on it, the face
 					# under it carried to its own corners
-					if mj.distance_to(mid) < 0.006 and absf(wrapf(qi.w - qj.w, -PI, PI)) < 0.12:
+					if mj.distance_to(mid) < 0.006 and absf(wrapf(qi.w - qj.w, -PI * 0.5, PI * 0.5)) < 0.12:
 						for c in 4:
 							hs[c] = maxf(hs[c], rj.x + Vector2(rj.y, rj.z).dot(corners[c] - mj) + lift)
 					else:

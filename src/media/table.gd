@@ -137,6 +137,12 @@ const RUNS := {
 	"cut": {"weight": 2.0, "n": [2, 5], "dur": [1.15, 1.5], "gap": [0.05, 0.25]},
 	"wash": {"weight": 0.9, "n": [1, 1], "dur": [26.0, 32.0], "gap": [0.0, 0.0]},
 }
+## How many packets an overhand pass peels off the held cards.
+const OVERHAND_PACKETS := 5
+## The share of the deck that lies the other way round, face down (the share CardDeck.shuffled
+## turns up reversed). Shuffles carry each card's way with it; the one that ends on top is the way
+## the next card drawn comes up.
+const DECK_TURNED := 0.32
 ## The pause after a run: mostly a few seconds, now and then a long linger - median ~3 s.
 const IDLE_LOG := Vector2(1.1, 0.55)
 const IDLE_RANGE := Vector2(1.6, 18.0)
@@ -527,6 +533,9 @@ var _slot_jit: Array = []           # per deck slot: Vector3(x, z, yaw)
 var _lay_jit: Array = []            # per shown card: a small, repeatable placement difference
 var _moves: Array = []              # the shuffle: [{kind, t0, dur, seed}]
 var _move_rng := RandomNumberGenerator.new()
+var _flip0 := PackedByteArray()      # per card, as the deck lies at the shuffle's start: the other way round ([method _deck_flip0])
+var _flip_key := ""                  # what [member _flip0] was made for...
+var _flip_moves: Array = []          # ...and the chain of moves it was made on
 var _pitch := 45.0
 var _foil := 0.6
 var _noise := FastNoiseLite.new()
@@ -551,15 +560,18 @@ var _seen := PackedVector3Array()   # the table the camera sees, sampled (for th
 
 func mount(st: SubViewport) -> void:
 	super.mount(st)
-	# EDGES: the deck's stacked card edges and the shadow edges stair-stepped. 4x multisampling on
-	# the stage (a light scene - cheap), and a bigger atlas whose first quadrant is one whole slot,
-	# for the light whose shadows cover the most; the other lights take the next quadrant's four
-	# (every candle and the lamp cast: four candles at most). Given back when the table leaves.
+	# EDGES: 4x multisampling on the stage, and a bigger atlas. The first two
+	# quadrants hold a high-resolution shadow each; the others hold four each so
+	# four candles and the lamp can all cast. Given back when the table leaves.
 	_stage_was = {"msaa": st.msaa_3d, "atlas": st.positional_shadow_atlas_size,
-		"quad": st.positional_shadow_atlas_quad_0}
+		"quad": st.positional_shadow_atlas_quad_0, "quad1": st.positional_shadow_atlas_quad_1,
+		"quad2": st.positional_shadow_atlas_quad_2, "quad3": st.positional_shadow_atlas_quad_3}
 	st.msaa_3d = Viewport.MSAA_4X
 	st.positional_shadow_atlas_size = 4096
 	st.positional_shadow_atlas_quad_0 = Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_1
+	st.positional_shadow_atlas_quad_1 = Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_1
+	st.positional_shadow_atlas_quad_2 = Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_4
+	st.positional_shadow_atlas_quad_3 = Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_4
 	# the intro's bokeh: round, and fine enough to be a lens rather than a smear
 	RenderingServer.camera_attributes_set_dof_blur_bokeh_shape(RenderingServer.DOF_BOKEH_CIRCLE)
 	RenderingServer.camera_attributes_set_dof_blur_quality(RenderingServer.DOF_BLUR_QUALITY_HIGH, true)
@@ -802,6 +814,9 @@ func _exit_tree() -> void:
 		stage.msaa_3d = _stage_was["msaa"]
 		stage.positional_shadow_atlas_size = _stage_was["atlas"]
 		stage.positional_shadow_atlas_quad_0 = _stage_was["quad"]
+		stage.positional_shadow_atlas_quad_1 = _stage_was["quad1"]
+		stage.positional_shadow_atlas_quad_2 = _stage_was["quad2"]
+		stage.positional_shadow_atlas_quad_3 = _stage_was["quad3"]
 
 
 func on_stage_resized(_size: Vector2) -> void:
@@ -1083,7 +1098,8 @@ func _back_of(i: int, card: Dictionary) -> Material:
 	canvas.seed = _seed
 	var vp := CardFaces.viewport(self, canvas, CardFaces.face_px(canvas.look))
 	var mat := _foil_material(vp.get_texture())
-	mat.set_shader_parameter("lift", 0.06)
+	# Printed details need to read even when the box shades a card held over it.
+	mat.set_shader_parameter("lift", 0.5)
 	mat.set_shader_parameter("window", Vector4(0.0, 0.0, 1.0, 1.0))
 	while _printed.size() <= i:
 		_printed.append({})
@@ -1536,9 +1552,9 @@ func _stand_box(things: Array, built: Array) -> void:
 		world.size - Vector3(BOX_WALL * 2.0, BOX_WALL, BOX_WALL * 2.0))
 	_box = {"node": b["node"], "inner": inner, "world": world, "local_bounds": size,
 		"rest": (b["node"] as Node3D).transform}
+	# The box walls are real occluders. Its contact decal only darkens the cloth at
+	# the foot; it cannot cast the long shadow away from a candle or lamp.
 	if shoebox:
-		for m in b["meshes"]:
-			(m as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		var lid := Node3D.new()
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = CardTable.color(String((_look.get("frame", {}) as Dictionary).get("stock", "#c9b38a"))).darkened(0.3)
@@ -1572,7 +1588,7 @@ static func _lid_piece(parent: Node3D, mat: Material, dimensions: Vector3, at: V
 	part.material_override = mat
 	part.position = at
 	part.layers = THING_LAYER
-	part.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	part.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	parent.add_child(part)
 
 
@@ -2144,12 +2160,13 @@ func _put(t: Dictionary, b: Dictionary, spot: Dictionary, basis: Basis, group: S
 	node.transform = Transform3D(basis, Vector3(at.x, 0.0, at.y))
 	_props.add_child(node)
 	var wicks: Array = b["wicks"]
-	# A CANDLE CASTS IN EVERY FLAME'S LIGHT BUT ITS OWN: its own, just above it, printed a hard dark
-	# disc round its base. So it has a render layer of its own, which only its flames leave out. A
-	# thing with no flame is on its own layer too, so the cloth's shades fall on the cloth alone.
+	# The wax and holder immediately under a flame cannot shadow themselves: they printed a
+	# hard disc at the base. Separate accessories several centimeters away (a dish of dye beside
+	# the candle, for example) must still catch and cast that candle's light.
 	var own := (CANDLE_LAYER << _lights.size()) if not wicks.is_empty() else THING_LAYER
 	for m in b["meshes"]:
-		(m as MeshInstance3D).layers = own
+		var mesh := m as MeshInstance3D
+		mesh.layers = own if wicks.is_empty() or _near_wick(mesh, wicks) else THING_LAYER
 	var glows: Array = b.get("glows", [])
 	var first := _lights.size()
 	if not wicks.is_empty():
@@ -2182,6 +2199,22 @@ func _put(t: Dictionary, b: Dictionary, spot: Dictionary, basis: Basis, group: S
 		"node": node, "outline": spot["outline"], "bb": spot["bb"], "rect": spot["rect"], "foot": foot,
 		"box": node.transform * (b["size"] as AABB), "lit": wicks.size(), "lights": range(first, _lights.size()),
 		"meshes": b["meshes"]})
+
+
+## A mesh close enough to a flame that its own shadow would be a false dark ring.
+## Props keeps each part in a separate mesh, while its shared parent holds the final scale.
+static func _near_wick(mesh: MeshInstance3D, wicks: Array) -> bool:
+	var bounds := mesh.get_aabb()
+	var parent := mesh.get_parent() as Node3D
+	var center := parent.transform * bounds.get_center()
+	var half := bounds.size * parent.scale.abs() * 0.5
+	for wick in wicks:
+		var p := wick as Vector3
+		var dx := maxf(absf(center.x - p.x) - half.x, 0.0)
+		var dz := maxf(absf(center.z - p.z) - half.z, 0.0)
+		if Vector2(dx, dz).length() < 0.018:
+			return true
+	return false
 
 
 ## A FLAME at [param at], the top of a wick: a wick under it (on its candle's layer, [param own])
@@ -2243,6 +2276,7 @@ func _light_flames(flames: Array, own: int) -> void:
 	# it as rings and radial lines (feedback 0016) and dimmed the pool. 0.3 is about a millimeter
 	# there; the depth bias stays small, which is what keeps a card's own shadow.
 	light.light_size = 0.015
+	light.shadow_blur = 2.0
 	light.shadow_bias = 0.004
 	light.shadow_normal_bias = 0.3
 	light.omni_shadow_mode = OmniLight3D.SHADOW_CUBE
@@ -3268,6 +3302,12 @@ func _pose(t: float) -> void:
 	# THE DECK: shuffling from the shuffle mark until the first card leaves it, squared after - or,
 	# when the first card is a jumper, riffled once more first: the card flies out of that riffle;
 	# or the wash under way runs on and throws it
+	# THE DECK'S CARDS LIE THE WAY THEY LIE ([method _deck_turns]): each carries its own way through
+	# the shuffle, and the one that ends on top is the way the next card drawn comes up
+	var chained := _cards_from == "deck" and ts < INF
+	var turns := _deck_turns(t, ts, te, tm, wj, jump_s) if chained else PackedFloat32Array()
+	var settled := float(wj["end"]) if not wj.is_empty() else te
+	var top_slot := DECK_N - 1 - _deck_gone
 	for i in DECK_N:
 		var xf := _rest_xf(i)
 		if t >= ts:
@@ -3279,10 +3319,13 @@ func _pose(t: float) -> void:
 				xf = _jump_riffle(i, (t - te) / jump_s, _shuffle_xf(i, te - ts))
 			elif t < te + SQUARE and te < INF and jump_s == 0.0:
 				xf = _shuffle_xf(i, te - ts).interpolate_with(_rest_xf(i), _ease((t - te) / SQUARE))
-		# The top of the stack is the next card the viewer will see. Give its back that
-		# card's orientation before it is uncovered; the draw mesh takes its place at t0.
-		if i == DECK_N - 1 and _cards_from == "deck" and _top_deck_reversed(t, tm):
-			xf.basis = xf.basis * Basis(Vector3.UP, PI)
+		# The top of the stack is the next card the viewer will see. Once the shuffle is over, give its
+		# back that card's orientation before it is uncovered; the draw mesh takes its place at t0.
+		var spin := turns[i] if chained else 0.0
+		if _cards_from == "deck" and i == top_slot and (not chained or t >= settled):
+			spin = PI if _top_deck_reversed(t, tm) else 0.0
+		if spin != 0.0:
+			xf.basis = xf.basis * Basis(Vector3.UP, spin)
 		var dm: MeshInstance3D = _deck[i]
 		dm.transform = xf
 		# a box's cards are filed in it: the deck is seen only lying flat in a tin
@@ -3897,6 +3940,192 @@ func _shuffle_xf(i: int, u: float) -> Transform3D:
 	return _rest_xf(i)
 
 
+## THE DECK'S CARDS LIE THE WAY THEY LIE (2026-10-10, the user: "when shuffling, the orientation of the
+## very top card never changes" - and, once in a while, "then it reverts wrongly"). The deck's meshes
+## are interchangeable ([method _shuffle_xf]), so a card's way round was not a thing of its own: the
+## top slot was turned for the next card drawn, always, whichever mesh a cut brought up, and a mesh
+## that had flown away turned was upright again the moment its move ended. Now every card has its way
+## ([constant DECK_TURNED] of them lie turned about), a move carries it from slot to slot
+## ([method _move_goes]: where each slot goes, and which cards the move turns over, a wash's), and
+## the card that comes to the top by the shuffle's end is the way the next card drawn comes up - made
+## so by the way the deck began ([method _deck_flip0]), the one card chosen back to its start.
+## [method _chain_at] is the deck between moves: where each slot's card began, and how often it has
+## been turned about since.
+
+## Where each slot of the deck goes in [param m], and which of its cards the move turned about:
+## `{to: slot -> slot, turned}`.
+func _move_goes(m: Dictionary) -> Dictionary:
+	var to := PackedInt32Array()
+	var turned := PackedByteArray()
+	to.resize(DECK_N)
+	turned.resize(DECK_N)
+	match String(m["kind"]):
+		"riffle":
+			for i in DECK_N:
+				to[i] = _riffle_to(i)
+		"overhand":
+			for i in DECK_N:
+				to[i] = _overhand_to(i).x
+		"cut":
+			var rng := RandomNumberGenerator.new()
+			rng.seed = int(m["seed"])
+			var a := _cut_split(rng)
+			for i in DECK_N:
+				to[i] = (i - a) if i >= a else (DECK_N - a + i)
+		"wash":
+			var plan := _wash_fit(m)
+			var order: Array = plan.get("order", [])
+			if order.is_empty():
+				for i in DECK_N:
+					to[i] = i
+			else:
+				# a card the wash threw out for good (the jumper) is the deck's top, hidden
+				for i in DECK_N:
+					to[i] = DECK_N - 1
+				for slot in order.size():
+					to[int(order[slot])] = slot
+				turned = (plan["turned"] as PackedByteArray).duplicate()
+		_:
+			for i in DECK_N:
+				to[i] = i
+	return {"to": to, "turned": turned}
+
+
+## What [member _moves] key [method _chain_at] made its states for: they change with the room the
+## shuffle has, and the wash that is cut short to fit it.
+func _chain_key() -> String:
+	return "%s|%s|%s" % [_shuffle_room, _jump_room, _jump_scale]
+
+
+## The deck at the START of move [param idx] (and so in the pause before it): `{src, turn}` - for
+## each slot, which card of the deck's start lies there, and whether it has been turned about an odd
+## number of times since. Kept on each move, for the frames after.
+func _chain_at(idx: int) -> Dictionary:
+	var key := _chain_key()
+	var n := mini(idx, _moves.size())
+	var src0 := PackedInt32Array()
+	var turn0 := PackedByteArray()
+	src0.resize(DECK_N)
+	turn0.resize(DECK_N)
+	for i in DECK_N:
+		src0[i] = i
+	var state := {"src": src0, "turn": turn0}
+	var from := 0
+	for j in range(n, 0, -1):
+		var d: Dictionary = _moves[j - 1]
+		if String(d.get("chain_key", "")) == key:
+			state = d["after"]
+			from = j
+			break
+	for j in range(from, n):
+		var m: Dictionary = _moves[j]
+		var go := _move_goes(m)
+		var to: PackedInt32Array = go["to"]
+		var turned: PackedByteArray = go["turned"]
+		var was_src: PackedInt32Array = state["src"]
+		var was_turn: PackedByteArray = state["turn"]
+		var src := PackedInt32Array()
+		var turn := PackedByteArray()
+		src.resize(DECK_N)
+		turn.resize(DECK_N)
+		for i in DECK_N:
+			src[to[i]] = was_src[i]
+			turn[to[i]] = was_turn[i] ^ turned[i]
+		state = {"src": src, "turn": turn}
+		m["after"] = state
+		m["chain_key"] = key
+	return state
+
+
+## The first move that has not ended by [param u] seconds into the shuffle - the one under way, or
+## the next - and so the state of the deck then ([method _chain_at]).
+func _move_index_at(u: float) -> int:
+	_move_at(u)
+	for i in _moves.size():
+		var d: Dictionary = _moves[i]
+		if float(d["t0"]) + float(d["dur"]) > u:
+			return i
+	return _moves.size()
+
+
+## How each card of the deck lies at the shuffle's start: [constant DECK_TURNED] of them the other
+## way round, seeded - and the one card that is on top when the shuffle ends chosen back to its
+## start, so its way is the way the next card drawn comes up (for the jumper's wash, once it is
+## gathered, with the jumper's card gone from it).
+func _deck_flip0(te: float, ts: float, tm: Dictionary, wj: Dictionary) -> PackedByteArray:
+	var key := "%s|%s|%s|%s" % [te, ts, wj.get("end", ""), _chain_key()]
+	if key == _flip_key and is_same(_flip_moves, _moves) and _flip0.size() == DECK_N:
+		return _flip0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([_seed, "deck-turned"])
+	var f0 := PackedByteArray()
+	f0.resize(DECK_N)
+	for c in DECK_N:
+		f0[c] = 1 if rng.randf() < DECK_TURNED else 0
+	if te < INF and not _cards.is_empty():
+		var at := te - ts - 0.001
+		var idx := _move_index_at(at)
+		var st := _chain_at(idx)
+		var slot := DECK_N - 1
+		var want := _top_deck_reversed(te - 0.001, tm)
+		var turned := 0
+		if not wj.is_empty():
+			# the jumper's wash: the pile's top is the last card the wash lays, once it is down
+			var order: Array = (wj["plan"] as Dictionary).get("order", [])
+			if not order.is_empty():
+				slot = int(order[order.size() - 1])
+				turned = (wj["plan"] as Dictionary)["turned"][slot]
+			want = _top_deck_reversed(float(wj["end"]), tm)
+		elif idx < _moves.size() and at >= float((_moves[idx] as Dictionary)["t0"]):
+			# a move still under way when the shuffle ends: its cards go to their slots, turned
+			# as they were
+			turned = (_move_goes(_moves[idx]) as Dictionary)["turned"][slot]
+		var lies := int((st["turn"] as PackedByteArray)[slot]) ^ turned
+		f0[(st["src"] as PackedInt32Array)[slot]] = (1 if want else 0) ^ lies
+	_flip0 = f0
+	_flip_key = key
+	_flip_moves = _moves
+	return f0
+
+
+## The turn (radians about the card's own vertical) each deck slot's mesh carries at [param t] on top
+## of its move's pose: its card's way round, and - as the shuffle ends - a turn the move's pose had
+## in it handed over, so the card is not seen to turn back ([method _wash]'s cards turned half way
+## round are squared a quarter turn at most, the rest of the turn is here). Past the end of the
+## shuffle only the top slot's turn is the table's own ([method _pose]).
+func _deck_turns(t: float, ts: float, te: float, tm: Dictionary, wj: Dictionary, jump_s: float) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(DECK_N)
+	var f0 := _deck_flip0(te, ts, tm, wj)
+	# the deck from the shuffle's end on is the deck as the last move left it
+	var at := minf(t - ts, te - ts - 0.001)
+	var idx := _move_index_at(at)
+	var st := _chain_at(idx)
+	var src: PackedInt32Array = st["src"]
+	var turn: PackedByteArray = st["turn"]
+	var open := idx < _moves.size() and at >= float((_moves[idx] as Dictionary)["t0"])
+	var turned := PackedByteArray()
+	if open:
+		turned = (_move_goes(_moves[idx]) as Dictionary)["turned"]
+	if turned.is_empty():
+		turned.resize(DECK_N)
+	if not wj.is_empty() and t >= float(wj["end"]):
+		# the jumper's wash is gathered: each slot is the card the pile has there
+		var plan: Dictionary = wj["plan"]
+		var order: Array = plan.get("order", [])
+		for slot in DECK_N:
+			var c := int(order[slot]) if slot < order.size() else int(plan.get("jumper", slot))
+			out[slot] = PI * float((f0[src[c]] ^ turn[c]) ^ int((plan["turned"] as PackedByteArray)[c]))
+		return out
+	# the weight of the hand-over: the shuffle's pose settles into the rest over this
+	var w := 0.0
+	if wj.is_empty() and t > te and te < INF:
+		w = _ease(clampf((t - te) / (SQUARE if jump_s == 0.0 else jump_s * 0.35), 0.0, 1.0))
+	for i in DECK_N:
+		out[i] = PI * (float(f0[src[i]] ^ turn[i]) + float(turned[i]) * w)
+	return out
+
+
 ## The move under way at [param u], or empty in a pause. RUNS, NOT A LOTTERY: a reader does not
 ## pick a new shuffle for every move - they riffle three times running, cut four times, and then
 ## leave the deck alone for a few seconds (now and then for a long while) while they talk. So a
@@ -3962,12 +4191,19 @@ func _move_at(u: float) -> Dictionary:
 	return {}
 
 
+## Where a riffle puts deck slot [param i]: the halves interleave, the right half's card on top.
+static func _riffle_to(i: int) -> int:
+	var half := int(DECK_N * 0.5)
+	var left := i < half
+	return mini(2 * (i if left else i - half) + (0 if left else 1), DECK_N - 1)
+
+
 func _riffle(i: int, v: float, dur: float, seed: int) -> Transform3D:
 	var half := int(DECK_N * 0.5)
 	var left := i < half
 	var k := i if left else i - half
 	var side := -1.0 if left else 1.0
-	var j := mini(2 * k + (0 if left else 1), DECK_N - 1)
+	var j := _riffle_to(i)
 	var split_end := 0.5
 	var drop0 := 0.55
 	var drop1 := dur - 0.6
@@ -3986,12 +4222,27 @@ func _riffle(i: int, v: float, dur: float, seed: int) -> Transform3D:
 	return messy.interpolate_with(_rest_xf(j), _ease(sq))
 
 
+## Where an overhand shuffle puts deck slot [param i], and the packet it is peeled off in (-1: not
+## among the held cards, it stays): packets peel off the TOP of the held cards and land in turn on
+## the deck, the top packet first, so the held cards' order is reversed packet by packet.
+static func _overhand_to(i: int) -> Vector2i:
+	var k0 := int(DECK_N * 0.42)
+	if i < k0:
+		return Vector2i(i, -1)
+	var held_n := DECK_N - k0
+	var from_top := DECK_N - 1 - i
+	var p := mini(OVERHAND_PACKETS - 1, int(float(from_top) * float(OVERHAND_PACKETS) / float(held_n)))
+	var lo := int(ceil(float(p) * float(held_n) / float(OVERHAND_PACKETS)))
+	var hi := int(ceil(float(p + 1) * float(held_n) / float(OVERHAND_PACKETS)))
+	var in_packet := (DECK_N - 1 - lo) - i          # 0 = the packet's top card
+	return Vector2i(k0 + lo + (hi - lo - 1 - in_packet), p)
+
+
 func _overhand(i: int, v: float, dur: float, seed: int) -> Transform3D:
 	var k0 := int(DECK_N * 0.42)
 	if i < k0:
 		return _rest_xf(i)
-	var held_n := DECK_N - k0
-	var packets := 5
+	var packets := OVERHAND_PACKETS
 	var lift_end := 0.45
 	var casc0 := 0.5
 	var casc1 := dur - 0.45
@@ -3999,16 +4250,9 @@ func _overhand(i: int, v: float, dur: float, seed: int) -> Transform3D:
 		_cur_base + Vector3(0.07, 0.032 + (float(i - k0) + 0.5) * DECK_T, 0.012))
 	if v < lift_end:
 		return _rest_xf(i).interpolate_with(held, _ease(v / lift_end))
-	# packets peel off the TOP of the held cards and land in turn on the deck: the top packet
-	# lands first, so the held cards' order is reversed packet by packet
-	var from_top := DECK_N - 1 - i
-	var p := mini(packets - 1, int(float(from_top) * float(packets) / float(held_n)))
-	var lo := int(ceil(float(p) * float(held_n) / float(packets)))
-	var hi := int(ceil(float(p + 1) * float(held_n) / float(packets)))
-	var below := lo
-	var in_packet := (DECK_N - 1 - lo) - i          # 0 = the packet's top card
-	var size := hi - lo
-	var j := k0 + below + (size - 1 - in_packet)
+	var to := _overhand_to(i)
+	var p := to.y
+	var j := to.x
 	var tp := casc0 + (casc1 - casc0) * float(p) / float(packets)
 	var pd := (casc1 - casc0) / float(packets) * 0.85
 	if v < tp:
@@ -4023,13 +4267,19 @@ func _overhand(i: int, v: float, dur: float, seed: int) -> Transform3D:
 	return messy.interpolate_with(_rest_xf(j), _ease(sq))
 
 
+## Where a cut of the move seeded [param rng] (its first draw) is made: the first slot of the packet
+## that is lifted off.
+static func _cut_split(rng: RandomNumberGenerator) -> int:
+	return rng.randi_range(int(DECK_N * 0.3), int(DECK_N * 0.7))
+
+
 ## A CUT, quick enough to be done several times running: the top packet (from a point of the
 ## move's own) is lifted off and set down beside the deck, the rest is put on top of it, and the
 ## deck is drawn back to its place. Each cut in a run goes to its own side.
 func _cut(i: int, v: float, dur: float, seed: int) -> Transform3D:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
-	var a := rng.randi_range(int(DECK_N * 0.3), int(DECK_N * 0.7))
+	var a := _cut_split(rng)
 	var side := -1.0 if rng.randf() < 0.5 else 1.0
 	var aside := Vector3(side * rng.randf_range(0.08, 0.095), 0.0, rng.randf_range(-0.012, 0.018))
 	var top := i >= a
@@ -4285,7 +4535,7 @@ func _wash_rest_at(plan: Dictionary, v: float, bare := false) -> Array:
 			var lift := float(u[3]) * 0.5 + STACK_GAP * maxf(s, float(u[4])) + th * 0.5
 			# SQUARED ONE ON THE OTHER (the deck, the pile): held up at its own corners - above the face
 			# under it over the whole card, so above it wherever they cross
-			if umid.distance_squared_to(mid) < 0.006 * 0.006 and absf(wrapf(qi.w - float(u[5]), -PI, PI)) < 0.12:
+			if umid.distance_squared_to(mid) < 0.006 * 0.006 and absf(wrapf(qi.w - float(u[5]), -PI * 0.5, PI * 0.5)) < 0.12:
 				for c in 4:
 					hs[c] = maxf(hs[c], ur.x + ug.dot(corners[c] - umid) + lift)
 				continue
@@ -4904,7 +5154,9 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 					var slot := land_order.find(i)
 					var jit2: Vector3 = _slot_jit[slot] if slot >= 0 and slot < _slot_jit.size() else Vector3.ZERO
 					to_p[i] = Vector2(jit2.x, jit2.y) + Vector2(rng.randf_range(-0.0025, 0.0025), rng.randf_range(-0.0025, 0.0025))
-					to_yaw[i] = jit2.z + rng.randf_range(-0.05, 0.05)
+					# the nearest of the two ways a card lies (its yaw, or half a turn from it): a card
+					# the palms turned over lands the way it was turned, it is not turned back
+					to_yaw[i] = jit2.z + PI * roundf((from_yaw[i] - jit2.z) / PI) + rng.randf_range(-0.05, 0.05)
 					t_in[i] = gather_t0 + u1
 				var b0 := float(begun[i])
 				if g > u1 + dt:
@@ -5115,7 +5367,11 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 			(tracks[i] as Array).append(Vector4(pos[i].x, y, pos[i].y, yaw[i]))
 	# SQUARE: from wherever the pile left each card to its place in the deck - its place being where
 	# it lies in the pile, so none passes through another as the deck is squared - turned the short
-	# way round, whatever turns the wash gave it
+	# way round to the nearer of the deck's two ways (a quarter turn at most). A card the wash turned
+	# half way round stays turned: `turned` names those, and the deck carries them on
+	# ([method _deck_turns]).
+	var turned := PackedByteArray()
+	turned.resize(n)
 	var order: Array = []
 	for i in n:
 		if taken[i] == 0:
@@ -5130,7 +5386,9 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 		var jit3: Vector3 = _slot_jit[slot] if slot < _slot_jit.size() else Vector3.ZERO
 		var tr: PackedVector4Array = tracks[i]
 		var from: Vector4 = tr[mini(sq0, tr.size() - 1)]
-		var to := Vector4(jit3.x, WASH_FLOOR + float(slot) * WASH_LAYER, jit3.y, from.w + wrapf(jit3.z - from.w, -PI, PI))
+		var half := roundf((from.w - jit3.z) / PI)
+		turned[i] = posmod(int(half), 2)
+		var to := Vector4(jit3.x, WASH_FLOOR + float(slot) * WASH_LAYER, jit3.y, jit3.z + PI * half)
 		for st in range(sq0, tr.size()):
 			var e3 := _ease(float(st - sq0) / maxf(float(last - sq0), 1.0))
 			tr[st] = from.lerp(to, e3)
@@ -5152,7 +5410,7 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 		thin_at.append(0.0)
 		var piled := t_in[i] if t_in[i] > 0.0 and t_in[i] < INF else dur - square
 		thick_at.append(INF if taken[i] == 1 else minf(piled, dur - square))
-	return {"tracks": tracks, "out": thin_at, "in": thick_at, "order": order, "mix": Vector2(out_end, mix_end),
+	return {"tracks": tracks, "out": thin_at, "in": thick_at, "order": order, "turned": turned, "mix": Vector2(out_end, mix_end),
 		"gather": gather_t0, "dur": dur, "hands": hands["log"], "flights": flights, "airborne": airborne,
 		"jumper": jumper, "jumper_flight": jumper_flight}
 

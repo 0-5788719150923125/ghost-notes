@@ -607,11 +607,13 @@ class Face:
 	## facts (the booklet's keywords) and its text, set to fill the panel.
 	func _printed_back(win: Rect2, stock: Color, ink: Color, accent: Color) -> void:
 		var panel := win.grow(-win.size.x * 0.07)
-		var paper := stock
-		paper.a = 0.94
+		# The reverse's printing replaces its artwork with paper. Keeping the dark
+		# design under a translucent panel made long entries almost invisible in
+		# candlelight, especially on dark stock.
+		var paper := stock.lightened(0.8)
 		CardFaces._box(self, panel, paper, win.size.x * 0.03)
 		CardFaces._box(self, panel.grow(-6.0), accent, win.size.x * 0.025, false, 3.0)
-		var text_ink := CardTable.legible_ink(ink, stock, CardTable.TEXT_CONTRAST)
+		var text_ink := CardTable.legible_ink(ink, paper, CardTable.TEXT_CONTRAST)
 		var face := CardTable.font(String(look.get("title_face", "roman")))
 		var book := CardTable.font(CardTable.BOOK_FACE)
 		var italic := CardTable.font(CardTable.BOOK_ITALIC)

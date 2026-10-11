@@ -141,6 +141,10 @@ func _deck() -> bool:
 	_ok(stripped.contains("Read these upside down too.") and stripped.contains("This deck has 6 cards")
 		and stripped.contains("## After") and stripped.contains("- not a card"),
 		"stripping the cards took the rest of the brief with it")
+	_ok(CardTable.staging_of({"staging": {"source": "box"}})["text"] == "front",
+		"a boxed collection without a text choice grew a separate booklet")
+	_ok(CardTable.staging_of({"staging": {"source": "box", "text": "booklet"}})["text"] == "booklet",
+		"an explicitly supplied booklet was ignored")
 	print("cards_check: deck - a listed %d, %d without meanings; an alternative deck of %d" % [cards.size(), missing, own.size()])
 	return true
 

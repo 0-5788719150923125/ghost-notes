@@ -56,7 +56,7 @@ const SHOW := 1.6
 ## Three quick checks of anonymous cards in an open box, each returned before the chosen card is drawn.
 const RUMMAGE := 3.6
 ## A revealed card stays in the hand through an unspoken beat before it is returned or laid down.
-const LINGER := 18.0
+const LINGER := 2.0
 ## A card turned where it lies: a quarter turn (tap, untap), or over (flip).
 const TURN := 0.9
 const FLIP := 1.2
