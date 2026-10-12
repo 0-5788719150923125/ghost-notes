@@ -59,6 +59,13 @@ const EDDY_SD := 0.231
 ## degrees - tan(tilt) is the draft over the draw - never past [constant FLAME_TILT]. Between
 ## [constant GUTTER]'s two multiples of its draw it gutters: shorter, dimmer, as a candle does in a gust.
 const FLAME_TILT := 1.2
+## HOW MUCH OF THE EDDIES A FLAME FEELS ACROSS THE WIND (the user, 2026-10-11: the candles "don't seem to sync
+## with the wind correctly: you would expect candle flames to lean in the same direction in MOST instances").
+## A flame's eddies are a few centimeters wide, so two candles never share one; left whole, their sideways
+## halves lean neighboring flames opposite ways whenever the draft is along the view. Along the wind they
+## stretch and slacken the draft as it is; across it they shiver the flame ([constant FLAME_CROSS] of their
+## size) and leave its lean the wind's.
+const FLAME_CROSS := 0.3
 const GUTTER := Vector2(1.8, 5.0)
 ## A FLIER PUSHED ([method pushed]): the wind it remembers - this many of its own returns back - and the
 ## steps that span is summed in.
@@ -246,7 +253,15 @@ static func air_at(p: Dictionary, t: float, at: Vector3) -> Vector3:
 ## little longer in a draft that stretches it, longer in an eddy rising through it, shorter as it gutters;
 ## `bright`: dimmer as it gutters ([constant GUTTER]); `draft`: m/s.
 static func flame(p: Dictionary, t: float, at: Vector3, size: float, open := 1.0) -> Dictionary:
-	var a := air_at(p, t, at) * open
+	var v := velocity_at(p, t)
+	var e := eddy(p, t, at) * TURBULENCE * v.length()
+	if v.length() > 1e-5:
+		var along := v.normalized()
+		var he := Vector2(e.x, e.z)
+		var s := he.dot(along)
+		he = along * s + (he - along * s) * FLAME_CROSS
+		e = Vector3(he.x, e.y, he.y)
+	var a := (Vector3(v.x, 0.0, v.y) + e) * open
 	var h := Vector2(a.x, a.z)
 	var u := h.length()
 	var draw := sqrt(9.81 * maxf(size, 0.005))

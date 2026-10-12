@@ -1009,6 +1009,13 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
   of the channel's, loaded with ↻ - listing them and adding a video take the `youtube` scope, so
   the first ↻ signs in again for it (`YouTube.granted` reads the scopes kept with the token). A
   playlist YouTube refuses leaves the video up, and the status line says why.
+- **The producer writes for that line** (2026-10-11): asked for "the video's title, as it appears on
+  YouTube", it wrote a whole one ("Yes Or No Tarot: Ask As Many Times As It Takes", which went up
+  after "True Tarot: " - two colons, "Tarot" twice). It is now shown the template with the show's
+  name in it and its own part marked (`YouTube.title_shape`, `CardsEditor._uploads_as`, the
+  `episode_title` rule in `rules/cards/producer.yaml`), and asked for title case - the capital on
+  every word was the agents' own, no code recases a title. Not yet judged on a real run; the
+  earlier episodes' titles still read back to it with every word capitalized.
 - **Google's "Access blocked"** (fixed 2026-10-06): an account that is not one of a Testing
   project's test users gets a dead-end page that never comes back to Ghost Notes, so the dialog
   names it; add the account under Google Auth Platform > Audience > Test users, then "Open the page
@@ -1199,6 +1206,14 @@ enforced:
   on smooth vinyl is drawn flat, and faint scratches correlate with nothing. A map spanning under
   `Tables.FLAT_SPAN` of gray is now kept as flat (`height.json` `flat: true`) - the print lies smooth
   rather than raised by the painting's-own-detail fallback, and no image job is spent asking again.
+- The same refusal, for maps with relief (2026-10-11): an oilcloth's printed check, a blanket's dyed
+  stripe and a pebbled steel top were each drawn right - the print left out, a nap or a grain alike
+  everywhere - and refused at 0.03, 0.24 and 0.09. A map that fits nothing is now kept, unmoved, when
+  its relief has no place of its own (`Tables.relief_spread` under `EVEN_SPREAD`: the gradient's size
+  over blocks, rows and columns; `height.json` `even: true`). The gap is narrow (those three 0.11 to
+  0.17, maps of boards and seams 0.21 up), and planks' seams one to a block are caught only by the
+  rows. Looked at on the oilcloth's own table: without the map the check is embossed, with it the
+  print lies flat - a small difference at that relief's depth (3 levels of 255 on average).
 - Next: the set dresser's prompt still names the zones as before; it could be told the table may run
   off the frame's sides and that the middle may stay free. A first look at real episodes is pending.
 
@@ -1260,11 +1275,49 @@ the agents, then simply draw their attention to it".
   the seam; `CardsEditor` reads the episode's `table.json`), live in the push loop and into the export
   take (made stereo), on a worker in both. Its clock is the show's (`Spectrum.stream_origin()` + pushed
   frames), and a table handed in mid-reading is picked up within two seconds.
-- ONE DIAL, Environment (the Cards card, knob `environment`, 0.5): level on a curve (-30 to -2 dB),
-  how hard gusts and crashes strike, and brightness (distance). It ducks up to 4.7 dB under speech and
-  a slow limiter holds a place alone under -5 dBFS. At 0.5 every part sits near -32 dBFS RMS.
+- ONE DIAL, Environment (the Cards card, knob `environment`, 0.5): level (-60 to -10 dB, a straight
+  line - 2.5 dB a step), how hard gusts and crashes strike, and brightness (distance). It ducks up to
+  4.7 dB under speech and a slow limiter holds a place alone under -5 dBFS. At 0.5 every part sits near
+  -54 dBFS RMS, some 30 dB under the voice.
+- The level was retuned on 2026-10-11 (the user: "even at a value of 0.05 (the lowest), the
+  'Environment' audio is really quite loud"): it was -30 to -2 dB on a curve steep at the bottom, so
+  the first step was already at -27 and the top half was as loud as the reader. What 0.05 was is now
+  near 0.65. Stored dials were not moved: one left at 0.05 is close to silent until it is turned up.
+  Not yet judged by ear.
 - Listening: `tests/soundscape_probe.gd` writes a dozen places to dist/soundscape/*.wav. Gate:
   tests/soundscape_check.gd.
+
+## 2026-10-11: what lies on what, the box's cards, a leaf under a card
+
+Three reports from finished videos, one cause each.
+
+- **Cards through cards** (Libra, true-tarot 871516: `fan 1-2`, `show 1`, `show 2`). A spread's
+  heights were a hair apart in dealing order, so a card shown and put back went down under the one
+  swept out after it, and that one then rose through it. Now what lies on what follows from when
+  each card was set down (`TableMedium._down_at`, `_rest_lift`): a card rests a full thickness on
+  whatever lay there first, and one put back lies on top. A card under another is slid out along the
+  cloth before it rises (`_slid_out`: the shortest way clear of what is on it, never into a card
+  beside it, the deck or the hem). A swept card leaves the deck flat and turns over with room for
+  its tilt (`_sweep_xf`) - it used to cut into the deck and the card it landed on.
+  `tests/table_staging_check.gd` follows a waterfall frame by frame; a straight lift is the control.
+- **The box's cards were another kind of card.** With the text on the back, a drawn card has a
+  printed back of its own while the unseen cards showed the printing's shared artwork. They now get
+  printed backs too (`_blank_backs`: `CardFaces.Face.anonymous`, type ruled as lines, three per
+  printing); the search's card as well. Front-text and booklet boxes keep the shared back.
+- **Piles** (`TablePositions.box_piles`): uneven heights, plots of the floor shared out by lot so
+  no two gaps match, each pile leaning and a little ragged, no card off its own plot. The drawn
+  cards wait on top of piles, first drawn uppermost; a card put back goes on a pile none is drawn
+  from. Gone: the eight cards floating at the rim and the return spot in the air. A shoebox of piles
+  is filled to `SHOEBOX_SHARE` of what it could hold, so heights have room to differ. The open box's
+  piles are laid the same way. Not touched: cards filed on edge, and the open box's `loose` heap.
+- **A leaf under a card.** A lying piece is cupped and lies higher than a card is thick, so one a
+  card came down on stood up through it. The air's `lay` moments now reach the drifts
+  (`Drifts.laid`): a piece where a card comes down goes aside first, out past the nearest clear edge
+  (`_make_way`, `_aside`). A life is what it was planned to do, amended by the cards known so far.
+
+Still open: keepsakes in a box lie on its floor, inside whatever pile stands there; a card sliding
+along the cloth (a waterfall, a slide-out) does not move a leaf in its way; none of this has been
+judged in a finished video yet.
 
 ## Not built yet
 

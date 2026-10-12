@@ -1076,6 +1076,9 @@ class Air:
 	## time, a length, or the path its emitter rides (a card's pose can move while its moment's time
 	## stands).
 	func plan(moments: Dictionary) -> void:
+		# what lies where a card comes down goes aside first ([method Drifts.laid])
+		for d in drifts:
+			Drifts.laid(d, moments.get("lay", []))
 		for b in bursts:
 			var fx: Dictionary = b["fx"]
 			var mine: Array = Effects.picked(moments.get(String(fx["on"]), []), fx.get("which", "every"))

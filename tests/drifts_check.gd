@@ -18,6 +18,11 @@ extends SceneTree
 ##   flat stays near level in still air - and a gust turns a flat one over, against one no gust can.
 ## - NEVER ON OR UNDER THE CARDS: with the table saying where cards lie (its `cover`), no piece comes
 ##   down there or lies there uncovered - against the same without it, which lands some there.
+## - A CARD COMING DOWN ON ONE BLOWS IT ASIDE (the user, 2026-10-11: a card laid on the table "clipped
+##   through a leaf that had fallen" there): told a card is set down over a leaf that lies still, the
+##   leaf is out from under it before the card is down, never jumping, and lies clear of it after - on
+##   the table, the same whenever it is asked - against the same leaf with no card told of, which is
+##   still there; and a card set down elsewhere moves nothing.
 ## - NEVER THROUGH A THING: no piece, at any time sampled, is inside a thing standing on the table or in
 ##   the table under its top - against a fall aimed through a thing, which the check finds.
 ## - GUSTS LIFT what lies: with a light grip on a gusty wind some lying pieces are carried off the table,
@@ -39,7 +44,7 @@ func _ok(cond: bool, what: String) -> void:
 
 
 func _run() -> void:
-	for check in [_wind, _sanitize, _drift, _often, _ways, _cards]:
+	for check in [_wind, _sanitize, _drift, _often, _ways, _cards, _laid]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("drifts_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -324,4 +329,58 @@ func _cards() -> bool:
 		counts.append(on)
 	_ok(int(counts[0]) == 0, "%d times a piece was on or under the cards" % int(counts[0]))
 	_ok(int(counts[1]) > 0, "the control: with no cover, no piece ever came down where the cards are")
+	return true
+
+
+## A card set down at [param t] and lying at [param at] (xz), as the air's `lay` moments say it.
+func _lay(t: float, at: Vector2) -> Dictionary:
+	return {"t": t, "dur": 0.2, "path": [[t, Transform3D(Basis.IDENTITY, Vector3(at.x, 0.001, at.y))]]}
+
+
+func _laid() -> bool:
+	var still := {"from": "left", "strength": 0.0, "gusts": 0.0, "every": 60}
+	var fx := {"look": "leaves", "every": 600, "shake": 0, "settle": 1.0, "grip": 1.0, "lying": 12}
+	var pop := _pop(fx, still)
+	var control := _pop(fx, still)
+	var down := 40.0
+	# the first leaf lying: a card comes down with its middle a little off the leaf
+	var lies: Vector3 = Drifts.pose(pop, (pop["lives"] as Array)[0], 1.0).origin
+	var card := Vector2(lies.x + 0.01, lies.z - 0.02)
+	var half := Vector2(TablePositions.CARD.x, TablePositions.CARD.y) * 0.5
+	var under := func(p: Vector3) -> bool: return absf(p.x - card.x) < half.x and absf(p.z - card.y) < half.y
+	Drifts.at(pop, 60.0)
+	Drifts.laid(pop, [_lay(down, card)])
+	Drifts.laid(control, [_lay(down, Vector2(card.x, card.y + 5.0))])
+	var lv: Dictionary = (pop["lives"] as Array)[0]
+	_ok(under.call(Drifts.pose(pop, lv, down - 2.0).origin), "before the card comes the leaf did not lie where it lay")
+	var clear := true
+	var t := down - Drifts.ASIDE.y
+	while t < down + 30.0:
+		clear = clear and not under.call(Drifts.pose(pop, lv, t).origin)
+		t += 0.25
+	_ok(clear, "the leaf is under the card as it comes down or after")
+	var rests: Vector3 = Drifts.pose(pop, lv, down + 5.0).origin
+	var table: AABB = pop["table"]
+	_ok(absf(rests.y - lies.y) < 1e-4 and rests.x > table.position.x and rests.x < table.end.x
+		and rests.z > table.position.z and rests.z < table.end.z and rests.distance_to(lies) < 0.2,
+		"blown aside, the leaf does not lie on the table near where it lay (%s from %s)" % [str(rests), str(lies)])
+	var worst := 0.0
+	var prev: Vector3 = Drifts.pose(pop, lv, down - 1.5).origin
+	t = down - 1.5
+	while t < down + 0.5:
+		t += 1.0 / 60.0
+		var now: Vector3 = Drifts.pose(pop, lv, t).origin
+		worst = maxf(worst, now.distance_to(prev))
+		prev = now
+	_ok(worst < 0.012, "the leaf jumps as it goes aside (%.1f mm in a frame)" % (worst * 1000.0))
+	# PURE: told of the card first and asked after, the same
+	var fresh := _pop(fx, still)
+	Drifts.laid(fresh, [_lay(down, card)])
+	_ok(str(Drifts.at(fresh, down + 3.0).map(func(p: Dictionary) -> String: return str(p["xf"])))
+		== str(Drifts.at(pop, down + 3.0).map(func(p: Dictionary) -> String: return str(p["xf"]))),
+		"the pieces after the card is down depend on when the card was told of")
+	# THE CONTROL: no card there, and the leaf stays - under where the card would be
+	var kept: Dictionary = (control["lives"] as Array)[0]
+	_ok(under.call(Drifts.pose(control, kept, down + 5.0).origin) and Drifts.pose(control, kept, down + 5.0).origin.is_equal_approx(lies),
+		"the control: with the card set down elsewhere the leaf moved")
 	return true

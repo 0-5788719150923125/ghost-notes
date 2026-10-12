@@ -15,6 +15,9 @@ extends SceneTree
 ##   at all, guttering only in a strong gust; a torch's taller flame leans less than a candle's in the same
 ##   air, a lantern hardly; an electric lamp has no flame. A flame stands in a hurricane glass, not beside a
 ##   candelabra's stem, nor in its own wax.
+## - CANDLES ON ONE TABLE LEAN ALIKE (the user, 2026-10-11): in a draft along the view, flames a few
+##   centimeter-wide eddies apart still agree which way they lean; the eddies' cross-wind half, left whole,
+##   is a control that must fall short of it.
 ## - WHAT RIDES THE AIR is carried downwind at the air's speed and comes round again, so the shot holds about
 ##   as many as it did; WHAT FLIES holds its place in a breeze it can beat, is carried off by a gust past its
 ##   strength and flies home after. Two-sided: the same mote with no airspeed is carried off by the breeze,
@@ -194,6 +197,30 @@ func _flames() -> bool:
 		leaned = maxf(leaned, acos(clampf((f["axis"] as Vector3).y, -1.0, 1.0)))
 	_ok(worst < 0.75, "a candle never gutters in a gale (dimmest %.2f)" % worst)
 	_ok(leaned <= Winds.FLAME_TILT + 1e-4 and leaned > 1.0, "a candle in a gale leans %.2f radians" % leaned)
+	# CANDLES ON ONE TABLE LEAN ALIKE, in the air along the view as across it
+	for from in ["back", "left"]:
+		var wp := Winds.plan(Winds.sanitize({"from": from, "strength": 0.3, "gusts": 0.5, "every": 14}), 7)
+		var spots := [Vector3(-0.6, 0.05, 0.1), Vector3(-0.2, 0.05, -0.2), Vector3(0.25, 0.05, 0.15), Vector3(0.7, 0.05, -0.1)]
+		var kept := 0.0
+		var loose := 0.0
+		var m := 0
+		for i in 400:
+			var t := 3.0 + float(i) * 0.31
+			var dirs := PackedVector2Array()
+			var raw := PackedVector2Array()
+			for sp in spots:
+				var ax: Vector3 = Winds.flame(wp, t, sp as Vector3, 0.03)["axis"]
+				dirs.append(Vector2(ax.x, ax.z).normalized())
+				var a := Winds.air_at(wp, t, sp as Vector3)
+				raw.append(Vector2(a.x, a.z).normalized())
+			for j in range(1, spots.size()):
+				kept += dirs[0].dot(dirs[j])
+				loose += raw[0].dot(raw[j])
+				m += 1
+		kept /= float(m)
+		loose /= float(m)
+		_ok(kept > 0.95, "candles on one table lean alike %.2f from the %s, not 0.95" % [kept, from])
+		_ok(kept > loose + 0.04, "the cross-wind eddies left whole lean candles as alike (%.2f against %.2f)" % [loose, kept])
 	# LAMPS: a torch's tall flame leans less, a lantern's glass keeps it off, a lamp has no flame
 	var lamp_at := Vector3(1.2, 0.6, 0.4)
 	var candle := 0.0

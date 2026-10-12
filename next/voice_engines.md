@@ -132,6 +132,77 @@ whole), and every clause's first word would be clipped the way a sentence's is (
 leak is local and the plan says exactly where it is, so it is fixed there. If the ear still hears the
 next word in a rest, splitting is the experiment to run next.
 
+## Built (2026-10-11): a word's own hiss, and the next word's early start
+
+Reported: the trail "seems to truncate the 's' at the end of its final word too early, such that it
+turns plural words into singular words". Status: built, gated, waiting on the user's ear
+(`13_plurals_before.wav` against `14_plurals_after.wav`: twelve sentences of the Cards reading with
+a hiss-final word before a comma, then ten made ones, the last a singular for contrast).
+
+**What was measured** (`final_s.py`, `final_s_frames.py`, `final_plural.py`; seeded, the note's own
+settings). The model renders a final /z/ small: planned for one or two frames, 30 to 60 ms long, 25
+to 35 dB under the take's peak. The trail looked for the voice's end 12 dB under the rime's peak, so
+it stopped before that hiss or part of the way into it, and its floor then held the rest of it 16 dB
+down, at the room tone:
+
+| | hiss-final words | own hiss down over 6 dB | over 12 dB | next word's start dipped over 3 dB |
+|---|---|---|---|---|
+| made sentences, before | 26 | 20 (median 11.7 dB) | 12 | 4 of 31 commas (worst 23.5) |
+| made sentences, after | 26 | 0 | 0 | 1 (a -40 dB murmur) |
+| the Cards reading (127 requests), before | 18 | 9 | 5 | 20 of 83 commas (worst 24.4) |
+| the Cards reading, after | 18 | 0 (worst 0.1 dB) | 0 | 1 (a blip 50 ms out in the rest) |
+| before a hiss-initial word, 50 draws, after | 50 | 0 (worst 0.9 dB) | 0 | 0 |
+
+In the finished audio, 31 hiss-final words: 4 had under 20 ms of their hiss left before the pause
+(median 70 ms at -33 dB), now none (median 100 ms at -27 dB); no splice lands inside a hiss, and
+nothing clips. The lead was innocent: `_quiet_lead` touched none of 100 own hisses.
+
+- **The plan says which words, the waveform says where** (`_HISSES`, `_hiss_codas`, `_hiss_tail`).
+  A word whose sounds after its last vowel hold s z ʃ ʒ f θ is looked at for its hiss, for as many
+  runs as it spells ("asks," has two, a 70 ms closure apart; "last," one, so its /t/ keeps the
+  floor). The voice ends before the hiss, the hiss is left at the model's own level, and the floor
+  comes back after it. Words the plan does not name are byte-identical to before.
+- **Looked for above 2 kHz, not 4** - a /ʃ/ has 94-100% of its energy above 2 kHz and 5-40% above
+  4 ("hush, you." in the reading had the middle of its /ʃ/ floored by the first version of this).
+- **The voice falls no further than its hiss** - the fade's depth is the vowel's level over the
+  hiss's, at most TRAIL_DB: the whole 16 dB before a quiet /z/, about 8 before "hush,".
+- **The next word can start before the plan says** (10-30 ms): the far side of the rest is walked
+  back to where its sound begins (`_sound_from`, at most TRAIL_EARLY), so the floor lets go first
+  and the search for the voice's end cannot land on the next word ("a horse, a voice").
+
+Gates: `hosts/voice/test_trail.py` (nine new checks, each with its control: a hiss the plan does
+not name is still floored, one run where two are spelled, 4 kHz instead of 2, TRAIL_EARLY 0).
+
+**A duration floor on the final hiss was weighed and set aside** (`hiss_floor.py`, like
+OPENING_VOWEL): it lengthens a voiceless /s/ about 10 ms a frame, but a voiced /z/ - the short
+case - only gets longer as voice (hiss 65 / 70 / 90 / 115 ms at 0 / 4 / 6 / 8 frames in the median,
+"hands" 55 / 40 / 35 / 60), and every floored word grows by the floor.
+
+**A delivery mark started a sentence late** where its passage opened on something stripped (a
+comment and a blank line): `_resolve_marks` noted marks before the leading whitespace went
+(`tests/multi_voice_check.gd`, `[0, 0, 0.5]` before).
+
+**Found on the way, not built** (the review of the whole voice path, 2026-10-11):
+
+- *A delivery mark is under what can be heard.* One step is pace 4% (about 2% in the audio: most
+  ids sit on the one-frame Ceil), pitch 0.33 st, effort 0.2 dB, eased half a sentence at a time;
+  the model's own sentence medians wander about a semitone. The Cards reader writes one in most
+  episodes (over 1000 marks; `dry`, `quicker, brighter`, `softer` lead). The pitch is on the
+  formant-locked path, clamped at 1.5 st in the host, so there is room: `15_delivery_today.wav`,
+  `16_delivery_x2.5.wav`, `17_delivery_x4.wav` (`listen_delivery.py`). The steps are pinned small
+  by `multi_voice_check` on purpose; the ear decides.
+- *Dead with one sentence per request*: the length-conditioned rate (`rel` is always 1) and the
+  alternating `noise_w` (always the plus side) in `_discourse_plan`. Both under 2% at typical dials.
+- *A hold's cut* (`rests`, `_splice_holds`) is searched only in the plan's gap, which after a
+  hiss-final word with no mark can lie inside the hiss: part of it lands after the hesitation.
+- *A failed request carries no id* (`VoiceHost.failed`): the live reading waits on that chunk for
+  good, and an export awaits `synthesized`.
+- *The outro mark's fade is in the export take and in the render's master ramp* (twice);
+  *live and export hash different text for their seed* (unstripped against stripped);
+  *a chain stage at 0 on one voice keeps its state frozen* across a handover.
+- `_effort` and `_emphasize` end in a hard clip: none at the note's settings (0 samples at full
+  scale in 23 takes), reachable at the top of the Effort dial.
+
 ## Still proposed
 
 1. **Rests rendered, not spliced** - the comma rest whole from `rest_floor`, no digital silence

@@ -101,8 +101,14 @@ const DUCK := 0.42
 ## The duck's follower: how fast it closes on a word and how slowly it lets go (seconds).
 const DUCK_ATTACK := 0.03
 const DUCK_RELEASE := 0.9
-## THE DIAL'S LEVEL: dB at its bottom and its top, over the layers' own levels.
-const LEVEL_DB := Vector2(-30.0, -2.0)
+## THE DIAL'S LEVEL: dB at its bottom and its top, over the layers' own levels, and a straight line
+## between them ([method level_db]) - a step of the dial (0.05) is 2.5 dB wherever it is. It was -30 to
+## -2 on a curve steepest at the bottom: the first step was already at -27, the whole dial covered 25 dB,
+## and its upper half was a place as loud as the reader (the user, 2026-10-11: "even at a value of 0.05
+## (the lowest), the 'Environment' audio is really quite loud" - a stream and a light wind in the trees,
+## measured there at -48 dBFS RMS under a voice near -23). That level is now two thirds of the way up;
+## the middle is 8 dB under it, and the bottom 30.
+const LEVEL_DB := Vector2(-60.0, -10.0)
 ## THE LOUDEST A PLACE GETS, alone (linear): a gust at the top of the dial, a breaker, a downpour are held
 ## under it by a slow limiter, so the place never reaches the voice's own peaks.
 const CEILING := 0.56
@@ -451,11 +457,15 @@ func active() -> bool:
 	return not _bands.is_empty() or _in.has("crickets")
 
 
+## The dial's level at [param d], 0-1, in dB over the layers' own ([constant LEVEL_DB]).
+static func level_db(d: float) -> float:
+	return lerpf(LEVEL_DB.x, LEVEL_DB.y, clampf(d, 0.0, 1.0))
+
+
 ## THE DIAL, 0-1: the level, how hard what moves strikes, and how bright it is - distance, in one.
 func set_level(d: float) -> void:
 	d = clampf(d, 0.0, 1.0)
-	# on a curve: the middle of the dial is where a place usually sits, and the bottom is far away
-	_gain = 0.0 if d <= 0.0 else db_to_linear(lerpf(LEVEL_DB.x, LEVEL_DB.y, pow(d, 0.75))) * smoothstep(0.0, FADE_IN, d)
+	_gain = 0.0 if d <= 0.0 else db_to_linear(level_db(d)) * smoothstep(0.0, FADE_IN, d)
 	_contrast = lerpf(0.55, 1.5, d)
 	_snap = lerpf(0.4, 1.25, d)
 	# the floor sinks as the dial rises - more contrast, never silence: -6 dB low, -11 dB at the top

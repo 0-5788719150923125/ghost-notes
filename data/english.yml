@@ -106,6 +106,49 @@ names:
   organoids: AO1 R G AH0 N OY2 D Z
   heganoid: HH IY1 G AA0 N OY2 D
   heganoids: HH IY1 G AA0 N OY2 D Z
+
+  # REAL WORDS eSPEAK READS WRONG - the sky and the cards. These have a dictionary reading; the
+  # neural path never asks the dictionary, so they are pinned here like a name. The user,
+  # 2026-10-11: "The audio model keeps pronouncing 'Libra' wrong" - eSpeak says lˈaɪbɹə
+  # (LIE-bruh), 18 times across the Cards scripts made by then, and the sign is LEE-bruh.
+  # Found by asking eSpeak for the zodiac, the planets, the terms of a chart and a tarot
+  # deck, and for every word of those scripts, then comparing with CMUdict and the
+  # dictionaries: only a reading that was WRONG is here (eSpeak's is beside each), and
+  # the other eleven signs, which it reads right, are not. A possessive follows its word
+  # ("Libra's" - Phonemes._resolve_homographs); a plural is its own line.
+  #   libra       lˈaɪbɹə         (CMUdict ends it AA0, LEE-brah; the schwa is the sign)
+  libra: L IY1 B R AH0
+  libras: L IY1 B R AH0 Z
+  libran: L IY1 B R AH0 N
+  librans: L IY1 B R AH0 N Z
+  #   leos        lɪˈoʊz          (lee-OZE; the singular it reads right)
+  leos: L IY1 OW0 Z
+  #   ophiuchus   ˈɑːfɪˌʌtʃəs     (OFF-ee-utch-us)
+  ophiuchus: OW2 F IY0 Y UW1 K AH0 S
+  #   decan       dᵻkˈæn          (dih-CAN)
+  decan: D EH1 K AH0 N
+  decans: D EH1 K AH0 N Z
+  #   synastry    sˈɪnæstɹi       (SIN-ass-tree)
+  synastry: S IH0 N AE1 S T R IY0
+  #   retrograde  ɹˌɛtɹoʊɡɹˈeɪd   (retro-GRADE; CMUdict's reading)
+  retrograde: R EH1 T R AH0 G R EY2 D
+  #   querent     kwˈɜːɹənt       (KWUR-ent)
+  querent: K W IH1 R AH0 N T
+  querents: K W IH1 R AH0 N T S
+  #   hierophant  hˈaɪɚɹɑːfənt    (HIRE-ah-funt)
+  hierophant: HH AY1 ER0 AH0 F AE2 N T
+  hierophants: HH AY1 ER0 AH0 F AE2 N T S
+  #   cartomancy  kˈɑːɹɾəmənsi    (the -mancy swallowed)
+  cartomancy: K AA1 R T AH0 M AE2 N S IY0
+  # Constellations and a myth those scripts told (CMUdict's readings where it has them):
+  #   pyxis       pˈaɪksɪs        (PIE-ksis)
+  #   horologium  hɔːɹˈɑːlədʒəm   (ho-ROLL-uh-jum)
+  #   midas       mˈiːdəz         (MEE-duz, 12 times)
+  #   pactolus    pˈæktɑːləs      (PACK-tah-lus)
+  pyxis: P IH1 K S IH0 S
+  horologium: HH AO2 R AH0 L OW1 JH IY0 AH0 M
+  midas: M AY1 D AH0 S
+  pactolus: P AE0 K T OW1 L AH0 S
   herganoid: HH ER1 G AA0 N OY2 D
   herganoids: HH ER1 G AA0 N OY2 D Z
 

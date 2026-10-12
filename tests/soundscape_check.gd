@@ -27,7 +27,9 @@ extends SceneTree
 ##   BOTH ears: no half second of a place set to one side is more than 8 dB from one ear to
 ##   the other (nor less than 2 dB: it is still to one side).
 ## - SLICED THE SAME: the samples are the same rendered at once, in odd slices, or ahead on a worker.
-## - THE DIAL: 0 is silence; louder as it rises; never past the ceiling alone.
+## - THE DIAL: 0 is silence; louder as it rises; never past the ceiling alone; and its first step is
+##   far under its middle (18 dB or more: it was 14, and "even at a value of 0.05 (the lowest) ...
+##   really quite loud", the user, 2026-10-11) - against a third of the way up, which is not.
 ## - IT STEPS BACK FOR THE VOICE: under speech the place is quieter than in the gaps - against the
 ##   same place with no voice, which is not.
 ## - CICADAS ARE A CHORUS: their loudness over 2 ms wobbles little round its 50 ms average while they
@@ -150,7 +152,8 @@ func _floor() -> bool:
 		var loud := lv[int(lv.size() * 0.9)]
 		_ok(loud - quiet < 18.0, "at %.1f the breeze falls %.1f dB below its loud moments between gusts" % [d, loud - quiet])
 		_ok(loud - lv[int(lv.size() * 0.1)] > 4.0, "at %.1f the breeze does not ebb and flow (%.1f dB)" % [d, loud - lv[int(lv.size() * 0.1)]])
-		_ok(quiet > -60.0, "at %.1f the breeze is near silence at its quietest (%.1f dBFS)" % [d, quiet])
+		# over the dial's own level: what is held is the breeze, not where the dial is tuned
+		_ok(quiet - Soundscape.level_db(d) > -47.0, "at %.1f the breeze is near silence at its quietest (%.1f dB over the dial's level)" % [d, quiet - Soundscape.level_db(d)])
 	return true
 
 
@@ -405,6 +408,12 @@ func _dial() -> bool:
 		for v in pcm:
 			peak = maxf(peak, maxf(absf(v.x), absf(v.y)))
 		_ok(peak <= Soundscape.CEILING * 1.001, "at %.1f a place alone peaks at %.3f, past the ceiling" % [d, peak])
+	# THE BOTTOM IS FAR UNDER THE MIDDLE: the dial's first step, and the control a third of the way up
+	var middle := linear_to_db(_rms(_make(place, {}, 3, 0.5).render(SR * 30)).length())
+	var first := middle - linear_to_db(_rms(_make(place, {}, 3, 0.05).render(SR * 30)).length())
+	var third := middle - linear_to_db(_rms(_make(place, {}, 3, 0.3).render(SR * 30)).length())
+	_ok(first >= 18.0, "the dial's first step is only %.1f dB under its middle" % first)
+	_ok(third < 18.0, "the control: a third of the way up is %.1f dB under the middle too" % third)
 	return true
 
 
@@ -450,11 +459,12 @@ func _every() -> bool:
 		places.append([{"insects": {"kind": k}}, {}])
 	for p in places:
 		var pcm := _make(p[0], p[1]).render(SR * 20)
-		var level := linear_to_db(_rms(pcm).length() / sqrt(2.0))
+		# over the dial's own level, so this holds each part's level beside the rest wherever the dial is tuned
+		var level := linear_to_db(_rms(pcm).length() / sqrt(2.0)) - Soundscape.level_db(0.5)
 		var nan := false
 		for v in pcm:
 			if is_nan(v.x) or is_nan(v.y):
 				nan = true
 				break
-		_ok(not nan and level > -48.0 and level < -22.0, "%s is %.1f dBFS%s" % [str(p[0]), level, " and NaN" if nan else ""])
+		_ok(not nan and level > -35.0 and level < -9.0, "%s is %.1f dB over the dial's level%s" % [str(p[0]), level, " and NaN" if nan else ""])
 	return true

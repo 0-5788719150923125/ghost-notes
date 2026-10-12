@@ -52,6 +52,10 @@ const PILE_GAP := 0.018
 const SIDEWAYS := -PI * 0.5
 ## Where a lidded shoebox stays after it is brought in: centered across the table, toward the far edge.
 const SHOEBOX_AT := Vector3(0.0, 0.0, -0.17)
+## A pile in a box keeps at least this much of the floor beside its card for itself (meters).
+const BOX_PILE_GAP := 0.006
+## How untidy a collection kept in piles is ([method box_piles]), where 1 is cards left as they fell.
+const PILES_NEAT := 0.4
 
 
 ## THE SEEDED SPREAD, as the table has always laid it: a preset picked per episode from [param rng],
@@ -172,9 +176,111 @@ static func staged(cards: Array, rng: RandomNumberGenerator, lay: Dictionary, bo
 		var off := CardTable.clear_of(out, CARD, keep)
 		for sl in out:
 			(sl as Dictionary)["pos"] = ((sl as Dictionary)["pos"] as Vector3) + Vector3(off.x, 0.0, off.y)
-		if rows == 2 or _in_frame(out, lay):
+		if rows == 2 or (_in_frame(out, lay) and _on_cloth(out)):
 			return out
 	return []
+
+
+## How many piles of [param size] cards stand side by side on the floor of [param inner]: across, and
+## front to back.
+static func box_plots(inner: AABB, size: Vector2) -> Vector2i:
+	return Vector2i(maxi(1, int(floor(inner.size.x / (size.x + BOX_PILE_GAP)))),
+		maxi(1, int(floor(inner.size.z / (size.y + BOX_PILE_GAP)))))
+
+
+## THE PILES IN A BOX the cards are kept in (2026-10-11, the user: "perfect little stacks, equally-spaced
+## apart... more natural, maybe with some stacks taller than others"): [param count] cards of [param size]
+## lying on the floor of [param inner], each [param pitch] above the one under it (less when the tallest
+## pile would pass the rim). As many piles as fit side by side ([method box_plots]); the floor left over
+## is shared out unevenly, each row of piles its own way, so no two gaps match and the rows do not line
+## up. Every pile has its own height, stands somewhere in its plot, leans as it rises, and its cards
+## lie a hair off one another, now and then one askew. No card leaves its pile's plot, so a pile never
+## runs into its neighbor or through a wall. [param mess]: 0 is the squared grid (a gate's control),
+## [constant PILES_NEAT] a collection kept in piles, 1 cards left as they fell.
+## `[{rect: Rect2 (x, z), cards: [Transform3D], bottom to top}]`.
+static func box_piles(inner: AABB, size: Vector2, count: int, pitch: float, mess: float,
+		rng: RandomNumberGenerator) -> Array:
+	var plots := box_plots(inner, size)
+	var on := 1.0 if mess > 0.0 else 0.0
+	var piles: Array = []
+	var deep := _shares(plots.y, inner.size.z, size.y, on, rng)
+	var z := inner.position.z
+	for r in plots.y:
+		var wide := _shares(plots.x, inner.size.x, size.x, on, rng)
+		var x := inner.position.x
+		for c in plots.x:
+			piles.append({"rect": Rect2(x, z, wide[c], deep[r]), "cards": []})
+			x += wide[c]
+		z += deep[r]
+	# THE HEIGHTS: the cards shared out by weight, the odd ones over going to the first piles
+	var weights := PackedFloat32Array()
+	var sum := 0.0
+	for p in piles:
+		weights.append(lerpf(1.0, rng.randf_range(0.3, 1.0), on))
+		sum += weights[-1]
+	var heights := PackedInt32Array()
+	var left := maxi(count, 0)
+	for i in piles.size():
+		heights.append(int(floor(float(maxi(count, 0)) * weights[i] / sum)))
+		left -= heights[i]
+	for i in left:
+		heights[i % heights.size()] += 1
+	var tallest := 1
+	for h in heights:
+		tallest = maxi(tallest, h)
+	var step := minf(pitch, (inner.size.y - 0.004) / float(tallest))
+	for i in piles.size():
+		var plot: Rect2 = piles[i]["rect"]
+		var way := PI if rng.randf() < 0.5 else 0.0
+		var tilt := rng.randf_range(-0.06, 0.06) * mess
+		var lean := Vector2.from_angle(rng.randf_range(-PI, PI)) * rng.randf_range(0.0, 0.1) * mess
+		var free := (plot.size - size).max(Vector2.ZERO) * 0.5
+		var spot := plot.get_center() + Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)) * free * on
+		var wander := Vector2.ZERO
+		for j in heights[i]:
+			wander += Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)) * 0.0005 * mess
+			var turn := tilt + rng.randf_range(-1.0, 1.0) * (0.012 + 0.03 * mess) * on
+			var off := Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)) * (0.0005 + 0.0012 * mess) * on
+			if rng.randf() < (0.02 + 0.08 * mess) * on:
+				turn = tilt + rng.randf_range(-1.0, 1.0) * (0.06 + 0.25 * mess)
+				off *= 3.0
+			# kept on its own plot: turned less until it fits, then pushed back inside
+			var half := _lying_half(size, turn)
+			for tries in 6:
+				if half.x * 2.0 <= plot.size.x and half.y * 2.0 <= plot.size.y:
+					break
+				turn = turn * 0.5 if tries < 5 else 0.0
+				half = _lying_half(size, turn)
+			var at := spot + lean * (float(j) * step) + wander + off
+			var lo := plot.position + half
+			var hi := plot.end - half
+			at.x = clampf(at.x, lo.x, hi.x) if lo.x <= hi.x else plot.get_center().x
+			at.y = clampf(at.y, lo.y, hi.y) if lo.y <= hi.y else plot.get_center().y
+			(piles[i]["cards"] as Array).append(Transform3D(Basis(Vector3.UP, way + turn),
+				Vector3(at.x, inner.position.y + 0.001 + (float(j) + 0.5) * step, at.y)))
+	return piles
+
+
+## [param total] meters shared among [param n] plots, each at least a [param card] long: evenly, or
+## ([param on] 1) the room left over shared by lot.
+static func _shares(n: int, total: float, card: float, on: float, rng: RandomNumberGenerator) -> PackedFloat32Array:
+	var slack := maxf(total - card * float(n), 0.0)
+	var weights := PackedFloat32Array()
+	var sum := 0.0
+	for i in n:
+		weights.append(lerpf(1.0, rng.randf_range(0.25, 1.75), on))
+		sum += weights[-1]
+	var out := PackedFloat32Array()
+	for i in n:
+		out.append((total - slack) / float(n) + slack * weights[i] / sum)
+	return out
+
+
+## Half of what a card of [param size] lying turned [param turn] covers, across and front to back.
+static func _lying_half(size: Vector2, turn: float) -> Vector2:
+	var c := absf(cos(turn))
+	var s := absf(sin(turn))
+	return Vector2(c * size.x + s * size.y, s * size.x + c * size.y) * 0.5
 
 
 ## The piles [param cards] make: `[{kind: single|stack|sweep, cards: [index...]}]` - a card `on` the one
@@ -271,6 +377,18 @@ static func _rows(n: int, gap: float) -> Array:
 		var cnt: int = top if row == 0 else n - top
 		pos.append(Vector3((float(k) - float(cnt - 1) * 0.5) * gap, 0.0, -0.165 + float(row) * CARD.y * 1.12))
 	return pos
+
+
+## Does every card of [param slots] lie whole on the cloth, a hem in from its edge? A row that could not
+## step aside past the box's column steps BACK instead, off the far edge of the cloth, and is still in
+## the frame (feedback 0020: ten cards laid at z -0.44 on a cloth ending at -0.38, the first of them in
+## the far corner while the front of the table was bare) - it is two rows instead.
+static func _on_cloth(slots: Array) -> bool:
+	var cloth := Rect2(CLOTH_MIDDLE - CLOTH * 0.5, CLOTH).grow(-HEM)
+	for s in slots:
+		if not cloth.encloses(CardTable.footprint(s["pos"], float(s["yaw"]), CARD)):
+			return false
+	return true
 
 
 static func _in_frame(slots: Array, lay: Dictionary) -> bool:

@@ -28,7 +28,10 @@ class_name Drifts
 ## it is thrown again from elsewhere; a skid stops short of what it runs into. NOR THROUGH THE CARDS: the
 ## table says where the deck and every card lying on the cloth are at any time (its `cover`); a piece
 ## never comes down where one lies (one once fell through the deck and lay under it), never skids into
-## one, and one laid over it later pins it there - a gust cannot reach it.
+## one - and A CARD COMING DOWN ON ONE BLOWS IT ASIDE ([method laid]): out past the card's nearest edge,
+## low over the cloth, before the card is down. A piece lies higher than a card is thick and is cupped, so
+## one left under a card stood up through it (the user, 2026-10-11: a card "clipped through a leaf that
+## had fallen on the table").
 ##
 ## A piece is real geometry - a cupped quad cut to its outline in the shader (shaders/air_drift.gdshader),
 ## lit by every light on the table, glowing through where the sun is behind it, casting its small
@@ -116,6 +119,13 @@ const LANDING := 0.45
 ## A lift: how high it hops (meters, at most), and how quickly.
 const HOP := 0.04
 const HOP_RISE := 0.35
+## BLOWN ASIDE by a card coming down on it ([method laid]): how long before the card is down it goes, and
+## by when it is clear (seconds); how high it hops and how much room it leaves the card (meters), and
+## how much further it may go.
+const ASIDE := Vector2(0.85, 0.4)
+const ASIDE_HOP := 0.012
+const ASIDE_ROOM := 0.01
+const ASIDE_MORE := 0.03
 ## Further than this from the table's middle, or under the air's floor, a piece is gone (meters).
 const GONE := 3.0
 ## The share of falls from above that come down past the table, in the room behind it.
@@ -463,6 +473,7 @@ static func _live(pop: Dictionary, k: int, j: int, t0: float) -> Dictionary:
 		var lift := float(lv["lift"]) if settles else LIFT.x * 0.5
 		if float(fx["grip"]) >= 0.999 and settles:
 			lift = INF
+		lv["grip"] = lift
 		segs = _after(pop, lv, p, float(lv["t1"]), lift, r)
 		if settles:
 			resting.append(float(segs[segs.size() - 1]["end"]) if not segs.is_empty() else Lights.HORIZON)
@@ -471,6 +482,8 @@ static func _live(pop: Dictionary, k: int, j: int, t0: float) -> Dictionary:
 	lv["segs"] = segs
 	if not segs.is_empty():
 		lv["end"] = float((segs[segs.size() - 1] as Dictionary)["end"])
+	lv["dice"] = [k, j]
+	_make_way(pop, lv)
 	return lv
 
 
@@ -489,8 +502,11 @@ static func _lying(pop: Dictionary, j: int) -> Dictionary:
 			lv["p0"] = p
 			lv["land"] = p
 			var lift := float(lv["lift"]) if float((pop["fx"] as Dictionary)["grip"]) < 0.999 else INF
+			lv["grip"] = lift
 			lv["segs"] = _after(pop, lv, p, -Lights.HORIZON, lift, r)
 			lv["end"] = float((lv["segs"][(lv["segs"] as Array).size() - 1] as Dictionary)["end"])
+			lv["dice"] = [-1, j]
+			_make_way(pop, lv)
 			return lv
 	return {}
 
@@ -605,16 +621,18 @@ static func _gone_at(pop: Dictionary, lv: Dictionary) -> float:
 ## ALL IT DOES ONCE IT IS DOWN at [param p] at [param t]: it lies there until a gust blows past
 ## [param lift] (m/s); the gust skids it across the cloth to where the gust alone would take it - short
 ## of anything in the way, the deck and the cards too - or, when that is past the table's edge, carries
-## it off. A card laid over it pins it: no gust reaches it there. Lying, skidding, carried off:
-## `[{kind, t, end, from, to, gust}]`.
-static func _after(pop: Dictionary, lv: Dictionary, p: Vector3, t: float, lift: float, r: RandomNumberGenerator) -> Array:
+## it off. Under a card no gust reaches it (a card coming down on it sends it aside first: [method
+## laid]). Lying, skidding, carried off: `[{kind, t, end, from, to, gust}]`.
+static func _after(pop: Dictionary, lv: Dictionary, p: Vector3, t: float, lift: float, r: RandomNumberGenerator,
+		lies: Dictionary = {}) -> Array:
 	var wind: Dictionary = pop["wind"]
 	var segs: Array = []
 	var here := p
 	var now := t
 	var after := t
-	var flip := bool(lv["flip"])
-	var yaw := float(lv["rest_yaw"])
+	# the way it lies as it comes down - or, blown aside, the way it already lay ([param lies])
+	var flip := bool(lies.get("flip", lv["flip"]))
+	var yaw := float(lies.get("yaw", lv["rest_yaw"]))
 	for n in 64:
 		var g := Winds.next_gust(wind, maxf(after, 0.0), lift) if lift < INF else -1
 		if g < 0:
@@ -679,6 +697,117 @@ static func _after(pop: Dictionary, lv: Dictionary, p: Vector3, t: float, lift: 
 		after = stop
 	segs.append({"kind": "rest", "t": now, "end": Lights.HORIZON, "from": here, "flip": flip, "yaw": yaw})
 	return segs
+
+
+## THE CARDS SET DOWN ([param lays]: the air's `lay` moments - `{t, path: [[t, Transform3D], ...]}`, each
+## card as it lies from the moment it is down), whenever the schedule moves. EVERY PIECE LYING WHERE ONE
+## COMES DOWN IS BLOWN ASIDE FIRST ([method _make_way]): each life is what it was planned to do, amended
+## by these - the same for the same cards, asked at any time. The cards a voice has not reached yet are
+## not known: a piece goes when its card is.
+static func laid(pop: Dictionary, lays: Array) -> void:
+	var downs: Array = []
+	for m in lays:
+		var path: Array = (m as Dictionary).get("path", [])
+		if not path.is_empty():
+			downs.append({"t": float((m as Dictionary)["t"]), "xf": (path[0] as Array)[1]})
+	downs.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["t"]) < float(b["t"]))
+	var key := str(downs.map(func(d: Dictionary) -> String: return "%.3f/%s" % [float(d["t"]), str(d["xf"])]))
+	if key == String(pop.get("laid", "")):
+		return
+	pop["laid"] = key
+	pop["downs"] = downs
+	var lives: Array = pop["lives"]
+	for lv in lives:
+		_make_way(pop, lv)
+	# filed again from the start: a life's end may have moved
+	pop["bins"] = {}
+	pop["ongoing"] = range(lives.size())
+	for lv in lives:
+		(lv as Dictionary).erase("filed")
+	var until := float(pop["planned"])
+	pop["planned"] = -INF
+	_plan_to(pop, until)
+
+
+## [param lv]'s life as it was planned, with every rest a card comes down on ([member laid]'s cards) cut
+## short: it lies until [constant ASIDE] before the card is down, goes aside ([method _aside]) and lives
+## on from there ([method _after], on dice of its own). A piece with nowhere to go stays.
+static func _make_way(pop: Dictionary, lv: Dictionary) -> void:
+	if not lv.has("segs"):
+		return
+	if not lv.has("planned"):
+		lv["planned"] = {"segs": lv["segs"], "end": lv["end"]}
+	var segs: Array = ((lv["planned"] as Dictionary)["segs"] as Array).duplicate()
+	lv["segs"] = segs
+	lv["end"] = (lv["planned"] as Dictionary)["end"]
+	var downs: Array = pop.get("downs", [])
+	if downs.is_empty() or segs.is_empty():
+		return
+	var reach := Vector2(TablePositions.CARD.x, TablePositions.CARD.y) * 0.5 + Vector2.ONE * float(pop["size"]) * 0.5
+	var dice: Array = lv.get("dice", [0, 0])
+	var went := 0
+	var i := 0
+	while i < segs.size() and went < 8:
+		var s: Dictionary = segs[i]
+		i += 1
+		if String(s["kind"]) != "rest":
+			continue
+		var from: Vector3 = s["from"]
+		for d in downs:
+			var down := float((d as Dictionary)["t"])
+			if down <= float(s["t"]) or down - ASIDE.x >= float(s["end"]):
+				continue
+			var xf: Transform3D = (d as Dictionary)["xf"]
+			var l := xf.affine_inverse() * Vector3(from.x, xf.origin.y, from.z)
+			if absf(l.x) > reach.x or absf(l.z) > reach.y:
+				continue
+			var r := _dice(pop, int(dice[0]), int(dice[1]), "aside %d" % went)
+			var to: Variant = _aside(pop, from, xf, l, reach, down, r)
+			if to == null:
+				continue
+			var go := maxf(float(s["t"]), down - ASIDE.x)
+			var stop := maxf(go + 0.12, minf(down - ASIDE.y, go + ASIDE.x - ASIDE.y))
+			var turn := r.randf() < 0.3
+			var head := s.duplicate()
+			head["end"] = go
+			var lies := {"flip": bool(s["flip"]) != turn, "yaw": float(s["yaw"])}
+			segs.resize(i - 1)
+			segs.append(head)
+			segs.append({"kind": "aside", "t": go, "end": stop, "from": from, "to": to, "flip": s["flip"], "yaw": s["yaw"],
+				"turn": turn, "hop": ASIDE_HOP})
+			segs.append_array(_after(pop, lv, to, stop, float(lv.get("grip", INF)), r, lies))
+			i += 1
+			went += 1
+			break
+	lv["end"] = float((segs[segs.size() - 1] as Dictionary)["end"])
+
+
+## WHERE A PIECE AT [param from] GOES, out from under the card coming down at [param xf] ([param l] its
+## place on the card, [param reach] the card's half and the piece's own): past the card's nearest edge
+## and a little further, or the next nearest when that way is off the top, into a thing, or onto the
+## deck or another card lying there at [param down]. Null when no way is clear.
+static func _aside(pop: Dictionary, from: Vector3, xf: Transform3D, l: Vector3, reach: Vector2, down: float,
+		r: RandomNumberGenerator) -> Variant:
+	var sx := 1.0 if l.x >= 0.0 else -1.0
+	var sz := 1.0 if l.z >= 0.0 else -1.0
+	var out := Vector2(reach.x + ASIDE_ROOM + r.randf() * ASIDE_MORE, reach.y + ASIDE_ROOM + r.randf() * ASIDE_MORE)
+	var ways := [[reach.x - absf(l.x), Vector3(sx * out.x, 0.0, l.z)], [reach.y - absf(l.z), Vector3(l.x, 0.0, sz * out.y)],
+		[reach.x + absf(l.x), Vector3(-sx * out.x, 0.0, l.z)], [reach.y + absf(l.z), Vector3(l.x, 0.0, -sz * out.y)]]
+	ways.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+	var up := Vector3(0.0, 0.004, 0.0)
+	for w in ways:
+		var world := xf * ((w as Array)[1] as Vector3)
+		var to := Vector3(world.x, from.y, world.z)
+		if not _on_top(pop, Vector2(to.x, to.z)) or _blocked(pop, to + up) or _cover(pop, to, down) > -INF:
+			continue
+		var clear := true
+		for o in pop["things"]:
+			if (o as AABB).grow(float(pop["size"]) * 0.5).intersects_segment(from + up, to + up) != null:
+				clear = false
+				break
+		if clear:
+			return to
+	return null
 
 
 ## Where a piece carried off is at [param t]: lifted off the cloth as the gust takes it, carried with the
@@ -746,12 +875,14 @@ static func pose(pop: Dictionary, lv: Dictionary, t: float) -> Transform3D:
 				# TREMBLING IN THE BREEZE, harder as it rises
 				var shiver := 0.18 * Winds.strength_at(pop["wind"], t) * sin(17.0 * t + float(lv["seed"]) * 40.0)
 				return Transform3D(Basis(lv["shiver_ax"], shiver) * flat * scale, d["from"])
-			"skid":
-				var u := clampf((t - float(d["t"])) / maxf(float(d["end"]) - float(d["t"]), 1e-4), 0.0, 1.0)
-				var gw := Winds.swell_carry(pop["wind"], int(d["gust"]), t)
-				var g0 := Winds.swell_carry(pop["wind"], int(d["gust"]), float(d["t"]))
-				var g1 := Winds.swell_carry(pop["wind"], int(d["gust"]), float(d["end"]))
-				var along := clampf((gw - g0) / maxf(g1 - g0, 1e-5), 0.0, 1.0)
+			"skid", "aside":
+				# as far along as the gust has carried it - or, blown aside by a card, eased out and in
+				var along := smoothstep(float(d["t"]), float(d["end"]), t)
+				if String(d["kind"]) == "skid":
+					var gw := Winds.swell_carry(pop["wind"], int(d["gust"]), t)
+					var g0 := Winds.swell_carry(pop["wind"], int(d["gust"]), float(d["t"]))
+					var g1 := Winds.swell_carry(pop["wind"], int(d["gust"]), float(d["end"]))
+					along = clampf((gw - g0) / maxf(g1 - g0, 1e-5), 0.0, 1.0)
 				var at := (d["from"] as Vector3).lerp(d["to"], along)
 				at.y += float(d["hop"]) * sin(PI * along)
 				var b := flat

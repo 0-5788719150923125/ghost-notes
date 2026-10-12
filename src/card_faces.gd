@@ -527,6 +527,10 @@ class Face:
 	## A BACK WITH THE CARD'S TEXT ON IT ([constant CardTable.TEXTS] `back`): [member card]'s booklet
 	## printed in a panel over the printing's back, as a baseball card's stats are.
 	var printed := false
+	## A CARD NOBODY WROTE, printed as the others are ([member printed]): the panel's type ruled where a
+	## name, a few facts and a paragraph would be set - the unseen cards in a box, whose backs have to be
+	## the drawn cards' kind of back. [member card] carries only a `key`, which seeds the lines.
+	var anonymous := false
 	var seed := 0
 
 	func _draw() -> void:
@@ -621,6 +625,9 @@ class Face:
 		var x := panel.position.x + m
 		var w := panel.size.x - 2.0 * m
 		var y := panel.position.y + m
+		if anonymous:
+			_ruled_type(Rect2(x, y, w, panel.end.y - m - y), text_ink, accent)
+			return
 		var name := String(card.get("name", ""))
 		var ns := CardFaces._fit(face, name, 46, w)
 		y += face.get_ascent(ns)
@@ -649,6 +656,36 @@ class Face:
 			size -= 1
 		draw_multiline_string(book, Vector2(x, y + book.get_ascent(size)), text, HORIZONTAL_ALIGNMENT_LEFT, w,
 			size, -1, text_ink)
+
+	## TYPE NOBODY WROTE, in [param room]: ruled word by word where a printed back sets it - a centered
+	## name, a few facts between the accent's rules, a paragraph ending on a short line.
+	func _ruled_type(room: Rect2, ink: Color, accent: Color) -> void:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash([seed, String(card.get("key", "")), "ruled type"])
+		var x := room.position.x
+		var w := room.size.x
+		var y := room.position.y
+		var words := func(from: float, to: float, top: float, thick: float) -> void:
+			var cx := from
+			while cx < to - thick:
+				var run := minf(thick * rng.randf_range(1.5, 6.0), to - cx)
+				draw_rect(Rect2(cx, top, run, thick), Color(ink, 0.55))
+				cx += run + thick * 0.9
+		var name_w := w * rng.randf_range(0.45, 0.85)
+		words.call(x + (w - name_w) * 0.5, x + (w + name_w) * 0.5, y + 12.0, 20.0)
+		y += 54.0
+		draw_line(Vector2(x, y), Vector2(x + w, y), accent, 2.0, true)
+		y += 14.0
+		for i in rng.randi_range(2, 5):
+			words.call(x, x + w * rng.randf_range(0.3, 0.75), y, 11.0)
+			y += 30.0
+		y += 2.0
+		draw_line(Vector2(x, y), Vector2(x + w, y), accent, 2.0, true)
+		y += 16.0
+		var lines := mini(int((room.end.y - y) / 28.0), maxi(2, int((room.end.y - y) / 28.0 * rng.randf_range(0.55, 1.0))))
+		for i in lines:
+			words.call(x, x + w * (rng.randf_range(0.3, 0.8) if i == lines - 1 else 1.0), y, 10.0)
+			y += 28.0
 
 	## THE RULES ROUND THE PICTURE, in the window's own shape ([method CardFaces.outline]).
 	func _frame(style: String, shape: String, win: Rect2, ink: Color, accent: Color, sz: Vector2) -> void:

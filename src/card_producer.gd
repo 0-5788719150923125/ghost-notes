@@ -251,7 +251,8 @@ func _make_plan() -> void:
 	var n := _spread_n()
 	var p := CardPrompts.producer(String(spec.get("title", "")), String(spec.get("brief", "")),
 		episode.seed, n, bool(spec.get("reversals", true)), CardTable.FACES,
-		CardTable.FRAMES, CardEpisode.archive(episode.show, episode.seed), _deck(), bool(spec.get("chooses", false)))
+		CardTable.FRAMES, CardEpisode.archive(episode.show, episode.seed), _deck(), bool(spec.get("chooses", false)),
+		String(spec.get("uploads_as", "")))
 	_submit_text("plan", p, "best")
 
 
@@ -621,9 +622,10 @@ func _land(step: String, res: Dictionary) -> void:
 		_errors[step] = err
 
 
-## THE HEIGHT MAP, KEPT ONLY IF IT LIES UNDER THE PAINTING ([method Tables.height_fit]) - or is flat,
-## which lies under anything ([constant Tables.FLAT_SPAN]): its score and shift written beside it
-## (`height.json`, which the table reads), or the map removed and why.
+## THE HEIGHT MAP, KEPT ONLY IF IT LIES UNDER THE PAINTING ([method Tables.height_fit]) - or is flat
+## ([constant Tables.FLAT_SPAN]) or alike everywhere ([constant Tables.EVEN_SPREAD]), which lie under
+## anything: its score and shift written beside it (`height.json`, which the table reads), or the map
+## removed and why.
 func _land_height() -> String:
 	var paint := Image.load_from_file(episode.file_of("image:surface")) if episode.has("image:surface") else null
 	var h := Image.load_from_file(episode.file_of("image:height"))
@@ -639,6 +641,11 @@ func _land_height() -> String:
 	var score := float(fit["score"])
 	print("ghost: cards image:height - lies under the painting at %.2f, shifted %s" % [score, str(fit["shift"])])
 	if score < Tables.FIT_LEAST:
+		var spread := Tables.relief_spread(h)
+		if spread < Tables.EVEN_SPREAD:
+			# relief with no place of its own (a nap, a grain - the painting's pattern a print, not drawn)
+			print("ghost: cards image:height - alike everywhere (spread %.2f): it lies under the painting unmoved" % spread)
+			return TextGen.put(episode.dir.path_join("height.json"), JSON.stringify({"score": score, "shift": [0.0, 0.0], "even": true}, "\t"))
 		DirAccess.remove_absolute(episode.file_of("image:height"))
 		return "the height map did not line up with the painting (%.2f, %.2f needed): the painting's own detail stands in" % [score, Tables.FIT_LEAST]
 	var shift: Vector2 = fit["shift"]

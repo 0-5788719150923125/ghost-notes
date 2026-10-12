@@ -30,7 +30,9 @@ extends SceneTree
 ##   its title - the template's macros filled, nothing dangling, no name twice - privacy and playlist
 ##   over the panel's part, and nothing when the panel has nothing; a sign-in that may only upload
 ##   lacks the playlists' scope; a resume while an upload waits on a file that exists, not once it
-##   is gone; Sign in / Sign out and Import / Replace follow the files.
+##   is gone; Sign in / Sign out and Import / Replace follow the files. THE LINE A TITLE GOES UP IN
+##   (`title_shape`): the template with the episode's title marked, handed to the Cards producer from
+##   the card's own template - none when the episode's title stands alone or is left out.
 ## - THE TAG FIELD (tag_field.gd, 2026-10-06, the user: "show all of the tags, with the ability to
 ##   click an 'x' to remove them on each one... comma-delimited splits the tags into the button with
 ##   the x"): a chip per tag, filled without a change signal; a comma, Enter or a paste of "a, b, c"
@@ -427,6 +429,12 @@ func _card() -> bool:
 	_ok(YouTube.expand_title("%title% - %episode% - %date%", {"title": "T", "date": "D"}) == "T - D",
 		"a gap in the middle closes up (%s)" % YouTube.expand_title("%title% - %episode% - %date%", {"title": "T", "date": "D"}))
 	_ok(YouTube.expand_title("%title% #%seed% %what%", {"title": "T", "seed": "7"}) == "T #7 %what%", "an unknown macro is left as written")
+	# the line an episode's title goes up in, shown to whoever names the episode
+	_ok(YouTube.title_shape("%title%: %episode%", {"title": "Truthful Tarot"}, "[x]") == "Truthful Tarot: [x]", "the default template's line")
+	_ok(YouTube.title_shape("%episode% | %title% #%seed% (%date%)", {"title": "T", "seed": "7"}, "[x]") == "[x] | T #7 ([date])",
+		"every macro in its place, the date marked (%s)" % YouTube.title_shape("%episode% | %title% #%seed% (%date%)", {"title": "T", "seed": "7"}, "[x]"))
+	_ok(YouTube.title_shape("%title%: %episode%", {}, "[x]") == "" and YouTube.title_shape("%title% #%seed%", {"title": "T", "seed": "7"}, "[x]") == "",
+		"control: no line when the episode's title stands alone, or is left out")
 	# the scopes and the account rows
 	YouTube.forget_client()
 	card._refresh_account()
@@ -536,12 +544,20 @@ func _panel_fields() -> bool:
 		"the upload's title is the show's name, then the episode's - the file keeps the episode's alone")
 	ed._refresh_upload_note()
 	_ok(ed._youtube._preview.text.begins_with("Goes up as \"Truthful Tarot: My Own Title\""), "the card shows the title as it goes up")
+	# THE PRODUCER IS SHOWN THAT LINE before it names the next episode
+	_ok(ed._spec().get("uploads_as") == "Truthful Tarot: [episode_title]", "the producer is not handed the line a title goes up in (%s)" % str(ed._spec().get("uploads_as")))
+	ed._youtube._title.text = "%episode% | %title% #%seed%"
+	_ok(ed._spec().get("uploads_as") == "[episode_title] | Truthful Tarot #21", "the line is not the card's own template (%s)" % str(ed._spec().get("uploads_as")))
+	ed._youtube._title.text = "%title% #%seed%"
+	_ok(ed._spec().get("uploads_as") == "", "control: a template without the episode's title still made a line")
+	ed._youtube._title.text = YouTube.TITLE_TEMPLATE
 	_ok(ed.upload_title("Truthful Tarot", "truthful tarot: Already Named") == "truthful tarot: Already Named"
 		and ed.upload_title("", "Bare") == "Bare" and ed.upload_title("Show", "") == "Show",
 		"no name twice, none when the show has no title, the name alone when the episode has none")
 	var long_title: String = YouTube.fit_title(ed.upload_title("Truthful Tarot", "word ".repeat(30)))
 	_ok(long_title.begins_with("Truthful Tarot: ") and long_title.length() <= 100, "cut to 100 characters, the name stands")
 	ed._doc._fields.erase("title")
+	_ok(ed._spec().get("uploads_as") == "", "control: a show with no name has no line round its episode's title")
 	# THE BYLINE, on the document card right under Title
 	var card = ed._writer
 	var edits: Array = card._field_edits.keys()

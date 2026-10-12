@@ -1149,6 +1149,16 @@ func _check_delivery_marks() -> void:
 		"a delivery moved the voice by more than a lean: %s against %s" % [str(lit), str(calm)])
 	_ok(_ed.lean_of("nonsense words") == Vector4.ZERO and _ed.lean_of("quicker quicker quicker") == Vector4(2, 0, 0, 0),
 		"an unknown word moved the voice, or three steps went past two")
+	# A PASSAGE THAT OPENS ON SOMETHING STRIPPED (an authoring note and its blank line): a mark is
+	# noted where it falls BEFORE the passage's leading whitespace goes, and applied to the text
+	# after it has gone - two characters out, and a mark on its own line started a sentence late.
+	var led: Array = _ed._build_chunks("<!-- a note -->\n\nCalm start here.\n\n<!-- delivery: excited -->\nOh wow. This is big.")
+	var led_pace: Array = []
+	for c in led:
+		led_pace.append(snappedf(((c as Dictionary).get("lean", Vector4.ZERO) as Vector4).x, 0.01))
+	_ok(led_pace.size() == 3 and float(led_pace[0]) == 0.0 and float(led_pace[1]) > 0.0
+		and float(led_pace[2]) > float(led_pace[1]),
+		"a delivery marked after a stripped opening did not start on its own first sentence: %s" % str(led_pace))
 	# VOLUME is effort alone: louder asks for more effort and no pitch at all
 	var loud := {"tokens": [], "plan_u": 0.0, "plan_v": 0.0, "lean": _ed.lean_of("louder")}
 	var la: Dictionary = _ed._request_args(_ed._cfg(0), loud)

@@ -21,8 +21,11 @@ extends SceneTree
 ##   wholly on the top hangs nowhere (the control). Layers stack upward, all under where a card rests.
 ## - A PAINTED HEIGHT MAP IS USED ONLY WHERE IT LIES UNDER THE PAINTING: a map of the painting's own
 ##   structure is accepted - shifted (and the shift found), or drawn the other way round (white low) -
-##   and an unrelated picture refused (two-sided); the episode lists the step only once the table lays
-##   the painting where its depth is read, a new cloth clears it and a new table does not.
+##   and an unrelated picture refused (two-sided); a flat map, or one whose relief is alike everywhere
+##   (a nap under a dyed stripe the painter rightly left out), fits nothing and is kept all the same,
+##   unmoved - against boards drawn somewhere else, which are taken away; the episode lists the step
+##   only once the table lays the painting where its depth is read, a new cloth clears it and a new
+##   table does not.
 ## - THE LIGHT READS WHAT LIES UPPERMOST: a pale runner over a dark cloth is pale under the runner and
 ##   dark beside it; past the top, the floor.
 
@@ -269,6 +272,20 @@ func _boards(seed: int, w: int, h: int) -> Image:
 	return img
 
 
+## A felted nap: gray grain alike everywhere, a few pixels to the fleck.
+func _nap(seed: int, w: int, h: int) -> Image:
+	var img := Image.create(w, h, false, Image.FORMAT_RGB8)
+	var n := FastNoiseLite.new()
+	n.seed = seed
+	n.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	n.frequency = 0.09
+	for y in h:
+		for x in w:
+			var v := clampf(0.5 + n.get_noise_2d(x, y) * 0.35, 0.0, 1.0)
+			img.set_pixel(x, y, Color(v, v, v))
+	return img
+
+
 ## The height map of [param img]: its lightness as gray, moved [param shift] pixels, [param flip]
 ## drawn the other way round.
 func _gray_of(img: Image, shift: Vector2i, flip: bool) -> Image:
@@ -306,6 +323,20 @@ func _height_map() -> void:
 		"a flat map fits nothing (%.2f) and is known flat (%.3f)" % [float(mat_fit["score"]), Tables.height_span(mat)])
 	_ok(Tables.height_span(_gray_of(paint, Vector2i.ZERO, false)) > Tables.FLAT_SPAN * 2.0,
 		"control: a real height map is not flat (%.3f)" % Tables.height_span(_gray_of(paint, Vector2i.ZERO, false)))
+	# AN EVEN MAP (a felted nap under a dyed stripe: the stripe is not drawn) fits nothing either, and
+	# is known by its relief being alike everywhere; boards are not - their seams, one to a block, are
+	# even by blocks and caught by rows
+	var nap := _nap(5, 768, 512)
+	var striped := _gray_of(nap, Vector2i.ZERO, false)
+	striped.fill_rect(Rect2i(0, 200, 768, 90), Color(0.08, 0.08, 0.12))
+	var nap_fit := Tables.height_fit(striped, nap)
+	_ok(float(nap_fit["score"]) < Tables.FIT_LEAST and Tables.height_span(nap) > Tables.FLAT_SPAN
+		and Tables.relief_spread(nap) < Tables.EVEN_SPREAD,
+		"an even map fits nothing (%.2f), is not flat (%.3f) and is known even (%.2f)" % [float(nap_fit["score"]),
+			Tables.height_span(nap), Tables.relief_spread(nap)])
+	var seams := _gray_of(_boards(91, 768, 512), Vector2i(5, 9), false)
+	_ok(Tables.relief_spread(seams) > Tables.EVEN_SPREAD,
+		"control: a map of boards is not even (%.2f)" % Tables.relief_spread(seams))
 	# THE STEP, on an episode of the gate's own
 	CardEpisode.root = "user://tables_check"
 	var ep := CardEpisode.open("tables-check", 7)
@@ -326,6 +357,19 @@ func _height_map() -> void:
 	ep.write_json("table", {"things": [], "top": {"material": "painting"}, "layers": []})
 	ep.invalidate("image:surface")
 	_ok(not ep.has("image:height") and not FileAccess.file_exists(ep.dir.path_join("height.json")), "a new cloth clears it and its fit")
+	# LANDING IT: the even map is kept under the striped painting, unmoved; the boards' is taken away
+	var prod := CardProducer.new(ep, {"title": "T", "brief": "B"})
+	striped.save_png(ep.file_of("image:surface"))
+	nap.save_png(ep.file_of("image:height"))
+	var landed := prod._land_height()
+	var kept: Variant = JSON.parse_string(FileAccess.get_file_as_string(ep.dir.path_join("height.json")))
+	_ok(landed.is_empty() and ep.has("image:height") and kept is Dictionary and (kept as Dictionary).get("even") == true
+		and (kept as Dictionary).get("shift") == [0.0, 0.0], "an even map was not kept, unmoved: %s %s" % [landed, str(kept)])
+	DirAccess.remove_absolute(ep.dir.path_join("height.json"))
+	seams.save_png(ep.file_of("image:height"))
+	landed = prod._land_height()
+	_ok(landed.contains("did not line up") and not ep.has("image:height") and not FileAccess.file_exists(ep.dir.path_join("height.json")),
+		"control: boards drawn somewhere else were kept under the painting (%s)" % landed)
 	for fn in DirAccess.get_files_at(ep.dir):
 		DirAccess.remove_absolute(ep.dir.path_join(fn))
 	CardEpisode.root = CardEpisode.ROOT

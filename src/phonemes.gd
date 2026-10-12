@@ -1229,10 +1229,15 @@ static func _resolve_homographs(sentences: Array) -> void:
 			# A NAME beats everything else here. These are words no dictionary holds -
 			# invented ones, coined ones, proper nouns - so there is no reading to weigh
 			# them against; whatever the file says is simply what they are called.
-			if _names.has(key):
-				var nm := _parse_cmu(String(_names[key]))
-				w["phones"] = nm.phones
+			# ITS POSSESSIVE TOO: "Libra's" is one token, so it missed the table and eSpeak read
+			# the name inside it its own way - the wrong one the entry exists for.
+			var owner := key.trim_suffix("'s")
+			if _names.has(owner):
+				var nm := _parse_cmu(String(_names[owner]))
+				w["phones"] = nm.phones if owner == key else _attach_s(nm.phones, owner)
 				w["stress"] = nm.stress
+				while (w["stress"] as Array).size() < (w["phones"] as Array).size():
+					(w["stress"] as Array).append(0)
 				w["literal"] = true
 				continue
 			if not SPEAK_AS.has(key):

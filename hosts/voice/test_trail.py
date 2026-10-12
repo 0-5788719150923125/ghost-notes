@@ -17,11 +17,17 @@ What is held, each with the case that must not change:
   5. the sag lowers the tip's pitch by TRAIL_SAG semitones and keeps the length; a glide that
      would reach the next word is not made;
   6. the next word's hiss in a floored rest is held to LEAD_KEEP, and voice, a short lead and an
-     unfloored mark are left alone (`_quiet_lead`).
+     unfloored mark are left alone (`_quiet_lead`);
+  7. a word that ends on a hiss keeps it ("cards," is not "card,"): the plan says which words and
+     how many runs (`_hiss_codas`), the waveform says where, the voice ends before it, and the
+     floor comes back after it; a word the plan does not name, a second run it does not spell
+     (the /t/ of "last,") and a stray hiss out in the rest all keep the floor; a hiss that sits
+     between 2 and 4 kHz ("hush,") is one too, and the voice falls no further than a loud one;
+  8. a next word that starts before the plan says is not dipped; with TRAIL_EARLY 0 it is.
 
 Synthesis runs against the fake ONNX session of test_expression.py: deterministic audio and
-durations, no model download, no eSpeak. Signals for 4-6 are made here: a tone with a hard end,
-silence, and noise above 4 kHz.
+durations, no model download, no eSpeak. Signals for 4-8 are made here: a tone with a hard end,
+silence, a faint room tone, and noise above 4 kHz.
 """
 
 from __future__ import annotations
@@ -316,6 +322,225 @@ def test_quiet_lead_leaves_the_rest_alone():
         "nor is a comma at Pause 0",
     )
     ok(not np.array_equal(_quiet_lead(full, edges, GROUP, PAUSED, SR), full), "(and the case itself does)")
+
+
+# -- 7. a word's own hiss ------------------------------------------------------------
+
+
+def _room(seconds: float, amp: float = 0.0015, seed: int = 5):
+    """A faint low room tone (about -50 dB under the tone), so a rest has a level to measure."""
+    import numpy as np
+
+    n = int(round(seconds * SR))
+    w = np.random.default_rng(seed).standard_normal(n + 15)
+    x = np.convolve(w, np.ones(16) / 16.0, "valid")
+    return (amp * x / np.max(np.abs(x))).astype(np.float32)
+
+
+def _shh(seconds: float, amp: float = 0.03, seed: int = 11):
+    """Noise between 2 and 4 kHz - a /ʃ/, which has next to nothing above 4."""
+    import numpy as np
+
+    n = int(round(seconds * SR))
+    spec = np.fft.rfft(np.random.default_rng(seed).standard_normal(n))
+    f = np.fft.rfftfreq(n, 1.0 / SR)
+    spec[(f < 2200.0) | (f > 3800.0)] = 0.0
+    x = np.fft.irfft(spec, n)
+    return (amp * x / np.max(np.abs(x))).astype(np.float32)
+
+
+def _plural(hisses=((0.44, 0.50),), voice_to: float = 0.42, amp: float = 0.03, make=_hiss):
+    """`_scene` with word 0 ending on a hiss: its tone over [0.1, voice_to), each (t0, t1) of
+    `hisses` a hiss at `amp` (-24 dB under the tone, a final /z/'s level), and a room tone
+    under the whole rest. The plan's last sound is 0.45: before the hiss ends, as it is."""
+    import numpy as np
+
+    a = np.zeros(int(1.3 * SR), dtype=np.float32)
+    a[int(0.1 * SR) : int(voice_to * SR)] = _tone(voice_to - 0.1)
+    a[int(0.9 * SR) : int(1.2 * SR)] = _tone(0.3)
+    a[int(voice_to * SR) : int(0.9 * SR)] += _room(0.9 - voice_to)
+    for k, (t0, t1) in enumerate(hisses):
+        h = make(t1 - t0, amp=amp, seed=7 + k)
+        a[int(t0 * SR) : int(t0 * SR) + h.size] += h
+    return a, {0: (0.1, 0.45), 1: (0.9, 1.2)}
+
+
+@check
+def test_hiss_codas():
+    """Which words end on a hiss, and on how many runs of it."""
+    from backends.piper import _hiss_codas
+
+    syms = [
+        ("k", 0), ("ˈ", 0), ("ɑ", 0), ("ː", 0), ("ɹ", 0), ("d", 0), ("z", 0), (",", 0), (" ", 0),
+        ("k", 1), ("ˈ", 1), ("ɑ", 1), ("ː", 1), ("ɹ", 1), ("d", 1), (" ", 1),
+        ("ˈ", 2), ("æ", 2), ("s", 2), ("k", 2), ("s", 2), (" ", 2),
+        ("l", 3), ("ˈ", 3), ("æ", 3), ("s", 3), ("t", 3), (" ", 3),
+        ("s", 4), ("ˈ", 4), ("ɪ", 4), ("s", 4), ("t", 4), ("ɚ", 4), (" ", 4),
+        ("m", 5), ("ˈ", 5), ("ʌ", 5), ("n", 5), ("θ", 5), ("s", 5), (" ", 5),
+        ("ʃ", 6), ("ʃ", 6), (".", 6),
+    ]
+    got = _hiss_codas(syms)
+    eq(got.get(0), 1, "'cards': one run, after its last vowel")
+    ok(1 not in got, "'card': no hiss, not named")
+    eq(got.get(2), 2, "'asks': two, a stop between them")
+    eq(got.get(3), 1, "'last': one, and the stop after it is not another")
+    ok(4 not in got, "'sister': its hisses are before its last vowel")
+    eq(got.get(5), 1, "'months': two hisses side by side are one run")
+    eq(got.get(6), 1, "'shh': no vowel, the whole word")
+
+
+@check
+def test_a_final_hiss_is_kept():
+    """Voice, a stop's closure, a hiss: the hiss at its own level, the voice still down before
+    it, the floor back after it. Unnamed, the same word loses the hiss - the reported fault."""
+    import numpy as np
+    from backends.piper import TRAIL_DB, _trail
+
+    a, edges = _plural()
+    out = _trail(a, edges, GROUP, PAUSED, SR, {0: 1})
+    eq(out.size, a.size, "the length is kept")
+    kept = _rms_db(a, out, 0.445, 0.495)
+    ok(abs(kept) < 0.5, "the hiss is the model's own level", "%+.1f dB" % kept)
+    tip = _rms_db(a, out, 0.395, 0.405)
+    ok(tip < -TRAIL_DB * 0.5, "the voice still falls away before it", "%+.1f dB" % tip)
+    rest = _rms_db(a, out, 0.60, 0.80)
+    ok(abs(rest + TRAIL_DB) < 1.0, "and the floor is back in the rest after it", "%+.1f dB" % rest)
+    ok(np.array_equal(out[int(0.895 * SR) :], a[int(0.895 * SR) :]), "the next word untouched")
+    # the control, and what a stop's release still gets: a word the plan does not name
+    for name, arg in (("no plan", None), ("another word's", {1: 1})):
+        lost = _rms_db(a, _trail(a, edges, GROUP, PAUSED, SR, arg), 0.445, 0.495)
+        ok(lost < -TRAIL_DB + 2.0, "control (%s): the hiss is under the floor" % name, "%+.1f dB" % lost)
+
+
+@check
+def test_voice_that_runs_into_its_hiss():
+    """No closure, and a hiss loud enough to pass for voice ("eyes,", "answers,"): the voice
+    ends where the hiss begins instead of somewhere inside it."""
+    from backends.piper import TRAIL_DB, _trail
+
+    a, edges = _plural(hisses=((0.42, 0.52),), amp=0.2)
+    out = _trail(a, edges, GROUP, PAUSED, SR, {0: 1})
+    kept = _rms_db(a, out, 0.43, 0.515)
+    ok(abs(kept) < 0.5, "the hiss is the model's own level", "%+.1f dB" % kept)
+    tip = _rms_db(a, out, 0.39, 0.40)
+    ok(tip < -TRAIL_DB * 0.5, "the voice has fallen away by the time it starts", "%+.1f dB" % tip)
+    # the control: unnamed, the fade runs through the hiss
+    lost = _rms_db(a, _trail(a, edges, GROUP, PAUSED, SR), 0.49, 0.515)
+    ok(lost < -TRAIL_DB * 0.5, "control: unnamed, the end of the hiss is faded", "%+.1f dB" % lost)
+
+
+@check
+def test_a_low_hiss_is_a_hiss():
+    """A /ʃ/ sits between 2 and 4 kHz: found whole. Looked for above 4 kHz, as a lead is, it
+    is not found and goes under the floor."""
+    from backends import piper as P
+
+    a, edges = _plural(hisses=((0.44, 0.56),), make=_shh)
+    kept = _rms_db(a, P._trail(a, edges, GROUP, PAUSED, SR, {0: 1}), 0.45, 0.55)
+    ok(abs(kept) < 0.5, "the whole of it is the model's own level", "%+.1f dB" % kept)
+    real = P.TRAIL_HISS_ABOVE
+    P.TRAIL_HISS_ABOVE = P.LEAD_ABOVE
+    try:
+        lost = _rms_db(a, P._trail(a, edges, GROUP, PAUSED, SR, {0: 1}), 0.45, 0.55)
+    finally:
+        P.TRAIL_HISS_ABOVE = real
+    ok(lost < -P.TRAIL_DB + 2.0, "control: above 4 kHz it is not seen", "%+.1f dB" % lost)
+
+
+@check
+def test_the_voice_falls_no_further_than_its_hiss():
+    """Before a hiss as loud as the voice the fade is next to nothing; before a quiet one it
+    is the whole TRAIL_DB."""
+    from backends.piper import TRAIL_DB, _trail
+
+    loud, edges = _plural(hisses=((0.42, 0.54),), amp=0.9, make=_shh)
+    out = _trail(loud, edges, GROUP, PAUSED, SR, {0: 1})
+    tip = _rms_db(loud, out, 0.385, 0.405)
+    ok(tip > -2.0, "a loud hiss: the voice is not dipped under it", "%+.1f dB" % tip)
+    ok(abs(_rms_db(loud, out, 0.43, 0.53)) < 0.5, "and the hiss is the model's own level")
+    quiet, edges = _plural(hisses=((0.42, 0.54),), amp=0.03, make=_shh)
+    deep = _rms_db(quiet, _trail(quiet, edges, GROUP, PAUSED, SR, {0: 1}), 0.385, 0.405)
+    ok(deep < -TRAIL_DB * 0.6, "control: a quiet one, and the voice comes down to it", "%+.1f dB" % deep)
+
+
+@check
+def test_hiss_runs_are_the_plans():
+    """Two hisses a closure apart: both kept where the word spells two ("asks,"), only the
+    first where it spells one ("last," - what follows is a stop's release, and stays down)."""
+    from backends.piper import TRAIL_DB, _trail
+
+    a, edges = _plural(hisses=((0.42, 0.47), (0.54, 0.59)))
+    two = _trail(a, edges, GROUP, PAUSED, SR, {0: 2})
+    ok(abs(_rms_db(a, two, 0.425, 0.465)) < 0.5, "two runs: the first is kept")
+    second = _rms_db(a, two, 0.545, 0.585)
+    ok(abs(second) < 0.5, "two runs: and the second, past the closure", "%+.1f dB" % second)
+    one = _trail(a, edges, GROUP, PAUSED, SR, {0: 1})
+    ok(abs(_rms_db(a, one, 0.425, 0.465)) < 0.5, "one run: the hiss is kept")
+    release = _rms_db(a, one, 0.545, 0.585)
+    ok(release < -TRAIL_DB + 2.0, "one run: what follows the closure keeps the floor", "%+.1f dB" % release)
+
+
+@check
+def test_a_stray_hiss_is_not_the_words():
+    """A hiss that starts long after the voice has ended is out in the rest, not the word's."""
+    from backends.piper import TRAIL_DB, _trail
+
+    a, edges = _plural(hisses=((0.70, 0.74),))
+    out = _trail(a, edges, GROUP, PAUSED, SR, {0: 1})
+    stray = _rms_db(a, out, 0.705, 0.735)
+    ok(stray < -TRAIL_DB + 2.0, "it keeps the floor", "%+.1f dB" % stray)
+    plain = _trail(a, edges, GROUP, PAUSED, SR)
+    ok(abs(_rms_db(plain, out, 0.30, 0.42)) < 0.1, "and the voice ends where it would with no hiss named")
+
+
+# -- 8. the next word, early ---------------------------------------------------------
+
+
+@check
+def test_an_early_next_word_is_not_dipped():
+    """The next word starts 30 ms before the plan says: the floor lets go before its sound."""
+    import numpy as np
+    from backends import piper as P
+
+    a, edges = _scene()
+    early = int(0.87 * SR)
+    a[early : int(0.9 * SR)] = _tone(0.3)[: int(0.9 * SR) - early]
+    out = P._trail(a, edges, GROUP, PAUSED, SR)
+    ok(np.array_equal(out[early:], a[early:]), "its first sound is the same samples")
+    ok(_rms_db(a, out, 0.485, 0.495) < -P.TRAIL_DB * 0.5, "and the word before still trails off")
+    real = P.TRAIL_EARLY
+    P.TRAIL_EARLY = 0.0
+    try:
+        old = P._trail(a, edges, GROUP, PAUSED, SR)
+    finally:
+        P.TRAIL_EARLY = real
+    dip = _rms_db(a, old, 0.87, 0.88)
+    ok(dip < -3.0, "control: trusting the plan dips it", "%+.1f dB" % dip)
+
+
+@check
+def test_the_plan_reaches_the_trail():
+    """`_synth_tokens` hands `_trail` the words that end on a hiss, by token."""
+    from backends import piper as P
+
+    toks = [
+        _tok("cards", ",", ["K", "AA1", "R", "D", "Z"]),
+        _tok("card", ",", ["K", "AA1", "R", "D"]),
+        _tok("asks", ".", ["AE1", "S", "K", "S"]),
+    ]
+    seen: list = []
+    real = P._trail
+
+    def spy(audio, edges, group, params, sr, hisses=None):
+        seen.append(hisses)
+        return real(audio, edges, group, params, sr, hisses)
+
+    P._trail = spy
+    try:
+        _render(toks, PAUSED)
+    finally:
+        P._trail = real
+    eq(seen, [{0: 1, 2: 2}], "'cards' one run, 'card' none, 'asks' two")
 
 
 def main() -> int:

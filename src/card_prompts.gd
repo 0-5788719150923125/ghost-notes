@@ -50,6 +50,9 @@ const PAST_FULL := 10
 const PAST_LINES := 30
 ## How many earlier decks' pictures of the same card the designer is shown.
 const SAME_CARD := 6
+## What stands for the episode's title in the line a producer is shown it goes up in
+## ([method producer]'s `uploads_as`): the reply's own key.
+const TITLE_MARK := "[episode_title]"
 ## How many earlier openings, card reactions and closes a reader passage is shown, and how many
 ## words of each.
 const HEARD := {"intro": [6, 40], "card": [10, 14], "jumper": [6, 24], "close": [6, 60]}
@@ -182,14 +185,17 @@ static func remarks(seed: int, n: int) -> Array:
 ## The registry keys a look may name, for the producer to choose from: the faces the card titles
 ## are set in and the frames round them. Passed in by the caller so this file names no asset.
 ## [param history] is the show's other episodes, newest first ([method CardEpisode.archive]).
+## [param uploads_as] is the line the episode's title goes up in, [constant TITLE_MARK] where the title
+## will stand ("Truthful Tarot: [episode_title]") - or "", and the producer is told of no line.
 static func producer(title: String, brief: String, seed: int, cards: int, reversals: bool,
-		faces: Dictionary, frames: Dictionary, history: Array, deck: Array = [], chooses := false) -> Dictionary:
+		faces: Dictionary, frames: Dictionary, history: Array, deck: Array = [], chooses := false,
+		uploads_as := "") -> Dictionary:
 	var d := dice(seed)
 	var past := PackedStringArray()
 	for i in mini(history.size(), PAST_FULL + PAST_LINES):
 		past.append(_past(_d(history[i])) if i < PAST_FULL else _past_line(_d(history[i])))
 	var vars := {"seed": seed, "cards": cards, "reversals": reversals, "chooses": chooses,
-		"habits": not past.is_empty(), "past": "\n".join(past),
+		"habits": not past.is_empty(), "past": "\n".join(past), "uploads_as": uploads_as.strip_edges(),
 		"place": String(d["place"]), "year": int(d["year"]), "hue": int(d["hue"]), "hour": int(d["hour"]), "direction": int(d["direction"]),
 		"frame_styles": ", ".join(frames.keys()), "windows": ", ".join(CardTable.WINDOWS.keys()), "corners": ", ".join(CardTable.CORNERS.keys()),
 		"ornaments": ", ".join(CardTable.ORNAMENTS.keys()), "pages": ", ".join(CardTable.PAGES.keys()), "faces": ", ".join(faces.keys())}

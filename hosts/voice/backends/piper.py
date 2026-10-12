@@ -320,6 +320,49 @@ TRAIL_SAG_TAIL = 0.03
 # The sag's join back to the unmoved audio.
 TRAIL_JOIN = 0.002
 
+# A WORD'S OWN HISS IS NOT FADED. The fade is the VOICE falling away; a word that ends on
+# frication ("cards,", "house,", "gifts,") ends on a sound that is no voice, and the model
+# renders it small: a final /z/ is planned for one or two frames and comes out 30 to 60 ms long,
+# 25 to 35 dB under the take's peak - 12 to 25 under its own vowel. So the search for the voice's
+# end (TRAIL_VOICED_DB under the rime's peak) stopped before it, or part of the way into it, and
+# the fade's floor held the rest of it TRAIL_DB down, at the model's room tone: over 45 such
+# words before a comma, en_US-libritts-high, 33 lost more than 6 dB of it and 21 more than 12.
+# Reported as plurals heard as singulars.
+#
+# THE PLAN SAYS WHICH WORDS, THE WAVEFORM SAYS WHERE. A word whose last sounds - what follows
+# its last vowel - hold one of `_HISSES` is looked at for a hiss after its rime's loudest point
+# (`_hiss_tail`), and for as many runs of it as those sounds spell (`_hiss_codas`): one in
+# "cards" and "last", two in "asks" and "tests", where a stop's closure of up to TRAIL_HISS_GAP
+# parts them (70 ms measured in "asks,"). A run survives a dropout of TRAIL_HISS_DROP. The voice
+# then ends TRAIL_HISS_IN before the hiss, where the fade comes back up to nothing, and goes
+# down again over TRAIL_HISS_OUT once the hiss has ended - so the /t/ of "last," and every word
+# the plan does not name keep the floor through their last sounds, and a stop's release standing
+# in a long rest is still taken down. The plan's own end of the word is no help with the where:
+# such a hiss runs 40 to 170 ms past it.
+#
+# A WORD'S OWN HISS IS LOOKED FOR LOWER THAN A LEAD'S, above TRAIL_HISS_ABOVE: the /ʃ/ of
+# "hush,", "much," and "edge," has 94 to 100% of its energy above 2 kHz and 5 to 40% above 4, an
+# /f/ about 65% and 48%, and the brightest vowel (/iː/) 12% and 4% - so 4 kHz finds an /s/ and
+# a sliver of a /ʃ/, and the rest of that /ʃ/ went under the floor.
+#
+# THE VOICE FALLS NO FURTHER THAN ITS HISS. Before a final /z/ 20 dB under its vowel the fade
+# is the whole TRAIL_DB and the voice comes down to meet it; before a /ʃ/ as loud as the vowel
+# ("hush,": 4 dB under) a fade of 16 would dip the vowel under the sound it is running into, so
+# its depth is the vowel's level over the hiss's, and no more than TRAIL_DB.
+_HISSES = frozenset("szʃʒfθ")
+TRAIL_HISS_ABOVE = 2000.0
+TRAIL_HISS_GAP = 0.12
+TRAIL_HISS_DROP = 0.015
+TRAIL_HISS_IN = 0.012
+TRAIL_HISS_OUT = 0.03
+# THE NEXT WORD CAN START BEFORE THE PLAN SAYS (by 10 to 30 ms, measured: "a horse, a voice",
+# "my loves, come closer"), and the fade's floor reached to the plan's figure: the word's first
+# 20 ms came back up out of it, and where the rest was short the search for the voice's end
+# found the next word instead. The far side of the rest is walked back from the plan's figure
+# while the audio is louder than TRAIL_SOUNDING of the take's peak, no further than TRAIL_EARLY.
+TRAIL_SOUNDING = 0.01
+TRAIL_EARLY = 0.06
+
 # THE NEXT WORD'S HISS, LEAKED INTO A REST. The model starts a fricative early - an /s/ 40 to 75
 # ms before its word, which is its own coarticulation and sounds right - but the word-space the
 # rest floor lengthens takes the next word's sound with it, and before an /s/ the lead grew to
@@ -328,10 +371,11 @@ TRAIL_JOIN = 0.002
 # silence to cut in and cut through the hiss: a burst stayed on the word before ("the end, sweet
 # souls" heard as "ends ... ssweet"). `_quiet_lead` keeps LEAD_KEEP seconds of it before the next
 # word, coming in over LEAD_RAMP, and silences what is earlier. A frame is hiss when more than
-# LEAD_HF of its energy is above 4 kHz and it is louder than LEAD_FLOOR (of the take's peak).
+# LEAD_HF of its energy is above LEAD_ABOVE and it is louder than LEAD_FLOOR (of the take's peak).
 LEAD_KEEP = 0.08
 LEAD_RAMP = 0.03
 LEAD_HF = 0.5
+LEAD_ABOVE = 4000.0
 LEAD_FLOOR = 0.005
 LEAD_FRAME = 0.005
 
@@ -423,6 +467,25 @@ def _final_rimes(symbols: list, want) -> set:
         if first > 0 and items[first - 1][1] == _STRESS:
             first -= 1
         out.update(j for j, _ in items[first:])
+    return out
+
+
+def _hiss_codas(symbols: list) -> dict:
+    """{source: runs} for the sources in `symbols` whose last sounds hold a hiss: how many runs
+    of `_HISSES` follow the word's last vowel - one in "cards" and "last", two in "asks", where
+    a stop parts them - or stand anywhere in a word with no vowel at all. What `_trail` may look
+    for at the end of a word, and how much of it."""
+    by_src: dict = {}
+    for sym, src in symbols:
+        if src >= 0 and sym != " " and sym not in _MARK_SYMBOLS:
+            by_src.setdefault(src, []).append(sym)
+    out: dict = {}
+    for src, syms in by_src.items():
+        last = next((k for k in range(len(syms) - 1, -1, -1) if syms[k] in _VOWELS), -1)
+        coda = [s in _HISSES for s in syms[last + 1 :]]
+        runs = sum(1 for k, h in enumerate(coda) if h and (k == 0 or not coda[k - 1]))
+        if runs:
+            out[src] = runs
     return out
 
 
@@ -782,22 +845,75 @@ def _glide(audio, a: int, b: int, c: int, fall: float, stop: int, sr: int) -> bo
     return True
 
 
-def _hiss_from(audio, lo: int, hi: int, sr: int, peak: float) -> int:
+def _is_hiss(x, sr: int, peak: float, above: float = LEAD_ABOVE) -> bool:
+    """Whether the frame `x` is hiss: louder than LEAD_FLOOR of the take's `peak`, with more than
+    LEAD_HF of its energy above `above` Hz."""
+    import numpy as np
+
+    x = x.astype(np.float64)
+    if x.size < 8 or np.sqrt(np.mean(x * x)) < peak * LEAD_FLOOR:
+        return False
+    spec = np.abs(np.fft.rfft(x * np.hanning(x.size))) ** 2
+    tot = float(spec.sum())
+    high = float(spec[np.fft.rfftfreq(x.size, 1.0 / sr) >= above].sum())
+    return tot > 0.0 and high / tot > LEAD_HF
+
+
+def _hiss_from(
+    audio, lo: int, hi: int, sr: int, peak: float, above: float = LEAD_ABOVE
+) -> int:
     """Where the run of hiss that ends at sample `hi` begins, walked back from it frame by frame
-    and never before `lo`; `hi` itself where the frame before it is not hiss (`LEAD_HF`)."""
+    and never before `lo`; `hi` itself where the frame before it is not hiss (`_is_hiss`)."""
+    w = max(8, int(round(LEAD_FRAME * sr)))
+    k = int(hi)
+    while k - w >= lo and _is_hiss(audio[k - w : k], sr, peak, above):
+        k -= w
+    return k
+
+
+def _hiss_tail(audio, lo: int, by: int, hi: int, sr: int, peak: float, runs: int = 1):
+    """(start, end) in samples of the hiss a word ends on, looked for in [lo, hi), or None.
+
+    From the first frame of hiss (above TRAIL_HISS_ABOVE) after `lo` - which must come before
+    `by`, or it is not this word's - through `runs` runs of it: a run goes on over a dropout of
+    TRAIL_HISS_DROP, and the next one may start up to TRAIL_HISS_GAP after it (a stop's
+    closure). A stray frame out in the rest is none of it. A start at `lo` itself may be the
+    middle of a run: the caller walks it back (`_hiss_from`).
+    """
+    w = max(8, int(round(LEAD_FRAME * sr)))
+    drop = int(round(TRAIL_HISS_DROP * sr))
+    gap = int(round(TRAIL_HISS_GAP * sr))
+    start = end = None
+    left = max(1, int(runs))
+    for k in range(int(lo), int(hi) - w + 1, w):
+        hiss = _is_hiss(audio[k : k + w], sr, peak, TRAIL_HISS_ABOVE)
+        if start is None:
+            if hiss:
+                start, end = k, k + w
+            elif k > by:
+                break
+        elif hiss:
+            if k - end > drop:
+                # past a closure: the next run, where the word has one
+                if left <= 1:
+                    break
+                left -= 1
+            end = k + w
+        elif k - end >= (gap if left > 1 else drop):
+            break
+    return None if start is None else (start, end)
+
+
+def _sound_from(audio, lo: int, hi: int, sr: int, peak: float) -> int:
+    """Where the sound that is running at sample `hi` begins: walked back from it frame by frame
+    while a frame is louder than TRAIL_SOUNDING of the take's `peak`, and never before `lo`."""
     import numpy as np
 
     w = max(8, int(round(LEAD_FRAME * sr)))
-    f = np.fft.rfftfreq(w, 1.0 / sr)
-    window = np.hanning(w)
     k = int(hi)
     while k - w >= lo:
         x = audio[k - w : k].astype(np.float64)
-        if np.sqrt(np.mean(x * x)) < peak * LEAD_FLOOR:
-            break
-        spec = np.abs(np.fft.rfft(x * window)) ** 2
-        tot = float(spec.sum())
-        if tot <= 0.0 or float(spec[f >= 4000.0].sum()) / tot <= LEAD_HF:
+        if np.sqrt(np.mean(x * x)) < peak * TRAIL_SOUNDING:
             break
         k -= w
     return k
@@ -807,9 +923,11 @@ def _quiet_lead(audio, edges: dict, group: list, params: dict, sr: int):
     """The next word's hiss in a floored rest held to LEAD_KEEP seconds (see LEAD_KEEP).
 
     Only where the rest was floored (`_rest_floor`): that is what lengthens the lead, and an
-    unfloored boundary is the model's own. The plan says where the rest is - from the word's last
-    sound to the next one's first - so a word's own final fricative is never looked at. Returns a
-    copy, or `audio` itself where nothing is changed.
+    unfloored boundary is the model's own. The lead is walked back from the next word's first
+    sound and never past the plan's end of this one. A word's own final hiss runs past that end
+    (see `_HISSES`) and is kept from it by the silence between the two: none of 100 such words
+    before a hiss-initial one was touched. Returns a copy, or `audio` itself where nothing is
+    changed.
     """
     import numpy as np
 
@@ -842,14 +960,16 @@ def _quiet_lead(audio, edges: dict, group: list, params: dict, sr: int):
     return audio if out is None else out
 
 
-def _trail(audio, edges: dict, group: list, params: dict, sr: int):
+def _trail(audio, edges: dict, group: list, params: dict, sr: int, hisses=None):
     """The fade and the sag of `TRAIL_*`, on each word that comes before a mid-sentence mark.
 
     `edges` is {token: (first sound, last sound)} in seconds. The voice's own end is looked for
     in the waveform - the last point within TRAIL_VOICED_DB of the final rime's peak - because
     the plan puts it 50 ms early to 80 ms late. The fade ends there, so the model's own drop
-    lands in the part of the word that is already down. Returns a copy with the words changed,
-    or `audio` itself where none is.
+    lands in the part of the word that is already down. `hisses` is {token: runs} for the
+    words that end on a hiss (`_hiss_codas`): theirs is found and left at the model's own level,
+    the voice ending before it (see `_HISSES`). Returns a copy with the words changed, or
+    `audio` itself where none is.
     """
     import numpy as np
 
@@ -869,34 +989,67 @@ def _trail(audio, edges: dict, group: list, params: dict, sr: int):
         first, last = (int(round(float(x) * sr)) for x in edges[ti])
         nxt = edges.get(ti + 1)
         limit = out.size if nxt is None else min(out.size, int(round(float(nxt[0]) * sr)))
-        # the next word starts where its lead hiss does (`_quiet_lead`): never faded, and never
-        # mistaken for this word's voice
+        # the next word starts where its lead hiss does (`_quiet_lead`), and where its own
+        # sound does when that is before the plan's figure: never faded, and never mistaken
+        # for this word's voice
         limit = _hiss_from(audio, last, limit, sr, peak)
+        early = max(last, limit - int(round(TRAIL_EARLY * sr)))
+        limit = _sound_from(audio, early, limit, sr, peak)
         lo = max(first, last - int(round(0.12 * sr)))
         hi = min(limit - guard, last + int(round(0.25 * sr)))
         if hi - lo < 4 * n_env:
             continue
         env = _rms_envelope(audio[lo:hi], n_env)
-        top = float(env[: max(1, last + int(round(0.08 * sr)) - lo)].max())
+        head = env[: max(1, last + int(round(0.08 * sr)) - lo)]
+        top = float(head.max())
         if top < peak * 0.01:
             continue
         end = lo + int(np.flatnonzero(env >= top * 10.0 ** (-TRAIL_VOICED_DB / 20.0))[-1])
+        # the hiss this word ends on, and the voice ending before it
+        tail = None
+        runs = int(hisses.get(ti, 0)) if hisses else 0
+        if runs > 0:
+            by = max(end, last) + int(round(TRAIL_HISS_GAP * sr))
+            tail = _hiss_tail(audio, lo + int(head.argmax()), by, hi, sr, peak, runs)
+        if tail is not None:
+            tail = (_hiss_from(audio, first, tail[0], sr, peak, TRAIL_HISS_ABOVE), tail[1])
+            end = min(end, tail[0] - int(round(TRAIL_HISS_IN * sr)))
         tip = min(int(round(TRAIL_TIP * sr)), end - first)
         if tip < int(round(0.03 * sr)):
             continue
         stop = max(end, limit - guard)
         span = min(int(round(TRAIL_SAG_SPAN * sr)), end - first)
-        c = min(end + int(round(TRAIL_SAG_TAIL * sr)), stop)
-        if not _glide(out, end - span, end, c, TRAIL_SAG * w, stop, sr):
-            _glide(out, end - span, end, end, TRAIL_SAG * w, stop, sr)
+        if tail is not None:
+            # the slow read's run-on ends before the hiss: none of it is displaced
+            _glide(out, end - span, end, end, TRAIL_SAG * w, tail[0], sr)
+        else:
+            c = min(end + int(round(TRAIL_SAG_TAIL * sr)), stop)
+            if not _glide(out, end - span, end, c, TRAIL_SAG * w, stop, sr):
+                _glide(out, end - span, end, end, TRAIL_SAG * w, stop, sr)
         depth = TRAIL_DB * w
-        n = stop - (end - tip)
-        g = np.full(n, -depth)
-        g[:tip] = -depth * (np.arange(tip) / float(tip)) ** 2
+        base = end - tip
+        n = stop - base
         back = min(int(round(TRAIL_BACK * sr)), stop - end)
-        if back > 0:
-            g[n - back :] = -depth * (1.0 - np.arange(back) / float(back))
-        out[end - tip : stop] *= (10.0 ** (g / 20.0)).astype(np.float32)
+        if tail is None:
+            g = np.full(n, -depth)
+            g[:tip] = -depth * (np.arange(tip) / float(tip)) ** 2
+            if back > 0:
+                g[n - back :] = -depth * (1.0 - np.arange(back) / float(back))
+        else:
+            # the voice down to its hiss's level and no further, up to nothing as the hiss
+            # arrives, and the floor once it has ended
+            voice = float(_rms_envelope(audio[base:end], n_env).max())
+            hiss = float(_rms_envelope(audio[tail[0] : tail[1]], n_env).max())
+            fall = min(depth, max(0.0, 20.0 * math.log10(max(voice, 1e-9) / max(hiss, 1e-9))))
+            at = np.arange(n, dtype=np.float64)
+            up = np.clip((at + base - tail[0]) / (TRAIL_HISS_IN * sr) + 1.0, 0.0, 1.0)
+            down = np.clip((tail[1] - at - base) / (TRAIL_HISS_OUT * sr) + 1.0, 0.0, 1.0)
+            up = 0.5 - 0.5 * np.cos(np.pi * up)
+            down = 0.5 - 0.5 * np.cos(np.pi * down)
+            g = -fall * np.minimum(at / float(tip), 1.0) ** 2 * (1.0 - up) - depth * (1.0 - down)
+            if back > 0:
+                g[n - back :] *= 1.0 - np.arange(back) / float(back)
+        out[base:stop] *= (10.0 ** (g / 20.0)).astype(np.float32)
     return out
 
 
@@ -1942,6 +2095,7 @@ class PiperBackend(Backend):
         self._last_floor = None
         self._last_rests: list = []
         self._last_edges: dict = {}
+        self._last_hisses: dict = {}
 
     # -- storage -----------------------------------------------------------
 
@@ -2710,7 +2864,7 @@ class PiperBackend(Backend):
             frame = HOP_LENGTH / float(sr)
             audio = _emphasize(audio, edges, group, sr)
             audio = _quiet_lead(audio, edges, group, params, sr)
-            audio = _trail(audio, edges, group, params, sr)
+            audio = _trail(audio, edges, group, params, sr, dict(self._last_hisses))
             # SAY WHICH WORDS CAME BACK WITHOUT A SPAN. ghost keeps them in the karaoke line
             # either way now (it interpolates their timing - see
             # GenerativeEditor._bridge_words), but a token the aligner cannot place is a real
@@ -3149,6 +3303,8 @@ class PiperBackend(Backend):
         self._last_rests: list = []
         # {token: (first sound start, last sound end)} in the same seconds - see `sound`.
         self._last_edges: dict = {}
+        # The tokens that end on a hiss, for `_trail`. From the symbols, so with or without a plan.
+        self._last_hisses: dict = _hiss_codas(symbols)
         if len(out) > 1:
             frames = np.asarray(out[1]).squeeze().astype(np.float64)
             if frames.ndim == 1 and frames.size == len(owner):

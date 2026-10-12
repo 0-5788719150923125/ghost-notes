@@ -12,6 +12,9 @@ extends Node
 ##   - IT MOVES WITH SHOW TIME and nothing else: a cloud over the sun dims the sun and the room's picture,
 ##     and the same moment twice is the same light.
 ##   - ITS EXPOSURE FOLLOWS THE CLOTH: on a pale cloth the sun is held lower than on a dark one.
+##   - ONE DRAFT LEANS EVERY FLAME ALIKE ON THE SCREEN (the user, 2026-10-11: one candle looked straight up
+##     and two leaned right): candles at the table's two ends in one wind lean the same on the screen -
+##     where each read across its own line of sight to the lens, they would not (the control).
 ##   - THE CARDS ARE NEVER IN THE DARK: with nothing in the light reaching them and no candle to lead, the
 ##     lamp hangs over the table after all - against a torch, which needs none.
 ##
@@ -129,6 +132,9 @@ func _run() -> void:
 	var pale_sun: float = medium._rig.sun_energy
 	_ok(medium._hot_lum() > dark_hot and pale_sun < dark_sun, "on a pale cloth the sun is held lower (%.2f, against %.2f on a dark one)" % [pale_sun, dark_sun])
 
+	print("one draft leans every flame alike")
+	_wind_lean()
+
 	print("the cards are never in the dark")
 	_lay("dark", {"light": {"sky": {"color": "#10141c", "strength": 0.03}}}, {"materials": {}, "things": []})
 	_ok(medium._lamp.visible and medium._key_flame == -1, "nothing lights the cards and no candle leads: the lamp hangs over them (%s)" % medium.lead_name())
@@ -145,6 +151,39 @@ func _run() -> void:
 	_clear()
 	print("table_light_check: %s" % ("ALL OK" if _fails == 0 else "%d FAILED" % _fails))
 	get_tree().quit(0 if _fails == 0 else 1)
+
+
+## Candles at either end of the back of the table, in a steady draft from the back left (toward the lens and
+## to the right): how far each leans on the screen, and how far each would by its own line of sight.
+func _wind_lean() -> void:
+	var pillar := {"shape": "lathe", "profile": [[0, 0], [2.4, 0], [2.4, 8], [0, 8]], "material": "wax", "wick": true}
+	var things := {"materials": {"wax": {"kind": "wax", "color": "#e8dcc0"}},
+		"things": [{"name": "a pillar", "place": "back left", "parts": [pillar]},
+			{"name": "another pillar", "place": "back right", "parts": [pillar]}]}
+	_lay("dark", {"light": {"sky": {"color": "#b8c8d8", "strength": 0.6},
+		"wind": {"from": "back left", "strength": 0.6, "gusts": 0.0, "every": 30}}}, things)
+	var flames: Array = []
+	for l in medium._lights:
+		flames.append_array((l as Dictionary)["flames"])
+	_ok(flames.size() == 2, "two candles stand (%d)" % flames.size())
+	if flames.size() != 2:
+		return
+	var right: Vector3 = medium._cam.global_transform.basis.x
+	var shown := PackedFloat32Array()
+	var by_sight := PackedFloat32Array()
+	var apart := (flames[0]["base"] as Vector3).distance_to(flames[1]["base"] as Vector3)
+	medium._tick_props(20.0)
+	for f in flames:
+		var up: Vector3 = ((f["mesh"] as MeshInstance3D).transform.basis.y).normalized()
+		shown.append(up.dot(right) / maxf(up.y, 1e-3))
+		var w := Winds.flame(medium._wind, 20.0, f["base"] as Vector3, medium.FLAME_H, float(f.get("open", 1.0)))
+		var los := (medium._cam.global_position - (f["base"] as Vector3)) * Vector3(1, 0, 1)
+		var across := Vector3.UP.cross(los.normalized())
+		var ax: Vector3 = w["axis"]
+		by_sight.append(ax.dot(across) / maxf(ax.y, 1e-3))
+	_ok(apart > 0.3 and absf(shown[0]) > 0.15, "the candles stand apart (%.2f m) and lean (%.2f)" % [apart, shown[0]])
+	_ok(absf(shown[0] - shown[1]) < 0.03, "the same draft leans two candles differently on the screen (%.2f and %.2f)" % [shown[0], shown[1]])
+	_ok(absf(by_sight[0] - by_sight[1]) > 0.15, "control: read across their own sight they would lean alike (%.2f and %.2f)" % [by_sight[0], by_sight[1]])
 
 
 func _legacy() -> void:

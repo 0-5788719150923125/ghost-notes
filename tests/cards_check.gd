@@ -47,6 +47,9 @@ extends SceneTree
 ##   and every card's name fits the stock below its picture, in every face. A picture still to come is
 ##   drawn in every window shape with nothing the renderer cannot triangulate - against the sliver an
 ##   oval window once left, which is refused.
+## - THE EPISODE'S TITLE is written for the line it goes up in: the producer is shown that line with
+##   its own part marked, asked for title case, and its reply is no longer called the video's whole
+##   title. Two-sided: with no line, none is spoken of. A title lands as it was written.
 ## - THE TITLE SCREEN: the name as large as the frame's width allows (two lines for a long one), in
 ##   proportion at any frame size; the set dresser's color kept and junk dropped for the default; a
 ##   shade round the name that its color always reads against.
@@ -63,7 +66,7 @@ func _init() -> void:
 			_lanes, _rerun_clears, _scrub_near, _clear_of_deck, _trash_episode, _pictures, _only_what_was_asked, _no_objects, _moves_after_words,
 			_few_remarks, _burst_moments,
 			_table_step, _things_built, _stones, _card_stock, _candles, _room_prompt, _cloth_prompt, _familiar, _archive,
-			_title_screen, _card_frame]:
+			_title_screen, _card_frame, _episode_title]:
 		_ok((check as Callable).call() == true, "%s stopped part way (a script error - see above)"
 			% (check as Callable).get_method())
 	print("cards_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails,
@@ -1276,6 +1279,35 @@ func _retired_heap(n: int, jit: float, radius: float, bounds: Dictionary, rng: R
 			spot = Vector2.from_angle(rng.randf() * TAU) * radius * 1.3
 		laid.append([Vector3(spot.x, lowest, spot.y), 0.0, girth * s, hh])
 	return laid.map(func(e: Array) -> Array: return [e[0], e[2], e[3]])
+
+
+## THE EPISODE'S TITLE (the user, 2026-10-11: "Yes Or No Tarot: Ask As Many Times As It Takes" went up
+## after "True Tarot: " - two colons, "Tarot" twice, a capital on every word): the producer is shown
+## the line its title goes up in and asked for title case, and no code recases what it writes.
+func _episode_title() -> bool:
+	var line := "Test Tarot: " + CardPrompts.TITLE_MARK
+	var told := String(CardPrompts.producer("Test Tarot", "B", 7, 3, true, CardTable.FACES, CardTable.FRAMES, [],
+		FixtureDeck.cards(), false, line)["prompt"])
+	_ok(told.contains("The video goes up as \"%s\"" % line), "the producer is not shown the line its title goes up in")
+	_ok(told.contains("its own part of the line the video goes up as"), "the reply's title is not said to be one part of that line")
+	_ok(told.contains("THE TITLE, `episode_title`, is set in title case"), "the producer is not asked for title case")
+	_ok(not told.contains("as it appears on YouTube"), "the reply's title is still called the whole of the video's")
+	var bare := String(CardPrompts.producer("Test Tarot", "B", 7, 3, true, CardTable.FACES, CardTable.FRAMES, [],
+		FixtureDeck.cards())["prompt"])
+	_ok(not bare.contains("goes up as") and bare.contains("is set in title case"),
+		"control: with no line to show, the producer is still told of one (or not of title case)")
+	_ok(not told.contains("{{") and not bare.contains("{{"), "a name in the title's rule was left unfilled")
+	# AS WRITTEN: the plan keeps the title's own capitals
+	CardEpisode.root = "user://cards_check"
+	var ep := CardEpisode.open("title-check", 5)
+	ep.invalidate("plan")
+	var prod := CardProducer.new(ep, {"title": "T", "brief": "B", "deck": FixtureDeck.cards(), "draw": [3, 3]})
+	var err := prod._land_plan(JSON.stringify({"episode_title": " ask as Many times as it takes ",
+		"spread": {"name": "S", "positions": ["a", "b", "c"]}, "look": {"deck_name": "D"}}))
+	var plan: Variant = ep.read_json("plan")
+	_ok(err.is_empty() and plan is Dictionary and String((plan as Dictionary).get("episode_title", "")) == "ask as Many times as it takes",
+		"a title did not land as written: %s %s" % [err, str((plan as Dictionary).get("episode_title", "") if plan is Dictionary else plan)])
+	return true
 
 
 ## THE CARD STOCK is the producer's choice (asked only for "card stock", it printed every deck on

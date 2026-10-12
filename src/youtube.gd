@@ -884,6 +884,20 @@ static func expand_title(template: String, values: Dictionary) -> String:
 	return out.strip_edges()
 
 
+## THE LINE AN EPISODE'S TITLE GOES UP IN, for whoever names the episode before it exists (the Cards
+## producer): [param template] with [param values] filled in and [param mark] standing where the
+## episode's title will - "Truthful Tarot: [episode_title]" - and "[date]" for a date not yet known.
+## "" when the line is the episode's title alone, or leaves it out: there is nothing round it to show.
+static func title_shape(template: String, values: Dictionary, mark: String) -> String:
+	if not template.contains("%episode%"):
+		return ""
+	var v := {"date": "[date]"}
+	v.merge(values, true)
+	v["episode"] = mark
+	var out := expand_title(template, v)
+	return "" if out == mark else out
+
+
 ## [param text] as YouTube takes it: `<` and `>` (which it refuses) become `‹` and `›`, and control
 ## characters other than line breaks and tabs go.
 static func clean(text: String) -> String:

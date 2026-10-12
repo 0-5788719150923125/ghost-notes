@@ -303,6 +303,16 @@ static func upload_title(show: String, episode: String) -> String:
 	return "%s: %s" % [name, t] if not t.is_empty() else name
 
 
+## THE LINE THE NEXT EPISODE'S TITLE GOES UP IN, which its producer is shown before it writes one
+## ([method YouTube.title_shape], the `episode_title` rule in rules/cards/producer.yaml): the YouTube
+## card's template - with no card, the default one, which is what [method upload_title] makes - with
+## the show's name in it and [constant CardPrompts.TITLE_MARK] where the episode's title will stand.
+func _uploads_as() -> String:
+	return YouTube.title_shape(_youtube.template() if _youtube != null else YouTube.TITLE_TEMPLATE,
+		{"title": _doc.field("title").strip_edges() if _doc != null else "",
+		"seed": str(_episode.seed) if _episode != null else ""}, CardPrompts.TITLE_MARK)
+
+
 ## WHERE THE THUMBNAIL IS TAKEN, seconds into the video: the title screen with the show's name fully
 ## up over the out-of-focus table - after the name fades in (by 1.4 s) and before the focus pull,
 ## which starts 1.4 s before the reading opens at the intro's end (see the table medium's `_title_alpha`
@@ -341,14 +351,16 @@ func _show_title() -> String:
 	return t if not t.is_empty() else "Untitled show"
 
 
-## What the producer works from, read fresh: the title and byline, the brief (its card LIST taken out - see
+## What the producer works from, read fresh: the title and byline, the line an episode's title goes
+## up in ([method _uploads_as]), the brief (its card LIST taken out - see
 ## [method CardDeck.strip]), the deck the brief lists (or none, when the producer chooses each
 ## episode's - `chooses`), the show's voices
 ## (every one its document names - the reader's and any other, a familiar's - for the reader to
 ## hand lines to), and the knobs.
 func _spec() -> Dictionary:
 	var body := Manuscript.strip_frontmatter(_doc.pull())
-	return {"title": _show_title(), "byline": _show_byline(), "brief": CardDeck.strip(body), "deck": CardDeck.of(body),
+	return {"title": _show_title(), "byline": _show_byline(), "uploads_as": _uploads_as(),
+		"brief": CardDeck.strip(body), "deck": CardDeck.of(body),
 		"chooses": CardDeck.chooses(body), "voices": _cast_dict().keys(),
 		"draw": _knobs["draw"], "reversals": _knobs["reversals"], "jumpers": _knobs["jumpers"],
 		"writer": _knobs["writer"], "writer_model": _knobs["writer_model"], "writer_effort": _knobs["writer_effort"],

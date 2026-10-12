@@ -29,6 +29,19 @@ extends Node
 ##     is far from the card the spread is still laying. A jumper comes down as it lies: its flight
 ##     ends where it lands, turned as it lands (it snapped a third of a turn round as it touched).
 ##
+##   - WHAT LIES ON WHAT (2026-10-11, the user, of a waterfall's two cards shown one after the other: the
+##     second "was pulled THROUGH the 1st card... it may have looked even better to slide the 2nd card
+##     out to the right"): through a waterfall, each card shown and laid again, no card passes through
+##     another or lies in it - a card under another is slid out along the cloth before it rises, and one
+##     put back lies on top. Two-sided: a card lifted straight up from under the one on it does pass
+##     through it, and the check says so.
+##   - THE CARDS IN THE BOX (the same day: the box's cards "did not match the ones we were drawing";
+##     "perfect little stacks, equally-spaced apart"): with the text on the back, every card nobody
+##     drew has a printed back as the drawn ones do, never the shared artwork (which a front-text box
+##     keeps - the control, in the front details). Piles are of different heights, unevenly spaced and
+##     not squared, each card on its own plot of the floor; the drawn cards wait on top of piles, and
+##     a card put back goes on a pile. Two-sided: the same piles laid with no mess are the squared grid.
+##
 ##   tests/run_boot_probe.sh tests/table_staging_check.gd 300
 ##
 ## A BOOT probe (the medium reaches the Director); no GPU - poses are transforms.
@@ -75,6 +88,9 @@ func _run() -> void:
 	_search_and_linger()
 	_laid_over_box()
 	_loose_box()
+	_open_loose_box()
+	_piles()
+	_waterfall_shown()
 	_printings()
 	_front_details()
 	_bursts()
@@ -350,7 +366,24 @@ func _box_show() -> void:
 	var filed := 0
 	for f in medium._file:
 		filed += ((f as MultiMeshInstance3D).multimesh as MultiMesh).instance_count
-	_ok(filed + medium._cards.size() == deck.size(), "the box shows its twelve planned cards, including the drawn ones (%d)" % (filed + medium._cards.size()))
+	# AN OPEN BOX IS FILED OUT, as a shoebox is (feedback 0020: "barely any cards in the box"): the planned
+	# cards at least, standing through at least OPEN_FILE_SHARE of its depth
+	var depth: float = (medium._box["inner"] as AABB).size.z
+	var kept := filed + medium._cards.size()
+	_ok(kept >= deck.size() and float(kept) * TableMedium.FILE_PITCH >= depth * TableMedium.OPEN_FILE_SHARE - TableMedium.FILE_PITCH,
+		"the box shows its twelve planned cards and is filed out to half its depth (%d cards, %.0f mm of %.0f)" % [kept, float(kept) * TableMedium.FILE_PITCH * 1000.0, depth * 1000.0])
+	# THE TEXT IS ON THE BACK: the cards nobody drew are printed as the drawn ones are
+	var blanks: Array = ((medium._backs[""] as Dictionary).get("blank", []) as Array).map(func(b: Dictionary) -> Material: return b["mat"])
+	var printed := not blanks.is_empty()
+	for f in medium._file:
+		var shown := ((f as MultiMeshInstance3D).multimesh as MultiMesh).mesh.surface_get_material(1)
+		printed = printed and blanks.has(shown) and shown != (medium._backs[""] as Dictionary)["mat"]
+	for b in (medium._backs[""] as Dictionary).get("blank", []):
+		var canvas: CardFaces.Face = (b as Dictionary)["canvas"]
+		printed = printed and canvas.printed and canvas.anonymous and canvas.back
+	_ok(printed and (medium._cards[0] as MeshInstance3D).get_surface_override_material(1) == (medium._printed[0] as Dictionary)["mat"],
+		"with the text on the back, the cards nobody drew have printed backs like the drawn ones, not the shared artwork")
+	_ok(blanks.has(medium._rummage_card.get_surface_override_material(1)), "a card looked at in a search has a printed back too")
 	var inner: AABB = medium._box["inner"]
 	_posed(0.5)
 	var waiting: Transform3D = (medium._cards[0] as MeshInstance3D).transform
@@ -461,9 +494,8 @@ func _shoebox_show() -> void:
 	_ok((medium._slots[0]["pos"] as Vector3).distance_to(medium._slots[1]["pos"]) < 0.015,
 		"shown cards form a small stack")
 	var returned := medium._slot_xf(2).origin
-	_ok((medium._box["inner"] as AABB).grow(0.01).has_point(returned) and
-		returned.y > (medium._box["at_k"][2] as Transform3D).origin.y,
-		"a returned card lands on top of the contents inside the box")
+	_ok((medium._box["inner"] as AABB).grow(0.01).has_point(returned) and not _buried(returned),
+		"a returned card lands on top of a pile inside the box")
 	var events: Array = medium._times()["events"]
 	var once := true
 	for card_events in events:
@@ -515,20 +547,56 @@ func _loose_box() -> void:
 	angles.sort()
 	var spread := float(xs[-1]) - float(xs[0])
 	var turn := float(angles[-1]) - float(angles[0])
-	_ok(poses.size() == CardTable.SHOEBOX_FILL and spread > 0.09 and turn > 0.1,
-		"loose cards occupy varied spots and angles, with the whole inventory present (%d cards, %.1f mm, %.2f rad)" %
+	_ok(poses.size() > 200 and poses.size() <= CardTable.SHOEBOX_FILL and spread > 0.09 and turn > 0.1,
+		"loose cards occupy varied spots and angles, the box well filled (%d cards, %.1f mm, %.2f rad)" %
 		[poses.size(), spread * 1000.0, turn])
 	var source: Array = medium._box["at_k"]
 	var return_at: Vector3 = medium._box["return_at"]
-	var top_down := true
-	var separate := true
+	var on_top := true
+	var in_order := true
+	var apart := true
 	for k in source.size():
 		var at: Transform3D = source[k]
-		if k > 0:
-			top_down = top_down and at.origin.y < (source[k - 1] as Transform3D).origin.y
-		separate = separate and return_at.x - at.origin.x > CardTable.card_size(medium._look).length() + 0.007
-	_ok(top_down and separate and return_at.y > (source[0] as Transform3D).origin.y + 0.0007,
-		"loose cards are drawn from the exposed top in order and returned to a clear higher spot")
+		on_top = on_top and not _buried(at.origin, source)
+		apart = apart and Vector2(at.origin.x - return_at.x, at.origin.z - return_at.z).length() > NEAR
+		for j in k:
+			var before: Transform3D = source[j]
+			if Vector2(at.origin.x - before.origin.x, at.origin.z - before.origin.z).length() < NEAR:
+				in_order = in_order and before.origin.y > at.origin.y
+	_ok(on_top and in_order, "the drawn cards wait on top of piles, the first to be drawn uppermost")
+	_ok(apart and not _buried(return_at), "a card put back goes on top of a pile none is drawn from")
+
+
+## THE CONTROL for the open box's fill: only a box of cards on edge is filed out - the same box with its
+## cards loose keeps exactly the planned collection.
+func _open_loose_box() -> void:
+	print("-- loose cards in an open box")
+	var deck: Array = []
+	for i in 12:
+		deck.append({"key": "o%d" % i, "name": "Open card %d" % i})
+	_load(47, [{}, {}, {}], {"look": {"candles": 0},
+		"staging": {"source": "box", "box_style": "open", "contents": "loose"}, "deck": deck})
+	var filed := 0
+	for f in medium._file:
+		filed += ((f as MultiMeshInstance3D).multimesh as MultiMesh).instance_count
+	_ok(not medium._box.is_empty() and filed + medium._cards.size() == deck.size(),
+		"control: an open box of loose cards keeps its twelve planned cards (%d)" % (filed + medium._cards.size()))
+
+
+## Cards nearer than this (xz, meters) lie in one pile.
+const NEAR := 0.03
+
+
+## Whether a card in the box lies over [param at], in its pile ([param but] aside: the drawn cards' own
+## places).
+func _buried(at: Vector3, but: Array = []) -> bool:
+	for xf in _box_poses():
+		var o: Vector3 = (xf as Transform3D).origin
+		if but.has(xf) or o.is_equal_approx(at):
+			continue
+		if Vector2(o.x - at.x, o.z - at.z).length() < NEAR and o.y > at.y:
+			return true
+	return false
 
 
 func _box_poses() -> Array:
@@ -574,6 +642,23 @@ func _laid_over_box() -> void:
 	_ok(behind == 0, "no card lies in the box's column, in front of it or behind (%d did)" % behind)
 	_ok(rows_of_two > 0, "a long row that would reach it is two rows (%d of %d spreads)" % [rows_of_two, SEEDS * 3])
 	_ok(oracle > 0, "control: with no box the same spreads do lie in its column (%d cards)" % oracle)
+	# NOT OFF THE CLOTH (feedback 0020: ten cards beside a box, stepped back past the cloth's far edge and
+	# the first of them in the far corner, with the front of the table bare): a row that cannot step aside
+	# past the box's column is two rows, every card on the cloth
+	var off_cloth := 0
+	var cloth := Rect2(TablePositions.CLOTH_MIDDLE - TablePositions.CLOTH * 0.5, TablePositions.CLOTH).grow(-TablePositions.HEM)
+	for s in range(1, SEEDS + 1):
+		var lay := CardTable.layout_of(s)
+		for n in [9, 10, 11, 12]:
+			var rng := RandomNumberGenerator.new()
+			rng.seed = hash([s, n, "behind-box"])
+			for sl in TablePositions.staged(_cards(_plain(n)), rng, lay, size):
+				if not cloth.encloses(CardTable.footprint(sl["pos"], float(sl["yaw"]), TablePositions.CARD)):
+					off_cloth += 1
+	_ok(off_cloth == 0, "every card of a long spread beside the box lies on the cloth (%d did not)" % off_cloth)
+	var stepped_back := [{"pos": Vector3(0.0, 0.0, -0.44), "yaw": 0.0}]
+	_ok(not TablePositions._on_cloth(stepped_back) and TablePositions._on_cloth([{"pos": Vector3(0.0, 0.0, -0.165), "yaw": 0.0}]),
+		"control: a row stepped back to z -0.44 is off the cloth, one at -0.165 is not")
 	# THE FLIGHT: from held up in front of the lens to a place right behind the box
 	if medium._box.is_empty():
 		_ok(false, "a box stands to lay over")
@@ -658,8 +743,9 @@ func _front_details() -> void:
 		for name in filed:
 			if mm.mesh.surface_get_material(0) == (medium._backs[name] as Dictionary)["mat"]:
 				filed[name] += mm.instance_count
-	_ok(filed["First"] == 6 and filed["Second"] == 3,
-		"the nine undrawn cards keep the planned printing mix, six first and three second (%s)" % str(filed))
+	var undrawn_n: int = int(filed["First"]) + int(filed["Second"])
+	_ok(filed["First"] >= 6 and filed["Second"] >= 3 and absf(float(filed["First"]) / float(maxi(undrawn_n, 1)) - 8.0 / 12.0) < 0.05,
+		"the undrawn cards, the nine planned and the stock filed out with them, keep the planned printing mix, two first to one second (%s)" % str(filed))
 
 
 ## How far the emitter [param e] is from card [param card] as drawn (meters): its middle, or its edges
@@ -757,3 +843,155 @@ func _bursts() -> void:
 				% [float(w[0]) * 1000.0, w[1]])
 	medium._spin_wanted = false
 	medium._spin_key = ""
+
+
+## How uneven [param piles] ([method TablePositions.box_piles]) are: `{low, high}` the shortest and the
+## tallest pile's cards, `gaps` how far the widest space between two piles next to each other in a row is
+## from the narrowest (meters), `ragged` the most a pile's cards lie off its first (meters), `kept`
+## whether every card lies inside its own plot.
+func _pile_measure(piles: Array, size: Vector2) -> Dictionary:
+	var low := 1 << 30
+	var high := 0
+	var ragged := 0.0
+	var kept := true
+	var rows := {}
+	for p in piles:
+		var cards: Array = (p as Dictionary)["cards"]
+		var plot: Rect2 = (p as Dictionary)["rect"]
+		low = mini(low, cards.size())
+		high = maxi(high, cards.size())
+		if cards.is_empty():
+			continue
+		var first: Vector3 = (cards[0] as Transform3D).origin
+		for xf in cards:
+			var t: Transform3D = xf
+			ragged = maxf(ragged, Vector2(t.origin.x - first.x, t.origin.z - first.z).length())
+			var foot := CardTable.footprint(t.origin, atan2(-t.basis.x.z, t.basis.x.x), size)
+			kept = kept and plot.grow(0.0002).encloses(foot)
+		var row := snappedf(plot.position.y, 0.0001)
+		if not rows.has(row):
+			rows[row] = []
+		(rows[row] as Array).append(first.x)
+	var steps: Array = []
+	for row in rows:
+		var xs: Array = rows[row]
+		xs.sort()
+		for i in range(1, xs.size()):
+			steps.append(float(xs[i]) - float(xs[i - 1]))
+	steps.sort()
+	return {"low": low, "high": high, "ragged": ragged, "kept": kept,
+		"gaps": float(steps[-1]) - float(steps[0]) if steps.size() > 1 else 0.0}
+
+
+func _piles() -> void:
+	print("-- piles in a box")
+	var inner := AABB(Vector3(-0.16, 0.0, -0.105), Vector3(0.32, 0.1, 0.21))
+	var size: Vector2 = CardTable.CARD_SIZES["trading"]
+	var worst := {"low": 1.0, "gaps": INF, "ragged": INF}
+	var kept := true
+	var whole := true
+	for seed in SEEDS:
+		for mess in [TablePositions.PILES_NEAT, 1.0]:
+			var rng := RandomNumberGenerator.new()
+			rng.seed = seed
+			var piles := TablePositions.box_piles(inner, size, 600, 0.00072, float(mess), rng)
+			var m := _pile_measure(piles, size)
+			var count := 0
+			for p in piles:
+				count += ((p as Dictionary)["cards"] as Array).size()
+			whole = whole and count == 600
+			kept = kept and bool(m["kept"])
+			worst["low"] = minf(float(worst["low"]), 1.0 - float(m["low"]) / float(m["high"]))
+			worst["gaps"] = minf(float(worst["gaps"]), float(m["gaps"]))
+			worst["ragged"] = minf(float(worst["ragged"]), float(m["ragged"]))
+	_ok(whole and kept, "every card is in a pile, on its own pile's plot of the floor, inside the box")
+	_ok(float(worst["low"]) > 0.15, "some piles are taller than others (the shortest at least %.0f%% under the tallest)" % (float(worst["low"]) * 100.0))
+	_ok(float(worst["gaps"]) > 0.002 and float(worst["ragged"]) > 0.001,
+		"the piles are unevenly spaced and not squared (spaces %.1f mm apart at least, cards %.1f mm off)" %
+		[float(worst["gaps"]) * 1000.0, float(worst["ragged"]) * 1000.0])
+	var square := RandomNumberGenerator.new()
+	square.seed = 5
+	var grid := _pile_measure(TablePositions.box_piles(inner, size, 600, 0.00072, 0.0, square), size)
+	_ok(int(grid["high"]) - int(grid["low"]) <= 1 and float(grid["gaps"]) < 0.0001 and float(grid["ragged"]) < 0.0001,
+		"control: laid with no mess, the piles are the squared grid (%d to %d cards, spaces %.2f mm apart, %.2f mm off)" %
+		[int(grid["low"]), int(grid["high"]), float(grid["gaps"]) * 1000.0, float(grid["ragged"]) * 1000.0])
+
+
+## How many times a card passes through another, or lies in it, between [param from] and [param to]
+## (two poses of every card, a frame apart: `[Transform3D or null when unseen]`): a point of one card
+## over the other's face changing sides of it, or within it.
+func _through(from: Array, to: Array) -> int:
+	var n := 0
+	var half := TablePositions.CARD * 0.5
+	for a in from.size():
+		for b in from.size():
+			if a == b or from[a] == null or to[a] == null or from[b] == null or to[b] == null:
+				continue
+			var hit := false
+			for gx in [-0.96, 0.0, 0.96]:
+				for gz in [-0.96, -0.5, 0.0, 0.5, 0.96]:
+					var p := Vector3(float(gx) * half.x, 0.0, float(gz) * half.y)
+					var was: Vector3 = (from[b] as Transform3D).affine_inverse() * ((from[a] as Transform3D) * p)
+					var now: Vector3 = (to[b] as Transform3D).affine_inverse() * ((to[a] as Transform3D) * p)
+					if absf(was.x) > half.x or absf(was.z) > half.y or absf(now.x) > half.x or absf(now.z) > half.y:
+						continue
+					if signf(was.y) != signf(now.y) or absf(now.y) < TableMedium.CARD_T * 0.9:
+						hit = true
+			n += 1 if hit else 0
+	return n
+
+
+func _seen() -> Array:
+	var out: Array = []
+	for c in medium._cards:
+		out.append((c as MeshInstance3D).transform if (c as MeshInstance3D).visible else null)
+	return out
+
+
+func _waterfall_shown() -> void:
+	print("-- a waterfall, each card shown")
+	_load(871516, [{"comes": "swept"}, {"comes": "swept"}, {}],
+		{"look": {"candles": 0}, "staging": {"source": "deck", "text": "booklet"}})
+	var tm := medium._times()
+	var kinds: Array = ((tm["events"] as Array)[0] as Array).map(func(e: Dictionary) -> String: return String(e["k"]))
+	_ok(kinds == ["arrive", "show", "lay"] and _at(1, "show") < INF,
+		"the waterfall's cards are swept out, then each shown and laid again (%s)" % str(kinds))
+	var t := _at(0, "arrive", "fan")
+	var end := float(tm["spread"]) + 2.0
+	_posed(t)
+	var prev := _seen()
+	var through := 0
+	var first := INF
+	while t < end:
+		t += 1.0 / 60.0
+		_posed(t)
+		var now := _seen()
+		var hits := _through(prev, now)
+		if hits > 0 and first == INF:
+			first = t
+		through += hits
+		prev = now
+	_ok(through == 0, "no card passes through another or lies in it (%d times, first at %.2f s)" % [through, first])
+	# card 1 lies under card 2 until it is shown: it slides out along the cloth before it rises
+	var show := _at(0, "show")
+	_posed(show - 0.02)
+	var under: Transform3D = (medium._cards[0] as MeshInstance3D).transform
+	var over: Transform3D = (medium._cards[1] as MeshInstance3D).transform
+	_ok(over.origin.y - under.origin.y > TableMedium.CARD_T * 0.99, "the second card swept out lies on the first, a card's thickness up")
+	_posed(show + TableMedium.SHOW_SLIDE * 0.98)
+	var slid: Transform3D = (medium._cards[0] as MeshInstance3D).transform
+	_ok(absf(slid.origin.y - under.origin.y) < 0.0002 and Vector2(slid.origin.x - under.origin.x, slid.origin.z - under.origin.z).length() > 0.03
+		and not TablePositions.overlaps({"pos": slid.origin, "yaw": medium._slots[0]["yaw"]}, {"pos": over.origin, "yaw": medium._slots[1]["yaw"]}),
+		"shown, the first is slid out from under the second along the cloth before it rises (%.0f mm)" %
+		(Vector2(slid.origin.x - under.origin.x, slid.origin.z - under.origin.z).length() * 1000.0))
+	_posed(_at(1, "show") - 0.02)
+	_ok((medium._cards[0] as MeshInstance3D).transform.origin.y - (medium._cards[1] as MeshInstance3D).transform.origin.y > TableMedium.CARD_T * 0.99,
+		"laid again, the first lies on top of the second")
+	# THE CONTROL: lifted straight up from where it lay under the second, it passes through it
+	var straight := 0
+	var was: Array = [under, over]
+	for i in 12:
+		var up: Array = [Transform3D(under.basis, under.origin + Vector3(0.0, 0.004 * float(i + 1), 0.0)), over]
+		straight += _through(was, up)
+		was = up
+	_ok(straight > 0, "control: a card lifted straight up from under another passes through it")

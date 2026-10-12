@@ -211,8 +211,12 @@ func ticked() -> bool:
 ## [member values], as the panel stands now.
 func title_now(given := {}) -> String:
 	var v: Variant = given if not given.is_empty() else (values.call() if values.is_valid() else {})
-	var t := _title.text if not _title.text.strip_edges().is_empty() else YouTube.TITLE_TEMPLATE
-	return YouTube.fit_title(YouTube.expand_title(t, v if v is Dictionary else {}))
+	return YouTube.fit_title(YouTube.expand_title(template(), v if v is Dictionary else {}))
+
+
+## The title's template as it stands: the field's, else the one a new card starts with.
+func template() -> String:
+	return _title.text if not _title.text.strip_edges().is_empty() else YouTube.TITLE_TEMPLATE
 
 
 ## WHAT AN UPLOAD SAYS (see [member Exporter.upload_provider]): [param base] - the panel's own part,

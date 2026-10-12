@@ -99,8 +99,13 @@ const DEAL_END := 1.9
 ## A WATERFALL (TableActions.FAN): each card leaves a beat behind the one before (TableActions.FAN_EACH)
 ## and slides out to its place, turning face up as it goes.
 const FAN_MOVE := 1.45
+const SWEEP_FLAT := 0.25
 ## A CARD SHOWN from where it lies (TableActions.SHOW): it lifts and comes up; its page opens.
 const SHOW_RISE := 1.1
+## ...after it is slid out from under whatever lies on it ([method _slid_out]), in the first of that.
+const SHOW_SLIDE := 0.45
+const SLIDE_STEP := 0.004
+const SLIDE_MOST := 0.2
 const SHOW_PAGE := Vector2(0.9, 1.6)
 ## A card TURNED where it lies (TableActions.TURN, FLIP): the turn's own seconds.
 const TURN_END := 0.8
@@ -110,6 +115,14 @@ const FLIP_END_LAY := 1.1
 const BOX_WALL := 0.006
 const FILE_PITCH := 0.0011
 const FILE_LEAN := 0.35
+## How many different printed backs the unseen cards of one printing share ([method _blank_backs]).
+const BLANKS := 3
+## How full a shoebox of piles is: this share of what its piles could hold to the rim.
+const SHOEBOX_SHARE := 0.6
+## How much of the depth of an open box of cards on edge they fill at least: the producer's list of
+## fourteen undrawn cards stood in a front corner of a box twenty centimeters deep (feedback 0020:
+## "barely any cards in the box"), so the rest of the stock is filed behind them as a shoebox's is.
+const OPEN_FILE_SHARE := 0.5
 ## A card pulled from the box rises this far above the rim before it turns to the camera.
 const PULL_CLEAR := 0.02
 ## A card laid down arcs this high over the cloth on its way (meters) - and is lifted higher while the
@@ -420,6 +433,16 @@ shader_type spatial;
 render_mode unshaded, cull_disabled, blend_add;
 uniform vec3 color = vec3(1.0, 0.65, 0.3);
 uniform float energy = 4.0;
+// A FLAME BENDS, it does not tip: its foot stays on the wick and its tip leans furthest, licking from
+// side to side as the draft finds it. `bend` is how far the tip has leaned (meters, across the quad), `lick`
+// how far a ripple swings it and `phase` where the ripple is - all planned on the CPU from show time.
+uniform float bend = 0.0;
+uniform float lick = 0.0;
+uniform float phase = 0.0;
+void vertex() {
+	float h = clamp(VERTEX.y / 0.03 + 0.5, 0.0, 1.0);
+	VERTEX.x += (bend + lick * sin(phase - h * 4.5)) * h * h;
+}
 void fragment() {
 	vec2 p = UV - vec2(0.5, 0.62);
 	p.x *= 2.2;
@@ -478,6 +501,11 @@ var _flame_n := 0                     # flames lit so far on this table, each wi
 ## the quad it is drawn on, standing on its wick.
 const FLAME_H := 0.03
 const FLAME_QUAD := 0.03
+## HOW A FLAME LEANS (the user, 2026-10-11: they "lean... which is not a thing that flames should do"):
+## the share of its lean that BENDS it - foot upright, tip leaned - the rest tipping the whole sprite;
+## and how far its tip licks from side to side, in flame heights, in still air and fanned to a full draft.
+const FLAME_BEND := 0.6
+const FLAME_LICK := Vector2(0.04, 0.16)
 var _glows: Array = []              # [{light, base, energy, flicker}] - candles in the room, out of shot
 var _lamp_base := 1.6                 # the lamp's light before a candle takes the key from it
 var _key_flame := -1                  # the key: the flame that leads the light, or -1 for the lamp
@@ -532,6 +560,9 @@ var _slots: Array = []              # per card: Transform3D where it lies in the
 var _jump_land := Vector3.ZERO
 var _slot_jit: Array = []           # per deck slot: Vector3(x, z, yaw)
 var _lay_jit: Array = []            # per shown card: a small, repeatable placement difference
+var _all_events: Array = []         # every card's timeline, as [method _times] last made it ([method _rest_lift])
+var _laps: Array = []               # per card: the cards its place overlaps ([method _laps_of]), for [member _laps_for]
+var _laps_for: Array = []
 var _moves: Array = []              # the shuffle: [{kind, t0, dur, seed}]
 var _move_rng := RandomNumberGenerator.new()
 var _flip0 := PackedByteArray()      # per card, as the deck lies at the shuffle's start: the other way round ([method _deck_flip0])
@@ -1007,8 +1038,8 @@ func _build_episode() -> void:
 	for d in _deck:
 		(d as MeshInstance3D).mesh = deck_mesh
 	_rummage_card.mesh = _mesh_for(_look)
-	_rummage_card.set_surface_override_material(0, _back_mat)
-	_rummage_card.set_surface_override_material(1, _back_mat)
+	_rummage_card.set_surface_override_material(0, _unseen_mats("")[0])
+	_rummage_card.set_surface_override_material(1, _unseen_mats("")[0])
 	_rummage_card.set_surface_override_material(2, _edge_mat)
 	_back_mat.set_shader_parameter("window", Vector4(0.0, 0.0, 1.0, 1.0))
 	_edge_mat.albedo_color = CardTable.color(String((_look.get("frame", {}) as Dictionary).get("stock", "#efe6d2"))).darkened(0.08)
@@ -1041,15 +1072,20 @@ func _build_episode() -> void:
 	CardFaces.redraw(_back_vp)
 	for pb in _printed:
 		CardFaces.redraw((pb as Dictionary)["vp"])
+	for key in _backs:
+		for blank in (_backs[key] as Dictionary).get("blank", []) as Array:
+			CardFaces.redraw((blank as Dictionary)["vp"])
 
 
 ## THE BACKS: the deck's own ([member _back_vp]), and one more per printing the drawn cards (and the box,
 ## when the producer chose it) are printed in ([method CardTable.look_of]).
 func _build_backs(cards: Array) -> void:
 	for key in _backs:
+		for blank in (_backs[key] as Dictionary).get("blank", []) as Array:
+			((blank as Dictionary)["vp"] as Node).queue_free()
 		if String(key) != "":
 			((_backs[key] as Dictionary)["vp"] as Node).queue_free()
-	_backs = {"": {"vp": _back_vp, "canvas": _back_canvas, "mat": _back_mat}}
+	_backs = {"": {"vp": _back_vp, "canvas": _back_canvas, "mat": _back_mat, "blank": _blank_backs("")}}
 	for name in _printings(cards):
 		if String(name).is_empty() or _backs.has(name):
 			continue
@@ -1062,7 +1098,42 @@ func _build_backs(cards: Array) -> void:
 		mat.set_shader_parameter("lift", 0.06)
 		mat.set_shader_parameter("window", Vector4(0.0, 0.0, 1.0, 1.0))
 		_foil_stock(mat, canvas.look)
-		_backs[name] = {"vp": vp, "canvas": canvas, "mat": mat}
+		_backs[name] = {"vp": vp, "canvas": canvas, "mat": mat, "blank": _blank_backs(String(name))}
+
+
+## THE BACKS OF THE CARDS NOBODY DREW, for printing [param name], when the cards come from a box and
+## their text is printed on their backs: [constant BLANKS] of them, printed as a drawn card's own back is
+## ([method _back_of]) with type nobody wrote ([member CardFaces.Face.anonymous]). The box's unseen
+## cards showed the printing's shared artwork while every card pulled out of it had a printed back -
+## two kinds of card in one box (the user, 2026-10-11). None otherwise: the shared back is the right one.
+func _blank_backs(name: String) -> Array:
+	var out: Array = []
+	if _cards_from != "box" or String(_staging["text"]) != "back":
+		return out
+	for v in BLANKS:
+		var canvas := CardFaces.Face.new()
+		canvas.back = true
+		canvas.printed = true
+		canvas.anonymous = true
+		canvas.look = CardTable.look_of(_look, {"series": name}) if not name.is_empty() else _look
+		canvas.card = {"key": "unseen %d" % v}
+		canvas.seed = _seed
+		var vp := CardFaces.viewport(self, canvas, CardFaces.face_px(canvas.look))
+		var mat := _foil_material(vp.get_texture())
+		mat.set_shader_parameter("lift", 0.5)
+		mat.set_shader_parameter("window", Vector4(0.0, 0.0, 1.0, 1.0))
+		out.append({"vp": vp, "canvas": canvas, "mat": mat})
+	return out
+
+
+## What a card nobody drew shows, in printing [param name]: its shared back, or one of its printed
+## backs ([method _blank_backs]).
+func _unseen_mats(name: String) -> Array:
+	var bk: Dictionary = _backs.get(name, _backs[""])
+	var blank: Array = bk.get("blank", [])
+	if blank.is_empty():
+		return [bk["mat"]]
+	return blank.map(func(b: Dictionary) -> Material: return b["mat"])
 
 
 ## Every printing the episode's cards are in, the deck's own ("") among them when any card is in it: the
@@ -1190,6 +1261,11 @@ func _poll_pictures(force := false) -> void:
 			CardFaces.redraw(bk["vp"])
 		_foil_accent(bk["mat"], _look)
 		(bk["mat"] as ShaderMaterial).set_shader_parameter("foil", _foil * 0.8)
+		for blank in bk.get("blank", []) as Array:
+			if back != null and ((blank as Dictionary)["canvas"] as CardFaces.Face).art != back:
+				((blank as Dictionary)["canvas"] as CardFaces.Face).art = back
+				CardFaces.redraw((blank as Dictionary)["vp"])
+			((blank as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("foil", _foil * 0.25)
 		for pb in _printed:
 			if String((pb as Dictionary).get("series", "")) != String(name):
 				continue
@@ -1408,8 +1484,15 @@ func _slot_xf(i: int, quarter := 0, over := false) -> Transform3D:
 		if String(p.get("destination", "")) == "box" and i < (_box["at_k"] as Array).size():
 			var placed: Transform3D = (_box["at_k"] as Array)[i]
 			if _box.has("return_at"):
-				placed.origin = (_box["return_at"] as Vector3) + Vector3(0.0, float(i) * CARD_T * 1.1, 0.0)
-				placed.basis = Basis(Vector3.UP, PI if i % 2 == 0 else 0.0)
+				# on the pile the returns go to, each on the last, set down a little off true
+				var before := 0
+				for j in i:
+					if cards[j] is Dictionary and (cards[j] as Dictionary).get("position") is Dictionary \
+							and String(((cards[j] as Dictionary)["position"] as Dictionary).get("destination", "")) == "box":
+						before += 1
+				placed.origin = (_box["return_at"] as Vector3) + Vector3(0.0, float(before) * CARD_T * 1.1, 0.0)
+				placed.basis = Basis(Vector3.UP, float(_box.get("return_turn", 0.0))
+					+ (float(hash([_seed, i, "put back"]) % 1000) / 1000.0 - 0.5) * 0.14)
 			elif String(_staging.get("contents", "file")) != "file":
 				var inner: AABB = _box["inner"]
 				placed.origin.y = minf(inner.end.y - CARD_T, placed.origin.y + CARD_T * 2.0)
@@ -1593,9 +1676,11 @@ static func _lid_piece(parent: Node3D, mat: Material, dimensions: Vector3, at: V
 	parent.add_child(part)
 
 
-## THE CARDS IN THE BOX: an open box keeps the planned collection; a shoebox fills out its
-## printings with physical copies so it reads as a collection accumulated over time. The drawn
-## cards have their own places near the accessible top. Undrawn cards share one MultiMesh per printing.
+## THE CARDS IN THE BOX: an open box of cards on edge and a shoebox fill out their printings with
+## physical copies ([constant OPEN_FILE_SHARE], [constant CardTable.SHOEBOX_FILL]) so each reads as a
+## collection accumulated over time. The drawn
+## cards have their own places near the accessible top. Cards lying in piles are laid by
+## [method _pile_places]. Undrawn cards share one MultiMesh per printing and back ([method _unseen_mats]).
 func _build_file() -> void:
 	var inner: AABB = _box["inner"]
 	var content := String(_staging.get("contents", "file"))
@@ -1616,17 +1701,27 @@ func _build_file() -> void:
 	var stand := Basis(Vector3.UP, PI) * Basis(Vector3(1, 0, 0), PI * 0.5)
 	if lie:
 		stand = stand * Basis(Vector3.UP, PI * 0.5)
-	var undrawn := _file_inventory()
-	var count := _cards.size() + undrawn.size()
 	var shoebox := _box.has("lid")
+	var piled := content == "piles" or (shoebox and content == "loose")
+	var rise := CARD_T * 1.02 if shoebox else CARD_T + 0.00025
+	var want := CardTable.SHOEBOX_FILL
+	if piled:
+		var plots := TablePositions.box_plots(inner, size)
+		want = clampi(int(float(plots.x * plots.y) * (inner.size.y - 0.004) / rise * SHOEBOX_SHARE),
+			_cards.size(), CardTable.SHOEBOX_FILL)
+	var pad := shoebox
+	if not shoebox and not piled and content == "file":
+		want = int(inner.size.z * OPEN_FILE_SHARE / FILE_PITCH)
+		pad = true
+	var undrawn := _file_inventory(want, pad)
+	var count := _cards.size() + undrawn.size()
 	_box["count"] = count
-	if shoebox and content == "loose":
-		_box["return_at"] = Vector3(inner.end.x - size.x * 0.5 - 0.008,
-			inner.end.y + 0.004, inner.get_center().z)
 	var fill := minf(1.0, float(count) * FILE_PITCH / maxf(inner.size.z, FILE_PITCH))
 	var tail := mini(6, count / 4)
 	var xfs: Array = []
-	for i in count:
+	if piled:
+		xfs = _pile_places(inner, size, count, rise, rng)
+	for i in count if not piled else 0:
 		if shoebox:
 			if content == "file":
 				var rows := maxi(1, int(floor(inner.size.x / (size.x + 0.006))))
@@ -1637,34 +1732,6 @@ func _build_file() -> void:
 				var z := inner.end.z - pitch * (float(layer) + 0.5) - 0.004
 				xfs.append(Transform3D(stand, Vector3(x, inner.position.y + v * 0.5, z)))
 				continue
-			if content == "loose" and i >= count - 8:
-				var radius := size.length() * 0.5 + 0.002
-				var x_min := inner.position.x + radius
-				var x_max := minf(inner.end.x - radius,
-					(_box["return_at"] as Vector3).x - radius * 2.0 - 0.008)
-				var dz := maxf(inner.size.z * 0.5 - radius, 0.0)
-				xfs.append(Transform3D(Basis(Vector3.UP, rng.randf_range(-PI, PI)),
-					Vector3(rng.randf_range(x_min, maxf(x_min, x_max)),
-						inner.end.y - 0.003 + float(i - (count - 8)) * 0.0008,
-						inner.get_center().z + rng.randf_range(-dz, dz))))
-				continue
-			var cols := maxi(1, int(floor(inner.size.x / (size.x + 0.006))))
-			var rows := maxi(1, int(floor(inner.size.z / (size.y + 0.006))))
-			var cells := cols * rows
-			var cell := i % cells
-			var layer := i / cells
-			var layers := maxi(1, int(ceil(float(count) / float(cells))))
-			var pitch := minf(CARD_T * 1.02, (inner.size.y - 0.004) / float(layers))
-			var x := inner.position.x + inner.size.x * (float(cell % cols) + 0.5) / float(cols)
-			var z := inner.position.z + inner.size.z * (float(cell / cols) + 0.5) / float(rows)
-			var loose := content == "loose"
-			var angle := rng.randf_range(-0.08, 0.08) if loose else 0.0
-			if loose and layer >= layers - 3:
-				angle = rng.randf_range(-0.13, 0.13)
-			if hash([_seed, cell, "pile direction"]) & 1:
-				angle += PI
-			xfs.append(Transform3D(Basis(Vector3.UP, angle), Vector3(x, inner.position.y + 0.001 + (float(layer) + 0.5) * pitch, z)))
-			continue
 		if content == "loose":
 			var radius := size.length() * 0.5
 			var dx := maxf(inner.size.x * 0.5 - radius - 0.003, 0.0)
@@ -1673,15 +1740,6 @@ func _build_file() -> void:
 				Vector3(inner.get_center().x + rng.randf_range(-dx, dx),
 					inner.position.y + 0.001 + 0.004 * float(i) / float(maxi(count, 1)),
 					inner.get_center().z + rng.randf_range(-dz, dz))))
-			continue
-		if content == "piles":
-			var groups := 2 if inner.size.z >= size.y * 2.05 else 1
-			var group := i % groups
-			var layer := i / groups
-			var z_flat := inner.position.z + inner.size.z * (0.5 if groups == 1 else (0.25 if group == 0 else 0.75))
-			var x_flat := inner.get_center().x
-			var y_flat := inner.position.y + 0.001 + float(layer) * (CARD_T + 0.00025)
-			xfs.append(Transform3D(Basis.IDENTITY, Vector3(x_flat, y_flat, z_flat)))
 			continue
 		# from the front wall back; the last few lean back into the gap
 		var z := inner.end.z - FILE_PITCH * (float(i) + 0.5)
@@ -1695,13 +1753,11 @@ func _build_file() -> void:
 	var free: Array = range(0, count - tail)
 	if shoebox:
 		free = range(maxi(0, count - maxi(_cards.size() * 4, 24)), count)
-		if content == "loose":
-			free = range(maxi(0, count - maxi(_cards.size(), 8)), count)
-	for k in _cards.size():
-		var j := int(free.pop_back()) if shoebox and content == "loose" else int(free.pop_at(rng.randi_range(0, free.size() - 1)))
+	for k in _cards.size() if not piled else 0:
+		var j := int(free.pop_at(rng.randi_range(0, free.size() - 1)))
 		(_box["at_k"] as Array).append(xfs[j])
 		xfs[j] = null
-	# one MultiMesh per printing, its cards shared out among them
+	# one MultiMesh per printing and back, its cards shared out among them
 	var per := {}
 	for n in _backs:
 		per[n] = []
@@ -1710,26 +1766,80 @@ func _build_file() -> void:
 			var name: String = undrawn.pop_at(rng.randi_range(0, undrawn.size() - 1))
 			(per[name] as Array).append(xf)
 	for n in per:
-		var list: Array = per[n]
-		if list.is_empty():
-			continue
-		var mesh := _mesh_for((_backs[n] as Dictionary)["canvas"].look).duplicate() as ArrayMesh
-		# a filed card faces either way: the front one shows its printing's back, whichever way it stands
-		mesh.surface_set_material(0, (_backs[n] as Dictionary)["mat"])
-		mesh.surface_set_material(1, (_backs[n] as Dictionary)["mat"])
-		mesh.surface_set_material(2, _edge_mat)
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = mesh
-		mm.instance_count = list.size()
-		for i in list.size():
-			mm.set_instance_transform(i, list[i])
-		var inst := MultiMeshInstance3D.new()
-		inst.multimesh = mm
-		if shoebox:
-			inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_root3.add_child(inst)
-		_file.append(inst)
+		var mats := _unseen_mats(String(n))
+		for which in mats.size():
+			var list: Array = []
+			for i in (per[n] as Array).size():
+				if i % mats.size() == which:
+					list.append((per[n] as Array)[i])
+			if list.is_empty():
+				continue
+			var mesh := _mesh_for((_backs[n] as Dictionary)["canvas"].look).duplicate() as ArrayMesh
+			# a filed card faces either way: the front one shows its printing's back, whichever way it stands
+			mesh.surface_set_material(0, mats[which])
+			mesh.surface_set_material(1, mats[which])
+			mesh.surface_set_material(2, _edge_mat)
+			var mm := MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.mesh = mesh
+			mm.instance_count = list.size()
+			for i in list.size():
+				mm.set_instance_transform(i, list[i])
+			var inst := MultiMeshInstance3D.new()
+			inst.multimesh = mm
+			if shoebox:
+				inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			_root3.add_child(inst)
+			_file.append(inst)
+
+
+## THE CARDS LYING IN PILES in the box ([method TablePositions.box_piles]: a collection kept in piles, or
+## in a shoebox left as it fell), all [param count] of them. THE DRAWN CARDS WAIT ON TOP OF THE PILES
+## (`at_k`), the first to be drawn uppermost where two share a pile, so every card is taken off a pile
+## and none out from under another. A card put back goes on a pile none is drawn from (`return_at`, and
+## the way that pile lies, `return_turn`), one on the last. Eight cards used to float loose at the rim
+## over the piles for the drawing, a spot in the air beside them for the returns (the user, 2026-10-11:
+## "the loose cards on top is a strange look"). Returns the places left for the cards nobody draws.
+func _pile_places(inner: AABB, size: Vector2, count: int, pitch: float, rng: RandomNumberGenerator) -> Array:
+	var mess := 1.0 if String(_staging.get("contents", "file")) == "loose" else TablePositions.PILES_NEAT
+	var piles := TablePositions.box_piles(inner, size, count, pitch, mess, rng)
+	var stocked: Array = []
+	for i in piles.size():
+		if not ((piles[i] as Dictionary)["cards"] as Array).is_empty():
+			stocked.append(i)
+	var back := -1
+	if stocked.size() > 1:
+		back = int(stocked.pop_at(rng.randi_range(0, stocked.size() - 1)))
+		var held := 0
+		for i in stocked:
+			held += ((piles[i] as Dictionary)["cards"] as Array).size()
+		if held < _cards.size():
+			stocked.append(back)
+	elif stocked.size() == 1:
+		back = int(stocked[0])
+	if back >= 0:
+		var top: Transform3D = ((piles[back] as Dictionary)["cards"] as Array)[-1]
+		_box["return_at"] = top.origin + Vector3(0.0, pitch, 0.0)
+		_box["return_turn"] = atan2(-top.basis.x.z, top.basis.x.x)
+	for i in range(stocked.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var swap: int = stocked[i]
+		stocked[i] = stocked[j]
+		stocked[j] = swap
+	var turn := 0
+	for k in _cards.size():
+		var from: Array = []
+		for tries in stocked.size():
+			from = (piles[stocked[(turn + tries) % stocked.size()]] as Dictionary)["cards"]
+			if not from.is_empty():
+				turn += tries + 1
+				break
+		(_box["at_k"] as Array).append(from.pop_back() if not from.is_empty()
+			else Transform3D(Basis.IDENTITY, inner.get_center()))
+	var rest: Array = []
+	for p in piles:
+		rest.append_array((p as Dictionary)["cards"])
+	return rest
 
 
 ## A few ordinary small keepsakes rest in the open space at the back of the container.
@@ -1780,8 +1890,9 @@ func _build_box_objects() -> void:
 
 
 ## The planned cards still in the box, by printing. A shoebox repeats those printings to fill
-## the physical container without asking the producer to enumerate every unseen card.
-func _file_inventory() -> Array:
+## the physical container - [param want] cards with the drawn ones - without asking the producer to
+## enumerate every unseen card.
+func _file_inventory(want := CardTable.SHOEBOX_FILL, pad := _box.has("lid")) -> Array:
 	var plan: Dictionary = _pay.get("plan", {}) if _pay.get("plan") is Dictionary else {}
 	var names: Array = []
 	var deck: Array = plan.get("deck", []) if plan.get("deck") is Array else []
@@ -1799,9 +1910,9 @@ func _file_inventory() -> Array:
 		for card in _pay.get("cards", []) if _pay.get("cards") is Array else []:
 			if card is Dictionary:
 				names.append(CardTable.series_of(_look, card as Dictionary))
-	if _box.has("lid") and not names.is_empty():
+	if pad and not names.is_empty():
 		var printings := names.duplicate()
-		while names.size() < CardTable.SHOEBOX_FILL:
+		while names.size() < want:
 			names.append(printings[names.size() % printings.size()])
 	for card in _pay.get("cards", []) if _pay.get("cards") is Array else []:
 		if not (card is Dictionary) or names.is_empty():
@@ -2240,7 +2351,8 @@ func _flame(at: Vector3, own: int, glow: Variant = null) -> Dictionary:
 	_props.add_child(wick)
 	var flame := MeshInstance3D.new()
 	var q := QuadMesh.new()
-	q.size = Vector2(0.012, 0.03)
+	q.size = Vector2(0.012, FLAME_QUAD)
+	q.subdivide_depth = 8
 	flame.mesh = q
 	var fm := ShaderMaterial.new()
 	var sh := Shader.new()
@@ -2719,24 +2831,40 @@ func _tick_props(t: float) -> void:
 			var lean := Vector3(fl.z * 0.0015, 0, 0)
 			var axis := Vector3.UP
 			var tall := 1.0
+			var draft := 0.0
 			if blows:
 				var w := Winds.flame(_wind, t, f["base"] as Vector3, FLAME_H, float(f.get("open", 1.0)))
 				axis = w["axis"]
 				tall = float(w["tall"])
+				draft = float(w["draft"])
 				fl.x *= float(w["bright"])
 				lean += w["mid"] as Vector3
 			var mesh: MeshInstance3D = f["mesh"]
-			# A SPRITE FACING THE READER, standing on its wick: turned about the upright to the camera, then
-			# tipped in its own plane as far as its lean shows from there, and foreshortened by what of it
-			# leans toward or away from the lens
+			# A SPRITE PARALLEL TO THE PICTURE, standing on its wick: its lean as it shows on the screen split
+			# into a BEND (the shader's: foot upright, tip leaned) and a tip of the whole sprite in its own
+			# plane, foreshortened by what of it leans toward or away from the lens. Every flame is read
+			# across the CAMERA's right, never across its own line of sight: the same draft then leans every
+			# flame the same way on the screen (the user, 2026-10-11: one flame looked straight up and two
+			# leaned right, in a draft that was one - the wide lens sees a flame at the edge end on)
 			var root := (f["base"] as Vector3) - Vector3(0.0, FLAME_QUAD * 0.5, 0.0)
-			var face := (_cam.global_position - root) * Vector3(1, 0, 1)
-			face = face.normalized() if face.length() > 1e-5 else Vector3.BACK
-			var across := Vector3.UP.cross(face)
+			var across := _cam.global_transform.basis.x * Vector3(1, 0, 1)
+			across = across.normalized() if across.length() > 1e-5 else Vector3.RIGHT
+			var face := across.cross(Vector3.UP)
 			var shown := Vector2(axis.dot(across), axis.y)
-			var b := Basis(across, Vector3.UP, face) * Basis(Vector3.BACK, -atan2(shown.x, shown.y)) \
+			var rest := shown.x / maxf(absf(shown.y), 1e-3)
+			var bend := clampf(rest * FLAME_BEND, -0.5, 0.5)
+			var b := Basis(across, Vector3.UP, face) * Basis(Vector3.BACK, -atan(rest - bend)) \
 				* Basis.from_scale(Vector3(1.0 + 0.06 * fast, fl.y * tall * shown.length(), 1.0))
 			mesh.transform = Transform3D(b, root + b * Vector3(0.0, FLAME_QUAD * 0.5, 0.0) + Vector3(lean.x, 0.0, 0.0) * (0.0 if blows else 1.0))
+			# ...AND LICKING: a ripple climbing it at the flame's own tempo, wider the harder it is fanned
+			var fk: Dictionary = f["flicker"]
+			var rate := float(fk["rate"])
+			var lick := lerpf(FLAME_LICK.x, FLAME_LICK.y, clampf(draft / sqrt(9.81 * FLAME_H), 0.0, 1.0))
+			var ripple := _noise.get_noise_2d(t * 2.1 * rate, float(fk["seed"]) + 143.0)
+			var fm := mesh.material_override as ShaderMaterial
+			fm.set_shader_parameter("bend", bend * FLAME_QUAD)
+			fm.set_shader_parameter("lick", FLAME_QUAD * lick * clampf(0.8 + 0.7 * ripple, 0.2, 1.5))
+			fm.set_shader_parameter("phase", TAU * 3.2 * rate * t + 2.5 * _noise.get_noise_2d(t * 0.9 * rate, float(fk["seed"]) + 211.0))
 			if f.get("glow") is ShaderMaterial:
 				(f["glow"] as ShaderMaterial).set_shader_parameter("flame", fl.x)
 			bright += fl.x
@@ -3122,6 +3250,7 @@ func _times() -> Dictionary:
 				if TableActions.ends(kind):
 					spread = t0
 		moved = moved or takes
+	_all_events = events
 	return {"shuffle": shuffle, "opening": opening, "end": first, "draw": draw, "lay": lay, "spread": spread,
 		"first": first_act, "events": events, "rummages": rummages}
 
@@ -3421,7 +3550,11 @@ func _card_pose(k: int, t: float, ev: Array, wj: Dictionary) -> Dictionary:
 	var t0 := float(e["t0"])
 	var u := (t - t0) / s - float(e["off"])
 	out["since"] = t0
+	# WHERE IT LIES, on whatever lay there first ([method _rest_lift]) - for a card picked up, as it lay
+	# at that moment
 	var lying := _slot_xf(k, quarter, over)
+	var lay_t := minf(t, t0 + float(e["off"]) * s) if String(e["k"]) == "show" else t
+	lying.origin.y += _rest_lift(k, lay_t)
 	# when the card held up now goes down: the next event's start, if it is a lay
 	var until := INF
 	if cur + 1 < ev.size() and String((ev[cur + 1] as Dictionary)["k"]) == "lay":
@@ -3467,11 +3600,16 @@ func _card_pose(k: int, t: float, ev: Array, wj: Dictionary) -> Dictionary:
 		"show":
 			var at := t0 + (float(e["off"]) + SHOW_RISE) * s
 			var pres := _present_xf(k, t, at, until)
+			# out from under a card lying on it first, along the cloth; then up
+			var clear := _slid_out(k, lying, t0 + float(e["off"]) * s)
+			var slid := 0.0 if clear.is_equal_approx(lying) else SHOW_SLIDE
 			if u < 0.0:
 				out["xf"] = lying
+			elif u < slid:
+				out["xf"] = lying.interpolate_with(clear, _ease(u / slid))
 			elif u < SHOW_RISE:
-				var f := _ease(u / SHOW_RISE)
-				var xf := lying.interpolate_with(pres, f)
+				var f := _ease((u - slid) / (SHOW_RISE - slid))
+				var xf := clear.interpolate_with(pres, f)
 				xf.origin.y += sin(PI * f) * 0.025
 				out["xf"] = xf
 			else:
@@ -3498,6 +3636,7 @@ func _card_pose(k: int, t: float, ev: Array, wj: Dictionary) -> Dictionary:
 			var how := String(e["how"])
 			var to := _slot_xf(k, quarter + (1 if how == "tap" else (-1 if how == "untap" and quarter > least else 0)),
 				not over if how == "flip" else over)
+			to.origin.y += _rest_lift(k, t)
 			var span := FLIP_END_LAY if how == "flip" else TURN_END
 			var f := _ease(clampf(u / span, 0.0, 1.0))
 			var xf := lying.interpolate_with(to, f)
@@ -3506,6 +3645,151 @@ func _card_pose(k: int, t: float, ev: Array, wj: Dictionary) -> Dictionary:
 	if up_ev >= 0 and String(e["k"]) == "lay":
 		out["since"] = float((ev[up_ev] as Dictionary)["t0"])
 	return out
+
+
+## WHEN THE CARD WHOSE TIMELINE IS [param ev] WAS LAST SET DOWN, as of [param t]: the moment it lands -
+## counted from the start of its way down, so what it comes to rest on is settled before it arrives -
+## or INF while it is in its source or in a hand. A card being picked up still lies until it has slid
+## out ([constant SHOW_SLIDE]): what lies on it stays up until then.
+func _down_at(ev: Array, t: float) -> float:
+	var down := INF
+	for item in ev:
+		var e: Dictionary = item
+		var t0 := float(e["t0"])
+		if t0 == INF or t < t0:
+			break
+		var s := maxf(float(e["s"]), 0.05)
+		var off := float(e["off"])
+		match String(e["k"]):
+			"arrive":
+				match String(e["how"]):
+					"fan":
+						down = t0 + (off + TableActions.FAN_EACH * float(e.get("i", 0)) + FAN_MOVE) * s
+					"deal":
+						down = t0 + (off + DEAL_END) * s
+					_:
+						down = INF
+			"show":
+				if t >= t0 + (off + SHOW_SLIDE) * s:
+					down = INF
+			"lay":
+				down = t0 + LAY_END * s
+	return down
+
+
+## The cards whose places on the cloth card [param k]'s overlaps ([method TablePositions.overlaps]) -
+## none in a spread laid side by side, and nothing more is asked of it then. Made once per spread.
+func _laps_of(k: int) -> Array:
+	if not is_same(_laps_for, _slots) or _laps.size() != _slots.size():
+		_laps_for = _slots
+		_laps = []
+		var cards: Array = _pay.get("cards", [])
+		var lies: Array = []
+		for i in _slots.size():
+			var p: Dictionary = (cards[i] as Dictionary).get("position", {}) \
+				if i < cards.size() and cards[i] is Dictionary and (cards[i] as Dictionary).get("position") is Dictionary else {}
+			# a card put back in its box is not on the cloth
+			var boxed := _filed() and String(p.get("destination", "")) == "box"
+			var hand: Vector3 = _lay_jit[i] if i < _lay_jit.size() else Vector3.ZERO
+			lies.append({} if boxed else {"pos": (_slots[i]["pos"] as Vector3) + Vector3(hand.x, 0.0, hand.y),
+				"yaw": float(_slots[i]["yaw"]) + hand.z})
+			_laps.append([])
+		for i in lies.size():
+			for j in range(i + 1, lies.size()):
+				if not (lies[i] as Dictionary).is_empty() and not (lies[j] as Dictionary).is_empty() \
+						and TablePositions.overlaps(lies[i], lies[j]):
+					(_laps[i] as Array).append(j)
+					(_laps[j] as Array).append(i)
+	return _laps[k] if k < _laps.size() else []
+
+
+## HOW MUCH HIGHER CARD [param k] LIES at [param t] than its place alone says: ON every card set down
+## before it that it overlaps, a card's thickness above the highest of them. The spread's own heights
+## are a hair apart in the order the cards are dealt, which a card picked up and put back breaks: in
+## the Libra reading (true-tarot 871516, the user: the second card "was pulled THROUGH the 1st") a
+## waterfall's first card went back down under the second, through it. What lies on what follows from
+## when each was set down ([method _down_at]), so a card put back lies on top.
+func _rest_lift(k: int, t: float) -> float:
+	if _laps_of(k).is_empty() or k >= _all_events.size():
+		return 0.0
+	var downs := PackedFloat32Array()
+	var order: Array = []
+	for j in mini(_all_events.size(), _slots.size()):
+		downs.append(_down_at(_all_events[j], t))
+		if downs[j] < INF:
+			order.append(j)
+	if downs[k] == INF:
+		return 0.0
+	order.sort_custom(func(a: int, b: int) -> bool: return downs[a] < downs[b] or (downs[a] == downs[b] and a < b))
+	var high := {}
+	for j in order:
+		var h := float((_slots[j]["pos"] as Vector3).y)
+		for i in _laps_of(j):
+			if high.has(i):
+				h = maxf(h, float(high[i]) + CARD_T)
+		high[j] = h
+		if j == k:
+			break
+	return float(high[k]) - float((_slots[k]["pos"] as Vector3).y)
+
+
+## CARD [param k] SLID OUT from under the cards lying on it at [param t] (set down after it, over its
+## place), from [param lying]: along the cloth, the shortest way that clears them all without running
+## into a card lying beside it, the deck or the cloth's edge - straight away from them when that is as
+## short as any. It was lifted straight up through them (the user, 2026-10-11: "it may have looked even
+## better to slide the 2nd card out to the right"). [param lying] itself when nothing lies on it, or
+## there is no way out.
+func _slid_out(k: int, lying: Transform3D, t: float) -> Transform3D:
+	var laps := _laps_of(k)
+	if laps.is_empty() or k >= _all_events.size():
+		return lying
+	var mine := _down_at(_all_events[k], t)
+	var over: Array = []
+	var beside: Array = []
+	var from := Vector2.ZERO
+	for j in mini(_all_events.size(), _slots.size()):
+		if j == k:
+			continue
+		var down := _down_at(_all_events[j], t)
+		if down == INF:
+			continue
+		var place := {"pos": _slots[j]["pos"], "yaw": float(_slots[j]["yaw"])}
+		if not laps.has(j):
+			beside.append(place)
+		elif down > mine:
+			over.append(place)
+			from += Vector2((place["pos"] as Vector3).x, (place["pos"] as Vector3).z)
+	if over.is_empty() or mine == INF:
+		return lying
+	var yaw := float(_slots[k]["yaw"])
+	var at := Vector2(lying.origin.x, lying.origin.z)
+	var away := (at - from / float(over.size())).normalized()
+	if away == Vector2.ZERO:
+		away = Vector2.RIGHT
+	var keep := TablePositions.deck_keep(_deck_base, _box_keep(), _box_center())
+	var cloth := Rect2(TablePositions.CLOTH_MIDDLE - TablePositions.CLOTH * 0.5, TablePositions.CLOTH).grow(-TablePositions.HEM)
+	if not cloth.encloses(CardTable.footprint(lying.origin, yaw, CARD)):
+		cloth = cloth.grow(1.0)      # a place given past the hem: the hem is no wall to it
+	var best := INF
+	var way := Vector2.ZERO
+	for turn in [0.0, 0.4, -0.4, 0.8, -0.8, 1.2, -1.2, 1.6, -1.6, 2.0, -2.0, 2.4, -2.4, 2.8, -2.8]:
+		var dir := away.rotated(turn)
+		var d := SLIDE_STEP
+		while d < minf(best, SLIDE_MOST):
+			var p := at + dir * d
+			var moved := {"pos": Vector3(p.x, 0.0, p.y), "yaw": yaw}
+			var foot := CardTable.footprint(moved["pos"], yaw, CARD)
+			if foot.intersects(keep) or not cloth.encloses(foot) \
+					or beside.any(func(b: Dictionary) -> bool: return TablePositions.overlaps(moved, b)):
+				break
+			if not over.any(func(b: Dictionary) -> bool: return TablePositions.overlaps(moved, b)):
+				best = d
+				way = dir
+				break
+			d += SLIDE_STEP
+	if best == INF:
+		return lying
+	return Transform3D(lying.basis, lying.origin + Vector3(way.x, 0.0, way.y) * (best + SLIDE_STEP))
 
 
 ## HOW HIGH A CARD LAID DOWN IS LIFTED at [param f] of its way (0..1, eased) from [param from] (held up)
@@ -3585,8 +3869,14 @@ func _sweep_xf(k: int, v: float, to: Transform3D) -> Transform3D:
 	if v >= FAN_MOVE:
 		return to
 	var f := _ease(clampf(v / FAN_MOVE, 0.0, 1.0))
-	var xf := from.interpolate_with(to, f)
-	xf.origin.y += sin(PI * f) * 0.018
+	# OFF THE DECK FLAT, then turning over (SWEEP_FLAT of the way): turning from the first, it crossed
+	# the card leaving a beat behind it
+	var xf := Transform3D(from.basis.orthonormalized().slerp(to.basis.orthonormalized(), smoothstep(SWEEP_FLAT, 1.0, f)),
+		from.origin.lerp(to.origin, f))
+	# TURNING OVER, its lower edge keeps to the line it travels: skimming at its middle's height, the
+	# tilted card cut into the deck it left and into the card it came to lie on
+	var b := xf.basis
+	xf.origin.y += sin(PI * f) * 0.018 + (CARD.x * absf(b.x.y) + CARD.y * absf(b.z.y)) * 0.5
 	return xf
 
 

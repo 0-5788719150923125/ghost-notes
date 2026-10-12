@@ -76,6 +76,26 @@ const NAMES := [
 	["She calls them the Biouks.", "biouks", "B IY UW K S"],
 	["The Biouks are still singing.", "biouks", "B IY UW K S"],
 	["Njandejara, she calls him.", "njandejara", "N Y AA N D EH D ZH AA R AH"],
+	# Real words eSpeak reads wrong, pinned the same way: it says LIE-bruh, and the sign is
+	# LEE-bruh (the user, 2026-10-11: "the audio model keeps pronouncing 'Libra' wrong").
+	["The sun is in Libra this month.", "libra", "L IY B R AH"],
+	["Two Libras at one table.", "libras", "L IY B R AH Z"],
+	# ...and the possessive, one token, which missed the table and went to eSpeak as it was
+	["Libra's scales never settle.", "libra's", "L IY B R AH Z"],
+	["Midas's wish, part one.", "midas's", "M AY D AH S IH Z"],
+	["The Hierophant's hand is raised.", "hierophant's", "HH AY ER AH F AE N T S"],
+	["Mercury is retrograde again.", "retrograde", "R EH T R AH G R EY D"],
+]
+
+# The control of the names above: what a pinned word is must reach the neural voice
+# (`literal`), and a word eSpeak reads right is left to it - the other signs, a possessive
+# of no name.
+const PINNED := [
+	["The sun is in Libra this month.", "libra", true],
+	["Libra's scales never settle.", "libra's", true],
+	["The sun is in Leo this month.", "leo", false],
+	["Leo's month is August.", "leo's", false],
+	["The reader's hand is raised.", "reader's", false],
 ]
 
 # Markdown is typography and must never be spoken. eSpeak turns a bare asterisk into the
@@ -172,6 +192,7 @@ func _init() -> void:
 	fails += _run("switches", SWITCHES)
 	fails += _run("holds", HOLDS)
 	fails += _run("names", NAMES)
+	fails += _pinned()
 	fails += _run("trailing", SWITCHES_TRAILING)
 	fails += _markup()
 	fails += _normalize()
@@ -181,7 +202,7 @@ func _init() -> void:
 		quit(1)
 		return
 	print("homograph_check: ALL OK (%d cases)"
-		% (SWITCHES.size() + HOLDS.size() + NAMES.size() + MARKUP.size()
+		% (SWITCHES.size() + HOLDS.size() + NAMES.size() + PINNED.size() + MARKUP.size()
 			+ SWITCHES_TRAILING.size() + NORMALIZE.size() + GROUPING.size()))
 	quit()
 
@@ -261,6 +282,22 @@ func _run(label: String, cases: Array) -> int:
 			print("  %-9s %-46s want: %-16s got: %s" % [label, c[0], want, got])
 			bad += 1
 	print("homograph_check: %-9s %d/%d" % [label, cases.size() - bad, cases.size()])
+	return bad
+
+
+## Whether each word is pinned (`literal`: ghost's own phones beat eSpeak's on the neural path).
+func _pinned() -> int:
+	var bad := 0
+	for c in PINNED:
+		var got := "<not found>"
+		for s in Phonemes.parse(TextNorm.normalize(String(c[0]))):
+			for w in s:
+				if String(w.get("text", "")).to_lower().strip_edges() == String(c[1]):
+					got = str(bool(w.get("literal", false)))
+		if got != str(bool(c[2])):
+			print("  %-9s %-46s want literal: %-5s got: %s" % ["pinned", c[0], str(bool(c[2])), got])
+			bad += 1
+	print("homograph_check: %-9s %d/%d" % ["pinned", PINNED.size() - bad, PINNED.size()])
 	return bad
 
 

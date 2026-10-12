@@ -606,7 +606,8 @@ static func apply_painting(built: Dictionary, tex: Texture2D, height: Texture2D 
 ## is MEASURED against the painting before it is used: the two images' STRUCTURE (where each changes,
 ## its gradient's size - blind to which way round the gray runs) at [constant FIT_W] across,
 ## correlated at every shift up to [constant FIT_SHIFT] pixels either way. The best is its score (1 the
-## same structure, about 0 unrelated) and its shift; under [constant FIT_LEAST] it is refused.
+## same structure, about 0 unrelated) and its shift; under [constant FIT_LEAST] it is refused - unless
+## it has nothing to misplace: a flat map ([constant FLAT_SPAN]) or an even one ([constant EVEN_SPREAD]).
 const FIT_W := 96
 const FIT_SHIFT := 4
 const FIT_LEAST := 0.35
@@ -617,6 +618,16 @@ const FIT_LEAST := 0.35
 ## that answer, kept as it is: the surface lies smooth, its print not raised. The maps that lined up
 ## spanned 0.043 to 0.24; that cutting mat's, 0.015.
 const FLAT_SPAN := 0.025
+## AN EVEN MAP lies under anything too: relief that is alike everywhere - a felted nap, a pebbled
+## finish, the crazing of an old oilcloth - has no place of its own, so no move of it shows. And it
+## is what the painter is asked for where the painting's own pattern is print or dye: the check or the
+## stripe is not drawn, the map shares nothing with the picture, and three right answers were refused
+## for it (0.03, 0.09 and 0.24; the user, 2026-10-11) - leaving the table to raise the print itself.
+## A map that fits nothing is kept, unmoved, when its relief's spread ([method relief_spread]) is under
+## this. Those three spread 0.11 to 0.17; the maps that drew boards, seams and weaves, 0.21 to 0.58 -
+## a narrow gap, and only where the fit has already failed.
+const EVEN_SPREAD := 0.19
+const EVEN_BLOCK := 8
 
 
 ## Whether a table made safe ([param spec], `{top, layers}`) lays the painting where a height map
@@ -682,9 +693,68 @@ static func height_span(height: Image) -> float:
 	return v[int(v.size() * 0.98)] - v[int(v.size() * 0.02)]
 
 
+## HOW UNEVENLY [param height]'s RELIEF IS SPREAD (see [constant EVEN_SPREAD]): the size of its
+## gradient at [constant FIT_W] across, averaged over each block [constant EVEN_BLOCK] pixels square,
+## each row and each column - the spread of those means over their mean, the largest of the three. Near
+## 0 where every part of the map is as rough as every other. Rows and columns are for straight things:
+## planks' seams one to a block give every block its seam, and read as even by blocks alone.
+static func relief_spread(height: Image) -> float:
+	var w := FIT_W
+	var h := maxi(8, roundi(float(FIT_W) * float(height.get_height()) / float(maxi(height.get_width(), 1))))
+	var g := _slope(height, w, h)
+	var blocks := PackedFloat32Array()
+	for by in range(1, h - EVEN_BLOCK, EVEN_BLOCK):
+		for bx in range(1, w - EVEN_BLOCK, EVEN_BLOCK):
+			blocks.append(_mean_of(g, w, Rect2i(bx, by, EVEN_BLOCK, EVEN_BLOCK)))
+	var rows := PackedFloat32Array()
+	for y in range(1, h - 1):
+		rows.append(_mean_of(g, w, Rect2i(1, y, w - 2, 1)))
+	var cols := PackedFloat32Array()
+	for x in range(1, w - 1):
+		cols.append(_mean_of(g, w, Rect2i(x, 1, 1, h - 2)))
+	return maxf(_spread_of(blocks), maxf(_spread_of(rows), _spread_of(cols)))
+
+
+static func _mean_of(g: PackedFloat32Array, w: int, r: Rect2i) -> float:
+	var t := 0.0
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			t += g[y * w + x]
+	return t / float(maxi(r.size.x * r.size.y, 1))
+
+
+## The spread of [param v] (its standard deviation) over its mean.
+static func _spread_of(v: PackedFloat32Array) -> float:
+	if v.is_empty():
+		return 0.0
+	var mean := 0.0
+	for x in v:
+		mean += x
+	mean /= float(v.size())
+	var dev := 0.0
+	for x in v:
+		dev += (x - mean) * (x - mean)
+	return sqrt(dev / float(v.size())) / maxf(mean, 1e-9)
+
+
 ## An image's STRUCTURE at [param w] x [param h]: the size of its lightness's gradient, softened by a
 ## pixel, less its mean - where it changes, not which way.
 static func _structure(img: Image, w: int, h: int) -> PackedFloat32Array:
+	var g := _slope(img, w, h)
+	var mean := 0.0
+	for y in range(1, h - 1):
+		for x in range(1, w - 1):
+			mean += g[y * w + x]
+	mean /= float(maxi((w - 2) * (h - 2), 1))
+	for y in range(1, h - 1):
+		for x in range(1, w - 1):
+			g[y * w + x] -= mean
+	return g
+
+
+## The size of an image's lightness's gradient at [param w] x [param h], softened by a pixel; nothing
+## on the outermost ring, which has no neighbors to take it from.
+static func _slope(img: Image, w: int, h: int) -> PackedFloat32Array:
 	var im := img.duplicate() as Image
 	if im.is_compressed():
 		im.decompress()
@@ -699,18 +769,12 @@ static func _structure(img: Image, w: int, h: int) -> PackedFloat32Array:
 			l[y * w + x] = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722
 	var g := PackedFloat32Array()
 	g.resize(w * h)
-	var mean := 0.0
 	for y in range(1, h - 1):
 		for x in range(1, w - 1):
 			var i := y * w + x
 			var gx := (l[i + 1] - l[i - 1]) * 2.0 + (l[i + 1 - w] - l[i - 1 - w]) + (l[i + 1 + w] - l[i - 1 + w])
 			var gy := (l[i + w] - l[i - w]) * 2.0 + (l[i + w - 1] - l[i - w - 1]) + (l[i + w + 1] - l[i - w + 1])
 			g[i] = sqrt(gx * gx + gy * gy)
-			mean += g[i]
-	mean /= float(maxi((w - 2) * (h - 2), 1))
-	for y in range(1, h - 1):
-		for x in range(1, w - 1):
-			g[y * w + x] -= mean
 	return g
 
 
