@@ -175,6 +175,17 @@ static func _section(body: String) -> Dictionary:
 		"after": ("\n" + "\n".join(lines.slice(end))) if end < lines.size() else ""}
 
 
+## WHERE THE DECK IS in [param body] (a brief with no frontmatter, as the editor shows it): the
+## character span of the Cards section's own lines, after its heading - what [ScriptHighlighter]
+## colors cards and suits inside. (-1, -1) when the brief has no such section.
+static func span(body: String) -> Vector2i:
+	var s := _section(body)
+	if s.is_empty():
+		return Vector2i(-1, -1)
+	return Vector2i(String(s["before"]).length() + String(s["head"]).length() + 1,
+		body.length() - String(s["after"]).length())
+
+
 # --- the draw ---------------------------------------------------------------------------------
 
 ## THE SHUFFLE: [param deck] in the order this [param seed] cuts it, each card with whether it

@@ -33,6 +33,20 @@ extends Node
 ## it; New -> Note's "+" attaches a Voice and the note reopens as a reading; and back on the list
 ## nothing is left behind (the claims, the row, the conductor, the stage, the background programs,
 ## no mode node).
+##
+## SAVE… TAKES THE NOTE WITH IT (2026-10-12, the user: "That selection keeps getting reverted back to
+## the untitled cards label, and I am unsure if my edits are even being used"): the Script card has
+## Save… and a [SaveMark], the editor window has no button of the kind, and Save… asks for a file
+## every time. Saved into a file elsewhere, the note IS that file - for main, for "⋯", for the list -
+## the one Ghost Notes was keeping goes (the gate's `discard`), and left and opened again it is still
+## that file, with the words typed before and after. A file of the author's own that a note is saved
+## out of stays on disk and leaves the list. THE CONTROL is the old behavior: a script sent to a file
+## the note does not follow is the old file again the next time the note opens.
+##
+## OPEN… LOADS A FILE FROM DISK (the user, the same day: "The 'Save' button would just overwrite the
+## file on disk"): in a note it asks for a file to open, and the file chosen becomes the note - its
+## own text on screen, byte for byte unwritten - while the note left behind keeps the words typed a
+## moment before and stays in the list. A file with no blocks opens as a plain note.
 
 var _fails: Array = []
 var _main: Node
@@ -65,6 +79,7 @@ func _run() -> void:
 	await _check_delete()
 	await _check_round_trip()
 	await _check_new_card_starter()
+	await _check_save_moves_the_note()
 	NoteStore.discard = Callable()
 	_clean()
 	_report()
@@ -321,6 +336,143 @@ func _check_new_card_starter() -> void:
 	var editor := _main._generative as CardsEditor
 	_ok(editor != null and editor._text.text == starter,
 		"Edit shows the starter brief from the new note")
+
+
+## SAVE… ON THE SCRIPT CARD, from the Cards note the last check left open.
+func _check_save_moves_the_note() -> void:
+	print("-- Save… takes the note with it")
+	var ch: Chrome = _main._chrome
+	var editor := _main._generative as CardsEditor
+	var old: String = _main._note
+	if editor == null or old.is_empty():
+		_ok(false, "a Cards note is open")
+		return
+	var dir := ProjectSettings.globalize_path(ROOT).path_join("elsewhere")
+	DirAccess.make_dir_recursive_absolute(dir)
+	var writer: ScriptWriter = editor._writer
+	_ok(writer._save_btn.visible and writer._save_btn.text == "Save…" and writer._open_btn.visible
+		and writer._open_btn.get_index() < writer._save_btn.get_index() and not writer._clear_btn.visible,
+		"the Script card has Open… and Save… (and, in a note, no Clear)")
+	_ok(writer.save_mark != null and writer.save_mark.state() == "saved" and writer._name.text == old.get_file(),
+		"...and a mark beside the file's name (%s)" % writer._name.text)
+	var stray := writer._window.find_children("*", "Button", true, false).filter(func(b: Node) -> bool:
+		return (b as Button).text.begins_with("Sync") or (b as Button).text.begins_with("Save"))
+	_ok(stray.is_empty(), "the editor window has no Sync or Save button")
+	for _i in 2:
+		writer._save_btn.pressed.emit()
+		await _frames(2)
+		var dlg := editor._doc._dialog as FileDialog
+		_ok(dlg != null and dlg.file_mode == FileDialog.FILE_MODE_SAVE_FILE, "Save… asks for a file, every time")
+		editor._doc._close_dialog()
+		await _frames(2)
+	# THE CONTROL - what "Sync to…" did in a note: the script goes, the note does not follow
+	editor._doc.moved.disconnect(editor._on_note_moved)
+	var astray := dir.path_join("astray.md")
+	_ok(editor._doc.save_to(astray) and _main._note == old, "the control: the script was sent where the note did not follow")
+	ch._home_button.pressed.emit()
+	await _frames(12)
+	_main._list._open(old)
+	await _frames(14)
+	editor = _main._generative as CardsEditor
+	_ok(editor != null and editor._doc.doc_path() == old and editor._doc.doc_path() != astray,
+		"the control: opened again, such a note is the old file once more")
+	if editor == null:
+		return
+	# THE REAL THING
+	var te: TextEdit = editor._text
+	te.set_caret_line(te.get_line_count() - 1)
+	te.set_caret_column(te.get_line(te.get_line_count() - 1).length())
+	te.insert_text_at_caret("\n## The box\n\nAn open-top box.\n")
+	var now := dir.path_join("penalty-box.md")
+	var mark: SaveMark = editor._writer.save_mark
+	var writes := mark.writes
+	_ok(editor._doc.save_to(now), "Save… into a file elsewhere")
+	_ok(_main._note == now and ch._note_path == now and editor.note_path == now,
+		"the note is that file: for main, for \"⋯\" and for its panel (%s)" % _main._note.get_file())
+	_ok(not FileAccess.file_exists(old), "the one Ghost Notes was keeping for it is gone")
+	_ok(editor._writer._name.text == "penalty-box.md" and mark.writes > writes and mark.flashing(),
+		"the card names the new file and its mark ticked (%s)" % editor._writer._name.text)
+	_ok(editor._writer._note.visible and editor._writer._note.text.contains("penalty-box.md")
+		and editor._writer._note.text.contains(old.get_file()), "...and says where the old one went: %s" % editor._writer._note.text)
+	var raw := FileAccess.get_file_as_string(now)
+	_ok(raw.contains("An open-top box.") and NoteStore.blocks_of(now).get("cards") is Dictionary,
+		"the file holds the brief as it was on screen, and the show's block")
+	ch._home_button.pressed.emit()
+	await _frames(12)
+	var list: NotesList = _main._list
+	list.refresh()
+	_ok(_row_of(list, now) and not _row_of(list, old), "the list shows the note once, as the new file")
+	list._open(now)
+	await _frames(14)
+	editor = _main._generative as CardsEditor
+	_ok(editor != null and _main._note == now and editor._doc.doc_path() == now
+		and editor._text.text.contains("An open-top box."), "opened again, it is still that file - nothing reverts")
+	if editor == null:
+		return
+	# an edit made after that is saved into it (the autosave, allowed for this file of the gate's own)
+	editor._doc.allow_autosave_for_test()
+	mark = editor._writer.save_mark
+	writes = mark.writes
+	te = editor._text
+	te.set_caret_line(te.get_line_count() - 1)
+	te.insert_text_at_caret("Typed after the move.\n")
+	for _i in 200:
+		if mark.writes > writes:
+			break
+		await _frames(2)
+	_ok(FileAccess.get_file_as_string(now).contains("Typed after the move.") and mark.writes > writes,
+		"an edit made in the note afterwards is in the file, and the mark ticked for it")
+	# A FILE OF THE AUTHOR'S OWN is left where it is, and leaves the list
+	var third := dir.path_join("third.md")
+	_ok(editor._doc.save_to(third) and _main._note == third, "saved on again, the note follows again")
+	_ok(FileAccess.file_exists(now) and not NoteStore.is_added(now) and NoteStore.is_added(third),
+		"a file of the author's own is left on disk and leaves the list")
+	editor._doc._autosave_for_test = false
+	await _check_open_from_disk(dir, third)
+	ch._home_button.pressed.emit()
+	await _frames(12)
+	for p in [third, dir.path_join("on-disk.md"), dir.path_join("plain.md")]:
+		NoteStore.remove(p)
+
+
+## OPEN… ON THE SCRIPT CARD, from the Cards note [param from] the check above ends in.
+func _check_open_from_disk(dir: String, from: String) -> void:
+	print("-- Open… loads a file from disk")
+	var editor := _main._generative as CardsEditor
+	var on_disk := dir.path_join("on-disk.md")
+	FrontMatter.create(on_disk, {"cards": {"show": "from-disk"}}, "A brief that was on disk.\n", "",
+		FrontMatter.KEY, {"title": "From disk"})
+	var plain := dir.path_join("plain.md")
+	FrontMatter.create(plain, null, "Only words.\n")
+	var before := FileAccess.get_file_as_string(on_disk)
+	editor._writer._open_btn.pressed.emit()
+	await _frames(2)
+	var dlg := editor._doc._dialog as FileDialog
+	_ok(dlg != null and dlg.file_mode == FileDialog.FILE_MODE_OPEN_FILE, "Open… asks for a file to open")
+	editor._doc._close_dialog()
+	await _frames(2)
+	var te: TextEdit = editor._text
+	te.set_caret_line(te.get_line_count() - 1)
+	te.insert_text_at_caret("Typed a moment before opening.\n")
+	editor._writer.open_as_note(on_disk)
+	await _frames(14)
+	editor = _main._generative as CardsEditor
+	_ok(_main._note == on_disk and editor != null and editor._doc.doc_path() == on_disk
+		and editor._text.text.contains("A brief that was on disk.") and String(editor._knobs["show"]) == "from-disk",
+		"the file chosen is the note: its own text and its own settings (%s)" % _main._note.get_file())
+	_ok(FileAccess.get_file_as_string(on_disk) == before, "...and opening it wrote nothing into it")
+	_ok(FileAccess.get_file_as_string(from).contains("Typed a moment before opening.") and NoteStore.is_added(from),
+		"the note left behind kept the words typed a moment before, and stays in the list")
+	if editor == null:
+		return
+	editor._writer.open_as_note(dir.path_join("not-there.md"))
+	await _frames(4)
+	_ok(_main._note == on_disk and editor._writer._note.text.contains("no file"),
+		"a file that is not there opens nothing, and the card says so: %s" % editor._writer._note.text)
+	editor._writer.open_as_note(plain)
+	await _frames(14)
+	_ok(_main._note == plain and _main._note_panel != null and is_instance_valid(_main._note_panel),
+		"a file with no blocks opens as a plain note")
 
 
 ## The stage is showing a picture.

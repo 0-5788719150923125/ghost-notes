@@ -35,6 +35,9 @@ const WITH_SONG := ["picture", "look", "bookends", "storyboard", "youtube"]
 ## Set by main: the note this panel shows, and how to open it again once a component is attached.
 var path := ""
 var reopen: Callable
+## Set by main: (from: String, to: String) -> String - the note was saved into another file (its
+## Script card's Save…), which is the note from here on; returns what became of the file it left.
+var note_moved: Callable
 ## Set by main: (song: String, picture: bool, storyboard: String) -> void - load the note's song,
 ## waiting at its start, with a show for it when the note has a picture.
 var begin_song: Callable
@@ -44,6 +47,7 @@ var restage: Callable
 var _panel: SidePanel
 var _writer: ScriptWriter
 var _status: Label
+var _heading: Label
 var _blocks := {}             # the note's blocks, as it opened
 var _attached: Array = []     # the components it has (Components.attached_of)
 var _cards := {}              # block key -> a card with capture() / apply()
@@ -78,6 +82,7 @@ func _ready() -> void:
 	_writer = preload("res://src/script_writer.gd").new()
 	_writer.setup(SECTION, PackedStringArray(_doc_blocks()), SECTION)
 	_writer.bind_note()
+	_writer.doc.moved.connect(_on_note_moved)
 	script_card.add_child(_writer)
 	if has_song:
 		_song = SongCard.new(_song_path())
@@ -136,6 +141,7 @@ func _build_header(_box: VBoxContainer) -> void:
 	_panel.pin_header(head)
 	head.add_child(Chrome.back_button(self))
 	var title := Label.new()
+	_heading = title
 	title.text = _title()
 	title.add_theme_font_size_override("font_size", 20)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -196,6 +202,15 @@ func _doc_apply(blocks: Dictionary) -> void:
 	for key in _cards:
 		if blocks.get(key) is Dictionary:
 			(_cards[key] as Object).call("apply", blocks[key] as Dictionary)
+
+
+## THE NOTE WAS SAVED INTO ANOTHER FILE ([signal DocSource.moved]): this panel is that file's now,
+## and main makes it the note everywhere else (see [method ReadingPanel._on_note_moved]).
+func _on_note_moved(from: String, to: String) -> void:
+	path = to
+	_heading.text = _title()
+	var said := String(note_moved.call(from, to)) if note_moved.is_valid() else ""
+	_writer.doc.tell("✓  This note is %s now - every change is saved there. %s" % [to.get_file(), said])
 
 
 func _song_path() -> String:

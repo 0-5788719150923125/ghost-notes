@@ -14,8 +14,13 @@ extends Node
 ##   CLEAR DETACHES, IT DOES NOT DELETE. A synced file is left byte-identical, a script synced
 ##   to nothing comes back with one undo, and a synced script is never copied into Settings
 ##   (that copy would only ever be a stale one).
-##   SYNC TO… IS A STANDING STATE. The script lands in the new file with the voice in its
-##   frontmatter, and the edits after it land there too.
+##   SAVE… IS A STANDING STATE. The script lands in the new file with the voice in its
+##   frontmatter, and the edits after it land there too - [signal DocSource.moved] names the
+##   file it left and the one it went to (what a note follows), the old file is left byte for
+##   byte, and saving into the file it is in already moves nothing.
+##   THE MARK TICKS ONLY FOR A WRITE ([SaveMark]): it turns while an edit waits, flashes when
+##   the file has it, and in a process that may not write (the last check's control) it keeps
+##   turning and never ticks - a mark that ticked without a write would be worse than none.
 ##   THE VOICE IS RESTORED, AND SAVED. This is the whole reason the frontmatter is written
 ##   at all - a cast of two readers that comes back as one is the feature not working.
 ##   THE SAVE IS AUTOMATIC, ON A QUIET PERIOD. A dial moved is a dial written, with no button
@@ -107,7 +112,7 @@ func _ready() -> void:
 	await _check_the_voice_is_the_documents()
 	await _check_editing_in_ghost()
 	_check_fields()
-	await _check_sync_to()
+	await _check_save_to()
 	await _check_unattended_processes_never_autosave()
 
 	_ed._cast_timer.stop()
@@ -628,33 +633,64 @@ func _check_fields() -> void:
 		"the fields did not round-trip back to the original file:\n%s" % back)
 
 
-## SYNC TO… writes the script into a new file with the voice in its frontmatter and stays
-## there: an edit typed afterwards lands in that file too.
-func _check_sync_to() -> void:
+## SAVE… writes the script into a new file with the voice in its frontmatter and stays
+## there: an edit typed afterwards lands in that file too, and the mark says each step.
+func _check_save_to() -> void:
 	_doc.allow_autosave_for_test()
 	_doc.clear()
+	var mark: SaveMark = _ed._writer.save_mark
+	var moves: Array = []
+	var on_move := func(from: String, to: String) -> void: moves.append([from, to])
+	_doc.moved.connect(on_move)
+	await _wait(60)
+	_ok(mark.state() == "none" and _doc.save_state() == "none", "a script saved nowhere shows a mark that says saved (%s)" % mark.state())
 	var te: TextEdit = _ed._text
 	te.insert_text_at_caret("A new script.\n")
-	# Fields set on an unsynced script travel into the file at Sync to….
+	# Fields set on an unsaved script travel into the file at Save….
 	_doc.set_field("title", "Untitled No More")
-	_ok(_doc.field("title") == "Untitled No More", "an unsynced script did not keep its title")
+	_ok(_doc.field("title") == "Untitled No More", "an unsaved script did not keep its title")
 	var target := DIR + "/synced.md"
-	_ok(_doc.sync_to(target), "Sync to… failed")
+	var writes := mark.writes
+	_ok(_doc.save_to(target), "Save… failed")
 	var raw := FileAccess.get_file_as_string(target)
-	_ok(_doc.is_sync() and _doc.doc_path() == target, "Sync to… did not sync to the new file")
+	_ok(_doc.is_sync() and _doc.doc_path() == target, "Save… did not stay with the new file")
 	_ok(FrontMatter.lf(String(FrontMatter.split(raw).body)).strip_edges() == "A new script.",
 		"the script did not land in the new file: %s" % raw)
 	_ok(FrontMatter.read_block(raw).data.has("voice"), "the voice did not go into its frontmatter")
 	_ok(BookLayout.field_of(raw, "title") == "Untitled No More" and _doc._fields.is_empty(),
-		"the unsynced title did not move into the file")
+		"the unsaved title did not move into the file")
+	_ok(moves == [["", target]], "Save… did not say where the script went: %s" % str(moves))
+	_ok(mark.writes == writes + 1 and mark.flashing(), "the mark did not tick for the save (%d writes)" % (mark.writes - writes))
+	_ok(_doc.save_tip().contains(ProjectSettings.globalize_path(target)) or _doc.save_tip().contains(target),
+		"the mark's tooltip does not name the file: %s" % _doc.save_tip())
 	te.set_caret_line(te.get_line_count() - 1)
 	te.insert_text_at_caret("And a second line.\n")
+	writes = mark.writes
+	await _wait(int(DocSource.POLL_MS) + 250)
+	_ok(mark.state() == "pending" and mark.writes == writes,
+		"an edit waiting for its quiet period does not turn the mark (%s)" % mark.state())
+	_ok(not FileAccess.get_file_as_string(target).contains("And a second line."),
+		"the control is wrong - the edit was in the file before the mark could say it was waiting")
 	await _wait(int(DocSource.AUTOSAVE_MS) + 900)
 	_ok(FileAccess.get_file_as_string(target).contains("And a second line."),
-		"an edit after Sync to… did not reach the file - it was a one-time copy")
+		"an edit after Save… did not reach the file - it was a one-time copy")
+	_ok(mark.state() == "saved" and mark.writes > writes,
+		"the mark did not tick once the edit was in the file (%s, %d writes)" % [mark.state(), mark.writes - writes])
+	# INTO THE FILE IT IS IN ALREADY: brought up to date, and nothing moved
+	_ok(_doc.save_to(target) and moves.size() == 1, "saving into its own file moved the script: %s" % str(moves))
+	# INTO ANOTHER FILE: the one it left is named, and left byte for byte
+	var before := FileAccess.get_file_as_string(target)
+	var other := DIR + "/elsewhere.md"
+	_ok(_doc.save_to(other) and moves.size() == 2 and moves[1] == [target, other],
+		"a saved script saved elsewhere did not name both files: %s" % str(moves))
+	_ok(FileAccess.get_file_as_string(target) == before, "the file a script was saved out of was changed")
+	_ok(BookLayout.field_of(FileAccess.get_file_as_string(other), "title") == "Untitled No More",
+		"the new file did not take the old one's frontmatter")
+	_doc.moved.disconnect(on_move)
 	_doc._autosave_for_test = false
 	_doc._on_picked(_path)
 	DirAccess.remove_absolute(target)
+	DirAccess.remove_absolute(other)
 
 
 ## AN UNATTENDED PROCESS MUST NOT EDIT A MANUSCRIPT. The control for everything above: with
@@ -667,9 +703,14 @@ func _check_unattended_processes_never_autosave() -> void:
 	var before := FileAccess.get_file_as_string(_path)
 	_ed._turn.value = 5.5
 	_ed._text.insert_text_at_caret("Typed by nobody.")
+	var mark: SaveMark = _ed._writer.save_mark
+	var writes := mark.writes
 	await _wait(int(DocSource.AUTOSAVE_MS) + 900)
 	_ok(FileAccess.get_file_as_string(_path) == before,
 		"a read-only process (a render, the analyzer, a probe) wrote to the author's document")
+	_ok(mark.writes == writes and mark.state() == "pending" and not mark.flashing(),
+		"the mark ticked for a change that never reached the file (%s, %d writes)"
+			% [mark.state(), mark.writes - writes])
 
 
 func _wait(ms: int) -> void:

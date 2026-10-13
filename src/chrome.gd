@@ -72,6 +72,7 @@ var _home_leave := Callable()     # () -> String: "" once it has left, else why 
 var _home_blocker := Callable()   # () -> String: why the mode cannot be left now, "" when it can
 var _note_path := ""             # the note open now, "" on the list
 var _note_delete := Callable()    # (path, answer) -> void: main's delete_note
+var _note_open := Callable()      # (path) -> String: main's open_file
 var _home_t := 0.0
 
 ## THE PANELS ABOVE THE ROW, one open at a time: the console's log, the Assistant's panel and the
@@ -291,9 +292,18 @@ static func back_button(owner: Node) -> Button:
 
 ## THE NOTE OPEN NOW, and how to delete it ([param delete]: (path, "trash" or "forget") -> void) -
 ## what every panel's "⋯" acts on ([method note_menu]). "" and an invalid Callable on the list.
-func set_note(path: String, delete := Callable()) -> void:
+func set_note(path: String, delete := Callable(), open := Callable()) -> void:
 	_note_path = path
 	_note_delete = delete
+	_note_open = open
+
+
+## OPEN ANOTHER FILE AS THE NOTE, from inside a note (its Script card's Open…): "" once it is open,
+## or why it could not be (the note cannot be left this moment, there is no such file).
+func open_file(path: String) -> String:
+	if not _note_open.is_valid():
+		return "No note is open."
+	return String(_note_open.call(path))
 
 
 ## "⋯" FOR A PANEL'S HEADER (2026-10-06): what can be done to the note itself - deleting it, asked

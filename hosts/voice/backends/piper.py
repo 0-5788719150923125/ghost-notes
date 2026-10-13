@@ -265,14 +265,29 @@ DUR_SCALE_INPUT = "dur_scale"
 # model renders the longer vowel itself, with its own transitions in and out; only the level
 # is a gain. Pitch, the third cue of stress, has no input in a VITS graph.
 #
-# Small on purpose. Contrastive stress lengthens a stressed vowel by roughly a third in read
-# English, and a voice that hits every italic like a drum reads as sarcastic.
+# TWO STEPS, AND BOTH HEARD (2026-10-12, the user: "*italics* should be rendered as italics, and
+# hit hard, while **bold** should be rendered in bold, and hit even harder than that"). They were
+# small on purpose (1.30 / 1.5 dB and 1.50 / 3 dB: contrastive stress lengthens a stressed vowel by
+# roughly a third in read English), which left an italic word hard to tell from an unmarked one.
+#
+# MEASURED, NOT HEARD YET: en_US-libritts-high, speaker 4, "never" and "must" mid-sentence, 14
+# renders a level (the model's own durations vary by 30 to 50 ms a render, so one render says
+# nothing). The word against the rest of its sentence, over the unmarked word:
+#   italic   16 to 20% longer,  5 to 6 dB up     (was about 8% and 1.5 to 6 dB)
+#   bold     29 to 38% longer,  7 to 9 dB up     (was about 15% and 5 to 8 dB)
+# The word grows by less than its multiplier because only the stressed vowel is held, and it
+# rises by more than its gain because the model renders a longer vowel louder by itself. Most of
+# bold's step over italic is LENGTH: the gain never clips the word (`EMPHASIS_CEILING`), and a
+# bold word reaches that ceiling - with 3 dB on italic there was no room left above it, and the
+# two came out equally loud.
 EMPHASIS: dict[int, tuple[float, float]] = {
     # level: (vowel duration multiplier, gain on the word in dB)
-    1: (1.30, 1.5),
-    2: (1.50, 3.0),
-    3: (1.50, 3.0),
+    1: (1.50, 2.5),
+    2: (1.90, 5.0),
+    3: (1.90, 5.0),
 }
+# The loudest a lifted word may peak, of full scale: its lift is cut back to stay under it.
+EMPHASIS_CEILING = 0.97
 # How quickly the emphasis gain comes and goes at the word's edges.
 EMPHASIS_RAMP = 0.030
 
@@ -782,7 +797,12 @@ def _emphasize(audio, edges: dict, group: list, sr: int):
         hi = min(audio.size, int(round(b * sr)) + ramp)
         if hi <= lo:
             continue
-        g = np.full(hi - lo, 10.0 ** (db / 20.0))
+        # never into the clip below: a word already near full scale is lifted by what room it has
+        peak = float(np.max(np.abs(audio[lo:hi])))
+        lift = 10.0 ** (db / 20.0)
+        if peak > 0.0:
+            lift = max(1.0, min(lift, EMPHASIS_CEILING / peak))
+        g = np.full(hi - lo, lift)
         n = min(ramp, (hi - lo) // 2)
         if n > 0:
             ease = 0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, n))

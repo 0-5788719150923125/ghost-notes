@@ -352,15 +352,15 @@ func _show_title() -> String:
 
 
 ## What the producer works from, read fresh: the title and byline, the line an episode's title goes
-## up in ([method _uploads_as]), the brief (its card LIST taken out - see
-## [method CardDeck.strip]), the deck the brief lists (or none, when the producer chooses each
+## up in ([method _uploads_as]), the brief (as the agents get it: its card LIST taken out, its
+## macros read, its notes to self gone - see [method CardPrompts.brief]), the deck the brief lists (or none, when the producer chooses each
 ## episode's - `chooses`), the show's voices
 ## (every one its document names - the reader's and any other, a familiar's - for the reader to
 ## hand lines to), and the knobs.
 func _spec() -> Dictionary:
 	var body := Manuscript.strip_frontmatter(_doc.pull())
 	return {"title": _show_title(), "byline": _show_byline(), "uploads_as": _uploads_as(),
-		"brief": CardDeck.strip(body), "deck": CardDeck.of(body),
+		"brief": CardPrompts.brief(body), "deck": CardDeck.of(body),
 		"chooses": CardDeck.chooses(body), "voices": _cast_dict().keys(),
 		"draw": _knobs["draw"], "reversals": _knobs["reversals"], "jumpers": _knobs["jumpers"],
 		"writer": _knobs["writer"], "writer_model": _knobs["writer_model"], "writer_effort": _knobs["writer_effort"],

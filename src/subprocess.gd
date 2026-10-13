@@ -62,6 +62,8 @@ class_name Subprocess
 
 ## pid -> a short label, kept only so the shutdown reap can say what it killed.
 static var _tracked := {}
+## Ghost is closing: [method reap_all] has run, so every child still registered was killed by us.
+static var _closing := false
 ## Resolved once: "" not looked up yet, "-" no pact available, otherwise the setpriv path.
 static var _pact := ""
 ## Programs already reported missing, so a per-frame caller complains once, not 60x/s.
@@ -376,6 +378,17 @@ static func alive(pid: int) -> bool:
 	return false
 
 
+## GHOST IS CLOSING, AND ITS CHILDREN WERE KILLED BY IT ([method reap_all] has run). Whoever watches
+## a child asks this before concluding anything from the child being gone: the tree lives one more
+## frame after the reap (main._shutdown waits for it, so the `_exit_tree` saves run), and in that
+## frame every watcher saw its child dead and said so (2026-10-12, on every close with the README's
+## recording under way: "ERROR: Parse JSON failed" out of the recorder's unwritten capture file,
+## "the recording ended without finishing", "the voice host exited unexpectedly"). A child ghost
+## stopped has not failed.
+static func closing() -> bool:
+	return _closing
+
+
 ## Kill one child now and forget it. Returns whether it actually signaled anything, so a
 ## second stop - after a reap, or on a pid a mode's shutdown list still holds from last time -
 ## is visibly a no-op rather than an error in the log.
@@ -399,6 +412,7 @@ static func forget(pid: int) -> void:
 ## `is_process_running` on the same pid races that reap into ECHILD - the crash-on-close
 ## `assistant.gd` documents. `kill()` on an already-dead child is harmless.
 static func reap_all() -> int:
+	_closing = true
 	var n := 0
 	for pid in _tracked.keys():
 		if int(pid) > 0:

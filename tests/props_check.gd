@@ -40,6 +40,10 @@ extends SceneTree
 ##   all round; a stroke finer than the sculpt is cut is found before it is built, and a thick one is not.
 ##   And THE SKULLS ARE SCULPTS: a bird's orbits are open right through it, where a line through its
 ##   braincase is not.
+## - A FACETED STONE HAS NO HOLES (feedback 0021, a lump of copper ore showed the cloth through three of its
+##   faces): every triangle of a faceted ball, over seeds and lumps, shows its front outward - a face turned
+##   inward is culled and the stone is open there. Two-sided: the control, triangles wound the other
+##   way are found.
 ## - A HEAP OF COINS NEVER SHARES SPACE (feedback 0008, coins in a dish cut through each other): fourteen
 ##   coins heaped on seven seeds lie flat, and no two discs overlap in plan and in height. Two-sided: two
 ##   coins laid on the same spot are found overlapping.
@@ -65,6 +69,7 @@ func _initialize() -> void:
 	_bones()
 	_sculpts()
 	_coins()
+	_facets()
 	_told()
 	if _fails.is_empty():
 		print("props_check: ALL OK")
@@ -526,6 +531,38 @@ func _coins() -> void:
 			_ok((t as Transform3D).basis.y.normalized().dot(Vector3.UP) > 0.9999, "seed %d: a coin lies flat" % seed)
 	var same := [Transform3D(Basis(), Vector3(0, b, 0)), Transform3D(Basis(), Vector3(0.005, b, 0))]
 	_ok(_coins_touch(same, a, b), "the control: two coins on one spot are found overlapping")
+
+
+## How many triangles of [param g] show their front toward its middle (Godot draws clockwise fronts, so a
+## triangle's front is against its counterclockwise cross product): each one is a hole seen from outside.
+func _turned_in(g: Props.Tris) -> int:
+	var box := AABB(g.v[0], Vector3.ZERO)
+	for q in g.v:
+		box = box.expand(q)
+	var mid := box.get_center()
+	var n := 0
+	for t in range(0, g.v.size(), 3):
+		var front := -(g.v[t + 1] - g.v[t]).cross(g.v[t + 2] - g.v[t])
+		if front.dot((g.v[t] + g.v[t + 1] + g.v[t + 2]) / 3.0 - mid) < 0.0:
+			n += 1
+	return n
+
+
+func _facets() -> void:
+	var turned := 0
+	var total := 0
+	for seed in 12:
+		var g := _geo({"shape": "ball", "size": [9, 6.5, 7.5], "lumpy": 0.7, "facets": true}, seed + 1)
+		turned += _turned_in(g)
+		total += g.v.size() / 3
+	_ok(total > 0 and turned == 0, "a faceted stone has %d of %d triangles facing in: the cloth shows through" % [turned, total])
+	# the control: the same stone with some triangles wound the other way is found
+	var g := _geo({"shape": "ball", "size": [9, 6.5, 7.5], "lumpy": 0.7, "facets": true}, 1)
+	for t in range(0, g.v.size(), 30):
+		var swap := g.v[t + 1]
+		g.v[t + 1] = g.v[t + 2]
+		g.v[t + 2] = swap
+	_ok(_turned_in(g) > 0, "the control: a triangle wound inward is found - the hole check proves nothing")
 
 
 func _hits(g: Props.Tris, from: Vector3, dir: Vector3) -> int:

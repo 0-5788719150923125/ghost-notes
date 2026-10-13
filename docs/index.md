@@ -44,7 +44,7 @@ core. The commitments:
 - [Forces](forces.md) (8) - the physics primitives particles compose.
 - [Stage actors and verbs](stage.md) (3 actors, 22 verbs) - what a storyboard's `stage` entries are made of.
 - [Masking effects](masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
-- [Script marks](script.md) (29) - every mark a script may carry - the script editor's palette.
+- [Script marks](script.md) (32) - every mark a script may carry - the script editor's palette.
 - [Agents](agents.md) (4 writers, 3 painters, 2 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.
 
 ## Subsystems
@@ -223,13 +223,14 @@ Text to narrated audio in two paths: ghost's own source-filter synthesizer (no m
 - [`voice_stream.gd`](../src/voice_stream.gd) **VoiceStream** - real-time speech on its own thread: render lag cannot break it.
 - [`synth_editor.gd`](../src/synth_editor.gd) **SynthEditor** - the synthesis surface. The loop is a fishing trip:
 - [`voice_sampler.gd`](../src/voice_sampler.gd) **VoiceSampler** - "echo a living voice": record the player reading a fixed passage, MEASURE the voice (never keep it), and mint a brand-new seed whose traits and prosody genome mimic the source.
-- [`doc_source.gd`](../src/doc_source.gd) **DocSource** - where a reading's words come from: the editor alone, or a file it syncs to.
+- [`doc_source.gd`](../src/doc_source.gd) **DocSource** - where a reading's words come from: the editor alone, or the file they are saved in.
 - [`front_matter.gd`](../src/front_matter.gd) **FrontMatter** - YAML frontmatter on a Markdown document, read and (carefully) written.
 - [`manuscript.gd`](../src/manuscript.gd) **Manuscript** - what a chapter file SAYS about itself, beyond the words to be read.
 - [`tablet_script.gd`](../src/tablet_script.gd) **TabletScript** - a chapter written as somebody browsing on a tablet.
 - [`script_marks.gd`](../src/script_marks.gd) **ScriptMarks** - every authoring mark a script may carry, registered with what it does.
 - [`script_highlighter.gd`](../src/script_highlighter.gd) **ScriptHighlighter** - colors a script by the marks the panel reading it understands.
 - [`script_writer.gd`](../src/script_writer.gd) **ScriptWriter** - where a voice panel's script is written: a card in the panel, and an editor window it opens.
+- [`save_mark.gd`](../src/save_mark.gd) **SaveMark** - the small mark beside a script's file name that says where its words stand with the file: turning while a change made here waits for its quiet period, a tick that flashes the moment the change is in the file, an amber mark when a write was refused, a hollow ring when the script is saved nowhere.
 - [`subtitles.gd`](../src/subtitles.gd) **Subtitles** - the karaoke overlay, session-owned rather than editor-owned.
 - [`voice_host.gd`](../src/voice_host.gd) **VoiceHost** - Godot's end of the neural voice subprocess (see VOICE_PLAN.md).
 - [`reading_panel.gd`](../src/reading_panel.gd) **ReadingPanel** - a reading of a document in the neural voice: the script, the cast, the voice, the stream, the transport's hooks, the export (VOICE_PLAN.md P4). The Generative and Cards panels are both one (next/notes.md step 5): each adds the cards its picture is made of (`_build_cards`) and the blocks it ...

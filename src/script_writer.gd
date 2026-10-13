@@ -20,6 +20,14 @@ class_name ScriptWriter
 ##
 ## The window's [CodeEdit] IS the panel's text box: the panel reads `text_edit.text` and
 ## listens to its `text_changed` exactly as it did the old one, and [member doc] drives it.
+##
+## WHERE IT IS SAVED IS ON THE CARD (2026-10-12): the file's name, a [SaveMark] that turns while a
+## change waits and ticks when it is in the file, and Save…, which always asks for a file. It was
+## "Sync to…" inside the editor window, where a note's script could be sent to a file the note
+## itself never followed (see [DocSource]). OPEN… IS THE OTHER DIRECTION, and a note has it too
+## (the user, the same day: "I need to load a file from disk, and there's no way to do that
+## currently. The 'Save' button would just overwrite the file on disk"): Save… puts what is here
+## into a file, Open… takes what is in a file and writes nothing.
 
 ## The document's own metadata - top-level frontmatter keys, not ghost's block - edited on the
 ## card, never in the editor. Each is read by something: the label, its tooltip, the panels
@@ -36,17 +44,19 @@ const FIELDS := {
 }
 
 ## WHAT THE DOCUMENT IS CALLED, where it is not a script: a card show's body is the BRIEF its
-## agents work from - written by hand, never read aloud.
+## agents work from - written by hand, never read aloud. Its marks are its own ([ScriptMarks],
+## "cards"): what each does in a brief is the registry's `blurbs`.
 const WORDING := {
 	"cards": {"window": "Brief",
-		"edit_tip": "Open the show's brief in an editor: what the show is, who reads it and by what rules. Every agent behind every episode is handed it word for word.",
-		"placeholder": "What is this show? Who reads it, how, and by what rules?"},
+		"edit_tip": "Open the show's brief in an editor, with every mark a brief understands listed beside it - the deck, other voices, notes to yourself - ready to insert at the cursor. The brief is what the show is, who reads it and by what rules, and every agent behind every episode is handed it.",
+		"placeholder": "What is this show? Who reads it, how, and by what rules?",
+		"speakers": "Voices in this brief"},
 }
 
 ## How long typing must pause before the card's summary is recounted.
 const SUMMARY_MS := 0.4
 
-## Where the words come from (a synced file, or none), built into the window's top bar.
+## Where the words come from (the file they are saved in, or none), built into the window's top bar.
 var doc: DocSource
 ## The editor. The owning panel treats this as its text box.
 var text_edit: CodeEdit
@@ -64,6 +74,11 @@ var _speaker_names := PackedStringArray()
 var _field_edits := {}          # key -> LineEdit
 var _open_btn: Button
 var _clear_btn: Button
+var _save_btn: Button
+var _in_note := false
+## The card's own save mark (the editor window has another, on the same source).
+var save_mark: SaveMark
+var _mark_slot: Control
 
 
 func _wording(key: String, dflt: String) -> String:
@@ -85,11 +100,26 @@ func setup(section: String, blocks: PackedStringArray, mode: String) -> void:
 	_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_name.add_theme_font_size_override("font_size", 14)
 	row.add_child(_name)
+	# the mark needs the source, which the window builds: its place is kept here
+	_mark_slot = Control.new()
+	_mark_slot.custom_minimum_size = Vector2(SaveMark.SIZE, SaveMark.SIZE)
+	_mark_slot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(_mark_slot)
+	var save := Button.new()
+	_save_btn = save
+	save.text = "Save…"
+	save.pressed.connect(func() -> void: doc.save_dialog())
+	row.add_child(save)
 	var open := Button.new()
 	_open_btn = open
 	open.text = "Open…"
-	open.pressed.connect(func() -> void: doc.open())
+	open.pressed.connect(func() -> void:
+		if _in_note:
+			doc.ask_open(open_as_note)
+		else:
+			doc.open())
 	row.add_child(open)
+	row.move_child(open, save.get_index())      # Open…, then Save…: the order every editor has
 	var clear := Button.new()
 	_clear_btn = clear
 	clear.text = "Clear"
@@ -125,6 +155,9 @@ func setup(section: String, blocks: PackedStringArray, mode: String) -> void:
 	_build_window(section, blocks)
 	open.tooltip_text = DocSource.OPEN_TIP
 	clear.tooltip_text = DocSource.CLEAR_TIP
+	save.tooltip_text = DocSource.SAVE_TIP
+	save_mark = preload("res://src/save_mark.gd").new(doc)
+	_mark_slot.add_child(save_mark)
 	doc.dialog_host = self
 	doc.noted.connect(func(msg: String) -> void:
 		_note.text = msg
@@ -136,16 +169,37 @@ func setup(section: String, blocks: PackedStringArray, mode: String) -> void:
 	_refresh()
 
 
-## THE CARD IS A NOTE'S (2026-10-06): the note IS the file, so Open… (sync to another file) and Clear
-## (let go of this one) are not offered - the same legacy the notes list's Open… was, there to work
-## with modes that opened documents. A panel started without a note (`--cards`, `--synth`) keeps them.
+## THE CARD IS A NOTE'S (2026-10-06): the note IS the file, so Clear (let go of this one) is not
+## offered. A panel started without a note (`--cards`, `--synth`) keeps it. Save… moves the note to
+## the file chosen ([signal DocSource.moved]); Open… (hidden here until 2026-10-12, which left no way
+## to load a file from inside a note) opens the file chosen AS THE NOTE ([method open_as_note]).
 func bind_note() -> void:
-	_open_btn.visible = false
+	_in_note = true
 	_clear_btn.visible = false
+	_open_btn.tooltip_text = DocSource.OPEN_NOTE_TIP
+	_save_btn.tooltip_text = DocSource.SAVE_NOTE_TIP
+
+
+## A NOTE'S OPEN…: [param path] becomes the note in this window, through the one way every note
+## opens ([method main.open_file], reached through [Chrome]) - so what it is follows from its own
+## blocks, and a file with none is a plain note. Nothing is written into it. What is waiting here
+## is written into this note's own file first, which stays in the list; the file already open is
+## simply read again.
+func open_as_note(path: String) -> void:
+	if not doc.settle():
+		return
+	if path.simplify_path() == doc.doc_path().simplify_path():
+		if doc.reload():
+			doc.tell("Read %s again." % path.get_file())
+		return
+	var ch := Chrome.of(self)
+	var why := ch.open_file(path) if ch != null else "Nothing here can open another note."
+	if not why.is_empty():
+		doc.tell("⚠  " + why)
 
 
 ## The FIELDS this panel uses, as a two-column form under the summary. An edit is committed on
-## Enter or on leaving the box (not per keystroke - synced, each commit is a write to the file),
+## Enter or on leaving the box (not per keystroke - saved in a file, each commit is a write to it),
 ## and the box then shows what the source holds, so a refused write is visible as a revert.
 func _build_fields() -> void:
 	var grid := GridContainer.new()
@@ -263,7 +317,8 @@ func _build_window(section: String, blocks: PackedStringArray) -> void:
 	col.add_child(foot)
 	var hint := Label.new()
 	hint.text = ("Frontmatter is not shown here: the panel's settings are written into it on "
-		+ "their own. A synced file takes your edits a moment after you stop typing.")
+		+ "their own. The file takes your edits a moment after you stop typing - the mark "
+		+ "beside its name turns while one waits and ticks when it is in.")
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hint.add_theme_font_size_override("font_size", 11)
@@ -321,7 +376,7 @@ func _build_palette() -> Control:
 			box.add_child(_mark_button(String(k), color))
 		if g == "voices":
 			_speakers_head = Label.new()
-			_speakers_head.text = "Speakers in this script"
+			_speakers_head.text = _wording("speakers", "Speakers in this script")
 			_speakers_head.add_theme_font_size_override("font_size", 11)
 			_speakers_head.modulate = Color(1, 1, 1, 0.6)
 			box.add_child(_speakers_head)
@@ -346,7 +401,7 @@ func _mark_button(key: String, color: Color) -> Button:
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	b.flat = true
 	b.add_theme_color_override("font_color", color)
-	b.tooltip_text = "%s\n\n%s" % [ScriptMarks.example(key), String(e["blurb"])]
+	b.tooltip_text = "%s\n\n%s" % [ScriptMarks.example(key), ScriptMarks.blurb(key, _mode)]
 	b.pressed.connect(func() -> void:
 		ScriptMarks.insert(text_edit, key)
 		text_edit.grab_focus())
@@ -358,7 +413,7 @@ func _mark_button(key: String, color: Color) -> Button:
 func _explain(key: String) -> void:
 	var e: Dictionary = ScriptMarks.REGISTRY[key]
 	_help.text = "%s\n%s\n\n%s" % [String(e["label"]), ScriptMarks.example(key),
-		String(e["blurb"])]
+		ScriptMarks.blurb(key, _mode)]
 
 
 func _gap(px: int) -> Control:
@@ -374,10 +429,10 @@ func _refresh() -> void:
 		return
 	var text := text_edit.text
 	var source := doc.doc_path().get_file() if doc.is_sync() \
-		else "Unsynced %s" % _wording("window", "Script").to_lower()
+		else "Unsaved %s" % _wording("window", "Script").to_lower()
 	_name.text = source
-	_name.tooltip_text = ("Synced to " + doc.doc_path()) if doc.is_sync() else \
-		"Kept by Ghost Notes alone, in no file. Sync to… in the editor writes it into one."
+	_name.tooltip_text = ("Saved in " + doc.doc_path()) if doc.is_sync() else \
+		"Kept by Ghost Notes alone, in no file. Save… writes it into one."
 	_window.title = "%s - %s" % [_wording("window", "Script"), source]
 	for k in _field_edits:
 		var e: LineEdit = _field_edits[k]
@@ -385,7 +440,7 @@ func _refresh() -> void:
 			e.text = doc.field(k)
 	var spoken := Manuscript.unspoken(text)
 	var parts := PackedStringArray([_count(Manuscript._rx("\\S+").search_all(spoken).size(), "word")])
-	if _mode == "generative":
+	if _mode in ["generative", "cards"]:
 		var names := Manuscript.speakers(text)
 		parts.append(_count(names.size(), "voice"))
 		var pics := Manuscript.images(text).size()

@@ -358,6 +358,53 @@ func reopen_note(path: String) -> void:
 	open_note(path)
 
 
+## OPEN A FILE FROM DISK AS THE NOTE, from inside a note (its Script card's Open…, 2026-10-12, the
+## user: "I need to load a file from disk, and there's no way to do that currently. The 'Save'
+## button would just overwrite the file on disk"). What the list's "Existing note…" does, without
+## the trip to the list: the file joins the list and opens through the one session path, as what
+## its own blocks say it is. Nothing is written into it, and the note left behind is left as it is
+## (its panel wrote what it held first). Returns "" once it is open, or why it could not be.
+func open_file(path: String) -> String:
+	var why := leave_blocker()
+	if not why.is_empty():
+		return why
+	if not FileAccess.file_exists(path) or not NoteStore.add(path):
+		return "There is no file at %s." % path
+	_end_session(false)
+	open_note(path.simplify_path())
+	return ""
+
+
+## THE NOTE OPEN NOW WAS SAVED INTO ANOTHER FILE (its Script card's Save…, 2026-10-12): [param to] is
+## the note from here on - what "⋯" deletes, what the list shows and what opens next time. The panel
+## has moved already ([signal DocSource.moved]); without this the note was still [param from], so
+## opening it again read the old file and the edits made since were in one nothing read (the user:
+## "That selection keeps getting reverted back to the untitled cards label, and I am unsure if my
+## edits are even being used"). ONE NOTE, ONE FILE: a note Ghost Notes was keeping in its own folder
+## goes to the trash once the new file is written (two rows of one note is how the wrong one gets
+## opened), a file added by hand leaves the list, and both of those - like a file in an added
+## folder, which stays listed with its folder - are the author's files, left exactly as they were.
+## Returns what became of [param from], as a sentence for the panel to say.
+func note_moved(from: String, to: String) -> String:
+	if _note.is_empty() or from.simplify_path() != _note.simplify_path() \
+			or to.simplify_path() == from.simplify_path() or not FileAccess.file_exists(to):
+		return ""
+	_note = to
+	NoteStore.add(to)
+	if _chrome != null and is_instance_valid(_chrome):
+		_chrome.set_note(_note, delete_note, open_file)
+	if NoteStore.is_own(from):
+		var err := NoteStore.trash(from)
+		if not err.is_empty():
+			push_warning("ghost: " + err)
+			return err
+		return "%s, which Ghost Notes was keeping for it, went to the trash." % from.get_file()
+	if NoteStore.is_added(from):
+		NoteStore.remove(from)
+		return "%s is left as it was, and is off the list." % from.get_file()
+	return "%s is left as it was." % from.get_file()
+
+
 ## DELETE THE NOTE OPEN NOW (its panel's "⋯", once asked - see [DeleteDialog]): it is left the way the
 ## ⌂ leaves it - its panel writing what it holds as it goes - and only then thrown away ([param
 ## answer] "trash"), or let go of the list with its file kept ("forget"). The list comes back without it.
@@ -405,6 +452,7 @@ func _open_note_panel(path: String) -> void:
 	var panel: Node = preload("res://src/note_panel.gd").new()
 	panel.path = path
 	panel.reopen = reopen_note
+	panel.note_moved = note_moved
 	panel.begin_song = _begin_song
 	panel.restage = _restage
 	_note_panel = panel
@@ -516,7 +564,8 @@ func leave_blocker() -> String:
 func _entered_mode() -> void:
 	if _chrome != null and is_instance_valid(_chrome):
 		_chrome.set_home(leave_mode, leave_blocker)
-		_chrome.set_note(_note, delete_note if not _note.is_empty() else Callable())
+		_chrome.set_note(_note, delete_note if not _note.is_empty() else Callable(),
+			open_file if not _note.is_empty() else Callable())
 
 
 ## Tear the session down and return to the notes list - THE ONE TEARDOWN, for every mode (step 6):
@@ -913,6 +962,7 @@ func _open_synth_editor(mode := "fishing") -> void:
 	# exports exactly like a song, and ` feedback works over the running show.
 	var editor := preload("res://src/synth_editor.gd").new()
 	editor.note_path = _note
+	editor.note_moved = note_moved
 	editor.begin_stream = _begin_synth_stream
 	editor.end_stream = _end_synth_stream
 	_synth_editor = editor
@@ -940,6 +990,7 @@ func _open_synth_editor(mode := "fishing") -> void:
 func _open_generative_editor(script: Script = preload("res://src/generative_editor.gd")) -> void:
 	var editor: ReadingPanel = script.new()
 	editor.note_path = _note
+	editor.note_moved = note_moved
 	editor.begin_stream = _begin_generative_stream
 	editor.end_stream = _end_generative_stream
 	_synth_editor = editor

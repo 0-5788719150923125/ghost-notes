@@ -1,7 +1,7 @@
 extends VBoxContainer
 class_name DocSource
 
-## DocSource - where a reading's words come from: the editor alone, or a file it syncs to.
+## DocSource - where a reading's words come from: the editor alone, or the file they are saved in.
 ##
 ## THE TEXT BOX IS A DRAFT, and a chapter is not a draft. Everything the voice panels read
 ## until now was pasted in, which has three costs that only show up on real material: the
@@ -10,12 +10,23 @@ class_name DocSource
 ## silently inherits the last one's voice and coming back has lost it; and a fix to a
 ## sentence means finding the panel, clearing it and pasting again.
 ##
-## So a script can be SYNCED TO A FILE, and that is a standing state rather than an act: OPEN
-## reads a document and syncs to it, SYNC TO… writes the script into a new file and syncs to
-## that, and CLEAR detaches and empties the editor, leaving a script that is saved nowhere
-## until it is synced. Nothing downstream of the panel knows which is in use, because both end up
-## as text in the same [TextEdit] (the [ScriptWriter]'s editor). Unsynced text is the panel's
-## own: it persists it in Settings as before.
+## So a script can be SAVED IN A FILE, and that is a standing state rather than an act: OPEN
+## reads a document and stays with it, SAVE… writes the script into a file of the author's
+## choosing and stays with that, and CLEAR detaches and empties the editor, leaving a script that
+## is saved nowhere until it is saved. Nothing downstream of the panel knows which is in use,
+## because both end up as text in the same [TextEdit] (the [ScriptWriter]'s editor). Text saved
+## nowhere is the panel's own: it persists it in Settings as before. (The code calls the standing
+## state "sync", the word the button had until 2026-10-12.)
+##
+## SAVE… ALWAYS ASKS WHERE, AND A NOTE GOES WITH IT (2026-10-12, the user: "That selection keeps
+## getting reverted back to the untitled cards label, and I am unsure if my edits are even being
+## used"). The button was "Sync to…", inside the editor window, and in a note it moved only this
+## source: the note was still the file it was opened from, so the next time it opened it read
+## that file again - and the edits made in between were in a file nothing read. [signal moved]
+## says the script left one file for another, and the panel hands that to main, which makes the
+## new file the note ([method main.note_moved]). The button is on the Script card, beside a
+## [SaveMark] that turns while a change waits and ticks when it is in the file ([signal written],
+## [method save_state]).
 ##
 ## THE DOCUMENT CAN BE WRITTEN HERE TOO. The editor shows the BODY only - the frontmatter is
 ## the panel's business and is written by it - and an edit made in ghost is saved on the same
@@ -72,20 +83,43 @@ const AUTOSAVE_MS := 1200
 const POLL_MS := 250
 ## Clear's tooltip; the button is on the [ScriptWriter] card.
 const CLEAR_TIP := ("Start an empty script that is saved nowhere, and forget the file it was "
-	+ "synced to. The file itself is left exactly as it is. Text that was not synced anywhere "
+	+ "saved in. The file itself is left exactly as it is. Text that was saved nowhere "
 	+ "can be brought back with Ctrl+Z in the editor.")
 ## Open…'s tooltip; the button is on the [ScriptWriter] card.
-const OPEN_TIP := ("Open a Markdown file and sync to it: it is read fresh at every Play, "
+const OPEN_TIP := ("Open a Markdown file and stay with it: it is read fresh at every Play, "
 	+ "and edits made here are saved into it. Edit it in your own editor too if you like. "
 	+ "Its YAML frontmatter is never shown or spoken - the panel keeps the voice there.")
+## Open…'s tooltip in a note, where the file opened is a note of its own.
+const OPEN_NOTE_TIP := ("Open a Markdown file from disk as the note: its text and its settings, "
+	+ "read from the file and saved back into it as you change them. Nothing is written into "
+	+ "it by opening it. The note open now is saved first and stays in the list as it is.")
+## Save…'s tooltip; the button is on the [ScriptWriter] card.
+const SAVE_TIP := ("Choose the file this is saved in. It is written there now - the text, and "
+	+ "this panel's settings in its frontmatter - and from then on every change made here is "
+	+ "saved into that file a moment after you stop. The mark beside the name turns while a "
+	+ "change is waiting and ticks once it is in the file.")
+## Save…'s tooltip in a note, where the note itself goes to the file chosen.
+const SAVE_NOTE_TIP := ("Choose the file this note is saved in. The whole note is written there "
+	+ "now and that file is the note from then on: it is what the list opens, what every Play "
+	+ "reads and where every change made here is saved. A note Ghost Notes was keeping in its "
+	+ "own folder goes to the trash once the new file is written; a file of yours is left as it "
+	+ "is. The mark beside the name turns while a change is waiting and ticks once it is in the "
+	+ "file.")
 
 ## A document was opened and its voice (if it had one) applied.
 signal opened(path: String)
 ## A status line was shown (or cleared, with ""). The panel's script card mirrors it, so a
 ## failed save is visible with the editor window closed.
 signal noted(msg: String)
-## The script was synced to a file, or detached from one.
+## The script was saved in a file, or detached from one.
 signal mode_changed(sync: bool)
+## Save… put the script in another file: [param from] is the file it was in until now ("" when it
+## was in none), which is left exactly as it was. A panel showing a note hands this on, so the
+## note is the new file (see the header).
+signal moved(from: String, to: String)
+## A change made here reached the file - the text, the panel's settings or a field. Raised only
+## after the write was verified, so a [SaveMark] ticking is the file holding what is on screen.
+signal written
 
 ## The panel's settings, as they are right now -> `{block: Dictionary}`, one entry per block
 ## this source owns ([member _blocks]), stored under `ghost:` as siblings. Set by the owner; a
@@ -131,6 +165,9 @@ var _body_seen_v := -1
 var _body_settled_ms := 0
 var _body_failed_v := -1         # a write refused at this version is not retried until an edit
 var _conflict := false           # the file moved under an unsaved edit; the author decides
+var _body_fault := ""            # why the text's last write was refused, "" once one lands
+var _waiting := false            # a change made here is not in the file yet (the poll's finding)
+var _written_clock := ""         # when the last write landed, as the wall clock says it
 ## Let a gate that is specifically testing the autosave run it in a probe. Mirrors - and is
 ## deliberately separate from - [method Settings.allow_writes_for_test]: flipping the global
 ## would also let the gate write the author's real config, and the thing under test here is a
@@ -157,9 +194,10 @@ func setup(section: String, blocks: PackedStringArray) -> void:
 	_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	row.add_child(_name)
-	row.add_child(_tool("Sync to…", "Write this script into a Markdown file and keep it there: "
-		+ "from now on every edit is saved into the file a moment after you stop typing, with "
-		+ "this panel's voice in its frontmatter.", _sync_to_dialog))
+	# the mark first, beside the name it speaks for (the label takes the rest of the row)
+	var mark: Control = preload("res://src/save_mark.gd").new(self)
+	row.add_child(mark)
+	row.move_child(mark, 0)
 
 	_conflict_row = HBoxContainer.new()
 	_conflict_row.add_theme_constant_override("separation", 4)
@@ -244,7 +282,7 @@ func field(key: String) -> String:
 
 ## Set a field. Synced, it is written into the file at once - one key, by the same checked line
 ## surgery as the voice, and REMOVED when emptied rather than left as an empty key; unsynced, it
-## is kept with the script and goes into the file at Sync to…. Called on a person's edit, so not
+## is kept with the script and goes into the file at Save…. Called on a person's edit, so not
 ## refused in a read-only process (the same reasoning as the flush on Play).
 func set_field(key: String, value: String) -> bool:
 	value = value.strip_edges()
@@ -261,6 +299,7 @@ func set_field(key: String, value: String) -> bool:
 	if not err.is_empty():
 		_note("⚠  " + err)
 		return false
+	_wrote()
 	return true
 
 
@@ -340,12 +379,15 @@ func _write_body(force: bool) -> bool:
 	if err.is_empty():
 		_body = mine
 		_body_failed_v = -1
-		if _conflict:
+		if _conflict or not _body_fault.is_empty():
 			_conflict = false
 			_conflict_row.visible = false
 			_note("✓  %s saved." % _path.get_file())
+		_body_fault = ""
+		_wrote()
 		return true
 	_body_failed_v = _text.get_version()
+	_body_fault = err
 	if err.begins_with(FrontMatter_.CONFLICT):
 		_conflict = true
 		_conflict_row.visible = true
@@ -365,8 +407,8 @@ func _flush() -> void:
 	if snap.is_empty() or snap == _saved:
 		return
 	var err := _write_reconciled()
+	_autosave_note = err
 	if not err.is_empty():
-		_autosave_note = err
 		_note("⚠  " + err)
 
 
@@ -383,6 +425,7 @@ func reload() -> bool:
 	_conflict = false
 	_conflict_row.visible = false
 	_body_failed_v = -1
+	_body_fault = ""
 	_show(_body)
 	_import(String(raw))
 	return true
@@ -415,6 +458,7 @@ func save() -> bool:
 	_seen = _snapshot()
 	_saved = _seen
 	_autosave_note = ""
+	_wrote()
 	_note("✓  Voice saved into %s" % _path.get_file())
 	return true
 
@@ -435,19 +479,21 @@ func save() -> bool:
 func _process(_delta: float) -> void:
 	if not is_sync():
 		return
-	# An export render, the offline analyzer and a test probe all boot the whole app against
-	# the author's own settings - and would find their own document open. A person pressing Play
-	# is a person; a background process is not.
-	if Settings.is_read_only() and not _autosave_for_test:
-		return
 	var now := Time.get_ticks_msec()
 	if now - _polled_ms < POLL_MS:
 		return
 	_polled_ms = now
+	# An export render, the offline analyzer and a test probe all boot the whole app against
+	# the author's own settings - and would find their own document open. A person pressing Play
+	# is a person; a background process is not. (Its mark still says a change is waiting: it is.)
+	if Settings.is_read_only() and not _autosave_for_test:
+		_take_stock(_snapshot())
+		return
 	_poll_body(now)
+	var snap := _snapshot()
+	_take_stock(snap)
 	if not capture.is_valid():
 		return
-	var snap := _snapshot()
 	if snap != _seen:
 		_seen = snap
 		_settled_ms = now
@@ -462,6 +508,12 @@ func _process(_delta: float) -> void:
 	if err != _autosave_note:
 		_autosave_note = err
 		_note("⚠  " + err)
+
+
+## What the [SaveMark] turns on: the text, or the settings ([param snap]), are ahead of the file.
+func _take_stock(snap: String) -> void:
+	_waiting = (_unsaved() and not _conflict and _body_fault.is_empty()) \
+		or (capture.is_valid() and snap != _saved)
 
 
 ## The body's half of the autosave: written once the editor's version has held still for
@@ -521,7 +573,45 @@ func _write_reconciled() -> String:
 	_seen = _snapshot()
 	_saved = _seen
 	_lay_over(ghost, mine)
-	return FrontMatter_.write_block(_path, ghost)
+	var err := FrontMatter_.write_block(_path, ghost)
+	if err.is_empty():
+		_wrote()
+	return err
+
+
+## A change made here is in the file, verified ([signal written]).
+func _wrote() -> void:
+	_written_clock = Time.get_time_string_from_system()
+	written.emit()
+
+
+## WHERE THE SCRIPT STANDS WITH ITS FILE, for the [SaveMark]: "none" (it is saved nowhere),
+## "pending" (a change made here is waiting for its quiet period), "failed" (a write was refused,
+## or the file changed under an edit and the author has not chosen) or "saved" (the file holds
+## what is on screen). The waiting is the autosave poll's own finding, a quarter second old at most.
+func save_state() -> String:
+	if not is_sync():
+		return "none"
+	if _conflict or not _body_fault.is_empty() or not _autosave_note.is_empty():
+		return "failed"
+	return "pending" if _waiting else "saved"
+
+
+## [method save_state] in a sentence, with the file's whole path: the [SaveMark]'s tooltip.
+func save_tip() -> String:
+	match save_state():
+		"none":
+			return "Saved nowhere yet: Ghost Notes keeps this itself, in no file. Save… writes it into one."
+		"pending":
+			return "Saving into %s a moment after you stop." % _path
+		"failed":
+			if _conflict:
+				return ("%s was changed outside Ghost Notes while it was being edited here. Nothing "
+					% _path + "is saved until you choose which to keep (Edit).")
+			return "Not saved into %s: %s" % [_path, _body_fault if not _body_fault.is_empty() else _autosave_note]
+	if _written_clock.is_empty():
+		return "Saved in %s. Nothing has been changed here since it was read." % _path
+	return "Saved in %s - last written at %s." % [_path, _written_clock]
 
 
 ## The blocks of [param ghost] this source owns, whatever their shape, by key.
@@ -653,11 +743,12 @@ func _apply_editable() -> void:
 
 func _refresh_row() -> void:
 	if is_sync():
-		_name.text = "Synced to %s" % _path.get_file()
+		_name.text = "Saved in %s" % _path.get_file()
 		_name.tooltip_text = _path
 	else:
-		_name.text = "Not synced to a file"
-		_name.tooltip_text = "This script is kept by Ghost Notes alone. Sync to… writes it into a file."
+		_name.text = "Saved nowhere yet"
+		_name.tooltip_text = ("Ghost Notes keeps this itself, in no file. Save…, on the panel's "
+			+ "card, writes it into one.")
 
 
 func _show(body: String) -> void:
@@ -732,16 +823,16 @@ func _import(raw: String, quiet := false) -> void:
 	_settled_ms = Time.get_ticks_msec()
 
 
-## OPEN A DOCUMENT AND SYNC TO IT. Text synced to nothing would be replaced by the file's and
-## exists nowhere else, so that is asked about first; a synced script is in its file already.
+## OPEN A DOCUMENT AND STAY WITH IT. Text saved nowhere would be replaced by the file's and
+## exists nowhere else, so that is asked about first; a saved script is in its file already.
 func open() -> void:
 	if _dialog != null and is_instance_valid(_dialog):
 		return
 	if not is_sync() and _text != null and not _text.text.strip_edges().is_empty():
 		var ask := ConfirmationDialog.new()
 		ask.title = "Open a document"
-		ask.dialog_text = ("This script is not synced to a file, and opening one replaces it.\n"
-			+ "Use Sync to… first to keep it.")
+		ask.dialog_text = ("This script is saved nowhere, and opening a file replaces it.\n"
+			+ "Use Save… first to keep it.")
 		ask.ok_button_text = "Open anyway"
 		ask.confirmed.connect(func() -> void:
 			_close_dialog()
@@ -752,20 +843,44 @@ func open() -> void:
 	_open_dialog()
 
 
+## ASK FOR A FILE TO OPEN and hand its path to [param then], opening nothing here: a note's Open…,
+## where the file is a note of its own and main opens it ([method ScriptWriter.bind_note]).
+func ask_open(then: Callable) -> void:
+	if _dialog != null and is_instance_valid(_dialog):
+		return
+	var d := _file_dialog(FileDialog.FILE_MODE_OPEN_FILE, "Open a note from disk")
+	d.filters = PackedStringArray(["*.md, *.markdown ; Notes"])
+	d.file_selected.connect(func(path: String) -> void:
+		_close_dialog()
+		then.call(path))
+	_popup(d)
+
+
+## Write whatever is waiting here - the settings, then the text - before the script leaves this
+## file. False, with the reason on the status line, when the text cannot be written.
+func settle() -> bool:
+	if not is_sync():
+		return true
+	_flush()
+	return _leave_document()
+
+
 func _open_dialog() -> void:
-	var d := _file_dialog(FileDialog.FILE_MODE_OPEN_FILE, "Open and sync to a document")
+	var d := _file_dialog(FileDialog.FILE_MODE_OPEN_FILE, "Open a document")
 	d.filters = PackedStringArray(["*.md, *.markdown, *.txt ; Text", "* ; Every file"])
 	d.file_selected.connect(_on_picked)
 	_popup(d)
 
 
-func _sync_to_dialog() -> void:
+## SAVE…: ask where, always - the file is the author's to name, every time the button is pressed.
+## The dialog asks before an existing file is replaced.
+func save_dialog() -> void:
 	if _dialog != null and is_instance_valid(_dialog):
 		return
-	var d := _file_dialog(FileDialog.FILE_MODE_SAVE_FILE, "Sync this script to a file")
+	var d := _file_dialog(FileDialog.FILE_MODE_SAVE_FILE, "Save into a file")
 	d.filters = PackedStringArray(["*.md ; Markdown"])
 	d.current_file = _path.get_file() if not _path.is_empty() else "chapter.md"
-	d.file_selected.connect(sync_to)
+	d.file_selected.connect(save_to)
 	_popup(d)
 
 
@@ -811,15 +926,26 @@ func _on_picked(path: String) -> void:
 	mode_changed.emit(true)
 
 
-## SYNC THE SCRIPT TO A FILE: write it there now - the panel's voice in the frontmatter - and
-## keep it there from then on. Synced already, the new file takes the old one's frontmatter
-## too (a title, the other panel's voice), and the old file is left as it was.
-func sync_to(path: String) -> bool:
+## SAVE THE SCRIPT INTO A FILE: write it there now - the panel's voice in the frontmatter - and
+## keep it there from then on. Saved somewhere already, the new file takes the old one's
+## frontmatter too (a title, the other panel's voice), and the old file is left as it was -
+## [signal moved] says so, for a note to follow. The file it is in already is simply brought up
+## to date: whatever was waiting is written now.
+func save_to(path: String) -> bool:
 	_close_dialog()
 	if _text == null:
 		return false
 	if not path.get_extension().to_lower() in ["md", "markdown", "txt"]:
 		path += ".md"
+	var was := doc_path()
+	if not was.is_empty() and path.simplify_path() == was.simplify_path():
+		_flush()
+		_flush_body()
+		if save_state() == "failed":
+			return false
+		_wrote()
+		_note("✓  Saved in %s." % _path.get_file())
+		return true
 	var template := ""
 	var ghost := {}
 	if is_sync():
@@ -848,9 +974,12 @@ func sync_to(path: String) -> bool:
 	_refresh_row()
 	_apply_editable()
 	reload()
-	_note("✓  Synced to %s - edits are saved there from now on." % _path.get_file())
+	_autosave_note = ""
+	_wrote()
+	_note("✓  Saved in %s - every change is saved there from now on." % _path.get_file())
 	opened.emit(_path)
 	mode_changed.emit(true)
+	moved.emit(was, _path)
 	return true
 
 
@@ -867,8 +996,8 @@ func clear() -> void:
 		_sync = false
 		Settings.write(_section, "text", "")
 		_show("")
-		_note("No longer synced to %s, which is unchanged. This script is saved nowhere until "
-			% was + "you Sync it to a file.")
+		_note("No longer saved in %s, which is unchanged. This script is saved nowhere until "
+			% was + "you Save… it into a file.")
 	else:
 		_text.begin_complex_operation()
 		_text.select_all()
@@ -882,9 +1011,18 @@ func clear() -> void:
 	Settings.write(_section, "fields", {})
 	_conflict = false
 	_conflict_row.visible = false
+	_body_fault = ""
+	_autosave_note = ""
+	_waiting = false
 	_refresh_row()
 	_apply_editable()
 	mode_changed.emit(false)
+
+
+## Say [param msg] on the source's own status line (and the card's, which mirrors it): the panel's
+## word on something the source started - what became of the file a note was saved out of.
+func tell(msg: String) -> void:
+	_note(msg)
 
 
 func _close_dialog() -> void:

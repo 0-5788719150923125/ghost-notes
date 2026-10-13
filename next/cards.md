@@ -1319,6 +1319,111 @@ Still open: keepsakes in a box lie on its floor, inside whatever pile stands the
 along the cloth (a waterfall, a slide-out) does not move a leaf in its way; none of this has been
 judged in a finished video yet.
 
+## 2026-10-12: a card out of the box is the box's kind, and a search of cards on edge
+
+The user, of "Seasick and Looking for Someone to Hit" (penalty-box 260998: an open box, cards on
+edge, text on the back): every card in the box had "consistent artwork on the back", and a card
+drawn from it had content on both sides - "the card changed to something else after getting
+pulled from the box"; and a card "was lifted from the deck FLAT, and THREE times in a row".
+
+Read off the video's own frames (`~/Downloads/<title>.mp4`, ffmpeg), not a re-render:
+
+- The file stood FACE to the camera, and the cards nobody drew have no face. So the box showed
+  only border strips, and the drawn card came up a picture out of it. NOW THE FILE STANDS BACK TO
+  THE CAMERA (`_build_file`'s `stand`): a card comes up showing its back, as every card in the box
+  does, and is turned round on its way to being shown. This holds for a shared-art back too.
+- The unseen cards' printed backs were ruled dashes (`anonymous`), plain to see once a search held
+  one up. They are now THE DECK'S OWN CARDS the draw left in (`_left_in`: name, group, meaning; up
+  to `WRITTEN`); the dashes remain only where the plan lists no deck.
+- The search was one flat card appearing in the air at the rim. It now DRAWS THE FILE'S OWN CARDS
+  UP OUT OF THEIR PLACES (`_box["search"]`, `_searched_xf`): on edge, `SEARCH_RISE` of the way,
+  tipped toward the eye, let back down - a different card and place at every look. Off a pile it
+  lifts the top card, turns it up to be read and lays it back.
+
+Gate: `table_staging_check` (`_file_search`, the box show's facing, the cards left in).
+
+Then, the same day (the user: "address the open items as well... some ability for random
+placement might be good"):
+
+- THE CARD A SEARCH LOOKS AT IS THE BOX'S OWN, kept in its place (`_keep_searched`, `_searched`):
+  standing in the file, or lying on top of a pile nothing is drawn from or put back on
+  (`_pile_places` spares piles for it, the draws keeping two). Nothing appears as a look begins.
+  Only a box with no place to spare (a tin's flat deck, one pile) is lent a card for the look.
+- A card lifted off a pile is lifted no higher than the picture (`_searched_xf`): a shoebox stands
+  at the back of the table, near the frame's top, and the card's far edge went out of it.
+- THE BOX STANDS IN ITS OWN PLACE in the room kept for one (`TablePositions.box_stand`): seeded,
+  anywhere a box smaller than `BOX_MAX` / `SHOEBOX_MAX` fits, an open box in the inner half
+  (14 to 27 mm toward the spread for the plain box). The spread's room is untouched.
+
+Still open: a card at the top of its rise out of an open box at the side is still about a third
+out of the picture in 260998 (it was half). More than that means moving `box_at`, which is the
+room the spread keeps off - every box episode's spread would re-lay. The pile search was judged
+on a copy of 260998 restaged as a shoebox of piles (`--root`), not on an episode made that way.
+Nothing here judged in a finished video yet.
+
+## 2026-10-12: the brief's own marks
+
+The user: "In the in-app editor, along the right side, why are all of the supported macros and
+features missing from 'cards' editor mode? I would expect that most if not all of the features from
+generative mode should also work here."
+
+- **Why it was empty.** The palette is built from `ScriptMarks`, each mark listing the panels that
+  honor it, and none listed Cards: the document there is the brief the agents work from, never read
+  aloud, so a script's marks did nothing in it.
+- **What a brief is offered now**, each saying what it does IN A BRIEF (`blurbs`): a speaker cue
+  (another voice of the show - this worked already, unadvertised), the deck (`## Cards`, a suit, a
+  card - colored only inside the section, `CardDeck.span`), a template macro (the agents get its
+  default) and a note to self (taken out before any agent sees the brief) - both new, in
+  `CardPrompts.brief` - a heading, italic and bold, and a hesitation, a timed hesitation and a
+  delivery, which stand in a line the brief gives the host word for word: the reader's `spoken` rule
+  now says such a line keeps its marks.
+- **What it is not offered, and why.** Pictures, sketches, scene lines and breaks, log-entry times,
+  the outro mark and everything of the tablet: the table is the only medium, its pictures are the
+  painter's, and the outro is the bookends'. The inline pronunciation: a reader's passage keeps no
+  bracket (`CardProducer.clean_spoken`), so it would be lost - `script_marks_check` holds that, and
+  says to offer the mark if that ever changes.
+- **Still open.** Whether a writer really keeps a dictated line's marks is the writer's doing: the
+  rule is there and the pipeline keeps them, and no episode has been made with one yet. A way to give a name's
+  pronunciation in a brief.
+- **Italic hits, bold hits harder** (the user, the same day, on the two having disagreed -
+  `clean_spoken` turned `**word**` into `*word*` while the reader's rule promised that double
+  asterisks "hit harder still": "*italics* should be rendered as italics, and hit hard, while
+  **bold** should be rendered in bold, and hit even harder than that"). A passage keeps `**` now,
+  so a bold word is shown in bold and sent at the stronger level, and both levels were raised in
+  the voice host for every reading, not only a show's (`EMPHASIS` in hosts/voice/backends/piper.py,
+  with what was measured and the ceiling that keeps a lifted word from clipping). Measured on the
+  real voice, not yet judged by ear: `~/.cache/ghost_look/stress/` has one sentence said the three
+  ways. Episodes already written keep the single asterisks they were saved with.
+
+## 2026-10-12: nothing out of doors pulses
+
+The user, of the latest True Tarot episode (647530: a ketch at sea, the wind through canvas and the
+sea against the hull): "There are weird bursts of oscillation sound happening, over and over. It
+almost sounds like a fan spinning." And after the first fix: "The wind sounds fine but the water
+still has the oscillation sounds, and it's still pretty bad there."
+
+- **What it was.** Two parts of that place were noise chopped by a sine. The awning's flap: one band
+  pulsed deep at 2 to 9 Hz for as long as the wind was up. The slosh after each slap on the hull: a
+  burst near 1100 Hz pulsed at 8 to 16 Hz, every one to four seconds - and, measured part by part
+  (each rendered alone from the episode's `table.json` and seed), the loudest thing in the water:
+  its peaks 5 dB over the slap it trails, because `Band.strike` does not strike to the level it is
+  given (below) and its band is wider and where an ear hears best.
+- **The first fix was half right.** Cloth flaps as events now - a thump at a time, each its own
+  strength and pitch, the waits between them exponential, now and then straight back - and that was
+  heard as fixed. The slosh's pulse was only made ragged, which measured better and sounded the
+  same: a pulsed burst is a pulsed burst. Lesson kept: measure the parts alone, and their LEVELS,
+  before deciding which one a person is hearing.
+- **Now.** The slosh is a plain wash - broad, unpulsed, struck to a peak about 4 dB under its slap -
+  and the gurgle is the bubbles' (a few more of them, and audible: they were 20 dB under everything).
+  `soundscape_pulse_check` holds the wash (no pulse, under its slap and there) and the flaps
+  against the old recipes; it is a gate of its own because `soundscape_check` already runs close to
+  its five minutes on a busy machine.
+- **Found on the way.** `Band.strike` scales by the envelope one sample after the strike, floored at
+  0.05, so its `amount` is about a fourteenth of the real peak; every struck sound was tuned by ear
+  on that, so it is left alone, and `Band.hit` is the one whose argument is the peak.
+- **For the ear.** `~/.cache/ghost_look/sound/`: the water as it was heard and now, the whole place
+  now, and each part alone (the old slosh among them), all at that show's Environment setting.
+
 ## Not built yet
 
 - The light, next (2026-10-07): no real set dresser has lit a table yet. A cloud's edge ACROSS the table

@@ -196,6 +196,11 @@ func _process(delta: float) -> void:
 		"starting", "up":
 			_drain()
 			_drain_stderr()
+			# stopped by ghost closing is not a failure, and nobody is left to tell
+			# ([method Subprocess.closing])
+			if Subprocess.closing():
+				set_process(false)
+				return
 			if _pid > 0 and not Subprocess.alive(_pid):
 				_drain_stderr()          # whatever it managed to say on the way out
 				_fail("host", "the voice host exited unexpectedly - see the "

@@ -1,5 +1,5 @@
 {
-	"digest": "e30c145fddba5df5415daeaf5e97cfe685c7af8a4fd436170aff5bdd92345f07",
+	"digest": "d3afd3455628e4a55aee063a572893bcf21b07c0079a80e5d7c08571dacae97f",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -128,6 +128,7 @@
 		"res://src/reading_panel.gd",
 		"res://src/room_fx.gd",
 		"res://src/rules.gd",
+		"res://src/save_mark.gd",
 		"res://src/scene3d.gd",
 		"res://src/scene_view.gd",
 		"res://src/scenes/aurora.gd",

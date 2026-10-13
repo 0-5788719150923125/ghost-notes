@@ -15,6 +15,19 @@ class_name Soundscape
 ##     that brightens and swells in a gust - with what it blows THROUGH on top: leaves hiss a moment
 ##     after a gust reaches them, rigging sings (an Aeolian tone rises in proportion to the speed),
 ##     eaves moan, canvas flaps.
+##   - NOTHING OUT OF DOORS PULSES. A noise chopped by a sine is a machine: the user, 2026-10-12, of
+##     a ketch at sea (wind through canvas, the sea against the hull): "weird bursts of oscillation
+##     sound happening, over and over. It almost sounds like a fan spinning." Two things were that.
+##     The awning's flap was one band pulsed deep at 2 to 9 Hz for as long as the wind was up: cloth
+##     flaps as EVENTS now (each its own thump, strength and pitch, the waits between them uneven,
+##     [method _wind_block]) - "the wind sounds fine". And THE SLOSH after every slap on the hull
+##     was a burst of noise near 1100 Hz pulsed at 8 to 16 Hz - and, by an accident of how it was
+##     struck, 5 dB LOUDER than the slap it trails, in the band an ear hears best. Making its pulse
+##     ragged was not enough ("the water still has the oscillation sounds, and it's still pretty
+##     bad"): a pulsed burst is a pulsed burst. It is a plain wash now, under its slap, and the
+##     gurgle is the bubbles' ([method _water_block]). The cicadas' one deep pulse had been "a
+##     horrible screeching" and the eaves' narrow moan "whirred like something spinning": the same
+##     mistake each time. Only an insect keeps a pulse, far too fast to hear as one.
 ##   - THE SEA is a wave's ENVELOPE over filtered noise - the swell gathering low, the break opening the
 ##     filter, the wash fizzing away for seconds - or, against a hull or a piling, slaps (a short thump
 ##     of band-passed noise), the slosh after them and a few bubbles.
@@ -342,6 +355,22 @@ class Band:
 		var peak := maxf(0.05, pow(k1, tp) - pow(k2, tp))
 		e1 += amount / peak
 		e2 += amount / peak
+
+	## STRUCK TO A PEAK: as [method strike], with [param peak] the height the envelope really
+	## reaches. ([method strike]'s own scale is the envelope one sample after the strike, floored
+	## at 0.05 - so its `amount` is a fraction of the peak, about a fourteenth for a slap, and every
+	## sound struck with it was tuned by ear on that. This one is for a level worked out, not tuned.)
+	func hit(peak: float, decay: float, attack: float, sr: float) -> void:
+		k1 = exp(-1.0 / maxf(1.0, decay * sr))
+		k2 = exp(-1.0 / maxf(1.0, attack * sr))
+		var l1 := log(k1)
+		var l2 := log(k2)
+		var top := 1.0
+		if l1 - l2 > 1e-9:
+			var tp := log(l2 / l1) / (l1 - l2)
+			top = maxf(0.05, pow(k1, tp) - pow(k2, tp))
+		e1 += peak / top
+		e2 += peak / top
 
 
 ## ONE EDDY of the wind's body: pink noise, a 24 dB low-pass (two state-variable stages), its own slow
@@ -676,12 +705,15 @@ func _setup() -> void:
 				_w["moan"] = _band(0, 3, 220.0, 3.5, false)
 				_w["gap"] = _band(0, 3, 900.0, 16.0, false)
 			"canvas":
-				var flap := _band(0, 1, 230.0, 1.2, false)
-				var snap := _band(0, 1, 1500.0, 1.4, false)
-				flap.am_depth = 1.0
-				snap.am_depth = 1.0
-				_w["flap"] = flap
-				_w["snap"] = snap
+				# struck, never steady, and two of each in turn: a flap's tail is still sounding
+				# when the next one lands
+				_w["flaps"] = [_band(0, 1, 230.0, 1.2, false), _band(0, 1, 230.0, 1.2, false)]
+				_w["snaps"] = [_band(0, 1, 1500.0, 1.4, false), _band(0, 1, 1500.0, 1.4, false)]
+				for b in (_w["flaps"] as Array) + (_w["snaps"] as Array):
+					(b as Band).steady = 0.0
+				_w["flap_in"] = _range(0.2, 1.2)
+				_w["flap_k"] = 0
+				_w["flap_back"] = 0.0
 	if _sound.get("water") is Dictionary:
 		var x: Dictionary = _sound["water"]
 		var kind := String(x["kind"])
@@ -695,11 +727,10 @@ func _setup() -> void:
 			_wa["swell"] = _band(1, 0, 220.0, 0.7, false)
 			_wa["wash"] = _band(0, 1, 500.0, 0.8, true)
 			_wa["slaps"] = [_band(0, 1, 400.0, 1.4, false), _band(0, 1, 400.0, 1.4, false)]
-			_wa["sloshes"] = [_band(0, 1, 1100.0, 1.5, false), _band(0, 1, 1100.0, 1.5, false)]
+			# broad and unpulsed: the water running back off the hull, not a sound of its own
+			_wa["sloshes"] = [_band(0, 1, 800.0, 0.8, false), _band(0, 1, 800.0, 0.8, false)]
 			for b in (_wa["slaps"] as Array) + (_wa["sloshes"] as Array):
 				(b as Band).steady = 0.0
-			for b in _wa["sloshes"]:
-				(b as Band).am_depth = 0.55
 			var spray := _band(0, 1, 5500.0, 0.5, true)
 			spray.steady = 0.0
 			_wa["spray"] = spray
@@ -984,18 +1015,41 @@ func _wind_block(dt: float) -> void:
 			gap.gl = gg * ears.x
 			gap.gr = gg * ears.y
 		"canvas":
-			var flap: Band = _w["flap"]
-			var snap: Band = _w["snap"]
-			var rate := (1.8 + 5.5 * minf(w, 1.3)) * (1.0 + 0.25 * _turb)
-			flap.am_rate = rate
-			snap.am_rate = rate
-			snap.am_ph = flap.am_ph
+			# CLOTH FLAPS ONE FLAP AT A TIME: each a thump of its own strength and pitch, the gaps
+			# between them uneven, now and then the cloth filling and holding (a lull), now and
+			# then coming straight back (a double). Quicker and harder as the wind rises, as the
+			# steady pulse this replaces was - which at one rate was a fan (see the header).
 			var fg := lvl * 0.6 * size * pow(smoothstep(0.35, 1.2, rel), 1.4 * c)
-			flap.gl = fg * ears.x
-			flap.gr = fg * ears.y
 			var sg := lvl * 0.18 * _snap * size * pow(smoothstep(0.8, 1.7, rel), 1.6 * c)
-			snap.gl = sg * ears.x
-			snap.gr = sg * ears.y
+			var left := float(_w["flap_in"]) - dt
+			if left <= 0.0:
+				var k := int(_w["flap_k"])
+				_w["flap_k"] = k + 1
+				var back := float(_w["flap_back"])
+				var hit := (back if back > 0.0 else _range(0.3, 1.0) * _range(0.5, 1.0))
+				# as loud at its hardest as the pulse's own peaks were (twice its level)
+				if fg * hit > 1e-5:
+					var flap: Band = (_w["flaps"] as Array)[k % 2]
+					flap.fc = _range(170.0, 330.0)
+					flap.gl = ears.x
+					flap.gr = ears.y
+					flap.hit(2.0 * fg * hit, _range(0.05, 0.13), _range(0.005, 0.012), _sr)
+				if hit > 0.6 and sg * hit > 1e-5:
+					var snap: Band = (_w["snaps"] as Array)[k % 2]
+					snap.fc = _range(1200.0, 2200.0)
+					snap.gl = ears.x
+					snap.gr = ears.y
+					snap.hit(2.0 * sg * hit, _range(0.015, 0.04), 0.001, _sr)
+				var rate := (1.8 + 5.5 * minf(w, 1.3)) * (1.0 + 0.25 * _turb)
+				# the wait for the next: never at once, and as likely short as long (an exponential
+				# wait, as of things that happen by chance) - its long ones are the cloth filling
+				# and holding
+				left = (0.3 + 0.8 * -log(maxf(_rand(), 1e-4))) / rate
+				_w["flap_back"] = 0.0
+				if back <= 0.0 and _rand() < 0.25:
+					left = _range(0.06, 0.16)                  # ...and straight back, softer
+					_w["flap_back"] = hit * _range(0.35, 0.7)
+			_w["flap_in"] = left
 		"tunnel":
 			# A HOLLOW: the passage's own modes, a low howl that rises with the air and booms in a gust
 			for mode in _w["modes"]:
@@ -1114,16 +1168,17 @@ func _water_block(t: float, dt: float) -> void:
 		slap.gl = side.x
 		slap.gr = side.y
 		slap.strike(amp * _snap * (0.14 if hull else 0.1) * near, _range(0.1, 0.2) if hull else _range(0.06, 0.12), 0.006, _sr)
-		slosh.fc = _range(800.0, 1500.0) * dull
-		slosh.am_rate = _range(8.0, 16.0)
+		# THE WASH AFTER IT, under it: the slap's real peak is about twice `amp * near` (see
+		# [method Band.strike]), and this comes to about half of that once its wider band is counted
+		slosh.fc = _range(550.0, 1000.0) * dull
 		slosh.gl = side.x
 		slosh.gr = side.y
-		slosh.strike(amp * 0.08 * near, _range(0.4, 0.9), 0.06, _sr)
-		# the bubbles after it, through the next half second
+		slosh.hit(amp * 0.5 * near, _range(0.3, 0.7), _range(0.06, 0.1), _sr)
+		# ...and the gurgle: bubbles through the next second, each its own pitch
 		var plinks: Array = _wa["plinks"]
-		var count := (2 + int(_rand() * 3.0)) if hull else (3 + int(_rand() * 5.0))
+		var count := (3 + int(_rand() * 4.0)) if hull else (3 + int(_rand() * 5.0))
 		for j in count:
-			plinks.append([t + _range(0.04, 0.6), side])
+			plinks.append([t + _range(0.04, 0.9), side])
 		if hull and amp > 0.8 and size > 0.5:
 			var spray: Band = _wa["spray"]
 			spray.gl = 1.0
@@ -1135,7 +1190,7 @@ func _water_block(t: float, dt: float) -> void:
 	for p in _wa["plinks"]:
 		if t >= float(p[0]):
 			_bubble(_range(450.0, 1500.0) * (1.0 if hull else 1.3), _range(0.012, 0.035), _range(0.15, 0.4),
-				0.03 * near * _hard(0.5), p[1])
+				0.075 * near * _hard(0.5), p[1])
 		else:
 			due.append(p)
 	_wa["plinks"] = due

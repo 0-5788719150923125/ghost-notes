@@ -429,7 +429,8 @@ func _helpers() -> bool:
 	var c := CardProducer.clean_spoken("\"# Intro\n*shuffles the deck*\nHello, my loves \u2014 welcome.\n[pause]\n**Truly.**\"")
 	_ok(not c.contains("#") and not c.contains("shuffles") and not c.contains("[") and not c.contains("\u2014"),
 		"stage directions or markup survive the cleanup: %s" % c)
-	_ok(c.contains("Hello, my loves - welcome.") and c.contains("*Truly.*"), "the cleanup lost words: %s" % c)
+	_ok(c.contains("Hello, my loves - welcome.") and c.contains("**Truly.**"),
+		"the cleanup lost words, or flattened a bold word to an italic one: %s" % c)
 	var look := CardTable.sanitize_look({"palette": ["red", "#zzzzzz"], "title_face": "Comic Sans",
 		"props": ["candle", "laser", "candle"], "frame": {"style": "weird"}, "foil": 7})
 	var objs := CardTable.sanitize_look({"candles": 9, "objects": ["a brass astrolabe",

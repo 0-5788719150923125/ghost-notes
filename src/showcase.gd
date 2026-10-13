@@ -66,6 +66,8 @@ var _render_pid := -1
 var _encode_pid := -1
 var _work := ""
 var _quit_after := false
+## How the last recording ended, as it was said ("" while none has).
+var ended := ""
 
 
 ## Why the trigger does nothing in this process ("" when it may record). A person's ordinary
@@ -209,6 +211,13 @@ func _start(argv: PackedStringArray, claim: String) -> void:
 
 
 func _process(_dt: float) -> void:
+	# stopped by ghost closing, not ended: nothing to encode, and the claim goes so the next launch
+	# records it ([method Subprocess.closing])
+	if Subprocess.closing():
+		_render_pid = -1
+		_encode_pid = -1
+		_done("stopped as Ghost Notes closed - the next launch records it", 0)
+		return
 	if _render_pid > 0:
 		if Subprocess.alive(_render_pid):
 			return
@@ -223,7 +232,9 @@ func _process(_dt: float) -> void:
 
 ## The recorder's last [method frames] frames, encoded to an animated webp beside them.
 func _encode() -> void:
-	var cap: Variant = JSON.parse_string(FileAccess.get_file_as_string(_work.path_join("capture.json")))
+	# (a recorder that died early wrote no capture file: read as "not finished", never parsed)
+	var said := FileAccess.get_file_as_string(_work.path_join("capture.json"))
+	var cap: Variant = JSON.parse_string(said) if not said.strip_edges().is_empty() else null
 	if not (cap is Dictionary):
 		_done("the recording ended without finishing - see %s" % _work.path_join("render.log"), 1)
 		return
@@ -286,6 +297,7 @@ func _done(msg: String, code: int) -> void:
 	set_process(false)
 	if not _work.is_empty():
 		DirAccess.remove_absolute(_work.path_join("claim"))
+	ended = msg
 	print("ghost showcase: " + msg)
 	if _quit_after:
 		get_tree().quit(code)

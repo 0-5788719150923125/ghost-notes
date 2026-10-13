@@ -15,7 +15,7 @@ class_name ScriptHighlighter
 
 var mode := "generative"
 
-var _rules: Array = []          # [{re: RegEx, color: Color}] in registry (priority) order
+var _rules: Array = []          # [{re: RegEx, color: Color, within: String}] in registry (priority) order
 var _version := -1
 var _lines := {}                # line -> {column: {"color": Color}}
 
@@ -27,7 +27,8 @@ func _init(for_mode := "generative") -> void:
 		if re.compile(String(ScriptMarks.REGISTRY[k]["pattern"])) != OK:
 			push_warning("ScriptHighlighter: the pattern for '%s' does not compile" % k)
 			continue
-		_rules.append({"re": re, "color": ScriptMarks.color_of(k)})
+		_rules.append({"re": re, "color": ScriptMarks.color_of(k),
+			"within": String(ScriptMarks.REGISTRY[k].get("within", ""))})
 
 
 ## Forget every line's colors. Wired to the text edit's own change signals in
@@ -70,10 +71,15 @@ func _scan(te: TextEdit) -> void:
 	var owner := PackedInt32Array()
 	owner.resize(n)
 	owner.fill(-1)
+	# a list item is a card, and a heading a suit, only inside the brief's deck (`within`)
+	var deck := CardDeck.span(text) if _rules.any(func(r: Dictionary) -> bool: return r["within"] == "deck") \
+		else Vector2i(-1, -1)
 	for ri in _rules.size():
 		for m in (_rules[ri]["re"] as RegEx).search_all(text):
 			var a := m.get_start()
 			var b := m.get_end()
+			if _rules[ri]["within"] == "deck" and (a < deck.x or b > deck.y):
+				continue
 			var free := true
 			for i in range(a, b):
 				if owner[i] != -1:

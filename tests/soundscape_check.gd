@@ -36,6 +36,8 @@ extends SceneTree
 ##   sing (each of several cicadas pulsing at its own rate, shallow) - against the recipe that was "a
 ##   horrible screeching sound throughout" (the user, 2026-10-09): one narrow band a group, chopped deep at
 ##   one rate, which is rough.
+## - (NOTHING PULSES AT ONE RATE is a gate of its own, tests/soundscape_pulse_check.gd: this one
+##   runs close to its five minutes on a busy machine.)
 ## - EVERY PART SOUNDS: each part and kind alone is heard at the dial's middle, in a sane range, and
 ##   none is NaN.
 

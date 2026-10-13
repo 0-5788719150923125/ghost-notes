@@ -2142,7 +2142,9 @@ static func _ball(size: Vector3, lumpy: float, facets: bool, rng: RandomNumberGe
 			for q in [[j, i], [j, i + 1], [j + 1, i + 1], [j + 1, i]]:
 				ns.append(_grid_normal(grid, int(q[0]), int(q[1]), segs, mid))
 			if facets:
-				var fn := ((p10 - p00).cross(p01 - p00) + (p11 - p01).cross(p10 - p11)).normalized()
+				# the diagonals' cross is the quad's own normal; the two triangles' cross products
+				# summed cancel on a flat quad, and what was left turned some faces inward (holes)
+				var fn := (p11 - p00).cross(p01 - p10).normalized()
 				if fn.dot((p00 + p11) * 0.5 - mid) < 0.0:
 					fn = -fn
 				ns = [fn, fn, fn, fn]

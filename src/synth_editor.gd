@@ -101,6 +101,9 @@ const ENSEMBLE_W := 0.45
 
 ## The note this panel is (set by main before it is added), "" when started without one.
 var note_path := ""
+## Set by main: (from: String, to: String) -> String - the note was saved into another file (its
+## Script card's Save…), which is the note from here on; returns what became of the file it left.
+var note_moved: Callable
 
 # Who contributed to the current candidate and how much - recorded by
 # _ensemble_traits so the sustain bank can be built from the same combination
@@ -324,6 +327,7 @@ func _build_panel() -> void:
 	_writer.setup("synth", PackedStringArray(["synthesis", "youtube"]), "synthesis")
 	if not note_path.is_empty():
 		_writer.bind_note()
+		_writer.doc.moved.connect(_on_note_moved)
 	_doc = _writer.doc
 	_doc.capture = _doc_capture
 	_doc.apply = _doc_apply
@@ -486,6 +490,14 @@ func _offer() -> Array:
 	if _youtube != null:
 		have.append("youtube")
 	return [have, ["youtube"]]
+
+
+## THE NOTE WAS SAVED INTO ANOTHER FILE ([signal DocSource.moved]): this panel is that file's now,
+## and main makes it the note everywhere else (see [method ReadingPanel._on_note_moved]).
+func _on_note_moved(from: String, to: String) -> void:
+	note_path = to
+	var said := String(note_moved.call(from, to)) if note_moved.is_valid() else ""
+	_doc.tell("✓  This note is %s now - every change is saved there. %s" % [to.get_file(), said])
 
 
 ## A component picked from "+": its card, at once - the autosave writes its block into the note.

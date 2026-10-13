@@ -297,6 +297,26 @@ def test_emphasis_gain():
         True,
         "no mark: the same array back",
     )
+    # BOLD HITS HARDER THAN ITALIC, in level as in length
+    bold = _emphasize(a, edges, [{"text": "a"}, {"text": "b", "emph": 2}], SR)
+    ok(
+        float(bold[int(0.5 * SR)]) > float(out[int(0.5 * SR)]) + 0.01
+        and EMPHASIS[2][0] > EMPHASIS[1][0] > 1.0,
+        "bold is lifted and held more than italic",
+        "%.3f against %.3f" % (float(bold[int(0.5 * SR)]), float(out[int(0.5 * SR)])),
+    )
+    # A LOUD WORD IS NOT SQUARED OFF: lifted by the room it has, never into the clip. The
+    # control is the quiet word above, which got its whole lift.
+    from backends.piper import EMPHASIS_CEILING
+
+    loud = np.full(SR, 0.9, np.float32)
+    hit = _emphasize(loud, edges, [{"text": "a"}, {"text": "b", "emph": 2}], SR)
+    top = float(np.max(np.abs(hit)))
+    ok(
+        0.9 < top <= EMPHASIS_CEILING + 1e-6,
+        "a loud word is lifted to the ceiling, not clipped",
+        "peak %.4f" % top,
+    )
 
 
 # -- 4. the Tone, played back in the host --------------------------------------

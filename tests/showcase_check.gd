@@ -16,6 +16,13 @@ extends Node
 ##     storyboards/showcase.yaml add up to [constant Showcase.SONG] (the control: the default board's
 ##     do not), and two songs written are byte-identical.
 ##
+##   - A CHILD GHOST STOPPED HAS NOT FAILED (2026-10-12, printed on every close with a recording
+##     under way: "ERROR: Parse JSON failed", "the recording ended without finishing", "the voice host
+##     exited unexpectedly"): with [method Subprocess.closing] true, the recorder's watcher encodes
+##     nothing, says it was stopped and lets go of its claim, and the voice host reports no failure.
+##     The control is the same two watchers with nothing closing: a recorder gone without its
+##     capture file IS a recording that did not finish, and a voice host gone IS a failure.
+##
 ## It never records: a recording is two and a half minutes on the GPU, and `--showcase-now` is how
 ## to ask for one.
 
@@ -36,6 +43,7 @@ func _run() -> void:
 	_ok(not Showcase.skip_reason().is_empty(),
 		"the trigger does not record from a test process ('%s')" % Showcase.skip_reason())
 	_check_song(dir)
+	_check_closing(dir)
 	for f in DirAccess.get_files_at(dir):
 		DirAccess.remove_absolute(dir.path_join(f))
 	DirAccess.remove_absolute(dir)
@@ -104,6 +112,35 @@ func _check_song(dir: String) -> void:
 	_ok(bytes.size() == 44 + int(Showcase.SONG * ShowcaseRecorder.RATE) * 2,
 		"...%.1f seconds of it (%d bytes)" % [Showcase.SONG, bytes.size()])
 	_ok(bytes == FileAccess.get_file_as_bytes(two), "...and the same every time")
+
+
+## The two watchers of a child, with the child gone: once because it died, once because ghost is
+## closing and killed it.
+func _check_closing(dir: String) -> void:
+	for closing in [false, true]:
+		Subprocess._closing = closing
+		var show := Showcase.new()
+		show._work = dir
+		show._render_pid = 999999999          # nobody's: gone, as far as the registry knows
+		_put(dir.path_join("claim"), "1")
+		show._process(0.0)
+		var host := VoiceHost.new()
+		var failures: Array = []
+		host.failed.connect(func(stage: String, _msg: String) -> void: failures.append(stage))
+		host._state = "up"
+		host._pid = 999999999
+		host._process(1.0)
+		if closing:
+			_ok(show.ended.contains("stopped") and not FileAccess.file_exists(dir.path_join("claim")),
+				"closing, the recorder says it was stopped and lets go of its claim ('%s')" % show.ended)
+			_ok(failures.is_empty() and host._state == "up", "closing, the voice host reports no failure (%s)" % str(failures))
+		else:
+			_ok(show.ended.contains("without finishing"),
+				"the control: a recorder gone on its own is a recording that did not finish ('%s')" % show.ended)
+			_ok(failures == ["host"], "the control: a voice host gone on its own is a failure (%s)" % str(failures))
+		show.free()
+		host.free()
+	Subprocess._closing = false
 
 
 func _put(path: String, text: String) -> void:

@@ -76,6 +76,7 @@ func _child_role() -> void:
 func _registry_half() -> void:
 	print("REGISTRY (the clean-quit half: reap_all kills what is still registered)")
 	var before := Subprocess.tracked()
+	_check(not Subprocess.closing(), "nothing is closing before the reap")
 	var pid := Subprocess.start("sleep", [SLEEP_S], "registry probe")
 	_check(pid > 0, "a tracked child started (pid %d)" % pid)
 	_check(Subprocess.tracked() == before + 1, "it is registered (%d tracked)" % Subprocess.tracked())
@@ -83,6 +84,7 @@ func _registry_half() -> void:
 	var n := Subprocess.reap_all()
 	OS.delay_msec(400)
 	_check(n >= 1, "reap_all() reported killing %d" % n)
+	_check(Subprocess.closing(), "...and says ghost is closing, for whoever was watching a child")
 	_check(not _running(pid), "the child is gone after reap_all()")
 	_check(Subprocess.tracked() == 0, "the registry is empty (%d tracked)" % Subprocess.tracked())
 	# ...and the registry FORGETS a child that exited on its own, or a shutdown reap could

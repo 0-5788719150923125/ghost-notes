@@ -277,7 +277,9 @@ moves: >-
   passage with a pause: nothing moves until you finish.
 
 # THE SHAPE EVERY PASSAGE KEEPS: spoken aloud word for word, and leaned by delivery marks the voice
-# reads (VoiceFX) but never says
+# reads (VoiceFX) but never says. A line the brief dictates keeps the marks its author put in it
+# (2026-10-12: the brief's editor offers them - ScriptMarks, "cards" - and this is what makes a
+# hesitation typed into a catchphrase a rest in the video)
 spoken: >-
   FORMAT - everything you write is spoken aloud by a voice over the video, word for word:
 
@@ -285,9 +287,10 @@ spoken: >-
   quotation marks around the passage, no sound effects in brackets.
 
   - You may put single asterisks around ONE word you lean on - *this* - and only now and then. The
-  voice says that word with stress, a touch longer and louder, so mark the word a reader would
-  really hit ("it was *never* about the card"), never a whole phrase. Double asterisks - **this** -
-  hit harder still; keep them for the rare word that has to land.
+  voice hits that word, holding it longer and saying it louder, and the subtitle shows it in
+  italics, so mark the word a reader would really hit ("it was *never* about the card"), never a
+  whole phrase. Double asterisks - **this** - hit harder still and show in bold; keep them for the
+  rare word that has to land.
 
   - Write numbers, symbols and abbreviations the way they are said ("eleven eleven", "twenty
   percent", "okay").
@@ -308,6 +311,11 @@ spoken: >-
   <!-- hesitation --> at that exact spot (<!-- hesitation: 2 --> for two seconds). Sparingly: most
   paragraphs carry no mark at all, and a passage seldom more than one or two. These marks are never
   read aloud, so never also describe the delivery in words.
+
+
+  A LINE THE BRIEF GIVES YOU WORD FOR WORD - a greeting, a catchphrase, a sign-off - is said exactly
+  as the brief writes it, its marks included: a hesitation, a delivery mark or asterisks the brief
+  put in that line stay exactly where the brief has them, and you add none of your own to it.
 
 # HOW A PASSAGE HANDS A LINE TO ANOTHER VOICE: the same own-line cue a manuscript uses, back to the
 # reader by name ({{narrator}}, Manuscript.NARRATOR), every passage opening in the reader's voice

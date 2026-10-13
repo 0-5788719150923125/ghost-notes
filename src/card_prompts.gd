@@ -139,6 +139,16 @@ static func deck_noun(look: Dictionary) -> String:
 	return kind if not kind.is_empty() else "deck"
 
 
+## THE BRIEF AS THE AGENTS ARE HANDED IT, from the body of the show's document: the deck's list
+## taken out ([method CardDeck.strip]), every `${MACRO:default}` read as its default
+## ([TextNorm]), and every comment that is not a voice's mark taken out - a note to self is the
+## author's, and a speaker cue, a hesitation and a delivery stay because the brief means them
+## ([method CardProducer.voice_marks_only]). What the editor's palette promises of a brief
+## ([ScriptMarks], "cards") is kept here.
+static func brief(body: String) -> String:
+	return CardProducer.voice_marks_only(TextNorm._expand_macros(CardDeck.strip(body)))
+
+
 ## The context every agent shares: which show, and its brief - the same words for every show.
 static func show_context(title: String, brief: String) -> String:
 	return Rules.say("cards/show.context", {"title": title, "brief": brief.strip_edges()})
@@ -667,7 +677,8 @@ static func heard(text: String) -> String:
 ## [param text] without the sentences [param brief] gives word for word (a greeting, a sign-off):
 ## those are the same in every episode by design, and the record is of what changes.
 static func unfixed(text: String, brief: String) -> String:
-	var fixed := " %s " % _bare(brief)
+	# (a mark the brief put in such a line is not one of its words)
+	var fixed := " %s " % _bare(Manuscript._rx(Manuscript.COMMENT).sub(brief, " ", true))
 	var keep := PackedStringArray()
 	for m in Manuscript._rx("[^.!?]+[.!?]*").search_all(text):
 		var sentence := m.get_string().strip_edges()

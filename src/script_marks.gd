@@ -15,6 +15,20 @@ class_name ScriptMarks
 ## `tests/script_marks_check.gd` inserts every entry's example and asks THOSE parsers what
 ## they make of it - so an entry that drifts from what the reader actually does fails there,
 ## and a new entry without a check fails too.
+##
+## A CARDS BRIEF IS NOT A SCRIPT, AND HAS MARKS OF ITS OWN (2026-10-12, the user: "why are all of
+## the supported macros and features missing from 'cards' editor mode? I would expect that most if
+## not all of the features from generative mode should also work here"). The palette was empty
+## there because no entry named the mode: a show's document is the BRIEF its agents work from,
+## never read aloud, so a mark in it does something only where the code reads it out of the brief
+## or an agent is told to honor it. Those are offered ("cards" in `modes`), each saying what it
+## does THERE (`blurbs`): a speaker cue gives the show another voice, a `## Cards` section is its
+## deck, a macro reads as its default and a note to self is taken out before any agent sees the
+## brief ([method CardPrompts.brief]), and a hesitation, a delivery or a stressed word stands in
+## a line the brief gives the host word for word (rules/cards/reader.yaml, `spoken`). The marks of
+## a page or a tablet (pictures, scene lines, web pages) and the inline pronunciation are not: the
+## table is the only medium there, its pictures are the painter's, and a reader's passage keeps no
+## bracket ([method CardProducer.clean_spoken]).
 
 ## Fields of an entry:
 ##   label    the palette button
@@ -24,7 +38,9 @@ class_name ScriptMarks
 ##            ends up in the fill is left selected so typing replaces it.
 ##   line     "own": the mark goes on a line of its own; "start": at the head of the line;
 ##            "" anywhere
-##   modes    the panels that honor it ("generative", "synthesis")
+##   modes    the panels that honor it ("generative", "synthesis", "cards")
+##   blurbs   optional, {mode: blurb}: what it does in a panel where that differs ([method blurb])
+##   within   optional, "deck": colored only inside the brief's Cards section ([method CardDeck.span])
 ##   pattern  how [ScriptHighlighter] finds it. Registry ORDER is highlight priority: a span
 ##            claimed by an earlier entry is not recolored by a later one.
 
@@ -34,7 +50,8 @@ const REGISTRY := {
 		"group": "voices",
 		"blurb": "Hands everything after it to the named voice, until the next cue. The panel's voices list follows the names the script uses. Must be a line of its own, or it is only a note.",
 		"before": "<!-- speaker: ", "fill": "Name", "after": " -->", "line": "own",
-		"modes": ["generative"],
+		"modes": ["generative", "cards"],
+		"blurbs": {"cards": "Gives the show another voice by this name: a tab of its own on the Voice card, and the reader writes its lines and hands them over. Say in the brief who it is and when it speaks. Must be a line of its own."},
 		"pattern": "(?m)^[ \\t]*(?:<!--\\s*speaker\\s*:\\s*.+?\\s*-->|\\[\\s*speaker\\s*:\\s*[^\\]]+?\\s*\\])[ \\t]*$",
 	},
 	"hesitation": {
@@ -42,7 +59,8 @@ const REGISTRY := {
 		"group": "timing",
 		"blurb": "A longer rest at exactly this point, mid-sentence included. Its length is the panel's Hesitate dial.",
 		"before": "<!-- hesitation -->", "fill": "", "after": "", "line": "",
-		"modes": ["generative"],
+		"modes": ["generative", "cards"],
+		"blurbs": {"cards": "In a line the brief gives the host to say word for word, a rest at exactly this point; its length is the Voice card's Hesitate dial. Everywhere else the reader places its own."},
 		"pattern": Manuscript.HESITATION,
 	},
 	"delivery": {
@@ -50,7 +68,8 @@ const REGISTRY := {
 		"group": "timing",
 		"blurb": "Lean how the rest of this paragraph is said, a step at a time: quicker / slower, brighter / graver, tighter / looser (pauses), louder / softer, or excited, serious, hushed, urgent, playful, tender, dry; steady is the voice's own. Small, and eased in and out over a few sentences.",
 		"before": "<!-- delivery: ", "fill": "quicker, brighter", "after": " -->", "line": "own",
-		"modes": ["generative"],
+		"modes": ["generative", "cards"],
+		"blurbs": {"cards": "On a line of its own before words the brief gives the host to say word for word: leans how they are said - quicker / slower, brighter / graver, tighter / looser, louder / softer, or excited, serious, hushed, urgent, playful, tender, dry. Everywhere else the reader chooses its own."},
 		"pattern": Manuscript.DELIVERY,
 	},
 	"hesitation_timed": {
@@ -58,7 +77,8 @@ const REGISTRY := {
 		"group": "timing",
 		"blurb": "A rest of exactly this many seconds, whatever the Hesitate dial says.",
 		"before": "<!-- hesitation: ", "fill": "2.5", "after": " -->", "line": "",
-		"modes": ["generative"],
+		"modes": ["generative", "cards"],
+		"blurbs": {"cards": "In a line the brief gives the host to say word for word, a rest of exactly this many seconds."},
 		"pattern": Manuscript.HESITATION,
 	},
 	"timestamp": {
@@ -122,15 +142,41 @@ const REGISTRY := {
 		"group": "text",
 		"blurb": "A placeholder for a fact only the book's build knows. Ghost Notes reads the default after the colon, never the macro itself; one with no default is skipped and named in the panel.",
 		"before": "${", "fill": "CHAPTERS_BEFORE:twenty-one", "after": "}", "line": "",
-		"modes": ["generative", "synthesis"],
+		"modes": ["generative", "synthesis", "cards"],
+		"blurbs": {"cards": "A placeholder for a fact only the build knows. The agents are handed the default after the colon, never the macro itself; one with no default is left out."},
 		"pattern": "\\$\\{[A-Za-z_][A-Za-z0-9_.]*(?::(?:[^{}]|\\{[^{}]*\\})*)?\\}",
+	},
+	"deck": {
+		"label": "The deck",
+		"group": "deck",
+		"blurb": "Opens the show's own deck: every list item under this heading, down to the next heading of its level, is a card, and each episode's cards are a seeded shuffle of them. A brief with no such section leaves each episode's cards to the producer.",
+		"before": "## Cards", "fill": "", "after": "", "line": "own",
+		"modes": ["cards"],
+		"pattern": "(?im)^#{1,6}[ \\t]*(?:the[ \\t]+)?cards[ \\t]*:?[ \\t]*$",
+	},
+	"suit": {
+		"label": "A suit",
+		"group": "deck",
+		"blurb": "Inside the deck: names the group the cards listed under it belong to - a suit, an arcana, a team.",
+		"before": "### ", "fill": "Major Arcana", "after": "", "line": "start",
+		"modes": ["cards"], "within": "deck",
+		"pattern": "(?m)^#{1,6}[ \\t]+.+$",
+	},
+	"card": {
+		"label": "A card",
+		"group": "deck",
+		"blurb": "Inside the deck: one card - its name, then what it means after a colon. A numeral may lead it (XVI. The Tower). A writer is handed a card's meaning only once that card is drawn.",
+		"before": "- ", "fill": "The Tower: sudden upheaval, a structure that was never sound", "after": "", "line": "start",
+		"modes": ["cards"], "within": "deck",
+		"pattern": "(?m)^[ \\t]*(?:[-*+]|\\d+[.)])[ \\t]+.+$",
 	},
 	"heading": {
 		"label": "Heading",
 		"group": "typography",
 		"blurb": "Spoken like any line, set as a heading on the page. The frontmatter's title is read first on its own.",
 		"before": "# ", "fill": "Heading", "after": "", "line": "start",
-		"modes": ["generative", "synthesis"],
+		"modes": ["generative", "synthesis", "cards"],
+		"blurbs": {"cards": "A section of the brief, for the agents to find their way by. One heading is read by Ghost Notes itself: Cards, the show's deck."},
 		"pattern": "(?m)^#{1,6}[ \\t].*$",
 	},
 	"scene_line": {
@@ -144,17 +190,19 @@ const REGISTRY := {
 	"italic": {
 		"label": "Italic",
 		"group": "typography",
-		"blurb": "Never spoken as a mark; shown slanted in the subtitles and on the page.",
+		"blurb": "Shown in italics in the subtitles and on the page, and a word or a few so marked is hit: held longer and said louder. A longer run is typography, said plainly. The asterisks are never spoken.",
 		"before": "*", "fill": "emphasized", "after": "*", "line": "",
-		"modes": ["generative", "synthesis"],
+		"modes": ["generative", "synthesis", "cards"],
+		"blurbs": {"cards": "In a line the brief gives the host to say word for word, the word the voice hits, shown in italics in the subtitle. Anywhere else it is emphasis for the agents reading the brief."},
 		"pattern": "(?<![*\\w])\\*(?![*\\s])[^*\\n]*?[^*\\s]\\*(?![*\\w])|(?<![*\\w])\\*[^*\\s]\\*(?![*\\w])",
 	},
 	"bold": {
 		"label": "Bold",
 		"group": "typography",
-		"blurb": "Never spoken as a mark; shown emboldened in the subtitles and on the page.",
+		"blurb": "Shown in bold in the subtitles and on the page, and a word or a few so marked is hit harder than an italic one. The asterisks are never spoken.",
 		"before": "**", "fill": "strong", "after": "**", "line": "",
-		"modes": ["generative", "synthesis"],
+		"modes": ["generative", "synthesis", "cards"],
+		"blurbs": {"cards": "In a line the brief gives the host to say word for word, the word the voice hits hardest, shown in bold in the subtitle. Anywhere else it is emphasis for the agents reading the brief."},
 		"pattern": "\\*\\*(?![*\\s])[^*\\n]*?\\*\\*",
 	},
 	"rule": {
@@ -258,7 +306,8 @@ const REGISTRY := {
 		"group": "notes",
 		"blurb": "Any other HTML comment is an authoring note: never spoken, never printed.",
 		"before": "<!-- ", "fill": "a note to yourself", "after": " -->", "line": "",
-		"modes": ["generative", "synthesis"],
+		"modes": ["generative", "synthesis", "cards"],
+		"blurbs": {"cards": "Any other HTML comment is a note to yourself: taken out of the brief before any agent is handed it."},
 		"pattern": Manuscript.COMMENT,
 	},
 }
@@ -272,6 +321,7 @@ const GROUPS := {
 	"text": {"label": "Text", "color": Color(1.0, 0.6, 0.75)},
 	"typography": {"label": "Typography", "color": Color(0.95, 0.9, 0.6)},
 	"tablet": {"label": "Tablet", "color": Color(0.5, 0.75, 1.0)},
+	"deck": {"label": "The deck", "color": Color(0.98, 0.62, 0.5)},
 	"notes": {"label": "Notes", "color": Color(0.6, 0.6, 0.66)},
 }
 
@@ -283,6 +333,13 @@ static func for_mode(mode: String) -> PackedStringArray:
 		if (REGISTRY[k]["modes"] as Array).has(mode):
 			out.append(k)
 	return out
+
+
+## What a mark does in the panel [param mode]: its own words for that panel (`blurbs`) where the
+## mark means something else there, the registry's otherwise.
+static func blurb(key: String, mode := "") -> String:
+	var e: Dictionary = REGISTRY[key]
+	return String((e.get("blurbs", {}) as Dictionary).get(mode, e["blurb"]))
 
 
 ## The highlight color of a mark.

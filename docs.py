@@ -251,6 +251,7 @@ SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
             "script_marks.gd",
             "script_highlighter.gd",
             "script_writer.gd",
+            "save_mark.gd",
             "subtitles.gd",
             "voice_host.gd",
             "reading_panel.gd",
@@ -1292,16 +1293,27 @@ def _render_script_doc(marks: Script) -> str:
                 warn(f"ScriptMarks.REGISTRY['{key}'] has no {name}")
         modes = re.search(r'"modes":\s*\[([^\]]*)\]', body)
         f["modes"] = re.findall(r'"(\w+)"', modes.group(1)) if modes else []
+        # what the mark does in a panel where that differs: {"cards": "..."}
+        own = re.search(r'"blurbs":\s*\{(.*)\},?\s*$', body, re.M)
+        f["blurbs"] = (
+            {
+                m: _gd_string(t)
+                for m, t in re.findall(r'"(\w+)":\s*"((?:[^"\\]|\\.)*)"', own.group(1))
+            }
+            if own
+            else {}
+        )
         rows.append((key, f))
     lines = [
         AUTOGEN_HEADER,
         "# Writing a script",
         "",
-        "Every mark a Generative or Synthesis script may carry - the list the "
-        "script editor's palette (**Edit** on either panel) is built "
+        "Every mark a Generative or Synthesis script, or a Cards brief, may carry - "
+        "the list the script editor's palette (**Edit** on the panel) is built "
         "from, and the patterns it highlights with. A script is Markdown; "
         "YAML frontmatter at the top is the panel's and never shown in the "
-        "editor or spoken.",
+        "editor or spoken. A Cards brief is handed to the show's agents rather "
+        "than read aloud, so a mark offered there says what it does in a brief.",
         "",
         _full_doc(marks.doc),
         "",
@@ -1325,7 +1337,10 @@ def _render_script_doc(marks: Script) -> str:
         for k, f in mine:
             ex = (f["before"] + f["fill"] + f["after"]).strip().replace("|", "\\|")
             panels = ", ".join(m.capitalize() for m in f["modes"])
-            lines.append(f"| {f['label']} | `{ex}` | {panels} | {f['blurb']} |")
+            does = f["blurb"]
+            for m, text in f["blurbs"].items():
+                does += f" **In a {m.capitalize()} brief:** {text}"
+            lines.append(f"| {f['label']} | `{ex}` | {panels} | {does} |")
         lines.append("")
     for k, f in rows:
         if f["group"] not in [g for g, _ in groups]:

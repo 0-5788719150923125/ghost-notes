@@ -483,6 +483,9 @@ var _medium_rows := {}
 ## each answers `capture() -> Dictionary` and `apply(block)`. The voice is this panel's own.
 ## The note this panel is (set by main before it is added), "" when started without one.
 var note_path := ""
+## Set by main: (from: String, to: String) -> String - the note was saved into another file (its
+## Script card's Save…), which is the note from here on; returns what became of the file it left.
+var note_moved: Callable
 var _block_cards := {}
 var _youtube: YouTubeCard
 var _lead_in := 0.0        # the intro seeded into _pending by _plan, in seconds
@@ -805,6 +808,7 @@ func _build_source(box: VBoxContainer) -> void:
 	_writer.setup(_section, _doc_blocks(), _section)
 	if not note_path.is_empty():
 		_writer.bind_note()
+		_writer.doc.moved.connect(_on_note_moved)
 	_doc = _writer.doc
 	_doc.capture = _doc_capture
 	_doc.apply = _doc_apply
@@ -819,6 +823,16 @@ func _build_source(box: VBoxContainer) -> void:
 		_last_edit_ms = Time.get_ticks_msec()
 		_on_source_edited())
 	box.add_child(_writer)
+
+
+## THE NOTE WAS SAVED INTO ANOTHER FILE ([signal DocSource.moved]): this panel is that file's now,
+## and main makes it the note everywhere else - or the next time the note opened it would read the
+## file it was opened from, and every edit since would be in a file nothing reads (2026-10-12, the
+## user: "That selection keeps getting reverted back to the untitled cards label").
+func _on_note_moved(from: String, to: String) -> void:
+	note_path = to
+	var said := String(note_moved.call(from, to)) if note_moved.is_valid() else ""
+	_doc.tell("✓  This note is %s now - every change is saved there. %s" % [to.get_file(), said])
 
 
 ## The author changed the document by hand. Here the document IS the reading, so what is on the

@@ -416,6 +416,18 @@ static func box_at(deck: Vector3) -> Vector3:
 	return Vector3(deck.x + signf(deck.x) * 0.03, 0.0, deck.z - 0.04)
 
 
+## WHERE A BOX OF ITS OWN SIZE STANDS in the room kept for one ([param most] across and deep, about
+## [param mid]): [param size] across and deep, anywhere the room lets it - a different place every
+## episode ([param rng]). [param inward] (-1, 1, or 0 for neither) is the side the spread lies on: a box
+## at the side of the table stands in the inner half of its room, so a card coming up out of it is in
+## the picture (2026-10-12: the box stood in the middle of its room whatever its size, and a card
+## pulled out of it rose half outside the frame). A box as big as its room stands at [param mid].
+static func box_stand(mid: Vector3, size: Vector2, most: Vector2, inward: float, rng: RandomNumberGenerator) -> Vector3:
+	var room := ((most - size) * 0.5).max(Vector2.ZERO)
+	var across := rng.randf_range(0.5, 1.0) * inward if inward != 0.0 else rng.randf_range(-1.0, 1.0)
+	return mid + Vector3(room.x * across, 0.0, room.y * rng.randf_range(-0.8, 0.8))
+
+
 ## THE POSITIONS THE CARDS WERE GIVEN, as slots (`[{pos, yaw}]`) - each card's `position` carrying
 ## `x` and `z` (a plan's, or a dealer's laid over it) - or [] when any card has none or the set has a
 ## trouble ([method troubles]) - [param top], the table's top made safe, when it is set: the table

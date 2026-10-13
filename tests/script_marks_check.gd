@@ -15,6 +15,17 @@ extends SceneTree
 ## selected, an own-line mark gets its own line, one undo step), and the highlighter coloring
 ## a multi-line picture description and leaving prose plain.
 ##
+## A CARDS BRIEF HAS A PALETTE TOO (2026-10-12, the user: "why are all of the supported macros and
+## features missing from 'cards' editor mode?"), and each mark offered there is held to what it
+## says of a BRIEF, which is not what it says of a script: a speaker cue is a voice of the show, a
+## note to self never reaches an agent and a macro reaches them as its default ([method
+## CardPrompts.brief] - the control is the brief before it, which still carries both), a
+## hesitation, a delivery and a stressed word survive from a line the brief dictates into the
+## reader's passage and the reader is told to keep them (italic and bold as two levels of stress,
+## never flattened into one), such a line is still known as the brief's own, and a card is colored
+## as one only inside the deck. What is NOT offered is held too: a
+## passage keeps no bracket, which is why the inline pronunciation is left out.
+##
 ## Run: godot --headless --path . --script tests/script_marks_check.gd
 
 var fails := 0
@@ -25,6 +36,7 @@ func _init() -> void:
 	_registry_shape()
 	_patterns_match_examples()
 	_parsers_agree()
+	_cards_brief()
 	_insertion()
 	_highlighter()
 	if fails == 0:
@@ -49,13 +61,27 @@ func _registry_shape() -> void:
 		_ok(ScriptMarks.GROUPS.has(e.get("group", "")), "%s names an unknown group" % k)
 		_ok(String(e.get("line", "")) in ["", "own", "start"], "%s has an unknown line rule" % k)
 		for m in e.get("modes", []):
-			_ok(m in ["generative", "synthesis"], "%s names an unknown mode %s" % [k, m])
+			_ok(m in ["generative", "synthesis", "cards"], "%s names an unknown mode %s" % [k, m])
+		for m in e.get("blurbs", {}):
+			_ok((e["modes"] as Array).has(m) and not String(e["blurbs"][m]).is_empty(),
+				"%s words itself for %s, a panel it is not offered in" % [k, m])
+		_ok(String(e.get("within", "")) in ["", "deck"], "%s names an unknown `within`" % k)
 		var re := RegEx.new()
 		_ok(re.compile(String(e.get("pattern", ""))) == OK, "%s's pattern does not compile" % k)
 	# Both panels have something to offer.
 	_ok(ScriptMarks.for_mode("generative").size() > ScriptMarks.for_mode("synthesis").size()
 			and ScriptMarks.for_mode("synthesis").size() > 0,
 		"the per-mode palettes are not what they should be")
+	# ...and so has a brief: its own marks, and none that need a page or a tablet
+	var cards := ScriptMarks.for_mode("cards")
+	for k in ["speaker", "deck", "card", "suit", "note", "macro", "hesitation", "delivery"]:
+		_ok(cards.has(k), "a Cards brief is not offered `%s`" % k)
+	for k in cards:
+		_ok(not String(ScriptMarks.REGISTRY[k]["group"]) in ["pictures", "tablet", "pronunciation"],
+			"a Cards brief is offered `%s`, which nothing there reads" % k)
+	_ok(ScriptMarks.blurb("speaker", "cards") != ScriptMarks.blurb("speaker", "generative")
+			and ScriptMarks.blurb("speaker", "generative") == String(ScriptMarks.REGISTRY["speaker"]["blurb"]),
+		"a mark does not say what it does in a brief")
 
 
 ## THE COLOR IS A CLAIM TOO: the highlight pattern must find the whole example, on a line
@@ -191,6 +217,17 @@ func _parsers_agree() -> void:
 				var dflt := fill.get_slice(":", 1)
 				_ok(TextNorm.normalize("Chapter %s." % ex) == TextNorm.normalize("Chapter %s." % dflt),
 					"a macro does not read as its default")
+			"deck", "suit", "card":
+				var body := "A show.\n\n%s\n\n%s\n%s\n\n## The host\n\n- quick with a joke\n" % [
+					ScriptMarks.example("deck"), ScriptMarks.example("suit"), ScriptMarks.example("card")]
+				var deck := CardDeck.parse(body)
+				_ok(deck.size() == 1 and String(deck[0]["name"]) == "The Tower"
+						and String(deck[0]["meaning"]).begins_with("sudden upheaval")
+						and String(deck[0]["group"]) == "Major Arcana",
+					"the deck's marks do not make a deck of one card in its suit: %s" % str(deck))
+				# the control: the same item under any other heading is no card
+				_ok(CardDeck.parse("## The host\n\n%s\n" % ScriptMarks.example("card")).is_empty(),
+					"a list item outside the Cards section is a card")
 			"heading":
 				var b := Manuscript.blocks(ex + "\n\nText.\n")
 				_ok(b.size() > 0 and String(b[0]["kind"]) == "heading"
@@ -236,6 +273,81 @@ func _parsers_agree() -> void:
 	_ok(_words(raw).has("emily") and not _words(Manuscript.unspoken(raw)).has("emily")
 			and not _words(Manuscript.unspoken(raw)).has("hesitation"),
 		"Manuscript.unspoken does not keep comments out of a synthesis reading")
+
+
+## WHAT A BRIEF'S MARKS DO, each as its Cards blurb says it.
+func _cards_brief() -> void:
+	var body := "\n".join(PackedStringArray([
+		"# The Penalty Box", "",
+		"A league of ${TEAMS:twelve} teams. <!-- check the count -->", "",
+		"<!-- speaker: Rink Announcer -->", "",
+		"Sign off with: Keep your *stick* <!-- hesitation --> on the ice.", "",
+		"<!-- delivery: hushed -->", "Open with: Welcome back to the box. <!-- hesitation: 2 -->", ""]))
+	var brief := CardPrompts.brief(body)
+	# the control: the brief before it is prepared still carries the note and the macro
+	_ok(CardDeck.strip(body).contains("check the count") and CardDeck.strip(body).contains("${TEAMS"),
+		"the control is wrong - the unprepared brief carries no note or macro")
+	_ok(not brief.contains("check the count"), "a note to self reaches the agents")
+	_ok(brief.contains("twelve teams") and not brief.contains("${"), "a macro does not reach the agents as its default: %s" % brief)
+	_ok(Manuscript.speakers(body).has("Rink Announcer") and brief.contains("<!-- speaker: Rink Announcer -->"),
+		"a speaker cue in a brief is not a voice of the show")
+	_ok(brief.contains("<!-- hesitation -->") and brief.contains("<!-- hesitation: 2 -->")
+			and brief.contains("<!-- delivery: hushed -->") and brief.contains("*stick*"),
+		"a dictated line's marks do not reach the agents: %s" % brief)
+	# ...the reader is told to keep them, and its passage does
+	_ok(Rules.say("cards/reader.spoken").contains("WORD FOR WORD") and Rules.say("cards/reader.spoken").contains("its marks included"),
+		"the reader is not told to keep a dictated line's marks")
+	var said := CardProducer.clean_spoken("<!-- delivery: hushed -->\nWelcome back to the box. <!-- hesitation: 2 -->\n\n"
+		+ "Keep your *stick* <!-- hesitation --> on the ice. <!-- table: draw 2 -->")
+	_ok(said.contains("<!-- delivery: hushed -->") and said.contains("<!-- hesitation: 2 -->")
+			and said.contains("*stick* <!-- hesitation --> on") and not said.contains("table:"),
+		"a reader's passage does not keep the voice's marks (and only those): %s" % said)
+	_ok(_stressed(said, "stick") and not _stressed(said, "ice"),
+		"a stressed word of a dictated line is not stressed in the reading")
+	# ITALIC HITS, BOLD HITS HARDER (2026-10-12): a reader's passage keeps the two apart, each leaves it
+	# as its own level (1, 2) - the level the voice leans by and the subtitle picks its face from
+	var two := CardProducer.clean_spoken("It was *never* about the card. You **must** rest.")
+	_ok(two.contains("*never*") and two.contains("**must**"), "a passage does not keep italic and bold apart: %s" % two)
+	# (what the voice makes of a level is the reading panel's and the host's: multi_voice_check's
+	# "a word leaned on is sent leaned on", hosts/voice/test_expression.py's "bold leans harder")
+	var levels := {}
+	for sentence in Phonemes.parse(two):
+		for w in sentence:
+			if int(w.get("emph", 0)) != 0:
+				levels[String(w["text"]).to_lower()] = int(w["emph"])
+	_ok(levels.size() == 2 and int(levels.get("never", 0)) == TextNorm.EMPH_I and int(levels.get("must", 0)) == TextNorm.EMPH_B,
+		"italic and bold do not leave a passage as two levels: %s" % str(levels))
+	# a dictated line is still known as the brief's own with a mark in it; a line of the reader's is not
+	var left := CardPrompts.unfixed("Keep your stick on the ice. Something new happened today.", brief)
+	_ok(left == "Something new happened today.", "a dictated line with a mark in it is not known as the brief's: '%s'" % left)
+	# WHAT IS NOT OFFERED: a passage keeps no bracket, so an inline pronunciation would be lost
+	_ok(not CardProducer.clean_spoken("The [K AE T] sat down on the ice.").contains("["),
+		"a reader's passage keeps brackets now - offer the pronunciation mark in a brief")
+	# THE DECK IS COLORED AS ONE, and a list anywhere else is not
+	var te := TextEdit.new()
+	var hl := ScriptHighlighter.new("cards")
+	te.syntax_highlighter = hl
+	te.text = "## The host\n- quick with a joke\n\n## Cards\n### Major Arcana\n- The Tower: upheaval\n<!-- image: a wolf -->"
+	var plain: Color = te.get_theme_color("font_color")
+	var deck := ScriptMarks.color_of("card")
+	var l1 := hl.get_line_syntax_highlighting(1)
+	_ok(l1.has(0) and (l1[0]["color"] as Color).is_equal_approx(plain), "a list outside the deck is colored as cards: %s" % l1)
+	for i in [3, 4, 5]:
+		var l := hl.get_line_syntax_highlighting(i)
+		_ok(l.has(0) and (l[0]["color"] as Color).is_equal_approx(deck), "line %d of the deck is not colored as the deck: %s" % [i, l])
+	var l6 := hl.get_line_syntax_highlighting(6)
+	_ok(l6.has(0) and (l6[0]["color"] as Color).is_equal_approx(ScriptMarks.color_of("note")),
+		"a picture mark in a brief is colored as a working one: %s" % l6)
+	te.free()
+
+
+## Does [param word] carry emphasis anywhere in [param text], as the voice parses it?
+func _stressed(text: String, word: String) -> bool:
+	for sentence in Phonemes.parse(Manuscript.unspoken(text)):
+		for w in sentence:
+			if String(w["text"]).to_lower().begins_with(word) and int(w.get("emph", 0)) != 0:
+				return true
+	return false
 
 
 func _words(text: String) -> PackedStringArray:

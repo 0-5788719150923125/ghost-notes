@@ -1529,6 +1529,39 @@ The user tried the build and sent a round of revisions. **Status: done; gates be
   user's machine) and `tests/rewrite_blocks.gd` (the step-5 document rewrite).
 
 
+### Save… moves the note (2026-10-12)
+
+The user: "Why does the 'Penalty Box' script keep reverting to 'Untitled Cards.md'? ... I have since
+tried to use 'Sync' in the in-app editor, to sync it with '/home/crow/repos/rift/cards/penalty-box.md'.
+That selection keeps getting reverted back to the untitled cards label, and I am unsure if my edits
+are even being used." **Status: done; `doc_sync_check`, `notes_list_check`.**
+
+- **The cause.** "Sync to…", in the editor window, moved the script's source (`DocSource`) to the
+  file chosen and nothing else: the note was still the file it was opened from (`main._note`), and
+  `open_note` points the panel back at that file every time. So the edits made after a Sync went
+  into the chosen file, and the next time the note opened it read the old one. On the author's
+  machine the two had drifted apart: `penalty-box.md` had a "## The box" section the note did not,
+  and the note had the newer settings (playlist, writer, seed).
+- **Save…, on the Script card.** It always asks for a file. In a note the whole note goes there
+  (`DocSource.moved` -> the panel -> `main.note_moved`): that file is what "⋯" deletes, what the list
+  shows and what opens next time. One note, one file - the note Ghost Notes was keeping in its own
+  folder goes to the trash once the new file is written, a file added by hand leaves the list, and
+  the author's own files are left exactly as they were. Nothing is torn down: a reading or a
+  generation under way carries on.
+- **The mark.** `SaveMark`, beside the file's name on the card and in the editor window: it turns
+  while a change waits for its quiet period, ticks (and flashes) when the write is verified, goes
+  amber when a write is refused, and its tooltip is the file's whole path and the time of the last
+  write. It reads `DocSource.save_state()` and `written`, nothing of its own.
+- **Open…, in a note too.** The user, after the first pass: "we need an 'Open' button as well.
+  Because I need to load a file from disk, and there's no way to do that currently. The 'Save'
+  button would just overwrite the file on disk." Open… on a note's Script card asks for a file and
+  opens it AS THE NOTE (`ScriptWriter.open_as_note` -> `Chrome.open_file` -> `main.open_file`):
+  through the one session path, so it is what its own blocks say it is, and nothing is written
+  into it. The note left behind is written first and stays in the list - Open… never deletes.
+- **Not built.** A rename from the list; pouring one file's words into another note (copy and
+  paste does it).
+
+
 ## Questions, answered
 
 The user answered the open questions on 2026-10-06. Each answer is recorded here and carried into
