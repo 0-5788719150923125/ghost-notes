@@ -1562,6 +1562,39 @@ are even being used." **Status: done; `doc_sync_check`, `notes_list_check`.**
   paste does it).
 
 
+### Composition, not templates (2026-10-12)
+
+The user: "If you click on 'New', the list of options presented to you are, essentially, a bunch of
+mode-switches... In a better design, I would imagine that 'New' has no options at all. Every note
+would open in exactly the same way. Then, the user would be responsible for using the '+' attachment
+feature to attach the components they want." **Status: done as far as the list below; the design,
+and what it does not do yet, are in [storyboard.md](storyboard.md).**
+
+- **The cause.** Step 7 made the modes templates over the registry, and step 8 read a note's
+  blocks to pick one (`Components.template_for`). So a note was still exactly one mode, chosen by
+  an `if` chain, and "+" on a plain note was the same choice with other words on it.
+- **One kind of note.** New is a button. A note has what is attached to it and nothing else;
+  `Components.workspace_of` derives which panel runs it from what its components declare, and
+  `TEMPLATES`, `template_for` and `marker_blocks` are gone.
+- **Slots** (`clock`, `presentation`) say what a note has one of - the "family says how many" of
+  [A component](#a-component), declared per component rather than per family, because a clip takes
+  both and a Voice takes one.
+- **"+" is derived and detach exists.** One menu on every panel, each refusal with its reason; an
+  × on every component's card. The risk named above ("Every component needs a real detach") is
+  answered by the one teardown plus `NoteCards.detach`: the block leaves the file and the note
+  opens again.
+- **One composition.** `NoteCards.build` makes a note's component cards on every panel, and
+  `main._attach_show` puts a song's show and a reading's up through one path.
+- **The storyboard is the note's**, kept in its `scenes:` block and written in an editor
+  (`StoryboardEditor`). "Storyboards... stay the Scenes card's own files" (below) was the answer
+  until someone needed more; the user did.
+- **Not built:** the Voice as a card on the note's own panel (five workspaces remain), two clocks
+  on one note, a show with no sound, on/ghosted, "+" suggestions, diff notes.
+
+Gates: components_check and notes_list_check (rewritten), teardown_check (two new make-ups),
+storyboard_check and storyboard_editor_check (new).
+
+
 ## Questions, answered
 
 The user answered the open questions on 2026-10-06. Each answer is recorded here and carried into
@@ -1591,6 +1624,8 @@ the sections above.
   DocSource's three-way merge (`merge3`) is there when patches are wanted.
 - **Storyboards.** Left to me, "without going overboard": they stay the Scenes card's own files, as
   now, and a note names the one it uses in its Scenes block. Nothing more until someone needs it.
+  (2026-10-12: someone did. A note keeps its own storyboard in that block now, and may still name
+  a file - see [storyboard.md](storyboard.md).)
 - **Where generated things live.** Not a question - the plan stands: `user://notes/<id>/<component>/`,
   generalizing Tarot's `show` key. The id lives in the note's frontmatter, so a note's generated
   files follow it when the file moves or is opened from another folder. And a note names a

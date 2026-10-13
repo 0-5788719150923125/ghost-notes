@@ -217,6 +217,11 @@ var automation_available := false
 ## once it is rendered, so a mode can time chapters from it and describe the episode the take was
 ## made of.
 var upload_provider := Callable()
+## WHAT THE NOTE'S SHOW IS (`() -> Dictionary`, a panel's `show_plan()`): the storyboard the render
+## must walk comes from the note, not from whatever the Director happens to hold - a reading that
+## is not playing has let its storyboard go, and its export would have rendered the seeded show.
+## Unset (the command line), the Director's own is used.
+var show_provider := Callable()
 
 
 func _ready() -> void:
@@ -786,9 +791,10 @@ func _start_render() -> void:
 	# ...and THE FRAME, for the same reason
 	args.append("--frame")
 	args.append(Director.resolved_frame())
-	if Director.is_manual():
+	var board := _storyboard_arg()
+	if not board.is_empty():
 		args.append("--storyboard")
-		args.append(Director.storyboard_source())   # the loadable name/path, NOT the display name
+		args.append(board)
 	# "Automate the Synthesis game (record the UI)" was checked: tell the render
 	# to open the Synthesis panel over the take and let it play itself (Throw /
 	# Pull / reel / hold-or-fold on timers). Without this flag the render runs
@@ -1242,6 +1248,33 @@ static func override_text(w: int, h: int) -> String:
 	if portrait:
 		t += "window/stretch/aspect=\"keep\"\n"
 	return t + "\n[editor]\n\nmovie_writer/video_quality=1.0\n"
+
+
+## WHAT THE RENDER IS TOLD TO WALK, "" for the seeded show: the note's storyboard, as its panel
+## plans it ([member show_provider]), else the one the Director is walking. A file's is its name or
+## path, so the render loads the same file; one a note keeps in its own block is written out now,
+## in its loaded form (the render needs none of the note), beside the render's other scratch.
+func _storyboard_arg() -> String:
+	var plan: Variant = show_provider.call() if show_provider.is_valid() else {}
+	var board: Variant = (plan as Dictionary).get("board", {}) if plan is Dictionary else {}
+	if board is Dictionary and not (board as Dictionary).is_empty():
+		var named := String((plan as Dictionary).get("source", ""))
+		return named if not named.is_empty() else _write_board(Storyboard.raw_of(board as Dictionary))
+	if not Director.is_manual():
+		return ""
+	var source := Director.storyboard_source()
+	return source if not source.is_empty() else _write_board(Director.storyboard_data())
+
+
+func _write_board(data: Dictionary) -> String:
+	var path := ProjectSettings.globalize_path("user://export_storyboard.yaml")
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		push_warning("ghost export: could not write the note's storyboard for the render (%s)" % path)
+		return ""
+	f.store_string(Storyboard.to_yaml(data))
+	f.close()
+	return path
 
 
 func _write_override(w: int, h: int) -> void:

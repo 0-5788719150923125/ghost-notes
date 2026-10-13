@@ -128,7 +128,7 @@ func _stage() -> void:
 		await get_tree().process_frame
 	var keep_root := NoteStore.root
 	NoteStore.root = SONG_DIR
-	var note := NoteStore.create("auto", "frame check", "", {"song": {"path": song}, "picture": {"medium": "full"}})
+	var note := NoteStore.create("frame check", "", {"song": {"path": song}, "picture": {"medium": "full"}})
 	NoteStore.root = keep_root
 	main._list._open(note)
 	for _i in 10:

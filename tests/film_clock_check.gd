@@ -46,6 +46,9 @@ const FIXTURE := "user://films_test/ramp.mp4"
 ## (VideoStreamPlayer refuses one on the frame it starts playing), and libtheora needs a
 ## few more to hand back the frame it landed on.
 const SETTLE_FRAMES := 24
+## How far past the time the probe really waited a decoder may be, in seconds: the fixture's own
+## quantization (0.4 s a step of red) and a frame or two of the seek landing.
+const LEAD_SLACK := 0.6
 
 var _clip: Dictionary = {}
 var _fails: Array = []
@@ -329,6 +332,7 @@ func _check_rate() -> void:
 
 ## Open a panel at `show_t` and read the clip's position back out of the drawn pixels.
 func _check_at(show_t: float) -> void:
+	var opened := Time.get_ticks_msec()
 	var rig := _open(show_t)
 	for i in SETTLE_FRAMES:
 		(rig["scene"] as GhostScene).update(null, 0.0)
@@ -341,15 +345,19 @@ func _check_at(show_t: float) -> void:
 	# first version of this check compared the two spaces directly and called a working
 	# player broken at every position past the first window.
 	var decoder := _film_time_of(rig)
+	var waited := float(Time.get_ticks_msec() - opened) / 1000.0
 	var want := Films.position_at(_clip, show_t)
-	print("  show_t %6.1f  want %5.2fs   decoder %5.2fs (window %d)   drawn %5.2fs"
-		% [show_t, want, decoder, int((rig["scene"] as FilmScene)._win), drawn])
+	print("  show_t %6.1f  want %5.2fs   decoder %5.2fs (window %d)   drawn %5.2fs   after %.2fs"
+		% [show_t, want, decoder, int((rig["scene"] as FilmScene)._win), drawn, waited])
 	# The decoder keeps playing while the probe waits, so it is AHEAD of `want` by the
-	# settle - never behind it, and never back at the start.
+	# settle - never behind it, and never back at the start. THE SETTLE IS MEASURED, not
+	# assumed: it was "under two seconds", which twenty-four frames are on a machine with
+	# nothing else to do, and this failed at 2.11 s the day three gates ran beside it
+	# (2026-10-12). A decoder may lead by as long as the probe really waited, and no more.
 	var lead := decoder - want
-	if lead < -0.4 or lead > 2.0:
-		_fails.append("show_t %.1f: the decoder is at %.2fs, %.2fs from the %.2fs asked for"
-			% [show_t, decoder, lead, want])
+	if lead < -0.4 or lead > waited + LEAD_SLACK:
+		_fails.append("show_t %.1f: the decoder is at %.2fs, %.2fs from the %.2fs asked for %.2fs ago"
+			% [show_t, decoder, lead, want, waited])
 	# WHAT IS ON SCREEN is the frame the decoder is on. This is the claim `stream_position`
 	# cannot make by itself. The tolerance carries the fixture's own quantization: a
 	# hundred seconds of ramp across 8 bits of red is 0.4s per step before theora rounds it.

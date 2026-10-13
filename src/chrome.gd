@@ -106,6 +106,13 @@ var bottom_inset := 0.0
 ## and departures can produce a wrong answer.
 var _bottom_claims := {}
 var _export_claims := {}
+## THE SHOW'S ROOM. Something docked along the bottom that a person works in while WATCHING the
+## show - the storyboard's editor - claims the height it covers, and main fits the frame into what
+## is left above it ([signal stage_room_changed], [member stage_bottom]): the picture being edited
+## is seen whole, not from behind the editor. Keyed, as every claim here is.
+signal stage_room_changed
+var stage_bottom := 0.0
+var _stage_claims := {}
 
 
 ## Claim [param px] of room at the bottom of the frame for [param who]. Idempotent -
@@ -134,6 +141,29 @@ func suppress_export(who: StringName) -> void:
 func release_export(who: StringName) -> void:
 	if _export_claims.erase(who):
 		_apply_suppression()
+
+
+## Claim [param px] at the bottom of the frame as covered for [param who]: the show is fitted
+## above it. Idempotent - call it again whenever the claiming surface changes size.
+func claim_stage(who: StringName, px: float) -> void:
+	_stage_claims[who] = maxf(px, 0.0)
+	_apply_stage()
+
+
+## Drop [param who]'s claim on the show's room. Safe to call when there is none.
+func release_stage(who: StringName) -> void:
+	if _stage_claims.erase(who):
+		_apply_stage()
+
+
+func _apply_stage() -> void:
+	var want := 0.0
+	for v in _stage_claims.values():
+		want = maxf(want, float(v))
+	if is_equal_approx(want, stage_bottom):
+		return
+	stage_bottom = want
+	stage_room_changed.emit()
 
 
 func _apply_inset() -> void:

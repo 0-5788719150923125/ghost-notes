@@ -1,7 +1,7 @@
 extends Node
 class_name Showcase
 
-## Showcase - the README's animation, recorded from the real app: a Manual note playing
+## Showcase - the README's animation, recorded from the real app: a note with a song playing
 ## `storyboards/showcase.yaml` (a blue prism flies in and divides into a blue one and a red one,
 ## the pair lock, then take opposite highways), with the note's panel, the row and the transport
 ## around it - the UI as a person sees it, not a picture of the stage alone. Praxis records its

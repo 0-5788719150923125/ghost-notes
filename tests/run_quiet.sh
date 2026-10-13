@@ -38,9 +38,18 @@ trap 'rm -f "$PROBE_LOG"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 if command -v xvfb-run >/dev/null 2>&1; then
-	# -a picks a free display number; -s sets a screen big enough that a gate
-	# requesting a window never has it clamped.
-	RUNNER=(xvfb-run -a -s "-screen 0 1280x1024x24")
+	# -s sets a screen big enough that a gate requesting a window never has it clamped.
+	# A DISPLAY OF ITS OWN. `xvfb-run -a` looks for a free display number and starts its server a
+	# moment LATER, so two started in the same instant both take :99: they share one server, and the
+	# first to finish kills it under the other ("X connection to :99 broken" - seen 2026-10-12, two
+	# GPU gates started together by `check.sh --gpu --jobs`). `-d` has the server choose its own
+	# number, which cannot collide; an xvfb-run too old to have it starts looking from a number of
+	# this process's own.
+	if xvfb-run --help 2>&1 | grep -q -- '--auto-display'; then
+		RUNNER=(xvfb-run -d -s "-screen 0 1280x1024x24")
+	else
+		RUNNER=(xvfb-run -a -n "$((100 + $$ % 20000))" -s "-screen 0 1280x1024x24")
+	fi
 	RUNNER+=("$GODOT")
 else
 	echo "run_quiet: xvfb-run not found - falling back to a VISIBLE window."

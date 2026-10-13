@@ -152,13 +152,14 @@ func _panel(name: String, make: Callable) -> void:
 	await get_tree().process_frame
 
 
-## A NOTE'S OWN PANEL: a Manual note (a song, a picture, a storyboard), made in a folder of the gate's
-## own. Its components are cards - the Script, the Song, the Picture, the Storyboards - keyed by the
+## A NOTE'S OWN PANEL: a note with a song, a picture and a storyboard, made in a folder of the gate's
+## own. Its components are cards - the Script, the Song, the Picture, the Storyboard - keyed by the
 ## note's panel, a chip each, and a fold is kept like the panels' cards.
 func _note_panel() -> void:
 	var keep := NoteStore.root
 	NoteStore.root = "user://card_fold_check"
-	var note := NoteStore.create("manual", "Fold check", "Words.\n")
+	var note := NoteStore.create("Fold check", "Words.\n", {"song": {"path": ""},
+		"picture": {"medium": "full"}, "scenes": {"storyboard": "default"}})
 	NoteStore.root = keep
 	var np := NotePanel.new()
 	np.path = note
@@ -166,7 +167,7 @@ func _note_panel() -> void:
 	await get_tree().process_frame
 	var cards: Array = np._panel.cards()
 	var titles: Array = cards.map(func(c: Node) -> String: return (c as Card).title)
-	_ok(titles == ["Script", "Song", "Picture", "Storyboards"], "a Manual note: its components are cards (%s)" % str(titles))
+	_ok(titles == ["Script", "Song", "Picture", "Storyboard"], "a note with a song, a picture and a storyboard: its components are cards (%s)" % str(titles))
 	_ok(cards.all(func(c: Node) -> bool: return (c as Card).key.begins_with("note.")), "...each keyed by the note's panel")
 	_ok(np._panel.card_row.get_child_count() == cards.size(), "...with a chip each")
 	if not cards.is_empty():

@@ -1,29 +1,41 @@
 # Storyboards
 
-A **storyboard** is a user-authored score for a song: an ordered list of scenes the
-visualizer plays in sequence, instead of the automatic novelty scheduler choosing
-for you. This is **manual mode** - orchestrating an entire visualization from data.
+A **storyboard** is a show written down: an ordered list of entries, each naming a
+scene, how long it stays and how it leaves. The `Director` walks whatever list it is
+handed - and where it is handed none, it writes one as it goes, from the seed. So the
+seeded show is a storyboard nobody wrote down, and a written one is the same show made
+explicit: everything here is the general case.
 
-- **Auto mode** (no storyboard): the `Director` picks scenes by novelty weighting and
-  cuts on the music. This is the default.
-- **Manual mode** (a storyboard): the `Director` walks your `sequence` in order, and
-  each entry decides how long it stays and what cue it exits on.
+- **Nothing written**: the `Director` picks scenes by novelty weighting and cuts on the
+  music.
+- **A storyboard**: the `Director` walks your `sequence` in order, and each entry
+  decides how long it stays and what cue it exits on.
 
-Run one:
+## Where one lives
+
+- **In a note.** Attach a Storyboard to a note with a Picture ("+"), and the note keeps
+  its own in the `scenes:` block of its frontmatter. It is written in the app: the
+  card's **Timeline…** opens the editor under the show, and **Start from** fills it with
+  the seeded show written down, or with a copy of one of the files here.
+- **In a file.** A note may instead name one - `scenes: {storyboard: default}`, or a
+  path. The file is played as it is and never written; the card offers to take it into
+  the note. From the command line:
 
 ```
 godot --path . -- --storyboard default         # loads storyboards/default.yaml
 godot --path . -- --audio ~/track.wav --storyboard default
 ```
 
-(or pick it from the splash screen, in manual mode).
+The fields an entry, an actor and a span can carry are tables in the code
+(`Storyboard.ENTRY`, `Cast.PARAMS`, `Actions.ARGS`), which the editor builds its rows
+from and [docs/stage.md](../docs/stage.md) lists.
 
-## Formats: YAML on disk, JSON for machines
+## Formats
 
-A storyboard is **YAML** (the on-disk format - it holds comments) or **JSON** (what
-the manual editor UI will emit); both parse to the same canonical structure, so
-everything downstream is format-blind. A bare name resolves in this directory,
-`.yaml` first, then `.json`; explicit paths are taken as-is.
+A storyboard is **YAML** (it holds comments) or **JSON**; both parse to the same
+structure, so everything downstream is format-blind. A note's own is YAML in its
+frontmatter. A bare name resolves in this directory, `.yaml` first, then `.json`;
+explicit paths are taken as-is.
 
 The YAML dialect is a deliberately small subset (`src/yaml.gd`), and anything
 outside it is **rejected with a line number**, never silently misparsed:
@@ -40,7 +52,7 @@ outside it is **rejected with a line number**, never silently misparsed:
 
 | field         | type    | default | meaning                                                        |
 |---------------|---------|---------|----------------------------------------------------------------|
-| `name`        | string  | file    | label shown in logs / the splash.                              |
+| `name`        | string  | file    | label shown in logs.                                           |
 | `loop`        | bool    | `true`  | restart the sequence when it ends. `false` holds the final scene. |
 | `transition`  | string  | `cut`   | default transition style (`cut` / `dip` / `fade`); a compatible morph always wins. |
 | `sensitivity` | number  | `1.0`   | narrative **tempo**. Higher = faster: holds shrink and every scene's keyframe clock (including a stage `track`) compresses proportionally, so events still land. Ambient body animation never speeds up. Per-entry `sensitivity` overrides it. |
@@ -197,7 +209,7 @@ runs entirely on `stage` data now.
 
 ## Roadmap
 
-The stage spec is the foundation the manual editor writes to (JSON). Next rungs:
-per-entry parameter dials in the Workspace, more actor kinds (rock, terrain,
-layers-as-actors), verb-level `on:` cues throughout, and a `kind: stage` group
-actor if a board ever needs true nesting.
+See [next/storyboard.md](../next/storyboard.md): more actor kinds (rock, terrain,
+layers-as-actors), a `layers` scene so a scene's look is data too, verb-level `on:` cues
+throughout, keyframed property lanes, and a `kind: stage` group actor if a board ever
+needs true nesting.

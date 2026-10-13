@@ -7,7 +7,7 @@
 #   scripts/check.sh --skip a,b      # everything but these
 #   scripts/check.sh --fail-fast     # stop at the first failing gate (CI: no compute spent on a red run)
 #   scripts/check.sh --jobs 4        # run four gates at once (`auto` = one per core); the default is 1
-#   scripts/check.sh --list          # what would run, and how
+#   scripts/check.sh --list          # what would run, how, and (with --jobs) in what order
 #
 # Logs go to dist/check/<gate>.log; a passing gate's log is removed unless --keep.
 #
@@ -27,8 +27,18 @@
 # `ok*`; one that died before saying anything is a failure. Exit codes are never trusted
 # alone, and neither is silence.
 #
-# THE TIMEOUT is the one in the gate's own run line (`run_boot_probe.sh tests/<name>.gd 120`),
-# else 300 s; anything after it on that line is handed to the probe as its args.
+# THE TIMEOUT is the one in the gate's own run line (`run_boot_probe.sh tests/<name>.gd 120`, or
+# for a SceneTree gate `timeout 600 godot --headless --path . --script res://tests/<name>.gd`),
+# else 300 s; anything after it on a probe's line is handed to the probe as its args.
+#
+# THE LONGEST GATES START FIRST (--jobs above 1), by how long each took the last time it passed
+# (dist/check/.times, written by every run; CI carries it from run to run in a cache). Left in
+# the order they are found, the two longest gates started near the end and ran by themselves for
+# almost half the run, three of four cores idle - measured on a runner, 2026-10-13: 1040 s of
+# gates, 260 s at best four at a time, 372 s taken. A gate with no time yet starts before the
+# timed ones, the longest timeout first: a new gate is the one most worth an early answer. The
+# last lines of a run say what the gates added up to and what that is at best over the cores,
+# so a run that is not using them shows it.
 
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
@@ -98,7 +108,11 @@ kind_of() {  # script | probe
 }
 timeout_of() {
 	local t
+	[ -f "tests/$1.gd" ] || { echo 300; return; }
 	t=$(grep -m1 -oE "run_boot_probe\.sh tests/$1\.gd [0-9]+" "tests/$1.gd" | grep -oE '[0-9]+$')
+	# a SceneTree gate that needs longer says so the same way, in its own run line
+	[ -n "$t" ] || t=$(grep -m1 -oE "timeout [0-9]+ godot .*--script (res://)?tests/$1\.gd" "tests/$1.gd" \
+		| grep -oE '^timeout [0-9]+' | grep -oE '[0-9]+')
 	echo "${t:-300}"
 }
 ## ...and the rest of that line is the probe's args (`... 400 --seed 2491232026`), so the
@@ -151,8 +165,43 @@ how() {
 	esac
 }
 
+## HOW LONG EACH GATE TOOK the last time it passed: `<gate> <seconds>` a line in $OUT/.times.
+## Read here, kept current as gates finish, written back when the run ends - a run cut short
+## still keeps what it measured. Only a pass is a time worth keeping: a gate that failed fast,
+## or ran into its timeout, says nothing about how long it takes.
+declare -A took=()
+if [ -f "$OUT/.times" ]; then
+	while read -r tg ts; do
+		[[ "$ts" =~ ^[0-9]+$ ]] && took[$tg]=$ts
+	done <"$OUT/.times"
+fi
+
+## THE ORDER GATES START IN when several run at once: `parse` and `docs` first and alone, then
+## THE LONGEST FIRST, so none of them is left running alone at the end with the other cores idle -
+## by the time each took when it last passed, and a gate with no time yet before all of those, the
+## longest timeout first (see the header). Prints one gate a line.
+start_order() {
+	local g
+	for g in "$@"; do [ "$g" = parse ] || [ "$g" = docs ] && echo "$g"; done
+	for g in "$@"; do
+		[ "$g" = parse ] || [ "$g" = docs ] && continue
+		if [ -n "${took[$g]:-}" ]; then echo "${took[$g]} $g"; else echo "$((100000 + $(timeout_of "$g"))) $g"; fi
+	done | sort -k1,1nr -k2,2 | cut -d' ' -f2
+}
+
+[ "$jobs" = auto ] && jobs=$(nproc 2>/dev/null || echo 1)
+if ! [[ "$jobs" =~ ^[1-9][0-9]*$ ]]; then
+	bad "--jobs wants a positive number or 'auto', not '$jobs'."
+	exit 2
+fi
+
 if [ "$list" -eq 1 ]; then
-	for g in "${gates[@]}"; do printf '    %-28s %s\n' "$g" "$(how "$g")"; done
+	# in the order they would start, each with how it runs and how long it took last time
+	listed=("${gates[@]}")
+	[ "$jobs" -gt 1 ] && mapfile -t listed < <(start_order "${gates[@]}")
+	for g in "${listed[@]}"; do
+		printf '    %-28s %-46s %s\n' "$g" "$(how "$g")" "${took[$g]:+last ${took[$g]}s}"
+	done
 	[ "$gpu" -eq 0 ] && [ -z "$only" ] && printf '    (%d GPU gates need --gpu)\n' "${#GPU[@]}"
 	exit 0
 fi
@@ -165,6 +214,16 @@ if command -v flock >/dev/null 2>&1 && ! flock -n 9; then
 	bad "another scripts/check.sh is running (it holds $OUT/.lock)."
 	exit 2
 fi
+
+save_times() {
+	local g
+	for g in "${!took[@]}"; do echo "$g ${took[$g]}"; done | sort >"$OUT/.times.new" \
+		&& mv -f "$OUT/.times.new" "$OUT/.times"
+}
+trap 'stop_running; save_times' EXIT
+work=0          # this run's gates, added up, in seconds
+longest=0
+longest_g=""
 
 # -- run ------------------------------------------------------------------------
 
@@ -234,21 +293,27 @@ settle() {
 	local g="$1" log="$OUT/$1.log" rc dt
 	read -r rc dt <"$OUT/.res.$g"
 	rm -f "$OUT/.res.$g"
+	work=$((work + dt))
+	if [ "$dt" -gt "$longest" ]; then longest=$dt; longest_g=$g; fi
 	# a shader compile check reports through its output, not its exit code
 	if [ "$rc" -eq 0 ] && grep -q 'SHADER ERROR' "$log"; then
 		rc=98
 	fi
 	if [ "$rc" -eq 0 ]; then
 		printf '  ok     %-28s %4ds\n' "$g" "$dt"
+		took[$g]=$dt
 		[ "$keep" -eq 1 ] || rm -f "$log"
 	elif [ "$rc" -eq 137 ] && said_pass "$g" "$log"; then
 		# the probe ended itself with a SIGKILL after its verdict, to skip the engine's teardown
 		printf '  ok     %-28s %4ds   (hard exit after its verdict)\n' "$g" "$dt"
+		took[$g]=$dt
 		[ "$keep" -eq 1 ] || rm -f "$log"
 	elif { [ "$rc" -eq 124 ] || [ "$rc" -ge 128 ]; } && said_pass "$g" "$log"; then
 		printf '  ok*    %-28s %4ds   passed, then the engine %s in teardown (exit %d)\n' "$g" "$dt" \
 			"$([ "$rc" -eq 124 ] && echo 'hung' || echo 'crashed')" "$rc"
 		dirty+=("$g")
+		# (a hang's time is its timeout, not the gate's: only a crash after the verdict is kept)
+		[ "$rc" -eq 124 ] || took[$g]=$dt
 		[ "$keep" -eq 1 ] || rm -f "$log"
 	else
 		printf '  FAIL   %-28s %4ds   exit %d - %s\n' "$g" "$dt" "$rc" "$log"
@@ -262,19 +327,12 @@ settle() {
 	fi
 }
 
-[ "$jobs" = auto ] && jobs=$(nproc 2>/dev/null || echo 1)
-if ! [[ "$jobs" =~ ^[1-9][0-9]*$ ]]; then
-	bad "--jobs wants a positive number or 'auto', not '$jobs'."
-	exit 2
-fi
-
 if [ "$jobs" -le 1 ]; then
 	for g in "${gates[@]}"; do
 		run_one "$g"
 		settle "$g" || [ "$fail_fast" -eq 0 ] || break
 	done
 else
-	say "$jobs at a time"
 	set -m
 	## `parse` first and alone (it registers the class names every other gate loads), then `docs`.
 	queue=()
@@ -288,13 +346,11 @@ else
 		fi
 	done
 	[ "${#failed[@]}" -gt 0 ] && [ "$fail_fast" -eq 1 ] && queue=()
-	## The long gates start first, so none of them is left running alone at the end.
-	SLOW=(sand_settle_check comic_motion_check song_check fractal_travel_check table_wash_check
-		doc_sync_check sand_warm_check scene_smoke sampler_check voice_check)
-	ordered=()
-	for g in "${SLOW[@]}"; do in_list "$g" "${queue[*]}" && ordered+=("$g"); done
-	for g in "${queue[@]}"; do in_list "$g" "${ordered[*]}" || ordered+=("$g"); done
-	queue=("${ordered[@]}")
+	## the longest first (see start_order)
+	timed=0
+	for g in "${queue[@]}"; do [ -n "${took[$g]:-}" ] && timed=$((timed + 1)); done
+	say "$jobs at a time, the longest first ($timed of ${#queue[@]} timed by an earlier run)"
+	[ "${#queue[@]}" -gt 0 ] && mapfile -t queue < <(start_order "${queue[@]}")
 	stop=0
 	while [ "${#queue[@]}" -gt 0 ] || [ "${#running[@]}" -gt 0 ]; do
 		while [ "$stop" -eq 0 ] && [ "${#queue[@]}" -gt 0 ] && [ "${#running[@]}" -lt "$jobs" ]; do
@@ -321,6 +377,14 @@ fi
 
 echo
 t_total=$(( $(date +%s) - t_all ))
+## WHAT THE CORES WERE GIVEN, so a run that is not using them shows it: the gates added up, what
+## that is at best over this many at a time, and the one gate no number of cores makes shorter.
+clock() { printf '%dm%02ds' $(($1 / 60)) $(($1 % 60)); }
+if [ "$jobs" -gt 1 ] && [ "$work" -gt 0 ]; then
+	best=$(( (work + jobs - 1) / jobs ))
+	[ "$longest" -gt "$best" ] && best=$longest
+	say "$(clock "$work") of gates in $(clock "$t_total"), $jobs at a time: $(clock "$best") at best (the longest alone, $longest_g, is $(clock "$longest"))"
+fi
 if [ "${#dirty[@]}" -gt 0 ]; then
 	say "ok* = passed, then the engine died in teardown: ${dirty[*]}"
 fi

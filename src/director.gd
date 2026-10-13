@@ -452,6 +452,7 @@ var _echo: Echo = null
 var _sched_starts: Array = []        # schedule start time (s) of each sequence entry
 var _sched_end := 0.0                # schedule time where the sequence ends and the tail begins
 var _manual_i := -1                  # index of the on-screen SEQUENCE entry (-1 = tail / auto)
+var _entry_i := -1                   # ...and of the on-screen entry, the tail's counted on from the sequence's end
 var _heard_t := 0.0                  # monotonic listening clock (never rewinds; lags vote against it)
 var _cursor_t := 0.0                 # the cursor's continuous schedule-time claim - snapped to an
                                      # entry's start when one begins, free-running through the tail,
@@ -907,6 +908,7 @@ func detach() -> void:
 	_sched_starts = []
 	_sched_end = 0.0
 	_manual_i = -1
+	_entry_i = -1
 	_heard_t = 0.0
 	_cursor_t = 0.0
 
@@ -929,26 +931,115 @@ func storyboard_source() -> String:
 
 ## Load a storyboard by name (res://storyboards/<name>.yaml or .json) or by a full/absolute
 ## path, switching the Director into manual mode. Returns true on success. Safe to call
-## before attach(); main.start_template uses this to start a manually-orchestrated session.
+## before attach(), where it is the board the session starts on (`--storyboard`, a note that names a file).
 ## Parsing / defs expansion / validation live in [Storyboard] - the Director only keeps
 ## the walk state.
 func load_storyboard(name_or_path: String) -> bool:
-	var sb := Storyboard.load_file(name_or_path)
-	if not sb.ok:
-		push_warning("ghost: %s" % sb.error)
+	return load_board(Storyboard.load_file(name_or_path), name_or_path)
+
+
+## Walk [param sb], a storyboard in its LOADED form ([method Storyboard.from_data]) - a file's, or
+## the one a note keeps in its own block. [param source] is the name or path a render can load it
+## from again, "" for one that is in no file ([method storyboard_data] is what a render is handed
+## then). Before attach() it is the board the session starts on; while a show is up, the walk
+## carries on from the entry it had reached, in the new board - an edit lands at the next cut, or
+## at once through [method goto_entry].
+func load_board(sb: Dictionary, source := "") -> bool:
+	if not bool(sb.get("ok", false)):
+		push_warning("ghost: %s" % String(sb.get("error", "that is not a storyboard")))
 		return false
+	var live := _host != null and is_manual()
 	_storyboard_seq = sb.sequence
 	_storyboard_tail = sb.tail
 	_storyboard_loop = sb.loop
 	_storyboard_name = sb.name
-	_storyboard_source = name_or_path           # remember HOW it was loaded, so the export can re-load it
+	_storyboard_source = source                 # remember HOW it was loaded, so the export can re-load it
 	_storyboard_transition = sb.transition      # e.g. "cut" forces jump cuts
 	_storyboard_sensitivity = sb.sensitivity    # narrative tempo (<0 = use the export)
-	_step = 0
+	_step = mini(_step, _storyboard_seq.size() + _storyboard_tail.size()) if live else 0
 	_sched_starts = _schedule_starts()
+	if _host != null:
+		# the map of what the song sounds like at each schedule time was filed under the OLD schedule
+		_echo = Echo.new()
+		_heard_t = 0.0
 	print("ghost: storyboard '%s' loaded (%d scenes, loop=%s)" % [
 		_storyboard_name, _storyboard_seq.size(), _storyboard_loop])
 	return true
+
+
+## Stop walking a storyboard: from the next cut the show is the seed's again. What a note does when
+## its storyboard has nothing written in it.
+func clear_storyboard() -> void:
+	_storyboard_seq = []
+	_storyboard_tail = []
+	_storyboard_name = ""
+	_storyboard_source = ""
+	_storyboard_loop = true
+	_storyboard_transition = ""
+	_storyboard_sensitivity = -1.0
+	_sched_starts = []
+	_sched_end = 0.0
+	_manual_i = -1
+	_entry_i = -1
+	_step = 0
+
+
+## The storyboard being walked, as raw data a render can load ([method Storyboard.to_yaml]): the
+## loaded form's own keys, every `use` already expanded. {} in the seeded show.
+func storyboard_data() -> Dictionary:
+	if not is_manual():
+		return {}
+	return Storyboard.raw_of({"name": _storyboard_name, "loop": _storyboard_loop,
+		"transition": _storyboard_transition, "sensitivity": _storyboard_sensitivity,
+		"sequence": _storyboard_seq, "tail": _storyboard_tail})
+
+
+## The tempo an entry runs at where it names none: the storyboard's, else the Director's own.
+func storyboard_sensitivity() -> float:
+	return _storyboard_sensitivity if _storyboard_sensitivity > 0.0 else sensitivity
+
+
+## What an entry that gives no timing at all is scheduled as, in seconds (see [method _schedule_starts]).
+func unauthored_hold() -> float:
+	return min_hold * pacing
+
+
+## WHERE THE WALK IS: `entry` (the index of the entry on screen - the sequence's, then the tail's
+## counted on from its end; -1 in the seeded show or before one is up), `elapsed` (seconds it has
+## been up) and `tail` (whether it is a tail entry). An editor's playhead.
+func cursor() -> Dictionary:
+	return {"entry": _entry_i if is_manual() and _current != null else -1, "elapsed": _elapsed,
+		"tail": is_manual() and _entry_i >= _storyboard_seq.size()}
+
+
+## PUT ENTRY [param i] ON SCREEN NOW - the sequence's, then the tail's counted on from its end. An
+## editor's jump, so it is a cut whatever the entries' own transitions say: no morph from an
+## entry that is not its neighbor, no dip to wait through. The walk carries on from there.
+func goto_entry(i: int) -> void:
+	if _host == null or not is_manual():
+		return
+	_step = clampi(i, 0, _storyboard_seq.size() + _storyboard_tail.size() - 1)
+	# a page that owns its cast (a comic) changes scene by its own handover
+	if _medium != null and is_instance_valid(_medium) and _medium.owns_cast():
+		if not _transitioning:
+			_begin_transition()
+		return
+	if _transitioning and is_instance_valid(_next):
+		_next.queue_free()
+	_next = null
+	_transitioning = false
+	_trans_t = 0.0
+	_sting_left = 0
+	_sting_t = -1.0
+	_burst_left = 0
+	_paced_t = 0.0
+	var nxt := _make_scene()
+	_scene_host(nxt).add_child(nxt)
+	if _current != null and is_instance_valid(_current):
+		_current.queue_free()
+	_current = nxt
+	_swaps += 1
+	_arm()
 
 
 # Cumulative schedule start time (s) of each sequence entry, mirroring _make_scene's
@@ -956,28 +1047,18 @@ func load_storyboard(name_or_path: String) -> bool:
 # re-localization. Cue-exit entries have no deterministic length, so they contribute a
 # min-hold estimate; the map only needs entry-level granularity there. Also stamps
 # `_sched_end`, where the sequence hands over to the tail.
+#
+# Authored timings are literal here too. Only the UNAUTHORED fallback - an entry that gave no
+# timing at all, and so exits through _scaled_bound's auto branch at runtime - carries `pacing`,
+# so this estimate keeps mirroring what those entries actually do. Computed once at storyboard
+# load and then frozen: it is the [Echo] map's coordinate system, and re-deriving it mid-session
+# would move the schedule times the already-recorded fingerprints were filed under.
+#
+# The arithmetic is [method Storyboard.schedule]'s, which the editor's ruler is drawn from too.
 func _schedule_starts() -> Array:
-	var out: Array = []
-	var acc := 0.0
-	var sbs: float = _storyboard_sensitivity if _storyboard_sensitivity > 0.0 else sensitivity
-	for item in _storyboard_seq:
-		out.append(acc)
-		var sens := clampf(float(item.get("sensitivity", sbs)), 0.05, 20.0)
-		# Authored timings are literal here too. Only the UNAUTHORED fallback - an entry that gave no
-		# timing at all, and so exits through _scaled_bound's auto branch at runtime - carries `pacing`,
-		# so this estimate keeps mirroring what those entries actually do. Computed once at storyboard
-		# load and then frozen: it is the [Echo] map's coordinate system, and re-deriving it mid-session
-		# would move the schedule times the already-recorded fingerprints were filed under.
-		var dur: float = 0.0
-		if item.has("hold"):
-			dur = float(item["hold"])
-		elif item.has("min_hold"):
-			dur = float(item["min_hold"])
-		else:
-			dur = min_hold * pacing
-		acc += maxf(0.5, dur / sens)
-	_sched_end = acc
-	return out
+	var s := Storyboard.schedule(_storyboard_seq, storyboard_sensitivity(), unauthored_hold())
+	_sched_end = float(s["end"])
+	return s["starts"]
 
 
 # `--storyboard <name|path>` selects manual mode at launch.
@@ -1924,6 +2005,14 @@ func _pick_index() -> int:
 		return j
 	if _locked >= 0:
 		return _locked
+	return _pick(_session_seed, _pick_salt, _swaps, _index, _kind_last, _rng)
+
+
+# The pick itself, as a FUNCTION OF WHAT IT IS HANDED - the session's seed, the cut number, the
+# scene on screen and when each kind was last shown - so the show that WILL play can be asked for
+# without playing it ([method forecast]), and both answers come from this one body.
+func _pick(session: int, salt: int, swaps: int, index: int, kind_last: Dictionary,
+		fallback: RandomNumberGenerator) -> int:
 	if SCENES.size() <= 1:
 		return 0
 	# Identity-keyed weighted selection (Efraimidis-Spirakis): each candidate gets a STABLE
@@ -1938,16 +2027,44 @@ func _pick_index() -> int:
 	var best := -1
 	var best_key := -1.0
 	for i in SCENES.size():
-		var w := _novelty_weight(i)
+		var w := _novelty(i, index, kind_last, swaps)
 		if w <= 0.0:
 			continue
-		var h := hash([_session_seed ^ (_pick_salt * 0x27D4EB2F), _swaps, _scene_key(i)])
+		var h := hash([session ^ (salt * 0x27D4EB2F), swaps, _scene_key(i)])
 		var u := clampf(float(h & 0xFFFFFFFF) / 4294967296.0, 1e-9, 1.0)
 		var key := pow(u, 1.0 / w)
 		if key > best_key:
 			best_key = key
 			best = i
-	return best if best >= 0 else _rng.randi() % SCENES.size()   # all suppressed: fall back
+	if best >= 0:
+		return best
+	return (fallback.randi() if fallback != null else 0) % SCENES.size()   # all suppressed: fall back
+
+
+## THE SEEDED SHOW, WRITTEN DOWN: its first [param count] entries as a storyboard's - each a
+## scene, its motion and the seed that rolls its look - in the order this session's seed plays
+## them. What "automatic" chooses is a function of the seed and the cut number, so it can be read
+## ahead without playing a frame, and a note can take it as the first draft of its own storyboard.
+## The TIMING is not in it, nor the framing: where each cut lands is the music's, heard live, and
+## the seeded show draws its shots as it goes - so the entries carry no hold and no shot, and
+## leave as the seeded show's do. Asked before a show is up, the seed is the loaded song's own.
+func forecast(count: int) -> Array:
+	var session := _session_seed if _host != null else _resolve_seed()
+	var out: Array = []
+	var index := -1
+	var kind_last := {}
+	for k in maxi(count, 0):
+		# the cut number a pick is made under: the opening scene and the one after it are both
+		# picked before the first cut has been counted (attach() builds one, the first change the next)
+		var swaps := maxi(0, k - 1)
+		index = _pick(session, 0, swaps, index, kind_last, null)
+		var e: Dictionary = SCENES[index]
+		kind_last[String(e.script.resource_path)] = swaps
+		out.append({
+			"scene": String(e.script.resource_path).get_file().get_basename(),
+			"behavior": String(e.behavior),
+			"seed": session ^ _scene_key(index) ^ (swaps * 0x85EBCA77)})
+	return out
 
 
 # A STABLE identity for a catalog entry: a hash of (scene name, behavior), independent of its
@@ -1990,14 +2107,19 @@ const NOVELTY_EXP := 1.0
 # added for: two behaviors of one scene do not follow each other, and a kind shown a moment ago
 # is unlikely to return immediately. What it no longer does is decide the whole running order.
 func _novelty_weight(i: int) -> float:
-	if i == _index:
+	return _novelty(i, _index, _kind_last, _swaps)
+
+
+# ...as a function of the state it reads (see [method _pick]).
+func _novelty(i: int, index: int, kind_last: Dictionary, swaps: int) -> float:
+	if i == index:
 		return 0.0
 	var kind := String(SCENES[i].script.resource_path)
-	if _index >= 0 and kind == String(SCENES[_index].script.resource_path):
+	if index >= 0 and kind == String(SCENES[index].script.resource_path):
 		return 0.05
 	# An unseen kind is MAXIMALLY due, not infinitely due. The -1000 sentinel is unchanged and
 	# harmless now that the clamp is what decides how far novelty reaches.
-	var age := float(_swaps - int(_kind_last.get(kind, -1000)))
+	var age := float(swaps - int(kind_last.get(kind, -1000)))
 	return pow(clampf(age, 1.0, NOVELTY_SPAN), NOVELTY_EXP)
 
 
@@ -2033,6 +2155,7 @@ func _next_entry() -> Dictionary:
 		i = n + t                                    # distinct index -> distinct derived seed
 		item = _storyboard_tail[t]
 	_manual_i = i if i < n else -1                   # -1 = a tail entry
+	_entry_i = i
 	if i < n and i < _sched_starts.size():
 		_cursor_t = float(_sched_starts[i])          # a sequence entry claims its scheduled start;
 	_step += 1                                       # the tail free-runs from wherever it began

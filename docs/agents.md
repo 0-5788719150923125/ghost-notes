@@ -3,7 +3,7 @@
 
 Ghost Notes hands three kinds of work to AI agents. A **writer** writes the words: a card show's plan, its deck's booklet, the set dresser's table and every reading. A **painter** paints the pictures: a deck's cards, the table's cloth and room, and the book's and the notebook's illustrations. The **assistant** takes a note left in the feedback console (the backtick key) and makes the fix in the copy of Ghost Notes it runs from.
 
-Every agent is a command-line tool you install yourself, and each keeps its own sign-in, which Ghost Notes never handles: it finds the tool, runs it only when you ask, and keeps what each run was sent and what it said beside the result. Install one or several. Until one is installed, a template that needs a writer or a painter is grayed in **New**, its tooltip naming every agent that would do; the Environment panel (the ⚙ in the bottom-right row) lists each tool with the command that installs it.
+Every agent is a command-line tool you install yourself, and each keeps its own sign-in, which Ghost Notes never handles: it finds the tool, runs it only when you ask, and keeps what each run was sent and what it said beside the result. Install one or several. Until one is installed, a component that needs a writer or a painter is grayed in a note's **+**, its tooltip naming every agent that would do; the Environment panel (the ⚙ in the bottom-right row) lists each tool with the command that installs it.
 
 ## Which tool does what
 

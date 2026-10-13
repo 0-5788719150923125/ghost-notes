@@ -367,11 +367,27 @@ func _spec() -> Dictionary:
 		"painter": _knobs["painter"], "painter_model": _knobs["painter_model"], "painter_effort": _knobs["painter_effort"]}
 
 
-## A SHOW'S BLOCKS: its own (`cards:` - the knobs, the show's title and description), and the
-## voice, the Look and the bookends, which are the same blocks a chapter keeps. No `picture:` -
-## the table is the only medium here - and no `illustrations:`.
-func _doc_blocks() -> PackedStringArray:
+## A SHOW'S OWN BLOCKS: `cards:` (the knobs, the show's title and description) and the voice that
+## reads it. The Look and the bookends are the note's, kept when it has them attached - the same
+## blocks a chapter keeps. No `picture:` - the table is the only medium here - and no
+## `illustrations:`.
+func _own_blocks() -> Array:
+	return ["cards", "voice"]
+
+
+## ...and every block of a panel started without a note.
+func _classic_blocks() -> PackedStringArray:
 	return PackedStringArray(["cards", "voice", "look", "bookends", "youtube"])
+
+
+func _classic_components() -> Array:
+	return ["text", "cards", "voice", "look", "bookends"]
+
+
+## Of a note's component cards, the ones a card table can show: no Picture (the table is the
+## presentation) and so no Storyboard.
+func _hosted() -> Array:
+	return ["look", "bookends"]
 
 
 ## The show's own block: the knobs, and its YouTube title and description.
@@ -498,13 +514,23 @@ func _touch() -> void:
 ## THE TABLE'S PICTURE SETTINGS: the Look and the bookends, the same cards the Generative panel
 ## has. No Picture card - the table is the only medium here, it cuts no scenes, and it is filmed
 ## from a tripod (a dial that moved it by a millimeter was a dial that did nothing).
-func _build_cards() -> void:
+func _classic_cards() -> void:
 	_add_block_card("Look", &"look", LookCard.new())
-	_add_block_card("Intro & outro", &"paper", BookendsCard.new(
-		"Seconds the table holds before the reader speaks, with the channel's name and the "
-		+ "episode's title over it. The deck starts shuffling a beat before the first word.",
-		"Seconds held after the last word, the spread on the table and the channel's name over "
-		+ "it, fading picture and sound out together."))
+	_add_block_card("Intro & outro", &"paper", BookendsCard.new(INTRO_TIP, OUTRO_TIP))
+
+
+## What the bookends hold at a card table, in its own words.
+const INTRO_TIP := ("Seconds the table holds before the reader speaks, with the channel's name and the "
+	+ "episode's title over it. The deck starts shuffling a beat before the first word.")
+const OUTRO_TIP := ("Seconds held after the last word, the spread on the table and the channel's name over "
+	+ "it, fading picture and sound out together.")
+
+
+func _note_cards(ctx := {}) -> void:
+	var with := ctx.duplicate()
+	with["intro_tip"] = INTRO_TIP
+	with["outro_tip"] = OUTRO_TIP
+	super._note_cards(with)
 
 
 # --- the episode section -----------------------------------------------------------------------
@@ -517,7 +543,7 @@ func _build_source(script_box: VBoxContainer) -> void:
 	_doc.mode_changed.connect(_on_doc_mode)
 	# THE EPISODE is the producer's card, not the script's: the brief above is what every agent
 	# is handed, and everything on this card is what they make of it.
-	var box: VBoxContainer = _panel.add_card("episode", "Episode", &"producer")
+	var box: VBoxContainer = _panel.add_card("episode", "Episode", &"producer", "cards")
 
 	var erow := HBoxContainer.new()
 	erow.add_theme_constant_override("separation", 6)

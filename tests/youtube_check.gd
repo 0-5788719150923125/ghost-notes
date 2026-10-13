@@ -480,18 +480,30 @@ func _panel_fields() -> bool:
 		"a show with no YouTube card has no description or tags to edit, and uploads nothing")
 	ed._panel.plus.about_to_popup.emit()
 	var pop: PopupMenu = ed._panel.plus.get_popup()
+	# "+" lists what a note can have; on a show of cards the clock and the presentation are taken,
+	# so YouTube is the one thing it can be given, and the rest is grayed with its reason
 	var at := -1
+	var lit: Array = []
 	for i in pop.item_count:
-		if String(pop.get_item_metadata(i)) == "youtube":
+		var key := str(pop.get_item_metadata(i))
+		if key == "youtube":
 			at = i
-	_ok(at >= 0 and pop.item_count == 1, "its \"+\" offers YouTube, and only that (%d items)" % pop.item_count)
+		if not key.is_empty() and not pop.is_item_disabled(i):
+			lit.append(key)
+	_ok(at >= 0 and lit == ["youtube"], "its \"+\" offers YouTube, and nothing else that can be attached to a show of cards (%s)" % str(lit))
 	if at >= 0:
 		pop.id_pressed.emit(pop.get_item_id(at))
 	_ok(ed._youtube != null and ed._yt_desc != null and ed._yt_desc.get_parent() == ed._youtube.extra,
 		"attached, the YouTube card holds the show's description and tags")
 	ed._panel.plus.about_to_popup.emit()
-	_ok(pop.item_count == 1 and pop.is_item_disabled(0) and String(pop.get_item_metadata(0)).is_empty(),
-		"and \"+\" does not offer it twice - it says nothing else can be attached")
+	var left: Array = []
+	var twice := false
+	for i in pop.item_count:
+		var key := str(pop.get_item_metadata(i))
+		twice = twice or key == "youtube"
+		if not key.is_empty() and not pop.is_item_disabled(i):
+			left.append(key)
+	_ok(not twice and left.is_empty(), "and \"+\" does not offer it twice - nothing it lists can be attached now (%s)" % str(left))
 	ed._youtube._upload.set_pressed_no_signal(true)
 	# NOT THE AUTHOR'S SHOW. A panel comes up synced to whatever document the person running
 	# this has open, and DocSource.set_field writes a synced document at once - so this gate read

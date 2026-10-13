@@ -65,6 +65,14 @@ var plus: MenuButton
 var card_prefix := ""
 ## What the restore button says - the panel's own name, so it is clear what comes back.
 var title := ""
+## HOW A COMPONENT COMES OFF THE NOTE: `(component: String) -> void`, set by a panel that shows a
+## note BEFORE its cards are added - a card added with a component then carries an × that asks and
+## calls it ([method add_card]). Unset, cards have none (a panel with no note to change).
+var detach := Callable()
+## Why a component cannot be detached this moment: `(component: String) -> String`, "" when it can.
+var detach_blocker := Callable()
+var _detach_buttons: Array = []     # [Button, component, tooltip]
+var _detach_t := 0.0
 ## THE WAY BACK. Hiding the panel (its – button) left nothing on screen to bring it back but
 ## F2, which nobody knows: "if I minimize the left-side panel, there is no clear way to
 ## restore it". A small button in the corner the panel occupied, shown exactly while the
@@ -133,11 +141,11 @@ func add_card_row() -> CardRow:
 
 
 ## THE COMPONENT ROW: "+", then the chips ([CardRow]), under the heading - every note's panel has it
-## (the note's own, the readings', Synthesis'). "+" offers what [param offer] says - `() -> [attached,
-## only]`, asked as the menu opens ([method Components.attach_menu]: the impossible left out, the
-## not-ready and the unmet grayed with the reason, nothing attached twice) - and hands the key of
-## the one picked to [param attach].
-func add_component_row(offer: Callable, attach: Callable) -> CardRow:
+## (the note's own, the readings', the voice lab's). "+" offers what a note with [param attached] -
+## `() -> Array`, asked as the menu opens - can take next ([method Components.attach_menu]: the
+## impossible left out; the not-ready, the unmet and what there is no room for grayed with the
+## reason; nothing attached twice), and hands the key of the one picked to [param attach].
+func add_component_row(attached: Callable, attach: Callable) -> CardRow:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	body.add_child(row)
@@ -147,9 +155,8 @@ func add_component_row(offer: Callable, attach: Callable) -> CardRow:
 	plus.tooltip_text = ("Attach what this note should have next - each one grayed, with the reason, "
 		+ "when it cannot be had yet.")
 	plus.about_to_popup.connect(func() -> void:
-		var o: Array = offer.call()
 		var pop := plus.get_popup()
-		Components.attach_menu(pop, o[0], o[1])
+		Components.attach_menu(pop, attached.call())
 		if pop.item_count == 0:
 			pop.add_item("Nothing else can be attached here")
 			pop.set_item_metadata(0, "")
@@ -181,14 +188,49 @@ func add_component_row(offer: Callable, attach: Callable) -> CardRow:
 
 
 ## A new card at the end of [member body], with a chip in [member card_row]; returns the card's
-## body, which is where its rows go. [param key] names it in the stored fold.
-func add_card(key: String, card_title: String, family: StringName) -> VBoxContainer:
+## body, which is where its rows go. [param key] names it in the stored fold. A card that is a
+## COMPONENT's ([param component], its key in [constant Components.REGISTRY]) can be taken off the
+## note from its title bar, where the panel says how ([member detach]).
+func add_card(key: String, card_title: String, family: StringName, component := "") -> VBoxContainer:
 	var card: Card = CardScript.new(("%s.%s" % [card_prefix, key]) if not card_prefix.is_empty() else "",
 		card_title, family)
 	body.add_child(card)
 	if card_row != null:
 		card_row.track(card)
+	if not component.is_empty() and detach.is_valid():
+		_add_detach(card, component)
 	return card.body
+
+
+## THE × ON A COMPONENT'S CARD: what "+" attached comes off again, asked first - its settings in
+## the note go with it. Grayed, with the reason, while it cannot ([member detach_blocker]: a
+## component another one brings stays while that one does).
+func _add_detach(card: Card, component: String) -> void:
+	var x := Button.new()
+	x.text = "×"
+	x.flat = true
+	x.focus_mode = Control.FOCUS_NONE
+	x.add_theme_font_size_override("font_size", 14)
+	var label := String((Components.REGISTRY.get(component, {"label": card.title}) as Dictionary)["label"])
+	var tip := "Detach %s from this note. Its settings here are removed with it." % label
+	x.tooltip_text = tip
+	x.pressed.connect(func() -> void:
+		if x.disabled:
+			return
+		var ask := ConfirmationDialog.new()
+		ask.title = "Detach %s?" % label
+		ask.dialog_autowrap = true
+		ask.dialog_text = ("%s comes off this note, and its settings in the note are removed. "
+			+ "The note's words, and everything else attached, stay as they are.") % label
+		ask.ok_button_text = "Detach"
+		ask.confirmed.connect(func() -> void:
+			ask.queue_free()
+			detach.call(component))
+		ask.canceled.connect(ask.queue_free)
+		add_sibling(ask)
+		ask.popup_centered(Vector2i(480, 0)))
+	card.add_title_bar_control(x)
+	_detach_buttons.append([x, component, tip])
 
 
 ## A card PINNED UNDER the scrolling body, with a chip in [member card_row]; returns the card's body.
@@ -243,6 +285,23 @@ func _ready() -> void:
 	get_tree().node_added.connect(func(n: Node) -> void:
 		if is_ancestor_of(n):
 			_no_wheel(n))
+
+
+func _process(delta: float) -> void:
+	# whether a component can come off follows what else is attached; twice a second is plenty
+	if _detach_buttons.is_empty():
+		return
+	_detach_t -= delta
+	if _detach_t > 0.0:
+		return
+	_detach_t = 0.5
+	for row in _detach_buttons:
+		var x: Button = row[0]
+		if not is_instance_valid(x):
+			continue
+		var why := String(detach_blocker.call(String(row[1]))) if detach_blocker.is_valid() else ""
+		x.disabled = not why.is_empty()
+		x.tooltip_text = why if not why.is_empty() else String(row[2])
 
 
 ## A [Slider] takes the mouse wheel by default, so scrolling down a long panel dragged every

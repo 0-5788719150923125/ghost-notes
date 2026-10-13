@@ -154,7 +154,7 @@ func show_list() -> void:
 
 ## A new, empty note, open in the editor.
 func new_note() -> void:
-	var path := NoteStore.create("note", "Untitled")
+	var path := NoteStore.create("Untitled")
 	if not path.is_empty():
 		open_note(path)
 

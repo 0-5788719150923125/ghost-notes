@@ -31,6 +31,15 @@ extends Node
 ##     keep their order and a card's thickness between them (that would be a card through a card);
 ##   - no card jumps: its step at the plan's rate is a hand's speed at most (HAND_SPEED);
 ##   - and the plan is cheap enough to make at an episode's load;
+##
+## THE THREE COSTS ARE THE CODE'S, NOT THE MACHINE'S ([WorkClock], tests/work_clock.gd). They were
+## wall-clock times, and this gate failed with nothing changed the day three gates ran beside it:
+## 828 ms against 700 for the plan, 59.6 ms against 25 for a step (2026-10-12) - mostly time spent
+## waiting for a core. A step's cost was also the WORST single timing of some 350, which one pause
+## of the machine decides: it read 17 to 19 ms with the machine to itself, and the dearest step
+## costs 4 to 9 when each is the least of three. Now every cost is the least of a few timings on
+## the thread's own processor clock. The control: the same plan made twice over costs clearly
+## more, about twice, so the clock follows the work and a budget on it can be broken.
 ##   - a JUMPER flies out of a shuffle: when it springs the deck is mid-riffle, even when the
 ##     shuffle before it had gone quiet ("not when the cards are just sitting there").
 ##
@@ -58,7 +67,13 @@ extends Node
 ##
 ## A BOOT probe (the medium reaches the Director); no GPU - the tracks are numbers.
 
+const WorkClock := preload("res://tests/work_clock.gd")
 const SEEDS := 12
+## THE BUDGETS, in milliseconds of the thread's processor ([WorkClock]): a wash's plan as an
+## episode loads, one cut short while the reading plays, and a step of rest inside a frame.
+const PLAN_MS := 700.0
+const CUT_MS := 250.0
+const STEP_MS := 25.0
 ## Half a card's travel is in straight runs at least this long (meters).
 const SWEEP := 0.12
 ## A card going this fast (m/s) is sweeping; one going slower than STILL is lying still.
@@ -113,13 +128,13 @@ func _run() -> void:
 		for k in m:
 			n[k] = float(n[k]) + float(m[k]) / float(SEEDS) if k in ["dur", "mix", "path", "sweep", "long", "reach", "knocked"] \
 				else int(n[k]) + int(m[k])
-	# THE COST of the longest wash, the least of three: a loaded machine only ever adds to a timing
-	var best := INF
-	for r in 3:
-		var t0 := Time.get_ticks_usec()
-		medium._wash_plan(7777, float(TableMedium.RUNS["wash"]["dur"][1]))
-		best = minf(best, float(Time.get_ticks_usec() - t0) / 1000.0)
-	n["ms"] = best
+	# THE COST of the longest wash (see the header), and the control: made twice over it costs
+	# twice as much - the clock follows the work, whatever else the machine is doing
+	var longest := float(TableMedium.RUNS["wash"]["dur"][1])
+	n["ms"] = WorkClock.cost_ms(func() -> void: medium._wash_plan(7777, longest), Callable(), 5)
+	n["twice"] = WorkClock.cost_ms(func() -> void:
+		medium._wash_plan(7777, longest)
+		medium._wash_plan(7777, longest), Callable(), 5)
 	print("wash_check: over %d washes - %.1f s long, %.1f s of it mixing; %.2f m a card, half of it in runs of %.0f cm or more, %.0f%% in runs of 10 cm or more;"
 		% [SEEDS, n["dur"], n["mix"], n["path"], float(n["sweep"]) * 100.0, float(n["long"]) * 100.0])
 	print("            %.0f%% of the cards go 15 cm or more from where the mixing found them; %.0f%% of the still cards a sweep runs over are knocked"
@@ -139,7 +154,11 @@ func _run() -> void:
 	_ok(int(n["flips"]) >= SEEDS * 8, "the order changes between cards that meet again (%d)" % n["flips"])
 	_ok(int(n["clips"]) == 0, "never while they touch: no card through a card (%d)" % n["clips"])
 	_ok(int(n["jumps"]) == 0, "no card jumps (%d)" % n["jumps"])
-	_ok(float(n["ms"]) < 700.0, "a plan is cheap enough to make as an episode loads (%.0f ms)" % n["ms"])
+	_ok(float(n["ms"]) < PLAN_MS, "a plan is cheap enough to make as an episode loads (%.0f ms of %.0f)" % [n["ms"], PLAN_MS])
+	var ratio := float(n["twice"]) / maxf(float(n["ms"]), 0.001)
+	# (no ceiling on it: what else the machine is doing only adds to a timing, and it read 1.6 to 2.8
+	# over seven runs on a busy desk - a ceiling here would be the wall clock's failure again)
+	_ok(ratio > 1.3, "control: the same plan made twice over costs more, about twice (%.2f times) - the clock follows the work" % ratio)
 	_cut_short()
 	_jumper()
 	_looks()
@@ -159,9 +178,8 @@ func _run() -> void:
 ## because it is made while the reading plays.
 func _cut_short() -> void:
 	var full: Dictionary = medium._wash_plan(4242, 30.0)
-	var t0 := Time.get_ticks_usec()
 	var cut: Dictionary = medium._wash_plan(4242, 17.0, full)
-	var ms := float(Time.get_ticks_usec() - t0) / 1000.0
+	var ms := WorkClock.cost_ms(func() -> void: medium._wash_plan(4242, 17.0, full))
 	var g := int(floor(float((cut["mix"] as Vector2).y) * TableMedium.WASH_HZ))
 	var same := true
 	for i in (full["tracks"] as Array).size():
@@ -181,7 +199,7 @@ func _cut_short() -> void:
 	_ok(same, "a wash cut short is the same wash up to its gather")
 	_ok(worst <= TableMedium.HAND_SPEED / TableMedium.WASH_HZ, "and nothing jumps where it turns to gathering (%.1f mm a step at most)" % (worst * 1000.0))
 	_ok(last.size() == int(ceil(17.0 * TableMedium.WASH_HZ)) + 1, "it ends when the room does (%d steps)" % last.size())
-	_ok(ms < 250.0, "and is cheap to make mid-reading (%.0f ms)" % ms)
+	_ok(ms < CUT_MS, "and is cheap to make mid-reading (%.0f ms of %.0f)" % [ms, CUT_MS])
 	# too little room for a wash at all: the deck stays squared rather than snapping a spread back
 	var m := {"t0": 10.0, "dur": 30.0, "seed": 4242, "plan": full}
 	medium._shuffle_room = 10.0 + TableMedium.WASH_ROOM - 1.0
@@ -268,11 +286,15 @@ func _resting() -> void:
 		var last := (tracks[0] as PackedVector4Array).size() - 1
 		for st in range(1, last, 7):
 			# AS IT PLAYS, the step before made first: a calmed fan-out step reuses the bare rests round
-			# it (TableMedium.CALM_HZ), and only a seek lands on none of them (seven rests, ~20 ms, once)
-			medium._wash_rest(plan, st - 1)
-			var t0 := Time.get_ticks_usec()
+			# it (TableMedium.CALM_HZ), and only a seek lands on none of them (seven rests, ~20 ms, once).
+			# Each timing starts from that same place - what was kept thrown away, the step before made
+			# again - or the second timing would only measure the keeping.
+			var as_it_plays := func() -> void:
+				medium._rest_steps = {}
+				medium._rest_lifts = {}
+				medium._wash_rest(plan, st - 1)
+			worst_ms = maxf(worst_ms, WorkClock.cost_ms(func() -> void: medium._wash_rest(plan, st), as_it_plays))
 			var rest: Array = medium._wash_rest(plan, st)
-			worst_ms = maxf(worst_ms, float(Time.get_ticks_usec() - t0) / 1000.0)
 			var v := float(st) / TableMedium.WASH_HZ
 			var on: Array = []
 			for i in rest.size():
@@ -355,7 +377,7 @@ func _resting() -> void:
 	_ok(flat_high > judged / 3, "control: on the plan's flat layers %d of %d sit higher than that" % [flat_high, judged])
 	_ok(mean_new < mean_old, "corners over bare cloth come down toward it: %.2f mm up, against %.2f mm on flat layers" % [mean_new, mean_old])
 	_ok(tipped > cards / 10, "cards resting on others tip (%d of %d)" % [tipped, cards])
-	_ok(worst_ms < 25.0, "a step of rest is cheap enough to make as it plays (%.1f ms)" % worst_ms)
+	_ok(worst_ms < STEP_MS, "a step of rest is cheap enough to make as it plays (%.1f ms of %.0f)" % [worst_ms, STEP_MS])
 
 
 ## AS THE CAMERA SEES IT (2026-10-06: "the cards often clip through each other... cards moving

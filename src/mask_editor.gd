@@ -81,6 +81,8 @@ var render_mode := false
 ## The note this editor is (set by main), where a clip chosen here is written - "" from the
 ## command line.
 var note_path := ""
+## Set by main: (path: String) -> void - open the note again, once its clip has been detached.
+var reopen: Callable
 
 var session: MaskSession = null
 var _session_path := ""       # res://-relative or absolute; wherever it was loaded from
@@ -888,6 +890,22 @@ func _header_row() -> HBoxContainer:
 	return row
 
 
+## A NOTE'S CLIP COMES OFF AGAIN: the Clip card's × on [param panel] takes the `clip:` block out of
+## the note and opens it as what is left ([method NoteCards.detach]) - its words, as a plain note.
+## The session Masking keeps for the clip is its own file and is left as it is. Not while an export
+## is under way, and not from the command line, where there is no note.
+func _note_detach(panel: SidePanel) -> void:
+	if note_path.is_empty() or render_mode or not reopen.is_valid():
+		return
+	panel.detach_blocker = func(_key: String) -> String: return leave_blocker()
+	panel.detach = func(key: String) -> void:
+		var err := NoteCards.detach(note_path, key)
+		if not err.is_empty():
+			push_warning("ghost mask: could not detach the clip from %s - %s" % [note_path.get_file(), err])
+			return
+		reopen.call(note_path)
+
+
 ## The clip's own name, as the Clip card heads it.
 func _clip_name() -> String:
 	var src := String(session.source_path) if session != null else ""
@@ -896,7 +914,7 @@ func _clip_name() -> String:
 	return "▶  " + (src.get_file().get_basename() if not src.is_empty() else "the clip")
 
 
-## A NOTE WITH NO CLIP YET (New -> Masking): the panel, with a Clip card asking for one - a video
+## A NOTE WITH NO CLIP YET (a Clip just attached): the panel, with a Clip card asking for one - a video
 ## file, or a link to download (2026-10-06: the link field left the notes list for the component it
 ## belongs to - "if we want to import an audio file or a video file - then we should add those
 ## relevant components/attachments to the note options themselves"). What is chosen is written into
@@ -907,13 +925,14 @@ func _build_source_panel() -> void:
 	_src_panel = SidePanel.new(PANEL_W)
 	_src_panel.title = "Masking"
 	_src_panel.card_prefix = "masking"
+	_note_detach(_src_panel)
 	add_child(_src_panel)
 	_src_panel.body.add_theme_constant_override("separation", 8)
 	_src_panel.pin_header(_header_row())
 	var chips := CardRow.new()
 	_src_panel.body.add_child(chips)
 	_src_panel.card_row = chips
-	var clip: VBoxContainer = _src_panel.add_card("clip", "Clip", &"picture")
+	var clip: VBoxContainer = _src_panel.add_card("clip", "Clip", &"picture", "clip")
 	var none := Label.new()
 	none.text = "No clip yet."
 	none.add_theme_font_size_override("font_size", 14)
@@ -3113,13 +3132,14 @@ func _build_panel() -> void:
 	_panel = SidePanel.new(PANEL_W)
 	_panel.title = "Masking"
 	_panel.card_prefix = "masking"
+	_note_detach(_panel)
 	_chrome_host().add_child(_panel)
 	_panel.body.add_theme_constant_override("separation", 8)
 	_panel.pin_header(_header_row())
 	var chips := CardRow.new()
 	_panel.body.add_child(chips)
 	_panel.card_row = chips
-	var clip: VBoxContainer = _panel.add_card("clip", "Clip", &"picture")
+	var clip: VBoxContainer = _panel.add_card("clip", "Clip", &"picture", "clip")
 	var clip_name := Label.new()
 	clip_name.text = _clip_name()
 	clip_name.tooltip_text = String(session.source_path if not session.source_path.is_empty() else session.video_path)

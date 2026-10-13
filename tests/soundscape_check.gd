@@ -2,7 +2,12 @@ extends SceneTree
 
 ## The gate of [Soundscape] - what a place sounds like behind the reader - with no audio device.
 ##
-##   godot --headless --path . --script res://tests/soundscape_check.gd
+##   timeout 600 godot --headless --path . --script res://tests/soundscape_check.gd
+##
+## IT IS LONG, and says so in the line above (scripts/check.sh reads the timeout there): every
+## check renders seconds of a place, a sample at a time in script - two minutes on a CI runner, and
+## 344 s on a busy desk (2026-10-12), which is past the 300 s a gate gets when it asks for nothing.
+## It was killed there with nothing wrong.
 ##
 ## - MADE SAFE: nothing written is `{}`; a part that is not an object, an unknown part or kind is left
 ##   out or falls back, with a note; a sound made safe reads the same made safe again (an opening's
@@ -36,8 +41,7 @@ extends SceneTree
 ##   sing (each of several cicadas pulsing at its own rate, shallow) - against the recipe that was "a
 ##   horrible screeching sound throughout" (the user, 2026-10-09): one narrow band a group, chopped deep at
 ##   one rate, which is rough.
-## - (NOTHING PULSES AT ONE RATE is a gate of its own, tests/soundscape_pulse_check.gd: this one
-##   runs close to its five minutes on a busy machine.)
+## - (NOTHING PULSES AT ONE RATE is a gate of its own, tests/soundscape_pulse_check.gd.)
 ## - EVERY PART SOUNDS: each part and kind alone is heard at the dial's middle, in a sane range, and
 ##   none is NaN.
 

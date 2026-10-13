@@ -36,7 +36,7 @@ core. The commitments:
 
 ## Feature registries
 
-- [Components and templates](components.md) (14 components, 7 templates) - what a note can carry, the templates **New** makes from it, and what each part asks of the platform.
+- [Components](components.md) (14 components, 5 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
 - [Media](media.md) (7) - what the show is carried on.
 - [Look filters](filters.md) (8) - the post-process over the whole picture.
@@ -52,7 +52,7 @@ core. The commitments:
 - [How the show is made](architecture.md) - from the audio to the screen or a video file: the signal path, composition, drawing, scheduling, rendering - and adding a scene.
 - [The environment](environment.md) - what Ghost Notes installs itself, and the few programs that stay the machine's.
 - [CLI flags](cli.md) - every command-line flag.
-- [Storyboards](../storyboards/README.md) - the data spec Manual notes are written in.
+- [Storyboards](../storyboards/README.md) - the data spec a note's storyboard is written in.
 
 ## Directory layout
 
@@ -91,7 +91,7 @@ From a song file to the typed per-frame `AudioFeatures` every scene consumes - l
 
 ### Direction & session
 
-The lifecycle around the scenes: boot, the notes list and a note's own panel, the Director's scheduling/transitions, and the storyboards card.
+The lifecycle around the scenes: boot, the notes list and a note's own panel, the cards every panel builds a note's components from, and the Director's scheduling/transitions.
 
 - [`main.gd`](../src/main.gd) **main** - ghost entry point.
 - [`boot.gd`](../src/boot.gd) **boot** - Boot - the earliest hook (first autoload), for things that must happen before the window is ever drawn into. In export-render mode (--export) it keeps the render window out of the way as early as GDScript can - off-screen, no focus - so it barely flickers into view before the render takes over. ...
@@ -105,7 +105,7 @@ The lifecycle around the scenes: boot, the notes list and a note's own panel, th
 - [`provision_badge.gd`](../src/provision_badge.gd) **provision_badge** - ProvisionBadge - a small notice at the top of the frame while ghost is installing or updating its own dependencies, in every mode. Chrome furniture, because an install can start from anywhere: the voice's environment from the Generative panel, FFmpeg from a clip opened on a first run, an update at ...
 - [`chrome.gd`](../src/chrome.gd) **Chrome** - the shared session furniture every mode of ghost carries.
 - [`capabilities.gd`](../src/capabilities.gd) **Capabilities** - what this platform can do, and what is ready now (next/notes.md, "Platforms: desktop and Android"). One table, two questions per entry, each answered with a reason:
-- [`components.gd`](../src/components.gd) **Components** - the parts a note is made of (next/notes.md, "A component" and step 7). One registry shaped like `Medium`'s: each entry says what the component is, what it needs and what it gives, the components it brings with it, what it asks of the platform (`Capabilities`), which groups of the script's marks it ...
+- [`components.gd`](../src/components.gd) **Components** - the parts a note is made of (next/notes.md, "A component"). One registry shaped like `Medium`'s: each entry says what the component is, what it needs and what it gives, the components it brings with it, the room it takes in a note, what it asks of the platform (`Capabilities`), which groups of the ...
 - [`side_panel.gd`](../src/side_panel.gd) **SidePanel** - a mode's control panel, which CANNOT outgrow the window.
 - [`card.gd`](../src/card.gd) **Card** - one component's settings on a side panel: a titled box that folds, bordered in its FAMILY's color (next/notes.md, "A card").
 - [`card_row.gd`](../src/card_row.gd) **CardRow** - the chips under a panel's title, one per `Card` in its color (next/notes.md, "The component row"). A click opens or closes that card; Ctrl-click opens it alone and folds the rest, as Blender's panel headers do. A chip shows ● while its card is open and ○ while it is folded, so the row also answers ...
@@ -113,12 +113,12 @@ The lifecycle around the scenes: boot, the notes list and a note's own panel, th
 - [`bookends_card.gd`](../src/bookends_card.gd) **BookendsCard** - the intro and the outro: seconds held before the first word and after the last (next/notes.md step 5: one card per section, in every panel that has it - the Cards panel used to declare both sliders a second time). Its block in a document is `bookends:`.
 - [`picture_card.gd`](../src/picture_card.gd) **PictureCard** - the picture a reading is shown in: the MEDIUM (what the show is carried on), the FILMS a comic cuts to, the book's PICTURES (`IllustrationPanel`), and the Director's dials - scene hold, flourishes, camera, handwriting (next/notes.md step 5: one card per section). Its block in a document is ...
 - [`song_card.gd`](../src/song_card.gd) **SongCard** - the note's song (2026-10-06): which file it is, and a way to choose one. Importing a song is a component of a note, not a button on the notes list - "if we want to import an audio file or a video file - then we should add those relevant components/attachments to the note".
-- [`storyboards_card.gd`](../src/storyboards_card.gd) **StoryboardsCard** - the scenes by hand: the storyboards in `storyboards/`, one a click away, in a note with a song and a Picture (the Manual template). It was the Workspace, a panel of its own beside the show; a note's panel holds it now, as a card like every other component's, and the board picked is the note's - ...
+- [`note_cards.gd`](../src/note_cards.gd) **NoteCards** - a note's component cards, built ONE way on whichever panel shows the note, and the two edits that change what a note is made of: attach and detach.
 - [`console.gd`](../src/console.gd) **ConsoleView** - The in-app console - a live tail of Godot's own log file. print(), push_warning(), push_error() and engine SCRIPT ERRORs all land in user://logs/godot*.log via the engine's default file logging, but anyone launching ghost as a compiled app or from the Godot launcher never sees that stream - it used ...
-- [`notes_list.gd`](../src/notes_list.gd) **NotesList** - where Ghost Notes opens (next/notes.md step 8, "No home screen"): a notes app opens on its notes. The left panel lists them - the default folder and every folder or file the user added (`NoteStore`), newest first - under the name and the tagline, with New: the templates (today's modes, and a plain ...
+- [`notes_list.gd`](../src/notes_list.gd) **NotesList** - where Ghost Notes opens (next/notes.md step 8, "No home screen"): a notes app opens on its notes. The left panel lists them - the default folder and every folder or file the user added (`NoteStore`), newest first - under the name and the tagline, with New, and "Existing note…" for a markdown file ...
 - [`delete_dialog.gd`](../src/delete_dialog.gd) **DeleteDialog** - "Delete this note?", asked before a note goes (2026-10-06, the user: "add a delete option to every note, and probably an x to each note on the home screen. If we click the x, prompt for confirmation to delete the note"). Asked from the notes list's × and from every note's own "⋯" (see [method ...
 - [`phone_shell.gd`](../src/phone_shell.gd) **PhoneShell** - Ghost Notes on a phone (next/notes.md step 11, "Platforms: desktop and Android"): a notes app and nothing more. A list of the notes in `user://notes/` (`NoteStore`), and the editor - full screen, in portrait - with no stage, no transport, no Chrome furniture and no agent: on a phone a note has one ...
-- [`note_panel.gd`](../src/note_panel.gd) **NotePanel** - a note's own panel, for every note no specialized panel runs: a note with nothing attached (next/notes.md step 8: "with nothing attached, it is a text editor"), and a note with a song - Auto and Manual, rebuilt 2026-10-06 ("if we load an audio file, allow it to be played. Do not hide the left-hand ...
+- [`note_panel.gd`](../src/note_panel.gd) **NotePanel** - a note's own panel: where every new note opens, and what runs every note whose components need no editor of their own (`Components.workspace_of`) - a note that is its words alone, and a note with a song.
 - [`note_store.gd`](../src/note_store.gd) **NoteStore** - where notes live (next/notes.md step 8, "Where do notes live?"): a DEFAULT FOLDER, and every other folder or file the user points Ghost Notes at - "it's not realistic to prevent people from sourcing their own content from other projects, git repos, etc." One small interface (list, create, add, and ...
 - [`director.gd`](../src/director.gd) **director** - 
 - [`settings.gd`](../src/settings.gd) **settings** - Settings - the one owner of `user://ghost.cfg` (autoload).
@@ -234,7 +234,7 @@ Text to narrated audio in two paths: ghost's own source-filter synthesizer (no m
 - [`subtitles.gd`](../src/subtitles.gd) **Subtitles** - the karaoke overlay, session-owned rather than editor-owned.
 - [`voice_host.gd`](../src/voice_host.gd) **VoiceHost** - Godot's end of the neural voice subprocess (see VOICE_PLAN.md).
 - [`reading_panel.gd`](../src/reading_panel.gd) **ReadingPanel** - a reading of a document in the neural voice: the script, the cast, the voice, the stream, the transport's hooks, the export (VOICE_PLAN.md P4). The Generative and Cards panels are both one (next/notes.md step 5): each adds the cards its picture is made of (`_build_cards`) and the blocks it ...
-- [`generative_editor.gd`](../src/generative_editor.gd) **GenerativeEditor** - the Generative mode: a chapter read aloud in the neural voice, shown in the medium the author picks. Everything that reads is `ReadingPanel`'s; this panel adds the cards a chapter's picture is made of (next/notes.md step 5) - the Picture (`PictureCard`: the medium, the films, the book's pictures, ...
+- [`generative_editor.gd`](../src/generative_editor.gd) **GenerativeEditor** - the reading workspace: a note with a Voice, its text read aloud in the neural voice. Everything that reads is `ReadingPanel`'s, and what the reading is SEEN in is the note's: the cards of whatever else it has attached - the Picture (`PictureCard`: the medium, the films, the book's pictures, the ...
 - [`voice_readers.gd`](../src/voice_readers.gd) **VoiceReaders** - who a multi-speaker voice's speaker NUMBER actually is.
 - [`voice_fx.gd`](../src/voice_fx.gd) **VoiceFX** - the ambience from Synthesis, over any PCM.
 - [`room_fx.gd`](../src/room_fx.gd) **RoomFX** - THE ROOM, decided once and rendered twice.
@@ -277,10 +277,16 @@ Every piece of writing and painting ghost asks an AI for: who writes (TextGen) a
 
 ### Storyboards & stage
 
-Manual mode as data: the YAML-subset parser, the storyboard loader, and the Cast/Actions/Track stack that renders a described scene. See [storyboards/README.md](../storyboards/README.md) for the data spec and [stage.md](stage.md) for the actor/verb registries.
+A show written down, as data: the YAML-subset parser, the storyboard's spec and its field tables, pure edits of nested data, the card that keeps a note's storyboard and the editor it opens (a strip of entries, a stage entry's lanes, rows built from the tables), and the Cast/Actions/Track stack that renders a described scene. See [storyboards/README.md](../storyboards/README.md) for the data spec and [stage.md](stage.md) for the fields and the actor/verb registries.
 
 - [`yaml.gd`](../src/yaml.gd) **MiniYaml** - an in-house parser for the YAML *subset* storyboards are written in.
-- [`storyboard.gd`](../src/storyboard.gd) **Storyboard** - the loader for user-authored scene scores (Manual mode).
+- [`storyboard.gd`](../src/storyboard.gd) **Storyboard** - a show's scenes written down: the data spec, and its one owner.
+- [`data_path.gd`](../src/data_path.gd) **DataPath** - edits of nested data (Dictionaries and Arrays) as PURE FUNCTIONS, addressed by a path: the keys and indexes from the root down, `["sequence", 2, "track", "spans", 0, "from"]`.
+- [`schema_form.gd`](../src/schema_form.gd) **SchemaForm** - rows of controls built from a TABLE OF FIELDS, for editing one map of data.
+- [`storyboard_card.gd`](../src/storyboard_card.gd) **StoryboardCard** - the note's storyboard: the show written down, on a note with a Picture. What plays, in what order, for how long - and where nothing is written, the seed still chooses. The card says what the note holds and lists its entries, one a click away; the writing is done in the `StoryboardEditor` it opens ...
+- [`storyboard_editor.gd`](../src/storyboard_editor.gd) **StoryboardEditor** - the nonlinear editor of a note's storyboard: a dock along the bottom of the frame, under the show it edits. Opened from the `StoryboardCard` ("Timeline…").
+- [`storyboard_strip.gd`](../src/storyboard_strip.gd) **StoryboardStrip** - a storyboard's entries laid along a ruler: one block per entry, as wide as it is scheduled to stay, the tail's after the sequence's. The top row of the `StoryboardEditor`.
+- [`storyboard_lanes.gd`](../src/storyboard_lanes.gd) **StoryboardLanes** - one stage entry's timeline: a lane per actor, and on it every span that happens to that actor - a block for a window (`from` to `to`), a diamond for a moment (`at`). The lower rows of the `StoryboardEditor`, shown while a stage entry is picked.
 - [`cast.gd`](../src/cast.gd) **Cast** - the actor registry for data-driven scenes (see scenes/stage.gd).
 - [`actions.gd`](../src/actions.gd) **Actions** - the verb registry for data-driven scenes (see scenes/stage.gd).
 - [`track.gd`](../src/track.gd) **Track** - the timeline runner for data-driven scenes (see scenes/stage.gd).
@@ -303,8 +309,8 @@ Rendering a session to video (bake + Movie Maker, background processes), uploadi
 - [`exporter.gd`](../src/exporter.gd) **Exporter** - render the visualization to a video, in the background, in two steps.
 - [`youtube.gd`](../src/youtube.gd) **youtube** - YouTube - sign in to the author's YouTube channel and upload a finished export to it.
 - [`youtube_card.gd`](../src/youtube_card.gd) **YouTubeCard** - the YouTube component's card (2026-10-07, the user: "add a little '+' button near those labels... 'youtube' should be an option. When we add it, a new card is created"): whether an export goes up, what it is called, who may see it and the playlist it joins - and the Google client and the sign-in an ...
-- [`showcase.gd`](../src/showcase.gd) **Showcase** - the README's animation, recorded from the real app: a Manual note playing `storyboards/showcase.yaml` (a blue prism flies in and divides into a blue one and a red one, the pair lock, then take opposite highways), with the note's panel, the row and the transport around it - the UI as a person sees ...
-- [`showcase_recorder.gd`](../src/showcase_recorder.gd) **ShowcaseRecorder** - the README's recording, inside the second ghost that `Showcase` starts under Movie Maker with `--showcase <work>`. It makes what a person would - a Manual note with a song, on the showcase storyboard - opens it the way the notes list does, presses Play, and quits once `Showcase.frames` ...
+- [`showcase.gd`](../src/showcase.gd) **Showcase** - the README's animation, recorded from the real app: a note with a song playing `storyboards/showcase.yaml` (a blue prism flies in and divides into a blue one and a red one, the pair lock, then take opposite highways), with the note's panel, the row and the transport around it - the UI as a person ...
+- [`showcase_recorder.gd`](../src/showcase_recorder.gd) **ShowcaseRecorder** - the README's recording, inside the second ghost that `Showcase` starts under Movie Maker with `--showcase <work>`. It makes what a person would - a note with a song, on the showcase storyboard - opens it the way the notes list does, presses Play, and quits once `Showcase.frames` frames have ...
 
 ### Feedback & assistant
 

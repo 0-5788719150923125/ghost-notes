@@ -1,15 +1,17 @@
 extends Node
 
-## teardown_check - EVERY MODE CAN BE LEFT AND ENTERED AGAIN (next/notes.md step 6), through the real
-## main scene: each template opened the way the notes list opens a note, left by Chrome's ⌂, several times
-## over, and the app measured after every return home.
+## teardown_check - EVERY NOTE CAN BE LEFT AND ENTERED AGAIN (next/notes.md step 6), through the real
+## main scene: a note of each make-up - its words alone, a song and its show, a show written by hand
+## with the storyboard's editor open, each workspace - opened the way the notes list opens a note,
+## left by Chrome's ⌂, several times over, and the app measured after every return home.
 ##
 ##   tests/run_boot_probe.sh tests/teardown_check.gd 420
 ##
 ## WHAT IS MEASURED after each return: nodes in the tree and orphan nodes (Godot's own monitors);
 ## the stage (wiped - no medium mounted, nothing shown: a tablet chapter's desk used to stay under the
 ## next note, 2026-10-06);
-## Chrome's claims on the bottom of the frame and on the export button (the notes list's own only);
+## Chrome's claims on the bottom of the frame, on the show's room and on the export button (the notes
+## list's own only - the storyboard's editor, docked under the show, gives back what it took);
 ## the row (Masking's ⤓ gone, the ⌂ hidden); the transport (no conductor, nothing timed); the
 ## Director (no storyboard, no game pacing, no medium pinned by a mode); the audio buses and their
 ## effects; the background programs [Subprocess] tracks (the voice host stops with its panel). A
@@ -27,19 +29,39 @@ extends Node
 ## scene and start fresh"): a chapter that sets its medium and look hands neither to the note opened
 ## after it, and a song note opens stopped at its start. Two-sided: the chapter does set them.
 ##
+## A NOTE'S MAKE-UP IS ITS BLOCKS: there is one kind of new note, so each is made with the blocks "+"
+## would have written ([constant BLOCKS]) - a voice with a Picture and a storyboard among them, which
+## no template ever was.
+##
 ## MASKING OPENS ON NO CLIP (its panel asks for one): the author's sessions hold hand-placed markers that
 ## cannot be remade, and no gate opens one. A song for Auto and Manual is a fixture of silence. Every
 ## note lives in a folder of the gate's own (`NoteStore.root`), so the author's notes are never made,
 ## listed or opened - and a reading's panel is pointed at a note of the gate's, never their chapter.
 
 const CYCLES := 3
-## The templates, as the notes list opens them (step 8): a note made from each, opened from the list.
-const MODES := ["note", "auto", "manual", "synthesis", "generative", "cards", "masking"]
+## WHAT EACH NOTE IS MADE OF: the blocks a note of that make-up carries (`SONG` stands for the
+## fixture's path). There is one kind of new note; these are what "+" would have made of it.
+const MODES := ["note", "auto", "manual", "story", "synthesis", "generative", "narrated", "cards", "masking"]
+const BLOCKS := {
+	"note": {},
+	"auto": {"song": {"path": "SONG"}, "picture": {"medium": "auto"}},
+	"manual": {"song": {"path": "SONG"}, "picture": {"medium": "full"}, "scenes": {"storyboard": "default"}},
+	# a storyboard of the note's own, with the editor opened over the show before each leaving
+	"story": {"song": {"path": "SONG"}, "picture": {"medium": "full"},
+		"scenes": {"loop": true, "sequence": [{"scene": "aurora", "hold": 4}, {"scene": "embers", "hold": 4}]}},
+	"synthesis": {"synthesis": {}},
+	"generative": {"voice": {}},
+	# a voice with a Picture and a storyboard: a pairing no template had
+	"narrated": {"voice": {}, "picture": {"medium": "full"},
+		"scenes": {"loop": true, "sequence": [{"scene": "aurora", "hold": 4}]}},
+	"cards": {"cards": {}},
+	"masking": {"clip": {"path": ""}},
+}
 const ROOT := "user://teardown_check_notes"
 
 var _fails: Array = []
 var _main: Node
-var _notes := {}       # template -> the gate's note made from it
+var _notes := {}       # make-up -> the gate's note made of it
 
 
 func _ready() -> void:
@@ -66,6 +88,9 @@ func _run() -> void:
 				"%s #%d: the ⌂ shows while the mode is up" % [mode, cycle + 1])
 			if mode == "generative" and cycle == 0:
 				await _check_refused_while_preparing()
+			if mode == "story":
+				_open_timeline(cycle)
+				await _frames(6)
 			ch._home_button.pressed.emit()
 			await _frames(12)
 			await _quiet(int(home["procs"]))
@@ -91,10 +116,31 @@ func _enter(mode: String, song: String) -> void:
 		_ok(false, "%s: there is no notes list to open it from" % mode)
 		return
 	if not _notes.has(mode):
-		var blocks := {"song": {"path": song}} if mode in ["auto", "manual"] else {}
-		_notes[mode] = NoteStore.create(mode, "teardown %s" % mode, "Words.\n", blocks)
+		_notes[mode] = NoteStore.create("teardown %s" % mode, "Words.\n", _blocks(mode, song))
 	list._open(String(_notes[mode]))
 	await _frames(20)
+
+
+## The blocks of a note of [param mode]'s make-up, the fixture's song put where one is named.
+func _blocks(mode: String, song: String) -> Dictionary:
+	var blocks: Dictionary = (BLOCKS[mode] as Dictionary).duplicate(true)
+	if blocks.has("song"):
+		blocks["song"] = {"path": song}
+	return blocks
+
+
+## The storyboard's editor, opened over the note's show: it claims room at the bottom of the frame
+## and from the stage, and the leaving that follows must give both back.
+func _open_timeline(cycle: int) -> void:
+	var panel: NotePanel = _main._note_panel
+	var card: StoryboardCard = panel._story if panel != null else null
+	_ok(card != null, "story #%d: the note has a Storyboard card" % (cycle + 1))
+	if card == null:
+		return
+	card.open_editor()
+	var ch: Chrome = _main._chrome
+	_ok(card.editor() != null and ch._bottom_claims.has(StoryboardEditor.CLAIM) and ch._stage_claims.has(StoryboardEditor.CLAIM),
+		"story #%d: its editor is docked, and has claimed its room (%s, %s)" % [cycle + 1, ch._bottom_claims.keys(), ch._stage_claims.keys()])
 
 
 ## Back on the list after leaving [param mode]: everything the list began with, nothing a mode left.
@@ -104,6 +150,7 @@ func _check_home(mode: String, cycle: int, m: Dictionary, home: Dictionary) -> v
 	_ok(str(m["bottom"]) == str(home["bottom"]) and str(m["export"]) == str(home["export"]),
 		"%s: Chrome's claims are the list's own (bottom %s, export %s - list: %s, %s)"
 		% [tag, m["bottom"], m["export"], home["bottom"], home["export"]])
+	_ok((m["stage_room"] as Array).is_empty(), "%s: nothing is left claiming the show's room (%s)" % [tag, m["stage_room"]])
 	_ok(not m["home_button"], "%s: the ⌂ hides again" % tag)
 	_ok(m["row"] == home["row"], "%s: the row is back to %d buttons (%d)" % [tag, home["row"], m["row"]])
 	_ok(not m["conductor"] and not m["timed"], "%s: nothing conducts and nothing is timed" % tag)
@@ -134,15 +181,15 @@ func _check_refused_while_preparing() -> void:
 ## A NOTE STARTS FROM NOTHING: what a chapter set is not the next note's, and a song opens stopped.
 func _check_fresh(song: String) -> void:
 	var ch: Chrome = _main._chrome
-	var chapter := NoteStore.create("generative", "teardown fresh", "Words.\n",
-		{"picture": {"medium": "tablet"}, "look": {"filters": {"monochrome": 1.0}}})
+	var chapter := NoteStore.create("teardown fresh", "Words.\n",
+		{"voice": {}, "picture": {"medium": "tablet"}, "look": {"filters": {"monochrome": 1.0}}})
 	_main._list._open(chapter)
 	await _frames(20)
 	_ok(Director.medium == "tablet" and Director.filter_amount("monochrome") > 0.0,
 		"a chapter sets its medium and look (%s, %s)" % [Director.medium, str(Director.filters)])
 	ch._home_button.pressed.emit()
 	await _frames(12)
-	var plain := NoteStore.create("note", "teardown plain", "Words.\n")
+	var plain := NoteStore.create("teardown plain", "Words.\n")
 	_main._list._open(plain)
 	await _frames(12)
 	_ok(Director.medium == "full" and Director.resolved_filters().is_empty(),
@@ -150,7 +197,7 @@ func _check_fresh(song: String) -> void:
 	_ok(not _measure()["stage"], "...with no stage under its panel")
 	ch._home_button.pressed.emit()
 	await _frames(12)
-	var auto := NoteStore.create("auto", "teardown stopped", "", {"song": {"path": song}})
+	var auto := NoteStore.create("teardown stopped", "", _blocks("auto", song))
 	_main._list._open(auto)
 	await _frames(20)
 	_ok(Spectrum.has_audio() and not Spectrum.transport_playing() and Spectrum.current.time < 0.05,
@@ -189,6 +236,7 @@ func _measure() -> Dictionary:
 		"orphans": int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)),
 		"bottom": ch._bottom_claims.keys(),
 		"export": ch._export_claims.keys(),
+		"stage_room": ch._stage_claims.keys(),
 		"row": ch.row.get_child_count(),
 		"home_button": ch._home_button.visible,
 		"conductor": not Spectrum.conductor().is_empty(),

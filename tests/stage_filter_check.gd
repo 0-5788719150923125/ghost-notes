@@ -53,6 +53,11 @@ const SPOT := Rect2i(232, 128, 8, 8)      # the bright spot bloom must spread
 const NEAR_SPOT := Rect2i(218, 114, 36, 36)   # ...and the dark ring around it
 const FAR := Rect2i(170, 20, 24, 24)      # dark field a long way from the spot
 
+## THE FILM FRAMES a filter that changes with time is judged on: pinned (`u_frame`), never the
+## shader's clock. On the clock a check is of whichever frame the moment happens to be, so it
+## passes or fails by how long the checks before it took and what else the machine is doing.
+const FRAMES := [0, 7, 14, 21]
+
 var fails := 0
 var checks := 0
 var _tex: ImageTexture
@@ -165,16 +170,20 @@ func _check_each_filter_acts() -> void:
 	for key in Filters_.REGISTRY:
 		if key == "slip" or key == "dust":
 			continue          # sparse and per-frame - see _check_slip / _check_dust
-		var got := await _render({String(key): 1.0})
-		var f := _changed_fraction(got, _plain)
+		# ON PINNED FILM FRAMES (see FRAMES): a filter that changes from frame to frame is judged on
+		# the one where it does the most, and one that does not is the same picture four times
+		var f := 0.0
+		var soft_f := 0.0
+		for frame in FRAMES:
+			f = maxf(f, _changed_fraction(await _render({String(key): 1.0}, frame), _plain))
+			soft_f = maxf(soft_f, _changed_fraction(await _render({String(key): float(Filters_.DEFAULTS[key])}, frame), _plain))
 		print("stage_filter_check: '%s' moves %.1f%% of the frame at 1.0" % [key, f * 100.0])
 		_ok(f > 0.02, "filter '%s' at full strength moved %.2f%% of the pixels - "
 			% [key, f * 100.0] + "it is doing nothing")
 		# ...and its DEFAULT does something too, which is what a freshly ticked box applies.
-		var soft := await _render({String(key): float(Filters_.DEFAULTS[key])})
-		_ok(_changed_fraction(soft, _plain) > 0.005,
+		_ok(soft_f > 0.005,
 			"filter '%s' at its default of %.2f moved %.2f%% of the pixels - ticking it "
-			% [key, float(Filters_.DEFAULTS[key]), _changed_fraction(soft, _plain) * 100.0]
+			% [key, float(Filters_.DEFAULTS[key]), soft_f * 100.0]
 			+ "reads as broken")
 
 
@@ -299,8 +308,14 @@ func _check_slip() -> void:
 ## GRAIN LIVES IN THE MIDTONES. Flat noise fogs a black that exposed nothing, which is the one
 ## place it must not, and it is exactly what an unweighted version does.
 func _check_grain() -> void:
-	var got := await _render({"static": 1.0})
-	var mid := _added_variance(got, MID)
+	# the pinned frame with the most grain in the mid patch (mottle leaves it nearly clean on some)
+	var got: Image = null
+	var mid := -1.0
+	for frame in FRAMES:
+		var one := await _render({"static": 1.0}, frame)
+		if _added_variance(one, MID) > mid:
+			mid = _added_variance(one, MID)
+			got = one
 	var black := _added_variance(got, BLACK)
 	var white := _added_variance(got, WHITE)
 	_ok(mid > 0.0005, "grain added no noise to the midtones (%.6f)" % mid)
@@ -358,10 +373,17 @@ func _check_noir() -> void:
 ## TWO AT ONCE, which is the reason these are dials and not a picker.
 func _check_combining() -> void:
 	var mono := await _render({"monochrome": 1.0})
-	var grain := await _render({"static": 1.0})
-	var both := await _render({"monochrome": 1.0, "static": 1.0})
-	_ok(_mean_diff(both, mono) > 0.002,
-		"monochrome + grain is indistinguishable from monochrome alone")
+	# THE GRAIN'S FILM FRAME IS PINNED here too. Left to the shader's clock, which frame these two
+	# pictures were of was a matter of how long everything before them took, and some frames are
+	# quiet: measured, 43 of the first 1500 film frames put the pair under this line, and so did 6
+	# of 300 pictures taken on the clock. It failed that way, with nothing changed, on 2026-10-12.
+	var grain := await _render({"static": 1.0}, FRAMES[0])
+	var both := await _render({"monochrome": 1.0, "static": 1.0}, FRAMES[0])
+	var apart := _mean_diff(both, mono)
+	for frame in FRAMES.slice(1):
+		apart = maxf(apart, _mean_diff(await _render({"monochrome": 1.0, "static": 1.0}, frame), mono))
+	_ok(apart > 0.002,
+		"monochrome + grain is indistinguishable from monochrome alone (%.4f apart at most)" % apart)
 	_ok(_mean_diff(both, grain) > 0.01,
 		"monochrome + grain is indistinguishable from grain alone")
 	# ...and each keeps its own property in the pair.
@@ -371,8 +393,8 @@ func _check_combining() -> void:
 	# in a quiet spell: the best of a few pinned frames, never the clock (which made this pass
 	# or fail on how long the checks before it took).
 	var mid_var := 0.0
-	for f in 4:
-		mid_var = maxf(mid_var, _added_variance(await _render({"monochrome": 1.0, "static": 1.0}, f * 7), MID))
+	for frame in FRAMES:
+		mid_var = maxf(mid_var, _added_variance(await _render({"monochrome": 1.0, "static": 1.0}, frame), MID))
 	_ok(mid_var > 0.0005, "monochrome flattened the grain out of the midtones")
 	# THE WHOLE STACK, which is the setting most likely to be used and the one most likely to
 	# hit a clamp: it must still be a picture rather than black or white.

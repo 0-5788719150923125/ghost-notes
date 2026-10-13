@@ -27,6 +27,97 @@ const REGISTRY := {
 	"set": SetParam, "ramp": Ramp, "pulse": Pulse, "flash": Flash,
 }
 
+## What `set` and `ramp` can move on an actor: the ones every kind has, then the eye's own.
+const PARAM_NAMES := ["scale", "fade", "hue", "time_scale", "drive", "dilate", "lid", "iris"]
+
+## WHAT EACH VERB CAN BE TOLD, AS DATA: its `args` in a storyboard's span - the rows an editor
+## builds for it ([SchemaForm]), beside the ones every span has ([constant Storyboard.SPAN]). A
+## `num` takes a number or a sampled `[lo, hi]` range; a default of null is the verb's own draw.
+## A verb with no row here takes no args.
+const ARGS := {
+	"look": {
+		"tiers": {"label": "Depths", "type": "data", "default": null,
+			"blurb": "Where the gaze rests, as a list of tiers: each a chance `p`, a distance `dist` and how long it dwells there, `dwell`."},
+		"lateral": {"label": "Sideways", "type": "num", "default": null,
+			"blurb": "How far a fixation strays to the side."},
+		"stray": {"label": "Stray", "type": "num", "default": 0.0,
+			"blurb": "The chance that one eye wanders off the shared focus for a fixation."},
+	},
+	"blink": {
+		"duration": {"label": "Seconds", "type": "num", "default": 0.32, "blurb": "How long the lids take to close and open again."},
+	},
+	"arrive": {
+		"from": {"label": "From", "type": "vec3", "default": null,
+			"blurb": "Where it flies in from. Unset, from off the frame."},
+		"wobble": {"label": "Wobble", "type": "num", "default": null,
+			"blurb": "How much it rocks as it lands. Unset, a little, by the seed."},
+	},
+	"sprout": {
+		"side": {"label": "Side", "type": "num", "default": null,
+			"blurb": "Which side of its place the stem grows on: -1 left, 1 right. Unset, by the seed."},
+	},
+	"split": {
+		"into": {"label": "Into", "type": "actor", "default": null,
+			"blurb": "The hidden actor that becomes the newborn."},
+		"hue": {"label": "Its hue", "type": "num", "default": null,
+			"blurb": "The color the newborn warms to as it pulls away. Unset, its parent's."},
+		"slots": {"label": "Places", "type": "data", "default": null,
+			"blurb": "Where the two come to rest, as two places: `[[x, y, z], [x, y, z]]`."},
+	},
+	"crystallize": {
+		"into": {"label": "Into", "type": "actor", "default": null,
+			"blurb": "The hidden prism the eye freezes over into."},
+	},
+	"burst": {
+		"replaces": {"label": "Replaces", "type": "actor", "default": null,
+			"blurb": "An actor that goes as this one bursts into being."},
+	},
+	"lock": {
+		"to": {"label": "To", "type": "actor", "default": null, "blurb": "The prism whose turning it locks onto."},
+		"snap": {"label": "Snap", "type": "num", "default": 0.05,
+			"blurb": "How quickly it snaps into step, as a share of the window."},
+	},
+	"sway": {
+		"amp": {"label": "Reach", "type": "num", "default": null,
+			"blurb": "How far it drifts from its place. Unset, a little, by the seed."},
+	},
+	"counterflow": {
+		"lane": {"label": "Lane", "type": "num", "default": null, "blurb": "How far apart the two highways run."},
+		"speed": {"label": "Speed", "type": "num", "default": null, "blurb": "How fast they cruise."},
+		"loop_k": {"label": "Loop at", "type": "num", "default": null,
+			"blurb": "How far through the window each pulls its closing loop, from 0 to 1."},
+	},
+	"specialize": {
+		"size": {"label": "Size", "type": "num", "default": 1.0, "blurb": "How many times its size it grows or shrinks to."},
+		"tempo": {"label": "Tempo", "type": "num", "default": 1.0, "blurb": "How many times its own speed it runs at."},
+		"pulse": {"label": "Pulse", "type": "data", "default": null,
+			"blurb": "A breathing of its size it keeps afterward: `{\"amp\": 0.06, \"rate\": 6.5}`."},
+	},
+	"fly": {
+		"speed": {"label": "Speed", "type": "num", "default": 1.0, "blurb": "How fast the swarm flies its track."},
+		"follow": {"label": "Camera", "type": "num", "default": 0.72,
+			"blurb": "How closely the camera keeps up: 1 holds the swarm still in frame, less lets it pull away."},
+	},
+	"set": {
+		"param": {"label": "What", "type": "enum", "options": PARAM_NAMES, "default": "scale", "blurb": "What is set."},
+		"value": {"label": "To", "type": "num", "default": 0.0, "blurb": "Its new value, at once."},
+	},
+	"ramp": {
+		"param": {"label": "What", "type": "enum", "options": PARAM_NAMES, "default": "scale", "blurb": "What is eased."},
+		"from": {"label": "From", "type": "num", "default": null, "blurb": "Where it starts. Unset, from where it is."},
+		"to": {"label": "To", "type": "num", "default": 0.0, "blurb": "Where it ends up, across the window."},
+	},
+	"pulse": {
+		"amp": {"label": "Depth", "type": "num", "default": 0.1, "blurb": "How much its size breathes."},
+		"rate": {"label": "Rate", "type": "num", "default": 1.2, "blurb": "How many breaths a second."},
+		"latch": {"label": "Keeps on", "type": "bool", "default": true,
+			"blurb": "The breathing carries on after the window closes."},
+	},
+	"flash": {
+		"hue": {"label": "Hue", "type": "num", "default": null, "blurb": "The flash's color. Unset, the actor's own."},
+	},
+}
+
 
 static func make(key: String, args: Dictionary, rng: RandomNumberGenerator) -> Action:
 	if not REGISTRY.has(key):

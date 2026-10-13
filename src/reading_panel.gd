@@ -486,6 +486,13 @@ var note_path := ""
 ## Set by main: (from: String, to: String) -> String - the note was saved into another file (its
 ## Script card's Save…), which is the note from here on; returns what became of the file it left.
 var note_moved: Callable
+## Set by main: (path: String) -> void - open the note again, as what a component attached to it
+## or taken off it made it.
+var reopen: Callable
+## THE COMPONENTS THE NOTE HAS ([method Components.attached_of]), read as the panel is built: the
+## cards it shows and what "+" offers follow them. [] when the panel was started without a note
+## (the command line, a gate), which is every card the workspace has.
+var _attached: Array = []
 var _block_cards := {}
 var _youtube: YouTubeCard
 var _lead_in := 0.0        # the intro seeded into _pending by _plan, in seconds
@@ -502,6 +509,11 @@ func _ready() -> void:
 	layer = 10
 	DirAccess.make_dir_recursive_absolute(TAKE_DIR)
 	_build_panel()
+	# NOTHING TO RENDER without something to be seen in: a voice alone has no ⤓, as a song alone
+	# has none (released on the way out, keyed - see Chrome._export_claims)
+	var ch := Chrome.of(self)
+	if ch != null and not bool(show_plan()["picture"]):
+		ch.suppress_export(&"reading")
 	_host = VoiceHost.new()
 	add_child(_host)
 	_host.host_ready.connect(_on_host_ready)
@@ -664,6 +676,11 @@ func _build_panel() -> void:
 	# bottom edge were unreachable rather than clipped. See side_panel.gd.
 	_panel = preload("res://src/side_panel.gd").new(380.0)
 	_panel.title = _panel_title()
+	if not note_path.is_empty():
+		_attached = Components.attached_of(NoteStore.blocks_of(note_path))
+		# a note's components come off again: each card's × (see SidePanel.add_card)
+		_panel.detach = _detach
+		_panel.detach_blocker = func(key: String) -> String: return Components.detach_blocker(key, _has())
 	add_child(_panel)
 	var box: VBoxContainer = _panel.body
 	box.add_theme_constant_override("separation", 8)
@@ -672,17 +689,17 @@ func _build_panel() -> void:
 	# row under the heading. The order is the families': the text, what produces it, the voice,
 	# the picture, the Look - read top to bottom, the panel says what happens to the note.
 	_panel.card_prefix = _section
-	_panel.add_component_row(_offer, _attach)
+	_panel.add_component_row(_has, _attach)
 	_build_source(_panel.add_card("script", "Script", &"paper"))
 	# The voice card: the cast rows (Turn, Hesitate, the list of speakers) are global; every row
 	# below the list belongs to the speaker that is selected in it.
-	var voice: VBoxContainer = _panel.add_card("voice", "Voice", &"voice")
+	var voice: VBoxContainer = _panel.add_card("voice", "Voice", &"voice", "voice")
 	_build_cast(voice)
 	_build_voice(voice)
-	# THE PICTURE'S CARDS are the mode's (the Picture, the Look, the bookends...)
+	# THE REST ARE THE NOTE'S (the Picture, the Storyboard, the Look, the bookends...)
 	_build_cards()
 	# ...and where the video goes, when the note says so
-	if not note_path.is_empty() and NoteStore.blocks_of(note_path).get("youtube") is Dictionary:
+	if _attached.has("youtube"):
 		_add_youtube()
 	# rows only some media use (the Ink) follow the medium the moment it changes
 	_sync_medium_rows()
@@ -704,9 +721,38 @@ func _panel_hint() -> String:
 	return ""
 
 
-## THE PICTURE'S CARDS: the mode adds each with [method _add_block_card], after the voice.
+## THE CARDS AFTER THE VOICE. In a note they are the note's: one for each component it has
+## attached, built the way every panel builds them ([method _note_cards]) - a workspace overrides
+## this only to say what it holds in its own words. Started without a note, a workspace builds
+## every card it has ([method _classic_cards]).
 func _build_cards() -> void:
+	if note_path.is_empty():
+		_classic_cards()
+	else:
+		_note_cards()
+
+
+## Every card this workspace has, for a panel with no note to read them off.
+func _classic_cards() -> void:
 	pass
+
+
+## The note's own cards, after the voice ([method NoteCards.build]) - all but YouTube, which this
+## panel builds itself ([method _add_youtube]: a workspace adds rows of its own to it).
+## [param ctx] is the workspace's say in them: the bookends' tooltips, which cards it has at all.
+func _note_cards(ctx := {}) -> void:
+	var with := ctx.duplicate()
+	with["reading"] = true
+	with["only"] = _hosted()
+	var built := NoteCards.build(_panel, _attached, with)
+	for key in built:
+		_add_block(built[key])
+
+
+## Which of a note's component cards this workspace shows, of [constant NoteCards.KEYS]: every
+## one a reading can carry. (YouTube is this panel's own to build.)
+func _hosted() -> Array:
+	return ["picture", "storyboard", "look", "bookends"]
 
 
 ## Put [param card] - a node with `KEY`, `capture()` and `apply(block)` - on a card of its own,
@@ -718,24 +764,66 @@ func _add_block_card(title: String, family: StringName, card: Control) -> Contro
 	return card
 
 
-## THE "+" MENU's question ([method SidePanel.add_component_row]): what this note has - its
-## template's components and what has been attached since - and what this panel can take while it
-## is up, which is what changes no part of the show: where the video goes.
-func _offer() -> Array:
-	var have: Array = []
-	for t in Components.TEMPLATES:
-		if String((Components.TEMPLATES[t] as Dictionary).get("section", "")) == _section:
-			have = (Components.TEMPLATES[t]["components"] as Array).duplicate()
-	if _youtube != null:
+## THE COMPONENTS THIS NOTE HAS, for "+" and for what may be detached: what its blocks say, and
+## what has been attached since the panel came up. Without a note, the workspace's own.
+func _has() -> Array:
+	var have: Array = _attached.duplicate() if not note_path.is_empty() else _classic_components()
+	if _youtube != null and not have.has("youtube"):
 		have.append("youtube")
-	return [have, ["youtube"]]
+	return have
 
 
-## A component picked from "+": its card, at once - the autosave writes its block into the note.
+## What a panel started without a note is made of.
+func _classic_components() -> Array:
+	return ["text", "voice"]
+
+
+## WHAT THE NOTE'S SHOW IS, for main ([method main._attach_show]): whether it has something to be
+## seen in - a Picture, a card table; a voice alone is heard, its words over an empty frame - and
+## the storyboard it walks. Without a note, the workspace's show as it always was.
+func show_plan() -> Dictionary:
+	if note_path.is_empty():
+		return {"picture": true}
+	var plan := {"picture": not Components.holder("presentation", _attached).is_empty(), "board": {}, "source": ""}
+	var story: Object = _block_cards.get("scenes")
+	if story != null and story.has_method("plan"):
+		plan.merge(story.call("plan"), true)
+	return plan
+
+
+## A component picked from "+". YouTube's card is added at once - the autosave writes its block
+## into the note, and nothing of the reading changes. Anything else changes what the note is made
+## of: its block is written and the note opened again ([method NoteCards.attach]).
 func _attach(key: String) -> void:
 	if key == "youtube" and _youtube == null:
 		_add_youtube()
 		_set_status("YouTube attached: tick \"Upload after export\" to send this note's exports to your channel.")
+		return
+	_rewrite(func(held: Dictionary) -> String: return NoteCards.attach(note_path, key, held))
+
+
+## A card's ×, once asked: its blocks out of the note, and the note opened again without it.
+func _detach(key: String) -> void:
+	_rewrite(func(held: Dictionary) -> String: return NoteCards.detach(note_path, key, held))
+
+
+## CHANGE WHAT THE NOTE IS MADE OF, then open it again (see [method NotePanel._rewrite]): what is
+## waiting to be saved goes into the file first, [param write] makes the change, and this panel
+## stops saving before the next one is built.
+func _rewrite(write: Callable) -> void:
+	if note_path.is_empty() or not reopen.is_valid():
+		_set_status("⚠  That needs a note - this panel was opened without one.")
+		return
+	if not _doc.settle():
+		return
+	var err := String(write.call(_doc_capture()))
+	if not err.is_empty():
+		push_warning("ghost: could not change what %s is made of - %s" % [note_path.get_file(), err])
+		_set_status("⚠  " + err)
+		return
+	_doc.set_process(false)
+	_doc.capture = Callable()
+	reopen.call(note_path)
 
 
 ## THE YOUTUBE CARD, last of the cards (the families' order ends where the video goes). One attached
@@ -743,7 +831,7 @@ func _attach(key: String) -> void:
 func _add_youtube() -> void:
 	_youtube = YouTubeCard.new()
 	_youtube.values = _upload_values
-	_panel.add_card(YouTubeCard.KEY, "YouTube", &"publish").add_child(_youtube)
+	_panel.add_card(YouTubeCard.KEY, "YouTube", &"publish", "youtube").add_child(_youtube)
 	_block_cards[YouTubeCard.KEY] = _youtube
 	_youtube.noted.connect(_set_status)
 	var card: Node = _youtube.get_parent()
@@ -1400,6 +1488,28 @@ func _load_persisted() -> void:
 ## COMPONENT'S, not the panel's: the Generative and Cards panels read and write the same `voice:`,
 ## `look:` and `bookends:`, so a chapter's voices are there whichever panel opens it.
 func _doc_blocks() -> PackedStringArray:
+	if note_path.is_empty():
+		return _classic_blocks()
+	# asked before the cards are built (the script's source is set up first), so read off what
+	# the note has attached, never off the cards
+	var out := PackedStringArray(_own_blocks())
+	for key in _hosted():
+		if _attached.has(key):
+			for b in Components.blocks_of(key):
+				if not out.has(String(b)):
+					out.append(String(b))
+	if not out.has("youtube"):
+		out.append("youtube")
+	return out
+
+
+## The blocks this workspace keeps itself, whatever else the note has attached.
+func _own_blocks() -> Array:
+	return ["voice"]
+
+
+## The blocks of a panel started without a note: every one its classic cards keep.
+func _classic_blocks() -> PackedStringArray:
 	return PackedStringArray(["voice", "youtube"])
 
 
@@ -1959,6 +2069,9 @@ func _selected_voice_id() -> String:
 
 func _exit_tree() -> void:
 	Spectrum.release_conductor(self)
+	var ch := Chrome.of(self)
+	if ch != null:
+		ch.release_export(&"reading")
 	if _dirty:
 		_persist()
 

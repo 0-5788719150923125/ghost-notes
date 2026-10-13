@@ -181,7 +181,7 @@ var _last_time := 0.0           # last published clock, held when the player sto
 
 var _has_audio := false
 var _idle_time := 0.0
-var _override_path := ""        # the note's song (main.start_template); wins over CLI/default
+var _override_path := ""        # the note's song (main._begin_song); wins over CLI/default
 var _loaded_path := ""          # the resolved path actually loaded (for re-launch/export)
 
 # Baked backend: a pre-computed per-frame spectrum timeline (one PackedFloat32Array

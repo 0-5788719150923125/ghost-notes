@@ -25,6 +25,47 @@ const REGISTRY := {
 	"swarm": "swarm",
 }
 
+## WHAT EACH KIND CAN BE TOLD, AS DATA: its own settings in a storyboard's cast, beside the ones
+## every actor has ([constant Storyboard.ACTOR]) - the rows an editor builds for it ([SchemaForm]).
+## A `num` takes a number or a sampled `[lo, hi]` range; a default of null is "drawn from the seed".
+const PARAMS := {
+	"eye": {
+		"radius": {"label": "Size", "type": "num", "default": null,
+			"blurb": "How large the eye is. Unset, drawn between 0.24 and 0.34."},
+		"hue": {"label": "Hue", "type": "num", "default": null,
+			"blurb": "The iris's color, around the wheel from 0 to 1. Unset, drawn from the seed."},
+	},
+	"prism": {
+		"scale": {"label": "Size", "type": "num", "default": null,
+			"blurb": "How large the prism is. Unset, drawn between 0.24 and 0.30."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.6,
+			"blurb": "Its color, around the wheel from 0 to 1: blue near 0.6, red at 0."},
+	},
+	"swarm": {
+		"count": {"label": "Members", "type": "num", "default": 7,
+			"blurb": "How many prisms fly in the blue strand."},
+		"count_red": {"label": "Red members", "type": "num", "default": null,
+			"blurb": "How many fly in the red strand once the helix opens. Unset, as many as the blue."},
+		"spacing": {"label": "Spacing", "type": "num", "default": 0.45,
+			"blurb": "The distance between one member and the next along the track."},
+		"head": {"label": "Head", "type": "num", "default": 3.6,
+			"blurb": "How far ahead of the camera the formation's lead flies."},
+		"size": {"label": "Size", "type": "num", "default": 0.42, "blurb": "How large each member is."},
+		"helix": {"label": "Helix", "type": "num", "default": 1.15,
+			"blurb": "How tightly the two strands wind once the track opens into a double helix."},
+		"r_min": {"label": "Nearest", "type": "num", "default": 0.30, "blurb": "The helix's radius at its narrowest."},
+		"r_max": {"label": "Widest", "type": "num", "default": 0.95, "blurb": "The helix's radius at its widest."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.6, "blurb": "The blue strand's color."},
+		"hue_red": {"label": "Red hue", "type": "num", "default": 0.0, "blurb": "The red strand's color."},
+		"bank": {"label": "Banks", "type": "enum", "options": ["", "left", "right"], "default": "",
+			"blurb": "Which way the track curves. Unset, by the seed."},
+		"lead": {"label": "Lead", "type": "actor", "default": null,
+			"blurb": "An actor carried in from the entry before whose prism becomes the first blue member."},
+		"lead_red": {"label": "Red lead", "type": "actor", "default": null,
+			"blurb": "An actor carried in whose prism becomes the red strand's lead, waiting until the helix opens."},
+	},
+}
+
 
 ## Build an actor from a storyboard cast entry. `raw_cfg` is the un-sampled entry
 ## (ranges intact); each instance draws its own values from [param rng].

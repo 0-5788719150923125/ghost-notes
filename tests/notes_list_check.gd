@@ -8,31 +8,43 @@ extends Node
 ##
 ## THE LIST MAKES NOTES AND NOTHING ELSE (2026-10-06, the user: "the launch screen should be clean"):
 ## no path or URL field, no Open…, and the name and tagline once - in the panel, not again in large
-## type over the main area. New ends on "Existing note…", which asks for markdown alone.
+## type over the main area. "Existing note…" stands beside New, and asks for markdown alone.
+##
+## NEW HAS NO OPTIONS (2026-10-12, the user: "'New' has no options at all. Every note would open in
+## exactly the same way"): it is a button, not a menu; it makes a note with nothing attached - no
+## `ghost:` key in its file - and that note opens in the note's own panel, whatever is installed.
 ##
 ## THE APP STARTS ON THE LIST: the list is up, no home screen, the ⌂ hidden, the ⤓ export not there
 ## at all and no claim on the bottom of the frame (the row sits where it sits in every note), nothing
 ## in the row over the Environment panel (open, and with a detail open), and the keyed handover - a
 ## note's claims survive the list leaving after it.
 ##
-## NEW IS GATED ON AGENTS, as the home screen's rows were (splash_agents_check's contract, moved
-## here): with every agent's program hidden in `Deps._resolved` - the cache a launch reads, never a
-## seam - Cards is grayed, and its tooltip says what is missing, lists every supported agent from the
-## registries, suggests installing one or several, and is written as paragraphs that survive Boot's
-## re-flow; restored, it is lit exactly when the machine has both roles.
+## WHAT NEEDS AN AGENT IS GATED IN "+", where a note becomes something (the home screen's rule,
+## moved from New): with every agent's program hidden in `Deps._resolved` - the cache a launch
+## reads, never a seam - New still makes a note, and in its "+" Cards is grayed, with a tooltip that
+## says what is missing, lists every supported agent from the registries, suggests installing one or
+## several, and is written as paragraphs that survive Boot's re-flow; a press on it attaches nothing;
+## restored, it is lit exactly when the machine has both roles.
 ##
 ## A NOTE GOES WHEN ASKED (2026-10-06): the list's × asks first ([DeleteDialog]) - canceled, the note
 ## stays; confirmed, it goes to the trash (here the gate's seam, `NoteStore.discard`: a plain delete,
 ## never the author's trash) and out of the list. A note's own "⋯" does the same from inside it, and
 ## the list comes back.
 ##
-## THE ROUND TRIP: New -> Auto makes a song note with no song yet, and nothing is stuck - its panel is
-## up with a Song card asking for one, a Picture in the Auto medium, nothing timed, no stage; choosing
-## a song writes it into the note and opens the note again around it, loaded and WAITING at its start
-## ("start from the baseline of off, not played yet"); it plays through the transport; the ⌂ leaves
-## it; New -> Note's "+" attaches a Voice and the note reopens as a reading; and back on the list
-## nothing is left behind (the claims, the row, the conductor, the stage, the background programs,
-## no mode node).
+## THE ROUND TRIP - A NOTE BECOMES A SHOW BY WHAT IS ATTACHED: New, then "+" Song (the note opens
+## again with a Song card asking for one, nothing timed, no stage, and a Picture grayed no longer),
+## "+" Picture (in the Auto medium: the seeded show); choosing a song writes it into the note and
+## opens the note again around it, loaded and WAITING at its start ("start from the baseline of off,
+## not played yet"); it plays through the transport; "+" Storyboard puts its card on the same note
+## and the seed still chooses until something is written. A SECOND CLOCK IS REFUSED, WITH THE REASON
+## (a Voice on a note with a song: "detach that first"), and a component COMES OFF AGAIN: the Song
+## card's ×, once asked, takes the `song:` block out and leaves the note's other blocks and its
+## words as they were. The ⌂ leaves it; New then "+" Voice reopens a plain note as a reading; and
+## back on the list nothing is left behind (the claims, the row, the conductor, the stage, the
+## background programs, no mode node).
+##
+## A SHOW OF CARDS STARTS WITH A BRIEF: attaching Cards to a note with no words fills it with the
+## bundled starter, and the Cards workspace opens showing it.
 ##
 ## SAVE… TAKES THE NOTE WITH IT (2026-10-12, the user: "That selection keeps getting reverted back to
 ## the untitled cards label, and I am unsure if my edits are even being used"): the Script card has
@@ -74,8 +86,7 @@ func _run() -> void:
 	_ok(_find(_main, "Splash") == null, "there is no home screen")
 	_check_clean(list)
 	await _check_furniture(list)
-	list = _main._list
-	await _check_gating(list)
+	await _check_gating()
 	await _check_delete()
 	await _check_round_trip()
 	await _check_new_card_starter()
@@ -104,14 +115,14 @@ func _check_clean(list: NotesList) -> void:
 	var names := list.find_children("*", "Label", true, false).filter(
 		func(l: Node) -> bool: return (l as Label).text == Boot.NAME)
 	_ok(names.size() == 1 and list._panel.is_ancestor_of(names[0]), "the name is shown once, in the panel")
-	var pop := list._new.get_popup()
-	var last := pop.item_count - 1
-	_ok(pop.get_item_id(last) == NotesList.EXISTING_ID and pop.get_item_text(last).begins_with("Existing note"),
-		"New ends on Existing note…")
-	list._on_new(NotesList.EXISTING_ID)
+	_ok(list._new is Button and not (list._new is MenuButton) and list._new.text == "New",
+		"New has no options: it is a button, not a menu")
+	_ok(list.find_children("*", "MenuButton", true, false).is_empty(), "nothing on the list is a menu of kinds of note")
+	_ok(list._existing != null and list._existing.text.begins_with("Existing note"), "Existing note… stands beside New")
+	list._existing.pressed.emit()
 	var dlg: FileDialog = list._dialog
 	_ok(dlg != null and Array(dlg.filters).size() == 1 and String(dlg.filters[0]).contains("*.md"),
-		"...which asks for a markdown note and nothing else")
+		"...and asks for a markdown note and nothing else")
 	list._close_dialog()
 
 
@@ -163,36 +174,53 @@ func _check_furniture(list: NotesList) -> void:
 
 # --- the gating ----------------------------------------------------------------------------------
 
-func _check_gating(list: NotesList) -> void:
-	print("-- New is gated on agents")
-	list._gate_templates()
-	var cards := _item(list, "cards")
-	_ok(cards >= 0, "New offers Cards")
-	if cards < 0:
-		return
-	var pop := list._new.get_popup()
+func _check_gating() -> void:
+	print("-- New is for everyone; what needs an agent is gated in \"+\"")
 	var keep := Deps._resolved.duplicate()
 	for prog in AGENT_PROGRAMS:
 		Deps._resolved[prog] = ""
-	list._gate_templates()
-	var tip := pop.get_item_tooltip(cards)
-	_ok(pop.is_item_disabled(cards), "with no agent installed, Cards is grayed")
-	_ok(tip.contains("No AI writer or painter is installed."), "its tooltip says what is missing")
-	for role in ["writer", "painter"]:
-		for label in (Capabilities.registry(role).LABELS as Dictionary).values():
-			_ok(tip.contains(String(label).replace(" ", " ")), "it lists the supported %s %s" % [role, label])
-	_ok(tip.contains("Install one or several of them"), "it suggests installing one or several")
-	var paras := tip.split("\n\n")
-	_ok(Array(paras).all(func(p: String) -> bool: return not p.contains("\n")), "it is written as paragraphs")
-	_ok(Boot.wrap_tip(tip).split("\n\n").size() == paras.size(), "the paragraphs survive Boot's re-flow")
-	# a press on a grayed item makes nothing
+	var list: NotesList = _main._list
 	var before := NoteStore.list().size()
-	list._on_new(pop.get_item_id(cards))
-	_ok(NoteStore.list().size() == before and _main._list == list, "a grayed template makes no note")
+	list.new_note()
+	await _frames(12)
+	var panel: NotePanel = _main._note_panel
+	_ok(NoteStore.list().size() == before + 1 and panel != null and is_instance_valid(panel),
+		"with no agent installed, New still makes a note and opens it")
+	if panel == null:
+		Deps._resolved = keep
+		return
+	_ok(not FileAccess.get_file_as_string(panel.path).contains("ghost:"), "a new note has nothing attached: no ghost: key at all")
+	_ok(panel._panel.cards().size() == 1, "...and its panel is its words alone (%d cards)" % panel._panel.cards().size())
+	var plus: MenuButton = panel._panel.plus
+	plus.about_to_popup.emit()
+	var pop := plus.get_popup()
+	var cards := _menu_item(pop, "cards")
+	_ok(cards >= 0, "\"+\" offers Cards")
+	if cards >= 0:
+		var tip := pop.get_item_tooltip(cards)
+		_ok(pop.is_item_disabled(cards), "with no agent installed, Cards is grayed")
+		_ok(tip.contains("No AI writer or painter is installed."), "its tooltip says what is missing")
+		for role in ["writer", "painter"]:
+			for label in (Capabilities.registry(role).LABELS as Dictionary).values():
+				_ok(tip.contains(String(label).replace(" ", " ")), "it lists the supported %s %s" % [role, label])
+		_ok(tip.contains("Install one or several of them"), "it suggests installing one or several")
+		var paras := tip.split("\n\n")
+		_ok(Array(paras).all(func(p: String) -> bool: return not p.contains("\n")), "it is written as paragraphs")
+		_ok(Boot.wrap_tip(tip).split("\n\n").size() == paras.size(), "the paragraphs survive Boot's re-flow")
+		# a press on a grayed item attaches nothing
+		pop.id_pressed.emit(pop.get_item_id(cards))
+		await _frames(6)
+		_ok(_main._note_panel == panel and not NoteStore.blocks_of(panel.path).has("cards"),
+			"a grayed component is not attached")
+		Deps._resolved = keep
+		plus.about_to_popup.emit()
+		cards = _menu_item(pop, "cards")
+		var lit := Capabilities.missing_roles(["writer", "painter"]).is_empty()
+		_ok(cards >= 0 and pop.is_item_disabled(cards) == not lit,
+			"with the agents back, Cards is lit exactly when both roles are filled")
 	Deps._resolved = keep
-	list._gate_templates()
-	var lit := Capabilities.missing_roles(["writer", "painter"]).is_empty()
-	_ok(pop.is_item_disabled(cards) == not lit, "with the agents back, Cards is lit exactly when both roles are filled")
+	_main._chrome._home_button.pressed.emit()
+	await _frames(12)
 
 
 # --- deleting ------------------------------------------------------------------------------------
@@ -200,7 +228,7 @@ func _check_gating(list: NotesList) -> void:
 func _check_delete() -> void:
 	print("-- a note goes when asked")
 	var list: NotesList = _main._list
-	var path := NoteStore.create("note", "Delete me", "Words.\n")
+	var path := NoteStore.create("Delete me", "Words.\n")
 	list.refresh()
 	_ok(_row_of(list, path), "a new note is listed")
 	list._ask_delete(path)
@@ -221,7 +249,7 @@ func _check_delete() -> void:
 	list.refresh()
 	_ok(not _row_of(list, path), "...and leaves the list")
 	# FROM INSIDE THE NOTE: its own "⋯", asked first, and the list comes back
-	var inside := NoteStore.create("note", "Delete me from inside", "Words.\n")
+	var inside := NoteStore.create("Delete me from inside", "Words.\n")
 	list._open(inside)
 	await _frames(12)
 	var ch: Chrome = _main._chrome
@@ -255,26 +283,41 @@ func _dialog_in(n: Node) -> DeleteDialog:
 # --- the round trip ------------------------------------------------------------------------------
 
 func _check_round_trip() -> void:
-	print("-- New -> Auto, a song, play, leave")
+	print("-- New, + Song, + Picture, a song, play, a storyboard, detach, leave")
 	var ch: Chrome = _main._chrome
 	var home := _measure()
 	var list: NotesList = _main._list
-	list._on_new(list._new.get_popup().get_item_id(_item(list, "auto")))
+	list.new_note()
 	await _frames(12)
 	var panel: NotePanel = _main._note_panel
-	_ok(panel != null and is_instance_valid(panel), "New -> Auto opens the note's own panel - nothing is stuck")
+	_ok(panel != null and is_instance_valid(panel), "New opens the note's own panel")
 	if panel == null:
 		return
 	var note: String = panel.path
-	_ok(panel._song != null and not panel._song.ready_to_play(), "...a Song card asking for a song")
-	_ok(panel._picture != null and Director.medium == "auto", "...a Picture in the Auto medium (%s)" % Director.medium)
+	_ok(_offer(panel, "picture") == "grayed" and _offer(panel, "song") == "lit" and _offer(panel, "voice") == "lit",
+		"a plain note's \"+\": a Song and a Voice are lit, a Picture waits for a sound (picture %s, song %s, voice %s)"
+		% [_offer(panel, "picture"), _offer(panel, "song"), _offer(panel, "voice")])
+	panel = await _attach(panel, "song")
+	_ok(panel != null and _main._note == note and panel._song != null and not panel._song.ready_to_play(),
+		"+ Song: the same note, opened again with a Song card asking for a song")
+	if panel == null:
+		return
 	_ok(not Spectrum.timed() and not _stage_up(), "...nothing timed and no stage until there is a song")
+	_ok(_offer(panel, "voice") == "grayed" and _tip(panel, "voice").contains("clock") and _tip(panel, "voice").contains("Song"),
+		"a second clock is refused, and \"+\" says which to detach (%s)" % _tip(panel, "voice").get_slice("\n\n", 1))
+	_ok(_offer(panel, "song") == "", "what is attached is not offered again")
+	panel = await _attach(panel, "picture")
+	_ok(panel != null and panel._picture != null and Director.medium == "auto",
+		"+ Picture: a Picture card, in the Auto medium (%s)" % Director.medium)
+	if panel == null:
+		return
 	# twenty seconds, as teardown_check's: the eight-second silence opens on spires, whose worker-thread
 	# builds trip Godot's own teardown fault after the verdict (tests/run_scene_smoke.sh) - this gate is
 	# about the list, not about that scene
 	var song := FixtureAudio.silence(20.0)
 	panel._song.chosen.emit(song)
 	await _frames(20)
+	panel = _main._note_panel
 	var song_block: Variant = NoteStore.blocks_of(note).get("song", {})
 	_ok(song_block is Dictionary and String((song_block as Dictionary).get("path", "")) == song,
 		"choosing a song writes it into the note")
@@ -282,60 +325,157 @@ func _check_round_trip() -> void:
 	_ok(not Spectrum.transport_playing(), "...WAITING at its start: a note opens stopped")
 	_ok(Director.is_attached() and _main._medium != null and _main._medium.key == "auto" and _stage_up(),
 		"its picture is up, in the Auto medium")
+	_ok(not Director.is_manual(), "...and the seed chooses its scenes")
 	Spectrum.transport_play()
 	await _frames(10)
 	_ok(Spectrum.transport_playing(), "and it plays through the transport")
 	_ok(ch._home_button.visible, "the ⌂ shows in a note")
+	# a storyboard, attached to the same note: nothing written yet, so the seed still chooses
+	panel = await _attach(panel, "storyboard")
+	_ok(panel != null and panel._story != null and Storyboard.of_block(NoteStore.blocks_of(note).get("scenes"))["kind"] == "own",
+		"+ Storyboard: its card, and the note's own storyboard in its scenes: block")
+	_ok(Director.is_attached() and not Director.is_manual(), "...with nothing written in it, the seed still chooses")
+	# ...and a component comes off again
+	if panel != null:
+		var words := String(FrontMatter.split(FileAccess.get_file_as_string(note)).body)
+		var x := _detach_button(panel, "Song")
+		_ok(x != null and not x.disabled, "the Song card has an ×")
+		_ok(_detach_button(panel, "Script") == null, "...and the Script has none: the words are the note")
+		if x != null:
+			x.pressed.emit()
+			await _frames(3)
+			var ask: ConfirmationDialog = null
+			for d in panel.find_children("*", "ConfirmationDialog", true, false):
+				if (d as ConfirmationDialog).title.begins_with("Detach"):
+					ask = d
+			_ok(ask != null and NoteStore.blocks_of(note).has("song"), "the × asks first, and nothing is detached until it is answered")
+			if ask != null:
+				ask.confirmed.emit()
+		await _frames(20)
+		panel = _main._note_panel
+		var left := NoteStore.blocks_of(note)
+		_ok(not left.has("song") and left.has("picture") and left.has("scenes"),
+			"detaching the Song takes its block out and leaves the others (%s)" % str(left.keys()))
+		_ok(String(FrontMatter.split(FileAccess.get_file_as_string(note)).body) == words, "...and the note's words as they were")
+		_ok(panel != null and panel._song == null and not Spectrum.timed() and not _stage_up(),
+			"...the note opens again without it: no clock, no stage")
+		_ok(panel != null and panel._picture != null and _waiting(panel).contains("song or a voice"),
+			"...and the Picture left on it says what it is waiting for (%s)" % _waiting(panel))
 	ch._home_button.pressed.emit()
 	await _frames(12)
 	_ok(_main._list != null and is_instance_valid(_main._list), "the ⌂ goes back to the list")
 	_check_home("after the song", home)
-	# a plain note: New -> Note, then "+" -> Voice
+	# a plain note: New, then "+" -> Voice
 	list = _main._list
-	list._on_new(list._new.get_popup().get_item_id(_item(list, "note")))
+	list.new_note()
 	await _frames(12)
 	panel = _main._note_panel
-	_ok(panel != null and is_instance_valid(panel), "New -> Note opens a plain note")
+	_ok(panel != null and is_instance_valid(panel), "New opens a plain note")
 	if panel != null:
 		var plain: String = panel.path
 		var menu: PopupMenu = panel._panel.plus.get_popup()
 		panel._panel.plus.about_to_popup.emit()
-		var voice := -1
-		for i in menu.item_count:
-			if String(menu.get_item_metadata(i)) == "voice":
-				voice = i
+		var voice := _menu_item(menu, "voice")
 		_ok(voice >= 0, "its \"+\" offers a Voice")
 		if voice >= 0:
 			menu.id_pressed.emit(menu.get_item_id(voice))
 			await _frames(20)
 			_ok(NoteStore.blocks_of(plain).get("voice") is Dictionary, "attaching wrote the voice block into the note")
-			_ok(_main._generative != null and is_instance_valid(_main._generative) and _main._note == plain,
+			var reading: Node = _main._generative
+			_ok(reading != null and is_instance_valid(reading) and _main._note == plain,
 				"...and the note reopened as a reading of itself")
+			if reading != null:
+				var titles: Array = (reading._panel as SidePanel).cards().map(func(c: Node) -> String: return (c as Card).title)
+				_ok(titles == ["Script", "Voice"], "a voice alone: its words and its voice, and no picture until one is attached (%s)" % str(titles))
+				_ok(not bool(reading.show_plan()["picture"]), "...so its reading puts no stage up")
 			ch._home_button.pressed.emit()
 			await _frames(12)
 			await _quiet(int(home["procs"]))
 			_check_home("after the reading", home)
 
 
+## Attach [param key] through the panel's "+", as a click on its item does; returns the note's panel
+## as it is afterward (the note is opened again), or null where "+" did not offer it lit.
+func _attach(panel: NotePanel, key: String) -> NotePanel:
+	var menu: PopupMenu = panel._panel.plus.get_popup()
+	panel._panel.plus.about_to_popup.emit()
+	var i := _menu_item(menu, key)
+	if i < 0 or menu.is_item_disabled(i):
+		_ok(false, "\"+\" offers %s, lit" % key)
+		return null
+	menu.id_pressed.emit(menu.get_item_id(i))
+	await _frames(20)
+	return _main._note_panel
+
+
+## How "+" offers [param key] on [param panel]: "lit", "grayed", or "" when it is not offered.
+func _offer(panel: NotePanel, key: String) -> String:
+	var menu: PopupMenu = panel._panel.plus.get_popup()
+	panel._panel.plus.about_to_popup.emit()
+	var i := _menu_item(menu, key)
+	if i < 0:
+		return ""
+	return "grayed" if menu.is_item_disabled(i) else "lit"
+
+
+func _tip(panel: NotePanel, key: String) -> String:
+	var menu: PopupMenu = panel._panel.plus.get_popup()
+	panel._panel.plus.about_to_popup.emit()
+	var i := _menu_item(menu, key)
+	return menu.get_item_tooltip(i) if i >= 0 else ""
+
+
+func _menu_item(menu: PopupMenu, key: String) -> int:
+	for i in menu.item_count:
+		if str(menu.get_item_metadata(i)) == key:
+			return i
+	return -1
+
+
+## The × on the card titled [param title], or null.
+func _detach_button(panel: NotePanel, title: String) -> Button:
+	for c in panel._panel.cards():
+		if (c as Card).title != title:
+			continue
+		for b in (c as Card).find_children("*", "Button", true, false):
+			if (b as Button).text == "×":
+				return b as Button
+	return null
+
+
+## What the note's cards say they are waiting for (the ⚠ lines NoteCards puts at their heads).
+func _waiting(panel: NotePanel) -> String:
+	var out := PackedStringArray()
+	for l in panel._panel.find_children("*", "Label", true, false):
+		if (l as Label).text.begins_with("⚠"):
+			out.append((l as Label).text)
+	return " | ".join(out)
+
+
 func _check_new_card_starter() -> void:
-	print("-- New -> Cards starts with the bundled brief")
+	print("-- + Cards starts a note with no words on the bundled brief")
 	var list: NotesList = _main._list
-	var pop := list._new.get_popup()
-	var item := _item(list, "cards")
-	if item < 0:
-		_ok(false, "New offers Cards")
-		return
-	# The template gate is about installed agents; this probe is about the new file.
-	pop.set_item_disabled(item, false)
-	list._on_new(pop.get_item_id(item))
+	list.new_note()
 	await _frames(12)
-	var path: String = _main._note
+	var panel: NotePanel = _main._note_panel
+	if panel == null:
+		_ok(false, "New opens a note")
+		return
+	var path: String = panel.path
+	# The gate in "+" is about installed agents; this is about what attaching writes.
+	panel._attach("cards")
+	await _frames(20)
 	var starter := FileAccess.get_file_as_string("res://rules/cards/starter.md")
-	_ok(not path.is_empty() and FileAccess.get_file_as_string(path).contains(starter),
-		"New -> Cards writes the full starter into the note")
+	_ok(_main._note == path and NoteStore.blocks_of(path).get("cards") is Dictionary, "+ Cards writes the cards block into the note")
+	_ok(FileAccess.get_file_as_string(path).contains(starter), "...and the full starter brief, since the note had no words")
 	var editor := _main._generative as CardsEditor
 	_ok(editor != null and editor._text.text == starter,
-		"Edit shows the starter brief from the new note")
+		"the Cards workspace opens, and Edit shows the starter brief")
+	if editor != null:
+		var titles: Array = (editor._panel as SidePanel).cards().map(func(c: Node) -> String: return (c as Card).title)
+		_ok(titles.has("Episode") and titles.has("Voice") and not titles.has("Picture"),
+			"its cards are the show's: the Episode and the Voice it brings, and no Picture (%s)" % str(titles))
+		_ok(bool(editor.show_plan()["picture"]), "...and the table is what it is seen in")
 
 
 ## SAVE… ON THE SCRIPT CARD, from the Cards note the last check left open.
@@ -502,14 +642,6 @@ func _measure() -> Dictionary:
 		"bottom": ch._bottom_claims.keys(), "export": ch._export_claims.keys(),
 		"row": ch.row.get_child_count(), "home_button": ch._home_button.visible,
 		"conductor": not Spectrum.conductor().is_empty(), "modes": modes, "procs": Subprocess.tracked()}
-
-
-func _item(list: NotesList, key: String) -> int:
-	var pop := list._new.get_popup()
-	for i in pop.item_count:
-		if str(pop.get_item_metadata(i)) == key:
-			return i
-	return -1
 
 
 func _quiet(home_procs: int) -> void:

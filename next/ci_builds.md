@@ -11,6 +11,28 @@ Researched 2026-10-07. Scaffolded the same day (below); the first real Actions r
 - Verified locally: both exports from a clean clone of HEAD (fresh import included), the Linux launch check, archive contents, checksums.
 - NOT verified: anything on a GitHub runner (the gatekeeping job on a clean Ubuntu image, the Windows launch check, the publish job); the full gate suite is not known green (`cards_choose_check` was failing); the Windows `.exe` has never been run.
 
+## Gatekeeping on four cores (2026-10-12)
+
+The user: "the `--jobs auto` flag doesn't seem to use all 4 cores, in CI builds. The gatekeeping is
+as slow and sequential as it ever was." Read off run 38330728497's own log: it did run four at a
+time, and 103 of the 105 gates were done in 3m30s. Then `soundscape_check` (122 s) and
+`table_place_check` (202 s) ran by themselves for the last 2m50s - they were not in `check.sh`'s
+hand-kept list of slow gates, so they started near the end, in alphabetical order. The gates added
+up to 1040 s; four at a time that is 260 s at best, and the run took 372.
+
+- **The longest start first, by measurement.** `check.sh` writes how long each gate took when it
+  passed (`dist/check/.times`) and the next run starts them in that order; a gate with no time yet
+  goes before the timed ones, longest timeout first. The hand list is gone - it was the thing that
+  went stale. The workflow carries `.times` between runs in a cache (a new key per run, the newest
+  restored), so only the first run after this lands orders by timeouts alone.
+- **A run says what the cores were given**: the gates added up, what that is at best over the
+  jobs, and the longest gate alone. `scripts/check.sh --list --jobs 4` shows the order with each
+  gate's last time.
+- **What bounds it now** is the work, not the order: about 17 minutes of gates over four cores.
+  Three gates are 41% of that (`table_place_check`, `soundscape_check`, `sand_settle_check`);
+  making gatekeeping much shorter means making those cheaper. Not done.
+- **Not verified on a runner**: the cache step and the new order have run only locally.
+
 ## Original request and agreed order
 
 The user asked for:

@@ -30,8 +30,8 @@ const COL_DIM := Color(0.50, 0.57, 0.68)
 const GROUPS := ["kept current by Ghost Notes", "built the first time a feature needs it",
 	"from this machine"]
 
-## A probe has landed: [Deps]' answers are fresh. The notes list grays its agent templates off
-## them, so a rescan after installing an agent CLI lights its template up.
+## A probe has landed: [Deps]' answers are fresh. A note's "+" grays what needs an agent off
+## them, as its menu opens, so a rescan after installing an agent CLI lights that component up.
 signal probed
 ## The one-line state changed ([method state_line], [method state_color]) - the row's ⚙ shows it.
 signal state_changed

@@ -104,6 +104,16 @@ var note_path := ""
 ## Set by main: (from: String, to: String) -> String - the note was saved into another file (its
 ## Script card's Save…), which is the note from here on; returns what became of the file it left.
 var note_moved: Callable
+## Set by main: (path: String) -> void - open the note again, as what a component attached to it
+## or taken off it made it.
+var reopen: Callable
+## The components the note has ([method Components.attached_of]); [] without a note.
+var _attached: Array = []
+## The note's own cards this workspace shows ([constant HOSTED]), by block.
+var _block_cards := {}
+## Of a note's component cards, the ones the lab can show: its show is the scenes, full frame, so
+## no Picture and no Storyboard - a Look over them, and the holds at either end.
+const HOSTED := ["look", "bookends"]
 
 # Who contributed to the current candidate and how much - recorded by
 # _ensemble_traits so the sustain bank can be built from the same combination
@@ -288,6 +298,10 @@ func _build_panel() -> void:
 	# bottom edge were unreachable rather than clipped. See side_panel.gd.
 	_panel = preload("res://src/side_panel.gd").new(380.0)
 	_panel.title = "Synthesis"
+	if not note_path.is_empty():
+		_attached = Components.attached_of(NoteStore.blocks_of(note_path))
+		_panel.detach = _detach
+		_panel.detach_blocker = func(key: String) -> String: return Components.detach_blocker(key, _has())
 	add_child(_panel)
 	var box: VBoxContainer = _panel.body
 	box.add_theme_constant_override("separation", 8)
@@ -319,12 +333,12 @@ func _build_panel() -> void:
 	# THE CARDS (next/notes.md, step 2): the script, the water and the Collection, each a card
 	# that folds, with its chip under the heading.
 	_panel.card_prefix = "synth"
-	_panel.add_component_row(_offer, _attach)
+	_panel.add_component_row(_has, _attach)
 	# THE SCRIPT: a card here, the writing in the editor window it opens. Its source is a
 	# draft or a file on disk re-read at every cast; see ScriptWriter and DocSource.
 	box = _panel.add_card("script", "Script", &"paper")
 	_writer = preload("res://src/script_writer.gd").new()
-	_writer.setup("synth", PackedStringArray(["synthesis", "youtube"]), "synthesis")
+	_writer.setup("synth", PackedStringArray(_doc_blocks()), "synthesis")
 	if not note_path.is_empty():
 		_writer.bind_note()
 		_writer.doc.moved.connect(_on_note_moved)
@@ -338,7 +352,7 @@ func _build_panel() -> void:
 	# drawn - the candidate's constellation, the line that visibly pulls when
 	# something anchors, the reel's progress while the adrenochrome forms -
 	# with the reward switchboard on its right edge.
-	box = _panel.add_card("water", "The water", &"voice")
+	box = _panel.add_card("water", "The water", &"voice", "voice_lab")
 	var hud_panel := PanelContainer.new()
 	var hud_style := StyleBoxFlat.new()
 	hud_style.bg_color = Color(0.015, 0.045, 0.03, 0.96)
@@ -478,18 +492,33 @@ func _build_panel() -> void:
 	_belt_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_belt_rows.add_theme_constant_override("separation", 4)
 	scroll.add_child(_belt_rows)
-	# ...and where the video goes, when the note says so
-	if not note_path.is_empty() and NoteStore.blocks_of(note_path).get("youtube") is Dictionary:
+	# THE NOTE'S OWN CARDS, after the lab's (see NoteCards), and where the video goes
+	_block_cards = NoteCards.build(_panel, _attached, {"only": HOSTED})
+	for key in _block_cards:
+		if (_block_cards[key] as Object).has_signal("noted"):
+			(_block_cards[key] as Object).connect("noted", func(msg: String) -> void: _status.text = msg)
+	if _attached.has("youtube"):
 		_add_youtube()
 
 
-## THE "+" MENU's question ([method SidePanel.add_component_row]): the template's components and
-## what has been attached since, and what this panel can take while it is up - where the video goes.
-func _offer() -> Array:
-	var have: Array = (Components.TEMPLATES["synthesis"]["components"] as Array).duplicate()
-	if _youtube != null:
+## THE COMPONENTS THIS NOTE HAS, for "+" and for what may be detached: what its blocks say, and
+## what has been attached since the panel came up. Without a note, what a voice lab is made of.
+func _has() -> Array:
+	var have: Array = _attached.duplicate() if not note_path.is_empty() else ["text", "voice_lab"]
+	if _youtube != null and not have.has("youtube"):
 		have.append("youtube")
-	return [have, ["youtube"]]
+	return have
+
+
+## The blocks this panel keeps in the note: the voice's own, the cards the note has attached that
+## the lab shows, and YouTube's (it may be attached while the panel is up).
+func _doc_blocks() -> Array:
+	var out: Array = ["synthesis"]
+	for key in HOSTED:
+		if _attached.has(key):
+			out.append_array(Components.blocks_of(key))
+	out.append("youtube")
+	return out
 
 
 ## THE NOTE WAS SAVED INTO ANOTHER FILE ([signal DocSource.moved]): this panel is that file's now,
@@ -500,10 +529,36 @@ func _on_note_moved(from: String, to: String) -> void:
 	_doc.tell("✓  This note is %s now - every change is saved there. %s" % [to.get_file(), said])
 
 
-## A component picked from "+": its card, at once - the autosave writes its block into the note.
+## A component picked from "+". YouTube's card is added at once - the autosave writes its block
+## into the note. Anything else changes what the note is made of: its block is written and the note
+## opened again ([method NoteCards.attach]).
 func _attach(key: String) -> void:
 	if key == "youtube" and _youtube == null:
 		_add_youtube()
+		return
+	_rewrite(func(held: Dictionary) -> String: return NoteCards.attach(note_path, key, held))
+
+
+## A card's ×, once asked: its blocks out of the note, and the note opened again without it.
+func _detach(key: String) -> void:
+	_rewrite(func(held: Dictionary) -> String: return NoteCards.detach(note_path, key, held))
+
+
+## Change what the note is made of, then open it again (see [method NotePanel._rewrite]).
+func _rewrite(write: Callable) -> void:
+	if note_path.is_empty() or not reopen.is_valid():
+		_status.text = "⚠  That needs a note - this panel was opened without one."
+		return
+	if not _doc.settle():
+		return
+	var err := String(write.call(_doc_capture()))
+	if not err.is_empty():
+		push_warning("ghost: could not change what %s is made of - %s" % [note_path.get_file(), err])
+		_status.text = "⚠  " + err
+		return
+	_doc.set_process(false)
+	_doc.capture = Callable()
+	reopen.call(note_path)
 
 
 ## The YouTube card, after the Collection.
@@ -512,7 +567,7 @@ func _add_youtube() -> void:
 	_youtube.values = func() -> Dictionary:
 		var t := _doc.field("title").strip_edges() if _doc != null else ""
 		return {"title": t if not t.is_empty() or note_path.is_empty() else NoteStore.title_of(note_path), "episode": ""}
-	_panel.add_card("youtube", "YouTube", &"publish").add_child(_youtube)
+	_panel.add_card("youtube", "YouTube", &"publish", "youtube").add_child(_youtube)
 	_youtube.noted.connect(func(msg: String) -> void: _status.text = msg)
 
 
@@ -2303,6 +2358,8 @@ func _doc_capture() -> Dictionary:
 	}}
 	if _youtube != null:
 		out["youtube"] = _youtube.capture()
+	for key in _block_cards:
+		out[key] = (_block_cards[key] as Object).call("capture")
 	return out
 
 
@@ -2311,6 +2368,9 @@ func _doc_capture() -> Dictionary:
 func _doc_apply(blocks: Dictionary) -> void:
 	if _youtube != null and blocks.get("youtube") is Dictionary:
 		_youtube.apply(blocks["youtube"] as Dictionary)
+	for key in _block_cards:
+		if blocks.get(key) is Dictionary:
+			(_block_cards[key] as Object).call("apply", blocks[key] as Dictionary)
 	var cfg: Dictionary = blocks["synthesis"] if blocks.get("synthesis") is Dictionary else {}
 	var lineage: Variant = cfg.get("lineage", null)
 	if not (lineage is Array) or (lineage as Array).is_empty():

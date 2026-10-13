@@ -87,7 +87,17 @@ GODOT="${GODOT:-godot}"   # scripts/check.sh and build.sh pass theirs
 RUNNER=("$GODOT" --headless)
 if [[ "${GHOST_PROBE_GPU:-0}" != "0" ]]; then
   if command -v xvfb-run >/dev/null 2>&1; then
-    RUNNER=(xvfb-run -a -s "-screen 0 1280x1024x24" "$GODOT")
+    # A DISPLAY OF ITS OWN. `xvfb-run -a` looks for a free display number and starts its server a
+    # moment LATER, so two started in the same instant both take :99: they share one server, and the
+    # first to finish kills it under the other ("X connection to :99 broken" - seen 2026-10-12, two
+    # GPU gates started together by `check.sh --gpu --jobs`). `-d` has the server choose its own
+    # number, which cannot collide; an xvfb-run too old to have it starts looking from a number of
+    # this process's own.
+    if xvfb-run --help 2>&1 | grep -q -- '--auto-display'; then
+      RUNNER=(xvfb-run -d -s "-screen 0 1280x1024x24" "$GODOT")
+    else
+      RUNNER=(xvfb-run -a -n "$((100 + $$ % 20000))" -s "-screen 0 1280x1024x24" "$GODOT")
+    fi
   else
     echo "run_boot_probe: GHOST_PROBE_GPU set but xvfb-run not found -" \
          "falling back to a VISIBLE window." >&2

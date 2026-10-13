@@ -8,11 +8,11 @@ class_name NoteStore
 ## rebuilt from the files, which stay the source of truth - without touching a component.
 ##
 ## A NOTE IS A MARKDOWN FILE, as a rift chapter already is: frontmatter, then a body, and its
-## components are the blocks under `ghost:` ([Components.template_for] reads which template runs
-## it). Creating a note writes only the block that says what it is - `voice:` for a Generative
-## note, `cards:` for a show, `song:` for a song - and leaves every other block to the panel, which
-## writes one the first time its card is changed: an empty block is not "the defaults" to every card
-## (an empty `illustrations:` would wipe the pictures' look), and a block nobody set is no block.
+## components are the blocks under `ghost:` ([method Components.attached_of]). A new note has
+## none. Attaching a component writes only the block that says it is there
+## ([method Components.attach_blocks]) and leaves every setting to its card, which writes one the
+## first time it is changed: an empty block is not "the defaults" to every card (an empty
+## `illustrations:` would wipe the pictures' look), and a block nobody set is no block.
 
 ## The default folder.
 const DEFAULT := "user://notes"
@@ -103,22 +103,17 @@ static func blocks_of(path: String) -> Dictionary:
 	return res.data if res.ok and res.data is Dictionary else {}
 
 
-## A NEW NOTE from the template [param key], in the default folder: `title:` and the block that
-## says what it is ([method Components.marker_blocks]), with [param body] and [param blocks] laid
-## over them. Returns its path, or "" with the reason pushed as a warning.
-static func create(key: String, title := "", body := "", blocks := {}) -> String:
-	var t: Dictionary = Components.TEMPLATES.get(key, {})
-	if t.is_empty():
-		push_warning("ghost: no template '%s'" % key)
-		return ""
+## A NEW NOTE in the default folder: its `title:`, [param body] and nothing attached - or
+## [param blocks], for one made with components already on it (a recording, a gate). There is one
+## kind of new note; "+" makes it what it becomes ([Components]). Returns its path, or "" with the
+## reason pushed as a warning.
+static func create(title := "", body := "", blocks := {}) -> String:
 	var name := title.strip_edges()
 	if name.is_empty():
-		name = "Untitled %s" % String(t["label"])
+		name = "Untitled"
 	var path := unique(folder().path_join(_safe(name) + ".md"))
-	var ghost := Components.marker_blocks(key)
-	ghost.merge(blocks, true)
 	# a note with no component has no `ghost:` key at all (null removes it), not an empty one
-	var err := FrontMatter.create(path, ghost if not ghost.is_empty() else null, body, "",
+	var err := FrontMatter.create(path, blocks.duplicate(true) if not blocks.is_empty() else null, body, "",
 		FrontMatter.KEY, {"title": name})
 	if not err.is_empty():
 		push_warning("ghost: could not make the note %s - %s" % [path, err])

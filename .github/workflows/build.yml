@@ -60,6 +60,15 @@ jobs:
           apt_get() { sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 "$@"; }
           apt_get install -y -qq --no-install-recommends ffmpeg \
             || { apt_get update -qq && apt_get install -y -qq --no-install-recommends ffmpeg; }
+      # How long each gate took the last time it passed. check.sh starts the longest first from it,
+      # so no long gate is left running by itself at the end with the other cores idle (a run
+      # without it still orders them, by their timeouts). A cache is never rewritten, so each run
+      # saves under a key of its own and restores the newest.
+      - uses: actions/cache@v6
+        with:
+          path: dist/check/.times
+          key: gate-times-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: gate-times-
       # The first red gate fails the run: nothing after it spends compute.
       - name: Do the gatekeeping
         run: scripts/check.sh --fail-fast --jobs auto

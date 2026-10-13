@@ -3,17 +3,19 @@ class_name NotesList
 
 ## NotesList - where Ghost Notes opens (next/notes.md step 8, "No home screen"): a notes app opens on
 ## its notes. The left panel lists them - the default folder and every folder or file the user added
-## ([NoteStore]), newest first - under the name and the tagline, with New: the templates (today's
-## modes, and a plain note), and an existing markdown note brought into the list. Each note has an ×
-## that deletes it, asked first ([DeleteDialog]).
+## ([NoteStore]), newest first - under the name and the tagline, with New, and "Existing note…" for a
+## markdown file brought into the list. Each note has an × that deletes it, asked first
+## ([DeleteDialog]).
+##
+## NEW MAKES A NOTE, AND THERE IS ONE KIND (2026-10-12, the user: "'New' has no options at all.
+## Every note would open in exactly the same way"): its words and nothing else. What it becomes is
+## what "+" attaches to it inside ([Components]) - a song, a Picture, a Voice, a show of cards - so
+## the list never asks what a note is going to be. It offered a menu of the old modes until then,
+## which was a mode switch with the word "template" on it.
 ##
 ## IT MAKES NOTES AND NOTHING ELSE (2026-10-06, the user: "the launch screen should be clean, and a
 ## URL input panel causes immediate confusion"): a song or a video is a component of a note - the
 ## Song card's Choose…, the Clip card's file or link - never a button here. The main area is empty.
-##
-## THE TEMPLATES ARE GATED on their agents exactly as the home screen's rows were (a disabled item
-## still shows its tooltip, which lists every agent of each unfilled role from the registries); the
-## Environment panel and the Assistant's picker are Chrome's (step 4); the key hint is the tooltips'.
 ##
 ## THE ⤓ EXPORT BUTTON HAS NO BUSINESS HERE: nothing is playing, so there is nothing to render.
 ## Suppressed on the way in and released on the way out - KEYED, because main opens the note FIRST
@@ -23,11 +25,10 @@ class_name NotesList
 var open_note: Callable
 
 const COL_DATE := Color(0.5, 0.56, 0.66)
-## New's last item, under the templates: an existing markdown note, brought into the list.
-const EXISTING_ID := 1000
 
 var _panel: SidePanel
-var _new: MenuButton
+var _new: Button
+var _existing: Button
 var _rows: VBoxContainer
 var _dialog: FileDialog
 var _seen := ""            # the list as last drawn, so it is rebuilt only when it changed
@@ -40,8 +41,6 @@ func _ready() -> void:
 	var ch := Chrome.of(self)
 	if ch != null:
 		ch.suppress_export(&"notes")
-		# installing an agent and pressing rescan lights its templates up
-		ch.environment.probed.connect(_gate_templates)
 	refresh()
 
 
@@ -79,78 +78,34 @@ func _build() -> void:
 	sub.modulate = Color(1, 1, 1, 0.6)
 	box.add_child(sub)
 
-	_new = MenuButton.new()
-	_new.text = "New ▾"
-	_new.flat = false
-	_new.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	_new.tooltip_text = "A new note from a template - today's modes, or just the words."
-	_new.get_popup().id_pressed.connect(_on_new)
-	_new.about_to_popup.connect(_gate_templates)
-	box.add_child(_new)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	box.add_child(row)
+	_new = Button.new()
+	_new.text = "New"
+	_new.focus_mode = Control.FOCUS_NONE
+	_new.tooltip_text = ("A new note: its words, and nothing else yet. Inside it, + attaches what it "
+		+ "should become - a song, a picture, a voice, a show of cards.")
+	_new.pressed.connect(new_note)
+	row.add_child(_new)
+	_existing = Button.new()
+	_existing.text = "Existing note…"
+	_existing.flat = true
+	_existing.focus_mode = Control.FOCUS_NONE
+	_existing.tooltip_text = ("Keep a markdown note from anywhere in this list - a chapter in another "
+		+ "project, a git repository. The file stays where it is.")
+	_existing.pressed.connect(_open_dialog)
+	row.add_child(_existing)
 
 	_rows = VBoxContainer.new()
 	_rows.add_theme_constant_override("separation", 2)
 	box.add_child(_rows)
-	_fill_templates()
 
 
-## New's items: one per template, in [constant Components.TEMPLATES]' order.
-func _fill_templates() -> void:
-	var pop := _new.get_popup()
-	pop.clear()
-	var i := 0
-	for key in Components.TEMPLATES:
-		pop.add_item(String(Components.TEMPLATES[key]["label"]), i)
-		pop.set_item_metadata(pop.item_count - 1, key)
-		i += 1
-	pop.add_separator()
-	pop.add_item("Existing note…", EXISTING_ID)
-	pop.set_item_metadata(pop.item_count - 1, "")
-	pop.set_item_tooltip(pop.item_count - 1, "Keep a markdown note from anywhere in this list - a chapter "
-		+ "in another project, a git repository. The file stays where it is.")
-	_gate_templates()
-
-
-## GRAY OUT every template whose agents are not installed - the home screen's rule, moved here. The
-## tooltip lists every agent of each unfilled role from the registries and suggests installing one
-## or several; with them, it names the installed ones. Asked again each time the menu opens and
-## whenever the Environment panel's probe lands.
-func _gate_templates() -> void:
-	var pop := _new.get_popup()
-	for i in pop.item_count:
-		var meta: Variant = pop.get_item_metadata(i)     # null on the separator
-		if not (meta is String) or not Components.TEMPLATES.has(meta):
-			continue
-		var t: Dictionary = Components.TEMPLATES[meta]
-		var roles := Capabilities.roles_of(Components.capabilities_of(t["components"]))
-		var missing := Capabilities.missing_roles(roles)
-		pop.set_item_disabled(i, not missing.is_empty())
-		var tip := String(t["blurb"])
-		if not roles.is_empty():
-			tip += "\n\n" + Capabilities.agents_tooltip(roles, missing)
-		pop.set_item_tooltip(i, tip)
-
-
-func _on_new(id: int) -> void:
-	if id == EXISTING_ID:
-		_open_dialog()
-		return
-	var pop := _new.get_popup()
-	var i := pop.get_item_index(id)
-	if i < 0 or pop.is_item_disabled(i):
-		return
-	var key := String(pop.get_item_metadata(i))
-	# A new Card is a synced document immediately, so the editor's unsynced starter
-	# fallback cannot fill it. Put the starter in the new file's body instead.
-	var body := FileAccess.get_file_as_string("res://rules/cards/starter.md") if key == "cards" else ""
-	var path := NoteStore.create(key, "", body)
+## NEW: a note with nothing attached, made in the default folder and opened.
+func new_note() -> void:
+	var path := NoteStore.create()
 	if not path.is_empty():
-		# FrontMatter.create separates a new head and body with a blank line. The
-		# starter is the editor's actual text, so remove that separator from the body.
-		if key == "cards" and not body.is_empty():
-			var err := FrontMatter.write_body(path, body, "\n" + body)
-			if not err.is_empty():
-				push_warning("ghost: could not fill the new Card brief - " + err)
 		_open(path)
 
 
@@ -246,7 +201,7 @@ func _open(path: String) -> void:
 	queue_free()
 
 
-## NEW -> EXISTING NOTE…: a markdown file from anywhere, kept in the list where it is ([method
+## EXISTING NOTE…: a markdown file from anywhere, kept in the list where it is ([method
 ## NoteStore.add]) and opened.
 func _open_dialog() -> void:
 	if _dialog != null and is_instance_valid(_dialog):

@@ -10,9 +10,6 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **One queue for every agent job**
       `Illustrations` still pumps its own jobs beside `AgentJobs`.
 
-- [ ] **The manual editor**
-      Per-entry params, reordering, a timeline and save, grown into the Workspace.
-
 - [ ] **Photoreal stone**
       Texture, roughness and height relief for `rocks`, to pair with the wireframe reveal.
 
@@ -76,20 +73,23 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **A desktop build that runs everything**
       An exported build cannot yet run the Python hosts, relaunch itself to render, or write into `res://`, and the Steam list is open: URL import left out of a store build, the export's excludes, a GPL FFmpeg on Linux, the Assistant stripped, third-party notices. See [binary_export_and_steam.md](binary_export_and_steam.md).
 
-- [ ] **Let the note own the show**
-      The notes list and the templates are built (next/notes.md, step 8); the deeper half is not. The note, not the mode, should hold the clock, the feeds between its components, its moments, places and seed; there should be one window - the note's text while writing, its stage while playing - and the note should get a card of its own. See [notes.md](notes.md), step 8.
-
 - [ ] **Cards, generalized**
       Built: the rename (Cards, 2026-10-06), the table's verbs as one registry, positions as data, a dealer's tools and the reader's guard (step 9). Open: card state over show time; decks and faces read from the show's guide (the rules are every show's since 2026-10-08 - a tarot show is its brief; the card's size and face are still the tarot's); a dealer run by a real agent (the tools exist, and no episode step calls them yet); pick-a-pile episodes.
 
 - [ ] **The neural voice steered through its duration plan**
       Begun 2026-10-07: `dur_scale` patched in beside `rest_floor`, `*italic*` and `**bold**` spoken as stress, the clipped opening vowel floored, and both pitch moves band-limited and played back in the host. Open: rests rendered instead of spliced, final lengthening on the last words, `dur_cap`, a pitch accent on a stressed word, then a Kokoro-82M prototype whose decoder takes an F0 curve. See [voice_engines.md](voice_engines.md).
 
+- [ ] **The storyboard's editor, continued**
+      Built 2026-10-12: a note keeps its own storyboard and edits it in a dock under the show - a strip of entries, a stage entry's lanes, rows built from the fields' tables, undo, a YAML source view, and the seeded show written down as a first draft. Open: the author's own pass over it; a `layers` scene so a scene's look is data too; a storyboard that conducts itself with no sound; keyframed property lanes; a transition as a timeline item. See [storyboard.md](storyboard.md).
+
 - [ ] **The scene-spec pipeline**
       The north star, "cattle, not pets": a declarative spec that samples a configuration of geometry families, modifiers, materials, motion and lighting and composes them, so lifelike scenes come from integrating many sampled domains rather than from code written per scene. `rocks` and `bloom` sample small specs already, and the storyboard `stage` spec is the same idea for choreography; next is pushing the spec down into the bodies' own geometry and material numbers, the `eye`'s hand-tuned constants first. Every tunable constant is a candidate for sampling.
 
 - [ ] **The card table's light, in real episodes**
       Built 2026-10-07: the set dresser lights its table (`Lights`) - a sky, a sun or the moon and what it falls through (a window, blinds, a lattice, leaves, an awning, a parasol...), clouds passing over the sun, birds' shadows, lamps out of the shot - and watches what moves in it. Open: the first real set dresser run with it (how it reads the plan's light and the room's painting, and how many of its 40 pictures the light takes); a screen for a lamp at night (a street lamp through a window's bars); rain on a window; water's caustics. See [cards.md](cards.md), "THE LIGHT".
+
+- [ ] **Let the note own the show**
+      Built 2026-10-12: one kind of note, the panel that runs it derived from its components, slots for what a note has one of, a derived "+" and a detach on every panel, and one path that puts a song's show and a reading's up. Open: the Voice as a card on the note's own panel (the reading, Cards, the voice lab and Masking are still panels of their own), a song and a voice on one note, the note holding the clock, the feeds between its components, its moments, places and seed; one window - the note's text while writing, its stage while playing - and a card of the note's own. See [notes.md](notes.md), "Composition, not templates", and [storyboard.md](storyboard.md).
 
 - [ ] **Tools for every agent**
       Only Claude takes Ghost Notes' tools (`AgentTools`), and only the set dresser uses them. Proposed: a painter checked by a vision pass and repainted with notes, a reader's `check_passage`, a producer that can read any earlier episode whole, and Bedrock as a tool-taking writer. Grok and Codex take them since 2026-10-09 (Codex with its token in its environment, sent as a bearer) (`TextGen.Grok`; a real set dresser run built, looked at and fixed a seven-thing table over 32 calls and 27 pictures, stopped by the machine's memory before `submit`): what is open is a whole run to `submit`, and its pace - at Grok's default high effort it thought ~11 minutes before its first call. See [cards.md](cards.md), "Not built yet".
@@ -99,6 +99,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 
 - [x] **Notes, not modes (2026-10-06)**
       Ghost Notes opens on a notes list. A note is a markdown file with components attached; the six modes are templates over one registry; every panel section is a colored card; one transport plays every timed show; one bottom-right row; one frontmatter block per component; every mode is left and entered again through one teardown; and every component declares what it asks of the platform. Steps 0-8 of [notes.md](notes.md).
+
+- [x] **One kind of note (2026-10-12)**
+      New has no options: it makes a note with nothing attached, and "+" makes it what it becomes. The template table is gone; a component declares the room it takes and the workspace it needs, and the rest is derived. Every component detaches. A note keeps its own storyboard and edits it in the app. See [storyboard.md](storyboard.md).
 
 - [x] **After the first review (2026-10-06)**
       A clean notes list (New only; delete with ×, or a note's "⋯"), every note starting from nothing, a song as a note's component with Auto as a medium, Manual's storyboards as a card, Tarot renamed Cards, Masking's panel in the framework, and "Edit". See [notes.md](notes.md), "After the first review".

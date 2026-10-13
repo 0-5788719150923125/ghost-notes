@@ -2,7 +2,7 @@ extends Node
 class_name ShowcaseRecorder
 
 ## ShowcaseRecorder - the README's recording, inside the second ghost that [Showcase] starts under
-## Movie Maker with `--showcase <work>`. It makes what a person would - a Manual note with a song,
+## Movie Maker with `--showcase <work>`. It makes what a person would - a note with a song,
 ## on the showcase storyboard - opens it the way the notes list does, presses Play, and quits once
 ## [method Showcase.frames] frames have been drawn since. Movie Maker has been writing every frame
 ## from the first; [Showcase] keeps the last of them, so the boot and the note opening never show.
@@ -37,8 +37,9 @@ func _run() -> void:
 	if not write_song(song):
 		_fail("could not write the song (%s)" % song)
 		return
-	var note := NoteStore.create("manual", Showcase.TITLE, Showcase.BODY, {
+	var note := NoteStore.create(Showcase.TITLE, Showcase.BODY, {
 		"song": {"path": song},
+		"picture": {"medium": "full"},
 		"scenes": {"storyboard": Showcase.STORYBOARD},
 		"bookends": {"intro": Showcase.INTRO, "outro": Showcase.OUTRO}})
 	if note.is_empty():

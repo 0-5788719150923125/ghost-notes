@@ -41,7 +41,7 @@ const TABLE := {
 	"mic": {"label": "a microphone", "where": "desktop"},
 }
 
-## The agent registry behind [param role] - the same ones the notes list gates its templates on. By
+## The agent registry behind [param role] - the same ones a note's "+" gates its components on. By
 ## class name, not preload: [TextGen] starts its agents through [Subprocess], which asks this file.
 static func registry(role: String) -> GDScript:
 	return TextGen if role == "writer" else ImageGen
@@ -121,7 +121,7 @@ static func _platform_name() -> String:
 # An AI agent in a ROLE. The agent CLIs keep their own logins, so they stay the user's to install
 # (see [constant Deps.TOOLS]). A role is a backend registry ([method registry]), filled when ANY ONE
 # of its backends is installed - availability is the backend's own `available()`, the same resolver
-# its jobs launch through, so a template is never lit for an agent its jobs cannot find. These were
+# its jobs launch through, so a component is never lit for an agent its jobs cannot find. These were
 # the home screen's (Splash) until step 8 retired it; the notes list's New menu asks them now.
 
 ## What every gate tells a person to do about a missing agent.
@@ -154,7 +154,7 @@ static func role_phrase(roles: Array) -> String:
 	return "an AI " + join_words(roles, "and")
 
 
-## A gated template's tooltip. With nothing [param missing], which installed agents fill each role
+## A gated component's tooltip. With nothing [param missing], which installed agents fill each role
 ## in [param needs]. Otherwise: what is not installed; for each unfilled role, EVERY agent its
 ## registry supports; the agents that would fill all of them alone (a key names the same CLI in
 ## every registry - `codex` writes and paints); and what to do about it. Written as PARAGRAPHS: Boot

@@ -3,6 +3,75 @@
 
 The data-driven scene stack behind storyboard `stage` entries: a **Cast** of actors, **Actions** verbs applied to them on a **Track** timeline. The storyboard file format itself is specified in [storyboards/README.md](../storyboards/README.md).
 
+## Fields
+
+What a storyboard can say, read from the tables its editor builds its rows from (`Storyboard.BOARD` and its siblings in [src/storyboard.gd](../src/storyboard.gd)): a field in a table is a control in the editor. A `num` is a number or a sampled `[lo, hi]` range; a key left out is its default.
+
+### The storyboard
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `loop` | Loop | bool | At the end, start again from the first entry. Off, the show follows the song instead: it holds its last entry, or cycles the tail, and rolls back to the top when the song does. |
+| `transition` | Transition | enum: `cut`, `dip`, `fade` | How one entry gives way to the next unless the entry says otherwise: a hard cut, a dip through black, or a crossfade. Two entries that can morph always do. |
+| `sensitivity` | Tempo | float | The story's pace. Higher is faster: every hold shrinks and every entry's timeline is compressed with it, so each event still lands. What an actor does on its own never speeds up. |
+| `elastic` | Elastic | float | How far a stage's timeline breathes with the song: a loud passage runs it faster, a quiet one slower, the total unchanged. 0 keeps it even. |
+
+### An entry
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `scene` | Scene | scene | What is on screen. Stage is the one made of data: its actors and what they do are written in the entry itself. |
+| `behavior` | Motion | enum: `static`, `drift`, `fluid` | How the scene moves: held still, drifting as one, or every part moving on its own. |
+| `shot` | Shot | enum: `centered`, `offset`, `push_in`, `pull_back`, `pan`, `canted` | How the camera frames it. Left unset, one that suits the scene is drawn from the entry's seed. |
+| `seed` | Seed | int | Pins everything the scene rolls - its colors, its shapes, each sampled range. Unset, it comes from the song and the entry's place in the list. |
+| `transition` | Leaves by | enum: `cut`, `dip`, `fade` | How this entry gives way to the next. Unset, the storyboard's own transition. |
+| `sensitivity` | Tempo | float | This entry's own pace. Unset, the storyboard's. |
+
+### How long an entry stays
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `hold` | Seconds | float | How long the entry stays. |
+| `exit` | Cue | enum: `beat`, `movement`, `lull` | What the entry leaves on: a beat, a change of section, or a drop into quiet. |
+| `min_hold` | At least | float | The entry never leaves sooner than this many seconds. |
+| `max_hold` | At most | float | The entry leaves by this many seconds even if no cue came. |
+
+### A stage entry
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `carry` | Carry | bool | Actors with the same id as the entry before carry on across the cut - the same body, pose and gaze. Off, the entry opens on a clean cut. |
+| `elastic` | Elastic | float | This entry's own breathing with the song. Unset, the storyboard's. |
+
+### Its camera
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `eye` | Eye | vec3 | Where the camera stands. |
+| `look` | Looks at | vec3 | The point it faces. |
+| `fov` | Field of view | num | In degrees: wider takes in more and deepens the perspective. |
+
+### An actor
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `id` | Name | text | What the timeline calls this actor. One name, one body: the same name in the next stage entry is the same actor, carried across. |
+| `kind` | Kind | enum: `eye`, `prism`, `swarm` | What it is. |
+| `at` | Place | vec3 | Where it stands: right, up and toward the camera. With the camera at its default, 0.62 to either side are the two side-by-side places. |
+| `hidden` | Starts hidden | bool | It is there but unseen until something on the timeline reveals it. |
+| `seed` | Seed | int | Pins what this actor rolls for itself. Unset, it comes from the entry's seed. |
+
+### A span
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `action` | Does | enum: `look`, `blink`, `arrive`, `sprout`, `split`, `crystallize`, `tremble`, `burst`, `lock`, `desync`, `hold_still`, `sway`, `counterflow`, `specialize`, `gather`, `fly`, `helix_split`, `lane_jump`, `set`, `ramp`, `pulse`, `flash` | What happens. |
+| `target` | Who | targets | The actors it happens to. None chosen means everyone on the stage. |
+| `ease` | Ease | enum: `smooth`, `linear`, `in`, `out`, `spike` | The shape of its progress across the window. A verb with phases of its own wants linear. |
+| `on` | Waits for | enum: `beat`, `movement`, `lull` | A cue in the music the span waits for once its time has come, so a drop lands on the drop. |
+| `by` | No later than | float | Seconds it waits for that cue before going anyway. |
+| `sustain` | Keeps on | bool | After its window closes it carries on at full strength for the rest of the entry, instead of finishing. |
+
 ## Cast (actor registry)
 
 Cast - the actor registry for data-driven scenes (see scenes/stage.gd).
@@ -19,19 +88,45 @@ Registry: `Cast.REGISTRY` in [src/cast.gd](../src/cast.gd) (3 kinds)
 
 A human eye (`EyeBody`) on a slot. Gaze is driven by a look verb feeding `state.focus` (shared focus = real vergence); when no verb has fed it for a moment it falls back to the body's own center-biased self-saccades.
 
-Source: [src/cast.gd:125](../src/cast.gd#L125)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `radius` | Size | num | How large the eye is. Unset, drawn between 0.24 and 0.34. |
+| `hue` | Hue | num | The iris's color, around the wheel from 0 to 1. Unset, drawn from the seed. |
+
+Source: [src/cast.gd:166](../src/cast.gd#L166)
 
 ### `prism` - PrismActor
 
 A living wireframe prism (`PrismBody`) on a slot, drawn through the projected-slot bridge (world slot -> screen center + perspective scale) so it lines up exactly with 3D bodies sharing the lens.
 
-Source: [src/cast.gd:486](../src/cast.gd#L486)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `scale` | Size | num | How large the prism is. Unset, drawn between 0.24 and 0.30. |
+| `hue` | Hue | num | Its color, around the wheel from 0 to 1: blue near 0.6, red at 0. |
+
+Source: [src/cast.gd:527](../src/cast.gd#L527)
 
 ### `swarm` - SwarmActor
 
 A formation of prisms streaming along an invisible track into the void - a GROUP actor (many bodies, one performer), because the swarm's coordinated strand math is one thing, not N independent choreographies. Ported from prism_swarm.gd. Verbs steer it through state: `gather` (members ease in one at a time), `travel` (flown distance - the fly verb), `split_k` (the track opens into a double helix; the red strand fades in on the OTHER winding), `lane` (the bank-and-jump to the far strand). config: count / count_red / spacing / head / size / helix / r_min / r_max / hue (blue strand) / hue_red / bank ("left" / "right"; by seed otherwise) / lead (an actor id whose live prism becomes member 0 across a carry).
 
-Source: [src/cast.gd:530](../src/cast.gd#L530)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `count` | Members | num | How many prisms fly in the blue strand. |
+| `count_red` | Red members | num | How many fly in the red strand once the helix opens. Unset, as many as the blue. |
+| `spacing` | Spacing | num | The distance between one member and the next along the track. |
+| `head` | Head | num | How far ahead of the camera the formation's lead flies. |
+| `size` | Size | num | How large each member is. |
+| `helix` | Helix | num | How tightly the two strands wind once the track opens into a double helix. |
+| `r_min` | Nearest | num | The helix's radius at its narrowest. |
+| `r_max` | Widest | num | The helix's radius at its widest. |
+| `hue` | Hue | num | The blue strand's color. |
+| `hue_red` | Red hue | num | The red strand's color. |
+| `bank` | Banks | enum: `left`, `right` | Which way the track curves. Unset, by the seed. |
+| `lead` | Lead | actor | An actor carried in from the entry before whose prism becomes the first blue member. |
+| `lead_red` | Red lead | actor | An actor carried in whose prism becomes the red strand's lead, waiting until the helix opens. |
+
+Source: [src/cast.gd:571](../src/cast.gd#L571)
 
 ## Actions (verb registry)
 
@@ -49,133 +144,213 @@ Registry: `Actions.REGISTRY` in [src/actions.gd](../src/actions.gd) (22 verbs)
 
 look - aim eyes at a wandering 3D focus point. ALL targets share one focus, so two eyes verge (toe in near, run parallel far) for free; a rare stray sends one eye wandering. The depth-tier table comes from the args (see `Cast.FocusSampler`).
 
-Source: [src/actions.gd:65](../src/actions.gd#L65)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `tiers` | Depths | data | Where the gaze rests, as a list of tiers: each a chance `p`, a distance `dist` and how long it dwells there, `dwell`. |
+| `lateral` | Sideways | num | How far a fixation strays to the side. |
+| `stray` | Stray | num | The chance that one eye wanders off the shared focus for a fixation. |
+
+Source: [src/actions.gd:156](../src/actions.gd#L156)
 
 ### `blink` - Blink
 
 blink - close and reopen the eyelids once. args: duration (s).
 
-Source: [src/actions.gd:84](../src/actions.gd#L84)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `duration` | Seconds | num | How long the lids take to close and open again. |
+
+Source: [src/actions.gd:175](../src/actions.gd#L175)
 
 ### `arrive` - Arrive
 
 arrive - the actor FLIES IN with velocity from offscreen, finds its anchor, and lands with a small damped wobble. The path curves slightly (a swoop, not a rail) and the approach decelerates hard into the landing. Give the span `ease: linear` - the verb shapes its own motion. args: from ([x,y,z] origin, default a sampled offscreen point), wobble (landing amplitude, world units).
 
-Source: [src/actions.gd:97](../src/actions.gd#L97)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `from` | From | vec3 | Where it flies in from. Unset, from off the frame. |
+| `wobble` | Wobble | num | How much it rocks as it lands. Unset, a little, by the seed. |
+
+Source: [src/actions.gd:188](../src/actions.gd#L188)
 
 ### `sprout` - Sprout
 
 sprout - a STANDING ROSE beside the anchor: the stem grows up from below the frame (rooted in the void's floor - never from the camera), rising almost vertical beside the eye's anchor, cresting above it, and drooping its head over so the tip hangs downward; the eye swells at the hanging tip like fruit, facing the ground. As it hangs, the bloom SHEDS a petal or two; then the eye DETACHES - the release is what whips the freed stem back, and it retreats down along itself while the dropped eye settles onto its anchor and slowly rights itself to face forward. The vine and petals are drawn by `Cast.EyeActor` from `state.vine`. Give the span `ease: linear`. args: side (-1/1 stem side, default sampled).
 
-Source: [src/actions.gd:149](../src/actions.gd#L149)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `side` | Side | num | Which side of its place the stem grows on: -1 left, 1 right. Unset, by the seed. |
+
+Source: [src/actions.gd:240](../src/actions.gd#L240)
 
 ### `split` - Split
 
 split - MITOSIS: one eye divides into two. The twin buds off the source as a blank wet ball (no iris yet), connected by a stretching tissue membrane (drawn by `Cast.EyeActor` from `state.mit`); volume is conserved, so the parent visibly deflates as the bud swells (one R eye -> two ~0.79R twins). The pull is stick-slip (the tissue resists in jerks) up to the SNAP, where the membrane tears: both eyes recoil on a damped spring the rest of the way to their slots, droplets spatter, and only then does the newborn's iris surface - followed by its first blink. A prism divides the same way, with cold shards and a flash in place of the tissue. args: into (actor id), slots ([[x,y,z],[x,y,z]]), hue (the newborn's, reached by the snap; default the parent's).
 
-Source: [src/actions.gd:273](../src/actions.gd#L273)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `into` | Into | actor | The hidden actor that becomes the newborn. |
+| `hue` | Its hue | num | The color the newborn warms to as it pulls away. Unset, its parent's. |
+| `slots` | Places | data | Where the two come to rest, as two places: `[[x, y, z], [x, y, z]]`. |
+
+Source: [src/actions.gd:364](../src/actions.gd#L364)
 
 ### `crystallize` - Crystallize
 
 crystallize - the eye FREEZES OVER into the prism (a staged physical transition, not a crossfade). Phase 1, stilling: the gaze locks to one point and crystal edges creep across the ball (`Cast.EyeActor` draws the cage from `state.crys`) while the pupil constricts to a pinpoint and the iris hue chills toward the crystal's. Phase 2, faceting: the cage tightens and glints, the iris features die away (a blank frozen ball), and the prism's wireframe materializes aligned over it. Phase 3, collapse: the ball is sucked into the crystal's core - cold shards, an icy flash, and the prism solidifies alive. Give the span `ease: linear` - the verb shapes its own phases. args: into (actor id).
 
-Source: [src/actions.gd:414](../src/actions.gd#L414)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `into` | Into | actor | The hidden prism the eye freezes over into. |
+
+Source: [src/actions.gd:505](../src/actions.gd#L505)
 
 ### `tremble` - Tremble
 
 tremble - the riser: the eye vibrates harder as k rises, light building around it (the drawing lives in `Cast.EyeActor`). Latches at its final level - the burst that replaces the eye is what ends it.
 
-Source: [src/actions.gd:484](../src/actions.gd#L484)
+Source: [src/actions.gd:575](../src/actions.gd#L575)
 
 ### `burst` - Burst
 
 burst - the target bursts into being in a flash (the DROP): revealed at full fade, optionally replacing another actor (the eye it erupts from). Usually a point span gated on a beat: `{at: 0, on: beat, by: 0.8, action: burst, ...}`.
 
-Source: [src/actions.gd:494](../src/actions.gd#L494)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `replaces` | Replaces | actor | An actor that goes as this one bursts into being. |
+
+Source: [src/actions.gd:585](../src/actions.gd#L585)
 
 ### `lock` - Lock
 
 lock - phase-lock the target's pose to another prism (they turn as one), with a brief bright tie between them at the snap. Latches until a desync. args: to (actor id), snap (window fraction where the snap lands, default 0.05).
 
-Source: [src/actions.gd:508](../src/actions.gd#L508)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `to` | To | actor | The prism whose turning it locks onto. |
+| `snap` | Snap | num | How quickly it snaps into step, as a share of the window. |
+
+Source: [src/actions.gd:599](../src/actions.gd#L599)
 
 ### `desync` - Desync
 
 desync - break a phase-lock: the target resumes its own rotation.
 
-Source: [src/actions.gd:528](../src/actions.gd#L528)
+Source: [src/actions.gd:619](../src/actions.gd#L619)
 
 ### `hold_still` - HoldStill
 
 hold_still - damp the target's own spin toward rest (it keeps breathing). Latches.
 
-Source: [src/actions.gd:535](../src/actions.gd#L535)
+Source: [src/actions.gd:626](../src/actions.gd#L626)
 
 ### `sway` - Sway
 
 sway - slip the anchor and drift weightlessly around it, pushing and pulling (the float). Each target wanders on its own seeded phases; the audio leans into it. args: amp (world units, default [0.07, 0.10] - sampled per target).
 
-Source: [src/actions.gd:544](../src/actions.gd#L544)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `amp` | Reach | num | How far it drifts from its place. Unset, a little, by the seed. |
+
+Source: [src/actions.gd:635](../src/actions.gd#L635)
 
 ### `counterflow` - Counterflow
 
 counterflow - the pair take OPPOSITE HIGHWAYS: each merges onto its own lane and cruises against the other (they pass mid-scene), rolling about its travel axis like a drill boring down its road; in the final stretch each pulls a LOOP off its lane - the arc that carries them into the ouroboros. Cruise speed rides the actor's live time_scale, so a specialized small/fast prism zips while the large/ slow one glides. Give the span `ease: linear`. args: lane (half-gap between the highways), speed (world/s), loop_k (where the exit loop begins, 0..1).
 
-Source: [src/actions.gd:573](../src/actions.gd#L573)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `lane` | Lane | num | How far apart the two highways run. |
+| `speed` | Speed | num | How fast they cruise. |
+| `loop_k` | Loop at | num | How far through the window each pulls its closing loop, from 0 to 1. |
+
+Source: [src/actions.gd:664](../src/actions.gd#L664)
 
 ### `specialize` - Specialize
 
 specialize - diverge in character: scale eases to size x, the body's whole tempo to `tempo` x, and a scale pulse latches ({amp, rate}) - bias vs variance made physical. args: size (default 1.0), tempo (default 1.0), pulse {amp, rate}.
 
-Source: [src/actions.gd:639](../src/actions.gd#L639)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `size` | Size | num | How many times its size it grows or shrinks to. |
+| `tempo` | Tempo | num | How many times its own speed it runs at. |
+| `pulse` | Pulse | data | A breathing of its size it keeps afterward: `{"amp": 0.06, "rate": 6.5}`. |
+
+Source: [src/actions.gd:730](../src/actions.gd#L730)
 
 ### `gather` - Gather
 
 gather - the swarm's members ease in one at a time and form up (k plays the staggered joins through; see `Cast.SwarmActor`).
 
-Source: [src/actions.gd:663](../src/actions.gd#L663)
+Source: [src/actions.gd:754](../src/actions.gd#L754)
 
 ### `fly` - Fly
 
 fly - the formation flies forward along its track, the stage camera following a touch slower so it pulls ahead and recedes (the ONE camera move in the brief). args: speed (x, default 1.0), follow (camera fraction of the travel, default 0.72).
 
-Source: [src/actions.gd:672](../src/actions.gd#L672)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `speed` | Speed | num | How fast the swarm flies its track. |
+| `follow` | Camera | num | How closely the camera keeps up: 1 holds the swarm still in frame, less lets it pull away. |
+
+Source: [src/actions.gd:763](../src/actions.gd#L763)
 
 ### `helix_split` - HelixSplit
 
 helix_split - the single track opens into a double helix: the spread widens and the counter-winding red strand fades in (see `Cast.SwarmActor`).
 
-Source: [src/actions.gd:693](../src/actions.gd#L693)
+Source: [src/actions.gd:784](../src/actions.gd#L784)
 
 ### `lane_jump` - LaneJump
 
 lane_jump - the swarm banks to its side and leaps across to the other strand, then holds there (k rides the bank's arc through the crossing).
 
-Source: [src/actions.gd:701](../src/actions.gd#L701)
+Source: [src/actions.gd:792](../src/actions.gd#L792)
 
 ### `set` - SetParam
 
 set - set one actor parameter instantly. args: param, value.
 
-Source: [src/actions.gd:708](../src/actions.gd#L708)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `param` | What | enum | What is set. |
+| `value` | To | num | Its new value, at once. |
+
+Source: [src/actions.gd:799](../src/actions.gd#L799)
 
 ### `ramp` - Ramp
 
 ramp - ease one actor parameter from its current value (or `from`) to `to`.
 
-Source: [src/actions.gd:716](../src/actions.gd#L716)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `param` | What | enum | What is eased. |
+| `from` | From | num | Where it starts. Unset, from where it is. |
+| `to` | To | num | Where it ends up, across the window. |
+
+Source: [src/actions.gd:807](../src/actions.gd#L807)
 
 ### `pulse` - Pulse
 
 pulse - a scale breathing on the target while the span runs ({amp, rate}); latches unless args.latch is false.
 
-Source: [src/actions.gd:732](../src/actions.gd#L732)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `amp` | Depth | num | How much its size breathes. |
+| `rate` | Rate | num | How many breaths a second. |
+| `latch` | Keeps on | bool | The breathing carries on after the window closes. |
+
+Source: [src/actions.gd:823](../src/actions.gd#L823)
 
 ### `flash` - Flash
 
 flash - a bright burst overlay on the target (a stinger accent).
 
-Source: [src/actions.gd:751](../src/actions.gd#L751)
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `hue` | Hue | num | The flash's color. Unset, the actor's own. |
+
+Source: [src/actions.gd:842](../src/actions.gd#L842)
 
 ## Track (the timeline runner)
 
