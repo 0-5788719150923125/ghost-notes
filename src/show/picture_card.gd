@@ -11,7 +11,7 @@ class_name PictureCard
 ## reading), and AUTO - the original show with nothing to set ([AutoMedium]) - is first, and shows
 ## nothing under the picker at all.
 ##
-## A ROW A MEDIUM CANNOT USE IS HIDDEN, by [constant Medium.USES] rather than by branching here:
+## A ROW A MEDIUM CANNOT USE IS HIDDEN, by each medium's `uses` ([constant Medium.REGISTRY]) rather than by branching here:
 ## "there are a number of settings currently being displayed that ONLY work with the comic book
 ## medium" - a control that does nothing teaches nothing. The rows move the moment the medium
 ## does ([signal Director.medium_changed]), though the medium itself lands at the next reading: a
@@ -40,7 +40,7 @@ var _film_freq: HSlider
 var _film_status: Label
 var _film_cutting := -1     # windows being cut last frame, so the status line only changes on change
 var _film_dialog: FileDialog = null
-## Rows only some media use, by the [constant Medium.USES] tag they answer to.
+## Rows only some media use, by the `uses` tag they answer to ([constant Medium.REGISTRY]).
 var _medium_rows := {}
 ## Rows every medium that takes settings uses: hidden only under one that takes none (Auto).
 var _setting_rows: Array = []
@@ -199,8 +199,8 @@ func _medium_option() -> OptionButton:
 	var tip := ("What the show is drawn ON, as opposed to what drives it." + (" Takes effect on the "
 		+ "next reading, not the one already playing." if _reading else "") + "\n")
 	for k in keys:
-		opt.add_item(String(Medium.LABELS.get(k, k)))
-		tip += "\n%s - %s" % [Medium.LABELS.get(k, k), Medium.BLURBS.get(k, "")]
+		opt.add_item(Registry.label(Medium.REGISTRY, k))
+		tip += "\n%s - %s" % [Registry.label(Medium.REGISTRY, k), Registry.blurb(Medium.REGISTRY, k)]
 	opt.tooltip_text = tip
 	# The DIRECTOR is the truth for this one (it is a whole-app setting and the export
 	# render reads it), so the picker drives the setter rather than being bound directly -
@@ -211,13 +211,13 @@ func _medium_option() -> OptionButton:
 		if not Medium.takes_settings(k):
 			_to_defaults()
 		Director.set_medium(k)
-		noted.emit("Medium: %s%s" % [Medium.LABELS.get(k, k), " - takes effect on the next reading." if _reading else "."]))
+		noted.emit("Medium: %s%s" % [Registry.label(Medium.REGISTRY, k), " - takes effect on the next reading." if _reading else "."]))
 	row.add_child(opt)
 	return opt
 
 
 ## THE FRAME: landscape 16:9 or portrait 9:16 (next/notes.md step 10) - a property of the show, kept
-## beside the medium. Only what the medium can be shown in is offered ([constant Medium.FRAMES]); a
+## beside the medium. Only what the medium can be shown in is offered (its row's `frames`, [method Medium.frames]); a
 ## frame it cannot is grayed, saying so, and the show plays in landscape.
 func _frame_option() -> OptionButton:
 	var row := HBoxContainer.new()
@@ -249,7 +249,7 @@ func _sync_frames() -> void:
 	_frame_pick.select(1 if Director.resolved_frame() == "portrait" else 0)
 	_frame_pick.tooltip_text = ("What the show is framed as - and exported at. Portrait is for Shorts, Reels and TikTok."
 		if ok else "%s has no portrait frame yet - it frames a spread or a table a 9:16 view cannot hold - so the show is landscape."
-			% Medium.LABELS.get(Director.resolved_medium(), Director.resolved_medium()))
+			% Registry.label(Medium.REGISTRY, Director.resolved_medium()))
 
 
 ## The notebook's handwriting: a named hand, or Random (drawn per session from the seed).
@@ -298,7 +298,7 @@ func _hand_keys() -> Array:
 # a control that does nothing teaches nothing, and there were two of them.
 
 ## The film library block: the list, an import button, and the frequency dial. Built into a
-## group of its own so the whole block can be shown or hidden as one (see Medium.USES).
+## group of its own so the whole block can be shown or hidden as one (see a medium's `uses`).
 func _build_films() -> void:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)

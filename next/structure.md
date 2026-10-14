@@ -187,35 +187,46 @@ feedback console (the first of 9), which is all 48. See "How the 48 went".
 - **Masking gets the console courtesy.** `main._end_session` asked its own handle whether the
   feedback console was open; Masking's console is the shell's, so a reading of it was missed.
 
-**6. One shape of registry.** *Status, 2026-10-13: the roster is out of the Director; the shape
-is not unified.* `SceneRoster` (`scenes/roster.gd`) holds the rotation and the atmospheric list, read
-by the Director, the storyboard's editor, docs.py and the gates; the order and names are unchanged,
-so every seeded show is. Left: one row shape - label, a sentence, a table of fields, the script -
-over the four shapes there are (parallel `REGISTRY` / `LABELS` / `BLURBS` maps in `Medium`,
-`Filters`, `TextGen` and `ImageGen`; one map of rows in `Components`; `Cast` and `Actions` with
-separate field tables; the roster's list), and one reader, so `SchemaForm`, `docs.py`, "+" and a
-timeline's "add" menu read any of them the same way. docs.py parses each shape by its own regex,
-so the reader and docs.py change together.
+**6. One shape of registry.** *Status, 2026-10-13: done for the registries that were parallel
+maps; the roster is out of the Director.* Every registry is a Dictionary of ROWS, one per key, in
+the order it is offered: a `label` a person reads, a `blurb`, and the fields of its own kind. The
+Look's filters (`uniform`, `default`), the media (`script`, `uses`, `frames`, `needs`, `mode`,
+`bare`) and the agent backends (`backend`) were four or seven parallel tables keyed alike and are
+one table of rows each now, with each field's reason written beside the field instead of above a
+table of its own. `Registry` (`data/`) reads a label, a blurb or a field of any of them; docs.py's
+`_rows` reads any of them as data, so the docs need no regex per table. `data/` moved to the bottom
+of the stack for it: plain-data helpers name nothing, and the platform reads them.
+`SceneRoster` (`scenes/roster.gd`) holds the rotation and the atmospheric list, read by the
+Director, the storyboard's editor, docs.py and the gates; the order and names are unchanged, so
+every seeded show is. Left: a table of FIELDS per composable thing - scenes have none yet (what a
+scene rolls from its seed is code), layers and forces neither - which is what a timeline's
+inspector and an agent choosing parts will read; `Cast.PARAMS` and `Actions.ARGS` are the shape.
 
-**7. `table.gd` along its banners.** *Status, 2026-10-13: the shuffle is out.* `TableShuffle`
-(`table/table_shuffle.gd`, 2,300 lines: every move the deck makes and where each card is during
-one) holds its own state, reads 34 things of the medium (`medium.`) and is asked seven
-(`shuffle_xf`, `shuffle_wander`, `move_at`, `deck_turns`, `riffle`, `wash`, `wash_jump`); `table.gd`
-fell from 6,800 lines to 4,500. Measured, the other sections do not cut the same way: "the things on
-the table", "posing" and "the episode" each read 60 or more of the medium's members. But almost all
-of those are WRITTEN IN ONE PLACE, when the episode loads (the seed, the cards, the slots, the deck's
-base, the camera's, the staging...) and only read after. That is the next cut: a `TablePlan`, made
-once by the episode and read by everything that poses - the table as a pure function of (plan,
-show time), which is what its header has always said it is. Then the posing and the things on the
-table come out holding the plan instead of the medium.
+**7. `table.gd` along its banners.** *Status, 2026-10-13: three parts out; 6,800 lines to 3,800.*
+`TableShuffle` (every move the deck makes), `TablePlan` (what an episode decides when it loads -
+the seed, the cards, the slots, the camera's place, the staging... - written by one fixed order of
+statements, a fresh one per episode, read by everything after) and `TableCardPose` (where each card
+is at a moment of the show: no state of its own, read off the plan, the schedule and the box). What
+is left in `table.gd` is the per-frame driver (`_pose`, which applies poses to the meshes and keeps
+the little per-frame state there is), the building of the set and the episode, and the things on
+the table. Next: the things on the table (they read the plan now, so their boundary is narrower
+than the 64 references it was), and the episode's build split from its decisions - the plan made
+by a function of (episode, seed) with the same draws in the same order, the nodes built from it.
 
-**8. The workspaces become cards.** *Not begun, and measured not to be a cutting job.*
-`reading_panel.gd`'s banners do not hold together (its "audition" section holds `_set_status`,
-which the rest calls 19 times), and `CardsEditor` overrides 31 of its methods: a method moved into a
-part would call the part's own copy, and the override would go quiet with no compiler to say so. So
-the reading comes apart the way storyboard.md's fourth "Next" says - the voice a card on the note's
-own panel, Cards a component that brings a voice - with the overrides turned into what each mode
-hands the reading.
+**8. The workspaces become cards.** *Status, 2026-10-13: the first piece - what a reading reads -
+is handed, not overridden.* `reading_panel.gd`'s banners do not hold together (its "audition"
+section holds `_set_status`, which the rest calls 19 times), and `CardsEditor` overrode 31 of its
+methods: a method moved into a part would call the part's own copy, and the override would go quiet
+with no compiler to say so. So the reading comes apart by turning overrides into what a mode HANDS
+it. The first: `TextWalk` (`reading/`) is what a reading reads - the words, the title announced,
+the text the cast and the fingerprint come from, the passage a voice is auditioned with - the note's
+own by default (a tablet chapter read off its screen); Cards hands an `EpisodeWalk` (`cards/`) that
+reads the episode it produced, never the brief. Six overrides went (31 to 25), and
+`tests/reading/text_walk_check.gd` holds the walks - it fails, as it should, when Cards' walk is
+made to read the brief, which no gate checked before. Next, in the same way: where the reading is
+(`_environment`, already a maker of a `SoundBed`), how its export is named and uploaded
+(`export_name`, `_upload_*`), then the panel's own cards - until a voice is a card that reads
+whatever walk the note's components hand it (storyboard.md's fourth "Next"; notes.md, "text walks").
 
 **9. Masking joins.** *Status, 2026-10-13: three parts are out.* `MaskPoseTrack` (the pose track:
 bootstrapped, read by time), `MaskUrlImport` (a link where a file is expected) and `MaskFaceTrack`
@@ -252,6 +263,36 @@ filled from a feed where it now takes a finished manuscript, a clock with no aud
 dresser's today). Step 8 is the one that makes room: a voice that is a card can be attached to
 it. Cards is the rehearsal - its agents already produce a show step by step - and its table is
 already a place a desk could be.
+
+**Many kinds of show, and rounds** (the user, 2026-10-13: "we are essentially building a kind of
+harness for AI agents ... we have made the visual aspect a first-class citizen ... we might be
+working on a kind of world model" - cartoons and animation, a music-making tool, automatons doing
+real work live on video). Each of those is a feature that does not exist yet, so the foundation's
+job is not to know them but to not forbid them: parts that meet only through what a show hands them
+(`ShowFeed`, a plan, a feed), registries that describe what can be composed, and a clock that never
+waits on anything.
+
+That last one is where ROUNDS come in. An agent loop works in rounds: a turn asks for tools, they
+run (several at once), the results come back, the next turn starts - nothing blocks on everything.
+The same shape fits both halves of a live show:
+
+- **Agents.** A round's output lands as data on the show's schedule - an entry, a moment, a page for
+  the tablet, a line for the voice - at a round boundary, and the show keeps playing in between.
+  That is "agents write data, not code" with a clock attached, and it is the storyboard's third
+  source (a live queue) from step 8's future above.
+- **Drawing.** Work is given a priority and a budget per frame, and what misses its frame lands on
+  a later one. Ghost already does this in five places, each its own way: `FrameForge` (geometry
+  built on a worker, taken when ready), the landscapes that repaint every 3-4 frames, `SimClock`'s
+  fixed tick, "work that misses a frame is absorbed, not queued" (docs/index.md, the design
+  commitments), and `AgentJobs`' one queue. One scheduler would make that a declaration on the part
+  rather than a trick inside it.
+
+THE PRECONDITION IS PURITY, which is why the plan and the feed come first: a pose that is a
+function of (plan, show time) can be computed early, late, on another thread or at low priority and
+still land where it belongs; a scene that integrates state frame by frame cannot be deferred without
+changing what it shows. So each part moved onto "a function of what it is handed and the time" -
+`TableShuffle`, `TablePlan`, the media on `ShowFeed` - is a part a scheduler could later run in
+rounds. Not built; a direction, recorded so the next cut is made with it in mind.
 
 ## What this does not do
 

@@ -7,7 +7,7 @@ class_name AutoMedium
 ## audio, just like the original mode did it").
 ##
 ## IT DRAWS EXACTLY WHAT [FullMedium] DRAWS. What makes it a medium of its own is what it takes:
-## no settings at all ([constant Medium.BARE]). The Picture card shows nothing under it but the
+## no settings at all (its row's `bare`). The Picture card shows nothing under it but the
 ## picker, picking it puts the Director's dials back to their defaults, and its block in a note is
 ## the medium's name alone - so the same song is the same show in every note, whatever another
 ## note's dials were left at. The frame is landscape: a portrait show is Full frame's.

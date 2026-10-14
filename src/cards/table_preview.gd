@@ -624,7 +624,7 @@ func overhead(raw: Dictionary) -> Dictionary:
 ## The stretch of the table the episode's camera sees, as a thin line laid on it.
 func _frame_on_table(m) -> MeshInstance3D:
 	var pts := PackedVector3Array()
-	var cam: Transform3D = m._cam_base
+	var cam: Transform3D = m._plan.cam_base
 	var fov: float = (m._cam as Camera3D).fov
 	var k := tan(deg_to_rad(fov * 0.5))
 	var edge: Array = []
@@ -796,27 +796,27 @@ func _staged(on: String) -> Dictionary:
 	var moments: Array = []
 	match on:
 		"shuffle":
-			m._cur_base = m._mid
+			m._cur_base = m._plan.mid
 			moments.append({"t": t0, "dur": 0.5, "from": "point",
-				"path": [[t0, Transform3D(Basis.IDENTITY, (m._mid as Vector3) + Vector3(0.0, 0.03, 0.0))]]})
+				"path": [[t0, Transform3D(Basis.IDENTITY, (m._plan.mid as Vector3) + Vector3(0.0, 0.03, 0.0))]]})
 		"jumper":
 			# a card springing off the deck in the middle and flying to land, as a jumper does
-			m._cur_base = m._mid
+			m._cur_base = m._plan.mid
 			var fly: Vector2 = consts.get("JUMP_FLY", Vector2(1.15, 2.25))
 			var path: Array = []
 			for i in 9:
 				var u := lerpf(fly.x, fly.y, float(i) / 8.0)
-				path.append([t0 + (u - fly.x), m._jump_xf(0, u, Transform3D.IDENTITY)])
+				path.append([t0 + (u - fly.x), m._card_poses._jump_xf(0, u, Transform3D.IDENTITY)])
 			card = path
 			moments.append({"t": t0, "dur": fly.y - fly.x, "from": "card", "path": path})
 		"reveal":
-			var xf: Transform3D = m._present_xf(0, t0)
+			var xf: Transform3D = m._card_poses._present_xf(0, t0)
 			card = [[t0, xf]]
 			moments.append({"t": t0, "dur": 0.3, "from": "card", "path": card})
 		"pirouette":
 			# a card held up and twirled round three times, winding down as a hand's flourish does
-			var held: Transform3D = m._present_xf(0, t0)
-			var up: Vector3 = (m._cam_base as Transform3D).basis.y
+			var held: Transform3D = m._card_poses._present_xf(0, t0)
+			var up: Vector3 = (m._plan.cam_base as Transform3D).basis.y
 			var path: Array = []
 			for i in 17:
 				var u := float(i) / 16.0
@@ -840,7 +840,7 @@ func _pose_moment(on: String, moment: Dictionary, t: float) -> void:
 	var m = _medium
 	_pose_spread()
 	if on == "shuffle" or on == "jumper":
-		m._cur_base = m._mid
+		m._cur_base = m._plan.mid
 		for i in (m._deck as Array).size():
 			(m._deck[i] as MeshInstance3D).transform = m._rest_xf(i)
 		for k in (m._cards as Array).size():
@@ -876,7 +876,7 @@ func _pose_spread(light_at := -1.0) -> void:
 	for i in (m._deck as Array).size():
 		(m._deck[i] as MeshInstance3D).transform = m._rest_xf(i)
 	for k in (m._cards as Array).size():
-		var s: Dictionary = m._slots[k]
+		var s: Dictionary = m._plan.slots[k]
 		var card: MeshInstance3D = m._cards[k]
 		card.visible = true
 		card.transform = Transform3D(Basis(Vector3.UP, float(s["yaw"])), (s["pos"] as Vector3) + Vector3(0.0, card_t * 0.5, 0.0))

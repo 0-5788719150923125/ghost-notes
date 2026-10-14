@@ -13,7 +13,7 @@ FILTERS COMBINE, which is the reason this is a registry of amounts and not a pic
 
 THE REGISTRY ORDER IS THE PIPELINE ORDER, top to bottom, and it is the one thing here that cannot be read off the shader: dots are laid first (they RE-SAMPLE the picture, so anything after them grades the dots rather than the photograph), then the optics that a lens would add, then the grade, then the emulsion, then the frame. Monochrome before Noir is what makes the pair read as black-and-white noir rather than as a tinted color picture - Noir's split-tone is applied to whatever it is handed.
 
-ADDING A FILTER is an entry in each of the four tables below plus a `u_<key>` uniform and a block in `shaders/stage_filter.gdshader`. Nothing in main, the Director or the panel changes - the controls are built off `Filters.REGISTRY`. A key with no matching uniform is the failure this arrangement is exposed to, because `set_shader_parameter` on a name the shader does not declare is a SILENT no-op; the gate reads the shader source and fails on it.
+ADDING A FILTER is a row of `REGISTRY` below plus a `u_<key>` uniform and a block in `shaders/stage_filter.gdshader`. Nothing in main, the Director or the panel changes - the controls are built off `Filters.REGISTRY`. A key with no matching uniform is the failure this arrangement is exposed to, because `set_shader_parameter` on a name the shader does not declare is a SILENT no-op; the gate reads the shader source and fails on it.
 
 Registry: `Filters.REGISTRY` in [src/show/filters.gd](../src/show/filters.gd) (8 entries), rendered by [shaders/stage_filter.gdshader](../shaders/stage_filter.gdshader). Select with `--filter key=amount,...` (or `--filter none`), or the Look rows in the Generative panel (persisted to `user://ghost.cfg`, `[director] filters`).
 
@@ -24,7 +24,7 @@ Registry: `Filters.REGISTRY` in [src/show/filters.gd](../src/show/filters.gd) (8
 | 3 | `bloom` | Bloom | `u_bloom` | 0.45 |
 | 4 | `monochrome` | Monochrome | `u_monochrome` | 1.0 |
 | 5 | `noir` | Film noir | `u_noir` | 0.55 |
-| 6 | `static` | Static | `u_static` | 0.40 |
+| 6 | `static` | Static | `u_static` | 0.4 |
 | 7 | `dust` | Dust & scratches | `u_dust` | 0.45 |
 | 8 | `vignette` | Vignette | `u_vignette` | 0.45 |
 
@@ -62,7 +62,7 @@ Uniform `u_noir`, default 0.55 when first switched on.
 
 Fine noise over the picture, strongest in the midtones and nearly absent in the blacks and the blown highlights, where the emulsion's own noise lives, and it moves at a film's frame rate.
 
-Uniform `u_static`, default 0.40 when first switched on.
+Uniform `u_static`, default 0.4 when first switched on.
 
 ## `dust` - Dust & scratches
 

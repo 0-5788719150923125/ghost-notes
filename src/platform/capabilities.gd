@@ -194,8 +194,8 @@ static func agents_tooltip(needs: Array, missing: Array) -> String:
 ## Display labels for [param keys] of [param role]'s registry, each held together with no-break
 ## spaces so a tooltip's re-flow never splits an agent's name across two lines.
 static func agent_labels(role: String, keys: Array) -> Array:
-	var labels: Dictionary = registry(role).LABELS
-	return keys.map(func(k: String) -> String: return String(labels.get(k, k)).replace(" ", "\u00a0"))
+	var reg: Dictionary = registry(role).REGISTRY
+	return keys.map(func(k: String) -> String: return Registry.label(reg, k).replace(" ", "\u00a0"))
 
 
 ## "a", "a and b", "a, b and c".

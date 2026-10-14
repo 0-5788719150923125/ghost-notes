@@ -46,7 +46,7 @@ owner.write_text(ot)
 # 3. the gates that reach into what moved
 names = {m: api.get(m, m) for m in moved}
 recv = "|".join(re.escape(r) for r in spec.get("receivers", []))
-others = sorted((repo / "tests").glob("*.gd")) + [x for x in sorted((repo / "src").rglob("*.gd")) if x not in (part, owner)]
+others = sorted((repo / "tests").rglob("*.gd")) + [x for x in sorted((repo / "src").rglob("*.gd")) if x not in (part, owner)]
 for p in others:
     t = p.read_text()
     total = 0

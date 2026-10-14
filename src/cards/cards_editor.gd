@@ -103,6 +103,8 @@ var _cur_desc := ""
 
 func _init() -> void:
 	_section = "cards"
+	# THE READING IS THE EPISODE'S, never the note's: the note is the brief (EpisodeWalk)
+	walk = EpisodeWalk.new(func() -> CardEpisode: return _episode)
 
 
 func _ready() -> void:
@@ -150,25 +152,6 @@ func _panel_hint() -> String:
 		+ "in the voice below, at the table.")
 
 
-## THE READING IS THE EPISODE'S, never the document's: the document is the brief. The pull still
-## happens first, because it is what flushes a voice change into the show's file.
-func _reading_body() -> String:
-	_doc.pull()
-	return _episode.script() if _episode != null else ""
-
-
-func _reading_of(body: String) -> Dictionary:
-	return {"body": CardReading.speakable(body), "title": ""}
-
-
-func _cast_text() -> String:
-	return _episode.script() if _episode != null else ""
-
-
-func _fingerprint_text() -> String:
-	return _cast_text()
-
-
 ## WHERE THE READING IS: the episode's table (`table.json`), heard - its `sound` and its light's wind,
 ## on the episode's seed as the table plans it ([method Soundscape.of_table]). An export's is the
 ## episode pinned for it.
@@ -199,19 +182,9 @@ func _environment_level() -> float:
 	return float(_knobs["environment"])
 
 
-func _has_reading() -> bool:
-	return not _cast_text().strip_edges().is_empty()
-
-
 ## Editing the brief does not change a reading already made: it changes the NEXT one. Say so.
 func _on_source_edited() -> void:
 	_brief_changed = true
-
-
-func _test_passage() -> String:
-	return ("Hello, my loves, and welcome back to the channel. This is a timeless reading, so "
-		+ "whenever you find it is exactly when you were meant to. Let's shuffle. Oh. Oh, wow. "
-		+ "Okay, I'm getting chills - the cards are really insisting on this one tonight.")
 
 
 func book_document(body := "") -> Dictionary:
@@ -626,12 +599,12 @@ func _build_source(script_box: VBoxContainer) -> void:
 
 	# WHO WRITES AND WHO PAINTS: an agent CLI each, from the registries - the plan, the booklet and
 	# the reading are words, the deck and the table are pictures
-	var w := _agent_pick(box, "Writer", "writer", TextGen.REGISTRY, TextGen.LABELS, TextGen.BLURBS,
+	var w := _agent_pick(box, "Writer", "writer", TextGen.REGISTRY,
 		func(k: String) -> bool: return TextGen.make(k).available(),
 		"Who writes the plan, the booklet and the reading.",
-		func(k: String) -> Array: return (TextGen.REGISTRY.get(k, TextGen.Claude) as GDScript).models(),
+		func(k: String) -> Array: return (Registry.field(TextGen.REGISTRY, k, "backend", TextGen.Claude) as GDScript).models(),
 		"The model that writes. Default is the CLI's own choice per job (for Claude: Opus for the plan and the reading, Sonnet for the card designs); a model chosen here writes all of it.",
-		func(k: String, m: String) -> Array: return (TextGen.REGISTRY.get(k, TextGen.Claude) as GDScript).efforts(m),
+		func(k: String, m: String) -> Array: return (Registry.field(TextGen.REGISTRY, k, "backend", TextGen.Claude) as GDScript).efforts(m),
 		("How hard the writer thinks before it writes - the CLI's own reasoning effort. Default is what "
 		+ "each CLI does unasked (Claude: your Claude Code setting for the model; Codex: medium, low for "
 		+ "the card designs; Amazon Nova: off - only Nova 2 Lite thinks, billed as output). A level "
@@ -639,12 +612,12 @@ func _build_source(script_box: VBoxContainer) -> void:
 	_writer_pick = w[0]
 	_writer_model = w[1]
 	_writer_effort = w[2]
-	var p := _agent_pick(box, "Painter", "painter", ImageGen.REGISTRY, ImageGen.LABELS, ImageGen.BLURBS,
+	var p := _agent_pick(box, "Painter", "painter", ImageGen.REGISTRY,
 		func(k: String) -> bool: return ImageGen.make(k).available(),
 		"Who paints the card back, the cloth, the room and every card.",
-		func(k: String) -> Array: return (ImageGen.REGISTRY.get(k, ImageGen.Codex) as GDScript).models(),
+		func(k: String) -> Array: return (Registry.field(ImageGen.REGISTRY, k, "backend", ImageGen.Codex) as GDScript).models(),
 		"The model of the agent that asks for each picture. The picture itself is made by the CLI's own image tool whichever model asks.",
-		func(k: String, m: String) -> Array: return (ImageGen.REGISTRY.get(k, ImageGen.Codex) as GDScript).efforts(m),
+		func(k: String, m: String) -> Array: return (Registry.field(ImageGen.REGISTRY, k, "backend", ImageGen.Codex) as GDScript).efforts(m),
 		("How hard the agent that asks for each picture thinks - not the picture itself. Default is "
 		+ "low for Codex (its job is to call one tool); Bedrock's painter takes no setting."))
 	_painter_pick = p[0]
@@ -711,8 +684,8 @@ func _build_source(script_box: VBoxContainer) -> void:
 ## agent). An agent whose CLI is not installed is shown as such and not choosable. Takes effect at
 ## the next Generate - a step already running finishes with what it started with. Returns
 ## [agent picker, model picker].
-func _agent_pick(box: VBoxContainer, title: String, knob: String, registry: Dictionary, labels: Dictionary,
-		blurbs: Dictionary, available: Callable, what: String, models_of: Callable, model_tip: String,
+func _agent_pick(box: VBoxContainer, title: String, knob: String, registry: Dictionary,
+		available: Callable, what: String, models_of: Callable, model_tip: String,
 		efforts_of: Callable, effort_tip: String) -> Array:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
@@ -735,7 +708,7 @@ func _agent_pick(box: VBoxContainer, title: String, knob: String, registry: Dict
 		# the CLI's own name in the row (its full label is in the tooltip): the row is shared with the model
 		pick.add_item(k.capitalize() + ("" if here else "  (not installed)"))
 		pick.set_item_disabled(i, not here)
-		tips.append("%s: %s" % [String(labels.get(k, k)), String(blurbs.get(k, ""))])
+		tips.append("%s: %s" % [Registry.label(registry, k), Registry.blurb(registry, k)])
 	pick.tooltip_text = "\n\n".join(tips)
 	row.add_child(pick)
 	var model := OptionButton.new()

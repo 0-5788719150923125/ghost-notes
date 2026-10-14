@@ -1323,6 +1323,11 @@ func _build_voice(box: VBoxContainer) -> void:
 
 # --- the seams a mode built on this panel overrides ---------------------------
 
+## WHAT THIS READING READS ([TextWalk]): the note's own words, unless the mode hands another - Cards
+## hands the episode it produced ([EpisodeWalk]). Handed, not overridden: the words a reading speaks
+## are a thing of their own, and the methods below only ask the walk.
+var walk: TextWalk = TextWalk.new()
+
 
 ## WHERE THE READING IS, heard: `{make, key}` (`{key}` alone while it has none yet) - `make` is
 ## `(sample_rate: int, t0: float) -> SoundBed`, the bed to lay under the voice from show time
@@ -1381,36 +1386,34 @@ func _tick_environment(delta: float) -> void:
 ## THE WORDS TO READ, fresh: what Play, a scrub and an export read. Here the document's own
 ## body - in sync mode the file as it is on disk RIGHT NOW (see [method DocSource.pull]).
 func _reading_body() -> String:
-	return _doc.pull()
+	return walk.body(_doc.pull())
 
 
 ## What the VOICE reads of [param body] and the title it announces first: `{body, title}`. A
 ## tablet chapter is read off the screen and nothing else - no title announced, skipped text
 ## out, link targets out, a rest for every run of taps.
 func _reading_of(body: String) -> Dictionary:
-	if TabletScript.is_tablet(body):
-		return {"body": TabletScript.speakable(body), "title": ""}
-	return {"body": body, "title": _doc_field(body, "title").strip_edges()}
+	return walk.spoken(body, _doc_field(body, "title").strip_edges())
 
 
 ## The text the cast is derived from - the speaker cues in it are the tabs.
 func _cast_text() -> String:
-	return _text.text
+	return walk.cast_text(_text.text)
 
 
 ## The text the live session is fingerprinted by (its scenes' seed, the pad's notes).
 func _fingerprint_text() -> String:
-	return _text.text
+	return walk.cast_text(_text.text)
 
 
 ## Whether there is anything to read (and so to export).
 func _has_reading() -> bool:
-	return not _text.text.strip_edges().is_empty()
+	return not _cast_text().strip_edges().is_empty()
 
 
 ## The passage every voice is auditioned with by Test.
 func _test_passage() -> String:
-	return TEST_PASSAGE
+	return walk.test_passage(TEST_PASSAGE)
 
 
 # --- persistence (mirrors SynthEditor._persist / _load_persisted) ------------

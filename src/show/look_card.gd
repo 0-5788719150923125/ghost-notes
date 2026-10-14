@@ -56,10 +56,10 @@ func _init() -> void:
 		row.add_theme_constant_override("separation", 8)
 		add_child(row)
 		var cb := CheckBox.new()
-		cb.text = String(Filters.LABELS.get(k, k))
+		cb.text = Registry.label(Filters.REGISTRY, k)
 		cb.custom_minimum_size = Vector2(128, 0)
 		cb.add_theme_font_size_override("font_size", 12)
-		cb.tooltip_text = String(Filters.BLURBS.get(k, ""))
+		cb.tooltip_text = Registry.blurb(Filters.REGISTRY, k)
 		row.add_child(cb)
 		var sl := HSlider.new()
 		sl.min_value = 0.0
@@ -68,19 +68,19 @@ func _init() -> void:
 		sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		sl.tooltip_text = ("How much of it. The top of every range here is deliberately too "
 			+ "much, so the interesting settings are in the middle.\n\n"
-			+ String(Filters.BLURBS.get(k, "")))
+			+ Registry.blurb(Filters.REGISTRY, k))
 		row.add_child(sl)
 		var readout := Card.readout(row, sl)
 		var live := Director.filter_amount(k)
 		cb.set_pressed_no_signal(live > 0.0)
-		Card.put_slider(sl, readout, live if live > 0.0 else float(Filters.DEFAULTS.get(k, 0.5)))
+		Card.put_slider(sl, readout, live if live > 0.0 else float(Registry.field(Filters.REGISTRY, k, "default", 0.5)))
 		sl.editable = live > 0.0
 		# TICKING A FILTER ON MUST DO SOMETHING VISIBLE. A box whose dial happens to be at 0
 		# reads as a broken checkbox, so switching on with nothing dialed in lands on the
 		# registry's own starting point rather than on silence.
 		cb.toggled.connect(func(on: bool) -> void:
 			if on and sl.value <= 0.0:
-				Card.put_slider(sl, readout, float(Filters.DEFAULTS.get(k, 0.5)))
+				Card.put_slider(sl, readout, float(Registry.field(Filters.REGISTRY, k, "default", 0.5)))
 			sl.editable = on
 			Director.set_filter(k, sl.value if on else 0.0)
 			refresh())

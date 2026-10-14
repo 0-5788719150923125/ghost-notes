@@ -43,10 +43,11 @@ scripts/check.sh runs.
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parent
 SCRIPTS = ROOT / "src"
@@ -79,18 +80,19 @@ def warn(msg: str) -> None:
 # the code at every run (`check_structure`); next/structure.md is why it is this order.
 FOLDERS: List[Tuple[str, str, str]] = [
     (
+        "data",
+        "Plain data",
+        "Plain data in and out, at the bottom because it needs nothing: the YAML-subset "
+        "parser, a document's frontmatter (re-read, one key edited, verified), pure edits of "
+        "nested data, reading any registry's rows (`Registry`), what an agent is told "
+        "(`rules/`), and a script read into cues, hesitations and pictures.",
+    ),
+    (
         "platform",
         "The machine",
         "The machine under Ghost Notes: the one owner of its settings file, the earliest hook "
         "of a launch, every child program in one place, what ghost installs for itself and "
         "keeps current, the app's own update, and what this platform can do.",
-    ),
-    (
-        "data",
-        "Plain data",
-        "Plain data in and out: the YAML-subset parser, a document's frontmatter (re-read, "
-        "one key edited, verified), pure edits of nested data, what an agent is told "
-        "(`rules/`), and a script read into cues, hesitations and pictures.",
     ),
     (
         "audio",
@@ -1080,12 +1082,9 @@ def _render_media_doc(base: Script) -> str:
     pairs = _media_pairs(base)
     if not pairs:
         warn("could not parse Medium.REGISTRY")
-    labels = dict(
-        re.findall(r'"(\w+)":\s*"([^"]*)"', _const_block(base.text, "LABELS"))
-    )
-    blurbs = dict(
-        re.findall(r'"(\w+)":\s*"([^"]*)"', _const_block(base.text, "BLURBS"))
-    )
+    rows = _rows(base.text, "REGISTRY")
+    labels = {k: str(r.get("label", k)) for k, r in rows.items()}
+    blurbs = {k: str(r.get("blurb", "")) for k, r in rows.items()}
     lines = [
         AUTOGEN_HEADER,
         "# Media: what carries the show",
@@ -1136,25 +1135,20 @@ def _render_filters_doc(base: Script) -> str:
     """docs/filters.md, from Filters.REGISTRY + LABELS/BLURBS and the shader's own header.
 
     Not _render_registry_page: a filter is neither an inner class nor a script, it is a
-    uniform and a block of GLSL - so the per-entry text comes from BLURBS and the how
+    uniform and a block of GLSL - so the per-entry text comes from each row's blurb and the how
     comes from the shader file's header, which is where the pipeline is written down.
 
     It also CHECKS the pair, which is this table's own failure mode: a registry key whose
     uniform the shader does not declare ships as a control that does nothing, because
     `set_shader_parameter` on an unknown name is silent. tests/show/stage_filter_check.gd
     asserts the same thing at runtime; this is so a docs run says it too."""
+    rows = _rows(base.text, "REGISTRY")
     pairs = _filter_pairs(base)
     if not pairs:
         warn("could not parse Filters.REGISTRY")
-    labels = dict(
-        re.findall(r'"(\w+)":\s*"([^"]*)"', _const_block(base.text, "LABELS"))
-    )
-    blurbs = dict(
-        re.findall(r'"(\w+)":\s*"([^"]*)"', _const_block(base.text, "BLURBS"))
-    )
-    defaults = dict(
-        re.findall(r'"(\w+)":\s*([0-9.]+)', _const_block(base.text, "DEFAULTS"))
-    )
+    labels = {k: str(r.get("label", k)) for k, r in rows.items()}
+    blurbs = {k: str(r.get("blurb", "")) for k, r in rows.items()}
+    defaults = {k: r["default"] for k, r in rows.items() if "default" in r}
     shader_path = ROOT / "shaders" / "stage_filter.gdshader"
     shader_src = shader_path.read_text() if shader_path.exists() else ""
     if not shader_src:
@@ -1191,13 +1185,9 @@ def _render_filters_doc(base: Script) -> str:
                 f"Filters.REGISTRY maps '{key}' to {uniform}, which "
                 "shaders/stage_filter.gdshader does not declare - the control is a no-op"
             )
-        for table in ("LABELS", "BLURBS", "DEFAULTS"):
-            if key not in (
-                labels
-                if table == "LABELS"
-                else blurbs if table == "BLURBS" else defaults
-            ):
-                warn(f"Filters.{table} has no entry for '{key}'")
+        for field in ("label", "blurb", "default"):
+            if field not in rows.get(key, {}):
+                warn(f"Filters.REGISTRY's row '{key}' has no `{field}`")
         lines.append(f"## `{key}` - {labels.get(key, key)}")
         lines.append("")
         if blurbs.get(key):
@@ -1219,6 +1209,60 @@ def _render_filters_doc(base: Script) -> str:
 def _const_block(text: str, name: str) -> str:
     m = re.search(rf"const {name} :?= \{{(.*?)\n\}}", text, re.S)
     return m.group(1) if m else ""
+
+
+def _rows(text: str, name: str) -> Dict[str, Dict[str, Any]]:
+    """A registry of ROWS - `const NAME := {"key": {"label": ..., "about": ..., ...}}`, the one shape
+    ghost's registries share (next/structure.md, step 6) - read as Python data. GDScript's literals
+    are Python's but for `true` / `false` / `null`, `&"name"` and a bare name in a value's place (an
+    inner class, a constant), which comes back as its name, a string. Comments are dropped."""
+    m = re.search(rf"^const {name}\b[^=\n]*:?=\s*\{{", text, re.M)
+    if not m:
+        return {}
+    i, depth, quote = m.end(), 1, None
+    while depth and i < len(text):
+        c = text[i]
+        if quote:
+            if c == "\\":
+                i += 1
+            elif c == quote:
+                quote = None
+        elif c in "\"'":
+            quote = c
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+        i += 1
+    body = text[m.end() - 1 : i]
+    lines = []
+    for line in body.split("\n"):
+        kept, q = [], None
+        for j, c in enumerate(line):
+            if q:
+                kept.append(c)
+                if c == q and line[j - 1] != "\\":
+                    q = None
+            elif c in "\"'":
+                q = c
+                kept.append(c)
+            elif c == "#":
+                break
+            else:
+                kept.append(c)
+        lines.append("".join(kept))
+    src = re.sub(r'[&^]"', '"', "\n".join(lines))
+    # outside the string literals only: GDScript's words for Python's, and a bare name as its name
+    words = {"true": "True", "false": "False", "null": "None"}
+    parts = re.split(r'("(?:[^"\\\n]|\\.)*")', src)
+    for k in range(0, len(parts), 2):
+        seg = re.sub(r"\b(true|false|null)\b", lambda mm: words[mm.group(1)], parts[k])
+        parts[k] = re.sub(
+            r"(?<=[:\[,])(\s*)([A-Za-z_][\w.]*)(?=\s*[,\]}])",
+            lambda mm: mm.group(0) if mm.group(2) in ("True", "False", "None") else f'{mm.group(1)}"{mm.group(2)}"',
+            seg,
+        )
+    return ast.literal_eval("".join(parts))
 
 
 def _gd_string(lit: str) -> str:
@@ -1684,14 +1728,15 @@ def _gd_rows(text: str, const: str) -> List[str]:
 def _media_pairs(base: Script) -> List[Tuple[str, str]]:
     """Medium.REGISTRY as (key, script path from the repository's root). A row names its script
     by path, so a medium a feature brings lives with the feature (the card table, in `table/`)."""
-    return re.findall(
-        r'"(\w+)":\s*"res://(src/\w+/\w+\.gd)"', _const_block(base.text, "REGISTRY")
-    )
+    return [
+        (k, str(r.get("script", "")).replace("res://", "", 1))
+        for k, r in _rows(base.text, "REGISTRY").items()
+    ]
 
 
 def _filter_pairs(base: Script) -> List[Tuple[str, str]]:
     """Filters.REGISTRY as (key, uniform)."""
-    return re.findall(r'"(\w+)":\s*"(u_\w+)"', _const_block(base.text, "REGISTRY"))
+    return [(k, str(r.get("uniform", ""))) for k, r in _rows(base.text, "REGISTRY").items()]
 
 
 def _mask_effects(session: Script) -> List[str]:
@@ -1971,17 +2016,18 @@ def _agent_backends(script: Script) -> List[Dict[str, str]]:
     """A TextGen / ImageGen registry as one record per backend, in registry order: its key, label,
     blurb and class doc, the Deps row its CLI resolves through (the `Deps.has` in its class), and
     whether it takes Ghost Notes' own tools (`takes_tools` returning true)."""
-    labels = {k: _gd_string(v) for k, v in re.findall(rf'"(\w+)":\s*{_STR}', _const_block(script.text, "LABELS"))}
-    blurbs = {k: _gd_string(v) for k, v in re.findall(rf'"(\w+)":\s*{_STR}', _const_block(script.text, "BLURBS"))}
+    rows = _rows(script.text, "REGISTRY")
+    labels = {k: str(r.get("label", k)) for k, r in rows.items()}
+    blurbs = {k: str(r.get("blurb", "")) for k, r in rows.items()}
     docs = _inner_class_docs(script.text)
     out = []
-    for key, cls in _parse_registry_dict(script.text):
+    for key, cls in ((k, str(r.get("backend", ""))) for k, r in rows.items()):
         body = _class_body(script.text, cls)
         dep = _first(body, r'Deps\.has\("(\w+)"\)') or ""
         if not dep:
             warn(f"{script.rel}: {cls} names no Deps row (Deps.has) - docs/agents.md cannot say what to install")
         if key not in labels or key not in blurbs:
-            warn(f"{script.rel}: '{key}' has no LABELS or BLURBS entry")
+            warn(f"{script.rel}: the row '{key}' has no label or blurb")
         doc, line = docs.get(cls, ("", None))
         out.append({"key": key, "label": labels.get(key, key), "blurb": blurbs.get(key, ""), "doc": doc,
                     "line": str(line or ""), "dep": dep,
@@ -2196,13 +2242,10 @@ def _render_architecture_doc(
     morphing = sum(1 for s in live.values() if s.morph_in or s.morph_out)
     forces = _parse_registry_dict(prims.text)
     layers = _parse_registry_dict(layer.text)
-    labels = dict(re.findall(r'"(\w+)":\s*"([^"]*)"', _const_block(medium.text, "LABELS")))
+    medium_rows = _rows(medium.text, "REGISTRY")
+    labels = {k: str(r.get("label", k)) for k, r in medium_rows.items()}
     media = [labels.get(k, k) for k, _ in _media_pairs(medium)]
-    portrait = [
-        labels.get(k, k)
-        for k, frames in re.findall(r'"(\w+)":\s*\[([^\]]*)\]', _const_block(medium.text, "FRAMES"))
-        if '"portrait"' in frames
-    ]
+    portrait = [labels.get(k, k) for k, r in medium_rows.items() if "portrait" in r.get("frames", [])]
     lines = [
         AUTOGEN_HEADER,
         "# How the show is made",
@@ -2858,8 +2901,8 @@ def main() -> int:
         (
             "agents",
             "Agents",
-            f"{len(_parse_registry_dict(scripts['text_gen'].text))} writers, "
-            f"{len(_parse_registry_dict(scripts['image_gen'].text))} painters, "
+            f"{len(_rows(scripts['text_gen'].text, 'REGISTRY'))} writers, "
+            f"{len(_rows(scripts['image_gen'].text, 'REGISTRY'))} painters, "
             f"{len(_gd_entries(scripts['assistant_backends'].text, 'REGISTRY'))} assistants",
             "the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which "
             "does what, how each is run, and how to install one.",

@@ -34,83 +34,69 @@ class_name Medium
 ## still owns it: when the governor stops the stage, it stops the medium and every
 ## panel viewport nested under it, together.
 
-## The registry. Adding a presentation is an entry here, never new control flow in the
-## Director (see the four vetoes above) - the same rule [Layer] and [Primitives] follow.
+## THE REGISTRY: one row a medium, the one shape every registry here has (a `label` a person reads, a
+## `blurb`, and the fields of its own kind - next/structure.md, step 6). Adding a presentation is a
+## row here, never new control flow in the Director (see the four vetoes above) - the same rule
+## [Layer] and [Primitives] follow. Keys are what `--medium NAME` and `[director] medium` in
+## `user://ghost.cfg` take; the order is the picker's.
 ##
-## Keys are what `--medium NAME` and `[director] medium` in `user://ghost.cfg` take.
+##   label   its name in the Picture card's picker
+##   script  the medium's script, by path - a medium a feature brings lives with that feature (the
+##           card table, in `table/`)
+##   uses    WHICH OPTIONAL SETTINGS IT USES, as the panel's own group names. A medium decides what
+##           the show is presented AS, so some of the Director's picture settings mean nothing to
+##           some of them - the full-frame show has no camera to be severe with and no panels to
+##           cut footage into. Reported as "there are a number of settings currently being
+##           displayed that ONLY work with the comic book medium". Declared here rather than
+##           branched on in the panel: a medium added later says what it uses and the panel
+##           follows. A setting EVERY medium uses (scene hold, flourishes, the Look, the holds)
+##           needs no tag.
+##   frames  THE FRAMES IT CAN BE SHOWN IN (next/notes.md, "Two frames"): landscape 16:9 for every
+##           one, portrait 9:16 only where it was measured to work. The full-frame show does -
+##           scenes size everything off the frame's short side. The tablet needs its camera
+##           distances fitted on both axes first; the comic, the book, the notebook and the card
+##           table frame a spread or a table a 9:16 view cannot hold: design work of their own.
+##   needs   optional: WHAT IT NEEDS FROM THE NOTE beyond a sound to cut on. The novel, the
+##           notebook and the tablet print a READING - its words, timed by the voice - so a note
+##           with only a song has nothing to put on their pages, and its Picture card does not
+##           offer them.
+##   mode    optional: THE MODE IT BELONGS TO, which shows its readings in it. The card table is
+##           drawn from an episode Cards produced - its deck, its pictures, its spread - so a
+##           chapter read anywhere else has nothing to put on it. Such a medium is never offered
+##           by a picker ([method pickable]) and never becomes the remembered setting; its mode
+##           pins it for the session instead (see [member Director.medium_override]).
+##   bare    optional: it TAKES NO SETTINGS - the Picture card shows nothing under the picker,
+##           and picking it puts the Director's dials back to their defaults (see [AutoMedium]).
+##   blurb   one line, for the picker's tooltip and docs/media.md - ONE string literal, not a `+`
+##           continuation, so docs.py reads it whole
 const REGISTRY := {
-	"auto": "res://src/media/auto.gd",
-	"full": "res://src/media/full.gd",
-	"comic": "res://src/media/comic.gd",
-	"book": "res://src/media/book.gd",
-	"notebook": "res://src/media/notebook.gd",
-	"tablet": "res://src/media/tablet.gd",
-	"table": "res://src/table/table.gd",
-}
-
-## Display names for the registry keys, in registry order - for the settings surface.
-const LABELS := {
-	"auto": "Auto",
-	"full": "Full frame",
-	"comic": "Comic book",
-	"book": "Novel",
-	"notebook": "Notebook",
-	"tablet": "Tablet",
-	"table": "Card table",
-}
-
-## WHICH OPTIONAL SETTINGS EACH MEDIUM ACTUALLY USES, as a list of tags per key.
-##
-## A medium decides what the show is presented AS, so some of the Director's picture
-## settings mean nothing to some of them: the full-frame show has no camera to be severe with
-## and no panels to cut footage into, and the two controls for those sat on the panel doing
-## nothing whichever medium was chosen. Reported as "there are a number of settings
-## currently being displayed that ONLY work with the comic book medium".
-##
-## DECLARED HERE RATHER THAN BRANCHED ON IN THE PANEL, which is the same rule the rest of this
-## file follows: adding a presentation is an entry in these tables, never new control flow
-## somewhere else. A medium added later says what it uses and the panel follows; a panel that
-## asked `if key == "comic"` would have to be found and edited instead, and it is not the file
-## anyone would think to look in.
-##
-## Tags are the panel's own group names - a setting that EVERY medium uses (scene hold,
-## flourishes, the Look filters, the bookend holds) needs no tag and is never listed.
-const USES := {
-	"auto": [],
-	"full": [],
-	"comic": ["camera", "films"],
-	"book": ["camera", "illustrations"],
-	"notebook": ["camera", "illustrations", "handwriting"],
-	"tablet": ["camera", "illustrations"],
-	"table": [],
-}
-
-## MEDIA THAT BELONG TO A MODE: key -> the mode that shows its readings in it. The card table
-## is drawn from an episode the Cards mode produced - its deck, its pictures, its spread - so a
-## chapter read in any other mode has nothing to put on it. Such a medium is never offered by a
-## picker ([method pickable]) and never becomes the remembered setting; its mode pins it for the
-## session instead (see [member Director.medium_override]).
-const OWNED := {
-	"table": "cards",
-}
-
-## MEDIA THAT TAKE NO SETTINGS: the Picture card shows nothing under the picker for these, and
-## picking one puts the Director's dials back to their defaults (see [AutoMedium]).
-const BARE := ["auto"]
-
-## WHAT A MEDIUM NEEDS FROM THE NOTE beyond a sound to cut on: the novel, the notebook and the tablet
-## print a READING - its words, timed by the voice - so a note with only a song has nothing to put
-## on their pages, and its Picture card does not offer them.
-const NEEDS := {
-	"book": ["reading"],
-	"notebook": ["reading"],
-	"tablet": ["reading"],
+	"auto": {"label": "Auto", "script": "res://src/media/auto.gd",
+		"uses": [], "frames": ["landscape"], "bare": true,
+		"blurb": "The original show with nothing to set: scenes chosen by the song's own fingerprint and cut on its beat, at the default pacing - the same song is the same show in every note."},
+	"full": {"label": "Full frame", "script": "res://src/media/full.gd",
+		"uses": [], "frames": ["landscape", "portrait"],
+		"blurb": "One scene at a time, filling the frame. The original show."},
+	"comic": {"label": "Comic book", "script": "res://src/media/comic.gd",
+		"uses": ["camera", "films"], "frames": ["landscape"],
+		"blurb": "The same scenes drawn into the panels of an open comic book - two facing pages, flown over by a real perspective camera. Each cut fills the next panel; a full spread turns the leaf on its spine."},
+	"book": {"label": "Novel", "script": "res://src/media/book.gd",
+		"uses": ["camera", "illustrations"], "frames": ["landscape"], "needs": ["reading"],
+		"blurb": "The chapter itself, typeset into the pages of an open novel on a desk, with each word lit as it is spoken and the leaf turning as the reading reaches the next spread. Pictures come from the chapter's image markers."},
+	"notebook": {"label": "Notebook", "script": "res://src/media/notebook.gd",
+		"uses": ["camera", "illustrations", "handwriting"], "frames": ["landscape"], "needs": ["reading"],
+		"blurb": "The chapter handwritten into a ruled research notebook - margin times, underlined emphasis, photos paper-clipped over the writing at an angle, and sketches (`<!-- sketch: ... -->`) drawn onto the page in the same ink. For a chapter drafted as a journal or a lab report."},
+	"tablet": {"label": "Tablet", "script": "res://src/media/tablet.gd",
+		"uses": ["camera", "illustrations"], "frames": ["landscape"], "needs": ["reading"],
+		"blurb": "Somebody browsing on a tablet lying on a desk: the chapter is web pages (`<!-- url: -->`), read aloud as they are scrolled, with searches, new tabs, a turn to landscape and links followed between them - every tap and keystroke timed into the rests the voice leaves for it."},
+	"table": {"label": "Card table", "script": "res://src/table/table.gd",
+		"uses": [], "frames": ["landscape"], "mode": "cards",
+		"blurb": "A card reading at a table, seen from the reader's chair: the deck shuffles while the reader talks, each card is drawn, held up beside its booklet entry, read and laid into the spread. The Cards mode's own medium - its deck, pictures and spread come from the episode the agents produced."},
 }
 
 
-## Does [param key]'s medium take any settings? (See [constant BARE].)
+## Does [param key]'s medium take any settings? (A row's `bare`.)
 static func takes_settings(key: String) -> bool:
-	return not BARE.has(key)
+	return not bool(Registry.field(REGISTRY, key, "bare", false))
 
 
 ## The media a picker offers a note that provides [param have] (a note with a song provides
@@ -119,7 +105,7 @@ static func offered(have: Array) -> Array:
 	var out: Array = []
 	for k in pickable():
 		var ok := true
-		for n in NEEDS.get(k, []) as Array:
+		for n in Registry.field(REGISTRY, k, "needs", []) as Array:
 			if not have.has(n):
 				ok = false
 		if ok:
@@ -127,11 +113,16 @@ static func offered(have: Array) -> Array:
 	return out
 
 
+## The mode [param key]'s medium belongs to (a row's `mode`), or "" for one every note may pick.
+static func mode_of(key: String) -> String:
+	return String(Registry.field(REGISTRY, key, "mode", ""))
+
+
 ## The keys a picker offers, in registry order: every medium no mode owns.
 static func pickable() -> Array:
 	var out: Array = []
 	for k in REGISTRY:
-		if not OWNED.has(k):
+		if mode_of(k).is_empty():
 			out.append(k)
 	return out
 
@@ -139,32 +130,18 @@ static func pickable() -> Array:
 ## features answer TRUE, deliberately: the failure of a wrong answer here is a control the
 ## author cannot find, and showing a setting that does nothing is the lesser of the two.
 static func uses(key: String, feature: String) -> bool:
-	if not USES.has(key):
+	if not REGISTRY.has(key):
 		return true
-	return feature in (USES[key] as Array)
+	return feature in (Registry.field(REGISTRY, key, "uses", []) as Array)
 
 
-## THE FRAMES EACH PRESENTATION CAN BE SHOWN IN (next/notes.md, "Two frames: landscape and
-## portrait"): landscape 16:9 for every one, portrait 9:16 only where it was measured to work. The
-## full-frame show does - scenes size everything off the frame's short side. The tablet needs its
-## camera distances fitted on both axes first, and the comic, the book, the notebook and the card
-## table frame a spread or a table that a 9:16 view cannot hold: design work of their own.
-const FRAMES := {
-	"auto": ["landscape"],
-	"full": ["landscape", "portrait"],
-	"comic": ["landscape"],
-	"book": ["landscape"],
-	"notebook": ["landscape"],
-	"tablet": ["landscape"],
-	"table": ["landscape"],
-}
 ## Each frame's size at 1080p, in pixels.
 const FRAME_SIZES := {"landscape": Vector2i(1920, 1080), "portrait": Vector2i(1080, 1920)}
 
 
 ## The frames [param key]'s presentation can be shown in.
 static func frames(key: String) -> Array:
-	return FRAMES.get(key, ["landscape"])
+	return Registry.field(REGISTRY, key, "frames", ["landscape"])
 
 
 ## Can [param key]'s presentation be shown in [param frame]?
@@ -172,7 +149,7 @@ static func supports(key: String, frame: String) -> bool:
 	return frames(key).has(frame)
 
 
-## SHOW EACH ROW ONLY WHERE [param key]'s medium has its feature: [param rows] maps a [constant USES]
+## SHOW EACH ROW ONLY WHERE [param key]'s medium has its feature: [param rows] maps a `uses`
 ## tag to the controls that answer to it. Every card with such rows shows them by this one rule;
 ## the key is the caller's (`Director.resolved_medium()`), so this file names no autoload.
 static func show_rows(rows: Dictionary, key: String) -> void:
@@ -183,24 +160,12 @@ static func show_rows(rows: Dictionary, key: String) -> void:
 				(row as Control).visible = on
 
 
-## One line each, for the toggle's tooltip and docs/media.md. Deliberately ONE string
-## literal per entry, not a `+` continuation: docs.py reads this table with a regex and a
-## continuation silently truncates the blurb at the first line.
-const BLURBS := {
-	"auto": "The original show with nothing to set: scenes chosen by the song's own fingerprint and cut on its beat, at the default pacing - the same song is the same show in every note.",
-	"full": "One scene at a time, filling the frame. The original show.",
-	"book": "The chapter itself, typeset into the pages of an open novel on a desk, with each word lit as it is spoken and the leaf turning as the reading reaches the next spread. Pictures come from the chapter's image markers.",
-	"notebook": "The chapter handwritten into a ruled research notebook - margin times, underlined emphasis, photos paper-clipped over the writing at an angle, and sketches (`<!-- sketch: ... -->`) drawn onto the page in the same ink. For a chapter drafted as a journal or a lab report.",
-	"tablet": "Somebody browsing on a tablet lying on a desk: the chapter is web pages (`<!-- url: -->`), read aloud as they are scrolled, with searches, new tabs, a turn to landscape and links followed between them - every tap and keystroke timed into the rests the voice leaves for it.",
-	"comic": "The same scenes drawn into the panels of an open comic book - two facing pages, flown over by a real perspective camera. Each cut fills the next panel; a full spread turns the leaf on its spine.",
-	"table": "A card reading at a table, seen from the reader's chair: the deck shuffles while the reader talks, each card is drawn, held up beside its booklet entry, read and laid into the spread. The Cards mode's own medium - its deck, pictures and spread come from the episode the agents produced.",
-}
 
 
 ## Build the medium for [param key], falling back to `full` for an unknown one (a
 ## stale config or a typo must never be able to stop a session starting).
 static func make(key: String) -> Medium:
-	var path: String = REGISTRY.get(key, REGISTRY["full"])
+	var path := String(Registry.field(REGISTRY, key, "script", REGISTRY["full"]["script"]))
 	if not REGISTRY.has(key):
 		push_warning("ghost: unknown medium '%s' - falling back to full frame" % key)
 	var v: Medium = load(path).new()

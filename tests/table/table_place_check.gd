@@ -235,7 +235,7 @@ func _sweep(cloth: String, candles: int, table := {}) -> Dictionary:
 				n["cut"] += 0 if _inside(r) else 1
 			if int(t["lit"]) > 0:
 				n["lit_things"] += 1
-				n["front"] += 1 if node.position.z > medium._mid.z + 0.001 else 0
+				n["front"] += 1 if node.position.z > medium._plan.mid.z + 0.001 else 0
 			for q in (t["outline"] as PackedVector2Array):
 				if absf(q.x) > TableShuffle.CLOTH.x * 0.5 or q.y < -0.02 - TableShuffle.CLOTH.y * 0.5 or q.y > -0.02 + TableShuffle.CLOTH.y * 0.5:
 					n["off_cloth"] += 1
@@ -371,7 +371,7 @@ func _cards_go_round(table: Dictionary) -> Dictionary:
 			for i in tracks.size():
 				var tr: PackedVector4Array = PackedVector4Array(tracks[i] as Array) if tracks[i] is Array else tracks[i]
 				for q in tr:
-					var at := Vector2(q.x + medium._mid.x, q.z + medium._mid.z)
+					var at := Vector2(q.x + medium._plan.mid.x, q.z + medium._plan.mid.z)
 					var card := TableShuffle._card_poly(at, q.w)
 					var hit := false
 					for st in medium._standing:
@@ -391,7 +391,7 @@ func _cards_go_round(table: Dictionary) -> Dictionary:
 				if collide:
 					out["cards"] += 1
 					var last: Vector4 = tr[tr.size() - 1]
-					var slot: Vector3 = medium._slot_jit[(plan["order"] as Array).find(i)] if (plan["order"] as Array).find(i) >= 0 else medium._slot_jit[i]
+					var slot: Vector3 = medium._plan.slot_jit[(plan["order"] as Array).find(i)] if (plan["order"] as Array).find(i) >= 0 else medium._plan.slot_jit[i]
 					out["home"] += 1 if Vector2(last.x, last.z).distance_to(Vector2(slot.x, slot.y)) < 0.002 else 0
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(tf))
 	return out
@@ -533,9 +533,9 @@ func _backdrop() -> void:
 			medium._key = ""
 			medium._ensure_doc()
 			var xf := medium._backdrop.global_transform
-			var eye := medium._cam_base.origin
+			var eye := medium._plan.cam_base.origin
 			var size := (medium._backdrop.mesh as QuadMesh).size
-			var ahead := -medium._cam_base.basis.z
+			var ahead := -medium._plan.cam_base.basis.z
 			if v:
 				var upright := absf(xf.basis.y.normalized().dot(Vector3.UP) - 1.0) < 0.001
 				var at_eye := absf(xf.origin.y - eye.y) < 0.001
@@ -543,7 +543,7 @@ func _backdrop() -> void:
 				var lens := size.distance_to(Vector2(36.0, 24.0) * 3.2 / 20.0) < 0.001
 				level += 1 if upright and at_eye and facing and lens else 0
 			else:
-				old += 1 if xf.basis.y.normalized().dot(medium._cam_base.basis.y.normalized()) > 0.999 else 0
+				old += 1 if xf.basis.y.normalized().dot(medium._plan.cam_base.basis.y.normalized()) > 0.999 else 0
 	if FileAccess.file_exists(vf):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(vf))
 	_ok(level == 8, "a level picture stands upright at the eye, straight ahead, as wide as its lens (%d of 8)" % level)
@@ -562,8 +562,8 @@ func _outro() -> void:
 	subs.document = {"source": _script, "title": "Place Check", "table": doc}
 	medium._ensure_doc()
 	medium._follow.extend(subs.words)
-	medium._sched = medium._follow.place(medium._parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
-	var spoken: PackedStringArray = medium._parse["spoken"]
+	medium._sched = medium._follow.place(medium._plan.parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
+	var spoken: PackedStringArray = medium._plan.parse["spoken"]
 	var last := medium._follow.known_last()
 	_ok(last == spoken.size() - 1, "the last word's time is known (%d of %d)" % [last + 1, spoken.size()])
 	var end_t: float = medium._follow.st1[last]
@@ -622,11 +622,11 @@ func _outro() -> void:
 	subs.document = {"source": box, "title": "Place Check", "table": doc}
 	medium._ensure_doc()
 	medium._follow.extend(subs.words)
-	medium._sched = medium._follow.place(medium._parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
+	medium._sched = medium._follow.place(medium._plan.parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
 	var tb := medium._times()
 	var to := float(tb["opening"])
 	# control: a box reading has no shuffle, so the old timing had nothing to hold the name up by
-	_ok(medium._cards_from == "box" and float(tb["shuffle"]) == INF and to < INF,
+	_ok(medium._plan.cards_from == "box" and float(tb["shuffle"]) == INF and to < INF,
 		"control: a box reading opens (%.2f s) with no shuffle (%s)" % [to, str(tb["shuffle"])])
 	medium._tick_focus(thumb)
 	_ok(medium._title_alpha(thumb) > 0.999 and medium._blur.visible and is_equal_approx(_blur_sigma(), wide),
@@ -674,7 +674,7 @@ func _box_rect(at: Vector3, r: float, h: float) -> Rect2:
 			for cz in [-r, r]:
 				corners.append(Vector3(cx, cy, cz))
 	var k := tan(deg_to_rad(medium._cam.fov * 0.5))
-	return TableMedium._screen_rect_fast(corners, at, medium._cam_base.affine_inverse(), Vector2(k * 16.0 / 9.0, k))
+	return TableMedium._screen_rect_fast(corners, at, medium._plan.cam_base.affine_inverse(), Vector2(k * 16.0 / 9.0, k))
 
 
 func _inside(r: Rect2) -> bool:

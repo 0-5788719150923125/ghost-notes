@@ -83,7 +83,7 @@ func _ready_reading(seed: int, reversed: bool) -> Dictionary:
 	subs.document = {"source": script, "title": "Turns Check", "table": doc}
 	medium._ensure_doc()
 	medium._follow.extend(subs.words)
-	medium._sched = medium._follow.place(medium._parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
+	medium._sched = medium._follow.place(medium._plan.parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
 	var tm: Dictionary = medium._times()
 	return {"ts": float(tm["shuffle"]), "te": float((tm["first"] as Array)[0]), "tm": tm}
 
@@ -120,7 +120,7 @@ func _turned_washes() -> void:
 			turned_n += int(turned[i])
 			# squared: the card's last yaw is the deck slot's own, or half a turn from it
 			var last: PackedVector4Array = (plan["tracks"] as Array)[i]
-			var jit: Vector3 = medium._slot_jit[slot]
+			var jit: Vector3 = medium._plan.slot_jit[slot]
 			var off := fposmod(last[last.size() - 1].w - jit.z, TAU)
 			var want := PI if int(turned[i]) == 1 else 0.0
 			worst = maxf(worst, absf(wrapf(off - want, -PI, PI)))

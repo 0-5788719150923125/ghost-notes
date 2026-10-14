@@ -45,7 +45,7 @@ func _run() -> void:
 		print("vpick: FAILED - the picker was never built")
 		fails += 1
 	else:
-		# what a picker offers: every medium no mode owns (Medium.OWNED - the card table is the
+		# what a picker offers: every medium no mode owns (a row's `mode` - the card table is the
 		# Cards mode's, pinned for its sessions, and never a choice here)
 		var keys: Array = Medium.pickable()
 		print("vpick: %d items, selected %d (%s)" % [
@@ -54,7 +54,7 @@ func _run() -> void:
 			print("vpick: FAILED - %d items for %d pickable media" % [
 				opt.item_count, keys.size()])
 			fails += 1
-		if opt.get_item_text(maxi(0, opt.selected)) != String(Medium.LABELS.get(Director.medium, "")):
+		if opt.get_item_text(maxi(0, opt.selected)) != Registry.label(Medium.REGISTRY, Director.medium):
 			print("vpick: FAILED - selection does not show the live setting '%s'" % Director.medium)
 			fails += 1
 		# and that choosing one actually reaches the Director
@@ -119,7 +119,7 @@ func _run() -> void:
 								"shown" if want else "hidden"])
 						fails += 1
 						break
-			print("vpick: '%s' shows %s" % [vk, str(Medium.USES.get(vk, []))])
+			print("vpick: '%s' shows %s" % [vk, str(Registry.field(Medium.REGISTRY, vk, "uses", []))])
 		# THE CONTROL: at least one tag must actually differ between two media, or the
 		# sweep above is satisfied by every row being visible everywhere.
 		var differs := false
@@ -178,9 +178,9 @@ func _run() -> void:
 		if Director.filter_amount(first) <= 0.0:
 			print("vpick: FAILED - ticking '%s' on left it at 0 (the dial was empty)" % first)
 			fails += 1
-		elif not is_equal_approx(Director.filter_amount(first), float(Filters.DEFAULTS[first])):
+		elif not is_equal_approx(Director.filter_amount(first), float(Filters.REGISTRY[first]["default"])):
 			print("vpick: FAILED - ticking '%s' applied %.2f, not its default %.2f"
-				% [first, Director.filter_amount(first), float(Filters.DEFAULTS[first])])
+				% [first, Director.filter_amount(first), float(Filters.REGISTRY[first]["default"])])
 			fails += 1
 		else:
 			print("vpick: ticking '%s' set the Director to its default %.2f"

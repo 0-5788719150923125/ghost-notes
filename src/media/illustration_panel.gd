@@ -72,8 +72,8 @@ func _ready() -> void:
 	var keys: Array = ImageGen.REGISTRY.keys()
 	var tip := "Which image model paints the pictures.\n"
 	for k in keys:
-		pick.add_item(String(ImageGen.LABELS.get(k, k)))
-		tip += "\n%s - %s" % [ImageGen.LABELS.get(k, k), ImageGen.BLURBS.get(k, "")]
+		pick.add_item(Registry.label(ImageGen.REGISTRY, k))
+		tip += "\n%s - %s" % [Registry.label(ImageGen.REGISTRY, k), Registry.blurb(ImageGen.REGISTRY, k)]
 	pick.tooltip_text = tip
 	pick.select(maxi(0, keys.find(Illustrations.backend())))
 	pick.item_selected.connect(func(i: int) -> void: Illustrations.set_backend(String(keys[i])))

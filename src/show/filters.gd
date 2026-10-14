@@ -28,7 +28,7 @@ class_name Filters
 ## makes the pair read as black-and-white noir rather than as a tinted color picture - Noir's
 ## split-tone is applied to whatever it is handed.
 ##
-## ADDING A FILTER is an entry in each of the four tables below plus a `u_<key>` uniform and a
+## ADDING A FILTER is a row of [constant REGISTRY] below plus a `u_<key>` uniform and a
 ## block in [code]shaders/stage_filter.gdshader[/code]. Nothing in main, the Director or the
 ## panel changes - the controls are built off [constant Filters.REGISTRY]. A key with no matching
 ## uniform is the failure this arrangement is exposed to, because
@@ -37,60 +37,38 @@ class_name Filters
 
 const SHADER := "res://shaders/stage_filter.gdshader"
 
-## The registry: filter key -> the shader uniform its amount drives. In PIPELINE ORDER.
+## THE REGISTRY, in PIPELINE ORDER: one row a filter, the one shape every registry here has (a
+## `label` a person reads, a `blurb`, and the fields of its own kind - next/structure.md, step 6).
+##
+##   label    its name, on the Look card and in docs/filters.md
+##   uniform  the shader uniform its amount drives
+##   default  where its dial lands the first time it is switched on. Not 1.0: the top of every
+##            range here is deliberately too much (a painting, a fogged lens, a blizzard of
+##            grain), so an unfamiliar filter that arrived at full strength would read as
+##            broken rather than as a look. Picking one up gives a usable version of it and the
+##            dial does the rest.
+##   blurb    one line, for the checkbox's tooltip and docs/filters.md - ONE string literal, not
+##            a `+` continuation, so docs.py reads it whole
 ##
 ## Keys are what `[director] filters` in `user://ghost.cfg` stores and what
 ## `--filter KEY=AMOUNT` takes.
 const REGISTRY := {
-	"slip": "u_slip",
-	"pointillism": "u_pointillism",
-	"bloom": "u_bloom",
-	"monochrome": "u_monochrome",
-	"noir": "u_noir",
-	"static": "u_static",
-	"dust": "u_dust",
-	"vignette": "u_vignette",
-}
-
-## Display names for the registry keys, in registry order - for the settings surface.
-const LABELS := {
-	"slip": "Gate slip",
-	"pointillism": "Pointillism",
-	"bloom": "Bloom",
-	"monochrome": "Monochrome",
-	"noir": "Film noir",
-	"static": "Static",
-	"dust": "Dust & scratches",
-	"vignette": "Vignette",
-}
-
-## One line each, for the checkbox tooltips and docs/filters.md. Deliberately ONE string
-## literal per entry, not a `+` continuation: docs.py reads this table with a regex and a
-## continuation silently truncates the blurb at the first line.
-const BLURBS := {
-	"slip": "Tearing: now and then a band of the picture jumps sideways for one frame and snaps back, the way a frame that does not seat squarely in a projector's gate is printed offset. The dial is how often and how far.",
-	"pointillism": "The picture re-laid as overlapping dots of paint on a jittered lattice, each dot taking its color from where it sits and its size from how bright that is. The dial is the size of the dots, so a little is a canvas texture and a lot is a painting you have to stand back from.",
-	"bloom": "Light bleeding out of the bright parts, the way it does through a lens. Only what is already brighter than the picture's own highlights blooms, so it lifts lamps, sparks and speculars without fogging the whole frame.",
-	"monochrome": "Color taken out, weighted the way the eye weighs it rather than by averaging the channels - so a red and a green of the same brightness do not come out as the same gray.",
-	"noir": "The hard grade: contrast pushed until the blacks close up and the highlights burn, with cold shadows against warm highlights. It grades whatever it is handed, so put Monochrome above it for black-and-white and leave it off for something closer to Technicolor.",
-	"static": "Fine noise over the picture, strongest in the midtones and nearly absent in the blacks and the blown highlights, where the emulsion's own noise lives, and it moves at a film's frame rate.",
-	"dust": "Dirt on the print: specks of dust (mostly dark, some light), the odd curled hair, and now and then a scratch down the frame that holds for a moment and wanders. It changes every film frame, the way dirt on a moving print does.",
-	"vignette": "The corners fallen off, as a fast lens does wide open. Measured on the frame's own diagonal, so it is the same shape of falloff on a phone clip as on a widescreen render.",
-}
-
-## Where a filter's dial lands the first time it is switched on. Not 1.0: the top of every
-## range here is deliberately too much (a painting, a fogged lens, a blizzard of grain), so
-## an unfamiliar filter that arrived at full strength would read as broken rather than as a
-## look. Picking one up gives you a usable version of it and the dial does the rest.
-const DEFAULTS := {
-	"slip": 0.45,
-	"pointillism": 0.35,
-	"bloom": 0.45,
-	"monochrome": 1.0,
-	"noir": 0.55,
-	"static": 0.40,
-	"dust": 0.45,
-	"vignette": 0.45,
+	"slip": {"label": "Gate slip", "uniform": "u_slip", "default": 0.45,
+		"blurb": "Tearing: now and then a band of the picture jumps sideways for one frame and snaps back, the way a frame that does not seat squarely in a projector's gate is printed offset. The dial is how often and how far."},
+	"pointillism": {"label": "Pointillism", "uniform": "u_pointillism", "default": 0.35,
+		"blurb": "The picture re-laid as overlapping dots of paint on a jittered lattice, each dot taking its color from where it sits and its size from how bright that is. The dial is the size of the dots, so a little is a canvas texture and a lot is a painting you have to stand back from."},
+	"bloom": {"label": "Bloom", "uniform": "u_bloom", "default": 0.45,
+		"blurb": "Light bleeding out of the bright parts, the way it does through a lens. Only what is already brighter than the picture's own highlights blooms, so it lifts lamps, sparks and speculars without fogging the whole frame."},
+	"monochrome": {"label": "Monochrome", "uniform": "u_monochrome", "default": 1.0,
+		"blurb": "Color taken out, weighted the way the eye weighs it rather than by averaging the channels - so a red and a green of the same brightness do not come out as the same gray."},
+	"noir": {"label": "Film noir", "uniform": "u_noir", "default": 0.55,
+		"blurb": "The hard grade: contrast pushed until the blacks close up and the highlights burn, with cold shadows against warm highlights. It grades whatever it is handed, so put Monochrome above it for black-and-white and leave it off for something closer to Technicolor."},
+	"static": {"label": "Static", "uniform": "u_static", "default": 0.4,
+		"blurb": "Fine noise over the picture, strongest in the midtones and nearly absent in the blacks and the blown highlights, where the emulsion's own noise lives, and it moves at a film's frame rate."},
+	"dust": {"label": "Dust & scratches", "uniform": "u_dust", "default": 0.45,
+		"blurb": "Dirt on the print: specks of dust (mostly dark, some light), the odd curled hair, and now and then a scratch down the frame that holds for a moment and wanders. It changes every film frame, the way dirt on a moving print does."},
+	"vignette": {"label": "Vignette", "uniform": "u_vignette", "default": 0.45,
+		"blurb": "The corners fallen off, as a fast lens does wide open. Measured on the frame's own diagonal, so it is the same shape of falloff on a phone clip as on a widescreen render."},
 }
 
 
@@ -148,7 +126,7 @@ static func apply(rect: CanvasItem, amounts: Dictionary, size: Vector2) -> void:
 	# leaves a filter that was just switched off still burning at its old amount, which is
 	# a checkbox that cannot be unticked.
 	for k in REGISTRY:
-		mat.set_shader_parameter(String(REGISTRY[k]), float(live.get(k, 0.0)))
+		mat.set_shader_parameter(String(REGISTRY[k]["uniform"]), float(live.get(k, 0.0)))
 	# The dot lattice and the grain are sized in PIXELS, so they need the frame's real size
 	# rather than UV. Without it a dot is a fixed fraction of the picture and the
 	# pointillism gets coarser as the window gets bigger.
@@ -187,5 +165,5 @@ static func describe(amounts: Dictionary) -> String:
 	var parts: Array = []
 	for k in REGISTRY:
 		if live.has(k):
-			parts.append("%s %d%%" % [LABELS.get(k, k), int(round(float(live[k]) * 100.0))])
+			parts.append("%s %d%%" % [Registry.label(REGISTRY, k), int(round(float(live[k]) * 100.0))])
 	return ", ".join(parts)

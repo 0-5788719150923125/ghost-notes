@@ -224,7 +224,7 @@ func _jumper() -> void:
 	subs.document = {"source": script, "title": "Wash Check", "table": doc}
 	medium._ensure_doc()
 	medium._follow.extend(subs.words)
-	medium._sched = medium._follow.place(medium._parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
+	medium._sched = medium._follow.place(medium._plan.parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
 	medium._moves = [{"kind": "riffle", "t0": 0.15, "dur": 2.4, "pause": 1000.0, "seed": 1}]   # then quiet
 	var tm := medium._times()
 	var first: Array = tm["first"]
@@ -635,7 +635,7 @@ var _thrown := {"n": 0, "soft": 0, "up": 0, "late": 0, "off": 0, "unseen": 0, "t
 ## What [param plan]'s throws were, judged on the table it was planned on (the medium's as it is).
 func _throw_facts(plan: Dictionary) -> void:
 	var mix: Vector2 = plan["mix"]
-	var off := Vector2(medium._mid.x, medium._mid.z)
+	var off := Vector2(medium._plan.mid.x, medium._plan.mid.z)
 	var cloth := Rect2(-TableShuffle.CLOTH.x * 0.5, -0.02 - TableShuffle.CLOTH.y * 0.5, TableShuffle.CLOTH.x, TableShuffle.CLOTH.y)
 	for f in plan["flights"]:
 		var fd: Dictionary = f
@@ -648,7 +648,7 @@ func _throw_facts(plan: Dictionary) -> void:
 		var unseen := false
 		for c: Vector2 in card:
 			off_cloth = off_cloth or not cloth.has_point(c)
-			var sc: Variant = CardTable.project(medium._cam_base, medium._cam.fov, Vector3(c.x, TableShuffle.WASH_FLOOR, c.y))
+			var sc: Variant = CardTable.project(medium._plan.cam_base, medium._cam.fov, Vector3(c.x, TableShuffle.WASH_FLOOR, c.y))
 			unseen = unseen or sc == null or not Rect2(0.0, 0.0, 1.0, 1.0).has_point(sc as Vector2)
 		_thrown["off"] = int(_thrown["off"]) + (1 if off_cloth else 0)
 		_thrown["unseen"] = int(_thrown["unseen"]) + (1 if unseen else 0)
@@ -677,7 +677,7 @@ func _wash_jumper() -> void:
 		subs.document = {"source": script, "title": "Wash Check", "table": doc}
 		medium._ensure_doc()
 		medium._follow.extend(subs.words)
-		medium._sched = medium._follow.place(medium._parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
+		medium._sched = medium._follow.place(medium._plan.parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
 		var tm := medium._times()
 		var first: Array = tm["first"]
 		var ts := float(tm["shuffle"])
@@ -701,7 +701,7 @@ func _wash_jumper() -> void:
 		var lies_right := true
 		var on_top := true
 		var through := 0
-		var rest_at := te + TableMedium.JUMP_REST * sc
+		var rest_at := te + TableCardPose.JUMP_REST * sc
 		var t := ts + w0 + 2.0
 		while t < float(wj["end"]) + 2.0:
 			medium._now = t
@@ -739,7 +739,7 @@ func _wash_jumper() -> void:
 		var up_at := te + TableMedium.JUMP_RISE * sc
 		medium._now = up_at + 0.1
 		medium._pose(up_at + 0.1)
-		var shown := card.transform.origin.distance_to(medium._present_xf(0, up_at + 0.1, up_at, INF).origin)
+		var shown := card.transform.origin.distance_to(medium._card_poses._present_xf(0, up_at + 0.1, up_at, INF).origin)
 		var late := float(wj["end"]) + TableMedium.PUSH_SLIDE * sc + 0.5
 		medium._now = late
 		medium._pose(late)
@@ -830,7 +830,7 @@ func _looks() -> void:
 	var bad_plain := 0
 	var draws := 600
 	for i in draws:
-		var look := TableMedium._look_of(rng)
+		var look := TableCardPose._look_of(rng)
 		var way := float(look["way"])
 		var turn := float(look["turn"])
 		var hold := float(look["hold"])
@@ -844,12 +844,12 @@ func _looks() -> void:
 		var against := false
 		var prev := 0.0
 		for s in 600:
-			var a := TableMedium._look_angle(look, total * float(s + 1) / 600.0)
+			var a := TableCardPose._look_angle(look, total * float(s + 1) / 600.0)
 			if (a - prev) * way < -1e-5:
 				against = true
 			prev = a
-		var on_back := absf(TableMedium._look_angle(look, turn + hold * 0.5) - way * PI) < 1e-4
-		var end := TableMedium._look_angle(look, total)
+		var on_back := absf(TableCardPose._look_angle(look, turn + hold * 0.5) - way * PI) < 1e-4
+		var end := TableCardPose._look_angle(look, total)
 		if spin:
 			bad_spin += 0 if (not against and on_back and absf(end - way * 6.0 * PI) < 1e-3) else 1
 		else:
@@ -885,7 +885,7 @@ func _looks() -> void:
 		var past := false
 		for f in int(until * 30.0):
 			var t := float(f) / 30.0
-			var a := medium._turn_of(k, t, 0.0, until)
+			var a := medium._card_poses._turn_of(k, t, 0.0, until)
 			worst = maxf(worst, absf(wrapf(a - prev, -PI, PI)))
 			round_seen += 1 if absf(a) > TAU else 0
 			if t > until - 1.0 and absf(a) > 1e-6:
@@ -922,7 +922,7 @@ func _looks() -> void:
 			var spun := false
 			var prev2 := 0.0
 			for f in int(until * 30.0):
-				var a := medium._turn_of(k, float(f) / 30.0, 0.0, until)
+				var a := medium._card_poses._turn_of(k, float(f) / 30.0, 0.0, until)
 				worst = maxf(worst, absf(wrapf(a - prev2, -PI, PI)))
 				spun = spun or absf(a) > TAU
 				prev2 = a

@@ -23,7 +23,7 @@ _The original show with nothing to set: scenes chosen by the song's own fingerpr
 
 AutoMedium - the original show with nothing to set: one scene at a time, filling the frame, chosen by the song's own fingerprint and cut on its beat (2026-10-06, the user: an "auto" type "which removes all options from the user, and just automatically plays the scene, seeded by the audio, just like the original mode did it").
 
-IT DRAWS EXACTLY WHAT `FullMedium` DRAWS. What makes it a medium of its own is what it takes: no settings at all (`Medium.BARE`). The Picture card shows nothing under it but the picker, picking it puts the Director's dials back to their defaults, and its block in a note is the medium's name alone - so the same song is the same show in every note, whatever another note's dials were left at. The frame is landscape: a portrait show is Full frame's.
+IT DRAWS EXACTLY WHAT `FullMedium` DRAWS. What makes it a medium of its own is what it takes: no settings at all (its row's `bare`). The Picture card shows nothing under it but the picker, picking it puts the Director's dials back to their defaults, and its block in a note is the medium's name alone - so the same song is the same show in every note, whatever another note's dials were left at. The frame is landscape: a portrait show is Full frame's.
 
 Source: [src/media/auto.gd](../src/media/auto.gd)
 
@@ -107,7 +107,7 @@ _A card reading at a table, seen from the reader's chair: the deck shuffles whil
 
 TableMedium - a card reading at a table, seen from the reader's chair.
 
-The Cards mode's own medium (see `Medium.OWNED`): the episode's cloth on a table, its room out of focus beyond the far edge, its candles, and the deck. The reader is a voice, never a pair of hands - the cards move on their own:
+The Cards mode's own medium (its row of `Medium.REGISTRY` names the mode): the episode's cloth on a table, its room out of focus beyond the far edge, its candles, and the deck. The reader is a voice, never a pair of hands - the cards move on their own:
 
 the intro      the deck shuffles in the middle of the table under the voice, in RUNS - riffles, overhand passes, strings of cuts, now and then a wash across the cloth - with long stretches of nothing between them (`RUNS`) the push       before the first card, the deck is squared and pushed to its side a draw         the deck squares, the top card slides off, turns over, and comes up to the camera on the LEFT; its booklet page opens on the RIGHT - shown, never read the reading    the card and the page float there while the voice talks about it, turning a little on their axes; now and then the card is turned to look at its back the lay        the page closes and the card goes down into its place in the spread a jumper       the first card flies out of the shuffle on its own, lands face up, and is picked up and shown like a drawn one the close      the whole spread lies on the table
 

@@ -5,25 +5,25 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 261 references inside a folder, 698 down the stack, 0 up it.
+Between scripts today: 271 references inside a folder, 710 down the stack, 0 up it.
 
 ## The stack, top first
 
 | folder | what it is | scripts | names |
 | --- | --- | --- | --- |
-| `app/` | The shell | 13 | `masking`, `cards`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `audio`, `data`, `platform` |
-| `masking/` | Masking | 8 | `timeline`, `voice`, `ui`, `notes`, `data`, `platform` |
-| `cards/` | Cards | 8 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `audio`, `data`, `platform` |
-| `table/` | The set | 14 | `media`, `scene_kit`, `audio`, `data` |
-| `reading/` | The voice's workspaces | 3 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `data`, `platform` |
-| `export/` | Export | 3 | `show`, `voice`, `ui`, `agents`, `stage`, `audio`, `data`, `platform` |
+| `app/` | The shell | 13 | `masking`, `cards`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
+| `masking/` | Masking | 8 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
+| `cards/` | Cards | 9 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
+| `table/` | The set | 16 | `media`, `scene_kit`, `audio`, `data` |
+| `reading/` | The voice's workspaces | 4 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
+| `export/` | Export | 3 | `show`, `voice`, `ui`, `agents`, `stage`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
-| `show/` | The show | 8 | `media`, `ui`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform` |
-| `media/` | Media | 19 | `voice`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `data`, `platform` |
-| `voice/` | Synthesis (voice) | 11 | `audio`, `data`, `platform` |
-| `ui/` | The panel kit | 10 | `notes`, `data`, `platform` |
-| `notes/` | Notes | 5 | `stage`, `data`, `platform` |
-| `agents/` | Agents | 6 | `data`, `platform` |
+| `show/` | The show | 8 | `media`, `ui`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
+| `media/` | Media | 19 | `voice`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
+| `voice/` | Synthesis (voice) | 11 | `audio`, `platform`, `data` |
+| `ui/` | The panel kit | 10 | `notes`, `platform`, `data` |
+| `notes/` | Notes | 5 | `stage`, `platform`, `data` |
+| `agents/` | Agents | 6 | `platform`, `data` |
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
 | `stage/` | Storyboards & stage | 4 | `geometry`, `render`, `audio`, `data` |
 | `scene_kit/` | Scene substrate | 7 | `geometry`, `motion`, `render`, `audio` |
@@ -31,22 +31,22 @@ Between scripts today: 261 references inside a folder, 698 down the stack, 0 up 
 | `motion/` | Motion & simulation | 13 | `render`, `audio` |
 | `render/` | Drawing | 7 | nothing |
 | `audio/` | Audio & analysis | 7 | `platform` |
-| `data/` | Plain data | 5 | nothing |
-| `platform/` | The machine | 9 | nothing |
+| `platform/` | The machine | 9 | `data` |
+| `data/` | Plain data | 6 | nothing |
 
 ## The folders, bottom first
+
+### `data/` - Plain data
+
+Plain data in and out, at the bottom because it needs nothing: the YAML-subset parser, a document's frontmatter (re-read, one key edited, verified), pure edits of nested data, reading any registry's rows (`Registry`), what an agent is told (`rules/`), and a script read into cues, hesitations and pictures.
+
+[`data_path`](../src/data/data_path.gd), [`front_matter`](../src/data/front_matter.gd), [`manuscript`](../src/data/manuscript.gd), [`registry`](../src/data/registry.gd), [`rules`](../src/data/rules.gd), [`yaml`](../src/data/yaml.gd)
 
 ### `platform/` - The machine
 
 The machine under Ghost Notes: the one owner of its settings file, the earliest hook of a launch, every child program in one place, what ghost installs for itself and keeps current, the app's own update, and what this platform can do.
 
 [`app_update`](../src/platform/app_update.gd), [`boot`](../src/platform/boot.gd), [`bundled_hosts`](../src/platform/bundled_hosts.gd), [`capabilities`](../src/platform/capabilities.gd), [`deps`](../src/platform/deps.gd), [`provision`](../src/platform/provision.gd), [`provisioner`](../src/platform/provisioner.gd), [`settings`](../src/platform/settings.gd), [`subprocess`](../src/platform/subprocess.gd)
-
-### `data/` - Plain data
-
-Plain data in and out: the YAML-subset parser, a document's frontmatter (re-read, one key edited, verified), pure edits of nested data, what an agent is told (`rules/`), and a script read into cues, hesitations and pictures.
-
-[`data_path`](../src/data/data_path.gd), [`front_matter`](../src/data/front_matter.gd), [`manuscript`](../src/data/manuscript.gd), [`rules`](../src/data/rules.gd), [`yaml`](../src/data/yaml.gd)
 
 ### `audio/` - Audio & analysis
 
@@ -140,19 +140,19 @@ Rendering a session to video (bake + Movie Maker, background processes) and uplo
 
 The panels a voice runs in: the reading (script, cast, voice, stream, export), the Generative editor built on it, and the voice lab with the fishing game that breeds its voices.
 
-[`generative_editor`](../src/reading/generative_editor.gd), [`reading_panel`](../src/reading/reading_panel.gd), [`synth_editor`](../src/reading/synth_editor.gd)
+[`generative_editor`](../src/reading/generative_editor.gd), [`reading_panel`](../src/reading/reading_panel.gd), [`synth_editor`](../src/reading/synth_editor.gd), [`text_walk`](../src/reading/text_walk.gd)
 
 ### `table/` - The set
 
 A place, seen and heard, built from a written description: the table itself (Tables), the things on it (Props), its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds), its sound (Soundscape), where cards go on it, what can be done with them and how a reading says so, the faces printed on them - and the medium that puts it all on the stage (`table.gd`, a row of `Medium.REGISTRY`).
 
-[`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`lights`](../src/table/lights.gd), [`props`](../src/table/props.gd), [`soundscape`](../src/table/soundscape.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`tables`](../src/table/tables.gd), [`winds`](../src/table/winds.gd)
+[`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`lights`](../src/table/lights.gd), [`props`](../src/table/props.gd), [`soundscape`](../src/table/soundscape.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`tables`](../src/table/tables.gd), [`winds`](../src/table/winds.gd)
 
 ### `cards/` - Cards
 
 A show of cards nobody writes: a show's brief, its episodes - each planned, dealt, painted and written by agents one card at a time, kept on disk step by step - and the set dresser that builds the table they are read at. The rules are every show's; the brief says what the cards are - tarot, baseball or trading cards, a card game's deck, flashcards, recipe cards - and lists them, or leaves each episode's deck to its producer. Design: next/cards.md.
 
-[`card_deck`](../src/cards/card_deck.gd), [`card_episode`](../src/cards/card_episode.gd), [`card_producer`](../src/cards/card_producer.gd), [`card_prompts`](../src/cards/card_prompts.gd), [`cards_editor`](../src/cards/cards_editor.gd), [`dealer_tools`](../src/cards/dealer_tools.gd), [`set_dresser_tools`](../src/cards/set_dresser_tools.gd), [`table_preview`](../src/cards/table_preview.gd)
+[`card_deck`](../src/cards/card_deck.gd), [`card_episode`](../src/cards/card_episode.gd), [`card_producer`](../src/cards/card_producer.gd), [`card_prompts`](../src/cards/card_prompts.gd), [`cards_editor`](../src/cards/cards_editor.gd), [`dealer_tools`](../src/cards/dealer_tools.gd), [`episode_walk`](../src/cards/episode_walk.gd), [`set_dresser_tools`](../src/cards/set_dresser_tools.gd), [`table_preview`](../src/cards/table_preview.gd)
 
 ### `masking/` - Masking
 

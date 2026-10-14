@@ -221,7 +221,7 @@ for p in list((repo / "src").rglob("*.gd")):
         outside_names.add(m.group(1))
     for m in re.finditer(rf"\b{OWNER}\.(\w+)\b", t):
         asked_of_owner.add(m.group(1))
-for p in list((repo / "tests").glob("*.gd")):
+for p in list((repo / "tests").rglob("*.gd")):
     for m in re.finditer(r"\.(\w+)\b", p.read_text()):
         outside_names.add(m.group(1))
 keep |= {x for x in asked_of_owner if x in by_name and by_name[x]["kind"] in ("const", "enum", "class")}
@@ -307,7 +307,7 @@ for li, l in enumerate(lines):
             strs.add((li + 1, m.group(1)))
 print(f"  moved members named in a string in this file: {sorted(strs)}")
 ext = defaultdict(set)
-for p in list((repo / "src").rglob("*.gd")) + list((repo / "tests").glob("*.gd")):
+for p in list((repo / "src").rglob("*.gd")) + list((repo / "tests").rglob("*.gd")):
     if p == path:
         continue
     t = p.read_text()

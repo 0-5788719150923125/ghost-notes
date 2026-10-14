@@ -98,10 +98,10 @@ func _aside() -> void:
 			var lay := CardTable.layout_of(seed)
 			var rng := RandomNumberGenerator.new()
 			rng.seed = hash([seed, "aside-check"])
-			m._seed = seed
-			m._cards_from = "deck"
+			m._plan.seed_value = seed
+			m._plan.cards_from = "deck"
 			m._deck_base = lay["deck"]
-			m._slots = TablePositions.seeded(n, rng, lay)
+			m._plan.slots = TablePositions.seeded(n, rng, lay)
 			m._plan_aside({})
 			if m._aside_card < 0 and m._deck_far == lay["deck"]:
 				continue
@@ -109,7 +109,7 @@ func _aside() -> void:
 			lone += 1 if n == 1 else 0
 			var r := TablePositions.deck_keep(m._deck_far)
 			bad += 0 if TablePositions._frame_trouble(r, lay).is_empty() else 1
-			for sl in m._slots:
+			for sl in m._plan.slots:
 				bad += 1 if CardTable.footprint(sl["pos"], float(sl["yaw"]), CARD).intersects(r) else 0
 	m.free()
 	_ok(moved > 0, "a crowded deck is put aside now and then (%d of 400 long spreads)" % (moved - lone))

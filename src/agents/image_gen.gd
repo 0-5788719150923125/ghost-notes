@@ -19,30 +19,26 @@ class_name ImageGen
 ## may add its own keys to it (the event log, a thread id) and read them back later.
 
 ## Keys are what `[illustrations] backend` in `user://ghost.cfg` stores.
+##
+## One row a backend, the one shape every registry here has (next/structure.md, step 6):
+##   label    its name in a picker
+##   backend  the inner class that runs it
+##   blurb    one line, for the picker's tooltip and docs/agents.md - ONE string literal, not a
+##            `+` continuation, so docs.py reads it whole
 const REGISTRY := {
-	"codex": Codex,
-	"grok": Grok,
-	"bedrock": Bedrock,
-}
-
-const LABELS := {
-	"codex": "OpenAI (Codex CLI)",
-	"grok": "xAI (Grok Build CLI)",
-	"bedrock": "Amazon Bedrock (AWS CLI)",
-}
-
-## One string literal per entry, for the picker's tooltip - same rule as Medium.BLURBS.
-const BLURBS := {
-	"codex": "OpenAI's image model, driven through the Codex CLI's built-in image tool. Uses the Codex login, not an API key. About a minute per picture.",
-	"grok": "xAI's image model, driven through the Grok Build CLI's built-in image tools: it looks at the reference pictures and paints from them by path. Uses the Grok login. About half a minute per picture.",
-	"bedrock": "Image models on Amazon Bedrock - Stability AI's (Amazon retired its own in 2026) - through the AWS CLI with your AWS credentials, billed per picture to your AWS account. An Amazon Nova model reads each request and its reference pictures and writes the image model's prompt. A Stability model subscribes the account to it through AWS Marketplace on first use.",
+	"codex": {"label": "OpenAI (Codex CLI)", "backend": Codex,
+		"blurb": "OpenAI's image model, driven through the Codex CLI's built-in image tool. Uses the Codex login, not an API key. About a minute per picture."},
+	"grok": {"label": "xAI (Grok Build CLI)", "backend": Grok,
+		"blurb": "xAI's image model, driven through the Grok Build CLI's built-in image tools: it looks at the reference pictures and paints from them by path. Uses the Grok login. About half a minute per picture."},
+	"bedrock": {"label": "Amazon Bedrock (AWS CLI)", "backend": Bedrock,
+		"blurb": "Image models on Amazon Bedrock - Stability AI's (Amazon retired its own in 2026) - through the AWS CLI with your AWS credentials, billed per picture to your AWS account. An Amazon Nova model reads each request and its reference pictures and writes the image model's prompt. A Stability model subscribes the account to it through AWS Marketplace on first use."},
 }
 
 
 ## Build the backend for [param key], falling back to the first entry for an unknown one: a
 ## stale config must never leave the panel without a painter.
 static func make(key: String) -> Backend:
-	var cls: Variant = REGISTRY.get(key, REGISTRY[REGISTRY.keys()[0]])
+	var cls: Variant = Registry.field(REGISTRY, key, "backend", REGISTRY[REGISTRY.keys()[0]]["backend"])
 	return cls.new()
 
 

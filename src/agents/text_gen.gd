@@ -45,26 +45,21 @@ class_name TextGen
 const PICTURE_EDGE := 768
 
 ## Keys are what `ghost: cards: writer` (and anything else that asks for words) stores.
+##
+## One row a backend, the one shape every registry here has (next/structure.md, step 6):
+##   label    its name in a picker
+##   backend  the inner class that runs it
+##   blurb    one line, for the picker's tooltip and docs/agents.md - ONE string literal, not a
+##            `+` continuation, so docs.py reads it whole
 const REGISTRY := {
-	"claude": Claude,
-	"codex": Codex,
-	"grok": Grok,
-	"bedrock": Bedrock,
-}
-
-const LABELS := {
-	"claude": "Claude (Claude Code CLI)",
-	"codex": "OpenAI (Codex CLI)",
-	"grok": "xAI (Grok Build CLI)",
-	"bedrock": "Amazon Bedrock (AWS CLI)",
-}
-
-## One string literal per entry, for a picker's tooltip - same rule as Medium.BLURBS.
-const BLURBS := {
-	"claude": "Anthropic's models through the Claude Code CLI, run with no tools and no project context. Uses the Claude Code login.",
-	"codex": "OpenAI's models through the Codex CLI, run read-only in the job's own folder and told to work only from the message it is given - and Ghost Notes' tools where a job serves them, as the card table's set dresser does. Uses the Codex login.",
-	"grok": "xAI's Grok models through the Grok Build CLI, with ghost's own system prompt, none of its own tools but reading the pictures it is sent - and Ghost Notes' tools where a job serves them, as the card table's set dresser does - no memory, and none of the setup it would borrow from Claude, Cursor or Codex. Uses the Grok login.",
-	"bedrock": "Models on Amazon Bedrock - Amazon's own Nova by default, and the open models Bedrock hosts - through the AWS CLI with your AWS credentials and region (aws configure). Billed per token to your AWS account; a model from another provider may subscribe the account to it through AWS Marketplace on first use.",
+	"claude": {"label": "Claude (Claude Code CLI)", "backend": Claude,
+		"blurb": "Anthropic's models through the Claude Code CLI, run with no tools and no project context. Uses the Claude Code login."},
+	"codex": {"label": "OpenAI (Codex CLI)", "backend": Codex,
+		"blurb": "OpenAI's models through the Codex CLI, run read-only in the job's own folder and told to work only from the message it is given - and Ghost Notes' tools where a job serves them, as the card table's set dresser does. Uses the Codex login."},
+	"grok": {"label": "xAI (Grok Build CLI)", "backend": Grok,
+		"blurb": "xAI's Grok models through the Grok Build CLI, with ghost's own system prompt, none of its own tools but reading the pictures it is sent - and Ghost Notes' tools where a job serves them, as the card table's set dresser does - no memory, and none of the setup it would borrow from Claude, Cursor or Codex. Uses the Grok login."},
+	"bedrock": {"label": "Amazon Bedrock (AWS CLI)", "backend": Bedrock,
+		"blurb": "Models on Amazon Bedrock - Amazon's own Nova by default, and the open models Bedrock hosts - through the AWS CLI with your AWS credentials and region (aws configure). Billed per token to your AWS account; a model from another provider may subscribe the account to it through AWS Marketplace on first use."},
 }
 
 ## THE TIER is what a caller asks for instead of a model name: `best` for words somebody will
@@ -76,7 +71,7 @@ const TIERS := ["best", "fast"]
 ## Build the backend for [param key], falling back to the first entry for an unknown one: a
 ## stale document must never leave a caller without a writer.
 static func make(key: String) -> Backend:
-	var cls: Variant = REGISTRY.get(key, REGISTRY[REGISTRY.keys()[0]])
+	var cls: Variant = Registry.field(REGISTRY, key, "backend", REGISTRY[REGISTRY.keys()[0]]["backend"])
 	return cls.new()
 
 

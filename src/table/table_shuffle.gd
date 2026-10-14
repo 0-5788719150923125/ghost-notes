@@ -313,7 +313,7 @@ func _deck_flip0(te: float, ts: float, tm: Dictionary, wj: Dictionary) -> Packed
 	if key == _flip_key and is_same(_flip_moves, medium._moves) and _flip0.size() == TableMedium.DECK_N:
 		return _flip0
 	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([medium._seed, "deck-turned"])
+	rng.seed = hash([medium._plan.seed_value, "deck-turned"])
 	var f0 := PackedByteArray()
 	f0.resize(TableMedium.DECK_N)
 	for c in TableMedium.DECK_N:
@@ -1066,7 +1066,7 @@ func _wash_spread_at(plan: Dictionary, i: int, v: float) -> float:
 ## table, by the least that keeps a card's whole reach clear of it; unchanged when clear.
 func _clear_of_standing(at: Vector2) -> Vector2:
 	var reach := Vector2(TableMedium.CARD.x, TableMedium.CARD.y).length() * 0.5 + 0.01
-	var off := Vector2(medium._mid.x, medium._mid.z)
+	var off := Vector2(medium._plan.mid.x, medium._plan.mid.z)
 	var p := at
 	for i in medium._standing.size():
 		var c: Vector2 = medium._standing_c[i]
@@ -1082,7 +1082,7 @@ func _clear_of_standing(at: Vector2) -> Vector2:
 ## everything standing on the table.
 func _path_clear(a: Vector2, b: Vector2) -> bool:
 	var reach := Vector2(TableMedium.CARD.x, TableMedium.CARD.y).length() * 0.5
-	var off := Vector2(medium._mid.x, medium._mid.z)
+	var off := Vector2(medium._plan.mid.x, medium._plan.mid.z)
 	for i in medium._standing.size():
 		var c: Vector2 = medium._standing_c[i]
 		var q := Geometry2D.get_closest_point_to_segment(c, a + off, b + off)
@@ -1099,7 +1099,7 @@ func _path_clear(a: Vector2, b: Vector2) -> bool:
 func _card_clear(from: Vector2, want: Vector2, yaw: float) -> Vector2:
 	if medium._standing.is_empty() or not _collide:
 		return want
-	var off := Vector2(medium._mid.x, medium._mid.z)
+	var off := Vector2(medium._plan.mid.x, medium._plan.mid.z)
 	var reach := Vector2(TableMedium.CARD.x, TableMedium.CARD.y).length() * 0.5
 	var travel := from.distance_to(want)
 	var near := false
@@ -1255,7 +1255,7 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 	var aim := PackedVector2Array()
 	var t_out := PackedFloat32Array()
 	for i in n:
-		var jit: Vector3 = medium._slot_jit[i] if i < medium._slot_jit.size() else Vector3.ZERO
+		var jit: Vector3 = medium._plan.slot_jit[i] if i < medium._plan.slot_jit.size() else Vector3.ZERO
 		start.append(Vector2(jit.x, jit.y))
 		# out to somewhere a card can get to: by a way clear of everything standing on the table (a
 		# few tries, then the nearest spot clear of them)
@@ -1414,7 +1414,7 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 			for i in n:
 				var e := TableMedium._ease(clampf((t - WASH_FLATTEN * 0.5 - t_out[i]) / minf(1.1, out_end * 0.4), 0.0, 1.0))
 				pos[i] = start[i].lerp(aim[i], e)
-				yaw[i] = (medium._slot_jit[i] as Vector3).z + spin0[i] * e if i < medium._slot_jit.size() else spin0[i] * e
+				yaw[i] = (medium._plan.slot_jit[i] as Vector3).z + spin0[i] * e if i < medium._plan.slot_jit.size() else spin0[i] * e
 		elif t < gather_t0:
 			# MIX: the cloth slows what slides, cards drag what they lie on, the palms bring what they
 			# press to their speed (last, so what a palm holds goes its way), and every card moves.
@@ -1494,7 +1494,7 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 					from_yaw[i] = yaw[i]
 					# into the pile, squared as it lands, near enough: the pile is built, not tidied
 					var slot := land_order.find(i)
-					var jit2: Vector3 = medium._slot_jit[slot] if slot >= 0 and slot < medium._slot_jit.size() else Vector3.ZERO
+					var jit2: Vector3 = medium._plan.slot_jit[slot] if slot >= 0 and slot < medium._plan.slot_jit.size() else Vector3.ZERO
 					to_p[i] = Vector2(jit2.x, jit2.y) + Vector2(rng.randf_range(-0.0025, 0.0025), rng.randf_range(-0.0025, 0.0025))
 					# the nearest of the two ways a card lies (its yaw, or half a turn from it): a card
 					# the palms turned over lands the way it was turned, it is not turned back
@@ -1725,7 +1725,7 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 		tracks[i] = PackedVector4Array(tracks[i] as Array)
 	for slot in order.size():
 		var i := int(order[slot])
-		var jit3: Vector3 = medium._slot_jit[slot] if slot < medium._slot_jit.size() else Vector3.ZERO
+		var jit3: Vector3 = medium._plan.slot_jit[slot] if slot < medium._plan.slot_jit.size() else Vector3.ZERO
 		var tr: PackedVector4Array = tracks[i]
 		var from: Vector4 = tr[mini(sq0, tr.size() - 1)]
 		var half := roundf((from.w - jit3.z) / PI)
@@ -1859,14 +1859,14 @@ func _eject(i: int, at: Vector2, yaw: float, way: Vector2, reach: Vector2, t: fl
 func _may_land(i: int, from: Vector2, to: Vector2, yaw: float, up: bool, flights: Array) -> bool:
 	if not _path_clear(from, to):
 		return false
-	var off := Vector2(medium._mid.x, medium._mid.z)
+	var off := Vector2(medium._plan.mid.x, medium._plan.mid.z)
 	var card := _card_poly(to + off, yaw)
 	var cloth := Rect2(-CLOTH.x * 0.5 + 0.01, -0.02 - CLOTH.y * 0.5 + 0.01, CLOTH.x - 0.02, CLOTH.y - 0.02)
 	var frame := Rect2(0.1, 0.1, 0.8, 0.8) if up else Rect2(0.03, 0.03, 0.94, 0.94)
 	for c: Vector2 in card:
 		if not cloth.has_point(c) or Tables.sdf(medium._top_o, c) > -Tables.EDGE:
 			return false
-		var sc: Variant = CardTable.project(medium._cam_base, medium._cam.fov, Vector3(c.x, WASH_FLOOR, c.y))
+		var sc: Variant = CardTable.project(medium._plan.cam_base, medium._cam.fov, Vector3(c.x, WASH_FLOOR, c.y))
 		if sc == null or not frame.has_point(sc as Vector2):
 			return false
 	for foot in medium._standing:

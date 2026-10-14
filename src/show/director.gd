@@ -434,8 +434,8 @@ func set_hand(key: String) -> void:
 ## re-hosting the live scene into a different surface while it is drawing; the honest
 ## version of that is a restart, so the surface says so rather than half-doing it.
 func set_medium(key: String) -> void:
-	# a mode's own medium is pinned for its sessions, never remembered (see Medium.OWNED)
-	if not Medium.REGISTRY.has(key) or Medium.OWNED.has(key) or key == medium:
+	# a mode's own medium is pinned for its sessions, never remembered (see Medium.mode_of)
+	if not Medium.REGISTRY.has(key) or not Medium.mode_of(key).is_empty() or key == medium:
 		return
 	medium = key
 	_save_pacing()
@@ -454,7 +454,7 @@ func set_frame(f: String) -> void:
 
 
 ## The frame this run shows and renders in: `--frame NAME` if given, else the remembered one - and
-## landscape whenever the medium cannot be shown in it ([constant Medium.FRAMES]), so a note that
+## landscape whenever the medium cannot be shown in it ([method Medium.frames]), so a note that
 ## asks for a frame its presentation lacks still plays, in the other.
 func resolved_frame() -> String:
 	var want := frame

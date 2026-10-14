@@ -685,7 +685,7 @@ static func generate(image: Dictionary) -> String:
 	if status(key) in ["queued", "running"]:
 		return ""
 	if not ImageGen.make(backend()).available():
-		return "%s is not installed" % String(ImageGen.LABELS.get(backend(), backend()))
+		return "%s is not installed" % Registry.label(ImageGen.REGISTRY, backend())
 	_errors.erase(key)
 	_queue.append({"key": key, "prompt": String(image["prompt"]),
 		"placement": String(image.get("placement", "inline"))})

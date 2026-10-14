@@ -62,7 +62,7 @@ func _run() -> void:
 		# unfiltered picture to compare against.
 		wrote.append(await _shot({}, "none"))
 		for key in Filters_.REGISTRY:
-			wrote.append(await _shot({String(key): float(Filters_.DEFAULTS[key])},
+			wrote.append(await _shot({String(key): float(Filters_.REGISTRY[key]["default"])},
 				"%s_default" % key))
 
 	print("filter_look_probe: wrote %d image(s) to %s" % [wrote.size(), _out])

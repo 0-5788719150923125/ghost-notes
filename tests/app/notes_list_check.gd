@@ -201,7 +201,8 @@ func _check_gating() -> void:
 		_ok(pop.is_item_disabled(cards), "with no agent installed, Cards is grayed")
 		_ok(tip.contains("No AI writer or painter is installed."), "its tooltip says what is missing")
 		for role in ["writer", "painter"]:
-			for label in (Capabilities.registry(role).LABELS as Dictionary).values():
+			var reg: Dictionary = Capabilities.registry(role).REGISTRY
+			for label in reg.keys().map(func(k: String) -> String: return Registry.label(reg, k)):
 				_ok(tip.contains(String(label).replace(" ", " ")), "it lists the supported %s %s" % [role, label])
 		_ok(tip.contains("Install one or several of them"), "it suggests installing one or several")
 		var paras := tip.split("\n\n")

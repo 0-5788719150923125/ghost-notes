@@ -109,14 +109,14 @@ func _check_uniform_contract() -> void:
 	var src := FileAccess.get_file_as_string(Filters_.SHADER)
 	_ok(not src.is_empty(), "the stage filter shader could not be read at all")
 	for key in Filters_.REGISTRY:
-		var name := String(Filters_.REGISTRY[key])
+		var name := String(Filters_.REGISTRY[key]["uniform"])
 		_ok(src.contains("uniform float %s" % name),
 			"filter '%s' drives `%s`, which the shader does not declare - "
 			% [key, name] + "setting it is a silent no-op")
-		_ok(Filters_.LABELS.has(key) and Filters_.BLURBS.has(key)
-				and Filters_.DEFAULTS.has(key),
+		var row: Dictionary = Filters_.REGISTRY[key]
+		_ok(row.has("label") and row.has("blurb") and row.has("default"),
 			"filter '%s' is missing a label, a blurb or a default" % key)
-		var d := float(Filters_.DEFAULTS[key])
+		var d := float(Filters_.REGISTRY[key]["default"])
 		_ok(d > 0.0 and d <= 1.0,
 			"filter '%s' has a default of %f - switching it on would do nothing" % [key, d])
 	_ok(not src.contains("uniform float u_not_a_filter"),
@@ -176,14 +176,14 @@ func _check_each_filter_acts() -> void:
 		var soft_f := 0.0
 		for frame in FRAMES:
 			f = maxf(f, _changed_fraction(await _render({String(key): 1.0}, frame), _plain))
-			soft_f = maxf(soft_f, _changed_fraction(await _render({String(key): float(Filters_.DEFAULTS[key])}, frame), _plain))
+			soft_f = maxf(soft_f, _changed_fraction(await _render({String(key): float(Filters_.REGISTRY[key]["default"])}, frame), _plain))
 		print("stage_filter_check: '%s' moves %.1f%% of the frame at 1.0" % [key, f * 100.0])
 		_ok(f > 0.02, "filter '%s' at full strength moved %.2f%% of the pixels - "
 			% [key, f * 100.0] + "it is doing nothing")
 		# ...and its DEFAULT does something too, which is what a freshly ticked box applies.
 		_ok(soft_f > 0.005,
 			"filter '%s' at its default of %.2f moved %.2f%% of the pixels - ticking it "
-			% [key, float(Filters_.DEFAULTS[key]), soft_f * 100.0]
+			% [key, float(Filters_.REGISTRY[key]["default"]), soft_f * 100.0]
 			+ "reads as broken")
 
 
@@ -259,7 +259,7 @@ func _check_slip() -> void:
 	_ok(fired >= 0, "gate slip at 1.0 never moved the picture in 60 film frames")
 	var soft := false
 	for f in 120:
-		if _changed_fraction(await _render({"slip": float(Filters_.DEFAULTS["slip"])}, f), _plain) > 0.005:
+		if _changed_fraction(await _render({"slip": float(Filters_.REGISTRY["slip"]["default"])}, f), _plain) > 0.005:
 			soft = true
 			break
 	_ok(soft, "gate slip at its default never moved the picture in 120 film frames")
@@ -400,7 +400,7 @@ func _check_combining() -> void:
 	# hit a clamp: it must still be a picture rather than black or white.
 	var all := {}
 	for k in Filters_.REGISTRY:
-		all[String(k)] = float(Filters_.DEFAULTS[k])
+		all[String(k)] = float(Filters_.REGISTRY[k]["default"])
 	var everything := await _render(all)
 	var l := _mean_luma(everything)
 	_ok(l > 0.03 and l < 0.9,
@@ -613,7 +613,7 @@ func _check_dust() -> void:
 	# Presence is by chance per frame, so the default is judged over a half second of frames.
 	var soft_hit := 0
 	for f in 12:
-		var soft := await _render({"dust": float(Filters_.DEFAULTS["dust"])}, f)
+		var soft := await _render({"dust": float(Filters_.REGISTRY["dust"]["default"])}, f)
 		if _changed_fraction(soft, _plain) > 0.0:
 			soft_hit += 1
 	_ok(soft_hit >= 6, "dust at its default touched only %d of 12 frames" % soft_hit)

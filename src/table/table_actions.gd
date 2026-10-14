@@ -5,7 +5,7 @@ class_name TableActions
 ## 9, "Actions are a registry"). Each verb declares what it takes (which card), whether it is written
 ## in a reading's marks or performed between them, the rest the voice takes for it, whether it brings
 ## a card up to be shown or puts the shown one down first, and the moments it makes (what the air can
-## burst on, [constant CardTable.MOMENTS]) - declared, not branched on, the way [constant Medium.USES]
+## burst on, [constant CardTable.MOMENTS]) - declared, not branched on, the way a medium's `uses`
 ## is. CardReading's marks and rests and the table's schedule read it; adding a verb is an entry here
 ## and its pose where the table draws it.
 ##

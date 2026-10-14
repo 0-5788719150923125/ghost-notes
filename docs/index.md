@@ -81,6 +81,17 @@ core. The commitments:
 
 One folder under `src/` a group, bottom first: a script names scripts in its own folder and in the folders above its own in this list. [structure.md](structure.md) is the same stack with what each folder names and what still points up.
 
+### `data/` - Plain data
+
+Plain data in and out, at the bottom because it needs nothing: the YAML-subset parser, a document's frontmatter (re-read, one key edited, verified), pure edits of nested data, reading any registry's rows (`Registry`), what an agent is told (`rules/`), and a script read into cues, hesitations and pictures.
+
+- [`data_path.gd`](../src/data/data_path.gd) **DataPath** - edits of nested data (Dictionaries and Arrays) as PURE FUNCTIONS, addressed by a path: the keys and indexes from the root down, `["sequence", 2, "track", "spans", 0, "from"]`.
+- [`front_matter.gd`](../src/data/front_matter.gd) **FrontMatter** - YAML frontmatter on a Markdown document, read and (carefully) written.
+- [`manuscript.gd`](../src/data/manuscript.gd) **Manuscript** - what a chapter file SAYS about itself, beyond the words to be read.
+- [`registry.gd`](../src/data/registry.gd) **Registry** - reading any of ghost's registries, which are one shape: a Dictionary of ROWS, one per key, in the order they are offered, each row a Dictionary of fields. Every row has a `label` (what a person reads) and a `blurb` (a sentence or two: a tooltip, a line of the docs); the rest of a row is its own ...
+- [`rules.gd`](../src/data/rules.gd) **Rules** - what the agents are told, kept as text a person reads: `rules/<group>/<role>.yaml` (the user, 2026-10-08: "extract agent instructions into a more interpretable format, like yaml ... as a human - it would be easier for me to read and grok the meaning of all the various things we're asking those ...
+- [`yaml.gd`](../src/data/yaml.gd) **MiniYaml** - an in-house parser for the YAML *subset* storyboards are written in.
+
 ### `platform/` - The machine
 
 The machine under Ghost Notes: the one owner of its settings file, the earliest hook of a launch, every child program in one place, what ghost installs for itself and keeps current, the app's own update, and what this platform can do.
@@ -94,16 +105,6 @@ The machine under Ghost Notes: the one owner of its settings file, the earliest 
 - [`provisioner.gd`](../src/platform/provisioner.gd) **provisioner** - Provisioner (autoload) - installs, updates and reports on everything ghost fetches for itself.
 - [`settings.gd`](../src/platform/settings.gd) **settings** - Settings - the one owner of `user://ghost.cfg` (autoload).
 - [`subprocess.gd`](../src/platform/subprocess.gd) **Subprocess** - every external program ghost starts, in one place, with one promise: A CHILD NEVER OUTLIVES THE APP THAT STARTED IT.
-
-### `data/` - Plain data
-
-Plain data in and out: the YAML-subset parser, a document's frontmatter (re-read, one key edited, verified), pure edits of nested data, what an agent is told (`rules/`), and a script read into cues, hesitations and pictures.
-
-- [`data_path.gd`](../src/data/data_path.gd) **DataPath** - edits of nested data (Dictionaries and Arrays) as PURE FUNCTIONS, addressed by a path: the keys and indexes from the root down, `["sequence", 2, "track", "spans", 0, "from"]`.
-- [`front_matter.gd`](../src/data/front_matter.gd) **FrontMatter** - YAML frontmatter on a Markdown document, read and (carefully) written.
-- [`manuscript.gd`](../src/data/manuscript.gd) **Manuscript** - what a chapter file SAYS about itself, beyond the words to be read.
-- [`rules.gd`](../src/data/rules.gd) **Rules** - what the agents are told, kept as text a person reads: `rules/<group>/<role>.yaml` (the user, 2026-10-08: "extract agent instructions into a more interpretable format, like yaml ... as a human - it would be easier for me to read and grok the meaning of all the various things we're asking those ...
-- [`yaml.gd`](../src/data/yaml.gd) **MiniYaml** - an in-house parser for the YAML *subset* storyboards are written in.
 
 ### `audio/` - Audio & analysis
 
@@ -303,6 +304,7 @@ The panels a voice runs in: the reading (script, cast, voice, stream, export), t
 - [`generative_editor.gd`](../src/reading/generative_editor.gd) **GenerativeEditor** - the reading workspace: a note with a Voice, its text read aloud in the neural voice. Everything that reads is `ReadingPanel`'s, and what the reading is SEEN in is the note's: the cards of whatever else it has attached - the Picture (`PictureCard`: the medium, the films, the book's pictures, the ...
 - [`reading_panel.gd`](../src/reading/reading_panel.gd) **ReadingPanel** - a reading of a document in the neural voice: the script, the cast, the voice, the stream, the transport's hooks, the export (VOICE_PLAN.md P4). The Generative and Cards panels are both one (next/notes.md step 5): each adds the cards its picture is made of (`_build_cards`) and the blocks it ...
 - [`synth_editor.gd`](../src/reading/synth_editor.gd) **SynthEditor** - the synthesis surface. The loop is a fishing trip:
+- [`text_walk.gd`](../src/reading/text_walk.gd) **TextWalk** - what a reading reads of its note: the words the voice says, the title it announces, the text its cast of speakers and its fingerprint come from, and the passage a voice is auditioned with. This one is the note's own words (a tablet chapter read off its screen); a component that rewrites what the ...
 
 ### `table/` - The set
 
@@ -318,6 +320,8 @@ A place, seen and heard, built from a written description: the table itself (Tab
 - [`soundscape.gd`](../src/table/soundscape.gd) **Soundscape** - what a place sounds like behind the reader: the wind, the sea, rain, a fire, a stream, the insects of a summer night. The user, 2026-10-08: "there are a lot of scenes that take place in places where pure environmental silence feels inappropriate. One scene was on a boat at sea: you might expect to ...
 - [`table.gd`](../src/table/table.gd) **TableMedium** - a card reading at a table, seen from the reader's chair.
 - [`table_actions.gd`](../src/table/table_actions.gd) **TableActions** - the verbs a card show performs at the table, as ONE REGISTRY (next/notes.md step 9, "Actions are a registry"). Each verb declares what it takes (which card), whether it is written in a reading's marks or performed between them, the rest the voice takes for it, whether it brings a card up to be ...
+- [`table_card_pose.gd`](../src/table/table_card_pose.gd) **TableCardPose** - where each drawn card is at a moment of the show: taken from the deck or the box, dealt, laid, turned, held up to be read, a jumper's flight, a card searched for in the box, and how it rests when another comes down on it. A part of `TableMedium`.
+- [`table_plan.gd`](../src/table/table_plan.gd) **TablePlan** - what an episode decides when it is loaded: everything the table reads to show it, and nothing that changes while it plays. A part of `TableMedium`.
 - [`table_positions.gd`](../src/table/table_positions.gd) **TablePositions** - where cards lie on the table, as DATA (next/notes.md step 9, "Positions are data"). A position is `{x, z, yaw, face}` on the cloth - meters, x to the reader's right and z toward the reader; yaw in degrees; face "up" or "down" - written by the producer's plan (a spread position may carry coordinates ...
 - [`table_shuffle.gd`](../src/table/table_shuffle.gd) **TableShuffle** - every move the deck makes between readings, and where each of its cards is during one: the riffle, the overhand, the cut, the wash that spreads the whole deck over the cloth and gathers it again, a jumper thrown clear. A part of `TableMedium`.
 - [`tables.gd`](../src/table/tables.gd) **Tables** - THE TABLE ITSELF, BUILT FROM A DESCRIPTION. Its TOP: an outline (a rectangle, round, an oval, a many-sided polygon, its rim scalloped if it likes), a thickness, the profile its edge is cut to (bevel, bullnose, ogee...), and what it is made of - boards of a wood, a slab of stone, metal, lacquer, ...
@@ -333,6 +337,7 @@ A show of cards nobody writes: a show's brief, its episodes - each planned, deal
 - [`card_prompts.gd`](../src/cards/card_prompts.gd) **CardPrompts** - what each agent behind a card episode is told. Pure: strings in, strings out, so a gate can hold every prompt to the rules (see tests/cards/cards_check.gd). THE WORDS ARE IN rules/cards/ (producer, designer, set_dresser, reader, painter, show - read by `Rules`); here is what decides which of them ...
 - [`cards_editor.gd`](../src/cards/cards_editor.gd) **CardsEditor** - the Cards mode: a show of cards nobody writes by hand. What kind of cards, and what the show is, are the brief's to say.
 - [`dealer_tools.gd`](../src/cards/dealer_tools.gd) **DealerTools** - what a dealer can do while it lays an episode's cards out (next/notes.md step 9, "Agents choose"): PLACE a card where it should lie, FLIP it face up or down, LOOK at the whole layout as the table will check it, and SUBMIT it. Served as tools (`AgentTools`), as the set dresser's are ...
+- [`episode_walk.gd`](../src/cards/episode_walk.gd) **EpisodeWalk** - a show of cards reads its EPISODE, never the note: the note is the brief agents work from, and what the reader says is the script they wrote, step by step, for the episode up now. A `TextWalk` Cards hands its reading.
 - [`set_dresser_tools.gd`](../src/cards/set_dresser_tools.gd) **SetDresserTools** - what the set dresser can do while it sets the reader's table: MAKE a thing, LOOK at it, FIX it, and see the whole table as the camera will before handing it in.
 - [`table_preview.gd`](../src/cards/table_preview.gd) **TablePreview** - a table described but not yet set, SEEN: each thing alone in a studio, and the whole table standing on the episode's own cloth, photographed from the camera's own place. It is what the set dresser looks through (`SetDresserTools`): it makes a thing, looks at it, and fixes what it sees.
 
