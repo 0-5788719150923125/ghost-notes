@@ -16,6 +16,13 @@ extends SceneTree
 ##   shared context is the same words around any brief, and "tarot" reaches the producer, the designer
 ##   and the painter only from the brief or the deck's `kind` the producer named - two-sided: a look whose
 ##   kind is a tarot deck is painted and designed as one, and a brief that says tarot is handed whole.
+## - A CARD GOES BACK IN THE BOX ONLY WHEN IT WAS PASSED OVER (the user, 2026-10-13: "Don't spend a full
+##   minute talking about the card, just to put it back"): in a spread where cards stay out, a plan that
+##   gives a card a story and puts it back lands with that card kept out, a card put back is looked at
+##   briefly, and its reader is told it is passed over and asked for a few words. Two-sided: a spread
+##   that puts every card back is left as planned, and a kept card's reader is told nothing of the kind.
+## - THE DRAW KEEPS WHAT IT LEFT IN A BOX, for the table to print the cards nobody drew as - and no
+##   reader is handed one of them (the no-cheating check reads the prompts of an episode that has them).
 
 var _fails := 0
 const ROOT := "user://cards_choose_check"
@@ -35,7 +42,7 @@ Any kind of collectible card, chosen fresh each episode.
 
 
 func _init() -> void:
-	for check in [_chooses, _framing, _box, _no_cheating, _painter]:
+	for check in [_chooses, _framing, _box, _put_back, _no_cheating, _painter]:
 		_ok((check as Callable).call() == true, "%s stopped part way (a script error - see above)"
 			% (check as Callable).get_method())
 	_remove_tree(ROOT)
@@ -149,6 +156,93 @@ func _box() -> bool:
 		"control: a show with its own deck kept a producer's box")
 	ep.invalidate("plan")
 	print("cards_choose_check: box - at least twice the spread, and the draw comes from it")
+	return true
+
+
+func _put_back() -> bool:
+	var st := {"source": "box", "pace": "mixed"}
+	# THE REPORTED PLAN (the-shoebox 65803): a quick look put back, two kept on a pile, a story put back
+	var reported := [{"comment": "brief", "destination": "box"}, {"destination": "stack"},
+		{"comes": "searched", "comment": "story", "destination": "stack", "on": true}, {"comment": "story", "destination": "box"}]
+	CardProducer.back_only_passed(reported, st)
+	_ok(String(reported[3].get("destination", "")) == "stack" and String(reported[3]["comment"]) == "story",
+		"a card given a story was still put back in the box while others stay out: %s" % str(reported[3]))
+	_ok(String(reported[0]["destination"]) == "box" and String(reported[0]["comment"]) == "brief",
+		"a quick look was not put back as planned: %s" % str(reported[0]))
+	# no keep pile in the spread: the storied card is laid in its place; a card put back with no length
+	# asked for is looked at briefly
+	var row := [{"destination": "box"}, {}, {"comment": "story", "destination": "box"}, {"comment": "none", "destination": "box"}]
+	CardProducer.back_only_passed(row, st)
+	_ok(not (row[2] as Dictionary).has("destination") and String(row[0].get("comment", "")) == "brief"
+		and String(row[0]["destination"]) == "box" and String(row[3]["comment"]) == "none" and String(row[3]["destination"]) == "box",
+		"a spread laid in a row did not keep its storied card out, or its returns quick: %s" % str(row))
+	# a quick pace is already a few words: nothing to shorten
+	var quick := [{"destination": "box"}, {}]
+	CardProducer.back_only_passed(quick, {"source": "box", "pace": "quick"})
+	_ok(not (quick[0] as Dictionary).has("comment") and String(quick[0]["destination"]) == "box", "a quick episode's return was rewritten: %s" % str(quick[0]))
+	# control: every card put back is a pattern of its own, stories and all
+	var all_back := [{"comment": "story", "destination": "box"}, {"destination": "box"}, {"comment": "brief", "destination": "box"}]
+	var before := all_back.duplicate(true)
+	CardProducer.back_only_passed(all_back, st)
+	_ok(all_back == before, "control: a spread that puts every card back was rewritten: %s" % str(all_back))
+	# no box to go back into, and no hand to go back from
+	var deck := [{"destination": "box"}, {"destination": "stack"}]
+	CardProducer.back_only_passed(deck, {"source": "deck"})
+	var dealt := [{"comes": "dealt", "destination": "box"}, {"comes": "swept", "destination": "box"}, {"destination": "box", "comment": "brief"}]
+	CardProducer.back_only_passed(dealt, st)
+	_ok(not (deck[0] as Dictionary).has("destination") and String(deck[1]["destination"]) == "stack"
+		and not (dealt[0] as Dictionary).has("destination") and not (dealt[1] as Dictionary).has("destination")
+		and String(dealt[2]["destination"]) == "box",
+		"a card went back into a box from a deck, or from where it was dealt: %s %s" % [str(deck), str(dealt)])
+	# AS A PLAN LANDS: the reported one, whole - the storied card joins the pile it follows
+	CardEpisode.root = ROOT
+	var ep := CardEpisode.open("choose-show", 6565)
+	ep.invalidate("plan")
+	var prod := CardProducer.new(ep, {"title": "S", "brief": BRIEF, "chooses": true, "draw": [4, 4]})
+	var box: Array = []
+	for i in 12:
+		box.append({"name": "Card %c" % (65 + i), "group": "Set", "meaning": "number %d" % i})
+	var err := prod._land_plan(JSON.stringify({"episode_title": "T", "staging": {"source": "box", "pace": "mixed", "text": "front"},
+		"spread": {"name": "S", "positions": [
+			{"name": "a", "asks": "?", "comment": "brief", "destination": "box"},
+			{"name": "b", "asks": "?", "destination": "stack"},
+			{"name": "c", "asks": "?", "comes": "searched", "comment": "story", "destination": "stack", "on": true},
+			{"name": "d", "asks": "?", "comment": "story", "destination": "box"}]},
+		"deck": box, "look": {"deck_name": "D", "kind": "baseball card set"}}))
+	_ok(err.is_empty(), "the reported plan did not land: %s" % err)
+	var plan: Dictionary = ep.read_json("plan")
+	var pos: Array = (plan["spread"] as Dictionary)["positions"]
+	_ok(String((pos[3] as Dictionary).get("destination", "")) == "stack" and bool((pos[3] as Dictionary).get("on", false))
+		and String((pos[0] as Dictionary)["destination"]) == "box",
+		"the landed plan still tells a story and puts the card back: %s" % str(pos[3]))
+	prod._finish("draw", prod._make_draw())
+	# THE DRAW KEEPS WHAT IT LEFT IN THE BOX: the eight nobody drew, by name, none of them drawn
+	var draw: Dictionary = ep.read_json("draw")
+	var drawn_names: Array = (draw["cards"] as Array).map(func(c: Dictionary) -> String: return String(c["name"]))
+	var left: Array = draw.get("left", []) if draw.get("left") is Array else []
+	_ok(left.size() == 8 and left.all(func(c: Dictionary) -> bool:
+			return String(c["name"]).begins_with("Card ") and not drawn_names.has(String(c["name"])) and String(c["meaning"]).begins_with("number")),
+		"the draw did not keep the cards it left in the box: %s" % str(left))
+	_ok(((ep.document() as Dictionary).get("left", []) as Array).size() == 8, "the table is not handed the cards left in")
+	# THE READER of the card put back is told it is passed over, in a few words; the kept cards' are not
+	var back_prompt := String(prod.say_prompt("1")["prompt"]).replace("This card", "this card")
+	var kept_prompt := String(prod.say_prompt("2")["prompt"]).replace("This card", "this card")
+	var story_prompt := String(prod.say_prompt("4")["prompt"]).replace("This card", "this card")
+	_ok(back_prompt.contains("THIS CARD IS PASSED OVER") and back_prompt.contains("Write 15 to 40 words")
+		and back_prompt.contains("this card goes back into the box"),
+		"the reader of a card put back is not told it is passed over, in a few words")
+	_ok(not kept_prompt.contains("PASSED OVER") and not story_prompt.contains("PASSED OVER")
+		and story_prompt.contains("this card joins a stack at the side"),
+		"control: a kept card's reader is told it is passed over, or its story's card still goes back")
+	# control: where every card goes back, none is "passed over" - there is nothing kept to set it against
+	var every := {"spread": {"positions": [{"name": "a", "asks": "?", "destination": "box"}, {"name": "b", "asks": "?", "destination": "box"}]},
+		"staging": {"source": "box", "text": "front"}, "look": {"deck_name": "D"}}
+	var every_prompt := String(CardPrompts.reader("S", BRIEF, every, "1", ["Hello."], [{"name": "Card A"}], 2)["prompt"]).replace("This card", "this card")
+	_ok(not every_prompt.contains("PASSED OVER") and every_prompt.contains("goes back into the box"),
+		"control: in a spread that puts every card back, a card was called passed over")
+	_ok(Rules.missing.is_empty(), "a reader's rule was handed a name it could not fill: %s" % ", ".join(Rules.missing))
+	ep.invalidate("plan")
+	print("cards_choose_check: put back - only a card passed over goes back in the box while others stay out")
 	return true
 
 

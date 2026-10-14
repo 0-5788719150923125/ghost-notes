@@ -394,9 +394,13 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 			vars["card"] = false
 			vars["aside"] = true
 		var pace := String(staging.get("pace", "reflective"))
+		# A CARD PASSED OVER ([method CardProducer.passed]) is put back while others stay out: a few
+		# words, and they say what makes it one to put back
+		var passed := boxed and CardProducer.passed(p, positions)
+		vars["passed"] = passed
 		if comment == "aside":
 			lo_hi = [45, 75]
-		elif comment == "brief" or (comment.is_empty() and pace == "quick"):
+		elif passed or comment == "brief" or (comment.is_empty() and pace == "quick"):
 			lo_hi = [15, 40]
 		elif comment.is_empty() and pace == "mixed" and int(step) % 3 == 0:
 			lo_hi = [90, 140]

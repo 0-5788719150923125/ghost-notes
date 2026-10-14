@@ -81,8 +81,9 @@ static func _cover(ci: CanvasItem, tex: Texture2D, dst: Rect2, flip := false) ->
 
 
 ## [param tex] drawn into the window [param hole] (a [method outline] round [param dst]), cropped to cover
-## [param dst] as [method _cover] does - the picture cut to the window's shape.
-static func _cover_shape(ci: CanvasItem, tex: Texture2D, dst: Rect2, hole: PackedVector2Array) -> void:
+## [param dst] as [method _cover] does - the picture cut to the window's shape. [param part] is the part
+## of that picture drawn (`{crop, mirror, tint}`, [method stand_in]) - all of it, as it is, when empty.
+static func _cover_shape(ci: CanvasItem, tex: Texture2D, dst: Rect2, hole: PackedVector2Array, part := {}) -> void:
 	var ts := Vector2(tex.get_size())
 	var want := dst.size.x / dst.size.y
 	var have := ts.x / ts.y
@@ -93,11 +94,39 @@ static func _cover_shape(ci: CanvasItem, tex: Texture2D, dst: Rect2, hole: Packe
 	else:
 		src.size.y = ts.x / want
 		src.position.y = (ts.y - src.size.y) * 0.5
+	var crop: Rect2 = part.get("crop", Rect2(0.0, 0.0, 1.0, 1.0))
+	src = Rect2(src.position + crop.position * src.size, crop.size * src.size)
 	var uvs := PackedVector2Array()
 	for p in hole:
 		var u := (p - dst.position) / dst.size
+		if bool(part.get("mirror", false)):
+			u.x = 1.0 - u.x
 		uvs.append((src.position + u * src.size) / ts)
-	ci.draw_polygon(hole, PackedColorArray([Color.WHITE]), uvs, tex)
+	ci.draw_polygon(hole, PackedColorArray([part.get("tint", Color.WHITE)]), uvs, tex)
+
+
+## How much of a painting stands in for one nobody painted ([method stand_in]): this share of its width
+## and height, so two to three times its size - and how far the deck's own color tints it.
+const STAND_IN_SHARE := Vector2(0.34, 0.5)
+const STAND_IN_TINT := 0.22
+
+
+## A PAINTING NOBODY PAINTED, for a card nobody drew ([member Face.part]): a PART of one of the deck's
+## own paintings - `{crop, mirror, tint}`, [constant STAND_IN_SHARE] of it somewhere in it, mirrored or
+## not, tinted toward one of [param palette]'s colors - seeded by [param seed], so the card always shows
+## the same one. Painting a card costs a painter's run, and a card that is only glanced at in its box is
+## never painted: enlarged, mirrored and tinted, a corner of another card's picture is the deck's
+## hand and colors and no picture the viewer has seen.
+static func stand_in(palette: Array, seed: int) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var share := rng.randf_range(STAND_IN_SHARE.x, STAND_IN_SHARE.y)
+	var at := Vector2(rng.randf(), rng.randf()) * (1.0 - share)
+	var mirror := rng.randf() < 0.5
+	var tint := Color.WHITE
+	if not palette.is_empty():
+		tint = Color.WHITE.lerp(CardTable.color(String(palette[rng.randi_range(0, palette.size() - 1)])).lightened(0.5), STAND_IN_TINT)
+	return {"crop": Rect2(at, Vector2(share, share)), "mirror": mirror, "tint": tint}
 
 
 ## A picture not painted yet: a soft field of the deck's own colors, seeded per card - a
@@ -529,8 +558,12 @@ class Face:
 	var printed := false
 	## A CARD NOBODY WROTE, printed as the others are ([member printed]): the panel's type ruled where a
 	## name, a few facts and a paragraph would be set - the unseen cards in a box, whose backs have to be
-	## the drawn cards' kind of back. [member card] carries only a `key`, which seeds the lines.
+	## the drawn cards' kind of back. [member card] carries only a `key`, which seeds the lines. On a
+	## FRONT it is a card with no name to print: its band is left bare, its details ruled.
 	var anonymous := false
+	## THE PART OF [member art] THIS FACE SHOWS ([method CardFaces.stand_in]) when the picture is
+	## another card's, standing in for one nobody painted - all of it when empty, as a drawn card's is.
+	var part := {}
 	var seed := 0
 
 	func _draw() -> void:
@@ -547,7 +580,7 @@ class Face:
 		var hole := CardFaces.outline(shape, win)
 		if art != null:
 			# a reversed card is printed the right way up: the TABLE turns it over
-			CardFaces._cover_shape(self, art, win, hole)
+			CardFaces._cover_shape(self, art, win, hole, part)
 		else:
 			CardFaces._placeholder(self, win, look.get("palette", []),
 				hash([seed, String(card.get("key", "back"))]), hole)
@@ -555,7 +588,7 @@ class Face:
 		CardFaces.ornament(self, look, ink, accent)
 		if details and not back:
 			_printed_front(win, stock, ink, accent)
-		elif not back:
+		elif not back and not anonymous:
 			_lettering(win, ink, sz)
 		elif printed:
 			_printed_back(win, stock, ink, accent)
@@ -576,6 +609,9 @@ class Face:
 		var x := panel.position.x + 12.0
 		var w := panel.size.x - 24.0
 		var y := panel.position.y + 5.0
+		if anonymous:
+			_ruled_type(Rect2(x, y, w, panel.end.y - 5.0 - y), text_ink, accent)
+			return
 		var name := String(card.get("name", ""))
 		var ns := CardFaces._fit(face, name, 42, w)
 		var number := String(card.get("numeral", ""))

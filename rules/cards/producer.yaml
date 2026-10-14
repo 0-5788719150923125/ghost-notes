@@ -169,7 +169,11 @@ episode_title:
       episode's part one phrase.
 
 # THE STAGING: where the cards come from and where their text is (TableActions.SOURCES, CardTable.TEXTS
-# - the registries' own words, as `sources` and `texts`), and how each position's card comes and lies
+# - the registries' own words, as `sources` and `texts`), and how each position's card comes and lies.
+# WHERE A CARD GOES was a soft rule ("mix those outcomes only for a stated purpose") and the-shoebox
+# 65803 gave its fourth card a story and put it back while two others lay on a pile (the user,
+# 2026-10-13: "Don't spend a full minute talking about the card, just to put it back"). It is said flat
+# now, and the code holds a plan to it as it lands (CardProducer.back_only_passed).
 staging:
   - >-
       THE STAGING: how this episode's cards come to the table and are shown, in `staging`. Choose
@@ -205,11 +209,14 @@ staging:
       for one, but do not hurry through every card.
       Put drawn cards
       at `destination: "stack"` to pile them beside the box, or `destination: "box"` to return them to it.
-      Decide why the collector keeps a card out before assigning destinations. Use a consistent
-      handling pattern for an ordinary browse: a row of distinct finds, or one growing keep pile,
-      or cards returned after viewing. Mix those outcomes only for a stated purpose such as comparing
-      candidates or searching for a particular card. A run of quick checks can establish a search;
-      a single return can instead be a deliberately unresolved quiet beat. Consecutive `stack` positions grow one
+      WHERE THE CARDS GO IS ONE PATTERN, and the viewer has to be able to read it: every card stays
+      out (a row of distinct finds, or one growing keep pile), or every card goes back in the box
+      after it is seen. Mix the two only this way: the cards talked about stay out, and a card goes
+      back in the box only because it was PASSED OVER - pulled, glanced at, and not one to keep out
+      - so it has `comment: "brief"` or `"none"` and is put back at once (one put back with no
+      `comment` is given a brief one). A card that is given a story is never then put back while
+      others lie on the table: it is kept out, whatever its destination says. A run of quick
+      passes can establish a search. Consecutive `stack` positions grow one
       pile; after a card goes back in the box, a new `stack` position begins a new pile.
       A `comment: "none"` card is a quick silent look, then put away or laid down. Do not
       set `linger` for a silent card: a long silent display interrupts a spoken episode.

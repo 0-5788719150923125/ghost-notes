@@ -274,7 +274,15 @@ func _make_draw() -> String:
 		var c: Dictionary = (deck[i] as Dictionary).duplicate()
 		c["jumper"] = jumper and i == 0
 		cards.append(c)
-	return episode.write_json("draw", {"seed": episode.seed, "cards": cards})
+	# ...and, of a box, THE CARDS IT LEFT IN: what the table prints the cards nobody drew as
+	# (TableMedium._left_in). The table's alone - no writer is handed a card that was not drawn.
+	var left: Array = []
+	if String(CardTable.staging_of(plan)["source"]) == "box":
+		for c in deck.slice(n):
+			var card: Dictionary = c
+			left.append({"key": card.get("key", ""), "name": card.get("name", ""), "numeral": card.get("numeral", ""),
+				"group": card.get("group", ""), "series": card.get("series", ""), "meaning": card.get("meaning", "")})
+	return episode.write_json("draw", {"seed": episode.seed, "cards": cards, "left": left})
 
 
 ## WHETHER A CARD JUMPS in episode [param seed] - a show that [param allowed] them, staged by [param plan] -
@@ -695,6 +703,9 @@ func _land_plan(text: String) -> String:
 					p.erase("comes")
 			else:
 				p.erase("comment")
+	back_only_passed(pos, plan["staging"])
+	for i in pos.size():
+		var p: Dictionary = pos[i]
 		# A side pile grows only from the card immediately beneath this one. A returned card
 		# cannot become the base of a pile just because an earlier card was kept.
 		if String(p.get("destination", "")) == "stack":
@@ -721,6 +732,59 @@ func _land_plan(text: String) -> String:
 	plan["seed"] = episode.seed
 	plan["dice"] = CardPrompts.dice(episode.seed)
 	return episode.write_json("plan", plan)
+
+
+## A CARD GOES BACK IN THE BOX ONLY WHEN IT WAS PASSED OVER - or when every card does. The user,
+## 2026-10-13, of an episode whose fourth card was given a story and then put back while two others
+## stayed out on a pile: "It makes no sense, why one card would go back in the box while others go on
+## the table ... Don't spend a full minute talking about the card, just to put it back." So in a spread
+## where some cards stay out, [param positions] are held to it, in place, for [param staging]:
+##
+##   - a card with a `story` stays out, the way the others do (on the keep pile when the spread has
+##     one, else laid in its place) - the story is the reason to keep it;
+##   - a card put back with no length asked for is looked at briefly (`comment: "brief"`), which is
+##     what makes putting it back read as a choice - [method passed] tells its reader so;
+##   - a quick look, a silent one and an aside go back as planned.
+##
+## A spread that puts EVERY card back is a pattern of its own and is left alone. No card goes back
+## into a box when the cards come from a deck, and none that was put straight down on the table (dealt,
+## swept) is in a hand to be put back.
+static func back_only_passed(positions: Array, staging: Dictionary) -> void:
+	var boxed := String(staging.get("source", "deck")) == "box"
+	var kept := 0
+	var stacks := false
+	for q in positions:
+		var p: Dictionary = q
+		if String(p.get("destination", "")) == "box" and (not boxed or String(p.get("comes", "")) in ["dealt", "swept"]):
+			p.erase("destination")
+		if String(p.get("destination", "")) != "box":
+			kept += 1
+		stacks = stacks or String(p.get("destination", "")) == "stack"
+	if not boxed or kept == 0:
+		return
+	for q in positions:
+		var p: Dictionary = q
+		if String(p.get("destination", "")) != "box":
+			continue
+		match String(p.get("comment", "")):
+			"story":
+				if stacks:
+					p["destination"] = "stack"
+				else:
+					p.erase("destination")
+			"":
+				if String(staging.get("pace", "")) != "quick":
+					p["comment"] = "brief"
+
+
+## IS POSITION [param p] PASSED OVER in a plan of [param positions]: looked at, said a few words of and
+## put back in its box, while other cards of the spread stay out ([method back_only_passed])? Its
+## reader is told so, to say what makes it one to put back.
+static func passed(p: Dictionary, positions: Array) -> bool:
+	if String(p.get("destination", "")) != "box" or String(p.get("comment", "")) == "aside":
+		return false
+	return positions.any(func(q: Variant) -> bool:
+		return q is Dictionary and String((q as Dictionary).get("destination", "")) != "box")
 
 
 ## A SPREAD POSITION AS IT LANDS: its name and question, and how its card comes and lies

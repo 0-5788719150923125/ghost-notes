@@ -552,7 +552,9 @@ func document() -> Dictionary:
 	var plan: Variant = read_json("plan")
 	var draw: Variant = read_json("draw")
 	var out := {"show": show, "seed": seed, "dir": dir, "plan": plan if plan is Dictionary else {},
-		"images": {}, "cards": []}
+		"images": {}, "cards": [],
+		# the cards a box's draw left in it (CardProducer._make_draw): the table prints the unseen cards as them
+		"left": (draw as Dictionary).get("left", []) if draw is Dictionary and (draw as Dictionary).get("left") is Array else []}
 	for k in ["back", "surface", "backdrop"]:
 		if has("image:" + k):
 			out["images"][k] = file_of("image:" + k)

@@ -1424,6 +1424,66 @@ still has the oscillation sounds, and it's still pretty bad there."
 - **For the ear.** `~/.cache/ghost_look/sound/`: the water as it was heard and now, the whole place
   now, and each part alone (the old slosh among them), all at that show's Environment setting.
 
+## 2026-10-13: a search looks at fronts, and a card goes back only as a pass
+
+The user, of "These Were Due Back in June" (the-shoebox 65803: a shoebox, cards on edge, text on the
+front): the search shows "the BACK of the cards. A person doesn't rifle through a deck looking at the
+back of the cards"; and a card is drawn, talked about and put back while another is laid on the table
+- "It makes no sense ... Don't spend a full minute talking about the card, just to put it back."
+
+**Fronts.** The file stood back to the camera since 2026-10-12 for one reason: the cards nobody drew
+had no front, so a file standing face on was a box of border strips. They have one now.
+
+- `TableMedium._unseen_fronts`: each card the draw left in (`_left_in`, up to `WRITTEN` a printing) is
+  printed as a drawn card's front is - frame, ornament, name, its details under the picture when the
+  text is on the front. IN ITS WINDOW IS A PART OF A DRAWN CARD'S PAINTING (`CardFaces.stand_in`,
+  `Face.part`): a third to a half of it, mirrored or not, tinted toward a palette color, seeded per
+  card, put in as that painting lands. No painter runs for a card that is only glanced at. A card with
+  no name known (`anonymous`) keeps its band bare and its details ruled.
+- The cards left in are the plan's deck less the drawn ones when the producer chose it; for a show
+  with its own deck, the draw now keeps them (`draw.json` `left`, `CardEpisode.document`). No writer
+  is handed one. Episodes drawn before this have none, and get the nameless fronts.
+- THE FILE STANDS FACE TO THE READER (`_build_file`'s `stand`): the drawn card comes up showing its
+  face, as every card left in does. The turn round on the way up is gone with the reason for it.
+- The look: on edge, the same partial draw (`SEARCH_RISE`), now leaned BACK to the eye, which looks
+  down on it (`SEARCH_TIP`), and drawn up less where the picture's top would cut the painting
+  (`_search_rise`, down to `SEARCH_RISE_LEAST`). Lying, a card is face down, so it is TURNED OVER
+  (`_turned_up`, a slerp from where it lay), carried as high as keeps its lowest corner out of its
+  pile, and held inside the box's walls; two looks share the search's rest instead of three
+  (`SEARCH_LOOKS_LYING`). The rest the voice takes (`TableActions.RUMMAGE`) is unchanged.
+
+Looked at on the real episode, on penalty-box 260998 (an open box, text on the back) and on a copy of
+65803 restaged as piles. The pile render showed the turned-up card coming out through the box's front
+wall, which the old look did too from a pile by that wall: `toward` is now held inside it.
+
+**Back in the box.** Where a card goes was the producer's per position, and the rule was soft ("mix
+those outcomes only for a stated purpose"). 65803 planned `story` + `box` for its fourth card.
+
+- `CardProducer.back_only_passed`, as a plan lands: where some cards stay out, a card with a `story`
+  stays out as they do (on the keep pile when the spread has one), a card put back with no length
+  asked for becomes `brief`, and a quick, silent or aside look goes back as planned. A spread that
+  puts EVERY card back is left alone. No card goes back into a box from a deck, or from where it was
+  dealt or swept.
+- `CardProducer.passed` -> the reader's `passed` rule: its few words (15 to 40, whatever the plan's
+  comment says) are the only place the viewer learns why this one goes back, so they say what makes
+  it one to put back. No sample reason is written into the rule: it would be said every episode.
+- `producer.yaml`'s staging says it flat: one pattern, or the talked-about stay out and only a card
+  passed over goes back.
+
+Gates: `table_staging_check` (fronts, facing, the leaned look, the turn over, `_search_rise`; and its
+checks of the box's contents now read the places the table keeps, `_box["filed"]` - a headless
+MultiMesh hands back identity for every instance, so several of them had been passing on nothing),
+`cards_choose_check` (`_put_back`).
+
+Still open: a plan made before this is not re-landed (65803 keeps its fourth card's return until it
+is planned again). A card put back keeps its empty place in the row (`TablePositions.piles_of` counts
+it), so the cards kept sit off-center. Which card is passed over is still the position's, set before
+the draw: a reason from the card itself (a common one, a double) would need the destination decided
+after it. A turn over off a pile near the frame's top is out of the picture for a moment at its
+middle, and a drawn card at the top of its rise out of a shoebox at the back still leaves it
+(65803 at 106.4 s). A tin's flat deck takes no card back: one "put back" is laid in the row. The
+stand-in paintings have not been judged in a finished video.
+
 ## Not built yet
 
 - The light, next (2026-10-07): no real set dresser has lit a table yet. A cloud's edge ACROSS the table

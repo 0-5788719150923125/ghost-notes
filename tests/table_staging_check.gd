@@ -19,14 +19,18 @@ extends Node
 ##     the middle with its page open. A box show: the box stands with the cards filed in it on edge, a
 ##     card waits standing in the file and rises out past the rim, is held up ALONE in the middle with no
 ##     page and turned over to show its printed back; the waterfall's cards lie overlapping. EVERY CARD
-##     IN THE FILE STANDS BACK TO THE CAMERA (2026-10-12, the user: a card "changed to something else
-##     after getting pulled from the box"): a card comes up showing its back and is turned round to be
-##     seen, and the cards nobody drew are printed as the deck's own cards the draw left in. A SEARCH
+##     IN THE BOX IS A CARD, FRONT AND BACK (2026-10-12, the user: a card "changed to something else
+##     after getting pulled from the box"; 2026-10-13: a search showed "the BACK of the cards", and
+##     nobody looks for a card by its back): the cards nobody drew are printed as the deck's own cards
+##     the draw left in, each with a front of its own - its name, and a part of a drawn card's painting
+##     in its window - and the file stands FACE to the reader, so a card comes up showing its front as
+##     every card left in does (two-sided: stood the other way round, it shows its back). A SEARCH
 ##     ("a card was lifted from the deck FLAT, and THREE times in a row") draws three different cards
-##     up out of their places on edge, part of the way, and lets them back down; off a pile it lifts
-##     the top card (two-sided: a lying card's place is looked at lying). THE CARD LOOKED AT IS THE
-##     BOX'S OWN, lying or standing in its place before the look and after it, on a pile nothing is
-##     drawn from or put back on (two-sided: a box with no card of its own is lent one for the look).
+##     up out of their places on edge, part of the way, their faces leaned back to the eye, and lets
+##     them back down; off a pile it lifts the top card and turns it over to be seen (two-sided: a
+##     lying card's place is looked at lying; a card only lifted shows its back). THE CARD LOOKED AT
+##     IS THE BOX'S OWN, lying or standing in its place before the look and after it, on a pile nothing
+##     is drawn from or put back on (two-sided: a box with no card of its own is lent one for the look).
 ##     THE BOX STANDS in its own place in the room kept for it, a different one each episode, an open
 ##     box toward the spread (two-sided: a box as big as its room stands where it always did). The file
 ##     holds the planned count, and a mixed box keeps each printing's own back and share of the cards.
@@ -275,13 +279,12 @@ func _search_and_linger() -> void:
 		var kept := medium._searched[i] as MeshInstance3D
 		var seat: Transform3D = seats[i]
 		rests = rests and kept.visible and kept.transform.origin.distance_to(seat.origin) < 0.0005 and kept.transform.basis.y.y > 0.9
-		for f in medium._file:
-			var mm: MultiMesh = (f as MultiMeshInstance3D).multimesh
-			for j in mm.instance_count:
-				var d := mm.get_instance_transform(j).origin - seat.origin
-				# nothing in its place and nothing on it
-				if Vector2(d.x, d.z).length() < NEAR and d.y > -0.0001:
-					own = false
+		# (the places the table keeps, `filed`: a headless run's MultiMesh hands back no transform)
+		for filed_xf in medium._box.get("filed", []):
+			var d := (filed_xf as Transform3D).origin - seat.origin
+			# nothing in its place and nothing on it
+			if Vector2(d.x, d.z).length() < NEAR and d.y > -0.0001:
+				own = false
 		for k in (medium._box["at_k"] as Array).size():
 			var d := ((medium._box["at_k"] as Array)[k] as Transform3D).origin - seat.origin
 			own = own and Vector2(d.x, d.z).length() > NEAR
@@ -289,29 +292,73 @@ func _search_and_linger() -> void:
 		own = own and Vector2(back.x - seat.origin.x, back.z - seat.origin.z).length() > NEAR
 	_ok(rests, "the cards a search looks at lie in the box before it, on top of piles (%d)" % medium._searched.size())
 	_ok(own, "each on a pile nothing is drawn from or put back on, the top of it")
-	for i in 3:
-		_posed(start + span * (float(i) + 0.001) / 3.0)
+	# LYING CARDS ARE TURNED OVER TO BE SEEN, which takes longer: fewer looks share the search's rest
+	var looks := medium._search_looks()
+	_ok(looks == TableMedium.SEARCH_LOOKS_LYING and looks < TableMedium.SEARCH_LOOKS, "a search of lying cards looks at fewer of them (%d)" % looks)
+	var fronts: Array = ((medium._backs[""] as Dictionary).get("fronts", []) as Array).map(func(f: Dictionary) -> Material: return f["mat"])
+	for i in looks:
+		_posed(start + span * (float(i) + 0.001) / float(looks))
 		var card := medium._looking
 		var from := card.transform if card != null else Transform3D.IDENTITY
 		var at_rest := false
 		for seat in seats:
 			at_rest = at_rest or from.origin.distance_to((seat as Transform3D).origin) < 0.0005
-		_posed(start + span * (float(i) + 0.5) / 3.0)
+		_posed(start + span * (float(i) + 0.5) / float(looks))
 		_ok(card != null and medium._looking == card and card.visible and at_rest and from.basis.y.y > 0.9
 			and (medium._box["inner"] as AABB).grow(0.002).has_point(from.origin)
-			and card.position.y - from.origin.y > 0.03 and card.transform.basis.y.z > 0.5 and _in_picture(card.transform),
-			"searched card %d is lifted off its pile, from where it lay, and turned up in the picture (%.0f mm)" % [i + 1, (card.position.y - from.origin.y) * 1000.0])
+			and card.position.y - from.origin.y > 0.03 and _in_picture(card.transform),
+			"searched card %d is lifted off its pile, from where it lay, and held in the picture (%.0f mm)" % [i + 1, (card.position.y - from.origin.y) * 1000.0])
+		# ITS FRONT, the right way up: it lay face down, and is turned over to the eye
+		_ok(card != null and _faces_camera(from) < 0.0 and _faces_camera(card.transform) > 0.7 and _top_up(card.transform) > 0.5
+			and fronts.has(card.get_surface_override_material(0)),
+			"it lay face down and is turned over: its front to the eye, the right way up (%.2f, top %.2f up)" % [
+				_faces_camera(card.transform) if card != null else 0.0, _top_up(card.transform) if card != null else 0.0])
+		# no part of it dips into what lies under it on the way over
+		var low := INF
+		for step in 40:
+			_posed(start + span * (float(i) + float(step) / 39.0) / float(looks))
+			if step > 4 and step < 35:
+				low = minf(low, _lowest(card.transform) - from.origin.y)
+		_ok(low > 0.0, "turning over, no corner of it goes down into its pile (%.1f mm clear at the least)" % (low * 1000.0))
 	# control: the same card a hand's breadth higher is out of the picture, and the check says so
-	_posed(start + span * 0.5 / 3.0)
+	_posed(start + span * 0.5 / float(looks))
 	_ok(medium._looking != null and not _in_picture(medium._looking.transform.translated(Vector3(0.0, 0.2, 0.0))),
 		"control: lifted far higher, its far edge is over the top of the picture")
+	# NEVER THROUGH THE BOX'S WALL (seen in a render of 65803 restaged as piles: from a pile by the front
+	# wall, a card held low came out through the cardboard): from a pile as near that wall as a pile
+	# lies, the card held up is inside it, and on its way over no corner gets past the wall's middle
+	var inner: AABB = medium._box["inner"]
+	var size := CardTable.card_size(medium._look)
+	var by_wall := Transform3D(Basis.IDENTITY, Vector3(inner.get_center().x, inner.position.y + 0.01,
+		inner.end.z - size.y * 0.5 - TablePositions.BOX_PILE_GAP))
+	medium._box["search"] = [by_wall]
+	var held_out := -INF
+	var turn_out := -INF
+	for step in 41:
+		var xf := medium._searched_xf(0, float(step) / 40.0)
+		for x in [-0.5, 0.5]:
+			for z in [-0.5, 0.5]:
+				var past: float = (xf * Vector3(size.x * x, 0.0, size.y * z)).z - inner.end.z
+				turn_out = maxf(turn_out, past)
+				if step == 20:
+					held_out = maxf(held_out, past)
+	medium._box["search"] = seats
+	_ok(held_out < -0.003 and turn_out < TableMedium.BOX_WALL * 0.5,
+		"from a pile by the front wall the card is held inside the box, and turns over inside it (%.1f mm inside held, %.1f at the nearest)" % [-held_out * 1000.0, -turn_out * 1000.0])
+	# control: brought as far toward the eye as a card from the middle of the box is, it comes out of the wall
+	var old_reach := by_wall.origin.z + (medium._box["world"] as AABB).size.z * 0.15 + cos(TableMedium.SEARCH_TURN) * size.y * 0.5 - inner.end.z
+	_ok(old_reach > TableMedium.BOX_WALL, "control: brought as far toward the eye as any card was, it comes out through the wall (%.1f mm past its inner face)" % (old_reach * 1000.0))
+	# control: lifted and tilted up without being turned over - the old look - it shows its back
+	var seat0: Transform3D = seats[0]
+	var tilted := Transform3D(Basis(Vector3.RIGHT, TableMedium.SEARCH_TURN) * seat0.basis, medium._looking.transform.origin)
+	_ok(_faces_camera(tilted) < -0.5, "control: only tilted up, a lying card shows the eye its back (%.2f)" % _faces_camera(tilted))
 	_posed(start + span + 0.02)
 	_ok(medium._looking == null and _at(1, "arrive", "draw") >= start + span - 0.01,
 		"the search ends before the selected card is drawn (%.2f / %.2f)" % [_at(1, "arrive", "draw"), start + span])
 	# control: a box with no pile to spare is given a card for the length of the look only
 	var kept_cards: Array = medium._searched
 	medium._searched = []
-	_posed(start + span * 0.5 / 3.0)
+	_posed(start + span * 0.5 / float(looks))
 	var lent := medium._looking == medium._rummage_card and medium._rummage_card.visible
 	_posed(start - 0.5)
 	_ok(lent and not medium._rummage_card.visible, "control: with no card of its own, the look's card is there only for the look")
@@ -482,12 +529,50 @@ func _box_show() -> void:
 		"with the text on the back, the cards nobody drew have printed backs like the drawn ones, not the shared artwork")
 	_ok(not medium._searched.is_empty() and medium._searched.all(func(c: MeshInstance3D) -> bool: return blanks.has(c.get_surface_override_material(1))),
 		"the cards a search looks at have printed backs too")
+	# ...AND EVERY ONE HAS A FRONT (2026-10-13: a search showed only backs): the same card's, by name,
+	# a front and never a back, with a part of a drawn card's painting to go in its window
+	var unseen: Array = (medium._backs[""] as Dictionary).get("fronts", [])
+	var blank: Array = (medium._backs[""] as Dictionary).get("blank", [])
+	var fronted := unseen.size() == TableMedium.WRITTEN and unseen.size() == blank.size()
+	var parts := {}
+	for v in unseen.size():
+		var fc: CardFaces.Face = (unseen[v] as Dictionary)["canvas"]
+		var from := int((unseen[v] as Dictionary)["from"])
+		fronted = fronted and not fc.back and not fc.anonymous and left.has(String(fc.card.get("key", ""))) \
+			and (v >= blank.size() or String(fc.card.get("key", "")) == String(((blank[v] as Dictionary)["canvas"] as CardFaces.Face).card.get("key", ""))) \
+			and from >= 0 and from < medium._cards.size() and fc.part.has("crop") \
+			and Rect2(0.0, 0.0, 1.0, 1.0).encloses(fc.part["crop"] as Rect2) and (fc.part["crop"] as Rect2).size.x <= CardFaces.STAND_IN_SHARE.y
+		parts[str(fc.part["crop"]) + str(fc.part["mirror"]) + str(from)] = true
+	_ok(fronted, "each card nobody drew has a front of its own, the same card as its back, with a part of a drawn card's painting")
+	_ok(parts.size() == unseen.size(), "no two of them show the same part of the same painting (%d of %d)" % [parts.size(), unseen.size()])
+	var front_mats: Array = unseen.map(func(f: Dictionary) -> Material: return f["mat"])
+	var faced := not medium._file.is_empty()
+	for f in medium._file:
+		var mesh: Mesh = ((f as MultiMeshInstance3D).multimesh as MultiMesh).mesh
+		# the front and the back of one card: the same place in both lists
+		faced = faced and front_mats.has(mesh.surface_get_material(0)) and front_mats.find(mesh.surface_get_material(0)) == blanks.find(mesh.surface_get_material(1))
+	_ok(faced, "every card filed in the box shows a front on its face and that card's own back behind it")
+	_ok(medium._searched.all(func(c: MeshInstance3D) -> bool:
+			return front_mats.has(c.get_surface_override_material(0)) and front_mats.find(c.get_surface_override_material(0)) == blanks.find(c.get_surface_override_material(1))),
+		"the cards a search looks at have their fronts too")
+	# control: a show whose cards come from a deck prints no such fronts - there is no box to look through
+	_ok(not blanks.has(front_mats[0]) and front_mats[0] != (medium._backs[""] as Dictionary)["mat"], "control: a front is no back")
 	var inner: AABB = medium._box["inner"]
 	_posed(0.5)
 	var waiting: Transform3D = (medium._cards[0] as MeshInstance3D).transform
 	_ok((medium._cards[0] as MeshInstance3D).visible and inner.grow(0.01).has_point(waiting.origin)
 		and absf(waiting.basis.z.normalized().y) > 0.9, "card 1 waits standing in the file, in the box")
-	_ok(_faces_camera(waiting) < -0.5, "its back to the camera, as every card in the file stands (%.2f)" % _faces_camera(waiting))
+	_ok(_faces_camera(waiting) > 0.5 and _top_up(waiting) > 0.9,
+		"its face to the reader and the right way up, as every card in the file stands (%.2f)" % _faces_camera(waiting))
+	var places: Array = (medium._box["at_k"] as Array).duplicate()
+	places.append_array(medium._box.get("search", []))
+	places.append_array(medium._box.get("filed", []))
+	_ok(places.size() == kept and places.all(func(xf: Transform3D) -> bool:
+			return _faces_camera(xf) > 0.0 and _top_up(xf) > 0.5),
+		"and so does every card in the file, drawn or not (%d)" % places.size())
+	# control: stood the other way round - as the file stood while its cards had no fronts - it shows its back
+	_ok(_faces_camera(Transform3D(Basis(Vector3.UP, PI) * waiting.basis, waiting.origin)) < -0.5,
+		"control: turned half round where it stands, a card shows the reader its back")
 	_ok(not (medium._deck[0] as MeshInstance3D).visible, "no deck lies on the table")
 	var draw := _at(0, "arrive", "draw")
 	var s := float((medium._times()["events"] as Array)[0][0]["s"])
@@ -495,12 +580,12 @@ func _box_show() -> void:
 	_posed(draw + (off + TableMedium.FLIP_END - 0.05) * s)
 	var rising: Transform3D = (medium._cards[0] as MeshInstance3D).transform
 	_ok(rising.origin.y - TablePositions.CARD.y * 0.5 > (medium._box["world"] as AABB).end.y, "pulled straight up, it clears the rim")
-	_ok(_faces_camera(rising) < -0.5, "it comes up showing its back, as it stood")
+	_ok(_faces_camera(rising) > 0.5, "it comes up showing its face, as it stood (%.2f)" % _faces_camera(rising))
 	_posed(draw + 3.6)
 	var held: Transform3D = (medium._cards[0] as MeshInstance3D).transform
 	_posed(draw + (off + TableMedium.RISE_END + 0.2) * s)
 	var shown := _faces_camera((medium._cards[0] as MeshInstance3D).transform)
-	_ok(shown > 0.5, "and is turned round to be seen as it comes up to be shown (%.2f)" % shown)
+	_ok(shown > 0.9, "and is held up face on (%.2f)" % shown)
 	var up_at := draw + (off + TableMedium.RISE_END) * s
 	var looks: Array = medium._looks(0, up_at, INF)
 	_ok(not looks.is_empty(), "it is turned over to show its back")
@@ -515,11 +600,13 @@ func _box_show() -> void:
 	_ok(TablePositions.overlaps(a, b), "the waterfall's cards lie overlapping")
 
 
-## Whether the top of [param xf]'s card (its far edge, lying) is under the picture's top edge.
+## Whether the top of [param xf]'s card (its far edge, lying) is under the picture's top edge - its
+## painting's top, an eighth of the card down, which is what a look at a card keeps in the picture
+## ([method TableMedium._searched_xf]: the frame may cut the card's border, never its painting).
 func _in_picture(xf: Transform3D) -> bool:
 	var size := CardTable.card_size(medium._look)
 	for x in [-0.5, 0.5]:
-		var p: Variant = CardTable.project(medium._cam_base, medium._cam.fov, xf * Vector3(size.x * x, 0.0, -size.y * 0.5))
+		var p: Variant = CardTable.project(medium._cam_base, medium._cam.fov, xf * Vector3(size.x * x, 0.0, -size.y * 0.375))
 		if p == null or (p as Vector2).y < 0.0:
 			return false
 	return true
@@ -530,9 +617,26 @@ func _faces_camera(xf: Transform3D) -> float:
 	return -xf.basis.y.normalized().dot((medium._cam_base.origin - xf.origin).normalized())
 
 
+## How far up the top of [param xf]'s picture points (1 straight up, -1 upside down): a face is printed
+## with its top at the card's far edge as it lies.
+func _top_up(xf: Transform3D) -> float:
+	return -xf.basis.z.normalized().y
+
+
+## The height of the lowest corner of [param xf]'s card.
+func _lowest(xf: Transform3D) -> float:
+	var size := CardTable.card_size(medium._look)
+	var low := INF
+	for x in [-0.5, 0.5]:
+		for z in [-0.5, 0.5]:
+			low = minf(low, (xf * Vector3(size.x * x, 0.0, size.y * z)).y)
+	return low
+
+
 ## A SEARCH OF A FILE (the user, 2026-10-12: "a card was lifted from the deck FLAT, and THREE times in a
-## row"): each look draws one of the file's own cards up out of its place on edge, back to the camera,
-## and lets it back down - three different cards from three different places.
+## row"; 2026-10-13: "we only see the BACK of the cards"): each look draws one of the file's own cards
+## up out of its place on edge, its FACE to the reader and leaned back to the eye, and lets it back down
+## - three different cards from three different places, each a front with a name on it.
 func _file_search() -> void:
 	print("-- a search of cards on edge")
 	var deck: Array = []
@@ -552,9 +656,11 @@ func _file_search() -> void:
 	var inner: AABB = medium._box["inner"]
 	var v := CardTable.card_size(medium._look).y
 	var seen := {}
+	var named := {}
 	var places := {}
 	var good := true
 	var worst := ""
+	_ok(medium._search_looks() == TableMedium.SEARCH_LOOKS and TableMedium.SEARCH_LOOKS == 3, "a search of cards on edge looks at three")
 	for i in 3:
 		# as it appears: in its own place in the file, among the cards
 		_posed(start + span * (float(i) + 0.001) / 3.0)
@@ -571,16 +677,34 @@ func _file_search() -> void:
 			good = false
 			worst = "look %d does not start in a place in the file" % (i + 1)
 		places[down.origin] = true
-		# at its highest: still on edge, back to the camera, most of the way out
+		# at its highest: still on edge, its face to the reader, most of the way out
 		_posed(start + span * (float(i) + 0.5) / 3.0)
 		var up := card.transform
-		if not (card.visible and absf(up.basis.y.normalized().y) < 0.5 and _faces_camera(up) < -0.3
+		# the same card drawn straight up, not leaned: what the lean is for
+		var straight := Transform3D(down.basis, up.origin)
+		if not (card.visible and absf(up.basis.y.normalized().y) < 0.5 and _faces_camera(up) > 0.5 and _top_up(up) > 0.5
+				and _faces_camera(up) > _faces_camera(straight) + 0.03
 				and up.origin.y - down.origin.y > v * TableMedium.SEARCH_RISE * 0.9 and up.origin.y - down.origin.y < v):
 			good = false
-			worst = "look %d: normal up %.2f, facing %.2f, rise %.0f mm" % [i + 1, up.basis.y.normalized().y, _faces_camera(up), (up.origin.y - down.origin.y) * 1000.0]
-		seen[card.get_surface_override_material(1)] = true
-	_ok(good, "each look draws a card up out of its place on edge, back to the camera, part of the way%s" % ("" if good else " - " + worst))
+			worst = "look %d: normal up %.2f, facing %.2f (%.2f straight), rise %.0f mm" % [i + 1, up.basis.y.normalized().y, _faces_camera(up), _faces_camera(straight), (up.origin.y - down.origin.y) * 1000.0]
+		seen[card.get_surface_override_material(0)] = true
+		named[String(_front_of(card.get_surface_override_material(0)).get("name", ""))] = true
+	_ok(good, "each look draws a card up out of its place on edge, face to the reader and leaned back to the eye, part of the way%s" % ("" if good else " - " + worst))
 	_ok(seen.size() == 3 and places.size() == 3, "three different cards from three different places (%d, %d)" % [seen.size(), places.size()])
+	_ok(named.size() == 3 and named.keys().all(func(n: String) -> bool: return n.begins_with("Card ")),
+		"each shows the front of a card the draw left in, by name (%s)" % ", ".join(named.keys()))
+	# NO HIGHER THAN THE PICTURE: from the same place a hand's breadth up - a box at the back of the
+	# table, near the frame's top - the card is drawn up less, and never less than the least
+	var seat0: Transform3D = seats[0]
+	var plain := medium._search_rise(seat0, Vector3.UP, v, Vector3.LEFT)
+	var high := medium._search_rise(seat0.translated(Vector3(0.0, 0.25, 0.0)), Vector3.UP, v, Vector3.LEFT)
+	_ok(plain <= TableMedium.SEARCH_RISE and high < plain and high >= TableMedium.SEARCH_RISE_LEAST,
+		"a card whose painting the picture's top would cut is drawn up less (%.2f of its height, %.2f in the picture)" % [high, plain])
+	# control: the look the file used to get - its back to the camera - shows no front at all
+	_posed(start + span * 0.5 / 3.0)
+	var about := medium._looking.transform
+	_ok(_faces_camera(Transform3D(Basis(Vector3.UP, PI) * about.basis, about.origin)) < -0.3,
+		"control: the same card stood back to the camera shows its back at the top of its look")
 	# control: a place where a card LIES is lifted flat - the old look, which a file never gets
 	var kept: Array = seats.duplicate()
 	var kept_cards: Array = medium._searched
@@ -590,6 +714,15 @@ func _file_search() -> void:
 	_ok(medium._looking != null and absf(medium._looking.transform.basis.y.normalized().y) > 0.5, "control: a lying card's place is looked at lying, not on edge")
 	medium._box["search"] = kept
 	medium._searched = kept_cards
+
+
+## The card a front's material [param mat] is printed as ([method TableMedium._unseen_fronts]), or {}.
+func _front_of(mat: Material) -> Dictionary:
+	for name in medium._backs:
+		for f in (medium._backs[name] as Dictionary).get("fronts", []):
+			if (f as Dictionary)["mat"] == mat:
+				return ((f as Dictionary)["canvas"] as CardFaces.Face).card
+	return {}
 
 
 func _shoebox_show() -> void:
@@ -782,10 +915,8 @@ func _buried(at: Vector3, but: Array = []) -> bool:
 
 func _box_poses() -> Array:
 	var out: Array = (medium._box["at_k"] as Array).duplicate()
-	for f in medium._file:
-		var mm: MultiMesh = (f as MultiMeshInstance3D).multimesh
-		for i in mm.instance_count:
-			out.append(mm.get_instance_transform(i))
+	# the places the table keeps: a headless run's MultiMesh hands back identity for every instance
+	out.append_array(medium._box.get("filed", []))
 	# the cards a search looks at are cards of the box too, each in its place
 	if not medium._searched.is_empty():
 		out.append_array(medium._box.get("search", []))
@@ -925,7 +1056,7 @@ func _front_details() -> void:
 	for inst in medium._file:
 		var mm: MultiMesh = (inst as MultiMeshInstance3D).multimesh
 		for name in filed:
-			if mm.mesh.surface_get_material(0) == (medium._backs[name] as Dictionary)["mat"]:
+			if mm.mesh.surface_get_material(1) == (medium._backs[name] as Dictionary)["mat"]:
 				filed[name] += mm.instance_count
 	var undrawn_n: int = int(filed["First"]) + int(filed["Second"])
 	_ok(filed["First"] >= 6 and filed["Second"] >= 3 and absf(float(filed["First"]) / float(maxi(undrawn_n, 1)) - 8.0 / 12.0) < 0.05,

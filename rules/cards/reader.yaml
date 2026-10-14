@@ -10,8 +10,9 @@
 # `close` or `card`) and, for a card, which way it came (`now_jumper`, `now_dealt`, `now_swept_first`,
 # `now_swept`, `now_boxed`, `now_drawn`), what may be said of its picture (`pic_quiet`, `pic_lying`,
 # `pic_held`, `pic_art`), and its text (`on_back` or `in_booklet`); `heard`, how earlier episodes met
-# this point; {{after}}, what the table does after the last word; `voices`, the show's other voices;
-# and the passage's length ({{lo}} to {{hi}} words).
+# this point; `passed`, a card put back in its box while others stay out; {{after}}, what the table
+# does after the last word; `voices`, the show's other voices; and the passage's length ({{lo}} to
+# {{hi}} words).
 prompt:
   - when: "!voices"
     say: "You are the READER: the voice of the video. You speak every word of it."
@@ -238,6 +239,18 @@ card:
       Keywords: {{keywords}}
       {{text}}
       </booklet>
+  # A CARD PUT BACK NEEDS ITS REASON (the user, 2026-10-13: "there must be a reason to put the card
+  # back"): the plan gives a passed card only a few words (CardProducer.back_only_passed), and they are
+  # the only place the viewer can learn why this one goes back when others were kept. No sample reason
+  # is given: one written here would be said in every episode.
+  - when: passed
+    say: >-
+          THIS CARD IS PASSED OVER. Other cards of this episode stay out on the table; this one you
+          glance at and put straight back in the box. Your few words are all the viewer has to make
+          sense of that, so they say what the card is to you and, from what it really is (its name,
+          its meaning above), why it is not one to keep out today. Say it in passing, as a judgment
+          of the card and never as an announcement of the move, and tell no story about it: a card
+          worth a story would have stayed out.
   - >-
       Respond to this card as the show's host would. A common card can pass with one observation;
       a card with a personal story may hold your attention. Follow the requested word range.

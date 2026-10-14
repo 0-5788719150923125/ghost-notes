@@ -115,17 +115,24 @@ const FLIP_END_LAY := 1.1
 const BOX_WALL := 0.006
 const FILE_PITCH := 0.0011
 const FILE_LEAN := 0.35
-## How many different printed backs the unseen cards of one printing share ([method _blank_backs]) when
-## nobody wrote them, and the most of the deck's own cards they are printed as when the plan lists them.
+## How many different cards the unseen cards of one printing are printed as ([method _unseen_fronts],
+## [method _blank_backs]) when nobody wrote them, and the most of the deck's own cards they are printed
+## as when the episode lists them.
 const BLANKS := 3
 const WRITTEN := 6
 ## A SEARCH OF THE BOX ([method _pose_rummage]): how many of its cards may be looked at
 ## ([constant SEATS], each in a place of its own), how far of its height a card on edge is drawn up out
-## of the file, how far it then tips toward the eye, and how far a card lifted off a pile is turned up.
+## of the file (and the least, where the picture's top edge would cut its painting: [method _search_rise]),
+## how far its face is then leaned back to the eye, and how far from lying a card lifted
+## off a pile is turned up, face to the eye. How many cards one search looks at: on edge, and lying -
+## a lying card is turned over to be seen and back, which takes longer.
 const SEATS := 9
 const SEARCH_RISE := 0.62
+const SEARCH_RISE_LEAST := 0.4
 const SEARCH_TIP := 0.2
 const SEARCH_TURN := 0.75
+const SEARCH_LOOKS := 3
+const SEARCH_LOOKS_LYING := 2
 ## How full a shoebox of piles is: this share of what its piles could hold to the rim.
 const SHOEBOX_SHARE := 0.6
 ## How much of the depth of an open box of cards on edge they fill at least: the producer's list of
@@ -1083,19 +1090,24 @@ func _build_episode() -> void:
 	for pb in _printed:
 		CardFaces.redraw((pb as Dictionary)["vp"])
 	for key in _backs:
-		for blank in (_backs[key] as Dictionary).get("blank", []) as Array:
-			CardFaces.redraw((blank as Dictionary)["vp"])
+		for side in ["blank", "fronts"]:
+			for unseen in (_backs[key] as Dictionary).get(side, []) as Array:
+				CardFaces.redraw((unseen as Dictionary)["vp"])
 
 
 ## THE BACKS: the deck's own ([member _back_vp]), and one more per printing the drawn cards (and the box,
-## when the producer chose it) are printed in ([method CardTable.look_of]).
+## when the producer chose it) are printed in ([method CardTable.look_of]) - and with each, what the
+## cards nobody drew are printed as: their fronts (`fronts`, [method _unseen_fronts]) and, when the text
+## is on the back, their backs (`blank`, [method _blank_backs]).
 func _build_backs(cards: Array) -> void:
 	for key in _backs:
-		for blank in (_backs[key] as Dictionary).get("blank", []) as Array:
-			((blank as Dictionary)["vp"] as Node).queue_free()
+		for side in ["blank", "fronts"]:
+			for unseen in (_backs[key] as Dictionary).get(side, []) as Array:
+				((unseen as Dictionary)["vp"] as Node).queue_free()
 		if String(key) != "":
 			((_backs[key] as Dictionary)["vp"] as Node).queue_free()
-	_backs = {"": {"vp": _back_vp, "canvas": _back_canvas, "mat": _back_mat, "blank": _blank_backs("")}}
+	_backs = {"": {"vp": _back_vp, "canvas": _back_canvas, "mat": _back_mat, "blank": _blank_backs(""),
+		"fronts": _unseen_fronts("", cards)}}
 	for name in _printings(cards):
 		if String(name).is_empty() or _backs.has(name):
 			continue
@@ -1108,7 +1120,8 @@ func _build_backs(cards: Array) -> void:
 		mat.set_shader_parameter("lift", 0.06)
 		mat.set_shader_parameter("window", Vector4(0.0, 0.0, 1.0, 1.0))
 		_foil_stock(mat, canvas.look)
-		_backs[name] = {"vp": vp, "canvas": canvas, "mat": mat, "blank": _blank_backs(String(name))}
+		_backs[name] = {"vp": vp, "canvas": canvas, "mat": mat, "blank": _blank_backs(String(name)),
+			"fronts": _unseen_fronts(String(name), cards)}
 
 
 ## THE BACKS OF THE CARDS NOBODY DREW, for printing [param name], when the cards come from a box and
@@ -1141,17 +1154,60 @@ func _blank_backs(name: String) -> Array:
 	return out
 
 
-## The deck's cards of printing [param name] that the draw LEFT IN THE BOX, as a printed back sets a
-## card ([method CardFaces.Face._printed_back]: its name, its group as its one fact, its meaning as its
-## text) - at most [constant WRITTEN], picked on the seed. Empty when the plan lists no deck.
+## THE FRONTS OF THE CARDS NOBODY DREW, for printing [param name], when the cards come from a box - what
+## a card looked at in a search shows, and every card standing in the file. EACH IS ONE OF THE DECK'S OWN
+## CARDS the draw left in ([method _left_in]; up to [constant WRITTEN]), printed as a drawn card's front
+## is - its frame, its ornament, its name, its details under the picture when the text is on the front -
+## with A PAINTING NOBODY PAINTED in its window: a part of a drawn card's ([method CardFaces.stand_in];
+## `from`, one of this printing's among [param cards] when it has any), put in as that painting lands
+## ([method _poll_pictures]). A painting is a painter's run, and no card is painted to be glanced at in
+## its box. Where the episode lists no card left in, [constant BLANKS] fronts with no name. A search
+## used to show the BACK of every card it looked at, and nobody looks for a card by its back (the user,
+## 2026-10-13: "they rifle through it looking at the front, to find the specific card").
+func _unseen_fronts(name: String, cards: Array) -> Array:
+	var out: Array = []
+	if _cards_from != "box":
+		return out
+	var left := _left_in(name)
+	var own: Array = []
+	for i in cards.size():
+		if cards[i] is Dictionary and CardTable.series_of(_look, cards[i] as Dictionary) == name:
+			own.append(i)
+	if own.is_empty():
+		own = range(cards.size())
+	for v in left.size() if not left.is_empty() else BLANKS:
+		var canvas := CardFaces.Face.new()
+		canvas.look = CardTable.look_of(_look, {"series": name}) if not name.is_empty() else _look
+		canvas.anonymous = left.is_empty()
+		canvas.card = left[v] if not left.is_empty() else {"key": "unseen %d" % v}
+		canvas.details = String(_staging["text"]) == "front"
+		canvas.seed = _seed
+		var pick := hash([_seed, name, String(canvas.card.get("key", "")), "stand-in"])
+		canvas.part = CardFaces.stand_in(canvas.look.get("palette", []) if canvas.look.get("palette") is Array else [], pick)
+		var vp := CardFaces.viewport(self, canvas, CardFaces.face_px(canvas.look))
+		var mat := _foil_material(vp.get_texture())
+		mat.set_shader_parameter("window", _face_window(canvas.look, canvas.details))
+		_foil_stock(mat, canvas.look)
+		out.append({"vp": vp, "canvas": canvas, "mat": mat, "from": int(own[absi(pick) % own.size()]) if not own.is_empty() else -1})
+	return out
+
+
+## The deck's cards of printing [param name] that the draw LEFT IN THE BOX, as a card's faces set one
+## ([class CardFaces.Face]: its name and numeral, its group as its one fact, its meaning as its text) - at
+## most [constant WRITTEN], picked on the seed. They are the plan's deck less the drawn cards when the
+## producer chose it, and otherwise what the draw says it left of the show's own (`left`,
+## [method CardProducer._make_draw]). Empty when the episode lists neither.
 func _left_in(name: String) -> Array:
 	var plan: Dictionary = _pay.get("plan", {}) if _pay.get("plan") is Dictionary else {}
 	var drawn := {}
 	for c in _pay.get("cards", []) if _pay.get("cards") is Array else []:
 		if c is Dictionary:
 			drawn[String((c as Dictionary).get("key", ""))] = true
+	var listed: Array = plan.get("deck", []) if plan.get("deck") is Array else []
+	if listed.is_empty():
+		listed = _pay.get("left", []) if _pay.get("left") is Array else []
 	var out: Array = []
-	for c in plan.get("deck", []) if plan.get("deck") is Array else []:
+	for c in listed:
 		if not (c is Dictionary) or drawn.has(String((c as Dictionary).get("key", ""))):
 			continue
 		var card: Dictionary = c
@@ -1159,6 +1215,7 @@ func _left_in(name: String) -> Array:
 			continue
 		var group := String(card.get("group", "")).strip_edges()
 		out.append({"key": String(card.get("key", "")), "name": String(card.get("name", "")),
+			"numeral": String(card.get("numeral", "")),
 			"booklet": {"keywords": [group] if not group.is_empty() else [], "upright": String(card.get("meaning", ""))}})
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([_seed, name, "left in the box"])
@@ -1170,14 +1227,36 @@ func _left_in(name: String) -> Array:
 	return out.slice(0, WRITTEN)
 
 
-## What a card nobody drew shows, in printing [param name]: its shared back, or one of its printed
-## backs ([method _blank_backs]).
+## What a card nobody drew shows on its back, in printing [param name]: its shared back, or one of its
+## printed backs ([method _blank_backs]).
 func _unseen_mats(name: String) -> Array:
 	var bk: Dictionary = _backs.get(name, _backs[""])
 	var blank: Array = bk.get("blank", [])
 	if blank.is_empty():
 		return [bk["mat"]]
 	return blank.map(func(b: Dictionary) -> Material: return b["mat"])
+
+
+## THE CARDS NOBODY DREW, in printing [param name], as `[front, back]` materials: each its own front
+## ([method _unseen_fronts]) and, where the backs are printed, that same card's back ([method _blank_backs]
+## sets the same cards in the same order) - the shared back otherwise, on both sides where there is no
+## front to show (a show whose cards do not come from a box).
+func _unseen_kinds(name: String) -> Array:
+	var backs := _unseen_mats(name)
+	var fronts: Array = (_backs.get(name, _backs[""]) as Dictionary).get("fronts", [])
+	var out: Array = []
+	for v in maxi(fronts.size(), backs.size()):
+		var back: Material = backs[v % backs.size()]
+		out.append([(fronts[v % fronts.size()] as Dictionary)["mat"] if not fronts.is_empty() else back, back])
+	return out
+
+
+## Every printing's cards nobody drew, one after another ([method _unseen_kinds]): what a search turns up.
+func _unseen_all() -> Array:
+	var out: Array = []
+	for name in _backs:
+		out.append_array(_unseen_kinds(String(name)))
+	return out
 
 
 ## Every printing the episode's cards are in, the deck's own ("") among them when any card is in it: the
@@ -1310,6 +1389,20 @@ func _poll_pictures(force := false) -> void:
 				((blank as Dictionary)["canvas"] as CardFaces.Face).art = back
 				CardFaces.redraw((blank as Dictionary)["vp"])
 			((blank as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("foil", _foil * 0.25)
+		# THE FRONTS OF THE CARDS NOBODY DREW: a part of a drawn card's painting, once that one has landed
+		for front in bk.get("fronts", []) as Array:
+			var from := int((front as Dictionary).get("from", -1))
+			var fc: CardFaces.Face = (front as Dictionary)["canvas"]
+			var fmat: ShaderMaterial = (front as Dictionary)["mat"]
+			var art: Texture2D = (_face_canvas[from] as CardFaces.Face).art if from >= 0 and from < _face_canvas.size() else null
+			if art != null and fc.art != art:
+				fc.art = art
+				var fkey: Vector2 = _textures.get(dir.path_join("card_%d.png" % (from + 1)) + "|key", Vector2(0.8, 0.95))
+				fmat.set_shader_parameter("lo", fkey.x)
+				fmat.set_shader_parameter("hi", fkey.y)
+				CardFaces.redraw((front as Dictionary)["vp"])
+			_foil_accent(fmat, fc.look)
+			fmat.set_shader_parameter("foil", _foil)
 		for pb in _printed:
 			if String((pb as Dictionary).get("series", "")) != String(name):
 				continue
@@ -1733,7 +1826,7 @@ static func _lid_piece(parent: Node3D, mat: Material, dimensions: Vector3, at: V
 ## physical copies ([constant OPEN_FILE_SHARE], [constant CardTable.SHOEBOX_FILL]) so each reads as a
 ## collection accumulated over time. The drawn
 ## cards have their own places near the accessible top. Cards lying in piles are laid by
-## [method _pile_places]. Undrawn cards share one MultiMesh per printing and back ([method _unseen_mats]).
+## [method _pile_places]. Undrawn cards share one MultiMesh per printing and card ([method _unseen_kinds]).
 func _build_file() -> void:
 	var inner: AABB = _box["inner"]
 	var content := String(_staging.get("contents", "file"))
@@ -1751,10 +1844,12 @@ func _build_file() -> void:
 		_box["flat"] = true
 		return
 	var v := size.y if upright else size.x
-	# ON EDGE, BACK TO THE CAMERA: a card comes up out of the file showing what every card left in it
-	# shows, and is turned round to be seen. Face to the camera, it came up a picture out of a box of
-	# cards that had none (the user, 2026-10-12: "the card changed to something else")
-	var stand := Basis(Vector3(1, 0, 0), PI * 0.5)
+	# ON EDGE, FACE TO THE READER, as a collection stands in its owner's box: whoever looks through it
+	# looks at the fronts (the user, 2026-10-13), and a card comes up out of the file showing what every
+	# card left in it shows - a front ([method _unseen_fronts]). The file stood back to the camera while
+	# the cards nobody drew had no front to show: face on, it was a box of border strips, and the drawn
+	# card came up a picture out of it (2026-10-12: "the card changed to something else").
+	var stand := Basis(Vector3(1, 0, 0), PI * 0.5) * _face_up()
 	if lie:
 		stand = stand * Basis(Vector3.UP, PI * 0.5)
 	var shoebox := _box.has("lid")
@@ -1831,27 +1926,30 @@ func _build_file() -> void:
 			seats.sort_custom(func(a: Transform3D, b: Transform3D) -> bool: return a.origin.z > b.origin.z)
 		_box["search"] = seats
 		_box["search_kept"] = true
-	# one MultiMesh per printing and back, its cards shared out among them
+	# one MultiMesh per printing and card, its cards shared out among them - and their places kept
+	# (`filed`): a MultiMesh hands no instance's transform back under the dummy renderer of a headless run
 	var per := {}
 	for n in _backs:
 		per[n] = []
+	_box["filed"] = []
 	for xf in xfs:
 		if xf != null and not undrawn.is_empty():
 			var name: String = undrawn.pop_at(rng.randi_range(0, undrawn.size() - 1))
 			(per[name] as Array).append(xf)
+			(_box["filed"] as Array).append(xf)
 	for n in per:
-		var mats := _unseen_mats(String(n))
-		for which in mats.size():
+		var kinds := _unseen_kinds(String(n))
+		for which in kinds.size():
 			var list: Array = []
 			for i in (per[n] as Array).size():
-				if i % mats.size() == which:
+				if i % kinds.size() == which:
 					list.append((per[n] as Array)[i])
 			if list.is_empty():
 				continue
 			var mesh := _mesh_for((_backs[n] as Dictionary)["canvas"].look).duplicate() as ArrayMesh
-			# a filed card faces either way: the front one shows its printing's back, whichever way it stands
-			mesh.surface_set_material(0, mats[which])
-			mesh.surface_set_material(1, mats[which])
+			# each a card nobody drew, its own front and back
+			mesh.surface_set_material(0, (kinds[which] as Array)[0])
+			mesh.surface_set_material(1, (kinds[which] as Array)[1])
 			mesh.surface_set_material(2, _edge_mat)
 			var mm := MultiMesh.new()
 			mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -1869,21 +1967,19 @@ func _build_file() -> void:
 
 
 ## THE CARDS A SEARCH LOOKS AT ARE THE BOX'S OWN, one kept in each of its places (`_box["search"]`, when
-## `search_kept`): there before the search and after it, each a different card nobody drew ([method
-## _unseen_mats], through every printing in turn). A card that was not on its pile a moment before
-## appeared on it as the look began, the top card's text changing under the eye (2026-10-12).
+## `search_kept`): there before the search and after it, each a different card nobody drew, front and
+## back ([method _unseen_all], through every printing in turn). A card that was not on its pile a moment
+## before appeared on it as the look began, the top card's text changing under the eye (2026-10-12).
 func _keep_searched(shoebox: bool) -> void:
 	if not bool(_box.get("search_kept", false)):
 		return
-	var mats: Array = []
-	for name in _backs:
-		mats.append_array(_unseen_mats(String(name)))
+	var kinds := _unseen_all()
 	var seats: Array = _box.get("search", [])
 	for i in seats.size():
 		var card := MeshInstance3D.new()
 		card.mesh = _mesh_for(_look)
-		card.set_surface_override_material(0, mats[i % mats.size()])
-		card.set_surface_override_material(1, mats[i % mats.size()])
+		card.set_surface_override_material(0, (kinds[i % kinds.size()] as Array)[0])
+		card.set_surface_override_material(1, (kinds[i % kinds.size()] as Array)[1])
 		card.set_surface_override_material(2, _edge_mat)
 		if shoebox:
 			card.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -3504,16 +3600,19 @@ func _pose_box(t: float, tm: Dictionary) -> void:
 	lid_shade.modulate.a = 0.6 * away
 
 
-## A SEARCH LOOKS AT THREE OF THE BOX'S OWN CARDS, one after another, each in its place
-## (`_box["search"]`, [method _build_file] and [method _pile_places]): a card ON EDGE is drawn up out of
-## the file along its own plane, [constant SEARCH_RISE] of its height, tipped toward the eye about the
-## file's top and let back down; a card LYING on a pile is lifted clear of the rim, turned up to be
-## read and laid back. THE CARD IS THE BOX'S OWN, kept in that place ([method _keep_searched]), so
-## nothing appears or changes as a look begins; only a box with no place to spare (a tin's flat deck,
-## one pile) is given a card for the length of the look ([method _show_searched]). None becomes
-## an episode draw or shows a face the producer did not make. It used to be one flat card that
-## appeared in the air over the rim, rose and sank three times, over a box of cards standing on edge
-## (the user, 2026-10-12: "lifted from the deck FLAT, and THREE times in a row. That is totally wrong").
+## A SEARCH LOOKS AT A FEW OF THE BOX'S OWN CARDS, one after another, each in its place
+## (`_box["search"]`, [method _build_file] and [method _pile_places]), AND AT THEIR FRONTS (the user,
+## 2026-10-13: nobody looks for a card by its back): a card ON EDGE, standing face to the reader, is
+## drawn up out of the file along its own plane, [constant SEARCH_RISE] of its height, its face leaned
+## back to the eye about the file's top, and let back down ([constant SEARCH_LOOKS] of them); a card
+## LYING face down on a pile is lifted clear of the rim, turned over to be seen, turned back and laid
+## down ([constant SEARCH_LOOKS_LYING], a turn over taking the longer). THE CARD IS THE BOX'S OWN, kept
+## in that place ([method _keep_searched]), so nothing appears or changes as a look begins; only a box
+## with no place to spare (a tin's flat deck, one pile) is given a card for the length of the look
+## ([method _show_searched]). None becomes an episode draw, and none shows a painting of its own
+## ([method _unseen_fronts]). It used to be one flat card that appeared in the air over the rim, rose
+## and sank three times, over a box of cards standing on edge (the user, 2026-10-12: "lifted from the
+## deck FLAT, and THREE times in a row. That is totally wrong").
 func _pose_rummage(t: float, tm: Dictionary) -> void:
 	_rummage_card.visible = false
 	_looking = null
@@ -3531,8 +3630,9 @@ func _pose_rummage(t: float, tm: Dictionary) -> void:
 		var span := TableActions.RUMMAGE * float(e["s"])
 		if t < start or t >= start + span:
 			continue
-		var beat := fmod((t - start) / span * 3.0, 1.0)
-		var which := n * 3 + int(floor((t - start) / span * 3.0))
+		var looks := _search_looks()
+		var beat := fmod((t - start) / span * float(looks), 1.0)
+		var which := n * looks + int(floor((t - start) / span * float(looks)))
 		if not _searched.is_empty():
 			_looking = _searched[which % _searched.size()]
 		elif beat >= 0.05 and beat <= 0.95:
@@ -3545,56 +3645,108 @@ func _pose_rummage(t: float, tm: Dictionary) -> void:
 		return
 
 
+## Where the [param which]-th card a search looks at waits: its place in the box (`_box["search"]`) - or,
+## where a tin's flat deck has no place of its own for it, off the middle of what lies there.
+func _search_seat(which: int) -> Transform3D:
+	var inner: AABB = _box["inner"]
+	var seats: Array = _box.get("search", [])
+	if seats.is_empty():
+		return Transform3D(Basis.IDENTITY, Vector3(inner.get_center().x, inner.position.y + 0.004, inner.get_center().z))
+	return seats[which % seats.size()]
+
+
+## How many cards one search looks at ([constant SEARCH_LOOKS]; [constant SEARCH_LOOKS_LYING] where the
+## box's cards lie): they share the one rest the voice takes for a search ([constant TableActions.RUMMAGE]).
+func _search_looks() -> int:
+	return SEARCH_LOOKS if absf(_search_seat(0).basis.y.normalized().y) < 0.7 else SEARCH_LOOKS_LYING
+
+
+## HOW FAR OF ITS HEIGHT [param v] a card on edge at [param seat] is drawn up to be looked at
+## ([constant SEARCH_RISE]) - less, down to [constant SEARCH_RISE_LEAST], while the picture's top edge
+## would cut into its painting, an eighth of the card down from its top: a box at the back of the table
+## stands near the frame's top, and a front that cannot be seen is the look wasted. [param up] is the
+## way it rises and [param axis] what it leans back about.
+func _search_rise(seat: Transform3D, up: Vector3, v: float, axis: Vector3) -> float:
+	var hinge := seat.origin + up * v * 0.5
+	var tip := Basis(axis, SEARCH_TIP)
+	var rise := SEARCH_RISE
+	while rise > SEARCH_RISE_LEAST:
+		var at: Variant = CardTable.project(_cam_base, _cam.fov, hinge + tip * (up * v * (rise - 0.125)))
+		if at != null and (at as Vector2).y > 0.0:
+			break
+		rise = maxf(SEARCH_RISE_LEAST, rise - 0.02)
+	return rise
+
+
+## A LYING CARD TURNED UP TO THE EYE, its FACE showing and the right way up: turned over about its long
+## side from where it lay face down, its far edge [constant SEARCH_TURN] up from lying.
+static func _turned_up() -> Basis:
+	var a := PI * 0.5 - SEARCH_TURN
+	return Basis(Vector3(-1.0, 0.0, 0.0), Vector3(0.0, -sin(a), -cos(a)), Vector3(0.0, -cos(a), sin(a)))
+
+
 ## The card a search is looking at, the [param which]-th it has looked at, [param beat] (0 to 1) of
 ## the way through its look ([method _pose_rummage]).
 func _searched_xf(which: int, beat: float) -> Transform3D:
 	var inner: AABB = _box["inner"]
 	var world: AABB = _box["world"]
 	var size := CardTable.card_size(_look)
-	var seats: Array = _box.get("search", [])
-	# a tin's flat deck has no place of its own for it: off the middle of what lies there
-	var seat := Transform3D(Basis.IDENTITY, Vector3(inner.get_center().x, inner.position.y + 0.004, inner.get_center().z))
-	if not seats.is_empty():
-		seat = seats[which % seats.size()]
+	var seat := _search_seat(which)
 	var lift := smoothstep(0.05, 0.38, beat) * (1.0 - smoothstep(0.62, 0.95, beat))
 	var look := smoothstep(0.18, 0.44, beat) * (1.0 - smoothstep(0.56, 0.82, beat))
 	var n := seat.basis.y.normalized()
 	if absf(n.y) < 0.7:
-		# ON EDGE: up along its own plane, then tipped about the line where it leaves the file
+		# ON EDGE: up along its own plane, then leaned about the line where it leaves the file - its
+		# top away from the eye, which looks down on it, so the side it shows the eye turns up to it
 		var up := (Vector3.UP - n * n.y).normalized()
 		var v := size.y if bool(_box.get("upright", true)) else size.x
 		var hinge := seat.origin + up * v * 0.5
-		var tip := Basis(up.cross(n).normalized(), SEARCH_TIP * look)
-		return Transform3D(tip * seat.basis, hinge + tip * (seat.origin + up * v * SEARCH_RISE * lift - hinge))
-	# LYING: lifted clear of the rim, its far edge turned up and the right way round, and laid back
-	var yaw := atan2(-seat.basis.x.z, seat.basis.x.x)
-	# high enough to turn it up with its low edge a centimeter over the rim - and no higher than the
-	# picture: a box at the back of the table stands near the frame's top, and the card's far edge
-	# went out of it (2026-10-12). Never lower than it takes to turn the card up off its pile.
+		var shown := n if n.dot(_cam_base.origin - seat.origin) > 0.0 else -n
+		var axis := shown.cross(up).normalized()
+		var tip := Basis(axis, SEARCH_TIP * look)
+		return Transform3D(tip * seat.basis, hinge + tip * (seat.origin + up * v * _search_rise(seat, up, v, axis) * lift - hinge))
+	# LYING, face down: lifted clear of the rim, turned over toward the eye and the right way round, and
+	# turned back as it is laid down - up sooner and held longer than a card on edge, a turn over being
+	# half a turn each way. High enough to turn with its low edge a centimeter over the rim -
+	# and no higher than the picture: a box at the back of the table stands near the frame's top, and
+	# the card's far edge went out of it (2026-10-12) - the picture's top edge may cut the card's border,
+	# an eighth of it, never its painting. Never lower than it takes to turn the card over clear of its
+	# pile.
 	var half := sin(SEARCH_TURN) * size.y * 0.5
-	var toward := world.size.z * 0.15
+	var reach := cos(SEARCH_TURN) * size.y * 0.5
+	# toward the eye, and never through the wall: held low, in a box near the frame's top, the card's
+	# near edge is under the rim, and a pile by the front wall brought it out through the cardboard
+	var toward := minf(world.size.z * 0.15, inner.end.z - 0.004 - reach - seat.origin.z)
 	var least := seat.origin.y + half + 0.005
 	var clear := maxf(maxf(world.end.y, inner.end.y) + half + 0.01, least)
 	while clear > least:
 		var edge: Variant = CardTable.project(_cam_base, _cam.fov,
-			Vector3(seat.origin.x, clear + half, seat.origin.z + toward - cos(SEARCH_TURN) * size.y * 0.5))
-		if edge != null and (edge as Vector2).y > 0.04:
+			Vector3(seat.origin.x, clear + half * 0.75, seat.origin.z + toward - reach * 0.75))
+		if edge != null and (edge as Vector2).y > 0.0:
 			break
 		clear = maxf(least, clear - 0.004)
-	return Transform3D(Basis(Vector3.RIGHT, SEARCH_TURN * look) * Basis(Vector3.UP, yaw * (1.0 - look)),
-		seat.origin + Vector3(0.0, (clear - seat.origin.y) * lift, toward * look))
+	lift = smoothstep(0.03, 0.25, beat) * (1.0 - smoothstep(0.75, 0.97, beat))
+	look = smoothstep(0.12, 0.4, beat) * (1.0 - smoothstep(0.6, 0.88, beat))
+	var basis := seat.basis.orthonormalized().slerp(_turned_up(), look)
+	# ON ITS WAY OVER A CARD STANDS ON A CORNER, lower than it is held: it is carried as high as keeps
+	# its lowest corner where the held card's low edge would be, so it never turns down into its pile
+	var low := (size.x * absf(basis.x.y) + size.y * absf(basis.z.y)) * 0.5
+	var up := maxf((clear - seat.origin.y) * lift, (clear - half - 0.002 - seat.origin.y) * lift + low)
+	# ...and reaches further toward the eye than it does held: no nearer the front wall than that corner
+	# allows, and never moved off its pile for it
+	var near := (size.x * absf(basis.x.z) + size.y * absf(basis.z.z)) * 0.5
+	var come := minf(toward * look, maxf(0.0, inner.end.z - 0.004 - near - seat.origin.z))
+	return Transform3D(basis, seat.origin + Vector3(0.0, up, come))
 
 
-## The searched card shows what the [param which]-th card nobody drew shows ([method _unseen_mats],
+## The searched card is the [param which]-th card nobody drew, front and back ([method _unseen_all],
 ## through every printing in turn): a different card at every look.
 func _show_searched(which: int) -> void:
-	var mats: Array = []
-	for name in _backs:
-		mats.append_array(_unseen_mats(String(name)))
-	var mat: Material = mats[which % mats.size()]
-	if _rummage_card.get_surface_override_material(1) != mat:
-		_rummage_card.set_surface_override_material(0, mat)
-		_rummage_card.set_surface_override_material(1, mat)
+	var kinds := _unseen_all()
+	var kind: Array = kinds[which % kinds.size()]
+	if _rummage_card.get_surface_override_material(0) != kind[0]:
+		_rummage_card.set_surface_override_material(0, kind[0])
+		_rummage_card.set_surface_override_material(1, kind[1])
 
 
 func _pose(t: float) -> void:
