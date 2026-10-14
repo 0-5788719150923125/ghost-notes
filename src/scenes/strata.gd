@@ -129,7 +129,7 @@ func _draw() -> void:
 ## own draw space, from the plane's spectrum slice and the scrolling profile.
 ##
 ## Split out of [method _draw] so a gate can ask for the geometry the scene ACTUALLY draws.
-## tests/strata_band_check.gd needs these exact points to show that the engine's triangulator
+## tests/scenes/strata_band_check.gd needs these exact points to show that the engine's triangulator
 ## refuses them while the scene paints the band anyway, and a gate that rebuilt the profile
 ## arithmetic for itself would quietly stop testing the thing it names the moment either copy
 ## changed.

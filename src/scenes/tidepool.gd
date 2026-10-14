@@ -92,7 +92,7 @@ const OVER := 1.18
 ## It counts the O(nodes) work, not just `nodes * components`. Casting the light, blurring
 ## the accumulator and shading each node are all O(nodes) with large constants, so budgeting
 ## on the sweep alone rewards a SIX-component surface with the finest grid and makes it the
-## most expensive of all. Measured per build at 1920x1080 (tests/tidepool_cost_probe.gd): 7
+## most expensive of all. Measured per build at 1920x1080 (tests/scenes/tidepool_cost_probe.gd): 7
 ## components over 6588 nodes took 47-51 ms, 13 components over 3555 nodes took 34 ms.
 ##
 ## PER_NODE is the rest of the frame in the same unit, measured from those pairs: the fixed
@@ -209,7 +209,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# at 0.24-0.52 the SHORTEST component came out with a period of 0.44 to 0.86 seconds - a one
 	# to two hertz wobble running for the whole hold, which is what "a constant wave effect,
 	# which is too fast" was. It also fought the build rate: a frame costs tens of milliseconds
-	# (tests/tidepool_cost_probe.gd), so the surface is rebuilt at 20-30 Hz, and a two hertz
+	# (tests/scenes/tidepool_cost_probe.gd), so the surface is rebuilt at 20-30 Hz, and a two hertz
 	# ripple sampled at 25 Hz strobes.
 	#
 	# 0.08-0.17 puts the fastest chop at 1.3-2.6 s and the longest swell at 3.5-7 s, which is

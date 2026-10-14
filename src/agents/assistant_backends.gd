@@ -12,7 +12,7 @@ class_name AssistantBackends
 ## as a run that never reports progress and never finishes cleanly.
 ##
 ## Everything here is PURE (strings and dictionaries in, strings and dictionaries out), so
-## tests/assistant_backend_check.gd can drive it with recorded streams and no subprocess.
+## tests/app/assistant_backend_check.gd can drive it with recorded streams and no subprocess.
 ##
 ## THE PROMPT IS NEVER IN ARGV. [method argv] returns flags, ids and paths only; the prompt
 ## reaches the CLI on stdin (`claude -p` reads it there when no prompt argument is given,

@@ -595,9 +595,12 @@ func _end_session(home := true) -> void:
 	# Never yank the feedback console out from under the user. If the song ends while
 	# they have it open and are typing, defer the whole teardown until they submit or
 	# cancel - the held scene stays frozen behind the modal until then.
-	if _feedback != null and is_instance_valid(_feedback) and _feedback.is_open():
-		if not _feedback.closed.is_connected(_end_session):
-			_feedback.closed.connect(_end_session.bind(home), CONNECT_ONE_SHOT)
+	# THE SHELL'S console, whoever asked for it: Masking attaches it itself ([method
+	# Shell.attach_feedback]), so the handle kept here is not the only way one comes to be open.
+	var fb: Node = _chrome.feedback if _chrome != null and is_instance_valid(_chrome) else _feedback
+	if fb != null and is_instance_valid(fb) and fb.is_open():
+		if not fb.closed.is_connected(_end_session):
+			fb.closed.connect(_end_session.bind(home), CONNECT_ONE_SHOT)
 		return
 	for n in [_list, _subtitles, _synth_editor, _mask_editor, _stream, _note_panel]:
 		if n != null and is_instance_valid(n):

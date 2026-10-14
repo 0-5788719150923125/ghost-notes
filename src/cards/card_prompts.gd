@@ -2,7 +2,7 @@ extends RefCounted
 class_name CardPrompts
 
 ## CardPrompts - what each agent behind a card episode is told. Pure: strings in, strings out,
-## so a gate can hold every prompt to the rules (see tests/cards_check.gd). THE WORDS ARE IN
+## so a gate can hold every prompt to the rules (see tests/cards/cards_check.gd). THE WORDS ARE IN
 ## rules/cards/ (producer, designer, set_dresser, reader, painter, show - read by [Rules]); here is
 ## what decides which of them apply and what fills them in: who knows what, when, and how much of
 ## what the show has already made.

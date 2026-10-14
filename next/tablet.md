@@ -88,14 +88,14 @@ Nothing is read off the screen: no title, and text before the first `url` is nei
 
 ## Gates and probes
 
-- `godot --headless --path . --script tests/tablet_check.gd` - inference, and that the voice's words
+- `godot --headless --path . --script tests/media/tablet_check.gd` - inference, and that the voice's words
   equal the words the screen marks spoken (two-sided).
-- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/tablet_look_probe.gd 600 --out <dir>/t --every 3 --screen 1`
-- `tests/run_boot_probe.sh tests/tablet_camera_check.gd 120` - the camera holds through every reading
+- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/media/tablet_look_probe.gd 600 --out <dir>/t --every 3 --screen 1`
+- `tests/run_boot_probe.sh tests/media/tablet_camera_check.gd 120` - the camera holds through every reading
   drag, the band fits the closest view at every Camera setting both ways round, the reading stays
   off the screen's foot, an article opens unswiped, a skim centers its picture, and a scrub opens
   in place with nothing replayed. Two-sided: the old scroll and the old scrub start each fail it.
-- `tests/run_boot_probe.sh tests/tablet_look_probe.gd 600 --audit 1 --until 700 [--focus word]` - no
+- `tests/run_boot_probe.sh tests/media/tablet_look_probe.gd 600 --audit 1 --until 700 [--focus word]` - no
   pictures: where each spoken word is (viewport, frame) and how far the camera moves after each drag,
   on any chapter. Stop it with `--until`; a whole chapter replays a long time.
 
@@ -128,4 +128,4 @@ that defeats this can still be screenshotted by hand and imported.
 ## Marks
 
 Every mark is in the script editor's palette (group "Tablet", plus "Outro starts here" under
-Timing), documented in `docs/script.md` and proven in `tests/script_marks_check.gd`.
+Timing), documented in `docs/script.md` and proven in `tests/notes/script_marks_check.gd`.

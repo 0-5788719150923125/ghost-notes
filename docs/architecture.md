@@ -80,7 +80,7 @@ func _draw() -> void:
         draw_circle(p, 6, Color.from_hsv(params.hue, 0.7, 1.0))
 ```
 
-Register it in `Director.SCENES` - `{"script": preload("res://src/scenes/my_scene.gd"),
+Register it in `SceneRoster.SCENES` - `{"script": preload("res://src/scenes/my_scene.gd"),
 "behavior": "fluid"}` - more than once with different behaviors to keep several looks. A oneshot
 sets `lifecycle = "oneshot"` in `build_params` and returns `true` from `finished()`. Weather and
 atmosphere are layers, composed the way forces are:

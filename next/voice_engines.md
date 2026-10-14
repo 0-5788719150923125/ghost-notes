@@ -87,7 +87,7 @@ the decoder. Status: built, gated, waiting on the user's ear (`5_before.wav` aga
 
 Gates: `hosts/voice/test_expression.py` (new: stress, the opening floor, the gain, the playback,
 the resampler against the linear control, an old patch upgraded), `test_pauses.py` (the floor
-check and the patch check say what they hold now), `tests/multi_voice_check.gd`
+check and the patch check say what they hold now), `tests/reading/multi_voice_check.gd`
 (`_check_stress_reaches_the_voice`, and `play_ratio` in `_check_settings_reach_the_request`).
 
 ## Built (2026-10-07): the word before a rest, and the next word's hiss
@@ -180,7 +180,7 @@ case - only gets longer as voice (hiss 65 / 70 / 90 / 115 ms at 0 / 4 / 6 / 8 fr
 
 **A delivery mark started a sentence late** where its passage opened on something stripped (a
 comment and a blank line): `_resolve_marks` noted marks before the leading whitespace went
-(`tests/multi_voice_check.gd`, `[0, 0, 0.5]` before).
+(`tests/reading/multi_voice_check.gd`, `[0, 0, 0.5]` before).
 
 **Found on the way, not built** (the review of the whole voice path, 2026-10-11):
 

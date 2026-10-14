@@ -2053,7 +2053,7 @@ func _resolve_marks(t: String, on: bool, bare: float) -> String:
 	# A DELIVERY MARK IS WHERE IT FALLS IN WHAT IS RETURNED: it was noted in `out`, before the
 	# passage's leading whitespace went, so a passage opening on a stripped comment and a blank
 	# line had every mark two characters late - past the first word of the sentence under it,
-	# which then read in the delivery before (tests/multi_voice_check.gd).
+	# which then read in the delivery before (tests/reading/multi_voice_check.gd).
 	var gone := out.strip_edges(false, true).length() - said.length()
 	if gone != 0:
 		for lean in _last_leans:

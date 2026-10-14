@@ -937,7 +937,7 @@ steps run from sessions in ghost-notes, once its memory has been copied (6, belo
 
 1. **The user commits** everything pending under `axis/ghost`, this file included, and decides about
    `stash@{0}` ("ghost things", 2026-09-05, touching `scripts/vehicles/comic.gd` and
-   `tests/comic_camera_check.gd`), which otherwise stays in praxis.
+   `tests/media/comic_camera_check.gd`), which otherwise stays in praxis.
 2. **The user brings the history.** No new tool is needed: `git subtree split` produces exactly the
    flat layout.
 

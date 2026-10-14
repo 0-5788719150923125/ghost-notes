@@ -80,10 +80,12 @@ static func slug(title: String) -> String:
 ## THE SECTION of [param body] under the first heading [param heading] matches (a pattern whose
 ## first group is the heading's `#`s): `{before, head, lines, after}`, or empty when there is
 ## none. It runs to the next heading of its own level or above. Frontmatter is not part of it.
+## Its patterns are compiled per call, not through [method _rx]: that cache is one Dictionary for
+## every thread, and nothing has checked that only one thread reads a deck.
 static func section(body: String, heading: String) -> Dictionary:
 	var src := strip_frontmatter(body)
 	var lines := src.split("\n")
-	var head := _rx(heading)
+	var head := RegEx.create_from_string(heading)
 	var start := -1
 	var level := 0
 	for i in lines.size():
@@ -95,7 +97,7 @@ static func section(body: String, heading: String) -> Dictionary:
 	if start < 0:
 		return {}
 	var end := lines.size()
-	var any := _rx("^(#{1,6})\\s+")
+	var any := RegEx.create_from_string("^(#{1,6})\\s+")
 	for i in range(start + 1, lines.size()):
 		var m := any.search(String(lines[i]))
 		if m != null and m.get_string(1).length() <= level:

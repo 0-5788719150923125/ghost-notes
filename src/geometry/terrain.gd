@@ -442,7 +442,7 @@ func step_light(delta: float) -> void:
 	# A 5-tap binomial (1 4 6 4 1), applied separably through `_cast_blur` as a horizontal pass and
 	# then a vertical one, so an edge is carried by about five vertices instead of one - measured,
 	# the worst neighbor-to-neighbor step falls from 84% of the map's whole lit-to-shadowed range
-	# to a third of it. See tests/shadow_feather_check.gd.
+	# to a third of it. See tests/geometry/shadow_feather_check.gd.
 	for k in range(-4, rows + 4):
 		var gy := posmod(first + k, res)
 		var y0 := gy * res

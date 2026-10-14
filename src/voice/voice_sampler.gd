@@ -246,7 +246,7 @@ static func _wav_to_mono(wav: AudioStreamWAV) -> Dictionary:
 
 
 # ---- the measurement --------------------------------------------------------
-# Static and UI-free so tests/sampler_check.gd can round-trip it headless
+# Static and UI-free so tests/voice/sampler_check.gd can round-trip it headless
 # against SYNTHESIZED voices with known traits.
 
 
@@ -548,7 +548,7 @@ static func analyze(pcm: PackedFloat32Array, sr: float) -> Dictionary:
 # Reference vowel-space medians: what _formants measures at formant_scale
 # 1.0 - the anchor the tract inversion measures against. Calibrated as the
 # geometric midpoint of tract +-0.7 renderings measured by THIS estimator
-# (tests/sampler_check.gd round-trips it: +-0.7 recovers to ~+-0.68).
+# (tests/voice/sampler_check.gd round-trips it: +-0.7 recovers to ~+-0.68).
 const F1_REF := 458.0
 const F2_REF := 1720.0
 

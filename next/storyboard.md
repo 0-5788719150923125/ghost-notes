@@ -137,7 +137,7 @@ Said plainly, because each is a place the old shape still shows.
 - **Transitions are three names.** `cut`, `dip`, `fade`, and a morph where two entries line up. A
   transition as its own timeline item is not built.
 - **The editor is not judged by a person yet.** It was looked at through rendered pictures
-  (`tests/storyboard_look_probe.gd`), not used.
+  (`tests/timeline/storyboard_look_probe.gd`), not used.
 
 ## Next, in order
 

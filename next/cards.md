@@ -240,7 +240,7 @@ lands; a step that fails says why on its row.
 
 **No cheating.** The reader's passages are made in drawing order, each from the passages before
 it and `CardProducer._drawn(K)` - cards 1..K, nothing else. Every prompt is kept beside its
-reply in `jobs/`. `tests/cards_check.gd` asserts no later card's name, booklet or picture
+reply in `jobs/`. `tests/cards/cards_check.gd` asserts no later card's name, booklet or picture
 reaches a reader prompt - the builder's and the producer's own (`say_prompt`) - two-sided.
 A writer with tools could still read `draw.json` off the disk: Claude runs with none, and Codex
 (whose `exec` keeps a read-only shell) is told plainly to work from the message alone and open no
@@ -369,7 +369,7 @@ real run (Haiku, on a copy of #352029, 7 turns, ~22k output tokens) the loop wor
 looks, set, submit - but the model called a 1 cm flat disc it had named a soapstone oil lamp, and a
 bare rod it had named a dried grass bundle, "perfect". The pictures showed both plainly. CLAUDE WITH TOOLS CANNOT RUN `--safe-mode`, which drops every MCP server (measured):
 a tool job loads no settings instead (`--setting-sources ""`), and was measured to see no
-CLAUDE.md, memory or skills. Gates `tests/agent_tools_check.gd`, `tests/set_dresser_tools_check.gd`.
+CLAUDE.md, memory or skills. Gates `tests/agents/agent_tools_check.gd`, `tests/cards/set_dresser_tools_check.gd`.
 
 THE AIR (2026-10-05; the user: "some particle and/or volumetric effects could go a long way... gentle
 fog/smoke rolling in the background region (with less-severe fog in the foreground, perhaps even upon
@@ -412,8 +412,8 @@ The set dresser writes `effects` beside its things; `Effects` builds them:
   any frame can be drawn alone. Tabletop scale: a few centimeters to a couple of hands.
 The set dresser sees it: `set` shows the air at a moment some way in; `watch` photographs one effect
 four times (a burst just after its staged moment, fog and motes 3 s apart). The show's taste is in the
-brief's "The table and its air". Gates `tests/effects_check.gd`, `tests/set_dresser_tools_check.gd`;
-look with `tests/air_look_probe.gd` on a COPY of an episode.
+brief's "The table and its air". Gates `tests/table/effects_check.gd`, `tests/cards/set_dresser_tools_check.gd`;
+look with `tests/table/air_look_probe.gd` on a COPY of an episode.
 
 THE TABLE ITSELF (2026-10-06; the user: "right now, the table is just a flat rectangular surface, with
 a texture crudely drawn onto it... give the agents the proper tools and instructions to construct their
@@ -471,7 +471,7 @@ tooling"). The set dresser now writes `top` and `layers` beside its things (`Tab
   `top` and `layers` (answered with the table in words and whatever had to change); `remove` takes
   layers; `overhead` photographs the table from straight above with the camera's view outlined; `set`
   says the table in a line. 36 pictures, 1800 s.
-Gate `tests/tables_check.gd`; look with `set_dresser_look_probe --spec` (a spec with `top`/`layers` is
+Gate `tests/table/tables_check.gd`; look with `set_dresser_look_probe --spec` (a spec with `top`/`layers` is
 put first and seen from above).
 
 THE PAINTING'S DEPTH, PAINTED (2026-10-07; the user: "the painter-made height map, especially, sounds
@@ -594,8 +594,8 @@ spilling past its scalloped edge, a cloud taking the sunlit strip and giving it 
 blinds with a neon sign's red glow; a 2 a.m. kitchen by one candle and a street lamp's long shadows; a
 gull's shadow sweeping the palm mat; then roof beams' bars and a pillar's stripe across the shoebox's
 cloth, a bell rope swinging, a chandelier's spokes, laundry rippling and a fan turning. Gates
-`tests/lights_check.gd`, `tests/table_light_check.gd` (boot),
-`tests/light_screen_check.gd` (GPU), set_dresser_tools_check `_light`, cards_check (archive, the table step).
+`tests/table/lights_check.gd`, `tests/table/table_light_check.gd` (boot),
+`tests/table/light_screen_check.gd` (GPU), set_dresser_tools_check `_light`, cards_check (archive, the table step).
 
 SHADE, WIND AND WHAT IT CARRIES (2026-10-08; the user: "a diffuse shadow, which is softer and blurrier.
 Today, it sort of feels like most shadows more or less are of the same 'quality'"; "a table under a tree,
@@ -645,7 +645,7 @@ or getting carried-off from the table again after another gust"):
   works. BURSTS: the GPU carries each particle by the air's run since its birth less the lag still to
   make up (`air_carried`, `air_vel`; its birth's run in the transform's second column,
   `Effects.particle_xform`) - within a centimeter of a stepped integration. FOG rolls with the wind in
-  place of its own `drift`. Gate: `tests/wind_reach_check.gd`. Open: a tablecloth's hanging edge in a
+  place of its own `drift`. Gate: `tests/table/wind_reach_check.gd`. Open: a tablecloth's hanging edge in a
   gust; the cards themselves stay put (a 2 g card lifts at about 2 m/s - the reading must stay readable).
 - WHAT DRIFTS (`effects` kind `drift`; `src/table/drifts.gd`, `Drifts`, `shaders/air_drift.gdshader`): petals,
   rose petals, leaves, green leaves, seeds, spinners, feathers - falling from above or blown in from the
@@ -667,7 +667,7 @@ or getting carried-off from the table again after another gust"):
   the cloth are at a time; a piece never comes down or skids there, and a card laid over one later pins
   it - no gust reaches it. `put` reports how many gusts lift what lies; `watch` takes a drift through the
   strongest gust ahead, and `wind` through its strongest gust.
-Gates: `tests/drifts_check.gd` (the wind's closed-form carry against a summed one, gust rate, purity in
+Gates: `tests/table/drifts_check.gd` (the wind's closed-form carry against a summed one, gust rate, purity in
 any order, never through a thing, gusts lift and grip 1 holds, no jump between frames, how often both
 ways, gust shaking, the ways, a gust turning a flat one over, never on or under the cards), lights_check
 `_shade`, light_screen_check (a grown copy in a gust, GPU).
@@ -681,7 +681,7 @@ clear crystal (clarity >= `Props.CLEAR`) is drawn as glass - opaque, a crystal b
 A flame lights everything but its own thing (an oil lamp's flame blew its own body white), whose
 wax glows with the flicker instead (`flame` uniform). A reflection probe catches the table once
 it is set, and only the things reflect it (`reflection_mask`): metal with nothing to reflect
-read as paint. Look at a description alone with `tests/props_look_probe.gd`.
+read as paint. Look at a description alone with `tests/table/props_look_probe.gd`.
 
 STONES (2026-10-05; the user: "a lot of tarot readers often have stones of all sizes: sometimes
 large ones, though often a handful of small ones of various colors and properties", and "stones do
@@ -752,7 +752,7 @@ field of where a point was, so crisp seams move together and never open); normal
 warp's measured slope; a part warped past scaling is built with points 5 mm apart (`WARP_STEP`) - a
 candle drawn top and bottom only stayed straight however far it was bent. The set dresser is told
 how parts meet (a spout or handle starts inside the body) and that living plants are things the
-parts make; the show's guide asks for them. Gate `tests/props_check.gd`; cards_check builds a thing
+parts make; the show's guide asks for them. Gate `tests/table/props_check.gd`; cards_check builds a thing
 of every new shape.
 
 WHERE A THING STANDS IS FOUND (`_place_things`, `_stand`): groups biggest first, a group's tallest
@@ -788,7 +788,7 @@ two - a pure function of show time, so a render and a scrub see the same flame. 
 with its flame, so the shadows breathe. ROOM CANDLES OUT OF SHOT (the user's idea, "backlighting
 behind the camera, which also flickers"): two or three shadowless, flickering lights behind the
 camera and off to the sides - a warm fill on the cloth and on the card held up to the lens.
-Gate: `tests/table_place_check.gd`.
+Gate: `tests/table/table_place_check.gd`.
 
 EVERY LIGHT THROWS ITS OWN SHADOW (2026-10-05; the user, on a frame where "the rock casts a
 shadow that is crescent-moon shaped": "most scenes have multiple light sources, and thus should
@@ -956,7 +956,7 @@ so a half-covered card is pulled out by its free half; two cards lying one on th
 other, hard under a pressed card; a card run into is nudged. Now half a card's travel is in
 straight runs of 15 cm or more (the circles: 4), 89% of the cards get 15 cm or more from where the
 mixing found them (24%), and more than half the still cards a sweep runs over are knocked askew. Gate:
-`tests/table_wash_check.gd` (two-sided: the circling wash fails four of its checks, and tiny
+`tests/table/table_wash_check.gd` (two-sided: the circling wash fails four of its checks, and tiny
 circles made up inside the gate fail them too). A draw: square, slide, flip, up to the camera on the LEFT beside the booklet page on the
 RIGHT (shown, never read); both turn a little on their axes, and the card is now and then turned
 to look at its back - either way round, its back held anywhere from half a second to five (most
@@ -1082,38 +1082,38 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
 
 ## Probes and gates
 
-- `godot --headless --path . --script res://tests/cards_check.gd` - the gate.
-- `godot --headless --path . --script res://tests/youtube_check.gd` and `youtube_flow_check.gd` -
+- `godot --headless --path . --script res://tests/cards/cards_check.gd` - the gate.
+- `godot --headless --path . --script res://tests/export/youtube_check.gd` and `youtube_flow_check.gd` -
   the upload's pieces, and sign-in + upload end to end against a stand-in for Google.
-- `tests/episode_probe.gd` - make an episode headlessly (real quota); `--only table` sets
+- `tests/cards/episode_probe.gd` - make an episode headlessly (real quota); `--only table` sets
   just the table.
-- `tests/run_quiet.sh -- res://tests/props_look_probe.gd --spec <table.json> --out x.png` - a
+- `tests/run_quiet.sh -- res://tests/table/props_look_probe.gd --spec <table.json> --out x.png` - a
   table description's things side by side under candlelight, no tarot table around them (the camera
   backs off to show the tallest whole).
-- `godot --headless --path . --script res://tests/props_check.gd` - the shapes themselves: flat ends,
+- `godot --headless --path . --script res://tests/table/props_check.gd` - the shapes themselves: flat ends,
   corners, elbows, kinks, lofts, coils and warps.
-- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table_look_probe.gd 400 --show S --seed N --marks 1`
+- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/table_look_probe.gd 400 --show S --seed N --marks 1`
   - the table over an episode with a synthetic voice. `--times 3.6 --name "Show" --byline "with X"
   --ink "#1d2f5c"` photographs the title screen with a set dresser's color.
 - `tests/run_quiet.sh intro_blur_check` - the intro's blur, in pixels (see "The title screen").
-- `GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 tests/run_boot_probe.sh tests/cards_voice_probe.gd 900 --spec <md> --seed N --export 1`
+- `GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 tests/run_boot_probe.sh tests/cards/cards_voice_probe.gd 900 --spec <md> --seed N --export 1`
   - the panel, the real voice and the table, end to end, and the export take.
-- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/set_dresser_look_probe.gd 300 --show S --seed N`
+- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/cards/set_dresser_look_probe.gd 300 --show S --seed N`
   - what the set dresser's tools show, with no agent: an episode's table put, looked at and set, and
   the opening (`--ink`, `--name`, `--byline`). A `--spec` with `top`/`layers` builds the table itself first and shows
   it from above.
-- `godot --headless --path . --script res://tests/tables_check.gd` - the table itself (`Tables`).
-- `godot --headless --path . --script res://tests/lights_check.gd` - the light (`Lights`);
-  `tests/run_boot_probe.sh tests/table_light_check.gd 300` - the table's own light in the medium;
+- `godot --headless --path . --script res://tests/table/tables_check.gd` - the table itself (`Tables`).
+- `godot --headless --path . --script res://tests/table/lights_check.gd` - the light (`Lights`);
+  `tests/run_boot_probe.sh tests/table/table_light_check.gd 300` - the table's own light in the medium;
   `tests/run_quiet.sh light_screen_check` - what the screens draw is what `Lights` reckons.
-- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/set_dresser_look_probe.gd 380 --show S --seed N --light <light.json> --quick 1`
+- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/cards/set_dresser_look_probe.gd 380 --show S --seed N --light <light.json> --quick 1`
   - a light put on an episode's table through the set dresser's own tools, set, and every moving part
   watched (`--watch 0`: none).
-- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/set_dresser_run_probe.gd 1600 --spec <md> --seed N [--model haiku]`
+- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/cards/set_dresser_run_probe.gd 1600 --spec <md> --seed N [--model haiku]`
   - the real set dresser at work through its tools (quota), on a COPY of an episode.
-- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/air_look_probe.gd 400 --show S --seed N --spec <effects.json> --moments 1`
+- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/air_look_probe.gd 400 --show S --seed N --spec <effects.json> --moments 1`
   - the air over a COPY of an episode, photographed at every moment a burst can mark.
-- `godot --headless --path . --script res://tests/agent_tools_claude_probe.gd` - that the installed
+- `godot --headless --path . --script res://tests/agents/agent_tools_claude_probe.gd` - that the installed
   Claude CLI reaches ghost's tools and sees their pictures (one short run).
 
 ## 2026-10-07: the reading's rhythm, the printed card, strands and bones, bursts
@@ -1192,7 +1192,7 @@ enforced:
 - A row or arc of five or more is laid as two rows now and then (`TablePositions.SPLIT_LONG`, its own
   die); and when a card of the spread would lie within `DECK_CROWD` of the deck, the reader slides the
   deck further out (`_plan_aside`, `DECK_ASIDE` of such episodes) just before that card is taken.
-  About a quarter of 5-8 card spreads; gated in tests/table_positions_check.gd.
+  About a quarter of 5-8 card spreads; gated in tests/table/table_positions_check.gd.
 - The wash's pile builds to the deck's height as it is gathered (each card thickened as it lands),
   not all at once as it is squared. A card slid up onto the taller pile tips ~20 degrees, where
   `_tipped`'s skewed long side dipped 0.1 mm into the card under it (table_wash_check): the long side
@@ -1284,8 +1284,8 @@ the agents, then simply draw their attention to it".
   the first step was already at -27 and the top half was as loud as the reader. What 0.05 was is now
   near 0.65. Stored dials were not moved: one left at 0.05 is close to silent until it is turned up.
   Not yet judged by ear.
-- Listening: `tests/soundscape_probe.gd` writes a dozen places to dist/soundscape/*.wav. Gate:
-  tests/soundscape_check.gd.
+- Listening: `tests/table/soundscape_probe.gd` writes a dozen places to dist/soundscape/*.wav. Gate:
+  tests/table/soundscape_check.gd.
 
 ## 2026-10-11: what lies on what, the box's cards, a leaf under a card
 
@@ -1299,7 +1299,7 @@ Three reports from finished videos, one cause each.
   cloth before it rises (`_slid_out`: the shortest way clear of what is on it, never into a card
   beside it, the deck or the hem). A swept card leaves the deck flat and turns over with room for
   its tilt (`_sweep_xf`) - it used to cut into the deck and the card it landed on.
-  `tests/table_staging_check.gd` follows a waterfall frame by frame; a straight lift is the control.
+  `tests/table/table_staging_check.gd` follows a waterfall frame by frame; a straight lift is the control.
 - **The box's cards were another kind of card.** With the text on the back, a drawn card has a
   printed back of its own while the unseen cards showed the printing's shared artwork. They now get
   printed backs too (`_blank_backs`: `CardFaces.Face.anonymous`, type ruled as lines, three per

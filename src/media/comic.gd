@@ -21,7 +21,7 @@ class_name ComicMedium
 ## ONE LIVE PANEL, THE REST HELD. The Director runs exactly one scene (two across a
 ## transition) and this keeps that: the newest panel is live in its own SubViewport, and
 ## every panel behind it is a STOPPED render target - update mode DISABLED, its scene
-## freed, its last frame still sitting in VRAM. Measured in tests/medium_probe.gd: the
+## freed, its last frame still sitting in VRAM. Measured in tests/media/medium_probe.gd: the
 ## texture survives both the stop and the free, bit-exact, so a held panel costs nothing
 ## at all. That is the only reason this can ship. Six live scenes is not a thing that
 ## runs - the stage governor already spends its budget on one - and the alternative,
@@ -138,7 +138,7 @@ const REOPEN_STEP := 1.5
 ##
 ## THIS IS WHAT "4 OF THE 6 FRAMES ARE PURE BLACK, AND EMPTY" WAS, and the freeze mechanism
 ## was working perfectly the whole time. A held panel keeps the last picture it DREW - that is
-## the measured invariant the whole medium rests on (tests/medium_probe.gd) - and a panel
+## the measured invariant the whole medium rests on (tests/media/medium_probe.gd) - and a panel
 ## that was cast, given two frames, and frozen has a last picture that is two frames of an
 ## empty scene. Which is black. Nothing culled it; it was preserved exactly as found.
 ##
@@ -1167,7 +1167,7 @@ func _tick_cast(features, delta: float) -> void:
 ## property and cost four rounds of guards that never converged. An entry is now a DESTINATION
 ## and a SPEED - see the note inside the table for what each key means - and one follower
 ## walks toward it every frame, so the only discontinuity a session can contain is a call to
-## _cut_to. That is a property, and tests/comic_motion_check.gd counts it.
+## _cut_to. That is a property, and tests/media/comic_motion_check.gd counts it.
 ##
 ## THE BAG IS MOSTLY GENTLE, and that is a correction. It was first weighted the other way,
 ## in answer to "a constant shot of a single frame should be an event, not the rule" - and
@@ -1738,7 +1738,7 @@ func _begin_shot(panel: int, turned := false) -> void:
 
 ## THE ONLY PLACE THIS FILE ASSIGNS THE CAMERA. Everything else integrates toward a target, so
 ## the number of discontinuities in a session is exactly the number of calls to this - which is
-## a property, not a hope, and is what tests/comic_motion_check.gd counts.
+## a property, not a hope, and is what tests/media/comic_motion_check.gd counts.
 func _cut_to(pose: Dictionary) -> void:
 	_cam = pose.duplicate()
 	_snap = true                  # the placed rake and distance jump with it, or it tears
@@ -2080,7 +2080,7 @@ func _printed_bounds() -> Rect2:
 ## HOW MUCH OF THE FRAME THE SHEET COVERS. 1.0 when there is paper under all four corners
 ## of the picture; below that, the number is how far the WORST corner falls outside the
 ## sheet as a fraction of half the frame height - so 0.92 is a sliver of desk in one corner
-## and 0.5 is a wedge across the shot. Read by tests/comic_look_probe.gd, which is the only
+## and 0.5 is a wedge across the shot. Read by tests/media/comic_look_probe.gd, which is the only
 ## way "is there dead space in the frame" gets checked by something other than an eye.
 ##
 ## FOUR CORNERS, not two edges of a bounding box. The old measure took the projected sheet's
@@ -2177,7 +2177,7 @@ func _quad_clearance(q: PackedVector2Array, hx: float, hy: float) -> float:
 ## HOW MUCH OF THE FRAME THE PANEL BEING READ TAKES UP, on its worst axis. 1.0 means it
 ## exactly spans the picture; above 1 the screen is cropping into it, which is the intended
 ## shot for an abstract field and the wrong one for a piece of footage - see CONTAIN_FILL.
-## Read by tests/comic_look_probe.gd, so "is the whole video on screen" is a number.
+## Read by tests/media/comic_look_probe.gd, so "is the whole video on screen" is a number.
 func read_panel_fit() -> float:
 	if _spread == null or _read < 0 or _read >= _spread.panels.size():
 		return 0.0
@@ -2628,7 +2628,7 @@ func _cells(ok: Array, n: int) -> PackedInt32Array:
 
 ## One panel's picture: its render target mapped onto a GRID-subdivided quad whose every
 ## vertex is projected individually. Two triangles would be affine and would warp (28.5 px
-## on a 512 px frame, measured in tests/medium_probe.gd); subdivision makes the mapping
+## on a 512 px frame, measured in tests/media/medium_probe.gd); subdivision makes the mapping
 ## piecewise-perspective and the error vanishes.
 func _panel_quad(sp: ComicSpread, i: int, pool: int, m: Basis,
 		u: float, origin: Vector2, fade: float, mirror: bool) -> void:

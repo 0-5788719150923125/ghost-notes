@@ -27,7 +27,7 @@ class_name Rules
 ## went wrong without it - is a `#` comment above it.
 ##
 ## Nothing is filled in silently: a name the code did not give is left as `{{name}}` and said in
-## [member missing], which the gate holds empty (tests/rules_check.gd), as it holds every file to parse.
+## [member missing], which the gate holds empty (tests/data/rules_check.gd), as it holds every file to parse.
 
 const DIR := "res://rules"
 

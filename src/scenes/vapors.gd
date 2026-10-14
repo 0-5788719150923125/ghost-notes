@@ -14,7 +14,7 @@ extends GhostScene
 ## double domain warp for the twist, the plume envelope re-tapped toward the lamp for the
 ## volume) and [Layer.Vapor] for the plumes that place, color and drive it.
 ##
-## Its gate is tests/vapor_check.gd, and it is a gate about a LOOK: presence, a front, drawn-out
+## Its gate is tests/scenes/vapor_check.gd, and it is a gate about a LOOK: presence, a front, drawn-out
 ## filaments, more than one hue, and motion, each against a control that breaks that one
 ## property. Three earlier cuts of the field compiled, ran, reported plausible coverage and drew
 ## engraved satin; that is why the gate measures the properties rather than the plumbing.
@@ -27,7 +27,7 @@ extends GhostScene
 ## loudness, and since amplitude IS the size of a mass, the whole frame inflated and collapsed
 ## with the harmonics ("EXTREMELY unstable... it should be continuous movement forward, not an
 ## expand and contract"). Every audio path here now ends in a brightness or a rate, and
-## tests/vapor_check.gd holds it to that. The tonal center pulls every hue toward the music's
+## tests/scenes/vapor_check.gd holds it to that. The tonal center pulls every hue toward the music's
 ## key, eased as a vector so a key change sweeps instead of jumping.
 ##
 ## What kind of vapor it is comes from one roll, because these are not independent

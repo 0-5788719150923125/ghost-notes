@@ -36,7 +36,7 @@ class_name Echo
 ##   cooldown  - after a correction the accumulator restarts from silence.
 ##
 ## Echo holds no rng and no Godot scene state - it is a pure listener, testable
-## headlessly (see tests/echo_check.gd).
+## headlessly (see tests/audio/echo_check.gd).
 
 const CELL := 0.5          # map resolution: one signature snapshot per this many schedule seconds
 const TICK := 0.25         # how often the live signature is matched against the map (s)

@@ -5,7 +5,7 @@ The Praxis move (see praxis/docs.py) applied to a Godot project: introspect
 the source of record and generate the documentation from it, so the docs
 cannot drift from the code. Here the source of record is the GDScript
 itself - every script carries a leading `##` doc comment, the scene roster
-is the literal `Director.SCENES` array, the component registries are
+is the literal `SceneRoster.SCENES` array (`src/scenes/roster.gd`), the component registries are
 literal `const REGISTRY := {...}` dictionaries, and the Masking effect
 table is `MASK_EFFECTS` / `EFFECT_CONTROLS`. This script parses all of
 that statically (no Godot boot required) and writes:
@@ -653,8 +653,9 @@ TOP_LEVEL: List[Tuple[str, str]] = [
     ),
     (
         "tests/",
-        "The gates (`*_check.gd`), probes (`*_probe.gd`) and their runners; "
-        "`scripts/check.sh` runs them all.",
+        "The gates (`*_check.gd`) and probes (`*_probe.gd`), in folders that mirror `src/` "
+        "(a gate lives with what it holds), and their runners and fixtures at the top; "
+        "`scripts/check.sh` runs them all, and `--for` the ones a change can reach.",
     ),
     (
         "docs/",
@@ -888,10 +889,10 @@ def _first(text: str, pattern: str) -> Optional[str]:
 
 
 def _parse_scene_roster(director_text: str) -> List[Tuple[str, str, str]]:
-    """Parse Director.SCENES into (scene name, behavior, group comment)."""
+    """Parse SceneRoster.SCENES into (scene name, behavior, group comment)."""
     m = re.search(r"const SCENES :?= \[(.*?)\n\]", director_text, re.S)
     if not m:
-        warn("could not parse Director.SCENES")
+        warn("could not parse SceneRoster.SCENES")
         return []
     entries: List[Tuple[str, str, str]] = []
     group = ""
@@ -906,15 +907,24 @@ def _parse_scene_roster(director_text: str) -> List[Tuple[str, str, str]]:
     return entries
 
 
+SCENE_BASES = {"GhostScene", "Scene3D"}
+
+
 def _collect_scenes() -> Tuple[Dict[str, SceneInfo], List[str]]:
     """All scenes on disk, annotated with their Director registration.
     Returns (name -> SceneInfo, ordered group labels)."""
-    scenes = {p.stem: SceneInfo(Script(p)) for p in sorted(SCENES_DIR.glob("*.gd"))}
-    roster = _parse_scene_roster(_script_path("director").read_text())
+    # A scene is a script that extends a scene base; the roster beside them is a registry, not one.
+    scenes = {
+        p.stem: SceneInfo(s)
+        for p in sorted(SCENES_DIR.glob("*.gd"))
+        for s in [Script(p)]
+        if s.extends in SCENE_BASES
+    }
+    roster = _parse_scene_roster((SCENES_DIR / "roster.gd").read_text())
     groups: List[str] = []
     for name, behavior, group in roster:
         if name not in scenes:
-            warn(f"Director.SCENES registers scenes/{name}.gd which does not exist")
+            warn(f"SceneRoster.SCENES registers scenes/{name}.gd which does not exist")
             continue
         scenes[name].behaviors.append(behavior)
         scenes[name].group = group
@@ -954,7 +964,7 @@ def _render_scenes_doc(scenes: Dict[str, SceneInfo], groups: List[str]) -> str:
         "each documented by its own leading doc comment (reproduced here). "
         "A scene is a seeded **definition** (`build_params(rng)`) modulated "
         "by audio (`update`) and drawn through a view; registration in "
-        "`Director.SCENES` pairs it with one or more **behaviors** "
+        "`SceneRoster.SCENES` pairs it with one or more **behaviors** "
         "(`static` / `drift` / `fluid`).",
         "",
         "Legend per entry: render kind, registered behaviors, lifecycle. "
@@ -989,7 +999,7 @@ def _render_scenes_doc(scenes: Dict[str, SceneInfo], groups: List[str]) -> str:
                 "## On disk but not in the auto rotation",
                 "",
                 "Present under `src/scenes/` but not registered in "
-                "`Director.SCENES` - reachable only by storyboard (`stage`), "
+                "`SceneRoster.SCENES` - reachable only by storyboard (`stage`), "
                 "`--scene` pin, or not reachable at all. If one of these "
                 "should be in the rotation, register it; if it is retired, "
                 "delete it.",
@@ -1131,7 +1141,7 @@ def _render_filters_doc(base: Script) -> str:
 
     It also CHECKS the pair, which is this table's own failure mode: a registry key whose
     uniform the shader does not declare ships as a control that does nothing, because
-    `set_shader_parameter` on an unknown name is silent. tests/stage_filter_check.gd
+    `set_shader_parameter` on an unknown name is silent. tests/show/stage_filter_check.gd
     asserts the same thing at runtime; this is so a docs run says it too."""
     pairs = _filter_pairs(base)
     if not pairs:
@@ -1264,7 +1274,7 @@ def _render_script_doc(marks: Script) -> str:
         "",
         f"Registry: `ScriptMarks.REGISTRY` in {_source_link(marks.rel)} "
         f"({len(rows)} entries). Each one is proven against the parser that "
-        "reads it by `tests/script_marks_check.gd`.",
+        "reads it by `tests/notes/script_marks_check.gd`.",
         "",
     ]
     for gkey, glabel in groups:
@@ -2126,7 +2136,7 @@ func _draw() -> void:
         draw_circle(p, 6, Color.from_hsv(params.hue, 0.7, 1.0))
 ```
 
-Register it in `Director.SCENES` - `{"script": preload("res://src/scenes/my_scene.gd"),
+Register it in `SceneRoster.SCENES` - `{"script": preload("res://src/scenes/my_scene.gd"),
 "behavior": "fluid"}` - more than once with different behaviors to keep several looks. A oneshot
 sets `lifecycle = "oneshot"` in `build_params` and returns `true` from `finished()`. Weather and
 atmosphere are layers, composed the way forces are:
@@ -2540,6 +2550,47 @@ def check_structure() -> Dict[str, set]:
     return edges
 
 
+def _missing_paths(text: str) -> List[str]:
+    """The `src/<...>.gd` and `tests/<...>.gd` paths written in [text] that are not on disk."""
+    found = re.findall(r"(?<![\w/])(?:res://)?((?:src|tests)/[a-z_0-9]+(?:/[a-z_0-9]+)*\.gd)\b", text)
+    return [rel for rel in sorted(set(found)) if not (ROOT / rel).exists()]
+
+
+def check_paths() -> None:
+    """A script path written in code names a script that exists.
+
+    A class name is global, so a script that moves folders breaks nothing the compiler can see -
+    and a `load("res://src/...")` built from a string, a `--script` argument, a row of a registry
+    that names its script by path, or a gate that reads a source file as text breaks at the
+    moment it runs, in whichever session reaches it first. `compile_check` loads every script and
+    never follows a string. This reads every `src/<...>.gd` written in the code, the gates, the
+    rules, the storyboards, the shaders and the two orientation files, and names any that is not
+    on disk. The notes in next/ are left out: they are allowed to remember a file that is gone.
+
+    THE CONTROL, run first: a path that names nothing must be found, and one that names a real
+    script must not be.
+    """
+    if _missing_paths('load("res://src/platform/no_such_script.gd")') != [
+        "src/platform/no_such_script.gd"
+    ] or _missing_paths("src/platform/settings.gd and res://src/show/director.gd"):
+        warn("check_paths: its control did not fail - the check proves nothing")
+    roots = ["src", "tests", "rules", "storyboards", "shaders", "scenes", "hosts", "scripts"]
+    files = [ROOT / "project.godot", ROOT / "CLAUDE.md", ROOT / "README.md"]
+    for r in roots:
+        files += [p for p in (ROOT / r).rglob("*") if p.is_file()]
+    kinds = {".gd", ".tscn", ".godot", ".cfg", ".py", ".sh", ".md", ".yaml", ".yml",
+             ".gdshader", ".gdshaderinc"}
+    for p in sorted(files):
+        if not p.exists() or p.suffix not in kinds or "__pycache__" in p.parts:
+            continue
+        try:
+            text = p.read_text()
+        except UnicodeDecodeError:
+            continue
+        for rel in _missing_paths(text):
+            warn(f"{p.relative_to(ROOT).as_posix()} names {rel}, which does not exist")
+
+
 def _render_structure_doc(edges: Dict[str, set]) -> str:
     """docs/structure.md: the stack, what each folder names, and what still points up."""
     order = [folder for folder, _t, _d in FOLDERS]
@@ -2725,6 +2776,10 @@ def _patch_readme_block(name: str, body: str) -> None:
 
 
 def main() -> int:
+    if "--folders" in sys.argv[1:]:
+        # the stack, bottom first, one a line: what scripts/check.sh --for reads
+        print("\n".join(folder for folder, _t, _d in FOLDERS))
+        return 0
     # Every script but the scenes, by file name (a scene is read from SCENES_DIR).
     scripts: Dict[str, Script] = {}
     for p in sorted(SCRIPTS.glob("*/*.gd")):
@@ -2736,6 +2791,7 @@ def main() -> int:
         scripts[p.stem] = Script(p)
     scenes, groups = _collect_scenes()
     edges = check_structure()
+    check_paths()
     check_panel_controls()
     check_settings_owner()
     check_films_pumped()

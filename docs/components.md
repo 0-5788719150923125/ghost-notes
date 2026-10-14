@@ -13,7 +13,7 @@ SLOTS SAY HOW MANY (`SLOTS`): components that name the same slot are alternative
 
 THE STAGE IS A CAPABILITY: anything shown on it asks for `forward_plus`, the desktop renderer, so on a phone - where a note is its text and nothing more - every component but the text is impossible and "+" offers nothing (`attach_menu`).
 
-A CARD ANY PANEL CAN SHOW IS A ROW'S `script`: the path of the script that builds the component's card, loaded when a panel builds it (`NoteCards.make`). By path because this registry is under every card (docs/structure.md): a row is how it names one. The script answers `KEY` (its block), `for_note(ctx)`, `capture()` and `apply(block)`; `tests/components_check.gd` loads each and holds it to that.
+A CARD ANY PANEL CAN SHOW IS A ROW'S `script`: the path of the script that builds the component's card, loaded when a panel builds it (`NoteCards.make`). By path because this registry is under every card (docs/structure.md): a row is how it names one. The script answers `KEY` (its block), `for_note(ctx)`, `capture()` and `apply(block)`; `tests/notes/components_check.gd` loads each and holds it to that.
 
 Static and free of autoload names, like `Capabilities`, so a gate can read it under `--script`.
 

@@ -22,117 +22,6 @@ signal frame_changed                  # the frame (or what the medium allows of 
 ## from the song hash, so a given track always yields the same scenes, behaviors,
 ## triggers, and cut/blend choices.
 
-# Each entry pairs a scene script with a motion behavior (see GhostScene). The
-# same scene appears more than once with different behaviors - that is how the
-# original, un-modulated "static" looks are kept as first-class options.
-const SCENES := [
-	{"script": preload("res://src/scenes/spectrum_ring.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/spectrum_ring.gd"), "behavior": "fluid"},
-	{"script": preload("res://src/scenes/harmonic_lattice.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/harmonic_lattice.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/rooted_growth.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/filaments.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/filaments.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/furry.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/furry.gd"), "behavior": "fluid"},
-	{"script": preload("res://src/scenes/fog_lights.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/strata.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/bloom.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/bloom.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/wire_solid.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/planes.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/planes.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/voxel_blocks.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/cityscape.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/shatter_glass.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/gaussian_landscape.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/rocks.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/embers.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/metropolis.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/clockwork.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/clockwork.gd"), "behavior": "drift"},
-	# Weather & atmosphere - composed from the shared Layer registry (see src/scene_kit/layer.gd).
-	{"script": preload("res://src/scenes/snowfall.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/snowflakes.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/rainfall.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/clouds.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/clouds.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/fog_volume.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/fire.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/underwater.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/fireflies.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/starfield.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/starfield.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/aurora.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/fog_bank.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/petals.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/bubbles.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/motes.gd"), "behavior": "drift"},
-	# Vapors - the FIELD half of the atmosphere: a fragment program, not puffs, which is
-	# what lets it have a hard front and fiber (see scenes/vapors.gd). Registered on both
-	# behaviors: the drifting camera suits the nebula characters and a held one suits the
-	# denser ink, where the twisting is already all the movement the frame needs.
-	{"script": preload("res://src/scenes/vapors.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/vapors.gd"), "behavior": "static"},
-	# Worlds & projections - real 3D terrain, cities on it, latent geometry.
-	{"script": preload("res://src/scenes/projection.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/projection.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/terrain.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/terrain.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/terrain_city.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/spires.gd"), "behavior": "drift"},
-	# Simulation, structure and graphic work - the batch that widened the catalog past
-	# "particles over a color bed" and "a body in a void", which between them were most
-	# of what came before. Each of these is a language nothing else here speaks: a running
-	# physical state, a real symmetry group, a written script, a routed graph, a plant in
-	# depth, standing waves.
-	{"script": preload("res://src/scenes/chladni.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/chladni.gd"), "behavior": "drift"},
-	# wallpaper is DEREGISTERED, not deleted. Judged in the field: "everything about it
-	# looked bad - the colors, the way the patterns were exactly the same everywhere, and
-	# no movement at all besides a camera that shifted every once in a while."
-	#
-	# That is not a bug report, it is the design being wrong, and the design is mine. The
-	# scene's stated bet was that a perfectly synchronized RE-INK of a static tiling would
-	# be dramatic where motion would be cheap. It is not: an unchanging motif repeated to
-	# the frame edge reads as a background texture, and a lattice glide on the beat reads
-	# as the camera slipping rather than as the pattern stepping. The palette compounded it
-	# - a black keyline against saturated inks on paper has to be composed, and these are
-	# sampled.
-	#
-	# The file and [WallpaperGroup] stay: the seventeen plane groups are correct, tested
-	# and reusable, and a motif worth repeating would still want them. What is missing is a
-	# reason for the eye to stay, and that is a redesign rather than a tuning pass - one
-	# that should be done where it can actually be looked at, which is what --scene is for.
-	{"script": preload("res://src/scenes/glyphs.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/falling_sand.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/falling_sand.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/neural_field.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/canopy.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/cloth.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/murmuration.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/tidepool.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/tidepool.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/contour_map.gd"), "behavior": "drift"},
-	# Two things the catalog had no version of at all. `fractal_zoom` is the only scene whose
-	# subject has detail at every scale, so it is the only one that can move FORWARD forever
-	# without repeating - and the only one where the camera's motion is the whole content.
-	# `tunnel_run` is the only RIDE: everything else here is looked at, and a first-person track
-	# puts the viewer inside the frame instead. Both are registered on `drift` (their own camera
-	# does the work; the 2D view adds almost nothing) and the fractal also on `static`, where a
-	# completely fixed frame suits a fall that is already all the motion there is.
-	{"script": preload("res://src/scenes/fractal_zoom.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/fractal_zoom.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/tunnel_run.gd"), "behavior": "drift"},
-	# "the-point" scenes (camera holds, per the brief).
-	{"script": preload("res://src/scenes/eye.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/two_eyes.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/prism.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/prism_split.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/eye_prism.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/two_prisms.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/prism_swarm.gd"), "behavior": "drift"},
-]
 
 # ----------------------------------------------------------------------------------
 # The launch-lottery constant. The auto show is spectrally deterministic - a given song
@@ -143,33 +32,6 @@ const SCENES := [
 const SEED_SALT := 3141592653589793
 # ----------------------------------------------------------------------------------
 
-# The LAYER transition phases two scenes ASYNCHRONOUSLY: the incoming fades IN over the
-# outgoing (both visible, layered), then the outgoing fades OUT, leaving the incoming behind -
-# a slow dissolve-through-an-overlap rather than a dip to black. To keep the overlap tasteful it
-# is only used when the INCOMING scene is one of these ATMOSPHERIC field scenes (they read well
-# washed over another look). During the overlap the two are pushed to opposite regions (one left
-# /smaller, one right/larger) so they compose instead of colliding at the focal point.
-const ATMOSPHERIC := [
-	"res://src/scenes/starfield.gd", "res://src/scenes/aurora.gd",
-	"res://src/scenes/fog_bank.gd", "res://src/scenes/fog_lights.gd",
-	"res://src/scenes/fireflies.gd", "res://src/scenes/snowfall.gd",
-	"res://src/scenes/rainfall.gd", "res://src/scenes/motes.gd",
-	"res://src/scenes/bubbles.gd", "res://src/scenes/petals.gd",
-	"res://src/scenes/embers.gd", "res://src/scenes/clouds.gd",
-	"res://src/scenes/underwater.gd", "res://src/scenes/fire.gd",
-	"res://src/scenes/vapors.gd",
-	"res://src/scenes/clouds.gd", "res://src/scenes/fog_volume.gd",
-	# The soft-edged half of the new bright scenes. A LAYER dissolve suits them for the
-	# same reason it suits the weather - they are full-frame fields with no silhouette to
-	# collide with, and arriving through a wash rather than out of a beat of black is
-	# kinder to a high-key image.
-	#
-	# The HARD-edged new ones are deliberately NOT here. A printed survey sheet or a flat
-	# wallpaper pattern half-dissolved over another scene reads as a rendering fault
-	# rather than as a transition; those want the clean dip, and a bright picture fading
-	# up from black is a perfectly good entrance - it is a cut onto white that would jar.
-	"res://src/scenes/tidepool.gd", "res://src/scenes/murmuration.gd",
-]
 
 enum Style { CUT, DIP, FADE, LAYER }
 enum Trigger { BEAT, MOVEMENT, LULL }
@@ -291,7 +153,7 @@ var _medium: Medium = null
 ## Folded in by XOR everywhere it is used, and 0 for the Director's own path, so at 0 every
 ## expression is bit-identical to what it was before this existed. That is deliberate and it
 ## is checked: the show is deterministic per song, and a new feature must not silently
-## re-roll every existing one. tests/scene_mix_check.gd replays a seed and compares.
+## re-roll every existing one. tests/scenes/scene_mix_check.gd replays a seed and compares.
 var _pick_salt := 0
 var _prev_time := -1.0       # last frame's MUSIC-CLOCK position (Spectrum.current.time); the per-frame
                              # time step is derived from this, NOT the drawn-frame delta, so scenes and
@@ -357,12 +219,12 @@ const FLURRY_CD_MIN := 6     # never fewer scenes between flurries, whatever the
 #
 # Zoom kick ranges, sampled per punch (never baked to one value). Asymmetric on
 # purpose - see the sampler in _drive_stinger and the gate in
-# tests/sting_shape_check.gd, which checks the outward one against the margin
+# tests/show/sting_shape_check.gd, which checks the outward one against the margin
 # below rather than against a remembered number.
 # ...AND THE SIZE OF ONE IS ANCHORED TO THE CAMERA'S ORDINARY TRAVEL, below, rather than
 # picked. The first version of this gesture was reported as "the entire scene explodes
 # quickly, then recovers immediately" and the fix was its ENVELOPE - it had been a one-frame
-# step, and tests/sting_shape_check.gd has gated the attack ever since. The complaint came
+# step, and tests/show/sting_shape_check.gd has gated the attack ever since. The complaint came
 # back anyway, in the same words, about a punch that is now perfectly smooth: "they were
 # exploding/contracting quickly, in response to harmonics... nobody expects a scene to
 # explode and quickly contract." Smooth was necessary and was never sufficient. A 20% zoom
@@ -1131,9 +993,9 @@ func _locked_scene_arg() -> int:
 		if args[i] == "--scene" and i + 1 < args.size():
 			var v := args[i + 1]
 			if v.is_valid_int():
-				return clampi(int(v), 0, SCENES.size() - 1)
-			for s in SCENES.size():
-				if String(SCENES[s].script.resource_path).contains(v):
+				return clampi(int(v), 0, SceneRoster.SCENES.size() - 1)
+			for s in SceneRoster.SCENES.size():
+				if String(SceneRoster.SCENES[s].script.resource_path).contains(v):
 					return s
 	return -1
 
@@ -1385,7 +1247,7 @@ func _reading() -> bool:
 # The envelope was always meant to BE the easing (SceneView: "not eased - the
 # Director drives the envelope"); it simply never eased the onset.
 #
-# THE SPLIT AND THE FLOOR ARE BOTH MEASURED, by tests/sting_shape_check.gd: the
+# THE SPLIT AND THE FLOOR ARE BOTH MEASURED, by tests/show/sting_shape_check.gd: the
 # largest change in drawn zoom between two consecutive frames, at the largest kick
 # the sampler can produce (0.20). ghost's own eased camera covers 8% of its
 # remaining error per frame (SceneView.smoothing = 5), so a 0.20 move starts at
@@ -1745,7 +1607,7 @@ func jump(seed_val: int) -> void:
 	# pre-session jumps silent no-ops, so the first scene of a run fell back
 	# to the session fingerprint - which the throw jitter re-rolls every cast:
 	# "the initial scene is ALWAYS different across runs.")
-	_jump_next = absi(seed_val) % maxi(SCENES.size(), 1)
+	_jump_next = absi(seed_val) % maxi(SceneRoster.SCENES.size(), 1)
 	if _host == null:
 		return                       # no session yet: the jump waits for attach()
 	next()
@@ -1753,8 +1615,8 @@ func jump(seed_val: int) -> void:
 
 ## The scene name a seed value maps to (for tooltips and ledgers).
 func scene_title(seed_val: int) -> String:
-	var i := absi(seed_val) % maxi(SCENES.size(), 1)
-	return String(SCENES[i].script.resource_path).get_file().get_basename()
+	var i := absi(seed_val) % maxi(SceneRoster.SCENES.size(), 1)
+	return String(SceneRoster.SCENES[i].script.resource_path).get_file().get_basename()
 
 
 ## A typed snapshot of the scene currently on screen, for the feedback console.
@@ -1840,7 +1702,7 @@ func _transition_alphas(k: float) -> Vector2:
 
 func _begin_transition() -> void:
 	_paced_t = 0.0
-	if SCENES.size() < 2:
+	if SceneRoster.SCENES.size() < 2:
 		_elapsed = 0.0
 		_cue_prev = 0.0
 		return
@@ -1893,7 +1755,7 @@ func _begin_transition() -> void:
 		_style = Style.CUT            # a burst is a run of hard jump cuts
 	# A LAYER overlap only reads well when the incoming is an atmospheric wash; otherwise two
 	# busy looks fight, so fall back to a clean dip.
-	if _style == Style.LAYER and not ATMOSPHERIC.has(nxt.get_script().resource_path):
+	if _style == Style.LAYER and not SceneRoster.ATMOSPHERIC.has(nxt.get_script().resource_path):
 		_style = Style.DIP
 	if _style == Style.CUT:
 		_scene_host(nxt).add_child(nxt)   # instant swap, no blend
@@ -1977,7 +1839,7 @@ func _pick_index() -> int:
 # without playing it ([method forecast]), and both answers come from this one body.
 func _pick(session: int, salt: int, swaps: int, index: int, kind_last: Dictionary,
 		fallback: RandomNumberGenerator) -> int:
-	if SCENES.size() <= 1:
+	if SceneRoster.SCENES.size() <= 1:
 		return 0
 	# Identity-keyed weighted selection (Efraimidis-Spirakis): each candidate gets a STABLE
 	# per-cut uniform from a hash of (session, cut#, this scene's identity), and we keep the one
@@ -1990,7 +1852,7 @@ func _pick(session: int, salt: int, swaps: int, index: int, kind_last: Dictionar
 	# the running order every playback.
 	var best := -1
 	var best_key := -1.0
-	for i in SCENES.size():
+	for i in SceneRoster.SCENES.size():
 		var w := _novelty(i, index, kind_last, swaps)
 		if w <= 0.0:
 			continue
@@ -2002,7 +1864,7 @@ func _pick(session: int, salt: int, swaps: int, index: int, kind_last: Dictionar
 			best = i
 	if best >= 0:
 		return best
-	return (fallback.randi() if fallback != null else 0) % SCENES.size()   # all suppressed: fall back
+	return (fallback.randi() if fallback != null else 0) % SceneRoster.SCENES.size()   # all suppressed: fall back
 
 
 ## THE SEEDED SHOW, WRITTEN DOWN: its first [param count] entries as a storyboard's - each a
@@ -2022,7 +1884,7 @@ func forecast(count: int) -> Array:
 		# picked before the first cut has been counted (attach() builds one, the first change the next)
 		var swaps := maxi(0, k - 1)
 		index = _pick(session, 0, swaps, index, kind_last, null)
-		var e: Dictionary = SCENES[index]
+		var e: Dictionary = SceneRoster.SCENES[index]
 		kind_last[String(e.script.resource_path)] = swaps
 		out.append({
 			"scene": String(e.script.resource_path).get_file().get_basename(),
@@ -2032,17 +1894,17 @@ func forecast(count: int) -> Array:
 
 
 # A STABLE identity for a catalog entry: a hash of (scene name, behavior), independent of its
-# position in SCENES. Keying seeds and selection off this - not the array index - is what lets us
+# position in SceneRoster.SCENES. Keying seeds and selection off this - not the array index - is what lets us
 # add or reorder scenes without changing how the existing ones are chosen or how they look.
 func _scene_key(i: int) -> int:
-	var e: Dictionary = SCENES[i]
+	var e: Dictionary = SceneRoster.SCENES[i]
 	return hash(String(e.script.resource_path).get_file().get_basename() + "|" + String(e.behavior))
 
 
 ## How many cuts back the novelty term can see. Past this a kind is simply DUE, and no more due
 ## than any other kind that is also due - which is the whole difference between sampling the
 ## catalog and queueing it. Chosen by measuring the first-repeat statistic, not by taste; see
-## tests/scene_mix_check.gd.
+## tests/scenes/scene_mix_check.gd.
 const NOVELTY_SPAN := 5.0
 
 ## How sharply novelty rises inside that span. 1.0 is linear in cuts-since-last-seen.
@@ -2061,7 +1923,7 @@ const NOVELTY_EXP := 1.0
 # rotation through the catalog wearing the clothes of a weighted random draw, and the function
 # above promised "a soft priority queue, not a hard rotation" while delivering the opposite.
 #
-# Measured before the change (tests/scene_mix_check.gd, 40 sessions x 140 cuts over 52 kinds):
+# Measured before the change (tests/scenes/scene_mix_check.gd, 40 sessions x 140 cuts over 52 kinds):
 # the first repeated kind arrived at cut 50.0, where a genuine random draw over 52 kinds repeats
 # at about cut 9.0 and a complete sweep would be cut 53. A video therefore played very nearly
 # the whole catalog once through before it ever came back to anything, which is what "the
@@ -2078,8 +1940,8 @@ func _novelty_weight(i: int) -> float:
 func _novelty(i: int, index: int, kind_last: Dictionary, swaps: int) -> float:
 	if i == index:
 		return 0.0
-	var kind := String(SCENES[i].script.resource_path)
-	if index >= 0 and kind == String(SCENES[index].script.resource_path):
+	var kind := String(SceneRoster.SCENES[i].script.resource_path)
+	if index >= 0 and kind == String(SceneRoster.SCENES[index].script.resource_path):
 		return 0.05
 	# An unseen kind is MAXIMALLY due, not infinitely due. The -1000 sentinel is unchanged and
 	# harmless now that the clamp is what decides how far novelty reaches.
@@ -2092,8 +1954,8 @@ func _novelty(i: int, index: int, kind_last: Dictionary, swaps: int) -> float:
 func _next_entry() -> Dictionary:
 	if _storyboard_seq.is_empty():
 		_index = _pick_index()
-		_kind_last[String(SCENES[_index].script.resource_path)] = _swaps
-		var e: Dictionary = SCENES[_index]
+		_kind_last[String(SceneRoster.SCENES[_index].script.resource_path)] = _swaps
+		var e: Dictionary = SceneRoster.SCENES[_index]
 		# session identity (from the song fingerprint) ^ scene IDENTITY (not its array slot) ^ history
 		# (swaps). Fully DETERMINISTIC: the same song yields the same seed here every run, so a scene's
 		# structure - clockwork's gears, a terrain's shape - reproduces exactly. The live
@@ -2125,7 +1987,7 @@ func _next_entry() -> Dictionary:
 	_step += 1                                       # the tail free-runs from wherever it began
 	var nm := String(item.get("scene", ""))
 	var path := "res://src/scenes/%s.gd" % nm
-	var script: Resource = load(path) if ResourceLoader.exists(path) else SCENES[0].script
+	var script: Resource = load(path) if ResourceLoader.exists(path) else SceneRoster.SCENES[0].script
 	if not ResourceLoader.exists(path):
 		push_warning("ghost: storyboard scene '%s' not found, substituting" % nm)
 	# The seed is keyed to the entry's POSITION, never to how many times it has been

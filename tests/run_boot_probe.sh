@@ -25,7 +25,7 @@
 # EACH RUN BOOTS A SCENE OF ITS OWN, `tests/_probe_<pid>.tscn`, naming the probe
 # where it lies (a probe outside the project is copied to `tests/_probe_<pid>.gd`
 # first), and removes it on exit. It used to copy the probe over one shared
-# `tests/boot_probe.gd` and restore a stub afterwards - so two runs at once (two
+# `boot_probe.gd` under tests/ and restore a stub afterwards - so two runs at once (two
 # dispatched agents, or an agent and you) ran each other's probes and could
 # restore the WRONG file permanently, and the "stub" that was committed had
 # itself become an old copy of a probe. Nothing is shared now: runs can overlap,

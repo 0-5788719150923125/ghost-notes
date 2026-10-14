@@ -78,7 +78,7 @@ Top-level layout; every script is in [docs/index.md](docs/index.md).
 - **[`fonts/`](fonts/)** - Faces the media draw with: the notebook's handwriting and the card table's lettering.
 - **[`hosts/`](hosts/)** - The Python hosts ghost spawns, each in an environment of its own the Provisioner builds (`src/platform/deps.gd`): `voice/` the neural voice, `face/` Masking's face and body pre-passes, `capture/` the tablet's page capture. Kept out of the exported .pck.
 - **[`scripts/`](scripts/)** - Build and check scripts: `scripts/check.sh` runs every gate (`--gpu` adds the ones that need a real renderer), `scripts/build.sh` exports a target into `dist/`.
-- **[`tests/`](tests/)** - The gates (`*_check.gd`), probes (`*_probe.gd`) and their runners; `scripts/check.sh` runs them all.
+- **[`tests/`](tests/)** - The gates (`*_check.gd`) and probes (`*_probe.gd`), in folders that mirror `src/` (a gate lives with what it holds), and their runners and fixtures at the top; `scripts/check.sh` runs them all, and `--for` the ones a change can reach.
 - **[`docs/`](docs/)** - Generated documentation. Regenerate with `python docs.py`; do not edit by hand.
 - **[`next/`](next/)** - Design notes and plans, one per subsystem: [notes.md](next/notes.md) is the notes refactor, step by step, and [roadmap.md](next/roadmap.md) is what comes next.
 - **[`reference/`](reference/)** - Reference imagery scenes were prototyped from.

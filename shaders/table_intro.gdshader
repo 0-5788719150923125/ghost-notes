@@ -12,7 +12,7 @@ uniform sampler2D screen : hint_screen_texture, filter_linear_mipmap, repeat_dis
 // the blur's standard deviation, as a share of the frame's height; 0 leaves the frame as it is
 uniform float sigma = 0.0;
 // the blur one mip level carries, read through the B-spline, in that level's texels - measured off
-// an edge (tests/intro_blur_check.gd): at 2.07 the blur drawn is the blur asked for, at 720 and 1080
+// an edge (tests/table/intro_blur_check.gd): at 2.07 the blur drawn is the blur asked for, at 720 and 1080
 uniform float level_sigma = 2.07;
 
 vec3 bspline(vec2 uv, int level) {

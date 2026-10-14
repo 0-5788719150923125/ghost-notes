@@ -214,7 +214,7 @@ Three tiers, in the existing `tests/` convention:
   agents already computed successfully, so the code path is proven: (a) per-phoneme-class delivered
   level relative to mean vowel, checked against a target table; (b) vowel space hull area in Bark²,
   stressed and unstressed separately; (c) word-boundary trough depth distribution. Wire into
-  `tests/voice_check.gd`, which is already the gate. This catches every regression class in this
+  `tests/voice/voice_check.gd`, which is already the gate. This catches every regression class in this
   document.
 - **Primary metric: ASR word error rate.** Synthesize known text, transcribe, compare - the
   standard objective intelligibility proxy, and unusually clean here because alignment is known by
@@ -325,7 +325,7 @@ Three things become data rather than code:
 - **A voice configuration is one object** whether it came from a preset, a bred seed, or a
   diagnostic A/B. Today `RAW_MODE`, `NOISE_FX`, `DRONE`, `FRIC_LEVEL` are static vars and module
   constants reachable only by editing the file - which is why every past investigation had to patch
-  source to run an experiment, and why `tests/pure_say.gd` has to save and restore a static var.
+  source to run an experiment, and why `tests/voice/pure_say.gd` has to save and restore a static var.
 - **The effect chain is a declared ordered list**, inspectable and per-context, so "clean narration"
   and "fishing atmosphere" are two configurations rather than two code paths. This is the same move
   `mask_session.gd`'s `MASK_EFFECTS`/`EFFECT_CONTROLS` already makes for the mask editor, so it
@@ -347,7 +347,7 @@ amplitude-column work. `SynthState`'s split into six typed sub-objects comes wit
 rewrite. By the end of section 4 the pipeline is typed, and no day was spent on typing alone.
 
 Determinism: seeds must reproduce forever, so every restructure step needs a byte-identical check on
-a fixed lineage before and after. `tests/voice_check.gd` should assert that. Note that the acoustic
+a fixed lineage before and after. `tests/voice/voice_check.gd` should assert that. Note that the acoustic
 fixes themselves *will* change output - that is the point - so bump a version marker on the voice
 config and treat pre-fix seeds as a different generation rather than trying to preserve them.
 
@@ -442,7 +442,7 @@ a voiced release event.
 | ASR WER, narration fixture | not measured | **4.5%** |
 | ASR WER, consonant-dense fixture | not measured | **36.7%** |
 
-`tests/voice_check.gd` still reports ALL OK, so trait determinism, lineage reproducibility and
+`tests/voice/voice_check.gd` still reports ALL OK, so trait determinism, lineage reproducibility and
 ornament aging survived every change.
 
 **Read the WER numbers carefully.** 4.5% on connected narrative prose is a genuinely good result,

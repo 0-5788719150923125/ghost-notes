@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Run the whole-catalogue smoke gate (tests/scene_smoke.gd) and report a TRUSTWORTHY
+# Run the whole-catalogue smoke gate (tests/scenes/scene_smoke.gd) and report a TRUSTWORTHY
 # exit status.
 #
 # WHY THIS WRAPPER EXISTS
 # -----------------------
-# The probe itself is straightforward - build every Director.SCENES entry at several
+# The probe itself is straightforward - build every SceneRoster.SCENES entry at several
 # seeds, update it, render it, free it - and it works: it reaches its verdict and
 # prints it. What it cannot do is EXIT cleanly.
 #
@@ -44,7 +44,7 @@ trap 'rm -f "$LOG"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-tests/run_boot_probe.sh tests/scene_smoke.gd "$TIMEOUT" 2>&1 | tee "$LOG" \
+tests/run_boot_probe.sh tests/scenes/scene_smoke.gd "$TIMEOUT" 2>&1 | tee "$LOG" \
   | grep -Ev '^\s*at:|GDScript backtrace|^\s*\[[0-9]+\]|handle_crash|Load address|^=+$|Dumping the backtrace|Engine version'
 
 # A RUNTIME SCRIPT ERROR IS A FAILURE, even though the probe survives it. Godot prints

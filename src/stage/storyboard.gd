@@ -54,7 +54,7 @@ const MIN_ENTRY := 0.5
 ## range), `vec3` (three of those), `scene`, `targets` (actor ids, none meaning all).
 ##
 ## The choices are written out here, and not read off the registries that own them, because this
-## file names no autoload and so loads under `--script`; `tests/storyboard_editor_check.gd` holds
+## file names no autoload and so loads under `--script`; `tests/timeline/storyboard_editor_check.gd` holds
 ## each list to its registry (GhostScene.BEHAVIORS, Shots.REGISTRY, Cast, Actions, Track).
 const BOARD := {
 	"loop": {"label": "Loop", "type": "bool", "default": true,

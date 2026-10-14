@@ -4,7 +4,7 @@ extends RefCounted
 ## busy machine does not decide the answer.
 ##
 ##   const WorkClock := preload("res://tests/work_clock.gd")
-##   var ms := WorkClock.cost_ms(func() -> void: medium._wash_plan(7777, 30.0))
+##   var ms := WorkClock.cost_ms(func() -> void: medium._shuffles._wash_plan(7777, 30.0))
 ##   _ok(ms < 700.0, "a plan is cheap enough (%.0f ms)" % ms)
 ##
 ## THE WALL CLOCK TIMES THE MACHINE, NOT THE CODE. table_wash_check held a step of rest to 25 ms by

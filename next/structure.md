@@ -92,7 +92,8 @@ mechanism" is a commitment in `docs/index.md`. Three differences shaped the plan
    first two).
 5. **Only `app/` names everything.** It is where a note's parts are put together, and a feature
    never reaches up for it.
-6. **One file, one job** - along the banners a big file already has. Not begun.
+6. **One file, one job** - along the banners a big file already has, a section at a time, never
+   moving a method a subclass overrides (step 8).
 
 **The gate.** `python docs.py --check` reads every script's references and fails on one that points
 up, on a script that is in no folder, on a folder the table does not place, and on a folder inside
@@ -168,31 +169,67 @@ folders needs no edit there.
 done* - with the table medium going home (the first half of 7) and Masking taking the shell's
 feedback console (the first of 9), which is all 48. See "How the 48 went".
 
-What is left, in the order that pays. 7 and 8 are where the bugs are.
+**Correctness, not only green.** *Status, 2026-10-13: done.* Three things no gate could see:
 
-**6. One shape of registry.** Today there are four (parallel `REGISTRY` / `LABELS` / `BLURBS`
-maps in `Medium`, `Filters`, `TextGen` and `ImageGen`; one map of rows in `Components`; `Cast` and
-`Actions` with separate field tables; the roster's list in the Director). One row shape - label, a
-sentence, a table of fields, the script - and one reader, so `SchemaForm`, `docs.py`, "+" and a
-timeline's "add" menu read any of them the same way. The roster leaves the Director for `scenes/`
-with it.
+- **A gate passed for a week with its check dead.** `clown_face_check` set two members of the
+  editor that no longer existed; the runtime error ended its Steadiness check and the gate printed
+  its pass over it. Steadiness moved to the face track long ago, so the check now lives in
+  `face_track_check`, through the dial's own mapping (`MaskFaceTrack.sigma_for`, which the editor
+  now calls), with a control that fails when the wobble never reaches the reader. AND THE RUNNER
+  FAILS THAT NOW: `check.sh` counts the runtime `SCRIPT ERROR`s in a passing gate's log, and a
+  gate that makes one on purpose declares it (`## script errors: N`). The first full run under it
+  found no other - and it caught a check of mine from earlier the same day, which loaded scripts
+  before the autoloads existed and passed over its own errors.
+- **A path written in code is held to the disk.** `docs.py --check` reads every `src/<...>.gd`
+  and `tests/<...>.gd` written in the code, the gates, the rules and the orientation files, and
+  names any that is missing - a moved script breaks nothing the compiler sees. It found two dead
+  references on its first run.
+- **Masking gets the console courtesy.** `main._end_session` asked its own handle whether the
+  feedback console was open; Masking's console is the shell's, so a reading of it was missed.
 
-**7. `table.gd` along its banners.** The episode (700 lines), the things on the table (1,440),
-posing (970), the shuffle (2,160): each a script with the state it alone touches, the medium left
-as the thing that mounts them. One banner a sitting, the table's gates after each
-(`table_place_check`, `table_staging_check`, `table_wash_check`, `deck_turns_check`).
+**6. One shape of registry.** *Status, 2026-10-13: the roster is out of the Director; the shape
+is not unified.* `SceneRoster` (`scenes/roster.gd`) holds the rotation and the atmospheric list, read
+by the Director, the storyboard's editor, docs.py and the gates; the order and names are unchanged,
+so every seeded show is. Left: one row shape - label, a sentence, a table of fields, the script -
+over the four shapes there are (parallel `REGISTRY` / `LABELS` / `BLURBS` maps in `Medium`,
+`Filters`, `TextGen` and `ImageGen`; one map of rows in `Components`; `Cast` and `Actions` with
+separate field tables; the roster's list), and one reader, so `SchemaForm`, `docs.py`, "+" and a
+timeline's "add" menu read any of them the same way. docs.py parses each shape by its own regex,
+so the reader and docs.py change together.
 
-**8. The workspaces become cards.** `ReadingPanel` along its banners (voices, the audition, the
-host, the window, export), the voice a card on the note's own panel, `CardsEditor` a component
-that brings a voice in place of a subclass that overrides one. storyboard.md lists this as its
-fourth "Next"; the stack no longer stands in its way, since nothing in `reading/` reaches up.
+**7. `table.gd` along its banners.** *Status, 2026-10-13: the shuffle is out.* `TableShuffle`
+(`table/table_shuffle.gd`, 2,300 lines: every move the deck makes and where each card is during
+one) holds its own state, reads 34 things of the medium (`medium.`) and is asked seven
+(`shuffle_xf`, `shuffle_wander`, `move_at`, `deck_turns`, `riffle`, `wash`, `wash_jump`); `table.gd`
+fell from 6,800 lines to 4,500. Measured, the other sections do not cut the same way: "the things on
+the table", "posing" and "the episode" each read 60 or more of the medium's members. But almost all
+of those are WRITTEN IN ONE PLACE, when the episode loads (the seed, the cards, the slots, the deck's
+base, the camera's, the staging...) and only read after. That is the next cut: a `TablePlan`, made
+once by the episode and read by everything that poses - the table as a pure function of (plan,
+show time), which is what its header has always said it is. Then the posing and the things on the
+table come out holding the plan instead of the medium.
 
-**9. Masking joins.** The shared transport (roadmap, "One transport for Masking too"), and
-`mask_editor.gd` along its 23 banners. Its two timelines and the storyboard's become one kit.
+**8. The workspaces become cards.** *Not begun, and measured not to be a cutting job.*
+`reading_panel.gd`'s banners do not hold together (its "audition" section holds `_set_status`,
+which the rest calls 19 times), and `CardsEditor` overrides 31 of its methods: a method moved into a
+part would call the part's own copy, and the override would go quiet with no compiler to say so. So
+the reading comes apart the way storyboard.md's fourth "Next" says - the voice a card on the note's
+own panel, Cards a component that brings a voice - with the overrides turned into what each mode
+hands the reading.
 
-**10. Tests mirror the folders.** 129 gates in one directory become `tests/<folder>/`, gate names
-unchanged. "Run the gate that covers what you touched" becomes a command: the gates of the folders
-touched and of the folders above them, read off the table.
+**9. Masking joins.** *Status, 2026-10-13: three parts are out.* `MaskPoseTrack` (the pose track:
+bootstrapped, read by time), `MaskUrlImport` (a link where a file is expected) and `MaskFaceTrack`
+(the face track and the stencil rasterized from it) hold their own state and read the editor through
+`editor.`; `mask_editor.gd` fell from 8,400 lines to 6,800. Left: the shared transport (roadmap, "One
+transport for Masking too"), the prep (its section is asked twelve things - the session's lifecycle
+lives in it), and one timeline kit for Masking's two and the storyboard's.
+
+**10. Tests mirror the folders.** *Status, 2026-10-13: done.* 165 gates and probes live in
+`tests/<folder>/`, the folder of what each holds; the runners, the fixtures and `compile_check` stay
+at the top. `scripts/check.sh --for` runs what a change can reach - the gates of the folders it
+touched and of every folder above (by default, what changed since the last commit; a path outside
+src/ and tests/ runs everything) - reading the stack from `python3 docs.py --folders`. A change in
+`src/table/` runs 37 gates of the 132.
 
 ## What the two futures need
 

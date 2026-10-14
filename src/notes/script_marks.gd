@@ -12,7 +12,7 @@ class_name ScriptMarks
 ##
 ## AN ENTRY DOES NOT IMPLEMENT ITS MARK. The parsers of record stay where they are
 ## ([Manuscript] for cues, rests and pictures; [TextNorm] and [Phonemes] for the rest), and
-## `tests/script_marks_check.gd` inserts every entry's example and asks THOSE parsers what
+## `tests/notes/script_marks_check.gd` inserts every entry's example and asks THOSE parsers what
 ## they make of it - so an entry that drifts from what the reader actually does fails there,
 ## and a new entry without a check fails too.
 ##

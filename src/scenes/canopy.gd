@@ -17,7 +17,7 @@ extends Scene3D
 ## and it turns six hundred L-systems into eight.
 ##
 ## WHAT A WOOD LOOKS LIKE is the subject of this scene, and each part of it is a number that
-## tests/canopy_scatter_check.gd holds:
+## tests/scenes/canopy_scatter_check.gd holds:
 ##
 ##   SIZE. A tree is a small fraction of the landscape's own vertical range - a mean of 0.11
 ##   of the relief. Height is sampled AS a fraction of relief, so it cannot drift when a
@@ -278,7 +278,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var climate := String(ok[rng.randi() % ok.size()])
 	_terrain = Terrain.new()
 	# RELIEF. A tree may only be a small fraction of the landscape's vertical range (that is what
-	# tests/canopy_scatter_check.gd measures), so the range has to be big enough for a small
+	# tests/scenes/canopy_scatter_check.gd measures), so the range has to be big enough for a small
 	# fraction of it to still be a tree: at the old 0.42-0.72 a correctly-proportioned tree was a
 	# tenth of a world unit and eleven pixels tall. Deeper relief also gives the wood real slopes
 	# to climb and real valleys to gather in, which is the whole subject of the density field.
@@ -288,7 +288,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# facets go under the trees where they belong, and the same 300-600 trees cover it as a
 	# forest instead of an orchard.
 	# EXTENT BACK OUT, RELIEF UP, AND THE CAMERA IN. Three numbers that only make sense together.
-	# A tree may only be a small fraction of the relief (tests/canopy_scatter_check.gd), so the
+	# A tree may only be a small fraction of the relief (tests/scenes/canopy_scatter_check.gd), so the
 	# relief has to be deep enough for that fraction to be a tree: at the old 0.42-0.72 it was a
 	# tenth of a unit and eleven pixels. But relief over a SMALL extent is a wall of spikes - the
 	# slope of this land is relief/half and the recipes are tuned around a sixth - so shrinking
@@ -327,7 +327,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# HEIGHT IS A FRACTION OF THE LANDSCAPE'S RELIEF, not an absolute. It was 0.30 to 0.56 world
 	# units against a relief of 0.42 to 0.72, which made the average tree 78% of the whole
 	# hillside's vertical range and the tallest 150% of it - a wood of trees taller than the
-	# mountain they stand on. Measured, in tests/canopy_scatter_check.gd, which is where the
+	# mountain they stand on. Measured, in tests/scenes/canopy_scatter_check.gd, which is where the
 	# 0.18-of-relief mean and 0.30 ceiling come from.
 	var h_hi: float = _terrain.relief * rng.randf_range(0.13, 0.185)
 	for si in nstands:

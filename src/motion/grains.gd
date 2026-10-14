@@ -638,7 +638,7 @@ func step() -> void:
 			# directions used to be tried in the order `rb, -rb` - and `rb` flips with the
 			# generation, so a fluid cell with passable space on BOTH sides simply took the first
 			# option every tick and walked right, left, right, left for ever. Measured on a
-			# SETTLED chamber with nothing pouring into it (tests/sand_flicker_probe.gd): a
+			# SETTLED chamber with nothing pouring into it (a probe since retired): a
 			# water-only pool had 40 cells changing occupancy 40 times in 40 ticks, every one a
 			# clean two-tick oscillation, while a powder-only chamber had exactly zero - powders
 			# have no `spread` and never enter this branch. Each of those swaps empties the cell

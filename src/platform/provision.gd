@@ -10,7 +10,7 @@ class_name Provision
 ##
 ## This file is the static half: where things live, which release fits this machine, how an archive
 ## is unpacked, and whether an environment is the one its requirements describe. It runs anywhere,
-## which is how tests/provision_check.gd covers it with no network. The live half is the
+## which is how tests/platform/provision_check.gd covers it with no network. The live half is the
 ## `Provisioner` autoload (provisioner.gd), which downloads, runs uv and reports progress. Features
 ## never name the autoload: they call [method ensure] here, which reaches it while the app runs and
 ## otherwise answers from what is on disk.

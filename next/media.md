@@ -106,7 +106,7 @@ is byte-identical to today's.
 ## Checklist
 
 ### Phase 0 - prove the two engine assumptions before building on them - DONE
-- [x] `tests/medium_probe.gd`: a SubViewport set to `UPDATE_DISABLED` keeps its last frame after
+- [x] `tests/media/medium_probe.gd`: a SubViewport set to `UPDATE_DISABLED` keeps its last frame after
       its child scene is freed. **Measured: drift 0.0000 after 8 frames with the scene freed.**
       The freeze is exact and free.
 - [x] Same probe: a ViewportTexture RID draws through a projected, subdivided grid.
@@ -139,7 +139,7 @@ is byte-identical to today's.
 
 ### Phase 3 - the surface - DONE
 - [x] Medium picker in the Generative panel's "THE PICTURE" section, built off the registry.
-- [x] `tests/comic_look_probe.gd` - drives a real comic session and writes PNGs; asserts only
+- [x] `tests/media/comic_look_probe.gd` - drives a real comic session and writes PNGs; asserts only
       that the frame is not uniform (the failure most likely to ship silently).
 - [x] `python docs.py` (`docs/media.md`, the CLI flag, the layout block) + README section.
 
@@ -249,7 +249,7 @@ so an unflushed change lands within a couple of seconds whatever the control is 
 `Settings.bind(control, section, key, default, keys)` is the part that answers "by default" -
 it loads the stored value, connects the signal and writes on change, so a control cannot be
 added without being saved. Two checks keep it that way: `docs.py check_settings_owner` and
-`tests/settings_check.gd`, which also proves the kill case rather than assuming it.
+`tests/platform/settings_check.gd`, which also proves the kill case rather than assuming it.
 
 Two things this turned up on the way:
 - **Autoload order is load-bearing.** `Settings` must be FIRST; listed after `Director` it

@@ -293,7 +293,7 @@ const EFFECT_UMBRA := 17
 ## not the same request as "take the yellow out" and the second leaves gray.
 ## Its selection is an angular CONE around the key rather than the raw projection
 ## the other two use: a replacement is all-or-nothing, and skin sitting 28 degrees
-## off a yellow wall must not take a share of it (see tests/repaint_check.gd).
+## off a yellow wall must not take a share of it (see tests/masking/repaint_check.gd).
 const EFFECT_REPAINT := 18
 ## RAIN: keyless weather in front of and behind the subject. Every drop is
 ## independent - lane, phase, speed and length all hashed per drop - and Depth

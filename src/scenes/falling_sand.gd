@@ -38,7 +38,7 @@ extends GhostScene
 ## own repose, a thin run on every shelf, and a stream still in the air under whichever lanes
 ## are open. Deposited rather than simulated, because a pre-roll long enough to raise a cone
 ## is over a second of CPU - either a stall at the cut or a second of empty chamber arriving
-## late. Gated by tests/sand_warm_check.gd, which settles the deposit against the automaton.
+## late. Gated by tests/scenes/sand_warm_check.gd, which settles the deposit against the automaton.
 ##
 ## AUDIO. Each spout owns a FIXED band, and its rate in grains per second is its gain times
 ## that band's level, so the pours move against each other rather than throbbing together -

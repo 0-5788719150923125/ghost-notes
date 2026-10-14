@@ -231,7 +231,7 @@ const RAW_TRIM := 4.0                 # raw (RAW_MODE) output trim, staged by
 # radiation stage - shaped like a consonant, fused by sharing the lip
 # transform and the phoneme's tract POSTURE, but never lowpassed by the vowel.
 # FRIC_LEVEL seats the whole branch; per-phoneme balance lives in the table.
-# A static var (not a const) ONLY so tests/pure_say.gd can sweep it.
+# A static var (not a const) ONLY so tests/voice/pure_say.gd can sweep it.
 static var FRIC_LEVEL := 0.075
 # Reference bandwidth for the parallel branch's power normalization (see
 # _tune_parallel). /s/'s principal pole is 500 Hz wide, so referencing here

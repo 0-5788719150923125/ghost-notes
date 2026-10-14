@@ -68,7 +68,7 @@ core. The commitments:
 - **[`fonts/`](../fonts/)** - Faces the media draw with: the notebook's handwriting and the card table's lettering.
 - **[`hosts/`](../hosts/)** - The Python hosts ghost spawns, each in an environment of its own the Provisioner builds (`src/platform/deps.gd`): `voice/` the neural voice, `face/` Masking's face and body pre-passes, `capture/` the tablet's page capture. Kept out of the exported .pck.
 - **[`scripts/`](../scripts/)** - Build and check scripts: `scripts/check.sh` runs every gate (`--gpu` adds the ones that need a real renderer), `scripts/build.sh` exports a target into `dist/`.
-- **[`tests/`](../tests/)** - The gates (`*_check.gd`), probes (`*_probe.gd`) and their runners; `scripts/check.sh` runs them all.
+- **[`tests/`](../tests/)** - The gates (`*_check.gd`) and probes (`*_probe.gd`), in folders that mirror `src/` (a gate lives with what it holds), and their runners and fixtures at the top; `scripts/check.sh` runs them all, and `--for` the ones a change can reach.
 - **[`docs/`](../docs/)** - Generated documentation. Regenerate with `python docs.py`; do not edit by hand.
 - **[`next/`](../next/)** - Design notes and plans, one per subsystem: [notes.md](../next/notes.md) is the notes refactor, step by step, and [roadmap.md](../next/roadmap.md) is what comes next.
 - **[`reference/`](../reference/)** - Reference imagery scenes were prototyped from.
@@ -319,6 +319,7 @@ A place, seen and heard, built from a written description: the table itself (Tab
 - [`table.gd`](../src/table/table.gd) **TableMedium** - a card reading at a table, seen from the reader's chair.
 - [`table_actions.gd`](../src/table/table_actions.gd) **TableActions** - the verbs a card show performs at the table, as ONE REGISTRY (next/notes.md step 9, "Actions are a registry"). Each verb declares what it takes (which card), whether it is written in a reading's marks or performed between them, the rest the voice takes for it, whether it brings a card up to be ...
 - [`table_positions.gd`](../src/table/table_positions.gd) **TablePositions** - where cards lie on the table, as DATA (next/notes.md step 9, "Positions are data"). A position is `{x, z, yaw, face}` on the cloth - meters, x to the reader's right and z toward the reader; yaw in degrees; face "up" or "down" - written by the producer's plan (a spread position may carry coordinates ...
+- [`table_shuffle.gd`](../src/table/table_shuffle.gd) **TableShuffle** - every move the deck makes between readings, and where each of its cards is during one: the riffle, the overhand, the cut, the wash that spreads the whole deck over the cloth and gathers it again, a jumper thrown clear. A part of `TableMedium`.
 - [`tables.gd`](../src/table/tables.gd) **Tables** - THE TABLE ITSELF, BUILT FROM A DESCRIPTION. Its TOP: an outline (a rectangle, round, an oval, a many-sided polygon, its rim scalloped if it likes), a thickness, the profile its edge is cut to (bevel, bullnose, ogee...), and what it is made of - boards of a wood, a slab of stone, metal, lacquer, ...
 - [`winds.gd`](../src/table/winds.gd) **Winds** - the air moving over a scene: a breeze from one side that rises and falls a little, and GUSTS now and then, each a swell that rises in a second or so and dies away over a few. One wind for the whole table: it stirs what the sun falls through, swings what hangs and ripples what flutters (`Lights`), ...
 
@@ -329,7 +330,7 @@ A show of cards nobody writes: a show's brief, its episodes - each planned, deal
 - [`card_deck.gd`](../src/cards/card_deck.gd) **CardDeck** - the cards a show reads with, and how an episode's deck is shuffled.
 - [`card_episode.gd`](../src/cards/card_episode.gd) **CardEpisode** - one episode of a card show, as it lies on disk.
 - [`card_producer.gd`](../src/cards/card_producer.gd) **CardProducer** - makes whatever an episode is missing, in the order a reading happens.
-- [`card_prompts.gd`](../src/cards/card_prompts.gd) **CardPrompts** - what each agent behind a card episode is told. Pure: strings in, strings out, so a gate can hold every prompt to the rules (see tests/cards_check.gd). THE WORDS ARE IN rules/cards/ (producer, designer, set_dresser, reader, painter, show - read by `Rules`); here is what decides which of them apply ...
+- [`card_prompts.gd`](../src/cards/card_prompts.gd) **CardPrompts** - what each agent behind a card episode is told. Pure: strings in, strings out, so a gate can hold every prompt to the rules (see tests/cards/cards_check.gd). THE WORDS ARE IN rules/cards/ (producer, designer, set_dresser, reader, painter, show - read by `Rules`); here is what decides which of them ...
 - [`cards_editor.gd`](../src/cards/cards_editor.gd) **CardsEditor** - the Cards mode: a show of cards nobody writes by hand. What kind of cards, and what the show is, are the brief's to say.
 - [`dealer_tools.gd`](../src/cards/dealer_tools.gd) **DealerTools** - what a dealer can do while it lays an episode's cards out (next/notes.md step 9, "Agents choose"): PLACE a card where it should lie, FLIP it face up or down, LOOK at the whole layout as the table will check it, and SUBMIT it. Served as tools (`AgentTools`), as the set dresser's are ...
 - [`set_dresser_tools.gd`](../src/cards/set_dresser_tools.gd) **SetDresserTools** - what the set dresser can do while it sets the reader's table: MAKE a thing, LOOK at it, FIX it, and see the whole table as the camera will before handing it in.
@@ -340,9 +341,12 @@ A show of cards nobody writes: a show's brief, its episodes - each planned, deal
 The video chroma-key masking editor - a second app surface inside ghost. See [masking.md](masking.md).
 
 - [`mask_editor.gd`](../src/masking/mask_editor.gd) **MaskEditor** - the mask-mode authoring surface.
+- [`mask_face_track.gd`](../src/masking/mask_face_track.gd) **MaskFaceTrack** - the face, fitted once and read by time: Masking's face track and the stencil rasterized from it, a part of `MaskEditor`. It bootstraps the offline pre-pass (`hosts/face/face_track.py`), reads the landmarks at a moment, fits the clown's face model to them (`clown_model_now`, [method ...
 - [`mask_marker_tool.gd`](../src/masking/mask_marker_tool.gd) **mask_marker_tool** - mask_marker_tool - headless CLI: insert one marker into a mask session file at a given time.
+- [`mask_pose_track.gd`](../src/masking/mask_pose_track.gd) **MaskPoseTrack** - her silhouette and her skeleton, read by time: Masking's pose track, a part of `MaskEditor`. It bootstraps the offline pre-pass (`hosts/face/pose_track.py`), runs it one window at a time, and answers what the track says at a moment: where a joint is (`point`), whether it is seen ([method ...
 - [`mask_session.gd`](../src/masking/mask_session.gd) **MaskSession** - the data model for one mask-mode editing session.
 - [`mask_timeline.gd`](../src/masking/mask_timeline.gd) **MaskTimeline** - the mask editor's scrub strip.
+- [`mask_url_import.gd`](../src/masking/mask_url_import.gd) **MaskUrlImport** - a link where a file path is expected: Masking's YouTube (or any http) import, a part of `MaskEditor`. `download` downloads the link with yt-dlp, polled and never blocking, and hands the file it made back to `MaskEditor.open_source`.
 - [`track_lane.gd`](../src/masking/track_lane.gd) **TrackLane** - one clip's block on the shared timeline: drag its LEFT/RIGHT edges to trim (in/out points), drag its BODY to shift where it sits on the master timeline. Used for both the primary clip's own trim block (offset fixed at 0 - it IS master time, so `movable` is false there) and one lane per imported ...
 
 ### `app/` - The shell

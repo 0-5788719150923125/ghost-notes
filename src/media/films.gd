@@ -98,7 +98,7 @@ const GOP := "25"
 ## at 0 none ever do.
 ##
 ## IT DOES NOT COMPETE WITH THE SCENE CATALOG. A film is not a 72nd entry in
-## `Director.SCENES` drawn against the other 71 - it is an independent draw made when the
+## `SceneRoster.SCENES` drawn against the other 71 - it is an independent draw made when the
 ## page turns, and only then does the rest of the page go to the Director. That
 ## distinction is the whole reason a dial can control this at all.
 ##

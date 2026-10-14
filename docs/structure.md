@@ -5,26 +5,26 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 195 references inside a folder, 742 down the stack, 0 up it.
+Between scripts today: 261 references inside a folder, 698 down the stack, 0 up it.
 
 ## The stack, top first
 
 | folder | what it is | scripts | names |
 | --- | --- | --- | --- |
 | `app/` | The shell | 13 | `masking`, `cards`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `audio`, `data`, `platform` |
-| `masking/` | Masking | 5 | `timeline`, `voice`, `ui`, `notes`, `data`, `platform` |
+| `masking/` | Masking | 8 | `timeline`, `voice`, `ui`, `notes`, `data`, `platform` |
 | `cards/` | Cards | 8 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `audio`, `data`, `platform` |
-| `table/` | The set | 13 | `media`, `scene_kit`, `audio`, `data` |
+| `table/` | The set | 14 | `media`, `scene_kit`, `audio`, `data` |
 | `reading/` | The voice's workspaces | 3 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `data`, `platform` |
 | `export/` | Export | 3 | `show`, `voice`, `ui`, `agents`, `stage`, `audio`, `data`, `platform` |
-| `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `stage`, `audio`, `data` |
+| `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
 | `show/` | The show | 8 | `media`, `ui`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform` |
 | `media/` | Media | 19 | `voice`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `data`, `platform` |
 | `voice/` | Synthesis (voice) | 11 | `audio`, `data`, `platform` |
 | `ui/` | The panel kit | 10 | `notes`, `data`, `platform` |
 | `notes/` | Notes | 5 | `stage`, `data`, `platform` |
 | `agents/` | Agents | 6 | `data`, `platform` |
-| `scenes/` | Scenes | 58 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
+| `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
 | `stage/` | Storyboards & stage | 4 | `geometry`, `render`, `audio`, `data` |
 | `scene_kit/` | Scene substrate | 7 | `geometry`, `motion`, `render`, `audio` |
 | `geometry/` | Generative form | 12 | `motion`, `render` |
@@ -146,7 +146,7 @@ The panels a voice runs in: the reading (script, cast, voice, stream, export), t
 
 A place, seen and heard, built from a written description: the table itself (Tables), the things on it (Props), its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds), its sound (Soundscape), where cards go on it, what can be done with them and how a reading says so, the faces printed on them - and the medium that puts it all on the stage (`table.gd`, a row of `Medium.REGISTRY`).
 
-[`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`lights`](../src/table/lights.gd), [`props`](../src/table/props.gd), [`soundscape`](../src/table/soundscape.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_positions`](../src/table/table_positions.gd), [`tables`](../src/table/tables.gd), [`winds`](../src/table/winds.gd)
+[`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`lights`](../src/table/lights.gd), [`props`](../src/table/props.gd), [`soundscape`](../src/table/soundscape.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`tables`](../src/table/tables.gd), [`winds`](../src/table/winds.gd)
 
 ### `cards/` - Cards
 
@@ -158,7 +158,7 @@ A show of cards nobody writes: a show's brief, its episodes - each planned, deal
 
 The video chroma-key masking editor - a second app surface inside ghost. See [masking.md](masking.md).
 
-[`mask_editor`](../src/masking/mask_editor.gd), [`mask_marker_tool`](../src/masking/mask_marker_tool.gd), [`mask_session`](../src/masking/mask_session.gd), [`mask_timeline`](../src/masking/mask_timeline.gd), [`track_lane`](../src/masking/track_lane.gd)
+[`mask_editor`](../src/masking/mask_editor.gd), [`mask_face_track`](../src/masking/mask_face_track.gd), [`mask_marker_tool`](../src/masking/mask_marker_tool.gd), [`mask_pose_track`](../src/masking/mask_pose_track.gd), [`mask_session`](../src/masking/mask_session.gd), [`mask_timeline`](../src/masking/mask_timeline.gd), [`mask_url_import`](../src/masking/mask_url_import.gd), [`track_lane`](../src/masking/track_lane.gd)
 
 ### `app/` - The shell
 

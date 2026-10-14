@@ -770,7 +770,7 @@ class Homographs:
 def _audit(paths: list) -> int:
     """Print every reading this pass would change in a script, and why.
 
-    `tests/pronounce_audit.gd` answers "which words in this chapter are uncertain";
+    `tests/voice/pronounce_audit.gd` answers "which words in this chapter are uncertain";
     this answers the follow-up, "and what did the machine actually decide about
     them" - which is the question that comes up after a chapter has been heard.
     Sentences are fed in reading order so the narrative prior builds exactly as it

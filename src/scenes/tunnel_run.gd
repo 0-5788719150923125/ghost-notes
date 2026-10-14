@@ -85,7 +85,7 @@ const PROFILES := {
 
 ## Track characters. The curvature amplitudes are radians per unit of arclength, so an amplitude
 ## near 0.2 held over a quarter wavelength is most of a full loop - which is why `coaster` always
-## turns right over, and tests/tunnel_track_check.gd holds it to that.
+## turns right over, and tests/scenes/tunnel_track_check.gd holds it to that.
 ##
 ## THESE ARE DEGREES OF THE SAME THING, not separate worlds, and it is worth being exact about
 ## why. Once ROLL has turned the frame, a YAW about the frame's own now-tilted up axis IS world

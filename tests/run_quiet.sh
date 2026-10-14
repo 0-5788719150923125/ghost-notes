@@ -84,14 +84,17 @@ fi
 
 fails=0
 for t in "$@"; do
-	name="${t%.gd}"
-	if [ ! -f "tests/${name}.gd" ]; then
+	# a gate by its name or its path: tests/<folder>/<name>.gd, or tests/<name>.gd at the top
+	name=$(basename "${t%.gd}")
+	file="${t%.gd}.gd"
+	[ -f "$file" ] || file=$(ls tests/"${name}".gd tests/*/"${name}".gd 2>/dev/null | head -1)
+	if [ -z "$file" ] || [ ! -f "$file" ]; then
 		echo "run_quiet: no such gate: ${name}"
 		fails=$((fails + 1))
 		continue
 	fi
 	echo "=== ${name} ==="
-	"${RUNNER[@]}" --path . --script "res://tests/${name}.gd"
+	"${RUNNER[@]}" --path . --script "res://${file}"
 	rc=$?
 	[ "$rc" -ne 0 ] && fails=$((fails + 1))
 	echo "exit=${rc}"

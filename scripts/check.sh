@@ -8,10 +8,14 @@
 #   scripts/check.sh --fail-fast     # stop at the first failing gate (CI: no compute spent on a red run)
 #   scripts/check.sh --jobs 4        # run four gates at once (`auto` = one per core); the default is 1
 #   scripts/check.sh --list          # what would run, how, and (with --jobs) in what order
+#   scripts/check.sh --for           # the gates that cover what changed since the last commit
+#   scripts/check.sh --for src/table # ...or what is under these paths
 #
 # Logs go to dist/check/<gate>.log; a passing gate's log is removed unless --keep.
 #
-# WHICH GATES. Every tests/*_check.gd on disk - a new gate needs no edit here. How each runs
+# WHICH GATES. Every tests/<folder>/*_check.gd on disk (and the few cross-cutting ones at the top
+# of tests/) - a new gate needs no edit here. The folders mirror src/: a gate lives in the folder of
+# what it holds, which is what `--for` reads (below). A gate's name is unique. How each runs
 # is read off the gate: `extends SceneTree` runs under `godot --script`, anything else is a
 # boot probe (tests/run_boot_probe.sh: the real app with its autoloads, in a scene of its
 # own, read-only). A gate that needs a REAL RENDERER is named in GPU below - a pixel read
@@ -24,11 +28,12 @@
 # in its own teardown - an abort, a segfault, or a hang until the timeout - the fault
 # tests/run_scene_smoke.sh documents. A gate that printed its own passing verdict
 # (`<name>: ALL OK` or `<name>: PASS`) and no FAIL line is counted as a pass and marked
-# `ok*`; one that died before saying anything is a failure. Exit codes are never trusted
+# `ok*`; one that died before saying anything is a failure, and so is one that printed a
+# `SCRIPT ERROR` its header does not declare (`## script errors: N`). Exit codes are never trusted
 # alone, and neither is silence.
 #
-# THE TIMEOUT is the one in the gate's own run line (`run_boot_probe.sh tests/<name>.gd 120`, or
-# for a SceneTree gate `timeout 600 godot --headless --path . --script res://tests/<name>.gd`),
+# THE TIMEOUT is the one in the gate's own run line (`run_boot_probe.sh tests/<folder>/<name>.gd 120`,
+# or for a SceneTree gate `timeout 600 godot --headless --path . --script res://tests/<folder>/<name>.gd`),
 # else 300 s; anything after it on a probe's line is handed to the probe as its args.
 #
 # THE LONGEST GATES START FIRST (--jobs above 1), by how long each took the last time it passed
@@ -39,6 +44,14 @@
 # timed ones, the longest timeout first: a new gate is the one most worth an early answer. The
 # last lines of a run say what the gates added up to and what that is at best over the cores,
 # so a run that is not using them shows it.
+#
+# WHAT `--for` RUNS. src/ is a stack of folders, and a change can reach only the folders above the
+# one it is in (docs/structure.md). So the gates for a change are those in the folder it touched
+# and in every folder above it, with parse, docs and compile_check: a change in src/table/ runs
+# the table's, the cards', Masking's and the shell's gates, and none of the voice's. A gate that
+# changed runs itself. A path outside src/ and tests/ (a shader, a host, the rules) gives no
+# folder, so `--for` says so and runs everything - it never guesses smaller. The order of the
+# stack is docs.py's (`python3 docs.py --folders`), never a copy here.
 
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
@@ -72,6 +85,8 @@ jobs=1
 list=0
 only=""
 skip=""
+for_set=0
+for_paths=()
 while [ "$#" -gt 0 ]; do
 	case "$1" in
 		--gpu) gpu=1 ;;
@@ -84,6 +99,9 @@ while [ "$#" -gt 0 ]; do
 		--only=*) only="${1#--only=}" ;;
 		--skip) skip="${2:-}"; shift ;;
 		--skip=*) skip="${1#--skip=}" ;;
+		--for)
+			for_set=1
+			while [ "$#" -gt 1 ] && [[ "$2" != --* ]]; do for_paths+=("$2"); shift; done ;;
 		-h|--help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 		*) echo "check.sh: unknown option '$1'. Try --help." >&2; exit 2 ;;
 	esac
@@ -103,36 +121,87 @@ in_list() {  # in_list <word> <comma-or-space list>
 	[[ "$l" == *",$w,"* ]]
 }
 is_gpu() { in_list "$1" "${GPU[*]}"; }
+## WHERE EACH GATE IS: name -> tests/<folder>/<name>.gd (or tests/<name>.gd for a cross-cutting one).
+declare -A path_of=()
+for f in tests/*_check.gd tests/*/*_check.gd; do
+	[ -f "$f" ] || continue
+	n=$(basename "$f" .gd)
+	[ -z "${path_of[$n]:-}" ] || { bad "two gates are called $n: ${path_of[$n]} and $f"; exit 2; }
+	path_of[$n]="$f"
+done
 kind_of() {  # script | probe
-	if grep -qE '^extends SceneTree' "tests/$1.gd"; then echo script; else echo probe; fi
+	if grep -qE '^extends SceneTree' "${path_of[$1]}"; then echo script; else echo probe; fi
 }
 timeout_of() {
-	local t
-	[ -f "tests/$1.gd" ] || { echo 300; return; }
-	t=$(grep -m1 -oE "run_boot_probe\.sh tests/$1\.gd [0-9]+" "tests/$1.gd" | grep -oE '[0-9]+$')
+	local t p="${path_of[$1]:-}"
+	[ -n "$p" ] && [ -f "$p" ] || { echo 300; return; }
+	t=$(grep -m1 -oE "run_boot_probe\.sh ${p//./\\.} [0-9]+" "$p" | grep -oE '[0-9]+$')
 	# a SceneTree gate that needs longer says so the same way, in its own run line
-	[ -n "$t" ] || t=$(grep -m1 -oE "timeout [0-9]+ godot .*--script (res://)?tests/$1\.gd" "tests/$1.gd" \
+	[ -n "$t" ] || t=$(grep -m1 -oE "timeout [0-9]+ godot .*--script (res://)?${p//./\\.}" "$p" \
 		| grep -oE '^timeout [0-9]+' | grep -oE '[0-9]+')
 	echo "${t:-300}"
 }
 ## ...and the rest of that line is the probe's args (`... 400 --seed 2491232026`), so the
 ## documented command and the gatekeeping run the same show.
 args_of() {
-	grep -m1 -oE "run_boot_probe\.sh tests/$1\.gd [0-9]+.*" "tests/$1.gd" | cut -d' ' -f4-
+	local p="${path_of[$1]}"
+	grep -m1 -oE "run_boot_probe\.sh ${p//./\\.} [0-9]+.*" "$p" | cut -d' ' -f4-
 }
 
 # -- what runs ------------------------------------------------------------------
 
 ## `docs` is a second long, so it runs second: a stale generated doc fails before any slow gate starts.
 gates=(parse docs)
-for f in tests/*_check.gd; do
-	name=$(basename "$f" .gd)
+for name in $(printf '%s\n' "${!path_of[@]}" | sort); do
 	if is_gpu "$name" && [ "$gpu" -eq 0 ] && [ -z "$only" ]; then
 		continue
 	fi
 	gates+=("$name")
 done
 gates+=(scene_smoke)
+
+## --for: the folders a change touched, and every folder above them in the stack.
+if [ "$for_set" -eq 1 ]; then
+	if [ "${#for_paths[@]}" -eq 0 ]; then
+		mapfile -t for_paths < <({ git diff --name-only HEAD; git ls-files --others --exclude-standard; } 2>/dev/null | sort -u)
+	fi
+	mapfile -t stack < <(python3 docs.py --folders)
+	declare -A touched=() own=()
+	everything=0
+	for p in "${for_paths[@]}"; do
+		p="${p#./}"
+		case "$p" in
+			src/*/*) touched[$(cut -d/ -f2 <<<"$p")]=1 ;;
+			src/*) touched[$(cut -d/ -f2 <<<"$p")]=1 ;;
+			tests/*/*_check.gd|tests/*_check.gd) own[$(basename "$p" .gd)]=1 ;;
+			tests/*|docs/*|next/*|*.md|docs.py) ;;
+			*) everything=1; say "--for: $p is outside src/ and tests/, so everything runs" ;;
+		esac
+	done
+	if [ "$everything" -eq 0 ]; then
+		declare -A reach=()
+		low=-1
+		for i in "${!stack[@]}"; do
+			if [ -n "${touched[${stack[$i]}]:-}" ] && [ "$low" -lt 0 ]; then low=$i; fi
+		done
+		if [ "$low" -ge 0 ]; then
+			for i in "${!stack[@]}"; do [ "$i" -ge "$low" ] && reach[${stack[$i]}]=1; done
+		fi
+		picked=()
+		for g in "${gates[@]}"; do
+			case "$g" in
+				parse|docs|compile_check) picked+=("$g"); continue ;;
+				scene_smoke) [ -n "${reach[scenes]:-}" ] && picked+=("$g"); continue ;;
+			esac
+			folder=$(cut -d/ -f2 <<<"${path_of[$g]}")
+			if [ -n "${own[$g]:-}" ] || [ -n "${reach[$folder]:-}" ]; then picked+=("$g"); fi
+		done
+		gates=("${picked[@]}")
+		tk="${!touched[*]}"
+		ok_="${!own[*]}"
+		say "--for: touched ${tk:-no folder}${ok_:+, and the gates $ok_} - so the folders from ${stack[$low]:-none} up"
+	fi
+fi
 if [ -n "$only" ]; then
 	picked=()
 	for g in "${gates[@]}"; do in_list "$g" "$only" && picked+=("$g"); done
@@ -247,11 +316,11 @@ run_gate() {  # run_gate <name> <log>; returns the raw exit code
 			t=$(timeout_of "$g")
 			if [ "$(kind_of "$g")" = script ]; then
 				if is_gpu "$g"; then
-					timeout --foreground "$t" tests/run_quiet.sh "$g" >"$log" 2>&1
+					timeout --foreground "$t" tests/run_quiet.sh "${path_of[$g]}" >"$log" 2>&1
 				else
 					local plog
 					plog=$(mktemp)
-					timeout --foreground "$t" "$GODOT" --headless --log-file "$plog" --path . --script "res://tests/$g.gd" >"$log" 2>&1
+					timeout --foreground "$t" "$GODOT" --headless --log-file "$plog" --path . --script "res://${path_of[$g]}" >"$log" 2>&1
 					local rc=$?
 					rm -f "$plog"
 					return "$rc"
@@ -260,9 +329,9 @@ run_gate() {  # run_gate <name> <log>; returns the raw exit code
 				local -a pa=()
 				read -ra pa <<<"$(args_of "$g")"
 				if is_gpu "$g"; then
-					GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 tests/run_boot_probe.sh "tests/$g.gd" "$t" "${pa[@]}" >"$log" 2>&1
+					GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 tests/run_boot_probe.sh "${path_of[$g]}" "$t" "${pa[@]}" >"$log" 2>&1
 				else
-					tests/run_boot_probe.sh "tests/$g.gd" "$t" "${pa[@]}" >"$log" 2>&1
+					tests/run_boot_probe.sh "${path_of[$g]}" "$t" "${pa[@]}" >"$log" 2>&1
 				fi
 			fi ;;
 	esac
@@ -298,6 +367,22 @@ settle() {
 	# a shader compile check reports through its output, not its exit code
 	if [ "$rc" -eq 0 ] && grep -q 'SHADER ERROR' "$log"; then
 		rc=98
+	fi
+	# A RUNTIME ERROR BEHIND A PASS IS A FAILURE. A GDScript error prints and carries on, so the
+	# check that hit one ended early and the gate went on to print its verdict over everything it
+	# skipped - clown_face_check set two members that no longer existed and passed for a week with
+	# its Steadiness check never reached. A gate that makes runtime errors on purpose (a control)
+	# says how many in its header, `## script errors: N`, and more than that fails it. COMPILE
+	# errors are not counted here: a `--script` gate is compiled once before the autoloads exist,
+	# so every script it names that names one prints a compile error and is compiled again a moment
+	# later (compile_check's note) - a harness artifact, and `parse` and `compile_check` hold the
+	# real ones.
+	local errs allowed
+	errs=$(grep 'SCRIPT ERROR' "$log" 2>/dev/null | grep -vcE 'Compile Error|Parse Error')
+	allowed=$(grep -m1 -oE '^## script errors: [0-9]+' "${path_of[$g]:-/dev/null}" 2>/dev/null | grep -oE '[0-9]+$')
+	if [ "${errs:-0}" -gt "${allowed:-0}" ] && [ "$g" != parse ]; then
+		echo "check.sh: $g printed ${errs} SCRIPT ERROR(s), its header allows ${allowed:-0}" >>"$log"
+		rc=97
 	fi
 	if [ "$rc" -eq 0 ]; then
 		printf '  ok     %-28s %4ds\n' "$g" "$dt"

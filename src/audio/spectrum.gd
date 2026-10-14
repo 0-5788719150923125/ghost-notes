@@ -48,7 +48,7 @@ var song_hash: int = 0
 ## position. This is that, and it is deliberately ONE branch in `_process` rather than a second
 ## code path: the energy, the beat, the tempo, the flux and the movement are all derived below
 ## it, and a replay that computed those itself would be measuring a copy of this file rather
-## than this file. See tests/show_timeline_probe.gd.
+## than this file. See tests/show/show_timeline_probe.gd.
 var virtual_clock: float = -1.0
 ## THE RENDER CLOCK: in an export, the show's time is COUNTED FROM FRAMES rather than asked of
 ## the audio player. True only in a render.

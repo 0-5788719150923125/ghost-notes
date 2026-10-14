@@ -584,7 +584,7 @@ reads far louder than at voice frequencies (real /s/ sits 10-15 dB BELOW
 vowels, not ~-1 dB), and our /s/ is raw resonator-filtered white noise -
 harsher than real turbulence.
 
-`tests/pure_say.gd` (user's minimal-repro idea): bare Voice.render -> WAV,
+`tests/voice/pure_say.gd` (user's minimal-repro idea): bare Voice.render -> WAV,
 no Ghost, no autoloads, no stream. Renders one text at a LADDER of
 FRIC_TRIM levels (off 0.0 / soft 0.04 / natural 0.12 / full 1.0), each
 peak-normalized -> /tmp/ghost_scratch/pure_say_*.wav. FRIC_TRIM became a
@@ -824,7 +824,7 @@ lineage still reproduces the same take, deterministically.
 Ear report after §18 landed: better, but the F in "father" is completely
 silent and the "rs" in "yours" is too. Two specific words turned out to
 implicate FOUR separate defects, three of them introduced by §18 itself.
-`tests/phone_dump.gd` (new) is the tool that made this tractable: it prints
+`tests/app/phone_dump.gd` (new) is the tool that made this tractable: it prints
 every phoneme of an utterance with its position, duration, broadband RMS and
 three band energies, so a word reported by ear becomes a measurement.
 
@@ -946,7 +946,7 @@ syllable on every past-tense verb in the book.
 
 ### The measurement, which is the real deliverable
 
-`tests/g2p_check.gd` grades against `data/reference.yml` - hand-written from
+`tests/voice/g2p_check.gd` grades against `data/reference.yml` - hand-written from
 knowledge, independent of what the front end produces, never a snapshot of its
 output - weighted by TOKEN frequency in the chapter. Type-level error rates
 flatter the system badly: an error on `the` costs 130 times what an error on
@@ -956,8 +956,8 @@ flatter the system badly: an error on `the` costs 130 times what an error on
     after:              token-weighted WER 0.0% over the graded set
                         (110 types, 1054 of 1530 tokens = 69% of the text)
 
-Also new: `tests/g2p_dump.gd` (every distinct word of a text with its phonemes,
-ordered by corpus frequency) and `tests/phone_dump.gd` from §19. Between them a
+Also new: `tests/voice/g2p_dump.gd` (every distinct word of a text with its phonemes,
+ordered by corpus frequency) and `tests/app/phone_dump.gd` from §19. Between them a
 word reported by ear becomes a measurement in one command.
 
 ### Honest limits
@@ -1108,7 +1108,7 @@ HARD it leans, never WHERE. Four parser-free rules:
 4. **Stress clash** - two full accents in adjacent words is not English rhythm;
    the earlier one steps back.
 
-Measured on the chapter's own sentences (`tests/phrasing_dump.gd`, new):
+Measured on the chapter's own sentences (`tests/voice/phrasing_dump.gd`, new):
 
     in the BEGINNING was the [COUCH,] and the couch(0.31) was with [FATHER.]
     it's not the KIND of WRONG i can [EXPLAIN.]
@@ -1273,7 +1273,7 @@ Separately, and for speech too: `rate` widened from `2^(0.35*pace)` to
 `2^(0.55*pace)`. The slow end could only reach 1.28x slower than neutral, which
 is not slow enough for a deliberate reading.
 
-### Measured (`tests/song_check.gd`, new)
+### Measured (`tests/voice/song_check.gd`, new)
 
     song   median note   p90     on-note   |df0/dt|
     0.0        71 ms    143 ms    35.2%    382 cents/s
@@ -1480,7 +1480,7 @@ reach and absorption), wave vector and phase from the seed's strongest
 or cancel by geometry. `cos` has zero spatial mean, so `M` perturbs without
 biasing toward the centroid - the structural guard against the collapse failure
 mode. Migration is seven steps, each leaving a working game, starting with a
-standalone `src/voice/voice_field.gd` plus `tests/field_check.gd` and no call
+standalone `src/voice/voice_field.gd` plus `tests/voice/field_check.gd` and no call
 sites. Do NOT ship the later steps before the metric fix, or the field is a
 field over `hesit_bias`.
 
@@ -1585,7 +1585,7 @@ into pure distance falloff, which is the thing being fixed.
   the listener at 2.0. Its wall-clock beat survives as live shimmer only - a
   clock must never reach the trait path.
 
-### `tests/field_check.gd` - the first test the fishing loop has ever had
+### `tests/voice/field_check.gd` - the first test the fishing loop has ever had
 
     determinism   identical, and independent of belt array order
     falloff       monotonic beyond the belt's extent, decays to 0.0% of edge
@@ -1682,7 +1682,7 @@ a metronome, and because the weights are signed a contributor can SUPPRESS a
 position the dominant would have held. Empty bank = the single-cycle behaviour,
 so nothing changed for a voice with no contributors.
 
-Measured (`tests/ensemble_check.gd`, new), held syllables out of the first 60 at
+Measured (`tests/voice/ensemble_check.gd`, new), held syllables out of the first 60 at
 identical mean drive:
 
     solo      [1, 7, 18, 24, 29, 35, 40, 46, 57]

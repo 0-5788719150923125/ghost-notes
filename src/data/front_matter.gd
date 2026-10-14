@@ -34,7 +34,7 @@ class_name FrontMatter
 ##   4. ATOMIC. The new text goes to a sibling temp file, is read back, and only then is
 ##      renamed over the original - so an interrupted write cannot leave a half-file.
 ##
-## Nothing here touches the scene tree, so [code]tests/doc_source_check.gd[/code] can hold
+## Nothing here touches the scene tree, so [code]tests/notes/doc_source_check.gd[/code] can hold
 ## all of it to account headless.
 
 const MiniYaml_ := preload("res://src/data/yaml.gd")

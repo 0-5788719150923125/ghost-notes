@@ -121,7 +121,7 @@ interesting happens in layer 3.
 
 - [x] **Rung 0 - the vowel.** SHIPPED (pulse-train source first; sampled sound-font sources
   remain the open half): `Voice` synthesizes vowels through a three-formant cascade, and
-  `tests/voice_check.gd` verifies them *objectively* - Goertzel probes show /AA/ dominating
+  `tests/voice/voice_check.gd` verifies them *objectively* - Goertzel probes show /AA/ dominating
   its F1 region by ~200x and /IY/ its F2 region by ~4x. Judged-by-ear still pending (the
   human half). Exotic sources move to a later rung: the source is behind one function.
 - [x] **Rung 1 - the word.** SHIPPED: `Phonemes` (table + digraph/magic-e rules + exceptions
@@ -132,7 +132,7 @@ interesting happens in layer 3.
   each in [-1,1]) - the ZERO vector is the hand-curated default speaker (its centres live
   in `Spec.from_traits`, tune them there), a seed only initializes the sliders, and the
   vector itself is the replicable identity (autosaved; asserted byte-identical in
-  `tests/voice_check.gd`). The N-render batch + side-by-side audition is still open.
+  `tests/voice/voice_check.gd`). The N-render batch + side-by-side audition is still open.
 - [x] **Real-time streaming (was: eliminate the pre-render wait).** Synthesis measured
   ~30x real time in GDScript, so `VoiceStream` runs a sliding window: a ~0.3s prebuffer
   is synthesized in the triggering frame, pushed into an `AudioStreamGenerator` on
@@ -307,7 +307,7 @@ The seed: fresh root lineage, untempered (the trust region cages rolled
 strangers; this voice was earned by being read), difficulty = trait RMS
 distance from the party centre, belt entry shaped exactly like a catch.
 
-Validation: tests/sampler_check.gd round-trips the analysis against
+Validation: tests/voice/sampler_check.gd round-trips the analysis against
 SYNTHESIZED voices with known traits - pitch recovers within tolerance,
 pace recovers direction, genome lands in G_BOUNDS, deterministic, and the
 minted spec renders. Known v1 coarseness: trait centers are calibrated for

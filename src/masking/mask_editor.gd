@@ -59,11 +59,6 @@ const SHADER := preload("res://shaders/mask_split.gdshader")
 const PAINT_SIM_SHADER := preload("res://shaders/clown_paint.gdshader")
 const UMBRA_SIM_SHADER := preload("res://shaders/umbra_field.gdshader")
 const MASKS_DIR := "res://masks"
-## Ghost's OWN python venv - yt-dlp lives here, never the repo's venvs or the
-## system site-packages. user:// keeps it out of res:// (the editor's file
-## scanner must never crawl a venv) and out of git entirely.
-const YT_VENV_DIR := "user://ytdlp_venv"
-const YT_DL_DIR := MASKS_DIR + "/_downloads"   # inside /masks/ = already gitignored
 
 
 static func _masks_dir() -> String:
@@ -185,11 +180,7 @@ var _import_pending := {}   # {source, video, index} - the lane is added up fron
 # --- YouTube / URL import runtime (see _start_url_import) ---
 var _yt_state := "idle"    # idle | provisioning | downloading
 var _yt_pid := -1
-var _yt_url := ""
-var _yt_log := ""          # absolute path; the current step's combined stdout/stderr
-var _yt_started := 0.0     # unix time the download step began (newest-file fallback)
 var _yt_step_started := 0.0   # unix time the CURRENT step began - the elapsed readout
-var _yt_retried := false   # one automatic update-and-retry per import (stale yt-dlp)
 var _yt_echoed := {}       # WARNING/ERROR lines already print()-echoed live (a set)
 
 # --- The clown face model (see _update_face_model): eyes / mouth / oval /
@@ -238,43 +229,10 @@ var _face_slot := -1
 ## clip's shape happens to be. Converting through this constant keeps 16:9
 ## footage bit-identical to what those numbers were tuned against, and gives
 ## every other shape the same physical bound instead of a scaled one.
-# --- THE FACE TRACK: real landmarks, fitted once, read by time ------------------
-# What the clown's feature positions come from now. See hosts/face/face_track.py for
-# the pre-pass and the file format; this half bootstraps it, runs it, and reads it.
-#
-# Same architecture as the umbra look-ahead track (_umb_ensure_track), for the same
-# three reasons: the live editor and the export relaunch are separate PROCESSES
-# that must agree frame-for-frame and do because they read one cached file; no
-# detection ever runs inside the render loop; and because the whole track exists
-# before playback, smoothing can use frames on BOTH sides of now, which a live
-# tracker cannot - it only has the past, so it must choose between lag and jitter.
-#
-# The environment is ghost's OWN (`face_venv`, see [Provision]): one effect's
-# dependency must never become the project's, and it is built on first use rather
-# than required up front, so a session that never touches the clown installs nothing.
 const FACE_ENV := "face_venv"
-const FACE_VENV_DIR := "user://face_venv"
-const FACE_TRACK_DIR := "user://face_tracks"
-## Per-user editor preferences. ONE cfg serves the whole app ([notes], [director],
-## [synth], [generative] ...), so every write here is a
-## READ-MODIFY-WRITE of just the [mask] section - a fresh ConfigFile.save() would
-## silently wipe all of those. Same discipline as Director._save_pacing.
-const PREFS_CFG := "user://ghost.cfg"
-const FACE_TRACK_RATE := 15.0    # samples/sec - must match what face_track.py wrote
-const FACE_TRACK_POINTS := 478
-const FACE_TRACK_HEADER := 20    # 4 magic + u32 version + f32 rate + u32 count + u32 points
 
 var _ft_state := "none"   # none | provisioning | tracking | ready | failed
 var _ft_pid := -1
-var _ft_path := ""        # the cached track for THIS clip
-var _ft_log := ""
-var _ft_rate := FACE_TRACK_RATE
-var _ft_count := 0
-var _ft_points := FACE_TRACK_POINTS
-## The whole track in memory: count x points x (x, y), plus a found flag per
-## sample. ~12 MB for a four-minute clip at 15 Hz, read once.
-var _ft_xy := PackedFloat32Array()
-var _ft_found := PackedByteArray()
 
 const _FACE_ASP_REF := 1.7778
 ## What counts as the face's CORE, as a fraction of the peak weight - the mass the
@@ -373,49 +331,6 @@ var _clown_bleed := 0.0    # its Bleed / Settle / Hollow knobs, fed to the paint
 var _clown_settle := 0.35
 var _clown_hollow := 0.0
 
-# --- THE POSE TRACK: her silhouette and her skeleton, read by time, A WINDOW AT A TIME -
-# What the umbra's whole shape comes from. See hosts/face/pose_track.py for the
-# pre-pass and the file format; this half bootstraps it, runs it, and reads it.
-#
-# It shares the CLOWN'S VENV rather than building a second one: mediapipe is the
-# same package and it is 100 MB. Only the model file differs, so a session that has
-# already tracked a face pays nothing but the 9 MB pose bundle.
-#
-# The look-ahead is the reason this is offline and not a live detector. A ghost that
-# moves a beat BEFORE she does reads as a puppeteer; one that follows reads as a
-# shadow. No live tracker can supply the first, at any amount of smoothing, because
-# the frame it would need has not been decoded yet.
-#
-# WHY IT IS CHUNKED. The pre-pass runs at about real time, so reading a ten-minute
-# clip up front is ten minutes of an effect that draws nothing - which is what the
-# author saw, and it is the wrong shape for a tool you place a marker in and expect
-# to see. The clip is cut into POSE_CHUNK_SECS windows on ONE GLOBAL SAMPLE GRID
-# (pose_track.py writes each chunk's starting index into its header, so two chunks
-# written by two runs butt together exactly), the editor asks only for the window
-# the playhead is in and the one after it, and it evicts windows it has walked
-# away from. So an umbra layer starts drawing about twenty seconds after it is
-# placed, wherever in the clip that is, and scrubbing somewhere new costs the same
-# twenty seconds rather than a re-read of everything before it.
-const POSE_TRACK_DIR := "user://pose_tracks"
-const POSE_TRACK_RATE := 12.0    # samples/sec - must match what pose_track.py wrote
-const POSE_TRACK_POINTS := 33
-## 4 magic + u32 version + f32 rate + u32 count + u32 points + u32 mask_w + u32 mask_h
-## + u32 start + f32 dir_x + f32 dir_y + f32 conf. The face track's own header was
-## read four bytes short once and every sample after it returned plausible, entirely
-## wrong numbers - hence tests/pose_track_check.gd, which reads a hand-built file
-## through this reader.
-const POSE_TRACK_HEADER := 44
-## How much clip one window covers. TWENTY SECONDS IS THE CAST DIRECTION'S FLOOR,
-## not a guess at a pleasant latency: the throw is measured from how the background
-## VARIES as she moves, and measured on the reference clip that reads conf 0.97 over
-## the whole ten minutes, 0.45 over twenty seconds and 0.06 over six - which is
-## below the floor at which the editor will believe it at all. A shorter window
-## would start faster and know nothing about the light.
-const POSE_CHUNK_SECS := 20.0
-## How many windows stay in memory. Each is ~1.3 MB at 96x54, and the reason to
-## bound it at all is a long clip scrubbed end to end: without eviction every window
-## ever visited stays resident.
-const POSE_CHUNK_KEEP := 4
 
 ## The landmark indices this effect uses, by name rather than by number at the call
 ## site - MediaPipe's pose order is not guessable and a transposed pair here is a
@@ -436,42 +351,18 @@ const PT_SH_R := 12
 ## would cost the window's latency (see the face_venv row in deps.gd).
 var _pt_state := "none"
 var _pt_pid := -1          # unused by the bootstrap now; kept in the reap list
-var _pt_log := ""
-var _pt_rate := POSE_TRACK_RATE
-var _pt_points := POSE_TRACK_POINTS
-var _pt_mw := 96
-var _pt_mh := 54
 ## THE CAST DIRECTION, accumulated over every window ever loaded this session and
 ## weighted by each one's own confidence. One window measures it poorly and a dozen
 ## measure it well, so this improves as the author works rather than being fixed by
 ## whichever window happened to load first - and a window that measured nothing
 ## contributes nothing rather than dragging the answer toward its noise.
 var _pt_dir := Vector2(1.0, 0.0)
-var _pt_dir_acc := Vector2.ZERO
-var _pt_dir_w := 0.0
-var _pt_conf := 0.0
-## Loaded windows, keyed by index: {count, found, xy, vis, mask}. Sample numbering is
-## GLOBAL - window k holds samples [k * _pt_chunk_n, ...) - so a sample index means
-## the same thing whichever window produced it.
-var _pt_chunks := {}
-var _pt_chunk_n := int(POSE_CHUNK_SECS * POSE_TRACK_RATE)
-## The window being read right now, and the ones already known to be missing so the
-## per-frame pump does not stat the same absent file every frame.
-var _pt_job := -1          # chunk index, or -1
-var _pt_job_pid := -1
-var _pt_progress_ms := 0
-var _pt_missing := {}
-## How many windows the clip has at all - so the pump never asks for one past the
-## end and then waits forever for a file that cannot exist.
-var _pt_chunk_total := 0
 ## The silhouette handed to the field sim, kept as one image + texture and rewritten
 ## in place per sample rather than reallocated - this runs every frame an umbra layer
 ## is live, and Image.create_from_data on every one of them is heap churn for nothing.
 var _pt_slot := -1
 var _pt_guard_slot := -1
-var _pt_img: Image = null
 var _pt_tex: ImageTexture = null
-var _pt_bytes := PackedByteArray()
 
 # --- UMBRA: the ghost that moves her (see _umb_solve_cast and
 # shaders/umbra_field.gdshader).
@@ -490,14 +381,6 @@ var _pt_bytes := PackedByteArray()
 # person mask is the same answer with none of the conditions - and it also
 # gives the ghost a SKELETON, which is what lets its head and its eyes be
 # placed rather than guessed at from the middle of a blob.
-## The silhouette grid. 160x90 rather than 96x54: a cell is 12 px of a 1080p
-## frame instead of 20, which is what lets the shader's grid-dissolving jitter
-## come down from +-34 px (a visibly crawling outline) to +-10. It costs 2.8x the
-## cache - 3.5 MB a twenty-second window - and the grid is in the window
-## FILENAME, so raising it does not read stale coarse windows, it asks for finer
-## ones and the old files are simply never opened again.
-const _UMB_W := 160
-const _UMB_H := 90
 var _umbra_active := false
 # THE CAST TRANSFORM, solved per frame from the pose sample at `t + Lead` and
 # handed to the field sim as its inverse. It is a SIMILARITY pinned by two
@@ -800,8 +683,8 @@ func open_source(path: String) -> void:
 			return
 		_build_source_panel()
 		return
-	if _is_url(path):
-		_start_url_import(path)   # downloads, then re-enters here with the local file
+	if MaskUrlImport.is_url(path):
+		_url_import.download(path)   # downloads, then re-enters here with the local file
 		return
 	_close_source_panel()
 	_note_clip(path)
@@ -958,9 +841,9 @@ func _on_link(text: String) -> void:
 	var s := text.strip_edges()
 	if s.is_empty():
 		return
-	if not _is_url(s) and (s.begins_with("www.") or s.to_lower().contains("youtu.be") or s.to_lower().contains("youtube.com")):
+	if not MaskUrlImport.is_url(s) and (s.begins_with("www.") or s.to_lower().contains("youtu.be") or s.to_lower().contains("youtube.com")):
 		s = "https://" + s       # pasted without a scheme
-	if not _is_url(s):
+	if not MaskUrlImport.is_url(s):
 		_src_link.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
 		return
 	open_source(s)
@@ -985,6 +868,30 @@ func _note_clip(path: String) -> void:
 	var err := FrontMatter.write_block(note_path, ghost)
 	if not err.is_empty():
 		push_warning("ghost mask: could not write the clip into %s - %s" % [note_path.get_file(), err])
+
+
+# --- the editor's parts -----------------------------------------------------------------
+# What used to be sections of this file and is a script of its own now: each holds its own state,
+# reads the rest through `editor.`, and is asked a few things by name (next/structure.md, "One
+# file, one job").
+
+## THE POSE TRACK is a part of its own ([MaskPoseTrack]): bootstrapped, run a window at a time,
+## and read by time. The umbra asks it where she is.
+var _pose := MaskPoseTrack.new()
+
+## A LINK WHERE A FILE IS EXPECTED is a part of its own ([MaskUrlImport]): downloaded, polled,
+## and handed back to [method open_source].
+var _url_import := MaskUrlImport.new()
+
+## THE FACE TRACK is a part of its own ([MaskFaceTrack]): fitted once, read by time, and
+## rasterized into the stencil the clown's shader keys on.
+var _face := MaskFaceTrack.new()
+
+
+func _init() -> void:
+	_pose.editor = self
+	_url_import.editor = self
+	_face.editor = self
 
 
 # --- one-time prep: ffmpeg -> masks/<slug>/{video.ogv, audio.wav} -----------------
@@ -1272,254 +1179,7 @@ static func _slugify(path: String) -> String:
 	return out.trim_suffix("_").substr(0, 32)
 
 
-# --- YouTube / URL import: paste a URL where a file path is expected --------------
-# open_source() routes any http(s) source here. yt-dlp lives in ghost's own
-# environment (`ytdlp_venv`, see [Provision]), with Deno beside it for YouTube's
-# download challenges; the first import waits while it is built, then
-#   <env python> -u -m yt_dlp <url>  ->  masks/_downloads/<title>_<id>.<ext>
-# is polled like prep (never blocking), and the downloaded file re-enters
-# open_source() so the normal ffmpeg->theora prep takes over unchanged. YouTube
-# breaking old yt-dlp versions is the norm, not the exception: the environment is
-# updated with the rest of ghost's dependencies, and a failed download updates it
-# once more and retries.
-
-static func _is_url(path: String) -> bool:
-	return path.begins_with("http://") or path.begins_with("https://")
-
-
-## The video id, for cache hits and output matching (ported from nutube's
-## YouTubeSource.id_from_url). "" for URLs that don't look like YouTube - yt-dlp
-## handles plenty of other sites; those just skip the id-keyed cache.
-static func _youtube_id(url: String) -> String:
-	var u := url.strip_edges()
-	if u.contains("watch?v="):
-		u = u.get_slice("watch?v=", 1)
-	elif u.contains("youtu.be/"):
-		u = u.get_slice("youtu.be/", 1)
-	elif u.contains("/shorts/"):
-		u = u.get_slice("/shorts/", 1)
-	else:
-		return ""
-	for sep in ["?", "&", "#", "/"]:
-		u = u.get_slice(sep, 0)
-	return u
-
-
 const YT_ENV := "ytdlp_venv"
-
-
-func _yt_bin(tool_name: String) -> String:
-	return Deps.venv_bin(YT_VENV_DIR, tool_name)
-
-
-func _yt_dl_dir() -> String:
-	return ProjectSettings.globalize_path(YT_DL_DIR if OS.has_feature("editor")
-		else _masks_dir() + "/_downloads")
-
-
-## Resolve a binary. [Deps] owns this for the whole app - a GUI-launched Godot
-## doesn't inherit a shell PATH, and the answer has to be the same one
-## [Subprocess] and the home screen's Environment panel get.
-static func _which(prog: String) -> String:
-	return Deps.resolve(prog)
-
-
-func _start_url_import(url: String) -> void:
-	if _yt_state != "idle":
-		_set_status("⏳  Another download is already running…")
-		return
-	_yt_url = url
-	_yt_retried = false
-	_yt_echoed = {}
-	DirAccess.make_dir_recursive_absolute(_yt_dl_dir())
-	print("ghost yt: import requested - ", url)
-	var cached := _yt_find_download()
-	if not cached.is_empty():
-		# Says so in the log too - otherwise a cache hit runs NO python at all
-		# and an empty console reads as "capture is broken", not "nothing ran".
-		print("ghost yt: using cached download - ", cached)
-		_set_status("✓  Already downloaded - opening the cached copy")
-		open_source(cached)
-		return
-	var why := Provision.unsupported(YT_ENV)
-	if not why.is_empty():
-		_set_status("⚠  URL import is not available on this machine: " + why)
-		return
-	_yt_state = "provisioning"
-	_yt_step_started = Time.get_unix_time_from_system()
-	_yt_wait_for_env()
-
-
-## Download once the environment is ready; until then show what its install is doing,
-## and stop with the install's own reason if it cannot be had. Polled from _process.
-func _yt_wait_for_env() -> void:
-	if Provision.ensure(YT_ENV):
-		_yt_state = "idle"
-		_yt_download()
-		return
-	var s := Provision.state(YT_ENV)
-	if not bool(s.get("running", false)) and (s.has("error") or not Provision.can_install()):
-		_yt_state = "idle"
-		_set_status("⚠  " + Deps.hint(YT_ENV))
-		return
-	_set_status("⏳  Preparing URL import - " + Provision.describe(YT_ENV, s))
-
-
-func _yt_download() -> void:
-	_yt_started = Time.get_unix_time_from_system()
-	_yt_step_started = _yt_started
-	# No codec constraints in the format pick - the prep transcodes to theora
-	# regardless, so "best up to 1080p" is all that matters. --restrict-filenames
-	# keeps the output shell-and-slug-safe; the title lands in the session slug.
-	# Runs as `python -u -m yt_dlp`, NOT the yt-dlp entry script: with stdout
-	# going to a file, python block-buffers it and the "[download] 42%" lines
-	# only landed in the log kilobytes at a time - the progress readout below
-	# read an empty file for minutes (the "black screen" report). -u makes the
-	# log stream line-by-line, same reason exporter's ffmpeg uses -progress.
-	var args := PackedStringArray([
-		"-u", "-m", "yt_dlp",
-		"-f", "bv*[height<=1080]+ba/b[height<=1080]",
-		"--no-playlist", "--restrict-filenames", "--newline",
-		# Under 100K/s yt-dlp assumes YouTube's anti-bot throttle and re-extracts
-		# instead of crawling for an hour; fragmented formats also parallelize.
-		"--throttled-rate", "100K", "--concurrent-fragments", "4"])
-	# YouTube's nsig/PO-token challenges need a JavaScript runtime, and with NONE
-	# the download still "works", just at the punitive fallback throttle (~40KB/s:
-	# the "0% to 1% took three minutes" report). The environment carries Deno for
-	# exactly this; on a machine with no Deno build, whatever runtime the machine
-	# has stands in. By explicit path - a GUI-launched Godot's PATH is not a
-	# shell's, so auto-detection can't be trusted either.
-	var deno := _yt_bin("deno")
-	if FileAccess.file_exists(deno):
-		args.append_array(PackedStringArray(["--js-runtimes", "deno:" + deno]))
-	else:
-		for rt in ["deno", "node"]:
-			var rt_bin := _which(rt)
-			if not rt_bin.is_empty():
-				args.append("--js-runtimes")
-				args.append(rt + ":" + rt_bin)
-	args.append_array(PackedStringArray([
-		"-o", _yt_dl_dir().path_join("%(title).40s_%(id)s.%(ext)s"),
-		_yt_url]))
-	# The exact command, in the log: whether --js-runtimes was engaged is the
-	# first thing to check when a download crawls (no runtime = YouTube's
-	# ~40KB/s anti-bot throttle).
-	print("ghost yt: exec ", _yt_bin("python"), " ", " ".join(args))
-	Provision.hold(YT_ENV, "clip download")
-	_yt_pid = _yt_spawn_logged(_yt_bin("python"), args)
-	_yt_state = "downloading" if _yt_pid > 0 else "idle"
-	# Status lands IMMEDIATELY, success or not - the first cut only reported
-	# failure here, so a clean start showed nothing until the download finished.
-	_set_status("⏳  Downloading…  connecting" if _yt_pid > 0
-		else "⚠  Could not start yt-dlp")
-
-
-## OS.create_process can't redirect output, and both the progress readout and any
-## failure diagnosis live in it - so stdout+stderr go to a log file this instance
-## then tails ([method Subprocess.start_logged], no shell on any platform).
-func _yt_spawn_logged(cmd: String, args: PackedStringArray) -> int:
-	_yt_log = _yt_dl_dir().path_join(".yt.log")
-	return Subprocess.start_logged(cmd, args, _yt_log, "clip download")
-
-
-## The log's last 4KB. This is polled EVERY FRAME while a download runs (the
-## same cadence _read_prep_pct polls ffmpeg's progress file), and a long
-## --newline download writes tens of thousands of lines - reading the whole
-## file each frame would grow linearly with the download. The freshest
-## progress line always lives in the tail window.
-func _yt_tail_window() -> String:
-	if _yt_log.is_empty() or not FileAccess.file_exists(_yt_log):
-		return ""
-	var f := FileAccess.open(_yt_log, FileAccess.READ)
-	if f == null:
-		return ""
-	var sz := f.get_length()
-	if sz > 4096:
-		f.seek(sz - 4096)
-	return f.get_buffer(mini(int(sz), 4096)).get_string_from_utf8()
-
-
-## The freshest yt-dlp "[download]  42.3% of 10.5MiB at 2.1MiB/s ETA 00:04"
-## line, as display text - percent, size, speed and ETA ride along verbatim.
-func _yt_pct() -> String:
-	var best := ""
-	for line in _yt_tail_window().split("\n"):
-		if line.begins_with("[download]") and line.contains("%"):
-			best = line.substr(10).strip_edges()
-	return best
-
-
-func _yt_log_tail() -> String:
-	var lines := _yt_tail_window().strip_edges().split("\n")
-	return String(lines[lines.size() - 1]).substr(0, 160) if lines.size() > 0 else ""
-
-
-## The downloaded file for the current URL: id-matched when the URL is YouTube,
-## else the newest completed media file since the download began. Excludes
-## yt-dlp's own .part/.ytdl intermediates and the log.
-func _yt_find_download() -> String:
-	var dir := DirAccess.open(_yt_dl_dir())
-	if dir == null:
-		return ""
-	var id := _youtube_id(_yt_url)
-	var best := ""
-	var best_mtime := 0
-	for f in dir.get_files():
-		if f.ends_with(".part") or f.ends_with(".ytdl") or f.begins_with("."):
-			continue
-		var p := _yt_dl_dir().path_join(f)
-		if not id.is_empty():
-			if f.contains(id):
-				return p
-			continue
-		var mt := FileAccess.get_modified_time(p)
-		if mt >= int(_yt_started) and mt > best_mtime:
-			best_mtime = mt
-			best = p
-	return best
-
-
-## Everything a finished step logged - minus the [download] progress spam -
-## echoes into godot's own log via print(), which is what the in-app console
-## (chrome's >_ toggle) tails. yt-dlp's diagnostics (throttling, missing JS
-## runtime, geo blocks, format errors) otherwise die unseen in
-## masks/_downloads/.yt.log, unreadable from a compiled app.
-func _yt_echo_log(label: String) -> void:
-	if _yt_log.is_empty() or not FileAccess.file_exists(_yt_log):
-		return
-	var kept := PackedStringArray()
-	for line in FileAccess.get_file_as_string(_yt_log).split("\n"):
-		var s := line.strip_edges()
-		if not s.is_empty() and not s.begins_with("[download]"):
-			kept.append(s)
-	if kept.size() > 40:
-		kept = kept.slice(kept.size() - 40)
-	if kept.size() > 0:
-		print("ghost yt [", label, "]:\n  ", "\n  ".join(kept))
-
-
-## The download just exited (see _process) - advance the machine. Success is
-## judged by what it was supposed to produce (the file) - the same evidence-over-
-## status-code stance as _finish_session's duration check.
-func _yt_step_done() -> void:
-	var state := _yt_state
-	_yt_state = "idle"
-	Provision.release(YT_ENV, "clip download")
-	_yt_echo_log(state)
-	var file := _yt_find_download()
-	if not file.is_empty():
-		_set_status("✓  Downloaded " + file.get_file())
-		open_source(file)
-	elif not _yt_retried:
-		# The single most common failure mode is a stale yt-dlp (YouTube changed,
-		# old extractor broke) - update the environment once, then retry.
-		_yt_retried = true
-		_set_status("⚠  Download failed - updating yt-dlp and retrying…")
-		Provision.update(YT_ENV)
-		_yt_state = "provisioning"
-		_yt_step_started = Time.get_unix_time_from_system()
-	else:
-		_set_status("⚠  Download failed: " + _yt_log_tail())
 
 
 # --- session ready: build preview + (unless render_mode) the editing UI -----------
@@ -1782,7 +1442,7 @@ func _step_paint_sim() -> void:
 	dtp = clampf(dtp, 0.0, 0.1)
 	if dtp <= 0.0 and not reset:
 		return   # paused/held: the liquid holds; the mats keep last frame's field
-	var cm := _clown_model_now()
+	var cm := _face.clown_model_now()
 	var mat: ShaderMaterial = _paint_rects[_paint_ping].material
 	mat.set_shader_parameter("u_prev", _paint_vps[1 - _paint_ping].get_texture())
 	mat.set_shader_parameter("u_dt", dtp)
@@ -1915,7 +1575,7 @@ func _step_umbra_sim() -> void:
 func _tick_umbra() -> void:
 	if not _umbra_active or _player == null or session == null:
 		return
-	_pt_ensure()
+	_pose.ensure()
 	if _pt_state != "ready":
 		_umb_have = false
 		return
@@ -3661,8 +3321,8 @@ func _build_panel() -> void:
 	# sits by the list header and not in the options panel - so it belongs beside
 	# the other per-user settings; storing it on the session would mean opening
 	# somebody else's work silently switched it back.
-	_follow_playhead.set_pressed_no_signal(_load_follow())
-	_follow_playhead.toggled.connect(_save_follow)
+	_follow_playhead.set_pressed_no_signal(_face.load_follow())
+	_follow_playhead.toggled.connect(_face.save_follow)
 	_follow_playhead.focus_mode = Control.FOCUS_NONE
 	_follow_playhead.tooltip_text = "Select each marker as the playhead reaches it. " + \
 		"On, scrubbing a session walks you through it without clicking every flag; " + \
@@ -3966,8 +3626,8 @@ func _maybe_capture_echo() -> void:
 		# than fitted. When there is no track the fitter's geometry stands, as
 		# the fallback it now is.
 		_update_face_model(img)
-		if _ft_state == "ready" and _ft_has(pos):
-			_ft_apply_model(pos)
+		if _ft_state == "ready" and _face.has_track(pos):
+			_face.apply_model(pos)
 	_update_whisp_anchor(img)
 	# The track readback is chimera's alone - skip it entirely unless a chimera layer
 	# is actually rendering this frame (it usually isn't: the marker sits at one point
@@ -3987,11 +3647,11 @@ func _maybe_capture_face() -> void:
 	# tick) because reading it costs an array lookup, and the whole reason the
 	# old path had a 6.7 Hz tick at all was that its detection was expensive.
 	# Reading continuously is also what removes the last of the stepping.
-	_ft_ensure()
+	_face.ensure()
 	if _ft_state == "ready":
-		if _ft_has(_player.stream_position):
-			_ft_apply_model(_player.stream_position)
-			_update_stencil(_player.stream_position)
+		if _face.has_track(_player.stream_position):
+			_face.apply_model(_player.stream_position)
+			_face.update_stencil(_player.stream_position)
 		# No detection at this instant (a turn away, a hand across the face):
 		# HOLD the last model rather than snapping to a guess.
 		return
@@ -4044,7 +3704,7 @@ func _push_anchor() -> void:
 		# the cost is mild overshoot on direction reversals, which reads as
 		# the mask swinging - far better than trailing.
 		if _clown_active:
-			var cm := _clown_model_now()
+			var cm := _face.clown_model_now()
 			mat.set_shader_parameter("u_clown_eye_l", cm.eye_l)
 			mat.set_shader_parameter("u_clown_eye_r", cm.eye_r)
 			mat.set_shader_parameter("u_clown_mouth", cm.mouth)
@@ -4857,49 +4517,7 @@ func _apply_audio_fx(l: Dictionary) -> void:
 
 # --- face track: bootstrap, run, poll -------------------------------------------
 
-## MediaPipe's canonical face-mesh indices, only the ones this effect consumes.
-## Named rather than inlined because a bare 263 in the middle of a size
-## calculation is unreadable and unverifiable.
-## LEFT/RIGHT here are the IMAGE's left and right, not the subject's.
-## CONTOUR POINT SETS, not ordered rings. Every shape below is rasterized as the
-## CONVEX HULL of its set (see _ft_hull), which cannot self-intersect however the
-## indices are ordered - and an ordering mistake is otherwise invisible until you
-## look at a render and find a bow-tie where a nose should be, which is exactly
-## what a hand-ordered nose ring produced here first time.
-##
-## The indices are MediaPipe's canonical face-mesh numbering. They are written out
-## because mediapipe 1.0.1 is Tasks-only and no longer ships the FACEMESH_* tables
-## the older `solutions` module carried; the numbering itself is fixed by the
-## canonical model and has not changed since the mesh was published. Verified by
-## drawing all four on real footage - the oval follows the jaw, the eyes come out
-## almond rather than round, the lips sit exactly on the lips.
-const FT_EYE_L := [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
-const FT_EYE_R := [263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386, 387, 388, 466]
-const FT_LIPS := [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185]
-const FT_OVAL := [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379,
-	378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109]
-## THE BALL OF THE NOSE, not the nose. This used to open at 168 - the nasion,
-## the dip BETWEEN THE EYES - and run the whole dorsum down: 168, 6, 197, 195 are
-## the bridge chain, and their convex hull is a wedge covering the entire length
-## of it, so the red streaked from the tip up to the brow. A clown paints the ball
-## and nothing else. What is left is the supratip and tip (5, 4, 1), the columella
-## and subnasale (19, 94, 2), and the alae with their creases (48, 115, 220, 45 and
-## 278, 344, 440, 275) - a hull around the round part, which is the shape being
-## drawn. Scale still grows it from there.
-## THE BALL OF THE NOSE, not the nose. This used to open at 168 - the nasion, the
-## dip BETWEEN THE EYES - and run the whole dorsum down: 168, 6, 197 and 195 are
-## the bridge chain, and their convex hull is a wedge covering its entire length,
-## so the red streaked from the tip up to the brow. Most clowns paint the ball and
-## nothing else. What is left is the supratip and tip (5, 4, 1), the columella and
-## subnasale (19, 94, 2) and the alae with their creases (48, 115, 220, 45 and 278,
-## 344, 440, 275) - a hull around the round part. Scale still grows it from there.
-const FT_NOSE := [5, 4, 1, 19, 94, 2, 48, 115, 220, 45, 278, 344, 440, 275]
-const FT_NOSE_TIP := 1
 const FT_NOSE_BRIDGE := 168
-const FT_FACE_TOP := 10
-const FT_FACE_CHIN := 152
-const FT_FACE_LEFT := 234
-const FT_FACE_RIGHT := 454
 
 
 # --- THE FEATURE STENCIL: the contours, rasterized ------------------------------
@@ -4917,790 +4535,8 @@ const FT_FACE_RIGHT := 454
 # The paint sim then reads a shape instead of evaluating an ellipse, and every
 # downstream behavior it already has - advection, bleed, settle, the drip - works
 # on the real silhouette without knowing anything changed.
-const _STENCIL_H := 384      # tall enough for a face, small enough to be free
 
 var _stencil_vp: SubViewport
-var _stencil_draw: Node2D
-var _stencil_cut: Node2D
-var _stencil_cuts: Array = []
-var _stencil_shapes := []    # [eyes, lips, nose, oval] as PackedVector2Array, in VIEWPORT px
-
-
-func _ensure_stencil() -> void:
-	if _stencil_vp != null:
-		return
-	var asp := _source_aspect()
-	_stencil_vp = SubViewport.new()
-	_stencil_vp.size = Vector2i(maxi(2, int(round(_STENCIL_H * asp))), _STENCIL_H)
-	_stencil_vp.disable_3d = true
-	_stencil_vp.transparent_bg = true
-	# CLEARED EVERY DRAW, unlike the paint field next door: this is a statement of
-	# where the features ARE this instant, not an accumulation. The persistence
-	# lives in the paint sim that reads it.
-	_stencil_vp.render_target_clear_mode = SubViewport.CLEAR_MODE_ALWAYS
-	_stencil_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
-	_stencil_draw = Node2D.new()
-	var cm := CanvasItemMaterial.new()
-	# PREMULTIPLIED, not ADD. Godot's additive blend multiplies the source by its
-	# own alpha before adding, so a color written to isolate one channel -
-	# (1,0,0,0) for the eyes - contributes exactly nothing, and the first cut of
-	# this drew only the oval (the one shape whose color had any alpha in it).
-	# In premultiplied mode the color is taken as written: dst = src + dst*(1-a),
-	# so an a=0 color adds into RGB and leaves the alpha channel alone.
-	cm.blend_mode = CanvasItemMaterial.BLEND_MODE_PREMULT_ALPHA
-	_stencil_draw.material = cm
-	_stencil_draw.draw.connect(_draw_stencil)
-	_stencil_vp.add_child(_stencil_draw)
-	# THE EYE OPENINGS ARE CUT OUT OF THE COAT, in a second pass, because
-	# premultiplied blending cannot REMOVE alpha - `dst = src + dst * (1 - src.a)`
-	# leaves the alpha channel alone at src.a = 0 and REPLACES it at src.a = 1, and
-	# there is no color in between that subtracts. A negative color clamps (that
-	# was tried). So the openings are drawn by a child with a SUBTRACTIVE material,
-	# which children being drawn after their parent puts in exactly the right
-	# order: dst.a - 1 = 0 inside each opening, and rgb untouched because the
-	# color's rgb is zero.
-	#
-	# What it is FOR: the eye patch is an annulus so a clown paints AROUND the eye,
-	# and that worked - but the white coat underneath went on covering the opening,
-	# so the hole in the black revealed white instead of an eyeball. Same fault as
-	# the black over the eyeball, with the color inverted. A hole has to be a hole
-	# in the whole mask.
-	_stencil_cut = Node2D.new()
-	var cut_m := CanvasItemMaterial.new()
-	cut_m.blend_mode = CanvasItemMaterial.BLEND_MODE_SUB
-	_stencil_cut.material = cut_m
-	_stencil_cut.draw.connect(_draw_stencil_cut)
-	_stencil_vp.add_child(_stencil_cut)
-	add_child(_stencil_vp)
-
-
-## The eye openings, subtracted from the coat's silhouette. See _ensure_stencil
-## for why this is a separate pass and not another entry in _stencil_shapes.
-## The Follow switch, out of and into user://ghost.cfg. Defaults to ON, which is
-## the behavior every session had before the switch existed.
-func _load_follow() -> bool:
-	var cfg := ConfigFile.new()
-	if cfg.load(PREFS_CFG) != OK:
-		return true
-	return bool(cfg.get_value("mask", "follow_playhead", true))
-
-
-func _save_follow(on: bool) -> void:
-	var cfg := ConfigFile.new()
-	cfg.load(PREFS_CFG)     # read-modify-write - see PREFS_CFG
-	cfg.set_value("mask", "follow_playhead", on)
-	cfg.save(PREFS_CFG)
-
-
-func _draw_stencil_cut() -> void:
-	for pts in _stencil_cuts:
-		if pts.size() >= 3:
-			_stencil_cut.draw_colored_polygon(pts, Color(0, 0, 0, 1))
-
-
-func _draw_stencil() -> void:
-	# One channel each, and the two EYES are separate polygons sharing a channel -
-	# a single hull around both is a bandit's mask across the bridge of the nose.
-	# Additive blending lets the eye and nose polygons overlap the oval without
-	# either erasing the other, which a normal alpha blend would.
-	for entry in _stencil_shapes:
-		var pts: PackedVector2Array = entry[0]
-		# DEGENERATE POLYGONS ARE SKIPPED, not handed to the renderer. A ring is
-		# decomposed into triangles between two hulls, and wherever those hulls
-		# touch - a collapsed corner, a vertex flattened onto the bridge line beside
-		# its neighbor - the triangle has no area, and Godot answers that with
-		# "Invalid polygon data, triangulation failed" once per frame in the log.
-		# The shape is invisible either way; the difference is a clean console.
-		if pts.size() >= 3 and absf(_poly_area(pts)) > 1e-9:
-			_stencil_draw.draw_colored_polygon(pts, entry[1])
-
-
-## Twice the signed area - the sign is unused, only the magnitude, as a
-## degeneracy test.
-static func _poly_area(pts: PackedVector2Array) -> float:
-	var acc := 0.0
-	for i in pts.size():
-		var p0 := pts[i]
-		var p1 := pts[(i + 1) % pts.size()]
-		acc += p0.x * p1.y - p1.x * p0.y
-	return acc * 0.5
-
-
-## The convex hull of a landmark set at `t`, in frame UV. Hull rather than the
-## points in order: see the FT_* sets for why.
-func _ft_hull(ring: Array, t: float) -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	for i in ring:
-		pts.append(_ft_point(int(i), t))
-	return Geometry2D.convex_hull(pts)
-
-
-## The RING between two hulls, as quads - paint AROUND a feature rather than over
-## it. Both hulls come from _grow_hull of the same source, so they have matching
-## point counts and correspondence, and the ring is one quad per edge.
-##
-## Built geometrically because it cannot be drawn. Punching a hole by drawing the
-## inner shape in a negative color reads as the obvious trick and does not work:
-## on a normal target the value clamps and the hole stays solid, and on an HDR one
-## it comes back at 0.92 rather than 0. Godot's polygon drawing has no hole
-## support either. Quads between corresponding points have neither problem and are
-## exact.
-static func _ring_quads(outer: PackedVector2Array, inner: PackedVector2Array) -> Array:
-	var out := []
-	if outer.size() < 3 or outer.size() != inner.size():
-		return out
-	# TWO TRIANGLES per segment, not one quad. A quad in the order
-	# (outer[i], outer[j], inner[j], inner[i]) is a valid trapezoid on paper, but
-	# where the hull is nearly pointed - the corners of an eye - the four points
-	# are close to collinear and the drawn polygon comes out as a BOW-TIE. Rendered
-	# and looked at, the "ring" was a self-crossing outline rather than a band.
-	# Triangles cannot cross themselves whatever the points do.
-	for i in outer.size():
-		var j := (i + 1) % outer.size()
-		out.append(PackedVector2Array([outer[i], outer[j], inner[j]]))
-		out.append(PackedVector2Array([outer[i], inner[j], inner[i]]))
-	return out
-
-
-## THE UNIT ONE STEP OF EYE SIZE IS WORTH, in aspect space. Mostly the hull's
-## SHORT reach - for an eye, lid to lash - with a share of its long one.
-##
-## Neither alone works. Pure minor (0.0169 on the measured eye) makes Eye size
-## barely move the patch past the corners, and covering the skin OUTSIDE the eye is
-## what the control is for. Pure major (0.1406, eight times larger) inflates the
-## short axis out of all proportion and the patch becomes a blob. The mix keeps the
-## patch growing rounder rather than longer - which is the point of offsetting at
-## all instead of scaling - while still reaching out across the socket.
-static func _hull_step(pts: PackedVector2Array, asp: float) -> float:
-	if pts.is_empty():
-		return 0.0
-	var a := Vector2(asp, 1.0)
-	var c := Vector2.ZERO
-	for p in pts:
-		c += p * a
-	c /= float(pts.size())
-	var lo := 1e9
-	var hi := 0.0
-	for p in pts:
-		var d := (p * a - c).length()
-		lo = minf(lo, d)
-		hi = maxf(hi, d)
-	return lo * 0.35 + hi * 0.28
-
-
-## Offset a convex hull outward by `d` along its own normals (negative = inward),
-## in aspect space so the band is the same width at the top as at the side.
-##
-## THIS IS WHY THE PATCH GROWS ROUNDER RATHER THAN LONGER. The eye hull measures
-## 0.141 along its major axis and 0.0169 across - 8.3 to 1 - so SCALING it about
-## its centroid (which is what Eye size used to do) multiplies that length by the
-## same factor as its height, and at the stored 2.2x the patch reaches a fifth of
-## the way across the face while staying almost as thin. Its ends become long
-## spikes, and the ring between two such hulls is a spike too, not a band: the
-## reported "it's cutting that inner eye too short - the black ring must go all the
-## way around". An offset adds the same distance in every direction, so the shape
-## fills out instead of stretching, and the ring has one width the whole way round.
-##
-## THE UNIT IS THE MINOR RADIUS, and getting that wrong is the whole difficulty: a
-## first cut offset by the hull's MEAN radius, which on an 8-to-1 lens is dominated
-## by the long axis, and the patch inflated into an angular blob three times the
-## size of the eye socket (rendered, looked at, reverted). The miter is clamped
-## tightly for the same reason - the exact miter at a lens's corner runs away
-## toward infinity, and an unclamped one is what put the spikes back.
-static func _offset_hull(pts: PackedVector2Array, d: float, asp: float) -> PackedVector2Array:
-	var m := pts.size()
-	if m < 3 or absf(d) < 1e-6:
-		return pts
-	var a := Vector2(asp, 1.0)
-	var area := 0.0
-	for i in m:
-		var q0: Vector2 = pts[i] * a
-		var q1: Vector2 = pts[(i + 1) % m] * a
-		area += q0.x * q1.y - q1.x * q0.y
-	var w := 1.0 if area > 0.0 else -1.0
-	var out := PackedVector2Array()
-	for i in m:
-		var p_prev: Vector2 = pts[(i - 1 + m) % m] * a
-		var p: Vector2 = pts[i] * a
-		var p_next: Vector2 = pts[(i + 1) % m] * a
-		var e0 := (p - p_prev).normalized()
-		var e1 := (p_next - p).normalized()
-		if e0.length() < 0.5 or e1.length() < 0.5:
-			out.append(pts[i])
-			continue
-		var bis := Vector2(e0.y, -e0.x) * w + Vector2(e1.y, -e1.x) * w
-		if bis.length() < 1e-5:
-			out.append(pts[i])
-			continue
-		bis = bis.normalized()
-		out.append((p + bis * (d / maxf(bis.dot(Vector2(e1.y, -e1.x) * w), 0.62))) / a)
-	return out
-
-
-## Squeeze a hull against a line rather than cutting it on one: vertices are
-## compressed smoothly as they approach `lim` and asymptote to it, so the line is
-## PRESSURE against expanding further rather than a wall. Nothing ever reaches it.
-##
-## A hard clamp was tried first and it works geometrically - the two eye patches
-## stop short of the bridge - but every vertex past the line lands exactly ON it,
-## which draws a straight edge down the inner side of each socket. Reported as a
-## cut, three times, in three different disguises. The soft version has no edge to
-## see: the hull just gets denser as it nears the line, so the paint fills in and
-## thins out instead of stopping.
-##
-## The response is `x / (1 + x)` - saturating, monotone, and with a slope of 1 at
-## the knee, so it joins the untouched part of the hull without a crease. The
-## vertex COUNT is preserved either way, which _ring_quads requires: it pairs the
-## outer and inner hulls by index and draws nothing at all if their sizes differ.
-static func _press_hull(pts: PackedVector2Array, origin: Vector2, n: Vector2,
-		lim: float, knee: float, asp: float) -> PackedVector2Array:
-	if knee <= 1e-6:
-		return pts
-	var a := Vector2(asp, 1.0)
-	var start := lim - knee
-	var out := PackedVector2Array()
-	for p in pts:
-		var q: Vector2 = p * a
-		var d := (q - origin).dot(n)
-		if d <= start:
-			out.append(p)
-			continue
-		var x := (d - start) / knee
-		out.append((q + n * (start + knee * (x / (1.0 + x)) - d)) / a)
-	return out
-
-
-## How far a hull reaches along `n` from `origin`.
-static func _hull_extent(pts: PackedVector2Array, origin: Vector2, n: Vector2,
-		asp: float) -> float:
-	var a := Vector2(asp, 1.0)
-	var m := -1e9
-	for p in pts:
-		m = maxf(m, (p * a - origin).dot(n))
-	return m
-
-
-## Push the inner hull away from the outer wherever the two have converged closer
-## than `min_d`, so the ring between them has a real width everywhere - including
-## at the corners, where two concentric SCALED copies of a pointed hull always
-## meet. Vertex for vertex, so the count is preserved (_ring_quads pairs them by
-## index and draws nothing at all if the sizes differ), and untouched wherever the
-## gap is already wide enough - which is everywhere but the corners, so Hollow goes
-## on sizing the opening exactly as before.
-static func _open_band(outer: PackedVector2Array, inner: PackedVector2Array,
-		min_d: float, asp: float) -> PackedVector2Array:
-	if outer.size() != inner.size() or outer.is_empty() or min_d <= 0.0:
-		return inner
-	var a := Vector2(asp, 1.0)
-	var c := Vector2.ZERO
-	for p in inner:
-		c += p * a
-	c /= float(inner.size())
-	var out := PackedVector2Array()
-	for i in inner.size():
-		var qi: Vector2 = inner[i] * a
-		var qo: Vector2 = outer[i] * a
-		var v := qi - qo
-		if v.length() >= min_d:
-			out.append(inner[i])
-			continue
-		# Toward the hull's own center if the two points coincide, which is what
-		# happens at a corner where the scaling has collapsed the gap entirely.
-		var dir := v.normalized() if v.length() > 1e-6 else (c - qo).normalized()
-		out.append((qo + dir * min_d) / a)
-	return out
-
-
-## Grow a hull, but never past a line. Same as _grow_hull except that each vertex
-## is allowed only as much growth as keeps it on the near side of the half-plane
-## `dot(p * asp - origin, n) <= lim` - so the hull swells freely in every direction
-## except the one that is bounded, where it flattens against the line.
-##
-## THE TWO EYE PATCHES MUST NOT MEET ACROSS THE BRIDGE OF THE NOSE. _grow_hull
-## scales about a hull's own centroid and knows nothing about the other eye, so at
-## the stored Eye size (2.2x) each patch grew that far toward the nose as well and
-## the pair fused into one bandit's mask - the exact fault clown_scale_check was
-## written for, which bounded the ANALYTIC radii and never saw this path, because
-## the stencil replaced it. Smudge then rubs the edges outward on top, so the
-## clearance has to account for it too (see the caller).
-##
-## Capping the growth PER VERTEX rather than capping k for the whole hull is what
-## keeps the patch its full size: a single k low enough to clear the bridge shrinks
-## the outer corner by the same fraction, and the outer corner is the part the
-## author wants big. Vertex COUNT is preserved either way, which _ring_quads
-## requires - it pairs the outer and inner hulls by index and silently draws
-## nothing at all if their sizes differ.
-static func _grow_hull_bounded(pts: PackedVector2Array, k: float, origin: Vector2,
-		n: Vector2, lim: float, asp: float) -> PackedVector2Array:
-	if pts.is_empty():
-		return pts
-	var a := Vector2(asp, 1.0)
-	var c := Vector2.ZERO
-	for p in pts:
-		c += p
-	c /= float(pts.size())
-	# How far the centroid already sits from the line. If it is past it there is
-	# nothing sensible to do, so growth is simply not allowed to make it worse.
-	var head := (c * a - origin).dot(n) - lim
-	var out := PackedVector2Array()
-	for p in pts:
-		var b := ((p - c) * a).dot(n)
-		var kp := k
-		if b > 1e-6:
-			# FLOORED AT 1.0 - THE MEASURED CONTOUR IS NEVER CLIPPED. Without this
-			# floor the cap eats into the eye itself whenever the clearance is wider
-			# than the space between the eye's inner corner and the midline, and it
-			# is: the reported result was the inner half of the patch simply gone,
-			# with the eye opening cut in two. Growth is what may be limited here,
-			# never the outline the growth started from.
-			kp = clampf(-head / b, 1.0, k)
-		out.append(c + (p - c) * kp)
-	return out
-
-
-## Grow a hull about its own centroid. The features are drawn from measured
-## outlines now, so "bigger eyes" has to mean a bigger version of THIS eye rather
-## than a bigger circle - scaling the hull keeps the shape and only changes how
-## much of the face it covers.
-static func _grow_hull(pts: PackedVector2Array, k: float) -> PackedVector2Array:
-	if pts.is_empty() or absf(k - 1.0) < 0.001:
-		return pts
-	var c := Vector2.ZERO
-	for p in pts:
-		c += p
-	c /= float(pts.size())
-	var out := PackedVector2Array()
-	for p in pts:
-		out.append(c + (p - c) * k)
-	return out
-
-
-## THE SMILE. A clown's mouth is not the wearer's mouth - the Joker's runs most of
-## the way to his ears and curves up past where any face bends. So the lip hull is
-## stretched horizontally about its own center and its outer ends are swept along a
-## curve, before rasterizing. Width 1 and curve 0 leave the real mouth exactly as
-## measured; both push far past anatomy on purpose, because that is the look.
-## The curve is applied proportionally to the SQUARE of the horizontal distance
-## from center, so the middle of the lips stays put and the corners travel - which
-## is how a smile actually deforms, and what keeps it a mouth rather than a banana.
-static func _smile_hull(pts: PackedVector2Array, width: float, curve: float) -> PackedVector2Array:
-	if pts.is_empty():
-		return pts
-	var c := Vector2.ZERO
-	for p in pts:
-		c += p
-	c /= float(pts.size())
-	var half := 0.0001
-	for p in pts:
-		half = maxf(half, absf(p.x - c.x))
-	var out := PackedVector2Array()
-	for p in pts:
-		var dx := (p.x - c.x) * width
-		var u := clampf(dx / (half * maxf(width, 0.001)), -1.0, 1.0)
-		out.append(Vector2(c.x + dx, p.y + curve * u * u))
-	return out
-
-
-## Rebuild the stencil for clip time `t`. Cheap enough to run every frame: four
-## convex hulls of at most 36 points, then one small viewport draw.
-func _update_stencil(t: float) -> void:
-	if _ft_state != "ready":
-		return
-	_ensure_stencil()
-	var sz := Vector2(_stencil_vp.size)
-	var eyes := PackedVector2Array()
-	# The two eyes share a channel but must NOT share a hull - one hull around both
-	# is a bandit's mask across the bridge of the nose.
-	# EACH EYE IS A RING, not a patch: a clown paints around the eye, not over the
-	# eyeball. Hollow sizes the opening.
-	#
-	# BOTH RADII ARE RELATIVE TO THE MEASURED EYE OPENING, and getting that wrong
-	# is why the paint still covered the eyeballs after the ring was added. The
-	# outer hull was 1.0x the opening and the hole ran 0 -> 0.82x, so even at full
-	# Hollow the "ring" was a thin band between 82% and 100% of the eye - entirely
-	# ON the eyeball, with nothing at all around it. Backwards. The patch has to be
-	# comfortably BIGGER than the eye (a clown's is), and the hole has to reach
-	# slightly PAST it so the eyeball is genuinely clear rather than fringed by the
-	# landmark's own error.
-	var eye_l_src := _ft_hull(FT_EYE_L, t)
-	var eye_r_src := _ft_hull(FT_EYE_R, t)
-	# 0.9x the eye opening at the stored default, widening to 1.5x. It used to run
-	# from 0, i.e. NO hole - so out of the box the patch was solid over the eyeball,
-	# the control that fixes it sat at its inert end, and there was no way to tell
-	# from the panel that it was the one to reach for. A clown paints around the
-	# eye; that is the default now, and the slider widens the opening from there.
-	var hole := 0.9 + clampf(_clown_hollow, 0.0, 1.0) * 0.6
-	# THE EYE PATCH IS THE MEASURED EYE, SCALED - the original geometry, restored.
-	# Three attempts to improve on it each traded one fault for another and are
-	# recorded here so none of them comes back: bounding the growth against a line
-	# through the bridge (to stop the two patches fusing over the nose) emptied the
-	# INNER side; rebuilding both hulls as normal offsets fixed the band but made
-	# the patch an angular blob, because an eye hull is 8 to 1 and an offset in any
-	# averaged unit inflates the short axis out of proportion; and gating the paint
-	# on the coat's alpha (to keep a wide Smudge off the eyeball) cut a straight
-	# edge down each socket. Scaling wraps the eye all the way round, which is the
-	# property that actually matters, and the one thing it genuinely gets wrong -
-	# a ring between two SCALED copies of a pointed hull pinches to nothing at the
-	# corners - is fixed by _open_band, which is a few lines and touches nothing
-	# else.
-	var eye_l := _grow_hull(eye_l_src, _clown_eye_size)
-	var eye_r := _grow_hull(eye_r_src, _clown_eye_size)
-	var eye_l_in := _grow_hull(eye_l_src, hole)
-	var eye_r_in := _grow_hull(eye_r_src, hole)
-	var asp_e := _source_aspect()
-	var band_l := _hull_step(eye_l_src, asp_e) * 0.45
-	var band_r := _hull_step(eye_r_src, asp_e) * 0.45
-	# NOTHING HOLDS THE HULLS BACK FROM THE BRIDGE. Three versions tried to - a
-	# per-vertex growth cap, a hard flatten against a line, then a soft asymptotic
-	# squeeze - and all three drew a visible edge down the inner side of each
-	# socket, because a hull here has SIXTEEN vertices and no operation on sixteen
-	# points can be soft. The eye patches are simply the measured eyes, grown; the
-	# bridge is kept bare per PIXEL instead, by a wide fade in the deposit (see
-	# clown_paint's `bridge pressure`), which has as many samples as the frame has
-	# texels and can therefore actually be gradual.
-	var lips := _smile_hull(_ft_hull(FT_LIPS, t), _clown_smile_w, _clown_smile_curve)
-	var nose := _ft_hull(FT_NOSE, t)
-	# THE COAT'S OUTLINE IS DILATED A LITTLE past the measured jawline. Two soft
-	# edges sit between the polygon and the picture - the deposit reads the
-	# rasterized alpha through a smoothstep, and mask_split gates the whole layer
-	# on the coat field through another - and each costs a pixel or two at the
-	# boundary. Growing the hull moves BOTH of those outside the visible jaw, so
-	# the jaw itself is interior and fully painted. It cannot spill onto the
-	# background: the layer is separately gated on matching the face's own color
-	# (match16 in the clown branch), so paint that exists past the jaw in the
-	# FIELD simply has nothing to draw on.
-	var oval := _grow_hull(_ft_hull(FT_OVAL, t), 1.015)
-	const EYE := Color(1, 0, 0, 0)
-	# Ring quads when Hollow has opened one, the whole hull when it has not.
-	var eye_shapes := []
-	if hole > 0.02:
-		for quad in _ring_quads(_to_px(eye_l, sz), _to_px(eye_l_in, sz)):
-			eye_shapes.append([quad, EYE])
-		for quad in _ring_quads(_to_px(eye_r, sz), _to_px(eye_r_in, sz)):
-			eye_shapes.append([quad, EYE])
-	else:
-		eye_shapes.append([_to_px(eye_l, sz), EYE])
-		eye_shapes.append([_to_px(eye_r, sz), EYE])
-	# THE OVAL GOES FIRST. Its color is the only one carrying alpha, and in
-	# premultiplied blending an a=1 source REPLACES what is under it - drawn last
-	# it would wipe the three channels drawn before it.
-	_stencil_shapes = [[_to_px(oval, sz), Color(0, 0, 0, 1)]]
-	_stencil_shapes.append_array(eye_shapes)
-	_stencil_shapes.append([_to_px(lips, sz), Color(0, 1, 0, 0)])
-	_stencil_shapes.append([_to_px(nose, sz), Color(0, 0, 1, 0)])
-	# The eye openings come out of the COAT as well as out of the black - see
-	# _ensure_stencil. Cut at the ring's own inner hull, so the hole in the white
-	# is exactly the hole in the black and Hollow sizes both.
-	_stencil_cuts = []
-	if hole > 0.02:
-		_stencil_cuts = [_to_px(eye_l_in, sz), _to_px(eye_r_in, sz)]
-	_stencil_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
-	_stencil_draw.queue_redraw()
-	_stencil_cut.queue_redraw()
-
-
-static func _to_px(pts: PackedVector2Array, sz: Vector2) -> PackedVector2Array:
-	var out := PackedVector2Array()
-	for p in pts:
-		out.append(Vector2(p.x * sz.x, p.y * sz.y))
-	return out
-
-
-## The centroid of a landmark ring at `t`.
-func _ft_ring_center(ring: Array, t: float) -> Vector2:
-	var acc := Vector2.ZERO
-	for i in ring:
-		acc += _ft_point(int(i), t)
-	return acc / float(ring.size())
-
-
-## A ring's half-extent, aspect-corrected so a radius means the same thing on
-## either axis. Returned in RAW UV (the shaders' contract for these fields).
-func _ft_ring_radius(ring: Array, t: float, asp: float) -> float:
-	var c := _ft_ring_center(ring, t)
-	var m := 0.0
-	for i in ring:
-		m = maxf(m, ((_ft_point(int(i), t) - c) * Vector2(asp, 1.0)).length())
-	return m
-
-
-## THE WHOLE FACE MODEL, from measured landmarks instead of a fitted blob. This
-## is what replaces _update_face_model's ~300 lines of weighted mass, second
-## moments, dark-cluster hunting and hand-tuned plausibility bounds. Every value
-## below is a MEASUREMENT of a named part of the face, so there is nothing left to
-## tune and nothing left to be wrong about pose: a turned head simply reports
-## different landmark positions, which is the whole point.
-func _ft_apply_model(t: float) -> void:
-	var asp := _source_aspect()
-	var eye_l := _ft_ring_center(FT_EYE_L, t)
-	var eye_r := _ft_ring_center(FT_EYE_R, t)
-	var lips := _ft_ring_center(FT_LIPS, t)
-	var top := _ft_point(FT_FACE_TOP, t)
-	var chin := _ft_point(FT_FACE_CHIN, t)
-	var left := _ft_point(FT_FACE_LEFT, t)
-	var right := _ft_point(FT_FACE_RIGHT, t)
-	# No EMA and no prediction. Both existed to paper over a detector that
-	# jittered and lagged; this one is fitted offline over the whole clip, so the
-	# track is already smooth and already knows the future. Writing straight
-	# through is what makes the mask sit still.
-	_face_eye_l_ema = eye_l
-	_face_eye_r_ema = eye_r
-	_face_mouth_ema = lips
-	_face_nose_ema = _ft_point(FT_NOSE_TIP, t)
-	_face_c_ema = (top + chin + left + right) * 0.25
-	_face_r_ema = Vector2(absf(right.x - left.x) * 0.5, absf(chin.y - top.y) * 0.5)
-	_face_eye_lr_ema = _ft_ring_radius(FT_EYE_L, t, asp)
-	_face_eye_rr_ema = _ft_ring_radius(FT_EYE_R, t, asp)
-	# The mouth's own half-width and half-height, measured corner-to-corner and
-	# lip-to-lip - so it opens and closes with the real mouth instead of holding
-	# a fitted ellipse's proportions.
-	var mw := 0.0
-	var mh := 0.0
-	for i in FT_LIPS:
-		var d := _ft_point(int(i), t) - lips
-		mw = maxf(mw, absf(d.x))
-		mh = maxf(mh, absf(d.y))
-	_face_mouth_r_ema = Vector2(mw, mh)
-	# The face's mean tint/luminance still come from the picture (the coat is a
-	# per-pixel color match, not a fitted oval) - see _update_face_model, which
-	# still runs for those when no track is available.
-	_face_prev_lum = PackedFloat32Array()
-
-
-func _ft_bin(tool_name: String) -> String:
-	return Deps.venv_bin(FACE_VENV_DIR, tool_name)
-
-
-func _ft_model_path() -> String:
-	return Provision.file_path("face_model")
-
-
-## Kick the pre-pass off (or discover it already cached). Called per frame while a
-## clown layer is live; every branch is a cheap no-op once the track is ready.
-## Deliberately lazy: a session that never uses the clown never installs anything.
-func _ft_ensure() -> void:
-	if _ft_state == "provisioning":
-		_ft_wait_for_env()
-		return
-	if _ft_state in ["ready", "failed", "tracking"]:
-		_ft_poll()
-		return
-	if session == null or session.video_path.is_empty():
-		return
-	var src := ProjectSettings.globalize_path(session.video_path)
-	if not FileAccess.file_exists(src):
-		return
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(FACE_TRACK_DIR))
-	_ft_path = ProjectSettings.globalize_path(FACE_TRACK_DIR).path_join(
-		str(hash(session.video_path)) + ".bin")
-	_ft_log = ProjectSettings.globalize_path(FACE_TRACK_DIR).path_join("last_run.log")
-	if FileAccess.file_exists(_ft_path):
-		_ft_load()
-		return
-	_ft_state = "provisioning"
-	_ft_wait_for_env()
-
-
-## Track once the environment (and its models) is ready; until then show what its
-## install is doing, and fail with the install's own reason if it cannot be had.
-func _ft_wait_for_env() -> void:
-	var why := Provision.unsupported(FACE_ENV)
-	if not why.is_empty():
-		_ft_fail("not available on this machine: " + why)
-		return
-	if Provision.ensure(FACE_ENV):
-		Provision.hold(FACE_ENV, "mask editor")
-		_ft_start_track()
-		return
-	var s := Provision.state(FACE_ENV)
-	if not bool(s.get("running", false)) and (s.has("error") or not Provision.can_install()):
-		_ft_fail(String(s.get("error", Provision.hint(FACE_ENV))))
-		return
-	_set_status("⏳  Preparing the face tracker - " + Provision.describe(FACE_ENV, s))
-
-
-func _ft_start_track() -> void:
-	var script := BundledHosts.path("res://hosts/face/face_track.py")
-	if not FileAccess.file_exists(script):
-		_ft_fail("hosts/face/face_track.py is missing")
-		return
-	# The ORIGINAL source where we still have it, else the prepared .ogv. The
-	# source is better evidence: the transcode is theora q6 and its chroma blocks
-	# are exactly the artifact a landmarker has to see past.
-	var src := session.source_path
-	if src.is_empty() or not FileAccess.file_exists(src):
-		src = ProjectSettings.globalize_path(session.video_path)
-	print("ghost face: tracking ", src)
-	_ft_pid = _ft_spawn_logged(_ft_bin("python"), PackedStringArray([
-		script, "--video", src, "--out", _ft_path, "--model", _ft_model_path(),
-		"--rate", str(FACE_TRACK_RATE),
-		"--progress", ProjectSettings.globalize_path(FACE_TRACK_DIR).path_join("progress")]))
-	_ft_state = "tracking" if _ft_pid > 0 else "failed"
-	_set_status("⏳  Finding the face through the clip…" if _ft_pid > 0
-		else "⚠  Could not start the face tracker")
-
-
-func _ft_poll() -> void:
-	if _ft_pid <= 0 or Subprocess.alive(_ft_pid):
-		if _ft_state == "tracking":
-			var pf := ProjectSettings.globalize_path(FACE_TRACK_DIR).path_join("progress")
-			if FileAccess.file_exists(pf):
-				var f := FileAccess.open(pf, FileAccess.READ)
-				if f != null:
-					_set_status("⏳  Finding the face through the clip…  %d%%"
-						% int(f.get_as_text().strip_edges().to_float() * 100.0))
-		return
-	_ft_pid = -1
-	match _ft_state:
-		"tracking":
-			if FileAccess.file_exists(_ft_path):
-				_ft_load()
-			else:
-				_ft_fail("the face pre-pass produced no track (see the log)")
-
-
-func _ft_fail(why: String) -> void:
-	_ft_state = "failed"
-	push_warning("ghost face: " + why)
-	# SAY SO rather than quietly drawing a bad mask. The fallback fitter still
-	# runs, but the author needs to know they are looking at the fallback - the
-	# whole reason this exists is that the fallback is not good enough.
-	_set_status("⚠  Face tracking unavailable - " + why)
-
-
-## stdout+stderr to one file, so a mediapipe error is readable afterwards instead
-## of vanishing into a GUI launch's missing console.
-func _ft_spawn_logged(exe: String, args: PackedStringArray) -> int:
-	return Subprocess.start_logged(exe, args, _ft_log, "face track")
-
-
-func _ft_load() -> void:
-	var f := FileAccess.open(_ft_path, FileAccess.READ)
-	if f == null:
-		_ft_fail("the cached track could not be opened")
-		return
-	if f.get_buffer(4).get_string_from_ascii() != "GFT1":
-		f.close()
-		DirAccess.remove_absolute(_ft_path)   # a stale/foreign file - rebuild next open
-		_ft_fail("the cached track is not a face track")
-		return
-	var _version := f.get_32()
-	_ft_rate = f.get_float()
-	_ft_count = f.get_32()
-	_ft_points = f.get_32()
-	var stride := 1 + _ft_points * 8
-	if _ft_count <= 0 or _ft_points <= 0 \
-			or f.get_length() != FACE_TRACK_HEADER + _ft_count * stride:
-		f.close()
-		DirAccess.remove_absolute(_ft_path)
-		_ft_fail("the cached track is truncated")
-		return
-	_ft_found.resize(_ft_count)
-	_ft_xy.resize(_ft_count * _ft_points * 2)
-	var found_n := 0
-	for i in _ft_count:
-		_ft_found[i] = f.get_8()
-		found_n += _ft_found[i]
-		var row := f.get_buffer(_ft_points * 8).to_float32_array()
-		for k in _ft_points * 2:
-			_ft_xy[i * _ft_points * 2 + k] = row[k]
-	f.close()
-	_ft_state = "ready"
-	print("ghost face: track ready - %d samples at %.1f Hz, face in %d (%.0f%%)"
-		% [_ft_count, _ft_rate, found_n, 100.0 * float(found_n) / float(maxi(_ft_count, 1))])
-	_set_status("✓  Face tracked (%d%% of the clip)"
-		% int(100.0 * float(found_n) / float(maxi(_ft_count, 1))))
-
-
-## Landmark `idx` at clip time `t`, in frame UV. Linearly interpolated between the
-## two nearest samples - at 15 Hz a talking head moves little enough between them
-## that this is a short interpolation rather than a guess, and it means the drawn
-## mask moves continuously instead of stepping at the sample rate.
-func _ft_point(idx: int, t: float) -> Vector2:
-	if _ft_state != "ready" or _ft_count <= 0:
-		return Vector2.ZERO
-	var s := clampf(t * _ft_rate, 0.0, float(_ft_count - 1))
-	# A CENTERED GAUSSIAN OVER THE SAMPLES, which smooths and interpolates in one
-	# pass. This replaced a plain lerp between the two nearest samples, and the
-	# reasoning behind that lerp was wrong in a way worth writing down: the track
-	# is fitted offline, so it needs no LAG COMPENSATION - but that is not the same
-	# as needing no smoothing. The detector still wobbles a pixel or two per
-	# sample, and a lerp between noisy samples is a piecewise-linear path with a
-	# CORNER at every one of them, so the whole mask twitched at the sample rate.
-	#
-	# Weighting neighbors on BOTH sides is what the offline track exists for. A
-	# live tracker only has the past, so its only smoothing is a lag; a centered
-	# kernel has ZERO phase - it removes the jitter and moves the mask not one
-	# frame later than the face. And because the weight is a smooth function of
-	# the continuous position, the result is smooth in time by construction:
-	# no corners at sample boundaries, nothing to step.
-	var sigma := _ft_sigma
-	var half := maxi(1, int(ceil(sigma * 2.5)))
-	var lo := maxi(0, int(s) - half)
-	var hi := mini(_ft_count - 1, int(s) + half + 1)
-	var acc := Vector2.ZERO
-	var wsum := 0.0
-	var base := idx * 2
-	for i in range(lo, hi + 1):
-		# LOST SAMPLES ARE SKIPPED, not averaged in - their coordinates are a held
-		# copy of a neighbor, so including them would drag the feature toward
-		# wherever the hold happened to be.
-		if _ft_found[i] == 0:
-			continue
-		var d := (float(i) - s) / sigma
-		var w := exp(-0.5 * d * d)
-		var b := i * _ft_points * 2 + base
-		acc += Vector2(_ft_xy[b], _ft_xy[b + 1]) * w
-		wsum += w
-	if wsum <= 1e-6:
-		# Every sample in the window was lost - fall back to the nearest one that
-		# is not, rather than returning the origin and snapping the mask to a corner.
-		var n := clampi(int(round(s)), 0, _ft_count - 1)
-		var bn := n * _ft_points * 2 + base
-		return Vector2(_ft_xy[bn], _ft_xy[bn + 1])
-	return acc / wsum
-
-
-## Is there a real detection at `t`? The mean of a few landmarks is meaningless
-## when the answer is "no face here", and the caller has to be able to hold.
-func _ft_has(t: float) -> bool:
-	if _ft_state != "ready" or _ft_count <= 0:
-		return false
-	return _ft_found[clampi(int(t * _ft_rate), 0, _ft_count - 1)] != 0
-
-
-## The clown model's current display state - positions velocity-extrapolated
-## by the fraction through the capture tick (prediction cancels the capture +
-## EMA lag), sizes taken straight from their EMAs (predicting a size just
-## amplifies shape twitch). One source of truth for _push_anchor AND the
-## paint sim's deposit targets.
-func _clown_model_now() -> Dictionary:
-	# LEAD scales the prediction. It is a jitter AMPLIFIER as much as a lag
-	# canceller - it continues whatever the last tick did, so when the detection
-	# is clean it cancels the capture+EMA delay, and when the detection is noisy
-	# it doubles the noise and the mask visibly shakes at the capture cadence.
-	# Which of those dominates is a property of the footage, so it is the
-	# author's call: 0 turns the prediction off entirely (calmest, laggiest), 1
-	# is the behavior this always had, 2 over-predicts for fast motion.
-	var ff := clampf(fposmod(_player.stream_position, _FACE_INTERVAL) / _FACE_INTERVAL, 0.0, 1.0)
-	# WITH A TRACK, DO NOT PREDICT. The prediction exists to cancel a live
-	# detector's delay, and it does that by ramping a fraction from 0 to 1 across
-	# each capture tick and then snapping back to 0 - a sawtooth. On a laggy
-	# detector that sawtooth is smaller than the lag it cancels and worth paying.
-	# On the offline track there is NO lag to cancel (the smoothing is centered),
-	# so all that is left is the sawtooth itself: the whole mask lurching forward
-	# and resetting several times a second, which is exactly the twitch reported.
-	if _ft_state == "ready":
-		ff = 0.0
-	return {
-		"eye_l": _face_eye_l_ema + (_face_eye_l_ema - _face_eye_l_prev) * ff,
-		"eye_r": _face_eye_r_ema + (_face_eye_r_ema - _face_eye_r_prev) * ff,
-		"mouth": _face_mouth_ema + (_face_mouth_ema - _face_mouth_prev) * ff,
-		"nose": _face_nose_ema + (_face_nose_ema - _face_nose_prev) * ff,
-		"face_c": _face_c_ema + (_face_c_ema - _face_c_prev) * ff,
-		"eye_lr": _face_eye_lr_ema, "eye_rr": _face_eye_rr_ema,
-		"mouth_r": _face_mouth_r_ema,
-	}
 
 
 # --- the pose track: bootstrap, then one window at a time --------------------
@@ -5711,439 +4547,11 @@ func _clown_model_now() -> Dictionary:
 # them, so nothing here is ever "waiting for the clip to finish".
 
 
-func _pt_model_path() -> String:
-	return Provision.file_path("pose_model")
-
-
-func _pt_dir_path() -> String:
-	return ProjectSettings.globalize_path(POSE_TRACK_DIR)
-
-
-## Where window `k` of THIS clip lives. Keyed by the clip and by the sample grid,
-## so changing the rate or the grid cannot silently read windows written under the
-## old one.
-func _pt_chunk_path(k: int) -> String:
-	return _pt_dir_path().path_join("%d_%dx%d_%02d.bin"
-		% [hash(session.video_path), _UMB_W, _UMB_H, k])
-
-
-## Called every frame while an umbra layer is live. Bootstraps once, then pumps
-## the window the playhead needs. Every branch is a cheap no-op in the steady
-## state.
-func _pt_ensure() -> void:
-	if _pt_state == "failed" or session == null or session.video_path.is_empty():
-		return
-	if _pt_state != "ready":
-		# Before ANY step, not just the windows: the tracker logs here, and an empty path
-		# makes its redirect fail so the step never runs at all.
-		DirAccess.make_dir_recursive_absolute(_pt_dir_path())
-		_pt_log = _pt_dir_path().path_join("last_run.log")
-		var why := Provision.unsupported(FACE_ENV)
-		if not why.is_empty():
-			_pt_fail("not available on this machine: " + why)
-			return
-		if not Provision.ensure(FACE_ENV):
-			_pt_state = "provisioning"
-			var s := Provision.state(FACE_ENV)
-			if not bool(s.get("running", false)) and (s.has("error") or not Provision.can_install()):
-				_pt_fail(String(s.get("error", Provision.hint(FACE_ENV))))
-			else:
-				_set_status("⏳  Preparing the pose tracker - " + Provision.describe(FACE_ENV, s))
-			return
-		Provision.hold(FACE_ENV, "mask editor")
-		_pt_chunk_n = int(POSE_CHUNK_SECS * POSE_TRACK_RATE)
-		_pt_chunk_total = maxi(1, int(ceil(session.duration / POSE_CHUNK_SECS)))
-		_pt_state = "ready"
-	_pt_pump()
-
-
-func _pt_fail(why: String) -> void:
-	_pt_state = "failed"
-	push_warning("ghost pose: " + why)
-	# SAY SO rather than drawing nothing and letting the author wonder. The umbra
-	# has no fallback at all - its whole shape is the track - so silence here is
-	# indistinguishable from the effect being switched off.
-	_set_status("⚠  The umbra can't see the body - " + why)
-
-
-## stdout+stderr to one file, like [method _ft_spawn_logged].
-##
-## THE WINDOWS RUN AT THE LOWEST PRIORITY THE OS HANDS OUT, and pose_track.py lowers itself
-## (`--background`: nice 19, or IDLE_PRIORITY_CLASS on Windows) before it loads anything.
-## WHY, and it is not tidiness: mediapipe saturates every core it is given, and
-## ghost's video decode and the editor's own frame both run on this machine's
-## other ones. Starve the decode and `_player.stream_position` stops advancing;
-## the A/V rule in `_process` then sees audio ahead of video, HOLDS the audio
-## (see the long note there), and the hold cannot release while the starvation
-## continues. Reported as "the sound no longer works in masking mode... it's
-## breaking the audio at launch" - and nothing had touched the audio at all. A
-## background job that can stall the foreground is a background job in name only.
-func _pt_spawn_logged(exe: String, args: PackedStringArray) -> int:
-	return Subprocess.start_logged(exe, args, _pt_log, "pose track")
-
-
-## THE PUMP. Which windows are wanted is a pure function of the playhead: the one
-## it is in, and the one after it (playback walks forward, and Lead already reads
-## past the current frame). Anything already on disk is loaded; the nearest thing
-## missing is read; everything far away is dropped.
-func _pt_pump() -> void:
-	if _player == null:
-		return
-	var t := _player.stream_position + clampf(_umb_lead, 0.0, 2.0)
-	var here := clampi(int(floor(t / POSE_CHUNK_SECS)), 0, maxi(0, _pt_chunk_total - 1))
-	var want: Array[int] = [here]
-	# The guard reads the playhead itself, which is a different window from the
-	# lead's whenever the playhead sits within Lead of a boundary.
-	var guard_k := clampi(int(floor(_player.stream_position / POSE_CHUNK_SECS)),
-		0, maxi(0, _pt_chunk_total - 1))
-	if guard_k != here:
-		want.append(guard_k)
-	if here + 1 < _pt_chunk_total:
-		want.append(here + 1)
-
-	_pt_poll_job(here)
-
-	for k in want:
-		if _pt_chunks.has(k):
-			continue
-		var path := _pt_chunk_path(k)
-		if FileAccess.file_exists(path):
-			_pt_load_chunk(k, path)
-		elif _pt_job < 0 and not _pt_missing.has(k):
-			_pt_start_chunk(k)
-			break   # one child at a time: two of these compete for the same cores
-
-	# EVICT WHAT WE HAVE WALKED AWAY FROM. Each window is ~1.3 MB and a long clip
-	# scrubbed end to end would otherwise keep every one ever visited.
-	if _pt_chunks.size() > POSE_CHUNK_KEEP:
-		var far := -1
-		var far_d := -1
-		for k in _pt_chunks:
-			var d: int = absi(int(k) - here)
-			if d > far_d:
-				far_d = d
-				far = int(k)
-		if far >= 0 and far_d > 1:
-			_pt_chunks.erase(far)
-
-
-## Progress for the window being read, reported as the window's own progress -
-## "34% of the whole clip" was the old message and it was true and useless, because
-## the thing the author is waiting for is twenty seconds of it.
-func _pt_poll_job(here: int) -> void:
-	if _pt_job < 0:
-		return
-	if Subprocess.alive(_pt_job_pid):
-		# Four times a second, not sixty. The child writes this once a second, so a
-		# read per frame is fifteen file opens for every value that changes - on
-		# the main thread, in a loop this file has already had to make quiet once.
-		var now := Time.get_ticks_msec()
-		if now - _pt_progress_ms < 250:
-			return
-		_pt_progress_ms = now
-		var pf := _pt_dir_path().path_join("progress")
-		var frac := 0.0
-		if FileAccess.file_exists(pf):
-			var f := FileAccess.open(pf, FileAccess.READ)
-			if f != null:
-				frac = f.get_as_text().strip_edges().to_float()
-		_set_status("⏳  Reading the body around %s…  %d%%"
-			% [_clock(float(_pt_job) * POSE_CHUNK_SECS), int(clampf(frac, 0.0, 1.0) * 100.0)])
-		return
-	_pt_job_pid = -1
-	var done := _pt_job
-	_pt_job = -1
-	var path := _pt_chunk_path(done)
-	if FileAccess.file_exists(path):
-		# NOT if it is already resident. The pump's own "is it on disk yet" branch
-		# can reach the file in the same frame the child finishes, and loading it
-		# twice DOUBLE-COUNTS its confidence into the accumulated cast direction -
-		# measured, window 0 alone took the weight from 0.90 to 1.80, which would
-		# have quietly outvoted every window read after it.
-		if not _pt_chunks.has(done):
-			_pt_load_chunk(done, path)
-		_set_status("✓  The umbra can see her here")
-	else:
-		# REMEMBER THE FAILURE, or the pump re-runs the same doomed child every
-		# frame for the rest of the session. A window with no pose in it at all
-		# (a title card, a cutaway) is a legitimate outcome and lands here too.
-		_pt_missing[done] = true
-		if done == here:
-			_set_status("⚠  No body found around " + _clock(float(done) * POSE_CHUNK_SECS))
-
-
-func _pt_start_chunk(k: int) -> void:
-	var script := BundledHosts.path("res://hosts/face/pose_track.py")
-	if not FileAccess.file_exists(script):
-		_pt_fail("hosts/face/pose_track.py is missing")
-		return
-	# The ORIGINAL source where we still have it, for the same reason the face
-	# track prefers it: the prepared .ogv is theora q6 and its chroma blocks are
-	# exactly what a segmentation model has to see past.
-	var src := session.source_path
-	if src.is_empty() or not FileAccess.file_exists(src):
-		src = ProjectSettings.globalize_path(session.video_path)
-	_pt_job_pid = _pt_spawn_logged(_ft_bin("python"), PackedStringArray([
-		script, "--video", src, "--out", _pt_chunk_path(k), "--model", _pt_model_path(),
-		"--rate", str(POSE_TRACK_RATE), "--mask-w", str(_UMB_W), "--mask-h", str(_UMB_H),
-		"--start", str(float(k) * POSE_CHUNK_SECS), "--duration", str(POSE_CHUNK_SECS),
-		"--progress", _pt_dir_path().path_join("progress"), "--background"]))
-	if _pt_job_pid <= 0:
-		_pt_missing[k] = true
-		_pt_fail("could not start the pose tracker")
-		return
-	_pt_job = k
-	print("ghost pose: reading window %d (%s)" % [k, _clock(float(k) * POSE_CHUNK_SECS)])
-
-
-func _clock(secs: float) -> String:
-	return "%d:%02d" % [int(secs) / 60, int(secs) % 60]
-
-
-## Read one window. Rejects and DELETES anything that is not exactly the file this
-## reader expects, so a stale grid or a half-written chunk is rebuilt rather than
-## read as plausible nonsense.
-func _pt_load_chunk(k: int, path: String) -> void:
-	var f := FileAccess.open(path, FileAccess.READ)
-	if f == null:
-		_pt_missing[k] = true
-		return
-	if f.get_buffer(4).get_string_from_ascii() != "GST2":
-		f.close()
-		DirAccess.remove_absolute(path)
-		return
-	var _version := f.get_32()
-	var rate := f.get_float()
-	var count := f.get_32()
-	var points := f.get_32()
-	var mw := f.get_32()
-	var mh := f.get_32()
-	var start := f.get_32()
-	var dx := f.get_float()
-	var dy := f.get_float()
-	var conf := f.get_float()
-	var cells := mw * mh
-	var stride := 1 + points * 8 + points * 4 + cells
-	if count <= 0 or points <= 0 or cells <= 0 \
-			or f.get_length() != POSE_TRACK_HEADER + count * stride:
-		f.close()
-		DirAccess.remove_absolute(path)
-		_pt_missing[k] = true
-		push_warning("ghost pose: window %d was truncated - it will be read again" % k)
-		return
-	# THE HEADER'S OWN START INDEX IS THE AUTHORITY, not the filename. A window
-	# whose samples do not sit where this reader thinks they do would put the ghost
-	# on the wrong frame, silently, which is the whole failure class the format
-	# check exists for.
-	if start != k * int(rate * POSE_CHUNK_SECS):
-		f.close()
-		DirAccess.remove_absolute(path)
-		_pt_missing[k] = true
-		push_warning("ghost pose: window %d starts at sample %d, expected %d - discarded"
-			% [k, start, k * int(rate * POSE_CHUNK_SECS)])
-		return
-	_pt_rate = rate
-	_pt_points = points
-	_pt_mw = mw
-	_pt_mh = mh
-	_pt_chunk_n = int(rate * POSE_CHUNK_SECS)
-	var found := PackedByteArray()
-	var xy := PackedFloat32Array()
-	var vis := PackedFloat32Array()
-	var mask := PackedByteArray()
-	found.resize(count)
-	# APPENDED IN WHOLE BUFFERS, never cell by cell. A window is 240 samples of
-	# 5184 mask cells, and a GDScript loop that copies one byte at a time is over a
-	# million interpreted iterations per window - a visible hitch on a file that
-	# reads off the disk in a fraction of one.
-	var found_n := 0
-	for i in count:
-		found[i] = f.get_8()
-		found_n += found[i]
-		xy.append_array(f.get_buffer(points * 8).to_float32_array())
-		vis.append_array(f.get_buffer(points * 4).to_float32_array())
-		mask.append_array(f.get_buffer(cells))
-	f.close()
-	_pt_chunks[k] = {"count": count, "found": found, "xy": xy, "vis": vis, "mask": mask}
-	_pt_slot = -1
-	# The throw, accumulated. One window measures it poorly (measured on the
-	# reference clip: conf 0.97 over ten minutes, 0.45 over twenty seconds, 0.06
-	# over six); weighting by each window's own confidence means a dozen of them
-	# converge on the right answer while a window that measured nothing adds
-	# nothing rather than dragging it toward its noise.
-	var d := Vector2(dx, dy)
-	if conf > 0.0 and d.length() > 1e-4:
-		_pt_dir_acc += d.normalized() * conf
-		_pt_dir_w += conf
-	_pt_conf = _pt_dir_w
-	_pt_dir = _pt_dir_acc.normalized() if _pt_dir_w > 0.12 else Vector2(1.0, 0.0)
-	print("ghost pose: window %d ready - %d samples, body in %d, cast (%.2f, %.2f) w %.2f"
-		% [k, count, found_n, _pt_dir.x, _pt_dir.y, _pt_dir_w])
-
-
-## Is there a usable sample at clip time `t`, and which one? GLOBAL sample index,
-## or -1. Deliberately the NEAREST sample and not an interpolation: the silhouette
-## is a bitmap and cross-fading two of them makes a ghost with two outlines.
-## Position smoothness comes from the field sim, which advects at frame rate over
-## whatever the deposit does at 12 Hz.
-func _pt_slot_at(t: float) -> int:
-	if _pt_state != "ready" or _pt_chunk_n <= 0:
-		return -1
-	var i := maxi(0, int(round(t * _pt_rate)))
-	if _pt_found_at(i):
-		return i
-	# Hold the nearest real sample rather than dropping the ghost for one frame -
-	# a body that blinks out on a missed detection is a worse artifact than a body
-	# a twelfth of a second stale. Bounded to within this window, because reaching
-	# into one that is not loaded is how a hold becomes a jump across a gap.
-	for k in range(1, 8):
-		if i - k >= 0 and _pt_found_at(i - k):
-			return i - k
-		if _pt_found_at(i + k):
-			return i + k
-	return -1
-
-
-## Global sample index -> the window holding it, or an empty Dictionary.
-func _pt_chunk_of(i: int) -> Dictionary:
-	if _pt_chunk_n <= 0:
-		return {}
-	var k := i / _pt_chunk_n
-	var c = _pt_chunks.get(k, null)
-	if c == null:
-		return {}
-	if i - k * _pt_chunk_n >= int(c["count"]):
-		return {}
-	return c
-
-
-func _pt_found_at(i: int) -> bool:
-	if i < 0:
-		return false
-	var c := _pt_chunk_of(i)
-	if c.is_empty():
-		return false
-	return c["found"][i - (i / _pt_chunk_n) * _pt_chunk_n] != 0
-
-
-## Landmark `idx` of global sample `i`, in frame UV.
-func _pt_point(i: int, idx: int) -> Vector2:
-	var c := _pt_chunk_of(i)
-	if c.is_empty():
-		return Vector2(0.5, 0.5)
-	var b := ((i - (i / _pt_chunk_n) * _pt_chunk_n) * _pt_points + idx) * 2
-	var xy: PackedFloat32Array = c["xy"]
-	return Vector2(xy[b], xy[b + 1])
-
-
-## ...and how much the model believes it. MediaPipe reports a landmark it cannot
-## see - one off the bottom of a half-body framing, or an ear behind a turned
-## head - with a plausible EXTRAPOLATED position and a visibility near zero, so
-## the coordinate alone never says "no". Measured on the reference clip: the hips
-## come back at y = 1.37 (below the picture) on every sample, at visibility 0.00.
-func _pt_vis_at(i: int, idx: int) -> float:
-	var c := _pt_chunk_of(i)
-	if c.is_empty():
-		return 0.0
-	var vis: PackedFloat32Array = c["vis"]
-	return vis[(i - (i / _pt_chunk_n) * _pt_chunk_n) * _pt_points + idx]
-
-
-## Upload global sample `i`'s silhouette as the field sim's source texture.
-##
-## R and B are the SAME mask at two dilations, and that is the whole channel
-## design: R is the body the throw magnifies, B is the guard read at plain screen
-## uv, and the guard is grown a cell so its exclusion starts BEFORE her outline
-## rather than at it. Erring outward is the safe direction - the one property this
-## effect may never trade away is staying off her.
-## THE TWO CHANNELS COME FROM TWO DIFFERENT MOMENTS, and that is the whole point.
-## The BODY is her silhouette at `t + Lead` - the ghost is ahead of her, which is
-## the effect. The GUARD is her silhouette NOW, because the guard's job is to keep
-## the ghost off the woman who is on screen, and she is on screen at `t`.
-##
-## Uploading one sample for both is what produced the reported artifact: with Lead
-## wound up, a moving hand cut a hand-shaped hole in the ghost a third of a second
-## AHEAD of the hand, and left the real hand uncovered - a hard-edged gap sliding
-## through the mass with nothing where it had been.
-func _pt_upload_mask(i: int, guard_i: int) -> void:
-	var c := _pt_chunk_of(i)
-	if c.is_empty():
-		return
-	var gc := _pt_chunk_of(guard_i)
-	if gc.is_empty():
-		gc = c            # no sample for now: a stale guard beats no guard
-		guard_i = i
-	var cells := _pt_mw * _pt_mh
-	if _pt_bytes.size() != cells * 4:
-		_pt_bytes.resize(cells * 4)
-	var src: PackedByteArray = c["mask"]
-	var gsrc: PackedByteArray = gc["mask"]
-	# A CENTERED THREE-TAP OVER TIME, and centered is the point. The segmentation
-	# wobbles a cell or two per sample and the track runs at 12 Hz, so the raw
-	# outline both shimmers and STEPS - which is most of "the edges are very
-	# jittery and unstable". An EMA would fix the shimmer and buy it with lag,
-	# which on this effect is the one thing that must not be spent: the Lead is
-	# the whole point. Because the track is fitted OFFLINE the future is already
-	# on disk, so the neighbor on each side can be weighted equally - zero phase,
-	# the mask arrives no later than it did, and the wobble is gone. Same argument
-	# as the face track's `_ft_point` smoothing, one dimension up.
-	# Offsets of the two neighbors INSIDE THIS WINDOW's own array. A neighbor on
-	# the far side of a window boundary is simply absent (-1) rather than reached
-	# for: the next window may not be resident, and a half-loaded blend is worse
-	# than none.
-	var local := i - (i / _pt_chunk_n) * _pt_chunk_n
-	var last := int(c["count"]) - 1
-	var prev_b := (local - 1) * cells if local > 0 else -1
-	var next_b := (local + 1) * cells if local < last else -1
-	var gbase := (guard_i - (guard_i / _pt_chunk_n) * _pt_chunk_n) * cells
-	var base := (i - (i / _pt_chunk_n) * _pt_chunk_n) * cells
-	for y in _pt_mh:
-		for x in _pt_mw:
-			var k := y * _pt_mw + x
-			var v := src[base + k]
-			# A REAL ONE-CELL MAX DILATION, not a gain on the same value. Scaling
-			# the coverage up only widens the guard across the mask's own soft
-			# rim, which is a cell at most and nothing at all where the rim is
-			# hard - and "hard" is exactly the case (a crisp shoulder against a
-			# plain wall) where the ghost would otherwise be allowed to touch her.
-			# A cell of this grid is ~20 px of a 1080p frame, so this costs a
-			# hairline of unpainted wall around her and buys the one property the
-			# effect may never trade away.
-			var g := int(gsrc[gbase + k])
-			if x > 0:
-				g = maxi(g, gsrc[gbase + k - 1])
-			if x < _pt_mw - 1:
-				g = maxi(g, gsrc[gbase + k + 1])
-			if y > 0:
-				g = maxi(g, gsrc[gbase + k - _pt_mw])
-			if y < _pt_mh - 1:
-				g = maxi(g, gsrc[gbase + k + _pt_mw])
-			var b4 := k * 4
-			# 0.25 / 0.50 / 0.25. A missing neighbor (the window's own ends) falls
-			# back to this sample rather than to zero, which would pull the whole
-			# outline inward for two samples either side of every window boundary.
-			var sm := int(v)
-			if prev_b >= 0 or next_b >= 0:
-				var a := int(src[prev_b + k]) if prev_b >= 0 else int(v)
-				var bnx := int(src[next_b + k]) if next_b >= 0 else int(v)
-				sm = (a + int(v) * 2 + bnx) / 4
-			_pt_bytes[b4] = sm
-			_pt_bytes[b4 + 1] = 0
-			_pt_bytes[b4 + 2] = g
-			_pt_bytes[b4 + 3] = 255
-	if _pt_img == null or _pt_img.get_width() != _pt_mw or _pt_img.get_height() != _pt_mh:
-		_pt_img = Image.create_from_data(_pt_mw, _pt_mh, false, Image.FORMAT_RGBA8, _pt_bytes)
-		_pt_tex = ImageTexture.create_from_image(_pt_img)
-	else:
-		_pt_img.set_data(_pt_mw, _pt_mh, false, Image.FORMAT_RGBA8, _pt_bytes)
-		_pt_tex.update(_pt_img)
-
-
 # --- umbra: throwing her shadow ----------------------------------------------
 
 
 ## ONE PLACE where the umbra's knobs are read off a layer, because there were two
-## and they drifted: `tests/umbra_look_probe.gd` carried its own copy of these
+## and they drifted: `tests/masking/umbra_look_probe.gd` carried its own copy of these
 ## mappings, and after Stand's low end was widened the probe went on rendering the
 ## old range - so the picture it produced to check a change was a picture of the
 ## code before it. A probe that reproduces the resolve is a probe that can lie.
@@ -6178,8 +4586,6 @@ func _umb_read_layer(l: Dictionary, env: float) -> void:
 	_umb_eye_amt = clampf(float(l.get("sat_floor", 0.18)), 0.0, 1.0)
 	_umb_lean = clampf(float(l.get("swap", 0.45)), 0.0, 1.0)
 	_umb_narrow = clampf(float(l.get("intensity_b", 0.35)), 0.0, 0.75)
-
-
 
 
 ## THE CAST TRANSFORM, solved for the current playhead.
@@ -6226,19 +4632,19 @@ func _umb_solve_cast() -> void:
 	# extrapolation cannot do this - it can only continue what just happened, which
 	# on real footage is mostly detection noise multiplied by the lead time.
 	var t := _player.stream_position + clampf(_umb_lead, 0.0, 2.0)
-	var i := _pt_slot_at(t)
+	var i := _pose.slot_at(t)
 	if i < 0:
 		return
 	if not _umb_cast_from(i, _source_aspect()):
 		return
 	# The guard's own sample: HER, now, not the frame the ghost is drawn from.
-	var gi := _pt_slot_at(_player.stream_position)
+	var gi := _pose.slot_at(_player.stream_position)
 	if gi < 0:
 		gi = i
 	if _pt_slot != i or _pt_guard_slot != gi:
 		_pt_slot = i
 		_pt_guard_slot = gi
-		_pt_upload_mask(i, gi)
+		_pose.upload_mask(i, gi)
 	_umb_have = _pt_tex != null
 	if OS.has_environment("GHOST_UMBRA_DEBUG"):
 		print("UMBDBG t=%.2f (+%.2f) sample=%d unit=%.3f scale=%.2f throw=(%.2f,%.2f) "
@@ -6250,7 +4656,7 @@ func _umb_solve_cast() -> void:
 
 
 ## The geometry itself, split out from the playhead so it can be asserted without
-## a clip, a player or a renderer (tests/umbra_cast_check.gd). Reads the live knob
+## a clip, a player or a renderer (tests/masking/umbra_cast_check.gd). Reads the live knob
 ## state, writes every _umb_* transform field, and returns false when this sample
 ## cannot support a throw at all.
 func _umb_cast_from(i: int, asp: float) -> bool:
@@ -6261,14 +4667,14 @@ func _umb_cast_from(i: int, asp: float) -> bool:
 	# are excluded on purpose - one of them is genuinely hidden whenever a head
 	# turns, and half_w falls back on its own floor there.
 	for k in [PT_SH_L, PT_SH_R, PT_EYE_L, PT_EYE_R]:
-		if _pt_vis_at(i, k) < 0.30:
+		if _pose.vis_at(i, k) < 0.30:
 			return false
 	var av := Vector2(asp, 1.0)
-	var sh := (_pt_point(i, PT_SH_L) + _pt_point(i, PT_SH_R)) * 0.5 * av
-	var eye_l := _pt_point(i, PT_EYE_L) * av
-	var eye_r := _pt_point(i, PT_EYE_R) * av
+	var sh := (_pose.point(i, PT_SH_L) + _pose.point(i, PT_SH_R)) * 0.5 * av
+	var eye_l := _pose.point(i, PT_EYE_L) * av
+	var eye_r := _pose.point(i, PT_EYE_R) * av
 	var eye := (eye_l + eye_r) * 0.5
-	var half_w := maxf(absf(_pt_point(i, PT_EAR_L).x - _pt_point(i, PT_EAR_R).x) * asp * 0.5, 0.02)
+	var half_w := maxf(absf(_pose.point(i, PT_EAR_L).x - _pose.point(i, PT_EAR_R).x) * asp * 0.5, 0.02)
 	var axis := eye - sh
 	var unit := axis.length()
 	if unit < 1e-3:
@@ -6324,7 +4730,7 @@ func _umb_cast_from(i: int, asp: float) -> bool:
 	# plain sight, because the wrong one is still a rotation and still draws
 	# something plausible. Column k of fwd is e1*h1[k] + e2*h2[k]; the check that
 	# catches it is that fwd*h1 must come back as e1 exactly, which is what
-	# tests/umbra_cast_check.gd asserts.
+	# tests/masking/umbra_cast_check.gd asserts.
 	var f0 := e1 * h1.x + e2 * h2.x     # column 0
 	var f1 := e1 * h1.y + e2 * h2.y     # column 1
 	var det := f0.x * f1.y - f1.x * f0.y
@@ -7557,9 +5963,7 @@ func _apply_frame_state(p: Dictionary) -> void:
 			# fx_x defaults to 0, and 0 must be a GOOD value: some feather is
 			# always wanted, so the range runs from soft to softer.
 			_clown_feather = 0.012 + clampf(float(l.get("fx_x", 0.0)), 0.0, 1.0) * 0.055
-			# hue_b defaults to 0, and 0 has to be a GOOD value rather than "off" -
-			# some smoothing is always wanted, so the range runs from calm to calmer.
-			_ft_sigma = 2.5 + clampf(float(l.get("hue_b", 0.0)), 0.0, 1.0) * 7.5
+			_ft_sigma = MaskFaceTrack.sigma_for(float(l.get("hue_b", 0.0)))
 			_clown_region = Vector4(
 				float(l.get("reg_x0", 0.0)), float(l.get("reg_y0", 0.0)),
 				float(l.get("reg_x1", 1.0)), float(l.get("reg_y1", 1.0)))
@@ -7837,11 +6241,11 @@ func _process(_dt: float) -> void:
 		_:
 			pass
 	if _yt_state == "provisioning":
-		_yt_wait_for_env()
+		_url_import.wait_for_env()
 	elif _yt_state != "idle":
 		if _yt_pid > 0 and not Subprocess.alive(_yt_pid):
 			_yt_pid = -1
-			_yt_step_done()
+			_url_import.step_done()
 		else:
 			# Live readout every frame, exporter-style: a step with no percent
 			# of its own at least ticks its elapsed seconds, so a slow venv
@@ -7849,13 +6253,13 @@ func _process(_dt: float) -> void:
 			var el := int(Time.get_unix_time_from_system() - _yt_step_started)
 			match _yt_state:
 				"downloading":
-					var pct := _yt_pct()
+					var pct := _url_import.pct()
 					_set_status("⏳  Downloading…  " + (pct if not pct.is_empty()
 						else "connecting  %ds" % el))
 					# yt-dlp's WARNING/ERROR lines echo into godot's log the
 					# moment they appear (deduped) - a throttle warning is only
 					# useful WHILE the download crawls, not after it finishes.
-					for line in _yt_tail_window().split("\n"):
+					for line in _url_import.tail_window().split("\n"):
 						var s := line.strip_edges()
 						if (s.begins_with("WARNING") or s.begins_with("ERROR")) \
 								and not _yt_echoed.has(s):

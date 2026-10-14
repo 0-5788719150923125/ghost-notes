@@ -20,7 +20,7 @@ extends GhostScene
 ## sheet is almost still - so the map reads as a survey being re-flown rather than as a
 ## picture. That is [method _step_tectonics], and it is deliberately NOT the window:
 ## moving the window moves every line in the frame by the same vector. Gated in
-## tests/contour_flow_check.gd.
+## tests/scenes/contour_flow_check.gd.
 ##
 ## A RE-PRINT MUST NOT BE VISIBLE, and most of what follows serves that. The sheet is
 ## rebuilt a couple of times a second, and every difference between builds lands as a step
@@ -147,7 +147,7 @@ var _ch_v := Vector2.ZERO
 var _ch_raw := Vector2.ZERO
 var _ch_seeded := false
 ## Seconds for the tonal center and the flux to close most of the way onto a new value.
-## Set from the measurement in `tests/contour_flow_check.gd`: against a tonal center
+## Set from the measurement in `tests/scenes/contour_flow_check.gd`: against a tonal center
 ## sweeping continuously through the wrap, this is what keeps the inked contour's color
 ## step across one re-print under 0.05, and 2.5 s did not (0.076 at seed 11).
 const EASE_SECS := 4.0
@@ -723,7 +723,7 @@ func _rewarp() -> void:
 ##   so the window's lattice snap still holds exactly: after a one-cell window move, grid
 ##   point (x, y) reads the field point (x-1, y) read - same land, same phase, same value.
 ##   The sheet is still only translated between prints, which is what
-##   tests/contour_flow_check.gd exists for. A perturbation defined in sheet coordinates
+##   tests/scenes/contour_flow_check.gd exists for. A perturbation defined in sheet coordinates
 ##   would slide under that snap and re-wobble every line.
 ##
 ##   PURE IN TIME. Nothing is integrated - both fields are a function of `_tect_t` - so a
@@ -1316,7 +1316,7 @@ class SheetJob:
 	## ground can run away however little slope there is to divide by.
 	##
 	## MEASURED, IT DOES NOT BIND at the budget this scene ships with: moving it between 1.0 and
-	## 1.6 changes tests/contour_flow_check.gd's displacement figures by nothing at four
+	## 1.6 changes tests/scenes/contour_flow_check.gd's displacement figures by nothing at four
 	## decimals. It is kept at the tighter of the two, as the backstop it is - what actually
 	## shapes the picture is the rate budget and the slope weighting below.
 	const MAX_SHIFT := 1.0

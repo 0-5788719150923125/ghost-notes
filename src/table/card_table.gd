@@ -198,7 +198,7 @@ const TITLE_SHADE := 0.85
 ## sigma is this share of the frame's height ([TableMedium], `shaders/table_intro.gdshader`). The
 ## lens's softest bokeh (a sigma of 6.2 px, 0.0086 of a 720 frame, measured) showed "too much table
 ## detail"; 0.11 came first and was "just a smidge too blurry" (the user: "reduce the blur by about
-## 25%"), and 0.0825 was cut "another 50%". tests/intro_blur_check.gd holds it between the verdicts.
+## 25%"), and 0.0825 was cut "another 50%". tests/table/intro_blur_check.gd holds it between the verdicts.
 const TITLE_BLUR := 0.04125
 
 

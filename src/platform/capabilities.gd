@@ -44,7 +44,7 @@ const TABLE := {
 ## WHO FILLS AN AGENT ROLE: the script whose `REGISTRY` lists that role's backends. Named by path
 ## and loaded when asked - this file is under them ([TextGen] starts its agents through
 ## [Subprocess], which asks this file), and a row is how something below names something above.
-## `tests/components_check.gd` loads each and holds it to a registry.
+## `tests/notes/components_check.gd` loads each and holds it to a registry.
 const ROLES := {
 	"writer": "res://src/agents/text_gen.gd",
 	"painter": "res://src/agents/image_gen.gd",
