@@ -66,7 +66,7 @@ func _expect(ok: bool, msg: String) -> void:
 
 
 func _check_follow() -> void:
-	var ed = load("res://src/mask_editor.gd").new()
+	var ed = load("res://src/masking/mask_editor.gd").new()
 	# A neighboring section, planted first: the read-modify-write is what has to
 	# preserve it, and a fresh ConfigFile.save() is the mistake being guarded
 	# against. splash's remembered clip lives exactly like this.
@@ -140,7 +140,7 @@ func _check_key_swatch() -> void:
 
 
 func _check_drag_undo() -> void:
-	var ed = load("res://src/mask_editor.gd").new()
+	var ed = load("res://src/masking/mask_editor.gd").new()
 	# _snapshot() reads the session, so give it one; nothing below touches the
 	# video or the panel.
 	ed.session = MaskSession.new()

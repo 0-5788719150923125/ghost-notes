@@ -45,7 +45,7 @@ func _initialize() -> void:
 			f.store_float(_expect_y(i, k))
 	f.close()
 
-	var ed: Node = load("res://src/mask_editor.gd").new()
+	var ed: Node = load("res://src/masking/mask_editor.gd").new()
 	var s := MaskSession.new()
 	s.video_path = "res://masks/_face_check/video.ogv"
 	ed.session = s
@@ -128,7 +128,7 @@ func _initialize() -> void:
 	g.store_32(POINTS)
 	g.store_8(1)          # one byte of one sample, then nothing
 	g.close()
-	var ed2: Node = load("res://src/mask_editor.gd").new()
+	var ed2: Node = load("res://src/masking/mask_editor.gd").new()
 	ed2.session = s
 	ed2._ft_path = t2
 	ed2._ft_load()

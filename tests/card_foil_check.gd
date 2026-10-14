@@ -52,7 +52,7 @@ func _ready() -> void:
 		var raw := _keys_the_line(Vector3(a.r, a.g, a.b), DECKS[0][0], DECKS[0][1], inner)
 		_ok(not raw.is_empty(), "control: the sRGB accent passed - the checks cannot see the fringe")
 		print("card_foil_check: the sRGB accent fails as it must (%s); key edges %.2f-%.2f" % [raw, inner, outer])
-	var src := FileAccess.get_file_as_string("res://src/media/table.gd")
+	var src := FileAccess.get_file_as_string("res://src/table/table.gd")
 	var writes := RegEx.create_from_string("set_shader_parameter\\(\"accent\"").search_all(src).size()
 	_ok(writes == 1, "table.gd writes the accent uniform in %d places - only _foil_accent may" % writes)
 	await get_tree().process_frame

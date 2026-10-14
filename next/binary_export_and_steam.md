@@ -48,7 +48,7 @@ What monetizing adds is Steam's own rule that in-game transactions go through St
 
 1. **The YouTube import.** The one item with court rulings against tools like it (details below).
    ghost installs yt-dlp plus Deno to solve YouTube's challenges, and says so in its own panel text
-   (`src/deps.gd:128`). Fetching instead of bundling does not help: §1201 and the German rule
+   (`src/platform/deps.gd:128`). Fetching instead of bundling does not help: §1201 and the German rule
    both reach PROVIDING the tool. Valve has not acted against this (VRChat ships yt-dlp), so the
    risk is rights holders, not review. Recommendation: leave URL import out of the Steam build and
    keep it in the source build. Keeping it is **ASK** (a lawyer).
@@ -63,7 +63,7 @@ What monetizing adds is Steam's own rule that in-game transactions go through St
    BtbN's Windows builds are plain GPLv3.
 4. **The Assistant.** It runs `claude --dangerously-skip-permissions` and
    `codex --dangerously-bypass-approvals-and-sandbox` against the checkout
-   (`src/assistant_backends.gd:61`, `:68`). A Steam install has no checkout, and an agent with no
+   (`src/agents/assistant_backends.gd:61`, `:68`). A Steam install has no checkout, and an agent with no
    permission checks on a customer's machine runs into Valve's ban on apps that "modify customer's
    computers in unexpected or harmful ways". Strip it from the build. (The tarot writer and painter
    are already locked down: `--tools ""` or ghost's own MCP tools, Codex read-only or
@@ -85,15 +85,15 @@ Not legal issues; the reasons an exported ghost would fail as the code stands.
   `data/cmudict.dict`, `data/english.yml`, `storyboards/*.yml`, the hosts' files and every license
   file. Check `.json` too.
 - **The video export and the audio bake relaunch the engine against the project folder** -
-  `--path <project>`, plus `--script res://...` for the bake (`src/exporter.gd:550-555`,
-  `src/mask_editor.gd:8036`) - and the render reads its resolution from an `override.cfg`
-  written into the project root (`src/exporter.gd:886-890`). An exported build has no project
+  `--path <project>`, plus `--script res://...` for the bake (`src/export/exporter.gd:550-555`,
+  `src/masking/mask_editor.gd:8036`) - and the render reads its resolution from an `override.cfg`
+  written into the project root (`src/export/exporter.gd:886-890`). An exported build has no project
   folder: this becomes the binary relaunching itself, with the overrides passed some way other than
-  a file in the install directory. Masking's reload check (`src/mask_editor.gd:6453`) runs
+  a file in the install directory. Masking's reload check (`src/masking/mask_editor.gd:6453`) runs
   `--editor`, which an export template does not have - dev-only, strip it with the Assistant.
-- **`MASKS_DIR` is `res://masks`** (`src/mask_editor.gd:61`), read-only once exported. Masking's
+- **`MASKS_DIR` is `res://masks`** (`src/masking/mask_editor.gd:61`), read-only once exported. Masking's
   sessions and URL downloads belong in `user://`.
-- **The Assistant finds the checkout as `res://`** (`src/assistant.gd:130`; it was `res://../..` until the
+- **The Assistant finds the checkout as `res://`** (`src/app/assistant.gd:130`; it was `res://../..` until the
   move to ghost-notes, 2026-10-06). An export has no checkout at all; see the `checkout` capability in
   [notes.md](notes.md#platforms-desktop-and-android).
 - **Programs that stay the machine's own** (`Deps.TOOLS`: setpriv, fallocate, xvfb-run) - open
@@ -115,7 +115,7 @@ Verified on the Steamworks pages unless marked as inference.
   January 2026 change ("Efficiency gains through the use of these tools is not the focus").
 - **Store page:** "Requires 3rd-Party Account" and the AI-service notice ("Connects to 3rd-Party
   Service for AI Content Generation"). Disclose the first-run downloads and their sizes (from
-  `src/deps.gd`): FFmpeg ~70 MB (~115 MB Windows), uv ~20 MB, Python ~35 MB, voice environment
+  `src/platform/deps.gd`): FFmpeg ~70 MB (~115 MB Windows), uv ~20 MB, Python ~35 MB, voice environment
   ~320 MB, download environment ~140 MB, page capture ~150 MB + Chromium ~170 MB, body/face
   tracking ~520 MB, Piper voices ~60 MB each.
 - **Downloading programs after install:** no rule forbids it and no store field covers it. The
@@ -254,7 +254,7 @@ fine-tuning chain.
 
 - **The license comments disagree with the code.** `hosts/voice/requirements.txt:11-12` says
   phonemizer and espeakng-loader are not installed; lines 37-38 install them, and
-  `hosts/voice/backends/piper.py:2084` uses eSpeak by default. `src/deps.gd:177` tells users no
+  `hosts/voice/backends/piper.py:2084` uses eSpeak by default. `src/platform/deps.gd:177` tells users no
   GPL Piper code is installed (true only of piper-tts). Fix before anyone audits from the comments.
 - **The name.** Renamed 2026-10-05 to "Ghost Notes: A Spectral Experience": a Steam game is already
   called Ghost, and the word is unsearchable. Still run a trademark search on the new name before it

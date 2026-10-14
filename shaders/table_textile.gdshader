@@ -1,4 +1,4 @@
-// A LAYER LAID ON THE TABLE (see src/tables.gd): a tablecloth, a runner, a square, a mat - woven in
+// A LAYER LAID ON THE TABLE (see src/table/tables.gd): a tablecloth, a runner, a square, a mat - woven in
 // a fabric and a pattern (table_common.gdshaderinc), hanging over the table's edge where it passes it
 // (the drape is geometry; UV is the cloth's own flat space, cm), its ends fringed.
 shader_type spatial;

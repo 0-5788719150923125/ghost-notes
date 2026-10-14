@@ -70,6 +70,39 @@ func _ok(cond: bool, msg: String) -> void:
 
 func _registry() -> void:
 	print("-- the registry")
+	# an agent role names its registry by path (Capabilities is under the agents): each row loads
+	for role in Capabilities.ROLES:
+		var reg := load(String(Capabilities.ROLES[role])) as GDScript
+		_ok(reg != null and reg.get_script_constant_map().get("REGISTRY") is Dictionary,
+			"the %s role's registry loads and lists its backends" % role)
+	for cap in Capabilities.TABLE:
+		var role := String((Capabilities.TABLE[cap] as Dictionary).get("role", ""))
+		_ok(role.is_empty() or Capabilities.ROLES.has(role),
+			"%s: its role '%s' has a registry" % [cap, role])
+	# a card any panel can show is named by path (the registry is under every card): each row loads,
+	# answers the card contract, and the rows that name one are exactly the keys panels build
+	var scripted: Array = []
+	for k in Components.REGISTRY:
+		var path := String((Components.REGISTRY[k] as Dictionary).get("script", ""))
+		if path.is_empty():
+			continue
+		scripted.append(k)
+		var card := load(path) as GDScript
+		_ok(card != null and card.get_script_constant_map().get("KEY") == (Components.REGISTRY[k] as Dictionary)["block"],
+			"%s: its card's script loads, and its KEY is the row's block" % k)
+		var has := {}
+		if card != null:
+			for m in card.get_script_method_list():
+				has[String(m["name"])] = true
+		_ok(has.has("for_note") and has.has("capture") and has.has("apply"),
+			"%s: its card answers for_note, capture and apply" % k)
+	var keys: Array = NoteCards.KEYS.duplicate()
+	keys.sort()
+	scripted.sort()
+	_ok(keys == scripted, "the cards a panel builds are the rows that name a script (%s / %s)" % [keys, scripted])
+	var none := NoteCards.make("no-such-component")
+	_ok(none.get_child_count() == 0, "CONTROL: a component with no row gets an empty card, and says so")
+	none.free()
 	var blocks := {}
 	for k in Components.REGISTRY:
 		var row: Dictionary = Components.REGISTRY[k]

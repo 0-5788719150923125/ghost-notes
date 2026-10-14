@@ -1,4 +1,4 @@
-// What every modeled thing's surface shares (see src/props.gd): noise in the thing's own
+// What every modeled thing's surface shares (see src/table/props.gd): noise in the thing's own
 // space, relief without tangents, the ORNAMENT - a motif laid out round a part, worked in as
 // relief, paint or inlay - and what the PLAY OF LIGHT needs. Included by prop.gdshader,
 // prop_glass.gdshader and prop_lens.gdshader.

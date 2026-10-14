@@ -21,9 +21,9 @@ func _check(ok: bool, what: String) -> void:
 
 
 func _init() -> void:
-	var I = load("res://src/illustrations.gd")
-	var G = load("res://src/image_gen.gd")
-	var M = load("res://src/manuscript.gd")
+	var I = load("res://src/media/illustrations.gd")
+	var G = load("res://src/agents/image_gen.gd")
+	var M = load("res://src/data/manuscript.gd")
 
 	print("-- prompt")
 	var desc := "A gaunt gray wolf detective, one paw raised to his brow as if peering through fog"

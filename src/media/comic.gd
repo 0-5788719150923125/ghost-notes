@@ -536,7 +536,7 @@ func mount(st: SubViewport) -> void:
 ## Everything sampled, rolled here rather than in mount() because the session seed is not
 ## resolved until the Director attaches (see Medium.begin_session).
 func begin_session() -> void:
-	_rng.seed = Director.session_seed() ^ 0x0C031C
+	_rng.seed = feed.session_seed() ^ 0x0C031C
 	# Paper is never pure white - a white page reads as a blank canvas rather than as
 	# printed stock - and it is sampled, like everything else here.
 	_paper = Color.from_hsv(_rng.randf_range(0.055, 0.11),
@@ -550,7 +550,7 @@ func begin_session() -> void:
 	_desk = Color.from_hsv(_rng.randf_range(0.02, 0.12), _rng.randf_range(0.10, 0.32),
 		_rng.randf_range(0.055, 0.115))
 	_ink_weight = _rng.randf_range(0.0030, 0.0052)
-	_mod = ModBank.new(Director.session_seed() ^ 0x9A6E)
+	_mod = ModBank.new(feed.session_seed() ^ 0x9A6E)
 	_reset_book()
 
 
@@ -704,7 +704,7 @@ func _turn_spread(idx: int) -> void:
 		_blank(_slots[_pool * POOL + i])
 	_spread_i = idx
 	_pool = idx % 2
-	_spread = ComicSpread.new(hash([Director.session_seed(), "comic-spread", idx]))
+	_spread = ComicSpread.new(hash([feed.session_seed(), "comic-spread", idx]))
 	_cast = []
 	_cast.resize(_spread.panels.size())
 	_warm = []
@@ -756,7 +756,7 @@ func _roll_plan() -> void:
 	if n <= 0:
 		return
 	var r := RandomNumberGenerator.new()
-	r.seed = hash([Director.session_seed(), "comic-plan", _spread_i])
+	r.seed = hash([feed.session_seed(), "comic-plan", _spread_i])
 	var want := clampi(r.randi_range(FOCUS.x, FOCUS.y), 1, n)
 	var style := _pick_style(r)
 	var picked: Array = []
@@ -849,7 +849,7 @@ func _choose_film() -> void:
 	if _spread == null or Films.frequency() <= 0.0:
 		return
 	var r := RandomNumberGenerator.new()
-	r.seed = hash([Director.session_seed(), "film-spread", _spread_i])
+	r.seed = hash([feed.session_seed(), "film-spread", _spread_i])
 	if r.randf() > Films.frequency():
 		return
 	var list := Films.clips()
@@ -921,6 +921,7 @@ func _cast_panel(i: int) -> void:
 	# the library.
 	if i == _film_at and not _film_clip.is_empty():
 		var film := FilmScene.new()
+		film.feed = feed
 		film.set_clip(_film_clip, maxf(Spectrum.current.time, 0.0))
 		film.init_with_seed(hash([_spread_i, i, "film"]), "static")
 		film.scene_name = "film"
@@ -931,7 +932,7 @@ func _cast_panel(i: int) -> void:
 	# scheduler rather than the same one repeated - the Director's clock has not moved
 	# between them (see Director.mint_scene). Quiet for every panel but the one being read:
 	# casting a spread is one change of scene, not a dozen.
-	var sc := Director.mint_scene(hash([_spread_i, i]) & 0xFFFF, i != _read)
+	var sc := feed.mint_scene(hash([_spread_i, i]) & 0xFFFF, i != _read)
 	vp.add_child(sc)
 	_cast[i] = sc
 
@@ -1326,7 +1327,7 @@ const SETTLE_CONTENT := 0.72
 ## continuous drift so the sheet is never still.
 func _choose_spread_look() -> void:
 	var r := RandomNumberGenerator.new()
-	r.seed = hash([Director.session_seed(), "comic-spread-look", _spread_i])
+	r.seed = hash([feed.session_seed(), "comic-spread-look", _spread_i])
 	_att_target = Vector3(
 		r.randf_range(-PITCH, PITCH),
 		r.randf_range(-YAW, YAW),
@@ -1655,7 +1656,7 @@ const RATE_DIST := 2.4
 ## The severity in force, 0..2. Asked of the Director rather than held here so the slider takes
 ## effect on the next frame without anything having to be pushed at the medium.
 func _sev() -> float:
-	return clampf(Director.camera, Director.CAMERA_MIN, Director.CAMERA_MAX)
+	return clampf(feed.camera, ShowFeed.CAMERA_MIN, ShowFeed.CAMERA_MAX)
 
 
 ## How far a shot travels, and how fast, at the current setting. See REACH_CALM and RATE_CALM.
@@ -1684,7 +1685,7 @@ func _arrive_time(r: RandomNumberGenerator, travel: float, kind: String) -> floa
 	speed *= float(SHOTS[kind].get("rate", 1.0)) * lerpf(0.7, 1.7, clampf(_sev(), 0.0, 2.0) * 0.5)
 	var want := travel / maxf(speed, 0.001)
 	var share := lerpf(ARRIVE_SHARE_CALM, ARRIVE_SHARE_BUSY, clampf(_sev(), 0.0, 2.0) * 0.5)
-	var room := Director.hold_remaining() * share
+	var room := feed.hold_remaining() * share
 	return clampf(minf(want, maxf(room, ARRIVE_FLOOR)), ARRIVE_FLOOR, ARRIVE_CEIL)
 
 
@@ -1695,7 +1696,7 @@ func _begin_shot(panel: int, turned := false) -> void:
 		return
 	panel = clampi(panel, 0, _spread.panels.size() - 1)
 	var r := RandomNumberGenerator.new()
-	r.seed = hash([Director.session_seed(), "comic-shot", _spread_i, panel, _shot_n])
+	r.seed = hash([feed.session_seed(), "comic-shot", _spread_i, panel, _shot_n])
 	_shot_n += 1
 	var kind := _pick_shot(r)
 	# A ZOOM MAY BE CONTINUED BUT NEVER REVERSED WITHOUT A HOLD BETWEEN. `_zoom_dir` is cleared

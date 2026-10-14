@@ -55,7 +55,7 @@ func _initialize() -> void:
 	_h = img.get_height()
 	_frame = ImageTexture.create_from_image(img)
 
-	_ed = load("res://src/mask_editor.gd").new()
+	_ed = load("res://src/masking/mask_editor.gd").new()
 	var s := MaskSession.new()
 	s.video_path = "res://masks/_look_probe/video.ogv"
 	var m := {}

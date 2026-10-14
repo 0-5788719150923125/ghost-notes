@@ -13,7 +13,7 @@ uniform vec3 tint : source_color = vec3(1.0);
 uniform float has_picture = 0.0;
 // the disc's radius in the picture's own UV, per axis, so it is round on the quad
 uniform vec2 radius = vec2(0.004, 0.006);
-// how lit the room is now against how it was painted (src/lights.gd): a cloud over the sun dims the
+// how lit the room is now against how it was painted (src/table/lights.gd): a cloud over the sun dims the
 // sun's share of it, a flash of lightning brightens it; 1 as painted
 uniform float shade = 1.0;
 

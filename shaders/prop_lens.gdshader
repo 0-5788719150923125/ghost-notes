@@ -1,4 +1,4 @@
-// A modeled thing's SOLID glass or clear crystal (see src/props.gd) - a crystal ball, a lens, a
+// A modeled thing's SOLID glass or clear crystal (see src/table/props.gd) - a crystal ball, a lens, a
 // clear point: what is behind it is seen through it, bent and turned over as a lens turns it, and
 // its skin catches the flames. Hollow glass (a jar, a bottle) is prop_glass, which a flame inside
 // can be seen through.

@@ -1,4 +1,4 @@
-# THE PRODUCER - what it is told (CardPrompts.producer fills it in; src/rules.gd says how a rules
+# THE PRODUCER - what it is told (CardPrompts.producer fills it in; src/data/rules.gd says how a rules
 # file reads). It plans an episode BEFORE the shuffle: its title and angle, the spread, the staging and
 # a whole deck's look. It knows no card, because no card has been drawn.
 #

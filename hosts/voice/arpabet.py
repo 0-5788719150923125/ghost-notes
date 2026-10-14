@@ -7,7 +7,7 @@ which is GPLv3 and therefore viral for a shipped game. That is the single most
 common reason projects in this class cannot be used commercially.
 
 ghost does not have that problem, because ghost already has its own grapheme-to-
-phoneme front end: `src/phonemes.gd` plus a CMUdict-derived lexicon, in
+phoneme front end: `src/voice/phonemes.gd` plus a CMUdict-derived lexicon, in
 ARPAbet. Translating ARPAbet to the model's symbol set lets us feed the model
 directly and never link, ship or invoke eSpeak at all.
 

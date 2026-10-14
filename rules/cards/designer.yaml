@@ -1,6 +1,6 @@
 # THE DESIGNER - the deck's creator, once per drawn card: that card's illustration and its entry in the
 # deck's little booklet (or what is printed on its back). One card per run - it never learns what else
-# was drawn (CardPrompts.designer fills it in; src/rules.gd says how a rules file reads).
+# was drawn (CardPrompts.designer fills it in; src/data/rules.gd says how a rules file reads).
 #
 # What a card's group stands for (a suit's element, a team's city) is the brief's to say, beside the
 # group's heading in its Cards section; the designer reads it there.

@@ -29,7 +29,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	_bar = preload("res://src/transport.gd").new()
+	_bar = preload("res://src/show/transport.gd").new()
 	add_child(_bar)
 	await _frames(2)
 	_ok(not _bar._root.visible, "with nothing loaded the show is untimed and there is no transport")

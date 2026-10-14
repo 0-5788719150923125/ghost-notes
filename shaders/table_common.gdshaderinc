@@ -1,4 +1,4 @@
-// What the table's own surfaces share (see src/tables.gd): the top (table_top.gdshader) and every
+// What the table's own surfaces share (see src/table/tables.gd): the top (table_top.gdshader) and every
 // layer laid on it (table_textile.gdshader). A surface is drawn in its own FLAT space - UV is
 // centimeters from its middle before it is draped over the table's edge, UV2.x how far in from its
 // hem - so a pattern keeps its size and a border runs along the hem wherever the cloth hangs.

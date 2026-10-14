@@ -193,7 +193,7 @@ func _choice() -> void:
 
 func _draws() -> void:
 	var was := Director.subtitle_reveal
-	var subs: Subtitles = preload("res://src/subtitles.gd").new()
+	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	var words: Array = []
 	var t := 0.5
 	for w in ["Hello,", "my", "loves.", "Pull", "up", "a", "chair."]:

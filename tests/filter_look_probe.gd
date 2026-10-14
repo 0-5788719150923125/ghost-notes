@@ -24,7 +24,7 @@ extends SceneTree
 ## because grain is judged on midtones and a vignette on edges, and a synthetic chart with hard
 ## borders hides both.
 
-const Filters_ := preload("res://src/filters.gd")
+const Filters_ := preload("res://src/show/filters.gd")
 
 const W := 640
 const H := 360

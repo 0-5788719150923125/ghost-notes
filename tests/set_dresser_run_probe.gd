@@ -32,8 +32,8 @@ func _run() -> void:
 	var raw := FileAccess.get_file_as_string(spec_path)
 	var block: Dictionary = FrontMatter.read_block(raw)["data"]
 	var knobs: Dictionary = block.get("cards", {}) if block.get("cards") is Dictionary else {}
-	var title := BookLayout.field_of(raw, "title")
-	var show := String(knobs.get("show", "")) if not String(knobs.get("show", "")).is_empty() else CardEpisode.slug(title)
+	var title := FrontMatter.field_of(raw, "title")
+	var show := String(knobs.get("show", "")) if not String(knobs.get("show", "")).is_empty() else Manuscript.slug(title)
 	var source := CardEpisode.open(show, seed)
 	CardEpisode.root = ROOT
 	var ep := CardEpisode.open(show, seed)

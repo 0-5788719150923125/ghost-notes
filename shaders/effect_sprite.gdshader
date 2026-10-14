@@ -1,4 +1,4 @@
-// A glowing sprite of an effect (see src/effects.gd): a mote or a burst's particle, added to the
+// A glowing sprite of an effect (see src/table/effects.gd): a mote or a burst's particle, added to the
 // light already there - brighter than white, so the stage's bloom spreads it.
 shader_type spatial;
 render_mode unshaded, blend_add, depth_draw_never, cull_disabled, shadows_disabled, skip_vertex_transform;

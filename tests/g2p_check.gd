@@ -16,7 +16,7 @@ extends SceneTree
 ##
 ## Run: godot --headless --path . --script tests/g2p_check.gd
 
-const Phonemes_ := preload("res://src/phonemes.gd")
+const Phonemes_ := preload("res://src/voice/phonemes.gd")
 
 const REF_PATH := "res://data/reference.yml"
 const GROUPS := ["words", "derived", "fallback"]

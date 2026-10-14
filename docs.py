@@ -72,296 +72,199 @@ def warn(msg: str) -> None:
 # code but not here is reported, so the map can rot loudly, never quietly.
 # ---------------------------------------------------------------------------
 
-# (group title, group description, [script filenames under src/]).
-SCRIPT_GROUPS: List[Tuple[str, str, List[str]]] = [
+# THE STACK. Every folder under src/, BOTTOM FIRST: (folder, title, description). A script may
+# name scripts in its own folder and in the folders listed above its own here - never one below
+# it in this list. A script's group is its folder, so nothing lists file names: a new script is
+# in the docs by being in a folder, and a new folder is a row here. The order is held against
+# the code at every run (`check_structure`); next/structure.md is why it is this order.
+FOLDERS: List[Tuple[str, str, str]] = [
     (
+        "platform",
+        "The machine",
+        "The machine under Ghost Notes: the one owner of its settings file, the earliest hook "
+        "of a launch, every child program in one place, what ghost installs for itself and "
+        "keeps current, the app's own update, and what this platform can do.",
+    ),
+    (
+        "data",
+        "Plain data",
+        "Plain data in and out: the YAML-subset parser, a document's frontmatter (re-read, "
+        "one key edited, verified), pure edits of nested data, what an agent is told "
+        "(`rules/`), and a script read into cues, hesitations and pictures.",
+    ),
+    (
+        "audio",
         "Audio & analysis",
         "From a song file to the typed per-frame `AudioFeatures` every scene "
         "consumes - live analyzer, offline bake, and the content descriptors "
         "that make sessions deterministic per song.",
-        [
-            "spectrum.gd",
-            "audio_features.gd",
-            "bake.gd",
-            "bake_runner.gd",
-            "harmonic_signature.gd",
-            "echo.gd",
-        ],
     ),
     (
-        "Direction & session",
-        "The lifecycle around the scenes: boot, the notes list and a note's own "
-        "panel, the cards every panel builds a note's components from, and the "
-        "Director's scheduling/transitions.",
-        [
-            "main.gd",
-            "boot.gd",
-            "subprocess.gd",
-            "deps.gd",
-            "deps_panel.gd",
-            "app_update.gd",
-            "provision.gd",
-            "provisioner.gd",
-            "bundled_hosts.gd",
-            "provision_badge.gd",
-            "chrome.gd",
-            "capabilities.gd",
-            "components.gd",
-            "side_panel.gd",
-            "card.gd",
-            "card_row.gd",
-            "look_card.gd",
-            "bookends_card.gd",
-            "picture_card.gd",
-            "song_card.gd",
-            "note_cards.gd",
-            "console.gd",
-            "notes_list.gd",
-            "delete_dialog.gd",
-            "phone_shell.gd",
-            "note_panel.gd",
-            "note_store.gd",
-            "director.gd",
-            "settings.gd",
-            "medium.gd",
-            "filters.gd",
-            "comic_page.gd",
-            "comic_spread.gd",
-            "book_layout.gd",
-            "notebook_layout.gd",
-            "tablet_page.gd",
-            "page_capture.gd",
-            "films.gd",
-            "illustrations.gd",
-            "image_gen.gd",
-            "illustration_panel.gd",
-            "volume_knob.gd",
-            "transport.gd",
-            "tag_field.gd",
-        ],
+        "render",
+        "Drawing",
+        "How things get drawn and how a heavy scene stays interactive: thousands of shapes "
+        "in one draw call, geometry built off the main thread, the lens, planes and meshes "
+        "of the software 3D path, and color.",
     ),
     (
-        "Scene substrate",
-        "What every scene is built on: the `GhostScene` base, the camera, "
-        "framing pools, seeded motion, sparse response gating, lighting, and "
-        "the organic primitives (curves, flow fields, growth).",
-        [
-            "ghost_scene.gd",
-            "scene_view.gd",
-            "shots.gd",
-            "mod_bank.gd",
-            "activation.gd",
-            "lighting.gd",
-            "nonlinear.gd",
-            "flow.gd",
-            "filament.gd",
-            "swarm.gd",
-            "sim_clock.gd",
-        ],
+        "motion",
+        "Motion & simulation",
+        "How things move: seeded oscillators, sparse response gating, the nonlinear kit and "
+        "flow fields, the forces particles compose by key (`Primitives`), the fixed-rate "
+        "tick, and running systems whose STATE is the picture - a granular automaton, a "
+        "flock with a spatial hash, a plate's standing waves, a water surface.",
     ),
     (
+        "geometry",
         "Generative form",
-        "Self-contained generators a scene composes rather than hand-models - "
-        "each one samples a space of shapes from a seed and hands back plain "
-        "geometry. The `cattle, not pets` discipline, made into parts.",
-        [
-            "crystal.gd",
-            "glyphs.gd",
-            "wallpaper_group.gd",
-            "branch3d.gd",
-            "contour.gd",
-        ],
+        "Self-contained generators a scene composes rather than hand-models - each one "
+        "samples a space of shapes from a seed and hands back plain geometry - with the "
+        "procedural fields, terrain heightfields and shadowing of the 3D world, and the "
+        "composed bodies. The `cattle, not pets` discipline, made into parts.",
     ),
     (
-        "Simulation substrates",
-        "Running physical systems whose STATE is the picture, rather than "
-        "drawings of one: a granular automaton, a flock with a spatial hash, "
-        "a plate's standing waves, and a water surface.",
-        [
-            "grains.gd",
-            "boids.gd",
-            "plate_field.gd",
-            "wave_field.gd",
-        ],
+        "scene_kit",
+        "Scene substrate",
+        "What every scene is built on: the `GhostScene` base and its 3D sibling, the "
+        "camera, framing pools, lighting, the visual layers scenes compose by key "
+        "(`Layer`), and `ShowFeed` - what the show hands the parts it mounts.",
     ),
     (
-        "Rendering & performance",
-        "How a heavy scene stays interactive: thousands of shapes in one "
-        "draw call, and the geometry for them built off the main thread.",
-        ["tri_batch.gd", "frame_forge.gd"],
+        "stage",
+        "Storyboards & stage",
+        "A show written down, as data: the storyboard's spec and its field tables, and the "
+        "Cast/Actions/Track stack that renders a described scene. See "
+        "[storyboards/README.md](../storyboards/README.md) for the data spec and "
+        "[stage.md](stage.md) for the fields and the actor/verb registries.",
     ),
     (
-        "Composition registries",
-        "The two shared registries scenes compose by key - appearance "
-        "(`Layer`) and physics (`Primitives`) - plus the particle substrate "
-        "the forces act on.",
-        [
-            "layer.gd",
-            "primitives.gd",
-            "particle.gd",
-            "particle_system.gd",
-        ],
+        "scenes",
+        "Scenes",
+        "The catalog, one scene a file. Cataloged in [scenes.md](scenes.md), each from its "
+        "own doc comment.",
     ),
     (
-        "3D path",
-        "The unified software-3D renderer: a positionable perspective camera, "
-        "mesh/plane primitives, procedural fields, palettes, terrain "
-        "heightfields, and shadowing.",
-        [
-            "lens3d.gd",
-            "plane3d.gd",
-            "scene3d.gd",
-            "mesh3d.gd",
-            "geometry.gd",
-            "field.gd",
-            "scheme.gd",
-            "palette.gd",
-            "terrain.gd",
-            "shadow_field.gd",
-        ],
+        "agents",
+        "Agents",
+        "Every piece of writing and painting ghost asks an AI for: who writes "
+        "(TextGen) and who paints (ImageGen), one queue for both (AgentJobs), "
+        "the tools ghost serves an agent while it works (AgentTools), "
+        "which Amazon Bedrock models an AWS account can call (BedrockCatalog), "
+        "and how the Assistant's command-line tools are run.",
     ),
     (
-        "Bodies",
-        "Reusable composed characters - sampled stacks of primitives, not "
-        "bespoke meshes.",
-        ["eye_body.gd", "prism_body.gd"],
+        "notes",
+        "Notes",
+        "The note as a file: where notes live, a document kept in step with its file, the "
+        "registry of what a note can carry (`Components`), and the registry of the marks a "
+        "script may carry (`ScriptMarks`).",
     ),
     (
+        "ui",
+        "The panel kit",
+        "What every note's panel is built from, and what it asks of the window it is in: a "
+        "side panel that cannot outgrow the window and its \"+\", a component's folding card "
+        "in its family's color and the chips over the cards, the cards a note's components "
+        "bring (built from the registry's rows, attached and detached), the Script card every "
+        "note has (its editor window and highlighter), rows drawn from a table of fields, two small "
+        "controls, and `Shell` - the bottom-right row, room along the bottom edge, the way "
+        "back to the notes. Above `notes/` because it is a kit for a note's components.",
+    ),
+    (
+        "voice",
         "Synthesis (voice)",
         "Text to narrated audio in two paths: ghost's own source-filter "
         "synthesizer (no models, no weights, fully inspectable, and the only "
         "path that can sing), and a small local neural voice run by a "
-        "subprocess host. Shared between them: the source of the words (the "
-        "text box, or a Markdown file on disk re-read at every Play, whose "
-        "frontmatter carries the voice), the text front end and its "
-        "normalization, the threaded real-time stream, karaoke subtitles, and "
-        "the buffer effects. Design: next/voice.md.",
-        [
-            "phonemes.gd",
-            "text_norm.gd",
-            "phrasing.gd",
-            "voice.gd",
-            "voice_field.gd",
-            "voice_stream.gd",
-            "synth_editor.gd",
-            "voice_sampler.gd",
-            "doc_source.gd",
-            "front_matter.gd",
-            "manuscript.gd",
-            "tablet_script.gd",
-            "script_marks.gd",
-            "script_highlighter.gd",
-            "script_writer.gd",
-            "save_mark.gd",
-            "subtitles.gd",
-            "voice_host.gd",
-            "reading_panel.gd",
-            "generative_editor.gd",
-            "voice_readers.gd",
-            "voice_fx.gd",
-            "room_fx.gd",
-        ],
+        "subprocess host. Shared between them: the text front end and its "
+        "normalization, the threaded real-time stream and the buffer effects. "
+        "Design: next/voice.md.",
     ),
     (
+        "media",
+        "Media",
+        "What the show is carried on: the `Medium` base and its registry, each medium "
+        "([media.md](media.md)), the layouts they set (comic pages, a novel, a notebook, a "
+        "tablet's pages), the films and pictures they show, and where a reading is in its "
+        "document.",
+    ),
+    (
+        "show",
+        "The show",
+        "The player: the Director's schedule and transitions, the one transport, karaoke "
+        "subtitles, the Look over the whole picture, and the cards of the show's own "
+        "settings.",
+    ),
+    (
+        "timeline",
+        "The storyboard's editor",
+        "The card that keeps a note's storyboard and the dock it opens: a strip of "
+        "entries, a stage entry's lanes, and the ruler.",
+    ),
+    (
+        "export",
+        "Export",
+        "Rendering a session to video (bake + Movie Maker, background "
+        "processes) and uploading it to YouTube. Under the workspaces: a reading and a show "
+        "of cards export a take and fill in an upload, and the exporter names neither.",
+    ),
+    (
+        "reading",
+        "The voice's workspaces",
+        "The panels a voice runs in: the reading (script, cast, voice, stream, export), "
+        "the Generative editor built on it, and the voice lab with the fishing game that "
+        "breeds its voices.",
+    ),
+    (
+        "table",
+        "The set",
+        "A place, seen and heard, built from a written description: the table itself "
+        "(Tables), the things on it (Props), its air (Effects, and what the wind carries: "
+        "Drifts), its light (Lights) and the one wind both share (Winds), its sound "
+        "(Soundscape), where cards go on it, what can be done with them and how a reading "
+        "says so, the faces printed on them - and the medium that puts it all on the stage "
+        "(`table.gd`, a row of `Medium.REGISTRY`).",
+    ),
+    (
+        "cards",
         "Cards",
         "A show of cards nobody writes: a show's brief, its episodes - each "
         "planned, dealt, painted and written by agents one card at a time, kept "
-        "on disk step by step - and the table they are read at, in the Generative "
-        "voice, with the table itself and the things on it modeled from a "
-        "written description (Tables, Props), its air (Effects, and what the wind carries: Drifts), "
-        "its light (Lights) and the one wind both share (Winds). "
-        "The rules are every show's; the brief says what the cards are - tarot, baseball or trading cards, "
-        "a card game's deck, flashcards, recipe cards - and lists them, or leaves each episode's deck to its producer. "
-        "Design: next/cards.md.",
-        [
-            "cards_editor.gd",
-            "table_actions.gd",
-            "table_positions.gd",
-            "dealer_tools.gd",
-            "card_producer.gd",
-            "card_episode.gd",
-            "card_prompts.gd",
-            "card_reading.gd",
-            "card_deck.gd",
-            "card_table.gd",
-            "card_faces.gd",
-            "props.gd",
-            "tables.gd",
-            "effects.gd",
-            "drifts.gd",
-            "lights.gd",
-            "winds.gd",
-            "soundscape.gd",
-            "set_dresser_tools.gd",
-            "table_preview.gd",
-        ],
+        "on disk step by step - and the set dresser that builds the table they are read "
+        "at. The rules are every show's; the brief says what the cards are - tarot, "
+        "baseball or trading cards, a card game's deck, flashcards, recipe cards - and "
+        "lists them, or leaves each episode's deck to its producer. Design: next/cards.md.",
     ),
     (
-        "Agents",
-        "Every piece of writing and painting ghost asks an AI for: who writes "
-        "(TextGen) and who paints (ImageGen), one queue for both (AgentJobs), "
-        "what each is told (Rules, reading rules/), "
-        "the tools ghost serves an agent while it works (AgentTools), "
-        "which Amazon Bedrock models an AWS account can call (BedrockCatalog), "
-        "and where a reading's voice is in its document (ReadingFollower).",
-        [
-            "text_gen.gd",
-            "agent_jobs.gd",
-            "agent_tools.gd",
-            "rules.gd",
-            "bedrock_catalog.gd",
-            "reading_follower.gd",
-        ],
-    ),
-    (
-        "Storyboards & stage",
-        "A show written down, as data: the YAML-subset parser, the storyboard's "
-        "spec and its field tables, pure edits of nested data, the card that keeps "
-        "a note's storyboard and the editor it opens (a strip of entries, a stage "
-        "entry's lanes, rows built from the tables), and the Cast/Actions/Track "
-        "stack that renders a described scene. See "
-        "[storyboards/README.md](../storyboards/README.md) for the data spec and "
-        "[stage.md](stage.md) for the fields and the actor/verb registries.",
-        [
-            "yaml.gd",
-            "storyboard.gd",
-            "data_path.gd",
-            "schema_form.gd",
-            "storyboard_card.gd",
-            "storyboard_editor.gd",
-            "storyboard_strip.gd",
-            "storyboard_lanes.gd",
-            "cast.gd",
-            "actions.gd",
-            "track.gd",
-        ],
-    ),
-    (
+        "masking",
         "Masking",
         "The video chroma-key masking editor - a second app surface inside "
         "ghost. See [masking.md](masking.md).",
-        [
-            "mask_session.gd",
-            "mask_editor.gd",
-            "mask_timeline.gd",
-            "timeline_view.gd",
-            "track_lane.gd",
-            "mask_marker_tool.gd",
-        ],
     ),
     (
-        "Export",
-        "Rendering a session to video (bake + Movie Maker, background "
-        "processes), uploading it to YouTube, and recording the README's "
-        "animation from the real app.",
-        ["exporter.gd", "youtube.gd", "youtube_card.gd", "showcase.gd", "showcase_recorder.gd"],
+        "app",
+        "The shell",
+        "The lifecycle around everything, and the one folder that names every other: main, "
+        "the furniture every mode gets (Chrome), the notes list and a note's own panel, the "
+        "phone shell, the "
+        "authoring loop - the log, the feedback console and the Assistant - and the "
+        "recorder of the README's animation, which drives the real app.",
     ),
-    (
-        "Feedback & assistant",
-        "The in-app authoring loop: capture reproducible critiques, browse "
-        "them, and dispatch automated fixes.",
-        ["feedback.gd", "assistant.gd", "assistant_backends.gd"],
-    ),
+]
+
+# WHAT STILL POINTS UP: (pattern, the fix, [(script, the script above it that it names)]),
+# scripts as `folder/name`. `check_structure` holds this list to the code BOTH WAYS: a script
+# that names one above it and is not listed here fails the check, and so does a pair listed
+# here that is no longer in the code - so the list can only shrink, and when a pattern is
+# fixed its rows are deleted with it. Never add a row to make a new reference pass: hand the
+# script what it reads instead (next/structure.md, "The rules").
+#
+# EMPTY SINCE 2026-10-13: it began at 48 pairs in eight patterns, and each went by one of four
+# moves - a helper moved down to the folder that could own it, a contract put under both sides
+# (`Shell`, `ShowFeed`, `SoundBed`), a registry row naming its script by path
+# (`Components` `script`, `Capabilities.ROLES`, `Medium.REGISTRY`), or a script moved to the
+# folder it turned out to belong in. Keep it empty: a row here is a debt, with a date.
+UPWARD: List[Tuple[str, str, List[Tuple[str, str]]]] = [
 ]
 
 # (flag, argument placeholder, description, internal). Internal flags are
@@ -577,7 +480,7 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
         "",
         "Record the README's animation (`docs/showcase.webp`) now, stale or "
         "not, and quit; pairs with `--headless`. A development launch records "
-        "it by itself when what it shows has changed (`src/showcase.gd`).",
+        "it by itself when what it shows has changed (`src/app/showcase.gd`).",
         False,
     ),
     (
@@ -709,8 +612,9 @@ TOP_LEVEL: List[Tuple[str, str]] = [
     ("scenes/", "The Godot entry scene (`main.tscn`). Everything else is code-built."),
     (
         "src/",
-        "All GDScript. Per-script map in [docs/index.md](docs/index.md); the "
-        "subsystem groups are described there too.",
+        "All GDScript, in one level of folders that are a stack: a script names its own "
+        "folder and the ones below. [docs/structure.md](docs/structure.md) is the stack; "
+        "[docs/index.md](docs/index.md) has every script.",
     ),
     (
         "src/scenes/",
@@ -739,7 +643,7 @@ TOP_LEVEL: List[Tuple[str, str]] = [
     (
         "hosts/",
         "The Python hosts ghost spawns, each in an environment of its own the Provisioner builds "
-        "(`src/deps.gd`): `voice/` the neural voice, `face/` Masking's face and body pre-passes, "
+        "(`src/platform/deps.gd`): `voice/` the neural voice, `face/` Masking's face and body pre-passes, "
         "`capture/` the tablet's page capture. Kept out of the exported .pck.",
     ),
     (
@@ -791,6 +695,11 @@ SUBSYSTEMS: List[Tuple[str, str, str]] = [
         "docs/environment.md",
         "what Ghost Notes installs itself, and the few programs that stay the machine's.",
     ),
+    (
+        "The structure",
+        "docs/structure.md",
+        "`src/` as a stack of folders: what each is, what it names, and what still points up.",
+    ),
     ("CLI flags", "docs/cli.md", "every command-line flag."),
     ("Storyboards", "storyboards/README.md", "the data spec a note's storyboard is written in."),
 ]
@@ -801,6 +710,20 @@ AUTOGEN_HEADER = "<!-- AUTOGENERATED by docs.py - do not edit by hand -->"
 # ---------------------------------------------------------------------------
 # GDScript parsing
 # ---------------------------------------------------------------------------
+
+
+def _script_path(stem: str) -> Path:
+    """Where a script lives, by its file name alone: its folder is looked up, never written
+    here, so a script that moves folders needs no edit in this file. The scene catalog is left
+    out of the search - `glyphs` and `terrain` are a generator and a scene both - and a scene
+    is read from `SCENES_DIR` by whoever wants one."""
+    found = [p for p in sorted(SCRIPTS.glob(f"*/{stem}.gd")) if p.parent != SCENES_DIR]
+    if len(found) != 1:
+        raise SystemExit(
+            f"[ghost-docs] docs.py reads src/*/{stem}.gd and found {len(found)}: "
+            + (", ".join(p.relative_to(ROOT).as_posix() for p in found) or "none")
+        )
+    return found[0]
 
 
 class Script:
@@ -987,7 +910,7 @@ def _collect_scenes() -> Tuple[Dict[str, SceneInfo], List[str]]:
     """All scenes on disk, annotated with their Director registration.
     Returns (name -> SceneInfo, ordered group labels)."""
     scenes = {p.stem: SceneInfo(Script(p)) for p in sorted(SCENES_DIR.glob("*.gd"))}
-    roster = _parse_scene_roster((SCRIPTS / "director.gd").read_text())
+    roster = _parse_scene_roster(_script_path("director").read_text())
     groups: List[str] = []
     for name, behavior, group in roster:
         if name not in scenes:
@@ -1168,10 +1091,10 @@ def _render_media_doc(base: Script) -> str:
         "`[director] medium`).",
         "",
     ]
-    for key, stem in pairs:
-        path = MEDIA_DIR / f"{stem}.gd"
+    for key, rel in pairs:
+        path = ROOT / rel
         if not path.exists():
-            warn(f"Medium.REGISTRY registers media/{stem}.gd which does not exist")
+            warn(f"Medium.REGISTRY registers {rel} which does not exist")
             continue
         sc = Script(path)
         lines.append(f"## `{key}` - {labels.get(key, key)}")
@@ -1184,12 +1107,18 @@ def _render_media_doc(base: Script) -> str:
             warn(f"{sc.rel}: medium '{key}' has no doc comment")
         lines.append(f"Source: {_source_link(sc.rel)}")
         lines.append("")
-    for path in sorted(MEDIA_DIR.glob("*.gd")):
-        if path.stem not in [stem for _k, stem in pairs]:
-            warn(
-                f"src/media/{path.stem}.gd is not registered in "
-                "Medium.REGISTRY - it can never be selected"
-            )
+    # The folder also holds what the media set and show (layouts, films, pictures): only a
+    # script that IS a medium - one extending Medium or a registered medium - must be a row.
+    registered = [rel for _k, rel in pairs]
+    medium_classes = {"Medium"} | {
+        Script(ROOT / rel).class_name for rel in registered if (ROOT / rel).exists()
+    }
+    for path in sorted(SCRIPTS.glob("*/*.gd")):
+        rel = path.relative_to(ROOT).as_posix()
+        if rel in registered or path.stem == "medium" or path.parent == SCENES_DIR:
+            continue
+        if Script(path).extends in medium_classes:
+            warn(f"{rel} is a medium not registered in Medium.REGISTRY - it can never be selected")
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -1548,11 +1477,11 @@ def _render_masklab_doc(session: Script, editor: Script) -> str:
             "",
             "## Headless marker insertion",
             "",
-            "`src/mask_marker_tool.gd` inserts one marker into a saved "
+            "`src/masking/mask_marker_tool.gd` inserts one marker into a saved "
             "session from the command line (no editor boot): ",
             "",
             "```",
-            "godot --headless --path . --script src/mask_marker_tool.gd \\",
+            "godot --headless --path . --script src/masking/mask_marker_tool.gd \\",
             "    -- masks/<video>/session.json <time> [field=value ...]",
             "```",
             "",
@@ -1590,7 +1519,7 @@ def check_panel_controls() -> None:
     never built was never registered either. It IS visible here: a name that is
     written to but never assigned. Same drift-detection idea as CLI_FLAGS above.
     """
-    src = (SCRIPTS / "mask_editor.gd").read_text(encoding="utf-8")
+    src = _script_path("mask_editor").read_text(encoding="utf-8")
     written = set(re.findall(r"\b(_\w+)\.set_(?:value|pressed)_no_signal\(", src))
     for name in sorted(written):
         # `var _x` alone is a declaration, not a construction - the assignment is
@@ -1612,7 +1541,7 @@ def check_films_pumped() -> None:
     a session and never again. main's `_process` is the only one always running, and a test
     probe replaces the main scene, so no gate can see this from inside a run.
     """
-    main = (SCRIPTS / "main.gd").read_text(encoding="utf-8")
+    main = _script_path("main").read_text(encoding="utf-8")
     if "Films.pump()" not in main:
         warn(
             "main.gd never calls Films.pump() - a finished window cut will never be "
@@ -1642,7 +1571,7 @@ def check_settings_owner() -> None:
         if "ConfigFile.new()" in text or '"user://ghost.cfg"' in text:
             warn(
                 f"{rel}: writes user://ghost.cfg directly - settings belong to "
-                "Settings (src/settings.gd), which owns the file, the debounce "
+                "Settings (src/platform/settings.gd), which owns the file, the debounce "
                 "and the flushing"
             )
 
@@ -1743,9 +1672,10 @@ def _gd_rows(text: str, const: str) -> List[str]:
 
 
 def _media_pairs(base: Script) -> List[Tuple[str, str]]:
-    """Medium.REGISTRY as (key, script stem)."""
+    """Medium.REGISTRY as (key, script path from the repository's root). A row names its script
+    by path, so a medium a feature brings lives with the feature (the card table, in `table/`)."""
     return re.findall(
-        r'"(\w+)":\s*"res://src/media/(\w+)\.gd"', _const_block(base.text, "REGISTRY")
+        r'"(\w+)":\s*"res://(src/\w+/\w+\.gd)"', _const_block(base.text, "REGISTRY")
     )
 
 
@@ -2002,7 +1932,7 @@ def _render_environment_doc(deps: Script) -> str:
             "be built on are named under it above. On a phone Ghost Notes downloads nothing.",
             "",
             f"Source: `Deps.FETCHED`, `Deps.MANAGED` and `Deps.TOOLS` in {_source_link(deps.rel)}, "
-            "installed by [src/provisioner.gd](../src/provisioner.gd). The panel and every program "
+            "installed by [src/platform/provisioner.gd](../src/platform/provisioner.gd). The panel and every program "
             "Ghost Notes starts ask the same resolver, so the panel cannot report a program "
             "present while a launch fails to find it.",
         ]
@@ -2243,7 +2173,7 @@ def _render_architecture_doc(
     def keys(pairs: List[Tuple[str, str]]) -> str:
         return ", ".join(f"`{k}`" for k, _ in pairs)
 
-    features_src = (SCRIPTS / "audio_features.gd").read_text()
+    features_src = _script_path("audio_features").read_text()
     fields = ", ".join(f"`{v}`" for v in re.findall(r"^var (\w+)", features_src, re.M))
     live = {n: s for n, s in scenes.items() if s.behaviors}
     behaviors = sorted({b for s in live.values() for b in s.behaviors})
@@ -2445,37 +2375,244 @@ def _render_index(
     for title, path, desc in SUBSYSTEMS:
         lines.append(f"- [{title}]({_docs_relative(path)}) - {desc}")
     lines.extend(["", "## Directory layout", "", _render_layout_block("../"), ""])
-    lines.extend(["## Script map", ""])
-    grouped = {f for _, _, files in SCRIPT_GROUPS for f in files}
-    for title, desc, files in SCRIPT_GROUPS:
-        lines.extend([f"### {title}", "", desc, ""])
-        for fname in files:
-            script = scripts.get(Path(fname).stem)
-            if script is None:
-                warn(f"docs.py SCRIPT_GROUPS lists {fname} which does not exist")
-                continue
+    lines.extend(
+        [
+            "## Script map",
+            "",
+            "One folder under `src/` a group, bottom first: a script names scripts in its own "
+            "folder and in the folders above its own in this list. [structure.md](structure.md) "
+            "is the same stack with what each folder names and what still points up.",
+            "",
+        ]
+    )
+    for folder, title, desc in FOLDERS:
+        lines.extend([f"### `{folder}/` - {title}", "", desc, ""])
+        if folder == "scenes":
+            continue
+        for script in sorted(_folder_scripts(folder), key=lambda s: s.name):
             one = _one_liner(script.doc, strip_name=script.class_name or "")
             label = script.class_name or script.name
-            lines.append(f"- [`{fname}`](../src/{fname}) **{label}** - {one}")
-        lines.append("")
-    stray = sorted(p.name for p in SCRIPTS.glob("*.gd") if p.name not in grouped)
-    if stray:
-        warn("scripts not in docs.py SCRIPT_GROUPS: " + ", ".join(stray))
-        lines.extend(
-            [
-                "### Unsorted (add to `SCRIPT_GROUPS` in docs.py)",
-                "",
-            ]
-        )
-        for fname in stray:
-            script = scripts.get(Path(fname).stem)
-            one = _one_liner(script.doc) if script else ""
-            lines.append(f"- [`{fname}`](../src/{fname}) - {one}")
+            lines.append(f"- [`{script.name}.gd`](../{script.rel}) **{label}** - {one}")
         lines.append("")
     lines.append(
         f"Scene scripts ({len(scenes)}) are cataloged separately in "
         "[scenes.md](scenes.md)."
     )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _folder_scripts(folder: str) -> List[Script]:
+    return [Script(p) for p in sorted((SCRIPTS / folder).glob("*.gd"))]
+
+
+# ---------------------------------------------------------------------------
+# The structure: src/ is a stack, and the code is held to it
+# ---------------------------------------------------------------------------
+
+
+def _code_of(text: str) -> str:
+    """A script with its comments and string literals taken out, so a class named in a doc
+    comment or a tooltip is not a reference."""
+    out = []
+    for line in text.splitlines():
+        kept, i, quote = [], 0, None
+        while i < len(line):
+            c = line[i]
+            if quote:
+                if c == "\\":
+                    i += 2
+                    continue
+                if c == quote:
+                    quote = None
+            elif c in "\"'":
+                quote = c
+            elif c == "#":
+                break
+            else:
+                kept.append(c)
+            i += 1
+        out.append("".join(kept))
+    return "\n".join(out)
+
+
+def _references() -> Dict[str, set]:
+    """{script: the scripts it names}, each as `folder/name`: a class name or an autoload's
+    name in its code, or a `preload` / `load` of a script's path."""
+    paths = sorted(SCRIPTS.glob("*/*.gd"))
+    key = lambda p: f"{p.parent.name}/{p.stem}"
+    text = {key(p): p.read_text() for p in paths}
+    by_res = {p.relative_to(ROOT).as_posix(): key(p) for p in paths}
+    named: Dict[str, str] = {}
+    project = (ROOT / "project.godot").read_text()
+    for name, rel in re.findall(r'^(\w+)="\*?res://([^"]+\.gd)"', project, re.M):
+        if rel in by_res:
+            named[name] = by_res[rel]
+    for k, t in text.items():
+        m = re.search(r"^class_name\s+(\w+)", t, re.M)
+        if m:
+            named[m.group(1)] = k
+    edges: Dict[str, set] = {k: set() for k in text}
+    for k, t in text.items():
+        for m in re.finditer(r"\b[A-Z][A-Za-z0-9_]*\b", _code_of(t)):
+            other = named.get(m.group(0))
+            if other and other != k:
+                edges[k].add(other)
+        for m in re.finditer(r'(?:pre)?load\(\s*"res://(src/[\w/]+\.gd)"', t):
+            other = by_res.get(m.group(1))
+            if other and other != k:
+                edges[k].add(other)
+    return edges
+
+
+def _upward(edges: Dict[str, set], order: List[str]) -> List[Tuple[str, str]]:
+    """The references that point up the stack: (script, the script above it that it names)."""
+    rank = {folder: i for i, folder in enumerate(order)}
+    out = []
+    for a in sorted(edges):
+        for b in sorted(edges[a]):
+            fa, fb = a.split("/")[0], b.split("/")[0]
+            if fa in rank and fb in rank and rank[fb] > rank[fa]:
+                out.append((a, b))
+    return out
+
+
+def _structure_problems(
+    edges: Dict[str, set], order: List[str], listed: List[Tuple[str, str]]
+) -> List[str]:
+    """What is wrong between the code and the stack. Pure, so its control can be run on a
+    made-up graph: see `check_structure`."""
+    up = _upward(edges, order)
+    out = []
+    for a, b in up:
+        if (a, b) not in listed:
+            out.append(
+                f"src/{a}.gd names src/{b}.gd, which is ABOVE it: src/ is a stack, and a "
+                "script names its own folder and the ones below. Hand it what it reads "
+                "(next/structure.md, \"The rules\") - do not add a row to UPWARD"
+            )
+    for a, b in listed:
+        if (a, b) not in up:
+            out.append(
+                f"docs.py UPWARD lists {a} -> {b}, which is no longer in the code: delete "
+                "its row (the list only shrinks)"
+            )
+    if len(set(listed)) != len(listed):
+        out.append("docs.py UPWARD lists a pair twice")
+    return out
+
+
+def check_structure() -> Dict[str, set]:
+    """src/ is a stack (FOLDERS, bottom first), and the code is held to it.
+
+    Every script sits in exactly one folder that FOLDERS names, and every reference between
+    scripts points down or stays in its folder - except the pairs UPWARD lists, which is what
+    is left to fix and may only get shorter. A flat `src/` hid that the code was already
+    layered (703 of 751 references pointed down when this was first measured, 2026-10-13); a
+    stack nothing holds is flat again within a month, one convenient `Director.x` at a time.
+
+    THE CONTROL: before the real code is judged, a made-up graph with one reference planted
+    upward must be reported, and one listed pair that is gone must be reported too. A check
+    that passes those has not been run.
+    """
+    order = [folder for folder, _t, _d in FOLDERS]
+    planted = {"platform/a": {"app/b"}, "app/b": {"platform/a"}}
+    if len(_structure_problems(planted, order, [])) != 1 or len(
+        _structure_problems({"platform/a": set()}, order, [("platform/a", "app/b")])
+    ) != 1:
+        warn("check_structure: its control did not fail - the check proves nothing")
+
+    on_disk = sorted(p.name for p in SCRIPTS.iterdir() if p.is_dir())
+    for folder in on_disk:
+        if folder not in order:
+            warn(f"src/{folder}/ is not in docs.py FOLDERS: say where it sits in the stack")
+    for folder in order:
+        if folder not in on_disk:
+            warn(f"docs.py FOLDERS lists src/{folder}/, which does not exist")
+    for p in sorted(SCRIPTS.glob("*.gd")):
+        warn(f"src/{p.name} is in no folder: every script lives in src/<folder>/")
+    for p in sorted(SCRIPTS.glob("*/*/*.gd")):
+        warn(f"{p.relative_to(ROOT).as_posix()}: one level of folders under src/, no deeper")
+
+    edges = _references()
+    listed = [pair for _p, _f, pairs in UPWARD for pair in pairs]
+    for problem in _structure_problems(edges, order, listed):
+        warn(problem)
+    return edges
+
+
+def _render_structure_doc(edges: Dict[str, set]) -> str:
+    """docs/structure.md: the stack, what each folder names, and what still points up."""
+    order = [folder for folder, _t, _d in FOLDERS]
+    rank = {folder: i for i, folder in enumerate(order)}
+    names: Dict[str, set] = {folder: set() for folder in order}
+    inside = down = 0
+    for a, bs in edges.items():
+        for b in bs:
+            fa, fb = a.split("/")[0], b.split("/")[0]
+            if fa == fb:
+                inside += 1
+            elif rank[fb] < rank[fa]:
+                down += 1
+                names[fa].add(fb)
+    up = sum(len(pairs) for _p, _f, pairs in UPWARD)
+    lines = [
+        AUTOGEN_HEADER,
+        "# The structure",
+        "",
+        "`src/` is one level of folders, and the folders are a STACK. A script names "
+        "scripts in its own folder and in the folders below it, and nothing above: what a "
+        "part reads from higher up is handed to it. So the folders a change can reach are "
+        "the ones above the folder it is in, and a folder near the bottom can be read "
+        "without knowing anything over it.",
+        "",
+        "Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code "
+        "to both at every `python docs.py --check`: a new reference that points up fails, "
+        "and so does a listed one that is gone. [next/structure.md](../next/structure.md) "
+        "is why the stack is in this order and what is being done about the rest.",
+        "",
+        f"Between scripts today: {inside} references inside a folder, {down} down the "
+        f"stack, {up} up it.",
+        "",
+        "## The stack, top first",
+        "",
+        "| folder | what it is | scripts | names |",
+        "| --- | --- | --- | --- |",
+    ]
+    for folder, title, _desc in reversed(FOLDERS):
+        count = len(list((SCRIPTS / folder).glob("*.gd")))
+        below = ", ".join(f"`{n}`" for n in sorted(names[folder], key=lambda n: -rank[n]))
+        lines.append(f"| `{folder}/` | {title} | {count} | {below or 'nothing'} |")
+    lines.extend(["", "## The folders, bottom first", ""])
+    for folder, title, desc in FOLDERS:
+        lines.extend([f"### `{folder}/` - {title}", "", desc, ""])
+        if folder == "scenes":
+            continue
+        lines.append(
+            ", ".join(f"[`{s.name}`](../{s.rel})" for s in _folder_scripts(folder))
+        )
+        lines.append("")
+    lines.extend(["## What still points up", ""])
+    if not UPWARD:
+        lines.extend(
+            [
+                "Nothing. Every reference between scripts stays in its folder or points down, "
+                "and `python docs.py --check` fails the first one that does not.",
+                "",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                f"{up} references, in {len(UPWARD)} patterns. Each row is a script naming one "
+                "above it; a pattern's rows go when its fix lands.",
+                "",
+            ]
+        )
+    for pattern, fix, pairs in UPWARD:
+        lines.extend([f"### {pattern} ({len(pairs)})", "", f"The fix: {fix}.", ""])
+        for a, b in pairs:
+            lines.append(f"- `{a}` names `{b}`")
+        lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -2588,8 +2725,17 @@ def _patch_readme_block(name: str, body: str) -> None:
 
 
 def main() -> int:
-    scripts = {p.stem: Script(p) for p in sorted(SCRIPTS.glob("*.gd"))}
+    # Every script but the scenes, by file name (a scene is read from SCENES_DIR).
+    scripts: Dict[str, Script] = {}
+    for p in sorted(SCRIPTS.glob("*/*.gd")):
+        if p.parent == SCENES_DIR:
+            continue
+        if p.stem in scripts:
+            warn(f"two scripts are named {p.stem}.gd: {scripts[p.stem].rel} and "
+                 f"{p.relative_to(ROOT).as_posix()}")
+        scripts[p.stem] = Script(p)
     scenes, groups = _collect_scenes()
+    edges = check_structure()
     check_panel_controls()
     check_settings_owner()
     check_films_pumped()
@@ -2712,6 +2858,7 @@ def main() -> int:
             scripts["text_gen"], scripts["image_gen"], scripts["assistant_backends"], scripts["deps"]
         ),
     )
+    _write_if_changed(DOCS / "structure.md", _render_structure_doc(edges))
     _write_if_changed(DOCS / "cli.md", _render_cli_doc(_scan_flags()))
     _write_if_changed(DOCS / "index.md", _render_index(scripts, scenes, features))
 

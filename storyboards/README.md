@@ -37,7 +37,7 @@ structure, so everything downstream is format-blind. A note's own is YAML in its
 frontmatter. A bare name resolves in this directory, `.yaml` first, then `.json`;
 explicit paths are taken as-is.
 
-The YAML dialect is a deliberately small subset (`src/yaml.gd`), and anything
+The YAML dialect is a deliberately small subset (`src/data/yaml.gd`), and anything
 outside it is **rejected with a line number**, never silently misparsed:
 
 - `#` comments; block maps and lists nested by indentation (spaces only);
@@ -112,8 +112,8 @@ tables, cast blocks - "a scene calling a scene".
 `scene: stage` is the **data-driven renderer**: the entry itself describes what is
 on screen (`cast:`) and what happens over time (`track:`). Nothing about the show
 lives in scene code - performers come from the **Cast registry**
-(`src/cast.gd`), verbs from the **Actions registry** (`src/actions.gd`),
-the timeline from `src/track.gd`.
+(`src/stage/cast.gd`), verbs from the **Actions registry** (`src/stage/actions.gd`),
+the timeline from `src/stage/track.gd`.
 
 ```yaml
 - scene: stage

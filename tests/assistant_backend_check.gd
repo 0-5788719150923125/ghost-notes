@@ -28,7 +28,7 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script tests/assistant_backend_check.gd
 
-const B := preload("res://src/assistant_backends.gd")
+const B := preload("res://src/agents/assistant_backends.gd")
 const FIX := "res://tests/fixtures/assistant/"
 
 var _fails: Array = []

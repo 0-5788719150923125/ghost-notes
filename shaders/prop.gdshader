@@ -1,4 +1,4 @@
-// A modeled thing's surface (see src/props.gd): one shader for every opaque material, its
+// A modeled thing's surface (see src/table/props.gd): one shader for every opaque material, its
 // look procedural - noise in the thing's own space, so nothing tiles and nothing needs a texture.
 // Glass is its own shader (prop_glass); what both share is prop_common.gdshaderinc.
 shader_type spatial;

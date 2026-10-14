@@ -1,4 +1,4 @@
-// A modeled thing's GLASS (see src/props.gd): tinted, see-through at its face and silvered at
+// A modeled thing's GLASS (see src/table/props.gd): tinted, see-through at its face and silvered at
 // its edges, frosted as its clarity falls - and an ornament on glass is etched, so it frosts too.
 shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;

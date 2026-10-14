@@ -105,7 +105,7 @@ func _run() -> void:
 	medium.mount(stage)
 	Director.attach(stage, medium)
 	Director.hold(true)
-	subs = preload("res://src/subtitles.gd").new()
+	subs = preload("res://src/show/subtitles.gd").new()
 	add_child(subs)
 	medium.bind_captions(subs)
 	var script := CardReading.compose([{"kind": "shuffle", "card": 0, "text": "Shuffle the deck."},

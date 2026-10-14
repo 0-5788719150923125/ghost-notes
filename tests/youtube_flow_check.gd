@@ -41,7 +41,7 @@ extends SceneTree
 ##   a newer sign-in replaces one still waiting without the old one reporting over it; ↻ on the
 ##   playlist signs in again for the wider scope and loads them.
 
-const YouTube := preload("res://src/youtube.gd")
+const YouTube := preload("res://src/export/youtube.gd")
 const ROOT := "user://youtube_flow_check"
 const CHUNK := 256 * 1024
 
@@ -385,14 +385,14 @@ func _playlists() -> bool:
 ## children moved into the tree: its _ready would clear a live render's override.cfg.
 func _card_sign_in() -> bool:
 	YouTube.forget_token()
-	var ex = load("res://src/exporter.gd").new()
+	var ex = load("res://src/export/exporter.gd").new()
 	ex._build_ui()
 	var holder := Node.new()
 	root.add_child(holder)
 	for c in ex.get_children():
 		ex.remove_child(c)
 		holder.add_child(c)
-	var card = load("res://src/youtube_card.gd").new()
+	var card = load("res://src/export/youtube_card.gd").new()
 	card.exporter = ex
 	holder.add_child(card)
 
@@ -500,7 +500,7 @@ func _frame() -> bool:
 	var out: Array = []
 	OS.execute(Deps.resolve("ffmpeg"), ["-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=duration=4:size=640x360:rate=25",
 		"-pix_fmt", "yuv420p", mp4], out)
-	var ex = load("res://src/exporter.gd").new()
+	var ex = load("res://src/export/exporter.gd").new()
 	ex._build_ui()
 	var jpg: String = await ex._take_thumbnail(mp4, 1.5)
 	var img := Image.load_from_file(jpg) if not jpg.is_empty() else null

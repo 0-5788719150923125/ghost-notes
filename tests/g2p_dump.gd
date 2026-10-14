@@ -7,7 +7,7 @@ extends SceneTree
 ##
 ## Run: godot --headless --path . --script tests/g2p_dump.gd -- <file> [limit]
 
-const Phonemes_ := preload("res://src/phonemes.gd")
+const Phonemes_ := preload("res://src/voice/phonemes.gd")
 
 
 func _init() -> void:

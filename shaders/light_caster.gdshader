@@ -1,4 +1,4 @@
-// A SHADOW OUT OF THE SHOT (src/lights.gd, `shadows`): a part of something that throws its shadow on the
+// A SHADOW OUT OF THE SHOT (src/table/lights.gd, `shadows`): a part of something that throws its shadow on the
 // table and is never seen - a beam, a pillar, a rope, a chandelier's arm, a sheet on a line - drawn into
 // nothing but the shadow maps of the lights that cast (the mesh is shadow-only, on Lights.CASTER_LAYER).
 // A SHEET RIPPLES as it hangs: its vertices move along its face, more the further they hang from its top

@@ -1,4 +1,4 @@
-// Fog of an effect (see src/effects.gd): one FogVolume's density, rolling through its box as a
+// Fog of an effect (see src/table/effects.gd): one FogVolume's density, rolling through its box as a
 // function of SHOW TIME - the noise is carried by a slow wind (the light's own, when it has one) and turns over itself - thickest at its
 // floor and thinning toward its height, soft at its sides. The scene's lights light it (Godot's own
 // volumetric fog), so candles and lit motes glow inside it.

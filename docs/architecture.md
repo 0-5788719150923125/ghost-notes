@@ -13,35 +13,35 @@ From the audio to the screen, or to a video file. Each part's reference is its o
 
 ## The signal path
 
-- **[`Spectrum`](../src/spectrum.gd)** (an autoload) owns the audio player and the analyzer, and emits one [`AudioFeatures`](../src/audio_features.gd) a frame: `energy`, `bass`, `low_mid`, `mid`, `high`, `treble`, `beat`, `beat_period`, `flux`, `movement`, `bands`, `time`. It is the one typed interface every scene reads; no scene touches the audio engine.
-- **[`GhostScene`](../src/ghost_scene.gd)** is one visualizer: `build_params(rng)` rolls a **definition** from a seeded RNG, `update(features, delta)` modulates it by the audio, and `_draw()` renders it through the scene's **view** (zoom, tilt, rotation, offset).
-- **Motion is its own axis.** What a scene draws is separate from how it moves - its **behavior**, one of `drift`, `fluid`, `static`: `static` reacts to the audio alone, `drift` adds whole-scene camera breathing, `fluid` adds independent per-element motion. A [`ModBank`](../src/mod_bank.gd) of slow seeded oscillators feeds named organic channels and per-element `wobble(key, i)`.
+- **[`Spectrum`](../src/audio/spectrum.gd)** (an autoload) owns the audio player and the analyzer, and emits one [`AudioFeatures`](../src/audio/audio_features.gd) a frame: `energy`, `bass`, `low_mid`, `mid`, `high`, `treble`, `beat`, `beat_period`, `flux`, `movement`, `bands`, `time`. It is the one typed interface every scene reads; no scene touches the audio engine.
+- **[`GhostScene`](../src/scene_kit/ghost_scene.gd)** is one visualizer: `build_params(rng)` rolls a **definition** from a seeded RNG, `update(features, delta)` modulates it by the audio, and `_draw()` renders it through the scene's **view** (zoom, tilt, rotation, offset).
+- **Motion is its own axis.** What a scene draws is separate from how it moves - its **behavior**, one of `drift`, `fluid`, `static`: `static` reacts to the audio alone, `drift` adds whole-scene camera breathing, `fluid` adds independent per-element motion. A [`ModBank`](../src/motion/mod_bank.gd) of slow seeded oscillators feeds named organic channels and per-element `wobble(key, i)`.
 - **The seed is the song's.** The session seed derives from the audio's own fingerprint, so the same song always plays the same show; `--seed N` rolls another.
 
 ## Composition, by registry
 
-- **Physics:** [`Primitives`](../src/primitives.gd) holds 8 force modules (`gravity`, `spring`, `drag`, `scatter`, `wind`, `pulse`, `orbit`, `wobble`) that a scene composes into a [`ParticleSystem`](../src/particle_system.gd) by key - the same `scatter` bursts glass, rocks and embers. See [forces.md](forces.md).
-- **Appearance:** [`Layer`](../src/layer.gd) holds 22 visual components (`bed`, `surface`, `kelp`, `fog`, `snow`, `rain`, `fireflies`, `stars`, `aurora`, `petals`, `dust`, `bubbles`, `embers`, `cosmos`, `clouds`, `fire`, `vapor`, `rays`, `planet`, `volumetric`, `veil`, `flare`) that seed themselves, advance on the audio and draw on a scene's canvas, in unit-fraction space so they fill any frame - the same `snow` that is a scene of its own falls over the cityscape. See [layers.md](layers.md).
+- **Physics:** [`Primitives`](../src/motion/primitives.gd) holds 8 force modules (`gravity`, `spring`, `drag`, `scatter`, `wind`, `pulse`, `orbit`, `wobble`) that a scene composes into a [`ParticleSystem`](../src/motion/particle_system.gd) by key - the same `scatter` bursts glass, rocks and embers. See [forces.md](forces.md).
+- **Appearance:** [`Layer`](../src/scene_kit/layer.gd) holds 22 visual components (`bed`, `surface`, `kelp`, `fog`, `snow`, `rain`, `fireflies`, `stars`, `aurora`, `petals`, `dust`, `bubbles`, `embers`, `cosmos`, `clouds`, `fire`, `vapor`, `rays`, `planet`, `volumetric`, `veil`, `flare`) that seed themselves, advance on the audio and draw on a scene's canvas, in unit-fraction space so they fill any frame - the same `snow` that is a scene of its own falls over the cityscape. See [layers.md](layers.md).
 - A new scene is mostly a parts list.
 
 ## Drawing
 
 - **Every scene declares a render kind** - in the rotation: `canvas` (33), `scene3d` (16), `particles` (3), `swarm` (2), `mesh3d` (1).
-- **The 3D path** ([`Scene3D`](../src/scene3d.gd), [`Lens3D`](../src/lens3d.gd), [`Plane3D`](../src/plane3d.gd), [`Mesh3D`](../src/mesh3d.gd), [`Geo`](../src/geometry.gd)) is where the 2D scenes converge: a positionable perspective camera, flat quads placed in 3D, software meshes with texture and a gaussian wireframe reveal, all depth-sorted under one lens.
-- **Structure is the bias; motion is bounded variance.** Flat subjects sway about a seeded rest pose rather than spin; solid bodies rotate, because that is how a solid shows its volume. [`Activation`](../src/activation.gd) gives each element a seeded threshold and gain through a soft nonlinearity, so some stay rooted while others bloom.
-- **Sound drives color, not scale.** [`Lighting`](../src/lighting.gd) moves hotspots across the frame, flares a glow on beats and drifts the hue, where pulsing geometry would throb.
-- **Many items, local rules.** [`Swarm`](../src/swarm.gd) evolves a field over a grid by local interaction - thousands of items, none scripted.
+- **The 3D path** ([`Scene3D`](../src/scene_kit/scene3d.gd), [`Lens3D`](../src/render/lens3d.gd), [`Plane3D`](../src/render/plane3d.gd), [`Mesh3D`](../src/render/mesh3d.gd), [`Geo`](../src/geometry/geometry.gd)) is where the 2D scenes converge: a positionable perspective camera, flat quads placed in 3D, software meshes with texture and a gaussian wireframe reveal, all depth-sorted under one lens.
+- **Structure is the bias; motion is bounded variance.** Flat subjects sway about a seeded rest pose rather than spin; solid bodies rotate, because that is how a solid shows its volume. [`Activation`](../src/motion/activation.gd) gives each element a seeded threshold and gain through a soft nonlinearity, so some stay rooted while others bloom.
+- **Sound drives color, not scale.** [`Lighting`](../src/scene_kit/lighting.gd) moves hotspots across the frame, flares a glow on beats and drifts the hue, where pulsing geometry would throb.
+- **Many items, local rules.** [`Swarm`](../src/motion/swarm.gd) evolves a field over a grid by local interaction - thousands of items, none scripted.
 
 ## Staying interactive
 
 The engine runs one main loop, so a scene that spends 300 ms in a frame blocks input for 300 ms.
 
-- [`TriBatch`](../src/tri_batch.gd) submits a frame's triangles in one call: per-shape draw calls, not geometry, were the cost.
-- [`FrameForge`](../src/frame_forge.gd) builds a scene's geometry on a worker from a plain-data snapshot, and `_draw` submits the finished packet in microseconds.
+- [`TriBatch`](../src/render/tri_batch.gd) submits a frame's triangles in one call: per-shape draw calls, not geometry, were the cost.
+- [`FrameForge`](../src/render/frame_forge.gd) builds a scene's geometry on a worker from a plain-data snapshot, and `_draw` submits the finished packet in microseconds.
 
 ## Scheduling and transitions
 
-- **[`Director`](../src/director.gd)** (an autoload) holds the roster - 55 scenes in the rotation - and performs the cuts. A scene loops until cut, or is a oneshot that reports `finished()`; once it may leave, the Director waits for a spectral trigger - a beat, a movement (a section change) or a lull - with a maximum hold as the backstop, so exits land on the music.
+- **[`Director`](../src/show/director.gd)** (an autoload) holds the roster - 55 scenes in the rotation - and performs the cuts. A scene loops until cut, or is a oneshot that reports `finished()`; once it may leave, the Director waits for a spectral trigger - a beat, a movement (a section change) or a lull - with a maximum hold as the backstop, so exits land on the music.
 - **Novelty, not chance:** each candidate is weighted by how long its kind has gone unshown, so the show spreads across the catalog.
 - **Typed morphs:** a scene declares the geometry it leaves (`morph_out`) and what it can grow from (`morph_in`); where they match, the Director hands over a typed payload and the cut is continuous (5 scenes in the rotation take part). Anything else is a cut.
 - **Transition style is a hierarchy**, highest first: a compatible morph, the storyboard entry's `transition`, the scene's own style, the storyboard's default, the mode's default.
@@ -53,7 +53,7 @@ The scenes are drawn on a **medium** - Auto, Full frame, Comic book, Novel, Note
 ## Rendering: live and baked
 
 1. **Live.** The audio plays through the analyzer and the scenes react in real time. The window stretches in `canvas_items` mode, so 2D rasterizes at the monitor's own resolution.
-2. **Baked, for export** ([`Exporter`](../src/exporter.gd)). A headless process analyzes the song into a spectrum timeline once ([`SpectrumBake`](../src/bake.gd), cached per song); a second renders the show with Movie Maker, driving the scenes from that timeline - frame-perfect, in sync. The size goes through a transient `override.cfg`, because Movie Maker fixes it at startup: `viewport` stretch, in a window shaped like the frame, so frames come from an offscreen buffer at any resolution. On Linux the render runs on a virtual display (`xvfb-run`), so the desktop cannot freeze it, and ffmpeg encodes the MP4 while the render is still writing.
+2. **Baked, for export** ([`Exporter`](../src/export/exporter.gd)). A headless process analyzes the song into a spectrum timeline once ([`SpectrumBake`](../src/audio/bake.gd), cached per song); a second renders the show with Movie Maker, driving the scenes from that timeline - frame-perfect, in sync. The size goes through a transient `override.cfg`, because Movie Maker fixes it at startup: `viewport` stretch, in a window shaped like the frame, so frames come from an offscreen buffer at any resolution. On Linux the render runs on a virtual display (`xvfb-run`), so the desktop cannot freeze it, and ffmpeg encodes the MP4 while the render is still writing.
 
 ## The feedback loop
 

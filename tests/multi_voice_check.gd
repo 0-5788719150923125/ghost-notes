@@ -610,7 +610,7 @@ func _check_voice_colors() -> void:
 		if who.is_empty() or who.back() != String((w as Dictionary).get("speaker", "")):
 			who.append(String((w as Dictionary).get("speaker", "")))
 	_ok(who == [Manuscript.NARRATOR, "Familiar"], "subtitle words carry voices %s" % str(who))
-	var subs: Subtitles = preload("res://src/subtitles.gd").new()
+	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	subs.words = said
 	_ok(subs.voice_order(Manuscript.NARRATOR) == 0 and subs.voice_order("Familiar") == 1 and subs.voice_order("") == 0,
 		"the voices' places are %d, %d" % [subs.voice_order(Manuscript.NARRATOR), subs.voice_order("Familiar")])
@@ -622,18 +622,18 @@ func _check_voice_colors() -> void:
 	var jumps := 0
 	var old_outside := 0
 	var wheel := true
-	for order in range(0, Subtitles.VOICE_BANDS.size() + 2):
+	for order in range(0, Scheme.VOICE_BANDS.size() + 2):
 		var prev := -1.0
 		for i in 400:
 			var phase := float(i) / 100.0 - 1.37
-			var h := Subtitles.voice_hue(phase, order)
+			var h := Scheme.voice_hue(phase, order)
 			if prev >= 0.0 and absf(wrapf(h - prev, -0.5, 0.5)) > 0.04:
 				jumps += 1
 			prev = h
 			if order == 0:
 				wheel = wheel and absf(wrapf(h - phase, -0.5, 0.5)) < 1e-4
 				continue
-			var band: Array = Subtitles.VOICE_BANDS[(order - 1) % Subtitles.VOICE_BANDS.size()]
+			var band: Array = Scheme.VOICE_BANDS[(order - 1) % Scheme.VOICE_BANDS.size()]
 			var mid := (float(band[0]) + float(band[1])) * 0.5
 			var half := absf(float(band[1]) - float(band[0])) * 0.5 + 1e-4
 			outside += 1 if absf(wrapf(h - mid, -0.5, 0.5)) > half else 0

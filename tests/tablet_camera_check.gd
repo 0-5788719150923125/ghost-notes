@@ -141,7 +141,7 @@ func _read(body: String, from := "", intro := 1.0) -> RefCounted:
 	Director.attach(stage, medium)
 	Director.hold(true)
 	Director.intro_hold = intro        # the Director reloads its own at attach
-	var subs: Subtitles = preload("res://src/subtitles.gd").new()
+	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	var scrub: Dictionary = Audit.scrub_to(body, from) if not from.is_empty() else {"si": 0}
 	subs.words = Audit.timeline(body, 0.3, Director.intro_hold, int(scrub["si"]))
 	subs.document = {"source": body, "title": "Camera"}

@@ -51,28 +51,28 @@ seeds' hash salts keep their old `tarot-` names, so every episode already made c
 
 | file | what it is |
 |---|---|
-| `src/text_gen.gd` | `TextGen`: who writes words - a registry beside `ImageGen` (`claude`, `codex`). Stateless writers; pictures go with the words. Claude runs with no tools; Codex is told to work from the message alone. |
-| `src/agent_jobs.gd` | `AgentJobs`: one queue for every AI run (text and image) - limits per kind, LANES (one at a time, in order), timeouts, read-only refusal, and a rerun's folder cleared of the last run's output. Polled from `main._process`. |
-| `src/reading_follower.gd` | `ReadingFollower`: where the voice is in a document - the tablet's sequential word match, and the schedule that puts actions in the voice's rests. |
-| `src/card_episode.gd` | `CardEpisode`: an episode on disk, one file per step, under `user://cards/<show>/<seed>/`. A redo is a delete. |
-| `src/card_producer.gd` | `CardProducer`: makes whatever is missing, in drawing order. |
-| `src/card_prompts.gd` | `CardPrompts`: which rules each agent is told, and what fills them in. Pure. |
-| `rules/cards/*.yaml`, `src/rules.gd` | The words themselves, one file per role (producer, designer, set_dresser, reader, painter, show), each rule's reason a comment above it; `Rules` reads them (items in order, `when` flags, `insert`, Mustache sections). Moved out of the code 2026-10-08 with every prompt byte for byte the same (227 prompts over three real episodes, compared before and after). |
-| `src/card_reading.gd` | `CardReading`: the reading's marks; one walk gives the voice its text and the table its actions. |
-| `src/card_deck.gd` | `CardDeck`: the show's deck, parsed from its brief's `## Cards` section (none built in: a brief that lists no card leaves each episode's to its producer); the seeded shuffle; true-random seeds. |
-| `src/card_table.gd` | `CardTable`: what a look may name - title faces (`fonts/cards/`, OFL), frames, the zones things stand in - `sanitize_look`, `sanitize_table`, and the layout a prompt can know ahead (`layout_of`, `headroom`). |
-| `src/agent_tools.gd` | `AgentTools`: tools ghost serves an agent WHILE it works - an MCP server (HTTP, JSON) inside the ghost process, a URL per job, every call logged beside the prompt (`tools.jsonl`, `look_NN.jpg`). Claude, Grok and Codex take them (`TextGen.Backend.takes_tools`; Grok through its `search_tool` / `use_tool`, the calls allowed by rule; Codex by config overrides, its token in its environment as a bearer); Bedrock is still one reply. |
-| `src/set_dresser_tools.gd` | `SetDresserTools`: the set dresser's tools - `put`, `remove`, `look`, `set`, `watch`, `title`, `submit` - over a draft table. |
-| `src/table_preview.gd` | `TablePreview`: what those tools show - a thing in a studio on a centimeter grid (four sides, or several in tiles), the draft on the episode's own table from the show's camera, and the opening (the show's name over that table thrown out of focus). |
-| `src/effects.gd` | `Effects`: the AIR - fog, motes, bursts - as data an agent writes (registries it reads, `sanitize`, `build`), posed from show time. Generic; the tarot table names its regions and moments (`CardTable.AIR`, `MOMENTS`). Shaders `effect_fog.gdshader`, `effect_sprite.gdshader`, `effect_smoke.gdshader`. |
-| `src/lights.gd` | `Lights`: the table's LIGHT built from a description - its sky, its sun (or the moon) and what the sun falls through (a window, blinds, a lattice, leaves, fronds, branches, slats, an awning, a parasol), clouds and birds, lamps out of the shot; registries an agent reads, `sanitize`, `build`, and the CPU's reckoning of where the sun falls. Shaders `light_screen.gdshader`, `light_bird.gdshader`, `light_noise.gdshaderinc` (the noise both reckon alike). See "THE LIGHT" below. |
-| `src/winds.gd` | `Winds`: the table's one wind - a breeze and planned gusts, its carry in closed form - shared by the light and the air. See "SHADE, WIND AND WHAT IT CARRIES" below. |
-| `src/drifts.gd` | `Drifts`: what the wind carries (the air's `drift`) - petals, leaves, seeds - each piece's life planned from its own dice: falling, lying, skidding, carried off. Shader `air_drift.gdshader`. |
-| `src/tables.gd` | `Tables`: the table itself built from a description - its top (shape, edge profile, material, boards, tiles, inlay) and the layers laid on it (fabric, pattern, border, fringe), each surface's relief; registries an agent reads, `sanitize`, `build`. Shaders `table_top.gdshader`, `table_textile.gdshader`, `table_common.gdshaderinc`, `table_relief.gdshaderinc` (and `noise_common.gdshaderinc`, shared with the props). |
-| `src/props.gd` | `Props`: things built from a description - shapes (lathe, loft, tube, coil, extrude...), corners as data, a warp on any part, materials, ornaments (registries an agent reads), `sanitize`, `build`. Generic; the tarot table is its first user. Shaders `prop.gdshader`, `prop_glass.gdshader`, `prop_lens.gdshader`, `prop_common.gdshaderinc`. |
-| `src/card_faces.gd` | `CardFaces`: faces, backs and booklet pages, composed in 2D into stopped SubViewports. |
-| `src/media/table.gd` | `TableMedium`: the table. Pinned by the mode (`Medium.OWNED`, `Director.medium_override`). |
-| `src/cards_editor.gd` | `CardsEditor extends GenerativeEditor`: the panel. |
+| `src/agents/text_gen.gd` | `TextGen`: who writes words - a registry beside `ImageGen` (`claude`, `codex`). Stateless writers; pictures go with the words. Claude runs with no tools; Codex is told to work from the message alone. |
+| `src/agents/agent_jobs.gd` | `AgentJobs`: one queue for every AI run (text and image) - limits per kind, LANES (one at a time, in order), timeouts, read-only refusal, and a rerun's folder cleared of the last run's output. Polled from `main._process`. |
+| `src/media/reading_follower.gd` | `ReadingFollower`: where the voice is in a document - the tablet's sequential word match, and the schedule that puts actions in the voice's rests. |
+| `src/cards/card_episode.gd` | `CardEpisode`: an episode on disk, one file per step, under `user://cards/<show>/<seed>/`. A redo is a delete. |
+| `src/cards/card_producer.gd` | `CardProducer`: makes whatever is missing, in drawing order. |
+| `src/cards/card_prompts.gd` | `CardPrompts`: which rules each agent is told, and what fills them in. Pure. |
+| `rules/cards/*.yaml`, `src/data/rules.gd` | The words themselves, one file per role (producer, designer, set_dresser, reader, painter, show), each rule's reason a comment above it; `Rules` reads them (items in order, `when` flags, `insert`, Mustache sections). Moved out of the code 2026-10-08 with every prompt byte for byte the same (227 prompts over three real episodes, compared before and after). |
+| `src/table/card_reading.gd` | `CardReading`: the reading's marks; one walk gives the voice its text and the table its actions. |
+| `src/cards/card_deck.gd` | `CardDeck`: the show's deck, parsed from its brief's `## Cards` section (none built in: a brief that lists no card leaves each episode's to its producer); the seeded shuffle; true-random seeds. |
+| `src/table/card_table.gd` | `CardTable`: what a look may name - title faces (`fonts/cards/`, OFL), frames, the zones things stand in - `sanitize_look`, `sanitize_table`, and the layout a prompt can know ahead (`layout_of`, `headroom`). |
+| `src/agents/agent_tools.gd` | `AgentTools`: tools ghost serves an agent WHILE it works - an MCP server (HTTP, JSON) inside the ghost process, a URL per job, every call logged beside the prompt (`tools.jsonl`, `look_NN.jpg`). Claude, Grok and Codex take them (`TextGen.Backend.takes_tools`; Grok through its `search_tool` / `use_tool`, the calls allowed by rule; Codex by config overrides, its token in its environment as a bearer); Bedrock is still one reply. |
+| `src/cards/set_dresser_tools.gd` | `SetDresserTools`: the set dresser's tools - `put`, `remove`, `look`, `set`, `watch`, `title`, `submit` - over a draft table. |
+| `src/cards/table_preview.gd` | `TablePreview`: what those tools show - a thing in a studio on a centimeter grid (four sides, or several in tiles), the draft on the episode's own table from the show's camera, and the opening (the show's name over that table thrown out of focus). |
+| `src/table/effects.gd` | `Effects`: the AIR - fog, motes, bursts - as data an agent writes (registries it reads, `sanitize`, `build`), posed from show time. Generic; the tarot table names its regions and moments (`CardTable.AIR`, `MOMENTS`). Shaders `effect_fog.gdshader`, `effect_sprite.gdshader`, `effect_smoke.gdshader`. |
+| `src/table/lights.gd` | `Lights`: the table's LIGHT built from a description - its sky, its sun (or the moon) and what the sun falls through (a window, blinds, a lattice, leaves, fronds, branches, slats, an awning, a parasol), clouds and birds, lamps out of the shot; registries an agent reads, `sanitize`, `build`, and the CPU's reckoning of where the sun falls. Shaders `light_screen.gdshader`, `light_bird.gdshader`, `light_noise.gdshaderinc` (the noise both reckon alike). See "THE LIGHT" below. |
+| `src/table/winds.gd` | `Winds`: the table's one wind - a breeze and planned gusts, its carry in closed form - shared by the light and the air. See "SHADE, WIND AND WHAT IT CARRIES" below. |
+| `src/table/drifts.gd` | `Drifts`: what the wind carries (the air's `drift`) - petals, leaves, seeds - each piece's life planned from its own dice: falling, lying, skidding, carried off. Shader `air_drift.gdshader`. |
+| `src/table/tables.gd` | `Tables`: the table itself built from a description - its top (shape, edge profile, material, boards, tiles, inlay) and the layers laid on it (fabric, pattern, border, fringe), each surface's relief; registries an agent reads, `sanitize`, `build`. Shaders `table_top.gdshader`, `table_textile.gdshader`, `table_common.gdshaderinc`, `table_relief.gdshaderinc` (and `noise_common.gdshaderinc`, shared with the props). |
+| `src/table/props.gd` | `Props`: things built from a description - shapes (lathe, loft, tube, coil, extrude...), corners as data, a warp on any part, materials, ornaments (registries an agent reads), `sanitize`, `build`. Generic; the tarot table is its first user. Shaders `prop.gdshader`, `prop_glass.gdshader`, `prop_lens.gdshader`, `prop_common.gdshaderinc`. |
+| `src/table/card_faces.gd` | `CardFaces`: faces, backs and booklet pages, composed in 2D into stopped SubViewports. |
+| `src/table/table.gd` | `TableMedium`: the table. Pinned by the mode (`Medium.OWNED`, `Director.medium_override`). |
+| `src/cards/cards_editor.gd` | `CardsEditor extends GenerativeEditor`: the panel. |
 
 ## The show document
 
@@ -420,7 +420,7 @@ a texture crudely drawn onto it... give the agents the proper tools and instruct
 own table, with optional tapestries, tablecloths, runners, etc. And of course, item placement changes a
 bit as well, depending upon the geometry of the table"; then "the table would really benefit from some
 depth mapping... normal mapping, tesselation, whatever - make such things available to the agents'
-tooling"). The set dresser now writes `top` and `layers` beside its things (`Tables`, `src/tables.gd`):
+tooling"). The set dresser now writes `top` and `layers` beside its things (`Tables`, `src/table/tables.gd`):
 - THE TOP: rect (with rounded corners), round, oval or a regular polygon, a scalloped rim if it likes;
   1.5-9 cm thick; its edge cut to a profile (square, eased, bevel, bullnose, ogee, bead) as real
   geometry - the far edge is all of the table's side the camera sees; made of one of the table's
@@ -506,7 +506,7 @@ to give the agents proper tooling, to create these vibes on its own"). The plans
 along - "bright overhead noon sun diffused through a white canvas awning", "warm afternoon sunlight
 slanting low through tall windows from one side", "cool early-morning daylight from the open sky, with
 no flame on the table" - and every table was drawn alike: a dark room, a spot lamp, candles out of shot.
-The set dresser now writes `light` beside its things (`Lights`, `src/lights.gd`; `CardTable.sanitize_table`
+The set dresser now writes `light` beside its things (`Lights`, `src/table/lights.gd`; `CardTable.sanitize_table`
 -> `light`, `{}` when it wrote none):
 - THE SKY: an ambient light, and a share of it from above (a light with no shadow, so things are modeled
   from the top as an open sky models them) - its color and strength.
@@ -619,7 +619,7 @@ or getting carried-off from the table again after another gust"):
   wide - a high light's shade lies under the thing, so no pool showed, and it printed a faint moire on
   the cloth. Seen on 482104 overcast: the rope's coils and the pot gain depth; on a table a candle leads,
   the cloth's own pool stays faint (the fill is a small share of its light).
-- THE WIND (`light.wind`: from, strength, gusts, every; `src/winds.gd`, `Winds`): a breeze of slow sines
+- THE WIND (`light.wind`: from, strength, gusts, every; `src/table/winds.gd`, `Winds`): a breeze of slow sines
   and gusts planned over the horizon from the seed - each a raised cosine, quick to rise and slow to fall,
   veering a little - so how far the air has carried a thing is closed form (`Winds.carried`), never
   stepped. One plan per table (`TableMedium._wind`), shared: a gust stirs the screens harder (`gust` in
@@ -647,7 +647,7 @@ or getting carried-off from the table again after another gust"):
   `Effects.particle_xform`) - within a centimeter of a stepped integration. FOG rolls with the wind in
   place of its own `drift`. Gate: `tests/wind_reach_check.gd`. Open: a tablecloth's hanging edge in a
   gust; the cards themselves stay put (a 2 g card lifts at about 2 m/s - the reading must stay readable).
-- WHAT DRIFTS (`effects` kind `drift`; `src/drifts.gd`, `Drifts`, `shaders/air_drift.gdshader`): petals,
+- WHAT DRIFTS (`effects` kind `drift`; `src/table/drifts.gd`, `Drifts`, `shaders/air_drift.gdshader`): petals,
   rose petals, leaves, green leaves, seeds, spinners, feathers - falling from above or blown in from the
   wind's side. RARE (2026-10-08, the user: a tree "coming down all at once"; "it takes days or even weeks
   for all of the foliage to fall"): `every` seconds between one coming loose in the breeze and the next
@@ -672,7 +672,7 @@ any order, never through a thing, gusts lift and grip 1 holds, no jump between f
 ways, gust shaking, the ways, a gust turning a flat one over, never on or under the cards), lights_check
 `_shade`, light_screen_check (a grown copy in a gust, GPU).
 
-BUILT IN THE ENGINE (`src/props.gd`, `Props.build`): meshes in meters, base on y = 0, each
+BUILT IN THE ENGINE (`src/table/props.gd`, `Props.build`): meshes in meters, base on y = 0, each
 part's surface laid out for its own girth and height so a motif keeps its shape. A candle's wax
 part carries a `wick`: the flame is lit at its top, melted into a pool, and `drips` run down it.
 SEEN-THROUGH material is glass for a vessel (`prop_glass`, a flame inside it shows) and a LENS
@@ -990,7 +990,7 @@ draw the same frames.
 
 Built 2026-10-06 (user: "upload them unlisted... an optional flag, selected when we press the
 export button"; "have Ghost Notes prompt for a credentials file... and cache those credentials for
-every future login"). `src/youtube.gd` is generic. MOVED TO A COMPONENT 2026-10-07 (the user: "The
+every future login"). `src/export/youtube.gd` is generic. MOVED TO A COMPONENT 2026-10-07 (the user: "The
 placement of the YouTube upload button is not in a good spot"): "+" on any note's panel attaches
 YouTube, and `YouTubeCard` (block `youtube:`) holds the choice; every panel's `upload_meta` is the
 card's title, visibility and playlist over the mode's own part (`_upload_base`: here the episode's
@@ -1226,7 +1226,7 @@ strength accordingly". Then: the wind heard from where a window is, stronger on 
 from, and wind in a tunnel unlike wind in the open - "make the configuration features available to
 the agents, then simply draw their attention to it".
 
-- `Soundscape` (src/soundscape.gd): synthesized, no recordings - filtered noise, struck envelopes and
+- `Soundscape` (src/table/soundscape.gd): synthesized, no recordings - filtered noise, struck envelopes and
   rising sines (bubbles). Wind through open air, trees, grass, rigging, eaves, canvas or a tunnel; the
   sea on a shore, against a hull, at a dock; rain on leaves, a roof, canvas, a window, the ground,
   water; a fire; a stream; crickets or cicadas. Each with where it is (`from`) and how far off.

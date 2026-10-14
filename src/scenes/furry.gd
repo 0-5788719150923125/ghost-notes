@@ -20,7 +20,7 @@ extends GhostScene
 ## rebuild of the strand data. That's what lets 150+ long strands recompute their
 ## lean every frame cheaply: only the transform changes, never the segment list.
 
-const Flow2D := preload("res://src/flow.gd")
+const Flow2D := preload("res://src/motion/flow.gd")
 
 # COATS. The scene grew one pelt forever - 160-230 strands, all 0.34-0.62 long -
 # so every seed was the same animal in a different color. A coat is a whole habit

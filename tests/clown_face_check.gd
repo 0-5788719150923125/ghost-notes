@@ -74,7 +74,7 @@ func _initialize() -> void:
 		var rx_uv := FACE_R_SHORT * short / float(size.x)
 		var ry_uv := FACE_R_SHORT * FACE_TALL * short / float(size.y)
 		var img := _draw_face(size, rx_uv, ry_uv)
-		var ed: Node = load("res://src/mask_editor.gd").new()
+		var ed: Node = load("res://src/masking/mask_editor.gd").new()
 		ed.session = _session()
 		for i in 24:
 			ed._update_face_model(img)
@@ -188,7 +188,7 @@ func _check_steady() -> void:
 	var frames := [_draw_face(size, rx, ry, -0.006), _draw_face(size, rx, ry, 0.006)]
 	var moved := {}
 	for steady in [0.0, 0.9]:
-		var ed: Node = load("res://src/mask_editor.gd").new()
+		var ed: Node = load("res://src/masking/mask_editor.gd").new()
 		ed.session = _session()
 		ed._clown_steady = steady
 		ed._clown_firm = steady

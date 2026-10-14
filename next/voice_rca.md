@@ -1086,7 +1086,7 @@ stressed different words on different seeds, and no seed stressed them where
 English does. The walk was generating prosody when it should only have been
 colouring it.
 
-### `src/phrasing.gd` - sentence stress from the text
+### `src/voice/phrasing.gd` - sentence stress from the text
 
 A new typed stage between [Phonemes] and `plan()`. Nothing in it is seeded: the
 same text always gets the same phrasing, and the voice's temperament decides how
@@ -1480,7 +1480,7 @@ reach and absorption), wave vector and phase from the seed's strongest
 or cancel by geometry. `cos` has zero spatial mean, so `M` perturbs without
 biasing toward the centroid - the structural guard against the collapse failure
 mode. Migration is seven steps, each leaving a working game, starting with a
-standalone `src/voice_field.gd` plus `tests/field_check.gd` and no call
+standalone `src/voice/voice_field.gd` plus `tests/field_check.gd` and no call
 sites. Do NOT ship the later steps before the metric fix, or the field is a
 field over `hesit_bias`.
 
@@ -1515,7 +1515,7 @@ Three different rules, none of them chosen deliberately, all in the same game:
 So the answer to "are we adding or multiplying" was: both, in different places,
 by accident.
 
-### `src/voice_field.gd`
+### `src/voice/voice_field.gd`
 
 The rule is now named and selectable. `COMBINE` has four modes, and they are
 different instruments rather than four spellings of a sum:

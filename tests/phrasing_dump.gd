@@ -6,8 +6,8 @@ extends SceneTree
 ##
 ## Run: godot --headless --path . --script tests/phrasing_dump.gd -- "text"
 
-const Phonemes_ := preload("res://src/phonemes.gd")
-const Phrasing_ := preload("res://src/phrasing.gd")
+const Phonemes_ := preload("res://src/voice/phonemes.gd")
+const Phrasing_ := preload("res://src/voice/phrasing.gd")
 
 
 func _init() -> void:

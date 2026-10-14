@@ -29,8 +29,8 @@ extends SceneTree
 ##
 ## Run: godot --headless --path . --script tests/doc_source_check.gd
 
-const MiniYaml_ := preload("res://src/yaml.gd")
-const FrontMatter_ := preload("res://src/front_matter.gd")
+const MiniYaml_ := preload("res://src/data/yaml.gd")
+const FrontMatter_ := preload("res://src/data/front_matter.gd")
 
 const DIR := "user://doc_source_check"
 
@@ -473,9 +473,9 @@ func _body() -> void:
 	_ok(err.is_empty() and t.find("title:") >= 0 and t.find("title:") < t.find("ghost:")
 			and not t.contains("author:"),
 		"a new document's fields are missing, misplaced or empty keys: %s" % t)
-	_ok(BookLayout.field_of(t, "title") == "A Title: With Colon", "a title with a colon did not survive")
+	_ok(FrontMatter.field_of(t, "title") == "A Title: With Colon", "a title with a colon did not survive")
 	err = FrontMatter_.create(titled, {}, "x\n", AWKWARD, FrontMatter_.KEY, {"title": "Other"})
-	_ok(_read(titled).count("title:") == 1 and BookLayout.field_of(_read(titled), "title") == "Chapter One",
+	_ok(_read(titled).count("title:") == 1 and FrontMatter.field_of(_read(titled), "title") == "Chapter One",
 		"a template's own title was overwritten or doubled")
 
 	# REMOVAL: a null value takes the key out and nothing else; an absent key changes nothing.

@@ -1,6 +1,6 @@
 extends Node
 
-## showcase_check - THE README'S ANIMATION RECORDS ONLY WHEN IT WOULD CHANGE (src/showcase.gd).
+## showcase_check - THE README'S ANIMATION RECORDS ONLY WHEN IT WOULD CHANGE (src/app/showcase.gd).
 ##
 ##   tests/run_boot_probe.sh tests/showcase_check.gd 120
 ##
@@ -86,11 +86,11 @@ func _check_stamp(dir: String) -> void:
 
 func _check_loaded() -> void:
 	var files := Showcase.loaded_files()
-	_ok(files.has("res://src/showcase.gd") and files.has("res://src/storyboard.gd"),
+	_ok(files.has("res://src/app/showcase.gd") and files.has("res://src/stage/storyboard.gd"),
 		"the list holds the scripts this process has loaded (%d files)" % files.size())
 	for p in Showcase.ALWAYS:
 		_ok(files.has(p), "...and %s, which is read rather than loaded" % p)
-	_ok(not ResourceLoader.has_cached("res://src/bake_runner.gd") and not files.has("res://src/bake_runner.gd"),
+	_ok(not ResourceLoader.has_cached("res://src/audio/bake_runner.gd") and not files.has("res://src/audio/bake_runner.gd"),
 		"the control: a script never loaded here is not on it")
 
 

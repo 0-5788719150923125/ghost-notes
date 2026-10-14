@@ -8,8 +8,8 @@ extends SceneTree
 ##
 ## Run: godot --headless --path . --script tests/sampler_check.gd
 
-const Voice_ := preload("res://src/voice.gd")
-const Sampler_ := preload("res://src/voice_sampler.gd")
+const Voice_ := preload("res://src/voice/voice.gd")
+const Sampler_ := preload("res://src/voice/voice_sampler.gd")
 
 const TEXT := ("Once upon a time, the river spoke softly to the stones. "
 	+ "Did the water remember every voice it carried? "

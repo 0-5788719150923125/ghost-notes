@@ -53,7 +53,7 @@ extends SceneTree
 ## - THE THUMBNAIL'S MOMENT and ffmpeg's arguments for taking it.
 
 ## By path, not by class name: a new class is unknown to `--script` runs until the editor rescans.
-const YouTube := preload("res://src/youtube.gd")
+const YouTube := preload("res://src/export/youtube.gd")
 const ROOT := "user://youtube_check"
 const TAROT := "user://youtube_check_tarot"
 
@@ -380,7 +380,7 @@ func _episode_notes() -> bool:
 
 
 func _menu() -> bool:
-	var ex = load("res://src/exporter.gd").new()
+	var ex = load("res://src/export/exporter.gd").new()
 	ex._build_ui()            # not added to the tree: its _ready would clear a live render's override.cfg
 	var menu: PopupMenu = ex._quality_menu
 	ex.upload_provider = func(_take: String) -> Dictionary: return {"title": "An Episode"}
@@ -395,9 +395,9 @@ func _menu() -> bool:
 
 
 func _card() -> bool:
-	var ex = load("res://src/exporter.gd").new()
+	var ex = load("res://src/export/exporter.gd").new()
 	ex._build_ui()
-	var card = load("res://src/youtube_card.gd").new()
+	var card = load("res://src/export/youtube_card.gd").new()
 	card.exporter = ex
 	var cap: Dictionary = card.capture()
 	_ok(cap == {"upload": false, "title": "%title%: %episode%", "privacy": "private", "playlist": "", "playlist_title": ""},
@@ -474,7 +474,7 @@ func _card() -> bool:
 ## Built by hand, as panel_fit_check builds it: its _ready would start the voice host.
 func _panel_fields() -> bool:
 	# loaded here, not named: the panel's scripts need the autoloads, which are only up by now
-	var ed = load("res://src/cards_editor.gd").new()
+	var ed = load("res://src/cards/cards_editor.gd").new()
 	ed._build_panel()
 	_ok(ed._youtube == null and ed._yt_desc == null and ed.upload_meta("").is_empty(),
 		"a show with no YouTube card has no description or tags to edit, and uploads nothing")
@@ -597,7 +597,7 @@ func _panel_fields() -> bool:
 	_ok(not DirAccess.dir_exists_absolute(CardEpisode.open("panel-check", 22).dir), "nothing was written for the new episode")
 	_ok(ed.thumbnail_moment(9.0) == 3.6 and ed.thumbnail_moment(3.0) == 1.5 and ed.thumbnail_moment(0.5) == 1.5,
 		"the thumbnail is taken with the name up and the table still out of focus")
-	var args: PackedStringArray = load("res://src/exporter.gd").thumbnail_args("/v/a b.mp4", "/v/a b.thumbnail.jpg", 3.6)
+	var args: PackedStringArray = load("res://src/export/exporter.gd").thumbnail_args("/v/a b.mp4", "/v/a b.thumbnail.jpg", 3.6)
 	_ok(Array(args) == ["-y", "-nostdin", "-loglevel", "error", "-ss", "3.600", "-i", "/v/a b.mp4", "-frames:v", "1",
 		"-vf", "scale=1280:720:flags=lanczos", "-q:v", "2", "/v/a b.thumbnail.jpg"], "one frame, at the moment, 1280x720")
 	ed.free()
@@ -605,7 +605,7 @@ func _panel_fields() -> bool:
 
 
 func _tag_field() -> bool:
-	var f = load("res://src/tag_field.gd").new()
+	var f = load("res://src/ui/tag_field.gd").new()
 	var changes := [0]
 	f.changed.connect(func() -> void: changes[0] += 1)
 	var chips := func() -> Array:
@@ -663,7 +663,7 @@ func _tag_field() -> bool:
 ## A real show file: opened, seeded, its byline set on the card, written by the document's own writer, read
 ## back - and opened again by another panel, whose new episode is filled from it at once.
 func _doc_file() -> bool:
-	var ed = load("res://src/cards_editor.gd").new()
+	var ed = load("res://src/cards/cards_editor.gd").new()
 	ed._build_panel()
 	ed._attach("youtube")
 	var ep := CardEpisode.open("doc-check", 31)
@@ -694,7 +694,7 @@ func _doc_file() -> bool:
 	_ok(raw.ends_with("---\n" + body), "the body is untouched")
 	ed.free()
 	# ANOTHER PANEL OPENS THE FILE, AND MAKES A NEW EPISODE: filled from the file at once
-	var again = load("res://src/cards_editor.gd").new()
+	var again = load("res://src/cards/cards_editor.gd").new()
 	again._build_panel()
 	again._attach("youtube")
 	again._doc._on_picked(path)

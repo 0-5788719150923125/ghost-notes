@@ -48,9 +48,9 @@ Nothing is read off the screen: no title, and text before the first `url` is nei
 
 ## How it works
 
-- `src/tablet_script.gd` - one line walk produces both the page model and the voice's text,
+- `src/media/tablet_script.gd` - one line walk produces both the page model and the voice's text,
   so they cannot disagree. `speakable()` returns any chapter without `url:`/`search:` untouched.
-- `src/tablet_page.gd` - typesets a page into a column (portrait 1200 / landscape 1600 logical px).
+- `src/media/tablet_page.gd` - typesets a page into a column (portrait 1200 / landscape 1600 logical px).
 - `src/media/tablet.gd` - the 3D desk + slab, one screen SubViewport, and the schedule.
 - Hooked in `GenerativeEditor._split_speakers` (two small changes).
 - **The screen is a pure function of show time**: action groups are placed in the gap between the

@@ -973,7 +973,7 @@ steps run from sessions in ghost-notes, once its memory has been copied (6, belo
    own folder (checked). Then `godot --headless --path . --editor --quit` rebuilds the class cache,
    and its log must show no invalid UID, failed load or parse error.
 5. **Fix what pointed at praxis:**
-   - `src/assistant.gd` finds the checkout as `res://../..`, and tells a dispatched agent to read
+   - `src/app/assistant.gd` finds the checkout as `res://../..`, and tells a dispatched agent to read
      `axis/ghost/CLAUDE.md` and `axis/ghost/feedback/NNNN.{json,png}`. From ghost-notes that is
      `/home/crow`, every path dead, and every dispatched fix would run there. The checkout is
      `res://` now, and the paths lose `axis/ghost/`.
@@ -1199,7 +1199,7 @@ play, pause, seek and stop through the bar for a song and for a reading, finds t
 during a pause (inside a bookend too), and finds no hook left after a stop or after leaving; and
 speak_stop_check passes.
 
-**Status, 2026-10-06: done.** `src/transport.gd` (the Scrubber, grown: ▶/❚❚, ■, the time, the rail)
+**Status, 2026-10-06: done.** `src/show/transport.gd` (the Scrubber, grown: ▶/❚❚, ■, the time, the rail)
 is Chrome furniture and shows exactly when `Spectrum.timed()`. Spectrum gained a CONDUCTOR -
 `conduct(owner, hooks)` / `release_conductor(owner)`, held through a WeakRef so a freed owner drops
 out by itself - in place of the three bare scrub Callables, and transport verbs that call its hooks
@@ -1308,11 +1308,11 @@ templates, and main.gd's three session paths become one - so a command-line Mask
 Chrome. **Done when** each template makes the show its mode made (scene_mix_check's seed replay,
 unchanged), and "+" grays a component whose capability is missing, with the reason.
 
-**Status, 2026-10-06: done.** `src/capabilities.gd` is the table from [Platforms](#platforms-desktop-and-android),
+**Status, 2026-10-06: done.** `src/platform/capabilities.gd` is the table from [Platforms](#platforms-desktop-and-android),
 each entry answering `impossible()` and `not_ready()` with a reason, plus one entry the table did not
 have: `stage`, the show itself (a clock, a transport, a stage that plays), which a song, a voice and
 the voice lab feed - without it the gate found a phone's "+" offering a song and the voice lab, and
-the plan says a phone note is its text alone. `src/components.gd` holds the registry (label, blurb,
+the plan says a phone note is its text alone. `src/notes/components.gd` holds the registry (label, blurb,
 family - the families moved here from Card - needs, provides, requires, capabilities, mark groups,
 block, card) and the six templates; the home screen builds its rows from the templates, and
 `main.start_template(key, source)` is the one session path for every row and for `--synth`,
@@ -1339,14 +1339,14 @@ and opens another with nothing leaked; the drafts arrive as notes; and splash.gd
 are gone, their checks moved to the list's.
 
 **Status, 2026-10-06: done as the "done when" reads; the deeper half of the step is not built yet.**
-Ghost Notes opens on the notes list (`src/notes_list.gd`): New (the templates - a plain Note and the
+Ghost Notes opens on the notes list (`src/app/notes_list.gd`): New (the templates - a plain Note and the
 six modes, gated on their agents as the rows were), Open… and the path or URL field, and the notes
-newest first, from `NoteStore` (`src/note_store.gd`: the default folder `user://notes` plus the files
+newest first, from `NoteStore` (`src/notes/note_store.gd`: the default folder `user://notes` plus the files
 and folders the user adds). A note's template is read off its blocks (`Components.template_for`), and
 `main.open_note` starts it through the one session path - a reading's panel pointed at the note
 first, a song or a clip the note's own `song:`/`clip:` block. A new note carries only its marker
 block, because an empty block is not "the defaults" to every card: an empty `illustrations:` wipes
-the pictures' look. A note with nothing attached is `src/note_panel.gd`, its "+" offering what
+the pictures' look. A note with nothing attached is `src/app/note_panel.gd`, its "+" offering what
 decides what it becomes; attaching writes the block and reopens the note as that template. "‹ Notes"
 tops every panel. The drafts became notes once (the user's Synthesis draft will, the first time the
 list opens, and the two rift documents join the list), `--note <path>` opens one, `--no-splash` went,
@@ -1462,7 +1462,7 @@ APK on the phone opens the list, makes, edits and keeps a note across restarts a
 download, and a desktop gate runs the shell under `--handheld`.
 
 **Status, 2026-10-06: done on the desktop; the phone itself is the user's to try (no device was
-attached).** `src/phone_shell.gd`: on a phone, or `--handheld` / `GHOST_HANDHELD=1`, main builds the
+attached).** `src/app/phone_shell.gd`: on a phone, or `--handheld` / `GHOST_HANDHELD=1`, main builds the
 shell and nothing else - the notes in `user://notes/`, a full-screen editor written on a quiet period
 (the body through `FrontMatter.write_body`, the title as its line), Import… and Export… through the
 system's picker (`DisplayServer.file_dialog_show`, `content://` on Android), Android's back, a save on
@@ -1483,7 +1483,7 @@ The user tried the build and sent a round of revisions. **Status: done; gates be
   and Masking's Clip card, which takes a file or a link. New ends on "Existing note…", which brings a
   markdown file from anywhere into the list (markdown only).
 - **Every note can be deleted.** The list's × and every panel's "⋯" (`Chrome.note_menu`) ask first
-  (`src/delete_dialog.gd`); the note goes to the system's trash (`NoteStore.trash`, with a
+  (`src/app/delete_dialog.gd`); the note goes to the system's trash (`NoteStore.trash`, with a
   `discard` seam so a gate never fills the author's trash), or, for a file added by hand, can just
   leave the list. A note that is open is left first - its panel writes what it holds - then trashed.
   The phone shell's editor has Delete… too.
@@ -1495,7 +1495,7 @@ The user tried the build and sent a round of revisions. **Status: done; gates be
   song note opens loaded and stopped at its start. A reading's Stop hides the stage too.
 - **A song is a note's component, and Auto is a medium.** Song notes (Auto, Manual, and any note a
   song is attached to) are `NotePanel` now - the panel never hides - with the note's components as
-  cards: the Script, the Song (`src/song_card.gd`), the Picture, the Look, the Intro & outro, the
+  cards: the Script, the Song (`src/show/song_card.gd`), the Picture, the Look, the Intro & outro, the
   Storyboards. Without a Picture the song plays to an empty frame; "+" offers a Picture for it (and
   grays the Look and storyboards, "Needs a Picture"). The Picture's media are what a song can carry
   (`Medium.offered`: not the novel, notebook or tablet, which print a reading) with AUTO first

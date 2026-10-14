@@ -8,7 +8,7 @@ extends SceneTree
 ## time constant: when recognition confirms after the wrap, what schedule time it
 ## resolves to, any false fires, and refire behavior after a top rejoin.
 
-const Bake := preload("res://src/bake.gd")
+const Bake := preload("res://src/audio/bake.gd")
 const SONG := "/home/crow/Music/Beats Able/Beats Enable.wav"
 const BANDS := 64
 const FPS := 30

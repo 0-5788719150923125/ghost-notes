@@ -29,8 +29,8 @@ extends SceneTree
 ##       (optionally: -- "your own text here")
 ## Listen:  mpv /tmp/ghost_scratch/pure_say_<name>.wav
 
-const Voice_ := preload("res://src/voice.gd")
-const Phonemes := preload("res://src/phonemes.gd")
+const Voice_ := preload("res://src/voice/voice.gd")
+const Phonemes := preload("res://src/voice/phonemes.gd")
 
 const OUT_DIR := "/tmp/ghost_scratch"
 const VOICELESS_FRIC := ["S", "SH", "F", "TH"]

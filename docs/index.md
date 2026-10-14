@@ -51,6 +51,7 @@ core. The commitments:
 
 - [How the show is made](architecture.md) - from the audio to the screen or a video file: the signal path, composition, drawing, scheduling, rendering - and adding a scene.
 - [The environment](environment.md) - what Ghost Notes installs itself, and the few programs that stay the machine's.
+- [The structure](structure.md) - `src/` as a stack of folders: what each is, what it names, and what still points up.
 - [CLI flags](cli.md) - every command-line flag.
 - [Storyboards](../storyboards/README.md) - the data spec a note's storyboard is written in.
 
@@ -58,14 +59,14 @@ core. The commitments:
 
 - **[`project.godot`](../project.godot)** - Godot 4.7 project; autoloads `Settings`, `Boot`, `Spectrum`, `Director`, `Provisioner`; `scenes/main.tscn` is the entry scene.
 - **[`scenes/`](../scenes/)** - The Godot entry scene (`main.tscn`). Everything else is code-built.
-- **[`src/`](../src/)** - All GDScript. Per-script map in [docs/index.md](../docs/index.md); the subsystem groups are described there too.
+- **[`src/`](../src/)** - All GDScript, in one level of folders that are a stack: a script names its own folder and the ones below. [docs/structure.md](../docs/structure.md) is the stack; [docs/index.md](../docs/index.md) has every script.
 - **[`src/scenes/`](../src/scenes/)** - The visualizer scene catalog - one class per scene. See [docs/scenes.md](../docs/scenes.md).
 - **[`src/media/`](../src/media/)** - The media - what the show is carried on. See [docs/media.md](../docs/media.md).
 - **[`shaders/`](../shaders/)** - The GPU shaders: the Look, every Masking effect, the card table and a few scenes.
 - **[`storyboards/`](../storyboards/)** - Manual-mode scene scores (YAML; JSON accepted). [storyboards/README.md](../storyboards/README.md) is the data spec.
 - **[`data/`](../data/)** - Data the code reads - pronunciation (CMUdict, `english.yml`), the LibriTTS speaker table - each license beside its file.
 - **[`fonts/`](../fonts/)** - Faces the media draw with: the notebook's handwriting and the card table's lettering.
-- **[`hosts/`](../hosts/)** - The Python hosts ghost spawns, each in an environment of its own the Provisioner builds (`src/deps.gd`): `voice/` the neural voice, `face/` Masking's face and body pre-passes, `capture/` the tablet's page capture. Kept out of the exported .pck.
+- **[`hosts/`](../hosts/)** - The Python hosts ghost spawns, each in an environment of its own the Provisioner builds (`src/platform/deps.gd`): `voice/` the neural voice, `face/` Masking's face and body pre-passes, `capture/` the tablet's page capture. Kept out of the exported .pck.
 - **[`scripts/`](../scripts/)** - Build and check scripts: `scripts/check.sh` runs every gate (`--gpu` adds the ones that need a real renderer), `scripts/build.sh` exports a target into `dist/`.
 - **[`tests/`](../tests/)** - The gates (`*_check.gd`), probes (`*_probe.gd`) and their runners; `scripts/check.sh` runs them all.
 - **[`docs/`](../docs/)** - Generated documentation. Regenerate with `python docs.py`; do not edit by hand.
@@ -78,246 +79,288 @@ core. The commitments:
 
 ## Script map
 
-### Audio & analysis
+One folder under `src/` a group, bottom first: a script names scripts in its own folder and in the folders above its own in this list. [structure.md](structure.md) is the same stack with what each folder names and what still points up.
+
+### `platform/` - The machine
+
+The machine under Ghost Notes: the one owner of its settings file, the earliest hook of a launch, every child program in one place, what ghost installs for itself and keeps current, the app's own update, and what this platform can do.
+
+- [`app_update.gd`](../src/platform/app_update.gd) **AppUpdate** - Portable desktop updater. The release executable is copied beside the running one while it can still be written, then that same downloaded executable starts headlessly on exit to swap the files after the old process closes. No installer or system Python is needed.
+- [`boot.gd`](../src/platform/boot.gd) **boot** - Boot - the earliest hook (first autoload), for things that must happen before the window is ever drawn into. In export-render mode (--export) it keeps the render window out of the way as early as GDScript can - off-screen, no focus - so it barely flickers into view before the render takes over. ...
+- [`bundled_hosts.gd`](../src/platform/bundled_hosts.gd) **BundledHosts** - External Python processes cannot read the exported res:// pack. The build includes one archive of hosts/ in that pack; on first use, copy it to a versioned user:// directory. The editor keeps using the source tree directly.
+- [`capabilities.gd`](../src/platform/capabilities.gd) **Capabilities** - what this platform can do, and what is ready now (next/notes.md, "Platforms: desktop and Android"). One table, two questions per entry, each answered with a reason:
+- [`deps.gd`](../src/platform/deps.gd) **Deps** - every external program and environment ghost uses, in one place, with one promise: RESOLUTION AND REPORTING ARE THE SAME CODE.
+- [`provision.gd`](../src/platform/provision.gd) **Provision** - what ghost installs for itself, and the one door every feature asks through.
+- [`provisioner.gd`](../src/platform/provisioner.gd) **provisioner** - Provisioner (autoload) - installs, updates and reports on everything ghost fetches for itself.
+- [`settings.gd`](../src/platform/settings.gd) **settings** - Settings - the one owner of `user://ghost.cfg` (autoload).
+- [`subprocess.gd`](../src/platform/subprocess.gd) **Subprocess** - every external program ghost starts, in one place, with one promise: A CHILD NEVER OUTLIVES THE APP THAT STARTED IT.
+
+### `data/` - Plain data
+
+Plain data in and out: the YAML-subset parser, a document's frontmatter (re-read, one key edited, verified), pure edits of nested data, what an agent is told (`rules/`), and a script read into cues, hesitations and pictures.
+
+- [`data_path.gd`](../src/data/data_path.gd) **DataPath** - edits of nested data (Dictionaries and Arrays) as PURE FUNCTIONS, addressed by a path: the keys and indexes from the root down, `["sequence", 2, "track", "spans", 0, "from"]`.
+- [`front_matter.gd`](../src/data/front_matter.gd) **FrontMatter** - YAML frontmatter on a Markdown document, read and (carefully) written.
+- [`manuscript.gd`](../src/data/manuscript.gd) **Manuscript** - what a chapter file SAYS about itself, beyond the words to be read.
+- [`rules.gd`](../src/data/rules.gd) **Rules** - what the agents are told, kept as text a person reads: `rules/<group>/<role>.yaml` (the user, 2026-10-08: "extract agent instructions into a more interpretable format, like yaml ... as a human - it would be easier for me to read and grok the meaning of all the various things we're asking those ...
+- [`yaml.gd`](../src/data/yaml.gd) **MiniYaml** - an in-house parser for the YAML *subset* storyboards are written in.
+
+### `audio/` - Audio & analysis
 
 From a song file to the typed per-frame `AudioFeatures` every scene consumes - live analyzer, offline bake, and the content descriptors that make sessions deterministic per song.
 
-- [`spectrum.gd`](../src/spectrum.gd) **spectrum** - Spectrum - the audio front end (autoload).
-- [`audio_features.gd`](../src/audio_features.gd) **AudioFeatures** - One frame of audio, typed.
-- [`bake.gd`](../src/bake.gd) **SpectrumBake** - offline analysis of a song into a spectrum timeline.
-- [`bake_runner.gd`](../src/bake_runner.gd) **bake_runner** - bake_runner - a headless one-shot that analyzes a song and writes its spectrum cache, then quits. The exporter launches this (with --headless, so NO window appears) before the video render, so the render can just load the cache and start drawing immediately instead of freezing while it bakes. Run ...
-- [`harmonic_signature.gd`](../src/harmonic_signature.gd) **HarmonicSignature** - a perceptual, loudness-invariant descriptor of the RECENT audio, plus a cosine-LSH (SimHash) seed derived from it. The point: seed the show from the *harmonic content present right now*, not from the file - so the same music reconstructs the same visuals even when the audio is re-encoded (lossy), ...
-- [`echo.gd`](../src/echo.gd) **Echo** - content re-localization: "have I heard this before, and where?"
+- [`audio_features.gd`](../src/audio/audio_features.gd) **AudioFeatures** - One frame of audio, typed.
+- [`bake.gd`](../src/audio/bake.gd) **SpectrumBake** - offline analysis of a song into a spectrum timeline.
+- [`bake_runner.gd`](../src/audio/bake_runner.gd) **bake_runner** - bake_runner - a headless one-shot that analyzes a song and writes its spectrum cache, then quits. The exporter launches this (with --headless, so NO window appears) before the video render, so the render can just load the cache and start drawing immediately instead of freezing while it bakes. Run ...
+- [`echo.gd`](../src/audio/echo.gd) **Echo** - content re-localization: "have I heard this before, and where?"
+- [`harmonic_signature.gd`](../src/audio/harmonic_signature.gd) **HarmonicSignature** - a perceptual, loudness-invariant descriptor of the RECENT audio, plus a cosine-LSH (SimHash) seed derived from it. The point: seed the show from the *harmonic content present right now*, not from the file - so the same music reconstructs the same visuals even when the audio is re-encoded (lossy), ...
+- [`sound_bed.gd`](../src/audio/sound_bed.gd) **SoundBed** - a sound laid under a voice: what a reading asks of whatever makes one.
+- [`spectrum.gd`](../src/audio/spectrum.gd) **spectrum** - Spectrum - the audio front end (autoload).
 
-### Direction & session
+### `render/` - Drawing
 
-The lifecycle around the scenes: boot, the notes list and a note's own panel, the cards every panel builds a note's components from, and the Director's scheduling/transitions.
+How things get drawn and how a heavy scene stays interactive: thousands of shapes in one draw call, geometry built off the main thread, the lens, planes and meshes of the software 3D path, and color.
 
-- [`main.gd`](../src/main.gd) **main** - ghost entry point.
-- [`boot.gd`](../src/boot.gd) **boot** - Boot - the earliest hook (first autoload), for things that must happen before the window is ever drawn into. In export-render mode (--export) it keeps the render window out of the way as early as GDScript can - off-screen, no focus - so it barely flickers into view before the render takes over. ...
-- [`subprocess.gd`](../src/subprocess.gd) **Subprocess** - every external program ghost starts, in one place, with one promise: A CHILD NEVER OUTLIVES THE APP THAT STARTED IT.
-- [`deps.gd`](../src/deps.gd) **Deps** - every external program and environment ghost uses, in one place, with one promise: RESOLUTION AND REPORTING ARE THE SAME CODE.
-- [`deps_panel.gd`](../src/deps_panel.gd) **DepsPanel** - the environment readout above the bottom-right row, behind its ⚙ (Chrome).
-- [`app_update.gd`](../src/app_update.gd) **AppUpdate** - Portable desktop updater. The release executable is copied beside the running one while it can still be written, then that same downloaded executable starts headlessly on exit to swap the files after the old process closes. No installer or system Python is needed.
-- [`provision.gd`](../src/provision.gd) **Provision** - what ghost installs for itself, and the one door every feature asks through.
-- [`provisioner.gd`](../src/provisioner.gd) **provisioner** - Provisioner (autoload) - installs, updates and reports on everything ghost fetches for itself.
-- [`bundled_hosts.gd`](../src/bundled_hosts.gd) **BundledHosts** - External Python processes cannot read the exported res:// pack. The build includes one archive of hosts/ in that pack; on first use, copy it to a versioned user:// directory. The editor keeps using the source tree directly.
-- [`provision_badge.gd`](../src/provision_badge.gd) **provision_badge** - ProvisionBadge - a small notice at the top of the frame while ghost is installing or updating its own dependencies, in every mode. Chrome furniture, because an install can start from anywhere: the voice's environment from the Generative panel, FFmpeg from a clip opened on a first run, an update at ...
-- [`chrome.gd`](../src/chrome.gd) **Chrome** - the shared session furniture every mode of ghost carries.
-- [`capabilities.gd`](../src/capabilities.gd) **Capabilities** - what this platform can do, and what is ready now (next/notes.md, "Platforms: desktop and Android"). One table, two questions per entry, each answered with a reason:
-- [`components.gd`](../src/components.gd) **Components** - the parts a note is made of (next/notes.md, "A component"). One registry shaped like `Medium`'s: each entry says what the component is, what it needs and what it gives, the components it brings with it, the room it takes in a note, what it asks of the platform (`Capabilities`), which groups of the ...
-- [`side_panel.gd`](../src/side_panel.gd) **SidePanel** - a mode's control panel, which CANNOT outgrow the window.
-- [`card.gd`](../src/card.gd) **Card** - one component's settings on a side panel: a titled box that folds, bordered in its FAMILY's color (next/notes.md, "A card").
-- [`card_row.gd`](../src/card_row.gd) **CardRow** - the chips under a panel's title, one per `Card` in its color (next/notes.md, "The component row"). A click opens or closes that card; Ctrl-click opens it alone and folds the rest, as Blender's panel headers do. A chip shows ● while its card is open and ○ while it is folded, so the row also answers ...
-- [`look_card.gd`](../src/look_card.gd) **LookCard** - the Look: a post-process over the whole picture, one row per filter in `Filters.REGISTRY` (next/notes.md step 5: one card per section, in every panel that has it - the Generative panel built it and the Cards panel borrowed it by inheriting the whole panel).
-- [`bookends_card.gd`](../src/bookends_card.gd) **BookendsCard** - the intro and the outro: seconds held before the first word and after the last (next/notes.md step 5: one card per section, in every panel that has it - the Cards panel used to declare both sliders a second time). Its block in a document is `bookends:`.
-- [`picture_card.gd`](../src/picture_card.gd) **PictureCard** - the picture a reading is shown in: the MEDIUM (what the show is carried on), the FILMS a comic cuts to, the book's PICTURES (`IllustrationPanel`), and the Director's dials - scene hold, flourishes, camera, handwriting (next/notes.md step 5: one card per section). Its block in a document is ...
-- [`song_card.gd`](../src/song_card.gd) **SongCard** - the note's song (2026-10-06): which file it is, and a way to choose one. Importing a song is a component of a note, not a button on the notes list - "if we want to import an audio file or a video file - then we should add those relevant components/attachments to the note".
-- [`note_cards.gd`](../src/note_cards.gd) **NoteCards** - a note's component cards, built ONE way on whichever panel shows the note, and the two edits that change what a note is made of: attach and detach.
-- [`console.gd`](../src/console.gd) **ConsoleView** - The in-app console - a live tail of Godot's own log file. print(), push_warning(), push_error() and engine SCRIPT ERRORs all land in user://logs/godot*.log via the engine's default file logging, but anyone launching ghost as a compiled app or from the Godot launcher never sees that stream - it used ...
-- [`notes_list.gd`](../src/notes_list.gd) **NotesList** - where Ghost Notes opens (next/notes.md step 8, "No home screen"): a notes app opens on its notes. The left panel lists them - the default folder and every folder or file the user added (`NoteStore`), newest first - under the name and the tagline, with New, and "Existing note…" for a markdown file ...
-- [`delete_dialog.gd`](../src/delete_dialog.gd) **DeleteDialog** - "Delete this note?", asked before a note goes (2026-10-06, the user: "add a delete option to every note, and probably an x to each note on the home screen. If we click the x, prompt for confirmation to delete the note"). Asked from the notes list's × and from every note's own "⋯" (see [method ...
-- [`phone_shell.gd`](../src/phone_shell.gd) **PhoneShell** - Ghost Notes on a phone (next/notes.md step 11, "Platforms: desktop and Android"): a notes app and nothing more. A list of the notes in `user://notes/` (`NoteStore`), and the editor - full screen, in portrait - with no stage, no transport, no Chrome furniture and no agent: on a phone a note has one ...
-- [`note_panel.gd`](../src/note_panel.gd) **NotePanel** - a note's own panel: where every new note opens, and what runs every note whose components need no editor of their own (`Components.workspace_of`) - a note that is its words alone, and a note with a song.
-- [`note_store.gd`](../src/note_store.gd) **NoteStore** - where notes live (next/notes.md step 8, "Where do notes live?"): a DEFAULT FOLDER, and every other folder or file the user points Ghost Notes at - "it's not realistic to prevent people from sourcing their own content from other projects, git repos, etc." One small interface (list, create, add, and ...
-- [`director.gd`](../src/director.gd) **director** - 
-- [`settings.gd`](../src/settings.gd) **settings** - Settings - the one owner of `user://ghost.cfg` (autoload).
-- [`medium.gd`](../src/medium.gd) **Medium** - what the show is carried ON. The presentation axis.
-- [`filters.gd`](../src/filters.gd) **Filters** - the LOOK the whole picture is put through, after the scenes have drawn.
-- [`comic_page.gd`](../src/comic_page.gd) **ComicPage** - one seeded page of comic panels. The layout half of `ComicMedium`.
-- [`comic_spread.gd`](../src/comic_spread.gd) **ComicSpread** - the two facing pages of an open comic book. What `ComicMedium` flies over.
-- [`book_layout.gd`](../src/book_layout.gd) **BookLayout** - a chapter typeset into the pages of a printed novel, for `BookMedium`.
-- [`notebook_layout.gd`](../src/notebook_layout.gd) **NotebookLayout** - a chapter written by hand into a ruled notebook, for `NotebookMedium`.
-- [`tablet_page.gd`](../src/tablet_page.gd) **TabletPage** - one web page of a `TabletScript`, set into a column of a given width.
-- [`page_capture.gd`](../src/page_capture.gd) **PageCapture** - a REAL web page, captured as one tall picture, for the tablet medium.
-- [`films.gd`](../src/films.gd) **Films** - the library of imported video clips a comic panel can be filled with.
-- [`illustrations.gd`](../src/illustrations.gd) **Illustrations** - the library of generated pictures a book prints.
-- [`image_gen.gd`](../src/image_gen.gd) **ImageGen** - who paints the pictures. The backend axis of `Illustrations`.
-- [`illustration_panel.gd`](../src/illustration_panel.gd) **IllustrationPanel** - the Generative panel's controls for a book's pictures (`Illustrations`).
-- [`volume_knob.gd`](../src/volume_knob.gd) **VolumeKnob** - A pull-rope volume control. Click-and-HOLD the knob, then drag AWAY from it: a rope stretches from the knob (the anchor) to your cursor, and the farther you pull the louder it gets - but the ceiling is ASYMPTOTIC (v = 1 - e^(-d/D0)), so "max" is approached, never reached. Let go and the level is ...
-- [`transport.gd`](../src/transport.gd) **Transport** - play, pause, stop and the scrub rail along the bottom of the stage: ONE for every mode (next/notes.md, "The transport"). It grew out of the Scrubber, Chrome's seek bar.
-- [`tag_field.gd`](../src/tag_field.gd) **tag_field** - TagField - tags as chips, the way YouTube Studio shows them: every tag visible, wrapping onto as many lines as it needs, each with an × that removes it, and a box at the end where a comma (or Enter, or leaving the box, or pasting "a, b, c") turns what was typed into chips. Backspace in the empty ...
+- [`frame_forge.gd`](../src/render/frame_forge.gd) **FrameForge** - scene geometry built OFF the main thread: the foundational fix for UI lag, not another mitigation.
+- [`lens3d.gd`](../src/render/lens3d.gd) **Lens3D** - a positionable perspective camera for the unified 3D path.
+- [`mesh3d.gd`](../src/render/mesh3d.gd) **Mesh3D** - a tiny software 3D mesh for the 2D canvas.
+- [`palette.gd`](../src/render/palette.gd) **Palette** - a color ramp sampled by a scalar (0..1). The color half of the texture story: a `Field` gives a scalar (height, mottle, development); a Palette turns it into color. Themed presets map terrain elevation to believable bands (water -> shore -> green -> rock -> snow), but a Palette colors anything ...
+- [`plane3d.gd`](../src/render/plane3d.gd) **Plane3D** - a flat quad genuinely placed in 3D space, projected through a `Lens3D`.
+- [`scheme.gd`](../src/render/scheme.gd) **Scheme** - a scene's color identity, drawn from a named mood.
+- [`tri_batch.gd`](../src/render/tri_batch.gd) **TriBatch** - one canvas draw call for thousands of shapes.
 
-### Scene substrate
+### `motion/` - Motion & simulation
 
-What every scene is built on: the `GhostScene` base, the camera, framing pools, seeded motion, sparse response gating, lighting, and the organic primitives (curves, flow fields, growth).
+How things move: seeded oscillators, sparse response gating, the nonlinear kit and flow fields, the forces particles compose by key (`Primitives`), the fixed-rate tick, and running systems whose STATE is the picture - a granular automaton, a flock with a spatial hash, a plate's standing waves, a water surface.
 
-- [`ghost_scene.gd`](../src/ghost_scene.gd) **GhostScene** - one visualizer.
-- [`scene_view.gd`](../src/scene_view.gd) **SceneView** - the camera every scene draws through.
-- [`shots.gd`](../src/shots.gd) **Shots** - the registry of camera framings (composition + slow moves).
-- [`mod_bank.gd`](../src/mod_bank.gd) **ModBank** - the organic-motion engine.
-- [`activation.gd`](../src/activation.gd) **Activation** - per-element response gating with EMA decay (who moves, and how much).
-- [`lighting.gd`](../src/lighting.gd) **Lighting** - audio-reactive color, not scale.
-- [`nonlinear.gd`](../src/nonlinear.gd) **Nonlinear** - the shared library of activation / response curves.
-- [`flow.gd`](../src/flow.gd) **Flow2D** - a divergence-free curl-noise vector field.
-- [`filament.gd`](../src/filament.gd) **Filament** - an organic growing path: root, tendril, lightning, or thread.
-- [`swarm.gd`](../src/swarm.gd) **Swarm** - a scalar field over a grid that evolves by *local* rules.
-- [`sim_clock.gd`](../src/sim_clock.gd) **SimClock** - a fixed-rate tick accumulator for scenes that run a SIMULATION.
+- [`activation.gd`](../src/motion/activation.gd) **Activation** - per-element response gating with EMA decay (who moves, and how much).
+- [`boids.gd`](../src/motion/boids.gd) **Boids** - a flock that decides together, over packed arrays and a uniform grid hash.
+- [`flow.gd`](../src/motion/flow.gd) **Flow2D** - a divergence-free curl-noise vector field.
+- [`grains.gd`](../src/motion/grains.gd) **Grains** - a cellular automaton of MATTER: one material per cell, moved by local rules.
+- [`mod_bank.gd`](../src/motion/mod_bank.gd) **ModBank** - the organic-motion engine.
+- [`nonlinear.gd`](../src/motion/nonlinear.gd) **Nonlinear** - the shared library of activation / response curves.
+- [`particle.gd`](../src/motion/particle.gd) **Particle** - one transformable element a `ParticleSystem` moves.
+- [`particle_system.gd`](../src/motion/particle_system.gd) **ParticleSystem** - a bag of `Particle`s and a composed list of `Primitives` forces. The shared substrate that lets scenes be assembled from physics instead of hand-rolling it.
+- [`plate_field.gd`](../src/motion/plate_field.gd) **PlateField** - the standing-wave field of a driven plate, baked onto a grid.
+- [`primitives.gd`](../src/motion/primitives.gd) **Primitives** - the registry of reusable physical forces.
+- [`sim_clock.gd`](../src/motion/sim_clock.gd) **SimClock** - a fixed-rate tick accumulator for scenes that run a SIMULATION.
+- [`swarm.gd`](../src/motion/swarm.gd) **Swarm** - a scalar field over a grid that evolves by *local* rules.
+- [`wave_field.gd`](../src/motion/wave_field.gd) **WaveField** - an analytic water surface: a sum of Gerstner components carrying its own closed-form gradient.
 
-### Generative form
+### `geometry/` - Generative form
 
-Self-contained generators a scene composes rather than hand-models - each one samples a space of shapes from a seed and hands back plain geometry. The `cattle, not pets` discipline, made into parts.
+Self-contained generators a scene composes rather than hand-models - each one samples a space of shapes from a seed and hands back plain geometry - with the procedural fields, terrain heightfields and shadowing of the 3D world, and the composed bodies. The `cattle, not pets` discipline, made into parts.
 
-- [`crystal.gd`](../src/crystal.gd) **Crystal** - a BANK of snow crystals, generated once from sampled morphology.
-- [`glyphs.gd`](../src/glyphs.gd) **GlyphSet** - a seeded alphabet of invented characters, baked as pen-ready ink.
-- [`wallpaper_group.gd`](../src/wallpaper_group.gd) **WallpaperGroup** - the seventeen plane symmetry groups, as a table plus an enumerator.
-- [`branch3d.gd`](../src/branch3d.gd) **Branch3D** - a bracketed L-system that emits segments in THREE dimensions, plus the tapered-tube loft that turns them into drawable faces.
-- [`contour.gd`](../src/contour.gd) **Contour** - isolines out of a sampled field, and the vocabulary a technical sheet is annotated with.
+- [`branch3d.gd`](../src/geometry/branch3d.gd) **Branch3D** - a bracketed L-system that emits segments in THREE dimensions, plus the tapered-tube loft that turns them into drawable faces.
+- [`contour.gd`](../src/geometry/contour.gd) **Contour** - isolines out of a sampled field, and the vocabulary a technical sheet is annotated with.
+- [`crystal.gd`](../src/geometry/crystal.gd) **Crystal** - a BANK of snow crystals, generated once from sampled morphology.
+- [`eye_body.gd`](../src/geometry/eye_body.gd) **EyeBody** - a real-3D human eyeball, drawn through a `Lens3D` with a real light.
+- [`field.gd`](../src/geometry/field.gd) **Field** - a composable procedural scalar field; the universal "texture / modulation".
+- [`filament.gd`](../src/geometry/filament.gd) **Filament** - an organic growing path: root, tendril, lightning, or thread.
+- [`geometry.gd`](../src/geometry/geometry.gd) **Geo** - small reusable polygon helpers (area, centroid, convex split, fracture). Shared geometry, not a scene's private code - the fracture that shatters glass can shatter anything.
+- [`glyphs.gd`](../src/geometry/glyphs.gd) **GlyphSet** - a seeded alphabet of invented characters, baked as pen-ready ink.
+- [`prism_body.gd`](../src/geometry/prism_body.gd) **PrismBody** - the browser Prism, ported (praxis web, dark mode).
+- [`shadow_field.gd`](../src/geometry/shadow_field.gd) **ShadowField** - A cheap CPU SHADOW MAP in light space - the honest version of "cast shadows" for the canvas 3D scenes. Occluders (buildings, spires) are rasterized into a grid on the plane perpendicular to the light; each cell keeps the occluder surface CLOSEST to the light. A surface point is then in shadow if ...
+- [`terrain.gd`](../src/geometry/terrain.gd) **Terrain** - a heightfield assembled from `Field`s and drawn through a `Lens3D`.
+- [`wallpaper_group.gd`](../src/geometry/wallpaper_group.gd) **WallpaperGroup** - the seventeen plane symmetry groups, as a table plus an enumerator.
 
-### Simulation substrates
+### `scene_kit/` - Scene substrate
 
-Running physical systems whose STATE is the picture, rather than drawings of one: a granular automaton, a flock with a spatial hash, a plate's standing waves, and a water surface.
+What every scene is built on: the `GhostScene` base and its 3D sibling, the camera, framing pools, lighting, the visual layers scenes compose by key (`Layer`), and `ShowFeed` - what the show hands the parts it mounts.
 
-- [`grains.gd`](../src/grains.gd) **Grains** - a cellular automaton of MATTER: one material per cell, moved by local rules.
-- [`boids.gd`](../src/boids.gd) **Boids** - a flock that decides together, over packed arrays and a uniform grid hash.
-- [`plate_field.gd`](../src/plate_field.gd) **PlateField** - the standing-wave field of a driven plate, baked onto a grid.
-- [`wave_field.gd`](../src/wave_field.gd) **WaveField** - an analytic water surface: a sum of Gerstner components carrying its own closed-form gradient.
+- [`ghost_scene.gd`](../src/scene_kit/ghost_scene.gd) **GhostScene** - one visualizer.
+- [`layer.gd`](../src/scene_kit/layer.gd) **Layer** - the registry of reusable visual components.
+- [`lighting.gd`](../src/scene_kit/lighting.gd) **Lighting** - audio-reactive color, not scale.
+- [`scene3d.gd`](../src/scene_kit/scene3d.gd) **Scene3D** - the unified 3D rendering path (the convergence target).
+- [`scene_view.gd`](../src/scene_kit/scene_view.gd) **SceneView** - the camera every scene draws through.
+- [`shots.gd`](../src/scene_kit/shots.gd) **Shots** - the registry of camera framings (composition + slow moves).
+- [`show_feed.gd`](../src/scene_kit/show_feed.gd) **ShowFeed** - what the show hands the parts it mounts.
 
-### Rendering & performance
+### `stage/` - Storyboards & stage
 
-How a heavy scene stays interactive: thousands of shapes in one draw call, and the geometry for them built off the main thread.
+A show written down, as data: the storyboard's spec and its field tables, and the Cast/Actions/Track stack that renders a described scene. See [storyboards/README.md](../storyboards/README.md) for the data spec and [stage.md](stage.md) for the fields and the actor/verb registries.
 
-- [`tri_batch.gd`](../src/tri_batch.gd) **TriBatch** - one canvas draw call for thousands of shapes.
-- [`frame_forge.gd`](../src/frame_forge.gd) **FrameForge** - scene geometry built OFF the main thread: the foundational fix for UI lag, not another mitigation.
+- [`actions.gd`](../src/stage/actions.gd) **Actions** - the verb registry for data-driven scenes (see scenes/stage.gd).
+- [`cast.gd`](../src/stage/cast.gd) **Cast** - the actor registry for data-driven scenes (see scenes/stage.gd).
+- [`storyboard.gd`](../src/stage/storyboard.gd) **Storyboard** - a show's scenes written down: the data spec, and its one owner.
+- [`track.gd`](../src/stage/track.gd) **Track** - the timeline runner for data-driven scenes (see scenes/stage.gd).
 
-### Composition registries
+### `scenes/` - Scenes
 
-The two shared registries scenes compose by key - appearance (`Layer`) and physics (`Primitives`) - plus the particle substrate the forces act on.
+The catalog, one scene a file. Cataloged in [scenes.md](scenes.md), each from its own doc comment.
 
-- [`layer.gd`](../src/layer.gd) **Layer** - the registry of reusable visual components.
-- [`primitives.gd`](../src/primitives.gd) **Primitives** - the registry of reusable physical forces.
-- [`particle.gd`](../src/particle.gd) **Particle** - one transformable element a `ParticleSystem` moves.
-- [`particle_system.gd`](../src/particle_system.gd) **ParticleSystem** - a bag of `Particle`s and a composed list of `Primitives` forces. The shared substrate that lets scenes be assembled from physics instead of hand-rolling it.
+### `agents/` - Agents
 
-### 3D path
+Every piece of writing and painting ghost asks an AI for: who writes (TextGen) and who paints (ImageGen), one queue for both (AgentJobs), the tools ghost serves an agent while it works (AgentTools), which Amazon Bedrock models an AWS account can call (BedrockCatalog), and how the Assistant's command-line tools are run.
 
-The unified software-3D renderer: a positionable perspective camera, mesh/plane primitives, procedural fields, palettes, terrain heightfields, and shadowing.
+- [`agent_jobs.gd`](../src/agents/agent_jobs.gd) **AgentJobs** - every piece of writing and painting ghost asks an AI for, in one queue.
+- [`agent_tools.gd`](../src/agents/agent_tools.gd) **AgentTools** - the tools an agent can call while it works, served by ghost itself.
+- [`assistant_backends.gd`](../src/agents/assistant_backends.gd) **AssistantBackends** - the CLIs `Assistant` can dispatch a feedback note to, and everything that differs between them: how a run is launched, how it is resumed, and how its event stream reads.
+- [`bedrock_catalog.gd`](../src/agents/bedrock_catalog.gd) **BedrockCatalog** - which Amazon Bedrock models this AWS account can call, and how to reach each. Shared by the Bedrock writer (`TextGen`'s `bedrock`) and painter (`ImageGen`'s `bedrock`); it only ever makes the free listing calls, never a model call.
+- [`image_gen.gd`](../src/agents/image_gen.gd) **ImageGen** - who paints the pictures. The backend axis of `Illustrations`.
+- [`text_gen.gd`](../src/agents/text_gen.gd) **TextGen** - who writes the words. The text counterpart of `ImageGen`.
 
-- [`lens3d.gd`](../src/lens3d.gd) **Lens3D** - a positionable perspective camera for the unified 3D path.
-- [`plane3d.gd`](../src/plane3d.gd) **Plane3D** - a flat quad genuinely placed in 3D space, projected through a `Lens3D`.
-- [`scene3d.gd`](../src/scene3d.gd) **Scene3D** - the unified 3D rendering path (the convergence target).
-- [`mesh3d.gd`](../src/mesh3d.gd) **Mesh3D** - a tiny software 3D mesh for the 2D canvas.
-- [`geometry.gd`](../src/geometry.gd) **Geo** - small reusable polygon helpers (area, centroid, convex split, fracture). Shared geometry, not a scene's private code - the fracture that shatters glass can shatter anything.
-- [`field.gd`](../src/field.gd) **Field** - a composable procedural scalar field; the universal "texture / modulation".
-- [`scheme.gd`](../src/scheme.gd) **Scheme** - a scene's color identity, drawn from a named mood.
-- [`palette.gd`](../src/palette.gd) **Palette** - a color ramp sampled by a scalar (0..1). The color half of the texture story: a `Field` gives a scalar (height, mottle, development); a Palette turns it into color. Themed presets map terrain elevation to believable bands (water -> shore -> green -> rock -> snow), but a Palette colors anything ...
-- [`terrain.gd`](../src/terrain.gd) **Terrain** - a heightfield assembled from `Field`s and drawn through a `Lens3D`.
-- [`shadow_field.gd`](../src/shadow_field.gd) **ShadowField** - A cheap CPU SHADOW MAP in light space - the honest version of "cast shadows" for the canvas 3D scenes. Occluders (buildings, spires) are rasterized into a grid on the plane perpendicular to the light; each cell keeps the occluder surface CLOSEST to the light. A surface point is then in shadow if ...
+### `notes/` - Notes
 
-### Bodies
+The note as a file: where notes live, a document kept in step with its file, the registry of what a note can carry (`Components`), and the registry of the marks a script may carry (`ScriptMarks`).
 
-Reusable composed characters - sampled stacks of primitives, not bespoke meshes.
+- [`components.gd`](../src/notes/components.gd) **Components** - the parts a note is made of (next/notes.md, "A component"). One registry shaped like `Medium`'s: each entry says what the component is, what it needs and what it gives, the components it brings with it, the room it takes in a note, what it asks of the platform (`Capabilities`), which groups of the ...
+- [`doc_source.gd`](../src/notes/doc_source.gd) **DocSource** - where a reading's words come from: the editor alone, or the file they are saved in.
+- [`note_store.gd`](../src/notes/note_store.gd) **NoteStore** - where notes live (next/notes.md step 8, "Where do notes live?"): a DEFAULT FOLDER, and every other folder or file the user points Ghost Notes at - "it's not realistic to prevent people from sourcing their own content from other projects, git repos, etc." One small interface (list, create, add, and ...
+- [`save_mark.gd`](../src/notes/save_mark.gd) **SaveMark** - the small mark beside a script's file name that says where its words stand with the file: turning while a change made here waits for its quiet period, a tick that flashes the moment the change is in the file, an amber mark when a write was refused, a hollow ring when the script is saved nowhere.
+- [`script_marks.gd`](../src/notes/script_marks.gd) **ScriptMarks** - every authoring mark a script may carry, registered with what it does.
 
-- [`eye_body.gd`](../src/eye_body.gd) **EyeBody** - a real-3D human eyeball, drawn through a `Lens3D` with a real light.
-- [`prism_body.gd`](../src/prism_body.gd) **PrismBody** - the browser Prism, ported (praxis web, dark mode).
+### `ui/` - The panel kit
 
-### Synthesis (voice)
+What every note's panel is built from, and what it asks of the window it is in: a side panel that cannot outgrow the window and its "+", a component's folding card in its family's color and the chips over the cards, the cards a note's components bring (built from the registry's rows, attached and detached), the Script card every note has (its editor window and highlighter), rows drawn from a table of fields, two small controls, and `Shell` - the bottom-right row, room along the bottom edge, the way back to the notes. Above `notes/` because it is a kit for a note's components.
 
-Text to narrated audio in two paths: ghost's own source-filter synthesizer (no models, no weights, fully inspectable, and the only path that can sing), and a small local neural voice run by a subprocess host. Shared between them: the source of the words (the text box, or a Markdown file on disk re-read at every Play, whose frontmatter carries the voice), the text front end and its normalization, the threaded real-time stream, karaoke subtitles, and the buffer effects. Design: next/voice.md.
+- [`card.gd`](../src/ui/card.gd) **Card** - one component's settings on a side panel: a titled box that folds, bordered in its FAMILY's color (next/notes.md, "A card").
+- [`card_row.gd`](../src/ui/card_row.gd) **CardRow** - the chips under a panel's title, one per `Card` in its color (next/notes.md, "The component row"). A click opens or closes that card; Ctrl-click opens it alone and folds the rest, as Blender's panel headers do. A chip shows ● while its card is open and ○ while it is folded, so the row also answers ...
+- [`note_cards.gd`](../src/ui/note_cards.gd) **NoteCards** - a note's component cards, built ONE way on whichever panel shows the note, and the two edits that change what a note is made of: attach and detach.
+- [`schema_form.gd`](../src/ui/schema_form.gd) **SchemaForm** - rows of controls built from a TABLE OF FIELDS, for editing one map of data.
+- [`script_highlighter.gd`](../src/ui/script_highlighter.gd) **ScriptHighlighter** - colors a script by the marks the panel reading it understands.
+- [`script_writer.gd`](../src/ui/script_writer.gd) **ScriptWriter** - where a voice panel's script is written: a card in the panel, and an editor window it opens.
+- [`shell.gd`](../src/ui/shell.gd) **Shell** - what a panel asks of the window it is in.
+- [`side_panel.gd`](../src/ui/side_panel.gd) **SidePanel** - a mode's control panel, which CANNOT outgrow the window.
+- [`tag_field.gd`](../src/ui/tag_field.gd) **tag_field** - TagField - tags as chips, the way YouTube Studio shows them: every tag visible, wrapping onto as many lines as it needs, each with an × that removes it, and a box at the end where a comma (or Enter, or leaving the box, or pasting "a, b, c") turns what was typed into chips. Backspace in the empty ...
+- [`volume_knob.gd`](../src/ui/volume_knob.gd) **VolumeKnob** - A pull-rope volume control. Click-and-HOLD the knob, then drag AWAY from it: a rope stretches from the knob (the anchor) to your cursor, and the farther you pull the louder it gets - but the ceiling is ASYMPTOTIC (v = 1 - e^(-d/D0)), so "max" is approached, never reached. Let go and the level is ...
 
-- [`phonemes.gd`](../src/phonemes.gd) **Phonemes** - the phoneme inventory and the text-to-phoneme expansion.
-- [`text_norm.gd`](../src/text_norm.gd) **TextNorm** - turn written English into speakable words, before anything else.
-- [`phrasing.gd`](../src/phrasing.gd) **Phrasing** - sentence-level prominence, derived from the TEXT.
-- [`voice.gd`](../src/voice.gd) **Voice** - the source-filter speech synthesizer (rungs 0-2 of next/voice.md).
-- [`voice_field.gd`](../src/voice_field.gd) **VoiceField** - the belt as a field of interfering sources.
-- [`voice_stream.gd`](../src/voice_stream.gd) **VoiceStream** - real-time speech on its own thread: render lag cannot break it.
-- [`synth_editor.gd`](../src/synth_editor.gd) **SynthEditor** - the synthesis surface. The loop is a fishing trip:
-- [`voice_sampler.gd`](../src/voice_sampler.gd) **VoiceSampler** - "echo a living voice": record the player reading a fixed passage, MEASURE the voice (never keep it), and mint a brand-new seed whose traits and prosody genome mimic the source.
-- [`doc_source.gd`](../src/doc_source.gd) **DocSource** - where a reading's words come from: the editor alone, or the file they are saved in.
-- [`front_matter.gd`](../src/front_matter.gd) **FrontMatter** - YAML frontmatter on a Markdown document, read and (carefully) written.
-- [`manuscript.gd`](../src/manuscript.gd) **Manuscript** - what a chapter file SAYS about itself, beyond the words to be read.
-- [`tablet_script.gd`](../src/tablet_script.gd) **TabletScript** - a chapter written as somebody browsing on a tablet.
-- [`script_marks.gd`](../src/script_marks.gd) **ScriptMarks** - every authoring mark a script may carry, registered with what it does.
-- [`script_highlighter.gd`](../src/script_highlighter.gd) **ScriptHighlighter** - colors a script by the marks the panel reading it understands.
-- [`script_writer.gd`](../src/script_writer.gd) **ScriptWriter** - where a voice panel's script is written: a card in the panel, and an editor window it opens.
-- [`save_mark.gd`](../src/save_mark.gd) **SaveMark** - the small mark beside a script's file name that says where its words stand with the file: turning while a change made here waits for its quiet period, a tick that flashes the moment the change is in the file, an amber mark when a write was refused, a hollow ring when the script is saved nowhere.
-- [`subtitles.gd`](../src/subtitles.gd) **Subtitles** - the karaoke overlay, session-owned rather than editor-owned.
-- [`voice_host.gd`](../src/voice_host.gd) **VoiceHost** - Godot's end of the neural voice subprocess (see VOICE_PLAN.md).
-- [`reading_panel.gd`](../src/reading_panel.gd) **ReadingPanel** - a reading of a document in the neural voice: the script, the cast, the voice, the stream, the transport's hooks, the export (VOICE_PLAN.md P4). The Generative and Cards panels are both one (next/notes.md step 5): each adds the cards its picture is made of (`_build_cards`) and the blocks it ...
-- [`generative_editor.gd`](../src/generative_editor.gd) **GenerativeEditor** - the reading workspace: a note with a Voice, its text read aloud in the neural voice. Everything that reads is `ReadingPanel`'s, and what the reading is SEEN in is the note's: the cards of whatever else it has attached - the Picture (`PictureCard`: the medium, the films, the book's pictures, the ...
-- [`voice_readers.gd`](../src/voice_readers.gd) **VoiceReaders** - who a multi-speaker voice's speaker NUMBER actually is.
-- [`voice_fx.gd`](../src/voice_fx.gd) **VoiceFX** - the ambience from Synthesis, over any PCM.
-- [`room_fx.gd`](../src/room_fx.gd) **RoomFX** - THE ROOM, decided once and rendered twice.
+### `voice/` - Synthesis (voice)
 
-### Cards
+Text to narrated audio in two paths: ghost's own source-filter synthesizer (no models, no weights, fully inspectable, and the only path that can sing), and a small local neural voice run by a subprocess host. Shared between them: the text front end and its normalization, the threaded real-time stream and the buffer effects. Design: next/voice.md.
 
-A show of cards nobody writes: a show's brief, its episodes - each planned, dealt, painted and written by agents one card at a time, kept on disk step by step - and the table they are read at, in the Generative voice, with the table itself and the things on it modeled from a written description (Tables, Props), its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds). The rules are every show's; the brief says what the cards are - tarot, baseball or trading cards, a card game's deck, flashcards, recipe cards - and lists them, or leaves each episode's deck to its producer. Design: next/cards.md.
+- [`phonemes.gd`](../src/voice/phonemes.gd) **Phonemes** - the phoneme inventory and the text-to-phoneme expansion.
+- [`phrasing.gd`](../src/voice/phrasing.gd) **Phrasing** - sentence-level prominence, derived from the TEXT.
+- [`room_fx.gd`](../src/voice/room_fx.gd) **RoomFX** - THE ROOM, decided once and rendered twice.
+- [`text_norm.gd`](../src/voice/text_norm.gd) **TextNorm** - turn written English into speakable words, before anything else.
+- [`voice.gd`](../src/voice/voice.gd) **Voice** - the source-filter speech synthesizer (rungs 0-2 of next/voice.md).
+- [`voice_field.gd`](../src/voice/voice_field.gd) **VoiceField** - the belt as a field of interfering sources.
+- [`voice_fx.gd`](../src/voice/voice_fx.gd) **VoiceFX** - the ambience from Synthesis, over any PCM.
+- [`voice_host.gd`](../src/voice/voice_host.gd) **VoiceHost** - Godot's end of the neural voice subprocess (see VOICE_PLAN.md).
+- [`voice_readers.gd`](../src/voice/voice_readers.gd) **VoiceReaders** - who a multi-speaker voice's speaker NUMBER actually is.
+- [`voice_sampler.gd`](../src/voice/voice_sampler.gd) **VoiceSampler** - "echo a living voice": record the player reading a fixed passage, MEASURE the voice (never keep it), and mint a brand-new seed whose traits and prosody genome mimic the source.
+- [`voice_stream.gd`](../src/voice/voice_stream.gd) **VoiceStream** - real-time speech on its own thread: render lag cannot break it.
 
-- [`cards_editor.gd`](../src/cards_editor.gd) **CardsEditor** - the Cards mode: a show of cards nobody writes by hand. What kind of cards, and what the show is, are the brief's to say.
-- [`table_actions.gd`](../src/table_actions.gd) **TableActions** - the verbs a card show performs at the table, as ONE REGISTRY (next/notes.md step 9, "Actions are a registry"). Each verb declares what it takes (which card), whether it is written in a reading's marks or performed between them, the rest the voice takes for it, whether it brings a card up to be ...
-- [`table_positions.gd`](../src/table_positions.gd) **TablePositions** - where cards lie on the table, as DATA (next/notes.md step 9, "Positions are data"). A position is `{x, z, yaw, face}` on the cloth - meters, x to the reader's right and z toward the reader; yaw in degrees; face "up" or "down" - written by the producer's plan (a spread position may carry coordinates ...
-- [`dealer_tools.gd`](../src/dealer_tools.gd) **DealerTools** - what a dealer can do while it lays an episode's cards out (next/notes.md step 9, "Agents choose"): PLACE a card where it should lie, FLIP it face up or down, LOOK at the whole layout as the table will check it, and SUBMIT it. Served as tools (`AgentTools`), as the set dresser's are ...
-- [`card_producer.gd`](../src/card_producer.gd) **CardProducer** - makes whatever an episode is missing, in the order a reading happens.
-- [`card_episode.gd`](../src/card_episode.gd) **CardEpisode** - one episode of a card show, as it lies on disk.
-- [`card_prompts.gd`](../src/card_prompts.gd) **CardPrompts** - what each agent behind a card episode is told. Pure: strings in, strings out, so a gate can hold every prompt to the rules (see tests/cards_check.gd). THE WORDS ARE IN rules/cards/ (producer, designer, set_dresser, reader, painter, show - read by `Rules`); here is what decides which of them apply ...
-- [`card_reading.gd`](../src/card_reading.gd) **CardReading** - a card reading as the voice reads it and the table performs it.
-- [`card_deck.gd`](../src/card_deck.gd) **CardDeck** - the cards a show reads with, and how an episode's deck is shuffled.
-- [`card_table.gd`](../src/card_table.gd) **CardTable** - what an episode's look may name, and how a look is made safe to draw.
-- [`card_faces.gd`](../src/card_faces.gd) **CardFaces** - a card's face, its back and its booklet page, composed in 2D for the table.
-- [`props.gd`](../src/props.gd) **Props** - things BUILT FROM A DESCRIPTION. A thing is a few PARTS, each one SHAPE with real sizes and one MATERIAL whose surface is procedural, with an ORNAMENT worked into it if it has one - or a GROUP of parts, placed and repeated as one (a candelabra's arm, cup and taper, copied round). An agent writes ...
-- [`tables.gd`](../src/tables.gd) **Tables** - THE TABLE ITSELF, BUILT FROM A DESCRIPTION. Its TOP: an outline (a rectangle, round, an oval, a many-sided polygon, its rim scalloped if it likes), a thickness, the profile its edge is cut to (bevel, bullnose, ogee...), and what it is made of - boards of a wood, a slab of stone, metal, lacquer, ...
-- [`effects.gd`](../src/effects.gd) **Effects** - air that moves and light that bursts: FOG that rolls through a stretch of the scene, MOTES that wander about it (pixies, fireflies, flies, embers, dust) and leave and come back, and BURSTS of sparks, glitter, embers, flame, smoke or stars at a moment - and what the wind carries, DRIFTING down and ...
-- [`drifts.gd`](../src/drifts.gd) **Drifts** - what the wind carries: petals, leaves, seeds, keys and feathers, falling from a tree overhead or blowing through the scene, settling on the table and lifted off it again by a gust (the user, 2026-10-08: "petals could fall from that tree ... either blowing through the scene, or settling on the ...
-- [`lights.gd`](../src/lights.gd) **Lights** - what lights a scene, and how that light moves: the SKY that fills it, a SUN (or the moon) that throws its shadows, what the sun falls THROUGH on its way (a window and its panes, blinds, a pierced screen, leaves, fronds or bare branches overhead, a pergola's slats, an awning, a parasol), the WEATHER ...
-- [`winds.gd`](../src/winds.gd) **Winds** - the air moving over a scene: a breeze from one side that rises and falls a little, and GUSTS now and then, each a swell that rises in a second or so and dies away over a few. One wind for the whole table: it stirs what the sun falls through, swings what hangs and ripples what flutters (`Lights`), ...
-- [`soundscape.gd`](../src/soundscape.gd) **Soundscape** - what a place sounds like behind the reader: the wind, the sea, rain, a fire, a stream, the insects of a summer night. The user, 2026-10-08: "there are a lot of scenes that take place in places where pure environmental silence feels inappropriate. One scene was on a boat at sea: you might expect to ...
-- [`set_dresser_tools.gd`](../src/set_dresser_tools.gd) **SetDresserTools** - what the set dresser can do while it sets the reader's table: MAKE a thing, LOOK at it, FIX it, and see the whole table as the camera will before handing it in.
-- [`table_preview.gd`](../src/table_preview.gd) **TablePreview** - a table described but not yet set, SEEN: each thing alone in a studio, and the whole table standing on the episode's own cloth, photographed from the camera's own place. It is what the set dresser looks through (`SetDresserTools`): it makes a thing, looks at it, and fixes what it sees.
+### `media/` - Media
 
-### Agents
+What the show is carried on: the `Medium` base and its registry, each medium ([media.md](media.md)), the layouts they set (comic pages, a novel, a notebook, a tablet's pages), the films and pictures they show, and where a reading is in its document.
 
-Every piece of writing and painting ghost asks an AI for: who writes (TextGen) and who paints (ImageGen), one queue for both (AgentJobs), what each is told (Rules, reading rules/), the tools ghost serves an agent while it works (AgentTools), which Amazon Bedrock models an AWS account can call (BedrockCatalog), and where a reading's voice is in its document (ReadingFollower).
+- [`auto.gd`](../src/media/auto.gd) **AutoMedium** - the original show with nothing to set: one scene at a time, filling the frame, chosen by the song's own fingerprint and cut on its beat (2026-10-06, the user: an "auto" type "which removes all options from the user, and just automatically plays the scene, seeded by the audio, just like the original ...
+- [`book.gd`](../src/media/book.gd) **BookMedium** - the reading as a printed novel, open on a desk, with the words lit as they are spoken.
+- [`book_layout.gd`](../src/media/book_layout.gd) **BookLayout** - a chapter typeset into the pages of a printed novel, for `BookMedium`.
+- [`comic.gd`](../src/media/comic.gd) **ComicMedium** - the show as an open comic book, flown over by a real perspective camera.
+- [`comic_page.gd`](../src/media/comic_page.gd) **ComicPage** - one seeded page of comic panels. The layout half of `ComicMedium`.
+- [`comic_spread.gd`](../src/media/comic_spread.gd) **ComicSpread** - the two facing pages of an open comic book. What `ComicMedium` flies over.
+- [`film.gd`](../src/media/film.gd) **FilmScene** - a panel of real footage, cut into the comic among the drawn ones.
+- [`films.gd`](../src/media/films.gd) **Films** - the library of imported video clips a comic panel can be filled with.
+- [`full.gd`](../src/media/full.gd) **FullMedium** - one scene, filling the frame. What ghost has always done.
+- [`illustration_panel.gd`](../src/media/illustration_panel.gd) **IllustrationPanel** - the Generative panel's controls for a book's pictures (`Illustrations`).
+- [`illustrations.gd`](../src/media/illustrations.gd) **Illustrations** - the library of generated pictures a book prints.
+- [`medium.gd`](../src/media/medium.gd) **Medium** - what the show is carried ON. The presentation axis.
+- [`notebook.gd`](../src/media/notebook.gd) **NotebookMedium** - the reading as a research notebook, written by hand, open on a desk.
+- [`notebook_layout.gd`](../src/media/notebook_layout.gd) **NotebookLayout** - a chapter written by hand into a ruled notebook, for `NotebookMedium`.
+- [`page_capture.gd`](../src/media/page_capture.gd) **PageCapture** - a REAL web page, captured as one tall picture, for the tablet medium.
+- [`reading_follower.gd`](../src/media/reading_follower.gd) **ReadingFollower** - where the voice is in a document, and when each of its words was said.
+- [`tablet.gd`](../src/media/tablet.gd) **TabletMedium** - the reading as somebody browsing on a tablet lying on a desk.
+- [`tablet_page.gd`](../src/media/tablet_page.gd) **TabletPage** - one web page of a `TabletScript`, set into a column of a given width.
+- [`tablet_script.gd`](../src/media/tablet_script.gd) **TabletScript** - a chapter written as somebody browsing on a tablet.
 
-- [`text_gen.gd`](../src/text_gen.gd) **TextGen** - who writes the words. The text counterpart of `ImageGen`.
-- [`agent_jobs.gd`](../src/agent_jobs.gd) **AgentJobs** - every piece of writing and painting ghost asks an AI for, in one queue.
-- [`agent_tools.gd`](../src/agent_tools.gd) **AgentTools** - the tools an agent can call while it works, served by ghost itself.
-- [`rules.gd`](../src/rules.gd) **Rules** - what the agents are told, kept as text a person reads: `rules/<group>/<role>.yaml` (the user, 2026-10-08: "extract agent instructions into a more interpretable format, like yaml ... as a human - it would be easier for me to read and grok the meaning of all the various things we're asking those ...
-- [`bedrock_catalog.gd`](../src/bedrock_catalog.gd) **BedrockCatalog** - which Amazon Bedrock models this AWS account can call, and how to reach each. Shared by the Bedrock writer (`TextGen`'s `bedrock`) and painter (`ImageGen`'s `bedrock`); it only ever makes the free listing calls, never a model call.
-- [`reading_follower.gd`](../src/reading_follower.gd) **ReadingFollower** - where the voice is in a document, and when each of its words was said.
+### `show/` - The show
 
-### Storyboards & stage
+The player: the Director's schedule and transitions, the one transport, karaoke subtitles, the Look over the whole picture, and the cards of the show's own settings.
 
-A show written down, as data: the YAML-subset parser, the storyboard's spec and its field tables, pure edits of nested data, the card that keeps a note's storyboard and the editor it opens (a strip of entries, a stage entry's lanes, rows built from the tables), and the Cast/Actions/Track stack that renders a described scene. See [storyboards/README.md](../storyboards/README.md) for the data spec and [stage.md](stage.md) for the fields and the actor/verb registries.
+- [`bookends_card.gd`](../src/show/bookends_card.gd) **BookendsCard** - the intro and the outro: seconds held before the first word and after the last (next/notes.md step 5: one card per section, in every panel that has it - the Cards panel used to declare both sliders a second time). Its block in a document is `bookends:`.
+- [`director.gd`](../src/show/director.gd) **director** - 
+- [`filters.gd`](../src/show/filters.gd) **Filters** - the LOOK the whole picture is put through, after the scenes have drawn.
+- [`look_card.gd`](../src/show/look_card.gd) **LookCard** - the Look: a post-process over the whole picture, one row per filter in `Filters.REGISTRY` (next/notes.md step 5: one card per section, in every panel that has it - the Generative panel built it and the Cards panel borrowed it by inheriting the whole panel).
+- [`picture_card.gd`](../src/show/picture_card.gd) **PictureCard** - the picture a reading is shown in: the MEDIUM (what the show is carried on), the FILMS a comic cuts to, the book's PICTURES (`IllustrationPanel`), and the Director's dials - scene hold, flourishes, camera, handwriting (next/notes.md step 5: one card per section). Its block in a document is ...
+- [`song_card.gd`](../src/show/song_card.gd) **SongCard** - the note's song (2026-10-06): which file it is, and a way to choose one. Importing a song is a component of a note, not a button on the notes list - "if we want to import an audio file or a video file - then we should add those relevant components/attachments to the note".
+- [`subtitles.gd`](../src/show/subtitles.gd) **Subtitles** - the karaoke overlay, session-owned rather than editor-owned.
+- [`transport.gd`](../src/show/transport.gd) **Transport** - play, pause, stop and the scrub rail along the bottom of the stage: ONE for every mode (next/notes.md, "The transport"). It grew out of the Scrubber, Chrome's seek bar.
 
-- [`yaml.gd`](../src/yaml.gd) **MiniYaml** - an in-house parser for the YAML *subset* storyboards are written in.
-- [`storyboard.gd`](../src/storyboard.gd) **Storyboard** - a show's scenes written down: the data spec, and its one owner.
-- [`data_path.gd`](../src/data_path.gd) **DataPath** - edits of nested data (Dictionaries and Arrays) as PURE FUNCTIONS, addressed by a path: the keys and indexes from the root down, `["sequence", 2, "track", "spans", 0, "from"]`.
-- [`schema_form.gd`](../src/schema_form.gd) **SchemaForm** - rows of controls built from a TABLE OF FIELDS, for editing one map of data.
-- [`storyboard_card.gd`](../src/storyboard_card.gd) **StoryboardCard** - the note's storyboard: the show written down, on a note with a Picture. What plays, in what order, for how long - and where nothing is written, the seed still chooses. The card says what the note holds and lists its entries, one a click away; the writing is done in the `StoryboardEditor` it opens ...
-- [`storyboard_editor.gd`](../src/storyboard_editor.gd) **StoryboardEditor** - the nonlinear editor of a note's storyboard: a dock along the bottom of the frame, under the show it edits. Opened from the `StoryboardCard` ("Timeline…").
-- [`storyboard_strip.gd`](../src/storyboard_strip.gd) **StoryboardStrip** - a storyboard's entries laid along a ruler: one block per entry, as wide as it is scheduled to stay, the tail's after the sequence's. The top row of the `StoryboardEditor`.
-- [`storyboard_lanes.gd`](../src/storyboard_lanes.gd) **StoryboardLanes** - one stage entry's timeline: a lane per actor, and on it every span that happens to that actor - a block for a window (`from` to `to`), a diamond for a moment (`at`). The lower rows of the `StoryboardEditor`, shown while a stage entry is picked.
-- [`cast.gd`](../src/cast.gd) **Cast** - the actor registry for data-driven scenes (see scenes/stage.gd).
-- [`actions.gd`](../src/actions.gd) **Actions** - the verb registry for data-driven scenes (see scenes/stage.gd).
-- [`track.gd`](../src/track.gd) **Track** - the timeline runner for data-driven scenes (see scenes/stage.gd).
+### `timeline/` - The storyboard's editor
 
-### Masking
+The card that keeps a note's storyboard and the dock it opens: a strip of entries, a stage entry's lanes, and the ruler.
+
+- [`storyboard_card.gd`](../src/timeline/storyboard_card.gd) **StoryboardCard** - the note's storyboard: the show written down, on a note with a Picture. What plays, in what order, for how long - and where nothing is written, the seed still chooses. The card says what the note holds and lists its entries, one a click away; the writing is done in the `StoryboardEditor` it opens ...
+- [`storyboard_editor.gd`](../src/timeline/storyboard_editor.gd) **StoryboardEditor** - the nonlinear editor of a note's storyboard: a dock along the bottom of the frame, under the show it edits. Opened from the `StoryboardCard` ("Timeline…").
+- [`storyboard_lanes.gd`](../src/timeline/storyboard_lanes.gd) **StoryboardLanes** - one stage entry's timeline: a lane per actor, and on it every span that happens to that actor - a block for a window (`from` to `to`), a diamond for a moment (`at`). The lower rows of the `StoryboardEditor`, shown while a stage entry is picked.
+- [`storyboard_strip.gd`](../src/timeline/storyboard_strip.gd) **StoryboardStrip** - a storyboard's entries laid along a ruler: one block per entry, as wide as it is scheduled to stay, the tail's after the sequence's. The top row of the `StoryboardEditor`.
+- [`timeline_view.gd`](../src/timeline/timeline_view.gd) **TimelineView** - the shared pixel<->time mapping for the mask editor's whole timeline stack: the primary clip's trim lane, any imported track's lane, and the marker-editing strip all read the SAME zoom/pan state, so a second's position agrees across every row.
+
+### `export/` - Export
+
+Rendering a session to video (bake + Movie Maker, background processes) and uploading it to YouTube. Under the workspaces: a reading and a show of cards export a take and fill in an upload, and the exporter names neither.
+
+- [`exporter.gd`](../src/export/exporter.gd) **Exporter** - render the visualization to a video, in the background, in two steps.
+- [`youtube.gd`](../src/export/youtube.gd) **youtube** - YouTube - sign in to the author's YouTube channel and upload a finished export to it.
+- [`youtube_card.gd`](../src/export/youtube_card.gd) **YouTubeCard** - the YouTube component's card (2026-10-07, the user: "add a little '+' button near those labels... 'youtube' should be an option. When we add it, a new card is created"): whether an export goes up, what it is called, who may see it and the playlist it joins - and the Google client and the sign-in an ...
+
+### `reading/` - The voice's workspaces
+
+The panels a voice runs in: the reading (script, cast, voice, stream, export), the Generative editor built on it, and the voice lab with the fishing game that breeds its voices.
+
+- [`generative_editor.gd`](../src/reading/generative_editor.gd) **GenerativeEditor** - the reading workspace: a note with a Voice, its text read aloud in the neural voice. Everything that reads is `ReadingPanel`'s, and what the reading is SEEN in is the note's: the cards of whatever else it has attached - the Picture (`PictureCard`: the medium, the films, the book's pictures, the ...
+- [`reading_panel.gd`](../src/reading/reading_panel.gd) **ReadingPanel** - a reading of a document in the neural voice: the script, the cast, the voice, the stream, the transport's hooks, the export (VOICE_PLAN.md P4). The Generative and Cards panels are both one (next/notes.md step 5): each adds the cards its picture is made of (`_build_cards`) and the blocks it ...
+- [`synth_editor.gd`](../src/reading/synth_editor.gd) **SynthEditor** - the synthesis surface. The loop is a fishing trip:
+
+### `table/` - The set
+
+A place, seen and heard, built from a written description: the table itself (Tables), the things on it (Props), its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds), its sound (Soundscape), where cards go on it, what can be done with them and how a reading says so, the faces printed on them - and the medium that puts it all on the stage (`table.gd`, a row of `Medium.REGISTRY`).
+
+- [`card_faces.gd`](../src/table/card_faces.gd) **CardFaces** - a card's face, its back and its booklet page, composed in 2D for the table.
+- [`card_reading.gd`](../src/table/card_reading.gd) **CardReading** - a card reading as the voice reads it and the table performs it.
+- [`card_table.gd`](../src/table/card_table.gd) **CardTable** - what an episode's look may name, and how a look is made safe to draw.
+- [`drifts.gd`](../src/table/drifts.gd) **Drifts** - what the wind carries: petals, leaves, seeds, keys and feathers, falling from a tree overhead or blowing through the scene, settling on the table and lifted off it again by a gust (the user, 2026-10-08: "petals could fall from that tree ... either blowing through the scene, or settling on the ...
+- [`effects.gd`](../src/table/effects.gd) **Effects** - air that moves and light that bursts: FOG that rolls through a stretch of the scene, MOTES that wander about it (pixies, fireflies, flies, embers, dust) and leave and come back, and BURSTS of sparks, glitter, embers, flame, smoke or stars at a moment - and what the wind carries, DRIFTING down and ...
+- [`lights.gd`](../src/table/lights.gd) **Lights** - what lights a scene, and how that light moves: the SKY that fills it, a SUN (or the moon) that throws its shadows, what the sun falls THROUGH on its way (a window and its panes, blinds, a pierced screen, leaves, fronds or bare branches overhead, a pergola's slats, an awning, a parasol), the WEATHER ...
+- [`props.gd`](../src/table/props.gd) **Props** - things BUILT FROM A DESCRIPTION. A thing is a few PARTS, each one SHAPE with real sizes and one MATERIAL whose surface is procedural, with an ORNAMENT worked into it if it has one - or a GROUP of parts, placed and repeated as one (a candelabra's arm, cup and taper, copied round). An agent writes ...
+- [`soundscape.gd`](../src/table/soundscape.gd) **Soundscape** - what a place sounds like behind the reader: the wind, the sea, rain, a fire, a stream, the insects of a summer night. The user, 2026-10-08: "there are a lot of scenes that take place in places where pure environmental silence feels inappropriate. One scene was on a boat at sea: you might expect to ...
+- [`table.gd`](../src/table/table.gd) **TableMedium** - a card reading at a table, seen from the reader's chair.
+- [`table_actions.gd`](../src/table/table_actions.gd) **TableActions** - the verbs a card show performs at the table, as ONE REGISTRY (next/notes.md step 9, "Actions are a registry"). Each verb declares what it takes (which card), whether it is written in a reading's marks or performed between them, the rest the voice takes for it, whether it brings a card up to be ...
+- [`table_positions.gd`](../src/table/table_positions.gd) **TablePositions** - where cards lie on the table, as DATA (next/notes.md step 9, "Positions are data"). A position is `{x, z, yaw, face}` on the cloth - meters, x to the reader's right and z toward the reader; yaw in degrees; face "up" or "down" - written by the producer's plan (a spread position may carry coordinates ...
+- [`tables.gd`](../src/table/tables.gd) **Tables** - THE TABLE ITSELF, BUILT FROM A DESCRIPTION. Its TOP: an outline (a rectangle, round, an oval, a many-sided polygon, its rim scalloped if it likes), a thickness, the profile its edge is cut to (bevel, bullnose, ogee...), and what it is made of - boards of a wood, a slab of stone, metal, lacquer, ...
+- [`winds.gd`](../src/table/winds.gd) **Winds** - the air moving over a scene: a breeze from one side that rises and falls a little, and GUSTS now and then, each a swell that rises in a second or so and dies away over a few. One wind for the whole table: it stirs what the sun falls through, swings what hangs and ripples what flutters (`Lights`), ...
+
+### `cards/` - Cards
+
+A show of cards nobody writes: a show's brief, its episodes - each planned, dealt, painted and written by agents one card at a time, kept on disk step by step - and the set dresser that builds the table they are read at. The rules are every show's; the brief says what the cards are - tarot, baseball or trading cards, a card game's deck, flashcards, recipe cards - and lists them, or leaves each episode's deck to its producer. Design: next/cards.md.
+
+- [`card_deck.gd`](../src/cards/card_deck.gd) **CardDeck** - the cards a show reads with, and how an episode's deck is shuffled.
+- [`card_episode.gd`](../src/cards/card_episode.gd) **CardEpisode** - one episode of a card show, as it lies on disk.
+- [`card_producer.gd`](../src/cards/card_producer.gd) **CardProducer** - makes whatever an episode is missing, in the order a reading happens.
+- [`card_prompts.gd`](../src/cards/card_prompts.gd) **CardPrompts** - what each agent behind a card episode is told. Pure: strings in, strings out, so a gate can hold every prompt to the rules (see tests/cards_check.gd). THE WORDS ARE IN rules/cards/ (producer, designer, set_dresser, reader, painter, show - read by `Rules`); here is what decides which of them apply ...
+- [`cards_editor.gd`](../src/cards/cards_editor.gd) **CardsEditor** - the Cards mode: a show of cards nobody writes by hand. What kind of cards, and what the show is, are the brief's to say.
+- [`dealer_tools.gd`](../src/cards/dealer_tools.gd) **DealerTools** - what a dealer can do while it lays an episode's cards out (next/notes.md step 9, "Agents choose"): PLACE a card where it should lie, FLIP it face up or down, LOOK at the whole layout as the table will check it, and SUBMIT it. Served as tools (`AgentTools`), as the set dresser's are ...
+- [`set_dresser_tools.gd`](../src/cards/set_dresser_tools.gd) **SetDresserTools** - what the set dresser can do while it sets the reader's table: MAKE a thing, LOOK at it, FIX it, and see the whole table as the camera will before handing it in.
+- [`table_preview.gd`](../src/cards/table_preview.gd) **TablePreview** - a table described but not yet set, SEEN: each thing alone in a studio, and the whole table standing on the episode's own cloth, photographed from the camera's own place. It is what the set dresser looks through (`SetDresserTools`): it makes a thing, looks at it, and fixes what it sees.
+
+### `masking/` - Masking
 
 The video chroma-key masking editor - a second app surface inside ghost. See [masking.md](masking.md).
 
-- [`mask_session.gd`](../src/mask_session.gd) **MaskSession** - the data model for one mask-mode editing session.
-- [`mask_editor.gd`](../src/mask_editor.gd) **MaskEditor** - the mask-mode authoring surface.
-- [`mask_timeline.gd`](../src/mask_timeline.gd) **MaskTimeline** - the mask editor's scrub strip.
-- [`timeline_view.gd`](../src/timeline_view.gd) **TimelineView** - the shared pixel<->time mapping for the mask editor's whole timeline stack: the primary clip's trim lane, any imported track's lane, and the marker-editing strip all read the SAME zoom/pan state, so a second's position agrees across every row.
-- [`track_lane.gd`](../src/track_lane.gd) **TrackLane** - one clip's block on the shared timeline: drag its LEFT/RIGHT edges to trim (in/out points), drag its BODY to shift where it sits on the master timeline. Used for both the primary clip's own trim block (offset fixed at 0 - it IS master time, so `movable` is false there) and one lane per imported ...
-- [`mask_marker_tool.gd`](../src/mask_marker_tool.gd) **mask_marker_tool** - mask_marker_tool - headless CLI: insert one marker into a mask session file at a given time.
+- [`mask_editor.gd`](../src/masking/mask_editor.gd) **MaskEditor** - the mask-mode authoring surface.
+- [`mask_marker_tool.gd`](../src/masking/mask_marker_tool.gd) **mask_marker_tool** - mask_marker_tool - headless CLI: insert one marker into a mask session file at a given time.
+- [`mask_session.gd`](../src/masking/mask_session.gd) **MaskSession** - the data model for one mask-mode editing session.
+- [`mask_timeline.gd`](../src/masking/mask_timeline.gd) **MaskTimeline** - the mask editor's scrub strip.
+- [`track_lane.gd`](../src/masking/track_lane.gd) **TrackLane** - one clip's block on the shared timeline: drag its LEFT/RIGHT edges to trim (in/out points), drag its BODY to shift where it sits on the master timeline. Used for both the primary clip's own trim block (offset fixed at 0 - it IS master time, so `movable` is false there) and one lane per imported ...
 
-### Export
+### `app/` - The shell
 
-Rendering a session to video (bake + Movie Maker, background processes), uploading it to YouTube, and recording the README's animation from the real app.
+The lifecycle around everything, and the one folder that names every other: main, the furniture every mode gets (Chrome), the notes list and a note's own panel, the phone shell, the authoring loop - the log, the feedback console and the Assistant - and the recorder of the README's animation, which drives the real app.
 
-- [`exporter.gd`](../src/exporter.gd) **Exporter** - render the visualization to a video, in the background, in two steps.
-- [`youtube.gd`](../src/youtube.gd) **youtube** - YouTube - sign in to the author's YouTube channel and upload a finished export to it.
-- [`youtube_card.gd`](../src/youtube_card.gd) **YouTubeCard** - the YouTube component's card (2026-10-07, the user: "add a little '+' button near those labels... 'youtube' should be an option. When we add it, a new card is created"): whether an export goes up, what it is called, who may see it and the playlist it joins - and the Google client and the sign-in an ...
-- [`showcase.gd`](../src/showcase.gd) **Showcase** - the README's animation, recorded from the real app: a note with a song playing `storyboards/showcase.yaml` (a blue prism flies in and divides into a blue one and a red one, the pair lock, then take opposite highways), with the note's panel, the row and the transport around it - the UI as a person ...
-- [`showcase_recorder.gd`](../src/showcase_recorder.gd) **ShowcaseRecorder** - the README's recording, inside the second ghost that `Showcase` starts under Movie Maker with `--showcase <work>`. It makes what a person would - a note with a song, on the showcase storyboard - opens it the way the notes list does, presses Play, and quits once `Showcase.frames` frames have ...
+- [`assistant.gd`](../src/app/assistant.gd) **Assistant** - The muted caption under the picker - the home screen's caption color, which it borrowed.
+- [`chrome.gd`](../src/app/chrome.gd) **Chrome** - the shared session furniture every mode of ghost carries.
+- [`console.gd`](../src/app/console.gd) **ConsoleView** - The in-app console - a live tail of Godot's own log file. print(), push_warning(), push_error() and engine SCRIPT ERRORs all land in user://logs/godot*.log via the engine's default file logging, but anyone launching ghost as a compiled app or from the Godot launcher never sees that stream - it used ...
+- [`delete_dialog.gd`](../src/app/delete_dialog.gd) **DeleteDialog** - "Delete this note?", asked before a note goes (2026-10-06, the user: "add a delete option to every note, and probably an x to each note on the home screen. If we click the x, prompt for confirmation to delete the note"). Asked from the notes list's × and from every note's own "⋯" (see [method ...
+- [`deps_panel.gd`](../src/app/deps_panel.gd) **DepsPanel** - the environment readout above the bottom-right row, behind its ⚙ (Chrome).
+- [`feedback.gd`](../src/app/feedback.gd) **FeedbackConsole** - the authoring feedback channel.
+- [`main.gd`](../src/app/main.gd) **main** - ghost entry point.
+- [`note_panel.gd`](../src/app/note_panel.gd) **NotePanel** - a note's own panel: where every new note opens, and what runs every note whose components need no editor of their own (`Components.workspace_of`) - a note that is its words alone, and a note with a song.
+- [`notes_list.gd`](../src/app/notes_list.gd) **NotesList** - where Ghost Notes opens (next/notes.md step 8, "No home screen"): a notes app opens on its notes. The left panel lists them - the default folder and every folder or file the user added (`NoteStore`), newest first - under the name and the tagline, with New, and "Existing note…" for a markdown file ...
+- [`phone_shell.gd`](../src/app/phone_shell.gd) **PhoneShell** - Ghost Notes on a phone (next/notes.md step 11, "Platforms: desktop and Android"): a notes app and nothing more. A list of the notes in `user://notes/` (`NoteStore`), and the editor - full screen, in portrait - with no stage, no transport, no Chrome furniture and no agent: on a phone a note has one ...
+- [`provision_badge.gd`](../src/app/provision_badge.gd) **provision_badge** - ProvisionBadge - a small notice at the top of the frame while ghost is installing or updating its own dependencies, in every mode. Chrome furniture, because an install can start from anywhere: the voice's environment from the Generative panel, FFmpeg from a clip opened on a first run, an update at ...
+- [`showcase.gd`](../src/app/showcase.gd) **Showcase** - the README's animation, recorded from the real app: a note with a song playing `storyboards/showcase.yaml` (a blue prism flies in and divides into a blue one and a red one, the pair lock, then take opposite highways), with the note's panel, the row and the transport around it - the UI as a person ...
+- [`showcase_recorder.gd`](../src/app/showcase_recorder.gd) **ShowcaseRecorder** - the README's recording, inside the second ghost that `Showcase` starts under Movie Maker with `--showcase <work>`. It makes what a person would - a note with a song, on the showcase storyboard - opens it the way the notes list does, presses Play, and quits once `Showcase.frames` frames have ...
 
-### Feedback & assistant
-
-The in-app authoring loop: capture reproducible critiques, browse them, and dispatch automated fixes.
-
-- [`feedback.gd`](../src/feedback.gd) **FeedbackConsole** - the authoring feedback channel.
-- [`assistant.gd`](../src/assistant.gd) **Assistant** - The muted caption under the picker - the home screen's caption color, which it borrowed.
-- [`assistant_backends.gd`](../src/assistant_backends.gd) **AssistantBackends** - the CLIs `Assistant` can dispatch a feedback note to, and everything that differs between them: how a run is launched, how it is resumed, and how its event stream reads.
-
-Scene scripts (59) are cataloged separately in [scenes.md](scenes.md).
+Scene scripts (58) are cataloged separately in [scenes.md](scenes.md).

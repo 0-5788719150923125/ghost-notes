@@ -78,7 +78,7 @@ func _run() -> void:
 	Director.attach(stage, medium)
 	Director.hold(true)
 
-	var subs: Subtitles = preload("res://src/subtitles.gd").new()
+	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	subs.words = _timeline(body)
 	# the voices' inks, as the Generative panel hands them over (book_document)
 	var inks := {}

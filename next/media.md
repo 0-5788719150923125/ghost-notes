@@ -114,7 +114,7 @@ is byte-identical to today's.
       512 px frame**, so subdivision is not optional.
 
 ### Phase 1 - the medium axis - DONE
-- [x] `src/medium.gd` - the base + `MEDIUM_REGISTRY` (`full`, `comic`), labels, blurbs.
+- [x] `src/media/medium.gd` - the base + `MEDIUM_REGISTRY` (`full`, `comic`), labels, blurbs.
 - [x] `src/media/full.gd` - the identity medium; every veto returns its argument.
 - [x] Director: `_scene_host` router, `style_for` veto, `hold_outgoing`, `owns_bookend`,
       `begin_session`. Four call sites, no other control flow.
@@ -127,7 +127,7 @@ is byte-identical to today's.
       `sting_shape_check` also passes.
 
 ### Phase 2 - the comic page - DONE
-- [x] `src/comic_page.gd` - the seeded page roll: 3-6 panels, rows then columns, uneven
+- [x] `src/media/comic_page.gd` - the seeded page roll: 3-6 panels, rows then columns, uneven
       splits, gutters, margin, corner radius (weighted toward hard corners), the occasional cant.
       Rolls are REJECTED and retried when a panel aspect would crop a subject through.
 - [x] `src/media/comic.gd` - the two slot pools, the page basis, the lens, the draw.
@@ -243,7 +243,7 @@ three ways and all three were live:
   since the last pause. A debounce can also be starved indefinitely by a drag that never
   goes quiet.
 
-`src/settings.gd` is now the one owner: one in-memory copy, one writer, `MAX_DIRTY_MS`
+`src/platform/settings.gd` is now the one owner: one in-memory copy, one writer, `MAX_DIRTY_MS`
 so an unflushed change lands within a couple of seconds whatever the control is doing, and
 `_read_only` so a render or a test probe can never write the user's file.
 `Settings.bind(control, section, key, default, keys)` is the part that answers "by default" -

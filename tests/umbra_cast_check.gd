@@ -48,7 +48,7 @@ func _initialize() -> void:
 	path = path.path_join("_cast_check.bin")
 	_write_track(path)
 
-	_ed = load("res://src/mask_editor.gd").new()
+	_ed = load("res://src/masking/mask_editor.gd").new()
 	var s := MaskSession.new()
 	s.video_path = "res://masks/_cast_check/video.ogv"
 	_ed.session = s

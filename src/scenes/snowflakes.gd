@@ -12,7 +12,7 @@ extends GhostScene
 ## only the translation - a stationary field (`drift`) or one carried on a curl-noise
 ## breeze (`wind`). Color, not size, carries the audio: the crystals brighten with energy.
 
-const FlowField := preload("res://src/flow.gd")
+const FlowField := preload("res://src/motion/flow.gd")
 
 var _flakes: Array = []
 var _mode := "independent"

@@ -1,4 +1,4 @@
-// A BIRD'S SHADOW (src/lights.gd): a bird's silhouette, its wings spread or beating, drawn into nothing
+// A BIRD'S SHADOW (src/table/lights.gd): a bird's silhouette, its wings spread or beating, drawn into nothing
 // but the sun's shadow map (the mesh is shadow-only, on Lights.SCREEN_LAYER) - a quad lying level, as
 // a bird flies, so the shade it throws on the level table has its true shape. Lights.Rig poses the quad
 // from show time; here the wings are drawn at their beat and the shape is smeared a little along the

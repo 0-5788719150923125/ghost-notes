@@ -1,4 +1,4 @@
-// WHAT DRIFTS IN THE AIR (src/drifts.gd): a petal, a rose petal, a leaf, a seed's tuft, a maple key or a
+// WHAT DRIFTS IN THE AIR (src/table/drifts.gd): a petal, a rose petal, a leaf, a seed's tuft, a maple key or a
 // feather - one quad of a MultiMesh, cupped, cut to its outline here, lit by every light on
 // the table and glowing where a light is behind it. The quad is the plane mesh's (x across, z along,
 // -0.5..0.5, its face +y); a piece's size and turn are its transform's, its color the instance's, and

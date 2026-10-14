@@ -445,7 +445,7 @@ func _helpers() -> bool:
 		"what the reader is told is on the table: %s" % CardTable.on_the_table(objs))
 	_ok(String((look["frame"] as Dictionary)["style"]) == "line", "an unknown frame was kept")
 	_ok(float(look["foil"]) == 1.0, "foil was not clamped")
-	_ok(CardEpisode.slug("Truthful Tarot!") == "truthful-tarot", "the show's slug is %s" % CardEpisode.slug("Truthful Tarot!"))
+	_ok(Manuscript.slug("Truthful Tarot!") == "truthful-tarot", "the show's slug is %s" % Manuscript.slug("Truthful Tarot!"))
 	return true
 
 

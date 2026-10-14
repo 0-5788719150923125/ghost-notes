@@ -40,7 +40,7 @@ extends SceneTree
 ## mid-gray and a white patch for the grain weighting, and one small very bright spot on a dark
 ## field for the bloom threshold.
 
-const Filters_ := preload("res://src/filters.gd")
+const Filters_ := preload("res://src/show/filters.gd")
 
 const W := 320
 const H := 180

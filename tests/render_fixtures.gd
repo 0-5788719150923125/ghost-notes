@@ -15,7 +15,7 @@ extends SceneTree
 ##       [-- <out_dir>]
 ## Default out_dir is build/voice (gitignored).
 
-const Voice_ := preload("res://src/voice.gd")
+const Voice_ := preload("res://src/voice/voice.gd")
 
 const DEFAULT_OUT := "res://build/voice"
 

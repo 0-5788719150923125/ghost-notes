@@ -366,7 +366,7 @@ func _step(dt: float) -> void:
 	# to reach a full press at all, and an asymmetric follower to keep the hand from
 	# strobing between hairline and heavy on consecutive frames.
 	_press_lvl = Nonlinear.flare(_press_lvl, clampf(_f.flux * 20.0, 0.0, 1.0), dt, 6.0, 1.8)
-	if _f.energy < Director.silence_floor:
+	if feed != null and _f.energy < feed.silence_floor:
 		return                          # silence: the nib rests where it is, mid-stroke
 	# Spend this substep across rests and characters in order, carrying the OVERSHOOT rather
 	# than discarding it, so a fast hand loses no fraction of a character's progress at a

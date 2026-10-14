@@ -11,7 +11,7 @@ extends SceneTree
 ## frame, and an unwrapped Label grows to its right - under the buttons and past the edge. The
 ## control is the old arrangement (the row's band, no wrapping), which fails both halves.
 
-const ROW_TOP := 68.0           # the button row's top, above the bottom edge (Chrome.ROW_TOP)
+const ROW_TOP := 68.0           # the button row's top, above the bottom edge (Shell.ROW_TOP)
 const RIGHT := 28.0             # the row's right margin
 
 var _fails := 0
@@ -33,7 +33,7 @@ func _run() -> void:
 		settings.set("_read_only", true)
 	# built by hand, its status line moved into the tree on a layer of its own as the exporter's is:
 	# the exporter's _ready would clear a live render's override.cfg
-	var ex = load("res://src/exporter.gd").new()
+	var ex = load("res://src/export/exporter.gd").new()
 	ex._build_ui()
 	var layer := CanvasLayer.new()
 	root.add_child(layer)

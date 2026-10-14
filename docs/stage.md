@@ -5,7 +5,7 @@ The data-driven scene stack behind storyboard `stage` entries: a **Cast** of act
 
 ## Fields
 
-What a storyboard can say, read from the tables its editor builds its rows from (`Storyboard.BOARD` and its siblings in [src/storyboard.gd](../src/storyboard.gd)): a field in a table is a control in the editor. A `num` is a number or a sampled `[lo, hi]` range; a key left out is its default.
+What a storyboard can say, read from the tables its editor builds its rows from (`Storyboard.BOARD` and its siblings in [src/stage/storyboard.gd](../src/stage/storyboard.gd)): a field in a table is a control in the editor. A `num` is a number or a sampled `[lo, hi]` range; a key left out is its default.
 
 ### The storyboard
 
@@ -82,7 +82,7 @@ An actor is a RefCounted, so a stage hands its LIVE actors to the next stage thr
 
 Verbs communicate with actors through `state` (a plain Dictionary): e.g. `state.tremble` (0..1 riser vibration), `state.lock_to` (pose-lock source id), `state.still` (spin damping), `state.pulse` ({amp, rate} scale breathing), `state.focus` (a world point the eye looks at). Kind classes read what they understand; unknown keys are inert - a misspelled verb can't crash a show.
 
-Registry: `Cast.REGISTRY` in [src/cast.gd](../src/cast.gd) (3 kinds)
+Registry: `Cast.REGISTRY` in [src/stage/cast.gd](../src/stage/cast.gd) (3 kinds)
 
 ### `eye` - EyeActor
 
@@ -93,7 +93,7 @@ A human eye (`EyeBody`) on a slot. Gaze is driven by a look verb feeding `state.
 | `radius` | Size | num | How large the eye is. Unset, drawn between 0.24 and 0.34. |
 | `hue` | Hue | num | The iris's color, around the wheel from 0 to 1. Unset, drawn from the seed. |
 
-Source: [src/cast.gd:166](../src/cast.gd#L166)
+Source: [src/stage/cast.gd:166](../src/stage/cast.gd#L166)
 
 ### `prism` - PrismActor
 
@@ -104,7 +104,7 @@ A living wireframe prism (`PrismBody`) on a slot, drawn through the projected-sl
 | `scale` | Size | num | How large the prism is. Unset, drawn between 0.24 and 0.30. |
 | `hue` | Hue | num | Its color, around the wheel from 0 to 1: blue near 0.6, red at 0. |
 
-Source: [src/cast.gd:527](../src/cast.gd#L527)
+Source: [src/stage/cast.gd:527](../src/stage/cast.gd#L527)
 
 ### `swarm` - SwarmActor
 
@@ -126,7 +126,7 @@ A formation of prisms streaming along an invisible track into the void - a GROUP
 | `lead` | Lead | actor | An actor carried in from the entry before whose prism becomes the first blue member. |
 | `lead_red` | Red lead | actor | An actor carried in whose prism becomes the red strand's lead, waiting until the helix opens. |
 
-Source: [src/cast.gd:571](../src/cast.gd#L571)
+Source: [src/stage/cast.gd:571](../src/stage/cast.gd#L571)
 
 ## Actions (verb registry)
 
@@ -138,7 +138,7 @@ Lifecycle: `begin(stage, actors)` once when the window is entered, `apply(stage,
 
 Verbs receive their args RAW (ranges intact) plus a seeded rng: values meant to be fixed per instance are sampled in begin() ("cattle, not pets"); per-event values (a gaze fixation's distance) are re-drawn as they happen. Same seed, same show.
 
-Registry: `Actions.REGISTRY` in [src/actions.gd](../src/actions.gd) (22 verbs)
+Registry: `Actions.REGISTRY` in [src/stage/actions.gd](../src/stage/actions.gd) (22 verbs)
 
 ### `look` - Look
 
@@ -150,7 +150,7 @@ look - aim eyes at a wandering 3D focus point. ALL targets share one focus, so t
 | `lateral` | Sideways | num | How far a fixation strays to the side. |
 | `stray` | Stray | num | The chance that one eye wanders off the shared focus for a fixation. |
 
-Source: [src/actions.gd:156](../src/actions.gd#L156)
+Source: [src/stage/actions.gd:156](../src/stage/actions.gd#L156)
 
 ### `blink` - Blink
 
@@ -160,7 +160,7 @@ blink - close and reopen the eyelids once. args: duration (s).
 | --- | --- | --- | --- |
 | `duration` | Seconds | num | How long the lids take to close and open again. |
 
-Source: [src/actions.gd:175](../src/actions.gd#L175)
+Source: [src/stage/actions.gd:175](../src/stage/actions.gd#L175)
 
 ### `arrive` - Arrive
 
@@ -171,7 +171,7 @@ arrive - the actor FLIES IN with velocity from offscreen, finds its anchor, and 
 | `from` | From | vec3 | Where it flies in from. Unset, from off the frame. |
 | `wobble` | Wobble | num | How much it rocks as it lands. Unset, a little, by the seed. |
 
-Source: [src/actions.gd:188](../src/actions.gd#L188)
+Source: [src/stage/actions.gd:188](../src/stage/actions.gd#L188)
 
 ### `sprout` - Sprout
 
@@ -181,7 +181,7 @@ sprout - a STANDING ROSE beside the anchor: the stem grows up from below the fra
 | --- | --- | --- | --- |
 | `side` | Side | num | Which side of its place the stem grows on: -1 left, 1 right. Unset, by the seed. |
 
-Source: [src/actions.gd:240](../src/actions.gd#L240)
+Source: [src/stage/actions.gd:240](../src/stage/actions.gd#L240)
 
 ### `split` - Split
 
@@ -193,7 +193,7 @@ split - MITOSIS: one eye divides into two. The twin buds off the source as a bla
 | `hue` | Its hue | num | The color the newborn warms to as it pulls away. Unset, its parent's. |
 | `slots` | Places | data | Where the two come to rest, as two places: `[[x, y, z], [x, y, z]]`. |
 
-Source: [src/actions.gd:364](../src/actions.gd#L364)
+Source: [src/stage/actions.gd:364](../src/stage/actions.gd#L364)
 
 ### `crystallize` - Crystallize
 
@@ -203,13 +203,13 @@ crystallize - the eye FREEZES OVER into the prism (a staged physical transition,
 | --- | --- | --- | --- |
 | `into` | Into | actor | The hidden prism the eye freezes over into. |
 
-Source: [src/actions.gd:505](../src/actions.gd#L505)
+Source: [src/stage/actions.gd:505](../src/stage/actions.gd#L505)
 
 ### `tremble` - Tremble
 
 tremble - the riser: the eye vibrates harder as k rises, light building around it (the drawing lives in `Cast.EyeActor`). Latches at its final level - the burst that replaces the eye is what ends it.
 
-Source: [src/actions.gd:575](../src/actions.gd#L575)
+Source: [src/stage/actions.gd:575](../src/stage/actions.gd#L575)
 
 ### `burst` - Burst
 
@@ -219,7 +219,7 @@ burst - the target bursts into being in a flash (the DROP): revealed at full fad
 | --- | --- | --- | --- |
 | `replaces` | Replaces | actor | An actor that goes as this one bursts into being. |
 
-Source: [src/actions.gd:585](../src/actions.gd#L585)
+Source: [src/stage/actions.gd:585](../src/stage/actions.gd#L585)
 
 ### `lock` - Lock
 
@@ -230,19 +230,19 @@ lock - phase-lock the target's pose to another prism (they turn as one), with a 
 | `to` | To | actor | The prism whose turning it locks onto. |
 | `snap` | Snap | num | How quickly it snaps into step, as a share of the window. |
 
-Source: [src/actions.gd:599](../src/actions.gd#L599)
+Source: [src/stage/actions.gd:599](../src/stage/actions.gd#L599)
 
 ### `desync` - Desync
 
 desync - break a phase-lock: the target resumes its own rotation.
 
-Source: [src/actions.gd:619](../src/actions.gd#L619)
+Source: [src/stage/actions.gd:619](../src/stage/actions.gd#L619)
 
 ### `hold_still` - HoldStill
 
 hold_still - damp the target's own spin toward rest (it keeps breathing). Latches.
 
-Source: [src/actions.gd:626](../src/actions.gd#L626)
+Source: [src/stage/actions.gd:626](../src/stage/actions.gd#L626)
 
 ### `sway` - Sway
 
@@ -252,7 +252,7 @@ sway - slip the anchor and drift weightlessly around it, pushing and pulling (th
 | --- | --- | --- | --- |
 | `amp` | Reach | num | How far it drifts from its place. Unset, a little, by the seed. |
 
-Source: [src/actions.gd:635](../src/actions.gd#L635)
+Source: [src/stage/actions.gd:635](../src/stage/actions.gd#L635)
 
 ### `counterflow` - Counterflow
 
@@ -264,7 +264,7 @@ counterflow - the pair take OPPOSITE HIGHWAYS: each merges onto its own lane and
 | `speed` | Speed | num | How fast they cruise. |
 | `loop_k` | Loop at | num | How far through the window each pulls its closing loop, from 0 to 1. |
 
-Source: [src/actions.gd:664](../src/actions.gd#L664)
+Source: [src/stage/actions.gd:664](../src/stage/actions.gd#L664)
 
 ### `specialize` - Specialize
 
@@ -276,13 +276,13 @@ specialize - diverge in character: scale eases to size x, the body's whole tempo
 | `tempo` | Tempo | num | How many times its own speed it runs at. |
 | `pulse` | Pulse | data | A breathing of its size it keeps afterward: `{"amp": 0.06, "rate": 6.5}`. |
 
-Source: [src/actions.gd:730](../src/actions.gd#L730)
+Source: [src/stage/actions.gd:730](../src/stage/actions.gd#L730)
 
 ### `gather` - Gather
 
 gather - the swarm's members ease in one at a time and form up (k plays the staggered joins through; see `Cast.SwarmActor`).
 
-Source: [src/actions.gd:754](../src/actions.gd#L754)
+Source: [src/stage/actions.gd:754](../src/stage/actions.gd#L754)
 
 ### `fly` - Fly
 
@@ -293,19 +293,19 @@ fly - the formation flies forward along its track, the stage camera following a 
 | `speed` | Speed | num | How fast the swarm flies its track. |
 | `follow` | Camera | num | How closely the camera keeps up: 1 holds the swarm still in frame, less lets it pull away. |
 
-Source: [src/actions.gd:763](../src/actions.gd#L763)
+Source: [src/stage/actions.gd:763](../src/stage/actions.gd#L763)
 
 ### `helix_split` - HelixSplit
 
 helix_split - the single track opens into a double helix: the spread widens and the counter-winding red strand fades in (see `Cast.SwarmActor`).
 
-Source: [src/actions.gd:784](../src/actions.gd#L784)
+Source: [src/stage/actions.gd:784](../src/stage/actions.gd#L784)
 
 ### `lane_jump` - LaneJump
 
 lane_jump - the swarm banks to its side and leaps across to the other strand, then holds there (k rides the bank's arc through the crossing).
 
-Source: [src/actions.gd:792](../src/actions.gd#L792)
+Source: [src/stage/actions.gd:792](../src/stage/actions.gd#L792)
 
 ### `set` - SetParam
 
@@ -316,7 +316,7 @@ set - set one actor parameter instantly. args: param, value.
 | `param` | What | enum | What is set. |
 | `value` | To | num | Its new value, at once. |
 
-Source: [src/actions.gd:799](../src/actions.gd#L799)
+Source: [src/stage/actions.gd:799](../src/stage/actions.gd#L799)
 
 ### `ramp` - Ramp
 
@@ -328,7 +328,7 @@ ramp - ease one actor parameter from its current value (or `from`) to `to`.
 | `from` | From | num | Where it starts. Unset, from where it is. |
 | `to` | To | num | Where it ends up, across the window. |
 
-Source: [src/actions.gd:807](../src/actions.gd#L807)
+Source: [src/stage/actions.gd:807](../src/stage/actions.gd#L807)
 
 ### `pulse` - Pulse
 
@@ -340,7 +340,7 @@ pulse - a scale breathing on the target while the span runs ({amp, rate}); latch
 | `rate` | Rate | num | How many breaths a second. |
 | `latch` | Keeps on | bool | The breathing carries on after the window closes. |
 
-Source: [src/actions.gd:823](../src/actions.gd#L823)
+Source: [src/stage/actions.gd:823](../src/stage/actions.gd#L823)
 
 ### `flash` - Flash
 
@@ -350,7 +350,7 @@ flash - a bright burst overlay on the target (a stinger accent).
 | --- | --- | --- | --- |
 | `hue` | Hue | num | The flash's color. Unset, the actor's own. |
 
-Source: [src/actions.gd:842](../src/actions.gd#L842)
+Source: [src/stage/actions.gd:842](../src/stage/actions.gd#L842)
 
 ## Track (the timeline runner)
 
@@ -362,4 +362,4 @@ Span fields (storyboard data): at            - a point event, or `from` / `to` f
 
 All range sampling draws from per-span rngs seeded off the scene rng in declaration order: same seed, same show, cue jitter aside.
 
-Source: [src/track.gd](../src/track.gd)
+Source: [src/stage/track.gd](../src/stage/track.gd)

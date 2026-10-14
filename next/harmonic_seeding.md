@@ -75,12 +75,12 @@ re-dichotomy):
 
 ## Status / where it lives
 
-- `src/harmonic_signature.gd` - `HarmonicSignature` (chroma + coarse shape, L2-norm, EMA;
+- `src/audio/harmonic_signature.gd` - `HarmonicSignature` (chroma + coarse shape, L2-norm, EMA;
   `vector()`, `bucket(bits)`, `seed()`). Hyperplane bank from a baked seed (global/reproducible).
-- `src/spectrum.gd` - builds it from band centres, updates each analysed frame; exposes
+- `src/audio/spectrum.gd` - builds it from band centres, updates each analysed frame; exposes
   `harmonic_signature()` (continuous channel vector), `harmonic_bucket(bits)`, and
   **`seed_bias()`** (the coarse bucket spread across the seed bits, for XOR-mixing).
-- `src/director.gd` - the auto scene seed now XORs in `Spectrum.seed_bias()` at each cut;
+- `src/show/director.gd` - the auto scene seed now XORs in `Spectrum.seed_bias()` at each cut;
   prints the bucket as telemetry.
 
 **Threaded so far ("a bunch of places"):**

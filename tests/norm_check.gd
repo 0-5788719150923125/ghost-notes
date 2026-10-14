@@ -25,8 +25,8 @@ extends SceneTree
 ##
 ## Run: godot --headless --path . --script tests/norm_check.gd
 
-const TextNorm_ := preload("res://src/text_norm.gd")
-const Phonemes_ := preload("res://src/phonemes.gd")
+const TextNorm_ := preload("res://src/voice/text_norm.gd")
+const Phonemes_ := preload("res://src/voice/phonemes.gd")
 
 # expected substrings, because the surrounding punctuation is preserved
 ## INITIALISMS, as SWITCHES and HOLDS - the same discipline the homograph gates use, and for

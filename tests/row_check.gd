@@ -4,7 +4,7 @@ extends Node
 ##
 ##   tests/run_boot_probe.sh tests/row_check.gd 90
 ##
-## THE GEOMETRY, measured: the buttons stand in Chrome.ROW_ORDER, left to right, NO HOLE where a
+## THE GEOMETRY, measured: the buttons stand in Shell.ROW_ORDER, left to right, NO HOLE where a
 ## hidden one would be (each used to pin itself at a fixed offset, so a hidden ⤓ left a gap),
 ## nothing over anything else, one bottom edge, the right end ROW_MARGIN from the corner - and a
 ## claim on the bottom of the frame lifts the whole row as one.
@@ -63,7 +63,7 @@ func _frames(n: int) -> void:
 
 
 func _chrome() -> Chrome:
-	var ch: Chrome = preload("res://src/chrome.gd").new()
+	var ch: Chrome = preload("res://src/app/chrome.gd").new()
 	add_child(ch)
 	await _frames(6)
 	return ch
@@ -87,7 +87,7 @@ func _geometry(ch: Chrome) -> void:
 	var last := -1
 	for c in ch.row.get_children():
 		var who: StringName = ch._row_buttons.find_key(c)
-		var i := Chrome.ROW_ORDER.find(who)
+		var i := Shell.ROW_ORDER.find(who)
 		if i < last:
 			order_ok = false
 		last = i
@@ -104,7 +104,7 @@ func _geometry(ch: Chrome) -> void:
 	for k in range(1, shown.size()):
 		var a: Rect2 = (shown[k - 1] as Control).get_global_rect()
 		var b: Rect2 = (shown[k] as Control).get_global_rect()
-		if absf(b.position.x - a.end.x - Chrome.ROW_GAP) > 0.5 or a.intersects(b):
+		if absf(b.position.x - a.end.x - Shell.ROW_GAP) > 0.5 or a.intersects(b):
 			contiguous = false
 			print("    %s ends at %.1f, %s starts at %.1f" % [shown[k - 1].text, a.end.x, shown[k].text, b.position.x])
 		if absf(a.end.y - b.end.y) > 0.5:
@@ -112,14 +112,14 @@ func _geometry(ch: Chrome) -> void:
 	_ok(contiguous, "no hole where the hidden ⤓ is, and nothing over anything else (%d shown)" % shown.size())
 	_ok(bottoms, "one bottom edge")
 	var right: Rect2 = (shown[shown.size() - 1] as Control).get_global_rect()
-	_ok(absf(right.end.x - (vp.x - Chrome.ROW_MARGIN)) < 0.5 and absf(right.end.y - (vp.y - Chrome.ROW_MARGIN)) < 0.5,
+	_ok(absf(right.end.x - (vp.x - Shell.ROW_MARGIN)) < 0.5 and absf(right.end.y - (vp.y - Shell.ROW_MARGIN)) < 0.5,
 		"the row ends ROW_MARGIN from the corner (%.0f, %.0f in %.0fx%.0f)" % [right.end.x, right.end.y, vp.x, vp.y])
 	# a claim lifts the whole row as one
 	ch.claim_bottom(&"row_check", 120.0)
 	await _frames(3)
 	var lifted := true
 	for b in _shown(ch):
-		if absf((b as Control).get_global_rect().end.y - (vp.y - Chrome.ROW_MARGIN - 120.0)) > 0.5:
+		if absf((b as Control).get_global_rect().end.y - (vp.y - Shell.ROW_MARGIN - 120.0)) > 0.5:
 			lifted = false
 	_ok(lifted, "a claim on the bottom lifts every button together")
 	ch.release_bottom(&"row_check")
@@ -134,7 +134,7 @@ func _geometry(ch: Chrome) -> void:
 	for b in _shown(ch):
 		if (b as Control).get_global_rect().intersects(env):
 			over = true
-	_ok(not over and env.end.y <= vp.y - Chrome.ROW_TOP, "the Environment panel stands above the row, over nothing")
+	_ok(not over and env.end.y <= vp.y - Shell.ROW_TOP, "the Environment panel stands above the row, over nothing")
 
 
 func _clears_transport(ch: Chrome, vp: Vector2) -> void:
@@ -156,7 +156,7 @@ func _clears_transport(ch: Chrome, vp: Vector2) -> void:
 	Spectrum.release_conductor(self)
 	await _frames(4)
 	var back := (_shown(ch)[0] as Control).get_global_rect().end.y
-	_ok(absf(back - (vp.y - Chrome.ROW_MARGIN)) < 0.5, "untimed again, the row settles back to its margin (%.0f)" % back)
+	_ok(absf(back - (vp.y - Shell.ROW_MARGIN)) < 0.5, "untimed again, the row settles back to its margin (%.0f)" % back)
 
 
 func _one_at_a_time(ch: Chrome) -> void:

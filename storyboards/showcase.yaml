@@ -1,4 +1,4 @@
-# showcase - the README's animation (src/showcase.gd records it): one blue prism
+# showcase - the README's animation (src/app/showcase.gd records it): one blue prism
 # flies in, divides into a blue one and a red one, the pair lock and turn as one,
 # then break and take opposite highways, looping back to the middle as the picture
 # fades - so the recording loops on an empty void. Short on purpose: every second

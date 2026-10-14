@@ -152,7 +152,7 @@ func _begin(fp: int, sr: int, words: Array) -> AudioStreamGeneratorPlayback:
 	Director.attach(_stage, _medium)
 	if _subs != null:
 		_subs.queue_free()
-	_subs = preload("res://src/subtitles.gd").new()
+	_subs = preload("res://src/show/subtitles.gd").new()
 	_subs.words = words
 	_subs.document = _ed.book_document()
 	add_child(_subs)

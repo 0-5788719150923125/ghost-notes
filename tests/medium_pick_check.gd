@@ -30,7 +30,7 @@ func _run() -> void:
 			print("vpick: FAILED - file says '%s' but Director holds '%s' (autoload order?)"
 				% [want, Director.medium])
 			fails += 1
-	var ed := preload("res://src/generative_editor.gd").new()
+	var ed := preload("res://src/reading/generative_editor.gd").new()
 	add_child(ed)
 	await get_tree().process_frame
 	# THE PICTURE IS A CARD (next/notes.md step 5): its controls, and the rows that follow the

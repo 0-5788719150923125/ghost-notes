@@ -23,13 +23,13 @@ Layering is otherwise continuous and ADDITIVE: a later marker keying a second co
 
 THE TRANSITION CONTRACT. Every visual quantity leaving at_time() must be transition-safe in exactly one of three shapes; any new modulation MUST pick one, and nothing may drive a visual straight off a discrete snap: 1. CONTINUOUS  - global keying scalars (threshold, feather, sat_floor), lerped across transition windows. List: GLOBAL_CONTINUOUS. 2. PRESENCE    - which screen layers are up (view_mode): the discrete value is kept for storage and labeling, but the visuals consume the derived AMOUNT_FIELDS, which lerp. A mode change is a presence fade. 3. LAYER       - everything a marker's own channel carries (color, effect, strength, placement, coverage, contrast, resonance), baked into that marker's layer, whose ENVELOPE does the transitioning. An identity change is two layers with complementary envelopes - a dissolve, never a swap.
 
-Source: [src/mask_session.gd](../src/mask_session.gd)
+Source: [src/masking/mask_session.gd](../src/masking/mask_session.gd)
 
 ## The editor
 
 MaskEditor - the mask-mode authoring surface.
 
-Load a clip, key two colors apart (per-pixel hue classification, see shaders/mask_split.gdshader), place MARKERS where the split/effect should change, scrub the timeline, export. See src/mask_session.gd for the data model - a session's markers are fixed-schema scalar vectors, not free-form params, and every one is either a RAMP (eases in before its anchor) or a DAMP (accumulates after it) - there's no third, undifferentiated "marker" kind.
+Load a clip, key two colors apart (per-pixel hue classification, see shaders/mask_split.gdshader), place MARKERS where the split/effect should change, scrub the timeline, export. See src/masking/mask_session.gd for the data model - a session's markers are fixed-schema scalar vectors, not free-form params, and every one is either a RAMP (eases in before its anchor) or a DAMP (accumulates after it) - there's no third, undifferentiated "marker" kind.
 
 Standalone by design: a mask session is tied to one specific external clip, not the audio-reactive show, so this does NOT route through Director/Spectrum. Two entry points (see main.gd): --mask-edit [path]    interactive editor (this file's normal mode) --mask-render <json>  the export relaunch's headless-ish render mode (`render_mode` = true; no panel, autoplay, quits when the audio ends - mirrors --export/_export_mode).
 
@@ -43,7 +43,7 @@ THE REGION is the one control here that is spatial rather than chromatic, and it
 
 ANY FRAME SHAPE. The clip's own pixel dimensions are read once (`_src_size`) and are the only thing that decides the picture's geometry: the editor fits the whole frame inside its video area (a portrait phone clip gets black bars left and right, a wide one keeps them above and below), the effects' patterns stay isotropic through the shader's `u_aspect`, and the export records at the SOURCE's resolution - a 1080x1920 clip renders a 1080x1920 movie. Nothing in here assumes 16:9; see _src_size and _write_render_override.
 
-Source: [src/mask_editor.gd](../src/mask_editor.gd)
+Source: [src/masking/mask_editor.gd](../src/masking/mask_editor.gd)
 
 ## Effects
 
@@ -75,10 +75,10 @@ Source: [src/mask_editor.gd](../src/mask_editor.gd)
 
 ## Headless marker insertion
 
-`src/mask_marker_tool.gd` inserts one marker into a saved session from the command line (no editor boot): 
+`src/masking/mask_marker_tool.gd` inserts one marker into a saved session from the command line (no editor boot): 
 
 ```
-godot --headless --path . --script src/mask_marker_tool.gd \
+godot --headless --path . --script src/masking/mask_marker_tool.gd \
     -- masks/<video>/session.json <time> [field=value ...]
 ```
 

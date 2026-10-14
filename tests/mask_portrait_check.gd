@@ -69,7 +69,7 @@ func _initialize() -> void:
 ## shape has to reach.
 func _check(size: Vector2i, label: String) -> void:
 	var aspect := float(size.x) / float(size.y)
-	var editor: Node = load("res://src/mask_editor.gd").new()
+	var editor: Node = load("res://src/masking/mask_editor.gd").new()
 	root.add_child(editor)
 	editor.open_source(_session_path(size))
 	# A few frames: the session opens synchronously, but _sync_source_size only

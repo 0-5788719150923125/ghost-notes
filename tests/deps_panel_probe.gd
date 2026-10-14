@@ -31,7 +31,7 @@ func _run() -> void:
 		get_tree().quit(2)
 		return
 	# THE PANEL IS CHROME'S (next/notes.md step 4), behind the row's ⚙: a Chrome, with it open.
-	var chrome: Chrome = preload("res://src/chrome.gd").new()
+	var chrome: Chrome = preload("res://src/app/chrome.gd").new()
 	get_tree().root.add_child(chrome)
 	var panel: DepsPanel = chrome.environment
 	chrome.set_environment_open(true, false)

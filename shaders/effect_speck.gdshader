@@ -1,4 +1,4 @@
-// A dark speck of an effect (see src/effects.gd): a fly, a gnat - laid over what is behind it,
+// A dark speck of an effect (see src/table/effects.gd): a fly, a gnat - laid over what is behind it,
 // never added to it, so it shows dark on the cloth and against the light. Its body fills the middle
 // third of its quad, which the vertex smears along its motion. `glow` is how dark it is.
 shader_type spatial;

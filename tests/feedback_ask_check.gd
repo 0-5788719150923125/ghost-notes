@@ -46,7 +46,7 @@ func _run() -> void:
 	_ok(not Assistant.sends(false, "claude_cli"), "not asked: only logged")
 	_ok(not Assistant.sends(true, ""), "no backend: only logged")
 
-	var fc: FeedbackConsole = preload("res://src/feedback.gd").new()
+	var fc: FeedbackConsole = preload("res://src/app/feedback.gd").new()
 	fc.dir = SCRATCH
 	fc.describe = func() -> Dictionary: return {"scene": "probe"}
 	fc.freeze = func(_on: bool) -> void: pass
@@ -112,7 +112,7 @@ func _run() -> void:
 	fc._close()
 
 	print("the assistant")
-	var a: Assistant = preload("res://src/assistant.gd").new()
+	var a: Assistant = preload("res://src/app/assistant.gd").new()
 	a._running_count = Assistant.MAX_CONCURRENT   # nothing can start, whatever is queued
 	add_child(a)
 	await get_tree().process_frame

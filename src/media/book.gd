@@ -190,7 +190,7 @@ var _map_src_n := 0
 var _lay_t := {}                 # layout word -> when it finished being spoken (show time)
 var _lay_t0 := {}                # ...and when it began
 var _char0 := PackedInt32Array() # layout word -> its first character's index in the text
-var _voice_of := PackedInt32Array() # layout word -> its voice's place among the chapter's (Subtitles.voice_hue)
+var _voice_of := PackedInt32Array() # layout word -> its voice's place among the chapter's (Scheme.voice_hue)
 var _sent_lo := {}               # subtitle sentence id -> first layout word
 var _sent_hi := {}
 
@@ -433,7 +433,7 @@ func _leaf(side: float) -> MeshInstance3D:
 
 
 func begin_session() -> void:
-	_seed = Director.session_seed()
+	_seed = feed.session_seed()
 	_seed_hue = float(hash([_seed, "hue"]) & 0xFFFF) / 65535.0
 	var r := RandomNumberGenerator.new()
 	r.seed = _seed ^ 0xB00C
@@ -508,7 +508,7 @@ func advance(_features, delta: float, bookend: float) -> void:
 	if slen <= 0.0 or t < slen * 0.5:
 		b = clampf(t / FADE_IN, 0.0, 1.0)
 	# a live reading's outro mark fades the picture with the voice
-	_env.adjustment_brightness = clampf(b * Director.live_fade, 0.0, 1.0)
+	_env.adjustment_brightness = clampf(b * feed.live_fade, 0.0, 1.0)
 	_ensure_layout()
 	if _layout == null:
 		return
@@ -534,11 +534,11 @@ func _ensure_layout() -> void:
 		# title in it.
 		title = String(doc.get("title", ""))
 		if title.is_empty():
-			title = BookLayout.field_of(src, "title")
+			title = FrontMatter.field_of(src, "title")
 		var bk := String(doc.get("book", ""))
 		var au := String(doc.get("author", ""))
-		_set_cover(bk if not bk.is_empty() else BookLayout.field_of(src, "book"),
-			au if not au.is_empty() else BookLayout.field_of(src, "author"))
+		_set_cover(bk if not bk.is_empty() else FrontMatter.field_of(src, "book"),
+			au if not au.is_empty() else FrontMatter.field_of(src, "author"))
 	if src.is_empty() and not words.is_empty():
 		# NO MANUSCRIPT, ONLY WORDS: a take without a book block (an older sidecar, the
 		# fishing voice). Print what is spoken, a paragraph every few sentences, and reset
@@ -1015,7 +1015,7 @@ func draw_page(ci: CanvasItem, page: int, hl: Dictionary) -> void:
 					g = exp(-maxf((frac - at) * maxf(t1 - t0, 0.05), 0.0) / TRAIL_TAU)
 				if g > 0.01:
 					var ci_i := _char0[i] + k if i < _char0.size() else k
-					var hue := Subtitles.voice_hue(_seed_hue + float(ci_i) * HUE_STEP, _voice_of[i] if i < _voice_of.size() else 0)
+					var hue := Scheme.voice_hue(_seed_hue + float(ci_i) * HUE_STEP, _voice_of[i] if i < _voice_of.size() else 0)
 					# the subtitles' saturation wave: two slow incommensurate ripples along
 					# the text, so the color breathes instead of sitting at one intensity
 					var sw := 0.5 + 0.35 * sin(float(ci_i) * 0.21 - now * 0.9) \
@@ -1246,7 +1246,7 @@ func _underline(ci: CanvasItem, at: Vector2, width: float, col: Color, _salt: in
 # --- the camera ------------------------------------------------------------------
 
 func _sev() -> float:
-	return clampf(Director.camera, Director.CAMERA_MIN, Director.CAMERA_MAX)
+	return clampf(feed.camera, ShowFeed.CAMERA_MIN, ShowFeed.CAMERA_MAX)
 
 
 ## How far into the arc of the open spread the reading is: 0 wide, 1 local. A pure function

@@ -1,4 +1,4 @@
-// WHAT THE SUN FALLS THROUGH (src/lights.gd): a wall with a window, blinds or a pierced screen in it,
+// WHAT THE SUN FALLS THROUGH (src/table/lights.gd): a wall with a window, blinds or a pierced screen in it,
 // or leaves, fronds, branches, slats, an awning or a parasol overhead - drawn into nothing but the
 // sun's shadow map (the mesh is shadow-only, on Lights.SCREEN_LAYER): where a fragment is kept the
 // sun is held back, where one is discarded it gets through. Posed from show time - leaves stir, an

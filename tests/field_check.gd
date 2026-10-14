@@ -15,7 +15,7 @@ extends SceneTree
 ##
 ## Run: godot --headless --path . --script tests/field_check.gd
 
-const VoiceField_ := preload("res://src/voice_field.gd")
+const VoiceField_ := preload("res://src/voice/voice_field.gd")
 
 const N_BELT := 9
 

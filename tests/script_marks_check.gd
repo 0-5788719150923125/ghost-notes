@@ -193,7 +193,7 @@ func _parsers_agree() -> void:
 			"hum":
 				# Read off the source: the editor itself cannot load without the autoloads.
 				var word := fill.to_lower().rstrip(".!?…")
-				var src := FileAccess.get_file_as_string("res://src/reading_panel.gd")
+				var src := FileAccess.get_file_as_string("res://src/reading/reading_panel.gd")
 				var m := RegEx.create_from_string("const HUM_SECONDS := \\{([^}]*)\\}").search(src)
 				_ok(m != null and m.get_string(1).contains("\"%s\":" % word),
 					"the hum example is not a held hum")

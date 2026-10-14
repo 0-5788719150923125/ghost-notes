@@ -1,5 +1,5 @@
 # THE READER - the voice of the video, ONE PASSAGE AT A TIME, in drawing order (CardPrompts.reader fills
-# it in; src/rules.gd says how a rules file reads). Each run is shown the reading so far and the cards
+# it in; src/data/rules.gd says how a rules file reads). Each run is shown the reading so far and the cards
 # turned over so far, and nothing else: the next card does not exist anywhere in its input until it has
 # been drawn. That is the whole of "no cheating", and the code keeps it - this file only words it.
 #

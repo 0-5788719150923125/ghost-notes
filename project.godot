@@ -25,11 +25,11 @@ driver/enable_input=true
 
 [autoload]
 
-Settings="*res://src/settings.gd"
-Boot="*res://src/boot.gd"
-Spectrum="*res://src/spectrum.gd"
-Director="*res://src/director.gd"
-Provisioner="*res://src/provisioner.gd"
+Settings="*res://src/platform/settings.gd"
+Boot="*res://src/platform/boot.gd"
+Spectrum="*res://src/audio/spectrum.gd"
+Director="*res://src/show/director.gd"
+Provisioner="*res://src/platform/provisioner.gd"
 
 [debug]
 

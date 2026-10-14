@@ -89,7 +89,7 @@ func _presets() -> void:
 
 func _aside() -> void:
 	print("-- the deck put aside")
-	var m = load("res://src/media/table.gd").new()
+	var m = load("res://src/table/table.gd").new()
 	var moved := 0
 	var bad := 0
 	var lone := 0

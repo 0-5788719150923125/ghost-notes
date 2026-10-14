@@ -1,4 +1,4 @@
-// VALUE NOISE ON AN INTEGER HASH, for the light (src/lights.gd): the same numbers on the GPU as in
+// VALUE NOISE ON AN INTEGER HASH, for the light (src/table/lights.gd): the same numbers on the GPU as in
 // Lights' own reckoning on the CPU (Lights.noise, Lights.fbm), so the shade the set dresser is told
 // falls on the cards is the shade that is drawn. A float hash (noise_common's `fract(...)` products)
 // drifts apart between the two at these coordinates; 32-bit integer arithmetic does not. Both

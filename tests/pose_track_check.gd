@@ -65,7 +65,7 @@ func _initialize() -> void:
 			f.store_8(_expect_cell(i, c))
 	f.close()
 
-	var ed: Node = load("res://src/mask_editor.gd").new()
+	var ed: Node = load("res://src/masking/mask_editor.gd").new()
 	var s := MaskSession.new()
 	s.video_path = "res://masks/_pose_check/video.ogv"
 	ed.session = s
@@ -147,7 +147,7 @@ func _initialize() -> void:
 	var g := FileAccess.open(short, FileAccess.WRITE)
 	g.store_buffer(raw.slice(0, raw.size() - 900))
 	g.close()
-	var ed2: Node = load("res://src/mask_editor.gd").new()
+	var ed2: Node = load("res://src/masking/mask_editor.gd").new()
 	ed2.session = s
 	ed2._pt_state = "ready"
 	ed2._pt_load_chunk(CHUNK, short)

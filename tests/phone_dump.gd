@@ -7,7 +7,7 @@ extends SceneTree
 ##
 ## Run: godot --headless --path . --script tests/phone_dump.gd -- "your text"
 
-const Voice_ := preload("res://src/voice.gd")
+const Voice_ := preload("res://src/voice/voice.gd")
 
 const OUT_DIR := "/tmp/ghost_scratch"
 

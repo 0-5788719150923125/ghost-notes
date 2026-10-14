@@ -1,4 +1,4 @@
-// Smoke (see src/effects.gd): soft puffs laid over what is behind them, lit by the scene's own
+// Smoke (see src/table/effects.gd): soft puffs laid over what is behind them, lit by the scene's own
 // lights - a candle warms the smoke beside it - and thinning as they grow.
 shader_type spatial;
 render_mode blend_mix, depth_draw_never, cull_disabled, shadows_disabled, skip_vertex_transform, specular_disabled;

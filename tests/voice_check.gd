@@ -13,8 +13,8 @@ extends SceneTree
 ##    cover the audio, and write the WAV to /tmp/ghost_scratch/ for the human
 ##    half of the check (listening).
 
-const Voice_ := preload("res://src/voice.gd")
-const Phonemes_ := preload("res://src/phonemes.gd")
+const Voice_ := preload("res://src/voice/voice.gd")
+const Phonemes_ := preload("res://src/voice/phonemes.gd")
 
 const OUT_DIR := "/tmp/ghost_scratch"
 

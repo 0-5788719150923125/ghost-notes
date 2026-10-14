@@ -124,7 +124,7 @@ func _nova() -> bool:
 
 
 func _panel() -> bool:
-	var ed = load("res://src/cards_editor.gd").new()
+	var ed = load("res://src/cards/cards_editor.gd").new()
 	ed._build_panel()
 	# NOT THE AUTHOR'S SHOW. A panel comes up synced to whatever document the person running
 	# this has open, and DocSource.set_field writes a synced document at once - so this gate read

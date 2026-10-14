@@ -33,7 +33,7 @@ Ghost's own flags follow the Godot separator: `godot --path . -- <ghost flags>`.
 | `--synth-autopilot` |  | With `--export`: open the Synthesis panel over the take and let the fishing game play itself (random Throw/Pull/reel/hold-or-fold), so the UI is recorded into the video. Generates no audio and persists nothing (set by the exporter's 'Automate the Synthesis game' toggle). | _internal_ |
 | `--use-bake` |  | Drive `Spectrum` from the song's cached bake instead of the live analyzer. | _internal_ |
 | `--bake-file` | `<path>` | Explicit spectrum-bake cache for a render (implies `--use-bake`). | _internal_ |
-| `--showcase-now` |  | Record the README's animation (`docs/showcase.webp`) now, stale or not, and quit; pairs with `--headless`. A development launch records it by itself when what it shows has changed (`src/showcase.gd`). |  |
+| `--showcase-now` |  | Record the README's animation (`docs/showcase.webp`) now, stale or not, and quit; pairs with `--headless`. A development launch records it by itself when what it shows has changed (`src/app/showcase.gd`). |  |
 | `--showcase` | `<work dir>` | Marks the README animation's Movie Maker recording (set by `Showcase`): plays the showcase note read-only and quits. | _internal_ |
 | `--bake-song` | `<path>` | Export subprocess: the song to analyze. | _internal_ |
 | `--bake-out` | `<path>` | Export subprocess: where to write the bake cache. | _internal_ |

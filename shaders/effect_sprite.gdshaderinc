@@ -1,4 +1,4 @@
-// What every sprite of an effect shares (see src/effects.gd): a quad turned to the camera,
+// What every sprite of an effect shares (see src/table/effects.gd): a quad turned to the camera,
 // sized in meters, at a place that is a function of SHOW TIME. A mote is POSED (the CPU put it where
 // it is now: its place, its size in the custom data's w, its brightness in the color's alpha, and -
 // for a speck - its velocity in the transform's first column). A burst's particle FLIES: born at a

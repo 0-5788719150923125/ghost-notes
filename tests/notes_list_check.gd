@@ -142,14 +142,14 @@ func _check_furniture(list: NotesList) -> void:
 			ch.environment._toggle_detail(String(ch.environment._rows[0].get("key", "")))
 		await _frames(6)
 		var box := ch.environment.get_global_rect()
-		_ok(box.end.y <= floor_y - Chrome.ROW_TOP, "the Environment panel (%s) stands above the row" % step)
+		_ok(box.end.y <= floor_y - Shell.ROW_TOP, "the Environment panel (%s) stands above the row" % step)
 		for b in ch.row.get_children():
 			if (b as Control).visible:
 				_ok(not (b as Control).get_global_rect().intersects(box),
 					"%s is not over the Environment panel (%s)" % [(b as Button).text, step])
 	for b in ch.row.get_children():
 		if (b as Control).visible:
-			_ok(absf((b as Control).get_global_rect().end.y - (floor_y - Chrome.ROW_MARGIN)) < 0.5,
+			_ok(absf((b as Control).get_global_rect().end.y - (floor_y - Shell.ROW_MARGIN)) < 0.5,
 				"%s sits on the row every note uses" % (b as Button).text)
 		_ok(not (b as Control).get_global_rect().intersects(list._panel.get_global_rect()),
 			"%s is not over the list" % (b as Button).text)

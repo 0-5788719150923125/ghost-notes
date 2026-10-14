@@ -15,7 +15,7 @@ extends SceneTree
 ##
 ## Run: godot --headless --path . --script tests/song_check.gd
 
-const Voice_ := preload("res://src/voice.gd")
+const Voice_ := preload("res://src/voice/voice.gd")
 
 const TEXT := "The far end is yours. It has been yours for so long that the cushion has surrendered."
 const OUT_DIR := "/tmp/ghost_scratch"

@@ -27,8 +27,8 @@ extends Node
 ## [Subtitles] reads the Spectrum autoload:
 ##   tests/run_boot_probe.sh tests/subtitle_emphasis_check.gd 60
 
-const TextNorm_ := preload("res://src/text_norm.gd")
-const Phonemes_ := preload("res://src/phonemes.gd")
+const TextNorm_ := preload("res://src/voice/text_norm.gd")
+const Phonemes_ := preload("res://src/voice/phonemes.gd")
 
 # [source, [[display, level], ...]] - one entry per word the parse should produce,
 # flattened across sentences. A level is 0 plain, 1 italic, 2 bold, 3 both.

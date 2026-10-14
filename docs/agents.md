@@ -20,7 +20,7 @@ Where each is chosen: a card show's **Writer** and **Painter** rows, each with i
 
 ## Writers (4)
 
-`TextGen.REGISTRY` in [src/text_gen.gd](../src/text_gen.gd). Who writes the words. The text counterpart of `ImageGen`.
+`TextGen.REGISTRY` in [src/agents/text_gen.gd](../src/agents/text_gen.gd). Who writes the words. The text counterpart of `ImageGen`.
 
 ### `claude` - Claude (Claude Code CLI)
 
@@ -30,7 +30,7 @@ CLAUDE THROUGH THE CLAUDE CODE CLI, as a bare writer.
 
 `--safe-mode` leaves out everything the author has customized - CLAUDE.md, memory, skills, hooks, MCP servers, plugins, output styles - and `--system-prompt-file` replaces Claude Code's own agent prompt, so the model sees the two files and nothing else (measured: ~480 input tokens for a one-line prompt). `--tools ""` takes every tool away, so a reply is words and only words. `--no-session-persistence`: nothing is resumed, see the class note. The message goes in as STREAM-JSON (one user message on stdin), the only input that carries pictures; the reply comes back as the stream's `result` event (`--verbose` is required with stream-json output). Measured with a picture attached: the tool list stays empty. `--bare` would be tighter still and is NOT used - it reads only ANTHROPIC_API_KEY, never the subscription login the rest of ghost's Claude runs use.
 
-Runs the Claude Code CLI. Source: [src/text_gen.gd:325](../src/text_gen.gd#L325)
+Runs the Claude Code CLI. Source: [src/agents/text_gen.gd:325](../src/agents/text_gen.gd#L325)
 
 ### `codex` - OpenAI (Codex CLI)
 
@@ -42,7 +42,7 @@ OPENAI THROUGH THE CODEX CLI.
 
 GHOST'S TOOLS (`AgentTools`) are its server `ghost`, named in `-c mcp_servers.ghost.*` overrides: the bare endpoint in argv and the job's token read from an environment variable set for this run alone (`bearer_token_env_var`), so no argv holds it; its calls approved (`default_tools_approval_mode = "approve"`: `codex exec` never asks, and refused ghost's call with "requires approval, but approval policy is never"); and room for a slow one (`tool_timeout_sec`). A tool's picture reaches the model (measured, codex-cli 0.157.0: described rightly).
 
-Runs the OpenAI Codex CLI. Source: [src/text_gen.gd:525](../src/text_gen.gd#L525)
+Runs the OpenAI Codex CLI. Source: [src/agents/text_gen.gd:525](../src/agents/text_gen.gd#L525)
 
 ### `grok` - xAI (Grok Build CLI)
 
@@ -62,7 +62,7 @@ AN AGENT FILE'S BODY IS A TEMPLATE: a `${{ ... }}` in it is filled in (measured:
 
 NO SESSION IS KEPT. Grok keeps every run (its messages, the pictures it read, the text in a search index) and has no switch against it, so a finished run's sessions are deleted with Grok's own `sessions delete`, as the job's last steps (`forget`). The painter (`ImageGen.Grok`) shares all of this.
 
-Runs the Grok Build CLI (xAI). Source: [src/text_gen.gd:705](../src/text_gen.gd#L705)
+Runs the Grok Build CLI (xAI). Source: [src/agents/text_gen.gd:705](../src/agents/text_gen.gd#L705)
 
 ### `bedrock` - Amazon Bedrock (AWS CLI)
 
@@ -76,11 +76,11 @@ WHICH MODELS, AND WHERE TO CALL THEM, is the account's own answer: `BedrockCatal
 
 ONE API, MANY MODELS: Converse evens out most differences between providers, and the two that remain are retried as steps: a model that takes no system prompt is sent it at the head of the message, and one whose output limit is under `MAX_TOKENS` is asked again inside it.
 
-Runs the AWS CLI. Source: [src/text_gen.gd:1105](../src/text_gen.gd#L1105)
+Runs the AWS CLI. Source: [src/agents/text_gen.gd:1105](../src/agents/text_gen.gd#L1105)
 
 ## Painters (3)
 
-`ImageGen.REGISTRY` in [src/image_gen.gd](../src/image_gen.gd). Who paints the pictures. The backend axis of `Illustrations`.
+`ImageGen.REGISTRY` in [src/agents/image_gen.gd](../src/agents/image_gen.gd). Who paints the pictures. The backend axis of `Illustrations`.
 
 ### `codex` - OpenAI (Codex CLI)
 
@@ -94,7 +94,7 @@ Reasoning effort is LOW unless the panel asks for another: the author's default 
 
 `--ephemeral`: ghost keeps the picture, so Codex keeps no session. A session log holds every reference and the result as base64 (5-20 MB a picture) and Codex never prunes them. Measured on codex-cli 0.157.0: the thread id and `generated_images` are unaffected.
 
-Runs the OpenAI Codex CLI. Source: [src/image_gen.gd:97](../src/image_gen.gd#L97)
+Runs the OpenAI Codex CLI. Source: [src/agents/image_gen.gd:97](../src/agents/image_gen.gd#L97)
 
 ### `grok` - xAI (Grok Build CLI)
 
@@ -106,7 +106,7 @@ Run as the writer is (`TextGen.Grok`: an agent file whose body is the system pro
 
 The effort is LOW unless one is chosen, as Codex's painter: the agent writes a prompt and calls one tool; the picture is the image model's.
 
-Runs the Grok Build CLI (xAI). Source: [src/image_gen.gd:293](../src/image_gen.gd#L293)
+Runs the Grok Build CLI (xAI). Source: [src/agents/image_gen.gd:293](../src/agents/image_gen.gd#L293)
 
 ### `bedrock` - Amazon Bedrock (AWS CLI)
 
@@ -118,11 +118,11 @@ AN IMAGE MODEL IS NOT AN AGENT. Every painter prompt in ghost is written for one
 
 WHAT AN IMAGE MODEL IS ASKED is per family (`SCHEMAS`): the catalog lists every image model the account can reach, and a painter offers the ones it knows how to ask. A new family is an entry there and a body in `body`. Steps, each its own process: the catalog lookup if it is stale (see `BedrockCatalog`), the director, the painting.
 
-Runs the AWS CLI. Source: [src/image_gen.gd:463](../src/image_gen.gd#L463)
+Runs the AWS CLI. Source: [src/agents/image_gen.gd:463](../src/agents/image_gen.gd#L463)
 
 ## The assistant (2)
 
-`AssistantBackends.REGISTRY` in [src/assistant_backends.gd](../src/assistant_backends.gd). The CLIs `Assistant` can dispatch a feedback note to, and everything that differs between them: how a run is launched, how it is resumed, and how its event stream reads. It runs in the folder Ghost Notes runs from and edits it, so it is for working on Ghost Notes itself.
+`AssistantBackends.REGISTRY` in [src/agents/assistant_backends.gd](../src/agents/assistant_backends.gd). The CLIs `Assistant` can dispatch a feedback note to, and everything that differs between them: how a run is launched, how it is resumed, and how its event stream reads. It runs in the folder Ghost Notes runs from and edits it, so it is for working on Ghost Notes itself.
 
 - **Claude Code CLI** (`claude_cli`)
 - **Codex CLI (OpenAI)** (`codex_cli`)
@@ -146,4 +146,4 @@ Runs the AWS CLI. Source: [src/image_gen.gd:463](../src/image_gen.gd#L463)
   - macOS: `brew install awscli   ·   or the installer: https://awscli.amazonaws.com/AWSCLIV2.pkg`
   - Windows: `winget install Amazon.AWSCLI   ·   or msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi`
 
-Source: the registries above, and `Deps.TOOLS` in [src/deps.gd](../src/deps.gd), which the Environment panel and every launch resolve through - see [environment.md](environment.md).
+Source: the registries above, and `Deps.TOOLS` in [src/platform/deps.gd](../src/platform/deps.gd), which the Environment panel and every launch resolve through - see [environment.md](environment.md).

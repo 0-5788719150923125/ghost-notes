@@ -94,7 +94,7 @@ func advance(features, delta: float, bookend: float) -> void:
 ## The hand the author chose ([member Director.hand]), or this session's draw on "random".
 ## Checked every frame so a change in the panel re-typesets the open chapter at once.
 func _follow_hand() -> void:
-	var want := Director.hand if NotebookLayout.HANDS.has(Director.hand) else _drawn_hand
+	var want := feed.hand if NotebookLayout.HANDS.has(feed.hand) else _drawn_hand
 	if want.is_empty() or want == _hand:
 		return
 	_hand = want

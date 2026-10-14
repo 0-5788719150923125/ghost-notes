@@ -1,6 +1,6 @@
 # THE PAINTER - the deck's pictures and the table's, an image agent told in words to make ONE image and
 # put it at an exact path (ImageGen); never shown the reading (CardPrompts.card_image, back_image,
-# surface_image, height_image and backdrop_image fill these in; src/rules.gd says how a rules file
+# surface_image, height_image and backdrop_image fill these in; src/data/rules.gd says how a rules file
 # reads). Every picture's prompt opens with `head`.
 #
 # The code gives: {{target}}, the path; the look's {{deck_noun}}, {{deck_name}}, {{deck_style}},

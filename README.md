@@ -51,6 +51,7 @@ Documented outside the registry pages.
 
 - [How the show is made](docs/architecture.md) - from the audio to the screen or a video file: the signal path, composition, drawing, scheduling, rendering - and adding a scene.
 - [The environment](docs/environment.md) - what Ghost Notes installs itself, and the few programs that stay the machine's.
+- [The structure](docs/structure.md) - `src/` as a stack of folders: what each is, what it names, and what still points up.
 - [CLI flags](docs/cli.md) - every command-line flag.
 - [Storyboards](storyboards/README.md) - the data spec a note's storyboard is written in.
 
@@ -68,14 +69,14 @@ Top-level layout; every script is in [docs/index.md](docs/index.md).
 
 - **[`project.godot`](project.godot)** - Godot 4.7 project; autoloads `Settings`, `Boot`, `Spectrum`, `Director`, `Provisioner`; `scenes/main.tscn` is the entry scene.
 - **[`scenes/`](scenes/)** - The Godot entry scene (`main.tscn`). Everything else is code-built.
-- **[`src/`](src/)** - All GDScript. Per-script map in [docs/index.md](docs/index.md); the subsystem groups are described there too.
+- **[`src/`](src/)** - All GDScript, in one level of folders that are a stack: a script names its own folder and the ones below. [docs/structure.md](docs/structure.md) is the stack; [docs/index.md](docs/index.md) has every script.
 - **[`src/scenes/`](src/scenes/)** - The visualizer scene catalog - one class per scene. See [docs/scenes.md](docs/scenes.md).
 - **[`src/media/`](src/media/)** - The media - what the show is carried on. See [docs/media.md](docs/media.md).
 - **[`shaders/`](shaders/)** - The GPU shaders: the Look, every Masking effect, the card table and a few scenes.
 - **[`storyboards/`](storyboards/)** - Manual-mode scene scores (YAML; JSON accepted). [storyboards/README.md](storyboards/README.md) is the data spec.
 - **[`data/`](data/)** - Data the code reads - pronunciation (CMUdict, `english.yml`), the LibriTTS speaker table - each license beside its file.
 - **[`fonts/`](fonts/)** - Faces the media draw with: the notebook's handwriting and the card table's lettering.
-- **[`hosts/`](hosts/)** - The Python hosts ghost spawns, each in an environment of its own the Provisioner builds (`src/deps.gd`): `voice/` the neural voice, `face/` Masking's face and body pre-passes, `capture/` the tablet's page capture. Kept out of the exported .pck.
+- **[`hosts/`](hosts/)** - The Python hosts ghost spawns, each in an environment of its own the Provisioner builds (`src/platform/deps.gd`): `voice/` the neural voice, `face/` Masking's face and body pre-passes, `capture/` the tablet's page capture. Kept out of the exported .pck.
 - **[`scripts/`](scripts/)** - Build and check scripts: `scripts/check.sh` runs every gate (`--gpu` adds the ones that need a real renderer), `scripts/build.sh` exports a target into `dist/`.
 - **[`tests/`](tests/)** - The gates (`*_check.gd`), probes (`*_probe.gd`) and their runners; `scripts/check.sh` runs them all.
 - **[`docs/`](docs/)** - Generated documentation. Regenerate with `python docs.py`; do not edit by hand.

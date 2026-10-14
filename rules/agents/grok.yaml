@@ -1,5 +1,5 @@
 # GROK - what xAI's Grok Build CLI is told beside ghost's own prompts, for what it does differently
-# from the other agents (TextGen.Grok and ImageGen.Grok fill these in; src/rules.gd says how a rules
+# from the other agents (TextGen.Grok and ImageGen.Grok fill these in; src/data/rules.gd says how a rules
 # file reads).
 #
 # The code gives: `pictures` (a writer's: each {n, label, path}) and `refs` (a painter's: each {n,

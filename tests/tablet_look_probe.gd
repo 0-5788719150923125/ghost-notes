@@ -70,7 +70,7 @@ func _run() -> void:
 		print("tablet_look_probe: no spoken words in '%s' - nothing to drive" % _doc)
 		get_tree().quit(2)
 		return
-	var title := BookLayout.field_of(body, "title")
+	var title := FrontMatter.field_of(body, "title")
 	# stand-ins: --image for every picture, and any capture already taken for a real page
 	var idx := {}
 	if not _image.is_empty():
@@ -95,7 +95,7 @@ func _run() -> void:
 	Director.hold(true)
 	if _intro >= 0.0:
 		Director.intro_hold = _intro
-	var subs: Subtitles = preload("res://src/subtitles.gd").new()
+	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	var scrub: Dictionary = Audit.scrub_to(body, _from) if not _from.is_empty() else {"si": 0}
 	if int(scrub["si"]) < 0:
 		print("tablet_look_probe: '%s' is not read in this chapter" % _from)

@@ -42,7 +42,7 @@ extends Node
 ## PanelContainer holding the same VBox. It must overflow at a height where the SidePanel does
 ## not, or this gate is measuring a window that was always big enough.
 
-const SidePanel_ := preload("res://src/side_panel.gd")
+const SidePanel_ := preload("res://src/ui/side_panel.gd")
 
 ## Window heights to sweep. The viewport is 1.5x these (the project stretches content), which
 ## is why the assertions are all made against the viewport's own rect rather than these.

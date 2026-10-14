@@ -483,7 +483,7 @@ func _check_one_block_per_component() -> void:
 ## its cast is the cast written here - it used to keep a copy of its own, and a chapter
 ## opened in it had no voices. And what the cards_panel panel then writes leaves the picture alone.
 func _check_the_voice_is_the_documents() -> void:
-	var cards_panel = load("res://src/cards_editor.gd").new()
+	var cards_panel = load("res://src/cards/cards_editor.gd").new()
 	cards_panel._build_panel()
 	cards_panel.remove_child(cards_panel._panel)     # in the tree, as the panel above is: sliders emit only there
 	add_child(cards_panel._panel)
@@ -616,7 +616,7 @@ func _check_fields() -> void:
 	_ok(_doc.field("title") == "Chapter One", "the file's title was not read")
 	_ok(_doc.set_field("author", "Ann Example"), "setting the author failed")
 	var after := FileAccess.get_file_as_string(_path)
-	_ok(BookLayout.field_of(after, "author") == "Ann Example", "the author did not reach the file")
+	_ok(FrontMatter.field_of(after, "author") == "Ann Example", "the author did not reach the file")
 	_ok(String(FrontMatter.split(after).body) == String(parts.body), "setting a field changed the body")
 	_ok(FrontMatter.read_block(after).data == FrontMatter.read_block(before).data,
 		"setting a field changed ghost's block")
@@ -657,7 +657,7 @@ func _check_save_to() -> void:
 	_ok(FrontMatter.lf(String(FrontMatter.split(raw).body)).strip_edges() == "A new script.",
 		"the script did not land in the new file: %s" % raw)
 	_ok(FrontMatter.read_block(raw).data.has("voice"), "the voice did not go into its frontmatter")
-	_ok(BookLayout.field_of(raw, "title") == "Untitled No More" and _doc._fields.is_empty(),
+	_ok(FrontMatter.field_of(raw, "title") == "Untitled No More" and _doc._fields.is_empty(),
 		"the unsaved title did not move into the file")
 	_ok(moves == [["", target]], "Save… did not say where the script went: %s" % str(moves))
 	_ok(mark.writes == writes + 1 and mark.flashing(), "the mark did not tick for the save (%d writes)" % (mark.writes - writes))
@@ -684,7 +684,7 @@ func _check_save_to() -> void:
 	_ok(_doc.save_to(other) and moves.size() == 2 and moves[1] == [target, other],
 		"a saved script saved elsewhere did not name both files: %s" % str(moves))
 	_ok(FileAccess.get_file_as_string(target) == before, "the file a script was saved out of was changed")
-	_ok(BookLayout.field_of(FileAccess.get_file_as_string(other), "title") == "Untitled No More",
+	_ok(FrontMatter.field_of(FileAccess.get_file_as_string(other), "title") == "Untitled No More",
 		"the new file did not take the old one's frontmatter")
 	_doc.moved.disconnect(on_move)
 	_doc._autosave_for_test = false

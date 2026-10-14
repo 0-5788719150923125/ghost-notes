@@ -23,10 +23,10 @@ func _init() -> void:
 	var raw := FileAccess.get_file_as_string(spec_path)
 	var block: Dictionary = FrontMatter.read_block(raw)["data"]
 	var knobs: Dictionary = block.get("cards", {}) if block.get("cards") is Dictionary else {}
-	var title := BookLayout.field_of(raw, "title")
+	var title := FrontMatter.field_of(raw, "title")
 	var show := String(knobs.get("show", ""))
 	if show.is_empty():
-		show = CardEpisode.slug(title)
+		show = Manuscript.slug(title)
 	# `--seed new` draws one the way the panel's New episode does
 	var seed_arg := _arg(args, "--seed", str(knobs.get("seed", 1)))
 	var seed := CardDeck.true_seed() if seed_arg == "new" else int(seed_arg)

@@ -60,7 +60,7 @@ var _fails: PackedStringArray = []
 
 
 func _initialize() -> void:
-	_ed = load("res://src/mask_editor.gd").new()
+	_ed = load("res://src/masking/mask_editor.gd").new()
 	var s := MaskSession.new()
 	s.video_path = "res://masks/_controls_check/video.ogv"
 	var m := {}

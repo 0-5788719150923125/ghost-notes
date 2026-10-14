@@ -350,7 +350,7 @@ static func _rounded_slab(size: Vector2, t: float, r: float) -> ArrayMesh:
 
 
 func begin_session() -> void:
-	_seed = Director.session_seed()
+	_seed = feed.session_seed()
 	_hue0 = float(hash([_seed, "hue"]) & 0xFFFF) / 65535.0
 	_reset_reading()
 	_snap = true
@@ -364,7 +364,7 @@ func release() -> void:
 func _reset_reading() -> void:
 	# the intro this reading was started with: the voice's lead-in is fixed at Play, so a slider
 	# moved during the reading must not move the opening run away from it
-	_intro = maxf(0.0, Director.intro_hold)
+	_intro = maxf(0.0, feed.intro_hold)
 	_map = []
 	_map_j = 0
 	_map_rem = ""
@@ -434,7 +434,7 @@ func advance(_features, delta: float, bookend: float) -> void:
 	var slen := Spectrum.song_length()
 	var b := bookend if slen > 0.0 and t > slen * 0.5 else clampf(t / 1.2, 0.0, 1.0)
 	# a live reading's outro mark fades the picture with the voice
-	_env.adjustment_brightness = clampf(b * Director.live_fade, 0.0, 1.0)
+	_env.adjustment_brightness = clampf(b * feed.live_fade, 0.0, 1.0)
 	_ensure_doc()
 	_now = _subs.now() if _subs != null and is_instance_valid(_subs) else t
 	# A SEEK (the scrubber, in a file session) is a cut, not a move: the camera lands at once
@@ -469,7 +469,7 @@ func _ensure_doc() -> void:
 		src = String(d.get("source", ""))
 		title = String(d.get("title", ""))
 		if title.is_empty():
-			title = BookLayout.field_of(src, "title")
+			title = FrontMatter.field_of(src, "title")
 	if src == _source and title == _title and _rev == Illustrations.revision and not _doc.is_empty():
 		return
 	if src.is_empty() and not _doc.is_empty():
@@ -1167,7 +1167,7 @@ func _world_of(p: Vector2) -> Vector3:
 # --- the camera ----------------------------------------------------------------------------
 
 func _sev() -> float:
-	return clampf(Director.camera, Director.CAMERA_MIN, Director.CAMERA_MAX)
+	return clampf(feed.camera, ShowFeed.CAMERA_MIN, ShowFeed.CAMERA_MAX)
 
 
 ## THE JOURNAL'S CAMERA, NOT A SWITCH. Each page has an ARC: it opens wide on the whole slab,

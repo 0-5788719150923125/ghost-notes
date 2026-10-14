@@ -1,4 +1,4 @@
-# THE SET DRESSER - what it is told (CardPrompts.set_dresser fills it in; src/rules.gd says how a
+# THE SET DRESSER - what it is told (CardPrompts.set_dresser fills it in; src/data/rules.gd says how a
 # rules file reads). It sets the reader's table before the camera rolls: the table itself and its
 # cloths, every thing that stands on it, described in parts exactly enough to be built (Props), its
 # air (Effects) and its light (Lights). It knows the episode's plan and look, and no card: none has
@@ -128,7 +128,7 @@ prompt:
       down across it; the top of the frame passes low over the back of the cloth, which is why the
       back holds only short things. Candles stand at the back or the sides, never by the deck.
   # the user, 2026-10-10: a low thing stood at the bottom middle, "just in front of the speaker",
-  # with open cloth to either side (src/media/table.gd WORKSPACE scores such a spot worse)
+  # with open cloth to either side (src/table/table.gd WORKSPACE scores such a spot worse)
   - >-
       THE NEAR MIDDLE OF THE CLOTH, in front of the cards, is the reader's own workspace - their
       hands work there. Nothing of yours stands in it, however low: use the sides and the back, and

@@ -21,7 +21,7 @@ var _fails: PackedStringArray = []
 
 
 func _initialize() -> void:
-	var ed: Node = load("res://src/mask_editor.gd").new()
+	var ed: Node = load("res://src/masking/mask_editor.gd").new()
 	root.add_child(ed)
 	ed._ensure_audio_bus()
 

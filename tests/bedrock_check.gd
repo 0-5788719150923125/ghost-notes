@@ -27,7 +27,7 @@ extends SceneTree
 ##   [AgentJobs] and in [Illustrations]' own pump.
 
 ## By path, not by class name: a new class is unknown to `--script` runs until the editor rescans.
-const Catalog := preload("res://src/bedrock_catalog.gd")
+const Catalog := preload("res://src/agents/bedrock_catalog.gd")
 const ACCOUNT := "123456789012"
 
 var _fails := 0

@@ -29,7 +29,7 @@ extends Node
 ## That is the point of the division - this narrows six hours to one scene, and the look probes
 ## and perf_probe take it from there.
 
-const Bake_ := preload("res://src/bake.gd")
+const Bake_ := preload("res://src/audio/bake.gd")
 
 var _out: Array = []
 var _cuts: Array = []

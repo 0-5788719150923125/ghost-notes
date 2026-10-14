@@ -324,7 +324,7 @@ func _check_inks() -> void:
 		and NotebookLayout.ink_color("nonsense") == NotebookLayout.INKS["black"],
 		"ink names, hex and the black fallback do not resolve")
 	var m := NotebookMedium.new()
-	var subs: Subtitles = preload("res://src/subtitles.gd").new()
+	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	subs.document = {"source": doc, "inks": {"Angel": "blue", "Ryan": "red"}}
 	m._subs = subs
 	m._ink = NotebookLayout.INKS["black"]

@@ -101,7 +101,7 @@ func _run() -> void:
 	medium.mount(stage)
 	Director.attach(stage, medium)
 	Director.hold(true)
-	var subs: Subtitles = preload("res://src/subtitles.gd").new()
+	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	var parse := CardReading.parse(script)
 	subs.words = timeline(parse, _word, Director.intro_hold)
 	subs.document = {"source": script, "title": _name, "byline": _byline, "table": ep.document()}
