@@ -43,10 +43,13 @@ extends SceneTree
 ##   any stock, and the booklet is printed in the card's colors.
 ## - WHAT THE SHOW HAS ALREADY MADE reaches each agent in the part it decides (the producer names the
 ##   show's habits), never the episode being made, and never a card name through a reader's record.
-## - THE CARD'S FRAME keeps a border: no frameless style, an old look naming one drawn as `line`,
+## - THE CARD'S FRAME keeps a border in every bordered style: an old look naming `bleed` drawn as `line`,
 ##   and every card's name fits the stock below its picture, in every face. A picture still to come is
 ##   drawn in every window shape with nothing the renderer cannot triangulate - against the sliver an
 ##   oval window once left, which is refused.
+## - A BORDERLESS CARD is its painting, its type fit to its bands and set on a veil that reads over any
+##   painting, every deck's planned to the least, no heavier than allowed, light ink kept light; the foil
+##   keys none of its type. Controls: the stock and ink as they were need a veil all but opaque.
 ## - THE EPISODE'S TITLE is written for the line it goes up in: the producer is shown that line with
 ##   its own part marked, asked for title case, and its reply is no longer called the video's whole
 ##   title. Two-sided: with no line, none is spoken of. A title lands as it was written.
@@ -66,7 +69,7 @@ func _init() -> void:
 			_lanes, _rerun_clears, _scrub_near, _clear_of_deck, _trash_episode, _pictures, _only_what_was_asked, _no_objects, _moves_after_words,
 			_few_remarks, _burst_moments,
 			_table_step, _things_built, _stones, _card_stock, _candles, _room_prompt, _cloth_prompt, _familiar, _archive,
-			_title_screen, _card_frame, _episode_title]:
+			_title_screen, _card_frame, _borderless, _episode_title]:
 		_ok((check as Callable).call() == true, "%s stopped part way (a script error - see above)"
 			% (check as Callable).get_method())
 	print("cards_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails,
@@ -1361,9 +1364,9 @@ func _card_stock() -> bool:
 ## stock, a look naming the old style is drawn as `line`, the picture's window leaves a band above it
 ## and below it, and every name of the fixture deck's 78 fits the band below at a readable size in every face.
 func _card_frame() -> bool:
-	_ok(not CardTable.FRAMES.has("bleed"), "a frameless card style is still offered to the producer")
+	_ok(not CardTable.FRAMES.has("bleed"), "the old `bleed` style, which set the name on a plate too narrow for it, is offered again")
 	_ok(String((CardTable.sanitize_look({"frame": {"style": "bleed"}})["frame"] as Dictionary)["style"]) == "line",
-		"a look naming the frameless style is not drawn with a border")
+		"a look naming the old `bleed` style is not drawn with a border")
 	var sz := Vector2(CardFaces.FACE_PX)
 	var win := CardFaces.window()
 	_ok(win.position.x > 0.0 and win.end.x < sz.x and win.position.y >= sz.y * 0.075 and sz.y - win.end.y >= sz.y * 0.105,
@@ -1372,6 +1375,8 @@ func _card_frame() -> bool:
 	# border around the card"): with every frame style, the window leaves the ornament's line, its own
 	# band and the frame's outermost rule - the picture's rules never touch the ornament
 	for style in CardTable.FRAMES:
+		if style == "borderless":
+			continue  # no border to keep: _borderless
 		var orn := {"frame": {"style": style, "ornament": "beads"}}
 		var ow := CardFaces.window(false, orn)
 		var need := sz.x * (CardFaces.ORNAMENT_INSET + CardFaces.ORNAMENT_BAND + CardFaces.frame_reach(orn))
@@ -1420,7 +1425,101 @@ func _card_frame() -> bool:
 				for piece in CardFaces.placeholder_pieces(r, [], seed, CardFaces.outline(String(shape), r)):
 					undrawable += 0 if CardFaces.drawable(piece[0]) else 1
 	_ok(undrawable == 0, "%d pieces of a picture still to come cannot be drawn" % undrawable)
-	print("cards_check: card frame - a border always; the smallest name %s in %s at %d px" % [worst["name"], worst["face"], worst["size"]])
+	print("cards_check: card frame - a border round every bordered style; the smallest name %s in %s at %d px" % [worst["name"], worst["face"], worst["size"]])
+	return true
+
+
+## A BORDERLESS CARD (2026-10-14, the user: "cards have no border at all, because the card artwork fills
+## the entire card ... Be careful with how text is written onto such a card, since color will matter quite
+## a lot there, for visibility"): offered to the producer; its painting the whole card, face and back,
+## with no window shape or ornament left on it; its name and numeral fit the bands they are set in, in
+## every face, at a size that reads; its type reads over ANY painting - the veil's bound holds against
+## paintings of every color, and every deck's veil, planned on its own stock and ink, reaches the contrast
+## at no more than the veil allowed, a light ink kept light and a dark one dark; and the foil keys none of
+## its type. Two-sided: a veil a little lighter than planned fails the bound, the stock and ink as they
+## were need a band all but opaque (a border again), and the bound is broken by a painting of the ink's own
+## color under no veil at all. The pixels are tests/table/card_veil_check.gd's.
+func _borderless() -> bool:
+	_ok(CardTable.FRAMES.has("borderless"), "the producer is not offered a borderless card")
+	var look := CardTable.sanitize_look({"frame": {"style": "borderless", "window": "gothic", "ornament": "serpent", "corners": "round"}})
+	var f: Dictionary = look["frame"]
+	_ok(String(f["style"]) == "borderless" and String(f["window"]) == "rect" and String(f["ornament"]) == "none" and String(f["corners"]) == "round",
+		"a borderless look keeps a window shape or an ornament, or loses its corners: %s" % str(f))
+	var sz := Vector2(CardFaces.face_px(look))
+	for back in [false, true]:
+		_ok(CardFaces.window(back, look) == Rect2(Vector2.ZERO, sz), "a borderless %s's painting is not the whole card" % ("back" if back else "face"))
+	_ok(CardFaces.front_window(look, true) == Rect2(Vector2.ZERO, sz), "a borderless card with details cuts its painting short")
+	_ok(CardFaces.front_window({}, true).size.y < CardFaces.window().size.y, "control: a bordered card with details keeps its painting whole")
+	# THE TYPE FITS ITS BANDS, every name in every face: set as the card sets it, keyline and all
+	var boxes := CardFaces.type_boxes(look)
+	var band: Rect2 = boxes["name"]
+	var worst := {"size": 999, "name": "", "face": ""}
+	for fk in CardTable.FACES:
+		var face := CardTable.font(String(fk))
+		for c in FixtureDeck.cards():
+			var name := String((c as Dictionary)["name"])
+			if String(fk) in ["roman", "deco", "sign", "typed"]:
+				name = name.to_upper()
+			var size := CardFaces.fit_box(face, name, int(sz.y * 0.052), band)
+			if size < int(worst["size"]):
+				worst = {"size": size, "name": name, "face": fk}
+			var ring := CardFaces.keyline(size)
+			_ok(face.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x + ring <= band.size.x
+				and face.get_ascent(size) + face.get_descent(size) + ring <= band.size.y, "%s in %s runs out of its band" % [name, fk])
+	_ok(int(worst["size"]) >= int(sz.y * 0.035), "%s in %s is set at %d px on a %d px card - too small to read" % [worst["name"], worst["face"], worst["size"], int(sz.y)])
+	_ok(band.position.x > 0.0 and band.end.x < sz.x and band.end.y < sz.y and (boxes["numeral"] as Rect2).position.y > 0.0,
+		"a band of type runs to the card's edge: %s" % str(boxes))
+	# THE VEIL'S BOUND: over paintings of every color the type stands at least as far from its ground as
+	# veil_contrast says - and a painting of the ink's own color under no veil hides it
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1014
+	var under := 0
+	for i in 200:
+		var ink := Color(rng.randf(), rng.randf(), rng.randf())
+		var stock := Color(rng.randf(), rng.randf(), rng.randf())
+		var a := rng.randf()
+		var bound := CardTable.veil_contrast(ink, stock, a)
+		for j in 30:
+			var paint := Color(rng.randf(), rng.randf(), rng.randf()) if j > 1 else (Color.BLACK if j == 0 else Color.WHITE)
+			if CardTable.contrast(ink, paint.lerp(stock, a)) < bound - 1e-4:
+				under += 1
+	_ok(under == 0, "%d paintings left the type less contrast than the veil's bound" % under)
+	_ok(CardTable.veil_contrast(Color("#e8dcc0"), Color("#2f5d62"), 0.0) == 1.0 and CardTable.contrast(Color("#e8dcc0"), Color("#e8dcc0").lerp(Color("#2f5d62"), 0.0)) < 1.01,
+		"control: with no veil, a painting the ink's own color does not hide the type")
+	# EVERY DECK'S VEIL: random decks, printed as sanitize_look leaves them (the ink readable on the stock)
+	var heavy := 0
+	var weak := 0
+	var turned := 0
+	var stock_only := 0
+	for i in 300:
+		var d := CardTable.sanitize_look({"frame": {"style": "borderless", "stock": "#" + Color(rng.randf(), rng.randf(), rng.randf()).to_html(false),
+			"ink": "#" + Color(rng.randf(), rng.randf(), rng.randf()).to_html(false)}})
+		var stock := CardTable.color(String(d["frame"]["stock"]))
+		var ink := CardTable.color(String(d["frame"]["ink"]))
+		for want in [[CardTable.TEXT_CONTRAST, CardTable.VEIL_HEAVIEST], [CardTable.PANEL_CONTRAST, CardTable.PANEL_HEAVIEST]]:
+			var v := CardTable.veil_of(ink, stock, want[0], want[1])
+			var a := float(v["alpha"])
+			heavy += 1 if a > float(want[1]) + 1e-6 else 0
+			weak += 1 if CardTable.veil_contrast(v["ink"], v["veil"], a) < float(want[0]) - 1e-4 else 0
+			# planned to the least: a little less veil and the type no longer reads over every painting
+			weak += 1 if a > 0.01 and CardTable.veil_contrast(v["ink"], v["veil"], a - 0.01) >= float(want[0]) else 0
+			var was_lighter := CardTable._luminance(ink) > CardTable._luminance(stock)
+			turned += 1 if (CardTable._luminance(v["ink"]) > CardTable._luminance(v["veil"])) != was_lighter else 0
+			stock_only += 1 if CardTable.veil_alpha(ink, stock, want[0]) > float(want[1]) else 0
+	_ok(heavy == 0, "%d decks' veils are heavier than allowed" % heavy)
+	_ok(weak == 0, "%d decks' veils are not planned to the least that reads over every painting" % weak)
+	_ok(turned == 0, "%d decks' type was turned light for dark or dark for light" % turned)
+	_ok(stock_only > 100, "control: planned on the stock and ink as they were, only %d of 600 veils needed more than allowed" % stock_only)
+	var teal := CardTable.veil_alpha(Color("#e8dcc0"), Color("#2f5d62"), CardTable.TEXT_CONTRAST)
+	_ok(teal > 0.9, "control: cream on teal, planned on its stock alone, no longer needs a band all but opaque (%.2f)" % teal)
+	# THE FOIL keys none of the type: the painting clear of the veils' full strength
+	var named := CardFaces.bare(look, false, true, true)
+	_ok(named.position.y >= (boxes["numeral"] as Rect2).end.y and named.end.y <= band.position.y,
+		"the foil may key a borderless card's name or numeral: %s" % str(named))
+	_ok(CardFaces.bare(look, true, false, true).end.y <= (boxes["panel"] as Rect2).position.y, "the foil may key a borderless card's details")
+	_ok(CardFaces.bare(look, false, false, false) == Rect2(Vector2.ZERO, sz), "a borderless card with no type keeps no foil off its painting")
+	_ok(CardFaces.bare({}, false, true, true) == CardFaces.front_window({}), "control: a bordered card's foil is not its window")
+	print("cards_check: borderless - smallest name %s in %s at %d px; %d of 600 stock-only veils too heavy" % [worst["name"], worst["face"], worst["size"], stock_only])
 	return true
 
 
@@ -1671,6 +1770,15 @@ func _familiar() -> bool:
 	_ok(landed.contains("<!-- speaker: Familiar -->") and landed.contains("<!-- speaker: %s -->" % Manuscript.NARRATOR)
 		and not landed.contains("Spirit") and landed.contains("Boo.") and landed.contains("Oh no."),
 		"a writer's cues are not held to the show's voices: %s" % landed.c_escape())
+	# THE READER IS THE SHOW'S FIRST VOICE, WHATEVER ITS NAME (2026-10-15): a show reading as "Ryan" is told
+	# of its familiar alone, and a cue naming Ryan hands the line back to the reader
+	var ryan := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards(), "voices": ["Ryan", "Familiar"]})
+	var told_ryan := String(ryan.say_prompt("1")["prompt"])
+	_ok(told_ryan.contains("OTHER VOICES: Familiar.") and not told_ryan.contains("<!-- speaker: Ryan -->"),
+		"a show whose reader is named Ryan is told Ryan is another voice")
+	var back := CardProducer.own_voices("Hi.\n<!-- speaker: Familiar -->\nBoo.\n<!-- speaker: ryan -->\nBack.", ["Familiar"], "Ryan")
+	_ok(back.contains("<!-- speaker: %s -->" % Manuscript.NARRATOR) and not back.contains("ryan") and back.contains("Back."),
+		"a cue naming the reader by its own name did not hand the line back to the reader: %s" % back.c_escape())
 	# THE SCRIPT: a card ends on the familiar's quip (written inline, as a writer may); the next opens in the reader's
 	var texts := ["Hello, my loves. Welcome back.\n<!-- speaker: Familiar -->\nHere we go again.\n<!-- speaker: Narrator -->\nShush. Let's shuffle.",
 		"The Tower. Big changes for you. <!-- speaker: Familiar --> There is always a tower.",

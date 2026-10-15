@@ -327,8 +327,11 @@ static func ornament(ci: CanvasItem, look: Dictionary, ink: Color, accent: Color
 ## a band above it for the numeral and below it for the name - a back has no bands. A card printed with an
 ## ornament round its edge ([constant CardTable.ORNAMENTS]) keeps a wider border for it: the ornament's
 ## line, its own width, then the frame's outermost rule ([method frame_reach]) - so the rules never crowd it.
+## A BORDERLESS card's picture is the whole card, face and back: its type is set over it ([method type_boxes]).
 static func window(back := false, look: Dictionary = {}) -> Rect2:
 	var sz := Vector2(face_px(look))
+	if borderless(look):
+		return Rect2(Vector2.ZERO, sz)
 	var m := sz.x * 0.06
 	if ornament_of(look) != "none":
 		m = sz.x * (ORNAMENT_INSET + ORNAMENT_BAND + frame_reach(look))
@@ -337,10 +340,84 @@ static func window(back := false, look: Dictionary = {}) -> Rect2:
 	return Rect2(Vector2(m, m + top), Vector2(sz.x - 2.0 * m, sz.y - 2.0 * m - top - bottom))
 
 
-## A card with details on its front reserves the lower part of the face for its printed text.
+## A card with details on its front reserves the lower part of the face for its printed text - a
+## borderless one sets that text over its painting, which still fills the card.
 static func front_window(look: Dictionary, details := false) -> Rect2:
 	var full := window(false, look)
-	return Rect2(full.position, Vector2(full.size.x, full.size.y * 0.48)) if details else full
+	return Rect2(full.position, Vector2(full.size.x, full.size.y * 0.48)) if details and not borderless(look) else full
+
+
+static func borderless(look: Dictionary) -> bool:
+	var f: Dictionary = look.get("frame", {}) if look.get("frame") is Dictionary else {}
+	return String(f.get("style", "")) == "borderless"
+
+
+## Where a borderless card's type goes ([method type_boxes]): each band's top and foot as shares of the
+## card's height, the type [constant TYPE_INSET] of its width in from each side; and its veil's reach
+## past the type at full strength, and the fade beyond that (shares of the height).
+const TYPE_INSET := 0.08
+const NUMERAL_BAND := Vector2(0.03, 0.095)
+const NAME_BAND := Vector2(0.885, 0.965)
+const PANEL_BAND := Vector2(0.5, 0.965)
+const VEIL_PAD := 0.012
+const VEIL_FADE := 0.07
+## The keyline round each letter set on a painting, a share of its size: the veil's color at full
+## strength, so every stroke's edge stands on the stock however the painting shows through the veil.
+const KEYLINE := 0.1
+
+
+## A BORDERLESS CARD'S TYPE, set on its painting (pixels): `numeral`, a band at the top; `name`, a band at
+## the foot; `panel`, its details over the lower half when the front prints them. Under each, a VEIL of
+## the stock ([method CardTable.veil_alpha]) runs from the card's nearer edge to [constant VEIL_PAD] past
+## the type at full strength, then fades into the painting over [constant VEIL_FADE] - the painting's own
+## foot gone pale or dark, never a plate - and the type is fit to the width the veil runs (the old `bleed`
+## fit its name wider than its plate, [constant CardTable.FRAMES]).
+static func type_boxes(look: Dictionary) -> Dictionary:
+	var sz := Vector2(face_px(look))
+	var x := sz.x * TYPE_INSET
+	var w := sz.x - 2.0 * x
+	var out := {}
+	for k in [["numeral", NUMERAL_BAND], ["name", NAME_BAND], ["panel", PANEL_BAND]]:
+		var b: Vector2 = k[1]
+		out[k[0]] = Rect2(x, sz.y * b.x, w, sz.y * (b.y - b.x))
+	return out
+
+
+## The largest size up to [param size] at which [param text] in [param font], ringed by its keyline
+## ([constant KEYLINE]), fits inside [param box] - across it and from its ascent to its descent.
+static func fit_box(font: Font, text: String, size: int, box: Rect2) -> int:
+	var s := size
+	while s > 10:
+		var ring := keyline(s)
+		if font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, s).x + ring <= box.size.x \
+				and font.get_ascent(s) + font.get_descent(s) + ring <= box.size.y:
+			break
+		s -= 1
+	return s
+
+
+static func keyline(size: int) -> int:
+	return maxi(2, roundi(float(size) * KEYLINE))
+
+
+## THE PAINTING NO TYPE IS SET OVER (pixels): where the foil may key its highlights - the window, or on a
+## borderless card what lies clear of its veils at their full strength ([method type_boxes]): a light
+## ink's letters, keyed with the painting's highlights, glowed. [param numbered]: a numeral is printed;
+## [param named]: a name is.
+static func bare(look: Dictionary, details := false, numbered := false, named := true) -> Rect2:
+	var win := front_window(look, details)
+	if not borderless(look):
+		return win
+	var sz := Vector2(face_px(look))
+	var boxes := type_boxes(look)
+	var pad := sz.y * VEIL_PAD
+	var top := (boxes["numeral"] as Rect2).end.y + pad if numbered else 0.0
+	var foot := sz.y
+	if details:
+		foot = (boxes["panel"] as Rect2).position.y - pad
+	elif named:
+		foot = (boxes["name"] as Rect2).position.y - pad
+	return Rect2(0.0, top, sz.x, foot - top)
 
 
 ## Where the ornament runs, this far in from the card's edge, and the room it takes itself (shares of the
@@ -351,7 +428,7 @@ const ORNAMENT_BAND := 0.04
 ## How far each frame style's outermost mark stands outside the picture's window (a share of the card's
 ## width, the stroke's own width included) - what [method Face._frame] draws, so the room kept round the
 ## window and the type set under it clears it. Keep each entry at or over what its branch draws.
-const FRAME_REACH := {"line": 0.021, "double": 0.028, "corners": 0.039, "deco": 0.038}
+const FRAME_REACH := {"line": 0.021, "double": 0.028, "corners": 0.039, "deco": 0.038, "borderless": 0.0}
 
 
 static func frame_reach(look: Dictionary) -> float:
@@ -584,18 +661,37 @@ class Face:
 		else:
 			CardFaces._placeholder(self, win, look.get("palette", []),
 				hash([seed, String(card.get("key", "back"))]), hole)
-		_frame(style, shape, win, ink, accent, sz)
-		CardFaces.ornament(self, look, ink, accent)
+		# a borderless card is its painting: no rules round it, no ornament, its type set on it
+		var bare_card := CardFaces.borderless(look)
+		if not bare_card:
+			_frame(style, shape, win, ink, accent, sz)
+			CardFaces.ornament(self, look, ink, accent)
 		if details and not back:
 			_printed_front(win, stock, ink, accent)
 		elif not back and not anonymous:
-			_lettering(win, ink, sz)
+			if bare_card:
+				_painted_lettering(ink, stock, sz)
+			else:
+				_lettering(win, ink, sz)
 		elif printed:
 			_printed_back(win, stock, ink, accent)
+
+	## THE PAINTING NO TYPE IS SET OVER on this front ([method CardFaces.bare]) - where foil may key it.
+	func bare() -> Rect2:
+		return CardFaces.bare(look, details, not anonymous and not String(card.get("numeral", "")).is_empty(), not anonymous)
 
 	## The illustration and the card's facts share its front. The name and text are type, not
 	## part of the generated picture, so they stay consistent across a printing.
 	func _printed_front(win: Rect2, stock: Color, ink: Color, accent: Color) -> void:
+		if CardFaces.borderless(look):
+			# running text over the painting: a veil of the stock under the whole panel, planned for it
+			var panel_box: Rect2 = CardFaces.type_boxes(look)["panel"]
+			var v := CardTable.veil_of(ink, stock, CardTable.PANEL_CONTRAST, CardTable.PANEL_HEAVIEST)
+			_veil(panel_box, v["veil"], v["alpha"])
+			if not anonymous:
+				_painted_numeral(ink, stock)
+			_details(panel_box, v["ink"], accent)
+			return
 		var full := CardFaces.window(false, look)
 		# the frame's rules stand outside the window: the type starts clear of them, not under them
 		var reach := CardFaces.frame_reach(look) * float(CardFaces.face_px(look).x)
@@ -603,6 +699,17 @@ class Face:
 		var panel := Rect2(Vector2(win.position.x, win.end.y + below),
 			Vector2(win.size.x, Vector2(CardFaces.face_px(look)).y - full.position.x - win.end.y - below))
 		var text_ink := CardTable.legible_ink(ink, stock, CardTable.TEXT_CONTRAST)
+		var number := String(card.get("numeral", ""))
+		if not anonymous and not number.is_empty():
+			var face := CardTable.font(String(look.get("title_face", "roman")))
+			var w := panel.size.x - 24.0
+			var num_size := CardFaces._fit(face, number, 34, w)
+			draw_string(face, Vector2(panel.position.x + 12.0, full.position.y - below), number, HORIZONTAL_ALIGNMENT_CENTER, w,
+				num_size, text_ink)
+		_details(panel, text_ink, accent)
+
+	## THE CARD'S FACTS in [param panel]: its name, a rule, its keywords and its text, as large as fits.
+	func _details(panel: Rect2, text_ink: Color, accent: Color) -> void:
 		var face := CardTable.font(String(look.get("title_face", "roman")))
 		var book := CardTable.font(CardTable.BOOK_FACE)
 		var italic := CardTable.font(CardTable.BOOK_ITALIC)
@@ -614,12 +721,6 @@ class Face:
 			return
 		var name := String(card.get("name", ""))
 		var ns := CardFaces._fit(face, name, 42, w)
-		var number := String(card.get("numeral", ""))
-		if not number.is_empty():
-			var top := CardFaces.window(false, look).position.y
-			var num_size := CardFaces._fit(face, number, 34, w)
-			draw_string(face, Vector2(x, top - below), number, HORIZONTAL_ALIGNMENT_CENTER, w,
-				num_size, text_ink)
 		y += face.get_ascent(ns)
 		draw_string(face, Vector2(x, y), name, HORIZONTAL_ALIGNMENT_CENTER, w, ns, text_ink)
 		y += face.get_descent(ns) + 10.0
@@ -792,6 +893,53 @@ class Face:
 			var ny := band_top.get_center().y + (face.get_ascent(ns) - face.get_descent(ns)) * 0.5
 			draw_string(face, Vector2(band_top.position.x, ny), num, HORIZONTAL_ALIGNMENT_CENTER,
 				band_top.size.x, ns, ink)
+
+	## A BORDERLESS CARD'S NAME AND NUMERAL, set on its painting ([method CardFaces.type_boxes]), each on a
+	## veil of the stock planned for it ([method CardTable.veil_of]).
+	func _painted_lettering(ink: Color, stock: Color, sz: Vector2) -> void:
+		var face := CardTable.font(String(look.get("title_face", "roman")))
+		var name := String(card.get("name", ""))
+		if String(look.get("title_face", "roman")) in ["roman", "deco", "sign", "typed"]:
+			name = name.to_upper()
+		_painted_line(face, name, CardFaces.type_boxes(look)["name"], int(sz.y * 0.052), ink, stock)
+		_painted_numeral(ink, stock)
+
+	func _painted_numeral(ink: Color, stock: Color) -> void:
+		var num := String(card.get("numeral", ""))
+		if not num.is_empty():
+			_painted_line(CardTable.font(String(look.get("title_face", "roman"))), num, CardFaces.type_boxes(look)["numeral"],
+				int(float(CardFaces.face_px(look).y) * 0.045), ink, stock)
+
+	## ONE LINE OF TYPE ON THE PAINTING, centered in [param band] as large as fits up to [param cap]: its
+	## veil, then the keyline round its letters in the veil's color ([constant CardFaces.KEYLINE]), then the
+	## letters - at [constant CardTable.TEXT_CONTRAST] against whatever the painting under them is.
+	func _painted_line(face: Font, text: String, band: Rect2, cap: int, ink: Color, stock: Color) -> void:
+		var v := CardTable.veil_of(ink, stock, CardTable.TEXT_CONTRAST, CardTable.VEIL_HEAVIEST)
+		_veil(band, v["veil"], v["alpha"])
+		var size := CardFaces.fit_box(face, text, cap, band)
+		var at := Vector2(band.position.x, band.get_center().y + (face.get_ascent(size) - face.get_descent(size)) * 0.5)
+		draw_string_outline(face, at, text, HORIZONTAL_ALIGNMENT_CENTER, band.size.x, size, CardFaces.keyline(size), v["veil"])
+		draw_string(face, at, text, HORIZONTAL_ALIGNMENT_CENTER, band.size.x, size, v["ink"])
+
+	## THE VEIL under [param band]: [param color] at [param alpha], across the whole card, from the card's
+	## nearer edge to [constant CardFaces.VEIL_PAD] past the band - then eased out to nothing over
+	## [constant CardFaces.VEIL_FADE], in strips whose edges carry a smoothstep's values.
+	func _veil(band: Rect2, color: Color, alpha: float) -> void:
+		var sz := Vector2(CardFaces.face_px(look))
+		var pad := sz.y * CardFaces.VEIL_PAD
+		var fade := sz.y * CardFaces.VEIL_FADE
+		var at_top := band.get_center().y < sz.y * 0.5
+		var edge := band.end.y + pad if at_top else band.position.y - pad
+		var away := 1.0 if at_top else -1.0
+		draw_rect(Rect2(0.0, 0.0, sz.x, edge) if at_top else Rect2(0.0, edge, sz.x, sz.y - edge), Color(color, alpha))
+		var strips := 12
+		for i in strips:
+			var y0 := edge + away * fade * float(i) / float(strips)
+			var y1 := edge + away * fade * float(i + 1) / float(strips)
+			var c0 := Color(color, alpha * (1.0 - smoothstep(0.0, 1.0, float(i) / float(strips))))
+			var c1 := Color(color, alpha * (1.0 - smoothstep(0.0, 1.0, float(i + 1) / float(strips))))
+			draw_polygon(PackedVector2Array([Vector2(0.0, y0), Vector2(sz.x, y0), Vector2(sz.x, y1), Vector2(0.0, y1)]),
+				PackedColorArray([c0, c0, c1, c1]))
 
 
 ## THE BOOKLET'S COLORS are the card's: its stock for the paper, its ink and accent for the type,

@@ -26,12 +26,26 @@ card:
   - >-
       FORMAT: PORTRAIT 2:3 (1024x1536). The card's picture only, composed for a tall card and
       running to every edge: no border, no frame, no panel, no title, no numbers, no letters or
-      writing of any kind - the frame and the card's name are printed around it separately. Keep the
-      important things away from the outer tenth on each side.
-  - >-
-      The engine cuts the picture to the card's window ({{window}}): paint the WHOLE rectangle, the
-      scene running into every corner - never an arch, oval or panel of your own on a white or blank
-      ground, no white or empty corners.
+      writing of any kind - {{^borderless}}the frame and the card's name are printed around it{{/borderless}}{{#borderless}}the
+      card's name is printed over it{{/borderless}} separately. Keep the important things away from the
+      outer tenth on each side.
+  - when: "!borderless"
+    say: >-
+          The engine cuts the picture to the card's window ({{window}}): paint the WHOLE rectangle, the
+          scene running into every corner - never an arch, oval or panel of your own on a white or blank
+          ground, no white or empty corners.
+  # A BORDERLESS CARD (CardTable.FRAMES) is its painting to the edge, its type set over it on a veil of
+  # the stock: the veil is planned to read over any painting, so the painter is asked only to keep the
+  # subject out from under the type, never to paint a calm patch for it.
+  - when: borderless
+    say: >-
+          THIS DECK IS PRINTED BORDERLESS: the picture is the whole card, to its very edge and into
+          every corner, cut only to the card's corners - paint the WHOLE rectangle, never a vignette,
+          frame or panel of your own. The card's name is printed over the bottom of the
+          picture{{#numbered}} and its numeral over the top{{/numbered}}{{#details}}, and its text over
+          the lower half{{/details}}, each on a soft veil of the card's stock: {{^details}}keep faces and
+          the subject out of the bottom sixth{{/details}}{{#details}}compose the subject and every face
+          in the upper half{{/details}}.
   - when: has_back
     say: >-
           THE FIRST ATTACHED IMAGE is the BACK of this deck: match its palette, materials and hand.
@@ -83,8 +97,9 @@ back:
   - ""
   - include: style
   - >-
-      FORMAT: PORTRAIT 2:3 (1024x1536). The design runs to every edge: no outer border or frame (the
-      card's frame is printed separately), no text, no numbers, no watermark, no signature.
+      FORMAT: PORTRAIT 2:3 (1024x1536). The design runs to every edge: no outer border or frame
+      ({{^borderless}}the card's frame is printed separately{{/borderless}}{{#borderless}}the card is
+      printed to its edge, with no border{{/borderless}}), no text, no numbers, no watermark, no signature.
   - when: shaped
     say: >-
           THE ENGINE CUTS THE BACK TO THE CARD'S WINDOW ({{window}}), and the frame's rules are printed

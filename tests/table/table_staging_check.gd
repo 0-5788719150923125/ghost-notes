@@ -442,12 +442,12 @@ func _deck_reversals() -> void:
 	var draws: Array = medium._times()["draw"]
 	var first := float((draws[0] as Array)[0])
 	var second := float((draws[1] as Array)[0])
-	var top := medium._deck[TableMedium.DECK_N - 1] as MeshInstance3D
+	var top := medium._deck[medium._plan.deck_n - 1] as MeshInstance3D
 	_posed(first - 0.01)
-	_ok(top.transform.basis.x.dot(medium._rest_xf(TableMedium.DECK_N - 1).basis.x) > 0.99,
+	_ok(top.transform.basis.x.dot(medium._rest_xf(medium._plan.deck_n - 1).basis.x) > 0.99,
 		"the first upright card's back is upright before its draw")
 	_posed(first + 0.01)
-	_ok(top.transform.basis.x.dot(medium._rest_xf(TableMedium.DECK_N - 1).basis.x) < -0.99,
+	_ok(top.transform.basis.x.dot(medium._rest_xf(medium._plan.deck_n - 1).basis.x) < -0.99,
 		"the next reversed card is already reversed under the first card")
 	_posed(second - 0.01)
 	_ok(top.transform.basis.x.dot(medium._deck_top_xf(1).basis.x) > 0.99,
@@ -456,7 +456,7 @@ func _deck_reversals() -> void:
 	_posed(second + 0.01)
 	_ok((medium._cards[1] as MeshInstance3D).transform.basis.x.dot(waiting) > 0.99,
 		"the reversed draw starts with the back's waiting orientation")
-	_ok(top.transform.basis.x.dot(medium._rest_xf(TableMedium.DECK_N - 1).basis.x) > 0.99,
+	_ok(top.transform.basis.x.dot(medium._rest_xf(medium._plan.deck_n - 1).basis.x) > 0.99,
 		"the following upright card is ready under the reversed card")
 
 
@@ -823,22 +823,26 @@ func _placement_drift() -> void:
 	_ok(medium._plan.lay_jit.size() == medium._cards.size() and
 		(medium._plan.lay_jit[0] as Vector3).distance_to(medium._plan.lay_jit[1]) > 0.0001,
 		"cards laid in a row have different small, repeatable hand offsets")
+	# THE DECK DOES NOT SLIDE (the user, 2026-10-14: "floaty" - the deck's origin drifted round the table
+	# through every shuffle, cut and wash): its origin is the one place through every move and between them
 	medium._shuffles.move_at(45.0)
-	var rests: Array = []
+	var tm: Dictionary = medium._times()
+	var until := float(tm["end"])
+	if not (tm["first"] as Array).is_empty():
+		until = minf(until, float((tm["first"] as Array)[0]))
+	var worst := 0.0
+	var seen := 0
 	for m in medium._moves:
 		var d: Dictionary = m
-		if float(d["t0"]) + float(d["dur"]) < 45.0:
-			rests.append(medium._shuffles.shuffle_wander(float(d["t0"]) + float(d["dur"]) + 0.01))
-	var changed := 0
-	for i in range(1, rests.size()):
-		if (rests[i] as Vector3).distance_to(rests[i - 1]) > 0.001:
-			changed += 1
-	_ok(changed >= 2, "successive shuffles and cuts settle in different places (%d changed)" % changed)
-	if not rests.is_empty():
-		var at: Vector3 = rests[-1]
-		_ok(at.is_equal_approx(medium._shuffles.shuffle_wander(float((medium._moves[rests.size() - 1] as Dictionary)["t0"]) +
-			float((medium._moves[rests.size() - 1] as Dictionary)["dur"]) + 0.01)),
-			"a scrub returns to the same resting place")
+		for f in [0.0, 0.3, 0.6, 1.0, 1.01]:
+			# a move's times are seconds into the shuffle; the deck is asked at show time
+			var u := float(tm["shuffle"]) + float(d["t0"]) + float(d["dur"]) * float(f)
+			if u >= until:
+				continue
+			worst = maxf(worst, (medium._deck_at(u, tm) as Vector3).distance_to(medium._plan.mid))
+			seen += 1
+	_ok(seen >= 6, "the deck's origin was read through several moves (%d)" % seen)
+	_ok(worst < 1e-5, "the deck's origin never slides through the moves (%.5f m)" % worst)
 
 
 func _loose_box() -> void:

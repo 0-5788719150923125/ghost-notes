@@ -282,7 +282,9 @@ func _make_draw() -> String:
 			var card: Dictionary = c
 			left.append({"key": card.get("key", ""), "name": card.get("name", ""), "numeral": card.get("numeral", ""),
 				"group": card.get("group", ""), "series": card.get("series", ""), "meaning": card.get("meaning", "")})
-	return episode.write_json("draw", {"seed": episode.seed, "cards": cards, "left": left})
+	# ...and HOW MANY CARDS THE DECK HELD: the table stands, shuffles and washes that many
+	# (TableMedium._deck_count)
+	return episode.write_json("draw", {"seed": episode.seed, "cards": cards, "left": left, "deck_n": deck.size()})
 
 
 ## WHETHER A CARD JUMPS in episode [param seed] - a show that [param allowed] them, staged by [param plan] -
@@ -363,7 +365,7 @@ func _make_image(step: String) -> void:
 			chain = [chain[0]] + chain.slice(chain.size() - (CHAIN_MAX - 1))
 		refs.append_array(chain)
 		_submit_image(step, CardPrompts.card_image(CardTable.look_of(look, _card(k)), _card(k), art, target, has_back,
-			chain.size()), refs)
+			chain.size(), String(CardTable.staging_of(_plan())["text"]) == "front"), refs)
 		return
 	if parts.size() == 3 and String(parts[1]) == "back":
 		# A printing's own back, even when none of its cards happened to be drawn.
@@ -611,7 +613,7 @@ func _land(step: String, res: Dictionary) -> void:
 			"design":
 				err = _land_design(step, String(res.get("text", "")))
 			"say":
-				var t := own_voices(clean_spoken(String(res.get("text", ""))), _voices())
+				var t := own_voices(clean_spoken(String(res.get("text", ""))), _voices(), _reader_name())
 				err = "the reader wrote nothing speakable" if t.split(" ", false).size() < (1 if step.split(":")[1].is_valid_int() else 20) \
 					else episode.write_text(step, t)
 			"image":
@@ -886,20 +888,29 @@ static func _str(v: Variant) -> String:
 ## what is left to do when a writer adds a little anyway - wrapping quotes, a heading, a
 ## bracketed stage direction, a line that is nothing but an action in asterisks - and the em
 ## dash, which the voice reads as a pause either way and the subtitles show as a plain dash.
-## The show's voices besides the reader's ([constant Manuscript.NARRATOR]): the names its
-## document gives them, in its order.
+## The show's voices besides the reader's: the names its document gives them, in its order. The
+## reader is its FIRST voice, whatever the document calls it - a script cues it as
+## [constant Manuscript.NARRATOR] ([method ReadingPanel._reader]).
 func _voices() -> Array:
 	var out: Array = []
-	for v in spec.get("voices", []):
-		if String(v) != Manuscript.NARRATOR and not out.has(String(v)):
-			out.append(String(v))
+	var all: Array = spec.get("voices", [])
+	for k in all.size():
+		if k > 0 and String(all[k]) != Manuscript.NARRATOR and not out.has(String(all[k])):
+			out.append(String(all[k]))
 	return out
+
+
+## The reader's own name in the show's document (its first voice), or empty when it has none.
+func _reader_name() -> String:
+	var all: Array = spec.get("voices", [])
+	return String(all[0]) if not all.is_empty() else ""
 
 
 ## [param text] with every change of speaker naming one of the show's own [param voices] (or the
 ## reader), spelled as the show spells it; a cue naming anyone else is taken out, and its words
 ## stay with whoever was speaking. A writer's "familiar" would otherwise be a new voice of its own,
-## a copy of the reader's, kept in the show's document from then on.
+## a copy of the reader's, kept in the show's document from then on. A cue naming the reader by
+## the show's own name for it ([param reader]) hands the line back to the reader.
 ## A READER WRITES WORDS AND THE VOICE'S MARKS - a delivery, a hesitation, a change of speaker - AND
 ## NOTHING ELSE (next/notes.md step 9: "an unknown one is dropped"): every other comment in a reply
 ## goes, a table mark above all. `<!-- table: draw 2 -->` in a reading's words would be parsed as an
@@ -919,8 +930,10 @@ static func voice_marks_only(text: String) -> String:
 	return out + text.substr(at)
 
 
-static func own_voices(text: String, voices: Array) -> String:
+static func own_voices(text: String, voices: Array, reader := "") -> String:
 	var known := {Manuscript.NARRATOR.to_lower(): Manuscript.NARRATOR}
+	if not reader.is_empty():
+		known[reader.to_lower()] = Manuscript.NARRATOR
 	for v in voices:
 		known[String(v).to_lower()] = String(v)
 	var cue := Manuscript._rx(Manuscript.SPEAKER)

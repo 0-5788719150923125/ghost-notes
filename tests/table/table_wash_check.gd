@@ -40,6 +40,16 @@ extends Node
 ## costs 4 to 9 when each is the least of three. Now every cost is the least of a few timings on
 ## the thread's own processor clock. The control: the same plan made twice over costs clearly
 ## more, about twice, so the clock follows the work and a budget on it can be broken.
+##
+## A WASH IS OF THE WHOLE DECK (2026-10-14: the gathered pile kept growing because 26 meshes stood
+## for 78 cards - each spread as one card and swelling to three on the pile): a made-up episode's
+## deck, as this gate's are, is a tarot's 78, one mesh a card. Three times the cards lie in heaps
+## three times as deep, and the budgets and two of the measures were set again on it: the plan
+## costs some 1.9 s (budget 4 s; 26 cards had 0.35 s), a step of rest at worst some 70 ms as the
+## deck fans out, where every card still lies on the deck (budget 150; 9 to 18 ms mixing and
+## gathering); mixing cards tip under 4 degrees 99% of the time and 12 at most (the steepest lies on
+## a heap's edge; 26 cards had 3 and 8); and a hard blow throws a card in a wash or two of every six
+## - most cards struck in a full deck have a card lying on them, and one held down does not fly.
 ##   - a JUMPER flies out of a shuffle: when it springs the deck is mid-riffle, even when the
 ##     shuffle before it had gone quiet ("not when the cards are just sitting there").
 ##
@@ -71,9 +81,9 @@ const WorkClock := preload("res://tests/work_clock.gd")
 const SEEDS := 12
 ## THE BUDGETS, in milliseconds of the thread's processor ([WorkClock]): a wash's plan as an
 ## episode loads, one cut short while the reading plays, and a step of rest inside a frame.
-const PLAN_MS := 700.0
-const CUT_MS := 250.0
-const STEP_MS := 25.0
+const PLAN_MS := 4000.0
+const CUT_MS := 400.0
+const STEP_MS := 150.0
 ## Half a card's travel is in straight runs at least this long (meters).
 const SWEEP := 0.12
 ## A card going this fast (m/s) is sweeping; one going slower than STILL is lying still.
@@ -237,7 +247,7 @@ func _jumper() -> void:
 		medium._now = t
 		medium._pose(t)
 		var n := 0
-		for i in TableMedium.DECK_N:
+		for i in medium._plan.deck_n:
 			var at: Transform3D = (medium._deck[i] as MeshInstance3D).transform
 			var rest := medium._rest_xf(i)
 			# a card of the deck may lie half a turn round (tests/table/deck_turns_check.gd): still at rest
@@ -250,8 +260,8 @@ func _jumper() -> void:
 	var card: Transform3D = (medium._cards[0] as MeshInstance3D).transform
 	var lift := card.origin.distance_to(medium._deck_top_xf(0).origin)
 	var after: int = moving.call(te + (TableMedium.JUMP_RIFFLE + 0.05) * sc)
-	_ok(before == 0, "control: the shuffle had gone quiet before the jumper (%d of %d cards moving)" % [before, TableMedium.DECK_N])
-	_ok(at_spring >= 10, "when the card springs, the deck is riffling (%d of %d cards in the riffle)" % [at_spring, TableMedium.DECK_N])
+	_ok(before == 0, "control: the shuffle had gone quiet before the jumper (%d of %d cards moving)" % [before, medium._plan.deck_n])
+	_ok(at_spring >= 10, "when the card springs, the deck is riffling (%d of %d cards in the riffle)" % [at_spring, medium._plan.deck_n])
 	_ok(lift > 0.02, "and it springs off a half in the air, not the resting deck (%.0f mm from it)" % (lift * 1000.0))
 	_ok(after == 0, "the riffle done, the deck is square again (%d moving)" % after)
 
@@ -263,7 +273,10 @@ func _jumper() -> void:
 ## point where it crosses a card under it, each card its own thickness), and lies AS LOW AS WHAT IS
 ## UNDER IT LETS IT - its middle exactly as high as the lowest plane over all of those points, found
 ## here a second, independent way (the highest point any three of them, or two, or one, hold up over
-## the middle). Two-sided: the plan's flat layers sit above that, held up in the air.
+## the middle). Two-sided: the plan's flat layers sit above that, held up in the air. A CARD WITH A
+## CARD LYING ON IT IS HELD DOWN BY IT ([method TableShuffle._held_down]): it rests on what is under it
+## as every card does, and no corner rises more than [constant TableShuffle.LEVER] past the highest of
+## it (a deck of 78 rested otherwise stood cards a meter high - wash_deck_check holds that, two-sided).
 func _resting() -> void:
 	var through := 0
 	var afloat := 0
@@ -277,6 +290,8 @@ func _resting() -> void:
 	var off_low := 0
 	var off_most := 0.0
 	var flat_high := 0
+	var held_n := 0
+	var lever := 0.0
 	for s in range(1, 5):
 		var doc := {"show": "wash-check", "seed": s, "dir": "", "plan": {"look": {"candles": 2}}, "cards": []}
 		subs.document = {"source": CardReading.compose([{"kind": "shuffle", "card": 0, "text": "Shuffle."}]), "title": "Wash Check", "table": doc}
@@ -300,6 +315,16 @@ func _resting() -> void:
 			for i in rest.size():
 				if TableShuffle._flight_of(plan, i, v).is_empty():
 					on.append(i)
+			# which cards have a card lying on them (where they cross, or squared on it)
+			var held := {}
+			for i in on:
+				var qi: Vector4 = (tracks[i] as PackedVector4Array)[st]
+				for j in on:
+					var qj: Vector4 = (tracks[j] as PackedVector4Array)[st]
+					if held.has(j) or qj.y > qi.y or (qj.y == qi.y and j >= i):
+						continue
+					if TableShuffle._cards_overlap(Vector2(qi.x, qi.z), qi.w, Vector2(qj.x, qj.z), qj.w):
+						held[j] = true
 			for i in on:
 				var qi: Vector4 = (tracks[i] as PackedVector4Array)[st]
 				var si := medium._shuffles._wash_spread_at(plan, i, v)
@@ -350,12 +375,18 @@ func _resting() -> void:
 					for c in 4:
 						if Geometry2D.is_point_in_polygon(corners[c], cj):
 							covered[c] = true
-				var held := INF
+				var lowest_gap := INF
+				var highest := -INF
 				for k in hs.size():
-					held = minf(held, (r.x + g.dot(pts[k])) - hs[k])
-				afloat += 1 if held > 1e-5 else 0
+					lowest_gap = minf(lowest_gap, (r.x + g.dot(pts[k])) - hs[k])
+					highest = maxf(highest, hs[k])
+				afloat += 1 if lowest_gap > 1e-5 else 0
+				if held.has(i):
+					held_n += 1
+					for c in 4:
+						lever = maxf(lever, r.x + g.dot(corners[c] - mid) - highest)
 				# (under the palm, as the cards fan out, a tilt is calmed, not the lowest: TableShuffle.CALM_HZ)
-				if pts.size() > 4 and cards % 3 == 0 and v > float((plan["mix"] as Vector2).x) + TableShuffle.CALM_SETTLE:
+				elif pts.size() > 4 and cards % 3 == 0 and v > float((plan["mix"] as Vector2).x) + TableShuffle.CALM_SETTLE:
 					var lowest := _held_up(pts, hs)
 					judged += 1
 					off_low += 1 if absf(r.x - lowest) > 2e-6 else 0
@@ -373,7 +404,9 @@ func _resting() -> void:
 		% [cards, tipped, mean_new, mean_old, worst_ms])
 	_ok(through == 0, "no card in a wash passes through a card under it or into the cloth (%d points)" % through)
 	_ok(afloat == 0, "every card rests on something (%d of %d in the air)" % [afloat, cards])
-	_ok(judged > 200 and off_low == 0, "every card lies as low as the cards under it let it (%d of %d judged do not, by %.4f mm at most)" % [off_low, judged, off_most * 1000.0])
+	_ok(judged > 200 and off_low == 0, "every card with none on it lies as low as the cards under it let it (%d of %d judged do not, by %.4f mm at most)" % [off_low, judged, off_most * 1000.0])
+	_ok(held_n > 200 and lever <= TableShuffle.LEVER + 1e-6, "every card with one on it is held down: no corner %.1f mm past the highest thing under it (%d cards, %.2f mm at most)"
+		% [TableShuffle.LEVER * 1000.0, held_n, lever * 1000.0])
 	_ok(flat_high > judged / 3, "control: on the plan's flat layers %d of %d sit higher than that" % [flat_high, judged])
 	_ok(mean_new < mean_old, "corners over bare cloth come down toward it: %.2f mm up, against %.2f mm on flat layers" % [mean_new, mean_old])
 	_ok(tipped > cards / 10, "cards resting on others tip (%d of %d)" % [tipped, cards])
@@ -416,7 +449,7 @@ func _posed() -> void:
 			var was: Array = []
 			for f in int((mix.x + 0.5) * 30.0):
 				var now: Array = []
-				for i in TableMedium.DECK_N:
+				for i in medium._plan.deck_n:
 					now.append(medium._shuffles.wash(i, float(f) / 30.0, m).basis.y.normalized())
 					if not was.is_empty():
 						(fan[calm] as Array)[0] += 1
@@ -429,7 +462,7 @@ func _posed() -> void:
 		for f in int(dur * fps):
 			var v := float(f) / fps
 			var xfs: Array = []
-			for i in TableMedium.DECK_N:
+			for i in medium._plan.deck_n:
 				xfs.append(medium._shuffles.wash(i, v, m))
 			var r := _overlaps(xfs, prev_top)
 			crossings += int(r["crossings"])
@@ -459,7 +492,7 @@ func _posed() -> void:
 			# CONTROL: the same frame posed as two steps' rests blended
 			if s == 1:
 				var old: Array = []
-				for i in TableMedium.DECK_N:
+				for i in medium._plan.deck_n:
 					old.append(_blended(plan, m, i, v))
 				blended += int(_overlaps(old, {})["crossings"])
 			prev = xfs
@@ -476,7 +509,7 @@ func _posed() -> void:
 	_ok(swaps == 0, "two cards touching never swap which is on top (%d)" % swaps)
 	_ok(cloth == 0, "no card on the cloth dips into it (%d)" % cloth)
 	_ok(blended > 0, "control: posed as two steps' rests blended, cards cross (%d)" % blended)
-	_ok(p99 < 3.0 and worst < 8.0, "mixing cards lie gently: 99%% tip under %.1f deg, the most %.1f" % [p99, worst])
+	_ok(p99 < 4.0 and worst < 12.0, "mixing cards lie gently: 99%% tip under %.1f deg, the most %.1f" % [p99, worst])
 	_ok(jerk_share < 0.01, "and their tilt does not jump about (%.2f%% of frames turn faster than 60 deg/s)" % (jerk_share * 100.0))
 
 
@@ -521,7 +554,7 @@ func _overlaps(xfs: Array, before: Dictionary) -> Dictionary:
 				continue
 			mid /= float(cnt)
 			var a_top := _plane_y(a, mid) > _plane_y(b, mid)
-			tops[i * 64 + j] = a_top
+			tops[i * 1024 + j] = a_top
 			if hi > 0.0001 and lo < -0.0001:
 				crossings += 1
 			var dip := INF
@@ -530,7 +563,7 @@ func _overlaps(xfs: Array, before: Dictionary) -> Dictionary:
 					dip = minf(dip, (_plane_y(a, p) - ta * 0.5) - (_plane_y(b, p) + tb * 0.5) if a_top
 						else (_plane_y(b, p) - tb * 0.5) - (_plane_y(a, p) + ta * 0.5))
 			sinks += 1 if dip < -0.00002 else 0
-			if before.has(i * 64 + j) and bool(before[i * 64 + j]) != a_top:
+			if before.has(i * 1024 + j) and bool(before[i * 1024 + j]) != a_top:
 				swaps += 1
 	return {"crossings": crossings, "sinks": sinks, "swaps": swaps, "tops": tops}
 
@@ -619,7 +652,7 @@ func _throws(plans: Array) -> void:
 		most = maxi(most, k)
 	print("            throws: %d of %d washes threw a card, at most %d in one; %d thrown in all - %d not struck hard, %d face up, %d late, %d off the cloth, %d out of the picture, %d through or onto what stands"
 		% [some, plans.size(), most, _thrown["n"], _thrown["soft"], _thrown["up"], _thrown["late"], _thrown["off"], _thrown["unseen"], _thrown["things"]])
-	_ok(some >= plans.size() / 3 and most <= TableShuffle.EJECT_MOST, "a hard blow throws a card now and then (%d of %d washes), never more than %d (%d)"
+	_ok(some >= plans.size() / 6 and most <= TableShuffle.EJECT_MOST, "a hard blow throws a card now and then (%d of %d washes), never more than %d (%d)"
 		% [some, plans.size(), TableShuffle.EJECT_MOST, most])
 	_ok(int(_thrown["soft"]) == 0, "every card thrown was struck faster than %.2f m/s (%d were not)" % [TableShuffle.EJECT_SPEED, _thrown["soft"]])
 	_ok(int(_thrown["up"]) == 0 and int(_thrown["late"]) == 0, "thrown face down, and in the mixing - down before the gather (%d face up, %d late)"
@@ -720,7 +753,7 @@ func _wash_jumper() -> void:
 				var as_deck := xf
 				as_deck.basis.y = xf.basis.y * (TableMedium.CARD_T / TableMedium.DECK_T)
 				var posed: Array = [as_deck]
-				for i in TableMedium.DECK_N:
+				for i in medium._plan.deck_n:
 					var dm: MeshInstance3D = medium._deck[i]
 					if dm.visible:
 						posed.append(dm.transform)
@@ -744,11 +777,11 @@ func _wash_jumper() -> void:
 		medium._now = late
 		medium._pose(late)
 		var visible := 0
-		for i in TableMedium.DECK_N:
+		for i in medium._plan.deck_n:
 			visible += 1 if (medium._deck[i] as MeshInstance3D).visible else 0
 		var at_side := medium._cur_base.distance_to(medium._deck_base)
 		_ok(shown < 0.002, "then it is picked up and shown (%.1f mm from the shown place)" % (shown * 1000.0))
-		_ok(visible == TableMedium.DECK_N - 1 and at_side < 0.002, "the deck is gathered one card short and pushed aside (%d meshes, %.1f mm off its place)"
+		_ok(visible == medium._plan.deck_n - 1 and at_side < 0.002, "the deck is gathered one card short and pushed aside (%d meshes, %.1f mm off its place)"
 			% [visible, at_side * 1000.0])
 	# THE SHUFFLE MAKES ROOM FOR IT: a jumper's episode that washes into it holds its one wash back to
 	# begin before the jumper is reckoned to come and run past it; another keeps the shuffle as it was
@@ -769,8 +802,8 @@ func _wash_jumper() -> void:
 			var at := medium._wash_from + TableMedium.JUMPER_WASH_LEAD
 			var m := medium._shuffles.move_at(at)
 			var covers := not m.is_empty() and String(m["kind"]) == "wash"
-			var mixing := covers and at - float(m["t0"]) >= float(((m["plan"] as Dictionary)["mix"] as Vector2).x) + TableShuffle.JUMP_MIX \
-				and at - float(m["t0"]) <= float(((m["plan"] as Dictionary)["mix"] as Vector2).y)
+			var mixing := covers and at - float(m["t0"]) >= float((medium._shuffles._whole(m)["mix"] as Vector2).x) + TableShuffle.JUMP_MIX \
+				and at - float(m["t0"]) <= float((medium._shuffles._whole(m)["mix"] as Vector2).y)
 			var early := 0
 			for mv in medium._moves:
 				if String((mv as Dictionary)["kind"]) == "wash" and float((mv as Dictionary)["t0"]) < medium._wash_from - 6.0:
@@ -995,7 +1028,7 @@ func _measure(plan: Dictionary, dur: float) -> Dictionary:
 			var pi_: Vector4 = (tracks[i] as PackedVector4Array)[st]
 			for j in range(i + 1, nc):
 				var pj: Vector4 = (tracks[j] as PackedVector4Array)[st]
-				var key := i * 64 + j
+				var key := i * 1024 + j
 				var over := TableShuffle._cards_overlap(Vector2(pi_.x, pi_.z), pi_.w, Vector2(pj.x, pj.z), pj.w)
 				if over:
 					var top := 1 if pi_.y > pj.y else -1
@@ -1060,7 +1093,7 @@ func _circles() -> void:
 	r.seed = 99
 	var tracks: Array = []
 	var steps := int(30.0 * TableShuffle.WASH_HZ) + 1
-	for i in TableMedium.DECK_N:
+	for i in medium._plan.deck_n:
 		var c := Vector2(r.randf_range(-0.22, 0.22), r.randf_range(-0.11, 0.09))
 		var ph := r.randf() * TAU
 		var om := r.randf_range(2.4, 4.0) * (1.0 if r.randf() < 0.5 else -1.0)

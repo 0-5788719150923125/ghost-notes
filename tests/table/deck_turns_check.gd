@@ -93,7 +93,7 @@ func _facing(t: float) -> Array:
 	medium._now = t
 	medium._pose(t)
 	var out: Array = []
-	for i in TableMedium.DECK_N:
+	for i in medium._plan.deck_n:
 		out.append(_upright((medium._deck[i] as MeshInstance3D).transform))
 	return out
 
@@ -124,7 +124,7 @@ func _turned_washes() -> void:
 			var off := fposmod(last[last.size() - 1].w - jit.z, TAU)
 			var want := PI if int(turned[i]) == 1 else 0.0
 			worst = maxf(worst, absf(wrapf(off - want, -PI, PI)))
-	_ok(turned_n > 0, "washes turn cards half way round, and gather them turned (%d of %d)" % [turned_n, 6 * TableMedium.DECK_N])
+	_ok(turned_n > 0, "washes turn cards half way round, and gather them turned (%d of %d)" % [turned_n, 6 * medium._plan.deck_n])
 	_ok(worst < 0.01, "and the pile is squared to the way each lies (%.3f rad at most)" % worst)
 
 
@@ -167,7 +167,7 @@ func _chains() -> void:
 			var kind := String(d["kind"])
 			if not by_kind.has(kind):
 				by_kind[kind] = [0, 0]
-			for i in TableMedium.DECK_N:
+			for i in medium._plan.deck_n:
 				checked += 1
 				(by_kind[kind] as Array)[1] += 1
 				if before[i] == after[to[i]]:
@@ -175,7 +175,7 @@ func _chains() -> void:
 					(by_kind[kind] as Array)[0] += 1
 				if before[i] != after[i]:
 					same_slot_differs += 1
-			var top: int = 1 if after[TableMedium.DECK_N - 1] else 0
+			var top: int = 1 if after[medium._plan.deck_n - 1] else 0
 			tops[top] = true
 			if last_top >= 0 and top != last_top:
 				changed += 1
@@ -201,6 +201,6 @@ func _ends_on_the_next_card() -> void:
 			medium._plan_moves()
 			var face := _facing(te - 0.01)
 			n += 1
-			if bool(face[TableMedium.DECK_N - 1]) == reversed:
+			if bool(face[medium._plan.deck_n - 1]) == reversed:
 				worst += 1
 	_ok(worst == 0, "the shuffle ends on the way the next card is drawn, reversed or not (%d of %d wrong)" % [worst, n])

@@ -30,6 +30,7 @@ var lamp_base := 1.6                 # the lamp's light before a candle takes th
 var mid := Vector3.ZERO            # where it is shuffled, in the middle of the table
 var slots: Array = []              # per card: Transform3D where it lies in the spread
 var jump_land := Vector3.ZERO
+var deck_n := 0                    # how many cards the deck holds: a mesh each ([method TableMedium._deck_count])
 var slot_jit: Array = []           # per deck slot: Vector3(x, z, yaw)
 var lay_jit: Array = []            # per shown card: a small, repeatable placement difference
 var ambient := {}                  # the room's own ambient, for a table with no light of its own

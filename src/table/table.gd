@@ -41,11 +41,18 @@ class_name TableMedium
 const CARD := TablePositions.CARD
 const CARD_R := 0.0045
 const CARD_T := 0.0007
-## The deck: this many meshes, each standing for three cards - 78 cards stand about 3 cm.
-const DECK_N := 26
+## THE DECK: a mesh for each of its cards, this thick - as many as the episode's deck holds
+## ([method _deck_count]: the agents decide it; 78 stand about 3 cm). A WASH SPREADS EVERY ONE OF
+## THEM, so the pile it gathers builds to the deck's height card by card (the user, 2026-10-14: the
+## gathered deck kept "slowly growing in a strange way... as if the number of cards on the table/in
+## the wash does not match the number of cards needed in the deck when stacked" - it had been 26
+## meshes standing for three cards each, spread as 26 single cards that swelled fourfold on the
+## pile). A deck card is a spread card and the gap above it ([constant TableShuffle.WASH_LAYER]).
+const DECK_T := 0.0004
+## The deck of an episode that says nothing of its size (one made up, as a gate's is): a tarot's.
+const DECK_FALLBACK := 78
 ## How much table a laid card leaves between itself and the deck.
 const DECK_CLEAR := TablePositions.DECK_CLEAR
-const DECK_T := 0.0012
 ## The table every episode had before (width, thickness, depth), centered at TABLE_Z, its top at y = 0
 ## ([constant Tables.DEFAULT_TOP]; the room's old placement still measures from its far edge); the
 ## cloth on it.
@@ -363,7 +370,7 @@ var _aside_card := -1                 # the card it is slid aside for (-1: it st
 var _things: Array = []               # what stood: [{name, group, place, node, outline, bb, rect, foot, lit, flames, meshes}]
 var _table_mt := -2                   # the table file's time when it was last built (-1: none)
 var _stage_was := {}                  # the stage's own settings, given back on leaving it
-var _deck: Array = []               # DECK_N MeshInstance3D, bottom first
+var _deck: Array = []               # a MeshInstance3D per deck card (TablePlan.deck_n), bottom first
 var _rummage_card: MeshInstance3D    # a search's card where the box keeps none for it (a tin's flat deck, one pile)
 var _searched: Array = []            # the box's own cards a search looks at, one in each place (`_box["search"]`)
 var _looking: MeshInstance3D         # the one being looked at at the moment posed, or null
@@ -374,6 +381,7 @@ var _face_mats: Array = []
 var _back_vp: SubViewport
 var _back_canvas: CardFaces.Face
 var _back_mat: ShaderMaterial
+var _unseen_mat: StandardMaterial3D   # a deck card's face, never shown
 var _page: MeshInstance3D
 var _page_vp: SubViewport
 var _page_canvas: CardFaces.Page
@@ -413,8 +421,8 @@ var _seen := PackedVector3Array()   # the table the camera sees, sampled (for th
 
 
 ## THE SHUFFLE is a part of its own ([TableShuffle]): every move the deck makes between readings
-## and where each card is during one. This file asks it seven things (`shuffle_xf`, `shuffle_wander`,
-## `move_at`, `deck_turns`, `riffle`, `wash`, `wash_jump`) and hands it itself to read from.
+## and where each card is during one. This file asks it seven things (`shuffle_xf`, `move_at`,
+## `deck_turns`, `riffle`, `wash`, `wash_jump`, `sweeps`) and hands it itself to read from.
 var _shuffles := TableShuffle.new()
 
 
@@ -556,22 +564,13 @@ func _build_world() -> void:
 	_edge_mat = StandardMaterial3D.new()
 	_edge_mat.albedo_color = Color(0.9, 0.88, 0.82)
 	_edge_mat.roughness = 0.8
-	var deck_mesh := _make_card_mesh(CARD, DECK_T, CARD_R)
 	_back_canvas = CardFaces.Face.new()
 	_back_canvas.back = true
 	_back_vp = CardFaces.viewport(self, _back_canvas, CardFaces.FACE_PX)
 	_back_mat = _foil_material(_back_vp.get_texture())
 	_back_mat.set_shader_parameter("lift", 0.06)
-	var unseen := StandardMaterial3D.new()
-	unseen.albedo_color = Color(0.92, 0.9, 0.85)
-	for i in DECK_N:
-		var m := MeshInstance3D.new()
-		m.mesh = deck_mesh
-		m.set_surface_override_material(0, unseen)
-		m.set_surface_override_material(1, _back_mat)
-		m.set_surface_override_material(2, _edge_mat)
-		_root3.add_child(m)
-		_deck.append(m)
+	_unseen_mat = StandardMaterial3D.new()
+	_unseen_mat.albedo_color = Color(0.92, 0.9, 0.85)
 	_rummage_card = MeshInstance3D.new()
 	_rummage_card.visible = false
 	_root3.add_child(_rummage_card)
@@ -750,6 +749,7 @@ func _ensure_doc() -> void:
 	_plan.staging = CardTable.staging_of(plan)
 	_plan.cards_from = String(_plan.parse.get("source", _plan.staging["source"])) if not _plan.parse.is_empty() else String(_plan.staging["source"])
 	_plan.alone = String(_plan.staging["text"]) != "booklet"
+	_plan.deck_n = _deck_count(pay)
 	# A READING STARTED MID-WAY (a scrub) begins where its first words are: everything before them
 	# happened long ago, spaced as a voice would have said it, so the cards drawn by then are
 	# already down (or up) on the first frame
@@ -767,6 +767,23 @@ func _ensure_doc() -> void:
 	print("ghost: card table - %s #%d, %d cards, %d actions, %d things (built in %d ms)" % [String(pay.get("show", "?")), _plan.seed_value,
 		(pay.get("cards", []) as Array).size(), (_plan.parse.get("actions", []) as Array).size(), _things.size(),
 		Time.get_ticks_msec() - t0])
+
+
+## HOW MANY CARDS THE DECK HOLDS, as the episode says - the table never picks a number of its own
+## (the user, 2026-10-14: "The agents define how many cards a deck will use"): what the draw was
+## shuffled from (`deck_n`, [method CardProducer._make_draw]; for an episode drawn before the draw
+## counted it, the deck its brief lists, [method CardsEditor._table_doc]), else the deck the producer
+## chose, else a box's drawn and left-in cards - and never fewer than the cards drawn. An episode that
+## says none of these (a made-up one) holds [constant DECK_FALLBACK].
+static func _deck_count(pay: Dictionary) -> int:
+	var drawn: int = (pay.get("cards", []) as Array).size() if pay.get("cards") is Array else 0
+	var n := int(pay.get("deck_n", 0))
+	var plan: Dictionary = pay.get("plan", {}) if pay.get("plan") is Dictionary else {}
+	if n <= 0 and plan.get("deck") is Array:
+		n = (plan["deck"] as Array).size()
+	if n <= 0 and pay.get("left") is Array and not (pay["left"] as Array).is_empty():
+		n = drawn + (pay["left"] as Array).size()
+	return maxi(n if n > 0 else DECK_FALLBACK, maxi(drawn, 1))
 
 
 ## Each spoken word's time along the reading as a voice would say it - the past a mid-way start
@@ -827,7 +844,7 @@ func _build_episode() -> void:
 	_plan.mid = lay["mid"]
 	_cur_base = _plan.mid
 	_plan.slot_jit = []
-	for i in DECK_N + 1:
+	for i in _plan.deck_n + 1:
 		_plan.slot_jit.append(Vector3(rng.randf_range(-0.0007, 0.0007), rng.randf_range(-0.0007, 0.0007),
 			deg_to_rad(rng.randf_range(-1.3, 1.3))))
 	# THE CARDS
@@ -860,7 +877,7 @@ func _build_episode() -> void:
 		canvas.seed = _plan.seed_value
 		var vp := CardFaces.viewport(self, canvas, CardFaces.face_px(canvas.look))
 		var mat := _foil_material(vp.get_texture())
-		mat.set_shader_parameter("window", _face_window(canvas.look, canvas.details))
+		mat.set_shader_parameter("window", _face_window(canvas))
 		_foil_stock(mat, canvas.look)
 		var m := MeshInstance3D.new()
 		m.mesh = _mesh_for(canvas.look)
@@ -877,7 +894,18 @@ func _build_episode() -> void:
 	_back_vp.size = CardFaces.face_px(_plan.look)
 	_back_canvas.seed = _plan.seed_value
 	_foil_stock(_back_mat, _plan.look)
+	# THE DECK'S CARDS, as many as it holds
 	var deck_mesh := _mesh_for(_plan.look, DECK_T)
+	while _deck.size() > _plan.deck_n:
+		(_deck.pop_back() as Node).queue_free()
+	while _deck.size() < _plan.deck_n:
+		var dm := MeshInstance3D.new()
+		dm.mesh = deck_mesh
+		dm.set_surface_override_material(0, _unseen_mat)
+		dm.set_surface_override_material(1, _back_mat)
+		dm.set_surface_override_material(2, _edge_mat)
+		_root3.add_child(dm)
+		_deck.append(dm)
 	for d in _deck:
 		(d as MeshInstance3D).mesh = deck_mesh
 	_rummage_card.mesh = _mesh_for(_plan.look)
@@ -1011,7 +1039,7 @@ func _unseen_fronts(name: String, cards: Array) -> Array:
 		canvas.part = CardFaces.stand_in(canvas.look.get("palette", []) if canvas.look.get("palette") is Array else [], pick)
 		var vp := CardFaces.viewport(self, canvas, CardFaces.face_px(canvas.look))
 		var mat := _foil_material(vp.get_texture())
-		mat.set_shader_parameter("window", _face_window(canvas.look, canvas.details))
+		mat.set_shader_parameter("window", _face_window(canvas))
 		_foil_stock(mat, canvas.look)
 		out.append({"vp": vp, "canvas": canvas, "mat": mat, "from": int(own[absi(pick) % own.size()]) if not own.is_empty() else -1})
 	return out
@@ -1138,11 +1166,11 @@ func _box_center() -> Vector3:
 	return TablePositions.SHOEBOX_AT if _plan.cards_from == "box" and String(_plan.staging.get("box_style", "open")) == "shoebox" else Vector3.ZERO
 
 
-## The part of a face that is the painting, in UV - foil is keyed inside it (the frame's foil is
-## keyed by its color instead).
-func _face_window(look: Dictionary = {}, details := false) -> Vector4:
-	var sz := Vector2(CardFaces.face_px(look))
-	var w := CardFaces.front_window(look, details)
+## The part of a face that is the painting with no type over it, in UV - foil is keyed inside it (the
+## frame's foil is keyed by its color instead; [method CardFaces.Face.bare]).
+func _face_window(face: CardFaces.Face) -> Vector4:
+	var sz := Vector2(CardFaces.face_px(face.look))
+	var w := face.bare()
 	return Vector4(w.position.x / sz.x, w.position.y / sz.y, w.end.x / sz.x, w.end.y / sz.y)
 
 
@@ -3032,8 +3060,8 @@ func _cover_at(p: Vector2, t: float, r: float) -> float:
 			loose = 0.1
 		if not wj.is_empty() and t >= float(wj["base"]) and t < float(wj["end"]):
 			loose = 0.12
-		if _under_card(_rest_xf(DECK_N - 1), p, r + loose):
-			top = _cur_base.y + float(DECK_N - _deck_gone) * DECK_T
+		if _under_card(_rest_xf(_plan.deck_n - 1), p, r + loose):
+			top = _cur_base.y + float(_plan.deck_n - _deck_gone) * DECK_T
 	var events: Array = tm["events"]
 	for k in _cards.size():
 		var pose := _card_poses.card_pose(k, t, events[k], wj)
@@ -3084,7 +3112,7 @@ func _air_moments() -> Dictionary:
 	if float(tm["shuffle"]) < INF:
 		var ts := float(tm["shuffle"])
 		(out["shuffle"] as Array).append({"t": ts, "dur": 0.5, "from": "point", "card": -1,
-			"path": [[ts, Transform3D(Basis.IDENTITY, _plan.mid + Vector3(0.0, DECK_T * DECK_N, 0.0))]]})
+			"path": [[ts, Transform3D(Basis.IDENTITY, _plan.mid + Vector3(0.0, DECK_T * _plan.deck_n, 0.0))]]})
 	var all_events: Array = tm["events"]
 	var wj0 := _shuffles.wash_jump(maxf(float(tm["shuffle"]), minf(0.0, _now)))
 	# THE CLOSE waits for the last card down: the spread's mark lays a card still held up, and a turn
@@ -3152,6 +3180,11 @@ func _air_moments() -> Dictionary:
 		for k in _cards.size():
 			(out["close"] as Array).append({"t": down, "dur": 0.8, "from": "card", "card": k,
 				"path": _card_path(k, down, 0.8, tm, wj0)})
+	# THE WASH'S CARDS ON THE CLOTH, for what lies there to be shoved by ([method Drifts.laid]); not a
+	# moment a burst can be on, so not one of [constant CardTable.MOMENTS]
+	var ts_wash := maxf(float(tm["shuffle"]), minf(0.0, _now))
+	out["sweep"] = _shuffles.sweeps(ts_wash, float(tm["end"]), func(t: float) -> Vector3: return _deck_at(t, tm, wj0),
+		str(tm["first"]))
 	return out
 
 
@@ -3183,9 +3216,10 @@ func _card_path(k: int, t0: float, dur: float, tm: Dictionary, wj: Dictionary) -
 
 # --- the schedule ----------------------------------------------------------------------------------------
 
-## THE SHUFFLE'S CHAIN, made now, wash plans and all, rather than a frame at a time while it
-## plays - and after the things on the table stand, so a wash's cards go round them, never
-## through them. Again whenever the table changes.
+## THE SHUFFLE'S CHAIN, made now rather than a frame at a time while it plays - and after the things
+## on the table stand, so a wash's cards go round them, never through them. Again whenever the table
+## changes. A wash's plan is made when it is first asked for ([method TableShuffle._whole]): the
+## first frame of a reading that shuffles, and never for a table only looked at.
 func _plan_moves() -> void:
 	_move_rng.seed = hash([_plan.seed_value, "tarot-moves"])
 	_moves = []
@@ -3308,12 +3342,9 @@ func _deck_at(t: float, tm: Dictionary, wj := {}) -> Vector3:
 		# IN THE BOX: a tin's deck lies flat on its floor (a box's cards are filed, the deck unseen)
 		var inner: AABB = _box.get("inner", AABB(_deck_base, Vector3.ZERO))
 		return Vector3(inner.get_center().x, inner.position.y, inner.get_center().z) if not _box.is_empty() else _deck_base
-	var ts := float(tm["shuffle"])
-	var te := float(tm["end"])
-	var wander := _shuffles.shuffle_wander(minf(maxf(t - ts, 0.0), maxf(te - ts, 0.0))) if ts < INF else Vector3.ZERO
 	var first: Array = tm["first"]
 	if first.is_empty():
-		return _plan.mid + wander
+		return _plan.mid
 	var s := maxf(float(first[1]), 0.05)
 	var go := SQUARE if String(first[2]) != "jumper" else JUMP_RIFFLE
 	if not wj.is_empty():
@@ -3324,8 +3355,8 @@ func _deck_at(t: float, tm: Dictionary, wj := {}) -> Vector3:
 		var d: Array = (tm["draw"] as Array)[_aside_card]
 		var taken := float(d[0]) + float(d[3]) * float(d[1])
 		var v := clampf((t - (taken - ASIDE_S)) / ASIDE_S, 0.0, 1.0)
-		return _deck_base.lerp(_deck_far, _ease(v)) + Vector3(0.0, sin(PI * v) * 0.003, 0.0) + wander
-	return _plan.mid.lerp(_deck_base, _ease(u)) + Vector3(0.0, sin(PI * u) * 0.004, 0.0) + wander
+		return _deck_base.lerp(_deck_far, _ease(v)) + Vector3(0.0, sin(PI * v) * 0.003, 0.0)
+	return _plan.mid.lerp(_deck_base, _ease(u)) + Vector3(0.0, sin(PI * u) * 0.004, 0.0)
 
 
 ## THE DECK PUT ASIDE ([constant DECK_CROWD]): the first card of the spread that would lie that near
@@ -3500,7 +3531,7 @@ func _pose(t: float) -> void:
 	# runs on, and the deck is one mesh short after (identical meshes: the top one goes)
 	var gone := -1
 	if not wj.is_empty() and t >= float(wj["eject"]):
-		gone = int(wj["card"]) if t < float(wj["end"]) else DECK_N - 1
+		gone = int(wj["card"]) if t < float(wj["end"]) else _plan.deck_n - 1
 	_deck_gone = 1 if not wj.is_empty() and t >= float(wj["end"]) else 0
 	# THE DECK: shuffling from the shuffle mark until the first card leaves it, squared after - or,
 	# when the first card is a jumper, riffled once more first: the card flies out of that riffle;
@@ -3510,8 +3541,8 @@ func _pose(t: float) -> void:
 	var chained := _plan.cards_from == "deck" and ts < INF
 	var turns := _shuffles.deck_turns(t, ts, te, tm, wj, jump_s) if chained else PackedFloat32Array()
 	var settled := float(wj["end"]) if not wj.is_empty() else te
-	var top_slot := DECK_N - 1 - _deck_gone
-	for i in DECK_N:
+	var top_slot := _plan.deck_n - 1 - _deck_gone
+	for i in _plan.deck_n:
 		var xf := _rest_xf(i)
 		if t >= ts:
 			if t < te:
@@ -3609,9 +3640,9 @@ func _rest_xf(i: int) -> Transform3D:
 
 ## Drawn card [param k] lying on top of the deck, face down (the way it will come up).
 func _deck_top_xf(k: int) -> Transform3D:
-	var j: Vector3 = _plan.slot_jit[DECK_N] if _plan.slot_jit.size() > DECK_N else Vector3.ZERO
+	var j: Vector3 = _plan.slot_jit[_plan.deck_n] if _plan.slot_jit.size() > _plan.deck_n else Vector3.ZERO
 	return Transform3D(Basis(Vector3.UP, j.z + (PI if _reversed(k) else 0.0)),
-		_cur_base + Vector3(j.x, float(DECK_N - _deck_gone) * DECK_T + CARD_T * 0.5, j.y))
+		_cur_base + Vector3(j.x, float(_plan.deck_n - _deck_gone) * DECK_T + CARD_T * 0.5, j.y))
 
 
 ## THE CARD TWIRLED for a burst on the pirouette ([constant SPIN_ROOM]), or -1 when no burst marks one -

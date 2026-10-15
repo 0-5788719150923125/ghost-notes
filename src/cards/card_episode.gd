@@ -544,7 +544,9 @@ func document() -> Dictionary:
 	var out := {"show": show, "seed": seed, "dir": dir, "plan": plan if plan is Dictionary else {},
 		"images": {}, "cards": [],
 		# the cards a box's draw left in it (CardProducer._make_draw): the table prints the unseen cards as them
-		"left": (draw as Dictionary).get("left", []) if draw is Dictionary and (draw as Dictionary).get("left") is Array else []}
+		"left": (draw as Dictionary).get("left", []) if draw is Dictionary and (draw as Dictionary).get("left") is Array else [],
+		# how many cards the deck the draw was shuffled from held (0: drawn before the draw counted them)
+		"deck_n": int((draw as Dictionary).get("deck_n", 0)) if draw is Dictionary else 0}
 	for k in ["back", "surface", "backdrop"]:
 		if has("image:" + k):
 			out["images"][k] = file_of("image:" + k)

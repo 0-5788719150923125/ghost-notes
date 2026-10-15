@@ -33,9 +33,11 @@ extends Node
 ##     the blur lifting as the focus pulls and off for the reading - a box's reading as a deck's,
 ##     though a box is never shuffled (control: its shuffle time is none).
 ##
-##   tests/run_boot_probe.sh tests/table/table_place_check.gd 900
+##   tests/run_boot_probe.sh tests/table/table_place_check.gd 1800
 ##
-## (900 s: it took 563-608 s alone on 2026-10-07, at HEAD as with that day's changes - 600 timed it out.)
+## (1800 s: it took 563-608 s alone on 2026-10-07, at HEAD as with that day's changes - 600 timed it out;
+## and on 2026-10-14 900 timed it out: every episode it loads plans its shuffle, and a wash is now of
+## the whole deck, 78 cards, some 2 s a plan.)
 ##
 ## A BOOT probe (the medium reaches the Director); no GPU needed - placement is projection
 ## arithmetic and the cloth's lightness is read from its file.

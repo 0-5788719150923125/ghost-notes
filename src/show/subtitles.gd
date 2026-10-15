@@ -627,16 +627,20 @@ class Overlay:
 			y += lh
 
 	## How wide row [param row] is up to letter [param upto] of its sentence (a fraction of the next letter, and
-	## of the gap after a word, counted in), at size [param fs] - the glitch centers a row on it.
+	## of the gap after a word, counted in), at size [param fs] - the glitch centers a row on it. NO GAP AFTER
+	## THE ROW'S LAST WORD: its next letter is on the next row (the user, 2026-10-15: "at the end of subtitle
+	## lines... there is almost always a trailing space" - every row written out stood a word's gap off center,
+	## its plate a gap too long).
 	func _written(row: Array, upto: float, font: Font, fs: int, gap: float) -> float:
 		var w := 0.0
-		for item in row:
+		for k in row.size():
+			var item: Dictionary = row[k]
 			var text: String = item.word.text
 			var c0 := int(item.cstart)
 			if upto <= float(c0):
 				break
 			if upto >= float(c0 + text.length()):
-				w += item.w + gap * clampf(upto - float(c0 + text.length()), 0.0, 1.0)
+				w += item.w + (gap * clampf(upto - float(c0 + text.length()), 0.0, 1.0) if k < row.size() - 1 else 0.0)
 				continue
 			var face := _face(font, int(item.word.get("emph", 0)))
 			for ch in text.length():

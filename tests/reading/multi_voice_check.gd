@@ -54,6 +54,7 @@ func _ready() -> void:
 	_check_turn_rest()
 	_check_handover_is_sample_accurate()
 	_check_tabs()
+	_check_reader_is_first()
 	_check_saved_shape()
 	_check_hesitations()
 	_check_hesitation_splice()
@@ -95,6 +96,7 @@ func _cast(names: Array) -> void:
 	for i in names.size():
 		_ed._slots.append(ReadingPanel.SLOT_DEFAULTS.duplicate())
 	_ed._stash = {}
+	_ed._order = PackedStringArray(names)
 	_ed._slot = 0
 
 
@@ -475,6 +477,39 @@ func _check_tabs() -> void:
 	# ...and the cast written out carries every voice, shown or not
 	_ok(_ed._cast_dict().has("Judge") and _ed._cast_dict().has("Emily White"),
 		"the saved cast dropped a voice the script no longer shows")
+
+
+## THE READER IS THE FIRST VOICE LISTED, WHATEVER ITS NAME (2026-10-15: a show whose one voice was
+## "Ryan" had a copy of it written in as "Narrator" at any change of a setting, and its `tab` put back
+## to "Narrator"). The words before the first cue, and a cue naming the reader as a Cards reading
+## does, are its; nothing is written in beside it, and which voice is on screen is not written at
+## all. Two-sided: a cast that lists Narrator first keeps it as the reader, and a Ryan as Ryan.
+func _check_reader_is_first() -> void:
+	_ed._text.text = "Just prose, no cues at all."
+	_ed._voice_apply({"voices": {"Ryan": {"pace": 0.6}}})
+	var cast: Dictionary = _ed._voice_capture()
+	_ok(_ed._names == PackedStringArray(["Ryan"]), "an uncued script is not read by the cast's own first voice: %s" % [_ed._names])
+	_ok((cast["voices"] as Dictionary).keys() == ["Ryan"], "a voice was written in beside the reader: %s" % [(cast["voices"] as Dictionary).keys()])
+	_ok(not cast.has("tab"), "the voice on screen was written into the document (tab: %s)" % [cast.get("tab")])
+	_ok(absf(float(_ed._cfg_of(Manuscript.NARRATOR)["pace"]) - 0.6) < 0.001, "a cue for the reader did not reach Ryan's voice")
+	# a cast left with the copy the panel used to write: the copy goes, the reader stays first
+	_ed._voice_apply({"voices": {"Ryan": {"pace": 0.6}, "Narrator": {"pace": 1.4}}})
+	_ok(_ed._cast_dict().keys() == ["Ryan"], "the reader's old copy stayed in the cast: %s" % [_ed._cast_dict().keys()])
+	# a Cards reading: a familiar's line, then the reader cued back by the reader's cue
+	_ed._text.text = "Opening.\n\n<!-- speaker: Mo -->\n\nBoo.\n\n<!-- speaker: Narrator -->\n\nBack."
+	_ed._voice_apply({"voices": {"Ryan": {"pace": 0.6}, "Mo": {"pace": 1.2}}})
+	_ok(_ed._names == PackedStringArray(["Ryan", "Mo"]), "the reader's cue is not the first voice's tab: %s" % [_ed._names])
+	# ...and with the familiar written out, it keeps its place after the reader
+	_ed._text.text = "Only the reader now."
+	_ed._refresh_cast(_ed._cast_text())
+	_ok(_ed._cast_dict().keys() == ["Ryan", "Mo"], "a hidden voice went before the reader: %s" % [_ed._cast_dict().keys()])
+	# the control: Narrator listed first is the reader, and Ryan a voice of its own
+	_ed._text.text = "Opening.\n\n<!-- speaker: Ryan -->\n\nHi."
+	_ed._voice_apply({"voices": {"Narrator": {"pace": 0.9}, "Ryan": {"pace": 0.6}}})
+	_ok(_ed._names == PackedStringArray(["Narrator", "Ryan"]) and absf(float(_ed._cfg_of("Ryan")["pace"]) - 0.6) < 0.001
+			and absf(float(_ed._cfg_of(Manuscript.NARRATOR)["pace"]) - 0.9) < 0.001,
+		"control: a cast that lists Narrator first did not keep it as its reader: %s" % [_ed._names])
+	_ed._text.text = ""
 
 
 ## The saved shape survives a ConfigFile round trip. It stores every number as a

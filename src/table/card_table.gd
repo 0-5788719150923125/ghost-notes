@@ -33,16 +33,19 @@ const FACES := {
 const BOOK_FACE := "res://fonts/cards/EBGaramond-Variable.ttf"
 const BOOK_ITALIC := "res://fonts/cards/EBGaramond-Italic-Variable.ttf"
 
-## THE FRAME around a card's picture - the border the deck prints on every face and back. Every
-## style keeps a border of stock round the picture, its numeral above it and its name below: a
-## frameless `bleed` style (removed 2026-10-06, feedback 0010) ran the painting to the card's edge,
-## cropped it to the card's shape, and set the name and numeral on plates over it - "It looks nothing
-## like other cards, from other episodes." A look naming it is drawn as `line`.
+## THE FRAME around a card's picture - the border the deck prints on every face and back, its numeral
+## above the picture and its name below. Or none: a BORDERLESS card (2026-10-14, the user: "a lot of
+## instances in the real world where cards have no border at all, because the card artwork fills the
+## entire card") is its painting to the edge, cut to the card's corners, with no window and no ornament,
+## and its type set on the painting over a veil of the stock ([method veil_alpha], [method
+## CardFaces.type_boxes]). A `bleed` style before it (removed 2026-10-06, feedback 0010) set the name on
+## a plate narrower than the width it was fit to, and it ran off: "It looks nothing like other cards".
 const FRAMES := {
 	"line": "a plain border with one thin rule inside it",
 	"double": "a border with a double rule, thick and thin",
 	"corners": "a border with ornamental brackets in the four corners",
 	"deco": "a border with stepped Art Deco corners",
+	"borderless": "no border at all: the painting fills the whole card to its edge (no window, no ornament), the name printed over its foot on a soft veil of the card stock - the further the ink stands from the stock, the lighter that veil can be",
 }
 
 ## THE CARD ITSELF, beyond its frame's rules (2026-10-07, the user: "Every single card we generate right
@@ -172,6 +175,10 @@ const FALLBACK_PALETTE := ["#1d1a2b", "#c9a227", "#e8dcc0", "#7a2e3a", "#2f5d62"
 const INK_CONTRAST := 3.0
 ## ...and the booklet's running text, which is small: WCAG's floor for body text.
 const TEXT_CONTRAST := 4.5
+## ...and a borderless card's details, running text set over a painting nobody has seen when the deck is
+## printed ([method veil_alpha]): WCAG's enhanced floor. Its name and numeral are held to TEXT_CONTRAST,
+## though large - a card is small on screen, and the painting shows through the veil behind them.
+const PANEL_CONTRAST := 7.0
 
 ## THE TITLE SCREEN: the show's name over the table thrown out of focus, which is also the video's
 ## thumbnail (the user, 2026-10-06: "too small in some layouts on mobile"). The name is as large as
@@ -357,6 +364,10 @@ static func sanitize_look(look: Dictionary) -> Dictionary:
 	for k in [["window", WINDOWS, "rect"], ["corners", CORNERS, "rounded"], ["ornament", ORNAMENTS, "none"]]:
 		var v := String(frame.get(k[0], "") if frame.get(k[0]) is String else "").strip_edges().to_lower()
 		f[k[0]] = v if (k[1] as Dictionary).has(v) else String(k[2])
+	# a borderless card has no window to shape and no border to run an ornament round: its corners stay
+	if f["style"] == "borderless":
+		f["window"] = "rect"
+		f["ornament"] = "none"
 	# the producer may print on any stock, black to white: the name must read on it
 	var ink := color(f["ink"])
 	var readable := legible_ink(ink, color(f["stock"]))
@@ -718,6 +729,86 @@ static func legible_ink(ink: Color, stock: Color, least := INK_CONTRAST) -> Colo
 		if contrast(c, stock) >= least:
 			return c
 	return to
+
+
+## THE VEIL A BORDERLESS CARD'S TYPE IS SET ON, for type in [param ink] on a deck printed on [param stock],
+## to read at [param least]: `{ink, veil, alpha}`. The veil is the stock's color and the type the ink, both
+## TAKEN APART TOGETHER - the veil toward black or white, the ink the other way, an equal share of the way
+## each - only as far as they must for no more than [param heaviest] of the veil to be laid over the
+## painting ([method veil_alpha]). Planned on the stock and ink as they were, a mid-tone deck's veil came
+## out all but opaque (teal under cream, 0.93): a band of stock across the painting, a border again. Taken
+## apart one at a time, the veil went to black before the ink moved, and the deck's color was lost. A
+## light ink stays light and a dark one dark: made legible on the stock first, white on a mid green was
+## turned dark, on a pale veil - the deck's printing the other way round.
+static func veil_of(ink: Color, stock: Color, least: float, heaviest: float) -> Dictionary:
+	var lighter := _luminance(ink) > _luminance(stock)
+	var ends := [Color.WHITE if lighter else Color.BLACK, Color.BLACK if lighter else Color.WHITE]
+	var got := _veil_at(ink, stock, ends, 0.0, least)
+	if float(got["alpha"]) <= heaviest:
+		return got
+	got = _veil_at(ink, stock, ends, 1.0, least)
+	if float(got["alpha"]) > heaviest:
+		return got
+	# the share taken apart only lowers the veil a type needs: halve toward the least that is enough
+	var lo := 0.0
+	var hi := 1.0
+	for i in 10:
+		var mid := (lo + hi) * 0.5
+		var m := _veil_at(ink, stock, ends, mid, least)
+		if float(m["alpha"]) <= heaviest:
+			hi = mid
+			got = m
+		else:
+			lo = mid
+	return got
+
+
+## [param ink] and [param stock] taken [param share] of the way to `ends` (the ink's, then the veil's).
+static func _veil_at(ink: Color, stock: Color, ends: Array, share: float, least: float) -> Dictionary:
+	var c := ink.lerp(ends[0], share)
+	var v := stock.lerp(ends[1], share)
+	return {"ink": c, "veil": v, "alpha": veil_alpha(c, v, least)}
+
+
+## How much of the veil may be laid over the painting under a borderless card's name and numeral, and
+## under its details ([method veil_of]): over any painting, type at TEXT_CONTRAST needs at least 0.45-0.54
+## of a white or black veil, and running text at PANEL_CONTRAST 0.58-0.65.
+const VEIL_HEAVIEST := 0.6
+const PANEL_HEAVIEST := 0.8
+
+
+## How much of [param stock] (0..1) is laid over the painting under [param ink] for the type to read at
+## [param least] - the least that does ([method veil_contrast]), or all of it. A PRINTER NEVER KNOWS WHICH
+## PAINTING GOES UNDER THE TYPE: every card of a deck is printed with one veil, planned against the worst
+## painting there could be, and a card's own colors, whatever they turn out to be, are never asked. The
+## canvas lays it as the face is drawn, in sRGB, and tests/table/card_veil_check.gd measures what it drew.
+static func veil_alpha(ink: Color, stock: Color, least: float) -> float:
+	if veil_contrast(ink, stock, 1.0) < least:
+		return 1.0
+	# more veil only narrows what the painting can show through it: halve toward the least that reads
+	var lo := 0.0
+	var hi := 1.0
+	for i in 12:
+		var mid := (lo + hi) * 0.5
+		if veil_contrast(ink, stock, mid) >= least:
+			hi = mid
+		else:
+			lo = mid
+	return hi
+
+
+## The least contrast [param ink] can have against [param stock] laid at [param alpha] over ANY painting.
+## The veil over black and over white bound every color it can come out as (the canvas mixes each channel
+## as `paint + (stock - paint) * alpha`, and lightness rises with every channel); an ink whose lightness
+## falls between them matches some painting, and reads not at all.
+static func veil_contrast(ink: Color, stock: Color, alpha: float) -> float:
+	var dark := _luminance(Color.BLACK.lerp(stock, alpha))
+	var light := _luminance(Color.WHITE.lerp(stock, alpha))
+	var l := _luminance(ink)
+	if l >= dark and l <= light:
+		return 1.0
+	var near := dark if l < dark else light
+	return (maxf(l, near) + 0.05) / (minf(l, near) + 0.05)
 
 
 static var _fonts := {}

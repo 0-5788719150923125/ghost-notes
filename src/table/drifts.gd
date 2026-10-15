@@ -33,6 +33,30 @@ class_name Drifts
 ## one left under a card stood up through it (the user, 2026-10-11: a card "clipped through a leaf that
 ## had fallen on the table").
 ##
+## NOR UNDER A WASH'S CARDS (the user, 2026-10-14: a petal on the table was "completely unaffected by the
+## card-washing: cards are clipping through the petals ... I would expect the petal to move, possibly even
+## catching on the cards, riding around on them, falling off, tumbling"): the cards a wash slides over the
+## cloth are told ([method laid]'s `sweeps`, the table's [method TableShuffle.sweeps]: each card's place
+## every 1/20 s), and a piece lying where one comes is not left under it. Each card it meets does one of
+## three things to it, on a die of its own: SHOVES it - out the side that came against it; lets it RIDE -
+## the edge slides in under it, onto the face the wash poses; or FLICKS it - a hop and a tumble, to come
+## down on the cloth or on the card beyond ([method _shove]). A RIDER HAS MOMENTUM (the user, same day, of a
+## petal that "keeps following the card even while it is NOT TOUCHING": it "probably needs a little bit of
+## momentum, such that when the underlying card moves - the petal is shaken off of it"): the face under its
+## middle changes its way by no more than it grips, and the still air holds it back as the card sweeps it
+## along, so a card hauled hard or swept fast goes on without it; it slides back over the face, off the
+## edge, and drops to the cloth, which stops it in a few centimeters.
+##
+## AND ONCE OFF, IT IS FREE (the user, again: the petals were "riding" cards around the wash, "which is
+## pretty strange", and slid off them "yet remain attached to them - even though they are way out to the
+## side"): a card meets a piece only pressing into it, with the side it came in by ([method _contact]) -
+## the card it has just slid off, going away, never catches it again, and a side going by is not the far
+## edge it once leapt to, a card's width in a step - and nothing carries it unless its middle is on the
+## face. A card under it is a floor, never a wall: what slides off one card lands on the next. Rides are
+## the rarer outcome and short ([constant SHOVE_ODDS], [constant RIDE_AIR]). Everything a wash does to it
+## is planned whole from the cards' tracks, so any time asked poses it the same; once the wash is over it
+## lies where it ended, and the gusts take it from there.
+##
 ## A piece is real geometry - a cupped quad cut to its outline in the shader (shaders/air_drift.gdshader),
 ## lit by every light on the table, glowing through where the sun is behind it, casting its small
 ## shadow, and blurred by the lens like everything else.
@@ -116,9 +140,18 @@ const LIFT := Vector2(0.12, 1.4)
 const DECK_UP := 0.04
 ## The share of a fall it spends turning flat before it lands (seconds).
 const LANDING := 0.45
-## A lift: how high it hops (meters, at most), and how quickly.
+## A lift: how high it hops (meters, at most). A GUST LIFTS WHAT IT IS BLOWING ALONG, never what it is
+## not moving (the user, 2026-10-14: petals "feel like UFOs taking-off. They hover straight up, then drift
+## off", one "straight up, then straight back down"): a skid's hop is at most HOP_SLOPE of the distance it
+## is carried (a piece that goes nowhere does not rise), and one carried off rises as it is blown, to its
+## full height over about OFF_RUN meters, so it leaves along a slant and never straight up. HOW HIGH
+## FOLLOWS HOW HARD (the user, same day: a petal blown along "is probably going to tumble across the
+## table, not lift-off like a helicopter - BOTH should be a possibility"): the hop of a skid and the
+## height of one carried off are both scaled by the gust's peak over the grip ([method _hop]), so a
+## breath just past the grip slides it over the edge a few millimeters up, and a strong gust lifts it.
 const HOP := 0.04
-const HOP_RISE := 0.35
+const HOP_SLOPE := 0.16
+const OFF_RUN := 0.3
 ## BLOWN ASIDE by a card coming down on it ([method laid]): how long before the card is down it goes, and
 ## by when it is clear (seconds); how high it hops and how much room it leaves the card (meters), and
 ## how much further it may go.
@@ -126,6 +159,32 @@ const ASIDE := Vector2(0.85, 0.4)
 const ASIDE_HOP := 0.012
 const ASIDE_ROOM := 0.01
 const ASIDE_MORE := 0.03
+## A WASH'S CARDS SHOVE WHAT LIES ([method _shove]): the share of the cards that shove a piece and, with
+## it, that let it ride (the rest flick it); how hard a card must be hauled for a piece riding it to slip
+## (m/s each second, about: each piece its own - the most the card can change its way); how hard the
+## still air holds a rider back edge on, against its weight at the speed it falls (so a fast sweep leaves
+## it behind); how quickly a shoved piece slows on the cloth (its drag, a second, and its grip, m/s each
+## second); how fast a card that came down on one, or a deck it is caught in, pushes it out (m/s); a
+## flick's sideways speed, rise (m/s) and spin (radians a second); how fast a piece in the air comes back
+## down (m/s each second) and loses its sideways way (a second: a petal does not coast with the card it
+## left); and how many steps a card's 1/20 s is taken in, so a quick card is never leapt.
+const SHOVE_ODDS := Vector2(0.6, 0.75)
+const SLIP := Vector2(1.0, 2.5)
+const RIDE_AIR := 0.5
+const SHOVE_FRICTION := 10.0
+const CLOTH_GRIP := 4.0
+const SQUEEZE := 0.6
+const FLICK_SPEED := Vector2(0.3, 0.8)
+const FLICK_RISE := Vector2(0.35, 0.8)
+const FLICK_SPIN := Vector2(7.0, 13.0)
+const AIR_FALL := 6.0
+const AIR_DRAG := 7.0
+const SUBSTEPS := 2
+## How high a card's face is over the cloth when the table gave no way to ask (meters: a card's thickness
+## and the gap the wash leaves) - written out, so this script does not depend on the shuffle's.
+const CARD_LAYER := 0.0004
+## What a card's record is (floats).
+const CARD_STRIDE := 8
 ## Further than this from the table's middle, or under the air's floor, a piece is gone (meters).
 const GONE := 3.0
 ## The share of falls from above that come down past the table, in the room behind it.
@@ -666,7 +725,8 @@ static func _after(pop: Dictionary, lv: Dictionary, p: Vector3, t: float, lift: 
 		var turn := r.randf() < 0.4
 		if hit >= 1.0 and not _over_table(pop, Vector2(to.x, to.z)):
 			# CARRIED OFF, over the edge and away
-			var off := {"kind": "off", "t": go, "end": go + 20.0, "from": here, "flip": flip, "yaw": yaw, "gust": g, "edge": go + 20.0}
+			var off := {"kind": "off", "t": go, "end": go + 20.0, "from": here, "flip": flip, "yaw": yaw, "gust": g, "edge": go + 20.0,
+				"rise": _hop(wind, g, lift) * 2.0}
 			var stopped: Variant = _off_plan(pop, lv, off)
 			if stopped == null:
 				segs.append(off)
@@ -687,8 +747,14 @@ static func _after(pop: Dictionary, lv: Dictionary, p: Vector3, t: float, lift: 
 				else:
 					hi = mid
 			to = here.lerp(to, lo)
+		var dist := here.distance_to(to)
+		if dist < 0.01:
+			# the gust cannot move it (a card, a thing or the edge is right there): it lies on, and is not lifted
+			segs.pop_back()
+			after = span.x + 1e-3
+			continue
 		segs.append({"kind": "skid", "t": go, "end": stop, "from": here, "to": to, "flip": flip, "yaw": yaw, "turn": turn, "gust": g,
-			"hop": HOP * clampf((float((wind["peaks"] as PackedFloat32Array)[g]) - lift) / maxf(lift, 0.05), 0.15, 1.0)})
+			"hop": minf(_hop(wind, g, lift), HOP_SLOPE * dist)})
 		if turn:
 			flip = not flip
 		yaw += r.randf_range(-1.2, 1.2)
@@ -699,12 +765,19 @@ static func _after(pop: Dictionary, lv: Dictionary, p: Vector3, t: float, lift: 
 	return segs
 
 
+## How high gust [param g] lifts what lies at grip [param lift] (meters, at most): the further its peak
+## is past the grip, the higher, from a sliver to [constant HOP].
+static func _hop(wind: Dictionary, g: int, lift: float) -> float:
+	return HOP * clampf((float((wind["peaks"] as PackedFloat32Array)[g]) - lift) / maxf(lift, 0.05), 0.15, 1.0)
+
+
 ## THE CARDS SET DOWN ([param lays]: the air's `lay` moments - `{t, path: [[t, Transform3D], ...]}`, each
 ## card as it lies from the moment it is down), whenever the schedule moves. EVERY PIECE LYING WHERE ONE
 ## COMES DOWN IS BLOWN ASIDE FIRST ([method _make_way]): each life is what it was planned to do, amended
 ## by these - the same for the same cards, asked at any time. The cards a voice has not reached yet are
-## not known: a piece goes when its card is.
-static func laid(pop: Dictionary, lays: Array) -> void:
+## not known: a piece goes when its card is. [param sweeps] are the wash's cards sliding on the cloth
+## ([method TableShuffle.sweeps]): what lies where they go is shoved by them ([method _shoved]).
+static func laid(pop: Dictionary, lays: Array, sweeps: Array = []) -> void:
 	var downs: Array = []
 	for m in lays:
 		var path: Array = (m as Dictionary).get("path", [])
@@ -712,10 +785,14 @@ static func laid(pop: Dictionary, lays: Array) -> void:
 			downs.append({"t": float((m as Dictionary)["t"]), "xf": (path[0] as Array)[1]})
 	downs.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["t"]) < float(b["t"]))
 	var key := str(downs.map(func(d: Dictionary) -> String: return "%.3f/%s" % [float(d["t"]), str(d["xf"])]))
+	var swept := str(sweeps.map(func(w: Dictionary) -> String: return "%.3f/%d/%d" % [float(w["t"]), int(w["frames"]), hash(w["data"])]))
+	key += swept
 	if key == String(pop.get("laid", "")):
 		return
 	pop["laid"] = key
 	pop["downs"] = downs
+	pop["sweeps"] = sweeps
+	pop["swept"] = swept
 	var lives: Array = pop["lives"]
 	for lv in lives:
 		_make_way(pop, lv)
@@ -740,6 +817,11 @@ static func _make_way(pop: Dictionary, lv: Dictionary) -> void:
 	var segs: Array = ((lv["planned"] as Dictionary)["segs"] as Array).duplicate()
 	lv["segs"] = segs
 	lv["end"] = (lv["planned"] as Dictionary)["end"]
+	# THE WASH'S CARDS first: what they leave is what a card coming down then finds
+	var sweeps: Array = pop.get("sweeps", [])
+	if not sweeps.is_empty() and not segs.is_empty():
+		_shoved(pop, lv, segs, sweeps)
+		lv["end"] = float((segs[segs.size() - 1] as Dictionary)["end"])
 	var downs: Array = pop.get("downs", [])
 	if downs.is_empty() or segs.is_empty():
 		return
@@ -810,14 +892,485 @@ static func _aside(pop: Dictionary, from: Vector3, xf: Transform3D, l: Vector3, 
 	return null
 
 
-## Where a piece carried off is at [param t]: lifted off the cloth as the gust takes it, carried with the
-## air, sinking again once past the table's edge.
+## [param lv]'s life as it was planned, with the rest a wash's cards ([param sweeps]) come over cut short
+## where the first of them touches it: it lies until then, is shoved, carried and flicked by them as long
+## as the wash goes ([method _shove]), and lives on from where it leaves it ([method _after], on dice of
+## its own). A piece the cards never reach is left as it was.
+static func _shoved(pop: Dictionary, lv: Dictionary, segs: Array, sweeps: Array) -> void:
+	# what the same cards did to this piece last time is what they do (a card told of after it
+	# changes nothing here, and a run is dear)
+	var swept := String(pop.get("swept", ""))
+	if String(lv.get("shoved_for", "")) == swept:
+		segs.clear()
+		segs.append_array(lv["shoved"])
+		return
+	var dice: Array = lv.get("dice", [0, 0])
+	var m := float(pop["size"]) * 0.5
+	var went := 0
+	for sw in sweeps:
+		var w0 := float((sw as Dictionary)["t"])
+		var hz := float((sw as Dictionary)["hz"])
+		var frames := int((sw as Dictionary)["frames"])
+		for i in segs.size():
+			var s: Dictionary = segs[i]
+			if String(s["kind"]) != "rest" or float(s["end"]) <= w0 or float(s["t"]) >= w0 + float(frames - 1) / hz:
+				continue
+			var from: Vector3 = s["from"]
+			var a := maxi(ceili((float(s["t"]) - w0) * hz), 0)
+			var b := mini(floori((minf(float(s["end"]), w0 + float(frames - 1) / hz) - w0) * hz), frames - 1)
+			# a step wider than the card is, so a quick one is never missed between two frames
+			var f := _touched(sw, Vector2(from.x, from.z), m + 0.01, a, b)
+			if f < 0:
+				continue
+			f = maxi(f - 1, a)
+			var r := _dice(pop, int(dice[0]), int(dice[1]), "shove %d" % went)
+			var run := _shove(pop, lv, sw, s, f, r)
+			var head := s.duplicate()
+			head["end"] = w0 + float(f) / hz
+			segs.resize(i)
+			segs.append(head)
+			segs.append(run["seg"])
+			segs.append_array(_after(pop, lv, run["to"], float(run["end"]), float(lv.get("grip", INF)), r, run["lies"]))
+			went += 1
+			break
+	lv["shoved_for"] = swept
+	lv["shoved"] = segs.duplicate()
+
+
+## The first frame of [param a]..[param b] of wash [param sw] at which a card on the cloth, or in the deck,
+## has [param p] (xz) within [param m] of its edge - or -1 when none does.
+static func _touched(sw: Dictionary, p: Vector2, m: float, a: int, b: int) -> int:
+	var data: PackedFloat32Array = sw["data"]
+	var n := int(sw["cards"])
+	var half := Vector2(TablePositions.CARD.x, TablePositions.CARD.y) * 0.5 + Vector2.ONE * m
+	for f in range(a, b + 1):
+		for j in n:
+			var o := (f * n + j) * 5
+			if data[o + 3] < 0.0:
+				continue
+			var l := _local(p, Vector2(data[o], data[o + 1]), data[o + 2])
+			if absf(l.x) <= half.x and absf(l.y) <= half.y:
+				return f
+	return -1
+
+
+## [param p] in the frame of a card whose middle is [param c], turned [param yaw]: across it, along it.
+static func _local(p: Vector2, c: Vector2, yaw: float) -> Vector2:
+	var d := p - c
+	return Vector2(d.x * cos(yaw) - d.y * sin(yaw), d.x * sin(yaw) + d.y * cos(yaw))
+
+
+## The point [param l] of a card whose middle is [param c], turned [param yaw] - across, along - in the world.
+static func _world(l: Vector2, c: Vector2, yaw: float) -> Vector2:
+	return c + Vector2(cos(yaw), -sin(yaw)) * l.x + Vector2(sin(yaw), cos(yaw)) * l.y
+
+
+## Every card of wash [param sw] at step [param s] (of [constant SUBSTEPS] to a frame), the frames either
+## side of it blended: [constant CARD_STRIDE] floats a card - x, z, turn, spread (-1 off the cloth), place
+## in the order, and the height of its face over the cloth at its middle with the slope of it across x
+## and z (the table's own - [method _rest_at]).
+static func _cards_at(sw: Dictionary, s: int) -> PackedFloat32Array:
+	var data: PackedFloat32Array = sw["data"]
+	var n := int(sw["cards"])
+	var last := int(sw["frames"]) - 1
+	var fa := mini(floori(float(s) / float(SUBSTEPS)), last)
+	var fb := mini(fa + 1, last)
+	var u := 0.0 if fa >= last else float(s % SUBSTEPS) / float(SUBSTEPS)
+	var ra := _rest_at(sw, fa)
+	var rb := _rest_at(sw, fb)
+	var out := PackedFloat32Array()
+	out.resize(n * CARD_STRIDE)
+	for j in n:
+		var oa := (fa * n + j) * 5
+		var ob := (fb * n + j) * 5
+		var o := j * CARD_STRIDE
+		out[o] = lerpf(data[oa], data[ob], u)
+		out[o + 1] = lerpf(data[oa + 1], data[ob + 1], u)
+		out[o + 2] = lerp_angle(data[oa + 2], data[ob + 2], u)
+		out[o + 3] = -1.0 if data[oa + 3] < 0.0 or data[ob + 3] < 0.0 else data[oa + 3]
+		out[o + 4] = data[oa + 4]
+		out[o + 5] = lerpf(ra[j * 3], rb[j * 3], u)
+		out[o + 6] = lerpf(ra[j * 3 + 1], rb[j * 3 + 1], u)
+		out[o + 7] = lerpf(ra[j * 3 + 2], rb[j * 3 + 2], u)
+	return out
+
+
+## How high each card's face is over the cloth at frame [param f] of wash [param sw], and how it slopes:
+## three floats a card, asked of the table as it is needed (what the wash poses is dear) and kept. Where
+## the table gave no way to ask, one thickness over the cloth and flat.
+static func _rest_at(sw: Dictionary, f: int) -> PackedFloat32Array:
+	var cache: Dictionary = sw.get("rest_cache", {})
+	if not cache.has(f):
+		var out := PackedFloat32Array()
+		var ask: Variant = sw.get("rest")
+		if ask is Callable and (ask as Callable).is_valid():
+			out = (ask as Callable).call(f)
+		else:
+			out.resize(int(sw["cards"]) * 3)
+			for j in int(sw["cards"]):
+				out[j * 3] = CARD_LAYER
+		cache[f] = out
+		sw["rest_cache"] = cache
+	return cache[f]
+
+
+## The height of card [param j]'s face at [param p] (xz), over the cloth, of [param cards] ([method _cards_at]).
+static func _face(cards: PackedFloat32Array, j: int, p: Vector2) -> float:
+	var o := j * CARD_STRIDE
+	return maxf(cards[o + 5] + cards[o + 6] * (p.x - cards[o]) + cards[o + 7] * (p.y - cards[o + 1]), 0.0)
+
+
+## HOW A WASH'S CARDS TREAT A PIECE lying at [param seg]'s place from frame [param f0] of wash [param sw]:
+## `{seg: the track, to: where it lies after, end: when, lies: {flip, yaw}}`. Stepped through the cards'
+## own tracks, each step one of three: ON THE CLOTH it slides on what it was given and the cloth soon
+## stops it ([method _slowed]); ON A CARD the face under its middle carries it, no harder than it grips -
+## sticking, it goes where the card does and turns with it; hauled harder, it slides on the face, the
+## way it was going - and once its middle is off the edge it is off, and drops (its card gathered or
+## thrown, with a hop); IN THE AIR it falls as a petal does, turning, to the cloth or the highest face
+## there. A CARD MEETS IT ONLY PRESSING INTO IT ([method _contact]: the side it came in by, never a side
+## moving away - one it has just slid off does not catch it again) and SHOVES it out that side, lets it
+## RIDE - the edge slides in under it, and nothing carries it until its middle is on the face - or FLICKS
+## it ([constant SHOVE_ODDS], a die of its own for each card): a card of the deck is only ever a wall, a
+## card covering what rides another's face is met as one on the cloth. It goes on until the cards are
+## done and it lies still, flat and on the cloth (or three seconds past, whatever it is doing), and what
+## the table's top or a thing standing on it refuses is never taken.
+static func _shove(pop: Dictionary, lv: Dictionary, sw: Dictionary, seg: Dictionary, f0: int, r: RandomNumberGenerator) -> Dictionary:
+	var dice: Array = lv.get("dice", [0, 0])
+	var hz := float(sw["hz"]) * float(SUBSTEPS)
+	var dt := 1.0 / hz
+	var n := int(sw["cards"])
+	var st := CARD_STRIDE
+	var last := (int(sw["frames"]) - 1) * SUBSTEPS
+	var start: Vector3 = seg["from"]
+	var base_y := start.y
+	var m := float(pop["size"]) * 0.5
+	var half := Vector2(TablePositions.CARD.x, TablePositions.CARD.y) * 0.5
+	var fall := float(lv["fall"])
+	var hold := r.randf_range(SLIP.x, SLIP.y)
+	var p := Vector2(start.x, start.z)
+	var v := Vector2.ZERO
+	var y := 0.0
+	var vy := 0.0
+	var yaw := float(seg["yaw"])
+	var roll := PI if bool(seg["flip"]) else 0.0
+	var spin := 0.0
+	var tilt := 0.0
+	var aloft := 0.0
+	# 0 on the cloth, 1 on card `on` (`up` once its middle has been over the face), 2 in the air
+	var mode := 0
+	var on := -1
+	var up := false
+	var outcome := {}
+	var pos := PackedVector3Array()
+	var ang := PackedVector3Array()
+	pos.append(start)
+	ang.append(Vector3(yaw, roll, 0.0))
+	var s := f0 * SUBSTEPS
+	var before := _cards_at(sw, s)
+	var calm := 0
+	while s < last + 3 * int(hz):
+		s += 1
+		var cur := _cards_at(sw, mini(s, last))
+		var pp := p
+		# WHERE IT GOES ON ITS OWN, by what it is doing
+		match mode:
+			0:
+				p += v * dt
+				v = _slowed(v, dt)
+			1:
+				var o := on * st
+				var c := Vector2(cur[o], cur[o + 1])
+				var w := cur[o + 2]
+				if cur[o + 3] < 0.5:
+					# ITS CARD THROWN out from under it: tossed with a hop and a tumble, the way the card
+					# went; GATHERED into the deck: off it, out the nearest side, in the air until it is clear
+					# (the deck is a wall)
+					mode = 2
+					vy = r.randf_range(0.1, 0.3)
+					v *= 0.5
+					if cur[o + 3] >= 0.0:
+						var l := _local(p, Vector2(before[o], before[o + 1]), before[o + 2])
+						var reach := half + Vector2.ONE * m
+						var gap := Vector2(reach.x - absf(l.x), reach.y - absf(l.y))
+						var nl := Vector2(signf(l.x) if l.x != 0.0 else 1.0, 0.0) if gap.x < gap.y else Vector2(0.0, signf(l.y) if l.y != 0.0 else 1.0)
+						var go := (maxf(minf(gap.x, gap.y), 0.0) + 0.003) * AIR_DRAG
+						var speed := maxf(SQUEEZE, go / 0.95)
+						vy = maxf(vy, AIR_FALL * 0.5 * -log(1.0 - go / speed) / AIR_DRAG)
+						v += (Vector2(cos(w), -sin(w)) * nl.x + Vector2(sin(w), cos(w)) * nl.y) * speed
+					spin = r.randf_range(FLICK_SPIN.x, FLICK_SPIN.y) * (1.0 if r.randf() < 0.5 else -1.0) * 0.6
+					aloft = 0.0
+				else:
+					# THE FACE UNDER ITS MIDDLE CARRIES IT (the user, 2026-10-14: petals slid off the cards
+					# "yet remain attached to them - even though they are way out to the side"): the way
+					# the card's own point under it goes this step, changed by no more than it grips -
+					# and nothing at all while it is not on the face (climbing on, the edge sliding in
+					# under it)
+					var lb := _local(pp, Vector2(before[o], before[o + 1]), before[o + 2])
+					if minf(half.x - absf(lb.x), half.y - absf(lb.y)) >= 0.0:
+						# and THE AIR it is carried through holds it back: as hard as its weight when it goes
+						# as fast as it falls, but edge on ([constant RIDE_AIR]) - a card swept fast goes on
+						# without it
+						var drag := -v * (9.8 * RIDE_AIR * v.length() / (fall * fall))
+						var need := (_world(lb, c, w) - pp) / dt - v
+						if (need / dt - drag).length() <= hold:
+							v += need
+							yaw += wrapf(w - before[o + 2], -PI, PI)
+						else:
+							v += (need.normalized() * hold + drag) * dt
+					else:
+						v = _slowed(v, dt)
+					p += v * dt
+					var l := _local(p, c, w)
+					var depth := minf(half.x - absf(l.x), half.y - absf(l.y))
+					up = up or depth >= 0.0
+					if (up and depth < 0.0) or depth < -m:
+						# OFF ITS EDGE, with the way it was going: down to the cloth (or a face), which stops it
+						mode = 2
+						vy = 0.0
+						spin = r.randf_range(FLICK_SPIN.x, FLICK_SPIN.y) * (1.0 if r.randf() < 0.5 else -1.0) * 0.3
+						aloft = 0.0
+			2:
+				p += v * dt
+				v *= exp(-AIR_DRAG * dt)
+				vy = maxf(vy - AIR_FALL * dt, -fall)
+				y += vy * dt
+				roll += spin * dt
+				aloft += dt
+				tilt = 0.4 * sin(aloft * 9.0)
+		# WHAT IS UNDER IT: the highest face of the cards on the cloth that hold it
+		var under := _under(cur, p)
+		var top := int(under.x)
+		var support := under.y
+		if mode == 2 and y <= support:
+			# LANDED, on the card that is there - or the cloth
+			spin = 0.0
+			vy = 0.0
+			if top >= 0:
+				mode = 1
+				on = top
+				up = true
+				y = support + 0.0003
+			else:
+				mode = 0
+				y = 0.0
+		# THE CARDS PRESSING INTO IT, as the one nearest the top is met first; a few turns to settle between two
+		var touched := false
+		if mode != 2 or y < support + 0.003:
+			for _it in 3:
+				var hit := -1
+				var held := -1
+				var hit_c := {}
+				var held_c := {}
+				for j in n:
+					var sp := cur[j * st + 3]
+					if sp < 0.0 or (mode == 1 and j == on):
+						continue
+					if mode == 1 and sp >= 0.5 and cur[j * st + 4] <= cur[on * st + 4]:
+						continue
+					# a card whose face is under it does not press it: it comes down on that face
+					if y > _face(cur, j, p) + 0.0001:
+						continue
+					var k := _contact(cur, before, j, p, pp, v, m, dt)
+					if k.is_empty():
+						continue
+					if sp < 0.5:
+						if held < 0:
+							held = j
+							held_c = k
+					elif hit < 0 or cur[j * st + 4] > cur[hit * st + 4]:
+						hit = j
+						hit_c = k
+				# a card that is over it first, a wall of the deck after
+				var wall := hit < 0 and held >= 0
+				if wall:
+					hit = held
+					hit_c = held_c
+				if hit < 0:
+					break
+				touched = true
+				var out_w: Vector2 = hit_c["out"]
+				var vc: Vector2 = hit_c["vel"]
+				var kind := 0
+				if not wall and not bool(hit_c["under"]):
+					if not outcome.has(hit):
+						var u := _dice(pop, int(dice[0]), int(dice[1]), "card %d" % hit).randf()
+						outcome[hit] = 0 if u < SHOVE_ODDS.x else (1 if u < SHOVE_ODDS.y else 2)
+					kind = int(outcome[hit])
+				var to := p + out_w * float(hit_c["depth"])
+				# never off the top, into a thing, or - shoved by a card - into the deck, which shoves back
+				var refused := not _on_top(pop, to) or _blocked(pop, Vector3(to.x, base_y + 0.004, to.y)) \
+					or (not wall and _in_deck(cur, to, m))
+				if kind != 1 and refused and not wall:
+					kind = 1
+				if kind == 1 and not wall:
+					# UP ONTO IT: the edge slides in under it, where it is
+					mode = 1
+					on = hit
+					up = false
+				elif kind == 2 and not wall and not refused:
+					# FLICKED: out of the way with a hop, and over
+					p = to
+					v = out_w * r.randf_range(FLICK_SPEED.x, FLICK_SPEED.y) + vc * 0.6
+					mode = 2
+					vy = r.randf_range(FLICK_RISE.x, FLICK_RISE.y)
+					spin = r.randf_range(FLICK_SPIN.x, FLICK_SPIN.y) * (1.0 if r.randf() < 0.5 else -1.0)
+					aloft = 0.0
+					break
+				elif not refused:
+					# SHOVED, ahead of the card's edge (off the face it rode, perhaps: then it drops)
+					p = to
+					v = out_w * maxf(vc.dot(out_w), 0.0)
+					if bool(hit_c["under"]):
+						# out from under a card no faster than SQUEEZE, however many it is under
+						break
+				else:
+					break
+		# WHAT THE TABLE'S TOP AND ITS THINGS REFUSE
+		if mode != 1 and p != pp and (not _on_top(pop, p) or _blocked(pop, Vector3(p.x, base_y + 0.004, p.y))):
+			p = pp
+			v = Vector2.ZERO
+		# OVER A FACE, IT LIES ON IT, never under it: on the cloth and pushed onto a card, or one slid in
+		# under it faster than it could be met
+		under = _under(cur, p)
+		if mode == 0 and under.x >= 0.0:
+			mode = 1
+			on = int(under.x)
+			up = true
+		# ITS HEIGHT AND TURN: up with the face it lies on at once, and down to where it lies by easing
+		if mode != 2:
+			var want := under.y + 0.0003 if under.x >= 0.0 else 0.0
+			if mode == 1:
+				# CLIMBING ON: the face's height comes in as its middle comes over the edge, from half its
+				# own size outside it - never held up in the air beside the card
+				var l := _local(p, Vector2(cur[on * st], cur[on * st + 1]), cur[on * st + 2])
+				var depth := minf(half.x - absf(l.x), half.y - absf(l.y))
+				want = maxf(want, (_face(cur, on, p) + 0.0003) * clampf((depth + m) / (m + 0.003), 0.0, 1.0))
+			y = want if want > y else y + (want - y) * (1.0 - exp(-25.0 * dt))
+			roll += (roundf(roll / PI) * PI - roll) * (1.0 - exp(-10.0 * dt))
+			tilt *= exp(-12.0 * dt)
+		pos.append(Vector3(p.x, base_y + y, p.y))
+		ang.append(Vector3(yaw, roll, tilt))
+		before = cur
+		# DONE: the cards are over, and it lies still on the cloth
+		if s >= last and mode == 0 and not touched and v.length() < 0.003 and absf(y) < 0.0003 \
+				and absf(roll - roundf(roll / PI) * PI) < 0.02 and absf(tilt) < 0.02:
+			calm += 1
+			if calm > 2:
+				break
+		else:
+			calm = 0
+	# IT LIES FLAT, on the cloth, where it is
+	roll = roundf(roll / PI) * PI
+	pos[pos.size() - 1] = Vector3(p.x, base_y, p.y)
+	ang[ang.size() - 1] = Vector3(yaw, roll, 0.0)
+	var t0 := float(sw["t"]) + float(f0) / float(sw["hz"])
+	var seg_out := {"kind": "shoved", "t": t0, "end": t0 + float(pos.size() - 1) / hz, "hz": hz, "pos": pos, "ang": ang,
+		"from": start, "flip": bool(seg["flip"]), "yaw": float(seg["yaw"])}
+	return {"seg": seg_out, "to": Vector3(p.x, base_y, p.y), "end": float(seg_out["end"]),
+		"lies": {"flip": posmod(int(roundf(roll / PI)), 2) == 1, "yaw": yaw}}
+
+
+## HOW CARD [param j] OF [param cur] PRESSES INTO a piece at [param p] going [param v] (at [param pp] a step
+## of [param dt] ago, when the cards were [param was]), the piece inside its edge by [param m] (half its
+## own size): `{out: the way it is pushed (xz), depth: how far, vel: the card's own point there (m/s),
+## under: whether it was there already}` - or empty when the card is not pressing into it. The side it
+## presses with is the side the piece came in by (once the side the card was going toward, which could be
+## the far one: a piece leapt a card's width in a step). A card that was there already - it came down
+## there, or the piece is caught in the deck it was gathered into - presses only while the piece's middle
+## is under it, out the nearest side, [constant SQUEEZE] at most a second; one that is not moving into it
+## (the card it has just slid off, one going by alongside) does not touch it at all.
+static func _contact(cur: PackedFloat32Array, was: PackedFloat32Array, j: int, p: Vector2, pp: Vector2, v: Vector2,
+		m: float, dt: float) -> Dictionary:
+	var o := j * CARD_STRIDE
+	var half := Vector2(TablePositions.CARD.x, TablePositions.CARD.y) * 0.5
+	var reach := half + Vector2.ONE * m
+	var c := Vector2(cur[o], cur[o + 1])
+	var w := cur[o + 2]
+	var l := _local(p, c, w)
+	# a card it is already out against (shoved to its very edge) is not met again
+	if minf(reach.x - absf(l.x), reach.y - absf(l.y)) <= 0.0002:
+		return {}
+	var cb := Vector2(was[o], was[o + 1])
+	var lb := _local(pp, cb, was[o + 2])
+	var vel := (_world(_local(p, cb, was[o + 2]), c, w) - p) / dt
+	var sides := [Vector2(1.0, 0.0), Vector2(-1.0, 0.0), Vector2(0.0, 1.0), Vector2(0.0, -1.0)]
+	var side := -1
+	var out_by := -INF
+	if was[o + 3] >= 0.0:
+		for k in 4:
+			var nk: Vector2 = sides[k]
+			var d := lb.dot(nk) - absf(reach.dot(nk))
+			if d > out_by:
+				out_by = d
+				side = k
+	var there := side < 0 or out_by < -0.0002
+	if there:
+		# THERE ALREADY: the nearest way out
+		side = 0
+		for k in 4:
+			if absf(reach.dot(sides[k])) - l.dot(sides[k]) < absf(reach.dot(sides[side])) - l.dot(sides[side]):
+				side = k
+	var nl: Vector2 = sides[side]
+	var out := Vector2(cos(w), -sin(w)) * nl.x + Vector2(sin(w), cos(w)) * nl.y
+	var depth := absf(reach.dot(nl)) - l.dot(nl)
+	var under := false
+	if there:
+		under = minf(half.x - absf(l.x), half.y - absf(l.y)) > 0.0
+		if not under and cur[o + 3] >= 0.5 and (vel - v).dot(out) <= 0.005:
+			return {}
+		depth = minf(depth, SQUEEZE * dt)
+	return {"out": out, "depth": depth, "vel": vel, "under": under}
+
+
+## What is under a piece at [param p] (xz) among [param cards]: the card on the cloth whose face is highest
+## there, and that face's height over the cloth - `(-1, 0)` when it is over the cloth.
+static func _under(cards: PackedFloat32Array, p: Vector2) -> Vector2:
+	var half := Vector2(TablePositions.CARD.x, TablePositions.CARD.y) * 0.5
+	var top := -1
+	var face := 0.0
+	for j in cards.size() / CARD_STRIDE:
+		var o := j * CARD_STRIDE
+		if cards[o + 3] < 0.5:
+			continue
+		var l := _local(p, Vector2(cards[o], cards[o + 1]), cards[o + 2])
+		if absf(l.x) <= half.x and absf(l.y) <= half.y:
+			var f := _face(cards, j, p)
+			if top < 0 or f > face:
+				face = f
+				top = j
+	return Vector2(top, face)
+
+
+## Whether a piece at [param p] would be within [param m] of a card of the deck in [param cards] (one on
+## the cloth less than half spread out: the deck, or the pile it is gathered into).
+static func _in_deck(cards: PackedFloat32Array, p: Vector2, m: float) -> bool:
+	var reach := Vector2(TablePositions.CARD.x, TablePositions.CARD.y) * 0.5 + Vector2.ONE * m
+	for j in cards.size() / CARD_STRIDE:
+		var o := j * CARD_STRIDE
+		if cards[o + 3] < 0.0 or cards[o + 3] >= 0.5:
+			continue
+		var l := _local(p, Vector2(cards[o], cards[o + 1]), cards[o + 2])
+		if absf(l.x) < reach.x - 0.0002 and absf(l.y) < reach.y - 0.0002:
+			return true
+	return false
+
+
+## A piece's way [param v] on the cloth after [param dt]: the cloth's grip ([constant CLOTH_GRIP]) and its
+## drag ([constant SHOVE_FRICTION]) stop it within a few centimeters.
+static func _slowed(v: Vector2, dt: float) -> Vector2:
+	var sp := v.length()
+	if sp <= CLOTH_GRIP * dt:
+		return Vector2.ZERO
+	return v * ((sp - CLOTH_GRIP * dt) / sp * exp(-SHOVE_FRICTION * dt))
+
+
+## Where a piece carried off is at [param t]: carried with the air and lifted as it is blown (by how far,
+## not how long - [constant OFF_RUN]), sinking again once past the table's edge.
 static func _off_pos(pop: Dictionary, lv: Dictionary, s: Dictionary, t: float) -> Vector3:
-	var dt := t - float(s["t"])
 	var from: Vector3 = s["from"]
-	var xz := Vector2(from.x, from.z) + Winds.carried_between(pop["wind"], float(s["t"]), t) * float(lv["c"])
-	var y := from.y + HOP * 2.0 * (1.0 - exp(-dt / HOP_RISE)) - float(lv["fall"]) * maxf(t - float(s["edge"]), 0.0)
-	return Vector3(xz.x, y, xz.y)
+	var carry := Winds.carried_between(pop["wind"], float(s["t"]), t) * float(lv["c"])
+	var y := from.y + float(s["rise"]) * (1.0 - exp(-carry.length() / OFF_RUN)) - float(lv["fall"]) * maxf(t - float(s["edge"]), 0.0)
+	return Vector3(from.x + carry.x, y, from.z + carry.y)
 
 
 ## Whether [param p] (xz) is over the table or near enough its edge that a piece sinking there would meet
@@ -844,7 +1397,7 @@ static func _off_plan(pop: Dictionary, lv: Dictionary, s: Dictionary) -> Variant
 		last = p
 		t += 0.05
 	s["edge"] = t
-	var top := (s["from"] as Vector3).y + HOP * 2.0
+	var top := (s["from"] as Vector3).y + float(s["rise"])
 	s["end"] = t + (top - float(pop["floor"])) / maxf(float(lv["fall"]), 0.05)
 	return null
 
@@ -891,6 +1444,16 @@ static func pose(pop: Dictionary, lv: Dictionary, t: float) -> Transform3D:
 					if axis.length() > 1e-5:
 						b = Basis(axis.normalized(), PI * along) * flat
 				return Transform3D(b * scale, at)
+			"shoved":
+				# SHOVED, RIDING AND FLICKED by a wash's cards: the planned track, a sample a step
+				var at: PackedVector3Array = d["pos"]
+				var an: PackedVector3Array = d["ang"]
+				var f := clampf((t - float(d["t"])) * float(d["hz"]), 0.0, float(at.size() - 1))
+				var i0 := int(f)
+				var i1 := mini(i0 + 1, at.size() - 1)
+				var w := an[i0].lerp(an[i1], f - float(i0))
+				var b := Basis(Vector3.UP, w.x) * Basis(Vector3.RIGHT, w.z) * Basis(Vector3.FORWARD, w.y)
+				return Transform3D(b * scale, at[i0].lerp(at[i1], f - float(i0)))
 			"off":
 				# TURNING OVER as the gust carries it, harder the harder it blows; a key spins as it falls
 				var dt := t - float(d["t"])

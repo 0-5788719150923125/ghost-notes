@@ -299,13 +299,38 @@ from outside its own palette): the prompt says what the stock is (the card's own
 picture and behind the name, and the booklet's), that decks are printed on every color, and to
 choose the one that sets off the paintings; each earlier episode in its history shows its stock,
 and "do not repeat" covers card stocks. `CardTable.sanitize_look` keeps the ink readable on
-whatever stock lands (`legible_ink`, WCAG contrast >= `INK_CONTRAST` 3). EVERY FRAME KEEPS A BORDER
-(feedback 0010, 2026-10-06): a `bleed` style ran the painting to the card's edge, cropped it to the
-card's shape and set the name and numeral on plates over it - the name, fit to the picture's width,
-ran off a plate 0.08 of the card narrower each side ("It looks nothing like other cards, from other
-episodes"). It is gone from `CardTable.FRAMES`, so a plan that named it is drawn as `line`; the
-picture's window is one function (`CardFaces.window`) the foil keys inside too. Gate: cards_check
-`_card_frame` (every standard name fits the band below the picture in every face). THE BOOKLET IS PRINTED IN
+whatever stock lands (`legible_ink`, WCAG contrast >= `INK_CONTRAST` 3). A `bleed` style (feedback
+0010, 2026-10-06) ran the painting to the card's edge and set the name and numeral on plates over it -
+the name, fit to the picture's width, ran off a plate 0.08 of the card narrower each side ("It looks
+nothing like other cards, from other episodes"). It was removed, and a plan that named it is drawn as
+`line`; the picture's window is one function (`CardFaces.window`). Gate: cards_check `_card_frame`
+(every standard name fits the band below the picture in every face).
+
+BORDERLESS (2026-10-14, the user: "a lot of instances in the real world where cards have no border at
+all, because the card artwork fills the entire card ... Be careful with how text is written onto such a
+card, since color will matter quite a lot there, for visibility"): `frame.style` `borderless`, the
+producer's choice like any frame. The painting is the whole card, face and back, cut to its corners (no
+window shape, no ornament - `sanitize_look` drops them). The type is set on the painting
+(`CardFaces.type_boxes`): the numeral in a band at the top, the name at the foot, a front's details in a
+panel over the lower half, each fit to the width its veil runs. UNDER EACH, A VEIL: the stock's color
+across the card, from its nearer edge to just past the type, fading into the painting. A PRINTER NEVER
+KNOWS WHICH PAINTING GOES UNDER THE TYPE, so the veil is planned against the worst painting there could
+be (`CardTable.veil_contrast`: a veil over black and over white bound every color it can come out as) -
+one veil for every card of a deck, never fitted to a card's own colors. The name and numeral read at
+`TEXT_CONTRAST` 4.5 over any painting, the details at `PANEL_CONTRAST` 7. Planned on the deck's stock and
+ink as they were, a mid-tone deck needed a veil all but opaque (cream on teal, 0.93: a border again), so
+`veil_of` takes the veil and the ink APART TOGETHER - the veil toward black or white, the ink the other
+way - only as far as the veil stays at most `VEIL_HEAVIEST` 0.6 (details `PANEL_HEAVIEST` 0.8). A light
+ink stays light (made legible on the stock first, white on a mid green came out dark on a pale veil),
+and the veil keeps the stock's hue (moved one at a time, it went to black). A keyline of the veil's
+color rings each letter. The foil keys none of the type (`CardFaces.bare`). The painter is told the
+deck is borderless and to keep the subject out of the bottom sixth (the upper half when details are on
+the front) - never to paint a calm patch, which the veil does not need. Seen on true-tarot 336151
+restaged borderless: every name in the final spread reads at table distance. Gates: cards_check
+`_borderless` (the bound against random paintings, every random deck planned to the least and no
+heavier than allowed; controls: stock-only plans need too much veil), tests/table/card_veil_check.gd
+(GPU: the drawn ground is the planned sRGB mix, not a linear one, and the letters stand at the contrast
+over black, white and a painting of the ink's own color; mutation-tested with a veil 20% light). THE BOOKLET IS PRINTED IN
 THE CARD'S COLORS (`CardFaces.page_colors`): the stock as its paper, the ink and accent for its
 type, kept readable on it (running text at `TEXT_CONTRAST` 4.5) - it was a fixed cream page.
 Episodes planned before keep their cream until the plan is redone. Gate: cards_check `_card_stock`.
@@ -1129,7 +1154,8 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
   oval, notched, octagon), `frame.corners` (square, rounded, round: the card's slab is cut to them),
   `frame.ornament` round the card's edge (vine, serpent, laurel, beads, rope, stars, scallops) and the
   booklet's `page` (classic, drop, banner, ledger). The producer chooses; the archive shows each episode's
-  choice so habits are named. Foil skips the stock showing in a shaped window's corners.
+  choice so habits are named. Foil skips the stock showing in a shaped window's corners. A `borderless`
+  frame (2026-10-14) has no window or ornament: the painting fills the card, its type on a veil (above).
 - STRANDS (`Props` shape `strand`): rope (three-strand lay), cord, wire, vine (leaves), beads, chain;
   laid as a coil, a flemish spiral, a heap, a path, or DRAPED across the table in its own coordinates
   and over the top's edge - hanging as far as the path runs past it, to the floor. A strand rests on

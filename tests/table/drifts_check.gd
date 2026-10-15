@@ -23,6 +23,19 @@ extends SceneTree
 ##   leaf is out from under it before the card is down, never jumping, and lies clear of it after - on
 ##   the table, the same whenever it is asked - against the same leaf with no card told of, which is
 ##   still there; and a card set down elsewhere moves nothing.
+## - A WASH'S CARDS SHOVE WHAT LIES (the user, 2026-10-14: a petal on the table was "completely
+##   unaffected by the card-washing: cards are clipping through the petals"): rows of cards slid across
+##   the whole cloth, and no piece lying there is under one at any time sampled - shoved ahead of it,
+##   ridden up on its face, or flicked over it - against the same pieces with the cards not told of,
+##   most of which are; the pieces are moved, lie on the table after, never jump, and the same whenever
+##   asked. A piece carried on a card is on it (the user: one "keeps following the card even while it is
+##   NOT TOUCHING"): those a card's face high are within its edge, near enough all the time.
+## - A PIECE HAS MOMENTUM (the user, same day: it "probably needs a little bit of momentum, such that
+##   when the underlying card moves - the petal is shaken off of it"): a card that slides in under a piece
+##   and is drawn off gently carries it along, and the same card hauled harder than any piece grips leaves
+##   it behind, lying on the cloth within a few centimeters of where it lay - never carried on beside the
+##   card (the user: one slid off "yet remain attached"). tests/table/wash_drift_check.gd holds the same
+##   under the real wash's cards.
 ## - NEVER THROUGH A THING: no piece, at any time sampled, is inside a thing standing on the table or in
 ##   the table under its top - against a fall aimed through a thing, which the check finds.
 ## - GUSTS LIFT what lies: with a light grip on a gusty wind some lying pieces are carried off the table,
@@ -44,7 +57,7 @@ func _ok(cond: bool, what: String) -> void:
 
 
 func _run() -> void:
-	for check in [_wind, _sanitize, _drift, _often, _ways, _cards, _laid]:
+	for check in [_wind, _sanitize, _drift, _often, _ways, _cards, _laid, _washed, _shaken]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("drifts_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -195,6 +208,44 @@ func _drift() -> bool:
 		for s in (l as Dictionary).get("segs", []):
 			offs += 1 if String((s as Dictionary)["kind"]) == "off" else 0
 	_ok(offs > 0, "no gust carried anything off a light grip")
+	# A GUST LIFTS WHAT IT BLOWS ALONG: no skid hops more than its slope of the way it goes (a piece that
+	# goes nowhere rises nowhere), and one carried off climbs along a slant, never straight up
+	var steep := 0
+	var skids := 0
+	for l in pop["lives"]:
+		for s in (l as Dictionary).get("segs", []):
+			var d: Dictionary = s
+			if String(d["kind"]) == "skid":
+				skids += 1
+				var run := (d["from"] as Vector3).distance_to(d["to"])
+				if run < 0.01 or float(d["hop"]) > Drifts.HOP_SLOPE * run + 1e-6:
+					steep += 1
+			elif String(d["kind"]) == "off":
+				for k in 40:
+					var at := float(d["t"]) + 0.05 * k
+					var a: Vector3 = Drifts._off_pos(pop, l, d, at)
+					var run := Vector2(a.x - (d["from"] as Vector3).x, a.z - (d["from"] as Vector3).z).length()
+					if a.y - (d["from"] as Vector3).y > Drifts.HOP * 2.0 * (1.0 - exp(-run / Drifts.OFF_RUN)) + 1e-5 \
+							and at < float(d["edge"]):
+						steep += 1
+						break
+	_ok(steep == 0, "%d lifts rose without being blown along (of %d skids)" % [steep, skids])
+	# BOTH ARE POSSIBLE: how high a gust lifts follows how hard it blows past the grip - a carry-off's
+	# rise is the same scale as a skid's hop, and the gusts here do not all lift to the full height
+	var wrong := 0
+	var gentle := 0
+	var carried := 0
+	for l in pop["lives"]:
+		for s in (l as Dictionary).get("segs", []):
+			var d: Dictionary = s
+			if String(d["kind"]) == "off":
+				carried += 1
+				var want := Drifts._hop(pop["wind"], int(d["gust"]), float((l as Dictionary)["grip"])) * 2.0
+				wrong += 0 if absf(float(d["rise"]) - want) < 1e-6 else 1
+				gentle += 1 if float(d["rise"]) < Drifts.HOP * 2.0 - 1e-6 else 0
+	_ok(wrong == 0, "%d carry-offs rose to a height their gust does not give" % wrong)
+	print("    carried off %d, of which %d lifted less than the full height" % [carried, gentle])
+	_ok(gentle > 0, "every carry-off rose to the full height, whatever the gust")
 	var held := _pop({"look": "petals", "every": 8, "shake": 3, "settle": 1.0, "grip": 1.0, "lying": 6}, breeze)
 	Drifts.at(held, 240.0)
 	var lifted := 0
@@ -383,4 +434,217 @@ func _laid() -> bool:
 	var kept: Dictionary = (control["lives"] as Array)[0]
 	_ok(under.call(Drifts.pose(control, kept, down + 5.0).origin) and Drifts.pose(control, kept, down + 5.0).origin.is_equal_approx(lies),
 		"the control: with the card set down elsewhere the leaf moved")
+	return true
+
+
+## ROWS OF CARDS sliding across the whole cloth from [param w0] for eight seconds, as the table's wash
+## [method TableShuffle.sweeps] hands them: seven rows, from off the cloth on one side to off it on the other,
+## each card five floats a frame - its middle, its turn, how spread out it is (gone off the cloth for the
+## last half second) and its place in the order.
+func _rows(w0: float) -> Dictionary:
+	var frames := 161
+	var n := 7
+	var data := PackedFloat32Array()
+	data.resize(frames * n * 5)
+	for f in frames:
+		for k in n:
+			var o := (f * n + k) * 5
+			data[o] = lerpf(-0.8, 0.8, float(f) / float(frames - 1))
+			data[o + 1] = -0.36 + 0.12 * float(k)
+			data[o + 2] = 0.0
+			data[o + 3] = 1.0 if f < 150 else -1.0
+			data[o + 4] = float(k)
+	return {"t": w0, "hz": 20.0, "cards": n, "frames": frames, "data": data}
+
+
+## Whether a piece at [param o] is under one of [param sw]'s cards at [param t] - on the cloth (not up on
+## a card's face, a card's thickness above it), inside the card's edge by more than a millimeter.
+func _under_wash(sw: Dictionary, o: Vector3, base: float, t: float) -> bool:
+	if o.y > base + 0.0001 or t < float(sw["t"]):
+		return false
+	var data: PackedFloat32Array = sw["data"]
+	var n := int(sw["cards"])
+	var f := clampf((t - float(sw["t"])) * float(sw["hz"]), 0.0, float(int(sw["frames"]) - 1))
+	var half := Vector2(TablePositions.CARD.x, TablePositions.CARD.y) * 0.5 - Vector2.ONE * 0.001
+	for k in n:
+		var a := (int(f) * n + k) * 5
+		if data[a + 3] < 0.0:
+			continue
+		var l := Drifts._local(Vector2(o.x, o.z), Vector2(data[a], data[a + 1]), data[a + 2])
+		if absf(l.x) < half.x and absf(l.y) < half.y:
+			return true
+	return false
+
+
+## Whether [param o] (xz) is within [param slack] of the face of a card of [param sw] on the cloth at [param t].
+func _on_wash(sw: Dictionary, o: Vector3, t: float, slack: float) -> bool:
+	var data: PackedFloat32Array = sw["data"]
+	var n := int(sw["cards"])
+	var f := clampf((t - float(sw["t"])) * float(sw["hz"]), 0.0, float(int(sw["frames"]) - 1))
+	var half := Vector2(TablePositions.CARD.x, TablePositions.CARD.y) * 0.5 + Vector2.ONE * slack
+	for k in n:
+		var a := (int(f) * n + k) * 5
+		if data[a + 3] < 0.0:
+			continue
+		var l := Drifts._local(Vector2(o.x, o.z), Vector2(data[a], data[a + 1]), data[a + 2])
+		if absf(l.x) <= half.x and absf(l.y) <= half.y:
+			return true
+	return false
+
+
+func _washed() -> bool:
+	var still := {"from": "left", "strength": 0.0, "gusts": 0.0, "every": 60}
+	var fx := {"look": "petals", "every": 600, "shake": 0, "settle": 1.0, "grip": 1.0, "lying": 12}
+	var w0 := 10.0
+	var sw := _rows(w0)
+	var pop := _pop(fx, still)
+	var control := _pop(fx, still)
+	var fresh := _pop(fx, still)
+	for p in [pop, control, fresh]:
+		Drifts.at(p, 60.0)
+	var lives: Array = pop["lives"]
+	_ok(lives.size() >= 8, "only %d pieces lie to be washed" % lives.size())
+	var was: Array = []
+	for lv in lives:
+		was.append(Drifts.pose(pop, lv, 1.0).origin)
+	Drifts.laid(pop, [], [sw])
+	Drifts.laid(fresh, [], [sw])
+	var table: AABB = pop["table"]
+	var under := 0
+	var under_control := 0
+	var worst := 0.0
+	var moved := 0
+	var airborne := 0
+	var carried := 0
+	var adrift := 0
+	for i in lives.size():
+		var lv: Dictionary = lives[i]
+		var base := float((((lv["planned"] as Dictionary)["segs"] as Array)[0] as Dictionary)["from"].y)
+		var prev: Vector3 = Drifts.pose(pop, lv, w0 - 1.0).origin
+		var t := w0 - 1.0
+		while t < w0 + 14.0:
+			t += 1.0 / 60.0
+			var o: Vector3 = Drifts.pose(pop, lv, t).origin
+			worst = maxf(worst, o.distance_to(prev))
+			prev = o
+			airborne += 1 if o.y > base + 0.004 else 0
+			if o.y > base + 0.0005 and o.y < base + 0.0009 and t >= w0 and t < w0 + 7.5:
+				# up on a card's face (a card's thickness and the clearance over it): its middle is within
+				# the card's edge, and the margin it came on with
+				carried += 1
+				if not _on_wash(sw, o, t, 0.006):
+					adrift += 1
+			if int(round(t * 60.0)) % 2 == 0:
+				under += 1 if _under_wash(sw, o, base, t) else 0
+				under_control += 1 if _under_wash(sw, Drifts.pose(control, control["lives"][i], t).origin, base, t) else 0
+		var after: Vector3 = Drifts.pose(pop, lv, w0 + 14.0).origin
+		_ok(absf(after.y - base) < 1e-3 and after.x > table.position.x and after.x < table.end.x
+			and after.z > table.position.z and after.z < table.end.z, "piece %d does not lie on the table after the wash (%s)" % [i, str(after)])
+		moved += 1 if Vector2(after.x - (was[i] as Vector3).x, after.z - (was[i] as Vector3).z).length() > 0.02 else 0
+	_ok(under == 0, "%d times a piece was under a washed card" % under)
+	_ok(under_control > 20, "the control: with the cards not told of, pieces were under one only %d times" % under_control)
+	_ok(moved * 2 >= lives.size(), "only %d of %d pieces were moved by a wash that crossed the whole cloth" % [moved, lives.size()])
+	_ok(airborne > 0, "no piece was ever lifted: a wash only slid them")
+	_ok(carried > 30, "no piece was ever carried on a card (%d samples)" % carried)
+	_ok(adrift * 10 <= carried, "%d of %d samples of a piece carried on a card were off every card's edge" % [adrift, carried])
+	_ok(worst < 0.03, "a piece jumps %.1f mm in a frame" % (worst * 1000.0))
+	# PURE: told of the wash before the piece was asked at all, the same
+	var same := true
+	for t in [9.0, 12.3, 17.7, 25.0]:
+		same = same and str(Drifts.at(fresh, t).map(func(p: Dictionary) -> String: return str(p["xf"]))) \
+			== str(Drifts.at(pop, t).map(func(p: Dictionary) -> String: return str(p["xf"])))
+	_ok(same, "the pieces under a wash depend on when it was told of")
+	return true
+
+
+## A card for each of [param at] (the middles; [param slot] the card's place in the wash, the rest kept
+## off the cloth): it slides in along x from beside the piece until it lies under it - easing in and
+## out, so it takes the piece on as a card can, edge first - rests, and from [param w0] + 1.5 s is hauled
+## on along x at [param a] m/s each second: wash [param sw]'s own format.
+func _hauled(at: Array, slot: Array, a: float, w0: float) -> Dictionary:
+	var frames := 81
+	var n := 0
+	for k in slot:
+		n = maxi(n, int(k) + 1)
+	var data := PackedFloat32Array()
+	data.resize(frames * n * 5)
+	var come := TablePositions.CARD.x * 0.5 + 0.02
+	for f in frames:
+		var v := float(f) / 20.0
+		for k in n:
+			var o := (f * n + k) * 5
+			data[o] = 9.0
+			data[o + 1] = 9.0
+			data[o + 3] = -1.0
+		for i in at.size():
+			var o := (f * n + int(slot[i])) * 5
+			var e := clampf(v / 1.0, 0.0, 1.0)
+			var h := maxf(v - 1.5, 0.0)
+			data[o] = (at[i] as Vector3).x - come * (1.0 - e * e * (3.0 - 2.0 * e)) + 0.5 * a * h * h
+			data[o + 1] = (at[i] as Vector3).z
+			data[o + 2] = 0.0
+			data[o + 3] = 1.0
+			data[o + 4] = float(i)
+	return {"t": w0, "hz": 20.0, "cards": n, "frames": frames, "data": data}
+
+
+## Whether the card in place [param k] of the wash lets piece [param lv] ride when it meets it (its die).
+func _lets_ride(pop: Dictionary, lv: Dictionary, k: int) -> bool:
+	var dice: Array = lv.get("dice", [0, 0])
+	var u := Drifts._dice(pop, int(dice[0]), int(dice[1]), "card %d" % k).randf()
+	return u >= Drifts.SHOVE_ODDS.x and u < Drifts.SHOVE_ODDS.y
+
+
+func _shaken() -> bool:
+	var still := {"from": "left", "strength": 0.0, "gusts": 0.0, "every": 60}
+	var fx := {"look": "petals", "every": 600, "shake": 0, "settle": 1.0, "grip": 1.0, "lying": 30}
+	var w0 := 10.0
+	var rode := 0
+	var kept := 0
+	var left := 0
+	var dragged := 0
+	var tried := 0
+	for a in [0.3, 16.0]:
+		var pop := _pop(fx, still)
+		Drifts.at(pop, 60.0)
+		# a card to a piece, none of them in another's way: lanes a card's length and more apart, each
+		# piece its own card, one whose die lets it ride
+		var picks: Array = []
+		var spots: Array = []
+		var slots: Array = []
+		for i in (pop["lives"] as Array).size():
+			var o: Vector3 = Drifts.pose(pop, pop["lives"][i], 1.0).origin
+			if spots.all(func(q: Vector3) -> bool: return absf(q.z - o.z) > TablePositions.CARD.y):
+				var k := 0
+				while slots.has(k) or not _lets_ride(pop, pop["lives"][i], k):
+					k += 1
+				picks.append(i)
+				spots.append(o)
+				slots.append(k)
+		_ok(picks.size() >= 4, "only %d pieces lie in lanes of their own" % picks.size())
+		var sw := _hauled(spots, slots, a, w0)
+		Drifts.laid(pop, [], [sw])
+		for k in picks.size():
+			var lv: Dictionary = pop["lives"][picks[k]]
+			var base := float((((lv["planned"] as Dictionary)["segs"] as Array)[0] as Dictionary)["from"].y)
+			var lay: Vector3 = Drifts.pose(pop, lv, w0 + 1.5).origin
+			if a < 1.0:
+				# taken on, and drawn gently: it goes with the card (the card is a long way on by now)
+				var t := w0 + 1.5 + 0.8
+				var o: Vector3 = Drifts.pose(pop, lv, t).origin
+				var up: bool = o.y > base + 0.0003 and _on_wash(sw, o, t, 0.0)
+				rode += 1 if lay.y > base + 0.0003 else 0
+				kept += 1 if up and Vector2(o.x - lay.x, o.z - lay.z).length() > 0.05 else 0
+			else:
+				# hauled hard, the card goes on without it: it slides off its back edge and lies on the
+				# cloth near where it lay - never carried on beside the card
+				var o: Vector3 = Drifts.pose(pop, lv, w0 + 4.0).origin
+				tried += 1
+				left += 1 if absf(o.y - base) < 0.0002 and not _on_wash(sw, o, w0 + 4.0, 0.0) else 0
+				dragged += 1 if Vector2(o.x - lay.x, o.z - lay.z).length() > 0.04 else 0
+	print("    taken onto a card %d, carried by one drawn gently %d; left by one hauled hard %d of %d" % [rode, kept, left, tried])
+	_ok(rode >= 2, "only %d pieces were taken onto a card that lets them ride" % rode)
+	_ok(kept == rode, "of %d carried, only %d went with a card drawn gently" % [rode, kept])
+	_ok(left == tried, "only %d of %d pieces were left lying on the cloth by a card hauled hard" % [left, tried])
+	_ok(dragged == 0, "%d pieces went on with a card hauled harder than any piece grips" % dragged)
 	return true

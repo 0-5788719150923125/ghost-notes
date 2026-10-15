@@ -441,6 +441,7 @@ var _tab_group: ButtonGroup
 var _names := PackedStringArray()  # the tabs, in order of first appearance in the script
 var _slots: Array = []         # [SLOT_DEFAULTS-shaped Dictionary], one per tab, beside _names
 var _stash := {}               # name -> settings, for voices the script no longer cues
+var _order := PackedStringArray()  # every voice's name in the order the document lists them - the first is the reader's
 var _slot := 0                 # which tab the controls are currently showing
 var _cast_timer: Timer         # re-derives the tabs once typing pauses
 # The lengths of the hesitations in the passage being cut, in text order; [method _cut]
@@ -1468,6 +1469,7 @@ func _load_persisted() -> void:
 				"pace": float(Settings.read(_section, "pace", 1.0)),
 				"pause": float(Settings.read(_section, "pause", 1.0)),
 			})
+	_order = PackedStringArray(_stash.keys())
 	var tab: Variant = Settings.read(_section, "tab_name", "")
 	_names = PackedStringArray()
 	_slots = []
@@ -1538,11 +1540,12 @@ func _capture_block(key: String) -> Variant:
 
 ## THE WHOLE CAST: every voice, keyed by the name the script cues it with - including names the
 ## text no longer uses, so rewriting a scene and restoring it does not lose a character's voice
-## from the document either. The controls are captured first, because they - not
-## [member _slots] - are the truth for the tab on screen.
+## from the document either - the reader's first ([method _reader]). The controls are captured
+## first, because they - not [member _slots] - are the truth for the tab on screen. WHICH VOICE
+## IS ON SCREEN IS NOT THE DOCUMENT'S: it had been kept as `tab`, and every change wrote it back.
 func _voice_capture() -> Dictionary:
 	_capture_slot()
-	return {"turn": _turn.value, "tab": _tab_name(), "voices": _cast_dict(),
+	return {"turn": _turn.value, "voices": _cast_dict(),
 		"hesitate": _hesitate.value, "hesitate_on": _hesitate_on.button_pressed}
 
 
@@ -1576,7 +1579,14 @@ func _voice_apply(cfg: Dictionary) -> void:
 		else _cast_from_rows(rows if rows is Array else [], _cast_text())
 	if cast.is_empty():
 		return
+	# THE READER IS THE FIRST VOICE LISTED, whatever its name. A voice named for the reader's cue
+	# ([constant Manuscript.NARRATOR]) listed after it can never be spoken - that name is the
+	# reader's - and is what the panel had written in as a copy of the reader: it goes.
+	var first := String(cast.keys()[0])
+	if first != Manuscript.NARRATOR:
+		cast.erase(Manuscript.NARRATOR)
 	_stash = cast
+	_order = PackedStringArray(cast.keys())
 	_names = PackedStringArray()
 	_slots = []
 	_syncing = true
@@ -1586,8 +1596,7 @@ func _voice_apply(cfg: Dictionary) -> void:
 	_hesitate_on.button_pressed = bool(cfg.get("hesitate_on", _hesitate_on.button_pressed))
 	_hesitate.editable = _hesitate_on.button_pressed
 	_syncing = false
-	var tab: Variant = cfg.get("tab", "")
-	_refresh_cast(_cast_text(), str(tab) if tab is String else "")
+	_refresh_cast(_cast_text())
 	# The room, once, exactly as [method _load_persisted] does it: the chain is stateful
 	# and a tab switch alone does not re-dial it.
 	_apply_fx(_fx, _cfg(_slot))
@@ -1627,14 +1636,37 @@ func _doc_field(src: String, key: String) -> String:
 # --- voices, plural and named --------------------------------------------------
 
 
-## Every voice the panel knows, shown or not: name -> settings.
+## Every voice the panel knows, shown or not: name -> settings, in the order the document lists
+## them (a new one last) - so the reader stays first ([method _reader]).
 func _cast_dict() -> Dictionary:
 	var out := {}
+	for k in _order:
+		var i := _names.find(k)
+		if i >= 0:
+			out[k] = _cfg(i)
+		elif _stash.has(k):
+			out[k] = _merge(_stash[k] as Dictionary)
 	for k in _stash:
-		out[k] = _merge(_stash[k] as Dictionary)
+		if not out.has(k):
+			out[k] = _merge(_stash[k] as Dictionary)
 	for i in _names.size():
-		out[_names[i]] = _cfg(i)
+		if not out.has(_names[i]):
+			out[_names[i]] = _cfg(i)
 	return out
+
+
+## THE READER'S VOICE: the first one the document lists, whatever it is called (the user,
+## 2026-10-15: a show whose one voice was "Ryan" had a copy of it written in as "Narrator" at any
+## change, because only a voice of that name could read the words before the first cue). Those
+## words, and a cue naming [constant Manuscript.NARRATOR] - as a Cards reading hands a line back to
+## its reader - are the reader's; a cast with no voice yet starts with one of that name.
+func _reader() -> String:
+	return _order[0] if not _order.is_empty() else Manuscript.NARRATOR
+
+
+## The voice a script's [param name] is: the reader's for [constant Manuscript.NARRATOR], else its own.
+func _who(name: String) -> String:
+	return _reader() if name == Manuscript.NARRATOR else name
 
 
 func _merge_cast(d: Dictionary) -> Dictionary:
@@ -1678,9 +1710,15 @@ func _refresh_cast(body: String, want := "") -> void:
 	_script_text_changed(body)
 	if _rate != null:
 		_capture_slot()
-	var names := Manuscript.speakers(body)
+	var names := PackedStringArray()
+	for n in Manuscript.speakers(body):
+		if not names.has(_who(n)):
+			names.append(_who(n))
 	if names.is_empty():
-		names = PackedStringArray([Manuscript.NARRATOR])
+		names = PackedStringArray([_reader()])
+	for n in names:
+		if not _order.has(n):
+			_order.append(n)
 	var showing := want if not want.is_empty() else _tab_name()
 	if names == _names and not _slots.is_empty():
 		if not want.is_empty() and names.has(want) and names.find(want) != _slot:
@@ -1733,6 +1771,7 @@ func _cfg(i: int) -> Dictionary:
 ## index moves whenever the script gains or loses a speaker, and a reading in flight must
 ## not change voice because someone typed a new name further down.
 func _cfg_of(who: String) -> Dictionary:
+	who = _who(who)
 	var i := _names.find(who)
 	if i >= 0:
 		return _cfg(i)
@@ -1986,7 +2025,7 @@ func _split_speakers(body: String) -> Array:
 				fading = true
 			var out := _resolve_marks(String(parts[k]), on, bare)
 			if not out.replace(TextNorm.HOLD_MARK, "").strip_edges().is_empty():
-				kept.append({"speaker": String((p as Dictionary)["speaker"]), "text": out,
+				kept.append({"speaker": _who(String((p as Dictionary)["speaker"])), "text": out,
 					"fade": fading, "leans": _last_leans})
 			else:
 				# A passage of nothing but hesitations: its rests would have no word to sit on.

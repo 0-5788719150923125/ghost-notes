@@ -754,12 +754,15 @@ static func _look_vars(look: Dictionary, target: String) -> Dictionary:
 		"light_kind": String(light.get("kind", "low lamplight"))}
 
 
-## A card's face: its illustration only - the engine prints the frame and the name around it.
+## A card's face: its illustration only - the engine prints the frame and the name around it, or on a
+## borderless card over it ([param details]: its text too, over the lower half).
 static func card_image(look: Dictionary, card: Dictionary, art: String, target: String,
-		has_back: bool, chain: int) -> String:
+		has_back: bool, chain: int, details := false) -> String:
 	var vars := _look_vars(look, target)
 	vars.merge({"name": String(card.get("name", "")), "art": art.strip_edges(), "has_back": has_back, "chain": chain,
-		"chain_many": chain > 1, "window": String(CardTable.WINDOWS.get(CardFaces.window_of(look), "a plain rectangle"))}, true)
+		"chain_many": chain > 1, "window": String(CardTable.WINDOWS.get(CardFaces.window_of(look), "a plain rectangle")),
+		"borderless": CardFaces.borderless(look), "details": details,
+		"numbered": not String(card.get("numeral", "")).is_empty()}, true)
 	return Rules.say("cards/painter.card", vars)
 
 
@@ -769,8 +772,9 @@ static func back_image(look: Dictionary, target: String, reversed := true, print
 	var vars := _look_vars(look, target)
 	# the window cuts the back as it cuts a face: a shaped one slices what the painting runs to its edge with
 	var shape := CardFaces.window_of(look)
-	vars.merge({"reversed": reversed, "printed": printed, "shaped": shape != "rect" and CardTable.WINDOWS.has(shape),
-		"window": String(CardTable.WINDOWS.get(shape, "a plain rectangle"))}, true)
+	var borderless := CardFaces.borderless(look)
+	vars.merge({"reversed": reversed, "printed": printed, "shaped": shape != "rect" and CardTable.WINDOWS.has(shape) and not borderless,
+		"window": String(CardTable.WINDOWS.get(shape, "a plain rectangle")), "borderless": borderless}, true)
 	return Rules.say("cards/painter.back", vars)
 
 

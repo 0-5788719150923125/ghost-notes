@@ -193,8 +193,18 @@ func book_document(body := "") -> Dictionary:
 	var pinned := not _export_pin.is_empty() and body.strip_edges() == String(_export_pin["body"])
 	d["title"] = String(_export_pin["title"]) if pinned else _show_title()
 	d["byline"] = String(_export_pin.get("byline", "")) if pinned else _show_byline()
-	d["table"] = _export_pin["doc"] if pinned else (_episode.document() if _episode != null else {})
+	d["table"] = _export_pin["doc"] if pinned else (_table_doc(_episode) if _episode != null else {})
 	return d
+
+
+## Episode [param ep] as the table draws it ([method CardEpisode.document]). One drawn before the
+## draw counted its deck is counted from the deck the brief lists (a deck the producer chose is in
+## its plan) - the table stands and washes as many cards as the deck held, never a number of its own.
+func _table_doc(ep: CardEpisode) -> Dictionary:
+	var doc := ep.document()
+	if int(doc.get("deck_n", 0)) <= 0 and _text != null:
+		doc["deck_n"] = CardDeck.parse(_text.text).size()
+	return doc
 
 
 ## AN EXPORT IS NAMED AFTER ITS EPISODE: the title the producer gave it (made safe for a file name
@@ -221,7 +231,7 @@ func export_take() -> String:
 	var ep := _episode
 	if ep == null:
 		return ""
-	_export_pin = {"episode": ep, "body": ep.script().strip_edges(), "doc": ep.document(),
+	_export_pin = {"episode": ep, "body": ep.script().strip_edges(), "doc": _table_doc(ep),
 		"title": _show_title(), "byline": _show_byline()}
 	var path: String = await super.export_take()
 	_export_pin = {}

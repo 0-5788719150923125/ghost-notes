@@ -22,6 +22,9 @@ extends Node
 ##     not on the same frames as its neighbor; the letter at the front is drawn from the simple set.
 ##   - THE CHOICE IS THE SHOW'S: the Director takes a known key and refuses an unknown one, and the Look
 ##     card writes it into the note's `look:` block and reads it back.
+##   - A ROW WRITTEN OUT IS ITS WORDS (2026-10-15: "at the end of subtitle lines... there is almost always a
+##     trailing space"): the glitch centers a row, and sizes its plate, on its words and the gaps between
+##     them - none after its last - two-sided: in the middle of a row, the gap after a written word counts.
 ##   - BOTH DRAW: the overlay draws a line in either reveal without an error.
 ##
 ##   tests/run_boot_probe.sh tests/show/subtitle_reveal_check.gd 60
@@ -45,6 +48,7 @@ func _run() -> void:
 	_reach()
 	_noise()
 	_choice()
+	_rows()
 	await _draws()
 	print("subtitle_reveal_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
 	get_tree().quit(1 if _fails > 0 else 0)
@@ -189,6 +193,21 @@ func _choice() -> void:
 	_ok(Director.subtitle_reveal == "karaoke", "the Look card does not read the reveal back")
 	card.free()
 	Director.set_subtitle_reveal(was)
+
+
+func _rows() -> void:
+	var ov := Subtitles.Overlay.new()
+	var font := ThemeDB.fallback_font
+	var gap := 14.0
+	var row: Array = [{"idx": 0, "word": {"text": "one"}, "w": 30.0, "cstart": 0},
+		{"idx": 1, "word": {"text": "two"}, "w": 30.0, "cstart": 4},
+		{"idx": 2, "word": {"text": "end."}, "w": 40.0, "cstart": 8}]
+	var whole := ov._written(row, 40.0, font, 24, gap)
+	_ok(is_equal_approx(whole, 30.0 + 30.0 + 40.0 + 2.0 * gap), "a row written out measures %.0f, not its words and the gaps between them (%.0f)"
+		% [whole, 30.0 + 30.0 + 40.0 + 2.0 * gap])
+	var mid := ov._written(row, 7.5, font, 24, gap)
+	_ok(is_equal_approx(mid, 30.0 + 30.0 + gap + gap * 0.5), "control: half way through the gap after a written word, it counts half of it (%.1f)" % mid)
+	ov.free()
 
 
 func _draws() -> void:

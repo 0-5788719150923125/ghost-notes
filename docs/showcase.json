@@ -1,5 +1,5 @@
 {
-	"digest": "01a6ee9e2271d25d5cb7b11dfbaf2844b71219c600e724ed7dbcb4c503b356ea",
+	"digest": "651d4c60e77e6b630d7065c4921d60932a70f94b7dac7060f727ede6a548a89e",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -59,11 +59,13 @@
 		"res://src/cards/card_prompts.gd",
 		"res://src/cards/cards_editor.gd",
 		"res://src/cards/dealer_tools.gd",
+		"res://src/cards/episode_walk.gd",
 		"res://src/cards/set_dresser_tools.gd",
 		"res://src/cards/table_preview.gd",
 		"res://src/data/data_path.gd",
 		"res://src/data/front_matter.gd",
 		"res://src/data/manuscript.gd",
+		"res://src/data/registry.gd",
 		"res://src/data/rules.gd",
 		"res://src/data/yaml.gd",
 		"res://src/export/exporter.gd",
@@ -127,6 +129,7 @@
 		"res://src/reading/generative_editor.gd",
 		"res://src/reading/reading_panel.gd",
 		"res://src/reading/synth_editor.gd",
+		"res://src/reading/text_walk.gd",
 		"res://src/render/frame_forge.gd",
 		"res://src/render/lens3d.gd",
 		"res://src/render/mesh3d.gd",
