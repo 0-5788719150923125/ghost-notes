@@ -27,9 +27,10 @@ func _enter_tree() -> void:
 
 
 ## THE PRODUCT'S NAME, for everything a person sees: the window title and the home screen. The code
-## keeps "ghost" - its directory, settings file, frontmatter key and `application/config/name`,
-## which Godot names the user:// folder after, so changing it would strand every setting, download
-## and episode.
+## keeps "ghost" - its directory, settings file and frontmatter key. The project is called by this
+## name too (`application/config/name`), but Godot would name the user:// folder after it and strand
+## every setting, download and episode in the old one, so project.godot names the folder outright
+## (`custom_user_dir_name`, held by docs.py's `check_user_dir`).
 const NAME := "Ghost Notes"
 const TAGLINE := "A Spectral Experience"
 const TITLE := NAME + ": " + TAGLINE

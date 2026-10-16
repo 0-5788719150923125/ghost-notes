@@ -1005,7 +1005,8 @@ steps run from sessions in ghost-notes, once its memory has been copied (6, belo
      by `praxis/docs.py:151-156` (edit the generator). Godot's project manager lists the old path.
 7. **What does not change: the user's data.** `config/name="ghost"` and no custom user directory,
    so `~/.local/share/godot/app_userdata/ghost/` (8 GB of settings, voices, episodes and tools) is
-   found exactly as before, and ghost.cfg names no praxis path.
+   found exactly as before, and ghost.cfg names no praxis path. (2026-10-16: the project is called
+   "Ghost Notes" now, and project.godot names that folder outright with `custom_user_dir_name`.)
 8. **The user, last,** removes `axis/ghost` from praxis and commits both repositories.
 
 **Done when**, in ghost-notes: `--editor --quit` logs no invalid UID, failed load or parse error;

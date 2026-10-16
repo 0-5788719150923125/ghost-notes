@@ -95,7 +95,8 @@ var _snap := true
 
 var _vp: SubViewport               # the page being written
 var _vp_turn: SubViewport          # the page turning away
-var _canvas: PadCanvas
+var _canvas: PadCanvas             # the page being written: its dry ink
+var _wet: PadCanvas                # and over it, what the pen is writing now
 var _canvas_turn: PadCanvas
 var _placeholder: GhostScene
 var _root3: Node3D
@@ -120,22 +121,49 @@ var _c_roll := 0.0
 var _v_roll := 0.0
 
 
-## A page, drawn: paper, rules, and the ink on page [member page] now.
+## A page, drawn: paper, rules, and the ink on page [member page] now - all of it, or one [member part].
+##
+## REDRAWN ONLY WHEN WHAT IT SHOWS HAS CHANGED ([method show_page]). A redraw frees and rebuilds every
+## stroke on it - each polyline is a GPU polygon of its own, some 400 on a full page - and redrawn every
+## frame, the desk made and threw away tens of thousands a second over a page that stood still, all
+## night after an export, until the engine crashed freeing one (2026-10-16: signal 11 in
+## `free_polygon`). So the page being written is two: its `dry` ink, redrawn as a formula is finished
+## or the page changes, under its `wet`, only what the pen is writing now.
 class PadCanvas extends Node2D:
 	var desk: DeskMedium
 	var page := 0
+	## "all"; "dry" - the paper, its rules and the ink finished on it; or "wet" - only the ink still
+	## being written, over the dry.
+	var part := "all"
+	var _shown: Array = []
+
+	## Shows page [param p] as [param state] has it (its part of [method DeskMedium.page_state]):
+	## queued for a redraw only when either has changed. True when it was.
+	func show_page(p: int, state: Array) -> bool:
+		if p == page and state == _shown:
+			return false
+		page = p
+		_shown = state
+		queue_redraw()
+		return true
+
+	## A new lesson: the next [method show_page] redraws, whatever it shows.
+	func forget() -> void:
+		page = -1
+		_shown = []
 
 	func _draw() -> void:
-		draw_rect(Rect2(0, 0, PW, PH), PAPER)
-		var y := DeskScript.FIRST_RULE
-		while y < PH - 20.0:
-			draw_line(Vector2(0, y), Vector2(PW, y), RULE_COLOR, 2.6, true)
-			y += DeskScript.RULE
-		draw_line(Vector2(MARGIN_X, 0), Vector2(MARGIN_X, PH), MARGIN_COLOR, 2.0)
-		draw_line(Vector2(MARGIN_X + 6.0, 0), Vector2(MARGIN_X + 6.0, PH), MARGIN_COLOR, 1.5)
-		if desk == null:
+		if part != "wet":
+			draw_rect(Rect2(0, 0, PW, PH), PAPER)
+			var y := DeskScript.FIRST_RULE
+			while y < PH - 20.0:
+				draw_line(Vector2(0, y), Vector2(PW, y), RULE_COLOR, 2.6, true)
+				y += DeskScript.RULE
+			draw_line(Vector2(MARGIN_X, 0), Vector2(MARGIN_X, PH), MARGIN_COLOR, 2.0)
+			draw_line(Vector2(MARGIN_X + 6.0, 0), Vector2(MARGIN_X + 6.0, PH), MARGIN_COLOR, 1.5)
+		if desk == null or page < 0:
 			return
-		for line in desk.page_ink(page):
+		for line in desk.page_ink(page, part):
 			var pts: PackedVector2Array = line["points"]
 			if pts.size() >= 2:
 				draw_polyline(pts, INK, float(line["width"]), true)
@@ -151,9 +179,10 @@ func mount(st: SubViewport) -> void:
 	_placeholder.init_with_seed(1, "drift")
 	_placeholder.visible = false
 	add_child(_placeholder)
-	_vp = _page_viewport()
+	_vp = _page_viewport(["dry", "wet"])
 	_canvas = _vp.get_child(0) as PadCanvas
-	_vp_turn = _page_viewport()
+	_wet = _vp.get_child(1) as PadCanvas
+	_vp_turn = _page_viewport(["all"])
 	_canvas_turn = _vp_turn.get_child(0) as PadCanvas
 	_build_world()
 	# THE OPENING, the card table's: the intro's blur over the desk, and the name over the blur
@@ -168,16 +197,19 @@ func mount(st: SubViewport) -> void:
 	add_child(_title)
 
 
-func _page_viewport() -> SubViewport:
+## A page's viewport, drawn by a [PadCanvas] for each of [param parts], the first at the bottom.
+func _page_viewport(parts: Array) -> SubViewport:
 	var vp := SubViewport.new()
 	vp.size = Vector2i(int(PW), int(PH))
 	vp.disable_3d = true
 	vp.transparent_bg = false
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(vp)
-	var c := PadCanvas.new()
-	c.desk = self
-	vp.add_child(c)
+	for part in parts:
+		var c := PadCanvas.new()
+		c.desk = self
+		c.part = String(part)
+		vp.add_child(c)
 	return vp
 
 
@@ -436,6 +468,9 @@ func load_lesson(source: String, desk: Dictionary) -> void:
 	for i in _actions.size():
 		_plan.append({"start": INF, "end": INF, "turn_at": INF})
 	_snap = true
+	for c in [_canvas, _wet, _canvas_turn]:
+		if c != null:
+			(c as PadCanvas).forget()
 
 
 ## WHEN EACH ACTION HAPPENS. A written item starts as its dictation's first word is said (the pen down
@@ -499,7 +534,7 @@ func _word_t1(si: int) -> float:
 func _ink_time(i: int) -> float:
 	var a: Dictionary = _actions[i]
 	var start := float(_plan[i]["start"])
-	var length := float((_strokes.get(String(a["id"]), {}) as Dictionary).get("length", a.get("write", 0.0)))
+	var length := _length(i)
 	if _now <= start:
 		return 0.0
 	if _now >= float(_plan[i]["end"]):
@@ -549,12 +584,12 @@ func _pages() -> Vector2i:
 
 func _show_pages() -> void:
 	var p := _pages()
-	_canvas.page = p.x
-	_canvas.queue_redraw()
+	var now := page_state(p.x)
+	_canvas.show_page(p.x, now["dry"])
+	_wet.show_page(p.x, now["wet"])
 	_hinge.visible = p.y >= 0
 	if p.y >= 0:
-		_canvas_turn.page = p.y
-		_canvas_turn.queue_redraw()
+		_canvas_turn.show_page(p.y, page_state(p.y)["all"])
 		var ta := INF
 		for i in _actions.size():
 			if int((_actions[i] as Dictionary)["page"]) == p.x and float(_plan[i]["turn_at"]) < INF:
@@ -565,33 +600,81 @@ func _show_pages() -> void:
 		_hinge.rotation.x = -PI * (u * u * (3.0 - 2.0 * u))
 
 
-## THE INK ON PAGE [param page] NOW, in the page's pixels: [{points, width}] - what [PadCanvas] draws.
-func page_ink(page: int) -> Array:
+## THE INK ON PAGE [param page] NOW, in the page's pixels: [{points, width}] - what [PadCanvas] draws;
+## all of it, or the [param part] finished (`dry`) or still being written (`wet`).
+func page_ink(page: int, part := "all") -> Array:
+	var out: Array = []
+	for i in _on_page(page):
+		if part != "all" and (_written(i) >= 1.0) != (part == "dry"):
+			continue
+		out.append_array(_ink_of(i))
+	return out
+
+
+## What page [param page] shows at [member _now], as its [PadCanvas]es key it: the actions finished
+## on it (`dry`), each still being written with how much of it is (`wet`), and both (`all`).
+func page_state(page: int) -> Dictionary:
+	var dry: Array = []
+	var wet: Array = []
+	for i in _on_page(page):
+		var u := _written(i)
+		if u >= 1.0:
+			dry.append(i)
+		else:
+			wet.append_array([i, u])
+	return {"dry": dry, "wet": wet, "all": dry + wet}
+
+
+## The actions begun on page [param page] by [member _now], in order (a strike, on the page of what it
+## strikes).
+func _on_page(page: int) -> Array:
 	var out: Array = []
 	for i in _actions.size():
 		var a: Dictionary = _actions[i]
-		var start := float(_plan[i]["start"])
-		if start > _now or int(a["page"]) != page:
+		if float(_plan[i]["start"]) > _now or int(a["page"]) != page:
 			continue
-		match String(a["kind"]):
-			"pad", "pad-text":
-				var sched: Dictionary = _strokes.get(String(a["id"]), {})
-				if sched.is_empty():
-					continue
-				var at: Vector2 = a["at"]
-				var k := float(a["k"]) * DeskScript.PX_PER_PT
-				for s in Ink.at(sched, _ink_time(i))["ink"]:
-					var pts := PackedVector2Array()
-					for q in (s as Dictionary)["points"]:
-						pts.append(at + (q as Vector2) * k)
-					out.append({"points": pts, "width": maxf(2.4, float((s as Dictionary)["width"]) * k * 1.35)})
-			"strike":
-				var of := int(a.get("of", -1))
-				if of < 0 or int((_actions[of] as Dictionary)["page"]) != page:
-					continue
-				var line := _strike_line(_actions[of])
-				var u := clampf((_now - start) / maxf(float(a["write"]), 0.01), 0.0, 1.0)
-				out.append({"points": PackedVector2Array([line[0], line[0].lerp(line[1], u)]), "width": 3.2})
+		if String(a["kind"]) == "strike":
+			var of := int(a.get("of", -1))
+			if of < 0 or int((_actions[of] as Dictionary)["page"]) != page:
+				continue
+		out.append(i)
+	return out
+
+
+## How long action [param i] takes the pen: its ink's, else what the script gave it.
+func _length(i: int) -> float:
+	var a: Dictionary = _actions[i]
+	return float((_strokes.get(String(a["id"]), {}) as Dictionary).get("length", a.get("write", 0.0)))
+
+
+## How much of action [param i] is written at [member _now], 0 to 1.
+func _written(i: int) -> float:
+	var a: Dictionary = _actions[i]
+	if String(a["kind"]) == "strike":
+		return clampf((_now - float(_plan[i]["start"])) / maxf(float(a["write"]), 0.01), 0.0, 1.0)
+	var length := _length(i)
+	return 1.0 if length <= 0.0 else clampf(_ink_time(i) / length, 0.0, 1.0)
+
+
+## Action [param i]'s ink at [member _now], as polylines in the page's pixels.
+func _ink_of(i: int) -> Array:
+	var a: Dictionary = _actions[i]
+	var out: Array = []
+	match String(a["kind"]):
+		"pad", "pad-text":
+			var sched: Dictionary = _strokes.get(String(a["id"]), {})
+			if sched.is_empty():
+				return out
+			var at: Vector2 = a["at"]
+			var k := float(a["k"]) * DeskScript.PX_PER_PT
+			for s in Ink.at(sched, _ink_time(i))["ink"]:
+				var pts := PackedVector2Array()
+				for q in (s as Dictionary)["points"]:
+					pts.append(at + (q as Vector2) * k)
+				out.append({"points": pts, "width": maxf(2.4, float((s as Dictionary)["width"]) * k * 1.35)})
+		"strike":
+			var line := _strike_line(_actions[int(a["of"])])
+			out.append({"points": PackedVector2Array([line[0], line[0].lerp(line[1], _written(i))]), "width": 3.2})
 	return out
 
 

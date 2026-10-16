@@ -258,10 +258,11 @@ fine-tuning chain.
   GPL Piper code is installed (true only of piper-tts). Fix before anyone audits from the comments.
 - **The name.** Renamed 2026-10-05 to "Ghost Notes: A Spectral Experience": a Steam game is already
   called Ghost, and the word is unsearchable. Still run a trademark search on the new name before it
-  goes on a store page. `application/config/name` stays "ghost" because Godot names the user:// folder
-  after it; the export preset should set the product name (Windows `product_name`, the macOS bundle
-  name) explicitly, and a shipped build probably wants its own custom user folder - with a migration
-  from `godot/app_userdata/ghost`.
+  goes on a store page. `application/config/name` is "Ghost Notes" (2026-10-16) and the user:// folder
+  is named outright (`custom_user_dir_name="godot/app_userdata/ghost"`, where it was while the project
+  was called "ghost"); the export preset should set the product name (Windows `product_name`, the
+  macOS bundle name) explicitly, and a shipped build probably wants a folder of its own there - with
+  a migration from `godot/app_userdata/ghost`.
 - **Everything runs locally** - face and body tracking included - and nothing reaches the
   developer. Worth keeping true: face-geometry data is what biometric-privacy laws such as
   Illinois's BIPA regulate.

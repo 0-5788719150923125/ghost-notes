@@ -381,6 +381,46 @@ func _desk() -> void:
 	_check(float(desk._framing()["k"]) == 1.0, "and close while the pen writes")
 	desk._now = float(f.st1[f.st1.size() - 1]) + 0.5
 	_check(float(desk._framing()["k"]) == 0.0, "and wide again once the last word is said")
+	# THE PAGE IS REDRAWN ONLY WHEN WHAT IT SHOWS CHANGES: a redraw rebuilds every stroke on it, and
+	# redrawn every frame over a page that stood still all night, the engine crashed freeing one
+	var dry_c := DeskMedium.PadCanvas.new()
+	dry_c.part = "dry"
+	var wet_c := DeskMedium.PadCanvas.new()
+	wet_c.part = "wet"
+	dry_c.forget()
+	wet_c.forget()
+	var still := float(f.st1[f.st1.size() - 1])
+	for p in desk._plan:
+		still = maxf(still, float((p as Dictionary)["end"]))
+	var redraws := 0
+	for k in 300:
+		desk._now = still + 0.5 + k / 60.0
+		var st := desk.page_state(0)
+		redraws += int(dry_c.show_page(0, st["dry"])) + int(wet_c.show_page(0, st["wet"]))
+	_check(redraws == 2, "a page that stands still is drawn once, not every frame (%d redraws of its two parts in 300 frames)" % redraws)
+	desk._now = float(f.st0[first + 1])
+	var w0 := desk.page_state(0)
+	desk._now = float(f.st0[first + 3])
+	var w1 := desk.page_state(0)
+	_check(w0["wet"] != w1["wet"] and w0["dry"] == w1["dry"],
+		"the control: as the pen writes, what it is writing is redrawn and the rest is not (wet %s -> %s)" % [w0["wet"], w1["wet"]])
+	desk._now = float(plan["end"]) - 0.05
+	var e0 := desk.page_state(0)
+	desk._now = float(plan["end"]) + 0.05
+	var e1 := desk.page_state(0)
+	_check(not (e0["dry"] as Array).has(1) and (e1["dry"] as Array).has(1), "and a formula goes under the dry ink as it is finished")
+	var s := -1
+	for i in desk._actions.size():
+		if String((desk._actions[i] as Dictionary)["kind"]) == "strike":
+			s = i
+	var sp_page := int((desk._actions[int((desk._actions[s] as Dictionary)["of"])] as Dictionary)["page"])
+	desk._now = float(desk._plan[s]["start"]) + DeskScript.STRIKE * 0.5
+	var mid := [desk.page_ink(sp_page, "wet").size(), desk.page_ink(sp_page, "dry").size()]
+	desk._now = float(desk._plan[s]["start"]) + DeskScript.STRIKE + 0.01
+	var done := [desk.page_ink(sp_page, "wet").size(), desk.page_ink(sp_page, "dry").size()]
+	_check(mid == [1, 0] and done == [0, 1], "a strike is wet as it is drawn and dry once it is (%s %s)" % [mid, done])
+	dry_c.free()
+	wet_c.free()
 	var none := DeskMedium.new()
 	none.load_lesson(LESSON, {"seed": 3})
 	_check(none._opening() == INF and ShowOpening.title_alpha(8.0, none._opening(), false) == 1.0,

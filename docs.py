@@ -2826,6 +2826,49 @@ def _uid_references(text: str, suffix: str) -> List[Tuple[int, str]]:
 UID_OVERRIDE = "text_editor/behavior/files/drop_preload_resources_as_uid=false"
 
 
+# Where the user's data is, under the OS's data path: what user:// was while the project was called "ghost".
+USER_DIR = "godot/app_userdata/ghost"
+
+
+def _user_dir(project: str) -> str:
+    """The folder under the OS's data path that Godot makes user:// from [application], as
+    `OS::get_user_data_dir` (core/os/os.cpp) does: `custom_user_dir_name` when `use_custom_user_dir`
+    is on, else `godot/app_userdata/<config/name>`."""
+    app = re.search(r"^\[application\]\n((?:[^\[\n].*\n|\n)*)", project, re.M)
+    body = app.group(1) if app else ""
+
+    def get(key: str) -> str:
+        m = re.search(r"^" + re.escape(key) + r"=(.*)$", body, re.M)
+        return m.group(1).strip().strip('"') if m else ""
+
+    if get("config/use_custom_user_dir") == "true" and get("config/custom_user_dir_name"):
+        return get("config/custom_user_dir_name")
+    return f"godot/app_userdata/{get('config/name')}"
+
+
+def check_user_dir() -> None:
+    """The user's data stays where it is, whatever the project is called.
+
+    Godot makes user:// from the project's name unless the project names the folder itself, so
+    renaming the project moved it: every note, setting, voice, episode and fetched tool (gigabytes)
+    left behind in the old folder, and a child started after the rename - the export's bake - wrote
+    into the new one while the app still read the old ("Bake failed", 2026-10-16). The project is
+    called "Ghost Notes" and names its folder outright: `use_custom_user_dir` and
+    `custom_user_dir_name` = USER_DIR (Android ignores both and keeps the app's own files folder).
+
+    THE CONTROL, run first: a project renamed without naming its folder must be caught, and one that
+    names it must not.
+    """
+    renamed = '[application]\n\nconfig/name="Ghost Notes"\n'
+    named = renamed + f'config/use_custom_user_dir=true\nconfig/custom_user_dir_name="{USER_DIR}"\n'
+    if _user_dir(renamed) == USER_DIR or _user_dir(named) != USER_DIR:
+        warn("check_user_dir: its control did not fail - the check proves nothing")
+    got = _user_dir((ROOT / "project.godot").read_text())
+    if got != USER_DIR:
+        warn(f"project.godot: user:// would be <data>/{got}, but the user's data is in <data>/{USER_DIR}: "
+             f'name the folder - config/use_custom_user_dir=true, config/custom_user_dir_name="{USER_DIR}"')
+
+
 def check_no_uids() -> None:
     """A file is named by its `res://` path, never a `uid://`.
 
@@ -3077,6 +3120,7 @@ def main() -> int:
     edges = check_structure()
     check_paths()
     check_no_uids()
+    check_user_dir()
     check_fields()
     check_panel_controls()
     check_settings_owner()

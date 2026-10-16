@@ -706,32 +706,15 @@ func _on_path(out_path: String) -> void:
 	# which point the live song may have ended/unloaded and Spectrum.song_length() would read 0.
 	_song_dur = Spectrum.song_length()
 	if _song_dur <= 0.0 and _song.get_extension().to_lower() == "wav":
-		# a provider-rendered take Spectrum hasn't finished streaming: PCM16
-		# mono WAV, so the file itself says how long it is.
-		#
-		# READ THE RATE FROM THE HEADER. This assumed Voice.SR (44100), which is
-		# only true for the procedural synthesizer's own takes; a neural voice
-		# renders at its model's rate - Piper is 22050 - so a generative export
-		# reported exactly HALF its length and the render stopped halfway
-		# through, which is what "it only produced 5 seconds" was.
-		_song_dur = maxf(0.0, float(_file_size(_song) - 44)
-			/ (2.0 * float(_wav_rate(_song))))
+		# a provider-rendered take Spectrum hasn't finished streaming: the file itself says how
+		# long it is ([method _wav_seconds]).
+		_song_dur = _wav_seconds(_song)
 	# Say what was decided, in the terminal. Every export failure so far has been
 	# a disagreement about WHICH file and HOW LONG - a stale path, or a duration
 	# read at the wrong sample rate that cut the render in half - and neither is
 	# visible from the UI.
 	print("ghost/export: take=%s  %.2fs @ %d Hz  ->  %s"
 		% [_song, _song_dur, _wav_rate(_song) if _song.get_extension().to_lower() == "wav" else 0, _out])
-	if _song_dur <= 0.5:
-		printerr("ghost/export: WARNING - the take reads as %.2fs. The render stops "
-			% _song_dur + "when the audio ends, so the video will be that short.")
-
-	# Say what was decided, in the terminal. Every export problem so far has been
-	# a disagreement about WHICH file or HOW LONG - a duration read at the wrong
-	# sample rate halved one render - and neither is visible from the UI.
-	print("ghost/export: take=%s" % _song)
-	print("ghost/export: %.2fs @ %d Hz -> %s" % [_song_dur,
-		_wav_rate(_song) if _song.get_extension().to_lower() == "wav" else 0, _out])
 	if _song_dur <= 1.0:
 		printerr("ghost/export: WARNING - the take reads as %.2fs, so the render "
 			% _song_dur + "will stop there. Check the text in the panel.")
@@ -1196,6 +1179,36 @@ static func _wav_rate(path: String) -> int:
 	var rate := f.get_32()
 	f.close()
 	return rate if rate > 0 else Voice.SR
+
+
+## HOW LONG A PCM WAV PLAYS: its `data` chunk over the byte rate its `fmt ` chunk gives (rate x
+## channels x bytes a sample), the chunks walked in case others come between; 0 when unreadable.
+## Never from an assumed format: a take at Voice.SR (44100) is only the procedural synthesizer's - a
+## neural voice renders at its model's rate (Piper's 22050), which read as HALF its length and stopped
+## the render halfway ("it only produced 5 seconds") - and a take is STEREO when a voice leans
+## ([VoiceFX]), which read as mono was twice its length: a nine-minute lesson exported as eighteen
+## (2026-10-16).
+static func _wav_seconds(path: String) -> float:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null or f.get_length() < 12 or f.get_buffer(4).get_string_from_ascii() != "RIFF":
+		return 0.0
+	f.get_32()
+	if f.get_buffer(4).get_string_from_ascii() != "WAVE":
+		return 0.0
+	var byte_rate := 0
+	while f.get_position() + 8 <= f.get_length():
+		var id := f.get_buffer(4).get_string_from_ascii()
+		var size := f.get_32()
+		var body := f.get_position()
+		if id == "fmt " and size >= 16:
+			f.seek(body + 8)
+			byte_rate = f.get_32()
+		elif id == "data":
+			# a take still being written may say 0, or more than is there: what is there is what plays
+			var have := f.get_length() - body
+			return float(have if size == 0 or size > have else size) / float(byte_rate) if byte_rate > 0 else 0.0
+		f.seek(body + size + (size & 1))
+	return 0.0
 
 
 func _file_size(path: String) -> int:
