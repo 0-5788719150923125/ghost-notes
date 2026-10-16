@@ -2786,6 +2786,95 @@ def check_paths() -> None:
             warn(f"{p.relative_to(ROOT).as_posix()} names {rel}, which does not exist")
 
 
+def _comment_off(line: str, mark: str) -> str:
+    """[line] up to its comment (`#` in GDScript, `//` in a shader); a mark inside a string is kept."""
+    quote, i = None, 0
+    while i < len(line):
+        c = line[i]
+        if quote:
+            if c == "\\":
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+        elif c in "\"'":
+            quote = c
+        elif line.startswith(mark, i):
+            return line[:i]
+        i += 1
+    return line
+
+
+def _uid_references(text: str, suffix: str) -> List[Tuple[int, str]]:
+    """The `uid://` references in a file Godot reads, as (line, uid). A scene's or resource's own
+    header (`[gd_scene ... uid=...]`) names the file itself, not another, and a comment refers to
+    nothing. Pure, for the control."""
+    out = []
+    for n, line in enumerate(text.splitlines(), 1):
+        if n == 1 and line.startswith(("[gd_scene", "[gd_resource")):
+            continue
+        if suffix == ".gd":
+            line = _comment_off(line, "#")
+        elif suffix in (".gdshader", ".gdshaderinc"):
+            line = _comment_off(line, "//")
+        elif line.lstrip().startswith(";"):
+            continue
+        out += [(n, m.group(0)) for m in re.finditer(r"uid://\w*", line)]
+    return out
+
+
+UID_OVERRIDE = "text_editor/behavior/files/drop_preload_resources_as_uid=false"
+
+
+def check_no_uids() -> None:
+    """A file is named by its `res://` path, never a `uid://`.
+
+    Since Godot 4.4 every script and shader has a `.uid` beside it, so a reference by UID survives
+    a move the editor never saw. ghost names its files in code (`preload`, `load`, a registry's
+    `script`, a `--script` argument), and a move is a path edit that `check_paths` and
+    `compile_check` hold, so the `.uid` files are read by nothing and gitignored: each checkout
+    mints its own. A `uid://` naming another file would then resolve in the checkout that wrote it
+    and nowhere else - a bare `preload("uid://...")` has no path to fall back on, and a scene's
+    `ext_resource` by UID warns and churns between checkouts. The editor writes one when a file
+    is dropped into the script editor, unless `project.godot`'s `[editor_overrides]` turns that
+    off (UID_OVERRIDE, held here too), and when it saves a scene or resource that references
+    another file: this catches either.
+
+    THE CONTROL, run first: a planted `preload("uid://...")` and an `ext_resource` by UID must be
+    found, and a scene's own header UID and a comment that mentions one must not.
+    """
+    found = [
+        _uid_references('const A := preload("uid://b1x")', ".gd"),
+        _uid_references('[ext_resource type="Script" uid="uid://b1x" path="res://a.gd" id="1"]', ".tscn"),
+    ]
+    quiet = [
+        _uid_references('[gd_scene format=3 uid="uid://b1x"]', ".tscn"),
+        _uid_references('# never preload("uid://b1x")', ".gd"),
+    ]
+    if any(len(f) != 1 for f in found) or any(quiet):
+        warn("check_no_uids: its control did not fail - the check proves nothing")
+    project = (ROOT / "project.godot").read_text()
+    if not re.search(r"^\[editor_overrides\]\n(?:[^\[\n].*\n|\n)*?" + re.escape(UID_OVERRIDE) + "$",
+                     project, re.M):
+        warn(f"project.godot: [editor_overrides] must keep {UID_OVERRIDE}, or a file dropped "
+             "into the script editor is preloaded by a UID only this checkout knows")
+    files = [ROOT / "project.godot", ROOT / "export_presets.cfg"]
+    for r in ["src", "tests", "scenes", "shaders", "fonts", "data"]:
+        if (ROOT / r).is_dir():
+            files += [p for p in (ROOT / r).rglob("*") if p.is_file()]
+    kinds = {".gd", ".tscn", ".tres", ".godot", ".cfg", ".gdshader", ".gdshaderinc"}
+    for p in sorted(files):
+        if p.suffix not in kinds:
+            continue
+        try:
+            text = p.read_text()
+        except (FileNotFoundError, UnicodeDecodeError):
+            continue
+        for n, uid in _uid_references(text, p.suffix):
+            warn(f"{p.relative_to(ROOT).as_posix()}:{n} names a file by {uid}: name it by its "
+                 "res:// path (the .uid files are gitignored, so a UID holds in one checkout only)")
+
+
 def _render_structure_doc(edges: Dict[str, set]) -> str:
     """docs/structure.md: the stack, what each folder names, and what still points up."""
     order = [folder for folder, _t, _d in FOLDERS]
@@ -2987,6 +3076,7 @@ def main() -> int:
     scenes, groups = _collect_scenes()
     edges = check_structure()
     check_paths()
+    check_no_uids()
     check_fields()
     check_panel_controls()
     check_settings_owner()

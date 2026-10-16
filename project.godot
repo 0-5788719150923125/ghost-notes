@@ -46,6 +46,10 @@ window/size/viewport_height.mobile=1920
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[editor_overrides]
+
+text_editor/behavior/files/drop_preload_resources_as_uid=false
+
 [rendering]
 
 textures/vram_compression/import_etc2_astc=true

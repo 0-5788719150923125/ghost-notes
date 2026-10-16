@@ -49,8 +49,11 @@ mono_crash.*.json
 *.mp4
 *.png.import.bak
 
-# *.uid and *.import are TRACKED (Godot's advice since 4.4): a .uid is what lets a reference by
-# UID survive a move or a clean clone, and an .import keeps an asset's import settings.
+# *.uid is NOT tracked: ghost names every file by its res:// path, never a uid://, so nothing
+# reads a .uid - the editor mints one per script on its scan, a different one in each checkout.
+# `python docs.py --check` fails a uid:// that names another file (check_no_uids). An .import IS
+# tracked: it keeps an asset's import settings.
+*.uid
 
 # ghost voice listening probes (regenerated on demand, never committed).
 # Numbered NN_name.wav at this directory's root - the earlier `0*.wav` missed
