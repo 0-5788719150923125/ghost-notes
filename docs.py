@@ -269,6 +269,17 @@ FOLDERS: List[Tuple[str, str, str]] = [
 UPWARD: List[Tuple[str, str, List[Tuple[str, str]]]] = [
 ]
 
+# WHAT A MOUNTED PART IS HANDED, AND NEVER NAMES (next/structure.md, step 11): {script: the
+# folders whose scripts read it only through what they are handed}. A scene, a medium and the
+# table are mounted by a show and read it through their `feed` ([ShowFeed]) - its seed, its dials,
+# its clock. The Director is above most of them anyway; the audio engine is BELOW all of them, so
+# the stack alone allows it, and a medium that read the clock off `Spectrum` could only ever be
+# played by a song - never by a preview a timeline scrubs, or a live show its agents conduct.
+HANDED: Dict[str, List[str]] = {
+    "audio/spectrum": ["scene_kit", "scenes", "media", "table"],
+    "show/director": ["table"],
+}
+
 # (flag, argument placeholder, description, internal). Internal flags are
 # passed between ghost's own processes (exporter -> render, editor ->
 # render), not meant for hand use. Verified against the source scan below.
@@ -1058,6 +1069,12 @@ def _render_registry_page(
         f"({len(pairs)} entries)",
         "",
     ]
+    bodies = _class_bodies(script.text)
+    common = {}
+    for body in bodies.values():
+        common = common or _rows(body, "COMMON")
+    if common:
+        lines.extend(["Every entry also takes:", ""] + _field_table(common) + [""])
     for key, cls in pairs:
         doc, line = inner.get(cls, ("", None))
         lines.append(f"## `{key}` - {cls}")
@@ -1066,9 +1083,23 @@ def _render_registry_page(
             lines.extend([doc, ""])
         else:
             warn(f"{script.rel}: class {cls} (registry key '{key}') has no doc comment")
+        fields = _rows(bodies.get(cls, ""), "FIELDS")
+        if fields:
+            lines.extend(_field_table(fields) + [""])
         lines.append(f"Source: {_source_link(script.rel, line)}")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _field_table(fields: Dict[str, Dict[str, Any]]) -> List[str]:
+    """A class's FIELDS as a table: the setting, its default (unset: drawn or worked out, as it
+    says), and what it does."""
+    out = ["| Setting | Default | What it does |", "| --- | --- | --- |"]
+    for k, row in fields.items():
+        d = row.get("default")
+        shown = "unset" if d is None else ("on" if d is True else "off" if d is False else f"`{d}`")
+        out.append(f"| `{k}` {row.get('label', '')} | {shown} | {_md(str(row.get('blurb', '')))} |")
+    return out
 
 
 def _render_media_doc(base: Script) -> str:
@@ -2554,6 +2585,19 @@ def _structure_problems(
     return out
 
 
+def _handed_problems(edges: Dict[str, set], handed: Dict[str, List[str]]) -> List[str]:
+    """The scripts a show mounts that name what they are handed (HANDED). Pure, for the control."""
+    out = []
+    for a in sorted(edges):
+        for b in sorted(edges[a]):
+            if a.split("/")[0] in handed.get(b, []):
+                out.append(
+                    f"src/{a}.gd names src/{b}.gd: a part a show mounts reads the show through "
+                    "its `feed` ([ShowFeed]) - hand it what it needs there (docs.py HANDED)"
+                )
+    return out
+
+
 def check_structure() -> Dict[str, set]:
     """src/ is a stack (FOLDERS, bottom first), and the code is held to it.
 
@@ -2573,6 +2617,8 @@ def check_structure() -> Dict[str, set]:
         _structure_problems({"platform/a": set()}, order, [("platform/a", "app/b")])
     ) != 1:
         warn("check_structure: its control did not fail - the check proves nothing")
+    if len(_handed_problems({"media/a": {"audio/b"}, "audio/c": {"audio/b"}}, {"audio/b": ["media"]})) != 1:
+        warn("check_structure: the HANDED control did not fail - the check proves nothing")
 
     on_disk = sorted(p.name for p in SCRIPTS.iterdir() if p.is_dir())
     for folder in on_disk:
@@ -2588,9 +2634,95 @@ def check_structure() -> Dict[str, set]:
 
     edges = _references()
     listed = [pair for _p, _f, pairs in UPWARD for pair in pairs]
-    for problem in _structure_problems(edges, order, listed):
+    for problem in _structure_problems(edges, order, listed) + _handed_problems(edges, HANDED):
         warn(problem)
     return edges
+
+
+def _class_bodies(text: str) -> Dict[str, str]:
+    """Each inner class of a script: its name -> its body, one tab of indent taken off."""
+    out: Dict[str, str] = {}
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        m = re.match(r"class (\w+)\b", line)
+        if not m:
+            continue
+        body = []
+        for l in lines[i + 1:]:
+            if l.strip() and not l.startswith(("\t", " ")):
+                break
+            body.append(l[1:] if l.startswith("\t") else l)
+        out[m.group(1)] = "\n".join(body)
+    return out
+
+
+def _reads(body: str) -> Dict[str, Tuple[str, str]]:
+    """The settings a class reads off its config: key -> (num / flag / txt, the default as written),
+    the first read of each. Comments and strings aside from the key itself are not looked in."""
+    out: Dict[str, Tuple[str, str]] = {}
+    code = "\n".join(l.split("#")[0] if not l.lstrip().startswith("#") else "" for l in body.split("\n"))
+    for m in re.finditer(r'(?<![\w.])(num|flag|txt|cfg\.get)\("(\w+)",\s*', code):
+        i, depth = m.end(), 1
+        while depth and i < len(code):
+            depth += {"(": 1, ")": -1}.get(code[i], 0)
+            i += 1
+        out.setdefault(m.group(2), (m.group(1).replace("cfg.get", "get"), code[m.end():i - 1].strip()))
+    return out
+
+
+def _field_problems(bodies: Dict[str, str], registry: List[Tuple[str, str]], base: str) -> List[str]:
+    """What is wrong between each registered class's FIELDS and the settings its code reads: a read
+    with no row, a row nothing reads, a row's type or literal default that is not the code's. The
+    base class's own reads are its `COMMON` rows, every class's. Pure, so its control can run on a
+    made-up script (see `check_fields`)."""
+    out = []
+    for key, cls in [("", base)] + list(registry):
+        body = bodies.get(cls, "")
+        own = _reads(body)
+        table = "COMMON" if cls == base else "FIELDS"
+        fields = _rows(body, table)
+        if cls == base and not own and not fields:
+            continue
+        for k, (kind, default) in own.items():
+            if k not in fields:
+                out.append(f"{cls} reads `{k}` and its {table} has no row for it")
+                continue
+            row = fields[k]
+            if kind != "get" and row.get("type") != kind:
+                out.append(f"{cls}.{table} `{k}` is a {row.get('type')}, and the code reads a {kind}")
+            want = row.get("default")
+            try:
+                lit = ast.literal_eval(default.replace("true", "True").replace("false", "False"))
+            except (ValueError, SyntaxError):
+                lit = None   # drawn from the seed, or worked out: the row says so in words
+            if lit is not None and want != lit:
+                out.append(f"{cls}.{table} `{k}` defaults to {want!r}, and the code to {lit!r}")
+            if lit is None and want is not None:
+                out.append(f"{cls}.{table} `{k}` defaults to {want!r}, and the code draws it ({default})")
+        for k in fields:
+            if k not in own:
+                out.append(f"{cls}.{table} has `{k}`, which its code never reads")
+    return out
+
+
+def check_fields() -> None:
+    """EVERY SETTING A COMPOSABLE THING READS IS A ROW (next/structure.md, step 16). A layer and a
+    force read their config through `num` / `flag` / `txt`; each class declares those settings in its
+    own `FIELDS` - what a timeline's inspector builds its rows from ([SchemaForm]) and what an agent
+    choosing a layer is shown - and this holds the two together: a setting read with no row, a row
+    nothing reads, and a default the row and the code disagree on.
+
+    THE CONTROL, run first: a made-up class that reads a setting its FIELDS lacks, and one whose row
+    has the wrong default, must each be reported.
+    """
+    planted = {"A": 'func _init():\n\tvar n := num("count", 3)\n',
+               "B": 'const FIELDS := {"count": {"type": "num", "default": 4}}\nfunc _init():\n\tvar n := num("count", 3)\n'}
+    if len(_field_problems(planted, [("a", "A"), ("b", "B")], "Base")) != 2:
+        warn("check_fields: its control did not fail - the check proves nothing")
+    for rel, base in [("src/scene_kit/layer.gd", "Base"), ("src/motion/primitives.gd", "Force")]:
+        text = (ROOT / rel).read_text()
+        for problem in _field_problems(_class_bodies(text), _parse_registry_dict(text), base):
+            warn(f"{rel}: {problem}")
 
 
 def _missing_paths(text: str) -> List[str]:
@@ -2835,6 +2967,7 @@ def main() -> int:
     scenes, groups = _collect_scenes()
     edges = check_structure()
     check_paths()
+    check_fields()
     check_panel_controls()
     check_settings_owner()
     check_films_pumped()

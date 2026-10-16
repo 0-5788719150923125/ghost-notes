@@ -26,9 +26,12 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	await _panel("Generative", func() -> Node: return GenerativeEditor.new())
+	await _panel("Generative", func() -> Node: return ReadingPanel.new())
 	await _panel("Synthesis", func() -> Node: return SynthEditor.new())
-	await _panel("Cards", func() -> Node: return CardsEditor.new())
+	await _panel("Cards", func() -> Node:
+		var cards := ReadingPanel.new()
+		cards.workspace = "cards"
+		return cards)
 	await _note_panel()
 	await _masking()
 	for k in _restore:

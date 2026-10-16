@@ -27,7 +27,7 @@ class_name MaskTimeline
 signal scrubbed(t: float)
 signal marker_picked(m: Dictionary)
 ## Fired once per drag gesture, BEFORE the first time-mutation - the hook point
-## for undo (see MaskEditor._push_undo). A plain click-to-select never fires
+## for undo (see MaskUndo.push). A plain click-to-select never fires
 ## this at all (no motion, no mutation, nothing to undo).
 signal marker_drag_started(m: Dictionary)
 signal marker_moved(m: Dictionary)

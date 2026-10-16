@@ -301,7 +301,7 @@ const EFFECT_REPAINT := 18
 const EFFECT_RAIN := 19
 ## AUDIO: draws nothing at all. The one layer whose product is sound - an EQ,
 ## compressor, delay and reverb chain on the mask bus, scaled by the marker's own
-## envelope so it fades in rather than popping on. See MaskEditor._apply_audio_fx.
+## envelope so it fades in rather than popping on. See MaskAudioFx.apply.
 const EFFECT_AUDIO := 20
 
 ## THE CONTROL HIERARCHY: which panel option groups each effect actually consumes

@@ -22,8 +22,9 @@ class_name NoteCards
 ## workspace, so a component that can be attached can always be taken off again.
 
 ## The components whose settings are a card any workspace can show, in the order they stand:
-## the rows of [constant Components.REGISTRY] that name a `script`.
-const KEYS := ["picture", "storyboard", "look", "bookends", "youtube"]
+## the rows of [constant Components.REGISTRY] that name a `script`. Cards' episode first: what
+## produces the text stands above what shows it.
+const KEYS := ["cards", "picture", "storyboard", "look", "bookends", "youtube"]
 
 
 ## A card for each of [param attached] that is one of [constant KEYS] (and of [param ctx]'s
@@ -38,7 +39,10 @@ static func build(panel: SidePanel, attached: Array, ctx := {}) -> Dictionary:
 			continue
 		var card := make(key, ctx)
 		var row: Dictionary = Components.REGISTRY[key]
-		var body := panel.add_card(String(card.KEY), String(row["label"]), row["family"], key)
+		# the card's id is its row's `card` (the panel keeps each card's fold under it), its title
+		# the row's `heading` where it has one
+		var body := panel.add_card(String(row.get("card", card.KEY)), String(row.get("heading", row["label"])),
+			row["family"], key)
 		var why := Components.needs_note(key, attached)
 		if not why.is_empty():
 			body.add_child(_waiting(why))

@@ -49,7 +49,7 @@ const OUTRO := "<!--\\s*outro\\s*-->"
 ## Any other comment is an authoring note.
 const COMMENT := "<!--[\\s\\S]*?-->"
 ## HOW A STRETCH IS SAID: `<!-- delivery: quicker, brighter -->` - a few words from a closed list
-## (ReadingPanel.DELIVERY_WORDS), each a small step in pace, brightness or pauses - from here
+## (Delivery.DELIVERY_WORDS), each a small step in pace, brightness or pauses - from here
 ## to the end of its paragraph, eased in and out across sentences. A lean of the voice's own
 ## delivery, never a different voice.
 const DELIVERY := "<!--\\s*delivery\\s*(?::\\s*([^>]*?))?\\s*-->"

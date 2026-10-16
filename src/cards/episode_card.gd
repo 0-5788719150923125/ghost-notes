@@ -1,16 +1,23 @@
-extends ReadingPanel
-class_name CardsEditor
+extends VBoxContainer
+class_name EpisodeCard
 
-## CardsEditor - the Cards mode: a show of cards nobody writes by hand. What kind of cards, and what
-## the show is, are the brief's to say.
+## EpisodeCard - the Cards component's card: a show of cards nobody writes by hand. What kind of
+## cards, and what the show is, are the brief's to say.
 ##
 ## A SHOW is a document: its title is the channel, its body is the BRIEF - what the show is,
 ## its voice, its rules - and its `ghost: cards:` block holds the knobs and the reader's voice.
 ## An EPISODE is one seed of the show, produced by agents ([CardProducer]) step by step and
 ## kept on disk ([CardEpisode]): planned, shuffled, designed, painted, and read aloud one card
-## at a time, in drawing order. What they write is then read in this panel's voice - the reading
-## is [ReadingPanel]'s, as the Generative panel's is - at the card table ([TableMedium]), which
-## this mode pins as its medium.
+## at a time, in drawing order. What they write is then read by the note's voice, at the card
+## table ([TableMedium]), which this card pins as the medium.
+##
+## A CARD ON THE READING, NOT A MODE OF IT (next/structure.md, step 12). This was `CardsEditor`, a
+## [ReadingPanel] that overrode 25 of the panel's methods. It is a component card now, built by
+## [NoteCards] from the `cards` row as the Look's is, and it HANDS the reading what a show of cards
+## changes: what is read ([EpisodeWalk]: the episode's script, never the brief), where it is heard
+## ([EpisodeCard.Bed]: the episode's table, its sound and wind) and how it goes out
+## ([EpisodeCard.Publish]: the episode's title, the episode held through a render, upload notes and a
+## chapter per card). The panel is the one a chapter is read in, and knows nothing of cards.
 ##
 ## GENERATION IS EXPLICIT, as with every picture in ghost: Generate makes what the episode is
 ## missing, New episode makes a new seed, and a step's redo deletes it (and what was made from
@@ -19,6 +26,8 @@ class_name CardsEditor
 const YouTube := preload("res://src/export/youtube.gd")
 const TagField := preload("res://src/ui/tag_field.gd")
 
+## The block it keeps under the document's `ghost:` key.
+const KEY := "cards"
 ## The knobs a show keeps beside its voice. Also the schema: a stored value of the wrong shape
 ## falls back to these.
 const KNOBS := {"show": "", "seed": 1, "draw": [3, 6], "reversals": true, "jumpers": true, "environment": 0.5,
@@ -84,7 +93,7 @@ var _table_log := {}
 ## {episode, body, doc, title}, or empty.
 var _export_pin := {}
 ## The take the last export rendered and the episode it is of: the upload describes them (see
-## [method _upload_base]) after the pin is let go. {take, episode}, or empty.
+## [method upload_base]) after the pin is let go. {take, episode}, or empty.
 var _taken := {}
 ## THE YOUTUBE FIELDS: the picked episode's title (on the Episode card, edited in place in its plan),
 ## and the show's description and tags (on the YouTube card - null without one).
@@ -96,35 +105,79 @@ var _yt_dirty := 0.0       # seconds until edits are written into the plan; 0 = 
 var _yt_seen := {}         # {path, mt}: the plan the fields were last filled from
 ## THE SHOW'S YOUTUBE TITLE AND DESCRIPTION, kept in its document's block - global, never a record
 ## per episode. The title is ONE value overwritten by whichever episode is picked (as the seed is);
-## the description is the show's, the same for every episode (see [method _doc_capture]).
+## the description is the show's, the same for every episode (see [method capture]).
 var _cur_title := ""
 var _cur_desc := ""
 
 
-func _init() -> void:
-	_section = "cards"
-	# THE READING IS THE EPISODE'S, never the note's: the note is the brief (EpisodeWalk)
-	walk = EpisodeWalk.new(func() -> CardEpisode: return _episode)
+
+## THE READING THIS CARD SERVES ([method serve]): it asks the panel a few things by name - its
+## document, its script box, the cast's names, the status line - and hands it a walk, a bed and a
+## publish. Null for a card nobody handed a reading (it is then inert).
+var reading: ReadingPanel
+var _doc: DocSource          # the reading's document: the show's brief, and its blocks
+var _text: TextEdit          # the brief as its box holds it
+var _syncing := false        # writing the controls from the knobs must not write them back
+var _youtube: YouTubeCard    # the note's YouTube card, once the reading has built it
 
 
-func _ready() -> void:
-	# PINNED BEFORE ANYTHING ATTACHES: the stage is built on the first reading, and it builds
-	# whatever medium resolves then (see Director.medium_override).
-	Director.medium_override = "table"
-	super._ready()
+## A card for the panel in [param ctx] (`workspace`, the [ReadingPanel] it is built on).
+static func for_note(ctx: Dictionary) -> EpisodeCard:
+	var card := EpisodeCard.new()
+	card.serve(ctx.get("workspace") as ReadingPanel)
+	return card
+
+
+## SERVE [param panel]: hand it the episode's walk, bed and publish, and build the card. The episode
+## opens once the panel has read its document ([method _on_reading_ready]) - opening it before would
+## open the last show's.
+func serve(panel: ReadingPanel) -> void:
+	add_theme_constant_override("separation", 8)
+	reading = panel
+	if reading == null:
+		return
+	_doc = reading.doc_source()
+	_text = reading.source_box()
+	reading.walk = EpisodeWalk.new(func() -> CardEpisode: return _episode)
+	reading.bed = Bed.new(self)
+	reading.publish = Publish.new(self)
+	_doc.opened.connect(_on_show_opened)
+	_doc.mode_changed.connect(_on_doc_mode)
+	reading.source_edited.connect(func() -> void: _brief_changed = true)
+	reading.persisted.connect(_persist)
+	reading.ready.connect(_on_reading_ready, CONNECT_ONE_SHOT)
+	_build()
+	_load_persisted()
+
+
+## The panel has read its document (its block applied, its cast loaded): a synced show with no block
+## of its own starts from the defaults, and the episode its knobs name opens.
+func _on_reading_ready() -> void:
+	if _doc.is_sync() and not _doc_has_block():
+		_knobs = KNOBS.duplicate(true)
+		_show_knobs()
 	_open_episode()
+
+
+## THE TABLE IS THE MEDIUM, pinned while the card is up - and BEFORE ANYTHING ATTACHES: the stage
+## is built on the first reading, with whatever medium resolves then (see Director.medium_override).
+## Pinned on entering the tree, not on being built, so a panel built by hand and freed (a gate)
+## leaves no pin behind.
+func _enter_tree() -> void:
+	if reading != null:
+		Director.medium_override = "table"
 
 
 func _exit_tree() -> void:
 	if _producer != null:
 		_producer.stop()
-	if Director.medium_override == "table":
+	if reading != null and Director.medium_override == "table":
 		Director.medium_override = ""
-	super._exit_tree()
 
 
 func _process(delta: float) -> void:
-	super._process(delta)
+	if reading == null:
+		return
 	if _yt_dirty > 0.0:
 		_yt_dirty -= delta
 		if _yt_dirty <= 0.0:
@@ -140,22 +193,85 @@ func _process(delta: float) -> void:
 		_seed_globals()
 
 
-# --- the seams ---------------------------------------------------------------------------
+# --- what the reading is asked ------------------------------------------------------------------
 
-func _panel_title() -> String:
-	return "Cards"
+func _set_status(text: String) -> void:
+	if reading != null:
+		reading.status(text)
 
 
-func _panel_hint() -> String:
-	return ("Open a show: its body is the brief every agent works from. Each seed is one episode - "
-		+ "planned, shuffled, painted and written one card at a time by the agents, then read here "
-		+ "in the voice below, at the table.")
+func _mark_stale() -> void:
+	if reading != null:
+		reading.mark_stale()
 
+
+func _touch() -> void:
+	if reading != null:
+		reading.touch()
+
+
+## The episode the reading on the stage is of, "" when none is playing.
+func _live_episode_dir() -> String:
+	if reading == null or not reading.reading_live():
+		return ""
+	var subs: Node = reading.subtitles
+	if subs == null or not is_instance_valid(subs):
+		return ""
+	var d: Variant = subs.get("document")
+	var t: Variant = (d as Dictionary).get("table", {}) if d is Dictionary else {}
+	return String((t as Dictionary).get("dir", "")) if t is Dictionary else ""
+
+
+# --- what it hands the reading -------------------------------------------------------------------
 
 ## WHERE THE READING IS: the episode's table (`table.json`), heard - its `sound` and its light's wind,
 ## on the episode's seed as the table plans it ([method Soundscape.of_table]). An export's is the
 ## episode pinned for it.
-func _environment(export := false) -> Dictionary:
+class Bed extends ReadingBed:
+	var card: EpisodeCard
+
+	func _init(c: EpisodeCard) -> void:
+		card = c
+
+	func of(export := false) -> Dictionary:
+		return card.bed_of(export)
+
+	## The Environment dial on the card.
+	func level() -> float:
+		return float(card._knobs["environment"])
+
+
+## HOW AN EPISODE GOES OUT: named after itself, pinned through the minutes of its render, and
+## followed by upload notes (see [method EpisodeCard.before_take]).
+class Publish extends ReadingPublish:
+	var card: EpisodeCard
+
+	func _init(c: EpisodeCard) -> void:
+		card = c
+
+	func name() -> String:
+		return card.export_name()
+
+	func before_take() -> bool:
+		return card.before_take()
+
+	func after_take(path: String) -> String:
+		return card.after_take(path)
+
+	func upload_base(take: String) -> Dictionary:
+		return card.upload_base(take)
+
+	func upload_values(_own: Dictionary) -> Dictionary:
+		return card.upload_values()
+
+	func book(d: Dictionary, body: String) -> Dictionary:
+		return card.book(d, body)
+
+	func youtube_built(yt: YouTubeCard) -> void:
+		card.youtube_built(yt)
+
+
+func bed_of(export := false) -> Dictionary:
 	var dir := ""
 	var seed := 0
 	if export and not _export_pin.is_empty():
@@ -178,18 +294,9 @@ func _environment(export := false) -> Dictionary:
 		return Soundscape.new(made["sound"], made["wind"], seed, sample_rate, t0)}
 
 
-func _environment_level() -> float:
-	return float(_knobs["environment"])
-
-
-## Editing the brief does not change a reading already made: it changes the NEXT one. Say so.
-func _on_source_edited() -> void:
-	_brief_changed = true
-
-
-func book_document(body := "") -> Dictionary:
-	var d := super.book_document(body)
-	# an export's own reading is of the episode pinned when it was asked for (see export_take)
+## The reading's document [param d], at a table: the show's title and byline, and the episode as the
+## table draws it - for an export's own reading, the episode pinned when it was asked for.
+func book(d: Dictionary, body: String) -> Dictionary:
 	var pinned := not _export_pin.is_empty() and body.strip_edges() == String(_export_pin["body"])
 	d["title"] = String(_export_pin["title"]) if pinned else _show_title()
 	d["byline"] = String(_export_pin.get("byline", "")) if pinned else _show_byline()
@@ -218,32 +325,37 @@ func export_name() -> String:
 	return t if not t.is_empty() else "%s %d" % [_show_title(), _episode.seed]
 
 
-## THE EXPORT, and its upload notes: the take is rendered exactly as the Generative panel renders
-## one, then the episode's folder gets `upload.md` - the title, the description and tags the
-## producer wrote, and a chapter per card timed from the take itself. One show makes many videos;
-## each should arrive ready to post.
+## THE EXPORT: the take is rendered as any reading's is, then the episode's folder gets `upload.md`
+## - the title, the description and tags the producer wrote, and a chapter per card timed from the
+## take itself. One show makes many videos; each should arrive ready to post.
 ##
 ## THE EPISODE IS PINNED BEFORE THE FIRST AWAIT: the take is minutes of synthesis, and the panel
-## stays live through it.
-func export_take() -> String:
+## stays live through it. False with no episode: nothing renders.
+func before_take() -> bool:
 	_doc.pull()          # a change in the show's file lands now, not part way through
 	_flush_upload_fields()
 	var ep := _episode
 	if ep == null:
-		return ""
+		return false
 	_export_pin = {"episode": ep, "body": ep.script().strip_edges(), "doc": _table_doc(ep),
 		"title": _show_title(), "byline": _show_byline()}
-	var path: String = await super.export_take()
+	return true
+
+
+## ...and once the take at [param path] is rendered ("" when it was not): the pin let go, the
+## upload notes written. Returns what the status line says of them.
+func after_take(path: String) -> String:
+	var ep: CardEpisode = _export_pin.get("episode")
 	_export_pin = {}
-	if not path.is_empty():
-		_taken = {"take": path, "episode": ep}
-		var show := _doc.field("title")
-		var ep_title := String(ep.upload_notes()["title"])
-		var err := ep.write_upload_notes(path, _show_tags(), _cur_desc, _youtube.title_now(
-			{"title": show.strip_edges(), "episode": ep_title}) if _youtube != null else upload_title(show, ep_title))
-		_set_status(("Rendered the take; upload notes are in the episode's folder (upload.md)." if err.is_empty()
-			else "Rendered the take; the upload notes failed: " + err))
-	return path
+	if path.is_empty() or ep == null:
+		return ""
+	_taken = {"take": path, "episode": ep}
+	var show := _doc.field("title")
+	var ep_title := String(ep.upload_notes()["title"])
+	var err := ep.write_upload_notes(path, _show_tags(), _cur_desc, _youtube.title_now(
+		{"title": show.strip_edges(), "episode": ep_title}) if _youtube != null else upload_title(show, ep_title))
+	return ("Rendered the take; upload notes are in the episode's folder (upload.md)." if err.is_empty()
+		else "Rendered the take; the upload notes failed: " + err)
 
 
 ## WHAT AN UPLOAD SAYS, under the YouTube card's title, visibility and playlist (see
@@ -253,7 +365,7 @@ func export_take() -> String:
 ## from, the file its uploads are recorded in, and the show's and the episode's titles for the
 ## card's `%title%` and `%episode%`. For the take an export just rendered it describes THAT
 ## episode, whichever is picked now; with no take, the picked one. {} while the episode has no plan.
-func _upload_base(take: String) -> Dictionary:
+func upload_base(take: String) -> Dictionary:
 	var ep: CardEpisode = _episode
 	if not take.is_empty() and String(_taken.get("take", "")) == take:
 		ep = _taken["episode"]
@@ -268,9 +380,9 @@ func _upload_base(take: String) -> Dictionary:
 		"record": ep.file_of("youtube")}
 
 
-## The macros of the YouTube card's title as the panel stands: the show's title and the picked
+## The macros of the YouTube card's title as the card stands: the show's title and the picked
 ## episode's.
-func _upload_values() -> Dictionary:
+func upload_values() -> Dictionary:
 	return {"title": _doc.field("title").strip_edges() if _doc != null else "", "episode": _cur_title,
 		"seed": str(_episode.seed) if _episode != null else ""}
 
@@ -345,39 +457,14 @@ func _spec() -> Dictionary:
 	var body := Manuscript.strip_frontmatter(_doc.pull())
 	return {"title": _show_title(), "byline": _show_byline(), "uploads_as": _uploads_as(),
 		"brief": CardPrompts.brief(body), "deck": CardDeck.of(body),
-		"chooses": CardDeck.chooses(body), "voices": _cast_dict().keys(),
+		"chooses": CardDeck.chooses(body), "voices": reading.cast_names(),
 		"draw": _knobs["draw"], "reversals": _knobs["reversals"], "jumpers": _knobs["jumpers"],
 		"writer": _knobs["writer"], "writer_model": _knobs["writer_model"], "writer_effort": _knobs["writer_effort"],
 		"painter": _knobs["painter"], "painter_model": _knobs["painter_model"], "painter_effort": _knobs["painter_effort"]}
 
 
-## A SHOW'S OWN BLOCKS: `cards:` (the knobs, the show's title and description) and the voice that
-## reads it. The Look and the bookends are the note's, kept when it has them attached - the same
-## blocks a chapter keeps. No `picture:` - the table is the only medium here - and no
-## `illustrations:`.
-func _own_blocks() -> Array:
-	return ["cards", "voice"]
-
-
-## ...and every block of a panel started without a note.
-func _classic_blocks() -> PackedStringArray:
-	return PackedStringArray(["cards", "voice", "look", "bookends", "youtube"])
-
-
-func _classic_components() -> Array:
-	return ["text", "cards", "voice", "look", "bookends"]
-
-
-## Of a note's component cards, the ones a card table can show: no Picture (the table is the
-## presentation) and so no Storyboard.
-func _hosted() -> Array:
-	return ["look", "bookends"]
-
-
 ## The show's own block: the knobs, and its YouTube title and description.
-func _capture_block(key: String) -> Variant:
-	if key != "cards":
-		return super._capture_block(key)
+func capture() -> Dictionary:
 	var t := {}
 	for k in KNOBS:
 		t[k] = _knobs[k]
@@ -399,15 +486,14 @@ func _capture_block(key: String) -> Variant:
 ## knobs the panel held - those belong to whatever show was open before, and a show whose block
 ## does not name its `show` key would otherwise make its episodes in the last show's folder,
 ## with the last show's history handed to its producer as its own. A document with no `cards:`
-## block at all (a chapter, opened here for its voice) is a new show, from the defaults.
-func _doc_apply(blocks: Dictionary) -> void:
-	var cfg: Dictionary = blocks["cards"] if blocks.get("cards") is Dictionary else {}
+## block at all (a chapter, opened here for its voice) is never applied: it opens as a new show,
+## from the defaults ([method _on_show_opened]).
+func apply(cfg: Dictionary) -> void:
 	var was := "%s#%d" % [String(_knobs["show"]), int(_knobs["seed"])]
 	_knobs = KNOBS.duplicate(true)
 	_take_knobs(cfg)
 	_cur_title = str(cfg.get("episode_title", ""))
 	_cur_desc = str(cfg.get("description", ""))
-	super._doc_apply(blocks)
 	if _episode == null or "%s#%d" % [String(_knobs["show"]), int(_knobs["seed"])] != was:
 		_open_episode()
 	_refresh_show_fields()
@@ -446,21 +532,16 @@ func _doc_has_block() -> bool:
 
 
 func _persist() -> void:
-	super._persist()
-	Settings.write(_section, "knobs", _knobs.duplicate(true))
+	Settings.write(reading.section(), "knobs", _knobs.duplicate(true))
 
 
 ## The knobs from the last session, for an unsynced brief; a synced show's own block replaces
-## them as the document is read (inside the super call), and a synced show with no block starts
-## from the defaults.
+## them as the reading reads its document, and a synced show with no block starts from the
+## defaults ([method _on_reading_ready]).
 func _load_persisted() -> void:
-	var k: Variant = Settings.read(_section, "knobs", {})
+	var k: Variant = Settings.read(reading.section(), "knobs", {})
 	if k is Dictionary:
 		_take_knobs(k as Dictionary)
-	super._load_persisted()
-	if _doc.is_sync() and not _doc_has_block():
-		_knobs = KNOBS.duplicate(true)
-		_show_knobs()
 
 
 ## Knobs from a stored block or a document, each checked against [constant KNOBS].
@@ -487,47 +568,11 @@ func _take_knobs(src: Dictionary) -> void:
 				_knobs[k] = String(v)
 	_show_knobs()
 
-
-func _touch() -> void:
-	_dirty = true
-	_last_edit_ms = Time.get_ticks_msec()
-
-
-# --- the picture ---------------------------------------------------------------------------------
-
-## THE TABLE'S PICTURE SETTINGS: the Look and the bookends, the same cards the Generative panel
-## has. No Picture card - the table is the only medium here, it cuts no scenes, and it is filmed
-## from a tripod (a dial that moved it by a millimeter was a dial that did nothing).
-func _classic_cards() -> void:
-	_add_block_card("Look", &"look", LookCard.new())
-	_add_block_card("Intro & outro", &"paper", BookendsCard.new(INTRO_TIP, OUTRO_TIP))
-
-
-## What the bookends hold at a card table, in its own words.
-const INTRO_TIP := ("Seconds the table holds before the reader speaks, with the channel's name and the "
-	+ "episode's title over it. The deck starts shuffling a beat before the first word.")
-const OUTRO_TIP := ("Seconds held after the last word, the spread on the table and the channel's name over "
-	+ "it, fading picture and sound out together.")
-
-
-func _note_cards(ctx := {}) -> void:
-	var with := ctx.duplicate()
-	with["intro_tip"] = INTRO_TIP
-	with["outro_tip"] = OUTRO_TIP
-	super._note_cards(with)
-
-
 # --- the episode section -----------------------------------------------------------------------
 
-func _build_source(script_box: VBoxContainer) -> void:
-	super._build_source(script_box)
-	# The bundled brief is an editable unsynced first draft, used only before a user draft exists.
-	_doc.default_text = FileAccess.get_file_as_string("res://rules/cards/starter.md")
-	_doc.opened.connect(_on_show_opened)
-	_doc.mode_changed.connect(_on_doc_mode)
-	# THE EPISODE is the producer's card, not the script's: the brief above is what every agent
-	# is handed, and everything on this card is what they make of it.
-	var box: VBoxContainer = _panel.add_card("episode", "Episode", &"producer", "cards")
+## The card: the episode picker, the draw, the agents, Generate, the rows and the title.
+func _build() -> void:
+	var box: VBoxContainer = self
 
 	var erow := HBoxContainer.new()
 	erow.add_theme_constant_override("separation", 6)
@@ -867,7 +912,7 @@ func _open_episode() -> void:
 	var seed := int(_knobs["seed"])
 	_episode = CardEpisode.open(_show_key(), seed)
 	# the spec is taken when Generate is pressed (see _generate) - never here, where reading the
-	# document would land back in _doc_apply
+	# document would land back in apply
 	_producer = CardProducer.new(_episode, {})
 	_brief_changed = false
 	_refill_episodes()
@@ -975,7 +1020,7 @@ func _delete_episode(ep: CardEpisode) -> void:
 	if open and _producer != null:
 		_producer.stop()
 	if _live_episode_dir() == ep.dir:
-		_stop_speaking()
+		reading.stop_speaking()
 	var err := ep.trash()
 	if not err.is_empty():
 		_set_status("Could not delete episode #%d: %s" % [ep.seed, err])
@@ -994,15 +1039,6 @@ func _delete_episode(ep: CardEpisode) -> void:
 ## Whether an export of [param ep] is under way (see [member _export_pin]).
 func _exporting(ep: CardEpisode) -> bool:
 	return not _export_pin.is_empty() and (_export_pin["episode"] as CardEpisode).dir == ep.dir
-
-
-## The episode the reading on the stage is of, "" when none is playing.
-func _live_episode_dir() -> String:
-	if not _reading_live() or subtitles == null or not is_instance_valid(subtitles):
-		return ""
-	var d: Variant = subtitles.get("document")
-	var t: Variant = (d as Dictionary).get("table", {}) if d is Dictionary else {}
-	return String((t as Dictionary).get("dir", "")) if t is Dictionary else ""
 
 
 func _redo(step: String) -> void:
@@ -1269,7 +1305,8 @@ func _build_title_field(box: VBoxContainer) -> void:
 
 
 ## The show's description and tags, on the YouTube card ([member YouTubeCard.extra]).
-func _youtube_built(card: YouTubeCard) -> void:
+func youtube_built(card: YouTubeCard) -> void:
+	_youtube = card
 	_build_upload_fields(card.extra)
 	_fill_upload_fields(true)
 

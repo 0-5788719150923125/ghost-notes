@@ -430,8 +430,8 @@ func bind_captions(subs) -> bool:
 
 
 func advance(_features, delta: float, bookend: float) -> void:
-	var t := maxf(Spectrum.current.time, 0.0)
-	var slen := Spectrum.song_length()
+	var t := maxf(feed.show_time(), 0.0)
+	var slen := feed.show_length()
 	var b := bookend if slen > 0.0 and t > slen * 0.5 else clampf(t / 1.2, 0.0, 1.0)
 	# a live reading's outro mark fades the picture with the voice
 	_env.adjustment_brightness = clampf(b * feed.live_fade, 0.0, 1.0)

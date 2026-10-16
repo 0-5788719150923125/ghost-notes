@@ -301,7 +301,7 @@ func _target(t: float) -> float:
 ## the last word's end - so a span covers a sentence's INTERNAL pauses as well as its words.
 ## Cached, because the list is walked every frame and can run to thousands of words; rebuilt
 ## when it changes, which it does word by word while a take streams (a live [VoiceStream] shares
-## this array by reference, and [GenerativeEditor] clears it in place between takes).
+## this array by reference, and [ReadingPanel] clears it in place between takes).
 var _spans: Array = []
 var _spans_n := -1
 var _spans_tail := -1.0
@@ -336,7 +336,7 @@ func _spans_now() -> Array:
 ## of the next one" - and those disagree for any pause longer than 1.2 s INSIDE a sentence.
 ## Reported from a ch19 render, at a colon: "at exactly the same place where the colon is, the
 ## subtitles briefly disappeared, then reappeared... the SAME subtitles flickered". A colon is
-## sent to the voice as a colon (see generative_editor._build_chunks), the model answers it with
+## sent to the voice as a colon (see ReadingPanel._build_chunks), the model answers it with
 ## a clause pause, and a pause_scale over 1 stretches it past that 1.2 s - so `presence` held at
 ## 1.0 while the draw had no sentence to draw and returned early, taking the plate with it.
 ## Measured before the fix: a 1.6 s internal pause went dark 0.45 s in, for a third of a second.

@@ -629,14 +629,9 @@ const _AUTOSAVE_DELAY := 0.4
 # and they merge ("Ctrl+Z often reverts several changes at once"). Both were
 # reported. A press opens one entry, the release closes it, and anything that is
 # not a drag is its own step.
-var _undo_stack: Array = []
-var _redo_stack: Array = []
 # Parallel to _undo_stack/_redo_stack - a human-readable description of the
 # action each entry captured, so the panel can preview what Ctrl+Z would
 # revert (see _push_undo/_refresh_history_label).
-var _undo_descs: Array = []
-var _redo_descs: Array = []
-const _UNDO_LIMIT := 200
 ## The undo key that the CURRENT mouse-held interaction opened, or "" when the
 ## button is up. See _push_undo - this is what makes a drag one history entry
 ## instead of one per place the pointer paused.
@@ -870,6 +865,14 @@ func _note_clip(path: String) -> void:
 		push_warning("ghost mask: could not write the clip into %s - %s" % [note_path.get_file(), err])
 
 
+## THE AUDIO EFFECT is a part of its own ([MaskAudioFx]): the bus, and the timeline applied to it.
+var _audio_fx := MaskAudioFx.new()
+
+
+## UNDO AND REDO are a part of their own ([MaskUndo]): the two stacks of snapshots.
+var _undo := MaskUndo.new()
+
+
 # --- the editor's parts -----------------------------------------------------------------
 # What used to be sections of this file and is a script of its own now: each holds its own state,
 # reads the rest through `editor.`, and is asked a few things by name (next/structure.md, "One
@@ -889,6 +892,8 @@ var _face := MaskFaceTrack.new()
 
 
 func _init() -> void:
+	_undo.editor = self
+	_audio_fx.editor = self
 	_pose.editor = self
 	_url_import.editor = self
 	_face.editor = self
@@ -1203,7 +1208,7 @@ func _ready_with_session() -> void:
 	# Through the effects bus from the start, not switched over later: the bus is
 	# neutral until an audio marker says otherwise, and re-routing a playing stream
 	# is an audible click.
-	_ensure_audio_bus()
+	_audio_fx.ensure_bus()
 	_audio.bus = MASK_BUS
 	add_child(_audio)
 	# The main audio is a big uncompressed WAV (~170MB / ~3s to read). Loading it on
@@ -2054,7 +2059,7 @@ func _refresh_lanes() -> void:
 	primary.get_fade_out = func(): return session.main_fade_out
 	primary.set_fade_out = func(v): session.main_fade_out = v
 	primary.get_snap_targets = _snap_targets_for.bind(-1)
-	primary.drag_started.connect(func(): _push_undo("", "trimmed the main clip"))
+	primary.drag_started.connect(func(): _undo.push("", "trimmed the main clip"))
 	primary.drag_ended.connect(_refresh_ruler)
 	primary.changed.connect(_mark_dirty)
 	_lanes_col.add_child(primary)
@@ -2101,7 +2106,7 @@ func _refresh_lanes() -> void:
 		lane.set_fade_out = _track_setter(i, "fade_out")
 		lane.get_snap_targets = _snap_targets_for.bind(i)
 		lane.get_playhead = func(): return _player.stream_position if _player != null else 0.0
-		lane.drag_started.connect(func(): _push_undo("", "trimmed a track"))
+		lane.drag_started.connect(func(): _undo.push("", "trimmed a track"))
 		lane.drag_ended.connect(_refresh_ruler)
 		lane.changed.connect(_mark_dirty)
 		_lanes_col.add_child(lane)
@@ -2222,7 +2227,7 @@ func _apply_lane_reserved(count: int) -> void:
 func _delete_track(i: int) -> void:
 	if i < 0 or i >= session.tracks.size():
 		return
-	_push_undo("", "deleted a track")
+	_undo.push("", "deleted a track")
 	if i < _track_runtime.size():
 		var rt: Dictionary = _track_runtime[i]
 		if rt.has("player"):
@@ -2263,7 +2268,7 @@ func _split_track(i: int) -> void:
 	if split_local <= cin + 0.05 or split_local >= cout - 0.05:
 		_set_status("✂  Move the playhead inside this track's span to split it there")
 		return
-	_push_undo("", "split a track")
+	_undo.push("", "split a track")
 	var right: Dictionary = track.duplicate()
 	right["clip_in"] = split_local
 	right["offset"] = master_t
@@ -2271,7 +2276,7 @@ func _split_track(i: int) -> void:
 	track["clip_out"] = split_local
 	track["fade_out"] = 0.0
 	session.tracks.append(right)
-	_reconcile_track_runtime()
+	_undo.reconcile_tracks()
 	_refresh_lanes()
 	_mark_dirty()
 
@@ -2297,7 +2302,7 @@ func _split_main() -> void:
 	if split_t <= cin + 0.05 or split_t >= cout - 0.05:
 		_set_status("✂  Move the playhead inside the main clip's span to split it there")
 		return
-	_push_undo("", "split the main clip")
+	_undo.push("", "split the main clip")
 	var right := {
 		"video_path": session.video_path,
 		"source_path": session.source_path,
@@ -2312,7 +2317,7 @@ func _split_main() -> void:
 	session.clip_out = split_t
 	session.main_fade_out = 0.0
 	session.tracks.append(right)
-	_reconcile_track_runtime()
+	_undo.reconcile_tracks()
 	_refresh_lanes()
 	_mark_dirty()
 
@@ -2383,7 +2388,7 @@ func _start_track_import(source: String) -> void:
 	var dur := _probe_duration(source)
 	if dur <= 0.0:
 		dur = maxf(session.duration, 1.0)
-	_push_undo("", "imported a track")
+	_undo.push("", "imported a track")
 	session.tracks.append({
 		"video_path": video, "source_path": source, "duration": dur,
 		"clip_in": 0.0, "clip_out": dur, "offset": 0.0,
@@ -2619,7 +2624,7 @@ func _build_chrome() -> void:
 	_timeline.offset_top = -90
 	_timeline.scrubbed.connect(_on_scrub)
 	_timeline.marker_picked.connect(_select_marker)
-	_timeline.marker_drag_started.connect(func(_m): _push_undo("", "moved a marker"))
+	_timeline.marker_drag_started.connect(func(_m): _undo.push("", "moved a marker"))
 	_timeline.marker_moved.connect(func(_m):
 		_refresh_marker_label()
 		_mark_dirty())
@@ -3277,7 +3282,7 @@ func _build_panel() -> void:
 	_history_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_history_label.tooltip_text = "What Ctrl+Z would revert right now"
 	list_col.add_child(_history_label)
-	_refresh_history_label()
+	_undo.refresh_label()
 
 	var mrow := HBoxContainer.new()
 	list_col.add_child(mrow)
@@ -3507,13 +3512,13 @@ func _edit(field: String, value: float) -> void:
 	var m: Variant = _selected
 	var created := false
 	if m == null:
-		_push_undo("", "created a marker")   # about to create one - always its own boundary
+		_undo.push("", "created a marker")   # about to create one - always its own boundary
 		m = session.add_marker(_player.stream_position if _player != null else 0.0)
 		_selected = m
 		_select_generation += 1
 		created = true
 	else:
-		_push_undo("marker:%d:%s" % [_select_generation, field], "adjusted %s" % field.capitalize())
+		_undo.push("marker:%d:%s" % [_select_generation, field], "adjusted %s" % field.capitalize())
 	m[field] = value
 	# Assigning a drawing effect to a marker whose OWN view shows no fx surface is
 	# a silent foot-gun: the layer holds forever but this marker's view hides it -
@@ -3552,7 +3557,7 @@ func _edit(field: String, value: float) -> void:
 
 
 func _add_marker_at_playhead(kind_id: int) -> void:
-	_push_undo("", "added a %s marker" % MaskSession.MARKER_KINDS[kind_id].capitalize())
+	_undo.push("", "added a %s marker" % MaskSession.MARKER_KINDS[kind_id].capitalize())
 	_selected = session.add_marker(_player.stream_position if _player != null else 0.0, kind_id)
 	_select_generation += 1
 	_timeline.selected = _selected
@@ -3562,7 +3567,7 @@ func _add_marker_at_playhead(kind_id: int) -> void:
 
 func _delete_selected() -> void:
 	if _selected != null:
-		_push_undo("", "deleted a marker")
+		_undo.push("", "deleted a marker")
 		session.remove_marker(_selected)
 		_selected = null
 		_timeline.selected = null
@@ -4400,119 +4405,8 @@ func _update_face_model(src: Image) -> void:
 
 
 # --- the audio effect: the timeline, applied to the sound -----------------------
-# The one effect here that draws nothing. A mask session already owns its clip's
-# audio - it plays it, fades it, and the export mixes it - so the timeline is
-# already the right place to say "from here, wetter", and a marker's envelope is
-# already the right shape for it: a reverb that arrives over a ramp is precisely
-# what a ramp is for.
-#
-# Everything runs on ONE dedicated bus routed to Master, built once and left in
-# place. Godot's own effects rather than hand-written DSP: they are sample-exact,
-# they cost nothing on the main thread, and - the part that matters for this app -
-# the export relaunch mixes through the same bus, so a rendered file carries the
-# same sound the editor previewed. A hand-rolled process() on the video thread
-# would not survive the export's fixed-fps clock at all.
-#
-# The chain's ORDER is the usual mixing order and is not arbitrary:
-#   EQ          shape the tone first, so everything downstream reacts to the tone
-#               you actually want (bass lifted here is bass the compressor hears)
-#   COMPRESSOR  then even it out - this is what "punchy" is: not more bass, but
-#               bass whose transients survive next to everything else
-#   DELAY       echoes of the shaped, evened signal
-#   REVERB      the room goes last, around all of it, as a room does
+## The bus the clip's sound runs through, with the timeline's effects on it ([MaskAudioFx]).
 const MASK_BUS := "MaskFX"
-
-var _bus_idx := -1
-var _fx_eq: AudioEffectEQ6
-var _fx_comp: AudioEffectCompressor
-var _fx_delay: AudioEffectDelay
-var _fx_reverb: AudioEffectReverb
-## The room's SETTINGS, shared with the mode that has no bus. See [RoomFX]: the
-## dial's range, its taper and what Resonance does to the tail are decided there
-## and rendered here onto Godot's own reverb, so Generative's Room slider is the
-## same control rather than a second one wearing the name.
-var _room := RoomFX.new()
-
-
-func _ensure_audio_bus() -> void:
-	if _bus_idx >= 0 and AudioServer.get_bus_index(MASK_BUS) == _bus_idx:
-		return
-	_bus_idx = AudioServer.get_bus_index(MASK_BUS)
-	if _bus_idx < 0:
-		AudioServer.add_bus()
-		_bus_idx = AudioServer.get_bus_count() - 1
-		AudioServer.set_bus_name(_bus_idx, MASK_BUS)
-		AudioServer.set_bus_send(_bus_idx, "Master")
-	# Rebuild the chain from scratch: a bus that survived a reload with a partial
-	# chain is worse than no bus, and these are cheap to make.
-	while AudioServer.get_bus_effect_count(_bus_idx) > 0:
-		AudioServer.remove_bus_effect(_bus_idx, 0)
-	_fx_eq = AudioEffectEQ6.new()
-	_fx_comp = AudioEffectCompressor.new()
-	_fx_delay = AudioEffectDelay.new()
-	_fx_reverb = AudioEffectReverb.new()
-	for fx in [_fx_eq, _fx_comp, _fx_delay, _fx_reverb]:
-		AudioServer.add_bus_effect(_bus_idx, fx)
-	_apply_audio_fx({})   # neutral until a marker says otherwise
-	if _audio != null:
-		_audio.bus = MASK_BUS
-
-
-## Resolve one audio layer onto the bus. `l` is the layer dict (empty = neutral).
-## Every parameter is driven through the layer's own envelope in `env`, so an
-## audio marker fades its sound in and out exactly like a visual one fades its
-## paint - no separate concept, no separate code path.
-func _apply_audio_fx(l: Dictionary) -> void:
-	if _fx_eq == null:
-		return
-	var amt := clampf(float(l.get("env", 0.0)) * float(l.get("intensity_a", 1.0)), 0.0, 1.0)
-	# BASS. Two bands lifted together rather than one, because a single band's
-	# bump is audible as a resonance rather than as weight. EQ6's bands are
-	# 32/100/320/1000/3200/10000 Hz; the bottom two are the ones a voice's chest
-	# and a kick's body live in.
-	var bass := clampf(float(l.get("fx_stick", 0.0)), 0.0, 1.0) * amt
-	_fx_eq.set_band_gain_db(0, bass * 12.0)
-	_fx_eq.set_band_gain_db(1, bass * 8.0)
-	# PUNCH is the compressor, and it rides the same knob - because "punchy" is
-	# not more bass, it is bass that keeps its transient. Raising the bass alone
-	# just makes a mix muddy, which is the trap this avoids by moving both.
-	_fx_comp.threshold = lerpf(0.0, -18.0, bass)
-	_fx_comp.ratio = lerpf(1.0, 5.0, bass)
-	_fx_comp.gain = bass * 5.0
-	_fx_comp.attack_us = lerpf(20.0, 8.0, bass)     # fast enough to catch a transient
-	_fx_comp.release_ms = lerpf(250.0, 120.0, bass)   # ms, unlike attack_us - the two differ
-	# ECHO. Lag is the time between repeats, Bleed how much comes back.
-	var echo := clampf(float(l.get("fx_smooth", 0.0)), 0.0, 1.0) * amt
-	_fx_delay.dry = 1.0
-	_fx_delay.tap1_active = echo > 0.001
-	_fx_delay.tap1_delay_ms = lerpf(60.0, 620.0, clampf(float(l.get("fx_lag", 0.35)), 0.0, 1.0))
-	_fx_delay.tap1_level_db = linear_to_db(maxf(echo * 0.7, 0.0001))
-	# The second tap at a non-multiple of the first, so repeats interleave into a
-	# decay instead of landing on top of each other as one loud slap.
-	_fx_delay.tap2_active = echo > 0.001
-	_fx_delay.tap2_delay_ms = _fx_delay.tap1_delay_ms * 1.63
-	_fx_delay.tap2_level_db = linear_to_db(maxf(echo * 0.45, 0.0001))
-	_fx_delay.feedback_active = echo > 0.001
-	_fx_delay.feedback_level_db = linear_to_db(maxf(echo * 0.35, 0.0001))
-	# RESONANCE, as the delay's own feedback color: a tuned, ringing repeat
-	# rather than a flat one. Low-passing the feedback path is what makes a tail
-	# sound like a space rather than like a copy.
-	var reso := clampf(float(l.get("fx_contrast", 0.5)), 0.0, 1.0)
-	_fx_delay.feedback_lowpass = lerpf(16000.0, 900.0, reso * amt)
-	# AMBIENCE. Room size and wet are separate on purpose - a big dry room and a
-	# small wet one are different sounds, and collapsing them into one "reverb"
-	# slider is what makes every preset sound the same.
-	#
-	# The mapping itself lives in [RoomFX] rather than here, because Generative has
-	# the same Room now and cannot use this bus (it bakes its effects into a take
-	# WAV; see the class docs). Only the RENDERER is mode-specific: this hands the
-	# settings to Godot's reverb, that one runs the same network per sample.
-	# Note the size is NOT scaled by the envelope while the wet is - a marker fades
-	# a room IN, it does not grow the walls.
-	_room.size = float(l.get("fx_scale", 1.0))
-	_room.wet = clampf(float(l.get("fx_density", 0.45)), 0.0, 1.0) * amt
-	_room.resonance = reso
-	_room.to_reverb(_fx_reverb)
 
 
 # --- face track: bootstrap, run, poll -------------------------------------------
@@ -4771,159 +4665,6 @@ func _umb_cast_from(i: int, asp: float) -> bool:
 
 
 # --- undo/redo ---------------------------------------------------------------
-
-## Snapshot markers + the primary clip's trim + every track onto the undo
-## stack, called BEFORE a mutation - so the stack always holds "what it looked
-## like before this happened". Pass a `key` for edits that repeat rapidly
-## during one gesture (a slider drag, a marker or trim/track handle dragged
-## along the timeline): a call whose key matches the in-flight gesture just
-## extends the coalescing window instead of pushing again, so the whole
-## gesture undoes in one Ctrl+Z. Leave `key` empty for one-shot actions
-## (add/delete a marker, import/delete a track) - those always open a fresh
-## boundary. Trim/track edits are exactly as accident-prone as marker edits -
-## see the whole reason this project asked for undo in the first place - so
-## they ride the same stack, not a separate one.
-func _snapshot() -> Dictionary:
-	return {
-		"markers": session.markers.duplicate(true),
-		"clip_in": session.clip_in, "clip_out": session.clip_out,
-		"tracks": session.tracks.duplicate(true),
-	}
-
-
-func _restore_snapshot(snap: Dictionary) -> void:
-	session.markers = snap.markers
-	session.clip_in = snap.clip_in
-	session.clip_out = snap.clip_out
-	session.tracks = snap.tracks
-
-
-## `desc` is what a Ctrl+Z right after this action would revert - shown live
-## above the Ramp/Damp buttons (see _refresh_history_label) so undo is never a
-## blind guess. Coalesced calls (matching `key`) keep the first desc: the whole
-## gesture is one undo step, so it should read as the one action it is (e.g.
-## "adjusted Contrast", not the field's very last no-op tick).
-func _push_undo(key: String = "", desc: String = "") -> void:
-	# A DRAG IS ONE ACTION IN THE HISTORY. Dragging a control back and forth to see
-	# how it looks emits a change per step, and the coalescing below is on a 0.9s
-	# TIMER - so every place the author paused mid-drag opened a fresh undo entry,
-	# and one adjustment left a dozen of them behind. Reported exactly that way:
-	# "every single place where I stop will be added to the command history".
-	#
-	# So while the mouse button is DOWN, the first change of a given key opens the
-	# boundary and every later one folds into it, however long the pauses; the
-	# boundary closes when the button comes up (cleared in _process). The marker
-	# itself still updates on every step - the live preview is the whole point of
-	# dragging - it is only the HISTORY that waits for the release, so one undo
-	# returns to where things stood before the drag began.
-	#
-	# Keyed on the BUTTON rather than on Slider.drag_started/drag_ended so one rule
-	# covers the color wheel and the region box too; neither has those signals and
-	# both had the same fault.
-	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-		if key != "" and key == _undo_press_key:
-			return
-		_undo_press_key = key
-	else:
-		_undo_press_key = ""
-	# NO TIME-BASED COALESCING. There was a 0.9s window that merged consecutive
-	# edits of the same field, and once the mouse button became the boundary above
-	# it had nothing left to do except cause the OTHER half of the report: two
-	# separate adjustments made within 0.9s of each other folded into one history
-	# entry, so Ctrl+Z "often reverts several changes at once". A press is an
-	# action, a release ends it, and anything else - a keyboard nudge, a menu pick -
-	# is its own step. Nothing merges on a clock.
-	_undo_stack.append(_snapshot())
-	_undo_descs.append(desc)
-	if _undo_stack.size() > _UNDO_LIMIT:
-		_undo_stack.pop_front()
-		_undo_descs.pop_front()
-	_redo_stack.clear()
-	_redo_descs.clear()
-	_refresh_history_label()
-
-
-func _undo() -> void:
-	if _undo_stack.is_empty():
-		return
-	_redo_stack.append(_snapshot())
-	_restore_snapshot(_undo_stack.pop_back())
-	_redo_descs.append(_undo_descs.pop_back())
-	_undo_press_key = ""   # the next edit must open its own fresh boundary
-	_after_history_restore()
-
-
-func _redo() -> void:
-	if _redo_stack.is_empty():
-		return
-	_undo_stack.append(_snapshot())
-	_restore_snapshot(_redo_stack.pop_back())
-	_undo_descs.append(_redo_descs.pop_back())
-	_undo_press_key = ""
-	_after_history_restore()
-
-
-## The live preview above the Ramp/Damp buttons - see feedback/0019: "if a user
-## uses undo, they have a little preview of what they would be reverting."
-## _undo_descs.back() is the description passed to the _push_undo() call that
-## opened the CURRENT undo step, i.e. exactly the action Ctrl+Z would revert.
-func _refresh_history_label() -> void:
-	if _history_label == null:
-		return
-	if _undo_descs.is_empty():
-		_history_label.text = "Undo: nothing yet"
-		_history_label.tooltip_text = ""
-	else:
-		var desc: String = _undo_descs.back()
-		_history_label.text = "Undo: " + desc
-		_history_label.tooltip_text = "Ctrl+Z would revert: " + desc
-
-
-## _selected points INTO the array a restore just replaced wholesale, so it's
-## dangling - re-resolve it by time in the restored array (or drop the
-## selection if that marker no longer exists there) before refreshing anything
-## that reads it. Tracks went through the same wholesale replacement - the
-## runtime players (see _track_runtime) need reconciling against whatever
-## session.tracks now holds, same as _delete_track/_finish_track_import do.
-func _after_history_restore() -> void:
-	if _selected != null:
-		var t: float = float(_selected.get("time", -1.0))
-		_selected = null
-		for m in session.markers:
-			if absf(float(m.time) - t) < 0.0005:
-				_selected = m
-				break
-	_select_generation += 1
-	_timeline.selected = _selected
-	_reconcile_track_runtime()
-	_refresh_lanes()
-	_refresh_marker_list()
-	_refresh_panel()
-	_refresh_history_label()
-	_mark_dirty()
-
-
-## After undo/redo swaps session.tracks wholesale, the live VideoStreamPlayers
-## in _track_runtime (built incrementally by _build_track_view) no longer
-## necessarily match it 1:1 - a track undo/redo added or removed can leave too
-## many or too few. Rebuild runtime state to match: free anything past the
-## restored count, (re)build anything missing. Existing entries are trusted
-## as-is even if that track's trim/offset changed - _sync_tracks reseeks on
-## the next frame regardless, same as any ordinary drag.
-func _reconcile_track_runtime() -> void:
-	if _composition_parent == null:
-		return   # render_mode / no editor UI - tracks aren't interactive there anyway
-	while _track_runtime.size() > session.tracks.size():
-		var rt: Dictionary = _track_runtime.pop_back()
-		if rt.has("player"):
-			(rt.player as Node).queue_free()
-		if rt.has("wrap"):
-			(rt.wrap as Node).queue_free()
-		if rt.has("audio") and rt.audio != null:
-			(rt.audio as Node).queue_free()
-	for i in session.tracks.size():
-		if i >= _track_runtime.size():
-			_build_track_view(i)
 
 
 # --- auto-save --------------------------------------------------------------
@@ -5743,12 +5484,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif event.ctrl_pressed and event.keycode == KEY_Z:
 		if event.shift_pressed:
-			_redo()
+			_undo.redo()
 		else:
-			_undo()
+			_undo.undo()
 		get_viewport().set_input_as_handled()
 	elif event.ctrl_pressed and event.keycode == KEY_Y:
-		_redo()
+		_undo.redo()
 		get_viewport().set_input_as_handled()
 
 
@@ -5983,8 +5724,8 @@ func _apply_frame_state(p: Dictionary) -> void:
 	# frame like everything else, so its envelope ramps the sound in exactly as a
 	# visual layer's ramps its paint - and so an export, which walks the same
 	# per-frame path, mixes the same sound the editor previewed.
-	_ensure_audio_bus()
-	_apply_audio_fx(_audio_layer)
+	_audio_fx.ensure_bus()
+	_audio_fx.apply(_audio_layer)
 	# Build the layer arrays ONCE; only the weights differ per surface (each
 	# material multiplies its own presence in). Arrays are pushed at FULL declared
 	# length - a short uniform array is silently dropped (flame.gdshader lesson).

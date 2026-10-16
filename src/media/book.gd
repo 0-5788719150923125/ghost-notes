@@ -502,8 +502,8 @@ func advance(_features, delta: float, bookend: float) -> void:
 	# THE BOOK FADES IN ON ITS OWN, quickly. The Director's fade-in lasts the whole intro hold,
 	# so the cover was still in the dark while the book opened: "I only see just the briefest
 	# flash of that cover". The Director's value still brings the ending down.
-	var t := maxf(Spectrum.current.time, 0.0)
-	var slen := Spectrum.song_length()
+	var t := maxf(feed.show_time(), 0.0)
+	var slen := feed.show_length()
 	var b := bookend
 	if slen <= 0.0 or t < slen * 0.5:
 		b = clampf(t / FADE_IN, 0.0, 1.0)
@@ -817,7 +817,7 @@ const OPEN_DELAY := 3.5
 const OPEN_TIME := 5.0
 
 func _open_now() -> float:
-	var t := maxf(Spectrum.current.time, 0.0)
+	var t := maxf(feed.show_time(), 0.0)
 	return smoothstep(0.0, 1.0, clampf((t - OPEN_DELAY) / OPEN_TIME, 0.0, 1.0))
 
 
@@ -1317,7 +1317,7 @@ func _local_dist() -> float:
 
 
 func _tick_camera(delta: float) -> void:
-	var t := maxf(Spectrum.current.time, 0.0)
+	var t := maxf(feed.show_time(), 0.0)
 	var sev := _sev()
 	var k := _arc()
 	# Where the reading is on the spread: its page and its line, as world coordinates.

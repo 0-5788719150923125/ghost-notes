@@ -27,6 +27,12 @@ const FlowField := preload("res://src/motion/flow.gd")
 
 class Base:
 	extends RefCounted
+	## WHAT EVERY LAYER CAN BE TOLD, beside its own [code]FIELDS[/code] ([method Layer.fields_of]).
+	const COMMON := {
+		"z": {"label": "Depth band", "type": "txt", "default": "front",
+			"blurb": "Which depth band: back draws behind the scene's own shapes, front over them. A scene drawing every layer in one pass ignores it."},
+	}
+
 	var cfg: Dictionary = {}
 	var rng := RandomNumberGenerator.new()
 	var half := Vector2(0.9, 0.55)     ## visible half-extent (unit fractions); set each update
@@ -52,15 +58,11 @@ class Base:
 	func txt(k: String, d: String) -> String:
 		return String(cfg.get(k, d))
 
-	## Base hue this layer themes around (a scene can tint a layer to its palette).
-	func hue() -> float:
-		return num("hue", 0.58)
-
 	## Depth band for compositing onto a geometry scene: "back" (drawn behind the
 	## geometry, e.g. stars in the sky) or "front" (drawn over it, e.g. falling snow).
 	## Standalone weather scenes ignore this and just draw everything in add order.
 	func z() -> String:
-		return String(cfg.get("z", "front"))
+		return txt("z", "front")
 
 	func update(_f: AudioFeatures, dt: float, h: Vector2) -> void:
 		half = h
@@ -232,6 +234,20 @@ static func draw_flake_basis(ci: CanvasItem, c: Vector2, ex: Vector2, ey: Vector
 # ---------------------------------------------------------------------------------
 class Bed:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"hue": {"label": "Hue", "type": "num", "default": null,
+			"blurb": "The wash's base color, 0 to 1 around the wheel; it creeps slowly round the wheel as the show plays. Unset, drawn between 0 and 1."},
+		"pools": {"label": "Pools", "type": "num", "default": 3,
+			"blurb": "How many soft color pools drift over the wash, near its hue, brightening as the music gets louder."},
+		"sat": {"label": "Saturation", "type": "num", "default": 0.5,
+			"blurb": "Color saturation of the wash, 0 to 1; the pools take 0.1 more."},
+		"val": {"label": "Brightness", "type": "num", "default": 0.32,
+			"blurb": "Brightness of the wash's middle band; the top is half that, the bottom about a third, and loudness scales it 0.7x to 1.2x."},
+	}
+
 	var _pools: Array = []
 	var _hue := 0.0
 	var _energy := 0.0
@@ -290,6 +306,22 @@ class Bed:
 # ---------------------------------------------------------------------------------
 class Fog:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"count": {"label": "Blobs", "type": "num", "default": 7,
+			"blurb": "How many big soft blobs roll across the frame."},
+		"swirl": {"label": "Beat swirl", "type": "flag", "default": true,
+			"blurb": "Whether a beat kicks the whole bank into a faster turn that eases back; off, it turns at a slow steady rate."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.6,
+			"blurb": "Tint of the fog, 0 to 1 around the wheel."},
+		"sat": {"label": "Saturation", "type": "num", "default": 0.12,
+			"blurb": "Color saturation of the fog; near 0 it is gray-white."},
+		"alpha": {"label": "Opacity", "type": "num", "default": 0.045,
+			"blurb": "Opacity of each blob; it builds up where blobs overlap."},
+	}
+
 	var _blobs: Array = []
 	var _swirl := 0.0
 	var _swirl_vel := 0.06
@@ -342,6 +374,36 @@ class Fog:
 # ---------------------------------------------------------------------------------
 class Snow:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"count": {"label": "Flakes", "type": "num", "default": 140,
+			"blurb": "How many flakes there are at most; the music decides how many of them show (see Density floor)."},
+		"size": {"label": "Flake size", "type": "num", "default": 0.006,
+			"blurb": "How large the biggest flakes grow, as a fraction of the frame's shorter side; sizes skew small and near flakes are larger."},
+		"habits": {"label": "Crystal shapes", "type": "dict", "default": {"stellar": 0.6, "sectored": 0.2, "plate": 0.2},
+			"blurb": "Relative weights of the crystal shapes made: plate, sectored, stellar, fern, needle, column, capped, bullet. A shape left out never appears."},
+		"bank": {"label": "Crystal variety", "type": "num", "default": 20,
+			"blurb": "How many different crystal shapes are made and shared among the flakes."},
+		"complexity": {"label": "Branching", "type": "num", "default": 0.5,
+			"blurb": "The chance, 0 to 1, that a six-armed crystal's side branches carry branches of their own (ferns always do)."},
+		"rime": {"label": "Rime", "type": "num", "default": 0.0,
+			"blurb": "The most frost a crystal can carry, 0 to 1: each gets a random amount up to it, drawn as lumpy stubs on its arms."},
+		"crystal_frac": {"label": "Crystal share", "type": "num", "default": 0.06,
+			"blurb": "The share of flakes drawn as tumbling crystals instead of soft dots, where they are large enough on screen to read."},
+		"density_floor": {"label": "Density floor", "type": "num", "default": 0.35,
+			"blurb": "The share of flakes that show in silence, 0 to 1; the music adds more on top."},
+		"density_gain": {"label": "Density gain", "type": "num", "default": 0.85,
+			"blurb": "How much loudness, bass and onsets raise the share of flakes that show above the floor."},
+		"fall": {"label": "Fall speed", "type": "num", "default": 0.1,
+			"blurb": "How fast the nearest flakes fall, in frame heights per second; far ones are slower and loud passages up to 1.5x faster."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.58,
+			"blurb": "Tint of the flakes and of the whiteout that builds on big moments, 0 to 1 around the wheel."},
+		"sat": {"label": "Saturation", "type": "num", "default": 0.06,
+			"blurb": "Color saturation of the flakes; near 0 they are white."},
+	}
+
 	var _flakes: Array = []
 	var _gust := 0.0
 	var _coverage := 0.0     # harmonic-driven density: swells into obscuring squalls, then clears
@@ -501,6 +563,28 @@ class Snow:
 # ---------------------------------------------------------------------------------
 class Rain:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"count": {"label": "Drops", "type": "num", "default": 130,
+			"blurb": "How many drops there are at most; the music decides how many of them show (see Density floor)."},
+		"slant": {"label": "Slant", "type": "num", "default": 0.16,
+			"blurb": "How far the streaks lean from vertical, sideways per unit down (positive leans right); it sways slowly and bass leans it more."},
+		"density_floor": {"label": "Density floor", "type": "num", "default": 0.35,
+			"blurb": "The share of drops that show in silence, 0 to 1; the music adds more on top."},
+		"density_gain": {"label": "Density gain", "type": "num", "default": 0.85,
+			"blurb": "How much loudness, bass and onsets raise the share of drops that show above the floor."},
+		"fall": {"label": "Fall speed", "type": "num", "default": 1.1,
+			"blurb": "How fast drops fall, in frame heights per second, times 0.36 to 1.5 per drop by depth; loud passages fall up to 1.3x faster."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.58,
+			"blurb": "Tint of the streaks, 0 to 1 around the wheel."},
+		"sat": {"label": "Saturation", "type": "num", "default": 0.14,
+			"blurb": "Color saturation of the streaks; near 0 they are white."},
+		"width": {"label": "Line width", "type": "num", "default": 1.5,
+			"blurb": "Line width of the nearest streaks in pixels (never under 1); farther drops are thinner."},
+	}
+
 	var _drops: Array = []
 	var _slant := 0.18
 	var _density := 0.6
@@ -570,6 +654,22 @@ class Rain:
 # ---------------------------------------------------------------------------------
 class Fireflies:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"count": {"label": "Fireflies", "type": "num", "default": 40,
+			"blurb": "How many fireflies wander the frame."},
+		"speed": {"label": "Flow speed", "type": "num", "default": 0.06,
+			"blurb": "How fast the slow curl-noise current carries them."},
+		"jitter": {"label": "Wander", "type": "num", "default": 0.16,
+			"blurb": "Strength of the random wander that keeps them from bunching into knots."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.16,
+			"blurb": "Color of their glow, 0 to 1 around the wheel (0.16 is yellow); each varies a little from it."},
+		"real_light": {"label": "Real light", "type": "flag", "default": false,
+			"blurb": "Draw each as a light source - a wide faint wash and a white-hot core - instead of a tighter soft glow."},
+	}
+
 	var _bugs: Array = []
 	var _flow: FlowField
 
@@ -636,6 +736,16 @@ class Fireflies:
 # ---------------------------------------------------------------------------------
 class Stars:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"count": {"label": "Stars", "type": "num", "default": 150,
+			"blurb": "How many stars fill the sky; a shooting star crosses now and then whatever the count."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.6,
+			"blurb": "Base color of the stars, 0 to 1 around the wheel; each strays up to 0.12 either way, and all are pale."},
+	}
+
 	var _stars: Array = []
 	var _shoot: Dictionary = {}
 	var _next_shoot := 3.0
@@ -707,6 +817,18 @@ class Stars:
 # ---------------------------------------------------------------------------------
 class Aurora:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"count": {"label": "Ribbons", "type": "num", "default": 4,
+			"blurb": "How many wavy curtains of light cross the frame, mostly in its upper half."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.38,
+			"blurb": "Base color of the curtains, 0 to 1 around the wheel (0.38 is green); each ribbon shifts up to 0.18 from it."},
+		"sat": {"label": "Saturation", "type": "num", "default": 0.55,
+			"blurb": "Color saturation of the curtains."},
+	}
+
 	var _ribbons: Array = []
 	var _f_cache: AudioFeatures = AudioFeatures.new()
 
@@ -799,6 +921,20 @@ class Aurora:
 # ---------------------------------------------------------------------------------
 class Petals:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"count": {"label": "Petals", "type": "num", "default": 46,
+			"blurb": "How many petals drift down."},
+		"fall": {"label": "Fall speed", "type": "num", "default": 0.08,
+			"blurb": "How fast petals fall, in frame heights per second, scaled by each petal's depth and rate; loud passages up to 1.2x faster."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.95,
+			"blurb": "Base color of the petals, 0 to 1 around the wheel (0.95 is pink); each strays up to 0.05 either way."},
+		"sat": {"label": "Saturation", "type": "num", "default": 0.5,
+			"blurb": "Color saturation of the petals."},
+	}
+
 	var _petals: Array = []
 	var _flow: FlowField
 
@@ -886,6 +1022,26 @@ class Petals:
 # ---------------------------------------------------------------------------------
 class Dust:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"count": {"label": "Motes", "type": "num", "default": 110,
+			"blurb": "How many motes float in the frame."},
+		"speed": {"label": "Flow speed", "type": "num", "default": 0.02,
+			"blurb": "How fast the slow curl-noise current carries the motes."},
+		"jitter": {"label": "Wander", "type": "num", "default": 0.1,
+			"blurb": "Strength of the random wander added to each mote."},
+		"drift": {"label": "Drift", "type": "num", "default": 0.006,
+			"blurb": "A steady sideways drift, in the frame's shorter side per second; negative drifts left."},
+		"shaft": {"label": "Light shaft", "type": "flag", "default": true,
+			"blurb": "Whether a soft beam of light falls from above the frame behind the motes."},
+		"shaft_x": {"label": "Shaft position", "type": "num", "default": -0.2,
+			"blurb": "Where the beam falls across the frame, as a fraction of the half-width (-1 left edge, 1 right)."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.12,
+			"blurb": "Color of the motes and the beam, 0 to 1 around the wheel (0.12 is warm gold); both are pale."},
+	}
+
 	var _motes: Array = []
 	var _flow: FlowField
 
@@ -942,6 +1098,18 @@ class Dust:
 # ---------------------------------------------------------------------------------
 class Bubbles:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"count": {"label": "Bubbles", "type": "num", "default": 60,
+			"blurb": "How many bubbles fill the frame when the layer starts; after that the vents release their own, in trickles and bursts."},
+		"rise": {"label": "Rise speed", "type": "num", "default": 0.17,
+			"blurb": "How fast bubbles climb, in the frame's shorter side per second; larger bubbles climb a little faster."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.55,
+			"blurb": "The water's color tinting the glass, 0 to 1 around the wheel."},
+	}
+
 	var _bubbles: Array = []
 	var _pops: Array = []
 	var _emitters: Array = []        # vent x positions, normalized -1..1
@@ -1110,6 +1278,22 @@ class Bubbles:
 # ---------------------------------------------------------------------------------
 class Embers:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"count": {"label": "Sparks", "type": "num", "default": 110,
+			"blurb": "How many sparks drift in the frame."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.06,
+			"blurb": "Base color of the sparks, 0 to 1 around the wheel (0.06 is orange); each shifts between -0.03 and +0.06."},
+		"speed": {"label": "Flow speed", "type": "num", "default": 0.05,
+			"blurb": "How fast the curl-noise current carries the sparks."},
+		"jitter": {"label": "Wander", "type": "num", "default": 0.12,
+			"blurb": "Strength of the random wander added to each spark."},
+		"lift": {"label": "Lift", "type": "num", "default": -0.05,
+			"blurb": "Steady vertical drift in the frame's shorter side per second; negative rises, and a spark leaving the top returns at the bottom."},
+	}
+
 	var _sparks: Array = []
 	var _flow: FlowField
 
@@ -1162,6 +1346,16 @@ class Embers:
 # ---------------------------------------------------------------------------------
 class Cosmos:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"count": {"label": "Bodies", "type": "num", "default": 1,
+			"blurb": "How many distant bodies hang in the background, each a nebula or a spiral galaxy by a coin flip."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.6,
+			"blurb": "Base color of the bodies, 0 to 1 around the wheel; each strays up to 0.25 either way."},
+	}
+
 	var _bodies: Array = []
 
 	func _init(seed_rng: RandomNumberGenerator, c: Dictionary = {}) -> void:
@@ -1258,6 +1452,22 @@ class Cosmos:
 # ---------------------------------------------------------------------------------
 class Clouds:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"count": {"label": "Clouds", "type": "num", "default": 5,
+			"blurb": "How many cloud masses drift across the sky, wrapping round at the edges."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.6,
+			"blurb": "Tint of the clouds, 0 to 1 around the wheel."},
+		"sat": {"label": "Saturation", "type": "num", "default": 0.12,
+			"blurb": "Color saturation of the clouds; near 0 they are gray-white."},
+		"val": {"label": "Brightness", "type": "num", "default": 0.62,
+			"blurb": "Brightness of the nearest clouds; farther ones are dimmer."},
+		"alpha": {"label": "Opacity", "type": "num", "default": 0.07,
+			"blurb": "Opacity of each puff in the nearest clouds; farther ones are fainter."},
+	}
+
 	var _clouds: Array = []
 
 	func _init(seed_rng: RandomNumberGenerator, c: Dictionary = {}) -> void:
@@ -1310,6 +1520,16 @@ class Clouds:
 # ---------------------------------------------------------------------------------
 class Fire:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"spread": {"label": "Spread", "type": "num", "default": 1.0,
+			"blurb": "How wide the bed of flames reaches: 1 spans 0.82 of the half-width each side of center."},
+		"count": {"label": "Sparks", "type": "num", "default": 90,
+			"blurb": "How many sparks can be alive at once; they are born from the heat, so a quiet passage has few."},
+	}
+
 	const SHADER := preload("res://shaders/flame.gdshader")
 	var _quad: FieldQuad = null      # the shader quad (a child canvas item: materials
 	var _mat := ShaderMaterial.new() # apply per-item, so the field needs its own)
@@ -1560,6 +1780,52 @@ class FieldQuad:
 # ---------------------------------------------------------------------------------
 class Vapor:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"count": {"label": "Masses", "type": "num", "default": 5,
+			"blurb": "How many masses there are, 1 to 8; the first listens to the lowest band and is broadest, the last to the highest."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.72,
+			"blurb": "The color the masses start from, 0 to 1 around the wheel; their hues walk toward the accent across the masses."},
+		"accent": {"label": "Accent", "type": "num", "default": null,
+			"blurb": "The hue the masses walk toward, and the color of their fringes. Unset, 0.42 of a turn round the wheel from the hue."},
+		"spread": {"label": "Hue spread", "type": "num", "default": 0.1,
+			"blurb": "How far each mass's hue may stray at random from its place between the hue and the accent."},
+		"size": {"label": "Size", "type": "num", "default": 1.0,
+			"blurb": "Scales the size of every mass; at 1 the low-band masses are broad and the high-band ones small."},
+		"layout": {"label": "Layout", "type": "txt", "default": "edges",
+			"blurb": "Where the masses sit: edges (round the border, the middle left dark), sweep (one diagonal current), anything else scattered."},
+		"counter": {"label": "Counter hue", "type": "num", "default": 0.0,
+			"blurb": "The chance, 0 to 1, that a mass takes the hue opposite its own instead, for a two-sided frame."},
+		"flow": {"label": "Flow", "type": "num", "default": null,
+			"blurb": "How fast the threads stream through the masses in one steady direction; loud passages up to 1.25x. Unset, drawn between 0.012 and 0.032."},
+		"swirl": {"label": "Swirl", "type": "num", "default": null,
+			"blurb": "How hard the field twists, held constant whatever the music does. Unset, drawn between 0.45 and 0.80."},
+		"churn": {"label": "Churn", "type": "num", "default": null,
+			"blurb": "How fast the twisting turns over; loudness moves it between 0.8x and 1.2x. Unset, drawn between 0.75 and 1.35."},
+		"scale": {"label": "Detail", "type": "num", "default": null,
+			"blurb": "How fine the swirls and threads are: higher is finer. Unset, drawn between 0.8 and 1.25."},
+		"stretch": {"label": "Stretch", "type": "num", "default": null,
+			"blurb": "How drawn out the threads are along the flow: 1 is not at all. Unset, drawn between 1.3 and 3.0."},
+		"crease": {"label": "Crease", "type": "num", "default": null,
+			"blurb": "How sharp the ridges are: near 1 billowy, near 3 wiry filaments. Unset, drawn between 1.4 and 2.6."},
+		"hard": {"label": "Hardness", "type": "num", "default": null,
+			"blurb": "How cut a mass's edge is, 0 a soft haze and 1 a sharp front with a bright rim. Unset, drawn between 0.45 and 0.85."},
+		"thresh": {"label": "Threshold", "type": "num", "default": null,
+			"blurb": "The density a mass's edge sits at: higher shrinks the masses toward their cores. Unset, drawn between 0.42 and 0.60."},
+		"haze": {"label": "Haze", "type": "num", "default": null,
+			"blurb": "How much soft glow surrounds the masses past their edges. Unset, drawn between 0.10 and 0.22."},
+		"shadow": {"label": "Shadow", "type": "num", "default": null,
+			"blurb": "How dark a mass falls on the side away from the wandering lamp. Unset, drawn between 1.4 and 2.6."},
+		"gain": {"label": "Overall glow", "type": "num", "default": null,
+			"blurb": "Overall brightness of the field. Unset, drawn between 1.15 and 1.5."},
+		"sat": {"label": "Saturation", "type": "num", "default": 0.85,
+			"blurb": "Color saturation of the masses, 0 to 1; the fringe color takes 0.9 of it."},
+		"val": {"label": "Brightness", "type": "num", "default": 1.0,
+			"blurb": "Brightness of each mass's color before the lighting, 0 to 1."},
+	}
+
 	const SHADER := preload("res://shaders/vapor_field.gdshader")
 	var _quad: FieldQuad = null       # the shader quad (see FieldQuad)
 	var _mat := ShaderMaterial.new()
@@ -1828,6 +2094,16 @@ class Vapor:
 # ---------------------------------------------------------------------------------
 class Rays:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"count": {"label": "Shafts", "type": "num", "default": 5,
+			"blurb": "How many shafts of light angle down from above the frame, swaying slowly."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.52,
+			"blurb": "Color of the shafts, 0 to 1 around the wheel; they are pale."},
+	}
+
 
 	## How far outside the visible top a shaft starts, as a multiple of the visible half-height.
 	## Anything that has an END must begin beyond the frame by a real margin rather than at its
@@ -1884,6 +2160,14 @@ class Rays:
 # ---------------------------------------------------------------------------------
 class Planet:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"hue": {"label": "Hue", "type": "num", "default": 0.6,
+			"blurb": "Base color of the planet, 0 to 1 around the wheel; the seed shifts it up to 0.3 either way."},
+	}
+
 	var _lens := Lens3D.new()
 	var _sphere: Mesh3D
 	var _pos := Vector2.ZERO
@@ -1932,6 +2216,16 @@ class Planet:
 # ---------------------------------------------------------------------------------
 class Volumetric:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"mode": {"label": "Mode", "type": "txt", "default": "cloud",
+			"blurb": "What it builds: cloud (three or four billowing sunlit masses in the sky) or fog (a wide bank of haze receding into depth)."},
+		"hue": {"label": "Hue", "type": "num", "default": -1.0,
+			"blurb": "Tint of the sunlit side, 0 to 1 around the wheel, the shade 0.55 of a turn away; below 0, warm white and cool gray."},
+	}
+
 	var _lens := Lens3D.new()
 	var _puffs: Array = []
 	var _sun := Vector3(0.4, 0.85, 0.3)
@@ -1942,7 +2236,7 @@ class Volumetric:
 
 	func _init(seed_rng: RandomNumberGenerator, c: Dictionary = {}) -> void:
 		super(seed_rng, c)
-		_mode = String(cfg.get("mode", "cloud"))
+		_mode = txt("mode", "cloud")
 		_sun = Vector3(rng.randf_range(-0.5, 0.5), rng.randf_range(0.55, 1.0), rng.randf_range(-0.2, 0.5)).normalized()
 		_driftx = rng.randf_range(0.03, 0.09) * (1.0 if rng.randf() < 0.5 else -1.0)
 		_fov = rng.randf_range(56.0, 70.0)
@@ -2043,6 +2337,16 @@ class Volumetric:
 # ---------------------------------------------------------------------------------
 class Flare:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"hue": {"label": "Hue", "type": "num", "default": 0.58,
+			"blurb": "Color of the flare's source, 0 to 1 around the wheel; its ghost discs stray from -0.18 to +0.22 of it."},
+		"fisheye": {"label": "Fisheye", "type": "num", "default": 0.22,
+			"blurb": "How strongly a barrel distortion bows the source and its chain of discs outward; 0 leaves them straight."},
+	}
+
 	var _src := Vector2(0.7, -0.5)
 	var _ghosts: Array = []
 	var _energy := 0.0
@@ -2111,6 +2415,24 @@ class Flare:
 # ---------------------------------------------------------------------------------
 class Veil:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"floor": {"label": "Floor", "type": "num", "default": 0.12,
+			"blurb": "How much musical intensity, 0 to 1, it takes before the veil shows at all."},
+		"gain": {"label": "Gain", "type": "num", "default": 0.9,
+			"blurb": "How quickly the veil thickens as intensity rises past the floor."},
+		"max": {"label": "Max opacity", "type": "num", "default": 0.6,
+			"blurb": "The most opaque the veil ever gets, 0 to 1."},
+		"hue": {"label": "Hue", "type": "num", "default": 0.58,
+			"blurb": "Tint of the veil, 0 to 1 around the wheel."},
+		"sat": {"label": "Saturation", "type": "num", "default": 0.05,
+			"blurb": "Color saturation of the veil; near 0 it is white."},
+		"val": {"label": "Brightness", "type": "num", "default": 1.0,
+			"blurb": "Brightness of the veil's color, 0 to 1."},
+	}
+
 	var _coverage := 0.0
 
 	func update(f: AudioFeatures, dt: float, h: Vector2) -> void:
@@ -2139,6 +2461,18 @@ class Veil:
 # ---------------------------------------------------------------------------------
 class Surface:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"hue": {"label": "Hue", "type": "num", "default": 0.54,
+			"blurb": "Color of the light pouring down from the surface, 0 to 1 around the wheel."},
+		"sun_x": {"label": "Sun position", "type": "num", "default": null,
+			"blurb": "Where the distant sun glows across the top, as a fraction of the half-width (-1 left edge, 1 right). Unset, drawn between -0.45 and 0.45."},
+		"caustics": {"label": "Caustics", "type": "num", "default": 8,
+			"blurb": "How many wavy bands of refracted light shimmer across the frame, packed toward the top and fading with depth."},
+	}
+
 	var _hue := 0.54
 	var _sun := 0.0
 	var _e := 0.0
@@ -2208,6 +2542,20 @@ class Surface:
 # ---------------------------------------------------------------------------------
 class Kelp:
 	extends Base
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads off its
+	## config, with what it does - a timeline's inspector and an agent read these ([method
+	## Layer.fields_of]); docs.py holds them to the code. Every layer also takes [constant Base.COMMON].
+	const FIELDS := {
+		"hue": {"label": "Hue", "type": "num", "default": 0.48,
+			"blurb": "Color of the fronds and the floor's glows, 0 to 1 around the wheel; each frond and glow varies a little from it."},
+		"form": {"label": "Form", "type": "txt", "default": "kelp",
+			"blurb": "The growth habit: kelp (tall, wavy), grass (short, quick), fan (broad, stiff), whip (very tall, thin) or bulb (stubby, fat)."},
+		"fronds": {"label": "Fronds", "type": "num", "default": 14,
+			"blurb": "How many fronds rise from the floor, swaying more toward their tips."},
+		"glows": {"label": "Glows", "type": "num", "default": 4,
+			"blurb": "How many blurry bioluminescent lights pool near the floor, pulsing slowly."},
+	}
+
 	var _fronds: Array = []
 	var _glows: Array = []
 	var _hue := 0.5
@@ -2324,3 +2672,14 @@ const REGISTRY := {
 ## Build a layer by registry key, seeding it from `rng` with its constants baked in.
 static func make(key: String, rng: RandomNumberGenerator, cfg := {}) -> Base:
 	return REGISTRY[key].new(rng, cfg)
+
+
+## WHAT THE LAYER [param key] CAN BE TOLD: every setting it reads off its config, as rows - `label`,
+## `type` (num, flag, txt, dict), `default` (null: drawn from the seed, or worked out, as the
+## `blurb` says) - the shared ones first. What a timeline's inspector builds its rows from
+## ([SchemaForm]), and what an agent choosing a layer is shown.
+static func fields_of(key: String) -> Dictionary:
+	var out: Dictionary = Base.COMMON.duplicate(true)
+	if REGISTRY.has(key):
+		out.merge((REGISTRY[key] as GDScript).get("FIELDS") as Dictionary, true)
+	return out

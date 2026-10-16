@@ -338,7 +338,7 @@ func update(f: AudioFeatures, delta: float) -> void:
 	# frame none of those exist yet - it would aim at, and clamp against, the declared defaults.
 	_track_pen(delta)
 	_ch = chroma_hue()
-	_sig = Spectrum.harmonic_signature()
+	_sig = signature()
 	# A character is COMMITTED on the beat, every _bpg beats. Event, not integration -
 	# so it belongs here and not in the sim step (the Director may substep an identical
 	# frame several times, and one edge stays one edge).

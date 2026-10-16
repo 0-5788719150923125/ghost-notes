@@ -33,6 +33,18 @@ class Force:
 
 ## Constant downward pull, with an optional bouncy floor at a fixed altitude.
 class Gravity extends Force:
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads, with
+	## what it does - a timeline's inspector and an agent read these; docs.py holds them to the code.
+	const FIELDS := {
+		"g": {"label": "Pull", "type": "num", "default": 1.8,
+			"blurb": "How hard every particle is pulled down."},
+		"floor_on": {"label": "Floor", "type": "flag", "default": true,
+			"blurb": "Whether particles land on a floor and bounce, or fall out of the frame."},
+		"floor": {"label": "Floor height", "type": "num", "default": 0.46,
+			"blurb": "How far below the center the floor sits."},
+		"bounce": {"label": "Bounce", "type": "num", "default": 0.35,
+			"blurb": "How much of its fall a particle keeps as it bounces off the floor: 0 lands dead, 1 bounces back as high."},
+	}
 	func is_dynamic() -> bool:
 		return true
 	func accumulate(ps, _f, _dt) -> void:
@@ -54,6 +66,12 @@ class Gravity extends Force:
 
 ## Pull each particle back toward its home (recombine / cohesion).
 class Spring extends Force:
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads, with
+	## what it does - a timeline's inspector and an agent read these; docs.py holds them to the code.
+	const FIELDS := {
+		"k": {"label": "Stiffness", "type": "num", "default": 4.0,
+			"blurb": "How hard each particle is pulled back toward its home - the higher, the quicker a scattered shape comes back together."},
+	}
 	func is_dynamic() -> bool:
 		return true
 	func accumulate(ps, _f, _dt) -> void:
@@ -64,6 +82,12 @@ class Spring extends Force:
 
 ## Velocity damping.
 class Drag extends Force:
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads, with
+	## what it does - a timeline's inspector and an agent read these; docs.py holds them to the code.
+	const FIELDS := {
+		"k": {"label": "Drag", "type": "num", "default": 0.9,
+			"blurb": "How quickly a particle's speed dies away, per second."},
+	}
 	func is_dynamic() -> bool:
 		return true
 	func resolve(ps, _f, dt) -> void:
@@ -77,6 +101,20 @@ class Drag extends Force:
 ## center. `once` fires a single time (oneshot crumble); `period` adds a fallback
 ## tempo when the track has no detectable beats.
 class Scatter extends Force:
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads, with
+	## what it does - a timeline's inspector and an agent read these; docs.py holds them to the code.
+	const FIELDS := {
+		"period": {"label": "Fallback period", "type": "num", "default": 0.0,
+			"blurb": "Seconds between bursts when the music gives no beat to burst on; 0 bursts on beats only."},
+		"once": {"label": "Once", "type": "flag", "default": false,
+			"blurb": "Burst a single time and never again - a shape that crumbles once."},
+		"strength": {"label": "Strength", "type": "num", "default": 0.5,
+			"blurb": "How hard each burst throws the particles out from their group's center."},
+		"jitter": {"label": "Jitter", "type": "num", "default": 0.5,
+			"blurb": "How far each particle's direction strays from straight out, so a burst does not read as a perfect ring."},
+		"spin": {"label": "Spin", "type": "num", "default": 2.0,
+			"blurb": "How much spin a burst gives each particle."},
+	}
 	var _was := 0.0
 	var _acc := 0.0
 	var _fired := false
@@ -109,6 +147,16 @@ class Scatter extends Force:
 ## A horizontal flow that varies with height and time (plus optional vertical
 ## lift), so detached particles drift as if in wind.
 class Wind extends Force:
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads, with
+	## what it does - a timeline's inspector and an agent read these; docs.py holds them to the code.
+	const FIELDS := {
+		"amp": {"label": "Strength", "type": "num", "default": 0.4,
+			"blurb": "How hard the wind pushes sideways; the treble adds a little more."},
+		"freq": {"label": "Gusts", "type": "num", "default": 0.4,
+			"blurb": "How fast the wind's sway comes and goes, and how tightly it varies with height."},
+		"lift": {"label": "Lift", "type": "num", "default": 0.0,
+			"blurb": "A steady push up (below 0) or down (above 0) on top of the sway."},
+	}
 	var _t := 0.0
 	func is_dynamic() -> bool:
 		return true
@@ -132,6 +180,16 @@ class Wind extends Force:
 ## Kinematic: grow/shrink a sub-group coherently about its center (rocks
 ## breathing), driven by energy/beat plus a slow organic wobble.
 class Pulse extends Force:
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads, with
+	## what it does - a timeline's inspector and an agent read these; docs.py holds them to the code.
+	const FIELDS := {
+		"amp": {"label": "Loudness", "type": "num", "default": 0.3,
+			"blurb": "How much a group grows with the music's loudness."},
+		"beat": {"label": "Beat", "type": "num", "default": 0.4,
+			"blurb": "How much it swells on each beat."},
+		"organic": {"label": "Breathing", "type": "num", "default": 0.15,
+			"blurb": "A slow swelling of its own, each particle in its own time, whatever the music does."},
+	}
 	var _t := 0.0
 	func resolve(ps, f, dt) -> void:
 		_t += dt
@@ -148,6 +206,16 @@ class Pulse extends Force:
 
 ## Kinematic: revolve every particle around the origin, optionally spinning each.
 class Orbit extends Force:
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads, with
+	## what it does - a timeline's inspector and an agent read these; docs.py holds them to the code.
+	const FIELDS := {
+		"rate": {"label": "Rate", "type": "num", "default": 0.2,
+			"blurb": "How fast everything turns about the center, in radians a second."},
+		"audio": {"label": "With the music", "type": "num", "default": 0.0,
+			"blurb": "How much faster it turns as the music gets louder."},
+		"spin": {"label": "Spin", "type": "num", "default": 1.0,
+			"blurb": "How much each particle turns on itself as it goes round: 1 keeps it facing the center."},
+	}
 	var _th := 0.0
 	func resolve(ps, f, dt) -> void:
 		_th += (num("rate", 0.2) + num("audio", 0.0) * f.energy) * dt
@@ -159,6 +227,14 @@ class Orbit extends Force:
 
 ## Kinematic: independent per-particle organic drift (decorrelated by noise).
 class Wobble extends Force:
+	## WHAT IT CAN BE TOLD, as data (next/structure.md, step 16): each setting it reads, with
+	## what it does - a timeline's inspector and an agent read these; docs.py holds them to the code.
+	const FIELDS := {
+		"amp": {"label": "Distance", "type": "num", "default": 0.04,
+			"blurb": "How far each particle drifts from its home."},
+		"rate": {"label": "Rate", "type": "num", "default": 0.5,
+			"blurb": "How fast the drift wanders."},
+	}
 	var _t := 0.0
 	func resolve(ps, _f, dt) -> void:
 		_t += dt

@@ -23,7 +23,7 @@ func _run() -> void:
 			"--find": _find = args[i + 1]
 			"--secs": _secs = float(args[i + 1])
 			"--out": _out = args[i + 1]
-	var ed: GenerativeEditor = GenerativeEditor.new()
+	var ed: ReadingPanel = ReadingPanel.new()
 	ed.begin_stream = func(fp: int, sr: int, _w: Array) -> AudioStreamGeneratorPlayback:
 		print("voice_double_probe: begin_stream (sr %d)" % sr)
 		Director.detach()

@@ -154,7 +154,7 @@ func _reading() -> void:
 	print("-- a reading")
 	Spectrum.lead_in = 0.0
 	Spectrum.tail = 0.0
-	var ed: GenerativeEditor = GenerativeEditor.new()
+	var ed: ReadingPanel = ReadingPanel.new()
 	ed._build_panel()
 	ed._doc._sync = false
 	ed._doc._fields = {}

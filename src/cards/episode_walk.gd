@@ -31,6 +31,11 @@ func test_passage(_fallback: String) -> String:
 		+ "Okay, I'm getting chills - the cards are really insisting on this one tonight.")
 
 
+## An edit to the brief changes the NEXT episode, never the reading of this one.
+func reads_source() -> bool:
+	return false
+
+
 func _script() -> String:
 	var ep: CardEpisode = episode.call() if episode.is_valid() else null
 	return ep.script() if ep != null else ""

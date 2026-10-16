@@ -474,9 +474,11 @@ func _card() -> bool:
 ## Built by hand, as panel_fit_check builds it: its _ready would start the voice host.
 func _panel_fields() -> bool:
 	# loaded here, not named: the panel's scripts need the autoloads, which are only up by now
-	var ed = load("res://src/cards/cards_editor.gd").new()
+	var ed = load("res://src/reading/reading_panel.gd").new()
+	ed.workspace = "cards"
 	ed._build_panel()
-	_ok(ed._youtube == null and ed._yt_desc == null and ed.upload_meta("").is_empty(),
+	var show = ed._block_cards["cards"]      # the episode's card ([EpisodeCard])
+	_ok(ed._youtube == null and show._yt_desc == null and ed.upload_meta("").is_empty(),
 		"a show with no YouTube card has no description or tags to edit, and uploads nothing")
 	ed._panel.plus.about_to_popup.emit()
 	var pop: PopupMenu = ed._panel.plus.get_popup()
@@ -493,7 +495,7 @@ func _panel_fields() -> bool:
 	_ok(at >= 0 and lit == ["youtube"], "its \"+\" offers YouTube, and nothing else that can be attached to a show of cards (%s)" % str(lit))
 	if at >= 0:
 		pop.id_pressed.emit(pop.get_item_id(at))
-	_ok(ed._youtube != null and ed._yt_desc != null and ed._yt_desc.get_parent() == ed._youtube.extra,
+	_ok(ed._youtube != null and show._yt_desc != null and show._yt_desc.get_parent() == ed._youtube.extra,
 		"attached, the YouTube card holds the show's description and tags")
 	ed._panel.plus.about_to_popup.emit()
 	var left: Array = []
@@ -513,22 +515,22 @@ func _panel_fields() -> bool:
 	var ep := CardEpisode.open("panel-check", 21)
 	ep.write_json("plan", {"episode_title": "The Producer's Title", "description": "The producer's words.",
 		"tags": ["tarot", "4am"], "premise": "p", "spread": {"positions": [{"name": "Past"}]}})
-	ed._knobs["show"] = "panel-check"
-	ed._knobs["seed"] = 21
-	ed._open_episode()
-	_ok(ed._yt_title.text == "The Producer's Title" and ed._yt_title.editable, "the title is the picked episode's")
-	_ok(ed._yt_desc.text.is_empty() and ed._yt_tags.get_tags().is_empty(), "a show with no description or tags shows none yet")
-	ed._seed_from_plan()
-	_ok(ed._yt_desc.text == "The producer's words." and Array(ed._yt_tags.get_tags()) == ["tarot", "4am"]
+	show._knobs["show"] = "panel-check"
+	show._knobs["seed"] = 21
+	show._open_episode()
+	_ok(show._yt_title.text == "The Producer's Title" and show._yt_title.editable, "the title is the picked episode's")
+	_ok(show._yt_desc.text.is_empty() and show._yt_tags.get_tags().is_empty(), "a show with no description or tags shows none yet")
+	show._seed_from_plan()
+	_ok(show._yt_desc.text == "The producer's words." and Array(show._yt_tags.get_tags()) == ["tarot", "4am"]
 		and ed._doc.field("tags") == "tarot, 4am", "...and takes the picked episode's once, as the show's own")
 	var before := ep.read_text("plan")
-	ed._flush_upload_fields()
+	show._flush_upload_fields()
 	_ok(ep.read_text("plan") == before, "nothing is written without an edit")
-	ed._yt_title.text = "  My Own Title  "
-	ed._yt_desc.text = "Mine."
-	ed._upload_edited()
-	_ok(ed._yt_dirty > 0.0, "an edit waits a moment before it is written")
-	ed._flush_upload_fields(true)
+	show._yt_title.text = "  My Own Title  "
+	show._yt_desc.text = "Mine."
+	show._upload_edited()
+	_ok(show._yt_dirty > 0.0, "an edit waits a moment before it is written")
+	show._flush_upload_fields(true)
 	var plan: Dictionary = ep.read_json("plan")
 	_ok(plan["episode_title"] == "My Own Title" and plan["premise"] == "p" and (plan["spread"] as Dictionary).has("positions"),
 		"an edited title is written into the episode's plan, the rest of it kept")
@@ -536,40 +538,40 @@ func _panel_fields() -> bool:
 	_ok(doc.get("episode_title") == "My Own Title" and doc.get("description") == "Mine." and not doc.has("youtube"),
 		"the block holds the show's title and description - one of each, no record per episode")
 	_ok(ed.export_name() == "My Own Title", "and the title names the export")
-	ed._yt_title.text = "   "
-	ed._upload_edited()
-	ed._flush_upload_fields(true)
+	show._yt_title.text = "   "
+	show._upload_edited()
+	show._flush_upload_fields(true)
 	_ok(String((ep.read_json("plan") as Dictionary)["episode_title"]) == "My Own Title", "an emptied title is not written")
-	ed._yt_title.text = "My Own Title"
-	ed._yt_tags._input.text = "satire, "
-	ed._yt_tags._on_typed(ed._yt_tags._input.text)
-	ed._yt_tags.remove("4am")
+	show._yt_title.text = "My Own Title"
+	show._yt_tags._input.text = "satire, "
+	show._yt_tags._on_typed(show._yt_tags._input.text)
+	show._yt_tags.remove("4am")
 	_ok(ed._doc.field("tags") == "tarot, satire", "the chips write the show's tags line (%s)" % ed._doc.field("tags"))
 	var meta: Dictionary = ed.upload_meta("")
 	_ok(meta.get("title") == "My Own Title" and meta.get("description") == "Mine." and meta.get("chapters") == []
 		and meta.get("tags") == ["tarot", "satire"] and String(meta.get("record", "")).ends_with("/21/youtube.json"),
 		"the upload: the episode's title, the show's description and tags")
-	_ok(is_equal_approx(float(meta.get("thumbnail_at", -1.0)), ed.thumbnail_moment(ed._take_intro(""))),
+	_ok(is_equal_approx(float(meta.get("thumbnail_at", -1.0)), show.thumbnail_moment(show._take_intro(""))),
 		"and the title screen's moment for its thumbnail")
 	ed._doc._fields["title"] = "Truthful Tarot"
 	_ok(ed.upload_meta("").get("title") == "Truthful Tarot: My Own Title" and ed.export_name() == "My Own Title",
 		"the upload's title is the show's name, then the episode's - the file keeps the episode's alone")
-	ed._refresh_upload_note()
+	show._refresh_upload_note()
 	_ok(ed._youtube._preview.text.begins_with("Goes up as \"Truthful Tarot: My Own Title\""), "the card shows the title as it goes up")
 	# THE PRODUCER IS SHOWN THAT LINE before it names the next episode
-	_ok(ed._spec().get("uploads_as") == "Truthful Tarot: [episode_title]", "the producer is not handed the line a title goes up in (%s)" % str(ed._spec().get("uploads_as")))
+	_ok(show._spec().get("uploads_as") == "Truthful Tarot: [episode_title]", "the producer is not handed the line a title goes up in (%s)" % str(show._spec().get("uploads_as")))
 	ed._youtube._title.text = "%episode% | %title% #%seed%"
-	_ok(ed._spec().get("uploads_as") == "[episode_title] | Truthful Tarot #21", "the line is not the card's own template (%s)" % str(ed._spec().get("uploads_as")))
+	_ok(show._spec().get("uploads_as") == "[episode_title] | Truthful Tarot #21", "the line is not the card's own template (%s)" % str(show._spec().get("uploads_as")))
 	ed._youtube._title.text = "%title% #%seed%"
-	_ok(ed._spec().get("uploads_as") == "", "control: a template without the episode's title still made a line")
+	_ok(show._spec().get("uploads_as") == "", "control: a template without the episode's title still made a line")
 	ed._youtube._title.text = YouTube.TITLE_TEMPLATE
-	_ok(ed.upload_title("Truthful Tarot", "truthful tarot: Already Named") == "truthful tarot: Already Named"
-		and ed.upload_title("", "Bare") == "Bare" and ed.upload_title("Show", "") == "Show",
+	_ok(show.upload_title("Truthful Tarot", "truthful tarot: Already Named") == "truthful tarot: Already Named"
+		and show.upload_title("", "Bare") == "Bare" and show.upload_title("Show", "") == "Show",
 		"no name twice, none when the show has no title, the name alone when the episode has none")
-	var long_title: String = YouTube.fit_title(ed.upload_title("Truthful Tarot", "word ".repeat(30)))
+	var long_title: String = YouTube.fit_title(show.upload_title("Truthful Tarot", "word ".repeat(30)))
 	_ok(long_title.begins_with("Truthful Tarot: ") and long_title.length() <= 100, "cut to 100 characters, the name stands")
 	ed._doc._fields.erase("title")
-	_ok(ed._spec().get("uploads_as") == "", "control: a show with no name has no line round its episode's title")
+	_ok(show._spec().get("uploads_as") == "", "control: a show with no name has no line round its episode's title")
 	# THE BYLINE, on the document card right under Title
 	var card = ed._writer
 	var edits: Array = card._field_edits.keys()
@@ -579,23 +581,23 @@ func _panel_fields() -> bool:
 	_ok(ed._doc.field("byline") == "with Pen & Ink" and ed.book_document()["byline"] == "with Pen & Ink",
 		"it is the show's `byline:`, handed to the title screen")
 	# A NEW EPISODE: the show's values at once
-	ed._knobs["seed"] = 22
-	ed._open_episode()
-	_ok(ed._yt_title.text == "My Own Title" and ed._yt_desc.text == "Mine." and Array(ed._yt_tags.get_tags()) == ["tarot", "satire"],
+	show._knobs["seed"] = 22
+	show._open_episode()
+	_ok(show._yt_title.text == "My Own Title" and show._yt_desc.text == "Mine." and Array(show._yt_tags.get_tags()) == ["tarot", "satire"],
 		"a new episode shows the show's title, description and tags at once")
-	_ok(not ed._yt_title.editable and ed._yt_desc.editable, "its title waits for its plan; the show's description does not")
+	_ok(not show._yt_title.editable and show._yt_desc.editable, "its title waits for its plan; the show's description does not")
 	var other := CardEpisode.open("panel-check", 23)
 	other.write_json("plan", {"episode_title": "Another Episode"})
 	var take := ProjectSettings.globalize_path(ROOT + "_files/take_9.wav")
-	ed._taken = {"take": take, "episode": ep}
-	ed._knobs["seed"] = 23
-	ed._open_episode()
-	_ok(ed._yt_title.text == "Another Episode" and ed._doc_capture()["cards"].get("episode_title") == "Another Episode"
-		and ed._yt_desc.text == "Mine.", "an episode with a plan overwrites the title, as the seed is; the description stays the show's")
+	show._taken = {"take": take, "episode": ep}
+	show._knobs["seed"] = 23
+	show._open_episode()
+	_ok(show._yt_title.text == "Another Episode" and ed._doc_capture()["cards"].get("episode_title") == "Another Episode"
+		and show._yt_desc.text == "Mine.", "an episode with a plan overwrites the title, as the seed is; the description stays the show's")
 	_ok(ed.upload_meta(take).get("title") == "My Own Title" and ed.upload_meta("").get("title") == "Another Episode",
 		"an export's upload describes the episode it rendered, not the one picked since")
 	_ok(not DirAccess.dir_exists_absolute(CardEpisode.open("panel-check", 22).dir), "nothing was written for the new episode")
-	_ok(ed.thumbnail_moment(9.0) == 3.6 and ed.thumbnail_moment(3.0) == 1.5 and ed.thumbnail_moment(0.5) == 1.5,
+	_ok(show.thumbnail_moment(9.0) == 3.6 and show.thumbnail_moment(3.0) == 1.5 and show.thumbnail_moment(0.5) == 1.5,
 		"the thumbnail is taken with the name up and the table still out of focus")
 	var args: PackedStringArray = load("res://src/export/exporter.gd").thumbnail_args("/v/a b.mp4", "/v/a b.thumbnail.jpg", 3.6)
 	_ok(Array(args) == ["-y", "-nostdin", "-loglevel", "error", "-ss", "3.600", "-i", "/v/a b.mp4", "-frames:v", "1",
@@ -663,8 +665,10 @@ func _tag_field() -> bool:
 ## A real show file: opened, seeded, its byline set on the card, written by the document's own writer, read
 ## back - and opened again by another panel, whose new episode is filled from it at once.
 func _doc_file() -> bool:
-	var ed = load("res://src/cards/cards_editor.gd").new()
+	var ed = load("res://src/reading/reading_panel.gd").new()
+	ed.workspace = "cards"
 	ed._build_panel()
+	var epi = ed._block_cards["cards"]      # the episode's card ([EpisodeCard])
 	ed._attach("youtube")
 	var ep := CardEpisode.open("doc-check", 31)
 	ep.write_json("plan", {"episode_title": "Episode Thirty-One", "description": "First paragraph.\n\nSecond: with a colon.",
@@ -672,9 +676,9 @@ func _doc_file() -> bool:
 	var body := "# The brief\n\nWhat the show is.\n"
 	var path := _file("show.md", "---\ntitle: Doc Check Show\nghost:\n  cards:\n    show: doc-check\n    seed: 31\n---\n" + body)
 	ed._doc._on_picked(path)
-	_ok(ed._doc.is_sync() and int(ed._knobs["seed"]) == 31 and ed._yt_title.text == "Episode Thirty-One",
+	_ok(ed._doc.is_sync() and int(epi._knobs["seed"]) == 31 and epi._yt_title.text == "Episode Thirty-One",
 		"the show file opens on its episode")
-	ed._seed_from_plan()
+	epi._seed_from_plan()
 	(ed._writer._field_edits["byline"] as LineEdit).text = "with Pen & Ink"
 	ed._writer._commit_field("byline")
 	_ok(ed._doc.save(), "the panel's block is written into the show file")
@@ -694,14 +698,16 @@ func _doc_file() -> bool:
 	_ok(raw.ends_with("---\n" + body), "the body is untouched")
 	ed.free()
 	# ANOTHER PANEL OPENS THE FILE, AND MAKES A NEW EPISODE: filled from the file at once
-	var again = load("res://src/cards/cards_editor.gd").new()
+	var again = load("res://src/reading/reading_panel.gd").new()
+	again.workspace = "cards"
 	again._build_panel()
+	var again_show = again._block_cards["cards"]
 	again._attach("youtube")
 	again._doc._on_picked(path)
-	again._knobs["seed"] = 99
-	again._open_episode()
-	_ok(again._yt_title.text == "Episode Thirty-One" and again._yt_desc.text == "First paragraph.\n\nSecond: with a colon."
-		and Array(again._yt_tags.get_tags()) == ["tarot", "pick a card"] and again._writer._field_edits["byline"].text == "with Pen & Ink",
+	again_show._knobs["seed"] = 99
+	again_show._open_episode()
+	_ok(again_show._yt_title.text == "Episode Thirty-One" and again_show._yt_desc.text == "First paragraph.\n\nSecond: with a colon."
+		and Array(again_show._yt_tags.get_tags()) == ["tarot", "pick a card"] and again._writer._field_edits["byline"].text == "with Pen & Ink",
 		"a new episode is filled from the file at once: title, description, tags, byline")
 	again.free()
 	return true

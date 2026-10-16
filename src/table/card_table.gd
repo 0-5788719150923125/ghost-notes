@@ -88,7 +88,7 @@ const PAGES := {
 
 ## THE CANDLES: the most LIT THINGS on a table - a candle in its stick, a candelabra, a dish of tea
 ## lights - each burning as ONE light however many flames it has (a light each is a shadow each, six
-## passes a frame), the brightest the key (see [method TableMedium._light_the_table]); and the most
+## passes a frame), the brightest the key (see [method TableLight.light_the_table]); and the most
 ## flames any one of them has.
 const MAX_CANDLES := 4
 const MAX_FLAMES := 12

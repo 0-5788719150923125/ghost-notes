@@ -30,12 +30,12 @@ func _run() -> void:
 			print("vpick: FAILED - file says '%s' but Director holds '%s' (autoload order?)"
 				% [want, Director.medium])
 			fails += 1
-	var ed := preload("res://src/reading/generative_editor.gd").new()
+	var ed := ReadingPanel.new()
 	add_child(ed)
 	await get_tree().process_frame
 	# THE PICTURE IS A CARD (next/notes.md step 5): its controls, and the rows that follow the
 	# medium - the card's and the panel's own (the Ink) - asked of both
-	var pic: PictureCard = ed._picture
+	var pic: PictureCard = ed._block_cards.get("picture")
 	var rows := {}
 	for owner_rows in [ed._medium_rows, pic._medium_rows]:
 		for tag in owner_rows:

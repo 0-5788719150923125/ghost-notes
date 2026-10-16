@@ -242,6 +242,89 @@ touched and of every folder above (by default, what changed since the last commi
 src/ and tests/ runs everything) - reading the stack from `python3 docs.py --folders`. A change in
 `src/table/` runs 37 gates of the 132.
 
+## The second round: a foundation for a live mode (2026-10-15)
+
+The user, before starting a new kind of mode - a real-time one that shows theorem-proving: "I don't
+think it's a good idea to start working on a new mode until we've cleaned-up the foundation."
+Measured first. A new mode that reads aloud would today have to EXTEND `ReadingPanel` (4,591 lines)
+and override what it needs, as Cards does 25 times; every medium and the table read the show's
+clock off `Spectrum`, so a show whose time is not a song's could not drive them; and the agents,
+the rules, the media registry and the components are ready as they are. So, in order:
+
+11. **The show's time is handed.** *Status, 2026-10-15: done.* `ShowFeed` carries the clock -
+    `show_time()`, `show_length()`, `tail()` (the bookend's, as baked) and `signature()` (the
+    harmonic signature) - and the media, the table and the scenes read it there; the Director
+    answers from `Spectrum`, and `BAND_COUNT` moved to `AudioFeatures`. A part a show mounts
+    (`scene_kit`, `scenes`, `media`, `table`) never names `Spectrum`: `HANDED` in docs.py holds it,
+    with a control. `tests/scene_kit/feed_clock_check.gd` hands a tablet 0.6 s with the session
+    clock wound to 100 s and gets half its fade, and a scene an E signature and gets E's hue - and
+    it found its own first draft passing over a part that failed to load, so it counts its checks.
+12. **The reading takes its parts.** *Status, 2026-10-15: done.* Nothing extends `ReadingPanel`.
+    A component hands it what it changes: what is read (`walk`, `TextWalk`), where it is heard
+    (`bed`, `ReadingBed`: `{make, key}` and the dial) and how it goes out (`publish`,
+    `ReadingPublish`: the export's name, what is held through the render and written after it, the
+    upload's text and macros, the book document, the YouTube card's own rows). Cards is a card:
+    `EpisodeCard` (`cards/`) is the episode, its agents, its rows and its YouTube fields, built by
+    `NoteCards` from the `cards` row (`script`, `heading`, the bookends' tips at a table) above the
+    voice, handing all three and asking the panel a few things by name. `CardsEditor` and
+    `GenerativeEditor` are gone: `Components.WORKSPACES` `reading` and `cards` say a panel's
+    section, title, hint, `hosts` and `classic` set, and main makes one `ReadingPanel` for either.
+    Two runtime errors behind passes were caught by check.sh on the way (gates reading the old
+    `_picture`), and one gap of mine by reading: the episode's walk did not yet say an edit to the
+    brief leaves its reading alone (`reads_source`, now held by text_walk_check).
+13. **`reading_panel.gd` along its banners.** *Status, 2026-10-15: the pure half is out.* What is
+    a function of its arguments went to static libraries under `voice/`: `Splice` (the hesitations
+    spliced into a take, the hums held, word timings moved by the cuts, WAV in and out) and
+    `Delivery` (the tone presets, the pause curve, the rest at a seam and a handover, stress, the
+    delivery marks eased sentence by sentence, the host's request for one chunk in one voice, the
+    room dialed). The live window, the audition and the export call the same functions, so they
+    cannot part. 4,664 lines to 3,734. Left: the stateful sections (the cast, the audition, the
+    sliding window), which a voice card would be built from.
+14. **`table.gd`.** *Status, 2026-10-15: two more parts out; 3,811 lines to 2,841.* `TableLight`
+    (the flames - flicker, draft, lick - their glow and heat, the rig and its key, the contact
+    shadows) and `TableBox` (the box, its files, the cards a search looks at; `stood`, `files`,
+    `searched`, which the poses read). Left: placing the things (it calls the light and the box,
+    and is called by the episode's build), and the plan made by a function of (episode, seed) -
+    the episode's section interleaves its draws with the nodes it builds, and splitting them
+    without moving a single draw is a change to make with the user's eyes on a seeded show.
+15. **`mask_editor.gd` along its banners.** *Status, 2026-10-15: two more parts out; 6,778 lines to
+    6,533.* `MaskAudioFx` (the bus and the timeline applied to the sound) and `MaskUndo` (the two
+    stacks of snapshots, a gesture coalesced into one step) each read the editor a few times. The
+    paint sim was measured too and left: it is where the shader is handed every clown and umbra dial
+    (54 of the editor's members), so it is not a boundary yet. Its banners do not hold together -
+    "Hi-res waveform window" holds the source panel, "auto-save" the face and pose processes - and
+    the lanes (1,264 lines), the markers (821) and the autosave (732) want their functions sorted
+    under true banners before any cut, with the shared transport and one timeline kit after.
+    Found on the way: `cut_part.py` let the owner's field be named like the method it took
+    (`_undo`), and a gate's calls were rewritten twice; it refuses that now.
+16. **Field tables.** *Status, 2026-10-15: done for the layers and the forces.* Every setting a
+    layer or a force reads off its config is a row in its class's own `FIELDS` (`label`, `type`,
+    `default` - null when the seed draws it or it is worked out, as the `blurb` says), the layers'
+    shared depth band in `Layer.Base.COMMON`; [method Layer.fields_of] reads one layer's rows, and
+    docs/layers.md and docs/forces.md show them. 107 layer settings and 26 force settings. HELD BOTH
+    WAYS: `docs.py --check` (`check_fields`) reports a setting read with no row, a row nothing reads
+    and a default the row and the code disagree on, with a control; and
+    `tests/scene_kit/layer_fields_check.gd` builds every layer told the defaults its table states
+    and requires the same layer as one told nothing, which fails, as it should, when one row's
+    default is changed. The two settings read as strings with `cfg.get` read through `txt()` now,
+    and the base's `hue()`, which nothing called, is gone. Left: the scenes, whose rolls from the
+    seed are code - a `layers` storyboard entry (storyboard.md, "Next" 2) is what would use these
+    rows first.
+
+WHERE THE THREE BIG FILES STAND (they were 30% of the code, and the week's bugs were in them):
+`mask_editor.gd` 8,376 lines to 6,533, `table.gd` 6,797 to 2,841, `reading_panel.gd` 4,548 to 3,734 -
+with seven parts and two libraries beside them, each holding its own state or none, and nothing
+left that extends the reading.
+
+A LIVE MODE IS THEN A COMPONENT AND A CARD. A row in `Components.REGISTRY` (its family, what it
+needs and provides, its slots, `script`), a card built by `NoteCards` above the voice that hands
+the reading a `TextWalk` whose text grows as its agents write (and, if it has a place, a
+`ReadingBed`; if its export is its own, a `ReadingPublish`), a medium registered by row that draws
+what they make from the time its `feed` hands it, and agents through `AgentJobs` and `rules/`. What
+it does NOT have yet is a reading that takes text while it streams (the sliding window plans its
+chunks at Play) and a show timed by nothing but a clock (storyboard.md, "A storyboard needs a
+sound") - the first features to build in it, on this foundation.
+
 ## What the two futures need
 
 **A nonlinear timeline editor** (compose scenes from existing scenes, geometry and animation).

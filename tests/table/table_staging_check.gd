@@ -271,26 +271,26 @@ func _search_and_linger() -> void:
 	var span := TableActions.RUMMAGE * float(e["s"])
 	# THE CARD LOOKED AT LIES ON ITS PILE BEFORE THE LOOK (2026-10-12: a card that was not on the pile a
 	# moment before appeared on it as the look began): one of the box's own, on a pile of its own
-	var seats: Array = medium._box.get("search", [])
+	var seats: Array = medium._box_part.stood.get("search", [])
 	_posed(start - 0.5)
-	var rests := not medium._searched.is_empty() and medium._searched.size() == seats.size() and medium._looking == null
+	var rests := not medium._box_part.searched.is_empty() and medium._box_part.searched.size() == seats.size() and medium._box_part.looking == null
 	var own := true
-	for i in medium._searched.size():
-		var kept := medium._searched[i] as MeshInstance3D
+	for i in medium._box_part.searched.size():
+		var kept := medium._box_part.searched[i] as MeshInstance3D
 		var seat: Transform3D = seats[i]
 		rests = rests and kept.visible and kept.transform.origin.distance_to(seat.origin) < 0.0005 and kept.transform.basis.y.y > 0.9
 		# (the places the table keeps, `filed`: a headless run's MultiMesh hands back no transform)
-		for filed_xf in medium._box.get("filed", []):
+		for filed_xf in medium._box_part.stood.get("filed", []):
 			var d := (filed_xf as Transform3D).origin - seat.origin
 			# nothing in its place and nothing on it
 			if Vector2(d.x, d.z).length() < NEAR and d.y > -0.0001:
 				own = false
-		for k in (medium._box["at_k"] as Array).size():
-			var d := ((medium._box["at_k"] as Array)[k] as Transform3D).origin - seat.origin
+		for k in (medium._box_part.stood["at_k"] as Array).size():
+			var d := ((medium._box_part.stood["at_k"] as Array)[k] as Transform3D).origin - seat.origin
 			own = own and Vector2(d.x, d.z).length() > NEAR
-		var back: Vector3 = medium._box["return_at"]
+		var back: Vector3 = medium._box_part.stood["return_at"]
 		own = own and Vector2(back.x - seat.origin.x, back.z - seat.origin.z).length() > NEAR
-	_ok(rests, "the cards a search looks at lie in the box before it, on top of piles (%d)" % medium._searched.size())
+	_ok(rests, "the cards a search looks at lie in the box before it, on top of piles (%d)" % medium._box_part.searched.size())
 	_ok(own, "each on a pile nothing is drawn from or put back on, the top of it")
 	# LYING CARDS ARE TURNED OVER TO BE SEEN, which takes longer: fewer looks share the search's rest
 	var looks := medium._card_poses.search_looks()
@@ -298,14 +298,14 @@ func _search_and_linger() -> void:
 	var fronts: Array = ((medium._backs[""] as Dictionary).get("fronts", []) as Array).map(func(f: Dictionary) -> Material: return f["mat"])
 	for i in looks:
 		_posed(start + span * (float(i) + 0.001) / float(looks))
-		var card := medium._looking
+		var card := medium._box_part.looking
 		var from := card.transform if card != null else Transform3D.IDENTITY
 		var at_rest := false
 		for seat in seats:
 			at_rest = at_rest or from.origin.distance_to((seat as Transform3D).origin) < 0.0005
 		_posed(start + span * (float(i) + 0.5) / float(looks))
-		_ok(card != null and medium._looking == card and card.visible and at_rest and from.basis.y.y > 0.9
-			and (medium._box["inner"] as AABB).grow(0.002).has_point(from.origin)
+		_ok(card != null and medium._box_part.looking == card and card.visible and at_rest and from.basis.y.y > 0.9
+			and (medium._box_part.stood["inner"] as AABB).grow(0.002).has_point(from.origin)
 			and card.position.y - from.origin.y > 0.03 and _in_picture(card.transform),
 			"searched card %d is lifted off its pile, from where it lay, and held in the picture (%.0f mm)" % [i + 1, (card.position.y - from.origin.y) * 1000.0])
 		# ITS FRONT, the right way up: it lay face down, and is turned over to the eye
@@ -322,16 +322,16 @@ func _search_and_linger() -> void:
 		_ok(low > 0.0, "turning over, no corner of it goes down into its pile (%.1f mm clear at the least)" % (low * 1000.0))
 	# control: the same card a hand's breadth higher is out of the picture, and the check says so
 	_posed(start + span * 0.5 / float(looks))
-	_ok(medium._looking != null and not _in_picture(medium._looking.transform.translated(Vector3(0.0, 0.2, 0.0))),
+	_ok(medium._box_part.looking != null and not _in_picture(medium._box_part.looking.transform.translated(Vector3(0.0, 0.2, 0.0))),
 		"control: lifted far higher, its far edge is over the top of the picture")
 	# NEVER THROUGH THE BOX'S WALL (seen in a render of 65803 restaged as piles: from a pile by the front
 	# wall, a card held low came out through the cardboard): from a pile as near that wall as a pile
 	# lies, the card held up is inside it, and on its way over no corner gets past the wall's middle
-	var inner: AABB = medium._box["inner"]
+	var inner: AABB = medium._box_part.stood["inner"]
 	var size := CardTable.card_size(medium._plan.look)
 	var by_wall := Transform3D(Basis.IDENTITY, Vector3(inner.get_center().x, inner.position.y + 0.01,
 		inner.end.z - size.y * 0.5 - TablePositions.BOX_PILE_GAP))
-	medium._box["search"] = [by_wall]
+	medium._box_part.stood["search"] = [by_wall]
 	var held_out := -INF
 	var turn_out := -INF
 	for step in 41:
@@ -342,27 +342,27 @@ func _search_and_linger() -> void:
 				turn_out = maxf(turn_out, past)
 				if step == 20:
 					held_out = maxf(held_out, past)
-	medium._box["search"] = seats
-	_ok(held_out < -0.003 and turn_out < TableMedium.BOX_WALL * 0.5,
+	medium._box_part.stood["search"] = seats
+	_ok(held_out < -0.003 and turn_out < TableBox.BOX_WALL * 0.5,
 		"from a pile by the front wall the card is held inside the box, and turns over inside it (%.1f mm inside held, %.1f at the nearest)" % [-held_out * 1000.0, -turn_out * 1000.0])
 	# control: brought as far toward the eye as a card from the middle of the box is, it comes out of the wall
-	var old_reach := by_wall.origin.z + (medium._box["world"] as AABB).size.z * 0.15 + cos(TableCardPose.SEARCH_TURN) * size.y * 0.5 - inner.end.z
-	_ok(old_reach > TableMedium.BOX_WALL, "control: brought as far toward the eye as any card was, it comes out through the wall (%.1f mm past its inner face)" % (old_reach * 1000.0))
+	var old_reach := by_wall.origin.z + (medium._box_part.stood["world"] as AABB).size.z * 0.15 + cos(TableCardPose.SEARCH_TURN) * size.y * 0.5 - inner.end.z
+	_ok(old_reach > TableBox.BOX_WALL, "control: brought as far toward the eye as any card was, it comes out through the wall (%.1f mm past its inner face)" % (old_reach * 1000.0))
 	# control: lifted and tilted up without being turned over - the old look - it shows its back
 	var seat0: Transform3D = seats[0]
-	var tilted := Transform3D(Basis(Vector3.RIGHT, TableCardPose.SEARCH_TURN) * seat0.basis, medium._looking.transform.origin)
+	var tilted := Transform3D(Basis(Vector3.RIGHT, TableCardPose.SEARCH_TURN) * seat0.basis, medium._box_part.looking.transform.origin)
 	_ok(_faces_camera(tilted) < -0.5, "control: only tilted up, a lying card shows the eye its back (%.2f)" % _faces_camera(tilted))
 	_posed(start + span + 0.02)
-	_ok(medium._looking == null and _at(1, "arrive", "draw") >= start + span - 0.01,
+	_ok(medium._box_part.looking == null and _at(1, "arrive", "draw") >= start + span - 0.01,
 		"the search ends before the selected card is drawn (%.2f / %.2f)" % [_at(1, "arrive", "draw"), start + span])
 	# control: a box with no pile to spare is given a card for the length of the look only
-	var kept_cards: Array = medium._searched
-	medium._searched = []
+	var kept_cards: Array = medium._box_part.searched
+	medium._box_part.searched = []
 	_posed(start + span * 0.5 / float(looks))
-	var lent := medium._looking == medium._rummage_card and medium._rummage_card.visible
+	var lent := medium._box_part.looking == medium._rummage_card and medium._rummage_card.visible
 	_posed(start - 0.5)
 	_ok(lent and not medium._rummage_card.visible, "control: with no card of its own, the look's card is there only for the look")
-	medium._searched = kept_cards
+	medium._box_part.searched = kept_cards
 
 
 ## Load [param positions] as an episode with [param staging], timed as a voice would read it.
@@ -497,23 +497,23 @@ func _box_show() -> void:
 		deck.append({"key": "c%d" % i, "name": "Card %d" % i})
 	_load(23, [{}, {"comes": "swept"}, {"comes": "swept"}],
 		{"look": {"candles": 0}, "staging": {"source": "box", "text": "back"}, "deck": deck})
-	_ok(medium._plan.cards_from == "box" and not medium._box.is_empty(), "the cards come from a box, and it stands")
-	if medium._box.is_empty():
+	_ok(medium._plan.cards_from == "box" and not medium._box_part.stood.is_empty(), "the cards come from a box, and it stands")
+	if medium._box_part.stood.is_empty():
 		return
 	var filed := 0
-	for f in medium._file:
+	for f in medium._box_part.files:
 		filed += ((f as MultiMeshInstance3D).multimesh as MultiMesh).instance_count
 	# AN OPEN BOX IS FILED OUT, as a shoebox is (feedback 0020: "barely any cards in the box"): the planned
 	# cards at least, standing through at least OPEN_FILE_SHARE of its depth
-	var depth: float = (medium._box["inner"] as AABB).size.z
+	var depth: float = (medium._box_part.stood["inner"] as AABB).size.z
 	# (the places a search looks are cards of the file too, each out of the fill)
-	var kept := filed + medium._cards.size() + (medium._box.get("search", []) as Array).size()
-	_ok(kept >= deck.size() and float(kept) * TableMedium.FILE_PITCH >= depth * TableMedium.OPEN_FILE_SHARE - TableMedium.FILE_PITCH,
-		"the box shows its twelve planned cards and is filed out to half its depth (%d cards, %.0f mm of %.0f)" % [kept, float(kept) * TableMedium.FILE_PITCH * 1000.0, depth * 1000.0])
+	var kept := filed + medium._cards.size() + (medium._box_part.stood.get("search", []) as Array).size()
+	_ok(kept >= deck.size() and float(kept) * TableBox.FILE_PITCH >= depth * TableBox.OPEN_FILE_SHARE - TableBox.FILE_PITCH,
+		"the box shows its twelve planned cards and is filed out to half its depth (%d cards, %.0f mm of %.0f)" % [kept, float(kept) * TableBox.FILE_PITCH * 1000.0, depth * 1000.0])
 	# THE TEXT IS ON THE BACK: the cards nobody drew are printed as the drawn ones are
 	var blanks: Array = ((medium._backs[""] as Dictionary).get("blank", []) as Array).map(func(b: Dictionary) -> Material: return b["mat"])
 	var printed := not blanks.is_empty()
-	for f in medium._file:
+	for f in medium._box_part.files:
 		var shown := ((f as MultiMeshInstance3D).multimesh as MultiMesh).mesh.surface_get_material(1)
 		printed = printed and blanks.has(shown) and shown != (medium._backs[""] as Dictionary)["mat"]
 	# ...and they are the deck's own cards, the ones the draw left in the box - never a drawn one
@@ -527,7 +527,7 @@ func _box_show() -> void:
 		"they are printed as the deck's own cards the draw left in (%s)" % ", ".join(left.values()))
 	_ok(printed and (medium._cards[0] as MeshInstance3D).get_surface_override_material(1) == (medium._printed[0] as Dictionary)["mat"],
 		"with the text on the back, the cards nobody drew have printed backs like the drawn ones, not the shared artwork")
-	_ok(not medium._searched.is_empty() and medium._searched.all(func(c: MeshInstance3D) -> bool: return blanks.has(c.get_surface_override_material(1))),
+	_ok(not medium._box_part.searched.is_empty() and medium._box_part.searched.all(func(c: MeshInstance3D) -> bool: return blanks.has(c.get_surface_override_material(1))),
 		"the cards a search looks at have printed backs too")
 	# ...AND EVERY ONE HAS A FRONT (2026-10-13: a search showed only backs): the same card's, by name,
 	# a front and never a back, with a part of a drawn card's painting to go in its window
@@ -546,27 +546,27 @@ func _box_show() -> void:
 	_ok(fronted, "each card nobody drew has a front of its own, the same card as its back, with a part of a drawn card's painting")
 	_ok(parts.size() == unseen.size(), "no two of them show the same part of the same painting (%d of %d)" % [parts.size(), unseen.size()])
 	var front_mats: Array = unseen.map(func(f: Dictionary) -> Material: return f["mat"])
-	var faced := not medium._file.is_empty()
-	for f in medium._file:
+	var faced := not medium._box_part.files.is_empty()
+	for f in medium._box_part.files:
 		var mesh: Mesh = ((f as MultiMeshInstance3D).multimesh as MultiMesh).mesh
 		# the front and the back of one card: the same place in both lists
 		faced = faced and front_mats.has(mesh.surface_get_material(0)) and front_mats.find(mesh.surface_get_material(0)) == blanks.find(mesh.surface_get_material(1))
 	_ok(faced, "every card filed in the box shows a front on its face and that card's own back behind it")
-	_ok(medium._searched.all(func(c: MeshInstance3D) -> bool:
+	_ok(medium._box_part.searched.all(func(c: MeshInstance3D) -> bool:
 			return front_mats.has(c.get_surface_override_material(0)) and front_mats.find(c.get_surface_override_material(0)) == blanks.find(c.get_surface_override_material(1))),
 		"the cards a search looks at have their fronts too")
 	# control: a show whose cards come from a deck prints no such fronts - there is no box to look through
 	_ok(not blanks.has(front_mats[0]) and front_mats[0] != (medium._backs[""] as Dictionary)["mat"], "control: a front is no back")
-	var inner: AABB = medium._box["inner"]
+	var inner: AABB = medium._box_part.stood["inner"]
 	_posed(0.5)
 	var waiting: Transform3D = (medium._cards[0] as MeshInstance3D).transform
 	_ok((medium._cards[0] as MeshInstance3D).visible and inner.grow(0.01).has_point(waiting.origin)
 		and absf(waiting.basis.z.normalized().y) > 0.9, "card 1 waits standing in the file, in the box")
 	_ok(_faces_camera(waiting) > 0.5 and _top_up(waiting) > 0.9,
 		"its face to the reader and the right way up, as every card in the file stands (%.2f)" % _faces_camera(waiting))
-	var places: Array = (medium._box["at_k"] as Array).duplicate()
-	places.append_array(medium._box.get("search", []))
-	places.append_array(medium._box.get("filed", []))
+	var places: Array = (medium._box_part.stood["at_k"] as Array).duplicate()
+	places.append_array(medium._box_part.stood.get("search", []))
+	places.append_array(medium._box_part.stood.get("filed", []))
 	_ok(places.size() == kept and places.all(func(xf: Transform3D) -> bool:
 			return _faces_camera(xf) > 0.0 and _top_up(xf) > 0.5),
 		"and so does every card in the file, drawn or not (%d)" % places.size())
@@ -579,7 +579,7 @@ func _box_show() -> void:
 	var off := float((medium._times()["events"] as Array)[0][0]["off"])
 	_posed(draw + (off + TableCardPose.FLIP_END - 0.05) * s)
 	var rising: Transform3D = (medium._cards[0] as MeshInstance3D).transform
-	_ok(rising.origin.y - TablePositions.CARD.y * 0.5 > (medium._box["world"] as AABB).end.y, "pulled straight up, it clears the rim")
+	_ok(rising.origin.y - TablePositions.CARD.y * 0.5 > (medium._box_part.stood["world"] as AABB).end.y, "pulled straight up, it clears the rim")
 	_ok(_faces_camera(rising) > 0.5, "it comes up showing its face, as it stood (%.2f)" % _faces_camera(rising))
 	_posed(draw + 3.6)
 	var held: Transform3D = (medium._cards[0] as MeshInstance3D).transform
@@ -645,15 +645,15 @@ func _file_search() -> void:
 	_load(31, [{}, {"comes": "searched"}],
 		{"look": {"candles": 0, "card_size": "trading"}, "staging": {"source": "box", "text": "back"}, "deck": deck})
 	var searches: Array = medium._times()["rummages"]
-	var seats: Array = medium._box.get("search", [])
-	_ok(searches.size() == 1 and seats.size() >= 3 and bool(medium._box.get("upright", false)),
+	var seats: Array = medium._box_part.stood.get("search", [])
+	_ok(searches.size() == 1 and seats.size() >= 3 and bool(medium._box_part.stood.get("upright", false)),
 		"a search of a box of cards on edge has places to look (%d)" % seats.size())
 	if searches.is_empty() or seats.size() < 3:
 		return
 	var e: Dictionary = searches[0]
 	var start := float(e["t0"]) + float(e["off"]) * float(e["s"])
 	var span := TableActions.RUMMAGE * float(e["s"])
-	var inner: AABB = medium._box["inner"]
+	var inner: AABB = medium._box_part.stood["inner"]
 	var v := CardTable.card_size(medium._plan.look).y
 	var seen := {}
 	var named := {}
@@ -664,7 +664,7 @@ func _file_search() -> void:
 	for i in 3:
 		# as it appears: in its own place in the file, among the cards
 		_posed(start + span * (float(i) + 0.001) / 3.0)
-		var card := medium._looking
+		var card := medium._box_part.looking
 		if card == null:
 			good = false
 			worst = "look %d looks at nothing" % (i + 1)
@@ -702,18 +702,18 @@ func _file_search() -> void:
 		"a card whose painting the picture's top would cut is drawn up less (%.2f of its height, %.2f in the picture)" % [high, plain])
 	# control: the look the file used to get - its back to the camera - shows no front at all
 	_posed(start + span * 0.5 / 3.0)
-	var about := medium._looking.transform
+	var about := medium._box_part.looking.transform
 	_ok(_faces_camera(Transform3D(Basis(Vector3.UP, PI) * about.basis, about.origin)) < -0.3,
 		"control: the same card stood back to the camera shows its back at the top of its look")
 	# control: a place where a card LIES is lifted flat - the old look, which a file never gets
 	var kept: Array = seats.duplicate()
-	var kept_cards: Array = medium._searched
-	medium._searched = []
-	medium._box["search"] = [Transform3D(Basis.IDENTITY, inner.get_center())]
+	var kept_cards: Array = medium._box_part.searched
+	medium._box_part.searched = []
+	medium._box_part.stood["search"] = [Transform3D(Basis.IDENTITY, inner.get_center())]
 	_posed(start + span * 0.5 / 3.0)
-	_ok(medium._looking != null and absf(medium._looking.transform.basis.y.normalized().y) > 0.5, "control: a lying card's place is looked at lying, not on edge")
-	medium._box["search"] = kept
-	medium._searched = kept_cards
+	_ok(medium._box_part.looking != null and absf(medium._box_part.looking.transform.basis.y.normalized().y) > 0.5, "control: a lying card's place is looked at lying, not on edge")
+	medium._box_part.stood["search"] = kept
+	medium._box_part.searched = kept_cards
 
 
 ## The card a front's material [param mat] is printed as ([method TableMedium._unseen_fronts]), or {}.
@@ -736,9 +736,9 @@ func _shoebox_show() -> void:
 		"staging": {"source": "box", "text": "front", "box_style": "shoebox", "contents": "piles",
 			"keepsakes": ["coin", "ticket"]},
 		"deck": deck})
-	_ok(medium._box.has("lid") and medium._file.size() > 0, "the shoebox has a lid and visible contents")
-	_ok(medium._box_objects.size() == 2, "two small keepsakes rest among the cards")
-	if not medium._box.has("lid"):
+	_ok(medium._box_part.stood.has("lid") and medium._box_part.files.size() > 0, "the shoebox has a lid and visible contents")
+	_ok(medium._box_part.objects.size() == 2, "two small keepsakes rest among the cards")
+	if not medium._box_part.stood.has("lid"):
 		return
 	var mesh: ArrayMesh = (medium._cards[0] as MeshInstance3D).mesh
 	var extent := mesh.get_aabb().size
@@ -746,51 +746,51 @@ func _shoebox_show() -> void:
 		"trading cards are 63.5 by 88.9 mm, not the large card slab")
 	_ok(CardFaces.face_px(medium._plan.look).y < CardFaces.FACE_PX.y,
 		"the printed face matches the trading card's aspect ratio")
-	var first: Transform3D = medium._box["at_k"][0]
+	var first: Transform3D = medium._box_part.stood["at_k"][0]
 	_ok(absf(first.basis.z.y) < 0.1, "the cards lie flat in their piles")
 	var start := float(medium._times()["opening"])
 	_posed(start + 0.1)
-	_ok((medium._box_objects[0] as Node3D).position.y < (medium._box["world"] as AABB).end.y and
-		(medium._box["lid"] as Node3D).position.x == (medium._box["lid_rest"] as Vector3).x,
+	_ok((medium._box_part.objects[0] as Node3D).position.y < (medium._box_part.stood["world"] as AABB).end.y and
+		(medium._box_part.stood["lid"] as Node3D).position.x == (medium._box_part.stood["lid_rest"] as Vector3).x,
 		"the keepsakes wait inside the closed box")
-	var before: Vector3 = (medium._box["node"] as Node3D).position
-	var before_basis: Basis = (medium._box["node"] as Node3D).basis
-	var lid_before: Vector3 = (medium._box["lid"] as Node3D).position
-	var shade_before := (medium._box["shadow"] as Decal).position
-	var file_before := (medium._file[0] as Node3D).position
+	var before: Vector3 = (medium._box_part.stood["node"] as Node3D).position
+	var before_basis: Basis = (medium._box_part.stood["node"] as Node3D).basis
+	var lid_before: Vector3 = (medium._box_part.stood["lid"] as Node3D).position
+	var shade_before := (medium._box_part.stood["shadow"] as Decal).position
+	var file_before := (medium._box_part.files[0] as Node3D).position
 	_posed(start + 2.9)
-	var center: Vector3 = (medium._box["node"] as Node3D).position
-	var center_basis: Basis = (medium._box["node"] as Node3D).basis
-	var shade_center := (medium._box["shadow"] as Decal).position
-	var file_center := (medium._file[0] as Node3D).position
+	var center: Vector3 = (medium._box_part.stood["node"] as Node3D).position
+	var center_basis: Basis = (medium._box_part.stood["node"] as Node3D).basis
+	var shade_center := (medium._box_part.stood["shadow"] as Decal).position
+	var file_center := (medium._box_part.files[0] as Node3D).position
 	_posed(start + 4.2)
-	var lid_raised: Vector3 = (medium._box["node"] as Node3D).transform * (medium._box["lid"] as Node3D).position
+	var lid_raised: Vector3 = (medium._box_part.stood["node"] as Node3D).transform * (medium._box_part.stood["lid"] as Node3D).position
 	_posed(start + 6.0)
-	_ok((medium._box_objects[0] as Node3D).visible, "the keepsakes appear when the box is open")
-	var after: Vector3 = (medium._box["node"] as Node3D).position
-	var after_basis: Basis = (medium._box["node"] as Node3D).basis
-	var lid_after: Vector3 = (medium._box["lid"] as Node3D).position
+	_ok((medium._box_part.objects[0] as Node3D).visible, "the keepsakes appear when the box is open")
+	var after: Vector3 = (medium._box_part.stood["node"] as Node3D).position
+	var after_basis: Basis = (medium._box_part.stood["node"] as Node3D).basis
+	var lid_after: Vector3 = (medium._box_part.stood["lid"] as Node3D).position
 	_ok(absf(before.x) > 0.2 and absf(center.x) < 0.03 and center.distance_to(after) < 0.001 and
 		absf(before_basis.z.z) > absf(before_basis.z.x) and
 		absf(center_basis.z.x) > absf(center_basis.z.z) and center_basis.is_equal_approx(after_basis),
 		"the shoebox arrives vertical, turns horizontal, and stays centered after opening")
 	_ok(shade_before.distance_to(shade_center) > 0.2 and file_before.distance_to(file_center) > 0.2,
 		"the soft shade and the cards travel with the shoebox")
-	_ok(lid_raised.y > (medium._box["world"] as AABB).end.y + 0.03,
+	_ok(lid_raised.y > (medium._box_part.stood["world"] as AABB).end.y + 0.03,
 		"the lid clears the rim before sliding aside")
 	_ok(lid_after.distance_to(lid_before) > 0.2 and lid_after.y < lid_before.y,
 		"the lid lifts off and settles beside the centered box")
-	var lid_world := (medium._box["lid"] as Node3D).global_position
-	var box_bounds: AABB = medium._box["world"]
+	var lid_world := (medium._box_part.stood["lid"] as Node3D).global_position
+	var box_bounds: AABB = medium._box_part.stood["world"]
 	_ok(absf(lid_world.x - box_bounds.get_center().x) > box_bounds.size.x + 0.01,
 		"the lid clears the side of the box")
 	var lid_layers := true
-	for panel in (medium._box["lid"] as Node3D).get_children():
+	for panel in (medium._box_part.stood["lid"] as Node3D).get_children():
 		lid_layers = lid_layers and ((panel as MeshInstance3D).layers & 1) == 0
 	_ok(lid_layers, "the tabletop's contact shade cannot project onto the lid")
 	_ok((medium._cards[0] as MeshInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
 		"a card pulled near the box wall cannot cast a jagged shadow across it")
-	_ok((medium._file[0] as MultiMeshInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+	_ok((medium._box_part.files[0] as MultiMeshInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
 		"the shoebox inventory cannot cast a hard shadow into the lid")
 	var keep := TablePositions.deck_keep(medium._deck_base, medium._box_keep(), medium._box_center())
 	var clear := true
@@ -801,12 +801,12 @@ func _shoebox_show() -> void:
 	_ok(clear, "laid cards keep clear of the centered shoebox")
 	var front := true
 	for slot in medium._plan.slots:
-		front = front and (slot["pos"] as Vector3).z > (medium._box["world"] as AABB).end.z + 0.02
+		front = front and (slot["pos"] as Vector3).z > (medium._box_part.stood["world"] as AABB).end.z + 0.02
 	_ok(front, "shoebox cards land in front of its near wall")
 	_ok((medium._plan.slots[0]["pos"] as Vector3).distance_to(medium._plan.slots[1]["pos"]) < 0.015,
 		"shown cards form a small stack")
 	var returned := medium._slot_xf(2).origin
-	_ok((medium._box["inner"] as AABB).grow(0.01).has_point(returned) and not _buried(returned),
+	_ok((medium._box_part.stood["inner"] as AABB).grow(0.01).has_point(returned) and not _buried(returned),
 		"a returned card lands on top of a pile inside the box")
 	var events: Array = medium._times()["events"]
 	var once := true
@@ -866,8 +866,8 @@ func _loose_box() -> void:
 	_ok(poses.size() > 200 and poses.size() <= CardTable.SHOEBOX_FILL and spread > 0.09 and turn > 0.1,
 		"loose cards occupy varied spots and angles, the box well filled (%d cards, %.1f mm, %.2f rad)" %
 		[poses.size(), spread * 1000.0, turn])
-	var source: Array = medium._box["at_k"]
-	var return_at: Vector3 = medium._box["return_at"]
+	var source: Array = medium._box_part.stood["at_k"]
+	var return_at: Vector3 = medium._box_part.stood["return_at"]
 	var on_top := true
 	var in_order := true
 	var apart := true
@@ -893,11 +893,11 @@ func _open_loose_box() -> void:
 	_load(47, [{}, {}, {}], {"look": {"candles": 0},
 		"staging": {"source": "box", "box_style": "open", "contents": "loose"}, "deck": deck})
 	var filed := 0
-	for f in medium._file:
+	for f in medium._box_part.files:
 		filed += ((f as MultiMeshInstance3D).multimesh as MultiMesh).instance_count
 	# (a card a search looks at is one of the twelve, kept in its place)
-	var kept := filed + medium._cards.size() + medium._searched.size()
-	_ok(not medium._box.is_empty() and kept == deck.size(),
+	var kept := filed + medium._cards.size() + medium._box_part.searched.size()
+	_ok(not medium._box_part.stood.is_empty() and kept == deck.size(),
 		"control: an open box of loose cards keeps its twelve planned cards (%d)" % kept)
 
 
@@ -918,12 +918,12 @@ func _buried(at: Vector3, but: Array = []) -> bool:
 
 
 func _box_poses() -> Array:
-	var out: Array = (medium._box["at_k"] as Array).duplicate()
+	var out: Array = (medium._box_part.stood["at_k"] as Array).duplicate()
 	# the places the table keeps: a headless run's MultiMesh hands back identity for every instance
-	out.append_array(medium._box.get("filed", []))
+	out.append_array(medium._box_part.stood.get("filed", []))
 	# the cards a search looks at are cards of the box too, each in its place
-	if not medium._searched.is_empty():
-		out.append_array(medium._box.get("search", []))
+	if not medium._box_part.searched.is_empty():
+		out.append_array(medium._box_part.stood.get("search", []))
 	return out
 
 
@@ -979,10 +979,10 @@ func _laid_over_box() -> void:
 	_ok(not TablePositions._on_cloth(stepped_back) and TablePositions._on_cloth([{"pos": Vector3(0.0, 0.0, -0.165), "yaw": 0.0}]),
 		"control: a row stepped back to z -0.44 is off the cloth, one at -0.165 is not")
 	# THE FLIGHT: from held up in front of the lens to a place right behind the box
-	if medium._box.is_empty():
+	if medium._box_part.stood.is_empty():
 		_ok(false, "a box stands to lay over")
 		return
-	var world: AABB = medium._box["world"]
+	var world: AABB = medium._box_part.stood["world"]
 	var from := medium._card_poses._present_xf(0, 0.0)
 	var to := Transform3D(Basis(), Vector3(world.get_center().x, TableMedium.CARD_T * 0.5, world.position.z - 0.08))
 	var lifted := func(f: float) -> float: return medium._card_poses._lay_lift(from, to, f)
@@ -1057,7 +1057,7 @@ func _front_details() -> void:
 		CardFaces.front_window({}, true).size.y < CardFaces.window().size.y,
 		"the face reserves room below the picture for printed details")
 	var filed := {"First": 0, "Second": 0}
-	for inst in medium._file:
+	for inst in medium._box_part.files:
 		var mm: MultiMesh = (inst as MultiMeshInstance3D).multimesh
 		for name in filed:
 			if mm.mesh.surface_get_material(1) == (medium._backs[name] as Dictionary)["mat"]:

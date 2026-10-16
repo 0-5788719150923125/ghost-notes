@@ -21,7 +21,7 @@ class_name Transport
 ## [Director] is the exception - a SIMULATION, not a function of t - so after a seek the show
 ## carries on from the scene that is up ([Echo] drifts it back toward the content). To reach a
 ## SCENE, `--scene <name>` pins one. A live reading seeks by SENTENCE through its conductor's
-## `seek` (generative_editor.gd); a synthesis take cannot seek, and its rail does not take clicks.
+## `seek` (reading_panel.gd); a synthesis take cannot seek, and its rail does not take clicks.
 ##
 ## IT NEVER APPEARS IN AN EXPORT, and not by a check: the render process returns out of main
 ## before Chrome is built. HOVERING THE RAIL SHOWS THE TIME under the pointer, so a click can be

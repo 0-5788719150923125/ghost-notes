@@ -316,7 +316,7 @@ static func table_size(seed: int) -> Vector2i:
 
 ## THE BOX THE CARDS ARE KEPT IN, for the set dresser of an episode whose cards come out of one: one of
 ## its things, marked `holds_cards`, open, big enough to file the cards upright in, stood where the deck
-## would be ([method TableMedium._stand_box]).
+## would be ([method TableBox.build]).
 static func box_rule() -> String:
 	return Rules.say("cards/set_dresser.box", _box_size())
 

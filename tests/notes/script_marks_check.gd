@@ -191,9 +191,9 @@ func _parsers_agree() -> void:
 				var t := Manuscript.mark_timestamp_pauses(ex + "The subject was moved.")
 				_ok(Manuscript.hesitations(t).size() == 1, "a log-entry time gets no rest")
 			"hum":
-				# Read off the source: the editor itself cannot load without the autoloads.
+				# Read off the source, where the held hums are (Splice.HUM_SECONDS)
 				var word := fill.to_lower().rstrip(".!?…")
-				var src := FileAccess.get_file_as_string("res://src/reading/reading_panel.gd")
+				var src := FileAccess.get_file_as_string("res://src/voice/splice.gd")
 				var m := RegEx.create_from_string("const HUM_SECONDS := \\{([^}]*)\\}").search(src)
 				_ok(m != null and m.get_string(1).contains("\"%s\":" % word),
 					"the hum example is not a held hum")
@@ -255,7 +255,7 @@ func _parsers_agree() -> void:
 				_ok(not Manuscript.unspoken("Before %s after." % ex).contains(fill),
 					"a note survives into the synthesis reading")
 			"delivery":
-				# a delivery is the voice's business (GenerativeEditor reads it, multi_voice_check holds
+				# a delivery is the voice's business (ReadingPanel reads it, multi_voice_check holds
 				# what it does); here: it carries its words, and it is never read aloud or printed
 				var lm := Manuscript._rx(Manuscript.DELIVERY).search(ex)
 				_ok(lm != null and lm.get_string(1) == fill, "a delivery mark does not carry its words")

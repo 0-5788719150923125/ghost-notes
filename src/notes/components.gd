@@ -63,13 +63,25 @@ const SLOTS := {
 ## THE WORKSPACES: the panels that run a note. Most components are a card on whichever panel is
 ## up; a few are an editor of their own, and name the workspace that is ([method workspace_of]).
 ## `section` is the panel's [Settings] section, and the name its script's marks are offered under.
+## The two a [ReadingPanel] runs say the rest of that panel too, so nothing extends it: `title` and
+## `hint` (its heading and the line under it), `hosts` (which of a note's component cards it can
+## show - a card table is its own presentation, so it shows no Picture) and `classic` (what a panel
+## started without a note - the command line, a gate - is made of).
 const WORKSPACES := {
 	"note": {"label": "Note", "section": "note",
 		"blurb": "The note's own panel: its words, and a card for each thing attached."},
 	"reading": {"label": "Reading", "section": "generative",
-		"blurb": "A voice reads the note: the cast, each speaker's delivery and room, the stream."},
+		"blurb": "A voice reads the note: the cast, each speaker's delivery and room, the stream.",
+		"title": "Generative",
+		"hint": "Write or open a chapter. It is spoken in chunks, so the show starts while the rest is still being made. Edit lists every mark the reading understands - speakers, hesitations, pictures, pronunciations.",
+		"hosts": ["picture", "storyboard", "look", "bookends"],
+		"classic": ["text", "voice", "picture", "illustrations", "look", "bookends"]},
 	"cards": {"label": "Cards", "section": "cards",
-		"blurb": "A show of cards: the episodes agents make from the note's brief, and the voice that reads them."},
+		"blurb": "A show of cards: the episodes agents make from the note's brief, and the voice that reads them.",
+		"title": "Cards",
+		"hint": "Open a show: its body is the brief every agent works from. Each seed is one episode - planned, shuffled, painted and written one card at a time by the agents, then read here in the voice below, at the table.",
+		"hosts": ["cards", "look", "bookends"],
+		"classic": ["text", "cards", "voice", "look", "bookends"]},
 	"lab": {"label": "Voice lab", "section": "synth",
 		"blurb": "Ghost Notes' own synthesizer and the fishing game that breeds its voices."},
 	"clip": {"label": "Masking", "section": "",
@@ -123,12 +135,19 @@ const REGISTRY := {
 		"needs": ["audio"], "provides": [], "requires": [], "slots": [], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": [], "block": "bookends", "card": "bookends",
 		"script": "res://src/show/bookends_card.gd"},
+	# ITS CARD IS THE EPISODE: the show's knobs, its agents and every step they make. It hands the
+	# reading what is read (the episode's script), where it is heard (the table's sound) and how it
+	# goes out (the episode's title and upload notes). `heading` is the card's title where it is
+	# not the label; the tips are what the bookends hold at a card table.
 	"cards": {"label": "Cards", "family": &"producer",
 		"blurb": "Agents plan, deal, paint and write a reading, one card at a time, at a table. The note's words are the show's brief: they say what the cards are.",
 		"needs": ["text"], "provides": ["text", "picture", "moments"], "requires": ["voice"],
 		"slots": ["presentation"], "workspace": "cards", "starter": "res://rules/cards/starter.md",
 		"capabilities": ["forward_plus", "subprocess", "agent:writer", "agent:painter"], "marks": [],
-		"block": "cards", "card": "episode"},
+		"block": "cards", "card": "episode", "heading": "Episode",
+		"script": "res://src/cards/episode_card.gd",
+		"intro_tip": "Seconds the table holds before the reader speaks, with the channel's name and the episode's title over it. The deck starts shuffling a beat before the first word.",
+		"outro_tip": "Seconds held after the last word, the spread on the table and the channel's name over it, fading picture and sound out together."},
 	"clip": {"label": "Clip", "family": &"picture",
 		"blurb": "A video, cut and prepared from a file or a link, with chroma-key effects over it: markers, tracks and renders.",
 		"needs": [], "provides": ["picture", "audio"], "requires": [], "slots": ["clock", "presentation"], "workspace": "clip",

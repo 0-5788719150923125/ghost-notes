@@ -16,6 +16,8 @@ THE TRAPS, each met once:
   the variables in `receivers` (cut_part_names.py patches them), run the gates, and read their
   logs - check.sh fails a SCRIPT ERROR behind a pass.
 - A banner's prose (plain `#` lines under it) belongs to the part: name the banner in `carry`.
+- The owner's `field` must be named like none of its members (the tool refuses it): MaskUndo's was
+  `_undo`, the name of the method it took, and the gates' calls were rewritten twice.
 
 spec.json:
   file      the owner script
@@ -238,6 +240,9 @@ while changed:
             changed = True
 
 kept = members - moved
+# the field the owner holds its part in must be no member of the owner: named like a moved method
+# (`_undo` for MaskUndo), every `ed._undo` a gate held was rewritten twice, to `ed._undo.undo`
+assert FIELD not in members, f"the owner already has a member named {FIELD}: pick another `field`"
 inherited = set(spec.get("inherited", []))
 for d in decls:
     if d["name"] in moved:

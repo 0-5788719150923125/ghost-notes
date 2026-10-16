@@ -34,7 +34,7 @@ var _lens: Lens3D
 
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var sparsity := 0.0 if rng.randf() < 0.4 else rng.randf_range(0.3, 0.7)
-	_act = Activation.new(Spectrum.BAND_COUNT, rng, sparsity)
+	_act = Activation.new(AudioFeatures.BAND_COUNT, rng, sparsity)
 	_light = Lighting.new(rng)
 	_free = 0.0 if rng.randf() < 0.65 else rng.randf_range(0.3, 1.0)
 	_use_eye = rng.randf() < 0.4
@@ -90,7 +90,7 @@ func _draw() -> void:
 	var glow := _light.glow()
 	var n := _f.bands.size()
 	if n == 0:
-		n = Spectrum.BAND_COUNT
+		n = AudioFeatures.BAND_COUNT
 
 	var mirror := int(params.mirror)
 	var thickness: float = params.thickness

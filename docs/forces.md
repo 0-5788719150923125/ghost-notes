@@ -15,46 +15,92 @@ Registry: `Primitives.REGISTRY` in [src/motion/primitives.gd](../src/motion/prim
 
 Constant downward pull, with an optional bouncy floor at a fixed altitude.
 
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `g` Pull | `1.8` | How hard every particle is pulled down. |
+| `floor_on` Floor | on | Whether particles land on a floor and bounce, or fall out of the frame. |
+| `floor` Floor height | `0.46` | How far below the center the floor sits. |
+| `bounce` Bounce | `0.35` | How much of its fall a particle keeps as it bounces off the floor: 0 lands dead, 1 bounces back as high. |
+
 Source: [src/motion/primitives.gd:35](../src/motion/primitives.gd#L35)
 
 ## `spring` - Spring
 
 Pull each particle back toward its home (recombine / cohesion).
 
-Source: [src/motion/primitives.gd:56](../src/motion/primitives.gd#L56)
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `k` Stiffness | `4.0` | How hard each particle is pulled back toward its home - the higher, the quicker a scattered shape comes back together. |
+
+Source: [src/motion/primitives.gd:68](../src/motion/primitives.gd#L68)
 
 ## `drag` - Drag
 
 Velocity damping.
 
-Source: [src/motion/primitives.gd:66](../src/motion/primitives.gd#L66)
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `k` Drag | `0.9` | How quickly a particle's speed dies away, per second. |
+
+Source: [src/motion/primitives.gd:84](../src/motion/primitives.gd#L84)
 
 ## `scatter` - Scatter
 
 Outward impulse on each beat (rising edge), from each particle's sub-group center. `once` fires a single time (oneshot crumble); `period` adds a fallback tempo when the track has no detectable beats.
 
-Source: [src/motion/primitives.gd:79](../src/motion/primitives.gd#L79)
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `period` Fallback period | `0.0` | Seconds between bursts when the music gives no beat to burst on; 0 bursts on beats only. |
+| `once` Once | off | Burst a single time and never again - a shape that crumbles once. |
+| `strength` Strength | `0.5` | How hard each burst throws the particles out from their group's center. |
+| `jitter` Jitter | `0.5` | How far each particle's direction strays from straight out, so a burst does not read as a perfect ring. |
+| `spin` Spin | `2.0` | How much spin a burst gives each particle. |
+
+Source: [src/motion/primitives.gd:103](../src/motion/primitives.gd#L103)
 
 ## `wind` - Wind
 
 A horizontal flow that varies with height and time (plus optional vertical lift), so detached particles drift as if in wind.
 
-Source: [src/motion/primitives.gd:111](../src/motion/primitives.gd#L111)
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `amp` Strength | `0.4` | How hard the wind pushes sideways; the treble adds a little more. |
+| `freq` Gusts | `0.4` | How fast the wind's sway comes and goes, and how tightly it varies with height. |
+| `lift` Lift | `0.0` | A steady push up (below 0) or down (above 0) on top of the sway. |
+
+Source: [src/motion/primitives.gd:149](../src/motion/primitives.gd#L149)
 
 ## `pulse` - Pulse
 
 Kinematic: grow/shrink a sub-group coherently about its center (rocks breathing), driven by energy/beat plus a slow organic wobble.
 
-Source: [src/motion/primitives.gd:134](../src/motion/primitives.gd#L134)
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `amp` Loudness | `0.3` | How much a group grows with the music's loudness. |
+| `beat` Beat | `0.4` | How much it swells on each beat. |
+| `organic` Breathing | `0.15` | A slow swelling of its own, each particle in its own time, whatever the music does. |
+
+Source: [src/motion/primitives.gd:182](../src/motion/primitives.gd#L182)
 
 ## `orbit` - Orbit
 
 Kinematic: revolve every particle around the origin, optionally spinning each.
 
-Source: [src/motion/primitives.gd:150](../src/motion/primitives.gd#L150)
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `rate` Rate | `0.2` | How fast everything turns about the center, in radians a second. |
+| `audio` With the music | `0.0` | How much faster it turns as the music gets louder. |
+| `spin` Spin | `1.0` | How much each particle turns on itself as it goes round: 1 keeps it facing the center. |
+
+Source: [src/motion/primitives.gd:208](../src/motion/primitives.gd#L208)
 
 ## `wobble` - Wobble
 
 Kinematic: independent per-particle organic drift (decorrelated by noise).
 
-Source: [src/motion/primitives.gd:161](../src/motion/primitives.gd#L161)
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `amp` Distance | `0.04` | How far each particle drifts from its home. |
+| `rate` Rate | `0.5` | How fast the drift wanders. |
+
+Source: [src/motion/primitives.gd:229](../src/motion/primitives.gd#L229)

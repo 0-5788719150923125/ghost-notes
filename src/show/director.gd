@@ -663,6 +663,24 @@ func session_seed() -> int:
 	return _session_seed
 
 
+# THE SHOW'S TIME IS THE SESSION CLOCK ([ShowFeed]): what the parts this mounts are handed.
+
+func show_time() -> float:
+	return Spectrum.current.time
+
+
+func show_length() -> float:
+	return Spectrum.song_length()
+
+
+func tail() -> float:
+	return Spectrum.tail if Spectrum.bookend_baked else outro_hold
+
+
+func signature() -> PackedFloat32Array:
+	return Spectrum.harmonic_signature()
+
+
 # The session seed, by priority:
 #   1. an explicit --seed N (the exporter passes it so a render reproduces a session, and
 #      it is the way to roll a *different* show for the same song on purpose) - taken

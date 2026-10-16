@@ -869,7 +869,7 @@ func _choose_film() -> void:
 	# spread simply goes without footage, and the panel is an ordinary scene rather than a
 	# blank rectangle waiting for a file. The whole feature self-throttles on this line -
 	# film appears as often as the machine can prepare it.
-	if not Films.warm(_film_clip, maxf(Spectrum.current.time, 0.0)):
+	if not Films.warm(_film_clip, maxf(feed.show_time(), 0.0)):
 		_film_clip = {}
 		_film_at = -1
 		return
@@ -922,7 +922,7 @@ func _cast_panel(i: int) -> void:
 	if i == _film_at and not _film_clip.is_empty():
 		var film := FilmScene.new()
 		film.feed = feed
-		film.set_clip(_film_clip, maxf(Spectrum.current.time, 0.0))
+		film.set_clip(_film_clip, maxf(feed.show_time(), 0.0))
 		film.init_with_seed(hash([_spread_i, i, "film"]), "static")
 		film.scene_name = "film"
 		vp.add_child(film)

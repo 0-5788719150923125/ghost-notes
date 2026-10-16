@@ -440,10 +440,8 @@ func start_workspace(key: String, source := "", note := "") -> void:
 				push_warning("ghost: a note's own panel needs a note - open one with --note")
 				return
 			_open_note_panel(note)
-		"reading":
-			_open_generative_editor()
-		"cards":
-			_open_generative_editor(preload("res://src/cards/cards_editor.gd"))
+		"reading", "cards":
+			_open_reading(key)
 		"lab":
 			_open_synth_editor()
 		"clip":
@@ -1006,10 +1004,12 @@ func _open_synth_editor() -> void:
 ## engine's 25-dimensional genome and a neural backend exposes a speaker id and
 ## three scalars, so one UI cannot serve both. See VOICE_PLAN.md section 6.
 ##
-## [param script] is the panel: the Generative one, or another [ReadingPanel] (the Cards mode's
-## [CardsEditor], whose reading is written by agents) - the same stream, export and subtitles.
-func _open_generative_editor(script: Script = preload("res://src/reading/generative_editor.gd")) -> void:
-	var editor: ReadingPanel = script.new()
+## [param workspace] is which one the panel runs: a note read aloud, or a show of cards, whose
+## reading is written by agents (its episode is a card on the same panel) - the same stream, export
+## and subtitles.
+func _open_reading(workspace := "reading") -> void:
+	var editor := ReadingPanel.new()
+	editor.workspace = workspace
 	editor.note_path = _note
 	editor.note_moved = note_moved
 	editor.reopen = reopen_note

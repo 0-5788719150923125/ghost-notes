@@ -37,6 +37,9 @@ var flux: float = 0.0
 ## changes land with the music. Stays low through a steady passage.
 var movement: float = 0.0
 
+## How many bands [member bands] holds, as [Spectrum] analyzes them.
+const BAND_COUNT := 64
+
 ## The full spectrum this frame: N band magnitudes, low to high, each ~0..1.
 var bands: PackedFloat32Array = PackedFloat32Array()
 

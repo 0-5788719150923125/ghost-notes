@@ -15,13 +15,13 @@ extends Node
 ##   tests/run_boot_probe.sh tests/reading/multi_voice_check.gd 120
 
 var _fails: Array = []
-var _ed: GenerativeEditor
+var _ed: ReadingPanel
 
 
 func _ready() -> void:
 	# Built by hand rather than added to the tree: _ready would start the voice
 	# host, and nothing here needs a python process.
-	_ed = GenerativeEditor.new()
+	_ed = ReadingPanel.new()
 	_ed._build_panel()
 	# SYNCED TO NOTHING, which every check here is written against: the settings are the
 	# author's own, and synced, the open chapter's title would be read before every test script.
@@ -292,18 +292,18 @@ func _check_settings_reach_the_request() -> void:
 		"the reader id did not follow the tab: %d / %d" % [a["speaker"], b["speaker"]])
 	_ok(float(b["pause_scale"]) == 3.0 and float(a["pause_scale"]) == 1.0,
 		"the pause scale did not follow the tab")
-	_ok(absf(_ed._pitch_ratio_of(_ed._cfg(1)) - 1.0) > 0.05
-		and absf(_ed._pitch_ratio_of(_ed._cfg(0)) - 1.0) < 0.001,
+	_ok(absf(Delivery.pitch_ratio_of(_ed._cfg(1)) - 1.0) > 0.05
+		and absf(Delivery.pitch_ratio_of(_ed._cfg(0)) - 1.0) < 0.001,
 		"the tone's pitch shift did not follow the tab")
 	# THE HOST PLAYS THE TONE BACK (piper.py `_resample`, band-limited), so the request has to
 	# carry the ratio: without it the pitch move is silently lost, the model having been asked
 	# to speak r times slower for nothing.
-	_ok(absf(float(b.get("play_ratio", 0.0)) - _ed._pitch_ratio_of(_ed._cfg(1))) < 1e-6
+	_ok(absf(float(b.get("play_ratio", 0.0)) - Delivery.pitch_ratio_of(_ed._cfg(1))) < 1e-6
 		and absf(float(a.get("play_ratio", 0.0)) - 1.0) < 1e-6,
 		"the tone's playback ratio did not reach the request: %s / %s"
 		% [a.get("play_ratio"), b.get("play_ratio")])
 	# ...and the seam between sentences is the incoming voice's own rest
-	_ok(_ed._seam_gap_of(_ed._cfg(1)) > _ed._seam_gap_of(_ed._cfg(0)),
+	_ok(Delivery.seam_gap_of(_ed._cfg(1)) > Delivery.seam_gap_of(_ed._cfg(0)),
 		"the seam did not follow the tab")
 
 
@@ -319,18 +319,18 @@ func _check_room_is_per_voice() -> void:
 	_ed._slots[1]["room"] = 0.7
 	_ed._slots[1]["ambience"] = 0.5
 	var fx := VoiceFX.new()
-	_ed._apply_fx(fx, _ed._cfg(0))
+	Delivery.apply_fx(fx, _ed._cfg(0))
 	var dry_echo := fx.echo_wet
 	var dry_pad := fx.pad
-	_ed._apply_fx(fx, _ed._cfg(1))
+	Delivery.apply_fx(fx, _ed._cfg(1))
 	_ok(fx.echo_wet > dry_echo + 0.5 and fx.pad > dry_pad + 0.2,
 		"one chain did not re-dial between voices (echo %.2f->%.2f, pad %.2f->%.2f)"
 		% [dry_echo, fx.echo_wet, dry_pad, fx.pad])
 	# the lean too: one reader may move while the other sits still
 	_ed._slots[1]["lean"] = 0.6
-	_ed._apply_fx(fx, _ed._cfg(1))
+	Delivery.apply_fx(fx, _ed._cfg(1))
 	var leaning := fx.lean
-	_ed._apply_fx(fx, _ed._cfg(0))
+	Delivery.apply_fx(fx, _ed._cfg(0))
 	_ok(absf(leaning - 0.6) < 0.001 and fx.lean == 0.0,
 		"the lean did not follow the voice (%.2f, then %.2f)" % [leaning, fx.lean])
 
@@ -384,7 +384,7 @@ func _check_take_channels() -> void:
 		frames[i] = Vector2(v * 0.6, v * 1.3)
 	for ch in [1, 2]:
 		var path := "user://_lean_probe_%d.wav" % ch
-		var abs_path: String = _ed._write_wav(path, frames, ch)
+		var abs_path: String = Splice.write_wav(path, frames, ch, _ed._sr)
 		var wav := AudioStreamWAV.load_from_file(abs_path)
 		DirAccess.remove_absolute(abs_path)
 		_ok(wav != null and wav.stereo == (ch == 2) and wav.mix_rate == _ed._sr,
@@ -593,8 +593,8 @@ func _check_turn_rest() -> void:
 	_ed._turn.value = 0.0
 	_ok(_ed._gap_before(chunks, 2, s) == within, "Turn 0 still lengthened the handover")
 	# ...and the whole rest is capped however far it is pushed
-	_ed._turn.value = _ed.MAX_TURN_SCALE
-	_ok(_ed._gap_before(chunks, 2, s) <= ReadingPanel.TURN_CEILING + 0.001,
+	_ed._turn.value = Delivery.MAX_TURN_SCALE
+	_ok(_ed._gap_before(chunks, 2, s) <= Delivery.TURN_CEILING + 0.001,
 		"the handover ran past the ceiling: %.2fs" % _ed._gap_before(chunks, 2, s))
 	_ok(_ed._gap_before(chunks, 2, s) > across, "the top of the dial is no longer than the middle")
 	_ed._turn.value = 1.0
@@ -883,7 +883,7 @@ func _check_hesitation_splice() -> void:
 	# three words: 0.0-0.3, 0.4-0.6, 0.7-0.95
 	var spans: Array = [{"index": 0, "t0": 0.0, "t1": 0.3}, {"index": 1, "t0": 0.4, "t1": 0.6},
 		{"index": 2, "t0": 0.7, "t1": 0.95}]
-	var r: Dictionary = _ed._splice_holds(pcm, [{"tok": 0, "sec": 1.0, "before": false}], spans, 1.0)
+	var r: Dictionary = Splice.chunk(pcm, [{"tok": 0, "sec": 1.0, "before": false}], spans, 1.0, _ed._sr)
 	var out: PackedFloat32Array = r["pcm"]
 	_ok(absi(out.size() - 2 * sr) <= 1, "the take grew by %d samples, not one second" % (out.size() - sr))
 	var cut := int(0.35 * sr)
@@ -891,31 +891,31 @@ func _check_hesitation_splice() -> void:
 	_ok(absf(out[int(0.2 * sr)] - 0.5) < 1e-6, "audio before the rest changed")
 	_ok(absf(out[int(1.5 * sr)] - 0.5) < 1e-6, "audio after the rest did not move by its length")
 	var cuts: Array = r["cuts"]
-	_ok(is_equal_approx(ReadingPanel._shifted(0.3, cuts, 1.0, false), 0.3),
+	_ok(is_equal_approx(Splice.shifted(0.3, cuts, 1.0, false), 0.3),
 		"the word before the rest moved")
-	_ok(is_equal_approx(ReadingPanel._shifted(0.4, cuts, 1.0, true), 1.4),
+	_ok(is_equal_approx(Splice.shifted(0.4, cuts, 1.0, true), 1.4),
 		"the word after the rest did not move by it")
 	# a rest before the first word opens the chunk
-	var r2: Dictionary = _ed._splice_holds(pcm, [{"tok": 0, "sec": 0.5, "before": true}], spans, 1.0)
-	_ok(is_equal_approx(ReadingPanel._shifted(0.0, r2["cuts"], 1.0, true), 0.5),
+	var r2: Dictionary = Splice.chunk(pcm, [{"tok": 0, "sec": 0.5, "before": true}], spans, 1.0, _ed._sr)
+	_ok(is_equal_approx(Splice.shifted(0.0, r2["cuts"], 1.0, true), 0.5),
 		"a leading rest did not push the first word back")
 	_ok(absf((r2["pcm"] as PackedFloat32Array)[int(0.25 * sr)]) < 1e-6, "a leading rest is not silence")
 	# ...and one after the last word closes it, moving nothing
-	var r3: Dictionary = _ed._splice_holds(pcm, [{"tok": 2, "sec": 0.5, "before": false}], spans, 1.0)
-	_ok(is_equal_approx(ReadingPanel._shifted(0.95, r3["cuts"], 1.0, false), 0.95)
+	var r3: Dictionary = Splice.chunk(pcm, [{"tok": 2, "sec": 0.5, "before": false}], spans, 1.0, _ed._sr)
+	_ok(is_equal_approx(Splice.shifted(0.95, r3["cuts"], 1.0, false), 0.95)
 			and (r3["pcm"] as PackedFloat32Array).size() == sr + sr / 2,
 		"a trailing rest moved a word or was the wrong length")
 	# the resample ratio divides the model's clock
-	var r4: Dictionary = _ed._splice_holds(pcm, [{"tok": 0, "sec": 1.0, "before": false}], spans, 2.0)
-	_ok(is_equal_approx(ReadingPanel._shifted(0.4, r4["cuts"], 2.0, true), 1.2),
+	var r4: Dictionary = Splice.chunk(pcm, [{"tok": 0, "sec": 1.0, "before": false}], spans, 2.0, _ed._sr)
+	_ok(is_equal_approx(Splice.shifted(0.4, r4["cuts"], 2.0, true), 1.2),
 		"the splice ignored the resample ratio")
 	# THE HOST'S REST WINS over the midpoint of two spans: word spans touch, and the host knows
 	# where the quiet is between them
 	var placed: Array = spans.duplicate(true)
 	(placed[0] as Dictionary)["rest"] = 0.37
 	(placed[1] as Dictionary)["rest"] = 0.66
-	var r5: Dictionary = _ed._splice_holds(pcm, [{"tok": 0, "sec": 0.5, "before": false},
-		{"tok": 2, "sec": 0.5, "before": true}], placed, 1.0)
+	var r5: Dictionary = Splice.chunk(pcm, [{"tok": 0, "sec": 0.5, "before": false},
+		{"tok": 2, "sec": 0.5, "before": true}], placed, 1.0, _ed._sr)
 	var c5: Array = r5["cuts"]
 	_ok(c5.size() == 2 and is_equal_approx(float(c5[0]["t"]), 0.37)
 			and is_equal_approx(float(c5[1]["t"]), 0.66),
@@ -934,8 +934,8 @@ func _check_hesitation_splice() -> void:
 	var hushed := pcm.duplicate()
 	for i in range(int(0.31 * sr), int(0.39 * sr)):
 		hushed[i] = 0.0
-	var r6: Dictionary = _ed._splice_holds(hushed, [{"tok": 0, "sec": 0.5, "before": false}],
-		spans, 1.0)
+	var r6: Dictionary = Splice.chunk(hushed, [{"tok": 0, "sec": 0.5, "before": false}],
+		spans, 1.0, _ed._sr)
 	var o6: PackedFloat32Array = r6["pcm"]
 	_ok(o6.slice(0, int(0.31 * sr)) == hushed.slice(0, int(0.31 * sr)),
 		"a cut in silence reached into the word before it")
@@ -959,16 +959,16 @@ func _check_hum_is_held() -> void:
 	for i in range(int(0.3 * sr), int(0.6 * sr)):
 		pcm[i] = 0.3 * sin(TAU * 220.0 * float(i) / float(sr))       # the next word
 	var spans: Array = [{"index": 0, "t0": 0.0, "t1": 0.2}, {"index": 1, "t0": 0.3, "t1": 0.6}]
-	var r: Dictionary = _ed._splice_holds(pcm, [{"tok": 0, "sec": 0.0, "before": false, "hum": 0.75}], spans, 1.0)
+	var r: Dictionary = Splice.chunk(pcm, [{"tok": 0, "sec": 0.0, "before": false, "hum": 0.75}], spans, 1.0, _ed._sr)
 	var o: PackedFloat32Array = r["pcm"]
-	var end := ReadingPanel._shifted(0.2, r["cuts"], 1.0, false)
+	var end := Splice.shifted(0.2, r["cuts"], 1.0, false)
 	_ok(absf(end - 0.75) < 0.03, "the hum was held to %.3fs, wanted 0.75" % end)
-	_ok(absf(ReadingPanel._shifted(0.3, r["cuts"], 1.0, true) - (0.3 + end - 0.2)) < 0.002,
+	_ok(absf(Splice.shifted(0.3, r["cuts"], 1.0, true) - (0.3 + end - 0.2)) < 0.002,
 		"the next word did not move by what the hum gained")
 	# STEADY until it starts to fade, and only then does it die away.
 	var cut: Dictionary = (r["cuts"] as Array)[0]
 	var c0 := float(cut["at"]) / float(sr)
-	var fade_at := c0 + ReadingPanel.HUM_FADE_FROM * (end - c0)
+	var fade_at := c0 + Splice.HUM_FADE_FROM * (end - c0)
 	var hop := int(0.01 * sr)
 	var lo := 1e9
 	for f in range(2, int(fade_at * 100.0)):
@@ -987,8 +987,8 @@ func _check_hum_is_held() -> void:
 ## its start, and it has died away rather than stopping at full strength.
 func _check_hum_falls(fill: PackedFloat32Array, sr: int) -> void:
 	var n := int(0.02 * sr)
-	var p0: Vector3 = _ed._period_of(fill, 0, n)
-	var p1: Vector3 = _ed._period_of(fill, int(0.8 * float(fill.size())) - n, n)
+	var p0: Vector3 = Splice.period_of(fill, 0, n, _ed._sr)
+	var p1: Vector3 = Splice.period_of(fill, int(0.8 * float(fill.size())) - n, n, _ed._sr)
 	var semis := 12.0 * log(p1.x / maxf(p0.x, 1.0)) / log(2.0)
 	_ok(p0.x > 0.0 and p1.x > 0.0 and semis > 2.0,
 		"the held hum does not fall (%.1f semitones from its start to 80%% through)" % semis)
@@ -1028,7 +1028,7 @@ func _check_hum_is_smooth() -> void:
 		v *= 1.0 + fry * (0.8 + 1.2 * sin(PI * ph))
 		pcm[i] = 0.2 * env * v
 	var spans: Array = [{"index": 0, "t0": 0.0, "t1": 0.3}]
-	var r: Dictionary = _ed._splice_holds(pcm, [{"tok": 0, "sec": 0.0, "before": false, "hum": 0.9}], spans, 1.0)
+	var r: Dictionary = Splice.chunk(pcm, [{"tok": 0, "sec": 0.0, "before": false, "hum": 0.9}], spans, 1.0, _ed._sr)
 	var cuts: Array = r["cuts"]
 	_ok(cuts.size() == 1 and cuts[0].has("fill"), "the gliding hum was not held")
 	if cuts.size() != 1 or not cuts[0].has("fill"):
@@ -1047,7 +1047,7 @@ func _check_hum_is_smooth() -> void:
 	_ok(held <= own * 1.05, "the held hum has a step %.4f past the hum's own largest %.4f" % [held, own])
 	var hop := int(0.01 * sr)
 	var rms := []
-	for i in range(0, int(ReadingPanel.HUM_FADE_FROM * float(fill.size())) - hop, hop):
+	for i in range(0, int(Splice.HUM_FADE_FROM * float(fill.size())) - hop, hop):
 		var e := 0.0
 		for k in hop:
 			e += fill[i + k] * fill[i + k]
@@ -1061,7 +1061,7 @@ func _check_hum_is_smooth() -> void:
 		dev += (v - mean) * (v - mean)
 	var flutter := sqrt(dev / float(rms.size())) / maxf(mean, 1e-9)
 	_ok(flutter < 0.1, "the held hum flutters (10 ms loudness varies %.2f of its mean)" % flutter)
-	var pc: Vector3 = _ed._period_of(fill, 0, int(0.02 * sr))
+	var pc: Vector3 = Splice.period_of(fill, 0, int(0.02 * sr), _ed._sr)
 	_ok(pc.x > 0.0 and float(sr) / pc.x > 150.0,
 		"the hum was held in its fry (%.0f Hz)" % (float(sr) / maxf(pc.x, 1.0)))
 
@@ -1182,7 +1182,7 @@ func _check_delivery_marks() -> void:
 		"an excited stretch is not quicker, brighter and tighter than the voice's own")
 	_ok(float(lit["length_scale"]) > float(calm["length_scale"]) * 0.9 and float(lit["lean_semis"]) <= 0.7,
 		"a delivery moved the voice by more than a lean: %s against %s" % [str(lit), str(calm)])
-	_ok(_ed.lean_of("nonsense words") == Vector4.ZERO and _ed.lean_of("quicker quicker quicker") == Vector4(2, 0, 0, 0),
+	_ok(Delivery.lean_of("nonsense words") == Vector4.ZERO and Delivery.lean_of("quicker quicker quicker") == Vector4(2, 0, 0, 0),
 		"an unknown word moved the voice, or three steps went past two")
 	# A PASSAGE THAT OPENS ON SOMETHING STRIPPED (an authoring note and its blank line): a mark is
 	# noted where it falls BEFORE the passage's leading whitespace goes, and applied to the text
@@ -1195,6 +1195,6 @@ func _check_delivery_marks() -> void:
 		and float(led_pace[2]) > float(led_pace[1]),
 		"a delivery marked after a stripped opening did not start on its own first sentence: %s" % str(led_pace))
 	# VOLUME is effort alone: louder asks for more effort and no pitch at all
-	var loud := {"tokens": [], "plan_u": 0.0, "plan_v": 0.0, "lean": _ed.lean_of("louder")}
+	var loud := {"tokens": [], "plan_u": 0.0, "plan_v": 0.0, "lean": Delivery.lean_of("louder")}
 	var la: Dictionary = _ed._request_args(_ed._cfg(0), loud)
 	_ok(float(la["lean_effort"]) > 0.0 and float(la["lean_semis"]) == 0.0, "louder moved the pitch, or not the effort")

@@ -124,13 +124,15 @@ func _nova() -> bool:
 
 
 func _panel() -> bool:
-	var ed = load("res://src/cards/cards_editor.gd").new()
-	ed._build_panel()
+	var panel = load("res://src/reading/reading_panel.gd").new()
+	panel.workspace = "cards"
+	panel._build_panel()
+	var ed = panel._block_cards["cards"]      # the episode's card ([EpisodeCard])
 	# NOT THE AUTHOR'S SHOW. A panel comes up synced to whatever document the person running
 	# this has open, and DocSource.set_field writes a synced document at once - so this gate read
 	# the author's real show (and failed on its tags) and could have written into it.
-	ed._doc._sync = false
-	ed._doc._fields = {}
+	panel._doc._sync = false
+	panel._doc._fields = {}
 	ed._knobs["writer"] = "claude"
 	ed._show_knobs()
 	var pick: OptionButton = ed._writer_effort
@@ -156,5 +158,5 @@ func _panel() -> bool:
 	ed._knobs["writer_model"] = "m-small"
 	ed._fill_efforts(pick)
 	_ok(pick.get_item_text(pick.selected) == "Ultra  (not offered)", "a level this model does not offer stays, marked")
-	ed.free()
+	panel.free()
 	return true

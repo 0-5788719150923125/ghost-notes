@@ -23,7 +23,7 @@ var _fails: PackedStringArray = []
 func _initialize() -> void:
 	var ed: Node = load("res://src/masking/mask_editor.gd").new()
 	root.add_child(ed)
-	ed._ensure_audio_bus()
+	ed._audio_fx.ensure_bus()
 
 	var bi := AudioServer.get_bus_index(ed.MASK_BUS)
 	_expect(bi >= 0, "the effects bus was not created")
@@ -324,12 +324,12 @@ static func _layer(env: float) -> Dictionary:
 
 
 func _read(ed: Node, l: Dictionary) -> Dictionary:
-	ed._apply_audio_fx(l)
+	ed._audio_fx.apply(l)
 	return {
-		"bass": ed._fx_eq.get_band_gain_db(0), "ratio": ed._fx_comp.ratio,
-		"tap1_db": ed._fx_delay.tap1_level_db, "tap1_ms": ed._fx_delay.tap1_delay_ms,
-		"tap2_ms": ed._fx_delay.tap2_delay_ms, "fb_lp": ed._fx_delay.feedback_lowpass,
-		"wet": ed._fx_reverb.wet, "room": ed._fx_reverb.room_size,
+		"bass": ed._audio_fx._fx_eq.get_band_gain_db(0), "ratio": ed._audio_fx._fx_comp.ratio,
+		"tap1_db": ed._audio_fx._fx_delay.tap1_level_db, "tap1_ms": ed._audio_fx._fx_delay.tap1_delay_ms,
+		"tap2_ms": ed._audio_fx._fx_delay.tap2_delay_ms, "fb_lp": ed._audio_fx._fx_delay.feedback_lowpass,
+		"wet": ed._audio_fx._fx_reverb.wet, "room": ed._audio_fx._fx_reverb.room_size,
 	}
 
 

@@ -375,7 +375,7 @@ func _on_beat(f: AudioFeatures) -> void:
 # all, which is how it gets developed.
 func _reink() -> void:
 	var n_inks := _inks.size()
-	var sig := Spectrum.harmonic_signature()
+	var sig := signature()
 	var peak := 0.0
 	if sig.size() >= 12:
 		for k in 12:

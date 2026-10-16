@@ -41,6 +41,7 @@ func _run() -> void:
 		"a tablet chapter is read off its screen: no title, no marks (got %s)" % str(read))
 	_ok(own.cast_text("the text") == "the text", "the cast comes from the note's own text")
 	_ok(own.test_passage("fallback") == "fallback", "the note's walk auditions with the panel's own passage")
+	_ok(own.reads_source(), "an edit to the note leaves the note's reading out of date")
 
 	print("-- Cards' walk")
 	var root_was: String = episodes.get("root")
@@ -62,6 +63,7 @@ func _run() -> void:
 		and String(spoken["body"]).contains("Fool"),
 		"the episode is read without its table marks or a title (got %s)" % str(spoken))
 	_ok(cards.test_passage("fallback") != "fallback", "Cards auditions a voice with its own passage")
+	_ok(not cards.reads_source(), "an edit to the brief changed the reading of the episode up now")
 	var none: RefCounted = episode_walk.new(func() -> RefCounted: return null)
 	_ok(none.body(brief) == "" and none.cast_text(brief) == "",
 		"CONTROL: with no episode up there is nothing to read - and never the brief")

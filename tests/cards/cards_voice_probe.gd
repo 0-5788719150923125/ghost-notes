@@ -14,7 +14,8 @@ extends Node
 const W := 1280
 const H := 720
 
-var _ed: CardsEditor
+var _ed: ReadingPanel
+var _show: EpisodeCard        # the panel's episode
 var _stage: SubViewport
 var _medium: Medium
 var _subs: Subtitles
@@ -49,17 +50,19 @@ func _run() -> void:
 		print("cards_voice_probe: FAILED - no show document at %s" % spec)
 		get_tree().quit(2)
 		return
-	_ed = CardsEditor.new()
+	_ed = ReadingPanel.new()
+	_ed.workspace = "cards"
 	_ed.begin_stream = _begin
 	_ed.end_stream = func() -> void: pass
 	add_child(_ed)
+	_show = _ed._block_cards["cards"]
 	_ok(Director.resolved_medium() == "table", "the Cards mode pins its medium (%s)" % Director.resolved_medium())
 	if not spec.is_empty():
 		_ed._doc._on_picked(ProjectSettings.globalize_path(spec) if spec.begins_with("res://") else spec)
-	_ed._knobs["seed"] = seed
-	_ed._open_episode()
-	print("cards_voice_probe: show '%s' (%s), episode #%d complete=%s" % [_ed._show_title(),
-		_ed._show_key(), seed, str(_ed._episode.complete())])
+	_show._knobs["seed"] = seed
+	_show._open_episode()
+	print("cards_voice_probe: show '%s' (%s), episode #%d complete=%s" % [_show._show_title(),
+		_show._show_key(), seed, str(_show._episode.complete())])
 	var t0 := Time.get_ticks_msec()
 	while _ed._voice_meta.is_empty() and Time.get_ticks_msec() - t0 < 180000:
 		await get_tree().process_frame
@@ -75,7 +78,7 @@ func _run() -> void:
 	for c in _ed._chunks:
 		holds += ((c as Dictionary).get("holds", []) as Array).size()
 	print("cards_voice_probe: planned %d chunks, %d rests" % [_ed._chunks.size(), holds])
-	var acts: Array = CardReading.parse(_ed._episode.script())["actions"]
+	var acts: Array = CardReading.parse(_show._episode.script())["actions"]
 	_ok(holds == acts.size(), "every action has its rest in the voice (%d rests, %d actions)" % [holds, acts.size()])
 	var shots := _times.duplicate()
 	shots.sort()
@@ -113,7 +116,7 @@ func _run() -> void:
 		if j.parse(side) == OK and j.data is Dictionary:
 			var book: Dictionary = (j.data as Dictionary).get("book", {})
 			var table: Dictionary = book.get("table", {})
-			_ok(not table.is_empty() and (table.get("cards", []) as Array).size() == _ed._episode.card_count(),
+			_ok(not table.is_empty() and (table.get("cards", []) as Array).size() == _show._episode.card_count(),
 				"the sidecar carries the episode for the render's table")
 			_ok(CardReading.is_reading(String(book.get("source", ""))), "the sidecar carries the reading's script")
 			var words: Array = (j.data as Dictionary).get("words", [])

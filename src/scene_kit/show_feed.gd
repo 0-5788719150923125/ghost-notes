@@ -95,6 +95,37 @@ func session_seed() -> int:
 	return 0
 
 
+# --- the show's time ------------------------------------------------------------------------------
+# A PART IS A FUNCTION OF THE TIME IT IS HANDED. A medium, the table and the scenes read the
+# show's clock here, never off the audio engine: a show whose time is not a song's - a preview
+# scrubbed by a timeline, a live show conducted by what its agents write - drives them by
+# answering these, and they cannot tell (next/structure.md, step 11).
+
+## WHERE THE SHOW IS, in seconds: the moment a part draws itself at - the whole timeline, the
+## bookend's lead-in included, and below 0 before it starts. [Director]: the session clock.
+func show_time() -> float:
+	return 0.0
+
+
+## How long the show is on that same clock, bookends included; 0 while nobody knows (a stream
+## still being made, a live show).
+func show_length() -> float:
+	return 0.0
+
+
+## The seconds held after the last word, on the clock the show is timed by: the take's own tail
+## where the bookend was baked into it (a render), else the note's outro hold.
+func tail() -> float:
+	return outro_hold
+
+
+## The music's harmonic signature now (12 chroma bins and a coarse shape - [HarmonicSignature]),
+## empty when nothing is heard: the continuous half of harmonic seeding, a scene's palette pulled
+## toward the music's key.
+func signature() -> PackedFloat32Array:
+	return PackedFloat32Array()
+
+
 ## Seconds the scene that is up may still be held, or a deliberately large number when nothing
 ## is cutting: a caller then uses its own natural timing ([method Director.hold_remaining]).
 func hold_remaining() -> float:

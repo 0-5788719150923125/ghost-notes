@@ -187,7 +187,7 @@ func _queue() -> bool:
 
 func _rows() -> bool:
 	print("-- the Cards rows")
-	var ed: GDScript = load("res://src/cards/cards_editor.gd")
+	var ed: GDScript = load("res://src/cards/episode_card.gd")
 	var makers: Dictionary = ed.MAKERS
 	var missing := PackedStringArray()
 	for r in ed.ROWS:

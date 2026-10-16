@@ -21,9 +21,10 @@ extends Node
 ## cloth beside a card, one held at a face's height beside it, one carried on it the whole way (carried
 ## on a moving card nearly all the time, and a long ride) - each caught by the check it was made for.
 ##
-##   tests/run_boot_probe.sh tests/table/wash_drift_check.gd 180
+##   tests/run_boot_probe.sh tests/table/wash_drift_check.gd 300
 ##
-## A BOOT probe (the medium reaches the Director); no GPU - the tracks are numbers.
+## A BOOT probe (the medium reaches the Director); no GPU - the tracks are numbers. It takes about
+## 180 s alone (2026-10-15: six washes of the real plan), so its backstop is 300.
 
 const SEEDS := [11, 12, 13, 14, 15, 16]
 const WASH_S := 22.0

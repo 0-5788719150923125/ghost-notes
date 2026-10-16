@@ -13,7 +13,7 @@ extends Node
 ## frames for deterministic, analyzer-independent Movie Maker exports.
 
 ## Number of log-spaced bands in [member AudioFeatures.bands].
-const BAND_COUNT := 64
+const BAND_COUNT := AudioFeatures.BAND_COUNT
 const FREQ_MIN := 30.0
 const FREQ_MAX := 16000.0
 

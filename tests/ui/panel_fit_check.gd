@@ -49,9 +49,10 @@ const SidePanel_ := preload("res://src/ui/side_panel.gd")
 const HEIGHTS := [1920, 1080, 720]
 
 var _fails: Array = []
-var _ed: GenerativeEditor
+var _ed: ReadingPanel
 var _synth: SynthEditor
-var _cards: CardsEditor
+var _cards: ReadingPanel
+var _show: EpisodeCard        # the Cards panel's episode
 
 
 func _ready() -> void:
@@ -61,7 +62,7 @@ func _ready() -> void:
 func _run() -> void:
 	# Built by hand and reparented: _ready would start the voice host, and the panel has to be
 	# IN the tree or it has no viewport to fit itself to.
-	_ed = GenerativeEditor.new()
+	_ed = ReadingPanel.new()
 	_ed._build_panel()
 	_ed.remove_child(_ed._panel)
 	add_child(_ed._panel)
@@ -73,8 +74,10 @@ func _run() -> void:
 	_synth.remove_child(_synth._panel)
 	add_child(_synth._panel)
 
-	_cards = CardsEditor.new()
+	_cards = ReadingPanel.new()
+	_cards.workspace = "cards"
 	_cards._build_panel()
+	_show = _cards._block_cards["cards"]
 	_cards.remove_child(_cards._panel)
 	add_child(_cards._panel)
 	_cards.remove_child(_cards._repace_timer)
@@ -293,9 +296,9 @@ func _cards_episodes() -> void:
 		ep.write_json("plan", {"episode_title": "Why You Keep Waking Up At 4AM (And What The Universe Is "
 			+ "Trying To Tell You - It Is Usually Your Bladder) #%d" % seed,
 			"spread": {"positions": [{"name": "Past"}, {"name": "Present"}, {"name": "Future"}]}})
-	_cards._knobs["show"] = "fit-check"
-	_cards._knobs["seed"] = 11
-	_cards._open_episode()
+	_show._knobs["show"] = "fit-check"
+	_show._knobs["seed"] = 11
+	_show._open_episode()
 
 
 ## AT ITS DECLARED WIDTH, whatever its rows hold - and whatever its buttons say: Play is
@@ -324,30 +327,30 @@ func _check_width(name: String, panel: SidePanel_) -> void:
 ## made yet)... I have to pick a DIFFERENT entry, then return to that one"). The control is the
 ## entry before the panel looks again - the stale one the report was about.
 func _check_episode_entry_follows() -> void:
-	var pick: OptionButton = _cards._episode_pick
+	var pick: OptionButton = _show._episode_pick
 	var fresh := CardEpisode.open("fit-check", 13)
 	DirAccess.remove_absolute(fresh.file_of("plan"))       # a run before this one made it
-	_cards._knobs["seed"] = 13
-	_cards._open_episode()
-	var at := _cards._episode_seeds.find(13)
+	_show._knobs["seed"] = 13
+	_show._open_episode()
+	var at := _show._episode_seeds.find(13)
 	_ok(at >= 0 and pick.get_item_text(at).ends_with("(not made yet)"),
 		"a fresh episode is listed as not made yet (%s)" % (pick.get_item_text(at) if at >= 0 else "missing"))
 	CardEpisode.open("fit-check", 13).write_json("plan", {"episode_title": "Made While You Watched",
 		"spread": {"positions": [{"name": "Past"}]}})
 	_ok(pick.get_item_text(at).ends_with("(not made yet)"), "control: the entry is stale until the panel looks again")
-	_cards._refresh_rows()
+	_show._refresh_rows()
 	_ok(pick.get_item_text(at).ends_with("Made While You Watched") and pick.selected == at
 		and pick.text.ends_with("Made While You Watched"),
 		"its entry takes the title once the plan lands, shown on the button (%s)" % pick.text)
 	DirAccess.remove_absolute(fresh.file_of("plan"))
-	_cards._knobs["seed"] = 11
-	_cards._open_episode()
+	_show._knobs["seed"] = 11
+	_show._open_episode()
 
 
 ## THE CONTROL for the Cards panel: its episode list sized to its items again must push the
 ## panel out, or the long titles never reached it and the width check above proved nothing.
 func _check_long_items_would_widen() -> void:
-	var pick: OptionButton = _cards._episode_pick
+	var pick: OptionButton = _show._episode_pick
 	_ok(pick.item_count >= 2 and pick.get_item_text(0).length() > 80,
 		"the control is wrong - the Cards episode list holds %d item(s), not the long titles" % pick.item_count)
 	pick.fit_to_longest_item = true

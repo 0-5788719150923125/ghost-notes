@@ -77,13 +77,13 @@ func _run() -> void:
 
 	print("a table with a light of its own")
 	_lay("dark", {"light": DAY})
-	var rig = medium._rig
+	var rig = medium._light_part._rig
 	_ok(rig != null, "the light is built")
-	_ok(not medium._lamp.visible and not medium._fill.visible and medium._glows.is_empty(),
-		"the lamp, the fill and the room's candles give way to it (%s, %s, %d)" % [medium._lamp.visible, medium._fill.visible, medium._glows.size()])
+	_ok(not medium._lamp.visible and not medium._fill.visible and medium._light_part._glows.is_empty(),
+		"the lamp, the fill and the room's candles give way to it (%s, %s, %d)" % [medium._lamp.visible, medium._fill.visible, medium._light_part._glows.size()])
 	_ok(medium._env.ambient_light_color.is_equal_approx(Color.html("#b8c8d8")) and medium._env.ambient_light_energy > 0.0,
 		"its sky is the environment's ambient")
-	_ok(rig.leads() and medium._key_flame == -1 and medium.lead_name() == "the sun", "the sun leads, every candle a fill (%s)" % medium.lead_name())
+	_ok(rig.leads() and medium._light_part._key_flame == -1 and medium._light_part.lead_name() == "the sun", "the sun leads, every candle a fill (%s)" % medium._light_part.lead_name())
 	var cast_screens := 0
 	for l in medium._lights:
 		cast_screens += 1 if (((l as Dictionary)["light"] as OmniLight3D).shadow_caster_mask & Lights.SCREEN_MASK) != 0 else 0
@@ -97,7 +97,7 @@ func _run() -> void:
 	_ok(rig.casters.size() == 2 and shadow_casters == rig.lamps.size() and (medium._lamp.shadow_caster_mask & Lights.CASTER_LAYER) != 0,
 		"the shadows out of the shot are built and every lamp casts with them (%d built, %d of %d lamps)" % [rig.casters.size(), shadow_casters, rig.lamps.size()])
 	_ok(medium._backdrop.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "the room's picture casts no shadow")
-	_ok(not medium._seen.is_empty(), "the table the camera sees is sampled")
+	_ok(not medium._light_part._seen.is_empty(), "the table the camera sees is sampled")
 
 	print("it moves with show time")
 	var clear := -1.0
@@ -109,38 +109,38 @@ func _run() -> void:
 			clear = t
 		if c > 0.99 and cloudy < 0.0:
 			cloudy = t
-	medium._tick_light(clear)
+	medium._light_part.tick(clear)
 	var sun_clear: float = rig.sun.light_energy
 	var room_clear := float(medium._backdrop_mat.get_shader_parameter("shade"))
-	medium._tick_light(cloudy)
+	medium._light_part.tick(cloudy)
 	var sun_cloudy: float = rig.sun.light_energy
 	var room_cloudy := float(medium._backdrop_mat.get_shader_parameter("shade"))
 	_ok(clear >= 0.0 and cloudy >= 0.0 and sun_cloudy < sun_clear * 0.3, "a cloud dims the sun (%.2f to %.2f)" % [sun_clear, sun_cloudy])
 	_ok(room_clear > 0.99 and room_cloudy < room_clear and room_cloudy > 0.3, "a cloud dims the room's picture, about a stop (%.2f to %.2f)" % [room_clear, room_cloudy])
-	medium._tick_light(77.7)
+	medium._light_part.tick(77.7)
 	var a := _energies()
-	medium._tick_light(12.0)
+	medium._light_part.tick(12.0)
 	var swung := ((rig.casters[1] as Dictionary)["pivot"] as Node3D).basis
-	medium._tick_light(77.7)
+	medium._light_part.tick(77.7)
 	_ok(a == _energies(), "the same moment twice is the same light")
 	_ok(not swung.is_equal_approx(((rig.casters[1] as Dictionary)["pivot"] as Node3D).basis), "the rope hangs the same at 12 s and at 77.7 s - it does not swing")
 
 	print("its exposure follows the cloth")
 	var dark_sun: float = rig.sun_energy
-	var dark_hot := medium._hot_lum()
+	var dark_hot := medium._light_part._hot_lum()
 	_lay("pale", {"light": DAY})
-	var pale_sun: float = medium._rig.sun_energy
-	_ok(medium._hot_lum() > dark_hot and pale_sun < dark_sun, "on a pale cloth the sun is held lower (%.2f, against %.2f on a dark one)" % [pale_sun, dark_sun])
+	var pale_sun: float = medium._light_part._rig.sun_energy
+	_ok(medium._light_part._hot_lum() > dark_hot and pale_sun < dark_sun, "on a pale cloth the sun is held lower (%.2f, against %.2f on a dark one)" % [pale_sun, dark_sun])
 
 	print("one draft leans every flame alike")
 	_wind_lean()
 
 	print("the cards are never in the dark")
 	_lay("dark", {"light": {"sky": {"color": "#10141c", "strength": 0.03}}}, {"materials": {}, "things": []})
-	_ok(medium._lamp.visible and medium._key_flame == -1, "nothing lights the cards and no candle leads: the lamp hangs over them (%s)" % medium.lead_name())
+	_ok(medium._lamp.visible and medium._light_part._key_flame == -1, "nothing lights the cards and no candle leads: the lamp hangs over them (%s)" % medium._light_part.lead_name())
 	_lay("dark", {"light": {"sky": {"color": "#10141c", "strength": 0.03}, "lamps": [{"name": "a torch", "look": "torch", "from": "left", "strength": 0.8}]}},
 		{"materials": {}, "things": []})
-	_ok(not medium._lamp.visible and medium.lead_name() == "a torch", "control: a torch lights them, and no lamp is hung (%s)" % medium.lead_name())
+	_ok(not medium._lamp.visible and medium._light_part.lead_name() == "a torch", "control: a torch lights them, and no lamp is hung (%s)" % medium._light_part.lead_name())
 
 	print("a table rebuilt without its light")
 	_lay("dark", {})
@@ -172,11 +172,11 @@ func _wind_lean() -> void:
 	var shown := PackedFloat32Array()
 	var by_sight := PackedFloat32Array()
 	var apart := (flames[0]["base"] as Vector3).distance_to(flames[1]["base"] as Vector3)
-	medium._tick_props(20.0)
+	medium._light_part.tick_props(20.0)
 	for f in flames:
 		var up: Vector3 = ((f["mesh"] as MeshInstance3D).transform.basis.y).normalized()
 		shown.append(up.dot(right) / maxf(up.y, 1e-3))
-		var w := Winds.flame(medium._wind, 20.0, f["base"] as Vector3, medium.FLAME_H, float(f.get("open", 1.0)))
+		var w := Winds.flame(medium._wind, 20.0, f["base"] as Vector3, medium._light_part.FLAME_H, float(f.get("open", 1.0)))
 		var los := (medium._cam.global_position - (f["base"] as Vector3)) * Vector3(1, 0, 1)
 		var across := Vector3.UP.cross(los.normalized())
 		var ax: Vector3 = w["axis"]
@@ -187,8 +187,8 @@ func _wind_lean() -> void:
 
 
 func _legacy() -> void:
-	_ok(medium._rig == null and medium._lamp.visible and medium._fill.visible, "lit by the lamp and the fill")
-	_ok(medium._glows.size() >= 2 and medium._glows.size() <= 3, "the room's out-of-shot candles burn (%d)" % medium._glows.size())
+	_ok(medium._light_part._rig == null and medium._lamp.visible and medium._fill.visible, "lit by the lamp and the fill")
+	_ok(medium._light_part._glows.size() >= 2 and medium._light_part._glows.size() <= 3, "the room's out-of-shot candles burn (%d)" % medium._light_part._glows.size())
 	_ok(is_equal_approx(medium._env.ambient_light_energy, 0.18), "the room's own ambient (%.2f)" % medium._env.ambient_light_energy)
 	var shade: Variant = medium._backdrop_mat.get_shader_parameter("shade")
 	_ok(shade == null or is_equal_approx(float(shade), 1.0), "the room's picture as painted (%s)" % str(shade))
@@ -197,14 +197,14 @@ func _legacy() -> void:
 ## Every light's energy, as it is now.
 func _energies() -> Array:
 	var out: Array = []
-	if medium._rig != null:
-		out.append(medium._rig.sun.light_energy if medium._rig.sun != null else 0.0)
-		for l in medium._rig.lamps:
+	if medium._light_part._rig != null:
+		out.append(medium._light_part._rig.sun.light_energy if medium._light_part._rig.sun != null else 0.0)
+		for l in medium._light_part._rig.lamps:
 			out.append(((l as Dictionary)["light"] as Light3D).light_energy)
 			out.append(((l as Dictionary)["light"] as Light3D).position)
-		for b in medium._rig.bird_nodes:
+		for b in medium._light_part._rig.bird_nodes:
 			out.append((b as MeshInstance3D).visible)
-		for c in medium._rig.casters:
+		for c in medium._light_part._rig.casters:
 			out.append(((c as Dictionary)["pivot"] as Node3D).transform)
 	return out
 

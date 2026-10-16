@@ -440,7 +440,7 @@ func watch_light(raw: Dictionary, name: String) -> Dictionary:
 	if not err.is_empty():
 		return {"error": err}
 	var m = _medium
-	var rig = m._rig
+	var rig = m._light_part._rig
 	if rig == null:
 		return {"error": "the table has no light of its own"}
 	var plan := _light_moment(rig, name)
@@ -452,7 +452,7 @@ func watch_light(raw: Dictionary, name: String) -> Dictionary:
 	for i in steps.size():
 		var t := float(steps[i])
 		_pose_spread(t)
-		m._tick_props(t)
+		m._light_part.tick_props(t)
 		m._tick_air(t)
 		var img: Image = await _render(_table, TABLE_FRAMES)
 		if img == null:
@@ -675,8 +675,8 @@ func opening(raw: Dictionary) -> Dictionary:
 	var m = _medium
 	m._pose(OPENING_AT)
 	m._tick_camera(0.0)
-	m._tick_props(OPENING_AT)
-	m._tick_light(_quiet(OPENING_AT))
+	m._light_part.tick_props(OPENING_AT)
+	m._light_part.tick(_quiet(OPENING_AT))
 	m._tick_air(OPENING_AT)
 	(m._env as Environment).adjustment_brightness = 1.0
 	m._lens(0.0)
@@ -886,8 +886,8 @@ func _pose_spread(light_at := -1.0) -> void:
 		card.transform = Transform3D(Basis(Vector3.UP, float(s["yaw"])), (s["pos"] as Vector3) + Vector3(0.0, card_t * 0.5, 0.0))
 	(m._page as Node3D).visible = false
 	m._tick_camera(0.0)
-	m._tick_props(30.0)
-	m._tick_light(light_at if light_at >= 0.0 else _quiet(AIR_AT))
+	m._light_part.tick_props(30.0)
+	m._light_part.tick(light_at if light_at >= 0.0 else _quiet(AIR_AT))
 	(m._env as Environment).adjustment_brightness = 1.0
 	m._lens(1.0)
 
@@ -895,7 +895,7 @@ func _pose_spread(light_at := -1.0) -> void:
 ## A moment at or after [param t] when the table's light is as it mostly is: the sun out, no bird
 ## crossing - [param t] itself for a table with no light of its own.
 func _quiet(t: float) -> float:
-	var rig = _medium._rig if _medium != null else null
+	var rig = _medium._light_part._rig if _medium != null else null
 	return rig.quiet_near(t) if rig != null else t
 
 
@@ -927,11 +927,11 @@ func _placed(spec: Dictionary) -> Dictionary:
 			"k": node.transform.basis.get_scale().x, "tall": rect.size.y})
 		for li in th.get("lights", []):
 			by_light[int(li)] = name
-	var key: String = m.lead_name(by_light)
+	var key: String = m._light_part.lead_name(by_light)
 	var held: Array = []
 	for i in (m._lights as Array).size():
 		var l: Dictionary = m._lights[i]
-		var full := float(consts.get("KEY_ENERGY" if i == int(m._key_flame) else "FILL_ENERGY", 0.35)) * float((l["flames"] as Array).size())
+		var full := float(consts.get("KEY_ENERGY" if i == int(m._light_part._key_flame) else "FILL_ENERGY", 0.35)) * float((l["flames"] as Array).size())
 		if float(l["energy"]) < full * 0.9 and by_light.has(i):
 			held.append(by_light[i])
 	var deck: Vector3 = m._deck_base

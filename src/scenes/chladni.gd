@@ -395,7 +395,7 @@ func update(f: AudioFeatures, delta: float) -> void:
 	# The chroma channels, smoothed on the scene's one personality constant. Guarded on the
 	# signature's size the way every other consumer is - it is empty until the analyzer has
 	# seen enough audio.
-	var sig := Spectrum.harmonic_signature()
+	var sig := signature()
 	if sig.size() >= 12:
 		var k := 1.0 - exp(-delta / _tau)
 		for c in 12:

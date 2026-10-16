@@ -22,12 +22,12 @@ extends Node
 ## callback silently dead (see multi_voice_check.gd, which learned that the hard way).
 
 var _fails: Array = []
-var _ed: GenerativeEditor
+var _ed: ReadingPanel
 var _ended := 0
 
 
 func _ready() -> void:
-	_ed = GenerativeEditor.new()
+	_ed = ReadingPanel.new()
 	_ed._build_panel()
 	_ed.remove_child(_ed._panel)
 	add_child(_ed._panel)

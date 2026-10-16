@@ -90,7 +90,7 @@ func update(f: AudioFeatures, delta: float) -> void:
 	_phase += (float(params.wave_speed) * (0.4 + 0.6 * f.bass) + f.treble) * 0.5 * delta
 	_hue_t += float(params.hue_drift) * (0.5 + 0.8 * f.energy + 0.6 * f.beat) * delta
 	# Continuous harmonic seeding: the chroma channels and the tonality, read live each frame.
-	_sig = Spectrum.harmonic_signature()
+	_sig = signature()
 	_ch = chroma_hue()
 	queue_redraw()
 

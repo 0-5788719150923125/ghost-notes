@@ -469,7 +469,7 @@ func _check_new_card_starter() -> void:
 	var starter := FileAccess.get_file_as_string("res://rules/cards/starter.md")
 	_ok(_main._note == path and NoteStore.blocks_of(path).get("cards") is Dictionary, "+ Cards writes the cards block into the note")
 	_ok(FileAccess.get_file_as_string(path).contains(starter), "...and the full starter brief, since the note had no words")
-	var editor := _main._generative as CardsEditor
+	var editor := _main._generative as ReadingPanel
 	_ok(editor != null and editor._text.text == starter,
 		"the Cards workspace opens, and Edit shows the starter brief")
 	if editor != null:
@@ -483,7 +483,7 @@ func _check_new_card_starter() -> void:
 func _check_save_moves_the_note() -> void:
 	print("-- Save… takes the note with it")
 	var ch: Chrome = _main._chrome
-	var editor := _main._generative as CardsEditor
+	var editor := _main._generative as ReadingPanel
 	var old: String = _main._note
 	if editor == null or old.is_empty():
 		_ok(false, "a Cards note is open")
@@ -514,7 +514,7 @@ func _check_save_moves_the_note() -> void:
 	await _frames(12)
 	_main._list._open(old)
 	await _frames(14)
-	editor = _main._generative as CardsEditor
+	editor = _main._generative as ReadingPanel
 	_ok(editor != null and editor._doc.doc_path() == old and editor._doc.doc_path() != astray,
 		"the control: opened again, such a note is the old file once more")
 	if editor == null:
@@ -545,7 +545,7 @@ func _check_save_moves_the_note() -> void:
 	_ok(_row_of(list, now) and not _row_of(list, old), "the list shows the note once, as the new file")
 	list._open(now)
 	await _frames(14)
-	editor = _main._generative as CardsEditor
+	editor = _main._generative as ReadingPanel
 	_ok(editor != null and _main._note == now and editor._doc.doc_path() == now
 		and editor._text.text.contains("An open-top box."), "opened again, it is still that file - nothing reverts")
 	if editor == null:
@@ -579,7 +579,7 @@ func _check_save_moves_the_note() -> void:
 ## OPEN… ON THE SCRIPT CARD, from the Cards note [param from] the check above ends in.
 func _check_open_from_disk(dir: String, from: String) -> void:
 	print("-- Open… loads a file from disk")
-	var editor := _main._generative as CardsEditor
+	var editor := _main._generative as ReadingPanel
 	var on_disk := dir.path_join("on-disk.md")
 	FrontMatter.create(on_disk, {"cards": {"show": "from-disk"}}, "A brief that was on disk.\n", "",
 		FrontMatter.KEY, {"title": "From disk"})
@@ -597,9 +597,9 @@ func _check_open_from_disk(dir: String, from: String) -> void:
 	te.insert_text_at_caret("Typed a moment before opening.\n")
 	editor._writer.open_as_note(on_disk)
 	await _frames(14)
-	editor = _main._generative as CardsEditor
+	editor = _main._generative as ReadingPanel
 	_ok(_main._note == on_disk and editor != null and editor._doc.doc_path() == on_disk
-		and editor._text.text.contains("A brief that was on disk.") and String(editor._knobs["show"]) == "from-disk",
+		and editor._text.text.contains("A brief that was on disk.") and String(editor._block_cards["cards"]._knobs["show"]) == "from-disk",
 		"the file chosen is the note: its own text and its own settings (%s)" % _main._note.get_file())
 	_ok(FileAccess.get_file_as_string(on_disk) == before, "...and opening it wrote nothing into it")
 	_ok(FileAccess.get_file_as_string(from).contains("Typed a moment before opening.") and NoteStore.is_added(from),

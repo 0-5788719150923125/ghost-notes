@@ -95,30 +95,12 @@ const SHOW_RISE := 1.1
 ## A card TURNED where it lies (TableActions.TURN, FLIP): the turn's own seconds.
 const TURN_END := 0.8
 const FLIP_END_LAY := 1.1
-## THE BOX THE CARDS ARE KEPT IN: how thick its walls are taken to be (meters), and the cards filed in
-## it - their pitch (a card and the air beside it), and how far the last of them lean into the gap.
-const BOX_WALL := 0.006
-const FILE_PITCH := 0.0011
-const FILE_LEAN := 0.35
 ## How many different cards the unseen cards of one printing are printed as ([method _unseen_fronts],
 ## [method _blank_backs]) when nobody wrote them, and the most of the deck's own cards they are printed
 ## as when the episode lists them.
 const BLANKS := 3
 const WRITTEN := 6
-## A SEARCH OF THE BOX ([method _pose_rummage]): how many of its cards may be looked at
-## ([constant SEATS], each in a place of its own), how far of its height a card on edge is drawn up out
-## of the file (and the least, where the picture's top edge would cut its painting: [method _search_rise]),
-## how far its face is then leaned back to the eye, and how far from lying a card lifted
-## off a pile is turned up, face to the eye. How many cards one search looks at: on edge, and lying -
-## a lying card is turned over to be seen and back, which takes longer.
-const SEATS := 9
 const SEARCH_LOOKS := 3
-## How full a shoebox of piles is: this share of what its piles could hold to the rim.
-const SHOEBOX_SHARE := 0.6
-## How much of the depth of an open box of cards on edge they fill at least: the producer's list of
-## fourteen undrawn cards stood in a front corner of a box twenty centimeters deep (feedback 0020:
-## "barely any cards in the box"), so the rest of the stock is filed behind them as a shoebox's is.
-const OPEN_FILE_SHARE := 0.5
 ## A SPREAD CARD IS A REAL CARD'S THICKNESS (the user: cards should rest "with a gentle tilt"): the
 ## plan's chains of cards lying on cards run many deep, and every millimeter a card stands on tips
 ## the card lying across it. The cloth's top, how far over it a spread card lies, a spread card's
@@ -186,21 +168,11 @@ const FOOT_MARGIN := 0.004
 ## (0.64) the same light flooded half the frame through the bloom, and a cream stripe just behind a
 ## candle on a near-black blanket blew out though the cloth round it was dark on average.
 const HEAT := 2.0
-## ...looked for this far round the candle, meters, on the table's lightness at this grid over the
-## stretch of table the camera can see (x z, meters; 4 cm cells); and the flame height a candle's
-## place is judged at.
-const HEAT_R := 0.25
 const LUM_RECT := CardTable.SEEN_RECT
 const LUM_GRID := CardTable.SEEN_GRID
-const HEAT_H := 0.13
 ## The key candle's light, the least a candle must be allowed to be the key, and every other
 ## candle's.
 const KEY_ENERGY := 1.5
-const KEY_MIN := 1.0
-const FILL_ENERGY := 0.35
-## A table with a light of its own ([Lights]) whose sun and lamps light the cards less than this, and
-## which no candle can lead, has the lamp hung over it after all.
-const LAMP_FALLBACK := 0.12
 ## The render layer of the first candle's body (the next is the next bit), so each flame can leave
 ## its own candle out of its shadows - and only its own: a candle stands in the key's light.
 const CANDLE_LAYER := 1 << 12
@@ -314,9 +286,6 @@ var _key := ""
 var _now := 0.0
 var _backs := {}                      # printing name ("" the deck's own) -> {vp, canvas, mat}: each printing's back
 var _printed: Array = []              # per drawn card, when its text is on its back: {vp, canvas, mat}
-var _box := {}                        # the box the cards are kept in, stood: {node, at, inner (AABB, world), upright, lie}
-var _file: Array = []                 # the cards filed in it: MultiMeshInstance3D, one per printing
-var _box_objects: Array = []          # optional small keepsakes inside the box
 
 var _placeholder: GhostScene
 var _root3: Node3D
@@ -336,22 +305,7 @@ var _props: Node3D
 var _probe: ReflectionProbe
 var _probe_nudge := 1.0
 var _lights: Array = []             # a light per lit thing: {light, base, light_base, energy, flames: [{mesh, base, flicker, glow}]}
-var _flame_n := 0                     # flames lit so far on this table, each with its own flicker
-## A candle's flame: how tall it burns (meters - what a draft must blow against, [method Winds.flame]) and
-## the quad it is drawn on, standing on its wick.
-const FLAME_H := 0.03
-const FLAME_QUAD := 0.03
-## HOW A FLAME LEANS (the user, 2026-10-11: they "lean... which is not a thing that flames should do"):
-## the share of its lean that BENDS it - foot upright, tip leaned - the rest tipping the whole sprite;
-## and how far its tip licks from side to side, in flame heights, in still air and fanned to a full draft.
-const FLAME_BEND := 0.6
-const FLAME_LICK := Vector2(0.04, 0.16)
-var _glows: Array = []              # [{light, base, energy, flicker}] - candles in the room, out of shot
-var _key_flame := -1                  # the key: the flame that leads the light, or -1 for the lamp
 var _lum := PackedFloat32Array()      # the table's linear luminance where candles may stand (LUM_RECT); empty: not yet built
-var _heat_cells := {}                 # grid cell -> its heat at HEAT_H, for this build
-var _contact_tex: Texture2D = null
-var _lit_cloth: Texture2D = null      # the painting the table was last lit for
 var _shuffle_room := INF             # how long the shuffle has, from its start to the first card
 var _jump_room := -1.0                # ...when that first card is a jumper (-1: it is not, or not placed yet)
 var _jump_scale := 1.0                # ...and the speed its action is performed at
@@ -372,8 +326,6 @@ var _table_mt := -2                   # the table file's time when it was last b
 var _stage_was := {}                  # the stage's own settings, given back on leaving it
 var _deck: Array = []               # a MeshInstance3D per deck card (TablePlan.deck_n), bottom first
 var _rummage_card: MeshInstance3D    # a search's card where the box keeps none for it (a tin's flat deck, one pile)
-var _searched: Array = []            # the box's own cards a search looks at, one in each place (`_box["search"]`)
-var _looking: MeshInstance3D         # the one being looked at at the moment posed, or null
 var _cards: Array = []              # one MeshInstance3D per drawn card
 var _faces: Array = []              # one SubViewport per drawn card's face
 var _face_canvas: Array = []
@@ -412,12 +364,10 @@ var _air_key := ""                  # the schedule its bursts were last planned 
 var _spin_wanted := false           # a burst marks a pirouette: one card is twirled ([method _spin_card])
 var _spin_key := ""                 # ...the schedule it was chosen on
 var _spin_k := -1                   # ...and the card
-var _rig = null                     # the set dresser's light, built (Lights.Rig), or null: the lamp and the room's candles
 ## BUILT ASIDE, on a worker thread ([method TablePreview._stand]): its long loops then [method _breathe]
 var aside := false
 var _breaths := 0
 var _wind := {}                     # the table's wind (Winds.plan): its light's, or still air - shared by the light and the air
-var _seen := PackedVector3Array()   # the table the camera sees, sampled (for the light), this build
 
 
 ## THE SHUFFLE is a part of its own ([TableShuffle]): every move the deck makes between readings
@@ -427,6 +377,8 @@ var _shuffles := TableShuffle.new()
 
 
 func _init() -> void:
+	_box_part.medium = self
+	_light_part.medium = self
 	_card_poses.medium = self
 	_shuffles.medium = self
 
@@ -434,6 +386,16 @@ func _init() -> void:
 ## WHERE EACH CARD IS at a moment of the show is a part of its own ([TableCardPose]): no state,
 ## read off the plan, the schedule and the box; [method _pose] applies what it answers.
 var _card_poses := TableCardPose.new()
+
+
+## THE LIGHT ON THE TABLE is a part of its own ([TableLight]): the flames, their glow and heat, the
+## rig and its key, the contact shadows.
+var _light_part := TableLight.new()
+
+
+## THE BOX THE DECK IS KEPT IN is a part of its own ([TableBox]): built once per episode, holding
+## the box, its files and what a search looks at.
+var _box_part := TableBox.new()
 
 
 # --- mount -----------------------------------------------------------------------------------
@@ -698,7 +660,7 @@ func on_stage_resized(_size: Vector2) -> void:
 
 
 func advance(_features, delta: float, _bookend: float) -> void:
-	var t := maxf(Spectrum.current.time, 0.0)
+	var t := maxf(feed.show_time(), 0.0)
 	_now = _subs.now() if _subs != null and is_instance_valid(_subs) else t
 	_ensure_doc()
 	_poll_t -= delta
@@ -717,8 +679,8 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_pose(_now)
 	_tick_focus(_now)
 	_tick_camera(_now)
-	_tick_props(_now)
-	_tick_light(_now)
+	_light_part.tick_props(_now)
+	_light_part.tick(_now)
 	_tick_air(_now)
 	_title.alpha = _title_alpha(_now)
 	_title.queue_redraw()
@@ -772,7 +734,7 @@ func _ensure_doc() -> void:
 ## HOW MANY CARDS THE DECK HOLDS, as the episode says - the table never picks a number of its own
 ## (the user, 2026-10-14: "The agents define how many cards a deck will use"): what the draw was
 ## shuffled from (`deck_n`, [method CardProducer._make_draw]; for an episode drawn before the draw
-## counted it, the deck its brief lists, [method CardsEditor._table_doc]), else the deck the producer
+## counted it, the deck its brief lists, [method EpisodeCard._table_doc]), else the deck the producer
 ## chose, else a box's drawn and left-in cards - and never fewer than the cards drawn. An episode that
 ## says none of these (a made-up one) holds [constant DECK_FALLBACK].
 static func _deck_count(pay: Dictionary) -> int:
@@ -1277,11 +1239,11 @@ func _poll_pictures(force := false) -> void:
 		_apply_painting()
 		if relit:
 			_lum = _surface_lum()
-			_heat_cells = {}
+			_light_part._heat_cells = {}
 	# a cloth that landed after the candles stood (live, it is painted while a reading can already
 	# be playing) lights the table again
-	if _painting_tex != _lit_cloth:
-		_light_the_table()
+	if _painting_tex != _light_part._lit_cloth:
+		_light_part.light_the_table()
 		_reflect()
 	# THE TABLE, set while a reading can already be playing (live, the set dresser works beside the
 	# painter): built again when it lands, and the shuffle's chain with it - a wash goes round
@@ -1469,22 +1431,22 @@ func _backdrop_view() -> Dictionary:
 ## [constant TablePositions.SIDEWAYS] each) and turned over when [param over].
 func _slot_xf(i: int, quarter := 0, over := false) -> Transform3D:
 	var cards: Array = _plan.pay.get("cards", [])
-	if _filed() and i < cards.size() and cards[i] is Dictionary:
+	if _box_part.filed_on_edge() and i < cards.size() and cards[i] is Dictionary:
 		var p: Dictionary = (cards[i] as Dictionary).get("position", {}) if (cards[i] as Dictionary).get("position") is Dictionary else {}
-		if String(p.get("destination", "")) == "box" and i < (_box["at_k"] as Array).size():
-			var placed: Transform3D = (_box["at_k"] as Array)[i]
-			if _box.has("return_at"):
+		if String(p.get("destination", "")) == "box" and i < (_box_part.stood["at_k"] as Array).size():
+			var placed: Transform3D = (_box_part.stood["at_k"] as Array)[i]
+			if _box_part.stood.has("return_at"):
 				# on the pile the returns go to, each on the last, set down a little off true
 				var before := 0
 				for j in i:
 					if cards[j] is Dictionary and (cards[j] as Dictionary).get("position") is Dictionary \
 							and String(((cards[j] as Dictionary)["position"] as Dictionary).get("destination", "")) == "box":
 						before += 1
-				placed.origin = (_box["return_at"] as Vector3) + Vector3(0.0, float(before) * CARD_T * 1.1, 0.0)
-				placed.basis = Basis(Vector3.UP, float(_box.get("return_turn", 0.0))
+				placed.origin = (_box_part.stood["return_at"] as Vector3) + Vector3(0.0, float(before) * CARD_T * 1.1, 0.0)
+				placed.basis = Basis(Vector3.UP, float(_box_part.stood.get("return_turn", 0.0))
 					+ (float(hash([_plan.seed_value, i, "put back"]) % 1000) / 1000.0 - 0.5) * 0.14)
 			elif String(_plan.staging.get("contents", "file")) != "file":
-				var inner: AABB = _box["inner"]
+				var inner: AABB = _box_part.stood["inner"]
 				placed.origin.y = minf(inner.end.y - CARD_T, placed.origin.y + CARD_T * 2.0)
 			return placed
 	var s: Dictionary = _plan.slots[i] if i < _plan.slots.size() else {"pos": Vector3.ZERO, "yaw": 0.0}
@@ -1533,12 +1495,12 @@ func _build_table(spec: Dictionary = {}) -> void:
 	# its lightness before anything stands on it: a candle looks for dark cloth
 	_lum = _surface_lum()
 	_lights = []
-	_flame_n = 0
+	_light_part._flame_n = 0
 	_standing = []
 	_standing_c = PackedVector2Array()
 	_standing_r = PackedFloat32Array()
 	_things = []
-	_heat_cells = {}
+	_light_part._heat_cells = {}
 	# the name over this table is printed in the color the set dresser chose to stand out from it
 	_title.ink = CardTable.title_ink(spec)
 	_title.queue_redraw()
@@ -1554,450 +1516,12 @@ func _build_table(spec: Dictionary = {}) -> void:
 		else:
 			built.append(Props.build(things[i], spec["materials"], hash([_plan.seed_value, i, "thing"])))
 	# THE BOX THE CARDS ARE KEPT IN stands first, where the deck would be: the rest go round it
-	_stand_box(things, built)
+	_box_part.build(things, built)
 	_place_things(things, built, rng)
-	_build_light(spec)
-	_light_the_table()
+	_light_part.build(spec)
+	_light_part.light_the_table()
 	_reflect()
 	_build_air(spec)
-
-
-## THE BOX THE CARDS ARE KEPT IN, for a show whose cards come from one ([member _cards_from] `box`): the set
-## dresser's thing that `holds_cards` - taken out of [param things] and [param built] - or, when it made
-## none, a plain box of the deck's own stock. An open box stands by the deck; a shoebox settles across
-## the center. Both are scaled to their allotted space, with their contents built inside ([method
-## _build_file]). A box on a table whose cards come from a deck is a thing like any other.
-func _stand_box(things: Array, built: Array) -> void:
-	for f in _file:
-		(f as Node).queue_free()
-	_file = []
-	for c in _searched:
-		(c as Node).queue_free()
-	_searched = []
-	_looking = null
-	for o in _box_objects:
-		(o as Node).queue_free()
-	_box_objects = []
-	_box = {}
-	if _plan.cards_from != "box":
-		return
-	var t := {}
-	var b := {}
-	for i in things.size():
-		if bool((things[i] as Dictionary).get("holds_cards", false)):
-			t = things[i]
-			b = built[i]
-			things.remove_at(i)
-			built.remove_at(i)
-			break
-	var shoebox := String(_plan.staging.get("box_style", "open")) == "shoebox"
-	if t.is_empty():
-		var stock := CardTable.color(String((_plan.look.get("frame", {}) as Dictionary).get("stock", "#c9b38a")))
-		t = {"name": "the box the cards are kept in", "place": "by the deck", "holds_cards": true, "parts": [
-			{"shape": "extrude", "outline": "rect", "size": [22.0, 33.0] if shoebox else [9.6, 17.0],
-				"height": 11.0 if shoebox else 9.0, "wall": 0.5, "material": "card box"}]}
-		var mats := {"card box": Props.sanitize_material({"kind": "paper", "color": "#" + stock.darkened(0.25).to_html(false)}, "#a08060")}
-		b = Props.build(Props.sanitize({"things": [t], "materials": mats}, [])["things"][0], mats, hash([_plan.seed_value, "card box"]))
-	var size: AABB = b["size"]
-	if size.size.x <= 0.0 or size.size.z <= 0.0:
-		return
-	var across := size.size.z > size.size.x
-	var turn := (PI * 0.5 if across else 0.0) if shoebox else (0.0 if across or is_equal_approx(size.size.x, size.size.z) else PI * 0.5)
-	var w := size.size.z if turn != 0.0 else size.size.x
-	var d := size.size.x if turn != 0.0 else size.size.z
-	var most := CardTable.SHOEBOX_MAX if shoebox else CardTable.BOX_MAX
-	var k := minf(1.0, minf(most.x / w, minf(most.z / d, most.y / maxf(size.size.y, 0.001))))
-	var basis := Basis(Vector3.UP, turn).scaled(Vector3(k, k, k))
-	var want := _box_center() if shoebox else TablePositions.box_at(_deck_base)
-	# its own place in the room kept for it, the open box's toward the spread
-	var place := RandomNumberGenerator.new()
-	place.seed = hash([_plan.seed_value, "box place"])
-	want = TablePositions.box_stand(want, Vector2(w, d) * k, Vector2(most.x, most.z),
-		0.0 if shoebox else -signf(want.x), place)
-	var mid := basis * size.get_center()
-	var at := Vector2(want.x - mid.x, want.z - mid.z)
-	var shape := _translated(_turned(b["outline"], basis), at)
-	var lo := Vector2(INF, INF)
-	var hi := Vector2(-INF, -INF)
-	for q in shape:
-		lo = lo.min(q)
-		hi = hi.max(q)
-	var corners := PackedVector3Array()
-	for cx in [size.position.x, size.end.x]:
-		for cy in [size.position.y, size.end.y]:
-			for cz in [size.position.z, size.end.z]:
-				corners.append(basis * Vector3(cx, cy, cz))
-	var lens := Vector2(tan(deg_to_rad(_cam.fov * 0.5)) * (16.0 / 9.0), tan(deg_to_rad(_cam.fov * 0.5)))
-	var rect := _screen_rect_fast(corners, Vector3(at.x, 0.0, at.y), _plan.cam_base.affine_inverse(), lens)
-	_put(t, b, {"at": at, "outline": shape, "bb": Rect2(lo, hi - lo), "rect": rect}, basis, "#the box")
-	var world := Transform3D(basis, Vector3(at.x, 0.0, at.y)) * size
-	var inner := AABB(world.position + Vector3(BOX_WALL, BOX_WALL, BOX_WALL),
-		world.size - Vector3(BOX_WALL * 2.0, BOX_WALL, BOX_WALL * 2.0))
-	_box = {"node": b["node"], "inner": inner, "world": world, "local_bounds": size,
-		"rest": (b["node"] as Node3D).transform}
-	# The box walls are real occluders. Its contact decal only darkens the cloth at
-	# the foot; it cannot cast the long shadow away from a candle or lamp.
-	if shoebox:
-		var lid := Node3D.new()
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = CardTable.color(String((_plan.look.get("frame", {}) as Dictionary).get("stock", "#c9b38a"))).darkened(0.3)
-		mat.roughness = 0.9
-		var lx := size.size.x + 0.016
-		var lz := size.size.z + 0.016
-		_lid_piece(lid, mat, Vector3(lx, 0.003, lz), Vector3.ZERO)
-		for sx in [-1.0, 1.0]:
-			_lid_piece(lid, mat, Vector3(0.003, 0.028, lz), Vector3(sx * (lx - 0.003) * 0.5, -0.0155, 0.0))
-		for sz in [-1.0, 1.0]:
-			_lid_piece(lid, mat, Vector3(lx - 0.006, 0.028, 0.003), Vector3(0.0, -0.0155, sz * (lz - 0.003) * 0.5))
-		(b["node"] as Node3D).add_child(lid)
-		_box["lid"] = lid
-		_box["lid_rest"] = Vector3(size.get_center().x, size.end.y + 0.009, size.get_center().z)
-		_box["shadow"] = _contact(shape)
-		_box["lid_shadow"] = _contact(shape)
-	_build_file()
-	_build_box_objects()
-	if shoebox:
-		# A card passing close to these walls throws a large, stair-stepped shadow
-		# across them in the positional atlas. The box keeps its soft tabletop shade.
-		for card in _cards:
-			(card as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-
-
-static func _lid_piece(parent: Node3D, mat: Material, dimensions: Vector3, at: Vector3) -> void:
-	var part := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = dimensions
-	part.mesh = mesh
-	part.material_override = mat
-	part.position = at
-	part.layers = THING_LAYER
-	part.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	parent.add_child(part)
-
-
-## THE CARDS IN THE BOX: an open box of cards on edge and a shoebox fill out their printings with
-## physical copies ([constant OPEN_FILE_SHARE], [constant CardTable.SHOEBOX_FILL]) so each reads as a
-## collection accumulated over time. The drawn
-## cards have their own places near the accessible top. Cards lying in piles are laid by
-## [method _pile_places]. Undrawn cards share one MultiMesh per printing and card ([method _unseen_kinds]).
-func _build_file() -> void:
-	var inner: AABB = _box["inner"]
-	var content := String(_plan.staging.get("contents", "file"))
-	var size := CardTable.card_size(_plan.look)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([_plan.seed_value, "card file"])
-	var under_lid := _box.has("lid")
-	var upright := content == "file" and inner.size.x >= size.x * 1.03 and inner.size.y >= size.y * (1.03 if under_lid else 0.6)
-	var lie := content == "file" and not upright and inner.size.x >= size.y * 1.03 and inner.size.y >= size.x * (1.03 if under_lid else 0.6)
-	_box["upright"] = upright
-	_box["lie"] = lie
-	_box["at_k"] = []
-	if content == "file" and not upright and not lie:
-		# a shallow tin: the deck lies flat on its floor
-		_box["flat"] = true
-		return
-	var v := size.y if upright else size.x
-	# ON EDGE, FACE TO THE READER, as a collection stands in its owner's box: whoever looks through it
-	# looks at the fronts (the user, 2026-10-13), and a card comes up out of the file showing what every
-	# card left in it shows - a front ([method _unseen_fronts]). The file stood back to the camera while
-	# the cards nobody drew had no front to show: face on, it was a box of border strips, and the drawn
-	# card came up a picture out of it (2026-10-12: "the card changed to something else").
-	var stand := Basis(Vector3(1, 0, 0), PI * 0.5) * _face_up()
-	if lie:
-		stand = stand * Basis(Vector3.UP, PI * 0.5)
-	var shoebox := _box.has("lid")
-	var piled := content == "piles" or (shoebox and content == "loose")
-	var rise := CARD_T * 1.02 if shoebox else CARD_T + 0.00025
-	var want := CardTable.SHOEBOX_FILL
-	if piled:
-		var plots := TablePositions.box_plots(inner, size)
-		want = clampi(int(float(plots.x * plots.y) * (inner.size.y - 0.004) / rise * SHOEBOX_SHARE),
-			_cards.size(), CardTable.SHOEBOX_FILL)
-	var pad := shoebox
-	if not shoebox and not piled and content == "file":
-		want = int(inner.size.z * OPEN_FILE_SHARE / FILE_PITCH)
-		pad = true
-	var undrawn := _file_inventory(want, pad)
-	var count := _cards.size() + undrawn.size()
-	_box["count"] = count
-	var fill := minf(1.0, float(count) * FILE_PITCH / maxf(inner.size.z, FILE_PITCH))
-	var tail := mini(6, count / 4)
-	var xfs: Array = []
-	if piled:
-		xfs = _pile_places(inner, size, count, rise, rng)
-	for i in count if not piled else 0:
-		if shoebox:
-			if content == "file":
-				var rows := maxi(1, int(floor(inner.size.x / (size.x + 0.006))))
-				var row := i % rows
-				var layer := i / rows
-				var pitch := minf(CARD_T * 1.02, (inner.size.z - size.x * 0.1) / float(maxi(int(ceil(float(count) / rows)), 1)))
-				var x := inner.position.x + inner.size.x * (float(row) + 0.5) / float(rows)
-				var z := inner.end.z - pitch * (float(layer) + 0.5) - 0.004
-				xfs.append(Transform3D(stand, Vector3(x, inner.position.y + v * 0.5, z)))
-				continue
-		if content == "loose":
-			var radius := size.length() * 0.5
-			var dx := maxf(inner.size.x * 0.5 - radius - 0.003, 0.0)
-			var dz := maxf(inner.size.z * 0.5 - radius - 0.003, 0.0)
-			xfs.append(Transform3D(Basis(Vector3.UP, rng.randf_range(-PI, PI)),
-				Vector3(inner.get_center().x + rng.randf_range(-dx, dx),
-					inner.position.y + 0.001 + 0.004 * float(i) / float(maxi(count, 1)),
-					inner.get_center().z + rng.randf_range(-dz, dz))))
-			continue
-		# from the front wall back; the last few lean back into the gap
-		var z := inner.end.z - FILE_PITCH * (float(i) + 0.5)
-		var lean := 0.0
-		if fill < 0.96 and i >= count - tail:
-			lean = FILE_LEAN * float(i - (count - tail) + 1) / float(tail)
-		var bottom := Vector3(inner.get_center().x + rng.randf_range(-0.002, 0.002), inner.position.y, z)
-		var b := Basis(Vector3(1, 0, 0), -lean) * Basis(Vector3.UP, deg_to_rad(rng.randf_range(-1.2, 1.2))) * stand
-		xfs.append(Transform3D(b, bottom + Basis(Vector3(1, 0, 0), -lean) * Vector3(0.0, v * 0.5, 0.0)))
-	# THE DRAWN CARDS' PLACES in the file, away from the leaning tail
-	var free: Array = range(0, count - tail)
-	if shoebox:
-		free = range(maxi(0, count - maxi(_cards.size() * 4, 24)), count)
-	for k in _cards.size() if not piled else 0:
-		var j := int(free.pop_at(rng.randi_range(0, free.size() - 1)))
-		(_box["at_k"] as Array).append(xfs[j])
-		xfs[j] = null
-	# THE PLACES A SEARCH LOOKS: cards of the file's own, front to back, each drawn up out of its place
-	# and let back into it - or lying cards' places, a card's thickness up (the piles' are their tops)
-	if not piled:
-		var seats: Array = []
-		var lying := content == "loose"
-		for n in mini(SEATS, free.size() / 4):
-			# toward the back of the file, where the front wall hides none of a card coming up
-			var j := int(free.pop_at(rng.randi_range(free.size() / 3, free.size() - 1)))
-			var seat: Transform3D = xfs[j]
-			xfs[j] = null
-			if lying:
-				# on top of the heap, each over the last
-				seat.origin.y = inner.position.y + 0.006 + CARD_T * 1.1 * float(n)
-			seats.append(seat)
-		if not lying:
-			seats.sort_custom(func(a: Transform3D, b: Transform3D) -> bool: return a.origin.z > b.origin.z)
-		_box["search"] = seats
-		_box["search_kept"] = true
-	# one MultiMesh per printing and card, its cards shared out among them - and their places kept
-	# (`filed`): a MultiMesh hands no instance's transform back under the dummy renderer of a headless run
-	var per := {}
-	for n in _backs:
-		per[n] = []
-	_box["filed"] = []
-	for xf in xfs:
-		if xf != null and not undrawn.is_empty():
-			var name: String = undrawn.pop_at(rng.randi_range(0, undrawn.size() - 1))
-			(per[name] as Array).append(xf)
-			(_box["filed"] as Array).append(xf)
-	for n in per:
-		var kinds := _unseen_kinds(String(n))
-		for which in kinds.size():
-			var list: Array = []
-			for i in (per[n] as Array).size():
-				if i % kinds.size() == which:
-					list.append((per[n] as Array)[i])
-			if list.is_empty():
-				continue
-			var mesh := _mesh_for((_backs[n] as Dictionary)["canvas"].look).duplicate() as ArrayMesh
-			# each a card nobody drew, its own front and back
-			mesh.surface_set_material(0, (kinds[which] as Array)[0])
-			mesh.surface_set_material(1, (kinds[which] as Array)[1])
-			mesh.surface_set_material(2, _edge_mat)
-			var mm := MultiMesh.new()
-			mm.transform_format = MultiMesh.TRANSFORM_3D
-			mm.mesh = mesh
-			mm.instance_count = list.size()
-			for i in list.size():
-				mm.set_instance_transform(i, list[i])
-			var inst := MultiMeshInstance3D.new()
-			inst.multimesh = mm
-			if shoebox:
-				inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			_root3.add_child(inst)
-			_file.append(inst)
-	_keep_searched(shoebox)
-
-
-## THE CARDS A SEARCH LOOKS AT ARE THE BOX'S OWN, one kept in each of its places (`_box["search"]`, when
-## `search_kept`): there before the search and after it, each a different card nobody drew, front and
-## back ([method _unseen_all], through every printing in turn). A card that was not on its pile a moment
-## before appeared on it as the look began, the top card's text changing under the eye (2026-10-12).
-func _keep_searched(shoebox: bool) -> void:
-	if not bool(_box.get("search_kept", false)):
-		return
-	var kinds := _unseen_all()
-	var seats: Array = _box.get("search", [])
-	for i in seats.size():
-		var card := MeshInstance3D.new()
-		card.mesh = _mesh_for(_plan.look)
-		card.set_surface_override_material(0, (kinds[i % kinds.size()] as Array)[0])
-		card.set_surface_override_material(1, (kinds[i % kinds.size()] as Array)[1])
-		card.set_surface_override_material(2, _edge_mat)
-		if shoebox:
-			card.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		card.transform = seats[i]
-		_root3.add_child(card)
-		_searched.append(card)
-
-
-## THE CARDS LYING IN PILES in the box ([method TablePositions.box_piles]: a collection kept in piles, or
-## in a shoebox left as it fell), all [param count] of them. THE DRAWN CARDS WAIT ON TOP OF THE PILES
-## (`at_k`), the first to be drawn uppermost where two share a pile, so every card is taken off a pile
-## and none out from under another. A card put back goes on a pile none is drawn from (`return_at`, and
-## the way that pile lies, `return_turn`), one on the last. Eight cards used to float loose at the rim
-## over the piles for the drawing, a spot in the air beside them for the returns (the user, 2026-10-11:
-## "the loose cards on top is a strange look"). Returns the places left for the cards nobody draws.
-func _pile_places(inner: AABB, size: Vector2, count: int, pitch: float, rng: RandomNumberGenerator) -> Array:
-	var mess := 1.0 if String(_plan.staging.get("contents", "file")) == "loose" else TablePositions.PILES_NEAT
-	var piles := TablePositions.box_piles(inner, size, count, pitch, mess, rng)
-	var stocked: Array = []
-	for i in piles.size():
-		if not ((piles[i] as Dictionary)["cards"] as Array).is_empty():
-			stocked.append(i)
-	var back := -1
-	if stocked.size() > 1:
-		back = int(stocked.pop_at(rng.randi_range(0, stocked.size() - 1)))
-		var held := 0
-		for i in stocked:
-			held += ((piles[i] as Dictionary)["cards"] as Array).size()
-		if held < _cards.size():
-			stocked.append(back)
-	elif stocked.size() == 1:
-		back = int(stocked[0])
-	if back >= 0:
-		var top: Transform3D = ((piles[back] as Dictionary)["cards"] as Array)[-1]
-		_box["return_at"] = top.origin + Vector3(0.0, pitch, 0.0)
-		_box["return_turn"] = atan2(-top.basis.x.z, top.basis.x.x)
-	for i in range(stocked.size() - 1, 0, -1):
-		var j := rng.randi_range(0, i)
-		var swap: int = stocked[i]
-		stocked[i] = stocked[j]
-		stocked[j] = swap
-	# WHAT A SEARCH LOOKS AT: THE TOP CARD OF A PILE NOTHING IS DRAWN FROM, kept there (`search_kept`,
-	# [method _keep_searched]) - as many piles as can be spared, the draws keeping two where there are
-	# three, and cards enough. With none to spare (the returns' pile is drawn from, or there is one
-	# pile), a card's thickness over a pile as it was built, and no card kept for it.
-	var seats: Array = []
-	var spare := clampi(stocked.size() - (2 if stocked.size() > 2 else 1), 0, SEATS)
-	if stocked.has(back):
-		spare = 0
-	while spare > 0:
-		var left := 0
-		for i in stocked.size() - spare:
-			left += ((piles[stocked[i]] as Dictionary)["cards"] as Array).size()
-		if left >= _cards.size():
-			break
-		spare -= 1
-	for n in spare:
-		seats.append(((piles[int(stocked.pop_back())] as Dictionary)["cards"] as Array).pop_back())
-	_box["search_kept"] = not seats.is_empty()
-	if seats.is_empty():
-		for i in stocked:
-			if i != back or stocked.size() == 1:
-				var top: Transform3D = ((piles[i] as Dictionary)["cards"] as Array)[-1]
-				seats.append(top.translated(Vector3(0.0, pitch, 0.0)))
-	var turn := 0
-	for k in _cards.size():
-		var from: Array = []
-		for tries in stocked.size():
-			from = (piles[stocked[(turn + tries) % stocked.size()]] as Dictionary)["cards"]
-			if not from.is_empty():
-				turn += tries + 1
-				break
-		(_box["at_k"] as Array).append(from.pop_back() if not from.is_empty()
-			else Transform3D(Basis.IDENTITY, inner.get_center()))
-	var rest: Array = []
-	for p in piles:
-		rest.append_array((p as Dictionary)["cards"])
-	_box["search"] = seats
-	return rest
-
-
-## A few ordinary small keepsakes rest in the open space at the back of the container.
-## They are not cards, so they never enter the draw or the file's inventory.
-func _build_box_objects() -> void:
-	var inner: AABB = _box["inner"]
-	_box["objects_rest"] = []
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([_plan.seed_value, "box keepsakes"])
-	for item in _plan.staging.get("keepsakes", []) if _plan.staging.get("keepsakes") is Array else []:
-		var kind := String(item)
-		var mesh: PrimitiveMesh
-		var color := Color(0.72, 0.65, 0.49)
-		match kind:
-			"coin", "button":
-				var round_mesh := CylinderMesh.new()
-				round_mesh.top_radius = 0.008 if kind == "coin" else 0.006
-				round_mesh.bottom_radius = round_mesh.top_radius
-				round_mesh.height = 0.0015 if kind == "coin" else 0.0025
-				mesh = round_mesh
-				color = Color(0.68, 0.54, 0.29) if kind == "coin" else Color(0.47, 0.35, 0.3)
-			"marble":
-				var round_mesh := SphereMesh.new()
-				round_mesh.radius = 0.006
-				round_mesh.height = 0.012
-				mesh = round_mesh
-				color = Color(0.21, 0.47, 0.56)
-			"ticket":
-				var paper := BoxMesh.new()
-				paper.size = Vector3(0.024, 0.0007, 0.014)
-				mesh = paper
-				color = Color(0.78, 0.72, 0.58)
-			_:
-				continue
-		var obj := MeshInstance3D.new()
-		obj.mesh = mesh
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = color
-		mat.roughness = 0.55 if kind == "marble" else 0.85
-		obj.material_override = mat
-		var x := inner.get_center().x + rng.randf_range(-0.28, 0.28) * inner.size.x
-		var z := inner.position.z + inner.size.z * rng.randf_range(0.07, 0.13)
-		obj.position = Vector3(x, inner.position.y + (0.006 if kind == "marble" else 0.002), z)
-		obj.rotation.y = rng.randf_range(-0.25, 0.25)
-		_root3.add_child(obj)
-		_box_objects.append(obj)
-		(_box["objects_rest"] as Array).append(obj.transform)
-
-
-## The planned cards still in the box, by printing. A shoebox repeats those printings to fill
-## the physical container - [param want] cards with the drawn ones - without asking the producer to
-## enumerate every unseen card.
-func _file_inventory(want := CardTable.SHOEBOX_FILL, pad := _box.has("lid")) -> Array:
-	var plan: Dictionary = _plan.pay.get("plan", {}) if _plan.pay.get("plan") is Dictionary else {}
-	var names: Array = []
-	var deck: Array = plan.get("deck", []) if plan.get("deck") is Array else []
-	if not deck.is_empty():
-		for card in deck:
-			if card is Dictionary:
-				names.append(CardTable.series_of(_plan.look, card as Dictionary))
-	else:
-		var inventory: Dictionary = plan.get("inventory", {}) if plan.get("inventory") is Dictionary else {}
-		var counts: Dictionary = inventory.get("printings", {}) if inventory.get("printings") is Dictionary else {}
-		for name in counts:
-			for i in maxi(0, int(counts[name])):
-				names.append(String(name))
-	if names.is_empty():
-		for card in _plan.pay.get("cards", []) if _plan.pay.get("cards") is Array else []:
-			if card is Dictionary:
-				names.append(CardTable.series_of(_plan.look, card as Dictionary))
-	if pad and not names.is_empty():
-		var printings := names.duplicate()
-		while names.size() < want:
-			names.append(printings[names.size() % printings.size()])
-	for card in _plan.pay.get("cards", []) if _plan.pay.get("cards") is Array else []:
-		if not (card is Dictionary) or names.is_empty():
-			continue
-		var name := CardTable.series_of(_plan.look, card as Dictionary)
-		var at := names.find(name)
-		names.remove_at(at if at >= 0 else 0)
-	return names
-
-
-## The cards come out of a box they are filed in (on edge, not lying flat in a tin).
-func _filed() -> bool:
-	return not _box.is_empty() and not bool(_box.get("flat", false)) and (_box.get("at_k", []) as Array).size() > 0
 
 
 ## Catch the table again for the things to reflect: a probe that updates once does so again when
@@ -2165,8 +1689,8 @@ func _keep_out() -> Array:
 	if _plan.cards_from == "box":
 		# nothing stands where the box would, nor where a pulled card rises past it
 		out.append(TablePositions.deck_keep(_deck_base, _box_keep(), _box_center()))
-		if _box.has("lid"):
-			var world: AABB = _box["world"]
+		if _box_part.stood.has("lid"):
+			var world: AABB = _box_part.stood["world"]
 			var side := signf(_deck_base.x)
 			var x := world.get_center().x + side * (world.size.x + 0.025)
 			out.append(Rect2(x - world.size.x * 0.5 - 0.025, world.position.z + 0.08 - 0.025,
@@ -2307,7 +1831,7 @@ func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, kee
 						score += clampf((at.y - ap.y) * 4.0, -0.2, 0.2)
 				if lit:
 					# by dark cloth, where it can burn as the key: by pale, its light is held down
-					score -= 0.8 * maxf(0.0, _heat_cell(Vector3(at.x, 0.0, at.y)) * KEY_ENERGY / HEAT - 1.0)
+					score -= 0.8 * maxf(0.0, _light_part.heat_cell(Vector3(at.x, 0.0, at.y)) * KEY_ENERGY / HEAT - 1.0)
 				score -= _straddle(bb)
 				if bb.intersects(workspace):
 					score -= WORKSPACE
@@ -2350,24 +1874,24 @@ func _put(t: Dictionary, b: Dictionary, spot: Dictionary, basis: Basis, group: S
 	var own := (CANDLE_LAYER << _lights.size()) if not wicks.is_empty() else THING_LAYER
 	for m in b["meshes"]:
 		var mesh := m as MeshInstance3D
-		mesh.layers = own if wicks.is_empty() or _near_wick(mesh, wicks) else THING_LAYER
+		mesh.layers = own if wicks.is_empty() or TableLight.near_wick(mesh, wicks) else THING_LAYER
 	var glows: Array = b.get("glows", [])
 	var first := _lights.size()
 	if not wicks.is_empty():
 		var flames: Array = []
 		for i in wicks.size():
 			var wick: Vector3 = node.transform * (wicks[i] as Vector3)
-			var f := _flame(wick, own, glows[i] if i < glows.size() else null)
+			var f := _light_part.add_flame(wick, own, glows[i] if i < glows.size() else null)
 			f["open"] = Props.open_to_air(wick, node, b["meshes"])
 			flames.append(f)
-		_light_flames(flames, own)
+		_light_part.light_flames(flames, own)
 	var foot := _translated(_turned(b["foot"], basis), at)
 	if foot.size() >= 3:
 		# A moving shoebox gets its own moving soft shade. A fixed decal projects onto
 		# its walls as it passes, and a fixed shadow slab leaves a ghost at its destination.
 		if not (group == "#the box" and String(_plan.staging.get("box_style", "open")) == "shoebox"):
-			_contact(foot)
-			_foot_shadow(foot, own)
+			_light_part.contact_shadow(foot)
+			_light_part.foot_shadow(foot, own)
 		var grown := _grown(foot, FOOT_MARGIN)
 		_standing.append(grown)
 		var c := Vector2.ZERO
@@ -2383,138 +1907,6 @@ func _put(t: Dictionary, b: Dictionary, spot: Dictionary, basis: Basis, group: S
 		"node": node, "outline": spot["outline"], "bb": spot["bb"], "rect": spot["rect"], "foot": foot,
 		"box": node.transform * (b["size"] as AABB), "lit": wicks.size(), "lights": range(first, _lights.size()),
 		"meshes": b["meshes"]})
-
-
-## A mesh close enough to a flame that its own shadow would be a false dark ring.
-## Props keeps each part in a separate mesh, while its shared parent holds the final scale.
-static func _near_wick(mesh: MeshInstance3D, wicks: Array) -> bool:
-	var bounds := mesh.get_aabb()
-	var parent := mesh.get_parent() as Node3D
-	var center := parent.transform * bounds.get_center()
-	var half := bounds.size * parent.scale.abs() * 0.5
-	for wick in wicks:
-		var p := wick as Vector3
-		var dx := maxf(absf(center.x - p.x) - half.x, 0.0)
-		var dz := maxf(absf(center.z - p.z) - half.z, 0.0)
-		if Vector2(dx, dz).length() < 0.018:
-			return true
-	return false
-
-
-## A FLAME at [param at], the top of a wick: a wick under it (on its candle's layer, [param own])
-## and the flame, flickering in its own time. Its light is its thing's ([method _light_flames]); its
-## own wax glows with it, through [param glow] (its material's `flame`). The flame, as
-## `{mesh, base, flicker, glow}`.
-func _flame(at: Vector3, own: int, glow: Variant = null) -> Dictionary:
-	var wick := MeshInstance3D.new()
-	var wm := CylinderMesh.new()
-	wm.top_radius = 0.0006
-	wm.bottom_radius = 0.0008
-	wm.height = 0.009
-	wm.radial_segments = 6
-	wm.rings = 1
-	wick.mesh = wm
-	var wmat := StandardMaterial3D.new()
-	wmat.albedo_color = Color(0.07, 0.05, 0.04)
-	wmat.roughness = 0.9
-	wick.material_override = wmat
-	wick.position = at + Vector3(0.0, 0.0035, 0.0)
-	wick.layers = own
-	_props.add_child(wick)
-	var flame := MeshInstance3D.new()
-	var q := QuadMesh.new()
-	q.size = Vector2(0.012, FLAME_QUAD)
-	q.subdivide_depth = 8
-	flame.mesh = q
-	var fm := ShaderMaterial.new()
-	var sh := Shader.new()
-	sh.code = FLAME_SHADER
-	fm.shader = sh
-	flame.material_override = fm
-	flame.position = at + Vector3(0, 0.016, 0)
-	_props.add_child(flame)
-	_flame_n += 1
-	return {"mesh": flame, "base": flame.position, "flicker": _flicker_of(_flame_n - 1), "glow": glow, "open": 1.0}
-
-
-## A LIT THING'S ONE LIGHT, for every flame on it: a candelabra's tapers or a pillar's three wicks
-## light the room as one light from among them, as near together as they are - so a candle costs
-## one shadow however many flames it has. It lights everything but its own thing (render layer
-## [param own]) and throws shadows from all of it: a flame lighting its own holder blew it out (an
-## oil lamp's flame sits a few centimeters above its body). Its brightness follows its flames' -
-## each still flickers in its own time.
-func _light_flames(flames: Array, own: int) -> void:
-	var at := Vector3.ZERO
-	for f in flames:
-		at += (f as Dictionary)["base"]
-	at /= float(flames.size())
-	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.7, 0.4)
-	light.omni_range = 1.4
-	light.light_energy = 0.35
-	light.shadow_caster_mask = 0xFFFFFFFF & ~own & ~Lights.SCREEN_MASK
-	light.light_cull_mask = 0xFFFFFFFF & ~own
-	# a flame is a couple of centimeters across: the shadows it throws are soft at their ends. The
-	# biases are for a TABLETOP: at their defaults a deck's shadow began centimeters in front of it.
-	# The NORMAL bias is what holds the cloth smooth: a flame stands a few centimeters over it, so
-	# the cloth is lit at a grazing angle, and at 0.08 the cube map's texels printed themselves on
-	# it as rings and radial lines (feedback 0016) and dimmed the pool. 0.3 is about a millimeter
-	# there; the depth bias stays small, which is what keeps a card's own shadow.
-	light.light_size = 0.015
-	light.shadow_blur = 2.0
-	light.shadow_bias = 0.004
-	light.shadow_normal_bias = 0.3
-	light.omni_shadow_mode = OmniLight3D.SHADOW_CUBE
-	light.shadow_enabled = true
-	light.position = at + Vector3(0, 0.016, 0)
-	_props.add_child(light)
-	_lights.append({"light": light, "base": at, "light_base": light.position, "energy": 0.28, "flames": flames})
-
-
-## A SHADOW-ONLY SLAB under [param foot]: the tabletop's shadow biases are larger than the gap
-## under a bowl's sloping wall, so a ring of the lamp leaked in beside its base (feedback 0009). The
-## slab stands a few millimeters over the cloth, draws nothing and shades what the thing already
-## covers. It is on [param layer], so a candle's own flames still leave it out.
-func _foot_shadow(foot: PackedVector2Array, layer: int) -> void:
-	var tris := Geometry2D.triangulate_polygon(foot)
-	if tris.is_empty():
-		return
-	const H := 0.006
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in range(0, tris.size() - 2, 3):
-		var a := foot[tris[i]]
-		var b := foot[tris[i + 1]]
-		var c := foot[tris[i + 2]]
-		# top and bottom, each both ways round: no winding to get wrong in the shadow pass
-		for y in [H, 0.0]:
-			for q in [a, b, c, a, c, b]:
-				st.add_vertex(Vector3(q.x, y, q.y))
-	var mi := MeshInstance3D.new()
-	mi.mesh = st.commit()
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
-	mi.layers = layer
-	_props.add_child(mi)
-
-
-## A soft shade on the cloth under [param foot] (a thing's outline where it meets it): what
-## anything standing presses into the cloth.
-func _contact(foot: PackedVector2Array) -> Decal:
-	var lo := Vector2(INF, INF)
-	var hi := Vector2(-INF, -INF)
-	for q in foot:
-		lo = lo.min(q)
-		hi = hi.max(q)
-	var size := (hi - lo).max(Vector2(0.01, 0.01))
-	var contact := Decal.new()
-	contact.texture_albedo = _contact_texture()
-	contact.modulate = Color(0, 0, 0, 1)
-	contact.albedo_mix = 0.6
-	contact.size = Vector3(size.x * 1.7, 0.03, size.y * 1.7)
-	contact.position = Vector3((lo.x + hi.x) * 0.5, 0.0, (lo.y + hi.y) * 0.5)
-	contact.cull_mask = 1
-	_props.add_child(contact)
-	return contact
 
 
 ## The rectangle in the picture that [param corners] (a thing's box, turned and sized) cover
@@ -2594,362 +1986,6 @@ static func _span(poly: PackedVector2Array, ax: Vector2) -> Vector2:
 	return Vector2(lo, hi)
 
 
-## LIGHT FROM OUTSIDE THE SHOT: two or three more candles in the room - behind the camera and off
-## to the sides - never seen, only felt: a warm, shifting fill on the cloth, and on a card held up
-## to the lens. Without shadows - faint fills, whose shadows would be fainter still, at six shadow
-## passes each - each flickering in its own time.
-## Their own dice, so the rest of the table lands where it did.
-func _build_glows() -> void:
-	_glows = []
-	var r := RandomNumberGenerator.new()
-	r.seed = hash([_plan.seed_value, "tarot-glows"])
-	var n := r.randi_range(2, 3)
-	var tries := 0
-	while _glows.size() < n and tries < 60:
-		tries += 1
-		var at := Vector3(r.randf_range(-0.7, 0.7), r.randf_range(0.12, 0.5), _plan.cam_base.origin.z + r.randf_range(0.2, 0.7))
-		if not _glows.is_empty() and r.randf() < 0.5:
-			at = Vector3(r.randf_range(0.85, 1.4) * (1.0 if r.randf() < 0.5 else -1.0), r.randf_range(0.08, 0.45),
-				r.randf_range(-0.45, 0.35))
-		if _in_shot(at):
-			continue
-		var light := OmniLight3D.new()
-		light.light_color = Color(1.0, r.randf_range(0.6, 0.74), r.randf_range(0.3, 0.44))
-		light.omni_range = 3.0
-		light.shadow_enabled = false
-		light.position = at
-		_props.add_child(light)
-		_glows.append({"light": light, "base": at, "energy": r.randf_range(0.12, 0.3),
-			"flicker": _flicker_of("glow%d" % _glows.size())})
-
-
-## Whether [param at] is inside the camera's picture (with a margin) - a light there would light
-## the table from a place where nothing is burning.
-func _in_shot(at: Vector3) -> bool:
-	return CardTable.in_shot(_plan.cam_base, _cam.fov, at)
-
-
-## THE LIGHT: the set dresser's (its table's `light`, [Lights]) - a sky, a sun and what it falls through,
-## clouds, birds, lamps out of the shot - in place of the lamp and the room's out-of-shot candles; or,
-## for a table that wrote none (every table set before 2026-10-07), those, as every table had them.
-func _build_light(spec: Dictionary) -> void:
-	if _rig != null:
-		_rig.release()
-		_rig = null
-	var light: Dictionary = spec.get("light", {}) if spec.get("light") is Dictionary else {}
-	# ONE WIND for the light and the air: what stirs the leaves overhead blows the petals off the cloth
-	_wind = Winds.plan(light.get("wind", {}) if light.get("wind") is Dictionary else {}, hash([_plan.seed_value, "wind"]))
-	_lamp.visible = light.is_empty()
-	_fill.visible = light.is_empty()
-	if light.is_empty():
-		_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-		_env.ambient_light_color = _plan.ambient.get("color", Color(0.5, 0.46, 0.44))
-		_env.ambient_light_energy = float(_plan.ambient.get("energy", 0.18))
-		_build_glows()
-		return
-	_glows = []
-	_seen = _seen_points()
-	_rig = Lights.build(light, _light_stage(), hash([_plan.seed_value, "light"]))
-	_root3.add_child(_rig.root)
-
-
-## Where the light stands ([method Lights.build]): the camera, the middle of the reading, the table and
-## everything standing on it (a wall stands past them, a canopy over them), the table the camera sees,
-## the environment, the room's picture, and what is in the shot.
-func _light_stage() -> Dictionary:
-	var bounds: AABB = _furniture.get("bounds", AABB(Vector3(-TABLE.x * 0.5, -TABLE.y, TABLE_Z - TABLE.z * 0.5), TABLE))
-	for th in _things:
-		bounds = bounds.merge((th as Dictionary)["box"] as AABB)
-	return {"camera": _plan.cam_base, "fov": _cam.fov, "aspect": 16.0 / 9.0, "middle": Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y),
-		"bounds": bounds, "seen": _seen, "env": _env, "room": _backdrop_mat, "in_shot": _in_shot, "wind": _wind}
-
-
-## THE TABLE THE CAMERA SEES, sampled ([method CardTable.seen_points]).
-func _seen_points() -> PackedVector3Array:
-	return CardTable.seen_points(_plan.cam_base, _cam.fov, _top)
-
-
-## HOW PALE THE PALEST THING THE LIGHT FALLS ON IS (linear luminance): the cloth where it is lightest
-## that the camera sees (its 97th percentile - one pale thread is not the cloth) and the card stock, which
-## lies in the spread under the same light.
-func _hot_lum() -> float:
-	var lums := PackedFloat32Array()
-	if not _lum.is_empty():
-		var cell := LUM_RECT.size / Vector2(LUM_GRID)
-		for p in _seen:
-			var gx := clampi(floori((p.x - LUM_RECT.position.x) / cell.x), 0, LUM_GRID.x - 1)
-			var gy := clampi(floori((p.z - LUM_RECT.position.y) / cell.y), 0, LUM_GRID.y - 1)
-			lums.append(_lum[gy * LUM_GRID.x + gx])
-	var hot := 0.0
-	if lums.is_empty():
-		var c := _cloth_fallback().srgb_to_linear()
-		hot = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722
-	else:
-		lums.sort()
-		hot = lums[clampi(int(lums.size() * 0.97), 0, lums.size() - 1)]
-	var stock := CardTable.color(String((_plan.look.get("frame", {}) as Dictionary).get("stock", "#efe6d2"))).srgb_to_linear()
-	return maxf(hot, (stock.r * 0.2126 + stock.g * 0.7152 + stock.b * 0.0722) * 0.85)
-
-
-## The light at show time [param t].
-func _tick_light(t: float) -> void:
-	if _rig != null:
-		_rig.tick(t)
-
-
-## WHAT LEADS THE LIGHT, in words: a candle (by its thing's name), the sun or a lamp of the table's own
-## light, or the lamp.
-func lead_name(by_light: Dictionary = {}) -> String:
-	if _key_flame >= 0:
-		return String(by_light.get(_key_flame, "a candle"))
-	if _rig != null:
-		if _rig.leads():
-			return _rig.key_name()
-		if not _lamp.visible:
-			var name: String = _rig.key_name()
-			return ("%s, faintly - nothing in the light leads it" % name) if not name.is_empty() else "nothing but the sky - the table is dim"
-	return "the lamp"
-
-
-## EVERY LIGHT THROWS ITS OWN SHADOW (the user, 2026-10-05: "most scenes have multiple light
-## sources, and thus should probably cast multiple shadows"): every candle and the lamp, so a thing
-## has a shadow for each light near it, each turned away from its own. One light had thrown them all
-## (every light casting its own then gave the deck no shadow worth the name and each half of a split
-## deck two - "it's all very strange"); now the KEY leads instead of casting alone: the candle
-## nearest the middle of the table, bright enough to reach the cards, so the deck's long shadow
-## toward the reader reads and the others are fainter. The other candles are fills, and the lamp is
-## dimmed to one; with no candle at all, the lamp is the key ([member _key_flame] -1). NO CLOTH IS LIT HOTTER THAN IT CAN TAKE ([constant HEAT]): a candle
-## by pale cloth is dimmer - and so are candles standing TOGETHER, whose pools add up on the cloth
-## between them (two tapers side by side, each at its own limit, burned a pale cloth white through
-## the bloom). A candle the cloth cannot let burn at [constant KEY_MIN] is never the key - with
-## none that can, the lamp is.
-func _light_the_table() -> void:
-	# A LIGHT OF THE TABLE'S OWN ([Lights]) is fitted to how pale the table is; where its sun or a lamp
-	# leads, every candle burns as a fill
-	var leads := false
-	if _rig != null:
-		_rig.fit(_hot_lum())
-		leads = _rig.leads()
-	var fields: Array = []
-	var key := -1
-	var best := INF
-	for i in _lights.size():
-		var base: Vector3 = (_lights[i] as Dictionary)["base"]
-		var lb: Vector3 = (_lights[i] as Dictionary)["light_base"]
-		var field := _heat_field(Vector3(base.x, 0.0, base.z), lb.y)
-		fields.append(field)
-		var d := (base * Vector3(1, 0, 1)).length()
-		if not leads and HEAT / maxf(_field_max(field), 0.05) >= KEY_MIN and d < best:
-			best = d
-			key = i
-	# A LIGHT IS AS BRIGHT AS ITS FLAMES: a pillar's three wicks give three flames' light, a
-	# candelabra's five tapers five - capped like any other by the cloth they light
-	var flames := PackedFloat32Array()
-	for i in _lights.size():
-		flames.append(float(((_lights[i] as Dictionary)["flames"] as Array).size()))
-	var energy := PackedFloat32Array()
-	for i in _lights.size():
-		energy.append(minf((KEY_ENERGY if i == key else FILL_ENERGY) * flames[i], HEAT / maxf(_field_max(fields[i]), 0.05)))
-	# the cloth's hottest spot under all of them at once, brought down to what it can take by
-	# dimming every flame that reaches it - a few times, as the hottest spot moves
-	for pass_ in 6:
-		var total := {}
-		for i in _lights.size():
-			for c in fields[i]:
-				total[c] = float(total.get(c, 0.0)) + energy[i] * float((fields[i] as Dictionary)[c])
-		var hot := -1
-		var most := HEAT
-		for c in total:
-			if float(total[c]) > most:
-				most = float(total[c])
-				hot = int(c)
-		if hot < 0:
-			break
-		for i in _lights.size():
-			if (fields[i] as Dictionary).has(hot):
-				energy[i] *= HEAT / most * 0.999
-	if key >= 0 and energy[key] < KEY_MIN:
-		key = -1
-	_key_flame = key
-	for i in _lights.size():
-		var f: Dictionary = _lights[i]
-		f["energy"] = energy[i] if i == key else minf(energy[i], FILL_ENERGY * flames[i])
-	if _rig == null:
-		# the candle has to carry much of the light at the cards, or its shadow is lost under the lamp's
-		_lamp.light_energy = _plan.lamp_base * (1.0 if key < 0 else 0.4)
-	else:
-		# A TABLE WITH A LIGHT OF ITS OWN has no lamp - unless nothing in that light reaches the cards and no
-		# candle can lead: then the lamp hangs over it, so a reading is never read in the dark
-		_lamp.visible = not leads and key < 0 and _rig.lead_level() < LAMP_FALLBACK
-		_lamp.light_energy = _plan.lamp_base * 0.7
-	_lit_cloth = _painting_tex
-
-
-## The cloth's HOTTEST SPOT under a flame [param hf] above [param at] (see [method _heat_field]).
-func _heat(at: Vector3, hf: float) -> float:
-	return _field_max(_heat_field(at, hf))
-
-
-static func _field_max(field: Dictionary) -> float:
-	var m := 0.0
-	for c in field:
-		m = maxf(m, float(field[c]))
-	return m
-
-
-## HOW HOT A FLAME [param hf] above [param at] LIGHTS THE TABLE, cell by cell within [constant
-## HEAT_R] ([constant LUM_GRID] over [constant LUM_RECT], keyed by cell): each cell's lightness over
-## the flame's falloff - height over distance squared, which is the slant of the light times an omni
-## light's 1/d at Godot's default attenuation. A table not yet built is its cloth's color.
-func _heat_field(at: Vector3, hf: float) -> Dictionary:
-	var out := {}
-	var cell := LUM_RECT.size / Vector2(LUM_GRID)
-	var g := Vector2((at.x - LUM_RECT.position.x) / cell.x, (at.z - LUM_RECT.position.y) / cell.y)
-	var reach := Vector2i(ceili(HEAT_R / cell.x), ceili(HEAT_R / cell.y))
-	var flat := 0.0
-	if _lum.is_empty():
-		var c := _cloth_fallback().srgb_to_linear()
-		flat = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722
-	for gy in range(maxi(0, floori(g.y) - reach.y), mini(LUM_GRID.y, floori(g.y) + reach.y + 1)):
-		for gx in range(maxi(0, floori(g.x) - reach.x), mini(LUM_GRID.x, floori(g.x) + reach.x + 1)):
-			var r2 := Vector2((gx + 0.5 - g.x) * cell.x, (gy + 0.5 - g.y) * cell.y).length_squared()
-			if r2 <= HEAT_R * HEAT_R:
-				var lum := flat if _lum.is_empty() else _lum[gy * LUM_GRID.x + gx]
-				out[gy * LUM_GRID.x + gx] = lum * hf / (r2 + hf * hf)
-	return out
-
-
-## [method _heat] at a grid cell's middle for a flame of [constant HEAT_H], kept for the build -
-## a candle's place is judged at hundreds of spots.
-func _heat_cell(at: Vector3) -> float:
-	var cell := LUM_RECT.size / Vector2(LUM_GRID)
-	var gx := clampi(floori((at.x - LUM_RECT.position.x) / cell.x), 0, LUM_GRID.x - 1)
-	var gy := clampi(floori((at.z - LUM_RECT.position.y) / cell.y), 0, LUM_GRID.y - 1)
-	var k := gy * LUM_GRID.x + gx
-	if not _heat_cells.has(k):
-		_heat_cells[k] = _heat(Vector3(LUM_RECT.position.x + (gx + 0.5) * cell.x, 0.0, LUM_RECT.position.y + (gy + 0.5) * cell.y), HEAT_H)
-	return float(_heat_cells[k])
-
-
-## HOW A FLAME FLICKERS - its own way, so no two keep time: a tempo, how steadily it burns, and
-## how often a draft finds it. They all shared one tempo and one swing, and pulsed together.
-func _flicker_of(salt: Variant) -> Dictionary:
-	var r := RandomNumberGenerator.new()
-	r.seed = hash([_plan.seed_value, "flicker", salt])
-	return {"seed": r.randf() * 1000.0, "rate": exp(r.randf_range(log(0.5), log(2.0))),
-		"calm": r.randf_range(0.04, 0.12), "slot": r.randf_range(4.0, 12.0), "drafts": r.randf_range(0.3, 0.65),
-		"salt": hash([_plan.seed_value, "draft", salt])}
-
-
-## A flame at show time [param t]: (brightness about 1, height about 1, lean). Mostly a steady burn
-## - a slow sway and a fine shiver at the flame's own tempo - and now and then a DRAFT: for a second
-## or two it gutters, dims and leans. A draft is drawn per slot of the flame's own length from a
-## hash, so this is a pure function of time and a render and a scrub see the same flame. The room's
-## drafts are still air's ([param drafts]): in the light's wind the wind is the draft ([method _tick_props]).
-func _flame_at(fk: Dictionary, t: float, drafts := true) -> Vector3:
-	var s := float(fk["seed"])
-	var r := float(fk["rate"])
-	var calm := float(fk["calm"])
-	var slow := _noise.get_noise_2d(t * 0.8 * r, s)
-	var fast := _noise.get_noise_2d(t * 7.0 * r, s + 31.0)
-	var slot := float(fk["slot"])
-	var k := floori(t / slot)
-	var h := hash([int(fk["salt"]), k])
-	var env := 0.0
-	var strength := 0.0
-	if drafts and float(h & 0xFFFF) / 65535.0 < float(fk["drafts"]):
-		var dur := 0.7 + 1.8 * float((h >> 16) & 0xFF) / 255.0
-		var start := float(k) * slot + (slot - dur) * float((h >> 24) & 0xFF) / 255.0
-		var u := (t - start) / dur
-		if u > 0.0 and u < 1.0:
-			env = pow(sin(PI * u), 2.0)
-			strength = 0.18 + 0.2 * float((h >> 8) & 0xFF) / 255.0
-	var gust := _noise.get_noise_2d(t * 13.0 * r, s + 57.0)
-	return Vector3(1.0 + calm * (0.65 * slow + 0.35 * fast) + env * strength * (gust - 0.35),
-		1.0 + calm * 2.5 * slow + env * strength * 1.4 * gust,
-		_noise.get_noise_2d(t * 1.3 * r, s + 7.0) * 0.4 + env * gust * 1.6)
-
-
-## A soft round shade, dark at its middle, made once: what a candle's base presses into the cloth.
-func _contact_texture() -> Texture2D:
-	if _contact_tex == null:
-		var g := Gradient.new()
-		g.offsets = PackedFloat32Array([0.0, 0.45, 1.0])
-		g.colors = PackedColorArray([Color(0, 0, 0, 0.85), Color(0, 0, 0, 0.45), Color(0, 0, 0, 0.0)])
-		var gt := GradientTexture2D.new()
-		gt.gradient = g
-		gt.fill = GradientTexture2D.FILL_RADIAL
-		gt.fill_from = Vector2(0.5, 0.5)
-		gt.fill_to = Vector2(1.0, 0.5)
-		gt.width = 64
-		gt.height = 64
-		_contact_tex = gt
-	return _contact_tex
-
-
-## THE CANDLES AT SHOW TIME [param t]: each flame flickering in its own time, and IN THE LIGHT'S WIND
-## ([method Winds.flame], as much of it as reaches the flame - [method Props.open_to_air]) leaning downwind,
-## flickering in its eddies and guttering in a gust; its thing's light leans and dims with its flames,
-## so the shadows round it lean and dance with them.
-func _tick_props(t: float) -> void:
-	var blows := Winds.blows(_wind)
-	for l in _lights:
-		# EACH FLAME IN ITS OWN TIME, and their light as bright as they are together
-		var bright := 0.0
-		var leans := Vector3.ZERO
-		for f in (l as Dictionary)["flames"]:
-			var fl := _flame_at(f["flicker"], t, not blows)
-			var fast := _noise.get_noise_2d(t * 9.0 * float((f["flicker"] as Dictionary)["rate"]), float((f["flicker"] as Dictionary)["seed"]) + 91.0)
-			var lean := Vector3(fl.z * 0.0015, 0, 0)
-			var axis := Vector3.UP
-			var tall := 1.0
-			var draft := 0.0
-			if blows:
-				var w := Winds.flame(_wind, t, f["base"] as Vector3, FLAME_H, float(f.get("open", 1.0)))
-				axis = w["axis"]
-				tall = float(w["tall"])
-				draft = float(w["draft"])
-				fl.x *= float(w["bright"])
-				lean += w["mid"] as Vector3
-			var mesh: MeshInstance3D = f["mesh"]
-			# A SPRITE PARALLEL TO THE PICTURE, standing on its wick: its lean as it shows on the screen split
-			# into a BEND (the shader's: foot upright, tip leaned) and a tip of the whole sprite in its own
-			# plane, foreshortened by what of it leans toward or away from the lens. Every flame is read
-			# across the CAMERA's right, never across its own line of sight: the same draft then leans every
-			# flame the same way on the screen (the user, 2026-10-11: one flame looked straight up and two
-			# leaned right, in a draft that was one - the wide lens sees a flame at the edge end on)
-			var root := (f["base"] as Vector3) - Vector3(0.0, FLAME_QUAD * 0.5, 0.0)
-			var across := _cam.global_transform.basis.x * Vector3(1, 0, 1)
-			across = across.normalized() if across.length() > 1e-5 else Vector3.RIGHT
-			var face := across.cross(Vector3.UP)
-			var shown := Vector2(axis.dot(across), axis.y)
-			var rest := shown.x / maxf(absf(shown.y), 1e-3)
-			var bend := clampf(rest * FLAME_BEND, -0.5, 0.5)
-			var b := Basis(across, Vector3.UP, face) * Basis(Vector3.BACK, -atan(rest - bend)) \
-				* Basis.from_scale(Vector3(1.0 + 0.06 * fast, fl.y * tall * shown.length(), 1.0))
-			mesh.transform = Transform3D(b, root + b * Vector3(0.0, FLAME_QUAD * 0.5, 0.0) + Vector3(lean.x, 0.0, 0.0) * (0.0 if blows else 1.0))
-			# ...AND LICKING: a ripple climbing it at the flame's own tempo, wider the harder it is fanned
-			var fk: Dictionary = f["flicker"]
-			var rate := float(fk["rate"])
-			var lick := lerpf(FLAME_LICK.x, FLAME_LICK.y, clampf(draft / sqrt(9.81 * FLAME_H), 0.0, 1.0))
-			var ripple := _noise.get_noise_2d(t * 2.1 * rate, float(fk["seed"]) + 143.0)
-			var fm := mesh.material_override as ShaderMaterial
-			fm.set_shader_parameter("bend", bend * FLAME_QUAD)
-			fm.set_shader_parameter("lick", FLAME_QUAD * lick * clampf(0.8 + 0.7 * ripple, 0.2, 1.5))
-			fm.set_shader_parameter("phase", TAU * 3.2 * rate * t + 2.5 * _noise.get_noise_2d(t * 0.9 * rate, float(fk["seed"]) + 211.0))
-			if f.get("glow") is ShaderMaterial:
-				(f["glow"] as ShaderMaterial).set_shader_parameter("flame", fl.x)
-			bright += fl.x
-			leans += lean
-		var n := maxf(float(((l as Dictionary)["flames"] as Array).size()), 1.0)
-		var light: OmniLight3D = (l as Dictionary)["light"]
-		light.light_energy = float((l as Dictionary)["energy"]) * bright / n
-		# the light leans with its flames, so the shadows breathe with them
-		light.position = ((l as Dictionary)["light_base"] as Vector3) + leans / n
-	for g in _glows:
-		(g["light"] as OmniLight3D).light_energy = float(g["energy"]) * _flame_at(g["flicker"], t).x
-
-
 # --- the camera ----------------------------------------------------------------------------------------
 
 ## The reader's eye: still.
@@ -3010,8 +2046,8 @@ func _build_air(spec: Dictionary) -> void:
 	_lamp.light_volumetric_fog_energy = 1.6 if foggy else 1.0
 	for l in _lights:
 		((l as Dictionary)["light"] as OmniLight3D).light_volumetric_fog_energy = 2.0 if foggy else 1.0
-	if _rig != null:
-		_rig.set_fog(foggy)
+	if _light_part._rig != null:
+		_light_part._rig.set_fog(foggy)
 	_air_key = ""
 
 
@@ -3026,8 +2062,8 @@ func _air_stage() -> Dictionary:
 	var under: Array = [table]
 	for th in _things:
 		under.append((th as Dictionary)["box"])
-	if not _box.is_empty():
-		under.append(_box["world"])
+	if not _box_part.stood.is_empty():
+		under.append(_box_part.stood["world"])
 	var fwd := -_plan.cam_base.basis.z
 	var near := INF
 	var far := 0.0
@@ -3340,8 +2376,8 @@ func _times() -> Dictionary:
 func _deck_at(t: float, tm: Dictionary, wj := {}) -> Vector3:
 	if _plan.cards_from == "box":
 		# IN THE BOX: a tin's deck lies flat on its floor (a box's cards are filed, the deck unseen)
-		var inner: AABB = _box.get("inner", AABB(_deck_base, Vector3.ZERO))
-		return Vector3(inner.get_center().x, inner.position.y, inner.get_center().z) if not _box.is_empty() else _deck_base
+		var inner: AABB = _box_part.stood.get("inner", AABB(_deck_base, Vector3.ZERO))
+		return Vector3(inner.get_center().x, inner.position.y, inner.get_center().z) if not _box_part.stood.is_empty() else _deck_base
 	var first: Array = tm["first"]
 	if first.is_empty():
 		return _plan.mid
@@ -3419,37 +2455,37 @@ func _plan_aside(top: Dictionary) -> void:
 ## table. It stays there while the lid is lifted and set beside it. The contents are built at
 ## that settled position and travel with it. Scrubbing uses the same poses.
 func _pose_box(t: float, tm: Dictionary) -> void:
-	if not _box.has("lid"):
+	if not _box_part.stood.has("lid"):
 		return
 	var open_at := float(tm["opening"])
 	var u := maxf(t - open_at, 0.0) if open_at < INF else 0.0
-	var rest: Transform3D = _box["rest"]
+	var rest: Transform3D = _box_part.stood["rest"]
 	var side := signf(_deck_base.x)
 	var arrival := _ease(clampf(u / 2.7, 0.0, 1.0))
 	var turn := _ease(clampf((u - 0.7) / 2.0, 0.0, 1.0))
-	var node: Node3D = _box["node"]
+	var node: Node3D = _box_part.stood["node"]
 	node.transform = Transform3D(rest.basis * Basis(Vector3.UP, -side * (1.0 - turn) * PI * 0.5),
 		rest.origin + Vector3(side * 0.30 * (1.0 - arrival), 0.0, 0.015 * (1.0 - arrival)))
 	var lift := _ease(clampf((u - 3.0) / 0.8, 0.0, 1.0))
 	var away := _ease(clampf((u - 3.8) / 1.2, 0.0, 1.0))
-	var lid: Node3D = _box["lid"]
-	var lid_rest: Vector3 = _box["lid_rest"]
-	var box_bounds: AABB = _box["world"]
+	var lid: Node3D = _box_part.stood["lid"]
+	var lid_rest: Vector3 = _box_part.stood["lid_rest"]
+	var box_bounds: AABB = _box_part.stood["world"]
 	var lower := _ease(clampf((u - 5.0) / 0.9, 0.0, 1.0))
 	lid.position = Vector3(lid_rest.x, lerpf(lid_rest.y + 0.065 * lift, 0.003, lower), lid_rest.z) \
 		+ rest.basis.inverse() * Vector3(side * (box_bounds.size.x + 0.025) * away, 0.0, 0.08 * away)
 	lid.rotation.x = PI * _ease(clampf((u - 4.4) / 1.4, 0.0, 1.0))
 	var contents_move := node.transform * rest.affine_inverse()
-	for f in _file:
+	for f in _box_part.files:
 		(f as Node3D).transform = contents_move
-	_box["move"] = contents_move
-	for i in _box_objects.size():
-		(_box_objects[i] as Node3D).transform = contents_move * ((_box["objects_rest"] as Array)[i] as Transform3D)
-	var shade: Decal = _box["shadow"]
-	var moved: AABB = node.transform * (_box["local_bounds"] as AABB)
+	_box_part.stood["move"] = contents_move
+	for i in _box_part.objects.size():
+		(_box_part.objects[i] as Node3D).transform = contents_move * ((_box_part.stood["objects_rest"] as Array)[i] as Transform3D)
+	var shade: Decal = _box_part.stood["shadow"]
+	var moved: AABB = node.transform * (_box_part.stood["local_bounds"] as AABB)
 	shade.position = Vector3(moved.get_center().x, 0.0, moved.get_center().z)
 	shade.size = Vector3(moved.size.x * 1.7, 0.03, moved.size.z * 1.7)
-	var lid_shade: Decal = _box["lid_shadow"]
+	var lid_shade: Decal = _box_part.stood["lid_shadow"]
 	var lid_at: Vector3 = node.transform * lid.position
 	lid_shade.position = Vector3(lid_at.x, 0.0, lid_at.z)
 	lid_shade.size = Vector3(box_bounds.size.x * 1.7, 0.03, box_bounds.size.z * 1.7)
@@ -3471,14 +2507,14 @@ func _pose_box(t: float, tm: Dictionary) -> void:
 ## deck FLAT, and THREE times in a row. That is totally wrong").
 func _pose_rummage(t: float, tm: Dictionary) -> void:
 	_rummage_card.visible = false
-	_looking = null
-	if _plan.cards_from != "box" or _box.is_empty():
+	_box_part.looking = null
+	if _plan.cards_from != "box" or _box_part.stood.is_empty():
 		return
 	# the box's own cards rest in their places, where the box is
-	var move: Transform3D = _box.get("move", Transform3D.IDENTITY)
-	var seats: Array = _box.get("search", [])
-	for i in _searched.size():
-		(_searched[i] as MeshInstance3D).transform = move * (seats[i] as Transform3D)
+	var move: Transform3D = _box_part.stood.get("move", Transform3D.IDENTITY)
+	var seats: Array = _box_part.stood.get("search", [])
+	for i in _box_part.searched.size():
+		(_box_part.searched[i] as MeshInstance3D).transform = move * (seats[i] as Transform3D)
 	var searches: Array = tm["rummages"]
 	for n in searches.size():
 		var e: Dictionary = searches[n]
@@ -3489,15 +2525,15 @@ func _pose_rummage(t: float, tm: Dictionary) -> void:
 		var looks := _card_poses.search_looks()
 		var beat := fmod((t - start) / span * float(looks), 1.0)
 		var which := n * looks + int(floor((t - start) / span * float(looks)))
-		if not _searched.is_empty():
-			_looking = _searched[which % _searched.size()]
+		if not _box_part.searched.is_empty():
+			_box_part.looking = _box_part.searched[which % _box_part.searched.size()]
 		elif beat >= 0.05 and beat <= 0.95:
 			# no card of its own to look at: one for the length of the look
-			_looking = _rummage_card
+			_box_part.looking = _rummage_card
 			_show_searched(which)
 			_rummage_card.visible = true
-		if _looking != null:
-			_looking.transform = move * _card_poses.searched_xf(which, beat)
+		if _box_part.looking != null:
+			_box_part.looking.transform = move * _card_poses.searched_xf(which, beat)
 		return
 
 
@@ -3563,7 +2599,7 @@ func _pose(t: float) -> void:
 		var dm: MeshInstance3D = _deck[i]
 		dm.transform = xf
 		# a box's cards are filed in it: the deck is seen only lying flat in a tin
-		dm.visible = i != gone and (_plan.cards_from != "box" or bool(_box.get("flat", false)))
+		dm.visible = i != gone and (_plan.cards_from != "box" or bool(_box_part.stood.get("flat", false)))
 	# THE CARDS, each from its own timeline
 	var showing := -1
 	var page_in := 0.0
@@ -3576,8 +2612,8 @@ func _pose(t: float) -> void:
 		if not m.visible:
 			continue
 		m.transform = pose["xf"]
-		if _box.has("lid") and float(tm["opening"]) < INF and t < float(tm["opening"]) + 2.7:
-			m.transform = (_box["node"] as Node3D).transform * (_box["rest"] as Transform3D).affine_inverse() * m.transform
+		if _box_part.stood.has("lid") and float(tm["opening"]) < INF and t < float(tm["opening"]) + 2.7:
+			m.transform = (_box_part.stood["node"] as Node3D).transform * (_box_part.stood["rest"] as Transform3D).affine_inverse() * m.transform
 		if float(pose["page"]) > 0.0:
 			showing = k
 			page_in = float(pose["page"])
@@ -3618,7 +2654,7 @@ func _laps_of(k: int) -> Array:
 			var p: Dictionary = (cards[i] as Dictionary).get("position", {}) \
 				if i < cards.size() and cards[i] is Dictionary and (cards[i] as Dictionary).get("position") is Dictionary else {}
 			# a card put back in its box is not on the cloth
-			var boxed := _filed() and String(p.get("destination", "")) == "box"
+			var boxed := _box_part.filed_on_edge() and String(p.get("destination", "")) == "box"
 			var hand: Vector3 = _plan.lay_jit[i] if i < _plan.lay_jit.size() else Vector3.ZERO
 			lies.append({} if boxed else {"pos": (_plan.slots[i]["pos"] as Vector3) + Vector3(hand.x, 0.0, hand.y),
 				"yaw": float(_plan.slots[i]["yaw"]) + hand.z})
@@ -3727,7 +2763,7 @@ func _end_fade(t: float) -> float:
 	var last := _follow.known_last()
 	if total == 0 or last < total - 1:
 		return 1.0
-	var outro := maxf(Spectrum.tail if Spectrum.bookend_baked else feed.outro_hold, 0.0)
+	var outro := maxf(feed.tail(), 0.0)
 	var beat := minf(0.8, outro * 0.15)
 	return 1.0 - _ease((t - (_follow.st1[last] + beat)) / maxf(outro - beat, 0.05))
 

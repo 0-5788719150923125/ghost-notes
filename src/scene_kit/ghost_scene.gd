@@ -415,13 +415,19 @@ func wobble(key: String, i: int) -> float:
 	return mod.value("%s_%d" % [key, i]) * g
 
 
+## The music's harmonic signature now, as the show that plays this scene hears it
+## ([method ShowFeed.signature]); empty with no show.
+func signature() -> PackedFloat32Array:
+	return feed.signature() if feed != null else PackedFloat32Array()
+
+
 ## Tonal color from the live harmonic signature - the CONTINUOUS, expressive half of harmonic
 ## seeding (the discrete half is the seed_bias mixed into seeds; see next/harmonic_seeding.md).
 ## The 12 chroma bins are placed on the color wheel and summed: the result's angle is the
 ## music's tonality (its "key" as a hue) and its length is how tonal the moment is. Returns
 ## Vector2(hue 0..1, strength 0..1); a scene can pull its palette toward the hue by the strength.
 func chroma_hue() -> Vector2:
-	var sig := Spectrum.harmonic_signature()
+	var sig := signature()
 	if sig.size() < 12:
 		return Vector2.ZERO
 	var acc := Vector2.ZERO

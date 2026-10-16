@@ -26,7 +26,7 @@ extends Scene3D
 ## AUDIO. The input sheet is read across its width: the neuron at column fraction cx takes
 ## `f.sample(cx)`, so bass enters one side of the sheet and treble the other. Every neuron
 ## also carries a PITCH CLASS assigned at build and mixes in
-## `Spectrum.harmonic_signature()` for that class - so which neurons are ELIGIBLE to fire is
+## `signature()` for that class - so which neurons are ELIGIBLE to fire is
 ## decided by the harmony rather than loudness, and a chord change re-routes the slab
 ## without the level moving. (The signature array is EMPTY until the analyzer is up, hence
 ## the `.size() > pc` guard.) One [Activation] per sheet, driven by the sheet's aggregate,
@@ -444,7 +444,7 @@ func update(f: AudioFeatures, delta: float) -> void:
 	tick(f, delta)
 	drift_view(f, 0.01, 0.02)
 	update_layers(f, delta)
-	_sig = Spectrum.harmonic_signature()
+	_sig = signature()
 	_ch = chroma_hue()
 	_glow = Nonlinear.flare(_glow, clampf(0.35 * f.energy + 0.7 * f.beat, 0.0, 1.0), delta, 9.0, 1.6)
 

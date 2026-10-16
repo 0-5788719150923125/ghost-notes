@@ -65,7 +65,7 @@ const BODY_A := "\n# Chapter One\n\nThe rain had not stopped.\n\n<!-- speaker: E
 const BODY_B := "\n# Chapter One\n\nThe rain had stopped, and the door stood open.\n\n<!-- speaker: Emily White -->\n\nNor had I.\n"
 
 var _fails: Array = []
-var _ed: GenerativeEditor
+var _ed: ReadingPanel
 var _doc: DocSource
 var _path := ""
 
@@ -77,7 +77,7 @@ func _ready() -> void:
 
 	# Built by hand rather than added to the tree: _ready would start the voice host, and
 	# nothing here needs a python process.
-	_ed = GenerativeEditor.new()
+	_ed = ReadingPanel.new()
 	_ed._build_panel()
 	# THE PANEL MUST BE IN THE TREE - Range only emits value_changed for an owner inside
 	# one, so a panel built outside it has every slider callback silently dead.
@@ -141,7 +141,8 @@ func _check_cards_starter() -> void:
 	var sample := FileAccess.get_file_as_string("res://rules/cards/starter.md")
 	_ok(sample.contains("# The Penalty Box") and sample.contains("## The host"),
 		"the bundled Cards brief is missing or incomplete")
-	var cards := CardsEditor.new()
+	var cards := ReadingPanel.new()
+	cards.workspace = "cards"
 	cards._build_panel()
 	cards.remove_child(cards._cast_timer)
 	add_child(cards._cast_timer)
@@ -431,7 +432,7 @@ func _check_the_picture_travels() -> void:
 	_ok(is_equal_approx(Director.filter_amount("static"), 0.3), "the Look did not come back from the document")
 	_ok(is_equal_approx(Director.pacing, 1.4), "the scene hold did not come back from the document")
 	_ok(Director.hand == "patrick", "the handwriting did not come back from the document (%s)" % Director.hand)
-	var pic: PictureCard = _ed._picture
+	var pic: PictureCard = _ed._block_cards.get("picture")
 	_ok(pic._hand_pick.get_item_text(pic._hand_pick.selected) == "Patrick",
 		"the panel does not show the document's handwriting")
 	_ok(is_equal_approx(pic._scene_hold.value, 1.4), "the panel does not show the document's scene hold")
@@ -483,7 +484,8 @@ func _check_one_block_per_component() -> void:
 ## its cast is the cast written here - it used to keep a copy of its own, and a chapter
 ## opened in it had no voices. And what the cards_panel panel then writes leaves the picture alone.
 func _check_the_voice_is_the_documents() -> void:
-	var cards_panel = load("res://src/cards/cards_editor.gd").new()
+	var cards_panel = load("res://src/reading/reading_panel.gd").new()
+	cards_panel.workspace = "cards"
 	cards_panel._build_panel()
 	cards_panel.remove_child(cards_panel._panel)     # in the tree, as the panel above is: sliders emit only there
 	add_child(cards_panel._panel)
@@ -549,7 +551,7 @@ func _check_the_look_travels() -> void:
 	_ok(Illustrations.style("sketch") == "Ballpoint: schematic, \"plain\".",
 		"the sketch style came back as %s" % JSON.stringify(Illustrations.style("sketch")))
 	_ok(Illustrations.references().size() == 1, "the reference images did not come back from the document")
-	_ok(String(_ed._picture.illustrations()._style.text) == style, "the panel's style box does not show the document's style")
+	_ok(String((_ed._block_cards.get("picture") as PictureCard).illustrations()._style.text) == style, "the panel's style box does not show the document's style")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(ref))
 
 

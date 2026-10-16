@@ -152,8 +152,8 @@ func _check_drag_undo() -> void:
 	_hold(true)
 	await process_frame
 	for i in 6:
-		ed._push_undo(key, "adjusted Scale")
-	var during: int = ed._undo_stack.size()
+		ed._undo.push(key, "adjusted Scale")
+	var during: int = ed._undo._undo_stack.size()
 	_hold(false)
 	await process_frame
 	print("six changes during one held drag -> %d undo step(s)" % during)
@@ -164,12 +164,12 @@ func _check_drag_undo() -> void:
 	# ...and the next drag is its own step, or undo would swallow unrelated work.
 	_hold(true)
 	await process_frame
-	ed._push_undo(key, "adjusted Scale")
+	ed._undo.push(key, "adjusted Scale")
 	_hold(false)
 	await process_frame
 	print("a second drag of the SAME control -> %d undo step(s) in total"
-		% ed._undo_stack.size())
-	var total: int = ed._undo_stack.size()
+		% ed._undo._undo_stack.size())
+	var total: int = ed._undo._undo_stack.size()
 	_expect(total == 2,
 		"a second, separate drag did not open its own history entry (%d total) - "
 		% total + "one undo would now revert two adjustments")

@@ -81,8 +81,8 @@ const PIROUETTE_CHANCE := 0.1
 ## Where the [param which]-th card a search looks at waits: its place in the box (`_box["search"]`) - or,
 ## where a tin's flat deck has no place of its own for it, off the middle of what lies there.
 func _search_seat(which: int) -> Transform3D:
-	var inner: AABB = medium._box["inner"]
-	var seats: Array = medium._box.get("search", [])
+	var inner: AABB = medium._box_part.stood["inner"]
+	var seats: Array = medium._box_part.stood.get("search", [])
 	if seats.is_empty():
 		return Transform3D(Basis.IDENTITY, Vector3(inner.get_center().x, inner.position.y + 0.004, inner.get_center().z))
 	return seats[which % seats.size()]
@@ -121,8 +121,8 @@ static func _turned_up() -> Basis:
 ## The card a search is looking at, the [param which]-th it has looked at, [param beat] (0 to 1) of
 ## the way through its look ([method _pose_rummage]).
 func searched_xf(which: int, beat: float) -> Transform3D:
-	var inner: AABB = medium._box["inner"]
-	var world: AABB = medium._box["world"]
+	var inner: AABB = medium._box_part.stood["inner"]
+	var world: AABB = medium._box_part.stood["world"]
 	var size := CardTable.card_size(medium._plan.look)
 	var seat := _search_seat(which)
 	var lift := smoothstep(0.05, 0.38, beat) * (1.0 - smoothstep(0.62, 0.95, beat))
@@ -132,7 +132,7 @@ func searched_xf(which: int, beat: float) -> Transform3D:
 		# ON EDGE: up along its own plane, then leaned about the line where it leaves the file - its
 		# top away from the eye, which looks down on it, so the side it shows the eye turns up to it
 		var up := (Vector3.UP - n * n.y).normalized()
-		var v := size.y if bool(medium._box.get("upright", true)) else size.x
+		var v := size.y if bool(medium._box_part.stood.get("upright", true)) else size.x
 		var hinge := seat.origin + up * v * 0.5
 		var shown := n if n.dot(medium._plan.cam_base.origin - seat.origin) > 0.0 else -n
 		var axis := shown.cross(up).normalized()
@@ -184,9 +184,9 @@ func card_pose(k: int, t: float, ev: Array, wj: Dictionary) -> Dictionary:
 		if t >= float((ev[i] as Dictionary)["t0"]) and float((ev[i] as Dictionary)["t0"]) < INF:
 			cur = i
 	if cur < 0:
-		if medium._filed() and k < (medium._box["at_k"] as Array).size():
+		if medium._box_part.filed_on_edge() and k < (medium._box_part.stood["at_k"] as Array).size():
 			out["visible"] = true
-			out["xf"] = (medium._box["at_k"] as Array)[k]
+			out["xf"] = (medium._box_part.stood["at_k"] as Array)[k]
 		return out
 	out["visible"] = true
 	# the state the events before the current one left - a card laid sideways can be untapped upright
@@ -264,7 +264,7 @@ func card_pose(k: int, t: float, ev: Array, wj: Dictionary) -> Dictionary:
 					if v < 0.0:
 						# still in its source: one of the deck's own until it leaves (a box's stands in its file)
 						out["xf"] = _source_xf(k)
-						out["visible"] = medium._filed()
+						out["visible"] = medium._box_part.filed_on_edge()
 					else:
 						out["xf"] = _sweep_xf(k, v, lying)
 		"show":
@@ -444,9 +444,9 @@ func _slid_out(k: int, lying: Transform3D, t: float) -> Transform3D:
 ## gone by the time it lies. Feedback 0010: a card laid behind the box went down through it.
 func _lay_lift(from: Transform3D, to: Transform3D, f: float) -> float:
 	var lift := sin(PI * f) * LAY_ARC
-	if medium._box.is_empty():
+	if medium._box_part.stood.is_empty():
 		return lift
-	var world: AABB = medium._box["world"]
+	var world: AABB = medium._box_part.stood["world"]
 	var rim := Rect2(world.position.x, world.position.z, world.size.x, world.size.z).grow(-BOX_GRAZE)
 	var step := 1.0 / float(LAY_SAMPLES)
 	for s in range(1, LAY_SAMPLES):
@@ -471,8 +471,8 @@ func _lay_lift(from: Transform3D, to: Transform3D, f: float) -> float:
 ## WHERE CARD [param k] WAITS before it is taken: on top of the deck, or standing in the box's file (on
 ## top of a tin's flat deck).
 func _source_xf(k: int) -> Transform3D:
-	if medium._filed() and k < (medium._box["at_k"] as Array).size():
-		return (medium._box["at_k"] as Array)[k]
+	if medium._box_part.filed_on_edge() and k < (medium._box_part.stood["at_k"] as Array).size():
+		return (medium._box_part.stood["at_k"] as Array)[k]
 	return medium._deck_top_xf(k)
 
 
@@ -481,7 +481,7 @@ func _source_xf(k: int) -> Transform3D:
 ## over, or pulled straight up out of the box's file ([method _pull_xf]); then on to [param to].
 func _take_xf(k: int, u: float, to: Transform3D, span: float) -> Transform3D:
 	var r := u * TableMedium.RISE_END / maxf(span, 0.05)
-	if medium._filed():
+	if medium._box_part.filed_on_edge():
 		return _pull_xf(k, r, to)
 	return _draw_xf(k, r, to)
 
@@ -489,14 +489,14 @@ func _take_xf(k: int, u: float, to: Transform3D, span: float) -> Transform3D:
 ## A card PULLED FROM THE BOX at [param r] (a draw's phases): still in the file while the hand finds it,
 ## then up along its own plane until it clears the rim, then on to [param to].
 func _pull_xf(k: int, r: float, to: Transform3D) -> Transform3D:
-	var at: Transform3D = (medium._box["at_k"] as Array)[k]
+	var at: Transform3D = (medium._box_part.stood["at_k"] as Array)[k]
 	if r < TableMedium.SQUARE:
 		return at
-	var inner: AABB = medium._box["inner"]
-	var v := CardTable.card_size(medium._plan.look).y if bool(medium._box.get("upright", true)) else CardTable.card_size(medium._plan.look).x
+	var inner: AABB = medium._box_part.stood["inner"]
+	var v := CardTable.card_size(medium._plan.look).y if bool(medium._box_part.stood.get("upright", true)) else CardTable.card_size(medium._plan.look).x
 	if String(medium._plan.staging.get("contents", "file")) != "file":
 		v = 0.0
-	var raised := Transform3D(at.basis, Vector3(at.origin.x, maxf(inner.end.y, (medium._box["world"] as AABB).end.y) + v * 0.5 + PULL_CLEAR, at.origin.z))
+	var raised := Transform3D(at.basis, Vector3(at.origin.x, maxf(inner.end.y, (medium._box_part.stood["world"] as AABB).end.y) + v * 0.5 + PULL_CLEAR, at.origin.z))
 	if r < FLIP_END:
 		return at.interpolate_with(raised, TableMedium._ease((r - TableMedium.SQUARE) / (FLIP_END - TableMedium.SQUARE)))
 	if r < TableMedium.RISE_END:
@@ -507,7 +507,7 @@ func _pull_xf(k: int, r: float, to: Transform3D) -> Transform3D:
 ## A card IN A WATERFALL at [param v] seconds of its own slide ([constant FAN_MOVE]): off the deck and
 ## along the cloth to [param to], low, turning face up as it goes - or pulled up out of the box first.
 func _sweep_xf(k: int, v: float, to: Transform3D) -> Transform3D:
-	if medium._filed():
+	if medium._box_part.filed_on_edge():
 		return _pull_xf(k, v * TableMedium.RISE_END / TableMedium.FAN_MOVE, to)
 	var from := medium._deck_top_xf(k)
 	if v >= TableMedium.FAN_MOVE:

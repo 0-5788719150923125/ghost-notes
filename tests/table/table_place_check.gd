@@ -20,7 +20,7 @@ extends Node
 ##   - in a wash no card passes through anything standing, and every card still ends in the deck -
 ##     against the same washes with the cards let through, which must cross;
 ##   - no candle is brighter than the cloth by it allows ([constant TableMedium.HEAT]), the key
-##     is a candle only where its cloth can take [constant TableMedium.KEY_MIN], and every candle
+##     is a candle only where its cloth can take [constant TableLight.KEY_MIN], and every candle
 ##     and the lamp throw shadows. Two-sided: on a pale cloth the lamp must be the key, on a dark one a
 ##     candle at [constant TableMedium.KEY_ENERGY] - and the retired rule (nearest the middle, at
 ##     full light) must break the cap on this fixture, or the half-pale cloth tests nothing;
@@ -178,8 +178,8 @@ func _run() -> void:
 	# retired measure) let a key burn; its hottest spot does not
 	var edge := Vector3(0.27, 0.0, (0.26 - 0.5) * TableShuffle.CLOTH.y + Tables.ORIGIN.y)
 	var old_cap := 0.27 / maxf(_mean_lum(edge, 0.1), 0.02)
-	var new_cap := TableMedium.HEAT / maxf(medium._heat(edge, 0.13), 0.05)
-	_ok(old_cap >= TableMedium.KEY_ENERGY and new_cap < TableMedium.KEY_MIN,
+	var new_cap := TableMedium.HEAT / maxf(medium._light_part._heat(edge, 0.13), 0.05)
+	_ok(old_cap >= TableMedium.KEY_ENERGY and new_cap < TableLight.KEY_MIN,
 		"control: by the stripe the average allowed a key (%.2f), the hottest spot does not (%.2f)" % [old_cap, new_cap])
 
 	print("how they flicker")
@@ -275,8 +275,8 @@ func _sweep(cloth: String, candles: int, table := {}) -> Dictionary:
 				continue
 			var p: Vector3 = (t["node"] as Node3D).position
 			var aim := CardTable.zone_aim(String(t["place"]), medium._deck_base)
-			n["heat_at"] += medium._heat(Vector3(p.x, 0.0, p.z), TableMedium.HEAT_H)
-			n["heat_aim"] += medium._heat(Vector3(aim.x, 0.0, aim.y), TableMedium.HEAT_H)
+			n["heat_at"] += medium._light_part._heat(Vector3(p.x, 0.0, p.z), TableLight.HEAT_H)
+			n["heat_aim"] += medium._light_part._heat(Vector3(aim.x, 0.0, aim.y), TableLight.HEAT_H)
 		# THE CLOTH UNDER ALL THE FLAMES AT ONCE, cell by cell - and, as the control, under each alone at
 		# its own limit, the rule before candles stood together: the key (nearest the middle of those
 		# whose cloth can take it) at full light, the rest at the fill, each capped by its own cloth
@@ -289,16 +289,16 @@ func _sweep(cloth: String, candles: int, table := {}) -> Dictionary:
 			var fd: Dictionary = medium._lights[i]
 			var base: Vector3 = fd["base"]
 			var lb: Vector3 = fd["light_base"]
-			var field := medium._heat_field(Vector3(base.x, 0.0, base.z), lb.y)
+			var field := medium._light_part._heat_field(Vector3(base.x, 0.0, base.z), lb.y)
 			fields.append(field)
 			var d := (base * Vector3(1, 0, 1)).length()
-			if TableMedium.HEAT / maxf(TableMedium._field_max(field), 0.05) >= TableMedium.KEY_MIN and d < old_best:
+			if TableMedium.HEAT / maxf(TableLight._field_max(field), 0.05) >= TableLight.KEY_MIN and d < old_best:
 				old_best = d
 				old_key = i
 		for i in medium._lights.size():
 			var field: Dictionary = fields[i]
-			var own_cap := minf(TableMedium.KEY_ENERGY if i == old_key else TableMedium.FILL_ENERGY,
-				TableMedium.HEAT / maxf(TableMedium._field_max(field), 0.05))
+			var own_cap := minf(TableMedium.KEY_ENERGY if i == old_key else TableLight.FILL_ENERGY,
+				TableMedium.HEAT / maxf(TableLight._field_max(field), 0.05))
 			for c in field:
 				total[c] = float(total.get(c, 0.0)) + float((medium._lights[i] as Dictionary)["energy"]) * float(field[c])
 				alone[c] = float(alone.get(c, 0.0)) + own_cap * float(field[c])
@@ -317,14 +317,14 @@ func _sweep(cloth: String, candles: int, table := {}) -> Dictionary:
 			var f: Dictionary = medium._lights[i]
 			var base: Vector3 = f["base"]
 			var lb: Vector3 = f["light_base"]
-			var cap := TableMedium.HEAT / maxf(medium._heat(Vector3(base.x, 0.0, base.z), lb.y), 0.05)
+			var cap := TableMedium.HEAT / maxf(medium._light_part._heat(Vector3(base.x, 0.0, base.z), lb.y), 0.05)
 			if float(f["energy"]) > cap + 0.0001:
 				n["over_cap"] += 1
 			var light: OmniLight3D = f["light"]
 			if light.shadow_enabled:
 				casters += 1
-			if i == medium._key_flame:
-				if float(f["energy"]) < TableMedium.KEY_MIN - 0.0001:
+			if i == medium._light_part._key_flame:
+				if float(f["energy"]) < TableLight.KEY_MIN - 0.0001:
 					n["bad_key"] += 1
 				if absf(float(f["energy"]) - TableMedium.KEY_ENERGY * float((f["flames"] as Array).size())) < 0.0001:
 					n["full_keys"] += 1
@@ -334,12 +334,12 @@ func _sweep(cloth: String, candles: int, table := {}) -> Dictionary:
 				nearest = i
 		if casters != medium._lights.size() + 1:
 			n["casters"] += 1
-		if medium._key_flame < 0:
+		if medium._light_part._key_flame < 0:
 			n["lamp_keys"] += 1
 		if nearest >= 0:
 			var nb: Vector3 = (medium._lights[nearest] as Dictionary)["base"]
 			var nl: Vector3 = (medium._lights[nearest] as Dictionary)["light_base"]
-			if TableMedium.KEY_ENERGY > TableMedium.HEAT / maxf(medium._heat(Vector3(nb.x, 0.0, nb.z), nl.y), 0.05):
+			if TableMedium.KEY_ENERGY > TableMedium.HEAT / maxf(medium._light_part._heat(Vector3(nb.x, 0.0, nb.z), nl.y), 0.05):
 				n["old_over"] += 1
 	if FileAccess.file_exists(tf):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(tf))
@@ -447,7 +447,7 @@ func _flicker() -> void:
 			var dip := PackedByteArray()
 			for i in 1800:
 				var t := float(i) / 30.0
-				var b := medium._flame_at(fk, t).x
+				var b := medium._light_part._flame_at(fk, t).x
 				series.append(b)
 				dip.append(1 if b < 0.9 else 0)
 				var sd := float(fk["seed"])
@@ -470,14 +470,14 @@ func _flicker() -> void:
 				drafted += (pi_ + pj) / 3600.0
 				both += pij / 1800.0
 				expected += (pi_ / 1800.0) * (pj / 1800.0)
-		for g in medium._glows:
+		for g in medium._light_part._glows:
 			glows += 1
-			glows_seen += 1 if medium._in_shot((g as Dictionary)["base"]) else 0
+			glows_seen += 1 if medium._light_part._in_shot((g as Dictionary)["base"]) else 0
 			glow_shadows += 1 if ((g as Dictionary)["light"] as OmniLight3D).shadow_enabled else 0
-			var e0 := medium._flame_at((g as Dictionary)["flicker"], 3.0).x
+			var e0 := medium._light_part._flame_at((g as Dictionary)["flicker"], 3.0).x
 			var moved := false
 			for i in 60:
-				if absf(medium._flame_at((g as Dictionary)["flicker"], 3.0 + float(i) * 0.5).x - e0) > 0.02:
+				if absf(medium._light_part._flame_at((g as Dictionary)["flicker"], 3.0 + float(i) * 0.5).x - e0) > 0.02:
 					moved = true
 			glow_moves += 1 if moved else 0
 	ratios.sort()
@@ -594,7 +594,7 @@ func _outro() -> void:
 		moments += 1
 		t1 += 0.25
 	_ok(moments > 0 and full == moments, "the table is thrown out of focus all the while the name is up (%d of %d moments)" % [full, moments])
-	var thumb := CardsEditor.thumbnail_moment(Director.intro_hold)
+	var thumb := EpisodeCard.thumbnail_moment(Director.intro_hold)
 	medium._tick_focus(thumb)
 	_ok(medium._title_alpha(thumb) > 0.999 and medium._blur.visible and is_equal_approx(_blur_sigma(), wide),
 		"the thumbnail's moment (%.1f s) has the name fully up over the table out of focus" % thumb)

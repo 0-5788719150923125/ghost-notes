@@ -36,3 +36,9 @@ func cast_text(written: String) -> String:
 ## The passage every voice is auditioned with by Test; [param fallback] is the panel's own.
 func test_passage(fallback: String) -> String:
 	return fallback
+
+
+## Whether the words read are the note's as written - so an edit by hand leaves a reading already
+## on the stream out of date. Not for an episode: its brief is what the NEXT one is made from.
+func reads_source() -> bool:
+	return true

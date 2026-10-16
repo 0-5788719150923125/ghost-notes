@@ -506,7 +506,7 @@ static func _literal_word(token: String) -> Dictionary:
 			phones.append_array(["D", "ZH"])
 	var st := _with_default_stress(phones)
 	# `literal` is what makes ghost's own ARPAbet BEAT eSpeak downstream (see
-	# generative_editor._build_chunks). Without it an inline [K AE T] was quietly
+	# ReadingPanel._build_chunks). Without it an inline [K AE T] was quietly
 	# re-phonemized by eSpeak like any other word - the documented escape hatch for a
 	# mispronounced name did nothing at all on the generative path.
 	return {"text": inner.to_lower(), "display": inner, "phones": phones,

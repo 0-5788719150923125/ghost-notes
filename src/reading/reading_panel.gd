@@ -2,10 +2,10 @@ extends CanvasLayer
 class_name ReadingPanel
 
 ## ReadingPanel - a reading of a document in the neural voice: the script, the cast, the voice,
-## the stream, the transport's hooks, the export (VOICE_PLAN.md P4). The Generative and Cards
-## panels are both one (next/notes.md step 5): each adds the cards its picture is made of
-## ([method _build_cards]) and the blocks it keeps in a document ([method _doc_blocks]); neither
-## inherits the other any more, so neither spends its effort removing what the other built.
+## the stream, the transport's hooks, the export (VOICE_PLAN.md P4). It runs two workspaces - a
+## note read aloud, and a show of cards - and is the same panel for both: what differs is the
+## note's components, each a card ([method _note_cards]) keeping its block in the document
+## ([method _doc_blocks]).
 ##
 ## Deliberately NOT a backend swap inside [SynthEditor]. The fishing game's
 ## economy is defined over the procedural engine's parameter space - difficulty
@@ -30,10 +30,12 @@ class_name ReadingPanel
 
 ## A READING OF A DOCUMENT, WHOEVER WROTE IT. This panel is the voice and the room a reading is
 ## heard in; what is read comes from the document a [ScriptWriter] holds, and what it is SEEN in is
-## the cards a mode adds. A mode extends this class and overrides the few seams below (`_section`,
-## [method _build_cards], [method _doc_blocks], [method _reading_body], [method _reading_of],
-## [method _has_reading]) - [GenerativeEditor] for a chapter, [CardsEditor] for a reading written by
-## agents at the table - so the voice pipeline, the cast, the export and the scrubbing exist once.
+## the cards of the note's components. NOTHING EXTENDS IT (next/structure.md, step 12): the
+## workspace it runs is a row ([member workspace]: its section, title, hint and the cards a panel
+## without a note has), and a component that changes the reading HANDS it the part - what is read
+## ([member walk]), where it is heard ([member bed]) and how it goes out ([member publish]). Cards'
+## [EpisodeCard] hands all three, so the voice pipeline, the cast, the export and the scrubbing
+## exist once, for a chapter and for a reading agents write at a table alike.
 
 ## Set by main: open ONE generator session for the whole chapter.
 var begin_stream: Callable     # begin_stream.call(fp, sample_rate, words) -> playback
@@ -63,33 +65,6 @@ const LOOKAHEAD := 2           # chunks in flight; 1 would stall at every seam
 # sentences: small chunks keep the window shallow in TIME while still deep
 # enough in SECONDS to never starve.
 const LOOKAHEAD_SECONDS := 9.0
-# The silence between sentences. The host inserts this BETWEEN sentences inside
-# one chunk; with one sentence per chunk it has no pair to sit between, so the
-# boundary is made here instead. Without it the reading runs sentences together
-# - the "rushed" problem, reintroduced by the chunk size. This is the figure at
-# Pause 1.0; the slider scales it, and the host is sent the same pair so the two
-# sides of a seam agree (see _seam_gap).
-# Ceiling for the Pause slider. 2 was the first guess and it was far too timid: measured
-# end to end through the real host, scale 2 stretched a 4.3 s sentence by only 0.81 s -
-# spread over three marks, which reads as no change at all. Scale 10 stretches the same
-# sentence by 3.46 s, which is unmistakable. The base table stays conservative (it is
-# calibrated to what the model already does) and this opens the range instead, so the
-# choice is the reader's rather than baked in.
-#
-# The number is no longer a stretch factor for our own silence: the dial scales the WHOLE
-# rest along a saturating curve, so 10 means "3.2 times the natural rest" rather than "ten
-# times the silence we splice". See [method _rest_for].
-const MAX_PAUSE_SCALE := 10.0
-const SENTENCE_GAP := 0.32
-# What the MODEL rests at a sentence end on its own: the trailing silence of one rendered
-# sentence plus the leading silence of the next, which with one sentence per chunk is what
-# sits either side of a seam. Measured, 0.138-0.145 + 0.044. Mirrors piper.DWELL - see
-# [method _rest_for] for why a rest has to know this in order to scale properly.
-const SENTENCE_DWELL := 0.18
-# The pause curve's exponent, which IS its reach: log(5)/log(10), so the multiplier is
-# exactly 1.0 at Pause 1.0 and 5.0 at the top of the slider. Mirrors piper.PAUSE_GAIN -
-# see [method _pause_multiplier] for why a power law and not a saturating one.
-const PAUSE_GAIN := 0.69897
 # The punctuation marks the host is allowed to receive.
 #
 # A mark is phonemized as part of its word, so whatever is sent here has to have
@@ -131,23 +106,9 @@ const CHUNK_SENTENCES := 1
 # longer rest at exactly that point, for effect; `<!-- hesitation: 2.5 -->` names its own
 # length in seconds. The Hesitate row sets the length of a bare one and switches them all.
 # The rest is spliced into the take where the host reports the gap after a word, so it lands
-# between two words and never inside one (see [method _splice_holds]).
+# between two words and never inside one (see [method Splice.chunk]).
 const HESITATE_DEFAULT := 1.5
 const HESITATE_MAX := 6.0
-# THE HANDOVER. A change of speaker is a bigger boundary than a sentence end and
-# wants a bigger rest: one reader stops, the other starts, and run together they
-# read as one person changing their mind mid-paragraph rather than as two people.
-# This is the figure at Turn 1, ON TOP of the ordinary sentence seam, and the
-# slider scales it.
-#
-# GLOBAL, not per tab, and that is the point of it being above them: the pause
-# belongs to the BOUNDARY between two voices, not to either one of them, so
-# asking which tab owns it has no answer.
-const TURN_GAP := 0.55
-const MAX_TURN_SCALE := 6.0
-# ...and a ceiling on the whole rest, the seam included. Past a few seconds a
-# handover stops reading as a beat and starts reading as the file having ended.
-const TURN_CEILING := 4.0
 ## The voice a new tab reads in, and the one picked when a tab names none: 904 readers under one
 ## checkpoint, so a cast can be voiced from one model (the user, 2026-10-08: "make 'libritts high' the
 ## default voice option"). Before, the default was whatever the host listed first.
@@ -171,187 +132,7 @@ const SLOT_DEFAULTS := {
 ## which is why it is not larger.
 const LIVE_PREROLL := 2.5
 
-# TONE PRESETS.
-#
-# VITS has no affect control - the only handles are pace, how much variation the
-# model samples, and pitch. So a "tone" here is those three moved together, plus
-# A TONE OWNS THE VOICE AND NOTHING ELSE. It reached into two of the panel's own
-# dials once - the ambience bed and Presence - and both were mistakes, in opposite
-# directions.
-#
-# The bed was never the voice's business: it is a drone under the reading, a choice
-# about the room, and it neither competes with the voice nor belongs to any manner of
-# speaking. It was also pointless at the sizes used - "if we EVER set ambience to 0.1,
-# then there is essentially no ambience at all."
-#
-# Presence WAS the voice's business, because Gruff really is muffled, but a preset has
-# no business writing a control the reader has set - and as a hidden offset it was
-# worse than that: Presence rests at the TOP of its travel, so subtracting from it
-# could not be undone by pushing the slider up. "There is no way to correct that; I
-# can ramp presence up to 1.0 and it's still too quiet." What Gruff wanted was not
-# distance anyway. It wanted to sound like a voice coming through something, which is
-# a property of the SOURCE, and `muffle` is now exactly that - a filter the preset
-# owns, in the backend beside the whisper, leaving every dial on the panel alone.
-#
-# ...and `whisper` and `muffle`, which are neither. Those two are not parameters of
-# the model at all but transforms applied to what it returns (piper.py `_whisper`,
-# `_muffle`): the two manners a modal-speech checkpoint categorically cannot be asked
-# for are the one where the vocal folds are not vibrating and the one where the voice
-# is coming through something.
-#
-# The pitch shift is done by RESAMPLING, and the model compensates: to raise the
-# voice by r we ask it to speak r times SLOWER, then play back r times faster.
-# The two cancel in duration and leave only the pitch change, which avoids a
-# phase vocoder entirely. The host does the playback (`play_ratio` in
-# [method _request_args]), band-limited - this editor's own was linear, which dulled
-# the top end and folded images back into it. It does shift the
-# formants with the pitch, so the speaker reads as a different SIZE - which is
-# exactly what "spooky" (larger, lower) and "excited" (smaller, higher) want.
-## THE DELIVERY A SCRIPT MARKS (`<!-- delivery: quicker, brighter -->`, [constant
-## Manuscript.DELIVERY]): each word a step on four axes - PACE, BRIGHTNESS (a touch higher, a
-## little livelier, a little more effort), PAUSES (+ is longer: a reader who lets a moment sit, or
-## one running on) and VOLUME (effort alone, no pitch: leaning in, or projecting) - and the
-## intents a reader has as small combinations of them. `steady` is the voice's own. Steps add,
-## at most two each way.
-const DELIVERY_WORDS := {
-	"quicker": Vector4(1, 0, 0, 0), "faster": Vector4(1, 0, 0, 0), "slower": Vector4(-1, 0, 0, 0),
-	"brighter": Vector4(0, 1, 0, 0), "graver": Vector4(0, -1, 0, 0),
-	"tighter": Vector4(0, 0, -1, 0), "looser": Vector4(0, 0, 1, 0),
-	"louder": Vector4(0, 0, 0, 1), "softer": Vector4(0, 0, 0, -1),
-	"excited": Vector4(1, 1, -1, 0), "urgent": Vector4(1, 0, -1, 1), "playful": Vector4(1, 1, 0, 0),
-	"serious": Vector4(-1, -1, 1, 0), "hushed": Vector4(-1, -1, 1, -1), "tender": Vector4(-1, 0, 1, -1),
-	"dry": Vector4(0, -1, 0, 0), "steady": Vector4.ZERO,
-}
-## What ONE step is, on each axis - small on purpose: pace 4%, pitch a third of a semitone (on the
-## formant-locked path, so the speaker keeps their size), effort and melody a little, pauses a
-## fifth. Two steps is as far as a mark goes.
-const LEAN_PACE := 0.04
-const LEAN_SEMIS := 0.33
-const LEAN_EFFORT := 0.08
-const LEAN_LIVELY := 0.07
-## A pause step is the widest: a reader lets a moment sit, or barely stops on a roll (x1.3 a step).
-const LEAN_PAUSE := 1.3
-## Volume is effort alone - the spectral tilt and the level, no pitch.
-const LEAN_LOUD := 0.12
-## A hushed approach is this many "softer" steps of effort - the tilt of a dropped voice; the
-## level itself is VoiceFX's ([constant VoiceFX.NEAR_HUSH_DB]).
-const NEAR_SOFTER := 2.0
-## How much of the way to a new delivery each sentence goes: a change eases in over two or three
-## sentences, and back out the same way after its paragraph.
-const LEAN_EASE := 0.5
 var _last_leans: Array = []     # the delivery marks of the passage being resolved: [at, lean]
-
-const TONE_PRESETS := {
-	"Neutral":  {"pace": 1.00, "semis":  0.0, "noise": 0.667, "noise_w": 0.333, "muffle": 0.0, "whisper": 0.0},
-	"Warm":     {"pace": 0.96, "semis": -0.5, "noise": 0.60,  "noise_w": 0.35, "muffle": 0.0, "whisper": 0.0},
-	"Serious":  {"pace": 0.92, "semis": -1.5, "noise": 0.50,  "noise_w": 0.25, "muffle": 0.0, "whisper": 0.0},
-	"Excited":  {"pace": 1.15, "semis":  2.0, "noise": 0.85,  "noise_w": 0.50, "muffle": 0.0, "whisper": 0.0},
-	"Spooky":   {"pace": 0.85, "semis": -3.0, "noise": 0.45,  "noise_w": 0.20, "muffle": 0.0, "whisper": 0.0},
-	# The three below fill quadrants the first five leave empty. `pace` and
-	# `noise_w` are close to independent - one is how fast the reading runs, the
-	# other how EVENLY it is divided - and everything above sits on the diagonal:
-	# slow readings are also metronomic (Serious, Spooky), quick ones also loose
-	# (Excited). The off-diagonal corners are where the manners that are not just
-	# "more" or "less" of the same delivery live.
-	#
-	# SARCASTIC is the drawl: slow, but unevenly slow. It is not guesswork - the
-	# acoustics of sarcasm have been measured (Cheang & Pell, "The sound of
-	# sarcasm", Speech Communication 50, 2008), and against neutral productions of
-	# the same sentences sarcasm came out lower in mean F0 (their most robust cue,
-	# ~5-7% below neutral, so about a semitone), reduced in F0 standard deviation
-	# (a flatter contour), reduced in HNR (a rougher voice), and slower - 9% on
-	# whole sentences, 28% on short keyphrases. So: a semitone down, a sixth slower,
-	# `noise` well under Neutral to flatten the melody, and `noise_w` the highest in
-	# the bank, which is what stretches some syllables and clips others. The flat
-	# melody over uneven timing is the whole effect; the lowered pitch alone reads
-	# as Serious.
-	#
-	# URGENT is the corner nothing occupied: FAST AND TIGHT. Excited is fast and
-	# loose - a voice that has lost its grip on the rhythm - and the opposite of
-	# that is a voice keeping a grip on it deliberately. Low `noise_w` is what
-	# makes it clipped rather than merely quick, and the pitch barely moves,
-	# because the tension is in the timing, not the register.
-	#
-	# DREAMY is slow and loose, like Sarcastic, and reads nothing like it: it is
-	# a semitone and a half UP (the formants go with the pitch, so the reader is
-	# smaller and lighter, not larger and darker like Spooky), the model is left
-	# free to wander at the top of the `noise` range, and the ambience bed comes up
-	# further than any other preset - the pad is doing as much of the work as the
-	# voice is.
-	"Sarcastic": {"pace": 0.86, "semis": -1.0, "noise": 0.42, "noise_w": 0.60, "muffle": 0.0, "whisper": 0.0},
-	"Urgent":    {"pace": 1.22, "semis":  0.5, "noise": 0.40, "noise_w": 0.16, "muffle": 0.0, "whisper": 0.0},
-	"Dreamy":    {"pace": 0.88, "semis":  1.5, "noise": 0.78, "noise_w": 0.52, "muffle": 0.0, "whisper": 0.0},
-	# ...and these three are the classic vocal-emotion table, as far as it
-	# translates. Murray & Arnott ("Toward the simulation of emotion in synthetic
-	# speech", Speech Communication 16, 1993) reviewed the human literature FOR
-	# synthesis and tabulated five emotions against neutral speech, in rate, pitch
-	# average, pitch range, intensity, voice quality and inflection. Three of those
-	# five survive the trip into this parameter space; see below for the two that
-	# do not.
-	#
-	# MOURNFUL is their sadness: slightly slower, slightly lower, slightly
-	# narrower pitch range, downward inflections. Narrow range is the one that
-	# matters here and it is why `noise` is the lowest in the bank - this is the
-	# flattest, most affectless reading available, and the flatness is doing the
-	# work, not the pitch. It is a semitone down, no more: Serious already owns
-	# -1.5, and past that the formants have moved far enough that it reads as a
-	# different, larger reader rather than the same one grieving.
-	#
-	# FIERCE is their anger: quicker, higher, wider, louder, with ABRUPT pitch
-	# changes on stressed syllables and a rough chest tone. Only half of that is
-	# available. The pitch half is not - raising F0 here resamples, which shrinks
-	# the speaker, and an angry voice that has gone SMALL reads as a complaint
-	# rather than a threat - so it sits a little BELOW neutral to keep the chest in
-	# it, and the two halves that do translate carry the whole thing: `noise` at
-	# the top of the bank for the roughness, `noise_w` near the bottom for the
-	# abruptness. Fast, rough and clipped, where Excited is fast, bright and loose.
-	#
-	# ANXIOUS is their fear: much quicker, much higher, and IRREGULAR VOICING -
-	# which is the one emotion in the table whose signature cue is jitter, so it is
-	# the one this parameter space renders most directly. Highest `noise_w` in the
-	# bank. It sits close to Excited by design, because they sit close in real
-	# speakers too: high-arousal emotions are the ones listeners confuse with each
-	# other, and the difference is that Excited is EVENLY quick and this is not.
-	#
-	# The two that did not translate: HAPPINESS is Excited already, and DISGUST
-	# (very much slower, very much lower, grumbled) is Spooky with worse manners.
-	"Mournful":  {"pace": 0.84, "semis": -1.0, "noise": 0.30, "noise_w": 0.45, "muffle": 0.0, "whisper": 0.0},
-	"Fierce":    {"pace": 1.10, "semis": -0.5, "noise": 0.90, "noise_w": 0.28, "muffle": 0.0, "whisper": 0.0},
-	"Anxious":   {"pace": 1.18, "semis":  1.5, "noise": 0.80, "noise_w": 0.65, "muffle": 0.0, "whisper": 0.0},
-	# GRUFF is the growl behind the mask, and it is the first preset that needed
-	# `pres`. Low and rough are in reach without it - the deepest `semis` in the
-	# bank puts a bigger chest behind the voice, and `noise` near the top makes the
-	# source gravelly rather than clean - but MUFFLED and QUIETER are not, and they
-	# are half of what this voice is - and they are a property of the SOURCE, not of
-	# how far away it is standing. `muffle` is the preset's own filter (piper._muffle),
-	# so Gruff sounds like it is speaking through something without spending the
-	# reader's Presence dial, which stays theirs for the room.
-	#
-	# The timing is deliberate rather than drawled - this voice is forcing the
-	# words out, not savoring them - so `noise_w` sits low, near Fierce.
-	"Gruff":     {"pace": 0.90, "semis": -4.0, "noise": 0.88, "noise_w": 0.30, "muffle": 0.55, "whisper": 0.0},
-	# WHISPERED is the one manner in this bank that no inference parameter can
-	# reach, and the only one that is not a setting at all. A VITS checkpoint
-	# trained on modal speech has no whispered speech in it to sample, so there is
-	# nothing to ask for: turning the model's own variation up gives a rough voice,
-	# never a breathed one. What makes a whisper is the vocal folds not vibrating -
-	# no fundamental, no harmonics, the words carried entirely by the resonances -
-	# and that is a filter operation on the rendered audio, not a request to the
-	# model. piper.py `_whisper` does it: each frame rebuilt as noise shaped by its
-	# own spectral envelope, so the vocal tract survives and the voice in it does
-	# not.
-	#
-	# HUSHED is the same transform at half strength, which is a real manner rather
-	# than a fader position - a stage whisper is a voice that has not entirely
-	# left, and half is where it sits. It used to stand back a little as well, on
-	# the theory that someone lowering their voice does; that came out as "too
-	# quiet, and there is no way to correct that", and the distance was never the
-	# reason - a half blend of two UNCORRELATED signals loses 3 dB all by itself
-	# (piper._whisper, which now normalizes for it). The dial is back at 1.0 and
-	# the reader can push it away if they want the distance.
-	"Whispered": {"pace": 0.92, "semis":  0.0, "noise": 0.55, "noise_w": 0.35, "muffle": 0.0, "whisper": 1.0},
-	"Hushed":    {"pace": 0.94, "semis": -0.5, "noise": 0.55, "noise_w": 0.33, "muffle": 0.0, "whisper": 0.45},
-}
 
 var _host: VoiceHost
 var _panel: PanelContainer
@@ -412,7 +193,7 @@ var _ring_capacity := 0        # measured, never computed - see _drain_ready
 var _fx := VoiceFX.new()
 ## THE PLACE UNDER THE VOICE (a [SoundBed]): the wind, the sea, the rain of where the reading is, mixed
 ## in after the voice's own effects - live here, and into the exported take by [method export_take]. A
-## mode that knows where its reading is says so through [method _environment]; null when it does not.
+## component that knows where its reading is says so through [member bed]; null when none does.
 var _env: SoundBed = null
 var _env_key := ""             # the place it was made from, to notice the place changing mid-reading
 var _env_poll := 0.0
@@ -500,10 +281,33 @@ var _lead_in := 0.0        # the intro seeded into _pending by _plan, in seconds
 var _dirty := false
 var _last_edit_ms := 0
 ## The [Settings] section this panel's own state lives in (its draft, its remembered document, an
-## unsynced script's cast), and the mode its script's marks are offered for (see [ScriptMarks]).
-## Set by the mode in `_init`. A SYNCED document's settings are not per mode: its blocks are the
-## components' ([method _doc_blocks]), so two panels reading one chapter share its voice.
-var _section := ""
+## unsynced script's cast), and the mode its script's marks are offered for (see [ScriptMarks]):
+## the workspace's (its row's `section`). A SYNCED document's settings are not per mode: its blocks
+## are the components' ([method _doc_blocks]), so two panels reading one chapter share its voice.
+var _section := "generative"
+
+## THE WORKSPACE THIS PANEL RUNS, a key of [constant Components.WORKSPACES] - `reading` (a note read
+## aloud) or `cards` (a show of cards) - set by main before the panel is added. Its row says the
+## panel's section, title and hint, which of a note's cards it can show (`hosts`) and every card a
+## panel started without a note has (`classic`).
+var workspace := "reading":
+	set(key):
+		workspace = key
+		_section = String(Registry.field(Components.WORKSPACES, key, "section", "generative"))
+
+## WHERE THE READING IS HEARD ([ReadingBed]): no place, unless a component hands one - Cards hands
+## the episode's table, heard.
+var bed: ReadingBed = ReadingBed.new()
+## HOW THE READING GOES OUT ([ReadingPublish]): what its export is called, what is held while the
+## take renders, what an upload says. A note's own, unless a component hands another.
+var publish: ReadingPublish = ReadingPublish.new()
+
+## THE AUTHOR CHANGED THE SCRIPT by hand (never a document arriving): for a component that keeps
+## count of what an edit changes - Cards' brief changes the NEXT episode, not this one.
+signal source_edited
+## The panel's own state was written to [Settings] ([method _persist]): a component that keeps
+## some there writes its own beside it.
+signal persisted
 
 
 func _ready() -> void:
@@ -615,9 +419,9 @@ func _fx_admit(avail: int) -> int:
 		var m: Dictionary = _fx_marks.pop_front()
 		if m.has("speaker"):
 			_fx_live_name = String(m["speaker"])
-			_apply_fx(_fx, _cfg_of(_fx_live_name))
+			Delivery.apply_fx(_fx, _cfg_of(_fx_live_name))
 		if m.has("near"):
-			_near_to(_fx, m["near"])
+			Delivery.near_to(_fx, m["near"])
 	if _fx_marks.is_empty():
 		return avail
 	return mini(avail, maxi(0, int((_fx_marks[0] as Dictionary)["at"]) - _pushed))
@@ -676,7 +480,7 @@ func _build_panel() -> void:
 	# and a Control outside a container is never asked to fit anything - the rows past the
 	# bottom edge were unreachable rather than clipped. See side_panel.gd.
 	_panel = preload("res://src/ui/side_panel.gd").new(380.0)
-	_panel.title = _panel_title()
+	_panel.title = _row("title")
 	if not note_path.is_empty():
 		_attached = Components.attached_of(NoteStore.blocks_of(note_path))
 		# a note's components come off again: each card's × (see SidePanel.add_card)
@@ -692,13 +496,15 @@ func _build_panel() -> void:
 	_panel.card_prefix = _section
 	_panel.add_component_row(_has, _attach)
 	_build_source(_panel.add_card("script", "Script", &"paper"))
+	# WHAT PRODUCES THE TEXT comes before the voice that reads it (a show of cards' episode)
+	_note_cards(true)
 	# The voice card: the cast rows (Turn, Hesitate, the list of speakers) are global; every row
 	# below the list belongs to the speaker that is selected in it.
 	var voice: VBoxContainer = _panel.add_card("voice", "Voice", &"voice", "voice")
 	_build_cast(voice)
 	_build_voice(voice)
 	# THE REST ARE THE NOTE'S (the Picture, the Storyboard, the Look, the bookends...)
-	_build_cards()
+	_note_cards(false)
 	# ...and where the video goes, when the note says so
 	if _attached.has("youtube"):
 		_add_youtube()
@@ -712,48 +518,53 @@ func _build_panel() -> void:
 	box.add_child(_status)
 
 
-## The panel's name, on its title bar and its heading.
-func _panel_title() -> String:
-	return ""
+## What the workspace's row says ([member workspace]): `title`, `hint`.
+func _row(field: String) -> String:
+	return String(Registry.field(Components.WORKSPACES, workspace, field, ""))
 
 
-## The line under the heading: what this panel is for, in a sentence or two.
-func _panel_hint() -> String:
-	return ""
-
-
-## THE CARDS AFTER THE VOICE. In a note they are the note's: one for each component it has
-## attached, built the way every panel builds them ([method _note_cards]) - a workspace overrides
-## this only to say what it holds in its own words. Started without a note, a workspace builds
-## every card it has ([method _classic_cards]).
-func _build_cards() -> void:
-	if note_path.is_empty():
-		_classic_cards()
-	else:
-		_note_cards()
-
-
-## Every card this workspace has, for a panel with no note to read them off.
-func _classic_cards() -> void:
-	pass
-
-
-## The note's own cards, after the voice ([method NoteCards.build]) - all but YouTube, which this
-## panel builds itself ([method _add_youtube]: a workspace adds rows of its own to it).
-## [param ctx] is the workspace's say in them: the bookends' tooltips, which cards it has at all.
-func _note_cards(ctx := {}) -> void:
-	var with := ctx.duplicate()
-	with["reading"] = true
-	with["only"] = _hosted()
-	var built := NoteCards.build(_panel, _attached, with)
+## THE NOTE'S CARDS ([method NoteCards.build]): one for each component it has - or, started without
+## a note, each the workspace has ([method _components]) - built the way every panel builds them.
+## [param producers]: the cards of what produces the text, which stand above the voice that reads
+## it (a show of cards' episode); otherwise the rest, below it. YouTube is this panel's own to build
+## ([method _add_youtube]: a component adds rows of its own to it). Each card is handed what it may
+## need of this panel in `ctx`: `workspace` (this panel - a producer hands it what the reading reads),
+## `reading` (a voice is attached, so every medium is offered) and the bookends' tooltips in the
+## words of what the show is presented on (its row's `intro_tip` / `outro_tip`).
+func _note_cards(producers: bool) -> void:
+	var have := _components()
+	var with := {"reading": true, "workspace": self}
+	for key in have:
+		for tip in ["intro_tip", "outro_tip"]:
+			var said := String((Components.REGISTRY.get(key, {}) as Dictionary).get(tip, ""))
+			if not said.is_empty():
+				with[tip] = said
+	var only: Array = []
+	for key in _hosted():
+		if (StringName(Registry.field(Components.REGISTRY, key, "family", &"")) == &"producer") == producers:
+			only.append(key)
+	with["only"] = only
+	var built := NoteCards.build(_panel, have, with)
 	for key in built:
 		_add_block(built[key])
+	# THE BOOK'S PICTURES are set inside the Picture's card and keep a block of their own
+	var picture := built.get("picture") as PictureCard
+	if picture != null:
+		_add_block(picture.illustrations())
 
 
-## Which of a note's component cards this workspace shows, of [constant NoteCards.KEYS]: every
-## one a reading can carry. (YouTube is this panel's own to build.)
+## Which of a note's component cards this workspace shows, of [constant NoteCards.KEYS]: its row's
+## `hosts`. (YouTube is this panel's own to build.)
 func _hosted() -> Array:
-	return ["picture", "storyboard", "look", "bookends"]
+	return Registry.field(Components.WORKSPACES, workspace, "hosts", []) as Array
+
+
+## THE COMPONENTS THIS PANEL IS MADE OF: the note's, or - started without one (the command line, a
+## gate) - every one its workspace has (the row's `classic`).
+func _components() -> Array:
+	if not note_path.is_empty():
+		return _attached
+	return Registry.field(Components.WORKSPACES, workspace, "classic", ["text", "voice"]) as Array
 
 
 ## Put [param card] - a node with `KEY`, `capture()` and `apply(block)` - on a card of its own,
@@ -768,15 +579,10 @@ func _add_block_card(title: String, family: StringName, card: Control) -> Contro
 ## THE COMPONENTS THIS NOTE HAS, for "+" and for what may be detached: what its blocks say, and
 ## what has been attached since the panel came up. Without a note, the workspace's own.
 func _has() -> Array:
-	var have: Array = _attached.duplicate() if not note_path.is_empty() else _classic_components()
+	var have: Array = _components().duplicate()
 	if _youtube != null and not have.has("youtube"):
 		have.append("youtube")
 	return have
-
-
-## What a panel started without a note is made of.
-func _classic_components() -> Array:
-	return ["text", "voice"]
 
 
 ## WHAT THE NOTE'S SHOW IS, for main ([method main._attach_show]): whether it has something to be
@@ -840,20 +646,16 @@ func _add_youtube() -> void:
 		card = card.get_parent()
 	if card != null and _status != null and _status.get_parent() == card.get_parent():
 		card.get_parent().move_child(card, _status.get_index())
-	_youtube_built(_youtube)
+	publish.youtube_built(_youtube)
 
 
-## What the YouTube title's macros are worth now (see [method YouTube.expand_title]).
+## What the YouTube title's macros are worth now (see [method YouTube.expand_title]): the note's
+## title, and what the reading's [member publish] makes of it.
 func _upload_values() -> Dictionary:
 	var t := _doc.field("title").strip_edges() if _doc != null else ""
 	if t.is_empty() and not note_path.is_empty():
 		t = NoteStore.title_of(note_path)
-	return {"title": t, "episode": ""}
-
-
-## A mode's own rows on the YouTube card ([member YouTubeCard.extra]), once it is built.
-func _youtube_built(_card: YouTubeCard) -> void:
-	pass
+	return publish.upload_values({"title": t, "episode": ""})
 
 
 ## Keep [param card]'s block in the document without a card of its own (one shown inside another).
@@ -869,7 +671,7 @@ func _build_header(box: VBoxContainer) -> void:
 	(_panel as SidePanel).pin_header(title_row)
 	title_row.add_child(Shell.back_button(self))
 	var title := Label.new()
-	title.text = _panel_title()
+	title.text = _row("title")
 	title.add_theme_font_size_override("font_size", 20)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_row.add_child(title)
@@ -882,7 +684,7 @@ func _build_header(box: VBoxContainer) -> void:
 	title_row.add_child(hide)
 
 	var hint := Label.new()
-	hint.text = _panel_hint()
+	hint.text = _row("hint")
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.add_theme_font_size_override("font_size", 12)
 	hint.modulate = Color(1, 1, 1, 0.6)
@@ -912,6 +714,7 @@ func _build_source(box: VBoxContainer) -> void:
 		_last_edit_ms = Time.get_ticks_msec()
 		_on_source_edited())
 	box.add_child(_writer)
+	_writer.doc.default_text = _starter()
 
 
 ## THE NOTE WAS SAVED INTO ANOTHER FILE ([signal DocSource.moved]): this panel is that file's now,
@@ -924,11 +727,22 @@ func _on_note_moved(from: String, to: String) -> void:
 	_doc.tell("✓  This note is %s now - every change is saved there. %s" % [to.get_file(), said])
 
 
-## The author changed the document by hand. Here the document IS the reading, so what is on the
-## stream no longer matches it.
+## THE FIRST DRAFT of a panel with no draft of its own yet: the starter of a component it has (a
+## show of cards' bundled brief - the row's `starter`), an editable unsynced draft; "" for none.
+func _starter() -> String:
+	for key in _components():
+		var path := String((Components.REGISTRY.get(key, {}) as Dictionary).get("starter", ""))
+		if not path.is_empty():
+			return FileAccess.get_file_as_string(path)
+	return ""
+
+
+## The author changed the document by hand. Where the document IS the reading ([method
+## TextWalk.reads_source]), what is on the stream no longer matches it.
 func _on_source_edited() -> void:
-	if not _chunks.is_empty():
+	if walk.reads_source() and not _chunks.is_empty():
 		_stale = true            # the reading no longer matches the box
+	source_edited.emit()
 
 
 func _build_cast(box: VBoxContainer) -> void:
@@ -946,7 +760,7 @@ func _build_cast(box: VBoxContainer) -> void:
 	turow.add_child(tul)
 	_turn = HSlider.new()
 	_turn.min_value = 0.0
-	_turn.max_value = MAX_TURN_SCALE
+	_turn.max_value = Delivery.MAX_TURN_SCALE
 	_turn.step = 0.05
 	_turn.value = 1.0
 	_turn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -972,7 +786,7 @@ func _build_cast(box: VBoxContainer) -> void:
 	tur.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	tur.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var show_turn := func(v: float) -> void:
-		tur.text = "+%.1fs" % (TURN_GAP * v)
+		tur.text = "+%.1fs" % (Delivery.TURN_GAP * v)
 	show_turn.call(_turn.value)
 	_turn.value_changed.connect(show_turn)
 	turow.add_child(tur)
@@ -1159,7 +973,7 @@ func _build_voice(box: VBoxContainer) -> void:
 	_tone = OptionButton.new()
 	_tone.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_tone.tooltip_text = "The reading's overall manner: pace, pitch, how much the model varies itself, how evenly it divides the words, and whether it is whispered or muffled - all of it the VOICE, and none of it the dials below, which stay yours. The pitch shift moves the formants with it, so the reader reads as a different SIZE - which is what makes Spooky larger and lower, Excited smaller and higher. Regenerates the un-played chunks."
-	for k in TONE_PRESETS:
+	for k in Delivery.TONE_PRESETS:
 		_tone.add_item(String(k))
 	_tone.item_selected.connect(func(_i: int) -> void:
 		if _syncing:
@@ -1322,7 +1136,57 @@ func _build_voice(box: VBoxContainer) -> void:
 	_build_ink_row(box)
 
 
-# --- the seams a mode built on this panel overrides ---------------------------
+# --- what a component's card asks of the reading ------------------------------------------------
+# A card that changes the reading ([EpisodeCard]) hands it a walk, a bed and a publish, and asks it
+# these few things by name - never its own members.
+
+## The document the script card holds (the note, or a draft).
+func doc_source() -> DocSource:
+	return _doc
+
+
+## The script's box: the text as it is being written.
+func source_box() -> TextEdit:
+	return _text
+
+
+## The [Settings] section this panel keeps its own state in.
+func section() -> String:
+	return _section
+
+
+## A line on the panel's status row.
+func status(text: String) -> void:
+	_set_status(text)
+
+
+## What is on the stream no longer matches what would be read now: the next Play reads it again.
+func mark_stale() -> void:
+	_mark_stale()
+
+
+## Something of the panel's changed: it is written to [Settings] once the typing stops.
+func touch() -> void:
+	_dirty = true
+	_last_edit_ms = Time.get_ticks_msec()
+
+
+## Whether a reading is on the stream now.
+func reading_live() -> bool:
+	return _reading_live()
+
+
+## End the reading on the stream.
+func stop_speaking() -> void:
+	_stop_speaking()
+
+
+## Every voice the cast has, by the name the script cues it with - the reader's first.
+func cast_names() -> Array:
+	return _cast_dict().keys()
+
+
+# --- what is handed: what the reading reads, and where it is heard ---------------
 
 ## WHAT THIS READING READS ([TextWalk]): the note's own words, unless the mode hands another - Cards
 ## hands the episode it produced ([EpisodeWalk]). Handed, not overridden: the words a reading speaks
@@ -1330,24 +1194,9 @@ func _build_voice(box: VBoxContainer) -> void:
 var walk: TextWalk = TextWalk.new()
 
 
-## WHERE THE READING IS, heard: `{make, key}` (`{key}` alone while it has none yet) - `make` is
-## `(sample_rate: int, t0: float) -> SoundBed`, the bed to lay under the voice from show time
-## [code]t0[/code] (this panel knows the rate and the moment; the mode knows the place), and `key` changes when
-## the place does (it is asked again every couple of seconds while a reading plays). `{}` for none,
-## which is every mode that does not know: a chapter has no place. [param export]: for the take an
-## export is rendering, which may be of another episode than the one on screen.
-func _environment(_export := false) -> Dictionary:
-	return {}
-
-
-## The Environment dial, 0-1 (see [method SoundBed.set_level]).
-func _environment_level() -> float:
-	return 0.0
-
-
 func _open_environment(t0: float) -> void:
 	_close_environment()
-	var place := _environment()
+	var place := bed.of()
 	_env_key = String(place.get("key", ""))
 	_env_poll = 0.0
 	if not place.has("make"):
@@ -1355,7 +1204,7 @@ func _open_environment(t0: float) -> void:
 	var env: SoundBed = (place["make"] as Callable).call(_sr, t0)
 	if env == null or not env.active():
 		return
-	env.set_level(_environment_level())
+	env.set_level(bed.level())
 	env.prefetch()
 	_env = env
 
@@ -1371,7 +1220,7 @@ func _close_environment() -> void:
 ## and if so carry on from here with the new one.
 func _tick_environment(delta: float) -> void:
 	if _env != null:
-		_env.set_level(_environment_level())
+		_env.set_level(bed.level())
 		_env.prefetch()
 	if not _stream_open:
 		return
@@ -1379,7 +1228,7 @@ func _tick_environment(delta: float) -> void:
 	if _env_poll < 2.0:
 		return
 	_env_poll = 0.0
-	var place := _environment()
+	var place := bed.of()
 	if String(place.get("key", "")) != _env_key:
 		_open_environment(Spectrum.stream_origin() + float(_pushed) / float(_sr))
 
@@ -1441,11 +1290,12 @@ func _persist() -> void:
 	Settings.write(_section, "tab_name", _tab_name())
 	Settings.write(_section, "hesitate", _hesitate.value)
 	Settings.write(_section, "hesitate_on", _hesitate_on.button_pressed)
+	persisted.emit()
 
 
 func _load_persisted() -> void:
 	_syncing = true
-	_turn.value = clampf(float(Settings.read(_section, "turn", 1.0)), 0.0, MAX_TURN_SCALE)
+	_turn.value = clampf(float(Settings.read(_section, "turn", 1.0)), 0.0, Delivery.MAX_TURN_SCALE)
 	_hesitate.value = clampf(float(Settings.read(_section, "hesitate", HESITATE_DEFAULT)),
 		_hesitate.min_value, HESITATE_MAX)
 	_hesitate_on.button_pressed = bool(Settings.read(_section, "hesitate_on", true))
@@ -1477,7 +1327,7 @@ func _load_persisted() -> void:
 	_refresh_cast(str(Settings.read(_section, "text", "")), str(tab) if tab is String else "")
 	# Last, and once: every dial the chain reads is now in the slot, so this is the one
 	# place the loaded session's room is applied.
-	_apply_fx(_fx, _cfg(_slot))
+	Delivery.apply_fx(_fx, _cfg(_slot))
 	# ...and NOW the box is filled, after the cast is loaded, because a document that is open
 	# OVERRULES what was loaded above: in sync mode the file is the source of truth for both
 	# the words and the voice, which is what makes it safe for the panel to write back to it
@@ -1494,29 +1344,24 @@ func _load_persisted() -> void:
 ## COMPONENT'S, not the panel's: the Generative and Cards panels read and write the same `voice:`,
 ## `look:` and `bookends:`, so a chapter's voices are there whichever panel opens it.
 func _doc_blocks() -> PackedStringArray:
-	if note_path.is_empty():
-		return _classic_blocks()
 	# asked before the cards are built (the script's source is set up first), so read off what
-	# the note has attached, never off the cards
-	var out := PackedStringArray(_own_blocks())
-	for key in _hosted():
-		if _attached.has(key):
+	# the note has attached, never off the cards - in the order the cards stand: what produces the
+	# text, the voice (this panel's own), then the rest
+	var have := _components()
+	var out := PackedStringArray()
+	for producers in [true, false]:
+		if not producers:
+			out.append("voice")
+		for key in _hosted():
+			var producer := StringName(Registry.field(Components.REGISTRY, key, "family", &"")) == &"producer"
+			if producer != producers or not have.has(key):
+				continue
 			for b in Components.blocks_of(key):
 				if not out.has(String(b)):
 					out.append(String(b))
 	if not out.has("youtube"):
 		out.append("youtube")
 	return out
-
-
-## The blocks this workspace keeps itself, whatever else the note has attached.
-func _own_blocks() -> Array:
-	return ["voice"]
-
-
-## The blocks of a panel started without a note: every one its classic cards keep.
-func _classic_blocks() -> PackedStringArray:
-	return PackedStringArray(["voice", "youtube"])
 
 
 ## Every block this panel keeps, for [DocSource] to store in a document's frontmatter.
@@ -1561,9 +1406,11 @@ func _doc_apply(blocks: Dictionary) -> void:
 		_voice_apply(blocks["voice"] as Dictionary)
 
 
-## The script's text, whenever the cast is read from it: for a card that follows it.
-func _script_text_changed(_body: String) -> void:
-	pass
+## The script's text, whenever the cast is read from it: the book's pictures follow it.
+func _script_text_changed(body: String) -> void:
+	var picture := _block_cards.get("picture") as PictureCard
+	if picture != null:
+		picture.set_script_text(body)
 
 
 ## THE VOICE BLOCK, to the cast.
@@ -1590,7 +1437,7 @@ func _voice_apply(cfg: Dictionary) -> void:
 	_names = PackedStringArray()
 	_slots = []
 	_syncing = true
-	_turn.value = clampf(float(cfg.get("turn", _turn.value)), 0.0, MAX_TURN_SCALE)
+	_turn.value = clampf(float(cfg.get("turn", _turn.value)), 0.0, Delivery.MAX_TURN_SCALE)
 	_hesitate.value = clampf(float(cfg.get("hesitate", _hesitate.value)),
 		_hesitate.min_value, HESITATE_MAX)
 	_hesitate_on.button_pressed = bool(cfg.get("hesitate_on", _hesitate_on.button_pressed))
@@ -1599,7 +1446,7 @@ func _voice_apply(cfg: Dictionary) -> void:
 	_refresh_cast(_cast_text())
 	# The room, once, exactly as [method _load_persisted] does it: the chain is stateful
 	# and a tab switch alone does not re-dial it.
-	_apply_fx(_fx, _cfg(_slot))
+	Delivery.apply_fx(_fx, _cfg(_slot))
 	# Whatever is on the stream was cut against the PREVIOUS cast.
 	_mark_stale()
 	_dirty = true
@@ -1621,9 +1468,9 @@ func book_document(body := "") -> Dictionary:
 		var v := String((cast[who] as Dictionary).get("ink", ""))
 		if not v.is_empty():
 			inks[who] = v
-	return {"source": src, "title": _doc_field(src, "title"), "book": _doc_field(src, "book"),
+	return publish.book({"source": src, "title": _doc_field(src, "title"), "book": _doc_field(src, "book"),
 		"author": _doc_field(src, "author"), "inks": inks, "start_words": _start_words(),
-		"start_index": _start_index()}
+		"start_index": _start_index()}, body)
 
 
 ## A top-level frontmatter field (`title:`, `book:`): what the source says (the synced file,
@@ -1822,7 +1669,7 @@ func _apply_slot(i: int) -> void:
 		if String((_voice_meta[k] as Dictionary).get("id", "")) == _want_voice:
 			_voices.select(k)
 			break
-	_tone.select(clampi(int(s["tone"]), 0, TONE_PRESETS.size() - 1))
+	_tone.select(clampi(int(s["tone"]), 0, Delivery.TONE_PRESETS.size() - 1))
 	_rate.value = float(s["pace"])
 	_pause.value = float(s["pause"])
 	_dynamics.value = float(s["dynamics"])
@@ -1887,7 +1734,7 @@ func _refresh_tab_labels() -> void:
 		return
 	if _cast_head != null:
 		_cast_head.text = "Voices (%d)  -  from the script's speaker cues" % _names.size()
-	var tones := TONE_PRESETS.keys()
+	var tones := Delivery.TONE_PRESETS.keys()
 	for i in mini(_tabs.get_child_count(), _names.size()):
 		var s := _cfg(i)
 		var model := String(s["voice"])
@@ -2039,7 +1886,7 @@ func _split_speakers(body: String) -> Array:
 ## A passage's marks resolved: every hesitation (and the tablet's action rests) becomes a
 ## [constant TextNorm.HOLD_MARK] welded to the word before it - or leading the next, when
 ## nothing precedes it - with its length queued on [member _holds]; a DELIVERY mark is noted where
-## it falls ([member _last_leans], see [method _leans_of]); every other comment goes.
+## it falls ([member _last_leans], see [method Delivery.leans_of]); every other comment goes.
 func _resolve_marks(t: String, on: bool, bare: float) -> String:
 	var out := ""
 	var at := 0
@@ -2056,7 +1903,7 @@ func _resolve_marks(t: String, on: bool, bare: float) -> String:
 		if secs < 0.0:
 			var lm := lean_re.search(m.get_string())
 			if lm != null:
-				_last_leans.append([out.length(), lean_of(lm.get_string(1))])
+				_last_leans.append([out.length(), Delivery.lean_of(lm.get_string(1))])
 				continue
 			if not on:
 				continue
@@ -2073,7 +1920,7 @@ func _resolve_marks(t: String, on: bool, bare: float) -> String:
 		out = head + TextNorm.HOLD_MARK + out.substr(head.length())
 		_holds.append(secs)
 	out += t.substr(at)
-	_last_leans = _leans_of(out, _last_leans)
+	_last_leans = Delivery.leans_of(out, _last_leans)
 	# Sentinels with nothing before them in the passage LEAD the next word instead:
 	# close the gap after them so they weld on to it.
 	var body_t := out.strip_edges()
@@ -2221,14 +2068,14 @@ func _on_test_part(id: int, result: Dictionary) -> void:
 		_test_fx = VoiceFX.new()
 		_test_fx.pad_seed = hash(_test_passage())
 		_test_fx.setup(_sr)
-		_apply_fx(_test_fx, s)
+		Delivery.apply_fx(_test_fx, s)
 	# DECODE OFF THE MAIN THREAD. It is a per-sample GDScript loop, and a long sentence is
 	# several hundred thousand samples - measured at a 0.3 s frame on arrival. A pure function
 	# of the file, so a worker can do it; the join below waits for it.
 	var box := [PackedFloat32Array()]
 	var path := String(_test_parts[i])
 	_test_tasks[i] = {"box": box, "task": WorkerThreadPool.add_task(func() -> void:
-		box[0] = ReadingPanel._decode_wav(path))}
+		box[0] = Splice.decode_wav(path))}
 	_join_test_parts()
 
 
@@ -2248,11 +2095,11 @@ func _join_test_parts() -> void:
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(wav))
 		var part: PackedFloat32Array = (t["box"] as Array)[0]
 		if not part.is_empty():
-			_near_mark(_test_marks, (_test_chunks[_test_next] as Dictionary).get("near", {}),
+			Delivery.near_mark(_test_marks, (_test_chunks[_test_next] as Dictionary).get("near", {}),
 				_test_dry_end, _test_near)
 		if _test_next > 0 and not part.is_empty():
 			var gap := PackedFloat32Array()
-			gap.resize(int(_seam_gap_of(s) * float(_sr)))
+			gap.resize(int(Delivery.seam_gap_of(s) * float(_sr)))
 			gap.append_array(part)
 			part = gap
 		_test_next += 1
@@ -2300,9 +2147,9 @@ func _pump_test_fx() -> void:
 	var cfg := _cfg_of(_test_name)
 	var box := [PackedVector2Array()]
 	_test_fx_task = {"box": box, "task": WorkerThreadPool.add_task(func() -> void:
-		_apply_fx(fx, cfg)
+		Delivery.apply_fx(fx, cfg)
 		if not near.is_empty():
-			ReadingPanel._near_to(fx, near)
+			Delivery.near_to(fx, near)
 		box[0] = fx.process_stereo(piece))}
 	_start_test_playback()
 
@@ -2409,7 +2256,7 @@ func _place_chunks(out: Array, body: String) -> void:
 	# box with no formatting to lose - has no blank line anywhere in it, so this
 	# found exactly one paragraph and handed the entire chapter a single arc that
 	# descends from the first sentence to the last and never resets. That is half
-	# of the "lower and lower and lower" report ([method _arc_semis] is the other
+	# of the "lower and lower and lower" report ([method Delivery.arc_semis] is the other
 	# half); measured on one, the register fell monotonically across all sixteen
 	# sentences instead of resetting six times.
 	var para_mark := "\n\n"
@@ -2557,27 +2404,6 @@ func _fx_slider(box: VBoxContainer, name: String, initial: float, tip := "") -> 
 	return sl
 
 
-## Push ONE VOICE'S settings onto a [VoiceFX] chain. ONE definition, because there
-## were four lists of assignments - the slider callback, the config load, the
-## stream opening and the export - and a dial had to appear in all four to work
-## everywhere. Adding Room to three of them would have left one path silently
-## dry, which is the same class of bug [method _pad_level_of] was written to end:
-## live and render disagreeing about the room around the voice.
-##
-## It takes a SLOT rather than reading the panel, because the tab on screen is
-## not necessarily the voice being heard: while tab 1 narrates, tab 2's dials are
-## a room nobody is in yet.
-func _apply_fx(fx: VoiceFX, s: Dictionary) -> void:
-	if fx == null:
-		return
-	fx.echo_wet = float(s["echo"])
-	fx.resonance = float(s["resonance"])
-	fx.presence = _presence_of(s)
-	fx.pad = _pad_level_of(s)
-	fx.lean = clampf(float(s["lean"]), 0.0, 1.0)
-	# One dial, so [RoomFX] does the collapsing: size and wet open together, and
-	# Resonance colors the tail the same way it does on Masking's bus.
-	fx.room.from_dial(float(s["room"]), float(s["resonance"]))
 
 
 ## WHERE THE READER IS, sentence by sentence ([method VoiceFX.near_plan]), written into
@@ -2602,19 +2428,6 @@ func _plan_near(chunks: Array, from: int, voice := "") -> void:
 		(chunks[i] as Dictionary)["near"] = plan[i]
 
 
-## A distance mark at frame [param at], unless it is where the reader already is ([param last],
-## the last one written to [param marks], kept up to date here; empty is home).
-static func _near_mark(marks: Array, near: Dictionary, at: int, last: Dictionary) -> void:
-	var want := {"c": float(near.get("c", 0.0)), "hush": float(near.get("hush", 0.0))}
-	if want == last or (last.is_empty() and want["c"] == 0.0):
-		return
-	last.clear()
-	last.merge(want)
-	marks.append({"at": at, "near": want})
-
-
-static func _near_to(fx: VoiceFX, near: Dictionary) -> void:
-	fx.near_to(float(near.get("c", 0.0)), float(near.get("hush", 0.0)))
 
 
 ## A dial moved on the panel, applied to the LIVE chain - but only if the tab
@@ -2626,7 +2439,7 @@ func _live_fx() -> void:
 	if not _fx_live_name.is_empty() and _fx_live_name != _tab_name():
 		return
 	_fx_live_name = _tab_name()
-	_apply_fx(_fx, _cfg(_slot))
+	Delivery.apply_fx(_fx, _cfg(_slot))
 
 
 func _set_status(msg: String) -> void:
@@ -3165,7 +2978,7 @@ func _build_chunks(body: String) -> Array:
 						aim = (sp as Array)[1]
 			(c as Dictionary)["lean_aim"] = aim
 		out.append_array(chunks)
-	_ease_leans(out)
+	Delivery.ease_leans(out)
 	out = _trim_to_outro(out)
 	# LAST, so it wins the status line. TextNorm has already warned into the log,
 	# but this is the surface someone is looking at with their hand on Play, and
@@ -3189,10 +3002,10 @@ func _cut(body: String, sentence_no: int) -> Dictionary:
 	var out: Array = []
 	var toks: Array = []
 	var words: Array = []
-	var holds: Array = []          # [{tok, sec, before}] - see _splice_holds
+	var holds: Array = []          # [{tok, sec, before}] - see Splice.chunk
 	var sentences := 0
 	var parsed := Phonemes.parse(body)
-	var stressed_at := _stressed_words(parsed)
+	var stressed_at := Delivery.stressed_words(parsed)
 	var flat := -1
 	for sentence in parsed:
 		for w in sentence:
@@ -3213,11 +3026,11 @@ func _cut(body: String, sentence_no: int) -> Dictionary:
 					_hold_i += 1
 				if sec > 0.0:
 					holds.append({"tok": start, "sec": sec, "before": key == "hold_before"})
-			# A HUM IS HELD, not spoken in passing - see HUM_SECONDS.
+			# A HUM IS HELD, not spoken in passing - see Splice.HUM_SECONDS.
 			var hum_key := String(w.text).to_lower()
-			if HUM_SECONDS.has(hum_key):
+			if Splice.HUM_SECONDS.has(hum_key):
 				holds.append({"tok": start, "sec": 0.0, "before": false,
-					"hum": float(HUM_SECONDS[hum_key])})
+					"hum": float(Splice.HUM_SECONDS[hum_key])})
 			# ghost's dictionary returns stress 0 for every phone of most
 			# monosyllables, so no stress mark was ever emitted for them and the
 			# model heard a flat reading. Promote the nucleus - but only for
@@ -3297,199 +3110,10 @@ func _cut(body: String, sentence_no: int) -> Dictionary:
 	return {"chunks": out, "sentence_no": sentence_no}
 
 
-## THE LONGEST RUN OF EMPHASIZED WORDS THAT IS STRESS. Italics also mark things that are not
-## said harder: a paragraph in italics is a change of time or place ([ScriptMarks] "italic"), a
-## thought, a title. A word or a few is a reader leaning on them; a longer run is typography,
-## and stressing every word of it would drawl the whole paragraph.
-const STRESS_RUN_MAX := 3
 
 
-## {flat word index: emphasis level} for the words of [param parsed] ([method Phonemes.parse])
-## that are spoken with stress - each run of emphasized words no longer than
-## [constant STRESS_RUN_MAX], counted across sentence ends, so an italic paragraph of short
-## sentences is still one long run.
-static func _stressed_words(parsed: Array) -> Dictionary:
-	var levels: Array = []
-	for sentence in parsed:
-		for w in sentence:
-			levels.append(int((w as Dictionary).get("emph", 0)))
-	var out := {}
-	var i := 0
-	while i < levels.size():
-		if int(levels[i]) <= 0:
-			i += 1
-			continue
-		var j := i
-		while j < levels.size() and int(levels[j]) > 0:
-			j += 1
-		if j - i <= STRESS_RUN_MAX:
-			for k in range(i, j):
-				out[k] = int(levels[k])
-		i = j
-	return out
 
 
-## A slot's preset, and the resample ratio it implies.
-func _preset_of(s: Dictionary) -> Dictionary:
-	var keys := TONE_PRESETS.keys()
-	return TONE_PRESETS[keys[clampi(int(s["tone"]), 0, keys.size() - 1)]]
-
-
-func _pitch_ratio_of(s: Dictionary) -> float:
-	return pow(2.0, float(_preset_of(s)["semis"]) / 12.0)
-
-
-## One voice's delivery settings, as the host expects them.
-##
-## These used to be null-guarded against a missing slider, because export_take and
-## _pump are both reachable from outside this editor's own lifecycle. They read a
-## SLOT now, and a slot is [constant SLOT_DEFAULTS] merged with whatever was
-## stored - so the missing-value case is answered by the schema, once, for every
-## setting rather than one guard per dial.
-func _delivery_of(s: Dictionary) -> Dictionary:
-	return {
-		"dynamics": _open_up(float(s["dynamics"])),
-		"prosody_arc": _arc_semis(float(s["arc"])),
-		"effort": _open_up(float(s["effort"])),
-	}
-
-
-## THE PARAGRAPH PITCH ARC, in semitones peak-to-peak.
-##
-## Its own curve rather than [method _open_up] x a ceiling, because this dial had a
-## hard limit the other two do not, and it was not a limit of taste. The arc's pitch
-## move is bought by RESAMPLING (piper.py `_discourse_plan` -> `_resample`, the same
-## trick the Tone shift uses), and a resample moves the formants with the pitch - so
-## it did not change how high the reader was speaking, it changed HOW BIG THEY WERE.
-##
-## Reported exactly that way: "the voice becomes lower and lower and lower; it
-## completely transforms the voice into another voice by the end of the arc - the
-## voice doesn't actually maintain its identity", with everything past 0.2 unusable.
-## Measured on a sixteen-sentence script, the dial spanned 7.5 semitones at the top
-## of its travel, a 54% change in apparent vocal-tract scale between a paragraph's
-## opening sentence and its last. The dial was not too strong. It was asking a
-## formant-SHIFTING resampler for a thing only a formant-PRESERVING shifter can do.
-##
-## So the shifter was fixed instead of the dial being capped to hide it: piper.py
-## `_restore_formants` puts the speaker's own resonances back after the resample,
-## leaving the pitch move and nothing else. What bounds the ceiling now is the
-## linguistics rather than the DSP - 't Hart, Collier & Cohen put declination at
-## one to two semitones over an utterance, with the deepest boundaries resetting
-## further - so 4 semitones peak to peak is a top of travel that is more than any
-## speaker would do and still the same speaker doing it.
-##
-## The exponent is FITTED, not chosen: it holds the old curve's value at 0.15,
-## because 0.10 and 0.15 were reported as the settings that already work and a fix
-## for the top of a dial has no business moving the bottom of it. It tracks the old
-## curve within 5% up to about 0.4 and only then bends away, which is precisely the
-## half that was broken.
-const ARC_CEILING_SEMIS := 4.0
-const ARC_KNEE := 1.13
-
-func _arc_semis(k: float) -> float:
-	return ARC_CEILING_SEMIS * pow(clampf(k, 0.0, 1.0), ARC_KNEE)
-
-
-## The top of a delivery dial, opened up - identity at the bottom, 2.5x at the top.
-##
-## The first ceilings were set where I thought the results stopped being good, which
-## is not my call to make: at full travel Dynamics only slowed the last sentence of a
-## paragraph by 18%, so the upper half of the dial was doing almost nothing and the
-## reported symptom was exactly that. (Arc was opened up the same way and has since
-## been given its own curve - see [method _arc_semis] - because its ceiling is set by
-## the resampler rather than by taste.)
-##
-## AND THIS FUNCTION IS ONLY HALF OF A DIAL. It multiplies what the backend is handed;
-## the backend then multiplies its own coefficients by that. Those coefficients were
-## written as their own ceilings - piper's `_discourse_plan` has documented "18% at
-## full depth" since it was written - so opening the dial to 2.5x quietly took the
-## paragraph's final lengthening to 45%, the section's to 17%, and a sentence sitting
-## at the end of both to two and a half times its own length. Reported as "the
-## cadence/pace/speed of the voice becomes slower and slower and slower", attributed
-## to Arc, and measured on the reporter's own settings as 15% from Dynamics and 0.0%
-## from Arc. piper.DEPTH_TOP now divides it back out, so the figures documented there
-## are what the top of THIS dial delivers. A ceiling opened here has to be paid for
-## there; the two files are one control.
-func _open_up(k: float) -> float:
-	return k * (1.0 + 1.5 * k * k)
-
-
-## The ambience dial: SEVERITY, not level (see [constant VoiceFX.PAD_FADE_IN]). Just the slider now - see [constant TONE_PRESETS] for why
-## the preset writes this dial instead of secretly adding to it.
-##
-## Kept as a named function rather than inlined because the stream open, the export, the
-## slider callback and the config load all have to agree about it, and they did not once:
-## two of the four added the preset's contribution and two did not, so moving the slider
-## during a reading silently dropped it and the export put it back.
-func _pad_level_of(s: Dictionary) -> float:
-	return clampf(float(s["ambience"]), 0.0, 1.0)
-
-
-## How close the reader stands. The pad's twin, and the same story.
-##
-## Floored well above zero: the dial may push the voice back, never mute it, and
-## [member VoiceFX.presence] is a gain as well as a filter.
-func _presence_of(s: Dictionary) -> float:
-	return clampf(float(s["presence"]), 0.25, 1.0)
-
-
-func _pause_scale_of(s: Dictionary) -> float:
-	return clampf(float(s["pause"]), 0.0, MAX_PAUSE_SCALE)
-
-
-## The silence at a chunk seam. The host inserts the same figure between
-## sentences INSIDE a chunk, so a seam and an interior boundary stay the same
-## length however the reading happens to have been cut up.
-func _seam_gap_of(s: Dictionary) -> float:
-	return _rest_for(SENTENCE_GAP, SENTENCE_DWELL, _pause_scale_of(s))
-
-
-## The silence to place at a mark whose natural rest is `dwell` and whose top-up at
-## Pause 1.0 is `top_up`. MIRRORS piper._rest_for, and has to: the host owns the marks
-## inside a sentence and this owns the seam between two of them, so a reading cut one
-## way has to rest exactly as long as the same reading cut the other way.
-##
-## WHY THE DIAL MULTIPLIES THE WHOLE REST rather than our own share of it. What a reader
-## hears at a full stop is the model's own trailing silence plus the seam we add, and
-## scaling only the second half stretches the DIFFERENCES between the marks instead of
-## the marks. Reported as "the pause after a comma and the pause after a sentence are
-## very different... at 6.0 the comma-pauses feel about right, while the period-pauses
-## feel far too slow" - no one setting could suit both, because their ratio was moving
-## with the dial. It no longer moves: a full stop rests twice as long as a comma at 1.0
-## and at 10.0 and everywhere between. See piper.DWELL for the measurements.
-func _rest_for(top_up: float, dwell: float, scale: float) -> float:
-	var mult := _pause_multiplier(scale)
-	# At 1.0 the answer IS the top-up, said exactly - see piper._rest_for for the float.
-	if is_equal_approx(mult, 1.0):
-		return maxf(0.0, top_up)
-	return maxf(0.0, (dwell + top_up) * mult - dwell)
-
-
-## How much longer than natural every rest in this reading is. Mirrors piper's, and the
-## power law is deliberate: the saturating curve this replaces reached 3.2 at the top of
-## the dial and 3.29 at a hundred, so "the pause effect barely seems to work at 10x" could
-## not have been answered by allowing a bigger number - the curve had topped out, not the
-## dial. This one is exactly 1.0 at Pause 1.0 by construction, within 3% of the old curve
-## up to 3.0, and 5.0 at the top, where a full stop rests two and a half seconds.
-func _pause_multiplier(scale: float) -> float:
-	return pow(clampf(scale, 0.0, MAX_PAUSE_SCALE), PAUSE_GAIN)
-
-
-## The silence BEFORE chunk `idx` - the ordinary sentence seam, plus the turn
-## rest when the chunk before it was somebody else's.
-##
-## Both the live window and the export join chunks, so this is written once for
-## the same reason [method _request_args] is: the render has to be the reading
-## that was auditioned, and a second copy of a rule is where the two part.
-func _gap_before(chunks: Array, idx: int, s: Dictionary) -> float:
-	var g := _seam_gap_of(s)
-	if idx <= 0 or idx >= chunks.size():
-		return g
-	if String((chunks[idx - 1] as Dictionary).get("speaker", "")) \
-			== String((chunks[idx] as Dictionary).get("speaker", "")):
-		return g
-	return minf(g + TURN_GAP * clampf(_turn.value if _turn != null else 1.0,
-		0.0, MAX_TURN_SCALE), TURN_CEILING)
 
 
 ## Keep LOOKAHEAD chunks in flight and start playback as soon as the chunk we
@@ -3528,78 +3152,16 @@ func _speaker_of(s: Dictionary) -> int:
 			return clampi(int(s["speaker"]), 0, maxi(0, int((v as Dictionary).get("speakers", 1)) - 1))
 	return maxi(0, int(s["speaker"]))
 
-
-## Everything the host needs to read ONE chunk in ONE voice. Written once and
-## used by both the live window and the export, because the render must be the
-## performance that was auditioned - a second copy of this list is how the two
-## drift apart a parameter at a time.
+## [method Delivery.request_args] for slot [param s], with the reader this install's voice holds.
 func _request_args(s: Dictionary, ch: Dictionary) -> Dictionary:
-	var t := _preset_of(s)
-	var lean: Vector4 = ch.get("lean", Vector4.ZERO)
-	var near: Dictionary = ch.get("near", {})
-	# length_scale = r / pace: the model speaks r times slower so that
-	# playing back r times faster restores the intended pace
-	var r := _pitch_ratio_of(s)
-	var d := _delivery_of(s)
-	return {
-		"length_scale": r / maxf(float(s["pace"]) * float(t["pace"]), 0.1) * (1.0 - LEAN_PACE * lean.x),
-		"noise_scale": float(t["noise"]) * (1.0 + LEAN_LIVELY * lean.y), "noise_w": float(t["noise_w"]),
-		"lean_semis": LEAN_SEMIS * lean.y,
-		# COMING IN HUSHED is a softer voice as well as a quieter one (VoiceFX drops the level)
-		"lean_effort": LEAN_EFFORT * lean.y + LEAN_LOUD * (lean.w - NEAR_SOFTER * float(near.get("hush", 0.0))),
-		"whisper": float(t["whisper"]), "muffle": float(t["muffle"]),
-		"speaker": _speaker_of(s),
-		"sentence_gap": SENTENCE_GAP, "pause_scale": _pause_scale_of(s) * pow(LEAN_PAUSE, lean.z),
-		"dynamics": d["dynamics"],
-		"prosody_arc": d["prosody_arc"],
-		"effort": d["effort"],
-		"plan_u": float(ch.get("plan_u", 0.0)),
-		"plan_v": float(ch.get("plan_v", 0.0)),
-		# ...and the host plays it back r times faster, band-limited, so every time it returns
-		# is already in the heard audio's seconds (piper.py `_resample`)
-		"play_ratio": r,
-		"tokens": ch["tokens"],
-	}
+	return Delivery.request_args(s, ch, _speaker_of(s))
 
 
-## A delivery mark's words ([constant DELIVERY_WORDS]) as one lean: their steps added, at most two
-## each way. A word not on the list is nothing - a mark the voice cannot act on is ignored.
-static func lean_of(words: String) -> Vector4:
-	var v := Vector4.ZERO
-	for w in words.to_lower().replace(",", " ").split(" ", false):
-		v += DELIVERY_WORDS.get(String(w).strip_edges(), Vector4.ZERO)
-	return v.clamp(Vector4(-2, -2, -2, -2), Vector4(2, 2, 2, 2))
+## [method Delivery.gap_before], with the Turn dial as it stands.
+func _gap_before(chunks: Array, idx: int, s: Dictionary) -> float:
+	return Delivery.gap_before(chunks, idx, s, _turn.value if _turn != null else 1.0)
 
 
-## Delivery marks [param marks] (`[at, lean]` in [param text]) with the return each implies: a
-## delivery lasts to the end of its paragraph (a blank line), where the voice's own comes back.
-static func _leans_of(text: String, marks: Array) -> Array:
-	var out: Array = []
-	for i in marks.size():
-		var at := int((marks[i] as Array)[0])
-		out.append(marks[i])
-		var para := text.find("\n\n", at)
-		var next := int((marks[i + 1] as Array)[0]) if i + 1 < marks.size() else text.length() + 1
-		if para >= 0 and para < next:
-			out.append([para, Vector4.ZERO])
-	return out
-
-
-## EASED, NEVER SWITCHED: each sentence goes [constant LEAN_EASE] of the way from the delivery the
-## sentence before it had to the one marked for it, per voice - so a mark leans in over two or
-## three sentences and its paragraph's end lets go the same way. A hard change of delivery from
-## one sentence to the next is what made a marked stretch sound like somebody else.
-static func _ease_leans(chunks: Array) -> void:
-	var cur := {}
-	for c in chunks:
-		var d: Dictionary = c
-		var who := String(d.get("speaker", ""))
-		var was: Vector4 = cur.get(who, Vector4.ZERO)
-		var now := was + ((d.get("lean_aim", Vector4.ZERO) as Vector4) - was) * LEAN_EASE
-		if now.length() < 0.02:
-			now = Vector4.ZERO
-		cur[who] = now
-		d["lean"] = now
 
 
 func _pump() -> void:
@@ -3644,7 +3206,7 @@ func _drain_ready() -> void:
 		var idx := int(take["index"])
 		_next_to_play += 1
 
-		var pcm := _read_wav(String(take["wav"]))
+		var pcm := Splice.read_wav(String(take["wav"]))
 		if pcm.is_empty():
 			continue
 		var who := ""
@@ -3659,7 +3221,7 @@ func _drain_ready() -> void:
 		var ratio := 1.0
 		# THE HESITATIONS go in now, in the chunk's own time - so the word timings below can be
 		# moved by exactly what was inserted before them.
-		var spliced := _splice_holds(pcm, holds, take.get("spans", []), ratio)
+		var spliced := Splice.chunk(pcm, holds, take.get("spans", []), ratio, _sr)
 		pcm = spliced["pcm"]
 		# THE READER MOVES IN THE PAUSE before the sentence they come in for - so this
 		# mark goes BEFORE the gap (the first one follows the voice's, which opens the chain)
@@ -3667,7 +3229,7 @@ func _drain_ready() -> void:
 			if idx >= 0 and idx < _chunks.size() else {}
 		var near_first := _fx_marked
 		if near_first:
-			_near_mark(_fx_marks, near, _pushed + _pending.size() - _read, _fx_queued_near)
+			Delivery.near_mark(_fx_marks, near, _pushed + _pending.size() - _read, _fx_queued_near)
 		if _next_to_play > 1:
 			# a breath between sentences, at the seam the host cannot see.
 			# Scaled by Pause like every other rest, or the control would do
@@ -3697,14 +3259,14 @@ func _drain_ready() -> void:
 				"speaker": who})
 			_fx_marked = true
 		if not near_first:
-			_near_mark(_fx_marks, near, _pushed + _pending.size() - _read, _fx_queued_near)
+			Delivery.near_mark(_fx_marks, near, _pushed + _pending.size() - _read, _fx_queued_near)
 			_fx_marked = true
 		# the model timed each chunk from zero; shift into stream time
 		for w in take["words"]:
 			var d: Dictionary = (w as Dictionary).duplicate()
 			# moved by the hesitations spliced in before it
-			d["t0"] = _shifted(float(d["t0"]), spliced["cuts"], ratio, true) + _elapsed
-			d["t1"] = _shifted(float(d["t1"]), spliced["cuts"], ratio, false) + _elapsed
+			d["t0"] = Splice.shifted(float(d["t0"]), spliced["cuts"], ratio, true) + _elapsed
+			d["t1"] = Splice.shifted(float(d["t1"]), spliced["cuts"], ratio, false) + _elapsed
 			_sub_words.append(d)
 		_chunk_at[idx] = _pushed + (_pending.size() - _read)
 		# THE OUTRO MARK: the fade starts where the first chunk after it does
@@ -3767,7 +3329,7 @@ func _drain_ready() -> void:
 			# reading. The opening voice's, not the tab on screen's.
 			_fx_live_name = String((_fx_marks[0] as Dictionary).get("speaker", who)) \
 				if not _fx_marks.is_empty() else who
-			_apply_fx(_fx, _cfg_of(_fx_live_name))
+			Delivery.apply_fx(_fx, _cfg_of(_fx_live_name))
 			# the session opens on the FIRST chunk and never again - that is the
 			# whole point: one unbroken take, so the Director does not re-cut
 			# and the harmonic seed does not re-derive every few sentences
@@ -3830,428 +3392,26 @@ func _repace() -> void:
 	# accounting for it has to survive or the pump will pile more on top.
 	_next_to_request = _next_to_play
 	_set_status("%s at pace %.2fx, pause %.2fx - regenerating from chunk %d…"
-		% [_tab_name(), _rate.value, clampf(_pause.value, 0.0, MAX_PAUSE_SCALE), _next_to_play + 1])
+		% [_tab_name(), _rate.value, clampf(_pause.value, 0.0, Delivery.MAX_PAUSE_SCALE), _next_to_play + 1])
 	_pump()
 
 
-## SPLICE THE HESITATIONS into one chunk's audio, after its resample. Returns
-## `{pcm, cuts}`, where `cuts` is `[{t, add}]` in the MODEL's time (the clock the aligner's
-## spans are on) - [method _shifted] moves a word timing by every cut before it.
-##
-## WHERE: the host's `rest` for the word the rest follows - the quietest place between that
-## word's last sound and the next word's first, inside any pause already spliced there (piper
-## `_gap_window`). Word spans touch, so their midpoint is only the fallback for a host that
-## sends no `rest`. A rest before the chunk's first word opens the chunk; one after its last
-## closes it. Both sit inside the chunk rather than in the seam, so the live window and the
-## export - which join chunks differently - cannot disagree about them.
-##
-## THE EDGES: a raised-cosine ramp either side, as long as the level there needs - the voice
-## often runs straight from one word into the next, and a ramp of a few milliseconds on a
-## sounding vowel is a click. Mirrors piper `_edge_ramp`: HOLD_FADE in silence, up to a
-## HOLD_RELEASE out of the word and a HOLD_ATTACK into the next, log-spaced between HOLD_QUIET
-## and HOLD_LOUD of the chunk's peak.
-const HOLD_FADE := 0.002
-const HOLD_RELEASE := 0.030
-const HOLD_ATTACK := 0.012
-const HOLD_QUIET := 0.02
-const HOLD_LOUD := 0.16
-
-func _splice_holds(pcm: PackedFloat32Array, holds: Array, spans: Array, ratio: float) -> Dictionary:
-	var cuts: Array = []
-	if holds.is_empty():
-		return {"pcm": pcm, "cuts": cuts}
-	var by_index := {}
-	for sp in spans:
-		by_index[int((sp as Dictionary).get("index", -1))] = sp
-	var end := INF
-	for h in holds:
-		var k := int((h as Dictionary)["tok"])
-		var cur: Variant = by_index.get(k)
-		if (h as Dictionary).has("hum"):
-			if cur != null:
-				var hc := _hum_cut(pcm, float(cur["t0"]), float(cur["t1"]), float(h["hum"]), ratio)
-				if not hc.is_empty():
-					cuts.append(hc)
-			continue
-		var t := end
-		if bool((h as Dictionary)["before"]):
-			var prev: Variant = by_index.get(k - 1)
-			if k == 0:
-				t = 0.0
-			elif prev != null and cur != null:
-				t = float(prev.get("rest", (float(prev["t1"]) + float(cur["t0"])) * 0.5))
-			elif cur != null:
-				t = float(cur["t0"])
-			elif prev != null:
-				t = float(prev["t1"])
-		else:
-			var nxt: Variant = by_index.get(k + 1)
-			if nxt == null:
-				t = end              # the chunk's last word: rest after all of it
-			elif cur != null:
-				t = float(cur.get("rest", (float(cur["t1"]) + float(nxt["t0"])) * 0.5))
-			else:
-				t = float(nxt["t0"])
-		cuts.append({"t": t, "add": float((h as Dictionary)["sec"])})
-	cuts.sort_custom(func(a, b): return float(a["t"]) < float(b["t"]))
-	var out := PackedFloat32Array()
-	var from := 0
-	var peak := 0.0
-	for v in pcm:
-		peak = maxf(peak, absf(v))
-	var n_in := 0                    # the ramp into the piece after the last cut
-	var after_fill := false          # the piece being cut follows a hum: no fade-in on it
-	for c in cuts:
-		var ct := float(c["t"])
-		var at := pcm.size() if is_inf(ct) else clampi(int(c.get("at",
-			int(round(ct / ratio * float(_sr))))), from, pcm.size())
-		var piece := pcm.slice(from, at)
-		var fill: Variant = c.get("fill")
-		# Ramp either side of a SILENCE; a hum's continuation is phase-aligned to the cut, so
-		# fading it would put a dip in the middle of the hum it is lengthening.
-		var n_out := 0
-		if fill == null:
-			n_out = _edge_ramp(_edge_level(pcm, at, true), peak, HOLD_RELEASE)
-		piece = _ramped(piece, 0 if after_fill else n_in, n_out)
-		out.append_array(piece)
-		if fill != null:
-			out.append_array(fill as PackedFloat32Array)
-		else:
-			var gap := PackedFloat32Array()
-			gap.resize(int(float(c["add"]) * float(_sr)))
-			out.append_array(gap)
-		# A fill that RESUMES elsewhere ended in its own fade, so what follows fades in as
-		# after any rest; one that rejoins at `at` is phase-aligned and must not.
-		after_fill = fill != null and not c.has("resume")
-		from = clampi(int(c.get("resume", at)), at, pcm.size())
-		n_in = _edge_ramp(_edge_level(pcm, from, false), peak, HOLD_ATTACK)
-	out.append_array(_ramped(pcm.slice(from), 0 if after_fill else n_in, 0))
-	return {"pcm": out, "cuts": cuts}
-
-
-## RMS of the 5 ms on one side of sample [param at].
-func _edge_level(pcm: PackedFloat32Array, at: int, before: bool) -> float:
-	var n := maxi(1, int(0.005 * float(_sr)))
-	var a := maxi(0, at - n) if before else clampi(at, 0, pcm.size())
-	var b := clampi(at, 0, pcm.size()) if before else mini(pcm.size(), at + n)
-	if b <= a:
-		return 0.0
-	var e := 0.0
-	for i in range(a, b):
-		e += pcm[i] * pcm[i]
-	return sqrt(e / float(b - a))
-
-
-## Samples of ramp at a splice edge whose [param level] is that loud, up to [param longest]
-## seconds - see [constant HOLD_RELEASE].
-func _edge_ramp(level: float, peak: float, longest: float) -> int:
-	var sec := HOLD_FADE
-	var quiet := HOLD_QUIET * peak
-	if peak > 0.0 and level > quiet:
-		var k := minf(1.0, log(level / quiet) / log(HOLD_LOUD / HOLD_QUIET))
-		sec = HOLD_FADE + k * (longest - HOLD_FADE)
-	return maxi(1, int(round(sec * float(_sr))))
-
-
-## [param buf] with raised-cosine ramps over its first [param n_in] and last [param n_out]
-## samples.
-static func _ramped(buf: PackedFloat32Array, n_in: int, n_out: int) -> PackedFloat32Array:
-	var k := mini(n_in, buf.size())
-	for i in k:
-		buf[i] *= 0.5 - 0.5 * cos(PI * (float(i) + 0.5) / float(k))
-	k = mini(n_out, buf.size())
-	for i in k:
-		buf[buf.size() - 1 - i] *= 0.5 - 0.5 * cos(PI * (float(i) + 0.5) / float(k))
-	return buf
-
-
-## HUMS ARE HELD. "Hmm." read as a thinking hum is most of a second; the voice renders it in
-## about 0.15 s, and asking for more `M`s does not help - measured, eight of them come back
-## as 0.30 s, the model compresses the repeats. So the hum is LENGTHENED after the fact, by
-## pitch-synchronous overlap-add of its own steadiest periods: same voice and color.
-## Target length in seconds, per spelling.
-const HUM_SECONDS := {"hm": 0.45, "mm": 0.5, "hmm": 0.75, "mmm": 0.85, "hmmm": 0.95}
-## Pitch marks either side of the anchor the held hum wanders over. Wandering, rather than
-## repeating one period, keeps the hum alive; more than a few reaches the pitch glide and the
-## fry either side of the steady stretch.
-const HUM_MARKS := 2
-## THE HUM FALLS. A thinking "hmm" is not a held note: it settles, then drops in pitch and dies
-## away. Semitones of fall by the end, and where along the held hum (0..1) the pitch starts to
-## drop and the loudness starts to fade.
-const HUM_FALL := 4.0
-const HUM_FALL_FROM := 0.3
-const HUM_FADE_FROM := 0.55
-
-## The cut that lengthens one hum to [param target] seconds: `{t, at, add, fill}`, or empty
-## when it is already long enough or has no steady voiced stretch to hold.
-##
-## WHY OVERLAP-ADD. The first version butted raw periods end to end. A rendered hum is not
-## strictly periodic - its pitch glides ~15% across the word, periodicity is ~0.75, and it
-## drops into fry at half the pitch - so every join between copied periods was a step in the
-## waveform, and a join every few periods is a buzz: measured, splice steps up to 2.9x the
-## largest in the natural hum and a 5 ms loudness flutter of 20-50%. Here every period is a
-## two-period Hann grain laid down one period apart, so each join is a crossfade and a hard
-## step cannot occur; grains are matched in loudness to the anchor so the wander cannot
-## flutter; and the fill starts and ends on the anchor mark itself, so it leaves and rejoins
-## the natural hum at the same sample.
-##
-## IT REPLACES THE HUM'S TAIL rather than being inserted into it: the fill falls in pitch and
-## fades out, so going back to the natural hum afterwards would jump the pitch back up. The
-## take resumes (`resume`) where the natural hum has gone quiet, and `add` is what the reading
-## gained overall.
-func _hum_cut(pcm: PackedFloat32Array, t0: float, t1: float, target: float, ratio: float) -> Dictionary:
-	var sr := float(_sr)
-	var a := int(t0 / ratio * sr)
-	var b := mini(int(t1 / ratio * sr), pcm.size())
-	if target - float(b - a) / sr < 0.03 or b - a < 64:
-		return {}
-	# THE ANCHOR: the loudest periodic frame at the hum's own pitch. Most renders drop into
-	# FRY somewhere - a period-doubled subharmonic an octave down, often the loudest stretch
-	# and just as periodic (measured 0.96 against the modal 0.9), which held is a creak and
-	# not a hum. Two tells, and neither is a candidate unless the hum has nothing else: a
-	# frame pitched well under the highest the hum reaches cleanly, and one that matches
-	# itself better two periods on than one (the fry setting in or letting go).
-	var win := int(0.02 * sr)
-	var hi := int(sr / 60.0)
-	var frames: Array = []          # [at, period, periodicity, rms, doubled]
-	var modal := INF
-	var f := a
-	while f + win + hi <= b:
-		var pc := _period_of(pcm, f, win)
-		if pc.x > 0.0 and pc.y > 0.5:
-			var e := 0.0
-			for k in win:
-				e += pcm[f + k] * pcm[f + k]
-			frames.append([f, pc.x, pc.y, sqrt(e / float(win)), pc.z > pc.y + 0.05])
-			if pc.y > 0.7:
-				modal = minf(modal, pc.x)
-		f += int(0.01 * sr)
-	var anchor := -1
-	var period := 0.0
-	for pass_ in 2:
-		var score := 0.0
-		for fr in frames:
-			if pass_ == 0 and (float(fr[1]) > modal / 0.7 or bool(fr[4])):
-				continue
-			var sc: float = float(fr[3]) * float(fr[2]) * float(fr[2])
-			if sc > score:
-				score = sc
-				anchor = int(fr[0])
-				period = float(fr[1])
-		if anchor >= 0:
-			break
-	if anchor < 0:
-		return {}
-	var half := int(round(period))
-	# THE MARKS: the strongest peak in the middle period of the anchor frame, then one
-	# period at a time either side, each nudged to where it best matches the anchor's own
-	# period. They stay inside the frame that was measured: a frame is chosen for being
-	# steady, and the fry is often the very next thing.
-	var mid := anchor + win / 2 - half / 2
-	var c := mid
-	for k in half:
-		if pcm[mid + k] > pcm[c]:
-			c = mid + k
-	var marks: Array = []
-	var gains: Array = []
-	var ref := _grain_energy(pcm, c, half)
-	if ref <= 0.0:
-		return {}
-	for j in range(-HUM_MARKS, HUM_MARKS + 1):
-		var m := c
-		if j != 0:
-			m = _align_mark(pcm, c, int(round(float(c) + float(j) * period)), half)
-		if m - half < maxi(a, anchor - half / 2) or m + half >= mini(b, anchor + win + half / 2):
-			continue
-		marks.append(m)
-		gains.append(sqrt(ref / maxf(_grain_energy(pcm, m, half), 1e-9)))
-	var home := marks.find(c)
-	if home < 0:
-		return {}
-	# WHERE THE NATURAL HUM ENDS: the first 5 ms after the anchor quieter than a tenth of it,
-	# not the aligner's word end, which can fall short of the voicing it closes.
-	var ref_rms := sqrt(ref / float(maxi(1, half / 2 * 2)))
-	var hop5 := int(0.005 * sr)
-	var e := mini(b + int(0.2 * sr), pcm.size())
-	var s := c + int(0.02 * sr)
-	while s + hop5 <= mini(b + int(0.2 * sr), pcm.size()):
-		var en := 0.0
-		for k in hop5:
-			en += pcm[s + k] * pcm[s + k]
-		if sqrt(en / float(hop5)) < 0.1 * ref_rms:
-			e = s
-			break
-		s += hop5
-	var length := int(target * sr) - (c - a)
-	var add := float(length - (e - c)) / sr
-	if add < 0.03:
-		return {}
-	# THE FILL: grains laid down one output period apart - a period that lengthens as the
-	# pitch falls - from a seeded walk over the marks, the first on the anchor itself so the
-	# fill leaves the natural hum at the same sample. Divided by the summed window only where
-	# grains overlap by more than it: a longer hop leaves the windows short of 1 between
-	# grains, which is what a lower pitch is, and dividing that out would inflate the tails.
-	var fall := pow(2.0, -HUM_FALL / 12.0)
-	var acc := PackedFloat32Array()
-	acc.resize(length)
-	var wsum := PackedFloat32Array()
-	wsum.resize(length)
-	var at := home
-	var o := 0.0
-	var g := 0
-	while o < float(length + half):
-		var u := o / float(length)
-		var drop := smoothstep(HUM_FALL_FROM, 1.0, u)
-		var env := 0.5 + 0.5 * cos(PI * smoothstep(HUM_FADE_FROM, 1.0, u))
-		if g > 0:
-			var step := posmod(hash(g * 7919 + c), 3) - 1
-			at = clampi(at + step, 0, marks.size() - 1)
-		var m: int = marks[at]
-		var gain: float = env * (1.0 if at == home else float(gains[at]))
-		var oi := int(round(o))
-		for d in range(-half + 1, half):
-			var q := oi + d
-			if q < 0 or q >= length:
-				continue
-			var w := 0.5 + 0.5 * cos(PI * float(d) / float(half))
-			acc[q] += w * gain * pcm[m + d]
-			wsum[q] += w
-		o += period / lerpf(1.0, fall, drop)
-		g += 1
-	for q in length:
-		acc[q] = acc[q] / maxf(wsum[q], 1.0)
-	return {"t": float(c) / sr * ratio, "at": c, "add": add, "fill": acc, "resume": e}
-
-
-## The pitch period of [param n] samples from [param s0] (fractional, in samples), how
-## periodic they are (normalized correlation at that lag, 0..1), and the same correlation two
-## periods on, over a voice's 60-350 Hz. The SHORTEST lag within 90% of the best wins, so a
-## stretch that also matches itself two periods on does not read as an octave down.
-func _period_of(pcm: PackedFloat32Array, s0: int, n: int) -> Vector3:
-	var lo := int(float(_sr) / 350.0)
-	var hi := int(float(_sr) / 60.0)
-	if s0 < 0 or s0 + n + hi + 1 > pcm.size():
-		return Vector3.ZERO
-	var e0 := 0.0
-	for i in range(0, n, 2):
-		e0 += pcm[s0 + i] * pcm[s0 + i]
-	if e0 <= 1e-9:
-		return Vector3.ZERO
-	var rs := PackedFloat32Array()
-	rs.resize(hi + 2)
-	var best := 0.0
-	for lag in range(lo, hi + 2):
-		rs[lag] = _corr_at(pcm, s0, n, lag, e0)
-		best = maxf(best, rs[lag])
-	for lag in range(lo + 1, hi + 1):
-		if rs[lag] >= 0.9 * best and rs[lag] >= rs[lag - 1] and rs[lag] >= rs[lag + 1]:
-			# parabolic refinement: the true period is rarely a whole number of samples,
-			# and a whole-sample hop drifts a sample every few periods
-			var den := rs[lag - 1] - 2.0 * rs[lag] + rs[lag + 1]
-			var off := 0.0 if absf(den) < 1e-9 else clampf(0.5 * (rs[lag - 1] - rs[lag + 1]) / den, -0.5, 0.5)
-			# two periods on, searched a couple of samples either way for the pitch drift
-			var twice := 0.0
-			for l2 in range(2 * lag - 2, 2 * lag + 3):
-				if s0 + n + l2 <= pcm.size():
-					twice = maxf(twice, _corr_at(pcm, s0, n, l2, e0))
-			return Vector3(float(lag) + off, rs[lag], twice)
-	return Vector3.ZERO
-
-
-## Normalized correlation of pcm[s0, s0 + n) with itself [param lag] on, every other sample.
-func _corr_at(pcm: PackedFloat32Array, s0: int, n: int, lag: int, e0: float) -> float:
-	var r := 0.0
-	var e1 := 0.0
-	for i in range(0, n, 2):
-		var y := pcm[s0 + i + lag]
-		r += pcm[s0 + i] * y
-		e1 += y * y
-	return r / sqrt(e0 * maxf(e1, 1e-9))
-
-
-## The mark near [param guess] whose period best matches the one about [param c], searched a
-## sixth of a period either way - a hum's pitch drifts, so a mark a whole period away is
-## rarely exactly where arithmetic puts it.
-func _align_mark(pcm: PackedFloat32Array, c: int, guess: int, half: int) -> int:
-	var reach := maxi(1, half / 6)
-	var best := guess
-	var best_r := -INF
-	for m in range(guess - reach, guess + reach + 1):
-		if m - half < 0 or m + half >= pcm.size():
-			continue
-		var r := 0.0
-		for d in range(-half / 2, half / 2):
-			r += pcm[c + d] * pcm[m + d]
-		if r > best_r:
-			best_r = r
-			best = m
-	return best
-
-
-## Energy of one period centered on [param m].
-func _grain_energy(pcm: PackedFloat32Array, m: int, half: int) -> float:
-	var e := 0.0
-	for d in range(-half / 2, half / 2):
-		if m + d >= 0 and m + d < pcm.size():
-			e += pcm[m + d] * pcm[m + d]
-	return e
-
-
-## A word timing from the model's clock onto the spliced take's: divided by the resample
-## ratio, then moved by every rest spliced in before it. A START at exactly a cut is moved
-## (the rest precedes that word); an END at exactly a cut is not (the rest follows it).
-static func _shifted(t: float, cuts: Array, ratio: float, is_start: bool) -> float:
-	var add := 0.0
-	for c in cuts:
-		var ct := float(c["t"])
-		if ct < t or (is_start and is_equal_approx(ct, t)):
-			add += float(c["add"])
-	return t / ratio + add
-
-
-## PCM16 mono, as written by the voice host. The 44-byte canonical header is
-## ours, so this does not need to be a general WAV parser.
-func _read_wav(path: String) -> PackedFloat32Array:
-	return _decode_wav(path)
-
-
-## The same, static, for a worker thread (the audition decodes off the main thread).
-static func _decode_wav(path: String) -> PackedFloat32Array:
-	var f := FileAccess.open(path, FileAccess.READ)
-	if f == null:
-		return PackedFloat32Array()
-	var bytes := f.get_buffer(f.get_length())
-	f.close()
-	if bytes.size() <= 44:
-		return PackedFloat32Array()
-	var n := (bytes.size() - 44) / 2
-	var out := PackedFloat32Array()
-	out.resize(n)
-	for i in n:
-		out[i] = float(bytes.decode_s16(44 + i * 2)) / 32768.0
-	return out
 
 
 # --- export ------------------------------------------------------------------
 
 
 ## What an export of this reading is called, without an extension; "" keeps the exporter's own
-## name (see [member Exporter.name_provider]).
+## name (see [member Exporter.name_provider]). The reading's [member publish] says.
 func export_name() -> String:
-	return ""
+	return publish.name()
 
 
 ## What an upload of the take at [param take] says (see [member Exporter.upload_provider]): the
-## YouTube card's title, visibility and playlist over what the mode adds ([method _upload_base]);
-## {} without a card, or with its box clear.
+## YouTube card's title, visibility and playlist over what [member publish] adds; {} without a
+## card, or with its box clear.
 func upload_meta(take: String) -> Dictionary:
-	return _youtube.meta(_upload_base(take)) if _youtube != null else {}
-
-
-## The mode's part of an upload of [param take] - a description, tags, a thumbnail's moment, a
-## record - or {} when it has nothing to upload yet. A reading has no more than its title.
-func _upload_base(_take: String) -> Dictionary:
-	return {"tags": []}
+	return _youtube.meta(publish.upload_base(take)) if _youtube != null else {}
 
 
 ## Gate for the export button. The procedural path asks whether a seed has been
@@ -4261,13 +3421,23 @@ func can_export_take() -> bool:
 		and not _voice_meta.is_empty() and _host != null and _host.is_up()
 
 
-## Render the WHOLE text to one WAV, independent of whatever is playing.
-##
+## Render the WHOLE text to one WAV, independent of whatever is playing - with what the take is of
+## held by [member publish] while it renders, and what goes with it written after.
+func export_take() -> String:
+	if not publish.before_take():
+		return ""
+	var path: String = await _render_take()
+	var said := publish.after_take(path)
+	if not said.is_empty():
+		_set_status(said)
+	return path
+
+
 ## A coroutine, because the host answers asynchronously and the exporter awaits
 ## this. It deliberately does NOT reuse the playback queue: export must capture
 ## the entire reading including the part not yet spoken, and must not disturb a
 ## reading in progress.
-func export_take() -> String:
+func _render_take() -> String:
 	var body := _reading_body().strip_edges()
 	if body.is_empty() or _voices.selected < 0:
 		return ""
@@ -4307,16 +3477,16 @@ func export_take() -> String:
 		var wav := String(out.get("wav", ""))
 		if wav.is_empty():
 			continue
-		var part := _read_wav(wav)
+		var part := Splice.read_wav(wav)
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(wav))
 		# The same splice the live window makes, from the same function.
-		var spliced := _splice_holds(part, (chunks[i] as Dictionary).get("holds", []),
-			out.get("tokens", []), ratio)
+		var spliced := Splice.chunk(part, (chunks[i] as Dictionary).get("holds", []),
+			out.get("tokens", []), ratio, _sr)
 		part = spliced["pcm"]
 		# the reader moves in the pause before the sentence, as in _drain_ready
 		var near: Dictionary = (chunks[i] as Dictionary).get("near", {})
 		if not marks.is_empty():
-			_near_mark(marks, near, pcm.size(), last_near)
+			Delivery.near_mark(marks, near, pcm.size(), last_near)
 		if i > 0:
 			var seam := _gap_before(chunks, i, s)
 			var gap := PackedFloat32Array()
@@ -4329,7 +3499,7 @@ func export_take() -> String:
 			last_who = who
 			marks.append({"at": pcm.size(), "speaker": who})
 		if opening:
-			_near_mark(marks, near, pcm.size(), last_near)
+			Delivery.near_mark(marks, near, pcm.size(), last_near)
 		var by_index := {}
 		for sp in out.get("tokens", []):
 			by_index[int((sp as Dictionary).get("index", -1))] = sp
@@ -4342,10 +3512,10 @@ func export_take() -> String:
 			rows.append({"text": String(w["text"]), "sentence": int(w["sentence"]),
 				"emph": int(w.get("emph", 0)), "speaker": who,
 				"t0": 0.0 if span == null else
-					_shifted(float((span as Dictionary).get("t0", 0.0)), spliced["cuts"], ratio, true)
+					Splice.shifted(float((span as Dictionary).get("t0", 0.0)), spliced["cuts"], ratio, true)
 					+ elapsed,
 				"t1": 0.0 if tail == null else
-					_shifted(float((tail as Dictionary).get("t1", 0.0)), spliced["cuts"], ratio, false)
+					Splice.shifted(float((tail as Dictionary).get("t1", 0.0)), spliced["cuts"], ratio, false)
 					+ elapsed,
 				"ok": span != null})
 		words.append_array(_bridge_words(rows, "export chunk %d" % i))
@@ -4424,9 +3594,9 @@ func export_take() -> String:
 		if m.has("speaker"):
 			cfg = _cfg_of(String(m["speaker"]))
 			leans = leans or float(cfg["lean"]) > 0.0
-			_apply_fx(fx, cfg)
+			Delivery.apply_fx(fx, cfg)
 		if m.has("near"):
-			_near_to(fx, m["near"])
+			Delivery.near_to(fx, m["near"])
 		var a := int(m["at"])
 		var b := pcm.size() if k == marks.size() - 1 else int((marks[k + 1] as Dictionary)["at"])
 		if b > a:
@@ -4434,11 +3604,11 @@ func export_take() -> String:
 	# THE PLACE, under the whole take - its first sample at show time 0, since the take carries its own
 	# bookend - so the export hears the gusts the render shows. Rendered on a worker: minutes of take are
 	# a long while of GDScript, and the panel stays live through an export.
-	var place := _environment(true)
+	var place := bed.of(true)
 	if place.has("make"):
 		var env: SoundBed = (place["make"] as Callable).call(_sr, 0.0)
 		if env != null and env.active():
-			env.set_level(_environment_level())
+			env.set_level(bed.level())
 			_set_status("Mixing in the place's sound...")
 			var box := [wet]
 			var task := WorkerThreadPool.add_task(func() -> void: box[0] = env.mix(box[0]), false, "soundscape export")
@@ -4455,7 +3625,7 @@ func export_take() -> String:
 			wet[i] *= 0.0 if u >= 1.0 else 0.5 + 0.5 * cos(PI * u)
 
 	var path := TAKE_DIR + "/take_%d.wav" % stamp
-	var abs_path := _write_wav(path, wet, 2 if leans else 1)
+	var abs_path := Splice.write_wav(path, wet, 2 if leans else 1, _sr)
 	# ALWAYS written now, words or not: the book medium reads the chapter from it.
 	var side := FileAccess.open(path.get_basename() + ".json", FileAccess.WRITE)
 	if side != null:
@@ -4479,34 +3649,6 @@ func export_take() -> String:
 	return abs_path
 
 
-## PCM16 WAV, written atomically - the exporter's render process may open
-## this file while we are still writing it otherwise, which is how a truncated
-## take once made a render record silence forever. One channel writes each frame's
-## left (with no lean the two are the same), two write both.
-func _write_wav(path: String, frames: PackedVector2Array, channels: int) -> String:
-	var tmp := path + ".part"
-	var f := FileAccess.open(tmp, FileAccess.WRITE)
-	if f == null:
-		return ""
-	var bytes := PackedByteArray()
-	bytes.resize(frames.size() * 2 * channels)
-	for i in frames.size():
-		var v := frames[i]
-		bytes.encode_s16(i * 2 * channels, int(clampf(v.x, -1.0, 1.0) * 32767.0))
-		if channels == 2:
-			bytes.encode_s16(i * 4 + 2, int(clampf(v.y, -1.0, 1.0) * 32767.0))
-	f.store_buffer("RIFF".to_ascii_buffer()); f.store_32(36 + bytes.size())
-	f.store_buffer("WAVE".to_ascii_buffer()); f.store_buffer("fmt ".to_ascii_buffer())
-	f.store_32(16); f.store_16(1); f.store_16(channels); f.store_32(_sr)
-	f.store_32(_sr * 2 * channels); f.store_16(2 * channels); f.store_16(16)
-	f.store_buffer("data".to_ascii_buffer()); f.store_32(bytes.size())
-	f.store_buffer(bytes)
-	f.close()
-	var abs_tmp := ProjectSettings.globalize_path(tmp)
-	var abs_out := ProjectSettings.globalize_path(path)
-	if DirAccess.rename_absolute(abs_tmp, abs_out) != OK:
-		return abs_tmp
-	return abs_out
 
 
 # --- subtitles ----------------------------------------------------------------
