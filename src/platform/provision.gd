@@ -532,6 +532,210 @@ static func unpack(archives: PackedStringArray, programs: PackedStringArray, des
 	return {"ok": true, "files": files}
 
 
+## Why the zip at `archive` must not be unpacked: a member whose name climbs out (`..`) or is
+## absolute, or no zip at all. "" when it may. Reads the names only - [ZIPReader] finds a member by
+## scanning its directory, so reading a whole 18,571-file toolchain through it is quadratic
+## (measured: 600 MB of Lean's 3.4 GB in four minutes, slowing); ghost's own Python unpacks it
+## instead, in 30 s, and this is the guard in front of it.
+static func zip_unsafe(archive: String) -> String:
+	var zr := ZIPReader.new()
+	if zr.open(archive) != OK:
+		return "the download is not a readable zip"
+	var why := ""
+	for member in zr.get_files():
+		var rel := String(member).replace("\\", "/")
+		if rel.is_empty() or rel.begins_with("/") or rel.contains(":") \
+				or ("/" + rel + "/").contains("/../"):
+			why = "the download names a file outside itself (%s)" % rel
+			break
+	zr.close()
+	return why
+
+
+## Make every file in a `bin` folder under `root` executable: a zip keeps no Unix permissions the
+## unpacking honors, and the Lean toolchain's 17 programs are all in `bin/`. Links are not followed.
+## File IO only, so it may run on a worker.
+static func mark_bins_executable(root: String) -> void:
+	var queue := PackedStringArray([""])
+	var i := 0
+	while i < queue.size():
+		var rel := queue[i]
+		i += 1
+		var d := DirAccess.open(root.path_join(rel) if not rel.is_empty() else root)
+		if d == null:
+			continue
+		d.include_hidden = true
+		if rel.get_file() == "bin":
+			for f in d.get_files():
+				FileAccess.set_unix_permissions(root.path_join(rel).path_join(f),
+					FileAccess.UNIX_READ_OWNER | FileAccess.UNIX_WRITE_OWNER
+					| FileAccess.UNIX_EXECUTE_OWNER | FileAccess.UNIX_READ_GROUP
+					| FileAccess.UNIX_EXECUTE_GROUP | FileAccess.UNIX_READ_OTHER
+					| FileAccess.UNIX_EXECUTE_OTHER)
+		for sub in d.get_directories():
+			if not d.is_link(sub):
+				queue.append(rel.path_join(sub) if not rel.is_empty() else sub)
+
+
+## Take an unpacked distribution at `staging` as `dest`: find each of `programs` in a `bin` folder
+## inside it (the shallowest, so a nested tool's own `bin` never wins over the distribution's), then
+## move the whole tree into place. {ok, files: {program: path inside dest}} or {ok: false, error};
+## a missing program refuses the tree and removes it. File IO only, so it may run on a worker.
+static func adopt_tree(staging: String, programs: PackedStringArray, dest: String,
+		windows: bool) -> Dictionary:
+	var files := {}
+	for prog in programs:
+		var found := _find_bin(staging, prog + (".exe" if windows else ""))
+		if found.is_empty():
+			remove_tree(staging)
+			return {"ok": false, "error": "the download has no %s in it" % prog}
+		files[prog] = found
+	remove_tree(dest)
+	if move(staging, dest) != OK:
+		remove_tree(staging)
+		return {"ok": false, "error": "could not move the download into place"}
+	return {"ok": true, "files": files}
+
+
+## `name` inside a `bin` folder under `root`, or one folder below one (TeX Live keeps its programs
+## in `bin/<platform>/`), as a path relative to `root`; the shallowest wins. Breadth first, and
+## links to folders are not followed (a TeX tree links folders to each other).
+static func _find_bin(root: String, name: String) -> String:
+	var queue := PackedStringArray([""])
+	var i := 0
+	while i < queue.size() and i < 4000:
+		var rel := queue[i]
+		i += 1
+		var d := DirAccess.open(root.path_join(rel) if not rel.is_empty() else root)
+		if d == null:
+			continue
+		d.include_hidden = true
+		var parts := rel.split("/", false)
+		var in_bin := (parts.size() >= 1 and parts[parts.size() - 1] == "bin") \
+			or (parts.size() >= 2 and parts[parts.size() - 2] == "bin")
+		if in_bin and d.file_exists(name):
+			return rel.path_join(name)
+		for sub in d.get_directories():
+			if not d.is_link(sub) and parts.size() < 6:
+				queue.append(rel.path_join(sub) if not rel.is_empty() else sub)
+	return ""
+
+
+# --- Lean ---------------------------------------------------------------------
+#
+# Lean is three things that must agree: a toolchain (`lean`, a fetched tree), Mathlib (compiled
+# for exactly that toolchain) and the REPL ghost checks proofs through (tagged per toolchain too).
+# Mathlib's release names the toolchain, and the REPL tags the same names, so ONE TAG picks all
+# three: the newest Mathlib release the REPL also has.
+
+## The newest Mathlib release (from the `/releases` list) that the REPL has a tag for: {tag}, or
+## {error}. Drafts and prereleases are passed over; so is a release the REPL has not caught up with,
+## which is how a new Mathlib waits a day for its REPL instead of breaking the workbench.
+static func pick_mathlib(releases: Array, repl_tags: Array) -> Dictionary:
+	var best := ""
+	for r in releases:
+		var rel: Dictionary = r if r is Dictionary else {}
+		var tag := String(rel.get("tag_name", ""))
+		if tag.is_empty() or bool(rel.get("draft", false)) or bool(rel.get("prerelease", false)):
+			continue
+		if not RegEx.create_from_string("^v\\d+\\.\\d+\\.\\d+$").search(tag):
+			continue
+		if not repl_tags.has(tag):
+			continue
+		if best.is_empty() or Deps.version_lt(best.substr(1), tag.substr(1)):
+			best = tag
+	if best.is_empty():
+		return {"error": "no Mathlib release has a Lean REPL built for it yet"}
+	return {"tag": best}
+
+
+## The Lean release a `lean-toolchain` file names ("leanprover/lean4:v4.35.0" -> "v4.35.0"), ""
+## when it names something else (a nightly, a fork).
+static func parse_toolchain(text: String) -> String:
+	var m := RegEx.create_from_string("^\\s*leanprover/lean4:(v\\d+\\.\\d+\\.\\d+)\\s*$") \
+		.search(text)
+	return m.get_string(1) if m != null else ""
+
+
+## Where the workbenches live: user://lean/, one folder per Mathlib tag, and `current.json`
+## naming the one in use.
+static func lean_dir() -> String:
+	return base().path_join("lean")
+
+
+static func workbench(key := "mathlib") -> Dictionary:
+	return read_json(lean_dir().path_join(key + ".json"))
+
+
+static func write_workbench(key: String, data: Dictionary) -> bool:
+	DirAccess.make_dir_recursive_absolute(lean_dir())
+	var path := lean_dir().path_join(key + ".json")
+	var tmp := path + ".tmp"
+	var f := FileAccess.open(tmp, FileAccess.WRITE)
+	if f == null:
+		return false
+	f.store_string(JSON.stringify(data, "\t"))
+	f.close()
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(path)
+	return DirAccess.rename_absolute(tmp, path) == OK
+
+
+## The workbench folder in use, "" when there is none.
+static func workbench_path(key := "mathlib") -> String:
+	var dir := String(workbench(key).get("dir", ""))
+	return "" if dir.is_empty() else lean_dir().path_join(dir)
+
+
+## The REPL a proof is checked through, "" until the workbench is built.
+static func repl_path(key := "mathlib") -> String:
+	var root := workbench_path(key)
+	if root.is_empty():
+		return ""
+	var p := root.path_join(".lake/packages/REPL/.lake/build/bin/repl")
+	if Deps.platform() == "windows":
+		p += ".exe"
+	return p if FileAccess.file_exists(p) else ""
+
+
+## What a workbench is built from, as one hash: the template's files as written, and the tag. A
+## change to either is a new workbench.
+static func workbench_digest(row: Dictionary, tag: String) -> String:
+	var text := tag + "\n"
+	var dir := String(row.get("workbench", ""))
+	for f in ["lakefile.toml", "Ghost.lean"]:
+		text += FileAccess.get_file_as_string(dir.path_join(f)) + "\n"
+	return text.sha256_text()
+
+
+## Is the workbench `row` describes built, for the Lean ghost has, and from the template as it is
+## now? The REPL's program is the last thing a build makes, so its presence is the proof it ended.
+static func workbench_ready(row: Dictionary) -> bool:
+	var key := String(row.get("key", ""))
+	var have := workbench(key)
+	var tag := String(installed("lean").get("mathlib", ""))
+	if tag.is_empty() or String(have.get("tag", "")) != tag:
+		return false
+	if String(have.get("digest", "")) != workbench_digest(row, tag):
+		return false
+	return not repl_path(key).is_empty()
+
+
+## Remove every workbench but the one in use, and its download cache. With `only_stale` (a
+## launch's prune), only what is older than a day: a younger folder may be another ghost window's
+## build of the next Mathlib, in progress.
+static func prune_workbenches(key := "mathlib", only_stale := false) -> void:
+	var keep := String(workbench(key).get("dir", ""))
+	var d := DirAccess.open(lean_dir())
+	if d == null:
+		return
+	for sub in d.get_directories():
+		var path := lean_dir().path_join(sub)
+		if (sub.begins_with(key + "-") and sub != keep) or sub == "cache":
+			if not only_stale or stale(path):
+				remove_tree(path)
+
+
 # --- Python and the environments ----------------------------------------------
 
 ## ghost's own interpreter for [constant PYTHON], "" before uv has installed it. Taken through uv's
@@ -658,4 +862,6 @@ static func is_installed(key: String) -> bool:
 				return not python_exe().is_empty()
 			if row.has("requirements") or row.has("packages"):
 				return env_ready(row)
+			if row.has("workbench"):
+				return workbench_ready(row)
 	return false

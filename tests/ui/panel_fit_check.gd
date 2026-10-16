@@ -53,6 +53,7 @@ var _ed: ReadingPanel
 var _synth: SynthEditor
 var _cards: ReadingPanel
 var _show: EpisodeCard        # the Cards panel's episode
+var _proof: ReadingPanel      # a Proof note's panel (2026-10-15: its card asked for 448 px of 380)
 
 
 func _ready() -> void:
@@ -83,23 +84,37 @@ func _run() -> void:
 	_cards.remove_child(_cards._repace_timer)
 	add_child(_cards._repace_timer)
 	_cards_episodes()
+	_proof = ReadingPanel.new()
+	_proof.workspace = "proof"
+	_proof._build_panel()
+	_proof.remove_child(_proof._panel)
+	add_child(_proof._panel)
+	_proof.remove_child(_proof._repace_timer)
+	add_child(_proof._repace_timer)
+	# THE PROOF CARD'S PICKERS, filled as a real note fills them: a long problem title, and the
+	# writers by their whole names - the selected one is what an unclipped picker is as wide as
+	var proof_card: ProofCard = _proof._block_cards["proof"]
+	proof_card._pick.add_item("Episode 12 - Pick More Than Half, and One Divides Another, Every Time")
+	proof_card._pick.select(proof_card._pick.item_count - 1)
 	# a voice list as the host fills it - its longest name is what a picker sized to its items
 	# would be as wide as
-	for e in [_ed, _cards]:
+	for e in [_ed, _cards, _proof]:
 		(e as ReadingPanel)._voices.add_item("libritts high  (downloads)")
 		(e as ReadingPanel)._voices.add_item("en_GB southern english female medium  (downloads)")
 
 	# OPEN, whatever the person running this has folded: a probe reads their real settings, and
 	# a panel with its cards folded is short enough to fit any window - which would prove nothing.
-	for p in [_ed._panel, _synth._panel, _cards._panel]:
+	for p in [_ed._panel, _synth._panel, _cards._panel, _proof._panel]:
 		for c in (p as SidePanel).cards():
 			(c as Card).folded = false
 	await _check_fits("Generative", _ed._panel)
 	await _check_fits("Synthesis", _synth._panel)
 	await _check_fits("Cards", _cards._panel)
+	await _check_fits("Proof", _proof._panel)
 	await _check_width("Generative", _ed._panel)
 	await _check_width("Synthesis", _synth._panel)
 	await _check_width("Cards", _cards._panel)
+	await _check_width("Proof", _proof._panel)
 	await _check_long_items_would_widen()
 	await _check_episode_entry_follows()
 	await _check_short_panel_is_not_stretched()
@@ -109,9 +124,11 @@ func _run() -> void:
 	_synth._panel.queue_free()
 	_ed._panel.queue_free()
 	_cards._panel.queue_free()
+	_proof._panel.queue_free()
 	_synth.free()
 	_ed.free()
 	_cards.free()
+	_proof.free()
 	if _fails.is_empty():
 		print("panel_fit_check: ALL OK")
 		get_tree().quit()

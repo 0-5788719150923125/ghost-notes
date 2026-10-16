@@ -82,6 +82,12 @@ const WORKSPACES := {
 		"hint": "Open a show: its body is the brief every agent works from. Each seed is one episode - planned, shuffled, painted and written one card at a time by the agents, then read here in the voice below, at the table.",
 		"hosts": ["cards", "look", "bookends"],
 		"classic": ["text", "cards", "voice", "look", "bookends"]},
+	"proof": {"label": "Proof", "section": "proof",
+		"blurb": "A ghost doing math at a desk: the episodes agents make from the note's problem, and the voice that teaches them.",
+		"title": "Proof",
+		"hint": "The note's words are the problem: write one, or press Invent a problem. Make episode has the agents fix it, solve it at the desk and check the proof in Lean, then write the lesson the voice below reads while the pen writes it on the pad.",
+		"hosts": ["proof", "look", "bookends"],
+		"classic": ["text", "proof", "voice", "look", "bookends"]},
 	"lab": {"label": "Voice lab", "section": "synth",
 		"blurb": "Ghost Notes' own synthesizer and the fishing game that breeds its voices."},
 	"clip": {"label": "Masking", "section": "",
@@ -148,6 +154,18 @@ const REGISTRY := {
 		"script": "res://src/cards/episode_card.gd",
 		"intro_tip": "Seconds the table holds before the reader speaks, with the channel's name and the episode's title over it. The deck starts shuffling a beat before the first word.",
 		"outro_tip": "Seconds held after the last word, the spread on the table and the channel's name over it, fading picture and sound out together."},
+	# A GHOST DOING MATH AT A DESK (next/proof.md, 2026-10-15): its card is the episode - the problem
+	# fixed, solved at the desk with Lean, taught - and it hands the reading the lesson to read and the
+	# desk's document. It brings a Voice, as Cards does, and its own medium (the desk).
+	"proof": {"label": "Proof", "family": &"producer",
+		"blurb": "Agents work a math problem at a desk - the note's words are the problem - check the proof in Lean, and teach it: a pen writes each formula on a pad while the voice explains.",
+		"needs": ["text"], "provides": ["text", "picture", "moments"], "requires": ["voice"],
+		"slots": ["presentation"], "workspace": "proof",
+		"capabilities": ["forward_plus", "subprocess", "agent:writer", "tex", "lean", "python:math"], "marks": [],
+		"block": "proof", "card": "proof", "heading": "Proof",
+		"script": "res://src/proof/proof_card.gd",
+		"intro_tip": "Seconds the desk holds before the teacher speaks.",
+		"outro_tip": "Seconds held after the last word, the page on the desk, fading picture and sound out together."},
 	"clip": {"label": "Clip", "family": &"picture",
 		"blurb": "A video, cut and prepared from a file or a link, with chroma-key effects over it: markers, tracks and renders.",
 		"needs": [], "provides": ["picture", "audio"], "requires": [], "slots": ["clock", "presentation"], "workspace": "clip",
@@ -198,6 +216,8 @@ static func attach_blocks(key: String) -> Dictionary:
 			return {"synthesis": {}}
 		"cards":
 			return {"cards": {}}
+		"proof":
+			return {"proof": {}}
 		"song":
 			return {"song": {"path": ""}}
 		"clip":

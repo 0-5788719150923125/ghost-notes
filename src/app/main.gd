@@ -344,7 +344,7 @@ func open_note(path: String) -> void:
 	Director.reset_show()
 	Films.set_frequency(Films.FREQ_DEFAULT)
 	match ws:
-		"reading", "cards", "lab":
+		"reading", "cards", "proof", "lab":
 			var section := String((Components.WORKSPACES[ws] as Dictionary)["section"])
 			Settings.write(section, "doc_path", path)
 			Settings.write(section, "sync", true)
@@ -440,7 +440,7 @@ func start_workspace(key: String, source := "", note := "") -> void:
 				push_warning("ghost: a note's own panel needs a note - open one with --note")
 				return
 			_open_note_panel(note)
-		"reading", "cards":
+		"reading", "cards", "proof":
 			_open_reading(key)
 		"lab":
 			_open_synth_editor()
@@ -954,10 +954,11 @@ func _unhandled_input(event: InputEvent) -> void:
 ## The value following `flag` in the cmdline args, or "" if the flag is bare/absent
 ## (mask mode's two entry points both take an optional path this way).
 func _provision(scope: String) -> void:
-	if not scope in ["all", "update"]:
+	if not scope in ["all", "update"] and Deps.entry(scope).is_empty():
 		scope = ""
 	print("ghost: provisioning %s" % ("everything" if scope == "all"
-		else "updates" if scope == "update" else "the core (uv, FFmpeg, Python)"))
+		else "updates" if scope == "update" else "the core (uv, FFmpeg, Python)" if scope.is_empty()
+		else "the core and %s" % String(Deps.entry(scope).get("name", scope))))
 	var ok: bool = await Provisioner.run_cli(scope)
 	print("")
 	print(Deps.format_report())

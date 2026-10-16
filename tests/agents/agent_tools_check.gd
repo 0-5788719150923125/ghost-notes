@@ -50,6 +50,11 @@ class Toolset:
 				for i in 3:
 					await tree.process_frame
 				return {"text": "done after three frames"}
+			# AN ERROR IN WORDS, and none in words: what a toolset may say (ProofTools, DealerTools)
+			"fails":
+				return {"text": "", "error": "the disk is full"}
+			"fine":
+				return {"text": "kept", "error": ""}
 		return {"text": "no tool called %s" % name, "error": true}
 
 
@@ -166,6 +171,17 @@ func _run() -> void:
 	_ok(int(r["status"]) == 200, "a local origin was refused (%d)" % r["status"])
 	r = await _send(_raw("POST", "/mcp/" + "0".repeat(32), body))
 	_ok(int(r["status"]) == 404, "an unknown token was answered %d" % r["status"])
+
+	# AN ERROR SAID IN WORDS reaches the agent as one; "" is no error (2026-10-15: `bool()` of the
+	# words threw inside the answer, and the Proof solver's notebook calls were never answered)
+	r = await _post(path, {"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "fails", "arguments": {}}})
+	var failed: Dictionary = (r["json"] as Dictionary).get("result", {}) if r["json"] is Dictionary else {}
+	_ok(bool(failed.get("isError", false)) and String(failed.get("content", [{}])[0].get("text", "")) == "the disk is full",
+		"an error in words was answered %s" % str(r))
+	r = await _post(path, {"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": "fine", "arguments": {}}})
+	var fine: Dictionary = (r["json"] as Dictionary).get("result", {}) if r["json"] is Dictionary else {}
+	_ok(not bool(fine.get("isError", true)) and String(fine.get("content", [{}])[0].get("text", "")) == "kept",
+		"the control: an empty error is no error, answered %s" % str(r))
 
 	# A RUNAWAY LOOP ENDS
 	AgentTools._the._jobs[url.get_file()]["calls"] = AgentTools.MAX_CALLS

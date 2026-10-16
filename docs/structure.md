@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 287 references inside a folder, 700 down the stack, 0 up it.
+Between scripts today: 300 references inside a folder, 743 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -13,15 +13,17 @@ Between scripts today: 287 references inside a folder, 700 down the stack, 0 up 
 | --- | --- | --- | --- |
 | `app/` | The shell | 13 | `masking`, `cards`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
 | `masking/` | Masking | 10 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
+| `proof/` | Proof | 6 | `desk`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
+| `desk/` | The desk | 3 | `table`, `media`, `scene_kit`, `data` |
 | `cards/` | Cards | 9 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
-| `table/` | The set | 18 | `media`, `scene_kit`, `audio`, `data` |
+| `table/` | The set | 19 | `media`, `scene_kit`, `audio`, `data` |
 | `reading/` | The voice's workspaces | 5 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
 | `export/` | Export | 3 | `show`, `voice`, `ui`, `agents`, `stage`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
 | `show/` | The show | 8 | `media`, `ui`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `media/` | Media | 19 | `voice`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `voice/` | Synthesis (voice) | 13 | `audio`, `platform`, `data` |
-| `ui/` | The panel kit | 10 | `notes`, `platform`, `data` |
+| `ui/` | The panel kit | 11 | `notes`, `agents`, `platform`, `data` |
 | `notes/` | Notes | 5 | `stage`, `platform`, `data` |
 | `agents/` | Agents | 6 | `platform`, `data` |
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
@@ -104,7 +106,7 @@ The note as a file: where notes live, a document kept in step with its file, the
 
 What every note's panel is built from, and what it asks of the window it is in: a side panel that cannot outgrow the window and its "+", a component's folding card in its family's color and the chips over the cards, the cards a note's components bring (built from the registry's rows, attached and detached), the Script card every note has (its editor window and highlighter), rows drawn from a table of fields, two small controls, and `Shell` - the bottom-right row, room along the bottom edge, the way back to the notes. Above `notes/` because it is a kit for a note's components.
 
-[`card`](../src/ui/card.gd), [`card_row`](../src/ui/card_row.gd), [`note_cards`](../src/ui/note_cards.gd), [`schema_form`](../src/ui/schema_form.gd), [`script_highlighter`](../src/ui/script_highlighter.gd), [`script_writer`](../src/ui/script_writer.gd), [`shell`](../src/ui/shell.gd), [`side_panel`](../src/ui/side_panel.gd), [`tag_field`](../src/ui/tag_field.gd), [`volume_knob`](../src/ui/volume_knob.gd)
+[`agent_pick`](../src/ui/agent_pick.gd), [`card`](../src/ui/card.gd), [`card_row`](../src/ui/card_row.gd), [`note_cards`](../src/ui/note_cards.gd), [`schema_form`](../src/ui/schema_form.gd), [`script_highlighter`](../src/ui/script_highlighter.gd), [`script_writer`](../src/ui/script_writer.gd), [`shell`](../src/ui/shell.gd), [`side_panel`](../src/ui/side_panel.gd), [`tag_field`](../src/ui/tag_field.gd), [`volume_knob`](../src/ui/volume_knob.gd)
 
 ### `voice/` - Synthesis (voice)
 
@@ -146,13 +148,25 @@ The panels a voice runs in: the reading (script, cast, voice, stream, export), t
 
 A place, seen and heard, built from a written description: the table itself (Tables), the things on it (Props), its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds), its sound (Soundscape), where cards go on it, what can be done with them and how a reading says so, the faces printed on them - and the medium that puts it all on the stage (`table.gd`, a row of `Medium.REGISTRY`).
 
-[`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`lights`](../src/table/lights.gd), [`props`](../src/table/props.gd), [`soundscape`](../src/table/soundscape.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_light`](../src/table/table_light.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`tables`](../src/table/tables.gd), [`winds`](../src/table/winds.gd)
+[`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`lights`](../src/table/lights.gd), [`props`](../src/table/props.gd), [`soundscape`](../src/table/soundscape.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_light`](../src/table/table_light.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`winds`](../src/table/winds.gd)
 
 ### `cards/` - Cards
 
 A show of cards nobody writes: a show's brief, its episodes - each planned, dealt, painted and written by agents one card at a time, kept on disk step by step - and the set dresser that builds the table they are read at. The rules are every show's; the brief says what the cards are - tarot, baseball or trading cards, a card game's deck, flashcards, recipe cards - and lists them, or leaves each episode's deck to its producer. Design: next/cards.md.
 
 [`card_deck`](../src/cards/card_deck.gd), [`card_episode`](../src/cards/card_episode.gd), [`card_producer`](../src/cards/card_producer.gd), [`card_prompts`](../src/cards/card_prompts.gd), [`dealer_tools`](../src/cards/dealer_tools.gd), [`episode_card`](../src/cards/episode_card.gd), [`episode_walk`](../src/cards/episode_walk.gd), [`set_dresser_tools`](../src/cards/set_dresser_tools.gd), [`table_preview`](../src/cards/table_preview.gd)
+
+### `desk/` - The desk
+
+A study where a ghost does math, seen and heard: the ink (formulas TeX lays out, written stroke by stroke in a seeded hand from the Hershey stroke fonts), the pad, the pen that moves by itself, the instruments it reaches for - a calculator, a tablet, a screen with Lean on it - and the medium that puts them on the stage. Its room is built from the table's parts. Design: next/proof.md.
+
+[`desk`](../src/desk/desk.gd), [`desk_script`](../src/desk/desk_script.gd), [`ink`](../src/desk/ink.gd)
+
+### `proof/` - Proof
+
+A ghost doing math, made by agents: a note's problem fixed, worked at the desk with Lean - a lab notebook, checks, a proof handed in only when verified - and taught, each episode kept on disk step by step; the solver's tools, the rules each agent is told, and the card that runs it all and hands the reading its lesson. Design: next/proof.md.
+
+[`proof_card`](../src/proof/proof_card.gd), [`proof_episode`](../src/proof/proof_episode.gd), [`proof_producer`](../src/proof/proof_producer.gd), [`proof_prompts`](../src/proof/proof_prompts.gd), [`proof_tools`](../src/proof/proof_tools.gd), [`proof_walk`](../src/proof/proof_walk.gd)
 
 ### `masking/` - Masking
 

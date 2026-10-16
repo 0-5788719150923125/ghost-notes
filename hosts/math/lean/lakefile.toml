@@ -1,0 +1,18 @@
+# Ghost Notes' Lean workbench: what every proof is checked against. Written by the Provisioner
+# into its own folder (user://lean/), with {{tag}} filled by the Mathlib release it follows - the
+# newest one the Lean REPL also has a tag for, so the two are always built for the same Lean.
+name = "ghost"
+defaultTargets = ["Ghost"]
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "{{tag}}"
+
+[[require]]
+name = "REPL"
+git = "https://github.com/leanprover-community/repl"
+rev = "{{tag}}"
+
+[[lean_lib]]
+name = "Ghost"

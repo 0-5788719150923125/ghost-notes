@@ -10,12 +10,17 @@ godot --headless --path . -- --deps             # what is installed, and where
 godot --headless --path . -- --provision        # install uv, FFmpeg and Python now
 godot --headless --path . -- --provision all    # ...and every feature's environment
 godot --headless --path . -- --provision update # bring everything up to date
+godot --headless --path . -- --provision mathlib # Lean and Mathlib, for the Proof component (~8 GB)
 ```
 
 ## What Ghost Notes installs itself
 
 - **FFmpeg**, ~70 MB (~115 MB on Windows) - Masking (clip prep, waveforms, thumbnails), video export and transcode, film panels, and decoding the audio formats the engine has no loader for (FLAC, and MP3 in some builds). Ghost Notes downloads the newest release itself: Martin Riedl's static builds on Linux and macOS, Gyan Doshi's on Windows, BtbN's on Windows on ARM.
 - **uv**, ~20 MB - Builds Ghost Notes' Python environments: installs Python itself, then each feature's packages, from its own cache. The newest release, from PyPI.
+- **TeX (TinyTeX)**, ~55 MB (~250 MB on Windows), ~190 MB installed - TeX itself, for the Proof component: it lays out every formula the desk's pen writes (hosts/math/typeset.py) and typesets each episode's paper. TinyTeX's small build of TeX Live, its newest monthly release. Downloaded the first time a Proof needs it.
+  - Not on Windows on ARM: TinyTeX publishes no build for Windows on ARM.
+- **Lean**, ~930 MB, ~3.4 GB installed - The Lean theorem prover, for the Proof component's formal check. Not Lean's newest release but the one the newest Mathlib release is built for - and that the Lean REPL has a release for too - so the three always agree. Downloaded the first time a Proof needs it.
+  - Not on Windows on ARM: Lean publishes no build for Windows on ARM.
 - **Python**, ~35 MB - The interpreter every environment below runs on: CPython's newest patch of the version Ghost Notes targets, installed by uv into its own directory - never onto PATH or into the system.
 - **Voice environment**, ~320 MB - onnxruntime, numpy and the eSpeak phonemizer for the Generative voice. Built the first time you open Generative.
   - Not on Intel Macs: onnxruntime publishes no build for Intel Macs.
@@ -25,6 +30,9 @@ godot --headless --path . -- --provision update # bring everything up to date
 - **Body/face-tracking environment**, ~520 MB - MediaPipe and its two models, for the Masking clown effect's 478-point face landmarks and the umbra effect's person silhouette and 33 body landmarks. ONE environment for both. Built the first time a clown or umbra layer plays.
   - Not on Intel Macs: mediapipe publishes no build for Intel Macs.
   - Not on Windows on ARM: opencv-contrib-python has no Windows-on-ARM build.
+- **Math environment**, ~15 MB - fontTools, for hosts/math/typeset.py: it reads TeX's fonts for each glyph's name (and its outline, for a glyph no hand draws), so the desk's pen writes what TeX laid out. Built the first time a Proof needs it.
+- **Mathlib**, ~7.5 GB - Mathlib, Lean's library of mathematics, downloaded already compiled, and the Lean REPL built against it: the workbench every proof the Proof component shows is checked in. Lake fetches them with git; Mathlib's cache tool downloads with curl. Built the first time a Proof needs it, and moved to each new Mathlib release.
+  - Not on Windows on ARM: Lean publishes no build for Windows on ARM.
 - **Voice models (Piper)**, ~60 MB each - The neural voices themselves, fetched per voice from Hugging Face the first time one is selected. Data, not code - the models are MIT-tagged and no GPL Piper code is installed (see hosts/voice/requirements.txt).
 
 ## What stays the machine's
@@ -37,6 +45,17 @@ A few programs are part of the system or keep their own logins, so they stay you
   - Linux: `part of util-linux - installed on every mainstream distribution`
 - **xvfb-run**, Linux - Giving a video export a display of its own, so the recording cannot be frozen by the desktop: Godot stops rendering whenever the compositor stops drawing its window, and the movie writer then re-captures the last frame while the audio keeps advancing. Also what the pixel-readback gates in tests/ use (tests/run_quiet.sh), so no window ever appears for those. An X server, so it stays the system's to install.
   - Linux: `sudo pacman -S xorg-server-xvfb   ·   sudo apt install xvfb   ·   sudo dnf install xorg-x11-server-Xvfb`
+- **Git** - Lake, Lean's build tool, fetches Mathlib and the Lean REPL with it when the Proof component's workbench is built. Every developer machine has it; ghost does not fetch its own.
+  - Linux: `sudo pacman -S git   ·   sudo apt install git   ·   sudo dnf install git`
+  - macOS: `xcode-select --install   (or: brew install git)`
+  - Windows: `winget install Git.Git`
+- **curl** - Mathlib's cache tool downloads the compiled library with it when the Proof component's workbench is built. Part of macOS and of Windows 10 and later.
+  - Linux: `sudo pacman -S curl   ·   sudo apt install curl   ·   sudo dnf install curl`
+  - macOS: `part of macOS`
+  - Windows: `part of Windows 10 and later (C:\Windows\System32\curl.exe)`
+- **tar**, Linux, macOS - Unpacks ghost's own TeX, which TinyTeX publishes as a .tar.xz on Linux and macOS (GNU tar hands the .xz to the xz program; macOS's tar reads it itself). Windows gets a zip, which ghost opens itself.
+  - Linux: `sudo pacman -S tar xz   ·   sudo apt install tar xz-utils   ·   sudo dnf install tar xz`
+  - macOS: `part of macOS`
 - **Claude Code CLI** - A writer for the Cards mode (its plan, booklet and reading), and the Assistant (the 💬 panel's picker): with it chosen, a note left in the ` feedback console is dispatched to Claude Code as a one-shot fix against this checkout. It keeps its own login, so it stays yours to install, and it runs only when asked.
   - Linux: `curl -fsSL https://claude.ai/install.sh | bash`
   - macOS: `curl -fsSL https://claude.ai/install.sh | bash`

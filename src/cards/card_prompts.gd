@@ -51,8 +51,9 @@ const PAST_LINES := 30
 ## How many earlier decks' pictures of the same card the designer is shown.
 const SAME_CARD := 6
 ## What stands for the episode's title in the line a producer is shown it goes up in
-## ([method producer]'s `uploads_as`): the reply's own key.
-const TITLE_MARK := "[episode_title]"
+## ([method producer]'s `uploads_as`): the reply's own key - the one mark every show's namer is
+## shown ([constant YouTube.EPISODE_MARK]).
+const TITLE_MARK := preload("res://src/export/youtube.gd").EPISODE_MARK
 ## How many earlier openings, card reactions and closes a reader passage is shown, and how many
 ## words of each.
 const HEARD := {"intro": [6, 40], "card": [10, 14], "jumper": [6, 24], "close": [6, 60]}

@@ -229,6 +229,14 @@ func _rpc(job: Dictionary, msg: Dictionary) -> Dictionary:
 ## A tool's outcome as MCP content - its words, then its pictures (as JPEGs) - logged as it goes.
 func _content(job: Dictionary, name: String, args: Dictionary, res: Dictionary) -> Dictionary:
 	var text := String(res.get("text", ""))
+	# AN ERROR IS ITS WORDS OR A FLAG: a toolset says why a call failed (`{"error": "no tool 'x'"}`),
+	# or only that it did (`true`) - and "" is none. `bool()` of a String is no constructor in
+	# GDScript: it threw here, and the agent was never answered (measured 2026-10-15, the Proof
+	# solver's notebook calls). The words reach the agent when there is no text to say instead.
+	var said: Variant = res.get("error", false)
+	var error := (said is bool and bool(said)) or (said is String and not String(said).is_empty())
+	if error and said is String and text.is_empty():
+		text = String(said)
 	var content: Array = [{"type": "text", "text": text}]
 	var saved := PackedStringArray()
 	for im in res.get("images", []):
@@ -247,7 +255,6 @@ func _content(job: Dictionary, name: String, args: Dictionary, res: Dictionary) 
 			f.close()
 			saved.append(file)
 		content.append({"type": "image", "data": Marshalls.raw_to_base64(jpg), "mimeType": "image/jpeg"})
-	var error := bool(res.get("error", false))
 	AgentTools.log_call(String(job["dir"]), {"at": int(Time.get_unix_time_from_system()), "tool": name,
 		"args": args, "text": text, "images": Array(saved), "error": error})
 	return {"content": content, "isError": error}

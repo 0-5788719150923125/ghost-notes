@@ -95,7 +95,7 @@ prompt:
           formulas, angles, running bits, casts, painting styles, palettes, card stocks, cloths or
           rooms.
   - ""
-  - include: episode_title
+  - include: agents/episode.title
   - ""
   - >-
       INSPIRATION. These numbers were drawn for this episode. Let them push the episode somewhere
@@ -146,28 +146,6 @@ reply: |-
       "candles": 2
     }
   }
-
-# THE EPISODE'S TITLE. Asked for "the video's title, as it appears on YouTube", a producer wrote a whole
-# one, the genre's keyword heading and all - "Yes Or No Tarot: Ask As Many Times As It Takes", for a show
-# that uploads as "%title%: %episode%": two colons and "Tarot" twice (the user, 2026-10-11). It is shown
-# the line its title goes up in ({{uploads_as}}: the YouTube card's template with the show's name in it,
-# YouTube.title_shape - nothing when the line is the episode's title alone) and writes for the whole of it.
-# THE CAPITALS were the agents' own as well - no code touches a title: every one came back with a capital
-# on every word, the genre's habit, and each is read back to the next producer among the earlier
-# episodes. It is asked for title case in so many words, and given no sample title to copy.
-episode_title:
-  - >-
-      THE TITLE, `episode_title`, is set in title case, the way an editor sets a headline: its main
-      words capitalized, and the small words inside it - articles, short prepositions, short
-      conjunctions - left in lowercase. A capital on every word is the mistake to avoid.
-  - when: uploads_as
-    say: >-
-      The video goes up as "{{uploads_as}}": `episode_title` is only the part marked there, and the
-      rest is printed round it every time. Write it for that whole line, as a viewer meets it in a
-      list of videos. The line already says the show's name, so the episode's part says neither the
-      name nor the words in it again. The line already has its own break, so a second one inside
-      the episode's part - a colon, a dash, a bar - makes it read as three headings: keep the
-      episode's part one phrase.
 
 # THE STAGING: where the cards come from and where their text is (TableActions.SOURCES, CardTable.TEXTS
 # - the registries' own words, as `sources` and `texts`), and how each position's card comes and lies.

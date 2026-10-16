@@ -22,9 +22,9 @@ class_name NoteCards
 ## workspace, so a component that can be attached can always be taken off again.
 
 ## The components whose settings are a card any workspace can show, in the order they stand:
-## the rows of [constant Components.REGISTRY] that name a `script`. Cards' episode first: what
-## produces the text stands above what shows it.
-const KEYS := ["cards", "picture", "storyboard", "look", "bookends", "youtube"]
+## the rows of [constant Components.REGISTRY] that name a `script`. Cards' and Proof's episodes
+## first: what produces the text stands above what shows it.
+const KEYS := ["cards", "proof", "picture", "storyboard", "look", "bookends", "youtube"]
 
 
 ## A card for each of [param attached] that is one of [constant KEYS] (and of [param ctx]'s

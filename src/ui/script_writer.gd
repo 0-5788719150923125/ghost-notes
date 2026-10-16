@@ -33,9 +33,9 @@ class_name ScriptWriter
 ## card, never in the editor. Each is read by something: the label, its tooltip, the panels
 ## that use it.
 const FIELDS := {
-	"title": {"label": "Title", "modes": ["generative", "cards", "note"],
-		"tip": "The chapter's title. Read aloud first, by the voice that opens the chapter, and set at the head of the chapter in the Novel and Notebook. For a card show, the channel's name."},
-	"byline": {"label": "Byline", "modes": ["cards"],
+	"title": {"label": "Title", "modes": ["generative", "cards", "proof", "note"],
+		"tip": "The chapter's title. Read aloud first, by the voice that opens the chapter, and set at the head of the chapter in the Novel and Notebook. For a card show or a Proof note, the channel's name: on the title screen while the intro holds, and the %title% of the YouTube title (each episode's own name is its %episode%)."},
+	"byline": {"label": "Byline", "modes": ["cards", "proof"],
 		"tip": "A line under the channel's name on the title screen while the intro holds - \"with Pen & Ink\". Empty, the name stands alone."},
 	"author": {"label": "Author", "modes": ["generative"],
 		"tip": "Who wrote it. Printed on the cover in the Novel and Notebook."},
@@ -51,6 +51,12 @@ const WORDING := {
 		"edit_tip": "Open the show's brief in an editor, with every mark a brief understands listed beside it - the deck, other voices, notes to yourself - ready to insert at the cursor. The brief is what the show is, who reads it and by what rules, and every agent behind every episode is handed it.",
 		"placeholder": "What is this show? Who reads it, how, and by what rules?",
 		"speakers": "Voices in this brief"},
+	# A PROOF NOTE'S BODY IS ITS PROBLEM: what the agents work, written by hand or by "Invent a
+	# problem" - never read aloud (the voice reads the episode's lesson)
+	"proof": {"window": "Problem",
+		"edit_tip": "Open the problem in an editor. It is what every agent behind an episode works from: the problem in words, its precise statement, and anything you want stressed. Never read aloud - the voice reads the episode's lesson.",
+		"placeholder": "What problem should the episode work? Write it, or press Invent a problem.",
+		"speakers": "Voices"},
 }
 
 ## How long typing must pause before the card's summary is recounted.

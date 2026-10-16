@@ -82,6 +82,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **The storyboard's editor, continued**
       Built 2026-10-12: a note keeps its own storyboard and edits it in a dock under the show - a strip of entries, a stage entry's lanes, rows built from the fields' tables, undo, a YAML source view, and the seeded show written down as a first draft. Open: the author's own pass over it; a `layers` scene so a scene's look is data too; a storyboard that conducts itself with no sound; keyframed property lanes; a transition as a timeline item. See [storyboard.md](storyboard.md).
 
+- [ ] **Proof: a ghost doing math at a desk**
+      A lesson an agent team makes: a problem framed, researched, solved with real tools (a pad written in TeX laid out and a Hershey hand, a calculator, a tablet, Lean), checked in Lean, and taught by a narrating voice, with a paper as the research artifact. Spike 2026-10-15: TeX's layout written by a hand, every test glyph covered. Open: the Lean workbench (waiting on the user), a solver by hand, then the episode, the pad and pen, the instruments, the publish, and live. See [proof.md](proof.md).
+
 - [ ] **The scene-spec pipeline**
       The north star, "cattle, not pets": a declarative spec that samples a configuration of geometry families, modifiers, materials, motion and lighting and composes them, so lifelike scenes come from integrating many sampled domains rather than from code written per scene. `rocks` and `bloom` sample small specs already, and the storyboard `stage` spec is the same idea for choreography; next is pushing the spec down into the bodies' own geometry and material numbers, the `eye`'s hand-tuned constants first. Every tunable constant is a candidate for sampling.
 

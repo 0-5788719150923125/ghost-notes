@@ -212,8 +212,11 @@ func _update_all() -> void:
 	_mark_checked()
 	changed.emit("")
 	var keys := PackedStringArray(BOOT)
+	for row in Deps.FETCHED:
+		if not keys.has(String(row["key"])):
+			keys.append(String(row["key"]))      # fetched on demand (TeX, Lean): kept current once had
 	for row in Deps.MANAGED:
-		if _env_key(String(row["key"])):
+		if _env_key(String(row["key"])) or _bench_key(String(row["key"])):
 			keys.append(String(row["key"]))
 	for key in keys:
 		while _jobs.has(key):
@@ -248,8 +251,9 @@ func _updates_path() -> String:
 
 # --- `--provision` -------------------------------------------------------------
 
-## `--provision [all|update]`: install the core (with `all`, every environment too), or update
-## everything installed, printing each step. True when everything asked for is ready.
+## `--provision [all|update|<key>]`: install the core (with `all`, every environment too), update
+## everything installed, or install one row by its key (`--provision mathlib` brings Lean with it),
+## printing each step. True when everything asked for is ready.
 func run_cli(scope: String) -> bool:
 	_enabled = true
 	_cli = true
@@ -262,6 +266,8 @@ func run_cli(scope: String) -> bool:
 		for row in Deps.MANAGED:
 			if _env_key(String(row["key"])):
 				keys.append(String(row["key"]))
+	elif _installable(scope) and not keys.has(scope):
+		keys.append(scope)
 	var ok := true
 	for key in keys:
 		var why := Provision.unsupported(key)
@@ -277,13 +283,20 @@ func run_cli(scope: String) -> bool:
 
 func _installable(key: String) -> bool:
 	var row := Deps.entry(key)
-	return int(row.get("kind", -1)) == Deps.KIND_FETCHED or key == "python" or _env_key(key)
+	return int(row.get("kind", -1)) == Deps.KIND_FETCHED or key == "python" or _env_key(key) \
+		or _bench_key(key)
 
 
 func _env_key(key: String) -> bool:
 	var row := Deps.entry(key)
 	return int(row.get("kind", -1)) == Deps.KIND_MANAGED \
 		and (row.has("requirements") or row.has("packages"))
+
+
+## A Lake workbench ghost builds on its own Lean (Mathlib).
+func _bench_key(key: String) -> bool:
+	var row := Deps.entry(key)
+	return int(row.get("kind", -1)) == Deps.KIND_MANAGED and row.has("workbench")
 
 
 func _start(key: String, action: String) -> void:
@@ -293,6 +306,8 @@ func _start(key: String, action: String) -> void:
 		_python_job(action)
 	elif _env_key(key):
 		_env_job(key, action)
+	elif _bench_key(key):
+		_bench_job(key, action)
 
 
 ## Wait until `key` is ready, installing it if it is not. False if it cannot be had.
@@ -370,6 +385,7 @@ func _tool_job(key: String, action: String) -> void:
 	var version := String(rel["version"])
 	var have := Provision.installed(key)
 	if Provision.tool_ok(key) and String(have.get("version", "")) == version:
+		have.merge(rel.get("extra", {}), true)
 		have["checked_at"] = int(Time.get_unix_time_from_system())
 		Provision.write_installed(key, have)
 		_end(key, true, "%s %s is the newest" % [name, version])
@@ -379,8 +395,11 @@ func _tool_job(key: String, action: String) -> void:
 	var parts := PackedStringArray()
 	for i in files.size():
 		var file: Dictionary = files[i]
-		var part := Provision.partial_dir().path_join("%s-%s-%d-%d.zip"
-			% [key, version.validate_filename(), i, OS.get_process_id()])
+		# The asset's own name ends the file's: tar tells .tar.xz from .zip by it, as much as by
+		# its contents.
+		var part := Provision.partial_dir().path_join("%s-%s-%d-%d-%s"
+			% [key, version.validate_filename(), i, OS.get_process_id(),
+				String(file.get("name", "download.zip")).get_file().validate_filename()])
 		var label := "downloading %s" % version
 		if files.size() > 1:
 			label += " (%d of %d)" % [i + 1, files.size()]
@@ -403,18 +422,67 @@ func _tool_job(key: String, action: String) -> void:
 	var dest := Provision.tools_dir().path_join(key).path_join(dir)
 	var provides := PackedStringArray(row.get("provides", []))
 	var windows := Deps.platform() == "windows"
-	var res: Variant = await _on_worker(func() -> Dictionary:
-		return Provision.unpack(parts, provides, dest, windows))
+	var res: Variant
+	if bool(row.get("tree", false)):
+		res = await _unpack_tree(key, parts[0], provides, dest, windows)
+	else:
+		res = await _on_worker(func() -> Dictionary:
+			return Provision.unpack(parts, provides, dest, windows))
 	_discard(parts)
 	var out: Dictionary = res if res is Dictionary else {}
 	if not bool(out.get("ok", false)):
 		_end(key, false, String(out.get("error", "unpacking failed")))
 		return
 	var now := int(Time.get_unix_time_from_system())
-	Provision.write_installed(key, {"version": version, "dir": dir, "files": out["files"],
-		"source": String(src.get("via", "")), "installed_at": now, "checked_at": now})
+	var manifest := {"version": version, "dir": dir, "files": out["files"],
+		"source": String(src.get("via", "")), "installed_at": now, "checked_at": now}
+	manifest.merge(rel.get("extra", {}))      # Lean's: the Mathlib release it was picked for
+	Provision.write_installed(key, manifest)
 	Provision.prune(key)
 	_end(key, true, "%s %s installed" % [name, version])
+
+
+## A whole distribution unpacked as `dest` ([method Provision.adopt_tree]): a zip by ghost's own
+## Python behind [method Provision.zip_unsafe]'s guard ([ZIPReader] is quadratic on a toolchain's
+## 18,571 files), its `bin/` made executable after; a tarball (TinyTeX's .tar.xz) by the machine's
+## tar, which keeps the links and permissions a TeX tree is made of.
+func _unpack_tree(key: String, archive: String, provides: PackedStringArray, dest: String,
+		windows: bool) -> Dictionary:
+	var staging := dest + ".staging"
+	Provision.remove_tree(staging)
+	DirAccess.make_dir_recursive_absolute(staging)
+	var log_file := Provision.log_path(key, "unpack")
+	if archive.ends_with(".zip"):
+		var why: Variant = await _on_worker(func() -> String: return Provision.zip_unsafe(archive))
+		if not String(why).is_empty():
+			Provision.remove_tree(staging)
+			return {"ok": false, "error": String(why)}
+		if not await _need("python"):
+			Provision.remove_tree(staging)
+			return {"ok": false, "error": "Python is not available to unpack it"}
+		var code: int = await _run_logged(key, Provision.python_exe(), PackedStringArray(["-I", "-c",
+			"import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])",
+			archive, staging]), log_file, Callable())
+		if code != 0:
+			Provision.remove_tree(staging)
+			return {"ok": false, "error": "it could not be unpacked: " + _error_line(log_file)}
+		if not windows:
+			await _on_worker(func() -> bool:
+				Provision.mark_bins_executable(staging)
+				return true)
+	else:
+		var tar := Deps.resolve("tar")
+		if tar.is_empty():
+			Provision.remove_tree(staging)
+			return {"ok": false, "error": "tar is needed to unpack it - " + Deps.hint("tar")}
+		var code: int = await _run_logged(key, tar, PackedStringArray(["-xf", archive, "-C", staging]),
+			log_file, Callable())
+		if code != 0:
+			Provision.remove_tree(staging)
+			return {"ok": false, "error": "tar could not unpack it: " + _error_line(log_file)}
+	var res: Variant = await _on_worker(func() -> Dictionary:
+		return Provision.adopt_tree(staging, provides, dest, windows))
+	return res
 
 
 ## Which release is newest, and what to download for this machine: {version, files: [{url,
@@ -454,7 +522,48 @@ func _release(row: Dictionary, src: Dictionary) -> Dictionary:
 					return {"error": "no checksum is published for %s" % String(at["url"]).get_file()}
 				files.append({"url": String(at["url"]), "sha256": sha, "size": 0})
 			return {"version": version, "files": files}
+		"lean":
+			return await _lean_release(src)
 	return {"error": "there is no build for %s" % Provision.platform_key()}
+
+
+## The Lean toolchain to fetch is not Lean's newest: it is the one the newest Mathlib release (that
+## the REPL also has) was built with, read from that release's `lean-toolchain` file. The pick rides
+## along as `extra.mathlib`, for the workbench.
+func _lean_release(src: Dictionary) -> Dictionary:
+	var gh := ["Accept: application/vnd.github+json"]
+	var rels: Dictionary = await _ask(
+		"https://api.github.com/repos/leanprover-community/mathlib4/releases?per_page=20", true, gh)
+	if rels.has("error"):
+		return rels
+	var tags: Dictionary = await _ask(
+		"https://api.github.com/repos/leanprover-community/repl/tags?per_page=40", true, gh)
+	if tags.has("error"):
+		return tags
+	var repl_tags := []
+	for t in (tags.get("json", []) if tags.get("json") is Array else []):
+		repl_tags.append(String((t as Dictionary).get("name", "")))
+	var pick := Provision.pick_mathlib(rels.get("json", []) if rels.get("json") is Array else [],
+		repl_tags)
+	if pick.has("error"):
+		return pick
+	var tag := String(pick["tag"])
+	var tc: Dictionary = await _ask(
+		"https://raw.githubusercontent.com/leanprover-community/mathlib4/%s/lean-toolchain" % tag)
+	if tc.has("error"):
+		return tc
+	var lean_tag := Provision.parse_toolchain(String(tc.get("text", "")))
+	if lean_tag.is_empty():
+		return {"error": "Mathlib %s names a Lean that is not a release (%s)"
+			% [tag, String(tc.get("text", "")).strip_edges()]}
+	var r: Dictionary = await _ask(
+		"https://api.github.com/repos/leanprover/lean4/releases/tags/" + lean_tag, true, gh)
+	if r.has("error"):
+		return r
+	var got := Provision.pick_github(r.get("json", {}), String(src["asset"]))
+	if not got.has("error"):
+		got["extra"] = {"mathlib": tag}
+	return got
 
 
 # --- Python --------------------------------------------------------------------
@@ -550,6 +659,105 @@ func _env_job(key: String, action: String) -> void:
 		return
 	Provision.write_stamp(row)
 	_end(key, true, "%s %s" % [name, changes if not changes.is_empty() else "is current"])
+
+
+# --- a Lean workbench -----------------------------------------------------------
+#
+# Measured by hand first (2026-10-15, Mathlib v4.35.0): `lake update` 145 s, and Mathlib's own
+# post-update hook downloads and unpacks its compiled library while it runs (9,031 files); the
+# workbench is 7.3 GB, its download cache 0.45 GB more until it is removed. Lake runs git; the cache
+# tool runs curl and honors MATHLIB_CACHE_DIR, so nothing lands in the user's own caches.
+
+## Build the workbench `key` names for the Mathlib release ghost's Lean was picked for: write the
+## template into its own folder (one per release), let Lake fetch Mathlib and the REPL, download
+## Mathlib compiled, build the REPL, then build the template's one file as the check. The folder in
+## use is switched only when the new one is whole; the old one goes at the next prune.
+func _bench_job(key: String, action: String) -> void:
+	var row := Deps.entry(key)
+	var name := String(row.get("name", key))
+	_begin(key, action, "installing" if action == "install" else "checking for a newer release")
+	if not await _need("lean"):
+		_end(key, false, "Lean is not available")
+		return
+	var lean := Provision.installed("lean")
+	var tag := String(lean.get("mathlib", ""))
+	if tag.is_empty():
+		_end(key, false, "ghost's Lean does not say which Mathlib it was picked for")
+		return
+	if Provision.workbench_ready(row):
+		_end(key, true, "%s %s is current" % [name, tag])
+		return
+	var lake := Provision.tool_path("lean", "lake")
+	var tools := PackedStringArray([lake.get_base_dir()])
+	for prog in ["git", "curl"]:
+		var at := Deps.resolve(prog)
+		if at.is_empty():
+			_end(key, false, "%s is needed to build it - %s" % [prog, Deps.hint(prog)])
+			return
+		if not tools.has(at.get_base_dir()):
+			tools.append(at.get_base_dir())
+	var dir := "%s-%s" % [key, tag.validate_filename()]
+	var root := Provision.lean_dir().path_join(dir)
+	DirAccess.make_dir_recursive_absolute(root)
+	var template := String(row.get("workbench", ""))
+	var files := {
+		"lakefile.toml": FileAccess.get_file_as_string(template.path_join("lakefile.toml"))
+			.replace("{{tag}}", tag),
+		"Ghost.lean": FileAccess.get_file_as_string(template.path_join("Ghost.lean")),
+		"lean-toolchain": "leanprover/lean4:v%s\n" % String(lean.get("version", "")),
+	}
+	for f in files:
+		var out := FileAccess.open(root.path_join(f), FileAccess.WRITE)
+		if out == null or String(files[f]).strip_edges().is_empty():
+			_end(key, false, "could not write the workbench's %s" % f)
+			return
+		out.store_string(String(files[f]))
+		out.close()
+	var sep := ";" if Deps.platform() == "windows" else ":"
+	var io := {"cwd": root, "env": {
+		"PATH": sep.join(tools) + sep + OS.get_environment("PATH"),
+		"MATHLIB_CACHE_DIR": Provision.lean_dir().path_join("cache"),
+	}}
+	var steps := [
+		["fetching Mathlib and the REPL", PackedStringArray(["update"])],
+		["downloading Mathlib, compiled", PackedStringArray(["exe", "cache", "get"])],
+		["building the REPL", PackedStringArray(["build", "repl"])],
+		["checking Mathlib", PackedStringArray(["build", "Ghost"])],
+	]
+	for st in steps:
+		var phase := String(st[0])
+		_step(key, phase)
+		var log_file := Provision.log_path(key, String(st[1][0]))
+		var code: int = await _run_logged(key, lake, st[1], log_file, _watch_lake.bind(key, phase), io)
+		if code != 0:
+			_end(key, false, "%s failed: %s" % [phase, _error_line(log_file + ".err")
+				if FileAccess.file_exists(log_file + ".err") else _error_line(log_file)])
+			return
+	Provision.write_workbench(key, {"tag": tag, "dir": dir, "toolchain": String(lean.get("version", "")),
+		"digest": Provision.workbench_digest(row, tag), "built_at": int(Time.get_unix_time_from_system())})
+	if not Provision.workbench_ready(row):
+		_end(key, false, "it built, but the REPL is not where it should be")
+		return
+	if not _holds.has(key):
+		Provision.prune_workbenches(key)
+	_end(key, true, "%s %s ready" % [name, tag])
+
+
+## Lake's progress, as the panel's: Mathlib's cache tool rewrites one line,
+## "Downloaded: 8786 file(s) [attempted 8786/9031 = 97%, ...]", and `lake update` runs it too.
+func _watch_lake(text: String, key: String, _phase: String) -> void:
+	var at := text.rfind("[attempted ")
+	if at >= 0:
+		var m := RegEx.create_from_string("\\[attempted (\\d+)/(\\d+)").search(text, at)
+		if m != null and m.get_string(2).to_int() > 0:
+			var done := m.get_string(1).to_int()
+			var total := m.get_string(2).to_int()
+			_step(key, "downloading Mathlib, compiled", float(done) / total, done, total)
+			return
+	if text.rfind("ecompress") > maxi(at, 0):
+		_step(key, "unpacking Mathlib")
+		return
+	_beat(key)
 
 
 ## A data file an environment needs (a tracker's model), fetched by ghost rather than by Python, so
@@ -707,9 +915,9 @@ func _ask(url: String, follow := true, extra: Array = []) -> Dictionary:
 		return {"error": "%s answered HTTP %d" % [host, code]}
 	var text := (r[3] as PackedByteArray).get_string_from_utf8()
 	var out := {"code": code, "text": text}
-	if text.begins_with("{"):
+	if text.begins_with("{") or text.begins_with("["):      # a list endpoint answers an array
 		var json := JSON.new()
-		if json.parse(text) == OK and json.data is Dictionary:
+		if json.parse(text) == OK and (json.data is Dictionary or json.data is Array):
 			out["json"] = json.data
 	return out
 
@@ -792,12 +1000,21 @@ func _on_worker(fn: Callable) -> Variant:
 
 ## Run a program with its output in `log_file`, letting `watch` read the log as it grows. Returns
 ## the exit code, -1 when it could not start.
+## With `io` ({cwd, env}), the child runs in that folder with those variables set for it alone,
+## its stderr beside the log as `<log>.err` and read with it (Lake prints its progress there).
 func _run_logged(key: String, prog: String, args: PackedStringArray, log_file: String,
-		watch: Callable) -> int:
+		watch: Callable, io := {}) -> int:
 	if prog.is_empty():
 		return -1
 	DirAccess.make_dir_recursive_absolute(log_file.get_base_dir())
-	var pid := Subprocess.start_logged(prog, args, log_file, "provision " + key)
+	var pid := -1
+	var err_file := ""
+	if io.is_empty():
+		pid = Subprocess.start_logged(prog, args, log_file, "provision " + key)
+	else:
+		err_file = log_file + ".err"
+		pid = Subprocess.start_redirected(prog, args, {"cwd": String(io.get("cwd", "")),
+			"env": io.get("env", {}), "out": log_file, "err": err_file}, "provision " + key)
 	if pid <= 0:
 		return -1
 	var seen := -1
@@ -805,13 +1022,20 @@ func _run_logged(key: String, prog: String, args: PackedStringArray, log_file: S
 		await get_tree().create_timer(POLL_S).timeout
 		_beat(key)
 		if watch.is_valid():
-			var text := FileAccess.get_file_as_string(log_file)
+			var text := _log_text(log_file, err_file)
 			if text.length() != seen:
 				seen = text.length()
 				watch.call(text)
 	if watch.is_valid():
-		watch.call(FileAccess.get_file_as_string(log_file))
+		watch.call(_log_text(log_file, err_file))
 	return OS.get_process_exit_code(pid)
+
+
+func _log_text(log_file: String, err_file: String) -> String:
+	var text := FileAccess.get_file_as_string(log_file)
+	if not err_file.is_empty() and FileAccess.file_exists(err_file):
+		text += "\n" + FileAccess.get_file_as_string(err_file)
+	return text
 
 
 ## Clear what a killed session left behind: half-downloaded files, and versions nothing uses.
@@ -824,3 +1048,6 @@ func _prune() -> void:
 				DirAccess.remove_absolute(Provision.partial_dir().path_join(f))
 	for row in Deps.FETCHED:
 		Provision.prune(String(row["key"]))
+	for row in Deps.MANAGED:
+		if _bench_key(String(row["key"])) and not _holds.has(String(row["key"])):
+			Provision.prune_workbenches(String(row["key"]), true)

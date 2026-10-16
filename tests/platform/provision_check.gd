@@ -30,7 +30,9 @@ func _init() -> void:
 	_github()
 	_riedl()
 	_unpack()
+	_trees()
 	_installed()
+	_lean()
 	_resolver()
 	_python()
 	_envs()
@@ -247,6 +249,72 @@ func _unpack() -> void:
 	_check(not bool(res.get("ok", true)), "a file that is not a zip is refused")
 
 
+# --- whole distributions ---------------------------------------------------------
+
+## A TeX or a Lean toolchain is unpacked whole: its programs find their libraries by where they
+## sit. What can go wrong silently: a zip's lost permissions (Lean's 17 programs would not start), a
+## program taken from a nested tool's own `bin` instead of the distribution's, a member that climbs
+## out of the folder, and a tree missing a program left half in place.
+func _trees() -> void:
+	print("-- whole distributions")
+	var dir := _scratch.path_join("trees")
+	DirAccess.make_dir_recursive_absolute(dir)
+	var lean_zip := dir.path_join("lean.zip")
+	_zip(lean_zip, {"lean-4.35.0-linux/bin/lean": "LEAN", "lean-4.35.0-linux/bin/lake": "LAKE",
+		"lean-4.35.0-linux/lib/lean/Init.olean": "OLEAN"})
+	_check(Provision.zip_unsafe(lean_zip).is_empty(), "a toolchain zip may be unpacked")
+	# Unpacked as ghost's Python would leave it: the files, and no permissions.
+	var staging := dir.path_join("lean.staging")
+	for rel in ["lean-4.35.0-linux/bin/lean", "lean-4.35.0-linux/bin/lake",
+			"lean-4.35.0-linux/lib/lean/Init.olean", "lean-4.35.0-linux/share/tool/bin/lean"]:
+		_touch(staging.path_join(rel), "DECOY" if rel.contains("share")
+			else "OLEAN" if rel.ends_with(".olean") else rel.get_file().to_upper())
+	if OS.get_name() != "Windows":
+		FileAccess.set_unix_permissions(staging.path_join("lean-4.35.0-linux/bin/lake"),
+			FileAccess.UNIX_READ_OWNER | FileAccess.UNIX_WRITE_OWNER)
+		Provision.mark_bins_executable(staging)
+		var perms := FileAccess.get_unix_permissions(staging.path_join("lean-4.35.0-linux/bin/lake"))
+		_check(perms & FileAccess.UNIX_EXECUTE_OWNER != 0, "a program in bin/ is executable again")
+		perms = FileAccess.get_unix_permissions(staging.path_join("lean-4.35.0-linux/lib/lean/Init.olean"))
+		_check(perms & FileAccess.UNIX_EXECUTE_OWNER == 0, "and a library is not made one")
+	var dest := dir.path_join("lean-out")
+	var res := Provision.adopt_tree(staging, PackedStringArray(["lean", "lake"]), dest, false)
+	_check(bool(res.get("ok", false)), "the tree is adopted (%s)" % res.get("error", ""))
+	var files: Dictionary = res.get("files", {})
+	_check(String(files.get("lean", "")) == "lean-4.35.0-linux/bin/lean",
+		"the distribution's own lean wins over a nested tool's (%s)" % files.get("lean", ""))
+	_check(FileAccess.get_file_as_string(dest.path_join(String(files.get("lean", "")))) == "LEAN",
+		"and it is the program")
+	_check(FileAccess.get_file_as_string(dest.path_join("lean-4.35.0-linux/lib/lean/Init.olean"))
+		== "OLEAN", "a library keeps its place beside the programs")
+	_check(not DirAccess.dir_exists_absolute(staging), "no staging directory is left")
+
+	# TeX Live keeps its programs one folder below bin/.
+	var tex := dir.path_join("tex.staging")
+	for rel in [".TinyTeX/bin/x86_64-linux/latex", ".TinyTeX/bin/x86_64-linux/kpsewhich",
+			".TinyTeX/texmf-dist/tex/latex/base/article.cls"]:
+		_touch(tex.path_join(rel), "X")
+	res = Provision.adopt_tree(tex, PackedStringArray(["latex", "kpsewhich"]), dir.path_join("tex-out"),
+		false)
+	_check(String((res.get("files", {}) as Dictionary).get("latex", ""))
+		== ".TinyTeX/bin/x86_64-linux/latex", "a TeX's latex is found under bin/<platform>/")
+
+	# The controls: a program that is not there, and a member that climbs out.
+	var short := dir.path_join("short.staging")
+	_touch(short.path_join("x/bin/lean"), "LEAN")
+	res = Provision.adopt_tree(short, PackedStringArray(["lean", "lake"]), dir.path_join("short-out"), false)
+	_check(not bool(res.get("ok", true)), "a tree missing a program is refused")
+	_check(not DirAccess.dir_exists_absolute(short) and not DirAccess.dir_exists_absolute(
+		dir.path_join("short-out")), "and leaves nothing behind")
+	var evil := dir.path_join("evil.zip")
+	_zip(evil, {"pkg/bin/lean": "LEAN", "pkg/../../escaped.txt": "OUT"})
+	_check(not Provision.zip_unsafe(evil).is_empty(), "a member that climbs out of the folder refuses the zip")
+	var rooted := dir.path_join("rooted.zip")
+	_zip(rooted, {"/etc/ghost.txt": "OUT"})
+	_check(not Provision.zip_unsafe(rooted).is_empty(), "and so does an absolute one")
+	_check(not Provision.zip_unsafe(dir.path_join("nothing.zip")).is_empty(), "and a file that is not a zip")
+
+
 # --- what is installed -----------------------------------------------------------
 
 func _fake_tool(key: String, version: String, programs: Array) -> void:
@@ -296,6 +364,67 @@ func _installed() -> void:
 		_check(not DirAccess.dir_exists_absolute(tree), "remove_tree removes the tree")
 		_check(FileAccess.file_exists(outside.path_join("keep.txt")),
 			"but not what a link inside it points at")
+
+
+# --- Lean: one tag picks the toolchain, Mathlib and the REPL ------------------------
+
+func _lean() -> void:
+	print("-- Lean")
+	var rels := [
+		{"tag_name": "v4.36.0-rc1", "prerelease": true},
+		{"tag_name": "v4.35.0"},
+		{"tag_name": "v4.34.1"},
+		{"tag_name": "v4.34.0"},
+		{"tag_name": "nightly-testing-2026-10-14"},
+	]
+	var both := ["v4.36.0-rc1", "v4.35.0", "v4.34.1", "v4.34.0"]
+	_check(String(Provision.pick_mathlib(rels, both).get("tag", "")) == "v4.35.0",
+		"the newest release wins, a prerelease passed over")
+	# The control: when the REPL has not caught up with the newest Mathlib, the one before it wins -
+	# picking v4.35.0 here would build a workbench whose REPL does not exist.
+	_check(String(Provision.pick_mathlib(rels, ["v4.34.1", "v4.34.0"]).get("tag", "")) == "v4.34.1",
+		"a release the REPL lacks is passed over")
+	_check(Provision.pick_mathlib(rels, ["v4.20.0"]).has("error"), "no common release is an error")
+	_check(Provision.pick_mathlib([{"tag_name": "v4.9.0"}, {"tag_name": "v4.10.0"}],
+		["v4.9.0", "v4.10.0"]).get("tag", "") == "v4.10.0", "versions compare as numbers, not text")
+	_check(Provision.parse_toolchain("leanprover/lean4:v4.35.0\n") == "v4.35.0",
+		"a toolchain file names its release")
+	_check(Provision.parse_toolchain("leanprover/lean4:nightly-2026-10-14").is_empty(),
+		"a nightly is not a release")
+
+	# A workbench is ready only for ghost's Lean's Mathlib, from the template as it is now.
+	var row := Deps.entry("mathlib")
+	_check(not Provision.workbench_ready(row), "no workbench in a fresh folder")
+	_fake_tool("lean", "4.35.0", ["lean", "lake"])
+	var have := Provision.installed("lean")
+	have["mathlib"] = "v4.35.0"
+	Provision.write_installed("lean", have)
+	var dir := "mathlib-v4.35.0"
+	var repl := Provision.lean_dir().path_join(dir).path_join(".lake/packages/REPL/.lake/build/bin/repl"
+		+ (".exe" if OS.get_name() == "Windows" else ""))
+	_touch(repl, "REPL")
+	Provision.write_workbench("mathlib", {"tag": "v4.35.0", "dir": dir,
+		"digest": Provision.workbench_digest(row, "v4.35.0")})
+	_check(Provision.workbench_ready(row), "built for the Lean ghost has: ready")
+	_check(Provision.repl_path() == repl, "and the REPL is where a check looks for it")
+	Provision.write_workbench("mathlib", {"tag": "v4.35.0", "dir": dir, "digest": "edited"})
+	_check(not Provision.workbench_ready(row), "a template changed since the build is not ready")
+	have["mathlib"] = "v4.36.0"
+	Provision.write_installed("lean", have)
+	Provision.write_workbench("mathlib", {"tag": "v4.35.0", "dir": dir,
+		"digest": Provision.workbench_digest(row, "v4.35.0")})
+	_check(not Provision.workbench_ready(row), "nor one built for another Mathlib than Lean's")
+	var old := Provision.lean_dir().path_join("mathlib-v4.34.1")
+	DirAccess.make_dir_recursive_absolute(old)
+	_touch(Provision.lean_dir().path_join("cache/x.ltar"), "LTAR")
+	Provision.prune_workbenches("mathlib", true)
+	_check(DirAccess.dir_exists_absolute(old),
+		"a launch's prune spares a young workbench (another window's build, maybe)")
+	Provision.prune_workbenches("mathlib")
+	_check(not DirAccess.dir_exists_absolute(old), "prune removes a workbench nothing uses")
+	_check(FileAccess.file_exists(repl), "and keeps the one in use")
+	_check(not DirAccess.dir_exists_absolute(Provision.lean_dir().path_join("cache")),
+		"and the download cache")
 
 
 func _resolver() -> void:
@@ -375,7 +504,7 @@ func _table() -> void:
 		for plat in Provision.PLATFORMS:
 			var why: Dictionary = t.get("unsupported", {})
 			var src := Provision.source(t, plat)
-			_check(why.has(plat) or ["pypi", "github", "riedl"].has(String(src.get("via", ""))),
+			_check(why.has(plat) or ["pypi", "github", "riedl", "lean"].has(String(src.get("via", ""))),
 				"%s has a source for %s" % [key, plat])
 	for m in Deps.MANAGED:
 		var key := String(m["key"])

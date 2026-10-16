@@ -15,7 +15,7 @@ host_for(incoming)   - the node an arriving scene is added to. `full` returns th
 
 A medium is a Node2D mounted INSIDE the stage SubViewport, so the stage governor still owns it: when the governor stops the stage, it stops the medium and every panel viewport nested under it, together.
 
-Registry: `Medium.REGISTRY` in [src/media/medium.gd](../src/media/medium.gd) (7 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
+Registry: `Medium.REGISTRY` in [src/media/medium.gd](../src/media/medium.gd) (8 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
 
 ## `auto` - Auto
 
@@ -118,3 +118,19 @@ THE LOOK IS THE EPISODE'S. The cloth, the room, the card back and every face are
 FOIL. The brightest, most colorful parts of each painting - found per picture from its own luminance, never a fixed threshold - are printed as foil: they catch the light as a card tilts, breathe slowly, and now and then a glint sweeps across them, and the scene's bloom lets them bleed. The deck's look says how much foil it was printed with.
 
 Source: [src/table/table.gd](../src/table/table.gd)
+
+## `desk` - Desk
+
+_A ghost doing math at a desk: a legal pad under a lamp, and a pen that writes each formula on it by itself while the teacher talks, in a hand drawn from TeX's own layout. The Proof component's own medium - what it writes comes from the lesson its agents made._
+
+DeskMedium - a ghost doing math at a desk: a legal pad under a lamp, and a pen that writes on it by itself while the teacher talks (next/proof.md, "The desk").
+
+WHAT IT DRAWS FROM: the reading's document (`_subs.document`) - its `source`, the lesson with the pen's marks (`DeskScript`), and its `desk`, what the Proof component hands the reading (`ProofEpisode.document`): every formula as TeX laid it out (`ink`, the typeset answer of hosts/math/typeset.py) and the episode's seed, which is the hand's.
+
+A PURE FUNCTION OF THE VOICE'S TIME. The voice's words arrive with their times (`ReadingFollower`); each pen action is placed in the rest the voice left for it (`ReadingFollower.place`) and then runs at the pen's own pace, under the words that follow (a teacher writes while talking - `DeskScript`). A pad item is written by `Ink` at `now - start`, so any moment can be drawn without the ones before it: a seek lands on the page as it was. The camera alone eases (as the tablet's does), and lands at once on a seek.
+
+THE PAD: a page of a legal pad (8.5 x 11 in), ruled, written top to bottom. A formula sits on a rule (its baseline is snapped to one); prose starts at the margin and math a little in; what would run off the foot starts a new page, and `new page` tears one off on purpose. A struck line gets a stroke through it. Only the page being written is drawn: a torn-off page is gone.
+
+THE PEN has no hand (the user, 2026-10-15: the writer is unseen). While writing, its nib is the ink's own nib (`Ink.at`); between strokes it lifts and travels; after a formula it drifts to rest beside it.
+
+Source: [src/desk/desk.gd](../src/desk/desk.gd)

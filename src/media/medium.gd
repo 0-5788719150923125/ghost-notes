@@ -60,7 +60,7 @@ class_name Medium
 ##           notebook and the tablet print a READING - its words, timed by the voice - so a note
 ##           with only a song has nothing to put on their pages, and its Picture card does not
 ##           offer them.
-##   mode    optional: THE MODE IT BELONGS TO, which shows its readings in it. The card table is
+##   mode    optional: THE MODE IT BELONGS TO, which shows its readings in it (the desk is Proof's). The card table is
 ##           drawn from an episode Cards produced - its deck, its pictures, its spread - so a
 ##           chapter read anywhere else has nothing to put on it. Such a medium is never offered
 ##           by a picker ([method pickable]) and never becomes the remembered setting; its mode
@@ -91,6 +91,9 @@ const REGISTRY := {
 	"table": {"label": "Card table", "script": "res://src/table/table.gd",
 		"uses": [], "frames": ["landscape"], "mode": "cards",
 		"blurb": "A card reading at a table, seen from the reader's chair: the deck shuffles while the reader talks, each card is drawn, held up beside its booklet entry, read and laid into the spread. The Cards mode's own medium - its deck, pictures and spread come from the episode the agents produced."},
+	"desk": {"label": "Desk", "script": "res://src/desk/desk.gd",
+		"uses": [], "frames": ["landscape"], "mode": "proof",
+		"blurb": "A ghost doing math at a desk: a legal pad under a lamp, and a pen that writes each formula on it by itself while the teacher talks, in a hand drawn from TeX's own layout. The Proof component's own medium - what it writes comes from the lesson its agents made."},
 }
 
 

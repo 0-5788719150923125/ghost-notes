@@ -1,0 +1,599 @@
+extends VBoxContainer
+class_name ProofCard
+
+## ProofCard - the Proof component's card: a ghost doing math at a desk (next/proof.md).
+##
+## THE NOTE IS THE PROBLEM. Its words are what the agents work from - written by hand, or proposed by
+## "Invent a problem" (the user, 2026-10-15: "a second button: to generate a random problem to solve
+## ... I can just ask the agents to write one, then test it"), which writes them into the note where
+## they can be edited. An EPISODE is one go at the note, made by agents step by step and kept on disk
+## ([ProofEpisode], [ProofProducer]): the problem fixed, solved at the desk with Lean, taught. What
+## they make is then read by the note's voice at the desk ([DeskMedium]), which this card pins.
+##
+## A CARD ON THE READING, as Cards' is ([EpisodeCard]): built by [NoteCards] from the `proof` row, it
+## HANDS the reading what is read ([ProofWalk]: the episode's lesson, never the note) and how it goes
+## out ([ProofCard.Publish]: the episode's title, and the desk's document).
+##
+## GENERATION IS EXPLICIT: Make episode makes what the episode is missing, New episode starts another,
+## and a step's ⟳ deletes it (and what was made from it) and makes it again. Nothing runs on open.
+
+const YouTube := preload("res://src/export/youtube.gd")
+
+const KEY := "proof"
+const KNOBS := {"episode": 1, "minutes": 6.0, "writer": "claude", "writer_model": "", "writer_effort": ""}
+## The rows of the episode list: a label, the step, who makes it, and what its ⟳ says.
+const ROWS := [
+	["Problem", "problem", "framer", "Fix the problem again from the note (clears everything after it)"],
+	["Solve", "solve", "solver", "Work the problem again at the desk (clears the lesson)"],
+	["Lesson", "lesson", "teacher", "Write the lesson again"],
+	["Ink", "ink", "TeX", "Lay the formulas out again"],
+	["Script", "script", "", ""],
+]
+
+var reading: ReadingPanel
+var _doc: DocSource
+var _text: TextEdit
+var _knobs := KNOBS.duplicate(true)
+var _episode: ProofEpisode = null
+var _producer: ProofProducer = null
+var _syncing := false
+var _row_t := 0.0
+var _script_seen := -1
+var _invent_id := ""
+var _invent_seed := 0
+
+var _pick: OptionButton
+var _picked: Array = []
+var _invent_btn: Button
+var _make_btn: Button
+var _stop_btn: Button
+var _minutes: SpinBox
+var _writer: AgentPick
+var _youtube: YouTubeCard    # the note's YouTube card, once the reading has built it
+var _rows := {}               # step -> {state: Label, redo: Button}
+var _note: Label
+
+
+static func for_note(ctx: Dictionary) -> ProofCard:
+	var card := ProofCard.new()
+	card.serve(ctx.get("workspace") as ReadingPanel)
+	return card
+
+
+## SERVE [param panel]: hand it the episode's walk and publish, and build the card.
+func serve(panel: ReadingPanel) -> void:
+	add_theme_constant_override("separation", 8)
+	reading = panel
+	if reading == null:
+		return
+	_doc = reading.doc_source()
+	_text = reading.source_box()
+	reading.walk = ProofWalk.new(func() -> ProofEpisode: return _episode)
+	reading.publish = Publish.new(self)
+	reading.ready.connect(_open_episode, CONNECT_ONE_SHOT)
+	_build()
+
+
+## THE DESK IS THE MEDIUM, pinned while the card is up - before anything attaches (as the card table
+## is for Cards; see Director.medium_override).
+func _enter_tree() -> void:
+	if reading != null:
+		Director.medium_override = "desk"
+
+
+func _exit_tree() -> void:
+	if _producer != null:
+		_producer.stop()
+	if _invent_id != "":
+		AgentJobs.cancel(_invent_id)
+		AgentJobs.forget(_invent_id)
+	if reading != null and Director.medium_override == "desk":
+		Director.medium_override = ""
+
+
+func _process(delta: float) -> void:
+	if reading == null:
+		return
+	_row_t -= delta
+	if _row_t > 0.0:
+		return
+	_row_t = 0.25
+	if _producer != null:
+		_producer.tick()
+	_poll_invent()
+	_refresh()
+
+
+# --- the block ----------------------------------------------------------------------------------
+
+func capture() -> Dictionary:
+	return _knobs.duplicate(true)
+
+
+func apply(cfg: Dictionary) -> void:
+	var was := int(_knobs["episode"])
+	_knobs = KNOBS.duplicate(true)
+	for k in KNOBS:
+		if not cfg.has(k):
+			continue
+		match k:
+			"episode":
+				_knobs[k] = maxi(1, int(cfg[k]))
+			"minutes":
+				_knobs[k] = clampf(float(cfg[k]), 2.0, 20.0)
+			"writer":
+				_knobs[k] = String(cfg[k]) if TextGen.has(String(cfg[k])) else "claude"
+			_:
+				_knobs[k] = String(cfg[k])
+	_show_knobs()
+	if _episode == null or int(_knobs["episode"]) != was:
+		_open_episode()
+
+
+# --- what it hands the reading ---------------------------------------------------------------------
+
+## HOW AN EPISODE GOES OUT, as a card show's does ([EpisodeCard.Publish]): named after the episode, the
+## channel's name and byline over the desk while the intro holds, and its upload titled
+## `%title%: %episode%` - the note's Title, then the name the framer gave the episode.
+class Publish extends ReadingPublish:
+	var card: ProofCard
+
+	func _init(c: ProofCard) -> void:
+		card = c
+
+	func name() -> String:
+		return card.export_name()
+
+	func book(d: Dictionary, _body: String) -> Dictionary:
+		var ep := card.current()
+		d["desk"] = ep.document() if ep != null else {}
+		d["title"] = card.show_title()
+		d["byline"] = card.show_byline()
+		return d
+
+	func upload_base(take: String) -> Dictionary:
+		return card.upload_base(take)
+
+	func upload_values(_own: Dictionary) -> Dictionary:
+		return card.upload_values()
+
+	func youtube_built(yt: YouTubeCard) -> void:
+		card._youtube = yt
+
+
+func current() -> ProofEpisode:
+	return _episode
+
+
+## The episode's name, as the framer gave it - "" before the problem is fixed.
+func episode_title() -> String:
+	if _episode == null:
+		return ""
+	var p: Variant = _episode.read_json("problem")
+	return str((p as Dictionary).get("episode_title", "")) if p is Dictionary else ""
+
+
+## THE CHANNEL'S NAME: the note's Title (its `title:` line), as a card show's is - on the title screen
+## while the intro holds, and the YouTube title's %title%.
+func show_title() -> String:
+	return _doc.field("title").strip_edges() if _doc != null else ""
+
+
+## A line under the channel's name on the title screen (the note's `byline:`).
+func show_byline() -> String:
+	return _doc.field("byline").strip_edges() if _doc != null else ""
+
+
+## The note's own `tags:` line, as a card show's: every episode goes up with them.
+func _show_tags() -> PackedStringArray:
+	var out := PackedStringArray()
+	for t in (_doc.field("tags") if _doc != null else "").split(",", false):
+		if not String(t).strip_edges().is_empty():
+			out.append(String(t).strip_edges())
+	return out
+
+
+## AN EXPORT IS NAMED AFTER ITS EPISODE: the framer's name for it, or the note and the number while it
+## has none.
+func export_name() -> String:
+	if _episode == null:
+		return ""
+	var t := episode_title()
+	if not t.is_empty():
+		return t
+	var show := show_title()
+	return "%s %d" % [show if not show.is_empty() else "Proof", _episode.number]
+
+
+## THE LINE THE EPISODE'S TITLE GOES UP IN, which the framer is shown before it names one: the YouTube
+## card's template (the default one with no card) with the channel's name in it and the episode's place
+## marked ([method YouTube.title_shape]) - what Cards' producer is shown too.
+func _uploads_as() -> String:
+	return YouTube.title_shape(_youtube.template() if _youtube != null else YouTube.TITLE_TEMPLATE,
+		{"title": show_title(), "seed": str(_episode.number) if _episode != null else ""})
+
+
+## The YouTube title's macros as the card stands: the channel's name and this episode's.
+func upload_values() -> Dictionary:
+	return {"title": show_title(), "episode": episode_title(),
+		"seed": str(_episode.number) if _episode != null else ""}
+
+
+## THE UPLOAD: the episode's name in the title, the framer's description - and, said by the code from
+## what Lean answered, whether the proof was checked and by what (never the agents' to claim) - and the
+## note's tags with the episode's own. {} before the episode has a name.
+func upload_base(_take: String) -> Dictionary:
+	if _episode == null or episode_title().is_empty():
+		return {}
+	var p: Dictionary = _episode.read_json("problem") if _episode.read_json("problem") is Dictionary else {}
+	var s: Variant = _episode.read_json("solve")
+	var solve: Dictionary = s if s is Dictionary else {}
+	var check := ""
+	if bool(solve.get("verified", false)):
+		check = ("The proof in this video was checked by the Lean theorem prover%s: every step, with no "
+			+ "gaps and nothing assumed beyond Lean's standard axioms.") % (
+			" (Lean %s, Mathlib %s)" % [solve["lean"], solve["mathlib"]] if not String(solve.get("lean", "")).is_empty() else "")
+	elif not solve.is_empty():
+		check = "The formal check in Lean did not finish for this episode, and the video says so."
+	var desc := String(p.get("description", "")).strip_edges()
+	var tags := _show_tags()
+	for t in p.get("tags", []):
+		if not tags.has(String(t)):
+			tags.append(String(t))
+	return {"values": upload_values(), "description": (desc + ("\n\n" + check if not check.is_empty() else "")).strip_edges(),
+		"tags": Array(tags), "record": _episode.dir.path_join("youtube.json")}
+
+
+# --- the episode ---------------------------------------------------------------------------------
+
+func _show_key() -> String:
+	return ProofEpisode.show_key_of(reading.note_path if reading != null else "")
+
+
+func _open_episode() -> void:
+	if reading == null:
+		return
+	if _producer != null:
+		_producer.stop()
+	_episode = ProofEpisode.open(_show_key(), int(_knobs["episode"]))
+	_producer = ProofProducer.new(_episode, {})
+	_script_seen = -1
+	_refill()
+	_refresh()
+
+
+func _refill() -> void:
+	_syncing = true
+	_pick.clear()
+	_picked = []
+	var have := ProofEpisode.history(_show_key())
+	var nums: Array = []
+	for h in have:
+		nums.append(int((h as Dictionary)["n"]))
+	if not nums.has(int(_knobs["episode"])):
+		have.append({"n": int(_knobs["episode"]), "title": ""})
+		have.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["n"]) < int(b["n"]))
+	for h in have:
+		var t := String((h as Dictionary)["title"])
+		_pick.add_item("Episode %d%s" % [int(h["n"]), (" - " + t) if not t.is_empty() else ""])
+		_picked.append(int(h["n"]))
+		if int(h["n"]) == int(_knobs["episode"]):
+			_pick.select(_pick.item_count - 1)
+	_syncing = false
+
+
+func _spec() -> Dictionary:
+	# the channel's name, as the agents are told it: the note's Title, else the note's own name
+	var title := show_title()
+	if title.is_empty() and not reading.note_path.is_empty():
+		title = NoteStore.title_of(reading.note_path)
+	var before: Array = []
+	for h in ProofEpisode.history(_show_key()):
+		if int((h as Dictionary)["n"]) != int(_knobs["episode"]) and not String((h as Dictionary)["title"]).is_empty():
+			before.append(String((h as Dictionary)["title"]))
+	return {"title": title if not title.is_empty() else "Ghost Notes", "byline": show_byline(),
+		"uploads_as": _uploads_as(), "before": before.slice(-20), "brief": _problem_text(),
+		"writer": _knobs["writer"], "writer_model": _knobs["writer_model"],
+		"writer_effort": _knobs["writer_effort"], "minutes": float(_knobs["minutes"])}
+
+
+## The note's words: the problem, as the author or the inventor wrote it.
+func _problem_text() -> String:
+	return Manuscript.strip_frontmatter(_text.text if _text != null else "").strip_edges()
+
+
+func _make() -> void:
+	if _episode == null:
+		return
+	if _problem_text().is_empty():
+		_set_status("Write a problem in the note first, or press Invent a problem.")
+		return
+	_producer.spec = _spec()
+	_producer.start()
+	_set_status("Making episode %d: the problem is fixed first, then solved at the desk with Lean, then taught." % _episode.number)
+
+
+func _new_episode() -> void:
+	var top := 0
+	for h in ProofEpisode.history(_show_key()):
+		top = maxi(top, int((h as Dictionary)["n"]))
+	if _episode != null and not _episode.has("problem"):
+		_set_status("This episode has nothing made yet: Make episode fills it in.")
+		return
+	_knobs["episode"] = maxi(top, int(_knobs["episode"])) + 1
+	_touch()
+	_open_episode()
+
+
+func _redo(step: String) -> void:
+	if _episode == null:
+		return
+	_producer.stop()
+	_episode.invalidate(step)
+	reading.mark_stale()
+	_producer.spec = _spec()
+	_producer.start()
+
+
+# --- "Invent a problem" ------------------------------------------------------------------------
+
+func _invent() -> void:
+	if _invent_id != "":
+		return
+	var before: Array = []
+	for h in ProofEpisode.history(_show_key()):
+		var t := String((h as Dictionary)["title"])
+		if not t.is_empty():
+			before.append(t)
+	_invent_seed = int(Time.get_unix_time_from_system()) ^ randi()
+	var p := ProofPrompts.inventor(_invent_seed, before.slice(-12))
+	var dir := ProjectSettings.globalize_path(ProofEpisode.root.path_join(_show_key())
+		.path_join("invented").path_join(str(Time.get_unix_time_from_system()).replace(".", "_")))
+	_invent_id = AgentJobs.submit({"kind": "text", "backend": String(_knobs["writer"]), "tier": "best",
+		"dir": dir, "system": String(p["system"]), "prompt": String(p["prompt"]),
+		"label": "proof invent", "model": String(_knobs["writer_model"]),
+		"effort": String(_knobs["writer_effort"])})
+	if _invent_id.is_empty():
+		_set_status("⚠  This session cannot start agents.")
+		return
+	_set_status("Inventing a problem…")
+
+
+func _poll_invent() -> void:
+	if _invent_id.is_empty():
+		return
+	var st := AgentJobs.state(_invent_id)
+	if st != "done" and st != "failed":
+		return
+	var res := AgentJobs.result(_invent_id)
+	AgentJobs.forget(_invent_id)
+	_invent_id = ""
+	if not bool(res.get("ok", false)):
+		_set_status("⚠  The inventor stopped: %s" % String(res.get("error", "its run failed")))
+		return
+	var text := ProofProducer.clean_lesson(String(res.get("text", "")))
+	if text.is_empty():
+		_set_status("⚠  The inventor wrote nothing.")
+		return
+	# AN EDIT, NOT A REPLACEMENT: the note's own undo takes it back, and the autosave keeps it
+	_text.select_all()
+	_text.insert_text_at_caret(text + "\n")
+	_set_status("A new problem is in the note - edit it if you like, then Make episode.")
+
+
+# --- the card itself -----------------------------------------------------------------------------
+
+func _build() -> void:
+	var erow := HBoxContainer.new()
+	erow.add_theme_constant_override("separation", 6)
+	add_child(erow)
+	_pick = OptionButton.new()
+	_pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_pick.fit_to_longest_item = false
+	_pick.clip_text = true
+	_pick.focus_mode = Control.FOCUS_NONE
+	_pick.tooltip_text = "Every episode this note has made. Picking one loads it exactly as it was made."
+	_pick.item_selected.connect(func(i: int) -> void:
+		if _syncing or i < 0 or i >= _picked.size():
+			return
+		_knobs["episode"] = int(_picked[i])
+		_touch()
+		_open_episode())
+	erow.add_child(_pick)
+	var new_btn := Button.new()
+	new_btn.text = "New episode"
+	new_btn.tooltip_text = "Another go at the note: a fresh episode, made when you press Make episode."
+	new_btn.pressed.connect(_new_episode)
+	erow.add_child(new_btn)
+	# THE PANEL IS 380 PX, DECLARED (SidePanel): Folder stands here, beside the episode it opens,
+	# so the row of what to do fits - all four in one row asked for 374 px of a 380 px panel's room
+	var folder := Button.new()
+	folder.text = "Folder"
+	folder.tooltip_text = "Open this episode's folder: every prompt as sent, every reply, every Lean check, the notebook and the proof."
+	folder.pressed.connect(func() -> void:
+		if _episode != null:
+			DirAccess.make_dir_recursive_absolute(_episode.dir)
+			OS.shell_open(_episode.dir))
+	erow.add_child(folder)
+
+	var grow := HBoxContainer.new()
+	grow.add_theme_constant_override("separation", 6)
+	add_child(grow)
+	_invent_btn = Button.new()
+	_invent_btn.text = "Invent a problem"
+	_invent_btn.tooltip_text = ("The writer proposes a classic problem with a proof it can finish and check, "
+		+ "and writes it into the note - replacing what is there (Undo in the note brings it back). "
+		+ "Edit it as you like before making an episode.")
+	_invent_btn.pressed.connect(_invent)
+	_invent_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_invent_btn.clip_text = true
+	grow.add_child(_invent_btn)
+	_make_btn = Button.new()
+	_make_btn.text = "Make episode"
+	_make_btn.tooltip_text = ("Make whatever this episode is missing, in order: the problem fixed from the note, "
+		+ "the work at the desk checked in Lean, the lesson, and its formulas laid out by TeX. Spends the "
+		+ "writer's quota. Lean, Mathlib and TeX are fetched the first time (about 11 GB).")
+	_make_btn.pressed.connect(_make)
+	_make_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_make_btn.clip_text = true
+	grow.add_child(_make_btn)
+	_stop_btn = Button.new()
+	_stop_btn.text = "Stop"
+	_stop_btn.tooltip_text = "Stop making this episode. Whatever is finished is kept."
+	_stop_btn.pressed.connect(func() -> void:
+		if _producer != null:
+			_producer.stop())
+	grow.add_child(_stop_btn)
+
+	var krow := HBoxContainer.new()
+	krow.add_theme_constant_override("separation", 6)
+	add_child(krow)
+	var ml := Label.new()
+	ml.text = "Minutes"
+	ml.add_theme_font_size_override("font_size", 12)
+	krow.add_child(ml)
+	_minutes = SpinBox.new()
+	_minutes.min_value = 2
+	_minutes.max_value = 20
+	_minutes.step = 1
+	_minutes.tooltip_text = "About how long the lesson runs. The teacher writes about 140 words a minute."
+	_minutes.value_changed.connect(func(v: float) -> void:
+		if _syncing:
+			return
+		_knobs["minutes"] = v
+		_touch())
+	krow.add_child(_minutes)
+	# WHO WRITES: the agent, its model and how hard it reasons - one row, built the way every card
+	# that runs agents builds it ([AgentPick], Cards' own)
+	_writer = AgentPick.writer(("Who frames the problem, solves it at the desk and teaches it, and who invents "
+		+ "a problem. The solver checks its work with tools, so the writer must be one that takes them "
+		+ "(Claude, Codex or Grok). Takes effect at the next Make episode."),
+		"The model that writes. Default is the CLI's own choice per job; a model chosen here writes all of it.",
+		("How hard the writer thinks before it writes - the CLI's own reasoning effort. Default is what "
+		+ "each CLI does unasked. A level chosen here is used for every job. Higher is slower and spends "
+		+ "more quota."))
+	_writer.changed.connect(func() -> void:
+		if _syncing:
+			return
+		var c := _writer.choice()
+		_knobs["writer"] = String(c["agent"])
+		_knobs["writer_model"] = String(c["model"])
+		_knobs["writer_effort"] = String(c["effort"])
+		_touch())
+	add_child(_writer)
+
+	for row in ROWS:
+		var r := HBoxContainer.new()
+		r.add_theme_constant_override("separation", 6)
+		add_child(r)
+		var name_l := Label.new()
+		name_l.text = String(row[0])
+		name_l.custom_minimum_size.x = 64.0
+		name_l.add_theme_font_size_override("font_size", 12)
+		r.add_child(name_l)
+		var state := Label.new()
+		state.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		state.clip_text = true
+		state.add_theme_font_size_override("font_size", 11)
+		state.mouse_filter = Control.MOUSE_FILTER_STOP
+		r.add_child(state)
+		var redo := Button.new()
+		redo.text = "⟳"
+		redo.flat = true
+		redo.tooltip_text = String(row[3])
+		redo.visible = not String(row[3]).is_empty()
+		var step := String(row[1])
+		redo.pressed.connect(func() -> void: _redo(step))
+		r.add_child(redo)
+		_rows[step] = {"state": state, "redo": redo, "maker": String(row[2])}
+
+	_note = Label.new()
+	_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_note.add_theme_font_size_override("font_size", 11)
+	_note.modulate = Color(1, 1, 1, 0.7)
+	add_child(_note)
+	_show_knobs()
+
+
+func _show_knobs() -> void:
+	if _minutes == null:
+		return
+	_syncing = true
+	_minutes.value = float(_knobs["minutes"])
+	_writer.set_choice(String(_knobs["writer"]), String(_knobs["writer_model"]), String(_knobs["writer_effort"]))
+	_syncing = false
+
+
+func _refresh() -> void:
+	if _episode == null or _producer == null:
+		return
+	var busy := _producer.running or _producer.busy()
+	_make_btn.disabled = busy
+	_stop_btn.disabled = not busy
+	_invent_btn.disabled = _invent_id != ""
+	for step in _rows:
+		var r: Dictionary = _rows[step]
+		var st := _producer.state_of(String(step))
+		var said := ""
+		match st:
+			"ready":
+				said = "✓ " + _ready_note(String(step))
+			"running":
+				said = "… " + _producer.activity_of(String(step))
+			"queued":
+				said = "… waiting its turn"
+			"failed":
+				said = "✗ " + _producer.error_of(String(step))
+			_:
+				said = "–"
+		(r["state"] as Label).text = said
+		(r["state"] as Label).tooltip_text = said
+		(r["redo"] as Button).disabled = busy or st != "ready"
+	var line := ""
+	if not _producer.waiting.is_empty():
+		line = "Waiting: %s - Ghost Notes fetches these itself, once (see ⚙ for progress)." % _producer.waiting
+	elif _episode.has("script"):
+		line = "Ready: press Play to hear the lesson at the desk."
+	_note.text = line
+	# A NEW SCRIPT IS A NEW READING: what is on the stream was made from the old one
+	var mt := FileAccess.get_modified_time(_episode.file_of("script")) if _episode.has("script") else 0
+	if mt != _script_seen:
+		if _script_seen >= 0:
+			reading.mark_stale()
+		_script_seen = mt
+
+
+## What a ready step says of itself.
+func _ready_note(step: String) -> String:
+	match step:
+		"problem":
+			return episode_title()
+		"solve":
+			var s: Variant = _episode.read_json("solve")
+			if s is Dictionary:
+				return ("verified in Lean (%d check%s)" if bool((s as Dictionary).get("verified", false))
+					else "NOT verified (%d check%s)") % [int((s as Dictionary).get("checks", 0)),
+					"" if int((s as Dictionary).get("checks", 0)) == 1 else "s"]
+		"lesson":
+			return "%d formulas on the pad" % DeskScript.items(_episode.read_text("lesson")).size()
+		"ink":
+			var ink: Variant = _episode.read_json("ink")
+			if ink is Dictionary:
+				var ok := 0
+				var all := 0
+				for r in (ink as Dictionary).get("items", []):
+					all += 1
+					if bool((r as Dictionary).get("ok", false)):
+						ok += 1
+				return "%d of %d set" % [ok, all]
+	return "made"
+
+
+func _set_status(text: String) -> void:
+	if reading != null:
+		reading.status(text)
+
+
+func _touch() -> void:
+	if reading != null:
+		reading.touch()

@@ -884,11 +884,17 @@ static func expand_title(template: String, values: Dictionary) -> String:
 	return out.strip_edges()
 
 
-## THE LINE AN EPISODE'S TITLE GOES UP IN, for whoever names the episode before it exists (the Cards
-## producer): [param template] with [param values] filled in and [param mark] standing where the
-## episode's title will - "Truthful Tarot: [episode_title]" - and "[date]" for a date not yet known.
-## "" when the line is the episode's title alone, or leaves it out: there is nothing round it to show.
-static func title_shape(template: String, values: Dictionary, mark: String) -> String:
+## What stands for the episode's title in the line an episode's namer is shown it goes up in
+## ([method title_shape]): the reply's own key, in Cards' producer and Proof's framer alike
+## (rules/agents/episode.yaml).
+const EPISODE_MARK := "[episode_title]"
+
+
+## THE LINE AN EPISODE'S TITLE GOES UP IN, for whoever names the episode before it exists (Cards'
+## producer, Proof's framer): [param template] with [param values] filled in and [param mark] standing
+## where the episode's title will - "Truthful Tarot: [episode_title]" - and "[date]" for a date not yet
+## known. "" when the line is the episode's title alone, or leaves it out: there is nothing round it.
+static func title_shape(template: String, values: Dictionary, mark := EPISODE_MARK) -> String:
 	if not template.contains("%episode%"):
 		return ""
 	var v := {"date": "[date]"}

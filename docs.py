@@ -238,6 +238,24 @@ FOLDERS: List[Tuple[str, str, str]] = [
         "lists them, or leaves each episode's deck to its producer. Design: next/cards.md.",
     ),
     (
+        "desk",
+        "The desk",
+        "A study where a ghost does math, seen and heard: the ink (formulas TeX lays out, "
+        "written stroke by stroke in a seeded hand from the Hershey stroke fonts), the pad, "
+        "the pen that moves by itself, the instruments it reaches for - a calculator, a "
+        "tablet, a screen with Lean on it - and the medium that puts them on the stage. "
+        "Its room is built from the table's parts. Design: next/proof.md.",
+    ),
+    (
+        "proof",
+        "Proof",
+        "A ghost doing math, made by agents: a note's problem fixed, worked at the desk with "
+        "Lean - a lab notebook, checks, a proof handed in only when verified - and taught, "
+        "each episode kept on disk step by step; the solver's tools, the rules each agent is "
+        "told, and the card that runs it all and hands the reading its lesson. Design: "
+        "next/proof.md.",
+    ),
+    (
         "masking",
         "Masking",
         "The video chroma-key masking editor - a second app surface inside "
@@ -276,8 +294,8 @@ UPWARD: List[Tuple[str, str, List[Tuple[str, str]]]] = [
 # the stack alone allows it, and a medium that read the clock off `Spectrum` could only ever be
 # played by a song - never by a preview a timeline scrubs, or a live show its agents conduct.
 HANDED: Dict[str, List[str]] = {
-    "audio/spectrum": ["scene_kit", "scenes", "media", "table"],
-    "show/director": ["table"],
+    "audio/spectrum": ["scene_kit", "scenes", "media", "table", "desk"],
+    "show/director": ["table", "desk"],
 }
 
 # (flag, argument placeholder, description, internal). Internal flags are
@@ -380,10 +398,11 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
     ),
     (
         "--provision",
-        "[all|update]",
+        "[all|update|KEY]",
         "Install ghost's own dependencies now, printing each step, then exit: uv, "
-        "FFmpeg and Python by default, every feature's environment too with `all`, or "
-        "bring everything installed to its newest release with `update`. The same jobs "
+        "FFmpeg and Python by default, every feature's environment too with `all`, one "
+        "row by its key with what it needs (`mathlib` brings Lean), or bring everything "
+        "installed to its newest release with `update`. The same jobs "
         "an ordinary launch runs in the background. Exits non-zero if anything asked "
         "for could not be had. Pairs with `--headless`.",
         False,
@@ -1985,6 +2004,7 @@ def _render_environment_doc(deps: Script) -> str:
         "godot --headless --path . -- --provision        # install uv, FFmpeg and Python now",
         "godot --headless --path . -- --provision all    # ...and every feature's environment",
         "godot --headless --path . -- --provision update # bring everything up to date",
+        "godot --headless --path . -- --provision mathlib # Lean and Mathlib, for the Proof component (~8 GB)",
         "```",
         "",
         "## What Ghost Notes installs itself",

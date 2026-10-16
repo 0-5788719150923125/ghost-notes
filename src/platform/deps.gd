@@ -46,7 +46,11 @@ enum { KIND_TOOL, KIND_MANAGED, KIND_FETCHED }
 
 ## Programs ghost downloads from their upstream releases, checks against the published SHA-256 and
 ## keeps current. `provides` are the program names it answers [method resolve] for; `sources` says
-## where each machine's build comes from (`*` is every machine), in a form [Provision] reads.
+## where each machine's build comes from (`*` is every machine), in a form [Provision] reads. A row
+## with `tree` is a whole distribution, unpacked as it ships (a TeX, a Lean toolchain), its
+## programs found by name in a `bin` folder inside it; any other row is a few programs lifted out.
+## Only `uv`, FFmpeg and Python are fetched at launch ([constant Provisioner.BOOT]); the rest the
+## first time a feature asks.
 const FETCHED := [
 	{
 		"key": "ffmpeg",
@@ -85,13 +89,65 @@ const FETCHED := [
 		"sources": {"*": {"via": "pypi", "package": "uv"}},
 		"site": "https://docs.astral.sh/uv/",
 	},
+	{
+		"key": "tex",
+		"name": "TeX (TinyTeX)",
+		"kind": KIND_FETCHED,
+		"provides": ["latex", "pdflatex", "kpsewhich"],
+		"tree": true,
+		"version_args": ["--version"],
+		"tier": TIER_FEATURE,
+		"size": "~55 MB (~250 MB on Windows), ~190 MB installed",
+		"used_for": "TeX itself, for the Proof component: it lays out every formula the desk's pen "
+			+ "writes (hosts/math/typeset.py) and typesets each episode's paper. TinyTeX's small build "
+			+ "of TeX Live, its newest monthly release. Downloaded the first time a Proof needs it.",
+		"sources": {
+			"linux-x86_64": {"via": "github", "repo": "rstudio/tinytex-releases",
+				"asset": "^TinyTeX-1-linux-x86_64-v([0-9.]+)\\.tar\\.xz$"},
+			"linux-arm64": {"via": "github", "repo": "rstudio/tinytex-releases",
+				"asset": "^TinyTeX-1-linux-arm64-v([0-9.]+)\\.tar\\.xz$"},
+			"macos-arm64": {"via": "github", "repo": "rstudio/tinytex-releases",
+				"asset": "^TinyTeX-1-darwin-v([0-9.]+)\\.tar\\.xz$"},
+			"macos-x86_64": {"via": "github", "repo": "rstudio/tinytex-releases",
+				"asset": "^TinyTeX-1-darwin-v([0-9.]+)\\.tar\\.xz$"},
+			"windows-x86_64": {"via": "github", "repo": "rstudio/tinytex-releases",
+				"asset": "^TinyTeX-v([0-9.]+)\\.zip$"},
+		},
+		"unsupported": {"windows-arm64": "TinyTeX publishes no build for Windows on ARM"},
+		"site": "https://yihui.org/tinytex/",
+	},
+	{
+		"key": "lean",
+		"name": "Lean",
+		"kind": KIND_FETCHED,
+		"provides": ["lean", "lake"],
+		"tree": true,
+		"version_args": ["--version"],
+		"tier": TIER_FEATURE,
+		"size": "~930 MB, ~3.4 GB installed",
+		"used_for": "The Lean theorem prover, for the Proof component's formal check. Not Lean's "
+			+ "newest release but the one the newest Mathlib release is built for - and that the "
+			+ "Lean REPL has a release for too - so the three always agree. Downloaded the first "
+			+ "time a Proof needs it.",
+		"sources": {
+			"linux-x86_64": {"via": "lean", "asset": "^lean-([0-9.]+)-linux\\.zip$"},
+			"linux-arm64": {"via": "lean", "asset": "^lean-([0-9.]+)-linux_aarch64\\.zip$"},
+			"macos-arm64": {"via": "lean", "asset": "^lean-([0-9.]+)-darwin_aarch64\\.zip$"},
+			"macos-x86_64": {"via": "lean", "asset": "^lean-([0-9.]+)-darwin\\.zip$"},
+			"windows-x86_64": {"via": "lean", "asset": "^lean-([0-9.]+)-windows\\.zip$"},
+		},
+		"unsupported": {"windows-arm64": "Lean publishes no build for Windows on ARM"},
+		"site": "https://lean-lang.org/",
+	},
 ]
 
 ## What ghost builds for itself with uv. `python` is installed at launch; each environment the
 ## first time its feature is used, from `requirements` (a file) or `packages` (inline), then checked
 ## by importing `imports`. `post` runs with the environment's Python after the packages land, and
 ## `files` are data downloaded beside it. `unsupported` names the machines its wheels do not exist
-## for, so they are told why instead of watching an install fail.
+## for, so they are told why instead of watching an install fail. A row with `workbench` is a Lake
+## project instead, built on ghost's own Lean from the template folder it names (see
+## [method Provision.workbench_ready]).
 const MANAGED := [
 	{
 		"key": "python",
@@ -168,6 +224,30 @@ const MANAGED := [
 			+ "environment for both. Built the first time a clown or umbra layer plays.",
 	},
 	{
+		"key": "math_venv",
+		"name": "Math environment",
+		"kind": KIND_MANAGED,
+		"path": "user://math_venv",
+		"requirements": "res://hosts/math/requirements.txt",
+		"imports": "fontTools",
+		"size": "~15 MB",
+		"used_for": "fontTools, for hosts/math/typeset.py: it reads TeX's fonts for each glyph's name "
+			+ "(and its outline, for a glyph no hand draws), so the desk's pen writes what TeX laid "
+			+ "out. Built the first time a Proof needs it.",
+	},
+	{
+		"key": "mathlib",
+		"name": "Mathlib",
+		"kind": KIND_MANAGED,
+		"workbench": "res://hosts/math/lean",
+		"size": "~7.5 GB",
+		"unsupported": {"windows-arm64": "Lean publishes no build for Windows on ARM"},
+		"used_for": "Mathlib, Lean's library of mathematics, downloaded already compiled, and the "
+			+ "Lean REPL built against it: the workbench every proof the Proof component shows is "
+			+ "checked in. Lake fetches them with git; Mathlib's cache tool downloads with curl. "
+			+ "Built the first time a Proof needs it, and moved to each new Mathlib release.",
+	},
+	{
 		"key": "voices",
 		"name": "Voice models (Piper)",
 		"kind": KIND_MANAGED,
@@ -230,6 +310,53 @@ const TOOLS := [
 			"linux": "sudo pacman -S xorg-server-xvfb   ·   sudo apt install xvfb   ·   sudo dnf install xorg-x11-server-Xvfb",
 		},
 		"site": "https://www.x.org/",
+	},
+	{
+		"key": "git",
+		"name": "Git",
+		"bins": ["git"],
+		"version_args": ["--version"],
+		"tier": TIER_FEATURE,
+		"used_for": "Lake, Lean's build tool, fetches Mathlib and the Lean REPL with it when the "
+			+ "Proof component's workbench is built. Every developer machine has it; ghost does not "
+			+ "fetch its own.",
+		"install": {
+			"linux": "sudo pacman -S git   ·   sudo apt install git   ·   sudo dnf install git",
+			"macos": "xcode-select --install   (or: brew install git)",
+			"windows": "winget install Git.Git",
+		},
+		"site": "https://git-scm.com/downloads",
+	},
+	{
+		"key": "curl",
+		"name": "curl",
+		"bins": ["curl"],
+		"version_args": ["--version"],
+		"tier": TIER_FEATURE,
+		"used_for": "Mathlib's cache tool downloads the compiled library with it when the Proof "
+			+ "component's workbench is built. Part of macOS and of Windows 10 and later.",
+		"install": {
+			"linux": "sudo pacman -S curl   ·   sudo apt install curl   ·   sudo dnf install curl",
+			"macos": "part of macOS",
+			"windows": "part of Windows 10 and later (C:\\Windows\\System32\\curl.exe)",
+		},
+		"site": "https://curl.se/download.html",
+	},
+	{
+		"key": "tar",
+		"name": "tar",
+		"bins": ["tar"],
+		"version_args": ["--version"],
+		"tier": TIER_FEATURE,
+		"platforms": ["linux", "macos"],
+		"used_for": "Unpacks ghost's own TeX, which TinyTeX publishes as a .tar.xz on Linux and macOS "
+			+ "(GNU tar hands the .xz to the xz program; macOS's tar reads it itself). Windows gets a "
+			+ "zip, which ghost opens itself.",
+		"install": {
+			"linux": "sudo pacman -S tar xz   ·   sudo apt install tar xz-utils   ·   sudo dnf install tar xz",
+			"macos": "part of macOS",
+		},
+		"site": "https://www.gnu.org/software/tar/",
 	},
 	{
 		"key": "claude",
@@ -736,6 +863,15 @@ static func _probe_managed(m: Dictionary) -> Dictionary:
 		r["path"] = exe
 		r["version"] = _version_of(exe, ["--version"]) if not exe.is_empty() else ""
 		r["note"] = "" if r["found"] else "downloads at launch"
+		return r
+	if m.has("workbench"):
+		r["found"] = Provision.workbench_ready(m)
+		r["path"] = Provision.workbench_path(key)
+		r["version"] = String(Provision.workbench(key).get("tag", "")) if r["found"] else ""
+		if not why.is_empty():
+			r["note"] = "not available here"
+		elif not r["found"]:
+			r["note"] = "rebuilt on next use" if not r["path"].is_empty() else "on first use"
 		return r
 	var root := ProjectSettings.globalize_path(String(m.get("path", "")))
 	r["path"] = root

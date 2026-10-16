@@ -86,7 +86,8 @@ func _table_shape() -> void:
 		var key := String(m.get("key", ""))
 		_check(int(m.get("kind", -1)) == Deps.KIND_MANAGED, "%s is marked managed" % key)
 		_check(key == "python" or not String(m.get("check", "")).is_empty()
-			or not String(m.get("path", "")).is_empty(),
+			or not String(m.get("path", "")).is_empty()
+			or not String(m.get("workbench", "")).is_empty(),
 			"%s knows where it lives" % key)
 
 
@@ -161,15 +162,23 @@ func _source_drift() -> void:
 		% ", ".join(posix))
 
 
+## Every script under src/, every folder of the stack (it listed three folders by hand, and after
+## src/ became 22 folders on 2026-10-13 it was scanning two of them).
 func _scripts() -> PackedStringArray:
 	var out := PackedStringArray()
-	for base in ["res://src", "res://src/scenes", "res://src/media"]:
+	var queue := PackedStringArray(["res://src"])
+	var i := 0
+	while i < queue.size():
+		var base := queue[i]
+		i += 1
 		var d := DirAccess.open(base)
 		if d == null:
 			continue
 		for f in d.get_files():
 			if f.ends_with(".gd") and f != "deps.gd":
 				out.append(base + "/" + f)
+		for sub in d.get_directories():
+			queue.append(base + "/" + sub)
 	return out
 
 

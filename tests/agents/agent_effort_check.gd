@@ -123,6 +123,14 @@ func _nova() -> bool:
 	return true
 
 
+## An OptionButton's items, as text.
+func _items(p: OptionButton) -> Array:
+	var out: Array = []
+	for i in p.item_count:
+		out.append(p.get_item_text(i))
+	return out
+
+
 func _panel() -> bool:
 	var panel = load("res://src/reading/reading_panel.gd").new()
 	panel.workspace = "cards"
@@ -135,28 +143,48 @@ func _panel() -> bool:
 	panel._doc._fields = {}
 	ed._knobs["writer"] = "claude"
 	ed._show_knobs()
-	var pick: OptionButton = ed._writer_effort
+	var row: AgentPick = ed._writer
+	var pick: OptionButton = row.efforts
 	_ok(pick != null and pick.item_count == 6 and pick.get_item_text(0).begins_with("Default") and not pick.disabled,
 		"the writer row has an Effort picker with the agent's levels")
 	pick.select(4)
 	pick.item_selected.emit(4)
 	_ok(ed._knobs["writer_effort"] == "xhigh" and ed._spec()["writer_effort"] == "xhigh", "a level chosen is the show's knob and the producer's")
-	ed._knobs["writer_model"] = "sonnet"
-	ed._fill_efforts(pick)
+	row.model = "sonnet"
+	row.fill_efforts()
 	_ok(String(pick.get_item_metadata(pick.selected)) == "xhigh", "another model keeps the chosen level")
-	var agents: OptionButton = ed._writer_pick
+	var agents: OptionButton = row.agents
 	var codex_at: int = TextGen.REGISTRY.keys().find("codex")
 	agents.select(codex_at)
 	agents.item_selected.emit(codex_at)
 	_ok(ed._knobs["writer_effort"] == "" and pick.get_item_text(0) == "Default (medium, low for designs)",
 		"another agent: back to its own default, with its own levels")
-	ed._knobs["painter"] = "bedrock"
-	ed._knobs["painter_effort"] = ""
-	ed._fill_efforts(ed._painter_effort)
-	_ok(ed._painter_effort.disabled, "a painter with no effort setting grays the picker out")
-	ed._knobs["writer_effort"] = "ultra"
-	ed._knobs["writer_model"] = "m-small"
-	ed._fill_efforts(pick)
+	ed._painter.set_choice("bedrock", "", "")
+	_ok(ed._painter.efforts.disabled, "a painter with no effort setting grays the picker out")
+	row.set_choice("codex", "m-small", "ultra")
 	_ok(pick.get_item_text(pick.selected) == "Ultra  (not offered)", "a level this model does not offer stays, marked")
+	# ONE CHOICE OF AGENTS, EVERYWHERE (2026-10-15, the user: "We need to unify agent selection under a
+	# single codebase"): a Proof note's writer row is the same row as a card show's - the same agents,
+	# models and levels for the same choice - and what it chooses is the note's and its producer's.
+	var proof_panel = load("res://src/reading/reading_panel.gd").new()
+	proof_panel.workspace = "proof"
+	proof_panel._build_panel()
+	proof_panel._doc._sync = false
+	var proof = proof_panel._block_cards["proof"]
+	_ok(proof._writer is AgentPick, "the Proof card chooses its writer with the same row as Cards")
+	if proof._writer is AgentPick:
+		var theirs: AgentPick = proof._writer
+		row.set_choice("claude", "sonnet", "")
+		theirs.set_choice("claude", "sonnet", "")
+		var same := true
+		for pair in [[row.agents, theirs.agents], [row.models, theirs.models], [row.efforts, theirs.efforts]]:
+			same = same and _items(pair[0]) == _items(pair[1])
+		_ok(same and _items(theirs.efforts).size() > 1, "and it lists the same agents, models and levels (%s)" % str(_items(theirs.models)))
+		theirs.efforts.select(2)
+		theirs.efforts.item_selected.emit(2)
+		_ok(String(proof._knobs["writer_effort"]) == String(theirs.efforts.get_item_metadata(2))
+			and String(proof._spec()["writer_effort"]) == String(theirs.efforts.get_item_metadata(2)),
+			"a level chosen there is the note's knob and its producer's")
+	proof_panel.free()
 	panel.free()
 	return true

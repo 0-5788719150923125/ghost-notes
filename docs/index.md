@@ -36,9 +36,9 @@ core. The commitments:
 
 ## Feature registries
 
-- [Components](components.md) (14 components, 5 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
+- [Components](components.md) (15 components, 6 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
-- [Media](media.md) (7) - what the show is carried on.
+- [Media](media.md) (8) - what the show is carried on.
 - [Look filters](filters.md) (8) - the post-process over the whole picture.
 - [Layers](layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](forces.md) (8) - the physics primitives particles compose.
@@ -215,6 +215,7 @@ The note as a file: where notes live, a document kept in step with its file, the
 
 What every note's panel is built from, and what it asks of the window it is in: a side panel that cannot outgrow the window and its "+", a component's folding card in its family's color and the chips over the cards, the cards a note's components bring (built from the registry's rows, attached and detached), the Script card every note has (its editor window and highlighter), rows drawn from a table of fields, two small controls, and `Shell` - the bottom-right row, room along the bottom edge, the way back to the notes. Above `notes/` because it is a kit for a note's components.
 
+- [`agent_pick.gd`](../src/ui/agent_pick.gd) **AgentPick** - who does one job, as one row: the AGENT (a CLI from a backend registry, `TextGen` for a writer, `ImageGen` for a painter), the MODEL it runs and how hard it REASONS - each list the chosen agent's own, read from its backend (`TextGen.Backend.models`, `efforts`). Every card that runs agents ...
 - [`card.gd`](../src/ui/card.gd) **Card** - one component's settings on a side panel: a titled box that folds, bordered in its FAMILY's color (next/notes.md, "A card").
 - [`card_row.gd`](../src/ui/card_row.gd) **CardRow** - the chips under a panel's title, one per `Card` in its color (next/notes.md, "The component row"). A click opens or closes that card; Ctrl-click opens it alone and folds the rest, as Blender's panel headers do. A chip shows ● while its card is open and ○ while it is folded, so the row also answers ...
 - [`note_cards.gd`](../src/ui/note_cards.gd) **NoteCards** - a note's component cards, built ONE way on whichever panel shows the note, and the two edits that change what a note is made of: attach and detach.
@@ -330,6 +331,7 @@ A place, seen and heard, built from a written description: the table itself (Tab
 - [`table_positions.gd`](../src/table/table_positions.gd) **TablePositions** - where cards lie on the table, as DATA (next/notes.md step 9, "Positions are data"). A position is `{x, z, yaw, face}` on the cloth - meters, x to the reader's right and z toward the reader; yaw in degrees; face "up" or "down" - written by the producer's plan (a spread position may carry coordinates ...
 - [`table_shuffle.gd`](../src/table/table_shuffle.gd) **TableShuffle** - every move the deck makes between readings, and where each of its cards is during one: the riffle, the overhand, the cut, the wash that spreads the whole deck over the cloth and gathers it again, a jumper thrown clear. A part of `TableMedium`.
 - [`tables.gd`](../src/table/tables.gd) **Tables** - THE TABLE ITSELF, BUILT FROM A DESCRIPTION. Its TOP: an outline (a rectangle, round, an oval, a many-sided polygon, its rim scalloped if it likes), a thickness, the profile its edge is cut to (bevel, bullnose, ogee...), and what it is made of - boards of a wood, a slab of stone, metal, lacquer, ...
+- [`title_card.gd`](../src/table/title_card.gd) **TitleCard** - THE CHANNEL'S NAME over the picture while the intro holds, and its byline under it ("with Pen & Ink"), on a soft shade with a halo round every letter, so it reads over whatever is behind it. The card table's (`TableMedium`) and the desk's (`DeskMedium`) - one title screen for every show a note puts ...
 - [`winds.gd`](../src/table/winds.gd) **Winds** - the air moving over a scene: a breeze from one side that rises and falls a little, and GUSTS now and then, each a swell that rises in a second or so and dies away over a few. One wind for the whole table: it stirs what the sun falls through, swings what hangs and ripples what flutters (`Lights`), ...
 
 ### `cards/` - Cards
@@ -345,6 +347,25 @@ A show of cards nobody writes: a show's brief, its episodes - each planned, deal
 - [`episode_walk.gd`](../src/cards/episode_walk.gd) **EpisodeWalk** - a show of cards reads its EPISODE, never the note: the note is the brief agents work from, and what the reader says is the script they wrote, step by step, for the episode up now. A `TextWalk` Cards hands its reading.
 - [`set_dresser_tools.gd`](../src/cards/set_dresser_tools.gd) **SetDresserTools** - what the set dresser can do while it sets the reader's table: MAKE a thing, LOOK at it, FIX it, and see the whole table as the camera will before handing it in.
 - [`table_preview.gd`](../src/cards/table_preview.gd) **TablePreview** - a table described but not yet set, SEEN: each thing alone in a studio, and the whole table standing on the episode's own cloth, photographed from the camera's own place. It is what the set dresser looks through (`SetDresserTools`): it makes a thing, looks at it, and fixes what it sees.
+
+### `desk/` - The desk
+
+A study where a ghost does math, seen and heard: the ink (formulas TeX lays out, written stroke by stroke in a seeded hand from the Hershey stroke fonts), the pad, the pen that moves by itself, the instruments it reaches for - a calculator, a tablet, a screen with Lean on it - and the medium that puts them on the stage. Its room is built from the table's parts. Design: next/proof.md.
+
+- [`desk.gd`](../src/desk/desk.gd) **DeskMedium** - a ghost doing math at a desk: a legal pad under a lamp, and a pen that writes on it by itself while the teacher talks (next/proof.md, "The desk").
+- [`desk_script.gd`](../src/desk/desk_script.gd) **DeskScript** - a lesson as the voice reads it and the desk performs it.
+- [`ink.gd`](../src/desk/ink.gd) **Ink** - a formula written by hand, as a function of time.
+
+### `proof/` - Proof
+
+A ghost doing math, made by agents: a note's problem fixed, worked at the desk with Lean - a lab notebook, checks, a proof handed in only when verified - and taught, each episode kept on disk step by step; the solver's tools, the rules each agent is told, and the card that runs it all and hands the reading its lesson. Design: next/proof.md.
+
+- [`proof_card.gd`](../src/proof/proof_card.gd) **ProofCard** - the Proof component's card: a ghost doing math at a desk (next/proof.md).
+- [`proof_episode.gd`](../src/proof/proof_episode.gd) **ProofEpisode** - one episode of a Proof note, as it lies on disk (next/proof.md, "How an episode is made"). EVERY STEP IS A FILE under `user://proofs/<show>/<n>/`, written the moment it is made, as a card show's episodes are (`CardEpisode`): re-opening an episode re-uses what it made, a ghost that quit half way ...
+- [`proof_producer.gd`](../src/proof/proof_producer.gd) **ProofProducer** - makes whatever a Proof episode is missing, in the order a lesson happens (next/proof.md, "How an episode is made"), the way `CardProducer` makes a card show's:
+- [`proof_prompts.gd`](../src/proof/proof_prompts.gd) **ProofPrompts** - what each agent behind a Proof episode is told, built from rules/proof/ (`Rules`). Every builder is a pure function of what it is handed and returns `{system, prompt}`, so a gate renders each whole (tests/proof/proof_check.gd) - the words live in the YAML, the code decides what fills them.
+- [`proof_tools.gd`](../src/proof/proof_tools.gd) **ProofTools** - what the mathematician at the desk can do while it works (next/proof.md, "How an episode is made"): add to its lab NOTEBOOK, check a Lean file with LEAN, and SUBMIT the finished proof. Served as tools (`AgentTools`), as the set dresser's are, so any writer that takes tools works with them - and ...
+- [`proof_walk.gd`](../src/proof/proof_walk.gd) **ProofWalk** - a Proof note reads its EPISODE's lesson, never the note: the note is the problem the agents work from, and what the voice says is the lesson they wrote. A `TextWalk` the Proof card hands its reading, as Cards hands `EpisodeWalk`.
 
 ### `masking/` - Masking
 
