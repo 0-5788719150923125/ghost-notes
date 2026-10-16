@@ -1,8 +1,8 @@
 extends Node
 
 ## NOT a gate. Drives a real desk-medium session over a Proof episode's lesson with a SYNTHETIC voice
-## - every spoken word at a steady pace, and the rests [method DeskScript.parse] asks the voice for,
-## sized from the episode's own ink - and writes PNGs to look at.
+## ([method DeskScript.rehearsal]: every spoken word at a steady pace, and the rests the lesson asks
+## the voice for, sized from the episode's own ink and layout) - and writes PNGs to look at.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/desk/desk_look_probe.gd 400 \
 ##       --out <dir>/d --episode <episode folder> --times 3,8,20 [--every S] [--page 1]
@@ -15,7 +15,7 @@ extends Node
 const W := 1280
 const H := 720
 const DT := 1.0 / 30.0
-## The synthetic voice: a word every this many seconds, and a breath at each sentence's end.
+## The synthetic voice: a word every this many seconds, and a breath at each paragraph's end.
 const WORD := 0.32
 const SENTENCE := 0.35
 
@@ -62,8 +62,8 @@ func _run() -> void:
 	ep.dir = _episode
 	var desk := {"dir": _episode, "seed": ep.seed, "ink": ink}
 	var lengths := ep.lengths()
-	var parsed: Dictionary = DeskScript.parse(source, lengths)
-	var words := _timeline(source, parsed)
+	var parsed: Dictionary = DeskScript.parse(source, lengths, ep.sizes())
+	var words := DeskScript.rehearsal(parsed, WORD, SENTENCE, _lead)
 	var stage := SubViewport.new()
 	stage.size = Vector2i(W, H)
 	stage.own_world_3d = true
@@ -99,7 +99,10 @@ func _run() -> void:
 			Spectrum.virtual_clock = t
 			Spectrum.current.time = t
 			medium.advance(Spectrum.current, DT, 1.0)
-			await get_tree().process_frame
+			# the desk is a function of time and its camera's springs step on their own: only the last
+			# seconds before a photograph need rendering
+			if float(want) - t < 1.5 or int(round(t / DT)) % 20 == 0:
+				await get_tree().process_frame
 		await get_tree().process_frame
 		var img := stage.get_texture().get_image()
 		var path := "%s_t%05.1f.png" % [_out, float(want)]
@@ -118,24 +121,6 @@ func _run() -> void:
 	for _i in 3:
 		await get_tree().process_frame
 	get_tree().quit(1 if _flat > 0 else 0)
-
-
-## The voice's words as a steady reader would say them: one every [constant WORD] seconds, a breath
-## at each sentence's end, and before each run of pen actions the rest the lesson asks for.
-func _timeline(_source: String, parsed: Dictionary) -> Array:
-	var spoken: PackedStringArray = parsed["spoken"]
-	var rests := {}
-	for a in parsed["actions"]:
-		var k := int((a as Dictionary)["after"])
-		rests[k] = float(rests.get(k, 0.0)) + float((a as Dictionary)["dur"])
-	var out: Array = []
-	var t := _lead
-	for i in spoken.size():
-		if rests.has(i):
-			t += float(rests[i]) + 0.4
-		out.append({"text": spoken[i], "t0": t, "t1": t + WORD * 0.9, "sentence": 0})
-		t += WORD
-	return out
 
 
 func _spread(img: Image) -> float:

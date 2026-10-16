@@ -406,23 +406,14 @@ func _uploads_as() -> String:
 
 
 ## WHERE THE THUMBNAIL IS TAKEN, seconds into the video: the title screen with the show's name fully
-## up over the out-of-focus table - after the name fades in (by 1.4 s) and before the focus pull,
-## which starts 1.4 s before the reading opens at the intro's end (see the table medium's `_title_alpha`
-## and `_tick_focus`). [param intro] is the take's intro hold.
+## up over the out-of-focus table ([method ShowOpening.thumbnail_moment], every opening's).
 static func thumbnail_moment(intro: float) -> float:
-	return clampf(intro * 0.4, 1.5, maxf(1.5, intro - 1.6))
+	return ShowOpening.thumbnail_moment(intro)
 
 
 ## The intro hold a take was rendered with (its sidecar's bookend), else the Director's.
 static func _take_intro(take: String) -> float:
-	var side := take.get_basename() + ".json"
-	if take.is_empty() or not FileAccess.file_exists(side):
-		return Director.intro_hold
-	var j := JSON.new()
-	if j.parse(FileAccess.get_file_as_string(side)) != OK or not (j.data is Dictionary):
-		return Director.intro_hold
-	var b: Variant = (j.data as Dictionary).get("bookend", {})
-	return float((b as Dictionary).get("in", Director.intro_hold)) if b is Dictionary else Director.intro_hold
+	return ShowOpening.take_intro(take, Director.intro_hold)
 
 
 ## THE SHOW'S TAGS: its document's own `tags:` line, as North Star's chapters keep theirs

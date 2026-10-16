@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 300 references inside a folder, 743 down the stack, 0 up it.
+Between scripts today: 304 references inside a folder, 747 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -16,7 +16,7 @@ Between scripts today: 300 references inside a folder, 743 down the stack, 0 up 
 | `proof/` | Proof | 6 | `desk`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `desk/` | The desk | 3 | `table`, `media`, `scene_kit`, `data` |
 | `cards/` | Cards | 9 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
-| `table/` | The set | 19 | `media`, `scene_kit`, `audio`, `data` |
+| `table/` | The set | 21 | `media`, `scene_kit`, `audio`, `data` |
 | `reading/` | The voice's workspaces | 5 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
 | `export/` | Export | 3 | `show`, `voice`, `ui`, `agents`, `stage`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
@@ -148,7 +148,7 @@ The panels a voice runs in: the reading (script, cast, voice, stream, export), t
 
 A place, seen and heard, built from a written description: the table itself (Tables), the things on it (Props), its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds), its sound (Soundscape), where cards go on it, what can be done with them and how a reading says so, the faces printed on them - and the medium that puts it all on the stage (`table.gd`, a row of `Medium.REGISTRY`).
 
-[`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`lights`](../src/table/lights.gd), [`props`](../src/table/props.gd), [`soundscape`](../src/table/soundscape.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_light`](../src/table/table_light.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`winds`](../src/table/winds.gd)
+[`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`intro_blur`](../src/table/intro_blur.gd), [`lights`](../src/table/lights.gd), [`props`](../src/table/props.gd), [`show_opening`](../src/table/show_opening.gd), [`soundscape`](../src/table/soundscape.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_light`](../src/table/table_light.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`winds`](../src/table/winds.gd)
 
 ### `cards/` - Cards
 

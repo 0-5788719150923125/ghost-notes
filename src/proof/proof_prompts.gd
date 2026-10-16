@@ -48,8 +48,8 @@ static func solver(title: String, brief: String, problem: Dictionary) -> Diction
 
 
 ## The teacher, given the problem, the notebook and the Lean file as they were left. [param fix]
-## carries what a second try must mend: `broken` (formulas TeX refused) and `notation` (speech that
-## carried notation), each a list of lines.
+## carries what a second try must mend: `broken` (formulas TeX refused), `notation` (speech that
+## carried notation) and `undictated` (pad lines not read aloud as written), each a list of lines.
 static func teacher(title: String, brief: String, problem: Dictionary, notebook: String,
 		proof: String, verified: bool, minutes: float, fix: Dictionary = {}) -> Dictionary:
 	return {"system": Rules.say("proof/teacher.system", {}) + "\n\n" + context(title, brief),
@@ -63,4 +63,5 @@ static func teacher(title: String, brief: String, problem: Dictionary, notebook:
 			"verified": verified, "minutes": String.num(minutes, 0),
 			"words": str(int(round(minutes * WORDS_PER_MINUTE))),
 			"broken": "\n".join(PackedStringArray(fix.get("broken", []))),
-			"notation": "\n".join(PackedStringArray(fix.get("notation", [])))})}
+			"notation": "\n".join(PackedStringArray(fix.get("notation", []))),
+			"undictated": "\n".join(PackedStringArray(fix.get("undictated", [])))})}

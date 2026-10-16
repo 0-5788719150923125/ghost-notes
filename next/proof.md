@@ -172,20 +172,32 @@ two.
 
 **Marks** in the lesson say what the desk does, one `ScriptMarks` row each, documented in
 docs/script.md like the tablet's: `<!-- pad: \int_0^1 x^2\,dx -->`, `<!-- pad-text: Suppose $p$ is
-prime. -->`, `<!-- strike -->`, `<!-- box -->`, `<!-- new page -->`, `<!-- calc: 2^61 - 1 -->`,
+prime. -->`, `<!-- strike -->`, `<!-- box -->`, `<!-- calc: 2^61 - 1 -->`,
 `<!-- plot: sin(x)/x, -10, 10 -->`, the tablet's own `<!-- search: -->` and `<!-- url: -->`, and
 `<!-- lean: 3 -->` (the screen steps to tactic 3) or `<!-- lean: check -->`. A `DeskScript` walk
 turns a segment into the voice's text and the desk's actions from one pass, as `TabletScript` does,
 so they cannot disagree; `ReadingFollower.place` puts the actions between the spoken words.
 
-**Writing overlaps speech.** The tablet's typing waits for the voice to stop; a teacher writes while
-talking. A pad line starts as the sentence about it begins and runs on under the words. The voice
-waits (an `action-hold`) only when the writing would outlast its sentence by more than a beat.
+**What is written is said as it is written** (2026-10-16; the first plan let the pen write under
+whatever the voice was saying, and the user: "a person cannot pay attention to both"). The line right
+after a pad mark, with no blank line between, is its DICTATION - the formula read aloud, word for
+word - and the pen writes across exactly those words, its ink clock driven by how far through them
+the voice is, within 0.55-1.8x its own pace. The voice rests only for the pen to come down (0.45 s),
+for a page's turn (1.6 s), and for writing the words outrun (`DeskScript.tail_for`). A hand takes
+three or four times as long to write a line of prose as to say it (the first real lesson: 19 s of ink
+for an 11-word line), so a dictation the pen lags by a second or more goes PHRASE BY PHRASE
+(`DeskScript.paced`): the wait is shared out over its words and rested at each phrase's end - a stop,
+or six words without one, never one word left alone - so the voice says a phrase, the pen writes it,
+and on, never all the words and then a long silence. One rest between two paragraphs. **No mark turns a page**: the pad is
+filled rule by rule (`DeskScript.lay_out`) and turns when the next formula would run off its foot, so
+the layout is part of the parse and the voice's rests come from the typeset sizes.
 
 **The camera** has a station per instrument (over the shoulder on the pad, close on the calculator,
 square on the screen) and moves between them on a context switch, the tablet's camera arc inside
 each: wide on arrival, close while working, the current line held in a band of the view rather than
-followed.
+followed. The pad's, built: the book medium's kind (a 20° lens from high and a little in front,
+mostly looking down, wide enough for the instruments to come beside the pad; one slow critically
+damped spring; a per-page yaw and tilt and a wander).
 
 ## Ink
 
@@ -387,10 +399,10 @@ a user to define the problem. Then, a second button: to generate a random proble
   teacher, refused once if its speech carries notation), `ink` (TeX lays out every formula; one TeX
   refuses sends the lesson back once with TeX's words) and `script`. It waits, saying so, while
   Lean, Mathlib or TeX install.
-- **The desk** (`DeskMedium`): a legal pad under a lamp, ruled, formulas on the rules, a page turned
-  when one fills or at `new page`, a stroke through a struck line; the pen's nib is the ink's own,
-  lifting between strokes and resting after; the camera follows the line being written. The words are
-  the subtitle overlay's.
+- **The desk** (`DeskMedium`): a legal pad under a lamp, ruled, formulas on the rules, a page filled
+  and then turned over the binding, a stroke through a struck line; the pen's nib is the ink's own,
+  lifting between strokes and resting after, writing what the voice says as it says it; the camera
+  follows the line being written. The words are the subtitle overlay's.
 - **Held by** `tests/proof/proof_check.gd` (every prompt whole and the verified/unverified claim
   two-sided, the lesson's format and its notation audit, the episode's redo, the framer's answer, the
   pad's layout) and `components_check` / `rules_check`; looked at with `tests/desk/desk_look_probe.gd`.
@@ -443,6 +455,35 @@ Found by making it, each fixed and held:
   "Ghost Notes: Why Choosing n + 1 Numbers up to 2n Forces One to Divide Another".
 - **The panel's width** (a warning in the user's log: the card asked for 448 px of 380):
   `panel_fit_check` now builds the Proof panel too, and fails on the layout that warned.
+
+**After the user's second look (2026-10-16):**
+- **The opening and the close are the card table's** ("the intro/outro doesn't inherit the behavior
+  from cards mode. We need the blurring effect and fade and such"): `ShowOpening` (`table/`) is how a
+  show at a table or a desk opens and closes - the name over the frame thrown far out of focus
+  (`IntroBlur`, lifted out of the table with `TitleCard`), the focus pulled as the show opens (the
+  pen's first word), black a beat after the last word as the outro runs out, and where the thumbnail
+  is taken. The table delegates to it, unchanged (`table_place_check`); the desk calls it.
+- **The camera stands back** ("zoom far too close and tilted ... something closer to the book
+  medium, with a further zoom and mostly vertical orientation"): see The desk, above.
+- **Pages are filled, never wiped** ("a page with text on it is just 'wiped' clean, for seemingly no
+  reason"): the `new page` mark is gone; a full page lifts at its foot and swings over the binding,
+  the clean one under it.
+- **The voice says what the pen writes** ("we need to narrate the text being written, as it is being
+  written ... speak exactly what is written"): the dictation format above, phrase by phrase where the
+  pen lags; the teacher is told it as a template with no sample words in it, and a lesson that leaves
+  pad lines unread goes back once (`DeskScript.undictated`). The real teacher, rerun on the Erdős
+  note, read every pad line on the line after it the first time ("Six, seven, eight, nine, ten.").
+- **The pen leans to the top right** from its nib ("a more natural writing position"), which also
+  keeps the line just written, left of the nib, in view.
+- Held by `proof_check` (dictation spans and rests, the turn's rest, pages filled to their foot, and
+  the desk's clock with no stage: the pen down on the first word and done on the last, the ink as far
+  through as the words, a lagging formula at the pen's fastest and done before the voice goes on, the
+  turn after the writing before it, the camera wide, close and back, the title until the first
+  word).
+- Found rendering the rerun lesson (`desk_look_probe`): TeX sets "ff" and "fi" as one glyph each,
+  which the hand had no strokes for, so their outlines were traced and "different" read as bold. A
+  ligature is written as its letters now (`Ink._ligature`; `ink_check`, with a longer name as the
+  control). And the wide shot cut the pad's binding off: it stands at 1.45 m, the whole pad in it.
 
 ### 1. The episode, heard
 

@@ -13,7 +13,8 @@ extends SceneTree
 ##
 ## Two-sided where a pass could come from a broken instrument: the contour integral must NOT be
 ## covered and must still be drawn (traced, and named in `missing`); a name nothing knows must be
-## named and drawn as nothing; TeX's own order must have the sum's upper limit first, so the hand's
+## named and drawn as nothing; a ligature TeX sets as one glyph ("ff") is written as its letters, never
+## traced; TeX's own order must have the sum's upper limit first, so the hand's
 ## moving the sign ahead of it is seen to happen; a different seed must give a different hand.
 ##
 ##   godot --headless --path . --script tests/desk/ink_check.gd
@@ -93,6 +94,18 @@ func _coverage(items: Dictionary, outlines: Dictionary) -> void:
 	var got := Ink.strokes_of(made_up, 7)
 	_check((got["missing"] as PackedStringArray).has("cmsy10:nosuchglyph") and
 		(got["strokes"] as Array).is_empty(), "a glyph nothing can draw is named, and drawn as nothing")
+	# A LIGATURE: cmr's "ff" (code 11) is one glyph to TeX and two letters to a hand
+	var lig := {"id": "lig", "glyphs": [{"k": 1, "f": "cmr12", "c": 11, "n": "ff", "x": 0.0, "y": 0.0,
+		"s": 12.0, "w": 7.0, "ht": 8.3, "dp": 0.0}], "rules": []}
+	var one := {"id": "lig", "glyphs": [{"k": 1, "f": "cmr12", "c": 102, "n": "f", "x": 0.0, "y": 0.0,
+		"s": 12.0, "w": 3.6, "ht": 8.3, "dp": 0.0}], "rules": []}
+	var ff := Ink.strokes_of(lig, 7)
+	var f := Ink.strokes_of(one, 7)
+	_check((ff["missing"] as PackedStringArray).is_empty() and Ink.covered("ff", "cmr12")
+		and (ff["strokes"] as Array).size() == 2 * (f["strokes"] as Array).size(),
+		"a ligature is written as its letters, never traced (%d strokes, f has %d)"
+		% [(ff["strokes"] as Array).size(), (f["strokes"] as Array).size()])
+	_check(not Ink.covered("ffxyz", "cmr12"), "the control: a longer name is no ligature")
 
 
 # --- a seeded hand -----------------------------------------------------------------

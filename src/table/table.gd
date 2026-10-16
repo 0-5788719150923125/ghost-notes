@@ -180,16 +180,8 @@ const CANDLE_LAYER := 1 << 12
 ## into the cloth falls on the cloth alone.
 const THING_LAYER := 1 << 1
 ## The intro's focus pull: it starts this long before the reading opens and takes this long after it
-## (seconds), from a lens this soft (CameraAttributesPractical.dof_blur_amount).
-const FOCUS_PULL := Vector2(1.4, 1.6)
-const FOCUS_BLUR := 0.16
-## THE INTRO, THROWN FAR OUT OF FOCUS: while the name is up, the whole frame is drawn through a
-## Gaussian [constant CardTable.TITLE_BLUR] of its height wide ([constant INTRO_SHADER]). It lifts
-## over the first INTRO_LIFT of the focus pull, eased through its log down to INTRO_SHARP (half a
-## pixel at 1080), then is taken off; the lens's own near-to-far pull carries on from there.
-const INTRO_SHADER := preload("res://shaders/table_intro.gdshader")
-const INTRO_LIFT := 0.5
-const INTRO_SHARP := 0.0005
+## (seconds) - the opening every show at a table or a desk shares ([ShowOpening]).
+const FOCUS_PULL := ShowOpening.FOCUS_PULL
 ## Lead and tail around each action group, as the tablet's: a beat after the last word before
 ## the cards move, and they are still a beat before the next word.
 const LEAD := 0.25
@@ -425,7 +417,7 @@ func mount(st: SubViewport) -> void:
 	_noise.frequency = 1.0
 	_build_world()
 	# the intro's blur over the table, under the name
-	_blur = IntroBlur.new(INTRO_SHADER)
+	_blur = IntroBlur.new(ShowOpening.INTRO_SHADER)
 	add_child(_blur)
 	_title = TitleCard.new()
 	add_child(_title)
@@ -2000,29 +1992,12 @@ func _tick_camera(_t: float) -> void:
 ## opens (the deck's shuffle, the box's opening): the wide blur lifts, and the lens carries on near
 ## to far, the cloth in front of the reader first, and is off for the reading. The end card leaves it alone.
 func _tick_focus(t: float) -> void:
-	var ts := float(_times()["opening"])
-	var pull := 1.0                      # a reading with no opening placed: nothing to wait for
-	if ts < INF:
-		pull = clampf((t - (ts - FOCUS_PULL.x)) / (FOCUS_PULL.x + FOCUS_PULL.y), 0.0, 1.0)
-	elif _sched.is_empty():
-		pull = 0.0                       # the intro: nothing placed yet
-	_lens(pull)
+	_lens(ShowOpening.pull(t, float(_times()["opening"]), not _sched.is_empty()))
 
 
-## The lens at [param pull] of the intro's focus pull: 0 the intro (the frame through
-## [constant CardTable.TITLE_BLUR], the lens at its softest), 1 sharp (both off).
+## The lens at [param pull] of the intro's focus pull ([method ShowOpening.lens]).
 func _lens(pull: float) -> void:
-	var k := _ease(clampf(pull / INTRO_LIFT, 0.0, 1.0))
-	var wide := CardTable.TITLE_BLUR
-	_blur.set_sigma(wide * pow(INTRO_SHARP / wide, k) if k < 1.0 else 0.0)
-	if pull >= 1.0:
-		_attrs.dof_blur_far_enabled = false
-		return
-	var e := _ease(pull)
-	_attrs.dof_blur_far_enabled = true
-	_attrs.dof_blur_far_distance = lerpf(0.04, 1.6, e * e)
-	_attrs.dof_blur_far_transition = lerpf(0.05, 0.6, e)
-	_attrs.dof_blur_amount = lerpf(FOCUS_BLUR, FOCUS_BLUR * 0.4, e)
+	ShowOpening.lens(pull, _blur, _attrs)
 
 
 # --- the air ---------------------------------------------------------------------------------------------
@@ -2745,13 +2720,7 @@ static func _ease(x: float) -> float:
 ## shuffle, the box's opening) - and only then: the reading ends on the table fading to black, not
 ## on the name again.
 func _title_alpha(t: float) -> float:
-	var ts := float(_times()["opening"])
-	var a := clampf((t - 0.3) / 1.1, 0.0, 1.0)
-	if ts < INF:
-		a *= 1.0 - clampf((t - (ts - 0.6)) / 0.9, 0.0, 1.0)
-	elif not _sched.is_empty():
-		a = 0.0
-	return a
+	return ShowOpening.title_alpha(t, float(_times()["opening"]), not _sched.is_empty())
 
 
 ## THE OUTRO: once the voice has said its last word, the table fades to black - a beat after it,
@@ -2759,33 +2728,7 @@ func _title_alpha(t: float) -> float:
 ## Director's outro live). A function of show time like everything else, so a live reading, a
 ## scrub and the export fade alike. 1 until then.
 func _end_fade(t: float) -> float:
-	var total := (_plan.parse.get("spoken", PackedStringArray()) as PackedStringArray).size()
-	var last := _follow.known_last()
-	if total == 0 or last < total - 1:
-		return 1.0
-	var outro := maxf(feed.tail(), 0.0)
-	var beat := minf(0.8, outro * 0.15)
-	return 1.0 - _ease((t - (_follow.st1[last] + beat)) / maxf(outro - beat, 0.05))
-
-
-## THE INTRO'S BLUR: the whole stage read back through [constant INTRO_SHADER], drawn over the table
-## and under the name - and not drawn at all while it is off.
-class IntroBlur:
-	extends Node2D
-
-	var _mat := ShaderMaterial.new()
-
-	func _init(shader: Shader) -> void:
-		_mat.shader = shader
-		material = _mat
-		visible = false
-
-	## The blur's sigma, as a share of the frame's height; 0 takes it off.
-	func set_sigma(sigma: float) -> void:
-		_mat.set_shader_parameter("sigma", sigma)
-		visible = sigma > 0.0
-
-	func _draw() -> void:
-		draw_rect(Rect2(Vector2.ZERO, get_viewport_rect().size), Color.WHITE)
+	return ShowOpening.end_fade(t, _follow,
+		(_plan.parse.get("spoken", PackedStringArray()) as PackedStringArray).size(), feed.tail())
 
 

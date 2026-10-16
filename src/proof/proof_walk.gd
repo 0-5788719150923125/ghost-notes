@@ -5,9 +5,10 @@ class_name ProofWalk
 ## agents work from, and what the voice says is the lesson they wrote. A [TextWalk] the Proof card
 ## hands its reading, as Cards hands [EpisodeWalk].
 ##
-## THE VOICE'S RESTS ARE THE PEN'S: [method DeskScript.speakable] gives each formula a rest sized from
-## how long the desk will take to write it - measured from the episode's ink exactly as the desk
-## writes it ([method ProofEpisode.lengths]) - so the voice and the pen keep time.
+## THE VOICE'S RESTS ARE THE PEN'S: [method DeskScript.speakable] gives the pen a moment to come down
+## before each dictation, a page's turn where the pad fills, and a rest after a dictation the pen would
+## trail - each sized from the episode's ink exactly as the desk writes and lays it out
+## ([method ProofEpisode.lengths], [method ProofEpisode.sizes]) - so the voice and the pen keep time.
 
 ## The episode up now, asked each time: `() -> ProofEpisode`, null while there is none.
 var episode: Callable
@@ -23,7 +24,8 @@ func body(_pulled: String) -> String:
 
 func spoken(text: String, _title: String) -> Dictionary:
 	var ep: ProofEpisode = episode.call() if episode.is_valid() else null
-	return {"body": DeskScript.speakable(text, ep.lengths() if ep != null else {}), "title": ""}
+	return {"body": DeskScript.speakable(text, ep.lengths() if ep != null else {},
+		ep.sizes() if ep != null else {}), "title": ""}
 
 
 func cast_text(_written: String) -> String:

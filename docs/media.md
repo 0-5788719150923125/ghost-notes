@@ -123,14 +123,20 @@ Source: [src/table/table.gd](../src/table/table.gd)
 
 _A ghost doing math at a desk: a legal pad under a lamp, and a pen that writes each formula on it by itself while the teacher talks, in a hand drawn from TeX's own layout. The Proof component's own medium - what it writes comes from the lesson its agents made._
 
-DeskMedium - a ghost doing math at a desk: a legal pad under a lamp, and a pen that writes on it by itself while the teacher talks (next/proof.md, "The desk").
+DeskMedium - a ghost doing math at a desk: a legal pad under a lamp, and a pen that writes on it by itself while the teacher reads aloud what it writes (next/proof.md, "The desk").
 
-WHAT IT DRAWS FROM: the reading's document (`_subs.document`) - its `source`, the lesson with the pen's marks (`DeskScript`), and its `desk`, what the Proof component hands the reading (`ProofEpisode.document`): every formula as TeX laid it out (`ink`, the typeset answer of hosts/math/typeset.py) and the episode's seed, which is the hand's.
+WHAT IT DRAWS FROM: the reading's document (`_subs.document`) - its `source`, the lesson with the pen's marks (`DeskScript`); its `desk`, what the Proof component hands the reading (`ProofEpisode.document`): every formula as TeX laid it out (`ink`) and the episode's seed, which is the hand's; and its `title` and `byline`, the channel's, for the title screen.
 
-A PURE FUNCTION OF THE VOICE'S TIME. The voice's words arrive with their times (`ReadingFollower`); each pen action is placed in the rest the voice left for it (`ReadingFollower.place`) and then runs at the pen's own pace, under the words that follow (a teacher writes while talking - `DeskScript`). A pad item is written by `Ink` at `now - start`, so any moment can be drawn without the ones before it: a seek lands on the page as it was. The camera alone eases (as the tablet's does), and lands at once on a seek.
+IT OPENS AND CLOSES AS THE CARD TABLE DOES (`ShowOpening`, the user, 2026-10-16: "the intro/outro doesn't inherit the behavior from cards mode"): the channel's name over the desk thrown far out of focus while the intro holds, the focus pulled as the lesson's first word is said, and black a beat after its last word, as the outro runs out.
 
-THE PAD: a page of a legal pad (8.5 x 11 in), ruled, written top to bottom. A formula sits on a rule (its baseline is snapped to one); prose starts at the margin and math a little in; what would run off the foot starts a new page, and `new page` tears one off on purpose. A struck line gets a stroke through it. Only the page being written is drawn: a torn-off page is gone.
+THE PEN WRITES WHAT THE VOICE SAYS, AS IT SAYS IT (`DeskScript`, the user the same day: "we need to narrate the text being written, as it is being written"): a formula's writing runs across exactly the words of its dictation, the ink's own clock driven by how far through those words the voice is (`_ink_time`) - never faster than `DeskScript.MAX_PACE` of the pen's own pace nor slower than `DeskScript.MIN_PACE`; where it would lag the voice waits at the dictation's end, a rest the script already gave it.
 
-THE PEN has no hand (the user, 2026-10-15: the writer is unseen). While writing, its nib is the ink's own nib (`Ink.at`); between strokes it lifts and travels; after a formula it drifts to rest beside it.
+A PURE FUNCTION OF THE VOICE'S TIME. A pad item is written at `_ink_time`, a function of the words' times and now, so any moment can be drawn without the ones before it: a seek lands on the page as it was. The camera alone eases (as the book's and the tablet's do), and lands at once on a seek.
+
+THE PAD: a page of a legal pad (8.5 x 11 in), ruled, filled top to bottom - every formula on the next rules (`DeskScript.lay_out`) - and TURNED only when the next would run off the foot: the written sheet lifts at its foot, swings up over the binding and is gone, and the clean page is under it (the user: "a page with text on it is just 'wiped' clean, for seemingly no reason ... use all of the available space on a page, and then turn the page if we need more space"). A struck line gets a stroke through it.
+
+THE CAMERA IS THE BOOK'S KIND (`BookMedium`: "something closer to what we did with the 'book' medium, with a further zoom and mostly vertical orientation ... the actor swapping for a calculator, or a tablet, or a laptop"): a long lens, looking down at the desk from high and a little in front; wide over the intro and as a page turns, closer while the pen writes, following the line being written through one slow critically damped spring; each page its own slight yaw and tilt, and a wander over minutes, so it never sits dead still and never reads as a move.
+
+THE PEN has no hand (the writer is unseen). It leans to the top right of the frame from its nib (the user: "it should angle to the top-right, which would be a more natural writing position") - which also keeps what it has just written, to the left of the nib, in view.
 
 Source: [src/desk/desk.gd](../src/desk/desk.gd)

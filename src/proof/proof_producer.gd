@@ -51,7 +51,7 @@ var _tools := {}       # step -> {url, set}
 var _local := {}       # step -> {pid, out, log}: a step ghost runs as a program (the ink)
 var _errors := {}      # step -> why it failed, once out of tries
 var _tries := {}       # step -> runs started
-var _fix := {}         # what the next lesson must mend: {broken: [..], notation: [..]}
+var _fix := {}         # what the next lesson must mend: {broken: [..], notation: [..], undictated: [..]}
 
 
 func _init(ep: ProofEpisode, sp: Dictionary) -> void:
@@ -388,7 +388,8 @@ func _land_solve(handed: String, res: Dictionary, checks: int) -> String:
 
 ## THE LESSON, as the voice will read it: fences and stray framing off, at least one thing on the
 ## pad, and no notation in its speech ([method DeskScript.audit]) - a lesson that has some goes back
-## once, told which lines.
+## once, told which lines. One that leaves pad lines unread ([method DeskScript.undictated]) goes back
+## once too, and is taken the second time: the desk writes such a line while the voice waits.
 func _land_lesson(text: String) -> String:
 	var lesson := clean_lesson(text)
 	if DeskScript.items(lesson).is_empty():
@@ -398,6 +399,11 @@ func _land_lesson(text: String) -> String:
 		_fix["notation"] = Array(said)
 		return "the lesson's speech carries notation (%d line%s)" % [said.size(), "" if said.size() == 1 else "s"]
 	_fix.erase("notation")
+	var bare := DeskScript.undictated(lesson)
+	if not bare.is_empty() and int(_tries.get("lesson", 0)) <= RETRIES:
+		_fix["undictated"] = Array(bare)
+		return "%d pad line%s not read aloud as written" % [bare.size(), "" if bare.size() == 1 else "s"]
+	_fix.erase("undictated")
 	return episode.write_text("lesson", lesson + "\n")
 
 

@@ -213,8 +213,10 @@ static func covered(name: String, font := "cmr10") -> bool:
 
 # --- the glyphs -------------------------------------------------------------------
 
-## Where a glyph's strokes come from: {glyph: [l, r, strokes]} or {recipe: {...}}, {} for none.
-## Calligraphic capitals are cmsy's letters, blackboard bold msbm's.
+## Where a glyph's strokes come from: {glyph: [l, r, strokes]}, {recipe: {...}} or {letters: name},
+## {} for none. Calligraphic capitals are cmsy's letters, blackboard bold msbm's. A LIGATURE TeX sets
+## as one glyph (ff, fi, fl, ffi, ffl - and ae, oe) is written as its letters, as a hand writes them:
+## traced, its outline drew both edges of every stroke and "different" read as bold (the first lesson).
 static func _source(name: String, font: String) -> Dictionary:
 	if name.length() == 1 and name.to_upper() == name and name.to_lower() != name:
 		if font.begins_with("cmsy"):
@@ -232,9 +234,29 @@ static func _source(name: String, font: String) -> Dictionary:
 				break
 		at = String(_table().get(base + "big", _table().get(base, "")))
 	if at.is_empty():
-		return {}
+		return {"letters": name} if not _ligature(name).is_empty() else {}
 	var g := _hershey(at.get_slice(":", 0), at.substr(at.find(":") + 1))
 	return {} if g.is_empty() else {"glyph": g}
+
+
+## A ligature's letters side by side in the unit box ([method _unit]), each after the last one's
+## advance: [] for a name that is not two or three lowercase letters the hand has.
+static func _ligature(name: String) -> Array:
+	if name.length() < 2 or name.length() > 3 or name.to_lower() != name or not name.is_valid_identifier():
+		return []
+	var out: Array = []
+	var x := 0.0
+	for ch in name:
+		var g := _hershey("futural", ch)
+		if g.is_empty() or (g[2] as Array).is_empty():
+			return []
+		for st in _unit(g):
+			var moved: Array = []
+			for p in st:
+				moved.append(Vector2((p as Vector2).x + x, (p as Vector2).y))
+			out.append(moved)
+		x += (float(g[1]) - float(g[0])) / 21.0
+	return out
 
 
 static func _table() -> Dictionary:
@@ -276,6 +298,8 @@ static func _glyph(g: Dictionary, rng: RandomNumberGenerator, outlines: Dictiona
 			unit.append(twin)
 	elif src.has("recipe"):
 		unit = _recipe(src["recipe"])
+	elif src.has("letters"):
+		unit = _ligature(String(src["letters"]))
 	else:
 		unit = _outline(outlines, font, int(g.get("c", -1)))
 		traced = not unit.is_empty()

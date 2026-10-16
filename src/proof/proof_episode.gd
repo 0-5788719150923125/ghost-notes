@@ -207,6 +207,18 @@ func lengths() -> Dictionary:
 	return out
 
 
+## Every formula as TeX laid it out, by item id: what the pad's layout - and so where a page turns,
+## a rest the voice takes - is made from ([method DeskScript.lay_out]).
+func sizes() -> Dictionary:
+	var out := {}
+	var ink: Variant = read_json("ink")
+	if ink is Dictionary:
+		for r in (ink as Dictionary).get("items", []):
+			if r is Dictionary and bool((r as Dictionary).get("ok", false)):
+				out[String((r as Dictionary)["id"])] = r
+	return out
+
+
 ## Throw the episode away: the system trash, or the gate's [member discard].
 func trash() -> String:
 	if discard.is_valid():
