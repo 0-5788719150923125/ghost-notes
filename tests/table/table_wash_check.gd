@@ -816,7 +816,10 @@ func _wash_jumper() -> void:
 
 ## The lowest plane above every support [param hs] at [param pts] (about a card's middle), at the
 ## middle - found as the highest point any three supports (or two, or one) hold up over the middle,
-## the other way round from [method TableShuffle._rest_on], so the two cannot share a mistake.
+## the other way round from [method TableShuffle._rest_on], so the two cannot share a mistake. In
+## double precision ([method _cross]): a Vector2's own cross is single, and a thin triangle's
+## weights came out a few millionths from summing to one - the triangle holding a card up was
+## dropped and the card judged 3 micrometers too high (2026-10-15).
 func _held_up(pts: PackedVector2Array, hs: PackedFloat32Array) -> float:
 	var best := -INF
 	var n := pts.size()
@@ -825,22 +828,27 @@ func _held_up(pts: PackedVector2Array, hs: PackedFloat32Array) -> float:
 			best = maxf(best, hs[i])
 		for j in range(i + 1, n):
 			var d := pts[j] - pts[i]
-			if d.length() > 1e-9 and absf(d.cross(-pts[i])) < 1e-12:
+			if d.length() > 1e-9 and absf(_cross(pts[i], pts[j])) < 1e-12:
 				var u := (-pts[i]).dot(d) / d.length_squared()
 				if u >= 0.0 and u <= 1.0:
 					best = maxf(best, lerpf(hs[i], hs[j], u))
 			for k in range(j + 1, n):
 				# a triangle all but flat holds nothing up its edges do not (a corner lying in
 				# another card is a support twice over, a hair apart)
-				var area := (pts[j] - pts[i]).cross(pts[k] - pts[i])
+				var area := _cross(pts[i], pts[j]) + _cross(pts[j], pts[k]) + _cross(pts[k], pts[i])
 				if absf(area) < 1e-8:
 					continue
-				var l0 := pts[j].cross(pts[k]) / area
-				var l1 := pts[k].cross(pts[i]) / area
-				var l2 := pts[i].cross(pts[j]) / area
+				var l0 := _cross(pts[j], pts[k]) / area
+				var l1 := _cross(pts[k], pts[i]) / area
+				var l2 := _cross(pts[i], pts[j]) / area
 				if l0 >= -1e-9 and l1 >= -1e-9 and l2 >= -1e-9 and absf(l0 + l1 + l2 - 1.0) < 1e-6:
 					best = maxf(best, l0 * hs[i] + l1 * hs[j] + l2 * hs[k])
 	return best
+
+
+## [param a] cross [param b], in double precision.
+static func _cross(a: Vector2, b: Vector2) -> float:
+	return float(a.x) * float(b.y) - float(a.y) * float(b.x)
 
 
 ## THE HELD CARD'S LOOKS AT ITS BACK. Reported 2026-10-05: the hold "seems to be the exact same

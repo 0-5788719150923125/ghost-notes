@@ -20,13 +20,18 @@ extends Node
 ##     top): of two cards gathered in different sweeps, the later lies lower in the deck gathered;
 ##   - CARDS LEFT ALONE LIE STILL: a card no palm is near and no moving card touches, once any slide it
 ##     had has run out, does not move;
-##   - A HEAP IS NO TALLER THAN ITS CARDS: no card in a wash stands far over the deck's own height.
+##   - A HEAP IS NO TALLER THAN ITS CARDS: no card in a wash stands far over the deck's own height;
+##   - A HEAP STAYS LOW AS IT IS MIXED (2026-10-15: cards "floating a half inch or an inch above the
+##     table, because they are 'stacked' upon dozens of other cards... those stacks would topple and
+##     the cards would splay further"): no card lies 10 mm over the cloth, and 99 in 100 under 6 mm -
+##     while a card is not left alone as it topples off a heap ([constant TableShuffle.SPLAY_DEPTH]).
 ##
 ## THE CONTROLS: the gather laying each card on top ([member TableShuffle._sweep_under] off) is caught
 ## going the other way; a track made to creep as the heap's slump made it (12 mm/s) is caught; the pile posed
 ## as the old deck's (26 meshes standing for three cards each, every one swelling as it landed) stands
 ## off its cards' height; cards rested without the cards on them holding them down tower over the
-## cloth ([member TableShuffle._hold]).
+## cloth ([member TableShuffle._hold]); the wash as it was - no card splaying ([member TableShuffle._splay])
+## and a big deck spread no wider ([member TableShuffle._roomy]) - lies on heaps 15 mm and more tall.
 ##
 ##   tests/run_boot_probe.sh tests/table/wash_deck_check.gd 1200
 ##
@@ -44,6 +49,9 @@ const STILL := 0.00005
 ## How far over the deck's own height a card in a wash may stand (meters: a card tipped off the top of
 ## a heap).
 const TOWER := 0.012
+## The highest a card may lie over the cloth as a wash is mixed (meters) - and 99 in 100 under 0.6 of
+## that: a heap is a few cards thick where it is thickest.
+const MIXED_MOST := 0.01
 
 var _fails := 0
 var medium: TableMedium
@@ -298,10 +306,28 @@ func _alone(plan: Dictionary, tracks: Array) -> Array:
 				var qj0: Vector4 = (tracks[j] as PackedVector4Array)[st - 1]
 				if TableShuffle._cards_overlap(mid, q.w, Vector2(qj.x, qj.z), qj.w) or TableShuffle._cards_overlap(mid, q.w, Vector2(qj0.x, qj0.z), qj0.w):
 					free = false
+			# ...nor while its heap has lately risen past SPLAY_DEPTH under it: it topples
+			if free and _perched(tracks[i] as PackedVector4Array, st):
+				free = false
 			alone[i] = alone[i] + 1 if free else 0
 			if alone[i] > COAST:
 				out.append([i, st, moved[i]])
 	return out
+
+
+## Whether the card [param track] is of has, at step [param st] or in the steps before it that a topple
+## takes ([constant TableShuffle.SPLAY_WINDOW] and its slide to a stop), come to lie deeper than
+## [constant TableShuffle.SPLAY_DEPTH] - its place in the order the cards lie is its height in the
+## track (a card in the air lies over the whole deck, and is not on a heap).
+func _perched(track: PackedVector4Array, st: int) -> bool:
+	var back := int(ceil((TableShuffle.SPLAY_WINDOW + 0.3) * TableShuffle.WASH_HZ))
+	var n := medium._plan.deck_n
+	for k in range(maxi(st - back, 1), st + 1):
+		var d := roundi((track[k].y - TableShuffle.WASH_FLOOR) / TableShuffle.WASH_LAYER)
+		var d0 := roundi((track[k - 1].y - TableShuffle.WASH_FLOOR) / TableShuffle.WASH_LAYER)
+		if d > TableShuffle.SPLAY_DEPTH and d > d0 and d <= n:
+			return true
+	return false
 
 
 ## CARDS LEFT ALONE LIE STILL - against a card made to creep as the heap's slump made it (the control).
@@ -347,11 +373,13 @@ func _still(plans: Array) -> void:
 
 
 ## A HEAP IS NO TALLER THAN ITS CARDS - and rested without the cards on them holding them down (the
-## control), cards tower over the cloth.
+## control), cards tower over the cloth. And A HEAP STAYS LOW AS IT IS MIXED: its cards splay - against
+## the same wash with none splaying (the control), where cards stood on chains of cards 30 deep.
 func _heaps(plans: Array) -> void:
 	var tallest := 0.0
 	var steepest := 0.0
 	var n := 0
+	var mixed := PackedFloat32Array()
 	for p in plans:
 		var plan: Dictionary = p
 		n = (plan["tracks"] as Array).size()
@@ -360,6 +388,7 @@ func _heaps(plans: Array) -> void:
 			for r: Vector3 in medium._shuffles._wash_rest(plan, st):
 				tallest = maxf(tallest, r.x - TableMedium.CLOTH_TOP)
 				steepest = maxf(steepest, Vector2(r.y, r.z).length())
+		mixed.append_array(_mixed_heights(plan))
 	var deck := float(n) * TableMedium.DECK_T
 	medium._shuffles._hold = false
 	medium._shuffles._rest_steps = {}
@@ -377,3 +406,38 @@ func _heaps(plans: Array) -> void:
 		% [deck * 1000.0, tallest * 1000.0, rad_to_deg(atan(steepest)), towering * 1000.0])
 	_ok(tallest < deck + TOWER, "no card in a wash stands far over the deck's own height (%.1f mm, the deck %.1f)" % [tallest * 1000.0, deck * 1000.0])
 	_ok(towering > deck + 0.05, "control: rested without the cards on them holding them down, cards tower over it (%.0f mm)" % (towering * 1000.0))
+	# AS IT IS MIXED: how high the cards lie over the cloth, against the wash as it was - no card
+	# splaying, the deck spread no wider for being big
+	medium._shuffles._splay = false
+	medium._shuffles._roomy = false
+	var piled := _mixed_heights(medium._shuffles._wash_plan(600 + int(SEEDS[0]), WASH_S))
+	medium._shuffles._splay = true
+	medium._shuffles._roomy = true
+	medium._shuffles._rest_steps = {}
+	medium._shuffles._rest_lifts = {}
+	mixed.sort()
+	piled.sort()
+	var most := mixed[mixed.size() - 1]
+	var p99 := mixed[mixed.size() * 99 / 100]
+	print("  as the washes mix, the cards lie %.1f mm over the cloth at most, 99%% under %.1f mm (the wash as it was: %.1f mm, 99%% under %.1f)"
+		% [most * 1000.0, p99 * 1000.0, piled[piled.size() - 1] * 1000.0, piled[piled.size() * 99 / 100] * 1000.0])
+	_ok(most < MIXED_MOST and p99 < MIXED_MOST * 0.6, "a heap stays low as it is mixed: no card %.0f mm over the cloth (%.1f mm), 99%% under %.0f mm (%.1f mm)"
+		% [MIXED_MOST * 1000.0, most * 1000.0, MIXED_MOST * 600.0, p99 * 1000.0])
+	_ok(piled[piled.size() - 1] > MIXED_MOST * 1.5 and piled[piled.size() * 99 / 100] > MIXED_MOST,
+		"control: the wash as it was, no card splaying and the deck spread no wider, lies on heaps far taller (%.1f mm, 99%% under %.1f)"
+		% [piled[piled.size() - 1] * 1000.0, piled[piled.size() * 99 / 100] * 1000.0])
+
+
+## How high over the cloth each card of [param plan] lies as it is mixed (meters, every 0.15 s from a
+## second after the spread until the gather): the fan-out off the deck and the pile are tall as they
+## should be.
+func _mixed_heights(plan: Dictionary) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	var mix: Vector2 = plan["mix"]
+	for st in range(int(ceil((mix.x + 1.0) * TableShuffle.WASH_HZ)), int(float(plan["gather"]) * TableShuffle.WASH_HZ), 3):
+		var v := float(st) / TableShuffle.WASH_HZ
+		var rests: Array = medium._shuffles._wash_rest(plan, st)
+		for i in rests.size():
+			if not TableShuffle._off_cloth(plan, i, v):
+				out.append((rests[i] as Vector3).x - TableShuffle.WASH_FLOOR)
+	return out

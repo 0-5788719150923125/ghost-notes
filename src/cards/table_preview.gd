@@ -557,13 +557,17 @@ func _light_moment(rig, name: String) -> Dictionary:
 		var fk: Dictionary = (l as Dictionary)["fk"]
 		var style := String((Lights.LAMPS[String(spec["look"])] as Dictionary)["flicker"])
 		match style:
-			"pass", "lightning":
+			"pass":
 				for e in (fk["events"] as PackedFloat32Array):
 					if e >= 1.0:
-						var span := 3.2 if style == "pass" else 0.9
-						return {"times": [e - 0.5, e + span * 0.2, e + span * 0.5, e + span * 0.8],
-							"what": "\"%s\" at %.1f s: before, and as it %s." % [name, e, "passes" if style == "pass" else "flashes"]}
+						return {"times": [e - 0.5, e + 0.64, e + 1.6, e + 2.56], "what": "\"%s\" at %.1f s: before, and as it passes." % [name, e]}
 				return {"error": "\"%s\" never comes in the reading" % name}
+			"lightning":
+				var m := Lights.flash_moments(fk, 1.0)
+				if m.is_empty():
+					return {"error": "\"%s\" never comes in the reading" % name}
+				return {"times": [float(m[0]) - 0.5, m[1], m[2], float(m[2]) + 0.5],
+					"what": "\"%s\" at %.1f s: before, at its brightest flickers, and after." % [name, float(m[0])]}
 			"beam":
 				var every := float(fk["every"])
 				var t0 := (floorf(AIR_AT / every + float(fk["seed"])) + 0.5 - float(fk["seed"])) * every

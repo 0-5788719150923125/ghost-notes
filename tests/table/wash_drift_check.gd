@@ -12,12 +12,14 @@ extends Node
 ##   - none LEAPS: no step on the cloth or a face over 25 mm in 1/40 s (a shove once put one out the
 ##     far side of a card, a card's width in a step);
 ##   - none lies UNDER a card on the cloth, or in the deck (the first report: cards clipped through them);
-##   - RIDES ARE SHORT: a piece is up on a card's face a small share of the time, and most rides carry
-##     it a few centimeters - and yet the wash moves them: they are shoved, they ride, they are flicked.
+##   - RIDES ARE RARE AND SHORT: a piece is carried on a moving card's face a small share of the time
+##     (lying on a card that lies still is no ride: a wide, thin heap covers more of the cloth - 2026-10-15),
+##     and most rides carry it a few centimeters - and yet the wash moves them: they are shoved, they
+##     ride, they are flicked.
 ##
 ## THE CONTROL: tracks made to do what was reported, on the same washes' cards - one carried along the
-## cloth beside a card, one held at a face's height beside it, one carried on it the whole way - each
-## caught by the check it was made for.
+## cloth beside a card, one held at a face's height beside it, one carried on it the whole way (carried
+## on a moving card nearly all the time, and a long ride) - each caught by the check it was made for.
 ##
 ##   tests/run_boot_probe.sh tests/table/wash_drift_check.gd 180
 ##
@@ -27,9 +29,9 @@ const SEEDS := [11, 12, 13, 14, 15, 16]
 const WASH_S := 22.0
 ## A step longer than this (meters, in 1/40 s) on the cloth or a face is a leap.
 const LEAP := 0.025
-## The most of the time a piece the cards met may spend up on a card's face, and how far the longest
-## tenth of the rides may carry it (meters).
-const ON_FACE := 0.12
+## The most of the time a piece the cards met may spend carried on the face of a card that moves, and
+## how far the longest tenth of the rides may carry it (meters).
+const CARRIED := 0.03
 const RIDE_FAR := 0.15
 
 var _fails := 0
@@ -106,17 +108,18 @@ func _run() -> void:
 			control = _control(sw, float(pop["rest_y"]), m)
 		root.queue_free()
 	var on_face := float(tot["face"]) / maxf(float(tot["samples"]), 1.0)
+	var carried := float(tot["moving"]) / maxf(float(tot["samples"]), 1.0)
 	var rides: Array = tot["rides"]
 	rides.sort()
 	var tenth: float = rides[rides.size() * 9 / 10] if not rides.is_empty() else 0.0
-	print("  %d pieces met by %d washes, %d moved, %d flicked; on a card's face %.1f%% of the time, %d rides (most %.0f mm, the longest tenth past %.0f mm)"
-		% [pieces, SEEDS.size(), moved, flicked, on_face * 100.0, rides.size(), (rides.back() if not rides.is_empty() else 0.0) * 1000.0, tenth * 1000.0])
+	print("  %d pieces met by %d washes, %d moved, %d flicked; on a card's face %.1f%% of the time, carried on one moving %.1f%%; %d rides (most %.0f mm, the longest tenth past %.0f mm)"
+		% [pieces, SEEDS.size(), moved, flicked, on_face * 100.0, carried * 100.0, rides.size(), (rides.back() if not rides.is_empty() else 0.0) * 1000.0, tenth * 1000.0])
 	_ok(pieces >= 30, "the washes met %d pieces lying on the cloth" % pieces)
 	_ok(int(tot["carried"]) == 0, "no piece is carried by nothing: clear of every card on the cloth, %d steps sped up or turned" % tot["carried"])
 	_ok(int(tot["held"]) == 0, "no piece is held up beside a card: %d steps a face high with none in reach" % tot["held"])
 	_ok(int(tot["leaps"]) == 0, "no piece leaps: %d steps over %.0f mm (the longest %.1f mm)" % [tot["leaps"], LEAP * 1000.0, float(tot["leap"]) * 1000.0])
 	_ok(int(tot["under"]) == 0, "no piece lies under a card or in the deck: %d steps" % tot["under"])
-	_ok(on_face <= ON_FACE, "rides are rare: a piece is up on a card %.1f%% of the time (at most %.0f%%)" % [on_face * 100.0, ON_FACE * 100.0])
+	_ok(carried <= CARRIED, "rides are rare: a piece is carried on a moving card %.1f%% of the time (at most %.0f%%)" % [carried * 100.0, CARRIED * 100.0])
 	_ok(tenth <= RIDE_FAR, "rides are short: the longest tenth carry a piece past %.0f mm (at most %.0f)" % [tenth * 1000.0, RIDE_FAR * 1000.0])
 	_ok(moved * 2 >= pieces and rides.size() >= 5 and flicked >= 5,
 		"the wash moves them: %d of %d moved, %d rides, %d flicked" % [moved, pieces, rides.size(), flicked])
@@ -127,6 +130,9 @@ func _run() -> void:
 			% (control["beside"] as Dictionary)["carried"])
 		_ok(int((control["up"] as Dictionary)["held"]) > 0, "the control: a piece held a face high beside a card is caught (%d steps)"
 			% (control["up"] as Dictionary)["held"])
+		var gl: Dictionary = control["glued"]
+		var gl_carried := float(gl["moving"]) / maxf(float(gl["samples"]), 1.0)
+		_ok(gl_carried > CARRIED * 10.0, "the control: a piece carried on a card the whole way is carried on a moving card (%.0f%% of the time)" % (gl_carried * 100.0))
 		var glued: Array = (control["glued"] as Dictionary)["rides"]
 		_ok(not glued.is_empty() and float(glued.max()) > RIDE_FAR, "the control: a piece carried on a card the whole way is a long ride (%.0f mm)"
 			% (float(glued.max()) * 1000.0 if not glued.is_empty() else 0.0))
@@ -143,7 +149,7 @@ func _stage() -> Dictionary:
 
 
 func _judged() -> Dictionary:
-	return {"samples": 0, "face": 0, "carried": 0, "held": 0, "leaps": 0, "leap": 0.0, "under": 0, "rides": []}
+	return {"samples": 0, "face": 0, "moving": 0, "carried": 0, "held": 0, "leaps": 0, "leap": 0.0, "under": 0, "rides": []}
 
 
 ## Every step of a piece's track [param pos] (1/40 s apart, the first at substep [param s0] of wash
@@ -168,6 +174,7 @@ func _judge(sw: Dictionary, pos: PackedVector3Array, s0: int, base: float, m: fl
 		var out := INF
 		var near := INF
 		var inside := INF
+		var over := -1
 		for j in n:
 			var sp := cur[j * st + 3]
 			if sp < 0.0:
@@ -177,6 +184,8 @@ func _judge(sw: Dictionary, pos: PackedVector3Array, s0: int, base: float, m: fl
 			near = minf(near, o)
 			inside = minf(inside, o)
 			if sp >= 0.5:
+				if o < out:
+					over = j
 				out = minf(out, o)
 		clear = PackedFloat32Array([clear[1], clear[2], near])
 		tot["samples"] = int(tot["samples"]) + 1
@@ -191,6 +200,10 @@ func _judge(sw: Dictionary, pos: PackedVector3Array, s0: int, base: float, m: fl
 		var up := h > 0.0002 and out <= 0.0
 		if up:
 			tot["face"] = int(tot["face"]) + 1
+			# ...and CARRIED, the card under it moving
+			var was := Drifts._cards_at(sw, mini(s0 + i - 1, last))
+			if Vector2(cur[over * st] - was[over * st], cur[over * st + 1] - was[over * st + 1]).length() > 0.0002:
+				tot["moving"] = int(tot["moving"]) + 1
 			if not riding:
 				ride_from = p
 			riding = true

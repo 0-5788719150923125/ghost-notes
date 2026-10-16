@@ -22,8 +22,19 @@ extends SceneTree
 ## - BIRDS cross about as often as asked, each over the table, the same every time; a hawk's shadow
 ##   wheels back over the table more than once in a visit; a flock flies together.
 ## - LAMPS stand out of the shot - one asked for in it is moved up out of it, one asked for outside it
-##   stays; each flickers its own way as a function of the time: lightning dark but for its flashes, a
-##   sign steady but for its stutters, headlights only as they pass, a screen changing with its cuts.
+##   stays; each flickers its own way as a function of the time: a sign steady but for its stutters,
+##   headlights only as they pass, a screen changing with its cuts.
+## - LIGHTNING (the user, 2026-10-15: "usually just two flickers, which fade-in/fade-out slowly... It
+##   would come and go, while flickering with different levels of intensity and persistence"), as a
+##   camera takes it at 60 frames a second over an hour's storm: dark but for its flashes; a stroke gone
+##   in a frame or two; flashes unalike - some a single blink and some flickering five times and more,
+##   near and bright or far and faint, some over in a tenth of a second and some holding lit a quarter
+##   of a second and more; flashes in bursts, about as often as asked; every flash's light reaching
+##   the frames whole however its strokes fall between them; and a flash photographed for the set
+##   dresser caught lit (against the moments picked by the clock). The controls: the retired flash on the
+##   same storm (two to four pulses alike, each dying over 60 ms) flickers alike, as bright every time,
+##   and slowly; the retired storm's gaps come in no bursts; and a flash taken at each frame's instant
+##   loses or doubles a stroke's light.
 ## - BUILT: a sun that casts, its screens and birds shadow-only on SCREEN_LAYERS, no lamp casting with
 ##   them; a soft canopy casts the sun SOFT_SUNS times, each sun its own copy of it and every crisp screen
 ##   and bird (against crisp screens alone: one sun, one caster each); at most MAX_SHADOWED lamps casting; a cloud over the sun dims it; fitted, the palest thing in
@@ -62,7 +73,7 @@ func _ok(cond: bool, what: String) -> void:
 
 func _run() -> void:
 	_rng.seed = 4242
-	for check in [_sanitize, _vocabulary, _noise, _window, _screens, _clouds, _birds, _lamps, _built, _shadows, _shade]:
+	for check in [_sanitize, _vocabulary, _noise, _window, _screens, _clouds, _birds, _lamps, _lightning, _built, _shadows, _shade]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("lights_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -380,14 +391,6 @@ func _lamps() -> bool:
 	var out_lamp := Lights.sanitize({"lamps": [{"look": "torch", "from": "front left", "distance": 150, "height": 90}]})["lamps"][0] as Dictionary
 	_ok(not bool(Lights.lamp_place(out_lamp, middle, in_shot)["moved"]), "control: a torch behind the camera was moved")
 	# each its own way
-	var fk := Lights.flicker_of(Lights.sanitize({"lamps": [{"look": "lightning", "every": 20}]})["lamps"][0], 5)
-	var dark := 0
-	var lit := 0
-	for i in 6000:
-		var b := float(Lights.flicker("lightning", fk, float(i) * 0.1)["bright"])
-		dark += 1 if b < 0.01 else 0
-		lit += 1 if b > 0.5 else 0
-	_ok(dark > 5400 and lit > 10, "lightning is not dark but for its flashes (%d dark, %d lit of 6000)" % [dark, lit])
 	var nk := Lights.flicker_of(Lights.sanitize({"lamps": [{"look": "neon"}]})["lamps"][0], 6)
 	var off := 0
 	for i in 60000:
@@ -406,6 +409,177 @@ func _lamps() -> bool:
 	var tk := Lights.flicker_of(Lights.sanitize({"lamps": [{"look": "torch"}]})["lamps"][0], 9)
 	_ok(str(Lights.flicker("torch", tk, 42.0)) == str(Lights.flicker("torch", tk, 42.0)), "the same time gives another flicker")
 	return true
+
+
+## LIGHTNING over an hour's storm, against the retired flash and the retired storm.
+func _lightning() -> bool:
+	var fk := Lights.flicker_of(Lights.sanitize({"lamps": [{"look": "lightning", "every": 20}]})["lamps"][0], 5)
+	var events: PackedFloat32Array = fk["events"]
+	var dark := 0
+	var lit := 0
+	for i in 36000:
+		var b := float(Lights.flicker("lightning", fk, float(i) * 0.1)["bright"])
+		dark += 1 if b < 0.01 else 0
+		lit += 1 if b > 0.2 else 0
+	_ok(dark > 34000 and lit > 20, "lightning is not dark but for its flashes (%d dark, %d lit of 36000 moments)" % [dark, lit])
+	var now := _flashes(events, func(t: float) -> float: return float(Lights.flicker("lightning", fk, t)["bright"]))
+	var old := _flashes(events, func(t: float) -> float: return _retired_flash(fk, t))
+	print("  lightning, %d flashes in the hour: %s; the retired flash: %s" % [(now["tops"] as Array).size(), _flash_note(now), _flash_note(old)])
+	_ok(_median(now["falls"]) <= 3.0, "a stroke is not gone in a frame or two (half the flashes' quickest fall to a quarter takes %d frames)" % _median(now["falls"]))
+	_ok(_median(old["falls"]) >= 4.0, "control: the retired flash's pulses die fast (%d frames)" % _median(old["falls"]))
+	var counts := {}
+	for c: int in now["flickers"]:
+		counts[c] = true
+	_ok(counts.has(1) and (now["flickers"] as Array).max() >= 5 and counts.size() >= 4,
+		"flashes do not flicker unalike - a single blink, five times and more (%s)" % str(counts.keys()))
+	_ok(not (old["flickers"] as Array).has(1) and (old["flickers"] as Array).max() <= 4, "control: the retired flash flickers two to four times, every time")
+	_ok(_spread(now["tops"]) >= 2.0, "flashes are not near and far - as bright as each other (%.1fx between the bright and the faint)" % _spread(now["tops"]))
+	_ok(_spread(old["tops"]) < 1.5, "control: the retired flash is as bright every time (%.1fx)" % _spread(old["tops"]))
+	_ok((now["runs"] as Array).min() <= 100.0 and (now["runs"] as Array).max() >= 250.0,
+		"flashes are not some over in a tenth of a second, some holding lit a quarter (lit %d to %d ms)" % [(now["runs"] as Array).min(), (now["runs"] as Array).max()])
+	_ok((old["runs"] as Array).min() > 100.0, "control: every retired flash lingers (%d ms the least)" % (old["runs"] as Array).min())
+	# IN BURSTS, about as often as asked - against the retired storm's gaps, each 20 s times e^N(0, 0.5)
+	var soon := 0
+	var gaps := 0
+	var r := RandomNumberGenerator.new()
+	r.seed = 5
+	var soon_old := 0
+	for k in range(1, events.size()):
+		if events[k] > 3600.0:
+			break
+		gaps += 1
+		soon += 1 if events[k] - events[k - 1] < 8.0 else 0
+		soon_old += 1 if 20.0 * exp(r.randfn(0.0, 0.5)) < 8.0 else 0
+	_ok(float(soon) >= 0.15 * float(gaps) and gaps > 3600 / 26 and gaps < 3600 / 14,
+		"lightning does not come in bursts about every 20 s (%d flashes, %d within 8 s of the last)" % [gaps, soon])
+	_ok(float(soon_old) < 0.1 * float(gaps), "control: the retired storm's flashes come in no bursts (%d of %d)" % [soon_old, gaps])
+	# EVERY FLASH'S LIGHT REACHES THE FRAMES WHOLE: what the frames take adds up to what it throws - against
+	# each frame taken at its instant
+	var off := 0.0
+	var off_instant := 0.0
+	var salt := int(fk["salt"])
+	for i in events.size():
+		if events[i] > 3600.0:
+			break
+		if i + 1 < events.size() and events[i + 1] - events[i] < Lights.FLASH_LONGEST + 0.1:
+			continue
+		var pulses := Lights._strokes(salt, i)
+		var whole := Lights._flash_light(pulses, Lights.FLASH_LONGEST + 1.0)
+		var framed := 0.0
+		var instant := 0.0
+		for k in range(ceili(events[i] * 60.0), floori((events[i] + Lights.FLASH_LONGEST) * 60.0) + 2):
+			var t := float(k) / 60.0
+			framed += float(Lights.flicker("lightning", fk, t)["bright"]) / 60.0
+			var u := t - events[i]
+			instant += (Lights._flash_light(pulses, u) - Lights._flash_light(pulses, u - 1e-6)) / 1e-6 / 60.0
+		off = maxf(off, absf(framed - whole) / whole)
+		off_instant = maxf(off_instant, absf(instant - whole) / whole)
+	# PHOTOGRAPHED at its flickers - against the moments the retired preview picked by the clock
+	var shot := 0
+	var shot_old := 0
+	var after := 1.0
+	for k in 40:
+		var m := Lights.flash_moments(fk, after)
+		var e := float(m[0])
+		shot += 1 if maxf(float(Lights.flicker("lightning", fk, m[1])["bright"]), float(Lights.flicker("lightning", fk, m[2])["bright"])) > 0.1 else 0
+		shot_old += 1 if maxf(float(Lights.flicker("lightning", fk, e + 0.18)["bright"]), float(Lights.flicker("lightning", fk, e + 0.45)["bright"])) > 0.1 else 0
+		after = e + 0.01
+	_ok(shot == 40, "a flash photographed is not caught lit (%d of 40)" % shot)
+	_ok(shot_old < 30, "control: photographed by the clock, flashes are caught dark (%d of 40 lit)" % shot_old)
+	_ok(off < 0.02, "a flash's light does not reach the frames whole (%.1f%% off at most)" % (off * 100.0))
+	_ok(off_instant > 0.15, "control: taken at each frame's instant, a flash loses or doubles its light (%.0f%% off)" % (off_instant * 100.0))
+	return true
+
+
+## The flashes of [param events] in the first hour, [param bright] taken at 60 frames a second: each
+## one's brightest frame (`tops`), its quickest fall from a flicker to a quarter of it (frames: `falls`),
+## how many times it flickers - brightening again after dimming to half or less (`flickers`) - and its
+## longest run lit over 0.1 (ms: `runs`).
+func _flashes(events: PackedFloat32Array, bright: Callable) -> Dictionary:
+	var out := {"tops": [], "falls": [], "flickers": [], "runs": []}
+	for i in events.size():
+		if events[i] > 3600.0:
+			break
+		if i + 1 < events.size() and events[i + 1] - events[i] < Lights.FLASH_LONGEST + 0.1:
+			continue
+		var v := PackedFloat32Array()
+		for k in range(ceili(events[i] * 60.0), floori((events[i] + Lights.FLASH_LONGEST) * 60.0) + 2):
+			v.append(float(bright.call(float(k) / 60.0)))
+		var top := 0.0
+		var count := 0
+		var last := 0.0
+		var trough := INF
+		var run := 0
+		var longest := 0
+		var fall := 999
+		for k in v.size():
+			top = maxf(top, v[k])
+			trough = minf(trough, v[k])
+			run = run + 1 if v[k] > 0.1 else 0
+			longest = maxi(longest, run)
+			var before := v[k - 1] if k > 0 else 0.0
+			var after := v[k + 1] if k + 1 < v.size() else 0.0
+			if v[k] < 0.03 or v[k] < before or v[k] <= after:
+				continue
+			if count == 0 or trough <= 0.5 * minf(v[k], last):
+				count += 1
+				last = v[k]
+			else:
+				last = maxf(last, v[k])
+			trough = v[k]
+			# its fall to a quarter, unless it brightens again first
+			for j in range(k + 1, v.size()):
+				if v[j] <= v[k] * 0.25:
+					fall = mini(fall, j - k)
+					break
+				if v[j] > v[j - 1]:
+					break
+		(out["tops"] as Array).append(top)
+		(out["falls"] as Array).append(fall)
+		(out["flickers"] as Array).append(count)
+		(out["runs"] as Array).append(float(longest) * 1000.0 / 60.0)
+	return out
+
+
+func _flash_note(f: Dictionary) -> String:
+	var counts := {}
+	for c: int in f["flickers"]:
+		counts[c] = int(counts.get(c, 0)) + 1
+	var keys := counts.keys()
+	keys.sort()
+	return "flickers %s, quickest fall %d frames (median), brightest %.2f to %.2f, lit %d to %d ms" % [
+		", ".join(PackedStringArray(keys.map(func(k: int) -> String: return "%dx%d" % [k, counts[k]]))),
+		_median(f["falls"]), (f["tops"] as Array).min(), (f["tops"] as Array).max(), (f["runs"] as Array).min(), (f["runs"] as Array).max()]
+
+
+func _median(a: Array) -> float:
+	var b := a.duplicate()
+	b.sort()
+	return float(b[b.size() / 2]) if not b.is_empty() else 0.0
+
+
+## The 90th percentile of [param a] over its 10th.
+func _spread(a: Array) -> float:
+	var b := a.duplicate()
+	b.sort()
+	return float(b[b.size() * 9 / 10]) / maxf(float(b[b.size() / 10]), 1e-6)
+
+
+## THE RETIRED FLASH (until 2026-10-15): at each strike two to four pulses, each dying over 60 ms, the
+## first full and the rest at 0.7 - taken at the frame's instant.
+func _retired_flash(fk: Dictionary, t: float) -> float:
+	var starts: PackedFloat32Array = fk["events"]
+	var i := Lights._segment(starts, t)
+	if starts.is_empty() or t < starts[i] or t > starts[i] + 1.2:
+		return 0.0
+	var h := Lights._hash(int(fk["salt"]) ^ (i * 7919))
+	var pulses := 2 + (h & 0x3) % 3
+	var out := 0.0
+	for p in pulses:
+		var at := starts[i] + float(p) * (0.12 + 0.18 * float((h >> (4 + p * 4)) & 0xF) / 15.0)
+		if t >= at:
+			out = maxf(out, exp(-(t - at) / 0.06) * (1.0 if p == 0 else 0.7))
+	return out
 
 
 func _built() -> bool:

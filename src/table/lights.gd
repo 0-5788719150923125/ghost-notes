@@ -166,7 +166,7 @@ const LAMPS := {
 		"color": "#f4f4ff", "strength": 0.6, "flicker": "pass", "size": 5.0, "shadows": true, "distance": 350.0, "height": 40.0, "every": 40.0},
 	"lighthouse": {"about": "a lighthouse's beam sweeping round, crossing the table every few seconds", "kind": "spot",
 		"color": "#fff6e0", "strength": 0.6, "flicker": "beam", "size": 5.0, "shadows": false, "distance": 600.0, "height": 120.0, "every": 10.0},
-	"lightning": {"about": "a storm's lightning - now and then a blue-white flash, two or three flickers at once, the room lit by it",
+	"lightning": {"about": "a storm's lightning - now and then a blue-white flash: a strike's hard flickers, or the clouds glowing and flickering a moment, near and bright or far and faint, the room lit by it",
 		"kind": "omni", "color": "#dfe8ff", "strength": 1.0, "flicker": "lightning", "size": 0.0, "shadows": false, "distance": 500.0,
 		"height": 400.0, "every": 25.0},
 }
@@ -270,6 +270,16 @@ const OVERHEAD := 0.35
 const WALL_CLEAR := 0.25
 ## The shutter a bird's shadow is smeared over (seconds).
 const SHUTTER := 1.0 / 250.0
+## LIGHTNING ([method _strokes]): the share of flashes that follow the last within LIGHTNING_SOON seconds
+## (the least, and the most often), and the share that are the cloud lit from within rather than a
+## strike. A flash is taken as a camera takes it, its light over FLASH_SHUTTER (seconds); it is over in
+## FLASH_LONGEST; each of its pulses is FLASH_STRIDE floats.
+const LIGHTNING_BURST := 0.3
+const LIGHTNING_SOON := Vector2(2.5, 5.0)
+const LIGHTNING_SHEET := 0.3
+const FLASH_SHUTTER := 1.0 / 60.0
+const FLASH_LONGEST := 3.0
+const FLASH_STRIDE := 7
 ## How big a wall and a canopy are (meters): past every ray from the table to the sun.
 const WALL := Vector2(30.0, 16.0)
 const CANOPY := 40.0
@@ -1660,8 +1670,8 @@ static func flame_in_wind(look: String, wind: Dictionary, t: float, at: Vector3)
 
 
 ## The dice a lamp's flicker reads ([method flicker]): its noise and seed, the cuts of a screen's
-## pictures, the times headlights pass and lightning strikes, and its stutters - all over [constant
-## HORIZON], from [param salt].
+## pictures, the times headlights pass and lightning flashes (each flash's own dice are [method
+## _strokes]), and its stutters - all over [constant HORIZON], from [param salt].
 static func flicker_of(l: Dictionary, salt: int) -> Dictionary:
 	var r := RandomNumberGenerator.new()
 	r.seed = salt
@@ -1678,11 +1688,23 @@ static func flicker_of(l: Dictionary, salt: int) -> Dictionary:
 			while t < HORIZON:
 				cuts.append(t)
 				t += exp(r.randf_range(log(1.5), log(7.0)))
-		"pass", "lightning":
+		"pass":
 			t = r.randf_range(0.3, 1.0) * every
 			while t < HORIZON:
 				events.append(t)
 				t += every * exp(r.randfn(0.0, 0.5))
+		"lightning":
+			# A STORM COMES IN BURSTS: now and then a flash follows the last within seconds, and then a
+			# lull - about `every` apart on the whole
+			var burst := LIGHTNING_BURST
+			var lull := maxf(every - burst * LIGHTNING_SOON.y, every * 0.5) / (1.0 - burst)
+			t = r.randf_range(0.3, 1.0) * every
+			while t < HORIZON:
+				events.append(t)
+				if r.randf() < burst:
+					t += r.randf_range(LIGHTNING_SOON.x, LIGHTNING_SOON.y * 2.0 - LIGHTNING_SOON.x)
+				else:
+					t += maxf(lull * exp(r.randfn(-0.125, 0.5)), LIGHTNING_SOON.x)
 	return {"noise": n, "seed": r.randf() * 1000.0, "salt": salt & 0x7FFFFFFF, "every": every, "cuts": cuts, "events": events}
 
 
@@ -1715,20 +1737,134 @@ static func _stutter(fk: Dictionary, t: float, slot: float) -> float:
 	return 1.0 if sin((t - start) * 115.0 + float(h & 0x3F)) > -0.2 else 0.08
 
 
-## LIGHTNING at [param t]: dark, and at each strike two to four flickers inside a second, each dying fast.
+## LIGHTNING at [param t]: dark, and at each flash ([method _strokes]) the light it throws into the room
+## as a camera takes it - the mean over the [constant FLASH_SHUTTER] before [param t], taken whole
+## ([method _flash_light]), so a stroke shorter than a frame lights the frame it falls in, as it would on
+## film, rather than whichever frame the clock happens to sample.
 static func _flash(fk: Dictionary, t: float) -> float:
 	var starts: PackedFloat32Array = fk["events"]
 	var i := _segment(starts, t)
-	if starts.is_empty() or t < starts[i] or t > starts[i] + 1.2:
+	if starts.is_empty() or t < starts[i] or t - FLASH_SHUTTER > starts[i] + FLASH_LONGEST:
 		return 0.0
-	var h := _hash(int(fk["salt"]) ^ (i * 7919))
-	var pulses := 2 + (h & 0x3) % 3
-	var out := 0.0
-	for p in pulses:
-		var at := starts[i] + float(p) * (0.12 + 0.18 * float((h >> (4 + p * 4)) & 0xF) / 15.0)
-		if t >= at:
-			out = maxf(out, exp(-(t - at) / 0.06) * (1.0 if p == 0 else 0.7))
+	var pulses := _strokes(int(fk["salt"]), i)
+	var u := t - starts[i]
+	return minf((_flash_light(pulses, u) - _flash_light(pulses, u - FLASH_SHUTTER)) / FLASH_SHUTTER, 1.25)
+
+
+## FLASH [param i] of a lamp salted [param salt], as pulses of light from its start: each `at`
+## (seconds in), `peak`, `rise` and `decay` (seconds), and a continuing glow under it - how long it
+## `holds` and at what share of its peak (`level`) - wavering by `wob` (FLASH_STRIDE floats a pulse).
+##
+## THE USER, 2026-10-15: the lightning was "usually just two flickers, which fade-in/fade-out slowly...
+## I don't think lightning would really fade at all: It would come and go, while flickering with
+## different levels of intensity and persistence" - every flash had been two to four pulses alike, each
+## dying over 60 ms (a slow tail to the eye). So, as storms are seen from a room:
+##
+##   A STRIKE (to the ground): one to seven strokes down the same channel, a few hundredths of a second
+##       apart (lognormal, about 60 ms), each a hard flash gone in a frame or two (8 to 25 ms, its light
+##       as the eye keeps it - a stroke itself is over in a millisecond) - the room dark between
+##       them - the first the brightest, the rest anywhere from a third of it to as bright; and in about a
+##       third of strikes one stroke HOLDS, its channel glowing on at a share of its peak for a tenth of
+##       a second to nearly half, wavering, before it goes out.
+##   A SHEET (the cloud lit from within): four to a dozen quick swells over a quarter of a second to a
+##       second and more, overlapping and uneven - a flickering glow, fainter - now and then with one
+##       sharp stroke inside it.
+##
+## Near or far: a strike's brightest stroke is 0.35 to 1 (a close one rare), a sheet's 0.2 to 0.6.
+static func _strokes(salt: int, i: int) -> PackedFloat32Array:
+	var r := RandomNumberGenerator.new()
+	r.seed = hash([salt, i, "lightning"])
+	var out := PackedFloat32Array()
+	if r.randf() < LIGHTNING_SHEET:
+		var glow := r.randf_range(0.2, 0.6)
+		var swell := 0.0
+		for k in r.randi_range(4, 12):
+			out.append_array([swell, glow * r.randf_range(0.3, 1.0), r.randf_range(0.008, 0.03), r.randf_range(0.025, 0.09),
+				0.0, 0.0, 0.0])
+			swell += r.randf_range(0.03, 0.16)
+		if r.randf() < 0.35:
+			out.append_array([r.randf_range(0.0, swell), minf(glow * 1.6, 1.0), 0.0, r.randf_range(0.008, 0.02), 0.0, 0.0, 0.0])
+		return out
+	var level := lerpf(0.35, 1.0, pow(r.randf(), 1.6))
+	# how many strokes: one in six a single flash, most two to five, a few more
+	var u := r.randf()
+	var n := 1
+	for w in [0.17, 0.2, 0.2, 0.16, 0.12, 0.08]:
+		if u < w:
+			break
+		u -= w
+		n += 1
+	var holds := r.randi_range(0, n - 1) if r.randf() < 0.35 else -1
+	var at := 0.0
+	for k in n:
+		var hold := r.randf_range(0.08, 0.42) if k == holds else 0.0
+		out.append_array([at, level if k == 0 else level * r.randf_range(0.3, 1.0), 0.0, r.randf_range(0.008, 0.025), hold,
+			r.randf_range(0.2, 0.45) if hold > 0.0 else 0.0, r.randf() * 100.0])
+		at += hold + clampf(0.06 * exp(r.randfn(0.0, 0.6)), 0.015, 0.25)
 	return out
+
+
+## WHEN TO PHOTOGRAPH LIGHTNING ([param fk], [method flicker_of]): its first flash at or after [param
+## after] seconds - its start, and its two brightest flickers a tenth of a second or more apart, in
+## order (frames at 60 a second: a stroke is over in a frame or two, so a moment picked by the clock
+## falls in the dark between them) - or empty when it never flashes.
+static func flash_moments(fk: Dictionary, after: float) -> Array:
+	for e: float in fk["events"]:
+		if e < after:
+			continue
+		var lit := {}
+		for k in range(ceili(e * 60.0), floori((e + FLASH_LONGEST) * 60.0)):
+			lit[float(k) / 60.0] = _flash(fk, float(k) / 60.0)
+		var t1 := -1.0
+		for k: float in lit:
+			if t1 < 0.0 or float(lit[k]) > float(lit[t1]):
+				t1 = k
+		var t2 := -1.0
+		for k: float in lit:
+			if absf(k - t1) >= 0.1 and (t2 < 0.0 or float(lit[k]) > float(lit[t2])):
+				t2 = k
+		if t2 < 0.0:
+			t2 = t1 + 0.1
+		return [e, minf(t1, t2), maxf(t1, t2)]
+	return []
+
+
+## ALL THE LIGHT [param pulses] ([method _strokes]) throw from the start of their flash to [param u]
+## seconds into it: the integral of how bright they are, each pulse's in closed form. A STROKE is a
+## flash dying over its decay, as bright as a frame it lights whole sees its peak - and, one that
+## holds, a share of that (`level`) glowing on under it, wavering as current surges down the channel,
+## then dying too; A SWELL rises over its rise and dies over its decay, reaching its peak.
+static func _flash_light(pulses: PackedFloat32Array, u: float) -> float:
+	var x := 0.0
+	for k in range(0, pulses.size(), FLASH_STRIDE):
+		var s := u - pulses[k]
+		if s <= 0.0:
+			continue
+		var peak := pulses[k + 1]
+		var rise := pulses[k + 2]
+		var decay := pulses[k + 3]
+		var hold := pulses[k + 4]
+		var level := pulses[k + 5]
+		if rise > 0.0:
+			# peak (1 - e^(-s/rise)) e^(-s/decay), scaled to reach the peak: the difference of two decays
+			var c := rise * decay / (rise + decay)
+			var top := rise * log(1.0 + decay / rise)
+			var a := peak / ((1.0 - exp(-top / rise)) * exp(-top / decay))
+			x += a * (decay * (1.0 - exp(-s / decay)) - c * (1.0 - exp(-s / c)))
+			continue
+		# its flash as bright as the frame it falls in sees it: a frame takes the mean of so short a flash
+		x += peak * FLASH_SHUTTER / (1.0 - exp(-FLASH_SHUTTER / decay)) * (1.0 - exp(-s / decay))
+		if hold > 0.0:
+			# level (1 + 0.3 sin(w1 s + p1) + 0.2 sin(w2 s + p2)) while it holds, then dying over 1.5 decays
+			var wob := pulses[k + 6]
+			var w1 := 40.0 + fposmod(wob, 30.0)
+			var w2 := 95.0 + fposmod(wob * 7.0, 60.0)
+			var on := minf(s, hold)
+			x += peak * level * (on + 0.3 * (cos(wob) - cos(w1 * on + wob)) / w1
+				+ 0.2 * (cos(wob * 3.0) - cos(w2 * on + wob * 3.0)) / w2)
+			if s > hold:
+				x += peak * level * 1.5 * decay * (1.0 - exp(-(s - hold) / (1.5 * decay)))
+	return x
 
 
 # --- built --------------------------------------------------------------------------------------------

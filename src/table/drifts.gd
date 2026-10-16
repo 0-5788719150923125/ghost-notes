@@ -1230,12 +1230,15 @@ static func _shove(pop: Dictionary, lv: Dictionary, sw: Dictionary, seg: Diction
 			p = pp
 			v = Vector2.ZERO
 		# OVER A FACE, IT LIES ON IT, never under it: on the cloth and pushed onto a card, or one slid in
-		# under it faster than it could be met
+		# under it faster than it could be met - and in the air, flicked from the cloth to a place over
+		# a card, it starts from that card's face (it had hung a step at the cloth's height, under it)
 		under = _under(cur, p)
 		if mode == 0 and under.x >= 0.0:
 			mode = 1
 			on = int(under.x)
 			up = true
+		elif mode == 2 and under.x >= 0.0 and y < under.y + 0.0003:
+			y = under.y + 0.0003
 		# ITS HEIGHT AND TURN: up with the face it lies on at once, and down to where it lies by easing
 		if mode != 2:
 			var want := under.y + 0.0003 if under.x >= 0.0 else 0.0

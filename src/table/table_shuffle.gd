@@ -89,6 +89,25 @@ const WASH_REST := 0.12
 ## palm's when it can, and fetches a card lying out past WASH_STRAY of the spread's reach.
 const PALM := Vector2(0.045, 0.08)
 const WASH_SHOULDER := Vector2(0.19, 0.46)
+## A BIG DECK SPREADS WIDER: the spread as drawn holds about WASH_ROOMY cards; a deck of more goes out
+## wider by the square root of how many more, so it lies about as thick (a tarot's 78: 1.27 times).
+const WASH_ROOMY := 48.0
+## A HEAP STAYS LOW: ITS CARDS SPLAY (the user, 2026-10-15: cards looked "like they're floating a half
+## inch or an inch above the table, because they are 'stacked' upon dozens of other cards... those
+## stacks would topple and the cards would splay further"). A wash of 78 heaped cards on cards 30 and
+## 40 deep, and a stiff card lies on the highest of what is under it, so the heap stood as tall as its
+## longest chain, not its cards - one card 20 mm over the cloth with nine under it. So a card sliding
+## into one already lying SPLAY_DEPTH cards deep does not ride up onto it: it jams in under its edge,
+## as a card does against a step. And a card that comes to lie deeper than that all the same (carried
+## up by a palm, or a card slid in under its heap) TOPPLES: no palm holding it, it is pushed SPLAY_PUSH
+## (m/s each second, past what holds a card on a card) off the deeper of what it lies on, up to
+## SPLAY_SPEED (m/s), for SPLAY_WINDOW seconds from the moment it comes to lie there, and slides to a
+## stop a few centimeters on - wherever that leaves it. Pushed on for as long as it lay deep, a card
+## slid 20 cm and more across a heap, as if on ice.
+const SPLAY_DEPTH := 8
+const SPLAY_PUSH := 4.0
+const SPLAY_SPEED := 0.3
+const SPLAY_WINDOW := 0.3
 const WASH_TOUCH := 0.12
 const WASH_APART := 0.14
 const WASH_STRAY := 0.85
@@ -155,6 +174,8 @@ var _sweeps: Array = []             # ...and the washes' cards on the cloth, as 
 var _collide := true                  # cards go round what stands (off only for a gate's control)
 var _sweep_under := true               # a card gathered goes in under the pile (off only for a gate's control)
 var _hold := true                     # a card with cards on it is held down by them ([method _held_down]; off only for a gate's control)
+var _splay := true                    # a heap's cards splay ([constant SPLAY_DEPTH]; off only for a gate's control)
+var _roomy := true                    # a big deck spreads wider ([constant WASH_ROOMY]; off only for a gate's control)
 var _flip0 := PackedByteArray()      # per card, as the deck lies at the shuffle's start: the other way round ([method _deck_flip0])
 var _flip_key := ""                  # what [member _flip0] was made for...
 var _flip_moves: Array = []          # ...and the chain of moves it was made on
@@ -1274,6 +1295,100 @@ func _card_clear(from: Vector2, want: Vector2, yaw: float) -> Vector2:
 	return from
 
 
+## A SWEEP GOES ROUND WHAT STANDS: a card the hands bring in from beyond a thing on the table - the palms
+## can push one out behind a row of candles - is swept round it, as a hand would, not into it (wedged
+## there, it was squared straight through it at the end). The way round for a sweep from [param from]
+## to [param to] (about the deck's place): one point, or two, of a ring round each thing in the way,
+## the shortest way that keeps clear - `[]` when the straight way is clear, or no way round is.
+func _sweep_round(from: Vector2, to: Vector2) -> PackedVector2Array:
+	if not _collide or _way_clear(from, to):
+		return PackedVector2Array()
+	var off := Vector2(medium._plan.mid.x, medium._plan.mid.z)
+	var reach := Vector2(TableMedium.CARD.x, TableMedium.CARD.y).length() * 0.5
+	var ring := PackedVector2Array()
+	for i in medium._standing.size():
+		var c: Vector2 = medium._standing_c[i] - off
+		if c.distance_to(from) > from.distance_to(to) + medium._standing_r[i] + reach * 2.0:
+			continue
+		for k: float in [1.05, 1.35]:
+			for a in 12:
+				var w := c + Vector2.from_angle(TAU * float(a) / 12.0) * (medium._standing_r[i] + reach) * k
+				var clear := true
+				for j in medium._standing.size():
+					if (w + off).distance_to(medium._standing_c[j]) < medium._standing_r[j] + reach:
+						clear = false
+						break
+				if clear:
+					ring.append(w)
+	var best := PackedVector2Array()
+	var best_len := INF
+	for w in ring:
+		var l := from.distance_to(w) + w.distance_to(to)
+		if l < best_len and _way_clear(from, w) and _way_clear(w, to):
+			best_len = l
+			best = PackedVector2Array([w])
+	if not best.is_empty():
+		return best
+	for w1 in ring:
+		if not _way_clear(from, w1):
+			continue
+		for w2 in ring:
+			var l := from.distance_to(w1) + w1.distance_to(w2) + w2.distance_to(to)
+			if l < best_len and _way_clear(w1, w2) and _way_clear(w2, to):
+				best_len = l
+				best = PackedVector2Array([w1, w2])
+	return best
+
+
+## Whether a card's reach going from [param a] to [param b] (about the deck's place) comes no nearer
+## anything standing than it starts - and, once clear of it, stays clear ([method _path_clear], from a
+## start a thing may already crowd).
+func _way_clear(a: Vector2, b: Vector2) -> bool:
+	var reach := Vector2(TableMedium.CARD.x, TableMedium.CARD.y).length() * 0.5
+	var off := Vector2(medium._plan.mid.x, medium._plan.mid.z)
+	for i in medium._standing.size():
+		var c: Vector2 = medium._standing_c[i]
+		var need := minf(medium._standing_r[i] + reach, (a + off).distance_to(c) - 0.0005)
+		if Geometry2D.get_closest_point_to_segment(c, a + off, b + off).distance_to(c) < need:
+			return false
+	return true
+
+
+## [param e] of the way along a sweep from [param from] to [param to] by way of [param via] ([method
+## _sweep_round]: none for the straight way).
+static func _swept_to(from: Vector2, via: PackedVector2Array, to: Vector2, e: float) -> Vector2:
+	if via.is_empty():
+		return from.lerp(to, e)
+	var pts := PackedVector2Array([from])
+	pts.append_array(via)
+	pts.append(to)
+	var total := 0.0
+	for k in range(1, pts.size()):
+		total += pts[k - 1].distance_to(pts[k])
+	var s := e * total
+	for k in range(1, pts.size()):
+		var l := pts[k - 1].distance_to(pts[k])
+		if s <= l or k == pts.size() - 1:
+			return pts[k - 1].lerp(pts[k], clampf(s / maxf(l, 1e-6), 0.0, 1.0))
+		s -= l
+	return to
+
+
+## Whether a card at [param at] (about the deck's place) turned [param yaw] runs into anything standing
+## on the table ([method _card_clear]'s measure).
+func _into_standing(at: Vector2, yaw: float) -> bool:
+	if not _collide:
+		return false
+	var off := Vector2(medium._plan.mid.x, medium._plan.mid.z)
+	var reach := Vector2(TableMedium.CARD.x, TableMedium.CARD.y).length() * 0.5
+	for i in medium._standing.size():
+		var c: Vector2 = medium._standing_c[i]
+		if (at + off).distance_to(c) <= medium._standing_r[i] + reach \
+				and _push_out(_card_poly(at + off, yaw), medium._standing[i], (at + off) - c) != Vector2.ZERO:
+			return true
+	return false
+
+
 ## A card lying at [param at] turned [param yaw]: its four corners (x by z).
 static func _card_poly(at: Vector2, yaw: float) -> PackedVector2Array:
 	var ax := Vector2(cos(yaw), -sin(yaw)) * TableMedium.CARD.x * 0.5
@@ -1386,9 +1501,10 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 		mix_end = float(jump["at"])
 		gather_t0 = maxf(float(jump["pick"]), mix_end)
 		gather = maxf(dur - square - gather_t0, 1.0)
-	# WIDE: the cards go well out across the cloth, a few of them a long way
-	var rx := rng.randf_range(0.24, 0.29)
-	var rz := rng.randf_range(0.12, 0.15)
+	# WIDE: the cards go well out across the cloth, a few of them a long way - and a big deck wider
+	var roomy := sqrt(maxf(float(n) / WASH_ROOMY, 1.0)) if _roomy else 1.0
+	var rx := rng.randf_range(0.24, 0.29) * roomy
+	var rz := rng.randf_range(0.12, 0.15) * roomy
 	var pos := PackedVector2Array()
 	var yaw := PackedFloat32Array()
 	var start := PackedVector2Array()
@@ -1439,10 +1555,12 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 		tracks.append([])
 	var t_in := PackedFloat32Array()       # when a card is in the pile for good
 	t_in.resize(n)
-	var from_p := PackedVector2Array()     # a sweep under way: where the card was, where it goes
+	var from_p := PackedVector2Array()     # a sweep under way: where the card was, where it goes...
 	var to_p := PackedVector2Array()
+	var via_p: Array = []                  # ...and the way round what stands between ([method _sweep_round])
 	from_p.resize(n)
 	to_p.resize(n)
+	via_p.resize(n)
 	var from_yaw := PackedFloat32Array()
 	var to_yaw := PackedFloat32Array()
 	from_yaw.resize(n)
@@ -1542,6 +1660,11 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 		for i in n:
 			_layer_of(i, under, depth)
 	var thrown := flights.size()
+	# HOW DEEP EACH LAY at the step before, and when each came to lie too deep ([method _wash_splay])
+	var deep_was := depth.duplicate()
+	var perched := PackedFloat32Array()
+	perched.resize(n)
+	perched.fill(-INF)
 	var every := PackedInt32Array(range(n))
 	var card_half := TableMedium.CARD * 0.5
 	var ax0 := PackedVector2Array()
@@ -1599,6 +1722,7 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 				if flying[i] >= 0 or taken[i] == 1 or i == lying:
 					kin[i] = 1
 			_wash_drag(hands, pos, vel, spin, held, kin, rel, under, dt)
+			_wash_splay(pos, vel, held, kin, under, depth, deep_was, perched, t, dt)
 			_wash_rub(hands, vel, spin, under, kin, dt)
 			held.fill(0.0)
 			if t < mix_end:
@@ -1674,6 +1798,7 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 					var slot := land_order.find(i)
 					var jit2: Vector3 = medium._plan.slot_jit[slot] if slot >= 0 and slot < medium._plan.slot_jit.size() else Vector3.ZERO
 					to_p[i] = Vector2(jit2.x, jit2.y) + Vector2(rng.randf_range(-0.0025, 0.0025), rng.randf_range(-0.0025, 0.0025))
+					via_p[i] = _sweep_round(from_p[i], to_p[i])
 					# the nearest of the two ways a card lies (its yaw, or half a turn from it): a card
 					# the palms turned over lands the way it was turned, it is not turned back
 					to_yaw[i] = jit2.z + PI * roundf((from_yaw[i] - jit2.z) / PI) + rng.randf_range(-0.05, 0.05)
@@ -1682,7 +1807,7 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 				if g > u1 + dt:
 					continue
 				var e2 := TableMedium._ease(clampf((g - b0) / maxf(u1 - b0, 0.05), 0.0, 1.0))
-				pos[i] = from_p[i].lerp(to_p[i], e2)
+				pos[i] = _swept_to(from_p[i], via_p[i] as PackedVector2Array, to_p[i], e2)
 				yaw[i] = lerp_angle(from_yaw[i], to_yaw[i], e2)
 				kin[i] = 1
 			# WHAT NO SWEEP HAS REACHED YET SLIDES ON: the palms lift, and a card they let go of
@@ -1753,6 +1878,11 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 				stirred[i] = 0
 				continue
 			pos[i] = _card_clear(was[i], pos[i], yaw[i])
+			# WEDGED, it stays where it was - and as it was turned: turned in place against a thing, a
+			# corner went into it, and the card stayed stuck there (or was squared through it at the end)
+			if pos[i] == was[i] and yaw[i] != was_yaw[i] and _into_standing(pos[i], yaw[i]):
+				yaw[i] = was_yaw[i]
+				spin[i] = 0.0
 			moved[i] = pos[i].distance_to(was[i])
 			stirred[i] = 1 if moved[i] > 0.0 or yaw[i] != was_yaw[i] or landed[i] == 1 else 0
 			if kin[i] == 0:
@@ -1852,10 +1982,11 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 				if lying_on[ij] == 1:
 					continue
 				var i_top := moved[i] > moved[j] + 1e-6 if absf(moved[i] - moved[j]) > 1e-6 else false
-				# A CARD CLIMBS ONE CARD, NOT A HEAP: one lying two or more above it it runs in under
-				if i_top and layer[j] >= layer[i] + 2:
+				# A CARD CLIMBS ONE CARD, NOT A HEAP: one lying two or more above it, or lying on a heap
+				# already SPLAY_DEPTH deep, it runs in under
+				if i_top and (layer[j] >= layer[i] + 2 or (depth[j] >= SPLAY_DEPTH and depth[i] < depth[j] and _splay)):
 					i_top = false
-				elif not i_top and layer[i] >= layer[j] + 2:
+				elif not i_top and (layer[i] >= layer[j] + 2 or (depth[i] >= SPLAY_DEPTH and depth[j] < depth[i] and _splay)):
 					i_top = true
 				# GATHERED, A CARD IS SWEPT IN UNDER THE PILE (the user, 2026-10-14: "a person swiping-in
 				# cards to collect them from the table wash would be sweeping them into the bottom of the
@@ -2384,6 +2515,33 @@ func _wash_drag(hands: Dictionary, pos: PackedVector2Array, vel: PackedVector2Ar
 		var jt := back - pt * (pt.dot(back) / (CARD_I + rt.length_squared()))
 		vel[top] += jt
 		spin[top] += pt.dot(jt) / CARD_I
+
+
+## A CARD PERCHED MORE THAN [constant SPLAY_DEPTH] DEEP ([param depth]) TOPPLES at [param t]: no palm
+## holding it ([param held]), it is pushed off the deeper of the cards it lies on ([param under]) for
+## [constant SPLAY_WINDOW] seconds from the step it came to lie that deep ([param perched], against
+## [param was], how deep each lay at the step before).
+func _wash_splay(pos: PackedVector2Array, vel: PackedVector2Array, held: PackedFloat32Array, kin: PackedByteArray,
+		under: Array, depth: PackedInt32Array, was: PackedInt32Array, perched: PackedFloat32Array, t: float, dt: float) -> void:
+	for i in pos.size():
+		if depth[i] > SPLAY_DEPTH and depth[i] > was[i]:
+			perched[i] = t
+		was[i] = depth[i]
+		if kin[i] == 1 or depth[i] <= SPLAY_DEPTH or held[i] > 0.2 or not _splay:
+			continue
+		if t - perched[i] > SPLAY_WINDOW:
+			continue
+		# downhill: away from what it lies on, the deeper the more
+		var c := Vector2.ZERO
+		var w := 0.0
+		for j in under[i]:
+			c += pos[int(j)] * float(depth[int(j)] + 1)
+			w += float(depth[int(j)] + 1)
+		var away := pos[i] - c / maxf(w, 1.0)
+		if away.length() < 0.005:
+			away = vel[i] if vel[i] != Vector2.ZERO else pos[i] + Vector2(0.0, 0.01)
+		var dir := away.normalized()
+		vel[i] += dir * clampf(SPLAY_SPEED - vel[i].dot(dir), 0.0, SPLAY_PUSH * dt)
 
 
 ## THE CARDS MOVE, one step: none faster than a hand ([constant HAND_SPEED]), and one going out past
