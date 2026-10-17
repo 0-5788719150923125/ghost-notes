@@ -23,7 +23,11 @@ class_name DeskMedium
 ##
 ## A PURE FUNCTION OF THE VOICE'S TIME. A pad item is written at `_ink_time`, a function of the words'
 ## times and now, so any moment can be drawn without the ones before it: a seek lands on the page as it
-## was. The camera alone eases (as the book's and the tablet's do), and lands at once on a seek.
+## was. A READING STARTED MID-WAY (a scrub that starts the voice again from a later chunk) begins where
+## its first words are (the document's `start_words`, as the card table and the tablet find theirs):
+## everything before them was said long ago, so it is written on the first frame - matched from the
+## top instead, no word of the new reading was ever found, and the pen stood still to the end (the
+## user, 2026-10-16: "scrubbing the timeline seems to have broken the pen completely"). The camera alone eases (as the book's and the tablet's do), and lands at once on a seek.
 ##
 ## THE PAD: a page of a legal pad (8.5 x 11 in), ruled, filled top to bottom - every formula on the next
 ## rules ([method DeskScript.lay_out]) - and TURNED only when the next would run off the foot: the
@@ -41,7 +45,17 @@ class_name DeskMedium
 ##
 ## THE PEN has no hand (the writer is unseen). It leans to the top right of the frame from its nib
 ## (the user: "it should angle to the top-right, which would be a more natural writing position") -
-## which also keeps what it has just written, to the left of the nib, in view.
+## which also keeps what it has just written, to the left of the nib, in view. THE HAND IS ALIVE (the
+## user, 2026-10-16: "A hand holding a pen would never keep it at a perfectly static angle"): the lean
+## sways slowly about that direction ([method lean]), turns a little with where on the page the nib
+## is, as a forearm pivoting at the elbow turns it, and its top trails the nib's travel; off the paper
+## the nib drifts a few millimeters ([method drift]) - never while it writes, where it is the ink's.
+##
+## THE PEN POINTS AT WHAT IS SPOKEN OF ([DeskScript]'s `point`; the user: "never POINTING to any of
+## it ... after 2 minutes of no movement - it's very hard to get my attention back on track"): at the
+## word, the nib comes down close over the named thing - sweeping along under it when it is wide - and
+## stays beside its right end, low on its height, so the pen's body leans away over clean paper and
+## never onto the line below; the camera goes there.
 
 ## The page's canvas (an 8.5 x 11 sheet) and the sheet in the world, in meters.
 const PW := DeskScript.PW
@@ -57,6 +71,26 @@ const REST_EASE := 0.9
 const REACH_EASE := 0.45
 ## The pen comes down this long before its dictation's first word.
 const PEN_LEAD := 0.2
+## POINTING: how close over the paper the nib comes; a thing this wide (px) or wider is swept under
+## (this far below it) in the first [constant POINT_SWEEP] seconds; where the nib stays, this far right
+## of the thing's end; and the least time a point is held.
+const POINT_LIFT := 0.0035
+const POINT_WIDE := 90.0
+const POINT_SWEEP := 0.9
+const POINT_GAP := 14.0
+const POINT_MIN := 1.0
+## THE HAND IS ALIVE: the lean's slow sway (degrees, about the vertical and in its rise), its turn
+## across the page's width (degrees from the left edge to the right), how far the top trails the nib
+## (seconds of its travel, at most [constant TRAIL_MAX] degrees), measured over [constant MOTION_DT];
+## and the nib's drift off the paper (px, and meters of lift), full at rest and none while it writes.
+const SWAY_YAW := 5.0
+const SWAY_TILT := 3.0
+const REACH_YAW := 10.0
+const TRAIL := 1.7
+const TRAIL_MAX := 7.0
+const MOTION_DT := 0.1
+const DRIFT_PX := 12.0
+const DRIFT_LIFT := 0.003
 ## How it leans from its nib: up, to the right, and away from the writer - the frame's top right.
 const PEN_UP := Vector3(0.42, 0.64, -0.40)
 ## THE CAMERA: a long lens (the book's: a wide one stood close bends the page's lines), wide enough to
@@ -84,6 +118,7 @@ var _subs = null
 var _doc_key := ""
 var _seed := 1
 var _actions: Array = []           # DeskScript's, laid out
+var _records := {}                 # item id -> its typeset record (a part's box in `anchors`)
 var _spoken_n := 0
 var _strokes := {}                 # item id -> Ink.schedule
 var _follower := ReadingFollower.new()
@@ -435,16 +470,21 @@ func _ensure_doc() -> void:
 	_title.byline = String(d.get("byline", ""))
 	var src := String(d.get("source", ""))
 	var desk: Dictionary = d.get("desk", {}) if d.get("desk") is Dictionary else {}
-	var key := "%d|%s|%d" % [src.hash(), String(desk.get("dir", "")), int(desk.get("seed", 0))]
+	var start: PackedStringArray = d.get("start_words", PackedStringArray()) \
+		if d.get("start_words") is PackedStringArray else PackedStringArray()
+	var key := "%d|%s|%d|%s" % [src.hash(), String(desk.get("dir", "")), int(desk.get("seed", 0)),
+		" ".join(start)]
 	if key == _doc_key:
 		return
 	_doc_key = key
-	load_lesson(src, desk)
+	load_lesson(src, desk, start, int(d.get("start_index", -1)))
 
 
 ## LOAD A LESSON: [param source] (the lesson's text, the pen's marks in it) and [param desk] (`{ink,
-## seed}` - the typeset items and the hand's seed). Public for a gate, which hands it one by hand.
-func load_lesson(source: String, desk: Dictionary) -> void:
+## seed}` - the typeset items and the hand's seed); for a reading started mid-way, its first words
+## [param start] (normalized), [param near] the index they are about. Public for a gate, which hands
+## it one by hand.
+func load_lesson(source: String, desk: Dictionary, start := PackedStringArray(), near := -1) -> void:
 	_seed = int(desk.get("seed", _seed))
 	var typeset: Dictionary = desk.get("ink", {}) if desk.get("ink") is Dictionary else {}
 	var records := {}
@@ -459,10 +499,18 @@ func load_lesson(source: String, desk: Dictionary) -> void:
 		var sched := Ink.schedule(got["strokes"], _seed)
 		_strokes[id] = sched
 		lengths[id] = float(sched["length"])
+	_records = records
 	var parsed: Dictionary = DeskScript.parse(source, lengths, records)
 	_actions = parsed["actions"]
-	_spoken_n = (parsed["spoken"] as PackedStringArray).size()
-	_follower.reset(parsed["spoken"])
+	var spoken: PackedStringArray = parsed["spoken"]
+	_spoken_n = spoken.size()
+	var from := TabletScript.find_run(spoken, start, near) if not start.is_empty() else -1
+	var est := PackedFloat32Array()
+	if from > 0:
+		# the past, spaced as a steady voice would have said it, rests and all
+		for w in DeskScript.rehearsal(parsed):
+			est.append(float((w as Dictionary)["t0"]))
+	_follower.reset(spoken, from, est)
 	_built_n = -1
 	_plan = []
 	for i in _actions.size():
@@ -477,8 +525,10 @@ func load_lesson(source: String, desk: Dictionary) -> void:
 ## [constant PEN_LEAD] before it) and ends as the words do - no sooner than the pen can write it at
 ## [constant DeskScript.MAX_PACE], no later than at [constant DeskScript.MIN_PACE] - and never before
 ## the one before it has ended. One with no dictation, and a strike, are performed in the rest before
-## the next words. A page turn comes in the rest before the item that needs it, never over writing
-## still going on, and the item waits for it. An action whose words have not arrived waits.
+## the next words. A POINT is there as its word is said and held to its sentence's end, never into
+## the time the pen needs to reach what comes next. A page turn comes in the rest before the item that
+## needs it, never over writing still going on, and the item waits for it. An action whose words have
+## not arrived waits.
 func _build_plan() -> void:
 	var prev_end := -INF
 	for i in _actions.size():
@@ -490,7 +540,7 @@ func _build_plan() -> void:
 		var write := float(a.get("write", 0.0))
 		var start := INF
 		var end := INF
-		if String(a["kind"]) in ["pad", "pad-text"] and span > 0:
+		if String(a["kind"]) in DeskScript.WRITES and span > 0:
 			var t0 := _word_t0(after)
 			if t0 == INF:
 				break
@@ -498,6 +548,17 @@ func _build_plan() -> void:
 			var said := _word_t1(after + span - 1)
 			end = clampf(said if said < INF else start + float(span) * DeskScript.EST_WORD,
 				start + write / DeskScript.MAX_PACE, start + write / DeskScript.MIN_PACE)
+		elif String(a["kind"]) == "point":
+			var t0 := _word_t0(after)
+			if t0 == INF:
+				break
+			start = maxf(t0, prev_end)
+			var said := _word_t1(after + maxi(span, 1) - 1)
+			end = maxf(said if said < INF else start + float(span) * DeskScript.EST_WORD, start + POINT_MIN)
+			if i + 1 < _actions.size():
+				var next := _word_t0(int((_actions[i + 1] as Dictionary).get("after", 0)))
+				if next < INF:
+					end = maxf(minf(end, next - PEN_LEAD - REACH_EASE), start + 0.3)
 		else:
 			var before := _word_t1(after - 1) if after > 0 else maxf(feed.intro_hold, 0.6) - 0.25
 			if before == INF:
@@ -631,7 +692,7 @@ func _on_page(page: int) -> Array:
 	var out: Array = []
 	for i in _actions.size():
 		var a: Dictionary = _actions[i]
-		if float(_plan[i]["start"]) > _now or int(a["page"]) != page:
+		if float(_plan[i]["start"]) > _now or int(a["page"]) != page or String(a["kind"]) == "point":
 			continue
 		if String(a["kind"]) == "strike":
 			var of := int(a.get("of", -1))
@@ -661,7 +722,7 @@ func _ink_of(i: int) -> Array:
 	var a: Dictionary = _actions[i]
 	var out: Array = []
 	match String(a["kind"]):
-		"pad", "pad-text":
+		"pad", "pad-text", "draw":
 			var sched: Dictionary = _strokes.get(String(a["id"]), {})
 			if sched.is_empty():
 				return out
@@ -695,32 +756,38 @@ func pen_at() -> Dictionary:
 	var rest := Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0)
 	var last_end := -INF
 	var last_point := rest
+	var last_lift := LIFT
 	for i in _actions.size():
 		var a: Dictionary = _actions[i]
 		var start := float(_plan[i]["start"])
 		var end := float(_plan[i]["end"])
 		if start == INF:
 			break
+		var pointing := String(a["kind"]) == "point"
+		if pointing and target_box(a).size.x < 0.0:
+			continue        # at nothing on this page: the pen stays where it is
+		var down := POINT_LIFT if pointing else LIFT
 		if _now < start:
 			# on its way to the next action: from where it rested to where the action begins
 			var u := clampf(1.0 - (start - _now) / REACH_EASE, 0.0, 1.0)
 			var from := _rest_near(last_point) if last_end > -INF else rest
 			if float(_plan[i]["turn_at"]) < INF and _now < start - 0.05:
 				from = rest
-			return {"p": from.lerp(_action_point(a, true), _ease(u)), "lift": lerpf(REST_LIFT, LIFT, _ease(u))}
+			return {"p": from.lerp(_action_point(a, true), _ease(u)), "lift": lerpf(REST_LIFT, down, _ease(u))}
 		if _now < end:
 			return _pen_during(a, i, start)
 		last_end = end
 		last_point = _action_point(a, false)
+		last_lift = down
 	if last_end == -INF:
 		return {"p": rest, "lift": REST_LIFT}
 	var v := clampf((_now - last_end) / REST_EASE, 0.0, 1.0)
-	return {"p": last_point.lerp(_rest_near(last_point), _ease(v)), "lift": lerpf(LIFT, REST_LIFT, _ease(v))}
+	return {"p": last_point.lerp(_rest_near(last_point), _ease(v)), "lift": lerpf(last_lift, REST_LIFT, _ease(v))}
 
 
 func _pen_during(a: Dictionary, i: int, start: float) -> Dictionary:
 	match String(a["kind"]):
-		"pad", "pad-text":
+		"pad", "pad-text", "draw":
 			var local := _ink_time(i)
 			var sched: Dictionary = _strokes.get(String(a["id"]), {})
 			var at: Vector2 = a["at"]
@@ -750,13 +817,19 @@ func _pen_during(a: Dictionary, i: int, start: float) -> Dictionary:
 				var line := _strike_line(_actions[of])
 				var u := clampf((_now - start) / maxf(float(a["write"]), 0.01), 0.0, 1.0)
 				return {"p": (line[0] as Vector2).lerp(line[1], u), "lift": 0.0}
+		"point":
+			var path := point_path(a)
+			var u := clampf((_now - start) / POINT_SWEEP, 0.0, 1.0)
+			var p: Vector2 = (path[0] as Vector2).lerp(path[1], _ease(u / 0.7)) if u < 0.7 \
+				else (path[1] as Vector2).lerp(path[2], _ease((u - 0.7) / 0.3))
+			return {"p": p, "lift": POINT_LIFT}
 	return {"p": Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0), "lift": REST_LIFT}
 
 
 ## Where an action's writing begins ([param first]) or ends, on the page.
 func _action_point(a: Dictionary, first: bool) -> Vector2:
 	match String(a["kind"]):
-		"pad", "pad-text":
+		"pad", "pad-text", "draw":
 			var strokes: Array = (_strokes.get(String(a["id"]), {}) as Dictionary).get("strokes", [])
 			if not strokes.is_empty():
 				var pts: PackedVector2Array = (strokes[0 if first else strokes.size() - 1] as Dictionary)["points"]
@@ -766,7 +839,45 @@ func _action_point(a: Dictionary, first: bool) -> Vector2:
 			var of := int(a.get("of", -1))
 			if of >= 0:
 				return _strike_line(_actions[of])[0 if first else 1]
+		"point":
+			return point_path(a)[0 if first else 2]
 	return Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0)
+
+
+## WHAT A POINT POINTS AT, on the page (px): the box of the thing it names - a part's, from its ink
+## record's `anchors`, else the whole thing's - or a box of negative size when that is not on the page
+## the point is made over (or was never written).
+func target_box(a: Dictionary) -> Rect2:
+	var none := Rect2(Vector2.ZERO, Vector2(-1.0, -1.0))
+	var of := int(a.get("of", -1))
+	if of < 0 or of >= _actions.size():
+		return none
+	var t: Dictionary = _actions[of]
+	if int(t["page"]) != int(a["page"]) or not t.has("at"):
+		return none
+	var at: Vector2 = t["at"]
+	var part := String(a.get("part", ""))
+	var anchors: Dictionary = (_records.get(String(t["id"]), {}) as Dictionary).get("anchors", {})
+	var b: Array = anchors.get(part, []) if not part.is_empty() and anchors.get(part) is Array else []
+	if b.size() == 4:
+		var k := float(t["k"]) * DeskScript.PX_PER_PT
+		return Rect2(at + Vector2(float(b[0]), float(b[1])) * k,
+			Vector2(float(b[2]) - float(b[0]), float(b[3]) - float(b[1])) * k)
+	return Rect2(at.x, at.y - float(t["h"]), float(t["w"]), float(t["h"]) + float(t["d"]))
+
+
+## THE NIB'S WAY WHILE IT POINTS: `[down, along, stays]` - it comes down under a wide thing (a
+## formula, a curve) and sweeps along under it, then stays beside its right end, low on its height;
+## at a small one (a dot, a label, a short line) it comes straight to that place. Beside the end, the
+## pen's body leans away over clean paper, and never onto a line below (an aligned block's next line
+## is closer than a rule).
+func point_path(a: Dictionary) -> Array:
+	var b := target_box(a)
+	var stays := Vector2(b.end.x + POINT_GAP * 0.5, b.position.y + b.size.y * 0.7)
+	if b.size.x >= POINT_WIDE:
+		var y := b.end.y + POINT_GAP * 0.5
+		return [Vector2(b.position.x + b.size.x * 0.1, y), Vector2(b.end.x - b.size.x * 0.05, y), stays]
+	return [stays, stays, stays]
 
 
 ## Where the pen rests after writing at [param p]: to its right and a little below, clear of the line.
@@ -787,11 +898,61 @@ func _world(p: Vector2, lift: float) -> Vector3:
 
 func _place_pen() -> void:
 	var at := pen_at()
-	var nib := _world(at["p"], float(at["lift"]))
-	var up := PEN_UP.normalized()
+	var p: Vector2 = at["p"]
+	var lift := float(at["lift"])
+	var keep := _now
+	_now = keep - MOTION_DT
+	var before: Vector2 = pen_at()["p"]
+	_now = keep
+	var moved := (p - before) / MOTION_DT
+	var d := drift(_now, _seed, lift)
+	var up := lean(PEN_UP, _now, _seed, p.x / PW,
+		Vector3(moved.x / PW * PAD_W, 0.0, moved.y / PH * PAD_H))
+	var nib := _world(p + (d["dp"] as Vector2), lift + float(d["dlift"]))
 	var x := up.cross(Vector3.FORWARD).normalized()
 	var z := x.cross(up).normalized()
 	_pen.global_transform = Transform3D(Basis(x, up, z), nib)
+
+
+## THE PEN'S LEAN at [param now]: [param base] swayed slowly about the vertical and in its rise (the
+## phases the hand's [param seed]'s), turned toward the page's top as the nib goes left
+## ([param x_share], 0 at the page's left edge, 1 at its right - a forearm pivoting at the elbow), and
+## its top trailing [param motion], the nib's travel across the desk (m/s). A unit vector, always within
+## a few degrees of [param base]. Pure: the same moment is the same lean.
+static func lean(base: Vector3, now: float, seed: int, x_share: float, motion: Vector3) -> Vector3:
+	var ph := _phases(seed)
+	var up := base.normalized()
+	var yaw := SWAY_YAW * (0.65 * sin(TAU * now / 7.3 + ph[0]) + 0.35 * sin(TAU * now / 3.1 + ph[1])) \
+		+ REACH_YAW * (0.7 - clampf(x_share, 0.0, 1.0))
+	up = up.rotated(Vector3.UP, deg_to_rad(yaw))
+	var flat := Vector3(up.x, 0.0, up.z)
+	if flat.length() > 0.001:
+		var tilt := SWAY_TILT * sin(TAU * now / 5.7 + ph[2])
+		up = up.rotated(Vector3.UP.cross(flat).normalized(), deg_to_rad(tilt))
+	var trail := Vector3(motion.x, 0.0, motion.z) * -TRAIL
+	var most := tan(deg_to_rad(TRAIL_MAX))
+	if trail.length() > most:
+		trail = trail.normalized() * most
+	return (up + trail).normalized()
+
+
+## THE NIB'S DRIFT off the paper at [param now]: `{dp, dlift}` (px, m) - slow, a few millimeters, in
+## proportion to how high it is held ([param lift] of [constant REST_LIFT]): full at rest, slight while
+## it points, none while it writes, where the nib is the ink's.
+static func drift(now: float, seed: int, lift: float) -> Dictionary:
+	var w := clampf(lift / REST_LIFT, 0.0, 1.0)
+	var ph := _phases(seed)
+	var dx := 0.6 * sin(TAU * now / 9.1 + ph[3]) + 0.4 * sin(TAU * now / 4.3 + ph[4])
+	var dy := 0.6 * sin(TAU * now / 8.3 + ph[5]) + 0.4 * sin(TAU * now / 3.7 + ph[6])
+	return {"dp": Vector2(dx, dy) * DRIFT_PX * w, "dlift": DRIFT_LIFT * sin(TAU * now / 6.1 + ph[7]) * w}
+
+
+## The hand's phases, from its seed: eight angles.
+static func _phases(seed: int) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for k in 8:
+		out.append(TAU * _hash01(seed, 700 + k))
+	return out
 
 
 # --- the camera -------------------------------------------------------------------------------
@@ -815,8 +976,16 @@ func _framing() -> Dictionary:
 		var ta := float(_plan[i]["turn_at"])
 		if ta < INF and _now > ta - 1.5 and _now < ta + DeskScript.TURN + 0.5:
 			k = 0.25
+		if String(a["kind"]) == "point":
+			# a point is framed on what it points at
+			var b := target_box(a)
+			if b.size.x >= 0.0 and int(a["page"]) == page:
+				line = b.get_center()
+			continue
 		if int(a["page"]) == page and a.has("at"):
-			line = Vector2((a["at"] as Vector2).x + float(a["w"]) * 0.5, (a["at"] as Vector2).y)
+			# a drawing is framed on its middle; a line of writing, on its baseline
+			var up := float(a.get("h", 0.0)) * 0.5 if String(a["kind"]) == "draw" else 0.0
+			line = Vector2((a["at"] as Vector2).x + float(a["w"]) * 0.5, (a["at"] as Vector2).y - up)
 	var known := _follower.known_last()
 	if _spoken_n > 0 and known >= _spoken_n - 1 and _now > _follower.st1[known]:
 		k = 0.0

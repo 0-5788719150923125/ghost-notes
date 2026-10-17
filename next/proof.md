@@ -114,8 +114,9 @@ because a math video that fakes its work teaches something false:
 
 The note's text is the brief: the problem, or a source (a classic theorem, an olympiad problem, a
 manuscript from openai/math with its paper and Lean file), and anything the author wants stressed.
-The `proof:` block holds the dials: `level`, `length` (minutes), `kind` (solve, explain, explore -
-inferred from the brief when not set).
+The `proof:` block holds the dials: `level`, `kind` (solve, explain, explore - inferred from the
+brief when not set). NO LENGTH (2026-10-16, the user: "I would prefer to just make videos as long as
+they need to be"): a lesson runs as long as its proof takes to teach.
 
 Steps, one file each under `user://proofs/<show>/<episode>/`, in the Cards pattern (a step is done
 when its file exists; a redo deletes the step and what depends on it):
@@ -390,8 +391,9 @@ a user to define the problem. Then, a second button: to generate a random proble
 - **Attach "Proof" with "+"** (a `producer` row that brings a Voice and takes the presentation slot,
   workspace `proof`, block `ghost: proof:`). The note's words are the problem.
 - **The card** (`ProofCard`): Invent a problem (the inventor writes a classic problem into the note,
-  as an edit the note's Undo takes back), Make episode, Stop, Folder, New episode and a picker, the
-  lesson's minutes, the writer, and a row per step with what its agent is doing and a ⟳.
+  as an edit the note's Undo takes back), Refine (below), Make episode (Remake episode once anything
+  is made), Stop, Delete…, Folder, New episode and a picker, the writer, and a row per step with what its agent is doing and a ⟳ (the lesson's minutes
+  were a dial here until 2026-10-16 - see "No minutes" below).
 - **The episode** (`ProofEpisode`, `ProofProducer`): `problem` (the framer: words, TeX, the exact
   Lean statement of `theorem main`, the forbidden facts, history), `solve` (the solver with
   `ProofTools` - notebook, lean, submit - over `hosts/math/lean_check.py`; a proof is accepted only
@@ -484,6 +486,135 @@ Found by making it, each fixed and held:
   which the hand had no strokes for, so their outlines were traced and "different" read as bold. A
   ligature is written as its letters now (`Ink._ligature`; `ink_check`, with a longer name as the
   control). And the wide shot cut the pad's binding off: it stands at 1.45 m, the whole pad in it.
+
+**After the user's third look (2026-10-16)**, the second episode exported and on YouTube:
+- **A letter is said as a letter** ("The voices are pronouncing 'a' wrong; because they're using it
+  like a part of a sentence ... maybe a macro that could be used to override phonemes"): `[a]` in any
+  script is the letter's name, shown as `a` in the subtitles (`TextNorm._expand_core`, the `letter`
+  row of `ScriptMarks`). The teacher writes every letter that names something that way, and
+  `DeskScript.bare_letters` sends back a lesson that reads a formula's `a` as a bare word, or puts a
+  bare "a" before a comma or a stop, which no article is.
+- **The pen draws** ("at the very least ... charts/graphs/drawings upon the paper itself ... today,
+  the model just writes a title, then sits there explaining"): a `draw` mark holds an SVG over as many
+  lines as it takes, dictated like a formula. `hosts/math/figure.py` reads it with svgelements (MIT,
+  in `math_venv`) into pen paths - lines, curves and arcs flattened, a small filled shape a dot, a big
+  one hatched (only a fill the SVG asks for: SVG's default fill is black), dashes, hand-drawn
+  arrowheads - and its `<text>` labels are set by TeX in the same run as the formulas. `<axes>` draws
+  numbered axes on a box of the figure, and inside it `<plot fn>` is COMPUTED from its expression (an
+  arithmetic-only parser; broken where undefined or jumping, cut at the range's edge), so a curve is
+  never an agent's guess. The hand draws paths a little uneven, pinned at their ends, at 2.6 times its
+  writing speed; a figure is centered in the column. Held by `test_typeset.py`, `ink_check` and
+  `proof_check`; looked at on a fixture lesson (a number line with root two, y = x squared, stones and
+  a square's diagonal).
+- **Plain words, and a student** ("some concepts are unexplained, or not going into enough depth ...
+  the model was trying to be 'poetic' - which is absolutely not helpful here"): the teacher's rules
+  were rewritten (define every term with numbers, history included; every step names its rule; the
+  facts the proof stands on are taught; no metaphors, personification or flourishes), and two sample
+  phrases the old prompt held were taken out - both came back in the second episode almost word for
+  word. The lesson is three steps now: `draft` (the teacher), `review` (the STUDENT reads it as the
+  episode's viewer and notes where it loses them, as `{quote, need}`, never its reasoning), `lesson`
+  (the teacher again, from the draft and the notes). An episode whose lesson was written before there
+  were drafts is not drafted again behind it (`ProofEpisode.moot`). Run for real on the
+  irrational-power problem (`user://proofs/ghost-dev/3`, the second episode's solved work copied in):
+  the student's twelve notes were the right ones (Gelfond-Schneider named but never stated, case B
+  never checking that b is irrational, the power rule used on irrational exponents with no word on
+  why it still holds, "real number" undefined), and the second lesson answered them in plain words -
+  and ran 1,995 spoken words on a six-minute dial. THE DIAL WAS LOOSE BEFORE THAT: the budget assumed
+  140 words a minute, the rate a voice reads at alone, and the second episode's take spoke 1,014 words
+  in 9:01 - 112 a minute with the pen's rests. The budget is the measured rate now, the second draft
+  is told to stay in it (room for the notes is cut from asides, repeats and detail), and a lesson
+  over 1.35 times its words goes back once (`ProofPrompts.LONG`). All of it went the same day - see
+  "No minutes".
+- **The thumbnail** ("did not use the proper thumbnail ... the same thumbnail that cards-based modes
+  use"): the Proof card's upload never named the title screen's moment, so the exporter took none and
+  YouTube chose a frame. It names `ShowOpening.thumbnail_moment` at the take's intro now, as Cards does
+  (`proof_check`, on the first frame: the card names the Director).
+- **The category** ("every video is uploaded ... under the 'People & Blogs' category"): the YouTube
+  card picks one of YouTube's assignable categories (`YouTube.CATEGORIES`); People & Blogs until it is
+  changed.
+- **Refine** ("I want the agents to look at what I've written in the script, and give in a more
+  fully fleshed-out structure there ... rewrite the entire thing, to define the problem better", on a
+  note reading "Explain the 6 trig functions"): a button beside Invent. The refiner
+  (rules/proof/refiner.yaml) reads the note as it stands and writes it back whole - the title, the
+  question, the claim in LaTeX, what the viewer learns, who it is for, what to show on the pad, where
+  it comes from, and anything else asked. Everything the author asked
+  for is kept; a topic that is not a claim is given the claim at its heart, proved while the topic is
+  explained. One agent writes the note at a time (`ProofCard.NOTE_WRITERS`), and the edit is the
+  note's own (its undo takes it back).
+- **No minutes** ("I feel like the ability to set a video's runtime in minutes was a bad idea. I
+  would prefer to just make videos as long as they need to be, because otherwise you're stretching
+  them to fill the minutes requirement, or you are compressing them and teaching the content too
+  quickly"): the card's Minutes dial, the word budget (`WORDS_PER_MINUTE`), the over-length retry
+  (`LONG`) and the figure count by minutes are gone. The teacher is told the lesson has no set length
+  and is told against both failures - never stretch it (no repeats, no second example of the same
+  thing, no aside that does not serve the proof), never rush it (no step or definition the viewer
+  needs skipped or squeezed); the second draft answers each note where it arises, in as few plain
+  sentences as it needs, and cuts what does not serve the proof; a lesson draws at least two figures.
+  `proof_check` holds that no agent is handed minutes or words, and that a lesson of 4,500 spoken
+  words lands on its first try. If lessons come back bloated, the fix is in the teacher's words.
+- **The pen points, and is never still for long** (on the six-trig-functions episode: "the model has
+  gone for minutes just staring at a static page, while describing what is on the page, but never
+  POINTING to any of it ... I was not able to follow what the model was talking about, and after 2
+  minutes of no movement - it's very hard to get my attention back on track"): the lesson's longest
+  stretch of speech with the pen idle was 496 words (about four and a half minutes; the earlier
+  episodes' were 200 and 283). A thing on the pad can be NAMED - `<!-- pad #name: ... -->`, an SVG
+  element's `id` (on a `<g>` for several, inside `<axes>` too), a formula's `\pin{name}{...}` - and
+  `<!-- point: name -->` INSIDE SPEECH sends the pen there at the next word, held to the sentence's
+  end (`DeskScript`). typeset.py reads the pins back from TeX's own specials, figure.py the ids, each
+  as a box in the record's `anchors`. At the desk the nib comes down close (3.5 mm) beside a small
+  thing's foot, to its right, or sweeps under a wide one left to right, so the pen's body leans away
+  over clean paper; the camera goes there; a point at a page already turned leaves the pen be. A
+  lesson that says more than 80 words with the pen idle (`DeskScript.still`) or points at a name
+  nothing carries goes back once; the student marks both.
+- **The hand is alive** ("the pen being at a completely static angle feels awkward ... A hand holding a
+  pen would never keep it at a perfectly static angle"): `DeskMedium.lean` sways the lean a few
+  degrees over seconds about its top-right direction, turns it toward the page's top as the nib goes
+  left (a forearm pivoting at the elbow), and trails its top behind the nib's travel; `drift` moves the
+  nib a few millimeters off the paper, in proportion to how high it is held - never while it writes.
+- **Teach what this proof uses** (the same episode ran about 58 minutes - "possibly too long"): it
+  retold every numerical check in the notebook (pi/3, pi/6, x = 2.5, x = -0.7, the computer's
+  infinities), Lean's three axioms, and a similar-triangles detour on where the names come from, and
+  put Lean's own code on the pad. The length stays the lesson's own; the teacher is told to teach
+  only what the proof uses, to tell the steps that lead to it rather than every check, and to keep
+  Lean's code and inner workings out; the student marks a stretch spent on what the proof does not use.
+- **Delete and remake** ("There is currently no way to delete an episode. There is also no way to
+  entirely remake one. ... Delete should be a button, while 'Make Episode' should probably just
+  regenerate the entire thing"): once anything of an episode is made, Make episode reads Remake
+  episode and, after asking, throws every step away and makes it all again from the note; Delete…
+  asks, then sends the episode's folder to the system trash (`ProofEpisode.trash`) and opens the
+  newest one left. A step's ⟳ also goes on from a step that failed or was never made - what Make
+  episode did before. While a take of an episode renders it is pinned, and neither is done to it.
+- **A phrase is never broken** ("A point is named by two numbers" had "like 5 seconds of silence
+  between 'two' and 'numbers' ... flow completely broken by the interrupted sentence"): a dictation
+  the pen lags rested at punctuation OR after any six words, and "two" was the sixth. It rests at
+  punctuation only now (`DeskScript.paced`); what the pen owes in between waits for the next mark or
+  the end. The wait itself was the pen writing a whole sentence of prose (23 s of hand for 3 s of
+  words), so the teacher is told a line of pad text is a few words, and the rest is said.
+- **The pen keeps up with the voice** ("there is still a super long pause at the end of this ...
+  rather than breaking the audio, should we increase the speed of writing ... to track with the audio
+  better?"): `DeskScript.MAX_PACE` 1.8 -> 4.0. On the six-trig-functions episode the rest at "numbers:"
+  went from 6.5 s to 1.7, and the whole episode's rests inside dictations to 7, 5 s in all.
+- **A scrub no longer stops the pen** ("scrubbing the timeline seems to have broken the pen
+  completely. For the remainder of the video, the pen doesn't move at all"): a scrub starts the voice
+  again from a later chunk, and the desk matched the new words from the top of the lesson - a
+  twelve-word window found none, so nothing after it was ever scheduled. The desk now reads the
+  document's `start_words` (as the card table and the tablet do) and starts there; `proof_check`
+  holds both sides.
+- **The trig names "pronounced very strangely"** (BUILT - next/voice_engines.md, "a word eSpeak has
+  to guess at"; the user, on the clips below: "B sounds quite a bit better"; the report: cosine "co-seen", cotangent
+  "co-angent", cosecant "co-seh-cant"): eSpeak, which the neural voices use, gives kˈoʊsaɪn,
+  kˈoʊtændʒənt and kˈoʊsɛkənt - the core syllable unstressed in each, and the voice slurs an
+  unstressed full vowel ("sine" to "seen", the t of "tan" lost); cosecant's vowel is wrong too. A
+  dictionary does not settle it alone: Wiktionary's US cosine is /ˈkoʊ.saɪn/, eSpeak's pattern;
+  Merriam-Webster marks a secondary stress (\ˈkō-ˌsīn\). CMUdict has none of cosine, secant,
+  cotangent, cosecant, hypotenuse or radian; Wiktionary has them all (kaikki.org: a JSON file per
+  word, US IPA, topic tags). Two clips for the user's ear, speaker 13 of en_US-libritts-high:
+  dist/math_spike/stress_ab/A_as_now.wav and B_core_stressed.wav (kˈoʊsˌaɪn, kˈoʊtˌændʒənt,
+  kˈoʊsˌiːkənt). If B is right, the fix is general: a word CMUdict lacks (eSpeak guessing) gets a
+  secondary stress on each unstressed full vowel, and Wiktionary's vowels where eSpeak's differ.
+- Still to come from the user's notes: the instruments (step 3) - "an actor that could browse the
+  internet on a tablet, perhaps pull up a wikipedia page and read from it, perhaps compute on a
+  calculator ... we would pivot from one tool to another".
 
 ### 1. The episode, heard
 

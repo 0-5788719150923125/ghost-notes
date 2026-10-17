@@ -3074,6 +3074,12 @@ func _cut(body: String, sentence_no: int) -> Dictionary:
 			var tok := {"text": String(w.text), "punct": punct, "fallback": arpa}
 			if bool(w.get("literal", false)):
 				tok["arpa"] = arpa
+			# A WORD NO DICTIONARY HOLDS (the audit's UNKNOWN), spelled as written: eSpeak would be
+			# guessing at it, so the host reads it as Wiktionary has it, its full vowels stressed
+			# (lexicon.py - the user, 2026-10-16: cosine "co-seen", cotangent "co-angent")
+			elif String(w.get("display", w.text)).to_lower() == String(w.text).to_lower() \
+					and not Phonemes.is_known(String(w.text)):
+				tok["rare"] = true
 			# A WORD LEANED ON (`*so*`, `**so**`) is SPOKEN leaned on: the host holds its stressed
 			# vowel longer and lifts the word a little (piper.py `EMPHASIS`). Sent only when set,
 			# so an unmarked sentence is the request it always was.
@@ -3152,9 +3158,14 @@ func _speaker_of(s: Dictionary) -> int:
 			return clampi(int(s["speaker"]), 0, maxi(0, int((v as Dictionary).get("speakers", 1)) - 1))
 	return maxi(0, int(s["speaker"]))
 
-## [method Delivery.request_args] for slot [param s], with the reader this install's voice holds.
+## [method Delivery.request_args] for slot [param s], with the reader this install's voice holds - and
+## how the host may look up a word eSpeak would guess at (lexicon.py): from Wiktionary, kept in its
+## cache; never in a process that must not write the user's things (a gate, a probe), so a test is
+## the same on every machine.
 func _request_args(s: Dictionary, ch: Dictionary) -> Dictionary:
-	return Delivery.request_args(s, ch, _speaker_of(s))
+	var a := Delivery.request_args(s, ch, _speaker_of(s))
+	a["lexicon"] = "off" if Settings.is_read_only() else "fetch"
+	return a
 
 
 ## [method Delivery.gap_before], with the Turn dial as it stands.

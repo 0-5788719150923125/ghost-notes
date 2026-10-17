@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 304 references inside a folder, 747 down the stack, 0 up it.
+Between scripts today: 304 references inside a folder, 750 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -13,7 +13,7 @@ Between scripts today: 304 references inside a folder, 747 down the stack, 0 up 
 | --- | --- | --- | --- |
 | `app/` | The shell | 13 | `masking`, `cards`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
 | `masking/` | Masking | 10 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
-| `proof/` | Proof | 6 | `desk`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
+| `proof/` | Proof | 6 | `desk`, `table`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `desk/` | The desk | 3 | `table`, `media`, `scene_kit`, `data` |
 | `cards/` | Cards | 9 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
 | `table/` | The set | 21 | `media`, `scene_kit`, `audio`, `data` |

@@ -11,7 +11,7 @@ AN ENTRY DOES NOT IMPLEMENT ITS MARK. The parsers of record stay where they are 
 
 A CARDS BRIEF IS NOT A SCRIPT, AND HAS MARKS OF ITS OWN (2026-10-12, the user: "why are all of the supported macros and features missing from 'cards' editor mode? I would expect that most if not all of the features from generative mode should also work here"). The palette was empty there because no entry named the mode: a show's document is the BRIEF its agents work from, never read aloud, so a mark in it does something only where the code reads it out of the brief or an agent is told to honor it. Those are offered ("cards" in `modes`), each saying what it does THERE (`blurbs`): a speaker cue gives the show another voice, a `## Cards` section is its deck, a macro reads as its default and a note to self is taken out before any agent sees the brief (`CardPrompts.brief`), and a hesitation, a delivery or a stressed word stands in a line the brief gives the host word for word (rules/cards/reader.yaml, `spoken`). The marks of a page or a tablet (pictures, scene lines, web pages) and the inline pronunciation are not: the table is the only medium there, its pictures are the painter's, and a reader's passage keeps no bracket (`CardProducer.clean_spoken`).
 
-Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (32 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
+Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (33 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
 
 ## Voices
 
@@ -44,6 +44,7 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 | Mark | Example | Panels | What it does |
 |---|---|---|---|
 | Pronunciation | `[K AE T]` | Generative, Synthesis | Spells a word in ARPAbet phonemes, read exactly as written. For a name the voice gets wrong. |
+| Letter | `[a]` | Generative, Synthesis | A letter that names something - a number, a point, a case - said by its name and shown as the letter: [a] is "ay", where a bare a is read as the word a. |
 
 ## Text
 

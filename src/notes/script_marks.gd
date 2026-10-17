@@ -145,6 +145,14 @@ const REGISTRY := {
 		"modes": ["generative", "synthesis"],
 		"pattern": "\\[[A-Za-z]{1,2}[0-2]?(?:\\s+[A-Za-z]{1,2}[0-2]?)*\\]",
 	},
+	"letter": {
+		"label": "Letter",
+		"group": "pronunciation",
+		"blurb": "A letter that names something - a number, a point, a case - said by its name and shown as the letter: [a] is \"ay\", where a bare a is read as the word a.",
+		"before": "[", "fill": "a", "after": "]", "line": "",
+		"modes": ["generative", "synthesis"],
+		"pattern": "\\[[A-Za-z]\\]",
+	},
 	"macro": {
 		"label": "Template macro",
 		"group": "text",

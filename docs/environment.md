@@ -30,7 +30,7 @@ godot --headless --path . -- --provision mathlib # Lean and Mathlib, for the Pro
 - **Body/face-tracking environment**, ~520 MB - MediaPipe and its two models, for the Masking clown effect's 478-point face landmarks and the umbra effect's person silhouette and 33 body landmarks. ONE environment for both. Built the first time a clown or umbra layer plays.
   - Not on Intel Macs: mediapipe publishes no build for Intel Macs.
   - Not on Windows on ARM: opencv-contrib-python has no Windows-on-ARM build.
-- **Math environment**, ~15 MB - fontTools, for hosts/math/typeset.py: it reads TeX's fonts for each glyph's name (and its outline, for a glyph no hand draws), so the desk's pen writes what TeX laid out. Built the first time a Proof needs it.
+- **Math environment**, ~16 MB - fontTools, for hosts/math/typeset.py: it reads TeX's fonts for each glyph's name (and its outline, for a glyph no hand draws), so the desk's pen writes what TeX laid out; and svgelements, which reads a drawing's SVG for the pen (hosts/math/figure.py). Built the first time a Proof needs it.
 - **Mathlib**, ~7.5 GB - Mathlib, Lean's library of mathematics, downloaded already compiled, and the Lean REPL built against it: the workbench every proof the Proof component shows is checked in. Lake fetches them with git; Mathlib's cache tool downloads with curl. Built the first time a Proof needs it, and moved to each new Mathlib release.
   - Not on Windows on ARM: Lean publishes no build for Windows on ARM.
 - **Voice models (Piper)**, ~60 MB each - The neural voices themselves, fetched per voice from Hugging Face the first time one is selected. Data, not code - the models are MIT-tagged and no GPL Piper code is installed (see hosts/voice/requirements.txt).

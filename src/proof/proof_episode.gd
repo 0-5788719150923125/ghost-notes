@@ -11,7 +11,11 @@ class_name ProofEpisode
 ##                           its TeX, its exact Lean statement, the facts it may not cite, its history
 ##   solve     solve.json    the solver's session, ended: verified or not, and how many checks; beside
 ##                           it notebook.md (its lab notebook) and proof.lean (its Lean file)
-##   lesson    lesson.md     the teacher's: what the voice says, with the pen's marks ([DeskScript])
+##   draft     draft.md      the teacher's first draft of the lesson
+##   review    review.json   the student's notes on the draft: where it loses a newcomer, and what was
+##                           needed there (`{notes: [{quote, need}]}`)
+##   lesson    lesson.md     the teacher's, written again from the draft and the notes: what the voice
+##                           says, with the pen's marks ([DeskScript])
 ##   ink       ink.json      ghost's own: every formula the pen writes, laid out by TeX
 ##   script    script.md     ghost's own: what the voice reads
 ##
@@ -20,10 +24,13 @@ class_name ProofEpisode
 
 const ROOT := "user://proofs"
 ## The steps, in the order an episode is made.
-const STEPS := ["problem", "solve", "lesson", "ink", "script"]
+const STEPS := ["problem", "solve", "draft", "review", "lesson", "ink", "script"]
 ## What each step is made from.
-const NEEDS := {"problem": [], "solve": ["problem"], "lesson": ["solve"], "ink": ["lesson"],
-	"script": ["ink"]}
+const NEEDS := {"problem": [], "solve": ["problem"], "draft": ["solve"], "review": ["draft"],
+	"lesson": ["review"], "ink": ["lesson"], "script": ["ink"]}
+## THE STEPS ON THE WAY TO A LESSON: made only for one. An episode whose lesson was written before
+## there were drafts is not given one now (the producer passes them by while the lesson stands).
+const DRAFTING := ["draft", "review"]
 
 ## Where episodes live. Moved aside under test, so a gate never touches the author's episodes.
 static var root := ROOT
@@ -87,6 +94,10 @@ func file_of(step: String) -> String:
 			return dir.path_join("notebook.md")
 		"proof":
 			return dir.path_join("proof.lean")
+		"draft":
+			return dir.path_join("draft.md")
+		"review":
+			return dir.path_join("review.json")
 		"lesson":
 			return dir.path_join("lesson.md")
 		"ink":
@@ -104,6 +115,12 @@ func has(step: String) -> bool:
 
 func needs(step: String) -> Array:
 	return NEEDS.get(step, [])
+
+
+## A step there is no need to make: one on the way to a lesson ([constant DRAFTING]) while the lesson
+## stands - an episode written before there were drafts is not drafted again behind its lesson.
+func moot(step: String) -> bool:
+	return DRAFTING.has(step) and has("lesson")
 
 
 ## The steps made from [param step], directly or through others, in order.

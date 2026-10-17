@@ -17,7 +17,8 @@ extends SceneTree
 ## - WHAT A VIDEO SAYS: `<`/`>` made safe, the title one line of at most 100 characters cut at a
 ##   word, the description at most 5000 bytes, tags split as a document writes them, each once,
 ##   counted as YouTube counts them and fitted to 500; private unless asked otherwise (a privacy
-##   YouTube does not know is private), not for kids, synthetic, no paid promotion, People & Blogs.
+##   YouTube does not know is private), not for kids, synthetic, no paid promotion, People & Blogs
+##   unless another category is asked for (one an upload cannot take is People & Blogs).
 ##   The playlist a video joins is named and linked between the description and the chapters (the
 ##   control: no playlist, no line).
 ## - RECORDS: an upload recorded and read back; a queued upload pending, owner-only; a missing file
@@ -26,8 +27,9 @@ extends SceneTree
 ##   word timings (an hour on, `h:mm:ss`), and `upload.md` with the show's tags first.
 ## - THE EXPORT MENU says nothing of YouTube (2026-10-07: the upload moved to a component's card).
 ## - THE YOUTUBE CARD: a new one goes up nothing and privately, its block round-trips (an unknown
-##   privacy reads as private); unticked it describes no upload whatever the panel has, ticked it lays
-##   its title - the template's macros filled, nothing dangling, no name twice - privacy and playlist
+##   privacy reads as private, an unknown category as People & Blogs); unticked it describes no upload
+##   whatever the panel has, ticked it lays its title - the template's macros filled, nothing
+##   dangling, no name twice - privacy, category and playlist
 ##   over the panel's part, and nothing when the panel has nothing; a sign-in that may only upload
 ##   lacks the playlists' scope; a resume while an upload waits on a file that exists, not once it
 ##   is gone; Sign in / Sign out and Import / Replace follow the files. THE LINE A TITLE GOES UP IN
@@ -288,6 +290,10 @@ func _body() -> bool:
 		and YouTube.video_body({"privacy": "unlisted"})["status"]["privacyStatus"] == "unlisted"
 		and YouTube.video_body({"privacy": "everyone"})["status"]["privacyStatus"] == "private",
 		"the privacy asked for, and private for one YouTube does not know")
+	_ok(YouTube.video_body({"category": "27"})["snippet"]["categoryId"] == "27"
+		and YouTube.video_body({"category": "44"})["snippet"]["categoryId"] == "22"
+		and YouTube.video_body({"category": "Education"})["snippet"]["categoryId"] == "22",
+		"the category asked for, and People & Blogs for one an upload cannot take (Trailers) or that is not an id")
 	_ok(YouTube.video_body({}, "Episode 7")["snippet"]["title"] == "Episode 7"
 		and YouTube.video_body({})["snippet"]["title"] == "Untitled", "a video always has a title")
 	_ok(YouTube.video_body({"tags": ["a", "b"]})["snippet"]["tags"] == ["a", "b"], "tags as an Array too")
@@ -400,18 +406,19 @@ func _card() -> bool:
 	var card = load("res://src/export/youtube_card.gd").new()
 	card.exporter = ex
 	var cap: Dictionary = card.capture()
-	_ok(cap == {"upload": false, "title": "%title%: %episode%", "privacy": "private", "playlist": "", "playlist_title": ""},
-		"a new card uploads nothing, privately, titled by the template (%s)" % str(cap))
+	_ok(cap == {"upload": false, "title": "%title%: %episode%", "privacy": "private", "category": "22", "playlist": "",
+		"playlist_title": ""}, "a new card uploads nothing, privately, as People & Blogs, titled by the template (%s)" % str(cap))
 	card.values = func() -> Dictionary: return {"title": "Truthful Tarot", "episode": "The Tower"}
 	_ok(card.meta({"tags": ["a"]}).is_empty(), "unticked, it describes no upload whatever the panel has")
-	card.apply({"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted", "playlist": "PL1",
-		"playlist_title": "Readings"})
+	card.apply({"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted", "category": "27",
+		"playlist": "PL1", "playlist_title": "Readings"})
 	_ok(card.capture() == {"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted",
-		"playlist": "PL1", "playlist_title": "Readings"}, "its block round-trips (%s)" % str(card.capture()))
+		"category": "27", "playlist": "PL1", "playlist_title": "Readings"}, "its block round-trips (%s)" % str(card.capture()))
 	var m: Dictionary = card.meta({"tags": ["a"], "record": "r.json"})
 	_ok(m.get("title") == "Truthful Tarot - The Tower (%s)" % Time.get_date_string_from_system() and m.get("privacy") == "unlisted"
+		and m.get("category") == "27" and YouTube.video_body(m)["snippet"]["categoryId"] == "27"
 		and m.get("playlist") == "PL1" and m.get("playlist_title") == "Readings" and m.get("tags") == ["a"]
-		and m.get("record") == "r.json", "ticked, it lays its title, privacy and playlist over the panel's part (%s)" % str(m))
+		and m.get("record") == "r.json", "ticked, it lays its title, privacy, category and playlist over the panel's part (%s)" % str(m))
 	_ok(card.meta({}).is_empty(), "...and describes nothing when the panel has nothing")
 	_ok(card.meta({"values": {"title": "Show", "episode": "Rendered One"}}).get("title").begins_with("Show - Rendered One")
 		and not card.meta({"values": {"title": "S"}}).has("values"),
@@ -419,6 +426,9 @@ func _card() -> bool:
 	_ok(card._playlist.get_item_text(card._playlist.selected) == "Readings", "the block's playlist is shown before the list is loaded")
 	card.apply({"privacy": "everyone"})
 	_ok(card.capture()["privacy"] == "private", "a privacy YouTube does not know reads as private")
+	_ok(card.capture()["category"] == "22", "and a block that names no category is People & Blogs, as every upload was")
+	card.apply({"category": "30"})
+	_ok(card.capture()["category"] == "22", "the control: a category an upload cannot take (Movies) reads as People & Blogs")
 	# the title's macros
 	var v := {"title": "Truthful Tarot", "episode": "The Tower"}
 	_ok(YouTube.expand_title("%title%: %episode%", v) == "Truthful Tarot: The Tower", "the default template")

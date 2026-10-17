@@ -3,10 +3,12 @@ extends SceneTree
 ## Does the Proof component hold together without an agent: what each agent is told, the lesson's
 ## format, the episode on disk, the framer's answer checked, and the pad laid out?
 ##
-## - EVERY PROMPT RENDERS WHOLE ([ProofPrompts] over rules/proof/): the inventor, the framer, the
-##   solver, the teacher verified and not, and the teacher's second try with what it must mend -
-##   nothing left unfilled ([member Rules.missing], no `{{`). Two-sided on the one claim that matters
-##   most: a teacher whose proof Lean did NOT accept is never told it was checked, and is told to say
+## - EVERY PROMPT RENDERS WHOLE ([ProofPrompts] over rules/proof/): the inventor, the refiner, the
+##   framer, the solver, the teacher verified and not, and the teacher's second try with what it must
+##   mend - nothing left unfilled ([member Rules.missing], no `{{`). The refiner (the user, 2026-10-16:
+##   "rewrite the entire thing, to define the problem better") reads the note as it stands, and its
+##   format is placeholders only - a format with a title written in the control. Two-sided on the one
+##   claim that matters most: a teacher whose proof Lean did NOT accept is never told it was checked, and is told to say
 ##   so; one whose proof was accepted is told what Lean checked.
 ## - THE LESSON'S FORMAT ([DeskScript]): every pen's mark is an action anchored after the right word,
 ##   the paragraph right after a formula is its DICTATION (the words the pen writes across), the voice
@@ -25,6 +27,43 @@ extends SceneTree
 ##   ends, the ink as far through as the words are - within the pen's pace - a page turned in the rest
 ##   before the formula that needs it and never over writing, the camera wide over the intro and a turn
 ##   and close while the pen writes, and the title up until the first word ([ShowOpening]).
+## - A DRAWING ([DeskScript], the user, 2026-10-16: "it might be useful if it could draw something"): a
+##   `draw` mark over several lines is one action, a figure for the ink, dictated by the line after it,
+##   centered on the page and never spoken - with the SVG's text in the speech as the control.
+## - A LETTER IS SAID AS A LETTER (the user, the same day: "The voices are pronouncing 'a' wrong"): `[a]`
+##   is the letter's name, shown as `a`, where a bare "a" stays the article (the control); a lesson
+##   reading a formula's `a` as a bare word is caught, and one writing `[a]` is not.
+## - THE STUDENT AND THE SECOND DRAFT: the student's prompt renders whole and never asks for reasoning,
+##   its answer is read as notes (a non-answer refused), the teacher's second draft is handed the first
+##   and the notes, and an episode whose lesson stands is not drafted again behind it.
+## - THE PEN POINTS (the user, 2026-10-16: "describing what is on the page, but never POINTING to any of
+##   it"): a `point` in speech is an action at the word after it, held to its sentence's end and never
+##   spoken; it finds the latest thing written under its name - a mark's #name, a drawing's id, a
+##   formula's \pin - and a name nothing carries is caught (the control: the names that are there are
+##   not). At the desk the nib comes down beside the thing as the word is said - a wide one swept under
+##   first - the camera goes to it and no ink is drawn; a point at a page already turned leaves the pen where it was (the control).
+## - THE PEN IS NEVER STILL FOR LONG: a long stretch of speech with the pen idle is caught, and the same
+##   stretch broken by a point is not (the control).
+## - A READING STARTED MID-WAY (the user, 2026-10-16: "scrubbing the timeline seems to have broken the
+##   pen completely. For the remainder of the video, the pen doesn't move at all"): handed the new
+##   reading's first words, the desk finds its place - what came before is written, the next formula
+##   is scheduled and the pen writes it; the control, the same words with no start, matches nothing
+##   and leaves the rest unscheduled, which is what the user saw.
+## - THE HAND IS ALIVE (the same day: "A hand holding a pen would never keep it at a perfectly static
+##   angle"): the pen's lean sways over seconds - the old fixed lean is the control - always toward the
+##   top right and within a few degrees of it; it is the same at the same moment, another hand's sways
+##   otherwise; its top trails the nib's travel; and the nib drifts at rest and never while it writes.
+## - A LESSON'S LENGTH IS ITS OWN (the user, 2026-10-16: "make videos as long as they need to be"): no
+##   agent is handed minutes or words, and a lesson of thousands of words lands on its first try -
+##   against the same lesson with a pad line left unread, which still goes back.
+## - THE THUMBNAIL (the user: "did not use the proper thumbnail ... the same thumbnail that cards-based
+##   modes use"): a Proof upload names the title screen's moment, the name fully up over the blur - on
+##   the first frame, since [ProofCard] names the Director, which a script's `_init` has not got.
+## - DELETE AND REMAKE (the user, 2026-10-16: "There is currently no way to delete an episode. There is
+##   also no way to entirely remake one"): an episode with nothing made is made, one with anything made
+##   is remade (Make becomes Remake) and a remake leaves nothing of it; a delete throws away the
+##   episode's own folder - through the gate's seam, never the system trash - and opens the newest left,
+##   or a first one when none is.
 ##
 ##   godot --headless --path . --script tests/proof/proof_check.gd
 
@@ -43,6 +82,60 @@ func _init() -> void:
 	_episode()
 	_problem()
 	_pad()
+	_drawing()
+	_letters()
+	_student()
+	_length()
+	_points()
+	_alive()
+	_scrub()
+	process_frame.connect(_upload, CONNECT_ONE_SHOT)
+
+
+## THE UPLOAD, on the first frame (the card names the Director), and then the verdict.
+func _upload() -> void:
+	print("-- the upload's thumbnail")
+	var card: Script = load("res://src/proof/proof_card.gd")
+	var ep := ProofEpisode.open("thumb-note", 1)
+	ep.write_json("problem", {"episode_title": "Odd Squares", "description": "Sums of odd numbers.", "tags": ["induction"]})
+	ep.write_json("solve", {"verified": true, "lean": "4.35.0", "mathlib": "v4.35.0"})
+	var up: Dictionary = card.upload_of(ep, {"title": "Pen & Ink"}, PackedStringArray(["math"]), 9.0)
+	var at := float(up.get("thumbnail_at", -1.0))
+	var cards: Script = load("res://src/cards/episode_card.gd")
+	_check(absf(at - ShowOpening.thumbnail_moment(9.0)) < 0.001 and absf(at - float(cards.thumbnail_moment(9.0))) < 0.001,
+		"a Proof upload names the thumbnail's moment, the card shows' own (%.2f s)" % at)
+	_check(ShowOpening.title_alpha(at, 9.0, true) == 1.0 and ShowOpening.pull(at, 9.0, true) == 0.0,
+		"and at that moment the name is fully up over the desk out of focus")
+	_check(String(up.get("description", "")).contains("checked by the Lean theorem prover (Lean 4.35.0")
+		and up.get("tags", []) == ["math", "induction"], "with the description, the check and the tags as before")
+	var take := _scratch.path_join("take_1.wav")
+	FileAccess.open(take.get_basename() + ".json", FileAccess.WRITE).store_string(JSON.stringify({"bookend": {"in": 9.0, "out": 9.0}}))
+	_check(ShowOpening.take_intro(take, 2.0) == 9.0 and ShowOpening.take_intro(_scratch.path_join("none.wav"), 2.0) == 2.0,
+		"the moment comes from the intro the take was rendered with; the control, a take with no sidecar, the live one")
+	print("-- delete and remake")
+	var fresh := ProofEpisode.open("delete-note", 1)
+	_check(not card.made_any(fresh), "an episode with nothing made is made (the button says Make episode)")
+	fresh.write_text("lesson", "Words.\n")
+	var notes := ProofEpisode.open("delete-note", 2)
+	DirAccess.make_dir_recursive_absolute(notes.dir)
+	FileAccess.open(notes.file_of("notebook"), FileAccess.WRITE).store_string("## work")
+	_check(card.made_any(fresh) and card.made_any(notes), "one with any step made - a notebook too - is remade (Remake episode)")
+	var whole := ProofEpisode.open("delete-note", 3)
+	for st in ProofEpisode.STEPS:
+		whole.write_text(String(st), "x\n")
+	whole.invalidate("problem")
+	_check(not card.made_any(whole), "a remake leaves nothing of what was made")
+	_check(card.after_delete([]) == 1 and card.after_delete([{"n": 2, "title": ""}, {"n": 5, "title": ""}]) == 5,
+		"once one is deleted the newest left is opened, else a first one")
+	var thrown: Array = []
+	ProofEpisode.discard = func(d: String) -> void: thrown.append(d)
+	var err := fresh.trash()
+	ProofEpisode.discard = Callable()
+	_check(err.is_empty() and thrown == [fresh.dir], "a delete throws away that episode's own folder, through the gate's seam")
+	_finish()
+
+
+func _finish() -> void:
 	_rmrf(_scratch)
 	ProofEpisode.root = ProofEpisode.ROOT
 	if _fails.is_empty():
@@ -90,6 +183,21 @@ func _prompts() -> void:
 	_check(String(ProofPrompts.inventor(8, [])["prompt"]) != String(ProofPrompts.inventor(9, [])["prompt"])
 		or String(ProofPrompts.inventor(8, [])["prompt"]) != String(ProofPrompts.inventor(10, [])["prompt"]),
 		"two presses point the inventor at different branches")
+	var ref := ProofPrompts.refiner("Ghost Notes", "Explain the 6 trig functions")
+	texts.append(ref["system"])
+	texts.append(ref["prompt"])
+	_check(String(ref["system"]).contains("Explain the 6 trig functions")
+		and String(ref["prompt"]).contains("Keep everything the author asked for"),
+		"the refiner reads the note as it stands, and keeps what was asked")
+	_check(not String(ref["prompt"] + ref["system"]).to_lower().contains("reasoning"),
+		"the refiner is never asked for its reasoning")
+	# A SAMPLE IN A PROMPT COMES BACK WORD FOR WORD: every line of the format the refiner fills is a
+	# placeholder, or one of the note's own headings
+	var filled := _filled_in(String(ref["prompt"]))
+	_check(String(ref["prompt"]).contains("in exactly this format") and filled.is_empty(),
+		"the refiner's format is placeholders only (%s)" % " | ".join(filled))
+	_check(_filled_in("Write it in exactly this format:\n\n# <a title>\n\n# The Six Ratios\n\n## Who it is for").size() == 1,
+		"the control: a format with a title written in is found")
 	var fr := ProofPrompts.framer("Ghost Notes", "Show that primes never run out.",
 		YouTube_.title_shape(YouTube_.TITLE_TEMPLATE, {"title": "Ghost Notes"}), ["Pick More Than Half"])
 	texts.append(fr["system"])
@@ -109,11 +217,15 @@ func _prompts() -> void:
 	_check(String(so["prompt"]).contains("Nat.exists_infinite_primes"), "the solver is told the forbidden facts")
 	_check(not String(so["prompt"] + so["system"]).to_lower().contains("reasoning"),
 		"the solver is never asked for its reasoning (a safeguard stops that - next/proof.md step 0c)")
-	var yes := ProofPrompts.teacher("Ghost Notes", "a note", PROBLEM, "## notes", "theorem main", true, 6.0)
-	var no := ProofPrompts.teacher("Ghost Notes", "a note", PROBLEM, "## notes", "theorem main", false, 6.0)
-	var fix := ProofPrompts.teacher("Ghost Notes", "a note", PROBLEM, "", "", true, 4.0,
-		{"broken": ["\\frac{1}{: Missing } inserted."], "notation": ["so $x^2$ grows"], "undictated": ["n^2 + 1"]})
-	for t in [yes, no, fix]:
+	var yes := ProofPrompts.teacher("Ghost Notes", "a note", PROBLEM, "## notes", "theorem main", true)
+	var no := ProofPrompts.teacher("Ghost Notes", "a note", PROBLEM, "## notes", "theorem main", false)
+	var fix := ProofPrompts.teacher("Ghost Notes", "a note", PROBLEM, "", "", true,
+		{"broken": ["\\frac{1}{: Missing } inserted."], "notation": ["so $x^2$ grows"], "undictated": ["n^2 + 1"],
+		"letters": ["Take a equal to two."]})
+	var again := ProofPrompts.teacher("Ghost Notes", "a note", PROBLEM, "## notes", "theorem main", true, {},
+		"FIRST DRAFT TEXT", [{"quote": "a stubborn number", "need": "say what irrational means"}, {"quote": "x", "need": ""}])
+	var stu := ProofPrompts.student("Ghost Notes", "a note", PROBLEM, "THE DRAFT TO READ")
+	for t in [yes, no, fix, again, stu]:
 		texts.append((t as Dictionary)["system"])
 		texts.append((t as Dictionary)["prompt"])
 	_check(String(yes["prompt"]).contains("checked this proof and accepted it")
@@ -122,8 +234,36 @@ func _prompts() -> void:
 		"the control: an unverified proof's teacher is told to say so, never that it was checked")
 	_check(String(fix["prompt"]).contains("Missing } inserted") and String(fix["prompt"]).contains("so $x^2$ grows")
 		and String(fix["prompt"]).contains("n^2 + 1"), "a second try is told what to mend")
-	_check(not String(yes["prompt"]).contains("COULD NOT SET"), "and a first try is not")
-	_check(String(fix["prompt"]).contains("560"), "four minutes is about 560 words")
+	_check(String(fix["prompt"]).contains("Take a equal to two.") and String(fix["prompt"]).contains("square brackets"),
+		"and the lines that said a letter as the word a")
+	_check(not String(yes["prompt"]).contains("COULD NOT BE SET") and not String(yes["prompt"]).contains("FIRST DRAFT")
+		and not String(yes["prompt"]).contains("SAID A LETTER"), "and a first try is not")
+	_check(String(again["prompt"]).contains("FIRST DRAFT TEXT") and String(again["prompt"]).contains("\"a stubborn number\": say what irrational means")
+		and String(again["prompt"]).contains("Write the lesson again"),
+		"the second draft is handed the first and the student's notes (a note with no need left out)")
+	_check(String(stu["prompt"]).contains("THE DRAFT TO READ") and String(stu["prompt"]).contains("curious viewers")
+		and String(stu["prompt"]).contains("\"notes\""), "the student reads the draft as the episode's viewer, and answers notes")
+	_check(not String(stu["prompt"] + stu["system"]).to_lower().contains("reasoning")
+		and not String(stu["prompt"] + stu["system"]).to_lower().contains("explain why"),
+		"the student is never asked for its reasoning")
+	_check(String(yes["prompt"]).contains("<!-- draw:") and String(yes["prompt"]).contains("Draw at least two figures"),
+		"the teacher is told how to draw, and to draw at least two figures")
+	_check(String(yes["prompt"]).contains("no metaphors") and not String(yes["prompt"]).contains("refuses to behave")
+		and not String(yes["prompt"]).contains("can you see why that has to be even"),
+		"the teacher is told to talk plainly, and handed no sample phrase to repeat")
+	# AS LONG AS IT NEEDS (the user, 2026-10-16: "make videos as long as they need to be"): no agent is
+	# handed a length, and the teacher is told neither to stretch nor to rush
+	var lengths := PackedStringArray()
+	for t in [yes, again, ref]:
+		var said := String((t as Dictionary)["prompt"]).to_lower()
+		for w in ["minutes", "spoken words"]:
+			if said.contains(w):
+				lengths.append(w)
+	_check(lengths.is_empty() and String(yes["prompt"]).contains("no set length")
+		and String(ref["prompt"]).contains("no set length"),
+		"no agent is handed a length (%s), and the teacher and the refiner are told there is none" % ", ".join(lengths))
+	_check(String(yes["prompt"]).contains("Never stretch it") and String(yes["prompt"]).contains("never rush it"),
+		"the teacher is told neither to stretch the lesson nor to rush it")
 	var left := PackedStringArray()
 	for t in texts:
 		if String(t).contains("{{"):
@@ -152,7 +292,7 @@ So here is the idea.
 """
 ## How long each of the lesson's formulas takes the pen, as the ink would measure it: the first two
 ## keep up with their dictations, the third outlasts its words.
-const WRITES := {"pad-text|Do the primes ever run out?": 2.0, "pad|2!+1 = 3": 3.0, "pad|3!+1 = 7": 9.0}
+const WRITES := {"pad-text|Do the primes ever run out?": 2.0, "pad|2!+1 = 3": 3.0, "pad|3!+1 = 7": 20.0}
 
 
 func _lengths() -> Dictionary:
@@ -169,6 +309,17 @@ func _rests(speak: String) -> PackedFloat32Array:
 		out.append(float(m.get_string(1)))
 	return out
 
+
+
+## The lines of [param prompt]'s format (after "in exactly this format") that are neither a
+## placeholder (`<...>`) nor one of the note's headings (`## `): words an agent would copy.
+func _filled_in(prompt: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	var at := prompt.find("in exactly this format")
+	for line in (prompt.substr(at).split("\n").slice(1) if at >= 0 else PackedStringArray()):
+		if not line.strip_edges().is_empty() and not line.begins_with("## ") and not line.contains("<"):
+			out.append(line)
+	return out
 
 func _script() -> void:
 	print("-- the lesson's format")
@@ -189,10 +340,10 @@ func _script() -> void:
 	_check(" ".join(spoken.slice(at, at + 6)) == "two factorial plus one is three",
 		"and the pen writes across exactly those words (%s)" % " ".join(spoken.slice(at, at + 6)))
 	# the rests: the pen coming down before each dictation (0.45), none in or after a dictation the pen
-	# keeps up with, the third's writing outlasting its six words (9 s at 1.8 x pace, less the words) -
+	# keeps up with, the third's writing outlasting its six words (20 s at 4 x pace, less the words) -
 	# shared out over its three phrases, the last share after it - and the strike
 	var rests := _rests(String(p["speakable"]))
-	var tail := 9.0 / DeskScript.MAX_PACE - 6.0 * DeskScript.EST_WORD
+	var tail := 20.0 / DeskScript.MAX_PACE - 6.0 * DeskScript.EST_WORD
 	var want := PackedFloat32Array([DeskScript.LEAD_HOLD, DeskScript.LEAD_HOLD, DeskScript.LEAD_HOLD,
 		tail / 3.0, tail / 3.0, tail / 3.0, DeskScript.STRIKE])
 	var same := rests.size() == want.size()
@@ -202,10 +353,14 @@ func _script() -> void:
 	_check(String(p["speakable"]).contains("Three factorial, <!-- action-hold: 1.01 --> plus one, <!-- action-hold: 1.01 --> is seven.")
 		and String(p["speakable"]).contains("Two factorial, plus one, is three."),
 		"a dictation the pen lags goes phrase by phrase, resting while the pen writes; one it keeps up with is said straight")
-	var plain := DeskScript.paced("one two three four five six seven eight nine ten", 20.0, 10)
-	_check(String(plain["text"]).count("action-hold") == 1 and String(plain["text"]).contains("six <!-- action-hold")
-		and absf(float(plain["rest"]) - DeskScript.tail_for(20.0, 10) * 0.4) < 0.01,
-		"a phrase with no stop in it rests every few words (%s)" % String(plain["text"]))
+	# A PHRASE IS NEVER BROKEN (the user, 2026-10-16: "like 5 seconds of silence between 'two' and
+	# 'numbers' ... the flow completely broken by the interrupted sentence")
+	var plain := DeskScript.paced("A point is named by two numbers across then up.", 20.0, 10)
+	_check(String(plain["text"]).count("action-hold") == 0 and absf(float(plain["rest"]) - DeskScript.tail_for(20.0, 10)) < 0.01,
+		"words with no mark between them are said together, what the pen owes waiting for the end (%s)" % String(plain["text"]))
+	var marked := DeskScript.paced("A point is named by two numbers: across, then up.", 20.0, 10)
+	_check(String(marked["text"]).contains("numbers: <!-- action-hold") and not String(marked["text"]).contains("two <!--"),
+		"the control: with a colon in it, the voice rests there and nowhere mid-phrase (%s)" % String(marked["text"]))
 	var lone := DeskScript.paced("one two three four five six seven", 20.0, 7)
 	_check(String(lone["text"]).count("action-hold") == 0, "but never leaves one word to say alone (%s)" % String(lone["text"]))
 	var near := DeskScript.paced("Twelve is four times three. Forty is eight.", DeskScript.MAX_PACE * (8.0 * DeskScript.EST_WORD + 0.7), 8)
@@ -220,8 +375,9 @@ func _script() -> void:
 	var speak := String(p["speakable"])
 	_check(not speak.contains("pad:") and not speak.contains("2!+1") and not speak.contains("not read"),
 		"the voice is handed no TeX and no note")
-	_check(DeskScript.tail_for(3.0, 6) == 0.0 and DeskScript.tail_for(9.0, 6) > 2.9,
-		"a dictation the pen keeps up with leaves no rest; one it lags leaves the difference")
+	_check(DeskScript.tail_for(3.0, 6) == 0.0 and DeskScript.tail_for(7.5, 6) == 0.0
+		and absf(DeskScript.tail_for(20.0, 6) - (20.0 / DeskScript.MAX_PACE - 6.0 * DeskScript.EST_WORD)) < 0.001,
+		"a dictation the pen keeps up with leaves no rest - a line of prose at four times the pen's pace too; one it lags leaves the difference")
 	var silent := DeskScript.parse("Look.\n\n<!-- pad: x = 1 -->\n\nNow then.", {})
 	_check(absf(float((silent["actions"][0] as Dictionary)["dur"]) - DeskScript.LEAD_HOLD
 		- DeskScript.estimate("x = 1")) < 0.01 and int((silent["actions"][0] as Dictionary)["span"]) == 0,
@@ -249,15 +405,26 @@ func _episode() -> void:
 	print("-- the episode on disk")
 	var ep := ProofEpisode.open("my-note", 1)
 	_check(ep.dir.begins_with(_scratch), "the gate's episodes are in its own folder")
-	_check(ep.dependents("solve") == ["lesson", "ink", "script"], "a solve's dependents (%s)" % str(ep.dependents("solve")))
+	_check(ep.dependents("solve") == ["draft", "review", "lesson", "ink", "script"], "a solve's dependents (%s)" % str(ep.dependents("solve")))
 	_check(ep.dependents("script").is_empty(), "nothing is made from the script")
-	for step in ["problem", "solve", "lesson", "ink", "script", "notebook", "proof"]:
-		ep.write_text(step, "{}" if step in ["problem", "solve", "ink"] else "x")
+	for step in ["problem", "solve", "draft", "review", "lesson", "ink", "script", "notebook", "proof"]:
+		ep.write_text(step, "{}" if step in ["problem", "solve", "review", "ink"] else "x")
+	ep.invalidate("lesson")
+	_check(ep.has("draft") and ep.has("review") and not ep.has("lesson") and not ep.has("ink"),
+		"a redo of the lesson keeps the draft and the student's notes it is written again from")
+	_check(not ep.moot("draft") and not ep.moot("review"), "with no lesson, the draft and the notes are made")
+	ep.write_text("lesson", "x")
+	DirAccess.remove_absolute(ep.file_of("draft"))
+	DirAccess.remove_absolute(ep.file_of("review"))
+	_check(ep.moot("draft") and ep.moot("review") and not ep.moot("ink"),
+		"an episode whose lesson stands (made before there were drafts) is not drafted again behind it")
+	ep.write_text("ink", "{}")
+	ep.write_text("script", "x")
 	ep.write_json("problem", {"episode_title": "Primes never run out"})
 	ep.invalidate("solve")
 	var gone := PackedStringArray()
 	var kept := PackedStringArray()
-	for step in ["problem", "solve", "lesson", "ink", "script", "notebook", "proof"]:
+	for step in ["problem", "solve", "draft", "review", "lesson", "ink", "script", "notebook", "proof"]:
 		if FileAccess.file_exists(ep.file_of(step)):
 			kept.append(step)
 		else:
@@ -272,6 +439,289 @@ func _episode() -> void:
 	_check(ep.seed != two.seed and ep.seed == ProofEpisode.open("my-note", 1).seed,
 		"each episode's hand has a seed of its own, the same every time")
 	_check(ProofEpisode.show_key_of("/notes/My Proof Note.md") == "my-proof-note", "a note's key is its file's name")
+
+
+# --- a drawing, a letter, the student ------------------------------------------------------------
+
+const DRAWN := """Here is the number line.
+
+<!-- draw:
+<svg viewBox="0 0 360 120">
+  <line x1="10" y1="60" x2="350" y2="60" arrow="end"/>
+  <text x="10" y="90">$0$</text>
+</svg>
+-->
+A line, with zero at its left end.
+
+And on we go.
+"""
+
+
+func _drawing() -> void:
+	print("-- a drawing")
+	var p := DeskScript.parse(DRAWN, {})
+	var actions: Array = p["actions"]
+	_check(actions.size() == 1 and String((actions[0] as Dictionary)["kind"]) == "draw",
+		"a drawing over several lines is one action (%s)" % str(actions.map(func(a): return a["kind"])))
+	if actions.size() != 1:
+		return
+	var a: Dictionary = actions[0]
+	_check(String(a["mode"]) == "figure" and String(a["tex"]).begins_with("<svg viewBox") and String(a["tex"]).ends_with("</svg>"),
+		"its SVG is the figure the ink lays out")
+	_check(int(a["span"]) == 8 and int(a["after"]) == 5, "the line after it is its dictation (%d words after %d)" % [a["span"], a["after"]])
+	var w := float(a["w"])
+	_check(absf(float((a["at"] as Vector2).x) - (DeskScript.TEXT_X + (DeskScript.PW - DeskScript.RIGHT - DeskScript.TEXT_X - w) * 0.5)) < 0.01
+		and absf(w - DeskScript.FIGURE_W * DeskScript.PX_PER_PT) < 0.01 and absf(float(a["h"]) - 90.0 * DeskScript.PX_PER_PT) < 0.01,
+		"it spans the column, its viewBox's shape, centered on the page (%.0f wide at %s)" % [w, a["at"]])
+	var speak := String(p["speakable"])
+	_check(not speak.contains("svg") and not speak.contains("viewBox") and not speak.contains("$0$")
+		and speak.contains("A line, with zero at its left end.") and speak.contains("And on we go."),
+		"none of the drawing is spoken; its dictation and the words after it are")
+	var leak := DeskScript.parse(DRAWN.replace("<!-- draw:", "<!-- not a mark:"), {})
+	_check(String(leak["said"]).contains("viewBox") or (leak["actions"] as Array).is_empty(),
+		"the control: the same SVG with no draw mark is not a drawing")
+	_check(DeskScript.items(DRAWN).size() == 1 and String(DeskScript.items(DRAWN)[0]["mode"]) == "figure",
+		"the ink is handed it as a figure")
+	_check(DeskScript.undictated(DRAWN).is_empty() and DeskScript.undictated(DRAWN.replace("-->\nA line", "-->\n\nA line")).size() == 1,
+		"a drawing with no dictation is caught like a formula with none")
+	_check(DeskScript.estimate(String(a["tex"])) < 6.0 and DeskScript.estimate(String(a["tex"])) > DeskScript.EST_BASE,
+		"a drawing's time before the ink is guessed by its elements, not its characters (%.1f s)" % DeskScript.estimate(String(a["tex"])))
+
+
+func _letters() -> void:
+	print("-- a letter, said as a letter")
+	var said: Array = Phonemes.parse("Take [a] to be two.")[0]
+	var plain: Array = Phonemes.parse("Take a fraction.")[0]
+	_check(said.size() == 5 and String(said[1]["text"]) == "eigh" and String(said[1]["display"]) == "a",
+		"[a] is said as the letter's name and shown as the letter (%s / %s)" % [said[1].get("text"), said[1].get("display")])
+	_check(String(plain[1]["text"]) == "a", "the control: a bare a is the article")
+	var cased: Array = Phonemes.parse("Case [A], then [b].")[0]
+	_check(String(cased[1]["display"]) == "A," and String(cased[3]["text"]) == "bee" and String(cased[3]["display"]) == "b.",
+		"a capital is shown as written, and a stop after it stays (%s %s)" % [cased[1].get("display"), cased[3].get("display")])
+	var spoken := DeskScript.parse("<!-- pad: a + b -->\n[a] plus [b].\n\nDone.")["spoken"] as PackedStringArray
+	_check(spoken.size() > 0 and spoken[0] == "a", "the desk follows [a] as the word the subtitles show (%s)" % ", ".join(spoken))
+	var bad := "<!-- pad: a^{b} \\in \\mathbb{Q} -->\na to the power b is rational.\n\nSo it is."
+	var good := "<!-- pad: a^{b} \\in \\mathbb{Q} -->\n[a] to the power [b] is rational.\n\nSo it is."
+	var article := "<!-- pad: x \\in \\mathbb{Q} -->\nx is a fraction.\n\nSo it is."
+	_check(DeskScript.bare_letters(bad).size() == 1, "a formula's a read as the bare word is caught")
+	_check(DeskScript.bare_letters(good).is_empty() and DeskScript.bare_letters(article).is_empty(),
+		"the controls: [a] passes, and so does an article where the formula has no a")
+	_check(DeskScript.bare_letters("Take numbers a, b and c.").size() == 1, "and so is an a right before a comma, which no article is")
+
+
+func _student() -> void:
+	print("-- the student's notes")
+	var got := ProofProducer.land_review({"notes": [{"quote": "a stubborn number", "need": "say what irrational means"},
+		{"quote": "x", "need": "  "}, "not a note"]})
+	_check(not got.has("error") and (got["notes"] as Array).size() == 1
+		and String(got["notes"][0]["need"]) == "say what irrational means", "the notes are kept, the empty ones dropped")
+	_check(ProofProducer.land_review({"notes": []}).get("notes", null) == [], "no notes is an answer too")
+	_check(ProofProducer.land_review("just words").has("error") and ProofProducer.land_review({"remarks": []}).has("error"),
+		"the control: an answer that is not notes is refused")
+	var many: Array = []
+	for i in 30:
+		many.append({"quote": str(i), "need": "more"})
+	_check((ProofProducer.land_review({"notes": many})["notes"] as Array).size() == ProofPrompts.STUDENT_NOTES,
+		"no more than the student was asked for")
+
+
+
+func _length() -> void:
+	print("-- a lesson's length is its own")
+	# the pen busy every few sentences, so only the length is in question (a still pen goes back)
+	var long := ""
+	for i in 75:
+		long += "<!-- pad: %d + 1 = %d -->\n%d plus one equals %d.\n\n" % [i, i + 1, i, i + 1]
+		for j in 4:
+			long += "The sum grows by one at every step, and the next step is the same. "
+		long += "\n\n"
+	var words := (DeskScript.parse(long)["spoken"] as PackedStringArray).size()
+	var ep := ProofEpisode.open("length-check", 1)
+	var err := ProofProducer.new(ep, {})._land_lesson(long)
+	_check(words > 4000 and err.is_empty() and ep.has("lesson"),
+		"a lesson of %d spoken words lands on its first try (%s)" % [words, err])
+	var unread := ProofProducer.new(ProofEpisode.open("length-check", 2), {})._land_lesson(
+		long.replace("1 -->\n0 plus", "1 -->\n\n0 plus"))
+	_check(unread.contains("not read aloud"), "the control: the same lesson with its pad line unread goes back (%s)" % unread)
+
+
+
+# --- the pen points, and lives -------------------------------------------------------------------
+
+const POINTED := """Here is a circle.
+
+<!-- draw #circ:
+<svg viewBox="0 0 360 120"><circle cx="60" cy="60" r="40"/><dot id="P" x="88" y="32"/></svg>
+-->
+A circle, and a point on it.
+
+The <!-- point: P --> point sits on the circle. That is all for now.
+
+<!-- pad #pyth: \\pin{lhs}{a^2 + b^2} = c^2 -->
+[a] squared plus [b] squared equals [c] squared.
+
+Look at the <!-- point: lhs --> left side. Then the <!-- point: pyth --> whole line.
+"""
+
+
+func _points() -> void:
+	print("-- the pen points")
+	var p := DeskScript.parse(POINTED)
+	var pts: Array = (p["actions"] as Array).filter(func(a): return String(a["kind"]) == "point")
+	var spoken: PackedStringArray = p["spoken"]
+	_check(pts.size() == 3, "each point in speech is an action (%d)" % pts.size())
+	if pts.size() != 3:
+		return
+	var first: Dictionary = pts[0]
+	_check(spoken[int(first["after"])] == "point" and int(first["span"]) == 5,
+		"a point is at the word after it, held to its sentence's end (%s, %d words)" % [spoken[int(first["after"])], first["span"]])
+	_check(not String(p["speakable"]).contains("point:") and not spoken.has("p") and String(p["speakable"]).contains("The point sits"),
+		"and is never spoken (the voice reads \"The point sits\")")
+	var draw_i := -1
+	var pad_i := -1
+	for a in p["actions"]:
+		if String(a["kind"]) == "draw":
+			draw_i = int(a["i"])
+		elif String(a["kind"]) == "pad":
+			pad_i = int(a["i"])
+	_check(int(first["of"]) == draw_i and String(first["part"]) == "P", "a drawing's part is found by its id")
+	_check(int(pts[1]["of"]) == pad_i and String(pts[1]["part"]) == "lhs", "a formula's by its \\pin")
+	_check(int(pts[2]["of"]) == pad_i and String(pts[2]["part"]) == "", "and a whole line by its mark's name")
+	var twice := DeskScript.parse(POINTED.replace("Look at", "<!-- pad #circ: x -->\nEx.\n\nLook at") + "\nThe <!-- point: circ --> x.\n")
+	var last: Dictionary = (twice["actions"] as Array).back()
+	_check(String((twice["actions"][int(last["of"])] as Dictionary)["kind"]) == "pad",
+		"a name written twice points at the latest")
+	var bad := POINTED + "\nAnd the <!-- point: nowhere --> thing.\n"
+	_check(DeskScript.unknown_points(bad) == PackedStringArray(["nowhere"]) and DeskScript.unknown_points(POINTED).is_empty(),
+		"a point at a name nothing carries is caught (the control: the names that are there are not)")
+	var in_dictation := DeskScript.parse("<!-- pad #x: x -->\nThe <!-- point: x --> ex.\n")
+	_check((in_dictation["actions"] as Array).size() == 1, "a point inside a dictation is no action: the pen is writing")
+	# THE PEN IS NEVER STILL FOR LONG
+	var talk := ""
+	for i in 12:
+		talk += "This sentence says nothing that the pen could show at all. "
+	var idle := POINTED + "\n" + talk + "\n"
+	var busy := POINTED + "\n" + talk.substr(0, talk.length() / 2) + "See the <!-- point: P --> point. " + talk.substr(talk.length() / 2) + "\n"
+	_check(DeskScript.still(idle).size() == 1 and DeskScript.still(busy).is_empty() and DeskScript.still(POINTED).is_empty(),
+		"a long stretch over a still pen is caught (%s), and the same stretch broken by a point is not" % ", ".join(DeskScript.still(idle)))
+	# AT THE DESK: the nib beside the thing as its word is said, the camera on it, no ink
+	var draw_id := String(DeskScript.item("draw", String((p["actions"][draw_i] as Dictionary)["tex"]))["id"])
+	var pad_id := String(DeskScript.item("pad", "\\pin{lhs}{a^2 + b^2} = c^2")["id"])
+	var records := {
+		draw_id: {"id": draw_id, "ok": true, "figure": true, "w": 270.0, "h": 90.0, "d": 0.0, "glyphs": [],
+			"rules": [], "paths": [], "anchors": {"P": [200.0, -80.0, 204.0, -76.0]}},
+		pad_id: {"id": pad_id, "ok": true, "w": 100.0, "h": 10.0, "d": 3.0, "glyphs": [], "rules": [],
+			"anchors": {"lhs": [0.0, -10.0, 45.0, 2.0]}},
+	}
+	var desk := DeskMedium.new()
+	desk.load_lesson(POINTED, {"seed": 3, "ink": {"items": records.values()}})
+	var parsed := DeskScript.parse(POINTED, {}, records)
+	desk._actions = parsed["actions"]
+	desk._follower.extend(DeskScript.rehearsal(parsed))
+	desk._build_plan()
+	var at: Array = []
+	for i in desk._actions.size():
+		if String((desk._actions[i] as Dictionary)["kind"]) == "point":
+			at.append(i)
+	var pi := int(at[0])
+	var pa: Dictionary = desk._actions[pi]
+	var f := desk._follower
+	var box := desk.target_box(pa)
+	_check(absf(float(desk._plan[pi]["start"]) - f.st0[int(pa["after"])]) < 0.001,
+		"at the desk the point starts as its word is said")
+	_check(box.size.x > 0.0 and box.size.x < 20.0, "and points at the dot's own box, not the drawing's (%s)" % box)
+	desk._now = f.st0[int(pa["after"])] + DeskMedium.POINT_SWEEP + 0.05
+	var pen := desk.pen_at()
+	var nib: Vector2 = pen["p"]
+	_check(absf(float(pen["lift"]) - DeskMedium.POINT_LIFT) < 0.0001 and nib.x > box.end.x
+		and nib.x - box.end.x < DeskMedium.POINT_GAP and nib.y > box.position.y and nib.y < box.end.y,
+		"the nib comes down close, just right of the dot, within its height (%s by %s)" % [nib, box])
+	var frame: Vector2 = desk._framing()["line"]
+	_check(frame.distance_to(box.get_center()) < 0.5, "and the camera goes to it")
+	_check(desk.page_state(0)["all"].find(pi) < 0, "and a point draws no ink")
+	var wide := desk.target_box(desk._actions[int(at[2])])
+	var w0 := f.st0[int((desk._actions[int(at[2])] as Dictionary)["after"])]
+	desk._now = w0 + DeskMedium.POINT_SWEEP * 0.15
+	var early: Vector2 = desk.pen_at()["p"]
+	desk._now = w0 + DeskMedium.POINT_SWEEP * 0.6
+	var later: Vector2 = desk.pen_at()["p"]
+	desk._now = w0 + DeskMedium.POINT_SWEEP + 0.05
+	var ends: Vector2 = desk.pen_at()["p"]
+	_check(wide.size.x >= DeskMedium.POINT_WIDE and early.y > wide.end.y and later.y > wide.end.y and later.x > early.x + 50.0
+		and ends.x > wide.end.x and ends.y < wide.end.y,
+		"a wide thing is swept under, left to right, and the nib stays beside its end (%s, %s, %s by %s)" % [early, later, ends, wide])
+	# the control: the same point on another page than its target leaves the pen where it was
+	(desk._actions[pi] as Dictionary)["page"] = 1
+	desk._now = f.st0[int(pa["after"])] + DeskMedium.POINT_SWEEP + 0.05
+	var stays: Dictionary = desk.pen_at()
+	_check(desk.target_box(desk._actions[pi]).size.x < 0.0 and absf(float(stays["lift"]) - DeskMedium.POINT_LIFT) > 0.001,
+		"the control: a point at a page already turned leaves the pen where it was (lift %.4f)" % float(stays["lift"]))
+	desk.free()
+
+
+func _scrub() -> void:
+	print("-- a reading started mid-way")
+	var parsed := DeskScript.parse(LESSON, _lengths())
+	var spoken: PackedStringArray = parsed["spoken"]
+	var third: Dictionary = parsed["actions"][2]
+	var from := int(third["after"]) - 3
+	var all := DeskScript.rehearsal(parsed)
+	var heard: Array = []
+	for w in all.slice(from):
+		heard.append({"text": String(w["text"]), "t0": float(w["t0"]) - float(all[from]["t0"]) + 1.0,
+			"t1": float(w["t1"]) - float(all[from]["t0"]) + 1.0, "sentence": 0})
+	var found := DeskMedium.new()
+	found.load_lesson(LESSON, {"seed": 3}, spoken.slice(from, from + 6))
+	found._actions = parsed["actions"]
+	found._follower.extend(heard)
+	found._build_plan()
+	var at := float(found._plan[2]["start"])
+	_check(float(found._plan[0]["end"]) < 0.0 and float(found._plan[1]["end"]) < 0.0,
+		"handed the new reading's first words, what came before them is written by the first frame")
+	_check(absf(at - (float(heard[3]["t0"]) - DeskMedium.PEN_LEAD)) < 0.01,
+		"and the next formula is scheduled at its own words (%.2f s)" % at)
+	found._now = at + 0.6
+	_check(found._ink_time(2) > 0.0 and float(found.pen_at()["lift"]) < DeskMedium.REST_LIFT * 0.5,
+		"and the pen is down at it, writing (%.2f s of ink)" % found._ink_time(2))
+	var lost := DeskMedium.new()
+	lost.load_lesson(LESSON, {"seed": 3})
+	lost._actions = parsed["actions"]
+	lost._follower.extend(heard)
+	lost._build_plan()
+	_check(float(lost._plan[2]["start"]) == INF,
+		"the control: the same reading matched from the top finds none of its words, and nothing after the scrub is scheduled")
+	found.free()
+	lost.free()
+
+
+func _alive() -> void:
+	print("-- the hand is alive")
+	var base := DeskMedium.PEN_UP.normalized()
+	var most := 0.0
+	var widest := 0.0
+	var toward := true
+	for i in 200:
+		var up := DeskMedium.lean(DeskMedium.PEN_UP, i * 0.1, 3, 0.7, Vector3.ZERO)
+		most = maxf(most, rad_to_deg(up.angle_to(base)))
+		if i > 0:
+			widest = maxf(widest, rad_to_deg(up.angle_to(DeskMedium.lean(DeskMedium.PEN_UP, 0.0, 3, 0.7, Vector3.ZERO))))
+		toward = toward and up.x > 0.0 and up.z < 0.0 and up.y > 0.5
+	_check(widest > 3.0, "the pen's lean sways over twenty seconds (%.1f degrees at most apart; the old fixed lean, 0)" % widest)
+	_check(most < DeskMedium.SWAY_YAW + DeskMedium.SWAY_TILT + 1.0 and toward,
+		"always toward the top right, within %.1f degrees of its lean" % most)
+	_check(DeskMedium.lean(DeskMedium.PEN_UP, 4.2, 3, 0.5, Vector3.ZERO) == DeskMedium.lean(DeskMedium.PEN_UP, 4.2, 3, 0.5, Vector3.ZERO)
+		and DeskMedium.lean(DeskMedium.PEN_UP, 4.2, 3, 0.5, Vector3.ZERO) != DeskMedium.lean(DeskMedium.PEN_UP, 4.2, 4, 0.5, Vector3.ZERO),
+		"the same moment is the same lean, and another hand sways otherwise")
+	var still := DeskMedium.lean(DeskMedium.PEN_UP, 2.0, 3, 0.5, Vector3.ZERO)
+	var moving := DeskMedium.lean(DeskMedium.PEN_UP, 2.0, 3, 0.5, Vector3(0.04, 0.0, 0.0))
+	_check(moving.x < still.x - 0.02, "its top trails the nib: writing to the right tips it left (%.3f -> %.3f)" % [still.x, moving.x])
+	var left := DeskMedium.lean(DeskMedium.PEN_UP, 2.0, 3, 0.1, Vector3.ZERO)
+	_check(left.x < still.x and left.z < still.z, "and a nib at the page's left turns it toward the page's top")
+	var writing: Dictionary = DeskMedium.drift(3.3, 3, 0.0)
+	var resting: Dictionary = DeskMedium.drift(3.3, 3, DeskMedium.REST_LIFT)
+	_check((writing["dp"] as Vector2) == Vector2.ZERO and float(writing["dlift"]) == 0.0
+		and (resting["dp"] as Vector2).length() > 1.0,
+		"the nib drifts at rest (%s px) and never while it writes" % resting["dp"])
 
 
 # --- the framer's answer -----------------------------------------------------------------------

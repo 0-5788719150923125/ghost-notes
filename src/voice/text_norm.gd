@@ -114,7 +114,8 @@ const ABBREV := {
 ##
 ## IT IS NEVER APPLIED TO A WORD ON ITS OWN. `a`, `I` and `O` are real English words, and putting
 ## letter names in the lexicon would have read every article as "ay". Only a single-letter run
-## INSIDE a token that also contains a digit is a letter being named.
+## INSIDE a token that also contains a digit is a letter being named - or a letter the script names
+## outright, `[a]` ([method _expand_core]): "let [a] be two" is the letter, shown as `a`.
 ## `a` is `eigh` and not `ay`, which is not a typo. Asked of eSpeak, `ay` comes back ˈaɪ - the
 ## word "aye" - while the letter A is ˈeɪ, and `eigh` is the spelling that gets there. Every
 ## other entry below was put to the same test against the letter's own reading and agreed with
@@ -216,6 +217,8 @@ const CURRENCY := {"$": "dollars", "£": "pounds", "€": "euros", "¥": "yen"}
 ## counting takes the value to its MATCHING brace instead, so the value's
 ## content is not the parser's business.
 const NAME_HEAD := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
+## A letter named in brackets, `[a]`, as a reader is shown it: the letter.
+static var _NAMED_LETTER := RegEx.create_from_string("\\[([A-Za-z])\\]")
 const NAME_TAIL := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789."
 
 
@@ -692,6 +695,8 @@ static func _expand_numbers(text: String, marks_in: Array = [],
 		# mark means an earlier pass already replaced this token, so its `src` is
 		# the original and beats the token in hand, which is that pass's output.
 		var src := strip_emphasis(tok)     # shown to a reader; see _expand_abbrev
+		if src.contains("["):
+			src = _NAMED_LETTER.sub(src, "$1", true)   # `[a]` is shown as the letter it names
 		var span := done.length()
 		var rewritten := done != tok
 		while mi < marks_in.size() and int((marks_in[mi] as Dictionary)["at"]) < was:
@@ -736,6 +741,12 @@ static func _expand_token(tok: String) -> String:
 
 
 static func _expand_core(tok: String) -> String:
+	# A LETTER NAMED (2026-10-16: a lesson's "take a equal to root two" was read with the article,
+	# "uh"): `[a]` is the letter, said by its name and shown as the letter ([method _expand_numbers]
+	# keeps the source). A lone consonant in brackets was an ARPAbet word of one phoneme, which no
+	# script says.
+	if tok.length() == 3 and tok[0] == "[" and tok[2] == "]" and LETTER_NAMES.has(tok[1].to_lower()):
+		return String(LETTER_NAMES[tok[1].to_lower()])
 	# currency: $5, £1.50
 	var first := tok.substr(0, 1)
 	if CURRENCY.has(first) and tok.length() > 1:

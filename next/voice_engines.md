@@ -203,6 +203,29 @@ comment and a blank line): `_resolve_marks` noted marks before the leading white
 - `_effort` and `_emphasize` end in a hard clip: none at the note's settings (0 samples at full
   scale in 23 takes), reachable at the top of the Effort dial.
 
+## Built (2026-10-16): a word eSpeak has to guess at
+
+The report, on a Proof lesson about the six trig functions: cosine said "co-seen", cotangent
+"co-angent", cosecant "co-seh-cant". eSpeak, which the neural voices are phonemized by, gave
+kˈoʊsaɪn, kˈoʊtændʒənt and kˈoʊsɛkənt: the core syllable unstressed in each - and
+en_US-libritts-high slurs a full vowel given no stress - and cosecant's vowel wrong. A dictionary
+alone does not settle it (Wiktionary's US cosine is /ˈkoʊ.saɪn/, eSpeak's own pattern; CMUdict has
+none of cosine, secant, cotangent, cosecant). Two clips of the sentence in the user's voice, as
+read and with the core syllable stressed: "B sounds quite a bit better".
+
+So `hosts/voice/lexicon.py`, for a word the reading marks `rare` (not `Phonemes.is_known` - the
+audit's UNKNOWN - and spelled as written): its reading is Wiktionary's American one where Wiktionary
+has it (kaikki.org, one JSON file per word, fetched once into `<data>/ghost/voices/lexicon/`,
+rewritten into eSpeak's spelling and checked against the voice's phoneme map), else eSpeak's; then
+every full vowel left unstressed gets a secondary stress. A word eSpeak knows is never touched -
+its transcriptions are what the voices were trained on. The request's `lexicon` is "fetch" in the
+app and "off" in any read-only process (`ReadingPanel._request_args`), so a gate is the same on
+every machine. `hosts/voice/test_lexicon.py` holds the three readings of the report.
+
+Live, on a lesson's words: Pythagorean pˈaɪθɐɡˌɔːɹiən -> pɪθˌæɡəɹˈiːən, axiom ˈæksɪəm -> ˈæksiəm;
+secant, tangent, trigonometry, radians and Euclid unchanged. A name Wiktionary lacks keeps eSpeak's
+guess (Gelfond dʒˈɛlfɑːnd, the stress rule only). About a second a new word, once.
+
 ## Still proposed
 
 1. **Rests rendered, not spliced** - the comma rest whole from `rest_floor`, no digital silence

@@ -7,8 +7,9 @@ The spec is JSON - never argv, because ghost passes no free text on a command li
 {"items": [{"id", "tex", "mode"}], "out", "work", "width", "outlines", "bin"}. `bin` is the folder
 TeX's programs are in (ghost's own TeX; with none, they are looked up on PATH). `mode` is "math" (one
 formula, display style, on one line), "display" (a display environment such as `align*`, set in a
-column `width` points wide) or "text" (a paragraph with $...$ in it, wrapped at `width`). The
-answer, written to `out`, is one record per item:
+column `width` points wide), "text" (a paragraph with $...$ in it, wrapped at `width`) or "figure"
+(a DRAWING: `tex` is an SVG, which figure.py turns into pen paths, its labels set by TeX in the same
+run). The answer, written to `out`, is one record per item:
 
     {"id", "ok", "error", "w", "h", "d", "glyphs": [{"k", "f", "c", "n", "x", "y", "s", "w", "ht", "dp"}],
      "rules": [{"k", "x", "y", "w", "h"}]}
@@ -22,6 +23,11 @@ TFM name such as cmmi10), its code (`c`), its PostScript name (`n` - "alpha", "s
 TFM (`w`, `ht`, `dp`). THE NAME IS WHAT A HAND READS: the desk's ink draws a pen stroke for the
 glyph TeX chose, in the box TeX gave it, so the structure is TeX's and the writing is the hand's.
 With "outlines": true the fonts' outline contours come back too (`fonts`), for a glyph no hand has.
+A PART THE PEN CAN POINT AT: `\\pin{name}{...}` around part of a formula sets the part as it would
+be set anyway and names it - the record's `anchors` is {name: [x0, y0, x1, y1]}, the box of every
+glyph and rule set inside it (a drawing's anchors are its elements' ids, figure.py's).
+A drawing's record has `figure: true` and its `paths` beside its labels' glyphs and rules:
+[{"k", "kind", "pts"}] - "line", "hatch", "dot" or "arrow", points in the record's own convention.
 
 Why TeX and not a lighter engine: a lesson's paper is LaTeX compiled by the same TeX, so the pad
 and the paper cannot disagree about what a formula is, and every environment a mathematician
@@ -43,8 +49,14 @@ import struct
 import subprocess
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import figure  # noqa: E402  (ghost's own, beside this file: -I keeps the script's folder off the path)
+
+# \pin{name}{tex}: a special before and after the part, which the DVI reader pairs up - nothing
+# else changes, since TeX passes a whatsit by in math without spacing round it
 PREAMBLE = r"""\documentclass[12pt]{article}
 \usepackage{amsmath,amssymb}
+\newcommand{\pin}[2]{\special{ghost:pin+#1}#2\special{ghost:pin-#1}}
 \pagestyle{empty}
 \begin{document}
 """
@@ -232,6 +244,7 @@ def _pages(dvi):
     stack, f = [], None
     glyphs, rules, base = [], [], None
     seq = 0
+    pins = []          # the \pin parts open now, innermost last
 
     def put(c, advance):
         nonlocal h, seq
@@ -251,6 +264,8 @@ def _pages(dvi):
                 "w": round(wd * conv, 4), "ht": round(box[1] * size * conv, 4),
                 "dp": round(box[2] * size * conv, 4),
             })
+            if pins:
+                glyphs[-1]["a"] = list(pins)
         if advance:
             h += int(round(wd))
 
@@ -259,6 +274,8 @@ def _pages(dvi):
         if a > 0 and b > 0:
             seq += 1
             rules.append({"k": seq, "x": h * conv, "y": (v - a) * conv, "w": b * conv, "h": a * conv})
+            if pins:
+                rules[-1]["a"] = list(pins)
         if advance:
             h += b
 
@@ -282,7 +299,7 @@ def _pages(dvi):
         elif op == 139:
             pos += 44
             h = v = w = x = y = z = 0
-            stack, f, glyphs, rules, base, seq = [], None, [], [], None, 0
+            stack, f, glyphs, rules, base, seq, pins = [], None, [], [], None, 0, []
         elif op == 140:
             pages.append((glyphs, rules, base))
         elif op == 141:
@@ -319,8 +336,15 @@ def _pages(dvi):
             f = u(op - 234)
         elif 239 <= op <= 242:
             k = u(op - 238)
-            if dvi[pos:pos + k] == b"ghost:base" and base is None:
+            said = dvi[pos:pos + k]
+            if said == b"ghost:base" and base is None:
                 base = (h * conv, v * conv)
+            elif said.startswith(b"ghost:pin+"):
+                pins.append(said[10:].decode("latin-1"))
+            elif said.startswith(b"ghost:pin-"):
+                name = said[10:].decode("latin-1")
+                if name in pins:
+                    pins.remove(name)
             pos += k
         elif 243 <= op <= 246:
             k = u(op - 242)
@@ -368,15 +392,71 @@ def _record(item, page):
     bottom = max([g["y"] + g["dp"] for g in glyphs] + [r["y"] + r["h"] for r in rules])
     return {
         "id": item["id"], "ok": True, "error": "", "w": round(right, 4), "h": round(-top, 4),
-        "d": round(bottom, 4), "glyphs": glyphs, "rules": rules,
+        "d": round(bottom, 4), "glyphs": glyphs, "rules": rules, "anchors": _anchors(glyphs, rules),
     }
 
 
+def _anchors(glyphs, rules):
+    """Each \\pin part's box, [x0, y0, x1, y1] in the record's points: every glyph and rule set inside
+    it. The parts' names come off the pieces (`a`), which keep nothing else of them."""
+    boxes = {}
+
+    def grow(name, x0, y0, x1, y1):
+        b = boxes.get(name)
+        boxes[name] = [x0, y0, x1, y1] if b is None else [min(b[0], x0), min(b[1], y0),
+                                                           max(b[2], x1), max(b[3], y1)]
+
+    for g in glyphs:
+        for name in g.pop("a", []):
+            grow(name, g["x"], g["y"] - g["ht"], g["x"] + g["w"], g["y"] + g["dp"])
+    for r in rules:
+        for name in r.pop("a", []):
+            grow(name, r["x"], r["y"], r["x"] + r["w"], r["y"] + r["h"])
+    return {k: [round(v, 4) for v in b] for k, b in boxes.items()}
+
+
 def typeset(spec):
-    items = spec["items"]
     width = float(spec.get("width", 360.0))
     work = pathlib.Path(spec["work"])
     work.mkdir(parents=True, exist_ok=True)
+    # A DRAWING's labels are set in the same run as the formulas, one item each, and put back
+    # together into the drawing's own record after (figure.assemble)
+    items, figures = [], {}
+    for it in spec["items"]:
+        if it.get("mode") != "figure":
+            items.append(it)
+            continue
+        try:
+            fig = figure.compile_figure(it.get("tex", ""))
+        except figure.FigureError as e:
+            figures[it["id"]] = {"error": "the drawing: %s" % e}
+            continue
+        figures[it["id"]] = fig
+        for j, lab in enumerate(fig["labels"]):
+            items.append({"id": "%s/%d" % (it["id"], j), "tex": lab["tex"], "mode": "text"})
+    records = _set(items, width, work)
+    by_id = {r["id"]: r for r in records}
+    out = []
+    for it in spec["items"]:
+        if it.get("mode") != "figure":
+            out.append(by_id[it["id"]])
+            continue
+        fig = figures[it["id"]]
+        if "error" in fig:
+            out.append({"id": it["id"], "ok": False, "error": fig["error"], "glyphs": [], "rules": []})
+            continue
+        try:
+            out.append(figure.assemble(it["id"], fig,
+                                       [by_id["%s/%d" % (it["id"], j)] for j in range(len(fig["labels"]))]))
+        except figure.FigureError as e:
+            out.append({"id": it["id"], "ok": False, "error": "the drawing: %s" % e, "glyphs": [], "rules": []})
+    return _answer(out, spec)
+
+
+def _set(items, width, work):
+    """Every item set by TeX: one run for all, or one each when the run fails."""
+    if not items:
+        return []
     dvi, err = _run_latex(work, "batch", items, width)
     records = []
     if dvi is not None:
@@ -393,6 +473,10 @@ def typeset(spec):
             else:
                 records.append({"id": it["id"], "ok": False, "error": one_err or err,
                                 "glyphs": [], "rules": []})
+    return records
+
+
+def _answer(records, spec):
     answer = {"items": records}
     if spec.get("outlines"):
         fonts = {}

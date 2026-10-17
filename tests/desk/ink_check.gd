@@ -17,6 +17,11 @@ extends SceneTree
 ## traced; TeX's own order must have the sum's upper limit first, so the hand's
 ## moving the sign ahead of it is seen to happen; a different seed must give a different hand.
 ##
+## A DRAWING (hosts/math/figure.py's record: `paths` beside its labels' glyphs) is drawn by the same
+## hand, in one order over both: a line drawn a little uneven but ending exactly where it was laid out
+## (lines that meet still meet), never ruler-straight (the control), and faster than writing - a
+## line drawn at the writing pace is the control that must take longer.
+##
 ##   godot --headless --path . --script tests/desk/ink_check.gd
 
 var _fails: Array = []
@@ -37,6 +42,7 @@ func _init() -> void:
 	_boxes(items, outlines)
 	_proportions()
 	_time(items, outlines)
+	_figure(items)
 	if _fails.is_empty():
 		print("ink_check: ALL OK")
 		quit(0)
@@ -295,3 +301,48 @@ func _time(items: Dictionary, outlines: Dictionary) -> void:
 			writing = on
 			break
 	_check(writing, "mid-stroke, the pen is on the stroke it is drawing")
+
+
+func _figure(items: Dictionary) -> void:
+	print("-- a drawing, by the same hand")
+	var label: Dictionary = {}
+	for id in items:
+		for g in (items[id] as Dictionary).get("glyphs", []):
+			if String((g as Dictionary).get("n", "")) == "one":
+				label = (g as Dictionary).duplicate()
+	_check(not label.is_empty(), "the fixture has a glyph to label the drawing with")
+	label["k"] = 1001
+	label["x"] = 40.0
+	label["y"] = -4.0
+	var rec := {"id": "fig", "figure": true, "w": 200.0, "h": 60.0, "d": 0.0, "glyphs": [label], "rules": [],
+		"paths": [{"k": 0, "kind": "line", "pts": [[0.0, -30.0], [200.0, -30.0]]},
+			{"k": 2000, "kind": "arrow", "pts": [[194.0, -33.0], [200.0, -30.0], [194.0, -27.0]]},
+			{"k": 3000, "kind": "dot", "pts": [[100.0, -30.0], [101.0, -30.0], [100.5, -29.0]]}]}
+	var got := Ink.strokes_of(rec, 5)
+	var strokes: Array = got["strokes"]
+	var names := PackedStringArray()
+	for st in strokes:
+		names.append(String((st as Dictionary)["name"]))
+	_check(names.size() >= 4 and names[0] == "line" and names[names.size() - 2] == "arrow" and names[names.size() - 1] == "dot"
+		and names.slice(1, names.size() - 2).has("one"), "paths and labels in one order (%s)" % ", ".join(names))
+	var line: PackedVector2Array = (strokes[0] as Dictionary)["points"]
+	_check(line[0].distance_to(Vector2(0, -30)) < 0.001 and line[line.size() - 1].distance_to(Vector2(200, -30)) < 0.001,
+		"a line ends exactly where it was laid out")
+	var off := 0.0
+	for q in line:
+		off = maxf(off, absf(q.y + 30.0))
+	_check(off <= Ink.WANDER_RANGE.y + 0.2 and off > 0.05,
+		"and wanders a little between, never ruler-straight (%.2f points at most)" % off)
+	var dot: PackedVector2Array = (strokes[strokes.size() - 1] as Dictionary)["points"]
+	_check(dot.size() == 3 and dot[0] == Vector2(100, -30), "a dot is drawn as it was laid out")
+	_check(Ink.strokes_of(rec, 5)["strokes"][0]["points"] == line and Ink.strokes_of(rec, 6)["strokes"][0]["points"] != line,
+		"the same seed draws the same line; another seed, another")
+	var sched := Ink.schedule(strokes, 5)
+	var row: Dictionary = sched["strokes"][0]
+	var took := float(row["t1"]) - float(row["t0"])
+	var slow: Dictionary = (strokes[0] as Dictionary).duplicate()
+	slow.erase("speed")
+	var as_writing := Ink.schedule([slow], 5)["strokes"][0] as Dictionary
+	var slow_took := float(as_writing["t1"]) - float(as_writing["t0"])
+	_check(took < 2.0 and slow_took > took * 2.0,
+		"a line is drawn faster than writing (%.2f s; the control, at the writing pace, %.2f s)" % [took, slow_took])

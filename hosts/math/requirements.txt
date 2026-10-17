@@ -1,3 +1,5 @@
 # hosts/math: TeX layout for the desk's ink (typeset.py) - fontTools reads the Type 1 fonts'
-# encodings (a glyph's name) and outlines. TeX itself is a program on the machine, not a package.
+# encodings (a glyph's name) and outlines; svgelements reads a drawing's SVG (figure.py): its
+# paths, arcs, transforms and styles. TeX itself is a program on the machine, not a package.
 fonttools>=4.60
+svgelements>=1.9

@@ -213,6 +213,13 @@ func _parsers_agree() -> void:
 				_ok(ws.size() == 3 and bool(ws[1].get("literal", false))
 						and (ws[1]["phones"] as Array) == ["K", "AE", "T"],
 					"an inline pronunciation is not read as its phonemes")
+			"letter":
+				var ws: Array = Phonemes.parse("Take %s to be two." % ex)[0]
+				_ok(ws.size() == 5 and String(ws[1]["text"]) == TextNorm.LETTER_NAMES[fill]
+						and String(ws[1]["display"]) == fill,
+					"a named letter is not said by its name and shown as itself")
+				var bare: Array = Phonemes.parse("Take %s fraction." % fill)[0]
+				_ok(String(bare[1]["text"]) == fill, "a bare letter stopped being the word it spells")
 			"macro":
 				var dflt := fill.get_slice(":", 1)
 				_ok(TextNorm.normalize("Chapter %s." % ex) == TextNorm.normalize("Chapter %s." % dflt),

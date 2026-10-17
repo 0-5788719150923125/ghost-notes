@@ -229,11 +229,12 @@ const MANAGED := [
 		"kind": KIND_MANAGED,
 		"path": "user://math_venv",
 		"requirements": "res://hosts/math/requirements.txt",
-		"imports": "fontTools",
-		"size": "~15 MB",
+		"imports": "fontTools, svgelements",
+		"size": "~16 MB",
 		"used_for": "fontTools, for hosts/math/typeset.py: it reads TeX's fonts for each glyph's name "
 			+ "(and its outline, for a glyph no hand draws), so the desk's pen writes what TeX laid "
-			+ "out. Built the first time a Proof needs it.",
+			+ "out; and svgelements, which reads a drawing's SVG for the pen (hosts/math/figure.py). "
+			+ "Built the first time a Proof needs it.",
 	},
 	{
 		"key": "mathlib",

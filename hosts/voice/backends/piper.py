@@ -2094,6 +2094,7 @@ class PiperBackend(Backend):
                 "onnxruntime/numpy are not installed in the voice environment"
             ) from exc
         import homographs  # ghost's own; HERE is on sys.path - see host.py
+        import lexicon
         import vowel_probe
 
         self._sessions: dict[str, Any] = {}
@@ -2103,6 +2104,9 @@ class PiperBackend(Backend):
         # Constructed here rather than per request because its probe cache is the
         # thing that makes it free after the first few sentences.
         self._homographs = homographs.Homographs(self._espeak)
+        # A word eSpeak has to guess at (the reading marks it `rare`) is read as Wiktionary
+        # has it, its full vowels stressed - see lexicon.py. Its cache sits beside the voices.
+        self._lexicon = lexicon.Lexicon(self._espeak, self._root().parent / "lexicon")
         # Whether a checkpoint says the vowel its phoneme string names. Constructed
         # here for the same reason: the verdict is per voice and the probe RENDERS, so
         # it is asked once and then remembered - in memory here,
@@ -3104,6 +3108,10 @@ class PiperBackend(Backend):
         # tagger both are.
         if phonemizer == "espeak" and espeak_voice.split("-")[0] in ("en", ""):
             self._homographs.annotate(group, espeak_voice)
+            # ...and a word eSpeak is only guessing at, read as a dictionary has it, its full
+            # vowels stressed (lexicon.py; `lexicon` is the request's: fetch, cache or off)
+            self._lexicon.annotate(group, espeak_voice, str(params.get("lexicon", "off")),
+                                   cfg.get("phoneme_id_map", {}))
         # The reading is then written in the spelling this checkpoint was measured
         # to render correctly - see `_load`, which is where that measurement happens,
         # and vowel_probe.py for what it is measuring.

@@ -8,8 +8,10 @@ class_name ProofProducer
 ##             its TeX, its exact Lean statement, the facts it may not cite, where it comes from
 ##   solve     the SOLVER works it at the desk with [ProofTools] - a lab notebook, Lean checks,
 ##             a submitted proof - and its session ends verified or not, honestly either way
-##   lesson    the TEACHER writes what the voice says and the pen writes ([DeskScript]), from the
-##             notebook and the Lean file as they were left
+##   draft     the TEACHER writes what the voice says and the pen writes and draws ([DeskScript]),
+##             from the notebook and the Lean file as they were left
+##   review    the STUDENT reads the draft as the viewer it is for, and notes where it loses them
+##   lesson    the TEACHER writes it again from the draft and the student's notes
 ##   ink       ghost lays every formula out with TeX (hosts/math/typeset.py): a formula TeX refuses
 ##             sends the lesson back once, with TeX's own words, to be written so it can be set
 ##   script    ghost: what the voice reads
@@ -38,7 +40,7 @@ const PAD_WIDTH := 270.0
 
 var episode: ProofEpisode
 ## {title (the channel's name), byline, uploads_as (the line an episode's title goes up in), before
-## (the titles this note's other episodes took), brief, writer, writer_model, writer_effort, minutes}
+## (the titles this note's other episodes took), brief, writer, writer_model, writer_effort}
 var spec: Dictionary = {}
 var running := false
 ## The steps this run was asked for; empty for the whole episode.
@@ -51,7 +53,7 @@ var _tools := {}       # step -> {url, set}
 var _local := {}       # step -> {pid, out, log}: a step ghost runs as a program (the ink)
 var _errors := {}      # step -> why it failed, once out of tries
 var _tries := {}       # step -> runs started
-var _fix := {}         # what the next lesson must mend: {broken: [..], notation: [..], undictated: [..]}
+var _fix := {}         # what the next lesson must mend: {broken, notation, undictated, letters, points, still: [..]}
 
 
 func _init(ep: ProofEpisode, sp: Dictionary) -> void:
@@ -145,6 +147,8 @@ func tick() -> void:
 			var step := String(s)
 			if episode.has(step) or _jobs.has(step) or _local.has(step) or _errors.has(step):
 				continue
+			if episode.moot(step):
+				continue
 			var ready := true
 			for need in episode.needs(step):
 				if not episode.has(String(need)):
@@ -190,12 +194,20 @@ func _make(step: String) -> void:
 				spec.get("before", []) if spec.get("before") is Array else []), "best")
 		"solve":
 			_make_solve()
-		"lesson":
+		"draft", "lesson":
+			# the first draft from the work; the lesson from the draft and the student's notes on it
 			var solve: Variant = episode.read_json("solve")
 			var verified := bool((solve as Dictionary).get("verified", false)) if solve is Dictionary else false
+			var review: Variant = episode.read_json("review")
+			var notes: Array = (review as Dictionary).get("notes", []) if review is Dictionary \
+				and (review as Dictionary).get("notes") is Array else []
 			_submit_text(step, ProofPrompts.teacher(_title(), _brief(), _problem(),
 				episode.read_text("notebook"), episode.read_text("proof"), verified,
-				float(spec.get("minutes", 6.0)), _fix), "best")
+				_fix if step == "lesson" else {},
+				episode.read_text("draft") if step == "lesson" else "", notes), "best")
+		"review":
+			_submit_text(step, ProofPrompts.student(_title(), _brief(), _problem(),
+				episode.read_text("draft")), "best")
 		"ink":
 			_start_ink()
 		"script":
@@ -313,6 +325,10 @@ func _land(step: String, res: Dictionary) -> void:
 		match step:
 			"problem":
 				err = _land_problem(String(res.get("text", "")))
+			"draft":
+				err = _land_draft(String(res.get("text", "")))
+			"review":
+				err = _land_review(String(res.get("text", "")))
 			"lesson":
 				err = _land_lesson(String(res.get("text", "")))
 	if err.is_empty():
@@ -386,10 +402,50 @@ func _land_solve(handed: String, res: Dictionary, checks: int) -> String:
 	return episode.write_json("solve", {"verified": false, "checks": checks, "note": why})
 
 
+## THE FIRST DRAFT: a lesson in the pen's format, with something on the pad. It is read by the
+## student as it is; the lesson written from it is the one held to the audits.
+func _land_draft(text: String) -> String:
+	var draft := clean_lesson(text)
+	if DeskScript.items(draft).is_empty():
+		return "the draft writes nothing on the pad"
+	return episode.write_text("draft", draft + "\n")
+
+
+## THE STUDENT'S NOTES on the draft: `{notes: [{quote, need}]}`, at most [constant
+## ProofPrompts.STUDENT_NOTES]. None is an answer too - the lesson is written again all the same.
+func _land_review(text: String) -> String:
+	var got := land_review(TextGen.extract_json(text))
+	if got.has("error"):
+		return String(got["error"])
+	return episode.write_json("review", got)
+
+
+## The student's answer [param d] as notes, or `{error}`. Static and pure for the gate.
+static func land_review(d: Variant) -> Dictionary:
+	if not (d is Dictionary) or not ((d as Dictionary).get("notes") is Array):
+		return {"error": "the student's answer was not JSON with notes"}
+	var notes: Array = []
+	for n in (d as Dictionary)["notes"]:
+		if not (n is Dictionary):
+			continue
+		var need := str((n as Dictionary).get("need", "")).strip_edges()
+		if need.is_empty():
+			continue
+		notes.append({"quote": str((n as Dictionary).get("quote", "")).strip_edges().substr(0, 300),
+			"need": need.substr(0, 600)})
+		if notes.size() >= ProofPrompts.STUDENT_NOTES:
+			break
+	return {"notes": notes}
+
+
 ## THE LESSON, as the voice will read it: fences and stray framing off, at least one thing on the
 ## pad, and no notation in its speech ([method DeskScript.audit]) - a lesson that has some goes back
-## once, told which lines. One that leaves pad lines unread ([method DeskScript.undictated]) goes back
-## once too, and is taken the second time: the desk writes such a line while the voice waits.
+## once, told which lines. One that leaves pad lines unread ([method DeskScript.undictated]), says a
+## formula's letter as the word "a" ([method DeskScript.bare_letters]), points at a name nothing on
+## the pad carries ([method DeskScript.unknown_points]) or talks long over a still pen
+## ([method DeskScript.still]) goes back once too, and is taken the second time: the desk writes such a
+## line while the voice waits, the voice says "uh", the pen stays put, the viewer loses the thread.
+## ITS LENGTH IS ITS OWN: nothing sends a lesson back for running long ([ProofPrompts]).
 func _land_lesson(text: String) -> String:
 	var lesson := clean_lesson(text)
 	if DeskScript.items(lesson).is_empty():
@@ -400,10 +456,24 @@ func _land_lesson(text: String) -> String:
 		return "the lesson's speech carries notation (%d line%s)" % [said.size(), "" if said.size() == 1 else "s"]
 	_fix.erase("notation")
 	var bare := DeskScript.undictated(lesson)
-	if not bare.is_empty() and int(_tries.get("lesson", 0)) <= RETRIES:
+	var letters := DeskScript.bare_letters(lesson)
+	var points := DeskScript.unknown_points(lesson)
+	var still := DeskScript.still(lesson)
+	if (not bare.is_empty() or not letters.is_empty() or not points.is_empty() or not still.is_empty()) \
+			and int(_tries.get("lesson", 0)) <= RETRIES:
 		_fix["undictated"] = Array(bare)
-		return "%d pad line%s not read aloud as written" % [bare.size(), "" if bare.size() == 1 else "s"]
-	_fix.erase("undictated")
+		_fix["letters"] = Array(letters)
+		_fix["points"] = Array(points)
+		_fix["still"] = Array(still)
+		if not bare.is_empty():
+			return "%d pad line%s not read aloud as written" % [bare.size(), "" if bare.size() == 1 else "s"]
+		if not letters.is_empty():
+			return "%d line%s said a letter as the word a" % [letters.size(), "" if letters.size() == 1 else "s"]
+		if not points.is_empty():
+			return "it points at %s, which nothing on the pad is called" % ", ".join(points)
+		return "the pen stands still through %d long stretch%s of speech" % [still.size(), "" if still.size() == 1 else "es"]
+	for k in ["undictated", "letters", "points", "still"]:
+		_fix.erase(k)
 	return episode.write_text("lesson", lesson + "\n")
 
 
@@ -445,5 +515,5 @@ func _land_ink(job: Dictionary) -> void:
 func _tex_of(id: String) -> String:
 	for it in DeskScript.items(episode.read_text("lesson")):
 		if String((it as Dictionary)["id"]) == id:
-			return String((it as Dictionary)["tex"])
+			return String((it as Dictionary)["tex"]).substr(0, 400)
 	return id

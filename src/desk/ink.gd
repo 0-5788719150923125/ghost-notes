@@ -25,6 +25,10 @@ class_name Ink
 ##   the voice rather than between its sentences.
 ## - NOTHING LEAVES SILENTLY. A glyph the hand has no strokes for is drawn as its outline traced
 ##   (the typeset answer's `fonts`, when asked for) and named in `missing` either way.
+## - A DRAWING IS DRAWN BY THE SAME HAND (hosts/math/figure.py lays it out: its `paths` beside its
+##   labels' glyphs, one order over both). A path is drawn as it was laid out, a little uneven - a
+##   slow wave across it and a slight tremor, pinned at its ends so lines that meet still meet - and
+##   faster than a letter is written: a hand sweeps a line it would take care over in a word.
 
 ## The stroke fonts, by the name the table below uses.
 const FONTS := {
@@ -115,6 +119,12 @@ const RELATION_PAUSE := 0.25      # a longer one before a relation: "=", "<", an
 
 const RELATIONS := ["equal", "less", "greater", "lessequal", "greaterequal", "arrowdblright",
 	"arrowright", "equivalence", "approxequal", "element", "reflexsubset", "propersubset"]
+## A drawing's paths, by kind: how much faster than writing the pen draws one, and its nib (points).
+const DRAW_SPEED := {"line": 2.6, "hatch": 4.0, "arrow": 1.6, "dot": 1.2}
+const DRAW_NIB := {"line": 0.62, "hatch": 0.42, "arrow": 0.62, "dot": 0.9}
+## How far a drawn path wanders off its line: this share of its length, within these bounds (points).
+const WANDER := 0.006
+const WANDER_RANGE := Vector2(0.12, 0.9)
 
 static var _fonts := {}          # font name -> [[left, right, strokes], ...], ASCII order from 32
 static var _names := {}          # glyph name -> "font:character", NAMED with the letters filled in
@@ -134,6 +144,13 @@ static func strokes_of(item: Dictionary, seed: int, outlines: Dictionary = {}) -
 	var missing: PackedStringArray = []
 	for e in order:
 		var entry: Dictionary = e
+		if entry.has("pts"):
+			var kind := String(entry.get("kind", "line"))
+			var drawn := _drawn(entry, rng)
+			if drawn.size() > 0:
+				out.append({"name": kind, "k": int(entry.get("k", 0)), "points": drawn,
+					"width": float(DRAW_NIB.get(kind, 0.62)), "speed": float(DRAW_SPEED.get(kind, 2.6))})
+			continue
 		if entry.has("n"):
 			var placed := _glyph(entry, rng, outlines)
 			if placed.is_empty():
@@ -173,7 +190,7 @@ static func schedule(strokes: Array, seed: int, pace := 1.0) -> Dictionary:
 				t += RELATION_PAUSE / pace
 		if last != Vector2.INF:
 			t += (LIFT_MIN + last.distance_to(pts[0]) / PEN_TRAVEL) / pace
-		var dur := (STROKE_MIN + _length(pts) / PEN_SPEED) / pace
+		var dur := (STROKE_MIN + _length(pts) / (PEN_SPEED * float(st.get("speed", 1.0)))) / pace
 		var row := st.duplicate()
 		row["t0"] = t
 		row["t1"] = t + dur
@@ -446,6 +463,8 @@ static func _writing_order(item: Dictionary) -> Array:
 		seq.append(g)
 	for r in item.get("rules", []):
 		seq.append(r)
+	for p in item.get("paths", []):
+		seq.append(p)
 	seq.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return int(a.get("k", 0)) < int(b.get("k", 0)))
 	# A BAR UNDER AN ARROW IS ONE LONG ARROW: TeX sets `\implies` as an equals sign with a double
@@ -495,6 +514,41 @@ static func _writing_order(item: Dictionary) -> Array:
 				seq.insert(j, seq.pop_at(i))
 		i += 1
 	return seq
+
+
+## A DRAWING'S PATH, as a hand draws it: [param entry]'s points (`pts`, in the record's points) cut
+## at least every three points, each moved across the line by a slow wave (one or so across its
+## length, [constant WANDER] of it) and a little tremor - the wave pinned at both ends, so lines that
+## meet on the figure still meet. A dot is drawn as it was laid out.
+static func _drawn(entry: Dictionary, rng: RandomNumberGenerator) -> PackedVector2Array:
+	var src := PackedVector2Array()
+	for p in entry.get("pts", []):
+		if p is Array and (p as Array).size() >= 2:
+			src.append(Vector2(float(p[0]), float(p[1])))
+	var waves := rng.randf_range(0.6, 1.4)
+	var phase := rng.randf() * TAU
+	if src.size() < 2 or String(entry.get("kind", "line")) == "dot":
+		return src
+	var pts := PackedVector2Array([src[0]])
+	for i in range(1, src.size()):
+		var n := maxi(1, ceili(src[i - 1].distance_to(src[i]) / 3.0))
+		for j in range(1, n + 1):
+			pts.append(src[i - 1].lerp(src[i], float(j) / float(n)))
+	var length := _length(pts)
+	var amp := clampf(length * WANDER, WANDER_RANGE.x, WANDER_RANGE.y)
+	if String(entry.get("kind", "")) == "hatch":
+		amp = WANDER_RANGE.x
+	var out := PackedVector2Array()
+	var run := 0.0
+	for i in pts.size():
+		if i > 0:
+			run += pts[i - 1].distance_to(pts[i])
+		var u := run / maxf(length, 1e-6)
+		var dir := (pts[mini(i + 1, pts.size() - 1)] - pts[maxi(i - 1, 0)]).normalized()
+		var across := Vector2(-dir.y, dir.x)
+		var pin := sin(u * PI)
+		out.append(pts[i] + across * (sin(phase + u * TAU * waves) * amp + rng.randfn(0.0, 0.04)) * pin)
+	return out
 
 
 static func _nib(size: float) -> float:

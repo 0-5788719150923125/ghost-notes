@@ -13,6 +13,9 @@ class_name YouTubeCard
 ## what it alone knows (a show's description and tags, its thumbnail's moment) through [member extra],
 ## a slot under the card's own rows, and [method meta].
 ##
+## THE CATEGORY is the card's too ([constant YouTube.CATEGORIES]): People & Blogs until it is changed,
+## so a math channel's note can go up as Education.
+##
 ## TICKING "UPLOAD AFTER EXPORT" SETS UPLOADS UP as far as they need, visibly: the Google client file
 ## the first time, then the sign-in - and the box ticks once both are done (a cancel leaves it clear).
 ## A PLAYLIST takes more of the account than an upload, so the wider sign-in is asked for only when
@@ -25,7 +28,7 @@ const YouTube := preload("res://src/export/youtube.gd")
 const KEY := "youtube"
 ## A new card's block: nothing goes up until the box is ticked, and then privately.
 const DEFAULTS := {"upload": false, "title": YouTube.TITLE_TEMPLATE, "privacy": YouTube.PRIVACY,
-	"playlist": "", "playlist_title": ""}
+	"category": YouTube.CATEGORY, "playlist": "", "playlist_title": ""}
 const TITLE_TIP := ("The video's title. %title% is the note's title, %episode% the episode's, %seed% its seed, %date% "
 	+ "today's; what a missing one leaves (a dangling \": \") goes, and a name is never said twice. "
 	+ "YouTube takes 100 characters.")
@@ -43,6 +46,7 @@ var _upload: CheckBox
 var _title: LineEdit
 var _preview: Label
 var _privacy: OptionButton
+var _category: OptionButton
 var _playlist: OptionButton
 var _reload: Button
 var _account: Label
@@ -93,6 +97,15 @@ func _init() -> void:
 		+ "private whatever this says.")
 	_privacy.item_selected.connect(func(_i: int) -> void: refresh())
 	_row("Visibility", _privacy)
+	_category = OptionButton.new()
+	_category.fit_to_longest_item = false
+	_category.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for k in YouTube.CATEGORIES:
+		_category.add_item(String(YouTube.CATEGORIES[k]))
+		_category.set_item_metadata(_category.item_count - 1, k)
+	_category.tooltip_text = "The category YouTube files the video under, as YouTube Studio lists them."
+	_select(_category, YouTube.CATEGORY)
+	_row("Category", _category)
 	var prow := HBoxContainer.new()
 	prow.add_theme_constant_override("separation", 6)
 	_playlist = OptionButton.new()
@@ -182,11 +195,11 @@ func _process(dt: float) -> void:
 ## The block for a document.
 func capture() -> Dictionary:
 	return {"upload": _upload.button_pressed, "title": _title.text, "privacy": _privacy_key(),
-		"playlist": String(_list["id"]), "playlist_title": String(_list["title"])}
+		"category": _category_key(), "playlist": String(_list["id"]), "playlist_title": String(_list["title"])}
 
 
 ## ...and back. A key the block does not name keeps the card's default; a privacy YouTube does not
-## know is Private.
+## know is Private, and a category it does not offer is People & Blogs.
 func apply(block: Dictionary) -> void:
 	var b := DEFAULTS.duplicate()
 	b.merge(block, true)
@@ -199,6 +212,8 @@ func apply(block: Dictionary) -> void:
 			_privacy.select(i)
 	if not YouTube.PRIVACIES.has(p):
 		_privacy.select(0)
+	var cat := str(b["category"])
+	_select(_category, cat if YouTube.CATEGORIES.has(cat) else YouTube.CATEGORY)
 	_list = {"id": str(b["playlist"]), "title": str(b["playlist_title"])}
 	_fill_playlists()
 	refresh()
@@ -206,6 +221,17 @@ func apply(block: Dictionary) -> void:
 
 func _privacy_key() -> String:
 	return String(_privacy.get_item_metadata(maxi(0, _privacy.selected))) if _privacy.item_count > 0 else YouTube.PRIVACY
+
+
+func _category_key() -> String:
+	return String(_category.get_item_metadata(_category.selected)) if _category.selected >= 0 else YouTube.CATEGORY
+
+
+## Select the item of [param box] whose metadata is [param key].
+static func _select(box: OptionButton, key: String) -> void:
+	for i in box.item_count:
+		if String(box.get_item_metadata(i)) == key:
+			box.select(i)
 
 
 ## Is an export of this note to go up?
@@ -227,8 +253,8 @@ func template() -> String:
 
 ## WHAT AN UPLOAD SAYS (see [member Exporter.upload_provider]): [param base] - the panel's own part,
 ## its description, tags, thumbnail moment and record, and the macros' `values` when they are not the
-## panel's as it stands now (an episode an export rendered) - with this card's title, privacy and
-## playlist (its id and title, which the description names) laid over it. {} when nothing is to go
+## panel's as it stands now (an episode an export rendered) - with this card's title, privacy,
+## category and playlist (its id and title, which the description names) laid over it. {} when nothing is to go
 ## up: the box is clear, or the panel has nothing ({}).
 func meta(base: Dictionary) -> Dictionary:
 	if not ticked() or base.is_empty():
@@ -238,6 +264,7 @@ func meta(base: Dictionary) -> Dictionary:
 	out.erase("values")
 	out["title"] = title_now(given if given is Dictionary else {})
 	out["privacy"] = _privacy_key()
+	out["category"] = _category_key()
 	out["playlist"] = String(_list["id"])
 	out["playlist_title"] = String(_list["title"])
 	return out

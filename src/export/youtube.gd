@@ -35,10 +35,19 @@ const ROOT := "user://youtube"
 ## Every upload goes up private unless the note's card says otherwise, says it is not made for kids,
 ## declares itself altered or synthetic content (the voice is synthesized, and a mode's pictures may
 ## be painted by a model), and declares NO PAID PROMOTION - left unsaid, YouTube Studio showed the
-## question unanswered (2026-10-06). The category is People & Blogs.
+## question unanswered (2026-10-06). The category is People & Blogs unless the card says another.
 const PRIVACY := "private"
 ## Who may see an upload, in the order the card offers them: YouTube's own words, and ours.
 const PRIVACIES := {"private": "Private", "unlisted": "Unlisted", "public": "Public"}
+## THE CATEGORIES AN UPLOAD MAY GO UP IN, by YouTube's id, in YouTube Studio's words and order: the ones
+## `videoCategories.list` marks assignable (the rest - Shorts, Trailers, Movies - an upload cannot take,
+## and the list has stood unchanged for years). The note's card picks one (the user, 2026-10-16:
+## "every video is uploaded to YouTube under the 'People & Blogs' category ... expose those categories
+## as an adjustable option, so that I could load these math videos under a different category").
+const CATEGORIES := {"2": "Autos & Vehicles", "23": "Comedy", "27": "Education", "24": "Entertainment",
+	"1": "Film & Animation", "20": "Gaming", "26": "Howto & Style", "10": "Music", "25": "News & Politics",
+	"29": "Nonprofits & Activism", "22": "People & Blogs", "15": "Pets & Animals",
+	"28": "Science & Technology", "17": "Sports", "19": "Travel & Events"}
 ## THE TITLE A NEW YOUTUBE CARD STARTS WITH: macros the panel fills ([method expand_title]).
 const TITLE_TEMPLATE := "%title%: %episode%"
 const CATEGORY := "22"
@@ -827,10 +836,11 @@ static func video_body(meta: Dictionary, fallback := "") -> Dictionary:
 	var raw: Variant = meta.get("tags", [])
 	var tags: Array = Array(raw) if raw is Array or raw is PackedStringArray else []
 	var privacy := str(meta.get("privacy", PRIVACY))
+	var category := str(meta.get("category", CATEGORY))
 	return {
 		"snippet": {"title": title if not title.is_empty() else "Untitled",
 			"description": fit_description(description_of(meta)),
-			"tags": Array(fit_tags(tags)), "categoryId": CATEGORY},
+			"tags": Array(fit_tags(tags)), "categoryId": category if CATEGORIES.has(category) else CATEGORY},
 		"status": {"privacyStatus": privacy if PRIVACIES.has(privacy) else PRIVACY,
 			"selfDeclaredMadeForKids": false, "containsSyntheticMedia": true},
 		"paidProductPlacementDetails": {"hasPaidProductPlacement": PAID_PROMOTION},
