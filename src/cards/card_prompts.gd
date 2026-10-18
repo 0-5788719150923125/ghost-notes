@@ -63,6 +63,12 @@ const HEARD := {"intro": [6, 40], "card": [10, 14], "jumper": [6, 24], "close": 
 ## walked into four pictures of five ("See that little ant", "Look at the old tortoise"); a card left out
 ## of this share reaches the reader without its painting or its description, so it cannot.
 const REMARKS := Vector2(0.15, 0.4)
+## THE CARDS A READER READS WITH THE ONES ALREADY DOWN: a share of an episode's cards after the first
+## (the user, 2026-10-17: "the 2nd or 3rd or 4th draw often builds upon the earlier draws"). Shown every
+## card already on the table and every word said, no passage after the first of fourteen tarot episodes
+## named an earlier card - 0 of 66 - so the share is told it does; and only a share, or a link on every
+## card is the tic the next passage meets.
+const LINKS := Vector2(0.35, 0.65)
 
 ## What the producer is told about the show's own deck: its cards by name (their meanings reach a
 ## writer only as each is drawn).
@@ -179,8 +185,23 @@ static func remarks(seed: int, n: int) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed, "cards-remarks"])
 	var count := clampi(roundi(float(n) * rng.randf_range(REMARKS.x, REMARKS.y)), 0, (n + 1) / 2)
-	var order: Array = range(n)
-	for i in range(n - 1, 0, -1):
+	return _share(rng, range(n), count, n)
+
+
+## WHICH CARDS THE READER READS WITH THE CARDS ALREADY DOWN in episode [param seed]'s reading of
+## [param n]: one bool per card, in drawing order - a [constant LINKS] share of cards 2..n, seeded, and
+## at least one where there is a second card. The first card has nothing down to meet.
+static func links(seed: int, n: int) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed, "cards-links"])
+	var count := clampi(roundi(float(n - 1) * rng.randf_range(LINKS.x, LINKS.y)), mini(1, maxi(n - 1, 0)), maxi(n - 1, 0))
+	return _share(rng, range(1, maxi(n, 1)), count, n)
+
+
+## [param count] of [param slots] (indices of [param n] cards), shuffled by [param rng]: one bool per card.
+static func _share(rng: RandomNumberGenerator, slots: Array, count: int, n: int) -> Array:
+	var order := slots.duplicate()
+	for i in range(order.size() - 1, 0, -1):
 		var j := rng.randi_range(0, i)
 		var tmp: Variant = order[i]
 		order[i] = order[j]
@@ -188,7 +209,7 @@ static func remarks(seed: int, n: int) -> Array:
 	var out: Array = []
 	out.resize(n)
 	out.fill(false)
-	for i in count:
+	for i in mini(count, order.size()):
 		out[int(order[i])] = true
 	return out
 
@@ -218,7 +239,7 @@ static func producer(title: String, brief: String, seed: int, cards: int, revers
 ## The deck's creator, for ONE card: its illustration and its booklet entry. [param history] is
 ## the show's other episodes ([method CardEpisode.archive]), for how their decks pictured it.
 static func designer(title: String, brief: String, look: Dictionary, card: Dictionary,
-		reversals: bool, history: Array = [], text := "booklet") -> Dictionary:
+		reversals: bool, history: Array = [], text := "booklet", siblings: Array = []) -> Dictionary:
 	var group := String(card.get("group", ""))
 	var on_back := text == "back"
 	var on_front := text == "front"
@@ -229,6 +250,12 @@ static func designer(title: String, brief: String, look: Dictionary, card: Dicti
 		"in_booklet": not on_back and not on_front, "ledger": ledger, "ledger_booklet": ledger and not on_back and not on_front,
 		"plain_booklet": not ledger and not on_back and not on_front, "reversals": reversals,
 		"before": "\n".join(_pictured_before(history, String(card.get("name", ""))))}
+	# THE CARDS DESIGNED BEFORE IT IN THIS DRAW, their pictures only, each cut short
+	var sib: Array = []
+	for c in siblings:
+		sib.append({"k": int((c as Dictionary).get("k", 0)), "name": String((c as Dictionary).get("name", "")),
+			"art": clip(String((c as Dictionary).get("art", "")), 60)})
+	vars["siblings"] = sib
 	return {"system": show_context(title, brief), "prompt": Rules.say("cards/designer.prompt", vars)}
 
 
@@ -350,9 +377,15 @@ static func _box_size(shoebox := false, contents := "file") -> Dictionary:
 ##
 ## [param remark]: this card is one of the few whose painting the reader may stop on ([method remarks]).
 ## A card that is not reaches it by name and meaning only - no painting, no description of one.
+##
+## [param link]: this card is one the reader reads with the cards already on the table ([method links]),
+## each of which reaches it with its keywords - never a card put back with a few words, or one set aside.
+##
+## [param misses]: what this card's painting gets wrong, where the art director could not have it put
+## right ([method CardProducer._land_check]) - the viewer sees the painting, so the reader is told.
 static func reader(title: String, brief: String, plan: Dictionary, step: String, said: Array,
 		drawn: Array, spread_size: int, pictured := false, history: Array = [],
-		names: Array = [], voices: Array = [], remark := true) -> Dictionary:
+		names: Array = [], voices: Array = [], remark := true, link := false, misses: Array = []) -> Dictionary:
 	var positions: Array = ((plan.get("spread", {}) as Dictionary).get("positions", [])) as Array
 	var look: Dictionary = plan.get("look", {})
 	var staging := CardTable.staging_of(plan)
@@ -373,7 +406,9 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 	for i in drawn.size():
 		var where: Dictionary = positions[i] if i < positions.size() and positions[i] is Dictionary else {}
 		if i + 1 != at and String(where.get("destination", "")) != "box":
-			on_table.append({"line": _card_line(drawn[i] as Dictionary), "swept": at > 0 and i + 1 > at})
+			var b: Dictionary = (drawn[i] as Dictionary).get("booklet", {}) if (drawn[i] as Dictionary).get("booklet") is Dictionary else {}
+			on_table.append({"line": _card_line(drawn[i] as Dictionary), "keys": ", ".join(DataPath.strings(b.get("keywords", []))),
+				"swept": at > 0 and i + 1 > at})
 	var vars := {"title": title, "episode_title": String(plan.get("episode_title", "")), "audience": String(plan.get("audience", "")),
 		"topic": String(plan.get("topic", "")), "premise": String(plan.get("premise", "")), "reader_mood": String(plan.get("reader_mood", "")),
 		"running_bit": _s(plan.get("running_bit", "")), "spread_name": String((plan.get("spread", {}) as Dictionary).get("name", "")),
@@ -399,6 +434,8 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		# words, and they say what makes it one to put back
 		var passed := boxed and CardProducer.passed(p, positions)
 		vars["passed"] = passed
+		vars["link"] = link and not passed and comment != "aside" and comment != "none" and not on_table.is_empty()
+		vars["misses"] = misses
 		if comment == "aside":
 			lo_hi = [45, 75]
 		elif passed or comment == "brief" or (comment.is_empty() and pace == "quick"):
@@ -758,13 +795,30 @@ static func _look_vars(look: Dictionary, target: String) -> Dictionary:
 ## A card's face: its illustration only - the engine prints the frame and the name around it, or on a
 ## borderless card over it ([param details]: its text too, over the lower half).
 static func card_image(look: Dictionary, card: Dictionary, art: String, target: String,
-		has_back: bool, chain: int, details := false) -> String:
+		has_back: bool, chain: int, details := false, sent_back := PackedStringArray()) -> String:
 	var vars := _look_vars(look, target)
+	vars["sent_back"] = Array(sent_back)
 	vars.merge({"name": String(card.get("name", "")), "art": art.strip_edges(), "has_back": has_back, "chain": chain,
 		"chain_many": chain > 1, "window": String(CardTable.WINDOWS.get(CardFaces.window_of(look), "a plain rectangle")),
 		"borderless": CardFaces.borderless(look), "details": details,
 		"numbered": not String(card.get("numeral", "")).is_empty()}, true)
 	return Rules.say("cards/painter.card", vars)
+
+
+## THE ART DIRECTOR'S LOOK at card [param card]'s painting ([method CardProducer._make_check]): the
+## description it was painted from, the deck's hand (never a fault), what is printed with it on the side
+## [param text] names, and how many [param earlier] cards of this draw it is shown beside - the images
+## themselves go with the job.
+static func art_director(title: String, brief: String, look: Dictionary, card: Dictionary, earlier: int,
+		text := "booklet") -> Dictionary:
+	var b: Dictionary = card.get("booklet", {}) if card.get("booklet") is Dictionary else {}
+	var vars := {"deck_noun": deck_noun(look), "deck_name": String(look.get("deck_name", "")),
+		"deck_style": String(look.get("deck_style", "")), "name": String(card.get("name", "")),
+		"group": String(card.get("group", "")), "art": String(card.get("art", "")).strip_edges(),
+		"keywords": ", ".join(DataPath.strings(b.get("keywords", []))), "text": String(b.get("upright", "")).strip_edges(),
+		"printed": not b.is_empty(), "where": {"back": "on its back", "front": "on its front, under the picture"}.get(text, "in the deck's booklet"),
+		"earlier": earlier, "has_earlier": earlier > 0, "many_earlier": earlier > 1}
+	return {"system": show_context(title, brief), "prompt": Rules.say("cards/art_director.prompt", vars)}
 
 
 ## THE BACK: the side every card of a printing shows face down - EXACTLY SYMMETRIC under a half turn

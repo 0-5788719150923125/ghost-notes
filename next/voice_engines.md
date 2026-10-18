@@ -226,6 +226,12 @@ Live, on a lesson's words: Pythagorean pˈaɪθɐɡˌɔːɹiən -> pɪθˌæɡə
 secant, tangent, trigonometry, radians and Euclid unchanged. A name Wiktionary lacks keeps eSpeak's
 guess (Gelfond dʒˈɛlfɑːnd, the stress rule only). About a second a new word, once.
 
+The first export after it "sounded exactly like the original" (2026-10-17): `rare` compared a
+word's page spelling with its spoken one whole, and the page spelling keeps the word's marks, so
+"cosine," "cotangent," and "cosecant." were never marked. `Phonemes.guessed` compares them with the
+marks off (a word normalization wrote - a numeral, a letter's name - is still not one); g2p_check's
+"guessed" holds the sentence, the old rule marking only "secant" in it.
+
 ## Still proposed
 
 1. **Rests rendered, not spliced** - the comma rest whole from `rest_floor`, no digital silence

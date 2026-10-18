@@ -18,6 +18,10 @@ extends SceneTree
 ## - A REDO deletes the step and exactly what was made from it.
 ## - The helpers agents' replies go through: lenient JSON, spoken-text cleanup, look sanitizing.
 ## - THE QUEUE'S LANES run one job at a time, in order, and a rerun starts from a cleared folder.
+## - THE ART DIRECTOR looks at every painting before it is read: kept, or sent back and painted again
+##   with its faults told to the painter, up to CardProducer.REPAINTS times - then the reader is told
+##   what the painting gets wrong. A card read before checks were made needs none. And each designer is
+##   shown the cards designed before it in the draw.
 ## - REPLIES OF THE WRONG SHAPE are reshaped as they land; a step that writes nothing fails.
 ## - A SCRUB into a reading that repeats itself finds the repeat nearest where it was asked for.
 ## - THE SPREAD lies clear of the deck.
@@ -67,7 +71,7 @@ func _init() -> void:
 	# nothing, and it used to leave a gate that had checked half of something reading ALL OK
 	for check in [_deck, _shuffle, _script, _schedule, _no_cheating, _redo, _helpers, _landing, _printing_inventory,
 			_lanes, _rerun_clears, _scrub_near, _clear_of_deck, _trash_episode, _pictures, _only_what_was_asked, _no_objects, _moves_after_words,
-			_few_remarks, _burst_moments,
+			_few_remarks, _cards_meet, _art_director, _designed_in_order, _burst_moments,
 			_table_step, _things_built, _stones, _card_stock, _candles, _room_prompt, _cloth_prompt, _familiar, _archive,
 			_title_screen, _card_frame, _borderless, _episode_title]:
 		_ok((check as Callable).call() == true, "%s stopped part way (a script error - see above)"
@@ -394,6 +398,10 @@ func _no_cheating() -> bool:
 		_ok(sent == want, "the reader's prompt for %s is sent the paintings %s, not %s" % [step, str(sent), str(want)])
 		_ok(want.is_empty() == not (text.contains("painting above") or text.contains("paintings above")),
 			"the reader's prompt for %s %s the paintings it is sent" % [step, "is not told about" if not want.is_empty() else "speaks of"])
+		# A CARD READ WITH THE CARDS ALREADY DOWN: exactly the ones the seed picks ([method CardPrompts.links])
+		var linked := step.is_valid_int() and bool(CardPrompts.links(ep.seed, n)[upto - 1])
+		_ok(linked == text.contains("READ WITH THE CARDS ALREADY ON THE TABLE"),
+			"the reader's prompt for %s is%s told to read it with the cards already down" % [step, " not" if linked else ""])
 	_ok(prod_leaks == 0, "%d later card(s) reached a prompt the producer builds" % prod_leaks)
 	print("cards_check: no cheating - %d reader prompts, %d leaks (%d through the producer)" % [n + 2, leaks, prod_leaks])
 	return true
@@ -785,6 +793,148 @@ func _few_remarks() -> bool:
 	return true
 
 
+## A READING BUILDS (the user, 2026-10-17: "the 2nd or 3rd or 4th draw often builds upon the earlier
+## draws"; no passage after the first of fourteen tarot episodes named an earlier card): a seeded share of
+## the cards after the first is told to read the card with the ones already down - at least one, never the
+## first, never every card of a long reading - and the cards down reach it with their keywords. Two-sided:
+## a card outside the share is not told to, and keywords are only ever of cards already drawn.
+func _cards_meet() -> bool:
+	var total := 0
+	var all := 0
+	for seed in range(1, 401):
+		var l := CardPrompts.links(seed, 6)
+		_ok(l == CardPrompts.links(seed, 6), "the links are not a function of the seed")
+		_ok(not bool(l[0]), "the first card of %d is read with cards already down, of which there are none" % seed)
+		var c := l.count(true)
+		_ok(c >= 1, "episode %d of six reads no card with the ones before it" % seed)
+		total += c
+		all += 1 if c == 5 else 0
+	var mean := float(total) / 400.0
+	_ok(mean > 1.5 and mean < 3.5, "of five cards after the first, %.2f on average are read with the ones down" % mean)
+	_ok(all == 0, "%d readings of six read every card after the first with the ones down" % all)
+	_ok(CardPrompts.links(9, 1) == [false] and CardPrompts.links(9, 2) == [false, true], "a reading of one or two cards links wrongly")
+	var n := 3
+	var ep := _episode(n)
+	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards()})
+	var plan: Dictionary = ep.read_json("plan")
+	var drawn := prod._drawn(2)
+	var told := String(CardPrompts.reader("T", "B", plan, "2", prod._said(1), drawn, n, false, [], [], [], false, true)["prompt"])
+	var not_told := String(CardPrompts.reader("T", "B", plan, "2", prod._said(1), drawn, n, false, [], [], [], false, false)["prompt"])
+	_ok(told.contains("READ WITH THE CARDS ALREADY ON THE TABLE"), "a card in the share is not told to read it with the cards down")
+	_ok(not not_told.contains("READ WITH THE CARDS ALREADY ON THE TABLE"), "control: a card outside the share is told to as well")
+	var down := PackedStringArray()
+	for line in told.split("\n"):
+		if line.begins_with("  - "):
+			down.append(line)
+	var listed := "\n".join(down)
+	_ok(listed.contains(String(prod._card(1)["name"])) and listed.contains(": kw1"),
+		"the card already down does not reach the reader with its keywords:\n" + listed)
+	_ok(not listed.contains("kw2"), "the card just turned is listed as down, keywords and all")
+	_ok(not told.contains("kw3"), "a card not yet drawn reached the reader by its keywords")
+	var first := String(CardPrompts.reader("T", "B", plan, "1", prod._said(0), prod._drawn(1), n, false, [], [], [], false, true)["prompt"])
+	_ok(not first.contains("READ WITH THE CARDS ALREADY ON THE TABLE"), "the first card, with nothing down, is told to read it with the cards down")
+	return true
+
+
+## THE ART DIRECTOR (the user, 2026-10-17: a reading told a left-handed handshake while the painting showed
+## a right-handed one; rinks bent so a crowd would fit; a draw's cards near-copies of one another). On an
+## episode mid-way, driven through the producer's own landing with the verdicts an agent would give:
+## - a card not read yet waits for its check, and one already read (an episode made before checks) has
+##   none - the control: the same card unread asks for one again;
+## - "keep" writes the check and leaves the painting; "repaint" deletes the painting and what was made from
+##   it, keeps its faults, and the painter of the next is told them - and after REPAINTS sends back, the
+##   last painting stands and the reader is told what it gets wrong (the control: a kept card's reader is
+##   told nothing of the kind); a reply that is no verdict is a failure, not a pass;
+## - a person painting a card again by hand starts it with nothing sent back.
+func _art_director() -> bool:
+	var n := 3
+	var ep := _episode(n)
+	for s in ["image:back", "image:surface", "image:backdrop"]:
+		ep.write_text(s, "png")
+	ep.write_json("table", {"things": []})
+	ep.write_text("say:close", "Bye.")
+	ep.write_text("script", "<!-- table: shuffle -->")
+	for k in range(1, n + 1):
+		ep.write_text("image:card:%d" % k, "png")
+	_ok(not ep.steps().has("check:2") and ep.complete(), "a card read before checks were made asks for one")
+	for k in range(2, n + 1):
+		DirAccess.remove_absolute(ep.file_of("say:%d" % k))
+	_ok(ep.steps().has("check:2") and ep.needs("say:2").has("check:2") and not ep.complete(),
+		"control: a card not read yet does not wait for its check")
+	_ok(ep.needs("check:2").has("image:card:2") and ep.needs("check:2").has("design:2"), "a check does not wait for its painting")
+	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards()})
+	_ok(not prod._land_check("check:2", "I like it.").is_empty(), "a reply that is no verdict landed as one")
+	# KEEP
+	_ok(prod._land_check("check:2", '{"verdict": "keep", "faults": []}').is_empty() and ep.has("check:2")
+		and bool((ep.read_json("check:2") as Dictionary).get("kept", false)) and ep.has("image:card:2"),
+		"a kept painting was not kept")
+	# SENT BACK, and painted again with its faults told
+	var fault := "the clasp reads as two right hands; he offers his LEFT hand, his right hangs taped"
+	_ok(prod._land_check("check:3", '{"verdict": "repaint", "faults": ["%s"]}' % fault).is_empty(), "a send-back failed")
+	_ok(not ep.has("check:3") and not ep.has("image:card:3") and ep.has("design:3") and ep.has("image:card:2"),
+		"a painting sent back was not taken away alone (and its design kept)")
+	_ok(ep.sent_back(3) == [[fault]], "the faults sent back were not kept: %s" % str(ep.sent_back(3)))
+	var look: Dictionary = CardTable.look_of(prod._look(), prod._card(3))
+	var told := CardPrompts.card_image(look, prod._card(3), "art", "/x.png", true, 1, false, PackedStringArray([fault]))
+	_ok(told.contains("sent it back for") and told.contains(fault), "the painter of the next painting is not told its faults")
+	_ok(not CardPrompts.card_image(look, prod._card(3), "art", "/x.png", true, 1).contains("sent it back"),
+		"control: a first painting is told of faults")
+	# ...up to REPAINTS times: then the painting stands, and the reader is told what it gets wrong
+	for r in range(1, CardProducer.REPAINTS):
+		ep.write_text("image:card:3", "png")
+		prod._land_check("check:3", '{"verdict": "repaint", "faults": ["round %d"]}' % r)
+	_ok(ep.sent_back(3).size() == CardProducer.REPAINTS, "sent back %d times, not %d" % [ep.sent_back(3).size(), CardProducer.REPAINTS])
+	ep.write_text("image:card:3", "png")
+	_ok(prod._land_check("check:3", '{"verdict": "repaint", "faults": ["still two right hands"]}').is_empty()
+		and ep.has("check:3") and ep.has("image:card:3"), "past its send-backs, the last painting does not stand")
+	var stands: Dictionary = ep.read_json("check:3")
+	_ok(not bool(stands.get("kept", true)) and Array(stands.get("faults", [])) == ["still two right hands"],
+		"a painting that stands with faults does not say so: %s" % str(stands))
+	ep.write_text("say:2", "Passage for card 2.")
+	var reader := String(prod.say_prompt("3").get("prompt", ""))
+	_ok(reader.contains("DOES NOT QUITE SHOW WHAT THE CARD SAYS") and reader.contains("still two right hands"),
+		"the reader of a painting that stands with faults is not told them")
+	_ok(not String(prod.say_prompt("2").get("prompt", "")).contains("DOES NOT QUITE SHOW"),
+		"control: the reader of a kept painting is told it falls short")
+	# A PERSON PAINTING IT AGAIN starts it afresh
+	ep.invalidate("image:card:3")
+	_ok(ep.sent_back(3).is_empty(), "a card painted again by hand starts with what was sent back of the last one")
+	# THE PROMPT: the painting, what it was painted from, what is printed with it, and the cards before it
+	var card := prod._card(3)
+	var p := CardPrompts.art_director("Test Tarot", "A brief.", look, card, 2, "booklet")
+	var text := String(p["prompt"])
+	_ok(text.contains(String(card["art"])) and text.contains("booklet text number 3 upright") and text.contains("kw3"),
+		"the art director is not shown what the card was painted from and what is printed with it")
+	_ok(text.contains("The 2 after it are the cards") and text.contains("A COPY OF AN EARLIER CARD"),
+		"the art director is not told of the earlier cards it is shown")
+	var first := String(CardPrompts.art_director("Test Tarot", "A brief.", look, prod._card(1), 0, "booklet")["prompt"])
+	_ok(not first.contains("A COPY OF AN EARLIER CARD") and first.contains("The attached image is the painting"),
+		"control: the first card's art director is told of earlier cards")
+	_ok(not text.contains("{{") and not first.contains("{{"), "a name in the art director's prompt was left unfilled")
+	return true
+
+
+## EACH DESIGNER IS SHOWN THE CARDS DESIGNED BEFORE IT (the user, 2026-10-17: "players will be in very
+## similar poses/positions" - seven of ten designs of penalty-box 901482 alike, each designer blind to the
+## others): designs are made in drawing order, each shown the earlier ones' pictures - never their
+## entries - and a redesign keeps the cards after it. Two-sided: the first card's designer is shown none.
+func _designed_in_order() -> bool:
+	var ep := _episode(3)
+	_ok(ep.needs("design:2").has("design:1") and not ep.needs("design:1").has("design:0"), "designs are not made in drawing order")
+	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": "A brief.", "deck": FixtureDeck.cards()})
+	var look: Dictionary = CardTable.look_of(prod._look(), prod._card(2))
+	var sib := [{"k": 1, "name": String(prod._card(1)["name"]), "art": String(prod._card(1)["art"])}]
+	var told := String(CardPrompts.designer("T", "B", look, prod._card(2), true, [], "booklet", sib)["prompt"])
+	_ok(told.contains("ALREADY DESIGNED FOR TONIGHT'S DRAW") and told.contains("art for card 1"),
+		"a designer is not shown the cards designed before it")
+	_ok(not told.contains("booklet text number 1"), "a designer is shown an earlier card's entry")
+	var alone := String(CardPrompts.designer("T", "B", look, prod._card(1), true, [], "booklet")["prompt"])
+	_ok(not alone.contains("ALREADY DESIGNED"), "control: the first card's designer is told of cards before it")
+	_ok(told.contains("WHAT THE PICTURE MUST SHOW, IT SHOWS PLAINLY") and alone.contains("which hand or which side"),
+		"a designer is not told what a painting cannot be trusted to show")
+	return true
+
+
 ## A BURST'S MOMENTS ARE ONES THAT HAPPEN: the set dresser of a reading with no jumper is not offered the
 ## jumper's moment, and is told so; one with a jumper is (the control). Whether a card jumps comes from the
 ## seed alone, as the draw has it.
@@ -816,14 +966,18 @@ func _only_what_was_asked() -> bool:
 		if not String(f).begins_with("plan"):
 			DirAccess.remove_absolute(ep.dir.path_join(f))
 	var prod := CardProducer.new(ep, {"title": "T", "brief": "B", "deck": FixtureDeck.cards(), "draw": [3, 3]})
+	# designs are made in drawing order (each shown the ones before it): card 2's waits for card 1's
+	ep.write_json("design:1", {"art": "art for card 1", "booklet": {"keywords": ["kw1"], "upright": "booklet text number 1 upright"}})
 	prod.start(["design:2"])
 	_ok(prod._tries.keys() == ["design:2"], "asked for design 2, the producer tried %s" % str(prod._tries.keys()))
 	_ok(ep.has("draw"), "the shuffle a design needs, which costs nothing, was not made on the way")
 	_ok(not prod.running, "a run asked for one step is still running after it")
 	var all := CardProducer.new(ep, {"title": "T", "brief": "B", "deck": FixtureDeck.cards(), "draw": [3, 3]})
+	DirAccess.remove_absolute(ep.file_of("design:1"))
 	all.start()
-	for s in ["design:1", "design:3", "image:back", "image:surface", "say:intro"]:
+	for s in ["design:1", "image:back", "image:surface", "say:intro"]:
 		_ok(all._tries.has(s), "Generate did not try %s (it tried %s)" % [s, str(all._tries.keys())])
+	_ok(not all._tries.has("design:3"), "Generate designed card 3 before the cards before it")
 	return true
 
 

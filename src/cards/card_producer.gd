@@ -12,6 +12,8 @@ class_name CardProducer
 ##   draw       the deck is shuffled and cut (here, from the seed - no agent touches it)
 ##   design:K   the deck's creator draws up card K: its illustration and its booklet entry
 ##   image:*    the painter makes the back, the cloth, the room, then each card in turn
+##   check:K    the art director looks at card K's painting beside what it was asked to show and what
+##              is printed with it, and keeps it or sends it back to be painted again
 ##   table      the set dresser sets the reader's table, looking at the cloth - and, given a writer
 ##              that takes tools, looking at what it builds as it builds it ([SetDresserTools])
 ##   say:intro  the reader opens the video, shuffling, knowing no card
@@ -35,6 +37,9 @@ signal changed
 
 ## A step whose job fails is tried this many more times before the episode stops on it.
 const RETRIES := 1
+## How many times the art director may send one card's painting back ([method _land_check]): past
+## that the last painting stands, and the reader is told what it gets wrong.
+const REPAINTS := 2
 ## How much of the deck goes into a card's references: the back, the first card (which set the
 ## hand) and the most recent - the [Illustrations] chain, for the same reason: more attachments
 ## make a painter worse at matching, not better.
@@ -161,6 +166,8 @@ func _make(step: String) -> void:
 			_finish(step, _make_draw())
 		"design":
 			_make_design(int(parts[1]))
+		"check":
+			_make_check(int(parts[1]))
 		"image":
 			_make_image(step)
 		"say":
@@ -331,11 +338,19 @@ func _drawn(upto: int) -> Array:
 	return out
 
 
+## CARD [param k]'s DESIGN, shown the pictures of the cards designed before it in this draw (the user,
+## 2026-10-17, of penalty-box: "players will be in very similar poses/positions" - seven of ten designs of
+## 901482 were two men nose to nose in the middle, each designer blind to the others).
 func _make_design(k: int) -> void:
 	var card := _card(k)
+	var siblings: Array = []
+	for j in range(1, k):
+		var c := _card(j)
+		if not String(c.get("art", "")).is_empty():
+			siblings.append({"k": j, "name": String(c.get("name", "")), "art": String(c["art"])})
 	var p := CardPrompts.designer(String(spec.get("title", "")), String(spec.get("brief", "")),
 		CardTable.look_of(_look(), card), card, bool(spec.get("reversals", true)), CardEpisode.archive(episode.show, episode.seed),
-		String(CardTable.staging_of(_plan())["text"]))
+		String(CardTable.staging_of(_plan())["text"]), siblings)
 	_submit_text("design:%d" % k, p, "fast")
 
 
@@ -364,8 +379,14 @@ func _make_image(step: String) -> void:
 		if chain.size() > CHAIN_MAX:
 			chain = [chain[0]] + chain.slice(chain.size() - (CHAIN_MAX - 1))
 		refs.append_array(chain)
+		# WHAT THE ART DIRECTOR SENT BACK of this card's earlier paintings, every fault once
+		var faults := PackedStringArray()
+		for round in episode.sent_back(k):
+			for f in DataPath.strings(round):
+				if not faults.has(f):
+					faults.append(f)
 		_submit_image(step, CardPrompts.card_image(CardTable.look_of(look, _card(k)), _card(k), art, target, has_back,
-			chain.size(), String(CardTable.staging_of(_plan())["text"]) == "front"), refs)
+			chain.size(), String(CardTable.staging_of(_plan())["text"]) == "front", faults), refs)
 		return
 	if parts.size() == 3 and String(parts[1]) == "back":
 		# A printing's own back, even when none of its cards happened to be drawn.
@@ -395,6 +416,26 @@ func _make_image(step: String) -> void:
 				f.close()
 				DirAccess.rename_absolute(view + ".part", view)
 			_submit_image(step, CardPrompts.backdrop_image(look, target), [])
+
+
+## THE ART DIRECTOR looks at card [param k]'s painting before the reader does: shown the painting, the
+## description it was painted from, what is printed with it and the cards of this draw painted before
+## it, it keeps the painting or sends it back with what is wrong ([method _land_check]) - the user,
+## 2026-10-17: a reading said a player shook with his left hand, and the picture showed a right-handed
+## shake (penalty-box 290660); a rink bent into a triangle so a crowd would fit. A reversed card is shown
+## as it was painted, the right way up.
+func _make_check(k: int) -> void:
+	var card := _card(k)
+	var images: Array = [{"path": episode.file_of("image:card:%d" % k),
+		"label": "THE PAINTING to check - card %d, %s:" % [k, String(card.get("name", ""))], "flip": false}]
+	for j in range(1, k):
+		if episode.has("image:card:%d" % j):
+			images.append({"path": episode.file_of("image:card:%d" % j),
+				"label": "An earlier card of this draw - card %d, %s:" % [j, String(_card(j).get("name", ""))], "flip": false})
+	var p := CardPrompts.art_director(String(spec.get("title", "")), String(spec.get("brief", "")),
+		CardTable.look_of(_look(), card), card, images.size() - 1, String(CardTable.staging_of(_plan())["text"]))
+	p["images"] = images
+	_submit_text("check:%d" % k, p, "best")
 
 
 ## THE SET DRESSER sets the table from the plan, looking at the cloth, told the things earlier
@@ -481,7 +522,8 @@ func _make_say(who: String) -> void:
 ## THE READER'S PROMPT for passage [param who] ("intro", "1".."N", "close"): the passages before it
 ## and [method _drawn] up to its card - nothing else reaches it - and `images`, the PAINTINGS it
 ## talks about: card K's own for card K when K is one it may stop on ([method CardPrompts.remarks]),
-## every card's for the close, none for the intro. A
+## every card's for the close, none for the intro; and whether card K is one read with the cards
+## already down ([method CardPrompts.links]). A
 ## reversed card is sent upside down, as the viewer sees it. Public so the gate can hold the
 ## producer itself, not only the prompt builder, to all of that.
 func say_prompt(who: String) -> Dictionary:
@@ -501,9 +543,13 @@ func say_prompt(who: String) -> Dictionary:
 	# THE PAINTINGS go with a passage only where the reader may stop on one ([method CardPrompts.remarks]):
 	# a card left out reaches it by name and meaning alone
 	var remark := true
+	# ...and a share of the cards is read with the cards already down ([method CardPrompts.links])
+	var link := false
 	if who != "intro" and who != "close":
 		var shares := CardPrompts.remarks(episode.seed, n)
 		remark = int(who) - 1 < shares.size() and bool(shares[int(who) - 1])
+		var links := CardPrompts.links(episode.seed, n)
+		link = int(who) - 1 < links.size() and bool(links[int(who) - 1])
 	var images: Array = []
 	if who != "intro" and remark:
 		var plan_pos: Array = ((_plan().get("spread", {}) as Dictionary).get("positions", [])) as Array
@@ -520,9 +566,15 @@ func say_prompt(who: String) -> Dictionary:
 	var names: Array = []
 	for c in _deck():
 		names.append(String((c as Dictionary).get("name", "")))
+	# ...and WHAT ITS PAINTING GETS WRONG, when the art director could not have it put right
+	var misses: Array = []
+	if who.is_valid_int():
+		var check: Variant = episode.read_json("check:%s" % who)
+		if check is Dictionary and not bool((check as Dictionary).get("kept", true)):
+			misses = Array(DataPath.strings((check as Dictionary).get("faults", [])))
 	var p := CardPrompts.reader(String(spec.get("title", "")), String(spec.get("brief", "")),
 		_plan(), who, said, drawn, n, not images.is_empty(), CardEpisode.archive(episode.show, episode.seed), names,
-		_voices(), remark)
+		_voices(), remark, link, misses)
 	p["images"] = images
 	return p
 
@@ -612,6 +664,8 @@ func _land(step: String, res: Dictionary) -> void:
 				err = _land_plan(String(res.get("text", "")))
 			"design":
 				err = _land_design(step, String(res.get("text", "")))
+			"check":
+				err = _land_check(step, String(res.get("text", "")))
 			"say":
 				var t := own_voices(clean_spoken(String(res.get("text", ""))), _voices(), _reader_name())
 				err = "the reader wrote nothing speakable" if t.split(" ", false).size() < (1 if step.split(":")[1].is_valid_int() else 20) \
@@ -847,6 +901,34 @@ func _land_box(v: Variant, n: int) -> Array:
 			card["series"] = _str(d["series"])
 		out.append(card)
 	return out if out.size() >= int(r[0]) else []
+
+
+## THE ART DIRECTOR'S WORD on a card's painting ([param step] `check:K`): kept, or SENT BACK - its
+## faults added to [method CardEpisode.send_back] for the painter of the next, and the painting deleted
+## with what was made from it, so the producer paints it again and looks again - while it has been sent
+## back fewer than [constant REPAINTS] times. Past that the last painting stands, and its faults are
+## written into the check for the reader ([method say_prompt]).
+func _land_check(step: String, text: String) -> String:
+	var d: Variant = TextGen.extract_json(text)
+	if not (d is Dictionary) or not (String((d as Dictionary).get("verdict", "")) in ["keep", "repaint"]):
+		return "the art director's reply was not a verdict"
+	var k := int(step.split(":")[1])
+	var faults := Array(DataPath.strings((d as Dictionary).get("faults", [])))
+	var rounds := episode.sent_back(k).size()
+	if String((d as Dictionary)["verdict"]) == "keep" or faults.is_empty():
+		return episode.write_json(step, {"kept": true, "sent_back": rounds})
+	if rounds >= REPAINTS:
+		print("ghost: cards %s - painted %d times; it stands with: %s" % [step, rounds + 1, "; ".join(faults)])
+		return episode.write_json(step, {"kept": false, "sent_back": rounds, "faults": faults})
+	var err := episode.send_back(k, faults)
+	if not err.is_empty():
+		return err
+	print("ghost: cards %s - sent back: %s" % [step, "; ".join(faults)])
+	episode.invalidate("image:card:%d" % k, true)
+	# a new painting, and a new look at it: neither is a retry of a failed job
+	_tries.erase(step)
+	_tries.erase("image:card:%d" % k)
+	return ""
 
 
 func _land_design(step: String, text: String) -> String:

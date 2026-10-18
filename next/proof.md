@@ -586,14 +586,29 @@ Found by making it, each fixed and held:
   episode did before. While a take of an episode renders it is pinned, and neither is done to it.
 - **A phrase is never broken** ("A point is named by two numbers" had "like 5 seconds of silence
   between 'two' and 'numbers' ... flow completely broken by the interrupted sentence"): a dictation
-  the pen lags rested at punctuation OR after any six words, and "two" was the sixth. It rests at
-  punctuation only now (`DeskScript.paced`); what the pen owes in between waits for the next mark or
-  the end. The wait itself was the pen writing a whole sentence of prose (23 s of hand for 3 s of
-  words), so the teacher is told a line of pad text is a few words, and the rest is said.
+  the pen lags rested at punctuation OR after any six words, and "two" was the sixth. It rested at
+  punctuation only for a day; since 2026-10-17 it does not rest inside a dictation at all (below,
+  "the pen is elastic"). The wait itself was the pen writing a whole sentence of prose (23 s of hand
+  for 3 s of words), so the teacher is told a line of pad text is a few words, and the rest is said.
 - **The pen keeps up with the voice** ("there is still a super long pause at the end of this ...
   rather than breaking the audio, should we increase the speed of writing ... to track with the audio
   better?"): `DeskScript.MAX_PACE` 1.8 -> 4.0. On the six-trig-functions episode the rest at "numbers:"
   went from 6.5 s to 1.7, and the whole episode's rests inside dictations to 7, 5 s in all.
+- **The pen is elastic, and never stops mid-line** (2026-10-17: "the pen stopping at weird moments -
+  like halfway between drawing a straight line, pausing for a second or two ... If the speech is
+  gaining too far ahead, speed-up the pen. If the pen is too far ahead of the speech, slow down the
+  motions. But NEVER should we just be stopping ... We shouldn't be forcing arbitrary breaks in the
+  speech, to wait for the pen, nor should we be forcing arbitrary breaks in the pen movement, to
+  wait for the speech"). The ink's clock was the share of the dictation's words said, which stands
+  still in every gap between words, so the nib froze mid-stroke at each comma and breath - and where
+  the voice rested FOR the pen, the pen, waiting on words, rested too. `DeskMedium.elastic`: the
+  voice's progress smoothed over 1.5 s, stretched onto the pen's time (a pen that lags runs behind
+  evenly the whole way), with 0.3 of the progress steady - so it slows over a pause to about a third
+  of its average pace and makes it up over the words after, and is always moving. The voice no longer
+  rests inside a dictation (`DeskScript.paced` is gone): what the pen owes at 4 x is one rest after
+  the dictation's last word. On the trig episode, read by a steady voice, the longest the nib stands
+  still while writing is 0.17 s (the ink's own ease at a stroke's ends); 50 dictations leave 16 s of
+  rests after them. `proof_check` "the elastic pen", with the old clock as the control (1.6 s still).
 - **A scrub no longer stops the pen** ("scrubbing the timeline seems to have broken the pen
   completely. For the remainder of the video, the pen doesn't move at all"): a scrub starts the voice
   again from a later chunk, and the desk matched the new words from the top of the lesson - a
@@ -612,6 +627,11 @@ Found by making it, each fixed and held:
   dist/math_spike/stress_ab/A_as_now.wav and B_core_stressed.wav (kˈoʊsˌaɪn, kˈoʊtˌændʒənt,
   kˈoʊsˌiːkənt). If B is right, the fix is general: a word CMUdict lacks (eSpeak guessing) gets a
   secondary stress on each unstressed full vowel, and Wiktionary's vowels where eSpeak's differ.
+  NOT HEARD AT FIRST (2026-10-17: the export "sounded exactly like the original"): the reading
+  marked a word `rare` only when its page spelling matched its spoken one, and the page spelling
+  keeps its marks - "cosine," is not "cosine" - so in the list every one of the three, each with a
+  comma or a stop after it, went to eSpeak's guess ("secant", with none, was fetched). Now
+  `Phonemes.guessed`, its marks aside; `g2p_check` "guessed" holds the list.
 - Still to come from the user's notes: the instruments (step 3) - "an actor that could browse the
   internet on a tablet, perhaps pull up a wikipedia page and read from it, perhaps compute on a
   calculator ... we would pivot from one tool to another".

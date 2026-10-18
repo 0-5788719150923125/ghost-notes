@@ -197,6 +197,14 @@ func _prompts() -> bool:
 	_ok(front_reader.contains("12 cards in all") and front_reader.contains("Usually do not mention the total"),
 		"the reader can check the story against the box without announcing a count")
 	texts.append(CardPrompts.card_image(look, card, "a cliff", "/x.png", true, 2))
+	# ...a painting sent back, a designer shown the cards before it, the art director, a reader of a card
+	# read with the ones down whose painting falls short
+	texts.append(CardPrompts.card_image(look, card, "a cliff", "/x.png", true, 2, false, PackedStringArray(["the wing is missing"])))
+	texts.append(CardPrompts.designer("Show", "a brief", look, card, true, [], "booklet", [{"k": 1, "name": "The Owl", "art": "an owl"}])["prompt"])
+	for earlier in [0, 1, 2]:
+		texts.append(CardPrompts.art_director("Show", "a brief", look, card, earlier, "back")["prompt"])
+	texts.append(CardPrompts.reader("Show", "a brief", plan, "2", ["hello"], [card, card], 3, true, [], [], ["Moth"], true, true,
+		["the wing is missing"])["prompt"])
 	texts.append(CardPrompts.back_image(look, "/x.png", true, true))
 	# a symmetric back is never made by blending the picture with its half turn (feedback 0012: every
 	# mark printed twice); the control is a back that is not asked to be symmetric

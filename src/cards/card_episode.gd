@@ -135,6 +135,8 @@ func file_of(step: String) -> String:
 			return dir.path_join("draw.json")
 		"design":
 			return dir.path_join("design_%s.json" % parts[1])
+		"check":
+			return dir.path_join("check_%s.json" % parts[1])
 		"image":
 			if parts.size() == 3:
 				return dir.path_join("%s_%s.png" % [parts[1], parts[2]])     # card_K
@@ -214,10 +216,12 @@ func card_count() -> int:
 
 
 ## EVERY STEP, in the order it is made: `plan`, `draw`, `design:K`, `image:back`,
-## `image:surface`, `image:backdrop`, `table`, `image:height`, `image:card:K`, `say:intro`, `say:K`,
-## `say:close`, `script`. Card steps exist only once the plan says how many cards there are; the
-## painting's height map only once the table lays the painting where it would be read
-## ([method wants_height]).
+## `image:surface`, `image:backdrop`, `table`, `image:height`, `image:card:K` and `check:K`,
+## `say:intro`, `say:K`, `say:close`, `script`. Card steps exist only once the plan says how many
+## cards there are; the painting's height map only once the table lays the painting where it would be
+## read ([method wants_height]). A CARD ALREADY READ NEEDS NO CHECK: an episode read before paintings
+## were checked (2026-10-17) keeps its pictures and its words, so `check:K` is a step only where its
+## file is, or card K has not been read yet.
 func steps() -> Array:
 	var out := ["plan", "draw"]
 	var n := card_count()
@@ -232,11 +236,19 @@ func steps() -> Array:
 		out.append("image:height")
 	for k in range(1, n + 1):
 		out.append("image:card:%d" % k)
+		if checks(k):
+			out.append("check:%d" % k)
 	out.append("say:intro")
 	for k in range(1, n + 1):
 		out.append("say:%d" % k)
 	out.append_array(["say:close", "script"])
 	return out
+
+
+## Whether card [param k]'s painting is checked: a step where its check is, or the card is not read yet
+## (see [method steps]).
+func checks(k: int) -> bool:
+	return has("check:%d" % k) or not has("say:%d" % k)
 
 
 ## What [param step] is made FROM - the steps that must exist before it can be.
@@ -249,7 +261,14 @@ func needs(step: String) -> Array:
 		"draw":
 			return ["plan"]
 		"design":
-			return ["draw"]
+			# ONE AFTER ANOTHER: a card's designer is shown the cards designed before it in this draw,
+			# so it pictures its own otherwise (see CardProducer._make_design)
+			var k := int(parts[1])
+			return ["draw"] if k <= 1 else ["draw", "design:%d" % (k - 1)]
+		"check":
+			# the art director looks at a card's painting as it is described and printed
+			var k := int(parts[1])
+			return ["design:%d" % k, "image:card:%d" % k]
 		"image":
 			if parts.size() == 3 and String(parts[1]) == "card":
 				# a card's picture is painted in the deck's hand: after its printing's back, and after the
@@ -273,10 +292,10 @@ func needs(step: String) -> Array:
 				return ["draw"]
 			if who == "close":
 				return ["say:%d" % n] if n > 0 else ["say:intro"]
-			# a card's passage is written LOOKING AT the card: it waits for its picture, and a
+			# a card's passage is written LOOKING AT the card: it waits for its picture, checked, and a
 			# card painted again is a passage written again (see CardProducer.say_prompt)
 			var k := int(who)
-			var out := ["design:%d" % k, "image:card:%d" % k, "say:intro" if k == 1 else "say:%d" % (k - 1)]
+			var out := ["design:%d" % k, "image:card:%d" % k, "check:%d" % k, "say:intro" if k == 1 else "say:%d" % (k - 1)]
 			# a card swept out in a waterfall is read with the cards that came out with it: their entries too
 			for j in range(k + 1, reveal_of(k) + 1):
 				out.append("design:%d" % j)
@@ -311,16 +330,20 @@ func dependents(step: String) -> Array:
 
 
 ## The edges [method needs] lists only for ORDER: a card's picture waits for the back and for
-## the card before it, because it is sent them as references, but it is not made from them; and
+## the card before it, because it is sent them as references, but it is not made from them; a card's
+## design waits for the one before it, which it is shown, and is not made from it either; and
 ## the table waits for the cloth and the room to look at, but a new cloth or room keeps the table.
 static func _soft(from: String, to: String) -> bool:
 	return (to.begins_with("image:card:") and (from.begins_with("image:card:") or from.begins_with("image:back"))) \
+		or (to.begins_with("design:") and from.begins_with("design:")) \
 		or (to == "table" and (from == "image:surface" or from == "image:backdrop")) \
 		or (to == "image:height" and from == "table")
 
 
-## REDO [param step]: delete it and everything made from it. Returns what went.
-func invalidate(step: String) -> Array:
+## REDO [param step]: delete it and everything made from it. Returns what went. A card painted or
+## designed again starts with nothing sent back ([method sent_back]) - but [param keep_sent] keeps it,
+## for the art director's own send-back, which the painter is told of.
+func invalidate(step: String, keep_sent := false) -> Array:
 	var gone := [step] + dependents(step)
 	# the plan decides how many cards there are: going back to it takes every card step with it,
 	# including ones a smaller spread no longer lists
@@ -328,6 +351,7 @@ func invalidate(step: String) -> Array:
 		for f in DirAccess.get_files_at(dir):
 			var fs := String(f)
 			if fs.begins_with("design_") or fs.begins_with("card_") or fs.begins_with("say_") \
+					or fs.begins_with("check_") or fs.begins_with("sent_back_") \
 					or fs == "script.md" or (step == "plan" and (fs in ["draw.json", "back.png", "surface.png",
 					"backdrop.png", "height.png", "height.json"] or fs.begins_with("back_"))):
 				DirAccess.remove_absolute(dir.path_join(fs))
@@ -338,7 +362,37 @@ func invalidate(step: String) -> Array:
 		# the height map's fit goes with it
 		if String(s) == "image:height" and FileAccess.file_exists(dir.path_join("height.json")):
 			DirAccess.remove_absolute(dir.path_join("height.json"))
+		var card := String(s).trim_prefix("image:card:").trim_prefix("design:")
+		if not keep_sent and card != String(s) and card.is_valid_int():
+			DirAccess.remove_absolute(_sent_back_file(int(card)))
 	return gone
+
+
+## WHAT THE ART DIRECTOR SENT BACK of card [param k]'s paintings so far, a list of faults per
+## painting sent back, oldest first - kept beside the episode, not a step: the painting it was said of
+## is gone, and the painter of the next is told it ([method CardProducer._make_image]).
+func sent_back(k: int) -> Array:
+	var raw := FileAccess.get_file_as_string(_sent_back_file(k))
+	var j := JSON.new()
+	return j.data if not raw.is_empty() and j.parse(raw) == OK and j.data is Array else []
+
+
+## Card [param k]'s painting sent back for [param faults]: added to [method sent_back]. "" written.
+func send_back(k: int, faults: Array) -> String:
+	var rounds := sent_back(k)
+	rounds.append(faults)
+	var p := _sent_back_file(k)
+	DirAccess.make_dir_recursive_absolute(dir)
+	var f := FileAccess.open(p + ".part", FileAccess.WRITE)
+	if f == null:
+		return "could not write " + p
+	f.store_string(JSON.stringify(rounds, "\t"))
+	f.close()
+	return "" if DirAccess.rename_absolute(p + ".part", p) == OK else "could not move %s into place" % p
+
+
+func _sent_back_file(k: int) -> String:
+	return dir.path_join("sent_back_%d.json" % k)
 
 
 ## THE PRINTINGS in the full collection, including ones none of tonight's cards came from,

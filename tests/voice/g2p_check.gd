@@ -13,6 +13,11 @@ extends SceneTree
 ##             a wrong mark is a word leaned on in the wrong place, which is
 ##             audible in a way a wrong schwa is not. -1 asserts an unstressed
 ##             function word.
+##   GUESSED - which words of a parsed sentence the voice host is told eSpeak would
+##             be guessing at (`Phonemes.guessed` -> `rare`, hosts/voice/lexicon.py):
+##             the trig list the user heard slurred, every word with its comma or
+##             stop after it (2026-10-17: the marks hid all three); the controls, a
+##             word normalization wrote and a word the dictionary has, are not.
 ##
 ## Run: godot --headless --path . --script tests/voice/g2p_check.gd
 
@@ -58,12 +63,38 @@ func _init() -> void:
 			sbad += 1
 	print("g2p_check: %-9s %d/%d" % ["stress", st.size() - sbad, st.size()])
 	failures += sbad
+	failures += _guessed()
 	if failures > 0:
 		print("g2p_check: %d FAILURE(S)" % failures)
 		quit(1)
 		return
 	print("g2p_check: ALL OK")
 	quit()
+
+
+## The GUESSED half: failures, each printed.
+func _guessed() -> int:
+	var line := "It uses six functions: sine, cosine, tangent, cotangent, secant and cosecant. " \
+		+ "In 2009, the letter [x] was \"cosine\"."
+	var got := PackedStringArray()
+	var said := PackedStringArray()
+	for sentence in Phonemes_.parse(line):
+		for w in sentence:
+			said.append(String(w.text))
+			if Phonemes_.guessed(w):
+				got.append(String(w.text))
+	var want := PackedStringArray(["cosine", "cotangent", "secant", "cosecant", "cosine"])
+	var bad := 0
+	if got != want:
+		print("  guessed   want: %s  got: %s  (of %s)" % [", ".join(want), ", ".join(got), " ".join(said)])
+		bad += 1
+	# the controls: the numeral's words and the letter's name are normalization's, "sine" is CMUdict's
+	for w in ["two", "thousand", "nine", "ex", "sine"]:
+		if got.has(w):
+			print("  guessed   %s is not a guess, and was marked one" % w)
+			bad += 1
+	print("g2p_check: %-9s %s" % ["guessed", "ok" if bad == 0 else "FAILED"])
+	return bad
 
 
 ## Index of the primary-stressed vowel, counting vowels only. -1 if none.

@@ -57,13 +57,25 @@ card:
           {{#chain_many}}earlier cards{{/chain_many}}{{^chain_many}}an earlier card{{/chain_many}}
           from this same deck: match the rendering exactly - medium, palette, linework, texture,
           level of detail - so every card reads as one artist's. Do NOT reuse compositions or
-          subjects; the content comes only from THE PICTURE above.
+          subjects; the content comes only from THE PICTURE above. Take nothing else from them: not
+          the camera, the framing, the poses, the people, their clothes or colors, the place or its
+          light. A card that repeats one of them is sent back.
   - when: chain
     say: >-
           The earlier cards set the HAND, not the CAST: this card's people and creatures are its
           own, as the description gives them - a figure from an earlier card appears again only if
           the description asks for it.
+  # SENT BACK (CardProducer._land_check): what the art director found wrong with this card's last painting
+  - when: sent_back
+    say: "THIS CARD WAS PAINTED BEFORE, and the art director sent it back for:"
+  - each: sent_back
+    say: "  - {{it}}"
+  - when: sent_back
+    say: "Paint it again from THE PICTURE above, with every one of these put right."
   - "Every real animal named is drawn as that animal, with its true anatomy."
+  - >-
+      Every body is whole - two arms, two hands of five fingers, two legs each - and every place keeps
+      its real shape: cropped by the edge of the picture, never bent to fit it.
   - >-
       ALWAYS: no text, no captions, no lettering, no numbers, no borders, no watermark, no
       signature.

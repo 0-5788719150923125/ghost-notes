@@ -34,31 +34,36 @@ const KNOBS := {"show": "", "seed": 1, "draw": [3, 6], "reversals": true, "jumpe
 	"writer": "claude", "writer_model": "", "writer_effort": "", "painter": "codex", "painter_model": "",
 	"painter_effort": ""}
 ## Who makes each kind of step (a step's name up to its first ":"), as a row's status names them.
-const MAKERS := {"plan": "producer", "design": "designer", "image": "painter", "table": "set dresser", "say": "reader"}
+const MAKERS := {"plan": "producer", "design": "designer", "image": "painter", "check": "art director",
+	"table": "set dresser", "say": "reader"}
 ## The rows of the episode list: a label and the steps it covers ("K" is each card).
 const ROWS := [
 	["Plan", ["plan"]],
 	["Shuffle", ["draw"]],
 	["Table", ["image:back", "image:surface", "image:backdrop", "table", "image:height"]],
 	["Intro", ["say:intro"]],
-	["Card", ["design:K", "image:card:K", "say:K"]],
+	["Card", ["design:K", "image:card:K", "check:K", "say:K"]],
 	["Close", ["say:close", "script"]],
 ]
-## What a row's redo menu offers: label -> the step made again. ONLY that step is made: what
-## was made from it is cleared (it no longer follows), and waits for Generate. The shuffle has
-## none: the draw is a function of the seed, so dealing again deals the same cards - a different
-## deal is a different episode (New episode).
+## What a row's redo menu offers: label -> the step made again. ONLY that step is made (and what
+## [constant TOGETHER] makes with it): what was made from it is cleared (it no longer follows), and
+## waits for Generate. The shuffle has none: the draw is a function of the seed, so dealing again
+## deals the same cards - a different deal is a different episode (New episode).
 const REDO := {
 	"Plan": [["Make a new plan (clears the cards and the reading)", "plan"]],
 	"Table": [["Paint a new card back", "image:back"], ["Paint a new cloth", "image:surface"],
-		["Paint a new room", "image:backdrop"], ["Set the table again", "table"],
-		["Paint the cloth's depth again", "image:height"]],
+		["Paint a new room", "image:backdrop"], ["Set the table again", "table"]],
 	"Intro": [["Rewrite the intro (clears the readings after it)", "say:intro"]],
 	"Card": [["Paint this card again (clears its reading and the ones after)", "image:card:K"],
 		["Rewrite this card's reading (clears the ones after it)", "say:K"],
 		["Redesign the card (clears its picture and its reading on)", "design:K"]],
 	"Close": [["Rewrite the close", "say:close"]],
 }
+## WHAT A REDO MAKES ALONG WITH ITS STEP: what is made from it and nothing else, so no choice is left
+## (the user, 2026-10-17: "if you're changing the first, then by definition you'll need the other
+## automatically"). The cloth's depth is painted from the cloth: a new cloth is a new depth, where
+## the table wants one (CardEpisode.wants_height), and never a cloth with no depth until Generate.
+const TOGETHER := {"image:surface": ["image:height"]}
 
 var _knobs := KNOBS.duplicate(true)
 var _episode: CardEpisode = null
@@ -910,7 +915,7 @@ func _redo(step: String) -> void:
 	print("ghost: cards redo %s - removed %s" % [step, ", ".join(PackedStringArray(gone))])
 	_rebuild_rows()
 	_mark_stale()
-	_run([step])
+	_run([step] + (TOGETHER.get(step, []) as Array))
 
 
 # --- the rows ------------------------------------------------------------------------------------
@@ -980,11 +985,6 @@ func _add_row(title: String, kind: String, steps: Array, k: int) -> void:
 		menu.add_item(String(items[i][0]), i)
 	menu.id_pressed.connect(func(id: int) -> void:
 		_redo(String(items[id][1]).replace("K", str(k))))
-	# the painting's depth is offered only where the table wants it
-	menu.about_to_popup.connect(func() -> void:
-		for i in items.size():
-			if String(items[i][1]) == "image:height":
-				menu.set_item_disabled(menu.get_item_index(i), _episode == null or not _episode.wants_height()))
 	redo.modulate.a = 1.0 if not items.is_empty() else 0.0
 	redo.disabled = items.is_empty()
 	row.add_child(redo)
@@ -1046,6 +1046,9 @@ func _refresh_rows() -> void:
 		for s in (w as Dictionary)["steps"]:
 			# the painting's height map is a step only where the table wants one (CardEpisode.wants_height)
 			if String(s) == "image:height" and not _episode.wants_height():
+				continue
+			# ...and a card's check only where it is one (CardEpisode.checks: a card read before checks has none)
+			if String(s).begins_with("check:") and not _episode.checks(int(String(s).get_slice(":", 1))):
 				continue
 			var st := _producer.state_of(String(s))
 			# ...and a height map not made yet holds nothing back: it shows only while it is made, or why not

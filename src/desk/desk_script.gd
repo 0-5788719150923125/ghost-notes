@@ -27,14 +27,13 @@ class_name DeskScript
 ## right after a pen's mark is its DICTATION - the formula read aloud, "the sum of two k minus one, for k
 ## from one to n, equals n squared" - and the pen writes during exactly those words, keeping pace with them
 ## word by word ([DeskMedium]). The voice rests before a dictation only for the pen to come down (and
-## for the page to turn). Where the writing would trail the words ([method tail_for]) - a line of prose
-## takes a hand three or four times as long to write as to say - the dictation goes PHRASE BY PHRASE
-## ([method paced]): the voice says a phrase, rests while the pen writes it, and goes on, as a person
-## reading out what they write on a board does - never all the words and then a long silence. A PHRASE
-## ENDS AT PUNCTUATION, and only there (the user, 2026-10-16: "A point is named by two numbers" had
-## "like 5 seconds of silence between 'two' and 'numbers' ... the flow completely broken by the
-## interrupted sentence" - a rest once came after any six words): words with no mark between them are
-## said together, and what the pen still owes waits for the next mark or the dictation's end.
+## for the page to turn). A DICTATION IS NEVER BROKEN to wait for the pen (the user, 2026-10-16: "A
+## point is named by two numbers" had "like 5 seconds of silence between 'two' and 'numbers'"; and
+## 2026-10-17: "We shouldn't be forcing arbitrary breaks in the speech, to wait for the pen, nor ...
+## in the pen movement, to wait for the speech"): it is said straight through, the pen speeding up to
+## keep with it ([method DeskMedium.elastic]), and what the pen still owes at its fastest
+## ([method tail_for]) is the one rest, after the dictation's last word - a paragraph's end. Rests
+## shared out at a dictation's commas went: the pen, its clock the words said, stood still in them too.
 ##
 ## THE PAGES ARE FILLED (the user, the same day: "It would make more sense to use all of the available
 ## space on a page, and then to turn the page if we need more space"): there is no mark for a new
@@ -84,22 +83,16 @@ const WRITES := ["pad", "pad-text", "draw"]
 const LEAD_HOLD := 0.45
 ## A page turned before the next formula: the sheet lifts and flips over the pad's binding.
 const TURN := 1.6
-## How much faster or slower than its own pace the pen may write to keep with the words. Past
-## MAX_PACE it lags, and the voice waits for it at punctuation and at the dictation's end
-## ([method tail_for], [method paced]). THE PEN KEEPS UP WITH THE VOICE (the user, 2026-10-16: "rather
-## than breaking the audio, should we increase the speed of writing ... to track with the audio
-## better?"): at 1.8 a line of prose left the voice waiting six seconds at a colon; four times its
-## own pace covers nearly every dictation, and the voice is held only for what is left.
+## How much faster or slower than its own pace the pen may write, on the average over a dictation,
+## to keep with the words. Past MAX_PACE it lags, and the voice waits for it at the dictation's end
+## ([method tail_for]). THE PEN KEEPS UP WITH THE VOICE (the user, 2026-10-16: "rather than breaking
+## the audio, should we increase the speed of writing ... to track with the audio better?"): at 1.8 a
+## line of prose left the voice waiting six seconds at a colon; four times its own pace covers nearly
+## every dictation, and the voice is held only for what is left.
 const MAX_PACE := 4.0
 const MIN_PACE := 0.55
 ## A spoken word's length, for the rests sized before the voice is heard.
 const EST_WORD := 0.33
-## A dictation's phrases: it rests only after a word that ends one (`, ; : . ? !`), never with a
-## single word left, and never for less than [constant PHRASE_REST] - a shorter share waits for the
-## next. A dictation the pen lags by under [constant PACED_FROM] is said straight, the pen catching up
-## in the rest after it.
-const PHRASE_REST := 0.25
-const PACED_FROM := 1.0
 ## A cross-out: the pen draws a line through the last thing written, deliberately.
 const STRIKE := 0.9
 ## THE PEN IS NEVER STILL FOR LONG: more spoken words than this with the pen neither writing, drawing
@@ -289,10 +282,9 @@ static func parse(body: String, lengths: Dictionary = {}, sizes: Dictionary = {}
 			pa["after"] = spoken.size() + _words(text.substr(0, int(pa["mark"]))).size()
 			pa["span"] = maxi(1, _words(rest.substr(0, stop.get_end()) if stop != null else rest).size())
 		if not dictating.is_empty():
-			var p := paced(CardReading._voice_marks(String(blk["text"]).strip_edges()),
-				float(dictating["write"]), int(dictating["span"]))
-			_flush(String(blk["text"]), spoken, speak, said, String(p["text"]))
-			hold += float(p["rest"])
+			# said straight through; what the pen owes is the rest after it
+			_flush(String(blk["text"]), spoken, speak, said)
+			hold += float(dictating["tail"])
 			dictating = {}
 		else:
 			# a point's mark goes, with the space before it, so the voice's text reads as said
@@ -362,49 +354,11 @@ static func _words(text: String) -> PackedStringArray:
 	return out
 
 
-## A DICTATION PACED TO THE PEN: [param voiced] (its words as the voice reads them) for writing that
-## takes [param write] seconds over [param span] words, with the wait the pen needs ([method tail_for])
-## shared out over its words and rested at the end of each phrase. Returns `{text, rest}`: the text
-## with its rests in it, and the last phrase's share - the rest after the dictation, which the parse
-## sums with the next one. A dictation the pen keeps up with comes back as it was.
-static func paced(voiced: String, write: float, span: int) -> Dictionary:
-	var tail := tail_for(write, span)
-	if tail < PACED_FROM or span <= 0:
-		return {"text": voiced, "rest": tail}
-	var per := tail / float(span)
-	var notes := _rx(Manuscript.COMMENT).search_all(voiced)
-	var out := ""
-	var at := 0
-	var n := 0
-	var owed := 0.0
-	for m in _rx("\\S+").search_all(voiced):
-		var inside := false
-		for c in notes:
-			if m.get_start() < (c as RegExMatch).get_end() and m.get_end() > (c as RegExMatch).get_start():
-				inside = true
-		var piece := m.get_string()
-		if inside or TabletScript.norm(piece).is_empty():
-			continue
-		n += 1
-		owed += per
-		if n >= span:
-			break
-		var ends := piece.rstrip("\"')*_").right(1) in [",", ";", ":", ".", "?", "!"]
-		if ends and owed >= PHRASE_REST and span - n >= 2:
-			out += voiced.substr(at, m.get_end() - at) + " <!-- action-hold: %s -->" % String.num(owed, 2)
-			at = m.get_end()
-			owed = 0.0
-	out += voiced.substr(at)
-	return {"text": out, "rest": tail - (per * float(n) - owed) if n < span else owed}
-
-
-## A paragraph into the spoken list, the voice's text and the speech ([param voiced]: its words as the
-## voice reads them, when the caller has them already).
+## A paragraph into the spoken list, the voice's text and the speech.
 static func _flush(text: String, spoken: PackedStringArray, speak: PackedStringArray,
-		said: PackedStringArray, voiced := "") -> void:
+		said: PackedStringArray) -> void:
 	var t := text.strip_edges()
-	if voiced.is_empty():
-		voiced = CardReading._voice_marks(t)
+	var voiced := CardReading._voice_marks(t)
 	var plain := Manuscript._rx(Manuscript.COMMENT).sub(t, "", true).strip_edges()
 	spoken.append_array(_words(t))
 	if not voiced.is_empty():

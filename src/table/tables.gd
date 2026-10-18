@@ -156,6 +156,11 @@ static func describe() -> String:
 	lines.append("THE LAYERS (`layers`, from the bottom up, at most %d - or none: a bare top): each {\"name\", \"what\", \"outline\", \"size\", \"sides\", \"drop\", \"at\", \"turn\", \"fabric\", \"pattern\", \"border\", \"fringe\", \"relief\", \"sheen\"}." % MAX_LAYERS)
 	lines.append("- what: a few words - a tablecloth, a runner, an altar cloth laid as a diamond, a reading mat, a tapestry. outline: rect, round, oval or polygon (with `sides`) at `size` [width, depth] - width side to side and depth front to back, before it is turned - or \"top\": the top's own outline, hanging `drop` cm over its edge all round - a tablecloth.")
 	lines.append("- at [x, z]: its middle, from the middle of the reading (where the cards are dealt). turn: degrees - 0 square to the table, 45 a square laid as a diamond, 90 a runner of [200, 40] laid front to back instead of side to side. Wherever a layer runs past the top's edge it hangs over it, in folds.")
+	# A MAT UNDER THE CARDS HOLDS THEM (the user, 2026-10-17: penalty-box 21439's knitted square, 52 cm laid
+	# as a diamond under nine cards - "much too small for the scene"): the stretch the top is sized for
+	var hold := Vector2i(roundi(HOLDS.size.x * 100.0) + 4, roundi(HOLDS.size.y * 100.0) + 4)
+	lines.append("- UNDER THE CARDS: a layer the cards are read on covers the whole stretch they need, about %d x %d cm in the middle - laid as a diamond, a square needs sides of about %d cm to cover it. A smaller mat, square or doily lies off to a side or under a thing, never in the middle, where the cards would spill off its edges." % [
+		hold.x, hold.y, roundi((hold.x + hold.y) * 0.5 * sqrt(2.0))])
 	lines.append("- fabric:")
 	for k in FABRICS:
 		lines.append("  - %s: %s" % [k, String((FABRICS[k] as Dictionary)["about"])])

@@ -1,6 +1,7 @@
 # THE DESIGNER - the deck's creator, once per drawn card: that card's illustration and its entry in the
-# deck's little booklet (or what is printed on its back). One card per run - it never learns what else
-# was drawn (CardPrompts.designer fills it in; src/data/rules.gd says how a rules file reads).
+# deck's little booklet (or what is printed on its back). One card per run, in drawing order: it is shown
+# the pictures of the cards designed before it (`siblings`), never their entries, and never a card
+# drawn after it (CardPrompts.designer fills it in; src/data/rules.gd says how a rules file reads).
 #
 # What a card's group stands for (a suit's element, a team's city) is the brief's to say, beside the
 # group's heading in its Cards section; the designer reads it there.
@@ -8,7 +9,8 @@
 # The code gives: {{deck_noun}} (the kind of cards the producer named, or "deck"), {{deck_name}},
 # {{deck_style}}, {{palette}}; the card's {{name}}, {{group}} and {{meaning}}; the flags `on_back` (its
 # text printed on its back), `ledger` (the booklet page lists keywords in two columns), `reversals`; and
-# `before`, how earlier decks pictured it.
+# `before`, how earlier decks pictured it; `siblings`, the cards of this draw designed before it - each
+# {{k}}, {{name}}, {{art}}.
 prompt:
   - 'You are the DESIGNER of the {{deck_noun}} "{{deck_name}}", used on this show. Its look:'
   - "{{deck_style}}"
@@ -32,6 +34,18 @@ prompt:
       Whatever it pictures is its own, described so it could not be
       mistaken for another card's. Tall portrait format. No words, letters or numbers anywhere in
       the picture: the card's frame and name are printed separately.
+  # WHAT A PAINTING CAN BE TRUSTED TO SHOW (the user, 2026-10-17): a reading said a player shook hands
+  # with his left hand while the picture showed a right-handed shake (penalty-box 290660, card 1), and
+  # rinks were bent out of shape so a crowd would fit in the picture. An image generator draws left for
+  # right, miscounts past a few, and bends a place to fit its frame; a card whose point turns on one of
+  # them is contradicted by its own picture.
+  - >-
+      WHAT THE PICTURE MUST SHOW, IT SHOWS PLAINLY: what the card is about is large, central and
+      unmistakable. Never let the card's point - in its picture or in its printed text - turn on what
+      a painting cannot be trusted to show: which hand or which side, an exact count past three, a
+      small thing held in the fingers, or anything written. Every body is whole, and every place
+      keeps its real shape and size: a building, a room, a field or a rink is cropped by the edge of
+      the picture rather than bent to fit it, and a crowd is only where people could sit or stand.
   - when: on_back
     say: >-
           2. WHAT IS PRINTED ON ITS BACK, which the viewer reads when the card is turned over - in
@@ -54,6 +68,20 @@ prompt:
           number, four or six){{/ledger}}. Write it the way the brief says this deck's booklet
           speaks (if it does not say, in the earnest, slightly old-fashioned voice decks' booklets
           use). It stands alone: never mention another card.
+  # THE CARDS DESIGNED BEFORE IT IN THIS DRAW (the user, 2026-10-17, of penalty-box: "players will be in
+  # very similar poses/positions"): seven of ten designs of 901482 were two men nose to nose in the middle
+  # of the card, each designer blind to the others
+  - when: siblings
+    say: ""
+  - when: siblings
+    say: >-
+          THE CARDS ALREADY DESIGNED FOR TONIGHT'S DRAW, in the order they come up. The viewer sees
+          this card right after them, so picture it otherwise: another kind of moment, the eye
+          somewhere else (nearer or farther, higher or lower, from another side), other figures or
+          things at its center, another part of its world - unless this card really is the same
+          subject as one of them.
+  - each: siblings
+    say: "  {{k}}. {{name}}: {{art}}"
   # AN EARLIER DECK'S PICTURE of this card, so this one pictures it otherwise
   - when: before
     say: ""

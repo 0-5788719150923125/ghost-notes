@@ -65,6 +65,18 @@ func _vocabulary() -> void:
 			if not d.contains("- %s:" % k) and not d.contains("  - %s:" % k):
 				missing.append(String(k))
 	_ok(missing.is_empty(), "every registry word is described (missing: %s)" % ", ".join(missing))
+	# A MAT UNDER THE CARDS HOLDS THEM (penalty-box 21439: a 52 cm square laid as a diamond under nine
+	# cards): the set dresser is told the top's own stretch, and a diamond's side that covers it - a
+	# square turned 45 degrees covers a w x h stretch when its half diagonal reaches (w + h) / 2. The
+	# control: a side 5% shorter does not.
+	var under := RegEx.create_from_string("UNDER THE CARDS: .* about (\\d+) x (\\d+) cm in the middle .* sides of about (\\d+) cm").search(d)
+	_ok(under != null and d.contains("stretch about %s x %s cm in the middle" % [under.get_string(1), under.get_string(2)]),
+		"the set dresser is not told that a mat under the cards holds the top's own stretch")
+	if under != null:
+		var reach := func(side: float) -> bool:
+			return side / sqrt(2.0) >= (float(under.get_string(1)) + float(under.get_string(2))) * 0.5 - 0.5
+		_ok(reach.call(float(under.get_string(3))), "a diamond of the side told does not cover the cards' stretch")
+		_ok(not reach.call(float(under.get_string(3)) * 0.95), "control: a diamond 5% smaller covers the stretch too")
 	var p := CardPrompts.set_dresser("Show", "brief", {"look": {"candles": 1}}, 7, CardTable.headroom(7), [], true, 30, [], "",
 		["a round top of oak, 120 cm across"])
 	var prompt := String(p["prompt"])

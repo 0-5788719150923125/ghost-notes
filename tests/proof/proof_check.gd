@@ -341,31 +341,27 @@ func _script() -> void:
 		"and the pen writes across exactly those words (%s)" % " ".join(spoken.slice(at, at + 6)))
 	# the rests: the pen coming down before each dictation (0.45), none in or after a dictation the pen
 	# keeps up with, the third's writing outlasting its six words (20 s at 4 x pace, less the words) -
-	# shared out over its three phrases, the last share after it - and the strike
+	# all of it after its last word - and the strike
 	var rests := _rests(String(p["speakable"]))
 	var tail := 20.0 / DeskScript.MAX_PACE - 6.0 * DeskScript.EST_WORD
 	var want := PackedFloat32Array([DeskScript.LEAD_HOLD, DeskScript.LEAD_HOLD, DeskScript.LEAD_HOLD,
-		tail / 3.0, tail / 3.0, tail / 3.0, DeskScript.STRIKE])
+		tail, DeskScript.STRIKE])
 	var same := rests.size() == want.size()
 	for i in mini(rests.size(), want.size()):
 		same = same and absf(rests[i] - want[i]) < 0.011
 	_check(same, "the voice rests for the pen to come down, for what it lags and for a strike (%s)" % str(rests))
-	_check(String(p["speakable"]).contains("Three factorial, <!-- action-hold: 1.01 --> plus one, <!-- action-hold: 1.01 --> is seven.")
-		and String(p["speakable"]).contains("Two factorial, plus one, is three."),
-		"a dictation the pen lags goes phrase by phrase, resting while the pen writes; one it keeps up with is said straight")
-	# A PHRASE IS NEVER BROKEN (the user, 2026-10-16: "like 5 seconds of silence between 'two' and
-	# 'numbers' ... the flow completely broken by the interrupted sentence")
-	var plain := DeskScript.paced("A point is named by two numbers across then up.", 20.0, 10)
-	_check(String(plain["text"]).count("action-hold") == 0 and absf(float(plain["rest"]) - DeskScript.tail_for(20.0, 10)) < 0.01,
-		"words with no mark between them are said together, what the pen owes waiting for the end (%s)" % String(plain["text"]))
-	var marked := DeskScript.paced("A point is named by two numbers: across, then up.", 20.0, 10)
-	_check(String(marked["text"]).contains("numbers: <!-- action-hold") and not String(marked["text"]).contains("two <!--"),
-		"the control: with a colon in it, the voice rests there and nowhere mid-phrase (%s)" % String(marked["text"]))
-	var lone := DeskScript.paced("one two three four five six seven", 20.0, 7)
-	_check(String(lone["text"]).count("action-hold") == 0, "but never leaves one word to say alone (%s)" % String(lone["text"]))
-	var near := DeskScript.paced("Twelve is four times three. Forty is eight.", DeskScript.MAX_PACE * (8.0 * DeskScript.EST_WORD + 0.7), 8)
-	_check(not String(near["text"]).contains("action-hold") and absf(float(near["rest"]) - 0.7) < 0.01,
-		"the control: a dictation the pen lags by under a second is said straight, the rest after it")
+	# A DICTATION IS NEVER BROKEN (the user, 2026-10-16: "like 5 seconds of silence between 'two' and
+	# 'numbers'"; 2026-10-17: "We shouldn't be forcing arbitrary breaks in the speech, to wait for the pen")
+	_check(String(p["speakable"]).contains("Three factorial, plus one, is seven.\n\n<!-- action-hold: %s -->"
+		% String.num(tail, 2)) and String(p["speakable"]).contains("Two factorial, plus one, is three."),
+		"a dictation the pen lags is said straight through, what the pen owes after its last word")
+	var line := "Look.\n\n<!-- pad-text: A point is named by two numbers: across, then up. -->\n" \
+		+ "A point is named by two numbers: across, then up.\n\nNext."
+	var prose := DeskScript.item("pad-text", "A point is named by two numbers: across, then up.")
+	var reported := String(DeskScript.parse(line, {String(prose["id"]): 23.0})["speakable"])
+	_check(reported.contains("A point is named by two numbers: across, then up.\n\n<!-- action-hold: %s -->\n\nNext."
+		% String.num(DeskScript.tail_for(23.0, 10), 2)),
+		"the reported line is said whole, the rest after it (%s)" % reported.replace("\n", " / "))
 	var twice := false
 	var chunks := String(p["speakable"]).split("\n\n")
 	for i in range(1, chunks.size()):
@@ -783,6 +779,75 @@ func _pad() -> void:
 	_desk()
 
 
+## THE PEN IS ELASTIC (the user, 2026-10-17: "the pen stopping at weird moments - like halfway between
+## drawing a straight line, pausing for a second or two ... NEVER should we just be stopping"): over a
+## dictation with a long pause in it, the pen slows and never stands still, and makes it up after;
+## the control, the old clock (the share of the words said), stands still through the pause.
+func _elastic() -> void:
+	print("-- the elastic pen")
+	# ten words, 0.3 s each and 0.08 apart, with a breath of 1.6 s after the fourth
+	var t0s := PackedFloat32Array()
+	var t1s := PackedFloat32Array()
+	var t := 2.0
+	for j in 10:
+		t0s.append(t)
+		t1s.append(t + 0.3)
+		t += 0.38 + (1.6 if j == 3 else 0.0)
+	var start := t0s[0] - DeskMedium.PEN_LEAD
+	var end := t1s[9]
+	var dt := 1.0 / 30.0
+	var mean := 1.0 / (end - start)
+	var least := INF
+	var most := 0.0
+	var prev := 0.0
+	var back := false
+	var stood := 0.0          # the longest the old clock stood still while writing
+	var still := 0.0
+	var old_prev := 0.0
+	var off := 0.0            # how far the pen strays from the words, at each word's end
+	var tt := start
+	while tt < end - dt * 0.5:
+		tt += dt
+		var p := DeskMedium.elastic(tt, start, end, t0s, t1s)
+		var v := (p - prev) / dt / mean
+		least = minf(least, v)
+		most = maxf(most, v)
+		back = back or p < prev
+		prev = p
+		var old := _share_said(tt, t0s, t1s)
+		still = still + dt if old - old_prev < 1e-6 and old < 1.0 and old > 0.0 else 0.0
+		stood = maxf(stood, still)
+		old_prev = old
+	for j in 10:
+		off = maxf(off, absf(DeskMedium.elastic(t1s[j], start, end, t0s, t1s) - float(j + 1) / 10.0))
+	_check(DeskMedium.elastic(start, start, end, t0s, t1s) == 0.0 and DeskMedium.elastic(end, start, end, t0s, t1s) == 1.0
+		and not back, "the pen's clock runs from nothing at the pen's touch to all of it at the last word, never back")
+	_check(least >= 0.25, "it never stands still - its slowest is %.2f of its average pace" % least)
+	_check(stood >= 1.5, "the control: the old clock, the share of the words said, stood still %.1f s in the breath" % stood)
+	_check(most <= 2.0, "and never races - its fastest is %.2f of its average pace" % most)
+	_check(off <= 0.15, "it keeps with the words: at each word's end it is within %.2f of their share" % off)
+	var mid := (t1s[3] + t0s[4]) * 0.5
+	var in_breath := (DeskMedium.elastic(mid + 0.1, start, end, t0s, t1s) - DeskMedium.elastic(mid - 0.1, start, end, t0s, t1s)) / 0.2 / mean
+	var after := (DeskMedium.elastic(t1s[6], start, end, t0s, t1s) - DeskMedium.elastic(t0s[5], start, end, t0s, t1s)) / (t1s[6] - t0s[5]) / mean
+	_check(in_breath < 0.75 and after > 1.0,
+		"it slows in the breath (%.2f of its average pace) and makes it up over the words after (%.2f)" % [in_breath, after])
+	# THE PEN THAT LAGS runs the whole way behind, evenly: no slowing as the voice ends
+	var late := start + (end - start) * 2.5
+	var lmean := 1.0 / (late - start)
+	var tail_v := (DeskMedium.elastic(late - 0.2, start, late, t0s, t1s) - DeskMedium.elastic(late - 0.6, start, late, t0s, t1s)) / 0.4 / lmean
+	_check(tail_v >= 0.7, "a pen that lags its words does not slow as they end (%.2f of its average pace in the rest)" % tail_v)
+
+
+## The old clock, for the control: the share of words [param t0s]..[param t1s] said at [param t].
+func _share_said(t: float, t0s: PackedFloat32Array, t1s: PackedFloat32Array) -> float:
+	var done := 0.0
+	for j in t0s.size():
+		if t < t0s[j]:
+			break
+		done += clampf((t - t0s[j]) / (t1s[j] - t0s[j]), 0.0, 1.0)
+	return done / float(t0s.size())
+
+
 ## A desk over the lesson with no stage: the actions as the ink would lay them out (no strokes - an
 ## item's writing is its measured length), and a steady voice reading it.
 func _desk_over(sizes: Dictionary) -> DeskMedium:
@@ -807,7 +872,7 @@ func _desk() -> void:
 	_check(absf(float(plan["end"]) - f.st1[first + 5]) < 0.001, "and is done as the last word is (it keeps up)")
 	desk._now = float(f.st0[first + 3])
 	var share := desk._ink_time(1) / float(act["write"])
-	_check(absf(share - 0.5) < 0.02, "halfway through the words, halfway through the writing (%.2f)" % share)
+	_check(absf(share - 0.5) < 0.07, "halfway through the words, about halfway through the writing (%.2f)" % share)
 	desk._now = float(plan["start"])
 	_check(desk._ink_time(1) == 0.0, "nothing written before the pen is down")
 	desk._now = float(plan["end"]) + 0.1
@@ -816,11 +881,15 @@ func _desk() -> void:
 	var sp: Dictionary = desk._plan[2]
 	desk._now = float(f.st1[int(slow["after"]) + 5]) + 0.01
 	var lag := desk._ink_time(2)
-	_check(lag < float(slow["write"]) and absf(lag - (desk._now - float(sp["start"])) * DeskScript.MAX_PACE) < 0.01,
-		"a formula that outlasts its words is written at the pen's fastest, and finishes in the rest (%.2f of %.0f)"
+	desk._now += 0.1
+	var on := desk._ink_time(2)
+	_check(absf(float(sp["end"]) - float(sp["start"]) - float(slow["write"]) / DeskScript.MAX_PACE) < 0.001
+		and lag < float(slow["write"]) and on > lag,
+		"a formula that outlasts its words is written at the pen's fastest, and is still being written in the rest (%.2f of %.0f)"
 		% [lag, float(slow["write"])])
 	_check(float(sp["end"]) <= float(f.st0[int(slow["after"]) + 6]),
 		"before the voice goes on")
+	_elastic()
 	# THE TITLE AND THE CAMERA: up and wide over the intro until the first word, close as the pen writes
 	_check(ShowOpening.title_alpha(0.1, INF, false) == 0.0 and ShowOpening.title_alpha(1.6, INF, false) == 1.0,
 		"the channel's name comes up over the intro")
@@ -884,7 +953,7 @@ func _desk() -> void:
 	_check(bool((turned["actions"][2] as Dictionary)["turn"]) and not bool((turned["actions"][1] as Dictionary)["turn"]),
 		"the formula that will not fit turns the page")
 	var rests := _rests(String(turned["speakable"]))
-	_check(rests.size() == 7 and absf(rests[2] - DeskScript.LEAD_HOLD - DeskScript.TURN) < 0.011,
+	_check(rests.size() == 5 and absf(rests[2] - DeskScript.LEAD_HOLD - DeskScript.TURN) < 0.011,
 		"and the voice waits for the turn before its dictation (%s)" % str(rests))
 	var td := _desk_over(tall)
 	var tp: Dictionary = td._plan[2]

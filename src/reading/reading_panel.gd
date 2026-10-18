@@ -3077,8 +3077,7 @@ func _cut(body: String, sentence_no: int) -> Dictionary:
 			# A WORD NO DICTIONARY HOLDS (the audit's UNKNOWN), spelled as written: eSpeak would be
 			# guessing at it, so the host reads it as Wiktionary has it, its full vowels stressed
 			# (lexicon.py - the user, 2026-10-16: cosine "co-seen", cotangent "co-angent")
-			elif String(w.get("display", w.text)).to_lower() == String(w.text).to_lower() \
-					and not Phonemes.is_known(String(w.text)):
+			elif Phonemes.guessed(w):
 				tok["rare"] = true
 			# A WORD LEANED ON (`*so*`, `**so**`) is SPOKEN leaned on: the host holds its stressed
 			# vowel longer and lifts the word a little (piper.py `EMPHASIS`). Sent only when set,

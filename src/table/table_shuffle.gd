@@ -16,8 +16,8 @@ class_name TableShuffle
 ## TableMedium._moves], which this fills in on first ask. Its own state is what it works out and
 ## keeps: a wash's plan, the way each card began, the rest each card comes to.
 ##
-## THE TABLE ASKS SEVEN THINGS of it, the names without an underscore: [method shuffle_xf],
-## [method move_at], [method deck_turns], [method riffle], [method wash],
+## THE TABLE ASKS EIGHT THINGS of it, the names without an underscore: [method shuffle_xf],
+## [method move_at], [method deck_turns], [method riffle], [method riffle_top], [method wash],
 ## [method wash_jump], [method sweeps]. Everything else is how those are answered.
 
 ## The [TableMedium] this is a part of: everything read through it is something this part
@@ -31,13 +31,30 @@ const CLOTH := TablePositions.CLOTH
 ## inside the run. The wash (the deck spread and swirled across the cloth) is its own event: rare,
 ## long, and once at most.
 const RUNS := {
-	"riffle": {"weight": 3.0, "n": [2, 4], "dur": [2.2, 2.7], "gap": [0.2, 0.55]},
+	"riffle": {"weight": 3.0, "n": [2, 4], "dur": [1.7, 2.1], "gap": [0.2, 0.55]},
 	"overhand": {"weight": 2.0, "n": [2, 5], "dur": [2.1, 2.6], "gap": [0.05, 0.3]},
 	"cut": {"weight": 2.0, "n": [2, 5], "dur": [1.15, 1.5], "gap": [0.05, 0.25]},
 	"wash": {"weight": 0.9, "n": [1, 1], "dur": [26.0, 32.0], "gap": [0.0, 0.0]},
 }
 ## How many packets an overhand pass peels off the held cards.
 const OVERHAND_PACKETS := 5
+## A RIFFLE'S CARDS FALL IN CLUMPS (the user, 2026-10-17: the deck of 78 riffled "left, right, left,
+## right, in perfect unison through the whole shuffle ... cards tend to stick together, such that it
+## might be: 3 from the left, 2 from the right, 1 from the left, 3 from the right, 5 from the left").
+## The deck is cut near its middle, not at it: RIFFLE_CUT is the spread of the cut (cards, times the
+## square root of the deck - a fair coin's for each card) and how far off the middle it may land (a
+## share of the deck). Each half lets go of its cards from the bottom, the next from either half as
+## likely as the cards it still holds (the Gilbert-Shannon-Reeds model of a riffle) - and, past that,
+## from the half that just let go as often as the cards stick: each riffle draws its stickiness from
+## RIFFLE_STICK, so one is neater than the next. A clump is RIFFLE_CLUMP cards at most while the other
+## half still holds some; what is left when one half runs out falls as one. A clump falls together,
+## its cards RIFFLE_STAGGER seconds apart, and the next a beat after it, the beat jittered by
+## RIFFLE_BEAT - so a riffle of 78 lets go about thirty times, not 78, and is over sooner ([constant RUNS]).
+const RIFFLE_CUT := Vector2(0.5, 0.15)
+const RIFFLE_STICK := Vector2(0.2, 0.45)
+const RIFFLE_CLUMP := 7
+const RIFFLE_STAGGER := 0.004
+const RIFFLE_BEAT := Vector2(0.6, 1.4)
 ## The share of the deck that lies the other way round, face down (the share CardDeck.shuffled
 ## turns up reversed). Shuffles carry each card's way with it; the one that ends on top is the way
 ## the next card drawn comes up.
@@ -179,6 +196,7 @@ var _roomy := true                    # a big deck spreads wider ([constant WASH
 var _flip0 := PackedByteArray()      # per card, as the deck lies at the shuffle's start: the other way round ([method _deck_flip0])
 var _flip_key := ""                  # what [member _flip0] was made for...
 var _flip_moves: Array = []          # ...and the chain of moves it was made on
+var _riffles := {}                   # "seed|n" -> the riffle's plan ([method _riffle_plan])
 
 # --- the shuffle ------------------------------------------------------------------------------
 
@@ -228,8 +246,7 @@ func _move_goes(m: Dictionary) -> Dictionary:
 	turned.resize(n)
 	match String(m["kind"]):
 		"riffle":
-			for i in n:
-				to[i] = _riffle_to(i, n)
+			to = _riffle_of(int(m["seed"]))["to"]
 		"overhand":
 			for i in n:
 				to[i] = _overhand_to(i, n).x
@@ -456,21 +473,89 @@ func move_at(u: float) -> Dictionary:
 	return {}
 
 
-## Where a riffle puts slot [param i] of a deck of [param n]: the halves interleave, the right half's
-## card on top.
-static func _riffle_to(i: int, n: int) -> int:
-	var half := int(n * 0.5)
-	var left := i < half
-	return mini(2 * (i if left else i - half) + (0 if left else 1), n - 1)
+## THE RIFFLE OF [param seed] for a deck of [param n] ([constant RIFFLE_STICK]): `{cut, to, at, nth,
+## spread}` - the cut (the slots under it go to the left hand), where each slot lands, and for each
+## place it lands in, the share of the drop its clump falls at (0 the first clump, 1 the last) and how
+## many cards of its clump fell before it; and the longest of those, in seconds of stagger. Pure, so a
+## gate reads it without a table.
+static func _riffle_plan(seed: int, n: int) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed, "riffle"])
+	var to := PackedInt32Array()
+	var at := PackedFloat32Array()
+	var nth := PackedInt32Array()
+	to.resize(n)
+	at.resize(n)
+	nth.resize(n)
+	if n < 2:
+		return {"cut": n, "to": to, "at": at, "nth": nth, "spread": 0.0}
+	var lo := maxi(1, ceili(float(n) * (RIFFLE_CUT.x - RIFFLE_CUT.y)))
+	var hi := maxi(lo, mini(n - 1, floori(float(n) * (RIFFLE_CUT.x + RIFFLE_CUT.y))))
+	var cut := clampi(roundi(float(n) * RIFFLE_CUT.x + rng.randfn(0.0, sqrt(float(n)) * 0.5)), lo, hi)
+	var stick := rng.randf_range(RIFFLE_STICK.x, RIFFLE_STICK.y)
+	var next := [0, cut]            # the slot each half lets go of next, its bottom card
+	var side := -1
+	var clump := -1
+	var firsts := PackedInt32Array()   # per clump, the place its first card lands in
+	for j in n:
+		var held := [cut - int(next[0]), n - int(next[1])]
+		var go := 1 if int(held[0]) == 0 else 0
+		if int(held[0]) > 0 and int(held[1]) > 0:
+			var share := float(held[0]) / float(int(held[0]) + int(held[1]))
+			if side < 0:
+				go = 0 if rng.randf() < share else 1
+			elif j - int(firsts[clump]) >= RIFFLE_CLUMP:
+				go = 1 - side
+			else:
+				var mine := share if side == 0 else 1.0 - share
+				go = side if rng.randf() < stick + (1.0 - stick) * mine else 1 - side
+		if go != side:
+			clump += 1
+			firsts.append(j)
+			side = go
+		to[int(next[go])] = j
+		next[go] = int(next[go]) + 1
+		nth[j] = j - int(firsts[clump])
+	# each clump a beat after the one before, the beats jittered
+	var beats := PackedFloat32Array([0.0])
+	for c in range(1, firsts.size()):
+		beats.append(beats[c - 1] + rng.randf_range(RIFFLE_BEAT.x, RIFFLE_BEAT.y))
+	var last := maxf(beats[beats.size() - 1], 0.0001)
+	var longest := 0
+	for c in firsts.size():
+		var end := int(firsts[c + 1]) if c + 1 < firsts.size() else n
+		for j in range(int(firsts[c]), end):
+			at[j] = beats[c] / last if firsts.size() > 1 else 0.0
+		longest = maxi(longest, end - int(firsts[c]) - 1)
+	return {"cut": cut, "to": to, "at": at, "nth": nth, "spread": RIFFLE_STAGGER * float(longest)}
 
 
+## [method _riffle_plan] for this deck, kept by the move's seed: every card asks it every frame.
+func _riffle_of(seed: int) -> Dictionary:
+	var key := "%d|%d" % [seed, medium._plan.deck_n]
+	if not _riffles.has(key):
+		if _riffles.size() > 32:
+			_riffles.clear()
+		_riffles[key] = _riffle_plan(seed, medium._plan.deck_n)
+	return _riffles[key]
+
+
+## The deck slot that lands on top in the riffle of [param seed]: the last card to fall, the top of
+## the half that lets go last - which a jumper rides until it springs.
+func riffle_top(seed: int) -> int:
+	return (_riffle_of(seed)["to"] as PackedInt32Array).find(medium._plan.deck_n - 1)
+
+
+## Deck slot [param i] at [param v] seconds into the riffle of [param seed], [param dur] long: lifted
+## into its half, held until its clump lets go, fallen onto the cards under it, then squared.
 func riffle(i: int, v: float, dur: float, seed: int) -> Transform3D:
-	var n := medium._plan.deck_n
-	var half := int(n * 0.5)
-	var left := i < half
-	var k := i if left else i - half
+	var plan := _riffle_of(seed)
+	var cut := int(plan["cut"])
+	var left := i < cut
+	var k := i if left else i - cut
 	var side := -1.0 if left else 1.0
-	var j := _riffle_to(i, n)
+	var j: int = (plan["to"] as PackedInt32Array)[i]
+	var nth: int = (plan["nth"] as PackedInt32Array)[j]
 	var split_end := 0.5
 	var drop0 := 0.55
 	var drop1 := dur - 0.6
@@ -479,10 +564,12 @@ func riffle(i: int, v: float, dur: float, seed: int) -> Transform3D:
 	var held := Transform3D(held_rot, medium._cur_base + Vector3(side * 0.052, 0.016 + (float(k) + 0.5) * TableMedium.DECK_T, 0.004))
 	if v < split_end:
 		return medium._rest_xf(i).interpolate_with(held, TableMedium._ease(v / split_end))
-	var tj := drop0 + (drop1 - drop0) * float(j) / float(maxi(n - 1, 1))
+	var tj := drop0 + maxf(drop1 - drop0 - float(plan["spread"]), 0.0) * (plan["at"] as PackedFloat32Array)[j] \
+		+ RIFFLE_STAGGER * float(nth)
 	if v < tj:
 		return held
-	var messy := _messy(j, seed)
+	# a clump lands as one: its cards share their first card's slip
+	var messy := _messy(j, seed, j - nth)
 	if v < tj + fall:
 		return held.interpolate_with(messy, (v - tj) / fall)
 	var sq := clampf((v - drop1 - fall) / maxf(dur - drop1 - fall, 0.05), 0.0, 1.0)
@@ -2742,10 +2829,11 @@ static func _wash_into(p: Vector2, rx: float, rz: float, k: float) -> Vector2:
 	return Vector2(q.x * rx, q.y * rz - 0.01)
 
 
-## A card just landed on the deck, not yet squared.
-func _messy(j: int, seed: int) -> Transform3D:
+## A card just landed on the deck in place [param j], not yet squared - slipped as the card landing in
+## place [param like] is, when it came down stuck to it.
+func _messy(j: int, seed: int, like := -1) -> Transform3D:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([seed, j, "messy"])
+	rng.seed = hash([seed, j if like < 0 else like, "messy"])
 	var xf := medium._rest_xf(j)
 	xf.origin += Vector3(rng.randf_range(-0.003, 0.003), 0.0, rng.randf_range(-0.003, 0.003))
 	xf.basis = Basis(Vector3.UP, rng.randf_range(-0.07, 0.07)) * xf.basis

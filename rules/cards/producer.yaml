@@ -58,6 +58,16 @@ prompt:
       table - a candle in its holder, a candelabra, a dish of tea lights each count as one (what
       they are, and the rest of what stands on the table, is set separately). The card's frame, its
       name and its numeral are printed by the deck itself, so the illustrations carry no lettering.
+  # THE STYLE IS READ WITH EVERY CARD (the user, 2026-10-17, of penalty-box: "players will be in very
+  # similar poses/positions"): the painter reads `deck_style` beside each card's own description, and a
+  # style that said where the camera stood ("the camera always looks steeply down onto the ice from a
+  # balcony", 260998) or how every card was framed painted every card that way.
+  - >-
+      THE STYLE IS READ WITH EVERY CARD'S OWN DESCRIPTION, so it says how the whole deck is made -
+      the medium, the printing, the hand, the texture, the palette - and never what any one card's
+      picture is: where the eye or the camera stands, how near it is, how the picture is framed,
+      where it takes place, or what anyone in it is doing. Those are each card's own, and a style
+      that fixes them paints every card alike. The same holds for each printing's style.
   - include: printed_card
   - >-
       THE CARD STOCK is the card's own color: it shows all round every picture and behind its name
@@ -243,7 +253,9 @@ chosen_deck: >-
   THE DECK is yours to choose for this episode: the brief says what kind of cards this show
   shows. Choose one deck, box or collection that fits it and this episode, and list its
   cards in `deck` - between {{box_lo}} and {{box_hi}} of them, every one a card that collection
-  would really hold, each with what it is. You choose what is in the box, never what comes out: the
+  would really hold, each with what it is, spread the way the real collection is spread: across the
+  many people, teams, makers, places or kinds its range takes in, never a few of them again and
+  again. You choose what is in the box, never what comes out: the
   deck is shuffled from this episode's seed and {{cards}} cards come up, in an order nobody knows -
   so plan nothing that depends on any one card coming up. These listed cards are the possible
   draws for this episode. A shoebox can visibly hold many more cards from those printings.

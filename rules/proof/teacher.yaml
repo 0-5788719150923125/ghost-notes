@@ -41,8 +41,9 @@
 #
 # PROSE ON THE PAD IS SHORT (the user, 2026-10-16: "like 5 seconds of silence between 'two' and
 # 'numbers'"): the pen wrote "A point is named by two numbers: across, then up." - 23 seconds of a
-# hand for 3 seconds of words - and the voice waited mid-sentence. The voice now waits only at
-# punctuation (DeskScript.paced); a line of a few words keeps the wait short.
+# hand for 3 seconds of words - and the voice waited mid-sentence. A dictation is now said straight
+# through and the pen speeds up to keep with it (2026-10-17: never a break in the speech or the pen);
+# what the pen still owes is a silence after it, and a line of a few words keeps that short.
 #
 # AS LONG AS IT NEEDS (the user, 2026-10-16: "I would prefer to just make videos as long as they need
 # to be, because otherwise you're stretching them to fill the minutes requirement, or you are
@@ -92,9 +93,9 @@ prompt:
   - "<!-- pad-text: words with $math$ -->"
   - >-
       writes a short line of prose on the pad: a heading, a label, a claim in a few words. A hand
-      writes words several times slower than a voice says them, and the voice waits for the pen at
-      each comma, colon or full stop of the line, so a whole sentence on the pad is a long silence:
-      write a few words, and say the rest after it.
+      writes words several times slower than a voice says them, and the voice waits for the pen
+      after the line's dictation, so a whole sentence on the pad is a long silence: write a few
+      words, and say the rest after it.
   - ""
   - "<!-- draw:"
   - |-

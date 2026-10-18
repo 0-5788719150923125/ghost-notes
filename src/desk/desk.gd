@@ -16,10 +16,18 @@ class_name DeskMedium
 ##
 ## THE PEN WRITES WHAT THE VOICE SAYS, AS IT SAYS IT ([DeskScript], the user the same day: "we need to
 ## narrate the text being written, as it is being written"): a formula's writing runs across exactly
-## the words of its dictation, the ink's own clock driven by how far through those words the voice is
-## ([method _ink_time]) - never faster than [constant DeskScript.MAX_PACE] of the pen's own pace nor
-## slower than [constant DeskScript.MIN_PACE]; where it would lag the voice waits at the dictation's
-## end, a rest the script already gave it.
+## the words of its dictation, on the average never faster than [constant DeskScript.MAX_PACE] of the
+## pen's own pace nor slower than [constant DeskScript.MIN_PACE]; where it would lag, the voice waits
+## at the dictation's end, a rest the script already gave it, and nowhere inside it.
+##
+## THE PEN IS ELASTIC, AND NEVER STOPS MID-WRITING (the user, 2026-10-17: "the pen stopping at weird
+## moments - like halfway between drawing a straight line, pausing for a second or two ... If the
+## speech is gaining too far ahead, speed-up the pen. If the pen is too far ahead of the speech, slow
+## down the motions. But NEVER should we just be stopping"). The ink's clock was the share of the
+## words said, which stands still in every gap between two words - a comma, a breath, a rest - so the
+## nib froze mid-stroke; and where the voice rested FOR the pen, the pen, waiting for words, rested
+## too. Now it follows the voice's progress smoothed, with a steady share under it ([method elastic]):
+## it slows over a pause and speeds over a run of words, and is never still until its line is done.
 ##
 ## A PURE FUNCTION OF THE VOICE'S TIME. A pad item is written at `_ink_time`, a function of the words'
 ## times and now, so any moment can be drawn without the ones before it: a seek lands on the page as it
@@ -71,6 +79,11 @@ const REST_EASE := 0.9
 const REACH_EASE := 0.45
 ## The pen comes down this long before its dictation's first word.
 const PEN_LEAD := 0.2
+## THE PEN IS ELASTIC ([method elastic]): the voice's progress through a dictation is smoothed over
+## this many seconds, and this share of the pen's progress runs steady - the least it ever moves at,
+## against its average pace over the dictation.
+const ELASTIC_WINDOW := 1.5
+const ELASTIC_FLOOR := 0.3
 ## POINTING: how close over the paper the nib comes; a thing this wide (px) or wider is swept under
 ## (this far below it) in the first [constant POINT_SWEEP] seconds; where the nib stays, this far right
 ## of the thing's end; and the least time a point is held.
@@ -589,40 +602,92 @@ func _word_t1(si: int) -> float:
 
 
 ## HOW FAR THROUGH ITS WRITING action [param i] is at [member _now], as the ink's own clock (seconds
-## of [method Ink.schedule]): the share of its dictation's words said, kept within the pen's pace -
-## the voice ahead pulls the pen faster (to [constant DeskScript.MAX_PACE]), the voice behind slows it
-## (to [constant DeskScript.MIN_PACE]).
+## of [method Ink.schedule]): a dictated item's by [method elastic], over its dictation's words; one
+## written in silence at an even pace, across the rest the voice gives it.
 func _ink_time(i: int) -> float:
 	var a: Dictionary = _actions[i]
 	var start := float(_plan[i]["start"])
+	var end := float(_plan[i]["end"])
 	var length := _length(i)
-	if _now <= start:
-		return 0.0
-	if _now >= float(_plan[i]["end"]):
-		return length
-	var elapsed := _now - start
 	var span := int(a.get("span", 0))
-	var target := length
-	if span > 0:
-		target = _said(int(a["after"]), span) * length
-	return clampf(target, elapsed * DeskScript.MIN_PACE, minf(elapsed * DeskScript.MAX_PACE, length))
+	if span <= 0:
+		return length * clampf((_now - start) / maxf(end - start, 0.01), 0.0, 1.0)
+	var times := _dictation(int(a["after"]), span, start)
+	return length * elastic(_now, start, end, times[0], times[1])
 
 
-## The share of the [param span] words from [param after] the voice has said at [member _now]: a word
-## counts as it is said, and a word not heard yet is not said.
-func _said(after: int, span: int) -> float:
-	var done := 0.0
+## The times of the [param span] words from [param after]: [t0s, t1s], a word not heard yet placed
+## after the last that was, a steady word apart ([constant DeskScript.EST_WORD]).
+func _dictation(after: int, span: int, start: float) -> Array:
+	var t0s := PackedFloat32Array()
+	var t1s := PackedFloat32Array()
+	var last := start + PEN_LEAD
 	for j in span:
 		var t0 := _word_t0(after + j)
 		var t1 := _word_t1(after + j)
-		if t0 == INF or _now < t0:
-			break
-		if _now >= t1:
-			done += 1.0
-		else:
-			done += clampf((_now - t0) / maxf(t1 - t0, 0.01), 0.0, 1.0)
-			break
-	return done / float(maxi(span, 1))
+		if t0 == INF or t1 == INF:
+			t0 = last + 0.05
+			t1 = t0 + DeskScript.EST_WORD * 0.9
+		t0s.append(t0)
+		t1s.append(t1)
+		last = t1
+	return [t0s, t1s]
+
+
+## THE PEN'S CLOCK, ELASTIC: how far through its writing (0 to 1) the pen is at [param now], for
+## writing planned from [param start] to [param end] across words said at [param t0s] to [param t1s].
+## A pure function, so a seek lands where the pen would be.
+##
+## The voice's progress through the words (a word counts as it is said) is smoothed over
+## [constant ELASTIC_WINDOW], so a pause in it is a slope and not a step, and its time is stretched
+## onto the pen's - the pen that lags runs the whole way behind, evenly, rather than slowing as the
+## voice ends. [constant ELASTIC_FLOOR] of the pen's progress runs steady from its start to its end, so
+## the pen never stands still while it writes: over a long pause it slows to about that share of its
+## average pace, and makes it up over the words after. Then it is set to run from 0 at
+## [param start] to 1 at [param end] exactly.
+static func elastic(now: float, start: float, end: float, t0s: PackedFloat32Array,
+		t1s: PackedFloat32Array) -> float:
+	if now <= start:
+		return 0.0
+	if now >= end or t0s.is_empty():
+		return clampf((now - start) / maxf(end - start, 0.01), 0.0, 1.0)
+	var warp := maxf(t1s[t1s.size() - 1] - start, 0.01) / (end - start)
+	var lo := _elastic_mix(start, start, end, warp, t0s, t1s)
+	var hi := _elastic_mix(end, start, end, warp, t0s, t1s)
+	return clampf((_elastic_mix(now, start, end, warp, t0s, t1s) - lo) / maxf(hi - lo, 1e-6), 0.0, 1.0)
+
+
+## [method elastic] before it is set to run from 0 to 1: the smoothed voice at the pen's time, mixed
+## with the steady share.
+static func _elastic_mix(now: float, start: float, end: float, warp: float, t0s: PackedFloat32Array,
+		t1s: PackedFloat32Array) -> float:
+	var t := start + (now - start) * warp
+	var h := ELASTIC_WINDOW * 0.5
+	var voice := (_said_area(t + h, t0s, t1s) - _said_area(t - h, t0s, t1s)) / ELASTIC_WINDOW
+	return (1.0 - ELASTIC_FLOOR) * voice + ELASTIC_FLOOR * (now - start) / (end - start)
+
+
+## The share of words [param t0s]..[param t1s] said, summed over time up to [param t]: its integral,
+## so that a window's mean is two calls. A word counts evenly across its own time; a word that starts
+## before the last has ended starts as it ends.
+static func _said_area(t: float, t0s: PackedFloat32Array, t1s: PackedFloat32Array) -> float:
+	var step := 1.0 / float(t0s.size())
+	var area := 0.0
+	var level := 0.0
+	var x := t0s[0]
+	for j in t0s.size():
+		var a := maxf(t0s[j], x)
+		var b := maxf(t1s[j], a + 0.001)
+		if t <= a:
+			return area + level * maxf(t - x, 0.0)
+		area += level * (a - x)
+		if t <= b:
+			var d := t - a
+			return area + level * d + 0.5 * step * d * d / (b - a)
+		area += (level + 0.5 * step) * (b - a)
+		level += step
+		x = b
+	return area + (t - x)
 
 
 # --- the pages ---------------------------------------------------------------------------------

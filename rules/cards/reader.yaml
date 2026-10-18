@@ -7,11 +7,13 @@
 # {{running_bit}}, {{spread_name}}, {{spread_size}}, `positions` - each {{n}}, {{name}}, {{asks}},
 # {{how}}), {{deck_name}}, {{surface}}, {{on_the_table}}; `said`, every passage so far; `on_table`, the
 # cards already down ({{line}}, `swept`: swept out with this one, not read yet); the step (`intro`,
-# `close` or `card`) and, for a card, which way it came (`now_jumper`, `now_dealt`, `now_swept_first`,
+# `close` or `card`; each with {{keys}}, its keywords, or "") and, for a card, which way it came (`now_jumper`, `now_dealt`, `now_swept_first`,
 # `now_swept`, `now_boxed`, `now_drawn`), what may be said of its picture (`pic_quiet`, `pic_lying`,
-# `pic_held`, `pic_art`), and its text (`on_back` or `in_booklet`); `heard`, how earlier episodes met
-# this point; `passed`, a card put back in its box while others stay out; {{after}}, what the table
-# does after the last word; `voices`, the show's other voices; and the passage's length ({{lo}} to
+# `pic_held`, `pic_art`), and its text (`on_back` or `in_booklet`); `link`, a card read with the cards
+# already down; `heard`, how earlier episodes met this point; `passed`, a card put back in its box while
+# others stay out; {{after}}, what the table
+# does after the last word; `misses`, what the card's painting gets wrong (the art director could not
+# have it put right); `voices`, the show's other voices; and the passage's length ({{lo}} to
 # {{hi}} words).
 prompt:
   - when: "!voices"
@@ -54,7 +56,7 @@ prompt:
   - when: on_table
     say: "CARDS ALREADY ON THE TABLE:"
   - each: on_table
-    say: '  - {{line}}{{#swept}} (swept out with it, not read yet){{/swept}}'
+    say: '  - {{line}}{{#keys}}: {{keys}}{{/keys}}{{#swept}} (swept out with it, not read yet){{/swept}}'
   - when: on_table
     say: ""
   - when: intro
@@ -209,6 +211,15 @@ card:
     say: >-
           The viewer is looking at its picture, held up to the camera. For you, not to recite - this
           deck paints it as: {{art}}. Mention one detail only if it serves what you are saying.
+  # A PAINTING THE ART DIRECTOR COULD NOT HAVE PUT RIGHT (CardProducer._land_check): the viewer sees it,
+  # so the reader must not claim what it does not show (the user, 2026-10-17: a left-handed shake told,
+  # a right-handed one painted)
+  - when: misses
+    say: >-
+          ITS PAINTING DOES NOT QUITE SHOW WHAT THE CARD SAYS, and the viewer sees the painting: never
+          say it shows what it does not. Where it falls short:
+  - each: misses
+    say: "  - {{it}}"
   - when: on_back
     say: >-
           Its back is printed with this - the viewer reads it when the card is turned over in your
@@ -259,6 +270,18 @@ card:
       tell an incident, make an observation, or admit what you do not know. For a collection of
       people, distinguish someone you knew personally from someone you watched, heard about, or
       have never heard of. Do not invent a personal acquaintance for every person on a card.
+  # A READING BUILDS (the user, 2026-10-17: "the 2nd or 3rd or 4th draw often builds upon the earlier
+  # draws, creating a unified narrative"). Shown every word said and every card down, no passage after
+  # the first of fourteen tarot episodes named an earlier card - 0 of 66 - so a share of the cards is
+  # told it does (CardPrompts.links). What counts as a meeting is a kind of card's, so the brief says
+  # it; no sample link is given here, or it would be said in every episode.
+  - when: link
+    say: >-
+          THIS CARD IS READ WITH THE CARDS ALREADY ON THE TABLE. A reading builds: say where this
+          card meets one or more of them - repeats one, answers it, carries it further or turns it
+          around - and name the card it meets, so someone half-listening can follow. That meeting
+          is this passage's point, not a remark beside it. What counts as a meeting in this deck is
+          the brief's to say, where it says.
   # NOT MET THE SAME WAY TWICE: every card passage of episode 834225 opened on "Oh, the ..." (2026-10-07)
   - when: not_first
     say: >-

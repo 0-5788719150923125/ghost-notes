@@ -706,10 +706,12 @@ func jump_riffle(i: int, v: float, was: Transform3D) -> Transform3D:
 	return was.interpolate_with(xf, TableMedium._ease(v / 0.35)) if v < 0.35 else xf
 
 
-## Where a jumper rides before it springs: on top of the riffle's right half, one card above its
-## top card (so it moves with the half), from the top of the deck as the riffle begins.
+## Where a jumper rides before it springs: one card above the top of the half that lets go last
+## ([method TableShuffle.riffle_top] - so it moves with the half and is never fallen on), from the top of
+## the deck as the riffle begins.
 func _jump_ride(k: int, v: float) -> Transform3D:
-	var top := medium._shuffles.riffle(medium._plan.deck_n - 1, v, TableMedium.JUMP_RIFFLE, hash([medium._plan.seed_value, "jumper-riffle"]))
+	var seed := hash([medium._plan.seed_value, "jumper-riffle"])
+	var top := medium._shuffles.riffle(medium._shuffles.riffle_top(seed), v, TableMedium.JUMP_RIFFLE, seed)
 	top.origin += top.basis.y.normalized() * TableMedium.DECK_T
 	top.basis = top.basis * Basis(Vector3.UP, PI if medium._reversed(k) else 0.0)
 	return medium._deck_top_xf(k).interpolate_with(top, TableMedium._ease(v / 0.35)) if v < 0.35 else top

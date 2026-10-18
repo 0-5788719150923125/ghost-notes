@@ -539,6 +539,7 @@ static var _clitics := {}
 static var _function_words := {}
 static var _suffixes: Array = []
 static var _loaded := false
+static var _edges: RegEx                  # a word's marks at either end (guessed)
 
 
 static func _load_data() -> void:
@@ -773,6 +774,20 @@ static func is_known(word: String) -> bool:
 			if is_known(w.substr(pre.length())):
 				return true
 	return false
+
+
+## Is the front end GUESSING at this word as the page wrote it? [param w] is a word of [method parse]:
+## one no dictionary holds ([method is_known]) that reaches the voice spelled as the page spells it,
+## its marks aside. A word normalization wrote (a numeral read out, a letter said by its name) is a
+## spelling already chosen for the voice, and is not one. THE MARKS ARE NOT THE WORD: `display` keeps
+## them, and "cosine," compared whole with "cosine" left every listed word unmarked - the three the
+## user heard slurred were the three with a comma or a stop after them (2026-10-17).
+static func guessed(w: Dictionary) -> bool:
+	var text := String(w.get("text", ""))
+	if _edges == null:
+		_edges = RegEx.create_from_string("^[^\\p{L}\\p{N}]+|[^\\p{L}\\p{N}]+$")
+	var shown := _edges.sub(String(w.get("display", text)), "", true)
+	return not text.is_empty() and shown.to_lower() == text.to_lower() and not is_known(text)
 
 
 ## A stem answered outright, without recursing back through the affix stripping (which
