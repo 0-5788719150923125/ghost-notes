@@ -16,6 +16,22 @@ class_name YouTubeCard
 ## THE CATEGORY is the card's too ([constant YouTube.CATEGORIES]): People & Blogs until it is changed,
 ## so a math channel's note can go up as Education.
 ##
+## THE CHANNEL IS THE NOTE'S (the user, 2026-10-17: "target different channels for different kinds of
+## project ... the list of available clients should be a toggle, such that switching is easy"): a
+## toggle per channel signed in here, named as YouTube names it ([method YouTube.channels]), the note's
+## own pressed, and "+" to sign in to another. The block keeps the channel's id and its name, so a
+## note whose channel is not signed in here still shows it, dimmed, to sign in to; a block that names
+## none takes the first channel kept. A playlist is a channel's, so another channel clears it. The
+## account rows below speak for the channel picked.
+##
+## EACH EPISODE'S OWN TAGS (the user, 2026-10-18: "enable/disable the management of tags applied to the
+## video, based upon the script/content of the video ... allow the 'Generate' button to override/rewrite
+## those tags"): with "Write each episode's tags" ticked, the card adds a step to the episodes the note
+## makes ([YouTubeTags], an [EpisodeStep] - offered by [method episode_steps], never handed to a card by
+## name): the card that makes them lists it, writes it with the episode and again on its ⟳, and the
+## upload takes those tags in place of the note's own ([method meta]). The tags written for the episode
+## that card shows are here, under the box, to take one out or add one.
+##
 ## TICKING "UPLOAD AFTER EXPORT" SETS UPLOADS UP as far as they need, visibly: the Google client file
 ## the first time, then the sign-in - and the box ticks once both are done (a cancel leaves it clear).
 ## A PLAYLIST takes more of the account than an upload, so the wider sign-in is asked for only when
@@ -23,12 +39,14 @@ class_name YouTubeCard
 ## beside the upload that waits on them (see [method Exporter.youtube_sign_in]).
 
 const YouTube := preload("res://src/export/youtube.gd")
+const TagField := preload("res://src/ui/tag_field.gd")
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "youtube"
 ## A new card's block: nothing goes up until the box is ticked, and then privately.
 const DEFAULTS := {"upload": false, "title": YouTube.TITLE_TEMPLATE, "privacy": YouTube.PRIVACY,
-	"category": YouTube.CATEGORY, "playlist": "", "playlist_title": ""}
+	"category": YouTube.CATEGORY, "playlist": "", "playlist_title": "", "channel": "", "channel_name": "",
+	"write_tags": false}
 const TITLE_TIP := ("The video's title. %title% is the note's title, %episode% the episode's, %seed% its seed, %date% "
 	+ "today's; what a missing one leaves (a dangling \": \") goes, and a name is never said twice. "
 	+ "YouTube takes 100 characters.")
@@ -43,6 +61,9 @@ var extra: VBoxContainer
 var exporter: Node
 
 var _upload: CheckBox
+var _chips: HFlowContainer
+var _chip_group: ButtonGroup
+var _add: Button
 var _title: LineEdit
 var _preview: Label
 var _privacy: OptionButton
@@ -51,9 +72,18 @@ var _playlist: OptionButton
 var _reload: Button
 var _account: Label
 var _sign: Button
+var _remove: Button
 var _client: Button
 var _resume: Button
 var _state: Label
+var _write_tags: CheckBox
+var _written: TagField
+var _tags_note: Label
+## The step that writes each episode's tags, while the box is ticked.
+var _tags: YouTubeTags
+var _tags_seen := []            # what the tag rows were last drawn for
+## The channel the note's uploads go to, kept whole even when it is not signed in here: `{id, name}`.
+var _chan := {"id": "", "name": ""}
 ## The playlist the block names, kept whole even before the list is loaded: `{id, title}`.
 var _list := {"id": "", "title": ""}
 var _lists: Array = []          # the channel's playlists, as last loaded
@@ -73,11 +103,25 @@ func _init() -> void:
 	_upload = CheckBox.new()
 	_upload.text = "Upload after export"
 	_upload.add_theme_font_size_override("font_size", 12)
-	_upload.tooltip_text = ("Once an export of this note is saved, upload it to your YouTube channel. "
+	_upload.tooltip_text = ("Once an export of this note is saved, upload it to the YouTube channel picked below. "
 		+ "Ticking it the first time asks for your Google OAuth client file (the JSON from Google Cloud), "
 		+ "then opens your browser to sign in.")
 	_upload.toggled.connect(_on_tick)
 	add_child(_upload)
+	_chips = HFlowContainer.new()
+	_chips.add_theme_constant_override("h_separation", 4)
+	_chips.add_theme_constant_override("v_separation", 4)
+	_chip_group = ButtonGroup.new()
+	_add = Button.new()
+	_add.text = "+"
+	_add.focus_mode = Control.FOCUS_NONE
+	_add.add_theme_font_size_override("font_size", 12)
+	_add.tooltip_text = ("Sign in to another channel: your browser opens, and you choose the Google account - "
+		+ "and the channel, when Google asks which. It is named here as YouTube names it.")
+	_add.pressed.connect(_on_add)
+	_chips.add_child(_add)
+	_row("Channel", _chips)
+	_chan = _first_channel()
 	_title = LineEdit.new()
 	_title.placeholder_text = YouTube.TITLE_TEMPLATE
 	_title.tooltip_text = TITLE_TIP
@@ -118,7 +162,7 @@ func _init() -> void:
 	prow.add_child(_playlist)
 	_reload = Button.new()
 	_reload.text = "↻"
-	_reload.tooltip_text = "Load your channel's playlists."
+	_reload.tooltip_text = "Load the picked channel's playlists."
 	_reload.focus_mode = Control.FOCUS_NONE
 	_reload.pressed.connect(load_playlists)
 	prow.add_child(_reload)
@@ -127,6 +171,7 @@ func _init() -> void:
 	extra = VBoxContainer.new()
 	extra.add_theme_constant_override("separation", 8)
 	add_child(extra)
+	_build_tags()
 	add_child(HSeparator.new())
 	_account = _small("")
 	add_child(_account)
@@ -138,6 +183,12 @@ func _init() -> void:
 	_sign.add_theme_font_size_override("font_size", 12)
 	_sign.pressed.connect(_on_sign)
 	arow.add_child(_sign)
+	_remove = Button.new()
+	_remove.text = "Remove"
+	_remove.focus_mode = Control.FOCUS_NONE
+	_remove.add_theme_font_size_override("font_size", 12)
+	_remove.pressed.connect(_on_remove)
+	arow.add_child(_remove)
 	_client = Button.new()
 	_client.focus_mode = Control.FOCUS_NONE
 	_client.add_theme_font_size_override("font_size", 12)
@@ -158,6 +209,28 @@ func _init() -> void:
 
 func _ready() -> void:
 	refresh()
+
+
+## The box, the episode's tags and the line that says where they stand.
+func _build_tags() -> void:
+	_write_tags = CheckBox.new()
+	_write_tags.text = "Write each episode's tags"
+	_write_tags.add_theme_font_size_override("font_size", 12)
+	_write_tags.tooltip_text = ("Each episode gets tags of its own, written from what it says - its words, title "
+		+ "and description - by the show's writer, and they go up in place of the note's own tags (the writer "
+		+ "is shown those, and keeps the ones that fit). The card that makes the episode lists them as a step: "
+		+ "they are written along with the episode, and ⟳ on their row writes them again.")
+	_write_tags.toggled.connect(func(_on: bool) -> void: refresh())
+	add_child(_write_tags)
+	_tags = YouTubeTags.new(func() -> bool: return _write_tags.button_pressed)
+	_written = TagField.new()
+	_written.tooltip_text = ("The tags written for the episode picked on the card that makes it - going up in "
+		+ "place of the note's own. × removes one; type in the box and a comma (or Enter) adds one. YouTube "
+		+ "takes 500 characters of tags in all; a dimmed tag is past that.")
+	_written.changed.connect(_on_written)
+	add_child(_written)
+	_tags_note = _small("")
+	add_child(_tags_note)
 
 
 func _row(label: String, field: Control) -> void:
@@ -195,15 +268,19 @@ func _process(dt: float) -> void:
 ## The block for a document.
 func capture() -> Dictionary:
 	return {"upload": _upload.button_pressed, "title": _title.text, "privacy": _privacy_key(),
-		"category": _category_key(), "playlist": String(_list["id"]), "playlist_title": String(_list["title"])}
+		"category": _category_key(), "playlist": String(_list["id"]), "playlist_title": String(_list["title"]),
+		"channel": String(_chan["id"]), "channel_name": _channel_name(), "write_tags": writes_tags()}
 
 
 ## ...and back. A key the block does not name keeps the card's default; a privacy YouTube does not
-## know is Private, and a category it does not offer is People & Blogs.
+## know is Private, a category it does not offer is People & Blogs, and no channel is the first one
+## kept here.
 func apply(block: Dictionary) -> void:
 	var b := DEFAULTS.duplicate()
 	b.merge(block, true)
 	_upload.set_pressed_no_signal(bool(b["upload"]))
+	_write_tags.set_pressed_no_signal(bool(b["write_tags"]))
+	_tags_seen = []
 	if _title.text != str(b["title"]):
 		_title.text = str(b["title"])
 	var p := str(b["privacy"])
@@ -214,8 +291,12 @@ func apply(block: Dictionary) -> void:
 		_privacy.select(0)
 	var cat := str(b["category"])
 	_select(_category, cat if YouTube.CATEGORIES.has(cat) else YouTube.CATEGORY)
+	_chan = {"id": str(b["channel"]), "name": str(b["channel_name"])}
+	if String(_chan["id"]).is_empty():
+		_chan = _first_channel()
 	_list = {"id": str(b["playlist"]), "title": str(b["playlist_title"])}
 	_fill_playlists()
+	_seen = []
 	refresh()
 
 
@@ -239,6 +320,17 @@ func ticked() -> bool:
 	return _upload.button_pressed
 
 
+## Are each episode's tags written for it, in place of the note's own?
+func writes_tags() -> bool:
+	return _write_tags.button_pressed
+
+
+## THE STEPS THIS CARD ADDS TO THE NOTE'S EPISODES ([EpisodeStep]), for whatever card makes them: each
+## episode's tags. Listed only while [method writes_tags] (see [method YouTubeTags.wanted]).
+func episode_steps() -> Array:
+	return [_tags]
+
+
 ## The title as it goes up: the template, its macros filled from [param given] - else from
 ## [member values], as the panel stands now.
 func title_now(given := {}) -> String:
@@ -252,21 +344,30 @@ func template() -> String:
 
 
 ## WHAT AN UPLOAD SAYS (see [member Exporter.upload_provider]): [param base] - the panel's own part,
-## its description, tags, thumbnail moment and record, and the macros' `values` when they are not the
-## panel's as it stands now (an episode an export rendered) - with this card's title, privacy,
-## category and playlist (its id and title, which the description names) laid over it. {} when nothing is to go
-## up: the box is clear, or the panel has nothing ({}).
+## its description, tags, thumbnail moment and record, the macros' `values` when they are not the
+## panel's as it stands now (an episode an export rendered) and the `episode` it is of (an
+## [EpisodeFeed]) - with this card's title, privacy, category, playlist (its id and title, which the
+## description names) and channel laid over it, and THE EPISODE'S OWN TAGS in place of the panel's while
+## [method writes_tags] and some were written for the episode as it is ([method YouTubeTags.tags_of]).
+## {} when nothing is to go up: the box is clear, or the panel has nothing ({}).
 func meta(base: Dictionary) -> Dictionary:
 	if not ticked() or base.is_empty():
 		return {}
 	var out := base.duplicate()
 	var given: Variant = out.get("values", {})
 	out.erase("values")
+	var ep: Variant = out.get("episode")
+	out.erase("episode")
+	var own := _tags.tags_of(ep as EpisodeFeed) if writes_tags() and ep is EpisodeFeed else PackedStringArray()
+	if not own.is_empty():
+		out["tags"] = Array(own)
 	out["title"] = title_now(given if given is Dictionary else {})
 	out["privacy"] = _privacy_key()
 	out["category"] = _category_key()
 	out["playlist"] = String(_list["id"])
 	out["playlist_title"] = String(_list["title"])
+	out["channel"] = String(_chan["id"])
+	out["channel_name"] = _channel_name()
 	return out
 
 
@@ -277,45 +378,60 @@ func refresh() -> void:
 	var t := title_now()
 	_preview.text = ("Goes up as \"%s\"" % t) if not t.is_empty() else "The title is empty: the export's file name is used."
 	_refresh_account()
+	_refresh_tags()
 
 
 func _refresh_account() -> void:
 	var ex := _exporter()
 	var has_client := YouTube.has_client()
-	var signed := YouTube.signed_in()
-	var lists := YouTube.granted(YouTube.PLAYLIST_SCOPE)
+	var all := YouTube.channels()
+	var id := String(_chan["id"])
+	var kept := YouTube.channel(id)
+	var signed := YouTube.signed_in(id)
+	var lists := YouTube.granted(YouTube.PLAYLIST_SCOPE, id)
 	var p := YouTube.pending()
 	var busy := ex != null and bool(ex.youtube_busy())
 	var yt: Node = ex.youtube() if ex != null else null
 	var phase := String(yt.phase) if yt != null else ""
 	var pct := int(round(float(yt.progress) * 100.0)) if yt != null else 0
-	var now := [has_client, signed, lists, p.get("file", ""), busy, phase, pct, ex != null, _loading]
+	var now := [has_client, all, _chan, signed, lists, p.get("file", ""), p.get("channel", ""), busy, phase, pct,
+		ex != null, _loading]
 	if now == _seen:
 		return
 	_seen = now
+	_fill_channels(all)
+	var named := _channel_name()
+	var no_client := ("No Google client yet: uploads go through your own Google Cloud project's "
+		+ "\"Desktop app\" OAuth client. Import its JSON file once; Ghost Notes keeps it.")
 	if ex == null:
 		_account.text = "Uploads are made by the export, which this window does not have."
-	elif not has_client:
-		_account.text = ("No Google client yet: uploads go through your own Google Cloud project's "
-			+ "\"Desktop app\" OAuth client. Import its JSON file once; Ghost Notes keeps it.")
+	elif id.is_empty():
+		_account.text = no_client if not has_client else "No channel yet: + signs in to one. Your browser opens, and you choose the channel there."
 	elif not signed:
-		_account.text = "Not signed in to YouTube. Signing in opens your browser."
+		_account.text = ("%s is not signed in here%s. Signing in opens your browser: choose that channel there."
+			% [named, " (its sign-in lapsed)" if not kept.is_empty() else ""])
 	else:
-		_account.text = "Signed in to YouTube%s." % (", playlists too" if lists else " (uploads only)")
-	_sign.visible = ex != null and has_client
-	_sign.text = "Sign out" if signed else "Sign in"
-	_sign.tooltip_text = ("Forget the sign-in and ask Google to revoke it. The client file stays." if signed
-		else "Open your browser to sign in to the YouTube channel uploads go to.")
+		var title := String(kept.get("title", ""))
+		_account.text = "Uploads go to %s%s - signed in%s." % [named, (" (%s)" % title) if not title.is_empty() and title != named else "",
+			", playlists too" if lists else ", uploads only"]
+	_sign.visible = ex != null and not id.is_empty() and not signed
+	_sign.text = "Sign in"
+	_sign.tooltip_text = "Open your browser to sign in to %s. Choose that channel there." % named
+	_remove.visible = ex != null and not kept.is_empty()
+	_remove.tooltip_text = ("Sign out of %s - Google is asked to revoke the sign-in - and take it off the list. "
+		% named + "Notes that upload to it keep its name, to sign in again.")
 	_client.visible = ex != null
 	_client.text = "Replace client…" if has_client else "Import client…"
-	_client.tooltip_text = ("Import another Google OAuth client file (a \"Desktop app\" client's JSON). It "
-		+ "replaces the one Ghost Notes keeps; a sign-in made with a different client is forgotten."
-		if has_client else "Import your Google OAuth client file (a \"Desktop app\" client's JSON from "
-		+ "Google Cloud). It stays on this machine, readable only by you.")
+	_client.tooltip_text = ("Import another Google OAuth client file (a \"Desktop app\" client's JSON) - another "
+		+ "Cloud project's, for its own quota. New sign-ins use it; a channel already signed in keeps the "
+		+ "client it signed in with." if has_client else "Import your Google OAuth client file (a \"Desktop "
+		+ "app\" client's JSON from Google Cloud). It stays on this machine, readable only by you, and one "
+		+ "client signs in to every channel.")
 	var waiting := not p.is_empty() and FileAccess.file_exists(str(p.get("file", "")))
 	_resume.visible = ex != null and waiting and not busy
-	_resume.text = "Resume the upload of %s" % str(p.get("file", "")).get_file()
-	_reload.disabled = _loading or ex == null
+	var to := YouTube.name_of(YouTube.channel(str(p.get("channel", ""))))
+	_resume.text = "Resume the upload of %s%s" % [str(p.get("file", "")).get_file(), (" to " + to) if not to.is_empty() else ""]
+	_reload.disabled = _loading or ex == null or id.is_empty()
 	if busy and phase == "uploading":
 		_state.text = "Uploading … %d%%" % pct
 	elif busy:
@@ -333,14 +449,16 @@ func _exporter() -> Node:
 	return Exporter.of(self)
 
 
-## TICKED: set uploads up first - the box shows ticked only once the client is kept and the sign-in
-## may do what this card asks (a playlist chosen asks for more). Cleared: simply cleared.
+## TICKED: set uploads up first - the box shows ticked only once the note's channel is signed in and
+## may do what this card asks (a playlist chosen asks for more); a note with no channel yet signs in
+## to one, and takes it. Cleared: simply cleared.
 func _on_tick(on: bool) -> void:
 	if not on:
 		refresh()
 		return
+	var id := String(_chan["id"])
 	var scopes := _scopes()
-	if YouTube.has_client() and YouTube.signed_in() and YouTube.missing_scopes(scopes).is_empty():
+	if YouTube.signed_in(id) and YouTube.missing_scopes(scopes, id).is_empty():
 		refresh()
 		return
 	_upload.set_pressed_no_signal(false)
@@ -348,11 +466,12 @@ func _on_tick(on: bool) -> void:
 	if ex == null:
 		noted.emit("Uploads are made by the export, which this window does not have.")
 		return
-	var done := func() -> void:
+	var done := func(landed: String) -> void:
 		if is_instance_valid(self):
+			pick_channel(landed)
 			_upload.set_pressed_no_signal(true)
 			refresh()
-	ex.youtube_sign_in(done, scopes)
+	ex.youtube_sign_in(done, scopes, id, String(_chan["name"]))
 
 
 func _scopes() -> Array:
@@ -363,11 +482,159 @@ func _on_sign() -> void:
 	var ex := _exporter()
 	if ex == null:
 		return
-	if YouTube.signed_in():
-		ex.youtube_sign_out()
-	else:
-		ex.youtube_sign_in(Callable(), _scopes())
+	ex.youtube_sign_in(Callable(), _scopes(), String(_chan["id"]), String(_chan["name"]))
 	_seen = []
+
+
+func _on_remove() -> void:
+	var ex := _exporter()
+	if ex != null and not String(_chan["id"]).is_empty():
+		ex.youtube_sign_out(String(_chan["id"]))
+	_seen = []
+
+
+# --- the episode's tags --------------------------------------------------------------------------
+
+## UNDER THE BOX, while it is ticked: the tags written for the episode the card that makes it shows,
+## to edit - or where they stand, and that nothing on the note makes an episode when nothing does.
+## Drawn again only when something it shows has changed.
+func _refresh_tags() -> void:
+	var on := writes_tags()
+	var feed: EpisodeFeed = _tags.shown if on and not _tags.host.is_empty() else null
+	var st := _tags.state(feed) if feed != null else ""
+	var own := _tags.own_of(feed) if feed != null else PackedStringArray()
+	var fresh := feed != null and _tags.fresh(feed)
+	var words := fresh or (feed != null and not feed.words().is_empty())
+	var now := [on, _tags.host, feed.folder() if feed != null else "", st, own, fresh, words,
+		_tags.said(feed) if st == "failed" else "", _written.typing()]
+	if now == _tags_seen:
+		return
+	_tags_seen = now
+	_written.visible = fresh
+	_written.editable = st != "running" and st != "queued"
+	if fresh and not _written.typing():
+		_written.set_tags(own)
+		_written.mark(YouTube.left_out(own))
+	var row := "⟳ on its Tags row on %s" % _tags.host
+	var going := YouTube.fit_tags(Array(own))
+	var t := ""
+	if not on:
+		t = ""
+	elif feed == null:
+		t = "Nothing on this note makes episodes, so nothing writes their tags: the note's own go up."
+	elif st == "running" or st == "queued":
+		t = "Writing this episode's tags again… These go up until the new ones are in." if fresh else "Writing this episode's tags…"
+	elif st == "failed" and fresh:
+		t = "⚠  Writing them again stopped: %s. These still go up." % _tags.said(feed)
+	elif st == "failed":
+		t = "⚠  This episode's tags could not be written: %s. The note's own go up until they are; %s tries again." % [
+			_tags.said(feed), row]
+	elif fresh:
+		t = "%d tag%s written for this episode go up in place of the note's own - %d of YouTube's %d characters. %s writes them again." % [
+			going.size(), "" if going.size() == 1 else "s", YouTube.tags_length(going), YouTube.TAGS_MAX, row]
+	elif not words:
+		t = "This episode's tags are written once its words are, along with it. Until then the note's own go up."
+	elif not own.is_empty():
+		t = "This episode's words were written again after its tags: %s writes new ones, and so does making the episode. Until then the note's own go up." % row
+	else:
+		t = "No tags are written for this episode yet: %s writes them, and so does making the episode. Until then the note's own go up." % row
+	_tags_note.text = t
+	_tags_note.visible = not t.is_empty()
+
+
+## A tag taken out or added on the field: the episode's tags, written at once.
+func _on_written() -> void:
+	var feed: EpisodeFeed = _tags.shown
+	if feed == null or not _tags.fresh(feed):
+		return
+	var err := _tags.set_tags(feed, _written.get_tags())
+	if not err.is_empty():
+		noted.emit("⚠  The episode's tags could not be saved: " + err)
+	_tags_seen = []
+
+
+# --- the channel ---------------------------------------------------------------------------------
+
+## The channel a note with none takes: the first one kept here, else none.
+static func _first_channel() -> Dictionary:
+	var all := YouTube.channels()
+	return {"id": String(all[0]["id"]), "name": String(all[0]["name"])} if not all.is_empty() else {"id": "", "name": ""}
+
+
+## What the note's channel is called: as kept here, else as the block remembers it, else its id.
+func _channel_name() -> String:
+	var kept := YouTube.channel(String(_chan["id"]))
+	if not kept.is_empty():
+		return String(kept["name"])
+	return String(_chan["name"]) if not String(_chan["name"]).is_empty() else String(_chan["id"])
+
+
+## THE NOTE'S CHANNEL IS [param id] from now on: its uploads go there. Another channel's playlists are
+## not this one's, so the playlist is cleared.
+func pick_channel(id: String) -> void:
+	if id == String(_chan["id"]):
+		return
+	var kept := YouTube.channel(id)
+	_chan = {"id": id, "name": String(kept.get("name", ""))}
+	_list = {"id": "", "title": ""}
+	_lists = []
+	_fill_playlists()
+	_seen = []
+	refresh()
+
+
+## The toggles: a channel each, the order they were signed in to, the note's pressed - its own, dimmed,
+## when it is not signed in here - and "+" last.
+func _fill_channels(all: Array) -> void:
+	for c in _chips.get_children():
+		if c != _add:
+			_chips.remove_child(c)
+			c.queue_free()
+	var listed := false
+	for ch in all:
+		var d: Dictionary = ch
+		_chip(String(d["id"]), String(d["name"]), String(d["title"]), bool(d["signed_in"]))
+		listed = listed or String(d["id"]) == String(_chan["id"])
+	if not String(_chan["id"]).is_empty() and not listed:
+		_chip(String(_chan["id"]), _channel_name(), "", false)
+	_chips.move_child(_add, _chips.get_child_count() - 1)
+
+
+func _chip(id: String, name: String, title: String, signed: bool) -> void:
+	var b := Button.new()
+	b.text = name
+	b.toggle_mode = true
+	b.button_group = _chip_group
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_font_size_override("font_size", 12)
+	b.set_pressed_no_signal(id == String(_chan["id"]))
+	b.modulate = Color(1, 1, 1, 1.0 if signed else 0.55)
+	b.tooltip_text = ("%s%s\nThis note's uploads go to the channel pressed." % [title if not title.is_empty() and title != name else name,
+		"" if signed else " - not signed in here"])
+	b.pressed.connect(_on_channel.bind(id))
+	_chips.add_child(b)
+
+
+## A toggle pressed: the note's uploads go there. With the box ticked, a channel not signed in (or
+## whose sign-in may not do what this card asks) is signed in to at once, while the person is here.
+func _on_channel(id: String) -> void:
+	pick_channel(id)
+	var ex := _exporter()
+	if ticked() and ex != null and not YouTube.missing_scopes(_scopes(), id).is_empty():
+		ex.youtube_sign_in(Callable(), _scopes(), id, _channel_name())
+
+
+## "+": sign in to another channel, whichever the person picks, and make it the note's.
+func _on_add() -> void:
+	var ex := _exporter()
+	if ex == null:
+		noted.emit("Uploads are made by the export, which this window does not have.")
+		return
+	var then := func(landed: String) -> void:
+		if is_instance_valid(self):
+			pick_channel(landed)
+			noted.emit("Signed in to %s: this note's uploads go there." % YouTube.name_of(YouTube.channel(landed)))
+	ex.youtube_sign_in(then, [YouTube.SCOPE], "")
 
 
 func _on_client() -> void:
@@ -390,21 +657,27 @@ func _on_resume() -> void:
 ## listed, marked, until another is picked.
 func load_playlists() -> void:
 	var ex := _exporter()
+	var id := String(_chan["id"])
 	if ex == null or _loading:
 		return
-	if not YouTube.granted(YouTube.PLAYLIST_SCOPE):
-		var again := func() -> void:
+	if id.is_empty():
+		noted.emit("No channel yet: + signs in to one.")
+		return
+	if not YouTube.granted(YouTube.PLAYLIST_SCOPE, id):
+		var again := func(_landed: String) -> void:
 			if is_instance_valid(self):
 				load_playlists()
-		ex.youtube_sign_in(again, [YouTube.SCOPE, YouTube.PLAYLIST_SCOPE])
+		ex.youtube_sign_in(again, [YouTube.SCOPE, YouTube.PLAYLIST_SCOPE], id, _channel_name())
 		return
 	_loading = true
 	_seen = []
-	var got: Dictionary = await ex.youtube().playlists()
+	var got: Dictionary = await ex.youtube().playlists(id)
 	if not is_instance_valid(self):
 		return
 	_loading = false
 	_seen = []
+	if id != String(_chan["id"]):
+		return                      # another channel was picked meanwhile: these are not its playlists
 	if got.has("error"):
 		noted.emit("⚠  The playlists could not be loaded: %s" % got["error"])
 		return
@@ -440,8 +713,9 @@ func _on_playlist(i: int) -> void:
 	var d: Variant = _playlist.get_item_metadata(i)
 	_list = (d as Dictionary).duplicate() if d is Dictionary else {"id": "", "title": ""}
 	# a playlist needs the wider sign-in at upload time: ask for it now, while the person is here
-	if ticked() and not YouTube.missing_scopes(_scopes()).is_empty():
+	var id := String(_chan["id"])
+	if ticked() and not YouTube.missing_scopes(_scopes(), id).is_empty():
 		var ex := _exporter()
 		if ex != null:
-			ex.youtube_sign_in(Callable(), _scopes())
+			ex.youtube_sign_in(Callable(), _scopes(), id, _channel_name())
 	refresh()

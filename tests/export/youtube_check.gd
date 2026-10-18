@@ -8,10 +8,17 @@ extends SceneTree
 ##
 ## - THE CLIENT FILE: a "Desktop app" client is read; a Web client, a file with no secret, one that
 ##   is not JSON and one whose endpoints are not Google's are refused, each saying why. Imported, it
-##   is kept owner read/write only; re-importing the same client keeps the sign-in, another ends it,
-##   and a bad file leaves the kept one alone.
+##   is kept owner read/write only, and a bad file leaves the kept one alone. A CHANNEL KEEPS THE
+##   CLIENT IT SIGNED IN WITH: another client imported is the one new sign-ins use, and neither it nor
+##   the client forgotten costs a channel its sign-in.
+## - THE CHANNELS (2026-10-17, the user: "target different channels for different kinds of
+##   project"): each sign-in kept under its channel, owner-only, listed in the order signed in to and
+##   named by its handle, else its title; each may do what it was granted and only that; one signed in
+##   to again keeps its place; a lapsed one keeps its channel; one forgotten is off the list; an odd id
+##   cannot name a file outside the folder.
 ## - THE SIGN-IN'S PARTS: PKCE against RFC 7636's own example, the consent URL (upload scope only,
-##   S256, offline, consent, the loopback redirect - all encoded), the redirect's query decoded.
+##   S256, offline, the account chooser and the consent screen, the loopback redirect - all encoded),
+##   the redirect's query decoded.
 ## - THE WIRE: the next offset from a 308's `Range`, headers in any case, Google's error shapes in
 ##   words.
 ## - WHAT A VIDEO SAYS: `<`/`>` made safe, the title one line of at most 100 characters cut at a
@@ -21,8 +28,9 @@ extends SceneTree
 ##   unless another category is asked for (one an upload cannot take is People & Blogs).
 ##   The playlist a video joins is named and linked between the description and the chapters (the
 ##   control: no playlist, no line).
-## - RECORDS: an upload recorded and read back; a queued upload pending, owner-only; a missing file
-##   refused.
+## - RECORDS: an upload recorded and read back; a queued upload pending with its channel, owner-only;
+##   a missing file refused; one queued with no channel is aimed at the channel its sign-in lands on,
+##   one that names a channel keeps it.
 ## - THE TAROT EPISODE: its upload notes from the plan, with a chapter per card timed from a take's
 ##   word timings (an hour on, `h:mm:ss`), and `upload.md` with the show's tags first.
 ## - THE EXPORT MENU says nothing of YouTube (2026-10-07: the upload moved to a component's card).
@@ -30,9 +38,13 @@ extends SceneTree
 ##   privacy reads as private, an unknown category as People & Blogs); unticked it describes no upload
 ##   whatever the panel has, ticked it lays its title - the template's macros filled, nothing
 ##   dangling, no name twice - privacy, category and playlist
-##   over the panel's part, and nothing when the panel has nothing; a sign-in that may only upload
-##   lacks the playlists' scope; a resume while an upload waits on a file that exists, not once it
-##   is gone; Sign in / Sign out and Import / Replace follow the files. THE LINE A TITLE GOES UP IN
+##   and channel over the panel's part, and nothing when the panel has nothing. ITS CHANNEL: a toggle
+##   per channel kept, named as YouTube names it, the note's pressed; a block with none takes the
+##   first kept; another channel's toggle makes it the note's and clears the playlist (the other
+##   channel's); the block's channel when it is not kept here shows dimmed and pressed, its name kept,
+##   with Sign in and no Remove; a lapsed one offers both. A channel that may only upload lacks the
+##   playlists' scope; a resume - to its channel - while an upload waits on a file that exists, not
+##   once it is gone; Import / Replace follows the client file. THE LINE A TITLE GOES UP IN
 ##   (`title_shape`): the template with the episode's title marked, handed to the Cards producer from
 ##   the card's own template - none when the episode's title stands alone or is left out.
 ## - THE TAG FIELD (tag_field.gd, 2026-10-06, the user: "show all of the tags, with the ability to
@@ -49,6 +61,27 @@ extends SceneTree
 ##   upload described from all that - once the note has a YouTube card and its box is ticked -
 ##   with the title screen's thumbnail moment, for the episode an export rendered even after another
 ##   is picked. The description and tags are the YouTube card's; the title stays on the Episode card.
+## - EACH EPISODE'S OWN TAGS (2026-10-18, the user: "allow the 'Generate' button to override/rewrite those
+##   tags ... it would not be okay to tightly-couple the two cards"): the writer's answer is cleaned (no
+##   hashtag sign, no comma inside), each tag once, a bare list taken too - and no JSON, no list or too few
+##   usable tags are not kept. Its prompt renders whole with the show, the episode's title, description and
+##   words, the note's own tags and YouTube's limit, and says nothing of what an episode does not have. The
+##   step ([YouTubeTags], an [EpisodeStep]) is one only while the card's box is ticked; it waits for the
+##   episode's words (neither Generate nor ⟳ starts it before); started in a read-only gate it says why
+##   it cannot; a job that ended is kept in the episode's folder with the fingerprint of the words it was
+##   sent, a run that fails past its retry says why and leaves what was made; words written again make it
+##   stale - not made, none go up - and the same words again make it the episode's once more; a tag
+##   edited by hand is cleaned and keeps it the episode's. On the card: its block keeps the box, the box
+##   clear sends the note's own tags (and never the episode itself), ticked the episode's go up in place of
+##   them - not ones written for other words, and a panel that names no episode keeps its own; under the
+##   box, the episode's tags to edit (× takes one off the episode) or where they stand - and, with nothing
+##   listing the step, that nothing on the note makes episodes. THE HOSTS NEVER NAME THE CARD: the panel
+##   holds the step the YouTube card offers; the Episode card lists it as a Tags row under the Close only
+##   while the box is ticked, says which episode it shows, waits for the reading (its words with the marks
+##   out), makes it once its own steps are done (here refused, read-only, said on the row), shows ✓, the
+##   tags and ⟳ once made, and the upload takes them - not for an episode an export rendered that has
+##   none. The Proof card lists it under the Script, hands it the note's tags with the framer's, and its
+##   upload takes the episode's.
 ## - A REAL SHOW FILE: the tags and the byline land as top-level lines above ghost's block - the
 ##   chapter format - the block holds the show's title and description and no record per episode, the
 ##   rest of the file is untouched, and a panel opening it fills a new episode from it at once.
@@ -80,8 +113,8 @@ func _run() -> void:
 	_wipe(ROOT)
 	_wipe(TAROT)
 	_wipe(ROOT + "_files")
-	for check in [_client, _import, _pkce, _auth_url, _query, _wire, _fit, _body, _records, _episode_notes, _menu,
-			_card, _tag_field, _panel_fields, _doc_file]:
+	for check in [_client, _import, _channels, _pkce, _auth_url, _query, _wire, _fit, _body, _records, _episode_notes,
+			_menu, _card, _episode_tags, _tag_field, _panel_fields, _proof_steps, _doc_file]:
 		if not bool(check.call()):
 			_ok(false, "a check stopped part way (script error?)")
 	_wipe(ROOT)
@@ -174,15 +207,54 @@ func _import() -> bool:
 	_ok(OS.get_name() == "Windows" or FileAccess.get_unix_permissions(ProjectSettings.globalize_path(ROOT)) == YouTube.OWNER_DIR,
 		"its folder is owner-only too")
 	_ok(not FileAccess.get_file_as_string(kept).contains("redirect_uris"), "only what the flow needs is kept")
-	YouTube._write(YouTube._path("token.json"), JSON.stringify({"refresh_token": "rt"}), true)
-	_ok(YouTube.import_client(good) == "" and YouTube.signed_in(), "re-importing the same client keeps the sign-in")
+	# A CHANNEL KEEPS THE CLIENT IT SIGNED IN WITH
+	YouTube._keep({"id": "UC-a", "handle": "@a", "title": "A"}, YouTube.client(), {"refresh_token": "rt"}, YouTube.SCOPE)
+	_ok(YouTube.import_client(good) == "" and YouTube.signed_in("UC-a"), "re-importing the same client keeps the channel's sign-in")
 	_ok(YouTube.import_client(_file("web.json", _client_json("x", "web"))) != ""
-		and YouTube.client()["client_id"] == "123-abc.apps.googleusercontent.com" and YouTube.signed_in(),
+		and YouTube.client()["client_id"] == "123-abc.apps.googleusercontent.com" and YouTube.signed_in("UC-a"),
 		"a bad file leaves the kept client and sign-in alone")
 	_ok(YouTube.import_client(_file("other.json", _client_json("456-def.apps.googleusercontent.com"))) == ""
-		and not YouTube.signed_in(), "another client ends the sign-in made with the old one")
+		and YouTube.client()["client_id"] == "456-def.apps.googleusercontent.com" and YouTube.signed_in("UC-a")
+		and YouTube._token("UC-a")["client"]["client_id"] == "123-abc.apps.googleusercontent.com",
+		"another client is the one new sign-ins use; the channel keeps the client it signed in with")
+	var at := YouTube._channel_path("UC-a")
+	_ok(_owner_only(at) and (OS.get_name() == "Windows"
+		or FileAccess.get_unix_permissions(at.get_base_dir()) == YouTube.OWNER_DIR),
+		"a channel's sign-in is owner read/write only, its folder too")
 	YouTube.forget_client()
-	_ok(not YouTube.has_client() and not YouTube.signed_in(), "forgetting the client forgets the sign-in with it")
+	_ok(not YouTube.has_client() and YouTube.signed_in("UC-a"), "forgetting the client costs no channel its sign-in")
+	YouTube.forget_channel("UC-a")
+	_ok(YouTube.channels().is_empty() and not YouTube.signed_in("UC-a"), "a channel forgotten is off the list")
+	return true
+
+
+func _channels() -> bool:
+	var c := {"client_id": "x", "client_secret": "y", "token_uri": "https://oauth2.googleapis.com/token"}
+	_ok(YouTube.channels().is_empty() and YouTube.channel("").is_empty() and not YouTube.signed_in(""),
+		"no channels before a sign-in, and none is \"\"")
+	YouTube._keep({"id": "UC-ink", "handle": "@the-ink", "title": "The Ink"}, c, {"refresh_token": "r1"},
+		YouTube.SCOPE + " " + YouTube.READ_SCOPE)
+	YouTube._keep({"id": "UC-arc", "handle": "", "title": "The Arc"}, c, {"refresh_token": "r2"},
+		YouTube.SCOPE + " " + YouTube.PLAYLIST_SCOPE)
+	var names := func() -> Array: return YouTube.channels().map(func(ch: Dictionary) -> String: return ch["name"])
+	_ok(names.call() == ["@the-ink", "The Arc"], "in the order signed in to, named by the handle, else the title (%s)" % str(names.call()))
+	_ok(YouTube.granted(YouTube.PLAYLIST_SCOPE, "UC-arc") and not YouTube.granted(YouTube.PLAYLIST_SCOPE, "UC-ink")
+		and YouTube.granted(YouTube.SCOPE, "UC-ink") and YouTube.missing_scopes([YouTube.SCOPE, YouTube.PLAYLIST_SCOPE], "UC-ink")
+		== [YouTube.PLAYLIST_SCOPE], "each channel's sign-in may do what it was granted, and only that")
+	_ok(not YouTube.granted(YouTube.SCOPE, "UC-gone") and YouTube.channel("UC-gone").is_empty(),
+		"control: a channel not kept here may do nothing")
+	YouTube._keep({"id": "UC-ink", "handle": "@the-ink", "title": "The Ink"}, c, {"refresh_token": "r3"}, YouTube.SCOPE)
+	_ok(names.call() == ["@the-ink", "The Arc"] and YouTube._token("UC-ink")["refresh_token"] == "r3",
+		"a channel signed in to again keeps its place on the list")
+	YouTube._drop_sign_in("UC-ink")
+	var ink: Dictionary = YouTube.channel("UC-ink")
+	_ok(not YouTube.signed_in("UC-ink") and ink.get("signed_in") == false and ink.get("name") == "@the-ink"
+		and YouTube.channels().size() == 2, "a lapsed sign-in keeps its channel, to sign in again")
+	YouTube.forget_channel("UC-ink")
+	YouTube.forget_channel("UC-arc")
+	_ok(YouTube.channels().is_empty(), "forgotten, both are off the list")
+	_ok(YouTube._channel_path("../x").get_base_dir() == YouTube._path(YouTube.CHANNELS),
+		"a channel's file stays in its folder whatever its id says (%s)" % YouTube._channel_path("../x"))
 	return true
 
 
@@ -208,7 +280,8 @@ func _auth_url() -> bool:
 		"it carries the client, the loopback redirect, the state and the S256 challenge")
 	_ok(q.get("scope") == YouTube.SCOPE and YouTube.SCOPE == "https://www.googleapis.com/auth/youtube.upload",
 		"it asks for the upload scope and nothing else")
-	_ok(q.get("access_type") == "offline" and q.get("prompt") == "consent", "offline access, the consent screen shown")
+	_ok(q.get("access_type") == "offline" and q.get("prompt") == "select_account consent",
+		"offline access, the account chooser and the consent screen shown")
 	_ok(url.contains("redirect_uri=http%3A%2F%2F127.0.0.1%3A5555")
 		and url.contains("scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fyoutube.upload&"),
 		"every value is encoded")
@@ -316,15 +389,20 @@ func _records() -> bool:
 		and YouTube.record_upload(rec, {"id": "b", "url": "https://youtu.be/b"}) == "", "uploads are recorded")
 	var ups: Array = YouTube.uploads_in(rec)
 	_ok(ups.size() == 2 and ups[0]["id"] == "a" and ups[1]["id"] == "b", "and read back oldest first")
-	_ok(YouTube.queue(ProjectSettings.globalize_path(ROOT + "_files/none.mp4"), {}).has("error")
+	_ok(YouTube.queue(ProjectSettings.globalize_path(ROOT + "_files/none.mp4"), {}, "UC-a").has("error")
 		and YouTube.pending().is_empty(), "a missing video is not queued")
 	var video := _file("video.mp4", "0123456789")
-	var p: Dictionary = YouTube.queue(video, {"snippet": {"title": "T"}}, rec)
+	var p: Dictionary = YouTube.queue(video, {"snippet": {"title": "T"}}, "UC-a", rec)
 	var back: Dictionary = YouTube.pending()
-	_ok(not p.has("error") and back.get("file") == video and int(back.get("size", 0)) == 10
+	_ok(not p.has("error") and back.get("file") == video and int(back.get("size", 0)) == 10 and back.get("channel") == "UC-a"
 		and back.get("record") == rec and back.get("session") == "" and back["body"]["snippet"]["title"] == "T",
-		"a queued upload waits in pending.json, with no session yet")
+		"a queued upload waits in pending.json with its channel, no session yet")
 	_ok(_owner_only(YouTube._path("pending.json")), "pending.json is owner read/write only (it will hold the session)")
+	YouTube.aim_pending("UC-b")
+	_ok(YouTube.pending().get("channel") == "UC-a", "a waiting upload that names its channel keeps it")
+	YouTube.queue(video, {}, "")
+	YouTube.aim_pending("UC-b")
+	_ok(YouTube.pending().get("channel") == "UC-b", "one queued with no channel goes to the one its sign-in lands on")
 	YouTube.forget_pending()
 	_ok(YouTube.pending().is_empty(), "and is forgotten")
 	return true
@@ -407,18 +485,22 @@ func _card() -> bool:
 	card.exporter = ex
 	var cap: Dictionary = card.capture()
 	_ok(cap == {"upload": false, "title": "%title%: %episode%", "privacy": "private", "category": "22", "playlist": "",
-		"playlist_title": ""}, "a new card uploads nothing, privately, as People & Blogs, titled by the template (%s)" % str(cap))
+		"playlist_title": "", "channel": "", "channel_name": "", "write_tags": false},
+		"a new card uploads nothing, privately, as People & Blogs, titled by the template, to no channel yet (%s)" % str(cap))
 	card.values = func() -> Dictionary: return {"title": "Truthful Tarot", "episode": "The Tower"}
 	_ok(card.meta({"tags": ["a"]}).is_empty(), "unticked, it describes no upload whatever the panel has")
 	card.apply({"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted", "category": "27",
-		"playlist": "PL1", "playlist_title": "Readings"})
+		"playlist": "PL1", "playlist_title": "Readings", "channel": "UC-x", "channel_name": "@x", "write_tags": true})
 	_ok(card.capture() == {"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted",
-		"category": "27", "playlist": "PL1", "playlist_title": "Readings"}, "its block round-trips (%s)" % str(card.capture()))
+		"category": "27", "playlist": "PL1", "playlist_title": "Readings", "channel": "UC-x", "channel_name": "@x",
+		"write_tags": true},
+		"its block round-trips (%s)" % str(card.capture()))
 	var m: Dictionary = card.meta({"tags": ["a"], "record": "r.json"})
 	_ok(m.get("title") == "Truthful Tarot - The Tower (%s)" % Time.get_date_string_from_system() and m.get("privacy") == "unlisted"
 		and m.get("category") == "27" and YouTube.video_body(m)["snippet"]["categoryId"] == "27"
 		and m.get("playlist") == "PL1" and m.get("playlist_title") == "Readings" and m.get("tags") == ["a"]
-		and m.get("record") == "r.json", "ticked, it lays its title, privacy, category and playlist over the panel's part (%s)" % str(m))
+		and m.get("channel") == "UC-x" and m.get("channel_name") == "@x" and m.get("record") == "r.json",
+		"ticked, it lays its title, privacy, category, playlist and channel over the panel's part (%s)" % str(m))
 	_ok(card.meta({}).is_empty(), "...and describes nothing when the panel has nothing")
 	_ok(card.meta({"values": {"title": "Show", "episode": "Rendered One"}}).get("title").begins_with("Show - Rendered One")
 		and not card.meta({"values": {"title": "S"}}).has("values"),
@@ -445,40 +527,152 @@ func _card() -> bool:
 		"every macro in its place, the date marked (%s)" % YouTube.title_shape("%episode% | %title% #%seed% (%date%)", {"title": "T", "seed": "7"}, "[x]"))
 	_ok(YouTube.title_shape("%title%: %episode%", {}, "[x]") == "" and YouTube.title_shape("%title% #%seed%", {"title": "T", "seed": "7"}, "[x]") == "",
 		"control: no line when the episode's title stands alone, or is left out")
-	# the scopes and the account rows
+	# THE CHANNEL AND THE ACCOUNT ROWS
 	YouTube.forget_client()
+	card.apply({})
+	card._seen = []
 	card._refresh_account()
-	_ok(card._client.text == "Import client…" and not card._sign.visible, "with no client, it offers to import one")
+	_ok(card._client.text == "Import client…" and not card._sign.visible and not card._remove.visible
+		and card.capture()["channel"] == "" and _chips(card).is_empty() and card._add.get_parent() == card._chips,
+		"with no client and no channel, it offers to import a client, and + alone")
 	YouTube.import_client(_file("card_client.json", _client_json()))
+	YouTube._keep({"id": "UC-arc", "handle": "@the-arc", "title": "The Arc"}, YouTube.client(), {"refresh_token": "rt"},
+		YouTube.SCOPE + " " + YouTube.READ_SCOPE)
+	YouTube._keep({"id": "UC-ink", "handle": "@the-ink", "title": "The Ink"}, YouTube.client(), {"refresh_token": "rt2"},
+		YouTube.SCOPE + " " + YouTube.PLAYLIST_SCOPE)
+	card.apply({"upload": true, "playlist": "PL1", "playlist_title": "Readings"})
+	_ok(card.capture()["channel"] == "UC-arc" and card.capture()["channel_name"] == "@the-arc",
+		"a block that names no channel takes the first one kept (%s)" % card.capture()["channel"])
 	card._seen = []
 	card._refresh_account()
-	_ok(card._client.text == "Replace client…" and card._sign.visible and card._sign.text == "Sign in", "a kept client, no sign-in")
-	YouTube._write(YouTube._path("token.json"), JSON.stringify({"refresh_token": "rt"}), true)
-	_ok(YouTube.granted(YouTube.SCOPE) and not YouTube.granted(YouTube.PLAYLIST_SCOPE),
-		"a sign-in kept before scopes were written down may upload, and only that")
+	_ok(_chips(card).map(func(b: Button) -> String: return b.text) == ["@the-arc", "@the-ink"] and _pressed(card) == "@the-arc"
+		and card._chips.get_child(card._chips.get_child_count() - 1) == card._add,
+		"a toggle per channel, named as YouTube names it, the note's pressed, + last")
+	_ok(card._client.text == "Replace client…" and card._account.text.contains("@the-arc") and card._account.text.contains("uploads only")
+		and card._remove.visible and not card._sign.visible, "signed in, it says where uploads go and what the sign-in may do (%s)" % card._account.text)
+	var ink: Button = _chips(card)[1]
+	ink.pressed.emit()
+	_ok(card.capture()["channel"] == "UC-ink" and card.capture()["channel_name"] == "@the-ink" and card.capture()["playlist"] == ""
+		and card.meta({"tags": []}).get("channel") == "UC-ink",
+		"another channel's toggle makes it the note's, and clears the playlist - the other channel's")
 	card._seen = []
 	card._refresh_account()
-	_ok(card._sign.text == "Sign out" and card._account.text.contains("uploads only"), "signed in, it says what the sign-in may do")
-	YouTube._write(YouTube._path("token.json"), JSON.stringify({"refresh_token": "rt",
-		"scope": YouTube.SCOPE + " " + YouTube.PLAYLIST_SCOPE}), true)
-	_ok(YouTube.granted(YouTube.PLAYLIST_SCOPE) and YouTube.missing_scopes([YouTube.SCOPE, YouTube.PLAYLIST_SCOPE]).is_empty(),
-		"one granted both may see playlists")
+	_ok(_pressed(card) == "@the-ink" and card._account.text.contains("playlists too"), "the rows speak for the channel picked")
+	_ok(YouTube.granted(YouTube.PLAYLIST_SCOPE, "UC-ink") and not YouTube.granted(YouTube.PLAYLIST_SCOPE, "UC-arc"),
+		"one channel may see playlists while the other may only upload")
 	_ok(ex.scopes_for({"playlist": "PL1"}) == [YouTube.SCOPE, YouTube.PLAYLIST_SCOPE] and ex.scopes_for({}) == [YouTube.SCOPE],
 		"an upload joining a playlist asks for the playlists' scope, one without asks for uploads alone")
-	var video := _file("card.mp4", "abc")
-	YouTube.queue(video, {}, "")
+	# A CHANNEL NOT SIGNED IN HERE: a note from another machine, or one whose channel was removed
+	card.apply({"channel": "UC-gone", "channel_name": "@gone"})
 	card._seen = []
 	card._refresh_account()
-	_ok(card._resume.visible and card._resume.text.ends_with("card.mp4"), "a waiting upload can be resumed")
+	var gone: Button = _chips(card).back() if not _chips(card).is_empty() else null
+	_ok(gone != null and gone.text == "@gone" and gone.button_pressed and gone.modulate.a < 1.0 and _chips(card).size() == 3
+		and card.capture()["channel"] == "UC-gone" and card.capture()["channel_name"] == "@gone",
+		"the block's channel, not signed in here, shows dimmed and pressed, its name kept")
+	_ok(card._sign.visible and card._sign.text == "Sign in" and not card._remove.visible and card._account.text.contains("not signed in here"),
+		"it offers to sign in, and nothing to remove (%s)" % card._account.text)
+	YouTube._drop_sign_in("UC-arc")
+	card.apply({"channel": "UC-arc"})
+	card._seen = []
+	card._refresh_account()
+	_ok(card._account.text.contains("lapsed") and card._sign.visible and card._remove.visible and _chips(card)[0].modulate.a < 1.0,
+		"a lapsed sign-in keeps its channel: dimmed, to sign in again or remove (%s)" % card._account.text)
+	var video := _file("card.mp4", "abc")
+	YouTube.queue(video, {}, "UC-ink")
+	card._seen = []
+	card._refresh_account()
+	_ok(card._resume.visible and card._resume.text.ends_with("card.mp4 to @the-ink"), "a waiting upload can be resumed, to its channel (%s)" % card._resume.text)
 	DirAccess.remove_absolute(video)
 	card._seen = []
 	card._refresh_account()
 	_ok(not card._resume.visible, "not once its file is gone")
 	YouTube.forget_pending()
+	YouTube.forget_channel("UC-arc")
+	YouTube.forget_channel("UC-ink")
 	YouTube.forget_client()
 	card.free()
 	ex.free()
 	return true
+
+
+## THE PROOF CARD lists the step too: under its Script, the note's tags with the framer's handed to it.
+func _proof_steps() -> bool:
+	var keep := ProofEpisode.root
+	ProofEpisode.root = ROOT + "_proof"
+	var ed = load("res://src/reading/reading_panel.gd").new()
+	ed.workspace = "proof"
+	ed._build_panel()
+	ed._doc._sync = false
+	ed._doc._fields = {"title": "Proofs", "tags": "math"}
+	var proof = ed._block_cards["proof"]
+	ed._attach("youtube")
+	ed._youtube._upload.set_pressed_no_signal(true)
+	ed._youtube._write_tags.button_pressed = true
+	proof._open_episode()
+	proof._refresh()
+	var step = ed._youtube.episode_steps()[0]
+	_ok(proof._step_rows.has(step.key) and proof._step_box.get_index() > (proof._rows["script"]["state"] as Label).get_parent().get_index(),
+		"its row stands under the Script")
+	proof._tick_steps()
+	_ok(step.host == "the Proof card" and step.shown == proof._feed, "the Proof card says it lists the step, and which episode it shows")
+	proof._episode.write_json("problem", {"episode_title": "Why Two Is Prime", "description": "Two is prime.", "tags": ["primes", "math"]})
+	proof._episode.write_text("script", "Two has no divisors but one and itself.")
+	_ok(Array(proof._feed.tags()) == ["math", "primes"] and proof._feed.episode_title() == "Why Two Is Prime"
+		and proof._feed.words() == "Two has no divisors but one and itself.", "it hands the step the note's tags with the framer's, and the lesson")
+	step._keep(proof._feed, {"tags": ["prime numbers", "two", "proof"]}, proof._feed.stamp())
+	proof._refresh()
+	var r: Dictionary = proof._step_rows[step.key]
+	_ok((r["state"] as Label).text == "✓ 3 tags: prime numbers, two, proof" and not (r["redo"] as Button).disabled,
+		"made: its ✓, its tags, and its ⟳ (%s)" % (r["state"] as Label).text)
+	_ok(ed.upload_meta("").get("tags") == ["prime numbers", "two", "proof"], "the upload takes the episode's tags")
+	ed._youtube._write_tags.button_pressed = false
+	proof._refresh()
+	_ok(not proof._step_rows.has(step.key) and ed.upload_meta("").get("tags") == ["math", "primes"],
+		"control: box cleared, the row goes and the note's and the framer's go up")
+	ed.free()
+	_wipe(ProofEpisode.root)
+	ProofEpisode.root = keep
+	return true
+
+
+## The Episode card's row of the step another card added, {} for none.
+func _step_row(show: Node) -> Dictionary:
+	for w in show._row_widgets:
+		if (w as Dictionary).get("step") != null:
+			return w
+	return {}
+
+
+## An episode as a step reads it, made up: its folder under the scratch folder, its words as set.
+class FakeFeed extends "res://src/notes/episode_feed.gd":
+	var dir := ""
+	var said := ""
+
+	func folder() -> String:
+		return dir
+
+	func show_title() -> String:
+		return "The Show"
+
+	func episode_title() -> String:
+		return "The Tower Falls"
+
+	func words() -> String:
+		return said
+
+
+## A card's channel toggles, in order ("+" left out).
+func _chips(card: Node) -> Array:
+	return card._chips.get_children().filter(func(c: Node) -> bool: return c != card._add)
+
+
+## The pressed toggle's text, "" for none.
+func _pressed(card: Node) -> String:
+	for b in _chips(card):
+		if (b as Button).button_pressed:
+			return (b as Button).text
+	return ""
 
 
 ## Built by hand, as panel_fit_check builds it: its _ready would start the voice host.
@@ -607,12 +801,148 @@ func _panel_fields() -> bool:
 	_ok(ed.upload_meta(take).get("title") == "My Own Title" and ed.upload_meta("").get("title") == "Another Episode",
 		"an export's upload describes the episode it rendered, not the one picked since")
 	_ok(not DirAccess.dir_exists_absolute(CardEpisode.open("panel-check", 22).dir), "nothing was written for the new episode")
+	# THE STEPS THE NOTE'S OTHER CARDS ADD: the YouTube card's tags, on the Episode card, neither naming the other
+	var tags_step = ed._youtube.episode_steps()[0]
+	_ok(ed.episode_steps() == [tags_step], "the panel holds the step the YouTube card offers")
+	show._refresh_rows()
+	_ok(_step_row(show).is_empty(), "box clear, the Episode card lists no tags")
+	ed._youtube._write_tags.button_pressed = true
+	show._refresh_rows()
+	var row := _step_row(show)
+	_ok(not row.is_empty() and show._row_widgets.back() == row and String(show._row_widgets[show._row_widgets.size() - 2]["kind"]) == "Close",
+		"ticked, its row stands under the Close")
+	show._tick_steps()
+	_ok(tags_step.host == "the Episode card" and tags_step.shown == show._feed and tags_step.shown.folder() == show._episode.dir,
+		"the card says it lists the step, and which episode it shows")
+	show._refresh_rows()
+	_ok((row["status"] as Label).text == "·" and (row["text"] as Label).text == tags_step.waits and (row["redo"] as MenuButton).disabled
+		and show._steps_missing(), "before the reading is written the row waits, its ⟳ too")
+	show._episode.write_text("script", "<!-- table: draw 1 -->\nThe first card is the moon.")
+	_ok(show._feed.words() == "The first card is the moon.", "the step reads the reading as it is said, its marks out (%s)" % show._feed.words())
+	show._steps_asked = true
+	show._tick_steps()
+	show._refresh_rows()
+	_ok(not show._steps_asked and tags_step.state(show._feed) == "failed" and (row["status"] as Label).text == "✗"
+		and (row["text"] as Label).text.contains("read-only"),
+		"once the card's own steps are done, Generate makes it - here refused, read-only, and said on its row")
+	tags_step._errors.clear()
+	tags_step._keep(show._feed, {"tags": ["the moon", "night", "cards"]}, show._feed.stamp())
+	show._refresh_rows()
+	_ok((row["status"] as Label).text == "✓" and (row["text"] as Label).text == "3 tags: the moon, night, cards"
+		and not (row["redo"] as MenuButton).disabled and (row["redo"] as MenuButton).get_popup().get_item_text(0) == tags_step.again
+		and not show._steps_missing(), "made: its ✓, its tags and its ⟳ to write them again")
+	_ok(ed.upload_meta("").get("tags") == ["the moon", "night", "cards"], "the upload takes the episode's tags in place of the show's")
+	_ok(ed.upload_meta(take).get("tags") == ["tarot", "satire"], "control: the episode an export rendered has none written, and goes up with the show's")
+	ed._youtube._write_tags.button_pressed = false
+	show._refresh_rows()
+	_ok(_step_row(show).is_empty() and ed.upload_meta("").get("tags") == ["tarot", "satire"],
+		"box cleared: the row goes, and the show's tags go up again")
 	_ok(show.thumbnail_moment(9.0) == 3.6 and show.thumbnail_moment(3.0) == 1.5 and show.thumbnail_moment(0.5) == 1.5,
 		"the thumbnail is taken with the name up and the table still out of focus")
 	var args: PackedStringArray = load("res://src/export/exporter.gd").thumbnail_args("/v/a b.mp4", "/v/a b.thumbnail.jpg", 3.6)
 	_ok(Array(args) == ["-y", "-nostdin", "-loglevel", "error", "-ss", "3.600", "-i", "/v/a b.mp4", "-frames:v", "1",
 		"-vf", "scale=1280:720:flags=lanczos", "-q:v", "2", "/v/a b.thumbnail.jpg"], "one frame, at the moment, 1280x720")
 	ed.free()
+	return true
+
+
+## EACH EPISODE'S OWN TAGS: the step the YouTube card adds to the episodes a note makes, and the box.
+func _episode_tags() -> bool:
+	var Tags: GDScript = load("res://src/export/youtube_tags.gd")
+	# THE ANSWER, LANDED
+	var got: Variant = Tags.land(TextGen.extract_json("```json\n{\"tags\": [\"#Readings\", \"readings\", \"the tower\", \"a, b\", \" \"]}\n```"))
+	_ok(got is Dictionary and (got as Dictionary)["tags"] == ["Readings", "the tower", "a b"],
+		"an answer's tags are cleaned - no hashtag sign, no comma inside - each kept once whatever its case (%s)" % str(got))
+	_ok(Tags.land(["one", "two", "three"]) is Dictionary, "a bare list is an answer too")
+	_ok(Tags.land(null) is String and Tags.land({"tags": "one, two, three"}) is String and Tags.land({"tags": ["one", "#", "two"]}) is String,
+		"the controls: no JSON, no list, and too few usable tags are not kept")
+	# WHAT THE WRITER IS TOLD
+	Rules.clear()
+	var p: Dictionary = Tags.prompt("The Show", "The Tower Falls", "A reading of three.", PackedStringArray(["readings", "cards"]),
+		"The first card is the tower.")
+	var text := String(p["prompt"])
+	_ok(Rules.missing.is_empty() and not text.contains("{{") and not String(p["system"]).is_empty()
+		and text.contains("The first card is the tower.") and text.contains("THIS VIDEO'S TITLE: The Tower Falls")
+		and text.contains("ITS DESCRIPTION: A reading of three.") and text.contains("readings, cards")
+		and text.contains(str(YouTube.TAGS_MAX)),
+		"the writer is told the show, the episode's title, description and words, the note's own tags and YouTube's limit (%s)" % str(Rules.missing))
+	var bare := String(Tags.prompt("", "", "", PackedStringArray(), "Words.")["prompt"])
+	_ok(not bare.contains("THE SHOW:") and not bare.contains("OWN TAGS") and not bare.contains("DESCRIPTION") and bare.contains("Words."),
+		"the control: what an episode does not have is not said")
+	# THE STEP
+	var on := [false]
+	var step = Tags.new(func() -> bool: return bool(on[0]))
+	var feed := FakeFeed.new()
+	feed.dir = ProjectSettings.globalize_path(ROOT + "_files").path_join("episode_1")
+	_ok(not step.wanted() and EpisodeStep.listed_of([step]).is_empty(), "with the box clear, the step is not one")
+	on[0] = true
+	_ok(step.wanted() and EpisodeStep.listed_of([step, "not a step"]) == [step], "ticked, it is listed (and nothing that is not a step)")
+	_ok(step.state(feed) == "missing" and step.said(feed) == step.waits and not step.generate(feed) and not step.redo(feed),
+		"before the episode's words are written it waits for them, and neither Generate nor ⟳ starts it")
+	feed.said = "The first card is the tower."
+	_ok(step.generate(feed) and step.state(feed) == "failed" and step.said(feed).contains("read-only"),
+		"once they are, Generate starts it - in a read-only gate it stops, saying why (%s)" % step.said(feed))
+	step._errors.clear()
+	AgentJobs._ended["text-youtube-check-1"] = {"ok": true, "text": "{\"tags\": [\"the tower\", \"cards\", \"readings\", \"fortune\"]}"}
+	step._jobs[feed.folder()] = {"id": "text-youtube-check-1", "feed": feed, "stamp": feed.stamp()}
+	_ok(step.busy(feed) and step.state(feed) == "queued", "while its job is out, it is being made")
+	step.tick()
+	_ok(step.state(feed) == "ready" and step.fresh(feed) and Array(step.tags_of(feed)) == ["the tower", "cards", "readings", "fortune"]
+		and step.said(feed) == "4 tags: the tower, cards, readings, fortune" and not step.busy(feed),
+		"a job that ended is kept: made, and its tags go up (%s)" % step.said(feed))
+	var kept: Variant = JSON.parse_string(FileAccess.get_file_as_string(feed.folder().path_join("youtube_tags.json")))
+	_ok(kept is Dictionary and (kept as Dictionary).get("from") == feed.stamp(), "kept in the episode's folder, with the fingerprint of the words it was sent")
+	AgentJobs._ended["text-youtube-check-2"] = {"ok": false, "error": "the quota ran out"}
+	step._jobs[feed.folder()] = {"id": "text-youtube-check-2", "feed": feed, "stamp": feed.stamp()}
+	step._tries[feed.folder()] = 2
+	step.tick()
+	_ok(step.state(feed) == "failed" and step.said(feed) == "the quota ran out" and step.tags_of(feed).size() == 4,
+		"a run that fails past its retry says why, and what was made still goes up")
+	step._errors.clear()
+	feed.said = "The first card is the moon."
+	_ok(step.state(feed) == "missing" and step.tags_of(feed).is_empty() and step.said(feed).contains("written again"),
+		"once the words are written again the tags are not the episode's: not made, and none go up")
+	feed.said = "The first card is the tower."
+	_ok(step.state(feed) == "ready", "the same words again, and they are its own once more")
+	_ok(step.set_tags(feed, PackedStringArray(["the tower", "#cards", "a new one"])).is_empty() and step.fresh(feed)
+		and Array(step.own_of(feed)) == ["the tower", "cards", "a new one"], "edited by hand, cleaned, and still the episode's")
+	# THE BOX ON THE CARD
+	var ex = load("res://src/export/exporter.gd").new()
+	ex._build_ui()
+	var card = load("res://src/export/youtube_card.gd").new()
+	card.exporter = ex
+	card.values = func() -> Dictionary: return {"title": "The Show", "episode": "The Tower Falls"}
+	card.apply({"upload": true})
+	var mine = card.episode_steps()[0] if card.episode_steps().size() == 1 else null
+	_ok(mine != null and not mine.wanted() and not card.capture()["write_tags"], "the card offers its step, not wanted while the box is clear")
+	var base := {"tags": ["the note's"], "episode": feed}
+	_ok(card.meta(base).get("tags") == ["the note's"] and not card.meta(base).has("episode"),
+		"box clear: the note's own tags go up, and the episode itself is not sent on")
+	card._write_tags.button_pressed = true
+	_ok(card.capture()["write_tags"] and mine.wanted(), "ticked, its block says so and its step is wanted")
+	_ok(card.meta(base).get("tags") == ["the tower", "cards", "a new one"], "ticked: the episode's own go up in place of the note's")
+	feed.said = "Other words."
+	_ok(card.meta(base).get("tags") == ["the note's"], "control: tags written for other words do not go up")
+	feed.said = "The first card is the tower."
+	_ok(card.meta({"tags": ["the note's"]}).get("tags") == ["the note's"], "a panel that names no episode keeps its own")
+	card._refresh_tags()
+	_ok(not card._written.visible and card._tags_note.visible and card._tags_note.text.begins_with("Nothing on this note makes episodes"),
+		"with nothing listing the step, it says nothing on the note makes episodes")
+	mine.listed("the Episode card", feed)
+	card._refresh_tags()
+	_ok(card._written.visible and Array(card._written.get_tags()) == ["the tower", "cards", "a new one"]
+		and card._tags_note.text.contains("in place of the note's own") and card._tags_note.text.contains("the Episode card"),
+		"listed, the box has the episode's tags under it, and says where they are written again (%s)" % card._tags_note.text)
+	card._written.remove("a new one")
+	_ok(Array(mine.own_of(feed)) == ["the tower", "cards"], "a chip's × takes the tag off the episode")
+	feed.said = "Other words."
+	card._refresh_tags()
+	_ok(not card._written.visible and card._tags_note.text.contains("written again"), "words written again: no tags shown, and why (%s)" % card._tags_note.text)
+	card._write_tags.button_pressed = false
+	card._refresh_tags()
+	_ok(not card._written.visible and not card._tags_note.visible, "box clear: nothing of them")
+	card.free()
+	ex.free()
 	return true
 
 

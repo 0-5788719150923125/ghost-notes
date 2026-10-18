@@ -10,7 +10,8 @@ extends SceneTree
 ## - SIGN-IN: the "browser" (YouTube.open_url) reads the consent URL ghost built and answers at its
 ##   redirect - first a favicon and a stale tab carrying the wrong state, both turned away while the
 ##   wait goes on, then the code. The stand-in only trades the code for the right client, the same
-##   redirect and a verifier whose S256 is the challenge; the tokens are kept owner-only.
+##   redirect and a verifier whose S256 is the challenge; the sign-in asks which channel it is and is
+##   kept under it, owner-only, named by its handle.
 ## - UPLOAD: a file of six chunks, against a stand-in that drops one chunk (503), keeps half of
 ##   another and refuses a stale token (401): YouTube ends up with exactly the file's bytes - the
 ##   stand-in rejects any chunk that does not start where it stopped, so nothing is sent twice - the
@@ -20,9 +21,15 @@ extends SceneTree
 ## - RESUME: an upload stopped after two chunks, as a quit would stop it, waits in pending.json and a
 ##   fresh node finishes it from where the stand-in says it stopped; a session YouTube has forgotten
 ##   (404) starts over in a new one.
-## - A LAPSED SIGN-IN: a revoked refresh token is forgotten and read as signed out.
+## - A LAPSED SIGN-IN: a revoked refresh token is forgotten and read as signed out; its channel stays.
 ## - DECLINED: the consent screen's `access_denied` ends the sign-in, saying so.
-## - SIGN-OUT: the refresh token is revoked at Google and forgotten here; the client file stays.
+## - SIGN-OUT: the refresh token is revoked at Google and the channel forgotten here; the client
+##   file stays.
+## - TWO CHANNELS (2026-10-17, the user: "target different channels for different kinds of
+##   project"): a second channel signs in beside the first, each upload goes up as its own channel,
+##   and each sign-in is renewed through the client it was made with - another client imported since
+##   costs neither its sign-in; the control: a channel whose client Google does not know is signed out,
+##   kept on the list, and that client forgotten.
 ## - THE THUMBNAIL (2026-10-06, the user: "submit a screenshot from the 'intro' section of the
 ##   video"): ffmpeg takes a 1280x720 frame of a real video at the moment asked; queued with an
 ##   upload, it is set once the video is up; a channel YouTube will not let set one (403) still has
@@ -39,7 +46,10 @@ extends SceneTree
 ##   waiting and naming it; "Open the page again" finishes the same sign-in once the account is
 ##   allowed, and the box ticks; closing the dialog cancels; a refusal shows the hint and "Try again";
 ##   a newer sign-in replaces one still waiting without the old one reporting over it; ↻ on the
-##   playlist signs in again for the wider scope and loads them.
+##   playlist signs in again for the wider scope and loads them. A note with no channel takes the one
+##   its tick signs in to; "+" signs in to another, which becomes the note's and clears the playlist;
+##   a toggle switches back; a sign-in meant for one channel that lands on another fails, saying so,
+##   and the note's channel stays.
 
 const YouTube := preload("res://src/export/youtube.gd")
 const ROOT := "user://youtube_flow_check"
@@ -73,7 +83,7 @@ func _run() -> void:
 		quit(1))
 	var keep := {"root": YouTube.root, "upload": YouTube.upload_url, "revoke": YouTube.revoke_url,
 		"thumbnail": YouTube.thumbnail_url, "playlists": YouTube.playlists_url, "items": YouTube.playlist_items_url,
-		"chunk": YouTube.chunk, "backoff": YouTube.backoff_unit, "open": YouTube.open_url}
+		"channels": YouTube.channels_url, "chunk": YouTube.chunk, "backoff": YouTube.backoff_unit, "open": YouTube.open_url}
 	YouTube.root = ROOT
 	_wipe(ROOT)
 	_wipe(ROOT + "_files")
@@ -85,6 +95,7 @@ func _run() -> void:
 	YouTube.thumbnail_url = base + "/thumbnails/set"
 	YouTube.playlists_url = base + "/youtube/v3/playlists"
 	YouTube.playlist_items_url = base + "/youtube/v3/playlistItems"
+	YouTube.channels_url = base + "/youtube/v3/channels"
 	YouTube.chunk = CHUNK
 	YouTube.backoff_unit = 0.01
 	YouTube.open_url = _browser
@@ -96,7 +107,7 @@ func _run() -> void:
 	_yt = YouTube.new()
 	root.add_child(_yt)
 	for check in [_sign_in, _upload, _resume, _lapsed_session, _thumbnail, _frame, _lapsed_sign_in, _declined,
-			_sign_out, _playlists, _card_sign_in]:
+			_sign_out, _playlists, _two_channels, _card_sign_in]:
 		if not bool(await check.call()):
 			_ok(false, "a check stopped part way (script error?)")
 	_wipe(ROOT)
@@ -107,6 +118,7 @@ func _run() -> void:
 	YouTube.thumbnail_url = keep["thumbnail"]
 	YouTube.playlists_url = keep["playlists"]
 	YouTube.playlist_items_url = keep["items"]
+	YouTube.channels_url = keep["channels"]
 	YouTube.chunk = keep["chunk"]
 	YouTube.backoff_unit = keep["backoff"]
 	YouTube.open_url = keep["open"]
@@ -211,21 +223,25 @@ func _fetch(url: String) -> Dictionary:
 
 func _sign_in() -> bool:
 	_mode = "accept"
-	var err: String = await _yt.sign_in()
-	_ok(err == "", "the sign-in completes through the browser (%s)" % err)
+	_fake.account = "UC-arc"
+	var got: Dictionary = await _yt.sign_in()
+	var ch: Dictionary = got.get("channel", {})
+	_ok(not got.has("error") and ch.get("id") == "UC-arc", "the sign-in completes through the browser, on the channel chosen (%s)"
+		% got.get("error", ""))
 	_ok(_turned_away == [404, 400], "a favicon and a stale tab are turned away while the wait goes on (%s)" % str(_turned_away))
 	_ok(await _page_read() == 200, "the browser is told the sign-in worked")
-	_ok(_saw.get("scope") == YouTube.SCOPE and _saw.get("code_challenge_method") == "S256"
-		and _saw.get("access_type") == "offline" and _saw.get("prompt") == "consent"
+	_ok(_saw.get("scope") == YouTube.SCOPE + " " + YouTube.READ_SCOPE and _saw.get("code_challenge_method") == "S256"
+		and _saw.get("access_type") == "offline" and _saw.get("prompt") == "select_account consent"
 		and str(_saw.get("redirect_uri", "")).begins_with("http://127.0.0.1:"),
-		"the consent URL asks for uploads only, with PKCE, offline, at a loopback redirect")
-	_ok(_fake.exchanged == 1, "the code was traded once - for the right client, redirect and verifier")
-	_ok(YouTube.signed_in(), "the sign-in is kept")
-	var kept := ProjectSettings.globalize_path(ROOT.path_join("token.json"))
+		"the consent URL asks for uploads and the channel's name only, with PKCE, offline, the account chooser shown, at a loopback redirect")
+	_ok(_fake.exchanged == 1 and _fake.named == 1, "the code was traded once - for the right client, redirect and verifier - and the channel asked")
+	_ok(YouTube.signed_in("UC-arc") and YouTube.channels().map(func(c: Dictionary) -> String: return c["name"]) == ["@the-arc"]
+		and YouTube.channel("UC-arc").get("title") == "The Arc", "the sign-in is kept under its channel, named by its handle")
+	var kept := YouTube._channel_path("UC-arc")
 	_ok(OS.get_name() == "Windows" or FileAccess.get_unix_permissions(kept) == YouTube.OWNER_FILE,
-		"token.json is owner read/write only")
+		"the channel's sign-in is owner read/write only")
 	var before := _fake.refreshes
-	var tok: Dictionary = await _yt.access_token()
+	var tok: Dictionary = await _yt.access_token("UC-arc")
 	_ok(not str(tok.get("token", "")).is_empty() and _fake.refreshes == before,
 		"a live access token is handed out without asking Google again")
 	return true
@@ -239,7 +255,7 @@ func _upload() -> bool:
 	var body: Dictionary = YouTube.video_body({"title": "A <title>", "description": "Hello.\n\n0:00 Intro",
 		"tags": ["tarot", "Tarot", "pick a card"]})
 	var rec := ProjectSettings.globalize_path(ROOT + "_files/episode/youtube.json")
-	var res: Dictionary = await _yt.upload(file, body, rec)
+	var res: Dictionary = await _yt.upload(file, body, "UC-arc", rec)
 	_ok(not res.has("error"), "the upload finishes through a dropped chunk, a half-kept one and a stale token (%s)"
 		% res.get("error", ""))
 	var s: Dictionary = _fake.last()
@@ -259,7 +275,8 @@ func _upload() -> bool:
 	_ok(int(s.get("declared", 0)) == FileAccess.get_file_as_bytes(file).size() and s.get("type") == "video/mp4",
 		"the session was opened for the file's size and type")
 	_ok(res.get("url") == "https://youtu.be/%s" % s.get("id") and res.get("privacy") == "private"
-		and res.get("channel") == "Stand-in Channel", "the result names the video, its privacy and the channel")
+		and res.get("channel") == "The Arc" and res.get("channel_id") == "UC-arc" and s.get("account") == "UC-arc",
+		"it went up as the channel asked, and the result names the video, its privacy and the channel")
 	var ups: Array = YouTube.uploads_in(rec)
 	_ok(ups.size() == 1 and ups[0]["url"] == res.get("url") and ups[0]["file"] == file, "the upload is recorded for the mode")
 	_ok(YouTube.pending().is_empty(), "nothing is left pending")
@@ -274,7 +291,7 @@ func _resume() -> bool:
 	_fake.on_chunk = func(n: int) -> void:
 		if n == 2:
 			_yt.stop()               # as a quit would, part way through
-	var first: Dictionary = await _yt.upload(file, YouTube.video_body({"title": "Resumed"}), "")
+	var first: Dictionary = await _yt.upload(file, YouTube.video_body({"title": "Resumed"}), "UC-arc", "")
 	_fake.on_chunk = Callable()
 	_ok(first.has("error"), "a stopped upload says it stopped (%s)" % first.get("error", ""))
 	var p: Dictionary = YouTube.pending()
@@ -295,7 +312,7 @@ func _resume() -> bool:
 
 func _lapsed_session() -> bool:
 	var file := _video("three.mp4", CHUNK + 5)
-	var q: Dictionary = YouTube.queue(file, YouTube.video_body({"title": "Lapsed"}), "")
+	var q: Dictionary = YouTube.queue(file, YouTube.video_body({"title": "Lapsed"}), "UC-arc")
 	q["session"] = "http://127.0.0.1:%d/session/forgotten" % _fake.port
 	YouTube._write(YouTube._path("pending.json"), JSON.stringify(q), true)
 	var opened := _fake.sessions.size()
@@ -307,31 +324,33 @@ func _lapsed_session() -> bool:
 
 
 func _lapsed_sign_in() -> bool:
-	YouTube._expire()
+	YouTube._expire("UC-arc")
 	_fake.refresh_ok = false
-	var tok: Dictionary = await _yt.access_token()
+	var tok: Dictionary = await _yt.access_token("UC-arc")
 	_fake.refresh_ok = true
 	_ok(tok.has("signed_out") and str(tok.get("error", "")).contains("sign in again"),
 		"a revoked refresh token reads as signed out (%s)" % tok.get("error", ""))
-	_ok(not YouTube.signed_in(), "and is forgotten")
+	_ok(not YouTube.signed_in("UC-arc") and YouTube.channel("UC-arc").get("name") == "@the-arc",
+		"and is forgotten, its channel kept to sign in again")
 	return true
 
 
 func _declined() -> bool:
 	_mode = "deny"
-	var err: String = await _yt.sign_in()
+	var err := str((await _yt.sign_in()).get("error", ""))
 	_ok(err.contains("declined"), "a declined consent screen ends the sign-in, saying so (%s)" % err)
-	_ok(await _page_read() == 200 and not YouTube.signed_in(), "the browser hears it too, and nothing is kept")
+	_ok(await _page_read() == 200 and not YouTube.signed_in("UC-arc"), "the browser hears it too, and nothing is kept")
 	return true
 
 
 func _sign_out() -> bool:
 	_mode = "accept"
-	var err: String = await _yt.sign_in()
-	_ok(err == "" and YouTube.signed_in(), "signed in again (%s)" % err)
-	await _yt.sign_out()
-	_ok(not YouTube.signed_in(), "signing out forgets the sign-in")
-	_ok(_fake.revoked.has("rt-1"), "and revokes it at Google")
+	var got: Dictionary = await _yt.sign_in()
+	_ok(not got.has("error") and YouTube.signed_in("UC-arc") and YouTube.channels().size() == 1,
+		"signed in again, to the channel kept (%s)" % got.get("error", ""))
+	await _yt.sign_out("UC-arc")
+	_ok(not YouTube.signed_in("UC-arc") and YouTube.channels().is_empty(), "signing out forgets the sign-in, and the channel")
+	_ok(_fake.revoked.has("rt-UC-arc"), "and revokes it at Google")
 	_ok(YouTube.has_client(), "the client file stays imported")
 	return true
 
@@ -352,28 +371,29 @@ func _until(cond: Callable, ms := 5000) -> bool:
 ## The channel's playlists, and an upload that joins one.
 func _playlists() -> bool:
 	_mode = "accept"
-	YouTube.forget_token()
-	var err: String = await _yt.sign_in()
-	_ok(err == "" and YouTube.granted(YouTube.SCOPE) and not YouTube.granted(YouTube.PLAYLIST_SCOPE),
-		"a sign-in for uploads keeps what Google granted: uploads alone (%s)" % err)
+	_fake.account = "UC-arc"
+	var signed: Dictionary = await _yt.sign_in()
+	_ok(not signed.has("error") and YouTube.granted(YouTube.SCOPE, "UC-arc") and YouTube.granted(YouTube.READ_SCOPE, "UC-arc")
+		and not YouTube.granted(YouTube.PLAYLIST_SCOPE, "UC-arc"),
+		"a sign-in for uploads keeps what Google granted: uploads and the channel's name (%s)" % signed.get("error", ""))
 	var asked := _fake.listed
-	var got: Dictionary = await _yt.playlists()
+	var got: Dictionary = await _yt.playlists("UC-arc")
 	_ok(got.has("scope") and _fake.listed == asked, "it is not asked for playlists - nothing is sent (%s)" % got.get("error", ""))
-	err = await _yt.sign_in([YouTube.SCOPE, YouTube.PLAYLIST_SCOPE])
-	_ok(err == "" and _saw.get("scope") == YouTube.SCOPE + " " + YouTube.PLAYLIST_SCOPE and YouTube.granted(YouTube.PLAYLIST_SCOPE),
-		"a sign-in for both asks for both, and keeps both (%s)" % _saw.get("scope"))
-	got = await _yt.playlists()
+	signed = await _yt.sign_in([YouTube.SCOPE, YouTube.PLAYLIST_SCOPE])
+	_ok(not signed.has("error") and _saw.get("scope") == " ".join([YouTube.SCOPE, YouTube.PLAYLIST_SCOPE, YouTube.READ_SCOPE])
+		and YouTube.granted(YouTube.PLAYLIST_SCOPE, "UC-arc"), "a sign-in for both asks for both, and keeps both (%s)" % _saw.get("scope"))
+	got = await _yt.playlists("UC-arc")
 	var titles: Array = (got.get("playlists", []) as Array).map(func(p: Dictionary) -> String: return p["title"])
 	_ok(titles == ["Readings", "Shorts", "Drafts"] and _fake.listed - asked == 2,
 		"every page of the channel's playlists is listed (%s, %d pages)" % [str(titles), _fake.listed - asked])
 	var file := _video("six.mp4", CHUNK + 5)
-	YouTube.queue(file, YouTube.video_body({"title": "Into A Playlist", "privacy": "unlisted"}), "", "", "PL-2")
+	YouTube.queue(file, YouTube.video_body({"title": "Into A Playlist", "privacy": "unlisted"}), "UC-arc", "", "", "PL-2")
 	var res: Dictionary = await _yt.resume()
 	_ok(not res.has("error") and res.get("playlist") == "PL-2" and str(res.get("playlist_error", "x")).is_empty()
 		and _fake.items.get("PL-2", []) == [res.get("id")] and res.get("privacy") == "unlisted",
 		"an upload queued for a playlist joins it once it is up, as unlisted as asked (%s)" % res.get("playlist_error", res.get("error", "")))
 	var file2 := _video("seven.mp4", CHUNK + 6)
-	YouTube.queue(file2, YouTube.video_body({"title": "Lost Playlist"}), "", "", "PL-gone")
+	YouTube.queue(file2, YouTube.video_body({"title": "Lost Playlist"}), "UC-arc", "", "", "PL-gone")
 	var res2: Dictionary = await _yt.resume()
 	_ok(not res2.has("error") and str(res2.get("url", "")).begins_with("https://youtu.be/") and res2.get("playlist") == ""
 		and str(res2.get("playlist_error", "")).contains("playlist"),
@@ -381,10 +401,52 @@ func _playlists() -> bool:
 	return true
 
 
+## A second channel beside the first: each upload goes up as its own channel, and each sign-in is
+## renewed through the client it signed in with.
+func _two_channels() -> bool:
+	_mode = "accept"
+	_fake.account = "UC-ink"
+	var got: Dictionary = await _yt.sign_in()
+	_ok(not got.has("error") and (got.get("channel", {}) as Dictionary).get("id") == "UC-ink"
+		and YouTube.channels().map(func(c: Dictionary) -> String: return c["name"]) == ["@the-arc", "@the-ink"],
+		"a second channel signs in beside the first, listed after it (%s)" % got.get("error", ""))
+	var res: Dictionary = await _yt.upload(_video("ink.mp4", CHUNK + 3), YouTube.video_body({"title": "To The Ink"}), "UC-ink", "")
+	_ok(not res.has("error") and res.get("channel_id") == "UC-ink" and res.get("channel") == "The Ink"
+		and _fake.last().get("account") == "UC-ink", "an upload to the second channel goes up as that channel (%s)" % res.get("error", ""))
+	res = await _yt.upload(_video("arc.mp4", CHUNK + 4), YouTube.video_body({"title": "To The Arc"}), "UC-arc", "")
+	_ok(not res.has("error") and res.get("channel") == "The Arc" and _fake.last().get("account") == "UC-arc",
+		"and one to the first as the first: the two sign-ins kept apart")
+	# ANOTHER CLIENT IMPORTED SINCE - one the stand-in does not know - costs neither channel its sign-in
+	var base := "http://127.0.0.1:%d" % _fake.port
+	var stranger := _file("stranger.json", JSON.stringify({"installed": {"client_id": "stranger.apps.googleusercontent.com",
+		"project_id": "other-project", "auth_uri": base + "/auth", "token_uri": base + "/token", "client_secret": "other"}}))
+	_ok(YouTube.import_client(stranger) == "" and YouTube.signed_in("UC-arc") and YouTube.signed_in("UC-ink"),
+		"another client imports, and both channels stay signed in")
+	YouTube._expire("UC-ink")
+	var refreshes := _fake.refreshes
+	var tok: Dictionary = await _yt.access_token("UC-ink")
+	_ok(tok.has("token") and _fake.refreshes == refreshes + 1,
+		"a channel's sign-in is renewed through the client it signed in with, not the one imported since (%s)" % tok.get("error", ""))
+	# the control: a channel whose client Google does not know
+	var t: Dictionary = YouTube._token("UC-ink")
+	(t["client"] as Dictionary)["client_id"] = "stranger.apps.googleusercontent.com"
+	t["expires_at"] = 0.0
+	YouTube._write(YouTube._channel_path("UC-ink"), JSON.stringify(t), true)
+	tok = await _yt.access_token("UC-ink")
+	_ok(tok.has("bad_client") and tok.has("signed_out") and not YouTube.signed_in("UC-ink")
+		and YouTube.channel("UC-ink").get("name") == "@the-ink" and not YouTube.has_client() and YouTube.signed_in("UC-arc"),
+		"control: a client Google does not know signs that channel out, keeps it listed, and is forgotten as the client for new sign-ins (%s)"
+		% tok.get("error", ""))
+	_ok(YouTube.import_client(_client_path) == "", "the stand-in's client imports again")
+	return true
+
+
 ## The YouTube card's sign-in, through the exporter's dialog. The exporter is built by hand and its
 ## children moved into the tree: its _ready would clear a live render's override.cfg.
 func _card_sign_in() -> bool:
-	YouTube.forget_token()
+	for ch in YouTube.channels():
+		YouTube.forget_channel(String(ch["id"]))
+	_fake.account = "UC-arc"
 	var ex = load("res://src/export/exporter.gd").new()
 	ex._build_ui()
 	var holder := Node.new()
@@ -416,10 +478,12 @@ func _card_sign_in() -> bool:
 	_mode = "accept"
 	ex._on_sign_action("again")
 	_ok(await _until(func() -> bool: return ex._sign == "ok"), "the account allowed, the page opened again finishes the SAME sign-in")
-	_ok(_opens == 2 and YouTube.signed_in() and not ex._sign_dialog.visible and card.ticked(),
+	_ok(_opens == 2 and YouTube.signed_in("UC-arc") and not ex._sign_dialog.visible and card.ticked(),
 		"signed in: the dialog closes and the box is ticked")
+	_ok(card.capture()["channel"] == "UC-arc" and card.capture()["channel_name"] == "@the-arc",
+		"a note with no channel takes the one its tick signed in to")
 
-	YouTube.forget_token()
+	YouTube._drop_sign_in("UC-arc")
 	_mode = "block"
 	card._upload.button_pressed = false
 	card._upload.button_pressed = true
@@ -438,23 +502,47 @@ func _card_sign_in() -> bool:
 		"the dialog says so, with the test-user hint, and offers to try again")
 	_mode = "accept"
 	ex._on_sign_action("again")
-	_ok(await _until(func() -> bool: return ex._sign == "ok") and card.ticked() and YouTube.signed_in(),
+	_ok(await _until(func() -> bool: return ex._sign == "ok") and card.ticked() and YouTube.signed_in("UC-arc"),
 		"trying again signs in and ticks the box")
 
 	# the playlist: ↻ signs in again, asking to see them, then loads them
-	_ok(not YouTube.granted(YouTube.PLAYLIST_SCOPE), "the control: the sign-in may only upload")
+	_ok(not YouTube.granted(YouTube.PLAYLIST_SCOPE, "UC-arc"), "the control: the sign-in may only upload")
 	card.load_playlists()
 	_ok(await _until(func() -> bool: return card._playlist.item_count == 4), "↻ signs in again for the playlists' scope and loads them")
-	_ok(YouTube.granted(YouTube.PLAYLIST_SCOPE) and str(_saw.get("scope", "")).contains(YouTube.PLAYLIST_SCOPE),
+	_ok(YouTube.granted(YouTube.PLAYLIST_SCOPE, "UC-arc") and str(_saw.get("scope", "")).contains(YouTube.PLAYLIST_SCOPE),
 		"the second sign-in asked for the playlists")
 	card._playlist.select(2)
 	card._on_playlist(2)
 	_ok(card.capture()["playlist"] == "PL-2" and card.capture()["playlist_title"] == "Shorts", "a playlist picked is the block's")
 	var m: Dictionary = card.meta({"tags": []})
-	_ok(m.get("playlist") == "PL-2" and ex.scopes_for(m) == [YouTube.SCOPE, YouTube.PLAYLIST_SCOPE],
-		"and the upload asks for it, with the scope it needs")
+	_ok(m.get("playlist") == "PL-2" and m.get("channel") == "UC-arc" and ex.scopes_for(m) == [YouTube.SCOPE, YouTube.PLAYLIST_SCOPE],
+		"and the upload asks for it, with the scope it needs, on the note's channel")
 
-	YouTube.forget_token()
+	# "+": ANOTHER CHANNEL, which becomes the note's
+	_fake.account = "UC-ink"
+	card._on_add()
+	_ok(await _until(func() -> bool: return card.capture()["channel"] == "UC-ink"), "+ signs in to another channel, and it becomes the note's")
+	_ok(card.capture()["channel_name"] == "@the-ink" and card.capture()["playlist"] == "" and card.meta({"tags": []}).get("channel") == "UC-ink",
+		"named by its handle; the playlist, the other channel's, is cleared, and uploads go to it")
+	card._seen = []
+	card._refresh_account()
+	var chips: Array = card._chips.get_children().filter(func(c: Node) -> bool: return c != card._add)
+	_ok(chips.map(func(b: Button) -> String: return b.text) == ["@the-arc", "@the-ink"] and (chips[1] as Button).button_pressed,
+		"a toggle each, the new one pressed")
+	(chips[0] as Button).pressed.emit()
+	_ok(card.capture()["channel"] == "UC-arc" and ex._sign == "ok", "a toggle switches back, with nothing to sign in to")
+	# A SIGN-IN MEANT FOR ONE CHANNEL THAT LANDS ON ANOTHER
+	YouTube._drop_sign_in("UC-arc")
+	_fake.account = "UC-ink"
+	card._on_sign()
+	_ok(await _until(func() -> bool: return ex._sign == "failed"), "a sign-in meant for @the-arc that lands on @the-ink fails")
+	_ok(ex._sign_why.contains("@the-ink") and ex._sign_why.contains("@the-arc") and ex._sign_dialog.visible
+		and ex._sign_dialog.dialog_text.contains("@the-arc") and card.capture()["channel"] == "UC-arc" and not YouTube.signed_in("UC-arc"),
+		"saying where it landed and which to choose; the note's channel stays (%s)" % ex._sign_why)
+	_fake.account = "UC-arc"
+	ex._on_sign_action("again")
+	_ok(await _until(func() -> bool: return ex._sign == "ok") and YouTube.signed_in("UC-arc"), "trying again on that channel signs it in")
+
 	_mode = "block"
 	ex._check_sign_in()
 	await _frames(5)
@@ -474,7 +562,7 @@ func _thumbnail() -> bool:
 	var file := _video("four.mp4", CHUNK + 99)
 	var jpg := _video("four.thumbnail.jpg", 4096)
 	_fake.thumb_forbidden = false
-	YouTube.queue(file, YouTube.video_body({"title": "With A Thumbnail"}), "", jpg)
+	YouTube.queue(file, YouTube.video_body({"title": "With A Thumbnail"}), "UC-arc", "", jpg)
 	var res: Dictionary = await _yt.resume()
 	var id := str(res.get("id", ""))
 	_ok(not res.has("error") and res.get("thumbnail") == true and str(res.get("thumbnail_error", "x")).is_empty(),
@@ -482,7 +570,7 @@ func _thumbnail() -> bool:
 	_ok(_fake.thumbs.get(id, PackedByteArray()) == FileAccess.get_file_as_bytes(jpg), "YouTube got exactly the image, for that video")
 	var file2 := _video("five.mp4", CHUNK + 7)
 	_fake.thumb_forbidden = true
-	YouTube.queue(file2, YouTube.video_body({"title": "No Thumbnail Allowed"}), "", jpg)
+	YouTube.queue(file2, YouTube.video_body({"title": "No Thumbnail Allowed"}), "UC-arc", "", jpg)
 	var res2: Dictionary = await _yt.resume()
 	_fake.thumb_forbidden = false
 	_ok(not res2.has("error") and str(res2.get("url", "")).begins_with("https://youtu.be/") and res2.get("thumbnail") == false
@@ -526,9 +614,12 @@ class FakeGoogle extends Node:
 	var thumbs := {}           # video id -> the image bytes set as its thumbnail
 	var thumb_forbidden := false
 	var asked := ""            # the scopes the last consent URL asked for: what a sign-in is granted
-	var granted := ""
+	var account := "UC-arc"    # the channel the person picks on the next consent page
+	const CHANNELS := {"UC-arc": {"handle": "@the-arc", "title": "The Arc"}, "UC-ink": {"handle": "@the-ink", "title": "The Ink"}}
+	var named := 0             # times a sign-in's channel was asked
 	var listed := 0            # pages of playlists asked for
-	var playlists := [{"id": "PL-1", "title": "Readings"}, {"id": "PL-2", "title": "Shorts"}, {"id": "PL-3", "title": "Drafts"}]
+	var playlists := {"UC-arc": [{"id": "PL-1", "title": "Readings"}, {"id": "PL-2", "title": "Shorts"}, {"id": "PL-3", "title": "Drafts"}],
+		"UC-ink": [{"id": "PL-9", "title": "Ink Drafts"}]}
 	var items := {}            # playlist id -> the video ids added to it
 	var sessions := {}         # id -> {meta, declared, type, data, id}
 	var order: Array = []      # session ids, oldest first
@@ -538,7 +629,8 @@ class FakeGoogle extends Node:
 	var port := 0
 	var _tcp := TCPServer.new()
 	var _conns: Array = []
-	var _live := {}            # access tokens it honors
+	var _live := {}            # access tokens it honors -> {account, scope}
+	var _refresh := {}         # refresh tokens it honors -> {account, scope}
 	var _issued := 0
 
 	func start() -> int:
@@ -582,8 +674,10 @@ class FakeGoogle extends Node:
 		if method == "POST" and path == "/revoke":
 			revoked.append(str(YouTube.query_of("/?" + body.get_string_from_utf8()).get("token", "")))
 			return {"status": 200}
-		if not _live.has(str(headers.get("authorization", "")).trim_prefix("Bearer ")):
+		var who: Dictionary = _live.get(str(headers.get("authorization", "")).trim_prefix("Bearer "), {})
+		if who.is_empty():
 			return _json(401, {"error": {"code": 401, "message": "Invalid Credentials", "errors": [{"reason": "authError"}]}})
+		var scopes := str(who["scope"]).split(" ")
 		if method == "POST" and path.begins_with("/upload/youtube/v3/videos?"):
 			var q := YouTube.query_of(path)
 			if q.get("uploadType") != "resumable":
@@ -593,7 +687,7 @@ class FakeGoogle extends Node:
 				return _json(400, {"error": {"code": 400, "message": "bad metadata"}})
 			var id := "vid-%d" % (sessions.size() + 1)
 			sessions[id] = {"id": id, "meta": j.data, "parts": str(q.get("part", "")), "declared": int(str(headers.get("x-upload-content-length", "0"))),
-				"type": str(headers.get("x-upload-content-type", "")), "data": PackedByteArray()}
+				"type": str(headers.get("x-upload-content-type", "")), "data": PackedByteArray(), "account": who["account"]}
 			order.append(id)
 			return {"status": 200, "headers": {"Location": "http://127.0.0.1:%d/session/%s" % [port, id]}}
 		if method == "POST" and path.begins_with("/thumbnails/set?"):
@@ -605,16 +699,25 @@ class FakeGoogle extends Node:
 				return _json(400, {"error": {"code": 400, "message": "bad thumbnail request"}})
 			thumbs[str(tq.get("videoId", ""))] = body
 			return _json(200, {"kind": "youtube#thumbnailSetResponse", "items": [{"default": {"url": "x"}}]})
+		if method == "GET" and path.begins_with("/youtube/v3/channels?"):
+			named += 1
+			var cq := YouTube.query_of(path)
+			if cq.get("mine") != "true" or not (scopes.has(YouTube.READ_SCOPE) or scopes.has(YouTube.PLAYLIST_SCOPE)):
+				return _json(403, {"error": {"code": 403, "message": "Request had insufficient authentication scopes.",
+					"errors": [{"reason": "insufficientPermissions"}]}})
+			var c: Dictionary = CHANNELS[who["account"]]
+			return _json(200, {"kind": "youtube#channelListResponse", "items": [{"id": who["account"],
+				"snippet": {"title": c["title"], "customUrl": c["handle"]}}]})
 		if method == "GET" and path.begins_with("/youtube/v3/playlists?"):
-			return _playlists(YouTube.query_of(path))
+			return _playlists(YouTube.query_of(path), who)
 		if method == "POST" and path.begins_with("/youtube/v3/playlistItems?"):
 			var j := JSON.new()
-			if not granted.split(" ").has(YouTube.PLAYLIST_SCOPE) or j.parse(body.get_string_from_utf8()) != OK:
+			if not scopes.has(YouTube.PLAYLIST_SCOPE) or j.parse(body.get_string_from_utf8()) != OK:
 				return _json(403, {"error": {"code": 403, "message": "Request had insufficient authentication scopes.",
 					"errors": [{"reason": "insufficientPermissions"}]}})
 			var snip: Dictionary = (j.data as Dictionary).get("snippet", {})
 			var list := str(snip.get("playlistId", ""))
-			if not playlists.any(func(p: Dictionary) -> bool: return p["id"] == list):
+			if not (playlists[who["account"]] as Array).any(func(p: Dictionary) -> bool: return p["id"] == list):
 				return _json(404, {"error": {"code": 404, "message": "Playlist not found.", "errors": [{"reason": "playlistNotFound"}]}})
 			var vids: Array = items.get(list, [])
 			vids.append(str((snip.get("resourceId", {}) as Dictionary).get("videoId", "")))
@@ -633,15 +736,17 @@ class FakeGoogle extends Node:
 						or YouTube.challenge(str(f.get("code_verifier", ""))) != challenge:
 					return _json(400, {"error": "invalid_grant", "error_description": "Bad Request"})
 				exchanged += 1
-				granted = asked if not asked.is_empty() else YouTube.SCOPE
-				return _json(200, {"access_token": _issue(), "expires_in": 3599, "refresh_token": "rt-1",
+				var granted := asked if not asked.is_empty() else YouTube.SCOPE
+				var rt := "rt-" + account
+				_refresh[rt] = {"account": account, "scope": granted}
+				return _json(200, {"access_token": _issue(_refresh[rt]), "expires_in": 3599, "refresh_token": rt,
 					"scope": granted, "token_type": "Bearer"})
 			"refresh_token":
-				if f.get("refresh_token") != "rt-1" or not refresh_ok:
+				var held: Dictionary = _refresh.get(str(f.get("refresh_token", "")), {})
+				if held.is_empty() or not refresh_ok:
 					return _json(400, {"error": "invalid_grant", "error_description": "Token has been expired or revoked."})
 				refreshes += 1
-				return _json(200, {"access_token": _issue(), "expires_in": 3599, "scope": granted if not granted.is_empty() else YouTube.SCOPE,
-					"token_type": "Bearer"})
+				return _json(200, {"access_token": _issue(held), "expires_in": 3599, "scope": held["scope"], "token_type": "Bearer"})
 		return _json(400, {"error": "unsupported_grant_type"})
 
 	func _chunk(id: String, range_text: String, body: PackedByteArray) -> Dictionary:
@@ -674,32 +779,36 @@ class FakeGoogle extends Node:
 	func _done(s: Dictionary) -> Dictionary:
 		var meta: Dictionary = s["meta"]
 		return _json(201, {"kind": "youtube#video", "id": s["id"],
-			"snippet": {"title": meta["snippet"]["title"], "channelTitle": "Stand-in Channel"},
+			"snippet": {"title": meta["snippet"]["title"], "channelId": s["account"],
+				"channelTitle": (CHANNELS[s["account"]] as Dictionary)["title"]},
 			"status": {"privacyStatus": meta["status"]["privacyStatus"], "uploadStatus": "uploaded"}})
 
-	## Two playlists a page, so a channel's three take two pages.
-	func _playlists(q: Dictionary) -> Dictionary:
+	## Two playlists a page, so a channel's three take two pages: those of the channel [param who]
+	## signs in to.
+	func _playlists(q: Dictionary, who: Dictionary) -> Dictionary:
 		listed += 1
-		if q.get("mine") != "true" or not granted.split(" ").has(YouTube.PLAYLIST_SCOPE):
+		if q.get("mine") != "true" or not str(who["scope"]).split(" ").has(YouTube.PLAYLIST_SCOPE):
 			return _json(403, {"error": {"code": 403, "message": "Request had insufficient authentication scopes.",
 				"errors": [{"reason": "insufficientPermissions"}]}})
 		var from := int(str(q.get("pageToken", "0")))
 		var page: Array = []
-		for p in playlists.slice(from, from + 2):
+		var all: Array = playlists[who["account"]]
+		for p in all.slice(from, from + 2):
 			page.append({"id": p["id"], "snippet": {"title": p["title"]}, "status": {"privacyStatus": "public"},
 				"contentDetails": {"itemCount": 1}})
 		var out := {"kind": "youtube#playlistListResponse", "items": page}
-		if from + 2 < playlists.size():
+		if from + 2 < all.size():
 			out["nextPageToken"] = str(from + 2)
 		return _json(200, out)
 
 	func _incomplete(held: int) -> Dictionary:
 		return {"status": 308, "headers": {"Range": "bytes=0-%d" % (held - 1)} if held > 0 else {}}
 
-	func _issue() -> String:
+	## An access token for [param held]'s channel, with its scopes.
+	func _issue(held: Dictionary) -> String:
 		_issued += 1
 		var t := "at-%d" % _issued
-		_live[t] = true
+		_live[t] = held
 		return t
 
 	func _json(status: int, value: Variant) -> Dictionary:

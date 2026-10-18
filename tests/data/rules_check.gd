@@ -9,8 +9,8 @@ extends SceneTree
 ##   known keys (when, say, insert, include, each); every `include` names a part that exists - against a
 ##   file naming one that does not, which the check finds.
 ## - EVERY PROMPT RENDERS WHOLE: the producer, the designer, the set dresser (with tools and without), a
-##   reader's intro, card and close, every picture, and what Grok is told beside them (a writer's
-##   pictures, the painter's system prompt and references), over a fixture plan, leave nothing unfilled
+##   reader's intro, card and close, every picture, what Grok is told beside them (a writer's
+##   pictures, the painter's system prompt and references) and an episode's YouTube tags, over a fixture plan, leave nothing unfilled
 ##   ([member Rules.missing] empty, no `{{` left) - against a part asked for a name nobody gives, which is
 ##   said.
 ## - THE RULES ARE EVERY SHOW'S (the user, 2026-10-08: "there shouldn't be ANY tarot-gated rules or logic in
@@ -232,6 +232,10 @@ func _prompts() -> bool:
 	texts.append(Rules.say("agents/grok.painter"))
 	texts.append(ImageGen.Grok.compose({"dir": "/x", "prompt": CardPrompts.card_image(look, card, "a cliff", "/x.png", true, 2),
 		"refs": [shown, shown]})["message"])
+	# what the YouTube card's step tells the show's writer of an episode, for its tags
+	var tags_prompt: Dictionary = load("res://src/export/youtube_tags.gd").prompt("Show", "An Episode", "a description",
+		PackedStringArray(["a", "b"]), "the words of a reading")
+	texts.append(String(tags_prompt["system"]) + "\n" + String(tags_prompt["prompt"]))
 	_ok(Rules.missing.is_empty(), "rendering every prompt left these unfilled: %s" % str(Rules.missing.slice(0, 6)))
 	for t in texts:
 		_ok(_kinds_named(t).is_empty(), "a prompt over a fixture naming no kind of card names one: %s" % ", ".join(_kinds_named(t)))

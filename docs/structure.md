@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 304 references inside a folder, 750 down the stack, 0 up it.
+Between scripts today: 307 references inside a folder, 768 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -18,13 +18,13 @@ Between scripts today: 304 references inside a folder, 750 down the stack, 0 up 
 | `cards/` | Cards | 9 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
 | `table/` | The set | 21 | `media`, `scene_kit`, `audio`, `data` |
 | `reading/` | The voice's workspaces | 5 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
-| `export/` | Export | 3 | `show`, `voice`, `ui`, `agents`, `stage`, `audio`, `platform`, `data` |
+| `export/` | Export | 4 | `show`, `voice`, `ui`, `notes`, `agents`, `stage`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
 | `show/` | The show | 8 | `media`, `ui`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `media/` | Media | 19 | `voice`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `voice/` | Synthesis (voice) | 13 | `audio`, `platform`, `data` |
 | `ui/` | The panel kit | 11 | `notes`, `agents`, `platform`, `data` |
-| `notes/` | Notes | 5 | `stage`, `platform`, `data` |
+| `notes/` | Notes | 7 | `agents`, `stage`, `platform`, `data` |
 | `agents/` | Agents | 6 | `platform`, `data` |
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
 | `stage/` | Storyboards & stage | 4 | `geometry`, `render`, `audio`, `data` |
@@ -98,9 +98,9 @@ Every piece of writing and painting ghost asks an AI for: who writes (TextGen) a
 
 ### `notes/` - Notes
 
-The note as a file: where notes live, a document kept in step with its file, the registry of what a note can carry (`Components`), and the registry of the marks a script may carry (`ScriptMarks`).
+The note as a file: where notes live, a document kept in step with its file, the registry of what a note can carry (`Components`), the registry of the marks a script may carry (`ScriptMarks`), and where a note's cards meet without naming each other: an episode one card makes (`EpisodeFeed`) and the steps the others add to it (`EpisodeStep`).
 
-[`components`](../src/notes/components.gd), [`doc_source`](../src/notes/doc_source.gd), [`note_store`](../src/notes/note_store.gd), [`save_mark`](../src/notes/save_mark.gd), [`script_marks`](../src/notes/script_marks.gd)
+[`components`](../src/notes/components.gd), [`doc_source`](../src/notes/doc_source.gd), [`episode_feed`](../src/notes/episode_feed.gd), [`episode_step`](../src/notes/episode_step.gd), [`note_store`](../src/notes/note_store.gd), [`save_mark`](../src/notes/save_mark.gd), [`script_marks`](../src/notes/script_marks.gd)
 
 ### `ui/` - The panel kit
 
@@ -136,7 +136,7 @@ The card that keeps a note's storyboard and the dock it opens: a strip of entrie
 
 Rendering a session to video (bake + Movie Maker, background processes) and uploading it to YouTube. Under the workspaces: a reading and a show of cards export a take and fill in an upload, and the exporter names neither.
 
-[`exporter`](../src/export/exporter.gd), [`youtube`](../src/export/youtube.gd), [`youtube_card`](../src/export/youtube_card.gd)
+[`exporter`](../src/export/exporter.gd), [`youtube`](../src/export/youtube.gd), [`youtube_card`](../src/export/youtube_card.gd), [`youtube_tags`](../src/export/youtube_tags.gd)
 
 ### `reading/` - The voice's workspaces
 

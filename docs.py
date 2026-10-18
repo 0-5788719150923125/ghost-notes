@@ -158,8 +158,10 @@ FOLDERS: List[Tuple[str, str, str]] = [
         "notes",
         "Notes",
         "The note as a file: where notes live, a document kept in step with its file, the "
-        "registry of what a note can carry (`Components`), and the registry of the marks a "
-        "script may carry (`ScriptMarks`).",
+        "registry of what a note can carry (`Components`), the registry of the marks a "
+        "script may carry (`ScriptMarks`), and where a note's cards meet without naming each "
+        "other: an episode one card makes (`EpisodeFeed`) and the steps the others add to it "
+        "(`EpisodeStep`).",
     ),
     (
         "ui",

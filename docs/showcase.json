@@ -1,5 +1,5 @@
 {
-	"digest": "9aaccc547bcb604041bbee5a8d7ae3652c18dd7ad63e40b8c96fa4dd89e0a49e",
+	"digest": "f3f7c1bb016ff5496c05c5e01e4d1b7b72ed5029cf4c100907bfd8ff3de2144d",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -64,6 +64,7 @@
 		"res://src/export/exporter.gd",
 		"res://src/export/youtube.gd",
 		"res://src/export/youtube_card.gd",
+		"res://src/export/youtube_tags.gd",
 		"res://src/geometry/branch3d.gd",
 		"res://src/geometry/contour.gd",
 		"res://src/geometry/crystal.gd",
@@ -109,6 +110,8 @@
 		"res://src/motion/wave_field.gd",
 		"res://src/notes/components.gd",
 		"res://src/notes/doc_source.gd",
+		"res://src/notes/episode_feed.gd",
+		"res://src/notes/episode_step.gd",
 		"res://src/notes/note_store.gd",
 		"res://src/notes/save_mark.gd",
 		"res://src/notes/script_marks.gd",
@@ -232,6 +235,7 @@
 		"res://src/ui/script_writer.gd",
 		"res://src/ui/shell.gd",
 		"res://src/ui/side_panel.gd",
+		"res://src/ui/tag_field.gd",
 		"res://src/ui/volume_knob.gd",
 		"res://src/voice/delivery.gd",
 		"res://src/voice/phonemes.gd",

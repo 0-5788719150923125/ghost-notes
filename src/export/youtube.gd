@@ -9,12 +9,22 @@ extends Node
 ## SIGNING IN is Google's flow for installed apps ([method sign_in]): the system browser opens
 ## Google's consent page, Google sends the browser back to a one-shot listener on 127.0.0.1 (a port
 ## the system picks) with a code, and the code is traded for tokens together with its PKCE verifier.
-## Only the upload scope is asked for, until a note's YouTube card wants a playlist: listing the
-## channel's playlists and adding a video to one take the wider [constant PLAYLIST_SCOPE], asked
-## for by a sign-in of its own at that moment and never before ([method granted]). The refresh
-## token is kept beside the client, owner read/write only, with the scopes Google granted, so later
-## uploads need no browser until it lapses - after 7 days while the Cloud project's consent screen
-## is in "Testing".
+## Only the upload scope is asked for, and the channel's name ([constant READ_SCOPE]), until a note's
+## YouTube card wants a playlist: listing the channel's playlists and adding a video to one take the
+## wider [constant PLAYLIST_SCOPE], asked for by a sign-in of its own at that moment and never before
+## ([method granted]). The refresh token is kept owner read/write only, with the scopes Google
+## granted, so later uploads need no browser until it lapses - after 7 days while the Cloud project's
+## consent screen is in "Testing".
+##
+## A SIGN-IN IS A CHANNEL (the user, 2026-10-17: "manage multiple clients, so that I could target
+## different channels for different kinds of project ... each client should be named after the
+## channel it uploads to"): each is kept under the channel it landed on, `channels/<id>.json`, and
+## named by what YouTube calls that channel - its handle, else its title - asked once as it signs in
+## ([method sign_in]; Google's account chooser is always shown, so another channel can be picked).
+## It keeps a copy of the client it signed in with, so a client imported later (another Cloud
+## project, for its own quota) is the one NEW sign-ins use and costs no channel its sign-in. A lapsed
+## sign-in keeps its channel, to sign in again; a note's YouTube card picks the channel its uploads go
+## to, and the waiting upload names its own.
 ##
 ## AN UPLOAD IS RESUMABLE ([method resume], Google's protocol): a session is opened with the video's
 ## metadata, the file goes up in chunks, a chunk that fails asks YouTube how much arrived and carries
@@ -31,7 +41,11 @@ const SCOPE := "https://www.googleapis.com/auth/youtube.upload"
 ## What a playlist needs on top: `playlists.list` (mine) and `playlistItems.insert` take nothing
 ## narrower than managing the account.
 const PLAYLIST_SCOPE := "https://www.googleapis.com/auth/youtube"
+## What naming a sign-in's channel takes (`channels.list`, mine): the upload scope may not read it.
+const READ_SCOPE := "https://www.googleapis.com/auth/youtube.readonly"
 const ROOT := "user://youtube"
+## The folder under [constant ROOT] each channel's sign-in is kept in.
+const CHANNELS := "channels"
 ## Every upload goes up private unless the note's card says otherwise, says it is not made for kids,
 ## declares itself altered or synthetic content (the voice is synthesized, and a mode's pictures may
 ## be painted by a model), and declares NO PAID PROMOTION - left unsaid, YouTube Studio showed the
@@ -79,6 +93,7 @@ static var revoke_url := "https://oauth2.googleapis.com/revoke"
 static var thumbnail_url := "https://www.googleapis.com/upload/youtube/v3/thumbnails/set"
 static var playlists_url := "https://www.googleapis.com/youtube/v3/playlists"
 static var playlist_items_url := "https://www.googleapis.com/youtube/v3/playlistItems"
+static var channels_url := "https://www.googleapis.com/youtube/v3/channels"
 static var chunk := CHUNK
 ## Seconds per step of the wait between failures; a gate shortens it.
 static var backoff_unit := 1.0
@@ -151,60 +166,129 @@ static func has_client() -> bool:
 
 
 ## Import the client file at [param path]: checked, then kept - owner read/write only - for every
-## later sign-in. "" on success, else why not. A different client ends the sign-in made with the
-## old one, which Google would refuse anyway.
+## later sign-in. "" on success, else why not. A channel already signed in keeps the client it
+## signed in with: only new sign-ins use this one.
 static func import_client(path: String) -> String:
 	if not FileAccess.file_exists(path):
 		return "that file does not exist"
 	var c := parse_client(FileAccess.get_file_as_string(path))
 	if c.has("error"):
 		return String(c["error"])
-	var was := client()
 	var keep := {"installed": {"client_id": c["client_id"], "client_secret": c["client_secret"],
 		"project_id": c["project_id"], "auth_uri": c["auth_uri"], "token_uri": c["token_uri"]}}
 	var err := _write(_path("client.json"), JSON.stringify(keep, "\t"), true)
 	if not err.is_empty():
 		return err
-	if str(was.get("client_id", "")) != String(c["client_id"]):
-		forget_token()
 	print("ghost: YouTube - imported the Google client of project %s" % c["project_id"])
 	return ""
 
 
 static func forget_client() -> void:
 	DirAccess.remove_absolute(_path("client.json"))
-	forget_token()
+
+
+# --- the channels --------------------------------------------------------------------------------
+
+## THE CHANNELS KEPT HERE, in the order they were first signed in to: `[{id, handle, title, name,
+## signed_in}]` - `name` is what the card calls one ([method name_of]), and `signed_in` is false
+## once its sign-in has lapsed or been refused (the channel stays, to sign in again).
+static func channels() -> Array:
+	var out: Array = []
+	var dir := _path(CHANNELS)
+	if not DirAccess.dir_exists_absolute(dir):
+		return out
+	for f in DirAccess.get_files_at(dir):
+		if f.get_extension() != "json":
+			continue
+		var ch := _channel_of(_read_json(dir.path_join(f)))
+		if not ch.is_empty():
+			out.append(ch)
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["added"]) < float(b["added"]) if float(a["added"]) != float(b["added"]) \
+			else String(a["id"]) < String(b["id"]))
+	return out
+
+
+## The channel [param id] as kept here (see [method channels]), {} when it is not.
+static func channel(id: String) -> Dictionary:
+	return _channel_of(_token(id)) if not id.is_empty() else {}
+
+
+static func _channel_of(t: Dictionary) -> Dictionary:
+	var ch: Dictionary = t.get("channel", {}) if t.get("channel") is Dictionary else {}
+	if str(ch.get("id", "")).is_empty():
+		return {}
+	return {"id": str(ch["id"]), "handle": str(ch.get("handle", "")), "title": str(ch.get("title", "")),
+		"name": name_of(ch), "signed_in": not str(t.get("refresh_token", "")).is_empty(),
+		"added": float(t.get("added", 0.0))}
+
+
+## What a channel is called: its handle (`@...`), else its title, else its id.
+static func name_of(ch: Dictionary) -> String:
+	for k in ["handle", "title", "id"]:
+		var s := str(ch.get(k, "")).strip_edges()
+		if not s.is_empty():
+			return s
+	return ""
 
 
 # --- the sign-in ---------------------------------------------------------------------------------
 
-## Whether a sign-in is kept. It may still have lapsed: [method access_token] finds out.
-static func signed_in() -> bool:
-	return not str(_token().get("refresh_token", "")).is_empty()
+## Whether channel [param id]'s sign-in is kept. It may still have lapsed: [method access_token]
+## finds out.
+static func signed_in(id: String) -> bool:
+	return not str(_token(id).get("refresh_token", "")).is_empty()
 
 
-static func forget_token() -> void:
-	DirAccess.remove_absolute(_path("token.json"))
+## Forget channel [param id] altogether: its sign-in and its place on the list.
+static func forget_channel(id: String) -> void:
+	if not id.is_empty():
+		DirAccess.remove_absolute(_channel_path(id))
 
 
-## WHETHER THE KEPT SIGN-IN MAY DO [param scope]: Google says which scopes it granted with every
-## token, and they are kept with it. A sign-in kept before that was written down asked for the
-## upload scope alone, so that is all it has.
-static func granted(scope: String) -> bool:
-	if not signed_in():
+## Forget channel [param id]'s sign-in, keeping the channel: it lapsed, or Google refused it.
+static func _drop_sign_in(id: String) -> void:
+	var t := _token(id)
+	if t.is_empty():
+		return
+	for k in ["refresh_token", "access_token", "scope", "expires_at"]:
+		t.erase(k)
+	_write(_channel_path(id), JSON.stringify(t, "\t"), true)
+
+
+## WHETHER CHANNEL [param id]'S SIGN-IN MAY DO [param scope]: Google says which scopes it granted
+## with every token, and they are kept with it.
+static func granted(scope: String, id: String) -> bool:
+	if not signed_in(id):
 		return false
-	var t := _token()
-	var have := str(t.get("scope", SCOPE)).split(" ", false)
-	return have.has(scope)
+	return str(_token(id).get("scope", "")).split(" ", false).has(scope)
 
 
-## [param scopes] that the kept sign-in lacks.
-static func missing_scopes(scopes: Array) -> Array:
-	return scopes.filter(func(s: String) -> bool: return not granted(s))
+## [param scopes] that channel [param id]'s sign-in lacks.
+static func missing_scopes(scopes: Array, id: String) -> Array:
+	return scopes.filter(func(s: String) -> bool: return not granted(s, id))
 
 
-static func _token() -> Dictionary:
-	return _read_json(_path("token.json"))
+static func _token(id: String) -> Dictionary:
+	return _read_json(_channel_path(id)) if not id.is_empty() else {}
+
+
+static func _channel_path(id: String) -> String:
+	return _path(CHANNELS.path_join(id.validate_filename() + ".json"))
+
+
+## Keep a sign-in to channel [param ch] (`{id, handle, title}`), made with client [param c] and given
+## [param tok] (Google's token reply, [param scope] what it granted): where it was on the list, it
+## stays.
+static func _keep(ch: Dictionary, c: Dictionary, tok: Dictionary, scope: String) -> String:
+	var id := str(ch.get("id", ""))
+	var was := _token(id)
+	return _write(_channel_path(id), JSON.stringify({
+		"channel": {"id": id, "handle": str(ch.get("handle", "")), "title": str(ch.get("title", ""))},
+		"client": {"client_id": c["client_id"], "client_secret": c["client_secret"], "token_uri": c["token_uri"]},
+		"refresh_token": str(tok.get("refresh_token", "")), "access_token": str(tok.get("access_token", "")),
+		"scope": scope, "expires_at": _now() + float(tok.get("expires_in", 0)) - 60.0,
+		"added": float(was.get("added", _now()))}, "\t"), true)
 
 
 ## A PKCE code verifier: 64 characters of base64url from the system's cryptographic randomness
@@ -227,12 +311,13 @@ static func base64url(bytes: PackedByteArray) -> String:
 
 ## Google's consent page for client [param c], answered at [param redirect], asking for
 ## [param scopes]. Offline access with the consent screen always shown, because only that returns a
-## refresh token every time.
+## refresh token every time - and the account chooser always shown before it, or a browser signed in
+## to one Google account could never add another's channel.
 static func auth_url(c: Dictionary, redirect: String, code_challenge: String, state: String,
 		scopes: Array = [SCOPE]) -> String:
 	return String(c["auth_uri"]) + "?" + form({"client_id": c["client_id"], "redirect_uri": redirect,
 		"response_type": "code", "scope": " ".join(PackedStringArray(scopes)), "code_challenge": code_challenge,
-		"code_challenge_method": "S256", "state": state, "access_type": "offline", "prompt": "consent"})
+		"code_challenge_method": "S256", "state": state, "access_type": "offline", "prompt": "select_account consent"})
 
 
 ## [param fields] as `application/x-www-form-urlencoded` - also a URL's query - in their order.
@@ -257,60 +342,96 @@ static func query_of(path: String) -> Dictionary:
 
 
 ## Sign in through the browser, asking for [param scopes] (the upload's alone unless a playlist is
-## wanted), and keep the tokens: "" once signed in, else why not. The browser is waited for up to
-## [constant SIGN_IN_TIMEOUT]; [method stop_sign_in] ends the wait.
+## wanted) and the channel's name, and keep the sign-in under the channel it landed on - whichever
+## the person chose: `{channel: {id, handle, title}}` once signed in, else `{error}`. The browser is
+## waited for up to [constant SIGN_IN_TIMEOUT]; [method stop_sign_in] ends the wait.
 ##
 ## A NEWER SIGN-IN REPLACES ONE STILL WAITING. Google's "Access blocked" page (an account that is
 ## not one of a Testing project's test users) is a dead end that never comes back here, and a page
 ## can open behind another window - refusing a second attempt left nothing to do but wait out the
 ## first one.
-func sign_in(scopes: Array = [SCOPE]) -> String:
+func sign_in(scopes: Array = [SCOPE]) -> Dictionary:
 	var c := client()
 	if c.has("error"):
-		return String(c["error"])
+		return {"error": String(c["error"])}
+	var ask: Array = scopes.duplicate()
+	if not ask.has(READ_SCOPE):
+		ask.append(READ_SCOPE)
 	_wait += 1
 	var mine := _wait
 	var tcp := TCPServer.new()
 	if tcp.listen(0, "127.0.0.1") != OK:
 		phase = ""
 		sign_in_url = ""
-		return "Ghost Notes could not listen on 127.0.0.1 for Google's answer"
+		return {"error": "Ghost Notes could not listen on 127.0.0.1 for Google's answer"}
 	var redirect := "http://127.0.0.1:%d" % tcp.get_local_port()
 	var v := verifier()
 	var state := Crypto.new().generate_random_bytes(16).hex_encode()
-	sign_in_url = auth_url(c, redirect, challenge(v), state, scopes)
+	sign_in_url = auth_url(c, redirect, challenge(v), state, ask)
 	phase = "signing_in"
 	reopen_sign_in()
 	print("ghost: YouTube - signing in through the browser (Google answers on %s)" % redirect)
 	var got: Dictionary = await _await_answer(tcp, state, mine)
 	tcp.stop()
 	if mine != _wait:
-		return String(got.get("error", "the sign-in was replaced by a newer one"))
+		return {"error": String(got.get("error", "the sign-in was replaced by a newer one"))}
 	sign_in_url = ""
 	if got.has("error"):
 		phase = ""
-		return String(got["error"])
-	var res: Dictionary = await _send(String(c["token_uri"]), _form_headers(), HTTPClient.METHOD_POST,
-		form({"code": got["code"], "client_id": c["client_id"], "client_secret": c["client_secret"],
-			"redirect_uri": redirect, "grant_type": "authorization_code", "code_verifier": v}).to_utf8_buffer(), 30.0)
+		return {"error": String(got["error"])}
+	var out: Dictionary = await _trade(c, str(got["code"]), redirect, v, ask)
 	if mine == _wait:
 		phase = ""
+	return out
+
+
+## The browser's [param code] traded for tokens, the channel they sign in to asked, and the sign-in
+## kept under it: `{channel}`, or `{error}`.
+func _trade(c: Dictionary, code: String, redirect: String, v: String, ask: Array) -> Dictionary:
+	var res: Dictionary = await _send(String(c["token_uri"]), _form_headers(), HTTPClient.METHOD_POST,
+		form({"code": code, "client_id": c["client_id"], "client_secret": c["client_secret"],
+			"redirect_uri": redirect, "grant_type": "authorization_code", "code_verifier": v}).to_utf8_buffer(), 30.0)
 	if res.has("error"):
-		return "Google could not be reached to finish the sign-in (%s)" % res["error"]
+		return {"error": "Google could not be reached to finish the sign-in (%s)" % res["error"]}
 	var j: Variant = res.get("json")
 	if int(res["code"]) != 200 or not (j is Dictionary):
-		return error_text(int(res["code"]), res["body"])
+		return {"error": error_text(int(res["code"]), res["body"])}
 	var tok: Dictionary = j
 	if str(tok.get("refresh_token", "")).is_empty():
-		return "Google signed in without a refresh token - sign in again"
+		return {"error": "Google signed in without a refresh token - sign in again"}
+	var ch: Dictionary = await _whose(str(tok.get("access_token", "")))
+	if ch.has("error"):
+		return ch
 	# what Google granted, which may be less than was asked: the consent page lets a scope be unticked
-	var err := _write(_path("token.json"), JSON.stringify({"refresh_token": tok["refresh_token"],
-		"access_token": str(tok.get("access_token", "")),
-		"scope": str(tok.get("scope", " ".join(PackedStringArray(scopes)))),
-		"expires_at": _now() + float(tok.get("expires_in", 0)) - 60.0}, "\t"), true)
-	if err.is_empty():
-		print("ghost: YouTube - signed in")
-	return err
+	var err := _keep(ch, c, tok, str(tok.get("scope", " ".join(PackedStringArray(ask)))))
+	if not err.is_empty():
+		return {"error": err}
+	print("ghost: YouTube - signed in to %s (%s)" % [name_of(ch), ch["id"]])
+	return {"channel": ch}
+
+
+## WHOSE SIGN-IN THIS IS: the channel access token [param access] belongs to - `{id, handle, title}`,
+## the handle as YouTube gives it - or `{error}`.
+func _whose(access: String) -> Dictionary:
+	var r: Dictionary = await _send(channels_url + "?" + form({"part": "snippet", "mine": "true"}),
+		PackedStringArray(["Authorization: Bearer " + access]), HTTPClient.METHOD_GET, PackedByteArray(), 30.0)
+	if r.has("error"):
+		return {"error": "YouTube could not be reached to name the channel (%s)" % r["error"]}
+	var code := int(r["code"])
+	if code == 403 and error_text(code, r["body"]).contains("insufficient"):
+		return {"error": "Google signed in without letting Ghost Notes see which channel it is - sign in again and allow it"}
+	var j: Variant = r.get("json")
+	if code != 200 or not (j is Dictionary):
+		return {"error": error_text(code, r["body"])}
+	var items: Variant = (j as Dictionary).get("items", [])
+	if not (items is Array) or (items as Array).is_empty() or not ((items as Array)[0] is Dictionary):
+		return {"error": "this Google account has no YouTube channel yet"}
+	var it: Dictionary = (items as Array)[0]
+	var snip: Dictionary = it.get("snippet", {}) if it.get("snippet") is Dictionary else {}
+	if str(it.get("id", "")).is_empty():
+		return {"error": "YouTube named no channel for this sign-in"}
+	return {"id": str(it["id"]), "handle": str(snip.get("customUrl", "")).strip_edges(),
+		"title": str(snip.get("title", "")).strip_edges()}
 
 
 ## Open the waiting sign-in's page again - it may have opened behind a window, or Google may have
@@ -409,22 +530,25 @@ static func _drop(conns: Array) -> void:
 	conns.clear()
 
 
-## A live access token: `{token}`, renewed from the kept refresh token when it has run out. Else
-## `{error}`, with `signed_out` when only signing in again can help - the refresh token has lapsed
-## or was revoked, and is forgotten - and `bad_client` when Google no longer knows the client (it is
-## forgotten too, so the next upload asks for a new file).
-func access_token() -> Dictionary:
-	var t := _token()
+## A live access token for channel [param id]: `{token}`, renewed from its refresh token - through
+## the client it signed in with - when it has run out. Else `{error}`, with `signed_out` when only
+## signing in again can help: the refresh token has lapsed or was revoked, or Google no longer knows
+## the client (`bad_client` too). Either way the channel stays, its sign-in forgotten; a client
+## Google no longer knows is forgotten as well when it is the one kept for new sign-ins, so the next
+## asks for a new file.
+func access_token(id: String) -> Dictionary:
+	var t := _token(id)
 	var refresh := str(t.get("refresh_token", ""))
 	if refresh.is_empty():
-		return {"error": "not signed in to YouTube", "signed_out": true}
+		return {"error": "not signed in to that YouTube channel", "signed_out": true}
 	if not str(t.get("access_token", "")).is_empty() and _now() < float(t.get("expires_at", 0.0)):
 		return {"token": str(t["access_token"])}
-	var c := client()
-	if c.has("error"):
-		return {"error": String(c["error"]), "bad_client": true}
+	var c: Dictionary = t.get("client", {}) if t.get("client") is Dictionary else {}
+	if str(c.get("client_id", "")).is_empty() or not _google_endpoint(str(c.get("token_uri", ""))):
+		_drop_sign_in(id)
+		return {"error": "the sign-in keeps no Google client - sign in again", "signed_out": true}
 	var res: Dictionary = await _send(String(c["token_uri"]), _form_headers(), HTTPClient.METHOD_POST,
-		form({"client_id": c["client_id"], "client_secret": c["client_secret"], "refresh_token": refresh,
+		form({"client_id": c["client_id"], "client_secret": c.get("client_secret", ""), "refresh_token": refresh,
 			"grant_type": "refresh_token"}).to_utf8_buffer(), 30.0)
 	if res.has("error"):
 		return {"error": "Google could not be reached (%s)" % res["error"]}
@@ -432,11 +556,14 @@ func access_token() -> Dictionary:
 	if int(res["code"]) != 200 or not (j is Dictionary) or str((j as Dictionary).get("access_token", "")).is_empty():
 		match oauth_error(res["body"]):
 			"invalid_grant":
-				forget_token()
+				_drop_sign_in(id)
 				return {"error": "the YouTube sign-in has lapsed or was revoked - sign in again", "signed_out": true}
 			"invalid_client", "unauthorized_client":
-				forget_client()
-				return {"error": "Google no longer accepts the imported client file - import it again", "bad_client": true}
+				_drop_sign_in(id)
+				if str(client().get("client_id", "")) == str(c["client_id"]):
+					forget_client()
+				return {"error": "Google no longer accepts the client this channel signed in with - sign in again",
+					"signed_out": true, "bad_client": true}
 		return {"error": error_text(int(res["code"]), res["body"])}
 	t["access_token"] = str(j["access_token"])
 	t["expires_at"] = _now() + float(j.get("expires_in", 3600)) - 60.0
@@ -444,27 +571,29 @@ func access_token() -> Dictionary:
 		t["refresh_token"] = str(j["refresh_token"])
 	if not str(j.get("scope", "")).is_empty():
 		t["scope"] = str(j["scope"])
-	_write(_path("token.json"), JSON.stringify(t, "\t"), true)
+	_write(_channel_path(id), JSON.stringify(t, "\t"), true)
 	return {"token": str(t["access_token"])}
 
 
-## The kept access token, marked spent: the next [method access_token] renews it.
-static func _expire() -> void:
-	var t := _token()
+## Channel [param id]'s access token, marked spent: the next [method access_token] renews it.
+static func _expire(id: String) -> void:
+	var t := _token(id)
 	if t.is_empty():
 		return
 	t["expires_at"] = 0.0
-	_write(_path("token.json"), JSON.stringify(t, "\t"), true)
+	_write(_channel_path(id), JSON.stringify(t, "\t"), true)
 
 
-## Forget the sign-in, and ask Google to revoke it - best effort: it is forgotten here either way.
-func sign_out() -> void:
-	var refresh := str(_token().get("refresh_token", ""))
-	forget_token()
+## Forget channel [param id] - its sign-in and its place on the list - and ask Google to revoke the
+## sign-in: best effort, it is forgotten here either way.
+func sign_out(id: String) -> void:
+	var t := _token(id)
+	var refresh := str(t.get("refresh_token", ""))
+	forget_channel(id)
 	if refresh.is_empty():
 		return
 	await _send(revoke_url, _form_headers(), HTTPClient.METHOD_POST, form({"token": refresh}).to_utf8_buffer(), 15.0)
-	print("ghost: YouTube - signed out")
+	print("ghost: YouTube - signed out of %s" % name_of(_channel_of(t)))
 
 
 ## End a sign-in's wait, or an upload after its current chunk (it stays resumable).
@@ -475,7 +604,7 @@ func stop() -> void:
 
 # --- the upload ----------------------------------------------------------------------------------
 
-## The upload waiting to be made or finished: `{file, size, body, record, session, at}`, or {}.
+## The upload waiting to be made or finished: `{file, size, body, channel, record, session, at}`, or {}.
 static func pending() -> Dictionary:
 	return _read_json(_path("pending.json"))
 
@@ -484,38 +613,52 @@ static func forget_pending() -> void:
 	DirAccess.remove_absolute(_path("pending.json"))
 
 
-## Queue [param file] to go up as [param body] (see [method video_body]), its result recorded in
-## [param record], [param thumbnail] (an image) set as its thumbnail and the video added to the
-## playlist [param playlist], when those are given: the pending upload, or `{error}`. Queued before
-## anything is sent, so an upload stopped at any point - even before the sign-in - waits to be
-## resumed.
-static func queue(file: String, body: Dictionary, record := "", thumbnail := "", playlist := "") -> Dictionary:
+## Queue [param file] to go up to channel [param channel] as [param body] (see [method video_body]),
+## its result recorded in [param record], [param thumbnail] (an image) set as its thumbnail and the
+## video added to the playlist [param playlist], when those are given: the pending upload, or
+## `{error}`. Queued before anything is sent, so an upload stopped at any point - even before the
+## sign-in - waits to be resumed. One queued with no channel (its note had none yet) goes to the
+## channel its sign-in lands on ([method aim_pending]).
+static func queue(file: String, body: Dictionary, channel: String, record := "", thumbnail := "",
+		playlist := "") -> Dictionary:
 	var size := _size_of(file)
 	if size <= 0:
 		return {"error": "the video file is missing or empty"}
-	var p := {"file": file, "size": size, "body": body, "record": record, "thumbnail": thumbnail,
-		"playlist": playlist, "session": "", "at": _now()}
+	var p := {"file": file, "size": size, "body": body, "channel": channel, "record": record,
+		"thumbnail": thumbnail, "playlist": playlist, "session": "", "at": _now()}
 	var err := _write(_path("pending.json"), JSON.stringify(p, "\t"), true)
 	return {"error": err} if not err.is_empty() else p
 
 
+## The waiting upload that names no channel, sent to channel [param id]. One that names a channel
+## keeps it: a session is opened for the channel it names.
+static func aim_pending(id: String) -> void:
+	var p := pending()
+	if p.is_empty() or not str(p.get("channel", "")).is_empty() or id.is_empty():
+		return
+	p["channel"] = id
+	_write(_path("pending.json"), JSON.stringify(p, "\t"), true)
+
+
 ## Queue and upload (see [method queue] and [method resume]).
-func upload(file: String, body: Dictionary, record := "") -> Dictionary:
-	var p := queue(file, body, record)
+func upload(file: String, body: Dictionary, channel: String, record := "") -> Dictionary:
+	var p := queue(file, body, channel, record)
 	if p.has("error"):
 		return p
 	return await resume()
 
 
-## Send the pending upload: from where YouTube says it stopped, or from the start in a new session
-## when the old one has lapsed (they last about a week). The finished video's
-## `{id, url, privacy, title, channel, file, at}`, or `{error}` - and then it still waits.
+## Send the pending upload to its channel: from where YouTube says it stopped, or from the start in a
+## new session when the old one has lapsed (they last about a week). The finished video's
+## `{id, url, privacy, title, channel, channel_id, file, at}`, or `{error}` - and then it still waits.
 func resume() -> Dictionary:
 	if phase == "uploading":
 		return {"error": "an upload is already running"}
 	var p := pending()
 	if p.is_empty():
 		return {"error": "there is no upload to resume"}
+	if str(p.get("channel", "")).is_empty():
+		return {"error": "the upload has no channel to go to yet - sign in to one"}
 	if _size_of(str(p.get("file", ""))) != int(p.get("size", -1)):
 		forget_pending()
 		return {"error": "the video file has changed or gone since - export it again"}
@@ -531,6 +674,7 @@ func resume() -> Dictionary:
 
 func _send_chunks(p: Dictionary) -> Dictionary:
 	var size := int(p["size"])
+	var ch := str(p["channel"])
 	var f := FileAccess.open(str(p["file"]), FileAccess.READ)
 	if f == null:
 		return {"error": "the video file could not be read"}
@@ -560,7 +704,7 @@ func _send_chunks(p: Dictionary) -> Dictionary:
 			offset = 0
 			ask = false
 		if ask:
-			var st: Dictionary = await _status(session, size)
+			var st: Dictionary = await _status(session, size, ch)
 			if st.has("done"):
 				return await _finish(p, st["done"])
 			if st.has("gone"):
@@ -581,7 +725,7 @@ func _send_chunks(p: Dictionary) -> Dictionary:
 			tries += 1
 			why = "YouTube holds the whole file but has not finished the video"
 			continue
-		var tok: Dictionary = await access_token()
+		var tok: Dictionary = await access_token(ch)
 		if tok.has("error"):
 			if tok.has("signed_out") or tok.has("bad_client"):
 				return tok
@@ -614,7 +758,7 @@ func _send_chunks(p: Dictionary) -> Dictionary:
 				progress = 1.0
 				return await _finish(p, r.get("json"))
 			401:
-				_expire()
+				_expire(ch)
 				tries += 1
 				why = "YouTube refused the sign-in"
 			404, 410:
@@ -627,7 +771,7 @@ func _send_chunks(p: Dictionary) -> Dictionary:
 ## Open an upload session for [param p] with its metadata: `{session}` (its address), or `{error}`
 ## - with `retry` when trying again may help.
 func _open_session(p: Dictionary) -> Dictionary:
-	var tok: Dictionary = await access_token()
+	var tok: Dictionary = await access_token(str(p["channel"]))
 	if tok.has("error"):
 		return tok if tok.has("signed_out") or tok.has("bad_client") else {"retry": true, "error": tok["error"]}
 	# the parts named are exactly the body's, so a part added to video_body is written, never dropped
@@ -640,7 +784,7 @@ func _open_session(p: Dictionary) -> Dictionary:
 		return {"retry": true, "error": r["error"]}
 	var code := int(r["code"])
 	if code == 401:
-		_expire()
+		_expire(str(p["channel"]))
 		return {"retry": true, "error": "YouTube refused the sign-in"}
 	if code in RETRY:
 		return {"retry": true, "error": "YouTube answered HTTP %d" % code}
@@ -652,10 +796,11 @@ func _open_session(p: Dictionary) -> Dictionary:
 	return {"session": at}
 
 
-## Where an upload stands: `{offset}` (YouTube holds that many bytes), `{done: video}`, `{gone}` (the
-## session has lapsed), or `{error}` - with `retry` when asking again may help.
-func _status(session: String, size: int) -> Dictionary:
-	var tok: Dictionary = await access_token()
+## Where an upload to channel [param ch] stands: `{offset}` (YouTube holds that many bytes),
+## `{done: video}`, `{gone}` (the session has lapsed), or `{error}` - with `retry` when asking again
+## may help.
+func _status(session: String, size: int, ch: String) -> Dictionary:
+	var tok: Dictionary = await access_token(ch)
 	if tok.has("error"):
 		return tok if tok.has("signed_out") or tok.has("bad_client") else {"retry": true, "error": tok["error"]}
 	var r: Dictionary = await _send(session, PackedStringArray(["Authorization: Bearer " + str(tok["token"]),
@@ -671,7 +816,7 @@ func _status(session: String, size: int) -> Dictionary:
 		404, 410:
 			return {"gone": true}
 		401:
-			_expire()
+			_expire(ch)
 			return {"retry": true, "error": "YouTube refused the sign-in"}
 	if code in RETRY:
 		return {"retry": true, "error": "YouTube answered HTTP %d" % code}
@@ -689,16 +834,17 @@ func _finish(p: Dictionary, video: Variant) -> Dictionary:
 		return {"error": "YouTube finished the upload but named no video - look in YouTube Studio"}
 	var snip: Dictionary = v.get("snippet", {}) if v.get("snippet") is Dictionary else {}
 	var stat: Dictionary = v.get("status", {}) if v.get("status") is Dictionary else {}
+	var ch := str(p.get("channel", ""))
 	var out := {"id": id, "url": "https://youtu.be/" + id, "privacy": str(stat.get("privacyStatus", "")),
-		"title": str(snip.get("title", "")), "channel": str(snip.get("channelTitle", "")),
+		"title": str(snip.get("title", "")), "channel": str(snip.get("channelTitle", "")), "channel_id": ch,
 		"file": str(p.get("file", "")), "at": Time.get_datetime_string_from_system(true)}
 	var thumb := str(p.get("thumbnail", ""))
 	if not thumb.is_empty():
-		out["thumbnail_error"] = await set_thumbnail(id, thumb)
+		out["thumbnail_error"] = await set_thumbnail(id, thumb, ch)
 		out["thumbnail"] = String(out["thumbnail_error"]).is_empty()
 	var list := str(p.get("playlist", ""))
 	if not list.is_empty():
-		out["playlist_error"] = await add_to_playlist(id, list)
+		out["playlist_error"] = await add_to_playlist(id, list, ch)
 		out["playlist"] = list if String(out["playlist_error"]).is_empty() else ""
 	var rec := str(p.get("record", ""))
 	if not rec.is_empty():
@@ -709,15 +855,15 @@ func _finish(p: Dictionary, video: Variant) -> Dictionary:
 	return out
 
 
-## Set the image at [param path] (JPEG or PNG) as video [param video_id]'s thumbnail: "" when it is
-## set, else why not. A channel YouTube has not verified (youtube.com/verify) may not set custom
-## thumbnails at all.
-func set_thumbnail(video_id: String, path: String) -> String:
+## Set the image at [param path] (JPEG or PNG) as the thumbnail of video [param video_id], on channel
+## [param ch]: "" when it is set, else why not. A channel YouTube has not verified
+## (youtube.com/verify) may not set custom thumbnails at all.
+func set_thumbnail(video_id: String, path: String, ch: String) -> String:
 	var bytes := FileAccess.get_file_as_bytes(path) if FileAccess.file_exists(path) else PackedByteArray()
 	if bytes.is_empty():
 		return "the thumbnail image is missing"
 	for attempt in 2:
-		var tok: Dictionary = await access_token()
+		var tok: Dictionary = await access_token(ch)
 		if tok.has("error"):
 			return str(tok["error"])
 		var r: Dictionary = await _send(thumbnail_url + "?uploadType=media&videoId=" + video_id.uri_encode(),
@@ -728,7 +874,7 @@ func set_thumbnail(video_id: String, path: String) -> String:
 			return "YouTube could not be reached (%s)" % r["error"]
 		var code := int(r["code"])
 		if code == 401 and attempt == 0:
-			_expire()
+			_expire(ch)
 			continue
 		if code == 200:
 			print("ghost: YouTube - thumbnail set for %s" % video_id)
@@ -741,17 +887,17 @@ func set_thumbnail(video_id: String, path: String) -> String:
 	return "YouTube refused the sign-in"
 
 
-## THE CHANNEL'S PLAYLISTS, every page of them: `{playlists: [{id, title, privacy, count}]}` in
-## YouTube's order, or `{error}` - with `scope` when the kept sign-in may not list them (sign in
-## again with [constant PLAYLIST_SCOPE]) and `signed_out` when there is no sign-in at all.
-func playlists() -> Dictionary:
-	if not granted(PLAYLIST_SCOPE):
+## CHANNEL [param ch]'S PLAYLISTS, every page of them: `{playlists: [{id, title, privacy, count}]}`
+## in YouTube's order, or `{error}` - with `scope` when its sign-in may not list them (sign in again
+## with [constant PLAYLIST_SCOPE]) and `signed_out` when it has no sign-in at all.
+func playlists(ch: String) -> Dictionary:
+	if not granted(PLAYLIST_SCOPE, ch):
 		return {"error": "the YouTube sign-in may upload but not see playlists", "scope": true,
-			"signed_out": not signed_in()}
+			"signed_out": not signed_in(ch)}
 	var out: Array = []
 	var page := ""
 	for attempt in 40:              # 50 a page: two thousand playlists is past any channel's
-		var tok: Dictionary = await access_token()
+		var tok: Dictionary = await access_token(ch)
 		if tok.has("error"):
 			return tok
 		var url := playlists_url + "?" + form({"part": "snippet,status,contentDetails", "mine": "true",
@@ -762,7 +908,7 @@ func playlists() -> Dictionary:
 			return {"error": "YouTube could not be reached (%s)" % r["error"]}
 		var code := int(r["code"])
 		if code == 401:
-			_expire()
+			_expire(ch)
 			continue
 		if code == 403 and error_text(code, r["body"]).contains("insufficient"):
 			return {"error": "the YouTube sign-in may upload but not see playlists", "scope": true}
@@ -784,15 +930,15 @@ func playlists() -> Dictionary:
 	return {"playlists": out}
 
 
-## Add video [param video_id] to the end of playlist [param playlist_id]: "" when it is there, else
-## why not.
-func add_to_playlist(video_id: String, playlist_id: String) -> String:
-	if not granted(PLAYLIST_SCOPE):
+## Add video [param video_id] to the end of playlist [param playlist_id], on channel [param ch]: ""
+## when it is there, else why not.
+func add_to_playlist(video_id: String, playlist_id: String, ch: String) -> String:
+	if not granted(PLAYLIST_SCOPE, ch):
 		return "the YouTube sign-in may upload but not add to playlists - sign in again from the YouTube card"
 	var body := JSON.stringify({"snippet": {"playlistId": playlist_id,
 		"resourceId": {"kind": "youtube#video", "videoId": video_id}}}).to_utf8_buffer()
 	for attempt in 2:
-		var tok: Dictionary = await access_token()
+		var tok: Dictionary = await access_token(ch)
 		if tok.has("error"):
 			return str(tok["error"])
 		var r: Dictionary = await _send(playlist_items_url + "?part=snippet", PackedStringArray([
@@ -802,7 +948,7 @@ func add_to_playlist(video_id: String, playlist_id: String) -> String:
 			return "YouTube could not be reached (%s)" % r["error"]
 		var code := int(r["code"])
 		if code == 401 and attempt == 0:
-			_expire()
+			_expire(ch)
 			continue
 		if code == 200:
 			print("ghost: YouTube - %s added to playlist %s" % [video_id, playlist_id])
@@ -812,7 +958,7 @@ func add_to_playlist(video_id: String, playlist_id: String) -> String:
 
 
 ## The uploads recorded in [param path] - a mode's record file - oldest first:
-## `[{id, url, privacy, title, channel, file, at}]`.
+## `[{id, url, privacy, title, channel, channel_id, file, at}]`.
 static func uploads_in(path: String) -> Array:
 	var d := _read_json(path)
 	return d["uploads"] if d.get("uploads") is Array else []
@@ -1008,6 +1154,22 @@ static func tags_length(tags: PackedStringArray) -> int:
 	return n
 
 
+## Which of [param tags] do not go up ([method fit_tags]), and why: `{tag: reason}` - what a tag field
+## dims, saying so.
+static func left_out(tags: PackedStringArray) -> Dictionary:
+	var going := {}
+	for t in fit_tags(Array(tags)):
+		going[t.to_lower()] = true
+	var out := {}
+	for t in tags:
+		var c := clean_tag(t).to_lower()
+		if c.is_empty():
+			out[t] = "nothing is left of it once cleaned"
+		elif not going.has(c):
+			out[t] = "YouTube takes %d characters of tags, and they are used up" % TAGS_MAX
+	return out
+
+
 # --- the wire ------------------------------------------------------------------------------------
 
 ## The value of header [param name] in [param headers] (`Name: value` lines, any case), "" if absent.
@@ -1128,7 +1290,8 @@ static func _read_json(path: String) -> Dictionary:
 
 
 ## [param text] into [param path] ATOMICALLY - a temp file beside it, renamed over - and with
-## [param private], owner read/write only (its folder too) before a byte of it is written.
+## [param private], owner read/write only (its folder too, and [member root] above a channel's)
+## before a byte of it is written.
 static func _write(path: String, text: String, private := false) -> String:
 	var dir := path.get_base_dir()
 	DirAccess.make_dir_recursive_absolute(dir)
@@ -1136,6 +1299,9 @@ static func _write(path: String, text: String, private := false) -> String:
 		return "could not make the folder %s" % dir
 	if private:
 		FileAccess.set_unix_permissions(dir, OWNER_DIR)
+		var top := ProjectSettings.globalize_path(root)
+		if dir != top and dir.begins_with(top + "/"):
+			FileAccess.set_unix_permissions(top, OWNER_DIR)
 	var tmp := path + ".tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:

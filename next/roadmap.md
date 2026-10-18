@@ -103,6 +103,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **Folders that say what names what**
       Built 2026-10-13: `src/` is 22 folders, one level deep, stacked bottom to top, held by `python docs.py --check`; the 48 references that pointed up are turned; the tests mirror the folders and `scripts/check.sh --for` runs what a change can reach; a gate that passes over a runtime error fails; the scene roster is `scenes/roster.gd`; the table's shuffle and three of Masking's subsystems are scripts of their own. Built 2026-10-15 (the second round, for a live mode): the show's clock is handed to what it mounts (`ShowFeed.show_time()`...); nothing extends `ReadingPanel` - Cards is a card (`EpisodeCard`) that hands the reading its walk, its bed and its publish; the reading's pure rules are `Splice` and `Delivery`; `table.gd` has its plan, card poses, light and box as parts (2,841 lines, from 6,797); Masking's audio effect and undo are parts; every layer and force setting is a row in its class's `FIELDS`, held to the code both ways. Open: the reading's stateful half (the cast, the audition, the sliding window) as a voice card; placing the things on the table, and the plan as a function of the episode; Masking's banners sorted, then its lanes, markers and autosave, the shared transport and one timeline kit; field tables for the scenes. See [structure.md](structure.md).
 
+- [x] **YouTube uploads from every template**
+      A YouTube component (2026-10-07): "+" on every note's panel attaches it, and its card holds the upload - after export or not, a title template, the visibility, a playlist - with the Google client and the sign-in. Masking's own export does not upload. MANY CHANNELS (2026-10-17): a sign-in per channel, named by its handle, each keeping the client it signed in with; the card picks the note's channel with a toggle per channel, and "+" signs in to another. EACH EPISODE'S OWN TAGS (2026-10-18): "Write each episode's tags" on the card adds a Tags step to the card that makes the episodes (Cards, Proof) - an `EpisodeStep` the panel hands over, so neither card names the other - written by the show's writer from the episode's words, with ✓ and ⟳ on its row, and going up in place of the note's own. Next steps another card could add the same way: a thumbnail painted for the episode, a description, a short cut.
+
 - [x] **Notes, not modes (2026-10-06)**
       Ghost Notes opens on a notes list. A note is a markdown file with components attached; the six modes are templates over one registry; every panel section is a colored card; one transport plays every timed show; one bottom-right row; one frontmatter block per component; every mode is left and entered again through one teardown; and every component declares what it asks of the platform. Steps 0-8 of [notes.md](notes.md).
 
@@ -114,9 +117,6 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 
 - [x] **Tarot, now Cards (2026-10-04 to 10-06)**
       An automatic tarot reading: agents plan, paint and write each episode one card at a time, the table shuffles, deals and lights itself, a set dresser builds the reader's table through Ghost Notes' own tools, and an export can go straight to YouTube.
-
-- [x] **YouTube uploads from every template**
-      A YouTube component (2026-10-07): "+" on every note's panel attaches it, and its card holds the upload - after export or not, a title template, the visibility, a playlist - with the Google client and the sign-in. Masking's own export does not upload.
 
 - [x] **Pronunciation as data**
       A `names:` block, homographs decided by part of speech and clause tense (eSpeak asked again, no word lists), `pronounce_audit.gd` before a render, and a probe that asks each voice checkpoint whether it says `read` right.

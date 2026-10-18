@@ -203,10 +203,12 @@ Every piece of writing and painting ghost asks an AI for: who writes (TextGen) a
 
 ### `notes/` - Notes
 
-The note as a file: where notes live, a document kept in step with its file, the registry of what a note can carry (`Components`), and the registry of the marks a script may carry (`ScriptMarks`).
+The note as a file: where notes live, a document kept in step with its file, the registry of what a note can carry (`Components`), the registry of the marks a script may carry (`ScriptMarks`), and where a note's cards meet without naming each other: an episode one card makes (`EpisodeFeed`) and the steps the others add to it (`EpisodeStep`).
 
 - [`components.gd`](../src/notes/components.gd) **Components** - the parts a note is made of (next/notes.md, "A component"). One registry shaped like `Medium`'s: each entry says what the component is, what it needs and what it gives, the components it brings with it, the room it takes in a note, what it asks of the platform (`Capabilities`), which groups of the ...
 - [`doc_source.gd`](../src/notes/doc_source.gd) **DocSource** - where a reading's words come from: the editor alone, or the file they are saved in.
+- [`episode_feed.gd`](../src/notes/episode_feed.gd) **EpisodeFeed** - one episode a card makes, as the steps the note's other cards add to it read it (`EpisodeStep`).
+- [`episode_step.gd`](../src/notes/episode_step.gd) **EpisodeStep** - a step one card adds to the episodes another card makes: a row in that card's list of steps, with its ✓ once made and its ⟳ to make it again, made by Generate along with the rest (the user, 2026-10-18: "add an interface that would allow other cards (like the YouTube one) to hook-in to that list, to ...
 - [`note_store.gd`](../src/notes/note_store.gd) **NoteStore** - where notes live (next/notes.md step 8, "Where do notes live?"): a DEFAULT FOLDER, and every other folder or file the user points Ghost Notes at - "it's not realistic to prevent people from sourcing their own content from other projects, git repos, etc." One small interface (list, create, add, and ...
 - [`save_mark.gd`](../src/notes/save_mark.gd) **SaveMark** - the small mark beside a script's file name that says where its words stand with the file: turning while a change made here waits for its quiet period, a tick that flashes the moment the change is in the file, an amber mark when a write was refused, a hollow ring when the script is saved nowhere.
 - [`script_marks.gd`](../src/notes/script_marks.gd) **ScriptMarks** - every authoring mark a script may carry, registered with what it does.
@@ -299,6 +301,7 @@ Rendering a session to video (bake + Movie Maker, background processes) and uplo
 - [`exporter.gd`](../src/export/exporter.gd) **Exporter** - render the visualization to a video, in the background, in two steps.
 - [`youtube.gd`](../src/export/youtube.gd) **youtube** - YouTube - sign in to the author's YouTube channel and upload a finished export to it.
 - [`youtube_card.gd`](../src/export/youtube_card.gd) **YouTubeCard** - the YouTube component's card (2026-10-07, the user: "add a little '+' button near those labels... 'youtube' should be an option. When we add it, a new card is created"): whether an export goes up, what it is called, who may see it and the playlist it joins - and the Google client and the sign-in an ...
+- [`youtube_tags.gd`](../src/export/youtube_tags.gd) **YouTubeTags** - each episode's own YouTube tags, written from what it says (the user, 2026-10-18: "I want to be able to enable/disable the management of tags applied to the video, based upon the script/content of the video. Today, we have just a static list. I would like to allow the 'Generate' button to ...
 
 ### `reading/` - The voice's workspaces
 

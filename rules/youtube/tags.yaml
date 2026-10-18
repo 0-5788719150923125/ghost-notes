@@ -1,0 +1,63 @@
+# THE TAGS A VIDEO GOES UP WITH, written for each episode from what it says (the user, 2026-10-18: "I
+# want to be able to enable/disable the management of tags applied to the video, based upon the
+# script/content of the video. Today, we have just a static list. I would like to allow the 'Generate'
+# button to override/rewrite those tags, to be something more appropriate to the upload"). The YouTube
+# card's "Write each episode's tags" box adds this step to the card that makes the episode (YouTubeTags,
+# an EpisodeStep); the answer goes up in place of the note's own tags.
+#
+# THE NOTE'S OWN TAGS ARE SHOWN, NOT IMPOSED: they are what the author tags every video with - the show,
+# its subject - so the writer keeps the ones that fit this video and leaves out the rest, rather than
+# losing what the author chose or pasting it in whole.
+#
+# THE WORDS ARE THE VIDEO: the reading as the voice says it, its marks taken out. A tag names what is in
+# it and never what is not - a tag that promises what the video does not hold misleads the viewer who
+# searched for it.
+#
+# NO SAMPLE TAGS: a sample in a prompt comes back word for word, every run, so the format is
+# placeholders only.
+#
+# YOUTUBE'S LIMIT is held by the code (YouTube.fit_tags drops what is past {{most}} characters, counted
+# as YouTube counts them); the writer is told it so the tags that matter most come first.
+#
+# The code gives: {{show}}, {{title}}, {{description}} and {{given}} (the note's own tags), each maybe
+# empty; {{words}}; {{most}}.
+system: >-
+  You write the tags a video goes up to YouTube with. Answer with the JSON asked for and nothing else.
+prompt:
+  - >-
+      Write the YouTube tags for one video: the words and short phrases a viewer would search for to
+      find it, each one true of what the video holds.
+  - ""
+  - when: show
+    say: "THE SHOW: {{show}}"
+  - when: title
+    say: "THIS VIDEO'S TITLE: {{title}}"
+  - when: description
+    say: "ITS DESCRIPTION: {{description}}"
+  - when: given
+    say: >-
+      THE SHOW'S OWN TAGS, which it gives every video: {{given}}. Keep the ones that fit this video,
+      and leave out the ones that do not.
+  - ""
+  - "WHAT THE VIDEO SAYS, as its voice reads it:"
+  - ""
+  - "{{words}}"
+  - ""
+  - >-
+      Name what this video is about: its subject, the particular things it covers and the names it
+      uses, the kind of video it is, and the show's subject. Put the most particular first, then the
+      wider ones. Every tag must be true of this video: nothing it does not hold, no other channel's
+      or creator's name unless the video is about them, and no brand it does not name.
+  - >-
+      Each tag is a word or a short phrase of a few words, written the way people search: in
+      lowercase except for names, in the language the video speaks, with no hashtag sign, no comma
+      and no quotation mark inside it. No tag repeats another in a different case, number or word
+      order.
+  - >-
+      YouTube takes {{most}} characters of tags in all - each tag, a comma between tags, and two
+      quotation marks round any tag with a space in it - and the ones past that are dropped. Write
+      between ten and twenty, the most important first.
+  - ""
+  - "Answer with ONE JSON object and nothing else:"
+  - ""
+  - '{"tags": ["<a tag>", "<another tag>"]}'

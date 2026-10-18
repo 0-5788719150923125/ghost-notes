@@ -22,6 +22,12 @@ class_name EpisodeCard
 ## GENERATION IS EXPLICIT, as with every picture in ghost: Generate makes what the episode is
 ## missing, New episode makes a new seed, and a step's redo deletes it (and what was made from
 ## it) and makes it again. Nothing runs on open - it spends the author's quota.
+##
+## THE NOTE'S OTHER CARDS ADD STEPS OF THEIR OWN ([EpisodeStep], the user, 2026-10-18: "an interface
+## that would allow other cards (like the YouTube one) to hook-in to that list"): the panel hands over
+## what they offer ([method ReadingPanel.episode_steps]), and the ones wanted now are rows under the
+## Close, each with its ✓ and its ⟳ - the YouTube card's tags. Each is handed the episode as a [Feed]
+## and made once Generate's own steps are done; this card never asks what one is.
 
 const YouTube := preload("res://src/export/youtube.gd")
 const TagField := preload("res://src/ui/tag_field.gd")
@@ -98,6 +104,10 @@ var _export_pin := {}
 var _taken := {}
 ## THE YOUTUBE FIELDS: the picked episode's title (on the Episode card, edited in place in its plan),
 ## and the show's description and tags (on the YouTube card - null without one).
+## The picked episode, as the steps other cards add to it read it ([method _tick_steps]).
+var _feed: Feed = null
+## Generate was pressed: the steps other cards add are made once its own are done.
+var _steps_asked := false
 var _yt_title: LineEdit
 var _yt_desc: TextEdit
 var _yt_tags: TagField
@@ -172,6 +182,7 @@ func _enter_tree() -> void:
 func _exit_tree() -> void:
 	if _producer != null:
 		_producer.stop()
+	_stop_steps(_feed)
 	if reading != null and Director.medium_override == "table":
 		Director.medium_override = ""
 
@@ -190,6 +201,7 @@ func _process(delta: float) -> void:
 		_row_t = 0.25
 		if _producer != null:
 			_producer.tick()
+		_tick_steps()
 		_refresh_rows()
 		_seed_globals()
 
@@ -270,6 +282,40 @@ class Publish extends ReadingPublish:
 
 	func youtube_built(yt: YouTubeCard) -> void:
 		card.youtube_built(yt)
+
+
+## THE EPISODE AS THE STEPS OTHER CARDS ADD TO IT READ IT ([EpisodeFeed]): its folder, the show's name,
+## the episode's title and description, the show's tags, its reading with the marks taken out, and the
+## show's writer.
+class Feed extends EpisodeFeed:
+	var card: EpisodeCard
+	var episode: CardEpisode
+
+	func _init(c: EpisodeCard, ep: CardEpisode) -> void:
+		card = c
+		episode = ep
+
+	func folder() -> String:
+		return episode.dir
+
+	func show_title() -> String:
+		return card._doc.field("title").strip_edges() if card._doc != null else ""
+
+	func episode_title() -> String:
+		return String(episode.upload_notes()["title"])
+
+	func description() -> String:
+		return card._cur_desc if not card._cur_desc.is_empty() else String(episode.upload_notes()["description"])
+
+	func tags() -> PackedStringArray:
+		return card._show_tags()
+
+	func words() -> String:
+		return Manuscript.unspoken(episode.script()).strip_edges()
+
+	func writer() -> Dictionary:
+		return {"agent": String(card._knobs["writer"]), "model": String(card._knobs["writer_model"]),
+			"effort": String(card._knobs["writer_effort"])}
 
 
 func bed_of(export := false) -> Dictionary:
@@ -363,8 +409,9 @@ func after_take(path: String) -> String:
 ## [member Exporter.upload_provider]): the episode's description and a chapter per card timed from
 ## [param take] (apart, so the playlist goes between them - [method YouTube.description_of]), the
 ## SHOW'S tags (its document's `tags:` line), the moment of the title screen to take the thumbnail
-## from, the file its uploads are recorded in, and the show's and the episode's titles for the
-## card's `%title%` and `%episode%`. For the take an export just rendered it describes THAT
+## from, the file its uploads are recorded in, the show's and the episode's titles for the
+## card's `%title%` and `%episode%`, and the episode itself ([Feed]: what the steps other cards add
+## made of it - its own tags - go up with it). For the take an export just rendered it describes THAT
 ## episode, whichever is picked now; with no take, the picked one. {} while the episode has no plan.
 func upload_base(take: String) -> Dictionary:
 	var ep: CardEpisode = _episode
@@ -378,7 +425,7 @@ func upload_base(take: String) -> Dictionary:
 	var desc := _cur_desc if not _cur_desc.is_empty() else String(n["description"])
 	return {"values": {"title": _doc.field("title").strip_edges(), "episode": String(n["title"]), "seed": str(ep.seed)},
 		"description": desc, "chapters": Array(n["chapters"] as PackedStringArray), "tags": Array(_show_tags()), "thumbnail_at": thumbnail_moment(_take_intro(take)),
-		"record": ep.file_of("youtube")}
+		"record": ep.file_of("youtube"), "episode": _feed if ep == _episode and _feed != null else Feed.new(self, ep)}
 
 
 ## The macros of the YouTube card's title as the card stands: the show's title and the picked
@@ -677,7 +724,8 @@ func _build() -> void:
 	_halt_btn.tooltip_text = "Stop making this episode. Whatever is finished is kept."
 	_halt_btn.pressed.connect(func() -> void:
 		if _producer != null:
-			_producer.stop())
+			_producer.stop()
+		_stop_steps(_feed))
 	grow.add_child(_halt_btn)
 	var folder := Button.new()
 	folder.text = "Folder"
@@ -773,9 +821,11 @@ func _open_episode() -> void:
 		return
 	if _producer != null and _producer.running:
 		_producer.stop()
+	_stop_steps(_feed)          # ...and what the other cards were making of it
 	_flush_upload_fields()      # an edit still waiting belongs to the episode being left
 	var seed := int(_knobs["seed"])
 	_episode = CardEpisode.open(_show_key(), seed)
+	_feed = Feed.new(self, _episode)
 	# the spec is taken when Generate is pressed (see _generate) - never here, where reading the
 	# document would land back in apply
 	_producer = CardProducer.new(_episode, {})
@@ -846,6 +896,8 @@ func _run(steps: Array) -> void:
 	# the spec as it is NOW: the brief may have been edited since the episode was opened
 	_producer.spec = _spec()
 	_brief_changed = false
+	# THE WHOLE EPISODE IS WHAT THE OTHER CARDS' STEPS ARE MADE WITH: a redo of one part is that part
+	_steps_asked = steps.is_empty()
 	_producer.start(steps)
 	_refresh_rows()
 
@@ -884,6 +936,7 @@ func _delete_episode(ep: CardEpisode) -> void:
 	var open := _episode != null and _episode.dir == ep.dir
 	if open and _producer != null:
 		_producer.stop()
+	_stop_steps(Feed.new(self, ep))
 	if _live_episode_dir() == ep.dir:
 		reading.stop_speaking()
 	var err := ep.trash()
@@ -924,6 +977,7 @@ func _redo(step: String) -> void:
 var _row_widgets: Array = []      # [{label, steps, status: Label, text: Label}]
 var _rows_for := -1
 var _rows_backs := ""            # the printings the rows were built for (each prints its own back)
+var _rows_steps := ""            # the other cards' steps the rows were built for
 
 func _rebuild_rows() -> void:
 	if _rows_box == null or _episode == null:
@@ -950,10 +1004,16 @@ func _rebuild_rows() -> void:
 				_add_row("Card %d" % k, label, steps, k)
 		else:
 			_add_row(label, label, r[1], 0)
+	# THE STEPS THE NOTE'S OTHER CARDS ADD, under the Close
+	for st in _listed():
+		_add_row((st as EpisodeStep).label, "", [], 0, st as EpisodeStep)
+	_rows_steps = _steps_key()
 	_refresh_rows()
 
 
-func _add_row(title: String, kind: String, steps: Array, k: int) -> void:
+## A row: [param title], its glyph and what it says, and its ⟳ - the [constant REDO] of its [param kind],
+## or, for a [param step] another card added, that step made again.
+func _add_row(title: String, kind: String, steps: Array, k: int, step: EpisodeStep = null) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	_rows_box.add_child(row)
@@ -980,15 +1040,18 @@ func _add_row(title: String, kind: String, steps: Array, k: int) -> void:
 	redo.tooltip_text = ("Make this part again - only this part. What was made from it is cleared "
 		+ "and waits for Generate.")
 	var menu := redo.get_popup()
-	var items: Array = REDO.get(kind, [])
+	var items: Array = REDO.get(kind, []) if step == null else [[step.first, ""]]
 	for i in items.size():
 		menu.add_item(String(items[i][0]), i)
 	menu.id_pressed.connect(func(id: int) -> void:
-		_redo(String(items[id][1]).replace("K", str(k))))
+		if step != null:
+			_redo_step(step)
+		else:
+			_redo(String(items[id][1]).replace("K", str(k))))
 	redo.modulate.a = 1.0 if not items.is_empty() else 0.0
 	redo.disabled = items.is_empty()
 	row.add_child(redo)
-	_row_widgets.append({"steps": steps, "status": status, "text": text, "kind": kind, "k": k})
+	_row_widgets.append({"steps": steps, "status": status, "text": text, "kind": kind, "k": k, "step": step, "redo": redo})
 
 
 ## What the set dresser put on the picked episode's table, by name - read again only when the file
@@ -1036,11 +1099,15 @@ func _refresh_rows() -> void:
 			String((plan as Dictionary).get("episode_title", "")) if plan is Dictionary else "")
 		if _episode_pick.get_item_text(at) != label:
 			_episode_pick.set_item_text(at, label)
-	if _episode.card_count() != _rows_for or ",".join(_episode.printings()) != _rows_backs:
+	if _episode.card_count() != _rows_for or ",".join(_episode.printings()) != _rows_backs \
+			or _steps_key() != _rows_steps:
 		_rebuild_rows()
 		return
 	var doc := {}
 	for w in _row_widgets:
+		if w["step"] != null:
+			_refresh_step_row(w, w["step"])
+			continue
 		var states := {}
 		var why := ""
 		for s in (w as Dictionary)["steps"]:
@@ -1125,15 +1192,22 @@ func _refresh_rows() -> void:
 		var own := CardDeck.parse(_text.text)
 		_deck_note.text = ("Deck: %d cards, from the brief's Cards." % own.size()) if not own.is_empty() \
 			else "Deck: the producer's choice, each episode (the brief lists no cards)."
-	var busy := _producer.running or _producer.busy()
-	_gen_btn.disabled = busy or _episode.complete()
+	var busy := _producer.running or _producer.busy() or _steps_asked or _steps_busy()
+	var whole := _episode.complete() and not _steps_missing()
+	_gen_btn.disabled = busy or whole
 	_halt_btn.disabled = not busy
 	_del_btn.disabled = not DirAccess.dir_exists_absolute(_episode.dir) or _exporting(_episode)
 	var note := ""
-	if _episode.complete():
+	if whole:
 		note = "Ready - press Play to watch it, or export it."
 	elif busy:
 		note = "Making episode #%d…" % _episode.seed
+	elif _episode.complete():
+		var left := PackedStringArray()
+		for st in _listed():
+			if (st as EpisodeStep).state(_feed) != "ready":
+				left.append((st as EpisodeStep).label.to_lower())
+		note = "Ready to play - Generate makes its %s." % ", ".join(left)
 	elif _episode.has("plan"):
 		note = "Partly made - Generate finishes it."
 	else:
@@ -1142,6 +1216,94 @@ func _refresh_rows() -> void:
 		note += " The brief has changed since this episode was made; New episode uses it."
 	_episode_note.text = note
 	_fill_upload_fields()
+
+
+# --- the steps the note's other cards add -------------------------------------------------------
+
+## The steps the note's other cards add, all of them, as the panel holds them
+## ([method ReadingPanel.episode_steps]).
+func _offered() -> Array:
+	return reading.episode_steps() if reading != null else []
+
+
+## ...and the ones listed now, under the Close.
+func _listed() -> Array:
+	return EpisodeStep.listed_of(_offered())
+
+
+## What the rows were built for: the listed steps' keys.
+func _steps_key() -> String:
+	return ",".join(PackedStringArray(_listed().map(func(s: EpisodeStep) -> String: return s.key)))
+
+
+## This card as the steps' rows say where they are: "the Episode card".
+static func host_name() -> String:
+	return "the %s card" % String(Registry.field(Components.REGISTRY, KEY, "heading", "Episode"))
+
+
+## EACH REFRESH: what the steps' jobs ended with, landed; the picked episode said to the steps listed;
+## and once Generate's own steps are done, each listed step made - from the episode's words, so only
+## when they were written.
+func _tick_steps() -> void:
+	for s in _offered():
+		(s as EpisodeStep).tick()
+	var listed := _listed()
+	for s in listed:
+		(s as EpisodeStep).listed(host_name(), _feed)
+	if _steps_asked and _producer != null and not (_producer.running or _producer.busy()):
+		_steps_asked = false
+		for s in listed:
+			(s as EpisodeStep).generate(_feed)
+
+
+## STOP what the steps are making of [param feed]'s episode - and, for the picked one, what Generate asked
+## of them.
+func _stop_steps(feed: Feed) -> void:
+	if feed == null or _feed == null or feed.folder() == _feed.folder():
+		_steps_asked = false
+	if feed == null:
+		return
+	for s in _offered():
+		(s as EpisodeStep).stop(feed)
+
+
+## Is a listed step being made for the picked episode?
+func _steps_busy() -> bool:
+	for s in _listed():
+		if (s as EpisodeStep).busy(_feed):
+			return true
+	return false
+
+
+## Is a listed step not made for the picked episode, as its words are now?
+func _steps_missing() -> bool:
+	if _feed == null:
+		return false
+	for s in _listed():
+		if (s as EpisodeStep).state(_feed) != "ready":
+			return true
+	return false
+
+
+## ⟳ on a step's row: made again now, from the episode's words - which must be written first.
+func _redo_step(step: EpisodeStep) -> void:
+	if not step.redo(_feed):
+		_set_status("%s waits for the episode's words - Generate writes them." % step.label)
+
+
+## A step's row: its glyph, what it says, and its ⟳ - offered once the episode's words are written.
+func _refresh_step_row(w: Dictionary, step: EpisodeStep) -> void:
+	var st := step.state(_feed)
+	(w["status"] as Label).text = {"ready": "✓", "running": "◌", "queued": "◌", "failed": "✗"}.get(st, "·")
+	var said := step.said(_feed)
+	(w["text"] as Label).text = said
+	(w["text"] as Label).tooltip_text = said
+	var redo: MenuButton = w["redo"]
+	var made := not step.made(_feed).is_empty()
+	redo.get_popup().set_item_text(0, step.again if made else step.first)
+	redo.disabled = step.busy(_feed) or _feed.words().is_empty()
+	redo.tooltip_text = (step.again if made else step.first) + (" - once the episode's words are written"
+		if _feed.words().is_empty() else "")
 
 
 # --- the YouTube fields ------------------------------------------------------------------------
@@ -1184,9 +1346,10 @@ func _build_upload_fields(box: VBoxContainer) -> void:
 	_yt_desc.text_changed.connect(_upload_edited)
 	box.add_child(_yt_desc)
 	_yt_tags = TagField.new()
-	_yt_tags.tooltip_text = ("The show's tags - its document's `tags:` line - going up with every episode: "
-		+ "× removes one; type in the box and a comma (or Enter) makes it a tag. YouTube takes 500 "
-		+ "characters of tags in all; a dimmed tag is past that.")
+	_yt_tags.tooltip_text = ("The show's tags - its document's `tags:` line - going up with every episode, or, "
+		+ "with \"Write each episode's tags\" ticked below, shown to the writer of each episode's own, which go "
+		+ "up in their place. × removes one; type in the box and a comma (or Enter) makes it a tag. YouTube "
+		+ "takes 500 characters of tags in all; a dimmed tag is past that.")
 	_yt_tags.changed.connect(_save_tags)
 	box.add_child(_yt_tags)
 	_yt_note = Label.new()
@@ -1329,18 +1492,8 @@ func _refresh_upload_note() -> void:
 		return
 	var own := _yt_tags.get_tags() if _yt_tags != null else PackedStringArray()
 	var fitted := YouTube.fit_tags(Array(own))
-	var going := {}
-	for t in fitted:
-		going[t.to_lower()] = true
-	var reasons := {}
-	for t in own:
-		var c := YouTube.clean_tag(t).to_lower()
-		if c.is_empty():
-			reasons[t] = "nothing is left of it once cleaned"
-		elif not going.has(c):
-			reasons[t] = "YouTube takes %d characters of tags, and they are used up" % YouTube.TAGS_MAX
 	if _yt_tags != null:
-		_yt_tags.mark(reasons)
+		_yt_tags.mark(YouTube.left_out(own))
 	if _episode == null or not _episode.has("plan"):
 		_yt_note.text = "Generate the plan first: the producer writes the episode's title."
 		return

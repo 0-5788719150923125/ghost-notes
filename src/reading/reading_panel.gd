@@ -277,6 +277,10 @@ var reopen: Callable
 var _attached: Array = []
 var _block_cards := {}
 var _youtube: YouTubeCard
+## THE STEPS THE NOTE'S CARDS ADD TO ITS EPISODES ([EpisodeStep]): every one a card built here offers
+## (`episode_steps()` - the YouTube card's tags), for the card that makes episodes to list
+## ([method episode_steps]). The two never name each other: this panel puts them together.
+var _steps: Array = []
 var _lead_in := 0.0        # the intro seeded into _pending by _plan, in seconds
 var _dirty := false
 var _last_edit_ms := 0
@@ -641,6 +645,7 @@ func _add_youtube() -> void:
 	_panel.add_card(YouTubeCard.KEY, "YouTube", &"publish", "youtube").add_child(_youtube)
 	_block_cards[YouTubeCard.KEY] = _youtube
 	_youtube.noted.connect(_set_status)
+	_offer_steps(_youtube)
 	var card: Node = _youtube.get_parent()
 	while card != null and not (card is Card):
 		card = card.get_parent()
@@ -663,6 +668,23 @@ func _add_block(card: Object) -> void:
 	_block_cards[String(card.KEY)] = card
 	if card.has_signal("noted"):
 		card.noted.connect(_note)
+	_offer_steps(card)
+
+
+## What [param card] adds to the note's episodes, if it adds anything (`episode_steps()`).
+func _offer_steps(card: Object) -> void:
+	if not card.has_method("episode_steps"):
+		return
+	for s in card.call("episode_steps"):
+		if s is EpisodeStep and not _steps.has(s):
+			_steps.append(s)
+
+
+## THE STEPS THE NOTE'S CARDS ADD TO ITS EPISODES, as offered - all of them; the card that makes the
+## episodes lists the ones [method EpisodeStep.wanted] now. A card attached while the panel is up adds
+## its own at once.
+func episode_steps() -> Array:
+	return _steps
 
 
 func _build_header(box: VBoxContainer) -> void:
