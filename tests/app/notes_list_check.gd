@@ -64,6 +64,7 @@ var _fails: Array = []
 var _main: Node
 const ROOT := "user://notes_list_check"
 const AGENT_PROGRAMS := ["claude", "codex", "grok", "aws"]
+const PROBE_WAIT_MS := 120000     # a backstop for the Environment panel's first probe
 const FixtureAudio := preload("res://tests/fixture_audio.gd")
 
 
@@ -652,13 +653,20 @@ func _quiet(home_procs: int) -> void:
 		await _frames(5)
 
 
+## The Environment panel's first probe lands from a thread, its rows built as it does: waited on by
+## the clock (teardown_check's header says why). The panel's layout is checked with its rows in it.
 func _settle_probe() -> void:
 	var env: DepsPanel = _main._chrome.environment
-	for _i in 600:
-		if not env._rows.is_empty():
-			break
+	var t0 := Time.get_ticks_msec()
+	while not _probed(env) and Time.get_ticks_msec() - t0 < PROBE_WAIT_MS:
 		await get_tree().process_frame
+	_ok(_probed(env), "the Environment panel's probe has landed before anything is measured (%d rows, %.1f s)"
+		% [env._rows.size(), (Time.get_ticks_msec() - t0) / 1000.0])
 	await _frames(10)
+
+
+static func _probed(env: DepsPanel) -> bool:
+	return not env._rows.is_empty() and env._thread == null
 
 
 func _find(n: Node, cls: String) -> Node:

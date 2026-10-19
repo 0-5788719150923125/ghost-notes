@@ -1,5 +1,5 @@
 {
-	"digest": "e6f94ba7bc24410a3d95d47e23de542a30ce31f549f83593937d9df92e8c8288",
+	"digest": "b2a2c1ae4c40e3ca3b6786caded203ec04f9849d7db99fdab89cb29a200ed554",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -235,7 +235,6 @@
 		"res://src/ui/script_writer.gd",
 		"res://src/ui/shell.gd",
 		"res://src/ui/side_panel.gd",
-		"res://src/ui/tag_field.gd",
 		"res://src/ui/volume_knob.gd",
 		"res://src/voice/delivery.gd",
 		"res://src/voice/phonemes.gd",

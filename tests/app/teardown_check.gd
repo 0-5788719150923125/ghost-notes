@@ -18,6 +18,12 @@ extends Node
 ## number that grows with every cycle is a leak. The FIRST cycle of a mode may build what every later
 ## one reuses (the stage, a bus), so it is cycles 2..N that must agree with each other.
 ##
+## NOTHING IS MEASURED UNTIL THE ENVIRONMENT PANEL'S PROBE HAS LANDED. Its rows (162 nodes for 22
+## programs) are built when a thread comes back, and rows that land in the middle of the cycles read as
+## a leak (CI, 2026-10-19: manual's nodes [478, 478, 640] - the wait was 600 frames, and a cold probe
+## beside three other gates outlasted them). It is waited on by the clock, and a probe that never lands
+## fails here rather than as a count that grew.
+##
 ## LEAVING IS REFUSED, AND SAYS WHY, while an export is making the mode's take: the take is a
 ## coroutine on the mode's panel and the export would wait on a freed panel forever. Two-sided: the
 ## ⌂ grays and the mode stays, then the hold lifts and it leaves.
@@ -60,6 +66,9 @@ const BLOCKS := {
 	"masking": {"clip": {"path": ""}},
 }
 const ROOT := "user://teardown_check_notes"
+## How long the Environment panel's first probe may take: a backstop only, far over a cold probe on a
+## loaded runner.
+const PROBE_WAIT_MS := 120000
 
 var _fails: Array = []
 var _main: Node
@@ -262,14 +271,21 @@ func _quiet(home_procs: int) -> void:
 		await _frames(5)
 
 
-## The Environment panel's first probe runs on a thread and builds its rows when it returns.
+## The Environment panel's first probe runs on a thread and builds its rows when it returns: waited
+## on by the clock, since how many frames a cold probe takes is the machine's.
 func _settle_probe() -> void:
 	var env: DepsPanel = _main._chrome.environment
-	for _i in 600:
-		if not env._rows.is_empty():
-			break
+	var t0 := Time.get_ticks_msec()
+	while not _probed(env) and Time.get_ticks_msec() - t0 < PROBE_WAIT_MS:
 		await get_tree().process_frame
+	_ok(_probed(env), "the Environment panel's probe has landed before anything is measured (%d rows, %.1f s)"
+		% [env._rows.size(), (Time.get_ticks_msec() - t0) / 1000.0])
 	await _frames(10)
+
+
+## Its rows are built and no probe is still out on a thread.
+static func _probed(env: DepsPanel) -> bool:
+	return not env._rows.is_empty() and env._thread == null
 
 
 func _frames(n: int) -> void:
