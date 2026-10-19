@@ -1335,7 +1335,8 @@ Three reports from finished videos, one cause each.
   cards wait on top of piles, first drawn uppermost; a card put back goes on a pile none is drawn
   from. Gone: the eight cards floating at the rim and the return spot in the air. A shoebox of piles
   is filled to `SHOEBOX_SHARE` of what it could hold, so heights have room to differ. The open box's
-  piles are laid the same way. Not touched: cards filed on edge, and the open box's `loose` heap.
+  piles are laid the same way. Not touched: cards filed on edge, and the open box's `loose` heap
+  (piled too since 2026-10-18).
 - **A leaf under a card.** A lying piece is cupped and lies higher than a card is thick, so one a
   card came down on stood up through it. The air's `lay` moments now reach the drifts
   (`Drifts.laid`): a piece where a card comes down goes aside first, out past the nearest clear edge
@@ -1509,6 +1510,63 @@ after it. A turn over off a pile near the frame's top is out of the picture for 
 middle, and a drawn card at the top of its rise out of a shoebox at the back still leaves it
 (65803 at 106.4 s). A tin's flat deck takes no card back: one "put back" is laid in the row. The
 stand-in paintings have not been judged in a finished video.
+
+## 2026-10-18: a move is for the story, nothing in the box passes through a card, the shuffle's end
+
+Four reports from two videos (the-shoebox 32533, Benny's tin; penalty-box 21439), and one from true-tarot
+288024's shuffle. The user: "Can we do something about the agents just making arbitrary decisions about
+card behavior, for the sake of variety? We should not be forcing strange behavior without a good reason
+to, and when we do force that behavior - we should make sure it has a logical place in the story."
+
+**Why the agents chose them.** Each earlier episode's moves were listed in the producer's history, and the
+producer is told to name the show's habits and fall into none: 32533's plan named "Handling: ... never an
+aside, never dealt" and then staged a search, an aside, two put-backs and a waterfall of two it called
+"The Rubber-Banded Pair" (its reader said the band "had gone hard" over two loose cards); 21439 laid
+"The Squall - the accident nobody planned" sideways, and its reader was never told.
+
+- The history keeps where the cards came from, never how each was handled (`CardPrompts._past`), and
+  the habits rule says handling is never varied for its own sake.
+- `producer.yaml`: the plain pull, show and lay is how cards are handled; a move is for a position whose
+  own question is about it, in cards really handled that way. Sideways, `on` and `then` are a game's
+  only. THE TABLE SHOWS THE CARDS, the box and the moves - no plan rests on a band, a clip, a sleeve.
+- `CardProducer.runs_of_three`: a waterfall is three or more swept positions; fewer come out one at a time.
+- `reader.yaml`: the viewer sees everything done to the cards, so a passage claims no arrangement the
+  table does not show; a card laid sideways, laid on another or turned where it lies tells its reader so
+  (`handled`, `CardPrompts._handled`), and the reader says what it means. `after` names the sideways
+  lay and the card it is laid on.
+
+**The box** (`TableBox`, `TableCardPose`; gate `tests/table/box_clip_check.gd`, frame by frame):
+
+- An open box's loose cards lie in piles, as a shoebox's do: they were strewn 0.17 mm apart where a card
+  is 0.7 mm thick, the drawn ones waiting at random places in the heap.
+- A card put back goes where no card still to be drawn waits under it: the draws after the first return
+  never come from the returns' pile, which gives its top cards only to earlier draws; the returns lie on
+  its top as it is then. A box with room for one pile, in a reading that puts a card back before another
+  is drawn, files its cards on edge instead (`TableBox.contents`).
+- A card put back is carried over its place, turned as it will lie, then let straight down
+  (`_put_back_xf`); a card taken out rises over the highest card in the box, not only the rim
+  (`top_y`, `_over_box`) - an open box's file stands over its rim; a card dealt or swept out of the box
+  keeps its lower edge on its line, and over the box while the next one comes up behind it (`_box_lift`).
+- A file's cards are turned off true no further than keeps their sides clear of their neighbors.
+- A search stops on each card: about a second of its front to the eye (`RUMMAGE` 5.4); a card off a pile
+  rises clear of the cards it turns over before it turns (`TableCardPose._ground`), and a search spares
+  the tallest piles - off a low pile beside a tall one, a box at the back of the table had no room in the
+  picture to hold it over that one (it was held through it).
+- The deck checks of `table_staging_check` look at the deck's top card until the first card is taken. A card leaned back out of a file still rocks into the
+  cards in front of it below their tops, hidden - the gate counts what shows.
+
+**The shuffle's end** (`TableShuffle.cut_off`, `finish_xf`; gate `deck_turns_check`): the first card cut
+the last move off and every card was eased back to the slot it began the move in - in 288024 an
+overhand had carried the top card 36 cards down, and it rose back through them. A cut-off riffle,
+overhand or cut is finished along its own path in the squaring's 0.45 s, the orientation following the
+deck as the move leaves it. And the card to be drawn is the deck's own top card until the hand takes it
+(`TableMedium._taken_by`, `_leaves`), then itself in that card's place, the deck a card shorter: it was
+a card of its own over the whole deck, appearing as the shuffle's last packet came down through it.
+
+Still open: the moves' own paths are not clean - an overhand's packets drop through the edges of the
+cards still held (hundreds of card-over-card passes a pass), a riffle's halves lift through each other.
+A box that can neither spare a pile nor stand its cards on edge (a shallow tin of one pile) still buries
+a draw under a card put back. A riffle jumper still rides on top of a full deck.
 
 ## Not built yet
 

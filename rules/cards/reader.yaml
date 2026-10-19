@@ -11,7 +11,8 @@
 # `now_swept`, `now_boxed`, `now_drawn`), what may be said of its picture (`pic_quiet`, `pic_lying`,
 # `pic_held`, `pic_art`), and its text (`on_back` or `in_booklet`); `link`, a card read with the cards
 # already down; `heard`, how earlier episodes met this point; `passed`, a card put back in its box while
-# others stay out; {{after}}, what the table
+# others stay out; {{handled}}, what is done after it to this card or one on the table (laid sideways, laid on
+# another, turned where it lies); {{after}}, what the table
 # does after the last word; `misses`, what the card's painting gets wrong (the art director could not
 # have it put right); `voices`, the show's other voices; and the passage's length ({{lo}} to
 # {{hi}} words).
@@ -173,8 +174,8 @@ card:
           the camera.
   - when: now_searched
     say: >-
-          NOW: you have rapidly checked and returned several other cards while looking for a
-          particular one. You have just pulled card {{k}} of {{spread_size}} from the box and
+          NOW: you have lifted a few other cards, looked at each and put it back, while looking for
+          a particular one. You have just pulled card {{k}} of {{spread_size}} from the box and
           turned it to the camera. React to what actually came up. It may be the card you sought,
           a distraction, or another miss; you could not know before you pulled it.
   - when: now_drawn
@@ -282,6 +283,16 @@ card:
           around - and name the card it meets, so someone half-listening can follow. That meeting
           is this passage's point, not a remark beside it. What counts as a meeting in this deck is
           the brief's to say, where it says.
+  # A MOVE THE VIEWER WILL WATCH NEEDS ITS REASON (the user, 2026-10-18: "when we do force that behavior - we
+  # should make sure it has a logical place in the story"): penalty-box 21439's seventh card was laid
+  # sideways and its reader, never told, said nothing of it. No sample reason is given: it would be
+  # said in every episode.
+  - when: handled
+    say: >-
+          AFTER YOUR WORDS, {{handled}}. The viewer will watch it happen, and your passage is all
+          they have to make sense of it: say what it means for the card, in the terms of this kind
+          of card and how it is played or kept, as the host would - never as an announcement of the
+          move.
   # NOT MET THE SAME WAY TWICE: every card passage of episode 834225 opened on "Oh, the ..." (2026-10-07)
   - when: not_first
     say: >-
@@ -292,6 +303,9 @@ card:
       AFTER YOUR LAST WORD: {{after}} The viewer watches it happen, so you need not say it will -
       and never say it has: the next passage opens with it done.
 
+# NOTHING DONE TO THE CARDS THAT THE VIEWER CANNOT SEE (the user, 2026-10-18, of the-shoebox 32533: "The script
+# claims they were rubber-banded together, but they were not"): the plan named a "Rubber-Banded Pair",
+# and its reader said the band had gone hard over two loose cards.
 # WHEN THE CARDS MOVE, for every reader prompt. A passage is spoken whole and the table acts only after
 # it, in the silence before the next - so a passage that ended "And there. That's the first one."
 # announced a card the viewer had not seen yet (2026-10-05, "she's signaling the draw before it even
@@ -311,6 +325,12 @@ moves: >-
   thought, not on the move. Never report a move before it happens either ("there", "that's the first
   one", "beside the others"): the viewer has not seen it yet. Do not try to time a move inside your
   passage with a pause: nothing moves until you finish.
+
+  THE VIEWER SEES EVERYTHING DONE TO THE CARDS: the cards, the box, what stands on the table and
+  the moves named here, and nothing else. Never say a card is or was banded, clipped, sleeved,
+  taped, stuck or kept together with another, or that anything was tucked in with it: the viewer can
+  see that it was not. Say what you make of the cards, never an arrangement of them the table does
+  not show.
 
 # THE SHAPE EVERY PASSAGE KEEPS: spoken aloud word for word, and leaned by delivery marks the voice
 # reads (VoiceFX) but never says. A line the brief dictates keeps the marks its author put in it

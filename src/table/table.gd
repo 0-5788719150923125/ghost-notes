@@ -1437,7 +1437,7 @@ func _slot_xf(i: int, quarter := 0, over := false) -> Transform3D:
 				placed.origin = (_box_part.stood["return_at"] as Vector3) + Vector3(0.0, float(before) * CARD_T * 1.1, 0.0)
 				placed.basis = Basis(Vector3.UP, float(_box_part.stood.get("return_turn", 0.0))
 					+ (float(hash([_plan.seed_value, i, "put back"]) % 1000) / 1000.0 - 0.5) * 0.14)
-			elif String(_plan.staging.get("contents", "file")) != "file":
+			elif _box_part.contents() != "file":
 				var inner: AABB = _box_part.stood["inner"]
 				placed.origin.y = minf(inner.end.y - CARD_T, placed.origin.y + CARD_T * 2.0)
 			return placed
@@ -2072,7 +2072,7 @@ func _cover_at(p: Vector2, t: float, r: float) -> float:
 		if not wj.is_empty() and t >= float(wj["base"]) and t < float(wj["end"]):
 			loose = 0.12
 		if _under_card(_rest_xf(_plan.deck_n - 1), p, r + loose):
-			top = _cur_base.y + float(_plan.deck_n - _deck_gone) * DECK_T
+			top = _cur_base.y + float(_plan.deck_n - _deck_gone - _taken_by(t)) * DECK_T
 	var events: Array = tm["events"]
 	for k in _cards.size():
 		var pose := _card_poses.card_pose(k, t, events[k], wj)
@@ -2552,7 +2552,11 @@ func _pose(t: float) -> void:
 	var chained := _plan.cards_from == "deck" and ts < INF
 	var turns := _shuffles.deck_turns(t, ts, te, tm, wj, jump_s) if chained else PackedFloat32Array()
 	var settled := float(wj["end"]) if not wj.is_empty() else te
-	var top_slot := _plan.deck_n - 1 - _deck_gone
+	# a move the first card cuts off is finished, not undone ([method TableShuffle.finish_xf])
+	var cut := _shuffles.cut_off(ts, te) if chained and wj.is_empty() and jump_s == 0.0 else {}
+	if not cut.is_empty():
+		settled += SQUARE
+	var top_slot := _plan.deck_n - 1 - _deck_gone - _taken_by(t)
 	for i in _plan.deck_n:
 		var xf := _rest_xf(i)
 		if t >= ts:
@@ -2563,7 +2567,8 @@ func _pose(t: float) -> void:
 			elif jump_s > 0.0 and wj.is_empty() and te < INF and t < te + JUMP_RIFFLE * jump_s:
 				xf = _card_poses.jump_riffle(i, (t - te) / jump_s, _shuffles.shuffle_xf(i, te - ts))
 			elif t < te + SQUARE and te < INF and jump_s == 0.0:
-				xf = _shuffles.shuffle_xf(i, te - ts).interpolate_with(_rest_xf(i), _ease((t - te) / SQUARE))
+				xf = _shuffles.finish_xf(i, t, ts, te, cut) if not cut.is_empty() \
+					else _shuffles.shuffle_xf(i, te - ts).interpolate_with(_rest_xf(i), _ease((t - te) / SQUARE))
 		# The top of the stack is the next card the viewer will see. Once the shuffle is over, give its
 		# back that card's orientation before it is uncovered; the draw mesh takes its place at t0.
 		var spin := turns[i] if chained else 0.0
@@ -2574,7 +2579,7 @@ func _pose(t: float) -> void:
 		var dm: MeshInstance3D = _deck[i]
 		dm.transform = xf
 		# a box's cards are filed in it: the deck is seen only lying flat in a tin
-		dm.visible = i != gone and (_plan.cards_from != "box" or bool(_box_part.stood.get("flat", false)))
+		dm.visible = i != gone and i <= top_slot and (_plan.cards_from != "box" or bool(_box_part.stood.get("flat", false)))
 	# THE CARDS, each from its own timeline
 	var showing := -1
 	var page_in := 0.0
@@ -2607,12 +2612,13 @@ func _pose(t: float) -> void:
 	_back_mat.set_shader_parameter("pulse", 0.5 + 0.5 * sin(t * TAU / 7.0))
 
 
-## The card waiting on top of the deck. Advance while the current card covers the stack at the
-## start of its draw, so the newly exposed back never changes orientation between draws.
+## The card waiting on top of the deck: the next to be taken off it ([method _leaves]) - a jumper until
+## its action begins - so the deck's top card is turned the way the card it is comes up, and the back
+## exposed when it is taken already lies the way of the card after it.
 func _top_deck_reversed(t: float, tm: Dictionary) -> bool:
 	var draws: Array = tm["draw"]
 	for k in mini(draws.size(), _cards.size()):
-		if t < float((draws[k] as Array)[0]):
+		if t < (_leaves(k) if _from_top(k) else float((draws[k] as Array)[0])):
 			return _reversed(k)
 	return not _cards.is_empty() and _reversed(_cards.size() - 1)
 
@@ -2649,11 +2655,60 @@ func _rest_xf(i: int) -> Transform3D:
 	return Transform3D(Basis(Vector3.UP, j.z), _cur_base + Vector3(j.x, (float(i) + 0.5) * DECK_T, j.y))
 
 
-## Drawn card [param k] lying on top of the deck, face down (the way it will come up).
+## Drawn card [param k] lying on top of the deck, face down (the way it will come up): the deck's own top
+## card as the hand takes it ([method _taken_by]) - in its slot, turned as it lies, a card's thickness
+## from the slot under it. A jumper, which flies out of the deck rather than off its top, rides on it.
 func _deck_top_xf(k: int) -> Transform3D:
-	var j: Vector3 = _plan.slot_jit[_plan.deck_n] if _plan.slot_jit.size() > _plan.deck_n else Vector3.ZERO
+	var slot := _plan.deck_n - 1 - _deck_gone - _taken_before(k) + (0 if _from_top(k) else 1)
+	var j: Vector3 = _plan.slot_jit[slot] if slot >= 0 and slot < _plan.slot_jit.size() else Vector3.ZERO
 	return Transform3D(Basis(Vector3.UP, j.z + (PI if _reversed(k) else 0.0)),
-		_cur_base + Vector3(j.x, float(_plan.deck_n - _deck_gone) * DECK_T + CARD_T * 0.5, j.y))
+		_cur_base + Vector3(j.x, float(slot) * DECK_T + CARD_T * 0.5, j.y))
+
+
+## THE CARDS TAKEN OFF THE DECK'S TOP: a drawn, dealt or swept card is the deck's own top card until the
+## hand takes it, and the deck is a card shorter from then. It was a card of its own laid over the whole
+## deck, there from the moment its move was scheduled: at the end of a shuffle it appeared on the top
+## while the last packet of the shuffle was still coming down through where it lay (true-tarot 288024,
+## the user, 2026-10-18: a card "pops" to the top "or appearing out of nowhere").
+## Whether card [param k] comes off the deck's top (a jumper flies out of it).
+func _from_top(k: int) -> bool:
+	if k >= _all_events.size():
+		return false
+	for e in _all_events[k]:
+		if String((e as Dictionary)["k"]) == "arrive":
+			return String((e as Dictionary)["how"]) in ["draw", "deal", "fan"]
+	return false
+
+
+## When card [param k] leaves the deck: the start of its draw or deal, or its turn in a waterfall - the
+## moment it first moves ([method TableCardPose.card_pose]) - or INF before it is scheduled.
+func _leaves(k: int) -> float:
+	if k >= _all_events.size():
+		return INF
+	for e in _all_events[k]:
+		var d: Dictionary = e
+		if String(d["k"]) == "arrive":
+			var each := TableActions.FAN_EACH * float(d.get("i", 0)) if String(d["how"]) == "fan" else 0.0
+			return float(d["t0"]) + (float(d["off"]) + each) * maxf(float(d["s"]), 0.05)
+	return INF
+
+
+## How many cards have been taken off the deck's top by [param t].
+func _taken_by(t: float) -> int:
+	var n := 0
+	for k in mini(_cards.size(), _all_events.size()):
+		if _from_top(k) and _leaves(k) <= t:
+			n += 1
+	return n
+
+
+## How many cards are taken off the deck's top before card [param k].
+func _taken_before(k: int) -> int:
+	var n := 0
+	for j in mini(k, _all_events.size()):
+		if _from_top(j) and _leaves(j) < INF:
+			n += 1
+	return n
 
 
 ## THE CARD TWIRLED for a burst on the pirouette ([constant SPIN_ROOM]), or -1 when no burst marks one -

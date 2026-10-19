@@ -759,6 +759,7 @@ func _land_plan(text: String) -> String:
 					p.erase("comes")
 			else:
 				p.erase("comment")
+	runs_of_three(pos)
 	back_only_passed(pos, plan["staging"])
 	for i in pos.size():
 		var p: Dictionary = pos[i]
@@ -831,6 +832,26 @@ static func back_only_passed(positions: Array, staging: Dictionary) -> void:
 			"":
 				if String(staging.get("pace", "")) != "quick":
 					p["comment"] = "brief"
+
+
+## A WATERFALL IS A RUN, OF THREE OR MORE: [param positions] swept out with fewer next to them come out one
+## at a time, in place. The-shoebox 32533 swept out a pair from its box (the user, 2026-10-18: "two cards
+## are drawn simultaneously. One is put on the table, the other is read ... The two cards are eventually
+## stacked on top of each other"): two cards a waterfall's step apart lie half on each other, a pile of
+## two rather than a run the viewer sees at once.
+const RUN_LEAST := 3
+
+
+static func runs_of_three(positions: Array) -> void:
+	var i := 0
+	while i < positions.size():
+		var j := i
+		while j < positions.size() and String((positions[j] as Dictionary).get("comes", "")) == "swept":
+			j += 1
+		if j - i < RUN_LEAST:
+			for k in range(i, j):
+				(positions[k] as Dictionary).erase("comes")
+		i = maxi(j, i + 1)
 
 
 ## IS POSITION [param p] PASSED OVER in a plan of [param positions]: looked at, said a few words of and

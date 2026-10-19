@@ -156,8 +156,19 @@ static func _lid_piece(parent: Node3D, mat: Material, dimensions: Vector3, at: V
 ## THE CARDS IN THE BOX: an open box of cards on edge and a shoebox fill out their printings with
 ## physical copies ([constant OPEN_FILE_SHARE], [constant CardTable.SHOEBOX_FILL]) so each reads as a
 ## collection accumulated over time. The drawn
-## cards have their own places near the accessible top. Cards lying in piles are laid by
-## [method _pile_places]. Undrawn cards share one MultiMesh per printing and card ([method _unseen_kinds]).
+## cards have their own places near the accessible top. Cards lying in piles - or loose, which is
+## piles left as they fell - are laid by [method _pile_places]. Undrawn cards share one MultiMesh per
+## printing and card ([method _unseen_kinds]).
+##
+## LOOSE CARDS IN AN OPEN BOX lie in piles too, as a shoebox's do. They were strewn at random over a
+## band 4 mm deep, 0.17 mm apart where a card is 0.7 mm thick, and the drawn cards waited at random
+## places in it (the-shoebox 32533, the user, 2026-10-18: a card put back "lying on the top of the pile
+## in the box", and "every future draw clips-through that card").
+##
+## A BOX WITH ROOM FOR ONE PILE, in a reading that puts a card back before another is drawn, has
+## nowhere for the card to go that buries no card still to be drawn ([method _pile_places]): its cards
+## stand on edge instead, where a card put back goes back into its own place. [method contents] says
+## what the box was built with.
 func _build_file() -> void:
 	var inner: AABB = stood["inner"]
 	var content := String(medium._plan.staging.get("contents", "file"))
@@ -165,8 +176,14 @@ func _build_file() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([medium._plan.seed_value, "card file"])
 	var under_lid := stood.has("lid")
-	var upright := content == "file" and inner.size.x >= size.x * 1.03 and inner.size.y >= size.y * (1.03 if under_lid else 0.6)
-	var lie := content == "file" and not upright and inner.size.x >= size.y * 1.03 and inner.size.y >= size.x * (1.03 if under_lid else 0.6)
+	var stands := inner.size.x >= size.x * 1.03 and inner.size.y >= size.y * (1.03 if under_lid else 0.6)
+	var lies_on_edge := inner.size.x >= size.y * 1.03 and inner.size.y >= size.x * (1.03 if under_lid else 0.6)
+	var plots := TablePositions.box_plots(inner, size)
+	if content in ["piles", "loose"] and plots.x * plots.y == 1 and _late_draws() > 0 and (stands or lies_on_edge):
+		content = "file"
+	stood["contents"] = content
+	var upright := content == "file" and stands
+	var lie := content == "file" and not upright and lies_on_edge
 	stood["upright"] = upright
 	stood["lie"] = lie
 	stood["at_k"] = []
@@ -184,11 +201,10 @@ func _build_file() -> void:
 	if lie:
 		stand = stand * Basis(Vector3.UP, PI * 0.5)
 	var shoebox := stood.has("lid")
-	var piled := content == "piles" or (shoebox and content == "loose")
+	var piled := content == "piles" or content == "loose"
 	var rise := TableMedium.CARD_T * 1.02 if shoebox else TableMedium.CARD_T + 0.00025
 	var want := CardTable.SHOEBOX_FILL
 	if piled:
-		var plots := TablePositions.box_plots(inner, size)
 		want = clampi(int(float(plots.x * plots.y) * (inner.size.y - 0.004) / rise * SHOEBOX_SHARE),
 			medium._cards.size(), CardTable.SHOEBOX_FILL)
 	var pad := shoebox
@@ -200,6 +216,10 @@ func _build_file() -> void:
 	stood["count"] = count
 	var fill := minf(1.0, float(count) * FILE_PITCH / maxf(inner.size.z, FILE_PITCH))
 	var tail := mini(6, count / 4)
+	# HOW FAR A FILED CARD MAY BE TURNED OFF TRUE: no further than keeps its sides clear of the cards
+	# filed either side of it. Turned up to 1.2 degrees, two neighbors 1.1 mm apart crossed at their
+	# sides, and a card drawn up out of the file scraped through them (box_clip_check)
+	var off_true := asin(clampf((FILE_PITCH - TableMedium.CARD_T) / ((size.x if upright else size.y) * 0.5), 0.0, 1.0)) * 0.45
 	var xfs: Array = []
 	if piled:
 		xfs = _pile_places(inner, size, count, rise, rng)
@@ -214,22 +234,13 @@ func _build_file() -> void:
 				var z := inner.end.z - pitch * (float(layer) + 0.5) - 0.004
 				xfs.append(Transform3D(stand, Vector3(x, inner.position.y + v * 0.5, z)))
 				continue
-		if content == "loose":
-			var radius := size.length() * 0.5
-			var dx := maxf(inner.size.x * 0.5 - radius - 0.003, 0.0)
-			var dz := maxf(inner.size.z * 0.5 - radius - 0.003, 0.0)
-			xfs.append(Transform3D(Basis(Vector3.UP, rng.randf_range(-PI, PI)),
-				Vector3(inner.get_center().x + rng.randf_range(-dx, dx),
-					inner.position.y + 0.001 + 0.004 * float(i) / float(maxi(count, 1)),
-					inner.get_center().z + rng.randf_range(-dz, dz))))
-			continue
 		# from the front wall back; the last few lean back into the gap
 		var z := inner.end.z - FILE_PITCH * (float(i) + 0.5)
 		var lean := 0.0
 		if fill < 0.96 and i >= count - tail:
 			lean = FILE_LEAN * float(i - (count - tail) + 1) / float(tail)
 		var bottom := Vector3(inner.get_center().x + rng.randf_range(-0.002, 0.002), inner.position.y, z)
-		var b := Basis(Vector3(1, 0, 0), -lean) * Basis(Vector3.UP, deg_to_rad(rng.randf_range(-1.2, 1.2))) * stand
+		var b := Basis(Vector3(1, 0, 0), -lean) * Basis(Vector3.UP, rng.randf_range(-1.0, 1.0) * off_true) * stand
 		xfs.append(Transform3D(b, bottom + Basis(Vector3(1, 0, 0), -lean) * Vector3(0.0, v * 0.5, 0.0)))
 	# THE DRAWN CARDS' PLACES in the file, away from the leaning tail
 	var free: Array = range(0, count - tail)
@@ -240,21 +251,15 @@ func _build_file() -> void:
 		(stood["at_k"] as Array).append(xfs[j])
 		xfs[j] = null
 	# THE PLACES A SEARCH LOOKS: cards of the file's own, front to back, each drawn up out of its place
-	# and let back into it - or lying cards' places, a card's thickness up (the piles' are their tops)
+	# and let back into it (the piles' are their tops)
 	if not piled:
 		var seats: Array = []
-		var lying := content == "loose"
 		for n in mini(SEATS, free.size() / 4):
 			# toward the back of the file, where the front wall hides none of a card coming up
 			var j := int(free.pop_at(rng.randi_range(free.size() / 3, free.size() - 1)))
-			var seat: Transform3D = xfs[j]
+			seats.append(xfs[j])
 			xfs[j] = null
-			if lying:
-				# on top of the heap, each over the last
-				seat.origin.y = inner.position.y + 0.006 + TableMedium.CARD_T * 1.1 * float(n)
-			seats.append(seat)
-		if not lying:
-			seats.sort_custom(func(a: Transform3D, b: Transform3D) -> bool: return a.origin.z > b.origin.z)
+		seats.sort_custom(func(a: Transform3D, b: Transform3D) -> bool: return a.origin.z > b.origin.z)
 		stood["search"] = seats
 		stood["search_kept"] = true
 	# one MultiMesh per printing and card, its cards shared out among them - and their places kept
@@ -295,6 +300,13 @@ func _build_file() -> void:
 			medium._root3.add_child(inst)
 			files.append(inst)
 	_keep_searched(shoebox)
+	# THE HIGHEST POINT OF ANY CARD IN THE BOX, which a card taken out, put back or turned over keeps
+	# above: the cards of an open box's file stand over its rim, and a card raised only to the rim was
+	# turned to the camera with its foot still between them (box_clip_check)
+	var top := inner.position.y
+	for xf in (stood["filed"] as Array) + (stood["at_k"] as Array) + (stood.get("search", []) as Array):
+		top = maxf(top, card_top(xf as Transform3D, size))
+	stood["top_y"] = top
 
 
 ## THE CARDS A SEARCH LOOKS AT ARE THE BOX'S OWN, one kept in each of its places (`stood["search"]`, when
@@ -320,33 +332,39 @@ func _keep_searched(shoebox: bool) -> void:
 
 
 ## THE CARDS LYING IN PILES in the box ([method TablePositions.box_piles]: a collection kept in piles, or
-## in a shoebox left as it fell), all [param count] of them. THE DRAWN CARDS WAIT ON TOP OF THE PILES
+## cards left as they fell), all [param count] of them. THE DRAWN CARDS WAIT ON TOP OF THE PILES
 ## (`at_k`), the first to be drawn uppermost where two share a pile, so every card is taken off a pile
 ## and none out from under another. A card put back goes on a pile none is drawn from (`return_at`, and
 ## the way that pile lies, `return_turn`), one on the last. Eight cards used to float loose at the rim
 ## over the piles for the drawing, a spot in the air beside them for the returns (the user, 2026-10-11:
 ## "the loose cards on top is a strange look"). Returns the places left for the cards nobody draws.
+##
+## NOTHING PUT BACK LIES ON A CARD STILL TO BE DRAWN ([method _late_draws]): where the other piles
+## cannot hold every draw, the returns' pile gives up its top cards too - but only to draws made before
+## the first card goes back, and the smallest pile takes the returns when the one drawn by lot would
+## leave the rest too few for the draws after it. The returns then lie on its top as it is when they
+## come. A box of one pile is filed on edge instead ([method _build_file]).
 func _pile_places(inner: AABB, size: Vector2, count: int, pitch: float, rng: RandomNumberGenerator) -> Array:
-	var mess := 1.0 if String(medium._plan.staging.get("contents", "file")) == "loose" else TablePositions.PILES_NEAT
+	var mess := 1.0 if contents() == "loose" else TablePositions.PILES_NEAT
 	var piles := TablePositions.box_piles(inner, size, count, pitch, mess, rng)
 	var stocked: Array = []
 	for i in piles.size():
 		if not ((piles[i] as Dictionary)["cards"] as Array).is_empty():
 			stocked.append(i)
+	var first := _first_back()
+	var late := _late_draws()
 	var back := -1
 	if stocked.size() > 1:
 		back = int(stocked.pop_at(rng.randi_range(0, stocked.size() - 1)))
-		var held := 0
-		for i in stocked:
-			held += ((piles[i] as Dictionary)["cards"] as Array).size()
-		if held < medium._cards.size():
+		if _held(piles, stocked) < late:
+			stocked.append(back)
+			stocked.sort_custom(func(a: int, b: int) -> bool:
+				return ((piles[a] as Dictionary)["cards"] as Array).size() < ((piles[b] as Dictionary)["cards"] as Array).size())
+			back = int(stocked.pop_front())
+		if _held(piles, stocked) < medium._cards.size():
 			stocked.append(back)
 	elif stocked.size() == 1:
 		back = int(stocked[0])
-	if back >= 0:
-		var top: Transform3D = ((piles[back] as Dictionary)["cards"] as Array)[-1]
-		stood["return_at"] = top.origin + Vector3(0.0, pitch, 0.0)
-		stood["return_turn"] = atan2(-top.basis.x.z, top.basis.x.x)
 	for i in range(stocked.size() - 1, 0, -1):
 		var j := rng.randi_range(0, i)
 		var swap: int = stocked[i]
@@ -354,21 +372,25 @@ func _pile_places(inner: AABB, size: Vector2, count: int, pitch: float, rng: Ran
 		stocked[j] = swap
 	# WHAT A SEARCH LOOKS AT: THE TOP CARD OF A PILE NOTHING IS DRAWN FROM, kept there (`search_kept`,
 	# [method _keep_searched]) - as many piles as can be spared, the draws keeping two where there are
-	# three, and cards enough. With none to spare (the returns' pile is drawn from, or there is one
-	# pile), a card's thickness over a pile as it was built, and no card kept for it.
+	# three, and cards enough. The TALLEST piles are spared: a card turned over off a low pile beside a
+	# tall one had to be held over that one, and a box at the back of the table has no room above it in
+	# the picture (it was held lower, through it - box_clip_check). With none to spare (the returns' pile
+	# is drawn from, or there is one pile), a card's thickness over a pile as it was built, and no card
+	# kept for it.
 	var seats: Array = []
 	var spare := clampi(stocked.size() - (2 if stocked.size() > 2 else 1), 0, SEATS)
 	if stocked.has(back):
 		spare = 0
+	var tall := stocked.duplicate()
+	tall.sort_custom(func(a: int, b: int) -> bool:
+		return ((piles[a] as Dictionary)["cards"] as Array).size() > ((piles[b] as Dictionary)["cards"] as Array).size())
 	while spare > 0:
-		var left := 0
-		for i in stocked.size() - spare:
-			left += ((piles[stocked[i]] as Dictionary)["cards"] as Array).size()
-		if left >= medium._cards.size():
+		if _held(piles, stocked.filter(func(i: int) -> bool: return not tall.slice(0, spare).has(i))) >= medium._cards.size():
 			break
 		spare -= 1
 	for n in spare:
-		seats.append(((piles[int(stocked.pop_back())] as Dictionary)["cards"] as Array).pop_back())
+		stocked.erase(tall[n])
+		seats.append(((piles[int(tall[n])] as Dictionary)["cards"] as Array).pop_back())
 	stood["search_kept"] = not seats.is_empty()
 	if seats.is_empty():
 		for i in stocked:
@@ -378,13 +400,28 @@ func _pile_places(inner: AABB, size: Vector2, count: int, pitch: float, rng: Ran
 	var turn := 0
 	for k in medium._cards.size():
 		var from: Array = []
-		for tries in stocked.size():
-			from = (piles[stocked[(turn + tries) % stocked.size()]] as Dictionary)["cards"]
+		# a draw after a card has gone back comes from under it only where no other pile holds one
+		for under in [false, true]:
+			for tries in stocked.size():
+				var i := int(stocked[(turn + tries) % stocked.size()])
+				if i == back and k > first and not under:
+					continue
+				if not ((piles[i] as Dictionary)["cards"] as Array).is_empty():
+					from = (piles[i] as Dictionary)["cards"]
+					turn += tries + 1
+					break
 			if not from.is_empty():
-				turn += tries + 1
 				break
 		(stood["at_k"] as Array).append(from.pop_back() if not from.is_empty()
 			else Transform3D(Basis.IDENTITY, inner.get_center()))
+	# the returns go on the top their pile has once the draws before them are made
+	if back >= 0:
+		var left: Array = (piles[back] as Dictionary)["cards"]
+		var plot: Rect2 = (piles[back] as Dictionary)["rect"]
+		var top: Transform3D = left[-1] if not left.is_empty() \
+			else Transform3D(Basis.IDENTITY, Vector3(plot.get_center().x, inner.position.y + 0.001 - pitch * 0.5, plot.get_center().y))
+		stood["return_at"] = top.origin + Vector3(0.0, pitch, 0.0)
+		stood["return_turn"] = atan2(-top.basis.x.z, top.basis.x.x)
 	var rest: Array = []
 	for p in piles:
 		rest.append_array((p as Dictionary)["cards"])
@@ -471,6 +508,48 @@ func _file_inventory(want := CardTable.SHOEBOX_FILL, pad := stood.has("lid")) ->
 		var at := names.find(name)
 		names.remove_at(at if at >= 0 else 0)
 	return names
+
+
+## The height of the highest point of a card of [param size] posed at [param xf].
+static func card_top(xf: Transform3D, size: Vector2) -> float:
+	var b := xf.basis
+	return xf.origin.y + (size.x * absf(b.x.y) + size.y * absf(b.z.y) + TableMedium.CARD_T * absf(b.y.y)) * 0.5
+
+
+## What the box holds its cards as, built: `file`, `piles` or `loose` ([constant CardTable.BOX_CONTENTS]) -
+## the plan's, unless a box of one pile was filed instead ([method _build_file]).
+func contents() -> String:
+	return String(stood.get("contents", medium._plan.staging.get("contents", "file")))
+
+
+## Whether drawn card [param i] goes back in the box after it is shown (its position's `destination`).
+func put_back(i: int) -> bool:
+	var cards: Array = medium._plan.pay.get("cards", []) if medium._plan.pay.get("cards") is Array else []
+	if i < 0 or i >= cards.size() or not (cards[i] is Dictionary):
+		return false
+	var p: Variant = (cards[i] as Dictionary).get("position", {})
+	return p is Dictionary and String((p as Dictionary).get("destination", "")) == "box"
+
+
+## The first drawn card that goes back in the box, or the number drawn when none does.
+func _first_back() -> int:
+	for i in medium._cards.size():
+		if put_back(i):
+			return i
+	return medium._cards.size()
+
+
+## How many cards are drawn after the first one goes back in the box: none of them may wait under it.
+func _late_draws() -> int:
+	return maxi(0, medium._cards.size() - _first_back() - 1)
+
+
+## How many cards the piles numbered [param which] hold between them.
+static func _held(piles: Array, which: Array) -> int:
+	var n := 0
+	for i in which:
+		n += ((piles[int(i)] as Dictionary)["cards"] as Array).size()
+	return n
 
 
 ## The cards come out of a box they are filed in (on edge, not lying flat in a tin).

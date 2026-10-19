@@ -435,6 +435,7 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		var passed := boxed and CardProducer.passed(p, positions)
 		vars["passed"] = passed
 		vars["link"] = link and not passed and comment != "aside" and comment != "none" and not on_table.is_empty()
+		vars["handled"] = _handled(p, int(step))
 		vars["misses"] = misses
 		if comment == "aside":
 			lo_hi = [45, 75]
@@ -520,9 +521,13 @@ static func after(plan: Dictionary, k: int, n: int) -> String:
 		var destination := String((at.call(k) as Dictionary).get("destination", "row"))
 		if bool((at.call(k) as Dictionary).get("linger", false)):
 			parts.append("this card stays visible for a long, wordless moment")
+		var down := "this card goes back down into its place in the waterfall" if comes.call(k) == "swept" \
+			else ("this card goes down on card %d, a little behind it" % (k - 1) if (at.call(k) as Dictionary).get("on") == true and k > 1
+			else "this card goes down into its place")
+		if String((at.call(k) as Dictionary).get("lies", "")) == "sideways":
+			down += ", laid sideways"
 		parts.append("this card goes back into the box" if destination == "box" else
-			("this card joins a stack at the side" if destination == "stack" else
-			("this card goes back down into its place in the waterfall" if comes.call(k) == "swept" else "this card goes down into its place")))
+			("this card joins a stack at the side" if destination == "stack" else down))
 	for m in (at.call(k) as Dictionary).get("then", []) if k >= 1 and (at.call(k) as Dictionary).get("then") is Array else []:
 		var w := String(m).split(" ", false)
 		if w.size() == 2:
@@ -544,11 +549,28 @@ static func after(plan: Dictionary, k: int, n: int) -> String:
 					parts.append(("cards %d to %d are swept out together in one waterfall, and card %d is picked up" % [next, last, next])
 						if last > next else "the next card is swept out and picked up")
 			_:
-				parts.append("a few cards are quickly checked and returned during a hunt; then the next card is pulled out and held up" if boxed and comes.call(next) == "searched" else
+				parts.append("a few cards are lifted, looked at and returned during a hunt; then the next card is pulled out and held up" if boxed and comes.call(next) == "searched" else
 					"the next card is pulled out of the box and held up to the camera" if boxed
 					else "the next card is drawn, turned over and held up to the camera")
 	var text := "; then ".join(parts)
 	return text.substr(0, 1).to_upper() + text.substr(1) + "."
+
+
+## WHAT IS DONE AFTER POSITION [param p]'s PASSAGE (card [param k]) that its reader has to account for: the
+## card laid sideways or on the card before it, a card turned where it lies (`then`) - in words, or ""
+## for a card laid down plainly, put back or piled at the side.
+static func _handled(p: Dictionary, k: int) -> String:
+	var parts := PackedStringArray()
+	var laid := String(p.get("destination", "")) not in ["box", "stack"]
+	if laid and String(p.get("lies", "")) == "sideways":
+		parts.append("this card is laid down sideways, a quarter turn round")
+	if laid and p.get("on") == true and k > 1:
+		parts.append("this card is laid on card %d, a little behind it" % (k - 1))
+	for m in p.get("then", []) if p.get("then") is Array else []:
+		var w := String(m).split(" ", false)
+		if w.size() == 2:
+			parts.append("card %s is turned %s where it lies" % [w[1], "sideways" if w[0] == "tap" else "back upright"])
+	return "; and ".join(parts)
 
 
 ## How position [param p] (number [param i]) comes and lies, as a reader is told it beside its name.
@@ -613,18 +635,13 @@ static func _past(e: Dictionary) -> String:
 	if not _s(p.get("running_bit", "")).is_empty():
 		lines.append("  Running bit: %s" % clip(_s(p.get("running_bit", "")), 30))
 	lines.append("  Spread: %s" % _s(_d(p.get("spread")).get("name", "")))
+	# WHERE THE CARDS CAME FROM, and never how each was handled: listed, the moves became habits to
+	# break ("never an aside, never dealt"), and the next plan staged the ones it had not seen (2026-10-18)
 	if p.get("staging") is Dictionary:
 		var st := CardTable.staging_of(p)
-		var moves := PackedStringArray()
-		var listed: Array = _d(p.get("spread")).get("positions", []) if _d(p.get("spread")).get("positions") is Array else []
-		for i in listed.size():
-			var how := _how_note(_d(listed[i]), i + 1).strip_edges().trim_prefix("(").trim_suffix(")")
-			if not how.is_empty() and not moves.has(how):
-				moves.append(how)
 		var where := "in a booklet" if st["text"] == "booklet" else ("on the fronts" if st["text"] == "front" else "on the backs")
-		lines.append("  Staged: from a %s, %s box, %s contents, %s pace, text %s%s" % [st["source"],
-			st["box_style"], st["contents"], st["pace"], where,
-			("; " + "; ".join(moves)) if not moves.is_empty() else ""])
+		lines.append("  Staged: from a %s, %s box, %s contents, %s pace, text %s" % [st["source"],
+			st["box_style"], st["contents"], st["pace"], where])
 	lines.append("  Card size: %s" % _s(look.get("card_size", "large")))
 	lines.append("  Deck \"%s\": %s" % [_s(look.get("deck_name", "")), clip(_s(look.get("deck_style", "")), 40)])
 	if not _s(look.get("kind", "")).is_empty():

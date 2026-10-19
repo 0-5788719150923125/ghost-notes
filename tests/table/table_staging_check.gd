@@ -440,27 +440,32 @@ func _deck_reversals() -> void:
 	var cards: Array = medium._plan.pay["cards"]
 	(cards[1] as Dictionary)["reversed"] = true
 	var draws: Array = medium._times()["draw"]
-	var first := float((draws[0] as Array)[0])
-	var second := float((draws[1] as Array)[0])
 	var top := medium._deck[medium._plan.deck_n - 1] as MeshInstance3D
 	# THE WAY IT FACES, NOT ITS TILT: the first card is drawn as the shuffle ends, and a riffle under way
 	# then is cut short, its cards still tipped in the hand while the deck squares (2026-10-17: a riffle
 	# a third shorter left the top card tipped 9 degrees at the draw, upright all the same)
 	var way := func(a: Vector3, b: Vector3) -> float: return Vector2(a.x, a.z).normalized().dot(Vector2(b.x, b.z).normalized())
-	_posed(first - 0.01)
-	_ok(way.call(top.transform.basis.x, medium._rest_xf(medium._plan.deck_n - 1).basis.x) > 0.9,
-		"the first upright card's back is upright before its draw")
-	_posed(first + 0.01)
-	_ok(way.call(top.transform.basis.x, medium._rest_xf(medium._plan.deck_n - 1).basis.x) < -0.9,
+	# A CARD ON THE DECK IS THE DECK'S OWN TOP CARD until the hand takes it (TableMedium._taken_by): the
+	# back on top is the first card's until it leaves, then the next card's, on the card under it
+	var under := medium._deck[medium._plan.deck_n - 2] as MeshInstance3D
+	_posed(medium._leaves(0) - 0.01)
+	_ok(top.visible and not (medium._cards[0] as MeshInstance3D).visible
+		and way.call(top.transform.basis.x, medium._rest_xf(medium._plan.deck_n - 1).basis.x) > 0.9,
+		"the first upright card's back is upright before its draw, the deck's own top card")
+	_posed(medium._leaves(0) + 0.01)
+	_ok(not top.visible and under.visible and (medium._cards[0] as MeshInstance3D).visible
+		and way.call(under.transform.basis.x, medium._rest_xf(medium._plan.deck_n - 2).basis.x) < -0.9,
 		"the next reversed card is already reversed under the first card")
-	_posed(second - 0.01)
-	_ok(top.transform.basis.x.dot(medium._deck_top_xf(1).basis.x) > 0.99,
+	_posed(medium._leaves(1) - 0.01)
+	var waits := under.transform
+	_ok(under.visible and not (medium._cards[1] as MeshInstance3D).visible and waits.basis.x.dot(medium._deck_top_xf(1).basis.x) > 0.99,
 		"the reversed back stays reversed while waiting on the deck")
-	var waiting := top.transform.basis.x
-	_posed(second + 0.01)
-	_ok((medium._cards[1] as MeshInstance3D).transform.basis.x.dot(waiting) > 0.99,
-		"the reversed draw starts with the back's waiting orientation")
-	_ok(top.transform.basis.x.dot(medium._rest_xf(medium._plan.deck_n - 1).basis.x) > 0.99,
+	_posed(medium._leaves(1) + 0.01)
+	var taken := (medium._cards[1] as MeshInstance3D).transform
+	_ok(not under.visible and Vector2(taken.origin.x - waits.origin.x, taken.origin.z - waits.origin.z).length() < 0.0005
+		and taken.basis.x.dot(waits.basis.x) > 0.99, "taken, the reversed draw starts as the deck's top card lay, turned as it was")
+	var next := medium._deck[medium._plan.deck_n - 3] as MeshInstance3D
+	_ok(next.visible and next.transform.basis.x.dot(medium._rest_xf(medium._plan.deck_n - 3).basis.x) > 0.99,
 		"the following upright card is ready under the reversed card")
 
 

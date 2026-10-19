@@ -46,8 +46,10 @@ const SEARCH_RISE_LEAST := 0.4
 const SEARCH_TIP := 0.2
 const SEARCH_TURN := 0.75
 const SEARCH_LOOKS_LYING := 2
-## A card pulled from the box rises this far above the rim before it turns to the camera.
+## A card pulled from the box rises this far above the rim before it turns to the camera - and one put
+## back is brought over its place this far above the rim, for this much of its way, then let down.
 const PULL_CLEAR := 0.02
+const PUT_OVER := 0.7
 ## A card laid down arcs this high over the cloth on its way (meters) - and is lifted higher while the
 ## box stands in its way ([method _lay_lift]): sampled in LAY_SAMPLES steps, the lift eased away over
 ## LAY_EASE of the way after the box and over the last LAY_LAND of it.
@@ -111,6 +113,27 @@ func _search_rise(seat: Transform3D, up: Vector3, v: float, axis: Vector3) -> fl
 	return rise
 
 
+## The top of the highest card in the box within [param reach] of [param seat] (across the floor, its
+## middle), a card put back on its pile included - what a card turned over there passes over.
+func _ground(seat: Transform3D, reach: float) -> float:
+	var size := CardTable.card_size(medium._plan.look)
+	var box: Dictionary = medium._box_part.stood
+	var near: Array = (box.get("filed", []) as Array) + (box.get("search", []) as Array) + (box.get("at_k", []) as Array)
+	var top := -INF
+	for xf in near:
+		var o: Vector3 = (xf as Transform3D).origin
+		if Vector2(o.x - seat.origin.x, o.z - seat.origin.z).length() < reach + size.y * 0.5 and not o.is_equal_approx(seat.origin):
+			top = maxf(top, TableBox.card_top(xf as Transform3D, size))
+	if box.has("return_at"):
+		var back: Vector3 = box["return_at"]
+		if Vector2(back.x - seat.origin.x, back.z - seat.origin.z).length() < reach + size.y * 0.5:
+			var n := 0
+			for i in medium._cards.size():
+				n += 1 if medium._box_part.put_back(i) else 0
+			top = maxf(top, back.y + float(n) * TableMedium.CARD_T * 1.1)
+	return top
+
+
 ## A LYING CARD TURNED UP TO THE EYE, its FACE showing and the right way up: turned over about its long
 ## side from where it lay face down, its far edge [constant SEARCH_TURN] up from lying.
 static func _turned_up() -> Basis:
@@ -119,14 +142,17 @@ static func _turned_up() -> Basis:
 
 
 ## The card a search is looking at, the [param which]-th it has looked at, [param beat] (0 to 1) of
-## the way through its look ([method _pose_rummage]).
+## the way through its look ([method _pose_rummage]). A LOOK STOPS ON THE CARD: its front is held to
+## the eye for half of the look on edge and nearly half off a pile - about a second either way
+## ([constant TableActions.RUMMAGE]) - and it is quick to come up and go back. It used to be in view
+## for a tenth of the look, under half a second, and read as pulled and put straight back.
 func searched_xf(which: int, beat: float) -> Transform3D:
 	var inner: AABB = medium._box_part.stood["inner"]
 	var world: AABB = medium._box_part.stood["world"]
 	var size := CardTable.card_size(medium._plan.look)
 	var seat := _search_seat(which)
-	var lift := smoothstep(0.05, 0.38, beat) * (1.0 - smoothstep(0.62, 0.95, beat))
-	var look := smoothstep(0.18, 0.44, beat) * (1.0 - smoothstep(0.56, 0.82, beat))
+	var lift := smoothstep(0.03, 0.22, beat) * (1.0 - smoothstep(0.78, 0.97, beat))
+	var look := smoothstep(0.1, 0.25, beat) * (1.0 - smoothstep(0.75, 0.9, beat))
 	var n := seat.basis.y.normalized()
 	if absf(n.y) < 0.7:
 		# ON EDGE: up along its own plane, then leaned about the line where it leaves the file - its
@@ -150,7 +176,9 @@ func searched_xf(which: int, beat: float) -> Transform3D:
 	# toward the eye, and never through the wall: held low, in a box near the frame's top, the card's
 	# near edge is under the rim, and a pile by the front wall brought it out through the cardboard
 	var toward := minf(world.size.z * 0.15, inner.end.z - 0.004 - reach - seat.origin.z)
-	var least := seat.origin.y + half + 0.005
+	# clear of the highest card it turns over, not only its own pile: turned toward the eye, its corner
+	# swept through a taller pile in front of it (box_clip_check)
+	var least := maxf(seat.origin.y, _ground(seat, size.y * 0.5 + toward)) + half + 0.005
 	var clear := maxf(maxf(world.end.y, inner.end.y) + half + 0.01, least)
 	while clear > least:
 		var edge: Variant = CardTable.project(medium._plan.cam_base, medium._cam.fov,
@@ -158,8 +186,10 @@ func searched_xf(which: int, beat: float) -> Transform3D:
 		if edge != null and (edge as Vector2).y > 0.0:
 			break
 		clear = maxf(least, clear - 0.004)
-	lift = smoothstep(0.03, 0.25, beat) * (1.0 - smoothstep(0.75, 0.97, beat))
-	look = smoothstep(0.12, 0.4, beat) * (1.0 - smoothstep(0.6, 0.88, beat))
+	# UP FIRST, THEN OVER: lifted flat off its pile to where it is held, and only then turned over and
+	# brought toward the eye - the way back the same, turned back before it goes down
+	lift = smoothstep(0.02, 0.16, beat) * (1.0 - smoothstep(0.84, 0.98, beat))
+	look = smoothstep(0.16, 0.33, beat) * (1.0 - smoothstep(0.67, 0.84, beat))
 	var basis := seat.basis.orthonormalized().slerp(_turned_up(), look)
 	# ON ITS WAY OVER A CARD STANDS ON A CORNER, lower than it is held: it is carried as high as keeps
 	# its lowest corner where the held card's low edge would be, so it never turns down into its pile
@@ -233,8 +263,10 @@ func card_pose(k: int, t: float, ev: Array, wj: Dictionary) -> Dictionary:
 		"arrive":
 			var how := String(e["how"])
 			if u < 0.0 and how != "fan":
-				# the card before is still going down: this one waits in its source
+				# the card before is still going down: this one waits in its source - in a box, standing
+				# in its place; in a deck, as the deck's own top card until it is taken (TableMedium._taken_by)
 				out["xf"] = _source_xf(k)
+				out["visible"] = medium._box_part.filed_on_edge() or how == "jumper"
 				return out
 			match how:
 				"draw":
@@ -292,9 +324,12 @@ func card_pose(k: int, t: float, ev: Array, wj: Dictionary) -> Dictionary:
 			var from := _present_xf(k, t0, up_at, t0)
 			var lay_u := (t - t0) / s
 			if lay_u < TableMedium.LAY_END:
-				var f := TableMedium._ease(clampf((lay_u - LAY_MOVE.x) / (LAY_MOVE.y - LAY_MOVE.x), 0.0, 1.0))
+				var way := clampf((lay_u - LAY_MOVE.x) / (LAY_MOVE.y - LAY_MOVE.x), 0.0, 1.0)
+				var f := TableMedium._ease(way)
 				var xf := from.interpolate_with(lying, f)
 				xf.origin.y += _lay_lift(from, lying, f)
+				if medium._box_part.filed_on_edge() and medium._box_part.put_back(k):
+					xf = _put_back_xf(from, lying, way)
 				if lay_u > LAY_MOVE.y:
 					xf.origin.y += (1.0 - clampf((lay_u - LAY_MOVE.y) / (TableMedium.LAY_END - LAY_MOVE.y), 0.0, 1.0)) * 0.002
 				out["xf"] = xf
@@ -443,7 +478,16 @@ func _slid_out(k: int, lying: Transform3D, t: float) -> Transform3D:
 ## down after (the card's footprint, turned as it is at each step; [constant LAY_SAMPLES] steps), and
 ## gone by the time it lies. Feedback 0010: a card laid behind the box went down through it.
 func _lay_lift(from: Transform3D, to: Transform3D, f: float) -> float:
-	var lift := sin(PI * f) * LAY_ARC
+	# set down: nothing is left of it where the card lies
+	return minf(maxf(sin(PI * f) * LAY_ARC, _box_lift(from, to, f)), LAY_LIFT_MAX) * smoothstep(1.0, 1.0 - LAY_LAND, f)
+
+
+## How high a card on its way from [param from] to [param to], at [param f] of it, is lifted to keep its
+## lowest edge [constant PULL_CLEAR] over the box's rim and the cards in it - and a card's thickness or
+## two more, over the card a waterfall pulls up out of the box behind it - for every step its way is over
+## the box (none where it never is).
+func _box_lift(from: Transform3D, to: Transform3D, f: float) -> float:
+	var lift := 0.0
 	if medium._box_part.stood.is_empty():
 		return lift
 	var world: AABB = medium._box_part.stood["world"]
@@ -460,12 +504,30 @@ func _lay_lift(from: Transform3D, to: Transform3D, f: float) -> float:
 			TableMedium.CARD.x * absf(b.x.z) + TableMedium.CARD.y * absf(b.z.z) + TableMedium.CARD_T * absf(b.y.z)) * 0.5
 		if not Rect2(xf.origin.x - half.x, xf.origin.z - half.z, half.x * 2.0, half.z * 2.0).intersects(rim):
 			continue
-		var need := world.end.y + PULL_CLEAR + half.y - xf.origin.y
+		var need := _over_box() + PULL_CLEAR + TableMedium.CARD_T * 2.0 + half.y - xf.origin.y
 		# held for the step either side, eased away over LAY_EASE after
 		var held := 1.0 - smoothstep(0.0, LAY_EASE, absf(f - fs) - step)
 		lift = maxf(lift, need * held)
-	# set down: nothing is left of it where the card lies
-	return minf(lift, LAY_LIFT_MAX) * smoothstep(1.0, 1.0 - LAY_LAND, f)
+	return lift
+
+
+## A CARD PUT BACK IN THE BOX, [param way] (0 to 1, linear) of its way from [param from] (held up) to
+## [param to] (its place in the box): carried over the box and turned as it will lie there, then let
+## straight down into its place - between the cards filed either side of it, or flat onto its pile. Laid
+## along the one curve every card takes, it came down still turning, and scraped through the cards
+## beside it (box_clip_check).
+func _put_back_xf(from: Transform3D, to: Transform3D, way: float) -> Transform3D:
+	var size := CardTable.card_size(medium._plan.look)
+	var v := 0.0
+	if medium._box_part.contents() == "file":
+		v = size.y if bool(medium._box_part.stood.get("upright", true)) else size.x
+	var over := Transform3D(to.basis, Vector3(to.origin.x, _over_box() + v * 0.5 + PULL_CLEAR, to.origin.z))
+	if way < PUT_OVER:
+		var g := TableMedium._ease(way / PUT_OVER)
+		var xf := from.interpolate_with(over, g)
+		xf.origin.y += _lay_lift(from, over, g)
+		return xf
+	return over.interpolate_with(to, TableMedium._ease((way - PUT_OVER) / (1.0 - PUT_OVER)))
 
 
 ## WHERE CARD [param k] WAITS before it is taken: on top of the deck, or standing in the box's file (on
@@ -487,21 +549,36 @@ func _take_xf(k: int, u: float, to: Transform3D, span: float) -> Transform3D:
 
 
 ## A card PULLED FROM THE BOX at [param r] (a draw's phases): still in the file while the hand finds it,
-## then up along its own plane until it clears the rim, then on to [param to].
+## then up along its own plane until it clears the rim and every card in the box, then on to [param to].
 func _pull_xf(k: int, r: float, to: Transform3D) -> Transform3D:
 	var at: Transform3D = (medium._box_part.stood["at_k"] as Array)[k]
 	if r < TableMedium.SQUARE:
 		return at
-	var inner: AABB = medium._box_part.stood["inner"]
 	var v := CardTable.card_size(medium._plan.look).y if bool(medium._box_part.stood.get("upright", true)) else CardTable.card_size(medium._plan.look).x
-	if String(medium._plan.staging.get("contents", "file")) != "file":
+	if medium._box_part.contents() != "file":
 		v = 0.0
-	var raised := Transform3D(at.basis, Vector3(at.origin.x, maxf(inner.end.y, (medium._box_part.stood["world"] as AABB).end.y) + v * 0.5 + PULL_CLEAR, at.origin.z))
+	var raised := Transform3D(at.basis, Vector3(at.origin.x, _over_box() + v * 0.5 + PULL_CLEAR, at.origin.z))
 	if r < FLIP_END:
 		return at.interpolate_with(raised, TableMedium._ease((r - TableMedium.SQUARE) / (FLIP_END - TableMedium.SQUARE)))
 	if r < TableMedium.RISE_END:
-		return raised.interpolate_with(to, TableMedium._ease((r - FLIP_END) / (TableMedium.RISE_END - FLIP_END)))
+		var xf := raised.interpolate_with(to, TableMedium._ease((r - FLIP_END) / (TableMedium.RISE_END - FLIP_END)))
+		# PUT DOWN LYING (dealt, or swept out): turning over on its way, its lower edge keeps to the line
+		# it travels, as a card swept off a deck does ([method _sweep_xf]) - turning at its middle's
+		# height, it cut into the card of its waterfall it came to lie on
+		# - and while it is still over the box it keeps over the card coming up out of it behind it
+		if absf(to.basis.y.normalized().y) > 0.9:
+			var b := xf.basis
+			var size := CardTable.card_size(medium._plan.look)
+			xf.origin.y += maxf((size.x * absf(b.x.y) + size.y * absf(b.z.y)) * 0.5,
+				_box_lift(raised, to, TableMedium._ease((r - FLIP_END) / (TableMedium.RISE_END - FLIP_END))))
+		return xf
 	return to
+
+
+## The height a card is carried at over the box: above its rim and the highest card in it.
+func _over_box() -> float:
+	return maxf(maxf((medium._box_part.stood["inner"] as AABB).end.y, (medium._box_part.stood["world"] as AABB).end.y),
+		float(medium._box_part.stood.get("top_y", -INF)))
 
 
 ## A card IN A WATERFALL at [param v] seconds of its own slide ([constant FAN_MOVE]): off the deck and

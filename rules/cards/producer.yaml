@@ -93,6 +93,9 @@ prompt:
     insert: past
   - when: habits
     say: ""
+  # HOW THE CARDS ARE HANDLED IS NO HABIT (2026-10-18): shown each episode's moves, a producer named
+  # "Handling: ... never an aside, never dealt" among the habits and staged the moves it had not seen
+  # yet. The history no longer lists them (CardPrompts._past), and the rule says why.
   - when: habits
     say: >-
           THE SHOW'S HABITS. Read those episodes for what they share - not their subjects, which
@@ -103,7 +106,8 @@ prompt:
           `habits`, with how many of the episodes fell into it. Then plan an episode that falls into
           none of them, in its form as well as its subject, and repeats none of their topics, title
           formulas, angles, running bits, casts, painting styles, palettes, card stocks, cloths or
-          rooms.
+          rooms. How the cards come out and are handled is never one of the habits: it follows from
+          the kind of card and the story, and is never varied for its own sake.
   - ""
   - include: agents/episode.title
   - ""
@@ -214,28 +218,46 @@ staging:
       To keep talking while ignoring the revealed card, choose `comment: "aside"` for a box card.
       The card remains in view during a short continuation of the preceding thought, with no
       mention of this card or its printed details, then goes back into the box. Use this rarely.
+  # A MOVE IS FOR THE STORY, NEVER FOR VARIETY (the user, 2026-10-18: "We should not be forcing strange
+  # behavior without a good reason to"). Offered as a menu "when this kind of card is handled that way",
+  # with every earlier episode's moves in its history, a producer reached for the ones not yet used:
+  # the-shoebox 32533 swept out "The Rubber-Banded Pair" as a waterfall of two, and its reader said the
+  # band had gone hard while two loose cards fell on each other; penalty-box 21439 laid "The Squall - the
+  # accident nobody planned" sideways, and nobody said why. A waterfall of fewer than three is drawn
+  # one card at a time (CardProducer.runs_of_three).
   - >-
-      EACH POSITION can say how its card comes and lies; leave these out for the usual, a card
-      drawn, held up while it is read, and laid down in a row:
+      EACH POSITION can say how its card comes and lies. Leave these out: a card pulled, held up
+      while it is read and laid down is how cards are handled, and an episode where every card comes
+      that way is the usual one. A move below is for a position whose own question is about it, in a
+      kind of card really handled that way, and its reader will say what it is for. Never choose one
+      to vary the episode, because earlier episodes did not use it, or for a card the story does not
+      need it for: the viewer watches every move and has to see why it happened.
   - >-
       - `comes` "dealt": put straight down in its place, face up, and read lying there - small on
-      screen, so for a card that needs no close look. "swept": positions next to each other that are
-      all swept go out together in one waterfall, overlapping in a line or an arc so the viewer sees
-      the run at once; then each is picked up in turn and read. "searched": only for a box; before
-      this position's card is revealed, quickly lift, check and return several anonymous cards while
+      screen, so for a card that needs no close look. "swept": a run of three or more positions
+      next to each other, all swept, goes out together in one waterfall, overlapping in a line or an
+      arc so the viewer sees the run at once; then each is picked up in turn and read (fewer than
+      three is no run, and comes out one at a time). "searched": only for a box; before
+      this position's card is revealed, a few cards are lifted, looked at and returned while
       hunting. Give the hunt an object, but do not promise the next random draw will be it. The host
       can be distracted by another find or continue the hunt later. The seed chooses the card after
       the plan is written.
-  - '- `lies` "sideways": laid with a quarter turn, as a tapped card lies.'
   - >-
-      - `on` true: laid on the card before it, a little behind so that card's name still shows - a
-      stack, as a player keeps lands.
+      - `lies` "sideways": laid with a quarter turn - only for a game's card, turned the way that
+      game turns a card it has used (tapped).
+  - >-
+      - `on` true: laid on the card before it, a little behind so that card's name still shows - only
+      for a game's cards kept in a stack, as a player keeps lands.
   - >-
       - `then`: moves made after this card's passage - "tap 2" turns card 2 sideways where it lies,
-      "untap 2" turns it back - naming a card already on the table.
+      "untap 2" turns it back - naming a card already on the table; only for a game's cards, played
+      as that game plays them.
   - >-
-      Use them when this kind of card is handled that way (a game's cards played, tapped and
-      stacked; a collector fanning a run of a set out); a reading that needs none is the usual one.
+      THE TABLE SHOWS THE CARDS, the box they came from and these moves - nothing else. Never plan a
+      position on something done to the cards that the table cannot show: a rubber band, a clip, a
+      sleeve, an envelope, a note tucked in, cards stuck or kept together, a card hidden under
+      another. A position's name and question are about the card that comes up, never about how
+      the cards are bundled.
 
 # THE PRINTED CARD: what a deck's printer chooses beyond its painting - the frame's rules, the window's
 # shape, the ornament round the edge, the booklet's page (`printed`, each with its registry's options),

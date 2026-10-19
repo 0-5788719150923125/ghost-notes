@@ -210,7 +210,11 @@ func shuffle_xf(i: int, u: float) -> Transform3D:
 	var m := move_at(u)
 	if m.is_empty():
 		return medium._rest_xf(i)
-	var v := u - float(m["t0"])
+	return _move_xf(i, u - float(m["t0"]), m)
+
+
+## Deck slot [param i] [param v] seconds into move [param m].
+func _move_xf(i: int, v: float, m: Dictionary) -> Transform3D:
 	var dur := float(m["dur"])
 	match String(m["kind"]):
 		"riffle":
@@ -222,6 +226,28 @@ func shuffle_xf(i: int, u: float) -> Transform3D:
 		"wash":
 			return wash(i, v, m)
 	return medium._rest_xf(i)
+
+
+## THE MOVE THE FIRST CARD CUTS OFF: the riffle, overhand or cut still under way when the shuffle that
+## began at [param ts] ends at [param te] - or empty, in a pause, or a wash (fitted to end in time,
+## [method _wash_fit]).
+func cut_off(ts: float, te: float) -> Dictionary:
+	if ts == INF or te == INF or te <= ts:
+		return {}
+	var m := move_at(te - ts - 0.001)
+	return {} if m.is_empty() or String(m["kind"]) == "wash" else m
+
+
+## A MOVE CUT OFF BY THE FIRST CARD IS FINISHED, NOT UNDONE: deck slot [param i] at [param t], from the
+## shuffle's end [param te] for [constant TableMedium.SQUARE] seconds, goes on through the rest of move
+## [param m] along the move's own path, played that much faster, to the slot the move was taking its card
+## to. Eased straight back to where it began instead, a card the move had carried down into the deck rose
+## back up through the cards above it to the top (true-tarot 288024, the user, 2026-10-18: "a card
+## 'pops' to the top, clipping through the other cards from below").
+func finish_xf(i: int, t: float, ts: float, te: float, m: Dictionary) -> Transform3D:
+	var dur := float(m["dur"])
+	var v := lerpf(te - ts - float(m["t0"]), dur, TableMedium._ease(clampf((t - te) / TableMedium.SQUARE, 0.0, 1.0)))
+	return _move_xf(i, minf(v, dur), m)
 
 
 ## THE DECK'S CARDS LIE THE WAY THEY LIE (2026-10-10, the user: "when shuffling, the orientation of the
@@ -360,8 +386,12 @@ func _deck_flip0(te: float, ts: float, tm: Dictionary, wj: Dictionary) -> Packed
 				slot = int(order[order.size() - 1])
 				turned = (wj["plan"] as Dictionary)["turned"][slot]
 			want = medium._top_deck_reversed(float(wj["end"]), tm)
+		elif not cut_off(ts, te).is_empty():
+			# a move the first card cuts off is finished ([method finish_xf]): the top is the card
+			# it brings there
+			st = _chain_at(idx + 1)
 		elif idx < medium._moves.size() and at >= float((medium._moves[idx] as Dictionary)["t0"]):
-			# a move still under way when the shuffle ends: its cards go to their slots, turned
+			# a wash still under way when the shuffle ends: its cards go to their slots, turned
 			# as they were
 			turned = (_move_goes(medium._moves[idx]) as Dictionary)["turned"][slot]
 		var lies := int((st["turn"] as PackedByteArray)[slot]) ^ turned
@@ -400,6 +430,13 @@ func deck_turns(t: float, ts: float, te: float, tm: Dictionary, wj: Dictionary, 
 		for slot in medium._plan.deck_n:
 			var c := int(order[slot]) if slot < order.size() else int(plan.get("jumper", slot))
 			out[slot] = PI * float((f0[src[c]] ^ turn[c]) ^ int((plan["turned"] as PackedByteArray)[c]))
+		return out
+	# A MOVE THE FIRST CARD CUTS OFF, once it is finished ([method finish_xf]): each slot holds the card
+	# the move brought to it, the way that card lay - as each card did on its way there
+	if wj.is_empty() and jump_s == 0.0 and t >= te + TableMedium.SQUARE and not cut_off(ts, te).is_empty():
+		var after := _chain_at(idx + 1)
+		for slot in medium._plan.deck_n:
+			out[slot] = PI * float(f0[(after["src"] as PackedInt32Array)[slot]] ^ (after["turn"] as PackedByteArray)[slot])
 		return out
 	# the weight of the hand-over: the shuffle's pose settles into the rest over this
 	var w := 0.0

@@ -54,8 +54,10 @@ const FAN_EACH := 0.32
 ## A card lying on the table picked up and held up to be shown.
 const SHOW := 1.6
 ## A few quick looks at the box's own cards, each returned before the chosen card is drawn: three drawn
-## part of the way up out of a file, or two turned over off a pile (TableMedium.SEARCH_LOOKS).
-const RUMMAGE := 3.6
+## part of the way up out of a file, or two turned over off a pile (TableMedium.SEARCH_LOOKS) - each
+## front held to the eye about a second (TableCardPose.searched_xf). At 3.6 s a front was in view for
+## under half a second (the user, 2026-10-18: "they never stop to even look at the cards briefly").
+const RUMMAGE := 5.4
 ## A revealed card stays in the hand through an unspoken beat before it is returned or laid down.
 const LINGER := 2.0
 ## A card turned where it lies: a quarter turn (tap, untap), or over (flip).
