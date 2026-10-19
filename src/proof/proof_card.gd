@@ -29,8 +29,14 @@ class_name ProofCard
 ## THE NOTE'S OTHER CARDS ADD STEPS OF THEIR OWN ([EpisodeStep]), as on Cards' card: the ones wanted
 ## now are rows under the Script - the YouTube card's tags - each handed the episode as a [Feed], made
 ## once the episode's own steps are done, and made again on its ⟳. This card never asks what one is.
+##
+## THE NOTE'S TAGS ARE ONE LIST (the user, 2026-10-19: "I never know which tags are truly going to be
+## applied"): its `tags:` line, shown on the YouTube card ([method youtube_built]) and taken whole by
+## every upload. A note with none takes the framer's, once ([method _seed_tags]), as a card show takes
+## its producer's; a step that writes an episode's tags writes over it ([method Feed.replace_tags]).
 
 const YouTube := preload("res://src/export/youtube.gd")
+const TagField := preload("res://src/ui/tag_field.gd")
 
 const KEY := "proof"
 ## NO MINUTES (the user, 2026-10-16: "I would prefer to just make videos as long as they need to be"):
@@ -77,6 +83,7 @@ var _stop_btn: Button
 var _del_btn: Button
 var _writer: AgentPick
 var _youtube: YouTubeCard    # the note's YouTube card, once the reading has built it
+var _tags_field: TagField     # the note's tags on it
 var _rows := {}               # step -> {state: Label, redo: Button}
 ## The picked episode, as the steps other cards add to it read it ([method _tick_steps]).
 var _feed: Feed = null
@@ -137,6 +144,8 @@ func _process(delta: float) -> void:
 		_producer.tick()
 	_tick_steps()
 	_poll_note_job()
+	_seed_tags()
+	_refresh_tags()
 	_refresh()
 
 
@@ -201,12 +210,12 @@ class Publish extends ReadingPublish:
 		return card.upload_values()
 
 	func youtube_built(yt: YouTubeCard) -> void:
-		card._youtube = yt
+		card.youtube_built(yt)
 
 
 ## THE EPISODE AS THE STEPS OTHER CARDS ADD TO IT READ IT ([EpisodeFeed]): its folder, the channel's
-## name, the framer's title and description, the note's tags with the framer's, the lesson as the voice
-## reads it, and the note's writer.
+## name, the framer's title and description, the note's tags with the framer's (and a step's to write
+## over the note's), the lesson as the voice reads it, and the note's writer.
 class Feed extends EpisodeFeed:
 	var card: ProofCard
 	var episode: ProofEpisode
@@ -237,6 +246,12 @@ class Feed extends EpisodeFeed:
 			if not all.has(t):
 				all.append(t)
 		return all
+
+	func replace_tags(tags: PackedStringArray) -> String:
+		if card._doc == null or not card._doc.set_field("tags", ", ".join(tags)):
+			return "the tags could not be written into the note"
+		card._refresh_tags()
+		return ""
 
 	func words() -> String:
 		return Manuscript.unspoken(episode.script()).strip_edges()
@@ -278,6 +293,55 @@ func _show_tags() -> PackedStringArray:
 	return out
 
 
+## THE NOTE'S TAGS ON THE YOUTUBE CARD ([member YouTubeCard.extra]): its `tags:` line, as chips - the
+## one list its uploads take.
+func youtube_built(yt: YouTubeCard) -> void:
+	_youtube = yt
+	_tags_field = TagField.new()
+	_tags_field.tooltip_text = ("The note's tags - its `tags:` line - the one list every episode goes up with. With "
+		+ "\"Write each episode's tags\" ticked above, the writer replaces it with tags written for each episode. "
+		+ "× removes one; type in the box and a comma (or Enter) makes it a tag. YouTube takes 500 characters "
+		+ "of tags in all; a dimmed tag is past that.")
+	_tags_field.changed.connect(_save_tags)
+	yt.extra.add_child(_tags_field)
+	_refresh_tags()
+
+
+## The chips follow the note's line, unless they are being typed in.
+func _refresh_tags() -> void:
+	if _tags_field == null or _tags_field.typing():
+		return
+	var tags := _show_tags()
+	if _tags_field.get_tags() != tags:
+		_tags_field.set_tags(tags)
+	_tags_field.mark(YouTube.left_out(tags))
+
+
+## A chip added or removed: the note's `tags:` line, written at once.
+func _save_tags() -> void:
+	if _doc != null and not _doc.set_field("tags", ", ".join(_tags_field.get_tags())):
+		_set_status("The tags could not be saved into the note.")
+	_tags_field.mark(YouTube.left_out(_tags_field.get_tags()))
+
+
+## A NOTE WITH NO TAGS YET TAKES THE FRAMER'S, once, as a card show takes its producer's: after that the
+## list is the note's, edited on the YouTube card. Only with a YouTube card to show them, and never in a
+## process that may not write (a probe).
+func _seed_tags() -> void:
+	if not Settings.is_read_only():
+		_seed_from_problem()
+
+
+func _seed_from_problem() -> void:
+	if _tags_field == null or _tags_field.typing() or _episode == null or not _show_tags().is_empty() \
+			or not _episode.has("problem"):
+		return
+	var p: Variant = _episode.read_json("problem")
+	var tags := DataPath.strings((p as Dictionary).get("tags", [])) if p is Dictionary else PackedStringArray()
+	if not tags.is_empty() and _doc.set_field("tags", ", ".join(tags)):
+		_refresh_tags()
+
+
 ## AN EXPORT IS NAMED AFTER ITS EPISODE: the framer's name for it, or the note and the number while it
 ## has none.
 func export_name() -> String:
@@ -306,19 +370,15 @@ func upload_values() -> Dictionary:
 
 ## THE UPLOAD: the episode's name in the title, the framer's description - and, said by the code from
 ## what Lean answered, whether the proof was checked and by what (never the agents' to claim) - the
-## note's tags with the episode's own, and THE THUMBNAIL's moment: the channel's name over the desk out
-## of focus, as a card show's is ([method ShowOpening.thumbnail_moment], at the intro [param take] was
-## rendered with). Without one the exporter takes none and YouTube picks a frame of its own (2026-10-16,
-## the user: "did not use the proper thumbnail ... the same thumbnail that cards-based modes use").
-## And the episode itself ([Feed]: what the steps other cards add made of it go up with it). {} before
-## the episode has a name.
+## note's tags (the one list, as the YouTube card shows it), and THE THUMBNAIL's moment: the channel's
+## name over the desk out of focus, as a card show's is ([method ShowOpening.thumbnail_moment], at the
+## intro [param take] was rendered with). Without one the exporter takes none and YouTube picks a frame
+## of its own (2026-10-16, the user: "did not use the proper thumbnail ... the same thumbnail that
+## cards-based modes use"). {} before the episode has a name.
 func upload_base(take: String) -> Dictionary:
 	if _episode == null or episode_title().is_empty():
 		return {}
-	var out := upload_of(_episode, upload_values(), _show_tags(),
-		ShowOpening.take_intro(take, Director.intro_hold))
-	out["episode"] = _feed
-	return out
+	return upload_of(_episode, upload_values(), _show_tags(), ShowOpening.take_intro(take, Director.intro_hold))
 
 
 ## [method upload_base] for episode [param ep], with the title's macros [param values], the note's
@@ -335,12 +395,8 @@ static func upload_of(ep: ProofEpisode, values: Dictionary, tags: PackedStringAr
 	elif not solve.is_empty():
 		check = "The formal check in Lean did not finish for this episode, and the video says so."
 	var desc := String(p.get("description", "")).strip_edges()
-	var all := tags.duplicate()
-	for t in p.get("tags", []):
-		if not all.has(String(t)):
-			all.append(String(t))
 	return {"values": values, "description": (desc + ("\n\n" + check if not check.is_empty() else "")).strip_edges(),
-		"tags": Array(all), "record": ep.dir.path_join("youtube.json"),
+		"tags": Array(tags), "record": ep.dir.path_join("youtube.json"),
 		"thumbnail_at": ShowOpening.thumbnail_moment(intro)}
 
 

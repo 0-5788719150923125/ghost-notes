@@ -6,11 +6,12 @@
 #
 # The code gives: {{seed}}, the plan's {{episode_title}}, {{audience}}, {{topic}}, {{premise}},
 # {{deck_name}}, {{deck_style}}, {{palette}}, {{surface}}, {{setting}} and {{light_kind}}; how many
-# lit things ({{candles}}) and other things ({{lo}} to {{hi}}); the flags `cloth` and `room` (their
+# lit things ({{candles}}) and other things ({{lo}} to {{hi}}, {{most}} at the most); the flags `cloth` and `room` (their
 # paintings go with the prompt), `box` (the cards come
 # out of a box), `jumps` (a card leaps out of the shuffle) and `tools` (it works with tools and sees
 # what it builds, {{looks}} pictures); the registries' vocabularies as `tables`, `props`, `air`,
-# `lights` and `sounds`; `zones`, where things stand; and what earlier episodes' tables held.
+# `lights` and `sounds`; `zones`, where things stand when it cannot see them; and what earlier episodes'
+# tables held.
 prompt:
   - >-
       You are the SET DRESSER. Before the camera rolls on episode #{{seed}} you set the reader's
@@ -78,10 +79,14 @@ prompt:
       Small things of a kind - stones, shells, beads, coins - can stand as one large piece or as a
       handful of small ones, set straight on the cloth in a loose handful, a row or an arc, or heaped
       in a dish or a shell. Give each its own colors, and a stone its play of light if it has one.
+  # HOW FULL: a habit drawn per episode (CardPrompts.FILLS) - the user, 2026-10-18: "real tarot videos
+  # will often fill the table with all manner of items, dozens of them"
   - >-
       Exactly {{candles}} lit thing{{^one_candle}}s{{/one_candle}} - a candle in its holder, a
       candelabra, a dish of tea lights: each burns as one light, however many flames it has (a flame
-      is a wax part's `wick` or `wicks`) - and {{lo}} to {{hi}} other things.
+      is a wax part's `wick` or `wicks`) - and {{lo}} to {{hi}} other things. That is how full this
+      reader keeps a table; a place crowded by nature - a shop counter, an altar, a cluttered study, a
+      market stall - can hold more, up to {{most}}.
   - >-
       Candles take every form a reader of this world would light: a taper in a tall stick, a squat
       pillar with two or three wicks, tea lights in their tins, a votive in glass, a church candle
@@ -90,7 +95,9 @@ prompt:
   - >-
       Compose it as a reader does: a few groups and a few things alone, never a row of things evenly
       spaced. Heights vary within a group, and odd numbers sit well. The middle of the cloth stays
-      bare: the deck is shuffled there, and the cards drawn and laid.
+      bare: the deck is shuffled there, and the cards drawn and laid. A full table is full the way a
+      real one is: things pushed out to the sides and the back, standing close, a short thing in front
+      of a taller one, some cut by the frame's sides - never one hidden whole behind another.
   - >-
       Every thing is a real object, set out in earnest. Nothing on the table carries words, letters,
       numbers or labels.
@@ -118,15 +125,30 @@ prompt:
   - when: box
     include: box
   - ""
-  - >-
-      WHERE THINGS STAND - each thing's `place`, and the tallest a thing there can be and still be
-      seen whole:
+  - when: "!tools"
+    say: >-
+          WHERE THINGS STAND - each thing's `place`, and the tallest a thing there can be and still be
+          seen whole:
   - each: zones
+    when: "!tools"
     say: '- "{{zone}}": {{about}}; up to {{cm}} cm.'
+  # THE BLUEPRINT: the user, 2026-10-18 - "do the planning and desired placements up-front, then verify
+  # with screenshots at the end" (SetDresserTools `blueprint`, TableBlueprint)
+  - when: tools
+    say: >-
+          WHERE THINGS STAND is yours to write, on the table's BLUEPRINT: a plan of the table from
+          straight above, ruled in centimeters from the middle of the reading. Each thing's `at` is
+          [x, z] there - x to the reader's right, z toward the reader, so the far side of the table is
+          negative z - and its `turn` turns it about its middle. (A part's `at`, inside a thing, is
+          [x, y, z] in the thing's own space; a thing's is two numbers, on the table.) The drawing shows the top and its
+          cloths, where the cards go (nothing stands there), the reader's hands, the camera's frame, and
+          lines saying how tall a thing can stand at each spot and still be seen whole. Plan the whole
+          table on it before you look through the camera.
   - >-
       The camera is the reader's eye, about half a meter from the middle of the cloth and looking
       down across it; the top of the frame passes low over the back of the cloth, which is why the
-      back holds only short things. Candles stand at the back or the sides, never by the deck.
+      back holds only short things. Candles stand at the back or the sides, never by the deck{{#tools}},
+      and every flame behind the middle of the table{{/tools}}.
   # the user, 2026-10-10: a low thing stood at the bottom middle, "just in front of the speaker",
   # with open cloth to either side (src/table/table.gd WORKSPACE scores such a spot worse)
   - >-
@@ -134,10 +156,16 @@ prompt:
       hands work there. Nothing of yours stands in it, however low: use the sides and the back, and
       push things out toward the edges. A thing that must be by the deck stands beside it, never in
       front of it.
-  - >-
-      Things that share a `group` (any word) stand together, the tallest behind; a thing with no
-      group stands on its own. `turn` (degrees) turns a thing about its middle; at 0 its front faces
-      the reader.
+  - when: "!tools"
+    say: >-
+          Things that share a `group` (any word) stand together, the tallest behind; a thing with no
+          group stands on its own. `turn` (degrees) turns a thing about its middle; at 0 its front faces
+          the reader.
+  - when: tools
+    say: >-
+          `turn` (degrees) turns a thing about its middle; at 0 its front faces the reader. `scale`
+          stands it larger or smaller than you built it (1 as built). A `group` (any word) only names
+          things that belong together, for you; where each stands is its own `at`.
   - ""
   - HOW A THING IS DESCRIBED
   - >-
@@ -158,7 +186,7 @@ prompt:
       {{max_parts}}.
   - >-
       SIZES are the real sizes of the real things. For scale, a card here is 7 x 12 cm, and the deck
-      stands 3 cm high.
+      stands 3 cm high.{{#tools}} On the blueprint a thing's foot is drawn at its real size.{{/tools}}
   - ""
   - >-
       THE AIR: beside its things, a table can have air that moves - fog rolling in behind it, a few
@@ -273,39 +301,49 @@ check: >-
   its point, and a thing that would touch the cloth at only two points or along one line (dividers or
   a compass on their two tips, a pair of tongs, a tall thin frame) lies flat, leans on something or
   has a third foot that is really there - what stands has three or more points of contact round the
-  spot under its weight; the lowest point is at height 0; the sizes are real and fit the place's height; a
+  spot under its weight; the lowest point is at height 0; the sizes are real and fit the height where it stands; a
   hollow vessel's profile goes up the outside and back down the inside; every candle's wax has
   `wick` or `wicks`, and a candle in a cup or a holder stands on its floor.
 
 with_tools:
   - >-
       HOW YOU WORK: you build this table with tools, and you SEE what you build. `put` builds the
-      table itself (`top`, `layers`), puts things (and the materials they use, and the air's
-      effects) on it, lights it (`light`) and gives it its sound (`sound`), and answers with what was built - each thing's real
+      table itself (`top`, `layers`), makes things (and the materials they use, and the air's
+      effects), lights it (`light`) and gives it its sound (`sound`), and answers with what was built - each thing's real
       size, anything the builder could not make as written, where the sun falls - and a picture of
-      the things on a centimeter grid; `look` shows one thing close up from four sides; `overhead`
+      the things on a centimeter grid, each numbered; `blueprint` places things by name - each one's
+      `at`, `turn` and `scale` - and draws the plan with every placed thing on it, saying for each
+      where it stands, its foot and its height against what its spot shows, and anything that moved
+      it; `look` shows one thing close up from four sides; `overhead`
       shows the whole table from straight above - its top, its cloths as laid, the things and the
-      cards - with the stretch the camera sees outlined; `set` stands everything on this episode's
+      cards - with the stretch the camera sees outlined; `set` stands everything placed on this episode's
       own table and photographs it from the camera's place, as the viewer will see it, its air with
-      it, saying what was made smaller or left off for want of room and which light leads; `watch`
+      it, saying where each thing stood and which light leads (`numbers: true` tags each thing with its
+      number, for you alone); `watch`
       shows one effect of the air, or a moving part of the light, in motion - a burst at the moment
       it marks, a cloud passing over the sun, a bird's shadow crossing, a lamp flickering; `title`
       chooses the color the show's name is printed in and shows you the opening with it, saying how
       far the color stands out from the table behind the name; `remove` takes things, effects,
       layers or parts of the light off; `submit` hands the table in.
   - >-
-      Build the table first - its top and its layers - and look at it from above; then make the
-      things; then light the table (`put` its `light`), set it, and watch what moves in its light;
-      then give it the sound of its place (`put` its `sound`).
+      Build the table first - its top and its layers - and look at it from above. Then make the
+      things with `put`, a few at a time: their form, not yet their place. Then PLAN THE TABLE ON THE
+      BLUEPRINT: place every thing with `blueprint` and look at the drawing - the groups, what stands
+      at the back and what nearer, which spots show a tall thing whole, what the frame's sides cut,
+      the cards' room bare. Then light the table (`put` its `light`), set it, and watch what moves in
+      its light; then give it the sound of its place (`put` its `sound`).
   - >-
       Make a thing, look at it, and fix whatever does not read as the thing you meant - a part
       floating or sunk, a proportion off, a material that reads as another, anything that reads as a
-      body. When the things read, set the table and look at the frame: fix what was left off or made
-      too small to read, a group hidden behind another, a light that should lead and does not. Set
-      it again after a fix. A thing shown smaller to fit is only the room, as it may be; when set
-      says the table is set, it is. Then choose the title's color and look at the opening; submit
-      when both are right. Every picture counts against the {{looks}} you have; put a few things at
-      a time, and fix a thing by putting it again under the same name.
+      body. Place things on the blueprint and fix the plan there: a thing the table had to move, one
+      standing in the reader's hands, one taller than its spot shows (its number red), a table that
+      reads as scattered rather than set. When the plan is right, set the table and look at the frame:
+      fix what the camera shows - a thing too small to read, a group hidden behind another, a light
+      that should lead and does not - by placing again on the blueprint, and set it again after a
+      fix. When set says the table is set, it is. Then choose the title's color and look at the
+      opening; submit when both are right. Every picture counts against the {{looks}} you have; put
+      a few things at a time, fix a thing by putting it again under the same name (it keeps its
+      place), and move things with `blueprint`, giving only what changes.
   - ""
   - "CHECK each thing as you look at it: {{check}}"
   - ""
@@ -353,7 +391,7 @@ thing_example: |-
       {
         "name": "a boxwood chess pawn",
         "why": "the reader's reason for it, in a few words",
-        "place": "back left",
+        {{#tools}}"at": [-31, -24],{{/tools}}{{^tools}}"place": "back left",{{/tools}}
         "group": "a",
         "turn": 0,
         "parts": [

@@ -609,6 +609,20 @@ Found by making it, each fixed and held:
   the dictation's last word. On the trig episode, read by a steady voice, the longest the nib stands
   still while writing is 0.17 s (the ink's own ease at a stroke's ends); 50 dictations leave 16 s of
   rests after them. `proof_check` "the elastic pen", with the old clock as the control (1.6 s still).
+- **An idle pen gets out of the way** (2026-10-19: "as it told the story, doing nothing, for ~30 or
+  60 seconds, the pen was just frozen, right in the middle of the page, covering a bunch of the text's
+  visibility ... it would be better for the pen to drift to the right and top"). Over 40 words or more
+  with nothing for the pen (`DeskMedium.PARK_WORDS`, read off the script so it never changes its mind
+  as a streamed voice's words arrive), and before every page turn, the nib goes right off the written
+  lines, then up the pad's edge to `PARK` (off the pad's top right), and comes back as the next action
+  begins. Episode theorem-proving/5 has 23 such waits of 121, up to 75 words. Found on the way: the
+  nib JUMPED to its rest the frame each action ended (136 px), and across the page as one was about
+  to turn it (1025 px in a frame); every reach took 0.45 s however far (30 of 110 crossed most of the
+  page in it); and the old wait at the page's right stood in the turning sheet's way in 26-28 of a
+  turn's 96 frames. Now every move is continuous and a reach takes its way at 1000 px/s
+  (`_reach`); a page turns only once the pen is off the pad (`PARK_CLEAR`), early enough for the pen
+  to come back behind the sheet (`PARK_BACK`). `proof_check` "an idle pen gets out of the way" and
+  the turn's sheet checks (the pen a rod along its lean against the sheet's plane).
 - **A scrub no longer stops the pen** ("scrubbing the timeline seems to have broken the pen
   completely. For the remainder of the video, the pen doesn't move at all"): a scrub starts the voice
   again from a later chunk, and the desk matched the new words from the top of the lesson - a

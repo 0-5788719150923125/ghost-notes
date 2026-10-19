@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 308 references inside a folder, 768 down the stack, 0 up it.
+Between scripts today: 309 references inside a folder, 771 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -15,7 +15,7 @@ Between scripts today: 308 references inside a folder, 768 down the stack, 0 up 
 | `masking/` | Masking | 10 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
 | `proof/` | Proof | 6 | `desk`, `table`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `desk/` | The desk | 3 | `table`, `media`, `scene_kit`, `data` |
-| `cards/` | Cards | 9 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
+| `cards/` | Cards | 10 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
 | `table/` | The set | 21 | `media`, `scene_kit`, `audio`, `data` |
 | `reading/` | The voice's workspaces | 5 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
 | `export/` | Export | 4 | `show`, `voice`, `ui`, `notes`, `agents`, `stage`, `audio`, `platform`, `data` |
@@ -154,7 +154,7 @@ A place, seen and heard, built from a written description: the table itself (Tab
 
 A show of cards nobody writes: a show's brief, its episodes - each planned, dealt, painted and written by agents one card at a time, kept on disk step by step - and the set dresser that builds the table they are read at. The rules are every show's; the brief says what the cards are - tarot, baseball or trading cards, a card game's deck, flashcards, recipe cards - and lists them, or leaves each episode's deck to its producer. Design: next/cards.md.
 
-[`card_deck`](../src/cards/card_deck.gd), [`card_episode`](../src/cards/card_episode.gd), [`card_producer`](../src/cards/card_producer.gd), [`card_prompts`](../src/cards/card_prompts.gd), [`dealer_tools`](../src/cards/dealer_tools.gd), [`episode_card`](../src/cards/episode_card.gd), [`episode_walk`](../src/cards/episode_walk.gd), [`set_dresser_tools`](../src/cards/set_dresser_tools.gd), [`table_preview`](../src/cards/table_preview.gd)
+[`card_deck`](../src/cards/card_deck.gd), [`card_episode`](../src/cards/card_episode.gd), [`card_producer`](../src/cards/card_producer.gd), [`card_prompts`](../src/cards/card_prompts.gd), [`dealer_tools`](../src/cards/dealer_tools.gd), [`episode_card`](../src/cards/episode_card.gd), [`episode_walk`](../src/cards/episode_walk.gd), [`set_dresser_tools`](../src/cards/set_dresser_tools.gd), [`table_blueprint`](../src/cards/table_blueprint.gd), [`table_preview`](../src/cards/table_preview.gd)
 
 ### `desk/` - The desk
 

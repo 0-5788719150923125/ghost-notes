@@ -42,6 +42,12 @@ func tags() -> PackedStringArray:
 	return PackedStringArray()
 
 
+## THE NOTE'S TAGS ARE [param tags] FROM NOW ON: its `tags:` line - the one list its uploads take -
+## replaced whole ([YouTubeTags]). "" once written, else why not.
+func replace_tags(_tags: PackedStringArray) -> String:
+	return "nothing keeps this episode's note's tags"
+
+
 ## THE EPISODE'S WORDS, as the voice says them, the marks taken out - "" until they are written, which is
 ## when a step made from them can be made.
 func words() -> String:

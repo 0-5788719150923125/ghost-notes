@@ -12,7 +12,9 @@ extends Node
 ## `layers`, when it has them, put first and seen from above (`overhead`); `--air` puts a
 ## list of effects (or a table's `effects`) beside it, and every one of them is watched; `--light` puts a
 ## light ([Lights] - an object, or a table carrying `light`; else the description's own, if it has one)
-## and every part of it that moves is watched (`--watch 0`: none). Last, the name's color is chosen
+## and every part of it that moves is watched (`--watch 0`: none). Things written into zones (a table set
+## before the blueprint) are placed on it where the table's own hunt stands them; the blueprint is drawn and
+## the table set, with its things numbered and without. Last, the name's color is chosen
 ## (`--ink`, else the description's own `title`, else cream) and the OPENING is shown under
 ## `--name`/`--byline`; `--quick 1` skips the close look at a thing and the opening. The episode is only
 ## read: the tools work in a folder of their own (`user://set_dresser_look/<show>_<seed>`), never its jobs.
@@ -96,6 +98,17 @@ func _run() -> void:
 		await _call(tools, "put", {"light": light}, "light")
 	if not things.is_empty() and not quick:
 		await _call(tools, "look", {"name": String((things[0] as Dictionary).get("name", ""))}, "look")
+	# AN OLD TABLE, its things named into zones: written onto the blueprint where the table's own hunt
+	# stands them, so it looks as it always did - then drawn
+	var spots: Array = []
+	if not tools._unplaced().is_empty() and TablePreview.can_set():
+		var hunted: Dictionary = await tools._preview.table(tools.draft())
+		for st in hunted.get("stood", []):
+			if tools._unplaced().has(String((st as Dictionary)["name"])):
+				var at: Vector2 = (st as Dictionary)["at"]
+				spots.append({"name": String((st as Dictionary)["name"]), "at": [at.x, at.y]})
+	await _call(tools, "blueprint", {"things": spots}, "blueprint")
+	await _call(tools, "set", {"numbers": true}, "set_numbered")
 	await _call(tools, "set", {}, "set")
 	if not light.is_empty() and watch:
 		var moving: Array = []

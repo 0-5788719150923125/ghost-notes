@@ -24,13 +24,14 @@ class_name YouTubeCard
 ## none takes the first channel kept. A playlist is a channel's, so another channel clears it. The
 ## account rows below speak for the channel picked.
 ##
-## EACH EPISODE'S OWN TAGS (the user, 2026-10-18: "enable/disable the management of tags applied to the
-## video, based upon the script/content of the video ... allow the 'Generate' button to override/rewrite
-## those tags"): with "Write each episode's tags" ticked, the card adds a step to the episodes the note
+## ONE LIST OF TAGS (the user, 2026-10-19: "I never know which tags are truly going to be applied ...
+## I'd prefer to see just one, unified list"): the note's `tags:` line, which the panel shows in
+## [member extra] and every upload takes. With "Write each episode's tags" ticked (2026-10-18: "allow
+## the 'Generate' button to override/rewrite those tags"), the card adds a step to the episodes the note
 ## makes ([YouTubeTags], an [EpisodeStep] - offered by [method episode_steps], never handed to a card by
-## name): the card that makes them lists it, writes it with the episode and again on its ⟳, and the
-## upload takes those tags in place of the note's own ([method meta]). The tags written for the episode
-## that card shows are here, under the box, to take one out or add one.
+## name): the card that makes them lists it, writes it with the episode and again on its ⟳, and what it
+## writes REPLACES that list. The box stands at the top, beside "Upload after export" (the user: "where
+## it belongs"); a line under the list says what the writer is doing to it.
 ##
 ## TICKING "UPLOAD AFTER EXPORT" SETS UPLOADS UP as far as they need, visibly: the Google client file
 ## the first time, then the sign-in - and the box ticks once both are done (a cancel leaves it clear).
@@ -39,7 +40,6 @@ class_name YouTubeCard
 ## beside the upload that waits on them (see [method Exporter.youtube_sign_in]).
 
 const YouTube := preload("res://src/export/youtube.gd")
-const TagField := preload("res://src/ui/tag_field.gd")
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "youtube"
@@ -77,7 +77,6 @@ var _client: Button
 var _resume: Button
 var _state: Label
 var _write_tags: CheckBox
-var _written: TagField
 var _tags_note: Label
 ## The step that writes each episode's tags, while the box is ticked.
 var _tags: YouTubeTags
@@ -107,7 +106,19 @@ func _init() -> void:
 		+ "Ticking it the first time asks for your Google OAuth client file (the JSON from Google Cloud), "
 		+ "then opens your browser to sign in.")
 	_upload.toggled.connect(_on_tick)
-	add_child(_upload)
+	var boxes := HFlowContainer.new()
+	boxes.add_theme_constant_override("h_separation", 12)
+	add_child(boxes)
+	boxes.add_child(_upload)
+	_write_tags = CheckBox.new()
+	_write_tags.text = "Write each episode's tags"
+	_write_tags.add_theme_font_size_override("font_size", 12)
+	_write_tags.tooltip_text = ("The show's writer writes tags for each episode from what it says - its words, "
+		+ "title and description - and they REPLACE the note's tags below (the writer is shown those, and keeps "
+		+ "the ones that fit). The card that makes the episode lists them as a step: they are written along "
+		+ "with the episode, and ⟳ on their row writes them again.")
+	_write_tags.toggled.connect(func(_on: bool) -> void: refresh())
+	boxes.add_child(_write_tags)
 	_chips = HFlowContainer.new()
 	_chips.add_theme_constant_override("h_separation", 4)
 	_chips.add_theme_constant_override("v_separation", 4)
@@ -211,24 +222,10 @@ func _ready() -> void:
 	refresh()
 
 
-## The box, the episode's tags and the line that says where they stand.
+## The step that writes each episode's tags, and the line that says where it stands (the box that turns
+## it on is at the top, beside "Upload after export"; the list it writes is the panel's, above).
 func _build_tags() -> void:
-	_write_tags = CheckBox.new()
-	_write_tags.text = "Write each episode's tags"
-	_write_tags.add_theme_font_size_override("font_size", 12)
-	_write_tags.tooltip_text = ("Each episode gets tags of its own, written from what it says - its words, title "
-		+ "and description - by the show's writer, and they go up in place of the note's own tags (the writer "
-		+ "is shown those, and keeps the ones that fit). The card that makes the episode lists them as a step: "
-		+ "they are written along with the episode, and ⟳ on their row writes them again.")
-	_write_tags.toggled.connect(func(_on: bool) -> void: refresh())
-	add_child(_write_tags)
 	_tags = YouTubeTags.new(func() -> bool: return _write_tags.button_pressed)
-	_written = TagField.new()
-	_written.tooltip_text = ("The tags written for the episode picked on the card that makes it - going up in "
-		+ "place of the note's own. × removes one; type in the box and a comma (or Enter) adds one. YouTube "
-		+ "takes 500 characters of tags in all; a dimmed tag is past that.")
-	_written.changed.connect(_on_written)
-	add_child(_written)
 	_tags_note = _small("")
 	add_child(_tags_note)
 
@@ -320,7 +317,7 @@ func ticked() -> bool:
 	return _upload.button_pressed
 
 
-## Are each episode's tags written for it, in place of the note's own?
+## Does the writer write each episode's tags over the note's?
 func writes_tags() -> bool:
 	return _write_tags.button_pressed
 
@@ -344,23 +341,16 @@ func template() -> String:
 
 
 ## WHAT AN UPLOAD SAYS (see [member Exporter.upload_provider]): [param base] - the panel's own part,
-## its description, tags, thumbnail moment and record, the macros' `values` when they are not the
-## panel's as it stands now (an episode an export rendered) and the `episode` it is of (an
-## [EpisodeFeed]) - with this card's title, privacy, category, playlist (its id and title, which the
-## description names) and channel laid over it, and THE EPISODE'S OWN TAGS in place of the panel's while
-## [method writes_tags] and some were written for the episode as it is ([method YouTubeTags.tags_of]).
-## {} when nothing is to go up: the box is clear, or the panel has nothing ({}).
+## its description, tags (the note's one list), thumbnail moment and record, and the macros' `values`
+## when they are not the panel's as it stands now (an episode an export rendered) - with this card's
+## title, privacy, category, playlist (its id and title, which the description names) and channel laid
+## over it. {} when nothing is to go up: the box is clear, or the panel has nothing ({}).
 func meta(base: Dictionary) -> Dictionary:
 	if not ticked() or base.is_empty():
 		return {}
 	var out := base.duplicate()
 	var given: Variant = out.get("values", {})
 	out.erase("values")
-	var ep: Variant = out.get("episode")
-	out.erase("episode")
-	var own := _tags.tags_of(ep as EpisodeFeed) if writes_tags() and ep is EpisodeFeed else PackedStringArray()
-	if not own.is_empty():
-		out["tags"] = Array(own)
 	out["title"] = title_now(given if given is Dictionary else {})
 	out["privacy"] = _privacy_key()
 	out["category"] = _category_key()
@@ -495,62 +485,41 @@ func _on_remove() -> void:
 
 # --- the episode's tags --------------------------------------------------------------------------
 
-## UNDER THE BOX, while it is ticked: the tags written for the episode the card that makes it shows,
-## to edit - or where they stand, and that nothing on the note makes an episode when nothing does.
-## Drawn again only when something it shows has changed.
+## UNDER THE LIST, while the box is ticked: what the writer is doing to it for the episode the card
+## that makes it shows - or that nothing on the note makes an episode, when nothing does. Drawn again
+## only when something it says has changed.
 func _refresh_tags() -> void:
 	var on := writes_tags()
 	var feed: EpisodeFeed = _tags.shown if on and not _tags.host.is_empty() else null
 	var st := _tags.state(feed) if feed != null else ""
-	var own := _tags.own_of(feed) if feed != null else PackedStringArray()
-	var fresh := feed != null and _tags.fresh(feed)
-	var words := fresh or (feed != null and not feed.words().is_empty())
-	var now := [on, _tags.host, feed.folder() if feed != null else "", st, own, fresh, words,
-		_tags.said(feed) if st == "failed" else "", _written.typing()]
+	var words := feed != null and not feed.words().is_empty()
+	var stale := feed != null and not _tags.made(feed).is_empty() and not _tags.fresh(feed)
+	var now := [on, _tags.host, feed.folder() if feed != null else "", st, words, stale,
+		_tags.said(feed) if st == "failed" else ""]
 	if now == _tags_seen:
 		return
 	_tags_seen = now
-	_written.visible = fresh
-	_written.editable = st != "running" and st != "queued"
-	if fresh and not _written.typing():
-		_written.set_tags(own)
-		_written.mark(YouTube.left_out(own))
 	var row := "⟳ on its Tags row on %s" % _tags.host
-	var going := YouTube.fit_tags(Array(own))
 	var t := ""
 	if not on:
 		t = ""
 	elif feed == null:
-		t = "Nothing on this note makes episodes, so nothing writes their tags: the note's own go up."
+		t = "Nothing on this note makes episodes, so nothing writes their tags: the tags above go up as they are."
 	elif st == "running" or st == "queued":
-		t = "Writing this episode's tags again… These go up until the new ones are in." if fresh else "Writing this episode's tags…"
-	elif st == "failed" and fresh:
-		t = "⚠  Writing them again stopped: %s. These still go up." % _tags.said(feed)
+		t = "Writing this episode's tags… They replace the tags above when they are in."
 	elif st == "failed":
-		t = "⚠  This episode's tags could not be written: %s. The note's own go up until they are; %s tries again." % [
+		t = "⚠  This episode's tags could not be written: %s. The tags above go up as they are; %s tries again." % [
 			_tags.said(feed), row]
-	elif fresh:
-		t = "%d tag%s written for this episode go up in place of the note's own - %d of YouTube's %d characters. %s writes them again." % [
-			going.size(), "" if going.size() == 1 else "s", YouTube.tags_length(going), YouTube.TAGS_MAX, row]
+	elif st == "ready":
+		t = "This episode's tags are written: they replaced the tags above, which are what goes up. %s writes them again." % row
 	elif not words:
-		t = "This episode's tags are written once its words are, along with it. Until then the note's own go up."
-	elif not own.is_empty():
-		t = "This episode's words were written again after its tags: %s writes new ones, and so does making the episode. Until then the note's own go up." % row
+		t = "This episode's tags are written once its words are, along with it, replacing the tags above."
+	elif stale:
+		t = "This episode's words were written again after its tags: %s writes new ones over the tags above, and so does making the episode." % row
 	else:
-		t = "No tags are written for this episode yet: %s writes them, and so does making the episode. Until then the note's own go up." % row
+		t = "No tags are written for this episode yet: %s writes them over the tags above, and so does making the episode." % row
 	_tags_note.text = t
 	_tags_note.visible = not t.is_empty()
-
-
-## A tag taken out or added on the field: the episode's tags, written at once.
-func _on_written() -> void:
-	var feed: EpisodeFeed = _tags.shown
-	if feed == null or not _tags.fresh(feed):
-		return
-	var err := _tags.set_tags(feed, _written.get_tags())
-	if not err.is_empty():
-		noted.emit("⚠  The episode's tags could not be saved: " + err)
-	_tags_seen = []
 
 
 # --- the channel ---------------------------------------------------------------------------------

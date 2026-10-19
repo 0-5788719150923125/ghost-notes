@@ -13,6 +13,10 @@ extends Node
 ##     stretches a frame.)
 ##   - GIVEN BACK MID-BUILD, the stage being built is dropped, never swapped in; and the preview stands a
 ##     table again afterward.
+##   - A HIDDEN WINDOW DRAWS NOTHING (reported 2026-10-19: the app minimized, a `put` waited 35 minutes for a
+##     picture and the set dresser gave up): with the render loop off, as a minimized window leaves it, a
+##     picture still comes, the same pixel for pixel as one taken while the app draws ([method
+##     TablePreview._render]) - the control, in that state not one frame is drawn of itself.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/cards/table_thread_check.gd 300
 ##
@@ -124,6 +128,27 @@ func _run() -> void:
 		_ok(not (a["stood"] as Array).is_empty(), "nothing stood on the table %s (the comparison proves nothing)" % tag)
 		var diff := _differ(a["image"], b["image"])
 		_ok(diff == 0, "the table %s built on a worker photographs differently: %d sampled pixels (-1: no picture)" % [tag, diff])
+	# A HIDDEN WINDOW: the render loop off, as a minimized window leaves it
+	var shown: Dictionary = await _picture(prev, lit)
+	RenderingServer.render_loop_enabled = false
+	var posts := [0]
+	var count := func() -> void: posts[0] += 1
+	RenderingServer.frame_post_draw.connect(count)
+	for i in 10:
+		await get_tree().process_frame
+	RenderingServer.frame_post_draw.disconnect(count)
+	_ok(int(posts[0]) == 0, "the control: with the render loop off, %d frames were drawn all the same" % int(posts[0]))
+	var box := [null]
+	var take := func() -> void: box[0] = await _picture(prev, lit)
+	take.call()
+	var hid_at := Time.get_ticks_msec()
+	while box[0] == null and Time.get_ticks_msec() - hid_at < 30000:
+		await get_tree().process_frame
+	RenderingServer.render_loop_enabled = true
+	var hidden: Dictionary = box[0] if box[0] is Dictionary else {}
+	_ok(hidden.get("image") != null, "no picture came in 30 s while nothing was drawn")
+	var unseen := _differ(shown.get("image"), hidden.get("image"))
+	_ok(unseen == 0, "a picture taken while nothing is drawn differs from one taken while the app draws: %d sampled pixels (-1: no picture)" % unseen)
 	# GIVEN BACK MID-BUILD
 	var gone := func() -> void:
 		await get_tree().process_frame

@@ -301,7 +301,7 @@ Rendering a session to video (bake + Movie Maker, background processes) and uplo
 - [`exporter.gd`](../src/export/exporter.gd) **Exporter** - render the visualization to a video, in the background, in two steps.
 - [`youtube.gd`](../src/export/youtube.gd) **youtube** - YouTube - sign in to the author's YouTube channel and upload a finished export to it.
 - [`youtube_card.gd`](../src/export/youtube_card.gd) **YouTubeCard** - the YouTube component's card (2026-10-07, the user: "add a little '+' button near those labels... 'youtube' should be an option. When we add it, a new card is created"): whether an export goes up, what it is called, who may see it and the playlist it joins - and the Google client and the sign-in an ...
-- [`youtube_tags.gd`](../src/export/youtube_tags.gd) **YouTubeTags** - each episode's own YouTube tags, written from what it says (the user, 2026-10-18: "I want to be able to enable/disable the management of tags applied to the video, based upon the script/content of the video. Today, we have just a static list. I would like to allow the 'Generate' button to ...
+- [`youtube_tags.gd`](../src/export/youtube_tags.gd) **YouTubeTags** - each episode's tags, written from what it says (the user, 2026-10-18: "I want to be able to enable/disable the management of tags applied to the video, based upon the script/content of the video. Today, we have just a static list. I would like to allow the 'Generate' button to override/rewrite ...
 
 ### `reading/` - The voice's workspaces
 
@@ -351,6 +351,7 @@ A show of cards nobody writes: a show's brief, its episodes - each planned, deal
 - [`episode_card.gd`](../src/cards/episode_card.gd) **EpisodeCard** - the Cards component's card: a show of cards nobody writes by hand. What kind of cards, and what the show is, are the brief's to say.
 - [`episode_walk.gd`](../src/cards/episode_walk.gd) **EpisodeWalk** - a show of cards reads its EPISODE, never the note: the note is the brief agents work from, and what the reader says is the script they wrote, step by step, for the episode up now. A `TextWalk` Cards hands its reading.
 - [`set_dresser_tools.gd`](../src/cards/set_dresser_tools.gd) **SetDresserTools** - what the set dresser can do while it sets the reader's table: MAKE a thing, LOOK at it, FIX it, and see the whole table as the camera will before handing it in.
+- [`table_blueprint.gd`](../src/cards/table_blueprint.gd) **TableBlueprint** - the reader's table drawn as a plan, for the set dresser to lay its things out on (the user, 2026-10-18: "draw a literal blueprint: black lines on white paper, with measurements ... then simply ask the model to place props onto the blueprint at certain points, and with certain orientations"). Before ...
 - [`table_preview.gd`](../src/cards/table_preview.gd) **TablePreview** - a table described but not yet set, SEEN: each thing alone in a studio, and the whole table standing on the episode's own cloth, photographed from the camera's own place. It is what the set dresser looks through (`SetDresserTools`): it makes a thing, looks at it, and fixes what it sees.
 
 ### `desk/` - The desk

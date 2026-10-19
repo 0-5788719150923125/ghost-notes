@@ -287,8 +287,7 @@ static func parse(body: String, lengths: Dictionary = {}, sizes: Dictionary = {}
 			hold += float(dictating["tail"])
 			dictating = {}
 		else:
-			# a point's mark goes, with the space before it, so the voice's text reads as said
-			_flush(_rx(" ?" + POINT).sub(String(blk["text"]), "", true), spoken, speak, said)
+			_flush(_unpointed(String(blk["text"])), spoken, speak, said)
 	if hold > 0.0:
 		speak.append("<!-- action-hold: %s -->" % String.num(hold, 2))
 	return {"actions": actions, "spoken": spoken, "speakable": "\n\n".join(speak),
@@ -355,6 +354,15 @@ static func _words(text: String) -> PackedStringArray:
 
 
 ## A paragraph into the spoken list, the voice's text and the speech.
+## A PARAGRAPH WITH ITS POINTS TAKEN OUT, so the voice's text reads as said: a mark and the spaces
+## round it become one space, and none before punctuation or the paragraph's end. A lesson spaces a
+## mark either way - `only <!-- point: x --> the` or `only <!-- point: x -->the` - and taking only the
+## space before it fused the words ("onlythe", "drawing,the" in the subtitles, 2026-10-19).
+static func _unpointed(text: String) -> String:
+	var bare := _rx("[ \\t]*" + POINT + "[ \\t]*(?=[.,;:!?]|$)").sub(text, "", true)
+	return _rx("[ \\t]*" + POINT + "[ \\t]*").sub(bare, " ", true)
+
+
 static func _flush(text: String, spoken: PackedStringArray, speak: PackedStringArray,
 		said: PackedStringArray) -> void:
 	var t := text.strip_edges()

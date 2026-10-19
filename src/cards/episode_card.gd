@@ -285,8 +285,8 @@ class Publish extends ReadingPublish:
 
 
 ## THE EPISODE AS THE STEPS OTHER CARDS ADD TO IT READ IT ([EpisodeFeed]): its folder, the show's name,
-## the episode's title and description, the show's tags, its reading with the marks taken out, and the
-## show's writer.
+## the episode's title and description, the show's tags (and a step's to write over them), its reading
+## with the marks taken out, and the show's writer.
 class Feed extends EpisodeFeed:
 	var card: EpisodeCard
 	var episode: CardEpisode
@@ -309,6 +309,12 @@ class Feed extends EpisodeFeed:
 
 	func tags() -> PackedStringArray:
 		return card._show_tags()
+
+	func replace_tags(tags: PackedStringArray) -> String:
+		if card._doc == null or not card._doc.set_field("tags", ", ".join(tags)):
+			return "the tags could not be written into the show's document"
+		card._refresh_show_fields()
+		return ""
 
 	func words() -> String:
 		return Manuscript.unspoken(episode.script()).strip_edges()
@@ -408,11 +414,11 @@ func after_take(path: String) -> String:
 ## WHAT AN UPLOAD SAYS, under the YouTube card's title, visibility and playlist (see
 ## [member Exporter.upload_provider]): the episode's description and a chapter per card timed from
 ## [param take] (apart, so the playlist goes between them - [method YouTube.description_of]), the
-## SHOW'S tags (its document's `tags:` line), the moment of the title screen to take the thumbnail
-## from, the file its uploads are recorded in, the show's and the episode's titles for the
-## card's `%title%` and `%episode%`, and the episode itself ([Feed]: what the steps other cards add
-## made of it - its own tags - go up with it). For the take an export just rendered it describes THAT
-## episode, whichever is picked now; with no take, the picked one. {} while the episode has no plan.
+## SHOW'S tags (its document's `tags:` line, the one list - a step that writes an episode's writes over
+## it), the moment of the title screen to take the thumbnail from, the file its uploads are recorded in,
+## and the show's and the episode's titles for the card's `%title%` and `%episode%`. For the take an
+## export just rendered it describes THAT episode, whichever is picked now; with no take, the picked
+## one. {} while the episode has no plan.
 func upload_base(take: String) -> Dictionary:
 	var ep: CardEpisode = _episode
 	if not take.is_empty() and String(_taken.get("take", "")) == take:
@@ -425,7 +431,7 @@ func upload_base(take: String) -> Dictionary:
 	var desc := _cur_desc if not _cur_desc.is_empty() else String(n["description"])
 	return {"values": {"title": _doc.field("title").strip_edges(), "episode": String(n["title"]), "seed": str(ep.seed)},
 		"description": desc, "chapters": Array(n["chapters"] as PackedStringArray), "tags": Array(_show_tags()), "thumbnail_at": thumbnail_moment(_take_intro(take)),
-		"record": ep.file_of("youtube"), "episode": _feed if ep == _episode and _feed != null else Feed.new(self, ep)}
+		"record": ep.file_of("youtube")}
 
 
 ## The macros of the YouTube card's title as the card stands: the show's title and the picked
@@ -1346,10 +1352,10 @@ func _build_upload_fields(box: VBoxContainer) -> void:
 	_yt_desc.text_changed.connect(_upload_edited)
 	box.add_child(_yt_desc)
 	_yt_tags = TagField.new()
-	_yt_tags.tooltip_text = ("The show's tags - its document's `tags:` line - going up with every episode, or, "
-		+ "with \"Write each episode's tags\" ticked below, shown to the writer of each episode's own, which go "
-		+ "up in their place. × removes one; type in the box and a comma (or Enter) makes it a tag. YouTube "
-		+ "takes 500 characters of tags in all; a dimmed tag is past that.")
+	_yt_tags.tooltip_text = ("The show's tags - its document's `tags:` line - the one list every episode goes up "
+		+ "with. With \"Write each episode's tags\" ticked above, the writer replaces it with tags written for "
+		+ "each episode. × removes one; type in the box and a comma (or Enter) makes it a tag. YouTube takes "
+		+ "500 characters of tags in all; a dimmed tag is past that.")
 	_yt_tags.changed.connect(_save_tags)
 	box.add_child(_yt_tags)
 	_yt_note = Label.new()
@@ -1497,7 +1503,7 @@ func _refresh_upload_note() -> void:
 	if _episode == null or not _episode.has("plan"):
 		_yt_note.text = "Generate the plan first: the producer writes the episode's title."
 		return
-	var t := ("The show's %d tag%s, %d of YouTube's %d characters." % [fitted.size(),
+	var t := ("These %d tag%s go up, %d of YouTube's %d characters." % [fitted.size(),
 		"" if fitted.size() == 1 else "s", YouTube.tags_length(fitted), YouTube.TAGS_MAX]) if not fitted.is_empty() \
 		else "No tags yet: the ones added here are the show's, and go up with every episode."
 	var ups := _episode.uploads()

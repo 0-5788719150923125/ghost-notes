@@ -61,27 +61,28 @@ extends SceneTree
 ##   upload described from all that - once the note has a YouTube card and its box is ticked -
 ##   with the title screen's thumbnail moment, for the episode an export rendered even after another
 ##   is picked. The description and tags are the YouTube card's; the title stays on the Episode card.
-## - EACH EPISODE'S OWN TAGS (2026-10-18, the user: "allow the 'Generate' button to override/rewrite those
+## - EACH EPISODE'S TAGS (2026-10-18, the user: "allow the 'Generate' button to override/rewrite those
 ##   tags ... it would not be okay to tightly-couple the two cards"): the writer's answer is cleaned (no
 ##   hashtag sign, no comma inside), each tag once, a bare list taken too - and no JSON, no list or too few
 ##   usable tags are not kept. Its prompt renders whole with the show, the episode's title, description and
-##   words, the note's own tags and YouTube's limit, and says nothing of what an episode does not have. The
+##   words, the note's tags and YouTube's limit, and says nothing of what an episode does not have. The
 ##   step ([YouTubeTags], an [EpisodeStep]) is one only while the card's box is ticked; it waits for the
 ##   episode's words (neither Generate nor ⟳ starts it before); started in a read-only gate it says why
 ##   it cannot; a job that ended is kept in the episode's folder with the fingerprint of the words it was
-##   sent, a run that fails past its retry says why and leaves what was made; words written again make it
-##   stale - not made, none go up - and the same words again make it the episode's once more; a tag
-##   edited by hand is cleaned and keeps it the episode's. On the card: its block keeps the box, the box
-##   clear sends the note's own tags (and never the episode itself), ticked the episode's go up in place of
-##   them - not ones written for other words, and a panel that names no episode keeps its own; under the
-##   box, the episode's tags to edit (× takes one off the episode) or where they stand - and, with nothing
-##   listing the step, that nothing on the note makes episodes. THE HOSTS NEVER NAME THE CARD: the panel
-##   holds the step the YouTube card offers; the Episode card lists it as a Tags row under the Close only
-##   while the box is ticked, says which episode it shows, waits for the reading (its words with the marks
-##   out), makes it once its own steps are done (here refused, read-only, said on the row), shows ✓, the
-##   tags and ⟳ once made, and the upload takes them - not for an episode an export rendered that has
-##   none. The Proof card lists it under the Script, hands it the note's tags with the framer's, and its
-##   upload takes the episode's.
+##   sent and REPLACES THE NOTE'S TAGS (2026-10-19: "I never know which tags are truly going to be
+##   applied ... just one, unified list"); a note that cannot keep them fails the step, saying why (the
+##   control); a run that fails past its retry says why and leaves the note's as they were; words written
+##   again make it stale and the same words again make it made once more. On the card: its block keeps the
+##   box, the upload takes the panel's tags ticked or not, the card holds no list of its own, and the line
+##   under the panel's says what the writer does to it - or, with nothing listing the step, that nothing
+##   on the note makes episodes. THE HOSTS NEVER NAME THE CARD: the panel holds the step the YouTube card
+##   offers; the Episode card lists it as a Tags row under the Close only while the box is ticked, says
+##   which episode it shows, waits for the reading (its words with the marks out), makes it once its own
+##   steps are done (here refused, read-only, said on the row), shows ✓, the tags and ⟳ once made - and
+##   what it wrote is the show's one list, on the card and going up, for any episode's upload. The Proof
+##   card shows the note's tags as one list too, lists the step under the Script, hands it the note's tags
+##   with the framer's, and uploads the note's list alone - the framer's go into an empty one, once, and
+##   never in a read-only process (the control) - until the step writes over it.
 ## - A REAL SHOW FILE: the tags and the byline land as top-level lines above ghost's block - the
 ##   chapter format - the block holds the show's title and description and no record per episode, the
 ##   rest of the file is untouched, and a panel opening it fills a new episode from it at once.
@@ -620,16 +621,34 @@ func _proof_steps() -> bool:
 	proof._episode.write_text("script", "Two has no divisors but one and itself.")
 	_ok(Array(proof._feed.tags()) == ["math", "primes"] and proof._feed.episode_title() == "Why Two Is Prime"
 		and proof._feed.words() == "Two has no divisors but one and itself.", "it hands the step the note's tags with the framer's, and the lesson")
-	step._keep(proof._feed, {"tags": ["prime numbers", "two", "proof"]}, proof._feed.stamp())
+	proof._refresh_tags()
+	_ok(_tag_fields(ed._youtube) == 1 and Array(proof._tags_field.get_tags()) == ["math"]
+		and ed.upload_meta("").get("tags") == ["math"],
+		"the YouTube card shows the note's tags as one list, and the upload takes it alone - the framer's are not added unseen")
+	AgentJobs._ended["text-youtube-check-proof"] = {"ok": true, "text": "{\"tags\": [\"prime numbers\", \"two\", \"proof\"]}"}
+	step._jobs[proof._feed.folder()] = {"id": "text-youtube-check-proof", "feed": proof._feed, "stamp": proof._feed.stamp()}
+	step.tick()
 	proof._refresh()
 	var r: Dictionary = proof._step_rows[step.key]
 	_ok((r["state"] as Label).text == "✓ 3 tags: prime numbers, two, proof" and not (r["redo"] as Button).disabled,
 		"made: its ✓, its tags, and its ⟳ (%s)" % (r["state"] as Label).text)
-	_ok(ed.upload_meta("").get("tags") == ["prime numbers", "two", "proof"], "the upload takes the episode's tags")
+	_ok(ed._doc.field("tags") == "prime numbers, two, proof" and Array(proof._tags_field.get_tags()) == ["prime numbers", "two", "proof"]
+		and ed.upload_meta("").get("tags") == ["prime numbers", "two", "proof"],
+		"landed, they replace the note's tags: the one list on the card, and what goes up (%s)" % ed._doc.field("tags"))
 	ed._youtube._write_tags.button_pressed = false
 	proof._refresh()
-	_ok(not proof._step_rows.has(step.key) and ed.upload_meta("").get("tags") == ["math", "primes"],
-		"control: box cleared, the row goes and the note's and the framer's go up")
+	_ok(not proof._step_rows.has(step.key) and ed.upload_meta("").get("tags") == ["prime numbers", "two", "proof"],
+		"box cleared: the row goes, and the list stays as it was written")
+	# A NOTE WITH NO TAGS TAKES THE FRAMER'S, once
+	ed._doc._fields.erase("tags")
+	proof._seed_tags()
+	_ok(ed._doc.field("tags").is_empty(), "control: a read-only process does not fill an empty list")
+	proof._seed_from_problem()
+	_ok(ed._doc.field("tags") == "primes, math" and Array(proof._tags_field.get_tags()) == ["primes", "math"],
+		"a note with no tags takes the framer's, on the card (%s)" % ed._doc.field("tags"))
+	ed._doc._fields["tags"] = "mine"
+	proof._seed_from_problem()
+	_ok(ed._doc.field("tags") == "mine", "and a note with tags keeps its own")
 	ed.free()
 	_wipe(ProofEpisode.root)
 	ProofEpisode.root = keep
@@ -644,10 +663,26 @@ func _step_row(show: Node) -> Dictionary:
 	return {}
 
 
-## An episode as a step reads it, made up: its folder under the scratch folder, its words as set.
+## How many lists of tags [param node] shows, itself and all under it.
+func _tag_fields(node: Node) -> int:
+	var n := 1 if node.get_script() == load("res://src/ui/tag_field.gd") else 0
+	for c in node.get_children():
+		n += _tag_fields(c)
+	return n
+
+
+## An episode as a step reads it, made up: its folder under the scratch folder, its words as set, and
+## the note's tags it keeps - or why it cannot ([member refuse]).
 class FakeFeed extends "res://src/notes/episode_feed.gd":
 	var dir := ""
 	var said := ""
+	var note_tags := PackedStringArray()
+	var refuse := ""
+
+	func replace_tags(tags: PackedStringArray) -> String:
+		if refuse.is_empty():
+			note_tags = tags
+		return refuse
 
 	func folder() -> String:
 		return dir
@@ -826,17 +861,23 @@ func _panel_fields() -> bool:
 		and (row["text"] as Label).text.contains("read-only"),
 		"once the card's own steps are done, Generate makes it - here refused, read-only, and said on its row")
 	tags_step._errors.clear()
-	tags_step._keep(show._feed, {"tags": ["the moon", "night", "cards"]}, show._feed.stamp())
+	_ok(_tag_fields(ed._youtube) == 1 and ed.upload_meta("").get("tags") == ["tarot", "satire"],
+		"the YouTube card shows one list of tags, and it is what goes up")
+	AgentJobs._ended["text-youtube-check-cards"] = {"ok": true, "text": "{\"tags\": [\"the moon\", \"night\", \"cards\"]}"}
+	tags_step._jobs[show._feed.folder()] = {"id": "text-youtube-check-cards", "feed": show._feed, "stamp": show._feed.stamp()}
+	tags_step.tick()
 	show._refresh_rows()
 	_ok((row["status"] as Label).text == "✓" and (row["text"] as Label).text == "3 tags: the moon, night, cards"
 		and not (row["redo"] as MenuButton).disabled and (row["redo"] as MenuButton).get_popup().get_item_text(0) == tags_step.again
 		and not show._steps_missing(), "made: its ✓, its tags and its ⟳ to write them again")
-	_ok(ed.upload_meta("").get("tags") == ["the moon", "night", "cards"], "the upload takes the episode's tags in place of the show's")
-	_ok(ed.upload_meta(take).get("tags") == ["tarot", "satire"], "control: the episode an export rendered has none written, and goes up with the show's")
+	_ok(ed._doc.field("tags") == "the moon, night, cards" and Array(show._yt_tags.get_tags()) == ["the moon", "night", "cards"]
+		and _tag_fields(ed._youtube) == 1 and ed.upload_meta("").get("tags") == ["the moon", "night", "cards"],
+		"landed, they replace the show's tags: still one list on the card, and what goes up (%s)" % ed._doc.field("tags"))
+	_ok(ed.upload_meta(take).get("tags") == ["the moon", "night", "cards"], "an export of another episode goes up with the same list")
 	ed._youtube._write_tags.button_pressed = false
 	show._refresh_rows()
-	_ok(_step_row(show).is_empty() and ed.upload_meta("").get("tags") == ["tarot", "satire"],
-		"box cleared: the row goes, and the show's tags go up again")
+	_ok(_step_row(show).is_empty() and ed.upload_meta("").get("tags") == ["the moon", "night", "cards"],
+		"box cleared: the row goes, and the list stays as it was written")
 	_ok(show.thumbnail_moment(9.0) == 3.6 and show.thumbnail_moment(3.0) == 1.5 and show.thumbnail_moment(0.5) == 1.5,
 		"the thumbnail is taken with the name up and the table still out of focus")
 	var args: PackedStringArray = load("res://src/export/exporter.gd").thumbnail_args("/v/a b.mp4", "/v/a b.thumbnail.jpg", 3.6)
@@ -864,16 +905,17 @@ func _episode_tags() -> bool:
 	_ok(Rules.missing.is_empty() and not text.contains("{{") and not String(p["system"]).is_empty()
 		and text.contains("The first card is the tower.") and text.contains("THIS VIDEO'S TITLE: The Tower Falls")
 		and text.contains("ITS DESCRIPTION: A reading of three.") and text.contains("readings, cards")
-		and text.contains(str(YouTube.TAGS_MAX)),
-		"the writer is told the show, the episode's title, description and words, the note's own tags and YouTube's limit (%s)" % str(Rules.missing))
+		and text.contains("THE SHOW'S TAGS NOW, which yours replace: readings, cards") and text.contains(str(YouTube.TAGS_MAX)),
+		"the writer is told the show, the episode's title, description and words, the note's tags (which its answer replaces) and YouTube's limit (%s)" % str(Rules.missing))
 	var bare := String(Tags.prompt("", "", "", PackedStringArray(), "Words.")["prompt"])
-	_ok(not bare.contains("THE SHOW:") and not bare.contains("OWN TAGS") and not bare.contains("DESCRIPTION") and bare.contains("Words."),
+	_ok(not bare.contains("THE SHOW:") and not bare.contains("TAGS NOW") and not bare.contains("DESCRIPTION") and bare.contains("Words."),
 		"the control: what an episode does not have is not said")
 	# THE STEP
 	var on := [false]
 	var step = Tags.new(func() -> bool: return bool(on[0]))
 	var feed := FakeFeed.new()
 	feed.dir = ProjectSettings.globalize_path(ROOT + "_files").path_join("episode_1")
+	feed.note_tags = PackedStringArray(["the note's"])
 	_ok(not step.wanted() and EpisodeStep.listed_of([step]).is_empty(), "with the box clear, the step is not one")
 	on[0] = true
 	_ok(step.wanted() and EpisodeStep.listed_of([step, "not a step"]) == [step], "ticked, it is listed (and nothing that is not a step)")
@@ -883,29 +925,40 @@ func _episode_tags() -> bool:
 	_ok(step.generate(feed) and step.state(feed) == "failed" and step.said(feed).contains("read-only"),
 		"once they are, Generate starts it - in a read-only gate it stops, saying why (%s)" % step.said(feed))
 	step._errors.clear()
+	# THE CONTROL: a note that cannot keep tags - the answer is not landed, and the step says why
+	feed.refuse = "the note is gone"
+	AgentJobs._ended["text-youtube-check-0"] = {"ok": true, "text": "{\"tags\": [\"the tower\", \"cards\", \"readings\"]}"}
+	step._jobs[feed.folder()] = {"id": "text-youtube-check-0", "feed": feed, "stamp": feed.stamp()}
+	step._tries[feed.folder()] = 2
+	step.tick()
+	_ok(step.state(feed) == "failed" and step.said(feed) == "the note is gone" and Array(feed.note_tags) == ["the note's"]
+		and not FileAccess.file_exists(feed.folder().path_join("youtube_tags.json")),
+		"the control: a note that cannot keep them fails the step, saying why, and nothing is kept (%s)" % step.said(feed))
+	step._errors.clear()
+	step._tries.clear()
+	feed.refuse = ""
 	AgentJobs._ended["text-youtube-check-1"] = {"ok": true, "text": "{\"tags\": [\"the tower\", \"cards\", \"readings\", \"fortune\"]}"}
 	step._jobs[feed.folder()] = {"id": "text-youtube-check-1", "feed": feed, "stamp": feed.stamp()}
 	_ok(step.busy(feed) and step.state(feed) == "queued", "while its job is out, it is being made")
 	step.tick()
-	_ok(step.state(feed) == "ready" and step.fresh(feed) and Array(step.tags_of(feed)) == ["the tower", "cards", "readings", "fortune"]
+	_ok(step.state(feed) == "ready" and step.fresh(feed) and Array(feed.note_tags) == ["the tower", "cards", "readings", "fortune"]
 		and step.said(feed) == "4 tags: the tower, cards, readings, fortune" and not step.busy(feed),
-		"a job that ended is kept: made, and its tags go up (%s)" % step.said(feed))
+		"a job that ended replaces the note's tags, and the step is made (%s)" % step.said(feed))
 	var kept: Variant = JSON.parse_string(FileAccess.get_file_as_string(feed.folder().path_join("youtube_tags.json")))
 	_ok(kept is Dictionary and (kept as Dictionary).get("from") == feed.stamp(), "kept in the episode's folder, with the fingerprint of the words it was sent")
+	feed.note_tags = PackedStringArray(["edited by hand"])
 	AgentJobs._ended["text-youtube-check-2"] = {"ok": false, "error": "the quota ran out"}
 	step._jobs[feed.folder()] = {"id": "text-youtube-check-2", "feed": feed, "stamp": feed.stamp()}
 	step._tries[feed.folder()] = 2
 	step.tick()
-	_ok(step.state(feed) == "failed" and step.said(feed) == "the quota ran out" and step.tags_of(feed).size() == 4,
-		"a run that fails past its retry says why, and what was made still goes up")
+	_ok(step.state(feed) == "failed" and step.said(feed) == "the quota ran out" and Array(feed.note_tags) == ["edited by hand"],
+		"a run that fails past its retry says why, and leaves the note's tags as they are")
 	step._errors.clear()
 	feed.said = "The first card is the moon."
-	_ok(step.state(feed) == "missing" and step.tags_of(feed).is_empty() and step.said(feed).contains("written again"),
-		"once the words are written again the tags are not the episode's: not made, and none go up")
+	_ok(step.state(feed) == "missing" and step.said(feed).contains("written again"),
+		"once the words are written again the step is not made for them")
 	feed.said = "The first card is the tower."
-	_ok(step.state(feed) == "ready", "the same words again, and they are its own once more")
-	_ok(step.set_tags(feed, PackedStringArray(["the tower", "#cards", "a new one"])).is_empty() and step.fresh(feed)
-		and Array(step.own_of(feed)) == ["the tower", "cards", "a new one"], "edited by hand, cleaned, and still the episode's")
+	_ok(step.state(feed) == "ready", "the same words again, and it is made once more")
 	# THE BOX ON THE CARD
 	var ex = load("res://src/export/exporter.gd").new()
 	ex._build_ui()
@@ -915,32 +968,26 @@ func _episode_tags() -> bool:
 	card.apply({"upload": true})
 	var mine = card.episode_steps()[0] if card.episode_steps().size() == 1 else null
 	_ok(mine != null and not mine.wanted() and not card.capture()["write_tags"], "the card offers its step, not wanted while the box is clear")
-	var base := {"tags": ["the note's"], "episode": feed}
-	_ok(card.meta(base).get("tags") == ["the note's"] and not card.meta(base).has("episode"),
-		"box clear: the note's own tags go up, and the episode itself is not sent on")
+	var base := {"tags": ["the note's"]}
+	_ok(card.meta(base).get("tags") == ["the note's"], "box clear: the panel's tags go up")
 	card._write_tags.button_pressed = true
 	_ok(card.capture()["write_tags"] and mine.wanted(), "ticked, its block says so and its step is wanted")
-	_ok(card.meta(base).get("tags") == ["the tower", "cards", "a new one"], "ticked: the episode's own go up in place of the note's")
-	feed.said = "Other words."
-	_ok(card.meta(base).get("tags") == ["the note's"], "control: tags written for other words do not go up")
-	feed.said = "The first card is the tower."
-	_ok(card.meta({"tags": ["the note's"]}).get("tags") == ["the note's"], "a panel that names no episode keeps its own")
+	_ok(card.meta(base).get("tags") == ["the note's"] and _tag_fields(card) == 0,
+		"ticked too: the card lays no tags of its own over the panel's, and holds no list of its own")
 	card._refresh_tags()
-	_ok(not card._written.visible and card._tags_note.visible and card._tags_note.text.begins_with("Nothing on this note makes episodes"),
+	_ok(card._tags_note.visible and card._tags_note.text.begins_with("Nothing on this note makes episodes"),
 		"with nothing listing the step, it says nothing on the note makes episodes")
 	mine.listed("the Episode card", feed)
 	card._refresh_tags()
-	_ok(card._written.visible and Array(card._written.get_tags()) == ["the tower", "cards", "a new one"]
-		and card._tags_note.text.contains("in place of the note's own") and card._tags_note.text.contains("the Episode card"),
-		"listed, the box has the episode's tags under it, and says where they are written again (%s)" % card._tags_note.text)
-	card._written.remove("a new one")
-	_ok(Array(mine.own_of(feed)) == ["the tower", "cards"], "a chip's × takes the tag off the episode")
+	_ok(card._tags_note.text.contains("replaced the tags above") and card._tags_note.text.contains("the Episode card"),
+		"listed and made, it says the tags above were written over, and where they are written again (%s)" % card._tags_note.text)
 	feed.said = "Other words."
 	card._refresh_tags()
-	_ok(not card._written.visible and card._tags_note.text.contains("written again"), "words written again: no tags shown, and why (%s)" % card._tags_note.text)
+	_ok(card._tags_note.text.contains("written again") and card._tags_note.text.contains("over the tags above"),
+		"words written again: it says new ones are written over the list (%s)" % card._tags_note.text)
 	card._write_tags.button_pressed = false
 	card._refresh_tags()
-	_ok(not card._written.visible and not card._tags_note.visible, "box clear: nothing of them")
+	_ok(not card._tags_note.visible, "box clear: nothing of them")
 	card.free()
 	ex.free()
 	return true

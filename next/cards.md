@@ -396,6 +396,45 @@ bare rod it had named a dried grass bundle, "perfect". The pictures showed both 
 a tool job loads no settings instead (`--setting-sources ""`), and was measured to see no
 CLAUDE.md, memory or skills. Gates `tests/agents/agent_tools_check.gd`, `tests/cards/set_dresser_tools_check.gd`.
 
+THE BLUEPRINT (2026-10-18; the user: "placement still feels awfully strange ... a blueprint-based system
+might work better ... do the planning and desired placements up-front, then verify with screenshots at
+the end"). A thing used to name one of six zones (`CardTable.ZONES`), and `TableMedium._stand` hunted that
+zone for room - scored toward the zone's middle and refusing any spot in front of another group IN THE
+PICTURE. The set dresser could only rename zones and look where the hunt put things: on True Tarot #15853
+it moved a felt pad to lie under wherever the hunt had dropped its journal, and a glass of grass was LEFT
+OFF ("not in front of another group") until it was named into another zone; the table came out five small
+things in the back corners. Now:
+- A THING IS WRITTEN WHERE IT STANDS: `at` ([x, z] cm from `Tables.ORIGIN`, as a layer's `at`), `turn`,
+  `scale` (`CardTable.sanitize_table`). `TableMedium._stand_at` stands it exactly there, no jitter, and
+  moves it only for a spot where nothing may stand - off the top (`Tables.THING_EDGE` in), where the cards
+  go (`_keep_out`), in another thing (`WRITTEN_GAP`), a flame in front of the middle - to the nearest spot
+  that is clear, out to `CardTable.NUDGE_MOST` (15 cm), the move and its reason kept; else left off, in
+  `_unstood`. What the CAMERA makes of it (cut by the frame, one thing before another) is the set dresser's
+  to judge: a full table has both. A thing with no `at` (an old table, the one-reply writer) is hunted as
+  before, after the written.
+- THE DRAWING (`TableBlueprint`, `src/cards/table_blueprint.gd`, from `TableMedium.blueprint()`): black on
+  white, ruled in cm from the middle of the reading, rulers, the reader at the bottom; the top heavy, the
+  line a foot stays inside, the cloths dashed and named; gray where the camera does not see; the cards'
+  room hatched, the spread's cards, the deck; the reader's hands; the line flames stand behind; HOW TALL A
+  THING CAN BE AND BE SEEN WHOLE - straight lines at 5-45 cm, because the frame's top is a plane through
+  the lens (`CardTable.headroom_at`, closed form, held to the old step-by-step `headroom`); each thing's
+  foot, numbered as `put` numbers it, a tick to its front, lit ones warm, the number red when it is taller
+  than its spot shows, where it was written dashed red when it had to move. Names and sizes go in words.
+- THE TOOLS (`SetDresserTools`): `put` makes things (a thing put again keeps its place); `blueprint`
+  places them by name - only what changes - and answers with the drawing and, per thing, its spot, foot,
+  height against what the spot shows, and every move, refusal or cut; a thing not yet placed waits OFF
+  the table in every picture (a spot the hunt chose would pass for the set dresser's) and is asked about
+  once at submit; `set` says each thing at its spot (`numbers: true` tags them in the picture), and moved,
+  taller than its spot, or wholly out of the shot are faults. 60 looks (was 40). The prompt: zones for the
+  blind reply only; with tools, plan the whole table on the blueprint, then verify through the camera.
+- HOW FULL (`CardPrompts.FILLS`): the range asked was 3-4 to 5-6 every episode, so tables held six things;
+  now a habit drawn per episode - 3-6, 6-10, 10-16 or 16-24 besides the lit ones - and a place crowded by
+  nature may go up to `CardTable.MAX_THINGS` (32, was 12). The cost is the agent's geometry and looks;
+  building is cheap (a written thing is placed without the hunt's grid).
+Gates `tests/table/written_place_check.gd` (boot probe), `tests/cards/set_dresser_tools_check.gd`; look with
+`set_dresser_look_probe` (an old table is written where its hunt stood it, then drawn and set, numbered).
+OPEN: things stacked on things (a candle on a book) are still one thing's parts; a real run with an agent.
+
 THE AIR (2026-10-05; the user: "some particle and/or volumetric effects could go a long way... gentle
 fog/smoke rolling in the background region (with less-severe fog in the foreground, perhaps even upon
 the table)... when a card is ejected from the deck - a burst of colorful sparks... when a card twirls...

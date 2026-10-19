@@ -191,17 +191,6 @@ func tick() -> void:
 			_start(job["feed"])
 
 
-## CHANGED BY HAND (a tag removed on its card): [param changes] laid over what is kept, which stays made
-## from the words it was. "" once written, else why not.
-func amend(feed: EpisodeFeed, changes: Dictionary) -> String:
-	var m := made(feed)
-	if m.is_empty():
-		return "nothing is made to change"
-	var d := m.duplicate(true)
-	d.merge(changes, true)
-	return _write(feed, d)
-
-
 func _start(feed: EpisodeFeed) -> void:
 	var dir := feed.folder()
 	_tries[dir] = int(_tries.get(dir, 0)) + 1

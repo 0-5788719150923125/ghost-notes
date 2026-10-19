@@ -153,6 +153,16 @@ const STRADDLE_BIG := 0.18
 const WORKSPACE := 2.0
 const WORKSPACE_HALF := 0.25
 const WORKSPACE_FROM := 0.14
+## A THING WRITTEN WHERE IT STANDS (the user, 2026-10-18: "do the planning and desired placements
+## up-front, then verify with screenshots at the end"): the set dresser lays its things out on a
+## blueprint and writes each one's `at`, `turn` and `scale` ([method _stand_at]). It stands exactly
+## there unless that spot is one where nothing may stand - off the top, where the cards go, in another
+## thing, or a flame in front of the middle - and then at the nearest spot that is not, NUDGE_STEP by
+## NUDGE_STEP out to NUDGE_MOST (meters); with none so near, it is left off. Things written where they
+## stand keep WRITTEN_GAP apart: the set dresser spaces them itself.
+const NUDGE_MOST := CardTable.NUDGE_MOST
+const NUDGE_STEP := 0.005
+const WRITTEN_GAP := 0.003
 ## THE DECK PUT ASIDE (the user, 2026-10-08: a long row comes "oddly close to the deck ... TOO close"):
 ## when a card of the spread would lie within DECK_CROWD of the deck (meters, edge to edge), the reader
 ## slides the deck further out before drawing it - in an episode that draws DECK_ASIDE or under - over
@@ -313,7 +323,8 @@ var _layer_os: Array = []             # the layers' outlines (Tables.layer_outli
 var wash_calm := true                # the fan-out calmed (CALM_HZ); a gate's control turns it off
 var _deck_far := Vector3.ZERO         # where the deck is slid aside to, when the spread crowds it
 var _aside_card := -1                 # the card it is slid aside for (-1: it stays)
-var _things: Array = []               # what stood: [{name, group, place, node, outline, bb, rect, foot, lit, flames, meshes}]
+var _things: Array = []               # what stood: [{name, group, place, node, outline, bb, rect, foot, lit, flames, meshes, written, moved, why}]
+var _unstood: Array = []              # things written where they stand that found no room near it: [{name, written, why}]
 var _table_mt := -2                   # the table file's time when it was last built (-1: none)
 var _stage_was := {}                  # the stage's own settings, given back on leaving it
 var _deck: Array = []               # a MeshInstance3D per deck card (TablePlan.deck_n), bottom first
@@ -1492,6 +1503,7 @@ func _build_table(spec: Dictionary = {}) -> void:
 	_standing_c = PackedVector2Array()
 	_standing_r = PackedFloat32Array()
 	_things = []
+	_unstood = []
 	_light_part._heat_cells = {}
 	# the name over this table is printed in the color the set dresser chose to stand out from it
 	_title.ink = CardTable.title_ink(spec)
@@ -1537,7 +1549,8 @@ func _table_spec() -> Dictionary:
 	return CardTable.default_table(_plan.look, _plan.seed_value)
 
 
-## WHERE EACH THING STANDS. A thing goes in the zone the set dresser named, and things that share
+## WHERE EACH THING STANDS. A thing written where it stands (`at`) stands there ([method _stand_at]),
+## in the order written. Any other goes in the zone the set dresser named, and things that share
 ## a group stand together: the group's tallest first, as near its zone's middle as there is room,
 ## the rest round it - the shorter ones toward the reader - so a group reads as arranged, not
 ## lined up. The biggest groups choose first. A thing with no room is tried smaller, then left
@@ -1549,9 +1562,17 @@ func _place_things(things: Array, built: Array, rng: RandomNumberGenerator) -> v
 	for i in things.size():
 		if Props.draped(things[i]):
 			_drape(things[i], built[i], keep_out)
+	# ...THEN THE WRITTEN, each where the set dresser put it on the blueprint
+	for i in things.size():
+		if Props.draped(things[i]) or not (things[i] as Dictionary).has("at"):
+			continue
+		var g := String((things[i] as Dictionary).get("group", ""))
+		if not _stand_at(things[i], built[i], g if not g.is_empty() else "#%d" % i, keep_out):
+			print("ghost: card table - no room for %s near where it was written" % String((things[i] as Dictionary).get("name", "a thing")))
+			((built[i] as Dictionary)["node"] as Node).free()
 	var groups := {}
 	for i in things.size():
-		if Props.draped(things[i]):
+		if Props.draped(things[i]) or (things[i] as Dictionary).has("at"):
 			continue
 		var g := String((things[i] as Dictionary).get("group", ""))
 		var key := g if not g.is_empty() else "#%d" % i
@@ -1677,7 +1698,7 @@ func _keep_out() -> Array:
 	if _aside_card >= 0:
 		out.append(Rect2(_deck_far.x - 0.08, _deck_far.z - 0.1, 0.16, 0.2))
 	# the middle, where the deck is shuffled - and, whatever the source, where the spread lies
-	out.append(Rect2(_plan.mid.x - 0.22, _plan.mid.z - 0.14, 0.44, 0.28))
+	out.append(_shuffle_rect())
 	if _plan.cards_from == "box":
 		# nothing stands where the box would, nor where a pulled card rises past it
 		out.append(TablePositions.deck_keep(_deck_base, _box_keep(), _box_center()))
@@ -1690,6 +1711,42 @@ func _keep_out() -> Array:
 		return out
 	out.append(Rect2(_plan.jump_land.x - 0.07, _plan.jump_land.z - 0.09, 0.14, 0.18))
 	return out
+
+
+## The middle of the table, where the deck is shuffled (x by z).
+func _shuffle_rect() -> Rect2:
+	return Rect2(_plan.mid.x - 0.22, _plan.mid.z - 0.14, 0.44, 0.28)
+
+
+## THE TABLE'S BLUEPRINT, as [TableBlueprint] draws it for the set dresser: everything that decides where
+## a thing may stand, in the table's own space (meters; x to the reader's right, z toward the reader) -
+## the top's outline and its layers' ([method Tables.top_outline]), the spread's cards (`{pos, yaw}`), the
+## deck, where nothing may stand ([method _keep_out]), the shuffle, the reader's workspace, the line flames
+## stand behind, the camera - and each thing as it stood: its foot, which way its front faces, its height,
+## where it was written and how far it was moved, and why; and each written thing that found no room.
+func blueprint() -> Dictionary:
+	var cards: Array = []
+	for sl in _plan.slots:
+		cards.append({"pos": Vector2(((sl as Dictionary)["pos"] as Vector3).x, ((sl as Dictionary)["pos"] as Vector3).z),
+			"yaw": float((sl as Dictionary)["yaw"])})
+	var layers: Array = []
+	for l in ((_furniture.get("spec", {}) as Dictionary).get("layers", []) as Array):
+		if l is Dictionary:
+			layers.append({"name": String((l as Dictionary).get("name", "")), "o": Tables.layer_outline(l, _top)})
+	var things: Array = []
+	for th in _things:
+		var d: Dictionary = th
+		var node: Node3D = d["node"]
+		var front := node.transform.basis * Vector3(0.0, 0.0, 1.0)
+		things.append({"name": String(d["name"]), "foot": d["outline"], "bb": d["bb"], "at": Vector2(node.position.x, node.position.z),
+			"front": Vector2(front.x, front.z).normalized(), "height": (d["box"] as AABB).end.y, "lit": int(d["lit"]),
+			"written": d.get("written"), "moved": float(d.get("moved", 0.0)), "why": String(d.get("why", "")),
+			"rect": d["rect"], "box": String(d["group"]) == "#the box"})
+	return {"top": _top_o, "layers": layers, "cards": cards, "card": CARD, "deck": Vector2(_deck_base.x, _deck_base.z),
+		"keep_out": _keep_out(), "shuffle": _shuffle_rect(),
+		"workspace": Rect2(_plan.mid.x - WORKSPACE_HALF, _plan.mid.z + WORKSPACE_FROM, WORKSPACE_HALF * 2.0, 1.0),
+		"flames_behind": _plan.mid.z, "camera": _plan.cam_base, "fov": _cam.fov, "things": things,
+		"unstood": _unstood.duplicate(true)}
 
 
 ## ONE THING STOOD: the best free spot for [param t] (built as [param b]) on a grid over the table,
@@ -1840,6 +1897,80 @@ func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, kee
 	return {}
 
 
+## ONE THING STOOD WHERE IT WAS WRITTEN ([constant NUDGE_MOST]): [param t]'s `at`, turned by its `turn`
+## and sized by its `scale` - exactly, with no hand's jitter: the spot is the set dresser's. A spot where
+## it may not stand ([method _spot_trouble]) moves it to the nearest where it may, the move and its
+## reason kept for the blueprint; false, and kept in [member _unstood], when none is within reach. Whether
+## the camera sees it whole, or sees it in front of another thing, is the set dresser's to judge.
+func _stand_at(t: Dictionary, b: Dictionary, group: String, keep_out: Array) -> bool:
+	var box: AABB = b["size"]
+	var lit := not (b["wicks"] as Array).is_empty()
+	var k := float(t.get("scale", 1.0))
+	var basis := Basis(Vector3.UP, deg_to_rad(float(t.get("turn", 0.0)))).scaled(Vector3(k, k, k))
+	var cm: Array = t["at"]
+	var want := Tables.ORIGIN + Vector2(float(cm[0]), float(cm[1])) * 0.01
+	var shape := _turned(b["outline"], basis)
+	var why := ""
+	var spot := Vector2(INF, INF)
+	var r := 0.0
+	while r <= NUDGE_MOST + 1e-6 and spot.x == INF:
+		var n := 1 if r == 0.0 else maxi(8, ceili(TAU * r / NUDGE_STEP))
+		for i in n:
+			_breathe()
+			var at := want + Vector2(cos(TAU * i / n), sin(TAU * i / n)) * r
+			var trouble := _spot_trouble(_translated(shape, at), lit, at, keep_out)
+			if trouble.is_empty():
+				spot = at
+				break
+			if r == 0.0:
+				why = trouble
+		r += NUDGE_STEP
+	if spot.x == INF:
+		_unstood.append({"name": String(t.get("name", "")), "written": want, "why": why})
+		return false
+	var corners := PackedVector3Array()
+	for cx in [box.position.x, box.end.x]:
+		for cy in [box.position.y, box.end.y]:
+			for cz in [box.position.z, box.end.z]:
+				corners.append(basis * Vector3(cx, cy, cz))
+	var lens := Vector2(tan(deg_to_rad(_cam.fov * 0.5)) * (16.0 / 9.0), tan(deg_to_rad(_cam.fov * 0.5)))
+	var placed := _translated(shape, spot)
+	_put(t, b, {"at": spot, "outline": placed, "bb": _bounds(placed),
+		"rect": _screen_rect_fast(corners, Vector3(spot.x, 0.0, spot.y), _plan.cam_base.affine_inverse(), lens),
+		"written": want, "moved": spot.distance_to(want), "why": why}, basis, group)
+	return true
+
+
+## Why a foot [param placed] (convex, on the table) may not stand where it is, "" when it may: a flame
+## in front of the middle ([param lit], its middle at [param at]; see [method _stand]), off the top
+## ([constant Tables.THING_EDGE] in from its edge), where the cards go ([param keep_out]), or in what
+## already stands ([constant WRITTEN_GAP]).
+func _spot_trouble(placed: PackedVector2Array, lit: bool, at: Vector2, keep_out: Array) -> String:
+	if lit and at.y > _plan.mid.z:
+		return "a flame in front of the middle of the table blows out the card held up to the lens"
+	for q in placed:
+		if Tables.sdf(_top_o, q) > -Tables.THING_EDGE:
+			return "it ran off the table's edge"
+	var bb := _bounds(placed)
+	for r in keep_out:
+		if (r as Rect2).intersects(bb) and _convex_overlap(placed, _rect_poly(r as Rect2), 0.0):
+			return "it stood where the cards go"
+	for th in _things:
+		if ((th as Dictionary)["bb"] as Rect2).grow(WRITTEN_GAP).intersects(bb) \
+				and _convex_overlap(placed, (th as Dictionary)["outline"], WRITTEN_GAP):
+			return "it stood in %s" % String((th as Dictionary)["name"])
+	return ""
+
+
+static func _bounds(poly: PackedVector2Array) -> Rect2:
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for q in poly:
+		lo = lo.min(q)
+		hi = hi.max(q)
+	return Rect2(lo, hi - lo)
+
+
 ## A BREATH for the app, in a table built [member aside]: a worker in a long loop of GDScript calls holds
 ## the engine's object locks so tightly that the main thread drew at four frames a second (measured
 ## 2026-10-08); a moment given up now and then gave it back its frames, and the build got no slower. It
@@ -1898,7 +2029,8 @@ func _put(t: Dictionary, b: Dictionary, spot: Dictionary, basis: Basis, group: S
 	_things.append({"name": String(t.get("name", "")), "group": group, "place": String(t.get("place", "back")),
 		"node": node, "outline": spot["outline"], "bb": spot["bb"], "rect": spot["rect"], "foot": foot,
 		"box": node.transform * (b["size"] as AABB), "lit": wicks.size(), "lights": range(first, _lights.size()),
-		"meshes": b["meshes"]})
+		"meshes": b["meshes"], "written": spot.get("written"), "moved": float(spot.get("moved", 0.0)),
+		"why": String(spot.get("why", ""))})
 
 
 ## The rectangle in the picture that [param corners] (a thing's box, turned and sized) cover

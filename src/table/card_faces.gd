@@ -340,6 +340,27 @@ static func window(back := false, look: Dictionary = {}) -> Rect2:
 	return Rect2(Vector2(m, m + top), Vector2(sz.x - 2.0 * m, sz.y - 2.0 * m - top - bottom))
 
 
+## THE ARCH ROUND A BACK'S DESIGN (feedback 0006: "that border should be shifted upward on the card, so that it's
+## around the rectangular part"). A back's painting runs to the edges and keeps its own marks inside the middle
+## four sixths ([code]cards/painter.back[/code]), its ornate rectangle among them, so the arch is fitted to
+## that: its foot stands [constant BACK_PAD] under the painting's last sixth, and its springing line
+## [constant BACK_PAD] above the first, the dome a shallower arch between there and [param win]'s top rather than a
+## half circle that would cut the rectangle's corners. The painting keeps the scale it has in [param win] - only
+## the frame and the cut move. Returns `{win, dome}`: the arch's box, and its dome's height for [method outline].
+static func back_arch(look: Dictionary, win: Rect2) -> Dictionary:
+	var sz := Vector2(face_px(look))
+	var pad := sz.x * BACK_PAD
+	var foot := minf(sz.y * 5.0 / 6.0 + pad, win.end.y)
+	var spring := maxf(sz.y / 6.0 - pad, win.position.y)
+	var half := win.size.x * 0.5 - win.size.x * 0.07
+	var dome := clampf((spring - win.position.y) / half, 0.15, 1.0)
+	return {"win": Rect2(win.position, Vector2(win.size.x, foot - win.position.y)), "dome": dome}
+
+
+## How far the back's arch stands clear of the painting's middle four sixths (a share of the card's width).
+const BACK_PAD := 0.012
+
+
 ## A card with details on its front reserves the lower part of the face for its printed text - a
 ## borderless one sets that text over its painting, which still fills the card.
 static func front_window(look: Dictionary, details := false) -> Rect2:
@@ -449,7 +470,8 @@ static func window_of(look: Dictionary) -> String:
 ## THE WINDOW'S OUTLINE ([constant CardTable.WINDOWS]) round the picture's box [param r], grown outward by
 ## [param g] pixels - every rule of the frame is the same shape a little further out, so a grown outline is
 ## an offset of it, not the shape scaled. Closed, clockwise on screen, the first point not repeated.
-static func outline(shape: String, r: Rect2, g := 0.0) -> PackedVector2Array:
+## [param dome] is how tall an arch's dome stands, as a share of a half circle's height ([method back_arch]).
+static func outline(shape: String, r: Rect2, g := 0.0, dome := 1.0) -> PackedVector2Array:
 	var rr := r.grow(g)
 	var x0 := rr.position.x
 	var y0 := rr.position.y
@@ -468,11 +490,13 @@ static func outline(shape: String, r: Rect2, g := 0.0) -> PackedVector2Array:
 			# the shoulders step in by the same amount however far out the rule is; the arch grows with it
 			var sh := w * 0.07
 			var R := rr.size.x * 0.5 - sh
-			var ys := r.position.y + (w * 0.5 - sh)
+			var ry := (w * 0.5 - sh) * dome + g
+			var ys := r.position.y + (w * 0.5 - sh) * dome
 			pts.append(Vector2(x0, y1))
 			pts.append(Vector2(x0, ys))
 			pts.append(Vector2(x0 + sh, ys))
-			pts.append_array(_arc(Vector2(rr.get_center().x, ys), R, PI, TAU, 40).slice(1, 40))
+			for a in _arc(Vector2.ZERO, 1.0, PI, TAU, 40).slice(1, 40):
+				pts.append(Vector2(rr.get_center().x + a.x * R, ys + a.y * ry))
 			pts.append(Vector2(x1 - sh, ys))
 			pts.append(Vector2(x1, ys))
 			pts.append(Vector2(x1, y1))
@@ -654,7 +678,14 @@ class Face:
 		draw_rect(Rect2(Vector2.ZERO, sz), stock)
 		var win := CardFaces.window(true, look) if back else CardFaces.front_window(look, details)
 		var shape := CardFaces.window_of(look)
-		var hole := CardFaces.outline(shape, win)
+		# a back's arch is fitted to its design ([method CardFaces.back_arch]); the painting stays as it lies in win
+		var frame_win := win
+		var dome := 1.0
+		if back and shape == "arch" and not CardFaces.borderless(look):
+			var fit := CardFaces.back_arch(look, win)
+			frame_win = fit["win"]
+			dome = fit["dome"]
+		var hole := CardFaces.outline(shape, frame_win, 0.0, dome)
 		if art != null:
 			# a reversed card is printed the right way up: the TABLE turns it over
 			CardFaces._cover_shape(self, art, win, hole, part)
@@ -664,7 +695,7 @@ class Face:
 		# a borderless card is its painting: no rules round it, no ornament, its type set on it
 		var bare_card := CardFaces.borderless(look)
 		if not bare_card:
-			_frame(style, shape, win, ink, accent, sz)
+			_frame(style, shape, frame_win, ink, accent, sz, dome)
 			CardFaces.ornament(self, look, ink, accent)
 		if details and not back:
 			_printed_front(win, stock, ink, accent)
@@ -825,10 +856,10 @@ class Face:
 			y += 28.0
 
 	## THE RULES ROUND THE PICTURE, in the window's own shape ([method CardFaces.outline]).
-	func _frame(style: String, shape: String, win: Rect2, ink: Color, accent: Color, sz: Vector2) -> void:
+	func _frame(style: String, shape: String, win: Rect2, ink: Color, accent: Color, sz: Vector2, dome := 1.0) -> void:
 		var r := sz.x * 0.02
 		var line := func(g: float, col: Color, w: float) -> void:
-			draw_polyline(CardFaces.closed(CardFaces.outline(shape, win, g)), col, w, true)
+			draw_polyline(CardFaces.closed(CardFaces.outline(shape, win, g, dome)), col, w, true)
 		match style:
 			"double":
 				line.call(sz.x * 0.012, ink, sz.x * 0.009)
@@ -840,7 +871,7 @@ class Face:
 				var w := sz.x * 0.012
 				# a bracket at every corner the outline turns OUT at, sharply - a rectangle's four, an arch's
 				# foot and shoulders - never on a curve or where it turns in
-				var o := CardFaces.outline(shape, win, off)
+				var o := CardFaces.outline(shape, win, off, dome)
 				var n := o.size()
 				for i in n:
 					var c := o[i]

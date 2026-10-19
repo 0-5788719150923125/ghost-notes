@@ -40,6 +40,9 @@ const STUDIO_FOV := 28.0
 ## settle in a few.
 const STUDIO_FRAMES := 3
 const TABLE_FRAMES := 6
+## How many of the app's frames may run with nothing drawn before a picture draws its own: a window that
+## cannot be seen draws none ([method _render]); one that can draws every frame.
+const UNDRAWN := 4
 ## The moment of a reading the air is shown at: some way in, its fog rolled and its motes about.
 const AIR_AT := 40.0
 ## The moment the OPENING is shown at: the show's name up, the deck not yet shuffled.
@@ -378,8 +381,9 @@ func _shot(box: AABB, side: Vector3, size: Vector2i, caption: String) -> Image:
 ## `{image, stood: [{name, place, at, k, tall}], left_off: [names], key, held_down: [names], cards,
 ## deck}` - `at` in centimeters from the cloth's middle (x to the reader's right, z toward them), `k`
 ## how far it was made smaller (1 = not at all), `tall` its share of the picture's height. `error`
-## when the table cannot be stood here.
-func table(raw: Dictionary) -> Dictionary:
+## when the table cannot be stood here. With [param numbers] (name -> number), each thing carries its
+## number in the picture, as the blueprint numbers it ([Tags]).
+func table(raw: Dictionary, numbers: Dictionary = {}) -> Dictionary:
 	var err: String = await _stand(raw)
 	if not err.is_empty():
 		return {"error": err}
@@ -387,8 +391,39 @@ func table(raw: Dictionary) -> Dictionary:
 	_pose_spread()
 	_medium._tick_air(AIR_AT)
 	var out := _placed(CardTable.sanitize_table(raw, CardTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {})))
+	var tags: Tags = null
+	if not numbers.is_empty():
+		tags = Tags.new()
+		var cam: Transform3D = _medium._plan.cam_base
+		var fov: float = (_medium._cam as Camera3D).fov
+		for th in _medium._things:
+			var box: AABB = (th as Dictionary)["box"]
+			var top: Variant = CardTable.project(cam, fov, Vector3(box.get_center().x, box.end.y, box.get_center().z))
+			var n: Variant = numbers.get(String((th as Dictionary)["name"]))
+			if top != null and n != null:
+				tags.marks.append({"at": (top as Vector2) * Vector2(SHEET) - Vector2(0.0, 14.0), "text": str(n)})
+		_table.add_child(tags)
 	out["image"] = await _render(_table, TABLE_FRAMES)
+	if tags != null and is_instance_valid(tags):
+		tags.queue_free()
 	return out
+
+
+## THE NUMBERS OVER A TABLE'S THINGS ([method table]): each a small tag just over the thing's top.
+class Tags:
+	extends Node2D
+	var marks: Array = []
+
+	func _draw() -> void:
+		var font := ThemeDB.fallback_font
+		for m in marks:
+			var at: Vector2 = (m as Dictionary)["at"]
+			var text := String((m as Dictionary)["text"])
+			var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+			var r := Rect2(at - Vector2(w * 0.5 + 5.0, 10.0), Vector2(w + 10.0, 19.0))
+			draw_rect(r, Color(0.98, 0.98, 0.96, 0.85))
+			draw_rect(r, Color(0.08, 0.08, 0.08), false, 1.5)
+			draw_string(font, Vector2(at.x - w * 0.5, at.y + 5.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.08, 0.08, 0.08))
 
 
 ## ONE EFFECT IN MOTION: the effect named [param name] in [param raw]'s `effects`, on the episode's
@@ -625,36 +660,44 @@ func overhead(raw: Dictionary) -> Dictionary:
 	return {"image": img}
 
 
+## THE BLUEPRINT ([TableBlueprint]): [param raw] stood on the episode's own table and drawn from above as
+## a plan, each thing numbered by [param numbers] (name -> number). `{image, placed}` - `placed` as
+## [method table] says where each thing stood - or `error` when the table cannot be stood here.
+func blueprint(raw: Dictionary, numbers: Dictionary) -> Dictionary:
+	var err: String = await _stand(raw)
+	if not err.is_empty():
+		return {"error": err}
+	var data: Dictionary = _medium.blueprint()
+	data["numbers"] = numbers
+	var placed := _placed(CardTable.sanitize_table(raw, CardTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {})))
+	var vp := SubViewport.new()
+	vp.size = TableBlueprint.SHEET
+	vp.transparent_bg = false
+	vp.msaa_2d = Viewport.MSAA_4X
+	vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	var paper := TableBlueprint.new()
+	paper.data = data
+	vp.add_child(paper)
+	_tree().root.add_child(vp)
+	var img: Image = await _render(vp, 2)
+	if is_instance_valid(vp):
+		vp.queue_free()
+	if img == null:
+		return {"error": "no picture could be taken"}
+	return {"image": img, "placed": placed}
+
+
 ## The stretch of the table the episode's camera sees, as a thin line laid on it.
 func _frame_on_table(m) -> MeshInstance3D:
-	var pts := PackedVector3Array()
-	var cam: Transform3D = m._plan.cam_base
-	var fov: float = (m._cam as Camera3D).fov
-	var k := tan(deg_to_rad(fov * 0.5))
-	var edge: Array = []
-	for i in 41:
-		var u := float(i) / 40.0
-		edge.append(Vector2(u * 2.0 - 1.0, 1.0))
-	for i in 41:
-		edge.append(Vector2(1.0, 1.0 - float(i) / 20.0))
-	for i in 41:
-		edge.append(Vector2(1.0 - float(i) / 20.0, -1.0))
-	for i in 41:
-		edge.append(Vector2(-1.0, -1.0 + float(i) / 20.0))
-	for e in edge:
-		var d := (cam.basis * Vector3((e as Vector2).x * k * 16.0 / 9.0, (e as Vector2).y * k, -1.0)).normalized()
-		if d.y < -0.02:
-			var t := -cam.origin.y / d.y
-			pts.append(cam.origin + d * minf(t, 3.0))
-		else:
-			pts.append(cam.origin + Vector3(d.x, 0.0, d.z).normalized() * 3.0 - Vector3(0.0, cam.origin.y, 0.0))
+	var pts := TableBlueprint.seen(m._plan.cam_base, (m._cam as Camera3D).fov)
+	pts.append(pts[0])
 	var im := ImmediateMesh.new()
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.albedo_color = Color(1.0, 0.85, 0.2)
 	im.surface_begin(Mesh.PRIMITIVE_LINE_STRIP, mat)
 	for q in pts:
-		im.surface_add_vertex(Vector3(q.x, 0.0, q.z))
+		im.surface_add_vertex(Vector3(q.x, 0.0, q.y))
 	im.surface_end()
 	var mi := MeshInstance3D.new()
 	mi.mesh = im
@@ -907,7 +950,12 @@ func _placed(spec: Dictionary) -> Dictionary:
 	var stood: Array = []
 	var used := {}
 	var left_off: Array = []
+	var left_why := {}
 	var by_light := {}
+	for u in m._unstood:
+		left_why[String((u as Dictionary)["name"])] = String((u as Dictionary)["why"])
+	var cam: Transform3D = m._plan.cam_base
+	var fov: float = (m._cam as Camera3D).fov
 	for t in spec.get("things", []):
 		var name := String((t as Dictionary).get("name", ""))
 		var found := -1
@@ -922,9 +970,25 @@ func _placed(spec: Dictionary) -> Dictionary:
 		var th: Dictionary = m._things[found]
 		var node: Node3D = th["node"]
 		var rect: Rect2 = th["rect"]
-		stood.append({"name": name, "place": String(th["place"]),
-			"at": Vector2(node.position.x * 100.0, (node.position.z - Tables.ORIGIN.y) * 100.0),
-			"k": node.transform.basis.get_scale().x, "tall": rect.size.y})
+		var entry := {"name": name, "place": String(th["place"]),
+			"at": Vector2((node.position.x - Tables.ORIGIN.x) * 100.0, (node.position.z - Tables.ORIGIN.y) * 100.0),
+			"k": node.transform.basis.get_scale().x, "tall": rect.size.y}
+		# WRITTEN WHERE IT STANDS: where, how far it had to move and why, its foot and height against what
+		# its spot shows, and how much of it the frame keeps
+		var written: Variant = th.get("written")
+		if written != null:
+			var bb: Rect2 = th["bb"]
+			entry["written"] = ((written as Vector2) - Tables.ORIGIN) * 100.0
+			entry["moved"] = float(th.get("moved", 0.0)) * 100.0
+			entry["why"] = String(th.get("why", ""))
+			entry["foot"] = bb.size * 100.0
+			entry["height"] = (th["box"] as AABB).end.y * 100.0
+			entry["room"] = CardTable.headroom_at(cam, fov, Vector2(node.position.x, node.position.z)) * 100.0
+			entry["shown"] = rect.intersection(Rect2(0.0, 0.0, 1.0, 1.0)).get_area() / maxf(rect.get_area(), 1e-9)
+			var half := float(consts.get("WORKSPACE_HALF", 0.25))
+			var mid: Vector3 = m._plan.mid
+			entry["hands"] = bb.intersects(Rect2(mid.x - half, mid.z + float(consts.get("WORKSPACE_FROM", 0.14)), half * 2.0, 1.0))
+		stood.append(entry)
 		for li in th.get("lights", []):
 			by_light[int(li)] = name
 	var key: String = m._light_part.lead_name(by_light)
@@ -935,7 +999,7 @@ func _placed(spec: Dictionary) -> Dictionary:
 		if float(l["energy"]) < full * 0.9 and by_light.has(i):
 			held.append(by_light[i])
 	var deck: Vector3 = m._deck_base
-	return {"stood": stood, "left_off": left_off, "key": key, "held_down": held,
+	return {"stood": stood, "left_off": left_off, "left_why": left_why, "key": key, "held_down": held,
 		"cards": (m._cards as Array).size(), "deck": "front right" if deck.x > 0.0 else "front left"}
 
 
@@ -943,20 +1007,50 @@ func _placed(spec: Dictionary) -> Dictionary:
 
 ## [param vp] drawn for [param frames] frames, read back, then stopped again.
 ## null when the stage is given back while it waits ([method release]).
+##
+## A HIDDEN WINDOW DRAWS NOTHING (reported 2026-10-19: "the set dresser stopped without handing its table
+## in"): while Ghost Notes is minimized or on another desktop, Godot runs its frames and draws none, and a
+## picture that waited for frames to be drawn waited until the window came back - a `put` 35 minutes, every
+## call behind it timed out, and the agent gave up. Measured in a virtual KWin, on X11 and on Wayland: 435
+## frames run in 3 s, none drawn. So once [constant UNDRAWN] frames pass with nothing drawn, the picture
+## draws its own ([method _draw_unseen]).
 func _render(vp: SubViewport, frames: int) -> Image:
 	if vp == null or not is_instance_valid(vp):
 		return null
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	for i in frames:
-		await RenderingServer.frame_post_draw
-		if not is_instance_valid(vp):
-			return null
+	var drawn := [0]
+	var count := func() -> void: drawn[0] += 1
+	RenderingServer.frame_post_draw.connect(count)
+	var seen := 0
+	var idle := 0
+	while int(drawn[0]) < frames and is_instance_valid(vp):
+		await _tree().process_frame
+		idle = idle + 1 if int(drawn[0]) == seen else 0
+		seen = int(drawn[0])
+		if idle >= UNDRAWN and is_instance_valid(vp):
+			TablePreview._draw_unseen(frames - seen)
+	RenderingServer.frame_post_draw.disconnect(count)
+	if not is_instance_valid(vp):
+		return null
 	var img := vp.get_texture().get_image()
 	vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	if img == null or img.is_empty():
 		return null
 	img.convert(Image.FORMAT_RGB8)
 	return img
+
+
+## [param n] frames drawn now, for a window that draws none ([method _render]): every viewport but the
+## window's own, which is set aside for them - its picture would go to a screen that takes none, and on
+## Wayland a hidden window's screen can keep the draw waiting. Set inactive instead, it takes the viewports
+## under it out of the draw too (measured: the picture came back stale).
+static func _draw_unseen(n: int) -> void:
+	var root := _tree().root.get_viewport_rid()
+	var was := RenderingServer.viewport_get_update_mode(root)
+	RenderingServer.viewport_set_update_mode(root, RenderingServer.VIEWPORT_UPDATE_DISABLED)
+	for i in n:
+		RenderingServer.force_draw(false, 1.0 / 60.0)
+	RenderingServer.viewport_set_update_mode(root, was)
 
 
 static func _tree() -> SceneTree:

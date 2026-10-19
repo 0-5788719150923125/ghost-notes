@@ -95,8 +95,17 @@ const MAX_FLAMES := 12
 
 ## THE THINGS ON THE TABLE are modeled, not painted (see [Props]): the set dresser describes each
 ## in parts and materials and names where it stands; the table builds and places it. A painted
-## cut-out could neither take the candlelight nor cast a shadow. At most this many.
-const MAX_THINGS := 12
+## cut-out could neither take the candlelight nor cast a shadow. At most this many: a reader's table
+## runs from a few things to dozens (the user, 2026-10-18: "real tarot videos will often fill the
+## table with all manner of items").
+const MAX_THINGS := 32
+## A THING WRITTEN WHERE IT STANDS ([method TableMedium._stand_at]): its `at`, [x, z] centimeters from
+## the middle of the reading ([constant Tables.ORIGIN], as a layer's `at`), kept within AT_MOST; and
+## its `scale`, how much larger or smaller than built it stands.
+const AT_MOST := 200.0
+const SCALE_RANGE := Vector2(0.25, 2.0)
+## ...and how far from where it was written the table may move it, meters, when it may not stand there.
+const NUDGE_MOST := 0.15
 
 ## WHERE A THING CAN STAND, as the set dresser names it: stretches of the cloth the cards leave
 ## free. `aim` is a zone's middle on the table (x across, z toward the reader, meters); the table
@@ -336,6 +345,29 @@ static func headroom(seed: int) -> Dictionary:
 	return out
 
 
+## HOW TALL A THING AT [param p] (on the table, x z, meters) CAN STAND AND BE SEEN WHOLE, meters, for a
+## camera at [param cam] with [param fov]: where the vertical through [param p] meets the plane every
+## point the frame's top shows lies on ([method headroom]'s line, 0.03 of the frame down, its foot 1 cm
+## lower). That plane passes through the lens, so the height is linear in x and z and every height's
+## line on the table is straight - the blueprint's ([TableBlueprint]). INF when the frame's top never
+## reaches over it; 0 when it cuts the cloth itself.
+static func headroom_at(cam: Transform3D, fov: float, p: Vector2) -> float:
+	var r := headroom_plane(cam, fov)
+	return INF if is_inf(r.z) else maxf(p.x * r.x + p.y * r.y + r.z, 0.0)
+
+
+## [method headroom_at] as the plane it is, before it is kept above the cloth: the height at (x, z) is
+## x * r.x + z * r.y + r.z, meters. r.z is INF when the frame's top never comes down over the table.
+static func headroom_plane(cam: Transform3D, fov: float) -> Vector3:
+	var k := tan(deg_to_rad(fov * 0.5))
+	# in the camera's own space the frame's top is l.y = -(0.5 - 0.03) * 2 k l.z
+	var n := cam.basis * Vector3(0.0, 1.0, 0.94 * k)
+	if n.y <= 1e-6:
+		return Vector3(0.0, 0.0, INF)
+	var c := cam.origin
+	return Vector3(-n.x / n.y, -n.z / n.y, c.y + (n.x * c.x + n.z * c.z) / n.y - 0.01)
+
+
 ## The middle of zone [param zone] on the table (x, z), the deck kept at [param deck].
 static func zone_aim(zone: String, deck: Vector3) -> Vector2:
 	if zone == "by the deck":
@@ -520,6 +552,13 @@ static func sanitize_table(spec: Dictionary, look: Dictionary) -> Dictionary:
 		var g: Variant = thing.get("group", "")
 		thing["group"] = str(int(g)) if (g is float or g is int) else String(g if g is String else "").strip_edges()
 		thing["turn"] = Props._num(thing.get("turn"), 0.0, -180.0, 180.0)
+		# WRITTEN WHERE IT STANDS, or not: a thing with no `at` is found a spot in its `place`
+		var at: Variant = thing.get("at")
+		if at is Array and (at as Array).size() == 2 and _is_num(at[0]) and _is_num(at[1]):
+			thing["at"] = [clampf(float(at[0]), -AT_MOST, AT_MOST), clampf(float(at[1]), -AT_MOST, AT_MOST)]
+		else:
+			thing.erase("at")
+		thing["scale"] = Props._num(thing.get("scale"), 1.0, SCALE_RANGE.x, SCALE_RANGE.y)
 		# THE BOX THE CARDS ARE KEPT IN: one thing at most, stood where the deck would be
 		var holds: bool = thing.get("holds_cards") == true and not things.any(func(o: Variant) -> bool: return bool((o as Dictionary).get("holds_cards", false)))
 		thing["holds_cards"] = holds
@@ -622,6 +661,11 @@ static func on_the_table(look: Dictionary) -> String:
 
 static func _is_color(s: String) -> bool:
 	return Manuscript._rx("^#[0-9a-fA-F]{6}$").search(s.strip_edges()) != null
+
+
+## A finite number, as JSON hands one over.
+static func _is_num(v: Variant) -> bool:
+	return (v is float or v is int) and not is_nan(float(v)) and not is_inf(float(v))
 
 
 static func color(s: String, fallback := Color(0.5, 0.5, 0.5)) -> Color:

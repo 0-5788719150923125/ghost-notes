@@ -21,7 +21,8 @@ extends SceneTree
 ##   prompt) and one that does not the one-reply prompt; it lands a handed-in table whatever the run's
 ##   last words, says so when a run with tools handed nothing in, and closes the tools when it stops.
 ## - CLAUDE WITH TOOLS loads no settings instead of `--safe-mode` (which drops every MCP server) and is
-##   pointed at the toolset by a config file; without tools its argv is as it was. CODEX WITH TOOLS is
+##   pointed at the toolset by a config file, which gives a call ten minutes (the CLI's own limit is
+##   one); without tools its argv is as it was. CODEX WITH TOOLS is
 ##   pointed at ghost's endpoint by config overrides, its token in its environment (never in argv), its
 ##   calls approved, and told its tools are neither commands nor files; without tools, no server.
 ## - THE TABLE ITSELF: a top and layers put are said back as the table will be built (a top grown to
@@ -47,6 +48,21 @@ extends SceneTree
 ##   with nothing left off the frame's question says the table is set and what is left (the title's color,
 ##   then submit) - the control, a thing left off, is still sent to fix it; the producer says how many
 ##   pictures its set dresser has taken while its tools are open, and the prompt says a shrink is fine.
+## - THE BLUEPRINT (the user, 2026-10-18: "draw a literal blueprint ... then simply ask the model to place
+##   props onto the blueprint at certain points, and with certain orientations"): things placed by name -
+##   `at`, `turn`, `scale`, only what is given - and refused with a reason when not put, the cards' box,
+##   or not a number; a thing put again keeps its place unless given one; a thing never placed waits off
+##   the table in every picture (control: the draft keeps it) and is asked about once at submit; with no
+##   renderer the plan is said in words and no picture taken. A thing written where it stands is said at
+##   its spot - moved from it, or taller than its spot shows, a fault; cut by the frame's side, not - and
+##   never "made smaller to fit".
+## - THE DRAWING ([TableBlueprint]), without a renderer: the closed-form headroom agrees with the frame
+##   walked up step by step ([method CardTable.headroom]) - control: a lens 10 degrees wider does not; each
+##   height's line holds that height at its ends, a thing that tall seen whole nearer the reader and cut
+##   behind; an outline drawn round a top is the top's size; the frame on the table meets the frame's
+##   edge; the plan fits every card and thing in the drawing.
+## - HOW FULL A TABLE IS (CardPrompts.FILLS): drawn per episode from a few things to a crowded table, some
+##   seeds asking for more than the old most (6) and some for under it.
 const ROOT := "user://set_dresser_check"
 
 const FixtureDeck := preload("res://tests/fixture_deck.gd")
@@ -99,7 +115,7 @@ func _ok(cond: bool, what: String) -> void:
 
 func _run() -> void:
 	AgentJobs.allow_for_tool()
-	for check in [_fresh_start, _tools_listed, _put_reports, _remove_look_set, _submit, _title, _producer, _prompts, _claude_argv, _air, _table_itself, _light, _one_at_a_time, _verdict]:
+	for check in [_fresh_start, _tools_listed, _put_reports, _remove_look_set, _submit, _title, _producer, _prompts, _claude_argv, _air, _table_itself, _light, _one_at_a_time, _verdict, _blueprint, _drawing, _fills]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("set_dresser_tools_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -126,9 +142,12 @@ func _tools(ep: CardEpisode) -> SetDresserTools:
 	return SetDresserTools.new(ep, ep.read_json("plan"), ep.job_dir("table"))
 
 
-func _candle(name: String, h: float, place := "back left") -> Dictionary:
-	return {"name": name, "why": "light", "place": place, "group": "c", "parts": [{"shape": "lathe",
+func _candle(name: String, h: float, place := "back left", at: Variant = [-30.0, -26.0]) -> Dictionary:
+	var out := {"name": name, "why": "light", "place": place, "group": "c", "parts": [{"shape": "lathe",
 		"profile": [[0, 0], [2, 0], [2, h], [0, h]], "material": "beeswax", "wick": true}]}
+	if at != null:
+		out["at"] = at
+	return out
 
 
 func _fresh_start() -> bool:
@@ -153,10 +172,10 @@ func _tools_listed() -> bool:
 		names.append(String((d as Dictionary)["name"]))
 		shaped = shaped and String(((d as Dictionary)["inputSchema"] as Dictionary).get("type", "")) == "object" \
 			and not String((d as Dictionary).get("description", "")).is_empty()
-	_ok(names == ["put", "remove", "look", "set", "overhead", "watch", "title", "submit"], "the set dresser's tools are %s" % str(names))
+	_ok(names == ["put", "remove", "blueprint", "look", "set", "overhead", "watch", "title", "submit"], "the set dresser's tools are %s" % str(names))
 	_ok(shaped, "a tool has no description or no object schema")
 	var r: Dictionary = await t.call_tool("paint", {})
-	_ok(bool(r.get("error", false)) and String(r["text"]).contains("put, remove, look, overhead, set, watch, title and submit"),
+	_ok(bool(r.get("error", false)) and String(r["text"]).contains("put, remove, blueprint, look, overhead, set, watch, title and submit"),
 		"an unknown tool did not name the real ones: %s" % r)
 	t.release()
 	return true
@@ -185,10 +204,17 @@ func _put_reports() -> bool:
 	_ok((t.draft()["things"] as Array).size() == 3 and text.contains("the table now holds 3") and text.contains("4 x 12 x 4 cm"),
 		"a thing put again under its name was not replaced (%d things):\n%s" % [(t.draft()["things"] as Array).size(), text])
 	_ok(text.contains("2 lit things (2 asked for)"), "the tally does not count lit things against the ask:\n%s" % text)
-	var room := int(CardTable.headroom(ep.seed)["back"])
-	r = await t.call_tool("put", {"things": [{"name": "a tall jar", "place": "back", "parts": [{"shape": "box",
-		"size": [6, room + 10, 6], "material": "beeswax"}]}]})
-	_ok(String(r["text"]).contains("\"back\" shows only %d cm" % room), "a thing taller than its place was not reported:\n%s" % r["text"])
+	# A THING TALLER THAN ITS SPOT SHOWS is said where it is written - and a thing not yet placed is not judged
+	var lay := CardTable.layout_of(ep.seed)
+	var room := CardTable.headroom_at(lay["camera"], float(lay["fov"]), Tables.ORIGIN + Vector2(0.0, -0.3)) * 100.0
+	r = await t.call_tool("put", {"things": [{"name": "a tall jar", "at": [0, -30], "parts": [{"shape": "box",
+		"size": [6, roundi(room) + 10, 6], "material": "beeswax"}]}, {"name": "a tall jug", "parts": [{"shape": "box",
+		"size": [6, roundi(room) + 10, 6], "material": "beeswax"}]}]})
+	text = String(r["text"])
+	_ok(text.contains("a tall jar (at [0, -30])") and text.contains("where it stands the frame shows only %s cm" % TablePreview._cm(room * 0.01)),
+		"a thing taller than its spot shows was not reported:\n%s" % text)
+	_ok(text.contains("a tall jug (not yet placed)") and text.count("the frame shows only") == 1,
+		"control: a thing not yet placed was judged by a spot it has none of:\n%s" % text)
 	var many: Array = []
 	for i in 20:
 		many.append({"shape": "ball", "radius": 1, "at": [i * 2, 0, 0], "material": "beeswax"})
@@ -263,6 +289,17 @@ func _submit() -> bool:
 	r = await s.call_tool("submit", {})
 	_ok(not bool(r.get("error", false)) and s.submitted, "a second submit, unchanged, was refused: %s" % r)
 	s.release()
+	# A THING NEVER PLACED ON THE BLUEPRINT is asked about once, then handed in for the table to stand
+	var loose := _tools(ep)
+	await loose.call_tool("put", {"things": [_candle("a pillar", 9.0), _candle("a stub", 4.0, "back right", null)],
+		"materials": {"beeswax": {"kind": "wax", "color": "#e8d9a8"}}})
+	await loose.call_tool("title", {"color": "#e9dcc0"})
+	r = await loose.call_tool("submit", {})
+	_ok(bool(r.get("error", false)) and String(r["text"]).contains("Not placed on the blueprint: a stub.") and not loose.submitted,
+		"a table with a thing never placed was handed in without a word: %s" % r)
+	r = await loose.call_tool("submit", {})
+	_ok(not bool(r.get("error", false)) and loose.submitted, "a second submit with a thing unplaced was refused: %s" % r)
+	loose.release()
 	return true
 
 
@@ -360,10 +397,16 @@ func _prompts() -> bool:
 			"the set dresser %s is not told what the table holds" % tag)
 		for k in Props.SHAPES:
 			_ok(text.contains("- %s:" % k), "the set dresser %s is not told the shape %s" % [tag, k])
+		# ZONES for the reply written blind; the BLUEPRINT for the one that sees
 		for z in CardTable.ZONES:
-			_ok(text.contains("\"%s\": %s; up to %d cm" % [z, String((CardTable.ZONES[z] as Dictionary)["about"]), int(head[z])]),
-				"the set dresser %s is not told the zone %s" % [tag, z])
-		_ok(text.contains(CardPrompts.set_example()), "the set dresser %s is not shown the format" % tag)
+			_ok(text.contains("\"%s\": %s; up to %d cm" % [z, String((CardTable.ZONES[z] as Dictionary)["about"]), int(head[z])]) == (looks == 0),
+				"the set dresser %s is %s the zone %s" % [tag, "told" if looks > 0 else "not told", z])
+		_ok(text.contains("WHERE THINGS STAND is yours to write, on the table's BLUEPRINT") == (looks > 0),
+			"the set dresser %s is %s the blueprint" % [tag, "not told of" if looks > 0 else "told of"])
+		_ok(text.contains(CardPrompts.set_example(looks > 0)), "the set dresser %s is not shown the format" % tag)
+		_ok(text.contains("\"at\": [-31, -24]") == (looks > 0) and text.contains("\"place\": \"back left\"") == (looks == 0),
+			"the set dresser %s is shown a thing placed the other way" % tag)
+		_ok(text.contains("can hold more, up to %d" % (CardTable.MAX_THINGS - 2)), "the set dresser %s is not told how full a table may be" % tag)
 		_ok(text.contains("THE AIR:"), "the set dresser %s is not told about the air" % tag)
 		_ok(text.contains("THE LIGHT:") and text.contains(Rules.say("cards/set_dresser.light_example")), "the set dresser %s is not told about the light, or shown its format" % tag)
 		for k in Lights.SCREENS.keys() + Lights.BIRDS.keys() + Lights.LAMPS.keys() + Lights.SUNS.keys() + Lights.CASTER_SHAPES.keys() + Lights.CASTER_MOVES.keys():
@@ -377,8 +420,9 @@ func _prompts() -> bool:
 			"the set dresser %s is told the other way of working" % tag)
 		if looks > 0:
 			_ok(text.contains("against the %d you have" % looks), "the set dresser is not told how many pictures it has")
-			_ok(text.contains("A thing shown smaller to fit is only the room") and text.contains("when set says the table is set, it is"),
-				"the set dresser is not told a thing made smaller to fit is fine, or that a set table is set")
+			_ok(text.contains("PLAN THE TABLE ON THE BLUEPRINT") and text.contains("`blueprint` places things by name")
+				and text.contains("When set says the table is set, it is"),
+				"the set dresser is not told to plan on the blueprint, or that a set table is set")
 		_ok(text.contains("THE TITLE:") and text.contains("\"Test Tarot\"") and text.contains("thumbnail"),
 			"the set dresser %s is not told of the opening and its thumbnail" % tag)
 		_ok(text.contains("`title` chooses the color") == (looks > 0) and text.contains("\"title\": {\"color\": \"#rrggbb\"") == (looks == 0),
@@ -404,6 +448,9 @@ func _claude_argv() -> bool:
 	var cfg_ok := j.parse(FileAccess.get_file_as_string(dir.path_join("mcp.json"))) == OK \
 		and String(j.data["mcpServers"]["ghost"]["url"]) == String(job["tools_url"]) and String(j.data["mcpServers"]["ghost"]["type"]) == "http"
 	_ok(cfg_ok, "the tools' config does not name the job's URL")
+	_ok(cfg_ok and int(j.data["mcpServers"]["ghost"].get("timeout", 0)) == TextGen.Claude.TOOL_TIMEOUT_MS
+		and TextGen.Claude.TOOL_TIMEOUT_MS == TextGen.Codex.TOOL_TIMEOUT * 1000,
+		"a call of ghost's tools is not given Codex's ten minutes: %s" % str(j.data))
 	var at := args.find("--setting-sources")
 	_ok(at >= 0 and args[at + 1] == "" and not args.has("--safe-mode"), "a writer with tools still runs in safe mode (which drops ghost's tools): %s" % str(args))
 	_ok(args.has("--strict-mcp-config") and args[args.find("--mcp-config") + 1] == dir.path_join("mcp.json")
@@ -632,4 +679,175 @@ func _verdict() -> bool:
 	text = "\n".join(st["lines"] as PackedStringArray)
 	_ok(int(st["faults"]) == 1 and text.contains("an aloe: LEFT OFF"), "a thing left off is not a fault: %s" % text)
 	_ok(SetDresserTools.judge_of(int(st["faults"]), true) == SetDresserTools.JUDGE_TABLE, "a table with a thing left off is told it is set")
+	return true
+
+
+## A THING WRITTEN WHERE IT STANDS, as the frame's verdict says it ([method SetDresserTools.stood_lines]).
+func _verdict_written() -> bool:
+	var w := {"name": "a bell", "place": "back", "at": Vector2(-30.0, -26.0), "k": 1.0, "tall": 0.2, "written": Vector2(-30.0, -26.0),
+		"moved": 0.0, "why": "", "foot": Vector2(6.0, 6.0), "height": 9.0, "room": 14.0, "shown": 1.0}
+	var st := SetDresserTools.stood_lines({"stood": [w], "left_off": []}, {"a bell": 3})
+	var text := "\n".join(st["lines"] as PackedStringArray)
+	_ok(int(st["faults"]) == 0 and text == "- 3. a bell: at [-30, -26]; 20% of the picture's height", "a thing standing where it was written is not said plainly: %s" % text)
+	var moved := w.duplicate()
+	moved["written"] = Vector2(-30.0, -20.0)
+	moved["moved"] = 6.0
+	moved["why"] = "it stood where the cards go"
+	st = SetDresserTools.stood_lines({"stood": [moved], "left_off": []}, {"a bell": 3})
+	text = "\n".join(st["lines"] as PackedStringArray)
+	_ok(int(st["faults"]) == 1 and text.contains("MOVED 6 cm from where it was written, [-30, -20]: it stood where the cards go"),
+		"a thing moved from where it was written is not a fault, or not said why: %s" % text)
+	var tall := w.duplicate()
+	tall["height"] = 20.0
+	st = SetDresserTools.stood_lines({"stood": [tall], "left_off": []})
+	text = "\n".join(st["lines"] as PackedStringArray)
+	_ok(int(st["faults"]) == 1 and text.contains("20 cm tall where the frame shows 14 cm: its top is cut off"), "a thing taller than its spot is not a fault: %s" % text)
+	var cut := w.duplicate()
+	cut["shown"] = 0.6
+	cut["k"] = 0.5
+	st = SetDresserTools.stood_lines({"stood": [cut], "left_off": []})
+	text = "\n".join(st["lines"] as PackedStringArray)
+	_ok(int(st["faults"]) == 0 and text.contains("only 60% of it is in the shot") and not text.contains("to fit"),
+		"a thing the frame's side cuts is a fault, or a thing written smaller is said shrunk to fit: %s" % text)
+	var gone := w.duplicate()
+	gone["shown"] = 0.0
+	st = SetDresserTools.stood_lines({"stood": [gone], "left_off": []})
+	text = "\n".join(st["lines"] as PackedStringArray)
+	_ok(int(st["faults"]) == 1 and text.contains("NOT IN THE SHOT"), "a thing out of the shot altogether is not a fault: %s" % text)
+	st = SetDresserTools.stood_lines({"stood": [], "left_off": ["a jar"], "left_why": {"a jar": "it stood where the cards go"}}, {"a jar": 2})
+	text = "\n".join(st["lines"] as PackedStringArray)
+	_ok(int(st["faults"]) == 1 and text.contains("2. a jar: LEFT OFF - nowhere within %d cm of where it was written" % roundi(CardTable.NUDGE_MOST * 100.0))
+		and text.contains("(it stood where the cards go)"), "a written thing left off is not said with its reason: %s" % text)
+	return true
+
+
+## THE BLUEPRINT TOOL, with no renderer: placing by name, what it refuses, a place kept through a put, the
+## pictures' draft, and the plan in words.
+func _blueprint() -> bool:
+	if not await _verdict_written():
+		return false
+	var ep := _episode()
+	var t := _tools(ep)
+	await t.call_tool("put", {"things": [_candle("a pillar", 9.0),
+		{"name": "a bowl", "parts": [{"shape": "lathe", "profile": [[0, 0], [3, 0], [6, 3], [5.6, 3], [2.6, 0.4], [0, 0.4]], "material": "beeswax"}]},
+		{"name": "a rope", "parts": [{"shape": "strand", "lay": "drape", "path": [[-40, 0, -30], [-60, 0, -20]], "radius": 0.6, "material": "beeswax"}]}],
+		"materials": {"beeswax": {"kind": "wax", "color": "#e8d9a8"}}})
+	_ok(t._unplaced() == PackedStringArray(["a bowl"]), "the things waiting to be placed are %s" % str(t._unplaced()))
+	_ok((t.draft()["things"] as Array).size() == 3 and (t._on_table()["things"] as Array).size() == 2,
+		"a thing not yet placed is on the pictures' table, or the draft lost it (control): %d, %d" % [(t.draft()["things"] as Array).size(),
+		(t._on_table()["things"] as Array).size()])
+	var looks := t.looks_used()
+	var r: Dictionary = await t.call_tool("blueprint", {"things": [{"name": "a bowl", "at": [25, -20], "turn": 30},
+		{"name": "a ghost", "at": [0, 0]}, {"name": "a rope", "at": [5, 5]}, {"name": "a pillar", "at": "left", "scale": "big"}]})
+	var text := String(r["text"])
+	_ok(text.contains("Placed: a bowl, a pillar.") and text.contains("nothing called \"a ghost\" has been put")
+		and text.contains("\"a rope\" lies where its path is written - not placed") and text.contains("\"a pillar\": `at` is two numbers")
+		and text.contains("\"a pillar\": `scale` is a number"), "the blueprint did not say what it placed and refused:\n%s" % text)
+	var bowl: Dictionary = t.draft()["things"][1]
+	var pillar: Dictionary = t.draft()["things"][0]
+	_ok(bowl.get("at") == [25.0, -20.0] and float(bowl.get("turn", 0)) == 30.0 and pillar.get("at") == [-30.0, -26.0] and not pillar.has("scale"),
+		"the blueprint placed the wrong things: %s, %s" % [str(bowl), str(pillar)])
+	_ok(text.contains("2. a bowl: at [25, -20], turned 30; its spot shows") and text.contains("1. a pillar: at [-30, -26]")
+		and text.contains("3. a rope: lies where its path is written") and text.contains("(No drawing: no renderer.)") and (r.get("images", []) as Array).is_empty()
+		and t.looks_used() == looks, "the plan was not said in words without a picture:\n%s" % text)
+	# A THING MADE AGAIN KEEPS ITS PLACE - unless it is given one (control)
+	await t.call_tool("put", {"things": [{"name": "a bowl", "parts": [{"shape": "lathe", "profile": [[0, 0], [4, 0], [7, 3], [0, 3]], "material": "beeswax"}]}]})
+	bowl = t.draft()["things"][1]
+	_ok(bowl.get("at") == [25.0, -20.0] and float(bowl.get("turn", 0)) == 30.0, "a thing put again lost its place: %s" % str(bowl))
+	await t.call_tool("put", {"things": [{"name": "a bowl", "at": [5, -10], "parts": [{"shape": "lathe", "profile": [[0, 0], [4, 0], [7, 3], [0, 3]], "material": "beeswax"}]}]})
+	_ok((t.draft()["things"][1] as Dictionary).get("at") == [5, -10], "control: a thing put again with a place did not move: %s" % str(t.draft()["things"][1]))
+	_ok(t._unplaced().is_empty() and (t._on_table()["things"] as Array).size() == 3, "a placed thing is still waiting: %s" % str(t._unplaced()))
+	# THE TABLE MADE SAFE keeps a written place, and drops one that is not two numbers
+	var safe := CardTable.sanitize_table({"things": [{"name": "a", "at": [12, -400], "scale": 9, "parts": [{"shape": "ball", "size": [2, 2, 2]}]},
+		{"name": "b", "at": [1], "parts": [{"shape": "ball", "size": [2, 2, 2]}]},
+		{"name": "c", "at": [1, 2, 3], "parts": [{"shape": "ball", "size": [2, 2, 2]}]}]}, {})
+	_ok((safe["things"][0] as Dictionary).get("at") == [12.0, -CardTable.AT_MOST] and float((safe["things"][0] as Dictionary)["scale"]) == CardTable.SCALE_RANGE.y
+		and not (safe["things"][1] as Dictionary).has("at") and not (safe["things"][2] as Dictionary).has("at"),
+		"a written place was not made safe, or a part's three numbers were taken for one: %s" % str(safe["things"]))
+	t.release()
+	return true
+
+
+## WHERE EVERYTHING FALLS ON THE BLUEPRINT ([TableBlueprint]), worked out with no renderer.
+func _drawing() -> bool:
+	for seed in [7, 5150, 15853]:
+		var lay := CardTable.layout_of(seed)
+		var cam: Transform3D = lay["camera"]
+		var fov := float(lay["fov"])
+		# THE HEADROOM, closed form, against the frame walked up 5 mm at a time - and a wider lens, which must disagree
+		var head := CardTable.headroom(seed)
+		var worst := 0.0
+		var wide := 0.0
+		for z in CardTable.ZONES:
+			# the walk stops at 60 cm
+			if float(head[z]) >= 59.0:
+				continue
+			var aim := CardTable.zone_aim(String(z), lay["deck"])
+			worst = maxf(worst, absf(CardTable.headroom_at(cam, fov, aim) * 100.0 - float(head[z])))
+			wide = maxf(wide, absf(CardTable.headroom_at(cam, fov + 10.0, aim) * 100.0 - float(head[z])))
+		_ok(worst <= 1.01, "#%d: the blueprint's headroom is %.1f cm off the frame's" % [seed, worst])
+		_ok(wide > 2.0, "#%d: control: a lens 10 degrees wider agrees with the frame (%.1f cm) - the comparison proves nothing" % [seed, wide])
+		# EACH HEIGHT'S LINE: that height at its ends; a thing that tall seen whole nearer the reader, cut behind
+		var area := Rect2(-0.6, -0.55, 1.2, 0.8)
+		for h in TableBlueprint.HEIGHTS:
+			var seg := TableBlueprint.height_line(cam, fov, float(h) * 0.01, area)
+			if seg.size() < 2:
+				continue
+			var ends := absf(CardTable.headroom_at(cam, fov, seg[0]) - float(h) * 0.01) + absf(CardTable.headroom_at(cam, fov, seg[1]) - float(h) * 0.01)
+			var mid := (seg[0] + seg[1]) * 0.5
+			var near := CardTable.headroom_at(cam, fov, mid + Vector2(0.0, 0.03))
+			var far := CardTable.headroom_at(cam, fov, mid - Vector2(0.0, 0.03))
+			_ok(ends < 0.001 and near > float(h) * 0.01 and far < float(h) * 0.01,
+				"#%d: the %d cm line does not hold %d cm (ends off by %.4f m; %.3f nearer, %.3f behind)" % [seed, h, h, ends, near, far])
+			# what the frame itself shows there: a thing that tall stands whole just nearer, cut just behind
+			var top_near: Variant = CardTable.project(cam, fov, Vector3(mid.x, float(h) * 0.01 + 0.01, mid.y + 0.03))
+			var top_far: Variant = CardTable.project(cam, fov, Vector3(mid.x, float(h) * 0.01 + 0.01, mid.y - 0.03))
+			_ok(top_near != null and (top_near as Vector2).y > 0.03 and top_far != null and (top_far as Vector2).y < 0.03,
+				"#%d: the frame does not cut a %d cm thing where its line says" % [seed, h])
+		# THE FRAME ON THE TABLE: its near edge is where the frame's bottom meets the cloth
+		var seen := TableBlueprint.seen(cam, fov)
+		var bottom: Vector2 = seen[80 + 20]
+		var sp: Variant = CardTable.project(cam, fov, Vector3(bottom.x, 0.0, bottom.y))
+		_ok(seen.size() == 160 and sp != null and absf((sp as Vector2).y - 1.0) < 0.002, "#%d: the frame on the table is not the frame's edge: %s" % [seed, str(sp)])
+	# AN OUTLINE drawn round a top is the top's size
+	var rect := TableBlueprint._bounds(TableBlueprint.outline(Tables.top_outline({"shape": "rect", "size": [120, 80]})))
+	var round := TableBlueprint._bounds(TableBlueprint.outline(Tables.top_outline({"shape": "round", "size": [146, 146]})))
+	_ok(absf(rect.size.x - 1.2) < 0.005 and absf(rect.size.y - 0.8) < 0.005 and absf(round.size.x - 1.46) < 0.01,
+		"an outline drawn round a top is not its size: %s, %s" % [rect, round])
+	# THE PLAN FITS every card and thing in the drawing
+	var lay := CardTable.layout_of(5150)
+	var d := {"camera": lay["camera"], "fov": lay["fov"], "top": Tables.top_outline({"shape": "rect", "size": [190, 85]}),
+		"cards": [{"pos": Vector2(-0.1, -0.05), "yaw": 0.3}, {"pos": Vector2(0.1, -0.05), "yaw": 0.0}],
+		"things": [{"bb": Rect2(-0.62, -0.4, 0.08, 0.06)}, {"bb": Rect2(0.5, -0.1, 0.1, 0.1)}]}
+	var v := TableBlueprint.view(d)
+	var room: Rect2 = v["room"]
+	var fits := true
+	for p in [Vector2(-0.62, -0.4), Vector2(0.6, 0.0), Vector2(-0.1, -0.05), Tables.ORIGIN]:
+		fits = fits and room.grow(0.5).has_point(TableBlueprint._to_px(v, p))
+	_ok(fits and float(v["scale"]) > 300.0, "the plan does not fit the table in the drawing: %s" % str(v))
+	_ok(absf(_area(TableBlueprint.card_outline(Vector2.ZERO, 0.7, Vector2(0.07, 0.12))) - 0.0084) < 1e-6, "a card on the blueprint is not a card's size")
+	return true
+
+
+static func _area(poly: PackedVector2Array) -> float:
+	var a := 0.0
+	for i in poly.size():
+		a += poly[i].cross(poly[(i + 1) % poly.size()])
+	return absf(a) * 0.5
+
+
+## HOW FULL A TABLE IS: a few things to a crowded table, drawn per episode.
+func _fills() -> bool:
+	var most := 0
+	var least := 99
+	var over := 0
+	var n := 400
+	for seed in n:
+		var size := CardPrompts.table_size(seed)
+		most = maxi(most, size.y)
+		least = mini(least, size.x)
+		over += 1 if size.y > 6 else 0
+		_ok(size.x >= 3 and size.y > size.x and size.y + CardTable.MAX_CANDLES <= CardTable.MAX_THINGS, "#%d asks for %s things" % [seed, str(size)])
+	_ok(least == 3 and most >= 20 and over > n * 0.5 and over < n * 0.95,
+		"the tables run from %d to %d things, %d of %d past the old most (6)" % [least, most, over, n])
 	return true

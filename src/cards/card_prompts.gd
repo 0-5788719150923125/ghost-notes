@@ -69,6 +69,18 @@ const REMARKS := Vector2(0.15, 0.4)
 ## named an earlier card - 0 of 66 - so the share is told it does; and only a share, or a link on every
 ## card is the tic the next passage meets.
 const LINKS := Vector2(0.35, 0.65)
+## HOW FULL A READER KEEPS THE TABLE, besides its lit things, drawn per episode ([method table_size]):
+## each row a habit (`things`, fewest and most) and its share of episodes. The range asked was 3-4 to
+## 5-6 for every episode, and a set dresser asked for "3 to 5" set five - six things on nearly every
+## table - where a real reader's table is often crowded (the user, 2026-10-18: "real tarot videos will
+## often fill the table with all manner of items, dozens of them"). A place crowded by nature may go past
+## its habit, up to [constant CardTable.MAX_THINGS].
+const FILLS := [
+	{"things": Vector2i(3, 6), "share": 0.2},
+	{"things": Vector2i(6, 10), "share": 0.35},
+	{"things": Vector2i(10, 16), "share": 0.3},
+	{"things": Vector2i(16, 24), "share": 0.15},
+]
 
 ## What the producer is told about the show's own deck: its cards by name (their meanings reach a
 ## writer only as each is drawn).
@@ -294,6 +306,7 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 		"cloth": cloth, "room": room, "jumps": jumps, "tools": looks > 0, "looks": looks,
 		"box": String(CardTable.staging_of(plan)["source"]) == "box",
 		"candles": candles, "one_candle": candles == 1, "lo": size.x, "hi": size.y, "zones": zones,
+		"most": CardTable.MAX_THINGS - candles,
 		"max_parts": Props.MAX_PARTS, "check": Rules.say("cards/set_dresser.check"),
 		"tables": Tables.describe(), "props": Props.describe(), "air": Effects.describe(air_regions(), moments),
 		"lights": Lights.describe(), "sounds": Soundscape.describe(),
@@ -314,9 +327,10 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 	return {"system": show_context(title, brief), "prompt": Rules.say("cards/set_dresser.prompt", vars)}
 
 
-## The thing a set dresser is shown as the shape to copy ([method set_dresser]).
-static func set_example() -> String:
-	return Rules.say("cards/set_dresser.thing_example")
+## The thing a set dresser is shown as the shape to copy ([method set_dresser]) - written where it stands
+## when it works with [param tools], in a zone when it replies at once.
+static func set_example(tools := false) -> String:
+	return Rules.say("cards/set_dresser.thing_example", {"tools": tools})
 
 
 ## THE TITLE, as the set dresser is told it: the show's [param title] (and [param byline]) over its
@@ -338,8 +352,14 @@ static func air_regions() -> Dictionary:
 static func table_size(seed: int) -> Vector2i:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed, "tarot-table-size"])
-	var lo := rng.randi_range(3, 4)
-	return Vector2i(lo, lo + 2)
+	var u := rng.randf()
+	for f in FILLS:
+		u -= float((f as Dictionary)["share"])
+		if u < 0.0 or f == FILLS[FILLS.size() - 1]:
+			var r: Vector2i = (f as Dictionary)["things"]
+			var lo := rng.randi_range(r.x, r.y - 2)
+			return Vector2i(lo, mini(r.y, lo + maxi(2, floori((r.y - r.x) * 0.5))))
+	return Vector2i(3, 5)
 
 
 ## THE BOX THE CARDS ARE KEPT IN, for the set dresser of an episode whose cards come out of one: one of

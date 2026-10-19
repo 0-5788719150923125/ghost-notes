@@ -324,6 +324,11 @@ class Claude:
 	## `--effort`'s levels, as the CLI names them when handed another. Unset, a run takes the
 	## author's own Claude Code default for its model (see [method saved_effort]).
 	const EFFORTS := ["low", "medium", "high", "xhigh", "max"]
+	## The longest one of ghost's tools may take, in milliseconds: the server's `timeout` in `mcp.json`
+	## (CLI 2.1.303's per-server limit, the fetch's wait and the call's both). Unset it is a minute -
+	## "The operation timed out." at 60 s, measured 2026-10-19 - and `set` stands a whole table up and
+	## photographs it; as [constant Codex.TOOL_TIMEOUT].
+	const TOOL_TIMEOUT_MS := 600000
 
 	static func efforts(model := "") -> Array:
 		var mine := Claude.saved_effort(model if not model.is_empty() else String(MODELS["best"]))
@@ -404,14 +409,16 @@ class Claude:
 	## GHOST'S TOOLS for a job with a `tools_url`: the server named in a config file beside the
 	## prompt (`mcp.json` - a path in argv, never the URL's token), no other server the author has
 	## set up (`--strict-mcp-config`), and its tools allowed to run without asking - a print run has
-	## nobody to ask. Claude's own tools stay off (`--tools ""`), so ghost's are the only ones. Empty
-	## for a job without tools, or when the config cannot be written.
+	## nobody to ask - and as long as [constant TOOL_TIMEOUT_MS] to answer. Claude's own tools stay off
+	## (`--tools ""`), so ghost's are the only ones. Empty for a job without tools, or when the config
+	## cannot be written.
 	static func tool_args(job: Dictionary) -> PackedStringArray:
 		var url := String(job.get("tools_url", ""))
 		if url.is_empty():
 			return PackedStringArray()
 		var cfg := String(job["dir"]).path_join("mcp.json")
-		var err := TextGen.put(cfg, JSON.stringify({"mcpServers": {"ghost": {"type": "http", "url": url}}}, "\t"))
+		var err := TextGen.put(cfg, JSON.stringify({"mcpServers": {"ghost": {"type": "http", "url": url,
+			"timeout": TOOL_TIMEOUT_MS}}}, "\t"))
 		if not err.is_empty():
 			return PackedStringArray()
 		return PackedStringArray(["--mcp-config", cfg, "--strict-mcp-config", "--allowedTools", "mcp__ghost"])

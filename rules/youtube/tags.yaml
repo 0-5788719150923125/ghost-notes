@@ -3,11 +3,12 @@
 # script/content of the video. Today, we have just a static list. I would like to allow the 'Generate'
 # button to override/rewrite those tags, to be something more appropriate to the upload"). The YouTube
 # card's "Write each episode's tags" box adds this step to the card that makes the episode (YouTubeTags,
-# an EpisodeStep); the answer goes up in place of the note's own tags.
+# an EpisodeStep); the answer REPLACES the note's tags, the one list every upload takes (2026-10-19: "I
+# never know which tags are truly going to be applied").
 #
-# THE NOTE'S OWN TAGS ARE SHOWN, NOT IMPOSED: they are what the author tags every video with - the show,
-# its subject - so the writer keeps the ones that fit this video and leaves out the rest, rather than
-# losing what the author chose or pasting it in whole.
+# THE NOTE'S TAGS ARE SHOWN, NOT IMPOSED: they are what the author tags the show's videos with - the show,
+# its subject - or what the last episode's writer left there, so the writer keeps the ones that fit this
+# video and leaves out the rest, rather than losing what the author chose or pasting it in whole.
 #
 # THE WORDS ARE THE VIDEO: the reading as the voice says it, its marks taken out. A tag names what is in
 # it and never what is not - a tag that promises what the video does not hold misleads the viewer who
@@ -19,7 +20,7 @@
 # YOUTUBE'S LIMIT is held by the code (YouTube.fit_tags drops what is past {{most}} characters, counted
 # as YouTube counts them); the writer is told it so the tags that matter most come first.
 #
-# The code gives: {{show}}, {{title}}, {{description}} and {{given}} (the note's own tags), each maybe
+# The code gives: {{show}}, {{title}}, {{description}} and {{given}} (the note's tags), each maybe
 # empty; {{words}}; {{most}}.
 system: >-
   You write the tags a video goes up to YouTube with. Answer with the JSON asked for and nothing else.
@@ -36,8 +37,8 @@ prompt:
     say: "ITS DESCRIPTION: {{description}}"
   - when: given
     say: >-
-      THE SHOW'S OWN TAGS, which it gives every video: {{given}}. Keep the ones that fit this video,
-      and leave out the ones that do not.
+      THE SHOW'S TAGS NOW, which yours replace: {{given}}. Keep the ones that fit this video, and leave
+      out the ones that do not.
   - ""
   - "WHAT THE VIDEO SAYS, as its voice reads it:"
   - ""

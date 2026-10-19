@@ -100,9 +100,9 @@ Top-level layout; every script is in [docs/index.md](docs/index.md).
 Godot 4.7 is the only thing to install; Ghost Notes fetches the rest itself ([the environment](docs/environment.md)). Open `project.godot` and press play, or:
 
 ```
-godot --path .                          # the notes list
-godot --path . -- --note chapter.md     # open one note
-godot --path . -- --audio ~/track.wav   # straight into a song
+godot                          # the notes list
+godot -- --note chapter.md     # open one note
+godot -- --audio ~/track.wav   # straight into a song
 ```
 
 Every flag is in [docs/cli.md](docs/cli.md). Keys: `Space` play/pause, `N` next scene, `F11` full screen, `` ` `` feedback, `Esc` quit.

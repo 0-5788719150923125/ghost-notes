@@ -64,6 +64,17 @@ class_name DeskMedium
 ## word, the nib comes down close over the named thing - sweeping along under it when it is wide - and
 ## stays beside its right end, low on its height, so the pen's body leans away over clean paper and
 ## never onto the line below; the camera goes there.
+##
+## AN IDLE PEN GETS OUT OF THE WAY (the user, 2026-10-19: "as it told the story, doing nothing, for ~30
+## or 60 seconds, the pen was just frozen, right in the middle of the page, covering a bunch of the
+## text's visibility ... it would be better for the pen to drift to the right and top"): over a stretch
+## of [constant PARK_WORDS] words or more with nothing for it to do, and before a page turns, the nib
+## drifts off the pad's top right ([constant PARK]) - its body leaning on away from the page, clear of a
+## turning sheet - waits there, and comes back as its next action begins ([method _waiting]). Between
+## two actions closer than that it waits beside what it just did. Every move between actions is
+## continuous, and as long as its way ([method _reach]): the wait starts where the action ended and the
+## reach where the wait is - the nib once jumped to its rest the frame an action ended, and across the
+## page (1025 px in a frame) as one was about to turn it.
 
 ## The page's canvas (an 8.5 x 11 sheet) and the sheet in the world, in meters.
 const PW := DeskScript.PW
@@ -92,6 +103,20 @@ const POINT_WIDE := 90.0
 const POINT_SWEEP := 0.9
 const POINT_GAP := 14.0
 const POINT_MIN := 1.0
+## OUT OF THE WAY: a stretch of this many words or more with nothing for the pen (about 15 s of a
+## voice) sends it off the pad - this long after its last action ends, over this long - to this place
+## (px of the page: right of its edge, level with its top margin).
+const PARK_WORDS := 40
+const PARK_AFTER := 1.0
+const PARK_EASE := 2.5
+const PARK := Vector2(DeskScript.PW + 90.0, DeskScript.FIRST_RULE * 0.5)
+## It goes right first, and is off the pad this long after it sets off: a page never turns sooner
+## after the last action before it (the sheet lifts at its foot, where that action was). It comes back
+## over the new page once this share of the turn is over, the sheet well past upright.
+const PARK_CLEAR := 1.0
+const PARK_BACK := 0.7
+## How fast the nib travels to its next action between two (px of the page a second, on the average).
+const REACH_SPEED := 1000.0
 ## THE HAND IS ALIVE: the lean's slow sway (degrees, about the vertical and in its rise), its turn
 ## across the page's width (degrees from the left edge to the right), how far the top trails the nib
 ## (seconds of its travel, at most [constant TRAIL_MAX] degrees), measured over [constant MOTION_DT];
@@ -540,8 +565,8 @@ func load_lesson(source: String, desk: Dictionary, start := PackedStringArray(),
 ## the one before it has ended. One with no dictation, and a strike, are performed in the rest before
 ## the next words. A POINT is there as its word is said and held to its sentence's end, never into
 ## the time the pen needs to reach what comes next. A page turn comes in the rest before the item that
-## needs it, never over writing still going on, and the item waits for it. An action whose words have
-## not arrived waits.
+## needs it, never over writing still going on nor before the pen is off the pad ([constant
+## PARK_CLEAR]), and the item waits for it. An action whose words have not arrived waits.
 func _build_plan() -> void:
 	var prev_end := -INF
 	for i in _actions.size():
@@ -580,8 +605,10 @@ func _build_plan() -> void:
 			end = start + write
 		var turn_at := INF
 		if bool(a.get("turn", false)):
-			turn_at = maxf(start - DeskScript.TURN - 0.1, prev_end)
-			var late := turn_at + DeskScript.TURN + 0.05 - start
+			# early enough for the pen to come back over the new page behind the sheet, at its pace
+			var back := DeskScript.TURN * PARK_BACK + maxf(PARK.distance_to(_action_point(a, true)) / REACH_SPEED, REACH_EASE)
+			turn_at = maxf(start - back - 0.1, prev_end + PARK_CLEAR)
+			var late := maxf(turn_at + DeskScript.TURN + 0.05, turn_at + back) - start
 			if late > 0.0:
 				start += late
 				end += late
@@ -815,39 +842,86 @@ static func _strike_line(a: Dictionary) -> Array:
 # --- the pen ---------------------------------------------------------------------------------
 
 ## WHERE THE NIB IS NOW, on the page (px), and how high above it (m): writing, it is the ink's nib;
-## between strokes it lifts and travels; after an action it drifts to rest beside it; before the
-## first, it waits at the page's right.
+## between strokes it lifts and travels; between actions it waits ([method _waiting]) and reaches the
+## next as it begins ([method _reach]); before the first, it waits at the page's right.
 func pen_at() -> Dictionary:
-	var rest := Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0)
-	var last_end := -INF
-	var last_point := rest
-	var last_lift := LIFT
+	var rest := {"p": Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0), "lift": REST_LIFT}
+	var last := -1                  # the last action the pen did
 	for i in _actions.size():
 		var a: Dictionary = _actions[i]
-		var start := float(_plan[i]["start"])
-		var end := float(_plan[i]["end"])
-		if start == INF:
-			break
-		var pointing := String(a["kind"]) == "point"
-		if pointing and target_box(a).size.x < 0.0:
+		if String(a["kind"]) == "point" and target_box(a).size.x < 0.0:
 			continue        # at nothing on this page: the pen stays where it is
-		var down := POINT_LIFT if pointing else LIFT
+		var start := float(_plan[i]["start"])
+		if start == INF:
+			return _waiting(last, i) if last >= 0 else rest
 		if _now < start:
-			# on its way to the next action: from where it rested to where the action begins
-			var u := clampf(1.0 - (start - _now) / REACH_EASE, 0.0, 1.0)
-			var from := _rest_near(last_point) if last_end > -INF else rest
-			if float(_plan[i]["turn_at"]) < INF and _now < start - 0.05:
-				from = rest
-			return {"p": from.lerp(_action_point(a, true), _ease(u)), "lift": lerpf(REST_LIFT, down, _ease(u))}
-		if _now < end:
+			# on its way to the action: from where it waits to where the action begins
+			var wait := _waiting(last, i) if last >= 0 else rest
+			var u := _ease(clampf(1.0 - (start - _now) / _reach(last, i), 0.0, 1.0))
+			return {"p": (wait["p"] as Vector2).lerp(_action_point(a, true), u),
+				"lift": lerpf(float(wait["lift"]), _down(a), u)}
+		if _now < float(_plan[i]["end"]):
 			return _pen_during(a, i, start)
-		last_end = end
-		last_point = _action_point(a, false)
-		last_lift = down
-	if last_end == -INF:
-		return {"p": rest, "lift": REST_LIFT}
-	var v := clampf((_now - last_end) / REST_EASE, 0.0, 1.0)
-	return {"p": last_point.lerp(_rest_near(last_point), _ease(v)), "lift": lerpf(last_lift, REST_LIFT, _ease(v))}
+		last = i
+	return _waiting(last, -1) if last >= 0 else rest
+
+
+## WHERE THE NIB WAITS at [member _now], after action [param last] and before action [param next] (-1:
+## none comes): it settles beside the end of what it did, a little lifted; and where [method _parks]
+## says the wait is long, or a page is to turn, it drifts on from there to [constant PARK] - before a
+## turn at once, as the sheet will lift. One continuous way from where the action left the nib.
+func _waiting(last: int, next: int) -> Dictionary:
+	var a: Dictionary = _actions[last]
+	var end := float(_plan[last]["end"])
+	var from := _action_point(a, false)
+	var s := _ease(clampf((_now - end) / REST_EASE, 0.0, 1.0))
+	var p := from.lerp(_rest_near(from), s)
+	var lift := lerpf(_down(a), REST_LIFT, s)
+	if _parks(last, next):
+		var turning := next >= 0 and bool((_actions[next] as Dictionary).get("turn", false))
+		var v := (_now - end - (0.0 if turning else PARK_AFTER)) / PARK_EASE
+		# right first, off the written lines (and out from under a sheet about to turn), then up the
+		# pad's edge
+		var cleared := PARK_CLEAR / PARK_EASE
+		p = Vector2(lerpf(p.x, PARK.x, _ease(clampf(v / cleared, 0.0, 1.0))),
+			lerpf(p.y, PARK.y, _ease(clampf((v - cleared * 0.75) / (1.0 - cleared * 0.75), 0.0, 1.0))))
+	return {"p": p, "lift": lift}
+
+
+## Does the pen get out of the way between action [param last] and action [param next] (-1: the lesson's
+## end)? When [constant PARK_WORDS] words or more are said between them, or [param next] turns the page.
+## Read off the script, never the voice's times, so it never changes its mind as a voice's words arrive.
+func _parks(last: int, next: int) -> bool:
+	var a: Dictionary = _actions[last]
+	var to := _spoken_n
+	if next >= 0:
+		var b: Dictionary = _actions[next]
+		if bool(b.get("turn", false)):
+			return true
+		to = int(b.get("after", 0))
+	return to - (int(a.get("after", 0)) + int(a.get("span", 0))) >= PARK_WORDS
+
+
+## HOW LONG THE NIB TAKES TO REACH action [param next] after action [param last] (-1: none came): its
+## way from where it waits at [constant REACH_SPEED], never quicker than [constant REACH_EASE] - and
+## never longer than the wait, so it sets off from where the last action left it (over a page being
+## turned, once [constant PARK_BACK] of the turn is over). Every reach once took
+## [constant REACH_EASE], and 30 of an episode's 110 crossed most of the page in it (2026-10-19).
+func _reach(last: int, next: int) -> float:
+	var to := _action_point(_actions[next], true)
+	if last < 0:
+		return maxf(Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0).distance_to(to) / REACH_SPEED, REACH_EASE)
+	var from := PARK if _parks(last, next) else _rest_near(_action_point(_actions[last], false))
+	var free := float(_plan[last]["end"])
+	if float(_plan[next]["turn_at"]) < INF:
+		free = maxf(free, float(_plan[next]["turn_at"]) + DeskScript.TURN * PARK_BACK)
+	return minf(maxf(from.distance_to(to) / REACH_SPEED, REACH_EASE), maxf(float(_plan[next]["start"]) - free, 0.01))
+
+
+## How high the nib is as action [param a] begins and ends: on the paper for writing, just over it for
+## a point.
+static func _down(a: Dictionary) -> float:
+	return POINT_LIFT if String(a["kind"]) == "point" else 0.0
 
 
 func _pen_during(a: Dictionary, i: int, start: float) -> Dictionary:
@@ -1036,11 +1110,11 @@ func _framing() -> Dictionary:
 	for i in _actions.size():
 		var a: Dictionary = _actions[i]
 		var start := float(_plan[i]["start"])
-		if start == INF or start > ahead:
-			break
 		var ta := float(_plan[i]["turn_at"])
 		if ta < INF and _now > ta - 1.5 and _now < ta + DeskScript.TURN + 0.5:
-			k = 0.25
+			k = 0.25        # a turn, though what it turns for begins further ahead
+		if start == INF or start > ahead:
+			break
 		if String(a["kind"]) == "point":
 			# a point is framed on what it points at
 			var b := target_box(a)

@@ -38,12 +38,21 @@ extends SceneTree
 ##   and the notes, and an episode whose lesson stands is not drafted again behind it.
 ## - THE PEN POINTS (the user, 2026-10-16: "describing what is on the page, but never POINTING to any of
 ##   it"): a `point` in speech is an action at the word after it, held to its sentence's end and never
-##   spoken; it finds the latest thing written under its name - a mark's #name, a drawing's id, a
+##   spoken, whichever side of it the lesson spaced (2026-10-19: "onlythe" in the subtitles, from
+##   `only <!-- point: x -->the`; the control is the old cut, which took the space before it alone);
+##   it finds the latest thing written under its name - a mark's #name, a drawing's id, a
 ##   formula's \pin - and a name nothing carries is caught (the control: the names that are there are
 ##   not). At the desk the nib comes down beside the thing as the word is said - a wide one swept under
 ##   first - the camera goes to it and no ink is drawn; a point at a page already turned leaves the pen where it was (the control).
 ## - THE PEN IS NEVER STILL FOR LONG: a long stretch of speech with the pen idle is caught, and the same
 ##   stretch broken by a point is not (the control).
+## - AN IDLE PEN GETS OUT OF THE WAY (the user, 2026-10-19: "the pen was just frozen, right in the middle
+##   of the page, covering a bunch of the text's visibility"): over a long aside the nib sets off from
+##   where its action left it (the old wait jumped 136 px in a frame), goes right, then up, waits off the
+##   pad's top right and is back as the next formula begins at a hand's pace (the old reach, 0.45 s
+##   however far, is the control); over a short wait it stays by its line (the control). A page turns
+##   only once the pen is off the pad, and the pen comes back behind the sheet: the pen, a rod along
+##   its lean, never meets the turning sheet - the old wait at the page's right did, in 28 of 96 frames.
 ## - A READING STARTED MID-WAY (the user, 2026-10-16: "scrubbing the timeline seems to have broken the
 ##   pen completely. For the remainder of the video, the pen doesn't move at all"): handed the new
 ##   reading's first words, the desk finds its place - what came before is written, the next formula
@@ -58,7 +67,8 @@ extends SceneTree
 ##   against the same lesson with a pad line left unread, which still goes back.
 ## - THE THUMBNAIL (the user: "did not use the proper thumbnail ... the same thumbnail that cards-based
 ##   modes use"): a Proof upload names the title screen's moment, the name fully up over the blur - on
-##   the first frame, since [ProofCard] names the Director, which a script's `_init` has not got.
+##   the first frame, since [ProofCard] names the Director, which a script's `_init` has not got. Its
+##   tags are the note's alone, the one list the YouTube card shows (2026-10-19).
 ## - DELETE AND REMAKE (the user, 2026-10-16: "There is currently no way to delete an episode. There is
 ##   also no way to entirely remake one"): an episode with nothing made is made, one with anything made
 ##   is remade (Make becomes Remake) and a remake leaves nothing of it; a delete throws away the
@@ -107,7 +117,7 @@ func _upload() -> void:
 	_check(ShowOpening.title_alpha(at, 9.0, true) == 1.0 and ShowOpening.pull(at, 9.0, true) == 0.0,
 		"and at that moment the name is fully up over the desk out of focus")
 	_check(String(up.get("description", "")).contains("checked by the Lean theorem prover (Lean 4.35.0")
-		and up.get("tags", []) == ["math", "induction"], "with the description, the check and the tags as before")
+		and up.get("tags", []) == ["math"], "with the description, the check, and the note's tags alone - the framer's \"induction\" is not added unseen")
 	var take := _scratch.path_join("take_1.wav")
 	FileAccess.open(take.get_basename() + ".json", FileAccess.WRITE).store_string(JSON.stringify({"bookend": {"in": 9.0, "out": 9.0}}))
 	_check(ShowOpening.take_intro(take, 2.0) == 9.0 and ShowOpening.take_intro(_scratch.path_join("none.wav"), 2.0) == 2.0,
@@ -573,6 +583,17 @@ func _points() -> void:
 		"a point is at the word after it, held to its sentence's end (%s, %d words)" % [spoken[int(first["after"])], first["span"]])
 	_check(not String(p["speakable"]).contains("point:") and not spoken.has("p") and String(p["speakable"]).contains("The point sits"),
 		"and is never spoken (the voice reads \"The point sits\")")
+	# A MARK WRITTEN AGAINST ITS WORD (2026-10-19: the subtitles read "onlythe" and "drawing,the"):
+	# the same words, each point at the same word, and no space left before punctuation
+	var tight := DeskScript.parse(POINTED.replace("--> ", "-->") + "\nSee it here <!-- point: P -->.\n")
+	var tight_pts: Array = (tight["actions"] as Array).filter(func(a): return String(a["kind"]) == "point")
+	var tight_said := String(tight["speakable"])
+	_check(tight_said.contains("The point sits") and tight_said.contains("Look at the left side. Then the whole line.")
+		and tight_said.contains("See it here.") and (tight["spoken"] as PackedStringArray).slice(0, spoken.size()) == spoken
+		and tight_pts.size() == 4 and int(tight_pts[1]["after"]) == int(pts[1]["after"]),
+		"a mark written against its word leaves the words apart and the point at its word")
+	var old_cut := RegEx.create_from_string(" ?" + DeskScript.POINT).sub("Look at the <!-- point: lhs -->left side.", "", true)
+	_check(old_cut == "Look at theleft side.", "the control: the old cut, the space before the mark taken alone, fuses them (%s)" % old_cut)
 	var draw_i := -1
 	var pad_i := -1
 	for a in p["actions"]:
@@ -848,12 +869,89 @@ func _share_said(t: float, t0s: PackedFloat32Array, t1s: PackedFloat32Array) -> 
 	return done / float(t0s.size())
 
 
+## AN IDLE PEN GETS OUT OF THE WAY (the user, 2026-10-19: "the pen was just frozen, right in the middle
+## of the page, covering a bunch of the text's visibility ... drift to the right and top"): over a long
+## aside the nib sets off from where its action left it, goes right off the written lines, then up the
+## pad's edge, waits off its top right and is back as the next formula begins, never whipping across
+## the page; over a short wait it stays beside its line (the control). The old wait jumped to its rest
+## the frame an action ended, and every reach took 0.45 s however far it went.
+func _idle() -> void:
+	print("-- an idle pen gets out of the way")
+	var talk := ""
+	for i in 5:
+		talk += "This sentence says nothing that the pen could show at all. "
+	var desk := _desk_over({}, LESSON + "\n" + talk + "\n\n<!-- pad: 4!+1 = 25 -->\nFour factorial, plus one, is twenty five.\n")
+	var s := desk._actions.size() - 2
+	var k := s + 1
+	var end := float(desk._plan[s]["end"])
+	var start := float(desk._plan[k]["start"])
+	var words := int((desk._actions[k] as Dictionary)["after"]) - int((desk._actions[s] as Dictionary)["after"])
+	_check(String((desk._actions[s] as Dictionary)["kind"]) == "strike" and desk._parks(s, k) and not desk._parks(0, 1)
+		and not desk._parks(k, -1), "%d words with nothing for the pen send it off the pad, and the short waits do not" % words)
+	var left := desk._action_point(desk._actions[s], false)
+	desk._now = end + 0.01
+	var set_off: Vector2 = desk.pen_at()["p"]
+	_check(set_off.distance_to(left) < 3.0, "the nib sets off from where its action left it (%.1f px; the old wait, at its rest, %.0f px away the next frame)"
+		% [set_off.distance_to(left), DeskMedium._rest_near(left).distance_to(left)])
+	desk._now = end + DeskMedium.PARK_AFTER + DeskMedium.PARK_CLEAR
+	var cleared: Vector2 = desk.pen_at()["p"]
+	_check(cleared.x > DeskScript.PW and cleared.y > DeskMedium.PARK.y + 100.0,
+		"it goes right first, off the written lines, then up the pad's edge (%s)" % cleared)
+	desk._now = (end + start) * 0.5
+	var parked: Vector2 = desk.pen_at()["p"]
+	_check(parked.distance_to(DeskMedium.PARK) < 1.0, "over the aside it waits off the pad's top right (%s)" % parked)
+	var first := desk._action_point(desk._actions[k], true)
+	var fastest := 0.0
+	var prev := Vector2.INF
+	var t := end
+	while t < start:
+		desk._now = t
+		var p: Vector2 = desk.pen_at()["p"]
+		if prev != Vector2.INF:
+			fastest = maxf(fastest, p.distance_to(prev))
+		prev = p
+		t += 1.0 / 60.0
+	desk._now = start - 0.001
+	var back: Vector2 = desk.pen_at()["p"]
+	var old := 1.5 * DeskMedium.PARK.distance_to(first) / DeskMedium.REACH_EASE / 60.0
+	_check(back.distance_to(first) < 2.0 and fastest < 40.0 and old > 40.0,
+		"and is back as the formula begins, at most %.0f px a frame on its way (the control: the old reach, %.0f)" % [fastest, old])
+	var rest_at := float(desk._plan[0]["end"]) + DeskMedium.REST_EASE
+	desk._now = rest_at
+	var near: Vector2 = desk.pen_at()["p"]
+	_check(rest_at < float(desk._plan[1]["start"]) - desk._reach(0, 1) and near.x < DeskScript.PW
+		and near.distance_to(DeskMedium._rest_near(desk._action_point(desk._actions[0], false))) < 1.0,
+		"the control: between two actions closer than that it waits beside its line (%s)" % near)
+	desk.free()
+
+
+## Does the pen at [param at] (`pen_at`'s) meet the sheet a turn begun at [param ta] is swinging? In
+## the pad's meters: the sheet a plane about the pad's top edge as `_show_pages` swings it, the pen a
+## rod from its nib along its lean.
+func _meets_sheet(at: Dictionary, now: float, ta: float) -> bool:
+	var p: Vector2 = at["p"]
+	var nib := Vector3((p.x / DeskScript.PW - 0.5) * DeskMedium.PAD_W, 0.0003 + float(at["lift"]),
+		(p.y / DeskScript.PH - 0.5) * DeskMedium.PAD_H)
+	var up := DeskMedium.lean(DeskMedium.PEN_UP, now, 3, p.x / DeskScript.PW, Vector3.ZERO)
+	var u := clampf((now - ta) / DeskScript.TURN, 0.0, 1.0)
+	var th := PI * (u * u * (3.0 - 2.0 * u))
+	var hinge := Vector3(0.0, 0.0006, -DeskMedium.PAD_H * 0.5)
+	var along := Vector3(0.0, sin(th), cos(th))
+	var across := Vector3(0.0, cos(th), -sin(th))
+	for j in 41:
+		var q := nib + up * (0.02 + DeskMedium.PEN_LEN) * float(j) / 40.0 - hinge
+		if absf(q.dot(across)) < DeskMedium.PEN_R and absf(q.x) < DeskMedium.PAD_W * 0.5 + DeskMedium.PEN_R \
+				and q.dot(along) > 0.0 and q.dot(along) < DeskMedium.PAD_H:
+			return true
+	return false
+
+
 ## A desk over the lesson with no stage: the actions as the ink would lay them out (no strokes - an
 ## item's writing is its measured length), and a steady voice reading it.
-func _desk_over(sizes: Dictionary) -> DeskMedium:
+func _desk_over(sizes: Dictionary, lesson := LESSON) -> DeskMedium:
 	var desk := DeskMedium.new()
-	desk.load_lesson(LESSON, {"seed": 3})
-	var parsed := DeskScript.parse(LESSON, _lengths(), sizes)
+	desk.load_lesson(lesson, {"seed": 3})
+	var parsed := DeskScript.parse(lesson, _lengths(), sizes)
 	desk._actions = parsed["actions"]
 	desk._follower.extend(DeskScript.rehearsal(parsed))
 	desk._build_plan()
@@ -890,6 +988,7 @@ func _desk() -> void:
 	_check(float(sp["end"]) <= float(f.st0[int(slow["after"]) + 6]),
 		"before the voice goes on")
 	_elastic()
+	_idle()
 	# THE TITLE AND THE CAMERA: up and wide over the intro until the first word, close as the pen writes
 	_check(ShowOpening.title_alpha(0.1, INF, false) == 0.0 and ShowOpening.title_alpha(1.6, INF, false) == 1.0,
 		"the channel's name comes up over the intro")
@@ -958,8 +1057,25 @@ func _desk() -> void:
 	var td := _desk_over(tall)
 	var tp: Dictionary = td._plan[2]
 	var ta := float(tp["turn_at"])
-	_check(ta >= float(td._plan[1]["end"]) and float(tp["start"]) >= ta + DeskScript.TURN,
-		"the page turns after the writing before it, and the pen writes once it is over")
+	_check(ta >= float(td._plan[1]["end"]) + DeskMedium.PARK_CLEAR and float(tp["start"]) >= ta + DeskScript.TURN,
+		"the page turns once the pen is off the pad after the writing before it, and the pen writes once it is over")
+	# THE PEN IS NEVER IN THE TURNING SHEET'S WAY: it goes off the pad before the sheet lifts, and comes
+	# back over the new page behind it; the control, the old wait at the page's right, is in its way
+	var hits := 0
+	var old_hits := 0
+	var frames := 0
+	var t := ta
+	while t <= ta + DeskScript.TURN:
+		td._now = t
+		hits += int(_meets_sheet(td.pen_at(), t, ta))
+		old_hits += int(_meets_sheet({"p": Vector2(DeskScript.PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0),
+			"lift": DeskMedium.REST_LIFT}, t, ta))
+		frames += 1
+		t += 1.0 / 60.0
+	td._now = ta
+	_check(td._parks(1, 2) and (td.pen_at()["p"] as Vector2).x > DeskScript.PW and hits == 0 and old_hits > 10,
+		"the pen is off the pad as the sheet lifts and never in its way (%d of %d frames; the control, the old wait at the page's right, %d)"
+		% [hits, frames, old_hits])
 	td._now = ta - 0.1
 	var before := td._pages()
 	td._now = ta + 0.5
