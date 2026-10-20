@@ -20,7 +20,7 @@ extends SceneTree
 ##
 ## AND NOTHING MAY BE DROPPED IN SILENCE, which is the general form of all three: the no-drop
 ## block below requires every token of a paragraph to reach the parse output, and
-## Phonemes._rescue_phones plus ReadingPanel._bridge_words make the two places that used to
+## Phonemes._rescue_phones plus ReadingPlan.bridge_words make the two places that used to
 ## delete a word warn and keep it instead.
 ##
 ## Run: godot --headless --path . --script tests/voice/norm_check.gd

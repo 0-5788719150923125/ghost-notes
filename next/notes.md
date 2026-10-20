@@ -1589,8 +1589,10 @@ and what it does not do yet, are in [storyboard.md](storyboard.md).**
 - **The storyboard is the note's**, kept in its `scenes:` block and written in an editor
   (`StoryboardEditor`). "Storyboards... stay the Scenes card's own files" (below) was the answer
   until someone needed more; the user did.
-- **Not built:** the Voice as a card on the note's own panel (five workspaces remain), two clocks
-  on one note, a show with no sound, on/ghosted, "+" suggestions, diff notes.
+- **Not built:** the Voice as a card on the note's own panel (five workspaces remain - its insides
+  are a part of their own since 2026-10-19, `ReadingCast`, keeping the `voice` block with the
+  `capture()` / `apply()` every card keeps; structure.md, step 23), two clocks on one note, a show
+  with no sound, on/ghosted, "+" suggestions, diff notes.
 
 Gates: components_check and notes_list_check (rewritten), teardown_check (two new make-ups),
 storyboard_check and storyboard_editor_check (new).

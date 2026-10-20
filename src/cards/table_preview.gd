@@ -390,6 +390,7 @@ func table(raw: Dictionary, numbers: Dictionary = {}) -> Dictionary:
 	# THE TABLE AS IT MOSTLY IS: its light with the sun out and no bird crossing ([method Lights.Rig.quiet_near])
 	_pose_spread()
 	_medium._tick_air(AIR_AT)
+	_medium._tick_ride(AIR_AT)
 	var out := _placed(CardTable.sanitize_table(raw, CardTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {})))
 	var tags: Tags = null
 	if not numbers.is_empty():
@@ -468,7 +469,7 @@ func watch(raw: Dictionary, name: String) -> Dictionary:
 
 ## A MOVING PART OF THE LIGHT ([Lights]) photographed four times on the episode's table: "clouds" as one
 ## passes over the sun - the sun out, the cloud coming over it, under it, the sun back; "birds" as a
-## shadow crosses the table; something the sun falls through as it stirs; a lamp as it flickers, stutters,
+## shadow crosses the table; something the sun falls through as it stirs; a lamp as it flickers, fails,
 ## cuts, passes or flashes. `{image, frames: [seconds], what}`; `error` when it cannot be shown.
 func watch_light(raw: Dictionary, name: String) -> Dictionary:
 	var err: String = await _stand(raw)
@@ -487,6 +488,7 @@ func watch_light(raw: Dictionary, name: String) -> Dictionary:
 	for i in steps.size():
 		var t := float(steps[i])
 		_pose_spread(t)
+		m._tick_ride(t)
 		m._light_part.tick_props(t)
 		m._tick_air(t)
 		var img: Image = await _render(_table, TABLE_FRAMES)
@@ -591,6 +593,24 @@ func _light_moment(rig, name: String) -> Dictionary:
 			continue
 		var fk: Dictionary = (l as Dictionary)["fk"]
 		var style := String((Lights.LAMPS[String(spec["look"])] as Dictionary)["flicker"])
+		if fk.has("spells"):
+			# A FAILING LIGHT through its first bad spell: before it, at its deepest sag, later in it, and after
+			for k in (fk["spells"] as PackedFloat32Array).size():
+				var s0 := float((fk["spells"] as PackedFloat32Array)[k])
+				if s0 < AIR_AT:
+					continue
+				var length := float((fk["spell_lens"] as PackedFloat32Array)[k])
+				var deep := s0
+				var least := INF
+				var t := s0
+				while t < s0 + length:
+					var b := float(Lights.flicker(String(spec["look"]), fk, t)["bright"])
+					if b < least:
+						least = b
+						deep = t
+					t += 1.0 / 60.0
+				return {"times": [s0 - 0.5, deep, s0 + length * 0.75, s0 + length + 1.5],
+					"what": "\"%s\" failing at %.1f s: before, at its deepest sag, later in the spell, and after." % [name, s0]}
 		match style:
 			"pass":
 				for e in (fk["events"] as PackedFloat32Array):
@@ -611,13 +631,6 @@ func _light_moment(rig, name: String) -> Dictionary:
 				return {"times": [t0 - 0.3, t0 - 0.1, t0 + 0.1, t0 + 0.3], "what": "\"%s\" sweeping across the table." % name}
 			"steady":
 				return {"error": "\"%s\" is steady: set shows it" % name}
-			"fluorescent", "neon":
-				var t := AIR_AT
-				while t < AIR_AT + 600.0:
-					if float(Lights.flicker(String(spec["look"]), fk, t)["bright"]) < 0.5:
-						return {"times": [t - 0.6, t, t + 0.05, t + 0.7], "what": "\"%s\" stuttering, %.1f s in." % [name, t]}
-					t += 0.02
-				return {"times": [AIR_AT, AIR_AT + 1.0, AIR_AT + 2.0, AIR_AT + 3.0], "what": "\"%s\", steady." % name}
 			"screen":
 				return {"times": [AIR_AT, AIR_AT + 2.5, AIR_AT + 5.0, AIR_AT + 7.5], "what": "\"%s\" through its cuts, two and a half seconds apart." % name}
 			_:

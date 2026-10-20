@@ -170,8 +170,8 @@ func _reading() -> void:
 	_ok(_bar._play.disabled, "and its Play waits for a voice to load")
 	ed._can_play = true
 	ed._text.text = "The first sentence is here. The second one follows it. A third ends the reading."
-	ed._plan(ed._text.text)
-	ed._sync_speak_buttons()
+	ed._stream.plan(ed._text.text)
+	ed._stream._sync_speak_buttons()
 	await _frames(2)
 	_ok(Spectrum.seekable() and Spectrum.scrub_length() > 0.0, "a planned reading is on the rail")
 	_ok(Spectrum.transport_playing(), "and reads as playing")
@@ -183,8 +183,8 @@ func _reading() -> void:
 	_ok(not Spectrum.paused and Spectrum.transport_playing(), "▶ carries it on")
 	var t := Spectrum.scrub_length() * 0.6
 	Spectrum.seek(t)
-	_ok(ed._seek_k >= 0, "a seek on the rail goes to the reading, by sentence (to %d)" % ed._seek_k)
-	ed._seek_k = -1
+	_ok(ed._stream._seek_k >= 0, "a seek on the rail goes to the reading, by sentence (to %d)" % ed._stream._seek_k)
+	ed._stream._seek_k = -1
 	_bar._stop.pressed.emit()
 	await _frames(1)
 	_ok(ended[0] == 1, "■ ends the reading and hands the stage back (end_stream %d)" % ended[0])

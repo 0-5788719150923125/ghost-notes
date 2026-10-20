@@ -477,6 +477,11 @@ func _contact_texture() -> Texture2D:
 ## so the shadows round it lean and dance with them.
 func tick_props(t: float) -> void:
 	var blows := Winds.blows(medium._wind)
+	# ABOARD SOMETHING THAT MOVES ([Rides]): every flame leans toward the push and stays upright in the world as
+	# the deck rolls, and jumps at a jolt
+	var riding := Rides.moves(medium._ride)
+	var rode := Rides.flame(medium._ride, t) if riding else Vector2.ZERO
+	var jolt := Rides.jolting(medium._ride, t) if riding else 0.0
 	for l in medium._lights:
 		# EACH FLAME IN ITS OWN TIME, and their light as bright as they are together
 		var bright := 0.0
@@ -495,6 +500,11 @@ func tick_props(t: float) -> void:
 				draft = float(w["draft"])
 				fl.x *= float(w["bright"])
 				lean += w["mid"] as Vector3
+			if riding:
+				axis = (axis + Vector3(rode.x, 0.0, rode.y)).normalized()
+				lean += Vector3(rode.x, 0.0, rode.y) * FLAME_H * 0.5
+				fl.x *= 1.0 - 0.25 * jolt * (0.6 + 0.4 * fast)
+				tall *= 1.0 + 0.3 * jolt * fast
 			var mesh: MeshInstance3D = f["mesh"]
 			# A SPRITE PARALLEL TO THE PICTURE, standing on its wick: its lean as it shows on the screen split
 			# into a BEND (the shader's: foot upright, tip leaned) and a tip of the whole sprite in its own
@@ -511,7 +521,7 @@ func tick_props(t: float) -> void:
 			var bend := clampf(rest * FLAME_BEND, -0.5, 0.5)
 			var b := Basis(across, Vector3.UP, face) * Basis(Vector3.BACK, -atan(rest - bend)) \
 				* Basis.from_scale(Vector3(1.0 + 0.06 * fast, fl.y * tall * shown.length(), 1.0))
-			mesh.transform = Transform3D(b, root + b * Vector3(0.0, FLAME_QUAD * 0.5, 0.0) + Vector3(lean.x, 0.0, 0.0) * (0.0 if blows else 1.0))
+			mesh.transform = Transform3D(b, root + b * Vector3(0.0, FLAME_QUAD * 0.5, 0.0) + Vector3(lean.x, 0.0, 0.0) * (0.0 if blows or riding else 1.0))
 			# ...AND LICKING: a ripple climbing it at the flame's own tempo, wider the harder it is fanned
 			var fk: Dictionary = f["flicker"]
 			var rate := float(fk["rate"])

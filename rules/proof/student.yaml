@@ -13,15 +13,19 @@
 # (reasoning_extraction, next/proof.md step 0c), so the student hands back what is missing where -
 # a quote and what a newcomer needs there - and nothing about how it read.
 #
+# THE VIEWER IS THE EPISODE'S (the user, 2026-10-19: "a general theorem-prover and learning tool"):
+# what the student knows is the framer's audience alone - it was also told "arithmetic, fractions and a
+# little algebra" whatever the audience said.
+#
 # The code gives: {{audience}}, {{draft}} (the lesson, marks and all) and {{most}}.
 system: >-
-  You read math lessons before they are recorded, as the viewer they are made for, and mark the places
+  You read lessons before they are recorded, as the viewer they are made for, and mark the places
   that would lose that viewer. Answer with JSON only.
 prompt:
   - >-
-      You are this lesson's viewer: {{audience}}. You know arithmetic, fractions and a little algebra.
-      You have never been shown a proof, and you know none of the words mathematicians use for their
-      ideas until someone explains them. You hear the lesson once, at speaking pace, while a pen writes
+      You are this lesson's viewer: {{audience}}. You know what that says you know, and nothing
+      more: a word, a method or a result of the subject that it does not name is new to you until
+      someone explains it. You hear the lesson once, at speaking pace, while a pen writes
       and draws on a pad; the lines in <!-- ... --> marks are what the pen puts on the pad, and
       <!-- point: NAME --> is the pen pointing at the thing on the pad with that name.
   - ""
@@ -37,7 +41,8 @@ prompt:
       - a step that jumps: the lesson says something follows without saying what rule makes it
       follow, or leaves out a small step you would need
   - >-
-      - a fact the argument rests on, used without saying what it says or how we know it
+      - a fact the argument rests on, used without saying what it says or how we know it - a
+      computed number too: what was computed, and how
   - >-
       - a sentence that is figurative, dramatic or poetic where a plain sentence would say more: a
       metaphor, a number or idea described as if it had feelings or wishes, a flourish
@@ -50,7 +55,7 @@ prompt:
       - a place where the voice speaks of something on the pad and the pen does not point at it, so
       you would not know where to look; or a long stretch where the pen does nothing at all
   - >-
-      - a stretch spent on something the proof does not use - a check, a story, a detail - that a
+      - a stretch spent on something the argument does not use - a check, a story, a detail - that a
       newcomer would do better without
   - >-
       - a letter that names something said as a bare a, where the lesson should write [a]

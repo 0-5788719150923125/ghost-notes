@@ -237,6 +237,19 @@ const MANAGED := [
 			+ "Built the first time a Proof needs it.",
 	},
 	{
+		"key": "compute_venv",
+		"name": "Compute environment",
+		"kind": KIND_MANAGED,
+		"path": "user://compute_venv",
+		"requirements": "res://hosts/compute/requirements.txt",
+		"imports": "numpy, scipy, sympy",
+		"size": "~220 MB",
+		"used_for": "numpy, SciPy and SymPy, for the code a Proof solver RUNS (hosts/compute/run.py): "
+			+ "a simulation, a fit, a derivation or a small model trained, inside a sandbox "
+			+ "(bubblewrap), its numbers kept for the pad's drawings. Built the first time a Proof's "
+			+ "solver works where the sandbox is installed.",
+	},
+	{
 		"key": "mathlib",
 		"name": "Mathlib",
 		"kind": KIND_MANAGED,
@@ -294,6 +307,22 @@ const TOOLS := [
 			"linux": "part of util-linux - installed on every mainstream distribution",
 		},
 		"site": "https://github.com/util-linux/util-linux",
+	},
+	{
+		"key": "bwrap",
+		"name": "bubblewrap",
+		"bins": ["bwrap"],
+		"version_args": ["--version"],
+		"tier": TIER_FEATURE,
+		"platforms": ["linux"],
+		"used_for": "The sandbox a Proof solver's code runs in (hosts/compute/run.py): its own view "
+			+ "of the files - the system's libraries read-only, one folder to write in, nothing of "
+			+ "yours - and no network. Without it the solver cannot run code, and its episodes are "
+			+ "proofs in Lean only. Flatpak uses it, so most desktops have it already.",
+		"install": {
+			"linux": "sudo pacman -S bubblewrap   ·   sudo apt install bubblewrap   ·   sudo dnf install bubblewrap",
+		},
+		"site": "https://github.com/containers/bubblewrap",
 	},
 	{
 		"key": "xvfb",

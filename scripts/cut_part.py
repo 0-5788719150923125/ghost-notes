@@ -18,6 +18,8 @@ THE TRAPS, each met once:
 - A banner's prose (plain `#` lines under it) belongs to the part: name the banner in `carry`.
 - The owner's `field` must be named like none of its members (the tool refuses it): MaskUndo's was
   `_undo`, the name of the method it took, and the gates' calls were rewritten twice.
+- A plain `#` comment block touching a declaration goes with it (the AVI repair's note stayed in
+  the owner over an empty banner once); one standing apart, or under a banner, stays.
 
 spec.json:
   file      the owner script
@@ -112,6 +114,16 @@ while i < n:
         if lead is None:
             lead = i
         i += 1
+        continue
+    # a plain comment block TOUCHING a declaration (no blank line between) is about it, and goes
+    # where it goes: left in the owner over nothing, the AVI repair's lay above an empty banner
+    if not d and line.startswith("#") and not line.startswith("# ---"):
+        k = i
+        while k < n and lines[k].startswith("#") and not lines[k].startswith("# ---"):
+            k += 1
+        if k < n and (DECL.match(lines[k]) or lines[k].startswith("##")) and lead is None:
+            lead = i
+        i = k
         continue
     if d:
         kind, name = d.group(1), d.group(2)
@@ -367,6 +379,8 @@ for d in ordered:
     cursor = d["end"]
 owner.extend(l for gi, l in enumerate(lines[cursor:], cursor) if gi not in carried)
 text = "\n".join(owner)
+# a banner the cut left with nothing under it goes too
+text = re.sub(r"\n# --- [^\n]*\n\s*(?=\n# --- |\Z)", "\n", text)
 text = re.sub(r"\n{4,}", "\n\n\n", text)
 ptext = re.sub(r"\n{4,}", "\n\n\n", "\n".join(part)).rstrip("\n") + "\n"
 path.write_text(text)

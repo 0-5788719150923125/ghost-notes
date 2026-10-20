@@ -64,7 +64,7 @@ func _init(size: Vector2) -> void:
 ## end, and each run of actions' rest after the word before it - the shape a real take's sidecar
 ## has. [param intro] is the silence before all of it - the opening run's rest comes after it,
 ## whole, as the panel has it. [param from_si] > 0 is a SCRUB: the voice starts again at that
-## spoken word, with no intro, as `ReadingPanel._speak_from` does.
+## spoken word, with no intro, as `ReadingStream.speak_from` does.
 static func timeline(body: String, word_s: float, intro: float, from_si := 0) -> Array:
 	var d := TabletScript.parse(body)
 	var holds := {}
@@ -88,7 +88,7 @@ static func timeline(body: String, word_s: float, intro: float, from_si := 0) ->
 
 
 ## Where a scrub to the first run of [param phrase] restarts the reading: its spoken index, and
-## the start words `ReadingPanel._start_words` would hand the media. `{si, words}`, si -1
+## the start words `ReadingStream.start_words` would hand the media. `{si, words}`, si -1
 ## when the phrase is not read.
 static func scrub_to(body: String, phrase: String) -> Dictionary:
 	var d := TabletScript.parse(body)

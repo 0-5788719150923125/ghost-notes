@@ -83,10 +83,10 @@ func _ready() -> void:
 	# one, so a panel built outside it has every slider callback silently dead.
 	_ed.remove_child(_ed._panel)
 	add_child(_ed._panel)
-	_ed.remove_child(_ed._repace_timer)
-	add_child(_ed._repace_timer)
-	_ed.remove_child(_ed._cast_timer)
-	add_child(_ed._cast_timer)
+	_ed.remove_child(_ed._cast._repace_timer)
+	add_child(_ed._cast._repace_timer)
+	_ed.remove_child(_ed._cast._cast_timer)
+	add_child(_ed._cast._cast_timer)
 	# Re-point the source at a section of its own, BEFORE it is bound to the box: setup()
 	# has already read the author's real remembered document and this gate must not open it.
 	_doc = _ed._doc
@@ -115,8 +115,8 @@ func _ready() -> void:
 	await _check_save_to()
 	await _check_unattended_processes_never_autosave()
 
-	_ed._cast_timer.stop()
-	_ed._cast_timer.queue_free()
+	_ed._cast._cast_timer.stop()
+	_ed._cast._cast_timer.queue_free()
 	_ed.free()
 	DirAccess.remove_absolute(_path)
 	DirAccess.remove_absolute(DIR)
@@ -144,8 +144,8 @@ func _check_cards_starter() -> void:
 	var cards := ReadingPanel.new()
 	cards.workspace = "cards"
 	cards._build_panel()
-	cards.remove_child(cards._cast_timer)
-	add_child(cards._cast_timer)
+	cards.remove_child(cards._cast._cast_timer)
+	add_child(cards._cast._cast_timer)
 	var source := cards._doc
 	var section := "cards_starter_probe_%d" % Time.get_ticks_usec()
 	source._section = section
@@ -173,8 +173,8 @@ func _check_cards_starter() -> void:
 	_ok(source.is_sync() and cards._text.text == "# My file\n\nThe cards I chose.\n",
 		"a synced brief was replaced by the bundled one")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
-	cards._cast_timer.stop()
-	cards._cast_timer.queue_free()
+	cards._cast._cast_timer.stop()
+	cards._cast._cast_timer.queue_free()
 	cards.free()
 
 
@@ -207,21 +207,21 @@ func _check_opening_a_document() -> void:
 
 	# THE VOICE CAME WITH IT. Two readers, each with its own settings - a cast that came
 	# back as one tab would be the feature not working.
-	_ok(_ed._slots.size() == 2,
-		"the document's cast of 2 arrived as %d tab(s)" % _ed._slots.size())
-	_ok(is_equal_approx(_ed._turn.value, 2.5),
-		"the document's Turn did not reach the panel (%f)" % _ed._turn.value)
-	_ok(String(_ed._cfg(0).get("voice", "")) == "en_US-libritts-high"
-			and int(_ed._cfg(0).get("speaker", -1)) == 4
-			and is_equal_approx(float(_ed._cfg(0).get("pace", 0.0)), 0.8),
-		"the narrator did not come back as the document wrote it: %s" % str(_ed._cfg(0)))
-	_ok(_ed._names == PackedStringArray(["Narrator", "Emily White"]),
-		"the tabs are not the script's speakers by name: %s" % [_ed._names])
-	_ok(String(_ed._cfg(1).get("voice", "")) == "en_GB-alan-medium"
-			and is_equal_approx(float(_ed._cfg(1).get("pace", 0.0)), 1.3),
-		"Emily White did not come back as the document wrote her: %s" % str(_ed._cfg(1)))
+	_ok(_ed._cast._slots.size() == 2,
+		"the document's cast of 2 arrived as %d tab(s)" % _ed._cast._slots.size())
+	_ok(is_equal_approx(_ed._cast._turn.value, 2.5),
+		"the document's Turn did not reach the panel (%f)" % _ed._cast._turn.value)
+	_ok(String(_ed._cast.slot_cfg(0).get("voice", "")) == "en_US-libritts-high"
+			and int(_ed._cast.slot_cfg(0).get("speaker", -1)) == 4
+			and is_equal_approx(float(_ed._cast.slot_cfg(0).get("pace", 0.0)), 0.8),
+		"the narrator did not come back as the document wrote it: %s" % str(_ed._cast.slot_cfg(0)))
+	_ok(_ed._cast._names == PackedStringArray(["Narrator", "Emily White"]),
+		"the tabs are not the script's speakers by name: %s" % [_ed._cast._names])
+	_ok(String(_ed._cast.slot_cfg(1).get("voice", "")) == "en_GB-alan-medium"
+			and is_equal_approx(float(_ed._cast.slot_cfg(1).get("pace", 0.0)), 1.3),
+		"Emily White did not come back as the document wrote her: %s" % str(_ed._cast.slot_cfg(1)))
 	# A key the document did NOT mention takes its default rather than arriving missing.
-	_ok(_ed._cfg(0).has("presence") and _ed._cfg(0).has("ambience"),
+	_ok(_ed._cast.slot_cfg(0).has("presence") and _ed._cast.slot_cfg(0).has("ambience"),
 		"a voice written by an older build arrived with keys missing")
 	# OPENING A DOCUMENT IS NOT AN EDIT TO IT. The autosave's snapshot is seeded by the import,
 	# so a file the author has only just opened is not written back a second later - which
@@ -277,8 +277,8 @@ func _check_clear() -> void:
 ## AND BACK OUT AGAIN. The dial moved here is the one the document must carry next time.
 func _check_saving_the_voice() -> void:
 	var before := FileAccess.get_file_as_string(_path)
-	_ed._turn.value = 4.0
-	_ed._rate.value = 1.45
+	_ed._cast._turn.value = 4.0
+	_ed._cast._rate.value = 1.45
 	_ok(_doc.save(), "saving the voice into the document failed")
 
 	var after := FileAccess.get_file_as_string(_path)
@@ -289,18 +289,18 @@ func _check_saving_the_voice() -> void:
 	_ok(after.ends_with(BODY_A), "saving the voice changed the chapter")
 
 	# Read it back the way a fresh session would: through the panel, from the file.
-	_ed._turn.value = 1.0
-	_ed._slots = [ReadingPanel.SLOT_DEFAULTS.duplicate()]
-	_ed._names = PackedStringArray(["Narrator"])
-	_ed._stash = {}
-	_ed._slot = 0
-	_ed._rebuild_tabs()
+	_ed._cast._turn.value = 1.0
+	_ed._cast._slots = [ReadingPanel.SLOT_DEFAULTS.duplicate()]
+	_ed._cast._names = PackedStringArray(["Narrator"])
+	_ed._cast._stash = {}
+	_ed._cast.slot = 0
+	_ed._cast._rebuild_tabs()
 	_doc.reload()
-	_ok(_ed._slots.size() == 2, "the saved cast came back as %d tab(s)" % _ed._slots.size())
-	_ok(is_equal_approx(_ed._turn.value, 4.0),
-		"the saved Turn came back as %f" % _ed._turn.value)
-	_ok(is_equal_approx(float(_ed._cfg(0).get("pace", 0.0)), 1.45),
-		"the dial moved before saving did not survive the document: %s" % str(_ed._cfg(0)))
+	_ok(_ed._cast._slots.size() == 2, "the saved cast came back as %d tab(s)" % _ed._cast._slots.size())
+	_ok(is_equal_approx(_ed._cast._turn.value, 4.0),
+		"the saved Turn came back as %f" % _ed._cast._turn.value)
+	_ok(is_equal_approx(float(_ed._cast.slot_cfg(0).get("pace", 0.0)), 1.45),
+		"the dial moved before saving did not survive the document: %s" % str(_ed._cast.slot_cfg(0)))
 
 
 ## A DIAL MOVED IS A DIAL WRITTEN, with nothing pressed.
@@ -312,7 +312,7 @@ func _check_autosave() -> void:
 	await _wait(400)
 	var before := FileAccess.get_file_as_string(_path)
 
-	_ed._turn.value = 3.75
+	_ed._cast._turn.value = 3.75
 	await _wait(int(DocSource.AUTOSAVE_MS) + 900)
 	var after := FileAccess.get_file_as_string(_path)
 	_ok(after != before, "moving a dial never reached the document - autosave did nothing")
@@ -346,13 +346,13 @@ func _check_autosave_waits_for_quiet() -> void:
 	var gap: int = int(DocSource.POLL_MS) + 150
 	var bursts: int = 5
 	for i in bursts:
-		_ed._turn.value = 1.0 + 0.3 * float(i)
+		_ed._cast._turn.value = 1.0 + 0.3 * float(i)
 		await _wait(gap)
 	_ok(FileAccess.get_file_as_string(_path) == before,
 		"the document was written during %d adjustments %d ms apart - there is no quiet "
 		% [bursts, gap] + "period, only a poll")
 	# ...and it lands once the nudging stops, on the LAST value rather than an interim one.
-	_ed._turn.value = 2.25
+	_ed._cast._turn.value = 2.25
 	await _wait(int(DocSource.AUTOSAVE_MS) + 900)
 	var settled := FileAccess.get_file_as_string(_path)
 	_ok(settled != before, "the adjustments never landed once they stopped")
@@ -369,13 +369,13 @@ func _check_speak_takes_the_voice() -> void:
 	_doc.allow_autosave_for_test()
 	_write(HEAD.replace("pace: 0.8", "pace: 0.65") + BODY_A)
 	_doc.pull()
-	_ok(is_equal_approx(float(_ed._cfg(0).get("pace", 0.0)), 0.65),
-		"a Play did not take the voice edited in the file: %s" % str(_ed._cfg(0)))
-	_ed._select_tab(0)
-	_ed._rate.value = 1.2
+	_ok(is_equal_approx(float(_ed._cast.slot_cfg(0).get("pace", 0.0)), 0.65),
+		"a Play did not take the voice edited in the file: %s" % str(_ed._cast.slot_cfg(0)))
+	_ed._cast._select_tab(0)
+	_ed._cast._rate.value = 1.2
 	_doc.pull()
-	_ok(is_equal_approx(float(_ed._cfg(0).get("pace", 0.0)), 1.2),
-		"a Play put the file's older pace over the dial just moved: %s" % str(_ed._cfg(0)))
+	_ok(is_equal_approx(float(_ed._cast.slot_cfg(0).get("pace", 0.0)), 1.2),
+		"a Play put the file's older pace over the dial just moved: %s" % str(_ed._cast.slot_cfg(0)))
 	_ok(FileAccess.get_file_as_string(_path).contains("pace: 1.2"),
 		"the dial moved before Play was not written to the document first")
 	_doc._autosave_for_test = false
@@ -396,13 +396,13 @@ func _check_outside_edit_survives() -> void:
 	if m == null:
 		return
 	_write(raw.substr(0, m.get_start()) + "pace: 0.7" + raw.substr(m.get_end()))
-	_ed._turn.value = 1.9            # something else, moved in the panel
+	_ed._cast._turn.value = 1.9            # something else, moved in the panel
 	await _wait(int(DocSource.AUTOSAVE_MS) + 900)
 	var after := FileAccess.get_file_as_string(_path)
 	_ok(after.contains("pace: 0.7"), "the autosave put the panel's old pace back over an edit made in the file")
 	_ok(after.contains("turn: 1.9"), "the panel's own change was lost in reconciling with the file")
-	_ok(is_equal_approx(float(_ed._cfg(0).get("pace", 0.0)), 0.7),
-		"the panel does not show the file's edit after reconciling: %s" % str(_ed._cfg(0)))
+	_ok(is_equal_approx(float(_ed._cast.slot_cfg(0).get("pace", 0.0)), 0.7),
+		"the panel does not show the file's edit after reconciling: %s" % str(_ed._cast.slot_cfg(0)))
 	_doc._autosave_for_test = false
 
 
@@ -496,8 +496,8 @@ func _check_the_voice_is_the_documents() -> void:
 	await get_tree().process_frame
 	# by the CAST, not the tabs: the cards_panel panel's tabs follow its episode's script, and the
 	# cast keeps every voice the document names whether a script cues it or not
-	var cast: Dictionary = cards_panel._cast_dict()
-	var mine: Dictionary = _ed._cast_dict()
+	var cast: Dictionary = cards_panel._cast.cast_dict()
+	var mine: Dictionary = _ed._cast.cast_dict()
 	_ok(cast.size() == mine.size() and cast.has("Emily White") and cast.has(Manuscript.NARRATOR),
 		"the cards_panel panel does not hold the chapter's cast: %s against %s" % [cast.keys(), mine.keys()])
 	for who in mine:
@@ -703,7 +703,7 @@ func _check_unattended_processes_never_autosave() -> void:
 	_ok(Settings.is_read_only(),
 		"the control is wrong - this probe is not read-only, so it says nothing about a render")
 	var before := FileAccess.get_file_as_string(_path)
-	_ed._turn.value = 5.5
+	_ed._cast._turn.value = 5.5
 	_ed._text.insert_text_at_caret("Typed by nobody.")
 	var mark: SaveMark = _ed._writer.save_mark
 	var writes := mark.writes

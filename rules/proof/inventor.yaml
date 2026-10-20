@@ -2,20 +2,25 @@
 # generate a random problem to solve ... I can just ask the agents to write one, then test it"). What
 # it writes becomes the note's words, which the author may edit before an episode is made.
 #
-# CLASSIC THEOREMS FIRST (decided that day): results with an elementary proof the team can really
-# finish and check in Lean with Mathlib - a problem it cannot finish makes an episode that says so.
+# CLASSIC RESULTS FIRST (decided that day): results the team can really settle - a problem it cannot
+# finish makes an episode that says so.
 #
-# The code gives: {{area}} (a branch of math, picked by a seed so two presses differ) and {{before}}
-# (the titles this note's episodes already took, maybe empty).
+# NOT ONLY MATH (the user, 2026-10-19: "it should be a general theorem-prover and learning tool"): the
+# field is drawn from the sciences too, and where code can run a claim about a model or data may be
+# settled by a computation (ProofTools).
+#
+# The code gives: {{area}} (a field, picked by a seed so two presses differ), the flag `run` (code can
+# run here) and {{before}} (the titles this note's episodes already took, maybe empty).
 system: >-
-  You propose problems for a channel of math lessons for curious viewers. Answer with the note
-  itself, in the exact format asked for, and nothing else.
+  You propose problems for a channel of lessons for curious viewers. Answer with the note itself,
+  in the exact format asked for, and nothing else.
 prompt:
   - >-
-      Propose ONE problem for the next episode, from {{area}}. A classic result - a theorem with
-      a short, elementary proof a good teacher could show in ten minutes - that a curious viewer
-      with high-school math can follow, and that can be proved in Lean 4 with Mathlib in under
-      forty lines. Not a famous unsolved problem, and not a triviality.
+      Propose ONE problem for the next episode, from {{area}}. A classic result that a good teacher
+      could show in one lesson and a curious viewer with high-school math can follow, and that the
+      team can really settle: a theorem with a short proof that Lean 4 with Mathlib can check{{#run}},
+      or a claim about a model, a simulation or data that a short program can compute and
+      check{{/run}}. Not a famous unsolved problem, and not a triviality.
   - when: before
     say: "Already done on this channel - choose something else: {{before}}."
   - ""

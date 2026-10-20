@@ -336,7 +336,7 @@ func _spans_now() -> Array:
 ## of the next one" - and those disagree for any pause longer than 1.2 s INSIDE a sentence.
 ## Reported from a ch19 render, at a colon: "at exactly the same place where the colon is, the
 ## subtitles briefly disappeared, then reappeared... the SAME subtitles flickered". A colon is
-## sent to the voice as a colon (see ReadingPanel._build_chunks), the model answers it with
+## sent to the voice as a colon (see ReadingPlan.cut), the model answers it with
 ## a clause pause, and a pause_scale over 1 stretches it past that 1.2 s - so `presence` held at
 ## 1.0 while the draw had no sentence to draw and returned early, taking the plate with it.
 ## Measured before the fix: a 1.6 s internal pause went dark 0.45 s in, for a third of a second.

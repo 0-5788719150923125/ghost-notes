@@ -392,8 +392,14 @@ static func upload_of(ep: ProofEpisode, values: Dictionary, tags: PackedStringAr
 		check = ("The proof in this video was checked by the Lean theorem prover%s: every step, with no "
 			+ "gaps and nothing assumed beyond Lean's standard axioms.") % (
 			" (Lean %s, Mathlib %s)" % [solve["lean"], solve["mathlib"]] if not String(solve.get("lean", "")).is_empty() else "")
+	elif bool(solve.get("computed", false)):
+		check = ("The numbers and graphs in this video come from code that was run for it (Python, with NumPy, "
+			+ "SciPy and SymPy). A computation shows what happens in the cases it ran; it is not a proof for "
+			+ "every case.")
 	elif not solve.is_empty():
-		check = "The formal check in Lean did not finish for this episode, and the video says so."
+		check = ("The computation for this episode did not settle the question, and the video says so."
+			if ProofTools.kind_of(p) == "computation"
+			else "The formal check in Lean did not finish for this episode, and the video says so.")
 	var desc := String(p.get("description", "")).strip_edges()
 	return {"values": values, "description": (desc + ("\n\n" + check if not check.is_empty() else "")).strip_edges(),
 		"tags": Array(tags), "record": ep.dir.path_join("youtube.json"),
@@ -717,7 +723,8 @@ func _invent() -> void:
 		var t := String((h as Dictionary)["title"])
 		if not t.is_empty():
 			before.append(t)
-	_write_note("invent", ProofPrompts.inventor(int(Time.get_unix_time_from_system()) ^ randi(), before.slice(-12)))
+	_write_note("invent", ProofPrompts.inventor(int(Time.get_unix_time_from_system()) ^ randi(), before.slice(-12),
+		ProofTools.can_run()))
 
 
 ## "Refine": the refiner reads the note as it stands and writes it back whole, the problem defined.
@@ -726,7 +733,7 @@ func _refine() -> void:
 		_set_status("Write an idea in the note first - a line is enough - then press Refine.")
 		return
 	var s := _spec()
-	_write_note("refine", ProofPrompts.refiner(String(s["title"]), String(s["brief"])))
+	_write_note("refine", ProofPrompts.refiner(String(s["title"]), String(s["brief"]), ProofTools.can_run()))
 
 
 ## Hands [param p] (`{system, prompt}`) to the writer as [param by]'s job ([constant NOTE_WRITERS]);
@@ -817,9 +824,10 @@ func _build() -> void:
 	add_child(wrow)
 	_invent_btn = Button.new()
 	_invent_btn.text = "Invent a problem"
-	_invent_btn.tooltip_text = ("The writer proposes a classic problem with a proof it can finish and check, "
-		+ "and writes it into the note - replacing what is there (Undo in the note brings it back). "
-		+ "Edit it as you like before making an episode.")
+	_invent_btn.tooltip_text = ("The writer proposes a classic problem from a field picked at random - one it "
+		+ "can settle with a proof Lean checks, or (where code can run) a computation - and writes it into "
+		+ "the note, replacing what is there (Undo in the note brings it back). Edit it as you like before "
+		+ "making an episode.")
 	_invent_btn.pressed.connect(_invent)
 	_invent_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_invent_btn.clip_text = true
@@ -863,7 +871,8 @@ func _build() -> void:
 	# that runs agents builds it ([AgentPick], Cards' own)
 	_writer = AgentPick.writer(("Who frames the problem, solves it at the desk and teaches it, and who invents "
 		+ "or refines a problem. The solver checks its work with tools, so the writer must be one that takes them "
-		+ "(Claude, Codex or Grok). Takes effect at the next Make episode."),
+		+ "(Claude, Codex or Grok). Takes effect at the next Make episode. There is no painter: the desk, "
+		+ "what lies on it, the paper and the pen are built from shapes, picked anew for each episode."),
 		"The model that writes. Default is the CLI's own choice per job; a model chosen here writes all of it.",
 		("How hard the writer thinks before it writes - the CLI's own reasoning effort. Default is what "
 		+ "each CLI does unasked. A level chosen here is used for every job. Higher is slower and spends "
@@ -931,9 +940,10 @@ func _refresh() -> void:
 	_make_btn.text = "Remake episode" if made else "Make episode"
 	_make_btn.tooltip_text = (("Make this episode again from the note, whole: everything made for it is thrown "
 		+ "away first (it asks). To redo only part of it, use the ⟳ on a step.") if made else
-		("Make the episode, in order: the problem fixed from the note, the work at the desk checked in Lean, "
-		+ "the lesson, and its formulas laid out by TeX. Spends the writer's quota. Lean, Mathlib and TeX "
-		+ "are fetched the first time (about 11 GB)."))
+		("Make the episode, in order: the problem fixed from the note, the work at the desk - a proof checked "
+		+ "in Lean, or a computation run in a sandbox - the lesson, and its formulas laid out by TeX. Spends "
+		+ "the writer's quota. Lean, Mathlib and TeX are fetched the first time (about 11 GB), and the "
+		+ "compute environment (about 220 MB) where code can run."))
 	_stop_btn.disabled = not busy
 	_del_btn.disabled = busy or not DirAccess.dir_exists_absolute(_episode.dir)
 	_invent_btn.disabled = _note_job != ""
@@ -988,9 +998,16 @@ func _ready_note(step: String) -> String:
 		"solve":
 			var s: Variant = _episode.read_json("solve")
 			if s is Dictionary:
-				return ("verified in Lean (%d check%s)" if bool((s as Dictionary).get("verified", false))
-					else "NOT verified (%d check%s)") % [int((s as Dictionary).get("checks", 0)),
-					"" if int((s as Dictionary).get("checks", 0)) == 1 else "s"]
+				var d := s as Dictionary
+				var runs := int(d.get("runs", 0))
+				if bool(d.get("computed", false)):
+					return "computed (%d run%s)" % [runs, "" if runs == 1 else "s"]
+				var p: Variant = _episode.read_json("problem")
+				if ProofTools.kind_of(p if p is Dictionary else {}) == "computation":
+					return "NOT computed (%d run%s)" % [runs, "" if runs == 1 else "s"]
+				return ("verified in Lean (%d check%s)" if bool(d.get("verified", false))
+					else "NOT verified (%d check%s)") % [int(d.get("checks", 0)),
+					"" if int(d.get("checks", 0)) == 1 else "s"]
 		"draft", "lesson":
 			return _pad_note(_episode.read_text(step))
 		"review":

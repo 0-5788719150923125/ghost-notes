@@ -1319,7 +1319,7 @@ func _write_override(w: int, h: int) -> void:
 	# normal, drawable window: minimizing it makes Godot skip rendering and the movie
 	# records frozen frames (see boot.gd).
 	# AND THE INTERMEDIATE'S QUALITY (the [editor] half of [method override_text]) - see the
-	# matching note in MaskEditor._write_render_override. Godot writes .avi as MJPEG in yuvj420p
+	# matching note in MaskExport.write_override. Godot writes .avi as MJPEG in yuvj420p
 	# at `video_quality` 0.75, so the scratch file is a lossy, chroma-subsampled generation before
 	# x264 ever sees a frame. Measured on a real frame: 42.6 dB through the default intermediate
 	# against 45.5 for a single generation, and 44.3 at 1.0. The bigger scratch file is deleted

@@ -1,60 +1,108 @@
-# THE SOLVER - the mathematician at the desk. It works the fixed problem with ghost's tools
-# (ProofTools: notebook, lean, submit) and leaves a lab notebook the teacher builds the lesson from.
+# THE SOLVER - the one at the desk. It works the fixed problem with ghost's tools (ProofTools:
+# notebook, lean, run, submit) and leaves a lab notebook the teacher builds the lesson from.
 #
 # NEVER ASK FOR ITS REASONING (measured 2026-10-15, next/proof.md step 0c): a prompt asking it to log
 # "what you changed and why" had its last message stopped by a safeguard (`reasoning_extraction`).
 # It is asked for WORK WRITTEN FOR A STUDENT - attempts, what each gave, explanations - and every
 # step of its work is a file, so a stopped reply loses nothing.
 #
-# The code gives: {{statement}}, {{latex}}, {{lean}}, {{forbidden}} (comma-separated, maybe empty).
+# A PROOF OR A COMPUTATION (the user, 2026-10-19: "it should be a general theorem-prover and learning
+# tool"): the flag `proof` is the framer's check; a computation is settled by runs of code, and its
+# numbers are the code's alone. `run` says code can run here: a proof's solver may run its cases too.
+#
+# The code gives: {{statement}}, {{latex}}, {{lean}}, {{forbidden}} (comma-separated, maybe empty),
+# {{computation}} (what a computation computes), and the flags `proof` and `run`.
 # THE SAFEGUARD AGAIN (2026-10-15, the first real episode): with "your work is recorded" and "your
 # real attempts ... become the lesson" in its system prompt, a solver's run was stopped after its
 # first tool call; the retry went through. Nothing here speaks of recording the solver or of what
 # it thinks: the notebook is a deliverable, written for students, like any other answer.
 system: >-
-  You are a mathematician solving one problem for a teaching video. Your deliverables are a lab
-  notebook written for students - the problem worked from small cases to a proof, including the
-  attempts that did not work and what each showed - and a Lean proof that the checker accepts.
+  You work one problem for a teaching video, at a desk with tools. Your deliverables are a lab
+  notebook written for students - the problem worked from small cases to its answer, including the
+  attempts that did not work and what each showed - and finished work a computer checks: a Lean
+  proof the checker accepts, or a computation that runs.
 prompt:
   - "THE PROBLEM, fixed before you start: {{statement}}"
   - ""
   - "Precisely: {{latex}}"
   - ""
-  - "Its exact Lean 4 statement, which you may not change:"
-  - ""
-  - "{{lean}}"
-  - when: forbidden
+  - when: proof
+    say: "Its exact Lean 4 statement, which you may not change:"
+  - when: proof
+    say: ""
+  - when: proof
+    say: "{{lean}}"
+  - when: [proof, forbidden]
     say: "Forbidden facts - Mathlib's own proofs of this theorem, which the checker refuses: {{forbidden}}."
+  - when: "!proof"
+    say: "What is computed, fixed before you start, which you may not change: {{computation}}"
   - ""
   - "Your tools:"
   - >-
       - notebook: add a section to your lab notebook. Write it for a student reading over your
       shoulder: what you try, what each attempt gives, explanations in plain words, math in LaTeX
       between $...$.
-  - >-
+  - when: proof
+    say: >-
       - lean: check a Lean 4 file against Mathlib. It answers with Lean's errors, the goals before
-      each tactic, the library facts each step used, and VERIFIED or NOT VERIFIED. It is also your
+      each tactic, the library facts each step used, and VERIFIED or NOT VERIFIED. It is also a
       calculator: a file of #eval lines works out small cases.
-  - >-
+  - when: run
+    say: >-
+      - run: run a Python 3 program - numpy, scipy, sympy and the standard library - in a sandbox
+      with no network. Its folder is kept between your runs. keep(name, y) or keep(name, x, y), a
+      builtin, keeps a named series of numbers that the lesson's drawings can plot: keep what a graph
+      of the result would show. Fix the seed of anything random.
+  - when: proof
+    say: >-
       - submit: hand in the finished Lean file. It is checked again, and only a VERIFIED file is
       accepted.
+  - when: "!proof"
+    say: >-
+      - submit: hand in the result - what the computation found, in plain words with its numbers -
+      and the runs that show it. Only runs that ran to their end count.
   - ""
   - "How to work:"
-  - >-
+  - when: proof
+    say: >-
       1. In the notebook: the problem in your own words, then small cases worked out (compute them
-      with lean and #eval), and what you notice and guess from them.
-  - >-
+      with {{#run}}run, or {{/run}}lean and #eval), and what you notice and guess from them.
+  - when: proof
+    say: >-
       2. The key idea in a sentence or two, then the proof step by step, informally.
-  - >-
+  - when: proof
+    say: >-
       3. The Lean file: it starts with `import Mathlib`, states theorem main exactly as given, and
       proves it. Check it with lean, fix what Lean reports, check again.
+  - when: "!proof"
+    say: >-
+      1. In the notebook: the problem in your own words and the model or the data, then the smallest
+      case worked out by hand or by a run, checked against an exact answer where there is one.
+  - when: "!proof"
+    say: >-
+      2. The computation, a run at a time: what each run computes and why that answers the question,
+      and its numbers written into the notebook with what they mean.
+  - when: "!proof"
+    say: >-
+      3. The checks: a known exact answer reproduced, and a finer step or more samples changing
+      nothing that matters - and so how far the numbers can be trusted.
   - >-
       4. An attempt that fails stays in the notebook, with what it showed.
   - >-
       5. End the notebook with a section "## What a learner needs": the three to five ideas a
-      newcomer must grasp to follow the proof, in plain words.
-  - >-
+      newcomer must grasp to follow the work, in plain words.
+  - when: proof
+    say: >-
       6. Submit the file. If you cannot finish it, say so plainly in the notebook - what is proved,
       what is left - and stop.
+  - when: "!proof"
+    say: >-
+      6. Submit the result. If the computation cannot settle the question, say so plainly in the
+      notebook - what it showed, what is left - and stop.
   - ""
-  - "Never change the statement, never use a forbidden fact, no sorry, no new axioms."
+  - when: proof
+    say: "Never change the statement, never use a forbidden fact, no sorry, no new axioms."
+  - when: "!proof"
+    say: >-
+      Never change what is computed, never write a computed number into the notebook that no run
+      printed, and never claim more than the runs show.

@@ -16,7 +16,19 @@ extends SceneTree
 ##   behind - one rest between two paragraphs - and is handed no notation, with a lesson whose speech
 ##   says "$x^2$" as the control the audit must catch.
 ## - THE EPISODE ON DISK ([ProofEpisode], under a scratch root): what each step needs, that a redo of
-##   the solve deletes its notebook, its Lean file and everything made after it, and nothing else.
+##   the solve deletes its notebook, its Lean file, its runs and data and everything made after it, and
+##   nothing else.
+## - NOT EVERY CLAIM IS A THEOREM (the user, 2026-10-19: "it should be a general theorem-prover and
+##   learning tool"): a COMPUTATION is framed with what it computes and no Lean statement (one that does
+##   not say what it computes is refused - the control), and a problem framed before there were
+##   computations is a proof; the framer is offered a computation only where code can run (the
+##   control, without); a computation's solver is told what is computed and given no Lean, a proof's
+##   with no sandbox is given no run (the control); a computed lesson's teacher is shown the runs that
+##   show the result, first, and the series they kept, says the numbers come from code that ran and is
+##   never told of Lean (the control, a computation that did not settle it, says so); a result naming a
+##   run that did not finish is refused (the control, one that did, accepted) and lands `computed`;
+##   the upload says the numbers were computed; and no teacher or student is told a viewer's level
+##   the framer's audience did not give.
 ## - THE FRAMER'S ANSWER ([method ProofProducer.land_problem]): a statement handed back with its proof
 ##   keeps only the statement; one that does not state `theorem main` is refused (the control);
 ##   forbidden names that are not names are dropped.
@@ -52,12 +64,39 @@ extends SceneTree
 ##   pad's top right and is back as the next formula begins at a hand's pace (the old reach, 0.45 s
 ##   however far, is the control); over a short wait it stays by its line (the control). A page turns
 ##   only once the pen is off the pad, and the pen comes back behind the sheet: the pen, a rod along
-##   its lean, never meets the turning sheet - the old wait at the page's right did, in 28 of 96 frames.
+##   its lean, never meets the turning sheet - the old wait at the page's right did.
+## - A PAGE IS TURNED AS A HAND TURNS ONE ([LegalPad]; the user, 2026-10-19: "it sort of just disappears
+##   ... gently lifts the head of the pad and folds the paper around the back ... a turned page will
+##   COVER that top part of the paper. And multiple pages might fan-apart a bit"): the sheet starts
+##   flat where the page lay and ends round the pad's head, its end under the pad; the head is lifted
+##   for it and down before the pen comes back; eight pages over, their loops never cross nor go into
+##   the pad, each reaching further round the head, and a ninth turned over them never crosses one
+##   (the control, the same sheet given the innermost loop, does); the outermost loop's bulge stays
+##   above the first rule, and the pen writing the top line never meets it (the control, a loop twice
+##   as round, it does).
+## - EVERY DESK IS ITS OWN ([DeskLook]; the user: "a little bit of variety, of color, of the table, of
+##   objects on the table"): the same seed is the same desk; across seeds the paper, the ink, the top
+##   and the things vary; the ink always reads on its paper (the control, the paper's own color, does
+##   not); a thing is never put on the pad, behind it where the turned pages lie, or - a tall one -
+##   beside its right edge where the pen leans out (the control: the same draws with no rule land there).
+##   NO DESK WAITS FOR A PAINTING (the user: "There is nowhere to set the 'Painter' on the Proof card;
+##   so how would the generative table and props even work there?"): the card table's one painted
+##   surface - a top or a layer that IS the episode's painting - is never chosen, so a built desk lays
+##   the painting on nothing (controls: the same desk with its top the painting, and with its layers
+##   left out, which is the old reading cloth).
 ## - A READING STARTED MID-WAY (the user, 2026-10-16: "scrubbing the timeline seems to have broken the
 ##   pen completely. For the remainder of the video, the pen doesn't move at all"): handed the new
 ##   reading's first words, the desk finds its place - what came before is written, the next formula
 ##   is scheduled and the pen writes it; the control, the same words with no start, matches nothing
 ##   and leaves the rest unscheduled, which is what the user saw.
+## - WHAT IS ON THE PAGE STAYS (2026-10-19: "two graphs are drawn side-by-side. Then suddenly, the 2nd
+##   one disappears and is re-drawn"): a formula dictated over three sentences, its words' times
+##   arriving a sentence at a time a little before each is heard, from a voice slower than the guess -
+##   handed them as a live reading hands them ([method DeskMedium.take_words]), its ink never goes back,
+##   never outruns the pen, and is all written by its last word; the control, the plan made again
+##   without holding the past, takes back strokes already written. And no reach is squeezed: a point
+##   said while its formula is still being written waits the nib's way from it, crossed at a pen's pace
+##   - the control, the point begun the moment the formula ends, crosses the page in a frame.
 ## - THE HAND IS ALIVE (the same day: "A hand holding a pen would never keep it at a perfectly static
 ##   angle"): the pen's lean sways over seconds - the old fixed lean is the control - always toward the
 ##   top right and within a few degrees of it; it is the same at the same moment, another hand's sways
@@ -65,6 +104,10 @@ extends SceneTree
 ## - A LESSON'S LENGTH IS ITS OWN (the user, 2026-10-16: "make videos as long as they need to be"): no
 ##   agent is handed minutes or words, and a lesson of thousands of words lands on its first try -
 ##   against the same lesson with a pad line left unread, which still goes back.
+## - EVERY TAKE IS CHECKED (2026-10-19: "Was the problem fixed or not?"): a first take over a still pen
+##   goes back, a mended second is taken, and what the first was sent back for is still in the prompt a
+##   take after TeX's send-back gets - a fresh lesson's is not; a take out of tries is kept with its
+##   faults named for the log, a mended one has none.
 ## - THE THUMBNAIL (the user: "did not use the proper thumbnail ... the same thumbnail that cards-based
 ##   modes use"): a Proof upload names the title screen's moment, the name fully up over the blur - on
 ##   the first frame, since [ProofCard] names the Director, which a script's `_init` has not got. Its
@@ -99,6 +142,7 @@ func _init() -> void:
 	_points()
 	_alive()
 	_scrub()
+	_live()
 	process_frame.connect(_upload, CONNECT_ONE_SHOT)
 
 
@@ -118,8 +162,17 @@ func _upload() -> void:
 		"and at that moment the name is fully up over the desk out of focus")
 	_check(String(up.get("description", "")).contains("checked by the Lean theorem prover (Lean 4.35.0")
 		and up.get("tags", []) == ["math"], "with the description, the check, and the note's tags alone - the framer's \"induction\" is not added unseen")
+	var comp := ProofEpisode.open("thumb-note", 2)
+	comp.write_json("problem", COMPUTED.merged({"description": "The pendulum, integrated."}))
+	comp.write_json("solve", {"verified": false, "computed": true, "runs": 4})
+	var cdesc := String(card.upload_of(comp, {"title": "Pen & Ink"}, PackedStringArray(), 9.0).get("description", ""))
+	_check(cdesc.contains("come from code that was run for it") and not cdesc.contains("Lean"),
+		"a computed episode's upload says its numbers were computed, and never names Lean")
 	var take := _scratch.path_join("take_1.wav")
-	FileAccess.open(take.get_basename() + ".json", FileAccess.WRITE).store_string(JSON.stringify({"bookend": {"in": 9.0, "out": 9.0}}))
+	# closed here: a temporary FileAccess can live (unflushed) to the end of the function
+	var side := FileAccess.open(take.get_basename() + ".json", FileAccess.WRITE)
+	side.store_string(JSON.stringify({"bookend": {"in": 9.0, "out": 9.0}}))
+	side.close()
 	_check(ShowOpening.take_intro(take, 2.0) == 9.0 and ShowOpening.take_intro(_scratch.path_join("none.wav"), 2.0) == 2.0,
 		"the moment comes from the intro the take was rendered with; the control, a take with no sidecar, the live one")
 	print("-- delete and remake")
@@ -182,6 +235,12 @@ const PROBLEM := {"episode_title": "Why the Primes Never Run Out", "statement": 
 	"audience": "curious viewers"}
 
 
+const COMPUTED := {"episode_title": "How Fast Does a Pendulum Swing?", "statement": "A pendulum swung wider takes longer to swing.",
+	"latex": "\\ddot\\theta = -\\tfrac{g}{L}\\sin\\theta", "check": "computation",
+	"computation": "the period of a 1 m pendulum, integrated for amplitudes from 10 to 90 degrees", "lean": "",
+	"forbidden": [], "history": "", "audience": "students who know what a derivative is"}
+
+
 func _prompts() -> void:
 	print("-- every prompt renders whole")
 	Rules.missing = PackedStringArray()
@@ -227,12 +286,12 @@ func _prompts() -> void:
 	_check(String(so["prompt"]).contains("Nat.exists_infinite_primes"), "the solver is told the forbidden facts")
 	_check(not String(so["prompt"] + so["system"]).to_lower().contains("reasoning"),
 		"the solver is never asked for its reasoning (a safeguard stops that - next/proof.md step 0c)")
-	var yes := ProofPrompts.teacher("Ghost Notes", "a note", PROBLEM, "## notes", "theorem main", true)
-	var no := ProofPrompts.teacher("Ghost Notes", "a note", PROBLEM, "## notes", "theorem main", false)
-	var fix := ProofPrompts.teacher("Ghost Notes", "a note", PROBLEM, "", "", true,
+	var yes := ProofPrompts.teacher("Ghost Notes", "a note", PROBLEM, "## notes", "theorem main", {"verified": true})
+	var no := ProofPrompts.teacher("Ghost Notes", "a note", PROBLEM, "## notes", "theorem main", {"verified": false})
+	var fix := ProofPrompts.teacher("Ghost Notes", "a note", PROBLEM, "", "", {"verified": true},
 		{"broken": ["\\frac{1}{: Missing } inserted."], "notation": ["so $x^2$ grows"], "undictated": ["n^2 + 1"],
 		"letters": ["Take a equal to two."]})
-	var again := ProofPrompts.teacher("Ghost Notes", "a note", PROBLEM, "## notes", "theorem main", true, {},
+	var again := ProofPrompts.teacher("Ghost Notes", "a note", PROBLEM, "## notes", "theorem main", {"verified": true}, {},
 		"FIRST DRAFT TEXT", [{"quote": "a stubborn number", "need": "say what irrational means"}, {"quote": "x", "need": ""}])
 	var stu := ProofPrompts.student("Ghost Notes", "a note", PROBLEM, "THE DRAFT TO READ")
 	for t in [yes, no, fix, again, stu]:
@@ -274,6 +333,45 @@ func _prompts() -> void:
 		"no agent is handed a length (%s), and the teacher and the refiner are told there is none" % ", ".join(lengths))
 	_check(String(yes["prompt"]).contains("Never stretch it") and String(yes["prompt"]).contains("never rush it"),
 		"the teacher is told neither to stretch the lesson nor to rush it")
+	# NOT EVERY CLAIM IS A THEOREM: a computation, framed, solved and taught
+	var fr_run := String(ProofPrompts.framer("Ghost Notes", "a note", "", [], true)["prompt"])
+	_check(fr_run.contains("\"check\"") and fr_run.contains("\"computation\"") and fr_run.contains("proof or computation")
+		and not bare.contains("\"computation\"") and not bare.contains("or computation"),
+		"the framer is offered a computation where code can run (the control, with none, only a proof)")
+	var so_c := ProofPrompts.solver("Ghost Notes", "a note", COMPUTED, true)
+	var so_n := ProofPrompts.solver("Ghost Notes", "a note", PROBLEM, false)
+	texts.append_array([so_c["prompt"], so_n["prompt"], fr_run])
+	_check(String(so_c["prompt"]).contains("What is computed, fixed before you start") and String(so_c["prompt"]).contains("- run:")
+		and not String(so_c["prompt"]).contains("Lean 4 statement") and not String(so_c["prompt"]).contains("- lean:")
+		and not String(so_n["prompt"]).contains("- run:") and String(so_n["prompt"]).contains("- lean:"),
+		"a computation's solver is told what is computed and given no Lean; a proof's with no sandbox no run (the control)")
+	var runs := [{"n": 1, "code": "print(1)", "exit": 1, "timed_out": false, "stdout": "", "stderr": "boom", "error": ""},
+		{"n": 2, "code": "keep('period', [10, 20], [2.007, 2.016])\nprint('T at 10 degrees: 2.007')", "exit": 0,
+		"timed_out": false, "stdout": "T at 10 degrees: 2.007\n", "stderr": "", "error": ""}]
+	var data := {"period": {"points": [[10.0, 2.007], [20.0, 2.016]], "about": "seconds, by amplitude", "run": 2}}
+	var done := ProofPrompts.teacher("Ghost Notes", "a note", COMPUTED, "## notes", "", {"computed": true,
+		"result": "The period grows with the amplitude.", "evidence": [2]}, {}, "", [], runs, data)
+	var undone := ProofPrompts.teacher("Ghost Notes", "a note", COMPUTED, "## notes", "", {"computed": false}, {}, "", [], runs, {})
+	texts.append_array([done["prompt"], undone["prompt"]])
+	var dp := String(done["prompt"])
+	_check(dp.contains("The period grows with the amplitude.") and dp.contains("code that was run for this lesson")
+		and dp.find("Run 2 (the result names it)") < dp.find("run 1: did not finish") and dp.contains("print('T at 10 degrees")
+		and dp.contains("- period: 2 points") and dp.contains("<plot data=\"NAME\"/>"),
+		"a computed lesson's teacher is shown the result, the runs that show it first, and the series they kept")
+	_check(not dp.contains("what Lean is") and not dp.contains("Lean proof") and not dp.contains("did NOT settle"),
+		"and is never told of Lean")
+	_check(String(undone["prompt"]).contains("did NOT settle") and not String(undone["prompt"]).contains("code that was run for this lesson")
+		and not String(undone["prompt"]).contains("<plot data="),
+		"the control: a computation that did not settle it is told to say so, and offered no series to draw")
+	var levels := PackedStringArray()
+	for t2 in [yes, done, stu]:
+		if String((t2 as Dictionary)["prompt"]).contains("fractions and a little algebra"):
+			levels.append(String((t2 as Dictionary)["prompt"]).substr(0, 30))
+	_check(levels.is_empty() and String(done["prompt"]).contains(String(COMPUTED["audience"])),
+		"no teacher or student is told a viewer's level the framer's audience did not give")
+	var inv_run := String(ProofPrompts.inventor(7, [], true)["prompt"])
+	_check(inv_run.contains("a short program can compute") and not String(inv["prompt"]).contains("a short program can compute"),
+		"the inventor may propose a computation where code can run (the control, without, may not)")
 	var left := PackedStringArray()
 	for t in texts:
 		if String(t).contains("{{"):
@@ -413,8 +511,8 @@ func _episode() -> void:
 	_check(ep.dir.begins_with(_scratch), "the gate's episodes are in its own folder")
 	_check(ep.dependents("solve") == ["draft", "review", "lesson", "ink", "script"], "a solve's dependents (%s)" % str(ep.dependents("solve")))
 	_check(ep.dependents("script").is_empty(), "nothing is made from the script")
-	for step in ["problem", "solve", "draft", "review", "lesson", "ink", "script", "notebook", "proof"]:
-		ep.write_text(step, "{}" if step in ["problem", "solve", "review", "ink"] else "x")
+	for step in ["problem", "solve", "draft", "review", "lesson", "ink", "script", "notebook", "proof", "runs", "data"]:
+		ep.write_text(step, "{}" if step in ["problem", "solve", "review", "ink", "data"] else ("[]" if step == "runs" else "x"))
 	ep.invalidate("lesson")
 	_check(ep.has("draft") and ep.has("review") and not ep.has("lesson") and not ep.has("ink"),
 		"a redo of the lesson keeps the draft and the student's notes it is written again from")
@@ -427,10 +525,12 @@ func _episode() -> void:
 	ep.write_text("ink", "{}")
 	ep.write_text("script", "x")
 	ep.write_json("problem", {"episode_title": "Primes never run out"})
+	ep.write_text("runs", "[]")
+	ep.write_text("data", "{}")
 	ep.invalidate("solve")
 	var gone := PackedStringArray()
 	var kept := PackedStringArray()
-	for step in ["problem", "solve", "draft", "review", "lesson", "ink", "script", "notebook", "proof"]:
+	for step in ["problem", "solve", "draft", "review", "lesson", "ink", "script", "notebook", "proof", "runs", "data"]:
 		if FileAccess.file_exists(ep.file_of(step)):
 			kept.append(step)
 		else:
@@ -621,6 +721,23 @@ func _points() -> void:
 	var busy := POINTED + "\n" + talk.substr(0, talk.length() / 2) + "See the <!-- point: P --> point. " + talk.substr(talk.length() / 2) + "\n"
 	_check(DeskScript.still(idle).size() == 1 and DeskScript.still(busy).is_empty() and DeskScript.still(POINTED).is_empty(),
 		"a long stretch over a still pen is caught (%s), and the same stretch broken by a point is not" % ", ".join(DeskScript.still(idle)))
+	# EVERY TAKE IS CHECKED, AND WHAT ONE WAS SENT BACK FOR IS KEPT
+	var takes := ProofProducer.new(ProofEpisode.open("takes-check", 1), {})
+	takes._tries["lesson"] = 1
+	var sent := takes._land_lesson(idle)
+	_check(sent.contains("stands still") and not takes.episode.has("lesson"), "a first take over a still pen goes back (%s)" % sent)
+	takes._tries["lesson"] = 2
+	var mended := takes._land_lesson(busy)
+	_check(mended.is_empty() and takes.episode.has("lesson"), "the second take, mended, is taken (%s)" % mended)
+	var told := String(ProofPrompts.teacher("T", "", {"statement": "s"}, "", "", {}, takes._fix, "draft")["prompt"])
+	var untold := String(ProofPrompts.teacher("T", "", {"statement": "s"}, "", "", {}, {}, "draft")["prompt"])
+	_check(told.contains("STOOD STILL") and told.contains(DeskScript.still(idle)[0]) and not untold.contains("STOOD STILL"),
+		"a take TeX sends back after it is still told what the first was sent back for (the control: a fresh lesson is not)")
+	takes._tries["lesson"] = 3
+	var kept := takes._land_lesson(idle)
+	_check(kept.is_empty() and ProofProducer.lesson_faults({"still": DeskScript.still(idle)}).contains("stands still")
+		and ProofProducer.lesson_faults({"still": DeskScript.still(busy)}).is_empty(),
+		"a take out of tries is kept, its faults named for the log (the control: a mended one has none)")
 	# AT THE DESK: the nib beside the thing as its word is said, the camera on it, no ink
 	var draw_id := String(DeskScript.item("draw", String((p["actions"][draw_i] as Dictionary)["tex"]))["id"])
 	var pad_id := String(DeskScript.item("pad", "\\pin{lhs}{a^2 + b^2} = c^2")["id"])
@@ -711,6 +828,111 @@ func _scrub() -> void:
 	lost.free()
 
 
+const LIVE := """<!-- pad: x^2+y^2=r^2 -->
+The first of three sentences is short. The second one says a little more than the first one did. The third and last sentence ends the line at last.
+"""
+
+
+func _live() -> void:
+	print("-- what is on the page stays")
+	var id := String(DeskScript.item("pad", "x^2+y^2=r^2")["id"])
+	var parsed := DeskScript.parse(LIVE, {id: 14.0})
+	# a voice slower than the rehearsal's, each word in the sentence it is said in
+	var heard: Array = DeskScript.rehearsal(parsed)
+	var said := LIVE.split("\n")[1].split(" ")
+	var sentence := 0
+	var first := {}
+	for k in heard.size():
+		var w: Dictionary = heard[k]
+		w["t0"] = float(w["t0"]) * 1.4
+		w["t1"] = float(w["t1"]) * 1.4
+		w["sentence"] = sentence
+		first[k] = sentence
+		if String(said[k]).ends_with("."):
+			sentence += 1
+	var starts := {}
+	for k in heard.size():
+		if not starts.has(first[k]):
+			starts[first[k]] = float((heard[k] as Dictionary)["t0"])
+	var last_word := float((heard.back() as Dictionary)["t1"])
+	var runs := {}
+	for live in [true, false]:
+		var desk := DeskMedium.new()
+		desk.load_lesson(LIVE, {"seed": 3})
+		desk._actions = parsed["actions"]
+		var back := 0.0
+		var fastest := 0.0
+		var was := 0.0
+		var built := -1
+		var t := 0.0
+		while t < last_word + 1.0:
+			var n := 0
+			while n < heard.size() and float(starts[first[n]]) - 2.0 <= t:
+				n += 1
+			desk._now = t
+			if live:
+				desk.take_words(heard.slice(0, n))
+			else:
+				desk._follower.extend(heard.slice(0, n))
+				if n != built:
+					built = n
+					desk._build_plan()
+			var u := desk._written(0) if float(desk._plan[0]["start"]) <= t else 0.0
+			back = maxf(back, was - u)
+			fastest = maxf(fastest, (u - was) * 14.0 * 30.0)
+			was = u
+			t += 1.0 / 30.0
+		runs[live] = {"back": back, "fastest": fastest, "end": was}
+		desk.free()
+	var held: Dictionary = runs[true]
+	_check(float(held["back"]) <= 0.0 and float(held["end"]) >= 1.0,
+		"its ink never goes back as the voice's words arrive a sentence at a time, and is all written by the last word (%.2f)" % float(held["end"]))
+	_check(float(held["fastest"]) < DeskScript.MAX_PACE * 2.0,
+		"and never jumps ahead: at most %.1fx the pen's pace" % float(held["fastest"]))
+	_check(float((runs[false] as Dictionary)["back"]) > 0.05,
+		"the control: the plan made again without holding the past takes back %.0f%% of the formula" % (float((runs[false] as Dictionary)["back"]) * 100.0))
+	# NO REACH IS SQUEEZED: a point said while the formula it names is still being written - its one
+	# stroke ends at its right end, and the voice goes on 2.5 s sooner than the rest the pen was given
+	var src := "<!-- pad #long: x -->\nEx.\n\nLook at <!-- point: long --> it now.\n"
+	var long_id := String(DeskScript.item("pad", "x")["id"])
+	var zig := PackedVector2Array()
+	for j in 6:
+		zig.append(Vector2(0.0 if j % 2 == 0 else 200.0, -5.0))
+	var sched := Ink.schedule([{"points": zig, "width": 0.5}], 3)
+	var recs := {long_id: {"id": long_id, "ok": true, "w": 200.0, "h": 10.0, "d": 3.0, "glyphs": [], "rules": [], "anchors": {}}}
+	var wp := DeskScript.parse(src, {long_id: float(sched["length"])}, recs)
+	var way := DeskMedium.new()
+	way.load_lesson(src, {"seed": 3, "ink": {"items": recs.values()}})
+	way._actions = wp["actions"]
+	way._strokes[long_id] = sched
+	var soon: Array = DeskScript.rehearsal(wp)
+	for k in range(1, soon.size()):
+		soon[k]["t0"] = float(soon[k]["t0"]) - 2.5
+		soon[k]["t1"] = float(soon[k]["t1"]) - 2.5
+	way.take_words(soon)
+	var gap := float(way._plan[1]["start"]) - float(way._plan[0]["end"])
+	var jump := func(desk: DeskMedium) -> float:
+		var most := 0.0
+		var t := float(desk._plan[0]["end"]) - 0.5
+		desk._now = t
+		var was: Vector2 = desk.pen_at()["p"]
+		while t < float(desk._plan[1]["start"]) + 1.0:
+			t += 1.0 / 30.0
+			desk._now = t
+			var nib: Vector2 = desk.pen_at()["p"]
+			most = maxf(most, nib.distance_to(was))
+			was = nib
+		return most
+	var paced: float = jump.call(way)
+	_check(gap >= way._way(0, 1) - 0.001 and float(soon[3]["t0"]) < float(way._plan[0]["end"]),
+		"a point said while its formula is still being written waits the nib's way from it (%.2f s)" % gap)
+	way._plan[1]["start"] = way._plan[0]["end"]
+	var squeezed: float = jump.call(way)
+	_check(paced < 60.0 and squeezed > 200.0,
+		"and the nib goes there at most %.0f px a frame; the control, the point begun as the formula ends, %.0f px" % [paced, squeezed])
+	way.free()
+
+
 func _alive() -> void:
 	print("-- the hand is alive")
 	var base := DeskMedium.PEN_UP.normalized()
@@ -761,6 +983,41 @@ func _problem() -> void:
 	_check(ProofProducer.land_problem({"episode_title": "", "statement": "y", "lean": "theorem main : True"}).has("error"),
 		"and so is one with no title")
 	_check(ProofProducer.clean_lesson("```markdown\nHello.\n```") == "Hello.", "a fenced lesson is unwrapped")
+	var comp := ProofProducer.land_problem({"episode_title": "Pendulums", "statement": "wider is slower", "check": "Computation",
+		"computation": "the period by amplitude", "lean": "theorem main : True", "forbidden": ["Real.pi"]})
+	_check(not comp.has("error") and String(comp["check"]) == "computation" and String(comp["lean"]).is_empty()
+		and (comp["forbidden"] as Array).is_empty() and ProofTools.kind_of(comp) == "computation",
+		"a computation is framed with what it computes and no Lean statement")
+	_check(ProofProducer.land_problem({"episode_title": "Pendulums", "statement": "y", "check": "computation"}).has("error"),
+		"the control: a computation that does not say what it computes is refused")
+	_check(ProofTools.kind_of(PROBLEM) == "proof" and ProofTools.kind_of({"lean": "theorem main : True"}) == "proof",
+		"a problem framed before there were computations is a proof")
+	# THE RESULT, handed in: only runs that ran to their end show it
+	var ep := ProofEpisode.open("computed-note", 1)
+	ep.write_json("problem", COMPUTED)
+	ep.write_json("runs", [{"n": 1, "code": "x", "exit": 0, "timed_out": false}, {"n": 2, "code": "y", "exit": 0, "timed_out": true}])
+	DirAccess.make_dir_recursive_absolute(ep.job_dir("solve"))
+	var tools := ProofTools.new(ep, COMPUTED, ep.job_dir("solve"))
+	var names := PackedStringArray()
+	for d in tools.list_tools():
+		names.append(String((d as Dictionary)["name"]))
+	_check(not names.has("lean") and names.has("submit") and names.has("run") == ProofTools.can_run(),
+		"a computation's solver has no Lean, and runs code only where it can (%s)" % ", ".join(names))
+	var refused := tools._submit_result("wider is slower", [1, 2])
+	var taken := tools._submit_result("wider is slower", [1.0])
+	var sub: Variant = JSON.parse_string(FileAccess.get_file_as_string(ep.job_dir("solve").path_join(ProofTools.SUBMITTED)))
+	_check(String(refused.get("error", "")).contains("did not run to its end") and String(taken.get("text", "")).begins_with("Accepted")
+		and sub is Dictionary and bool(sub["computed"]) and (sub["runs"] as Array).size() == 1 and int(sub["runs"][0]) == 1,
+		"a result naming a run that did not finish is refused (the control, one that did, is taken)")
+	var maker := ProofProducer.new(ep, {})
+	var landed := maker._land_solve(FileAccess.get_file_as_string(ep.job_dir("solve").path_join(ProofTools.SUBMITTED)), {"ok": true}, 0)
+	var solve: Variant = ep.read_json("solve")
+	_check(landed.is_empty() and solve is Dictionary and bool(solve["computed"]) and not bool(solve["verified"])
+		and int(solve["runs"]) == 2 and String(solve["result"]) == "wider is slower",
+		"and lands computed, never verified, with its runs counted")
+	_check(ProofTools.run_report({"n": 3, "exit": 0, "seconds": 1.25, "stdout": "ok\n", "stderr": "", "error": ""},
+		{"period": {"points": [[10.0, 2.0], [90.0, 2.4]]}}).contains("period (2 points, x from 10 to 90, y from 2 to 2.4)"),
+		"a run's report names what it kept, with its ranges")
 
 
 # --- the pad --------------------------------------------------------------------------------
@@ -925,25 +1182,259 @@ func _idle() -> void:
 	desk.free()
 
 
-## Does the pen at [param at] (`pen_at`'s) meet the sheet a turn begun at [param ta] is swinging? In
-## the pad's meters: the sheet a plane about the pad's top edge as `_show_pages` swings it, the pen a
-## rod from its nib along its lean.
-func _meets_sheet(at: Dictionary, now: float, ta: float) -> bool:
+## Does the pen at [param at] (`pen_at`'s) meet the sheet a turn begun at [param ta] is turning over
+## [param over] pages already turned? In the pad's meters: the sheet as [LegalPad] draws it - its left
+## and right edges' profiles, swept across, the pad's head lifted as it is then - the pen a rod from its
+## nib along its lean.
+func _meets_sheet(at: Dictionary, now: float, ta: float, over := 0) -> bool:
+	var u := clampf((now - ta) / DeskScript.TURN, 0.0, 1.0)
+	var beta := LegalPad.tilt(u)
+	var lead := LegalPad.LEAD * sin(PI * clampf(u / LegalPad.FLIP, 0.0, 1.0))
+	var r := LegalPad.rank(over, over, LegalPad.turn_progress(u))
+	var loop := LegalPad.loop_of(over, r, 3)
+	return _rod_meets(at, now, _lifted(LegalPad.curve(clampf(u - lead, 0.0, 1.0), loop, LegalPad.root_of(r), LegalPad.under_of(r), beta), beta),
+		_lifted(LegalPad.curve(clampf(u + lead, 0.0, 1.0), loop, LegalPad.root_of(r), LegalPad.under_of(r), beta), beta))
+
+
+## A profile in the pad's body, where it is with the head lifted [param beta].
+func _lifted(c: PackedVector2Array, beta: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for q in c:
+		out.append(LegalPad.lifted(q, beta))
+	return out
+
+
+## Does the pen at [param at] meet a sheet whose left edge's profile is [param left] and right edge's
+## [param right] ((z, y) in the pad's meters)?
+func _rod_meets(at: Dictionary, now: float, left: PackedVector2Array, right: PackedVector2Array) -> bool:
 	var p: Vector2 = at["p"]
 	var nib := Vector3((p.x / DeskScript.PW - 0.5) * DeskMedium.PAD_W, 0.0003 + float(at["lift"]),
 		(p.y / DeskScript.PH - 0.5) * DeskMedium.PAD_H)
 	var up := DeskMedium.lean(DeskMedium.PEN_UP, now, 3, p.x / DeskScript.PW, Vector3.ZERO)
-	var u := clampf((now - ta) / DeskScript.TURN, 0.0, 1.0)
-	var th := PI * (u * u * (3.0 - 2.0 * u))
-	var hinge := Vector3(0.0, 0.0006, -DeskMedium.PAD_H * 0.5)
-	var along := Vector3(0.0, sin(th), cos(th))
-	var across := Vector3(0.0, cos(th), -sin(th))
 	for j in 41:
-		var q := nib + up * (0.02 + DeskMedium.PEN_LEN) * float(j) / 40.0 - hinge
-		if absf(q.dot(across)) < DeskMedium.PEN_R and absf(q.x) < DeskMedium.PAD_W * 0.5 + DeskMedium.PEN_R \
-				and q.dot(along) > 0.0 and q.dot(along) < DeskMedium.PAD_H:
+		var q := nib + up * (0.02 + DeskMedium.PEN_LEN) * float(j) / 40.0
+		if absf(q.x) > DeskMedium.PAD_W * 0.5 + DeskMedium.PEN_R:
+			continue
+		var f := clampf(q.x / DeskMedium.PAD_W + 0.5, 0.0, 1.0)
+		var at2 := Vector2(q.z, q.y)
+		for i in left.size() - 1:
+			var a := left[i].lerp(right[i], f)
+			var b := left[i + 1].lerp(right[i + 1], f)
+			if at2.distance_to(Geometry2D.get_closest_point_to_segment(at2, a, b)) < DeskMedium.PEN_R:
+				return true
+	return false
+
+
+## How many times two profiles cross.
+func _crossings(p: PackedVector2Array, q: PackedVector2Array) -> int:
+	var n := 0
+	for i in p.size() - 1:
+		for j in q.size() - 1:
+			if Geometry2D.segment_intersects_segment(p[i], p[i + 1], q[j], q[j + 1]) != null:
+				n += 1
+	return n
+
+
+## How many points of a profile (the pad's body) are inside the pad - its stack, or the binding over
+## its head.
+func _in_pad(c: PackedVector2Array) -> int:
+	var top := -LegalPad.H * 0.5
+	var head := top - LegalPad.BIND_W - 0.0025
+	var n := 0
+	for i in range(2, c.size()):
+		var q := c[i]
+		if q.x > head and q.x < LegalPad.H * 0.5 and q.y > -LegalPad.THICK + 0.00001 and q.y < -0.00001:
+			n += 1
+		elif q.x > head and q.x < top and q.y < LegalPad.TAPE_TOP + 0.0001 and q.y > -LegalPad.THICK:
+			n += 1
+	return n
+
+
+## A PAGE IS TURNED AS A HAND TURNS ONE ([LegalPad]): the sheet's profile through a turn and the
+## pages it folds round, in the pad's meters.
+func _turned() -> void:
+	print("-- a page turned")
+	var seed := 3
+	var over := LegalPad.KEPT
+	# where it starts and where it ends: flat where the page lay, then as it then lies round the head
+	var r0 := LegalPad.rank(over, over, 0.0)
+	var flat := LegalPad.curve(0.0, LegalPad.loop_of(over, r0, seed), LegalPad.root_of(r0), LegalPad.under_of(r0))
+	var lies := true
+	for i in flat.size():
+		var s := LegalPad.H * float(i) / float(flat.size() - 1)
+		lies = lies and absf(flat[i].x - (-LegalPad.H * 0.5 + s)) < 1e-4 and absf(flat[i].y - LegalPad.root_of(r0)) < 1e-6
+	var r1 := LegalPad.rank(over, over, LegalPad.turn_progress(1.0))
+	var done := LegalPad.curve(1.0, LegalPad.loop_of(over, r1, seed), LegalPad.root_of(r1), LegalPad.under_of(r1), LegalPad.tilt(1.0))
+	var r2 := LegalPad.rank(over, over + 1, 0.0)
+	var lain := LegalPad.curve(1.0, LegalPad.loop_of(over, r2, seed), LegalPad.root_of(r2), LegalPad.under_of(r2))
+	var end := done[done.size() - 1]
+	_check(lies and done == lain and end.y < -LegalPad.THICK and end.x > -LegalPad.H * 0.5,
+		"the sheet starts flat where the page lay, and ends as it then lies: round the head, its end under the pad (%s)" % end)
+	# THE HEAD IS LIFTED FOR IT, and down again before the pen comes back
+	var most := 0.0
+	var u := 0.0
+	while u <= 1.0:
+		most = maxf(most, LegalPad.tilt(u))
+		u += 0.01
+	_check(LegalPad.tilt(0.0) == 0.0 and most > deg_to_rad(10.0) and LegalPad.tilt(DeskMedium.PARK_BACK) == 0.0
+		and LegalPad.tilt(DeskMedium.PARK_BACK - 0.1) > 0.0,
+		"the pad's head is lifted for it (%.0f degrees at most) and down before the pen comes back" % rad_to_deg(most))
+	# EIGHT PAGES OVER: nested, none in the pad or its binding, fanned apart round the head
+	var olds: Array = []
+	for j in over:
+		var r := LegalPad.rank(j, over, 0.0)
+		olds.append(LegalPad.curve(1.0, LegalPad.loop_of(j, r, seed), LegalPad.root_of(r), LegalPad.under_of(r)))
+	var cross := 0
+	var inside := 0
+	var backs := PackedFloat32Array()
+	for j in over:
+		inside += _in_pad(olds[j])
+		var b := 1.0
+		for q in olds[j]:
+			b = minf(b, (q as Vector2).x)
+		backs.append(b)
+		for k in range(j + 1, over):
+			cross += _crossings(olds[j], olds[k])
+	var fanned := true
+	for j in range(1, over):
+		fanned = fanned and backs[j] < backs[j - 1] - 0.0002
+	_check(cross == 0 and inside == 0 and fanned,
+		"eight pages over: their loops never cross nor go into the pad, and each reaches further round the head than the one inside it (%.1f mm in all)"
+		% ((backs[0] - backs[over - 1]) * 1000.0))
+	# A NINTH TURNED OVER THEM: never crosses one nor goes into the pad; the control, the same sheet
+	# given the innermost loop
+	var hits := 0
+	var ctl := 0
+	u = 0.0
+	while u <= 1.0001:
+		var e := LegalPad.turn_progress(u)
+		var beta := LegalPad.tilt(u)
+		var lead := LegalPad.LEAD * sin(PI * clampf(u / LegalPad.FLIP, 0.0, 1.0))
+		var rt := LegalPad.rank(over, over, e)
+		var now: Array = []
+		for j in over:
+			var r := LegalPad.rank(j, over, e)
+			if r >= 0.0:
+				now.append(LegalPad.curve(1.0, LegalPad.loop_of(j, r, seed), LegalPad.root_of(r), LegalPad.under_of(r), beta))
+		for side in [-1.0, 1.0]:
+			var a := clampf(u + float(side) * lead, 0.0, 1.0)
+			var sheet := LegalPad.curve(a, LegalPad.loop_of(over, rt, seed), LegalPad.root_of(rt), LegalPad.under_of(rt), beta)
+			var inner := LegalPad.curve(a, LegalPad.loop_of(over, 0.0, seed), LegalPad.root_of(float(LegalPad.KEPT)), LegalPad.under_of(0.0), beta)
+			hits += _in_pad(sheet)
+			for o in now:
+				hits += _crossings(sheet, o)
+				ctl += _crossings(inner, o)
+		u += 1.0 / 30.0
+	_check(hits == 0 and ctl > 0, "a ninth page turned over them never crosses one nor goes into the pad (the control, given the innermost loop, crosses %d times)" % ctl)
+	# THE TOP OF THE PAGE IS COVERED, ABOVE ITS FIRST RULE: the roundest loop's bulge, and the pen writing
+	# the top line under it
+	var rk := float(LegalPad.KEPT - 1)
+	var roundest := LegalPad.curve(1.0, LegalPad.LOOP + rk * LegalPad.GAP + LegalPad.GAP * LegalPad.GAP_SPREAD * 0.5,
+		LegalPad.root_of(rk), LegalPad.under_of(rk))
+	var bulge := 0.0
+	for q in roundest:
+		if q.y > 0.002:
+			bulge = maxf(bulge, (q.x + LegalPad.H * 0.5) / LegalPad.H * DeskScript.PH)
+	var twice := LegalPad.curve(1.0, (LegalPad.LOOP + rk * LegalPad.GAP) * 2.0, LegalPad.root_of(rk), LegalPad.under_of(rk))
+	var meets := 0
+	var ctl_meets := 0
+	var tries := 0
+	var x := DeskScript.MATH_X
+	while x <= DeskScript.PW - DeskScript.RIGHT:
+		for k in 8:
+			var at := {"p": Vector2(x, DeskScript.FIRST_RULE - DeskScript.RULE * 0.8), "lift": 0.0}
+			meets += int(_rod_meets(at, k * 1.7, roundest, roundest))
+			ctl_meets += int(_rod_meets(at, k * 1.7, twice, twice))
+			tries += 1
+		x += 60.0
+	_check(bulge > 0.0 and bulge < DeskScript.FIRST_RULE - DeskScript.RULE and meets == 0 and ctl_meets > 0,
+		"the loops cover the page's top above its first rule (%.0f px), and the pen writing the top line never meets the roundest (the control, twice as round: %d of %d)"
+		% [bulge, ctl_meets, tries])
+
+
+## EVERY DESK IS ITS OWN ([DeskLook]): the same seed, the same desk; across seeds, a variety; the ink
+## readable; the things off the pad, out from behind it, and out of the pen's way; nothing painted.
+func _look() -> void:
+	print("-- the desk's look")
+	_check(str(DeskLook.of(41)) == str(DeskLook.of(41)) and str(DeskLook.of(41)) != str(DeskLook.of(42)),
+		"the same seed is the same desk, another seed another")
+	var papers := {}
+	var tops := {}
+	var kinds := {}
+	var counts := {}
+	var worst := INF
+	var ctl_worst := INF
+	for seed in 300:
+		var l := DeskLook.of(seed)
+		papers[(l["paper"] as Color).to_html(false).substr(0, 3)] = true
+		tops[String((l["materials"]["the desk"] as Dictionary)["kind"])] = true
+		counts[(l["things"] as Array).size()] = true
+		for t in l["things"]:
+			kinds[String((t as Dictionary)["kind"])] = true
+		worst = minf(worst, _contrast(l["ink"], l["paper"]))
+		ctl_worst = minf(ctl_worst, _contrast((l["paper"] as Color).darkened(0.1), l["paper"]))
+	_check(papers.size() > 10 and tops.size() >= 4 and kinds.size() == DeskLook.THINGS.size() and counts.size() >= 5,
+		"across 300 desks: %d papers, %d kinds of top, %d kinds of thing, %d counts of things" % [papers.size(), tops.size(), kinds.size(), counts.size()])
+	_check(worst > 7.0 and ctl_worst < 3.0, "the ink always reads on its paper (contrast at least %.1f; the control, the paper a shade darker, %.1f)" % [worst, ctl_worst])
+	# WHERE THINGS GO: never on the pad nor behind it, a tall one never beside its right edge or in front
+	var bad := 0
+	var ctl := 0
+	var placed := 0
+	for seed in 400:
+		var r := DeskLook._rng(seed, "probe")
+		var rad := r.randf_range(0.01, 0.12)
+		var tall := r.randf() < 0.5
+		var at := DeskLook._placed(r, rad, tall, [])
+		if at.x == INF:
+			continue
+		placed += 1
+		bad += int(_badly_placed(at, rad, tall))
+		var free := Vector2(r.randf_range(DeskLook.REACH.position.x, DeskLook.REACH.end.x), r.randf_range(DeskLook.REACH.position.y, DeskLook.REACH.end.y))
+		ctl += int(_badly_placed(free, rad, tall))
+	_check(placed > 300 and bad == 0 and ctl > 50, "a thing never stands on the pad, behind it, or tall in the pen's way (%d placed; the control, anywhere in reach, %d badly)" % [placed, ctl])
+	# NO PAINTER: nothing on a desk is the episode's painting, so Proof, which has no painter, makes it whole
+	var wants := 0
+	for seed in 300:
+		var l := DeskLook.of(seed)
+		wants += int(_wants_painting(Tables.sanitize(l["top"], l["layers"], l["materials"], [])))
+	var l41 := DeskLook.of(41)
+	var built := Tables.build(Tables.sanitize(l41["top"], l41["layers"], l41["materials"], []), 41)
+	var ctl_top := (l41["top"] as Dictionary).duplicate()
+	ctl_top["material"] = "painting"
+	var ctl_built := Tables.build(Tables.sanitize(ctl_top, l41["layers"], l41["materials"], []), 41)
+	var ctl_cloth := _wants_painting(Tables.sanitize(l41["top"], null, l41["materials"], []))
+	_check(wants == 0 and (built["painted"] as Array).is_empty() and not (ctl_built["painted"] as Array).is_empty() and ctl_cloth,
+		"no desk of 300 waits for a painting, and a built one lays it on nothing (controls: the top the painting lays it on %d, no layers is the painted cloth: %s)"
+		% [(ctl_built["painted"] as Array).size(), ctl_cloth])
+	(built["node"] as Node).free()
+	(ctl_built["node"] as Node).free()
+
+
+## Whether a table made safe ([method Tables.sanitize]) lays the painting anywhere: its top, or a layer, IS it.
+func _wants_painting(spec: Dictionary) -> bool:
+	var top: Dictionary = spec["top"]
+	if String(top.get("material", "")) == "painting" or String((top.get("pattern", {}) as Dictionary).get("kind", "")) == "painting":
+		return true
+	for l in spec["layers"]:
+		if String(((l as Dictionary).get("pattern", {}) as Dictionary).get("kind", "")) == "painting":
 			return true
 	return false
+
+
+func _badly_placed(at: Vector2, rad: float, tall: bool) -> bool:
+	var on_or_behind := absf(at.x) < LegalPad.W * 0.5 + rad and at.y < LegalPad.H * 0.5 + rad
+	var pen_lane := at.x > 0.0 and at.x < DeskLook.TALL_RIGHT + rad and at.y < 0.0
+	var tall_near := tall and (at.x > -DeskLook.TALL_LEFT - rad and at.x < DeskLook.TALL_RIGHT + rad)
+	return on_or_behind or pen_lane or tall_near
+
+
+## The contrast ratio of two colors (WCAG's, 1 to 21).
+func _contrast(a: Color, b: Color) -> float:
+	var x := a.srgb_to_linear()
+	var y := b.srgb_to_linear()
+	var la := 0.2126 * x.r + 0.7152 * x.g + 0.0722 * x.b
+	var lb := 0.2126 * y.r + 0.7152 * y.g + 0.0722 * y.b
+	return (maxf(la, lb) + 0.05) / (minf(la, lb) + 0.05)
 
 
 ## A desk over the lesson with no stage: the actions as the ink would lay them out (no strokes - an
@@ -989,6 +1480,8 @@ func _desk() -> void:
 		"before the voice goes on")
 	_elastic()
 	_idle()
+	_turned()
+	_look()
 	# THE TITLE AND THE CAMERA: up and wide over the intro until the first word, close as the pen writes
 	_check(ShowOpening.title_alpha(0.1, INF, false) == 0.0 and ShowOpening.title_alpha(1.6, INF, false) == 1.0,
 		"the channel's name comes up over the intro")
@@ -1065,7 +1558,7 @@ func _desk() -> void:
 	var old_hits := 0
 	var frames := 0
 	var t := ta
-	while t <= ta + DeskScript.TURN:
+	while t <= float(tp["start"]):
 		td._now = t
 		hits += int(_meets_sheet(td.pen_at(), t, ta))
 		old_hits += int(_meets_sheet({"p": Vector2(DeskScript.PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0),
@@ -1073,8 +1566,8 @@ func _desk() -> void:
 		frames += 1
 		t += 1.0 / 60.0
 	td._now = ta
-	_check(td._parks(1, 2) and (td.pen_at()["p"] as Vector2).x > DeskScript.PW and hits == 0 and old_hits > 10,
-		"the pen is off the pad as the sheet lifts and never in its way (%d of %d frames; the control, the old wait at the page's right, %d)"
+	_check(td._parks(1, 2) and (td.pen_at()["p"] as Vector2).x > DeskScript.PW and hits == 0 and old_hits > 2,
+		"the pen is off the pad as the sheet lifts and never in its way, nor as it comes back (%d of %d frames; the control, the old wait at the page's right, %d)"
 		% [hits, frames, old_hits])
 	td._now = ta - 0.1
 	var before := td._pages()
@@ -1083,7 +1576,7 @@ func _desk() -> void:
 	td._now = ta + DeskScript.TURN + 0.01
 	var after := td._pages()
 	_check(before == Vector2i(0, -1) and during == Vector2i(1, 0) and after == Vector2i(1, -1),
-		"page one is written, turned away over page two, and gone (%s %s %s)" % [before, during, after])
+		"page one is written, turned over page two, and lies over the pad's head (%s %s %s)" % [before, during, after])
 	td._now = ta + 0.5
 	_check(float(td._framing()["k"]) < 1.0, "the camera stands back as a page turns")
 	td.free()

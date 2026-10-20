@@ -22,8 +22,16 @@ extends SceneTree
 ## - BIRDS cross about as often as asked, each over the table, the same every time; a hawk's shadow
 ##   wheels back over the table more than once in a visit; a flock flies together.
 ## - LAMPS stand out of the shot - one asked for in it is moved up out of it, one asked for outside it
-##   stays; each flickers its own way as a function of the time: a sign steady but for its stutters,
-##   headlights only as they pass, a screen changing with its cuts.
+##   stays; each flickers its own way as a function of the time: headlights only as they pass, a screen
+##   changing with its cuts.
+## - AN ELECTRIC LIGHT IS STEADY (the user, 2026-10-19: flickering "in nearly every episode ... it flickers
+##   "all the way" on and off (when typically flickering would be more like a brown-out, with partial
+##   failure, not complete loss of light)"): a lamp, tubes and a sign never dim unless written `failing`.
+##   A FAILING one, over an hour: a few bad spells about as often as asked, and dim under a tenth of the
+##   time; in a spell, sags bunched three and more together, never darker than a brown-out but for a rare
+##   moment all but out; a bulb's light falling no faster than its filament cools - the voltage drops at
+##   once, the light's least comes tens of milliseconds after (the control) - and warmer as it dims; a
+##   tube's bank and a sign losing one tube or one stroke; the same at any time asked.
 ## - LIGHTNING (the user, 2026-10-15: "usually just two flickers, which fade-in/fade-out slowly... It
 ##   would come and go, while flickering with different levels of intensity and persistence"), as a
 ##   camera takes it at 60 frames a second over an hour's storm: dark but for its flashes; a stroke gone
@@ -73,7 +81,7 @@ func _ok(cond: bool, what: String) -> void:
 
 func _run() -> void:
 	_rng.seed = 4242
-	for check in [_sanitize, _vocabulary, _noise, _window, _screens, _clouds, _birds, _lamps, _lightning, _built, _shadows, _shade]:
+	for check in [_sanitize, _vocabulary, _noise, _window, _screens, _clouds, _birds, _lamps, _failing, _lightning, _built, _shadows, _shade]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("lights_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -391,11 +399,6 @@ func _lamps() -> bool:
 	var out_lamp := Lights.sanitize({"lamps": [{"look": "torch", "from": "front left", "distance": 150, "height": 90}]})["lamps"][0] as Dictionary
 	_ok(not bool(Lights.lamp_place(out_lamp, middle, in_shot)["moved"]), "control: a torch behind the camera was moved")
 	# each its own way
-	var nk := Lights.flicker_of(Lights.sanitize({"lamps": [{"look": "neon"}]})["lamps"][0], 6)
-	var off := 0
-	for i in 60000:
-		off += 1 if float(Lights.flicker("neon", nk, float(i) * 0.01)["bright"]) < 0.5 else 0
-	_ok(off > 0 and off < 3000, "a sign is not steady but for its stutters (%d of 60000 off)" % off)
 	var hk := Lights.flicker_of(Lights.sanitize({"lamps": [{"look": "headlights", "every": 30}]})["lamps"][0], 7)
 	var passing := 0
 	for i in 6000:
@@ -408,6 +411,111 @@ func _lamps() -> bool:
 	_ok(cuts.size() >= 4, "a screen's light does not change with its cuts (%d levels)" % cuts.size())
 	var tk := Lights.flicker_of(Lights.sanitize({"lamps": [{"look": "torch"}]})["lamps"][0], 9)
 	_ok(str(Lights.flicker("torch", tk, 42.0)) == str(Lights.flicker("torch", tk, 42.0)), "the same time gives another flicker")
+	return true
+
+
+## AN ELECTRIC LIGHT IS STEADY, and a FAILING one browns out ([method Lights._failing]).
+func _failing() -> bool:
+	for look in ["lamp", "hanging lamp", "street lamp", "fluorescent", "neon"]:
+		var fk := Lights.flicker_of(Lights.sanitize({"lamps": [{"look": look}]})["lamps"][0], 6)
+		var steady := true
+		for i in 3600:
+			var f := Lights.flicker(look, fk, float(i) * 1.003)
+			steady = steady and float(f["bright"]) == 1.0 and (f["tint"] as Color) == Color(1, 1, 1)
+		_ok(steady, "a sound %s is not steady" % look)
+	var notes := PackedStringArray()
+	var torch: Dictionary = Lights.sanitize({"lamps": [{"look": "torch", "failing": true}]}, notes)["lamps"][0]
+	_ok(not torch.has("failing") and notes.size() == 1, "a torch fails, or is not said: %s" % notes)
+	var spells := 0
+	var dim := 0
+	var n := 0
+	var lowest := 1.0
+	var fastest := 0.0
+	var bunched: Array = []
+	var warm := true
+	for seed in 5:
+		var lamp: Dictionary = Lights.sanitize({"lamps": [{"look": "lamp", "failing": true, "every": 240}]})["lamps"][0]
+		var fk := Lights.flicker_of(lamp, 40 + seed)
+		var starts: PackedFloat32Array = fk["spells"]
+		var hour := 0
+		while hour < starts.size() and starts[hour] < 3600.0:
+			hour += 1
+		spells += hour
+		for k in hour:
+			var sags := Lights._sags(int(fk["salt"]), k, float((fk["spell_lens"] as PackedFloat32Array)[k]), false)
+			bunched.append(sags.size())
+			var out := sags.any(func(sg: Array) -> bool: return float(sg[2]) <= 0.0)
+			# 60 frames a second through the spell, a moment either side
+			var last := 1.0
+			var t := starts[k] - 0.5
+			while t < starts[k] + float((fk["spell_lens"] as PackedFloat32Array)[k]) + 2.0:
+				var f := Lights.flicker("lamp", fk, t)
+				var b := float(f["bright"])
+				if not out:
+					lowest = minf(lowest, b)
+					fastest = maxf(fastest, last - b)
+				if b < 0.5:
+					warm = warm and (f["tint"] as Color).b < (f["tint"] as Color).r * 0.9
+				last = b
+				t += 1.0 / 60.0
+		for i in 3600 * 4:
+			n += 1
+			dim += 1 if float(Lights.flicker("lamp", fk, float(i) * 0.25)["bright"]) < 0.9 else 0
+	_ok(spells >= 5 and spells <= 5 * 30, "a failing lamp over five hours had %d bad spells (every 240 s asks for some fifteen an hour)" % spells)
+	_ok(float(dim) / float(n) < 0.03, "a failing lamp is dim %s of the time" % str(snappedf(float(dim) / float(n), 0.001)))
+	bunched.sort()
+	_ok(not bunched.is_empty() and int(bunched[bunched.size() / 2]) >= 3, "a bad spell's sags do not bunch (median %s)" % str(bunched[bunched.size() / 2] if not bunched.is_empty() else "-"))
+	_ok(lowest >= 0.2 and lowest < 0.8, "a failing bulb, all but out only in its dropouts, sank to %s" % str(snappedf(lowest, 0.01)))
+	_ok(fastest < 0.45, "a failing bulb dimmed %s in one frame - faster than a filament cools" % str(snappedf(fastest, 0.01)))
+	_ok(warm, "a failing bulb dimmed without warming")
+	# THE FILAMENT LAGS: the voltage drops at once, the light's least comes tens of milliseconds after
+	var lamp: Dictionary = Lights.sanitize({"lamps": [{"look": "lamp", "failing": true}]})["lamps"][0]
+	var fk := Lights.flicker_of(lamp, 41)
+	var s0 := float((fk["spells"] as PackedFloat32Array)[0])
+	var sg: Array = Lights._sags(int(fk["salt"]), 0, float((fk["spell_lens"] as PackedFloat32Array)[0]), false)[0]
+	var least := 1.0
+	var least_at := 0.0
+	var t := s0 + float(sg[0])
+	while t < s0 + float(sg[1]) + 0.05:
+		var b := float(Lights.flicker("lamp", fk, t)["bright"])
+		if b < least:
+			least = b
+			least_at = t - s0 - float(sg[0])
+		t += 0.001
+	_ok(float(sg[1]) - float(sg[0]) < 0.03 or least_at >= 0.03, "a bulb's light was least %s s into a sag: no slower than the voltage" % str(snappedf(least_at, 0.001)))
+	_ok(float(Lights.flicker("lamp", fk, s0 + float(sg[0]) + 0.001)["bright"]) > 0.95, "the control: a bulb went dark the moment the voltage sagged")
+	# A TUBE'S BANK loses one tube; a sign one stroke
+	for look in ["fluorescent", "neon"]:
+		var tf := Lights.flicker_of(Lights.sanitize({"lamps": [{"look": look, "failing": true, "every": 120}]})["lamps"][0], 7)
+		var parts := float(tf["parts"])
+		var low := 1.0
+		var any := false
+		var ts: PackedFloat32Array = tf["spells"]
+		for k in mini(ts.size(), 40):
+			var length := float((tf["spell_lens"] as PackedFloat32Array)[k])
+			# a spell holding its moment all but out aside
+			if Lights._sags(int(tf["salt"]), k, length, look == "neon").any(func(q: Array) -> bool: return float(q[2]) <= 0.0):
+				continue
+			var t2 := ts[k] - 0.2
+			while t2 < ts[k] + length + 1.5:
+				var b := float(Lights.flicker(look, tf, t2)["bright"])
+				low = minf(low, b)
+				any = any or b < 0.999
+				t2 += 0.004
+		_ok(any and low >= 1.0 - 1.0 / parts - 1e-3, "a failing %s fell to %s, more than one of its %d tubes or strokes" % [look, str(snappedf(low, 0.01)), int(parts)])
+	# THE SAME AT ANY TIME ASKED
+	var times: Array = []
+	for i in 400:
+		times.append(s0 - 0.2 + float(i) * 0.013)
+	var asked := {}
+	for t2 in times:
+		asked[t2] = Lights.flicker("lamp", fk, t2)["bright"]
+	times.shuffle()
+	var again := Lights.flicker_of(lamp, 41)
+	var same := true
+	for t2 in times:
+		same = same and is_equal_approx(float(Lights.flicker("lamp", again, t2)["bright"]), float(asked[t2]))
+	_ok(same, "a failing bulb asked out of order is not the bulb asked in order")
 	return true
 
 

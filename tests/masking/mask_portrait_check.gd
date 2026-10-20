@@ -5,7 +5,7 @@ extends SceneTree
 ##   godot --headless --path . --script res://tests/masking/mask_portrait_check.gd
 ##
 ## Everything downstream of the picture is shaped by ONE pair of numbers,
-## MaskEditor._src_size (probed from the clip, confirmed from the decoded texture).
+## MaskPrep.src_size (probed from the clip, confirmed from the decoded texture).
 ## This probe boots a real MaskEditor on a synthetic portrait session and checks the
 ## three places that pair has to reach, because each of them used to be a hardcoded
 ## 16:9 constant and each failed differently:
@@ -82,9 +82,9 @@ func _check(size: Vector2i, label: String) -> void:
 	print("--- %s (%dx%d, aspect %.4f) ---" % [label, size.x, size.y, aspect])
 
 	# 1. THE SOURCE SIZE ITSELF.
-	var src: Vector2i = editor._src_size
+	var src: Vector2i = editor._source_prep.src_size
 	print("  _src_size            %dx%d  (confirmed by the decoder: %s)"
-		% [src.x, src.y, editor._src_size_confirmed])
+		% [src.x, src.y, editor._source_prep.size_confirmed])
 	_expect(src == size, "%s: _src_size is %dx%d, expected %dx%d"
 		% [label, src.x, src.y, size.x, size.y])
 
@@ -158,15 +158,15 @@ func _check(size: Vector2i, label: String) -> void:
 
 	# 3. THE EXPORT RESOLUTION. Both the number the editor computes and what it
 	# actually writes into override.cfg for the render process to boot with.
-	var rsz: Vector2i = editor._render_size()
+	var rsz: Vector2i = editor._export.render_size()
 	print("  _render_size()       %dx%d" % [rsz.x, rsz.y])
 	_expect(rsz == size, "%s: the export would record %dx%d, expected the source's %dx%d"
 		% [label, rsz.x, rsz.y, size.x, size.y])
 	_expect(rsz.x % 2 == 0 and rsz.y % 2 == 0,
 		"%s: %dx%d is odd - yuv420p cannot encode it" % [label, rsz.x, rsz.y])
-	editor._write_render_override(rsz)
+	editor._export.write_override(rsz)
 	var cfg := _read_override()
-	editor._clear_render_override()
+	editor._export.clear_override()
 	print("  override.cfg         viewport %sx%s, stretch %s"
 		% [cfg.get("window/size/viewport_width", "?"),
 		   cfg.get("window/size/viewport_height", "?"),

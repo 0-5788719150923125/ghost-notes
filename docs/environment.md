@@ -31,6 +31,7 @@ godot --headless --path . -- --provision mathlib # Lean and Mathlib, for the Pro
   - Not on Intel Macs: mediapipe publishes no build for Intel Macs.
   - Not on Windows on ARM: opencv-contrib-python has no Windows-on-ARM build.
 - **Math environment**, ~16 MB - fontTools, for hosts/math/typeset.py: it reads TeX's fonts for each glyph's name (and its outline, for a glyph no hand draws), so the desk's pen writes what TeX laid out; and svgelements, which reads a drawing's SVG for the pen (hosts/math/figure.py). Built the first time a Proof needs it.
+- **Compute environment**, ~220 MB - numpy, SciPy and SymPy, for the code a Proof solver RUNS (hosts/compute/run.py): a simulation, a fit, a derivation or a small model trained, inside a sandbox (bubblewrap), its numbers kept for the pad's drawings. Built the first time a Proof's solver works where the sandbox is installed.
 - **Mathlib**, ~7.5 GB - Mathlib, Lean's library of mathematics, downloaded already compiled, and the Lean REPL built against it: the workbench every proof the Proof component shows is checked in. Lake fetches them with git; Mathlib's cache tool downloads with curl. Built the first time a Proof needs it, and moved to each new Mathlib release.
   - Not on Windows on ARM: Lean publishes no build for Windows on ARM.
 - **Voice models (Piper)**, ~60 MB each - The neural voices themselves, fetched per voice from Hugging Face the first time one is selected. Data, not code - the models are MIT-tagged and no GPL Piper code is installed (see hosts/voice/requirements.txt).
@@ -43,6 +44,8 @@ A few programs are part of the system or keep their own logins, so they stay you
   - Linux: `sudo pacman -S util-linux   ·   sudo apt install util-linux   (needs 2.33+ for --pdeathsig)`
 - **fallocate (util-linux)**, Linux - Keeping a video export's scratch file SMALL: the render's AVI is encoded as it is written, and the part already encoded is released from disk as it goes (a punched hole), so the intermediate never grows past a few seconds of video. Without it the scratch file grows to the whole film before it is deleted.
   - Linux: `part of util-linux - installed on every mainstream distribution`
+- **bubblewrap**, Linux - The sandbox a Proof solver's code runs in (hosts/compute/run.py): its own view of the files - the system's libraries read-only, one folder to write in, nothing of yours - and no network. Without it the solver cannot run code, and its episodes are proofs in Lean only. Flatpak uses it, so most desktops have it already.
+  - Linux: `sudo pacman -S bubblewrap   ·   sudo apt install bubblewrap   ·   sudo dnf install bubblewrap`
 - **xvfb-run**, Linux - Giving a video export a display of its own, so the recording cannot be frozen by the desktop: Godot stops rendering whenever the compositor stops drawing its window, and the movie writer then re-captures the last frame while the audio keeps advancing. Also what the pixel-readback gates in tests/ use (tests/run_quiet.sh), so no window ever appears for those. An X server, so it stays the system's to install.
   - Linux: `sudo pacman -S xorg-server-xvfb   ·   sudo apt install xvfb   ·   sudo dnf install xorg-x11-server-Xvfb`
 - **Git** - Lake, Lean's build tool, fetches Mathlib and the Lean REPL with it when the Proof component's workbench is built. Every developer machine has it; ghost does not fetch its own.

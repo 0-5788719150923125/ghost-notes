@@ -140,7 +140,14 @@ const BIRDS := {
 ## A LAMP OUT OF THE SHOT: a point of light (`omni`) or one aimed at the table (`spot`), its color and
 ## strength when none is given, how it flickers ([method flicker]), how wide its glow is (cm - its
 ## shadows' softness), whether it casts by default, where it stands when not told (cm from the
-## table's middle, and above it), and how often it comes when it comes and goes (`every`, seconds).
+## table's middle, and above it), how often it comes when it comes and goes (`every`, seconds), and, for
+## an electric light, how it FAILS when the set dresser says it is failing (`fails` - [method _failing]).
+##
+## AN ELECTRIC LIGHT IS STEADY (the user, 2026-10-19: the agents were "doing the "flickering lights" effect
+## very often, in nearly every episode ... it flickers "all the way" on and off (when typically flickering
+## would be more like a brown-out, with partial failure, not complete loss of light)"). A tube and a sign
+## had stuttered by their look alone - an 18 Hz blink down to 8%, every half minute or so - and of six
+## tables that flickered, one plan had asked for it. A light fails only when it is written `failing`.
 const LAMPS := {
 	"candles": {"about": "a few candles burning somewhere in the room - a warm, gently shifting fill", "kind": "omni",
 		"color": "#ffb066", "strength": 0.25, "flicker": "candle", "size": 2.0, "shadows": false, "distance": 120.0, "height": 30.0},
@@ -151,17 +158,17 @@ const LAMPS := {
 	"lantern": {"about": "an oil lantern - warm and nearly steady", "kind": "omni", "color": "#ffbf73", "strength": 0.45,
 		"flicker": "lantern", "size": 3.0, "shadows": false, "distance": 110.0, "height": 60.0},
 	"lamp": {"about": "an electric lamp with a shade - steady and warm, its light falling across the table", "kind": "spot",
-		"color": "#ffd6a0", "strength": 0.5, "flicker": "steady", "size": 4.0, "shadows": true, "distance": 110.0, "height": 70.0},
+		"color": "#ffd6a0", "strength": 0.5, "flicker": "steady", "size": 4.0, "shadows": true, "distance": 110.0, "height": 70.0, "fails": "bulb"},
 	"hanging lamp": {"about": "a shaded lamp hanging over the table, out of the frame - a steady pool of light", "kind": "spot",
-		"color": "#ffdcb0", "strength": 0.7, "flicker": "steady", "size": 4.0, "shadows": true, "distance": 45.0, "height": 85.0},
-	"fluorescent": {"about": "fluorescent tubes overhead - cool, flat and steady, now and then a stutter", "kind": "omni",
-		"color": "#e8f0ff", "strength": 0.5, "flicker": "fluorescent", "size": 8.0, "shadows": false, "distance": 80.0, "height": 160.0},
-	"neon": {"about": "a neon sign in the room or outside a window - one saturated color, steady, now and then a stutter",
-		"kind": "omni", "color": "#ff3d7f", "strength": 0.4, "flicker": "neon", "size": 6.0, "shadows": false, "distance": 180.0, "height": 70.0},
+		"color": "#ffdcb0", "strength": 0.7, "flicker": "steady", "size": 4.0, "shadows": true, "distance": 45.0, "height": 85.0, "fails": "bulb"},
+	"fluorescent": {"about": "fluorescent tubes overhead - cool, flat and steady", "kind": "omni",
+		"color": "#e8f0ff", "strength": 0.5, "flicker": "steady", "size": 8.0, "shadows": false, "distance": 80.0, "height": 160.0, "fails": "tube"},
+	"neon": {"about": "a neon sign in the room or outside a window - one saturated color, steady",
+		"kind": "omni", "color": "#ff3d7f", "strength": 0.4, "flicker": "steady", "size": 6.0, "shadows": false, "distance": 180.0, "height": 70.0, "fails": "sign"},
 	"screen": {"about": "a television's or a monitor's glow - cool, its brightness and color changing with each cut", "kind": "spot",
 		"color": "#b8d0ff", "strength": 0.35, "flicker": "screen", "size": 8.0, "shadows": false, "distance": 200.0, "height": 40.0},
 	"street lamp": {"about": "a street lamp outside - sodium orange or cold white, steady, from high up", "kind": "spot",
-		"color": "#ffa040", "strength": 0.5, "flicker": "steady", "size": 6.0, "shadows": true, "distance": 300.0, "height": 250.0},
+		"color": "#ffa040", "strength": 0.5, "flicker": "steady", "size": 6.0, "shadows": true, "distance": 300.0, "height": 250.0, "fails": "bulb"},
 	"headlights": {"about": "a car's headlights passing outside now and then, their light sweeping across the table", "kind": "spot",
 		"color": "#f4f4ff", "strength": 0.6, "flicker": "pass", "size": 5.0, "shadows": true, "distance": 350.0, "height": 40.0, "every": 40.0},
 	"lighthouse": {"about": "a lighthouse's beam sweeping round, crossing the table every few seconds", "kind": "spot",
@@ -280,6 +287,30 @@ const LIGHTNING_SHEET := 0.3
 const FLASH_SHUTTER := 1.0 / 60.0
 const FLASH_LONGEST := 3.0
 const FLASH_STRIDE := 7
+## A FAILING LIGHT ([method _failing]): steady for minutes, then a BAD SPELL of a few seconds - about
+## `every` apart (FAIL_EVERY when none is written, and its least and most), each spell's length (seconds:
+## its median, how widely they vary, the least and the most) - in which the supply SAGS again and again,
+## unevenly: the waits between sags (seconds, median; their spread - wide, so they bunch), each sag's length
+## (median and spread, the least and the most), how deep it sags (the share of the voltage lost, least and
+## most - mostly shallow), and how often a spell holds one moment of the light all but out, and how long.
+const FAIL_EVERY := Vector3(240.0, 60.0, 900.0)
+const SPELL := Vector4(3.0, 0.5, 1.2, 10.0)
+const SAG_GAP := Vector2(0.22, 0.9)
+const SAG := Vector4(0.1, 0.6, 0.03, 0.6)
+const SAG_DEPTH := Vector2(0.08, 0.35)
+const DROPOUT := Vector3(0.1, 0.15, 0.8)
+## A BULB'S FILAMENT cannot go dark at once: it cools toward a sag over FILAMENT.x seconds and heats back
+## over FILAMENT.y (the cold filament draws a surge); its light goes as its temperature to the power of
+## BULB_LIGHT and its color temperature to the BULB_WARM (light ~ V^3.4, color ~ V^0.42), so a sag is dimmer
+## and warmer - orange - and never a blink.
+const FILAMENT := Vector2(0.1, 0.04)
+const BULB_LIGHT := 3.4
+const BULB_WARM := 0.42
+## A TUBE'S BANK and A SIGN'S SEGMENTS: how many (the least and the most) - one of them fails, the rest
+## burn on - and how short a sign's sputters are beside a sag (the share).
+const TUBES := Vector2i(2, 4)
+const SEGMENTS := Vector2i(3, 6)
+const SPUTTER := 0.3
 ## How big a wall and a canopy are (meters): past every ray from the table to the sun.
 const WALL := Vector2(30.0, 16.0)
 const CANOPY := 40.0
@@ -308,7 +339,7 @@ static func describe() -> String:
 	lines.append("- birds: {\"look\", \"every\" (seconds between them, about), \"flock\" (how many fly together), \"speed\" 0-1, \"from\" (where they mostly fly from; left out, anywhere)} - now and then a bird's shadow flicks across the table and is gone; the bird is never seen. looks:")
 	for k in BIRDS:
 		lines.append("  - %s: %s" % [k, String((BIRDS[k] as Dictionary)["about"])])
-	lines.append("- lamps: [lights round the table, out of the shot - at most %d], each {\"name\", \"look\", \"from\", \"distance\" (cm from the middle of the table), \"height\" (cm above it), \"color\", \"strength\" 0-1, \"shadows\" true or false (at most %d cast), \"every\" (seconds, for what comes and goes)} - never seen, only felt: their light, its color and flicker and, when they cast them, their shadows across the table. A lamp the camera could see is moved up out of the shot. looks:" % [MAX_LAMPS, MAX_SHADOWED])
+	lines.append("- lamps: [lights round the table, out of the shot - at most %d], each {\"name\", \"look\", \"from\", \"distance\" (cm from the middle of the table), \"height\" (cm above it), \"color\", \"strength\" 0-1, \"shadows\" true or false (at most %d cast), \"every\" (seconds, for what comes and goes), \"failing\"} - never seen, only felt: their light, its color and flicker and, when they cast them, their shadows across the table. A lamp the camera could see is moved up out of the shot. An electric light - a lamp, a hanging lamp, a street lamp, fluorescent tubes, a neon sign - is steady. `failing` true is one that is really failing in this place: steady for minutes, then for a few seconds it sags unevenly - dimmer, a bulb warmer, one tube of a bank or one stroke of a sign gone - and comes back, very rarely all but out for a moment; `every` is then about how many seconds between its bad spells (%d when left out). Leave it out unless the plan says this light is failing: never for the mood. looks:" % [MAX_LAMPS, MAX_SHADOWED, roundi(FAIL_EVERY.x)])
 	for k in LAMPS:
 		lines.append("  - %s: %s" % [k, String((LAMPS[k] as Dictionary)["about"])])
 	lines.append("- shadows: [things out of the shot that throw a shadow on the table - at most %d], each {\"name\", \"what\", \"parts\", \"shadow\": [x, z] (cm from the middle of the reading - where the middle of its shadow falls), \"height\" (cm over the table - how high its middle is: a roof beam 200, a lantern on its chain 120), \"turn\" (degrees about the upright), \"by\" (\"sun\", or the name of a lamp that casts: whose shadow it is - the sun when left out), \"around\" (the name of a lamp it hangs round - a chandelier round its candles, a pierced lantern round its flame: that lamp's own light throws its shadow, from the origin [0, 0, 0] of its parts, so draw the thing round the flame: what hangs below it - a hoop, arms, a cage's bars - throws its shadow down on the table), \"move\": {\"kind\", \"amount\" 0-1, \"speed\" 0-1}} - never seen, only its shadow: a beam's bar of shade, a pillar's long stripe, a rope swinging across the cloth, a chandelier's arms spread over the table. It is set up its light's ray, out of the shot and clear of the table, so its shadow falls where it is aimed." % MAX_CASTERS)
@@ -511,6 +542,15 @@ static func _lamp(e: Dictionary, notes: PackedStringArray) -> Dictionary:
 		"shadows": Props._flag(e.get("shadows"), bool(base["shadows"]))}
 	if base.has("every"):
 		l["every"] = Props._num(e.get("every"), float(base["every"]), 3.0, 600.0)
+	# FAILING, only where written, and only an electric light
+	if Props._flag(e.get("failing")):
+		if base.has("fails"):
+			l["failing"] = true
+			l["every"] = Props._num(e.get("every"), FAIL_EVERY.x, FAIL_EVERY.y, FAIL_EVERY.z)
+		else:
+			notes.append("\"%s\": only an electric light fails - `failing` left out" % l["name"])
+	elif e.get("every") != null and not base.has("every"):
+		notes.append("\"%s\": `every` is for what comes and goes, or a failing light's spells - left out" % l["name"])
 	return l
 
 
@@ -721,7 +761,8 @@ static func summary(light: Dictionary) -> String:
 		parts.append("%s every %d s or so" % [String(birds["look"]), roundi(float(birds["every"]))])
 	for l in light.get("lamps", []):
 		var d: Dictionary = l
-		parts.append("%s (%s, %s%s)" % [String(d["name"]), String(d["look"]), from_name(float(d["from"])), ", casting" if bool(d["shadows"]) else ""])
+		parts.append("%s (%s, %s%s%s)" % [String(d["name"]), String(d["look"]), from_name(float(d["from"])), ", casting" if bool(d["shadows"]) else "",
+			", failing" if bool(d.get("failing", false)) else ""])
 	for c in light.get("shadows", []):
 		var d: Dictionary = c
 		var kind := String((d["move"] as Dictionary)["kind"])
@@ -1630,8 +1671,6 @@ static func flicker(look: String, fk: Dictionary, t: float) -> Dictionary:
 			out["jitter"] = Vector3(n.get_noise_2d(t * 1.1, s + 3.0), n.get_noise_2d(t * 1.4, s + 9.0) * 0.5, n.get_noise_2d(t * 1.2, s + 17.0)) * 0.035
 		"lantern":
 			out["bright"] = 1.0 + 0.03 * n.get_noise_2d(t * 1.5, s) + 0.015 * n.get_noise_2d(t * 9.0, s + 7.0)
-		"fluorescent", "neon":
-			out["bright"] = _stutter(fk, t, 60.0 if String((LAMPS[look] as Dictionary)["flicker"]) == "fluorescent" else 25.0)
 		"screen":
 			var cut := _segment(fk["cuts"] as PackedFloat32Array, t)
 			var h := _hash(int(fk["salt"]) ^ cut)
@@ -1650,6 +1689,11 @@ static func flicker(look: String, fk: Dictionary, t: float) -> Dictionary:
 			out["sweep"] = clampf((ph - 0.5) / 0.1, -1.0, 1.0)
 		"lightning":
 			out["bright"] = _flash(fk, t)
+	if fk.has("spells"):
+		var f := _failing(fk, t)
+		out["bright"] = float(out["bright"]) * f.x
+		if f.y < 1.0:
+			out["tint"] = (out["tint"] as Color) * _warmer(f.y)
 	return out
 
 
@@ -1671,7 +1715,8 @@ static func flame_in_wind(look: String, wind: Dictionary, t: float, at: Vector3)
 
 ## The dice a lamp's flicker reads ([method flicker]): its noise and seed, the cuts of a screen's
 ## pictures, the times headlights pass and lightning flashes (each flash's own dice are [method
-## _strokes]), and its stutters - all over [constant HORIZON], from [param salt].
+## _strokes]), and a failing light's bad spells (each spell's sags its own dice, [method _sags]) - all over
+## [constant HORIZON], from [param salt].
 static func flicker_of(l: Dictionary, salt: int) -> Dictionary:
 	var r := RandomNumberGenerator.new()
 	r.seed = salt
@@ -1705,7 +1750,25 @@ static func flicker_of(l: Dictionary, salt: int) -> Dictionary:
 					t += r.randf_range(LIGHTNING_SOON.x, LIGHTNING_SOON.y * 2.0 - LIGHTNING_SOON.x)
 				else:
 					t += maxf(lull * exp(r.randfn(-0.125, 0.5)), LIGHTNING_SOON.x)
-	return {"noise": n, "seed": r.randf() * 1000.0, "salt": salt & 0x7FFFFFFF, "every": every, "cuts": cuts, "events": events}
+	var out := {"noise": n, "seed": r.randf() * 1000.0, "salt": salt & 0x7FFFFFFF, "every": every, "cuts": cuts, "events": events}
+	var fails := String((LAMPS[String(l["look"])] as Dictionary).get("fails", ""))
+	if bool(l.get("failing", false)) and not fails.is_empty():
+		# A FAILING LIGHT'S BAD SPELLS, on dice of their own: about `every` apart, a few seconds each
+		var f := RandomNumberGenerator.new()
+		f.seed = hash([salt, "failing"])
+		var spells := PackedFloat32Array()
+		var lens := PackedFloat32Array()
+		t = f.randf_range(0.3, 1.2) * every
+		while t < HORIZON:
+			var length := clampf(SPELL.x * exp(f.randfn(0.0, SPELL.y)), SPELL.z, SPELL.w)
+			spells.append(t)
+			lens.append(length)
+			t += length + every * exp(f.randfn(-0.125, 0.5))
+		out["spells"] = spells
+		out["spell_lens"] = lens
+		out["fails"] = fails
+		out["parts"] = f.randi_range(TUBES.x, TUBES.y) if fails == "tube" else (f.randi_range(SEGMENTS.x, SEGMENTS.y) if fails == "sign" else 1)
+	return out
 
 
 ## The index of the segment [param t] falls in, segments starting at [param starts].
@@ -1723,18 +1786,92 @@ static func _event(starts: PackedFloat32Array, t: float, dur: float) -> float:
 	return (t - starts[i]) / dur
 
 
-## A tube's or a sign's STUTTER: steady, and now and then (about every [param slot] seconds) a fraction
-## of a second blinking off and on.
-static func _stutter(fk: Dictionary, t: float, slot: float) -> float:
-	var k := floori(t / slot)
-	var h := _hash(int(fk["salt"]) ^ (k * 2654435) & 0xFFFFFFFF)
-	if float(h & 0xFF) / 255.0 > 0.55:
-		return 1.0
-	var dur := 0.15 + 0.6 * float((h >> 8) & 0xFF) / 255.0
-	var start := float(k) * slot + (slot - dur) * float((h >> 16) & 0xFF) / 255.0
-	if t < start or t > start + dur:
-		return 1.0
-	return 1.0 if sin((t - start) * 115.0 + float(h & 0x3F)) > -0.2 else 0.08
+## A FAILING LIGHT at [param t] ([method flicker_of]'s `spells`): `Vector2(bright, warmth)` - 1 and 1 but in
+## a bad spell. In one the supply SAGS again and again ([method _sags]), and what that does is the light's:
+##   - A BULB's filament follows the voltage only as fast as it cools and heats ([constant FILAMENT]): a sag
+##     dims it over a tenth of a second and warms its color (`warmth`, the color temperature's share), and
+##     it comes back a little quicker - a brown-out, never a blink. Walked from the spell's start exactly,
+##     one exponential a step, so any time asked is the same light.
+##   - A TUBE's bank has one bad tube that drops out in a sag (and restrikes): the table loses its share of
+##     the bank; a SIGN, one stroke of its several, in short sputters ([constant SPUTTER]). These switch, so
+##     they are taken as a camera takes them - the share of the [constant FLASH_SHUTTER] before [param t]
+##     that was lit, as lightning is - and a frame never lands on a blink by chance.
+##   - Very rarely ([constant DROPOUT]) one sag is the whole light all but out for a moment.
+static func _failing(fk: Dictionary, t: float) -> Vector2:
+	var starts: PackedFloat32Array = fk["spells"]
+	var i := _segment(starts, t)
+	if starts.is_empty() or t < starts[i]:
+		return Vector2.ONE
+	var u := t - starts[i]
+	var length := float((fk["spell_lens"] as PackedFloat32Array)[i])
+	if u > length + SAG.w + DROPOUT.z + 6.0 * FILAMENT.x + FLASH_SHUTTER:
+		return Vector2.ONE
+	var sags := _sags(int(fk["salt"]), i, length, String(fk["fails"]) == "sign")
+	if String(fk["fails"]) == "bulb":
+		# the filament's temperature, walked from the spell's start (lit) through each sag and each recovery
+		var theta := 1.0
+		var at := 0.0
+		for sg in sags:
+			var s0 := float(sg[0])
+			var s1 := float(sg[1])
+			var v := float(sg[2])
+			theta = _toward(theta, 1.0, minf(s0, u) - at)
+			at = minf(s0, u)
+			if u <= s0:
+				break
+			theta = _toward(theta, v, minf(s1, u) - at)
+			at = minf(s1, u)
+			if u <= s1:
+				break
+		theta = _toward(theta, 1.0, u - at)
+		return Vector2(pow(theta, BULB_LIGHT), pow(theta, BULB_WARM))
+	# a tube's bank or a sign: what share of the shutter each sag covered, and how much of the light it took
+	var loss := 0.0
+	var parts := float(fk["parts"])
+	for sg in sags:
+		var lit := minf(float(sg[1]), u) - maxf(float(sg[0]), u - FLASH_SHUTTER)
+		if lit <= 0.0:
+			continue
+		var gone := 0.96 if float(sg[2]) <= 0.0 else 1.0 / parts
+		loss += gone * lit / FLASH_SHUTTER
+	return Vector2(maxf(1.0 - loss, 0.04), 1.0)
+
+
+## A filament at [param theta] heading for [param v] for [param dt] seconds: cooling toward a sag, heating
+## back faster ([constant FILAMENT]).
+static func _toward(theta: float, v: float, dt: float) -> float:
+	if dt <= 0.0:
+		return theta
+	return v + (theta - v) * exp(-dt / (FILAMENT.x if v < theta else FILAMENT.y))
+
+
+## BAD SPELL [param i]'s sags, on its own dice: `[[start, end, voltage]]` (seconds into the spell; the
+## voltage left, 0 for the moment all but out). The waits between them are wide-spread (log-normal), so they
+## bunch - two or three close, a pause, another - and most sags are shallow ([constant SAG_DEPTH]); a sign's
+## are short sputters.
+static func _sags(salt: int, i: int, length: float, sign: bool) -> Array:
+	var r := RandomNumberGenerator.new()
+	r.seed = hash([salt, i, "sags"])
+	var out: Array = []
+	var dropout := r.randf() < DROPOUT.x
+	var t := r.randf_range(0.0, 0.3)
+	while t < length:
+		var d := clampf(SAG.x * exp(r.randfn(0.0, SAG.y)), SAG.z, SAG.w) * (SPUTTER if sign else 1.0)
+		var v := 1.0 - lerpf(SAG_DEPTH.x, SAG_DEPTH.y, pow(r.randf(), 1.5))
+		if dropout and t > length * 0.3:
+			d = r.randf_range(DROPOUT.y, DROPOUT.z)
+			v = 0.0
+			dropout = false
+		out.append([t, t + d, v])
+		t += d + clampf(SAG_GAP.x * exp(r.randfn(0.0, SAG_GAP.y)), 0.03, 2.0)
+	return out
+
+
+## A light's color made warmer: its color temperature at [param share] of its own (a bulb's 2700 K at 0.8 is
+## about 2160 K) - red held, green and blue falling off as a blackbody's do down there.
+static func _warmer(share: float) -> Color:
+	var k := clampf(share, 0.3, 1.0)
+	return Color(1.0, pow(k, 0.9), pow(k, 2.2))
 
 
 ## LIGHTNING at [param t]: dark, and at each flash ([method _strokes]) the light it throws into the room

@@ -344,7 +344,7 @@ func bed_of(export := false) -> Dictionary:
 	if (made["sound"] as Dictionary).is_empty():
 		return {"key": key}
 	return {"key": key, "make": func(sample_rate: int, t0: float) -> SoundBed:
-		return Soundscape.new(made["sound"], made["wind"], seed, sample_rate, t0)}
+		return Soundscape.new(made["sound"], made["wind"], seed, sample_rate, t0, made["ride"])}
 
 
 ## The reading's document [param d], at a table: the show's title and byline, and the episode as the

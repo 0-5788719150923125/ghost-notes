@@ -12,8 +12,13 @@
 # the line it goes up in, beside a YouTube description and tags. The description says nothing of
 # whether the proof was checked: the upload adds that line from what Lean said (ProofCard.upload_base).
 #
-# The code gives: {{uploads_as}} (the line the title goes up in, maybe empty) and {{before}} (the
-# titles this note's other episodes took, maybe empty).
+# HOW IT IS CHECKED (the user, 2026-10-19: "it should be a general theorem-prover and learning tool"):
+# a claim of mathematics Lean can state is a PROOF; where code can run (ProofTools.can_run), a claim
+# about a model, a simulation or data is a COMPUTATION - what is computed is fixed here, as a proof's
+# statement is (ProofProducer.land_problem refuses a computation that does not say).
+#
+# The code gives: {{uploads_as}} (the line the title goes up in, maybe empty), {{before}} (the titles
+# this note's other episodes took, maybe empty) and the flag `run` (code can run here).
 prompt:
   - >-
       You are the FRAMER of this episode. Read the note and fix the problem the episode is about,
@@ -25,20 +30,38 @@ prompt:
   - '  "episode_title": "this episode''s title, in title case{{#uploads_as}} - its own part of the line the video goes up as{{/uploads_as}}",'
   - '  "statement": "the problem in plain words, as the teacher will first say it aloud",'
   - '  "latex": "the precise statement in LaTeX math, without dollar signs",'
-  - '  "lean": "the exact Lean 4 statement, starting with theorem main and ending before := (no proof)",'
-  - '  "forbidden": ["the Mathlib names that ARE this theorem or prove it outright"],'
+  - '  "check": "proof{{#run}} or computation{{/run}}",'
+  - '  "lean": "for a proof, the exact Lean 4 statement, starting with theorem main and ending before := (no proof){{#run}}; for a computation, empty{{/run}}",'
+  - '  "forbidden": ["for a proof, the Mathlib names that ARE this theorem or prove it outright"],'
+  - when: run
+    say: '  "computation": "for a computation, what is computed and how its numbers are checked; for a proof, empty",'
   - '  "history": "two to four sentences on where the problem comes from, only what you are sure of",'
   - '  "audience": "who the lesson is for: what the note says, else curious viewers with high-school math",'
   - '  "description": "the video''s YouTube description: what the viewer will see worked out and come away understanding, in two or three short paragraphs; plain and warm, no hype, no emoji, no links",'
-  - '  "tags": ["eight to twelve search tags: the topic, the branch of math, the theorem''s names"]'
+  - '  "tags": ["eight to twelve search tags: the topic, its field, the names of the results"]'
   - "}"
   - ""
   - >-
-      The Lean statement must say exactly what the plain statement says - no stronger, no weaker -
-      in Mathlib's standard definitions (Nat.Prime, Irrational, Finset.sum over Finset.range, and so
-      on), as simply as the claim allows. Name it main. Use Unicode notation the way Mathlib does
-      (ℕ, ℝ, ∑, √). If the note asks for something Lean cannot state well, state the nearest honest
-      version and say so in "statement".
+      Keep the claim at the depth and generality the note asks for, so long as the team can really
+      settle it; if it cannot, fix the nearest honest version and say so in "statement".
+  - >-
+      A claim of mathematics that Lean can state exactly is a proof.{{#run}} A claim about a model, a
+      simulation, an estimate or data - one whose answer is found by computing it - is a
+      computation. A theorem whose cases are worth seeing is still a proof: the solver can run code
+      to show them.{{/run}}
+  - >-
+      For a proof, the Lean statement must say exactly what the plain statement says - no stronger,
+      no weaker - in Mathlib's standard definitions (Nat.Prime, Irrational, Finset.sum over
+      Finset.range, and so on), as simply as the claim allows. Name it main. Use Unicode notation the
+      way Mathlib does (ℕ, ℝ, ∑, √).
+  - when: run
+    say: >-
+      For a computation, "computation" fixes the work as a statement fixes a proof: the model, its
+      equations and its numbers, or how the data is made (anything random with its seed fixed); the
+      quantity to find; and the checks that make the numbers trustworthy - a case with a known
+      exact answer, or a finer step or more samples giving the same result. A computation shows
+      what happens in the cases it runs: frame a claim that this settles honestly, and say in
+      "statement" which cases.
   - >-
       In "history", never invent a name, a date or a quotation: say less rather than guess.
   - ""

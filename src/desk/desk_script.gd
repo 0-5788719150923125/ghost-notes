@@ -81,8 +81,9 @@ const WRITES := ["pad", "pad-text", "draw"]
 
 ## The rest before a dictation, for the pen to come down at its line.
 const LEAD_HOLD := 0.45
-## A page turned before the next formula: the sheet lifts and flips over the pad's binding.
-const TURN := 1.6
+## A page turned before the next formula: the sheet is lifted, goes over the binding and is folded
+## round the back of the pad, its head lifted for it and set down again ([LegalPad]).
+const TURN := 2.2
 ## How much faster or slower than its own pace the pen may write, on the average over a dictation,
 ## to keep with the words. Past MAX_PACE it lags, and the voice waits for it at the dictation's end
 ## ([method tail_for]). THE PEN KEEPS UP WITH THE VOICE (the user, 2026-10-16: "rather than breaking

@@ -60,28 +60,26 @@ const PAINT_SIM_SHADER := preload("res://shaders/clown_paint.gdshader")
 const UMBRA_SIM_SHADER := preload("res://shaders/umbra_field.gdshader")
 const MASKS_DIR := "res://masks"
 
-
-static func _masks_dir() -> String:
-	return MASKS_DIR if OS.has_feature("editor") else "user://masks"
 ## The panel's width, as every note's panel has it ([SidePanel]); the video, the timeline and the
 ## lanes start past it and its margin on both sides.
 const PANEL_W := 380.0
 const VIDEO_LEFT := PANEL_W + 2.0 * SidePanel.MARGIN
+
 # Picked via _sort_dropdown - see _apply_sort for what each one does.
 const _SORT_MODES := ["A → Z", "Z → A", "Energy"]
 
 ## Set by main.gd before open_source() for the --mask-render relaunch: skip the
 ## editing panel, autoplay from t=0, quit when the audio finishes.
 var render_mode := false
+
 ## The note this editor is (set by main), where a clip chosen here is written - "" from the
 ## command line.
 var note_path := ""
+
 ## Set by main: (path: String) -> void - open the note again, once its clip has been detached.
 var reopen: Callable
-
 var session: MaskSession = null
 var _session_path := ""       # res://-relative or absolute; wherever it was loaded from
-
 var _player: VideoStreamPlayer     # always the RAW decode - never carries the shader
 var _audio: AudioStreamPlayer
 var _audio_thread: Thread = null   # loads the (large, uncompressed) main WAV off the main thread
@@ -95,16 +93,19 @@ var _pending_restore := -1.0       # playhead seconds to seek to once the player
 var _pending_restore_tries := 0
 var _reload_check_pid := -1        # headless compile check gating a reload (see _do_restart)
 var _reload_check_log := ""
+
 ## Set when a reload was requested while an export was mid-flight (_render_state !=
 ## "idle") - see _reload_requested. _poll_render re-fires the request once the export
 ## finishes, same deference the assistant already gets in reload_when_idle: a restart
 ## quits this process, and Godot kills the child processes it created (see assistant.gd's
 ## _closing doc) - including the render/transcode subprocess an export is waiting on.
 var _reload_after_export := false
+
 ## Set the instant _restart_now actually commits to quitting (after its own final
 ## _save_session capture) - see _save_session and _exit_tree for why this exists.
 var _restarting := false
 var _track_audio_jobs: Array = []  # background sidecar-.ogg extractions, {pid, index, ogg}
+
 # One material PER LAYER: the main overlay and the inset can be mid-transition at
 # different presences (e.g. fx-inset -> both: the inset holds full while the main
 # overlay fades in), and a layer's presence multiplies into its own intensities -
@@ -116,13 +117,13 @@ var _audio_holding := false   # main audio paused-in-place, waiting for video to
 var _av_debug_ms := 0         # GHOST_AV_DEBUG throttle
 var _av_reported := false     # the once-per-run audio path summary has been printed
 var _audio_hold_ms := 0       # when that hold engaged - it is not allowed to last forever
+
 ## The longest the audio may be held waiting for the video. A readback stall is
 ## tens of milliseconds; anything past this is not a stall but a machine that is
 ## not keeping up, and continuing to wait is just silence.
 const _AUDIO_HOLD_LIMIT_MS := 1200
 var _cursor_idle_t := 0.0
 const _CURSOR_HIDE_DELAY := 1.5   # seconds of stillness during playback before the mouse cursor hides
-
 var _fx_overlay: TextureRect       # full-frame fx layer - shaded copy of whichever source is active
 var _cont_view: TextureRect        # full-frame RAW layer for an active continuation track (see _sync_tracks) -
                                    # _player's own raw picture is only valid while session.main_visible_at's
@@ -140,31 +141,11 @@ var _peek_raw := false     # DISPLAY-ONLY raw override; never touches session da
 var _last_inset_show := 0.0   # this frame's resolved inset_show - _sync_tracks reads it too,
                                # so a track's own PiP box respects the same view-mode gate as _mask_wrap
 var _pip_track := 0           # this frame's resolved pip_track: 0 = main clip in the PiP, k = track (k-1)
-
 var _timeline: MaskTimeline
 var _tview: TimelineView          # shared pixel<->time mapping - see timeline_view.gd
 var _video_area: AspectRatioContainer  # letterboxed video slot - see _refresh_lanes
 var _lanes_col: VBoxContainer     # primary clip's trim lane + one per imported track
 var _composition_parent: Control  # holds _player/_fx_overlay/_mask_wrap - track PiP views land here too
-
-# --- THE SOURCE CLIP'S OWN FRAME SIZE -------------------------------------------
-# Everything that has to know the picture's SHAPE reads this: the editor's
-# letterboxed video slot (_build_editor_ui), the export's recorded resolution
-# (_write_render_override), the meta mirror's hand-built pane
-# (_shrink_into_video_pane) and the umbra eye fit's aspect correction. A portrait
-# clip (1080x1920) is therefore not a special case anywhere - it is just this pair
-# being taller than it is wide, and the editor pillarboxes it (black bars either
-# side) exactly the way a short clip already letterboxes. Nothing here assumes
-# 16:9; the several places that used to hardcode 1.7778 / 1920x1080 were the ONLY
-# reason a vertical clip came out horizontally squashed.
-#
-# Seeded by ffprobe at session-ready - the editor layout and the export launch
-# both need it BEFORE a frame has decoded - then confirmed from the decoded
-# texture itself the first frame it exists (_sync_source_size), which is
-# authoritative and also covers a machine with no ffprobe on PATH.
-const _SRC_SIZE_FALLBACK := Vector2i(1920, 1080)
-var _src_size := _SRC_SIZE_FALLBACK
-var _src_size_confirmed := false   # the decoded texture has had its say
 
 ## Runtime state per session.tracks[i] - NOT persisted (session.tracks holds only
 ## the data; players/views are rebuilt from it every _ready_with_session). Each:
@@ -177,13 +158,13 @@ var _import_dialog: FileDialog
 var _import_pid := -1
 var _import_pending := {}   # {source, video, index} - the lane is added up front, this tracks its transcode
 
-# --- YouTube / URL import runtime (see _start_url_import) ---
+# YouTube / URL import runtime (see [MaskUrlImport])
 var _yt_state := "idle"    # idle | provisioning | downloading
 var _yt_pid := -1
 var _yt_step_started := 0.0   # unix time the CURRENT step began - the elapsed readout
 var _yt_echoed := {}       # WARNING/ERROR lines already print()-echoed live (a set)
 
-# --- The clown face model (see _update_face_model): eyes / mouth / oval /
+# The clown face model (see _update_face_model): eyes / mouth / oval /
 # tint, fitted per capture tick, EMA-glided exactly like the anchor. Defaults
 # describe a plausible centered face so the paint shows before the first fit.
 var _clown_active := false
@@ -197,6 +178,7 @@ var _face_r_prev := Vector2(0.14, 0.20)
 var _face_r_ema := Vector2(0.14, 0.20)
 var _face_tint_ema := Vector3(0.55, 0.1, -0.5)
 var _face_lum_ema := 0.5
+
 # Per-feature sizes, measured from each cluster's own spread, in PLAIN
 # SCREEN units (uv) - deliberately NOT eye-distance units: normalizing by
 # the pair re-coupled every feature's size to the pair's jitter and the
@@ -207,6 +189,7 @@ var _face_eye_rr_prev := 0.035
 var _face_eye_rr_ema := 0.035
 var _face_mouth_r_prev := Vector2(0.05, 0.028)
 var _face_mouth_r_ema := Vector2(0.05, 0.028)
+
 # The face centroid (the coat channel's home + the cracks' local pull) and
 # the nose's OWN slow anchor - derived from eyes+mouth but smoothed on its
 # own clock, so it does not inherit the pair's frame jitter.
@@ -214,6 +197,7 @@ var _face_c_prev := Vector2(0.5, 0.45)
 var _face_c_ema := Vector2(0.5, 0.45)
 var _face_nose_prev := Vector2(0.5, 0.52)
 var _face_nose_ema := Vector2(0.5, 0.52)
+
 # The face model's OWN capture cadence - faster than the echo ring's 0.35s,
 # because the mask must chase the face in near-real-time (the half-second
 # drift report), while the ring's semantics (8 slots x 0.35s of history)
@@ -221,6 +205,7 @@ var _face_nose_ema := Vector2(0.5, 0.52)
 # image instead of paying a second readback.
 const _FACE_INTERVAL := 0.15
 var _face_slot := -1
+
 ## The aspect every hand-tuned bound in the face model was calibrated at. The
 ## fitted radii are stored in raw uv (the shaders' contract), but a BOUND on a
 ## width has to be applied in height units - "0.145 of the frame's width" is
@@ -230,16 +215,16 @@ var _face_slot := -1
 ## footage bit-identical to what those numbers were tuned against, and gives
 ## every other shape the same physical bound instead of a scaled one.
 const FACE_ENV := "face_venv"
-
 var _ft_state := "none"   # none | provisioning | tracking | ready | failed
 var _ft_pid := -1
-
 const _FACE_ASP_REF := 1.7778
+
 ## What counts as the face's CORE, as a fraction of the peak weight - the mass the
 ## size fit is allowed to see. See _update_face_model: the weight field is broad by
 ## design, and letting the broad part set the face's size is what pushed the eye
 ## pair off the face on real footage.
 const _FACE_CORE := 0.35
+
 ## KNOWN LOOSE END, measured, deliberately left alone: this fit's own bound
 ## (0.30 x _FACE_ASP_REF) is nearly twice as wide as the cap the paint sim draws
 ## the coat with (clown_paint.gdshader's FACE_CAP_XHI). Since rx also sets how far
@@ -255,6 +240,7 @@ var _face_motion_mean := 0.0                 # EMA of the face's ambient per-pix
 var _face_red_ema := 0.02                    # mean (r-g) over the face - the lips' baseline
 var _face_bg_lum := 0.2                      # this frame's whole-frame mean luminance (the
                                              #   brightness cue's floor - see _update_face_model)
+
 # The liquid paint simulation (see shaders/clown_paint.gdshader and
 # _step_paint_sim): a ping-pong SubViewport pair holding the persistent,
 # advected paint field the mask shader samples as u_clown_paint. Built
@@ -282,12 +268,14 @@ var _clown_drip_curve_sl: HSlider
 var _clown_smile_sl: HSlider
 var _clown_curve_sl: HSlider
 var _clown_evidence_sl: HSlider
+
 ## The clown's four tuning knobs, resolved per frame from the live layer (see
 ## _apply_frame_state). Each is a view onto a field the keying/pattern groups own
 ## for other effects and clown never uses - the same idiom umbra's six follow -
 ## and each DEFAULT REPRODUCES the constant it replaced, so no existing session
 ## changes look until its author moves a slider.
 var _clown_evidence := 0.0   # resonance  - drawn-shape floor vs the picture's own evidence
+
 ## THE SHAPE KNOBS, on the three fields Steady/Firm/Lead used to hold.
 ##
 ## Those three existed to fight a detector that jittered and lagged. The landmark
@@ -299,6 +287,7 @@ var _clown_evidence := 0.0   # resonance  - drawn-shape floor vs the picture's o
 ## internally, so it behaves exactly as before when there is no track.)
 var _clown_eye_size := 1.0     # threshold - how far the eye patch grows past the eye
 var _clown_drip := 0.0         # sat_floor - how far the black runs down the cheek
+
 ## The run's WEIGHT and its BOW. Drip says how FAR the liner runs; these two say
 ## what it looks like on the way, which is the half the author was left with no
 ## say over at all ("no options to adjust this drop shape, or its position, or
@@ -313,24 +302,27 @@ var _clown_drip_w := 0.35      # fx_y        - the run's width, x the measured l
 var _clown_drip_curve := 0.25  # intensity_b - how far it bows out across the cheek
 var _clown_smile_w := 1.0      # feather   - the smile's width, past the real mouth
 var _clown_smile_curve := 0.0  # fx_speed  - its corners swept up (-) or down (+)
+
 ## How far the coat's outer edge fades out, in frame UV. On fx_x - Pan is hidden
 ## for the clown (it could only slide a face-tracked mask OFF the face), so the
 ## field is free and this is the control that most wants a home.
 var _clown_feather := 0.012
+
 ## How wide the CENTERED kernel is that smooths the landmark track, in samples
 ## (see _ft_point). Because it is centered it costs no lag at any width - the only
 ## thing a wider one loses is genuinely fast motion, which it rounds off. On
 ## hue_b, the last field clown had free.
 var _ft_sigma := 2.5
+
 ## The clown layer's region box, mirrored CPU-side so the face SEARCH honors it
 ## too (see _face_region_at). Whole frame until the author draws one.
 var _clown_region := Vector4(0.0, 0.0, 1.0, 1.0)
+
 ## The live audio layer (see _apply_audio_fx); empty when no audio marker governs.
 var _audio_layer := {}
 var _clown_bleed := 0.0    # its Bleed / Settle / Hollow knobs, fed to the paint sim
 var _clown_settle := 0.35
 var _clown_hollow := 0.0
-
 
 ## The landmark indices this effect uses, by name rather than by number at the call
 ## site - MediaPipe's pose order is not guessable and a transposed pair here is a
@@ -351,37 +343,22 @@ const PT_SH_R := 12
 ## would cost the window's latency (see the face_venv row in deps.gd).
 var _pt_state := "none"
 var _pt_pid := -1          # unused by the bootstrap now; kept in the reap list
+
 ## THE CAST DIRECTION, accumulated over every window ever loaded this session and
 ## weighted by each one's own confidence. One window measures it poorly and a dozen
 ## measure it well, so this improves as the author works rather than being fixed by
 ## whichever window happened to load first - and a window that measured nothing
 ## contributes nothing rather than dragging the answer toward its noise.
 var _pt_dir := Vector2(1.0, 0.0)
+
 ## The silhouette handed to the field sim, kept as one image + texture and rewritten
 ## in place per sample rather than reallocated - this runs every frame an umbra layer
 ## is live, and Image.create_from_data on every one of them is heap churn for nothing.
 var _pt_slot := -1
 var _pt_guard_slot := -1
 var _pt_tex: ImageTexture = null
-
-# --- UMBRA: the ghost that moves her (see _umb_solve_cast and
-# shaders/umbra_field.gdshader).
-#
-# WHAT IT IS. Her own silhouette, thrown as a cast shadow that is larger than
-# she is, stands beside her, and reads the clip AHEAD of the playhead - so it
-# turns its head before she turns hers, and the picture reads as the ghost
-# moving her rather than the other way round.
-#
-# WHERE THE SHAPE COMES FROM. The pose track (_pt_*), which is MediaPipe's
-# person segmentation plus 33 body landmarks, fitted offline over the whole
-# clip. What it replaces was a chroma-direction detector that hunted the
-# footage's own cast shadow: it needed the room to have one big soft shadow on
-# a chromatically uniform wall, a color hypothesis scored per surface, two
-# flood fills, and a confidence gate that drew nothing when they disagreed. A
-# person mask is the same answer with none of the conditions - and it also
-# gives the ghost a SKELETON, which is what lets its head and its eyes be
-# placed rather than guessed at from the middle of a blob.
 var _umbra_active := false
+
 # THE CAST TRANSFORM, solved per frame from the pose sample at `t + Lead` and
 # handed to the field sim as its inverse. It is a SIMILARITY pinned by two
 # point pairs - her shoulder line to the ghost's, her eye line to the ghost's -
@@ -397,6 +374,7 @@ var _umb_eye_src := Vector2(0.5, 0.3)# her own eye line, aspect-corrected (the b
 var _umb_unit := 0.3                 # her eye-to-shoulder distance - the unit for everything
 var _umb_bust0 := 1.2                # bust falloff, in her own units, from her eye line
 var _umb_bust1 := 2.6
+
 # The cast direction, measured over the WHOLE clip by the pose pre-pass (her
 # shadow is the part of the background that moves when she does). Furniture,
 # not a per-frame measurement.
@@ -406,6 +384,7 @@ var _umb_stand := 1.05   # Stand  (threshold)   - how far to the side the ghost 
 var _umb_lead := 0.19    # Lead   (feather)     - seconds the ghost moves AHEAD of her
 var _umb_lean := 0.45    # Lean   (swap)        - how far it leans along the throw, and rises
 var _umb_narrow := 0.35  # Narrow (intensity_b) - how much taller-than-wide it is drawn
+
 # THE GHOST'S EYES: her own eye landmarks pushed through the cast transform, so
 # they are on the ghost's head by construction at every size.
 var _umb_eye_l := Vector2(0.5, 0.4)
@@ -414,6 +393,7 @@ var _umb_eye_rad := 0.05
 var _umb_eyes_ok := false
 var _umb_eye_amt := 0.0   # Gaze (sat_floor) - how strongly the eyes read
 var _umb_have := false
+
 # The umbra field simulation (ping-pong SubViewport pair, same discipline as
 # the clown's paint sim: stepped on PLAYBACK deltas so pause freezes it and
 # export traces the identical currents).
@@ -429,7 +409,6 @@ var _umb_wisp := 0.0     # Wisp   (fx_smooth)
 var _umb_cling := 0.35   # Cling  (fx_lag)
 var _umb_scale := 1.0    # Scale
 var _selected: Variant = null   # the marker Dictionary currently shown in the panel
-
 var _color_a: ColorPickerButton
 var _hue_a: HSlider   # the Morph slider (fx_tint - palette rotation), decoupled from _color_a
 var _threshold: HSlider
@@ -471,20 +450,19 @@ var _umbra_gaze: HSlider  # umbra's Gaze   - its view onto sat_floor
 var _umbra_lean: HSlider  # umbra's Lean   - its view onto swap
 var _umbra_narrow: HSlider# umbra's Narrow - its view onto intensity_b
 var _color_eye: ColorPickerButton   # umbra's eye color - hue_b, pushed as u_l_accent
+
 ## repaint's replacement color. Unlike every other picker here this one is a
 ## WHOLE color, not a hue: it writes hue_b/fx_stick/fx_tint (h/s/v), so black
 ## and white are reachable and "replace the yellow wall with black" is one pick.
 var _color_paint: ColorPickerButton
 var _paint_reach: HSlider           # repaint's Reach - fx_contrast
 var _paint_smooth: HSlider          # repaint's Smoothing - fx_smooth
+
 ## The region box: a CheckBox that turns it on for the selected marker, a slider
 ## for its border softness, and the draggable box itself over the video pane.
 var _region_on: CheckBox
 var _region_soft: HSlider
-var _region_overlay: Control
 var _region_drag := ""              # "" | nw/ne/sw/se | n/s/e/w | move
-var _region_drag_from := Vector2.ZERO   # mouse position at press
-var _region_drag_box := Rect2()         # the box at press - drags resolve from THIS
 var _resonance: HSlider
 var _effect_a: OptionButton
 var _intensity_a: HSlider
@@ -493,27 +471,22 @@ var _kind: OptionButton     # ramp / damp - see MaskSession.MARKER_KINDS
 var _marker_duration: HSlider
 var _marker_label: Label
 var _time_label: Label
+
 ## Whether playback drags the SELECTION along with the playhead (the "Follow"
 ## switch beside the marker list's header). On by default; off is what lets an
 ## author hold one marker selected and tune it while the clip runs.
 var _follow_playhead: CheckBox
 var _marker_list: VBoxContainer   # sequential ramp/damp list, pinned to the panel's bottom
 var _history_label: Label   # "Undo: <last action>" preview above the +Ramp/+Damp row, see _refresh_history_label
-
 var _feedback: Node = null    # the shell's backtick console (see _build_feedback); editor mode only
 var _was_playing_before_feedback := false
-
 var _status: Label            # shared bottom-right notification - prep AND export
 var _export_btn: Button
-var _dialog: FileDialog
 var _open_dialog: FileDialog
-
 var _prep_video_pid := -1
 var _prep_audio_pid := -1
-var _prep_src_dur := 0.0         # source clip duration (seconds), for the video step's %
 var _prep_state := "idle"        # idle / prepping_video / prepping_audio
 var _pending := {}               # source/dir/video/audio paths mid-prep
-const _PREP_PROGRESS_FILE := "user://mask_prep_progress.txt"
 
 # Temporal capture (echo ring + whisp anchor): quarter-res snapshots of past
 # frames, taken every _ECHO_INTERVAL seconds of PLAYBACK time (slot = position /
@@ -540,6 +513,7 @@ var _workspace_tex: ImageTexture = null  # the editor's own previous frame, capt
 var _meta_chrome: Control = null  # render-mode only: the editor-chrome overlay a META section
                               #   fades in over the clean video (the recorded product demo)
 var _chrome_parent: Node = null   # where _build_chrome() parents (self, or _meta_chrome in export)
+
 # The whisp anchor is double-buffered: _anchor_ema is the EMA at the LATEST
 # capture, _anchor_prev the one before. The uniform pushed per frame lerps
 # between them by position-within-slot (see _push_anchor) - pushing the EMA
@@ -548,6 +522,7 @@ var _chrome_parent: Node = null   # where _build_chrome() parents (self, or _met
 # export trace the identical glide.
 var _anchor_prev := Vector2(0.5, 0.5)
 var _anchor_ema := Vector2(0.5, 0.5)
+
 # Chimera's landmark FRAME (position + size), double-buffered and glided exactly
 # like the centroid above. The MAIN face's modeled size (RMS radius of its
 # key/motion mass) and the imported TRACK face's own centroid + size, each an
@@ -583,29 +558,12 @@ var _wave_pos := PackedVector2Array()
 var _wave_time := PackedFloat32Array()
 var _wave_amp := PackedFloat32Array()
 var _wave_slot := 0
-
 var _waveform_pid := -1
 var _waveform_path := ""         # set once we know it; polled in _process until it exists
-
-# --- Hi-res waveform window (see _poll_wave_hi): the base strip is one
-# 4096px showwavespic over the WHOLE clip - ~4px/s on a long video, mush when
-# the timeline is zoomed well in. When the on-screen pixels-per-second
-# outresolves the base, the VISIBLE window (padded) is re-rendered at the
-# same recipe on an audio slice, async and debounced, and the timeline draws
-# it over the base for that span. Progressive: the base shows (soft) until
-# the crisp slice lands.
-const _WAVEHI_PATH := "user://wave_hi.png"
 var _wavehi_pid := -1
-var _wavehi_span := Vector2.ZERO   # [start, end] seconds the in-flight/loaded render covers
-var _wavehi_want := Vector2.ZERO   # latest desired window - the debounce reference
-var _wavehi_settle := 0.0          # seconds the desired window has held still
-var _audio_env := PackedFloat32Array()   # per-column amplitude from the waveform image (resonance)
-
 var _render_state := "idle"      # idle / rendering / transcoding / done
 var _render_pid := -1
 var _transcode_pid := -1
-var _out := ""
-var _avi := ""
 
 # Auto-save: every edit marks the session dirty; it saves shortly after the last
 # change in a burst (and unconditionally on close), so work persists across
@@ -637,6 +595,63 @@ const _AUTOSAVE_DELAY := 0.4
 ## instead of one per place the pointer paused.
 var _undo_press_key := ""
 var _select_generation := 0   # bumped on every selection change; folded into the coalesce key
+const YT_ENV := "ytdlp_venv"
+
+## The bus the clip's sound runs through, with the timeline's effects on it ([MaskAudioFx]).
+const MASK_BUS := "MaskFX"
+const FT_NOSE_BRIDGE := 168
+var _stencil_vp: SubViewport
+
+
+# the editor's parts
+# What used to be sections of this file and is a script of its own now: each holds its own state,
+# reads the rest through `editor.`, and is asked a few things by name (next/structure.md, "One
+# file, one job").
+
+## THE POSE TRACK is a part of its own ([MaskPoseTrack]): bootstrapped, run a window at a time,
+## and read by time. The umbra asks it where she is.
+var _pose := MaskPoseTrack.new()
+
+## A LINK WHERE A FILE IS EXPECTED is a part of its own ([MaskUrlImport]): downloaded, polled,
+## and handed back to [method open_source].
+var _url_import := MaskUrlImport.new()
+
+## THE FACE TRACK is a part of its own ([MaskFaceTrack]): fitted once, read by time, and
+## rasterized into the stencil the clown's shader keys on.
+var _face := MaskFaceTrack.new()
+
+## THE AUDIO EFFECT is a part of its own ([MaskAudioFx]): the bus, and the timeline applied to it.
+var _audio_fx := MaskAudioFx.new()
+
+## UNDO AND REDO are a part of their own ([MaskUndo]): the two stacks of snapshots.
+var _undo := MaskUndo.new()
+
+## THE CLIP'S PREPARATION is a part of its own ([MaskPrep]): transcoded once, guarded against a second
+## writer, and measured - its length and its frame size.
+var _source_prep := MaskPrep.new()
+
+## THE WAVEFORM is a part of its own ([MaskWaveform]): the timeline's strip, crisp under zoom, and
+## the sound's envelope read off it.
+var _waveform := MaskWaveform.new()
+
+## THE REGION BOX is a part of its own ([MaskRegion]): drawn on, and dragged over, the video itself.
+var _region := MaskRegion.new()
+
+## THE EXPORT is a part of its own ([MaskExport]): a Movie Maker relaunch at the clip's own size,
+## then the mux.
+var _export := MaskExport.new()
+
+
+func _init() -> void:
+	_source_prep.editor = self
+	_export.editor = self
+	_waveform.editor = self
+	_region.editor = self
+	_undo.editor = self
+	_audio_fx.editor = self
+	_pose.editor = self
+	_url_import.editor = self
+	_face.editor = self
 
 
 func _ready() -> void:
@@ -648,9 +663,161 @@ func _ready() -> void:
 		# A render that was killed mid-flight leaves its override.cfg behind, and the
 		# next launch would boot into the render's resolution. Harmless to remove even
 		# while a render IS running: Godot reads it once, at that process's startup.
-		_clear_render_override()
+		_export.clear_override()
 		_build_status_label()   # built up front - prep needs it before a session exists
 		_warn_missing_tools()
+
+
+func _exit_tree() -> void:
+	# Hand the shared export button back on the way out, or leaving Masking would
+	# leave every other mode without one - see _build_export_ui.
+	var ch_out := _export.chrome()
+	if ch_out != null:
+		# KEYED, so this can only ever drop Masking's own claims. It used to write
+		# `false` / 0.0 outright, which would have clobbered a claim made by whatever
+		# came next - see the ordering note on Chrome._bottom_claims.
+		ch_out.release_export(&"mask")
+		ch_out.release_bottom(&"mask")
+	# The ⤓ lives in Chrome's row, which outlives this editor: freed with it, not left behind.
+	if _export_btn != null and is_instance_valid(_export_btn) and _export_btn.get_parent() != self:
+		_export_btn.queue_free()
+	_save_session()
+	# Reap every subprocess THIS instance spawned. A detached child keeps running -
+	# close the app mid-prep and the ffmpeg transcode carries on invisibly (no "godot"
+	# in ps), still touching video.ogv, and the NEXT launch reads the fresh mtime as
+	# "already in progress elsewhere" and waits on a writer the user can't see. Killing
+	# our own pids is safe - the ECHILD hazard is polling pids we did NOT spawn (see
+	# _prep_looks_live's doc). The half-written outputs are already handled: prep re-runs
+	# when the lock goes stale and _finish_session rejects truncated video, yt-dlp resumes
+	# its own .part.
+	#
+	# This list is now a BELT, not the braces: every spawn above goes through
+	# [Subprocess], so `Boot` reaps anything missing from it when the app closes and the
+	# kernel kills the lot if ghost is killed outright. Leaving the explicit list keeps
+	# the timing right - these die when MASKING closes, not when the app does, which is
+	# what frees video.ogv for the next session.
+	for pid in [_prep_video_pid, _prep_audio_pid, _import_pid, _waveform_pid,
+			_wavehi_pid, _yt_pid, _reload_check_pid, _render_pid, _transcode_pid,
+			_ft_pid, _pt_pid]:
+		Subprocess.stop(int(pid))
+	Provision.release(FACE_ENV, "mask editor")
+	Provision.release(YT_ENV, "clip download")
+	for job in _track_audio_jobs:
+		Subprocess.stop(int(job.get("pid", -1)))
+	# Join the audio loader if it's still running, or Godot warns about an orphaned
+	# thread on close.
+	if _audio_thread != null and _audio_thread.is_started():
+		_audio_thread.wait_to_finish()
+		_audio_thread = null
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+## Whatever the debounce hasn't flushed yet lands on disk when the editor goes away -
+## closing the window mid-burst never loses the last edit. Always save (not only when
+## dirty) so the current playhead is captured even after a pure play/scrub with no edit.
+## Why Masking cannot be left right now, "" when it can (see main.leave_blocker): its own export
+## renders in programs this editor owns, and leaving reaps them. A clip still being prepared is not
+## a reason - preparation picks up where it stopped the next time the clip is opened.
+func leave_blocker() -> String:
+	if _render_pid > 0 or _transcode_pid > 0:
+		return "Masking is exporting - leaving now would stop the export. Wait for it to finish."
+	return ""
+
+
+## THE keyboard map (mirrored by the help overlay - keep the two in sync):
+## Space play/pause · V cycle view · P hold-to-peek · T import track ·
+## Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y undo/redo · F1 help · Esc close help.
+## These aren't shortcuts FOR buttons any more - they're the only way; the
+## toolbar collapsed to the single Help button. Only live once a clip is
+## actually loaded (_player exists); main.gd defers Space entirely while this
+## editor is open (see main.gd's KEY_SPACE handling), so this doesn't fight
+## Director.next() for the key. echo excluded on undo/redo so a held key
+## doesn't spam repeats; a real accident deserves a deliberate press each
+## time it's undone.
+## Plain _input (not _unhandled_input) so cursor motion resets the idle timer
+## even while it's over a panel/button - GUI controls can eat mouse motion
+## before it would ever reach _unhandled_input, and hovering the toolbar
+## while playing should un-hide the cursor same as moving it over the video.
+func _input(event: InputEvent) -> void:
+	# THE DRAG BOUNDARY CLOSES HERE, on the release itself - see _push_undo. The
+	# first cut closed it in _process, which is wrong for a reason worth writing
+	# down: _process returns early in half a dozen states (clip still preparing,
+	# audio still transcoding, render mode), so the boundary could stay open across
+	# a release and swallow the NEXT adjustment into the previous undo step. _input
+	# runs whatever _process is doing, and before any control consumes the event.
+	if event is InputEventMouseButton and not event.pressed \
+			and event.button_index == MOUSE_BUTTON_LEFT:
+		_undo_press_key = ""
+	if render_mode:
+		return
+	# SPACE PLAYS AND PAUSES WHEREVER THE FOCUS IS: in _unhandled_input it came after the GUI, so
+	# a button clicked a moment before took Space for itself and pressed itself again
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE \
+			and _player != null and not (event.ctrl_pressed or event.alt_pressed or event.meta_pressed):
+		var f := get_viewport().gui_get_focus_owner()
+		if not (f is TextEdit or f is LineEdit):
+			_play(not _playing)
+			get_viewport().set_input_as_handled()
+			return
+	# A region drag in flight is tracked HERE, not in the overlay's gui_input, so
+	# it survives the cursor leaving the video pane - see _region_drag_motion.
+	if _region_drag != "":
+		_region.drag_motion(event)
+	if not event is InputEventMouseMotion:
+		return
+	_cursor_idle_t = 0.0
+	if Input.mouse_mode == Input.MOUSE_MODE_HIDDEN:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if render_mode or _player == null:
+		return
+	if not event is InputEventKey or event.echo:
+		return
+	# Hold-to-peek wants the RELEASE too - everything below this wants presses
+	# only. Hold beats the old toggle button for its actual job ("let me just
+	# look at raw for a second"): letting go always puts the effects back.
+	if event.keycode == KEY_P:
+		_peek_raw = event.pressed
+		get_viewport().set_input_as_handled()
+		return
+	if not event.pressed:
+		return
+	if event.keycode == KEY_V:
+		_cycle_view_mode()
+		get_viewport().set_input_as_handled()
+	elif event.keycode == KEY_T:
+		_prompt_import_track()
+		get_viewport().set_input_as_handled()
+	elif event.keycode == KEY_F1:
+		_toggle_help()
+		get_viewport().set_input_as_handled()
+	elif event.keycode == KEY_F5:
+		_reload_requested()   # restart-and-restore, deferred until assistant runs finish
+		get_viewport().set_input_as_handled()
+	elif event.keycode == KEY_ESCAPE and _help_panel != null and _help_panel.visible:
+		# Only claim Escape while help is open - otherwise it stays main.gd's
+		# quit key. Consuming it here is what keeps closing the overlay from
+		# ALSO quitting ghost.
+		_help_panel.visible = false
+		get_viewport().set_input_as_handled()
+	elif event.ctrl_pressed and event.keycode == KEY_Z:
+		if event.shift_pressed:
+			_undo.redo()
+		else:
+			_undo.undo()
+		get_viewport().set_input_as_handled()
+	elif event.ctrl_pressed and event.keycode == KEY_Y:
+		_undo.redo()
+		get_viewport().set_input_as_handled()
+
+
+# --- the source: a clip opened, or asked for ------------------------------------------------------
+
+
+static func _masks_dir() -> String:
+	return MASKS_DIR if OS.has_feature("editor") else "user://masks"
 
 
 ## Masking is the mode that CANNOT work without ffmpeg: every clip is transcoded
@@ -702,7 +869,7 @@ func open_source(path: String) -> void:
 	# up with duration 0.0: it was opened while an external transcode was still
 	# appending to video.ogv, and "exists" isn't "finished"). See _finish_session for
 	# the matching duration>0 validation on the fast paths below.
-	if _prep_looks_live(dir, video):
+	if _source_prep.looks_live(dir, video):
 		_prep_state = "waiting_external"
 		_set_status("⏳  Preparing clip (already in progress elsewhere)…")
 		return
@@ -716,7 +883,7 @@ func open_source(path: String) -> void:
 	var abs_video := ProjectSettings.globalize_path(video)
 	var abs_audio := ProjectSettings.globalize_path(audio)
 	if FileAccess.file_exists(abs_video) and FileAccess.file_exists(abs_audio):
-		_finish_session(path, video, audio)   # validates duration itself; re-preps if bad
+		_source_prep.finish_session(path, video, audio)   # validates duration itself; re-preps if bad
 		return
 	if not _have_ffmpeg():
 		# A first run: FFmpeg is still downloading. The clip waits for it in _process.
@@ -724,7 +891,7 @@ func open_source(path: String) -> void:
 		_prep_state = "waiting_tools"
 		_set_status("⏳  " + Deps.hint("ffmpeg"))
 		return
-	_prep(path, dir, video, audio)
+	_source_prep.prep(path, dir, video, audio)
 
 
 func _prompt_for_source() -> void:
@@ -865,315 +1032,6 @@ func _note_clip(path: String) -> void:
 		push_warning("ghost mask: could not write the clip into %s - %s" % [note_path.get_file(), err])
 
 
-## THE AUDIO EFFECT is a part of its own ([MaskAudioFx]): the bus, and the timeline applied to it.
-var _audio_fx := MaskAudioFx.new()
-
-
-## UNDO AND REDO are a part of their own ([MaskUndo]): the two stacks of snapshots.
-var _undo := MaskUndo.new()
-
-
-# --- the editor's parts -----------------------------------------------------------------
-# What used to be sections of this file and is a script of its own now: each holds its own state,
-# reads the rest through `editor.`, and is asked a few things by name (next/structure.md, "One
-# file, one job").
-
-## THE POSE TRACK is a part of its own ([MaskPoseTrack]): bootstrapped, run a window at a time,
-## and read by time. The umbra asks it where she is.
-var _pose := MaskPoseTrack.new()
-
-## A LINK WHERE A FILE IS EXPECTED is a part of its own ([MaskUrlImport]): downloaded, polled,
-## and handed back to [method open_source].
-var _url_import := MaskUrlImport.new()
-
-## THE FACE TRACK is a part of its own ([MaskFaceTrack]): fitted once, read by time, and
-## rasterized into the stencil the clown's shader keys on.
-var _face := MaskFaceTrack.new()
-
-
-func _init() -> void:
-	_undo.editor = self
-	_audio_fx.editor = self
-	_pose.editor = self
-	_url_import.editor = self
-	_face.editor = self
-
-
-# --- one-time prep: ffmpeg -> masks/<slug>/{video.ogv, audio.wav} -----------------
-# Two real ffmpeg processes (not a shell chain) so each can be polled and reported
-# like exporter.gd's bake/render/transcode steps: video first (the slow part - can
-# be minutes on a long clip), then audio (fast, PCM decode). Progress comes from the
-# same `-progress <file>` mechanism the export transcode step already uses.
-
-func _prep(source: String, dir: String, video: String, audio: String) -> void:
-	var abs_dir := ProjectSettings.globalize_path(dir)
-	DirAccess.make_dir_recursive_absolute(abs_dir)
-	_prep_src_dur = _probe_duration(source)
-	_progress_reset(_PREP_PROGRESS_FILE)
-	# Small GOP (-g 25 = ~1 keyframe/sec at typical fps) keeps scrubbing responsive on
-	# long clips; theora is the only format VideoStreamPlayer decodes natively (see
-	# next/mask_mode_spike notes - WebM/H.264 need a GDExtension, so every source
-	# clip gets this one-time transcode regardless of its original codec).
-	# Written as .part and promoted on completion (see _promote_part): a
-	# half-written media file at its REAL name is scanned by the Godot editor's
-	# importer, and a truncated WAV wedges it in an infinite seek loop -
-	# hanging every editor boot AND every headless compile check (including
-	# the assistant's reload gate) until the file is deleted by hand.
-	var args := PackedStringArray([
-		"-y", "-loglevel", "error", "-i", source, "-an",
-		"-c:v", "libtheora", "-q:v", "6", "-g", "25",
-		"-progress", ProjectSettings.globalize_path(_PREP_PROGRESS_FILE), "-nostats",
-		"-f", "ogg", ProjectSettings.globalize_path(video) + ".part"])
-	_prep_video_pid = Subprocess.start("ffmpeg", args, "clip prep (video)")
-	_prep_state = "prepping_video" if _prep_video_pid > 0 else "idle"
-	if _prep_video_pid <= 0:
-		_set_status("⚠  Could not start ffmpeg (is it on PATH?)")
-	else:
-		# In the log too: for a long clip THIS is the slow stage (libtheora is
-		# single-threaded), and the console should say what's grinding.
-		print("ghost mask: prep started - transcoding %s (%.0fs) -> %s" % [
-			source, _prep_src_dur, video])
-		_touch_lock(abs_dir)
-		_set_status("⏳  Preparing clip (video)…  0%")
-
-
-func _start_prep_audio() -> void:
-	_touch_lock(ProjectSettings.globalize_path(_pending.dir))   # bridge the gap while
-	# video.ogv's mtime goes stale and audio.wav doesn't exist yet - see _prep_looks_live.
-	# Two outputs, one decode: the PCM the waveform/envelope tooling needs,
-	# and the compressed sidecar playback actually attaches (see
-	# _ready_with_session for why the raw WAV is too slow to load live).
-	var abs_a := ProjectSettings.globalize_path(String(_pending.audio))
-	var args := PackedStringArray([
-		"-y", "-loglevel", "error", "-i", String(_pending.source), "-vn",
-		"-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2",
-		"-f", "wav", abs_a + ".part",
-		"-vn", "-c:a", "libvorbis", "-q:a", "5",
-		"-f", "ogg", abs_a.get_basename() + ".ogg.part"])
-	_prep_audio_pid = Subprocess.start("ffmpeg", args, "clip prep (audio)")
-	_prep_state = "prepping_audio" if _prep_audio_pid > 0 else "idle"
-	_set_status("⏳  Preparing clip (audio)…")
-
-
-func _progress_reset(path: String) -> void:
-	var f := FileAccess.open(path, FileAccess.WRITE)
-	if f != null:
-		f.store_string("")
-
-
-# --- prep liveness: is SOMETHING actively writing this clip's output right now? ---
-# Two writers on the SAME -y output path interleave and corrupt it - not
-# hypothetical, this is here because it happened (twice: a second launch mid-prep
-# raced the first, and separately a manual external ffmpeg run raced the app). The
-# first version of this guard tracked a PID and called Subprocess.alive() on
-# it - which crashes (engine-level ECHILD) the moment the PID belongs to a process
-# this instance didn't spawn itself, e.g. a PREVIOUS launch's child, exactly the
-# cross-instance case the guard exists for. An mtime check answers the actual
-# question - "did anything touch this file recently" - without caring who the
-# writer is or whether this instance could ever see its PID.
-const _STALE_AFTER := 10.0   # seconds since last write before a prep counts as abandoned
-
-func _lock_path(dir: String) -> String:
-	return dir.path_join(".prep.lock")
-
-
-## Move a finished prep output from its .part name into place. Outputs are
-## written under a name the editor's importer ignores because a truncated
-## media file at its REAL name is not just garbage, it's a trap: a killed
-## prep left a half-written audio.wav whose WAV import looped forever on
-## seeks past EOF (audio_stream_wav.cpp), hanging every editor scan until
-## the file was hand-deleted. A missing .part (ffmpeg died at startup) is
-## a no-op here - the duration validation downstream reports it.
-func _promote_part(dest: String) -> void:
-	var abs_dest := ProjectSettings.globalize_path(dest)
-	if FileAccess.file_exists(abs_dest + ".part"):
-		if FileAccess.file_exists(abs_dest):
-			DirAccess.remove_absolute(abs_dest)
-		DirAccess.rename_absolute(abs_dest + ".part", abs_dest)
-
-
-func _touch_lock(abs_dir: String) -> void:
-	var f := FileAccess.open(_lock_path(abs_dir), FileAccess.WRITE)
-	if f != null:
-		f.store_string(str(Time.get_unix_time_from_system()))
-
-
-func _clear_lock(dir: String) -> void:
-	var p := _lock_path(ProjectSettings.globalize_path(dir))
-	if FileAccess.file_exists(p):
-		DirAccess.remove_absolute(p)
-
-
-func _fresh(path: String, now: float) -> bool:
-	return FileAccess.file_exists(path) and now - FileAccess.get_modified_time(path) < _STALE_AFTER
-
-
-## True if the lock file, the video output, or the audio output was modified within
-## the last _STALE_AFTER seconds - covers both prep sub-steps (the lock's own touch
-## bridges the gap before video.ogv exists yet; the outputs' own mtimes take over,
-## and cover each other, for the rest).
-func _prep_looks_live(dir: String, video: String) -> bool:
-	var now := Time.get_unix_time_from_system()
-	var abs_dir := ProjectSettings.globalize_path(dir)
-	var abs_video := ProjectSettings.globalize_path(video)
-	return _fresh(_lock_path(abs_dir), now) \
-		or _fresh(abs_video, now) \
-		or _fresh(abs_video + ".part", now) \
-		or _fresh(abs_dir.path_join("audio.wav"), now) \
-		or _fresh(abs_dir.path_join("audio.wav.part"), now)
-
-
-## Same `out_time_us=` polling exporter.gd's transcode step uses, against the
-## source clip's OWN duration (captured before the video step starts).
-func _read_prep_pct() -> int:
-	if _prep_src_dur <= 0.0 or not FileAccess.file_exists(_PREP_PROGRESS_FILE):
-		return 0
-	var text := FileAccess.get_file_as_string(_PREP_PROGRESS_FILE)
-	var best := -1.0
-	for line in text.split("\n"):
-		if line.begins_with("out_time_us=") or line.begins_with("out_time_ms="):
-			best = maxf(best, line.substr(12).to_float() / 1_000_000.0)
-	if best < 0.0:
-		return 0
-	return clampi(int(round(best / _prep_src_dur * 100.0)), 0, 99)
-
-
-func _finish_session(source: String, video: String, audio: String) -> void:
-	var abs_video := ProjectSettings.globalize_path(video)
-	var dur := _probe_duration(abs_video)
-	# A theora/ogg file caught mid-write can still probe successfully - ffmpeg
-	# doesn't flush on every frame, so a writer can look "stale" by mtime alone
-	# during a buffering gap and still be actively growing. duration <= 0.0 catches
-	# a totally unparseable file; this catches the sneakier case where it parses
-	# fine but is truncated (this is exactly how a real 16:22 clip got cached at
-	# 2:14 - the audio step's own duration is ground truth, extracted whole, so a
-	# video duration meaningfully short of it means "not actually done yet", not
-	# "shorter clip").
-	var audio_dur := _probe_duration(ProjectSettings.globalize_path(audio))
-	var incomplete := dur <= 0.0 or (audio_dur > 0.0 and dur < audio_dur - 2.0)
-	if incomplete:
-		var dir := video.get_base_dir()
-		if _prep_looks_live(dir, video):
-			_prep_state = "waiting_external"
-			_set_status("⏳  Preparing clip (already in progress elsewhere)…")
-			return
-		_set_status("⚠  Cached clip looked incomplete - re-preparing…")
-		_prep(source, dir, video, audio)
-		return
-	session = MaskSession.new()
-	session.source_path = source
-	session.video_path = video
-	session.audio_path = audio
-	session.duration = dur
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_session_path.get_base_dir()))
-	session.save(ProjectSettings.globalize_path(_session_path))
-	print("ghost mask: session ready - %s (%.0fs)" % [_session_path, dur])
-	_ready_with_session()
-
-
-## Robust video-duration probe. The fast path is the container's own duration,
-## but our own libtheora transcode (see _start_track_import) routinely produces an
-## .ogv whose header carries NO duration - ffprobe returns "N/A" for both
-## format=duration AND stream=duration. That returned 0 here, and _finish_track_import
-## reads 0 as "transcode failed" and silently adds no lane (the "Track import does
-## nothing" bug). So when both are absent, fall back to counting video packets (fast,
-## no decode) and dividing by the frame rate - every playable file has a definite
-## packet count even when it lacks a duration field.
-func _probe_duration(path: String) -> float:
-	var d := _ffprobe_float(["-show_entries", "format=duration"], path)
-	if d > 0.0:
-		return d
-	d = _ffprobe_float(["-select_streams", "v:0", "-show_entries", "stream=duration"], path)
-	if d > 0.0:
-		return d
-	var out := []
-	Deps.execute("ffprobe", ["-v", "error", "-select_streams", "v:0", "-count_packets",
-		"-show_entries", "stream=nb_read_packets,r_frame_rate", "-of", "default=nw=1", path], out)
-	if out.size() > 0:
-		var packets := 0.0
-		var fps := 0.0
-		for line in String(out[0]).split("\n"):
-			var s := line.strip_edges()
-			if s.begins_with("nb_read_packets="):
-				packets = s.substr(16).to_float()
-			elif s.begins_with("r_frame_rate="):
-				var fr := s.substr(13).split("/")
-				if fr.size() == 2 and fr[1].to_float() > 0.0:
-					fps = fr[0].to_float() / fr[1].to_float()
-				else:
-					fps = s.substr(13).to_float()
-		if packets > 0.0 and fps > 0.0:
-			return packets / fps
-	return 0.0
-
-
-## One ffprobe query for a single float value (csv, no keys), 0.0 if it comes back
-## empty or "N/A". See _probe_duration for why the caller layers several of these.
-func _ffprobe_float(entries: Array, path: String) -> float:
-	var args := PackedStringArray(["-v", "error"])
-	for e in entries:
-		args.append(String(e))
-	args.append("-of")
-	args.append("csv=p=0")
-	args.append(path)
-	var out := []
-	Deps.execute("ffprobe", args, out)
-	if out.size() > 0:
-		var s := String(out[0]).strip_edges()
-		if s.is_valid_float():
-			return s.to_float()
-	return 0.0
-
-
-## The clip's frame size in pixels, or a zero vector when ffprobe can't say.
-## `csv=p=0:s=x` makes the whole answer one token - "1080x1920".
-func _probe_size(path: String) -> Vector2i:
-	var out := []
-	Deps.execute("ffprobe", ["-v", "error", "-select_streams", "v:0",
-		"-show_entries", "stream=width,height", "-of", "csv=p=0:s=x", path], out)
-	if out.size() > 0:
-		var parts := String(out[0]).strip_edges().split("x")
-		if parts.size() >= 2 and parts[0].is_valid_int() and parts[1].is_valid_int():
-			var sz := Vector2i(parts[0].to_int(), parts[1].to_int())
-			if sz.x > 0 and sz.y > 0:
-				return sz
-	return Vector2i.ZERO
-
-
-## The picture's width/height - >1 landscape, <1 portrait. See _src_size.
-func _source_aspect() -> float:
-	return float(maxi(1, _src_size.x)) / float(maxi(1, _src_size.y))
-
-
-## Seed _src_size from the prepared clip on disk, before anything has decoded.
-## Silently keeps the 16:9 fallback if ffprobe is absent or unhelpful -
-## _sync_source_size corrects it from the real texture a frame or two later.
-func _resolve_source_size() -> void:
-	if session == null or session.video_path.is_empty():
-		return
-	var sz := _probe_size(ProjectSettings.globalize_path(session.video_path))
-	if sz != Vector2i.ZERO:
-		_src_size = sz
-
-
-## The decoded texture's size is the truth - adopt it the first frame it exists
-## and re-fit the editor's video slot if the probe (or the fallback) disagreed.
-## One-shot: after the first real frame the size never changes for a clip.
-func _sync_source_size() -> void:
-	if _src_size_confirmed or _player == null:
-		return
-	var tex := _player.get_video_texture()
-	if tex == null or tex.get_width() <= 0 or tex.get_height() <= 0:
-		return
-	_src_size_confirmed = true
-	var sz := Vector2i(tex.get_width(), tex.get_height())
-	if sz == _src_size:
-		return
-	_src_size = sz
-	if _video_area != null:
-		_video_area.ratio = _source_aspect()
-
-
 static func _slugify(path: String) -> String:
 	var base := path.get_file().get_basename().to_lower()
 	var out := ""
@@ -1184,10 +1042,8 @@ static func _slugify(path: String) -> String:
 	return out.trim_suffix("_").substr(0, 32)
 
 
-const YT_ENV := "ytdlp_venv"
+# --- session ready: the preview, and (unless render_mode) the editing UI --------------------------
 
-
-# --- session ready: build preview + (unless render_mode) the editing UI -----------
 
 func _ready_with_session() -> void:
 	if _status != null:
@@ -1197,7 +1053,7 @@ func _ready_with_session() -> void:
 	_player.expand = true
 	# Before any layout is built: the editor's video slot is shaped by this, and so
 	# is the export's recorded resolution (see _src_size).
-	_resolve_source_size()
+	_source_prep.resolve_size()
 	# No .material here, ever - the fx layers carry the shader (see
 	# _build_video_composition). Which layer combination is shown is a per-marker
 	# field, applied every frame in _process identically whether this is the live
@@ -1250,11 +1106,11 @@ func _ready_with_session() -> void:
 		_waveform_path = session.audio_path.get_base_dir().path_join("waveform_sqrt.png")
 		var abs_wave := ProjectSettings.globalize_path(_waveform_path)
 		if not FileAccess.file_exists(abs_wave):
-			Deps.execute("ffmpeg", _waveform_args(abs_wave))
-		_load_waveform(abs_wave)
+			Deps.execute("ffmpeg", _waveform.args_for(abs_wave))
+		_waveform.load_strip(abs_wave)
 	else:
 		_build_editor_ui()
-		_ensure_waveform()
+		_waveform.ensure()
 	# Export loaded its audio synchronously (it must have sound from frame 0), so it
 	# can start immediately. Live loads the WAV on a worker thread: starting now would
 	# advance the video (the master clock) while the audio is still unattached, and the
@@ -1289,116 +1145,365 @@ func _ready_with_session() -> void:
 		_select_marker(gov)
 
 
+func _build_render_view() -> void:
+	var full := Control.new()
+	full.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(full)
+	_build_video_composition(full)
+	for i in session.tracks.size():
+		_build_track_view(i)
+	# Product-demo chrome: if this session uses META anywhere, build the REAL editor
+	# chrome (timeline, lanes, control panel) on top of the clean composition, fully
+	# transparent. _apply_meta_chrome fades it in per frame with the meta envelope, so
+	# the export shows clean video normally and the working editor during a meta
+	# section (the recorded demo). Purely additive - no meta markers, nothing built,
+	# the clean-video export path is untouched. mouse_filter IGNORE: never interactive.
+	if _session_uses_meta():
+		_meta_chrome = Control.new()
+		_meta_chrome.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_meta_chrome.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_meta_chrome.modulate.a = 0.0
+		add_child(_meta_chrome)
+		_chrome_parent = _meta_chrome
+		_build_chrome()
+		_chrome_parent = null
+		_refresh_panel()
+	# The export starts at the TIMELINE start (0), exactly like the live editor: live
+	# playback begins at 0 and main_visible_at() never gates on clip_in, so the main
+	# clip is shown from source 0 and markers/scenes can (and here do) sit before
+	# clip_in. Seeking the export to clip_in instead silently dropped everything before
+	# it - the "main video starts ~30s too late, early scenes truncated" report, on a
+	# session whose clip_in was 37s. clip_in still bounds the restore clamp and the
+	# kept-range END via content_end(); it is simply not the export's start.
+	_player.play()
+	_player.stream_position = 0.0
+	_apply_frame_state(session.at_time(0.0))
+	# The export quits on the deterministic movie clock reaching content_end() (see
+	# _process), NOT on the audio finishing - an audio track shorter than the session
+	# would otherwise cut the movie (and its trailing raw video) short.
+
+
+func _build_editor_ui() -> void:
+	_video_area = AspectRatioContainer.new()
+	_video_area.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_video_area.offset_left = VIDEO_LEFT
+	# THE CLIP'S OWN SHAPE, not a 16:9 assumption: a portrait clip gets a tall
+	# narrow slot with black bars left and right (pillarbox), a wide one keeps the
+	# bars above and below. AspectRatioContainer centers its single child in
+	# whatever is left after VIDEO_LEFT and the lane strip (see _apply_lane_reserved),
+	# so the picture always fits the viewport whole and is never stretched.
+	# _sync_source_size re-fits this once the decoder confirms the real size.
+	_video_area.ratio = _source_prep.source_aspect()
+	add_child(_video_area)
+
+	# A plain Control fills the AspectRatioContainer's one centered/letterboxed slot.
+	var inner := Control.new()
+	inner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_video_area.add_child(inner)
+	_build_video_composition(inner)
+	for i in session.tracks.size():
+		_build_track_view(i)
+
+	_build_chrome()
+	_export.build_ui()
+	_build_feedback()
+	_refresh_panel()
+	_apply_frame_state(session.at_time(_player.stream_position))
+
+
+## Where the interactive chrome (timeline, lanes, control panel) parents. Normally
+## `self` (the live editor); during a render-mode export that uses META, it's the
+## fading _meta_chrome overlay so a meta section can reveal the real working editor
+## over the clean video (the recorded product demo).
+func _chrome_host() -> Node:
+	return _chrome_parent if _chrome_parent != null else self
+
+
+## The editor chrome - the marker timeline, the trim/track lane stack, and the
+## control panel - built into _chrome_host(). Split out of _build_editor_ui so the
+## export path can build the SAME real widgets into an overlay (see _build_render_view
+## / _apply_meta_chrome). Prereqs: session and _player already exist.
+func _build_chrome() -> void:
+	_tview = TimelineView.new()
+	_tview.zoom = session.timeline_zoom          # restore the last zoom/pan (see _save_session)
+	_tview.view_start = session.timeline_view_start
+
+	_timeline = MaskTimeline.new()
+	_timeline.session = session
+	_timeline.player = _player
+	_timeline.tview = _tview
+	_timeline.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_timeline.offset_left = VIDEO_LEFT
+	_timeline.offset_bottom = -90
+	_timeline.offset_top = -90
+	_timeline.scrubbed.connect(_on_scrub)
+	_timeline.marker_picked.connect(_select_marker)
+	_timeline.marker_drag_started.connect(func(_m): _undo.push("", "moved a marker"))
+	_timeline.marker_moved.connect(func(_m):
+		_refresh_marker_label()
+		_mark_dirty())
+	_chrome_host().add_child(_timeline)
+
+	# The trim/track lane stack - the primary clip's own trim block, plus one
+	# lane per imported track - sits directly above the marker strip, sharing
+	# its ruler via the same _tview (see _refresh_lanes for why its height is
+	# computed and set explicitly rather than left to container auto-sizing).
+	_lanes_col = VBoxContainer.new()
+	_lanes_col.add_theme_constant_override("separation", 2)
+	_lanes_col.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_lanes_col.offset_left = VIDEO_LEFT
+	_chrome_host().add_child(_lanes_col)
+	_refresh_lanes()
+
+	_build_panel()
+	# Every popup in the editor joins the modal counter that suspends the
+	# cursor auto-hide (see _guard_popups). Walked from the whole tree, not
+	# just the panel, so the toolbar's dropdowns are covered too.
+	_guard_popups(self)
+
+
+## The same backtick feedback console every session has - the SHELL'S ([method
+## Shell.attach_feedback]: one console and one Assistant in the app, wired to each other there),
+## with mask-specific plumbing handed to it: the descriptor snapshots everything needed to debug a
+## masking complaint (playhead, the fully-resolved layer stack at that instant, every marker,
+## keying globals, audio envelope), freeze pauses playback while typing (restoring the prior play
+## state after), and advance is a no-op - the playhead is the user's business, not the console's.
+##
+## Masking used to build a console and an Assistant of its own: it predates the shell, and
+## launched from the notes that was a second 💬 and a second queue over the same feedback. With no
+## shell in the tree (a gate building the editor by hand) there is no console, and nothing to wire.
+func _build_feedback() -> void:
+	var ch := Shell.of(self)
+	_feedback = ch.attach_feedback() if ch != null else null
+	if _feedback == null:
+		return
+	_feedback.describe = _feedback_descriptor
+	_feedback.freeze = func(on: bool):
+		if on:
+			_was_playing_before_feedback = _playing
+			_play(false)
+		elif _was_playing_before_feedback:
+			_play(true)
+	_feedback.advance = func(): pass
+
+
+## Everything I'd want to know about "this frame looks wrong": where we are, what
+## the timeline resolved to (including each live layer's full parameter set and
+## envelope), the raw marker list, and the session's file identity. The screenshot
+## the console pairs with this carries the artifact itself.
+func _feedback_descriptor() -> Dictionary:
+	var t: float = _player.stream_position if _player != null else 0.0
+	var p := session.at_time(t)
+	return {
+		"mode": "mask",
+		"time": t,
+		"time_str": MaskTimeline.format_time(t),
+		"session_path": _session_path,
+		"video_path": session.video_path,
+		"source_path": session.source_path,
+		"duration": session.duration,
+		"resolved_state": p,             # globals + amounts + the live layer stack
+		"layer_count": (p.get("layers", []) as Array).size(),
+		"markers": session.markers,
+		"marker_count": session.markers.size(),
+		"audio_env": _waveform.env_at(t),
+		"peek_raw": _peek_raw,
+		"playing": _playing,
+	}
+
+
+## Wire every popup under `n` into the modal counter, once, at build time.
+## Walks rather than naming them so a control added later is covered for free -
+## the cursor bug this exists for was reported on the color picker, but every
+## dropdown in the panel had exactly the same hole.
+func _guard_popups(n: Node) -> void:
+	var p: Popup = null
+	if n is ColorPickerButton:
+		p = (n as ColorPickerButton).get_popup()
+	elif n is OptionButton:
+		p = (n as OptionButton).get_popup()
+	elif n is MenuButton:
+		p = (n as MenuButton).get_popup()
+	if p != null and not p.about_to_popup.is_connected(_on_modal_open):
+		p.about_to_popup.connect(_on_modal_open)
+		p.popup_hide.connect(_on_modal_close)
+	for c in n.get_children():
+		_guard_popups(c)
+
+
+func _on_modal_open() -> void:
+	_modal_depth += 1
+	_cursor_idle_t = 0.0
+	# Show it immediately rather than waiting for the next frame's elif: the
+	# click that opens a picker is the same gesture that needs to keep aiming.
+	if Input.mouse_mode == Input.MOUSE_MODE_HIDDEN:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _on_modal_close() -> void:
+	_modal_depth = maxi(0, _modal_depth - 1)
+	_cursor_idle_t = 0.0
+
+
 ## Kick off (or discover already-cached) the timeline's waveform image - fully
 ## decoupled from playback readiness. Generating it (an ffmpeg pass over the whole
 ## audio track) can take a couple seconds on a long clip; blocking session-ready on
 # that would turn "instant" cache hits back into a wait, so this fires async and the
-## timeline just draws nothing until _process() notices the PNG exists.
-func _ensure_waveform() -> void:
-	# "waveform_sqrt": the filename carries the rendering recipe, so clips whose
-	# cache predates a recipe change regenerate instead of loading the stale look.
-	# sqrt scaling lifts small amplitudes into visibility - a linear plot of
-	# ordinary speech/music sat near the axis and was barely visible on the strip.
-	# 4096px wide so it still resolves when the timeline is zoomed well in.
-	_waveform_path = session.audio_path.get_base_dir().path_join("waveform_sqrt.png")
-	var abs_wave := ProjectSettings.globalize_path(_waveform_path)
-	if FileAccess.file_exists(abs_wave):
-		_load_waveform(abs_wave)
+
+
+# --- the composition: the video's layers, and the meta mirror -------------------------------------
+
+
+## Stacked layers in `parent`'s full rect, shared by both the live editor and
+## the render_mode export so they composite identically:
+##   _player      raw video, visible underneath everything while the main clip's
+##                own kept range covers the current time
+##   _cont_view   raw video, same full-rect slot as _player - visible instead of it
+##                while a continuation track (see MaskSession.continuation_track_at)
+##                owns the current time; never both at once
+##   _fx_overlay  full-frame shaded copy of whichever of the above is active (its
+##                own material) - the MAIN fx layer
+##   _mask_wrap   the bordered inset holding _pip_view (its own material)
+## Which layers show, and how strongly, comes from the per-frame AMOUNTS
+## (MaskSession.mode_amounts, blended through ramp/damp windows by at_time) -
+## applied every frame in _apply_frame_state. A layer's presence multiplies into
+## its own material's intensities, which is why each has its own material: the
+## inset can hold full fx while the main overlay is still fading in.
+func _build_video_composition(parent: Control) -> void:
+	_composition_parent = parent   # secondary tracks' PiP views land here too - see _build_track_view
+	parent.add_child(_player)
+	_player.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	# Sits at the same full-rect slot as _player, right underneath it in the same
+	# z-position - only one of the two is ever visible at once (see _process), so
+	# _fx_overlay's shaded copy always has exactly one raw picture beneath it to draw.
+	_cont_view = TextureRect.new()
+	_cont_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_cont_view.stretch_mode = TextureRect.STRETCH_SCALE
+	_cont_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_cont_view.visible = false
+	parent.add_child(_cont_view)
+
+	_fx_overlay = TextureRect.new()
+	_fx_overlay.material = _mat_main
+	_fx_overlay.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_fx_overlay.stretch_mode = TextureRect.STRETCH_SCALE
+	_fx_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	parent.add_child(_fx_overlay)
+
+	_mask_wrap = PanelContainer.new()
+	var border := StyleBoxFlat.new()
+	border.bg_color = Color(0, 0, 0, 0)
+	border.set_border_width_all(2)
+	border.border_color = Color(1.0, 1.0, 1.0, 0.85)
+	_mask_wrap.add_theme_stylebox_override("panel", border)
+	# The inset's placement is fixed (bottom-right corner box); only its
+	# visibility/presence animates.
+	_mask_wrap.anchor_left = 0.66
+	_mask_wrap.anchor_top = 0.64
+	_mask_wrap.anchor_right = 0.98
+	_mask_wrap.anchor_bottom = 0.96
+	parent.add_child(_mask_wrap)
+
+	_pip_view = TextureRect.new()
+	_pip_view.material = _mat_inset
+	_pip_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_pip_view.stretch_mode = TextureRect.STRETCH_SCALE
+	_mask_wrap.add_child(_pip_view)
+
+	if not render_mode:
+		_region.build(parent)   # never in an export - it is a tool, not a look
+
+
+## The META mirror source: the editor's OWN previous frame, read back from the main
+## viewport into u_workspace. A full-window GPU->CPU readback (expensive), so the
+## caller (_process) only runs it while a meta layer is actually on screen. Feeding
+## this window back into the video surface - which lives IN this window - is the
+## infinite mirror; the one-frame delay is inherent and wanted (each frame nests one
+## level deeper). Downscaled before upload since the mirror draws small anyway.
+func _capture_workspace() -> void:
+	# Headless has no real framebuffer to read back (the dummy renderer's viewport
+	# texture is null - get_image would error every frame). It also never records a
+	# movie, so there is nothing to mirror; the windowed Movie Maker export IS a real
+	# GPU context, so this only ever skips genuine no-op cases.
+	if DisplayServer.get_name() == "headless":
 		return
-	_waveform_pid = Subprocess.start("ffmpeg", _waveform_args(abs_wave), "waveform")
-
-
-func _waveform_args(abs_out: String) -> PackedStringArray:
-	return PackedStringArray([
-		"-y", "-loglevel", "error", "-i", ProjectSettings.globalize_path(session.audio_path),
-		"-filter_complex", "showwavespic=s=4096x160:colors=white:scale=sqrt",
-		"-frames:v", "1", abs_out])
-
-
-## Load the waveform image once and derive BOTH consumers from it: the timeline's
-## strip texture, and the resonance envelope (per-column occupancy = amplitude).
-## One file, one recipe - so the wisps breathe with exactly the wave the user sees
-## on the strip, and live/export read identical values (file-deterministic; no
-## real-time analyzer to drift between the two).
-func _load_waveform(abs_path: String) -> void:
-	var img := Image.load_from_file(abs_path)
-	if img == null:
+	var vtex := get_viewport().get_texture()
+	if vtex == null:
 		return
-	if _timeline != null:
-		_timeline.waveform_texture = ImageTexture.create_from_image(img)
+	var img := vtex.get_image()
+	if img == null or img.is_empty():
+		return
+	if img.get_width() > 960:
+		var h := int(round(960.0 * float(img.get_height()) / float(maxi(1, img.get_width()))))
+		img.resize(960, maxi(1, h), Image.INTERPOLATE_BILINEAR)
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	if render_mode:
+		img = _shrink_into_video_pane(img)
+	var sz := Vector2i(img.get_width(), img.get_height())
+	if _workspace_tex == null or _workspace_tex.get_size() != Vector2(sz):
+		_workspace_tex = ImageTexture.create_from_image(img)
+	else:
+		_workspace_tex.update(img)
+	_mat_main.set_shader_parameter("u_workspace", _workspace_tex)
+	_mat_inset.set_shader_parameter("u_workspace", _workspace_tex)
+
+
+## In the live editor, the mirror's nesting comes for free: the video pane the shader
+## draws onto is genuinely SMALLER than the captured window (see _video_area's
+## VIDEO_LEFT inset + 16:9 letterbox in _build_editor_ui), so sampling the whole capture
+## back onto that smaller surface shrinks it - and since the capture already contained
+## the previous shrink, each frame nests one level deeper. _build_render_view's own
+## surface is edge-to-edge (the export must stay a clean, full-bleed video outside a
+## meta section - see its comment), so that free shrink doesn't exist there: verified
+## by a standalone Movie-Maker readback test (feedback/0001) that a same-size feedback
+## quad only ghosts/blurs, never nests. This reproduces the live editor's inset by hand
+## - blit a downscaled copy of the capture into the same VIDEO_LEFT/letterbox sub-rect the
+## live video pane occupies, over an unshrunk copy of the capture (so the chrome
+## painted at its real position, e.g. by _apply_meta_chrome, still reads at full size
+## around it) - so feeding this back through the SAME edge-to-edge quad reproduces the
+## same receding "hall of mirrors" the live editor gets from its smaller surface.
+func _shrink_into_video_pane(img: Image) -> Image:
 	var w := img.get_width()
 	var h := img.get_height()
-	_audio_env = PackedFloat32Array()
-	_audio_env.resize(w)
-	for x in w:
-		var count := 0
-		for y in range(0, h, 2):    # every 2nd row - envelope precision, half the cost
-			if img.get_pixel(x, y).a > 0.1:
-				count += 1
-		# showwavespic draws a symmetric column; its filled fraction IS the (sqrt-
-		# scaled) amplitude. 0.9 headroom so full-scale audio still reaches ~1.0.
-		_audio_env[x] = clampf(float(count) / (float(h) * 0.5 * 0.9), 0.0, 1.0)
+	# VIDEO_LEFT is a fraction of the LIVE EDITOR's window (the base 1920-wide canvas
+	# it lays out in), applied to whatever width the capture came back at. The pane
+	# inside it fits the CLIP's aspect, same as _video_area does - so a portrait
+	# session mirrors a tall narrow pane, not a 16:9 one.
+	var asp := _source_prep.source_aspect()
+	var px0 := int(round(w * VIDEO_LEFT / 1920.0))
+	var avail_w := maxi(1, w - px0)
+	var pw := avail_w
+	var ph := int(round(float(avail_w) / asp))
+	if ph > h:
+		ph = h
+		pw = int(round(float(h) * asp))
+	var py0 := int(round((h - ph) / 2.0))
+	var shrunk := img.duplicate()
+	shrunk.resize(maxi(1, pw), maxi(1, ph), Image.INTERPOLATE_BILINEAR)
+	var canvas: Image = img.duplicate()
+	canvas.blit_rect(shrunk, Rect2i(Vector2i.ZERO, Vector2i(pw, ph)), Vector2i(px0, py0))
+	return canvas
 
 
-## Keep the timeline's waveform crisp under zoom. Every frame: harvest a
-## finished slice render, then decide whether the current view needs a new
-## one - only when the view outresolves the base strip, only after the view
-## has held still a beat (never mid-drag), and only one ffmpeg at a time.
-## Deliberately regenerates on demand instead of pre-baking LODs: the slice
-## render is a sub-second ffmpeg pass over a PCM window, and most sessions
-## never zoom past the base strip at all.
-func _poll_wave_hi(dt: float) -> void:
-	if session == null or _timeline == null or _tview == null \
-			or session.duration <= 0.0 or _waveform_path.is_empty():
+## Render-mode only: fade the editor-chrome overlay in with the meta envelope, so the
+## export shows clean video normally and the real working editor during a meta section.
+func _apply_meta_chrome(amount: float) -> void:
+	if _meta_chrome == null:
 		return
-	if _wavehi_pid > 0 and not Subprocess.alive(_wavehi_pid):
-		_wavehi_pid = -1
-		var img := Image.load_from_file(ProjectSettings.globalize_path(_WAVEHI_PATH))
-		if img != null:
-			_timeline.wavehi_texture = ImageTexture.create_from_image(img)
-			_timeline.wavehi_span = _wavehi_span
-			_timeline.queue_redraw()
-	var span := _tview.visible_span()
-	if span <= 0.0 or _timeline.size.x <= 0.0:
-		return
-	var base_pps := 4096.0 / session.duration
-	var pps := _timeline.size.x / span
-	if pps <= base_pps * 1.4:
-		return   # the base strip still resolves this zoom
-	var pad := span * 0.5
-	var want := Vector2(
-		clampf(_tview.view_start - pad, 0.0, session.duration),
-		clampf(_tview.view_start + span + pad, 0.0, session.duration))
-	# Already covered at sufficient resolution? (The loaded slice may be wider
-	# than the view - panning inside it costs nothing.)
-	var cur: Vector2 = _timeline.wavehi_span
-	if cur.y > cur.x and cur.x <= _tview.view_start + 0.001 \
-			and cur.y >= _tview.view_start + span - 0.001 \
-			and 4096.0 / (cur.y - cur.x) >= pps * 0.9:
-		_wavehi_settle = 0.0
-		return
-	# Debounce: the desired window must hold still before ffmpeg fires, so a
-	# zoom gesture spawns one render at its end, not one per wheel tick.
-	if absf(want.x - _wavehi_want.x) > span * 0.05 or absf(want.y - _wavehi_want.y) > span * 0.05:
-		_wavehi_want = want
-		_wavehi_settle = 0.0
-		return
-	_wavehi_settle += dt
-	if _wavehi_settle < 0.35 or _wavehi_pid > 0:
-		return
-	_wavehi_settle = 0.0
-	_wavehi_span = want
-	# -ss/-t BEFORE -i: input seeking on PCM is sample-exact and skips the
-	# decode of everything outside the window.
-	_wavehi_pid = Subprocess.start("ffmpeg", PackedStringArray([
-		"-y", "-loglevel", "error",
-		"-ss", str(want.x), "-t", str(want.y - want.x),
-		"-i", ProjectSettings.globalize_path(session.audio_path),
-		"-filter_complex", "showwavespic=s=4096x160:colors=white:scale=sqrt",
-		"-frames:v", "1", ProjectSettings.globalize_path(_WAVEHI_PATH)]))
+	_meta_chrome.modulate.a = smoothstep(0.0, 1.0, clampf(amount, 0.0, 1.0))
 
 
-# --- the liquid paint sim (clown): ping-pong SubViewports ------------------------
+func _session_uses_meta() -> bool:
+	for m in session.markers:
+		if int(m.get("effect_a", 0)) == MaskSession.EFFECT_META:
+			return true
+	return false
+
+
+# --- the clown's paint and the umbra's field: ping-pong SubViewports ------------------------------
+
 
 func _ensure_paint_sim() -> void:
 	if not _paint_vps.is_empty():
@@ -1546,7 +1651,7 @@ func _step_umbra_sim() -> void:
 	mat.set_shader_parameter("u_dt", dtp)
 	mat.set_shader_parameter("u_reset", 1 if reset else 0)
 	mat.set_shader_parameter("u_time", pos)
-	mat.set_shader_parameter("u_aspect", _source_aspect())
+	mat.set_shader_parameter("u_aspect", _source_prep.source_aspect())
 	mat.set_shader_parameter("u_dir", _umb_dir)
 	mat.set_shader_parameter("u_loom", _umb_loom)
 	mat.set_shader_parameter("u_rise", _umb_rise)
@@ -1587,1992 +1692,247 @@ func _tick_umbra() -> void:
 	_umb_solve_cast()
 
 
-## The audio envelope at clip-time `t` (0 when unavailable), lightly smoothed so
-## the wisps swell rather than flicker frame-to-frame.
-func _env_at(t: float) -> float:
-	if _audio_env.is_empty() or session == null or session.duration <= 0.0:
-		return 0.0
-	var n := _audio_env.size()
-	var i := clampi(int(t / session.duration * float(n)), 1, n - 2)
-	return (_audio_env[i - 1] + _audio_env[i] + _audio_env[i + 1]) / 3.0
-
-
-## Stacked layers in `parent`'s full rect, shared by both the live editor and
-## the render_mode export so they composite identically:
-##   _player      raw video, visible underneath everything while the main clip's
-##                own kept range covers the current time
-##   _cont_view   raw video, same full-rect slot as _player - visible instead of it
-##                while a continuation track (see MaskSession.continuation_track_at)
-##                owns the current time; never both at once
-##   _fx_overlay  full-frame shaded copy of whichever of the above is active (its
-##                own material) - the MAIN fx layer
-##   _mask_wrap   the bordered inset holding _pip_view (its own material)
-## Which layers show, and how strongly, comes from the per-frame AMOUNTS
-## (MaskSession.mode_amounts, blended through ramp/damp windows by at_time) -
-## applied every frame in _apply_frame_state. A layer's presence multiplies into
-## its own material's intensities, which is why each has its own material: the
-## inset can hold full fx while the main overlay is still fading in.
-func _build_video_composition(parent: Control) -> void:
-	_composition_parent = parent   # secondary tracks' PiP views land here too - see _build_track_view
-	parent.add_child(_player)
-	_player.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-
-	# Sits at the same full-rect slot as _player, right underneath it in the same
-	# z-position - only one of the two is ever visible at once (see _process), so
-	# _fx_overlay's shaded copy always has exactly one raw picture beneath it to draw.
-	_cont_view = TextureRect.new()
-	_cont_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_cont_view.stretch_mode = TextureRect.STRETCH_SCALE
-	_cont_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_cont_view.visible = false
-	parent.add_child(_cont_view)
-
-	_fx_overlay = TextureRect.new()
-	_fx_overlay.material = _mat_main
-	_fx_overlay.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_fx_overlay.stretch_mode = TextureRect.STRETCH_SCALE
-	_fx_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	parent.add_child(_fx_overlay)
-
-	_mask_wrap = PanelContainer.new()
-	var border := StyleBoxFlat.new()
-	border.bg_color = Color(0, 0, 0, 0)
-	border.set_border_width_all(2)
-	border.border_color = Color(1.0, 1.0, 1.0, 0.85)
-	_mask_wrap.add_theme_stylebox_override("panel", border)
-	# The inset's placement is fixed (bottom-right corner box); only its
-	# visibility/presence animates.
-	_mask_wrap.anchor_left = 0.66
-	_mask_wrap.anchor_top = 0.64
-	_mask_wrap.anchor_right = 0.98
-	_mask_wrap.anchor_bottom = 0.96
-	parent.add_child(_mask_wrap)
-
-	_pip_view = TextureRect.new()
-	_pip_view.material = _mat_inset
-	_pip_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_pip_view.stretch_mode = TextureRect.STRETCH_SCALE
-	_mask_wrap.add_child(_pip_view)
-
-	if not render_mode:
-		_build_region_overlay(parent)   # never in an export - it is a tool, not a look
-
-
-# --- the region box: drawn on, and dragged over, the video itself ---------------
-# The panel edits scalars; a rectangle over a picture is not a scalar, and typing
-# four numbers to find the edge of a wall is not authoring. So the box is drawn
-# where it acts, with grab handles at the corners and edges, and every drag writes
-# straight through _edit into the selected marker's reg_* fields - the same path
-# as every slider, so undo/coalescing/autosave all work without knowing about it.
+# --- umbra: throwing her shadow -------------------------------------------------------------------
+# UMBRA: the ghost that moves her (see _umb_solve_cast and
+# shaders/umbra_field.gdshader).
 #
-# It lives INSIDE the composition parent, which is exactly the video's own rect
-# (the AspectRatioContainer's letterboxed slot - see _build_editor_ui), so
-# converting between a mouse position and frame UV is a plain divide and stays
-# correct on any clip shape, portrait included.
-
-const _REGION_GRAB := 14.0     # px reach of a corner/edge handle
-const _REGION_MIN := 0.02      # smallest box side, in UV, so it can't be lost
-const _REGION_SNAP := 0.012    # UV distance within which an edge snaps to the frame's
-
-
-func _build_region_overlay(parent: Control) -> void:
-	_region_overlay = Control.new()
-	_region_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_region_overlay.z_index = 20           # over the fx layers AND any track PiP
-	_region_overlay.visible = false        # only while a region is actually on
-	_region_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	_region_overlay.draw.connect(_draw_region_overlay)
-	_region_overlay.gui_input.connect(_region_overlay_input)
-	parent.add_child(_region_overlay)
+# WHAT IT IS. Her own silhouette, thrown as a cast shadow that is larger than
+# she is, stands beside her, and reads the clip AHEAD of the playhead - so it
+# turns its head before she turns hers, and the picture reads as the ghost
+# moving her rather than the other way round.
+#
+# WHERE THE SHAPE COMES FROM. The pose track (_pt_*), which is MediaPipe's
+# person segmentation plus 33 body landmarks, fitted offline over the whole
+# clip. What it replaces was a chroma-direction detector that hunted the
+# footage's own cast shadow: it needed the room to have one big soft shadow on
+# a chromatically uniform wall, a color hypothesis scored per surface, two
+# flood fills, and a confidence gate that drew nothing when they disagreed. A
+# person mask is the same answer with none of the conditions - and it also
+# gives the ghost a SKELETON, which is what lets its head and its eyes be
+# placed rather than guessed at from the middle of a blob.
 
 
-## The selected marker's box in this overlay's pixels, or an empty rect if there
-## is nothing to draw.
-func _region_rect_px() -> Rect2:
-	if _selected == null or _region_overlay == null:
-		return Rect2()
-	var sz := _region_overlay.size
-	var x0: float = minf(float(_selected.get("reg_x0", 0.0)), float(_selected.get("reg_x1", 1.0)))
-	var y0: float = minf(float(_selected.get("reg_y0", 0.0)), float(_selected.get("reg_y1", 1.0)))
-	var x1: float = maxf(float(_selected.get("reg_x0", 0.0)), float(_selected.get("reg_x1", 1.0)))
-	var y1: float = maxf(float(_selected.get("reg_y0", 0.0)), float(_selected.get("reg_y1", 1.0)))
-	return Rect2(x0 * sz.x, y0 * sz.y, (x1 - x0) * sz.x, (y1 - y0) * sz.y)
-
-
-func _draw_region_overlay() -> void:
-	var r := _region_rect_px()
-	if r.size.x <= 0.0 or r.size.y <= 0.0:
-		return
-	var c := _region_overlay
-	# Dim what the layer will NOT reach, so the box reads as a window rather than
-	# a decoration - four bands around it rather than a rect over it, because the
-	# inside must stay a true view of the effect.
-	var shade := Color(0, 0, 0, 0.34)
-	var sz := c.size
-	c.draw_rect(Rect2(0, 0, sz.x, r.position.y), shade)
-	c.draw_rect(Rect2(0, r.end.y, sz.x, sz.y - r.end.y), shade)
-	c.draw_rect(Rect2(0, r.position.y, r.position.x, r.size.y), shade)
-	c.draw_rect(Rect2(r.end.x, r.position.y, sz.x - r.end.x, r.size.y), shade)
-	# The border, twice: a dark line under a light one, so it stays visible over
-	# both a blown-out wall and a black one.
-	c.draw_rect(r, Color(0, 0, 0, 0.75), false, 3.0)
-	c.draw_rect(r, Color(1, 1, 1, 0.95), false, 1.0)
-	# Corner handles. Drawn as filled squares - a handle you can see is a handle
-	# you can hit, and these are the ones the mouse actually looks for first.
-	var h := _REGION_GRAB * 0.5
-	for p in [r.position, Vector2(r.end.x, r.position.y), Vector2(r.position.x, r.end.y), r.end]:
-		var box := Rect2(p - Vector2(h, h), Vector2(h * 2.0, h * 2.0))
-		c.draw_rect(box, Color(0, 0, 0, 0.75))
-		c.draw_rect(box.grow(-1.5), Color(1, 1, 1, 0.95))
-
-
-## Which part of the box the mouse is over: "nw"/"ne"/"sw"/"se" corners, "n"/"s"/
-## "e"/"w" edges, "move" inside, "" outside. Corners are tested first so the
-## overlapping edge bands at a corner never win.
-func _region_hit(pos: Vector2) -> String:
-	var r := _region_rect_px()
-	if r.size.x <= 0.0:
-		return ""
-	var g := _REGION_GRAB
-	var near_l: bool = absf(pos.x - r.position.x) <= g
-	var near_r: bool = absf(pos.x - r.end.x) <= g
-	var near_t: bool = absf(pos.y - r.position.y) <= g
-	var near_b: bool = absf(pos.y - r.end.y) <= g
-	var in_x: bool = pos.x >= r.position.x - g and pos.x <= r.end.x + g
-	var in_y: bool = pos.y >= r.position.y - g and pos.y <= r.end.y + g
-	if in_x and in_y:
-		if near_l and near_t: return "nw"
-		if near_r and near_t: return "ne"
-		if near_l and near_b: return "sw"
-		if near_r and near_b: return "se"
-		if near_l: return "w"
-		if near_r: return "e"
-		if near_t: return "n"
-		if near_b: return "s"
-	return "move" if r.has_point(pos) else ""
-
-
-const _REGION_CURSORS := {
-	"nw": Control.CURSOR_FDIAGSIZE, "se": Control.CURSOR_FDIAGSIZE,
-	"ne": Control.CURSOR_BDIAGSIZE, "sw": Control.CURSOR_BDIAGSIZE,
-	"n": Control.CURSOR_VSIZE, "s": Control.CURSOR_VSIZE,
-	"w": Control.CURSOR_HSIZE, "e": Control.CURSOR_HSIZE,
-	"move": Control.CURSOR_MOVE,
-}
-
-
-## The PRESS and hover feedback only. Everything after the press is handled in
-## _input instead - see _region_drag_motion for why a drag cannot live here.
-func _region_overlay_input(event: InputEvent) -> void:
-	if _selected == null:
-		return
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		_region_drag = _region_hit(event.position)
-		_region_drag_from = event.position
-		_region_drag_box = _region_rect_px()
-		# A press OUTSIDE the box is not ours - let it fall through to whatever
-		# is underneath rather than swallowing every click on the video for as
-		# long as a region exists.
-		if _region_drag != "":
-			_region_overlay.accept_event()
-		return
-	# Hover feedback: the handles have to advertise themselves or the box looks
-	# like a drawing rather than a tool.
-	if event is InputEventMouseMotion and _region_drag == "":
-		var hit := _region_hit(event.position)
-		_region_overlay.mouse_default_cursor_shape = _REGION_CURSORS.get(hit, Control.CURSOR_ARROW)
-
-
-## A DRAG IN PROGRESS, from the editor's own _input rather than the overlay's
-## gui_input. gui_input only delivers events that land ON the control, so a drag
-## that leaves the video pane silently stops updating - and the single most
-## natural gesture with this tool is shoving an edge PAST the frame border to
-## mean "all the way to the edge". Through gui_input that gesture stopped at
-## whatever pixel the cursor last crossed on its way out, leaving the box a
-## fraction of a percent short of the border: a thin unpainted band of the very
-## color being removed, hugging the top of the picture. Reading the mouse from
-## _input instead lets the drag continue past the edge and clamp cleanly at it.
-func _region_drag_motion(event: InputEvent) -> void:
-	if _region_drag == "" or _region_overlay == null:
-		return
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT \
-			and not event.pressed:
-		_region_drag = ""
-		return
-	if event is InputEventMouseMotion:
-		_region_apply_drag(_region_overlay.get_local_mouse_position())
-
-
-## Resolve a drag to new box corners and write them. Everything is computed from
-## the box AS IT WAS AT MOUSE-DOWN plus the total delta since - never
-## incrementally from the current box, which drifts and makes a slow drag land
-## somewhere different from a fast one covering the same distance.
-func _region_apply_drag(pos: Vector2) -> void:
-	var sz := _region_overlay.size
-	if sz.x <= 0.0 or sz.y <= 0.0:
-		return
-	var d := pos - _region_drag_from
-	var b := _region_drag_box
-	var x0 := b.position.x
-	var y0 := b.position.y
-	var x1 := b.end.x
-	var y1 := b.end.y
-	if _region_drag == "move":
-		# Moving keeps the SIZE and stays inside the frame, so dragging a box
-		# off the edge parks it against the edge instead of shrinking it.
-		var mx: float = clampf(x0 + d.x, 0.0, sz.x - b.size.x)
-		var my: float = clampf(y0 + d.y, 0.0, sz.y - b.size.y)
-		x0 = mx; y0 = my; x1 = mx + b.size.x; y1 = my + b.size.y
-	else:
-		if _region_drag.contains("w"):
-			x0 = clampf(x0 + d.x, 0.0, x1 - _REGION_MIN * sz.x)
-		if _region_drag.contains("e"):
-			x1 = clampf(x1 + d.x, x0 + _REGION_MIN * sz.x, sz.x)
-		if _region_drag.contains("n"):
-			y0 = clampf(y0 + d.y, 0.0, y1 - _REGION_MIN * sz.y)
-		if _region_drag.contains("s"):
-			y1 = clampf(y1 + d.y, y0 + _REGION_MIN * sz.y, sz.y)
-	# SNAP TO THE FRAME. An edge released within a few pixels of the picture's own
-	# border means the border - nobody drags a box to 0.4% off the top on purpose,
-	# and the difference is not visible in the editor but IS visible in the result
-	# as a hairline of the color being removed. Exact 0/1 also lets the shader
-	# skip that side's falloff entirely (see region_mask), so a flush edge paints
-	# the very first row instead of fading into it.
-	_edit("reg_x0", _snap_edge(x0 / sz.x))
-	_edit("reg_y0", _snap_edge(y0 / sz.y))
-	_edit("reg_x1", _snap_edge(x1 / sz.x))
-	_edit("reg_y1", _snap_edge(y1 / sz.y))
-	_region_overlay.queue_redraw()
-
-
-## Pull a box edge onto the frame's border if it is nearly there. In UV, because
-## that is what gets stored; the threshold is generous enough to be reachable by
-## hand and far too small to swallow a deliberate placement.
-static func _snap_edge(v: float) -> float:
-	if v < _REGION_SNAP:
-		return 0.0
-	if v > 1.0 - _REGION_SNAP:
-		return 1.0
-	return clampf(v, 0.0, 1.0)
-
-
-## The checkbox. ON seeds a box worth dragging (the middle of the frame) rather
-## than the full frame, which would have invisible handles pinned in the corners
-## and look broken. OFF restores the whole frame - the layer acts everywhere
-## again, which is the same state every session had before regions existed.
-func _on_region_toggled(on: bool) -> void:
-	if _syncing:
-		return
-	if on:
-		_edit("reg_x0", 0.15)
-		_edit("reg_y0", 0.10)
-		_edit("reg_x1", 0.85)
-		_edit("reg_y1", 0.55)
-	else:
-		_edit("reg_x0", 0.0)
-		_edit("reg_y0", 0.0)
-		_edit("reg_x1", 1.0)
-		_edit("reg_y1", 1.0)
-	_refresh_panel()   # re-reads the box, the checkbox and the edge slider's visibility
-
-
-## Show the box exactly when the selected marker actually has a region. Called
-## from _refresh_panel (selection/undo/reload) and after every toggle.
-func _sync_region_overlay() -> void:
-	if _region_overlay == null:
-		return
-	var on := _selected != null and MaskSession.has_region(_selected)
-	_region_overlay.visible = on
-	# MOUSE_FILTER_IGNORE while hidden is belt-and-braces: an invisible Control
-	# does not receive input anyway, but this one sits over the whole video and a
-	# future change that leaves it visible-but-empty must not eat every click.
-	_region_overlay.mouse_filter = Control.MOUSE_FILTER_STOP if on else Control.MOUSE_FILTER_IGNORE
-	if on:
-		_region_overlay.queue_redraw()
-
-
-## A secondary track's own composited view: a raw (unshaded - the masking
-## effects system keys off ONE frame's colors via the primary's shader chain,
-## not built for a second independent source yet) picture-in-picture box. It
-## takes over the SAME inset slot _mask_wrap occupies (bottom-right) rather
-## than getting its own corner - there is only ever one PiP box on screen at
-## a time; see _sync_tracks, which hides _mask_wrap for as long as a track's
-## own box is showing (feedback/0056: a stray, always-empty second box used
-## to sit at a separate default corner on top of the real one).
-func _build_track_view(i: int) -> void:
-	var track: Dictionary = session.tracks[i]
-	var player := VideoStreamPlayer.new()
-	player.stream = load(ProjectSettings.globalize_path(String(track.video_path)))
-	player.expand = true
-	_composition_parent.add_child(player)
-
-	var wrap := Control.new()
-	wrap.anchor_left = _mask_wrap.anchor_left
-	wrap.anchor_top = _mask_wrap.anchor_top
-	wrap.anchor_right = _mask_wrap.anchor_right
-	wrap.anchor_bottom = _mask_wrap.anchor_bottom
-	_composition_parent.add_child(wrap)
-
-	var view := TextureRect.new()
-	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	view.stretch_mode = TextureRect.STRETCH_SCALE
-	view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	wrap.add_child(view)
-
-	var border := StyleBoxFlat.new()
-	border.bg_color = Color(0, 0, 0, 0)
-	border.set_border_width_all(2)
-	border.border_color = Color(0.6, 0.9, 1.0, 0.85)
-	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", border)
-	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	wrap.add_child(panel)
-
-	# The track's audio plays through a real AudioStreamPlayer (the SAME proven path as
-	# the main clip) - VideoStreamPlayer's own embedded audio does NOT play when the
-	# video is driven by manual seeking, which is why the track was silent. We demux the
-	# track .ogv's Vorbis into a sidecar .ogg once (fast stream-copy, cached), and mute
-	# the video player's audio so nothing double-plays.
-	player.volume = 0.0
-
-	while _track_runtime.size() <= i:
-		_track_runtime.append({})
-	_track_runtime[i] = {"player": player, "view": view, "wrap": wrap, "audio": null, "active": false}
-	player.paused = true
-	player.play()   # must be playing before .stream_position can be set (see _sync_tracks)
-	_ensure_track_audio(i)   # attaches .audio now (cached sidecar) or when ffmpeg finishes
-
-
-## Give track `i` its AudioStreamPlayer, from a sidecar .ogg demuxed from the track's
-## .ogv. If the sidecar already exists we attach immediately; otherwise ffmpeg runs in
-## the BACKGROUND (was OS.execute - a synchronous main-thread stall that could hang the
-## whole editor while audio kept playing) and _poll_track_audio attaches it on finish.
-## The sidecar lives beside the .ogv (same basename, .ogg). If it exists, attach it.
-## Otherwise extract it - preferring the ORIGINAL SOURCE, which always has the audio:
-## the old -an transcode stripped it from the .ogv, so demuxing the .ogv gave nothing.
-## Re-encode to Vorbis (the source is usually aac/mp3, not copyable to ogg). Background
-## + quiet; if even the source has no audio, _poll_track_audio records no_audio so we
-## don't retry forever. Once a sidecar exists it's cached and this is a no-op.
-func _ensure_track_audio(i: int) -> void:
-	if i < 0 or i >= session.tracks.size():
-		return
-	var track: Dictionary = session.tracks[i]
-	var video_path := String(track.get("video_path", ""))
-	if video_path.is_empty():
-		return
-	var abs_ogg := ProjectSettings.globalize_path(video_path.get_basename() + ".ogg")
-	if FileAccess.file_exists(abs_ogg):
-		_attach_track_audio(i, abs_ogg)
-		return
-	if bool(track.get("no_audio", false)):
-		return   # already learned there's no audio anywhere for this track
-	# Prefer the original import (has audio); fall back to the .ogv (only new imports
-	# embed audio) when the source is gone or was never recorded.
-	var src := String(track.get("source_path", ""))
-	var abs_src := ProjectSettings.globalize_path(src) if src.begins_with("res://") else src
-	if src.is_empty() or not FileAccess.file_exists(abs_src):
-		abs_src = ProjectSettings.globalize_path(video_path)
-	if not FileAccess.file_exists(abs_src):
-		return
-	var pid := Subprocess.start("ffmpeg", ["-y", "-loglevel", "quiet", "-i", abs_src,
-		"-vn", "-c:a", "libvorbis", "-q:a", "4", abs_ogg])
-	if pid > 0:
-		_track_audio_jobs.append({"pid": pid, "index": i, "ogg": abs_ogg})
-
-
-## Load a track's sidecar .ogg into an AudioStreamPlayer and hang it on the runtime.
-func _attach_track_audio(i: int, abs_ogg: String) -> void:
-	if i < 0 or i >= _track_runtime.size() or not (_track_runtime[i] is Dictionary):
-		return
-	var stream := AudioStreamOggVorbis.load_from_file(abs_ogg)
-	if stream == null:
-		return
-	var ap := AudioStreamPlayer.new()
-	ap.stream = stream
-	add_child(ap)
-	_track_runtime[i]["audio"] = ap
-
-
-## Poll the background sidecar extractions; attach each track's audio as ffmpeg finishes.
-func _poll_track_audio() -> void:
-	for j in range(_track_audio_jobs.size() - 1, -1, -1):
-		var job: Dictionary = _track_audio_jobs[j]
-		if not Subprocess.alive(int(job.pid)):
-			var idx := int(job.index)
-			if FileAccess.file_exists(String(job.ogg)):
-				_attach_track_audio(idx, String(job.ogg))
-			elif idx >= 0 and idx < session.tracks.size():
-				# ffmpeg produced nothing - this track has no audio stream. Record it so
-				# we don't re-run (and re-fail) the extraction on every future load.
-				session.tracks[idx]["no_audio"] = true
-				_mark_dirty()
-			_track_audio_jobs.remove_at(j)
-
-
-# --- multi-track: trim lanes, import, playback sync ----------------------------
-
-# Per-lane reserved height. MUST cover a TrackLane's own minimum (26px, see
-# track_lane.gd) PLUS the _lanes_col VBox's inter-lane separation (2px), or the
-# lane stack overflows its allocated rect and - drawing above the marker strip it
-# abuts - spills over the timeline's top edge, clipping the marker flags and the
-# playhead timestamp tag (worsening with each imported track). 26 + 2 = 28.
-const _LANE_H := 28.0
-# The volume knob every lane gets (see _volume_knob) is anchored top-left, offset_right
-# 34 - a lane's own label must start past that plus a small gap, or the two draw on top
-# of each other whenever the lane's own left edge sits near local x0 (the primary lane's
-# offset is always 0, so this bites it every time - see feedback/0009).
-const _LANE_LABEL_LEFT := 38.0
-
-func _track_getter(i: int, field: String) -> Callable:
-	return func(): return float(session.tracks[i].get(field, 0.0))
-
-
-func _track_setter(i: int, field: String) -> Callable:
-	return func(v): session.tracks[i][field] = v
-
-
-## Rebuild every trim/track lane from session state (the primary clip's own trim
-## block, plus one per session.tracks entry) and recompute the shared
-## TimelineView's cached extent. Called after any STRUCTURAL change (import,
-## delete, undo/redo) - never mid-drag; see TrackLane.drag_ended and
-## TimelineView.refresh's own doc for why that distinction is load-bearing here.
-func _refresh_lanes() -> void:
-	if _lanes_col == null:
-		return
-	for c in _lanes_col.get_children():
-		c.queue_free()
-
-	var primary := TrackLane.new()
-	primary.tview = _tview
-	primary.label = String(session.video_path).get_file()
-	primary.reserved_left = _LANE_LABEL_LEFT
-	primary.color = Color(0.55, 0.75, 1.0)
-	primary.movable = false
-	primary.full_duration = session.duration
-	primary.get_in = func(): return session.clip_in
-	primary.set_in = func(v): session.clip_in = v
-	primary.get_out = func(): return session.effective_clip_out()
-	primary.set_out = func(v): session.clip_out = v
-	primary.get_fade_in = func(): return session.main_fade_in
-	primary.set_fade_in = func(v): session.main_fade_in = v
-	primary.get_fade_out = func(): return session.main_fade_out
-	primary.set_fade_out = func(v): session.main_fade_out = v
-	primary.get_snap_targets = _snap_targets_for.bind(-1)
-	primary.drag_started.connect(func(): _undo.push("", "trimmed the main clip"))
-	primary.drag_ended.connect(_refresh_ruler)
-	primary.changed.connect(_mark_dirty)
-	_lanes_col.add_child(primary)
-	# The main clip's own pull-rope volume (mirrors each track's), so its level in the
-	# mix is set independently.
-	primary.add_child(_volume_knob(
-		func(): return float(session.main_volume),
-		func(v): session.main_volume = v,
-		Color(0.55, 0.75, 1.0), true))
-	# Split, same corner/behavior as a secondary track's - the main clip is otherwise
-	# just track -1 (see _snap_targets_for), so it gets the same cut at the playhead
-	# (see _split_main). No delete button here: unlike an imported track, the primary
-	# clip is never optional - there's always exactly one.
-	var main_split := Button.new()
-	main_split.text = "✂"
-	main_split.custom_minimum_size = Vector2(20, 18)
-	main_split.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	main_split.offset_left = -22
-	main_split.offset_top = 2
-	main_split.offset_right = -2
-	main_split.offset_bottom = 20
-	main_split.focus_mode = Control.FOCUS_NONE
-	main_split.tooltip_text = "Split the main track at the playhead"
-	main_split.pressed.connect(_split_main)
-	primary.add_child(main_split)
-
-	for i in session.tracks.size():
-		var lane := TrackLane.new()
-		lane.tview = _tview
-		lane.label = String(session.tracks[i].get("video_path", "")).get_file()
-		lane.reserved_left = _LANE_LABEL_LEFT
-		lane.color = Color(0.6, 0.95, 0.7)
-		lane.movable = true
-		lane.full_duration = float(session.tracks[i].get("duration", 0.0))
-		lane.get_in = _track_getter(i, "clip_in")
-		lane.set_in = _track_setter(i, "clip_in")
-		lane.get_out = _track_getter(i, "clip_out")
-		lane.set_out = _track_setter(i, "clip_out")
-		lane.get_offset = _track_getter(i, "offset")
-		lane.set_offset = _track_setter(i, "offset")
-		lane.get_fade_in = _track_getter(i, "fade_in")
-		lane.set_fade_in = _track_setter(i, "fade_in")
-		lane.get_fade_out = _track_getter(i, "fade_out")
-		lane.set_fade_out = _track_setter(i, "fade_out")
-		lane.get_snap_targets = _snap_targets_for.bind(i)
-		lane.get_playhead = func(): return _player.stream_position if _player != null else 0.0
-		lane.drag_started.connect(func(): _undo.push("", "trimmed a track"))
-		lane.drag_ended.connect(_refresh_ruler)
-		lane.changed.connect(_mark_dirty)
-		_lanes_col.add_child(lane)
-		# The delete button OVERLAYS the lane's own top-right corner rather than
-		# sitting beside it in an HBoxContainer - an inline sibling would shrink
-		# the lane's own width below the primary lane's/_timeline's, and every
-		# lane's x_of() must span the exact same pixel width or their blocks
-		# stop lining up against a shared second.
-		var del := Button.new()
-		del.text = "✕"
-		del.custom_minimum_size = Vector2(20, 18)
-		del.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-		del.offset_left = -22
-		del.offset_top = 2
-		del.offset_right = -2
-		del.offset_bottom = 20
-		del.focus_mode = Control.FOCUS_NONE
-		del.tooltip_text = "Remove this track"
-		var idx := i
-		del.pressed.connect(func(): _delete_track(idx))
-		lane.add_child(del)
-		# Split, just left of delete - cuts this track in two at the playhead (see
-		# _split_track). Same overlay approach as delete, for the same reason: an
-		# inline sibling would shrink the lane's own width out from under the
-		# shared timeline's pixel mapping.
-		var split := Button.new()
-		split.text = "✂"
-		split.custom_minimum_size = Vector2(20, 18)
-		split.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-		split.offset_left = -46
-		split.offset_top = 2
-		split.offset_right = -26
-		split.offset_bottom = 20
-		split.focus_mode = Control.FOCUS_NONE
-		split.tooltip_text = "Split this track at the playhead"
-		split.pressed.connect(func(): _split_track(idx))
-		lane.add_child(split)
-		# Pull-rope volume knob, on the LEFT of the lane so it never sits under the floating
-		# assistant chat button (bottom-right, where the old right-side controls landed).
-		# The track's own AudioStreamPlayer mixes with the main clip; _sync_tracks reads
-		# `volume` every frame, so pulling it changes the level live.
-		lane.add_child(_volume_knob(
-			func(): return float(session.tracks[idx].get("volume", 1.0)),
-			func(v): session.tracks[idx]["volume"] = v,
-			Color(0.6, 0.95, 0.7)))
-
-	# The lane stack sits directly above the marker strip, and the video's own
-	# letterboxed slot (see _build_editor_ui) has to shrink to match - otherwise
-	# an imported track (or several) grows this stack tall enough to push its
-	# lanes/delete-buttons over the bottom of the video instead of the reserved
-	# strip below it.
-	_apply_lane_reserved(1 + session.tracks.size())
-	_refresh_ruler()
-
-
-## The ruler's length, taken again from the session. Called when a gesture ENDS, never during
-## one ([TimelineView]: a ruler that rescales under the handle being dragged).
-func _refresh_ruler() -> void:
-	if session != null:
-		_tview.refresh(session.timeline_extent())
-
-
-## Collapse the lane stack (and expand the video letterbox into the space that
-## frees up) to fit exactly `count` rows. Called with the full track count
-## right after any structural change (above), and every frame with however
-## many lanes are actually on screen right now - once TrackLane starts hiding
-## itself for clips scrolled entirely out of the current zoom/pan window, the
-## fixed-for-the-whole-track-count reservation left a dead black band where
-## those rows used to be instead of actually collapsing - see feedback/0023.
-func _apply_lane_reserved(count: int) -> void:
-	var reserved := 90.0 + float(count) * _LANE_H
-	_lanes_col.offset_top = -reserved
-	_lanes_col.offset_bottom = -90
-	if _video_area != null:
-		_video_area.offset_bottom = -reserved
-	# THE EXPORT BUTTON RIDES ABOVE THE BOTTOM CHROME. Its offsets are the ones
-	# every mode uses (-68/-28 from the bottom edge, matching assistant.gd's
-	# toggle row), and in every other mode the bottom of the frame is empty - but
-	# here it is the marker strip and the lane stack, so the button sat ON the
-	# timeline. `reserved` is exactly the height of that furniture, so anchoring to
-	# it keeps the button clear however many tracks are open.
-	# THE WHOLE BOTTOM-RIGHT ROW RIDES ABOVE THE BOTTOM CHROME - this editor's own
-	# export button AND the shared furniture (⤓ / 💬 / >_), all off ONE number, and
-	# all with the SAME arithmetic. They were laid out two different ways at first,
-	# which is why the row came out staggered rather than in a line: the shared
-	# buttons sit at -28..-68 from the bottom edge, so anything joining that row has
-	# to be -28 - inset .. -68 - inset and not "inset plus a margin".
+## ONE PLACE where the umbra's knobs are read off a layer, because there were two
+## and they drifted: `tests/masking/umbra_look_probe.gd` carried its own copy of these
+## mappings, and after Stand's low end was widened the probe went on rendering the
+## old range - so the picture it produced to check a change was a picture of the
+## code before it. A probe that reproduces the resolve is a probe that can lie.
+func _umb_read_layer(l: Dictionary, env: float) -> void:
+	# Scale is a real size relative to HER - at 1.0 the ghost is exactly her own
+	# size and stands beside her; past that it looms. Its head cannot be pushed off
+	# the frame at any setting (see _umb_solve_cast), so this is bounded only by
+	# what still reads as a body.
+	_umb_scale = clampf(float(l.get("fx_scale", 1.0)), 0.4, 3.2)
+	_umb_pan = Vector2(float(l.get("fx_x", 0.0)), float(l.get("fx_y", 0.0))) * 0.25
+	# Resonance folds in here exactly as it does for the shader's density array -
+	# the loom breathes with the audio, so on a talking clip the ghost surges when
+	# the subject speaks.
+	var ures := float(l.get("resonance", 0.0))
+	_umb_loom = clampf(float(l.get("fx_density", 0.45)) + 0.5 * ures * (env - 0.35), 0.0, 1.0)
+	_umb_roil = clampf(float(l.get("fx_contrast", 0.5)), 0.0, 1.0)
+	_umb_rise = maxf(0.05, float(l.get("fx_speed", 1.0)))
+	_umb_wisp = clampf(float(l.get("fx_smooth", 0.0)), 0.0, 1.0)
+	_umb_cling = clampf(float(l.get("fx_lag", 0.35)), 0.0, 1.0)
+	# Umbra-only views onto fields other effects own for their own purposes (umbra
+	# never keys, and `swap`/`intensity_b` are the two fields the two-channel era
+	# left behind - the clown reads the same pair under its own names).
 	#
-	# `reserved` is exactly what the marker strip and the trim/track lanes occupy,
-	# and it is what the video area is inset by, so the row stays clear however many
-	# tracks are open.
-	var inset := reserved - 14.0
-	# IN THE ROW once there is one (Chrome.row_button, the slot the shared ⤓ leaves while it is
-	# suppressed); the row is lifted by the claim below. Placed by hand only without a Chrome.
-	var ch_r := _chrome()
-	if ch_r != null and _export_btn != null and _export_btn.get_parent() == self:
-		ch_r.row_button(&"mask_export", _export_btn)
-	if _export_btn != null and _export_btn.get_parent() == self:
-		_export_btn.offset_bottom = -28.0 - inset
-		_export_btn.offset_top = -68.0 - inset
-	if _status != null:
-		# ITS OWN LINE, ABOVE THE BUTTON ROW - see Exporter.set_bottom_inset for
-		# why. The face-track line and the export progress both live here and both
-		# outgrow the space beside four buttons.
-		_status.offset_bottom = -74.0 - inset
-		_status.offset_top = -110.0 - inset
-		_status.offset_right = -28.0
-	# SET EVERY FRAME, not once at build time. The suppression used to be done in
-	# _build_export_ui, which runs before the chrome has joined its group in some
-	# boot orders - so it silently found nothing, the shared button stayed live on
-	# its higher CanvasLayer, and it went on covering this one and eating the click.
-	var ch_i := _chrome()
-	if ch_i != null:
-		ch_i.claim_bottom(&"mask", inset)
-		ch_i.suppress_export(&"mask")
+	# STAND'S LOW END REACHES BEHIND HER (0.55 -> 0.15). It was floored at a
+	# clearance of half the two skulls because the guard used to gate the DEPOSIT,
+	# so a ghost tucked in close was a ghost eaten by its own exclusion. The mass
+	# grows under her now and is only masked at render, so overlapping her is free
+	# - it hides behind her and emerges at her edges, which is what "hug the model
+	# closer" asks for.
+	_umb_stand = 0.15 + clampf(float(l.get("threshold", 0.24)), 0.0, 1.0) * 1.85
+	_umb_lead = clampf(float(l.get("feather", 0.12)), 0.0, 0.5) * 1.6
+	_umb_eye_amt = clampf(float(l.get("sat_floor", 0.18)), 0.0, 1.0)
+	_umb_lean = clampf(float(l.get("swap", 0.45)), 0.0, 1.0)
+	_umb_narrow = clampf(float(l.get("intensity_b", 0.35)), 0.0, 0.75)
 
 
-func _delete_track(i: int) -> void:
-	if i < 0 or i >= session.tracks.size():
-		return
-	_undo.push("", "deleted a track")
-	if i < _track_runtime.size():
-		var rt: Dictionary = _track_runtime[i]
-		if rt.has("player"):
-			(rt.player as Node).queue_free()
-		if rt.has("wrap"):
-			(rt.wrap as Node).queue_free()
-		if rt.has("audio") and rt.audio != null:
-			(rt.audio as Node).queue_free()
-		_track_runtime.remove_at(i)
-	session.tracks.remove_at(i)
-	_refresh_lanes()
-	_mark_dirty()
-
-
-## Cut track `i` into two independent lanes at the playhead, both still pointing
-## at the SAME source video/audio (video_path is shared - _ensure_track_audio's
-## sidecar .ogg is keyed off that path, so the new half finds the existing
-## extraction and attaches instantly, no re-demux). The left half keeps this
-## track's own identity and index (just trims its clip_out); the right half is
-## a full duplicate of the fields - same clip_in..clip_out span, same volume -
-## then re-pointed to start exactly at the split: its clip_in advances to the
-## split's LOCAL position in the source, and its offset (where that lands on
-## the MASTER timeline) is set to the playhead itself, so the two blocks sit
-## edge-to-edge with no gap or overlap. From there each is an ordinary lane -
-## TrackLane's own drag handles already shift/resize them independently.
-## Appended at the END of session.tracks (never inserted at i+1): background
-## sidecar-audio jobs (_track_audio_jobs) and _track_runtime are index-keyed,
-## and an insert would silently misalign any in-flight job for a LATER track.
-func _split_track(i: int) -> void:
-	if i < 0 or i >= session.tracks.size():
-		return
-	var track: Dictionary = session.tracks[i]
-	var offset := float(track.get("offset", 0.0))
-	var cin := float(track.get("clip_in", 0.0))
-	var cout := float(track.get("clip_out", 0.0))
-	var master_t: float = _player.stream_position if _player != null else 0.0
-	var split_local := master_t - offset + cin
-	if split_local <= cin + 0.05 or split_local >= cout - 0.05:
-		_set_status("✂  Move the playhead inside this track's span to split it there")
-		return
-	_undo.push("", "split a track")
-	var right: Dictionary = track.duplicate()
-	right["clip_in"] = split_local
-	right["offset"] = master_t
-	right["fade_in"] = 0.0
-	track["clip_out"] = split_local
-	track["fade_out"] = 0.0
-	session.tracks.append(right)
-	_undo.reconcile_tracks()
-	_refresh_lanes()
-	_mark_dirty()
-
-
-## Cut the MAIN clip in two at the playhead, same as _split_track but for the
-## primary lane: the main clip has no `offset` of its own (master time and its
-## source time are the same clock - see TrackLane._bounds), so the playhead
-## position IS the split point directly, no offset arithmetic needed. The left
-## half stays the main clip (just trims clip_out, same as dragging its own out
-## handle inward). The right half can't stay "main" - there's only ever one -
-## so it's appended to session.tracks as an ordinary track pointing at the same
-## video_path/source_path, picking up at the split with its own offset. From
-## there it's indistinguishable from any imported track: draggable, deletable,
-## splittable again - the main clip is really just track -1 (see
-## _snap_targets_for), and after a split its tail end is a track in fact, not
-## just in spirit.
-func _split_main() -> void:
-	if _player == null:
-		return
-	var cin := session.clip_in
-	var cout := session.effective_clip_out()
-	var split_t: float = _player.stream_position
-	if split_t <= cin + 0.05 or split_t >= cout - 0.05:
-		_set_status("✂  Move the playhead inside the main clip's span to split it there")
-		return
-	_undo.push("", "split the main clip")
-	var right := {
-		"video_path": session.video_path,
-		"source_path": session.source_path,
-		"duration": session.duration,
-		"clip_in": split_t,
-		"clip_out": cout,
-		"offset": split_t,
-		"fade_in": 0.0,
-		"fade_out": session.main_fade_out,
-		"volume": session.main_volume,
-	}
-	session.clip_out = split_t
-	session.main_fade_out = 0.0
-	session.tracks.append(right)
-	_undo.reconcile_tracks()
-	_refresh_lanes()
-	_mark_dirty()
-
-
-func _prompt_import_track() -> void:
-	# Already open (double-tap of T) - just bring it forward, don't stack a
-	# second dialog behind the first.
-	if _import_dialog != null and is_instance_valid(_import_dialog):
-		_import_dialog.popup_centered()
-		return
-	# An import is already transcoding - don't let a second one clobber the
-	# first's pending state mid-flight (they share _import_pid/_import_pending).
-	if _import_pid > 0:
-		_set_status("⏳  A track is still importing - one at a time")
-		return
-	# Immediate feedback that T registered, BEFORE the dialog - if the dialog
-	# itself somehow fails to show, at least the keypress isn't silent.
-	_set_status("📁  Choose a video to import as a second track…")
-	_import_dialog = FileDialog.new()
-	_import_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-	_import_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	# In-window dialog, NOT native. The native (portal) dialog silently shows
-	# nothing on a Linux box without xdg-desktop-portal - the exact "I press T
-	# and nothing happens" report. Godot's own dialog always renders in-window.
-	_import_dialog.use_native_dialog = false
-	_import_dialog.title = "Import a second track (picture-in-picture)"
-	_import_dialog.filters = PackedStringArray(["*.mp4, *.mov, *.mkv, *.webm, *.ogv ; Video"])
-	var downloads := OS.get_system_dir(OS.SYSTEM_DIR_DOWNLOADS)
-	if not downloads.is_empty():
-		_import_dialog.current_dir = downloads
-	_import_dialog.size = Vector2i(820, 560)
-	_import_dialog.file_selected.connect(_start_track_import)
-	# Free the dialog whichever way it closes (pick or cancel), so the next T
-	# opens a fresh one and the is_instance_valid guard above reads false
-	# again. _start_track_import is connected first, so it runs before the
-	# close on a pick.
-	_import_dialog.file_selected.connect(func(_p): _close_import_dialog())
-	_import_dialog.canceled.connect(_close_import_dialog)
-	add_child(_import_dialog)
-	_import_dialog.popup_centered()
-
-
-func _close_import_dialog() -> void:
-	if _import_dialog != null and is_instance_valid(_import_dialog):
-		_import_dialog.queue_free()
-	_import_dialog = null
-
-
-## Same one-time ffmpeg->theora transcode _prep() does for the primary clip,
-## minus the audio extraction step (v1 tracks are silent - see the class doc's
-## scope note) - PID-polled in _process(), never blocking, matching the
-## project's one established pattern for external subprocesses.
-## Add the track's LANE first, transcode second. The lane is pure metadata
-## (duration/offset/trim) - it doesn't need the transcoded video at all - so it
-## appears the instant you pick a file, independent of the background ffmpeg run.
-## The old order (transcode -> probe -> only THEN add the lane) meant any hiccup in
-## that async tail left the timeline looking like nothing happened. The PiP VIDEO
-## still needs the .ogv, so _build_track_view is deferred to _finish_track_import;
-## until then _sync_tracks just skips this index (no "player" in its runtime slot).
-func _start_track_import(source: String) -> void:
-	var slug := _slugify(source)
-	var dir := _session_path.get_base_dir()
-	var idx := session.tracks.size()
-	var video := dir + "/track_%s_%d.ogv" % [slug, idx]
-	# The SOURCE file has reliable duration metadata (unlike our libtheora output),
-	# so the lane gets its real length up front; the transcoded .ogv re-confirms it
-	# in _finish_track_import. Floor keeps the lane a visible width if a probe fails.
-	var dur := _probe_duration(source)
-	if dur <= 0.0:
-		dur = maxf(session.duration, 1.0)
-	_undo.push("", "imported a track")
-	session.tracks.append({
-		"video_path": video, "source_path": source, "duration": dur,
-		"clip_in": 0.0, "clip_out": dur, "offset": 0.0,
-		"x": 0.68, "y": 0.04, "w": 0.28, "h": 0.28,
-		"volume": 1.0,
-	})
-	while _track_runtime.size() <= idx:
-		_track_runtime.append({})   # empty slot: _sync_tracks skips it until the video loads
-	_refresh_lanes()                # the new timeline lane is on screen NOW
-	_mark_dirty()
-	_import_pending = {"source": source, "video": video, "index": idx}
-	_set_status("⏳  Track added - transcoding its video in the background…")
-	# Keep the audio this time (was -an): the track's own VideoStreamPlayer plays the
-	# embedded Vorbis, mixed alongside the main clip, with per-track mute/volume (see
-	# _sync_tracks). A source with no audio just yields a silent stream - no failure.
-	# .part + promote, same as the main prep - see _promote_part's doc.
-	var args := PackedStringArray([
-		"-y", "-loglevel", "error", "-i", source,
-		"-c:v", "libtheora", "-q:v", "6", "-g", "25",
-		"-c:a", "libvorbis", "-q:a", "4",
-		"-f", "ogg", ProjectSettings.globalize_path(video) + ".part"])
-	_import_pid = Subprocess.start("ffmpeg", args, "clip import")
-	if _import_pid <= 0:
-		_cancel_pending_track()     # couldn't even start ffmpeg - roll the lane back out
-		_set_status("⚠  Could not start ffmpeg for track import")
-
-
-## Roll back the placeholder lane _start_track_import added (ffmpeg failed to start,
-## or the transcode produced nothing usable). The pending track is always the last
-## one (imports are serialized - see _prompt_import_track's guard).
-func _cancel_pending_track() -> void:
-	if _import_pending.has("index"):
-		var idx := int(_import_pending.index)
-		if idx >= 0 and idx < session.tracks.size():
-			session.tracks.remove_at(idx)
-			if idx < _track_runtime.size():
-				_track_runtime.remove_at(idx)
-			_refresh_lanes()
-			_mark_dirty()
-	_import_pending = {}
-	_import_pid = -1
-
-
-func _finish_track_import() -> void:
-	if not _import_pending.has("index"):
-		_import_pending = {}
-		return
-	var idx := int(_import_pending.index)
-	_promote_part(String(_import_pending.video))
-	var abs_video := ProjectSettings.globalize_path(String(_import_pending.video))
-	var dur := _probe_duration(abs_video)
-	if dur <= 0.0 or idx < 0 or idx >= session.tracks.size():
-		# The lane is already on screen; the transcode still failed, so take it back
-		# out rather than leave a lane whose PiP video would never load.
-		_cancel_pending_track()
-		_set_status("⚠  Track import failed (transcode produced no usable video)")
-		return
-	# Correct the lane to the actual transcoded length, keeping it full if untrimmed.
-	var t: Dictionary = session.tracks[idx]
-	var was_full: bool = float(t.get("clip_out", 0.0)) >= float(t.get("duration", 0.0)) - 0.05
-	t["duration"] = dur
-	if was_full:
-		t["clip_out"] = dur
-	_build_track_view(idx)          # now the .ogv exists: load its PiP player
-	_refresh_lanes()
-	_mark_dirty()
-	_import_pending = {}
-	if _status != null:
-		_status.visible = false
-
-
-## Each imported track is driven off the PRIMARY player's own clock (never its
-## own independent playback state) - the same discipline the audio sync already
-## follows (see _play's class doc), so live preview and an export relaunch trace
-## the identical picture. A track that isn't currently inside its
-## [offset, offset+span) window on the master timeline is paused and hidden;
-## entering it seeks the track's own player to the matching local position and
-## lets it run from there, only re-seeking again if it drifts (video seeks are
-## heavy - constant tiny re-seeks would stutter, same reasoning as the 0.15s
-## audio tolerance, just a bit wider since a video seek is coarser than an
-## audio one).
-func _sync_tracks() -> void:
-	if _player == null:
-		return
-	var master_t := _player.stream_position
-	for i in session.tracks.size():
-		if i >= _track_runtime.size():
-			continue
-		var rt: Dictionary = _track_runtime[i]
-		if not rt.has("player"):
-			continue
-		var track: Dictionary = session.tracks[i]
-		var offset := float(track.get("offset", 0.0))
-		var cin := float(track.get("clip_in", 0.0))
-		var cout := float(track.get("clip_out", 0.0))
-		var local_t := master_t - offset + cin
-		var inside: bool = cout > cin and local_t >= cin and local_t < cout
-		var tplayer: VideoStreamPlayer = rt.player
-		var wrap: Control = rt.wrap
-		var taudio: AudioStreamPlayer = rt.get("audio")   # may be null (silent track)
-		# This track owns the PiP only when V has selected it (pip_track == i+1). The
-		# box is still gated by inset_show so track modes fade like the main PiP does.
-		var selected := _pip_track == i + 1
-		# The clip's fade envelope: audio AND video ramp together (coupled) over the
-		# fade_in seconds after the clip's start and the fade_out seconds before its end.
-		# g is 0 at a faded edge, 1 across the middle; see _clip_fade_gain / _track_level_db.
-		var g := _clip_fade_gain(master_t - offset, cout - cin,
-			float(track.get("fade_in", 0.0)), float(track.get("fade_out", 0.0)))
-		if inside:
-			wrap.visible = _last_inset_show > 0.001 and selected
-			wrap.modulate.a = g   # VIDEO fade, coupled to the audio one below
-			if not bool(rt.active) or absf(tplayer.stream_position - local_t) > 0.2:
-				tplayer.stream_position = local_t
-				rt.active = true
-			tplayer.paused = not _playing
-			var view: TextureRect = rt.view
-			if view != null:
-				view.texture = tplayer.get_video_texture()
-			if taudio != null:
-				# pull-rope volume × the fade envelope, as a log/dB level
-				taudio.volume_db = _track_level_db(float(track.get("volume", 1.0)), g)
-				if _playing:
-					if not taudio.playing:
-						taudio.play(local_t)
-					taudio.stream_paused = false
-					if absf(taudio.get_playback_position() - local_t) > 0.2:
-						taudio.seek(local_t)
-				else:
-					taudio.stream_paused = true   # paused / scrubbing: freeze its sound
-		else:
-			wrap.visible = false
-			tplayer.paused = true   # outside its window: no picture...
-			rt.active = false
-			if taudio != null and taudio.playing:
-				taudio.stop()        # ...and no sound; re-entry restarts it clean
-	# The main clip's PiP shows only when it is the selected source (pip_track == 0);
-	# a selected track replaces it. _apply_frame_state set _mask_wrap by inset_show
-	# alone, so correct it here now that we know which source V picked.
-	if _pip_track != 0:
-		_mask_wrap.visible = false
-
-
-func _build_render_view() -> void:
-	var full := Control.new()
-	full.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(full)
-	_build_video_composition(full)
-	for i in session.tracks.size():
-		_build_track_view(i)
-	# Product-demo chrome: if this session uses META anywhere, build the REAL editor
-	# chrome (timeline, lanes, control panel) on top of the clean composition, fully
-	# transparent. _apply_meta_chrome fades it in per frame with the meta envelope, so
-	# the export shows clean video normally and the working editor during a meta
-	# section (the recorded demo). Purely additive - no meta markers, nothing built,
-	# the clean-video export path is untouched. mouse_filter IGNORE: never interactive.
-	if _session_uses_meta():
-		_meta_chrome = Control.new()
-		_meta_chrome.set_anchors_preset(Control.PRESET_FULL_RECT)
-		_meta_chrome.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_meta_chrome.modulate.a = 0.0
-		add_child(_meta_chrome)
-		_chrome_parent = _meta_chrome
-		_build_chrome()
-		_chrome_parent = null
-		_refresh_panel()
-	# The export starts at the TIMELINE start (0), exactly like the live editor: live
-	# playback begins at 0 and main_visible_at() never gates on clip_in, so the main
-	# clip is shown from source 0 and markers/scenes can (and here do) sit before
-	# clip_in. Seeking the export to clip_in instead silently dropped everything before
-	# it - the "main video starts ~30s too late, early scenes truncated" report, on a
-	# session whose clip_in was 37s. clip_in still bounds the restore clamp and the
-	# kept-range END via content_end(); it is simply not the export's start.
-	_player.play()
-	_player.stream_position = 0.0
-	_apply_frame_state(session.at_time(0.0))
-	# The export quits on the deterministic movie clock reaching content_end() (see
-	# _process), NOT on the audio finishing - an audio track shorter than the session
-	# would otherwise cut the movie (and its trailing raw video) short.
-
-
-func _build_editor_ui() -> void:
-	_video_area = AspectRatioContainer.new()
-	_video_area.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_video_area.offset_left = VIDEO_LEFT
-	# THE CLIP'S OWN SHAPE, not a 16:9 assumption: a portrait clip gets a tall
-	# narrow slot with black bars left and right (pillarbox), a wide one keeps the
-	# bars above and below. AspectRatioContainer centers its single child in
-	# whatever is left after VIDEO_LEFT and the lane strip (see _apply_lane_reserved),
-	# so the picture always fits the viewport whole and is never stretched.
-	# _sync_source_size re-fits this once the decoder confirms the real size.
-	_video_area.ratio = _source_aspect()
-	add_child(_video_area)
-
-	# A plain Control fills the AspectRatioContainer's one centered/letterboxed slot.
-	var inner := Control.new()
-	inner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_video_area.add_child(inner)
-	_build_video_composition(inner)
-	for i in session.tracks.size():
-		_build_track_view(i)
-
-	_build_chrome()
-	_build_export_ui()
-	_build_feedback()
-	_refresh_panel()
-	_apply_frame_state(session.at_time(_player.stream_position))
-
-
-## Where the interactive chrome (timeline, lanes, control panel) parents. Normally
-## `self` (the live editor); during a render-mode export that uses META, it's the
-## fading _meta_chrome overlay so a meta section can reveal the real working editor
-## over the clean video (the recorded product demo).
-func _chrome_host() -> Node:
-	return _chrome_parent if _chrome_parent != null else self
-
-
-## The editor chrome - the marker timeline, the trim/track lane stack, and the
-## control panel - built into _chrome_host(). Split out of _build_editor_ui so the
-## export path can build the SAME real widgets into an overlay (see _build_render_view
-## / _apply_meta_chrome). Prereqs: session and _player already exist.
-func _build_chrome() -> void:
-	_tview = TimelineView.new()
-	_tview.zoom = session.timeline_zoom          # restore the last zoom/pan (see _save_session)
-	_tview.view_start = session.timeline_view_start
-
-	_timeline = MaskTimeline.new()
-	_timeline.session = session
-	_timeline.player = _player
-	_timeline.tview = _tview
-	_timeline.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	_timeline.offset_left = VIDEO_LEFT
-	_timeline.offset_bottom = -90
-	_timeline.offset_top = -90
-	_timeline.scrubbed.connect(_on_scrub)
-	_timeline.marker_picked.connect(_select_marker)
-	_timeline.marker_drag_started.connect(func(_m): _undo.push("", "moved a marker"))
-	_timeline.marker_moved.connect(func(_m):
-		_refresh_marker_label()
-		_mark_dirty())
-	_chrome_host().add_child(_timeline)
-
-	# The trim/track lane stack - the primary clip's own trim block, plus one
-	# lane per imported track - sits directly above the marker strip, sharing
-	# its ruler via the same _tview (see _refresh_lanes for why its height is
-	# computed and set explicitly rather than left to container auto-sizing).
-	_lanes_col = VBoxContainer.new()
-	_lanes_col.add_theme_constant_override("separation", 2)
-	_lanes_col.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	_lanes_col.offset_left = VIDEO_LEFT
-	_chrome_host().add_child(_lanes_col)
-	_refresh_lanes()
-
-	_build_panel()
-	# Every popup in the editor joins the modal counter that suspends the
-	# cursor auto-hide (see _guard_popups). Walked from the whole tree, not
-	# just the panel, so the toolbar's dropdowns are covered too.
-	_guard_popups(self)
-
-
-## The META mirror source: the editor's OWN previous frame, read back from the main
-## viewport into u_workspace. A full-window GPU->CPU readback (expensive), so the
-## caller (_process) only runs it while a meta layer is actually on screen. Feeding
-## this window back into the video surface - which lives IN this window - is the
-## infinite mirror; the one-frame delay is inherent and wanted (each frame nests one
-## level deeper). Downscaled before upload since the mirror draws small anyway.
-func _capture_workspace() -> void:
-	# Headless has no real framebuffer to read back (the dummy renderer's viewport
-	# texture is null - get_image would error every frame). It also never records a
-	# movie, so there is nothing to mirror; the windowed Movie Maker export IS a real
-	# GPU context, so this only ever skips genuine no-op cases.
-	if DisplayServer.get_name() == "headless":
-		return
-	var vtex := get_viewport().get_texture()
-	if vtex == null:
-		return
-	var img := vtex.get_image()
-	if img == null or img.is_empty():
-		return
-	if img.get_width() > 960:
-		var h := int(round(960.0 * float(img.get_height()) / float(maxi(1, img.get_width()))))
-		img.resize(960, maxi(1, h), Image.INTERPOLATE_BILINEAR)
-	if img.get_format() != Image.FORMAT_RGBA8:
-		img.convert(Image.FORMAT_RGBA8)
-	if render_mode:
-		img = _shrink_into_video_pane(img)
-	var sz := Vector2i(img.get_width(), img.get_height())
-	if _workspace_tex == null or _workspace_tex.get_size() != Vector2(sz):
-		_workspace_tex = ImageTexture.create_from_image(img)
-	else:
-		_workspace_tex.update(img)
-	_mat_main.set_shader_parameter("u_workspace", _workspace_tex)
-	_mat_inset.set_shader_parameter("u_workspace", _workspace_tex)
-
-
-## In the live editor, the mirror's nesting comes for free: the video pane the shader
-## draws onto is genuinely SMALLER than the captured window (see _video_area's
-## VIDEO_LEFT inset + 16:9 letterbox in _build_editor_ui), so sampling the whole capture
-## back onto that smaller surface shrinks it - and since the capture already contained
-## the previous shrink, each frame nests one level deeper. _build_render_view's own
-## surface is edge-to-edge (the export must stay a clean, full-bleed video outside a
-## meta section - see its comment), so that free shrink doesn't exist there: verified
-## by a standalone Movie-Maker readback test (feedback/0001) that a same-size feedback
-## quad only ghosts/blurs, never nests. This reproduces the live editor's inset by hand
-## - blit a downscaled copy of the capture into the same VIDEO_LEFT/letterbox sub-rect the
-## live video pane occupies, over an unshrunk copy of the capture (so the chrome
-## painted at its real position, e.g. by _apply_meta_chrome, still reads at full size
-## around it) - so feeding this back through the SAME edge-to-edge quad reproduces the
-## same receding "hall of mirrors" the live editor gets from its smaller surface.
-func _shrink_into_video_pane(img: Image) -> Image:
-	var w := img.get_width()
-	var h := img.get_height()
-	# VIDEO_LEFT is a fraction of the LIVE EDITOR's window (the base 1920-wide canvas
-	# it lays out in), applied to whatever width the capture came back at. The pane
-	# inside it fits the CLIP's aspect, same as _video_area does - so a portrait
-	# session mirrors a tall narrow pane, not a 16:9 one.
-	var asp := _source_aspect()
-	var px0 := int(round(w * VIDEO_LEFT / 1920.0))
-	var avail_w := maxi(1, w - px0)
-	var pw := avail_w
-	var ph := int(round(float(avail_w) / asp))
-	if ph > h:
-		ph = h
-		pw = int(round(float(h) * asp))
-	var py0 := int(round((h - ph) / 2.0))
-	var shrunk := img.duplicate()
-	shrunk.resize(maxi(1, pw), maxi(1, ph), Image.INTERPOLATE_BILINEAR)
-	var canvas: Image = img.duplicate()
-	canvas.blit_rect(shrunk, Rect2i(Vector2i.ZERO, Vector2i(pw, ph)), Vector2i(px0, py0))
-	return canvas
-
-
-## Render-mode only: fade the editor-chrome overlay in with the meta envelope, so the
-## export shows clean video normally and the real working editor during a meta section.
-func _apply_meta_chrome(amount: float) -> void:
-	if _meta_chrome == null:
-		return
-	_meta_chrome.modulate.a = smoothstep(0.0, 1.0, clampf(amount, 0.0, 1.0))
-
-
-func _session_uses_meta() -> bool:
-	for m in session.markers:
-		if int(m.get("effect_a", 0)) == MaskSession.EFFECT_META:
-			return true
-	return false
-
-
-## The same backtick feedback console every session has - the SHELL'S ([method
-## Shell.attach_feedback]: one console and one Assistant in the app, wired to each other there),
-## with mask-specific plumbing handed to it: the descriptor snapshots everything needed to debug a
-## masking complaint (playhead, the fully-resolved layer stack at that instant, every marker,
-## keying globals, audio envelope), freeze pauses playback while typing (restoring the prior play
-## state after), and advance is a no-op - the playhead is the user's business, not the console's.
+## THE CAST TRANSFORM, solved for the current playhead.
 ##
-## Masking used to build a console and an Assistant of its own: it predates the shell, and
-## launched from the notes that was a second 💬 and a second queue over the same feedback. With no
-## shell in the tree (a gate building the editor by hand) there is no console, and nothing to wire.
-func _build_feedback() -> void:
-	var ch := Shell.of(self)
-	_feedback = ch.attach_feedback() if ch != null else null
-	if _feedback == null:
+## Everything here happens in ASPECT-CORRECTED space (x multiplied by the frame
+## aspect), because every quantity is a distance between two points on a body and
+## raw UV is not a unit - "0.145 of the frame's width" is 0.258 frame-heights on
+## 16:9 and 0.082 on a phone clip, which is the trap that put the clown's lips
+## under its nose.
+##
+## The construction, and why each part is what it is:
+##
+##  THE ANCHOR IS THE EYE LINE, not the head's centroid and not the mass's. The
+##  eyes are the feature a viewer looks at, so they are the one that must land
+##  where it was placed; anchoring anywhere else means the eyes arrive wherever
+##  the rest of the geometry leaves them, which is how the effect this replaces
+##  ended up with one socket out on bare wall.
+##
+##  THE GHOST'S HEAD MUST CLEAR HERS. The separation is the two skulls' own
+##  half-widths added together, not a tuned constant - so it holds on a close-up
+##  and on a wide shot without either being tuned for. Standing it on top of her
+##  is what makes the guard eat the ghost: her silhouette is most of a close-up
+##  frame, and a ghost behind her is then a thin rind around her outline.
+##
+##  IT STANDS ON THE SIDE THERE IS ROOM FOR. The measured throw picks the side;
+##  if the ghost's head does not fit there, the other side is the honest answer.
+##  A head jammed against the frame edge is half a head with one eye.
+##
+##  THE SIZE IS FREE, AND THE SHAPE IS A BUST. Her silhouette is ~45% of a
+##  close-up frame; drawn whole at any magnification it is a wall of black with
+##  nothing in it to read. The mass is her HEAD AND SHOULDERS - a radial falloff
+##  about her eye line, applied in HER OWN units so it rides the transform with
+##  everything else - and below that it dissolves into the field's own smoke.
+##  Measured on the reference clip: drawn whole at Scale 2.8 the mass covered 63%
+##  of the frame and read as a dimmed room; as a bust it reads as a figure.
+func _umb_solve_cast() -> void:
+	_umb_have = false
+	_umb_eyes_ok = false
+	if _player == null or _pt_state != "ready":
 		return
-	_feedback.describe = _feedback_descriptor
-	_feedback.freeze = func(on: bool):
-		if on:
-			_was_playing_before_feedback = _playing
-			_play(false)
-		elif _was_playing_before_feedback:
-			_play(true)
-	_feedback.advance = func(): pass
-
-
-## Everything I'd want to know about "this frame looks wrong": where we are, what
-## the timeline resolved to (including each live layer's full parameter set and
-## envelope), the raw marker list, and the session's file identity. The screenshot
-## the console pairs with this carries the artifact itself.
-func _feedback_descriptor() -> Dictionary:
-	var t: float = _player.stream_position if _player != null else 0.0
-	var p := session.at_time(t)
-	return {
-		"mode": "mask",
-		"time": t,
-		"time_str": MaskTimeline.format_time(t),
-		"session_path": _session_path,
-		"video_path": session.video_path,
-		"source_path": session.source_path,
-		"duration": session.duration,
-		"resolved_state": p,             # globals + amounts + the live layer stack
-		"layer_count": (p.get("layers", []) as Array).size(),
-		"markers": session.markers,
-		"marker_count": session.markers.size(),
-		"audio_env": _env_at(t),
-		"peek_raw": _peek_raw,
-		"playing": _playing,
-	}
-
-
-func _build_panel() -> void:
-	# THE FRAMEWORK'S PANEL (2026-10-06, the user: Masking "doesn't inherit the panel UI or styling...
-	# we need to work on bringing it into the framework, proper"): a [SidePanel] like every other
-	# note's, with "‹ Notes", the note's title and its "⋯" on top, a chip per card, and three cards -
-	# the Clip, the Effect (the marker's key color, effect and options: ONE flat, sortable list, never
-	# titled groups - feedback 0011) and the Markers, PINNED under the rest as the ramp/damp list always was,
-	# so the whole manage-markers workflow stays in view however far the options are scrolled.
-	_panel = SidePanel.new(PANEL_W)
-	_panel.title = "Masking"
-	_panel.card_prefix = "masking"
-	_note_detach(_panel)
-	_chrome_host().add_child(_panel)
-	_panel.body.add_theme_constant_override("separation", 8)
-	_panel.pin_header(_header_row())
-	var chips := CardRow.new()
-	_panel.body.add_child(chips)
-	_panel.card_row = chips
-	var clip: VBoxContainer = _panel.add_card("clip", "Clip", &"picture", "clip")
-	var clip_name := Label.new()
-	clip_name.text = _clip_name()
-	clip_name.tooltip_text = String(session.source_path if not session.source_path.is_empty() else session.video_path)
-	clip_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	clip_name.add_theme_font_size_override("font_size", 14)
-	clip.add_child(clip_name)
-
-	# Two buttons here: Help and Import track. Everything ELSE that used to
-	# be a button (play, view cycle, peek, undo, redo) was pure duplication of
-	# a key and moved to the keyboard + the help overlay. Import stayed a
-	# button on purpose: it's the ONE action with no on-screen equivalent and
-	# no way to discover (a hidden T shortcut is exactly the "I don't see a
-	# clear way to do this" complaint - a keyboard-only import that also
-	# depends on nothing having eaten the keystroke is not good enough for the
-	# single essential action). Both a visible button AND the T key now.
-	var tools := HBoxContainer.new()
-	tools.add_theme_constant_override("separation", 6)
-	clip.add_child(tools)
-	var import_btn := Button.new()
-	import_btn.text = "⬆ Track"
-	import_btn.tooltip_text = "Import a second video as a picture-in-picture track (T)"
-	import_btn.focus_mode = Control.FOCUS_NONE
-	import_btn.pressed.connect(_prompt_import_track)
-	tools.add_child(import_btn)
-	var help_btn := Button.new()
-	help_btn.text = "?  Help"
-	help_btn.tooltip_text = "Keyboard map (F1)"
-	help_btn.focus_mode = Control.FOCUS_NONE
-	help_btn.pressed.connect(_toggle_help)
-	tools.add_child(help_btn)
-	var col := clip
-
-	var time_row := HBoxContainer.new()
-	time_row.add_theme_constant_override("separation", 10)
-	col.add_child(time_row)
-	_time_label = Label.new()
-	_time_label.add_theme_font_size_override("font_size", 15)
-	_time_label.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
-	time_row.add_child(_time_label)
-	_view_label = Label.new()
-	_view_label.add_theme_font_size_override("font_size", 13)
-	_view_label.add_theme_color_override("font_color", Color(0.6, 0.68, 0.8))
-	time_row.add_child(_view_label)
-	_build_help_overlay()
-
-	# One channel by default (a channel = one target color + one effect + one
-	# strength); the second is opt-in behind a toggle. Channels are independent
-	# layers in the shader, not competing "sides" - so there's no swap control any
-	# more either (swapping meant something when every pixel was forced to one side
-	# or the other; independent channels just re-pick their own colors).
-	col = _panel.add_card("effect", "Effect", &"look")
-	_grp_color = VBoxContainer.new()
-	_grp_color.add_theme_constant_override("separation", 8)
-	col.add_child(_grp_color)
-	_key_color_label = _label("Key color", "The color this channel targets - what it keys or paints")
-	_grp_color.add_child(_key_color_label)
-	_color_a = ColorPickerButton.new()
-	_color_a.focus_mode = Control.FOCUS_NONE
-	_color_a.custom_minimum_size = Vector2(0, 40)
-	_color_a.edit_alpha = false
-	_color_a.tooltip_text = "The color this channel targets - what it keys or paints. " + \
-		"The HUE is what gets matched; the swatch keeps the rest of your pick so you " + \
-		"can see which color off the footage you chose"
-	# Three fields, one pick - the same shape as the repaint picker below. Only the
-	# HUE is keyed on; the other two exist so the swatch you get back is the swatch
-	# you set (see MaskSession's key_sat/key_val).
-	_color_a.color_changed.connect(func(c):
-		_edit("hue_a", c.h)
-		_edit("key_sat", c.s)
-		_edit("key_val", c.v))
-	_grp_color.add_child(_color_a)
-	col.add_child(_label("Effect", "Which visual treatment this layer applies"))
-	_effect_a = _effect_menu(col, func(id): _edit("effect_a", float(id)))
-
-	# Every option below - this channel's grading through this effect's own
-	# pattern/echo/weather/tendril knobs - lives in one flat, sortable list instead
-	# of fixed titled groups (see feedback/0011: the group boundaries were drawn as
-	# separator lines that "made no sense" and just ate space). Which rows are
-	# actually visible still follows the selected effect exactly as before
-	# (MaskSession.EFFECT_CONTROLS / PATTERN_KNOBS, see _update_effect_controls) -
-	# only their ON-SCREEN ORDER is now driven by _sort_mode. _sort_dropdown picks
-	# it directly - same shape as the Effect dropdown just above; see _apply_sort.
-	var sort_tip := "How the options below are ordered - alphabetical (either " + \
-		"direction), or energy: the fullest slider floats to the top, pick-type " + \
-		"options with no slider sink to the bottom (A → Z among themselves)"
-	col.add_child(_label("Sort", sort_tip))
-	_sort_dropdown = OptionButton.new()
-	_sort_dropdown.focus_mode = Control.FOCUS_NONE
-	_sort_dropdown.tooltip_text = sort_tip
-	for i in _SORT_MODES.size():
-		_sort_dropdown.add_item(_SORT_MODES[i], i)
-	_sort_dropdown.select(_sort_mode)
-	_sort_dropdown.item_selected.connect(func(id):
-		_sort_mode = id
-		_apply_sort())
-	col.add_child(_sort_dropdown)
-
-	_grp_options = VBoxContainer.new()
-	_grp_options.add_theme_constant_override("separation", 8)
-	col.add_child(_grp_options)
-
-	_intensity_a = _slider(_grp_options, "Strength", 0.0, 1.0, func(v): _edit("intensity_a", v),
-		"How strongly this layer's effect applies")
-	_intensity_label = _intensity_a.get_meta("field_label")
-	_register_option(_intensity_a)
-	# Morph: its OWN field (fx_tint), deliberately decoupled from the color
-	# picker above. The old "Hue" slider was a second widget on hue_a and the
-	# linkage read as a bug ("changing hue changes the picker too") - now the
-	# picker says what to MASK and this says what color the drawn effect
-	# becomes (a palette hue rotation; 0 = the effect's natural colors).
-	_hue_a = _slider(_grp_options, "Morph", 0.0, 1.0, func(v):
-		_edit("fx_tint", v),
-		"Rotates this effect's own palette hue - 0 keeps its natural colors")
-	_register_option(_hue_a)
-
-	# Option rows, shown per the selected effect's needs (the control hierarchy,
-	# MaskSession.EFFECT_CONTROLS): a slider that does nothing for the current
-	# effect is not on screen for it. Erase shows none of these (projection is
-	# gate-free); restore shows only the threshold, relabeled as its reach;
-	# the volumetrics show everything. See _update_effect_controls.
-	_threshold = _slider(_grp_options, "Threshold", 0.0, 1.0, func(v): _edit("threshold", v),
-		"How far a pixel's hue may drift from the key color and still be masked")
-	_threshold_label = _threshold.get_meta("field_label")
-	_register_option(_threshold)
-
-	_feather = _slider(_grp_options, "Feather", 0.0, 0.5, func(v): _edit("feather", v),
-		"Softness of the mask's edge - 0 is a hard cutoff")
-	_register_option(_feather)
-	_sat_floor = _slider(_grp_options, "Min colorfulness", 0.0, 1.0, func(v): _edit("sat_floor", v),
-		"Minimum saturation a pixel needs before it can be keyed at all")
-	_register_option(_sat_floor)
-
-	# The wisp field's placement - pan/zoom the pattern over the frame (keyframe a
-	# tendril onto an eye), and dial its coverage from one wisp to an engulfing.
-	# All continuous marker fields, so they blend through ramps/damps.
-	_fx_x = _slider(_grp_options, "Pan X", -2.0, 2.0, func(v): _edit("fx_x", v),
-		"Shifts the pattern horizontally over the frame")
-	_fx_x.step = 0.01
-	_fx_x_label = _fx_x.get_meta("field_label")
-	_register_option(_fx_x)
-	_fx_y = _slider(_grp_options, "Pan Y", -2.0, 2.0, func(v): _edit("fx_y", v),
-		"Shifts the pattern vertically over the frame")
-	_fx_y.step = 0.01
-	_fx_y_label = _fx_y.get_meta("field_label")
-	_register_option(_fx_y)
-	_fx_scale = _slider(_grp_options, "Scale", 0.1, 8.0, func(v): _edit("fx_scale", v),
-		"Zoom of the effect's pattern - 1 is nominal size")
-	_fx_scale.exp_edit = true
-	_register_option(_fx_scale)
-	_fx_density = _slider(_grp_options, "Coverage", 0.0, 1.0, func(v): _edit("fx_density", v),
-		"How much of the keyed region the pattern consumes - 0 untouched, 1 fully devoured")
-	_fx_density_label = _fx_density.get_meta("field_label")
-	_register_option(_fx_density)
-	_fx_contrast = _slider(_grp_options, "Contrast", 0.0, 1.0, func(v): _edit("fx_contrast", v),
-		"Edge hardness of the pattern - 0.5 is neutral")
-	_fx_contrast_label = _fx_contrast.get_meta("field_label")
-	_register_option(_fx_contrast)
-	_fx_speed = _slider(_grp_options, "Velocity", 0.1, 4.0, func(v): _edit("fx_speed", v),
-		"Speed multiplier for the pattern's motion")
-	_fx_speed.exp_edit = true
-	_register_option(_fx_speed)
-	_resonance = _slider(_grp_options, "Resonance", 0.0, 1.0, func(v): _edit("resonance", v),
-		"Audio drive - how strongly this layer reacts to the track's live energy")
-	_register_option(_resonance)
-
-	_fx_lag = _slider(_grp_options, "Lag (s)", 0.05, 2.4, func(v): _edit("fx_lag", v),
-		"How far back the lagged frame reaches")
-	_fx_lag.exp_edit = true
-	_fx_lag_label = _fx_lag.get_meta("field_label")
-	_register_option(_fx_lag)
-	_fx_smooth = _slider(_grp_options, "Smoothing", 0.0, 1.0, func(v): _edit("fx_smooth", v),
-		"Stutter → smear: 0 is a discrete stutter, 1 is a wide temporal blend")
-	_register_option(_fx_smooth)
-
-	# Snow's own view onto fx_smooth - a separate widget from Smoothing above (same
-	# stored field, different meaning; the two rows never show together, see
-	# _update_effect_controls, so there's no risk of them fighting over what the
-	# slider looks like).
-	_gust = _slider(_grp_options, "Gust", 0.0, 1.0, func(v): _edit("fx_smooth", v),
-		"0 is a steady drift, 1 is chaotic gusts")
-	_register_option(_gust)
-
-	# Fur's tendril dynamics - fur-only views onto fx_smooth/fx_lag, the same
-	# stored-field reuse as Gust above (the rows never show together, see
-	# _update_effect_controls).
-	_undul = _slider(_grp_options, "Undulation", 0.0, 1.0, func(v): _edit("fx_smooth", v),
-		"Traveling waves along each strand")
-	_register_option(_undul)
-	_coil = _slider(_grp_options, "Coil", 0.0, 1.0, func(v): _edit("fx_lag", v),
-		"Eddies and spiral curl")
-	_register_option(_coil)
-	# Stickiness - 0 keeps today's free coat exactly; higher values thin the strands
-	# away from natural anchors so the hair clings to the keyed surface, the tracked
-	# landmark/motion centroid, and brighter regions (see the shader's fur branch).
-	_bleed = _slider(_grp_options, "Bleed", 0.0, 1.0, func(v): _edit("fx_smooth", v),
-		"How far each feature's paint may spread from the anatomy it found, and " +
-		"how much it softens as it travels")
-	_register_option(_bleed)
-	_settle = _slider(_grp_options, "Settle", 0.0, 1.0, func(v): _edit("fx_lag", v),
-		"How sticky the paint is in time - higher holds its shape through " +
-		"detection wobble (steadier, a touch slower to follow)")
-	_register_option(_settle)
-	# The clown's TRACKING knobs, as opposed to its look knobs above. The face
-	# model is a blob fitter, not a landmark detector, and how well it holds is a
-	# property of the footage as much as of the code - so the two smoothing rates,
-	# the prediction, and how literally the picture is trusted are the author's to
-	# set per clip. All four default to exactly what the constants they replaced
-	# used to be.
-	# THE CLOWN'S SHAPE KNOBS. What used to be Steady/Firm/Lead - three controls
-	# for smoothing a detector that no longer needs smoothing. The landmark track
-	# gives measured outlines, so what the effect was actually missing was a say
-	# over how far those outlines get pushed past the face they came from.
-	_clown_eye_sl = _slider(_grp_options, "Eye size", 0.0, 1.0,
-		func(v): _edit("threshold", v),
-		"How far the black grows past the eye it is painted on. It keeps the eye's " +
-		"own shape whatever the size - it is that eye, bigger, not a bigger circle")
-	_register_option(_clown_eye_sl)
-	_clown_drip_sl = _slider(_grp_options, "Drip", 0.0, 1.0,
-		func(v): _edit("sat_floor", v),
-		"How far the eye black runs DOWN the cheek. It leaves the lash line's own " +
-		"lower-outer corner - measured off the patch that is actually painted - so " +
-		"it reads as liner running rather than a shape stuck underneath")
-	_register_option(_clown_drip_sl)
-	_clown_smudge_sl = _slider(_grp_options, "Smudge", 0.0, 1.0,
-		func(v): _edit("swap", v),
-		"How far the eye black is RUBBED past its own outline, and how softly it " +
-		"ends - someone who has been crying and worrying at it, rather than a shape " +
-		"with an edge. It thins away over a band instead of stopping, and reaches " +
-		"further out in some places than others. 0 is already soft: a hard edge is " +
-		"not a setting, it is the polygon showing")
-	_register_option(_clown_smudge_sl)
-	_clown_drip_w_sl = _slider(_grp_options, "Drip width", 0.0, 1.0,
-		func(v): _edit("fx_y", v),
-		"How heavy the run is where it leaves the eye. A fraction of THIS eye's " +
-		"own width, so it stays in proportion however far Eye size has grown the " +
-		"patch. 0 is a lean streak; wound up it is a smear")
-	_register_option(_clown_drip_w_sl)
-	_clown_drip_curve_sl = _slider(_grp_options, "Drip curve", 0.0, 1.0,
-		func(v): _edit("intensity_b", v),
-		"How far the run bows OUTWARD as it falls - down the outside of the cheek " +
-		"rather than straight past the nose. The bow grows with distance, so the " +
-		"run always leaves the lash line vertically whatever this is set to")
-	_register_option(_clown_drip_curve_sl)
-	_clown_smile_sl = _slider(_grp_options, "Smile width", 0.0, 0.5,
-		func(v): _edit("feather", v),
-		"How far the painted mouth runs past the real one. At the default it IS " +
-		"the real mouth; wound up it goes Joker-wide, out toward the ears")
-	_register_option(_clown_smile_sl)
-	_clown_steady_sl = _slider(_grp_options, "Steadiness", 0.0, 1.0,
-		func(v): _edit("hue_b", v),
-		"How hard the landmark track is smoothed. The smoothing is CENTERED - it " +
-		"weighs frames on both sides of now - so it costs no lag at any setting; " +
-		"raising it only rounds off genuinely fast movement. 0 is already smoothed")
-	_register_option(_clown_steady_sl)
-	_clown_curve_sl = _slider(_grp_options, "Smile curve", 0.0, 2.0,
-		func(v): _edit("fx_speed", v),
-		"Sweeps the mouth's corners up into a grin or down into a sulk, leaving " +
-		"its middle where the lips are. 1.0 is the mouth as measured")
-	_register_option(_clown_curve_sl)
-	_clown_feather_sl = _slider(_grp_options, "Edge feather", 0.0, 1.0,
-		func(v): _edit("fx_x", v),
-		"How far the coat's outer edge fades into the picture. The silhouette is " +
-		"a hard-edged shape underneath; without this it reads as a sticker sitting " +
-		"on the face rather than paint on it")
-	_register_option(_clown_feather_sl)
-	_clown_evidence_sl = _slider(_grp_options, "Evidence", 0.0, 1.0,
-		func(v): _edit("resonance", v),
-		"How much each feature is the PICTURE rather than the outline it is drawn " +
-		"inside. At 0 a fixed share of every feature is the bare shape; raise it " +
-		"and the outline only bounds where paint may go, while the frame's own " +
-		"dark sockets and lip line decide what it actually lands on")
-	_register_option(_clown_evidence_sl)
-
-	_rain_squall = _slider(_grp_options, "Squall", 0.0, 1.0,
-		func(v): _edit("fx_smooth", v),
-		"How unsettled the weather is. Pan sets the direction the wind blows on " +
-		"AVERAGE; this is how far the sheet wanders around it and how much the " +
-		"drops scatter off each other. 0 is a still, straight downpour")
-	_register_option(_rain_squall)
-
-	# THE AUDIO GROUP. Six knobs, no color, no pattern - this effect resolves to
-	# bus parameters instead of pixels (see _apply_audio_fx).
-	_au_echo = _slider(_grp_options, "Echo", 0.0, 1.0, func(v): _edit("fx_smooth", v),
-		"How much of the sound comes back as repeats. Two taps at unrelated " +
-		"spacings, so they decay into each other instead of landing as one slap")
-	_register_option(_au_echo)
-	_au_time = _slider(_grp_options, "Echo time", 0.0, 1.0, func(v): _edit("fx_lag", v),
-		"How long between repeats - a slapback at the bottom, a room at the top")
-	_register_option(_au_time)
-	_au_amb = _slider(_grp_options, "Ambience", 0.0, 1.0, func(v): _edit("fx_density", v),
-		"How wet the sound is - how much of what you hear arrived by reflection")
-	_register_option(_au_amb)
-	_au_room = _slider(_grp_options, "Room", 0.0, 2.0, func(v): _edit("fx_scale", v),
-		"How BIG that space is, which is a different question from how wet it is - " +
-		"a big dry room and a small wet one sound nothing alike")
-	_register_option(_au_room)
-	_au_reso = _slider(_grp_options, "Resonance", 0.0, 1.0, func(v): _edit("fx_contrast", v),
-		"How much the repeats and the room ring rather than simply fading - it " +
-		"darkens the tail so it reads as a space, not as a copy")
-	_register_option(_au_reso)
-	_au_bass = _slider(_grp_options, "Bass punch", 0.0, 1.0, func(v): _edit("fx_stick", v),
-		"Weight AND attack together: it lifts the bottom two bands and compresses " +
-		"underneath them, because punchy is not more bass - it is bass whose " +
-		"transient survives. Lifting the bottom alone only makes a mix muddy")
-	_register_option(_au_bass)
-	_hollow = _slider(_grp_options, "Hollow", 0.0, 1.0, func(v): _edit("fx_stick", v),
-		"Paint AROUND the eyes and mouth instead of over them - opens over a " +
-		"visible eyeball or teeth, closes again on a blink or a shut mouth")
-	_register_option(_hollow)
-	_stick = _slider(_grp_options, "Stickiness", 0.0, 1.0, func(v): _edit("fx_stick", v),
-		"0 is a free coat, 1 clings to the face/motion")
-	_register_option(_stick)
-	# Umbra's own three - the same stored fields fur/snow/clown reuse under
-	# their own names (the groups never show together, so no schema growth).
-	_wisp = _slider(_grp_options, "Wisp", 0.0, 1.0, func(v): _edit("fx_smooth", v),
-		"How readily essence tears off the top of the mass and rises away, " +
-		"like smoke leaving a fire")
-	_register_option(_wisp)
-	_cling = _slider(_grp_options, "Cling", 0.0, 1.0, func(v): _edit("fx_lag", v),
-		"How long the shadow-mass holds its shape - higher is heavier and " +
-		"slower to follow her, lower is thinner and more restless")
-	_register_option(_cling)
-	_umbra_depth = _slider(_grp_options, "Depth", 0.0, 1.0, func(v): _edit("fx_stick", v),
-		"How much light the mass swallows - some of the wall always survives " +
-		"inside it, so it deepens the shadow rather than cutting a hole")
-	_register_option(_umbra_depth)
-	_umbra_stand = _slider(_grp_options, "Stand", 0.0, 1.0, func(v): _edit("threshold", v),
-		"How far to the side of her the ghost stands. At the bottom it is " +
-		"almost behind her (and mostly hidden by her); wound up it steps clear " +
-		"onto the wall beside her")
-	_register_option(_umbra_stand)
-	_umbra_lead = _slider(_grp_options, "Lead", 0.0, 0.5, func(v): _edit("feather", v),
-		"How far AHEAD of her the ghost moves, in seconds. It reads the clip " +
-		"before the playhead does, so it turns its head before she turns hers " +
-		"- which is what makes it look like the thing moving her")
-	_register_option(_umbra_lead)
-	_umbra_lean = _slider(_grp_options, "Lean", 0.0, 1.0, func(v): _edit("swap", v),
-		"How far the ghost leans out along the light - upright over her at 0, " +
-		"and rearing across her as it rises at 1")
-	_register_option(_umbra_lean)
-	_umbra_narrow = _slider(_grp_options, "Narrow", 0.0, 0.75, func(v): _edit("intensity_b", v),
-		"How much taller-than-wide the ghost is drawn. Her outline squeezed " +
-		"across its own spine - a long thin thing rather than a broad one")
-	_register_option(_umbra_narrow)
-	_umbra_gaze = _slider(_grp_options, "Gaze", 0.0, 1.0, func(v): _edit("sat_floor", v),
-		"How hard the ghost's eyes burn. They sit on her own eyes, carried " +
-		"through the same throw as the rest of it, so they are always on its " +
-		"head - 0 is a faceless shadow")
-	_register_option(_umbra_gaze)
-	# The eye color needed a control of its own. hue_b was wired through to the
-	# shader but nothing could edit it, so the eyes were stuck on whatever the
-	# session happened to have stored - 0.58, cyan, for anything saved before
-	# the default changed. "Cannot change their color" was literally true.
-	var eye_lbl := _label("Eye color", "The color the ghost's eyes burn - red by default")
-	_grp_options.add_child(eye_lbl)
-	_color_eye = ColorPickerButton.new()
-	_color_eye.focus_mode = Control.FOCUS_NONE
-	_color_eye.custom_minimum_size = Vector2(0, 32)
-	_color_eye.edit_alpha = false
-	_color_eye.tooltip_text = eye_lbl.tooltip_text
-	_color_eye.set_meta("field_label", eye_lbl)
-	_color_eye.color_changed.connect(func(c): _edit("hue_b", c.h))
-	_grp_options.add_child(_color_eye)
-	_register_option(_color_eye)
-
-	# Repaint's two. The paint color is stored as three fields because a hue
-	# alone cannot say "black" - and black is the whole point of the effect's
-	# first use (a yellow wall painted out). Same field-reuse idiom as umbra's
-	# six above: fx_stick/fx_tint mean something else under other effects, and
-	# the groups never show together.
-	var paint_lbl := _label("Paint color",
-		"The color the keyed color BECOMES - a whole color, so black and white " +
-		"are both reachable. Black by default")
-	_grp_options.add_child(paint_lbl)
-	_color_paint = ColorPickerButton.new()
-	_color_paint.focus_mode = Control.FOCUS_NONE
-	_color_paint.custom_minimum_size = Vector2(0, 32)
-	_color_paint.edit_alpha = false
-	_color_paint.tooltip_text = paint_lbl.tooltip_text
-	_color_paint.set_meta("field_label", paint_lbl)
-	# Three fields, one pick. _edit creates the marker on the first call and
-	# edits it on the other two, so this is one marker, not three.
-	_color_paint.color_changed.connect(func(c):
-		_edit("hue_b", c.h)
-		_edit("fx_stick", c.s)
-		_edit("fx_tint", c.v))
-	_grp_options.add_child(_color_paint)
-	_register_option(_color_paint)
-	_paint_reach = _slider(_grp_options, "Reach", 0.0, 1.0, func(v): _edit("fx_contrast", v),
-		"How far into weakly colored pixels the paint carries - low keeps it to " +
-		"the vivid core of the color, high takes the washed-out and shadowed parts " +
-		"of the same wall with it")
-	_register_option(_paint_reach)
-	_paint_smooth = _slider(_grp_options, "Smoothing", 0.0, 1.0, func(v): _edit("fx_smooth", v),
-		"How wide the edge of the paint is averaged. Compressed video stores color " +
-		"at quarter resolution in blocks, so a boundary keyed pixel-by-pixel comes out " +
-		"blocky and crawls frame to frame - raise this until it stops. Some averaging " +
-		"always happens; this is how much")
-	_register_option(_paint_smooth)
-
-	# THE REGION - universal, not one effect's group: any layer can be confined
-	# to a box. Two panel controls (the box itself is dragged on the video, see
-	# _build_region_overlay), because a color key cannot separate two things
-	# that are the same color and position can.
-	# A label of its own even though the checkbox carries text: every row here is
-	# a (label, control) pair and _apply_sort re-orders them two children at a
-	# time, so a control without one desynchronizes the whole list.
-	var region_lbl := _label("Region",
-		"Confine this layer to a box you drag on the video - for when the color " +
-		"you want gone and the color you want kept are the SAME color, and only " +
-		"their position tells them apart. For the clown it also tells the face " +
-		"detector WHERE TO LOOK, which is the fastest cure for a mask that has " +
-		"latched onto a wall the color of skin")
-	_grp_options.add_child(region_lbl)
-	_region_on = CheckBox.new()
-	_region_on.text = "Limit to a box"
-	_region_on.focus_mode = Control.FOCUS_NONE
-	_region_on.tooltip_text = region_lbl.tooltip_text
-	_region_on.set_meta("field_label", region_lbl)
-	_region_on.toggled.connect(_on_region_toggled)
-	_grp_options.add_child(_region_on)
-	_register_option(_region_on)
-	_region_soft = _slider(_grp_options, "Region edge", 0.0, 1.0,
-		func(v): _edit("reg_soft", v),
-		"How gradually the layer fades out at the region's border - 0 is a hard " +
-		"rectangular cut, which reads as a rectangular cut")
-	_register_option(_region_soft)
-
-	# Every marker is a ramp or a damp - there is no plain/neutral marker (see
-	# MaskSession class doc). Both transition TO this marker's values; the kind is
-	# which side of the anchor the transition occupies: a ramp eases in BEFORE,
-	# complete at the anchor; a damp begins AT the anchor and accumulates after.
-	# Lives in _grp_options (not a fixed spot below it) so it's part of the same
-	# sortable list as the effect knobs - see _apply_sort/_register_option; a
-	# pick-type control with no slider, it sorts to the bottom under Energy mode.
-	var _kind_label := _label("Kind",
-		"Which way this marker's change runs - ramp eases in before it, damp accumulates after")
-	_grp_options.add_child(_kind_label)
-	_kind = OptionButton.new()
-	_kind.focus_mode = Control.FOCUS_NONE
-	_kind.tooltip_text = "Ramp eases in before this marker; damp accumulates after it"
-	_kind.set_meta("field_label", _kind_label)
-	for i in MaskSession.MARKER_KINDS.size():
-		_kind.add_item(MaskSession.MARKER_KINDS[i].capitalize(), i)
-	_kind.item_selected.connect(func(id): _edit("kind", float(id)))
-	_grp_options.add_child(_kind)
-	_register_option(_kind)
-	# Exponential response: fine-grained fractions of a second on the left, whole
-	# minutes on the right - one slider covers a subtle 0.2s blend and a transition
-	# spanning the entire clip. (exp_edit needs a strictly positive min.)
-	_marker_duration = _slider(_grp_options, "Ramp/damp span (s)", 0.05, maxf(8.0, session.duration),
-		func(v): _edit("duration", v),
-		"How long the ramp (before) or damp (after) transition takes, in seconds")
-	_marker_duration.exp_edit = true
-	_marker_duration.step = 0.01
-	_register_option(_marker_duration)
-
-	# --- create/delete + the sequential list, pinned to the panel's bottom with its
-	# --- own scroll - the whole "manage markers" workflow stays visible together,
-	# --- rather than the create buttons living up in the scrolling edit area where
-	# --- reaching them means scrolling past everything else first.
-	var list_col: VBoxContainer = _panel.add_footer_card("markers", "Markers", &"look")
-	list_col.add_theme_constant_override("separation", 4)
-
-	_marker_label = Label.new()
-	_marker_label.add_theme_font_size_override("font_size", 12)
-	_marker_label.add_theme_color_override("font_color", Color(0.6, 0.68, 0.8))
-	_marker_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	list_col.add_child(_marker_label)
-
-	# See feedback/0019: a preview of what Ctrl+Z would revert, so undo isn't a
-	# blind guess - kept right above the buttons that create the history it
-	# describes. Populated by _refresh_history_label, driven off _undo_descs.
-	_history_label = Label.new()
-	_history_label.add_theme_font_size_override("font_size", 12)
-	_history_label.add_theme_color_override("font_color", Color(0.55, 0.6, 0.7))
-	_history_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_history_label.tooltip_text = "What Ctrl+Z would revert right now"
-	list_col.add_child(_history_label)
-	_undo.refresh_label()
-
-	var mrow := HBoxContainer.new()
-	list_col.add_child(mrow)
-	var ramp_btn := Button.new()
-	ramp_btn.text = "+ Ramp"
-	ramp_btn.tooltip_text = "Eases IN before the playhead, arriving here complete"
-	ramp_btn.focus_mode = Control.FOCUS_NONE
-	ramp_btn.pressed.connect(func(): _add_marker_at_playhead(0))
-	mrow.add_child(ramp_btn)
-	var damp_btn := Button.new()
-	damp_btn.text = "+ Damp"
-	damp_btn.tooltip_text = "Begins here and accumulates over the span that follows"
-	damp_btn.focus_mode = Control.FOCUS_NONE
-	damp_btn.pressed.connect(func(): _add_marker_at_playhead(1))
-	mrow.add_child(damp_btn)
-	var del_btn := Button.new()
-	del_btn.text = "Delete"
-	del_btn.focus_mode = Control.FOCUS_NONE
-	del_btn.pressed.connect(_delete_selected)
-	mrow.add_child(del_btn)
-
-	# The marker list's header, and beside it the switch for whether playback drags
-	# the SELECTION along with it (see _process). It lives here rather than in the
-	# options panel because it is about the list, not about a marker - nothing it
-	# does is stored on one.
-	var order_row := HBoxContainer.new()
-	# THE LABEL TAKES THE SLACK, not a spacer beside it. Every label here
-	# word-wraps (see _label - it is what stops a long one widening the whole
-	# panel), and a wrapping label's minimum width is tiny. Put an expanding
-	# spacer next to one in an HBox and the label is squeezed to that minimum,
-	# which renders "In order" as a column of single letters and makes the row as
-	# tall as the text is long. Letting the label expand instead leaves the
-	# checkbox at its natural size on the right and the text on one line.
-	var order_lbl := _label("In order")
-	order_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	order_row.add_child(order_lbl)
-	_follow_playhead = CheckBox.new()
-	_follow_playhead.text = "Follow"
-	# REMEMBERED ACROSS SESSIONS, in user://ghost.cfg rather than in the session
-	# JSON. It is a preference about how the EDITOR behaves - the same reason it
-	# sits by the list header and not in the options panel - so it belongs beside
-	# the other per-user settings; storing it on the session would mean opening
-	# somebody else's work silently switched it back.
-	_follow_playhead.set_pressed_no_signal(_face.load_follow())
-	_follow_playhead.toggled.connect(_face.save_follow)
-	_follow_playhead.focus_mode = Control.FOCUS_NONE
-	_follow_playhead.tooltip_text = "Select each marker as the playhead reaches it. " + \
-		"On, scrubbing a session walks you through it without clicking every flag; " + \
-		"OFF, the selection stays where you put it - which is what you want while " + \
-		"tuning one marker's knobs during playback, since otherwise the next marker " + \
-		"steals the panel mid-adjustment"
-	order_row.add_child(_follow_playhead)
-	list_col.add_child(order_row)
-	var list_scroll := ScrollContainer.new()
-	list_scroll.custom_minimum_size = Vector2(0, 150)
-	list_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	list_col.add_child(list_scroll)
-
-	_marker_list = VBoxContainer.new()
-	_marker_list.add_theme_constant_override("separation", 2)
-	_marker_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	list_scroll.add_child(_marker_list)
-
-
-## `tip` is the full explanation shown on mouse-over (Godot's native tooltip) -
-## labels themselves stay short so the panel reads clean; see the feedback that
-## drove this (0005): inline "Label - long explanation" text was the ambiguity
-## complaint, not just missing descriptions.
-func _label(text: String, tip: String = "") -> Label:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_font_size_override("font_size", 12)
-	l.add_theme_color_override("font_color", Color(0.6, 0.68, 0.8))
-	# A long, unwrapped label's natural width becomes the whole column's minimum
-	# width - that's exactly what pushed the panel wider than PANEL_W and over the
-	# timeline (a real bug: "no marker selected..." is longer than most other panel
-	# text, so it only showed up after deleting one). Word-wrap caps the minimum to
-	# the longest WORD instead of the longest sentence.
-	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.mouse_filter = Control.MOUSE_FILTER_PASS   # let the tooltip trigger over the label itself
-	l.tooltip_text = tip
-	return l
-
-
-func _slider(col: VBoxContainer, text: String, lo: float, hi: float, cb: Callable, tip: String = "") -> HSlider:
-	var lbl := _label(text, tip)
-	col.add_child(lbl)
-	var s := HSlider.new()
-	# Remember the label so a single knob (label + slider) can be hidden together
-	# when the effect doesn't consume it - see _show_field / _update_effect_controls.
-	s.set_meta("field_label", lbl)
-	s.focus_mode = Control.FOCUS_NONE
-	# The wheel belongs to the panel's ScrollContainer, never to a slider you
-	# happen to pass over on the way down - the panel is long enough now that
-	# scrolling it drags random knobs (and silently edits the marker under
-	# them). Drag-only.
-	s.scrollable = false
-	s.min_value = lo
-	s.max_value = hi
-	s.step = (hi - lo) / 200.0
-	s.tooltip_text = tip   # hovering the slider itself explains it too, not just the label above
-	s.value_changed.connect(cb)
-	col.add_child(s)
-	return s
-
-
-## A left-anchored pull-rope volume knob for a lane (see VolumeKnob): hold and drag
-## away to set a continuous 0..1 level with an asymptotic ceiling. `getter` reads the
-## stored volume, `setter` writes it - the same widget drives a track's `volume` and
-## the main clip's `main_volume`. Left side deliberately: the right corner sits under
-## the floating assistant chat button. `icon` shows the one-time speaker-glyph hint -
-## reserved for the main clip's own knob only (see VolumeKnob.show_icon).
-func _volume_knob(getter: Callable, setter: Callable, accent: Color, icon: bool = false) -> VolumeKnob:
-	var k := VolumeKnob.new()
-	k.accent = accent
-	k.show_icon = icon
-	k.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	# offset_left starts past TrackLane._EDGE_W (8px): the primary lane's own trim/fade
-	# "in" handles sit at local x0 = 0 (its offset is always 0, and the default view
-	# starts at t=0 too), so a knob planted right at the corner silently ate every click
-	# meant for that edge - "drag the left edge" looked broken specifically on the main
-	# track, since only ITS x0 is pinned to 0 - see feedback/0017.
-	k.offset_left = 12
-	k.offset_top = 2
-	k.offset_right = 34
-	k.offset_bottom = 20
-	k.get_v = getter
-	k.set_v = func(v):
-		setter.call(v)
-		_mark_dirty()   # cheap + debounced (autosave cooldown), fine to fire while pulling
-	return k
-
-
-## Show/hide one knob - the slider AND the label above it (stored on the slider
-## by _slider, or passed for the hand-built pattern rows). Used to prune pattern
-## knobs an effect doesn't read (MaskSession.PATTERN_KNOBS).
-func _show_field(slider: Control, vis: bool, label: Control = null) -> void:
-	if slider != null:
-		slider.visible = vis
-	var lbl: Variant = label
-	if lbl == null and slider != null and slider.has_meta("field_label"):
-		lbl = slider.get_meta("field_label")
-	if lbl != null:
-		(lbl as Control).visible = vis
-
-
-## Registers a slider or pick-type control (label stashed via set_meta, either by
-## _slider or by hand for non-Range controls like an OptionButton) into the flat
-## sortable list - see _apply_sort.
-func _register_option(ctrl: Control) -> void:
-	_options.append({"label": ctrl.get_meta("field_label"), "control": ctrl})
-
-
-## Re-orders _options within _grp_options per the active sort mode: alphabetical by
-## each row's CURRENT label text (which itself changes per effect - e.g. Contrast ->
-## Sensitivity for snow), or "energy" - how wide each slider's fill currently reads,
-## fullest first (see _option_energy). Pick-type controls with no slider (e.g. Kind)
-## have no fill to compare, so they sink below every slider and break ties alphabetically
-## among themselves. Hidden rows (this effect doesn't use them) are left trailing after
-## the visible ones - their order doesn't matter, they're off screen. Re-run whenever
-## the effect/visibility changes (_update_effect_controls) or a mode is picked in
-## _sort_dropdown - never on a live drag, so a slider never jumps out from under the
-## mouse mid-edit.
-func _apply_sort() -> void:
-	if _grp_options == null:
+	# THE LOOK-AHEAD, and the entire reason the track is offline. Reading the clip
+	# at `t + Lead` means the ghost turns its head on the frame she has not reached
+	# yet, which is what makes the picture read as the ghost moving HER. A velocity
+	# extrapolation cannot do this - it can only continue what just happened, which
+	# on real footage is mostly detection noise multiplied by the lead time.
+	var t := _player.stream_position + clampf(_umb_lead, 0.0, 2.0)
+	var i := _pose.slot_at(t)
+	if i < 0:
 		return
-	var shown: Array = _options.filter(func(o): return o.control.visible)
-	var hidden: Array = _options.filter(func(o): return not o.control.visible)
-	match _sort_mode:
-		1:
-			shown.sort_custom(func(a, b): return a.label.text.nocasecmp_to(b.label.text) > 0)
-		2:
-			shown.sort_custom(func(a, b):
-				var ea: float = _option_energy(a.control)
-				var eb: float = _option_energy(b.control)
-				if ea == eb:
-					return a.label.text.nocasecmp_to(b.label.text) < 0
-				return ea > eb)
-		_:
-			shown.sort_custom(func(a, b): return a.label.text.nocasecmp_to(b.label.text) < 0)
-	var idx := 0
-	for o in shown + hidden:
-		_grp_options.move_child(o.label, idx)
-		idx += 1
-		_grp_options.move_child(o.control, idx)
-		idx += 1
+	if not _umb_cast_from(i, _source_prep.source_aspect()):
+		return
+	# The guard's own sample: HER, now, not the frame the ghost is drawn from.
+	var gi := _pose.slot_at(_player.stream_position)
+	if gi < 0:
+		gi = i
+	if _pt_slot != i or _pt_guard_slot != gi:
+		_pt_slot = i
+		_pt_guard_slot = gi
+		_pose.upload_mask(i, gi)
+	_umb_have = _pt_tex != null
+	if OS.has_environment("GHOST_UMBRA_DEBUG"):
+		print("UMBDBG t=%.2f (+%.2f) sample=%d unit=%.3f scale=%.2f throw=(%.2f,%.2f) "
+			% [_player.stream_position, _umb_lead, i, _umb_unit, _umb_scale,
+				_umb_dir.x, _umb_dir.y]
+			+ "anchor=(%.3f,%.3f) eyeL=(%.3f,%.3f) eyeR=(%.3f,%.3f) rad=%.3f"
+			% [_umb_anchor.x / maxf(_source_prep.source_aspect(), 1e-3), _umb_anchor.y,
+				_umb_eye_l.x, _umb_eye_l.y, _umb_eye_r.x, _umb_eye_r.y, _umb_eye_rad])
 
 
-## How "present" a control's current value is, for the "Energy" sort mode. For a
-## slider this is its actual fill fraction - the handle's position between the
-## track's left and right ends, min at 0 and max at 1 - matching the bar you
-## actually see, so a slider barely nudged off its floor reads as low energy even
-## if that floor sits far from the range's midpoint. Range.get_as_ratio() (rather
-## than a hand-rolled linear (value-min)/span) is what makes this match what's on
-## screen for the exp_edit sliders (Scale/Velocity/Lag/Ramp-damp span): those are
-## drawn on a logarithmic track, so a linear fraction would read a handle sitting
-## visibly right-of-center as barely-there. Pick-type controls with no slider (not
-## a Range, e.g. Kind's OptionButton) have nothing to compare, so they return a
-## sentinel below any real slider value - see _apply_sort, where that sinks them to
-## the bottom and falls back to alphabetical among themselves.
-func _option_energy(ctrl: Control) -> float:
-	if not (ctrl is Range):
-		return -1.0
-	return (ctrl as Range).get_as_ratio()
-
-
-func _effect_menu(col: VBoxContainer, cb: Callable) -> OptionButton:
-	var ob := OptionButton.new()
-	ob.focus_mode = Control.FOCUS_NONE
-	ob.tooltip_text = "Which visual treatment this layer applies"
-	for i in MaskSession.MASK_EFFECTS.size():
-		ob.add_item(MaskSession.MASK_EFFECTS[i], i)
-	ob.item_selected.connect(cb)
-	col.add_child(ob)
-	return ob
-
-
-# --- marker editing -----------------------------------------------------------
-
-## Every panel edit targets the selected marker; if none is selected yet, planting
-## one at the current playhead is the edit's first move (a knob you touch becomes a
-## marker - no separate "create" step needed for the common case). Defaults to a
-## ramp when auto-created this way; press +Damp explicitly for the other kind.
-func _edit(field: String, value: float) -> void:
-	if _syncing:
-		return   # a programmatic panel repaint, not the user - see _refresh_panel
-	var m: Variant = _selected
-	var created := false
-	if m == null:
-		_undo.push("", "created a marker")   # about to create one - always its own boundary
-		m = session.add_marker(_player.stream_position if _player != null else 0.0)
-		_selected = m
-		_select_generation += 1
-		created = true
-	else:
-		_undo.push("marker:%d:%s" % [_select_generation, field], "adjusted %s" % field.capitalize())
-	m[field] = value
-	# Assigning a drawing effect to a marker whose OWN view shows no fx surface is
-	# a silent foot-gun: the layer holds forever but this marker's view hides it -
-	# "I configured fire and nothing shows" (a real session lost its fire exactly
-	# this way: the view button had been cycled to Raw on the same marker). Bump
-	# the view to the nearest fx-showing mode, preserving the surface choice:
-	# raw -> masked, pip_raw -> pip. Never behind the user's back on an unrelated
-	# knob, and never for restore/clear (they draw nothing of their own).
+## The geometry itself, split out from the playhead so it can be asserted without
+## a clip, a player or a renderer (tests/masking/umbra_cast_check.gd). Reads the live knob
+## state, writes every _umb_* transform field, and returns false when this sample
+## cannot support a throw at all.
+func _umb_cast_from(i: int, asp: float) -> bool:
+	# THE FOUR LANDMARKS THE THROW IS BUILT FROM HAVE TO BE SEEN. A shoulder the
+	# model placed by inference rather than by looking still returns a plausible
+	# point, so without this the ghost's whole body axis can be built out of a
+	# guess and nothing about the result looks wrong until it swings. The ears
+	# are excluded on purpose - one of them is genuinely hidden whenever a head
+	# turns, and half_w falls back on its own floor there.
+	for k in [PT_SH_L, PT_SH_R, PT_EYE_L, PT_EYE_R]:
+		if _pose.vis_at(i, k) < 0.30:
+			return false
+	var av := Vector2(asp, 1.0)
+	var sh := (_pose.point(i, PT_SH_L) + _pose.point(i, PT_SH_R)) * 0.5 * av
+	var eye_l := _pose.point(i, PT_EYE_L) * av
+	var eye_r := _pose.point(i, PT_EYE_R) * av
+	var eye := (eye_l + eye_r) * 0.5
+	var half_w := maxf(absf(_pose.point(i, PT_EAR_L).x - _pose.point(i, PT_EAR_R).x) * asp * 0.5, 0.02)
+	var axis := eye - sh
+	var unit := axis.length()
+	if unit < 1e-3:
+		return false
+	axis /= unit
+	var scale := clampf(_umb_scale, 0.4, 3.2)
+	var lean := clampf(_umb_lean, 0.0, 1.0)
+	var narrow := clampf(_umb_narrow, 0.0, 0.75)
+	# The throw, biased upward: a shadow thrown level reads as a stain on the wall,
+	# and the thing being built is a presence that RISES. This is the only place the
+	# measured direction is editorialized, and it is deliberate.
+	var throw := (_pt_dir + Vector2(0.0, -0.35)).normalized()
+	var ghost_hw := half_w * scale * (1.0 - narrow)
+	var gap := (half_w + ghost_hw) * clampf(_umb_stand, 0.4, 2.4)
+	var lim := ghost_hw + 0.04
+	var side := 1.0 if throw.x >= 0.0 else -1.0
+	var gx := eye.x + side * gap
+	if minf(gx - lim, asp - lim - gx) < 0.0:
+		var other := eye.x - side * gap
+		if minf(other - lim, asp - lim - other) > minf(gx - lim, asp - lim - gx):
+			gx = other
+	gx = clampf(gx, lim, maxf(lim, asp - lim))
+	# HOW FAR IT RISES IS A FRACTION OF THE HEADROOM THERE IS, not a multiple of
+	# her own height. Written the obvious way - eye.y minus some number of her
+	# units - it is pinned against the top clamp on any close-up, because her eyes
+	# are already near the top of such a frame: measured, a whole sweep of Lean
+	# produced eye heights of 0.1559, 0.1559, 0.1559 and 0.1559, i.e. a control
+	# that did nothing. Against the ceiling it always moves, and on a wide shot
+	# the same setting reads as a much bigger rise, which is right.
 	#
-	# THE HOLE THIS USED TO HAVE, and it swallowed a whole session: the bump fired
-	# only on effect_a/intensity_a, but a marker's DEFAULT effect is already erase
-	# and its default strength is already 1.0 - so anyone whose first move is the
-	# color picker (the natural first move: "erase THIS color") never touches
-	# either field, and the marker they just minted was born at view_mode raw,
-	# which renders no shader pass at all. The effect was configured, saved and
-	# completely invisible, and looked exactly like the effect being broken.
-	# So a marker MINTED by a panel touch bumps too, whichever knob minted it -
-	# it cannot have a deliberate view choice yet, it only has the inherited one.
-	# Deliberately NOT widened to hue_a on an EXISTING marker: view_mode 2 on one
-	# of those may be a raw checkpoint (the rebase - see MaskSession's class doc),
-	# and quietly un-raw-ing a checkpoint because its color was adjusted would
-	# break the layer window it exists to close.
-	if created or field == "effect_a" or field == "intensity_a":
-		var vm := int(m.get("view_mode", 2.0))
-		var eid := int(m.get("effect_a", 0))
-		var drawing: bool = eid != MaskSession.EFFECT_RESTORE \
-			and eid != MaskSession.EFFECT_CLEAR \
-			and float(m.get("intensity_a", 0.0)) > 0.0
-		if drawing and (vm == 2 or vm == 3):
-			m["view_mode"] = 1.0 if vm == 2 else 0.0
-	if field == "effect_a":
-		_update_effect_controls(int(value))
-	_timeline.selected = _selected
-	_refresh_marker_label()
-	_mark_dirty()
+	# THE CEILING IS WHERE ITS SOCKETS STILL FIT, not where its skull does. A
+	# ghost this size has a crown taller than the headroom of a close-up, and
+	# demanding the whole head stay in frame is the same pin one step further out:
+	# it leaves nothing to rise into. A shadow whose crown leaves the top of the
+	# picture is a shadow that is bigger than the picture, which is the point.
+	var ceil_y := clampf(ghost_hw * 0.34 / asp * 2.5 + 0.03, 0.04, 0.6)
+	var gy := lerpf(eye.y, minf(ceil_y, eye.y), 0.25 + 0.75 * lean)
+	var head := Vector2(gx, gy) + Vector2(_umb_pan.x * asp, _umb_pan.y)
+	# Its own body axis leans toward the throw too, but only half as far: a figure
+	# whose head leans and whose spine does not reads as a head balanced on a post.
+	var gaxis := (axis * (1.0 - lean * 0.5) + throw * (lean * 0.5)).normalized()
+	var anchor := head - gaxis * (unit * scale)
+	# The similarity, as a 2x2: her frame (axis, its perpendicular) into the ghost's,
+	# with the across-axis component scaled down by Narrow. Built as basis-into-basis
+	# rather than as an angle, because her axis is already a unit vector and the
+	# inverse of an orthonormal 2x2 is its transpose - no trigonometry, no wrap.
+	var h1 := axis
+	var h2 := Vector2(-axis.y, axis.x)
+	var e1 := gaxis * scale
+	var e2 := Vector2(-gaxis.y, gaxis.x) * (scale * (1.0 - narrow))
+	# fwd = [e1 e2] * [h1 h2]^-1, and [h1 h2] is orthonormal so its inverse is its
+	# TRANSPOSE - which is exactly where a transposed pair of columns hides in
+	# plain sight, because the wrong one is still a rotation and still draws
+	# something plausible. Column k of fwd is e1*h1[k] + e2*h2[k]; the check that
+	# catches it is that fwd*h1 must come back as e1 exactly, which is what
+	# tests/masking/umbra_cast_check.gd asserts.
+	var f0 := e1 * h1.x + e2 * h2.x     # column 0
+	var f1 := e1 * h1.y + e2 * h2.y     # column 1
+	var det := f0.x * f1.y - f1.x * f0.y
+	if absf(det) < 1e-8:
+		return false
+	_umb_inv0 = Vector2(f1.y, -f0.y) / det
+	_umb_inv1 = Vector2(-f1.x, f0.x) / det
+	_umb_anchor = anchor
+	_umb_src = sh
+	_umb_eye_src = eye
+	_umb_unit = unit
+	# The bust's extent, in her own units from her eye line. Loom opens it from a
+	# head and a collar out to a head, shoulders and chest.
+	var loom := clampf(_umb_loom, 0.0, 1.0)
+	_umb_bust0 = 0.70 + 2.00 * loom
+	_umb_bust1 = 1.60 + 3.40 * loom
+	_umb_dir = throw
+	# THE EYES, through the same map - so they are on the ghost's head by
+	# construction at every Scale, which is the property the previous version could
+	# not have (it anchored them to the visible mass's centroid and amplified her
+	# motion as a deviation, because carrying them geometrically put them off the
+	# top of the frame).
+	_umb_eye_l = anchor + Vector2(
+		f0.x * (eye_l.x - sh.x) + f1.x * (eye_l.y - sh.y),
+		f0.y * (eye_l.x - sh.x) + f1.y * (eye_l.y - sh.y))
+	_umb_eye_r = anchor + Vector2(
+		f0.x * (eye_r.x - sh.x) + f1.x * (eye_r.y - sh.y),
+		f0.y * (eye_r.x - sh.x) + f1.y * (eye_r.y - sh.y))
+	# Back to plain UV for the shader, which samples in screen space.
+	_umb_eye_l.x /= asp
+	_umb_eye_r.x /= asp
+	# Sized from the ghost's own skull, not from the fitted separation: the pair's
+	# spacing is the quantity that degrades when a head turns away, and a socket
+	# that swells with it reads as two unrelated holes.
+	_umb_eye_rad = clampf(ghost_hw * 0.34 / asp, 0.006, 0.09)
+	_umb_eyes_ok = true
+	return true
 
 
-func _add_marker_at_playhead(kind_id: int) -> void:
-	_undo.push("", "added a %s marker" % MaskSession.MARKER_KINDS[kind_id].capitalize())
-	_selected = session.add_marker(_player.stream_position if _player != null else 0.0, kind_id)
-	_select_generation += 1
-	_timeline.selected = _selected
-	_refresh_panel()
-	_mark_dirty()
-
-
-func _delete_selected() -> void:
-	if _selected != null:
-		_undo.push("", "deleted a marker")
-		session.remove_marker(_selected)
-		_selected = null
-		_timeline.selected = null
-		_refresh_panel()
-		_mark_dirty()
+# --- the capture ticks: the echo, the face model, the anchors, the wave impulses ------------------
 
 
 ## Temporal capture: when the playhead crosses into a new _ECHO_INTERVAL slot,
@@ -3721,7 +2081,7 @@ func _push_anchor() -> void:
 			# The face's own axes, from the eye pair: direction along the eye line,
 			# scaled by 1/separation. Everything drawn in this frame (the craquelure)
 			# is then pinned to the skin rather than to the screen.
-			var eye_v: Vector2 = (cm.eye_r - cm.eye_l) * Vector2(_source_aspect(), 1.0)
+			var eye_v: Vector2 = (cm.eye_r - cm.eye_l) * Vector2(_source_prep.source_aspect(), 1.0)
 			var eye_len: float = maxf(eye_v.length(), 1e-4)
 			mat.set_shader_parameter("u_clown_frame", eye_v / (eye_len * eye_len))
 			mat.set_shader_parameter("u_clown_tint", _face_tint_ema)
@@ -4404,487 +2764,1382 @@ func _update_face_model(src: Image) -> void:
 			_face_nose_ema.x, _face_nose_ema.y, no_w])
 
 
-# --- the audio effect: the timeline, applied to the sound -----------------------
-## The bus the clip's sound runs through, with the timeline's effects on it ([MaskAudioFx]).
-const MASK_BUS := "MaskFX"
+# --- tracks: trim lanes, import, playback sync ----------------------------------------------------
+
+# Per-lane reserved height. MUST cover a TrackLane's own minimum (26px, see
+# track_lane.gd) PLUS the _lanes_col VBox's inter-lane separation (2px), or the
+# lane stack overflows its allocated rect and - drawing above the marker strip it
+# abuts - spills over the timeline's top edge, clipping the marker flags and the
+# playhead timestamp tag (worsening with each imported track). 26 + 2 = 28.
+const _LANE_H := 28.0
+
+# The volume knob every lane gets (see _volume_knob) is anchored top-left, offset_right
+# 34 - a lane's own label must start past that plus a small gap, or the two draw on top
+# of each other whenever the lane's own left edge sits near local x0 (the primary lane's
+# offset is always 0, so this bites it every time - see feedback/0009).
+const _LANE_LABEL_LEFT := 38.0
 
 
-# --- face track: bootstrap, run, poll -------------------------------------------
+## A secondary track's own composited view: a raw (unshaded - the masking
+## effects system keys off ONE frame's colors via the primary's shader chain,
+## not built for a second independent source yet) picture-in-picture box. It
+## takes over the SAME inset slot _mask_wrap occupies (bottom-right) rather
+## than getting its own corner - there is only ever one PiP box on screen at
+## a time; see _sync_tracks, which hides _mask_wrap for as long as a track's
+## own box is showing (feedback/0056: a stray, always-empty second box used
+## to sit at a separate default corner on top of the real one).
+func _build_track_view(i: int) -> void:
+	var track: Dictionary = session.tracks[i]
+	var player := VideoStreamPlayer.new()
+	player.stream = load(ProjectSettings.globalize_path(String(track.video_path)))
+	player.expand = true
+	_composition_parent.add_child(player)
 
-const FT_NOSE_BRIDGE := 168
+	var wrap := Control.new()
+	wrap.anchor_left = _mask_wrap.anchor_left
+	wrap.anchor_top = _mask_wrap.anchor_top
+	wrap.anchor_right = _mask_wrap.anchor_right
+	wrap.anchor_bottom = _mask_wrap.anchor_bottom
+	_composition_parent.add_child(wrap)
+
+	var view := TextureRect.new()
+	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	view.stretch_mode = TextureRect.STRETCH_SCALE
+	view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	wrap.add_child(view)
+
+	var border := StyleBoxFlat.new()
+	border.bg_color = Color(0, 0, 0, 0)
+	border.set_border_width_all(2)
+	border.border_color = Color(0.6, 0.9, 1.0, 0.85)
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", border)
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wrap.add_child(panel)
+
+	# The track's audio plays through a real AudioStreamPlayer (the SAME proven path as
+	# the main clip) - VideoStreamPlayer's own embedded audio does NOT play when the
+	# video is driven by manual seeking, which is why the track was silent. We demux the
+	# track .ogv's Vorbis into a sidecar .ogg once (fast stream-copy, cached), and mute
+	# the video player's audio so nothing double-plays.
+	player.volume = 0.0
+
+	while _track_runtime.size() <= i:
+		_track_runtime.append({})
+	_track_runtime[i] = {"player": player, "view": view, "wrap": wrap, "audio": null, "active": false}
+	player.paused = true
+	player.play()   # must be playing before .stream_position can be set (see _sync_tracks)
+	_ensure_track_audio(i)   # attaches .audio now (cached sidecar) or when ffmpeg finishes
 
 
-# --- THE FEATURE STENCIL: the contours, rasterized ------------------------------
-# An analytic ellipse deposit - `win(p, center, radius)` - can only make a nose a
-# circle and a mouth an ellipse, however well placed: no cheekbone, no eye corner,
-# no cupid's bow. The landmarks describe the actual outlines, so the deposit goes
-# through a RASTERIZED STENCIL of them: four polygons drawn once per tick into a
-# small texture, one per channel.
-#
-#   R  the two eyes      G  the lips      B  the nose      A  the face oval
-#
-# Drawn on the GPU into a SubViewport (additively, so each polygon writes its own
-# channel and nothing clobbers a neighbor) rather than scanline-filled on the CPU,
-# because it is four convex polygons a frame and the GPU antialiases them for free.
-# The paint sim then reads a shape instead of evaluating an ellipse, and every
-# downstream behavior it already has - advection, bleed, settle, the drip - works
-# on the real silhouette without knowing anything changed.
+## Give track `i` its AudioStreamPlayer, from a sidecar .ogg demuxed from the track's
+## .ogv. If the sidecar already exists we attach immediately; otherwise ffmpeg runs in
+## the BACKGROUND (was OS.execute - a synchronous main-thread stall that could hang the
+## whole editor while audio kept playing) and _poll_track_audio attaches it on finish.
+## The sidecar lives beside the .ogv (same basename, .ogg). If it exists, attach it.
+## Otherwise extract it - preferring the ORIGINAL SOURCE, which always has the audio:
+## the old -an transcode stripped it from the .ogv, so demuxing the .ogv gave nothing.
+## Re-encode to Vorbis (the source is usually aac/mp3, not copyable to ogg). Background
+## + quiet; if even the source has no audio, _poll_track_audio records no_audio so we
+## don't retry forever. Once a sidecar exists it's cached and this is a no-op.
+func _ensure_track_audio(i: int) -> void:
+	if i < 0 or i >= session.tracks.size():
+		return
+	var track: Dictionary = session.tracks[i]
+	var video_path := String(track.get("video_path", ""))
+	if video_path.is_empty():
+		return
+	var abs_ogg := ProjectSettings.globalize_path(video_path.get_basename() + ".ogg")
+	if FileAccess.file_exists(abs_ogg):
+		_attach_track_audio(i, abs_ogg)
+		return
+	if bool(track.get("no_audio", false)):
+		return   # already learned there's no audio anywhere for this track
+	# Prefer the original import (has audio); fall back to the .ogv (only new imports
+	# embed audio) when the source is gone or was never recorded.
+	var src := String(track.get("source_path", ""))
+	var abs_src := ProjectSettings.globalize_path(src) if src.begins_with("res://") else src
+	if src.is_empty() or not FileAccess.file_exists(abs_src):
+		abs_src = ProjectSettings.globalize_path(video_path)
+	if not FileAccess.file_exists(abs_src):
+		return
+	var pid := Subprocess.start("ffmpeg", ["-y", "-loglevel", "quiet", "-i", abs_src,
+		"-vn", "-c:a", "libvorbis", "-q:a", "4", abs_ogg])
+	if pid > 0:
+		_track_audio_jobs.append({"pid": pid, "index": i, "ogg": abs_ogg})
 
-var _stencil_vp: SubViewport
+
+## Load a track's sidecar .ogg into an AudioStreamPlayer and hang it on the runtime.
+func _attach_track_audio(i: int, abs_ogg: String) -> void:
+	if i < 0 or i >= _track_runtime.size() or not (_track_runtime[i] is Dictionary):
+		return
+	var stream := AudioStreamOggVorbis.load_from_file(abs_ogg)
+	if stream == null:
+		return
+	var ap := AudioStreamPlayer.new()
+	ap.stream = stream
+	add_child(ap)
+	_track_runtime[i]["audio"] = ap
 
 
-# --- the pose track: bootstrap, then one window at a time --------------------
-# Two independent state machines, deliberately separated. `_pt_state` is about the
-# VENV AND THE MODEL - a one-off install that either works or does not - and it
-# runs the `_ft_*` half's shape because it is the same problem. The WINDOWS are a
-# pump: the playhead names which ones are wanted, and one child at a time reads
-# them, so nothing here is ever "waiting for the clip to finish".
+## Poll the background sidecar extractions; attach each track's audio as ffmpeg finishes.
+func _poll_track_audio() -> void:
+	for j in range(_track_audio_jobs.size() - 1, -1, -1):
+		var job: Dictionary = _track_audio_jobs[j]
+		if not Subprocess.alive(int(job.pid)):
+			var idx := int(job.index)
+			if FileAccess.file_exists(String(job.ogg)):
+				_attach_track_audio(idx, String(job.ogg))
+			elif idx >= 0 and idx < session.tracks.size():
+				# ffmpeg produced nothing - this track has no audio stream. Record it so
+				# we don't re-run (and re-fail) the extraction on every future load.
+				session.tracks[idx]["no_audio"] = true
+				_mark_dirty()
+			_track_audio_jobs.remove_at(j)
 
 
-# --- umbra: throwing her shadow ----------------------------------------------
+func _track_getter(i: int, field: String) -> Callable:
+	return func(): return float(session.tracks[i].get(field, 0.0))
 
 
-## ONE PLACE where the umbra's knobs are read off a layer, because there were two
-## and they drifted: `tests/masking/umbra_look_probe.gd` carried its own copy of these
-## mappings, and after Stand's low end was widened the probe went on rendering the
-## old range - so the picture it produced to check a change was a picture of the
-## code before it. A probe that reproduces the resolve is a probe that can lie.
-func _umb_read_layer(l: Dictionary, env: float) -> void:
-	# Scale is a real size relative to HER - at 1.0 the ghost is exactly her own
-	# size and stands beside her; past that it looms. Its head cannot be pushed off
-	# the frame at any setting (see _umb_solve_cast), so this is bounded only by
-	# what still reads as a body.
-	_umb_scale = clampf(float(l.get("fx_scale", 1.0)), 0.4, 3.2)
-	_umb_pan = Vector2(float(l.get("fx_x", 0.0)), float(l.get("fx_y", 0.0))) * 0.25
-	# Resonance folds in here exactly as it does for the shader's density array -
-	# the loom breathes with the audio, so on a talking clip the ghost surges when
-	# the subject speaks.
-	var ures := float(l.get("resonance", 0.0))
-	_umb_loom = clampf(float(l.get("fx_density", 0.45)) + 0.5 * ures * (env - 0.35), 0.0, 1.0)
-	_umb_roil = clampf(float(l.get("fx_contrast", 0.5)), 0.0, 1.0)
-	_umb_rise = maxf(0.05, float(l.get("fx_speed", 1.0)))
-	_umb_wisp = clampf(float(l.get("fx_smooth", 0.0)), 0.0, 1.0)
-	_umb_cling = clampf(float(l.get("fx_lag", 0.35)), 0.0, 1.0)
-	# Umbra-only views onto fields other effects own for their own purposes (umbra
-	# never keys, and `swap`/`intensity_b` are the two fields the two-channel era
-	# left behind - the clown reads the same pair under its own names).
+func _track_setter(i: int, field: String) -> Callable:
+	return func(v): session.tracks[i][field] = v
+
+
+## Rebuild every trim/track lane from session state (the primary clip's own trim
+## block, plus one per session.tracks entry) and recompute the shared
+## TimelineView's cached extent. Called after any STRUCTURAL change (import,
+## delete, undo/redo) - never mid-drag; see TrackLane.drag_ended and
+## TimelineView.refresh's own doc for why that distinction is load-bearing here.
+func _refresh_lanes() -> void:
+	if _lanes_col == null:
+		return
+	for c in _lanes_col.get_children():
+		c.queue_free()
+
+	var primary := TrackLane.new()
+	primary.tview = _tview
+	primary.label = String(session.video_path).get_file()
+	primary.reserved_left = _LANE_LABEL_LEFT
+	primary.color = Color(0.55, 0.75, 1.0)
+	primary.movable = false
+	primary.full_duration = session.duration
+	primary.get_in = func(): return session.clip_in
+	primary.set_in = func(v): session.clip_in = v
+	primary.get_out = func(): return session.effective_clip_out()
+	primary.set_out = func(v): session.clip_out = v
+	primary.get_fade_in = func(): return session.main_fade_in
+	primary.set_fade_in = func(v): session.main_fade_in = v
+	primary.get_fade_out = func(): return session.main_fade_out
+	primary.set_fade_out = func(v): session.main_fade_out = v
+	primary.get_snap_targets = _snap_targets_for.bind(-1)
+	primary.drag_started.connect(func(): _undo.push("", "trimmed the main clip"))
+	primary.drag_ended.connect(_refresh_ruler)
+	primary.changed.connect(_mark_dirty)
+	_lanes_col.add_child(primary)
+	# The main clip's own pull-rope volume (mirrors each track's), so its level in the
+	# mix is set independently.
+	primary.add_child(_volume_knob(
+		func(): return float(session.main_volume),
+		func(v): session.main_volume = v,
+		Color(0.55, 0.75, 1.0), true))
+	# Split, same corner/behavior as a secondary track's - the main clip is otherwise
+	# just track -1 (see _snap_targets_for), so it gets the same cut at the playhead
+	# (see _split_main). No delete button here: unlike an imported track, the primary
+	# clip is never optional - there's always exactly one.
+	var main_split := Button.new()
+	main_split.text = "✂"
+	main_split.custom_minimum_size = Vector2(20, 18)
+	main_split.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	main_split.offset_left = -22
+	main_split.offset_top = 2
+	main_split.offset_right = -2
+	main_split.offset_bottom = 20
+	main_split.focus_mode = Control.FOCUS_NONE
+	main_split.tooltip_text = "Split the main track at the playhead"
+	main_split.pressed.connect(_split_main)
+	primary.add_child(main_split)
+
+	for i in session.tracks.size():
+		var lane := TrackLane.new()
+		lane.tview = _tview
+		lane.label = String(session.tracks[i].get("video_path", "")).get_file()
+		lane.reserved_left = _LANE_LABEL_LEFT
+		lane.color = Color(0.6, 0.95, 0.7)
+		lane.movable = true
+		lane.full_duration = float(session.tracks[i].get("duration", 0.0))
+		lane.get_in = _track_getter(i, "clip_in")
+		lane.set_in = _track_setter(i, "clip_in")
+		lane.get_out = _track_getter(i, "clip_out")
+		lane.set_out = _track_setter(i, "clip_out")
+		lane.get_offset = _track_getter(i, "offset")
+		lane.set_offset = _track_setter(i, "offset")
+		lane.get_fade_in = _track_getter(i, "fade_in")
+		lane.set_fade_in = _track_setter(i, "fade_in")
+		lane.get_fade_out = _track_getter(i, "fade_out")
+		lane.set_fade_out = _track_setter(i, "fade_out")
+		lane.get_snap_targets = _snap_targets_for.bind(i)
+		lane.get_playhead = func(): return _player.stream_position if _player != null else 0.0
+		lane.drag_started.connect(func(): _undo.push("", "trimmed a track"))
+		lane.drag_ended.connect(_refresh_ruler)
+		lane.changed.connect(_mark_dirty)
+		_lanes_col.add_child(lane)
+		# The delete button OVERLAYS the lane's own top-right corner rather than
+		# sitting beside it in an HBoxContainer - an inline sibling would shrink
+		# the lane's own width below the primary lane's/_timeline's, and every
+		# lane's x_of() must span the exact same pixel width or their blocks
+		# stop lining up against a shared second.
+		var del := Button.new()
+		del.text = "✕"
+		del.custom_minimum_size = Vector2(20, 18)
+		del.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		del.offset_left = -22
+		del.offset_top = 2
+		del.offset_right = -2
+		del.offset_bottom = 20
+		del.focus_mode = Control.FOCUS_NONE
+		del.tooltip_text = "Remove this track"
+		var idx := i
+		del.pressed.connect(func(): _delete_track(idx))
+		lane.add_child(del)
+		# Split, just left of delete - cuts this track in two at the playhead (see
+		# _split_track). Same overlay approach as delete, for the same reason: an
+		# inline sibling would shrink the lane's own width out from under the
+		# shared timeline's pixel mapping.
+		var split := Button.new()
+		split.text = "✂"
+		split.custom_minimum_size = Vector2(20, 18)
+		split.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		split.offset_left = -46
+		split.offset_top = 2
+		split.offset_right = -26
+		split.offset_bottom = 20
+		split.focus_mode = Control.FOCUS_NONE
+		split.tooltip_text = "Split this track at the playhead"
+		split.pressed.connect(func(): _split_track(idx))
+		lane.add_child(split)
+		# Pull-rope volume knob, on the LEFT of the lane so it never sits under the floating
+		# assistant chat button (bottom-right, where the old right-side controls landed).
+		# The track's own AudioStreamPlayer mixes with the main clip; _sync_tracks reads
+		# `volume` every frame, so pulling it changes the level live.
+		lane.add_child(_volume_knob(
+			func(): return float(session.tracks[idx].get("volume", 1.0)),
+			func(v): session.tracks[idx]["volume"] = v,
+			Color(0.6, 0.95, 0.7)))
+
+	# The lane stack sits directly above the marker strip, and the video's own
+	# letterboxed slot (see _build_editor_ui) has to shrink to match - otherwise
+	# an imported track (or several) grows this stack tall enough to push its
+	# lanes/delete-buttons over the bottom of the video instead of the reserved
+	# strip below it.
+	_apply_lane_reserved(1 + session.tracks.size())
+	_refresh_ruler()
+
+
+## The ruler's length, taken again from the session. Called when a gesture ENDS, never during
+## one ([TimelineView]: a ruler that rescales under the handle being dragged).
+func _refresh_ruler() -> void:
+	if session != null:
+		_tview.refresh(session.timeline_extent())
+
+
+## Collapse the lane stack (and expand the video letterbox into the space that
+## frees up) to fit exactly `count` rows. Called with the full track count
+## right after any structural change (above), and every frame with however
+## many lanes are actually on screen right now - once TrackLane starts hiding
+## itself for clips scrolled entirely out of the current zoom/pan window, the
+## fixed-for-the-whole-track-count reservation left a dead black band where
+## those rows used to be instead of actually collapsing - see feedback/0023.
+func _apply_lane_reserved(count: int) -> void:
+	var reserved := 90.0 + float(count) * _LANE_H
+	_lanes_col.offset_top = -reserved
+	_lanes_col.offset_bottom = -90
+	if _video_area != null:
+		_video_area.offset_bottom = -reserved
+	# THE EXPORT BUTTON RIDES ABOVE THE BOTTOM CHROME. Its offsets are the ones
+	# every mode uses (-68/-28 from the bottom edge, matching assistant.gd's
+	# toggle row), and in every other mode the bottom of the frame is empty - but
+	# here it is the marker strip and the lane stack, so the button sat ON the
+	# timeline. `reserved` is exactly the height of that furniture, so anchoring to
+	# it keeps the button clear however many tracks are open.
+	# THE WHOLE BOTTOM-RIGHT ROW RIDES ABOVE THE BOTTOM CHROME - this editor's own
+	# export button AND the shared furniture (⤓ / 💬 / >_), all off ONE number, and
+	# all with the SAME arithmetic. They were laid out two different ways at first,
+	# which is why the row came out staggered rather than in a line: the shared
+	# buttons sit at -28..-68 from the bottom edge, so anything joining that row has
+	# to be -28 - inset .. -68 - inset and not "inset plus a margin".
 	#
-	# STAND'S LOW END REACHES BEHIND HER (0.55 -> 0.15). It was floored at a
-	# clearance of half the two skulls because the guard used to gate the DEPOSIT,
-	# so a ghost tucked in close was a ghost eaten by its own exclusion. The mass
-	# grows under her now and is only masked at render, so overlapping her is free
-	# - it hides behind her and emerges at her edges, which is what "hug the model
-	# closer" asks for.
-	_umb_stand = 0.15 + clampf(float(l.get("threshold", 0.24)), 0.0, 1.0) * 1.85
-	_umb_lead = clampf(float(l.get("feather", 0.12)), 0.0, 0.5) * 1.6
-	_umb_eye_amt = clampf(float(l.get("sat_floor", 0.18)), 0.0, 1.0)
-	_umb_lean = clampf(float(l.get("swap", 0.45)), 0.0, 1.0)
-	_umb_narrow = clampf(float(l.get("intensity_b", 0.35)), 0.0, 0.75)
+	# `reserved` is exactly what the marker strip and the trim/track lanes occupy,
+	# and it is what the video area is inset by, so the row stays clear however many
+	# tracks are open.
+	var inset := reserved - 14.0
+	# IN THE ROW once there is one (Chrome.row_button, the slot the shared ⤓ leaves while it is
+	# suppressed); the row is lifted by the claim below. Placed by hand only without a Chrome.
+	var ch_r := _export.chrome()
+	if ch_r != null and _export_btn != null and _export_btn.get_parent() == self:
+		ch_r.row_button(&"mask_export", _export_btn)
+	if _export_btn != null and _export_btn.get_parent() == self:
+		_export_btn.offset_bottom = -28.0 - inset
+		_export_btn.offset_top = -68.0 - inset
+	if _status != null:
+		# ITS OWN LINE, ABOVE THE BUTTON ROW - see Exporter.set_bottom_inset for
+		# why. The face-track line and the export progress both live here and both
+		# outgrow the space beside four buttons.
+		_status.offset_bottom = -74.0 - inset
+		_status.offset_top = -110.0 - inset
+		_status.offset_right = -28.0
+	# SET EVERY FRAME, not once at build time. The suppression used to be done in
+	# _build_export_ui, which runs before the chrome has joined its group in some
+	# boot orders - so it silently found nothing, the shared button stayed live on
+	# its higher CanvasLayer, and it went on covering this one and eating the click.
+	var ch_i := _export.chrome()
+	if ch_i != null:
+		ch_i.claim_bottom(&"mask", inset)
+		ch_i.suppress_export(&"mask")
 
 
-## THE CAST TRANSFORM, solved for the current playhead.
-##
-## Everything here happens in ASPECT-CORRECTED space (x multiplied by the frame
-## aspect), because every quantity is a distance between two points on a body and
-## raw UV is not a unit - "0.145 of the frame's width" is 0.258 frame-heights on
-## 16:9 and 0.082 on a phone clip, which is the trap that put the clown's lips
-## under its nose.
-##
-## The construction, and why each part is what it is:
-##
-##  THE ANCHOR IS THE EYE LINE, not the head's centroid and not the mass's. The
-##  eyes are the feature a viewer looks at, so they are the one that must land
-##  where it was placed; anchoring anywhere else means the eyes arrive wherever
-##  the rest of the geometry leaves them, which is how the effect this replaces
-##  ended up with one socket out on bare wall.
-##
-##  THE GHOST'S HEAD MUST CLEAR HERS. The separation is the two skulls' own
-##  half-widths added together, not a tuned constant - so it holds on a close-up
-##  and on a wide shot without either being tuned for. Standing it on top of her
-##  is what makes the guard eat the ghost: her silhouette is most of a close-up
-##  frame, and a ghost behind her is then a thin rind around her outline.
-##
-##  IT STANDS ON THE SIDE THERE IS ROOM FOR. The measured throw picks the side;
-##  if the ghost's head does not fit there, the other side is the honest answer.
-##  A head jammed against the frame edge is half a head with one eye.
-##
-##  THE SIZE IS FREE, AND THE SHAPE IS A BUST. Her silhouette is ~45% of a
-##  close-up frame; drawn whole at any magnification it is a wall of black with
-##  nothing in it to read. The mass is her HEAD AND SHOULDERS - a radial falloff
-##  about her eye line, applied in HER OWN units so it rides the transform with
-##  everything else - and below that it dissolves into the field's own smoke.
-##  Measured on the reference clip: drawn whole at Scale 2.8 the mass covered 63%
-##  of the frame and read as a dimmed room; as a bust it reads as a figure.
-func _umb_solve_cast() -> void:
-	_umb_have = false
-	_umb_eyes_ok = false
-	if _player == null or _pt_state != "ready":
+func _delete_track(i: int) -> void:
+	if i < 0 or i >= session.tracks.size():
 		return
-	# THE LOOK-AHEAD, and the entire reason the track is offline. Reading the clip
-	# at `t + Lead` means the ghost turns its head on the frame she has not reached
-	# yet, which is what makes the picture read as the ghost moving HER. A velocity
-	# extrapolation cannot do this - it can only continue what just happened, which
-	# on real footage is mostly detection noise multiplied by the lead time.
-	var t := _player.stream_position + clampf(_umb_lead, 0.0, 2.0)
-	var i := _pose.slot_at(t)
-	if i < 0:
+	_undo.push("", "deleted a track")
+	if i < _track_runtime.size():
+		var rt: Dictionary = _track_runtime[i]
+		if rt.has("player"):
+			(rt.player as Node).queue_free()
+		if rt.has("wrap"):
+			(rt.wrap as Node).queue_free()
+		if rt.has("audio") and rt.audio != null:
+			(rt.audio as Node).queue_free()
+		_track_runtime.remove_at(i)
+	session.tracks.remove_at(i)
+	_refresh_lanes()
+	_mark_dirty()
+
+
+## Cut track `i` into two independent lanes at the playhead, both still pointing
+## at the SAME source video/audio (video_path is shared - _ensure_track_audio's
+## sidecar .ogg is keyed off that path, so the new half finds the existing
+## extraction and attaches instantly, no re-demux). The left half keeps this
+## track's own identity and index (just trims its clip_out); the right half is
+## a full duplicate of the fields - same clip_in..clip_out span, same volume -
+## then re-pointed to start exactly at the split: its clip_in advances to the
+## split's LOCAL position in the source, and its offset (where that lands on
+## the MASTER timeline) is set to the playhead itself, so the two blocks sit
+## edge-to-edge with no gap or overlap. From there each is an ordinary lane -
+## TrackLane's own drag handles already shift/resize them independently.
+## Appended at the END of session.tracks (never inserted at i+1): background
+## sidecar-audio jobs (_track_audio_jobs) and _track_runtime are index-keyed,
+## and an insert would silently misalign any in-flight job for a LATER track.
+func _split_track(i: int) -> void:
+	if i < 0 or i >= session.tracks.size():
 		return
-	if not _umb_cast_from(i, _source_aspect()):
+	var track: Dictionary = session.tracks[i]
+	var offset := float(track.get("offset", 0.0))
+	var cin := float(track.get("clip_in", 0.0))
+	var cout := float(track.get("clip_out", 0.0))
+	var master_t: float = _player.stream_position if _player != null else 0.0
+	var split_local := master_t - offset + cin
+	if split_local <= cin + 0.05 or split_local >= cout - 0.05:
+		_set_status("✂  Move the playhead inside this track's span to split it there")
 		return
-	# The guard's own sample: HER, now, not the frame the ghost is drawn from.
-	var gi := _pose.slot_at(_player.stream_position)
-	if gi < 0:
-		gi = i
-	if _pt_slot != i or _pt_guard_slot != gi:
-		_pt_slot = i
-		_pt_guard_slot = gi
-		_pose.upload_mask(i, gi)
-	_umb_have = _pt_tex != null
-	if OS.has_environment("GHOST_UMBRA_DEBUG"):
-		print("UMBDBG t=%.2f (+%.2f) sample=%d unit=%.3f scale=%.2f throw=(%.2f,%.2f) "
-			% [_player.stream_position, _umb_lead, i, _umb_unit, _umb_scale,
-				_umb_dir.x, _umb_dir.y]
-			+ "anchor=(%.3f,%.3f) eyeL=(%.3f,%.3f) eyeR=(%.3f,%.3f) rad=%.3f"
-			% [_umb_anchor.x / maxf(_source_aspect(), 1e-3), _umb_anchor.y,
-				_umb_eye_l.x, _umb_eye_l.y, _umb_eye_r.x, _umb_eye_r.y, _umb_eye_rad])
+	_undo.push("", "split a track")
+	var right: Dictionary = track.duplicate()
+	right["clip_in"] = split_local
+	right["offset"] = master_t
+	right["fade_in"] = 0.0
+	track["clip_out"] = split_local
+	track["fade_out"] = 0.0
+	session.tracks.append(right)
+	_undo.reconcile_tracks()
+	_refresh_lanes()
+	_mark_dirty()
 
 
-## The geometry itself, split out from the playhead so it can be asserted without
-## a clip, a player or a renderer (tests/masking/umbra_cast_check.gd). Reads the live knob
-## state, writes every _umb_* transform field, and returns false when this sample
-## cannot support a throw at all.
-func _umb_cast_from(i: int, asp: float) -> bool:
-	# THE FOUR LANDMARKS THE THROW IS BUILT FROM HAVE TO BE SEEN. A shoulder the
-	# model placed by inference rather than by looking still returns a plausible
-	# point, so without this the ghost's whole body axis can be built out of a
-	# guess and nothing about the result looks wrong until it swings. The ears
-	# are excluded on purpose - one of them is genuinely hidden whenever a head
-	# turns, and half_w falls back on its own floor there.
-	for k in [PT_SH_L, PT_SH_R, PT_EYE_L, PT_EYE_R]:
-		if _pose.vis_at(i, k) < 0.30:
-			return false
-	var av := Vector2(asp, 1.0)
-	var sh := (_pose.point(i, PT_SH_L) + _pose.point(i, PT_SH_R)) * 0.5 * av
-	var eye_l := _pose.point(i, PT_EYE_L) * av
-	var eye_r := _pose.point(i, PT_EYE_R) * av
-	var eye := (eye_l + eye_r) * 0.5
-	var half_w := maxf(absf(_pose.point(i, PT_EAR_L).x - _pose.point(i, PT_EAR_R).x) * asp * 0.5, 0.02)
-	var axis := eye - sh
-	var unit := axis.length()
-	if unit < 1e-3:
-		return false
-	axis /= unit
-	var scale := clampf(_umb_scale, 0.4, 3.2)
-	var lean := clampf(_umb_lean, 0.0, 1.0)
-	var narrow := clampf(_umb_narrow, 0.0, 0.75)
-	# The throw, biased upward: a shadow thrown level reads as a stain on the wall,
-	# and the thing being built is a presence that RISES. This is the only place the
-	# measured direction is editorialized, and it is deliberate.
-	var throw := (_pt_dir + Vector2(0.0, -0.35)).normalized()
-	var ghost_hw := half_w * scale * (1.0 - narrow)
-	var gap := (half_w + ghost_hw) * clampf(_umb_stand, 0.4, 2.4)
-	var lim := ghost_hw + 0.04
-	var side := 1.0 if throw.x >= 0.0 else -1.0
-	var gx := eye.x + side * gap
-	if minf(gx - lim, asp - lim - gx) < 0.0:
-		var other := eye.x - side * gap
-		if minf(other - lim, asp - lim - other) > minf(gx - lim, asp - lim - gx):
-			gx = other
-	gx = clampf(gx, lim, maxf(lim, asp - lim))
-	# HOW FAR IT RISES IS A FRACTION OF THE HEADROOM THERE IS, not a multiple of
-	# her own height. Written the obvious way - eye.y minus some number of her
-	# units - it is pinned against the top clamp on any close-up, because her eyes
-	# are already near the top of such a frame: measured, a whole sweep of Lean
-	# produced eye heights of 0.1559, 0.1559, 0.1559 and 0.1559, i.e. a control
-	# that did nothing. Against the ceiling it always moves, and on a wide shot
-	# the same setting reads as a much bigger rise, which is right.
-	#
-	# THE CEILING IS WHERE ITS SOCKETS STILL FIT, not where its skull does. A
-	# ghost this size has a crown taller than the headroom of a close-up, and
-	# demanding the whole head stay in frame is the same pin one step further out:
-	# it leaves nothing to rise into. A shadow whose crown leaves the top of the
-	# picture is a shadow that is bigger than the picture, which is the point.
-	var ceil_y := clampf(ghost_hw * 0.34 / asp * 2.5 + 0.03, 0.04, 0.6)
-	var gy := lerpf(eye.y, minf(ceil_y, eye.y), 0.25 + 0.75 * lean)
-	var head := Vector2(gx, gy) + Vector2(_umb_pan.x * asp, _umb_pan.y)
-	# Its own body axis leans toward the throw too, but only half as far: a figure
-	# whose head leans and whose spine does not reads as a head balanced on a post.
-	var gaxis := (axis * (1.0 - lean * 0.5) + throw * (lean * 0.5)).normalized()
-	var anchor := head - gaxis * (unit * scale)
-	# The similarity, as a 2x2: her frame (axis, its perpendicular) into the ghost's,
-	# with the across-axis component scaled down by Narrow. Built as basis-into-basis
-	# rather than as an angle, because her axis is already a unit vector and the
-	# inverse of an orthonormal 2x2 is its transpose - no trigonometry, no wrap.
-	var h1 := axis
-	var h2 := Vector2(-axis.y, axis.x)
-	var e1 := gaxis * scale
-	var e2 := Vector2(-gaxis.y, gaxis.x) * (scale * (1.0 - narrow))
-	# fwd = [e1 e2] * [h1 h2]^-1, and [h1 h2] is orthonormal so its inverse is its
-	# TRANSPOSE - which is exactly where a transposed pair of columns hides in
-	# plain sight, because the wrong one is still a rotation and still draws
-	# something plausible. Column k of fwd is e1*h1[k] + e2*h2[k]; the check that
-	# catches it is that fwd*h1 must come back as e1 exactly, which is what
-	# tests/masking/umbra_cast_check.gd asserts.
-	var f0 := e1 * h1.x + e2 * h2.x     # column 0
-	var f1 := e1 * h1.y + e2 * h2.y     # column 1
-	var det := f0.x * f1.y - f1.x * f0.y
-	if absf(det) < 1e-8:
-		return false
-	_umb_inv0 = Vector2(f1.y, -f0.y) / det
-	_umb_inv1 = Vector2(-f1.x, f0.x) / det
-	_umb_anchor = anchor
-	_umb_src = sh
-	_umb_eye_src = eye
-	_umb_unit = unit
-	# The bust's extent, in her own units from her eye line. Loom opens it from a
-	# head and a collar out to a head, shoulders and chest.
-	var loom := clampf(_umb_loom, 0.0, 1.0)
-	_umb_bust0 = 0.70 + 2.00 * loom
-	_umb_bust1 = 1.60 + 3.40 * loom
-	_umb_dir = throw
-	# THE EYES, through the same map - so they are on the ghost's head by
-	# construction at every Scale, which is the property the previous version could
-	# not have (it anchored them to the visible mass's centroid and amplified her
-	# motion as a deviation, because carrying them geometrically put them off the
-	# top of the frame).
-	_umb_eye_l = anchor + Vector2(
-		f0.x * (eye_l.x - sh.x) + f1.x * (eye_l.y - sh.y),
-		f0.y * (eye_l.x - sh.x) + f1.y * (eye_l.y - sh.y))
-	_umb_eye_r = anchor + Vector2(
-		f0.x * (eye_r.x - sh.x) + f1.x * (eye_r.y - sh.y),
-		f0.y * (eye_r.x - sh.x) + f1.y * (eye_r.y - sh.y))
-	# Back to plain UV for the shader, which samples in screen space.
-	_umb_eye_l.x /= asp
-	_umb_eye_r.x /= asp
-	# Sized from the ghost's own skull, not from the fitted separation: the pair's
-	# spacing is the quantity that degrades when a head turns away, and a socket
-	# that swells with it reads as two unrelated holes.
-	_umb_eye_rad = clampf(ghost_hw * 0.34 / asp, 0.006, 0.09)
-	_umb_eyes_ok = true
-	return true
-
-
-# --- undo/redo ---------------------------------------------------------------
-
-
-# --- auto-save --------------------------------------------------------------
-
-func _mark_dirty() -> void:
-	_dirty = true
-	_autosave_cooldown = _AUTOSAVE_DELAY
-
-
-func _save_session() -> void:
-	if session == null or _session_path.is_empty():
+## Cut the MAIN clip in two at the playhead, same as _split_track but for the
+## primary lane: the main clip has no `offset` of its own (master time and its
+## source time are the same clock - see TrackLane._bounds), so the playhead
+## position IS the split point directly, no offset arithmetic needed. The left
+## half stays the main clip (just trims clip_out, same as dragging its own out
+## handle inward). The right half can't stay "main" - there's only ever one -
+## so it's appended to session.tracks as an ordinary track pointing at the same
+## video_path/source_path, picking up at the split with its own offset. From
+## there it's indistinguishable from any imported track: draggable, deletable,
+## splittable again - the main clip is really just track -1 (see
+## _snap_targets_for), and after a split its tail end is a track in fact, not
+## just in spirit.
+func _split_main() -> void:
+	if _player == null:
 		return
-	# Once a restart has committed to quitting, _player's playback is no longer a
-	# trustworthy live read - the engine's own shutdown sequence stops it before
-	# _exit_tree runs, which reports stream_position back as 0. _restart_now already
-	# took the definitive capture right before quitting; exit's own catch-all save
-	# (below) must not re-derive playhead from a player that may already be torn
-	# down, or it silently overwrites the correct saved value with 0 (this was why
-	# a restart always landed back at the start of the timeline).
-	if _player != null and not _restarting:
-		session.playhead = _player.stream_position   # persist where the playhead is
-	if _tview != null:
-		session.timeline_zoom = _tview.zoom
-		session.timeline_view_start = _tview.view_start
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_session_path.get_base_dir()))
-	session.save(ProjectSettings.globalize_path(_session_path))
-	_dirty = false
-
-
-## Reload the app to pick up code the assistant just edited, landing back on THIS
-## session at the current playhead (both persisted, see _save_session). Standalone
-## Godot can't hot-reload GDScript, so this is a clean restart-and-restore.
-##
-## But a restart mid-flight would corrupt any OTHER assistant run still writing files,
-## so it never fires while runs are in progress: it hands the restart to the Assistant,
-## which holds it until every agent has returned, THEN restarts (see Assistant.reload_when_idle).
-##
-## Same deference applies to an export in progress (_render_state != "idle", see
-## _poll_render): quitting to restart kills the render/transcode subprocess it's waiting
-## on, losing the render (feedback/0027). Checked first, and re-checked by _poll_render
-## once the export finishes, since one can start after this was first requested.
-func _reload_requested() -> void:
-	if _render_state != "idle":
-		_reload_after_export = true
-		_set_status("⟳  Reload queued - restarting once the export in progress finishes")
+	var cin := session.clip_in
+	var cout := session.effective_clip_out()
+	var split_t: float = _player.stream_position
+	if split_t <= cin + 0.05 or split_t >= cout - 0.05:
+		_set_status("✂  Move the playhead inside the main clip's span to split it there")
 		return
-	var a := get_tree().get_first_node_in_group("assistant")
-	if a != null and a.has_method("reload_when_idle") and bool(a.call("is_busy")):
-		a.call("reload_when_idle", Callable(self, "_do_restart"))
-		_set_status("⟳  Reload queued - restarting once assistant runs finish")
-	else:
-		_do_restart()
+	_undo.push("", "split the main clip")
+	var right := {
+		"video_path": session.video_path,
+		"source_path": session.source_path,
+		"duration": session.duration,
+		"clip_in": split_t,
+		"clip_out": cout,
+		"offset": split_t,
+		"fade_in": 0.0,
+		"fade_out": session.main_fade_out,
+		"volume": session.main_volume,
+	}
+	session.clip_out = split_t
+	session.main_fade_out = 0.0
+	session.tracks.append(right)
+	_undo.reconcile_tracks()
+	_refresh_lanes()
+	_mark_dirty()
 
 
-## The actual restart: relaunch this same executable straight back into --mask-edit on
-## the current session (so it reopens here, at the saved playhead), preserving whatever
-## engine args (--path etc.) it was launched with.
-func _do_restart() -> void:
-	_save_session()   # captures the playhead
-	if _reload_check_pid > 0:
-		return   # a check is already running - don't stack another
-	# NEVER restart into code that doesn't compile: the assistant's edit might have a
-	# syntax error, and relaunching into it would leave the app unable to open. Validate
-	# headless first (same check as src/scratchpad.py compile); _process reads the
-	# result and only then restarts, or reports the errors and stays put.
-	if not OS.has_feature("editor"):
-		_restart_now()
+func _prompt_import_track() -> void:
+	# Already open (double-tap of T) - just bring it forward, don't stack a
+	# second dialog behind the first.
+	if _import_dialog != null and is_instance_valid(_import_dialog):
+		_import_dialog.popup_centered()
 		return
-	var exe := OS.get_executable_path()
-	_reload_check_log = ProjectSettings.globalize_path("user://reload_compile_check.log")
-	_reload_check_pid = Subprocess.start_logged(exe,
-		PackedStringArray(["--headless"]) + Boot.project_args() + PackedStringArray(["--editor", "--quit"]),
-		_reload_check_log, "reload check")
-	if _reload_check_pid <= 0:
-		_set_status("⚠  Couldn't run the pre-reload compile check - NOT reloading (edits left as-is)")
-		_reload_check_pid = -1
+	# An import is already transcoding - don't let a second one clobber the
+	# first's pending state mid-flight (they share _import_pid/_import_pending).
+	if _import_pid > 0:
+		_set_status("⏳  A track is still importing - one at a time")
 		return
-	_set_status("⟳  Checking the edits compile before reloading…")
+	# Immediate feedback that T registered, BEFORE the dialog - if the dialog
+	# itself somehow fails to show, at least the keypress isn't silent.
+	_set_status("📁  Choose a video to import as a second track…")
+	_import_dialog = FileDialog.new()
+	_import_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	_import_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	# In-window dialog, NOT native. The native (portal) dialog silently shows
+	# nothing on a Linux box without xdg-desktop-portal - the exact "I press T
+	# and nothing happens" report. Godot's own dialog always renders in-window.
+	_import_dialog.use_native_dialog = false
+	_import_dialog.title = "Import a second track (picture-in-picture)"
+	_import_dialog.filters = PackedStringArray(["*.mp4, *.mov, *.mkv, *.webm, *.ogv ; Video"])
+	var downloads := OS.get_system_dir(OS.SYSTEM_DIR_DOWNLOADS)
+	if not downloads.is_empty():
+		_import_dialog.current_dir = downloads
+	_import_dialog.size = Vector2i(820, 560)
+	_import_dialog.file_selected.connect(_start_track_import)
+	# Free the dialog whichever way it closes (pick or cancel), so the next T
+	# opens a fresh one and the is_instance_valid guard above reads false
+	# again. _start_track_import is connected first, so it runs before the
+	# close on a pick.
+	_import_dialog.file_selected.connect(func(_p): _close_import_dialog())
+	_import_dialog.canceled.connect(_close_import_dialog)
+	add_child(_import_dialog)
+	_import_dialog.popup_centered()
 
 
-## The actual restart, run only once _do_restart's compile check comes back clean:
-## relaunch this same executable straight back into --mask-edit on the current session
-## (so it reopens here, at the saved playhead), preserving the engine args it had.
-func _restart_now() -> void:
-	# One last accurate capture right before quitting - the compile check the app just
-	# ran can take a while, and the app stays fully interactive while it does, so the
-	# playhead _do_restart captured when the check STARTED may already be stale. This
-	# is also the last point _player is guaranteed to still report a live position -
-	# see _save_session/_exit_tree for why nothing may re-derive it after this.
-	_save_session()
-	_restarting = true
-	var engine_args := PackedStringArray()
-	for a in OS.get_cmdline_args():
-		if a == "--":
-			break                     # everything before the user-args separator
-		engine_args.append(a)
-	engine_args.append("--")
-	engine_args.append("--mask-edit")
-	engine_args.append(_session_path)
-	OS.set_restart_on_exit(true, engine_args)
-	get_tree().quit()
+func _close_import_dialog() -> void:
+	if _import_dialog != null and is_instance_valid(_import_dialog):
+		_import_dialog.queue_free()
+	_import_dialog = null
 
 
-## Poll the pre-reload compile check (see _do_restart). Clean -> restart; errors ->
-## block the reload and surface them, so a broken assistant edit never bricks the app.
-func _poll_reload_check() -> void:
-	if _reload_check_pid <= 0 or Subprocess.alive(_reload_check_pid):
+## Same one-time ffmpeg->theora transcode _prep() does for the primary clip,
+## minus the audio extraction step (v1 tracks are silent - see the class doc's
+## scope note) - PID-polled in _process(), never blocking, matching the
+## project's one established pattern for external subprocesses.
+## Add the track's LANE first, transcode second. The lane is pure metadata
+## (duration/offset/trim) - it doesn't need the transcoded video at all - so it
+## appears the instant you pick a file, independent of the background ffmpeg run.
+## The old order (transcode -> probe -> only THEN add the lane) meant any hiccup in
+## that async tail left the timeline looking like nothing happened. The PiP VIDEO
+## still needs the .ogv, so _build_track_view is deferred to _finish_track_import;
+## until then _sync_tracks just skips this index (no "player" in its runtime slot).
+func _start_track_import(source: String) -> void:
+	var slug := _slugify(source)
+	var dir := _session_path.get_base_dir()
+	var idx := session.tracks.size()
+	var video := dir + "/track_%s_%d.ogv" % [slug, idx]
+	# The SOURCE file has reliable duration metadata (unlike our libtheora output),
+	# so the lane gets its real length up front; the transcoded .ogv re-confirms it
+	# in _finish_track_import. Floor keeps the lane a visible width if a probe fails.
+	var dur := _source_prep.probe_duration(source)
+	if dur <= 0.0:
+		dur = maxf(session.duration, 1.0)
+	_undo.push("", "imported a track")
+	session.tracks.append({
+		"video_path": video, "source_path": source, "duration": dur,
+		"clip_in": 0.0, "clip_out": dur, "offset": 0.0,
+		"x": 0.68, "y": 0.04, "w": 0.28, "h": 0.28,
+		"volume": 1.0,
+	})
+	while _track_runtime.size() <= idx:
+		_track_runtime.append({})   # empty slot: _sync_tracks skips it until the video loads
+	_refresh_lanes()                # the new timeline lane is on screen NOW
+	_mark_dirty()
+	_import_pending = {"source": source, "video": video, "index": idx}
+	_set_status("⏳  Track added - transcoding its video in the background…")
+	# Keep the audio this time (was -an): the track's own VideoStreamPlayer plays the
+	# embedded Vorbis, mixed alongside the main clip, with per-track mute/volume (see
+	# _sync_tracks). A source with no audio just yields a silent stream - no failure.
+	# .part + promote, same as the main prep - see _promote_part's doc.
+	var args := PackedStringArray([
+		"-y", "-loglevel", "error", "-i", source,
+		"-c:v", "libtheora", "-q:v", "6", "-g", "25",
+		"-c:a", "libvorbis", "-q:a", "4",
+		"-f", "ogg", ProjectSettings.globalize_path(video) + ".part"])
+	_import_pid = Subprocess.start("ffmpeg", args, "clip import")
+	if _import_pid <= 0:
+		_cancel_pending_track()     # couldn't even start ffmpeg - roll the lane back out
+		_set_status("⚠  Could not start ffmpeg for track import")
+
+
+## Roll back the placeholder lane _start_track_import added (ffmpeg failed to start,
+## or the transcode produced nothing usable). The pending track is always the last
+## one (imports are serialized - see _prompt_import_track's guard).
+func _cancel_pending_track() -> void:
+	if _import_pending.has("index"):
+		var idx := int(_import_pending.index)
+		if idx >= 0 and idx < session.tracks.size():
+			session.tracks.remove_at(idx)
+			if idx < _track_runtime.size():
+				_track_runtime.remove_at(idx)
+			_refresh_lanes()
+			_mark_dirty()
+	_import_pending = {}
+	_import_pid = -1
+
+
+func _finish_track_import() -> void:
+	if not _import_pending.has("index"):
+		_import_pending = {}
 		return
-	_reload_check_pid = -1
-	var log := FileAccess.get_file_as_string(_reload_check_log) if FileAccess.file_exists(_reload_check_log) else ""
-	if not _reload_check_log.is_empty():
-		DirAccess.remove_absolute(_reload_check_log)
-	var errs := []
-	for line in log.split("\n"):
-		for marker in ["SCRIPT ERROR", "Parse Error", "Compile Error", "Identifier not found", "Failed to load"]:
-			if line.contains(marker):
-				errs.append(line.strip_edges())
-				break
-	if errs.is_empty():
-		_restart_now()
-	else:
-		_set_status("⚠  Reload blocked - the edits don't compile (%d error%s); app left running" % [
-			errs.size(), "" if errs.size() == 1 else "s"])
-		push_warning("ghost: reload blocked, compile errors:\n" + "\n".join(errs))
+	var idx := int(_import_pending.index)
+	_source_prep.promote_part(String(_import_pending.video))
+	var abs_video := ProjectSettings.globalize_path(String(_import_pending.video))
+	var dur := _source_prep.probe_duration(abs_video)
+	if dur <= 0.0 or idx < 0 or idx >= session.tracks.size():
+		# The lane is already on screen; the transcode still failed, so take it back
+		# out rather than leave a lane whose PiP video would never load.
+		_cancel_pending_track()
+		_set_status("⚠  Track import failed (transcode produced no usable video)")
+		return
+	# Correct the lane to the actual transcoded length, keeping it full if untrimmed.
+	var t: Dictionary = session.tracks[idx]
+	var was_full: bool = float(t.get("clip_out", 0.0)) >= float(t.get("duration", 0.0)) - 0.05
+	t["duration"] = dur
+	if was_full:
+		t["clip_out"] = dur
+	_build_track_view(idx)          # now the .ogv exists: load its PiP player
+	_refresh_lanes()
+	_mark_dirty()
+	_import_pending = {}
+	if _status != null:
+		_status.visible = false
 
 
-## Whatever the debounce hasn't flushed yet lands on disk when the editor goes away -
-## closing the window mid-burst never loses the last edit. Always save (not only when
-## dirty) so the current playhead is captured even after a pure play/scrub with no edit.
-## Why Masking cannot be left right now, "" when it can (see main.leave_blocker): its own export
-## renders in programs this editor owns, and leaving reaps them. A clip still being prepared is not
-## a reason - preparation picks up where it stopped the next time the clip is opened.
-func leave_blocker() -> String:
-	if _render_pid > 0 or _transcode_pid > 0:
-		return "Masking is exporting - leaving now would stop the export. Wait for it to finish."
-	return ""
+## Each imported track is driven off the PRIMARY player's own clock (never its
+## own independent playback state) - the same discipline the audio sync already
+## follows (see _play's class doc), so live preview and an export relaunch trace
+## the identical picture. A track that isn't currently inside its
+## [offset, offset+span) window on the master timeline is paused and hidden;
+## entering it seeks the track's own player to the matching local position and
+## lets it run from there, only re-seeking again if it drifts (video seeks are
+## heavy - constant tiny re-seeks would stutter, same reasoning as the 0.15s
+## audio tolerance, just a bit wider since a video seek is coarser than an
+## audio one).
+func _sync_tracks() -> void:
+	if _player == null:
+		return
+	var master_t := _player.stream_position
+	for i in session.tracks.size():
+		if i >= _track_runtime.size():
+			continue
+		var rt: Dictionary = _track_runtime[i]
+		if not rt.has("player"):
+			continue
+		var track: Dictionary = session.tracks[i]
+		var offset := float(track.get("offset", 0.0))
+		var cin := float(track.get("clip_in", 0.0))
+		var cout := float(track.get("clip_out", 0.0))
+		var local_t := master_t - offset + cin
+		var inside: bool = cout > cin and local_t >= cin and local_t < cout
+		var tplayer: VideoStreamPlayer = rt.player
+		var wrap: Control = rt.wrap
+		var taudio: AudioStreamPlayer = rt.get("audio")   # may be null (silent track)
+		# This track owns the PiP only when V has selected it (pip_track == i+1). The
+		# box is still gated by inset_show so track modes fade like the main PiP does.
+		var selected := _pip_track == i + 1
+		# The clip's fade envelope: audio AND video ramp together (coupled) over the
+		# fade_in seconds after the clip's start and the fade_out seconds before its end.
+		# g is 0 at a faded edge, 1 across the middle; see _clip_fade_gain / _track_level_db.
+		var g := _clip_fade_gain(master_t - offset, cout - cin,
+			float(track.get("fade_in", 0.0)), float(track.get("fade_out", 0.0)))
+		if inside:
+			wrap.visible = _last_inset_show > 0.001 and selected
+			wrap.modulate.a = g   # VIDEO fade, coupled to the audio one below
+			if not bool(rt.active) or absf(tplayer.stream_position - local_t) > 0.2:
+				tplayer.stream_position = local_t
+				rt.active = true
+			tplayer.paused = not _playing
+			var view: TextureRect = rt.view
+			if view != null:
+				view.texture = tplayer.get_video_texture()
+			if taudio != null:
+				# pull-rope volume × the fade envelope, as a log/dB level
+				taudio.volume_db = _track_level_db(float(track.get("volume", 1.0)), g)
+				if _playing:
+					if not taudio.playing:
+						taudio.play(local_t)
+					taudio.stream_paused = false
+					if absf(taudio.get_playback_position() - local_t) > 0.2:
+						taudio.seek(local_t)
+				else:
+					taudio.stream_paused = true   # paused / scrubbing: freeze its sound
+		else:
+			wrap.visible = false
+			tplayer.paused = true   # outside its window: no picture...
+			rt.active = false
+			if taudio != null and taudio.playing:
+				taudio.stop()        # ...and no sound; re-entry restarts it clean
+	# The main clip's PiP shows only when it is the selected source (pip_track == 0);
+	# a selected track replaces it. _apply_frame_state set _mask_wrap by inset_show
+	# alone, so correct it here now that we know which source V picked.
+	if _pip_track != 0:
+		_mask_wrap.visible = false
 
 
-func _exit_tree() -> void:
-	# Hand the shared export button back on the way out, or leaving Masking would
-	# leave every other mode without one - see _build_export_ui.
-	var ch_out := _chrome()
-	if ch_out != null:
-		# KEYED, so this can only ever drop Masking's own claims. It used to write
-		# `false` / 0.0 outright, which would have clobbered a claim made by whatever
-		# came next - see the ordering note on Chrome._bottom_claims.
-		ch_out.release_export(&"mask")
-		ch_out.release_bottom(&"mask")
-	# The ⤓ lives in Chrome's row, which outlives this editor: freed with it, not left behind.
-	if _export_btn != null and is_instance_valid(_export_btn) and _export_btn.get_parent() != self:
-		_export_btn.queue_free()
-	_save_session()
-	# Reap every subprocess THIS instance spawned. A detached child keeps running -
-	# close the app mid-prep and the ffmpeg transcode carries on invisibly (no "godot"
-	# in ps), still touching video.ogv, and the NEXT launch reads the fresh mtime as
-	# "already in progress elsewhere" and waits on a writer the user can't see. Killing
-	# our own pids is safe - the ECHILD hazard is polling pids we did NOT spawn (see
-	# _prep_looks_live's doc). The half-written outputs are already handled: prep re-runs
-	# when the lock goes stale and _finish_session rejects truncated video, yt-dlp resumes
-	# its own .part.
-	#
-	# This list is now a BELT, not the braces: every spawn above goes through
-	# [Subprocess], so `Boot` reaps anything missing from it when the app closes and the
-	# kernel kills the lot if ghost is killed outright. Leaving the explicit list keeps
-	# the timing right - these die when MASKING closes, not when the app does, which is
-	# what frees video.ogv for the next session.
-	for pid in [_prep_video_pid, _prep_audio_pid, _import_pid, _waveform_pid,
-			_wavehi_pid, _yt_pid, _reload_check_pid, _render_pid, _transcode_pid,
-			_ft_pid, _pt_pid]:
-		Subprocess.stop(int(pid))
-	Provision.release(FACE_ENV, "mask editor")
-	Provision.release(YT_ENV, "clip download")
-	for job in _track_audio_jobs:
-		Subprocess.stop(int(job.get("pid", -1)))
-	# Join the audio loader if it's still running, or Godot warns about an orphaned
-	# thread on close.
-	if _audio_thread != null and _audio_thread.is_started():
-		_audio_thread.wait_to_finish()
-		_audio_thread = null
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+## A left-anchored pull-rope volume knob for a lane (see VolumeKnob): hold and drag
+## away to set a continuous 0..1 level with an asymptotic ceiling. `getter` reads the
+## stored volume, `setter` writes it - the same widget drives a track's `volume` and
+## the main clip's `main_volume`. Left side deliberately: the right corner sits under
+## the floating assistant chat button. `icon` shows the one-time speaker-glyph hint -
+## reserved for the main clip's own knob only (see VolumeKnob.show_icon).
+func _volume_knob(getter: Callable, setter: Callable, accent: Color, icon: bool = false) -> VolumeKnob:
+	var k := VolumeKnob.new()
+	k.accent = accent
+	k.show_icon = icon
+	k.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	# offset_left starts past TrackLane._EDGE_W (8px): the primary lane's own trim/fade
+	# "in" handles sit at local x0 = 0 (its offset is always 0, and the default view
+	# starts at t=0 too), so a knob planted right at the corner silently ate every click
+	# meant for that edge - "drag the left edge" looked broken specifically on the main
+	# track, since only ITS x0 is pinned to 0 - see feedback/0017.
+	k.offset_left = 12
+	k.offset_top = 2
+	k.offset_right = 34
+	k.offset_bottom = 20
+	k.get_v = getter
+	k.set_v = func(v):
+		setter.call(v)
+		_mark_dirty()   # cheap + debounced (autosave cooldown), fine to fire while pulling
+	return k
 
 
-func _select_marker(m: Dictionary) -> void:
-	_selected = m
-	_select_generation += 1   # a new marker's edits must never coalesce with the last one's
-	_timeline.selected = m
-	_refresh_panel()
+## Master-timeline seconds a dragged clip should snap its start/end to: 0, the playhead,
+## the primary clip's end, and every OTHER clip's start and end. exclude_i is the lane
+## doing the dragging (-1 = the primary), so a clip never snaps to itself.
+func _snap_targets_for(exclude_i: int) -> Array:
+	var targets := [0.0, session.effective_clip_out()]
+	if _player != null:
+		targets.append(_player.stream_position)
+	for j in session.tracks.size():
+		if j == exclude_i:
+			continue
+		var t: Dictionary = session.tracks[j]
+		var o := float(t.get("offset", 0.0))
+		var span := float(t.get("clip_out", 0.0)) - float(t.get("clip_in", 0.0))
+		targets.append(o)
+		targets.append(o + span)
+	return targets
 
 
-## Wire every popup under `n` into the modal counter, once, at build time.
-## Walks rather than naming them so a control added later is covered for free -
-## the cursor bug this exists for was reported on the color picker, but every
-## dropdown in the panel had exactly the same hole.
-func _guard_popups(n: Node) -> void:
-	var p: Popup = null
-	if n is ColorPickerButton:
-		p = (n as ColorPickerButton).get_popup()
-	elif n is OptionButton:
-		p = (n as OptionButton).get_popup()
-	elif n is MenuButton:
-		p = (n as MenuButton).get_popup()
-	if p != null and not p.about_to_popup.is_connected(_on_modal_open):
-		p.about_to_popup.connect(_on_modal_open)
-		p.popup_hide.connect(_on_modal_close)
-	for c in n.get_children():
-		_guard_popups(c)
+# --- the panel: its controls, kept to the selected marker -----------------------------------------
 
 
-func _on_modal_open() -> void:
-	_modal_depth += 1
-	_cursor_idle_t = 0.0
-	# Show it immediately rather than waiting for the next frame's elif: the
-	# click that opens a picker is the same gesture that needs to keep aiming.
-	if Input.mouse_mode == Input.MOUSE_MODE_HIDDEN:
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+func _build_panel() -> void:
+	# THE FRAMEWORK'S PANEL (2026-10-06, the user: Masking "doesn't inherit the panel UI or styling...
+	# we need to work on bringing it into the framework, proper"): a [SidePanel] like every other
+	# note's, with "‹ Notes", the note's title and its "⋯" on top, a chip per card, and three cards -
+	# the Clip, the Effect (the marker's key color, effect and options: ONE flat, sortable list, never
+	# titled groups - feedback 0011) and the Markers, PINNED under the rest as the ramp/damp list always was,
+	# so the whole manage-markers workflow stays in view however far the options are scrolled.
+	_panel = SidePanel.new(PANEL_W)
+	_panel.title = "Masking"
+	_panel.card_prefix = "masking"
+	_note_detach(_panel)
+	_chrome_host().add_child(_panel)
+	_panel.body.add_theme_constant_override("separation", 8)
+	_panel.pin_header(_header_row())
+	var chips := CardRow.new()
+	_panel.body.add_child(chips)
+	_panel.card_row = chips
+	var clip: VBoxContainer = _panel.add_card("clip", "Clip", &"picture", "clip")
+	var clip_name := Label.new()
+	clip_name.text = _clip_name()
+	clip_name.tooltip_text = String(session.source_path if not session.source_path.is_empty() else session.video_path)
+	clip_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	clip_name.add_theme_font_size_override("font_size", 14)
+	clip.add_child(clip_name)
+
+	# Two buttons here: Help and Import track. Everything ELSE that used to
+	# be a button (play, view cycle, peek, undo, redo) was pure duplication of
+	# a key and moved to the keyboard + the help overlay. Import stayed a
+	# button on purpose: it's the ONE action with no on-screen equivalent and
+	# no way to discover (a hidden T shortcut is exactly the "I don't see a
+	# clear way to do this" complaint - a keyboard-only import that also
+	# depends on nothing having eaten the keystroke is not good enough for the
+	# single essential action). Both a visible button AND the T key now.
+	var tools := HBoxContainer.new()
+	tools.add_theme_constant_override("separation", 6)
+	clip.add_child(tools)
+	var import_btn := Button.new()
+	import_btn.text = "⬆ Track"
+	import_btn.tooltip_text = "Import a second video as a picture-in-picture track (T)"
+	import_btn.focus_mode = Control.FOCUS_NONE
+	import_btn.pressed.connect(_prompt_import_track)
+	tools.add_child(import_btn)
+	var help_btn := Button.new()
+	help_btn.text = "?  Help"
+	help_btn.tooltip_text = "Keyboard map (F1)"
+	help_btn.focus_mode = Control.FOCUS_NONE
+	help_btn.pressed.connect(_toggle_help)
+	tools.add_child(help_btn)
+	var col := clip
+
+	var time_row := HBoxContainer.new()
+	time_row.add_theme_constant_override("separation", 10)
+	col.add_child(time_row)
+	_time_label = Label.new()
+	_time_label.add_theme_font_size_override("font_size", 15)
+	_time_label.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	time_row.add_child(_time_label)
+	_view_label = Label.new()
+	_view_label.add_theme_font_size_override("font_size", 13)
+	_view_label.add_theme_color_override("font_color", Color(0.6, 0.68, 0.8))
+	time_row.add_child(_view_label)
+	_build_help_overlay()
+
+	# One channel by default (a channel = one target color + one effect + one
+	# strength); the second is opt-in behind a toggle. Channels are independent
+	# layers in the shader, not competing "sides" - so there's no swap control any
+	# more either (swapping meant something when every pixel was forced to one side
+	# or the other; independent channels just re-pick their own colors).
+	col = _panel.add_card("effect", "Effect", &"look")
+	_grp_color = VBoxContainer.new()
+	_grp_color.add_theme_constant_override("separation", 8)
+	col.add_child(_grp_color)
+	_key_color_label = _label("Key color", "The color this channel targets - what it keys or paints")
+	_grp_color.add_child(_key_color_label)
+	_color_a = ColorPickerButton.new()
+	_color_a.focus_mode = Control.FOCUS_NONE
+	_color_a.custom_minimum_size = Vector2(0, 40)
+	_color_a.edit_alpha = false
+	_color_a.tooltip_text = "The color this channel targets - what it keys or paints. " + \
+		"The HUE is what gets matched; the swatch keeps the rest of your pick so you " + \
+		"can see which color off the footage you chose"
+	# Three fields, one pick - the same shape as the repaint picker below. Only the
+	# HUE is keyed on; the other two exist so the swatch you get back is the swatch
+	# you set (see MaskSession's key_sat/key_val).
+	_color_a.color_changed.connect(func(c):
+		_edit("hue_a", c.h)
+		_edit("key_sat", c.s)
+		_edit("key_val", c.v))
+	_grp_color.add_child(_color_a)
+	col.add_child(_label("Effect", "Which visual treatment this layer applies"))
+	_effect_a = _effect_menu(col, func(id): _edit("effect_a", float(id)))
+
+	# Every option below - this channel's grading through this effect's own
+	# pattern/echo/weather/tendril knobs - lives in one flat, sortable list instead
+	# of fixed titled groups (see feedback/0011: the group boundaries were drawn as
+	# separator lines that "made no sense" and just ate space). Which rows are
+	# actually visible still follows the selected effect exactly as before
+	# (MaskSession.EFFECT_CONTROLS / PATTERN_KNOBS, see _update_effect_controls) -
+	# only their ON-SCREEN ORDER is now driven by _sort_mode. _sort_dropdown picks
+	# it directly - same shape as the Effect dropdown just above; see _apply_sort.
+	var sort_tip := "How the options below are ordered - alphabetical (either " + \
+		"direction), or energy: the fullest slider floats to the top, pick-type " + \
+		"options with no slider sink to the bottom (A → Z among themselves)"
+	col.add_child(_label("Sort", sort_tip))
+	_sort_dropdown = OptionButton.new()
+	_sort_dropdown.focus_mode = Control.FOCUS_NONE
+	_sort_dropdown.tooltip_text = sort_tip
+	for i in _SORT_MODES.size():
+		_sort_dropdown.add_item(_SORT_MODES[i], i)
+	_sort_dropdown.select(_sort_mode)
+	_sort_dropdown.item_selected.connect(func(id):
+		_sort_mode = id
+		_apply_sort())
+	col.add_child(_sort_dropdown)
+
+	_grp_options = VBoxContainer.new()
+	_grp_options.add_theme_constant_override("separation", 8)
+	col.add_child(_grp_options)
+
+	_intensity_a = _slider(_grp_options, "Strength", 0.0, 1.0, func(v): _edit("intensity_a", v),
+		"How strongly this layer's effect applies")
+	_intensity_label = _intensity_a.get_meta("field_label")
+	_register_option(_intensity_a)
+	# Morph: its OWN field (fx_tint), deliberately decoupled from the color
+	# picker above. The old "Hue" slider was a second widget on hue_a and the
+	# linkage read as a bug ("changing hue changes the picker too") - now the
+	# picker says what to MASK and this says what color the drawn effect
+	# becomes (a palette hue rotation; 0 = the effect's natural colors).
+	_hue_a = _slider(_grp_options, "Morph", 0.0, 1.0, func(v):
+		_edit("fx_tint", v),
+		"Rotates this effect's own palette hue - 0 keeps its natural colors")
+	_register_option(_hue_a)
+
+	# Option rows, shown per the selected effect's needs (the control hierarchy,
+	# MaskSession.EFFECT_CONTROLS): a slider that does nothing for the current
+	# effect is not on screen for it. Erase shows none of these (projection is
+	# gate-free); restore shows only the threshold, relabeled as its reach;
+	# the volumetrics show everything. See _update_effect_controls.
+	_threshold = _slider(_grp_options, "Threshold", 0.0, 1.0, func(v): _edit("threshold", v),
+		"How far a pixel's hue may drift from the key color and still be masked")
+	_threshold_label = _threshold.get_meta("field_label")
+	_register_option(_threshold)
+
+	_feather = _slider(_grp_options, "Feather", 0.0, 0.5, func(v): _edit("feather", v),
+		"Softness of the mask's edge - 0 is a hard cutoff")
+	_register_option(_feather)
+	_sat_floor = _slider(_grp_options, "Min colorfulness", 0.0, 1.0, func(v): _edit("sat_floor", v),
+		"Minimum saturation a pixel needs before it can be keyed at all")
+	_register_option(_sat_floor)
+
+	# The wisp field's placement - pan/zoom the pattern over the frame (keyframe a
+	# tendril onto an eye), and dial its coverage from one wisp to an engulfing.
+	# All continuous marker fields, so they blend through ramps/damps.
+	_fx_x = _slider(_grp_options, "Pan X", -2.0, 2.0, func(v): _edit("fx_x", v),
+		"Shifts the pattern horizontally over the frame")
+	_fx_x.step = 0.01
+	_fx_x_label = _fx_x.get_meta("field_label")
+	_register_option(_fx_x)
+	_fx_y = _slider(_grp_options, "Pan Y", -2.0, 2.0, func(v): _edit("fx_y", v),
+		"Shifts the pattern vertically over the frame")
+	_fx_y.step = 0.01
+	_fx_y_label = _fx_y.get_meta("field_label")
+	_register_option(_fx_y)
+	_fx_scale = _slider(_grp_options, "Scale", 0.1, 8.0, func(v): _edit("fx_scale", v),
+		"Zoom of the effect's pattern - 1 is nominal size")
+	_fx_scale.exp_edit = true
+	_register_option(_fx_scale)
+	_fx_density = _slider(_grp_options, "Coverage", 0.0, 1.0, func(v): _edit("fx_density", v),
+		"How much of the keyed region the pattern consumes - 0 untouched, 1 fully devoured")
+	_fx_density_label = _fx_density.get_meta("field_label")
+	_register_option(_fx_density)
+	_fx_contrast = _slider(_grp_options, "Contrast", 0.0, 1.0, func(v): _edit("fx_contrast", v),
+		"Edge hardness of the pattern - 0.5 is neutral")
+	_fx_contrast_label = _fx_contrast.get_meta("field_label")
+	_register_option(_fx_contrast)
+	_fx_speed = _slider(_grp_options, "Velocity", 0.1, 4.0, func(v): _edit("fx_speed", v),
+		"Speed multiplier for the pattern's motion")
+	_fx_speed.exp_edit = true
+	_register_option(_fx_speed)
+	_resonance = _slider(_grp_options, "Resonance", 0.0, 1.0, func(v): _edit("resonance", v),
+		"Audio drive - how strongly this layer reacts to the track's live energy")
+	_register_option(_resonance)
+
+	_fx_lag = _slider(_grp_options, "Lag (s)", 0.05, 2.4, func(v): _edit("fx_lag", v),
+		"How far back the lagged frame reaches")
+	_fx_lag.exp_edit = true
+	_fx_lag_label = _fx_lag.get_meta("field_label")
+	_register_option(_fx_lag)
+	_fx_smooth = _slider(_grp_options, "Smoothing", 0.0, 1.0, func(v): _edit("fx_smooth", v),
+		"Stutter → smear: 0 is a discrete stutter, 1 is a wide temporal blend")
+	_register_option(_fx_smooth)
+
+	# Snow's own view onto fx_smooth - a separate widget from Smoothing above (same
+	# stored field, different meaning; the two rows never show together, see
+	# _update_effect_controls, so there's no risk of them fighting over what the
+	# slider looks like).
+	_gust = _slider(_grp_options, "Gust", 0.0, 1.0, func(v): _edit("fx_smooth", v),
+		"0 is a steady drift, 1 is chaotic gusts")
+	_register_option(_gust)
+
+	# Fur's tendril dynamics - fur-only views onto fx_smooth/fx_lag, the same
+	# stored-field reuse as Gust above (the rows never show together, see
+	# _update_effect_controls).
+	_undul = _slider(_grp_options, "Undulation", 0.0, 1.0, func(v): _edit("fx_smooth", v),
+		"Traveling waves along each strand")
+	_register_option(_undul)
+	_coil = _slider(_grp_options, "Coil", 0.0, 1.0, func(v): _edit("fx_lag", v),
+		"Eddies and spiral curl")
+	_register_option(_coil)
+	# Stickiness - 0 keeps today's free coat exactly; higher values thin the strands
+	# away from natural anchors so the hair clings to the keyed surface, the tracked
+	# landmark/motion centroid, and brighter regions (see the shader's fur branch).
+	_bleed = _slider(_grp_options, "Bleed", 0.0, 1.0, func(v): _edit("fx_smooth", v),
+		"How far each feature's paint may spread from the anatomy it found, and " +
+		"how much it softens as it travels")
+	_register_option(_bleed)
+	_settle = _slider(_grp_options, "Settle", 0.0, 1.0, func(v): _edit("fx_lag", v),
+		"How sticky the paint is in time - higher holds its shape through " +
+		"detection wobble (steadier, a touch slower to follow)")
+	_register_option(_settle)
+	# The clown's TRACKING knobs, as opposed to its look knobs above. The face
+	# model is a blob fitter, not a landmark detector, and how well it holds is a
+	# property of the footage as much as of the code - so the two smoothing rates,
+	# the prediction, and how literally the picture is trusted are the author's to
+	# set per clip. All four default to exactly what the constants they replaced
+	# used to be.
+	# THE CLOWN'S SHAPE KNOBS. What used to be Steady/Firm/Lead - three controls
+	# for smoothing a detector that no longer needs smoothing. The landmark track
+	# gives measured outlines, so what the effect was actually missing was a say
+	# over how far those outlines get pushed past the face they came from.
+	_clown_eye_sl = _slider(_grp_options, "Eye size", 0.0, 1.0,
+		func(v): _edit("threshold", v),
+		"How far the black grows past the eye it is painted on. It keeps the eye's " +
+		"own shape whatever the size - it is that eye, bigger, not a bigger circle")
+	_register_option(_clown_eye_sl)
+	_clown_drip_sl = _slider(_grp_options, "Drip", 0.0, 1.0,
+		func(v): _edit("sat_floor", v),
+		"How far the eye black runs DOWN the cheek. It leaves the lash line's own " +
+		"lower-outer corner - measured off the patch that is actually painted - so " +
+		"it reads as liner running rather than a shape stuck underneath")
+	_register_option(_clown_drip_sl)
+	_clown_smudge_sl = _slider(_grp_options, "Smudge", 0.0, 1.0,
+		func(v): _edit("swap", v),
+		"How far the eye black is RUBBED past its own outline, and how softly it " +
+		"ends - someone who has been crying and worrying at it, rather than a shape " +
+		"with an edge. It thins away over a band instead of stopping, and reaches " +
+		"further out in some places than others. 0 is already soft: a hard edge is " +
+		"not a setting, it is the polygon showing")
+	_register_option(_clown_smudge_sl)
+	_clown_drip_w_sl = _slider(_grp_options, "Drip width", 0.0, 1.0,
+		func(v): _edit("fx_y", v),
+		"How heavy the run is where it leaves the eye. A fraction of THIS eye's " +
+		"own width, so it stays in proportion however far Eye size has grown the " +
+		"patch. 0 is a lean streak; wound up it is a smear")
+	_register_option(_clown_drip_w_sl)
+	_clown_drip_curve_sl = _slider(_grp_options, "Drip curve", 0.0, 1.0,
+		func(v): _edit("intensity_b", v),
+		"How far the run bows OUTWARD as it falls - down the outside of the cheek " +
+		"rather than straight past the nose. The bow grows with distance, so the " +
+		"run always leaves the lash line vertically whatever this is set to")
+	_register_option(_clown_drip_curve_sl)
+	_clown_smile_sl = _slider(_grp_options, "Smile width", 0.0, 0.5,
+		func(v): _edit("feather", v),
+		"How far the painted mouth runs past the real one. At the default it IS " +
+		"the real mouth; wound up it goes Joker-wide, out toward the ears")
+	_register_option(_clown_smile_sl)
+	_clown_steady_sl = _slider(_grp_options, "Steadiness", 0.0, 1.0,
+		func(v): _edit("hue_b", v),
+		"How hard the landmark track is smoothed. The smoothing is CENTERED - it " +
+		"weighs frames on both sides of now - so it costs no lag at any setting; " +
+		"raising it only rounds off genuinely fast movement. 0 is already smoothed")
+	_register_option(_clown_steady_sl)
+	_clown_curve_sl = _slider(_grp_options, "Smile curve", 0.0, 2.0,
+		func(v): _edit("fx_speed", v),
+		"Sweeps the mouth's corners up into a grin or down into a sulk, leaving " +
+		"its middle where the lips are. 1.0 is the mouth as measured")
+	_register_option(_clown_curve_sl)
+	_clown_feather_sl = _slider(_grp_options, "Edge feather", 0.0, 1.0,
+		func(v): _edit("fx_x", v),
+		"How far the coat's outer edge fades into the picture. The silhouette is " +
+		"a hard-edged shape underneath; without this it reads as a sticker sitting " +
+		"on the face rather than paint on it")
+	_register_option(_clown_feather_sl)
+	_clown_evidence_sl = _slider(_grp_options, "Evidence", 0.0, 1.0,
+		func(v): _edit("resonance", v),
+		"How much each feature is the PICTURE rather than the outline it is drawn " +
+		"inside. At 0 a fixed share of every feature is the bare shape; raise it " +
+		"and the outline only bounds where paint may go, while the frame's own " +
+		"dark sockets and lip line decide what it actually lands on")
+	_register_option(_clown_evidence_sl)
+
+	_rain_squall = _slider(_grp_options, "Squall", 0.0, 1.0,
+		func(v): _edit("fx_smooth", v),
+		"How unsettled the weather is. Pan sets the direction the wind blows on " +
+		"AVERAGE; this is how far the sheet wanders around it and how much the " +
+		"drops scatter off each other. 0 is a still, straight downpour")
+	_register_option(_rain_squall)
+
+	# THE AUDIO GROUP. Six knobs, no color, no pattern - this effect resolves to
+	# bus parameters instead of pixels (see _apply_audio_fx).
+	_au_echo = _slider(_grp_options, "Echo", 0.0, 1.0, func(v): _edit("fx_smooth", v),
+		"How much of the sound comes back as repeats. Two taps at unrelated " +
+		"spacings, so they decay into each other instead of landing as one slap")
+	_register_option(_au_echo)
+	_au_time = _slider(_grp_options, "Echo time", 0.0, 1.0, func(v): _edit("fx_lag", v),
+		"How long between repeats - a slapback at the bottom, a room at the top")
+	_register_option(_au_time)
+	_au_amb = _slider(_grp_options, "Ambience", 0.0, 1.0, func(v): _edit("fx_density", v),
+		"How wet the sound is - how much of what you hear arrived by reflection")
+	_register_option(_au_amb)
+	_au_room = _slider(_grp_options, "Room", 0.0, 2.0, func(v): _edit("fx_scale", v),
+		"How BIG that space is, which is a different question from how wet it is - " +
+		"a big dry room and a small wet one sound nothing alike")
+	_register_option(_au_room)
+	_au_reso = _slider(_grp_options, "Resonance", 0.0, 1.0, func(v): _edit("fx_contrast", v),
+		"How much the repeats and the room ring rather than simply fading - it " +
+		"darkens the tail so it reads as a space, not as a copy")
+	_register_option(_au_reso)
+	_au_bass = _slider(_grp_options, "Bass punch", 0.0, 1.0, func(v): _edit("fx_stick", v),
+		"Weight AND attack together: it lifts the bottom two bands and compresses " +
+		"underneath them, because punchy is not more bass - it is bass whose " +
+		"transient survives. Lifting the bottom alone only makes a mix muddy")
+	_register_option(_au_bass)
+	_hollow = _slider(_grp_options, "Hollow", 0.0, 1.0, func(v): _edit("fx_stick", v),
+		"Paint AROUND the eyes and mouth instead of over them - opens over a " +
+		"visible eyeball or teeth, closes again on a blink or a shut mouth")
+	_register_option(_hollow)
+	_stick = _slider(_grp_options, "Stickiness", 0.0, 1.0, func(v): _edit("fx_stick", v),
+		"0 is a free coat, 1 clings to the face/motion")
+	_register_option(_stick)
+	# Umbra's own three - the same stored fields fur/snow/clown reuse under
+	# their own names (the groups never show together, so no schema growth).
+	_wisp = _slider(_grp_options, "Wisp", 0.0, 1.0, func(v): _edit("fx_smooth", v),
+		"How readily essence tears off the top of the mass and rises away, " +
+		"like smoke leaving a fire")
+	_register_option(_wisp)
+	_cling = _slider(_grp_options, "Cling", 0.0, 1.0, func(v): _edit("fx_lag", v),
+		"How long the shadow-mass holds its shape - higher is heavier and " +
+		"slower to follow her, lower is thinner and more restless")
+	_register_option(_cling)
+	_umbra_depth = _slider(_grp_options, "Depth", 0.0, 1.0, func(v): _edit("fx_stick", v),
+		"How much light the mass swallows - some of the wall always survives " +
+		"inside it, so it deepens the shadow rather than cutting a hole")
+	_register_option(_umbra_depth)
+	_umbra_stand = _slider(_grp_options, "Stand", 0.0, 1.0, func(v): _edit("threshold", v),
+		"How far to the side of her the ghost stands. At the bottom it is " +
+		"almost behind her (and mostly hidden by her); wound up it steps clear " +
+		"onto the wall beside her")
+	_register_option(_umbra_stand)
+	_umbra_lead = _slider(_grp_options, "Lead", 0.0, 0.5, func(v): _edit("feather", v),
+		"How far AHEAD of her the ghost moves, in seconds. It reads the clip " +
+		"before the playhead does, so it turns its head before she turns hers " +
+		"- which is what makes it look like the thing moving her")
+	_register_option(_umbra_lead)
+	_umbra_lean = _slider(_grp_options, "Lean", 0.0, 1.0, func(v): _edit("swap", v),
+		"How far the ghost leans out along the light - upright over her at 0, " +
+		"and rearing across her as it rises at 1")
+	_register_option(_umbra_lean)
+	_umbra_narrow = _slider(_grp_options, "Narrow", 0.0, 0.75, func(v): _edit("intensity_b", v),
+		"How much taller-than-wide the ghost is drawn. Her outline squeezed " +
+		"across its own spine - a long thin thing rather than a broad one")
+	_register_option(_umbra_narrow)
+	_umbra_gaze = _slider(_grp_options, "Gaze", 0.0, 1.0, func(v): _edit("sat_floor", v),
+		"How hard the ghost's eyes burn. They sit on her own eyes, carried " +
+		"through the same throw as the rest of it, so they are always on its " +
+		"head - 0 is a faceless shadow")
+	_register_option(_umbra_gaze)
+	# The eye color needed a control of its own. hue_b was wired through to the
+	# shader but nothing could edit it, so the eyes were stuck on whatever the
+	# session happened to have stored - 0.58, cyan, for anything saved before
+	# the default changed. "Cannot change their color" was literally true.
+	var eye_lbl := _label("Eye color", "The color the ghost's eyes burn - red by default")
+	_grp_options.add_child(eye_lbl)
+	_color_eye = ColorPickerButton.new()
+	_color_eye.focus_mode = Control.FOCUS_NONE
+	_color_eye.custom_minimum_size = Vector2(0, 32)
+	_color_eye.edit_alpha = false
+	_color_eye.tooltip_text = eye_lbl.tooltip_text
+	_color_eye.set_meta("field_label", eye_lbl)
+	_color_eye.color_changed.connect(func(c): _edit("hue_b", c.h))
+	_grp_options.add_child(_color_eye)
+	_register_option(_color_eye)
+
+	# Repaint's two. The paint color is stored as three fields because a hue
+	# alone cannot say "black" - and black is the whole point of the effect's
+	# first use (a yellow wall painted out). Same field-reuse idiom as umbra's
+	# six above: fx_stick/fx_tint mean something else under other effects, and
+	# the groups never show together.
+	var paint_lbl := _label("Paint color",
+		"The color the keyed color BECOMES - a whole color, so black and white " +
+		"are both reachable. Black by default")
+	_grp_options.add_child(paint_lbl)
+	_color_paint = ColorPickerButton.new()
+	_color_paint.focus_mode = Control.FOCUS_NONE
+	_color_paint.custom_minimum_size = Vector2(0, 32)
+	_color_paint.edit_alpha = false
+	_color_paint.tooltip_text = paint_lbl.tooltip_text
+	_color_paint.set_meta("field_label", paint_lbl)
+	# Three fields, one pick. _edit creates the marker on the first call and
+	# edits it on the other two, so this is one marker, not three.
+	_color_paint.color_changed.connect(func(c):
+		_edit("hue_b", c.h)
+		_edit("fx_stick", c.s)
+		_edit("fx_tint", c.v))
+	_grp_options.add_child(_color_paint)
+	_register_option(_color_paint)
+	_paint_reach = _slider(_grp_options, "Reach", 0.0, 1.0, func(v): _edit("fx_contrast", v),
+		"How far into weakly colored pixels the paint carries - low keeps it to " +
+		"the vivid core of the color, high takes the washed-out and shadowed parts " +
+		"of the same wall with it")
+	_register_option(_paint_reach)
+	_paint_smooth = _slider(_grp_options, "Smoothing", 0.0, 1.0, func(v): _edit("fx_smooth", v),
+		"How wide the edge of the paint is averaged. Compressed video stores color " +
+		"at quarter resolution in blocks, so a boundary keyed pixel-by-pixel comes out " +
+		"blocky and crawls frame to frame - raise this until it stops. Some averaging " +
+		"always happens; this is how much")
+	_register_option(_paint_smooth)
+
+	# THE REGION - universal, not one effect's group: any layer can be confined
+	# to a box. Two panel controls (the box itself is dragged on the video, see
+	# _build_region_overlay), because a color key cannot separate two things
+	# that are the same color and position can.
+	# A label of its own even though the checkbox carries text: every row here is
+	# a (label, control) pair and _apply_sort re-orders them two children at a
+	# time, so a control without one desynchronizes the whole list.
+	var region_lbl := _label("Region",
+		"Confine this layer to a box you drag on the video - for when the color " +
+		"you want gone and the color you want kept are the SAME color, and only " +
+		"their position tells them apart. For the clown it also tells the face " +
+		"detector WHERE TO LOOK, which is the fastest cure for a mask that has " +
+		"latched onto a wall the color of skin")
+	_grp_options.add_child(region_lbl)
+	_region_on = CheckBox.new()
+	_region_on.text = "Limit to a box"
+	_region_on.focus_mode = Control.FOCUS_NONE
+	_region_on.tooltip_text = region_lbl.tooltip_text
+	_region_on.set_meta("field_label", region_lbl)
+	_region_on.toggled.connect(_region.on_toggled)
+	_grp_options.add_child(_region_on)
+	_register_option(_region_on)
+	_region_soft = _slider(_grp_options, "Region edge", 0.0, 1.0,
+		func(v): _edit("reg_soft", v),
+		"How gradually the layer fades out at the region's border - 0 is a hard " +
+		"rectangular cut, which reads as a rectangular cut")
+	_register_option(_region_soft)
+
+	# Every marker is a ramp or a damp - there is no plain/neutral marker (see
+	# MaskSession class doc). Both transition TO this marker's values; the kind is
+	# which side of the anchor the transition occupies: a ramp eases in BEFORE,
+	# complete at the anchor; a damp begins AT the anchor and accumulates after.
+	# Lives in _grp_options (not a fixed spot below it) so it's part of the same
+	# sortable list as the effect knobs - see _apply_sort/_register_option; a
+	# pick-type control with no slider, it sorts to the bottom under Energy mode.
+	var _kind_label := _label("Kind",
+		"Which way this marker's change runs - ramp eases in before it, damp accumulates after")
+	_grp_options.add_child(_kind_label)
+	_kind = OptionButton.new()
+	_kind.focus_mode = Control.FOCUS_NONE
+	_kind.tooltip_text = "Ramp eases in before this marker; damp accumulates after it"
+	_kind.set_meta("field_label", _kind_label)
+	for i in MaskSession.MARKER_KINDS.size():
+		_kind.add_item(MaskSession.MARKER_KINDS[i].capitalize(), i)
+	_kind.item_selected.connect(func(id): _edit("kind", float(id)))
+	_grp_options.add_child(_kind)
+	_register_option(_kind)
+	# Exponential response: fine-grained fractions of a second on the left, whole
+	# minutes on the right - one slider covers a subtle 0.2s blend and a transition
+	# spanning the entire clip. (exp_edit needs a strictly positive min.)
+	_marker_duration = _slider(_grp_options, "Ramp/damp span (s)", 0.05, maxf(8.0, session.duration),
+		func(v): _edit("duration", v),
+		"How long the ramp (before) or damp (after) transition takes, in seconds")
+	_marker_duration.exp_edit = true
+	_marker_duration.step = 0.01
+	_register_option(_marker_duration)
+
+	# --- create/delete + the sequential list, pinned to the panel's bottom with its
+	# --- own scroll - the whole "manage markers" workflow stays visible together,
+	# --- rather than the create buttons living up in the scrolling edit area where
+	# --- reaching them means scrolling past everything else first.
+	var list_col: VBoxContainer = _panel.add_footer_card("markers", "Markers", &"look")
+	list_col.add_theme_constant_override("separation", 4)
+
+	_marker_label = Label.new()
+	_marker_label.add_theme_font_size_override("font_size", 12)
+	_marker_label.add_theme_color_override("font_color", Color(0.6, 0.68, 0.8))
+	_marker_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	list_col.add_child(_marker_label)
+
+	# See feedback/0019: a preview of what Ctrl+Z would revert, so undo isn't a
+	# blind guess - kept right above the buttons that create the history it
+	# describes. Populated by _refresh_history_label, driven off _undo_descs.
+	_history_label = Label.new()
+	_history_label.add_theme_font_size_override("font_size", 12)
+	_history_label.add_theme_color_override("font_color", Color(0.55, 0.6, 0.7))
+	_history_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_history_label.tooltip_text = "What Ctrl+Z would revert right now"
+	list_col.add_child(_history_label)
+	_undo.refresh_label()
+
+	var mrow := HBoxContainer.new()
+	list_col.add_child(mrow)
+	var ramp_btn := Button.new()
+	ramp_btn.text = "+ Ramp"
+	ramp_btn.tooltip_text = "Eases IN before the playhead, arriving here complete"
+	ramp_btn.focus_mode = Control.FOCUS_NONE
+	ramp_btn.pressed.connect(func(): _add_marker_at_playhead(0))
+	mrow.add_child(ramp_btn)
+	var damp_btn := Button.new()
+	damp_btn.text = "+ Damp"
+	damp_btn.tooltip_text = "Begins here and accumulates over the span that follows"
+	damp_btn.focus_mode = Control.FOCUS_NONE
+	damp_btn.pressed.connect(func(): _add_marker_at_playhead(1))
+	mrow.add_child(damp_btn)
+	var del_btn := Button.new()
+	del_btn.text = "Delete"
+	del_btn.focus_mode = Control.FOCUS_NONE
+	del_btn.pressed.connect(_delete_selected)
+	mrow.add_child(del_btn)
+
+	# The marker list's header, and beside it the switch for whether playback drags
+	# the SELECTION along with it (see _process). It lives here rather than in the
+	# options panel because it is about the list, not about a marker - nothing it
+	# does is stored on one.
+	var order_row := HBoxContainer.new()
+	# THE LABEL TAKES THE SLACK, not a spacer beside it. Every label here
+	# word-wraps (see _label - it is what stops a long one widening the whole
+	# panel), and a wrapping label's minimum width is tiny. Put an expanding
+	# spacer next to one in an HBox and the label is squeezed to that minimum,
+	# which renders "In order" as a column of single letters and makes the row as
+	# tall as the text is long. Letting the label expand instead leaves the
+	# checkbox at its natural size on the right and the text on one line.
+	var order_lbl := _label("In order")
+	order_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	order_row.add_child(order_lbl)
+	_follow_playhead = CheckBox.new()
+	_follow_playhead.text = "Follow"
+	# REMEMBERED ACROSS SESSIONS, in user://ghost.cfg rather than in the session
+	# JSON. It is a preference about how the EDITOR behaves - the same reason it
+	# sits by the list header and not in the options panel - so it belongs beside
+	# the other per-user settings; storing it on the session would mean opening
+	# somebody else's work silently switched it back.
+	_follow_playhead.set_pressed_no_signal(_face.load_follow())
+	_follow_playhead.toggled.connect(_face.save_follow)
+	_follow_playhead.focus_mode = Control.FOCUS_NONE
+	_follow_playhead.tooltip_text = "Select each marker as the playhead reaches it. " + \
+		"On, scrubbing a session walks you through it without clicking every flag; " + \
+		"OFF, the selection stays where you put it - which is what you want while " + \
+		"tuning one marker's knobs during playback, since otherwise the next marker " + \
+		"steals the panel mid-adjustment"
+	order_row.add_child(_follow_playhead)
+	list_col.add_child(order_row)
+	var list_scroll := ScrollContainer.new()
+	list_scroll.custom_minimum_size = Vector2(0, 150)
+	list_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	list_col.add_child(list_scroll)
+
+	_marker_list = VBoxContainer.new()
+	_marker_list.add_theme_constant_override("separation", 2)
+	_marker_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list_scroll.add_child(_marker_list)
 
 
-func _on_modal_close() -> void:
-	_modal_depth = maxi(0, _modal_depth - 1)
-	_cursor_idle_t = 0.0
+## `tip` is the full explanation shown on mouse-over (Godot's native tooltip) -
+## labels themselves stay short so the panel reads clean; see the feedback that
+## drove this (0005): inline "Label - long explanation" text was the ambiguity
+## complaint, not just missing descriptions.
+func _label(text: String, tip: String = "") -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", 12)
+	l.add_theme_color_override("font_color", Color(0.6, 0.68, 0.8))
+	# A long, unwrapped label's natural width becomes the whole column's minimum
+	# width - that's exactly what pushed the panel wider than PANEL_W and over the
+	# timeline (a real bug: "no marker selected..." is longer than most other panel
+	# text, so it only showed up after deleting one). Word-wrap caps the minimum to
+	# the longest WORD instead of the longest sentence.
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.mouse_filter = Control.MOUSE_FILTER_PASS   # let the tooltip trigger over the label itself
+	l.tooltip_text = tip
+	return l
+
+
+func _slider(col: VBoxContainer, text: String, lo: float, hi: float, cb: Callable, tip: String = "") -> HSlider:
+	var lbl := _label(text, tip)
+	col.add_child(lbl)
+	var s := HSlider.new()
+	# Remember the label so a single knob (label + slider) can be hidden together
+	# when the effect doesn't consume it - see _show_field / _update_effect_controls.
+	s.set_meta("field_label", lbl)
+	s.focus_mode = Control.FOCUS_NONE
+	# The wheel belongs to the panel's ScrollContainer, never to a slider you
+	# happen to pass over on the way down - the panel is long enough now that
+	# scrolling it drags random knobs (and silently edits the marker under
+	# them). Drag-only.
+	s.scrollable = false
+	s.min_value = lo
+	s.max_value = hi
+	s.step = (hi - lo) / 200.0
+	s.tooltip_text = tip   # hovering the slider itself explains it too, not just the label above
+	s.value_changed.connect(cb)
+	col.add_child(s)
+	return s
+
+
+## Show/hide one knob - the slider AND the label above it (stored on the slider
+## by _slider, or passed for the hand-built pattern rows). Used to prune pattern
+## knobs an effect doesn't read (MaskSession.PATTERN_KNOBS).
+func _show_field(slider: Control, vis: bool, label: Control = null) -> void:
+	if slider != null:
+		slider.visible = vis
+	var lbl: Variant = label
+	if lbl == null and slider != null and slider.has_meta("field_label"):
+		lbl = slider.get_meta("field_label")
+	if lbl != null:
+		(lbl as Control).visible = vis
+
+
+## Registers a slider or pick-type control (label stashed via set_meta, either by
+## _slider or by hand for non-Range controls like an OptionButton) into the flat
+## sortable list - see _apply_sort.
+func _register_option(ctrl: Control) -> void:
+	_options.append({"label": ctrl.get_meta("field_label"), "control": ctrl})
+
+
+## Re-orders _options within _grp_options per the active sort mode: alphabetical by
+## each row's CURRENT label text (which itself changes per effect - e.g. Contrast ->
+## Sensitivity for snow), or "energy" - how wide each slider's fill currently reads,
+## fullest first (see _option_energy). Pick-type controls with no slider (e.g. Kind)
+## have no fill to compare, so they sink below every slider and break ties alphabetically
+## among themselves. Hidden rows (this effect doesn't use them) are left trailing after
+## the visible ones - their order doesn't matter, they're off screen. Re-run whenever
+## the effect/visibility changes (_update_effect_controls) or a mode is picked in
+## _sort_dropdown - never on a live drag, so a slider never jumps out from under the
+## mouse mid-edit.
+func _apply_sort() -> void:
+	if _grp_options == null:
+		return
+	var shown: Array = _options.filter(func(o): return o.control.visible)
+	var hidden: Array = _options.filter(func(o): return not o.control.visible)
+	match _sort_mode:
+		1:
+			shown.sort_custom(func(a, b): return a.label.text.nocasecmp_to(b.label.text) > 0)
+		2:
+			shown.sort_custom(func(a, b):
+				var ea: float = _option_energy(a.control)
+				var eb: float = _option_energy(b.control)
+				if ea == eb:
+					return a.label.text.nocasecmp_to(b.label.text) < 0
+				return ea > eb)
+		_:
+			shown.sort_custom(func(a, b): return a.label.text.nocasecmp_to(b.label.text) < 0)
+	var idx := 0
+	for o in shown + hidden:
+		_grp_options.move_child(o.label, idx)
+		idx += 1
+		_grp_options.move_child(o.control, idx)
+		idx += 1
+
+
+## How "present" a control's current value is, for the "Energy" sort mode. For a
+## slider this is its actual fill fraction - the handle's position between the
+## track's left and right ends, min at 0 and max at 1 - matching the bar you
+## actually see, so a slider barely nudged off its floor reads as low energy even
+## if that floor sits far from the range's midpoint. Range.get_as_ratio() (rather
+## than a hand-rolled linear (value-min)/span) is what makes this match what's on
+## screen for the exp_edit sliders (Scale/Velocity/Lag/Ramp-damp span): those are
+## drawn on a logarithmic track, so a linear fraction would read a handle sitting
+## visibly right-of-center as barely-there. Pick-type controls with no slider (not
+## a Range, e.g. Kind's OptionButton) have nothing to compare, so they return a
+## sentinel below any real slider value - see _apply_sort, where that sinks them to
+## the bottom and falls back to alphabetical among themselves.
+func _option_energy(ctrl: Control) -> float:
+	if not (ctrl is Range):
+		return -1.0
+	return (ctrl as Range).get_as_ratio()
+
+
+func _effect_menu(col: VBoxContainer, cb: Callable) -> OptionButton:
+	var ob := OptionButton.new()
+	ob.focus_mode = Control.FOCUS_NONE
+	ob.tooltip_text = "Which visual treatment this layer applies"
+	for i in MaskSession.MASK_EFFECTS.size():
+		ob.add_item(MaskSession.MASK_EFFECTS[i], i)
+	ob.item_selected.connect(cb)
+	col.add_child(ob)
+	return ob
 
 
 func _refresh_panel() -> void:
@@ -4983,7 +4238,7 @@ func _refresh_panel_inner() -> void:
 	_region_soft.set_value_no_signal(float(m.get("reg_soft", 0.0)))
 	_resonance.set_value_no_signal(float(m.get("resonance", 0.0)))
 	_update_effect_controls(int(m.get("effect_a", 0)))
-	_sync_region_overlay()   # selection changed - the box follows the marker
+	_region.sync()   # selection changed - the box follows the marker
 	_refresh_marker_label()
 
 
@@ -5168,6 +4423,193 @@ func _update_effect_controls(effect_id: int) -> void:
 	_apply_sort()   # visibility/labels just changed - re-rank the now-current set (see _apply_sort)
 
 
+func _toggle_help() -> void:
+	if _help_panel != null:
+		_help_panel.visible = not _help_panel.visible
+
+
+## The keyboard map, centered over the video (F1 / the panel's one Help
+## button). This is where the buttons went: everything the old toolbar did is
+## a key now, and this overlay is how anyone who never learned the shortcuts
+## finds them. Keep in sync with _unhandled_input.
+func _build_help_overlay() -> void:
+	_help_panel = PanelContainer.new()
+	_help_panel.visible = false
+	_help_panel.z_index = 40
+	var hm := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		hm.add_theme_constant_override("margin_" + side, 20)
+	_help_panel.add_child(hm)
+	var hv := VBoxContainer.new()
+	hv.add_theme_constant_override("separation", 7)
+	hm.add_child(hv)
+	var ht := Label.new()
+	ht.text = "Keyboard"
+	ht.add_theme_font_size_override("font_size", 18)
+	hv.add_child(ht)
+	for pair in [
+		["Space", "play / pause"],
+		["V", "cycle view - raw → PiP (raw) → PiP (fx) → both → full fx"],
+		["P (hold)", "peek raw footage - display only, edits nothing"],
+		["T", "import a second video track (picture-in-picture)"],
+		["Ctrl+Z", "undo"],
+		["Ctrl+Shift+Z", "redo (also Ctrl+Y)"],
+		["`", "feedback console"],
+		["F11", "fullscreen"],
+		["F1", "this help (Esc closes it)"],
+	]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 14)
+		var kl := Label.new()
+		kl.text = pair[0]
+		kl.custom_minimum_size = Vector2(130, 0)
+		kl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
+		row.add_child(kl)
+		var dl := Label.new()
+		dl.text = pair[1]
+		dl.add_theme_color_override("font_color", Color(0.78, 0.84, 0.94))
+		row.add_child(dl)
+		hv.add_child(row)
+	hv.add_child(HSeparator.new())
+	for note in [
+		"Timeline - click/drag scrubs · drag markers to move them · Ctrl+scroll zooms at the cursor, plain scroll pans when zoomed · drag clip/track edges to trim",
+		"Editing - touching any knob plants a ramp at the playhead if nothing is selected · sliders are drag-only, the wheel always scrolls the panel",
+	]:
+		var nl := Label.new()
+		nl.text = note
+		nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		nl.custom_minimum_size = Vector2(560, 0)
+		nl.add_theme_font_size_override("font_size", 12)
+		nl.add_theme_color_override("font_color", Color(0.6, 0.68, 0.8))
+		hv.add_child(nl)
+	# Centered over the VIDEO side, not the whole window (the wrapper starts
+	# at PANEL_W so the box doesn't sit half-under the left panel). The
+	# wrapper ignores the mouse; the box itself still catches its own clicks.
+	var wrap := CenterContainer.new()
+	wrap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	wrap.offset_left = VIDEO_LEFT
+	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(wrap)
+	wrap.add_child(_help_panel)
+
+
+# --- the status line ------------------------------------------------------------------------------
+# Shared bottom-right notification: prep progress AND export progress use the
+# same label, same position - one status line, whatever phase produced it.
+
+
+func _build_status_label() -> void:
+	_status = Label.new()
+	_status.name = "MaskStatus"
+	_status.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	# Right edge clears the console's >_ slot (-156..-116, see console.gd).
+	_status.offset_left = -592
+	_status.offset_top = -64
+	_status.offset_right = -160
+	_status.offset_bottom = -28
+	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_status.visible = false
+	# Built before the chrome/timeline exist (see the doc comment on the _status
+	# var) so prep messages show pre-session; once the chrome IS built, MaskTimeline's
+	# near-opaque background (mask_timeline.gd's _draw) is added afterward and, being
+	# a later sibling, painted over this label - silently swallowing every status this
+	# label ever shows for the rest of the session (export progress included; feedback
+	# 0026). z_index keeps it on top regardless of what gets added later.
+	_status.z_index = 5
+	add_child(_status)
+
+
+func _set_status(text: String) -> void:
+	if _status == null:     # render_mode never builds it - status there is stdout only
+		print("ghost mask: ", text)
+		return
+	_status.text = text
+	_status.visible = true
+
+
+# --- markers: planted, edited, selected -----------------------------------------------------------
+
+
+## Every panel edit targets the selected marker; if none is selected yet, planting
+## one at the current playhead is the edit's first move (a knob you touch becomes a
+## marker - no separate "create" step needed for the common case). Defaults to a
+## ramp when auto-created this way; press +Damp explicitly for the other kind.
+func _edit(field: String, value: float) -> void:
+	if _syncing:
+		return   # a programmatic panel repaint, not the user - see _refresh_panel
+	var m: Variant = _selected
+	var created := false
+	if m == null:
+		_undo.push("", "created a marker")   # about to create one - always its own boundary
+		m = session.add_marker(_player.stream_position if _player != null else 0.0)
+		_selected = m
+		_select_generation += 1
+		created = true
+	else:
+		_undo.push("marker:%d:%s" % [_select_generation, field], "adjusted %s" % field.capitalize())
+	m[field] = value
+	# Assigning a drawing effect to a marker whose OWN view shows no fx surface is
+	# a silent foot-gun: the layer holds forever but this marker's view hides it -
+	# "I configured fire and nothing shows" (a real session lost its fire exactly
+	# this way: the view button had been cycled to Raw on the same marker). Bump
+	# the view to the nearest fx-showing mode, preserving the surface choice:
+	# raw -> masked, pip_raw -> pip. Never behind the user's back on an unrelated
+	# knob, and never for restore/clear (they draw nothing of their own).
+	#
+	# THE HOLE THIS USED TO HAVE, and it swallowed a whole session: the bump fired
+	# only on effect_a/intensity_a, but a marker's DEFAULT effect is already erase
+	# and its default strength is already 1.0 - so anyone whose first move is the
+	# color picker (the natural first move: "erase THIS color") never touches
+	# either field, and the marker they just minted was born at view_mode raw,
+	# which renders no shader pass at all. The effect was configured, saved and
+	# completely invisible, and looked exactly like the effect being broken.
+	# So a marker MINTED by a panel touch bumps too, whichever knob minted it -
+	# it cannot have a deliberate view choice yet, it only has the inherited one.
+	# Deliberately NOT widened to hue_a on an EXISTING marker: view_mode 2 on one
+	# of those may be a raw checkpoint (the rebase - see MaskSession's class doc),
+	# and quietly un-raw-ing a checkpoint because its color was adjusted would
+	# break the layer window it exists to close.
+	if created or field == "effect_a" or field == "intensity_a":
+		var vm := int(m.get("view_mode", 2.0))
+		var eid := int(m.get("effect_a", 0))
+		var drawing: bool = eid != MaskSession.EFFECT_RESTORE \
+			and eid != MaskSession.EFFECT_CLEAR \
+			and float(m.get("intensity_a", 0.0)) > 0.0
+		if drawing and (vm == 2 or vm == 3):
+			m["view_mode"] = 1.0 if vm == 2 else 0.0
+	if field == "effect_a":
+		_update_effect_controls(int(value))
+	_timeline.selected = _selected
+	_refresh_marker_label()
+	_mark_dirty()
+
+
+func _add_marker_at_playhead(kind_id: int) -> void:
+	_undo.push("", "added a %s marker" % MaskSession.MARKER_KINDS[kind_id].capitalize())
+	_selected = session.add_marker(_player.stream_position if _player != null else 0.0, kind_id)
+	_select_generation += 1
+	_timeline.selected = _selected
+	_refresh_panel()
+	_mark_dirty()
+
+
+func _delete_selected() -> void:
+	if _selected != null:
+		_undo.push("", "deleted a marker")
+		session.remove_marker(_selected)
+		_selected = null
+		_timeline.selected = null
+		_refresh_panel()
+		_mark_dirty()
+
+
+func _select_marker(m: Dictionary) -> void:
+	_selected = m
+	_select_generation += 1   # a new marker's edits must never coalesce with the last one's
+	_timeline.selected = m
+	_refresh_panel()
+
+
 func _refresh_marker_label() -> void:
 	if _selected == null:
 		_marker_label.text = "nothing selected - editing plants a ramp here"
@@ -5201,6 +4643,134 @@ func _refresh_marker_list() -> void:
 			b.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
 		b.pressed.connect(func(): _select_marker(m))
 		_marker_list.add_child(b)
+
+
+# --- auto-save, and the reload --------------------------------------------------------------------
+
+
+func _mark_dirty() -> void:
+	_dirty = true
+	_autosave_cooldown = _AUTOSAVE_DELAY
+
+
+func _save_session() -> void:
+	if session == null or _session_path.is_empty():
+		return
+	# Once a restart has committed to quitting, _player's playback is no longer a
+	# trustworthy live read - the engine's own shutdown sequence stops it before
+	# _exit_tree runs, which reports stream_position back as 0. _restart_now already
+	# took the definitive capture right before quitting; exit's own catch-all save
+	# (below) must not re-derive playhead from a player that may already be torn
+	# down, or it silently overwrites the correct saved value with 0 (this was why
+	# a restart always landed back at the start of the timeline).
+	if _player != null and not _restarting:
+		session.playhead = _player.stream_position   # persist where the playhead is
+	if _tview != null:
+		session.timeline_zoom = _tview.zoom
+		session.timeline_view_start = _tview.view_start
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_session_path.get_base_dir()))
+	session.save(ProjectSettings.globalize_path(_session_path))
+	_dirty = false
+
+
+## Reload the app to pick up code the assistant just edited, landing back on THIS
+## session at the current playhead (both persisted, see _save_session). Standalone
+## Godot can't hot-reload GDScript, so this is a clean restart-and-restore.
+##
+## But a restart mid-flight would corrupt any OTHER assistant run still writing files,
+## so it never fires while runs are in progress: it hands the restart to the Assistant,
+## which holds it until every agent has returned, THEN restarts (see Assistant.reload_when_idle).
+##
+## Same deference applies to an export in progress (_render_state != "idle", see
+## _poll_render): quitting to restart kills the render/transcode subprocess it's waiting
+## on, losing the render (feedback/0027). Checked first, and re-checked by _poll_render
+## once the export finishes, since one can start after this was first requested.
+func _reload_requested() -> void:
+	if _render_state != "idle":
+		_reload_after_export = true
+		_set_status("⟳  Reload queued - restarting once the export in progress finishes")
+		return
+	var a := get_tree().get_first_node_in_group("assistant")
+	if a != null and a.has_method("reload_when_idle") and bool(a.call("is_busy")):
+		a.call("reload_when_idle", Callable(self, "_do_restart"))
+		_set_status("⟳  Reload queued - restarting once assistant runs finish")
+	else:
+		_do_restart()
+
+
+## The actual restart: relaunch this same executable straight back into --mask-edit on
+## the current session (so it reopens here, at the saved playhead), preserving whatever
+## engine args (--path etc.) it was launched with.
+func _do_restart() -> void:
+	_save_session()   # captures the playhead
+	if _reload_check_pid > 0:
+		return   # a check is already running - don't stack another
+	# NEVER restart into code that doesn't compile: the assistant's edit might have a
+	# syntax error, and relaunching into it would leave the app unable to open. Validate
+	# headless first (same check as src/scratchpad.py compile); _process reads the
+	# result and only then restarts, or reports the errors and stays put.
+	if not OS.has_feature("editor"):
+		_restart_now()
+		return
+	var exe := OS.get_executable_path()
+	_reload_check_log = ProjectSettings.globalize_path("user://reload_compile_check.log")
+	_reload_check_pid = Subprocess.start_logged(exe,
+		PackedStringArray(["--headless"]) + Boot.project_args() + PackedStringArray(["--editor", "--quit"]),
+		_reload_check_log, "reload check")
+	if _reload_check_pid <= 0:
+		_set_status("⚠  Couldn't run the pre-reload compile check - NOT reloading (edits left as-is)")
+		_reload_check_pid = -1
+		return
+	_set_status("⟳  Checking the edits compile before reloading…")
+
+
+## The actual restart, run only once _do_restart's compile check comes back clean:
+## relaunch this same executable straight back into --mask-edit on the current session
+## (so it reopens here, at the saved playhead), preserving the engine args it had.
+func _restart_now() -> void:
+	# One last accurate capture right before quitting - the compile check the app just
+	# ran can take a while, and the app stays fully interactive while it does, so the
+	# playhead _do_restart captured when the check STARTED may already be stale. This
+	# is also the last point _player is guaranteed to still report a live position -
+	# see _save_session/_exit_tree for why nothing may re-derive it after this.
+	_save_session()
+	_restarting = true
+	var engine_args := PackedStringArray()
+	for a in OS.get_cmdline_args():
+		if a == "--":
+			break                     # everything before the user-args separator
+		engine_args.append(a)
+	engine_args.append("--")
+	engine_args.append("--mask-edit")
+	engine_args.append(_session_path)
+	OS.set_restart_on_exit(true, engine_args)
+	get_tree().quit()
+
+
+## Poll the pre-reload compile check (see _do_restart). Clean -> restart; errors ->
+## block the reload and surface them, so a broken assistant edit never bricks the app.
+func _poll_reload_check() -> void:
+	if _reload_check_pid <= 0 or Subprocess.alive(_reload_check_pid):
+		return
+	_reload_check_pid = -1
+	var log := FileAccess.get_file_as_string(_reload_check_log) if FileAccess.file_exists(_reload_check_log) else ""
+	if not _reload_check_log.is_empty():
+		DirAccess.remove_absolute(_reload_check_log)
+	var errs := []
+	for line in log.split("\n"):
+		for marker in ["SCRIPT ERROR", "Parse Error", "Compile Error", "Identifier not found", "Failed to load"]:
+			if line.contains(marker):
+				errs.append(line.strip_edges())
+				break
+	if errs.is_empty():
+		_restart_now()
+	else:
+		_set_status("⚠  Reload blocked - the edits don't compile (%d error%s); app left running" % [
+			errs.size(), "" if errs.size() == 1 else "s"])
+		push_warning("ghost: reload blocked, compile errors:\n" + "\n".join(errs))
+
+
+# --- playback: the clock, and the main clip's sound and fade --------------------------------------
 
 
 func _on_scrub(t: float) -> void:
@@ -5307,7 +4877,6 @@ func _clip_fade_gain(local: float, span: float, fi: float, fo: float) -> float:
 		g = minf(g, clampf((span - local) / fo, 0.0, 1.0))
 	return clampf(g, 0.0, 1.0)
 
-
 ## Exponential audio taper for the pull-rope knob's raw 0..1 reading: pushes the quiet
 ## end down hard (a real dead zone near the anchor, not just a shallower version of
 ## "audible") while leaving the top of the pull comparatively spacious, so fine-tuning
@@ -5315,6 +4884,8 @@ func _clip_fade_gain(local: float, span: float, fi: float, fo: float) -> float:
 ## inaudible, but isn't"; "the middle volume growth seems very fast". _TAPER_K controls
 ## how hard the low end is suppressed; the curve is 0 at v=0 and 1 at v=1 regardless.
 const _TAPER_K := 5.0
+
+
 func _volume_taper(v: float) -> float:
 	return (exp(_TAPER_K * v) - 1.0) / (exp(_TAPER_K) - 1.0)
 
@@ -5386,184 +4957,7 @@ func _apply_main_fade() -> void:
 		_audio.volume_db = _track_level_db(session.main_volume, audible)
 
 
-## Master-timeline seconds a dragged clip should snap its start/end to: 0, the playhead,
-## the primary clip's end, and every OTHER clip's start and end. exclude_i is the lane
-## doing the dragging (-1 = the primary), so a clip never snaps to itself.
-func _snap_targets_for(exclude_i: int) -> Array:
-	var targets := [0.0, session.effective_clip_out()]
-	if _player != null:
-		targets.append(_player.stream_position)
-	for j in session.tracks.size():
-		if j == exclude_i:
-			continue
-		var t: Dictionary = session.tracks[j]
-		var o := float(t.get("offset", 0.0))
-		var span := float(t.get("clip_out", 0.0)) - float(t.get("clip_in", 0.0))
-		targets.append(o)
-		targets.append(o + span)
-	return targets
-
-
-## THE keyboard map (mirrored by the help overlay - keep the two in sync):
-## Space play/pause · V cycle view · P hold-to-peek · T import track ·
-## Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y undo/redo · F1 help · Esc close help.
-## These aren't shortcuts FOR buttons any more - they're the only way; the
-## toolbar collapsed to the single Help button. Only live once a clip is
-## actually loaded (_player exists); main.gd defers Space entirely while this
-## editor is open (see main.gd's KEY_SPACE handling), so this doesn't fight
-## Director.next() for the key. echo excluded on undo/redo so a held key
-## doesn't spam repeats; a real accident deserves a deliberate press each
-## time it's undone.
-## Plain _input (not _unhandled_input) so cursor motion resets the idle timer
-## even while it's over a panel/button - GUI controls can eat mouse motion
-## before it would ever reach _unhandled_input, and hovering the toolbar
-## while playing should un-hide the cursor same as moving it over the video.
-func _input(event: InputEvent) -> void:
-	# THE DRAG BOUNDARY CLOSES HERE, on the release itself - see _push_undo. The
-	# first cut closed it in _process, which is wrong for a reason worth writing
-	# down: _process returns early in half a dozen states (clip still preparing,
-	# audio still transcoding, render mode), so the boundary could stay open across
-	# a release and swallow the NEXT adjustment into the previous undo step. _input
-	# runs whatever _process is doing, and before any control consumes the event.
-	if event is InputEventMouseButton and not event.pressed \
-			and event.button_index == MOUSE_BUTTON_LEFT:
-		_undo_press_key = ""
-	if render_mode:
-		return
-	# SPACE PLAYS AND PAUSES WHEREVER THE FOCUS IS: in _unhandled_input it came after the GUI, so
-	# a button clicked a moment before took Space for itself and pressed itself again
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE \
-			and _player != null and not (event.ctrl_pressed or event.alt_pressed or event.meta_pressed):
-		var f := get_viewport().gui_get_focus_owner()
-		if not (f is TextEdit or f is LineEdit):
-			_play(not _playing)
-			get_viewport().set_input_as_handled()
-			return
-	# A region drag in flight is tracked HERE, not in the overlay's gui_input, so
-	# it survives the cursor leaving the video pane - see _region_drag_motion.
-	if _region_drag != "":
-		_region_drag_motion(event)
-	if not event is InputEventMouseMotion:
-		return
-	_cursor_idle_t = 0.0
-	if Input.mouse_mode == Input.MOUSE_MODE_HIDDEN:
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	if render_mode or _player == null:
-		return
-	if not event is InputEventKey or event.echo:
-		return
-	# Hold-to-peek wants the RELEASE too - everything below this wants presses
-	# only. Hold beats the old toggle button for its actual job ("let me just
-	# look at raw for a second"): letting go always puts the effects back.
-	if event.keycode == KEY_P:
-		_peek_raw = event.pressed
-		get_viewport().set_input_as_handled()
-		return
-	if not event.pressed:
-		return
-	if event.keycode == KEY_V:
-		_cycle_view_mode()
-		get_viewport().set_input_as_handled()
-	elif event.keycode == KEY_T:
-		_prompt_import_track()
-		get_viewport().set_input_as_handled()
-	elif event.keycode == KEY_F1:
-		_toggle_help()
-		get_viewport().set_input_as_handled()
-	elif event.keycode == KEY_F5:
-		_reload_requested()   # restart-and-restore, deferred until assistant runs finish
-		get_viewport().set_input_as_handled()
-	elif event.keycode == KEY_ESCAPE and _help_panel != null and _help_panel.visible:
-		# Only claim Escape while help is open - otherwise it stays main.gd's
-		# quit key. Consuming it here is what keeps closing the overlay from
-		# ALSO quitting ghost.
-		_help_panel.visible = false
-		get_viewport().set_input_as_handled()
-	elif event.ctrl_pressed and event.keycode == KEY_Z:
-		if event.shift_pressed:
-			_undo.redo()
-		else:
-			_undo.undo()
-		get_viewport().set_input_as_handled()
-	elif event.ctrl_pressed and event.keycode == KEY_Y:
-		_undo.redo()
-		get_viewport().set_input_as_handled()
-
-
-func _toggle_help() -> void:
-	if _help_panel != null:
-		_help_panel.visible = not _help_panel.visible
-
-
-## The keyboard map, centered over the video (F1 / the panel's one Help
-## button). This is where the buttons went: everything the old toolbar did is
-## a key now, and this overlay is how anyone who never learned the shortcuts
-## finds them. Keep in sync with _unhandled_input.
-func _build_help_overlay() -> void:
-	_help_panel = PanelContainer.new()
-	_help_panel.visible = false
-	_help_panel.z_index = 40
-	var hm := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		hm.add_theme_constant_override("margin_" + side, 20)
-	_help_panel.add_child(hm)
-	var hv := VBoxContainer.new()
-	hv.add_theme_constant_override("separation", 7)
-	hm.add_child(hv)
-	var ht := Label.new()
-	ht.text = "Keyboard"
-	ht.add_theme_font_size_override("font_size", 18)
-	hv.add_child(ht)
-	for pair in [
-		["Space", "play / pause"],
-		["V", "cycle view - raw → PiP (raw) → PiP (fx) → both → full fx"],
-		["P (hold)", "peek raw footage - display only, edits nothing"],
-		["T", "import a second video track (picture-in-picture)"],
-		["Ctrl+Z", "undo"],
-		["Ctrl+Shift+Z", "redo (also Ctrl+Y)"],
-		["`", "feedback console"],
-		["F11", "fullscreen"],
-		["F1", "this help (Esc closes it)"],
-	]:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 14)
-		var kl := Label.new()
-		kl.text = pair[0]
-		kl.custom_minimum_size = Vector2(130, 0)
-		kl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
-		row.add_child(kl)
-		var dl := Label.new()
-		dl.text = pair[1]
-		dl.add_theme_color_override("font_color", Color(0.78, 0.84, 0.94))
-		row.add_child(dl)
-		hv.add_child(row)
-	hv.add_child(HSeparator.new())
-	for note in [
-		"Timeline - click/drag scrubs · drag markers to move them · Ctrl+scroll zooms at the cursor, plain scroll pans when zoomed · drag clip/track edges to trim",
-		"Editing - touching any knob plants a ramp at the playhead if nothing is selected · sliders are drag-only, the wheel always scrolls the panel",
-	]:
-		var nl := Label.new()
-		nl.text = note
-		nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		nl.custom_minimum_size = Vector2(560, 0)
-		nl.add_theme_font_size_override("font_size", 12)
-		nl.add_theme_color_override("font_color", Color(0.6, 0.68, 0.8))
-		hv.add_child(nl)
-	# Centered over the VIDEO side, not the whole window (the wrapper starts
-	# at PANEL_W so the box doesn't sit half-under the left panel). The
-	# wrapper ignores the mouse; the box itself still catches its own clicks.
-	var wrap := CenterContainer.new()
-	wrap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	wrap.offset_left = VIDEO_LEFT
-	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(wrap)
-	wrap.add_child(_help_panel)
-
-
-# --- view mode: main (raw/fx) x inset (hidden/raw/fx) --------------------------
+# --- view mode: main (raw/fx) x inset (hidden/raw/fx) ---------------------------------------------
 # A per-marker field (MaskSession.VIEW_MODES), not just an editing preference - see
 # class doc. There is deliberately no standalone "current mode" variable: the single
 # source of truth is always session.at_time(playhead), read fresh every frame in
@@ -5576,6 +4970,7 @@ func _build_help_overlay() -> void:
 ## full-frame fx alone. VIEW_MODES' own order is append-only storage layout (see
 ## MaskSession), so the narrative order lives here.
 const VIEW_CYCLE := [2, 3, 0, 5, 4, 1]   # raw -> pip_raw -> pip -> fx+raw-pip -> masked_pip -> masked
+
 
 ## The marker GOVERNING time `t` - the same last-wins search at_time() uses
 ## internally to resolve its `cur`, exposed here so callers that need the
@@ -5630,305 +5025,8 @@ func _cycle_view_mode() -> void:
 		_mark_dirty()
 
 
-## Pushes one resolved timeline state (see MaskSession.at_time) into the layers:
-## channel params to both materials, each layer's intensities scaled by its own
-## PRESENCE amount - so "how present is this layer" is a continuous, blendable
-## quantity and a mode transition is a fade, not a toggle. The inset's border
-## fades with it (modulate), and fully-absent layers are hidden entirely so they
-## cost nothing.
-func _apply_frame_state(p: Dictionary) -> void:
-	var main_amt := clampf(float(p.get("main_fx", 0.0)), 0.0, 1.0)
-	var inset_show := clampf(float(p.get("inset_show", 0.0)), 0.0, 1.0)
-	var inset_fx := clampf(float(p.get("inset_fx", 0.0)), 0.0, 1.0)
-	if _peek_raw:
-		main_amt = 0.0
-		inset_show = 0.0
-		inset_fx = 0.0
-	_last_inset_show = inset_show
-	# Which source fills the PiP this frame. Fall back to the main clip if the stored
-	# index points past the current track count (e.g. a track was deleted).
-	var pt := int(p.get("pip_track", 0.0))
-	_pip_track = 0 if (_peek_raw or pt < 0 or pt > session.tracks.size()) else pt
-	var t: float = _player.stream_position if _player != null else 0.0
-	var env := _env_at(t)
-	var layers: Array = p.get("layers", [])
-	# Does a chimera layer actually render this frame? _maybe_capture_echo reads this
-	# to decide whether the (expensive) track readback is worth doing right now.
-	# _temporal_active is the same idea one level up: gates the echo/whisp capture
-	# itself on whatever's actually on screen, not on the session's marker list.
-	_chimera_active = false
-	_audio_layer = {}
-	_temporal_active = false
-	_clown_active = false
-	_umbra_active = false
-	_meta_amount = 0.0
-	for l in layers:
-		var le := int(l.get("effect_a", 0))
-		if le == MaskSession.EFFECT_CHIMERA:
-			_chimera_active = true
-		if le == MaskSession.EFFECT_UMBRA:
-			_umbra_active = true
-			_umb_read_layer(l, env)
-		if le == MaskSession.EFFECT_CLOWN:
-			_clown_active = true
-			_clown_fs = clampf(float(l.get("fx_scale", 1.0)), 0.3, 2.5)
-			_clown_bleed = clampf(float(l.get("fx_smooth", 0.0)), 0.0, 1.0)
-			_clown_settle = clampf(float(l.get("fx_lag", 0.35)), 0.0, 1.0)
-			_clown_hollow = clampf(float(l.get("fx_stick", 0.0)), 0.0, 1.0)
-			# Four keying/pattern fields clown never keys or patterns with, read
-			# here under their clown names. See the vars' own doc for the mappings.
-			_clown_evidence = clampf(float(l.get("resonance", 0.0)), 0.0, 1.0)
-			# Ranges chosen so the STORED DEFAULTS land on "exactly the measured
-			# face": eye 1.0x, no drip, smile at the real mouth's width, no sweep.
-			# 1.2x the eye at the bottom of the slider, 2.2x at the stored default,
-			# 5.2x wound up. It used to be 1.0 + t*6 - 1.44, which is NEGATIVE below
-			# threshold 0.24 - a negative scale turns the hull inside out - and only
-			# 1.0x at the default, i.e. a patch exactly the size of the eye opening.
-			_clown_eye_size = 1.2 + clampf(float(l.get("threshold", 0.24)), 0.0, 1.0) * 4.0
-			_clown_drip = clampf(float(l.get("sat_floor", 0.18)), 0.0, 1.0) - 0.18
-			# Both of these sit on fields that default to 0, so 0 has to be a GOOD
-			# value rather than "off" - a lean streak with a gentle bow is what a
-			# tear of liner looks like, and the sliders take it heavier and wider
-			# from there.
-			# Its floor is a SOFT edge, not the polygon: a hard-edged oval is the
-			# fault this control exists for, so 0 must not be it. The floor is also
-			# what rounds the outline off - the patch is a 16-vertex hull pushed
-			# outward along its own normals, and at any real Eye size its facets are
-			# plainly visible until something averages over them.
-			_clown_smudge = 0.45 + clampf(float(l.get("swap", 0.0)), 0.0, 1.0) * 0.55
-			_clown_drip_w = 0.35 + clampf(float(l.get("fx_y", 0.0)), 0.0, 1.0) * 0.80
-			_clown_drip_curve = 0.45 + clampf(float(l.get("intensity_b", 0.0)),
-				0.0, 1.0) * 1.55
-			_clown_smile_w = 1.0 + (clampf(float(l.get("feather", 0.12)), 0.0, 0.5) - 0.12) * 8.0
-			_clown_smile_curve = (clampf(float(l.get("fx_speed", 1.0)), 0.0, 2.0) - 1.0) * 0.12
-			# fx_x defaults to 0, and 0 must be a GOOD value: some feather is
-			# always wanted, so the range runs from soft to softer.
-			_clown_feather = 0.012 + clampf(float(l.get("fx_x", 0.0)), 0.0, 1.0) * 0.055
-			_ft_sigma = MaskFaceTrack.sigma_for(float(l.get("hue_b", 0.0)))
-			_clown_region = Vector4(
-				float(l.get("reg_x0", 0.0)), float(l.get("reg_y0", 0.0)),
-				float(l.get("reg_x1", 1.0)), float(l.get("reg_y1", 1.0)))
-		if le == 5 or le == 7 or le == MaskSession.EFFECT_SNOW or le == MaskSession.EFFECT_ORACLE \
-				or le == MaskSession.EFFECT_SERPENT or le == MaskSession.EFFECT_CHIMERA \
-				or le == MaskSession.EFFECT_CLOWN:
-			_temporal_active = true
-		# The META mirror's strength - the same env x intensity the shader gets as
-		# this layer's weight. Drives whether the (expensive) workspace readback runs
-		# at all this frame, and how far the render-mode editor chrome has revealed.
-		if le == MaskSession.EFFECT_AUDIO:
-			_audio_layer = l
-		if le == MaskSession.EFFECT_META:
-			_meta_amount = maxf(_meta_amount,
-				clampf(float(l.get("env", 0.0)) * float(l.get("intensity_a", 0.0)), 0.0, 1.0))
-	# The audio layer resolves to bus parameters rather than pixels. Applied every
-	# frame like everything else, so its envelope ramps the sound in exactly as a
-	# visual layer's ramps its paint - and so an export, which walks the same
-	# per-frame path, mixes the same sound the editor previewed.
-	_audio_fx.ensure_bus()
-	_audio_fx.apply(_audio_layer)
-	# Build the layer arrays ONCE; only the weights differ per surface (each
-	# material multiplies its own presence in). Arrays are pushed at FULL declared
-	# length - a short uniform array is silently dropped (flame.gdshader lesson).
-	var n: int = mini(layers.size(), MaskSession.MAX_LAYERS)
-	var hues := PackedFloat32Array()
-	var effects := PackedInt32Array()
-	var base_w := PackedFloat32Array()
-	var offs := PackedVector2Array()
-	var scales := PackedFloat32Array()
-	var densities := PackedFloat32Array()
-	var contrasts := PackedFloat32Array()
-	var glows := PackedFloat32Array()
-	var speeds := PackedFloat32Array()
-	var smooths := PackedFloat32Array()   # raw fx_smooth - snow's Gust; echo bakes its own use into echo_w below
-	var tdirs := PackedVector3Array()
-	var echo_w := PackedFloat32Array()
-	var echo_lag := PackedInt32Array()
-	var lagf := PackedFloat32Array()   # raw fx_lag - fur's Coil knob (echo's use is baked into echo_w/echo_lag)
-	var sticks := PackedFloat32Array()   # raw fx_stick - fur's Stickiness (0 = today's free coat)
-	var tints := PackedFloat32Array()    # fx_tint - Morph, palette hue rotation (0 = natural)
-	var accents := PackedFloat32Array()  # hue_b - umbra's ghost-eye color (0 = red)
-	var regions := PackedVector4Array()  # the layer's box in frame UV (x0,y0,x1,y1)
-	var regsofts := PackedFloat32Array() # how gradually it fades out at that border
-	var slot_frac := fposmod((_player.stream_position if _player != null else 0.0) / _ECHO_INTERVAL, 1.0)
-	for i in MaskSession.MAX_LAYERS:
-		if i < n:
-			var l: Dictionary = layers[i]
-			var res := float(l.get("resonance", 0.0))
-			hues.append(float(l.get("hue_a", 0.0)))
-			effects.append(int(l.get("effect_a", 0)))
-			base_w.append(float(l.get("env", 0.0)) * float(l.get("intensity_a", 0.0)))
-			offs.append(Vector2(float(l.get("fx_x", 0.0)), float(l.get("fx_y", 0.0))))
-			scales.append(float(l.get("fx_scale", 1.0)))
-			# Resonance folds in CPU-side: the audio envelope swings coverage around
-			# its nominal (loud opens the field, quiet closes it) and pulses the rim.
-			densities.append(clampf(float(l.get("fx_density", 0.45)) + 0.5 * res * (env - 0.35), 0.0, 1.0))
-			contrasts.append(float(l.get("fx_contrast", 0.5)))
-			glows.append(1.0 + res * env * 1.3)
-			speeds.append(maxf(0.05, float(l.get("fx_speed", 1.0))))
-			smooths.append(clampf(float(l.get("fx_smooth", 0.0)), 0.0, 1.0))
-			# The echo's temporal kernel: weights over the 8 ring ages, centered
-			# on the layer's lag. Age of ring index k is (k + slot_frac) slots -
-			# continuous in playback time, so a spread kernel (Smoothing > 0)
-			# glides through the ring with no steps; Smoothing ~ 0 collapses to
-			# the nearest single frame - the held-frame stutter, now at an
-			# adjustable distance. Pure function of position + fields: live and
-			# export blend identically.
-			var lag_slots := clampf(float(l.get("fx_lag", 0.35)) / _ECHO_INTERVAL, 0.0, 7.0)
-			var smooth_amt := clampf(float(l.get("fx_smooth", 0.0)), 0.0, 1.0)
-			echo_lag.append(clampi(int(round(lag_slots)), 0, 7))
-			lagf.append(float(l.get("fx_lag", 0.35)))
-			sticks.append(clampf(float(l.get("fx_stick", 0.0)), 0.0, 1.0))
-			tints.append(clampf(float(l.get("fx_tint", 0.0)), 0.0, 1.0))
-			accents.append(clampf(float(l.get("hue_b", 0.0)), 0.0, 1.0))
-			var w := PackedFloat32Array()
-			var wsum := 0.0
-			for k in 8:
-				var wv: float
-				if smooth_amt < 0.02:
-					wv = 1.0 if k == clampi(int(round(lag_slots - slot_frac)), 0, 7) else 0.0
-				else:
-					wv = exp(-absf(float(k) + slot_frac - lag_slots) / (smooth_amt * 2.5))
-				w.append(wv)
-				wsum += wv
-			for k in 8:
-				echo_w.append(w[k] / maxf(wsum, 0.0001))
-			# The target hue's normalized chroma direction, for erase's
-			# projection-subtraction (see the shader: erase is subtraction,
-			# not classification - no gates, no boundary rings).
-			var tc := Color.from_hsv(float(l.get("hue_a", 0.0)), 1.0, 1.0)
-			var tl := 0.299 * tc.r + 0.587 * tc.g + 0.114 * tc.b
-			tdirs.append(Vector3(tc.r - tl, tc.g - tl, tc.b - tl).normalized())
-			# The layer's region box, normalized here so the shader never has to
-			# wonder which corner is which (a box dragged past itself is still a
-			# box). Sessions saved before regions existed have none of these
-			# fields; the DEFAULTS fall back to the whole frame, which is exactly
-			# what they rendered before.
-			# SNAPPED HERE, not only when dragged. A drag snaps an edge that lands
-			# near the frame's border onto it (see _snap_edge), but a value stored
-			# before that existed - or set any other way - keeps whatever it has,
-			# and an edge sitting 0.002 off the top is a four-pixel band of exactly
-			# the color the layer was added to remove, hugging the top of the
-			# picture. Snapping at the point of USE means every session gets the
-			# same treatment, and the shader can then skip that side's falloff
-			# entirely because the edge is genuinely flush.
-			regions.append(Vector4(
-				_snap_edge(minf(float(l.get("reg_x0", 0.0)), float(l.get("reg_x1", 1.0)))),
-				_snap_edge(minf(float(l.get("reg_y0", 0.0)), float(l.get("reg_y1", 1.0)))),
-				_snap_edge(maxf(float(l.get("reg_x0", 0.0)), float(l.get("reg_x1", 1.0)))),
-				_snap_edge(maxf(float(l.get("reg_y0", 0.0)), float(l.get("reg_y1", 1.0))))))
-			regsofts.append(clampf(float(l.get("reg_soft", 0.0)), 0.0, 1.0))
-		else:
-			hues.append(0.0)
-			effects.append(0)
-			base_w.append(0.0)
-			offs.append(Vector2.ZERO)
-			scales.append(1.0)
-			densities.append(0.0)
-			contrasts.append(0.5)
-			speeds.append(1.0)
-			smooths.append(0.0)
-			echo_lag.append(0)
-			lagf.append(0.0)
-			sticks.append(0.0)
-			tints.append(0.0)
-			accents.append(0.0)
-			for k in 8:
-				echo_w.append(1.0 if k == 0 else 0.0)
-			glows.append(1.0)
-			tdirs.append(Vector3(1, 0, 0))
-			regions.append(Vector4(0.0, 0.0, 1.0, 1.0))   # unused slot: whole frame
-			regsofts.append(0.0)
-	# Which source actually has valid picture at `t`: the main clip's own kept range,
-	# or - once that's ended - whichever continuation track (see
-	# MaskSession.continuation_track_at) has picked it up. Each continuation track
-	# renders through its OWN player (see _sync_tracks), never by borrowing _player's -
-	# see continuation_track_at's doc for why that used to be a fragile invariant.
-	var main_active := t < session.effective_clip_out()
-	var cont_idx := -1 if main_active else session.continuation_track_at(t)
-	var cont_tex: Texture2D = null
-	if cont_idx != -1 and cont_idx < _track_runtime.size() and _track_runtime[cont_idx].has("player"):
-		var cp: VideoStreamPlayer = _track_runtime[cont_idx].player
-		if cp != null and cp.get_video_texture() != null and cp.get_video_texture().get_height() > 0:
-			cont_tex = cp.get_video_texture()
-	_cont_view.visible = cont_tex != null
-	if cont_tex != null:
-		_cont_view.texture = cont_tex
-	for pair in [[_mat_main, main_amt], [_mat_inset, inset_fx]]:
-		var mat: ShaderMaterial = pair[0]
-		var amt: float = pair[1]
-		mat.set_shader_parameter("u_threshold", p.threshold)
-		mat.set_shader_parameter("u_feather", p.feather)
-		mat.set_shader_parameter("u_sat_floor", p.sat_floor)
-		# The wisp field's clock is the CLIP's own playback position, never
-		# wall-time - live and export step the same clock, so a session
-		# reproduces its exact wisps frame-for-frame (flame.gdshader discipline).
-		mat.set_shader_parameter("u_time", t)
-		var tex := (_player.get_video_texture() if _player != null else null) if main_active else cont_tex
-		if tex != null and tex.get_height() > 0:
-			mat.set_shader_parameter("u_aspect", float(tex.get_width()) / float(tex.get_height()))
-			# The ACTIVE source's own pixel grid - a continuation track may be a
-			# different size from the main clip, so this tracks `tex`, not _src_size.
-			mat.set_shader_parameter("u_texel",
-				Vector2(1.0 / float(tex.get_width()), 1.0 / float(tex.get_height())))
-		var ws := PackedFloat32Array()
-		for i in MaskSession.MAX_LAYERS:
-			ws.append(base_w[i] * amt)
-		mat.set_shader_parameter("u_l_count", n)
-		mat.set_shader_parameter("u_l_hue", hues)
-		mat.set_shader_parameter("u_l_effect", effects)
-		mat.set_shader_parameter("u_l_w", ws)
-		mat.set_shader_parameter("u_l_off", offs)
-		mat.set_shader_parameter("u_l_scale", scales)
-		mat.set_shader_parameter("u_l_dens", densities)
-		mat.set_shader_parameter("u_l_con", contrasts)
-		mat.set_shader_parameter("u_l_glow", glows)
-		mat.set_shader_parameter("u_l_speed", speeds)
-		mat.set_shader_parameter("u_l_smooth", smooths)
-		mat.set_shader_parameter("u_l_ew", echo_w)
-		mat.set_shader_parameter("u_l_elag", echo_lag)
-		mat.set_shader_parameter("u_l_lagf", lagf)
-		mat.set_shader_parameter("u_l_stick", sticks)
-		mat.set_shader_parameter("u_l_tint", tints)
-		mat.set_shader_parameter("u_l_accent", accents)
-		mat.set_shader_parameter("u_l_tdir", tdirs)
-		mat.set_shader_parameter("u_l_region", regions)
-		mat.set_shader_parameter("u_l_regsoft", regsofts)
-		# Chimera's graft source: the first track's live frame. The explicit
-		# flag matters - the sampler's default-black fallback must never read
-		# as footage.
-		var track_tex: Texture2D = null
-		if _track_runtime.size() > 0 and _track_runtime[0].has("player"):
-			var tp: VideoStreamPlayer = _track_runtime[0].player
-			if tp != null and tp.get_video_texture() != null \
-					and tp.get_video_texture().get_height() > 0:
-				track_tex = tp.get_video_texture()
-		mat.set_shader_parameter("u_track_on", 1 if track_tex != null else 0)
-		if track_tex != null:
-			mat.set_shader_parameter("u_track", track_tex)
-	# The active source's own raw frame - and everything sourced from it (the fx
-	# overlay, its own PiP inset) - only while the timeline actually claims this
-	# instant (feedback/0009: past the main track's own trim, with no track
-	# continuing it here, video.ogv kept rendering anyway).
-	_player.visible = main_active
-	_fx_overlay.visible = main_amt > 0.001 and (main_active or cont_tex != null)
-	# Main clip's PiP only when it's the selected source; _sync_tracks re-confirms.
-	_mask_wrap.visible = inset_show > 0.001 and _pip_track == 0 and main_active
-	_mask_wrap.modulate.a = inset_show
-	if _view_label != null:
-		if _pip_track > 0:
-			var main_lbl := "fx" if main_amt > 0.5 else "raw"
-			_view_label.text = "🎞  main %s · Track %d (raw)" % [main_lbl, _pip_track]
-		else:
-			match MaskSession.VIEW_MODES[clampi(int(p.get("view_mode", 2.0)), 0, MaskSession.VIEW_MODES.size() - 1)]:
-				"raw":            _view_label.text = "🎬  Raw"
-				"pip_raw":        _view_label.text = "🖼  PiP (raw)"
-				"pip":            _view_label.text = "🖼  PiP (fx)"
-				"masked_pip_raw": _view_label.text = "🎭  Full (fx) · PiP (raw)"
-				"masked_pip":     _view_label.text = "🎭  Both (fx)"
-				"masked":         _view_label.text = "🎭  Full (fx)"
+# --- per-frame: push the timeline's blended params into the shader --------------------------------
 
-
-# --- per-frame: push the timeline's blended params into the shader ---------------
 
 func _process(_dt: float) -> void:
 	# SEATBELT. _syncing is only valid inside a single synchronous
@@ -5942,7 +5040,7 @@ func _process(_dt: float) -> void:
 		"waiting_tools":
 			if _have_ffmpeg():
 				_prep_state = "idle"
-				_prep(_pending.source, _pending.dir, _pending.video, _pending.audio)
+				_source_prep.prep(_pending.source, _pending.dir, _pending.video, _pending.audio)
 				return
 			Provision.ensure("ffmpeg")   # retries by itself once a failed attempt has cooled off
 			var hint := Deps.hint("ffmpeg")
@@ -5951,33 +5049,33 @@ func _process(_dt: float) -> void:
 			return
 		"prepping_video":
 			if Subprocess.alive(_prep_video_pid):
-				_set_status("⏳  Preparing clip (video)…  %d%%" % _read_prep_pct())
+				_set_status("⏳  Preparing clip (video)…  %d%%" % _source_prep.read_pct())
 				return
-			_promote_part(String(_pending.video))
-			_start_prep_audio()
+			_source_prep.promote_part(String(_pending.video))
+			_source_prep.start_audio()
 			return
 		"prepping_audio":
 			if Subprocess.alive(_prep_audio_pid):
 				return
-			_promote_part(String(_pending.audio))
-			_promote_part(String(_pending.audio).get_basename() + ".ogg")
-			_clear_lock(_pending.dir)
+			_source_prep.promote_part(String(_pending.audio))
+			_source_prep.promote_part(String(_pending.audio).get_basename() + ".ogg")
+			_source_prep.clear_lock(_pending.dir)
 			_prep_state = "idle"
-			_finish_session(_pending.source, _pending.video, _pending.audio)
+			_source_prep.finish_session(_pending.source, _pending.video, _pending.audio)
 			return
 		"waiting_external":
 			var abs_video := ProjectSettings.globalize_path(_pending.video)
 			var abs_audio := ProjectSettings.globalize_path(_pending.audio)
 			if FileAccess.file_exists(abs_video) and FileAccess.file_exists(abs_audio):
 				_prep_state = "idle"
-				_finish_session(_pending.source, _pending.video, _pending.audio)
+				_source_prep.finish_session(_pending.source, _pending.video, _pending.audio)
 				return
-			if _prep_looks_live(_pending.dir, _pending.video):
+			if _source_prep.looks_live(_pending.dir, _pending.video):
 				return   # still going elsewhere - keep waiting
 			# Nothing's touched it in a while and it never produced both files - the
 			# other writer died mid-prep. Run it ourselves rather than waiting forever.
 			_prep_state = "idle"
-			_prep(_pending.source, _pending.dir, _pending.video, _pending.audio)
+			_source_prep.prep(_pending.source, _pending.dir, _pending.video, _pending.audio)
 			return
 		_:
 			pass
@@ -6010,8 +5108,8 @@ func _process(_dt: float) -> void:
 		_waveform_pid = -1
 		var abs_wave := ProjectSettings.globalize_path(_waveform_path)
 		if FileAccess.file_exists(abs_wave):
-			_load_waveform(abs_wave)
-	_poll_wave_hi(_dt)
+			_waveform.load_strip(abs_wave)
+	_waveform.poll_hi(_dt)
 	if _import_pid > 0 and not Subprocess.alive(_import_pid):
 		_import_pid = -1
 		_finish_track_import()
@@ -6028,7 +5126,7 @@ func _process(_dt: float) -> void:
 		_poll_reload_check()   # gates the reload on a clean headless compile
 	if session == null or _player == null:
 		return
-	_sync_source_size()   # one-shot; adopts the decoder's own frame size
+	_source_prep.sync_size()   # one-shot; adopts the decoder's own frame size
 	# THE EXPORT CLOCK. In render mode the movie is driven by accumulated fixed-fps time
 	# (_render_t), NOT the video/audio stream positions - those can drift a little, stall,
 	# or (when a source is shorter than the session) end early, and binding the export to
@@ -6232,288 +5330,302 @@ func _process(_dt: float) -> void:
 		_autosave_cooldown -= _dt
 		if _autosave_cooldown <= 0.0:
 			_save_session()
-	_poll_render()
+	_export.poll()
 
 
-# --- shared bottom-right notification: prep progress AND export progress use the
-# --- same label, same position - one status line, whatever phase produced it -----
-
-func _build_status_label() -> void:
-	_status = Label.new()
-	_status.name = "MaskStatus"
-	_status.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	# Right edge clears the console's >_ slot (-156..-116, see console.gd).
-	_status.offset_left = -592
-	_status.offset_top = -64
-	_status.offset_right = -160
-	_status.offset_bottom = -28
-	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_status.visible = false
-	# Built before the chrome/timeline exist (see the doc comment on the _status
-	# var) so prep messages show pre-session; once the chrome IS built, MaskTimeline's
-	# near-opaque background (mask_timeline.gd's _draw) is added afterward and, being
-	# a later sibling, painted over this label - silently swallowing every status this
-	# label ever shows for the rest of the session (export progress included; feedback
-	# 0026). z_index keeps it on top regardless of what gets added later.
-	_status.z_index = 5
-	add_child(_status)
-
-
-# --- export: relaunch in Movie Maker mode (--mask-render), then ffmpeg mux ------
-
-## The shared session furniture, if this session has any (the render relaunch and
-## the gates run without it). BY GROUP, not by walking the tree: the first cut
-## walked two levels down from the root and the exporter is three - root, main,
-## chrome, exporter - so it silently found nothing and the suppression below never
-## happened. The button stayed on top, grayed, swallowing every click.
-func _chrome() -> Node:
-	if get_tree() == null:
-		return null
-	return get_tree().get_first_node_in_group("ghost_chrome")
-
-
-func _build_export_ui() -> void:
-	_export_btn = Button.new()
-	_export_btn.focus_mode = Control.FOCUS_NONE
-	_export_btn.text = "⤓"                    # icon-only - matches assistant.gd's chat-bubble toggle
-	_export_btn.tooltip_text = "Render this mask session to a video file (in the background)"
-	_export_btn.custom_minimum_size = Vector2(40, 40)
-	_export_btn.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	# Same 40x40 box, same row (-28/-68), as assistant.gd's toggle, right of this one -
-	# see that file's _TOGGLE_SIZE/_TOGGLE_ROW_BOTTOM doc for why the numbers match.
-	_export_btn.offset_left = -112
-	_export_btn.offset_top = -68
-	_export_btn.offset_right = -72
-	_export_btn.offset_bottom = -28
-	_export_btn.pressed.connect(_on_export_pressed)
-	add_child(_export_btn)
-	# The SHARED export button steps aside - see Exporter.suppressed. Masking has
-	# its own export (a headless relaunch against the session json rather than the
-	# bake pipeline), and the shared one is on a higher CanvasLayer, so left alone
-	# it covers this one and swallows the click while grayed out.
-	var ch := _chrome()
-	if ch != null:
-		ch.suppress_export(&"mask")
-
-	_dialog = FileDialog.new()
-	_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
-	_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	_dialog.use_native_dialog = true
-	_dialog.title = "Export mask video"
-	_dialog.filters = PackedStringArray(["*.mp4 ; Video (MP4, H.264 + AAC)"])
-	_dialog.current_file = "ghost_mask.mp4"
-	var downloads := OS.get_system_dir(OS.SYSTEM_DIR_DOWNLOADS)
-	if not downloads.is_empty():
-		_dialog.current_dir = downloads
-	_dialog.size = Vector2i(800, 560)
-	_dialog.file_selected.connect(_on_export_path)
-	add_child(_dialog)
-
-
-func _on_export_pressed() -> void:
-	_dialog.popup_centered()
-
-
-func _on_export_path(out_path: String) -> void:
-	_out = out_path if out_path.get_extension().to_lower() == "mp4" else out_path + ".mp4"
-	_avi = _out.get_basename() + ".render.avi"
-	if FileAccess.file_exists(_avi):
-		DirAccess.remove_absolute(_avi)   # a stale scratch AVI from an interrupted prior export
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_session_path.get_base_dir()))
-	session.save(ProjectSettings.globalize_path(_session_path))   # the relaunch reads THIS file
-	# The relaunch must be TOLD what shape to record in, and it has to be told
-	# before it boots - see _write_render_override.
-	var rsz := _render_size()
-	_write_render_override(rsz)
-	var exe := OS.get_executable_path()
-	var args := Subprocess.own_log("mask_render") + Boot.project_args() + PackedStringArray([
-		"--write-movie", _avi, "--fixed-fps", "25",
-		"--", "--mask-render", _session_path])
-	_render_pid = Subprocess.start(exe, args, "mask render")
-	if _render_pid > 0:
-		_render_state = "rendering"
-		_set_status("⏺  Rendering %d×%d…" % [rsz.x, rsz.y])
-	else:
-		_clear_render_override()   # nothing booted; don't leave it lying for the next launch
-		_set_status("⚠  Could not start the render process")
-
-
-func _poll_render() -> void:
-	match _render_state:
-		"rendering":
-			if Subprocess.alive(_render_pid):
-				return
-			# The render process has read its override at boot and is gone - take it
-			# back out of the project root now, so a later launch (an F5 reload
-			# included, see _reload_requested) comes up in the normal live window
-			# mode and never inherits the render's offscreen resolution.
-			_clear_render_override()
-			if _file_size(_avi) > 65536:
-				_repair_avi_sizes(_avi)   # Godot's 32-bit AVI sizes wrap past 4 GiB; fix before transcode
-				_start_transcode()
-			else:
-				_set_status("⚠  Render produced no file (see console)")
-				_render_state = "idle"
-		"transcoding":
-			if Subprocess.alive(_transcode_pid):
-				return
-			# Always clear the scratch AVI - never leave an intermediate behind.
-			if _file_size(_out) > 4096:
-				DirAccess.remove_absolute(_avi)
-				_set_status("✓  Saved  " + _out)
-			else:
-				DirAccess.remove_absolute(_avi)
-				_set_status("⚠  Transcode failed (see console)")
-			_render_state = "idle"
-	# A reload asked for while this export was in flight (see _reload_requested) is
-	# held here until the export just went idle, then re-asked - re-checking the
-	# assistant's own busy state fresh rather than assuming it's still the same.
-	if _render_state == "idle" and _reload_after_export:
-		_reload_after_export = false
-		_reload_requested()
-
-
-# --- the export's recorded resolution ------------------------------------------
-# Movie Maker locks its output size to the project's viewport size at ENGINE
-# STARTUP, before a single script in the relaunched process runs - so the only way
-# to ask for anything other than project.godot's 1920x1080 is override.cfg, which
-# Godot reads from the project root at boot. It is written here (in the editor, by
-# the process that knows the clip) immediately before the render process is
-# created, and removed the moment that process exits. Same mechanism, same
-# reasoning, as exporter.gd's quality presets - see its _write_override.
-#
-# THE SIZE ASKED FOR IS THE SOURCE CLIP'S OWN, which is what makes a vertical clip
-# export vertically: a 1080x1920 source records a 1080x1920 movie instead of being
-# squeezed into a 16:9 frame. Before this, every mask export was 1920x1080 whatever
-# went in - correct by coincidence for a 1080p landscape clip, an upscale for
-# anything smaller, and a distortion for anything not 16:9.
-#
-# Capped on the long side because the fixed 1920x1080 window used to cap it there
-# anyway: a 4K source should not silently turn into a 4K render (minutes per frame,
-# tens of GB of scratch AVI) just because this now honors the source.
-const _RENDER_MAX_SIDE := 1920
-
-
-func _render_size() -> Vector2i:
-	var w := float(maxi(2, _src_size.x))
-	var h := float(maxi(2, _src_size.y))
-	var s: float = minf(1.0, float(_RENDER_MAX_SIDE) / maxf(w, h))
-	return Vector2i(_even(w * s), _even(h * s))
-
-
-## Even, because yuv420p (the transcode's pixel format) cannot encode an odd
-## dimension - a half-pixel would be rejected outright by x264.
-static func _even(v: float) -> int:
-	return maxi(2, int(round(v * 0.5)) * 2)
-
-
-func _override_path() -> String:
-	return Boot.project_dir().path_join("override.cfg")
-
-
-func _write_render_override(sz: Vector2i) -> void:
-	var f := FileAccess.open(_override_path(), FileAccess.WRITE)
-	if f == null:
-		push_warning("ghost mask export: could not write override.cfg (render falls back to 1920x1080)")
-		return
-	# viewport_* is the RECORDED resolution; window_*_override shrinks the OS window
-	# itself to an unobtrusive floater. In "viewport" stretch mode the two are
-	# independent, so the movie is an offscreen buffer of exactly the clip's size
-	# regardless of the monitor. The window keeps the clip's SHAPE (not a fixed
-	# 480x270) purely so the little preview looks like what is being recorded. It
-	# must stay a normal, drawable window - minimizing it makes Godot skip rendering
-	# and the movie records frozen frames (see boot.gd).
-	var s: float = 480.0 / float(maxi(2, maxi(sz.x, sz.y)))
-	var win := Vector2i(_even(float(sz.x) * s), _even(float(sz.y) * s))
-	f.store_string("[display]\n\nwindow/size/viewport_width=%d\nwindow/size/viewport_height=%d\nwindow/size/window_width_override=%d\nwindow/size/window_height_override=%d\nwindow/stretch/mode=\"viewport\"\n"
-		% [sz.x, sz.y, win.x, win.y])
-	# AND THE INTERMEDIATE'S QUALITY, which is the difference between one lossy
-	# generation and two. Godot writes .avi as MJPEG in yuvj420p - lossy, and
-	# already chroma-subsampled before x264 ever sees the frame - at
-	# `video_quality` 0.75 by default. Measured on a real umbra frame against the
-	# source: one generation (source -> x264 crf18) reads PSNR 45.5 dB; through
-	# the 0.75 intermediate it reads 42.6; at 1.0 it reads 44.3. The default was
-	# nearly DOUBLING the error (MSE 1.85 -> 3.57) to save space in a scratch file
-	# that is deleted seconds later.
-	#
-	# 1.0 is not lossless - MJPEG cannot be - and the remaining ~1.2 dB is the
-	# price of the container. Godot's only lossless writer is the PNG SEQUENCE (a
-	# .png movie path writes out00000000.png... plus a .wav), which for a
-	# ten-minute 1080p render is tens of gigabytes of scratch rather than a few,
-	# so it is not the default.
-	f.store_string("\n[editor]\n\nmovie_writer/video_quality=1.0\n")
-	f.close()
-
-
-## Remove it. Called when our render exits, and once at editor startup to clear a
-## stale copy left behind by a render that was killed or crashed - left in place,
-## it would boot the LIVE editor into the render's offscreen resolution.
-func _clear_render_override() -> void:
-	var path := _override_path()
-	if FileAccess.file_exists(path):
-		DirAccess.remove_absolute(path)
-
-
-func _start_transcode() -> void:
-	_set_status("⏳  Finalizing…")
-	# `-fflags +genpts` re-derives timestamps so a damaged/wrapped AVI index (see
-	# _repair_avi_sizes) is bypassed instead of trusted - without it a >4 GiB render
-	# transcodes to a broken file or fails outright, leaving the raw .render.avi behind.
-	# `-pix_fmt yuv420p` keeps the MP4 playable everywhere (VLC/QuickTime/browsers).
-	# The scratch AVI is deleted by _poll_render once the .mp4 is there. If ghost closes
-	# mid-transcode, ffmpeg dies with it (see [Subprocess]) and the AVI stays - it is then
-	# the only complete copy of the render - until the next export clears it.
-	_transcode_pid = Subprocess.start("ffmpeg", PackedStringArray([
-		"-y", "-loglevel", "error", "-fflags", "+genpts", "-i", _avi,
-		"-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
-		"-c:a", "aac", "-b:a", "192k", _out]), "mask transcode")
-	_render_state = "transcoding"
-
-
-# Godot's AVI writer keeps 32-bit RIFF/LIST size fields, and a full-resolution mask
-# render crosses 4 GiB in a few minutes - past that the written sizes WRAP (mod 2^32)
-# and the container lies about where the frame data ends, even though every 00db/01wb
-# chunk after it is written correctly to EOF. Demuxers that trust those fields (and
-# players, whose seeks hit the equally-wrapped idx1 offsets) stall, repeat frames, or
-# break time indexing (this is why VLC's scrub bar goes wrong on the raw AVI). The
-# repair is two words: RIFF size and the movi LIST size become 0 - "size unknown, read
-# to end of file" - turning any demux into a clean sequential walk of the intact chunks.
-# No-op for files under 4 GiB (their sizes are already correct). Mirrors exporter.gd.
-func _repair_avi_sizes(path: String) -> void:
-	var f := FileAccess.open(path, FileAccess.READ_WRITE)
-	if f == null:
-		return
-	if f.get_length() < 4294967296:
-		f.close()
-		return
-	f.seek(4)
-	f.store_32(0)                       # RIFF size -> unknown
-	var pos := 12
-	for i in 64:                        # walk top-level chunks to the movi LIST
-		f.seek(pos)
-		var tag := f.get_buffer(4).get_string_from_ascii()
-		var csize := f.get_32()
-		if tag == "LIST" and f.get_buffer(4).get_string_from_ascii() == "movi":
-			f.seek(pos + 4)
-			f.store_32(0)               # movi size -> unknown
-			print("ghost mask export: repaired wrapped >4GiB AVI sizes in ", path.get_file())
-			break
-		if csize <= 0 or tag.is_empty():
-			break
-		pos += 8 + csize + (csize & 1)
-	f.close()
-
-
-func _file_size(path: String) -> int:
-	if not FileAccess.file_exists(path):
-		return 0
-	var fa := FileAccess.open(path, FileAccess.READ)
-	return fa.get_length() if fa != null else 0
-
-
-func _set_status(text: String) -> void:
-	if _status == null:     # render_mode never builds it - status there is stdout only
-		print("ghost mask: ", text)
-		return
-	_status.text = text
-	_status.visible = true
+## Pushes one resolved timeline state (see MaskSession.at_time) into the layers:
+## channel params to both materials, each layer's intensities scaled by its own
+## PRESENCE amount - so "how present is this layer" is a continuous, blendable
+## quantity and a mode transition is a fade, not a toggle. The inset's border
+## fades with it (modulate), and fully-absent layers are hidden entirely so they
+## cost nothing.
+func _apply_frame_state(p: Dictionary) -> void:
+	var main_amt := clampf(float(p.get("main_fx", 0.0)), 0.0, 1.0)
+	var inset_show := clampf(float(p.get("inset_show", 0.0)), 0.0, 1.0)
+	var inset_fx := clampf(float(p.get("inset_fx", 0.0)), 0.0, 1.0)
+	if _peek_raw:
+		main_amt = 0.0
+		inset_show = 0.0
+		inset_fx = 0.0
+	_last_inset_show = inset_show
+	# Which source fills the PiP this frame. Fall back to the main clip if the stored
+	# index points past the current track count (e.g. a track was deleted).
+	var pt := int(p.get("pip_track", 0.0))
+	_pip_track = 0 if (_peek_raw or pt < 0 or pt > session.tracks.size()) else pt
+	var t: float = _player.stream_position if _player != null else 0.0
+	var env := _waveform.env_at(t)
+	var layers: Array = p.get("layers", [])
+	# Does a chimera layer actually render this frame? _maybe_capture_echo reads this
+	# to decide whether the (expensive) track readback is worth doing right now.
+	# _temporal_active is the same idea one level up: gates the echo/whisp capture
+	# itself on whatever's actually on screen, not on the session's marker list.
+	_chimera_active = false
+	_audio_layer = {}
+	_temporal_active = false
+	_clown_active = false
+	_umbra_active = false
+	_meta_amount = 0.0
+	for l in layers:
+		var le := int(l.get("effect_a", 0))
+		if le == MaskSession.EFFECT_CHIMERA:
+			_chimera_active = true
+		if le == MaskSession.EFFECT_UMBRA:
+			_umbra_active = true
+			_umb_read_layer(l, env)
+		if le == MaskSession.EFFECT_CLOWN:
+			_clown_active = true
+			_clown_fs = clampf(float(l.get("fx_scale", 1.0)), 0.3, 2.5)
+			_clown_bleed = clampf(float(l.get("fx_smooth", 0.0)), 0.0, 1.0)
+			_clown_settle = clampf(float(l.get("fx_lag", 0.35)), 0.0, 1.0)
+			_clown_hollow = clampf(float(l.get("fx_stick", 0.0)), 0.0, 1.0)
+			# Four keying/pattern fields clown never keys or patterns with, read
+			# here under their clown names. See the vars' own doc for the mappings.
+			_clown_evidence = clampf(float(l.get("resonance", 0.0)), 0.0, 1.0)
+			# Ranges chosen so the STORED DEFAULTS land on "exactly the measured
+			# face": eye 1.0x, no drip, smile at the real mouth's width, no sweep.
+			# 1.2x the eye at the bottom of the slider, 2.2x at the stored default,
+			# 5.2x wound up. It used to be 1.0 + t*6 - 1.44, which is NEGATIVE below
+			# threshold 0.24 - a negative scale turns the hull inside out - and only
+			# 1.0x at the default, i.e. a patch exactly the size of the eye opening.
+			_clown_eye_size = 1.2 + clampf(float(l.get("threshold", 0.24)), 0.0, 1.0) * 4.0
+			_clown_drip = clampf(float(l.get("sat_floor", 0.18)), 0.0, 1.0) - 0.18
+			# Both of these sit on fields that default to 0, so 0 has to be a GOOD
+			# value rather than "off" - a lean streak with a gentle bow is what a
+			# tear of liner looks like, and the sliders take it heavier and wider
+			# from there.
+			# Its floor is a SOFT edge, not the polygon: a hard-edged oval is the
+			# fault this control exists for, so 0 must not be it. The floor is also
+			# what rounds the outline off - the patch is a 16-vertex hull pushed
+			# outward along its own normals, and at any real Eye size its facets are
+			# plainly visible until something averages over them.
+			_clown_smudge = 0.45 + clampf(float(l.get("swap", 0.0)), 0.0, 1.0) * 0.55
+			_clown_drip_w = 0.35 + clampf(float(l.get("fx_y", 0.0)), 0.0, 1.0) * 0.80
+			_clown_drip_curve = 0.45 + clampf(float(l.get("intensity_b", 0.0)),
+				0.0, 1.0) * 1.55
+			_clown_smile_w = 1.0 + (clampf(float(l.get("feather", 0.12)), 0.0, 0.5) - 0.12) * 8.0
+			_clown_smile_curve = (clampf(float(l.get("fx_speed", 1.0)), 0.0, 2.0) - 1.0) * 0.12
+			# fx_x defaults to 0, and 0 must be a GOOD value: some feather is
+			# always wanted, so the range runs from soft to softer.
+			_clown_feather = 0.012 + clampf(float(l.get("fx_x", 0.0)), 0.0, 1.0) * 0.055
+			_ft_sigma = MaskFaceTrack.sigma_for(float(l.get("hue_b", 0.0)))
+			_clown_region = Vector4(
+				float(l.get("reg_x0", 0.0)), float(l.get("reg_y0", 0.0)),
+				float(l.get("reg_x1", 1.0)), float(l.get("reg_y1", 1.0)))
+		if le == 5 or le == 7 or le == MaskSession.EFFECT_SNOW or le == MaskSession.EFFECT_ORACLE \
+				or le == MaskSession.EFFECT_SERPENT or le == MaskSession.EFFECT_CHIMERA \
+				or le == MaskSession.EFFECT_CLOWN:
+			_temporal_active = true
+		# The META mirror's strength - the same env x intensity the shader gets as
+		# this layer's weight. Drives whether the (expensive) workspace readback runs
+		# at all this frame, and how far the render-mode editor chrome has revealed.
+		if le == MaskSession.EFFECT_AUDIO:
+			_audio_layer = l
+		if le == MaskSession.EFFECT_META:
+			_meta_amount = maxf(_meta_amount,
+				clampf(float(l.get("env", 0.0)) * float(l.get("intensity_a", 0.0)), 0.0, 1.0))
+	# The audio layer resolves to bus parameters rather than pixels. Applied every
+	# frame like everything else, so its envelope ramps the sound in exactly as a
+	# visual layer's ramps its paint - and so an export, which walks the same
+	# per-frame path, mixes the same sound the editor previewed.
+	_audio_fx.ensure_bus()
+	_audio_fx.apply(_audio_layer)
+	# Build the layer arrays ONCE; only the weights differ per surface (each
+	# material multiplies its own presence in). Arrays are pushed at FULL declared
+	# length - a short uniform array is silently dropped (flame.gdshader lesson).
+	var n: int = mini(layers.size(), MaskSession.MAX_LAYERS)
+	var hues := PackedFloat32Array()
+	var effects := PackedInt32Array()
+	var base_w := PackedFloat32Array()
+	var offs := PackedVector2Array()
+	var scales := PackedFloat32Array()
+	var densities := PackedFloat32Array()
+	var contrasts := PackedFloat32Array()
+	var glows := PackedFloat32Array()
+	var speeds := PackedFloat32Array()
+	var smooths := PackedFloat32Array()   # raw fx_smooth - snow's Gust; echo bakes its own use into echo_w below
+	var tdirs := PackedVector3Array()
+	var echo_w := PackedFloat32Array()
+	var echo_lag := PackedInt32Array()
+	var lagf := PackedFloat32Array()   # raw fx_lag - fur's Coil knob (echo's use is baked into echo_w/echo_lag)
+	var sticks := PackedFloat32Array()   # raw fx_stick - fur's Stickiness (0 = today's free coat)
+	var tints := PackedFloat32Array()    # fx_tint - Morph, palette hue rotation (0 = natural)
+	var accents := PackedFloat32Array()  # hue_b - umbra's ghost-eye color (0 = red)
+	var regions := PackedVector4Array()  # the layer's box in frame UV (x0,y0,x1,y1)
+	var regsofts := PackedFloat32Array() # how gradually it fades out at that border
+	var slot_frac := fposmod((_player.stream_position if _player != null else 0.0) / _ECHO_INTERVAL, 1.0)
+	for i in MaskSession.MAX_LAYERS:
+		if i < n:
+			var l: Dictionary = layers[i]
+			var res := float(l.get("resonance", 0.0))
+			hues.append(float(l.get("hue_a", 0.0)))
+			effects.append(int(l.get("effect_a", 0)))
+			base_w.append(float(l.get("env", 0.0)) * float(l.get("intensity_a", 0.0)))
+			offs.append(Vector2(float(l.get("fx_x", 0.0)), float(l.get("fx_y", 0.0))))
+			scales.append(float(l.get("fx_scale", 1.0)))
+			# Resonance folds in CPU-side: the audio envelope swings coverage around
+			# its nominal (loud opens the field, quiet closes it) and pulses the rim.
+			densities.append(clampf(float(l.get("fx_density", 0.45)) + 0.5 * res * (env - 0.35), 0.0, 1.0))
+			contrasts.append(float(l.get("fx_contrast", 0.5)))
+			glows.append(1.0 + res * env * 1.3)
+			speeds.append(maxf(0.05, float(l.get("fx_speed", 1.0))))
+			smooths.append(clampf(float(l.get("fx_smooth", 0.0)), 0.0, 1.0))
+			# The echo's temporal kernel: weights over the 8 ring ages, centered
+			# on the layer's lag. Age of ring index k is (k + slot_frac) slots -
+			# continuous in playback time, so a spread kernel (Smoothing > 0)
+			# glides through the ring with no steps; Smoothing ~ 0 collapses to
+			# the nearest single frame - the held-frame stutter, now at an
+			# adjustable distance. Pure function of position + fields: live and
+			# export blend identically.
+			var lag_slots := clampf(float(l.get("fx_lag", 0.35)) / _ECHO_INTERVAL, 0.0, 7.0)
+			var smooth_amt := clampf(float(l.get("fx_smooth", 0.0)), 0.0, 1.0)
+			echo_lag.append(clampi(int(round(lag_slots)), 0, 7))
+			lagf.append(float(l.get("fx_lag", 0.35)))
+			sticks.append(clampf(float(l.get("fx_stick", 0.0)), 0.0, 1.0))
+			tints.append(clampf(float(l.get("fx_tint", 0.0)), 0.0, 1.0))
+			accents.append(clampf(float(l.get("hue_b", 0.0)), 0.0, 1.0))
+			var w := PackedFloat32Array()
+			var wsum := 0.0
+			for k in 8:
+				var wv: float
+				if smooth_amt < 0.02:
+					wv = 1.0 if k == clampi(int(round(lag_slots - slot_frac)), 0, 7) else 0.0
+				else:
+					wv = exp(-absf(float(k) + slot_frac - lag_slots) / (smooth_amt * 2.5))
+				w.append(wv)
+				wsum += wv
+			for k in 8:
+				echo_w.append(w[k] / maxf(wsum, 0.0001))
+			# The target hue's normalized chroma direction, for erase's
+			# projection-subtraction (see the shader: erase is subtraction,
+			# not classification - no gates, no boundary rings).
+			var tc := Color.from_hsv(float(l.get("hue_a", 0.0)), 1.0, 1.0)
+			var tl := 0.299 * tc.r + 0.587 * tc.g + 0.114 * tc.b
+			tdirs.append(Vector3(tc.r - tl, tc.g - tl, tc.b - tl).normalized())
+			# The layer's region box, normalized here so the shader never has to
+			# wonder which corner is which (a box dragged past itself is still a
+			# box). Sessions saved before regions existed have none of these
+			# fields; the DEFAULTS fall back to the whole frame, which is exactly
+			# what they rendered before.
+			# SNAPPED HERE, not only when dragged. A drag snaps an edge that lands
+			# near the frame's border onto it (see _snap_edge), but a value stored
+			# before that existed - or set any other way - keeps whatever it has,
+			# and an edge sitting 0.002 off the top is a four-pixel band of exactly
+			# the color the layer was added to remove, hugging the top of the
+			# picture. Snapping at the point of USE means every session gets the
+			# same treatment, and the shader can then skip that side's falloff
+			# entirely because the edge is genuinely flush.
+			regions.append(Vector4(
+				MaskRegion.snap_edge(minf(float(l.get("reg_x0", 0.0)), float(l.get("reg_x1", 1.0)))),
+				MaskRegion.snap_edge(minf(float(l.get("reg_y0", 0.0)), float(l.get("reg_y1", 1.0)))),
+				MaskRegion.snap_edge(maxf(float(l.get("reg_x0", 0.0)), float(l.get("reg_x1", 1.0)))),
+				MaskRegion.snap_edge(maxf(float(l.get("reg_y0", 0.0)), float(l.get("reg_y1", 1.0))))))
+			regsofts.append(clampf(float(l.get("reg_soft", 0.0)), 0.0, 1.0))
+		else:
+			hues.append(0.0)
+			effects.append(0)
+			base_w.append(0.0)
+			offs.append(Vector2.ZERO)
+			scales.append(1.0)
+			densities.append(0.0)
+			contrasts.append(0.5)
+			speeds.append(1.0)
+			smooths.append(0.0)
+			echo_lag.append(0)
+			lagf.append(0.0)
+			sticks.append(0.0)
+			tints.append(0.0)
+			accents.append(0.0)
+			for k in 8:
+				echo_w.append(1.0 if k == 0 else 0.0)
+			glows.append(1.0)
+			tdirs.append(Vector3(1, 0, 0))
+			regions.append(Vector4(0.0, 0.0, 1.0, 1.0))   # unused slot: whole frame
+			regsofts.append(0.0)
+	# Which source actually has valid picture at `t`: the main clip's own kept range,
+	# or - once that's ended - whichever continuation track (see
+	# MaskSession.continuation_track_at) has picked it up. Each continuation track
+	# renders through its OWN player (see _sync_tracks), never by borrowing _player's -
+	# see continuation_track_at's doc for why that used to be a fragile invariant.
+	var main_active := t < session.effective_clip_out()
+	var cont_idx := -1 if main_active else session.continuation_track_at(t)
+	var cont_tex: Texture2D = null
+	if cont_idx != -1 and cont_idx < _track_runtime.size() and _track_runtime[cont_idx].has("player"):
+		var cp: VideoStreamPlayer = _track_runtime[cont_idx].player
+		if cp != null and cp.get_video_texture() != null and cp.get_video_texture().get_height() > 0:
+			cont_tex = cp.get_video_texture()
+	_cont_view.visible = cont_tex != null
+	if cont_tex != null:
+		_cont_view.texture = cont_tex
+	for pair in [[_mat_main, main_amt], [_mat_inset, inset_fx]]:
+		var mat: ShaderMaterial = pair[0]
+		var amt: float = pair[1]
+		mat.set_shader_parameter("u_threshold", p.threshold)
+		mat.set_shader_parameter("u_feather", p.feather)
+		mat.set_shader_parameter("u_sat_floor", p.sat_floor)
+		# The wisp field's clock is the CLIP's own playback position, never
+		# wall-time - live and export step the same clock, so a session
+		# reproduces its exact wisps frame-for-frame (flame.gdshader discipline).
+		mat.set_shader_parameter("u_time", t)
+		var tex := (_player.get_video_texture() if _player != null else null) if main_active else cont_tex
+		if tex != null and tex.get_height() > 0:
+			mat.set_shader_parameter("u_aspect", float(tex.get_width()) / float(tex.get_height()))
+			# The ACTIVE source's own pixel grid - a continuation track may be a
+			# different size from the main clip, so this tracks `tex`, not _src_size.
+			mat.set_shader_parameter("u_texel",
+				Vector2(1.0 / float(tex.get_width()), 1.0 / float(tex.get_height())))
+		var ws := PackedFloat32Array()
+		for i in MaskSession.MAX_LAYERS:
+			ws.append(base_w[i] * amt)
+		mat.set_shader_parameter("u_l_count", n)
+		mat.set_shader_parameter("u_l_hue", hues)
+		mat.set_shader_parameter("u_l_effect", effects)
+		mat.set_shader_parameter("u_l_w", ws)
+		mat.set_shader_parameter("u_l_off", offs)
+		mat.set_shader_parameter("u_l_scale", scales)
+		mat.set_shader_parameter("u_l_dens", densities)
+		mat.set_shader_parameter("u_l_con", contrasts)
+		mat.set_shader_parameter("u_l_glow", glows)
+		mat.set_shader_parameter("u_l_speed", speeds)
+		mat.set_shader_parameter("u_l_smooth", smooths)
+		mat.set_shader_parameter("u_l_ew", echo_w)
+		mat.set_shader_parameter("u_l_elag", echo_lag)
+		mat.set_shader_parameter("u_l_lagf", lagf)
+		mat.set_shader_parameter("u_l_stick", sticks)
+		mat.set_shader_parameter("u_l_tint", tints)
+		mat.set_shader_parameter("u_l_accent", accents)
+		mat.set_shader_parameter("u_l_tdir", tdirs)
+		mat.set_shader_parameter("u_l_region", regions)
+		mat.set_shader_parameter("u_l_regsoft", regsofts)
+		# Chimera's graft source: the first track's live frame. The explicit
+		# flag matters - the sampler's default-black fallback must never read
+		# as footage.
+		var track_tex: Texture2D = null
+		if _track_runtime.size() > 0 and _track_runtime[0].has("player"):
+			var tp: VideoStreamPlayer = _track_runtime[0].player
+			if tp != null and tp.get_video_texture() != null \
+					and tp.get_video_texture().get_height() > 0:
+				track_tex = tp.get_video_texture()
+		mat.set_shader_parameter("u_track_on", 1 if track_tex != null else 0)
+		if track_tex != null:
+			mat.set_shader_parameter("u_track", track_tex)
+	# The active source's own raw frame - and everything sourced from it (the fx
+	# overlay, its own PiP inset) - only while the timeline actually claims this
+	# instant (feedback/0009: past the main track's own trim, with no track
+	# continuing it here, video.ogv kept rendering anyway).
+	_player.visible = main_active
+	_fx_overlay.visible = main_amt > 0.001 and (main_active or cont_tex != null)
+	# Main clip's PiP only when it's the selected source; _sync_tracks re-confirms.
+	_mask_wrap.visible = inset_show > 0.001 and _pip_track == 0 and main_active
+	_mask_wrap.modulate.a = inset_show
+	if _view_label != null:
+		if _pip_track > 0:
+			var main_lbl := "fx" if main_amt > 0.5 else "raw"
+			_view_label.text = "🎞  main %s · Track %d (raw)" % [main_lbl, _pip_track]
+		else:
+			match MaskSession.VIEW_MODES[clampi(int(p.get("view_mode", 2.0)), 0, MaskSession.VIEW_MODES.size() - 1)]:
+				"raw":            _view_label.text = "🎬  Raw"
+				"pip_raw":        _view_label.text = "🖼  PiP (raw)"
+				"pip":            _view_label.text = "🖼  PiP (fx)"
+				"masked_pip_raw": _view_label.text = "🎭  Full (fx) · PiP (raw)"
+				"masked_pip":     _view_label.text = "🎭  Both (fx)"
+				"masked":         _view_label.text = "🎭  Full (fx)"

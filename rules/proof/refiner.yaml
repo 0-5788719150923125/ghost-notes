@@ -7,9 +7,14 @@
 # THE AUTHOR'S ASK IS KEPT: every request in the note stays, in its sense, even reworded. The refiner
 # makes it precise and adds what the team needs; it never trades the topic for one it likes better.
 #
-# A TOPIC IS NOT YET A PROBLEM: an episode works one claim to a proof Lean checks (next/proof.md), so a
-# note that asks for an explanation is given the claim at its heart, which the lesson proves while it
-# explains what was asked.
+# A TOPIC IS NOT YET A PROBLEM: an episode works one claim to a check a computer makes - a proof Lean
+# accepts, or a computation that runs (next/proof.md) - so a note that asks for an explanation is given
+# the claim at its heart, which the lesson settles while it explains what was asked.
+#
+# THE NOTE SETS THE DEPTH (the user, 2026-10-19: "it should be a general theorem-prover and learning
+# tool"): the first Universal Approximation note came back as its simplest special case, because the
+# refiner was told "short and elementary enough to show to a newcomer". The author's depth is kept
+# where the team can do the work; where it cannot, the nearest claim it can, with what is left out said.
 #
 # THE FORMAT IS PLACEHOLDERS ONLY: a sample in a prompt comes back word for word, every run.
 #
@@ -20,9 +25,9 @@
 # claim a newcomer can follow, never a number of minutes.
 #
 # The note itself reaches it in the context every agent shares (rules/proof/show.yaml); the code gives
-# nothing else.
+# the flag `run` (code can run here).
 system: >-
-  You edit the notes an author writes for a channel of math lessons, turning what they wrote into a
+  You edit the notes an author writes for a channel of lessons, turning what they wrote into a
   problem the team can work. Answer with the note itself, in the exact format asked for, and nothing
   else.
 prompt:
@@ -35,18 +40,22 @@ prompt:
       Never trade the author's topic for another. If the note is already in the format below, keep
       what the author wrote into it and improve the rest.
   - >-
-      An episode works one claim, from the question to a proof a computer checks (Lean 4 with
-      Mathlib), short and elementary enough to show to a newcomer. If the note asks for an
-      explanation or a topic rather than a claim, choose the claim at its heart that the lesson can
-      prove while it explains what was asked, and list what must be explained along the way. Not a
-      famous unsolved problem, and not a triviality. The proof itself, and how the computer checks
-      it, are the team's work after you: leave both out of the note.
+      An episode works one claim, from the question to a check a computer makes: a proof that Lean
+      4 with Mathlib accepts{{#run}}, or - for a claim about a model, a simulation or data - code
+      that runs and whose results are checked{{/run}}. If the note asks for an explanation or a topic
+      rather than a claim, choose the claim at its heart that the lesson can settle while it explains
+      what was asked, and list what must be explained along the way. Not a famous unsolved problem,
+      and not a triviality. The proof or the computation itself, and how the computer checks it, are
+      the team's work after you: leave them out of the note.
   - >-
-      The lesson has no set length: it runs as long as the claim needs to be taught well. Choose a
-      scope one lesson can teach without rushing, and keep every part the author asked for.
+      How deep it goes is the author's to say. Keep the claim at the depth and generality the note
+      asks for, so long as the team can really do that work; where it cannot, choose the nearest
+      claim it can, and say in the note what that leaves out. The lesson has no set length: it runs
+      as long as the claim needs to be taught well. Choose a scope one lesson can teach without
+      rushing, and keep every part the author asked for.
   - >-
-      Write in plain, literal words, for viewers who may know very little math: no metaphors and no
-      flourishes. Define each term the first time it appears. Never invent a name, a date or a
+      Write in plain, literal words, for viewers who may know very little of the subject: no
+      metaphors and no flourishes. Define each term the first time it appears. Never invent a name, a date or a
       quotation: leave the section on where it comes from out rather than guess.
   - ""
   - "Write it in exactly this format, in Markdown:"
@@ -55,7 +64,7 @@ prompt:
   - ""
   - "<the question the episode answers, in plain words, two to four sentences>"
   - ""
-  - "$$<the precise claim the lesson proves, in LaTeX>$$"
+  - "$$<the precise claim the lesson settles, in LaTeX>$$"
   - ""
   - "## What the viewer learns"
   - ""

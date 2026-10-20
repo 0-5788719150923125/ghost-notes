@@ -17,7 +17,8 @@ class_name SetDresserTools
 ##           hold the cards, a pattern it does not know); and THE LIGHT ([Lights]), part by part - its
 ##           sky, sun, clouds and birds each replacing the last, what the sun falls through and the lamps
 ##           by name - answered with where the sun falls (how much of the table, and of where the cards
-##           lie) and how the weather runs
+##           lie) and how the weather runs; and THE RIDE ([Rides]): what the table is aboard, if it moves -
+##           answered with how it shakes and what on the table moves with it
 ##   remove  things off it, by name
 ##   blueprint  where each thing stands, WRITTEN, not hunted for (the user, 2026-10-18: "do the planning
 ##           and desired placements up-front, then verify with screenshots at the end"): each thing's `at`
@@ -91,6 +92,8 @@ var _light := {}                 # the table's light as written, part by part, o
 var _light_put := false
 var _sound := {}                 # what the place sounds like ([Soundscape]), part by part, once put
 var _sound_put := false
+var _ride := {}                  # what the table is aboard ([Rides]), as written, once put
+var _ride_put := false
 var _looks := 0
 var _busy := false               # a call is in hand ([method call_tool])
 var _released := false
@@ -139,8 +142,9 @@ func list_tools() -> Array:
 				"top": {"type": "object", "description": "the table's top: {shape, size, corner, sides, scallops, thickness, edge, material, boards, tiles, pattern, inlay, relief, why} - replaces the top before"},
 				"layers": {"type": "array", "items": {"type": "object"}, "description": "cloths laid on the top, bottom first: each {name, what, outline, size, drop, at, turn, fabric, pattern, border, fringe, relief, sheen}, replacing a layer of the same name (a new one goes on top)"},
 				"light": {"type": "object", "description": "the table's light, {why, sky, sun, through, clouds, wind, birds, lamps, shadows}: each part given replaces that part (null takes it away); in `through`, `lamps` and `shadows` an entry replaces the one of the same name (an empty list takes them all away)"},
-				"sound": {"type": "object", "description": "what the place sounds like behind the reader, {why, wind, water, rain, fire, stream, insects}: each part given replaces that part (null takes it away)"}}}},
-		{"name": "remove", "description": "Take things - or effects of its air, layers, or parts of its light (what the sun falls through, a lamp or a shadow, by name; or \"sun\", \"clouds\", \"wind\", \"birds\", or \"light\" for all of it), or its sound (\"sound\") - off the table you are setting, by name.",
+				"sound": {"type": "object", "description": "what the place sounds like behind the reader, {why, wind, water, rain, fire, stream, insects, ride}: each part given replaces that part (null takes it away)"},
+				"ride": {"type": "object", "description": "what the table is aboard, when it moves: {on, rough, speed, why} - replaces the ride before ({} takes it away: the table stands still)"}}}},
+		{"name": "remove", "description": "Take things - or effects of its air, layers, or parts of its light (what the sun falls through, a lamp or a shadow, by name; or \"sun\", \"clouds\", \"wind\", \"birds\", or \"light\" for all of it), its sound (\"sound\") or its ride (\"ride\") - off the table you are setting, by name.",
 			"inputSchema": {"type": "object", "properties": {"names": {"type": "array", "items": {"type": "string"}}}, "required": ["names"]}},
 		{"name": "blueprint", "description": "Lay the things out on the table's BLUEPRINT and draw it: the table from straight above as a plan, black on white, ruled in centimeters from the middle of the reading (x to the reader's right, z toward the reader; the far side negative) - the top and its cloths, where the cards go (hatched: nothing stands there), the reader's hands, the camera's frame (gray past it), lines saying how tall a thing there can be and still be seen whole, the line flames stand behind, and every thing placed: its foot as it stands, numbered as put numbers it, a tick toward its front. Give `things` to place them first, each {name, at: [x, z], turn, scale}: only what changes need be given. Answers with the drawing and, for each thing, where it stands, its foot and height against the height its spot shows, and what moved it or kept it off.",
 			"inputSchema": {"type": "object", "properties": {"things": {"type": "array", "items": {"type": "object", "properties": {
@@ -221,6 +225,8 @@ func draft() -> Dictionary:
 		out["light"] = _light.duplicate(true)
 	if _sound_put:
 		out["sound"] = _sound.duplicate(true)
+	if _ride_put and not _ride.is_empty():
+		out["ride"] = _ride.duplicate(true)
 	return out
 
 
@@ -243,9 +249,13 @@ func _put(args: Dictionary) -> Dictionary:
 	var any_table: bool = new_top is Dictionary or new_layers is Array
 	var any_light: bool = args.get("light") is Dictionary
 	var any_sound: bool = args.get("sound") is Dictionary
+	var any_ride: bool = args.get("ride") is Dictionary
 	if not (raw is Array) or ((raw as Array).is_empty() and mats.is_empty() and not any_air and not any_table and not any_light
-			and not any_sound and not (args.get("idea") is String)):
-		return {"text": "Nothing was put: give `things` (a list of things), `materials`, `effects`, the table's `top` or `layers`, its `light`, its `sound`, or an `idea`.", "error": true}
+			and not any_sound and not any_ride and not (args.get("idea") is String)):
+		return {"text": "Nothing was put: give `things` (a list of things), `materials`, `effects`, the table's `top` or `layers`, its `light`, its `sound`, its `ride`, or an `idea`.", "error": true}
+	if any_ride:
+		_ride = (args["ride"] as Dictionary).duplicate(true)
+		_ride_put = true
 	if any_light:
 		_merge_light(args["light"] as Dictionary)
 	if any_sound:
@@ -336,6 +346,8 @@ func _put(args: Dictionary) -> Dictionary:
 		lines.append_array(_describe_light())
 	if any_sound or (any_light and _sound_put):
 		lines.append_array(_describe_sound())
+	if any_ride:
+		lines.append_array(_describe_ride())
 	if junk > 0:
 		lines.append("%d of the things given %s not an object {name, parts, ...} - left out." % [junk, "was" if junk == 1 else "were"])
 	if not notes.is_empty():
@@ -377,6 +389,9 @@ func _remove(args: Dictionary) -> Dictionary:
 			gone.append(String(n))
 		elif String(n).strip_edges().to_lower() == "sound" and not _sound.is_empty():
 			_sound = {}
+			gone.append(String(n))
+		elif String(n).strip_edges().to_lower() == "ride" and not _ride.is_empty():
+			_ride = {}
 			gone.append(String(n))
 		else:
 			missing.append(String(n))
@@ -876,8 +891,59 @@ func _describe_sound() -> PackedStringArray:
 		out.append("The sound: %s." % Soundscape.summary(made["sound"]))
 	if not _sound.has("wind") and ((Lights.sanitize(light) if not light.is_empty() else {}).get("wind", {}) as Dictionary).size() > 0:
 		out.append("  - the light's wind blows silently: give the sound a `wind` if it should be heard")
+	if not _sound.has("ride") and not Rides.sanitize(_ride).is_empty():
+		out.append("  - the ride is felt and never heard: give the sound a `ride` if it should be heard")
+	elif _sound.has("ride") and Rides.sanitize(_ride).is_empty():
+		out.append("  - the sound's `ride` is silent: the table has no `ride`")
 	for n in notes:
 		out.append("  - " + n)
+	return out
+
+
+## THE RIDE IN WORDS, as it will be felt: what it is aboard and how it shakes - the knocks, how often a hard
+## jolt comes - what had to change, and what on the table moves with it.
+func _describe_ride() -> PackedStringArray:
+	var notes := PackedStringArray()
+	var ride := Rides.sanitize(_ride, notes)
+	var out := PackedStringArray()
+	if ride.is_empty():
+		out.append("The ride: none - the table stands still.")
+	else:
+		var p := Rides.plan(ride, hash([episode.seed, "ride"]))
+		var jolts := (p["starts"] as PackedFloat32Array).size()
+		var how := PackedStringArray()
+		if float(p["period"]) > 0.0:
+			how.append("a wheel knocks over a rail joint every %s s" % str(snappedf(float(p["period"]), 0.1)))
+		if (p["patter"] as Vector2).x > 0.0:
+			how.append("small jolts %s times a second" % str(snappedf((p["patter"] as Vector2).x, 0.1)))
+		how.append("a hard jolt about every %d s" % roundi(Lights.HORIZON / float(maxi(jolts, 1))) if jolts > 0 else "no hard jolt")
+		out.append("The ride: %s - %s. The camera rides with the table: a faint buzz, a quick jolt at a bump." % [Rides.summary(ride), ", ".join(how)])
+	var moving := PackedStringArray()
+	for t in _safe()["things"]:
+		var kinds := _moves_in((t as Dictionary).get("parts", []))
+		if not kinds.is_empty():
+			moving.append("%s (%s)" % [String((t as Dictionary).get("name", "")), ", ".join(kinds)])
+	if not moving.is_empty():
+		out.append("  What moves with it: %s." % "; ".join(moving))
+	elif not ride.is_empty():
+		out.append("  Nothing on the table moves with it yet: give a part or a group that would really move a `move`.")
+	if not ride.is_empty() and not _sound.has("ride"):
+		out.append("  - the ride is felt and never heard: give the sound a `ride` if it should be heard")
+	for n in notes:
+		out.append("  - " + n)
+	return out
+
+
+## The moves among [param parts] (made safe), groups and all: "sways", "a needle", ...
+static func _moves_in(parts: Array) -> PackedStringArray:
+	var out := PackedStringArray()
+	for q in parts:
+		var d: Dictionary = q
+		if d.get("move") is Dictionary and not (d["move"] as Dictionary).is_empty():
+			var k := String((d["move"] as Dictionary)["kind"])
+			out.append({"sway": "sways", "tremble": "trembles", "swing": "swings", "needle": "a needle", "rock": "rocks", "slosh": "a liquid that sloshes"}[k])
+		if d.get("parts") is Array:
+			out.append_array(_moves_in(d["parts"]))
 	return out
 
 
@@ -1096,7 +1162,7 @@ func _light_names() -> String:
 			if float((g as Dictionary).get("sway", 0.0)) > 0.0 and String((g as Dictionary)["kind"]) in ["blinds", "leaves", "fronds", "branches", "awning", "parasol"]:
 				out.append(String((g as Dictionary)["name"]))
 		for l in light["lamps"]:
-			if String((Lights.LAMPS[String((l as Dictionary)["look"])] as Dictionary)["flicker"]) != "steady":
+			if String((Lights.LAMPS[String((l as Dictionary)["look"])] as Dictionary)["flicker"]) != "steady" or bool((l as Dictionary).get("failing", false)):
 				out.append(String((l as Dictionary)["name"]))
 		for c in light.get("shadows", []):
 			if String(((c as Dictionary)["move"] as Dictionary)["kind"]) != "still":
@@ -1156,11 +1222,14 @@ func _describe(names: Array) -> PackedStringArray:
 		var node: Node3D = b["node"]
 		var shrunk := node.get_child_count() > 0 and (node.get_child(0) as Node3D).scale.x < 0.999
 		var flames := (b["wicks"] as Array).size()
+		var moves := _moves_line(b)
 		node.free()
 		var group := String(built.get("group", ""))
 		out.append("%d. %s (%s%s): %s, %d part%s%s" % [at + 1, String(nm), _where_written(built), (", group " + group) if not group.is_empty() else "",
 			TablePreview.size_text(box), _count_parts(built.get("parts", [])), "" if _count_parts(built.get("parts", [])) == 1 else "s",
 			(", %d flame%s" % [flames, "" if flames == 1 else "s"]) if flames > 0 else ""])
+		if not moves.is_empty():
+			out.append("   moves: " + moves)
 		if shrunk:
 			troubles.append("larger than %d cm across: built smaller, whole" % roundi(Props.MAX_SIZE))
 		var wrote := 0
@@ -1176,6 +1245,32 @@ func _describe(names: Array) -> PackedStringArray:
 		for tr in troubles:
 			out.append("   - " + tr)
 	return out
+
+
+## WHAT MOVES IN A BUILT THING ([method Props.build]'s [param b]), in words: each kind, how many, where it is
+## held and how fast it rings on this draft's ride - and whether anything moves it at all.
+func _moves_line(b: Dictionary) -> String:
+	var movers: Array = b.get("movers", [])
+	if movers.is_empty():
+		return ""
+	var ride := Rides.plan(Rides.sanitize(_ride), hash([episode.seed, "ride"]))
+	var kinds := {}
+	for m in movers:
+		var md: Dictionary = m
+		var k := String((md["move"] as Dictionary)["kind"])
+		if not kinds.has(k):
+			var r := Rides.responder(ride, md["move"], float(md["reach"]) * float(b.get("sized", 1.0)), 1)
+			kinds[k] = {"n": 0, "hz": float(r["w"]) / TAU, "at": md["pivot"]}
+		(kinds[k] as Dictionary)["n"] = int((kinds[k] as Dictionary)["n"]) + 1
+	var out := PackedStringArray()
+	for k in kinds:
+		var d: Dictionary = kinds[k]
+		var at: Vector3 = d["at"]
+		var hz := "" if k in ["needle", "rock"] else ", %s times a second" % str(snappedf(float(d["hz"]), 0.1))
+		out.append("%s%s, held at [%s, %s, %s]%s" % [k, (" x%d" % int(d["n"])) if int(d["n"]) > 1 else "",
+			str(snappedf(at.x * 100.0, 0.1)), str(snappedf(at.y * 100.0, 0.1)), str(snappedf(at.z * 100.0, 0.1)), hz])
+	var still := ride.is_empty() and not (_light_put and not (Lights.sanitize(_light).get("wind", {}) as Dictionary).is_empty())
+	return "; ".join(out) + (" - nothing moves it yet: the table has no ride and no wind" if still else "")
 
 
 ## What the builder cannot make of thing [param t] as written: one line each.
@@ -1231,6 +1326,12 @@ func _part_troubles(list: Array, depth: int, budget: Array, path: String, out: P
 				if float(thin[si]) < float(cut["cell"]) * 0.6:
 					out.append("part %s: stroke %d is %s cm thick at its thinnest, finer than this sculpt is cut (about %s cm) - it may come out broken or vanish: make it thicker, or the sculpt smaller" % [where, si + 1,
 						str(snappedf(float(thin[si]), 0.01)), str(snappedf(float(cut["cell"]), 0.01))])
+		var mv := PackedStringArray()
+		Rides.sanitize_move(d.get("move"), mv)
+		for n in mv:
+			out.append("part %s: %s" % [where, n])
+		if d.get("move") != null and mv.is_empty() and (Props._flag(d.get("wick")) or d.get("wicks") != null):
+			out.append("part %s: a part with a flame never moves - its move is left out" % where)
 		if d.has("warp") and not (d["warp"] is Dictionary):
 			out.append("part %s: its warp is not {\"bend\": ..., ...} - not warped" % where)
 		elif d.get("warp") is Dictionary:

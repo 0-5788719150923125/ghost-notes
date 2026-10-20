@@ -1,0 +1,6 @@
+# ghost's compute environment (user://compute_venv): the libraries a Proof solver's code may use
+# when it RUNS something (hosts/compute/run.py) - arrays and linear algebra, numerical methods and
+# statistics, symbolic algebra. The code runs inside a sandbox (bubblewrap); see run.py.
+numpy>=2.3
+scipy>=1.16
+sympy>=1.14

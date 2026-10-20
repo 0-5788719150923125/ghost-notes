@@ -5,19 +5,19 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 309 references inside a folder, 771 down the stack, 0 up it.
+Between scripts today: 345 references inside a folder, 800 down the stack, 0 up it.
 
 ## The stack, top first
 
 | folder | what it is | scripts | names |
 | --- | --- | --- | --- |
 | `app/` | The shell | 13 | `masking`, `cards`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
-| `masking/` | Masking | 10 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
+| `masking/` | Masking | 14 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
 | `proof/` | Proof | 6 | `desk`, `table`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
-| `desk/` | The desk | 3 | `table`, `media`, `scene_kit`, `data` |
+| `desk/` | The desk | 5 | `table`, `media`, `scene_kit`, `data` |
 | `cards/` | Cards | 10 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
-| `table/` | The set | 21 | `media`, `scene_kit`, `audio`, `data` |
-| `reading/` | The voice's workspaces | 5 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
+| `table/` | The set | 22 | `media`, `scene_kit`, `audio`, `data` |
+| `reading/` | The voice's workspaces | 10 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
 | `export/` | Export | 4 | `show`, `voice`, `ui`, `notes`, `agents`, `stage`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
 | `show/` | The show | 8 | `media`, `ui`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
@@ -142,13 +142,13 @@ Rendering a session to video (bake + Movie Maker, background processes) and uplo
 
 The panels a voice runs in: the reading (script, cast, voice, stream, export), the Generative editor built on it, and the voice lab with the fishing game that breeds its voices.
 
-[`reading_bed`](../src/reading/reading_bed.gd), [`reading_panel`](../src/reading/reading_panel.gd), [`reading_publish`](../src/reading/reading_publish.gd), [`synth_editor`](../src/reading/synth_editor.gd), [`text_walk`](../src/reading/text_walk.gd)
+[`reading_audition`](../src/reading/reading_audition.gd), [`reading_bed`](../src/reading/reading_bed.gd), [`reading_cast`](../src/reading/reading_cast.gd), [`reading_join`](../src/reading/reading_join.gd), [`reading_panel`](../src/reading/reading_panel.gd), [`reading_plan`](../src/reading/reading_plan.gd), [`reading_publish`](../src/reading/reading_publish.gd), [`reading_stream`](../src/reading/reading_stream.gd), [`synth_editor`](../src/reading/synth_editor.gd), [`text_walk`](../src/reading/text_walk.gd)
 
 ### `table/` - The set
 
 A place, seen and heard, built from a written description: the table itself (Tables), the things on it (Props), its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds), its sound (Soundscape), where cards go on it, what can be done with them and how a reading says so, the faces printed on them - and the medium that puts it all on the stage (`table.gd`, a row of `Medium.REGISTRY`).
 
-[`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`intro_blur`](../src/table/intro_blur.gd), [`lights`](../src/table/lights.gd), [`props`](../src/table/props.gd), [`show_opening`](../src/table/show_opening.gd), [`soundscape`](../src/table/soundscape.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_light`](../src/table/table_light.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`winds`](../src/table/winds.gd)
+[`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`intro_blur`](../src/table/intro_blur.gd), [`lights`](../src/table/lights.gd), [`props`](../src/table/props.gd), [`rides`](../src/table/rides.gd), [`show_opening`](../src/table/show_opening.gd), [`soundscape`](../src/table/soundscape.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_light`](../src/table/table_light.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`winds`](../src/table/winds.gd)
 
 ### `cards/` - Cards
 
@@ -160,7 +160,7 @@ A show of cards nobody writes: a show's brief, its episodes - each planned, deal
 
 A study where a ghost does math, seen and heard: the ink (formulas TeX lays out, written stroke by stroke in a seeded hand from the Hershey stroke fonts), the pad, the pen that moves by itself, the instruments it reaches for - a calculator, a tablet, a screen with Lean on it - and the medium that puts them on the stage. Its room is built from the table's parts. Design: next/proof.md.
 
-[`desk`](../src/desk/desk.gd), [`desk_script`](../src/desk/desk_script.gd), [`ink`](../src/desk/ink.gd)
+[`desk`](../src/desk/desk.gd), [`desk_look`](../src/desk/desk_look.gd), [`desk_script`](../src/desk/desk_script.gd), [`ink`](../src/desk/ink.gd), [`legal_pad`](../src/desk/legal_pad.gd)
 
 ### `proof/` - Proof
 
@@ -172,7 +172,7 @@ A ghost doing math, made by agents: a note's problem fixed, worked at the desk w
 
 The video chroma-key masking editor - a second app surface inside ghost. See [masking.md](masking.md).
 
-[`mask_audio_fx`](../src/masking/mask_audio_fx.gd), [`mask_editor`](../src/masking/mask_editor.gd), [`mask_face_track`](../src/masking/mask_face_track.gd), [`mask_marker_tool`](../src/masking/mask_marker_tool.gd), [`mask_pose_track`](../src/masking/mask_pose_track.gd), [`mask_session`](../src/masking/mask_session.gd), [`mask_timeline`](../src/masking/mask_timeline.gd), [`mask_undo`](../src/masking/mask_undo.gd), [`mask_url_import`](../src/masking/mask_url_import.gd), [`track_lane`](../src/masking/track_lane.gd)
+[`mask_audio_fx`](../src/masking/mask_audio_fx.gd), [`mask_editor`](../src/masking/mask_editor.gd), [`mask_export`](../src/masking/mask_export.gd), [`mask_face_track`](../src/masking/mask_face_track.gd), [`mask_marker_tool`](../src/masking/mask_marker_tool.gd), [`mask_pose_track`](../src/masking/mask_pose_track.gd), [`mask_prep`](../src/masking/mask_prep.gd), [`mask_region`](../src/masking/mask_region.gd), [`mask_session`](../src/masking/mask_session.gd), [`mask_timeline`](../src/masking/mask_timeline.gd), [`mask_undo`](../src/masking/mask_undo.gd), [`mask_url_import`](../src/masking/mask_url_import.gd), [`mask_waveform`](../src/masking/mask_waveform.gd), [`track_lane`](../src/masking/track_lane.gd)
 
 ### `app/` - The shell
 

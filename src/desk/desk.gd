@@ -37,12 +37,25 @@ class_name DeskMedium
 ## top instead, no word of the new reading was ever found, and the pen stood still to the end (the
 ## user, 2026-10-16: "scrubbing the timeline seems to have broken the pen completely"). The camera alone eases (as the book's and the tablet's do), and lands at once on a seek.
 ##
+## WHAT IS ON THE PAGE STAYS (the user, 2026-10-19: "two graphs are drawn side-by-side. Then suddenly,
+## the 2nd one disappears and is re-drawn"). A live reading's word times arrive a sentence at a time,
+## a few seconds before it is heard, so a dictation of several sentences is planned on a guess at its
+## end; when its last words came in later than the guess, the share written fell and the newest strokes
+## were taken back. So a plan made again holds the past ([method _hold_past]): what has begun keeps its
+## start and its page's turn, what is done stays done, and a line being written goes on from where it is
+## to the new end ([method _ink_time]). A reading whose times are all known at once (an export) is
+## never planned again, and stays a pure function of time.
+##
 ## THE PAD: a page of a legal pad (8.5 x 11 in), ruled, filled top to bottom - every formula on the next
 ## rules ([method DeskScript.lay_out]) - and TURNED only when the next would run off the foot: the
-## written sheet lifts at its foot, swings up over the binding and is gone, and the clean page is under
-## it (the user: "a page with text on it is just 'wiped' clean, for seemingly no reason ... use all of
-## the available space on a page, and then turn the page if we need more space"). A struck line gets a
-## stroke through it.
+## written sheet is lifted at its foot, rolls up over the binding and is folded round the back of the
+## pad, its head lifted for it, and stays there; the clean page is under it ([LegalPad]; the user: "a
+## page with text on it is just 'wiped' clean, for seemingly no reason ... use all of the available
+## space on a page, and then turn the page if we need more space"). A struck line gets a stroke through
+## it.
+##
+## EACH EPISODE'S DESK IS ITS OWN ([DeskLook], from the episode's seed): the pad's paper and binding,
+## the ink, the pen, the desk's top and a mat on it, the lamp, and a few things lying about.
 ##
 ## THE CAMERA IS THE BOOK'S KIND ([BookMedium]: "something closer to what we did with the 'book' medium,
 ## with a further zoom and mostly vertical orientation ... the actor swapping for a calculator, or a
@@ -74,13 +87,14 @@ class_name DeskMedium
 ## two actions closer than that it waits beside what it just did. Every move between actions is
 ## continuous, and as long as its way ([method _reach]): the wait starts where the action ended and the
 ## reach where the wait is - the nib once jumped to its rest the frame an action ended, and across the
-## page (1025 px in a frame) as one was about to turn it.
+## page (1025 px in a frame) as one was about to turn it. The plan leaves that time between them
+## ([method _way]), or a reach squeezed into nothing is a jump all the same.
 
 ## The page's canvas (an 8.5 x 11 sheet) and the sheet in the world, in meters.
 const PW := DeskScript.PW
 const PH := DeskScript.PH
-const PAD_W := 0.2159
-const PAD_H := 0.2794
+const PAD_W := LegalPad.W
+const PAD_H := LegalPad.H
 ## The pen's body, in meters; how high it lifts between strokes and at rest; how it eases there.
 const PEN_LEN := 0.135
 const PEN_R := 0.0048
@@ -112,9 +126,10 @@ const PARK_EASE := 2.5
 const PARK := Vector2(DeskScript.PW + 90.0, DeskScript.FIRST_RULE * 0.5)
 ## It goes right first, and is off the pad this long after it sets off: a page never turns sooner
 ## after the last action before it (the sheet lifts at its foot, where that action was). It comes back
-## over the new page once this share of the turn is over, the sheet well past upright.
+## over the new page once this share of the turn is over: the sheet folded under and the pad's head
+## down again ([method LegalPad.tilt]).
 const PARK_CLEAR := 1.0
-const PARK_BACK := 0.7
+const PARK_BACK := 0.93
 ## How fast the nib travels to its next action between two (px of the page a second, on the average).
 const REACH_SPEED := 1000.0
 ## THE HAND IS ALIVE: the lean's slow sway (degrees, about the vertical and in its rise), its turn
@@ -145,12 +160,16 @@ const TILT_SPREAD := 1.5
 const ANGLE_SLOW := 3.0
 ## How long the framing looks ahead of the pen, as the book's does (springs make every move late).
 const CAM_LEAD := 2.0
-## The ink and the paper.
-const INK := Color(0.10, 0.13, 0.30)
-const PAPER := Color(0.985, 0.972, 0.90)
-const RULE_COLOR := Color(0.55, 0.72, 0.86, 0.85)
-const MARGIN_COLOR := Color(0.86, 0.42, 0.42, 0.8)
+## A PAGE TURN IS SEEN WHOLE: the camera stands back this long before it (its springs are slow) and
+## aims this far down the page, so the pad's head, where the page goes round, is in the shot.
+const TURN_BACK := 3.0
+const TURN_AIM := 0.36
+## The page's margin line, from its left edge (px). Its colors, the paper's and the ink's are the
+## desk's look's ([member look]).
 const MARGIN_X := 128.0
+## A FAINT line ([constant Ink.FAINT] - a figure's grid): how thin it may be drawn (px) and how light.
+const FAINT_W := 1.3
+const FAINT_ALPHA := 0.38
 
 var _subs = null
 var _doc_key := ""
@@ -162,6 +181,7 @@ var _strokes := {}                 # item id -> Ink.schedule
 var _follower := ReadingFollower.new()
 var _built_n := -1
 var _plan: Array = []              # per action: {start, end, turn_at} (seconds), INF while not placed
+var _held := {}                    # action -> what was shown of it when the plan was made again
 var _now := 0.0
 var _last_now := -1.0
 var _snap := true
@@ -176,9 +196,16 @@ var _root3: Node3D
 var _cam: Camera3D
 var _attrs: CameraAttributesPractical
 var _env: Environment
-var _pad: Node3D
-var _hinge: Node3D                 # the turning sheet hangs from the pad's binding
+var _pad: LegalPad
+var _desk: Node3D                  # the desk's top and the things on it
+var _lamp: SpotLight3D
+var _fill: DirectionalLight3D
+var _lacquer: StandardMaterial3D   # the pen's body
+var _trim: StandardMaterial3D      # ...and its metal
 var _pen: Node3D
+var _dressed := -1                 # the seed the desk was last dressed for
+## THE DESK'S LOOK ([method DeskLook.of]): its colors and what is on it, from the episode's seed.
+var look: Dictionary = DeskLook.of(1)
 var _blur: IntroBlur
 var _title: TitleCard
 # the camera's springs
@@ -226,22 +253,28 @@ class PadCanvas extends Node2D:
 		_shown = []
 
 	func _draw() -> void:
+		if desk == null:
+			return
+		var look: Dictionary = desk.look
 		if part != "wet":
-			draw_rect(Rect2(0, 0, PW, PH), PAPER)
+			draw_rect(Rect2(0, 0, PW, PH), look["paper"])
 			var y := DeskScript.FIRST_RULE
 			while y < PH - 20.0:
-				draw_line(Vector2(0, y), Vector2(PW, y), RULE_COLOR, 2.6, true)
+				draw_line(Vector2(0, y), Vector2(PW, y), look["rule"], 2.6, true)
 				y += DeskScript.RULE
-			draw_line(Vector2(MARGIN_X, 0), Vector2(MARGIN_X, PH), MARGIN_COLOR, 2.0)
-			draw_line(Vector2(MARGIN_X + 6.0, 0), Vector2(MARGIN_X + 6.0, PH), MARGIN_COLOR, 1.5)
-		if desk == null or page < 0:
+			draw_line(Vector2(MARGIN_X, 0), Vector2(MARGIN_X, PH), look["margin"], 2.0)
+			draw_line(Vector2(MARGIN_X + 6.0, 0), Vector2(MARGIN_X + 6.0, PH), look["margin"], 1.5)
+		if page < 0:
 			return
+		var ink: Color = look["ink"]
+		var faint := Color(ink, FAINT_ALPHA)
 		for line in desk.page_ink(page, part):
 			var pts: PackedVector2Array = line["points"]
+			var c := faint if bool(line.get("faint", false)) else ink
 			if pts.size() >= 2:
-				draw_polyline(pts, INK, float(line["width"]), true)
+				draw_polyline(pts, c, float(line["width"]), true)
 			elif pts.size() == 1:
-				draw_circle(pts[0], float(line["width"]) * 0.5, INK)
+				draw_circle(pts[0], float(line["width"]) * 0.5, c)
 
 
 # --- mount -------------------------------------------------------------------------------
@@ -266,8 +299,9 @@ func mount(st: SubViewport) -> void:
 	_title.italic = CardTable.font(CardTable.BOOK_ITALIC)
 	# IN THE PAD'S OWN INK: the card table's light name (chosen to stand out from a painted table)
 	# was cream on cream over the paper; dark, its shade turns light round it (CardTable.title_shade)
-	_title.ink = INK
+	_title.ink = look["ink"]
 	add_child(_title)
+	_dress()
 
 
 ## A page's viewport, drawn by a [PadCanvas] for each of [param parts], the first at the bottom.
@@ -308,111 +342,63 @@ func _build_world() -> void:
 	_cam.attributes = _attrs
 	_root3.add_child(_cam)
 	# THE LAMP, up and to the left of the pad, so the pen's shadow falls across the page to the right
-	# - a white page under the tablet's lamp (4.2, set for a dark screen) burned out to no rules at all
-	var lamp := SpotLight3D.new()
-	lamp.light_color = Color(1.0, 0.88, 0.72)
-	lamp.light_energy = 1.5
-	lamp.spot_range = 4.0
-	lamp.spot_angle = 42.0
-	lamp.spot_angle_attenuation = 1.4
-	lamp.shadow_enabled = true
-	lamp.shadow_bias = 0.005
-	lamp.shadow_normal_bias = 0.15
-	lamp.shadow_blur = 1.4
-	_root3.add_child(lamp)
-	lamp.position = Vector3(-0.55, 0.95, -0.25)
-	lamp.look_at_from_position(lamp.position, Vector3(0.02, 0.0, 0.02), Vector3.UP)
-	var fill := DirectionalLight3D.new()
-	fill.light_color = Color(0.72, 0.76, 0.9)
-	fill.light_energy = 0.18
-	_root3.add_child(fill)
-	fill.rotation_degrees = Vector3(-60.0, 35.0, 0.0)
+	# - a white page under the tablet's lamp (4.2, set for a dark screen) burned out to no rules at all;
+	# where exactly, how warm and how bright are the desk's look's
+	_lamp = SpotLight3D.new()
+	_lamp.spot_range = 4.0
+	_lamp.spot_angle = 42.0
+	_lamp.spot_angle_attenuation = 1.4
+	_lamp.shadow_enabled = true
+	_lamp.shadow_bias = 0.005
+	_lamp.shadow_normal_bias = 0.15
+	_lamp.shadow_blur = 1.4
+	_root3.add_child(_lamp)
+	_fill = DirectionalLight3D.new()
+	_fill.light_energy = 0.18
+	_root3.add_child(_fill)
+	_fill.rotation_degrees = Vector3(-60.0, 35.0, 0.0)
 
-	var desk := MeshInstance3D.new()
-	var dm := PlaneMesh.new()
-	dm.size = Vector2(8.0, 8.0)
-	desk.mesh = dm
-	var dmat := StandardMaterial3D.new()
-	dmat.albedo_color = Color(0.36, 0.22, 0.13)
-	dmat.albedo_texture = BookMedium._grime(0x5EED, 0.02, 5, 0.16)
-	dmat.uv1_scale = Vector3(14.0, 14.0, 1.0)
-	dmat.roughness = 0.6
-	dmat.roughness_texture = dmat.albedo_texture
-	desk.material_override = dmat
-	desk.position = Vector3(0.0, -0.004, 0.0)
-	_root3.add_child(desk)
-
-	_pad = Node3D.new()
+	_pad = LegalPad.new()
 	_root3.add_child(_pad)
-	# the pad's cardboard back peeking out, and the stack under the top sheet
-	_pad.add_child(_box(Vector3(PAD_W + 0.004, 0.0035, PAD_H + 0.03), Vector3(0.0, -0.0018, -0.012),
-		Color(0.32, 0.27, 0.22), 0.9))
-	_pad.add_child(_box(Vector3(PAD_W, 0.003, PAD_H), Vector3(0.0, -0.0015, 0.0), Color(0.95, 0.93, 0.86), 0.95))
-	var sheet := _sheet(_vp.get_texture())
-	sheet.position = Vector3(0.0, 0.0002, 0.0)
-	_pad.add_child(sheet)
-	# THE TURNING SHEET hangs from the binding (the pad's top edge): written on its face, plain paper
-	# on its back, rotated about the edge as it turns over
-	_hinge = Node3D.new()
-	_hinge.position = Vector3(0.0, 0.0006, -PAD_H * 0.5)
-	_hinge.visible = false
-	_pad.add_child(_hinge)
-	var face := _sheet(_vp_turn.get_texture())
-	face.position = Vector3(0.0, 0.0, PAD_H * 0.5)
-	_hinge.add_child(face)
-	var back := MeshInstance3D.new()
-	var bpm := PlaneMesh.new()
-	bpm.size = Vector2(PAD_W, PAD_H)
-	back.mesh = bpm
-	var backmat := StandardMaterial3D.new()
-	backmat.albedo_color = Color(0.93, 0.91, 0.84)
-	backmat.roughness = 0.95
-	back.material_override = backmat
-	back.rotation = Vector3(0.0, 0.0, PI)       # facing down: seen once the sheet is over
-	back.position = Vector3(0.0, -0.0002, PAD_H * 0.5)
-	_hinge.add_child(back)
 
 	_pen = Node3D.new()
 	_root3.add_child(_pen)
-	var lacquer := StandardMaterial3D.new()
-	lacquer.albedo_color = Color(0.05, 0.06, 0.09)
-	lacquer.metallic = 0.3
-	lacquer.roughness = 0.28
-	var brass := StandardMaterial3D.new()
-	brass.albedo_color = Color(0.78, 0.62, 0.32)
-	brass.metallic = 0.9
-	brass.roughness = 0.3
+	_lacquer = StandardMaterial3D.new()
+	_lacquer.metallic = 0.3
+	_lacquer.roughness = 0.28
+	_trim = StandardMaterial3D.new()
+	_trim.metallic = 0.9
+	_trim.roughness = 0.3
 	# the pen's own frame: its nib at the origin, its body up along +Y
-	_pen.add_child(_cyl(PEN_R * 0.85, 0.0005, 0.02, 0.01, brass))
-	_pen.add_child(_cyl(PEN_R, PEN_R * 0.92, PEN_LEN, 0.02 + PEN_LEN * 0.5, lacquer))
-	_pen.add_child(_cyl(PEN_R * 1.04, PEN_R * 1.04, 0.006, 0.02 + PEN_LEN * 0.62, brass))
+	_pen.add_child(_cyl(PEN_R * 0.85, 0.0005, 0.02, 0.01, _trim))
+	_pen.add_child(_cyl(PEN_R, PEN_R * 0.92, PEN_LEN, 0.02 + PEN_LEN * 0.5, _lacquer))
+	_pen.add_child(_cyl(PEN_R * 1.04, PEN_R * 1.04, 0.006, 0.02 + PEN_LEN * 0.62, _trim))
 
 
-func _box(size: Vector3, at: Vector3, color: Color, rough: float) -> MeshInstance3D:
-	var m := MeshInstance3D.new()
-	var b := BoxMesh.new()
-	b.size = size
-	m.mesh = b
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.roughness = rough
-	m.material_override = mat
-	m.position = at
-	return m
-
-
-func _sheet(tex: Texture2D) -> MeshInstance3D:
-	var m := MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(PAD_W, PAD_H)
-	m.mesh = pm
-	var paper := StandardMaterial3D.new()
-	paper.albedo_texture = tex
-	paper.albedo_color = Color(0.93, 0.92, 0.88)
-	paper.roughness = 0.92
-	paper.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
-	m.material_override = paper
-	return m
+## THE DESK DRESSED in [member look]: its top and the things on it, the pad's paper and binding, the
+## pen, the lamp and the title's ink - once for each seed, as a lesson is loaded.
+func _dress() -> void:
+	if _root3 == null or _dressed == _seed:
+		return
+	_dressed = _seed
+	if _desk != null:
+		_desk.queue_free()
+	_desk = DeskLook.dress(look, _seed, LegalPad.DESK_Y)
+	_root3.add_child(_desk)
+	_pad.seed = _seed
+	_pad.build(look, _vp.get_texture(), _vp_turn.get_texture())
+	var lamp: Dictionary = look["lamp"]
+	_lamp.light_color = lamp["color"]
+	_lamp.light_energy = float(lamp["energy"])
+	_lamp.position = lamp["at"]
+	_lamp.look_at_from_position(_lamp.position, Vector3(0.02, 0.0, 0.02), Vector3.UP)
+	_fill.light_color = look["fill"]
+	var pen: Dictionary = look["pen"]
+	_lacquer.albedo_color = pen["body"]
+	_trim.albedo_color = pen["trim"]
+	_title.ink = look["ink"]
+	for c in [_canvas, _wet, _canvas_turn]:
+		(c as PadCanvas).forget()
 
 
 func _cyl(top: float, bottom: float, height: float, y: float, mat: Material) -> MeshInstance3D:
@@ -471,13 +457,13 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_now = _subs.now() if _subs != null and is_instance_valid(_subs) else t
 	if absf(_now - _last_now) > 1.0:
 		_snap = true
+	if _now < _last_now - 1.0:
+		# back in time: what was shown is not the past any more
+		_held = {}
+		_built_n = -1
 	_last_now = _now
 	if _subs != null and is_instance_valid(_subs) and not _actions.is_empty():
-		var words: Array = _subs.words
-		_follower.extend(words)
-		if words.size() != _built_n:
-			_built_n = words.size()
-			_build_plan()
+		take_words(_subs.words)
 	# UP FROM BLACK as the session starts, down to it after the last word - the desk owns its
 	# bookend, as the card table does; an outro mark's fade still is the feed's
 	_env.adjustment_brightness = clampf(clampf(t / 1.2, 0.0, 1.0)
@@ -489,6 +475,23 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_show_pages()
 	_place_pen()
 	_tick_camera(delta)
+
+
+## THE VOICE'S WORDS SO FAR (the overlay's growing `words`), matched, and the plan made again when more
+## came. More of the same reading keeps what the page shows ([method _hold_past]) - taken before the new
+## times are, since they move where a dictation's unheard words were guessed; a new one (fewer words)
+## starts clean. Public for a gate, which hands it words as a live reading would.
+func take_words(words: Array) -> void:
+	var grown := words.size() != _built_n
+	if grown:
+		if _built_n > 0 and words.size() > _built_n:
+			_hold_past()
+		else:
+			_held = {}
+	_follower.extend(words)
+	if grown:
+		_built_n = words.size()
+		_build_plan()
 
 
 ## THE LESSON OPENS with its first word, which the pen's first dictation is: INF until it is heard.
@@ -524,6 +527,8 @@ func _ensure_doc() -> void:
 ## it one by hand.
 func load_lesson(source: String, desk: Dictionary, start := PackedStringArray(), near := -1) -> void:
 	_seed = int(desk.get("seed", _seed))
+	look = DeskLook.of(_seed)
+	_dress()
 	var typeset: Dictionary = desk.get("ink", {}) if desk.get("ink") is Dictionary else {}
 	var records := {}
 	for r in typeset.get("items", []):
@@ -550,6 +555,7 @@ func load_lesson(source: String, desk: Dictionary, start := PackedStringArray(),
 			est.append(float((w as Dictionary)["t0"]))
 	_follower.reset(spoken, from, est)
 	_built_n = -1
+	_held = {}
 	_plan = []
 	for i in _actions.size():
 		_plan.append({"start": INF, "end": INF, "turn_at": INF})
@@ -566,13 +572,19 @@ func load_lesson(source: String, desk: Dictionary, start := PackedStringArray(),
 ## the next words. A POINT is there as its word is said and held to its sentence's end, never into
 ## the time the pen needs to reach what comes next. A page turn comes in the rest before the item that
 ## needs it, never over writing still going on nor before the pen is off the pad ([constant
-## PARK_CLEAR]), and the item waits for it. An action whose words have not arrived waits.
+## PARK_CLEAR]), and the item waits for it. No action begins before the nib can get there from the
+## last ([method _way]). An action whose words have not arrived waits. What [member _held] keeps of the
+## past is kept: a start, a turn, a done action's end; one under way ends no sooner than the pen can
+## finish it from where it is.
 func _build_plan() -> void:
 	var prev_end := -INF
+	var last := -1                  # the last action the pen does
 	for i in _actions.size():
 		_plan[i] = {"start": INF, "end": INF, "turn_at": INF}
 	for i in _actions.size():
 		var a: Dictionary = _actions[i]
+		var held: Dictionary = _held.get(i, {})
+		var ready := prev_end + (_way(last, i) if last >= 0 else 0.0)
 		var after := int(a.get("after", 0))
 		var span := int(a.get("span", 0))
 		var write := float(a.get("write", 0.0))
@@ -582,7 +594,7 @@ func _build_plan() -> void:
 			var t0 := _word_t0(after)
 			if t0 == INF:
 				break
-			start = maxf(t0 - PEN_LEAD, prev_end)
+			start = float(held.get("start", maxf(t0 - PEN_LEAD, ready)))
 			var said := _word_t1(after + span - 1)
 			end = clampf(said if said < INF else start + float(span) * DeskScript.EST_WORD,
 				start + write / DeskScript.MAX_PACE, start + write / DeskScript.MIN_PACE)
@@ -590,7 +602,7 @@ func _build_plan() -> void:
 			var t0 := _word_t0(after)
 			if t0 == INF:
 				break
-			start = maxf(t0, prev_end)
+			start = float(held.get("start", maxf(t0, ready)))
 			var said := _word_t1(after + maxi(span, 1) - 1)
 			end = maxf(said if said < INF else start + float(span) * DeskScript.EST_WORD, start + POINT_MIN)
 			if i + 1 < _actions.size():
@@ -601,19 +613,61 @@ func _build_plan() -> void:
 			var before := _word_t1(after - 1) if after > 0 else maxf(feed.intro_hold, 0.6) - 0.25
 			if before == INF:
 				break
-			start = maxf(before + 0.25, prev_end)
+			start = float(held.get("start", maxf(before + 0.25, ready)))
 			end = start + write
-		var turn_at := INF
-		if bool(a.get("turn", false)):
+		var turn_at := float(held.get("turn_at", INF))
+		if bool(a.get("turn", false)) and not held.has("start"):
 			# early enough for the pen to come back over the new page behind the sheet, at its pace
 			var back := DeskScript.TURN * PARK_BACK + maxf(PARK.distance_to(_action_point(a, true)) / REACH_SPEED, REACH_EASE)
-			turn_at = maxf(start - back - 0.1, prev_end + PARK_CLEAR)
+			if not held.has("turn_at"):
+				turn_at = maxf(start - back - 0.1, prev_end + PARK_CLEAR)
 			var late := maxf(turn_at + DeskScript.TURN + 0.05, turn_at + back) - start
 			if late > 0.0:
 				start += late
 				end += late
+		if held.has("end"):
+			end = float(held["end"])
+		elif held.has("at"):
+			end = maxf(end, float(held["at"]) + maxf((1.0 - float(held.get("u", 0.0))) * write / DeskScript.MAX_PACE, 0.3))
 		_plan[i] = {"start": start, "end": end, "turn_at": turn_at}
 		prev_end = end
+		if not (String(a["kind"]) == "point" and target_box(a).size.x < 0.0):
+			last = i
+
+
+## HOW LONG THE NIB NEEDS to get from action [param last] to action [param next]: its way at
+## [constant REACH_SPEED], never under [constant REACH_EASE] - none for a point at nothing on its page,
+## which the pen leaves be. [method _build_plan] leaves it between them, so no reach is squeezed into
+## nothing: a point said while a drawing was still being written began the frame the drawing ended, and
+## the nib crossed 326 px in one frame (2026-10-19, the Universal Approximation episode).
+func _way(last: int, next: int) -> float:
+	var b: Dictionary = _actions[next]
+	if String(b["kind"]) == "point" and target_box(b).size.x < 0.0:
+		return 0.0
+	var from := PARK if _parks(last, next) else _action_point(_actions[last], false)
+	return maxf(from.distance_to(_action_point(b, true)) / REACH_SPEED, REACH_EASE)
+
+
+## WHAT THE PAGE HAS SHOWN, taken as the plan is about to be made again at [member _now]: for each action
+## begun, its start and when it began to be held; its end once done, else how much of it is written; and
+## a page turn begun. [method _build_plan] keeps them, and [method _ink_time] goes on from them.
+func _hold_past() -> void:
+	var held := {}
+	for i in _actions.size():
+		var p: Dictionary = _plan[i]
+		var h := {}
+		if float(p["turn_at"]) <= _now:
+			h["turn_at"] = float(p["turn_at"])
+		if float(p["start"]) <= _now:
+			h["start"] = float(p["start"])
+			h["at"] = _now
+			if float(p["end"]) <= _now:
+				h["end"] = float(p["end"])
+			else:
+				h["u"] = _written(i)
+		if not h.is_empty():
+			held[i] = h
+	_held = held
 
 
 func _word_t0(si: int) -> float:
@@ -630,17 +684,32 @@ func _word_t1(si: int) -> float:
 
 ## HOW FAR THROUGH ITS WRITING action [param i] is at [member _now], as the ink's own clock (seconds
 ## of [method Ink.schedule]): a dictated item's by [method elastic], over its dictation's words; one
-## written in silence at an even pace, across the rest the voice gives it.
+## written in silence at an even pace, across the rest the voice gives it. One under way when the plan
+## was made again ([member _held]) goes on from what was written then: the rest of it is spread over
+## what the new plan has left of it, so the ink never goes back and never jumps.
 func _ink_time(i: int) -> float:
+	var u := _share(i, _now)
+	var h: Dictionary = _held.get(i, {})
+	if h.has("u"):
+		var at := float(h["at"])
+		var u0 := float(h["u"])
+		var from := _share(i, at)
+		var rest := (u - from) / (1.0 - from) if from < 0.98 \
+			else (_now - at) / maxf(float(_plan[i]["end"]) - at, 0.01)
+		u = u0 + (1.0 - u0) * clampf(rest, 0.0, 1.0)
+	return _length(i) * u
+
+
+## How far through its writing action [param i] is at [param t] by the plan alone, 0 to 1.
+func _share(i: int, t: float) -> float:
 	var a: Dictionary = _actions[i]
 	var start := float(_plan[i]["start"])
 	var end := float(_plan[i]["end"])
-	var length := _length(i)
 	var span := int(a.get("span", 0))
 	if span <= 0:
-		return length * clampf((_now - start) / maxf(end - start, 0.01), 0.0, 1.0)
+		return clampf((t - start) / maxf(end - start, 0.01), 0.0, 1.0)
 	var times := _dictation(int(a["after"]), span, start)
-	return length * elastic(_now, start, end, times[0], times[1])
+	return elastic(t, start, end, times[0], times[1])
 
 
 ## The times of the [param span] words from [param after]: [t0s, t1s], a word not heard yet placed
@@ -740,17 +809,17 @@ func _show_pages() -> void:
 	var now := page_state(p.x)
 	_canvas.show_page(p.x, now["dry"])
 	_wet.show_page(p.x, now["wet"])
-	_hinge.visible = p.y >= 0
-	if p.y >= 0:
-		_canvas_turn.show_page(p.y, page_state(p.y)["all"])
-		var ta := INF
-		for i in _actions.size():
-			if int((_actions[i] as Dictionary)["page"]) == p.x and float(_plan[i]["turn_at"]) < INF:
-				ta = float(_plan[i]["turn_at"])
-				break
-		var u := clampf((_now - ta) / DeskScript.TURN, 0.0, 1.0)
-		# lifted at its foot and swung up over the binding, a touch faster through the top
-		_hinge.rotation.x = -PI * (u * u * (3.0 - 2.0 * u))
+	if p.y < 0:
+		_pad.show_turned(p.x, -1.0)
+		return
+	_canvas_turn.show_page(p.y, page_state(p.y)["all"])
+	var ta := INF
+	for i in _actions.size():
+		if int((_actions[i] as Dictionary)["page"]) == p.x and float(_plan[i]["turn_at"]) < INF:
+			ta = float(_plan[i]["turn_at"])
+			break
+	# the pages before it lie over the pad's head, and it goes over them
+	_pad.show_turned(p.y, clampf((_now - ta) / DeskScript.TURN, 0.0, 1.0))
 
 
 ## THE INK ON PAGE [param page] NOW, in the page's pixels: [{points, width}] - what [PadCanvas] draws;
@@ -824,7 +893,9 @@ func _ink_of(i: int) -> Array:
 				var pts := PackedVector2Array()
 				for q in (s as Dictionary)["points"]:
 					pts.append(at + (q as Vector2) * k)
-				out.append({"points": pts, "width": maxf(2.4, float((s as Dictionary)["width"]) * k * 1.35)})
+				var faint := bool((s as Dictionary).get("faint", false))
+				out.append({"points": pts, "width": maxf(FAINT_W if faint else 2.4, float((s as Dictionary)["width"]) * k * 1.35),
+					"faint": faint})
 		"strike":
 			var line := _strike_line(_actions[int(a["of"])])
 			out.append({"points": PackedVector2Array([line[0], line[0].lerp(line[1], _written(i))]), "width": 3.2})
@@ -1101,6 +1172,7 @@ static func _phases(seed: int) -> PackedFloat32Array:
 ## looked for [constant CAM_LEAD] ahead, the springs being late.
 func _framing() -> Dictionary:
 	var k := 0.0
+	var turn := false
 	var line := Vector2(PW * 0.5, PH * 0.5)
 	var opening := _opening()
 	if opening < INF and _now > opening - 1.0:
@@ -1111,8 +1183,9 @@ func _framing() -> Dictionary:
 		var a: Dictionary = _actions[i]
 		var start := float(_plan[i]["start"])
 		var ta := float(_plan[i]["turn_at"])
-		if ta < INF and _now > ta - 1.5 and _now < ta + DeskScript.TURN + 0.5:
-			k = 0.25        # a turn, though what it turns for begins further ahead
+		if ta < INF and _now > ta - TURN_BACK and _now < ta + DeskScript.TURN + 0.3:
+			k = 0.0         # a turn, though what it turns for begins further ahead
+			turn = true
 		if start == INF or start > ahead:
 			break
 		if String(a["kind"]) == "point":
@@ -1128,15 +1201,16 @@ func _framing() -> Dictionary:
 	var known := _follower.known_last()
 	if _spoken_n > 0 and known >= _spoken_n - 1 and _now > _follower.st1[known]:
 		k = 0.0
-	return {"k": k, "line": line}
+	return {"k": k, "line": line, "turn": turn}
 
 
 func _tick_camera(delta: float) -> void:
 	var f := _framing()
 	var k := float(f["k"])
 	var line: Vector2 = f["line"]
-	# the whole pad, its binding too, with the desk round it
-	var wide_aim := _world(Vector2(PW * 0.5, PH * 0.45), 0.0)
+	# the whole pad, its binding too, with the desk round it - and as a page turns, its head, where
+	# the page goes over and round
+	var wide_aim := _world(Vector2(PW * 0.5, PH * (TURN_AIM if bool(f["turn"]) else 0.45)), 0.0)
 	# local: the line being written, held a little below the frame's middle, never off the pad
 	var local_aim := _world(Vector2(clampf(line.x, PW * 0.35, PW * 0.65), clampf(line.y + 60.0, PH * 0.3, PH * 0.72)), 0.0)
 	var aim := wide_aim.lerp(local_aim, k)

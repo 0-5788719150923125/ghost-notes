@@ -24,6 +24,22 @@ class_name MaskFaceTrack
 ## The environment is ghost's OWN (`face_venv`, see [Provision]): one effect's
 ## dependency must never become the project's, and it is built on first use rather
 ## than required up front, so a session that never touches the clown installs nothing.
+##
+## THE FEATURE STENCIL: the contours, rasterized ([method update_stencil]).
+## An analytic ellipse deposit - `win(p, center, radius)` - can only make a nose a
+## circle and a mouth an ellipse, however well placed: no cheekbone, no eye corner,
+## no cupid's bow. The landmarks describe the actual outlines, so the deposit goes
+## through a RASTERIZED STENCIL of them: four polygons drawn once per tick into a
+## small texture, one per channel.
+##
+##   R  the two eyes      G  the lips      B  the nose      A  the face oval
+##
+## Drawn on the GPU into a SubViewport (additively, so each polygon writes its own
+## channel and nothing clobbers a neighbor) rather than scanline-filled on the CPU,
+## because it is four convex polygons a frame and the GPU antialiases them for free.
+## The paint sim then reads a shape instead of evaluating an ellipse, and every
+## downstream behavior it already has - advection, bleed, settle, the drip - works
+## on the real silhouette without knowing anything changed.
 
 ## The [MaskEditor] this is a part of: everything read through it is something this part
 ## is handed, and the list of them is what it depends on.
@@ -101,7 +117,7 @@ var _stencil_shapes := []    # [eyes, lips, nose, oval] as PackedVector2Array, i
 func _ensure_stencil() -> void:
 	if editor._stencil_vp != null:
 		return
-	var asp := editor._source_aspect()
+	var asp := editor._source_prep.source_aspect()
 	editor._stencil_vp = SubViewport.new()
 	editor._stencil_vp.size = Vector2i(maxi(2, int(round(_STENCIL_H * asp))), _STENCIL_H)
 	editor._stencil_vp.disable_3d = true
@@ -519,7 +535,7 @@ func update_stencil(t: float) -> void:
 	var eye_r := _grow_hull(eye_r_src, editor._clown_eye_size)
 	var eye_l_in := _grow_hull(eye_l_src, hole)
 	var eye_r_in := _grow_hull(eye_r_src, hole)
-	var asp_e := editor._source_aspect()
+	var asp_e := editor._source_prep.source_aspect()
 	var band_l := _hull_step(eye_l_src, asp_e) * 0.45
 	var band_r := _hull_step(eye_r_src, asp_e) * 0.45
 	# NOTHING HOLDS THE HULLS BACK FROM THE BRIDGE. Three versions tried to - a
@@ -603,7 +619,7 @@ func _ft_ring_radius(ring: Array, t: float, asp: float) -> float:
 ## tune and nothing left to be wrong about pose: a turned head simply reports
 ## different landmark positions, which is the whole point.
 func apply_model(t: float) -> void:
-	var asp := editor._source_aspect()
+	var asp := editor._source_prep.source_aspect()
 	var eye_l := _ft_ring_center(FT_EYE_L, t)
 	var eye_r := _ft_ring_center(FT_EYE_R, t)
 	var lips := _ft_ring_center(FT_LIPS, t)

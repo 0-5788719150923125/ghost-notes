@@ -37,7 +37,12 @@ extends SceneTree
 ##   reported: what it is, what the builder does not know, where the sun falls (on the table, and where
 ##   the cards lie), how the weather runs, a lamp moved up out of the shot; parts taken off by name (or
 ##   "clouds", "birds", "light"), watched by name (with no renderer, said so), handed in with the table;
-##   both prompts tell the set dresser of it, its vocabulary, its format and earlier episodes' light.
+##   both prompts tell the set dresser of it, its vocabulary, its format and earlier episodes' light. A
+##   sound sign is steady, and a failing one moves.
+## - THE RIDE ([Rides]): put, said back - what it is aboard, how it knocks and jolts, what on the table
+##   moves with it, and that it is felt but not heard until the sound has a `ride` - handed in with the
+##   table, taken off by name; a thing put with a moving part says what moves and how fast, and that
+##   nothing moves it on a table with no ride and no wind; both prompts tell the set dresser of it.
 
 ## - ONE CALL AT A TIME (reported 2026-10-07: the table's job ended while a call was photographing, and
 ##   every picture after it was "a previously freed instance"): two calls made together run one after the
@@ -115,7 +120,7 @@ func _ok(cond: bool, what: String) -> void:
 
 func _run() -> void:
 	AgentJobs.allow_for_tool()
-	for check in [_fresh_start, _tools_listed, _put_reports, _remove_look_set, _submit, _title, _producer, _prompts, _claude_argv, _air, _table_itself, _light, _one_at_a_time, _verdict, _blueprint, _drawing, _fills]:
+	for check in [_fresh_start, _tools_listed, _put_reports, _remove_look_set, _submit, _title, _producer, _prompts, _claude_argv, _air, _table_itself, _light, _ride, _one_at_a_time, _verdict, _blueprint, _drawing, _fills]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("set_dresser_tools_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -550,6 +555,36 @@ func _table_itself() -> bool:
 	return true
 
 
+func _ride() -> bool:
+	var ep := _episode()
+	var t := _tools(ep)
+	_ok(not t.draft().has("ride"), "a draft with no ride put rides")
+	var flower := {"name": "a carnation", "parts": [{"shape": "lathe", "material": "glass", "profile": [[0, 0], [2, 0], [2, 8], [0, 8]]},
+		{"parts": [{"shape": "tube", "material": "stem", "path": [[0, 1, 0], [0, 12, 0]], "radius": 0.2},
+			{"shape": "bloom", "material": "stem", "at": [0, 12, 0], "radius": 1.5}], "move": {"kind": "sway", "at": [0, 8, 0]}}]}
+	var r: Dictionary = await t.call_tool("put", {"things": [flower], "materials": {"glass": {"kind": "glass", "color": "#c0d0d8"}, "stem": {"kind": "plant", "color": "#3a6a30"}}})
+	_ok(String(r["text"]).contains("moves: sway") and String(r["text"]).contains("nothing moves it yet"),
+		"a thing with a moving part on a table that stands still does not say what moves, and that nothing moves it:\n%s" % r["text"])
+	r = await t.call_tool("put", {"ride": {"on": "rails", "rough": 0.5, "speed": 0.4}})
+	var text := String(r["text"])
+	_ok(text.contains("The ride: on rails") and text.contains("knocks over a rail joint") and text.contains("What moves with it: a carnation (sways)")
+		and text.contains("felt and never heard"), "a ride put was not said back:\n%s" % text)
+	_ok((t.draft().get("ride", {}) as Dictionary).get("on") == "rails", "the ride is not in the draft")
+	r = await t.call_tool("put", {"sound": {"ride": {"level": 0.5}}})
+	_ok(not String(r["text"]).contains("felt and never heard"), "a ride the sound hears is said to be silent:\n%s" % r["text"])
+	r = await t.call_tool("put", {"things": [flower]})
+	_ok(String(r["text"]).contains("moves: sway") and String(r["text"]).contains("times a second") and not String(r["text"]).contains("nothing moves it"),
+		"a moving part on a riding table does not say how it moves:\n%s" % r["text"])
+	r = await t.call_tool("remove", {"names": ["ride"]})
+	_ok(not bool(r.get("error", false)) and not t.draft().has("ride"), "the ride is not taken off by name")
+	for looks in [0, 10]:
+		var prompt := String(CardPrompts.set_dresser("Test Tarot", "A brief.", ep.read_json("plan"), ep.seed, CardTable.headroom(ep.seed), [], true, looks)["prompt"])
+		_ok(prompt.contains("THE RIDE (`ride`)") and prompt.contains("MOVING PARTS") and prompt.contains("- needle:") and prompt.contains("in `ride`, beside `sound`"),
+			"the set dresser is not told of the ride and the moving parts (%d looks)" % looks)
+	t.release()
+	return true
+
+
 func _light() -> bool:
 	var ep := _episode()
 	var t := _tools(ep)
@@ -572,7 +607,7 @@ func _light() -> bool:
 	var l: Dictionary = t.draft()["light"]
 	_ok(float((Lights.sanitize(l)["sun"] as Dictionary)["from"]) == 90.0 and (l["through"] as Array).size() == 2 and l.has("clouds"),
 		"a part put again does not replace that part alone: %s" % str(l))
-	await t.call_tool("put", {"light": {"lamps": [{"name": "a torch", "look": "fire", "from": "left"}, {"name": "a sign", "look": "neon", "from": "back right"}]}})
+	await t.call_tool("put", {"light": {"lamps": [{"name": "a torch", "look": "fire", "from": "left"}, {"name": "a sign", "look": "neon", "from": "back right", "failing": true}]}})
 	var lamps: Array = (t.draft()["light"] as Dictionary)["lamps"]
 	_ok(lamps.size() == 3 and String((lamps[0] as Dictionary)["look"]) == "fire", "lamps are not put by name: %s" % str(lamps))
 	await t.call_tool("put", {"light": {"clouds": null}})
@@ -581,7 +616,7 @@ func _light() -> bool:
 	var after: Dictionary = t.draft()["light"]
 	_ok(not bool(gone.get("error", false)) and not after.has("birds") and (after["lamps"] as Array).size() == 2, "parts of the light are not taken off by name: %s" % str(after))
 	r = await t.call_tool("watch", {"name": "clouds"})
-	_ok(bool(r.get("error", false)) and String(r["text"]).contains("In its light: a torch, a sign"), "watching clouds that are gone was not refused with what moves: %s" % r)
+	_ok(bool(r.get("error", false)) and String(r["text"]).contains("In its light: a torch, a sign"), "watching clouds that are gone was not refused with what moves (a failing sign moves): %s" % r)
 	r = await t.call_tool("watch", {"name": "a torch"})
 	_ok(not bool(r.get("error", false)) and String(r["text"]).contains("cannot be watched") and (r.get("images", []) as Array).is_empty(),
 		"watching the light with no renderer did not say so: %s" % r)

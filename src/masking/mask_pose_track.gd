@@ -32,6 +32,12 @@ class_name MaskPoseTrack
 ## away from. So an umbra layer starts drawing about twenty seconds after it is
 ## placed, wherever in the clip that is, and scrubbing somewhere new costs the same
 ## twenty seconds rather than a re-read of everything before it.
+##
+## Two independent state machines, deliberately separated. `_pt_state` is about the
+## VENV AND THE MODEL - a one-off install that either works or does not - and it
+## runs the `_ft_*` half's shape because it is the same problem. The WINDOWS are a
+## pump: the playhead names which ones are wanted, and one child at a time reads
+## them, so nothing here is ever "waiting for the clip to finish".
 
 ## The [MaskEditor] this is a part of: everything read through it is something this part
 ## is handed, and the list of them is what it depends on.

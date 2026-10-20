@@ -371,6 +371,8 @@ var _spin_k := -1                   # ...and the card
 var aside := false
 var _breaths := 0
 var _wind := {}                     # the table's wind (Winds.plan): its light's, or still air - shared by the light and the air
+var _ride := {}                     # what the table is aboard (Rides.plan), or {} for a table standing still
+var _movers: Array = []             # what moves with the ride and the wind: [{node, r, pivot, into, kind, at, contact}] (_tick_ride)
 
 
 ## THE SHUFFLE is a part of its own ([TableShuffle]): every move the deck makes between readings
@@ -682,6 +684,7 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_pose(_now)
 	_tick_focus(_now)
 	_tick_camera(_now)
+	_tick_ride(_now)
 	_light_part.tick_props(_now)
 	_light_part.tick(_now)
 	_tick_air(_now)
@@ -1505,6 +1508,10 @@ func _build_table(spec: Dictionary = {}) -> void:
 	_things = []
 	_unstood = []
 	_light_part._heat_cells = {}
+	# WHAT THE TABLE IS ABOARD, planned before anything stands on it: each thing's moving parts are made
+	# ready to answer it as they are put ([method _put])
+	_ride = Rides.plan(spec.get("ride", {}) if spec.get("ride") is Dictionary else {}, hash([_plan.seed_value, "ride"]))
+	_movers = []
 	# the name over this table is printed in the color the set dresser chose to stand out from it
 	_title.ink = CardTable.title_ink(spec)
 	_title.queue_redraw()
@@ -2026,6 +2033,7 @@ func _put(t: Dictionary, b: Dictionary, spot: Dictionary, basis: Basis, group: S
 			r = maxf(r, q.distance_to(c))
 		_standing_c.append(c)
 		_standing_r.append(r)
+	_take_movers(b, node)
 	_things.append({"name": String(t.get("name", "")), "group": group, "place": String(t.get("place", "back")),
 		"node": node, "outline": spot["outline"], "bb": spot["bb"], "rect": spot["rect"], "foot": foot,
 		"box": node.transform * (b["size"] as AABB), "lit": wicks.size(), "lights": range(first, _lights.size()),
@@ -2112,11 +2120,71 @@ static func _span(poly: PackedVector2Array, ax: Vector2) -> Vector2:
 
 # --- the camera ----------------------------------------------------------------------------------------
 
-## The reader's eye: still.
-func _tick_camera(_t: float) -> void:
+## The reader's eye: still - or, on a table that rides ([Rides]), given what its mount gives.
+func _tick_camera(t: float) -> void:
 	# A LOCKED-OFF CAMERA: the table is filmed from a tripod. The Camera dial's breath was a
-	# millimeter - nothing anyone could see - so the dial is gone from the panel
-	_cam.transform = _plan.cam_base
+	# millimeter - nothing anyone could see - so the dial is gone from the panel. ABOARD SOMETHING
+	# THAT MOVES the tripod rides with the table, and only its give shows: a faint buzz, a quick nod
+	# at a jolt (Rides.camera) - turned about the lens, so what is posed from the camera's place
+	# (a card held up, its page) is where it was
+	var give := Rides.camera(_ride, t)
+	_cam.transform = _plan.cam_base if give == Vector3.ZERO else _plan.cam_base * Transform3D(Basis.from_euler(give), Vector3.ZERO)
+
+
+# --- what moves ----------------------------------------------------------------------------------------
+
+## A THING'S MOVING PARTS ([Props.build]'s `movers`), made ready to answer the ride and the wind: each one's
+## oscillator ([method Rides.responder], from how far it reaches as it stands - the thing's size and scale
+## counted), where it is held, the turn from the table's space into its thing's, and where it stands on
+## the table (for the eddies of the wind there). Past [constant Rides.MAX_MOVERS] on a table, a thing's stand as built.
+func _take_movers(b: Dictionary, node: Node3D) -> void:
+	var into := node.transform.basis.orthonormalized().inverse()
+	var sized := float(b.get("sized", 1.0)) * node.transform.basis.get_scale().x
+	var inner: Node3D = node.get_child(0) if node.get_child_count() > 0 else node
+	for m in b.get("movers", []):
+		if _movers.size() >= Rides.MAX_MOVERS:
+			return
+		var md: Dictionary = m
+		var move: Dictionary = md["move"]
+		var pivot: Vector3 = md["pivot"]
+		_movers.append({"node": md["node"], "pivot": pivot, "into": into, "kind": String(move["kind"]),
+			"r": Rides.responder(_ride, move, float(md["reach"]) * sized, int(md["salt"])),
+			"at": node.transform * (inner.transform * pivot), "contact": md.get("contact", PackedVector3Array())})
+
+
+## EVERY MOVING PART at show time [param t] ([method Rides.pose]): turned about where it is held - a lean
+## about the level axis square to it (a hanging thing's weight swung that way, a rock tipped on the edge of
+## what it rests on furthest the way it leans - [method Props._contact]), a turn about the up - inside its
+## thing, so the light and its shadows follow.
+func _tick_ride(t: float) -> void:
+	for m in _movers:
+		var md: Dictionary = m
+		var node: Node3D = md["node"]
+		if not is_instance_valid(node):
+			continue
+		var pose := Rides.pose(_ride, _wind, md["r"], t, md["at"])
+		var lean: Vector2 = pose["lean"]
+		var into: Basis = md["into"]
+		var kind := String(md["kind"])
+		var pivot: Vector3 = md["pivot"]
+		var rot := Basis.IDENTITY
+		var turn := float(pose["turn"])
+		if absf(turn) > 1e-7:
+			rot = Basis(Vector3.UP, turn)
+		# a lean toward d turns its top (or, hanging, its weight) toward d: about up x d
+		var axis := Vector3(lean.y, 0.0, -lean.x) * (-1.0 if kind == "swing" else 1.0)
+		var a := axis.length()
+		if a > 1e-7:
+			rot = Basis((into * (axis / a)).normalized(), a) * rot
+			var contact: PackedVector3Array = md["contact"]
+			if kind == "rock" and not contact.is_empty():
+				var d := into * Vector3(lean.x, 0.0, lean.y)
+				var far := -INF
+				for c in contact:
+					if c.dot(d) > far:
+						far = c.dot(d)
+						pivot = c
+		node.transform = Transform3D(rot, pivot - rot * pivot)
 
 
 ## THE INTRO IS OUT OF FOCUS: the whole frame thrown far out of focus while the channel's name is

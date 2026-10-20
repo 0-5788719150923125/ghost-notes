@@ -993,7 +993,7 @@ static func _str(v: Variant) -> String:
 ## dash, which the voice reads as a pause either way and the subtitles show as a plain dash.
 ## The show's voices besides the reader's: the names its document gives them, in its order. The
 ## reader is its FIRST voice, whatever the document calls it - a script cues it as
-## [constant Manuscript.NARRATOR] ([method ReadingPanel._reader]).
+## [constant Manuscript.NARRATOR] ([method ReadingCast.reader]).
 func _voices() -> Array:
 	var out: Array = []
 	var all: Array = spec.get("voices", [])

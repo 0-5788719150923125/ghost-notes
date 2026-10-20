@@ -34,7 +34,7 @@ func _run() -> void:
 		Spectrum.stop()
 	add_child(ed)
 	var t0 := Time.get_ticks_msec()
-	while not (ed._host != null and ed._host.is_up() and ed._voices.selected >= 0):
+	while not (ed._host != null and ed._host.is_up() and ed._cast.voice_pick.selected >= 0):
 		if Time.get_ticks_msec() - t0 > 180000:
 			print("voice_double_probe: the voice host never came up")
 			get_tree().quit(2)
@@ -55,11 +55,11 @@ func _run() -> void:
 	var rec := AudioEffectRecord.new()
 	AudioServer.add_bus_effect(0, rec)
 	rec.set_recording_active(true)
-	ed._speak_from(maxi(k, 0))
+	ed._stream.speak_from(maxi(k, 0))
 	await get_tree().create_timer(_secs).timeout
 	rec.set_recording_active(false)
 	var got := rec.get_recording()
-	print("voice_double_probe: drained chunks %s, epoch %d" % [str(ed._chunk_at.keys()), ed._epoch])
+	print("voice_double_probe: drained chunks %s, epoch %d" % [str(ed._stream._join.chunk_at.keys()), ed._stream._epoch])
 	if got == null:
 		print("voice_double_probe: nothing recorded")
 	else:

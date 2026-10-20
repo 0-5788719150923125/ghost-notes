@@ -10,7 +10,7 @@ extends SceneTree
 ## all, and only the exported file had one.
 ##
 ## THE AUDITION STARVED. Chunks are one sentence each ([constant
-## ReadingPanel.CHUNK_SENTENCES] = 1) and sentence lengths are wildly uneven.
+## ReadingPlan.CHUNK_SENTENCES] = 1) and sentence lengths are wildly uneven.
 ## Measured on north-star chapter 3: the opening sentence renders to 1.13 s and the next
 ## to 14.49 s. The stream opened on whatever the first chunk happened to be, so playback
 ## drained 1.13 s of audio and then sat silent for as long as the next sentence took to
@@ -19,9 +19,10 @@ extends SceneTree
 ## about five seconds, then carries on, which is indistinguishable from an intro
 ## inserted in the wrong place.
 ##
-## The fix seeds the intro into the pending queue in `_plan` (so `_elapsed`, and with it
-## every word span and seam, is offset for free) and holds the stream shut until a real
-## lead exists, with the intro doubling as that lead. This checks both.
+## The fix seeds the intro into the pending queue in `_plan` (so the take's join starts on it,
+## and every word span and seam is offset for free - see [ReadingJoin], whose own gate joins
+## real takes after a lead) and holds the stream shut until a real lead exists, with the intro
+## doubling as that lead. This checks both, on a model of the queue's arithmetic.
 ##
 ## Run: godot --headless --path . --script tests/reading/live_intro_check.gd
 
@@ -84,7 +85,7 @@ func _check_order() -> void:
 
 ## The stream must not open on a lead shorter than it takes to make the next sentence.
 func _check_lead() -> void:
-	var preroll := 2.5                        # ReadingPanel.LIVE_PREROLL
+	var preroll := 2.5                        # ReadingStream.LIVE_PREROLL
 	# intro off: the floor governs, and 1.13 s of opening sentence is not enough
 	_ok(not _would_open(1.13, 0.0, preroll, false),
 		"lead: must NOT open on a 1.13s first sentence with the intro off")

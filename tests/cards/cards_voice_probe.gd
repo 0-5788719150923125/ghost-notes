@@ -64,20 +64,20 @@ func _run() -> void:
 	print("cards_voice_probe: show '%s' (%s), episode #%d complete=%s" % [_show._show_title(),
 		_show._show_key(), seed, str(_show._episode.complete())])
 	var t0 := Time.get_ticks_msec()
-	while _ed._voice_meta.is_empty() and Time.get_ticks_msec() - t0 < 180000:
+	while _ed._cast.voice_meta.is_empty() and Time.get_ticks_msec() - t0 < 180000:
 		await get_tree().process_frame
-	if _ed._voice_meta.is_empty():
+	if _ed._cast.voice_meta.is_empty():
 		print("cards_voice_probe: FAILED - the voice host never listed its voices")
 		get_tree().quit(2)
 		return
-	var cast := _ed._cast_dict()
+	var cast := _ed._cast.cast_dict()
 	print("cards_voice_probe: voices up after %.1fs; cast %s" % [float(Time.get_ticks_msec() - t0) / 1000.0, str(cast)])
 	_ok(_ed._has_reading(), "the episode has a reading")
-	_ed._on_speak()
+	_ed._stream.play()
 	var holds := 0
-	for c in _ed._chunks:
+	for c in _ed._stream.chunks:
 		holds += ((c as Dictionary).get("holds", []) as Array).size()
-	print("cards_voice_probe: planned %d chunks, %d rests" % [_ed._chunks.size(), holds])
+	print("cards_voice_probe: planned %d chunks, %d rests" % [_ed._stream.chunks.size(), holds])
 	var acts: Array = CardReading.parse(_show._episode.script())["actions"]
 	_ok(holds == acts.size(), "every action has its rest in the voice (%d rests, %d actions)" % [holds, acts.size()])
 	var shots := _times.duplicate()
@@ -106,7 +106,7 @@ func _run() -> void:
 				int((e["a"] as Dictionary)["card"]), float(e["t0"]), float(e["s"])])
 		_ok(tm._sched.size() >= 2, "the shuffle and the first draw were placed against the real voice")
 	if export:
-		_ed._stop_speaking()
+		_ed._stream.stop()
 		var t1 := Time.get_ticks_msec()
 		var take: String = await _ed.export_take()
 		print("cards_voice_probe: export take %s in %.0fs" % [take, float(Time.get_ticks_msec() - t1) / 1000.0])

@@ -11,7 +11,9 @@
 #   scripts/check.sh --for           # the gates that cover what changed since the last commit
 #   scripts/check.sh --for src/table # ...or what is under these paths
 #
-# Logs go to dist/check/<gate>.log; a passing gate's log is removed unless --keep.
+# Logs go to dist/check/<gate>.log; a passing gate's log is removed unless --keep. Two runs in one
+# working tree (two sessions at once) each name a folder of their own - GHOST_CHECK_OUT=dist/check_b -
+# or the second overwrites the first's logs and its record of how long each gate took.
 #
 # WHICH GATES. Every tests/<folder>/*_check.gd on disk (and the few cross-cutting ones at the top
 # of tests/) - a new gate needs no edit here. The folders mirror src/: a gate lives in the folder of
@@ -67,7 +69,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 GODOT="${GODOT:-godot}"
-OUT="dist/check"
+OUT="${GHOST_CHECK_OUT:-dist/check}"
 
 ## Gates that need a real renderer (pixels, shader compiles). Boot probes among them run
 ## with GHOST_PROBE_GPU=1; SceneTree gates run through tests/run_quiet.sh.

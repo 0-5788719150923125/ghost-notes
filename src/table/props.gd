@@ -281,6 +281,8 @@ static func describe() -> String:
 	lines.append("DRAPED: a strand laid `drape` is laid across the TABLE ITSELF, not in a thing's own space: its `path` is in the table's centimeters, from the middle of the reading (as a layer's `at`), x to the reader's right and z toward the reader. Where the path runs past the top's edge the strand rolls over the edge and hangs straight down as far as it ran past - a path ending 30 cm past the right edge hangs 30 cm down the side, to the floor at most. It is its thing's only part, its thing's `place` is not used, and it keeps clear of the middle of the cloth, where the deck and the cards go: along the back, round a corner, across one side and over an edge. The camera sees the far edge and a little of the sides; what hangs over the near edge is under the lens.")
 	lines.append("")
 	lines.append("FLAMES: a thing's flames burn as ONE light, however many it has - a candelabra's tapers, a pillar's three wicks, a dish of tea lights - up to %d on one thing." % CardTable.MAX_FLAMES)
+	lines.append("")
+	lines.append(Rides.describe_moves())
 	return "\n".join(lines)
 
 
@@ -357,7 +359,7 @@ static func _sanitize_parts(raw: Variant, mats: Dictionary, pal: Array, depth: i
 			var kids := _sanitize_parts(d["parts"], mats, pal, depth + 1, budget)
 			if not kids.is_empty():
 				out.append({"parts": kids, "at": _vec3(d.get("at"), Vector3.ZERO, MAX_SIZE), "turn": _turn(d.get("turn")),
-					"wick": false, "copies": _copies_of(d)})
+					"wick": false, "copies": _copies_of(d), "move": {} if _burns(kids) else Rides.sanitize_move(d.get("move"))})
 			continue
 		var part := _sanitize_part(d, mats, pal)
 		if not part.is_empty():
@@ -546,7 +548,18 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 	out["ornament"] = _sanitize_ornament(p.get("ornament"))
 	out["copies"] = _copies_of(p)
 	out["warp"] = _sanitize_warp(p.get("warp"))
+	# HOW IT MOVES with the ride and the wind ([Rides]): never a flame's (its light stands where it was lit), and
+	# never a strand laid across the table
+	out["move"] = {} if bool(out["wick"]) or String(out.get("lay", "")) == "drape" else Rides.sanitize_move(p.get("move"))
 	return out
+
+
+## Whether any of [param parts] (made safe), or any part in their groups, has a flame.
+static func _burns(parts: Array) -> bool:
+	for q in parts:
+		if bool((q as Dictionary).get("wick", false)) or ((q as Dictionary).get("parts") is Array and _burns((q as Dictionary)["parts"])):
+			return true
+	return false
 
 
 ## A LOFT'S SECTIONS made safe, sorted along its path: each `{outline, points, size, sides, scale,
@@ -858,7 +871,8 @@ const SHELTER := Vector2(0.05, 0.1)
 ## front toward +z), `size` (its bounds), `foot` (the convex outline of where it meets the cloth,
 ## up to [constant FOOT_H], x by z), `outline` (its whole outline seen from above), `wicks`
 ## (where its flames are lit), `glows` (each wick's wax material, whose `flame` the table sets as
-## the flame flickers) and `meshes` (every MeshInstance3D in it). [param materials] are the
+## the flame flickers), `meshes` (every MeshInstance3D in it), `movers` (what moves with the ride and the
+## wind, [method _holder]) and `sized` (how much it was made smaller). [param materials] are the
 ## sanitized materials; [param seed] varies drips, scatter, lumps and the patterns' noise.
 ## [param keep]: built where it was written, neither moved to stand on the origin nor made smaller - a strand
 ## draped across the table is laid in the table's own space ([method TableMedium._drape]).
@@ -875,7 +889,12 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	for leaf in leaves:
 		var xs: Array = leaf["xforms"]
 		leaf["xforms"] = xs.slice(0, maxi(budget, 0))
+		leaf["chains"] = (leaf.get("chains", []) as Array).slice(0, maxi(budget, 0))
 		budget -= xs.size()
+	# WHAT MOVES ([Rides]): a node of its own for each moving copy, inside whatever moves it in turn, at rest
+	# where it was built ([method _holder])
+	var movers: Array = []
+	var mover_at := {}
 	for leaf in leaves:
 		var part: Dictionary = leaf["part"]
 		var geos: Array = leaf["geos"]
@@ -899,13 +918,17 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 				continue
 			var fixed := String((geos[gi] as Dictionary).get("material", ""))
 			var takers := {}
+			var chains: Array = leaf["chains"]
 			for ci in xforms.size():
 				var nm := fixed if not fixed.is_empty() else String(names[ci % names.size()])
-				if not takers.has(nm):
-					takers[nm] = []
-				(takers[nm] as Array).append(ci)
-			for nm in takers:
-				var ids: Array = takers[nm]
+				var holder := _holder(chains[ci] if ci < chains.size() else [], inner, movers, mover_at, seed)
+				var tk := "%s|%d" % [nm, holder.get_instance_id()]
+				if not takers.has(tk):
+					takers[tk] = {"name": nm, "holder": holder, "ids": []}
+				((takers[tk] as Dictionary)["ids"] as Array).append(ci)
+			for tk in takers:
+				var nm := String((takers[tk] as Dictionary)["name"])
+				var ids: Array = (takers[tk] as Dictionary)["ids"]
 				var mine: Array = []
 				for ci in ids:
 					mine.append(xforms[ci])
@@ -917,7 +940,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 				mi.material_override = mat
 				if see_through(m):
 					mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-				inner.add_child(mi)
+				((takers[tk] as Dictionary)["holder"] as Node3D).add_child(mi)
 				meshes.append(mi)
 				all.append_array(merged.v)
 				if gi == 0 and part.get("wick") == true:
@@ -929,7 +952,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	root.add_child(inner)
 	if all.is_empty():
 		return {"node": root, "size": AABB(), "foot": PackedVector2Array(), "outline": PackedVector2Array(),
-			"wicks": [], "glows": [], "meshes": []}
+			"wicks": [], "glows": [], "meshes": [], "movers": []}
 	var box := AABB(all[0], Vector3.ZERO)
 	for p in all:
 		box = box.expand(p)
@@ -945,7 +968,32 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 		wicks[i] = ((wicks[i] as Vector3) + shift) * k
 	var size := AABB((box.position + shift) * k, box.size * k)
 	return {"node": root, "size": size, "foot": _foot(placed, FOOT_H), "outline": _hull(placed, INF),
-		"wicks": wicks, "glows": glows, "meshes": meshes}
+		"wicks": wicks, "glows": glows, "meshes": meshes, "movers": movers, "sized": k}
+
+
+## THE NODE A COPY HANGS IN, for its [param chain] of movers ([method _assemble], outermost first): each a
+## node of its own under the one before it (the first under [param inner]), made once - at rest it is where
+## the copy was built, and the table turns it about its pivot as the ride and the wind move it
+## ([method TableMedium._tick_ride]). Listed in [param movers] as `{node, move, pivot and contact (the thing's
+## space, meters, before it is sized), reach, salt, parent}` ([param at]: key to place). Past [constant
+## Rides.MAX_MOVERS] a thing's copies stand as built, in the last that moves.
+static func _holder(chain: Array, inner: Node3D, movers: Array, at: Dictionary, seed: int) -> Node3D:
+	var node := inner
+	var parent := -1
+	for m in chain:
+		var key := String((m as Dictionary)["key"])
+		if not at.has(key):
+			if movers.size() >= Rides.MAX_MOVERS:
+				break
+			var n := Node3D.new()
+			n.name = "moves %d" % movers.size()
+			node.add_child(n)
+			at[key] = movers.size()
+			movers.append({"node": n, "move": (m as Dictionary)["move"], "pivot": (m as Dictionary)["pivot"],
+				"reach": (m as Dictionary)["reach"], "contact": (m as Dictionary)["contact"], "salt": hash([seed, key]), "parent": parent})
+		parent = int(at[key])
+		node = (movers[parent] as Dictionary)["node"]
+	return node
 
 
 ## A thing's parts, groups opened: `[{part, geos, xforms, salt}]` - each shaped part with its
@@ -957,6 +1005,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 static func _assemble(parts: Array, seed: int, path: Array) -> Array:
 	var out: Array = []
 	var heaps: Array = []    # [place in out, rng]: laid last, into whatever they lie in ([method _walls])
+	var own: Array = []      # this list's own shaped parts, whose moves are reckoned once all are laid
 	for pi in parts.size():
 		var part: Dictionary = parts[pi]
 		var here: Variant = pi if path.is_empty() else path + [pi]
@@ -973,17 +1022,34 @@ static func _assemble(parts: Array, seed: int, path: Array) -> Array:
 					for e in leaf["geos"]:
 						sized.append({"geo": ((e as Dictionary)["geo"] as Tris).placed(leaf["xforms"])})
 			var outer := _placements(part, rng, sized)
+			# A MOVING GROUP: each of its copies moves as one, held where its move says in the group's space
+			var held := _held(part["move"] if part.get("move") is Dictionary else {}, inner)
 			for leaf in inner:
 				var xs: Array = []
-				for o in outer:
-					for x in leaf["xforms"]:
-						xs.append((o as Transform3D) * (x as Transform3D))
+				var cs: Array = []
+				for oi in outer.size():
+					var o: Transform3D = outer[oi]
+					for xi in (leaf["xforms"] as Array).size():
+						xs.append(o * (leaf["xforms"][xi] as Transform3D))
+						var chain: Array = [] if held.is_empty() else [_mover(held, here, oi, o)]
+						for m in (leaf["chains"][xi] as Array):
+							var c := (m as Dictionary).duplicate()
+							c["key"] = "%s/%d" % [String(c["key"]), oi]
+							c["pivot"] = o * (c["pivot"] as Vector3)
+							var moved := PackedVector3Array()
+							for q in (c["contact"] as PackedVector3Array):
+								moved.append(o * q)
+							c["contact"] = moved
+							chain.append(c)
+						cs.append(chain)
 				leaf["xforms"] = xs
+				leaf["chains"] = cs
 				out.append(leaf)
 			continue
 		var geos := _geometry(part, rng)
 		if geos.is_empty():
 			continue
+		own.append(out.size())
 		if String((part.get("copies", {}) as Dictionary).get("kind", "")) in ["heap", "scatter"]:
 			heaps.append([out.size(), rng])
 			out.append({"part": part, "geos": geos, "xforms": [], "salt": here})
@@ -996,7 +1062,100 @@ static func _assemble(parts: Array, seed: int, path: Array) -> Array:
 			leaf["xforms"] = _placements(leaf["part"], h[1], leaf["geos"], {}, _blocks(out, at.y * 0.01))
 		else:
 			leaf["xforms"] = _placements(leaf["part"], h[1], leaf["geos"], _walls(out, h[0], at * 0.01))
+	# A MOVING PART: each of its copies moves on its own, held where its move says in its own space
+	for li in own:
+		var leaf: Dictionary = out[li]
+		var mv: Variant = (leaf["part"] as Dictionary).get("move")
+		var held := _held(mv if mv is Dictionary else {}, [{"geos": leaf["geos"], "xforms": [Transform3D.IDENTITY]}])
+		var cs: Array = []
+		for xi in (leaf["xforms"] as Array).size():
+			cs.append([] if held.is_empty() else [_mover(held, leaf["salt"], xi, leaf["xforms"][xi])])
+		leaf["chains"] = cs
 	return out
+
+
+## WHERE A MOVING PART OR GROUP IS HELD, in its own space (meters), from its `move` ([param move], made safe;
+## `{}` moves nothing) and [param leaves] (`[{geos, xforms}]`), what it is there: where its move says (`at`),
+## or as its kind holds it ([constant Rides.MOVES] `hold` - the middle of its foot, of its top, or its middle).
+## `{move, pivot, reach, contact}`: how far it reaches from where it is held - a stalk's height over it, a
+## pendulum's length to its middle, a liquid's radius, a rock's foot - which sets how it rings ([method
+## Rides.responder]); and for a rock, the points it rests on (what it tips about - [method _contact]).
+static func _held(move: Dictionary, leaves: Array) -> Dictionary:
+	if move.is_empty():
+		return {}
+	var box := _leaves_box(leaves)
+	if box.size == Vector3.ZERO:
+		return {}
+	var c := box.get_center()
+	var pivot := Vector3(c.x, box.position.y, c.z)
+	match String((Rides.MOVES[String(move["kind"])] as Dictionary)["hold"]):
+		"top":
+			pivot = Vector3(c.x, box.end.y, c.z)
+		"middle":
+			pivot = c
+	if move.get("at") is Vector3:
+		pivot = (move["at"] as Vector3) * 0.01
+	var wide := maxf(box.size.x, box.size.z) * 0.5
+	var reach := 0.01
+	match String(move["kind"]):
+		"sway", "tremble":
+			reach = box.end.y - pivot.y
+		"swing":
+			reach = pivot.distance_to(c)
+		"slosh", "needle":
+			reach = wide
+		"rock":
+			reach = minf(box.size.x, box.size.z) * 0.5 * 0.8
+	return {"move": move, "pivot": pivot, "reach": maxf(reach, 0.005),
+		"contact": _contact(leaves, box.position.y) if String(move["kind"]) == "rock" else PackedVector3Array()}
+
+
+## WHAT A THING RESTS ON: the corners of the outline, seen from above, of its points within a couple of
+## millimeters of its lowest - a block's whole base, a pebble's small patch. Tipped toward a side, it turns
+## about the point of this furthest that way ([method TableMedium._tick_ride]): about its middle, a block
+## sank through the cloth at every jolt.
+static func _contact(leaves: Array, low: float) -> PackedVector3Array:
+	var pts := PackedVector2Array()
+	for leaf in leaves:
+		for e in (leaf as Dictionary)["geos"]:
+			for x in (leaf as Dictionary)["xforms"]:
+				for q in ((e as Dictionary)["geo"] as Tris).v:
+					var w := (x as Transform3D) * q
+					if w.y < low + 0.002:
+						pts.append(Vector2(w.x, w.z))
+	var out := PackedVector3Array()
+	for c in (Geometry2D.convex_hull(pts) if pts.size() >= 3 else pts):
+		out.append(Vector3(c.x, low, c.y))
+	return out
+
+
+## One copy's mover ([method _held]'s [param held] at its place [param xf], the [param i]th copy of the part
+## at [param here]): `{key, move, pivot and contact (where [param xf] puts them), reach}`.
+static func _mover(held: Dictionary, here: Variant, i: int, xf: Transform3D) -> Dictionary:
+	var contact := PackedVector3Array()
+	for c in (held["contact"] as PackedVector3Array):
+		contact.append(xf * c)
+	return {"key": "%s#%d" % [str(here), i], "move": held["move"], "pivot": xf * (held["pivot"] as Vector3), "reach": held["reach"],
+		"contact": contact}
+
+
+## What [param leaves] cover (`[{geos, xforms}]`), each geometry's box at each of its places.
+static func _leaves_box(leaves: Array) -> AABB:
+	var box := AABB()
+	var any := false
+	for leaf in leaves:
+		for e in (leaf as Dictionary)["geos"]:
+			var g: Tris = (e as Dictionary)["geo"]
+			if g.v.is_empty():
+				continue
+			var gb := AABB(g.v[0], Vector3.ZERO)
+			for q in g.v:
+				gb = gb.expand(q)
+			for x in (leaf as Dictionary)["xforms"]:
+				var xb := (x as Transform3D) * gb
+				box = xb if not any else box.merge(xb)
+				any = true
+	return box
 
 
 ## WHAT A STREWN PART MUST NOT LIE ON: the outline, seen from above, of every standing part among

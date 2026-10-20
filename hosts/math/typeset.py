@@ -4,8 +4,9 @@
     typeset.py <spec.json>
 
 The spec is JSON - never argv, because ghost passes no free text on a command line:
-{"items": [{"id", "tex", "mode"}], "out", "work", "width", "outlines", "bin"}. `bin` is the folder
-TeX's programs are in (ghost's own TeX; with none, they are looked up on PATH). `mode` is "math" (one
+{"items": [{"id", "tex", "mode"}], "out", "work", "width", "outlines", "bin", "data"}. `bin` is the
+folder TeX's programs are in (ghost's own TeX; with none, they are looked up on PATH); `data` the
+series the episode's runs kept, which a drawing plots by name (figure.py). `mode` is "math" (one
 formula, display style, on one line), "display" (a display environment such as `align*`, set in a
 column `width` points wide), "text" (a paragraph with $...$ in it, wrapped at `width`) or "figure"
 (a DRAWING: `tex` is an SVG, which figure.py turns into pen paths, its labels set by TeX in the same
@@ -427,7 +428,7 @@ def typeset(spec):
             items.append(it)
             continue
         try:
-            fig = figure.compile_figure(it.get("tex", ""))
+            fig = figure.compile_figure(it.get("tex", ""), spec.get("data") or {})
         except figure.FigureError as e:
             figures[it["id"]] = {"error": "the drawing: %s" % e}
             continue

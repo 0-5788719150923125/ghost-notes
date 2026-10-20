@@ -36,7 +36,7 @@ var session: MaskSession = null
 var player: VideoStreamPlayer = null
 var selected: Variant = null   # the currently-selected marker Dictionary, or null
 var waveform_texture: Texture2D = null   # set by MaskEditor once generated; null draws nothing
-# Hi-res waveform slice for the zoomed-in view (see MaskEditor._poll_wave_hi):
+# Hi-res waveform slice for the zoomed-in view (see MaskWaveform.poll_hi):
 # same recipe as the base strip, rendered over just wavehi_span seconds, drawn
 # OVER the base wherever it applies. Progressive - stale/absent just means the
 # (soft) base shows.
@@ -162,7 +162,7 @@ func _draw() -> void:
 		return
 	var span := tview.visible_span()
 	# The amplitude waveform (rendered once via ffmpeg's showwavespic, cached next to
-	# the clip - see MaskEditor._ensure_waveform). Drawn across wherever the clip's
+	# the clip - see MaskWaveform.ensure). Drawn across wherever the clip's
 	# OWN span [0, duration] currently maps to on screen - not the full widget width -
 	# so it stays correctly placed once the ruler can extend past a single clip
 	# (secondary tracks, the overflow margin) instead of always filling edge to edge.

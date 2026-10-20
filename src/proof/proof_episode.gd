@@ -8,9 +8,12 @@ class_name ProofEpisode
 ## removes the step and everything made from it; the producer makes what is missing).
 ##
 ##   problem   problem.json  the framer's: the problem fixed before anyone works on it - its words,
-##                           its TeX, its exact Lean statement, the facts it may not cite, its history
-##   solve     solve.json    the solver's session, ended: verified or not, and how many checks; beside
-##                           it notebook.md (its lab notebook) and proof.lean (its Lean file)
+##                           its TeX, how it is checked (a proof or a computation), its exact Lean
+##                           statement and the facts it may not cite, its history
+##   solve     solve.json    the solver's session, ended: verified or computed or neither, and how many
+##                           checks and runs; beside it notebook.md (its lab notebook), proof.lean (its
+##                           Lean file), runs.json (each program it ran, and what it printed) and
+##                           data.json (the series its programs kept, which the pad's drawings plot)
 ##   draft     draft.md      the teacher's first draft of the lesson
 ##   review    review.json   the student's notes on the draft: where it loses a newcomer, and what was
 ##                           needed there (`{notes: [{quote, need}]}`)
@@ -94,6 +97,10 @@ func file_of(step: String) -> String:
 			return dir.path_join("notebook.md")
 		"proof":
 			return dir.path_join("proof.lean")
+		"runs":
+			return dir.path_join("runs.json")
+		"data":
+			return dir.path_join("data.json")
 		"draft":
 			return dir.path_join("draft.md")
 		"review":
@@ -148,14 +155,14 @@ func _closure(step: String) -> Array:
 	return out
 
 
-## REDO IS DELETE: [param step] and everything made from it are removed (the solver's notebook and
-## Lean file go with its step), and the producer makes them again.
+## REDO IS DELETE: [param step] and everything made from it are removed (the solver's notebook, Lean
+## file, runs and data go with its step), and the producer makes them again.
 func invalidate(step: String) -> void:
 	for s in [step] + dependents(step):
 		DirAccess.remove_absolute(file_of(String(s)))
 		if s == "solve":
-			DirAccess.remove_absolute(file_of("notebook"))
-			DirAccess.remove_absolute(file_of("proof"))
+			for f in ["notebook", "proof", "runs", "data"]:
+				DirAccess.remove_absolute(file_of(f))
 
 
 ## The folder a step's agent job runs in - kept, with its prompt.

@@ -1607,6 +1607,58 @@ cards still held (hundreds of card-over-card passes a pass), a riffle's halves l
 A box that can neither spare a pile nor stand its cards on edge (a shallow tin of one pile) still buries
 a draw under a card put back. A riffle jumper still rides on top of a full deck.
 
+## 2026-10-19: the table rides, and an electric light holds steady
+
+The user, of true-tarot 136562 (a reading on the winter train south from Fairbanks): "the script will
+mention that we are on a moving thing ... there was no clear indication that the train was moving. If a
+real person were REALLY filming a table from the angle we film from ... you might expect to see a bit of
+vibration in the camera position. Not slow, gentle movement - not a head-bob, because the camera is
+mounted - but vibration, interspersed with "bumps" ... one might expect props themselves to vibrate or
+move a bit as well." The set dresser had wanted it: its light's `why` was "black spruce flicking past",
+its sound the rush of air along the car as a wind through eaves.
+
+**One ride, one plan** (`Rides`, the table's `ride`: `on` rails, road, track, water or air; `rough`,
+`speed`). Planned from the seed as the wind is, every part a function of show time in closed form: the
+BUZZ (a band of floor vibration), the KNOCKS (each axle of the car over each rail joint - pairs a long gap
+apart, as often as the speed takes them), the PATTER (a cart's wheels over stones), the BUMPS (now and
+then, harder), the slow SWAY, the deck's ROLL on the swell and the TURNS of the heading over minutes.
+
+- **The lens** is mounted and steadied (a phone on a small tripod, its stabilizer on): a 4.5 Hz, heavily
+  damped give - measured on the train copy, a 0.45 px rms buzz at 720p and a 2.3 px nod at a jolt that
+  settles in a few frames. It never takes the sway, the roll or the turns: slow motion of the whole frame
+  is what makes a viewer seasick, and a mounted camera rides it with the table anyway.
+- **What moves** is the set dresser's: a part's or a group's `move` - sway (a flower in its vase), tremble
+  (a petal, a feather), swing (a pendulum), needle (a compass's: it swings at a jolt and keeps to its north
+  as the ride turns), rock (a loose stone: only the hardest jolts, set down a degree or two turned, never
+  far from where it was put), slosh (a liquid's surface: it stays level in the world as the deck rolls).
+  Each is an oscillator - its frequency from how far it reaches, its damping its kind's - answering the
+  plan as damped rings for the jolts, the steady answer to the slow tones, and for the buzz a narrow band
+  (Rice's sum of close tones, its strength from Miles' equation). A sway, tremble or swing stirs in a
+  written wind too. Built as a pivot node per moving copy (`Props._holder`), at rest exactly where the
+  still build stands it; a rock tips about the furthest point of what it rests on (`Props._contact`).
+- **Flames** lean toward the push and stay upright as the deck rolls, and jump at a jolt.
+- **The sound** (`sound.ride`, heard only when written, as the wind is): a rumble and the wheels' roll,
+  each knock a thump and a steel tick, a bump a thud, its impact and a rattle - struck at the plan's own
+  times, so a jolt is heard as it is seen.
+- Gate `tests/table/ride_check.gd`; the set dresser's `put` says what moves and how fast, and that a ride
+  is felt but not heard until its sound names it.
+
+Not yet: what the sun falls through outside going BY (trees and poles sweeping their shadows over the
+table - the set dresser asked for it on 136562); the shadows' casters swinging with the ride (a lantern on
+its chain in a rolling cabin); a liquid's ripples (the surface tips whole); cards on the cloth shifting at a
+hard jolt; the reader's held card jiggling in their hand.
+
+**An electric light holds steady** (the user, the same day: "the agents are doing the "flickering lights"
+effect very often, in nearly every episode ... it flickers "all the way" on and off (when typically
+flickering would be more like a brown-out, with partial failure, not complete loss of light)"). Measured
+over 31 tables: six stuttered, and one plan had asked for it - `fluorescent` and `neon` stuttered by their
+look alone, an 18 Hz square wave down to 8% every half minute or so. Now they are steady, and an electric
+light (a lamp, a hanging lamp, a street lamp, tubes, a sign) fails only when written `failing`: a bad spell
+about every four minutes (`every`), a few seconds of bunched, mostly shallow sags; a bulb's filament cools
+over a tenth of a second and warms its color as it sags (light ~ V^3.4, color ~ V^0.42), a tube's bank or a
+sign loses one tube or one stroke, shutter-averaged; once in ten spells a moment all but out
+(`Lights._failing`, `lights_check`).
+
 ## Not built yet
 
 - The light, next (2026-10-07): no real set dresser has lit a table yet. A cloud's edge ACROSS the table

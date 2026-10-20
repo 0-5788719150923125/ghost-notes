@@ -67,8 +67,8 @@ func _run() -> void:
 	_ed._build_panel()
 	_ed.remove_child(_ed._panel)
 	add_child(_ed._panel)
-	_ed.remove_child(_ed._repace_timer)
-	add_child(_ed._repace_timer)
+	_ed.remove_child(_ed._cast._repace_timer)
+	add_child(_ed._cast._repace_timer)
 
 	_synth = SynthEditor.new()
 	_synth._build_panel()
@@ -81,16 +81,16 @@ func _run() -> void:
 	_show = _cards._block_cards["cards"]
 	_cards.remove_child(_cards._panel)
 	add_child(_cards._panel)
-	_cards.remove_child(_cards._repace_timer)
-	add_child(_cards._repace_timer)
+	_cards.remove_child(_cards._cast._repace_timer)
+	add_child(_cards._cast._repace_timer)
 	_cards_episodes()
 	_proof = ReadingPanel.new()
 	_proof.workspace = "proof"
 	_proof._build_panel()
 	_proof.remove_child(_proof._panel)
 	add_child(_proof._panel)
-	_proof.remove_child(_proof._repace_timer)
-	add_child(_proof._repace_timer)
+	_proof.remove_child(_proof._cast._repace_timer)
+	add_child(_proof._cast._repace_timer)
 	# THE PROOF CARD'S PICKERS, filled as a real note fills them: a long problem title, and the
 	# writers by their whole names - the selected one is what an unclipped picker is as wide as
 	var proof_card: ProofCard = _proof._block_cards["proof"]
@@ -99,8 +99,8 @@ func _run() -> void:
 	# a voice list as the host fills it - its longest name is what a picker sized to its items
 	# would be as wide as
 	for e in [_ed, _cards, _proof]:
-		(e as ReadingPanel)._voices.add_item("libritts high  (downloads)")
-		(e as ReadingPanel)._voices.add_item("en_GB southern english female medium  (downloads)")
+		(e as ReadingPanel)._cast.voice_pick.add_item("libritts high  (downloads)")
+		(e as ReadingPanel)._cast.voice_pick.add_item("en_GB southern english female medium  (downloads)")
 
 	# OPEN, whatever the person running this has folded: a probe reads their real settings, and
 	# a panel with its cards folded is short enough to fit any window - which would prove nothing.

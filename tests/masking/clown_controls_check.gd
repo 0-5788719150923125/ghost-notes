@@ -69,7 +69,7 @@ func _initialize() -> void:
 	m["effect_a"] = float(MaskSession.EFFECT_CLOWN)
 	s.markers.append(m)
 	_ed.session = s
-	_ed._src_size = Vector2i(W, H)
+	_ed._source_prep.src_size = Vector2i(W, H)
 	root.add_child(_ed)
 	_ed._face._ft_path = _write_track()
 	_ed._face._ft_load()

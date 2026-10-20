@@ -5,9 +5,11 @@ class_name ProofProducer
 ## (next/proof.md, "How an episode is made"), the way [CardProducer] makes a card show's:
 ##
 ##   problem   the FRAMER fixes the problem from the note before anyone works on it: its words,
-##             its TeX, its exact Lean statement, the facts it may not cite, where it comes from
-##   solve     the SOLVER works it at the desk with [ProofTools] - a lab notebook, Lean checks,
-##             a submitted proof - and its session ends verified or not, honestly either way
+##             its TeX, how it is checked - a PROOF in Lean (its exact statement, the facts it may
+##             not cite) or a COMPUTATION (what is computed) - and where it comes from
+##   solve     the SOLVER works it at the desk with [ProofTools] - a lab notebook, Lean checks, runs
+##             of code, a submitted proof or result - and its session ends verified, computed or
+##             neither, honestly whichever
 ##   draft     the TEACHER writes what the voice says and the pen writes and draws ([DeskScript]),
 ##             from the notebook and the Lean file as they were left
 ##   review    the STUDENT reads the draft as the viewer it is for, and notes where it loses them
@@ -20,9 +22,10 @@ class_name ProofProducer
 ## file does not, and lands what ended. Nothing runs on its own - [method start] is a person pressing
 ## Make episode, because the agents spend the author's quota.
 ##
-## IT WAITS FOR WHAT IT RUNS ON: the solver needs Lean and Mathlib, the ink TeX and the math
-## environment - all fetched by ghost itself ([Provision]). A step whose dependency is installing is
-## not failed; it waits, and [member waiting] says for what.
+## IT WAITS FOR WHAT IT RUNS ON: a proof's solver needs Lean and Mathlib, a solver that runs code the
+## compute environment, the ink TeX and the math environment - all fetched by ghost itself
+## ([Provision]). A step whose dependency is installing is not failed; it waits, and [member waiting]
+## says for what. What ghost cannot fetch - the sandbox, bubblewrap - a computation fails on, saying so.
 
 signal changed
 
@@ -37,6 +40,8 @@ const LOCAL := ["ink", "script"]
 const SOLVE_TIMEOUT := 3600
 ## TeX's measure for the pad: a column this many points wide (the page's text width).
 const PAD_WIDTH := 270.0
+## What a take of the lesson is checked for ([method _land_lesson]), as the keys of [member _fix].
+const CHECKED := ["notation", "undictated", "letters", "points", "still"]
 
 var episode: ProofEpisode
 ## {title (the channel's name), byline, uploads_as (the line an episode's title goes up in), before
@@ -111,9 +116,12 @@ func activity_of(step: String) -> String:
 	if _jobs.has(step):
 		var said := AgentJobs.activity(String(_jobs[step]))
 		var t: Dictionary = _tools.get(step, {})
-		if not t.is_empty() and int((t["set"] as ProofTools).checks) > 0:
-			said += " · %d Lean check%s" % [(t["set"] as ProofTools).checks,
-				"" if (t["set"] as ProofTools).checks == 1 else "s"]
+		if not t.is_empty():
+			var set := t["set"] as ProofTools
+			if set.checks > 0:
+				said += " · %d Lean check%s" % [set.checks, "" if set.checks == 1 else "s"]
+			if set.runs > 0:
+				said += " · %d run%s" % [set.runs, "" if set.runs == 1 else "s"]
 		return said
 	if _local.has(step):
 		return "laying out the formulas with TeX"
@@ -173,7 +181,9 @@ func _lacks(step: String) -> String:
 	var keys: Array = []
 	match step:
 		"solve":
-			keys = ["mathlib", "math_venv"]
+			keys = ["compute_venv"] if ProofTools.kind_of(_problem()) == "computation" else ["mathlib", "math_venv"]
+			if ProofTools.can_run() and not keys.has("compute_venv"):
+				keys.append("compute_venv")
 		"ink":
 			keys = ["tex", "math_venv"]
 	var names := PackedStringArray()
@@ -191,20 +201,25 @@ func _make(step: String) -> void:
 	match step:
 		"problem":
 			_submit_text(step, ProofPrompts.framer(_title(), _brief(), String(spec.get("uploads_as", "")),
-				spec.get("before", []) if spec.get("before") is Array else []), "best")
+				spec.get("before", []) if spec.get("before") is Array else [], ProofTools.can_run()), "best")
 		"solve":
 			_make_solve()
 		"draft", "lesson":
 			# the first draft from the work; the lesson from the draft and the student's notes on it
+			if step == "lesson" and int(_tries.get(step, 0)) == 0:
+				for k in CHECKED:
+					_fix.erase(k)
 			var solve: Variant = episode.read_json("solve")
-			var verified := bool((solve as Dictionary).get("verified", false)) if solve is Dictionary else false
 			var review: Variant = episode.read_json("review")
 			var notes: Array = (review as Dictionary).get("notes", []) if review is Dictionary \
 				and (review as Dictionary).get("notes") is Array else []
+			var runs: Variant = episode.read_json("runs")
+			var data: Variant = episode.read_json("data")
 			_submit_text(step, ProofPrompts.teacher(_title(), _brief(), _problem(),
-				episode.read_text("notebook"), episode.read_text("proof"), verified,
+				episode.read_text("notebook"), episode.read_text("proof"), solve if solve is Dictionary else {},
 				_fix if step == "lesson" else {},
-				episode.read_text("draft") if step == "lesson" else "", notes), "best")
+				episode.read_text("draft") if step == "lesson" else "", notes,
+				runs if runs is Array else [], data if data is Dictionary else {}), "best")
 		"review":
 			_submit_text(step, ProofPrompts.student(_title(), _brief(), _problem(),
 				episode.read_text("draft")), "best")
@@ -254,13 +269,20 @@ func _make_solve() -> void:
 	if not TextGen.has(writer) or not TextGen.make(writer).takes_tools():
 		_errors["solve"] = "the writer picked takes no tools - pick one that does (Claude, Codex or Grok)"
 		return
+	if ProofTools.kind_of(_problem()) == "computation" and not ProofTools.can_run():
+		_errors["solve"] = ("this problem is settled by running code, and this machine has no sandbox to run "
+			+ "it in: install bubblewrap (see the Environment panel), or Refine the note into a proof")
+		return
+	if int(_tries.get("solve", 0)) == 0:
+		# a solve begun afresh begins with an empty folder; a retry keeps what the first try saved
+		Provision.remove_tree(episode.job_dir("solve").path_join("compute"))
 	var toolset := ProofTools.new(episode, _problem(), episode.job_dir("solve"))
 	var url := AgentTools.open(episode.job_dir("solve"), toolset)
 	if url.is_empty():
 		_errors["solve"] = "the tools could not be served (a read-only session?)"
 		return
 	_tools["solve"] = {"url": url, "set": toolset}
-	_submit_text("solve", ProofPrompts.solver(_title(), _brief(), _problem()), "best",
+	_submit_text("solve", ProofPrompts.solver(_title(), _brief(), _problem(), ProofTools.can_run()), "best",
 		{"tools_url": url, "timeout": SOLVE_TIMEOUT})
 
 
@@ -286,9 +308,10 @@ func _start_ink() -> void:
 	var spec_path := episode.dir.path_join("ink.spec.json")
 	var log := episode.dir.path_join("ink.log")
 	DirAccess.remove_absolute(answer)
+	var data: Variant = episode.read_json("data")
 	var err := TextGen.put(spec_path, JSON.stringify({"items": items, "out": answer,
 		"work": episode.dir.path_join("ink_work"), "width": PAD_WIDTH, "outlines": true,
-		"bin": latex.get_base_dir()}))
+		"bin": latex.get_base_dir(), "data": data if data is Dictionary else {}}))
 	if not err.is_empty():
 		_errors["ink"] = err
 		return
@@ -319,6 +342,9 @@ func _land(step: String, res: Dictionary) -> void:
 		var checks := int((t["set"] as ProofTools).checks) if not t.is_empty() else 0
 		_close_tools("solve")
 		err = _land_solve(handed, res, checks)
+		if err.is_empty():
+			# what the runs left in their folder was scratch: what they did is in runs.json
+			Provision.remove_tree(episode.job_dir("solve").path_join("compute"))
 	elif not bool(res.get("ok", false)):
 		err = String(res.get("error", "the job failed"))
 	else:
@@ -339,8 +365,9 @@ func _land(step: String, res: Dictionary) -> void:
 		_errors[step] = err
 
 
-## THE FIXED PROBLEM, in the shape every later step reads: its words, its TeX, a Lean statement that
-## names `main` and stops before its proof, the facts it may not cite.
+## THE FIXED PROBLEM, in the shape every later step reads: its words, its TeX, how it is checked, and
+## for a proof a Lean statement that names `main` and stops before its proof and the facts it may not
+## cite, for a computation what is computed.
 func _land_problem(text: String) -> String:
 	var d: Variant = TextGen.extract_json(text)
 	if not (d is Dictionary):
@@ -354,10 +381,23 @@ func _land_problem(text: String) -> String:
 ## The framer's answer [param d] made into a problem, or `{error}`. Static and pure for the gate.
 ## THE EPISODE'S NAME is `episode_title` (Cards' producer's key, under the one rule both are given:
 ## rules/agents/episode.yaml); its description and tags go up with the video.
+##
+## NOT EVERY CLAIM IS A THEOREM: `check` is "proof" (Lean) or "computation" (code that runs,
+## [ProofTools]); anything else, or none - a problem framed before there were computations - is a proof.
 static func land_problem(d: Dictionary) -> Dictionary:
 	var out := {}
-	for k in ["episode_title", "statement", "latex", "lean", "history", "audience", "description"]:
+	for k in ["episode_title", "statement", "latex", "lean", "history", "audience", "description", "computation"]:
 		out[k] = str(d.get(k, "")).strip_edges()
+	out["check"] = "computation" if str(d.get("check", "")).strip_edges().to_lower() == "computation" else "proof"
+	if String(out["episode_title"]).is_empty() or String(out["statement"]).is_empty():
+		return {"error": "the problem has no episode title or no statement"}
+	out["tags"] = Array(DataPath.strings(d.get("tags", [])))
+	if out["check"] == "computation":
+		if String(out["computation"]).is_empty():
+			return {"error": "the problem is a computation and does not say what is computed"}
+		out["lean"] = ""
+		out["forbidden"] = []
+		return out
 	var lean := String(out["lean"])
 	# a statement handed back with its proof, or its `:=`, keeps only the statement
 	var at := lean.find(":=")
@@ -365,8 +405,6 @@ static func land_problem(d: Dictionary) -> Dictionary:
 		lean = lean.substr(0, at).strip_edges()
 	lean = lean.trim_prefix("```lean").trim_suffix("```").strip_edges()
 	out["lean"] = lean
-	if String(out["episode_title"]).is_empty() or String(out["statement"]).is_empty():
-		return {"error": "the problem has no episode title or no statement"}
 	if not RegEx.create_from_string("^theorem\\s+main\\b").search(lean):
 		return {"error": "the Lean statement does not state theorem main"}
 	var forbidden: Array = []
@@ -375,31 +413,37 @@ static func land_problem(d: Dictionary) -> Dictionary:
 		if not name.is_empty() and not name.contains(" "):
 			forbidden.append(name)
 	out["forbidden"] = forbidden
-	out["tags"] = Array(DataPath.strings(d.get("tags", [])))
 	return out
 
 
-## THE SOLVER'S SESSION, ENDED. A handed-in proof was VERIFIED when it was handed in (ProofTools
-## accepts nothing else). With none, the run is tried again once; after that the episode goes on
-## honestly unverified, so long as there is a notebook to teach from - the lesson then says so.
+## THE SOLVER'S SESSION, ENDED. A handed-in proof was VERIFIED when it was handed in, and a handed-in
+## result names runs that ran to their end (ProofTools accepts nothing else): `verified` or `computed`.
+## With neither, the run is tried again; after that the episode goes on honestly unchecked, so long as
+## there is a notebook to teach from - the lesson then says so.
 func _land_solve(handed: String, res: Dictionary, checks: int) -> String:
+	var r: Variant = episode.read_json("runs")
+	var runs := (r as Array).size() if r is Array else 0
 	if not handed.is_empty():
 		var sub: Variant = JSON.parse_string(handed)
 		var d: Dictionary = sub if sub is Dictionary else {}
+		if bool(d.get("computed", false)):
+			return episode.write_json("solve", {"verified": false, "computed": true, "checks": checks,
+				"runs": runs, "result": String(d.get("result", "")), "evidence": d.get("runs", [])})
 		episode.write_text("proof", String(d.get("code", episode.read_text("proof"))))
 		# WHAT CHECKED IT, kept with the verdict: the upload says so, in these versions
 		return episode.write_json("solve", {"verified": true, "checks": int(d.get("checks", checks)),
-			"axioms": d.get("axioms", {}), "seconds": d.get("seconds", 0.0),
+			"runs": runs, "axioms": d.get("axioms", {}), "seconds": d.get("seconds", 0.0),
 			"lean": String(Provision.installed("lean").get("version", "")),
 			"mathlib": String(Provision.workbench().get("tag", ""))})
-	var why := "the solver stopped without handing in a verified proof"
+	var why := ("the solver stopped without handing in a result" if ProofTools.kind_of(_problem()) == "computation"
+		else "the solver stopped without handing in a verified proof")
 	if not bool(res.get("ok", false)):
 		why = "the solver stopped: %s" % String(res.get("error", "its run failed"))
 	if int(_tries.get("solve", 0)) <= SOLVE_RETRIES:
 		return why
 	if episode.read_text("notebook").strip_edges().is_empty():
 		return why + ", and left no notebook"
-	return episode.write_json("solve", {"verified": false, "checks": checks, "note": why})
+	return episode.write_json("solve", {"verified": false, "computed": false, "checks": checks, "runs": runs, "note": why})
 
 
 ## THE FIRST DRAFT: a lesson in the pen's format, with something on the pad. It is read by the
@@ -445,6 +489,11 @@ static func land_review(d: Variant) -> Dictionary:
 ## the pad carries ([method DeskScript.unknown_points]) or talks long over a still pen
 ## ([method DeskScript.still]) goes back once too, and is taken the second time: the desk writes such a
 ## line while the voice waits, the voice says "uh", the pen stays put, the viewer loses the thread.
+## EVERY TAKE IS CHECKED AND THE LOG SAYS HOW IT STANDS (2026-10-19: "Was the problem fixed or not?" -
+## a take after a send-back was taken unchecked, and nothing said): one taken with faults left warns
+## with them, one that mends them says so. What a take was sent back for stays in [member _fix] until
+## the lesson is made anew, so the take TeX sends back - written from the draft again, like the first
+## - is told it too, and does not bring back what the second mended.
 ## ITS LENGTH IS ITS OWN: nothing sends a lesson back for running long ([ProofPrompts]).
 func _land_lesson(text: String) -> String:
 	var lesson := clean_lesson(text)
@@ -452,29 +501,40 @@ func _land_lesson(text: String) -> String:
 		return "the lesson writes nothing on the pad"
 	var said := DeskScript.audit(lesson)
 	if not said.is_empty():
-		_fix["notation"] = Array(said)
+		_fix["notation"] = Array(_fix.get("notation", [])) + Array(said)
 		return "the lesson's speech carries notation (%d line%s)" % [said.size(), "" if said.size() == 1 else "s"]
-	_fix.erase("notation")
-	var bare := DeskScript.undictated(lesson)
-	var letters := DeskScript.bare_letters(lesson)
-	var points := DeskScript.unknown_points(lesson)
-	var still := DeskScript.still(lesson)
-	if (not bare.is_empty() or not letters.is_empty() or not points.is_empty() or not still.is_empty()) \
-			and int(_tries.get("lesson", 0)) <= RETRIES:
-		_fix["undictated"] = Array(bare)
-		_fix["letters"] = Array(letters)
-		_fix["points"] = Array(points)
-		_fix["still"] = Array(still)
-		if not bare.is_empty():
-			return "%d pad line%s not read aloud as written" % [bare.size(), "" if bare.size() == 1 else "s"]
-		if not letters.is_empty():
-			return "%d line%s said a letter as the word a" % [letters.size(), "" if letters.size() == 1 else "s"]
-		if not points.is_empty():
-			return "it points at %s, which nothing on the pad is called" % ", ".join(points)
-		return "the pen stands still through %d long stretch%s of speech" % [still.size(), "" if still.size() == 1 else "es"]
-	for k in ["undictated", "letters", "points", "still"]:
-		_fix.erase(k)
+	var found := {"undictated": DeskScript.undictated(lesson), "letters": DeskScript.bare_letters(lesson),
+		"points": DeskScript.unknown_points(lesson), "still": DeskScript.still(lesson)}
+	var faults := lesson_faults(found)
+	for k in found:
+		if not (found[k] as PackedStringArray).is_empty():
+			_fix[k] = Array(_fix.get(k, [])) + Array(found[k])
+	var take := int(_tries.get("lesson", 0))
+	if not faults.is_empty() and take <= RETRIES:
+		return faults
+	if not faults.is_empty():
+		push_warning("ghost: proof lesson - take %d is kept as it is: %s" % [take, faults])
+	elif take > 1:
+		print("ghost: proof lesson - take %d passes every check" % take)
 	return episode.write_text("lesson", lesson + "\n")
+
+
+## What [param found] (check -> what it caught, as [method _land_lesson] runs them) says is wrong with
+## a lesson, the first fault named; "" when nothing is.
+static func lesson_faults(found: Dictionary) -> String:
+	var bare: PackedStringArray = found.get("undictated", PackedStringArray())
+	var letters: PackedStringArray = found.get("letters", PackedStringArray())
+	var points: PackedStringArray = found.get("points", PackedStringArray())
+	var still: PackedStringArray = found.get("still", PackedStringArray())
+	if not bare.is_empty():
+		return "%d pad line%s not read aloud as written" % [bare.size(), "" if bare.size() == 1 else "s"]
+	if not letters.is_empty():
+		return "%d line%s said a letter as the word a" % [letters.size(), "" if letters.size() == 1 else "s"]
+	if not points.is_empty():
+		return "it points at %s, which nothing on the pad is called" % ", ".join(points)
+	if not still.is_empty():
+		return "the pen stands still through %d long stretch%s of speech" % [still.size(), "" if still.size() == 1 else "es"]
+	return ""
 
 
 ## A teacher's reply as a lesson: a fenced reply unwrapped, outer blank lines off.
@@ -508,6 +568,10 @@ func _land_ink(job: Dictionary) -> void:
 		episode.invalidate("lesson")
 		push_warning("ghost: proof ink - %d formula(s) TeX refused; the lesson is written again" % broken.size())
 		return
+	if not broken.is_empty():
+		push_warning("ghost: proof ink - %d formula(s) TeX refused again; the pen leaves them out" % broken.size())
+	elif _fix.has("broken"):
+		print("ghost: proof ink - TeX sets every formula of the lesson written again")
 	_fix.erase("broken")
 	_finish("ink", episode.write_json("ink", answer))
 

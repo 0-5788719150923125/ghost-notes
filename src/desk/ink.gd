@@ -120,8 +120,10 @@ const RELATION_PAUSE := 0.25      # a longer one before a relation: "=", "<", an
 const RELATIONS := ["equal", "less", "greater", "lessequal", "greaterequal", "arrowdblright",
 	"arrowright", "equivalence", "approxequal", "element", "reflexsubset", "propersubset"]
 ## A drawing's paths, by kind: how much faster than writing the pen draws one, and its nib (points).
-const DRAW_SPEED := {"line": 2.6, "hatch": 4.0, "arrow": 1.6, "dot": 1.2}
-const DRAW_NIB := {"line": 0.62, "hatch": 0.42, "arrow": 0.62, "dot": 0.9}
+## A `grid` line is FAINT - drawn fine and light, under the figure ([constant FAINT]).
+const DRAW_SPEED := {"line": 2.6, "hatch": 4.0, "arrow": 1.6, "dot": 1.2, "grid": 5.0}
+const DRAW_NIB := {"line": 0.62, "hatch": 0.42, "arrow": 0.62, "dot": 0.9, "grid": 0.3}
+const FAINT := ["grid"]
 ## How far a drawn path wanders off its line: this share of its length, within these bounds (points).
 const WANDER := 0.006
 const WANDER_RANGE := Vector2(0.12, 0.9)
@@ -149,7 +151,8 @@ static func strokes_of(item: Dictionary, seed: int, outlines: Dictionary = {}) -
 			var drawn := _drawn(entry, rng)
 			if drawn.size() > 0:
 				out.append({"name": kind, "k": int(entry.get("k", 0)), "points": drawn,
-					"width": float(DRAW_NIB.get(kind, 0.62)), "speed": float(DRAW_SPEED.get(kind, 2.6))})
+					"width": float(DRAW_NIB.get(kind, 0.62)), "speed": float(DRAW_SPEED.get(kind, 2.6)),
+					"faint": kind in FAINT})
 			continue
 		if entry.has("n"):
 			var placed := _glyph(entry, rng, outlines)
@@ -214,11 +217,11 @@ static func at(sched: Dictionary, t: float) -> Dictionary:
 		var t1 := float(st["t1"])
 		var pts: PackedVector2Array = st["points"]
 		if t >= t1:
-			ink.append({"points": pts, "width": float(st["width"])})
+			ink.append({"points": pts, "width": float(st["width"]), "faint": bool(st.get("faint", false))})
 			continue
 		var u := clampf((t - t0) / maxf(t1 - t0, 1e-6), 0.0, 1.0)
 		var part := _partial(pts, u * u * u * (10.0 - 15.0 * u + 6.0 * u * u))
-		ink.append({"points": part, "width": float(st["width"])})
+		ink.append({"points": part, "width": float(st["width"]), "faint": bool(st.get("faint", false))})
 		pen = part[part.size() - 1]
 	return {"ink": ink, "pen": pen}
 
@@ -536,7 +539,7 @@ static func _drawn(entry: Dictionary, rng: RandomNumberGenerator) -> PackedVecto
 			pts.append(src[i - 1].lerp(src[i], float(j) / float(n)))
 	var length := _length(pts)
 	var amp := clampf(length * WANDER, WANDER_RANGE.x, WANDER_RANGE.y)
-	if String(entry.get("kind", "")) == "hatch":
+	if String(entry.get("kind", "")) in ["hatch", "grid"]:
 		amp = WANDER_RANGE.x
 	var out := PackedVector2Array()
 	var run := 0.0

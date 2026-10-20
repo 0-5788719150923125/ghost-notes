@@ -19,7 +19,19 @@ What is held, each with an input that must fail where a pass could be an acciden
   cut at the range's edge); an outline the SVG left unfilled is NOT shaded (SVG's own default fill is
   black - the control), a small filled circle is a dot and a big one hatched; an arrow ends at its
   line's end; and an expression that is not arithmetic in x is refused, names and calls alike.
+- A SERIES A RUN KEPT (hosts/compute/run.py's keep(), 2026-10-19): joined point to point and cut at
+  the box's edge, thinned when long, dotted (inside the box only), barred from the axis to its height;
+  a name no run kept is refused (the control), and so are too many dots; typeset hands it through.
+- MORE TO DRAW WITH (the user, 2026-10-19: "do the agents have the ability to draw charts, line
+  graphs, etc.? ... the ability to draw arbitrary pictures would be useful"): a curve of t is traced
+  whole inside its box (a unit circle closes on itself) and cut at the box's edges where it leaves it
+  (the control, a circle too big for the box); a polar curve is a radius at its angle; ticks written
+  with pi are numbered in pi (the control, the same ticks as a decimal, are not); a bar is hatched
+  from its foot to its height; an angle's arc runs between its two directions, a right angle is a
+  corner; a grid adds a faint line at each tick (the control, the same axes without it); and a range is a
+  constant, never a variable.
 """
+import math
 import pathlib
 import shutil
 import sys
@@ -159,6 +171,104 @@ def _figures():
         check(False, "a plot outside axes is refused")
     except figure.FigureError as e:
         check("axes" in str(e), "a plot outside axes is refused, saying where it belongs (%s)" % e)
+    _more()
+    _data(work)
+
+
+def _more():
+    import math
+    # A CURVE OF t, whole inside its box and cut at the box's edges where it leaves it
+    unit = figure._traced(math.cos, math.sin, 0.0, math.tau, -1.5, 1.5, -1.5, 1.5)
+    on = all(abs(math.hypot(x, y) - 1.0) < 1e-9 for r in unit for x, y in r)
+    check(len(unit) == 1 and on and math.dist(unit[0][0], unit[0][-1]) < 1e-9,
+          "a curve of t is traced whole: the unit circle closes on itself (%d run)" % len(unit))
+    big = figure._traced(lambda t: 2 * math.cos(t), lambda t: 2 * math.sin(t), 0.0, math.tau, -1.5, 1.5, -1.5, 1.5)
+    edges = all(abs(abs(p[0]) - 1.5) < 1e-9 or abs(abs(p[1]) - 1.5) < 1e-9 for r in big for p in (r[0], r[-1]))
+    check(len(big) >= 4 and edges, "the control: a circle too big for its box is cut where it leaves it, at the edges (%d runs)" % len(big))
+    fig = figure.compile_figure('<svg viewBox="0 0 360 200"><axes x="-2.5 2.5" y="-2 2" box="30 10 300 180">'
+                                '<plot r="1+cos(t)" t="0 2*pi" id="c"/></axes></svg>')
+    xs = [pt[0] for p in fig["paths"] if p["kind"] == "line" and len(p["pts"]) > 50 for pt in p["pts"]]
+    sc = figure.COLUMN_PT / figure.COLUMN
+    check(xs and abs(max(xs) - (30 + 300 * (2 + 2.5) / 5) * sc) < 0.5 and abs(min(xs) - (30 + 300 * (2.5 - 0.25) / 5) * sc) < 0.5,
+          "a polar curve is a radius at its angle: the cardioid reaches x = 2 and back to x = -1/4 (%.1f..%.1f)" % (min(xs), max(xs)))
+    # TICKS IN PI
+    trig = figure.compile_figure('<svg viewBox="0 0 360 160"><axes x="0 2*pi" y="-1.2 1.2" ticks="pi/2 1"><plot fn="sin(x)"/></axes></svg>')
+    labels = [lab["tex"] for lab in trig["labels"]]
+    plain = figure.compile_figure('<svg viewBox="0 0 360 160"><axes x="0 6.2832" y="-1.2 1.2" ticks="1.5708 1"><plot fn="sin(x)"/></axes></svg>')
+    check(all(t in labels for t in ("$\\pi/2$", "$\\pi$", "$3\\pi/2$")) and "$1.57$" in [lab["tex"] for lab in plain["labels"]],
+          "ticks written with pi are numbered in pi (%s; the control, written as decimals, %s)"
+          % (" ".join(labels[:3]), " ".join(lab["tex"] for lab in plain["labels"][:2])))
+    # A BAR, its foot on the axis and its top at its height, shaded
+    bars = figure.compile_figure('<svg viewBox="0 0 360 200"><axes x="0 4" y="0 4" box="40 10 280 180">'
+                                 '<rect x="1" y="0" width="1" height="3" fill="black" id="bar"/></axes></svg>')
+    hatch = [p for p in bars["paths"] if p["kind"] == "hatch"]
+    tops = [pt[1] for p in bars["paths"] if p["kind"] == "line" and len(p["pts"]) >= 4 for pt in p["pts"]]
+    check(hatch and tops and abs(min(tops) - (10 + 180 * (1 - 3 / 4)) * sc) < 0.5 and abs(max(tops) - 190 * sc) < 0.5,
+          "a bar stands from its foot on the axis to its height, hatched (%d hatch lines)" % len(hatch))
+    # AN ANGLE: its arc from one direction to the other; a right angle a corner
+    ang = figure.compile_figure('<svg viewBox="0 0 360 120"><line x1="50" y1="100" x2="300" y2="100"/>'
+                                '<angle x="50" y="100" r="40" from="0" to="35" id="th"/>'
+                                '<angle x="300" y="100" r="12" from="90" to="180" right="true"/></svg>')
+    arc = ang["paths"][1]["pts"]
+    end = (50 + 40 * math.cos(math.radians(35)), 100 - 40 * math.sin(math.radians(35)))
+    corner = ang["paths"][2]["pts"]
+    check(abs(arc[0][0] - 90 * sc) < 0.01 and abs(arc[0][1] - 100 * sc) < 0.01 and math.dist(arc[-1], (end[0] * sc, end[1] * sc)) < 0.01
+          and len(corner) == 3 and math.dist(corner[1], (288 * sc, 88 * sc)) < 0.01,
+          "an angle's arc runs from one direction to the other, counterclockwise as seen, and a right angle is a corner")
+    # A GRID: dotted lines at the ticks, under the rest
+    gridded = figure.compile_figure('<svg viewBox="0 0 360 200"><axes x="-3 3" y="-2 2" grid="true"><plot fn="x"/></axes></svg>')
+    bare = figure.compile_figure('<svg viewBox="0 0 360 200"><axes x="-3 3" y="-2 2"><plot fn="x"/></axes></svg>')
+    grid = [p for p in gridded["paths"] if p["kind"] == "grid"]
+    check(len(grid) == 10 and gridded["paths"][0]["kind"] == "grid" and len(gridded["paths"]) == len(bare["paths"]) + 10
+          and not any(p["kind"] == "grid" for p in bare["paths"]),
+          "a grid adds a faint line at each tick but the axes', drawn first (%d; the control, without it, none)" % len(grid))
+    for bad in ('<plot x="cos(t)" y="sin(t)" t="0 x"/>', '<plot x="cos(x)" y="sin(t)" t="0 1"/>'):
+        try:
+            figure.compile_figure('<svg viewBox="0 0 360 200"><axes x="-1 1" y="-1 1">%s</axes></svg>' % bad)
+            check(False, "a range is a constant and a curve of t names only t: %s" % bad)
+        except figure.FigureError as e:
+            check(True, "a range is a constant and a curve of t names only t (%s)" % e)
+
+
+
+def _data(work):
+    """A SERIES A RUN KEPT, drawn by its name: joined, dotted, barred; refused when no run kept it."""
+    sq = {"sq": {"points": [[i / 10.0, (i / 10.0) ** 2] for i in range(31)]}}
+    svg = '<svg viewBox="0 0 360 200"><axes x="0 2" y="0 4" box="40 10 280 180">%s</axes></svg>'
+    sc = figure.COLUMN_PT / figure.COLUMN
+    fig = figure.compile_figure(svg % '<plot data="sq" id="s"/>', sq)
+    line = [p for p in fig["paths"] if p["kind"] == "line" and len(p["pts"]) > 10]
+    ends = line[0]["pts"][-1] if line else (0, 0)
+    check(len(line) == 1 and len(line[0]["pts"]) == 21 and abs(ends[0] - (40 + 280) * sc) < 0.5 and abs(ends[1] - 10 * sc) < 0.5,
+          "a kept series is joined point to point, and cut at the box's edge where it leaves it (%d points, ending at the corner)"
+          % (len(line[0]["pts"]) if line else 0))
+    try:
+        figure.compile_figure(svg % '<plot data="sq"/>', {})
+        check(False, "the control: a series no run kept is refused")
+    except figure.FigureError as e:
+        check("no run kept" in str(e), "the control: a series no run kept is refused (%s)" % e)
+    many = {"n": {"points": [[i, math.sin(i / 300.0)] for i in range(5000)]}}
+    thin = figure.compile_figure('<svg viewBox="0 0 360 200"><axes x="0 5000" y="-1.2 1.2"><plot data="n"/></axes></svg>', many)
+    longest = max(len(p["pts"]) for p in thin["paths"] if p["kind"] == "line")
+    check(longest <= figure.PLOT_MOST + 1 + 2, "a long series is thinned for the pen (%d of 5000 points)" % longest)
+    five = {"d": {"points": [[0.2, 1], [0.6, 2], [1.0, 3], [1.4, 2], [3.0, 1]]}}
+    dots = figure.compile_figure(svg % '<dots data="d"/>', five)
+    check(sum(1 for p in dots["paths"] if p["kind"] == "dot") == 4, "a dot at each point inside the box (4 of 5: one is past x = 2)")
+    bars = figure.compile_figure(svg % '<bars data="d" width="0.2" fill="black"/>', five)
+    rects = [p for p in bars["paths"] if p["kind"] == "line" and len(p["pts"]) >= 4 and p["pts"][0] != p["pts"][1]]
+    tall = [min(pt[1] for pt in r["pts"]) for r in rects[-4:]]
+    want = [(10 + 180 * (1 - h / 4.0)) * sc for h in (1, 2, 3, 2)]
+    check(len(rects) >= 4 and all(abs(a - b) < 0.5 for a, b in zip(tall, want)) and any(p["kind"] == "hatch" for p in bars["paths"]),
+          "a bar stands on the axis at each x, as tall as its y, shaded")
+    try:
+        figure.compile_figure(svg % '<dots data="n"/>', many)
+        check(False, "too many dots are refused")
+    except figure.FigureError as e:
+        check("at most" in str(e), "too many dots are refused (%s)" % e)
+    got = typeset.typeset({"work": str(work / "d"), "width": 300, "data": sq,
+                           "items": [{"id": "f", "mode": "figure", "tex": svg % '<plot data="sq"/>'}]})
+    check(got["items"][0]["ok"] if isinstance(got, dict) and "items" in got else False,
+          "typeset hands a drawing the episode's data")
 
 
 if __name__ == "__main__":

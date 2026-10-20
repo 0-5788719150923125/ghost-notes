@@ -31,8 +31,8 @@ func _ready() -> void:
 	_ed._build_panel()
 	_ed.remove_child(_ed._panel)
 	add_child(_ed._panel)
-	_ed.remove_child(_ed._repace_timer)
-	add_child(_ed._repace_timer)
+	_ed.remove_child(_ed._cast._repace_timer)
+	add_child(_ed._cast._repace_timer)
 	_ed.end_stream = func() -> void: _ended += 1
 	_run.call_deferred()
 
@@ -52,7 +52,7 @@ func _run() -> void:
 	# Freed by hand: the editor was never in the tree, and the two children that WERE were
 	# reparented here, so nothing else is going to take them down.
 	_ed._panel.queue_free()
-	_ed._repace_timer.queue_free()
+	_ed._cast._repace_timer.queue_free()
 	for _i in 4:
 		await get_tree().process_frame
 	_ed.free()
@@ -66,33 +66,36 @@ func _check_stop_ends_a_reading() -> void:
 	print("")
 	print("stop_ends_a_reading")
 	_ed._text.text = "The machines are running. They have been here for years. Nobody minds."
-	_ed._plan(_ed._text.text)
-	_ok(not _ed._chunks.is_empty(), "a reading was planned (%d chunks)" % _ed._chunks.size())
+	_ed._stream.plan(_ed._text.text)
+	_ok(not _ed._stream.chunks.is_empty(), "a reading was planned (%d chunks)" % _ed._stream.chunks.size())
 	# Pretend the stream opened and a couple of chunks went out, which is the state Stop has to
 	# be able to unwind - not the tidy one just after planning.
-	_ed._stream_open = true
-	_ed._next_to_request = 2
-	_ed._in_flight = 1
-	_ed._req_chunk = {7: 0, 8: 1}
-	_ed._pushed = 12345
-	_ed._elapsed = 3.5
-	_ed._ready_takes = [{"stub": true}]
-	_ed._sub_words.append({"w": "the"})
+	_ed._stream._stream_open = true
+	_ed._stream._next_to_request = 2
+	_ed._stream._in_flight = 1
+	_ed._stream._req_chunk = {7: 0, 8: 1}
+	_ed._stream._pushed = 12345
+	_ed._stream._join.frames = 77175
+	_ed._stream._join.marks.append({"at": 0, "speaker": "Narrator"})
+	_ed._stream._join.fade_at = 500
+	_ed._stream._ready_takes = [{"stub": true}]
+	_ed._stream._sub_words.append({"w": "the"})
 	_ended = 0
-	_ed._stop_speaking()
+	_ed._stream.stop()
 	_ok(_ended == 1, "the owner's end_stream was called exactly once (%d)" % _ended)
-	for name in ["_chunks", "_ready_takes", "_sub_words"]:
-		_ok((_ed.get(name) as Array).is_empty(), "%s is empty" % name)
-	_ok(_ed._req_chunk.is_empty(),
+	# BY NAME, so a name the stream does not hold is a failure, never a null that reads as empty
+	for name in ["chunks", "_ready_takes", "_sub_words"]:
+		_ok(name in _ed._stream and (_ed._stream.get(name) as Array).is_empty(), "%s is empty" % name)
+	_ok(_ed._stream._req_chunk.is_empty(),
 		"the pending request map is cleared, so replies in flight are discarded on arrival")
-	_ok(not _ed._stream_open, "_stream_open is false")
-	_ok(_ed._playback == null, "_playback is released")
+	_ok(not _ed._stream._stream_open, "_stream_open is false")
+	_ok(_ed._stream.playback == null, "_playback is released")
 	for name in ["_next_to_request", "_next_to_play", "_in_flight", "_pushed", "_read",
 			"_ring_capacity"]:
-		_ok(int(_ed.get(name)) == 0, "%s is zero (%s)" % [name, str(_ed.get(name))])
-	_ok(is_equal_approx(_ed._elapsed, 0.0), "the reading clock is back to zero")
-	_ok(is_equal_approx(_ed._lead_in, 0.0), "the intro silence is cleared")
-	_ok(_ed._pending.is_empty(), "the resampler's pending buffer is empty")
+		_ok(name in _ed._stream and int(_ed._stream.get(name)) == 0, "%s is zero (%s)" % [name, str(_ed._stream.get(name))])
+	_ok(_ed._stream._join.frames == 0 and _ed._stream._join.marks.is_empty() and _ed._stream._join.fade_at == -1, "the reading clock is back to zero, with no marks and no fade")
+	_ok(is_equal_approx(_ed._stream._lead_in, 0.0), "the intro silence is cleared")
+	_ok(_ed._stream._pending.is_empty(), "the resampler's pending buffer is empty")
 
 
 ## Pressing it twice, or with nothing playing, must do nothing at all - including NOT calling
@@ -101,8 +104,8 @@ func _check_stop_is_idempotent() -> void:
 	print("")
 	print("stop_is_idempotent")
 	_ended = 0
-	_ed._stop_speaking()
-	_ed._stop_speaking()
+	_ed._stream.stop()
+	_ed._stream.stop()
 	_ok(_ended == 0, "stopping an already-stopped reading calls end_stream %d times" % _ended)
 
 
@@ -118,16 +121,16 @@ func _check_the_transport_follows_the_state() -> void:
 	_ok(not bool(h["can_stop"].call()), "Stop is grayed with nothing playing")
 	_ok(float(h["length"].call()) == 0.0, "and the rail is empty")
 	_ed._text.text = "One sentence is enough. And a second one, to have two."
-	_ed._plan(_ed._text.text)
-	_ed._sync_speak_buttons()
+	_ed._stream.plan(_ed._text.text)
+	_ed._stream._sync_speak_buttons()
 	_ok(bool(h["can_stop"].call()), "Stop is live once a reading is planned")
 	_ok(float(h["length"].call()) > 0.0, "and the rail has the reading on it (%.1fs)" % float(h["length"].call()))
-	_ed._stale = true
-	_ok(_ed._play_label().ends_with("●"), "an edit since the reading began shows its dot (%s)" % _ed._play_label())
-	_ed._stop_speaking()
+	_ed._stream.stale = true
+	_ok(_ed._stream.play_label().ends_with("●"), "an edit since the reading began shows its dot (%s)" % _ed._stream.play_label())
+	_ed._stream.stop()
 	_ok(not bool(h["can_stop"].call()), "Stop is grayed again after Stop")
 	_ok(float(h["length"].call()) == 0.0, "the rail is empty again - a seek there would start a reading")
-	_ok(_ed._play_label() == "Play", "Play has dropped its unsaved-edit dot after a stop (%s)" % _ed._play_label())
+	_ok(_ed._stream.play_label() == "Play", "Play has dropped its unsaved-edit dot after a stop (%s)" % _ed._stream.play_label())
 
 
 ## SPACE PLAYS AND PAUSES WHEREVER THE FOCUS IS (2026-10-05: "When I click the Tarot/collapse

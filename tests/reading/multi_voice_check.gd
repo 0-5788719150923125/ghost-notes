@@ -36,10 +36,10 @@ func _ready() -> void:
 	# and a gate written against that would pass whatever the callbacks did.
 	_ed.remove_child(_ed._panel)
 	add_child(_ed._panel)
-	_ed.remove_child(_ed._repace_timer)
-	add_child(_ed._repace_timer)
-	_ed.remove_child(_ed._cast_timer)
-	add_child(_ed._cast_timer)
+	_ed.remove_child(_ed._cast._repace_timer)
+	add_child(_ed._cast._repace_timer)
+	_ed.remove_child(_ed._cast._cast_timer)
+	add_child(_ed._cast._cast_timer)
 	_check_cues()
 	_check_comments_never_spoken()
 	_check_frontmatter()
@@ -91,19 +91,28 @@ func _slots(n: int) -> void:
 
 
 func _cast(names: Array) -> void:
-	_ed._names = PackedStringArray(names)
-	_ed._slots = []
+	_ed._cast._names = PackedStringArray(names)
+	_ed._cast._slots = []
 	for i in names.size():
-		_ed._slots.append(ReadingPanel.SLOT_DEFAULTS.duplicate())
-	_ed._stash = {}
-	_ed._order = PackedStringArray(names)
-	_ed._slot = 0
+		_ed._cast._slots.append(ReadingPanel.SLOT_DEFAULTS.duplicate())
+	_ed._cast._stash = {}
+	_ed._cast._order = PackedStringArray(names)
+	_ed._cast.slot = 0
 
 
 func _who(segs: Array) -> Array:
 	var out: Array = []
 	for s in segs:
 		out.append(String((s as Dictionary)["speaker"]))
+	return out
+
+
+## Every rest the passages carry, in text order (each passage keeps its own - see
+## [method ReadingPlan.passages]).
+func _rests(segs: Array) -> Array:
+	var out: Array = []
+	for s in segs:
+		out.append_array((s as Dictionary).get("holds", []))
 	return out
 
 
@@ -158,7 +167,8 @@ func _check_outro_mark() -> void:
 	var tail := ""
 	for i in 40:
 		tail += "Sentence number %d goes on a while. " % i
-	var chunks: Array = _ed._build_chunks("One. Two. <!-- outro --> Three four five. " + tail + "Zebedee.")
+	var plan: Dictionary = _ed._plan_of("One. Two. <!-- outro --> Three four five. " + tail + "Zebedee.")
+	var chunks: Array = plan["chunks"]
 	var said := ""
 	var before := 0
 	var fading := 0
@@ -174,17 +184,20 @@ func _check_outro_mark() -> void:
 	_ok(fading > 0 and said.contains("Three"), "the words after the mark are read, fading")
 	_ok(not said.to_lower().contains("outro"), "the outro mark was spoken: %s" % said)
 	_ok(not said.contains("Zebedee"), "text past the fade was synthesized anyway")
-	_ok(is_equal_approx(_ed._fade_len, maxf(0.5, Director.outro_hold)), "the fade is the Outro's length")
+	_ok(is_equal_approx(float(plan["fade"]), maxf(0.5, Director.outro_hold)), "the fade is the Outro's length")
+	_ok(float(_ed._plan_of("One. Two. Three.")["fade"]) == 0.0, "a chapter with no mark has no fade")
+	# THE PLAN IS ITS OWN: one made for an export while a reading fades leaves the reading's fade alone
+	_ed._stream._fade_len = 2.0
 	_ed._build_chunks("One. Two. Three.")
-	_ok(_ed._fade_len == 0.0, "a chapter with no mark has no fade")
+	_ok(_ed._stream._fade_len == 2.0, "planning another reading changed the live reading's fade")
 	# the fade itself: whole before, half way through at half, silent at the end
-	_ed._fade_at = 1000
-	_ed._fade_len = 2.0
+	_ed._stream._join.fade_at = 1000
+	_ed._stream._fade_len = 2.0
 	var sr := float(_ed._sr)
-	_ok(is_equal_approx(_ed._fade_gain(999), 1.0) and absf(_ed._fade_gain(1000 + int(sr)) - 0.5) < 0.01
-		and _ed._fade_gain(1000 + int(2.0 * sr)) == 0.0, "the fade runs 1 -> 0 over its length")
-	_ed._fade_at = -1
-	_ed._fade_len = 0.0
+	_ok(is_equal_approx(_ed._stream._fade_gain(999), 1.0) and absf(_ed._stream._fade_gain(1000 + int(sr)) - 0.5) < 0.01
+		and _ed._stream._fade_gain(1000 + int(2.0 * sr)) == 0.0, "the fade runs 1 -> 0 over its length")
+	_ed._stream._join.fade_at = -1
+	_ed._stream._fade_len = 0.0
 
 
 ## LIVE SCRUBBING, BY SENTENCE: a planned reading lays the bar out over its sentences, a seek
@@ -195,26 +208,26 @@ func _check_scrub() -> void:
 	var text := ""
 	for i in 12:
 		text += "Sentence number %d goes here. " % i
-	_ed._plan(text)
-	var n: int = _ed._chunks.size()
+	_ed._stream.plan(text)
+	var n: int = _ed._stream.chunks.size()
 	_ok(n >= 10 and Spectrum.seekable(), "a planned reading can be scrubbed (%d sentences)" % n)
-	var ordered := _ed._chunk_t.size() == n + 1
+	var ordered := _ed._stream._chunk_t.size() == n + 1
 	for i in n:
-		ordered = ordered and _ed._chunk_t[i + 1] > _ed._chunk_t[i]
-	_ok(ordered and is_equal_approx(_ed._scrub_len(), _ed._chunk_t[n]), "the bar runs sentence by sentence, first to last")
-	_ed._scrub_seek(_ed._chunk_t[5] + 0.05)
-	_ok(_ed._seek_k == 5 and is_equal_approx(_ed._scrub_pos(), _ed._chunk_t[5]),
+		ordered = ordered and _ed._stream._chunk_t[i + 1] > _ed._stream._chunk_t[i]
+	_ok(ordered and is_equal_approx(_ed._stream.length(), _ed._stream._chunk_t[n]), "the bar runs sentence by sentence, first to last")
+	_ed._stream.seek(_ed._stream._chunk_t[5] + 0.05)
+	_ok(_ed._stream._seek_k == 5 and is_equal_approx(_ed._stream.position(), _ed._stream._chunk_t[5]),
 		"a seek waits on the sentence under it, and the bar shows it there")
-	_ed._seek_k = -1
-	var k: int = _ed._start_at(5)
-	_ok(k == 5 and _ed._next_to_request == 5 and _ed._next_to_play == 5,
+	_ed._stream._seek_k = -1
+	var k: int = _ed._stream._start_at(5)
+	_ok(k == 5 and _ed._stream._next_to_request == 5 and _ed._stream._next_to_play == 5,
 		"a reading started there requests and plays from it")
-	_ok(_ed._lead_in == 0.0 and _ed._pending.is_empty(), "...with no intro")
-	var sw: PackedStringArray = _ed._start_words()
+	_ok(_ed._stream._lead_in == 0.0 and _ed._stream._pending.is_empty(), "...with no intro")
+	var sw: PackedStringArray = _ed._stream.start_words()
 	_ok(sw.size() >= 4 and sw[0] == "sentence" and sw[2] == "5", "the media are told where it starts: %s" % str(sw))
 	_ok(_ed.book_document(text)["start_words"] == sw, "...through the document they read")
-	_ed._plan(text)
-	_ok(_ed._start_words().is_empty(), "Play from the top hands them nothing")
+	_ed._stream.plan(text)
+	_ok(_ed._stream.start_words().is_empty(), "Play from the top hands them nothing")
 	# EVERY SENTENCE A SCRUB CAN LAND ON IS FOUND BY THE TABLET, from the words the panel hands
 	# it - links with a comma or period after them included, which the page sets as words of
 	# their own with no letters. One unfound start restarts the screen from the chapter's top.
@@ -222,19 +235,19 @@ func _check_scrub() -> void:
 		+ "He asks one thing.\n\nFrom the [wiki](a.test/w). This is about a cat.\n\n" \
 		+ "She's a [cat](a.test/c). Not every stack is a cat.\n\n| Plan | What |\n|---|---|\n" \
 		+ "| Free | Dreams as usual. |\n| Premium | No [falling](a.test/f). |\n\nAfter the table, more words.\n"
-	_ed._plan(tab)
+	_ed._stream.plan(tab)
 	var doc := TabletScript.parse(tab)
 	var norms := PackedStringArray()
 	for wi in (doc["spoken"] as PackedInt32Array):
 		norms.append(String((doc["words"][wi] as Dictionary)["norm"]))
 	var lost := []
-	for c in range(1, _ed._chunks.size()):
-		_ed._start_at(c)
-		if TabletScript.find_run(norms, _ed._start_words()) < 0:
+	for c in range(1, _ed._stream.chunks.size()):
+		_ed._stream._start_at(c)
+		if TabletScript.find_run(norms, _ed._stream.start_words()) < 0:
 			lost.append(c)
-	_ok(_ed._chunks.size() >= 6 and lost.is_empty(),
-		"every restart point of a tablet chapter is found by the tablet (lost: %s of %d)" % [str(lost), _ed._chunks.size()])
-	_ed._reset_playback()
+	_ok(_ed._stream.chunks.size() >= 6 and lost.is_empty(),
+		"every restart point of a tablet chapter is found by the tablet (lost: %s of %d)" % [str(lost), _ed._stream.chunks.size()])
+	_ed._stream._reset_playback()
 	_ok(not Spectrum.seekable(), "a stopped reading is no longer scrubbable")
 
 
@@ -274,17 +287,17 @@ func _check_chunks_carry_their_voice() -> void:
 ## is the failure that looks most like success.
 func _check_settings_reach_the_request() -> void:
 	_slots(2)
-	_ed._slots[0]["pace"] = 1.0
-	_ed._slots[0]["tone"] = 0                      # Neutral
-	_ed._slots[0]["pause"] = 1.0
-	_ed._slots[0]["speaker"] = 0
-	_ed._slots[1]["pace"] = 0.5
-	_ed._slots[1]["tone"] = 4                      # Spooky: slower, three semitones down
-	_ed._slots[1]["pause"] = 3.0
-	_ed._slots[1]["speaker"] = 7
+	_ed._cast._slots[0]["pace"] = 1.0
+	_ed._cast._slots[0]["tone"] = 0                      # Neutral
+	_ed._cast._slots[0]["pause"] = 1.0
+	_ed._cast._slots[0]["speaker"] = 0
+	_ed._cast._slots[1]["pace"] = 0.5
+	_ed._cast._slots[1]["tone"] = 4                      # Spooky: slower, three semitones down
+	_ed._cast._slots[1]["pause"] = 3.0
+	_ed._cast._slots[1]["speaker"] = 7
 	var ch := {"tokens": [], "plan_u": 0.0, "plan_v": 0.0}
-	var a: Dictionary = _ed._request_args(_ed._cfg(0), ch)
-	var b: Dictionary = _ed._request_args(_ed._cfg(1), ch)
+	var a: Dictionary = _ed._request_args(_ed._cast.slot_cfg(0), ch)
+	var b: Dictionary = _ed._request_args(_ed._cast.slot_cfg(1), ch)
 	_ok(float(b["length_scale"]) > float(a["length_scale"]) * 1.5,
 		"a slower, lower voice asked for length_scale %.3f against %.3f"
 		% [b["length_scale"], a["length_scale"]])
@@ -292,18 +305,18 @@ func _check_settings_reach_the_request() -> void:
 		"the reader id did not follow the tab: %d / %d" % [a["speaker"], b["speaker"]])
 	_ok(float(b["pause_scale"]) == 3.0 and float(a["pause_scale"]) == 1.0,
 		"the pause scale did not follow the tab")
-	_ok(absf(Delivery.pitch_ratio_of(_ed._cfg(1)) - 1.0) > 0.05
-		and absf(Delivery.pitch_ratio_of(_ed._cfg(0)) - 1.0) < 0.001,
+	_ok(absf(Delivery.pitch_ratio_of(_ed._cast.slot_cfg(1)) - 1.0) > 0.05
+		and absf(Delivery.pitch_ratio_of(_ed._cast.slot_cfg(0)) - 1.0) < 0.001,
 		"the tone's pitch shift did not follow the tab")
 	# THE HOST PLAYS THE TONE BACK (piper.py `_resample`, band-limited), so the request has to
 	# carry the ratio: without it the pitch move is silently lost, the model having been asked
 	# to speak r times slower for nothing.
-	_ok(absf(float(b.get("play_ratio", 0.0)) - Delivery.pitch_ratio_of(_ed._cfg(1))) < 1e-6
+	_ok(absf(float(b.get("play_ratio", 0.0)) - Delivery.pitch_ratio_of(_ed._cast.slot_cfg(1))) < 1e-6
 		and absf(float(a.get("play_ratio", 0.0)) - 1.0) < 1e-6,
 		"the tone's playback ratio did not reach the request: %s / %s"
 		% [a.get("play_ratio"), b.get("play_ratio")])
 	# ...and the seam between sentences is the incoming voice's own rest
-	_ok(Delivery.seam_gap_of(_ed._cfg(1)) > Delivery.seam_gap_of(_ed._cfg(0)),
+	_ok(Delivery.seam_gap_of(_ed._cast.slot_cfg(1)) > Delivery.seam_gap_of(_ed._cast.slot_cfg(0)),
 		"the seam did not follow the tab")
 
 
@@ -312,25 +325,25 @@ func _check_settings_reach_the_request() -> void:
 ## two slots differently.
 func _check_room_is_per_voice() -> void:
 	_slots(2)
-	_ed._slots[0]["echo"] = 0.0
-	_ed._slots[0]["room"] = 0.0
-	_ed._slots[0]["ambience"] = 0.0
-	_ed._slots[1]["echo"] = 0.8
-	_ed._slots[1]["room"] = 0.7
-	_ed._slots[1]["ambience"] = 0.5
+	_ed._cast._slots[0]["echo"] = 0.0
+	_ed._cast._slots[0]["room"] = 0.0
+	_ed._cast._slots[0]["ambience"] = 0.0
+	_ed._cast._slots[1]["echo"] = 0.8
+	_ed._cast._slots[1]["room"] = 0.7
+	_ed._cast._slots[1]["ambience"] = 0.5
 	var fx := VoiceFX.new()
-	Delivery.apply_fx(fx, _ed._cfg(0))
+	Delivery.apply_fx(fx, _ed._cast.slot_cfg(0))
 	var dry_echo := fx.echo_wet
 	var dry_pad := fx.pad
-	Delivery.apply_fx(fx, _ed._cfg(1))
+	Delivery.apply_fx(fx, _ed._cast.slot_cfg(1))
 	_ok(fx.echo_wet > dry_echo + 0.5 and fx.pad > dry_pad + 0.2,
 		"one chain did not re-dial between voices (echo %.2f->%.2f, pad %.2f->%.2f)"
 		% [dry_echo, fx.echo_wet, dry_pad, fx.pad])
 	# the lean too: one reader may move while the other sits still
-	_ed._slots[1]["lean"] = 0.6
-	Delivery.apply_fx(fx, _ed._cfg(1))
+	_ed._cast._slots[1]["lean"] = 0.6
+	Delivery.apply_fx(fx, _ed._cast.slot_cfg(1))
 	var leaning := fx.lean
-	Delivery.apply_fx(fx, _ed._cfg(0))
+	Delivery.apply_fx(fx, _ed._cast.slot_cfg(0))
 	_ok(absf(leaning - 0.6) < 0.001 and fx.lean == 0.0,
 		"the lean did not follow the voice (%.2f, then %.2f)" % [leaning, fx.lean])
 
@@ -340,7 +353,7 @@ func _check_room_is_per_voice() -> void:
 ## hushed - and on no others - and never for a whisper the Tone did not ask for.
 func _check_near_reaches_the_request() -> void:
 	_slots(2)
-	_ed._slots[1]["near"] = 0.8
+	_ed._cast._slots[1]["near"] = 0.8
 	var chunks: Array = []
 	for i in 200:
 		chunks.append({"speaker": Manuscript.NARRATOR if i % 2 == 0 else "Voice 2",
@@ -352,7 +365,7 @@ func _check_near_reaches_the_request() -> void:
 	for i in chunks.size():
 		var ch: Dictionary = chunks[i]
 		var near: Dictionary = ch["near"]
-		var s: Dictionary = _ed._cfg_of(String(ch["speaker"]))
+		var s: Dictionary = _ed._cast.cfg_of(String(ch["speaker"]))
 		var args: Dictionary = _ed._request_args(s, ch)
 		var plain: Dictionary = _ed._request_args(s, {"tokens": []})
 		if i % 2 == 0 and float(near["c"]) != 0.0:
@@ -368,7 +381,7 @@ func _check_near_reaches_the_request() -> void:
 	_ok(mismatched == 0, "%d requests did not carry their sentence's plan" % mismatched)
 	# a plan is never rewritten behind a request: only from `from` on
 	var before: Dictionary = chunks[10]["near"]
-	_ed._slots[1]["near"] = 0.0
+	_ed._cast._slots[1]["near"] = 0.0
 	_ed._plan_near(chunks, 50)
 	_ok(chunks[10]["near"] == before, "re-planning rewrote a sentence already requested")
 	_ok(float((chunks[51] as Dictionary)["near"]["c"]) == 0.0, "re-planning did not take the new dial")
@@ -400,24 +413,24 @@ func _check_take_channels() -> void:
 ## impossible to attribute after the fact.
 func _check_handover_is_sample_accurate() -> void:
 	_slots(2)
-	_ed._slots[1]["echo"] = 0.9
-	_ed._fx = VoiceFX.new()
-	_ed._fx_marks = [{"at": 0, "speaker": "Narrator"}, {"at": 1000, "speaker": "Voice 2"}]
-	_ed._fx_live_name = ""
-	_ed._pushed = 0
+	_ed._cast._slots[1]["echo"] = 0.9
+	_ed._stream.fx = VoiceFX.new()
+	_ed._stream._join.marks = [{"at": 0, "speaker": "Narrator"}, {"at": 1000, "speaker": "Voice 2"}]
+	_ed._stream._fx_live_name = ""
+	_ed._stream._pushed = 0
 	# at the head: the first voice is dialed in, and the push stops at the change
-	_ok(_ed._fx_admit(4096) == 1000, "the push must stop at the handover, got %d"
-		% _ed._fx_admit(4096))
-	_ok(_ed._fx_live_name == "Narrator", "the opening voice's room was not dialed in")
-	_ok(_ed._fx.echo_wet < 0.1, "the second voice's room arrived early")
+	_ok(_ed._stream._fx_admit(4096) == 1000, "the push must stop at the handover, got %d"
+		% _ed._stream._fx_admit(4096))
+	_ok(_ed._stream._fx_live_name == "Narrator", "the opening voice's room was not dialed in")
+	_ok(_ed._stream.fx.echo_wet < 0.1, "the second voice's room arrived early")
 	# short of it, nothing changes and the remaining distance is what is offered
-	_ed._pushed = 600
-	_ok(_ed._fx_admit(4096) == 400, "frames offered up to the handover")
-	_ok(_ed._fx_live_name == "Narrator", "the voice changed before its own first frame")
+	_ed._stream._pushed = 600
+	_ok(_ed._stream._fx_admit(4096) == 400, "frames offered up to the handover")
+	_ok(_ed._stream._fx_live_name == "Narrator", "the voice changed before its own first frame")
 	# on it
-	_ed._pushed = 1000
-	_ok(_ed._fx_admit(4096) == 4096, "past the last mark the whole buffer is free")
-	_ok(_ed._fx_live_name == "Voice 2" and _ed._fx.echo_wet > 0.5,
+	_ed._stream._pushed = 1000
+	_ok(_ed._stream._fx_admit(4096) == 4096, "past the last mark the whole buffer is free")
+	_ok(_ed._stream._fx_live_name == "Voice 2" and _ed._stream.fx.echo_wet > 0.5,
 		"the second voice's room did not arrive at its own frame")
 
 
@@ -427,55 +440,55 @@ func _check_handover_is_sample_accurate() -> void:
 ## settings for when it returns.
 func _check_tabs() -> void:
 	_cast([Manuscript.NARRATOR])
-	_ed._rebuild_tabs()
-	_ok(_ed._tabs.get_child_count() == 1, "a fresh panel is one tab")
+	_ed._cast._rebuild_tabs()
+	_ok(_ed._cast._tabs.get_child_count() == 1, "a fresh panel is one tab")
 
-	_ed._arc.value = 0.20                      # something to recognize the narrator by
-	_ed._refresh_cast("Opening.\n\n<!-- speaker: Emily White -->\n\nHis.\n\n"
+	_ed._cast._arc.value = 0.20                      # something to recognize the narrator by
+	_ed._cast.refresh("Opening.\n\n<!-- speaker: Emily White -->\n\nHis.\n\n"
 		+ "<!-- speaker: Judge -->\n\nOverruled.")
-	_ok(_ed._names == PackedStringArray(["Narrator", "Emily White", "Judge"]),
-		"the tabs are not the script's names in order: %s" % [_ed._names])
-	_ok(_ed._tabs.get_child_count() == 3, "one button per name, got %d" % _ed._tabs.get_child_count())
-	_ok(String((_ed._tabs.get_child(1) as Button).text).begins_with("Emily White"),
+	_ok(_ed._cast._names == PackedStringArray(["Narrator", "Emily White", "Judge"]),
+		"the tabs are not the script's names in order: %s" % [_ed._cast._names])
+	_ok(_ed._cast._tabs.get_child_count() == 3, "one button per name, got %d" % _ed._cast._tabs.get_child_count())
+	_ok(String((_ed._cast._tabs.get_child(1) as Button).text).begins_with("Emily White"),
 		"the tab is not labeled with the name")
-	_ok(_ed._slot == 0 and absf(_ed._arc.value - 0.20) < 0.001,
+	_ok(_ed._cast.slot == 0 and absf(_ed._cast._arc.value - 0.20) < 0.001,
 		"the voice on screen moved when names were added")
 
-	_ed._on_tab_selected(1)
-	_ok(absf(_ed._arc.value - 0.20) < 0.001, "a new name did not start as a copy of the first voice")
-	_ed._arc.value = 0.90                      # ...and Emily by
-	_ed._speaker.value = 5                     # a control that regenerates on change
+	_ed._cast._on_tab_selected(1)
+	_ok(absf(_ed._cast._arc.value - 0.20) < 0.001, "a new name did not start as a copy of the first voice")
+	_ed._cast._arc.value = 0.90                      # ...and Emily by
+	_ed._cast._speaker.value = 5                     # a control that regenerates on change
 
-	_ed._on_tab_selected(0)
-	_ok(absf(_ed._arc.value - 0.20) < 0.001,
-		"the narrator came back holding %.2f, which is Emily's" % _ed._arc.value)
-	_ok(int(_ed._speaker.value) == 0, "the narrator came back holding Emily's reader")
-	_ed._on_tab_selected(1)
-	_ok(absf(_ed._arc.value - 0.90) < 0.001, "Emily came back holding %.2f" % _ed._arc.value)
-	_ok(int(_ed._speaker.value) == 5, "Emily came back holding reader %d" % _ed._speaker.value)
+	_ed._cast._on_tab_selected(0)
+	_ok(absf(_ed._cast._arc.value - 0.20) < 0.001,
+		"the narrator came back holding %.2f, which is Emily's" % _ed._cast._arc.value)
+	_ok(int(_ed._cast._speaker.value) == 0, "the narrator came back holding Emily's reader")
+	_ed._cast._on_tab_selected(1)
+	_ok(absf(_ed._cast._arc.value - 0.90) < 0.001, "Emily came back holding %.2f" % _ed._cast._arc.value)
+	_ok(int(_ed._cast._speaker.value) == 5, "Emily came back holding reader %d" % _ed._cast._speaker.value)
 
 	# switching tabs must not throw the reading away - that is a repace, and it
 	# would fire on every glance at another voice's settings
-	_ed._chunks = [{"tokens": [], "words": []}]
-	_ed._epoch = 0
-	_ed._on_tab_selected(0)
-	_ed._on_tab_selected(1)
-	_ok(_ed._epoch == 0, "looking at another tab regenerated the reading")
-	_ed._chunks = []
+	_ed._stream.chunks = [{"tokens": [], "words": []}]
+	_ed._stream._epoch = 0
+	_ed._cast._on_tab_selected(0)
+	_ed._cast._on_tab_selected(1)
+	_ok(_ed._stream._epoch == 0, "looking at another tab regenerated the reading")
+	_ed._stream.chunks = []
 
 	# A NAME THAT LEAVES KEEPS ITS VOICE. Rewrite Emily out, then back in.
-	_ed._refresh_cast("Opening.\n\n<!-- speaker: Judge -->\n\nOverruled.")
-	_ok(_ed._names == PackedStringArray(["Narrator", "Judge"]),
-		"a name no longer cued is still a tab: %s" % [_ed._names])
-	_ok(_ed._tab_name() == "Narrator", "the tab on screen did not fall back when its name left")
-	_ok(_ed._cfg_of("Emily White")["arc"] > 0.8,
-		"a name that left the script lost its settings: %s" % [_ed._cfg_of("Emily White")])
-	_ed._refresh_cast("Opening.\n\n<!-- speaker: Emily White -->\n\nHis.")
-	var i := _ed._names.find("Emily White")
-	_ok(i >= 0 and absf(float(_ed._cfg(i)["arc"]) - 0.90) < 0.001 and int(_ed._cfg(i)["speaker"]) == 5,
-		"Emily came back without the voice she left with: %s" % [_ed._cfg(i) if i >= 0 else {}])
+	_ed._cast.refresh("Opening.\n\n<!-- speaker: Judge -->\n\nOverruled.")
+	_ok(_ed._cast._names == PackedStringArray(["Narrator", "Judge"]),
+		"a name no longer cued is still a tab: %s" % [_ed._cast._names])
+	_ok(_ed._cast.tab_name() == "Narrator", "the tab on screen did not fall back when its name left")
+	_ok(_ed._cast.cfg_of("Emily White")["arc"] > 0.8,
+		"a name that left the script lost its settings: %s" % [_ed._cast.cfg_of("Emily White")])
+	_ed._cast.refresh("Opening.\n\n<!-- speaker: Emily White -->\n\nHis.")
+	var i := _ed._cast._names.find("Emily White")
+	_ok(i >= 0 and absf(float(_ed._cast.slot_cfg(i)["arc"]) - 0.90) < 0.001 and int(_ed._cast.slot_cfg(i)["speaker"]) == 5,
+		"Emily came back without the voice she left with: %s" % [_ed._cast.slot_cfg(i) if i >= 0 else {}])
 	# ...and the cast written out carries every voice, shown or not
-	_ok(_ed._cast_dict().has("Judge") and _ed._cast_dict().has("Emily White"),
+	_ok(_ed._cast.cast_dict().has("Judge") and _ed._cast.cast_dict().has("Emily White"),
 		"the saved cast dropped a voice the script no longer shows")
 
 
@@ -486,29 +499,29 @@ func _check_tabs() -> void:
 ## all. Two-sided: a cast that lists Narrator first keeps it as the reader, and a Ryan as Ryan.
 func _check_reader_is_first() -> void:
 	_ed._text.text = "Just prose, no cues at all."
-	_ed._voice_apply({"voices": {"Ryan": {"pace": 0.6}}})
-	var cast: Dictionary = _ed._voice_capture()
-	_ok(_ed._names == PackedStringArray(["Ryan"]), "an uncued script is not read by the cast's own first voice: %s" % [_ed._names])
+	_ed._cast.apply({"voices": {"Ryan": {"pace": 0.6}}})
+	var cast: Dictionary = _ed._cast.capture()
+	_ok(_ed._cast._names == PackedStringArray(["Ryan"]), "an uncued script is not read by the cast's own first voice: %s" % [_ed._cast._names])
 	_ok((cast["voices"] as Dictionary).keys() == ["Ryan"], "a voice was written in beside the reader: %s" % [(cast["voices"] as Dictionary).keys()])
 	_ok(not cast.has("tab"), "the voice on screen was written into the document (tab: %s)" % [cast.get("tab")])
-	_ok(absf(float(_ed._cfg_of(Manuscript.NARRATOR)["pace"]) - 0.6) < 0.001, "a cue for the reader did not reach Ryan's voice")
+	_ok(absf(float(_ed._cast.cfg_of(Manuscript.NARRATOR)["pace"]) - 0.6) < 0.001, "a cue for the reader did not reach Ryan's voice")
 	# a cast left with the copy the panel used to write: the copy goes, the reader stays first
-	_ed._voice_apply({"voices": {"Ryan": {"pace": 0.6}, "Narrator": {"pace": 1.4}}})
-	_ok(_ed._cast_dict().keys() == ["Ryan"], "the reader's old copy stayed in the cast: %s" % [_ed._cast_dict().keys()])
+	_ed._cast.apply({"voices": {"Ryan": {"pace": 0.6}, "Narrator": {"pace": 1.4}}})
+	_ok(_ed._cast.cast_dict().keys() == ["Ryan"], "the reader's old copy stayed in the cast: %s" % [_ed._cast.cast_dict().keys()])
 	# a Cards reading: a familiar's line, then the reader cued back by the reader's cue
 	_ed._text.text = "Opening.\n\n<!-- speaker: Mo -->\n\nBoo.\n\n<!-- speaker: Narrator -->\n\nBack."
-	_ed._voice_apply({"voices": {"Ryan": {"pace": 0.6}, "Mo": {"pace": 1.2}}})
-	_ok(_ed._names == PackedStringArray(["Ryan", "Mo"]), "the reader's cue is not the first voice's tab: %s" % [_ed._names])
+	_ed._cast.apply({"voices": {"Ryan": {"pace": 0.6}, "Mo": {"pace": 1.2}}})
+	_ok(_ed._cast._names == PackedStringArray(["Ryan", "Mo"]), "the reader's cue is not the first voice's tab: %s" % [_ed._cast._names])
 	# ...and with the familiar written out, it keeps its place after the reader
 	_ed._text.text = "Only the reader now."
-	_ed._refresh_cast(_ed._cast_text())
-	_ok(_ed._cast_dict().keys() == ["Ryan", "Mo"], "a hidden voice went before the reader: %s" % [_ed._cast_dict().keys()])
+	_ed._cast.refresh(_ed._cast_text())
+	_ok(_ed._cast.cast_dict().keys() == ["Ryan", "Mo"], "a hidden voice went before the reader: %s" % [_ed._cast.cast_dict().keys()])
 	# the control: Narrator listed first is the reader, and Ryan a voice of its own
 	_ed._text.text = "Opening.\n\n<!-- speaker: Ryan -->\n\nHi."
-	_ed._voice_apply({"voices": {"Narrator": {"pace": 0.9}, "Ryan": {"pace": 0.6}}})
-	_ok(_ed._names == PackedStringArray(["Narrator", "Ryan"]) and absf(float(_ed._cfg_of("Ryan")["pace"]) - 0.6) < 0.001
-			and absf(float(_ed._cfg_of(Manuscript.NARRATOR)["pace"]) - 0.9) < 0.001,
-		"control: a cast that lists Narrator first did not keep it as its reader: %s" % [_ed._names])
+	_ed._cast.apply({"voices": {"Narrator": {"pace": 0.9}, "Ryan": {"pace": 0.6}}})
+	_ok(_ed._cast._names == PackedStringArray(["Narrator", "Ryan"]) and absf(float(_ed._cast.cfg_of("Ryan")["pace"]) - 0.6) < 0.001
+			and absf(float(_ed._cast.cfg_of(Manuscript.NARRATOR)["pace"]) - 0.9) < 0.001,
+		"control: a cast that lists Narrator first did not keep it as its reader: %s" % [_ed._cast._names])
 	_ed._text.text = ""
 
 
@@ -518,16 +531,16 @@ func _check_reader_is_first() -> void:
 ## replaced are MIGRATED, not lost: row N was cued `N`, row 1 was also the narrator.
 func _check_saved_shape() -> void:
 	_cast(["Narrator", "Emily White"])
-	_ed._slots[1]["tone"] = 3
-	_ed._slots[1]["speaker"] = 12
-	_ed._slots[1]["voice"] = "en_US-libritts-high"
+	_ed._cast._slots[1]["tone"] = 3
+	_ed._cast._slots[1]["speaker"] = 12
+	_ed._cast._slots[1]["voice"] = "en_US-libritts-high"
 	var path := "user://_multi_voice_probe.cfg"
 	var w := ConfigFile.new()
-	w.set_value("generative", "cast", _ed._cast_dict())
+	w.set_value("generative", "cast", _ed._cast.cast_dict())
 	w.save(path)
 	var r := ConfigFile.new()
 	r.load(path)
-	var back: Dictionary = _ed._merge_cast(r.get_value("generative", "cast", {}))
+	var back: Dictionary = _ed._cast._merge_cast(r.get_value("generative", "cast", {}))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	_ok(back.size() == 2, "two voices saved, %d came back" % back.size())
 	if not back.has("Emily White"):
@@ -539,17 +552,17 @@ func _check_saved_shape() -> void:
 		"the reader id came back as %s" % [m["speaker"]])
 	_ok(String(m["voice"]) == "en_US-libritts-high", "the voice id came back as %s" % [m["voice"]])
 	# a slot written by an older build is short a key, not broken
-	var old: Dictionary = _ed._merge({"pace": 0.8})
+	var old: Dictionary = _ed._cast._merge({"pace": 0.8})
 	_ok(absf(float(old["pace"]) - 0.8) < 0.001 and absf(float(old["presence"]) - 1.0) < 0.001,
 		"a slot missing keys did not fall back to the defaults")
-	var mig: Dictionary = _ed._cast_from_rows([{"pace": 0.7}, {"pace": 1.3}],
+	var mig: Dictionary = _ed._cast._cast_from_rows([{"pace": 0.7}, {"pace": 1.3}],
 		"Intro.\n<!-- speaker: 1 -->\nOne.\n<!-- speaker: 2 -->\nTwo.")
 	_ok(mig.has("Narrator") and mig.has("1") and mig.has("2")
 			and absf(float(mig["Narrator"]["pace"]) - 0.7) < 0.001
 			and absf(float(mig["2"]["pace"]) - 1.3) < 0.001,
 		"the numbered tabs did not migrate to names: %s" % [mig])
 	# ...and a single-voice chapter with no cues migrates to the narrator ALONE
-	var solo: Dictionary = _ed._cast_from_rows([{"pace": 0.6}], "Just prose, no cues.")
+	var solo: Dictionary = _ed._cast._cast_from_rows([{"pace": 0.6}], "Just prose, no cues.")
 	_ok(solo.keys() == ["Narrator"], "an uncued chapter grew a phantom voice: %s" % [solo.keys()])
 
 
@@ -559,18 +572,18 @@ func _check_saved_shape() -> void:
 ## yet puts the narrator in a cathedral mid-sentence.
 func _check_silent_tabs_stay_silent() -> void:
 	_slots(2)
-	_ed._slots[0]["echo"] = 0.3
-	_ed._slots[1]["echo"] = 0.9
-	_ed._fx = VoiceFX.new()
-	_ed._fx_live_name = "Narrator"             # voice 1 is on air
-	_ed._slot = 1                              # voice 2 is on screen
-	_ed._live_fx()
-	_ok(_ed._fx.echo_wet < 0.05,
-		"a dial on a silent tab reached the voice on air (echo %.2f)" % _ed._fx.echo_wet)
-	_ed._slot = 0                              # now the tab on screen IS on air
-	_ed._live_fx()
-	_ok(absf(_ed._fx.echo_wet - 0.3) < 0.001,
-		"the speaking tab's own dial did not apply (echo %.2f)" % _ed._fx.echo_wet)
+	_ed._cast._slots[0]["echo"] = 0.3
+	_ed._cast._slots[1]["echo"] = 0.9
+	_ed._stream.fx = VoiceFX.new()
+	_ed._stream._fx_live_name = "Narrator"             # voice 1 is on air
+	_ed._cast.slot = 1                              # voice 2 is on screen
+	_ed._stream.live_fx()
+	_ok(_ed._stream.fx.echo_wet < 0.05,
+		"a dial on a silent tab reached the voice on air (echo %.2f)" % _ed._stream.fx.echo_wet)
+	_ed._cast.slot = 0                              # now the tab on screen IS on air
+	_ed._stream.live_fx()
+	_ok(absf(_ed._stream.fx.echo_wet - 0.3) < 0.001,
+		"the speaking tab's own dial did not apply (echo %.2f)" % _ed._stream.fx.echo_wet)
 
 
 ## THE HANDOVER RESTS LONGER THAN A SENTENCE END. Run together, two readers
@@ -580,8 +593,8 @@ func _check_silent_tabs_stay_silent() -> void:
 func _check_turn_rest() -> void:
 	_slots(2)
 	var chunks: Array = [{"speaker": "A"}, {"speaker": "A"}, {"speaker": "B"}, {"speaker": "B"}]
-	var s: Dictionary = _ed._cfg(0)
-	_ed._turn.value = 1.0
+	var s: Dictionary = _ed._cast.slot_cfg(0)
+	_ed._cast._turn.value = 1.0
 	var within := _ed._gap_before(chunks, 1, s)
 	var across := _ed._gap_before(chunks, 2, s)
 	_ok(across > within + 0.4,
@@ -590,14 +603,14 @@ func _check_turn_rest() -> void:
 	_ok(_ed._gap_before(chunks, 0, s) == within, "the first chunk was given a seam")
 
 	# 0 hands over on the same beat as any other sentence...
-	_ed._turn.value = 0.0
+	_ed._cast._turn.value = 0.0
 	_ok(_ed._gap_before(chunks, 2, s) == within, "Turn 0 still lengthened the handover")
 	# ...and the whole rest is capped however far it is pushed
-	_ed._turn.value = Delivery.MAX_TURN_SCALE
+	_ed._cast._turn.value = Delivery.MAX_TURN_SCALE
 	_ok(_ed._gap_before(chunks, 2, s) <= Delivery.TURN_CEILING + 0.001,
 		"the handover ran past the ceiling: %.2fs" % _ed._gap_before(chunks, 2, s))
 	_ok(_ed._gap_before(chunks, 2, s) > across, "the top of the dial is no longer than the middle")
-	_ed._turn.value = 1.0
+	_ed._cast._turn.value = 1.0
 
 
 ## A CARD READING IN TWO VOICES - the reader, and a familiar on their shoulder with a quip now
@@ -620,7 +633,7 @@ func _check_cards_familiar() -> void:
 		if String((sg as Dictionary)["text"]).contains("Star"):
 			star = String((sg as Dictionary)["speaker"])
 	_ok(star == n, "the card after the familiar's quip is read by '%s'" % star)
-	_ok((_ed._holds as Array).size() == 4, "%d of the table's 4 rests survived the voices" % (_ed._holds as Array).size())
+	_ok(_rests(segs).size() == 4, "%d of the table's 4 rests survived the voices" % _rests(segs).size())
 
 
 ## EACH VOICE IN COLORS OF ITS OWN (2026-10-05: "the first can remain the rainbow color, while
@@ -631,15 +644,15 @@ func _check_cards_familiar() -> void:
 ## for every voice - leaves the second voice's band.
 func _check_voice_colors() -> void:
 	_cast([Manuscript.NARRATOR, "Familiar"])
-	var was: Array = _ed._chunks
-	_ed._chunks = _ed._build_chunks("Hello, my loves.\n<!-- speaker: Familiar -->\nHere we go again.")
+	var was: Array = _ed._stream.chunks
+	_ed._stream.chunks = _ed._build_chunks("Hello, my loves.\n<!-- speaker: Familiar -->\nHere we go again.")
 	var said: Array = []
-	for i in _ed._chunks.size():
+	for i in _ed._stream.chunks.size():
 		var spans: Array = []
-		for w in (_ed._chunks[i] as Dictionary)["words"]:
+		for w in (_ed._stream.chunks[i] as Dictionary)["words"]:
 			spans.append({"index": int((w as Dictionary)["index"]), "t0": 0.1, "t1": 0.2})
-		said.append_array(_ed._words_for(i, spans))
-	_ed._chunks = was
+		said.append_array(_ed._stream.words_for(i, spans))
+	_ed._stream.chunks = was
 	var who: Array = []
 	for w in said:
 		if who.is_empty() or who.back() != String((w as Dictionary).get("speaker", "")):
@@ -818,8 +831,8 @@ func _check_subtitles_show_the_source() -> void:
 ## these fails silently - a rest in the wrong place just sounds like a slow reader.
 func _check_hesitations() -> void:
 	_slots(2)
-	_ed._hesitate_on.button_pressed = true
-	_ed._hesitate.value = 1.5
+	_ed._cast._hesitate_on.button_pressed = true
+	_ed._cast._hesitate.value = 1.5
 	var chunks: Array = _ed._build_chunks(
 		"She comes all the way around, <!-- hesitation --> and stops on me.\n\n"
 		+ "<!-- speaker: Voice 2 -->\n\n<!-- hesitation: 2.5 -->\n\nHis.")
@@ -853,7 +866,7 @@ func _check_hesitations() -> void:
 				"the sentinel reached a subtitle card")
 
 	# OFF means no rests at all, and still nothing spoken
-	_ed._hesitate_on.button_pressed = false
+	_ed._cast._hesitate_on.button_pressed = false
 	var off: Array = _ed._build_chunks("Around, <!-- hesitation --> and stops.")
 	var any := 0
 	var off_said := ""
@@ -863,7 +876,7 @@ func _check_hesitations() -> void:
 			off_said += String((t as Dictionary)["text"]) + " "
 	_ok(any == 0, "Hesitate off still rested")
 	_ok(not off_said.to_lower().contains("hesitation"), "Hesitate off spoke the marker: %s" % off_said)
-	_ed._hesitate_on.button_pressed = true
+	_ed._cast._hesitate_on.button_pressed = true
 
 	# a hesitation between two paragraphs rests after the first one's last word
 	var para: Array = _ed._build_chunks("I will show up.\n\n<!-- hesitation -->\n\nI am here.")
@@ -1073,11 +1086,11 @@ func _check_hum_is_smooth() -> void:
 ## automatic ones with the rest.
 func _check_timestamp_pauses() -> void:
 	var body := "21:40 The subject has moved.\n\nWe met at 12:30 today.\n\n09:40 <!-- hesitation: 2 --> Arrived early.\n\n7:15 pm Dinner, alone."
-	var was: bool = _ed._hesitate_on.button_pressed
-	_ed._hesitate_on.button_pressed = true
-	var bare: float = _ed._hesitate.value
+	var was: bool = _ed._cast._hesitate_on.button_pressed
+	_ed._cast._hesitate_on.button_pressed = true
+	var bare: float = _ed._cast._hesitate.value
 	var kept: Array = _ed._split_speakers(body)
-	var holds: Array = _ed._holds
+	var holds: Array = _rests(kept)
 	_ok(holds.size() == 3, "%d rests for three paragraph-opening times (one authored): %s" % [holds.size(), holds])
 	if holds.size() == 3:
 		_ok(is_equal_approx(float(holds[0]), bare) and is_equal_approx(float(holds[1]), 2.0)
@@ -1097,10 +1110,9 @@ func _check_timestamp_pauses() -> void:
 		for w in (c as Dictionary)["words"]:
 			said += String((w as Dictionary)["text"]) + " "
 	_ok(not said.contains("#"), "a heading marker was spoken: %s" % said)
-	_ed._hesitate_on.button_pressed = false
-	_ed._split_speakers(body)
-	_ok((_ed._holds as Array).is_empty(), "Hesitate off kept the automatic rests")
-	_ed._hesitate_on.button_pressed = was
+	_ed._cast._hesitate_on.button_pressed = false
+	_ok(_rests(_ed._split_speakers(body)).is_empty(), "Hesitate off kept the automatic rests")
+	_ed._cast._hesitate_on.button_pressed = was
 
 
 ## A VOICE'S INK is a setting like any other on it: it survives the panel capturing the slot
@@ -1108,23 +1120,23 @@ func _check_timestamp_pauses() -> void:
 ## the next autosave), a hex color the Ink list does not offer is kept rather than replaced,
 ## and it reaches the page beside the text as the document's `inks`.
 func _check_ink_travels() -> void:
-	_ok(String(_ed._merge({"ink": "blue"})["ink"]) == "blue", "the slot schema drops `ink`")
-	_ok(String(_ed._merge({})["ink"]) == "", "a voice with no ink is not the default black")
-	var i: int = _ed._slot
-	var was: Dictionary = (_ed._slots[i] as Dictionary).duplicate()
-	_ed._slots[i]["ink"] = "red"
-	_ed._apply_slot(i)
-	_ed._capture_slot()
-	_ok(String(_ed._slots[i]["ink"]) == "red", "capturing the slot lost its ink")
-	_ed._slots[i]["ink"] = "#335577"
-	_ed._apply_slot(i)
-	_ed._capture_slot()
-	_ok(String(_ed._slots[i]["ink"]) == "#335577", "a hex ink was replaced on capture")
+	_ok(String(_ed._cast._merge({"ink": "blue"})["ink"]) == "blue", "the slot schema drops `ink`")
+	_ok(String(_ed._cast._merge({})["ink"]) == "", "a voice with no ink is not the default black")
+	var i: int = _ed._cast.slot
+	var was: Dictionary = (_ed._cast._slots[i] as Dictionary).duplicate()
+	_ed._cast._slots[i]["ink"] = "red"
+	_ed._cast._apply_slot(i)
+	_ed._cast.capture_slot()
+	_ok(String(_ed._cast._slots[i]["ink"]) == "red", "capturing the slot lost its ink")
+	_ed._cast._slots[i]["ink"] = "#335577"
+	_ed._cast._apply_slot(i)
+	_ed._cast.capture_slot()
+	_ok(String(_ed._cast._slots[i]["ink"]) == "#335577", "a hex ink was replaced on capture")
 	var doc: Dictionary = _ed.book_document("text")
 	_ok((doc.get("inks", {}) as Dictionary).values().has("#335577"),
 		"the ink does not travel with the document: %s" % [doc.get("inks")])
-	_ed._slots[i] = was
-	_ed._apply_slot(i)
+	_ed._cast._slots[i] = was
+	_ed._cast._apply_slot(i)
 
 
 ## A DELIVERY MARK leans the voice, a step at a time, and EASES: the first marked sentence goes
@@ -1159,9 +1171,9 @@ func _check_stress_reaches_the_voice() -> void:
 
 func _check_delivery_marks() -> void:
 	_slots(1)
-	_ed._slots[0]["pace"] = 1.0
-	_ed._slots[0]["tone"] = 1                      # Warm: the voice's own
-	_ed._slots[0]["pause"] = 1.0
+	_ed._cast._slots[0]["pace"] = 1.0
+	_ed._cast._slots[0]["tone"] = 1                      # Warm: the voice's own
+	_ed._cast._slots[0]["pause"] = 1.0
 	var chunks: Array = _ed._build_chunks("Calm start here.\n\n<!-- delivery: excited -->\nOh wow. This is big. "
 		+ "Really big.\n\nBack to calm now. And calmer.\n\n<!-- delivery: nonsense -->\nStill the voice's own.")
 	var leans: Array = []
@@ -1175,8 +1187,8 @@ func _check_delivery_marks() -> void:
 		"a delivery did not ease in over its sentences: %s" % str(pace))
 	_ok(float(pace[4]) < float(pace[3]) and float(pace[4]) > 0.0 and float(pace[5]) < float(pace[4]),
 		"after its paragraph the delivery did not ease back out: %s" % str(pace))
-	var calm: Dictionary = _ed._request_args(_ed._cfg(0), chunks[0])
-	var lit: Dictionary = _ed._request_args(_ed._cfg(0), chunks[3])
+	var calm: Dictionary = _ed._request_args(_ed._cast.slot_cfg(0), chunks[0])
+	var lit: Dictionary = _ed._request_args(_ed._cast.slot_cfg(0), chunks[3])
 	_ok(float(lit["length_scale"]) < float(calm["length_scale"]) and float(lit["lean_semis"]) > 0.0
 		and float(lit["pause_scale"]) < float(calm["pause_scale"]) and float(calm["lean_semis"]) == 0.0,
 		"an excited stretch is not quicker, brighter and tighter than the voice's own")
@@ -1196,5 +1208,5 @@ func _check_delivery_marks() -> void:
 		"a delivery marked after a stripped opening did not start on its own first sentence: %s" % str(led_pace))
 	# VOLUME is effort alone: louder asks for more effort and no pitch at all
 	var loud := {"tokens": [], "plan_u": 0.0, "plan_v": 0.0, "lean": Delivery.lean_of("louder")}
-	var la: Dictionary = _ed._request_args(_ed._cfg(0), loud)
+	var la: Dictionary = _ed._request_args(_ed._cast.slot_cfg(0), loud)
 	_ok(float(la["lean_effort"]) > 0.0 and float(la["lean_semis"]) == 0.0, "louder moved the pitch, or not the effort")

@@ -1,6 +1,6 @@
 """A drawing on the pad: the teacher's SVG turned into what a pen draws.
 
-    compile_figure(svg_text) -> {"paths": [...], "labels": [...]}     (raises FigureError)
+    compile_figure(svg_text, data=None) -> {"paths": [...], "labels": [...]}     (raises FigureError)
     assemble(fig, label_records) -> one typeset record, as typeset.py answers for a formula
 
 THE TEACHER DRAWS IN SVG, a language it writes fluently, and the desk's pen draws it by hand: every
@@ -22,10 +22,28 @@ badly or not at all):
     arrow="end" | "start" | "both"   on a line, polyline or path: an arrowhead drawn by hand
                                      (marker-end and marker-start are read the same way)
     <dot x="" y=""/>                 a dot, the size a pen makes one
-    <axes x="x0 x1" y="y0 y1" box="left top width height" ticks="dx dy" xlabel="" ylabel="">
+    <angle x="" y="" r="" from="" to=""/>
+                                     an angle marked at (x, y): an arc of radius r from one direction
+                                     to another, in degrees counterclockwise from pointing right as
+                                     the page is seen (0 right, 90 up); right="true" draws a right
+                                     angle's square corner instead
+    <axes x="x0 x1" y="y0 y1" box="left top width height" ticks="dx dy" xlabel="" ylabel="" grid="">
                                      a pair of axes on a box of the figure, its children in the
-                                     AXES' OWN COORDINATES (y up): <plot fn="x^2" from="" to=""/>,
-                                     <dot x y/>, <label x y>text</label>, <line .../>, <polyline .../>
+                                     AXES' OWN COORDINATES (y up): <plot fn="x^2" from="" to=""/>, a
+                                     curve given as x and y of t (<plot x="" y="" t="t0 t1"/>) or as
+                                     a radius at angle t (<plot r="" t="t0 t1"/>), <dot x y/>,
+                                     <label x y>text</label>, <line .../>, <polyline .../>,
+                                     <polygon .../>, <rect x y width height/> (x, y its lower left: a
+                                     bar), <circle cx cy r/>, <ellipse cx cy rx ry/> and <angle/> (its
+                                     r in the figure's units); grid="true" adds faint lines at the
+                                     ticks. A range or a tick may be written with pi (x="0 2*pi",
+                                     ticks="pi/2 1"): ticks given with pi are numbered in pi.
+                                     A SERIES A RUN KEPT (`data`, {name: {"points": [[x, y], ...]}},
+                                     hosts/compute/run.py's keep()) is drawn by its name:
+                                     <plot data=""/> joins its points (thinned to PLOT_MOST),
+                                     <dots data=""/> a dot at each (DOTS_MOST at most) and
+                                     <bars data="" width=""/> a bar standing on the x axis at each x,
+                                     as tall as its y (BARS_MOST at most).
 
 A PART THE PEN CAN POINT AT: an `id` on any element (or on a group, for all of it - inside <axes>
 too) names it, and the record's `anchors` is {id: [x0, y0, x1, y1]}, the box of everything drawn
@@ -33,7 +51,8 @@ under that name - the desk points the pen there when the lesson says so (DeskScr
 
 THE WORK SHOWN IS THE WORK DONE (next/proof.md): a plot is computed here, from its expression, never
 drawn from points an agent guessed. The expression is arithmetic only (+ - * / ^, parentheses, x, pi,
-e and the usual functions), read by a parser that allows nothing else.
+e and the usual functions), read by a parser that allows nothing else. Computed numbers come in only as
+a series a run kept, by name - a name no run kept is refused.
 
 What comes back is in POINTS, y down, from the figure's top left; [assemble] moves it to a record's
 convention (y down from a baseline at the figure's foot) once TeX has set the labels.
@@ -66,6 +85,11 @@ HEAD_ANGLE = math.radians(26.0)
 NUDGE = (3.0, -3.0)
 ## How many samples a plot takes across its range.
 SAMPLES = 240
+## A kept series: the most points a line is drawn through (more are thinned evenly, the last kept), the
+## most dots and the most bars a pen draws.
+PLOT_MOST = 800
+DOTS_MOST = 400
+BARS_MOST = 60
 SVG_NS = "http://www.w3.org/2000/svg"
 
 
@@ -87,13 +111,15 @@ _OPS = {ast.Add: lambda a, b: a + b, ast.Sub: lambda a, b: a - b, ast.Mult: lamb
         ast.Div: lambda a, b: a / b, ast.Pow: lambda a, b: a ** b, ast.Mod: lambda a, b: a % b}
 
 
-def expression(src):
-    """`src` (in x) as a function of x: arithmetic, x, the constants and FUNCS, nothing else."""
-    text = src.replace("^", "**").replace("−", "-").replace("·", "*").replace("×", "*")
+def expression(src, var="x"):
+    """`src` as a function of `var` (None: a constant, a function of nothing): arithmetic, the
+    variable, the constants and FUNCS, nothing else."""
+    text = src.replace("^", "**").replace("−", "-").replace("·", "*").replace("×", "*").replace("π", "pi")
     try:
         tree = ast.parse(text, mode="eval")
     except SyntaxError:
-        raise FigureError("the plot's fn %r is not arithmetic in x (write 2*x, not 2x)" % src)
+        raise FigureError("%r is not arithmetic%s (write 2*%s, not 2%s)" % (
+            src, " in " + var if var else "", var or "pi", var or "pi"))
 
     def check(node):
         if isinstance(node, ast.Expression):
@@ -105,14 +131,14 @@ def expression(src):
         if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
             return True
         if isinstance(node, ast.Name):
-            if node.id == "x" or node.id in CONSTS:
+            if node.id == var or node.id in CONSTS:
                 return True
-            raise FigureError("the plot's fn %r names %r - only x, pi and e" % (src, node.id))
+            raise FigureError("%r names %r - only %spi and e" % (src, node.id, var + ", " if var else ""))
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and not node.keywords:
             if node.func.id not in FUNCS:
-                raise FigureError("the plot's fn %r calls %r, which a plot does not know" % (src, node.func.id))
+                raise FigureError("%r calls %r, which a plot does not know" % (src, node.func.id))
             return all(check(a) for a in node.args)
-        raise FigureError("the plot's fn %r is not arithmetic in x" % src)
+        raise FigureError("%r is not arithmetic%s" % (src, " in " + var if var else ""))
 
     check(tree)
 
@@ -127,7 +153,7 @@ def expression(src):
         if isinstance(node, ast.Constant):
             return float(node.value)
         if isinstance(node, ast.Name):
-            return x if node.id == "x" else CONSTS[node.id]
+            return x if node.id == var else CONSTS[node.id]
         return FUNCS[node.func.id](*[ev(a, x) for a in node.args])
 
     def f(x):
@@ -160,16 +186,65 @@ def _num(el, key, default=None):
 
 
 def _pair(el, key, default=None):
+    """`key`'s numbers: each a number or a constant written with pi (2*pi, pi/2), without spaces."""
     v = el.get(key)
     if v is None:
         if default is None:
             raise FigureError("<%s> needs %s (two numbers)" % (_tag(el), key))
         return default
-    try:
-        bits = [float(b) for b in v.replace(",", " ").split()]
-    except ValueError:
-        raise FigureError("<%s> %s=%r is not numbers" % (_tag(el), key, v))
+    bits = []
+    for b in v.replace(",", " ").split():
+        try:
+            bits.append(float(b))
+        except ValueError:
+            try:
+                f = expression(b, None)
+            except FigureError:
+                raise FigureError("<%s> %s=%r is not numbers (write each without spaces: 2*pi)" % (_tag(el), key, v))
+            val = f(0.0)
+            if not math.isfinite(val):
+                raise FigureError("<%s> %s=%r is not numbers" % (_tag(el), key, v))
+            bits.append(val)
     return bits
+
+
+def _pi_fmt(v):
+    """`v` as a multiple of pi, the way a hand numbers a trig axis: pi/2, -pi, 3pi/2 - or plainly."""
+    n = v / math.pi
+    for d in (1, 2, 3, 4, 6):
+        a = n * d
+        if abs(a - round(a)) < 1e-6:
+            a = int(round(a))
+            if a == 0:
+                return "0"
+            num = ("-" if a < 0 else "") + ("" if abs(a) == 1 else str(abs(a)))
+            return num + "\\pi" + ("/%d" % d if d > 1 else "")
+    return _fmt(v)
+
+
+def _angle(el, cx, cy):
+    """<angle> as a polyline (figure units, y down) about (cx, cy): its arc, or a right angle's corner."""
+    r = _num(el, "r", 14.0)
+    a0 = math.radians(_num(el, "from"))
+    a1 = math.radians(_num(el, "to"))
+    if r <= 0:
+        raise FigureError("<angle> r is its radius, more than 0")
+
+    def at(a, k):
+        return (cx + k * math.cos(a), cy - k * math.sin(a))
+    if (el.get("right") or "").strip().lower() in ("true", "1", "yes"):
+        u, v = at(a0, r), at(a1, r)
+        pts = [u, (u[0] + v[0] - cx, u[1] + v[1] - cy), v]
+    else:
+        while a1 < a0:
+            a1 += math.tau
+        n = max(4, int(math.ceil(abs(a1 - a0) * r / 3.0)))
+        pts = [at(a0 + (a1 - a0) * i / n, r) for i in range(n + 1)]
+    e = _el("polyline", points=" ".join("%.3f,%.3f" % p for p in pts))
+    for k in ("stroke-dasharray", "id"):
+        if el.get(k):
+            e.set(k, el.get(k))
+    return e
 
 
 def _nice(span):
@@ -197,7 +272,50 @@ def _el(tag, **attrs):
     return e
 
 
-def _axes(el):
+def _series(data, name):
+    """The kept series [name] as (x, y) points, or FigureError naming what was kept."""
+    s = (data or {}).get(name)
+    pts = s.get("points") if isinstance(s, dict) else None
+    if not isinstance(pts, list) or not pts:
+        kept = ", ".join(sorted(data)) if data else "none"
+        raise FigureError('no run kept a series called "%s" (kept: %s)' % (name, kept))
+    out = []
+    for q in pts:
+        try:
+            x, y = float(q[0]), float(q[1])
+        except (TypeError, ValueError, IndexError):
+            raise FigureError('the series "%s" holds something that is not a point' % name)
+        if math.isfinite(x) and math.isfinite(y):
+            out.append((x, y))
+    return out
+
+
+def _joined(pts, x0, x1, y0, y1):
+    """A series joined point to point, as runs inside the box: cut where it leaves the box."""
+    runs, run = [], []
+    for p, q in zip(pts, pts[1:]):
+        cut = _clip(p, q, x0, x1, y0, y1)
+        if cut is None:
+            if len(run) > 1:
+                runs.append(run)
+            run = []
+            continue
+        c0, c1, whole_end = cut
+        if not (run and math.isclose(c0[0], p[0]) and math.isclose(c0[1], p[1])):
+            if len(run) > 1:
+                runs.append(run)
+            run = [c0]
+        if not (math.isclose(c1[0], run[-1][0]) and math.isclose(c1[1], run[-1][1])):
+            run.append(c1)
+        if not whole_end:
+            runs.append(run)
+            run = []
+    if len(run) > 1:
+        runs.append(run)
+    return runs
+
+
+def _axes(el, data=None):
     """<axes> made plain: a <g> of lines, ticks, numbers, curves, dots and labels in the figure's units."""
     x0, x1 = (_pair(el, "x") + [None, None])[:2]
     y0, y1 = (_pair(el, "y") + [None, None])[:2]
@@ -209,6 +327,10 @@ def _axes(el):
     bx, by, bw, bh = box
     ticks = _pair(el, "ticks", [_nice(x1 - x0), _nice(y1 - y0)])
     tx, ty = (ticks + ticks)[:2]
+    # ticks written with pi are numbered in pi
+    said = (el.get("ticks") or "").replace(",", " ").split()
+    xpi = len(said) > 0 and "pi" in said[0]
+    ypi = "pi" in said[1] if len(said) > 1 else xpi
 
     def X(x):
         return bx + (x - x0) / (x1 - x0) * bw
@@ -220,6 +342,22 @@ def _axes(el):
     ax_y = 0.0 if y0 <= 0.0 <= y1 else y0          # where the x axis crosses
     ax_x = 0.0 if x0 <= 0.0 <= x1 else x0          # where the y axis crosses
     tick = 0.025 * min(bw, bh) + 2.0
+    # THE GRID, drawn first, under everything: faint lines across the box at every tick (`grid` paths,
+    # which the hand draws fine and light - dashed, a grid was hundreds of strokes)
+    if (el.get("grid") or "").strip().lower() in ("true", "1", "yes", "both", "x", "y"):
+        which = (el.get("grid") or "").strip().lower()
+        if which != "y" and tx > 0:
+            n = math.ceil(x0 / tx - 1e-9)
+            while n * tx <= x1 + 1e-9:
+                if abs(n * tx - ax_x) > 1e-9:
+                    g.append(_el("line", x1=X(n * tx), y1=by + bh, x2=X(n * tx), y2=by, ghostkind="grid"))
+                n += 1
+        if which != "x" and ty > 0:
+            n = math.ceil(y0 / ty - 1e-9)
+            while n * ty <= y1 + 1e-9:
+                if abs(n * ty - ax_y) > 1e-9:
+                    g.append(_el("line", x1=bx, y1=Y(n * ty), x2=bx + bw, y2=Y(n * ty), ghostkind="grid"))
+                n += 1
     g.append(_el("line", x1=bx, y1=Y(ax_y), x2=bx + bw, y2=Y(ax_y), arrow="end"))
     g.append(_el("line", x1=X(ax_x), y1=by + bh, x2=X(ax_x), y2=by, arrow="end"))
     if tx > 0:
@@ -231,7 +369,7 @@ def _axes(el):
                 continue
             g.append(_el("line", x1=X(v), y1=Y(ax_y) - tick, x2=X(v), y2=Y(ax_y) + tick))
             lab = _el("text", x=X(v), y=Y(ax_y) + tick + 13.0, text_anchor="middle")
-            lab.text = "$%s$" % _fmt(v)
+            lab.text = "$%s$" % (_pi_fmt(v) if xpi else _fmt(v))
             g.append(lab)
     if ty > 0:
         n = math.ceil(y0 / ty - 1e-9)
@@ -242,7 +380,7 @@ def _axes(el):
                 continue
             g.append(_el("line", x1=X(ax_x) - tick, y1=Y(v), x2=X(ax_x) + tick, y2=Y(v)))
             lab = _el("text", x=X(ax_x) - tick - 4.0, y=Y(v) + 4.0, text_anchor="end")
-            lab.text = "$%s$" % _fmt(v)
+            lab.text = "$%s$" % (_pi_fmt(v) if ypi else _fmt(v))
             g.append(lab)
     if ax_x == 0.0 and ax_y == 0.0:
         lab = _el("text", x=X(0.0) - 4.0, y=Y(0.0) + tick + 13.0, text_anchor="end")
@@ -259,14 +397,67 @@ def _axes(el):
     for child in list(el):
         tag = _tag(child)
         at = len(g)
-        if tag == "plot":
+        if tag == "plot" and child.get("data") is not None:
+            pts = _series(data, child.get("data"))
+            if len(pts) > PLOT_MOST:
+                step = math.ceil(len(pts) / PLOT_MOST)
+                pts = pts[::step] + ([pts[-1]] if (len(pts) - 1) % step else [])
+            if len(pts) < 2:
+                raise FigureError('<plot data="%s"> has one point: draw it with <dots>' % child.get("data"))
+            for run in _joined(pts, x0, x1, y0, y1):
+                pl = _el("polyline", points=" ".join("%.3f,%.3f" % (X(x), Y(y)) for x, y in run))
+                for k in ("stroke-dasharray", "arrow"):
+                    if child.get(k):
+                        pl.set(k, child.get(k))
+                g.append(pl)
+        elif tag == "dots":
+            pts = _series(data, child.get("data"))
+            if len(pts) > DOTS_MOST:
+                raise FigureError('<dots data="%s"> has %d points; a pen draws at most %d dots - keep fewer'
+                                  % (child.get("data"), len(pts), DOTS_MOST))
+            for x, y in pts:
+                if x0 <= x <= x1 and y0 <= y <= y1:
+                    g.append(_el("dot", x=X(x), y=Y(y)))
+        elif tag == "bars":
+            pts = _series(data, child.get("data"))
+            if len(pts) > BARS_MOST:
+                raise FigureError('<bars data="%s"> has %d bars; a pen draws at most %d - keep fewer'
+                                  % (child.get("data"), len(pts), BARS_MOST))
+            xs = sorted(set(x for x, _ in pts))
+            gaps = [b - a for a, b in zip(xs, xs[1:]) if b > a]
+            w = _num(child, "width", min(gaps) * 0.8 if gaps else (x1 - x0) / 20.0)
+            for x, h in pts:
+                a, b = max(x - w / 2.0, x0), min(x + w / 2.0, x1)
+                lo, hi = max(min(ax_y, h), y0), min(max(ax_y, h), y1)
+                if b <= a or hi <= lo:
+                    continue
+                e = _el("rect", x=X(a), y=Y(hi), width=X(b) - X(a), height=Y(lo) - Y(hi))
+                if child.get("fill"):
+                    e.set("fill", child.get("fill"))
+                g.append(e)
+        elif tag == "plot":
             fn = child.get("fn")
-            if not fn:
-                raise FigureError("<plot> needs fn, an expression in x")
-            f = expression(fn)
-            a = _num(child, "from", x0)
-            b = _num(child, "to", x1)
-            for run in _curve(f, max(a, x0), min(b, x1), y0, y1):
+            if fn:
+                f = expression(fn)
+                a = _pair(child, "from", [x0])[0]
+                b = _pair(child, "to", [x1])[0]
+                runs = _curve(f, max(a, x0), min(b, x1), y0, y1)
+            elif child.get("r") or (child.get("x") and child.get("y")):
+                # A CURVE OF t: x and y given apart, or a radius at the angle t (polar)
+                t0, t1 = (_pair(child, "t") + [None, None])[:2]
+                if t1 is None or t1 <= t0:
+                    raise FigureError("<plot> t is the range of t, low then high: t=\"0 2*pi\"")
+                if child.get("r"):
+                    fr = expression(child.get("r"), "t")
+                    fx = lambda t: fr(t) * math.cos(t)
+                    fy = lambda t: fr(t) * math.sin(t)
+                else:
+                    fx = expression(child.get("x"), "t")
+                    fy = expression(child.get("y"), "t")
+                runs = _traced(fx, fy, t0, t1, x0, x1, y0, y1)
+            else:
+                raise FigureError("<plot> needs fn (y as an expression in x), x and y (each in t), or r (in t)")
+            for run in runs:
                 pl = _el("polyline", points=" ".join("%.3f,%.3f" % (X(x), Y(y)) for x, y in run))
                 for k in ("stroke-dasharray", "arrow"):
                     if child.get(k):
@@ -294,8 +485,28 @@ def _axes(el):
                 if child.get(k):
                     e.set(k, child.get(k))
             g.append(e)
+        elif tag == "rect":
+            x, y = _num(child, "x", 0.0), _num(child, "y", 0.0)
+            w, h = _num(child, "width"), _num(child, "height")
+            lo, hi = min(y, y + h), max(y, y + h)
+            e = _el("rect", x=min(X(x), X(x + w)), y=Y(hi), width=abs(X(x + w) - X(x)), height=Y(lo) - Y(hi))
+            for k in ("stroke-dasharray", "fill"):
+                if child.get(k):
+                    e.set(k, child.get(k))
+            g.append(e)
+        elif tag in ("circle", "ellipse"):
+            cx, cy = _num(child, "cx", 0.0), _num(child, "cy", 0.0)
+            rx = _num(child, "r") if tag == "circle" else _num(child, "rx")
+            ry = rx if tag == "circle" else _num(child, "ry")
+            e = _el("ellipse", cx=X(cx), cy=Y(cy), rx=abs(rx) * bw / (x1 - x0), ry=abs(ry) * bh / (y1 - y0))
+            for k in ("stroke-dasharray", "fill"):
+                if child.get(k):
+                    e.set(k, child.get(k))
+            g.append(e)
+        elif tag == "angle":
+            g.append(_angle(child, X(_num(child, "x")), Y(_num(child, "y"))))
         else:
-            raise FigureError("<axes> holds plot, dot, label, line, polyline and polygon - not <%s>" % tag)
+            raise FigureError("<axes> holds plot, dot, dots, bars, label, line, polyline, polygon, rect, circle, ellipse and angle - not <%s>" % tag)
         if child.get("id"):
             for made in list(g)[at:]:
                 made.set("id", child.get("id"))
@@ -339,6 +550,69 @@ def _curve(f, a, b, y0, y1):
     return runs
 
 
+def _traced(fx, fy, a, b, x0, x1, y0, y1):
+    """The curve (fx(t), fy(t)) for t from a to b, as runs of points inside the box x0..x1, y0..y1:
+    broken where it is undefined or leaps, and cut where it leaves the box, at the edge it crosses."""
+    runs, run = [], []
+    span = math.hypot(x1 - x0, y1 - y0)
+    prev = None
+    n = SAMPLES * 2
+    for i in range(n + 1):
+        t = a + (b - a) * i / n
+        p = (fx(t), fy(t))
+        if not (math.isfinite(p[0]) and math.isfinite(p[1])) or (prev is not None and math.dist(p, prev) > 0.5 * span):
+            if len(run) > 1:
+                runs.append(run)
+            run = []
+            prev = p if math.isfinite(p[0]) and math.isfinite(p[1]) else None
+            if prev is not None and x0 <= p[0] <= x1 and y0 <= p[1] <= y1:
+                run = [p]
+            continue
+        if prev is None:
+            if x0 <= p[0] <= x1 and y0 <= p[1] <= y1:
+                run = [p]
+            prev = p
+            continue
+        cut = _clip(prev, p, x0, x1, y0, y1)
+        if cut is None:
+            if len(run) > 1:
+                runs.append(run)
+            run = []
+        else:
+            c0, c1, whole_end = cut
+            if not run:
+                run = [c0]
+            run.append(c1)
+            if not whole_end:
+                if len(run) > 1:
+                    runs.append(run)
+                run = []
+        prev = p
+    if len(run) > 1:
+        runs.append(run)
+    return runs
+
+
+def _clip(p, q, x0, x1, y0, y1):
+    """The part of the segment p-q inside the box (Liang-Barsky): (start, end, whether it reaches q),
+    or None."""
+    t0, t1 = 0.0, 1.0
+    dx, dy = q[0] - p[0], q[1] - p[1]
+    for pp, qq in ((-dx, p[0] - x0), (dx, x1 - p[0]), (-dy, p[1] - y0), (dy, y1 - p[1])):
+        if pp == 0:
+            if qq < 0:
+                return None
+            continue
+        r = qq / pp
+        if pp < 0:
+            t0 = max(t0, r)
+        else:
+            t1 = min(t1, r)
+        if t0 > t1:
+            return None
+    return ((p[0] + dx * t0, p[1] + dy * t0), (p[0] + dx * t1, p[1] + dy * t1), t1 >= 1.0)
+
+
 def _filled(el, inherited):
     """Does `el` ask to be filled? Its own fill, a style's, or one it inherits - never SVG's default."""
     fill = el.get("fill")
@@ -351,15 +625,16 @@ def _filled(el, inherited):
     return fill.strip().lower() not in ("none", "transparent", "")
 
 
-def _plain(root):
+def _plain(root, data=None):
     """The figure's own elements made plain SVG, each drawn element marked with what it asks of the pen
-    (`ghostfill`, `ghostdot`) and the part it belongs to (`ghostid`: its own id, else its group's)."""
+    (`ghostfill`, `ghostdot`) and the part it belongs to (`ghostid`: its own id, else its group's).
+    [data]: the series runs kept, which a plot, dots or bars inside <axes> draw by name."""
     def walk(el, filled, part):
         for child in list(el):
             tag = _tag(child)
             name = child.get("id") or part
             if tag == "axes":
-                g = _axes(child)
+                g = _axes(child, data)
                 for k in ("transform",):
                     if child.get(k):
                         g.set(k, child.get(k))
@@ -367,6 +642,12 @@ def _plain(root):
                 el.remove(child)
                 child = g
                 tag = "g"
+            if tag == "angle":
+                a = _angle(child, _num(child, "x"), _num(child, "y"))
+                el.insert(list(el).index(child), a)
+                el.remove(child)
+                child = a
+                tag = "polyline"
             if tag == "dot":
                 c = _el("circle", cx=_num(child, "x", _num(child, "cx", 0.0)),
                         cy=_num(child, "y", _num(child, "cy", 0.0)), r="0.5", ghostdot="1")
@@ -520,9 +801,10 @@ def _arrows(el):
     return start, end
 
 
-def compile_figure(svg_text):
+def compile_figure(svg_text, data=None):
     """The SVG as the pen draws it: {"paths": [{k, pts, kind}], "labels": [{k, tex, x, y, anchor}],
-    "w", "h"} in points, y down from the viewBox's top left."""
+    "w", "h"} in points, y down from the viewBox's top left. [data]: the series runs kept (see the
+    module's note)."""
     text = svg_text.strip()
     if not text.startswith("<svg"):
         raise FigureError("a drawing is one <svg> element")
@@ -544,7 +826,7 @@ def compile_figure(svg_text):
             raise FigureError("a drawing needs a viewBox")
     if vw <= 0 or vh <= 0:
         raise FigureError("the viewBox has no size")
-    _plain(root)
+    _plain(root, data)
     scale = COLUMN_PT / COLUMN
     scale = min(scale, COLUMN_PT / vw, MAX_H / vh)
     root.set("viewBox", "%g %g %g %g" % (vx, vy, vw, vh))
@@ -616,10 +898,11 @@ def compile_figure(svg_text):
                 pattern = []
             if len(pattern) % 2:
                 pattern = pattern * 2
+        kind = "grid" if el.values.get("ghostkind") == "grid" else "line"
         for s in subs:
             for piece in (_dashes(s, pattern) if pattern else [s]):
                 if len(piece) > 1:
-                    paths.append({"k": k, "id": gid, "kind": "line", "pts": piece})
+                    paths.append({"k": k, "id": gid, "kind": kind, "pts": piece})
                     k += 1
         if filled:
             for h in _hatch([s for s in subs if len(s) > 2]):

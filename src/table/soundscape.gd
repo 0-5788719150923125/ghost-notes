@@ -37,6 +37,11 @@ class_name Soundscape
 ##   - FIRE is a low roar, a flickering hiss and crackles - very short bursts, often in clusters.
 ##   - A CRICKET is a few short tone pulses, chirp after chirp; cicadas a chorus - several broad bands
 ##     of noise, each pulsing shallowly at its own rate, so the pulses blur into a shimmer.
+##   - THE RIDE ([Rides], the table's `ride`) is a rumble through the floor (low noise, steady) and the
+##     roll of the wheels, and every jolt the table feels struck as it is felt, from the SAME PLAN - a
+##     wheel over a rail joint a thump and a steel tick, a cart's wheel over a stone a clack, a hard bump
+##     a thud and a rattle after it ([method _ride_block]). Struck events, never a pulse: the knocks'
+##     rhythm is the rails' and the car's, da-da ... da-da, as the camera and the flowers feel it.
 ##
 ## THE WIND IS THE TABLE'S OWN ([Winds], the light's `wind`, planned on the same seed as [TableMedium]
 ## plans it): its speed is read at every block of samples from the same closed-form plan the leaves,
@@ -138,7 +143,25 @@ const LAYERS := {
 	"fire": "a fire burning nearby - a hearth, a campfire, a brazier, a stove",
 	"stream": "running water - a brook, a fountain, a gutter after rain",
 	"insects": "insects of a warm evening or a summer day",
+	"ride": "the ride, heard - the table's own `ride`: a rumble through the floor and the roll of the wheels, every knock and jolt heard as it shakes the table",
 }
+## THE RIDE HEARD, by what the table is aboard ([method _ride_block]): the rumble's corner (Hz) and level,
+## the wheels' roll (its middle, Hz - 0 none - and level), a jolt's thump and its tick (Hz - 0 none), and
+## whether the patter is heard (a cart's wheels over stones; a road's grain is in its roll).
+const RIDE_TONES := {
+	"rails": {"rumble": 140.0, "low": 0.4, "roll": 950.0, "rolls": 0.18, "thump": 190.0, "tick": 2400.0, "patter": false},
+	"road": {"rumble": 110.0, "low": 0.36, "roll": 420.0, "rolls": 0.22, "thump": 150.0, "tick": 0.0, "patter": false},
+	"track": {"rumble": 90.0, "low": 0.25, "roll": 0.0, "rolls": 0.0, "thump": 240.0, "tick": 1400.0, "patter": true},
+	"water": {"rumble": 70.0, "low": 0.35, "roll": 0.0, "rolls": 0.0, "thump": 85.0, "tick": 0.0, "patter": false},
+	"air": {"rumble": 160.0, "low": 0.36, "roll": 620.0, "rolls": 0.26, "thump": 130.0, "tick": 1700.0, "patter": false},
+}
+## How hard each jolt is struck (an envelope's peak per unit of the ride's own hardest), and how long its
+## parts ring (seconds): a knock's thump and tick, a patter's clack, a bump's thud, and its rattle's ticks.
+const KNOCK := Vector2(1.1, 0.22)
+const KNOCK_RING := Vector2(0.07, 0.012)
+const PATTER := Vector2(0.35, 0.16)
+const BUMP := Vector2(2.4, 0.18)
+const BUMP_RING := Vector2(0.2, 0.015)
 ## What the wind blows through, which is most of what it sounds like.
 const THROUGH := {
 	"open": "open air - a rush that swells and brightens in each gust",
@@ -195,6 +218,7 @@ static func describe() -> String:
 	lines.append("- insects: {\"kind\", \"strength\" 0-1} - %s. kind:" % String(LAYERS["insects"]))
 	for k in INSECTS:
 		lines.append("  - %s: %s" % [k, String(INSECTS[k])])
+	lines.append("- ride: {\"level\" 0-1} - %s. Heard only on a table with a `ride`: give it whenever the ride should be heard - a train's rumble and its wheels knocking, a cart's jolting, an airplane's drone (0.6 when left out)." % String(LAYERS["ride"]))
 	lines.append("  from: where a sound is, as a sun's `from` (front, right, back left, ... or degrees). distance: 0 at the table's edge, 1 far off - quieter and duller.")
 	lines.append("A sound belongs to the place the room's painting and the light show: the sea where the sea is, rain where the sky is gray, no fire where none burns. Most places have one or two sounds; a quiet room none.")
 	return "\n".join(lines)
@@ -253,6 +277,11 @@ static func sanitize(raw: Variant, notes: PackedStringArray = PackedStringArray(
 				"distance": Props._num((v as Dictionary).get("distance"), 0.4, 0.0, 1.0)}
 		elif v != null:
 			notes.append("the %s was not an object {size, from, distance} - left out" % key)
+	var rd: Variant = d.get("ride")
+	if rd is Dictionary:
+		out["ride"] = {"level": Props._num((rd as Dictionary).get("level"), 0.6, 0.0, 1.0)}
+	elif rd != null:
+		notes.append("the ride was not an object {level} - left out")
 	var ins: Variant = d.get("insects")
 	if ins is Dictionary:
 		out["insects"] = {"kind": _kind((ins as Dictionary).get("kind"), INSECTS, "crickets", "the insects' `kind`", notes),
@@ -293,12 +322,14 @@ static func summary(sound: Dictionary) -> String:
 		parts.append("a stream")
 	if sound.get("insects") is Dictionary:
 		parts.append(String((sound["insects"] as Dictionary)["kind"]))
+	if sound.get("ride") is Dictionary:
+		parts.append("the ride%s" % (", silent" if float((sound["ride"] as Dictionary)["level"]) < 0.01 else ""))
 	return ", ".join(parts)
 
 
 ## WHAT A TABLE SOUNDS LIKE: its `sound` made safe, and the wind it hears planned exactly as
-## [TableMedium] plans the light's (the episode's [param seed]). `{sound, wind}`; `sound` is `{}` for a
-## quiet table. THE AGENT DECIDES: a light with a wind and a sound with none is silent - the wind is
+## [TableMedium] plans the light's (the episode's [param seed]), and its ride as the table plans it ([Rides]:
+## `{}` unless the sound hears it). `{sound, wind, ride}`; `sound` is `{}` for a quiet table. THE AGENT DECIDES: a light with a wind and a sound with none is silent - the wind is
 ## heard only where the set dresser wrote it into the sound (the user, 2026-10-08: "we should defer to
 ## the agents here"; many places are silent at every level of the dial).
 static func of_table(table: Dictionary, seed: int) -> Dictionary:
@@ -306,8 +337,9 @@ static func of_table(table: Dictionary, seed: int) -> Dictionary:
 	var light: Dictionary = Lights.sanitize(table["light"]) if table.get("light") is Dictionary else {}
 	var written: Dictionary = light.get("wind", {}) if light.get("wind") is Dictionary else {}
 	var plan := {}
+	var ride := Rides.plan(Rides.sanitize(table.get("ride")), hash([seed, "ride"])) if sound.has("ride") else {}
 	if not sound.has("wind"):
-		return {"sound": sound, "wind": plan}
+		return {"sound": sound, "wind": plan, "ride": ride}
 	if not written.is_empty():
 		plan = Winds.plan(written, hash([seed, "wind"]))
 	elif sound.get("wind") is Dictionary and (sound["wind"] as Dictionary).has("strength"):
@@ -317,7 +349,7 @@ static func of_table(table: Dictionary, seed: int) -> Dictionary:
 	elif sound.has("wind"):
 		# a wind with no light's and none of its own: a breath, heard
 		plan = Winds.plan({}, hash([seed, "wind outside"]))
-	return {"sound": sound, "wind": plan}
+	return {"sound": sound, "wind": plan, "ride": ride}
 
 
 # --- the synthesizer --------------------------------------------------------------------------------
@@ -448,19 +480,23 @@ var _ra := {}
 var _fi := {}
 var _st := {}
 var _in := {}
+var _ride := {}                   # the table's ride (Rides.plan), heard when the sound names it
+var _ri := {}
 
 static var _noise := PackedFloat32Array()
 static var _noise_lock := Mutex.new()
 
 
 ## A soundscape for [param sound] ([method sanitize]d, as [method of_table] gives it) with the wind
-## [param wind] ([method Winds.plan], or `{}`), at [param sample_rate], its first sample at show time
-## [param t0]. [param seed] makes the same place sound the same every time it is played.
-func _init(sound: Dictionary, wind: Dictionary, seed: int, sample_rate: int, t0 := 0.0) -> void:
+## [param wind] ([method Winds.plan], or `{}`) and the ride [param ride] ([method Rides.plan], or `{}`), at
+## [param sample_rate], its first sample at show time [param t0]. [param seed] makes the same place sound
+## the same every time it is played.
+func _init(sound: Dictionary, wind: Dictionary, seed: int, sample_rate: int, t0 := 0.0, ride := {}) -> void:
 	_sr = float(maxi(8000, sample_rate))
 	_t0 = t0
 	_sound = sound
 	_wind = wind
+	_ride = ride
 	_rng = (hash([seed, "sound"]) & 0x7FFFFFFF) | 1
 	_breath = Vector3(_rand() * TAU, _rand() * TAU, _rand() * TAU)
 	_bl.resize(CR)
@@ -764,6 +800,25 @@ func _setup() -> void:
 		var s: Dictionary = _sound["stream"]
 		_st = {"size": float(s["size"]), "from": float(s["from"]), "ears": _ears(float(s["from"]), 0.7), "far": float(s["distance"]),
 			"burble": _band(0, 1, 700.0, 0.6, true), "low": _band(1, 0, 350.0, 0.7, false), "next": 0.0, "mod": 0.0}
+	if _sound.get("ride") is Dictionary and not _ride.is_empty():
+		var on := String(_ride["on"])
+		var tone: Dictionary = RIDE_TONES[on]
+		_ri = {"level": float((_sound["ride"] as Dictionary)["level"]), "tone": tone, "row": Rides.ON[on],
+			"rumble": _band(1, 0, float(tone["rumble"]), 0.7, false), "k": 0, "rattle": []}
+		if float(tone["roll"]) > 0.0:
+			_ri["roll"] = _band(0, 1, float(tone["roll"]), 0.6, true)
+		# struck, in turn, so a tail still rings when the next knock lands
+		for part in ["thumps", "ticks"]:
+			var bs: Array = []
+			for i in 3:
+				var b := _band(0, 1, float(tone["thump"] if part == "thumps" else maxf(float(tone["tick"]), 1000.0)),
+					1.3 if part == "thumps" else 1.8, false)
+				b.steady = 0.0
+				bs.append(b)
+			_ri[part] = bs
+		var thud := _band(1, 0, float(tone["thump"]) * 0.55, 0.9, false)
+		thud.steady = 0.0
+		_ri["thud"] = thud
 	if _sound.get("insects") is Dictionary:
 		var i: Dictionary = _sound["insects"]
 		var kind := String(i["kind"])
@@ -818,6 +873,8 @@ func _block() -> void:
 		_stream_block(dt)
 	if not _in.is_empty():
 		_insects_block(t, dt)
+	if not _ri.is_empty():
+		_ride_block(t, dt)
 	for b in _bands:
 		_run(b)
 	if _w.has("eddies"):
@@ -1280,6 +1337,82 @@ func _fire_block(t: float, dt: float) -> void:
 				_fi["follow"] = 1 + int(_rand() * 3.0)
 			var rate := (1.5 + 12.0 * size) * fan
 			_fi["next"] = t + -log(maxf(1e-6, _rand())) / rate
+
+
+## THE RIDE HEARD at [param t]: the rumble and the roll, steady at how hard and how fast it goes, and every
+## jolt of the plan in this block struck where it falls - the same jolts that move the camera and the table's
+## things ([method Rides.jolts]).
+func _ride_block(t: float, dt: float) -> void:
+	var lv := float(_ri["level"])
+	var tone: Dictionary = _ri["tone"]
+	var row: Dictionary = _ri["row"]
+	var speed := float(_ride["speed"])
+	var shake := sqrt(float(_ride["buzz"]) / float(row["buzz"]))
+	var rumble: Band = _ri["rumble"]
+	var rg := float(tone["low"]) * lv * (0.3 + 0.7 * shake)
+	rumble.gl = rg
+	rumble.gr = rg
+	if _ri.has("roll"):
+		var roll: Band = _ri["roll"]
+		var og := float(tone["rolls"]) * lv * speed * (0.5 + 0.5 * shake)
+		roll.gl = og
+		roll.gr = og
+	var thumps: Array = _ri["thumps"]
+	var ticks: Array = _ri["ticks"]
+	for j in Rides.jolts(_ride, t, t + dt):
+		var kind := int(j[2])
+		var s := (j[1] as Vector3).length()
+		var k := int(_ri["k"])
+		_ri["k"] = k + 1
+		var thump: Band = thumps[k % thumps.size()]
+		var tick: Band = ticks[k % ticks.size()]
+		var side := _pan(_range(-0.25, 0.25))
+		for b in [thump, tick]:
+			(b as Band).gl = side.x
+			(b as Band).gr = side.y
+		thump.fc = float(tone["thump"]) * _range(0.85, 1.15)
+		match kind:
+			1:
+				# A WHEEL OVER A RAIL JOINT: a thump and a steel tick
+				var a := lv * minf(s / maxf(float(row["knock"]), 1e-4), 1.5)
+				thump.hit(KNOCK.x * a, KNOCK_RING.x, 0.002, _sr)
+				if float(tone["tick"]) > 0.0:
+					tick.fc = float(tone["tick"]) * _range(0.8, 1.2)
+					tick.hit(KNOCK.y * a, KNOCK_RING.y, 0.0005, _sr)
+			2:
+				# A WHEEL OVER A STONE: a clack
+				if bool(tone["patter"]):
+					var a := lv * minf(s / maxf((row["patter"] as Vector2).y, 1e-4), 1.5)
+					thump.hit(PATTER.x * a, 0.04, 0.002, _sr)
+					tick.fc = float(tone["tick"]) * _range(0.7, 1.4)
+					tick.hit(PATTER.y * a, 0.01, 0.0005, _sr)
+			_:
+				# A HARD JOLT: a thud through the floor, and what is loose rattling after it
+				var a := lv * minf(s / maxf((row["bump"] as Vector2).y, 1e-4), 1.5)
+				var thud: Band = _ri["thud"]
+				thud.gl = side.x
+				thud.gr = side.y
+				thud.hit(BUMP.x * a, BUMP_RING.x, 0.004, _sr)
+				thump.hit(KNOCK.x * a * 0.8, KNOCK_RING.x * 1.4, 0.002, _sr)
+				# the impact itself, sharp, before the rattle
+				tick.fc = maxf(float(tone["tick"]), 900.0) * _range(0.8, 1.2)
+				tick.hit(BUMP.y * a * 1.3, BUMP_RING.y * 1.5, 0.0004, _sr)
+				var at := t
+				for i in 2 + int(_rand() * 3.0 * minf(a / maxf(lv, 1e-3), 1.0)):
+					at += _range(0.02, 0.09)
+					(_ri["rattle"] as Array).append([at, BUMP.y * a * pow(0.7, float(i)) * _hard(0.4)])
+	# the rattle's ticks, each in its block
+	var left: Array = []
+	for r in _ri["rattle"]:
+		if float(r[0]) >= t + dt:
+			left.append(r)
+			continue
+		var k := int(_ri["k"])
+		_ri["k"] = k + 1
+		var tick: Band = ticks[k % ticks.size()]
+		tick.fc = maxf(float(tone["tick"]), 1200.0) * _range(0.7, 1.5)
+		tick.hit(float(r[1]), BUMP_RING.y, 0.0004, _sr)
+	_ri["rattle"] = left
 
 
 func _stream_block(dt: float) -> void:

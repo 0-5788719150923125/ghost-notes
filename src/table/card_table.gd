@@ -539,8 +539,9 @@ static func look_of(look: Dictionary, card: Dictionary) -> Dictionary:
 ## more lit things than [constant MAX_CANDLES] and no more than [constant MAX_FLAMES] flames on one
 ## - the first written keep their flames, the rest stand unlit - its `effects` as [Effects] can
 ## build them, in the table's [constant AIR] and at its [constant MOMENTS], its `light` as [Lights]
-## can build it (`{}` when it wrote none: the lamp and the room's candles, as every table had), and its
-## `title` (the color the show's name is printed in over it) when that is a color.
+## can build it (`{}` when it wrote none: the lamp and the room's candles, as every table had), its `ride`
+## as [Rides] can plan it (`{}`: it stands still), and its `title` (the color the show's name is printed in
+## over it) when that is a color.
 static func sanitize_table(spec: Dictionary, look: Dictionary) -> Dictionary:
 	var out := Props.sanitize(spec, look.get("palette", FALLBACK_PALETTE) if look.get("palette") is Array else FALLBACK_PALETTE)
 	var things: Array = []
@@ -588,6 +589,8 @@ static func sanitize_table(spec: Dictionary, look: Dictionary) -> Dictionary:
 	out["light"] = Lights.sanitize(spec.get("light"))
 	# THE SOUND: what the place sounds like behind the reader ([Soundscape]) - heard, never seen
 	out["sound"] = Soundscape.sanitize(spec.get("sound"))
+	# THE RIDE: what the table is aboard, if it moves ([Rides]) - `{}` for a table standing still
+	out["ride"] = Rides.sanitize(spec.get("ride"))
 	# THE TITLE'S COLOR, chosen to stand out from this table: kept when it is a color at all
 	var title: Dictionary = spec.get("title", {}) if spec.get("title") is Dictionary else {}
 	out["title"] = {}

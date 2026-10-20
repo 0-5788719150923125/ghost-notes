@@ -565,7 +565,10 @@ Found by making it, each fixed and held:
   thing's foot, to its right, or sweeps under a wide one left to right, so the pen's body leans away
   over clean paper; the camera goes there; a point at a page already turned leaves the pen be. A
   lesson that says more than 80 words with the pen idle (`DeskScript.still`) or points at a name
-  nothing carries goes back once; the student marks both.
+  nothing carries goes back once; the student marks both. Every take is checked and the log says how
+  it stands - kept with its faults named, or passing after a send-back (2026-10-19: "Was the problem
+  fixed or not?" - a second take was taken unchecked, in silence); what a take was sent back for is
+  told to the take TeX sends back too, since that one is written from the draft again.
 - **The hand is alive** ("the pen being at a completely static angle feels awkward ... A hand holding a
   pen would never keep it at a perfectly static angle"): `DeskMedium.lean` sways the lean a few
   degrees over seconds about its top-right direction, turns it toward the page's top as the nib goes
@@ -609,6 +612,23 @@ Found by making it, each fixed and held:
   the dictation's last word. On the trig episode, read by a steady voice, the longest the nib stands
   still while writing is 0.17 s (the ink's own ease at a stroke's ends); 50 dictations leave 16 s of
   rests after them. `proof_check` "the elastic pen", with the old clock as the control (1.6 s still).
+- **What is on the page stays** (2026-10-19: "two graphs are drawn side-by-side. Then suddenly, the
+  2nd one disappears and is re-drawn", and again at 3:50). A live reading's words arrive a sentence
+  (a chunk) at a time, when it is decoded - at most 9 s ahead of being heard - so a drawing dictated
+  over several sentences was planned on a guess at its last word's time, and the plan was made anew
+  as each sentence came in: a voice slower than the guess moved the end later, the share written fell,
+  and the newest strokes were taken back (up to 20% of a drawing; a faster one made it jump ahead at
+  19x the pen's pace). Now `DeskMedium.take_words` holds the past before the new times are taken in
+  (`_hold_past`): what began keeps its start and its page's turn, what is done stays done, and a line
+  being written goes on from where it is over what the new plan leaves it (`_ink_time`). An export,
+  whose times are all known at once, is planned once and stays a pure function of time. Replayed on
+  the Universal Approximation episode (`dist/math_spike/desk_replay.gd`, voices at 0.85-1.3 x the
+  rehearsal's pace, words 3-9 s ahead): seven drawings went back before, none after. `proof_check`
+  "what is on the page stays", with the plan made again unheld as the control (16% taken back).
+  Found measuring it: a reach was "never longer than the wait", and an action that began the moment
+  the last ended (a point said while its drawing was still being written) had none - the nib crossed
+  326 px in one frame at 338.8 s, 195 px at 767.8 s. `_build_plan` now starts no action before the
+  nib's way from the last (`DeskMedium._way`); the control, the point begun as the formula ends, 555 px.
 - **An idle pen gets out of the way** (2026-10-19: "as it told the story, doing nothing, for ~30 or
   60 seconds, the pen was just frozen, right in the middle of the page, covering a bunch of the text's
   visibility ... it would be better for the pen to drift to the right and top"). Over 40 words or more
@@ -623,6 +643,77 @@ Found by making it, each fixed and held:
   (`_reach`); a page turns only once the pen is off the pad (`PARK_CLEAR`), early enough for the pen
   to come back behind the sheet (`PARK_BACK`). `proof_check` "an idle pen gets out of the way" and
   the turn's sheet checks (the pen a rod along its lean against the sheet's plane).
+- **A page is turned as a hand turns one** (2026-10-19: "When a page is turned, it sort of just
+  disappears. Can we do a proper page turn, which gently lifts the head of the pad and folds the paper
+  around the back? ... a turned page will COVER that top part of the paper. And multiple pages might
+  fan-apart a bit, giving more depth"). `LegalPad` (desk/): the sheet is lifted at its foot, its
+  bottom right corner ahead, and rolled up the page - flat to where it has lifted, round a bend that
+  tightens as it nears the binding (the notebook's photo curl, page-long), its free end trailing; the
+  pad's head is lifted on its foot (24 degrees at most, `tilt`), the free end curls down behind it and
+  under, and the head comes down on it as the curl tightens round the binding. The page stays there:
+  each later page goes round it a loop's width rounder (the newest outermost - its root lies under the
+  older roots), the loops' bulge covers the page's top above the first rule (58 px of the 196 before
+  it), and eight are drawn. A turn takes 2.2 s (`DeskScript.TURN`, was 1.6) and the pen comes back once
+  the head is down (`PARK_BACK` 0.93). A first cut left the page lying flat on the desk behind the pad -
+  what a page does on a desk, but it read as a sheet on the desk, not one turned on a pad. Measured:
+  eight pages over and a ninth turned over them, no two sheets cross and none goes into the pad or the
+  binding (the control, the turning sheet given the innermost loop, crosses); on theorem-proving/5 the
+  pen meets a turning sheet in 0 of 924 frames and the loops in 0 of 34,862, and is never late for the
+  line after a turn. The camera stands back 3 s before a turn (its springs are slow) and aims higher,
+  at the head, where the page goes round (`TURN_BACK`, `TURN_AIM`); the pages' textures take the
+  book's five-tap filter, so the thin margin line no longer breaks into dashes in a wide shot.
+  `proof_check` "a page turned".
+- **Every desk is its own** (2026-10-19: "a little bit of variety, of color, of the table, of objects
+  on the table ... borrow from the cards mechanisms ... It would be very nice if the table could have
+  a proper texture"). `DeskLook` (desk/), from the episode's seed: the pad's paper (canary, white or a
+  pastel), rules, margin and binding, the ink (always 8.6:1 or better on its paper), the pen's lacquer
+  and trim, the lamp's warmth and place, the desk's top built as the card table's is (`Tables`: wood in
+  boards or a slab, stone, lacquer, leather or baize, with its relief), a felt or woven mat under the
+  pad about half the time, and up to five things on the desk made as the card table's are (`Props`):
+  a mug, pencils, a cup of pencils, an eraser, books, paper clips, index cards or sticky notes, a
+  ruler, a small cactus - each sized and colored by the seed, never on the pad, behind it, or (tall)
+  beside its right edge where the pen leans out. No agent and NO PAINTER (the user: "There is nowhere
+  to set the 'Painter' on the Proof card; so how would the generative table and props even work
+  there?"): every surface is a shader pattern from the drawn numbers, and the card table's one painted
+  surface - a top or layer that is the episode's painting, or the old reading cloth `Tables.sanitize`
+  lays when handed no layers - is never chosen (proof_check). An existing episode gets its desk on the
+  next play. NOT BUILT: a desk an agent dresses for the problem (the card table's set dresser, its
+  blueprint and its photographs) - things chosen for the topic.
+- **More to draw with** (2026-10-19: "do the agents have the ability to draw charts, line graphs,
+  etc.? ... the ability to draw arbitrary pictures would be useful: for example, if we wanted to draw
+  a tree, and use trig functions to measure the height"). They could already draw graphs of a
+  function of x on axes, dots, labels, dashed lines, arrows, hatched fills and any outline an SVG
+  path makes. Added to `hosts/math/figure.py` and told to the teacher (rules/proof/teacher.yaml):
+  curves of t (`<plot x="" y="" t=""/>`) and polar curves (`<plot r="" t=""/>`), cut at the box's
+  edges; bars (`<rect>` in the axes' units, hatched when filled), circles and ellipses in them; a
+  faint grid (`grid="true"`, a fine light line per tick - dashed, it was 434 strokes); ranges and
+  ticks written with pi, numbered in pi; `<angle>` marks (an arc between two directions, or a right
+  angle's corner); and the rule that a problem about a thing in the world draws that thing as a plain
+  outline with its lengths and angles marked. test_typeset.py holds each, with a control.
+- **Not only math** (2026-10-19: "I don't want to specialize that mode too much on just math: it
+  should be a general theorem-prover and learning tool"; the first Universal Approximation note came
+  back as its simplest case - one input, on-off switches - because the refiner was told "short and
+  elementary"). Two halves:
+  - THE WORDS: every agent is told of "a channel of lessons", not of math; the inventor draws from
+    twenty fields (number theory to orbits, epidemics and machine learning); the refiner and the
+    framer keep the depth the note asks for where the team can do the work, and say what a nearer
+    claim leaves out; the teacher and the student take the viewer from the framer's `audience` alone
+    (both had also been told "arithmetic, fractions and a little algebra").
+  - A SECOND KIND OF CHECKED WORK, A COMPUTATION: the framer's `check` is "proof" (Lean, as before)
+    or "computation" (what is computed, fixed as a statement is; `land_problem` refuses one that does
+    not say). The solver gets `run` (`ProofTools`): Python in the compute environment (`compute_venv`:
+    numpy, SciPy, SymPy) inside a bubblewrap sandbox (`hosts/compute/run.py` - the system read-only,
+    one folder to write in kept between runs, a sized /tmp, no network, nothing of the author's; its
+    memory, processor time, files and folder capped, killed at its wall time). `keep(name, x, y)` keeps
+    a series, which the teacher's drawings plot by name (`<plot data>`, `<dots data>`, `<bars data>`,
+    figure.py) - never numbers typed in. A computation is handed in as its result with the runs that
+    show it (each one that ran to its end) and lands `computed`; the teacher is shown those runs first,
+    says the numbers come from code that ran and what a computation does not show, and the upload says
+    so. A proof's solver may run code too. Where there is no bubblewrap (not Linux, or not installed)
+    nothing runs: `run` is not offered, the framer is never offered a computation, and a computation
+    framed before fails at the solve saying to install it. Held by `proof_check`,
+    `hosts/compute/test_run.py` (the sandbox, each limit beside a control run plainly) and
+    `test_typeset.py` (the series drawn). NOT BUILT: a sandbox on macOS (`sandbox-exec`) or Windows.
 - **A scrub no longer stops the pen** ("scrubbing the timeline seems to have broken the pen
   completely. For the remainder of the video, the pen doesn't move at all"): a scrub starts the voice
   again from a later chunk, and the desk matched the new words from the top of the lesson - a

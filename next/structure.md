@@ -325,6 +325,88 @@ it does NOT have yet is a reading that takes text while it streams (the sliding 
 chunks at Play) and a show timed by nothing but a clock (storyboard.md, "A storyboard needs a
 sound") - the first features to build in it, on this foundation.
 
+## The third round: the stateful halves (2026-10-19)
+
+The user, a few days and a lot of new work later (Proof's desk, the table's rides): "continue down
+the path of fixing the structure, especially with respect to the pure functional design, the
+stateful handling, and the rest of the stuff you left for later" - and, for a live mode not yet
+committed to, interfaces only where they are cheap and certain. Two other sessions were working in
+the tree that day (the desk, the table's rides), so this round kept to `reading/` and `masking/`,
+and the table's two steps (14) waited for them. Gates ran into a log folder of their own
+(`GHOST_CHECK_OUT`, new in check.sh): two runs in one tree had overwritten each other's logs.
+
+17. **A reading's plan is a function.** *Status, 2026-10-19: done.* `ReadingPlan` (`reading/`) is
+    what a reading will say, worked out from its words: the passages by speaker, the hesitations
+    and delivery marks resolved, the chunks cut and placed in their paragraphs, the outro mark's
+    fade, the scrub's estimate, the start words, the subtitle words timed from the host's spans.
+    In: the words, the title announced and what is asked (`reader`, `hesitate`, `bare`, `outro`).
+    The panel had kept the plan's findings in members - the hesitations' lengths in one list a
+    second method consumed with a cursor, the delivery marks of the passage last resolved, the
+    fade's length - and AN EXPORT PLANNED WHILE A READING PLAYED REWROTE THE FADE THE READING WAS
+    FADING BY (multi_voice_check holds it now; the old code fails it). A passage's rests are its
+    own: a sentinel the phonemizer loses costs that passage its lengths, never every passage after
+    it. FOR A READING THAT GROWS, `ReadingPlan.make(..., from_sentence)` plans a piece of text as a
+    continuation and says where the next starts. `tests/reading/reading_plan_check.gd` plans with
+    no panel at all (two mutations, two failures).
+18. **One join for the live reading and the export.** *Status, 2026-10-19: done.* `ReadingJoin`
+    joins a take a chunk at a time - the seam, the hesitations spliced in, the room's marks (voice
+    and distance), the words in the take's seconds, where each chunk starts and the fade - and the
+    live window, the export and the audition each hold one. They were three copies kept alike by
+    comments, and had parted: a reading started part way through rested a seam before its first
+    sentence (the export never did), the two placed an unaligned word on either side of a
+    hesitation's cut, and both kept a running total of seconds that drifted from the audio up to a
+    frame per seam (the join counts frames). `tests/reading/reading_join_check.gd`, three
+    mutations, three failures - one of them the trap the panel's comments record: a handover written
+    after the player consumed every mark still lands on its own frame, never at 0.
+19. **The audition is a part.** *Status, 2026-10-19: done.* `ReadingAudition` holds Test's
+    eighteen members of state; the panel asks it to start, stop and take a reply. It had no gate:
+    `tests/reading/audition_check.gd` answers it from a stand-in host with takes made in the gate
+    (every sentence asked at once, nothing joined out of order, a seam between each two and a
+    second of tail, every frame through the room, the takes off the disk, Stop dropping what is in
+    flight) - three mutations, three failures. A hum or a hesitation in the passage is now spliced
+    as a reading splices it.
+20. **The window is a part.** *Status, 2026-10-19: done.* `ReadingStream` is the reading on the
+    stream - the plan, the requests and takes, the ring, the join, the live chain, the place under
+    the voice, the scrub - cut with `cut_part.py`, then put in true sections. On the way check.sh
+    caught a runtime error behind a pass (speak_stop_check read the moved members by string name),
+    and the same loop's next check was passing on `int(null)`: both read off the stream now and fail
+    on a name it does not hold.
+21. **Banners that hold together.** *Status, 2026-10-19: done for the reading panel, the stream, the
+    cast and Masking.* `scripts/sort_banners.py` puts every declaration under the banner a layout
+    names and refuses to write unless each comes out byte for byte (a banner over a group of
+    variables becomes a comment over them; prose whose code had gone to a part went into that
+    part's header). Masking's 476 declarations went under 22 true banners, checked from outside the
+    tool: the same lines, reordered. `cut_part.py` learned two things from what it left behind - a
+    plain comment touching a declaration goes with it, and a banner left empty goes.
+22. **Masking along its true banners.** *Status, 2026-10-19: four parts out; 6,533 lines to 5,631.*
+    With the banners true, four sections came out with small boundaries: `MaskPrep` (the clip
+    transcoded once, guarded against a second writer, its length and frame size), `MaskWaveform`
+    (the strip, crisp under zoom, and the envelope), `MaskRegion` (the box drawn over the video)
+    and `MaskExport` (the Movie Maker relaunch at the clip's size, the mux). Each reads five to
+    eleven of the editor's members and is asked a few things by public name.
+23. **The cast is a part: the Voice card's insides.** *Status, 2026-10-19: done.* `ReadingCast` is
+    the voices the script names and the rows that edit them - the cast, the tabs, the voice picker,
+    the reader browser, every dial, Turn and Hesitate - and its block is the document's `voice:`
+    (`capture()`, `apply()`), which is the interface every card on a panel keeps. Everything that
+    reads a voice asks it by name (`cfg_of`). `reading_panel.gd` 3,765 lines to 1,101.
+
+WHERE THE BIG FILES STAND NOW: `reading_panel.gd` 4,548 lines (round one) to 1,101, with three
+pure libraries (`Splice`, `Delivery`, `ReadingPlan`), the join and three parts (the cast, the
+stream, the audition) beside it; `mask_editor.gd` 8,376 to 5,631, with nine parts; `table.gd`
+2,989 (the rides grew it), untouched this round.
+
+LEFT, in order: the Voice as a card built by `NoteCards` from the `voice` row (`ReadingCast`
+already keeps the block; what is left is the card being made where the others are, and a gate
+that reads it there); Masking's tracks (538 lines, reading 25 things of the editor), then its
+shared transport and one timeline kit; the table's things and its plan as a function of
+(episode, seed), when the table is free; the scenes' field tables.
+
+FOR A LIVE MODE, what is ready and what is not. A piece of text that arrives later is planned as a
+continuation (`ReadingPlan.make` with `from_sentence`) and joined onto the same take (`ReadingJoin`
+joins whatever chunk it is handed). What is not there is the stream's end: `ReadingStream` treats
+its last planned chunk as the end of the reading, so an open one would have to pad silence while it
+waits (a stream that runs dry stops the session clock) and queue its outro only when it is closed.
+
 ## What the two futures need
 
 **A nonlinear timeline editor** (compose scenes from existing scenes, geometry and animation).
