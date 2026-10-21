@@ -25,7 +25,7 @@ class_name SetDresserTools
 ##           ([x, z] centimeters from the middle of the reading), `turn` and `scale` set by name, and the
 ##           table drawn as a plan to lay them out on ([TableBlueprint]) - answered with where each thing
 ##           stands, its foot and height against what its spot shows, and what moved it or kept it off
-##           ([method TableMedium._stand_at]). A thing put with no `at` waits off the table in every picture
+##           ([method TableThings.stand_at]). A thing put with no `at` waits off the table in every picture
 ##           until it is placed ([method _on_table]); handed in so, the table finds it a spot itself.
 ##   look    one thing close up from four sides ([method TablePreview.thing])
 ##   overhead  the table from straight above - top, edge, layers, things, the cards' spread - with the
@@ -60,7 +60,7 @@ const JUDGE_TABLE := "Before you submit, say what the frame actually shows: can 
 ## ...and when every thing stood in the shot: THE TABLE IS SET, and it is told so. Told only to fix what was
 ## wrong, a set dresser read a thing made 88% of its size as a fault and set the table round after round
 ## chasing it, the shot holding no layout where nothing is made smaller. The table makes a thing smaller
-## only as far as it still reads (see TableMedium._stand), and leaves off what will not fit even so.
+## only as far as it still reads (see TableThings.stand), and leaves off what will not fit even so.
 const JUDGE_SET := "Every thing stands where you wrote it, none left off, cut at its top or out of the shot. Say what the frame actually shows: can each thing be told for what it is, and does the light come from where you meant? If so, the table is set - %s. Set it again only to fix what is plainly wrong."
 const JUDGE_AIR := "Say what the pictures show of it: is it where you meant, as thick or as bright as you meant, in colors that belong to this table - and can every card still be seen through it? Put it again to change it."
 const JUDGE_OVERHEAD := "Say what the plan shows: the top's shape and edge, each layer where you meant it and turned as you meant, what hangs over the edge, and whether the cloths, the things and the cards sit together as one table. Put again what does not."

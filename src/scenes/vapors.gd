@@ -88,11 +88,18 @@ var _vapor: Layer.Vapor = null
 var _ch_vec := Vector2.ZERO
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"character": {"label": "Character", "type": "choice", "options": "CHARACTERS", "default": null,
+		"blurb": "What the vapor is like: a drop of ink in still water, a nebula seen across light years, a pale gossamer cobweb, or hot plasma turning over fast."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
-	var keys := CHARACTERS.keys()
-	var kind := String(keys[rng.randi() % keys.size()])
+	var kind := String(choice("character", rng))
 	var ch: Dictionary = CHARACTERS[kind]
 	var sch := Scheme.among(ch["moods"], rng)
 	var layouts: Array = ch["layouts"]

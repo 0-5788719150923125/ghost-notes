@@ -435,7 +435,7 @@ var clip_out := -1.0
 
 ## The MAIN clip's audio level, 0 or 1 (the audio-mix toggle on its lane). Imported
 ## tracks carry their own per-track "volume" in the tracks array. All audio plays
-## together, each gated by its own 0/1 - see mask_editor.gd's _sync_tracks / _play.
+## together, each gated by its own 0/1 - see MaskTracks.sync / _play.
 var main_volume := 1.0
 
 ## The MAIN clip's fade envelope (seconds): audio AND video ramp in over the first
@@ -471,11 +471,11 @@ func effective_clip_out() -> float:
 
 
 ## Where playback (live preview and export) actually stops: effective_clip_out(),
-## extended to cover any track scheduled to run past it - e.g. _split_main's tail,
+## extended to cover any track scheduled to run past it - e.g. MaskTracks._split_main's tail,
 ## which trims clip_out and appends the remainder as a track at that same offset so
 ## it keeps playing there instead of cutting the show short. Clamped to `duration`:
 ## the master clock is the main clip's OWN decode position (see mask_editor.gd's
-## _sync_tracks), so it can never advance past the main clip's full length no
+## MaskTracks.sync), so it can never advance past the main clip's full length no
 ## matter how far out a track's offset reaches.
 func content_end() -> float:
 	var extent := effective_clip_out()
@@ -487,12 +487,12 @@ func content_end() -> float:
 
 ## Index of the track that is a continuation of the main clip (same source
 ## video_path - produced by splitting the main clip, see mask_editor.gd's
-## _split_main/_split_track) whose own [offset, offset+span) window covers
+## MaskTracks._split_main/MaskTracks._split_track) whose own [offset, offset+span) window covers
 ## master time `t`, or -1 if none. A track pointing at a DIFFERENT file is
-## always just a PiP inset (see _sync_tracks) and is never a continuation.
+## always just a PiP inset (see MaskTracks.sync) and is never a continuation.
 ##
 ## Each continuation track has its OWN independent player (mask_editor.gd's
-## _track_runtime) that mask_editor.gd seeks/renders full-screen while it
+## MaskTracks.runtime) that mask_editor.gd seeks/renders full-screen while it
 ## owns time `t` - unlike an earlier version of this check, there is no
 ## `offset == clip_in` invariant to protect here, because nothing is being
 ## borrowed from the main clip's own decode anymore. That invariant used to

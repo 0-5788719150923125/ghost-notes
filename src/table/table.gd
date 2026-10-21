@@ -42,7 +42,7 @@ const CARD := TablePositions.CARD
 const CARD_R := 0.0045
 const CARD_T := 0.0007
 ## THE DECK: a mesh for each of its cards, this thick - as many as the episode's deck holds
-## ([method _deck_count]: the agents decide it; 78 stand about 3 cm). A WASH SPREADS EVERY ONE OF
+## ([method TablePlan.deck_count]: the agents decide it; 78 stand about 3 cm). A WASH SPREADS EVERY ONE OF
 ## THEM, so the pile it gathers builds to the deck's height card by card (the user, 2026-10-14: the
 ## gathered deck kept "slowly growing in a strange way... as if the number of cards on the table/in
 ## the wash does not match the number of cards needed in the deck when stacked" - it had been 26
@@ -123,46 +123,6 @@ const TWIRL := Vector2(1.5, 2.1)
 ## reading (2026-10-07, "I have yet to see that occur even one time"). The card twirled is a held
 ## one with at least this long in the hand (seconds), seeded - the longest-held when none has.
 const SPIN_ROOM := 12.0
-## How far apart things stand on the table (meters): any two, and two of one group.
-const THING_GAP := 0.014
-const GROUP_GAP := 0.004
-## HOW A READER SETS OUT THEIR THINGS, a habit drawn per episode (the user, 2026-10-08: "props are
-## most often placed in a kind of arc along the top, with more or less equal spacing"; a real reader
-## "will often have an entire table of stuff", much of it cut by the frame's edge, and "push the props
-## to the left and right edges, such that the middle of the table remains more free"). Patterns
-## guided toward, never enforced ([method _habit_of]): how far each group's spot wanders off its
-## zone's middle (meters, x and z), how far the things are pushed out to the sides at the most, and
-## the least share of a thing's picture the frame may keep when it cuts it. Lit things first seek a
-## whole view; when that fails, their body may cross a side edge while every flame stays visible.
-const AIM_WANDER := Vector2(0.08, 0.05)
-const EDGE_PUSH := 0.2
-const SEEN_LEAST := 0.55
-## A THING ACROSS A CLOTH'S EDGE - half on the cloth, half on the bare top - reads as set down
-## carelessly (the user, 2026-10-08), unless it is large: a book, a tray may lie across a hem. So a
-## spot whose foot crosses a layer's edge scores this much worse (as many meters from its aim, over 4),
-## and a thing wider than STRADDLE_BIG only a third of it.
-const STRADDLE := 0.5
-const STRADDLE_BIG := 0.18
-## THE READER'S WORKSPACE (the user, 2026-10-10: a low thing stood "at the bottom and in the middle -
-## just in front of the speaker ... when there are open areas elsewhere"): the strip of the cloth
-## nearest the reader, in front of where the cards are shuffled and laid, is where their hands work.
-## A spot there scores this much worse (as many meters from its aim, over 4), a low thing's too - the
-## near ground a low thing may lie on ([method _stand]) is for a crowded table, not the first choice.
-## Soft: a table with no other room still stands its thing there. WORKSPACE_HALF is the strip's
-## half-width from the middle of the reading; it begins where [method _keep_out]'s middle ends.
-const WORKSPACE := 2.0
-const WORKSPACE_HALF := 0.25
-const WORKSPACE_FROM := 0.14
-## A THING WRITTEN WHERE IT STANDS (the user, 2026-10-18: "do the planning and desired placements
-## up-front, then verify with screenshots at the end"): the set dresser lays its things out on a
-## blueprint and writes each one's `at`, `turn` and `scale` ([method _stand_at]). It stands exactly
-## there unless that spot is one where nothing may stand - off the top, where the cards go, in another
-## thing, or a flame in front of the middle - and then at the nearest spot that is not, NUDGE_STEP by
-## NUDGE_STEP out to NUDGE_MOST (meters); with none so near, it is left off. Things written where they
-## stand keep WRITTEN_GAP apart: the set dresser spaces them itself.
-const NUDGE_MOST := CardTable.NUDGE_MOST
-const NUDGE_STEP := 0.005
-const WRITTEN_GAP := 0.003
 ## THE DECK PUT ASIDE (the user, 2026-10-08: a long row comes "oddly close to the deck ... TOO close"):
 ## when a card of the spread would lie within DECK_CROWD of the deck (meters, edge to edge), the reader
 ## slides the deck further out before drawing it - in an episode that draws DECK_ASIDE or under - over
@@ -170,8 +130,6 @@ const WRITTEN_GAP := 0.003
 const DECK_CROWD := 0.07
 const DECK_ASIDE := 0.75
 const ASIDE_S := 0.45
-## How far a card sliding across the cloth keeps from a thing's foot (meters).
-const FOOT_MARGIN := 0.004
 ## HOW HOT A CANDLE'S POOL MAY BURN: its light times the hottest spot of cloth round it - the
 ## cloth's linear luminance there over the flame's falloff (its height over the distance squared).
 ## The key's light on a felt of luminance 0.18 is the measure - it reads as a candle. On pale pine
@@ -311,20 +269,8 @@ var _lum := PackedFloat32Array()      # the table's linear luminance where candl
 var _shuffle_room := INF             # how long the shuffle has, from its start to the first card
 var _jump_room := -1.0                # ...when that first card is a jumper (-1: it is not, or not placed yet)
 var _jump_scale := 1.0                # ...and the speed its action is performed at
-var _wash_held := false               # the shuffle holds its wash back for a jumper ([method _jumper_wash])
-var _wash_from := 0.0                 # ...when (into the shuffle) it begins - before the first run ends, at once
-var _wash_until := 0.0                # ...and when it would end, past the jumper reckoned
 var _deck_gone := 0                   # deck meshes gone from the deck (a jumper thrown out of a wash)
-var _standing: Array = []             # what stands on the table: convex feet (x by z), for a wash to go round
-var _standing_c := PackedVector2Array()   # ...their middles
-var _standing_r := PackedFloat32Array()   # ...and how far they reach from them
-var _habit := {}                     # how this episode's reader sets out their things (_habit_of)
-var _layer_os: Array = []             # the layers' outlines (Tables.layer_outline), for a foot across a hem
 var wash_calm := true                # the fan-out calmed (CALM_HZ); a gate's control turns it off
-var _deck_far := Vector3.ZERO         # where the deck is slid aside to, when the spread crowds it
-var _aside_card := -1                 # the card it is slid aside for (-1: it stays)
-var _things: Array = []               # what stood: [{name, group, place, node, outline, bb, rect, foot, lit, flames, meshes, written, moved, why}]
-var _unstood: Array = []              # things written where they stand that found no room near it: [{name, written, why}]
 var _table_mt := -2                   # the table file's time when it was last built (-1: none)
 var _stage_was := {}                  # the stage's own settings, given back on leaving it
 var _deck: Array = []               # a MeshInstance3D per deck card (TablePlan.deck_n), bottom first
@@ -348,16 +294,12 @@ var _card_mesh: ArrayMesh
 var _meshes := {}                   # "radius|thickness" -> a card's slab cut to it ([method _mesh_for])
 var _edge_mat: StandardMaterial3D
 
-# the episode's table, sampled from its seed
-var _deck_base := Vector3.ZERO      # where the deck is drawn from, to one side
-var _cur_base := Vector3.ZERO       # where it is at the moment being posed (see _deck_at)
+var _cur_base := Vector3.ZERO       # where the deck is at the moment being posed (see _deck_at)
 var _all_events: Array = []         # every card's timeline, as [method _times] last made it ([method _rest_lift])
 var _laps: Array = []               # per card: the cards its place overlaps ([method _laps_of]), for [member _laps_for]
 var _laps_for: Array = []
 var _moves: Array = []              # the shuffle: [{kind, t0, dur, seed}]
 var _move_rng := RandomNumberGenerator.new()
-var _pitch := 45.0
-var _foil := 0.6
 var _noise := FastNoiseLite.new()
 var _mtimes := {}
 var _poll_t := 0.0
@@ -382,10 +324,16 @@ var _shuffles := TableShuffle.new()
 
 
 func _init() -> void:
+	_things_part.medium = self
 	_box_part.medium = self
 	_light_part.medium = self
 	_card_poses.medium = self
 	_shuffles.medium = self
+
+
+## THE THINGS ON THE TABLE are a part of their own ([TableThings]): where each stands, and what
+## stands where - the light, the wash and the blueprint read what stood.
+var _things_part := TableThings.new()
 
 
 ## WHERE EACH CARD IS at a moment of the show is a part of its own ([TableCardPose]): no state,
@@ -704,77 +652,26 @@ func _ensure_doc() -> void:
 	if key == _key:
 		return
 	_key = key
-	# A NEW EPISODE IS A NEW PLAN, decided below and in _build_episode in one fixed order, and read
-	# by everything after (TablePlan); nothing of the last one's survives into it.
-	_plan = TablePlan.new()
-	_plan.pay = pay
+	# A NEW EPISODE IS A NEW PLAN ([method TablePlan.make]): a function of the document, the set
+	# dresser's table as its file says now and the show's intro hold, and nothing of the last one's
+	# survives into it. The medium builds from it and decides nothing of its own.
 	_source = src
-	_plan.parse = CardReading.parse(src) if not src.is_empty() else {}
-	var plan: Dictionary = pay.get("plan", {}) if pay.get("plan") is Dictionary else {}
-	_plan.look = CardTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {})
-	_plan.seed_value = int(pay.get("seed", 0))
-	_foil = float(_plan.look.get("foil", 0.6))
-	_plan.staging = CardTable.staging_of(plan)
-	_plan.cards_from = String(_plan.parse.get("source", _plan.staging["source"])) if not _plan.parse.is_empty() else String(_plan.staging["source"])
-	_plan.alone = String(_plan.staging["text"]) != "booklet"
-	_plan.deck_n = _deck_count(pay)
-	# A READING STARTED MID-WAY (a scrub) begins where its first words are: everything before them
-	# happened long ago, spaced as a voice would have said it, so the cards drawn by then are
-	# already down (or up) on the first frame
+	_plan = TablePlan.make(d, _table_json(pay), feed.intro_hold)
 	var spoken: PackedStringArray = _plan.parse.get("spoken", PackedStringArray()) if not _plan.parse.is_empty() \
 		else PackedStringArray()
-	var start_si := -1
-	var sw: Variant = d.get("start_words", PackedStringArray())
-	if sw is PackedStringArray and not (sw as PackedStringArray).is_empty() and not spoken.is_empty():
-		start_si = TabletScript.find_run(spoken, sw, int(d.get("start_index", -1)))
-	_follow.reset(spoken, start_si, _estimated_times(spoken.size()))
+	_follow.reset(spoken, _plan.start_si, _plan.estimated_times(spoken.size()))
 	_built_n = -1
 	_sched = []
 	var t0 := Time.get_ticks_msec()
 	_build_episode()
 	print("ghost: card table - %s #%d, %d cards, %d actions, %d things (built in %d ms)" % [String(pay.get("show", "?")), _plan.seed_value,
-		(pay.get("cards", []) as Array).size(), (_plan.parse.get("actions", []) as Array).size(), _things.size(),
+		(pay.get("cards", []) as Array).size(), (_plan.parse.get("actions", []) as Array).size(), _things_part.on_table.size(),
 		Time.get_ticks_msec() - t0])
 
 
-## HOW MANY CARDS THE DECK HOLDS, as the episode says - the table never picks a number of its own
-## (the user, 2026-10-14: "The agents define how many cards a deck will use"): what the draw was
-## shuffled from (`deck_n`, [method CardProducer._make_draw]; for an episode drawn before the draw
-## counted it, the deck its brief lists, [method EpisodeCard._table_doc]), else the deck the producer
-## chose, else a box's drawn and left-in cards - and never fewer than the cards drawn. An episode that
-## says none of these (a made-up one) holds [constant DECK_FALLBACK].
-static func _deck_count(pay: Dictionary) -> int:
-	var drawn: int = (pay.get("cards", []) as Array).size() if pay.get("cards") is Array else 0
-	var n := int(pay.get("deck_n", 0))
-	var plan: Dictionary = pay.get("plan", {}) if pay.get("plan") is Dictionary else {}
-	if n <= 0 and plan.get("deck") is Array:
-		n = (plan["deck"] as Array).size()
-	if n <= 0 and pay.get("left") is Array and not (pay["left"] as Array).is_empty():
-		n = drawn + (pay["left"] as Array).size()
-	return maxi(n if n > 0 else DECK_FALLBACK, maxi(drawn, 1))
-
-
-## Each spoken word's time along the reading as a voice would say it - the past a mid-way start
-## is replayed in: the intro, then a word every 0.4 s, and each action's own rest.
-func _estimated_times(n: int) -> PackedFloat32Array:
-	var rests := {}
-	for a in _plan.parse.get("actions", []):
-		var k := int((a as Dictionary)["after"])
-		rests[k] = float(rests.get(k, 0.0)) + float((a as Dictionary)["dur"]) + LEAD + TAIL
-	var out := PackedFloat32Array()
-	out.resize(n)
-	var t := maxf(feed.intro_hold, 0.0)
-	for j in n:
-		t += float(rests.get(j, 0.0))
-		out[j] = t
-		t += 0.4
-	return out
-
-
-## Everything sampled from the episode's seed, and the episode's own cards.
+## THE EPISODE BUILT from what its plan decided ([member _plan]): the camera, the light, the cards and
+## their faces, the deck, the table and its things, the room.
 func _build_episode() -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([_plan.seed_value, "tarot-table"])
 	# THE CHANNEL'S NAME ONLY: the episode's title is the video's, on the platform, not on the table
 	_title.channel = String(_subs.document.get("title", "")) if _subs != null else ""
 	# ...and the show's byline under it, when it has one ("with Pen & Ink")
@@ -783,38 +680,21 @@ func _build_episode() -> void:
 	# deck's lettering (an uncial deck turned "Truthful" into "Truchful")
 	_title.face = CardTable.font("roman")
 	_title.italic = CardTable.font(CardTable.BOOK_ITALIC)
-	var lay := CardTable.sample_layout(rng)
-	# THE CAMERA: the reader's eye, a little different every episode
-	_pitch = float(lay["pitch"])
-	_plan.cam_base = lay["camera"]
+	# THE CAMERA, THE LIGHT AND THE ROOM'S DARK, as the plan decided them
 	_cam.transform = _plan.cam_base
-	_cam.fov = float(lay["fov"])
-	# THE LIGHT: the look's own, from above and to one side
-	var lc := CardTable.color(String((_plan.look.get("light", {}) as Dictionary).get("color", "#ffb36b")))
-	_lamp.light_color = Color(1, 1, 1).lerp(lc, 0.55)
-	_lamp.position = lay["lamp"]
+	_cam.fov = _plan.fov
+	_lamp.light_color = _plan.lamp_color
+	_lamp.position = _plan.lamp_at
 	# AIMED BY ITS OWN TRANSFORM, what look_at does under _root3 (never moved): look_at needs the tree, and
 	# the set dresser's table is built out of it, on a worker thread ([method TablePreview._stand])
 	var lamp_scale := _lamp.scale
 	_lamp.transform = Transform3D(Basis.looking_at(Vector3(0.0, 0.0, -0.1) - _lamp.position, Vector3.UP), _lamp.position)
 	_lamp.scale = lamp_scale
-	_lamp.light_energy = float(lay["lamp_energy"])
-	_plan.lamp_base = _lamp.light_energy
-	var pal: Array = _plan.look.get("palette", CardTable.FALLBACK_PALETTE)
-	var dark := CardTable.color(String(pal[0]))
-	_env.background_color = dark.darkened(0.6)
-	_env.ambient_light_color = Color(0.5, 0.5, 0.5).lerp(dark.lightened(0.4), 0.35)
-	_plan.ambient = {"color": _env.ambient_light_color, "energy": 0.18}
-	_fill.light_color = Color(0.75, 0.8, 1.0) if String((_plan.look.get("light", {}) as Dictionary).get("warmth", "warm")) == "warm" else lc
-	# THE DECK, squared where the reader keeps it
-	_deck_base = lay["deck"]
-	# SHUFFLED IN THE MIDDLE, in front of the reader, and pushed to its side before the first card
-	_plan.mid = lay["mid"]
+	_lamp.light_energy = _plan.lamp_base
+	_env.background_color = _plan.background
+	_env.ambient_light_color = _plan.ambient["color"]
+	_fill.light_color = _plan.fill
 	_cur_base = _plan.mid
-	_plan.slot_jit = []
-	for i in _plan.deck_n + 1:
-		_plan.slot_jit.append(Vector3(rng.randf_range(-0.0007, 0.0007), rng.randf_range(-0.0007, 0.0007),
-			deg_to_rad(rng.randf_range(-1.3, 1.3))))
 	# THE CARDS
 	for c in _cards:
 		(c as Node).queue_free()
@@ -884,24 +764,7 @@ func _build_episode() -> void:
 	_page_canvas.look = _plan.look
 	_page_canvas.seed = _plan.seed_value
 	_page_for = -1
-	# THE SPREAD: where the cards were given to lie (a plan's coordinates, a dealer's layout - checked
-	# on the cloth, in the frame and clear of the deck), else the seeded preset. The preset is drawn
-	# either way, so every draw after it lands where it always has.
-	var seeded := TablePositions.staged(cards, rng, CardTable.layout_of(_plan.seed_value), _box_keep(), _box_center())
-	var spec := _table_spec()
-	var given := TablePositions.given(cards, _plan.seed_value, spec["top"], _box_keep(), _box_center())
-	_plan.slots = given if not given.is_empty() else seeded
-	_plan.lay_jit = []
-	var placement := RandomNumberGenerator.new()
-	placement.seed = hash([_plan.seed_value, "lay by hand"])
-	for i in cards.size():
-		_plan.lay_jit.append(Vector3(placement.randf_range(-0.0015, 0.0015),
-			placement.randf_range(-0.0015, 0.0015), deg_to_rad(placement.randf_range(-1.2, 1.2))))
-	_plan_aside(spec["top"])
-	# a jumper flies out of the deck in the middle and lands on the far side from where the deck
-	# is about to go
-	_plan.jump_land = _plan.mid + Vector3(-signf(_deck_base.x) * 0.16, 0.0, 0.035)
-	_build_table(spec)
+	_build_table(_plan.table)
 	_plan_moves()
 	_place_backdrop()
 	_poll_pictures()
@@ -1123,17 +986,6 @@ func _back_of(i: int, card: Dictionary) -> Material:
 	return mat
 
 
-## Where the box the cards are kept in may stand, across and deep - kept clear by the spread - or zero
-## when they come from a deck.
-func _box_keep() -> Vector2:
-	var most := CardTable.SHOEBOX_MAX if String(_plan.staging.get("box_style", "open")) == "shoebox" else CardTable.BOX_MAX
-	return Vector2(most.x, most.z) if _plan.cards_from == "box" else Vector2.ZERO
-
-
-func _box_center() -> Vector3:
-	return TablePositions.SHOEBOX_AT if _plan.cards_from == "box" and String(_plan.staging.get("box_style", "open")) == "shoebox" else Vector3.ZERO
-
-
 ## The part of a face that is the painting with no type over it, in UV - foil is keyed inside it (the
 ## frame's foil is keyed by its color instead; [method CardFaces.Face.bare]).
 func _face_window(face: CardFaces.Face) -> Vector4:
@@ -1188,7 +1040,7 @@ func _poll_pictures(force := false) -> void:
 			mat.set_shader_parameter("hi", key.y)
 			CardFaces.redraw(_faces[i])
 		_foil_accent(_face_mats[i], _plan.look)
-		(_face_mats[i] as ShaderMaterial).set_shader_parameter("foil", _foil)
+		(_face_mats[i] as ShaderMaterial).set_shader_parameter("foil", _plan.foil)
 	# EACH PRINTING'S BACK (`back.png` the deck's own, `back_<printing>.png` the others'), and every back
 	# printed with a card's text over its printing's
 	for name in _backs:
@@ -1204,12 +1056,12 @@ func _poll_pictures(force := false) -> void:
 			(bk["mat"] as ShaderMaterial).set_shader_parameter("hi", pkey.y)
 			CardFaces.redraw(bk["vp"])
 		_foil_accent(bk["mat"], _plan.look)
-		(bk["mat"] as ShaderMaterial).set_shader_parameter("foil", _foil * 0.8)
+		(bk["mat"] as ShaderMaterial).set_shader_parameter("foil", _plan.foil * 0.8)
 		for blank in bk.get("blank", []) as Array:
 			if back != null and ((blank as Dictionary)["canvas"] as CardFaces.Face).art != back:
 				((blank as Dictionary)["canvas"] as CardFaces.Face).art = back
 				CardFaces.redraw((blank as Dictionary)["vp"])
-			((blank as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("foil", _foil * 0.25)
+			((blank as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("foil", _plan.foil * 0.25)
 		# THE FRONTS OF THE CARDS NOBODY DREW: a part of a drawn card's painting, once that one has landed
 		for front in bk.get("fronts", []) as Array:
 			var from := int((front as Dictionary).get("from", -1))
@@ -1223,7 +1075,7 @@ func _poll_pictures(force := false) -> void:
 				fmat.set_shader_parameter("hi", fkey.y)
 				CardFaces.redraw((front as Dictionary)["vp"])
 			_foil_accent(fmat, fc.look)
-			fmat.set_shader_parameter("foil", _foil)
+			fmat.set_shader_parameter("foil", _plan.foil)
 		for pb in _printed:
 			if String((pb as Dictionary).get("series", "")) != String(name):
 				continue
@@ -1231,7 +1083,7 @@ func _poll_pictures(force := false) -> void:
 				((pb as Dictionary)["canvas"] as CardFaces.Face).art = back
 				CardFaces.redraw((pb as Dictionary)["vp"])
 			# a printed back is read, not shone: its foil kept low
-			((pb as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("foil", _foil * 0.25)
+			((pb as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("foil", _plan.foil * 0.25)
 	# THE PAINTING of the episode's surface, laid wherever the table takes it ([Tables]: its cloth, its
 	# top, a runner...) - or each such surface's own color until it is painted
 	var cloth := _picture(dir.path_join("surface.png"), force)
@@ -1474,11 +1326,9 @@ static func _face_up() -> Basis:
 	return Basis(Vector3(0, 0, 1), PI)
 
 
-# --- the things on the table --------------------------------------------------------------------------
-
 ## THE TABLE'S THINGS: what the set dresser described for this episode (`table.json` in its folder,
 ## made safe by [method CardTable.sanitize_table]), or the look's candles alone until it has -
-## each built ([Props]), stood where [method _place_things] finds it room, its wicks lit - on THE
+## each built ([Props]), stood where [method TableThings.place] finds it room, its wicks lit - on THE
 ## TABLE ITSELF, built first ([Tables]): its top and the layers laid on it, the painting on whatever
 ## takes it. [param spec]: the table made safe, when it was just read.
 func _build_table(spec: Dictionary = {}) -> void:
@@ -1492,24 +1342,16 @@ func _build_table(spec: Dictionary = {}) -> void:
 	_furniture["spec"] = {"top": spec["top"], "layers": spec["layers"]}
 	_top = spec["top"]
 	_top_o = Tables.top_outline(_top)
-	_layer_os = []
-	for l in (spec["layers"] if spec["layers"] is Array else []):
-		if l is Dictionary and String((l as Dictionary).get("outline", "rect")) != "top":
-			_layer_os.append(Tables.layer_outline(l, _top))
 	_root3.add_child(_furniture["node"])
 	_apply_painting()
 	# its lightness before anything stands on it: a candle looks for dark cloth
 	_lum = _surface_lum()
 	_lights = []
 	_light_part._flame_n = 0
-	_standing = []
-	_standing_c = PackedVector2Array()
-	_standing_r = PackedFloat32Array()
-	_things = []
-	_unstood = []
+	_things_part.clear(spec["layers"])
 	_light_part._heat_cells = {}
 	# WHAT THE TABLE IS ABOARD, planned before anything stands on it: each thing's moving parts are made
-	# ready to answer it as they are put ([method _put])
+	# ready to answer it as they are put ([method TableThings.put])
 	_ride = Rides.plan(spec.get("ride", {}) if spec.get("ride") is Dictionary else {}, hash([_plan.seed_value, "ride"]))
 	_movers = []
 	# the name over this table is printed in the color the set dresser chose to stand out from it
@@ -1522,13 +1364,13 @@ func _build_table(spec: Dictionary = {}) -> void:
 	for i in things.size():
 		if Props.draped(things[i]):
 			# LAID ACROSS THE TABLE ITSELF: built in its space, over the edge of this top
-			things[i] = _grounded(things[i])
+			things[i] = _things_part.grounded(things[i])
 			built.append(Props.build(things[i], spec["materials"], hash([_plan.seed_value, i, "thing"]), true))
 		else:
 			built.append(Props.build(things[i], spec["materials"], hash([_plan.seed_value, i, "thing"])))
 	# THE BOX THE CARDS ARE KEPT IN stands first, where the deck would be: the rest go round it
 	_box_part.build(things, built)
-	_place_things(things, built, rng)
+	_things_part.place(things, built, rng)
 	_light_part.build(spec)
 	_light_part.light_the_table()
 	_reflect()
@@ -1547,435 +1389,19 @@ func _reflect() -> void:
 ## The set dresser's table, made safe - or, before there is one, the look's candles. Read from the
 ## FILE, as the pictures are, so a render (a second process) stands what the live table stood.
 func _table_spec() -> Dictionary:
-	var path := String(_plan.pay.get("dir", "")).path_join("table.json")
+	return TablePlan.table_of(_table_json(_plan.pay), _plan.look, _plan.seed_value)
+
+
+## The set dresser's `table.json` in episode [param pay]'s folder, as parsed - null when there is none
+## (or it does not parse) - and its time noted, so a table that lands live is built again.
+func _table_json(pay: Dictionary) -> Variant:
+	var path := String(pay.get("dir", "")).path_join("table.json")
 	_table_mt = FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
 	if _table_mt >= 0:
 		var j := JSON.new()
 		if j.parse(FileAccess.get_file_as_string(path)) == OK and j.data is Dictionary:
-			return CardTable.sanitize_table(j.data as Dictionary, _plan.look)
-	return CardTable.default_table(_plan.look, _plan.seed_value)
-
-
-## WHERE EACH THING STANDS. A thing written where it stands (`at`) stands there ([method _stand_at]),
-## in the order written. Any other goes in the zone the set dresser named, and things that share
-## a group stand together: the group's tallest first, as near its zone's middle as there is room,
-## the rest round it - the shorter ones toward the reader - so a group reads as arranged, not
-## lined up. The biggest groups choose first. A thing with no room is tried smaller, then left
-## off the table.
-func _place_things(things: Array, built: Array, rng: RandomNumberGenerator) -> void:
-	var keep_out := _keep_out()
-	_habit = _habit_of(_plan.seed_value)
-	# THE DRAPED FIRST: where they lie is written, and the rest stand clear of them
-	for i in things.size():
-		if Props.draped(things[i]):
-			_drape(things[i], built[i], keep_out)
-	# ...THEN THE WRITTEN, each where the set dresser put it on the blueprint
-	for i in things.size():
-		if Props.draped(things[i]) or not (things[i] as Dictionary).has("at"):
-			continue
-		var g := String((things[i] as Dictionary).get("group", ""))
-		if not _stand_at(things[i], built[i], g if not g.is_empty() else "#%d" % i, keep_out):
-			print("ghost: card table - no room for %s near where it was written" % String((things[i] as Dictionary).get("name", "a thing")))
-			((built[i] as Dictionary)["node"] as Node).free()
-	var groups := {}
-	for i in things.size():
-		if Props.draped(things[i]) or (things[i] as Dictionary).has("at"):
-			continue
-		var g := String((things[i] as Dictionary).get("group", ""))
-		var key := g if not g.is_empty() else "#%d" % i
-		if not groups.has(key):
-			groups[key] = []
-		(groups[key] as Array).append(i)
-	var area := func(members: Array) -> float:
-		var s := 0.0
-		for i in members:
-			var box: AABB = (built[i] as Dictionary)["size"]
-			s += box.size.x * box.size.z
-		return s
-	var order: Array = groups.keys()
-	order.sort_custom(func(a: Variant, b: Variant) -> bool: return float(area.call(groups[a])) > float(area.call(groups[b])))
-	for key in order:
-		var members: Array = groups[key]
-		members.sort_custom(func(a: int, b: int) -> bool:
-			return ((built[a] as Dictionary)["size"] as AABB).size.y > ((built[b] as Dictionary)["size"] as AABB).size.y)
-		var anchor := {}
-		for i in members:
-			var stood := _stand(things[i], built[i], String(key), anchor, keep_out, rng)
-			if stood.is_empty():
-				print("ghost: card table - no room for %s" % String((things[i] as Dictionary).get("name", "a thing")))
-				((built[i] as Dictionary)["node"] as Node).free()
-			elif anchor.is_empty():
-				anchor = stood
-
-
-## THIS EPISODE'S HABIT ([constant AIM_WANDER]), from its own die so no other draw moves: `push` - how
-## far out to the sides its things lean (0 keeps the zones' own middles, as before; often well out, so
-## the middle stays free), and `wander`, `side` - each group's own step off its zone's middle and the side
-## a "back" group leans to, by the group's name.
-static func _habit_of(seed: int) -> Dictionary:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([seed, "tarot-things-habit"])
-	return {"push": pow(rng.randf(), 0.7), "salt": rng.randi()}
-
-
-## Where group [param group] of zone [param zone] aims, the deck kept at [param deck]: the zone's middle,
-## pushed out to its side by the habit and wandered off by the group's own step.
-func _habit_aim(zone: String, group: String, deck: Vector3) -> Vector2:
-	var aim := CardTable.zone_aim(zone, deck)
-	if _habit.is_empty():
-		return aim
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([int(_habit["salt"]), group])
-	var step := Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)) * AIM_WANDER
-	var side := signf(aim.x) if absf(aim.x) > 0.01 else (-1.0 if rng.randf() < 0.5 else 1.0)
-	# a "back" thing leans out less (it stands where the frame is narrowest), by the deck not at all
-	var push := float(_habit["push"]) * EDGE_PUSH * (0.0 if zone == "by the deck" else (0.8 if absf(aim.x) < 0.01 else 1.0))
-	return aim + step + Vector2(side * push, 0.0)
-
-
-## How much worse a spot is for a foot [param bb] (x by z) that crosses a layer's edge ([constant STRADDLE]).
-func _straddle(bb: Rect2) -> float:
-	var pts := [bb.position, bb.end, Vector2(bb.position.x, bb.end.y), Vector2(bb.end.x, bb.position.y), bb.get_center()]
-	for o in _layer_os:
-		var inside := 0
-		for q in pts:
-			inside += 1 if Tables.sdf(o, q) < 0.0 else 0
-		if inside > 0 and inside < pts.size():
-			return STRADDLE * (1.0 / 3.0 if maxf(bb.size.x, bb.size.y) > STRADDLE_BIG else 1.0)
-	return 0.0
-
-
-## THING [param t] (its strand laid `drape`) with the ground it falls over: this top's edge ([method
-## Tables.sdf]), the middle of the reading its path is written from, and the floor.
-func _grounded(t: Dictionary) -> Dictionary:
-	var out := t.duplicate(true)
-	var o := _top_o
-	var ground := {"sdf": func(p: Vector2) -> float: return Tables.sdf(o, p),
-		"normal": func(p: Vector2) -> Vector2: return Tables.normal(o, p),
-		"origin": Tables.ORIGIN, "drop": Tables.DROP_MOST}
-	for p in out["parts"]:
-		(p as Dictionary)["ground"] = ground
-	return out
-
-
-## A STRAND DRAPED ACROSS THE TABLE ([param t], built as [param b] in the table's own space): laid where it was
-## written - unless it runs where the cards go ([param keep_out]), when it is left off - and the stretches of
-## the table it covers kept out for the things that stand after it.
-func _drape(t: Dictionary, b: Dictionary, keep_out: Array) -> void:
-	var node: Node3D = b["node"]
-	var line := PackedVector2Array()
-	for m in b["meshes"]:
-		var arr := ((m as MeshInstance3D).mesh as ArrayMesh).surface_get_arrays(0)
-		var vs: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
-		for i in range(0, vs.size(), 7):
-			if vs[i].y > -0.01:
-				line.append(Vector2(vs[i].x, vs[i].z))
-	var pieces: Array = []
-	var cell := 0.06
-	var cells := {}
-	for q in line:
-		var c := Vector2i(floori(q.x / cell), floori(q.y / cell))
-		if not cells.has(c):
-			cells[c] = Rect2(q, Vector2.ZERO)
-		cells[c] = (cells[c] as Rect2).expand(q)
-	for c in cells:
-		pieces.append((cells[c] as Rect2).grow(0.004))
-	for r in pieces:
-		for k in keep_out:
-			if (r as Rect2).intersects(k as Rect2):
-				print("ghost: card table - %s runs where the cards go; left off" % String(t.get("name", "a strand")))
-				node.free()
-				return
-	var bb := Rect2()
-	for r in pieces:
-		bb = (r as Rect2) if bb.size == Vector2.ZERO else bb.merge(r as Rect2)
-	var flat := b.duplicate()
-	flat["foot"] = PackedVector2Array()
-	_put(t, flat, {"at": Vector2.ZERO, "rect": Rect2(), "bb": bb, "outline": PackedVector2Array()}, Basis(), "")
-	keep_out.append_array(pieces)
-
-
-## Where nothing may stand: everywhere the cards go - the spread, the deck, the middle where the
-## deck is shuffled, where a jumper lands - as rectangles on the table (x by z).
-func _keep_out() -> Array:
-	var out: Array = []
-	for sl in _plan.slots:
-		out.append(CardTable.footprint((sl as Dictionary)["pos"], float((sl as Dictionary)["yaw"]), CARD).grow(0.03))
-	out.append(Rect2(_deck_base.x - 0.08, _deck_base.z - 0.1, 0.16, 0.2))
-	if _aside_card >= 0:
-		out.append(Rect2(_deck_far.x - 0.08, _deck_far.z - 0.1, 0.16, 0.2))
-	# the middle, where the deck is shuffled - and, whatever the source, where the spread lies
-	out.append(_shuffle_rect())
-	if _plan.cards_from == "box":
-		# nothing stands where the box would, nor where a pulled card rises past it
-		out.append(TablePositions.deck_keep(_deck_base, _box_keep(), _box_center()))
-		if _box_part.stood.has("lid"):
-			var world: AABB = _box_part.stood["world"]
-			var side := signf(_deck_base.x)
-			var x := world.get_center().x + side * (world.size.x + 0.025)
-			out.append(Rect2(x - world.size.x * 0.5 - 0.025, world.position.z + 0.08 - 0.025,
-				world.size.x + 0.05, world.size.z + 0.05))
-		return out
-	out.append(Rect2(_plan.jump_land.x - 0.07, _plan.jump_land.z - 0.09, 0.14, 0.18))
-	return out
-
-
-## The middle of the table, where the deck is shuffled (x by z).
-func _shuffle_rect() -> Rect2:
-	return Rect2(_plan.mid.x - 0.22, _plan.mid.z - 0.14, 0.44, 0.28)
-
-
-## THE TABLE'S BLUEPRINT, as [TableBlueprint] draws it for the set dresser: everything that decides where
-## a thing may stand, in the table's own space (meters; x to the reader's right, z toward the reader) -
-## the top's outline and its layers' ([method Tables.top_outline]), the spread's cards (`{pos, yaw}`), the
-## deck, where nothing may stand ([method _keep_out]), the shuffle, the reader's workspace, the line flames
-## stand behind, the camera - and each thing as it stood: its foot, which way its front faces, its height,
-## where it was written and how far it was moved, and why; and each written thing that found no room.
-func blueprint() -> Dictionary:
-	var cards: Array = []
-	for sl in _plan.slots:
-		cards.append({"pos": Vector2(((sl as Dictionary)["pos"] as Vector3).x, ((sl as Dictionary)["pos"] as Vector3).z),
-			"yaw": float((sl as Dictionary)["yaw"])})
-	var layers: Array = []
-	for l in ((_furniture.get("spec", {}) as Dictionary).get("layers", []) as Array):
-		if l is Dictionary:
-			layers.append({"name": String((l as Dictionary).get("name", "")), "o": Tables.layer_outline(l, _top)})
-	var things: Array = []
-	for th in _things:
-		var d: Dictionary = th
-		var node: Node3D = d["node"]
-		var front := node.transform.basis * Vector3(0.0, 0.0, 1.0)
-		things.append({"name": String(d["name"]), "foot": d["outline"], "bb": d["bb"], "at": Vector2(node.position.x, node.position.z),
-			"front": Vector2(front.x, front.z).normalized(), "height": (d["box"] as AABB).end.y, "lit": int(d["lit"]),
-			"written": d.get("written"), "moved": float(d.get("moved", 0.0)), "why": String(d.get("why", "")),
-			"rect": d["rect"], "box": String(d["group"]) == "#the box"})
-	return {"top": _top_o, "layers": layers, "cards": cards, "card": CARD, "deck": Vector2(_deck_base.x, _deck_base.z),
-		"keep_out": _keep_out(), "shuffle": _shuffle_rect(),
-		"workspace": Rect2(_plan.mid.x - WORKSPACE_HALF, _plan.mid.z + WORKSPACE_FROM, WORKSPACE_HALF * 2.0, 1.0),
-		"flames_behind": _plan.mid.z, "camera": _plan.cam_base, "fov": _cam.fov, "things": things,
-		"unstood": _unstood.duplicate(true)}
-
-
-## ONE THING STOOD: the best free spot for [param t] (built as [param b]) on a grid over the table,
-## at full size or, failing that, a little smaller. Every spot is ON THE TABLE, off everywhere the
-## cards go, clear of what already stands (by [constant THING_GAP], or [constant GROUP_GAP] within
-## its own group), IN THE SHOT (its projected box never cut by the frame's top, with at least
-## [constant SEEN_LEAST] visible). A lit thing first seeks a whole view; if none fits, its sides
-## may be cut while every flame stays in view. Between groups, things do not overlap in the picture.
-## Aimed where the episode's habit puts its zone ([method _habit_aim]),
-## and kept off a cloth's edge where it can be ([method _straddle]). A lit thing stands only behind the middle (in front of the
-## cards its flame blew out the card held up to the lens) and looks for dark cloth. The spot
-## chosen ({at, k, group, height}), or empty when there is none.
-func _stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, keep_out: Array,
-		rng: RandomNumberGenerator, edge_light := false) -> Dictionary:
-	var box: AABB = b["size"]
-	var lit := not (b["wicks"] as Array).is_empty()
-	var yaw := deg_to_rad(float(t.get("turn", 0.0)) + rng.randf_range(-8.0, 8.0))
-	var zone := String(t.get("place", "back"))
-	var aim := _habit_aim(zone, group, _deck_base)
-	var front := (_deck_base.z + 0.03) if zone in ["by the deck", "left", "right"] else _plan.mid.z + 0.03
-	# a LOW thing may lie nearer the reader, where it hides no card and nothing behind it
-	if box.size.y < 0.04:
-		front = 0.2
-	if lit:
-		front = minf(front, _plan.mid.z)
-	var outline: PackedVector2Array = b["outline"]
-	var top_center: Vector2 = _top_o["center"]
-	var top_half: Vector2 = _top_o["half"]
-	var shot := Rect2(0.0, 0.0, 1.0, 1.0)
-	var workspace := Rect2(_plan.mid.x - WORKSPACE_HALF, _plan.mid.z + WORKSPACE_FROM, WORKSPACE_HALF * 2.0, 1.0)
-	for k in [1.0, 0.88, 0.76]:
-		var basis := Basis(Vector3.UP, yaw).scaled(Vector3(k, k, k))
-		var shape := PackedVector2Array()
-		for q in outline:
-			var w := basis * Vector3(q.x, 0.0, q.y)
-			shape.append(Vector2(w.x, w.z))
-		var lo := Vector2(INF, INF)
-		var hi := Vector2(-INF, -INF)
-		for q in shape:
-			lo = lo.min(q)
-			hi = hi.max(q)
-		var corners := PackedVector3Array()
-		for cx in [box.position.x, box.end.x]:
-			for cy in [box.position.y, box.end.y]:
-				for cz in [box.position.z, box.end.z]:
-					corners.append(basis * Vector3(cx, cy, cz))
-		var best := {}
-		var best_score := -INF
-		var cam_inv := _plan.cam_base.affine_inverse()
-		var lens := Vector2(tan(deg_to_rad(_cam.fov * 0.5)) * (16.0 / 9.0), tan(deg_to_rad(_cam.fov * 0.5)))
-		var z := top_center.y - top_half.y
-		while z <= front:
-			var x := top_center.x - top_half.x
-			while x <= top_center.x + top_half.x:
-				_breathe()
-				var at := Vector2(x + rng.randf_range(-0.004, 0.004), z + rng.randf_range(-0.004, 0.004))
-				x += 0.02
-				var bb := Rect2(lo + at, hi - lo)
-				# The actual top, including its side margins, is available. Its outline below keeps
-				# every foot safely in from the rim; the picture test decides what the viewer sees.
-				if Tables.sdf(_top_o, bb.position) > -Tables.THING_EDGE or Tables.sdf(_top_o, bb.end) > -Tables.THING_EDGE \
-						or Tables.sdf(_top_o, Vector2(bb.position.x, bb.end.y)) > -Tables.THING_EDGE \
-						or Tables.sdf(_top_o, Vector2(bb.end.x, bb.position.y)) > -Tables.THING_EDGE:
-					continue
-				# the outline itself only where the boxes meet: most spots are judged by box alone
-				var placed := PackedVector2Array()
-				var clear := true
-				for r in keep_out:
-					if (r as Rect2).intersects(bb):
-						if placed.is_empty():
-							placed = _translated(shape, at)
-						if _convex_overlap(placed, _rect_poly(r as Rect2), 0.0):
-							clear = false
-							break
-				if not clear:
-					continue
-				for th in _things:
-					var gap := GROUP_GAP if String((th as Dictionary)["group"]) == group else THING_GAP
-					if ((th as Dictionary)["bb"] as Rect2).grow(gap).intersects(bb):
-						if placed.is_empty():
-							placed = _translated(shape, at)
-						if _convex_overlap(placed, (th as Dictionary)["outline"], gap):
-							clear = false
-							break
-				if not clear:
-					continue
-				var rect := _screen_rect_fast(corners, Vector3(at.x, 0.0, at.y), cam_inv, lens)
-				var seen := rect.intersection(shot)
-				# Never cut by the frame's TOP: that reads as a thing standing in the room. Lit things
-				# seek a whole view first; everything may run off a side if enough of it remains visible.
-				if rect.position.y < 0.02:
-					continue
-				if seen.get_area() < rect.get_area() * SEEN_LEAST:
-					continue
-				if lit:
-					if rect.end.y > 0.97:
-						continue
-					if not edge_light and (rect.position.x < 0.02 or rect.end.x > 0.98):
-						continue
-					if edge_light:
-						var wick_seen := true
-						for wick in b["wicks"]:
-							var flame: Variant = CardTable.project(_plan.cam_base, _cam.fov,
-								basis * (wick as Vector3) + Vector3(at.x, 0.0, at.y))
-							if flame == null or (flame as Vector2).x < 0.02 or (flame as Vector2).x > 0.98:
-								wick_seen = false
-								break
-						if not wick_seen:
-							continue
-				# not in front of another in the picture: apart between groups, and within one only a
-				# little in front - a group seen one thing through another read as a stack
-				var hidden := 0.0
-				for th in _things:
-					var other: Rect2 = ((th as Dictionary)["rect"] as Rect2).intersection(shot)
-					if String((th as Dictionary)["group"]) != group:
-						if other.grow(0.008).intersects(seen):
-							clear = false
-							break
-					elif other.intersects(seen):
-						hidden = maxf(hidden, other.intersection(seen).get_area() / maxf(minf(other.get_area(), seen.get_area()), 1e-6))
-				if not clear or hidden > 0.3:
-					continue
-				var score := -hidden * 2.0
-				if anchor.is_empty():
-					score -= at.distance_to(aim) * 4.0
-				else:
-					var ap: Vector2 = anchor["at"]
-					score -= at.distance_to(ap) * 6.0
-					# a shorter thing in a group stands toward the reader, a taller one behind
-					if box.size.y * k < float(anchor["height"]):
-						score += clampf((at.y - ap.y) * 4.0, -0.2, 0.2)
-				if lit:
-					# by dark cloth, where it can burn as the key: by pale, its light is held down
-					score -= 0.8 * maxf(0.0, _light_part.heat_cell(Vector3(at.x, 0.0, at.y)) * KEY_ENERGY / HEAT - 1.0)
-				score -= _straddle(bb)
-				if bb.intersects(workspace):
-					score -= WORKSPACE
-				score += rng.randf() * 0.05
-				if score > best_score:
-					best_score = score
-					best = {"at": at, "rect": rect, "bb": bb, "outline": placed if not placed.is_empty() else _translated(shape, at)}
-			z += 0.02
-		if not best.is_empty():
-			_put(t, b, best, basis, group)
-			return {"at": best["at"], "height": box.size.y * k, "k": k}
-	if lit and not edge_light:
-		return _stand(t, b, group, anchor, keep_out, rng, true)
-	return {}
-
-
-## ONE THING STOOD WHERE IT WAS WRITTEN ([constant NUDGE_MOST]): [param t]'s `at`, turned by its `turn`
-## and sized by its `scale` - exactly, with no hand's jitter: the spot is the set dresser's. A spot where
-## it may not stand ([method _spot_trouble]) moves it to the nearest where it may, the move and its
-## reason kept for the blueprint; false, and kept in [member _unstood], when none is within reach. Whether
-## the camera sees it whole, or sees it in front of another thing, is the set dresser's to judge.
-func _stand_at(t: Dictionary, b: Dictionary, group: String, keep_out: Array) -> bool:
-	var box: AABB = b["size"]
-	var lit := not (b["wicks"] as Array).is_empty()
-	var k := float(t.get("scale", 1.0))
-	var basis := Basis(Vector3.UP, deg_to_rad(float(t.get("turn", 0.0)))).scaled(Vector3(k, k, k))
-	var cm: Array = t["at"]
-	var want := Tables.ORIGIN + Vector2(float(cm[0]), float(cm[1])) * 0.01
-	var shape := _turned(b["outline"], basis)
-	var why := ""
-	var spot := Vector2(INF, INF)
-	var r := 0.0
-	while r <= NUDGE_MOST + 1e-6 and spot.x == INF:
-		var n := 1 if r == 0.0 else maxi(8, ceili(TAU * r / NUDGE_STEP))
-		for i in n:
-			_breathe()
-			var at := want + Vector2(cos(TAU * i / n), sin(TAU * i / n)) * r
-			var trouble := _spot_trouble(_translated(shape, at), lit, at, keep_out)
-			if trouble.is_empty():
-				spot = at
-				break
-			if r == 0.0:
-				why = trouble
-		r += NUDGE_STEP
-	if spot.x == INF:
-		_unstood.append({"name": String(t.get("name", "")), "written": want, "why": why})
-		return false
-	var corners := PackedVector3Array()
-	for cx in [box.position.x, box.end.x]:
-		for cy in [box.position.y, box.end.y]:
-			for cz in [box.position.z, box.end.z]:
-				corners.append(basis * Vector3(cx, cy, cz))
-	var lens := Vector2(tan(deg_to_rad(_cam.fov * 0.5)) * (16.0 / 9.0), tan(deg_to_rad(_cam.fov * 0.5)))
-	var placed := _translated(shape, spot)
-	_put(t, b, {"at": spot, "outline": placed, "bb": _bounds(placed),
-		"rect": _screen_rect_fast(corners, Vector3(spot.x, 0.0, spot.y), _plan.cam_base.affine_inverse(), lens),
-		"written": want, "moved": spot.distance_to(want), "why": why}, basis, group)
-	return true
-
-
-## Why a foot [param placed] (convex, on the table) may not stand where it is, "" when it may: a flame
-## in front of the middle ([param lit], its middle at [param at]; see [method _stand]), off the top
-## ([constant Tables.THING_EDGE] in from its edge), where the cards go ([param keep_out]), or in what
-## already stands ([constant WRITTEN_GAP]).
-func _spot_trouble(placed: PackedVector2Array, lit: bool, at: Vector2, keep_out: Array) -> String:
-	if lit and at.y > _plan.mid.z:
-		return "a flame in front of the middle of the table blows out the card held up to the lens"
-	for q in placed:
-		if Tables.sdf(_top_o, q) > -Tables.THING_EDGE:
-			return "it ran off the table's edge"
-	var bb := _bounds(placed)
-	for r in keep_out:
-		if (r as Rect2).intersects(bb) and _convex_overlap(placed, _rect_poly(r as Rect2), 0.0):
-			return "it stood where the cards go"
-	for th in _things:
-		if ((th as Dictionary)["bb"] as Rect2).grow(WRITTEN_GAP).intersects(bb) \
-				and _convex_overlap(placed, (th as Dictionary)["outline"], WRITTEN_GAP):
-			return "it stood in %s" % String((th as Dictionary)["name"])
-	return ""
-
-
-static func _bounds(poly: PackedVector2Array) -> Rect2:
-	var lo := Vector2(INF, INF)
-	var hi := Vector2(-INF, -INF)
-	for q in poly:
-		lo = lo.min(q)
-		hi = hi.max(q)
-	return Rect2(lo, hi - lo)
+			return j.data
+	return null
 
 
 ## A BREATH for the app, in a table built [member aside]: a worker in a long loop of GDScript calls holds
@@ -1988,134 +1414,6 @@ func _breathe() -> void:
 	_breaths += 1
 	if _breaths % 64 == 0:
 		OS.delay_usec(0)
-
-
-## Thing [param t] stood at the chosen spot: in the scene, its wicks lit, a soft shade where it meets
-## the cloth, its foot kept for the cards to go round (see [method _card_clear]).
-func _put(t: Dictionary, b: Dictionary, spot: Dictionary, basis: Basis, group: String) -> void:
-	var at: Vector2 = spot["at"]
-	var node: Node3D = b["node"]
-	node.transform = Transform3D(basis, Vector3(at.x, 0.0, at.y))
-	_props.add_child(node)
-	var wicks: Array = b["wicks"]
-	# The wax and holder immediately under a flame cannot shadow themselves: they printed a
-	# hard disc at the base. Separate accessories several centimeters away (a dish of dye beside
-	# the candle, for example) must still catch and cast that candle's light.
-	var own := (CANDLE_LAYER << _lights.size()) if not wicks.is_empty() else THING_LAYER
-	for m in b["meshes"]:
-		var mesh := m as MeshInstance3D
-		mesh.layers = own if wicks.is_empty() or TableLight.near_wick(mesh, wicks) else THING_LAYER
-	var glows: Array = b.get("glows", [])
-	var first := _lights.size()
-	if not wicks.is_empty():
-		var flames: Array = []
-		for i in wicks.size():
-			var wick: Vector3 = node.transform * (wicks[i] as Vector3)
-			var f := _light_part.add_flame(wick, own, glows[i] if i < glows.size() else null)
-			f["open"] = Props.open_to_air(wick, node, b["meshes"])
-			flames.append(f)
-		_light_part.light_flames(flames, own)
-	var foot := _translated(_turned(b["foot"], basis), at)
-	if foot.size() >= 3:
-		# A moving shoebox gets its own moving soft shade. A fixed decal projects onto
-		# its walls as it passes, and a fixed shadow slab leaves a ghost at its destination.
-		if not (group == "#the box" and String(_plan.staging.get("box_style", "open")) == "shoebox"):
-			_light_part.contact_shadow(foot)
-			_light_part.foot_shadow(foot, own)
-		var grown := _grown(foot, FOOT_MARGIN)
-		_standing.append(grown)
-		var c := Vector2.ZERO
-		for q in grown:
-			c += q
-		c /= float(grown.size())
-		var r := 0.0
-		for q in grown:
-			r = maxf(r, q.distance_to(c))
-		_standing_c.append(c)
-		_standing_r.append(r)
-	_take_movers(b, node)
-	_things.append({"name": String(t.get("name", "")), "group": group, "place": String(t.get("place", "back")),
-		"node": node, "outline": spot["outline"], "bb": spot["bb"], "rect": spot["rect"], "foot": foot,
-		"box": node.transform * (b["size"] as AABB), "lit": wicks.size(), "lights": range(first, _lights.size()),
-		"meshes": b["meshes"], "written": spot.get("written"), "moved": float(spot.get("moved", 0.0)),
-		"why": String(spot.get("why", ""))})
-
-
-## The rectangle in the picture that [param corners] (a thing's box, turned and sized) cover
-## standing at [param at], for a camera whose inverse is [param cam_inv] and whose lens spreads
-## [param lens] (tangents across and up); one wider than the frame when any lies behind the lens.
-static func _screen_rect_fast(corners: PackedVector3Array, at: Vector3, cam_inv: Transform3D, lens: Vector2) -> Rect2:
-	var lo := Vector2(INF, INF)
-	var hi := Vector2(-INF, -INF)
-	for c in corners:
-		var l: Vector3 = cam_inv * (c + at)
-		if l.z > -0.001:
-			return Rect2(-1.0, -1.0, 3.0, 3.0)
-		var sp := Vector2(0.5 + l.x / (-l.z * lens.x) * 0.5, 0.5 - l.y / (-l.z * lens.y) * 0.5)
-		lo = lo.min(sp)
-		hi = hi.max(sp)
-	return Rect2(lo, hi - lo)
-
-
-static func _translated(poly: PackedVector2Array, by: Vector2) -> PackedVector2Array:
-	var out := PackedVector2Array()
-	for q in poly:
-		out.append(q + by)
-	return out
-
-
-static func _turned(poly: PackedVector2Array, basis: Basis) -> PackedVector2Array:
-	var out := PackedVector2Array()
-	for q in poly:
-		var w := basis * Vector3(q.x, 0.0, q.y)
-		out.append(Vector2(w.x, w.z))
-	return out
-
-
-## [param poly] (convex) pushed out by [param by] all round.
-static func _grown(poly: PackedVector2Array, by: float) -> PackedVector2Array:
-	var c := Vector2.ZERO
-	for q in poly:
-		c += q
-	c /= float(maxi(poly.size(), 1))
-	var out := PackedVector2Array()
-	for q in poly:
-		out.append(q + (q - c).normalized() * by)
-	return out
-
-
-static func _rect_poly(r: Rect2) -> PackedVector2Array:
-	return PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)])
-
-
-## Whether convex [param a] and [param b] come within [param gap] of each other: no separating
-## axis among their edges' normals with that much room on it.
-static func _convex_overlap(a: PackedVector2Array, b: PackedVector2Array, gap: float) -> bool:
-	if a.size() < 2 or b.size() < 2:
-		return false
-	for poly in [a, b]:
-		var p: PackedVector2Array = poly
-		for i in p.size():
-			var e := p[(i + 1) % p.size()] - p[i]
-			if e.length_squared() < 1e-12:
-				continue
-			var ax := Vector2(-e.y, e.x).normalized()
-			var ra := _span(a, ax)
-			var rb := _span(b, ax)
-			if ra.x > rb.y + gap or rb.x > ra.y + gap:
-				return false
-	return true
-
-
-## [param poly]'s extent along [param ax]: (least, most).
-static func _span(poly: PackedVector2Array, ax: Vector2) -> Vector2:
-	var lo := INF
-	var hi := -INF
-	for q in poly:
-		var d := q.dot(ax)
-		lo = minf(lo, d)
-		hi = maxf(hi, d)
-	return Vector2(lo, hi)
 
 
 # --- the camera ----------------------------------------------------------------------------------------
@@ -2235,7 +1533,7 @@ func _build_air(spec: Dictionary) -> void:
 func _air_stage() -> Dictionary:
 	var table: AABB = _furniture.get("bounds", AABB(Vector3(-TABLE.x * 0.5, -TABLE.y, TABLE_Z - TABLE.z * 0.5), TABLE))
 	var under: Array = [table]
-	for th in _things:
+	for th in _things_part.on_table:
 		under.append((th as Dictionary)["box"])
 	if not _box_part.stood.is_empty():
 		under.append(_box_part.stood["world"])
@@ -2434,37 +1732,7 @@ func _card_path(k: int, t0: float, dur: float, tm: Dictionary, wj: Dictionary) -
 func _plan_moves() -> void:
 	_move_rng.seed = hash([_plan.seed_value, "tarot-moves"])
 	_moves = []
-	_jumper_wash()
 	_shuffles.move_at(120.0)
-
-
-## A JUMPER'S WASH, held back for it: an episode whose first card is a jumper washes the deck into
-## it now and then ([constant JUMPER_WASH], its own die) - its one wash begins
-## [constant JUMPER_WASH_LEAD] before the jumper is reckoned to come (the script's words at the
-## follower's steady pace) and runs [constant JUMPER_WASH_SLACK] past it, so the jumper comes while
-## it mixes whatever the voice's real pace ([method _jumper_plan]).
-func _jumper_wash() -> void:
-	_wash_held = false
-	var first := {}
-	for a in _plan.parse.get("actions", []):
-		var kind := String((a as Dictionary)["kind"])
-		if TableActions.shows(kind):
-			first = a
-			break
-	if first.is_empty() or String(first["kind"]) != "jumper":
-		return
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([_plan.seed_value, "jumper-wash"])
-	var spoken: PackedStringArray = _plan.parse.get("spoken", PackedStringArray())
-	var k := mini(int(first["after"]), spoken.size())
-	if rng.randf() >= JUMPER_WASH or k <= 0:
-		return
-	# the shuffle starts its lead before the first word; the jumper a beat after the intro's last
-	var est := _estimated_times(spoken.size())
-	var at := est[k - 1] + 0.4 + LEAD - (est[0] - TableActions.SHUFFLE_LEAD - TAIL)
-	_wash_held = true
-	_wash_from = at - JUMPER_WASH_LEAD
-	_wash_until = at + JUMPER_WASH_SLACK
 
 
 ## When each card is drawn and laid, and when the shuffle starts and stops, from the placed
@@ -2551,8 +1819,8 @@ func _times() -> Dictionary:
 func _deck_at(t: float, tm: Dictionary, wj := {}) -> Vector3:
 	if _plan.cards_from == "box":
 		# IN THE BOX: a tin's deck lies flat on its floor (a box's cards are filed, the deck unseen)
-		var inner: AABB = _box_part.stood.get("inner", AABB(_deck_base, Vector3.ZERO))
-		return Vector3(inner.get_center().x, inner.position.y, inner.get_center().z) if not _box_part.stood.is_empty() else _deck_base
+		var inner: AABB = _box_part.stood.get("inner", AABB(_plan.deck_base, Vector3.ZERO))
+		return Vector3(inner.get_center().x, inner.position.y, inner.get_center().z) if not _box_part.stood.is_empty() else _plan.deck_base
 	var first: Array = tm["first"]
 	if first.is_empty():
 		return _plan.mid
@@ -2561,67 +1829,13 @@ func _deck_at(t: float, tm: Dictionary, wj := {}) -> Vector3:
 	if not wj.is_empty():
 		go = (float(wj["end"]) - float(first[0])) / s
 	var u := clampf(((t - float(first[0])) / s - go) / PUSH_SLIDE, 0.0, 1.0)
-	if u >= 1.0 and _aside_card >= 0:
-		# PUT ASIDE before the card that would crowd it is taken ([method _plan_aside])
-		var d: Array = (tm["draw"] as Array)[_aside_card]
+	if u >= 1.0 and _plan.aside_card >= 0:
+		# PUT ASIDE before the card that would crowd it is taken ([method TablePlan.put_aside])
+		var d: Array = (tm["draw"] as Array)[_plan.aside_card]
 		var taken := float(d[0]) + float(d[3]) * float(d[1])
 		var v := clampf((t - (taken - ASIDE_S)) / ASIDE_S, 0.0, 1.0)
-		return _deck_base.lerp(_deck_far, _ease(v)) + Vector3(0.0, sin(PI * v) * 0.003, 0.0)
-	return _plan.mid.lerp(_deck_base, _ease(u)) + Vector3(0.0, sin(PI * u) * 0.004, 0.0)
-
-
-## THE DECK PUT ASIDE ([constant DECK_CROWD]): the first card of the spread that would lie that near
-## the deck, and the spot further out - in the frame, on the top, as far from the spread as it can be,
-## by the least slide - it is moved to before that card is drawn. None when nothing crowds it, the die
-## says it stays, the cards come from a box, or there is nowhere better; the first card itself crowding
-## it puts the deck there from the start.
-func _plan_aside(top: Dictionary) -> void:
-	_aside_card = -1
-	_deck_far = _deck_base
-	if _plan.cards_from == "box" or _plan.slots.is_empty():
-		return
-	var gap := func(a: Rect2, b: Rect2) -> float:
-		return Vector2(maxf(0.0, maxf(a.position.x - b.end.x, b.position.x - a.end.x)),
-			maxf(0.0, maxf(a.position.y - b.end.y, b.position.y - a.end.y))).length()
-	var feet: Array = []
-	for sl in _plan.slots:
-		feet.append(CardTable.footprint((sl as Dictionary)["pos"], float((sl as Dictionary)["yaw"]), CARD))
-	var keep := TablePositions.deck_keep(_deck_base)
-	var crowd := -1
-	for i in feet.size():
-		if float(gap.call(keep, feet[i])) < DECK_CROWD:
-			crowd = i
-			break
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([_plan.seed_value, "tarot-deck-aside"])
-	if crowd < 0 or rng.randf() >= DECK_ASIDE:
-		return
-	var lay := CardTable.layout_of(_plan.seed_value)
-	var side := signf(_deck_base.x)
-	var best := -INF
-	for dx in range(4, 17):
-		for dz in range(-3, 3):
-			var at := _deck_base + Vector3(side * float(dx) * 0.01, 0.0, float(dz) * 0.02)
-			var r := TablePositions.deck_keep(at)
-			if not TablePositions._frame_trouble(r, lay).is_empty():
-				continue
-			if not (Tables.inside(top, r.position, Tables.EDGE) and Tables.inside(top, r.end, Tables.EDGE)
-					and Tables.inside(top, Vector2(r.position.x, r.end.y), Tables.EDGE) and Tables.inside(top, Vector2(r.end.x, r.position.y), Tables.EDGE)):
-				continue
-			var near := INF
-			for f in feet:
-				near = minf(near, float(gap.call(r, f)))
-			# room enough wins; past it, the shorter slide
-			var score := minf(near, DECK_CROWD + 0.03) - at.distance_to(_deck_base) * 0.1
-			if near > float(gap.call(keep, feet[crowd])) + 0.02 and score > best:
-				best = score
-				_deck_far = at
-	if best == -INF:
-		return
-	if crowd == 0:
-		_deck_base = _deck_far
-	else:
-		_aside_card = crowd
+		return _plan.deck_base.lerp(_plan.deck_far, _ease(v)) + Vector3(0.0, sin(PI * v) * 0.003, 0.0)
+	return _plan.mid.lerp(_plan.deck_base, _ease(u)) + Vector3(0.0, sin(PI * u) * 0.004, 0.0)
 
 
 # --- posing everything --------------------------------------------------------------------------------------
@@ -2635,7 +1849,7 @@ func _pose_box(t: float, tm: Dictionary) -> void:
 	var open_at := float(tm["opening"])
 	var u := maxf(t - open_at, 0.0) if open_at < INF else 0.0
 	var rest: Transform3D = _box_part.stood["rest"]
-	var side := signf(_deck_base.x)
+	var side := signf(_plan.deck_base.x)
 	var arrival := _ease(clampf(u / 2.7, 0.0, 1.0))
 	var turn := _ease(clampf((u - 0.7) / 2.0, 0.0, 1.0))
 	var node: Node3D = _box_part.stood["node"]

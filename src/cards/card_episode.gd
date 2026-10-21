@@ -556,9 +556,7 @@ func upload_notes(take := "") -> Dictionary:
 
 ## [param t] seconds as a chapter's timestamp, as YouTube reads one: `m:ss`, `h:mm:ss` from an hour.
 static func chapter_clock(t: int) -> String:
-	if t >= 3600:
-		return "%d:%02d:%02d" % [floori(t / 3600.0), floori(t / 60.0) % 60, t % 60]
-	return "%d:%02d" % [floori(t / 60.0), t % 60]
+	return Clock.text(float(t))
 
 
 ## UPLOAD NOTES: `upload.md` - what an upload of the episode says (see [method upload_notes]), its

@@ -17,6 +17,14 @@ const FORMS := {
 }
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"form": {"label": "Form", "type": "choice", "options": "FORMS", "default": null,
+		"blurb": "How the curtain hangs: a couple of slow broad drapes, many fine ribbons, or a doubled curtain with a second set behind on the accent hue."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
@@ -24,8 +32,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# the high red fringe. Anything warm-orange would read as fire in the sky, not light.
 	var sch := Scheme.among(
 		["verdant", "toxic", "teal", "glacier", "violet", "magenta", "abyss", "rose"], rng)
-	var keys := FORMS.keys()
-	var form := String(keys[rng.randi() % keys.size()])
+	var form := String(choice("form", rng))
 	var f: Dictionary = FORMS[form]
 	var cnt: Array = f["count"]
 	var sat_r: Array = f["sat"]

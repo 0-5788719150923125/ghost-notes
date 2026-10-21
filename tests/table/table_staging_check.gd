@@ -482,19 +482,19 @@ func _table_edge() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 12
 	# The middle is occupied; on this top there is still clear room outside the old cloth.
-	var spot := medium._stand(thing, built, "#edge", {}, [Rect2(-0.31, -1.0, 0.62, 2.0)], rng)
-	var bb: Rect2 = (medium._things[-1] as Dictionary)["bb"] if not spot.is_empty() else Rect2()
-	var frame: Rect2 = (medium._things[-1] as Dictionary)["rect"] if not spot.is_empty() else Rect2()
+	var spot := medium._things_part.stand(thing, built, "#edge", {}, [Rect2(-0.31, -1.0, 0.62, 2.0)], rng)
+	var bb: Rect2 = (medium._things_part.on_table[-1] as Dictionary)["bb"] if not spot.is_empty() else Rect2()
+	var frame: Rect2 = (medium._things_part.on_table[-1] as Dictionary)["rect"] if not spot.is_empty() else Rect2()
 	_ok(not spot.is_empty() and maxf(absf(bb.position.x), absf(bb.end.x)) > TableShuffle.CLOTH.x * 0.5
 		and (frame.position.x < 0.0 or frame.end.x > 1.0),
 		"a prop can stand on the table's side margin while partly outside the picture")
-	medium._things.clear()
+	medium._things_part.on_table.clear()
 	var flame_spec := Props.sanitize({"things": [{"name": "edge candle", "place": "left", "parts": [
 		{"shape": "lathe", "profile": [[0, 0], [15, 0], [15, 4], [0, 4]], "wick": true}]}]}, [])
 	var candle: Dictionary = (flame_spec["things"] as Array)[0]
 	var candle_built := Props.build(candle, flame_spec["materials"], 13)
-	var candle_spot := medium._stand(candle, candle_built, "#flame", {}, [Rect2(-0.31, -1.0, 0.62, 2.0)], rng)
-	var candle_frame: Rect2 = (medium._things[-1] as Dictionary)["rect"] if not candle_spot.is_empty() else Rect2()
+	var candle_spot := medium._things_part.stand(candle, candle_built, "#flame", {}, [Rect2(-0.31, -1.0, 0.62, 2.0)], rng)
+	var candle_frame: Rect2 = (medium._things_part.on_table[-1] as Dictionary)["rect"] if not candle_spot.is_empty() else Rect2()
 	_ok(not candle_spot.is_empty() and (candle_frame.position.x < 0.0 or candle_frame.end.x > 1.0),
 		"a lit prop may use the side margin when its flame remains in view")
 
@@ -801,7 +801,7 @@ func _shoebox_show() -> void:
 		"a card pulled near the box wall cannot cast a jagged shadow across it")
 	_ok((medium._box_part.files[0] as MultiMeshInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
 		"the shoebox inventory cannot cast a hard shadow into the lid")
-	var keep := TablePositions.deck_keep(medium._deck_base, medium._box_keep(), medium._box_center())
+	var keep := TablePositions.deck_keep(medium._plan.deck_base, medium._plan.box_keep(), medium._plan.box_center())
 	var clear := true
 	for s in medium._plan.slots:
 		var slot: Dictionary = s

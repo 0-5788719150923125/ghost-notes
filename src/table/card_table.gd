@@ -99,7 +99,7 @@ const MAX_FLAMES := 12
 ## runs from a few things to dozens (the user, 2026-10-18: "real tarot videos will often fill the
 ## table with all manner of items").
 const MAX_THINGS := 32
-## A THING WRITTEN WHERE IT STANDS ([method TableMedium._stand_at]): its `at`, [x, z] centimeters from
+## A THING WRITTEN WHERE IT STANDS ([method TableThings.stand_at]): its `at`, [x, z] centimeters from
 ## the middle of the reading ([constant Tables.ORIGIN], as a layer's `at`), kept within AT_MOST; and
 ## its `scale`, how much larger or smaller than built it stands.
 const AT_MOST := 200.0
@@ -109,7 +109,7 @@ const NUDGE_MOST := 0.15
 
 ## WHERE A THING CAN STAND, as the set dresser names it: stretches of the cloth the cards leave
 ## free. `aim` is a zone's middle on the table (x across, z toward the reader, meters); the table
-## finds the spot itself ([method TableMedium._place_things]). "by the deck" is aimed per episode.
+## finds the spot itself ([method TableThings.place]). "by the deck" is aimed per episode.
 const ZONES := {
 	"back left": {"aim": Vector2(-0.3, -0.27), "about": "the far left of the cloth, behind where the cards are laid"},
 	"back": {"aim": Vector2(0.0, -0.3), "about": "the far middle of the cloth, behind where the cards are laid"},
@@ -305,6 +305,22 @@ static func layout_of(seed: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed, "tarot-table"])
 	return sample_layout(rng)
+
+
+## The rectangle in the picture that [param corners] (a thing's box, turned and sized) cover
+## standing at [param at], for a camera whose inverse is [param cam_inv] and whose lens spreads
+## [param lens] (tangents across and up); one wider than the frame when any lies behind the lens.
+static func screen_rect(corners: PackedVector3Array, at: Vector3, cam_inv: Transform3D, lens: Vector2) -> Rect2:
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for c in corners:
+		var l: Vector3 = cam_inv * (c + at)
+		if l.z > -0.001:
+			return Rect2(-1.0, -1.0, 3.0, 3.0)
+		var sp := Vector2(0.5 + l.x / (-l.z * lens.x) * 0.5, 0.5 - l.y / (-l.z * lens.y) * 0.5)
+		lo = lo.min(sp)
+		hi = hi.max(sp)
+	return Rect2(lo, hi - lo)
 
 
 ## WHERE [param at] LANDS IN THE PICTURE of a camera at [param cam] with [param fov] (16:9),

@@ -85,6 +85,7 @@ One folder under `src/` a group, bottom first: a script names scripts in its own
 
 Plain data in and out, at the bottom because it needs nothing: the YAML-subset parser, a document's frontmatter (re-read, one key edited, verified), pure edits of nested data, reading any registry's rows (`Registry`), what an agent is told (`rules/`), and a script read into cues, hesitations and pictures.
 
+- [`clock.gd`](../src/data/clock.gd) **Clock** - how the app tells the time: m:ss, h:mm:ss past an hour, whole seconds. The transport's rail, every timeline's ruler and playhead (`TimelineView`), an episode's chapters and an agent's progress all say it this one way, where each had kept a copy of its own. Plain, and naming no autoload, so a gate ...
 - [`data_path.gd`](../src/data/data_path.gd) **DataPath** - edits of nested data (Dictionaries and Arrays) as PURE FUNCTIONS, addressed by a path: the keys and indexes from the root down, `["sequence", 2, "track", "spans", 0, "from"]`.
 - [`front_matter.gd`](../src/data/front_matter.gd) **FrontMatter** - YAML frontmatter on a Markdown document, read and (carefully) written.
 - [`manuscript.gd`](../src/data/manuscript.gd) **Manuscript** - what a chapter file SAYS about itself, beyond the words to be read.
@@ -158,7 +159,7 @@ Self-contained generators a scene composes rather than hand-models - each one sa
 - [`eye_body.gd`](../src/geometry/eye_body.gd) **EyeBody** - a real-3D human eyeball, drawn through a `Lens3D` with a real light.
 - [`field.gd`](../src/geometry/field.gd) **Field** - a composable procedural scalar field; the universal "texture / modulation".
 - [`filament.gd`](../src/geometry/filament.gd) **Filament** - an organic growing path: root, tendril, lightning, or thread.
-- [`geometry.gd`](../src/geometry/geometry.gd) **Geo** - small reusable polygon helpers (area, centroid, convex split, fracture). Shared geometry, not a scene's private code - the fracture that shatters glass can shatter anything.
+- [`geometry.gd`](../src/geometry/geometry.gd) **Geo** - small reusable polygon helpers (area, centroid, convex split, fracture, footprints). Shared geometry, not a scene's private code - the fracture that shatters glass can shatter anything.
 - [`glyphs.gd`](../src/geometry/glyphs.gd) **GlyphSet** - a seeded alphabet of invented characters, baked as pen-ready ink.
 - [`prism_body.gd`](../src/geometry/prism_body.gd) **PrismBody** - the browser Prism, ported (praxis web, dark mode).
 - [`shadow_field.gd`](../src/geometry/shadow_field.gd) **ShadowField** - A cheap CPU SHADOW MAP in light space - the honest version of "cast shadows" for the canvas 3D scenes. Occluders (buildings, spires) are rasterized into a grid on the plane perpendicular to the light; each cell keeps the occluder surface CLOSEST to the light. A surface point is then in shadow if ...
@@ -293,7 +294,7 @@ The card that keeps a note's storyboard and the dock it opens: a strip of entrie
 - [`storyboard_editor.gd`](../src/timeline/storyboard_editor.gd) **StoryboardEditor** - the nonlinear editor of a note's storyboard: a dock along the bottom of the frame, under the show it edits. Opened from the `StoryboardCard` ("Timeline…").
 - [`storyboard_lanes.gd`](../src/timeline/storyboard_lanes.gd) **StoryboardLanes** - one stage entry's timeline: a lane per actor, and on it every span that happens to that actor - a block for a window (`from` to `to`), a diamond for a moment (`at`). The lower rows of the `StoryboardEditor`, shown while a stage entry is picked.
 - [`storyboard_strip.gd`](../src/timeline/storyboard_strip.gd) **StoryboardStrip** - a storyboard's entries laid along a ruler: one block per entry, as wide as it is scheduled to stay, the tail's after the sequence's. The top row of the `StoryboardEditor`.
-- [`timeline_view.gd`](../src/timeline/timeline_view.gd) **TimelineView** - the shared pixel<->time mapping for the mask editor's whole timeline stack: the primary clip's trim lane, any imported track's lane, and the marker-editing strip all read the SAME zoom/pan state, so a second's position agrees across every row.
+- [`timeline_view.gd`](../src/timeline/timeline_view.gd) **TimelineView** - THE TIMELINE KIT: the shared pixel<->time mapping, and the ruler, wheel and playhead every timeline draws with (next/structure.md, step 26). Masking's marker strip and each of its track lanes read ONE view, so a second's position agrees across every row; the storyboard's strip and a stage entry's ...
 
 ### `export/` - Export
 
@@ -318,6 +319,7 @@ The panels a voice runs in: the reading (script, cast, voice, stream, export), t
 - [`reading_stream.gd`](../src/reading/reading_stream.gd) **ReadingStream** - the reading on the stream: THE SLIDING WINDOW. A chapter is far too long to synthesize up front: at roughly 4x real time, twenty minutes of narration is five minutes of silence before anything plays. So the text is planned into chunks at sentence boundaries (`ReadingPlan`) and only [constant ...
 - [`synth_editor.gd`](../src/reading/synth_editor.gd) **SynthEditor** - the synthesis surface. The loop is a fishing trip:
 - [`text_walk.gd`](../src/reading/text_walk.gd) **TextWalk** - what a reading reads of its note: the words the voice says, the title it announces, the text its cast of speakers and its fingerprint come from, and the passage a voice is auditioned with. This one is the note's own words (a tablet chapter read off its screen); a component that rewrites what the ...
+- [`voice_card.gd`](../src/reading/voice_card.gd) **VoiceCard** - the Voice: the note's cast and the speaker picked in it, a card `NoteCards` builds from the `voice` row like every other component's (next/notes.md, "the Voice as a card").
 
 ### `table/` - The set
 
@@ -342,6 +344,7 @@ A place, seen and heard, built from a written description: the table itself (Tab
 - [`table_plan.gd`](../src/table/table_plan.gd) **TablePlan** - what an episode decides when it is loaded: everything the table reads to show it, and nothing that changes while it plays. A part of `TableMedium`.
 - [`table_positions.gd`](../src/table/table_positions.gd) **TablePositions** - where cards lie on the table, as DATA (next/notes.md step 9, "Positions are data"). A position is `{x, z, yaw, face}` on the cloth - meters, x to the reader's right and z toward the reader; yaw in degrees; face "up" or "down" - written by the producer's plan (a spread position may carry coordinates ...
 - [`table_shuffle.gd`](../src/table/table_shuffle.gd) **TableShuffle** - every move the deck makes between readings, and where each of its cards is during one: the riffle, the overhand, the cut, the wash that spreads the whole deck over the cloth and gathers it again, a jumper thrown clear. A part of `TableMedium`.
+- [`table_things.gd`](../src/table/table_things.gd) **TableThings** - THE THINGS ON THE TABLE: where each one stands, and what stands where. A part of `TableMedium` (next/structure.md, step 24).
 - [`tables.gd`](../src/table/tables.gd) **Tables** - THE TABLE ITSELF, BUILT FROM A DESCRIPTION. Its TOP: an outline (a rectangle, round, an oval, a many-sided polygon, its rim scalloped if it likes), a thickness, the profile its edge is cut to (bevel, bullnose, ogee...), and what it is made of - boards of a wood, a slab of stone, metal, lacquer, ...
 - [`title_card.gd`](../src/table/title_card.gd) **TitleCard** - THE CHANNEL'S NAME over the picture while the intro holds, and its byline under it ("with Pen & Ink"), on a soft shade with a halo round every letter, so it reads over whatever is behind it. The card table's (`TableMedium`) and the desk's (`DeskMedium`) - one title screen for every show a note puts ...
 - [`winds.gd`](../src/table/winds.gd) **Winds** - the air moving over a scene: a breeze from one side that rises and falls a little, and GUSTS now and then, each a swell that rises in a second or so and dies away over a few. One wind for the whole table: it stirs what the sun falls through, swings what hangs and ripples what flutters (`Lights`), ...
@@ -396,6 +399,7 @@ The video chroma-key masking editor - a second app surface inside ghost. See [ma
 - [`mask_region.gd`](../src/masking/mask_region.gd) **MaskRegion** - the region box, a part of `MaskEditor`: the rectangle a marker's effect is kept inside, drawn over the video and dragged by its corners and edges (`build`, `drag_motion`), its checkbox, and the box shown exactly when the selected marker has one (`sync`).
 - [`mask_session.gd`](../src/masking/mask_session.gd) **MaskSession** - the data model for one mask-mode editing session.
 - [`mask_timeline.gd`](../src/masking/mask_timeline.gd) **MaskTimeline** - the mask editor's scrub strip.
+- [`mask_tracks.gd`](../src/masking/mask_tracks.gd) **MaskTracks** - THE CLIP'S TRACKS: the trim lanes under the marker strip, a second clip imported onto the timeline, and every track kept in step with the master clock. A part of `MaskEditor` (next/structure.md, step 25).
 - [`mask_undo.gd`](../src/masking/mask_undo.gd) **MaskUndo** - Masking's undo and redo: snapshots of the markers, the primary clip's trim and every track, pushed BEFORE each change, a gesture (a slider drag, a handle dragged along the timeline) coalesced into one step, and the history line that says what Ctrl+Z will undo.
 - [`mask_url_import.gd`](../src/masking/mask_url_import.gd) **MaskUrlImport** - a link where a file path is expected: Masking's YouTube (or any http) import, a part of `MaskEditor`. `download` downloads the link with yt-dlp, polled and never blocking, and hands the file it made back to `MaskEditor.open_source`.
 - [`mask_waveform.gd`](../src/masking/mask_waveform.gd) **MaskWaveform** - the clip's sound drawn and measured, a part of `MaskEditor`: the timeline's waveform strip rendered once from the prepared audio (`ensure`, `load_strip`), re-rendered crisp over the visible window under zoom (`poll_hi`), and the sound's envelope read off the same image ([method ...

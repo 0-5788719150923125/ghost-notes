@@ -31,10 +31,18 @@ var _layers: Array = []
 var _sch: Scheme
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"skyline": {"label": "Skyline", "type": "choice", "options": "PROFILES", "default": null,
+		"blurb": "The skyline's profile: a dense downtown of many narrow blocks, a cluster of tall towers, a mix, or a low-rise spread."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
 	_sch = Scheme.pick(rng)
-	var profile := String(PROFILES.keys()[rng.randi() % PROFILES.size()])
+	var profile := String(choice("skyline", rng))
 	var pf: Dictionary = PROFILES[profile]
 	var layer_count := rng.randi_range(int(pf.layers[0]), int(pf.layers[1]))
 	for l in layer_count:

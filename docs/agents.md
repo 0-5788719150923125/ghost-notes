@@ -30,7 +30,7 @@ CLAUDE THROUGH THE CLAUDE CODE CLI, as a bare writer.
 
 `--safe-mode` leaves out everything the author has customized - CLAUDE.md, memory, skills, hooks, MCP servers, plugins, output styles - and `--system-prompt-file` replaces Claude Code's own agent prompt, so the model sees the two files and nothing else (measured: ~480 input tokens for a one-line prompt). `--tools ""` takes every tool away, so a reply is words and only words. `--no-session-persistence`: nothing is resumed, see the class note. The message goes in as STREAM-JSON (one user message on stdin), the only input that carries pictures; the reply comes back as the stream's `result` event (`--verbose` is required with stream-json output). Measured with a picture attached: the tool list stays empty. `--bare` would be tighter still and is NOT used - it reads only ANTHROPIC_API_KEY, never the subscription login the rest of ghost's Claude runs use.
 
-Runs the Claude Code CLI. Source: [src/agents/text_gen.gd:320](../src/agents/text_gen.gd#L320)
+Runs the Claude Code CLI. Source: [src/agents/text_gen.gd:317](../src/agents/text_gen.gd#L317)
 
 ### `codex` - OpenAI (Codex CLI)
 
@@ -42,7 +42,7 @@ OPENAI THROUGH THE CODEX CLI.
 
 GHOST'S TOOLS (`AgentTools`) are its server `ghost`, named in `-c mcp_servers.ghost.*` overrides: the bare endpoint in argv and the job's token read from an environment variable set for this run alone (`bearer_token_env_var`), so no argv holds it; its calls approved (`default_tools_approval_mode = "approve"`: `codex exec` never asks, and refused ghost's call with "requires approval, but approval policy is never"); and room for a slow one (`tool_timeout_sec`). A tool's picture reaches the model (measured, codex-cli 0.157.0: described rightly).
 
-Runs the OpenAI Codex CLI. Source: [src/agents/text_gen.gd:527](../src/agents/text_gen.gd#L527)
+Runs the OpenAI Codex CLI. Source: [src/agents/text_gen.gd:524](../src/agents/text_gen.gd#L524)
 
 ### `grok` - xAI (Grok Build CLI)
 
@@ -62,7 +62,7 @@ AN AGENT FILE'S BODY IS A TEMPLATE: a `${{ ... }}` in it is filled in (measured:
 
 NO SESSION IS KEPT. Grok keeps every run (its messages, the pictures it read, the text in a search index) and has no switch against it, so a finished run's sessions are deleted with Grok's own `sessions delete`, as the job's last steps (`forget`). The painter (`ImageGen.Grok`) shares all of this.
 
-Runs the Grok Build CLI (xAI). Source: [src/agents/text_gen.gd:707](../src/agents/text_gen.gd#L707)
+Runs the Grok Build CLI (xAI). Source: [src/agents/text_gen.gd:704](../src/agents/text_gen.gd#L704)
 
 ### `bedrock` - Amazon Bedrock (AWS CLI)
 
@@ -76,7 +76,7 @@ WHICH MODELS, AND WHERE TO CALL THEM, is the account's own answer: `BedrockCatal
 
 ONE API, MANY MODELS: Converse evens out most differences between providers, and the two that remain are retried as steps: a model that takes no system prompt is sent it at the head of the message, and one whose output limit is under `MAX_TOKENS` is asked again inside it.
 
-Runs the AWS CLI. Source: [src/agents/text_gen.gd:1107](../src/agents/text_gen.gd#L1107)
+Runs the AWS CLI. Source: [src/agents/text_gen.gd:1104](../src/agents/text_gen.gd#L1104)
 
 ## Painters (3)
 

@@ -466,8 +466,8 @@ func move_at(u: float) -> Dictionary:
 			t0 = float(p["t0"]) + float(p["dur"]) + float(p["pause"])
 			last = String(p["kind"])
 		# the run's kind: weighted, never the same as the last run, no second wash, no wash first -
-		# and a jumper's wash held back until its time ([method _jumper_wash])
-		var held_back := medium._wash_held and not washed
+		# and a jumper's wash held back until its time ([method TablePlan.hold_wash])
+		var held_back := medium._plan.wash_held and not washed
 		var total := 0.0
 		var pool: Array = []
 		for k in RUNS:
@@ -483,7 +483,7 @@ func move_at(u: float) -> Dictionary:
 				kind = String(k)
 				break
 		# its time: the run after this one would begin past it
-		if held_back and not medium._moves.is_empty() and t0 >= medium._wash_from - 6.0:
+		if held_back and not medium._moves.is_empty() and t0 >= medium._plan.wash_from - 6.0:
 			kind = "wash"
 		var run: Dictionary = RUNS[kind]
 		var n := medium._move_rng.randi_range(int(run["n"][0]), int(run["n"][1]))
@@ -497,8 +497,8 @@ func move_at(u: float) -> Dictionary:
 					gap = medium._move_rng.randf_range(9.0, IDLE_RANGE.y)
 			var move := {"kind": kind, "t0": t0, "dur": tempo * medium._move_rng.randf_range(0.95, 1.05),
 				"pause": gap, "seed": medium._move_rng.randi()}
-			if kind == "wash" and medium._wash_held:
-				move["dur"] = clampf(medium._wash_until - t0, float(run["dur"][0]), 44.0)
+			if kind == "wash" and medium._plan.wash_held:
+				move["dur"] = clampf(medium._plan.wash_until - t0, float(run["dur"][0]), 44.0)
 			medium._moves.append(move)
 			t0 += float(move["dur"]) + gap
 		if medium._moves.size() > 400:
@@ -1353,10 +1353,10 @@ func _clear_of_standing(at: Vector2) -> Vector2:
 	var reach := Vector2(TableMedium.CARD.x, TableMedium.CARD.y).length() * 0.5 + 0.01
 	var off := Vector2(medium._plan.mid.x, medium._plan.mid.z)
 	var p := at
-	for i in medium._standing.size():
-		var c: Vector2 = medium._standing_c[i]
+	for i in medium._things_part.standing.size():
+		var c: Vector2 = medium._things_part.standing_c[i]
 		var d := (p + off).distance_to(c)
-		var need := medium._standing_r[i] + reach
+		var need := medium._things_part.standing_r[i] + reach
 		if d < need:
 			var away := ((p + off) - c).normalized() if d > 1e-6 else Vector2(0.0, 1.0)
 			p += away * (need - d)
@@ -1368,10 +1368,10 @@ func _clear_of_standing(at: Vector2) -> Vector2:
 func _path_clear(a: Vector2, b: Vector2) -> bool:
 	var reach := Vector2(TableMedium.CARD.x, TableMedium.CARD.y).length() * 0.5
 	var off := Vector2(medium._plan.mid.x, medium._plan.mid.z)
-	for i in medium._standing.size():
-		var c: Vector2 = medium._standing_c[i]
+	for i in medium._things_part.standing.size():
+		var c: Vector2 = medium._things_part.standing_c[i]
 		var q := Geometry2D.get_closest_point_to_segment(c, a + off, b + off)
-		if q.distance_to(c) < medium._standing_r[i] + reach:
+		if q.distance_to(c) < medium._things_part.standing_r[i] + reach:
 			return false
 	return true
 
@@ -1382,14 +1382,14 @@ func _path_clear(a: Vector2, b: Vector2) -> bool:
 ## middle, the way it came - so it slides along it, and never jumps through to its far side. Wedged
 ## between two things, where a push out of one is a push into the other, it stays where it was.
 func _card_clear(from: Vector2, want: Vector2, yaw: float) -> Vector2:
-	if medium._standing.is_empty() or not _collide:
+	if medium._things_part.standing.is_empty() or not _collide:
 		return want
 	var off := Vector2(medium._plan.mid.x, medium._plan.mid.z)
 	var reach := Vector2(TableMedium.CARD.x, TableMedium.CARD.y).length() * 0.5
 	var travel := from.distance_to(want)
 	var near := false
-	for i in medium._standing.size():
-		if (want + off).distance_to(medium._standing_c[i]) < medium._standing_r[i] + reach + travel + 0.01:
+	for i in medium._things_part.standing.size():
+		if (want + off).distance_to(medium._things_part.standing_c[i]) < medium._things_part.standing_r[i] + reach + travel + 0.01:
 			near = true
 			break
 	if not near:
@@ -1398,19 +1398,19 @@ func _card_clear(from: Vector2, want: Vector2, yaw: float) -> Vector2:
 	var p := from
 	for s in steps:
 		p += (want - from) / float(steps)
-		for i in medium._standing.size():
-			var c: Vector2 = medium._standing_c[i]
-			if (p + off).distance_to(c) > medium._standing_r[i] + reach:
+		for i in medium._things_part.standing.size():
+			var c: Vector2 = medium._things_part.standing_c[i]
+			if (p + off).distance_to(c) > medium._things_part.standing_r[i] + reach:
 				continue
-			p += _push_out(_card_poly(p + off, yaw), medium._standing[i], (p + off) - c)
+			p += _push_out(_card_poly(p + off, yaw), medium._things_part.standing[i], (p + off) - c)
 	# clear of every one at once
 	for round in 4:
 		var clear := true
-		for i in medium._standing.size():
-			var c: Vector2 = medium._standing_c[i]
-			if (p + off).distance_to(c) > medium._standing_r[i] + reach:
+		for i in medium._things_part.standing.size():
+			var c: Vector2 = medium._things_part.standing_c[i]
+			if (p + off).distance_to(c) > medium._things_part.standing_r[i] + reach:
 				continue
-			var push := _push_out(_card_poly(p + off, yaw), medium._standing[i], (p + off) - c)
+			var push := _push_out(_card_poly(p + off, yaw), medium._things_part.standing[i], (p + off) - c)
 			if push != Vector2.ZERO:
 				p += push
 				clear = false
@@ -1430,16 +1430,16 @@ func _sweep_round(from: Vector2, to: Vector2) -> PackedVector2Array:
 	var off := Vector2(medium._plan.mid.x, medium._plan.mid.z)
 	var reach := Vector2(TableMedium.CARD.x, TableMedium.CARD.y).length() * 0.5
 	var ring := PackedVector2Array()
-	for i in medium._standing.size():
-		var c: Vector2 = medium._standing_c[i] - off
-		if c.distance_to(from) > from.distance_to(to) + medium._standing_r[i] + reach * 2.0:
+	for i in medium._things_part.standing.size():
+		var c: Vector2 = medium._things_part.standing_c[i] - off
+		if c.distance_to(from) > from.distance_to(to) + medium._things_part.standing_r[i] + reach * 2.0:
 			continue
 		for k: float in [1.05, 1.35]:
 			for a in 12:
-				var w := c + Vector2.from_angle(TAU * float(a) / 12.0) * (medium._standing_r[i] + reach) * k
+				var w := c + Vector2.from_angle(TAU * float(a) / 12.0) * (medium._things_part.standing_r[i] + reach) * k
 				var clear := true
-				for j in medium._standing.size():
-					if (w + off).distance_to(medium._standing_c[j]) < medium._standing_r[j] + reach:
+				for j in medium._things_part.standing.size():
+					if (w + off).distance_to(medium._things_part.standing_c[j]) < medium._things_part.standing_r[j] + reach:
 						clear = false
 						break
 				if clear:
@@ -1470,9 +1470,9 @@ func _sweep_round(from: Vector2, to: Vector2) -> PackedVector2Array:
 func _way_clear(a: Vector2, b: Vector2) -> bool:
 	var reach := Vector2(TableMedium.CARD.x, TableMedium.CARD.y).length() * 0.5
 	var off := Vector2(medium._plan.mid.x, medium._plan.mid.z)
-	for i in medium._standing.size():
-		var c: Vector2 = medium._standing_c[i]
-		var need := minf(medium._standing_r[i] + reach, (a + off).distance_to(c) - 0.0005)
+	for i in medium._things_part.standing.size():
+		var c: Vector2 = medium._things_part.standing_c[i]
+		var need := minf(medium._things_part.standing_r[i] + reach, (a + off).distance_to(c) - 0.0005)
 		if Geometry2D.get_closest_point_to_segment(c, a + off, b + off).distance_to(c) < need:
 			return false
 	return true
@@ -1505,10 +1505,10 @@ func _into_standing(at: Vector2, yaw: float) -> bool:
 		return false
 	var off := Vector2(medium._plan.mid.x, medium._plan.mid.z)
 	var reach := Vector2(TableMedium.CARD.x, TableMedium.CARD.y).length() * 0.5
-	for i in medium._standing.size():
-		var c: Vector2 = medium._standing_c[i]
-		if (at + off).distance_to(c) <= medium._standing_r[i] + reach \
-				and _push_out(_card_poly(at + off, yaw), medium._standing[i], (at + off) - c) != Vector2.ZERO:
+	for i in medium._things_part.standing.size():
+		var c: Vector2 = medium._things_part.standing_c[i]
+		if (at + off).distance_to(c) <= medium._things_part.standing_r[i] + reach \
+				and _push_out(_card_poly(at + off, yaw), medium._things_part.standing[i], (at + off) - c) != Vector2.ZERO:
 			return true
 	return false
 
@@ -1535,8 +1535,8 @@ static func _push_out(a: PackedVector2Array, b: PackedVector2Array, dir: Vector2
 			if e.length_squared() < 1e-12:
 				continue
 			var ax := Vector2(-e.y, e.x).normalized()
-			var ra := TableMedium._span(a, ax)
-			var rb := TableMedium._span(b, ax)
+			var ra := Geo.span(a, ax)
+			var rb := Geo.span(b, ax)
 			var o := minf(ra.y, rb.y) - maxf(ra.x, rb.x)
 			if o <= 0.0:
 				return Vector2.ZERO
@@ -2355,12 +2355,12 @@ func _may_land(i: int, from: Vector2, to: Vector2, yaw: float, up: bool, flights
 		var sc: Variant = CardTable.project(medium._plan.cam_base, medium._cam.fov, Vector3(c.x, WASH_FLOOR, c.y))
 		if sc == null or not frame.has_point(sc as Vector2):
 			return false
-	for foot in medium._standing:
-		if TableMedium._convex_overlap(card, foot, TableMedium.FOOT_MARGIN):
+	for foot in medium._things_part.standing:
+		if Geo.within(card, foot, TableThings.FOOT_MARGIN):
 			return false
 	for f in flights:
 		var fd: Dictionary = f
-		if int(fd["card"]) != i and TableMedium._convex_overlap(card, _card_poly((fd["to"] as Vector2) + off, float(fd["lie"])), 0.01):
+		if int(fd["card"]) != i and Geo.within(card, _card_poly((fd["to"] as Vector2) + off, float(fd["lie"])), 0.01):
 			return false
 	return true
 

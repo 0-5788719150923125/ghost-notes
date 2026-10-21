@@ -88,9 +88,21 @@ var _pitch := 0.5
 var _beat_prev := 0.0
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"landform": {"label": "Landform", "type": "choice", "options": "TERRAINS", "default": null,
+		"blurb": "The land the city is built on: hills, a mesa, valleys or a canyon."},
+	"layout": {"label": "Layout", "type": "choice", "options": "LAYOUTS", "default": null,
+		"blurb": "The city's plan: branching dendritic arms, a loose sprawl, thin ribbons, or separate towns."},
+	"skyline": {"label": "Skyline", "type": "choice", "options": "SKYLINES", "default": null,
+		"blurb": "How building heights are spread over the plots: mostly low with rare spires, an even mid-rise mass, stepped, or slabs."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
-	var ttype := String(TERRAINS.keys()[rng.randi() % TERRAINS.size()])
+	var ttype := String(choice("landform", rng))
 	var climates: Array = TERRAINS[ttype]
 	var climate := String(climates[rng.randi() % climates.size()])
 	# Plot size is the city's grain: a coarse grid gives big blocks on a small town, a fine
@@ -110,9 +122,9 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var to_accent := fposmod(sch.accent - sch.hue + 0.5, 1.0) - 0.5
 	_hue_dev = to_accent * rng.randf_range(0.35, 0.9)
 	_hue_elev = to_accent * rng.randf_range(0.1, 0.4)
-	var layout := String(LAYOUTS.keys()[rng.randi() % LAYOUTS.size()])
+	var layout := String(choice("layout", rng))
 	var lay: Dictionary = LAYOUTS[layout]
-	var skyline := String(SKYLINES.keys()[rng.randi() % SKYLINES.size()])
+	var skyline := String(choice("skyline", rng))
 	var sky_law: Dictionary = SKYLINES[skyline]
 	# The city grows from a few cores, each seeded in a LOW valley (easy ground): sample a
 	# handful of central cells and keep the lowest. Development creeps outward from there; the cores

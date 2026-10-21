@@ -52,9 +52,17 @@ var _frate := PackedFloat32Array()
 var _fglow := PackedFloat32Array()
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"body": {"label": "Body", "type": "choice", "options": "SOLID", "default": null,
+		"blurb": "The body's proportions: platonic, a tall obelisk, a flat slab, a thin blade, or a geodesic geode."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "plane"                       # the lens frames it; keep the 2D view square-on
-	var kind := String(SOLID.keys()[rng.randi() % SOLID.size()])
+	var kind := String(choice("body", rng))
 	var sd: Dictionary = SOLID[kind]
 	var forms: Array = sd["forms"]
 	var form := String(forms[rng.randi() % forms.size()])

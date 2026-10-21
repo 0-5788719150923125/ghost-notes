@@ -126,7 +126,7 @@ func _run() -> void:
 	if _glow >= 0.0:
 		(medium as TableMedium)._env.glow_hdr_threshold = _glow
 	if _foil >= 0.0:
-		(medium as TableMedium)._foil = _foil
+		(medium as TableMedium)._plan.foil = _foil
 	var end := float((subs.words.back() as Dictionary)["t1"]) + 4.0
 	print("table_look_probe: %d synthetic words, %.0fs, %d actions" % [subs.words.size(), end,
 		(parse["actions"] as Array).size()])
@@ -192,7 +192,7 @@ func _run() -> void:
 		var img := stage.get_texture().get_image()
 		if want == _times[0] and _things:
 			var tm := medium as TableMedium
-			for th in tm._things:
+			for th in tm._things_part.on_table:
 				var n3: Node3D = (th as Dictionary)["node"]
 				print("table_look_probe: thing %-44s group %-6s at (%.3f, %.3f) x%.2f, %d lit" % [String((th as Dictionary)["name"]).substr(0, 44),
 					String((th as Dictionary)["group"]), n3.position.x, n3.position.z, n3.scale.x, int((th as Dictionary)["lit"])])
@@ -214,7 +214,7 @@ func _run() -> void:
 			var cur := stage.get_camera_3d()
 			print("table_look_probe: camera is the table's: %s; env glow %s threshold %.2f; foil %.2f" % [
 				str(cur == tmed._cam), str(tmed._cam.environment.glow_enabled if tmed._cam.environment else false),
-				tmed._env.glow_hdr_threshold, tmed._foil])
+				tmed._env.glow_hdr_threshold, tmed._plan.foil])
 		var path := "%s_t%05.1f.png" % [_out, float(want)]
 		if _clip.y > _clip.x:
 			path = "%s_c%04d.png" % [_out, frame]

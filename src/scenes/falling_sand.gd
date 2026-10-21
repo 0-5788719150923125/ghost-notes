@@ -140,6 +140,16 @@ var _run_cap := 8
 var _ch := Vector2.ZERO
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"chamber": {"label": "Chamber", "type": "choice", "options": "SHAPE_BAG", "default": null,
+		"blurb": "The chamber the material falls through: ledges that break the fall into cascades, an hourglass that chokes the pour at a waist, a plain silo, or open sides it walks off."},
+	"wall": {"label": "Wall colors", "type": "choice", "options": "WALL_RAMPS", "default": null,
+		"blurb": "Which elevation ramp colors the strata of the chamber wall: earth, desert, alpine or ocean."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "swarm"
 	framing = "field"
@@ -166,7 +176,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# sessions in four were a plain box and the sand simply heaped in the bottom of it -
 	# reported, fairly, as boring. The cascading shapes are what this scene is FOR: matter
 	# that runs along a surface, reaches an edge, and pours off it.
-	var shape := String(SHAPE_BAG[rng.randi() % SHAPE_BAG.size()])
+	var shape := String(choice("chamber", rng))
 	var ch: Dictionary = CHAMBERS[shape]
 	var thick := _rint(ch["wall"], rng)
 
@@ -248,7 +258,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 
 	# Strata: the wall takes its color from an elevation ramp by row, which is the one
 	# place a [Palette] belongs here - everything else is matter, and matter has its own.
-	var ramp := Palette.named(String(WALL_RAMPS[rng.randi() % WALL_RAMPS.size()]), rng)
+	var ramp := Palette.named(String(choice("wall", rng)), rng)
 	var wall_v := rng.randf_range(0.30, 0.62)
 	var band := PackedColorArray()
 	band.resize(_h)

@@ -44,6 +44,14 @@ var _counter := 0.0        # .. and the clone's
 var _bond_col := Color(0.7, 0.85, 1.0)   # the taut filament, tinted by the mood
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"split": {"label": "Split", "type": "choice", "options": "SPLIT", "default": null,
+		"blurb": "How the prism comes apart: a wide sideways break, a diagonal one, or a tight vertical cleave."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "scene3d"
 	framing = "field"
@@ -53,7 +61,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_lead = sch.vary(rng)
 	_counter = sch.opposed(_lead)
 	_bond_col = Color.from_hsv(_lead, 0.25, 1.0)      # a pale filament of the original's color
-	var split := String(SPLIT.keys()[rng.randi() % SPLIT.size()])
+	var split := String(choice("split", rng))
 	var s: Dictionary = SPLIT[split]
 	var ang := _band(s["angle"], rng) * (1.0 if rng.randf() < 0.5 else -1.0)   # mirrored half the time
 	_axis = Vector2(cos(ang), sin(ang))

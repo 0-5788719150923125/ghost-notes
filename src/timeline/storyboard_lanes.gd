@@ -46,6 +46,9 @@ var selected := -1
 var playhead := -1.0
 var read_only := false
 
+## The ruler, in nominal seconds: the kit's view ([TimelineView]) across the lanes, right of their names.
+var _view := TimelineView.new()
+
 var _press := -1
 var _press_x := 0.0
 var _press_lane := 0
@@ -113,11 +116,19 @@ static func _sec(v: Variant) -> float:
 
 
 func _x(t: float) -> float:
-	return GUTTER + t / nominal * maxf(1.0, size.x - GUTTER - 6.0)
+	_fit()
+	return GUTTER + _view.x_of(t)
 
 
 func _t(x: float) -> float:
-	return clampf((x - GUTTER) / maxf(1.0, size.x - GUTTER - 6.0), 0.0, 1.0) * nominal
+	_fit()
+	return _view.t_of(x - GUTTER)
+
+
+## The view is the whole entry, every time it is read: its length and the lanes' width.
+func _fit() -> void:
+	_view.extent = nominal
+	_view.width = maxf(1.0, size.x - GUTTER - 6.0)
 
 
 func _lane_y(i: int) -> float:
@@ -222,11 +233,7 @@ func _draw() -> void:
 	var lanes := _lanes()
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.25))
 	# the ruler, in nominal seconds
-	var step := 1.0
-	for s in [0.5, 1.0, 2.0, 5.0, 10.0, 30.0]:
-		step = s
-		if nominal / s <= (size.x - GUTTER) / 46.0:
-			break
+	var step := TimelineView.step_for(nominal, (size.x - GUTTER) / 46.0)
 	var t := 0.0
 	while t <= nominal + 0.001:
 		var x := _x(t)
@@ -276,5 +283,4 @@ func _draw() -> void:
 				draw_string(font, rect.position + Vector2(4.0, 12.0), String(sp.get("action", "")).replace("_", " "),
 					HORIZONTAL_ALIGNMENT_LEFT, int(maxf(1.0, rect.size.x - 6.0)), 10, Color(1, 1, 1, 0.95))
 	if playhead >= 0.0:
-		var px := _x(minf(playhead, nominal))
-		draw_line(Vector2(px, 0), Vector2(px, size.y), Color(1.0, 0.35, 0.35), 2.0)
+		TimelineView.draw_playhead(self, _x(minf(playhead, nominal)), Color(1.0, 0.35, 0.35))

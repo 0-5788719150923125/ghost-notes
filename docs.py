@@ -1062,6 +1062,22 @@ def _render_scene_entry(name: str, info: SceneInfo) -> List[str]:
         facts.append("layers: " + ", ".join(f"`{k}`" for k in info.layers))
     if facts:
         out.extend([" · ".join(facts), ""])
+    text = (ROOT / s.rel).read_text()
+    fields = _rows(text, "FIELDS")
+    if fields:
+        # WHAT AN ENTRY CAN TELL IT (GhostScene.choice): its settings, each the seed's until told
+        out.extend(["An entry can tell it, under `set` (unset, the seed draws one):", "",
+                    "| Setting | Options | What it chooses |", "| --- | --- | --- |"])
+        for k, row in fields.items():
+            opts = _table_options(text, str(row.get("options", "")))
+            names = _table_options(text, str(row.get("names", ""))) if row.get("names") else []
+            shown = []
+            for o in opts:
+                said = str(names[int(o)]) if names and isinstance(o, int) and int(o) < len(names) else str(o)
+                if said not in shown:
+                    shown.append(said)
+            out.append(f"| `{k}` {row.get('label', '')} | {', '.join(f'`{o}`' for o in shown)} | {_md(str(row.get('blurb', '')))} |")
+        out.append("")
     out.extend([f"Source: {_source_link(s.rel)} (extends `{s.extends}`)", ""])
     return out
 
@@ -2727,24 +2743,108 @@ def _field_problems(bodies: Dict[str, str], registry: List[Tuple[str, str]], bas
     return out
 
 
+def _scene_field_problems(text: str, name: str) -> List[str]:
+    """What is wrong between a scene's FIELDS and the settings it takes from an entry
+    ([method GhostScene.choice], step 27): a setting chosen with no row, a row nothing chooses, a row
+    whose `options` (or `names`) names no table of the scene, and a default (a choice is the seed's
+    until it is told). Pure, so its control runs on a made-up scene."""
+    out = []
+    code = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))
+    chosen = set(re.findall(r'\bchoice\("(\w+)"', code))
+    fields = _rows(text, "FIELDS")
+    tables = set(re.findall(r"^const (\w+)\b", text, re.M))
+    for k in sorted(chosen - set(fields)):
+        out.append(f"{name} chooses `{k}` and its FIELDS has no row for it")
+    for k, row in fields.items():
+        if k not in chosen:
+            out.append(f"{name}.FIELDS has `{k}`, which its code never chooses")
+        for part in ("options", "names"):
+            v = row.get(part)
+            if (part == "options" or v is not None) and (not isinstance(v, str) or v not in tables):
+                out.append(f"{name}.FIELDS `{k}`: its {part} name `{v}`, which is no table of the scene")
+        if row.get("default") is not None:
+            out.append(f"{name}.FIELDS `{k}` defaults to {row.get('default')!r} - a choice is the seed's until told")
+    return out
+
+
+def _table_options(text: str, name: str) -> List[Any]:
+    """A scene's table [name] as its options: a Dictionary's keys, an Array's elements, in order - read
+    off the literal's top level alone, so what each option holds (a `Vector3(...)`, a nested row) is
+    never parsed."""
+    m = re.search(rf"^const {name}\b[^=\n]*:?=\s*([\[{{])", text, re.M)
+    if not m:
+        return []
+    is_dict = m.group(1) == "{"
+    i, depth, quote, start = m.end(), 1, None, m.end()
+    out: List[Any] = []
+    item = ""
+    while depth and i < len(text):
+        c = text[i]
+        if quote:
+            if c == "\\":
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+                if depth == 1:
+                    out_str = text[start:i]
+                    j = i + 1
+                    while j < len(text) and text[j] in " \t":
+                        j += 1
+                    if not is_dict or (j < len(text) and text[j] == ":"):
+                        out.append(out_str)
+        elif c in "\"'":
+            quote = c
+            start = i + 1
+        elif c == "#":
+            i = text.find("\n", i)
+            if i < 0:
+                break
+            continue
+        elif c in "[{(":
+            depth += 1
+        elif c in "]})":
+            depth -= 1
+        elif depth == 1 and not is_dict and (c.isdigit() or c == "-"):
+            j = i
+            while j < len(text) and (text[j].isdigit() or text[j] in "-."):
+                j += 1
+            num = text[i:j]
+            out.append(float(num) if "." in num else int(num))
+            i = j
+            continue
+        i += 1
+    return out
+
+
 def check_fields() -> None:
-    """EVERY SETTING A COMPOSABLE THING READS IS A ROW (next/structure.md, step 16). A layer and a
-    force read their config through `num` / `flag` / `txt`; each class declares those settings in its
-    own `FIELDS` - what a timeline's inspector builds its rows from ([SchemaForm]) and what an agent
-    choosing a layer is shown - and this holds the two together: a setting read with no row, a row
-    nothing reads, and a default the row and the code disagree on.
+    """EVERY SETTING A COMPOSABLE THING READS IS A ROW (next/structure.md, steps 16 and 27). A layer and
+    a force read their config through `num` / `flag` / `txt`, a scene takes an entry's `set` through
+    `choice`; each class declares those settings in its own `FIELDS` - what a timeline's inspector
+    builds its rows from ([SchemaForm]) and what an agent choosing a part is shown - and this holds the
+    two together: a setting read with no row, a row nothing reads, and a default the row and the code
+    disagree on (a scene's row: the table its options are must be the scene's).
 
     THE CONTROL, run first: a made-up class that reads a setting its FIELDS lacks, and one whose row
-    has the wrong default, must each be reported.
+    has the wrong default, must each be reported; and a made-up scene that chooses a setting with no
+    row, and one whose row names no table of it.
     """
     planted = {"A": 'func _init():\n\tvar n := num("count", 3)\n',
                "B": 'const FIELDS := {"count": {"type": "num", "default": 4}}\nfunc _init():\n\tvar n := num("count", 3)\n'}
     if len(_field_problems(planted, [("a", "A"), ("b", "B")], "Base")) != 2:
         warn("check_fields: its control did not fail - the check proves nothing")
+    scene_a = 'const KINDS := ["a", "b"]\nfunc build_params(rng):\n\tvar k = choice("kind", rng)\n'
+    scene_b = ('const FIELDS := {"kind": {"label": "Kind", "type": "choice", "options": "SORTS", "default": null, '
+               '"blurb": "x"}}\nconst KINDS := ["a"]\nfunc build_params(rng):\n\tvar k = choice("kind", rng)\n')
+    if len(_scene_field_problems(scene_a, "a")) != 1 or len(_scene_field_problems(scene_b, "b")) != 1:
+        warn("check_fields: its scenes' control did not fail - the check proves nothing")
     for rel, base in [("src/scene_kit/layer.gd", "Base"), ("src/motion/primitives.gd", "Force")]:
         text = (ROOT / rel).read_text()
         for problem in _field_problems(_class_bodies(text), _parse_registry_dict(text), base):
             warn(f"{rel}: {problem}")
+    for path in sorted((ROOT / "src" / "scenes").glob("*.gd")):
+        for problem in _scene_field_problems(path.read_text(), path.stem):
+            warn(f"{path.relative_to(ROOT)}: {problem}")
 
 
 def _missing_paths(text: str) -> List[str]:

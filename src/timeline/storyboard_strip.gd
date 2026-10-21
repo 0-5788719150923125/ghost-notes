@@ -96,12 +96,7 @@ func _rect(i: int) -> Rect2:
 func _gui_input(event: InputEvent) -> void:
 	var mb := event as InputEventMouseButton
 	if mb != null:
-		if mb.pressed and mb.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
-			var up := mb.button_index == MOUSE_BUTTON_WHEEL_UP
-			if mb.ctrl_pressed:
-				view.zoom_at(mb.position.x, 1.25 if up else 0.8)
-			else:
-				view.pan(-0.12 if up else 0.12)
+		if view.wheel(mb):
 			queue_redraw()
 			accept_event()
 			return
@@ -195,23 +190,15 @@ func _draw() -> void:
 	if play_entry >= 0 and play_entry < rows.size():
 		var p: Dictionary = rows[play_entry]
 		var px := view.x_of(float(p["start"]) + minf(play_elapsed, float(p["length"])))
-		draw_line(Vector2(px, 0), Vector2(px, size.y), Color(1.0, 0.35, 0.35), 2.0)
+		TimelineView.draw_playhead(self, px, Color(1.0, 0.35, 0.35))
 
 
 func _draw_ruler(font: Font) -> void:
-	var span := view.visible_span()
-	var step := 1.0
-	for s in [1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0]:
-		step = s
-		if span / s <= size.x / 70.0:
-			break
-	var t := floorf(view.view_start / step) * step
-	while t <= view.view_start + span:
+	var step := TimelineView.step_for(view.visible_span(), size.x / 70.0)
+	for t in view.ticks(step):
 		var x := view.x_of(t)
-		if x >= 0.0:
-			draw_line(Vector2(x, RULER_H - 5.0), Vector2(x, RULER_H), Color(1, 1, 1, 0.45))
-			draw_string(font, Vector2(x + 3.0, RULER_H - 5.0), _clock(t), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 1, 1, 0.55))
-		t += step
+		draw_line(Vector2(x, RULER_H - 5.0), Vector2(x, RULER_H), Color(1, 1, 1, 0.45))
+		draw_string(font, Vector2(x + 3.0, RULER_H - 5.0), TimelineView.tick_label(t, step), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 1, 1, 0.55))
 	draw_line(Vector2(0, RULER_H), Vector2(size.x, RULER_H), Color(1, 1, 1, 0.2))
 
 
@@ -241,7 +228,3 @@ func _draw_block(i: int, r: Rect2, font: Font, alpha: float) -> void:
 		said += "  ↻"
 	draw_string(font, r.position + Vector2(5.0, 32.0), said, HORIZONTAL_ALIGNMENT_LEFT, w, 10, Color(1, 1, 1, 0.6 * alpha))
 
-
-static func _clock(t: float) -> String:
-	var s := int(maxf(0.0, t))
-	return "%d:%02d" % [s / 60, s % 60]

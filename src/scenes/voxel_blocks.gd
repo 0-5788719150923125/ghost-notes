@@ -36,11 +36,19 @@ var _act: Activation
 var _sch: Scheme
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"scale": {"label": "Scale", "type": "choice", "options": "SCALES", "default": null,
+		"blurb": "The scale the equalizer is built at: a small plot, a terrace that overflows the frame, or a vast city with the camera down among the blocks."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
 	# Blocks are neutral matter - any mood paints them, so draw from the whole set.
 	_sch = Scheme.pick(rng)
-	var sname := String(SCALES.keys()[rng.randi() % SCALES.size()])
+	var sname := String(choice("scale", rng))
 	var sc: Dictionary = SCALES[sname]
 	var gr: Array = sc["grid"]
 	var ov: Array = sc["over"]

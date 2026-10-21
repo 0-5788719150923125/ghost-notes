@@ -1650,7 +1650,7 @@ static func thumbnail_args(video: String, jpg: String, at: float, portrait := fa
 ## What a finished portrait export says when it is too long to be a Short.
 func _shorts_note() -> String:
 	if int(_quality.h) > int(_quality.w) and _song_dur > SHORT_MAX:
-		return "   - %d:%02d long, so not a Short (3:00 at most)" % [int(_song_dur / 60.0), int(fmod(_song_dur, 60.0))]
+		return "   - %s long, so not a Short (3:00 at most)" % Clock.text(_song_dur)
 	return ""
 
 

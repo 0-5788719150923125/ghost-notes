@@ -151,6 +151,16 @@ var _ch := Vector2.ZERO
 var _f: AudioFeatures = AudioFeatures.new()
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"track": {"label": "Track", "type": "choice", "options": "TRACKS", "default": null,
+		"blurb": "How hard the track turns: a gentle glide, a weave, a corkscrew that rolls, or a coaster that turns right over."},
+	"profile": {"label": "Cross-section", "type": "choice", "options": "PROFILES", "default": null,
+		"blurb": "The tube's cross-section: round, fluted, star-shaped, a duct, or ribbed."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "scene3d"
 	# A tunnel fills the frame by definition, so it takes the gentle shots - and even those are
@@ -162,13 +172,13 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# One full swing between the scheme's two hues every 60 to 300 units of track.
 	_hue_travel = rng.randf_range(0.0033, 0.0167)
 
-	var track := String(TRACKS.keys()[rng.randi() % TRACKS.size()])
+	var track := String(choice("track", rng))
 	var tr: Dictionary = TRACKS[track]
 	_k_yaw = _roll_curve(rng, tr["yaw"], tr["wave"])
 	_k_pitch = _roll_curve(rng, tr["pitch"], tr["wave"])
 	_k_roll = _roll_curve(rng, tr["roll"], tr["wave"])
 
-	_prof_name = String(PROFILES.keys()[rng.randi() % PROFILES.size()])
+	_prof_name = String(choice("profile", rng))
 	var pf: Dictionary = PROFILES[_prof_name]
 	_a1 = _pick(rng, pf["a1"])
 	_n1 = float(rng.randi_range(int(pf["n1"][0]), int(pf["n1"][1])))

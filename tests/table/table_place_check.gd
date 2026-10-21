@@ -222,7 +222,7 @@ func _sweep(cloth: String, candles: int, table := {}) -> Dictionary:
 		subs.document = {"source": _script, "title": "Place Check", "table": doc}
 		medium._key = ""
 		medium._ensure_doc()
-		var things: Array = medium._things
+		var things: Array = medium._things_part.on_table
 		n["things"] += things.size()
 		for th in things:
 			var t: Dictionary = th
@@ -233,7 +233,7 @@ func _sweep(cloth: String, candles: int, table := {}) -> Dictionary:
 			if int(t["lit"]) > 0:
 				n["out"] += 0 if _inside(r) else 1
 			else:
-				n["out"] += 0 if r.position.y >= 0.0 and shown >= TableMedium.SEEN_LEAST - 0.001 else 1
+				n["out"] += 0 if r.position.y >= 0.0 and shown >= TableThings.SEEN_LEAST - 0.001 else 1
 				n["cut"] += 0 if _inside(r) else 1
 			if int(t["lit"]) > 0:
 				n["lit_things"] += 1
@@ -242,14 +242,14 @@ func _sweep(cloth: String, candles: int, table := {}) -> Dictionary:
 				if absf(q.x) > TableShuffle.CLOTH.x * 0.5 or q.y < -0.02 - TableShuffle.CLOTH.y * 0.5 or q.y > -0.02 + TableShuffle.CLOTH.y * 0.5:
 					n["off_cloth"] += 1
 					break
-			for k in medium._keep_out():
-				if TableMedium._convex_overlap(t["outline"], TableMedium._rect_poly(k as Rect2), 0.0):
+			for k in medium._things_part.off_limits():
+				if Geo.within(t["outline"], Geo.of_rect(k as Rect2), 0.0):
 					n["on_cards"] += 1
 		for i in things.size():
 			for j in range(i + 1, things.size()):
 				var a: Dictionary = things[i]
 				var b: Dictionary = things[j]
-				if TableMedium._convex_overlap(a["outline"], b["outline"], 0.0):
+				if Geo.within(a["outline"], b["outline"], 0.0):
 					n["touching"] += 1
 				if String(a["group"]) != String(b["group"]) and (a["rect"] as Rect2).intersects(b["rect"] as Rect2):
 					n["overlap"] += 1
@@ -274,7 +274,7 @@ func _sweep(cloth: String, candles: int, table := {}) -> Dictionary:
 			if int(t["lit"]) == 0:
 				continue
 			var p: Vector3 = (t["node"] as Node3D).position
-			var aim := CardTable.zone_aim(String(t["place"]), medium._deck_base)
+			var aim := CardTable.zone_aim(String(t["place"]), medium._plan.deck_base)
 			n["heat_at"] += medium._light_part._heat(Vector3(p.x, 0.0, p.z), TableLight.HEAT_H)
 			n["heat_aim"] += medium._light_part._heat(Vector3(aim.x, 0.0, aim.y), TableLight.HEAT_H)
 		# THE CLOTH UNDER ALL THE FLAMES AT ONCE, cell by cell - and, as the control, under each alone at
@@ -376,16 +376,16 @@ func _cards_go_round(table: Dictionary) -> Dictionary:
 					var at := Vector2(q.x + medium._plan.mid.x, q.z + medium._plan.mid.z)
 					var card := TableShuffle._card_poly(at, q.w)
 					var hit := false
-					for st in medium._standing:
+					for st in medium._things_part.standing:
 						# the foot as it stands, without the margin a card keeps from it, less a hair
-						if _sat_strict(card, TableMedium._grown(st as PackedVector2Array, -TableMedium.FOOT_MARGIN - 0.001)):
+						if _sat_strict(card, Geo.grown(st as PackedVector2Array, -TableThings.FOOT_MARGIN - 0.001)):
 							hit = true
 							break
 					if collide:
 						out["samples"] += 1
 						out["through"] += 1 if hit else 0
-						for st in medium._standing:
-							if TableMedium._convex_overlap(card, st as PackedVector2Array, 0.03):
+						for st in medium._things_part.standing:
+							if Geo.within(card, st as PackedVector2Array, 0.03):
 								out["near"] += 1
 								break
 					else:
@@ -408,8 +408,8 @@ func _sat_strict(a: PackedVector2Array, b: PackedVector2Array) -> bool:
 			if e.length_squared() < 1e-12:
 				continue
 			var ax := Vector2(-e.y, e.x).normalized()
-			var ra := TableMedium._span(a, ax)
-			var rb := TableMedium._span(b, ax)
+			var ra := Geo.span(a, ax)
+			var rb := Geo.span(b, ax)
 			if ra.x >= rb.y or rb.x >= ra.y:
 				return false
 	return true
@@ -676,7 +676,7 @@ func _box_rect(at: Vector3, r: float, h: float) -> Rect2:
 			for cz in [-r, r]:
 				corners.append(Vector3(cx, cy, cz))
 	var k := tan(deg_to_rad(medium._cam.fov * 0.5))
-	return TableMedium._screen_rect_fast(corners, at, medium._plan.cam_base.affine_inverse(), Vector2(k * 16.0 / 9.0, k))
+	return CardTable.screen_rect(corners, at, medium._plan.cam_base.affine_inverse(), Vector2(k * 16.0 / 9.0, k))
 
 
 func _inside(r: Rect2) -> bool:

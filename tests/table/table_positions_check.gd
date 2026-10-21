@@ -100,14 +100,14 @@ func _aside() -> void:
 			rng.seed = hash([seed, "aside-check"])
 			m._plan.seed_value = seed
 			m._plan.cards_from = "deck"
-			m._deck_base = lay["deck"]
+			m._plan.deck_base = lay["deck"]
 			m._plan.slots = TablePositions.seeded(n, rng, lay)
-			m._plan_aside({})
-			if m._aside_card < 0 and m._deck_far == lay["deck"]:
+			m._plan.put_aside({})
+			if m._plan.aside_card < 0 and m._plan.deck_far == lay["deck"]:
 				continue
 			moved += 1
 			lone += 1 if n == 1 else 0
-			var r := TablePositions.deck_keep(m._deck_far)
+			var r := TablePositions.deck_keep(m._plan.deck_far)
 			bad += 0 if TablePositions._frame_trouble(r, lay).is_empty() else 1
 			for sl in m._plan.slots:
 				bad += 1 if CardTable.footprint(sl["pos"], float(sl["yaw"]), CARD).intersects(r) else 0

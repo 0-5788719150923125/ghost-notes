@@ -66,6 +66,9 @@ const BOARD := {
 	"elastic": {"label": "Elastic", "type": "float", "min": 0.0, "max": 0.9, "step": 0.01, "default": 0.0,
 		"blurb": "How far a stage's timeline breathes with the song: a loud passage runs it faster, a quiet one slower, the total unchanged. 0 keeps it even."},
 }
+## What every entry says. Beside these, `set`: what the entry tells its scene, by the scene's own
+## settings ([method GhostScene.fields_of]; the editor shows them under the entry) - each the seed's
+## until it is told, and telling one moves nothing else the seed draws.
 const ENTRY := {
 	"scene": {"label": "Scene", "type": "scene", "default": "",
 		"blurb": "What is on screen. Stage is the one made of data: its actors and what they do are written in the entry itself."},

@@ -390,16 +390,79 @@ and the table's two steps (14) waited for them. Gates ran into a log folder of t
     (`capture()`, `apply()`), which is the interface every card on a panel keeps. Everything that
     reads a voice asks it by name (`cfg_of`). `reading_panel.gd` 3,765 lines to 1,101.
 
-WHERE THE BIG FILES STAND NOW: `reading_panel.gd` 4,548 lines (round one) to 1,101, with three
-pure libraries (`Splice`, `Delivery`, `ReadingPlan`), the join and three parts (the cast, the
-stream, the audition) beside it; `mask_editor.gd` 8,376 to 5,631, with nine parts; `table.gd`
-2,989 (the rides grew it), untouched this round.
+## The fourth round: the rest of the list (2026-10-20)
 
-LEFT, in order: the Voice as a card built by `NoteCards` from the `voice` row (`ReadingCast`
-already keeps the block; what is left is the card being made where the others are, and a gate
-that reads it there); Masking's tracks (538 lines, reading 25 things of the editor), then its
-shared transport and one timeline kit; the table's things and its plan as a function of
-(episode, seed), when the table is free; the scenes' field tables.
+The user: "move forward with all 4 remaining items", the Voice card's layout kept as it was. The
+desk's session and a likeness study were working in the tree; the table was free.
+
+24. **The table's plan is a function of the episode, and its things are a part.** *Status,
+    2026-10-20: done.* `TablePlan.make(document, table_json, intro_hold)` is every decision an
+    episode makes when it loads - the look, the camera, the lamp and the room's dark, the deck's
+    place and its slide aside, the slots, the hand's small differences, a jumper's held wash, a
+    mid-way start - drawing one seeded stream in the order the medium drew it. The medium reads the
+    file, makes the plan and builds its nodes from it; nothing in it decides (`_deck_base`, `_pitch`,
+    `_foil`, `_deck_far`, `_aside_card`, the wash's three were members the medium set as it built).
+    Dumped before and after over 84 episodes (a deck's, a jumper's, a long spread that crowds the
+    deck, a box's, a shoebox's, given places, things written where they stand): every value the
+    same but two numbers the old medium had carried over from the last jumper's episode, which
+    nothing read. `TableThings` (`table/`) is what stands on the table - the draped, the written, the
+    zoned, where nothing may stand, the blueprint - holding what stood; its footprint helpers went
+    to `Geo` (`geometry/`; the blueprint's three copies of them too) and its picture rectangle to
+    `CardTable.screen_rect`. `table.gd` 2,989 lines to 2,203. Gate: table_plan_check - the plan made
+    twice is the same plan, another seed another; the intro hold moves every word's reckoned time and
+    nothing the plan decides (a jumper's wash is reckoned from the first word, so the hold cancels out
+    of it - first written the other way, and the gate said so); the medium's plan is `make`'s; posed
+    742 times across the show, no plan written. Mutation-tested three ways.
+25. **Masking's tracks are a part.** *Status, 2026-10-20: done.* `MaskTracks` (`masking/`): the trim
+    lanes, a clip imported onto the timeline (a lane first, a transcode second), each track's sound
+    demuxed in the background, split and delete, and every frame which track plays (`sync`). 538
+    lines of functions; the section had read 26 of the editor's members. Found on the way: a delete
+    rebuilt the lanes with the old ones still drawing for the rest of the frame, each reading its
+    track by an index past the end of the list - an error per lane in the log. They leave the column
+    at once now. `mask_editor.gd` 5,631 lines to 4,983. Gate: mask_tracks_check (none covered the
+    tracks): the lanes, a split at the playhead (and a playhead outside the span splitting nothing),
+    the main clip's split, a delete, a track playing only in its window.
+26. **Masking on the shared transport, and one timeline kit.** *Status, 2026-10-20: done.* The editor
+    CONDUCTS the transport through its shell (`Shell.conduct_transport`, `transport_room` - Chrome's
+    furniture; naming `Spectrum` broke the `--script` gates, which compile before the autoloads): play,
+    pause, Stop (back to the in point), the position and length of the clip, a seek. Its own Space
+    key is gone; its marker strip, lanes and video stand above the rail (`bottom_lift`). The four
+    timelines - Masking's strip and lanes, the storyboard's strip, a stage entry's lanes - each had
+    a ruler ladder, a wheel, a playhead and a clock text of their own, and the copies had parted (a
+    pan step of 0.1 and one of 0.12, a clock with no hours, a ladder from 1 s and one from 0.5 s).
+    `TimelineView` is the kit now (`step_for`, `ticks`, `tick_label`, `wheel`, `draw_playhead`), and
+    `Clock.text` (`data/`) is the one clock, the transport's, the chapters' and an agent's progress
+    too - ten copies. Gates: timeline_kit_check (the ruler, the wheel, the clock, and a scan that
+    no timeline handles the wheel itself and nothing but `Clock` writes the clock's format - the
+    tablet's time of day excepted) and mask_tracks_check (the hooks, the seek, Stop, the lift - and
+    none under a shell with no transport). Found on the way: a clip whose sound loads from its WAV on
+    a worker (its first open, before the `.ogg` beside it exists) held its start for the sound - and
+    the pause that shows its first frame, made just after, cancelled the hold, so it opened paused.
+    The hold is made after the pause now, and the gate opens such a clip (the old order fails it).
+27. **What a scene can be told.** *Status, 2026-10-20: done for the scenes' named choices.* Every
+    scene that picks a named option from a table of its own - the snow, the hearth, the fractal's
+    family, the skyline - declares it in `FIELDS` (`label`, `type` "choice", `options` the NAME of the
+    table, `names` for options that are indices, `blurb`), and takes it through
+    `GhostScene.choice(key, rng)`: the entry's `set` when it names one of them, else the seed's -
+    and THE DIE IS THROWN EITHER WAY, so telling one setting moves nothing else the seed draws.
+    59 settings in 48 scenes; 24 picks were left (a table of rows with no names, a pick inside a
+    loop, a list filtered by an earlier pick). Dumped before and after, all 71 scenes and motions on
+    four seeds, told nothing: byte for byte the same. The storyboard's inspector shows a scene's
+    settings under its entry (`SceneRoster.fields_of`), docs/scenes.md lists them, and `docs.py
+    --check` holds each row to the code that chooses it. Gate: scene_fields_check - told an option
+    the seed would not draw, every scene takes it; told the one it draws, nothing else moves; a scene
+    that picks from its table itself is caught. Left: the numbers a scene rolls (sizes, speeds,
+    counts) are code still - a `[lo, hi]` range an entry could narrow is the next shape.
+
+WHERE THE BIG FILES STAND NOW: `reading_panel.gd` 1,104 lines (4,548 in round one); `mask_editor.gd`
+4,983 (8,376), with ten parts; `table.gd` 2,203 (6,797), with five parts and a plan made by a
+function. The biggest files now are ones no round has opened: `props.gd` (4,495, the free-form
+curves), `table_shuffle.gd` (2,877), `synth_editor.gd` (2,856), `comic.gd` (2,849), `layer.gd` (2,685,
+a registry of classes), `lights.gd` (2,472).
+
+LEFT: a reading that stays open while text arrives (below); a scene's rolled numbers as ranges an
+entry may narrow; the files above, each to be read before it is cut - a long file that is already a
+library of pure functions is not a problem.
 
 FOR A LIVE MODE, what is ready and what is not. A piece of text that arrives later is planned as a
 continuation (`ReadingPlan.make` with `from_sentence`) and joined onto the same take (`ReadingJoin`
@@ -413,8 +476,8 @@ waits (a stream that runs dry stops the session clock) and queue its outro only 
 The folders it grows in exist: `timeline/` is the editor, `stage/` the spec. What it needs from
 the steps: a catalog it can list without loading a player and every composable thing described
 the same way (6: one row shape with a table of fields, over scenes, layers, actors, verbs, forces,
-filters and shots), and one ruler - the storyboard's strip already borrows Masking's
-`TimelineView`, and Masking still has a second timeline of its own (9). `ShowFeed` is the other
+filters and shots), and one ruler - one timeline kit now (`TimelineView`, step 26), and the
+scenes' settings are rows an inspector builds from (step 27). `ShowFeed` is the other
 half: a preview scrubbed by a timeline is a second thing that fills it in, and the scenes and media
 it mounts cannot tell. Then the open items storyboard.md names: a `layers` entry, keyframed
 property lanes, a transition as an item.

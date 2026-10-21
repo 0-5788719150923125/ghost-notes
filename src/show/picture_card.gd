@@ -379,8 +379,7 @@ func _refresh_films() -> void:
 		_film_list.add_child(row)
 		var l := Label.new()
 		var dur := float(c.get("duration", 0.0))
-		l.text = "  %s  ·  %d:%02d" % [String(c.get("name", "clip")), int(dur / 60.0),
-			int(fmod(dur, 60.0))]
+		l.text = "  %s  ·  %s" % [String(c.get("name", "clip")), Clock.text(dur)]
 		l.add_theme_font_size_override("font_size", 11)
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS

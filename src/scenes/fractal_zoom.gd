@@ -172,6 +172,16 @@ var _ch := Vector2.ZERO
 var _ch_seeded := false
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"family": {"label": "Family", "type": "choice", "options": "FAMILY_BAG", "names": "FAMILIES", "default": null,
+		"blurb": "Which fractal family is drawn: the Mandelbrot set, a Julia set, the burning ship, the tricorn, the celtic or the buffalo."},
+	"direction": {"label": "Direction", "type": "choice", "options": "DIRECTION_BAG", "default": null,
+		"blurb": "Which way the zoom goes: falling inward (push) or climbing back out (pull)."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
@@ -181,7 +191,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_mat.shader = SHADER
 	_sch = Scheme.pick(rng)
 
-	_family = int(FAMILY_BAG[rng.randi() % FAMILY_BAG.size()])
+	_family = int(choice("family", rng))
 	# The power. Two is the Mandelbrot everybody knows; three and up are the multibrots, which
 	# are rounder, more symmetric and much less familiar - worth having, worth being rarer. The
 	# Mandelbrot leans harder on two because PERTURBATION IS THE QUADRATIC MANDELBROT'S ALONE
@@ -251,7 +261,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		clampf(_sch.sat * rng.randf_range(0.3, 0.9), 0.0, 1.0), iv)
 
 	# The zoom.
-	var dir_name := String(DIRECTION_BAG[rng.randi() % DIRECTION_BAG.size()])
+	var dir_name := String(choice("direction", rng))
 	_zl_max = log(SCALE_WIDE)
 	_zl_min = log(floor_scale)
 	if dir_name == "pull":

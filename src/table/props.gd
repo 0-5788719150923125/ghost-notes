@@ -875,7 +875,7 @@ const SHELTER := Vector2(0.05, 0.1)
 ## wind, [method _holder]) and `sized` (how much it was made smaller). [param materials] are the
 ## sanitized materials; [param seed] varies drips, scatter, lumps and the patterns' noise.
 ## [param keep]: built where it was written, neither moved to stand on the origin nor made smaller - a strand
-## draped across the table is laid in the table's own space ([method TableMedium._drape]).
+## draped across the table is laid in the table's own space ([method TableThings._drape]).
 static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := false) -> Dictionary:
 	var inner := Node3D.new()
 	var all := PackedVector3Array()

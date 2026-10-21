@@ -23,7 +23,11 @@
 #
 # DRAWINGS (the user, the same day: "it might be useful if it could draw something, to support the
 # idea. Because today, the model just writes a title, then sits there explaining"): `draw` puts an SVG
-# figure on the pad, drawn by the pen as it is described (hosts/math/figure.py reads it).
+# figure on the pad, drawn by the pen as it is described (hosts/math/figure.py reads it). A DRAWING'S
+# LINE GIVES EACH PART A PHRASE (2026-10-20: "chart and picture-drawing felt REALLY fast, relative to the
+# voice describing the charts"): lines of 4 to 20 words were said over 26 to 59 seconds of ink, and the
+# pen drew at four times its pace to keep up. The desk now lets a drawing run on into the talk about it
+# (DeskMedium._drawn_by); a line that names each part as it is drawn gives it the rest.
 #
 # A LETTER IS WRITTEN [a] (the user: "The voices are pronouncing 'a' wrong; because they're using it
 # like a part of a sentence"): the voice says a bracketed letter by its name (TextNorm), and
@@ -202,9 +206,12 @@ prompt:
       SAY WHAT YOU WRITE, AS YOU WRITE IT. The line right after a pen's mark, with no blank line
       between, is what the pen puts down, read aloud as the pen goes: a formula or a line of the pad
       read word for word, the way a teacher reads out what they chalk on a board; a drawing described
-      part by part, in the order the pen draws it. Nothing more: the pen works while you say exactly
-      those words, and a viewer cannot follow the pen and other words at once. Then a blank line,
-      and then whatever you say about it:
+      part by part, in the order the pen draws it. A drawing takes the pen far longer than a formula
+      of as many words - every number on its axes and every label is written by hand - so its line
+      gives each axis, curve, shape and label a phrase of its own, saying what it is as the pen
+      draws it; a drawing named in a few words is drawn in a rush. Nothing more: the pen works while
+      you say exactly those words, and a viewer cannot follow the pen and other words at once. Then a
+      blank line, and then whatever you say about it:
   - ""
   - "<!-- pad: the formula -->"
   - "The formula, read aloud word for word."

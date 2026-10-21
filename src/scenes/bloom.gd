@@ -34,13 +34,20 @@ var _morph := 0.0
 var _sharp := 0.0
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"form": {"label": "Form", "type": "choice", "options": "FORMS", "default": null,
+		"blurb": "The contour's family of shape: a star, a flower, a ripple, a cog or a soft polygon."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "plane"
 	# Nothing about a rosette says what color it is, so any mood is fair - it was a bare
 	# random hue before, which varied but never related to itself.
 	_sch = Scheme.pick(rng)
-	var keys := FORMS.keys()
-	var form := String(keys[rng.randi() % keys.size()])
+	var form := String(choice("form", rng))
 	var fm: Dictionary = FORMS[form]
 	var m_r: Array = fm["m"]
 	var m := float(rng.randi_range(int(m_r[0]), int(m_r[1])))

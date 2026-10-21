@@ -73,6 +73,14 @@ var _twist_w := PI * 0.45
 var _twist_speed := 0.2
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"ring": {"label": "Ring", "type": "choice", "options": "RINGS", "default": null,
+		"blurb": "How the panels stand in their ring: evenly spaced, woven in and out of the circle, stepped at alternating heights, or scalloped with a little of both."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"                       # the lens is the camera; keep 2D shots gentle
 	# A ring of lit panels is abstract - every mood suits it, so take the whole set.
@@ -105,7 +113,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_twist_speed = rng.randf_range(0.08, 0.28) * (1.0 if rng.randf() < 0.5 else -1.0)
 	_twist_a = rng.randf() * TAU
 
-	var lname := String(RINGS.keys()[rng.randi() % RINGS.size()])
+	var lname := String(choice("ring", rng))
 	var ring: Dictionary = RINGS[lname]
 	var stagger := float(ring["stagger"]) * rng.randf_range(0.6, 1.4)
 	var lift := float(ring["lift"]) * rng.randf_range(0.6, 1.4)

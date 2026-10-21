@@ -213,9 +213,9 @@ func looks_live(dir: String, video: String) -> bool:
 # --- the clip's frame size and length, probed and confirmed -----------------------------------
 
 ## Robust video-duration probe. The fast path is the container's own duration,
-## but our own libtheora transcode (see _start_track_import) routinely produces an
+## but our own libtheora transcode (see MaskTracks._start_track_import) routinely produces an
 ## .ogv whose header carries NO duration - ffprobe returns "N/A" for both
-## format=duration AND stream=duration. That returned 0 here, and _finish_track_import
+## format=duration AND stream=duration. That returned 0 here, and MaskTracks.finish_import
 ## reads 0 as "transcode failed" and silently adds no lane (the "Track import does
 ## nothing" bug). So when both are absent, fall back to counting video packets (fast,
 ## no decode) and dividing by the frame rate - every playable file has a definite

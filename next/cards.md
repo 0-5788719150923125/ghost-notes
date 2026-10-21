@@ -398,14 +398,14 @@ CLAUDE.md, memory or skills. Gates `tests/agents/agent_tools_check.gd`, `tests/c
 
 THE BLUEPRINT (2026-10-18; the user: "placement still feels awfully strange ... a blueprint-based system
 might work better ... do the planning and desired placements up-front, then verify with screenshots at
-the end"). A thing used to name one of six zones (`CardTable.ZONES`), and `TableMedium._stand` hunted that
+the end"). A thing used to name one of six zones (`CardTable.ZONES`), and `TableThings.stand` hunted that
 zone for room - scored toward the zone's middle and refusing any spot in front of another group IN THE
 PICTURE. The set dresser could only rename zones and look where the hunt put things: on True Tarot #15853
 it moved a felt pad to lie under wherever the hunt had dropped its journal, and a glass of grass was LEFT
 OFF ("not in front of another group") until it was named into another zone; the table came out five small
 things in the back corners. Now:
 - A THING IS WRITTEN WHERE IT STANDS: `at` ([x, z] cm from `Tables.ORIGIN`, as a layer's `at`), `turn`,
-  `scale` (`CardTable.sanitize_table`). `TableMedium._stand_at` stands it exactly there, no jitter, and
+  `scale` (`CardTable.sanitize_table`). `TableThings.stand_at` stands it exactly there, no jitter, and
   moves it only for a spot where nothing may stand - off the top (`Tables.THING_EDGE` in), where the cards
   go (`_keep_out`), in another thing (`WRITTEN_GAP`), a flame in front of the middle - to the nearest spot
   that is clear, out to `CardTable.NUDGE_MOST` (15 cm), the move and its reason kept; else left off, in

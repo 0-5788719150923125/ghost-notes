@@ -44,11 +44,18 @@ const SKIES := {
 }
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"sky": {"label": "Sky", "type": "choice", "options": "SKIES", "default": null,
+		"blurb": "Which part of space the sky shows: the crowded dusty core, an empty deep field, the inside of a nebula, or an orbit close over a world."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
-	var keys := SKIES.keys()
-	var sky_name := String(keys[rng.randi() % keys.size()])
+	var sky_name := String(choice("sky", rng))
 	var sky: Dictionary = SKIES[sky_name]
 	var sch := Scheme.among(sky["moods"], rng)
 	var val: Array = sky["val"]

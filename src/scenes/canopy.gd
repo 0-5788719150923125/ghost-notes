@@ -250,10 +250,18 @@ var _mid_max := 34
 var _embed := 0.03
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"season": {"label": "Season", "type": "choice", "options": "SEASONS", "default": null,
+		"blurb": "The time of year the wood is in - spring, summer, autumn or winter - which sets its colors, how thick the leaves are, which climates it may take and what drifts through the air."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
 	# The season first: every color, density and climate decision below is read through it.
-	_season = String(SEASONS.keys()[rng.randi() % SEASONS.size()])
+	_season = String(choice("season", rng))
 	var sea: Dictionary = SEASONS[_season]
 	_sch = Scheme.among(sea["moods"], rng)
 	var sat_mul: float = float(sea["sat"])

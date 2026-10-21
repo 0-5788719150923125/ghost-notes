@@ -24,6 +24,14 @@ var _beat_prev := 0.0
 var _ch := Vector2.ZERO       # live tonal color (hue, strength) from the harmonic signature
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"form": {"label": "Form", "type": "choice", "options": "FORMS", "default": null,
+		"blurb": "The shape the sparks hold at rest: a loose cloud, a plume rising off a fire, or a ring riding the rim of an updraft."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "particles"
 	_sys = ParticleSystem.new()
@@ -31,7 +39,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# flare rose. The set stays LIGHT-colored - nothing that would read as cold water.
 	var sch := Scheme.among(
 		["ember", "sodium", "dawn", "brass", "rose", "magenta", "violet", "toxic", "bone"], rng)
-	var form := String(FORMS[rng.randi() % FORMS.size()])
+	var form := String(choice("form", rng))
 	var n := rng.randi_range(60, 220)
 	# The whole cloud's grain: some seeds are fine dust, some are fat drifting cinders.
 	var grain := rng.randf_range(0.7, 1.8)

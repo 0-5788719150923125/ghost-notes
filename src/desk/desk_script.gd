@@ -212,9 +212,10 @@ static func speakable(body: String, lengths: Dictionary = {}, sizes: Dictionary 
 ## THE WALK. [param lengths]: item id -> seconds its writing takes (the ink's, else estimated);
 ## [param sizes]: item id -> the typeset item (`w`, `h`, `d` in TeX points), for the layout - without
 ## one an item is laid out as a line of type. Returns:
-##   actions   - [{kind, id, tex, mode, after, span, write, dur, tail, page, turn, at, k, w, h, d, of, i}]:
-##               `after` the spoken words before it (a pad item's dictation starts there), `span` its
-##               dictation's words, `write` how long the pen takes, `dur` the rest before it, `tail`
+##   actions   - [{kind, id, tex, mode, after, span, about, write, dur, tail, page, turn, at, k, w, h, d, of,
+##               i}]: `after` the spoken words before it (a pad item's dictation starts there), `span` its
+##               dictation's words, `about` the words of the talk about it (the paragraph right after its
+##               dictation), `write` how long the pen takes, `dur` the rest before it, `tail`
 ##               the rest after its dictation, `page`/`turn` where it is written and whether the page
 ##               turns for it, `at` its baseline's start on the page, `of` what a strike crosses out
 ##               or a point points at (`target` the name it was given, `part` the piece of it, `span`
@@ -238,7 +239,7 @@ static func parse(body: String, lengths: Dictionary = {}, sizes: Dictionary = {}
 						"write": 0.0, "dur": 0.0, "tail": 0.0, "block": bi, "mark": m.get_start(),
 						"mark_end": m.get_end()})
 			continue
-		var act := {"kind": kind, "id": "", "tex": "", "mode": "", "span": 0, "write": STRIKE,
+		var act := {"kind": kind, "id": "", "tex": "", "mode": "", "span": 0, "about": 0, "write": STRIKE,
 			"dur": STRIKE, "tail": 0.0, "block": bi, "name": String(blk.get("name", ""))}
 		if kind in WRITES:
 			if String(blk["arg"]).is_empty():
@@ -268,9 +269,11 @@ static func parse(body: String, lengths: Dictionary = {}, sizes: Dictionary = {}
 	var said := PackedStringArray()
 	var hold := 0.0
 	var dictating: Dictionary = {}
+	var talked: Dictionary = {}     # what was dictated in the paragraph just said
 	for bi in blocks.size():
 		var blk: Dictionary = blocks[bi]
 		if String(blk["kind"]) != "para":
+			talked = {}
 			if by_block.has(bi):
 				var act: Dictionary = by_block[bi]
 				act["after"] = spoken.size()
@@ -291,9 +294,14 @@ static func parse(body: String, lengths: Dictionary = {}, sizes: Dictionary = {}
 			# said straight through; what the pen owes is the rest after it
 			_flush(String(blk["text"]), spoken, speak, said)
 			hold += float(dictating["tail"])
+			talked = dictating
 			dictating = {}
 		else:
+			var before := spoken.size()
 			_flush(_unpointed(String(blk["text"])), spoken, speak, said)
+			if not talked.is_empty():
+				talked["about"] = spoken.size() - before
+				talked = {}
 	if hold > 0.0:
 		speak.append("<!-- action-hold: %s -->" % String.num(hold, 2))
 	return {"actions": actions, "spoken": spoken, "speakable": "\n\n".join(speak),

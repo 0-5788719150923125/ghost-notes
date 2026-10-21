@@ -45,6 +45,14 @@ var _eye_off := 0.0         # current world x separation (kept in sync with _dra
 var _eye_rad := 0.27
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"spacing": {"label": "Spacing", "type": "choice", "options": "SPACING", "default": null,
+		"blurb": "How far apart the eyes sit: crowded and front-set, at human spacing, or set wide like prey or something alien."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "plane"
 	morph_in = "eye"
@@ -65,7 +73,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	lens.eye = Vector3(0, 0, 4.0)
 	lens.look = Vector3.ZERO
 	lens.fov = 48.0
-	var spacing := String(SPACING.keys()[rng.randi() % SPACING.size()])
+	var spacing := String(choice("spacing", rng))
 	var sp: Dictionary = SPACING[spacing]
 	var rad_band: Array = sp["rad"]
 	var gap_band: Array = sp["gap"]

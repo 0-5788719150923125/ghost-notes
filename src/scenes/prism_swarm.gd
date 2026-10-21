@@ -68,13 +68,21 @@ const FL_JUMP := 0.74          # the lane-change leap
 const NOMINAL := 5.0
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"formation": {"label": "Formation", "type": "choice", "options": "FORMATION", "default": null,
+		"blurb": "The shape of the swarm flying the track: a file of six to eight prisms, a pair of a few large ones, or a shoal of a dozen small ones."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "scene3d"
 	framing = "plane"
 	morph_in = "prisms"
 	_rng.seed = rng.randi()
 	_bank = 1.0 if rng.randf() < 0.5 else -1.0
-	var form := String(FORMATION.keys()[rng.randi() % FORMATION.size()])
+	var form := String(choice("formation", rng))
 	var fm: Dictionary = FORMATION[form]
 	var n_band: Array = fm["n"]
 	_n = rng.randi_range(int(n_band[0]), int(n_band[1]))

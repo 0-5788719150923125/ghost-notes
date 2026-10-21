@@ -119,12 +119,20 @@ var _morph_target := 0.0
 var _reink_t := 0.0
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"group": {"label": "Group", "type": "choice", "options": "GROUP_POOL", "default": null,
+		"blurb": "Which of the 17 wallpaper symmetry groups tiles the pattern, from a plain p1 repeat to the mirror and six-fold groups."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
 	# A printed pattern is abstract matter - no mood is wrong for it, so take the whole set.
 	var sch := Scheme.pick(rng)
-	var gname := String(GROUP_POOL[rng.randi() % GROUP_POOL.size()])
+	var gname := String(choice("group", rng))
 	var ratio := rng.randf_range(0.72, 1.40)
 	var angle := rng.randf_range(50.0, 90.0)
 	# Build the group once at unit cell length purely to learn its ORDER, which the element

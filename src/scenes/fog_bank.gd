@@ -18,13 +18,20 @@ const BANKS := {
 }
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"bank": {"label": "Bank", "type": "choice", "options": "BANKS", "default": null,
+		"blurb": "How heavy the fog bank is: a thin veil, a rolling bank, or a deep one that buries the color in sheets."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
 	# Any mood is fair here: the bank is the constant, the color under it is the variable.
 	var sch := Scheme.pick(rng)
-	var keys := BANKS.keys()
-	var bank := String(keys[rng.randi() % keys.size()])
+	var bank := String(choice("bank", rng))
 	var b: Dictionary = BANKS[bank]
 	var val_r: Array = b["val"]
 	var alpha_r: Array = b["alpha"]

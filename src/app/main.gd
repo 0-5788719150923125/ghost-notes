@@ -180,8 +180,9 @@ func _ready() -> void:
 		add_child(preload("res://src/app/phone_shell.gd").new())
 		return
 	# Mask mode is a standalone authoring tool (see mask_editor.gd) - tied to one
-	# specific external clip, not the audio-reactive show - so it does not touch
-	# Director/Spectrum at all and is checked before everything else.
+	# specific external clip, not the audio-reactive show - so it does not touch the
+	# Director (a live editor conducts only the transport) and is checked before
+	# everything else.
 	if args.has("--mask-render"):
 		_begin_mask_render(_arg_value(args, "--mask-render"))
 		return

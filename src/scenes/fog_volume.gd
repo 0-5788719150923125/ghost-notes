@@ -16,14 +16,21 @@ const AIRS := {
 }
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"air": {"label": "Air", "type": "choice", "options": "AIRS", "default": null,
+		"blurb": "The air the haze hangs in: thin and nearly clear with the sky showing through, tinted, or a starless layered soup."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
 	# Haze is the color of whatever lights it - sodium street lamps, a green swamp, a cold
 	# dawn - so no mood is off the table. It was locked to one narrow blue before.
 	var sch := Scheme.pick(rng)
-	var keys := AIRS.keys()
-	var air := String(keys[rng.randi() % keys.size()])
+	var air := String(choice("air", rng))
 	var a: Dictionary = AIRS[air]
 	var val_r: Array = a["val"]
 	add_layer("bed", rng, {

@@ -152,3 +152,36 @@ const ATMOSPHERIC := [
 	# up from black is a perfectly good entrance - it is a cut onto white that would jar.
 	"res://src/scenes/tidepool.gd", "res://src/scenes/murmuration.gd",
 ]
+
+
+## The script of the scene named [param name] (its file's name) - the rotation's, or any scene file a
+## storyboard may name, as the Director loads it - or null.
+static func script_of(name: String) -> Script:
+	for e in SCENES:
+		var s: Script = (e as Dictionary)["script"]
+		if s.resource_path.get_file().get_basename() == name:
+			return s
+	var path := "res://src/scenes/%s.gd" % name
+	return load(path) as Script if ResourceLoader.exists(path) else null
+
+
+## WHAT THE SCENE [param name] CAN BE TOLD, as rows a form builds from ([SchemaForm]): each of its
+## settings ([method GhostScene.fields_of]) a pick among its options by name, the first of them ("")
+## leaving it to the seed. What the storyboard's inspector shows under an entry, written into its `set`.
+static func fields_of(name: String) -> Dictionary:
+	var script := script_of(name)
+	if script == null:
+		return {}
+	var out := {}
+	var fields := GhostScene.fields_of(script)
+	for key in fields:
+		var row: Dictionary = fields[key]
+		var names := GhostScene.table_of(script, String(row.get("names", "")))
+		var shown: Array = [""]
+		for o in GhostScene.options_of(script, String(key)):
+			var said := str(names[int(o)]) if not names.is_empty() else str(o)
+			if not shown.has(said):
+				shown.append(said)
+		out[key] = {"label": row["label"], "type": "enum", "options": shown, "default": "",
+			"blurb": String(row["blurb"]) + " Unset, the seed draws one."}
+	return out

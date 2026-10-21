@@ -396,7 +396,7 @@ func _show() -> void:
 		var sched := Storyboard.schedule(_loaded_sequence(), float(_data.get("sensitivity", Director.sensitivity)),
 			Director.unauthored_hold())
 		_state.text = "This note's own: %d %s, %s%s%s." % [seq.size(), "entry" if seq.size() == 1 else "entries",
-			StoryboardStrip._clock(float(sched["end"])),
+			Clock.text(float(sched["end"])),
 			(" and %d in the tail" % tail.size()) if not tail.is_empty() else "",
 			", looping" if bool(_data.get("loop", true)) else ", following the song"]
 	for c in _list.get_children():

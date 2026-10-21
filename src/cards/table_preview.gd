@@ -397,7 +397,7 @@ func table(raw: Dictionary, numbers: Dictionary = {}) -> Dictionary:
 		tags = Tags.new()
 		var cam: Transform3D = _medium._plan.cam_base
 		var fov: float = (_medium._cam as Camera3D).fov
-		for th in _medium._things:
+		for th in _medium._things_part.on_table:
 			var box: AABB = (th as Dictionary)["box"]
 			var top: Variant = CardTable.project(cam, fov, Vector3(box.get_center().x, box.end.y, box.get_center().z))
 			var n: Variant = numbers.get(String((th as Dictionary)["name"]))
@@ -680,7 +680,7 @@ func blueprint(raw: Dictionary, numbers: Dictionary) -> Dictionary:
 	var err: String = await _stand(raw)
 	if not err.is_empty():
 		return {"error": err}
-	var data: Dictionary = _medium.blueprint()
+	var data: Dictionary = _medium._things_part.blueprint()
 	data["numbers"] = numbers
 	var placed := _placed(CardTable.sanitize_table(raw, CardTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {})))
 	var vp := SubViewport.new()
@@ -932,7 +932,7 @@ func _sync_pictures() -> void:
 func _pose_spread(light_at := -1.0) -> void:
 	var m = _medium
 	var card_t := float((m.get_script() as Script).get_script_constant_map().get("CARD_T", 0.0007))
-	m._cur_base = m._deck_base
+	m._cur_base = m._plan.deck_base
 	for i in (m._deck as Array).size():
 		(m._deck[i] as MeshInstance3D).transform = m._rest_xf(i)
 	for k in (m._cards as Array).size():
@@ -965,22 +965,22 @@ func _placed(spec: Dictionary) -> Dictionary:
 	var left_off: Array = []
 	var left_why := {}
 	var by_light := {}
-	for u in m._unstood:
+	for u in m._things_part.unstood:
 		left_why[String((u as Dictionary)["name"])] = String((u as Dictionary)["why"])
 	var cam: Transform3D = m._plan.cam_base
 	var fov: float = (m._cam as Camera3D).fov
 	for t in spec.get("things", []):
 		var name := String((t as Dictionary).get("name", ""))
 		var found := -1
-		for i in (m._things as Array).size():
-			if not used.has(i) and String((m._things[i] as Dictionary)["name"]) == name:
+		for i in (m._things_part.on_table as Array).size():
+			if not used.has(i) and String((m._things_part.on_table[i] as Dictionary)["name"]) == name:
 				found = i
 				break
 		if found < 0:
 			left_off.append(name)
 			continue
 		used[found] = true
-		var th: Dictionary = m._things[found]
+		var th: Dictionary = m._things_part.on_table[found]
 		var node: Node3D = th["node"]
 		var rect: Rect2 = th["rect"]
 		var entry := {"name": name, "place": String(th["place"]),
@@ -1011,7 +1011,7 @@ func _placed(spec: Dictionary) -> Dictionary:
 		var full := float(consts.get("KEY_ENERGY" if i == int(m._light_part._key_flame) else "FILL_ENERGY", 0.35)) * float((l["flames"] as Array).size())
 		if float(l["energy"]) < full * 0.9 and by_light.has(i):
 			held.append(by_light[i])
-	var deck: Vector3 = m._deck_base
+	var deck: Vector3 = m._plan.deck_base
 	return {"stood": stood, "left_off": left_off, "left_why": left_why, "key": key, "held_down": held,
 		"cards": (m._cards as Array).size(), "deck": "front right" if deck.x > 0.0 else "front left"}
 

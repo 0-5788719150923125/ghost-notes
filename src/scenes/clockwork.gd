@@ -104,6 +104,14 @@ var _light_drift := 0.0
 var _light_sigma := 0.8       # angular width of the lit arc of teeth
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"mechanism": {"label": "Mechanism", "type": "choice", "options": "MODES", "default": null,
+		"blurb": "What kind of machine is built: one big orrery, scattered gear trains, a clock with a ticking escapement, a chorus of equal wheels turning together, or a split composition."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_rng.seed = rng.randi()
 	framing = "subject"                       # a mechanism is a subject: allow the slow push-in
@@ -139,7 +147,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_light_drift = rng.randf_range(-0.06, 0.06)
 	_light_sigma = rng.randf_range(0.5, 1.05)
 
-	var mode: String = MODES[rng.randi() % MODES.size()]
+	var mode: String = choice("mechanism", rng)
 	match mode:
 		"orrery":
 			_build_orrery(rng)

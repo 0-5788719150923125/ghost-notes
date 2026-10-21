@@ -22,12 +22,20 @@ var _swirl_vel := 0.0    # angular velocity - kicked on beats, decays between th
 var _beat_prev := 0.0
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"layout": {"label": "Layout", "type": "choice", "options": "LAYOUTS", "default": null,
+		"blurb": "How the lamps are arranged: scattered orbs in the haze, a row like street lighting, a ring around you, or a pair facing off across the frame."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
 	# Lights in fog can be any color at all - a sodium street, a green exit sign, cold
 	# moonlight - so the mood is unrestricted and the lamps drift around it by its spread.
 	var sch := Scheme.pick(rng)
-	var layout := String(LAYOUTS[rng.randi() % LAYOUTS.size()])
+	var layout := String(choice("layout", rng))
 	var light_count := rng.randi_range(2, 9)
 	if layout == "pair":
 		light_count = 2

@@ -52,6 +52,14 @@ var _glow := Color(0.7, 0.82, 1.0)   # the crystallization light, tinted by the 
 const HUE_BLUE := 0.6                # the base `two_prisms` draws the handed-over body at
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"composition": {"label": "Composition", "type": "choice", "options": "COMPOSITION", "default": null,
+		"blurb": "How the pair of eyes is placed: crowded close together, at human spacing, or set wide apart."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "scene3d"
 	framing = "plane"
@@ -72,7 +80,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var chue := crystal.vary(rng)
 	_blue.hue_shift = wrapf(chue - HUE_BLUE, -0.5, 0.5)
 	_glow = Color.from_hsv(chue, 0.30, 1.0)     # the light the crystallization throws
-	var comp := String(COMPOSITION.keys()[rng.randi() % COMPOSITION.size()])
+	var comp := String(choice("composition", rng))
 	var c: Dictionary = COMPOSITION[comp]
 	var rad_band: Array = c["rad"]
 	var gap_band: Array = c["gap"]

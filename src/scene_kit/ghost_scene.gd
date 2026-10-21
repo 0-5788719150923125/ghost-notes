@@ -55,9 +55,12 @@ var params: Dictionary = {}
 
 ## The raw storyboard entry that created this scene (empty in auto mode), set by the
 ## [Director] before [method init_with_seed]. A data-driven scene (see scenes/stage.gd)
-## builds its entire content - cast, track, camera - from this in build_params; ordinary
-## scenes ignore it.
+## builds its entire content - cast, track, camera - from this in build_params; an ordinary
+## scene reads only its `set` - the settings an entry tells it ([method choice]).
 var spec: Dictionary = {}
+## What each setting an entry may tell came out as, told or drawn ([method choice]): the scene's own
+## account of its choices, for the feedback console and a gate.
+var chosen := {}
 
 ## Identity stamped by the [Director] at creation, for telemetry / feedback capture
 ## (the feedback console writes these so a critique can be tied back to its scene).
@@ -157,6 +160,78 @@ func init_with_seed(seed_value: int, behavior_name := "drift") -> void:
 ## Override: roll the typed definition. Same seed -> same scene.
 func build_params(_rng: RandomNumberGenerator) -> Dictionary:
 	return {}
+
+
+# --- what a scene can be told ---------------------------------------------------------------------
+
+## A SETTING A STORYBOARD ENTRY MAY TELL THIS SCENE (next/structure.md, step 27): one of the options its
+## row in the scene's own `FIELDS` names ([method fields_of]) - the one the entry's `set` gives, when it
+## gives one of them; else the seed's pick. The die is thrown either way, so telling one setting moves
+## nothing else the seed draws, and a scene told nothing is the scene it always was.
+func choice(key: String, rng: RandomNumberGenerator) -> Variant:
+	var options := options_of(get_script(), key)
+	assert(not options.is_empty(), "%s: no options for the setting '%s'" % [get_script().resource_path, key])
+	var drawn: Variant = options[rng.randi() % options.size()]
+	var said: Variant = told(key)
+	# an option that is an index is told by the name its row's `names` gives it, or by itself
+	var names := table_of(get_script(), String((fields_of(get_script()).get(key, {}) as Dictionary).get("names", "")))
+	if said != null and names.has(said):
+		said = names.find(said)
+	if said != null:
+		for o in options:
+			if str(o) == str(said):
+				chosen[key] = o
+				return o
+	chosen[key] = drawn
+	return drawn
+
+
+## What the entry's `set` tells this scene of [param key], or null (nothing, or nothing named).
+func told(key: String) -> Variant:
+	var set: Variant = spec.get("set")
+	if not (set is Dictionary):
+		return null
+	var v: Variant = (set as Dictionary).get(key)
+	return null if v == null or str(v).is_empty() else v
+
+
+## WHAT A SCENE CAN BE TOLD: the rows of its own `FIELDS` (and an ancestor's), one per setting - `label`,
+## `type` ("choice"), `options` (the NAME of the scene's own table its choices are: a Dictionary's
+## keys, an Array's elements - repeats weight the seed's pick), `names` (for options that are indices,
+## the table of their names, which is what an entry may tell instead), `default` (null: drawn from the
+## seed), `blurb`. What the storyboard's inspector builds its rows from ([method SceneRoster.fields_of]) and
+## docs/scenes.md shows; docs.py holds each row to the code that reads it.
+static func fields_of(script: Script) -> Dictionary:
+	var chain: Array = []
+	var s := script
+	while s != null:
+		chain.push_front(s)
+		s = s.get_base_script()
+	var out := {}
+	for c in chain:
+		var f: Variant = (c as Script).get_script_constant_map().get("FIELDS")
+		if f is Dictionary:
+			out.merge(f as Dictionary, true)
+	return out
+
+
+## The options of [param script]'s setting [param key], in the order the seed draws from them.
+static func options_of(script: Script, key: String) -> Array:
+	return table_of(script, String((fields_of(script).get(key, {}) as Dictionary).get("options", "")))
+
+
+## [param script]'s own table [param name] (or an ancestor's) as a list: a Dictionary's keys, an
+## Array itself; empty when there is none.
+static func table_of(script: Script, name: String) -> Array:
+	var s := script
+	while s != null and not name.is_empty():
+		var t: Variant = s.get_script_constant_map().get(name)
+		if t is Dictionary:
+			return (t as Dictionary).keys()
+		if t is Array:
+			return t
+		s = s.get_base_script()
+	return []
 
 
 ## Override (optional): seed per-scene view ranges or initial state.

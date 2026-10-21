@@ -25,11 +25,18 @@ const HEARTHS := {
 }
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"hearth": {"label": "Hearth", "type": "choice", "options": "HEARTHS", "default": null,
+		"blurb": "Where the fire is found: a forge, a bonfire, or a fire on a cold night, which sets the wash behind the flame, how widely the flames are laid and how heavily it smokes."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
-	var keys := HEARTHS.keys()
-	var hearth := String(keys[rng.randi() % keys.size()])
+	var hearth := String(choice("hearth", rng))
 	var h: Dictionary = HEARTHS[hearth]
 	var sch := Scheme.among(h["moods"], rng)
 	var val_r: Array = h["val"]

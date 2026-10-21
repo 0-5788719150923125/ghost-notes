@@ -250,10 +250,7 @@ static func count(n: int) -> String:
 
 ## 0:42, 6:30, 1:02:05.
 static func clock(seconds: int) -> String:
-	var s := maxi(seconds, 0)
-	if s >= 3600:
-		return "%d:%02d:%02d" % [s / 3600, (s / 60) % 60, s % 60]
-	return "%d:%02d" % [s / 60, s % 60]
+	return Clock.text(float(seconds))
 
 
 class Backend:

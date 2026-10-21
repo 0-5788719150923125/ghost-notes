@@ -445,7 +445,7 @@ func _slid_out(k: int, lying: Transform3D, t: float) -> Transform3D:
 	var away := (at - from / float(over.size())).normalized()
 	if away == Vector2.ZERO:
 		away = Vector2.RIGHT
-	var keep := TablePositions.deck_keep(medium._deck_base, medium._box_keep(), medium._box_center())
+	var keep := TablePositions.deck_keep(medium._plan.deck_base, medium._plan.box_keep(), medium._plan.box_center())
 	var cloth := Rect2(TablePositions.CLOTH_MIDDLE - TablePositions.CLOTH * 0.5, TablePositions.CLOTH).grow(-TablePositions.HEM)
 	if not cloth.encloses(CardTable.footprint(lying.origin, yaw, TableMedium.CARD)):
 		cloth = cloth.grow(1.0)      # a place given past the hem: the hem is no wall to it

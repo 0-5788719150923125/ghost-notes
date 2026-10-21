@@ -86,7 +86,7 @@ func build(things: Array, built: Array) -> void:
 	var most := CardTable.SHOEBOX_MAX if shoebox else CardTable.BOX_MAX
 	var k := minf(1.0, minf(most.x / w, minf(most.z / d, most.y / maxf(size.size.y, 0.001))))
 	var basis := Basis(Vector3.UP, turn).scaled(Vector3(k, k, k))
-	var want := medium._box_center() if shoebox else TablePositions.box_at(medium._deck_base)
+	var want := medium._plan.box_center() if shoebox else TablePositions.box_at(medium._plan.deck_base)
 	# its own place in the room kept for it, the open box's toward the spread
 	var place := RandomNumberGenerator.new()
 	place.seed = hash([medium._plan.seed_value, "box place"])
@@ -94,7 +94,7 @@ func build(things: Array, built: Array) -> void:
 		0.0 if shoebox else -signf(want.x), place)
 	var mid := basis * size.get_center()
 	var at := Vector2(want.x - mid.x, want.z - mid.z)
-	var shape := TableMedium._translated(TableMedium._turned(b["outline"], basis), at)
+	var shape := Geo.moved(Geo.turned(b["outline"], basis), at)
 	var lo := Vector2(INF, INF)
 	var hi := Vector2(-INF, -INF)
 	for q in shape:
@@ -106,8 +106,8 @@ func build(things: Array, built: Array) -> void:
 			for cz in [size.position.z, size.end.z]:
 				corners.append(basis * Vector3(cx, cy, cz))
 	var lens := Vector2(tan(deg_to_rad(medium._cam.fov * 0.5)) * (16.0 / 9.0), tan(deg_to_rad(medium._cam.fov * 0.5)))
-	var rect := TableMedium._screen_rect_fast(corners, Vector3(at.x, 0.0, at.y), medium._plan.cam_base.affine_inverse(), lens)
-	medium._put(t, b, {"at": at, "outline": shape, "bb": Rect2(lo, hi - lo), "rect": rect}, basis, "#the box")
+	var rect := CardTable.screen_rect(corners, Vector3(at.x, 0.0, at.y), medium._plan.cam_base.affine_inverse(), lens)
+	medium._things_part.put(t, b, {"at": at, "outline": shape, "bb": Rect2(lo, hi - lo), "rect": rect}, basis, "#the box")
 	var world := Transform3D(basis, Vector3(at.x, 0.0, at.y)) * size
 	var inner := AABB(world.position + Vector3(BOX_WALL, BOX_WALL, BOX_WALL),
 		world.size - Vector3(BOX_WALL * 2.0, BOX_WALL, BOX_WALL * 2.0))

@@ -165,6 +165,22 @@ func attach_feedback() -> Node:
 	return null
 
 
+## THE TRANSPORT IS THE SHELL'S FURNITURE: a workspace whose clock is its own (Masking's clip) hands
+## it its verbs here - the hooks of [method Spectrum.conduct] - and takes them back when it leaves
+## ([method release_transport]), naming no autoload. Nothing, from a shell with no transport.
+func conduct_transport(_owner: Object, _hooks: Dictionary) -> void:
+	pass
+
+
+func release_transport(_owner: Object) -> void:
+	pass
+
+
+## How much of the frame's bottom edge the transport's rail takes while it shows (0: none).
+func transport_room() -> float:
+	return 0.0
+
+
 ## The room claimed at the bottom changed ([member bottom_inset]): the row has moved already.
 ## For the shell with furniture, which moves the rest of it.
 func _inset_changed() -> void:

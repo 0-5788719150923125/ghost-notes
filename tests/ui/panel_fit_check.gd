@@ -296,11 +296,11 @@ func _check_the_old_arrangement_overflows() -> void:
 
 
 ## A card's rows as they were before there were cards: a shared card's own node (step 5 - the
-## Look, the Picture, the bookends) counts its rows, not itself.
+## Look, the Picture, the bookends; the Voice since NoteCards builds it) counts its rows, not itself.
 func _rows_in(body: Control) -> int:
 	var n := 0
 	for r in body.get_children():
-		n += r.get_child_count() if (r is LookCard or r is PictureCard or r is BookendsCard) else 1
+		n += r.get_child_count() if (r is LookCard or r is PictureCard or r is BookendsCard or r is VoiceCard) else 1
 	return n
 
 

@@ -706,7 +706,7 @@ func _show_all() -> void:
 		if not bool(r["tail"]):
 			total += float(r["length"])
 	_summary.text = "%d %s · %s%s" % [_seq().size(), "entry" if _seq().size() == 1 else "entries",
-		StoryboardStrip._clock(total), ("  + %d in the tail" % _tail().size()) if not _tail().is_empty() else ""]
+		Clock.text(total), ("  + %d in the tail" % _tail().size()) if not _tail().is_empty() else ""]
 	for key in ["dup", "del", "left", "right"]:
 		(_buttons[key] as Button).disabled = read_only or _sel < 0
 	(_buttons["undo"] as Button).disabled = read_only or _undo.is_empty()
@@ -810,6 +810,12 @@ func _show_inspector() -> void:
 		else:
 			_write(p + [key], value))
 	_timing_rows(p, entry)
+	# WHAT THE SCENE CAN BE TOLD ([method SceneRoster.fields_of]): its own settings, written into the
+	# entry's `set` - a setting left unset is the seed's
+	var own := SceneRoster.fields_of(String(entry.get("scene", "")))
+	if not own.is_empty():
+		_heading("Its settings")
+		_form(p + ["set"], own)
 	if String(entry.get("scene", "")) != "stage":
 		return
 	_form(p, Storyboard.STAGE)

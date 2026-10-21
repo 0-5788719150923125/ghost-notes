@@ -68,11 +68,18 @@ const SNOWS := {
 }
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"snow": {"label": "Snow", "type": "choice", "options": "SNOWS", "default": null,
+		"blurb": "What kind of snow falls: fine powder, a flurry of fat slow flakes, a blizzard, or a sparse hoar frost of real crystals."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
-	var keys := SNOWS.keys()
-	var kind := String(keys[rng.randi() % keys.size()])
+	var kind := String(choice("snow", rng))
 	var s: Dictionary = SNOWS[kind]
 	var sch := Scheme.among(s["moods"], rng)
 	var val: Array = s["val"]

@@ -277,6 +277,14 @@ var _f: AudioFeatures = AudioFeatures.new()
 var _ch := Vector2.ZERO
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"pins": {"label": "Pins", "type": "choice", "options": "PIN_PATTERNS", "default": null,
+		"blurb": "How the sheet is pinned: along a line of pegs across the top, from its two top corners, down one side like a half-struck flag, or from a single peg at the center of the top edge."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "plane"
@@ -325,7 +333,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 			_w[i] = 1.0
 
 	# --- pins --------------------------------------------------------------------
-	var pattern := String(PIN_PATTERNS[rng.randi() % PIN_PATTERNS.size()])
+	var pattern := String(choice("pins", rng))
 	var step := rng.randi_range(2, 6)
 	_pin.clear(); _pax.clear(); _pay.clear(); _paz.clear()
 	_line_on = pattern == "line" or pattern == "corners"

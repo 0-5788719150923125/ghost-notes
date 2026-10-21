@@ -269,6 +269,14 @@ var _luvs := PackedVector2Array()
 var _lidx := PackedInt32Array()
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"land": {"label": "Land", "type": "choice", "options": "KINDS", "default": null,
+		"blurb": "What kind of land the map shows: rolling hills (fbm), a ridged mountain chain, dunes (billow), or a fractured plateau of scarps (cells)."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
@@ -276,7 +284,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_prng.seed = rng.randi()
 	_sch = Scheme.pick(rng)
 
-	var kind := String(KINDS[rng.randi() % KINDS.size()])
+	var kind := String(choice("land", rng))
 	var oct := rng.randi_range(3, 6)
 	var freq := rng.randf_range(1.2, 3.4)
 	_fld = Field.make(kind, rng.randi(), freq, oct)

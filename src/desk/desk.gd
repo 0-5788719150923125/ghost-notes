@@ -46,6 +46,17 @@ class_name DeskMedium
 ## to the new end ([method _ink_time]). A reading whose times are all known at once (an export) is
 ## never planned again, and stays a pure function of time.
 ##
+## A DRAWING TAKES ITS TIME (the user, 2026-10-20: "a lot of the chart and picture-drawing felt REALLY
+## fast, relative to the voice describing the charts ... it could have been a lot slower and there still
+## would have been plenty of buffer room to prepare for the next thing"). A drawing is said in a short
+## line - "axes, the graph, its corner" - and its ink is long (every tick's number and label handwritten):
+## held to its line, every drawing of an episode went at three and a half to four times the hand's pace,
+## 26 to 59 seconds of ink in 6 to 15, and the pen then sat 2 to 11 seconds before its next action. So
+## a drawing runs on past its line, through the talk about it (the paragraph after: `about`), as slow as
+## the hand's own pace ([constant DRAW_PACE]) - done [constant DRAW_SETTLE] and the nib's way before
+## the pen's next action is due ([method _drawn_by]), so that action is never late. The voice is the
+## same: no rest is added or taken away.
+##
 ## THE PAD: a page of a legal pad (8.5 x 11 in), ruled, filled top to bottom - every formula on the next
 ## rules ([method DeskScript.lay_out]) - and TURNED only when the next would run off the foot: the
 ## written sheet is lifted at its foot, rolls up over the binding and is folded round the back of the
@@ -104,14 +115,21 @@ const REST_EASE := 0.9
 const REACH_EASE := 0.45
 ## The pen comes down this long before its dictation's first word.
 const PEN_LEAD := 0.2
+## A DRAWING TAKES ITS TIME (see the class note): never quicker than its dictation, and on past it, through
+## the talk about it, to as slow as the hand's own pace - done this long, and the nib's way, before the
+## pen's next action is due.
+const DRAW_PACE := 1.0
+const DRAW_SETTLE := 1.0
 ## THE PEN IS ELASTIC ([method elastic]): the voice's progress through a dictation is smoothed over
 ## this many seconds, and this share of the pen's progress runs steady - the least it ever moves at,
 ## against its average pace over the dictation.
 const ELASTIC_WINDOW := 1.5
 const ELASTIC_FLOOR := 0.3
 ## POINTING: how close over the paper the nib comes; a thing this wide (px) or wider is swept under
-## (this far below it) in the first [constant POINT_SWEEP] seconds; where the nib stays, this far right
-## of the thing's end; and the least time a point is held.
+## (this far below it) in the first [constant POINT_SWEEP] seconds - or all of a point the next one cuts
+## shorter, so it ends where the pen waits from (cut at a third of its sweep, the nib jumped 366 px in a
+## frame to the sweep's end, 2026-10-20); where the nib stays, this far right of the thing's end; and the
+## least time a point is held.
 const POINT_LIFT := 0.0035
 const POINT_WIDE := 90.0
 const POINT_SWEEP := 0.9
@@ -496,9 +514,7 @@ func take_words(words: Array) -> void:
 
 ## THE LESSON OPENS with its first word, which the pen's first dictation is: INF until it is heard.
 func _opening() -> float:
-	if _follower.st0.size() > 0 and _follower.st0[0] != ReadingFollower.NO_TIME:
-		return _follower.st0[0]
-	return INF
+	return _word_t0(0)
 
 
 # --- the document ------------------------------------------------------------------------------
@@ -568,7 +584,7 @@ func load_lesson(source: String, desk: Dictionary, start := PackedStringArray(),
 ## WHEN EACH ACTION HAPPENS. A written item starts as its dictation's first word is said (the pen down
 ## [constant PEN_LEAD] before it) and ends as the words do - no sooner than the pen can write it at
 ## [constant DeskScript.MAX_PACE], no later than at [constant DeskScript.MIN_PACE] - and never before
-## the one before it has ended. One with no dictation, and a strike, are performed in the rest before
+## the one before it has ended; a drawing goes on past its words ([method _drawn_by]). One with no dictation, and a strike, are performed in the rest before
 ## the next words. A POINT is there as its word is said and held to its sentence's end, never into
 ## the time the pen needs to reach what comes next. A page turn comes in the rest before the item that
 ## needs it, never over writing still going on nor before the pen is off the pad ([constant
@@ -598,6 +614,8 @@ func _build_plan() -> void:
 			var said := _word_t1(after + span - 1)
 			end = clampf(said if said < INF else start + float(span) * DeskScript.EST_WORD,
 				start + write / DeskScript.MAX_PACE, start + write / DeskScript.MIN_PACE)
+			if String(a["kind"]) == "draw":
+				end = maxf(end, minf(start + write / DRAW_PACE, _drawn_by(i)))
 		elif String(a["kind"]) == "point":
 			var t0 := _word_t0(after)
 			if t0 == INF:
@@ -648,6 +666,49 @@ func _way(last: int, next: int) -> float:
 	return maxf(from.distance_to(_action_point(b, true)) / REACH_SPEED, REACH_EASE)
 
 
+## THE LATEST DRAWING [param i] MAY END: as the talk about it ends (a drawing with none, the next mark
+## right after its line, has the voice's rest before it), and [constant DRAW_SETTLE] and the nib's way
+## before the pen's next action is due - a write's pen down, a point's word, a page's turn early
+## enough for the pen to come back behind the sheet ([method _build_plan] gives each the same time). A
+## word not heard yet is guessed a steady word on from the last that was ([method _guess]).
+func _drawn_by(i: int) -> float:
+	var a: Dictionary = _actions[i]
+	var about := int(a.get("about", 0))
+	var by := _guess(int(a["after"]) + int(a["span"]) + about - 1, true) if about > 0 else INF
+	for j in range(i + 1, _actions.size()):
+		var b: Dictionary = _actions[j]
+		var kind := String(b["kind"])
+		if kind == "point" and target_box(b).size.x < 0.0:
+			continue
+		var after := int(b.get("after", 0))
+		var due := _guess(after, false)
+		if kind in DeskScript.WRITES and int(b.get("span", 0)) > 0:
+			due -= PEN_LEAD
+		elif kind != "point":
+			due = _guess(after - 1, true) + 0.25
+		if bool(b.get("turn", false)):
+			var back := DeskScript.TURN * PARK_BACK + maxf(PARK.distance_to(_action_point(b, true)) / REACH_SPEED, REACH_EASE)
+			due = minf(due - _way(i, j), due - back - 0.1 - PARK_CLEAR)
+		else:
+			due -= _way(i, j)
+		return minf(by, due - DRAW_SETTLE)
+	return by
+
+
+## When spoken word [param si] begins (or [param ends]): heard, or guessed [constant DeskScript.EST_WORD]
+## a word on from the last word heard; INF before any is.
+func _guess(si: int, ends: bool) -> float:
+	var t := _word_t1(si) if ends else _word_t0(si)
+	if t < INF:
+		return t
+	var k := mini(si, _follower.said1.size()) - 1
+	while k >= 0 and _follower.said1[k] == ReadingFollower.NO_TIME:
+		k -= 1
+	if k < 0:
+		return INF
+	return _follower.said1[k] + float(si - k - (0 if ends else 1)) * DeskScript.EST_WORD
+
+
 ## WHAT THE PAGE HAS SHOWN, taken as the plan is about to be made again at [member _now]: for each action
 ## begun, its start and when it began to be held; its end once done, else how much of it is written; and
 ## a page turn begun. [method _build_plan] keeps them, and [method _ink_time] goes on from them.
@@ -670,16 +731,19 @@ func _hold_past() -> void:
 	_held = held
 
 
+## When spoken word [param si] began and ended: INF while the voice has not reached it. A word it went
+## past without matching has the time it was most likely said ([member ReadingFollower.said0]) - a
+## word that waited for one held every action after it.
 func _word_t0(si: int) -> float:
-	if si < 0 or si >= _follower.st0.size() or _follower.st0[si] == ReadingFollower.NO_TIME:
+	if si < 0 or si >= _follower.said0.size() or _follower.said0[si] == ReadingFollower.NO_TIME:
 		return INF
-	return _follower.st0[si]
+	return _follower.said0[si]
 
 
 func _word_t1(si: int) -> float:
-	if si < 0 or si >= _follower.st1.size() or _follower.st1[si] == ReadingFollower.NO_TIME:
+	if si < 0 or si >= _follower.said1.size() or _follower.said1[si] == ReadingFollower.NO_TIME:
 		return INF
-	return _follower.st1[si]
+	return _follower.said1[si]
 
 
 ## HOW FAR THROUGH ITS WRITING action [param i] is at [member _now], as the ink's own clock (seconds
@@ -1029,7 +1093,7 @@ func _pen_during(a: Dictionary, i: int, start: float) -> Dictionary:
 				return {"p": (line[0] as Vector2).lerp(line[1], u), "lift": 0.0}
 		"point":
 			var path := point_path(a)
-			var u := clampf((_now - start) / POINT_SWEEP, 0.0, 1.0)
+			var u := clampf((_now - start) / clampf(float(_plan[i]["end"]) - start, 0.05, POINT_SWEEP), 0.0, 1.0)
 			var p: Vector2 = (path[0] as Vector2).lerp(path[1], _ease(u / 0.7)) if u < 0.7 \
 				else (path[1] as Vector2).lerp(path[2], _ease((u - 0.7) / 0.3))
 			return {"p": p, "lift": POINT_LIFT}

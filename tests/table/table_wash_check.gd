@@ -686,8 +686,8 @@ func _throw_facts(plan: Dictionary) -> void:
 		_thrown["off"] = int(_thrown["off"]) + (1 if off_cloth else 0)
 		_thrown["unseen"] = int(_thrown["unseen"]) + (1 if unseen else 0)
 		var things := not medium._shuffles._path_clear(fd["from"], fd["to"])
-		for foot in medium._standing:
-			things = things or TableMedium._convex_overlap(card, foot, 0.0)
+		for foot in medium._things_part.standing:
+			things = things or Geo.within(card, foot, 0.0)
 		_thrown["things"] = int(_thrown["things"]) + (1 if things else 0)
 
 
@@ -779,7 +779,7 @@ func _wash_jumper() -> void:
 		var visible := 0
 		for i in medium._plan.deck_n:
 			visible += 1 if (medium._deck[i] as MeshInstance3D).visible else 0
-		var at_side := medium._cur_base.distance_to(medium._deck_base)
+		var at_side := medium._cur_base.distance_to(medium._plan.deck_base)
 		_ok(shown < 0.002, "then it is picked up and shown (%.1f mm from the shown place)" % (shown * 1000.0))
 		_ok(visible == medium._plan.deck_n - 1 and at_side < 0.002, "the deck is gathered one card short and pushed aside (%d meshes, %.1f mm off its place)"
 			% [visible, at_side * 1000.0])
@@ -797,19 +797,19 @@ func _wash_jumper() -> void:
 			"cards": [{"key": "c0", "name": "Card", "numeral": "0", "reversed": false, "jumper": true, "position": {}, "booklet": {}, "art": ""}]}
 		subs.document = {"source": long_script, "title": "Wash Check", "table": doc}
 		medium._ensure_doc()
-		if medium._wash_held and held < 0:
+		if medium._plan.wash_held and held < 0:
 			held = sd
-			var at := medium._wash_from + TableMedium.JUMPER_WASH_LEAD
+			var at := medium._plan.wash_from + TableMedium.JUMPER_WASH_LEAD
 			var m := medium._shuffles.move_at(at)
 			var covers := not m.is_empty() and String(m["kind"]) == "wash"
 			var mixing := covers and at - float(m["t0"]) >= float((medium._shuffles._whole(m)["mix"] as Vector2).x) + TableShuffle.JUMP_MIX \
 				and at - float(m["t0"]) <= float((medium._shuffles._whole(m)["mix"] as Vector2).y)
 			var early := 0
 			for mv in medium._moves:
-				if String((mv as Dictionary)["kind"]) == "wash" and float((mv as Dictionary)["t0"]) < medium._wash_from - 6.0:
+				if String((mv as Dictionary)["kind"]) == "wash" and float((mv as Dictionary)["t0"]) < medium._plan.wash_from - 6.0:
 					early += 1
 			_ok(mixing and early == 0, "a jumper's wash is held back for it: mixing when the jumper is reckoned to come (episode %d, %s)" % [sd, str(mixing)])
-		elif not medium._wash_held and free < 0:
+		elif not medium._plan.wash_held and free < 0:
 			free = sd
 	_ok(held >= 0 and free >= 0, "some jumpers' episodes wash into them, some riffle (%d, %d)" % [held, free])
 

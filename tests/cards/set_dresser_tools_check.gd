@@ -845,8 +845,8 @@ func _drawing() -> bool:
 		var sp: Variant = CardTable.project(cam, fov, Vector3(bottom.x, 0.0, bottom.y))
 		_ok(seen.size() == 160 and sp != null and absf((sp as Vector2).y - 1.0) < 0.002, "#%d: the frame on the table is not the frame's edge: %s" % [seed, str(sp)])
 	# AN OUTLINE drawn round a top is the top's size
-	var rect := TableBlueprint._bounds(TableBlueprint.outline(Tables.top_outline({"shape": "rect", "size": [120, 80]})))
-	var round := TableBlueprint._bounds(TableBlueprint.outline(Tables.top_outline({"shape": "round", "size": [146, 146]})))
+	var rect := Geo.bounds(TableBlueprint.outline(Tables.top_outline({"shape": "rect", "size": [120, 80]})))
+	var round := Geo.bounds(TableBlueprint.outline(Tables.top_outline({"shape": "round", "size": [146, 146]})))
 	_ok(absf(rect.size.x - 1.2) < 0.005 and absf(rect.size.y - 0.8) < 0.005 and absf(round.size.x - 1.46) < 0.01,
 		"an outline drawn round a top is not its size: %s, %s" % [rect, round])
 	# THE PLAN FITS every card and thing in the drawing

@@ -140,7 +140,7 @@ static func describe(key: String, s: Dictionary = {}) -> String:
 			line += " · %d%%" % int(f * 100.0)
 		var secs := (Time.get_ticks_msec() - int(s.get("started", Time.get_ticks_msec()))) / 1000
 		if secs >= 3:
-			line += " · %d:%02d" % [secs / 60, secs % 60]
+			line += " · " + Clock.text(float(secs))
 		return line
 	if bool(s.get("ready", false)):
 		return ""

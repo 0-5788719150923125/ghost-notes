@@ -334,17 +334,11 @@ func _draw() -> void:
 	# source position (cin + how far the master playhead sits into this clip's span),
 	# not the master time, since knowing where the alt track itself is tracking is the
 	# whole point (see feedback/0007). Only drawn while the master playhead is actually
-	# over this clip's span - outside it the track isn't playing (see _sync_tracks).
+	# over this clip's span - outside it the track isn't playing (see MaskTracks.sync).
 	if get_playhead.is_valid():
 		var master_t: float = get_playhead.call()
 		var local_t := master_t - offset + cin
 		if local_t >= cin and local_t < cout:
 			var px := tview.x_of(master_t)
 			if px >= -2.0 and px <= size.x + 2.0:
-				draw_line(Vector2(px, 0), Vector2(px, size.y), Color(1, 1, 1, 0.92), 2.0)
-				var tag := MaskTimeline.format_time(local_t)
-				var tag_w := ThemeDB.fallback_font.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x + 8.0
-				var tag_x := clampf(px - tag_w * 0.5, 0.0, size.x - tag_w)
-				draw_rect(Rect2(tag_x, 2, tag_w, 18), Color(1, 1, 1, 0.92))
-				draw_string(ThemeDB.fallback_font, Vector2(tag_x + 4, 15), tag,
-					HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.05, 0.06, 0.08))
+				TimelineView.draw_playhead(self, px, Color(1, 1, 1, 0.92), Clock.text(local_t))

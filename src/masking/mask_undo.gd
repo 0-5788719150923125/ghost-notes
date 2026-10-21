@@ -131,8 +131,8 @@ func refresh_label() -> void:
 ## dangling - re-resolve it by time in the restored array (or drop the
 ## selection if that marker no longer exists there) before refreshing anything
 ## that reads it. Tracks went through the same wholesale replacement - the
-## runtime players (see _track_runtime) need reconciling against whatever
-## session.tracks now holds, same as _delete_track/_finish_track_import do.
+## runtime players (see MaskTracks.runtime) need reconciling against whatever
+## session.tracks now holds, same as MaskTracks._delete_track/MaskTracks.finish_import do.
 func _after_history_restore() -> void:
 	if editor._selected != null:
 		var t: float = float(editor._selected.get("time", -1.0))
@@ -144,7 +144,7 @@ func _after_history_restore() -> void:
 	editor._select_generation += 1
 	editor._timeline.selected = editor._selected
 	reconcile_tracks()
-	editor._refresh_lanes()
+	editor._tracks.refresh_lanes()
 	editor._refresh_marker_list()
 	editor._refresh_panel()
 	refresh_label()
@@ -152,17 +152,17 @@ func _after_history_restore() -> void:
 
 
 ## After undo/redo swaps session.tracks wholesale, the live VideoStreamPlayers
-## in _track_runtime (built incrementally by _build_track_view) no longer
+## in MaskTracks.runtime (built incrementally by MaskTracks.build_view) no longer
 ## necessarily match it 1:1 - a track undo/redo added or removed can leave too
 ## many or too few. Rebuild runtime state to match: free anything past the
 ## restored count, (re)build anything missing. Existing entries are trusted
-## as-is even if that track's trim/offset changed - _sync_tracks reseeks on
+## as-is even if that track's trim/offset changed - MaskTracks.sync reseeks on
 ## the next frame regardless, same as any ordinary drag.
 func reconcile_tracks() -> void:
 	if editor._composition_parent == null:
 		return   # render_mode / no editor UI - tracks aren't interactive there anyway
-	while editor._track_runtime.size() > editor.session.tracks.size():
-		var rt: Dictionary = editor._track_runtime.pop_back()
+	while editor._tracks.runtime.size() > editor.session.tracks.size():
+		var rt: Dictionary = editor._tracks.runtime.pop_back()
 		if rt.has("player"):
 			(rt.player as Node).queue_free()
 		if rt.has("wrap"):
@@ -170,5 +170,5 @@ func reconcile_tracks() -> void:
 		if rt.has("audio") and rt.audio != null:
 			(rt.audio as Node).queue_free()
 	for i in editor.session.tracks.size():
-		if i >= editor._track_runtime.size():
-			editor._build_track_view(i)
+		if i >= editor._tracks.runtime.size():
+			editor._tracks.build_view(i)

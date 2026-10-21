@@ -1,7 +1,7 @@
 extends RefCounted
 class_name Geo
 
-## Geo - small reusable polygon helpers (area, centroid, convex split, fracture).
+## Geo - small reusable polygon helpers (area, centroid, convex split, fracture, footprints).
 ## Shared geometry, not a scene's private code - the fracture that shatters glass
 ## can shatter anything.
 
@@ -77,3 +77,81 @@ static func fracture(base: PackedVector2Array, count: int, impact: Vector2, jitt
 			shards.append(fr)
 			shards.append(bk)
 	return shards
+
+
+# FOOTPRINTS: convex outlines on a plane (a thing's foot on a table, x by z), as the card table
+# stands its things and moves its cards round them.
+
+
+## [param poly]'s bounding rectangle.
+static func bounds(poly: PackedVector2Array) -> Rect2:
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for q in poly:
+		lo = lo.min(q)
+		hi = hi.max(q)
+	return Rect2(lo, hi - lo)
+
+
+## [param poly] moved by [param by].
+static func moved(poly: PackedVector2Array, by: Vector2) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for q in poly:
+		out.append(q + by)
+	return out
+
+
+## A footprint [param poly] (x by z) under [param basis], seen from above.
+static func turned(poly: PackedVector2Array, basis: Basis) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for q in poly:
+		var w := basis * Vector3(q.x, 0.0, q.y)
+		out.append(Vector2(w.x, w.z))
+	return out
+
+
+## [param poly] (convex) pushed out by [param by] all round.
+static func grown(poly: PackedVector2Array, by: float) -> PackedVector2Array:
+	var c := Vector2.ZERO
+	for q in poly:
+		c += q
+	c /= float(maxi(poly.size(), 1))
+	var out := PackedVector2Array()
+	for q in poly:
+		out.append(q + (q - c).normalized() * by)
+	return out
+
+
+## Rectangle [param r] as a convex outline.
+static func of_rect(r: Rect2) -> PackedVector2Array:
+	return PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)])
+
+
+## Whether convex [param a] and [param b] come within [param gap] of each other: no separating
+## axis among their edges' normals with that much room on it.
+static func within(a: PackedVector2Array, b: PackedVector2Array, gap: float) -> bool:
+	if a.size() < 2 or b.size() < 2:
+		return false
+	for poly in [a, b]:
+		var p: PackedVector2Array = poly
+		for i in p.size():
+			var e := p[(i + 1) % p.size()] - p[i]
+			if e.length_squared() < 1e-12:
+				continue
+			var ax := Vector2(-e.y, e.x).normalized()
+			var ra := span(a, ax)
+			var rb := span(b, ax)
+			if ra.x > rb.y + gap or rb.x > ra.y + gap:
+				return false
+	return true
+
+
+## [param poly]'s extent along [param ax]: (least, most).
+static func span(poly: PackedVector2Array, ax: Vector2) -> Vector2:
+	var lo := INF
+	var hi := -INF
+	for q in poly:
+		var d := q.dot(ax)
+		lo = minf(lo, d)
+		hi = maxf(hi, d)
+	return Vector2(lo, hi)

@@ -72,18 +72,7 @@ func _gui_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
-		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
-			if mb.ctrl_pressed:
-				tview.zoom_at(mb.position.x, 1.25)
-			else:
-				tview.pan(-0.1)
-			accept_event()
-			return
-		if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
-			if mb.ctrl_pressed:
-				tview.zoom_at(mb.position.x, 1.0 / 1.25)
-			else:
-				tview.pan(0.1)
+		if tview.wheel(mb):
 			accept_event()
 			return
 		if mb.button_index == MOUSE_BUTTON_LEFT:
@@ -141,14 +130,6 @@ func _marker_near(pos: Vector2) -> Variant:
 	return null
 
 
-## m:ss (or h:mm:ss past an hour) - shared with MaskEditor's panel readout so the
-## two timestamps displayed on screen always agree on format.
-static func format_time(t: float) -> String:
-	var s := maxi(0, int(t))
-	if s >= 3600:
-		return "%d:%02d:%02d" % [s / 3600, (s / 60) % 60, s % 60]
-	return "%d:%02d" % [s / 60, s % 60]
-
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.09, 0.10, 0.13, 0.94))
@@ -205,20 +186,13 @@ func _draw() -> void:
 		var tint := Color(0.45, 0.85, 0.55, 0.16) if is_ramp else Color(0.95, 0.55, 0.3, 0.16)
 		draw_rect(Rect2(x0, 0, maxf(1.0, x1 - x0), size.y), tint)
 	# The ruler adapts its tick step to the visible window, so zooming in brings
-	# finer gradations instead of one lonely label.
-	var step := 60.0
-	for s in [0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0]:
-		if span / s <= 14.0:
-			step = s
-			break
-	var tt := ceilf(tview.view_start / step) * step
-	while tt < tview.view_start + span:
+	# finer gradations instead of one lonely label ([method TimelineView.step_for]).
+	var step := TimelineView.step_for(span, 14.0)
+	for tt in tview.ticks(step):
 		var x := tview.x_of(tt)
 		draw_line(Vector2(x, size.y - 14), Vector2(x, size.y), Color(0.3, 0.34, 0.4, 0.6), 1.0)
-		var tick_label := format_time(tt) if step >= 1.0 else "%.1f" % tt
 		draw_string(ThemeDB.fallback_font, Vector2(x + 3, size.y - 4),
-			tick_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.45, 0.5, 0.58))
-		tt += step
+			TimelineView.tick_label(tt, step), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.45, 0.5, 0.58))
 	# Markers: an anchor line (taller/brighter when selected) plus a triangle handle
 	# pointing back (ramp - it's pulling the timeline in from the past) or forward
 	# (damp - pushing away into the future), colored to match its span tint. The
@@ -243,13 +217,7 @@ func _draw() -> void:
 	var t: float = player.stream_position if player != null else 0.0
 	var px := tview.x_of(t)
 	if px >= -2.0 and px <= size.x + 2.0:
-		draw_line(Vector2(px, 0), Vector2(px, size.y), Color(1, 1, 1, 0.92), 2.0)
-		var tag := format_time(t)
-		var tag_w := ThemeDB.fallback_font.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x + 8.0
-		var tag_x := clampf(px - tag_w * 0.5, 0.0, size.x - tag_w)
-		draw_rect(Rect2(tag_x, 2, tag_w, 18), Color(1, 1, 1, 0.92))
-		draw_string(ThemeDB.fallback_font, Vector2(tag_x + 4, 15), tag,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.05, 0.06, 0.08))
+		TimelineView.draw_playhead(self, px, Color(1, 1, 1, 0.92), Clock.text(t))
 	# Zoom badge, so a zoomed view never masquerades as the whole clip.
 	if tview.zoom > 1.01:
 		draw_string(ThemeDB.fallback_font, Vector2(size.x - 74, 14),

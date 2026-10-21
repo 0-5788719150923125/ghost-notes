@@ -5,8 +5,8 @@ class_name Transport
 ## mode (next/notes.md, "The transport"). It grew out of the Scrubber, Chrome's seek bar.
 ##
 ## THE TRANSPORT BELONGS TO THE CLOCK. It shows exactly when the show is timed
-## ([method Spectrum.timed]) - something conducts: a reading, a synthesis take, a song - and an
-## untimed note has none. Every button goes through Spectrum's transport verbs, which call the
+## ([method Spectrum.timed]) - something conducts: a reading, a synthesis take, a song, a clip in
+## Masking - and an untimed note has none. Every button goes through Spectrum's transport verbs, which call the
 ## registered conductor's hooks or drive a plain file themselves, so a mode never builds its own
 ## Play: four start/stop arrangements, two scrubbers and a Space that meant two things are what
 ## this replaced. Auto and Manual gained a pause with it.
@@ -164,7 +164,7 @@ func _process(delta: float) -> void:
 	_stop.position = Vector2(r.position.x - (BTN + GAP), y)
 	var t := Spectrum.scrub_position()
 	var total := maxf(0.0, Spectrum.scrub_length())
-	_label.text = "%s / %s" % [_clock(t), _clock(total)] if total > 0.0 else _clock(t)
+	_label.text = "%s / %s" % [Clock.text(t), Clock.text(total)] if total > 0.0 else Clock.text(t)
 	_label.position = Vector2(r.position.x, r.position.y - 20.0)
 	_label.modulate.a = _shown
 	_painter.queue_redraw()
@@ -260,13 +260,6 @@ func _rail() -> Rect2:
 	return Rect2(Vector2(left, vp.y - PAD), Vector2(maxf(10.0, vp.x - margin - left), BAR_H))
 
 
-static func _clock(t: float) -> String:
-	var s := int(maxf(0.0, t))
-	if s >= 3600:
-		return "%d:%02d:%02d" % [s / 3600, (s / 60) % 60, s % 60]
-	return "%d:%02d" % [s / 60, s % 60]
-
-
 class Painter:
 	extends Control
 	var owner_node: Transport
@@ -310,7 +303,7 @@ class Painter:
 			Color(1, 1, 1, 0.7 * a), true)
 		var font := get_theme_default_font()
 		const FS := 13
-		var text := Transport._clock(hf * total)
+		var text := Clock.text(hf * total)
 		var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, FS).x
 		var hgt := font.get_height(FS) + 4.0
 		var box := Rect2(Vector2(x - tw * 0.5 - 7.0, r.position.y - 24.0 - hgt), Vector2(tw + 14.0, hgt))

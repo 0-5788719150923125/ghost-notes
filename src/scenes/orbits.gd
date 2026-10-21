@@ -53,9 +53,16 @@ var _ch := Vector2.ZERO       # live tonal color (hue, strength) from the harmon
 var _sch: Scheme = null
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"figure": {"label": "Figure", "type": "choice", "options": "FIGURES", "default": null,
+		"blurb": "The figure the pen traces: a folding harmonograph rosette, a closed Lissajous braid, spirograph petal loops around an open ring, or a damped pendulum that spirals in."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
-	var keys := FIGURES.keys()
-	var figure := String(keys[rng.randi() % keys.size()])
+	var figure := String(choice("figure", rng))
 	var fig: Dictionary = FIGURES[figure]
 	_sch = Scheme.pick(rng)                  # any mood suits a line drawing
 	var n := rng.randi_range(int(fig["curves"][0]), int(fig["curves"][1]))

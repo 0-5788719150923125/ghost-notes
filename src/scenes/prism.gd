@@ -31,13 +31,21 @@ var _prism: PrismBody
 var _hue := 0.6
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"presence": {"label": "Presence", "type": "choice", "options": "PRESENCE", "default": null,
+		"blurb": "How much of the frame the prism claims: a distant mote, a portrait, or a looming shape that overruns the view."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "scene3d"
 	framing = "plane"                          # the prism hovers; keep the view square-on
 	var sch := Scheme.pick(rng)
 	_hue = sch.vary(rng)
 	_prism = PrismBody.new(rng.randi())
-	var pres := String(PRESENCE.keys()[rng.randi() % PRESENCE.size()])
+	var pres := String(choice("presence", rng))
 	var band: Array = PRESENCE[pres]
 	return {"radius": rng.randf_range(float(band[0]), float(band[1])),
 		"mood": sch.name, "hue": _hue, "presence": pres, "form": _prism.form}

@@ -66,12 +66,20 @@ var _crumble_t := 0.0
 var _done := false
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"arrangement": {"label": "Arrangement", "type": "choice", "options": "ARRANGEMENTS", "default": null,
+		"blurb": "How many stones and how big: a couple of boulders filling the frame, a resting cluster, or a wide scatter of small scree."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "mesh3d"
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED   # so the panned reveal mask wraps seamlessly
 	_mode = rng.randi_range(0, 2)
 	# Composition first: it decides which stone styles belong in it (see ARRANGEMENTS).
-	var arrangement := String(ARRANGEMENTS.keys()[rng.randi() % ARRANGEMENTS.size()])
+	var arrangement := String(choice("arrangement", rng))
 	var arr: Dictionary = ARRANGEMENTS[arrangement]
 	var styles: Array = arr.styles
 	_style = String(styles[rng.randi() % styles.size()])

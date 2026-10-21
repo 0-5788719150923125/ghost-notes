@@ -35,11 +35,21 @@ var _t := 0.0
 var _tb := TriBatch.new()
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"stack": {"label": "Stack", "type": "choice", "options": "STACKS", "default": null,
+		"blurb": "How many planes and how thick they sit: a few big slabs, a stack, or a deep stack receding."},
+	"profile": {"label": "Profile", "type": "choice", "options": "PROFILES", "default": null,
+		"blurb": "The line each plane's edge follows: smooth swells, ridges or terraces."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
 	# Planes of light are abstract: no mood is wrong, so take the whole set.
 	var sch := Scheme.pick(rng)
-	var kname := String(STACKS.keys()[rng.randi() % STACKS.size()])
+	var kname := String(choice("stack", rng))
 	var st: Dictionary = STACKS[kname]
 	var pl: Array = st["planes"]
 	var am: Array = st["amp"]
@@ -51,7 +61,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"planes": rng.randi_range(int(pl[0]), int(pl[1])),
 		"stack": kname,
 		"mood": sch.name,
-		"profile": String(PROFILES[rng.randi() % PROFILES.size()]),
+		"profile": String(choice("profile", rng)),
 		"steps": rng.randi_range(4, 11),        # terrace profile: how many treads
 		"hue": sch.hue,
 		"hue_span": to_accent * rng.randf_range(0.5, 1.3),

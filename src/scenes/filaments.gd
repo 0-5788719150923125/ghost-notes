@@ -71,10 +71,17 @@ var _cur_maxd := 1           # the bolt being drawn: its deepest branch level
 var _cur_persist := false    # the bolt being drawn: is a persistent channel
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"kind": {"label": "Kind", "type": "choice", "options": "MODES", "default": null,
+		"blurb": "What the filaments are: lightning bolts that strike, neural tendrils, or fiber threads."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_rng.seed = rng.randi()
-	var keys := MODES.keys()
-	_mode = keys[rng.randi() % keys.size()]
+	_mode = choice("kind", rng)
 	_cfg = MODES[_mode]
 	_strike_mode = bool(_cfg.strike)
 	# Lightning converges on a point: the spread bolts all strike toward it.

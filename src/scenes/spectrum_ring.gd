@@ -32,6 +32,16 @@ var _eye: EyeBody
 var _lens: Lens3D
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"form": {"label": "Bar shape", "type": "choice", "options": "FORMS", "default": null,
+		"blurb": "How each band's bar is drawn: a spoke, a wedge or a tick, so the ring reads as a spoke wheel, a sunburst or a dashed dial."},
+	"growth": {"label": "Growth", "type": "choice", "options": "GROWTH", "default": null,
+		"blurb": "Which way the bars grow off the rim: outward, inward like a closing iris, or both ways as two-ended spikes."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var sparsity := 0.0 if rng.randf() < 0.4 else rng.randf_range(0.3, 0.7)
 	_act = Activation.new(AudioFeatures.BAND_COUNT, rng, sparsity)
@@ -62,8 +72,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"spin_rate": rng.randf_range(-0.10, 0.10),
 		"mirror": rng.randi_range(1, 2),
 		"thickness": rng.randf_range(1.5, 9.0),
-		"form": FORMS[rng.randi() % FORMS.size()],
-		"growth": GROWTH[rng.randi() % GROWTH.size()],
+		"form": choice("form", rng),
+		"growth": choice("growth", rng),
 	}
 
 

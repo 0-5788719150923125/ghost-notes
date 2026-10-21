@@ -70,11 +70,19 @@ var _forge := FrameForge.new()   # the city is built OFF-THREAD (see FrameForge)
                                  # finished packet - the UI never waits on tiles
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"place": {"label": "Place", "type": "choice", "options": "CHARACTER", "default": null,
+		"blurb": "What kind of place the city is: countryside, a megacity, a dustbowl or a neon city, which sets its block size, its land, its districts and its air."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "swarm"
 	framing = "field"
 	_theme = "growth" if rng.randf() < 0.5 else "pulse"
-	_char = String(CHARACTER.keys()[rng.randi() % CHARACTER.size()])
+	_char = String(choice("place", rng))
 	var ch: Dictionary = CHARACTER[_char]
 	var grid: Array = ch["grid"]
 	_g = rng.randi_range(int(grid[0]), int(grid[1]))
@@ -131,8 +139,6 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 func _band(b, rng: RandomNumberGenerator) -> float:
 	var a: Array = b
 	return rng.randf_range(float(a[0]), float(a[1]))
-
-
 
 
 func update(f: AudioFeatures, delta: float) -> void:

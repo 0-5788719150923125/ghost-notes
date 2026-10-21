@@ -286,20 +286,16 @@ func _build_panel() -> void:
 	_panel.card_prefix = _section
 	_panel.add_component_row(_has, _attach)
 	_build_source(_panel.add_card("script", "Script", &"paper"))
-	# WHAT PRODUCES THE TEXT comes before the voice that reads it (a show of cards' episode)
-	_note_cards(true)
-	# The voice card: the cast rows (Turn, Hesitate, the list of speakers) are global; every row
-	# below the list belongs to the speaker that is selected in it.
-	var voice: VBoxContainer = _panel.add_card("voice", "Voice", &"voice", "voice")
-	_cast.build_cast(voice)
-	_cast.build_voice(voice)
 	# the transport's rail seeks by sentence, once a drag settles (see ReadingStream.seek)
 	_seek_timer = Timer.new()
 	_seek_timer.one_shot = true
 	_seek_timer.wait_time = SEEK_SETTLE
 	_seek_timer.timeout.connect(_stream.seek_now)
 	add_child(_seek_timer)
-	# THE REST ARE THE NOTE'S (the Picture, the Storyboard, the Look, the bookends...)
+	# WHAT PRODUCES THE TEXT comes before the voice that reads it (a show of cards' episode)
+	_note_cards(true)
+	# THE REST ARE THE NOTE'S: the Voice ([VoiceCard], the cast this panel reads), the Picture, the
+	# Storyboard, the Look, the bookends...
 	_note_cards(false)
 	# ...and where the video goes, when the note says so
 	if _attached.has("youtube"):
@@ -322,14 +318,15 @@ func _row(field: String) -> String:
 ## THE NOTE'S CARDS ([method NoteCards.build]): one for each component it has - or, started without
 ## a note, each the workspace has ([method _components]) - built the way every panel builds them.
 ## [param producers]: the cards of what produces the text, which stand above the voice that reads
-## it (a show of cards' episode); otherwise the rest, below it. YouTube is this panel's own to build
-## ([method _add_youtube]: a component adds rows of its own to it). Each card is handed what it may
-## need of this panel in `ctx`: `workspace` (this panel - a producer hands it what the reading reads),
-## `reading` (a voice is attached, so every medium is offered) and the bookends' tooltips in the
-## words of what the show is presented on (its row's `intro_tip` / `outro_tip`).
+## it (a show of cards' episode); otherwise the rest, the Voice first. YouTube is this panel's own to
+## build ([method _add_youtube]: a component adds rows of its own to it). Each card is handed what it
+## may need of this panel in `ctx`: `workspace` (this panel - a producer hands it what the reading
+## reads), `cast` (the voices the reading plays, which the Voice shows), `reading` (a voice is
+## attached, so every medium is offered) and the bookends' tooltips in the words of what the show is
+## presented on (its row's `intro_tip` / `outro_tip`).
 func _note_cards(producers: bool) -> void:
-	var have := _components()
-	var with := {"reading": true, "workspace": self}
+	var have := _voiced()
+	var with := {"reading": true, "workspace": self, "cast": _cast}
 	for key in have:
 		for tip in ["intro_tip", "outro_tip"]:
 			var said := String((Components.REGISTRY.get(key, {}) as Dictionary).get(tip, ""))
@@ -361,6 +358,15 @@ func _components() -> Array:
 	if not note_path.is_empty():
 		return _attached
 	return Registry.field(Components.WORKSPACES, workspace, "classic", ["text", "voice"]) as Array
+
+
+## ...AND ITS VOICE, ALWAYS, for the cards and the blocks they keep: a reading is the voice's
+## workspace, and a show of cards or a proof requires one - before its note carries the block.
+func _voiced() -> Array:
+	var have: Array = _components().duplicate()
+	if not have.has("voice"):
+		have.append("voice")
+	return have
 
 
 ## Put [param card] - a node with `KEY`, `capture()` and `apply(block)` - on a card of its own,
@@ -706,12 +712,10 @@ func _load_persisted() -> void:
 func _doc_blocks() -> PackedStringArray:
 	# asked before the cards are built (the script's source is set up first), so read off what
 	# the note has attached, never off the cards - in the order the cards stand: what produces the
-	# text, the voice (this panel's own), then the rest
-	var have := _components()
+	# text, the voice, then the rest
+	var have := _voiced()
 	var out := PackedStringArray()
 	for producers in [true, false]:
-		if not producers:
-			out.append("voice")
 		for key in _hosted():
 			var producer := StringName(Registry.field(Components.REGISTRY, key, "family", &"")) == &"producer"
 			if producer != producers or not have.has(key):
@@ -734,11 +738,8 @@ func _doc_capture() -> Dictionary:
 	return out
 
 
-## One block as it is now, or null for one this panel does not keep. The voice is the panel's
-## own; every other block is a card's ([method _add_block_card]).
+## One block as it is now, or null for one this panel does not keep: each is a card's.
 func _capture_block(key: String) -> Variant:
-	if key == "voice":
-		return _cast.capture()
 	var card: Object = _block_cards.get(key)
 	return card.capture() if card != null else null
 
@@ -746,13 +747,15 @@ func _capture_block(key: String) -> Variant:
 ## ...and back the other way: the blocks a document carries, each to its card. A block the
 ## document does not carry changes nothing.
 func _doc_apply(blocks: Dictionary) -> void:
-	# THE CARDS first, and on their own: a document may carry a look and no cast yet.
+	# THE OTHER CARDS first, and on their own: a document may carry a look and no cast yet - then
+	# the voice, whose cast reads the script's speakers as the rest stand
 	for key in _doc_blocks():
 		var card: Object = _block_cards.get(key)
-		if card != null and blocks.get(key) is Dictionary:
+		if key != VoiceCard.KEY and card != null and blocks.get(key) is Dictionary:
 			card.apply(blocks[key] as Dictionary)
-	if blocks.get("voice") is Dictionary:
-		_cast.apply(blocks["voice"] as Dictionary)
+	var voice: Object = _block_cards.get(VoiceCard.KEY)
+	if voice != null and blocks.get(VoiceCard.KEY) is Dictionary:
+		voice.apply(blocks[VoiceCard.KEY] as Dictionary)
 
 
 ## The script's text, whenever the cast is read from it: the book's pictures follow it.

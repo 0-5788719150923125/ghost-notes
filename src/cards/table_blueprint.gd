@@ -7,7 +7,7 @@ class_name TableBlueprint
 ## orientations"). Before it, a thing named a zone and the table hunted that zone for room: the set
 ## dresser of True Tarot #15853 moved a felt pad to lie under wherever the hunt had put its journal, and
 ## a glass of grass was LEFT OFF, "not in front of another group", until it was named into another
-## zone. Now each thing is written where it stands ([method TableMedium._stand_at]) and this is what
+## zone. Now each thing is written where it stands ([method TableThings.stand_at]) and this is what
 ## the set dresser plans it on:
 ##
 ##   - paper ruled in centimeters from the middle of the reading - where a thing's `at` is measured
@@ -50,14 +50,14 @@ const TROUBLE := Color("#c0392b")
 const FONT_SIZE := 14
 const SMALL := 12
 
-## What [method TableMedium.blueprint] handed over, and `numbers`: each thing's number, by name.
+## What [method TableThings.blueprint] handed over, and `numbers`: each thing's number, by name.
 var data := {}
 
 
 func _draw() -> void:
 	var v := view(data, Vector2(SHEET))
 	var room: Rect2 = v["room"]
-	var room_poly := _rect_poly(room)
+	var room_poly := Geo.of_rect(room)
 	var cam: Transform3D = data["camera"]
 	var fov := float(data["fov"])
 	var font := ThemeDB.fallback_font
@@ -78,7 +78,7 @@ func _draw() -> void:
 			_hatch(off, 12.0, GRID10, 1.0)
 	# where the cards go: nothing stands there
 	for r in data.get("keep_out", []):
-		var rp := _rect_poly(Rect2(_to_px(v, (r as Rect2).position), (r as Rect2).size * float(v["scale"])))
+		var rp := Geo.of_rect(Rect2(_to_px(v, (r as Rect2).position), (r as Rect2).size * float(v["scale"])))
 		for piece in Geometry2D.intersect_polygons(rp, room_poly):
 			_hatch(piece, 7.0, FAINT, 1.0)
 			_line(piece, FAINT, 1.0, room_poly, 0.0, true)
@@ -89,17 +89,17 @@ func _draw() -> void:
 		_line(poly, INK, 1.5, room_poly, 0.0, true)
 	var deck := _px(v, card_outline(data.get("deck", Vector2.ZERO), 0.0, card))
 	draw_colored_polygon(deck, FAINT)
-	_label(font, _center(deck), "deck", SMALL, PAPER, FAINT)
+	_label(font, Geo.centroid(deck), "deck", SMALL, PAPER, FAINT)
 	var shuffle: Rect2 = data.get("shuffle", Rect2())
 	if shuffle.has_area():
 		late.append([_to_px(v, Vector2(shuffle.get_center().x, shuffle.position.y)) + Vector2(0.0, -5.0), "the cards' room", INK, true])
 	# the reader's workspace, and the line the flames stand behind
 	var ws: Rect2 = data.get("workspace", Rect2())
 	if ws.has_area():
-		var wp := _rect_poly(Rect2(_to_px(v, ws.position), ws.size * float(v["scale"])))
+		var wp := Geo.of_rect(Rect2(_to_px(v, ws.position), ws.size * float(v["scale"])))
 		for piece in Geometry2D.intersect_polygons(wp, room_poly):
 			_line(piece, INK, 1.0, room_poly, 2.0, true)
-			var b := _bounds(piece)
+			var b := Geo.bounds(piece)
 			_label(font, Vector2(b.get_center().x, minf(b.end.y - 10.0, b.position.y + 22.0)), "the reader's hands", SMALL, INK, PAPER)
 	var area: Rect2 = v["area"]
 	var flames := float(data.get("flames_behind", 0.0))
@@ -114,7 +114,7 @@ func _draw() -> void:
 		_line(lp, INK, 1.0, room_poly, 6.0, true)
 		var inside: Array = Geometry2D.intersect_polygons(lp, room_poly)
 		if not inside.is_empty() and not String((l as Dictionary)["name"]).is_empty():
-			var lb := _bounds(inside[0])
+			var lb := Geo.bounds(inside[0])
 			_label(font, Vector2(lb.position.x + 6.0, lb.position.y + 14.0), String((l as Dictionary)["name"]), SMALL, FAINT, PAPER, false)
 	_line(top_px, INK, 3.0, room_poly, 0.0, true)
 	# where a foot must stay inside the top ([constant Tables.THING_EDGE])
@@ -148,11 +148,11 @@ func _things(v: Dictionary, font: Font, room_poly: PackedVector2Array, cam: Tran
 		if foot.size() < 3:
 			# a strand laid across the table: the stretch it covers
 			var bb: Rect2 = d["bb"]
-			_line(_rect_poly(Rect2(_to_px(v, bb.position), bb.size * s)), INK, 1.0, room_poly, 6.0, true)
+			_line(Geo.of_rect(Rect2(_to_px(v, bb.position), bb.size * s)), INK, 1.0, room_poly, 6.0, true)
 			continue
 		var written: Variant = d.get("written")
 		if written != null and float(d.get("moved", 0.0)) > 0.004:
-			var was := _px(v, _moved_by(d["foot"], (written as Vector2) - at))
+			var was := _px(v, Geo.moved(d["foot"], (written as Vector2) - at))
 			_line(was, TROUBLE, 1.5, room_poly, 6.0, true)
 			_line(PackedVector2Array([_to_px(v, written), _to_px(v, at)]), TROUBLE, 1.0, room_poly, 0.0, false)
 		draw_colored_polygon(foot, LIT if int(d.get("lit", 0)) > 0 else FOOT)
@@ -255,7 +255,7 @@ func _key(font: Font) -> void:
 			var sw := Rect2(Vector2(x, y - 11.0), Vector2(22.0, 13.0))
 			match kind:
 				"hatch":
-					_hatch(_rect_poly(sw), 5.0, FAINT, 1.0)
+					_hatch(Geo.of_rect(sw), 5.0, FAINT, 1.0)
 					draw_rect(sw, FAINT, false, 1.0)
 				"gray":
 					draw_rect(sw, UNSEEN)
@@ -265,7 +265,7 @@ func _key(font: Font) -> void:
 				"height":
 					draw_line(Vector2(x, y - 4.0), Vector2(x + 22.0, y - 4.0), HEIGHT_INK, 2.0)
 				"dots":
-					_line(_rect_poly(sw), INK, 1.0, PackedVector2Array(), 2.0, true)
+					_line(Geo.of_rect(sw), INK, 1.0, PackedVector2Array(), 2.0, true)
 				"moved":
 					draw_dashed_line(Vector2(x, y - 4.0), Vector2(x + 22.0, y - 4.0), TROUBLE, 2.0, 4.0)
 				"edge":
@@ -293,11 +293,11 @@ static func view(d: Dictionary, sheet := Vector2(SHEET)) -> Dictionary:
 	var have := false
 	if d.get("camera") is Transform3D and d.has("top"):
 		for poly in Geometry2D.intersect_polygons(outline(d["top"]), seen(d["camera"], float(d.get("fov", 40.0)))):
-			area = _bounds(poly) if not have else area.merge(_bounds(poly))
+			area = Geo.bounds(poly) if not have else area.merge(Geo.bounds(poly))
 			have = true
 	var card: Vector2 = d.get("card", Vector2(0.07, 0.12))
 	for c in d.get("cards", []):
-		var r := _bounds(card_outline((c as Dictionary)["pos"], float((c as Dictionary)["yaw"]), card))
+		var r := Geo.bounds(card_outline((c as Dictionary)["pos"], float((c as Dictionary)["yaw"]), card))
 		area = r if not have else area.merge(r)
 		have = true
 	for t in d.get("things", []):
@@ -385,7 +385,7 @@ static func height_line(cam: Transform3D, fov: float, h: float, area: Rect2) -> 
 	var m := area.get_center()
 	var p0 := m + g * (h - (m.dot(g) + r.z)) / g.length_squared()
 	var way := Vector2(-g.y, g.x).normalized() * (area.size.length() * 2.0)
-	var pieces: Array = Geometry2D.intersect_polyline_with_polygon(PackedVector2Array([p0 - way, p0 + way]), _rect_poly(area))
+	var pieces: Array = Geometry2D.intersect_polyline_with_polygon(PackedVector2Array([p0 - way, p0 + way]), Geo.of_rect(area))
 	if pieces.is_empty() or (pieces[0] as PackedVector2Array).size() < 2:
 		return PackedVector2Array()
 	var piece: PackedVector2Array = pieces[0]
@@ -400,33 +400,6 @@ static func card_outline(pos: Vector2, yaw: float, size: Vector2) -> PackedVecto
 		var w := Basis(Vector3.UP, yaw) * l
 		out.append(pos + Vector2(w.x, w.z))
 	return out
-
-
-static func _moved_by(poly: PackedVector2Array, by: Vector2) -> PackedVector2Array:
-	var out := PackedVector2Array()
-	for q in poly:
-		out.append(q + by)
-	return out
-
-
-static func _bounds(poly: PackedVector2Array) -> Rect2:
-	var lo := Vector2(INF, INF)
-	var hi := Vector2(-INF, -INF)
-	for q in poly:
-		lo = lo.min(q)
-		hi = hi.max(q)
-	return Rect2(lo, hi - lo)
-
-
-static func _center(poly: PackedVector2Array) -> Vector2:
-	var c := Vector2.ZERO
-	for q in poly:
-		c += q
-	return c / maxf(float(poly.size()), 1.0)
-
-
-static func _rect_poly(r: Rect2) -> PackedVector2Array:
-	return PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)])
 
 
 # --- the pen ----------------------------------------------------------------------------------------------
@@ -449,7 +422,7 @@ func _line(poly: PackedVector2Array, color: Color, width: float, clip: PackedVec
 
 ## [param poly] hatched with diagonal lines [param gap] pixels apart.
 func _hatch(poly: PackedVector2Array, gap: float, color: Color, width: float) -> void:
-	var b := _bounds(poly)
+	var b := Geo.bounds(poly)
 	var c := b.position.x - b.end.y
 	while c < b.end.x - b.position.y:
 		var line := PackedVector2Array([Vector2(c + b.position.y, b.position.y), Vector2(c + b.end.y, b.end.y)])

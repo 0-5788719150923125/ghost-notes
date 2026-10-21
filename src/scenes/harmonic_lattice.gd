@@ -38,13 +38,23 @@ var _ch := Vector2.ZERO            # live tonal color (hue, strength) from the h
 var _sig := PackedFloat32Array()   # the 12 chroma channels + coarse shape (continuous)
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"density": {"label": "Density", "type": "choice", "options": "DENSITIES", "default": null,
+		"blurb": "How finely the field is divided: a few big coarse panels, a medium grid, or a fine mesh."},
+	"cell": {"label": "Cell", "type": "choice", "options": "FORMS", "default": null,
+		"blurb": "The shape of each cell: a square, a diamond, a triangle, a hexagon or a disc."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
 	# A lattice is abstract geometry - no mood is wrong for it, so take the whole set.
 	var sch := Scheme.pick(rng)
-	var dname := String(DENSITIES.keys()[rng.randi() % DENSITIES.size()])
+	var dname := String(choice("density", rng))
 	var den: Dictionary = DENSITIES[dname]
-	var fname := String(FORMS.keys()[rng.randi() % FORMS.size()])
+	var fname := String(choice("cell", rng))
 	var form: Dictionary = FORMS[fname]
 	var cr: Array = den["cols"]
 	var rr: Array = den["rows"]

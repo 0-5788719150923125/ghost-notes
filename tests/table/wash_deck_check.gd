@@ -1,6 +1,6 @@
 extends Node
 
-## THE WASH WASHES THE DECK ([TableShuffle], [method TableMedium._deck_count]). The user, 2026-10-14:
+## THE WASH WASHES THE DECK ([TableShuffle], [method TablePlan.deck_count]). The user, 2026-10-14:
 ## in a wash "the cards NOT being moved are still slowly drifting/sliding away from each other... the
 ## cards just slide along the table, gently, as if on ice... Cards should settle, when they are not
 ## being moved by the washing directly (or pushed by other cards...)"; and "when the cards are

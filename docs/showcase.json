@@ -1,5 +1,5 @@
 {
-	"digest": "453a0d5a41daf84985d1bbe5185cd5d98b9bafa2192702b9264e46925187b6ac",
+	"digest": "a561a30dc40bdaa8ef83aced5ca3808874827f422fcd3e9f4927b9d44466efad",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -55,6 +55,7 @@
 		"res://src/audio/spectrum.gd",
 		"res://src/cards/card_episode.gd",
 		"res://src/cards/dealer_tools.gd",
+		"res://src/data/clock.gd",
 		"res://src/data/data_path.gd",
 		"res://src/data/front_matter.gd",
 		"res://src/data/manuscript.gd",
@@ -85,6 +86,7 @@
 		"res://src/masking/mask_region.gd",
 		"res://src/masking/mask_session.gd",
 		"res://src/masking/mask_timeline.gd",
+		"res://src/masking/mask_tracks.gd",
 		"res://src/masking/mask_undo.gd",
 		"res://src/masking/mask_url_import.gd",
 		"res://src/masking/mask_waveform.gd",
@@ -138,6 +140,7 @@
 		"res://src/reading/reading_stream.gd",
 		"res://src/reading/synth_editor.gd",
 		"res://src/reading/text_walk.gd",
+		"res://src/reading/voice_card.gd",
 		"res://src/render/frame_forge.gd",
 		"res://src/render/lens3d.gd",
 		"res://src/render/mesh3d.gd",

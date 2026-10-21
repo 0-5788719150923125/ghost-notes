@@ -290,7 +290,7 @@ func _make_draw() -> String:
 			left.append({"key": card.get("key", ""), "name": card.get("name", ""), "numeral": card.get("numeral", ""),
 				"group": card.get("group", ""), "series": card.get("series", ""), "meaning": card.get("meaning", "")})
 	# ...and HOW MANY CARDS THE DECK HELD: the table stands, shuffles and washes that many
-	# (TableMedium._deck_count)
+	# (TablePlan.deck_count)
 	return episode.write_json("draw", {"seed": episode.seed, "cards": cards, "left": left, "deck_n": deck.size()})
 
 

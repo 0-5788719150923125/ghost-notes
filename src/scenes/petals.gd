@@ -40,11 +40,18 @@ const FALLS := {
 }
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"fall": {"label": "Fall", "type": "choice", "options": "FALLS", "default": null,
+		"blurb": "What is falling: blossom, autumn leaves, spring petals, or flakes of ash over a dark ground."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
-	var keys := FALLS.keys()
-	var season := String(keys[rng.randi() % keys.size()])
+	var season := String(choice("fall", rng))
 	var fl: Dictionary = FALLS[season]
 	var sch := Scheme.among(fl["moods"], rng)
 	var val: Array = fl["val"]

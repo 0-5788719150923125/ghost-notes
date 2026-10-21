@@ -2,7 +2,7 @@ extends Node
 
 ## THINGS STAND WHERE THE SET DRESSER WROTE THEM (the user, 2026-10-18: "do the planning and desired
 ## placements up-front, then verify with screenshots at the end"). A thing with an `at` is stood by
-## [method TableMedium._stand_at], not hunted for in a zone; over several seeds, on a fixture of its own:
+## [method TableThings.stand_at], not hunted for in a zone; over several seeds, on a fixture of its own:
 ##
 ##   - a thing whose written spot is clear stands EXACTLY there, turned and sized as written - no hand's
 ##     jitter; one moved was moved for a reason that is real: its written foot runs off the top, into
@@ -16,7 +16,7 @@ extends Node
 ##     left off, kept in the blueprint's `unstood` with where it was written and why;
 ##   - a thing with no `at` still finds a spot in its zone, clear of every written thing;
 ##   - a crowded table - 28 small things written in rows round the back and sides - stands nearly whole;
-##   - the blueprint ([method TableMedium.blueprint]) holds every stood thing, its written spot and move,
+##   - the blueprint ([method TableThings.blueprint]) holds every stood thing, its written spot and move,
 ##     the spread's cards, where nothing may stand, the camera; and the drawing ([method TableBlueprint.view])
 ##     fits every thing.
 ##
@@ -82,8 +82,8 @@ func _run() -> void:
 		# a first build, to learn where this seed's cards go
 		_build(s, {"materials": MATERIALS, "things": []})
 		var mid: Vector3 = medium._plan.mid
-		var room: Rect2 = medium._shuffle_rect()
-		var away := -signf(medium._deck_base.x) if absf(medium._deck_base.x) > 0.01 else -1.0
+		var room: Rect2 = medium._things_part.shuffle_rect()
+		var away := -signf(medium._plan.deck_base.x) if absf(medium._plan.deck_base.x) > 0.01 else -1.0
 		var cm := func(p: Vector2) -> Array: return [(p.x - Tables.ORIGIN.x) * 100.0, (p.y - Tables.ORIGIN.y) * 100.0]
 		var edge_at := Vector2(room.get_center().x, room.position.y)
 		var flame_at := Vector2(mid.x + away * 0.45, mid.z + 0.03)
@@ -103,9 +103,9 @@ func _run() -> void:
 		]
 		_build(s, {"materials": MATERIALS, "things": things})
 		var stood := {}
-		for th in medium._things:
+		for th in medium._things_part.on_table:
 			stood[String((th as Dictionary)["name"])] = th
-		var keep: Array = medium._keep_out()
+		var keep: Array = medium._things_part.off_limits()
 		for t in things:
 			var d: Dictionary = t
 			if not d.has("at") or not stood.has(String(d["name"])):
@@ -125,7 +125,7 @@ func _run() -> void:
 			else:
 				n["moved"] += 1
 				# the gate's own geometry: the written foot must really hit something
-				var foot: PackedVector2Array = TableMedium._translated(th["outline"], want - at)
+				var foot: PackedVector2Array = Geo.moved(th["outline"], want - at)
 				if _hits(foot, keep, th, int(th["lit"]) > 0 and want.y > mid.z):
 					n["moved_real"] += 1
 		# ACROSS THE CARDS' ROOM: out of it, no further than it must go
@@ -134,7 +134,7 @@ func _run() -> void:
 			var at := Vector2((dish["node"] as Node3D).position.x, (dish["node"] as Node3D).position.z)
 			n["edge_ok"] += 1 if not _hits(dish["outline"], keep, dish, false) and not _hits_room(dish["outline"], keep) else 0
 			n["edge_far"] += _nearer_clear(dish, edge_at, keep)
-			n["edge_hit"] += 1 if _hits(TableMedium._translated(dish["outline"], edge_at - at), keep, {}, false) else 0
+			n["edge_hit"] += 1 if _hits(Geo.moved(dish["outline"], edge_at - at), keep, {}, false) else 0
 			n["edge_cards"] += 1 if String(dish["why"]).contains("cards") else 0
 		else:
 			n["edge_out"] += 1
@@ -142,9 +142,9 @@ func _run() -> void:
 		var stone: Dictionary = stood.get("a stone", {})
 		var ledger: Dictionary = stood.get("a ledger", {})
 		if not stone.is_empty() and not ledger.is_empty():
-			n["on_ok"] += 1 if not TableMedium._convex_overlap(stone["outline"], ledger["outline"], 0.0) else 0
-			var was := TableMedium._translated(stone["outline"], Tables.ORIGIN + Vector2(-0.42, -0.26) - Vector2((stone["node"] as Node3D).position.x, (stone["node"] as Node3D).position.z))
-			n["on_hit"] += 1 if TableMedium._convex_overlap(was, ledger["outline"], 0.0) else 0
+			n["on_ok"] += 1 if not Geo.within(stone["outline"], ledger["outline"], 0.0) else 0
+			var was := Geo.moved(stone["outline"], Tables.ORIGIN + Vector2(-0.42, -0.26) - Vector2((stone["node"] as Node3D).position.x, (stone["node"] as Node3D).position.z))
+			n["on_hit"] += 1 if Geo.within(was, ledger["outline"], 0.0) else 0
 			n["on_named"] += 1 if String(stone["why"]).contains("a ledger") else 0
 		# A FLAME IN FRONT OF THE MIDDLE goes behind it
 		var pillar: Dictionary = stood.get("a pillar", {})
@@ -152,7 +152,7 @@ func _run() -> void:
 			n["flame_ok"] += 1 if (pillar["node"] as Node3D).position.z <= mid.z + 1e-4 else 0
 			n["flame_front"] += 1 if flame_at.y > mid.z else 0
 		# DEEP IN THE CARDS' ROOM: left off, and the blueprint says where it was written and why
-		var bp: Dictionary = medium.blueprint()
+		var bp: Dictionary = medium._things_part.blueprint()
 		for u in bp["unstood"]:
 			if String((u as Dictionary)["name"]) == "a crate" and ((u as Dictionary)["written"] as Vector2).distance_to(room.get_center()) < 0.001 \
 					and String((u as Dictionary)["why"]).contains("cards"):
@@ -162,12 +162,12 @@ func _run() -> void:
 		var bottle: Dictionary = stood.get("a bottle", {})
 		if not bottle.is_empty() and bottle.get("written") == null:
 			var clear := true
-			for other in medium._things:
-				if other != bottle and TableMedium._convex_overlap(bottle["outline"], (other as Dictionary)["outline"], 0.0):
+			for other in medium._things_part.on_table:
+				if other != bottle and Geo.within(bottle["outline"], (other as Dictionary)["outline"], 0.0):
 					clear = false
 			n["zone_ok"] += 1 if clear else 0
 		# THE BLUEPRINT holds what stood, and the drawing fits it
-		var fits := (bp["things"] as Array).size() == medium._things.size() and (bp["cards"] as Array).size() == (medium._plan.slots as Array).size() \
+		var fits := (bp["things"] as Array).size() == medium._things_part.on_table.size() and (bp["cards"] as Array).size() == (medium._plan.slots as Array).size() \
 			and not (bp["keep_out"] as Array).is_empty() and bp["camera"] is Transform3D
 		for t in bp["things"]:
 			if String((t as Dictionary)["name"]) == "a stone":
@@ -186,11 +186,11 @@ func _run() -> void:
 			crowd.append(_box("left %d" % i, [4, 5, 4], [-50.0, -24.0 + i * 6.0]))
 			crowd.append(_box("right %d" % i, [4, 5, 4], [50.0, -24.0 + i * 6.0]))
 		_build(s, {"materials": MATERIALS, "things": crowd})
-		n["crowd"] += medium._things.size()
+		n["crowd"] += medium._things_part.on_table.size()
 		n["crowd_of"] += crowd.size()
-		for i in medium._things.size():
-			for j in range(i + 1, medium._things.size()):
-				if TableMedium._convex_overlap((medium._things[i] as Dictionary)["outline"], (medium._things[j] as Dictionary)["outline"], 0.0):
+		for i in medium._things_part.on_table.size():
+			for j in range(i + 1, medium._things_part.on_table.size()):
+				if Geo.within((medium._things_part.on_table[i] as Dictionary)["outline"], (medium._things_part.on_table[j] as Dictionary)["outline"], 0.0):
 					n["touching"] += 1
 	print(n)
 	_ok(n["written"] >= SEEDS * 6 and n["exact"] >= n["written"] - SEEDS * 3, "a clear written spot is where a thing stands (%d of %d exactly where written)" % [n["exact"], n["written"]])
@@ -236,15 +236,15 @@ func _build(s: int, table: Dictionary) -> void:
 ## counts - here, the cards' room and the table's edge, the things before it standing far off.
 func _nearer_clear(th: Dictionary, written: Vector2, keep: Array) -> int:
 	var at := Vector2((th["node"] as Node3D).position.x, (th["node"] as Node3D).position.z)
-	var reach := at.distance_to(written) - 2.0 * TableMedium.NUDGE_STEP
-	var step := TableMedium.NUDGE_STEP
+	var reach := at.distance_to(written) - 2.0 * TableThings.NUDGE_STEP
+	var step := TableThings.NUDGE_STEP
 	var out := 0
 	var y := -reach
 	while y <= reach:
 		var x := -reach
 		while x <= reach:
 			if Vector2(x, y).length() <= reach:
-				var foot := TableMedium._translated(th["outline"], written + Vector2(x, y) - at)
+				var foot := Geo.moved(th["outline"], written + Vector2(x, y) - at)
 				if not _hits_room(foot, keep):
 					out += 1
 			x += step
@@ -257,7 +257,7 @@ func _hits_room(foot: PackedVector2Array, keep: Array) -> bool:
 		if Tables.sdf(medium._top_o, q) > -Tables.THING_EDGE:
 			return true
 	for r in keep:
-		if TableMedium._convex_overlap(foot, TableMedium._rect_poly(r as Rect2), 0.0):
+		if Geo.within(foot, Geo.of_rect(r as Rect2), 0.0):
 			return true
 	return false
 
@@ -271,11 +271,11 @@ func _hits(foot: PackedVector2Array, keep: Array, self_: Dictionary, flame_front
 		if Tables.sdf(medium._top_o, q) > -Tables.THING_EDGE:
 			return true
 	for r in keep:
-		if TableMedium._convex_overlap(foot, TableMedium._rect_poly(r as Rect2), 0.0):
+		if Geo.within(foot, Geo.of_rect(r as Rect2), 0.0):
 			return true
-	for th in medium._things:
+	for th in medium._things_part.on_table:
 		if th != self_ and String((th as Dictionary)["name"]) != String(self_.get("name", "")) \
-				and TableMedium._convex_overlap(foot, (th as Dictionary)["outline"], TableMedium.WRITTEN_GAP):
+				and Geo.within(foot, (th as Dictionary)["outline"], TableThings.WRITTEN_GAP):
 			return true
 	return false
 

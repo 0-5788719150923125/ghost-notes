@@ -63,6 +63,14 @@ const FL_SPECIAL := 0.80   # specialize
 const NOMINAL := 16.0      # design length (used to pace in auto mode, where there is no fixed hold)
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"staging": {"label": "Staging", "type": "choice", "options": "STAGING", "default": null,
+		"blurb": "How the pair is staged: small prisms close together, a matched pair, or larger ones set apart."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "scene3d"        # drawn on the canvas, but a 3D-feeling body; keep the plane framing
 	framing = "plane"
@@ -80,7 +88,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_red_cast = _red.hue_shift
 	_blue.hue_shift += _lead_off
 	_red.hue_shift += wrapf(counter - HUE_RED, -0.5, 0.5)
-	var stage := String(STAGING.keys()[rng.randi() % STAGING.size()])
+	var stage := String(choice("staging", rng))
 	var st: Dictionary = STAGING[stage]
 	var size_band: Array = st["size"]
 	var off_band: Array = st["off"]

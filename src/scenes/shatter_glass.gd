@@ -50,6 +50,16 @@ const PANE := 1.25       # pane half-size, world units
 const NOMINAL_VAL := 0.85
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"pane": {"label": "Pane", "type": "choice", "options": "PANES", "default": null,
+		"blurb": "The shape of the intact pane before it breaks: a disc, a rectangle, a polygon or a tall portrait rectangle."},
+	"grain": {"label": "Grain", "type": "choice", "options": "GRAINS", "default": null,
+		"blurb": "How finely the pane breaks: into a few big planes of glass, a medium break, or fine splinters."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "plane"
 	_rng.seed = rng.randi()
@@ -60,8 +70,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	lens.fov = rng.randf_range(38.0, 58.0)
 	_angle = rng.randf_range(0.35, 0.7)
 
-	var form := String(PANES[rng.randi() % PANES.size()])
-	var gname := String(GRAINS.keys()[rng.randi() % GRAINS.size()])
+	var form := String(choice("pane", rng))
+	var gname := String(choice("grain", rng))
 	var grain: Dictionary = GRAINS[gname]
 	var base := _pane(form, rng)
 	var cuts: Array = grain["cuts"]

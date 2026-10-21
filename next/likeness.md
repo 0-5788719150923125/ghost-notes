@@ -1,539 +1,593 @@
-# Likeness: the actor, generated, reading the note
+# Likeness: an actor, played from his own frames
 
-Opened 2026-10-18 for the user's question. An actor wants a generative video of himself, driven by
-the standard text pipeline. He is an ASMR creator, and he asked for this himself, for his upcoming
-book launch: his AI likeness should read chapters of his book. His shot is always forward-facing,
-centered, and in the same room.
+Planned 2026-10-20, not built. This note is the build spec: "Go!" means build it in the order of
+**Build order**, top to bottom.
 
-The same day, the user set the direction after a first draft that re-rendered only the mouth over
-his real footage:
+**The goal.** An ASMR creator, Ephemeral Rift, asked for his likeness to read chapters of his
+upcoming book. Ghost makes a video of him reading the note's words, in his own room, from his own
+footage. It is not generative: every pixel of him is a real pixel from his videos, bent.
 
-- **The video is a novel performance.** "Between the hand movements and the head turns and such,
-  I really think just changing the mouth is not going to have the effect we need." A completely
-  novel video, or at the least the actor puppeted in his scene over his standard background.
-- **The voice is truly generative.** "Piper voices sound robotic; they do not sound natural." It
-  must speak with his inflection and cadence, not only his timbre.
-- **The goal is a proof:** 2 to 3 minutes, not chapters. Praxis is off while it renders, so the
-  whole GPU is the job's.
+**What was ruled out, and why** (the history is in git):
+- **Generative video:** this machine cannot do it, and the user will not pay for a service.
+- **A splat avatar** (gsplat, FLAME, MHR, SAM 3D Body, Audio2Face): "an exercise in dependency
+  hell".
 
-Every timing for this machine is an estimate scaled from measurements on other cards, marked
-**(est.)**, until step 0 replaces it with a measurement.
+**The user's direction (2026-10-20):**
+- "just re-implementing the thing is easier and faster and more reliable".
+- Keep MediaPipe.
+- "A full-screen shader".
+- "the bulk of any change would be small deviations from frame to frame, with the mouth tracking
+  the voice".
+- Piper for the first build.
+- **A pipeline, as a suite of tools,** not a feature tailored to one person. Like the book: the
+  Picture presents it, and the Illustrations card makes and manages the pictures.
 
-## The verdict
+## The method
 
-**Yes, both, at 480p in an evening, with nothing trained.**
-- **InfiniteTalk** makes him move from his voice alone: head turns, his gaze, his shoulders.
-  150 s takes about 1.5-4 h (est.; budget 3 h).
-- **Wan2.2-Animate** puppets him with a performer's real head and hand movement, over a real frame
-  of his room. 150 s takes about 1-2 h (est.).
-- **720p** takes about 4-11 h (est.), so it is an overnight run.
-- **Completely novel shots** (a new place, a new angle) are possible too, but training his likeness
-  into a model that can do them needs more memory than this machine has. That is a rented GPU for a
-  few hours, a few dollars.
+1. **His real takes are the base of every frame.** They hold his body, hands, hair, head turns and
+   room. A take is played at its own speed and never retimed.
+2. **The mouth is replaced:**
+   - by real mouths from his footage, chosen by the shape the voice needs;
+   - warped into the take through MediaPipe's face mesh;
+   - blended by one fragment shader.
+3. **The voice's phones drive the mouth shape.** Piper hands back every phone with its exact time.
+4. **The takes are chosen and joined** where two frames nearly match (Video Textures, SIGGRAPH
+   2000). An agent picks his gestures to land on the right words.
 
-**The voice:**
-- **VoxCPM2, fine-tuned on his recordings with a LoRA,** is the strongest commercially usable open
-  model. Its Apache license allows the launch; training takes about 2-5 h on this card (est.).
-- **Qwen3-TTS and CosyVoice3** are the runners-up.
-- **ElevenLabs' Professional Voice Clone is the bar to measure against.** The open models a launch
-  may use sit about 200 Elo under ElevenLabs on the public blind tests, so the actor's own ear
-  decides whether open is good enough.
+**The precedent:** Mary101 (MIT, SIGGRAPH 2002) did the mouth this way from 8 minutes of video and
+46 mouth images, and viewers telling real from synthetic scored 52.1% and 46.6%: chance.
 
-## The machine, with Praxis off
+**No new dependency:**
+- MediaPipe, OpenCV and numpy are in the face environment (`face_venv`);
+- yt-dlp is in the download environment (`ytdlp_venv`);
+- FFmpeg is fetched;
+- Piper is the voice;
+- the agents are ghost's own;
+- the rest is GDScript and one canvas shader.
 
-**The card:** an RTX 5060 Ti 16 GB, Blackwell (sm_120). With block swap, 16 GB of VRAM is enough
-for every model below.
+The one new file is MediaPipe's `canonical_face_model.obj` (Apache), a file row in `face_venv`.
 
-**The host:** an i7-4790K with 32 GB of DDR3 and PCIe 3.0 x8.
-- **System RAM is the limit, not VRAM.** 32 GB is the most this board takes, so more RAM means a new
-  platform.
-- **Block swap over the gen-3 link is not the bottleneck:** about 6 minutes in the worst case for a
-  whole take (est.).
-- **Every successful 16 GB report found had 64 GB or more of RAM.** On 32 GB, two runs failed, and
-  their failures set the rules:
-  - A 2-minute InfiniteTalk run finished on 32 GB plus a pagefile, but one over 3 minutes crashed
-    two hours in.
-  - The final decode of a 3-minute take wanted over 120 GB.
+## What his footage is (looked at 2026-10-20)
 
-**What follows from it:**
-- **Render in segments of 30-45 s, cut at pauses,** and save each right after the sampler, with no
-  previews.
-- **Add a 32-64 GB swapfile on a real disk.** `/tmp` is a RAM disk, so not there.
-- **Free the text encoder after it encodes.**
+`/home/crow/repos/praxis/staging/eidolon/videos/` (from an earlier project, Eidolon, a nose-touch
+classifier: only its videos are reused).
 
-**The software that works on sm_120:**
-- **Torch:** 2.9.1 with cu130 for ComfyUI-WanVideoWrapper; 2.10 with cu130 for Wan2GP. Avoid 2.8.0,
-  which leaks RAM in Wan2GP.
-- **SageAttention 2.2.0, built from source.** A plain `pip install` gives 1.0.6, which renders
-  black.
-- **Not SageAttention 3:** it gives mosaic artifacts on Wan and errors on a 5060 Ti.
-- **No flash-attn and no xformers:** neither has a working sm_120 build, and neither is needed.
+**What is there:**
+- 8 videos of his: 25-92 minutes each, about 7 hours in all.
+- 1920x1080 h264, all at 59.94 fps but one at 30.
+- 4 videos of other creators sit in the same folder.
 
-**The runtimes are ComfyUI with kijai's ComfyUI-WanVideoWrapper, or Wan2GP.** The official repos
-load InfiniteTalk into 110-120 GB of RAM, and Wan2.2-S2V needs 80 GB of VRAM.
+**What the pipeline must handle,** because it is not the "same shot every time" assumed:
+- **Each video is edited:** jump cuts, a few camera framings, and inserts such as a handheld
+  close-up, or him in a hat outside.
+- **The camera is placed differently from video to video** around the same desk.
+- **His look changes within a video:** glasses on for the first minutes, then off.
+- **The light drifts:** sunlight patches move across the wall over minutes.
+- **He talks with his hands constantly.** A hand is often on his cheek or his head, and sometimes
+  he holds a phone.
+- **He turns three-quarters toward his monitor often,** reading.
+- **A large gray beard and mustache:** the jaw line is hidden, and the lips are partly covered.
+- **A boom mic** stands beside him.
 
-## The picture
+**So the unit of work is a SET:** the stretches of footage with one camera placement and one look,
+found automatically and confirmed by an agent. Each set is a library of its own.
 
-### 1. From the voice alone: InfiniteTalk (the first proof)
+## The suite
 
-InfiniteTalk (MeiGen; Apache code and weights) is an audio adapter on an unchanged Wan2.1-I2V-14B.
-Given one frame of him and the voice, it makes him talk, with head motion, gaze and posture from
-the audio. It uses its hands little.
+Three parts, after the book's pattern: a library under both cards, a card that makes and manages,
+and a card that presents.
 
-**The recipe** (kijai's example workflow):
-- **Models:**
-  - Wan2.1-I2V-14B-480P in fp8_scaled, or GGUF Q6_K (14.2 GB) if RAM swaps;
-  - the InfiniteTalk adapter at Q8 (2.65 GB);
-  - umt5 in fp8 (6.74 GB), freed after it encodes;
-  - clip_vision_h, chinese-wav2vec2-base, and the lightx2v LoRA.
-  - Not FusionX, which costs identity and color.
-- **Settings:** 6 steps (try 4), cfg 1, shift 11, window 81, motion_frame 9, 832x480, the long node's
-  "infinitetalk" mode, and block swap 20-30, raised until it stops running out of memory.
-- **The cost:** 150 s at 25 fps is 3,750 frames, or 53 windows of 72 new frames. The 3090 figure,
-  "around half a minute per second of video", gives about 1.3 h. A measured 164 s per window gives
-  2.4 h. A 4090 baseline scaled by SM count gives 3.5-5 h. So the estimate is 1.5-4 h at 480p
-  (est.), and about 2.7x that at 720p.
+### The library: `Actors` (`src/likeness/actors.gd`)
 
-**Long takes.** Identity holds "up to 1 minute. Beyond 1 minute, color shifts become more
-pronounced." Segments of 30-45 s stay inside that. The color-match nodes help a little, but are
-reported not to hold for "even a minute or two".
+**An actor is a folder,** `user://actors/<id>/`, shared by every note that uses it, as
+`Illustrations` and `Films` are. Its rules are the illustration library's:
+- **Nothing builds on its own.** A button is the only caller, because the steps cost hours and the
+  agents cost quota.
+- **Cached by fingerprint.** Each step's output records the fingerprints of its inputs, its
+  settings and the script's version.
+- **Stale, not invalid.** A changed input marks the output stale (⚠); it is still used until it is
+  remade.
+- **The test seam:** `use_for_test()` moves the root aside, so no gate writes the author's actors.
 
-**Two ways to start a take:**
-- **I2V from one sharp real frame of him in his room.** The maintainer's trick is to turn the still
-  into a short fake video with a slight zoom, then run video-to-video.
-- **Video-to-video over a real take of him sitting still.** The camera and layout stay "nearly the
-  same", but the whole frame is regenerated. Away from him the room drifts 6-15 times the VAE's
-  floor, and at `start_step` 3 objects appeared that were not there. So: composite the generated
-  man over a clean plate of his room (see "Keeping his room" below).
+**`actor.json`:**
+- the name;
+- the sources: folders, links, and the videos found in each, each ticked or not;
+- the chosen set;
+- consent: a path to the signed license, or empty.
 
-**Silence is a hazard, and ASMR is full of it.** The face drifts during a trailing silence, and frame
-jumps cluster where silence turns back into speech. Cut segments so each begins and ends on speech.
-Where segments join on a long pause, which segment carries the pause is a test for step 0.
+**Consent:**
+- Building is private, so it runs without consent on file.
+- **An export that would upload refuses** an actor with none, and says why. The card shows "no
+  consent on file" until there is.
 
-**Identity.** A Wan2.1-14B LoRA loads into InfiniteTalk (its README runs one). But no report found
-says that a character LoRA improved identity there. So: no LoRA first, and judge 30 s with him.
-Only then train one on a rented GPU (below).
+### The Actor card (component `actor`): makes and manages
 
-### 2. A performer drives him: Wan2.2-Animate (the puppet)
+The card, top to bottom:
+1. **The actor:** pick one from the library or make a new one, and its name.
+2. **Sources:**
+   - **Add folder…** A directory, read in place and never copied or written. Its videos are listed
+     as rows, rescanned when the card opens.
+   - **Add link…** A video, a playlist or a channel.
+     - `yt-dlp --flat-playlist -J` lists the entries first, so the rows appear at once with title,
+       duration and thumbnail.
+     - Each is then fetched as its own step, one at a time.
+     - The settings:
+       - **Format:** `bv*[height<=1080][vcodec^=avc1]+ba[acodec^=mp4a]/b[height<=1080]`, the
+         format Eidolon used.
+       - **Captions:** `--write-auto-subs --sub-langs "en.*" --sub-format json3`, because auto
+         captions carry a time for every word.
+       - **Metadata:** `--write-info-json`.
+       - **No repeats:** `--download-archive` in the actor's folder, so re-adding a playlist fetches
+         only what is new.
+     - Files land in `footage/`.
+     - The download environment, its Deno, and its one update-and-retry follow `MaskUrlImport`.
+   - **"Captions only" on a link:** fetches no video, and matches each caption file to a folder
+     video by title. This gives the Eidolon folder's videos their captions without fetching 11 GB
+     again.
+   - **A tick per video,** for whether it is used. The four other creators are unticked.
+3. **Steps:** a row per step, in order (see The steps).
+   - Each row: ✓ when made, ⚠ when stale, a running share while it works, or what it waits for, and
+     a short summary of what it made (for example "3 sets, 41 min usable").
+   - ▶ makes that step and anything it needs.
+   - ⟳ redoes it: its output is deleted and remade, and what depends on it goes stale.
+   - A per-video step shows a count ("Survey 5/8").
+4. **Generate** makes everything missing or stale, in order. **Stop** ends the running step,
+   which resumes from its own last saved video or chunk.
+5. **Sets:** a thumbnail and a sample frame for each, its minutes, its look in words (from the
+   audit), and the chosen one.
+6. **The library:**
+   - his gestures as a strip of named thumbnails, which play on click;
+   - his visemes, one mouth per class;
+   - the count of mouths.
+7. **Who labels:** an `AgentPick` row. The job sends pictures, so the backend must see them
+   (`Bedrock.sees_pictures` already gates this).
+8. **Advanced** (folded): the step settings (see The defaults).
 
-Wan2.2-Animate-14B (Apache) moves a reference person with someone else's performance. A 512-pixel
-crop of the driver's face becomes a latent injected every 5 layers, so the driver's expressions and
-mouth carry over. Every 77-frame segment re-reads the reference image, which re-anchors identity.
+**The runner is `ActorBuilder` (`src/likeness/actor_builder.gd`),** shaped like `ProofProducer`:
+- Every `tick` starts each step whose inputs exist and whose output is missing or stale (when
+  Generate asked), and lands what ended.
+- **What runs at once:** one CPU step at a time, since MediaPipe takes every core it is given, and
+  one agent job at a time.
+- **Python steps** run through `Subprocess` (no shell), with `--progress <file>` polled as
+  `face_track.py` is. Outputs are written to a temporary name and renamed into place.
+- **A step that waits is not failed.** A step whose environment is installing waits, and says for
+  what.
 
-**The puppet:**
-- **The reference** is a real frame of him in his room.
-- **The driver** is a performer filmed reading along to the generated voice: framed like him,
-  centered, forward-facing, hands visible. The developer, or anyone of a similar build.
-- **What the performer gives:** real head turns and real hand movement, timed to the words because
-  they are reading them.
-- **A lip pass tightens the mouth to the audio:** MuseTalk 1.5, whose weights are usable "for any
-  purpose, even commercially", over the 480p result. It takes minutes. InfiniteTalk's
-  video-to-video would regenerate the performance the puppet just gave.
-- **Whispers matter less here.** The performer reads aloud, so the mouth is driven by a face, not by
-  an audio encoder hearing a whisper.
+### The Likeness card (component `likeness`) and medium (`likeness`): presents
 
-**Two modes:**
-- **Move:** the background comes from the reference frame, so it is his room, regenerated.
-- **Mix (replacement):** only the masked person is generated, and the driver video's own pixels are
-  kept outside the mask. Matte the performer onto a clean plate of his room first, then run Mix
-  with its Relighting LoRA (trained on IC-Light composites). Mix does not retarget, so a performer
-  of a different build deforms him. Move is the safer start.
+**The card:**
+- the set, from the actor's sets;
+- **Generate:** makes everything this note needs - the actor's missing steps through its feed,
+  then the gestures (see Direct);
+- **Direct:** the director places gesture marks in the note's text;
+- **Clear gestures.**
+- **Who directs:** an `AgentPick` row.
 
-**The cost:** 32 windows of about 4.8 s, at 4 steps with the lightx2v LoRA. The estimate is about
-1.1 h at 480p (1.6 h at 6 steps) and 3.7 h at 720p (est.). It runs at 16 fps, so frame
-interpolation (RIFE, MIT) brings it to 25 or 30.
+**The medium** is a row in `Medium.REGISTRY` (`res://src/likeness/likeness.gd`, frames
+`["landscape"]`, needs `reading`). It renders, as a pure function of show time (see Rendering).
 
-**Weak spots:** fast hand movement leaves ghosting, so slow, deliberate hands (ASMR's own habit) are
-the right brief for the performer.
+**The components' rows** (`src/notes/components.gd`):
+- **`actor`:** family `picture`; needs nothing; provides `actor`; requires nothing; no slot.
+  - Capabilities: `subprocess`, `ffmpeg`, `python:face`, `python:download`, `agent:writer`.
+  - Block `actor` (its `id`); script `res://src/likeness/actor_card.gd`.
+  - It may stand alone on a note, which then just builds an actor.
+- **`likeness`:** family `picture`; needs `reading` and `actor`; provides `picture`; requires
+  `actor` and `voice`; slot `presentation`.
+  - Capabilities: `forward_plus`, `agent:writer`; marks `["gestures"]`.
+  - Block `likeness`; script `res://src/likeness/likeness_card.gd`.
+  - "+" Likeness brings an Actor card and a Voice, as Cards brings a Voice.
+- **The reading workspace's `hosts`** gains `actor` and `likeness`.
 
-**Licenses in the preprocessing:**
-- The ComfyUI-native route uses DWPose (Apache).
-- The official preprocessor uses YOLOv10, whose code is AGPL-3.0.
-- Leave off the optional FLUX.1-Kontext-dev retargeting, which is non-commercial.
+**The cards never name each other.**
+- The Actor card answers `feeds()` with `{"actor": ActorFeed}`, collected by the panel as
+  `episode_steps()` is.
+- The Likeness card asks the panel `feed("actor")`.
+- **`ActorFeed`** is a small typed contract: the folder, the chosen set, `generate()`, and
+  `status()`.
 
-**Two to watch:**
-- **SCAIL-2** (June 2026; Apache code, MIT weights). Animate and replace modes, a Relighting LoRA,
-  and a DPO LoRA for hands, lips and eyes. About 1.9 h at 480p and 6.6 h at 720p (est.). Use its
-  end-to-end SAM3 mode: its pose path uses NLF, whose weights are non-commercial.
-- **Wan2.2-Animate-2** (2026-08-07; Apache). It reads the driving video directly with no extractors
-  and has a 10-step distill. Wan2GP runs it with an NVFP4 option; replacement mode is not yet
-  documented.
+## The actor's folder
 
-**Later: his own motion.** Pose tracks from his archive (ghost's `hosts/face/pose_track.py` already
-makes them), with the face from a performer reading the new words. That would carry his own
-mannerisms. ComfyUI feeds the pose and face videos in separately, so this is possible in
-principle, and untested.
+```
+user://actors/<id>/
+  actor.json                 name, sources, ticks, chosen set, consent
+  footage/                   fetched videos, .info.json, .en*.json3 captions, archive.txt
+  videos/<vid>/              one folder per source video (<vid> = a hash of its path and size)
+    probe.json               duration, fps, size, has captions
+    survey.bin               every 0.2 s: face found, head transform, 52 blendshapes, face box,
+                             33 pose landmarks, a 32x18 person mask, a 64x36 gray thumbnail
+    shots.json               the cuts: [start, end) in seconds
+    words.json               caption words with times (from json3), if any
+  sets.json                  sets: shots per set, minutes, sample frames, edge-map plate
+  sheets/                    contact sheets made for the agents (JPEG, timestamps burned in)
+  audit.json                 per set: its look in words; per shot: usable stretches, and why the rest is not
+  sets/<set>/
+    track.bin                the full track at 30 fps over its usable stretches: 478 landmarks (x, y, z),
+                             52 blendshapes, head transform, 33 pose landmarks
+    rig.json                 the mean shape, the outer rings, the triangles (canonical UVs included)
+    mouths/NNNN.png          the mouth library: lower face in canonical space, 384x192
+    mouths.json              per mouth: its key (mouth blendshapes, head yaw and pitch, light), its source frame
+    phones.json              his phones with times, from caption words through Phonemes
+    visemes.json             per viseme class: his mouth blendshapes; the linear map to lip and jaw landmarks
+    takes.json               the takes: [start, end) between rest frames, the excluded stretches
+    joins.json               per rest frame, its best joins (frame, cost)
+    gestures.json            per gesture: name, words, take, start, stroke, end, how often he does it
+    habits.md                the director's brief: when he does what
+    frames/<take>/NNNNN.jpg  a take's frames at 30 fps, extracted the first time the take is played
+```
 
-### 3. Completely novel shots: LTX-2.x with his LoRA
+**The track format** (both `survey.bin` and `track.bin`): little-endian like `face_track.py`'s
+`GFT1`, with the magic `b"ACT1"`, a version, the rate, the count, which fields are present, then
+the samples.
 
-LTX-2.3 and 2.5 (Lightricks, 22B) generate video and sound together. They also take a GIVEN voice:
-`A2VidPipelineTwoStage --audio-path` keeps the waveform unchanged, applies a `--lora`, takes image
-conditioning, and runs long clips in 97-frame chunks with 25 carry frames. (The "Dub-It" IC-LoRA
-cannot: it generates its own speech.)
+**The sizes** (est.):
+- The survey is about 1.5 KB a sample, about 200 MB for all 7 hours.
+- A set's track is about 7 KB a frame, about 250 MB for 20 minutes.
+- Frames are about 250 KB each, only for the takes played.
 
-**His likeness:**
-- An **A2V LoRA** (the trainer's `a2v_lora.yaml`: 960x544x89, 2000 steps, the audio branch frozen),
-  trained on his clips with his own speech. It should learn his gestures from his speech (est.).
-- **The trainer recommends 80 GB; its low-VRAM config needs 32 GB.** So training is rented: an A100
-  80 GB is $1.19-1.79 an hour, for a few hours (est.).
+## The steps
 
-**The cost:** 2.5 ships an NVFP4 distilled checkpoint for Blackwell. Reports: a 10 s clip in under
-5 minutes on an RTX 5070, and 20 s at 1080p fitting 16 GB. About 0.2-1.5 h for 150 s (est.). The
-Gemma 12B text encoder and the 22B weights do not fit 32 GB together, so Gemma is unloaded after it
-encodes.
+All Python is one entry point, `hosts/face/actor.py <step> ...`, one subcommand per step, in
+`face_venv`. Agent steps are `TextGen` jobs with pictures attached, like the art director's
+(`CardProducer`): the rules are in `rules/likeness/*.yaml`, and the reply is JSON, parsed and
+checked, with a malformed reply retried once.
 
-**The license** (LTX-2 community license):
-- free under $10M of annual revenue;
-- anything published must say it is machine-generated;
-- a deepfake is banned only "without consent";
-- watermarks must not be removed.
+| # | Step | Per | Runs | Reads | Writes | Cost (est.) |
+|---|---|---|---|---|---|---|
+| 1 | **fetch** | link video | yt-dlp | the link | `footage/` | download time |
+| 2 | **probe** | video | ffprobe | the video | `probe.json` | seconds |
+| 3 | **survey** | video | `actor.py survey` | the video | `survey.bin` | about 0.2-0.4x real time: 1.5-3 h for all 7 h |
+| 4 | **shots** | video | `actor.py shots` | `survey.bin`, the video | `shots.json` | seconds |
+| 5 | **words** | video | GDScript | captions json3 | `words.json` | seconds |
+| 6 | **sets** | actor | `actor.py sets` | every `shots.json` and `survey.bin` | `sets.json` | a minute |
+| 7 | **audit** | actor | agent | `sets.json`, sheets | `audit.json` | 1 job per set |
+| 8 | **track** | set | `actor.py track` | the usable stretches | `track.bin` | about 45 min for 20 min of footage |
+| 9 | **rig** | set | `actor.py rig` | `track.bin`, the canonical mesh | `rig.json` | seconds |
+| 10 | **mouths** | set | `actor.py mouths` | `track.bin`, `rig.json`, the video | `mouths/`, `mouths.json` | 10-20 min |
+| 11 | **visemes** | set | GDScript, then `actor.py visemes` | `words.json`, `track.bin` | `phones.json`, `visemes.json` | a minute |
+| 12 | **takes** | set | `actor.py takes` | `track.bin`, `audit.json` | `takes.json`, `joins.json` | minutes |
+| 13 | **gestures** | set | `actor.py candidates`, then agent | `track.bin`, `words.json`, sheets | `gestures.json`, `habits.md` | 1-3 jobs |
 
-**The route that trains here instead:** an image LoRA of him on an Apache image model, trained
-locally on 16 GB (est.). The candidates are Z-Image, Qwen-Image, and FLUX.2 klein 4B (the 9B is
-non-commercial). It makes new stills of him anywhere, and InfiniteTalk or Animate brings them to
-life.
+**Step by step:**
 
-### Keeping his room
+1. **fetch.** yt-dlp with the flags above, one video at a time. "Captions only" fetches nothing but
+   the json3, and matches it by title.
 
-His camera never moves, so a clean plate of the empty room is the background, and the generated man
-is composited over it. That holds the room perfectly still over minutes, which a regenerated
-background cannot promise.
+2. **probe.** ffprobe's duration, frame rate and size, and whether a captions file sits beside the
+   video (`<name>.en*.json3`).
 
-- **Commercially usable:**
-  - **BackgroundMattingV2** (MIT), built for exactly this: a fixed camera with a clean plate;
-  - BiRefNet including HR-matting (MIT);
-  - BEN2 Base (MIT);
-  - SAM 2 / 2.1 (Apache);
-  - SAM 3 (the SAM License: commercial use allowed, military and ITAR uses barred);
-  - Cutie (MIT).
-- **Not commercially usable:** MatAnyone 1 and 2 (S-Lab), RMBG-2.0 (CC BY-NC), VideoMaMa. RVM is
-  GPL-3.0, which covers the software, not the video.
-- **The plate:** 10-20 s of the empty set, from him (below). Failing that, the median of frames in
-  which he is out of a region, or an inpaint.
+3. **survey.**
+   - Decodes with OpenCV, and runs MediaPipe's face landmarker (with blendshapes and the head's
+     transform) and pose landmarker (with its segmentation mask) every 0.2 s.
+   - Keeps no 478 points: the survey is for finding things, not warping them.
+   - Passes a thread count, as `pose_track.py` does.
+   - **It resumes by video:** a stopped survey loses at most the video in hand.
 
-### The cost of 150 s on this machine
+4. **shots.**
+   - A cut is a jump in the thumbnails' difference that the samples on either side do not share.
+   - The exact frame is found by decoding the second around it.
+   - **Shots under 3 s are dropped.**
 
-| Pipeline | Training | 480p (est.) | 720p (est.) |
+5. **words.** The json3 caption events are read into words with `t0` and `t1`. Auto captions give a
+   time per word; a word's end is the next word's start, capped at 0.6 s.
+
+6. **sets.**
+   - **A shot's background is the median of its thumbnails** where the person mask is clear.
+   - **Shots are compared by their backgrounds' EDGE maps,** not their colors, so the sun moving on
+     the wall does not split a set while a moved camera does. The face box's size and place are
+     compared too.
+   - **Clustering is agglomerative, with a threshold.**
+   - **A set's usable minutes** count the samples with one face found, and no wrist or index
+     fingertip of the pose inside the lower half of the face box.
+   - **Its sheet** is 16 frames across its length.
+
+7. **audit (agent).** One job per set with over 2 minutes usable.
+   - **It is shown:** the set's sheet, plus a sheet for each of its shots (a 4x4 grid, near
+     1568x882).
+   - **It writes:**
+     - the set's look in words (glasses, hat, clothes, the framing);
+     - whether every shot is the same person in the same look, so a shot in another look is split
+       off into its own set;
+     - which stretches are usable, and why any is not: an insert, a hand over the mouth, a phone in
+       front of the face, leaving the frame, another person.
+   - **Its words go on the card.**
+   - **The chosen set** defaults to the one with the most usable minutes.
+
+8. **track.**
+   - The full face and pose at 30 fps over the chosen set's usable stretches: every second frame
+     of a 59.94 fps source, by time and not by index.
+   - **It keeps everything:** 478 points with depth, the blendshapes, the transform and the pose.
+
+9. **rig.**
+   - **The canonical mesh's points, with their UVs.** The 10 iris points ride their eyes.
+   - **Two outer rings** grown from the face oval's 36 points: one at 1.35x over the hair and beard,
+     one at 2x where any change has faded to nothing.
+   - **Anchors on the frame's edge.**
+   - **One triangulation** over all of them, made once with OpenCV's `Subdiv2D` in the mean shape,
+     and fixed for the set.
+
+10. **mouths.**
+    - **Every usable frame's lower face is unwrapped into canonical space:** the triangles below
+      the nose, plus the beard ring, warped triangle by triangle with OpenCV.
+    - **The key:** the mouth's blendshapes (`jawOpen`, `mouthClose`, `mouthFunnel`, `mouthPucker`,
+      the smiles, stretches, rolls, shrugs, presses and the lip uppers and lowers, about 20), the
+      head's yaw and pitch, and the light, as the mean color of the cheeks.
+    - **k-means into 512 entries** (seeded), keeping the frame nearest each center: a real mouth,
+      never an average.
+    - **Each mouth is saved** as a 384x192 PNG.
+
+11. **visemes.**
+    - **Phones from his captions:** GDScript turns `words.json` into phones with `Phonemes` (ARPAbet,
+      the same symbols Piper is sent). Each word's span is split in proportion to the phones'
+      usual durations, which gives `phones.json`.
+    - **His mouth per viseme:** `actor.py visemes` takes, for each viseme class, the median of his
+      mouth blendshapes at its phones' centers. The captions' timing is rough, but thousands of
+      occurrences make the medians good.
+    - **The map from mouth shape to points:** a least-squares map from the mouth blendshapes to the
+      lip and jaw landmarks in canonical space, so a target mouth becomes target points for the warp.
+
+12. **takes.**
+    - **Rest frames** are where his head, hands and mouth are slow and his mouth is near closed.
+    - **A take** runs from one rest frame to a later one, inside a usable stretch.
+    - **The joins:** for each rest frame, the 8 best rest frames to join to elsewhere in the set, by
+      a cost over the landmarks, the pose's hands, and a 64x36 thumbnail of the person.
+    - **A pair whose hands differ much is never joined.**
+
+13. **gestures.**
+    - **Candidates:** `actor.py candidates` finds stretches where the head's yaw or pitch, the
+      brows, the hands' height or the lean leave his rest range, and returns, rest to rest.
+    - **The agent** is shown each candidate's sheet and the caption words he said during it, about
+      20 per job. It names each, says what it conveys, and marks its stroke (the frame where it
+      lands), or drops it.
+    - **His habits:** the agent then writes `habits.md`, the director's brief: when he does what,
+      from the words beside his gestures.
+    - **No example names in the rules.** Examples get copied word for word; the names are his
+      footage's.
+
+## Rendering
+
+**One mesh, drawn over the whole frame with a canvas shader.** This is the full-screen shader.
+1. **The mesh is the rig's triangulation.** It reaches the frame's edges, so it covers every pixel.
+2. **Each vertex carries:**
+   - **its position:** the target point in output pixels;
+   - **its base UV:** where that point sits in the base frame;
+   - **its canonical UV:** where it sits in the mouth library.
+3. **The GPU interpolates both UVs across each triangle,** which is a piecewise affine warp, for
+   nothing.
+4. **The fragment shader, for each pixel:**
+   - **the base frame,** at the base UV;
+   - **inside the lower-face mask** (sampled at the canonical UV, feathered there): up to 3 library
+     mouths from a `Texture2DArray`, mixed by their weights;
+   - **each mouth color-matched first:** its mean and spread are matched to a ring of the base's
+     own cheek and beard around it, so the drifting sun leaves no seam.
+5. **A join** draws two meshes with their own base frames and warps toward one in-between shape,
+   cross-faded over 8 frames.
+
+**The first thing M4 checks:** how Godot's 2D mesh carries a second float UV per vertex (`COLOR`
+if it stays float, else `CUSTOM0`/`CUSTOM1`). The fallback is a small float texture of canonical
+UVs, looked up by vertex index.
+
+**Everything stays in sRGB:**
+- The frames are sRGB, and the shader blends them as they are.
+- No 3D, no tonemapper, no compute.
+- It should run on the Compatibility renderer too (est.).
+
+**Frames:**
+- A take's frames are extracted at 30 fps the first time it plays (FFmpeg, JPEG quality 92), as
+  Films prepares nothing until it is used.
+- They are read ahead on a thread. The export reads them in step.
+
+**Determinism:**
+- The output is a pure function of show time.
+- The mouth weights at a frame are the mean of the k-nearest weights over the 5 frames around it,
+  all computed from the target shape, itself a function of time. **Never a filter with memory,** or
+  a seek and an export would differ.
+
+## The lanes
+
+All are functions of show time. Each plan is held as it is shown: a chunk's plan is fixed when the
+chunk's phones land, as the desk holds its page (`DeskMedium.take_words`).
+
+1. **The base take.**
+   - **The bed:** takes of the chosen set, in seeded order, each joined to the next at its best
+     join.
+   - **A gesture mark** (`<!-- gesture: name -->`) cuts to that gesture's take, so that its stroke
+     lands on the word after the mark, then back to the bed.
+   - **Unmarked text plays the bed alone.**
+2. **The mouth.**
+   - **Piper's phones** (`{p, t0, t1}` on every take, exact: they are the durations the synthesizer
+     used) are mapped to viseme classes, and those to his viseme mouth shapes.
+   - **Coarticulation by dominance functions** (Cohen and Massaro, 1993): each phone pulls toward
+     its target with a falloff around its center, so an "m" closes the lips in fast speech while
+     the vowels blend.
+   - **A target mouth** becomes target lip and jaw points through `visemes.json`'s map, set into the
+     base frame's own head pose.
+   - **Then the 3 nearest library mouths by key:** the target blendshapes, the base frame's yaw and
+     pitch, and its light.
+   - **The base take's own mouth and jaw are covered:** the lower face is warped to the new jaw,
+     and the lips come from the library.
+3. **Small deviations (later):** gaze and brows as landmark offsets. The first build has none: his
+   takes carry their own motion.
+
+**The viseme classes are a registry, rows not tables** (`src/likeness/visemes.gd`). There are about
+14 classes:
+- **silence;**
+- **the consonants:** P B M; F V; TH DH; T D N L; S Z; SH ZH CH JH; K G NG; R; W;
+- **the vowels:** open AA AE AH AY AW; mid EH EY ER; spread IH IY Y; rounded AO OW OY UW UH.
+
+Each row has a `label`, its phones, its dominance (strength and falloff) and a `blurb`.
+
+## The agents
+
+Wired as everywhere else: `AgentPick` rows for who does each job, the words in `rules/likeness/*.yaml`
+(read by `Rules`, checked by `rules_check`), and jobs on `AgentJobs`.
+- **No reasoning asked for.** The `reasoning_extraction` safeguard stops a run that asks.
+- **No sample phrases in the rules.**
+
+| Job | Rules | Shown | Writes |
 |---|---|---|---|
-| InfiniteTalk, 4-6 steps | none (a rented LoRA if identity is off) | 1.5-4 h | 4-11 h |
-| Wan2.2-Animate, Move, 4 steps, plus a MuseTalk lip pass | none | 1.1-1.6 h | about 3.7 h |
-| SCAIL-2, 8 steps | none | about 1.9 h | about 6.6 h |
-| LTX-2.x A2V, distilled | rented, a few GPU-hours | 0.2-0.5 h | 0.6-1.5 h |
-| LongCat-Video-Avatar 1.5 | Wan LoRAs do not load | 5-10 h | - |
-| Wan2.2-S2V, 20 steps x 2 | Wan LoRAs show no effect | about 7.8 h | about 29 h |
-| SoulX-FlashHead Lite | none | minutes ("teeth unclear"): a timing draft | - |
+| Audit | `rules/likeness/audit.yaml` | the set's sheets | `audit.json` |
+| Gestures | `rules/likeness/gestures.yaml` | the candidates' sheets, with their words | `gestures.json`, `habits.md` |
+| Director | `rules/likeness/director.yaml` | the note's text, the gestures (names, what each conveys), `habits.md` | marks in the text |
 
-**At 720p, 3,750 decoded frames are about 41 GB in fp32.** So 720p is either segments of about 20 s
-or less, or 480p upscaled. The upscaled route is not measured.
+**The director writes its marks into the note's text,** as Proof's Refine writes the note.
+- **The check:** the text with every gesture mark removed must equal the text it was given, byte for
+  byte, or the result is refused.
+- **The author's own gesture marks stay,** and are not moved.
+- **The ScriptWriter's palette** offers a `gestures` group, listing only the gestures the chosen set
+  holds.
 
 ## The voice
 
-**The honest gap.** On Artificial Analysis's blind tests (October 2026):
-- ElevenLabs v4 leads, at 1328-1329.
-- The open models above 1100 are all non-commercial (Fish, Breeze, Step Audio EditX, Voxtral).
-- The usable ones sit near Chatterbox's 1026. On the cloned-voice board, Eleven v4 scores 1158 and
-  Chatterbox 932.
-- VoxCPM2, the open Qwen3-TTS and CosyVoice3 are not on either board.
+- **Piper, through the Voice card, as any reading.** The stand-in is the closest stock male voice
+  in Piper's allowlist.
+- **The one change: phones ride with words.** `ReadingJoin` carries each chunk's `phones` beside
+  its `words`, shifted by the same spliced rests (`ReadingPlan.words_for`), into the take the
+  medium reads.
+- **Later:** a generative voice (VoxCPM2 with a LoRA on his reading) only has to hand back phones
+  with times, from its own plan or an aligner. The picture does not change.
 
-**Our own blind A/B with him decides.** By objective scores (speaker similarity and word error rate
-on Seed-TTS-eval English), VoxCPM2 leads: 75.3 / 1.84. Then MOSS 73.4, CosyVoice3 72.0, and
-Qwen3-TTS 71.7, which has the lowest word error rate (1.23).
+## Gates
 
-**Cadence takes a fine-tune.**
-- Unsloth: zero-shot "captures general tone and timbre but misses pacing, phrasing"; fine-tuning
-  reproduces delivery.
-- The Qwen3-TTS paper: in-context cloning (a reference clip plus its transcript) "better preserves
-  prosody" than a speaker embedding, and a single-speaker fine-tune "transfers the target speaker's
-  timbre and prosody".
+Tests mirror `src/`, so each is under `tests/likeness/` unless named.
 
-**The three, in order:**
+| Gate | Holds | Its control, which must fail |
+|---|---|---|
+| `actors_check.gd` | Through `Actors.use_for_test`: a step with a missing input waits; a changed input marks stale; ⟳ deletes and stales what depends on it; Generate's order; nothing written outside the test root | A step started without its input |
+| `warp_check.gd` (GPU, `run_quiet.sh`) | A made base image with made landmarks, drawn with the target equal to the base, comes back within 1/255 | The target moved 2 px |
+| `coarticulation_check.gd` | AA M AA closes the lips at M's center | M's dominance set to zero |
+| `likeness_determinism_check.gd` (GPU) | Two renders of one moment hash the same | A seed changed |
+| `hosts/face/test_actor.py` | Unwrap then rewarp on a made image within 1 px; one cut found in a fixture made by FFmpeg; seeded k-means repeats; two made backgrounds are two sets, and a bright patch moved across one keeps it one | A rewarp with the UVs swapped |
+| existing: `components_check`, `rules_check`, `compile_check`, `docs.py --check` | the new rows, rules and folder | - |
 
-1. **VoxCPM2** (2B, Apache, April 2026)
-   - *Training:* the official LoRA at rank 64, alpha 64-128, on both the LM and the DiT, learning
-     rate 1e-4. 50-500 clips is its "style adaptation" range, the one for cadence. 1-3 epochs, with
-     every save checked: it can start to ignore the text within a few hundred steps.
-   - *Memory:* the official figure is about 20 GB at batch 16. Batch 4-6 with gradient accumulation,
-     and `max_batch_tokens` near 4096, should fit 16 GB (est.). VoxCPM1.5's LoRA fits at about
-     12 GB as a fallback.
-   - *Time:* about 2-5 h on 600-900 clips (est.).
-   - *Reading:* "Ultimate cloning" continues straight on from a reference clip and its transcript,
-     and output is 48 kHz.
-2. **Qwen3-TTS 1.7B Base** (Apache). The best long-passage robustness found: English word error
-   rate 2.81 on 200-2000-word texts.
-   - *Training:* the official single-speaker script trains the whole model in bf16 with plain AdamW:
-     batch 1-2 or an 8-bit optimizer (est.), learning rate 2e-5, 3-5 epochs.
-   - *A known bug:* FlashAttention-2 gives NaN losses past 8192 frames, so the code predictor runs on
-     eager attention.
-   - *Time:* about 2-4 h (est.). Start on 0.6B if 1.7B does not fit.
-3. **Fun-CosyVoice3-0.5B** (Apache). Small enough to fine-tune whole, and it has a `[breath]` tag. A
-   2026 paper fine-tuned it on real whispers to a whisper MOS of 4.53, above real recordings' 4.33.
-   - *Its cost:* lower speaker similarity than the two above, and it pins torch 2.3, which has to be
-     re-pinned for sm_120.
+**Fixtures are made, not found.** MediaPipe on a real face is looked at in probes on his footage,
+never in a gate: the footage is not in the repo.
 
-**Not usable:**
-- Non-commercial: F5-TTS, Fish S1/S2, Spark, Llasa, Dia and VibeVoice.
-- Step-Audio-EditX: its weights carry no license.
-- Maya1: no cloning.
-- Orpheus: Llama 3.2 terms.
-- MOSS-TTS 8B: too big for this card.
+## Build order
 
-**Higgs TTS 3 zero-shot is an option:** its Creator Use Grant covers monetized videos and audiobooks
-"published on channels the creator owns or controls", with credit. Fine-tuned derivatives are
-non-commercial, though.
+Each milestone ends with something to look at. Nothing past M4 is worth building if M4 looks bad.
 
-**Whispers.** No commercially usable open model has a working whisper control together with
-cloning. The control is the data: a whispered prompt, and whispered training clips. Expect long
-passages to drift toward a voiced voice, and test for it.
+- **M1 - The library and the sources.**
+  - `src/likeness/` (a row in docs.py's `FOLDERS`, after `desk/`): `Actors`, `ActorBuilder` and
+    `ActorFeed`.
+  - The Actor card with its sources (folder, link, playlist, captions only, ticks) and the step rows,
+    with Generate, ▶, ⟳ and Stop.
+  - The component rows.
+  - The `canonical_face_model.obj` file row in `face_venv`, with its sha256 and size.
+  - Gate: `actors_check`.
+  - **Look:** add the Eidolon folder and untick the four others; add his channel as captions only.
+- **M2 - Survey, shots, words, sets.** `actor.py survey|shots|sets` and `test_actor.py`.
+  - **Look:** the sets on the card.
+  - **Expect:** a few sets per video framing, and the inserts split off.
+- **M3 - Audit.** The rules, the job, `audit.json`, and the look in words on the card.
+  - **Look:** do the sets and looks match what is on screen? Correct the clustering's threshold
+    here.
+- **M4 - Track, rig, mouths, and the identity test.** The canonical-UV question answered first;
+  `warp_check`. Then a probe that renders:
+  - **(a)** a frame redrawn through its own mesh, which must be indistinguishable;
+  - **(b)** another frame's mouth drawn into it.
+  - **This is the first look at the seam, the beard and the teeth.**
+- **M5 - The ceiling.** A probe draws his own tracked mouth from one stretch onto a different take,
+  with his real audio under it. No voice and no visemes are involved, so any fault is the picture's.
+  - **Look at it with the user, side by side with the real stretch.**
+- **M6 - The voice lane and the medium.**
+  - Visemes from his captions; `visemes.gd`; coarticulation (and its gate); phones through
+    `ReadingJoin`.
+  - The Likeness card and medium on the bed alone.
+  - **Look:** a paragraph read by Piper.
+- **M7 - Takes, joins, gestures, the director.** `actor.py takes|candidates`, the gestures job,
+  `habits.md`, the director's job and its check, and the `gestures` palette group.
+  - **Look:** 60 s with gestures on their words.
+- **M8 - The proof.** 2-3 minutes of a chapter: Generate on the Likeness card, then the export.
+  `likeness_determinism_check`.
+  - **Look:** with him, if he wants.
 
-**Long passages:** one paragraph at a time, each passing the previous paragraph's audio as its
-continuation prompt (VoxCPM2; untested). Sesame CSM-1B (Apache) conditions on earlier turns by
-design, so it is the alternate if cadence breaks between paragraphs.
+On long work, batch the changes and run `scripts/check.sh --for src/likeness` once at the end of a
+milestone.
 
-**Word timings for the subtitles:** the text is known, so it is aligned, not transcribed. The tool
-is Qwen3-ForcedAligner-0.6B (Apache), which aligns words up to 5 minutes with 37.5 ms of English
-error, against WhisperX's 92.1.
+## The defaults
 
-**His training audio** (Emilia-Pipe, adapted):
-- Silero VAD into 3-30 s clips, and music removed only where there is music.
-- **Hand-checked clips, not a DNSMOS cutoff:** DNSMOS and VAD reject whispers. Then a filter by
-  speaker similarity to a centroid built from those clips.
-- **Exact transcripts**, "uhm" included.
-- **His breaths kept, the deliberate triggers (mouth sounds) cut,** or the model learns them.
-- **One delivery throughout.**
-- **45-90 minutes of narration-like speech.** Best of all is him reading other chapters of the book
-  in his ASMR setup.
+All are on the card's Advanced fold, so "Go!" needs no answers.
 
-**The hosted bar: ElevenLabs Professional Voice Clone on Eleven v4.**
-- *Training:* 30 min to 3 h of audio in one style; it trains in 3-24 h.
-- *Reading:* 10,000 characters a request, so a passage is one call. `[whispers]` is reliable when
-  whispers are in the training audio.
-- *Who makes it:* **he must create and verify the clone on his own account**, then share it.
+| Setting | Default | Why |
+|---|---|---|
+| Survey interval | 0.2 s | enough to find cuts and sets; full rate only where it is used |
+| Track rate, output rate | 30 fps | half his 59.94 fps; ghost's export rate |
+| Output size | the set's own, 1920x1080 | his frames as they are |
+| Mouth library | 512 entries, 384x192 | about 150 MB as a texture array; Mary101 needed 46 |
+| Mouths mixed | 3, weights sharpened toward the nearest | fewer blends, fewer doubled teeth |
+| Shortest shot | 3 s | jump cuts shorter than that are noise |
+| Set to build | the most usable minutes | the audit can change it |
+| Join cross-fade | 8 frames | a quarter second |
+| Labeler, director | the `AgentPick` default | as elsewhere |
+| Voice | the closest stock male Piper voice | a stand-in |
 
-## Ask him for a capture session
+## Risks, and where each is seen first
 
-He is cooperating, so the data can be shot for the purpose. The library comes first, for the
-zero-shot tests, since it is free. The session is what turns the proof into him:
+1. **Teeth doubled in a blend.** Seen at M4b and M5. The fixes: fewer mouths and sharper weights;
+   at worst, the single nearest mouth with a short cross-fade.
+2. **A seam in the beard.** Seen at M4b. Color matching plus feathering. The beard's own texture
+   hides more than skin would.
+3. **His original speech in the base take.** His cheeks and head move to words he said then. The
+   lower face is replaced; the rest is real motion, slightly off the new rhythm. Judged at M5.
+4. **His hands near his face.** The takes exclude stretches where the pose's hands are in the lower
+   face, so the mouth is never drawn over a hand.
+5. **Three-quarter turns toward the monitor.** The mouth key holds the head's yaw, and the set must
+   hold mouths at those angles. The card says how many mouths each yaw band holds.
+6. **Caption timing.** The visemes come from medians, so they are robust. If a class comes out
+   wrong, the capture session's scripted viseme take fixes it.
+7. **The light.** It drifts within a set: color matching for the mouths, and the join's cost
+   includes the person's thumbnail, so joins stay in similar light.
 
-1. **A consent statement on camera, and the signed license** (see Consent).
-2. **10-20 minutes in his setup, with variety:** head turns, expressions, slow hand movement,
-   reading, and talking. These give the reference frames, the stills for an identity LoRA, and the
-   clips for an LTX A2V LoRA.
-3. **A clean plate:** 10-20 s of the empty set, with the same camera, exposure and light.
-4. **45-90 minutes of him reading other chapters aloud** in the delivery the AI should have, on his
-   usual microphone, with no music and no triggers. A known text means exact transcripts.
-5. **One real passage, filmed: the ground truth.** The proof is judged next to it, in a blind A/B
-   for the voice and side by side for the picture.
+## Later, not in this build
 
-## How it sits in ghost (after the proof)
-
-The proof needs none of this. Steps 0-6 run by hand in `dist/likeness_spike/` (with a
-`.gdignore`). What follows is the shape the component takes if the proof convinces.
-
-- **The component is Likeness.** Its row:
-  - family `picture`, provides `picture`, requires `voice`;
-  - fills the `presentation` slot (the likeness is what the show is carried on);
-  - capabilities include a new `gpu:nvidia`, impossible on a phone and not ready without an NVIDIA
-    card, with the reason.
-- **The actor is a library thing,** kept in `user://actors/<id>/`:
-  - `actor.json`: his name, the license file, the sources, and every trained model with what it was
-    trained from;
-  - the voice LoRA and its dataset;
-  - the reference frames and the clean plate;
-  - any picture LoRAs.
-  - No training job starts without the license file in `actor.json`.
-- **The voice is a new backend** in `hosts/voice/backends/` (the registry the Kokoro plan named),
-  on the GPU, in an environment of its own. Piper's graph patches (`dur_scale`, `rest_floor`) do not
-  carry over. Its word timings come from the forced aligner.
-- **The picture is a render job,** run by a host that drives a headless ComfyUI (a saved workflow
-  posted to its HTTP API) or Wan2GP's command line. That host is fetched and pinned by ghost, like
-  every other dependency, along with its model files: about 25-30 GB for a route.
-- **The jobs:**
-  - **Segmented at pauses, and cached by fingerprint:** the audio segment, the reference, the
-    settings and the model versions. Editing a sentence re-renders its segment.
-  - **One GPU job at a time, resumable after a quit.**
-- **The medium** shows the rendered frame for each moment of show time (Films' virtual clock), and
-  the export bakes what is missing first.
-- **This breaks the 2026-10-05 rule** against heavy local models. The containment proposed: it is
-  opt-in, it renders at bake time only, and nothing else requires it. The other choice is a tool
-  beside the app that writes the actor's folder, which ghost then reads.
+- **His capture session,** shot for the purpose: a locked camera, one look, a scripted viseme take
+  (each mouth shape held, spoken and whispered, with slow turns), 20-45 minutes of him reading
+  chapters, his gestures each from rest to rest, and one passage filmed as the ground truth.
+- **The generative voice:** VoxCPM2 with a LoRA on that reading, judged blind by him.
+- **Small deviations:** gaze and brows.
+- **A webcam performer** through the same MediaPipe.
+- **The step up, if the warp's range is too small:** a splat avatar. Its research is in git
+  (2026-10-20).
 
 ## Consent and disclosure
 
-- **Already done in code:** ghost marks every upload as synthetic media
-  (`"containsSyntheticMedia": true`, `src/export/youtube.gd:991`), YouTube's "altered or synthetic
-  content" flag.
-- **The LTX license requires saying an LTX video is machine-generated,** and the EU AI Act's
-  Article 50 has applied since 2026-08-02. It reaches a US creator's video watched in the EU. For a
-  creative work, it is satisfied by a mention "that does not hamper the display or enjoyment of the
-  work": a line on the title card and in the description. A C2PA manifest on the export is later.
-- **YouTube likeness detection** has been open to every creator since 2026-05-17. If he enrolls,
-  these uploads will match, so agree in advance that he will not file takedowns against them.
-- **The written license should cover:**
+- **Every upload is already marked as synthetic media** (`"containsSyntheticMedia": true`,
+  `src/export/youtube.gd:991`).
+- **The disclosure:** a line on the title card and in the description satisfies the EU AI Act's
+  Article 50 for a creative work.
+- **If he enrolls in YouTube's likeness detection,** agree in advance that he files no takedowns
+  against these.
+- **The signed license should cover:**
   - the uses, named specifically;
-  - his approval of each script and each render;
-  - a fixed term, worldwide;
-  - revocation going forward, with a takedown deadline;
-  - **who owns the trained LoRAs and voice;**
-  - deletion of the data and models at the end, certified;
-  - the disclosure commitments;
-  - what his estate controls;
-  - his own counsel;
+  - his approval of each script and render;
+  - the term;
+  - revocation;
+  - who holds the actor's folder;
+  - deletion at the end;
+  - his estate;
   - pay and credit.
-- **Why each part:**
-  - California AB 2602 and New York GOL 5-302 require the uses to be described with reasonable
-    specificity, or counsel.
-  - The Tennessee ELVIS Act covers voice.
-  - California AB 1836 hands consent to his estate.
-- **Renting a bare GPU keeps his footage private;** hosted trainers have rules of their own about
-  real people.
-- **ACX/Audible reject AI narration.** Google Play Books and Spotify accept a labeled digital voice.
 
-## The plan for the proof, in order
-
-0. **Set up.**
-   - A 32-64 GB swapfile on a real disk.
-   - ComfyUI with WanVideoWrapper, on torch 2.9.1+cu130, with SageAttention 2.2.0 from source, in
-     `dist/likeness_spike/`.
-   - Wan2GP beside it as the second runtime.
-   - The model files for InfiniteTalk and Animate.
-1. **The voice, zero-shot.** One 350-word passage from three whispered reference clips of 20-30 s,
-   with exact transcripts, on:
-   - VoxCPM2 "Ultimate cloning";
-   - Qwen3-TTS in-context;
-   - CosyVoice3 zero-shot;
-   - Chatterbox;
-   - Eleven v4 Instant Voice Clone as the control.
-
-   **A blind A/B with him.** Score whether the whisper holds to the end, where his pauses fall, and
-   the timing (with the aligner).
-2. **The picture, zero-shot, InfiniteTalk.** 30 s, driven first by his REAL audio from another video,
-   so that voice faults and picture faults are told apart; then by the best voice from step 1. Run
-   both I2V from a sharp frame and video-to-video over a still take. Measure the time per window,
-   VRAM and RAM. Look at it with him.
-3. **The puppet, Animate.** The same 30 s, Move mode, the developer performing it, then the MuseTalk
-   lip pass. Side by side with step 2.
-4. **The voice, fine-tuned.** The step-1 winner, with a LoRA on 45-90 minutes of his audio; a blind
-   A/B against its zero-shot self.
-5. **Identity, only if it is off.** A rented Wan2.1-14B LoRA (musubi-tuner, on a host with 64 GB of
-   RAM or more). Its training material is 30-60 varied stills plus 10-20 short clips at about
-   480x272, rank 16-32, 1,500-3,000 steps: est. 2-6 h and $1-10. Then a 20 s A/B.
-6. **The 2-3 minute proof.** The better of steps 2 and 3, at 480p:
-   - in segments of 30-45 s cut at pauses;
-   - composited over the clean plate if the room moves;
-   - then 720p overnight, or 480p upscaled.
-7. **Optional: novel shots.** LTX-2.x A2V with a rented A2V LoRA, for a few seconds of him somewhere
-   new.
-
-Each step replaces this note's estimates with measurements.
-
-## For the user to decide
-
-1. **The first picture:** from the voice alone (InfiniteTalk, no performer) or a puppet (Animate,
-   with a performer). Both are cheap at 480p, so steps 2 and 3 run both.
-2. **Who performs** for the puppet: the developer, or someone of his build.
-3. **Renting** for the training this machine cannot do: an identity LoRA, an LTX A2V LoRA.
-4. **ElevenLabs as the voice's bar** (he makes the clone himself), and whether a hosted voice is
-   acceptable for the launch if it wins.
-5. **The runtime ghost drives later:** ComfyUI or Wan2GP.
-6. **The name** (Likeness?), and in ghost or beside it.
-7. **About him:**
-   - a beard or a mustache;
-   - the microphone in the shot;
-   - his hands near his face;
-   - whispered or soft spoken for the book;
-   - the resolution he posts at.
+  California AB 2602 and 1836, New York GOL 5-302 and Tennessee's ELVIS Act are why.
+- **ACX/Audible reject AI narration.**
 
 ## Sources
 
-The machine and the runtimes:
-- InfiniteTalk timings and RAM: https://github.com/MeiGen-AI/InfiniteTalk/issues/210,
-  https://github.com/MeiGen-AI/InfiniteTalk/issues/14, https://github.com/MeiGen-AI/InfiniteTalk/issues/71
-- WanVideoWrapper runs on 16 GB and 32 GB:
-  https://github.com/kijai/ComfyUI-WanVideoWrapper/issues/1185,
-  https://github.com/kijai/ComfyUI-WanVideoWrapper/issues/1088,
-  https://github.com/kijai/ComfyUI-WanVideoWrapper/issues/1805,
-  https://github.com/kijai/ComfyUI-WanVideoWrapper/issues/371
-- Wan2GP on 32 GB: https://github.com/deepbeepmeep/Wan2GP/issues/1183,
-  https://raw.githubusercontent.com/deepbeepmeep/Wan2GP/main/docs/INSTALLATION.md
-- SageAttention on sm_120: https://github.com/thu-ml/SageAttention,
-  https://github.com/thu-ml/SageAttention/issues/357,
-  https://github.com/kijai/ComfyUI-WanVideoWrapper/issues/1875,
-  https://github.com/Comfy-Org/ComfyUI/discussions/11583
-- flash-attn on sm_120: https://github.com/Dao-AILab/flash-attention/issues/2361
-- The 4790K's memory limit:
-  https://www.intel.com/content/www/us/en/products/sku/80807/intel-core-i74790k-processor-8m-cache-up-to-4-40-ghz/specifications.html
-
-InfiniteTalk:
-- https://github.com/MeiGen-AI/InfiniteTalk (long takes, LoRAs, FusionX); model files
-  https://huggingface.co/Kijai/WanVideo_comfy_GGUF/tree/main/InfiniteTalk,
-  https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/tree/main
-- The still-to-video trick: https://github.com/MeiGen-AI/InfiniteTalk/issues/10; silence:
-  https://github.com/MeiGen-AI/InfiniteTalk/issues/146, https://github.com/MeiGen-AI/InfiniteTalk/issues/6
-- Video-to-video drift: https://github.com/kijai/ComfyUI-WanVideoWrapper/issues/2048; color over
-  minutes: https://github.com/kijai/ComfyUI-WanVideoWrapper/issues/1941
-- The example workflows: https://github.com/kijai/ComfyUI-WanVideoWrapper/tree/main/example_workflows
-
-The puppet:
-- Wan2.2-Animate: https://huggingface.co/Wan-AI/Wan2.2-Animate-14B, https://arxiv.org/html/2509.14055,
-  https://docs.comfy.org/tutorials/video/wan/wan2-2-animate,
-  https://github.com/Wan-Video/Wan2.2/blob/main/wan/modules/animate/preprocess/UserGuider.md
-- Wan2.2-Animate-2: https://huggingface.co/Wan-AI/Wan2.2-Animate-2-14B; SCAIL-2:
-  https://github.com/zai-org/SCAIL-2; NLF's license: https://github.com/isarandi/nlf
-- MuseTalk: https://github.com/TMElyralab/MuseTalk; DWPose: https://github.com/IDEA-Research/DWPose;
-  YOLOv10: https://github.com/THU-MIG/yolov10
-- Hand ghosting: https://medium.com/@302.AI/wan2-2-animate-model-test-with-4-cases-e9e1c1ef492c
-
-Novel shots:
-- LTX-2: https://github.com/Lightricks/LTX-2/blob/main/packages/ltx-pipelines/docs/pipelines.md,
-  the A2V trainer config
-  https://raw.githubusercontent.com/Lightricks/LTX-2/main/packages/ltx-trainer/configs/a2v_lora.yaml,
-  the trainer https://github.com/Lightricks/LTX-2/blob/main/packages/ltx-trainer/README.md, the license
-  https://github.com/Lightricks/LTX-2/blob/main/LICENSE-2_x, 2.5 https://huggingface.co/Lightricks/LTX-2.5
-- Image models for an identity LoRA: https://huggingface.co/Tongyi-MAI/Z-Image,
-  https://huggingface.co/Qwen/Qwen-Image, https://huggingface.co/black-forest-labs/FLUX.2-klein-4B
-- musubi-tuner: https://github.com/kohya-ss/musubi-tuner,
-  https://github.com/kohya-ss/musubi-tuner/issues/489,
-  https://civarchive.com/models/1971596/wan22-16gb-training
-- LongCat-Video-Avatar: https://huggingface.co/meituan-longcat/LongCat-Video-Avatar-1.5; Wan LoRAs
-  in it https://github.com/kijai/ComfyUI-WanVideoWrapper/issues/1570
-- S2V: https://docs.comfy.org/tutorials/video/wan/wan2-2-s2v,
-  https://github.com/kijai/ComfyUI-WanVideoWrapper/issues/1109
-- SoulX-FlashHead: https://github.com/Soul-AILab/SoulX-FlashHead/issues/18
-
-Keeping his room:
-- BackgroundMattingV2: https://github.com/PeterL1n/BackgroundMattingV2; BiRefNet:
-  https://github.com/ZhengPeng7/BiRefNet; BEN2: https://huggingface.co/PramaLLC/BEN2
-- SAM 2: https://github.com/facebookresearch/sam2; SAM 3's license:
-  https://github.com/facebookresearch/sam3/blob/main/LICENSE
-- MatAnyone's license: https://raw.githubusercontent.com/pq-yang/MatAnyone/main/LICENSE; RMBG-2.0:
-  https://huggingface.co/briaai/RMBG-2.0
-
-The voice:
-- The boards: https://artificialanalysis.ai/text-to-speech/leaderboard,
-  https://artificialanalysis.ai/text-to-speech/leaderboard/controlled-voice
-- Fine-tuning for cadence: https://unsloth.ai/docs/basics/text-to-speech-tts-fine-tuning; the
-  Qwen3-TTS paper https://arxiv.org/html/2601.15621v1
-- VoxCPM2: https://github.com/OpenBMB/VoxCPM, https://huggingface.co/openbmb/VoxCPM2, its fine-tune
-  guide https://voxcpm.readthedocs.io/en/latest/finetuning/finetune.html and FAQ
-  https://voxcpm.readthedocs.io/en/latest/finetuning/faq.html
-- Qwen3-TTS: https://github.com/QwenLM/Qwen3-TTS/tree/main/finetuning; the NaN bug
-  https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base/discussions/18
-- CosyVoice3: https://github.com/FunAudioLLM/CosyVoice; whispers: https://arxiv.org/html/2603.14853v1
-- CSM-1B: https://huggingface.co/sesame/csm-1b; Higgs TTS 3's license:
-  https://huggingface.co/bosonai/higgs-tts-3-4b/blob/main/LICENSE
-- The aligner: https://github.com/QwenLM/Qwen3-ASR; Emilia-Pipe:
-  https://github.com/open-mmlab/Amphion/tree/main/preprocessors/Emilia
-- ElevenLabs: https://elevenlabs.io/blog/eleven-v4,
-  https://elevenlabs.io/docs/product-guides/voices/voice-cloning/professional-voice-cloning,
-  https://elevenlabs.io/docs/help-center/product/voices/voice-cloning/can-i-create-a-professional-voice-clone-of-someone-elses-voice.md
-
-Renting: https://www.runpod.io/pricing
-
-Consent and disclosure:
-- YouTube: https://support.google.com/youtube/answer/14328491,
-  https://developers.google.com/youtube/v3/revision_history, likeness detection
-  https://www.androidauthority.com/youtube-likeness-detection-expansion-3667840/
-- The EU AI Act: https://artificialintelligenceact.eu/article/50/, https://artificialintelligenceact.eu/article/2/
-- California: https://perkinscoie.com/insights/update/single-day-california-enacts-five-bills-tackling-digital-replicas-and-deepfakes;
-  New York: https://www.nysenate.gov/legislation/bills/2023/S7676
-- ACX: https://help.acx.com/s/article/acx-audio-submission-requirements
+- **Mary101** (Ezzat, Geiger and Poggio, SIGGRAPH 2002): https://history.siggraph.org/?p=118425.
+  The 8 minutes, the 46 prototypes and the visual Turing test are from Ezzat's lecture:
+  https://www.mit.edu/~9.520/spring08/Classes/tony_9520class08.pdf
+- **Video Rewrite** (Bregler, Covell and Slaney, 1997):
+  https://www.mit.edu/~9.520/spring09/Papers/VideoRewrite.pdf
+- **Video Textures** (Schödl, Szeliski, Salesin and Essa, 2000):
+  https://sites.cc.gatech.edu/gvu/perception/projects/videotexture/index.html
+- **Coarticulation by dominance functions:** Cohen and Massaro, "Modeling coarticulation in
+  synthetic visual speech", 1993.
+- **MediaPipe:**
+  - the face landmarker: https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker
+  - the canonical face mesh, with texture coordinates:
+    https://github.com/google-ai-edge/mediapipe/tree/master/mediapipe/modules/face_geometry/data
+- **yt-dlp's options:** https://github.com/yt-dlp/yt-dlp#usage-and-options
+- **Consent:**
+  - EU AI Act Article 50: https://artificialintelligenceact.eu/article/50/
+  - California: https://perkinscoie.com/insights/update/single-day-california-enacts-five-bills-tackling-digital-replicas-and-deepfakes
+  - New York: https://www.nysenate.gov/legislation/bills/2023/S7676
+  - ACX: https://help.acx.com/s/article/acx-audio-submission-requirements

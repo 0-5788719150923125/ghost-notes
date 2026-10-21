@@ -26,9 +26,17 @@ var _fog_col := Color(0.66, 0.70, 0.78)
 const TYPES := ["hills", "mountains", "valleys", "canyon", "islands", "mesa"]
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"landform": {"label": "Landform", "type": "choice", "options": "TYPES", "default": null,
+		"blurb": "Which landform is built: rolling hills, ridged mountains, river valleys, a fissured canyon, ocean islands, or a banded mesa."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
-	var ttype: String = TYPES[rng.randi() % TYPES.size()]
+	var ttype: String = choice("landform", rng)
 	var relief := rng.randf_range(1.1, 1.9)
 	# Mostly a natural biome (green lowland, brown/gray rock, snow peaks, blue water),
 	# biased by terrain type; sometimes a surreal palette (volcanic / alien) for variety.

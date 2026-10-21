@@ -56,6 +56,8 @@ extends SceneTree
 ##   formula's \pin - and a name nothing carries is caught (the control: the names that are there are
 ##   not). At the desk the nib comes down beside the thing as the word is said - a wide one swept under
 ##   first - the camera goes to it and no ink is drawn; a point at a page already turned leaves the pen where it was (the control).
+##   A sweep the next point cuts short ends where the pen waits from (2026-10-20: cut at a third of its
+##   sweep, the nib jumped 366 px in a frame in a live replay - the control, the sweep at its own pace).
 ## - THE PEN IS NEVER STILL FOR LONG: a long stretch of speech with the pen idle is caught, and the same
 ##   stretch broken by a point is not (the control).
 ## - AN IDLE PEN GETS OUT OF THE WAY (the user, 2026-10-19: "the pen was just frozen, right in the middle
@@ -87,8 +89,9 @@ extends SceneTree
 ## - A READING STARTED MID-WAY (the user, 2026-10-16: "scrubbing the timeline seems to have broken the
 ##   pen completely. For the remainder of the video, the pen doesn't move at all"): handed the new
 ##   reading's first words, the desk finds its place - what came before is written, the next formula
-##   is scheduled and the pen writes it; the control, the same words with no start, matches nothing
-##   and leaves the rest unscheduled, which is what the user saw.
+##   is scheduled and the pen writes it; the control, the same words with no start, finds none of
+##   its words - the rest unscheduled, which is what the user saw, or (since a word the voice went past
+##   is placed, 2026-10-20) scheduled on stray matches, never at the words.
 ## - WHAT IS ON THE PAGE STAYS (2026-10-19: "two graphs are drawn side-by-side. Then suddenly, the 2nd
 ##   one disappears and is re-drawn"): a formula dictated over three sentences, its words' times
 ##   arriving a sentence at a time a little before each is heard, from a voice slower than the guess -
@@ -97,6 +100,16 @@ extends SceneTree
 ##   without holding the past, takes back strokes already written. And no reach is squeezed: a point
 ##   said while its formula is still being written waits the nib's way from it, crossed at a pen's pace
 ##   - the control, the point begun the moment the formula ends, crosses the page in a frame.
+## - A WORD THE VOICE SAYS ITS OWN WAY NEVER HOLDS THE DESK (2026-10-20: "the pen just stood in one place
+##   swaying for the rest of the video" - "[c]'s" said as "c" and "'s" sent the matcher seven words on,
+##   and the plan waited on a word never heard): a one-letter word starts the page's next word and the
+##   words after keep their own times; a dictation whose first word is said another way ("seven") is
+##   written as that word is said - the control, the page's word itself never matched; and a last word
+##   said its own way is said when the voice's last word is.
+## - A DRAWING TAKES ITS TIME (the same day: "chart and picture-drawing felt REALLY fast, relative to the
+##   voice describing the charts"): its ink outlasting its short line, it runs on into the talk about it
+##   and is done a settle and the nib's way before the point at it, which is on its word as before - the
+##   control, a formula as long held to its words; and one with the room is drawn at the hand's own pace.
 ## - THE HAND IS ALIVE (the same day: "A hand holding a pen would never keep it at a perfectly static
 ##   angle"): the pen's lean sways over seconds - the old fixed lean is the control - always toward the
 ##   top right and within a few degrees of it; it is the same at the same moment, another hand's sways
@@ -148,6 +161,8 @@ func _init() -> void:
 	_alive()
 	_scrub()
 	_live()
+	_heard()
+	_drawn()
 	process_frame.connect(_upload, CONNECT_ONE_SHOT)
 
 
@@ -844,6 +859,19 @@ func _points() -> void:
 	_check(wide.size.x >= DeskMedium.POINT_WIDE and early.y > wide.end.y and later.y > wide.end.y and later.x > early.x + 50.0
 		and ends.x > wide.end.x and ends.y < wide.end.y,
 		"a wide thing is swept under, left to right, and the nib stays beside its end (%s, %s, %s by %s)" % [early, later, ends, wide])
+	# A POINT THE NEXT ONE CUTS SHORT sweeps all the same, and ends where the pen waits from
+	var wi := int(at[2])
+	var uncut: Dictionary = (desk._plan[wi] as Dictionary).duplicate()
+	desk._plan[wi]["end"] = w0 + 0.3
+	desk._now = w0 + 0.3 - 1.0 / 60.0
+	var cut: Vector2 = desk.pen_at()["p"]
+	desk._now = w0 + 0.3 + 1.0 / 60.0
+	var after_cut: Vector2 = desk.pen_at()["p"]
+	var sweep := desk.point_path(desk._actions[wi])
+	var was_cut: Vector2 = (sweep[0] as Vector2).lerp(sweep[1], DeskMedium._ease(0.3 / DeskMedium.POINT_SWEEP / 0.7))
+	_check(cut.distance_to(after_cut) < 40.0 and was_cut.distance_to(sweep[2]) > 100.0,
+		"a sweep cut to 0.3 s by the next point ends where the pen waits from (%.0f px in a frame; the control, the sweep at its own pace, %.0f px)" % [cut.distance_to(after_cut), was_cut.distance_to(sweep[2])])
+	desk._plan[wi] = uncut
 	# the control: the same point on another page than its target leaves the pen where it was
 	(desk._actions[pi] as Dictionary)["page"] = 1
 	desk._now = f.st0[int(pa["after"])] + DeskMedium.POINT_SWEEP + 0.05
@@ -882,8 +910,8 @@ func _scrub() -> void:
 	lost._actions = parsed["actions"]
 	lost._follower.extend(heard)
 	lost._build_plan()
-	_check(float(lost._plan[2]["start"]) == INF,
-		"the control: the same reading matched from the top finds none of its words, and nothing after the scrub is scheduled")
+	_check(absf(float(lost._plan[2]["start"]) - at) > 1.0,
+		"the control: the same reading matched from the top does not find its words, and the next formula is not written at them (%.1f s)" % float(lost._plan[2]["start"]))
 	found.free()
 	lost.free()
 
@@ -991,6 +1019,112 @@ func _live() -> void:
 	_check(paced < 60.0 and squeezed > 200.0,
 		"and the nib goes there at most %.0f px a frame; the control, the point begun as the formula ends, %.0f px" % [paced, squeezed])
 	way.free()
+
+
+const HEARD := """<!-- pad: c + d -->
+[c] plus [d].
+
+Each of the [c]'s and the [d] is a number.
+
+<!-- pad: 7 + d -->
+7 plus [d].
+
+That is all.
+"""
+
+
+func _heard() -> void:
+	print("-- a word the voice says its own way")
+	var parsed := DeskScript.parse(HEARD, {})
+	var spoken: PackedStringArray = parsed["spoken"]
+	var cs := spoken.find("cs")
+	var seven := spoken.find("7")
+	# the voice: "[c]'s" said as two words, "7" as "seven", and its last word one the page does not have
+	var heard: Array = []
+	var seven_at := 0.0
+	for w in DeskScript.rehearsal(parsed):
+		var said: Dictionary = (w as Dictionary).duplicate()
+		if String(said["text"]) == "cs":
+			var mid := (float(said["t0"]) + float(said["t1"])) * 0.5
+			heard.append({"text": "c", "t0": float(said["t0"]), "t1": mid, "sentence": 0})
+			said = {"text": "'s", "t0": mid, "t1": float(said["t1"]), "sentence": 0}
+		elif String(said["text"]) == "7":
+			said["text"] = "seven"
+			seven_at = float(said["t0"])
+		heard.append(said)
+	(heard.back() as Dictionary)["text"] = "everything"
+	var desk := DeskMedium.new()
+	desk.load_lesson(HEARD, {"seed": 3})
+	desk._actions = parsed["actions"]
+	desk.take_words(heard)
+	var f := desk._follower
+	var after_cs := heard.size() - 1
+	for k in heard.size():
+		if String((heard[k] as Dictionary)["text"]) == "'s":
+			after_cs = k + 1
+	_check(cs >= 0 and is_equal_approx(f.st0[cs], float((heard[cs] as Dictionary)["t0"]))
+		and is_equal_approx(f.st0[cs + 1], float((heard[after_cs] as Dictionary)["t0"])),
+		"\"[c]'s\" said as \"c\" and \"'s\" is the page's one word, and the words after it keep their own times")
+	var second: Dictionary = desk._plan[1]
+	_check(f.st0[seven] == ReadingFollower.NO_TIME and absf(float(second["start"]) + DeskMedium.PEN_LEAD - seven_at) < 0.001,
+		"a dictation whose first word the voice says its own way (\"seven\") is written all the same, as that word is said (%.2f s; the control: the page's word was never matched)" % float(second["start"]))
+	var last := spoken.size() - 1
+	_check(f.known_last() < last and is_equal_approx(f.said1[last], float((heard.back() as Dictionary)["t1"])),
+		"and a last word said its own way is said when the voice's last word is")
+	desk.free()
+
+
+## A DRAWING TAKES ITS TIME: its line is short and its ink long, and the talk about it comes next, with a
+## point at it in the middle.
+const SLOW := """<!-- draw #graph:
+<svg viewBox="0 0 360 120"><line x1="20" y1="100" x2="340" y2="100"/></svg>
+-->
+Axes, the graph, and its corner.
+
+The graph stays flat for a while and then it rises, and <!-- point: graph --> this whole line is what one neuron gives us for every input we try.
+
+<!-- pad: y = x -->
+[y] equals [x].
+"""
+
+
+func _drawn() -> void:
+	print("-- a drawing takes its time")
+	var draw_id := ""
+	for a in DeskScript.parse(SLOW)["actions"]:
+		if String((a as Dictionary)["kind"]) == "draw":
+			draw_id = String(a["id"])
+	var plans := {}
+	for write in [30.0, 3.0]:
+		var parsed := DeskScript.parse(SLOW, {draw_id: write}, {draw_id: {"w": 270.0, "h": 90.0, "d": 0.0}})
+		for kind in ["draw", "pad"]:
+			var desk := DeskMedium.new()
+			desk.load_lesson(SLOW, {"seed": 3})
+			desk._actions = parsed["actions"].duplicate(true)
+			desk._actions[0]["kind"] = kind
+			desk.take_words(DeskScript.rehearsal(parsed))
+			var f := desk._follower
+			var a: Dictionary = desk._actions[0]
+			plans["%s %d" % [kind, write]] = {"plan": desk._plan.duplicate(true), "said": f.st1[int(a["after"]) + int(a["span"]) - 1],
+				"talk": f.st1[int(a["after"]) + int(a["span"]) + int(a["about"]) - 1], "point": f.st0[int(desk._actions[1]["after"])],
+				"way": desk._way(0, 1), "about": int(a["about"])}
+			desk.free()
+	var slow: Dictionary = plans["draw 30"]
+	var held: Dictionary = plans["pad 30"]
+	var d: Dictionary = slow["plan"][0]
+	var h: Dictionary = held["plan"][0]
+	_check(int(slow["about"]) == 26, "the talk about a drawing is the paragraph after its line (%d words)" % int(slow["about"]))
+	_check(float(d["end"]) > float(slow["said"]) + 1.0 and float(d["end"]) > float(h["end"]) + 1.0,
+		"a drawing whose ink outlasts its line runs on past it, into the talk about it (done at %.1f s, its line at %.1f s)" % [float(d["end"]), float(slow["said"])])
+	_check(absf(float(d["end"]) - (float(slow["point"]) - float(slow["way"]) - DeskMedium.DRAW_SETTLE)) < 0.01
+		and absf(float(slow["plan"][1]["start"]) - float(slow["point"])) < 0.001
+		and absf(float(slow["plan"][1]["start"]) - float(held["plan"][1]["start"])) < 0.001,
+		"and is done a settle and the nib's way before the point at it, which is on its word as before")
+	_check(absf(float(h["end"]) - maxf(float(held["said"]), float(h["start"]) + 30.0 / DeskScript.MAX_PACE)) < 0.01,
+		"the control: a formula as long, its line as short, is held to its words (%.1f s)" % float(h["end"]))
+	var quick: Dictionary = plans["draw 3"]["plan"][0]
+	_check(absf(float(quick["end"]) - float(quick["start"]) - 3.0 / DeskMedium.DRAW_PACE) < 0.01,
+		"and a drawing that has the room is drawn no slower than the hand's own pace (%.1f s for 3 s of ink)" % (float(quick["end"]) - float(quick["start"])))
 
 
 func _alive() -> void:

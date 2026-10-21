@@ -212,6 +212,14 @@ var _tip_rot := 0.0
 var _tip_ok := false
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"layout": {"label": "Layout", "type": "choice", "options": "LAYOUTS", "default": null,
+		"blurb": "How the writing is laid out: a page, a column, a banner, or a spiral that stops reading as paper."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "plane"                     # a page is square-on; PLANE_BAG keeps it there
@@ -224,7 +232,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		_mean_ink += (g as GlyphSet.Glyph).total
 	_mean_ink /= maxf(1.0, float(_gs.count()))
 	_sch = Scheme.pick(rng)
-	_layout = String(LAYOUTS[rng.randi() % LAYOUTS.size()])
+	_layout = String(choice("layout", rng))
 	_centered = _layout == "banner"
 	_margin = rng.randf_range(0.04, 0.14)
 	_col_frac = rng.randf_range(0.38, 0.60)

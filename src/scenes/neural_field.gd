@@ -178,6 +178,14 @@ var _edge_gamma := 0.5
 var _node_gamma := 0.6
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"topology": {"label": "Topology", "type": "choice", "options": "TOPOLOGIES", "default": null,
+		"blurb": "How the sheets change size through the network: a slab of equal sheets, a funnel that narrows toward the output, a bottleneck that pinches in the middle, or a fan that widens."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "plane"                       # the yaw comes from the lens, not the shot
 	_sch = Scheme.pick(rng)                 # a graph is abstract: no mood is wrong for it
@@ -186,7 +194,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# Draw the column count from what the per-sheet budget leaves, so the sampled range is
 	# honored wherever it can be and the item count is still bounded.
 	_cols = rng.randi_range(4, clampi(MAX_PER_SHEET / _rows, 4, 9))
-	var topo := String(TOPOLOGIES[rng.randi() % TOPOLOGIES.size()])
+	var topo := String(choice("topology", rng))
 	var jitter := rng.randf_range(0.0, 0.35)
 	var spacing := rng.randf_range(0.5, 1.2)
 	var wexp := rng.randf_range(0.6, 2.2)

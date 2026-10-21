@@ -284,7 +284,7 @@ func _pt_start_chunk(k: int) -> void:
 
 
 func _clock(secs: float) -> String:
-	return "%d:%02d" % [int(secs) / 60, int(secs) % 60]
+	return Clock.text(secs)
 
 
 ## Read one window. Rejects and DELETES anything that is not exactly the file this

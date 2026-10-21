@@ -140,12 +140,20 @@ var _emit_t := 0.0           # countdown to the next sprout from the seed
 var _emit_interval := 0.6    # sampled seconds between new sprouts
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"season": {"label": "Season", "type": "choice", "options": "SEASONS", "default": null,
+		"blurb": "The time of year the growth is in: pale and dense spring, lush summer, sparse and bare autumn, or winter's few thick limbs drained of color."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_rng.seed = rng.randi()
 	# The season comes first, and everything below is drawn through it - that is the whole
 	# point of the table: color, density and form cannot disagree about what time of year
 	# this is, because they are all read off the same entry.
-	_season = String(SEASONS.keys()[rng.randi() % SEASONS.size()])
+	_season = String(choice("season", rng))
 	var sea: Dictionary = SEASONS[_season]
 	_sch = Scheme.among(sea.moods, rng)
 	_sat_mul = float(sea.sat)

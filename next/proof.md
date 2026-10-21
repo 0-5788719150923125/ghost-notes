@@ -648,6 +648,36 @@ Found by making it, each fixed and held:
   the last ended (a point said while its drawing was still being written) had none - the nib crossed
   326 px in one frame at 338.8 s, 195 px at 767.8 s. `_build_plan` now starts no action before the
   nib's way from the last (`DeskMedium._way`); the control, the point begun as the formula ends, 555 px.
+- **A word the voice says its own way never stops the desk** (2026-10-20, "What Can One Row of Neurons
+  Imitate?": "got stuck and just hanged there, after a few minutes. All animation stop, and the pen just
+  stood in one place swaying for the rest of the video"). At 1:50 the lesson said "the [c]'s": the page's
+  word is `cs`, the voice said "c" and "'s", and the follower (`ReadingFollower`) took a one-letter word
+  only as a whole word - it found the next `c` seven words on, those seven were never heard, and
+  `_build_plan` stopped at the first action anchored on one: 9 of 51 actions placed, the pen parked for
+  the last eleven minutes. Now a one-letter word starts the page's next word when it begins it, and a
+  word the voice goes past unmatched has the time it was most likely said (`said0`/`said1`: the voice's
+  loose words in its place, else an even share of the gap, and past the last match one loose word
+  each) - the desk waits only for what the voice has not reached. On the exported take: 1278 of 1278
+  words matched, 51 of 51 actions placed. `proof_check` "a word the voice says its own way".
+- **A drawing takes its time** (the same day: "a lot of the chart and picture-drawing felt REALLY fast,
+  relative to the voice describing the charts. It felt rushed, when it could have been a lot slower and
+  there still would have been plenty of buffer room to prepare for the next thing"). A drawing's line
+  is a few words ("Axes from zero to one, the neuron's graph, and its corner.") and its ink long - every
+  tick's number and label handwritten, half of it the pen in the air between them: the episode's seven
+  drawings had 26 to 59 s of ink at the hand's pace, were held to their lines at 3.6 to 4 x it (6 to 15
+  s), and the pen then sat 2 to 11 s before its next action. Now a drawing runs on past its line through
+  the talk about it (`about`, the paragraph after its dictation), never slower than the hand's own pace
+  (`DRAW_PACE`), done `DRAW_SETTLE` and the nib's way before the pen's next action is due
+  (`DeskMedium._drawn_by`) - no action later, the voice unchanged. On the exported take: 2.2 to 3.8 x
+  (2.8 on the whole, from 3.9), 92 s of drawing for 66; frame by frame no action starts later, the
+  biggest move in a frame 74 px (97 before), 14 frames over 60 px (148), the nib 13.6 px a frame while
+  drawing (18.7), no ink taken back (`dist/math_spike/pen_frames.gd`). The rest is the teacher's: a
+  drawing's line now gives each axis, curve, shape and label a phrase as it is drawn (teacher.yaml).
+  `proof_check` "a drawing takes its time", a formula as long held to its words as the control.
+  Found replaying it live (`dist/math_spike/desk_replay2.gd`, the same with drawings held as the
+  control - both alike): a point the next one cuts to 0.3 s stopped its 0.9 s sweep a third of the way
+  and the nib jumped 366 px in a frame to where the wait starts; a cut sweep now finishes in the time
+  it has (widest frame 133-163 px at 30 fps, voices x0.85-1.3).
 - **An idle pen gets out of the way** (2026-10-19: "as it told the story, doing nothing, for ~30 or
   60 seconds, the pen was just frozen, right in the middle of the page, covering a bunch of the text's
   visibility ... it would be better for the pen to drift to the right and top"). Over 40 words or more

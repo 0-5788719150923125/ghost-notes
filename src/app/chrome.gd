@@ -179,6 +179,21 @@ func attach_feedback() -> Node:
 	return feedback
 
 
+# --- the transport ------------------------------------------------------------------------------
+
+## A workspace on a clock of its own conducts the transport through its shell ([Shell]).
+func conduct_transport(owner: Object, hooks: Dictionary) -> void:
+	Spectrum.conduct(owner, hooks)
+
+
+func release_transport(owner: Object) -> void:
+	Spectrum.release_conductor(owner)
+
+
+func transport_room() -> float:
+	return Transport.room()
+
+
 ## Tear down the per-session console (the persistent pieces stay). Callers own
 ## the don't-yank-it-while-open courtesy (see main._end_session).
 func detach_feedback() -> void:

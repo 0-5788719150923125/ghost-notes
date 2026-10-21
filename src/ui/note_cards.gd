@@ -5,9 +5,10 @@ class_name NoteCards
 ## two edits that change what a note is made of: attach and detach.
 ##
 ## A PANEL DOES NOT LIST ITS CARDS; THE NOTE DOES. Each workspace (the note's own panel, a reading's,
-## a show of cards', the voice lab's) builds what only it has - a voice's cast, an episode - and
+## a show of cards', the voice lab's) builds what only it has - its words, the voice lab's water - and
 ## hands the rest to [method build], which adds a card for each component the note has attached, in
-## the order they stand on every panel. So a Storyboard attached to a note with a voice gets the
+## the order they stand on every panel; what a card shows of the workspace is handed in `ctx` (a
+## reading's cast to its Voice). So a Storyboard attached to a note with a voice gets the
 ## same card a song's has, with nothing written for the pairing: it is not a feature of either
 ## panel. A card answers `KEY` (its block under `ghost:`), `capture()` and `apply(block)`, as every
 ## block card does.
@@ -23,8 +24,8 @@ class_name NoteCards
 
 ## The components whose settings are a card any workspace can show, in the order they stand:
 ## the rows of [constant Components.REGISTRY] that name a `script`. Cards' and Proof's episodes
-## first: what produces the text stands above what shows it.
-const KEYS := ["cards", "proof", "picture", "storyboard", "look", "bookends", "youtube"]
+## first, then the voice that reads them: what produces the text stands above what shows it.
+const KEYS := ["cards", "proof", "voice", "picture", "storyboard", "look", "bookends", "youtube"]
 
 
 ## A card for each of [param attached] that is one of [constant KEYS] (and of [param ctx]'s

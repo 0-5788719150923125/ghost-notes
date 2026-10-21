@@ -874,7 +874,7 @@ func _build_body(entry: Dictionary) -> Control:
 			body.add_child(_build_resume_row(entry))
 		"running":
 			var elapsed_s: int = (Time.get_ticks_msec() - int(entry.get("started_at", Time.get_ticks_msec()))) / 1000
-			var time_str := "%ds" % elapsed_s if elapsed_s < 60 else "%d:%02d" % [elapsed_s / 60, elapsed_s % 60]
+			var time_str := "%ds" % elapsed_s if elapsed_s < 60 else Clock.text(float(elapsed_s))
 			body.add_child(_dim_label("running (%s)" % time_str))
 			var prog := String(entry.get("progress", ""))
 			if prog != "":

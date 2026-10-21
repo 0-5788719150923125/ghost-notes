@@ -47,6 +47,16 @@ var _hue := 0.0
 var _beat_prev := 0.0
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"bins": {"label": "Bins", "type": "choice", "options": "BINS", "default": null,
+		"blurb": "How finely the map is binned: coarse blocky cells, the paper's 64, or fine bins that read as a smooth density cloud."},
+	"form": {"label": "Form", "type": "choice", "options": "FORMS", "default": null,
+		"blurb": "The latent's own structure: one plain iris ring, a banded iris of two rings, or one ring haloed by a sparse corona."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
@@ -54,7 +64,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# A density map takes any palette - it is a colormap, not a thing with a nature.
 	_sch = Scheme.pick(rng)
 	_hue = _sch.hue
-	var bname := String(BINS.keys()[rng.randi() % BINS.size()])
+	var bname := String(choice("bins", rng))
 	_g = int(BINS[bname])
 	_n = rng.randi_range(1500, 4200)
 	# A placeholder shape only: the frame's size is not known until the node is in the tree,
@@ -69,7 +79,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		rng.randf_range(-0.15, 0.15))
 	# Sampled eye geometry: elongation (round through to very wide), iris ring, pupil
 	# nucleus, depth. The pupil can also sit OFF center, so the eye looks aside.
-	var form := String(FORMS[rng.randi() % FORMS.size()])
+	var form := String(choice("form", rng))
 	var ex := rng.randf_range(1.0, 2.3)
 	var ey := rng.randf_range(0.55, 1.10)
 	var iris_r := rng.randf_range(0.45, 0.95)

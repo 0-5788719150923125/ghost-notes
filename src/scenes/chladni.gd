@@ -161,6 +161,16 @@ var _drive := 0.4
 var _ch := Vector2.ZERO
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"plate": {"label": "Plate", "type": "choice", "options": "SHAPES", "default": null,
+		"blurb": "The shape of the vibrating plate: a square, a circle or a hexagon, each with its own family of patterns."},
+	"finish": {"label": "Finish", "type": "choice", "options": "FINISHES", "default": null,
+		"blurb": "The plate's surface: brushed metal, matte black, slate, or chalk - a pale board with dark filings on it."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "particles"
 	framing = "plane"
@@ -169,7 +179,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_light = Lighting.new(rng, rng.randi_range(2, 3))
 	_csig.resize(12)
 
-	_shape = String(SHAPES[rng.randi() % SHAPES.size()])
+	_shape = String(choice("plate", rng))
 	var boundary := "clamped" if rng.randf() < 0.45 else "free"
 	# 52-88 cells per axis. The nodal structure of the highest mode in the tables has a
 	# half-wavelength around a sixth of the plate, so even the coarse end has eight or nine
@@ -182,7 +192,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_field = PlateField.new(_shape, boundary, grid, rng.randf() * TAU)
 	_outline = _field.outline(72)
 
-	var fname := String(FINISHES.keys()[rng.randi() % FINISHES.size()])
+	var fname := String(choice("finish", rng))
 	var fin: Dictionary = FINISHES[fname]
 	_high_key = bool(fin["high"])
 	# One color identity for the plate, the room and the sand. Cool metals and bone, plus

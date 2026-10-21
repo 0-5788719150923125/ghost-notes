@@ -34,6 +34,14 @@ var _focus_target := Vector3(0, 0, 6.0) # the point the eye snaps to look at
 var _focus_dwell := 0.0
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"size": {"label": "Size", "type": "choice", "options": "SIZES", "default": null,
+		"blurb": "How big the eye is in the frame: a distant speck in the void, a portrait, or looming right up against the lens."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "plane"
 	morph_out = "eye"
@@ -43,7 +51,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# mood are still two different eyes.
 	_eye = EyeBody.new(rng.randi(), sch.vary(rng))
 	_eye.autonomous = false              # driven by the focus point below
-	var size_name := String(SIZES.keys()[rng.randi() % SIZES.size()])
+	var size_name := String(choice("size", rng))
 	var band: Array = SIZES[size_name]
 	# The lens itself stays fixed: two_eyes and eye_prism build their own cameras at
 	# these exact settings, and a differing fov would pop the size at the morph.

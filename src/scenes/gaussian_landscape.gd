@@ -38,10 +38,18 @@ var _cols := 56                     # samples across one ridgeline (its crispnes
 var _fog_bands := 3
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"relief": {"label": "Relief", "type": "choice", "options": "RELIEFS", "default": null,
+		"blurb": "The landform on the horizon: a few wide dunes, rolling swells, a crowded serration of ridges, or a massif."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
 	_sch = Scheme.pick(rng)
-	var relief := String(RELIEFS.keys()[rng.randi() % RELIEFS.size()])
+	var relief := String(choice("relief", rng))
 	var rl: Dictionary = RELIEFS[relief]
 	_rows = rng.randi_range(int(rl.rows[0]), int(rl.rows[1]))
 	_cols = rng.randi_range(int(rl.cols[0]), int(rl.cols[1]))

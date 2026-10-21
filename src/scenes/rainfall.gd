@@ -48,11 +48,18 @@ const STORMS := {
 }
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"storm": {"label": "Storm", "type": "choice", "options": "STORMS", "default": null,
+		"blurb": "What kind of rain falls: mist, drizzle, steady rain, a downpour, or rain in a lit street at night."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
-	var keys := STORMS.keys()
-	var storm := String(keys[rng.randi() % keys.size()])
+	var storm := String(choice("storm", rng))
 	var st: Dictionary = STORMS[storm]
 	var sch := Scheme.among(st["moods"], rng)
 	var count := rng.randi_range(int(st["count"][0]), int(st["count"][1]))
