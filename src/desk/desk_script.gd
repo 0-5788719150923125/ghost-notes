@@ -94,6 +94,11 @@ const MAX_PACE := 4.0
 const MIN_PACE := 0.55
 ## A spoken word's length, for the rests sized before the voice is heard.
 const EST_WORD := 0.33
+## A SPOKEN WORD IN A REAL READING, the voice's pauses between sentences and paragraphs with it (seconds):
+## what [method runtime] times a lesson by. Measured on three exported lessons (2026-10-20: 3857 to
+## 3930 spoken words, 0.49 to 0.53 s a word once the pen's rests and the bookends are taken off, the
+## Narrator at pace 0.9); a voice set faster or slower moves it.
+const SAID_WORD := 0.52
 ## A cross-out: the pen draws a line through the last thing written, deliberately.
 const STRIKE := 0.9
 ## THE PEN IS NEVER STILL FOR LONG: more spoken words than this with the pen neither writing, drawing
@@ -463,6 +468,20 @@ static func rehearsal(parsed: Dictionary, word := 0.32, pause := 0.35, lead := 1
 		if words:
 			t += pause
 	return out
+
+
+## HOW LONG [param body] RUNS when it is read (seconds, the bookends aside): every spoken word at
+## [constant SAID_WORD], and every rest the lesson asks the voice for ([param lengths] and
+## [param sizes] as [method parse] takes them - without the ink, the pen's times are guessed). Within a
+## few percent of the three exports it was measured on.
+static func runtime(body: String, lengths: Dictionary = {}, sizes: Dictionary = {}) -> float:
+	if not is_lesson(body):
+		return 0.0
+	var parsed := parse(body, lengths, sizes)
+	var t := float((parsed["spoken"] as PackedStringArray).size()) * SAID_WORD
+	for m in _rx("<!--\\s*action-hold\\s*:\\s*([0-9.]+)\\s*-->").search_all(String(parsed["speakable"])):
+		t += float(m.get_string(1))
+	return t
 
 
 ## WHAT THE PEN WOULD WRITE IN SILENCE: each pad line in [param body] with no dictation on the line

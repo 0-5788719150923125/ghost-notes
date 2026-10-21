@@ -20,7 +20,13 @@ const AREAS := ["number theory", "combinatorics and counting", "inequalities", "
 const RUNS_SHOWN := 40000
 
 ## A LESSON HAS NO SET LENGTH (the user, 2026-10-16: "I would prefer to just make videos as long as they
-## need to be"): no agent is handed minutes or a count of words, and none is sent back for running long.
+## need to be") - BUT THE ONE ITS NOTE ASKS FOR (2026-10-20: a note asking for "about 5 to 10 minutes"
+## came back as 36, because the teacher was told "the lesson has no set length" over the note's words,
+## and nothing could tell it how long it ran). Nothing lays a length on a lesson; the framer reads the
+## one the note asks for (`minutes`, [method asked]), and only then is the teacher handed it as spoken
+## words ([method length_of]), the second draft and the student how long the first runs
+## ([method DeskScript.runtime]), and a lesson well over it sent back ([ProofProducer]). It is met by
+## what is taught, never by saying it faster, and a lesson done sooner is never stretched.
 ##
 ## The most notes the student hands back on a draft.
 const STUDENT_NOTES := 12
@@ -29,6 +35,43 @@ const STUDENT_NOTES := 12
 ## What every agent shares: the channel's name and the note.
 static func context(title: String, brief: String) -> String:
 	return Rules.say("proof/show.context", {"title": title, "brief": brief})
+
+
+## The length [param problem]'s note asks for, `[least, most]` minutes as the framer read it; [] for
+## none ([method ProofProducer.land_problem] keeps only a sound pair).
+static func asked(problem: Dictionary) -> Array:
+	var m: Variant = problem.get("minutes", [])
+	return m if m is Array and (m as Array).size() == 2 else []
+
+
+## THE LENGTH, as an agent is told it: `minutes` (whether the note asks for one), `span` ("5 to 10
+## minutes"), `words` (the same in spoken words, at [constant DeskScript.SAID_WORD]), and for a
+## [param draft] how long it runs - `draft_minutes`, `draft_words` and `over` (past the most asked).
+static func length_of(problem: Dictionary, draft := "") -> Dictionary:
+	var m := asked(problem)
+	if m.is_empty():
+		return {"minutes": false}
+	var lo := float(m[0])
+	var hi := float(m[1])
+	var out := {"minutes": true,
+		"span": ("%s minutes" % said_num(hi)) if lo == hi else ("%s to %s minutes" % [said_num(lo), said_num(hi)]),
+		"words": str(words_in(hi)) if lo == hi else "%d to %d" % [words_in(lo), words_in(hi)]}
+	if not draft.strip_edges().is_empty():
+		var runs := DeskScript.runtime(draft)
+		out["draft_minutes"] = said_num(snappedf(runs / 60.0, 0.5))
+		out["draft_words"] = str((DeskScript.parse(draft)["spoken"] as PackedStringArray).size())
+		out["over"] = runs > hi * 60.0
+	return out
+
+
+## [param x] as a length is said: "5", "7.5" - never "5.0".
+static func said_num(x: float) -> String:
+	return str(int(x)) if x == floorf(x) else String.num(x, 1)
+
+
+## About how many spoken words [param minutes] of a reading hold, to the nearest ten.
+static func words_in(minutes: float) -> int:
+	return roundi(minutes * 60.0 / DeskScript.SAID_WORD / 10.0) * 10
 
 
 ## "Invent a problem": a field picked by [param seed], avoiding [param before] (titles done). [param run]:
@@ -74,17 +117,18 @@ static func solver(title: String, brief: String, problem: Dictionary, run := fal
 ## carries what a second try must mend: `broken` (formulas and drawings that could not be set),
 ## `notation` (speech that carried notation), `undictated` (pad lines not read aloud as written) and
 ## `letters` (speech that said a letter as the word "a"), `points` (names pointed at that nothing
-## carries) and `still` (long stretches of speech over a still pen), each a list of lines. With
-## [param draft]
-## (the first draft) and [param review] (the student's notes on it, `[{quote, need}]`) it writes the
-## lesson again from them.
+## carries), `still` (long stretches of speech over a still pen), each a list of lines, and `long` (how
+## long a take ran past the length the note asks for, the last line said). With [param draft] (the first
+## draft) and [param review] (the student's notes on it, `[{quote, need}]`) it writes the lesson again
+## from them, told how long the draft runs ([method length_of]).
 static func teacher(title: String, brief: String, problem: Dictionary, notebook: String,
 		proof: String, solve: Dictionary, fix: Dictionary = {}, draft := "",
 		review: Array = [], runs: Array = [], data: Dictionary = {}) -> Dictionary:
 	var is_proof := ProofTools.kind_of(problem) == "proof"
-	return {"system": Rules.say("proof/teacher.system", {}) + "\n\n" + context(title, brief),
-		"prompt": Rules.say("proof/teacher.prompt", {
-			"statement": str(problem.get("statement", "")), "latex": str(problem.get("latex", "")),
+	var said := length_of(problem, draft)
+	var long: Array = fix.get("long", [])
+	said["long"] = String(long.back()) if not long.is_empty() else ""
+	said.merge({"statement": str(problem.get("statement", "")), "latex": str(problem.get("latex", "")),
 			"history": str(problem.get("history", "")),
 			"audience": str(problem.get("audience", "curious viewers with high-school math")),
 			"notebook": notebook.strip_edges() if not notebook.strip_edges().is_empty()
@@ -103,7 +147,9 @@ static func teacher(title: String, brief: String, problem: Dictionary, notebook:
 			"letters": "\n".join(PackedStringArray(fix.get("letters", []))),
 			"points": ", ".join(PackedStringArray(fix.get("points", []))),
 			"still": "\n".join(PackedStringArray(fix.get("still", []))),
-			"still_words": str(DeskScript.STILL_WORDS)})}
+			"still_words": str(DeskScript.STILL_WORDS)})
+	return {"system": Rules.say("proof/teacher.system", {}) + "\n\n" + context(title, brief),
+		"prompt": Rules.say("proof/teacher.prompt", said)}
 
 
 ## THE RUNS as the teacher reads them: the ones the result names ([param evidence]) first, then the
@@ -159,12 +205,14 @@ static func data_text(data: Dictionary) -> String:
 	return "\n".join(lines)
 
 
-## THE STUDENT, given the teacher's first [param draft]: notes on where it loses a newcomer (JSON).
+## THE STUDENT, given the teacher's first [param draft]: notes on where it loses a newcomer (JSON) -
+## and, when the note asks for a length, told how long the draft runs against it.
 static func student(title: String, brief: String, problem: Dictionary, draft: String) -> Dictionary:
+	var said := length_of(problem, draft)
+	said.merge({"audience": str(problem.get("audience", "curious viewers with high-school math")),
+		"draft": draft.strip_edges(), "most": str(STUDENT_NOTES)})
 	return {"system": Rules.say("proof/student.system", {}) + "\n\n" + context(title, brief),
-		"prompt": Rules.say("proof/student.prompt", {
-			"audience": str(problem.get("audience", "curious viewers with high-school math")),
-			"draft": draft.strip_edges(), "most": str(STUDENT_NOTES)})}
+		"prompt": Rules.say("proof/student.prompt", said)}
 
 
 ## The student's notes as the teacher reads them: a line each, the lesson's words and what was needed.

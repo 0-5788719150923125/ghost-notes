@@ -41,7 +41,13 @@ const SOLVE_TIMEOUT := 3600
 ## TeX's measure for the pad: a column this many points wide (the page's text width).
 const PAD_WIDTH := 270.0
 ## What a take of the lesson is checked for ([method _land_lesson]), as the keys of [member _fix].
-const CHECKED := ["notation", "undictated", "letters", "points", "still"]
+const CHECKED := ["notation", "undictated", "letters", "points", "still", "long"]
+## A LESSON RUNS LONG when it passes the most minutes its note asks for by more than this share: the
+## estimate is good to a few percent ([method DeskScript.runtime]), and a lesson a little over is better
+## kept than cut again.
+const LONG_BY := 0.2
+## The most minutes a note's length is taken at; past it the framer misread the note.
+const MOST_MINUTES := 180.0
 
 var episode: ProofEpisode
 ## {title (the channel's name), byline, uploads_as (the line an episode's title goes up in), before
@@ -58,7 +64,7 @@ var _tools := {}       # step -> {url, set}
 var _local := {}       # step -> {pid, out, log}: a step ghost runs as a program (the ink)
 var _errors := {}      # step -> why it failed, once out of tries
 var _tries := {}       # step -> runs started
-var _fix := {}         # what the next lesson must mend: {broken, notation, undictated, letters, points, still: [..]}
+var _fix := {}         # what the next lesson must mend: {broken, notation, undictated, letters, points, still, long: [..]}
 
 
 func _init(ep: ProofEpisode, sp: Dictionary) -> void:
@@ -384,10 +390,13 @@ func _land_problem(text: String) -> String:
 ##
 ## NOT EVERY CLAIM IS A THEOREM: `check` is "proof" (Lean) or "computation" (code that runs,
 ## [ProofTools]); anything else, or none - a problem framed before there were computations - is a proof.
+## THE LENGTH THE NOTE ASKS FOR is `minutes`, `[least, most]` (one number is both), kept only when it
+## is sound - [] otherwise, and a lesson with none has no set length ([ProofPrompts]).
 static func land_problem(d: Dictionary) -> Dictionary:
 	var out := {}
 	for k in ["episode_title", "statement", "latex", "lean", "history", "audience", "description", "computation"]:
 		out[k] = str(d.get(k, "")).strip_edges()
+	out["minutes"] = minutes_of(d.get("minutes", []))
 	out["check"] = "computation" if str(d.get("check", "")).strip_edges().to_lower() == "computation" else "proof"
 	if String(out["episode_title"]).is_empty() or String(out["statement"]).is_empty():
 		return {"error": "the problem has no episode title or no statement"}
@@ -414,6 +423,22 @@ static func land_problem(d: Dictionary) -> Dictionary:
 			forbidden.append(name)
 	out["forbidden"] = forbidden
 	return out
+
+
+## [param m] as `[least, most]` minutes: one or two positive numbers (a number alone, or written as
+## text, is taken too); [] for anything else, or a length no lesson could be (over
+## [constant MOST_MINUTES]).
+static func minutes_of(m: Variant) -> Array:
+	var said: Array = m if m is Array else [m]
+	if said.is_empty() or said.size() > 2:
+		return []
+	var got: Array = []
+	for v in said:
+		var x := float(v) if v is float or v is int else (str(v).to_float() if str(v).strip_edges().is_valid_float() else 0.0)
+		if x <= 0.0 or x > MOST_MINUTES:
+			return []
+		got.append(x)
+	return [got.min(), got.max()]
 
 
 ## THE SOLVER'S SESSION, ENDED. A handed-in proof was VERIFIED when it was handed in, and a handed-in
@@ -452,6 +477,7 @@ func _land_draft(text: String) -> String:
 	var draft := clean_lesson(text)
 	if DeskScript.items(draft).is_empty():
 		return "the draft writes nothing on the pad"
+	print("ghost: proof draft - %s" % _runs(draft))
 	return episode.write_text("draft", draft + "\n")
 
 
@@ -494,7 +520,10 @@ static func land_review(d: Variant) -> Dictionary:
 ## with them, one that mends them says so. What a take was sent back for stays in [member _fix] until
 ## the lesson is made anew, so the take TeX sends back - written from the draft again, like the first
 ## - is told it too, and does not bring back what the second mended.
-## ITS LENGTH IS ITS OWN: nothing sends a lesson back for running long ([ProofPrompts]).
+## THE LENGTH THE NOTE ASKS FOR, AND NO OTHER (2026-10-20: "a 5-10 minute request in the script turned
+## into a 36-minute export"): every take's length is said in the log, and one that runs past the most
+## minutes the note asks for by more than [constant LONG_BY] goes back too, told by how much. With no
+## length asked, nothing sends a lesson back for running long ([ProofPrompts]).
 func _land_lesson(text: String) -> String:
 	var lesson := clean_lesson(text)
 	if DeskScript.items(lesson).is_empty():
@@ -504,12 +533,14 @@ func _land_lesson(text: String) -> String:
 		_fix["notation"] = Array(_fix.get("notation", [])) + Array(said)
 		return "the lesson's speech carries notation (%d line%s)" % [said.size(), "" if said.size() == 1 else "s"]
 	var found := {"undictated": DeskScript.undictated(lesson), "letters": DeskScript.bare_letters(lesson),
-		"points": DeskScript.unknown_points(lesson), "still": DeskScript.still(lesson)}
+		"points": DeskScript.unknown_points(lesson), "still": DeskScript.still(lesson),
+		"long": too_long(lesson, ProofPrompts.asked(_problem()))}
 	var faults := lesson_faults(found)
 	for k in found:
 		if not (found[k] as PackedStringArray).is_empty():
 			_fix[k] = Array(_fix.get(k, [])) + Array(found[k])
 	var take := int(_tries.get("lesson", 0))
+	print("ghost: proof lesson - take %d %s" % [take, _runs(lesson)])
 	if not faults.is_empty() and take <= RETRIES:
 		return faults
 	if not faults.is_empty():
@@ -520,21 +551,48 @@ func _land_lesson(text: String) -> String:
 
 
 ## What [param found] (check -> what it caught, as [method _land_lesson] runs them) says is wrong with
-## a lesson, the first fault named; "" when nothing is.
+## a lesson, every fault named; "" when nothing is.
 static func lesson_faults(found: Dictionary) -> String:
 	var bare: PackedStringArray = found.get("undictated", PackedStringArray())
 	var letters: PackedStringArray = found.get("letters", PackedStringArray())
 	var points: PackedStringArray = found.get("points", PackedStringArray())
 	var still: PackedStringArray = found.get("still", PackedStringArray())
+	var long: PackedStringArray = found.get("long", PackedStringArray())
+	var out := PackedStringArray()
 	if not bare.is_empty():
-		return "%d pad line%s not read aloud as written" % [bare.size(), "" if bare.size() == 1 else "s"]
+		out.append("%d pad line%s not read aloud as written" % [bare.size(), "" if bare.size() == 1 else "s"])
 	if not letters.is_empty():
-		return "%d line%s said a letter as the word a" % [letters.size(), "" if letters.size() == 1 else "s"]
+		out.append("%d line%s said a letter as the word a" % [letters.size(), "" if letters.size() == 1 else "s"])
 	if not points.is_empty():
-		return "it points at %s, which nothing on the pad is called" % ", ".join(points)
+		out.append("it points at %s, which nothing on the pad is called" % ", ".join(points))
 	if not still.is_empty():
-		return "the pen stands still through %d long stretch%s of speech" % [still.size(), "" if still.size() == 1 else "es"]
-	return ""
+		out.append("the pen stands still through %d long stretch%s of speech" % [still.size(), "" if still.size() == 1 else "es"])
+	if not long.is_empty():
+		out.append("it runs %s" % long[0])
+	return "; ".join(out)
+
+
+## THE LESSON RUN LONG: how far [param lesson] runs past [param asked] (`[least, most]` minutes, as
+## [method ProofPrompts.asked] has it) when that is more than [constant LONG_BY] of the most - one line,
+## as the log and the teacher are told it; none when it is within it, or nothing was asked.
+static func too_long(lesson: String, asked: Array) -> PackedStringArray:
+	if asked.size() != 2:
+		return PackedStringArray()
+	var runs := DeskScript.runtime(lesson)
+	if runs <= float(asked[1]) * 60.0 * (1.0 + LONG_BY):
+		return PackedStringArray()
+	return PackedStringArray(["about %s minutes (%d spoken words), past the %s the note asks for" % [
+		ProofPrompts.said_num(snappedf(runs / 60.0, 0.5)), (DeskScript.parse(lesson)["spoken"] as PackedStringArray).size(),
+		String(ProofPrompts.length_of({"minutes": asked})["span"])]])
+
+
+## How long [param lesson] runs, for the log: its minutes and spoken words, and the length its note
+## asks for when it asks one.
+func _runs(lesson: String) -> String:
+	var said := ProofPrompts.length_of(_problem())
+	return "runs about %s minutes (%d spoken words)%s" % [ProofPrompts.said_num(snappedf(DeskScript.runtime(lesson) / 60.0, 0.5)),
+		(DeskScript.parse(lesson)["spoken"] as PackedStringArray).size(),
+		(", the note asks for %s" % said["span"]) if bool(said["minutes"]) else ""]
 
 
 ## A teacher's reply as a lesson: a fenced reply unwrapped, outer blank lines off.

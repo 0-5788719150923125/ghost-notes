@@ -1,5 +1,5 @@
 {
-	"digest": "06d8f13b8e421e03bc94a8a1363baa90da5cd4edf409ee46ed49739c75fc25cf",
+	"digest": "453a0d5a41daf84985d1bbe5185cd5d98b9bafa2192702b9264e46925187b6ac",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -214,6 +214,7 @@
 		"res://src/show/filters.gd",
 		"res://src/show/picture_card.gd",
 		"res://src/show/song_card.gd",
+		"res://src/show/subtitle_sea.gd",
 		"res://src/show/subtitles.gd",
 		"res://src/show/transport.gd",
 		"res://src/stage/actions.gd",

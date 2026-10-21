@@ -101,9 +101,14 @@ extends SceneTree
 ##   angle"): the pen's lean sways over seconds - the old fixed lean is the control - always toward the
 ##   top right and within a few degrees of it; it is the same at the same moment, another hand's sways
 ##   otherwise; its top trails the nib's travel; and the nib drifts at rest and never while it writes.
-## - A LESSON'S LENGTH IS ITS OWN (the user, 2026-10-16: "make videos as long as they need to be"): no
-##   agent is handed minutes or words, and a lesson of thousands of words lands on its first try -
-##   against the same lesson with a pad line left unread, which still goes back.
+## - A LESSON'S LENGTH IS ITS OWN (the user, 2026-10-16: "make videos as long as they need to be"): with
+##   no length in the note, no agent is handed minutes or words, and a lesson of thousands of words
+##   lands on its first try - against the same lesson with a pad line left unread, which still goes back.
+## - BUT THE ONE ITS NOTE ASKS FOR (2026-10-20: "a 5-10 minute request in the script turned into a
+##   36-minute export"): the framer's `minutes` is kept only when sound; the teacher is handed it in
+##   spoken words in place of "no set length", the second draft and the student how long the first runs;
+##   a lesson's runtime is its spoken words at DeskScript.SAID_WORD and its rests; and the same long
+##   lesson goes back under a note asking "5 to 10 minutes", told by how much - a lesson inside it lands.
 ## - EVERY TAKE IS CHECKED (2026-10-19: "Was the problem fixed or not?"): a first take over a still pen
 ##   goes back, a mended second is taken, and what the first was sent back for is still in the prompt a
 ##   take after TeX's send-back gets - a fresh lesson's is not; a take out of tries is kept with its
@@ -333,6 +338,30 @@ func _prompts() -> void:
 		"no agent is handed a length (%s), and the teacher and the refiner are told there is none" % ", ".join(lengths))
 	_check(String(yes["prompt"]).contains("Never stretch it") and String(yes["prompt"]).contains("never rush it"),
 		"the teacher is told neither to stretch the lesson nor to rush it")
+	# BUT THE ONE ITS NOTE ASKS FOR (2026-10-20): read off the note by the framer, handed the teacher in
+	# spoken words, and the second draft and the student told how long the first runs
+	var asked := PROBLEM.duplicate()
+	asked["minutes"] = [5.0, 10.0]
+	var span := "%d to %d spoken words" % [ProofPrompts.words_in(5.0), ProofPrompts.words_in(10.0)]
+	var held := ProofPrompts.teacher("Ghost Notes", "a note", asked, "## notes", "theorem main", {"verified": true})
+	var held2 := ProofPrompts.teacher("Ghost Notes", "a note", asked, "## notes", "theorem main", {"verified": true}, {},
+		LESSON, [{"quote": "x", "need": "y"}])
+	var stu2 := ProofPrompts.student("Ghost Notes", "a note", asked, LESSON)
+	texts.append_array([held["prompt"], held2["prompt"], stu2["prompt"]])
+	_check(String(fr["prompt"]).contains("\"minutes\"") and String(fr["prompt"]).contains("never one you choose"),
+		"the framer reads the length the note asks for, and is told never to choose one")
+	_check(String(held["prompt"]).contains("about 5 to 10 minutes - about " + span) and not String(held["prompt"]).contains("no set length")
+		and not String(held["prompt"]).contains("YOUR FIRST DRAFT RUNS"),
+		"a note's length is handed the first draft in spoken words (%s), in place of none" % span)
+	var draft_runs := ProofPrompts.said_num(snappedf(DeskScript.runtime(LESSON) / 60.0, 0.5))
+	_check(String(held2["prompt"]).contains("YOUR FIRST DRAFT RUNS ABOUT %s MINUTES (%d spoken words)" % [draft_runs,
+		(DeskScript.parse(LESSON)["spoken"] as PackedStringArray).size()])
+		and String(held2["prompt"]).contains("Write it to the length the author asked for")
+		and not String(again["prompt"]).contains("YOUR FIRST DRAFT RUNS"),
+		"the second draft is told how long the first runs (the control: with no length asked, it is not)")
+	_check(String(stu2["prompt"]).contains("about 5 to 10 minutes, and this draft runs about %s minutes" % draft_runs)
+		and not String(stu2["prompt"]).contains("leave out to come down") and not String(stu["prompt"]).contains("this draft runs"),
+		"the student is told the length and the draft's, and a draft inside it is not cut (the control: none asked, none said)")
 	# NOT EVERY CLAIM IS A THEOREM: a computation, framed, solved and taught
 	var fr_run := String(ProofPrompts.framer("Ghost Notes", "a note", "", [], true)["prompt"])
 	_check(fr_run.contains("\"check\"") and fr_run.contains("\"computation\"") and fr_run.contains("proof or computation")
@@ -649,6 +678,37 @@ func _length() -> void:
 	var unread := ProofProducer.new(ProofEpisode.open("length-check", 2), {})._land_lesson(
 		long.replace("1 -->\n0 plus", "1 -->\n\n0 plus"))
 	_check(unread.contains("not read aloud"), "the control: the same lesson with its pad line unread goes back (%s)" % unread)
+	# BUT THE ONE ITS NOTE ASKS FOR: a runtime is its spoken words at SAID_WORD and its rests
+	var p := DeskScript.parse(long)
+	var rests := 0.0
+	for r in _rests(String(p["speakable"])):
+		rests += r
+	var runs := DeskScript.runtime(long)
+	_check(absf(runs - (words * DeskScript.SAID_WORD + rests)) < 0.01 and rests > 0.0 and DeskScript.runtime("no marks here") == 0.0,
+		"a lesson runs its spoken words at %.2f s and its rests (%.0f s, %.0f s of them rests)" % [DeskScript.SAID_WORD, runs, rests])
+	var asked := ProofEpisode.open("length-check", 3)
+	asked.write_json("problem", ProofProducer.land_problem({"episode_title": "x", "statement": "y",
+		"lean": "theorem main : True", "minutes": [10, 5]}))
+	var producer := ProofProducer.new(asked, {})
+	producer._tries["lesson"] = 1
+	var sent := producer._land_lesson(long)
+	_check(sent.contains("it runs about %s minutes (%d spoken words), past the 5 to 10 minutes" % [ProofPrompts.said_num(snappedf(runs / 60.0, 0.5)), words])
+		and not asked.has("lesson"), "under a note asking 5 to 10 minutes, the same lesson goes back, told by how much (%s)" % sent)
+	var told := String(ProofPrompts.teacher("T", "", producer._problem(), "", "", {}, producer._fix, "draft")["prompt"])
+	_check(told.contains("LAST TIME THE LESSON RAN about") and told.contains("Write it to about %d to %d spoken words" % [
+		ProofPrompts.words_in(5.0), ProofPrompts.words_in(10.0)]), "and the next take is told so, in words")
+	var cut := ""
+	for i in 12:
+		cut += "<!-- pad: %d + 1 = %d -->\n%d plus one equals %d.\n\n" % [i, i + 1, i, i + 1]
+		for j in 4:
+			cut += "The sum grows by one at every step, and the next step is the same. "
+		cut += "\n\n"
+	producer._tries["lesson"] = 2
+	var fits := producer._land_lesson(cut)
+	_check(fits.is_empty() and asked.has("lesson") and DeskScript.runtime(cut) < 10.0 * 60.0,
+		"the control: a lesson inside it lands (%.1f minutes; %s)" % [DeskScript.runtime(cut) / 60.0, fits])
+	var over := String(ProofPrompts.student("T", "", producer._problem(), long)["prompt"])
+	_check(over.contains("leave out to come down to that length"), "a student reading a draft past it marks what could go")
 
 
 
@@ -992,6 +1052,14 @@ func _problem() -> void:
 		"the control: a computation that does not say what it computes is refused")
 	_check(ProofTools.kind_of(PROBLEM) == "proof" and ProofTools.kind_of({"lean": "theorem main : True"}) == "proof",
 		"a problem framed before there were computations is a proof")
+	# THE LENGTH THE NOTE ASKS FOR, kept only when sound
+	_check(ProofProducer.minutes_of([10, 5]) == [5.0, 10.0] and ProofProducer.minutes_of([8]) == [8.0, 8.0]
+		and ProofProducer.minutes_of(12) == [12.0, 12.0] and ProofProducer.minutes_of(["5", "10"]) == [5.0, 10.0],
+		"a length is kept as [least, most] minutes, one number both")
+	_check(ProofProducer.minutes_of([]).is_empty() and ProofProducer.minutes_of("").is_empty()
+		and ProofProducer.minutes_of([0, 10]).is_empty() and ProofProducer.minutes_of([5, 10, 15]).is_empty()
+		and ProofProducer.minutes_of(["short"]).is_empty() and ProofProducer.minutes_of([5, 900]).is_empty()
+		and (got["minutes"] as Array).is_empty(), "the control: none, nonsense or no length at all is no length")
 	# THE RESULT, handed in: only runs that ran to their end show it
 	var ep := ProofEpisode.open("computed-note", 1)
 	ep.write_json("problem", COMPUTED)

@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 345 references inside a folder, 800 down the stack, 0 up it.
+Between scripts today: 346 references inside a folder, 800 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -20,7 +20,7 @@ Between scripts today: 345 references inside a folder, 800 down the stack, 0 up 
 | `reading/` | The voice's workspaces | 10 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
 | `export/` | Export | 4 | `show`, `voice`, `ui`, `notes`, `agents`, `stage`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
-| `show/` | The show | 8 | `media`, `ui`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
+| `show/` | The show | 9 | `media`, `ui`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `media/` | Media | 19 | `voice`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `voice/` | Synthesis (voice) | 13 | `audio`, `platform`, `data` |
 | `ui/` | The panel kit | 11 | `notes`, `agents`, `platform`, `data` |
@@ -124,7 +124,7 @@ What the show is carried on: the `Medium` base and its registry, each medium ([m
 
 The player: the Director's schedule and transitions, the one transport, karaoke subtitles, the Look over the whole picture, and the cards of the show's own settings.
 
-[`bookends_card`](../src/show/bookends_card.gd), [`director`](../src/show/director.gd), [`filters`](../src/show/filters.gd), [`look_card`](../src/show/look_card.gd), [`picture_card`](../src/show/picture_card.gd), [`song_card`](../src/show/song_card.gd), [`subtitles`](../src/show/subtitles.gd), [`transport`](../src/show/transport.gd)
+[`bookends_card`](../src/show/bookends_card.gd), [`director`](../src/show/director.gd), [`filters`](../src/show/filters.gd), [`look_card`](../src/show/look_card.gd), [`picture_card`](../src/show/picture_card.gd), [`song_card`](../src/show/song_card.gd), [`subtitle_sea`](../src/show/subtitle_sea.gd), [`subtitles`](../src/show/subtitles.gd), [`transport`](../src/show/transport.gd)
 
 ### `timeline/` - The storyboard's editor
 

@@ -17,6 +17,10 @@
 # about a model, a simulation or data is a COMPUTATION - what is computed is fixed here, as a proof's
 # statement is (ProofProducer.land_problem refuses a computation that does not say).
 #
+# THE LENGTH THE NOTE ASKS FOR (2026-10-20: "a 5-10 minute request in the script turned into a 36-minute
+# export"): the framer reads it off the note as `minutes`, and only then is a lesson held to it
+# (ProofPrompts.length_of, ProofProducer.too_long); a note that asks none has no set length.
+#
 # The code gives: {{uploads_as}} (the line the title goes up in, maybe empty), {{before}} (the titles
 # this note's other episodes took, maybe empty) and the flag `run` (code can run here).
 prompt:
@@ -37,6 +41,7 @@ prompt:
     say: '  "computation": "for a computation, what is computed and how its numbers are checked; for a proof, empty",'
   - '  "history": "two to four sentences on where the problem comes from, only what you are sure of",'
   - '  "audience": "who the lesson is for: what the note says, else curious viewers with high-school math",'
+  - '  "minutes": ["the least and the most minutes the note asks the video to run, as two numbers - one length asked is both; empty when it asks for none"],'
   - '  "description": "the video''s YouTube description: what the viewer will see worked out and come away understanding, in two or three short paragraphs; plain and warm, no hype, no emoji, no links",'
   - '  "tags": ["eight to twelve search tags: the topic, its field, the names of the results"]'
   - "}"
@@ -44,6 +49,9 @@ prompt:
   - >-
       Keep the claim at the depth and generality the note asks for, so long as the team can really
       settle it; if it cannot, fix the nearest honest version and say so in "statement".
+  - >-
+      "minutes" is the length the note asks for, read as it is asked - never one you choose. When the
+      note asks for one, frame a claim that a lesson of that length can teach well.
   - >-
       A claim of mathematics that Lean can state exactly is a proof.{{#run}} A claim about a model, a
       simulation, an estimate or data - one whose answer is found by computing it - is a

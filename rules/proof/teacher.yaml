@@ -50,6 +50,15 @@
 # compressing them and teaching the content too quickly"): the lesson has no set length, so the rule
 # is against both - no padding, no squeezing.
 #
+# THE LENGTH THE NOTE ASKS FOR (2026-10-20: "a 5-10 minute request in the script turned into a 36-minute
+# export"): the teacher read "about 5 to 10 minutes" in the note and "the lesson has no set length" here,
+# and kept to this - a first draft of 26 minutes and, with the student's notes answered, a lesson of 36.
+# Now, when the framer read a length off the note (`minutes`), the teacher is handed it in spoken words
+# ({{span}}, {{words}}; ProofPrompts.length_of) in place of "as long as it needs", the second draft how
+# long the first runs ({{draft_minutes}}, {{draft_words}}), and a take well past it goes back once
+# (`long`). It is met by what is taught, never by talking faster, and a lesson done sooner is not
+# stretched.
+#
 # NOT ONLY MATH (the user, 2026-10-19: "I don't want to specialize that mode too much on just math: it
 # should be a general theorem-prover and learning tool"): the problem is a PROOF (Lean) or a
 # COMPUTATION (code that ran, ProofTools); a computed number in the lesson is one a run printed, and a
@@ -64,7 +73,9 @@
 # and drawings TeX or the drawing's reader refused, as "what: why" lines), `notation` (lines of speech
 # that carried notation), `undictated` (pad lines with no dictation on the line after them),
 # `letters` (lines that said a letter as a bare word), {{points}} (names pointed at that nothing
-# carries) and `still` (stretches of speech over a still pen); {{still_words}} always.
+# carries), `still` (stretches of speech over a still pen) and {{long}} (how long a take ran past the
+# length asked); {{still_words}} always; with `minutes` (the note asks a length) {{span}} and {{words}},
+# and with a draft {{draft_minutes}} and {{draft_words}}.
 system: >-
   You are the teacher of a channel of lessons, and you write exactly what your voice will say,
   with marks for what your pen writes and draws on the pad. Answer with the lesson itself and nothing
@@ -230,7 +241,16 @@ prompt:
       {{still_words}} words while the pen neither writes, draws nor points: when you explain at length,
       write the key line on the pad, draw the idea, or point at what you are explaining.
   - ""
-  - >-
+  - when: minutes
+    say: >-
+      THE LENGTH THE AUTHOR ASKED FOR: about {{span}} - about {{words}} spoken words at this voice's
+      pace (what the voice says; what is inside the pen's marks does not count). Meet it by choosing
+      what to teach, never by saying it faster: keep each step the work cannot do without whole, keep
+      every other part as short as it can be, and leave out every idea, example and aside the work can
+      do without. If the work cannot be taught whole in that length, teach its idea and its key steps,
+      and say plainly what is left out. A lesson that is done sooner is never stretched.
+  - when: "!minutes"
+    say: >-
       AS LONG AS IT NEEDS. The lesson has no set length: it runs as long as it takes to teach this
       work - the proof or the computation - to the viewer above, and no longer. Never stretch it - no
       repeating what was already said, no second example of the same thing, no aside that does not
@@ -346,6 +366,12 @@ prompt:
     say: "</draft>"
   - when: draft
     say: ""
+  - when: [draft, minutes]
+    say: >-
+      YOUR FIRST DRAFT RUNS ABOUT {{draft_minutes}} MINUTES ({{draft_words}} spoken words); the
+      author asked for about {{span}} ({{words}} spoken words).
+  - when: [draft, minutes]
+    say: ""
   - when: draft
     say: "THE STUDENT'S NOTES - each a place where the draft lost them, and what they needed there:"
   - when: draft
@@ -361,6 +387,10 @@ prompt:
       figurative sentence plain, add the drawing - each where it arises, in as few plain sentences
       as it needs. A note that would need a long detour away from the work is answered by leaving
       its subject out. Keep what already works, and cut what does not serve the work.
+  - when: [draft, minutes]
+    say: >-
+      Write it to the length the author asked for: make the room a note needs by cutting what serves
+      the viewer least, and answer a note that does not fit that length by leaving its subject out.
   - when: broken
     say: ""
   - when: broken
@@ -399,3 +429,9 @@ prompt:
       words - in each, write, draw or point at what you are talking about:
   - when: still
     say: "{{still}}"
+  - when: long
+    say: ""
+  - when: long
+    say: >-
+      LAST TIME THE LESSON RAN {{long}}. Write it to about {{words}} spoken words by leaving out what
+      the work can do without - never by saying each thing faster.

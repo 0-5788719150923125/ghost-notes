@@ -22,7 +22,8 @@
 # and put the Lean code on the pad - work nobody had done yet (THE WORK SHOWN IS THE WORK DONE).
 #
 # NO SET LENGTH (the user, 2026-10-16: "make videos as long as they need to be"): the scope is one
-# claim a newcomer can follow, never a number of minutes.
+# claim a newcomer can follow, never a number of minutes - unless the author asks for one (2026-10-20:
+# "about 5 to 10 minutes" came back as 36): then it is kept, and the scope is one that length can teach.
 #
 # The note itself reaches it in the context every agent shares (rules/proof/show.yaml); the code gives
 # the flag `run` (code can run here).
@@ -50,9 +51,10 @@ prompt:
   - >-
       How deep it goes is the author's to say. Keep the claim at the depth and generality the note
       asks for, so long as the team can really do that work; where it cannot, choose the nearest
-      claim it can, and say in the note what that leaves out. The lesson has no set length: it runs
-      as long as the claim needs to be taught well. Choose a scope one lesson can teach without
-      rushing, and keep every part the author asked for.
+      claim it can, and say in the note what that leaves out. Unless the author asks for a length,
+      the lesson has no set length: it runs as long as the claim needs to be taught well. Choose a
+      scope one lesson can teach without rushing - in the length the author asked for, when they ask
+      one - and keep every part the author asked for, the length too.
   - >-
       Write in plain, literal words, for viewers who may know very little of the subject: no
       metaphors and no flourishes. Define each term the first time it appears. Never invent a name, a date or a

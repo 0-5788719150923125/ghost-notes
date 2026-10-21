@@ -16,8 +16,10 @@ class_name Subtitles
 ## hesitations (the target holds at a word boundary, so the eye settles there
 ## and waits for the voice) - weaving around the exact timing the way a
 ## storyteller's finger weaves over a page. The base hue rides the live harmonic
-## signature; individual glyphs pulse from separate FFT bands, with their own
-## attack and release, in live playback and baked exports alike.
+## signature, and THE COLOR MOVES ON A SEA ([SubtitleSea]): the eye is a source
+## whose harmonics raise waves that run back through the words already said, so
+## the words just said ripple gently with what the voice is doing and the older
+## ones settle back to rest, in live playback and baked exports alike.
 ##
 ## Timing comes from a **sidecar JSON** written next to a voice take by
 ## [SynthEditor] (`take_N.wav` + `take_N.json`), so the same overlay works
@@ -208,11 +210,10 @@ static func text_area(frame: Rect2) -> Dictionary:
 	return {"k": k, "max_w": area.size.x, "cx": area.position.x + area.size.x * 0.5, "base_y": area.end.y, "area": area}
 var _cursor := 0.0                  # the narrator's eye: global word progress, eased
 var _hue_sm := 0.6
-## Eight independent spectral lights. Each has a different release time, so a
-## vowel's low harmonics and a consonant's high harmonics leave different trails.
-const SPECTRAL_LIGHTS := 8
-var _spectral_levels := PackedFloat32Array()
-var _spectral_time := -1.0
+## The water the line's color moves on: the eye raises its waves ([method _process]), the draw reads them.
+var sea := SubtitleSea.new()
+var _letters := PackedInt32Array()  # word k's first letter through the whole reading (a gap is one)
+var _letters_of: Array = []         # ...in this words array
 var _overlay: Control
 var _order := {}                    # speaker -> its place among the reading's voices
 var _order_of: Array = []           # ...in this words array
@@ -234,6 +235,30 @@ func voice_order(who: String) -> int:
 			_order[w] = _order.size()
 		_order_n += 1
 	return int(_order.get(who, 0))
+
+
+## WHERE WORD [param k] BEGINS, in letters through the whole reading with each gap one ([param k] at the
+## end: one past the last gap) - the places [member sea] keeps its waves in. Read on as [member words]
+## grows; a new reading, or a word that is no longer the one counted, starts it over.
+func letter_of(k: int) -> int:
+	var n := _letters.size() - 1
+	if not is_same(_letters_of, words) or n > words.size() or (n > 0
+			and _letters[n] - _letters[n - 1] != String((words[n - 1] as Dictionary).text).length() + 1):
+		_letters_of = words
+		_letters = PackedInt32Array([0])
+	while _letters.size() <= mini(k, words.size()):
+		var at := _letters.size() - 1
+		_letters.append(_letters[at] + String((words[at] as Dictionary).text).length() + 1)
+	return _letters[clampi(k, 0, _letters.size() - 1)]
+
+
+## Where the eye is, in [method letter_of]'s letters: the word it is on and how far into it.
+func _eye_letter() -> float:
+	var k := clampi(floori(_cursor), 0, words.size())
+	if k >= words.size():
+		return float(letter_of(k))
+	var frac := clampf(_cursor - float(k), 0.0, 1.0)
+	return float(letter_of(k)) + frac * float(String((words[k] as Dictionary).text).length())
 
 
 ## The sidecar path for an audio file, or "" if none exists.
@@ -376,7 +401,6 @@ func _presence_target(t: float) -> float:
 
 
 func _process(delta: float) -> void:
-	_advance_spectral(Spectrum.current, delta)
 	if words.is_empty():
 		presence = 0.0
 		return
@@ -400,30 +424,14 @@ func _process(delta: float) -> void:
 		# ramps to catch a run of quick words and slows as it closes in
 		var rate := 3.0 + 7.0 * clampf(absf(gap) - 0.15, 0.0, 1.5)
 		_cursor = lerpf(_cursor, target, 1.0 - exp(-rate * delta))
+	# the sea runs on through a hidden line, as the eye does, so a line shown again is not calm
+	sea.hear(Spectrum.current.bands, now)
+	sea.emit(now, _eye_letter())
 	if overlay_hidden:
 		if _overlay.visible:
 			_overlay.visible = false
 		return
 	_overlay.queue_redraw()
-
-
-## Follow actual FFT bands, including the baked bands during export. The band
-## centers cover the useful speech range on Spectrum's logarithmic 30..16000 Hz
-## axis. A quick attack catches a syllable; progressively longer releases let
-## different components persist after it. Silence drains every light to zero.
-func _advance_spectral(f: AudioFeatures, delta: float) -> void:
-	if _spectral_levels.size() != SPECTRAL_LIGHTS:
-		_spectral_levels.resize(SPECTRAL_LIGHTS)
-	if _spectral_time >= 0.0 and (f.time < _spectral_time - 0.05 or f.time - _spectral_time > 2.0):
-		_spectral_levels.fill(0.0)  # seek, loop, or a new take
-	_spectral_time = f.time
-	for i in SPECTRAL_LIGHTS:
-		var x := lerpf(0.23, 0.88, float(i) / float(SPECTRAL_LIGHTS - 1))
-		var raw := (f.sample(x - 0.014) + f.sample(x) + f.sample(x + 0.014)) / 3.0
-		var target := clampf((raw - 0.10) * 2.5, 0.0, 1.0)
-		var old := _spectral_levels[i]
-		var tau := 0.055 if target > old else lerpf(0.35, 1.15, float(i) / float(SPECTRAL_LIGHTS - 1))
-		_spectral_levels[i] = lerpf(old, target, 1.0 - exp(-maxf(delta, 0.0) / tau))
 
 
 class Overlay:
@@ -435,22 +443,32 @@ class Overlay:
 	const MAX_LINES := 3
 	## The frame height every hard-coded pixel below is expressed against.
 	const REF_H := 1080.0
-	# The color is a GRADIENT keyed on the CHARACTER index across the whole
-	# sentence, not the word - so a band of hue drifts through the text spanning
-	# several words at once, and the reader can watch it flow rather than catch
-	# it word by word. HUE_SPAN sets how tight the band is (how much the hue
-	# turns from one glyph to the next); HUE_DRIFT sets how fast the whole band
-	# slides forward over time. LINGER is the payload of the request: a spoken
-	# glyph does NOT snap back to its resting dim the instant the voice leaves
-	# it - it holds its vivid gradient hue and cools over this many characters
-	# behind the cursor, so the color stays long enough to rest the eye on and
-	# read what the change meant.
-	const HUE_SPAN := 0.011          # hue turned per character (band tightness)
-	const HUE_DRIFT := 0.02          # hue slid per second (the band flows)
-	const LINGER := 24.0             # characters a spoken glyph stays lit behind the cursor
-	# Three neighboring glyphs share a frequency component. Those small pools
-	# light independently instead of one whole word pulsing with overall volume.
-	const GLYPHS_PER_LIGHT := 3
+	# THE COLOR IS THE SEA'S ([SubtitleSea]), keyed on the LETTER, not the word, so a
+	# wave runs through a word and on into the next. Under it the hue turns a little
+	# from one letter to the next (HUE_SPAN), so calm water is not one flat tint.
+	# A said letter at rest is CALM, a soft tint; where the water stands high it is
+	# brighter and a little richer, its hue turned on (HUE_SWING), and in a trough it
+	# falls a little toward gray and turns back - the trough pulling less than the
+	# crest lifts. HEIGHT is the water's height that lifts a letter all the way.
+	# ALL OF IT SETTLES WITH DISTANCE FROM THE EYE (the user, 2026-10-20, of the first
+	# sea: "too distracting. The colors are very intense, and they never decay back to
+	# the baseline color"): the sea moves a letter SETTLE letters behind the eye by a
+	# third of what it moves one beside it, so the words just said ripple and the
+	# older ones rest at CALM. The letters the voice has just said still FLARE over
+	# FLARE letters behind the eye, gently, so the reader can see where the voice is.
+	const HUE_SPAN := 0.0015         # hue turned per letter under the waves
+	const HUE_SWING := 0.02          # hue turned at a full crest (and back at a full trough)
+	const HEIGHT := 1.0
+	const SAT_CALM := 0.24
+	const VAL_CALM := 0.78
+	const SAT_CREST := 0.26
+	const VAL_CREST := 0.16
+	const SAT_TROUGH := 0.08
+	const VAL_TROUGH := 0.07
+	const SETTLE := 24.0
+	const FLARE := 8.0
+	const FLARE_SAT := 0.55
+	const FLARE_MIX := 0.6
 	# EMPHASIS IS DRAWN, NOT SPELLED. `*I will never hurt you*` reaches here as a level on
 	# the word (see TextNorm's emphasis sentinels), never as asterisks - printing the
 	# markers would be showing the reader the source code of the typography. Godot can
@@ -514,15 +532,18 @@ class Overlay:
 			fs -= maxi(1, int(round(2.0 * k)))
 			lines = _wrap(line_words, font, fs, max_w)
 		var lh := float(fs) + 12.0 * k
-		# the harmonic hue is now the BASE the gradient rides from, not the one
-		# color of the whole line - each glyph turns off it by its position and
-		# by time (see _glyph_color)
+		# the harmonic hue is the BASE the sea turns each letter from (see _glyph_color)
 		var base_hue := _harmonic_hue()
 		var now := owner_node._now()
 		var gap := 14.0 * k
-		# the cursor as a CHARACTER position within this sentence, so the lit
-		# front and the lingering trail are both measured in glyphs, not words
+		# the cursor as a CHARACTER position within this sentence, so the flare is
+		# measured in glyphs, not words
 		var ccur: float = _char_cursor(line_words)
+		# the sea along this line, a letter at a time: its places are the reading's, so a wave stays
+		# in the words it was raised in
+		var last_item: Dictionary = line_words[line_words.size() - 1]
+		var sea: PackedFloat32Array = owner_node.sea.line(float(owner_node.letter_of(int(line_words[0].idx))),
+			int(last_item.cstart) + String(last_item.word.text).length(), now)
 		var glitch := Director.subtitle_reveal == "glitch"
 		var base_y: float = box["base_y"]
 		var y: float = base_y - (lines.size() - 1) * lh
@@ -579,7 +600,7 @@ class Overlay:
 					var glyph := text.substr(ch, 1)
 					var cw := face.get_string_size(glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 					var pos := Vector2(x, y)
-					var col := _glyph_color(base_hue, ci + ch, ccur, now, order)
+					var col := _glyph_color(base_hue, ci + ch, ccur, sea, order)
 					col.a *= vis
 					var ahead := ci + ch - front
 					if glitch and ahead >= reach:
@@ -648,26 +669,26 @@ class Overlay:
 				w += cw * clampf(upto - float(c0 + ch), 0.0, 1.0)
 		return w
 
-	## A glyph has a position and voice hue, plus the independent spectral light
-	## assigned to its place in the sentence. The narrator's eye still determines
-	## the spoken flare and lingering trail; the FFT determines how saturated,
-	## bright, and shifted each part of that trail is at this instant.
-	func _glyph_color(base_hue: float, ci: int, ccur: float, t: float, order := 0) -> Color:
-		var band := (ci / GLYPHS_PER_LIGHT) % Subtitles.SPECTRAL_LIGHTS
-		var level: float = owner_node._spectral_levels[band] if owner_node._spectral_levels.size() == Subtitles.SPECTRAL_LIGHTS else 0.0
-		var phase := base_hue + float(ci) * HUE_SPAN - t * HUE_DRIFT
-		var hue := Scheme.voice_hue(phase + (float(band) - 3.5) * 0.024 * level, order)
-		var sm := lerpf(0.25, 1.0, level)
+	## Letter [param ci]'s color (of this sentence), the eye at letter [param ccur], on [param sea] - this
+	## line's [method SubtitleSea.line] - in the voice of [param order]: the hue its place and the harmonics
+	## cresting there turn it to, lit by how high the water stands there, both settling with distance from
+	## the eye ([constant SETTLE]); the letters just said flare. Ahead of the voice it waits dim, faintly
+	## tinted, so the coming color is previewed rather than a wall of gray.
+	static func _glyph_color(base_hue: float, ci: int, ccur: float, sea: PackedFloat32Array, order := 0) -> Color:
 		var d := ccur - float(ci)                       # >0 spoken (behind), <=0 waiting (ahead)
 		if d <= 0.0:
-			# ahead of the voice: dim but present, faintly tinted so the coming
-			# color is previewed rather than a wall of gray
-			return Color.from_hsv(hue, 0.16 + 0.16 * level, 0.58 + 0.08 * level, 0.92)
-		# spoken: full flare at the front, cooling to a resting tint over LINGER
-		var glow := clampf(1.0 - (d - 1.0) / LINGER, 0.0, 1.0)
-		var rest := Color.from_hsv(hue, 0.38 * sm, 0.68 + 0.12 * level)
-		var vivid := Color.from_hsv(hue, 0.95 * sm, 0.82 + 0.18 * level)
-		return rest.lerp(vivid, glow * (0.55 + 0.45 * level))
+			return Color.from_hsv(Scheme.voice_hue(base_hue + float(ci) * HUE_SPAN, order), 0.18, 0.6, 0.92)
+		var at := ci * SubtitleSea.STRIDE
+		var here := at + SubtitleSea.STRIDE <= sea.size()
+		var near := exp(-maxf(d - 1.0, 0.0) / SETTLE)
+		var lift := clampf((sea[at] if here else 0.0) / HEIGHT, -1.0, 1.0) * near
+		var pull := (sea[at + 1] if here else 0.0) * near
+		var hue := Scheme.voice_hue(base_hue + float(ci) * HUE_SPAN + pull + HUE_SWING * lift, order)
+		var sat := SAT_CALM + lift * (SAT_CREST if lift > 0.0 else SAT_TROUGH)
+		var val := VAL_CALM + lift * (VAL_CREST if lift > 0.0 else VAL_TROUGH)
+		var col := Color.from_hsv(hue, sat, clampf(val, 0.0, 1.0))
+		var glow := clampf(1.0 - (d - 1.0) / FLARE, 0.0, 1.0)
+		return col.lerp(Color.from_hsv(hue, FLARE_SAT, 1.0), glow * FLARE_MIX)
 
 	## The cursor expressed as a CHARACTER position within the current sentence:
 	## the word-level eye (owner._cursor) resolved through the per-word character

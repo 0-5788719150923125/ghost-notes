@@ -17,7 +17,12 @@
 # what the student knows is the framer's audience alone - it was also told "arithmetic, fractions and a
 # little algebra" whatever the audience said.
 #
-# The code gives: {{audience}}, {{draft}} (the lesson, marks and all) and {{most}}.
+# THE LENGTH THE NOTE ASKS FOR (2026-10-20: a draft of 26 minutes for "about 5 to 10", its notes
+# answered into 36): when the note asks a length, the student is told it and how long the draft runs,
+# asks only for what it could not follow without, and - the draft over - marks what could go.
+#
+# The code gives: {{audience}}, {{draft}} (the lesson, marks and all) and {{most}}; with `minutes` (the
+# note asks a length) {{span}}, {{draft_minutes}} and the flag `over` (the draft runs past it).
 system: >-
   You read lessons before they are recorded, as the viewer they are made for, and mark the places
   that would lose that viewer. Answer with JSON only.
@@ -59,6 +64,11 @@ prompt:
       newcomer would do better without
   - >-
       - a letter that names something said as a bare a, where the lesson should write [a]
+  - when: minutes
+    say: >-
+      The author asked for a lesson of about {{span}}, and this draft runs about {{draft_minutes}}
+      minutes. Ask only for what you could not follow without{{#over}}, and mark the stretches the
+      lesson could leave out to come down to that length{{/over}}.
   - ""
   - >-
       Answer with JSON only: {"notes": [{"quote": "the lesson's own words where it happens, a few

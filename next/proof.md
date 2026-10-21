@@ -116,7 +116,8 @@ The note's text is the brief: the problem, or a source (a classic theorem, an ol
 manuscript from openai/math with its paper and Lean file), and anything the author wants stressed.
 The `proof:` block holds the dials: `level`, `kind` (solve, explain, explore - inferred from the
 brief when not set). NO LENGTH (2026-10-16, the user: "I would prefer to just make videos as long as
-they need to be"): a lesson runs as long as its proof takes to teach.
+they need to be"): a lesson runs as long as its proof takes to teach - unless the note's words ask for
+one (2026-10-20, "The length the note asks for" below).
 
 Steps, one file each under `user://proofs/<show>/<episode>/`, in the Cards pattern (a step is done
 when its file exists; a redo deletes the step and what depends on it):
@@ -552,6 +553,24 @@ Found by making it, each fixed and held:
   sentences as it needs, and cuts what does not serve the proof; a lesson draws at least two figures.
   `proof_check` holds that no agent is handed minutes or words, and that a lesson of 4,500 spoken
   words lands on its first try. If lessons come back bloated, the fix is in the teacher's words.
+- **The length the note asks for** (2026-10-20: "a 5-10 minute request in the script turned into a
+  36-minute export, in reality. Why didn't the agents prioritize a shorter script ... Do we give them
+  any tools or ability to estimate the runtime?"): every agent read "about 5 to 10 minutes long" in
+  the note (its "Also asked"), but the teacher's own prompt said "the lesson has no set length", and
+  nothing could tell it how long it ran. The first draft came back at 3,030 spoken words (about 26
+  minutes), the student's twelve notes asked for more, and the lesson answered them at 3,930 - 36
+  minutes on the export. Still no dial and no budget of our own: the framer reads the length the note
+  asks for into `minutes` (`[least, most]`; `ProofProducer.minutes_of` keeps only a sound pair), and
+  only then the teacher is handed it as spoken words in place of "as long as it needs"
+  (`ProofPrompts.length_of`: 5 to 10 minutes is 580 to 1,150 words), met by what is taught - never by
+  talking faster, and a lesson done sooner is never stretched. The second draft and the student are
+  told how long the first runs (the student asks only for what it cannot follow without, and marks
+  what could go when the draft runs over), every take's length is in the log, and a take more than a
+  fifth past the most asked goes back once with the others' faults (`too_long`, `LONG_BY`). THE
+  ESTIMATE: `DeskScript.runtime` - spoken words at `SAID_WORD` (0.52 s, pauses included, measured on
+  the three exports: 0.49 to 0.53 s at the Narrator's pace 0.9) plus the lesson's rests; before the
+  ink it put episode 6 at 34.7 minutes, against 35.8 minutes of reading on the export. A voice set
+  faster or slower is not yet read into it.
 - **The pen points, and is never still for long** (on the six-trig-functions episode: "the model has
   gone for minutes just staring at a static page, while describing what is on the page, but never
   POINTING to any of it ... I was not able to follow what the model was talking about, and after 2

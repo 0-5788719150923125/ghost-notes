@@ -281,6 +281,7 @@ The player: the Director's schedule and transitions, the one transport, karaoke 
 - [`look_card.gd`](../src/show/look_card.gd) **LookCard** - the Look: a post-process over the whole picture, one row per filter in `Filters.REGISTRY` (next/notes.md step 5: one card per section, in every panel that has it - the Generative panel built it and the Cards panel borrowed it by inheriting the whole panel).
 - [`picture_card.gd`](../src/show/picture_card.gd) **PictureCard** - the picture a reading is shown in: the MEDIUM (what the show is carried on), the FILMS a comic cuts to, the book's PICTURES (`IllustrationPanel`), and the Director's dials - scene hold, flourishes, camera, handwriting (next/notes.md step 5: one card per section). Its block in a document is ...
 - [`song_card.gd`](../src/show/song_card.gd) **SongCard** - the note's song (2026-10-06): which file it is, and a way to choose one. Importing a song is a component of a note, not a button on the notes list - "if we want to import an audio file or a video file - then we should add those relevant components/attachments to the note".
+- [`subtitle_sea.gd`](../src/show/subtitle_sea.gd) **SubtitleSea** - the water the subtitles' color moves on.
 - [`subtitles.gd`](../src/show/subtitles.gd) **Subtitles** - the karaoke overlay, session-owned rather than editor-owned.
 - [`transport.gd`](../src/show/transport.gd) **Transport** - play, pause, stop and the scrub rail along the bottom of the stage: ONE for every mode (next/notes.md, "The transport"). It grew out of the Scrubber, Chrome's seek bar.
 
