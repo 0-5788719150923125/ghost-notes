@@ -36,9 +36,9 @@ core. The commitments:
 
 ## Feature registries
 
-- [Components](components.md) (15 components, 6 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
+- [Components](components.md) (17 components, 6 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
-- [Media](media.md) (8) - what the show is carried on.
+- [Media](media.md) (9) - what the show is carried on.
 - [Look filters](filters.md) (8) - the post-process over the whole picture.
 - [Layers](layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](forces.md) (8) - the physics primitives particles compose.
@@ -384,6 +384,24 @@ A ghost doing math, made by agents: a note's problem fixed, worked at the desk w
 - [`proof_prompts.gd`](../src/proof/proof_prompts.gd) **ProofPrompts** - what each agent behind a Proof episode is told, built from rules/proof/ (`Rules`). Every builder is a pure function of what it is handed and returns `{system, prompt}`, so a gate renders each whole (tests/proof/proof_check.gd) - the words live in the YAML, the code decides what fills them.
 - [`proof_tools.gd`](../src/proof/proof_tools.gd) **ProofTools** - what the solver at the desk can do while it works (next/proof.md, "How an episode is made"): add to its lab NOTEBOOK, check a Lean file with LEAN, RUN code, and SUBMIT what it finished. Served as tools (`AgentTools`), as the set dresser's are, so any writer that takes tools works with them - and ...
 - [`proof_walk.gd`](../src/proof/proof_walk.gd) **ProofWalk** - a Proof note reads its EPISODE's lesson, never the note: the note is the problem the agents work from, and what the voice says is the lesson they wrote. A `TextWalk` the Proof card hands its reading, as Cards hands `EpisodeWalk`.
+
+### `likeness/` - Likeness
+
+An actor played from their own footage: the library of actors, each built from their videos (a folder, or links fetched) - surveyed, grouped into sets by camera and look, the agent that audits them, a still of each set and a model of them from every video (their head's motion, their blinks, their mouths for each sound) - the card that makes one, and the card and medium that play them reading a note: the still, its head turned and its mouth and eyes drawn from their own, through one mesh over the frame. Design: next/likeness.md.
+
+- [`actor_builder.gd`](../src/likeness/actor_builder.gd) **ActorBuilder** - makes whatever an actor is missing, in the order `ActorSteps` gives, the way `ProofProducer` makes a Proof episode's (next/likeness.md, "The runner").
+- [`actor_card.gd`](../src/likeness/actor_card.gd) **ActorCard** - the Actor component's card: makes and manages an actor of the `Actors` library (next/likeness.md, "The Actor card"). A note with an Actor on it builds that actor; a Likeness on the same note plays them (`LikenessCard`, which reads them through this card's `ActorFeed`).
+- [`actor_feed.gd`](../src/likeness/actor_feed.gd) **ActorFeed** - an actor as the card that plays them reads it (next/likeness.md, "The cards never name each other"): the Actor card answers `feeds()` with `{"actor": ActorFeed}`, the panel collects it as it collects the steps a card adds (`ReadingPanel.feed`), and the Likeness card asks the panel for it. A ...
+- [`actor_folder.gd`](../src/likeness/actor_folder.gd) **ActorFolder** - Actor - one actor of the `Actors` library, as it lies on disk (next/likeness.md, "The actor's folder"): `actor.json` (their name, their sources and their videos, which are ticked, the chosen set and each set's still, consent) and a folder per thing a step covers - each video's (`videos/<vid>/`), ...
+- [`actor_prompts.gd`](../src/likeness/actor_prompts.gd) **ActorPrompts** - what the Likeness's agents are told, and what is made of their answers (next/likeness.md, "The agents"). The words are in `rules/likeness/` (`Rules`); this fills them in and reads the answers - each answer checked before anything is kept, a malformed one sent back (`ActorBuilder`). Pure, so a gate ...
+- [`actor_sources.gd`](../src/likeness/actor_sources.gd) **ActorSources** - where an actor's videos come from (next/likeness.md, "Sources"): a FOLDER, read in place and never copied or written, or a LINK - a video, a playlist or a channel - listed first and then fetched one video at a time into the actor's `footage/`. A link added CAPTIONS ONLY fetches no video: each of ...
+- [`actor_steps.gd`](../src/likeness/actor_steps.gd) **ActorSteps** - what an actor is made of, step by step (next/likeness.md, "The steps"): one row a step, in the order an actor is built. The Actor card lists them, `ActorBuilder` runs them, and `ActorFolder` keeps what each made.
+- [`actors.gd`](../src/likeness/actors.gd) **Actors** - the library of actors a Likeness plays: each a folder, `user://actors/<id>/`, shared by every note that uses it, as `Illustrations` and `Films` are (next/likeness.md, "The library").
+- [`likeness.gd`](../src/likeness/likeness.gd) **LikenessMedium** - an actor reads the note, in their own room (next/likeness.md, "The second build"): ONE STILL OF THEM and a model of how they move - their head's own motion, their blinks, their mouths for the voice's sounds (`LikenessPlan`). Every pixel of them is a real pixel of theirs, bent; no footage plays, so ...
+- [`likeness_card.gd`](../src/likeness/likeness_card.gd) **LikenessCard** - the Likeness component's card: an actor reads the note (next/likeness.md, "The Likeness card"). The actor is the note's Actor card's, read through its feed (`ActorFeed`, asked of the panel by name: `ReadingPanel.feed`) - the two cards never name each other.
+- [`likeness_face.gd`](../src/likeness/likeness_face.gd) **LikenessFace** - a set's rig and library, and the still a Likeness is drawn on (next/likeness.md, "The second build"). Read from `rig.json`, `library.json` and one of `stills.json`'s stills, which `actor.py rig`, `library` and `stills` make.
+- [`likeness_plan.gd`](../src/likeness/likeness_plan.gd) **LikenessPlan** - how the actor moves at each moment, on their still (next/likeness.md, "The second build"): the head, the eyes and the mouth, each A PURE FUNCTION OF SHOW TIME - asked for any moment, the answer depends on nothing asked before it, so a seek and an export draw what the live show drew.
+- [`visemes.gd`](../src/likeness/visemes.gd) **Visemes** - the mouth shapes a voice's sounds are seen as (next/likeness.md, "The lanes"): a row a class, the sounds in it and how strongly each holds the mouth to its shape. The mouth of a Likeness follows the voice's phones through these: each phone is a class, each class is THEIR mouth for it ([method ...
 
 ### `masking/` - Masking
 

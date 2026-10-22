@@ -236,6 +236,11 @@ func _prompts() -> bool:
 	var tags_prompt: Dictionary = load("res://src/export/youtube_tags.gd").prompt("Show", "An Episode", "a description",
 		PackedStringArray(["a", "b"]), "the words of a reading")
 	texts.append(String(tags_prompt["system"]) + "\n" + String(tags_prompt["prompt"]))
+	# A LIKENESS'S AGENT (rules/likeness/): the audit of a set, whole, over a made set
+	var a_set := {"id": "set-x", "minutes": 12.5, "shots": [{"vid": "v", "n": 0}, {"vid": "v", "n": 1}]}
+	for more in [false, true]:
+		var au := ActorPrompts.audit("An Actor", a_set, more)
+		texts.append(String(au["system"]) + "\n" + String(au["prompt"]))
 	_ok(Rules.missing.is_empty(), "rendering every prompt left these unfilled: %s" % str(Rules.missing.slice(0, 6)))
 	for t in texts:
 		_ok(_kinds_named(t).is_empty(), "a prompt over a fixture naming no kind of card names one: %s" % ", ".join(_kinds_named(t)))

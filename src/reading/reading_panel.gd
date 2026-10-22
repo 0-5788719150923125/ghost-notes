@@ -130,6 +130,10 @@ var _youtube: YouTubeCard
 ## (`episode_steps()` - the YouTube card's tags), for the card that makes episodes to list
 ## ([method episode_steps]). The two never name each other: this panel puts them together.
 var _steps: Array = []
+## WHAT THE NOTE'S CARDS HAND EACH OTHER, by name ([method feed]): a card answers `feeds()` -
+## `{name: object}` - and another asks the panel for it by that name, so the two never name each other
+## (the Actor card hands the actor a Likeness plays: [ActorFeed]).
+var _feeds := {}
 var _dirty := false
 var _last_edit_ms := 0
 
@@ -361,9 +365,11 @@ func _components() -> Array:
 
 
 ## ...AND ITS VOICE, ALWAYS, for the cards and the blocks they keep: a reading is the voice's
-## workspace, and a show of cards or a proof requires one - before its note carries the block.
+## workspace, and a show of cards or a proof requires one - before its note carries the block. AND
+## WHAT ITS COMPONENTS BRING ([method Components.with_required]): a Likeness brings an Actor, whose card
+## stands beside it from the first open (attaching writes the Likeness's block alone).
 func _voiced() -> Array:
-	var have: Array = _components().duplicate()
+	var have: Array = Components.with_required(_components())
 	if not have.has("voice"):
 		have.append("voice")
 	return have
@@ -469,13 +475,22 @@ func _add_block(card: Object) -> void:
 	_offer_steps(card)
 
 
-## What [param card] adds to the note's episodes, if it adds anything (`episode_steps()`).
+## What [param card] adds to the note's episodes, if it adds anything (`episode_steps()`), and what it
+## hands the other cards (`feeds()`).
 func _offer_steps(card: Object) -> void:
+	if card.has_method("feeds"):
+		_feeds.merge(card.call("feeds") as Dictionary, true)
 	if not card.has_method("episode_steps"):
 		return
 	for s in card.call("episode_steps"):
 		if s is EpisodeStep and not _steps.has(s):
 			_steps.append(s)
+
+
+## WHAT A CARD HANDS THE OTHERS under [param name] (an `ActorFeed` under "actor"), null when no card
+## on this note hands one.
+func feed(name: String) -> Object:
+	return _feeds.get(name)
 
 
 ## THE STEPS THE NOTE'S CARDS ADD TO ITS EPISODES, as offered - all of them; the card that makes the
@@ -983,6 +998,8 @@ func _render_take() -> String:
 	# changes voice and distance and every word, in frames and seconds of the take - the intro
 	# included, so the marks and the words are where they are heard
 	var join := ReadingJoin.new(_sr, words, head)
+	var phones: Array = []
+	join.phones = phones
 	join.label = "export chunk"
 	_plan_near(chunks, 0)
 
@@ -1008,7 +1025,7 @@ func _render_take() -> String:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(wav))
 		if part.is_empty():
 			continue
-		pcm.append_array(join.add(chunks, i, part, out.get("tokens", []), s, _cast.turn_scale()))
+		pcm.append_array(join.add(chunks, i, part, out.get("tokens", []), s, _cast.turn_scale(), out.get("phones", [])))
 
 	if join.frames <= head:
 		return ""
@@ -1096,8 +1113,9 @@ func _render_take() -> String:
 		# render all read this file and none of them needs to know a bookend exists.
 		# THE BOOK rides along: a render has no editor, and a medium that typesets
 		# pages needs the chapter those words came from (see BookMedium).
+		# ...AND THE PHONES, each sound timed as the words are, for a medium whose mouth says them
 		side.store_string(JSON.stringify({
-			"words": words, "bookend": {"in": intro, "out": outro},
+			"words": words, "phones": phones, "bookend": {"in": intro, "out": outro},
 			"book": book_document(body)}))
 		side.close()
 	_set_status("Rendered %.1fs for export (%.0fs intro, %.0fs outro)." % [spoken, intro, outro])

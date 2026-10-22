@@ -37,7 +37,8 @@ extends Node
 ##
 ## A NOTE'S MAKE-UP IS ITS BLOCKS: there is one kind of new note, so each is made with the blocks "+"
 ## would have written ([constant BLOCKS]) - a voice with a Picture and a storyboard among them, which
-## no template ever was.
+## no template ever was. A Likeness's note carries its own block alone, as "+" writes it, and must show
+## the Actor card it brings (2026-10-21: the reading built only what was written, and no Actor card).
 ##
 ## MASKING OPENS ON NO CLIP (its panel asks for one): the author's sessions hold hand-placed markers that
 ## cannot be remade, and no gate opens one. A song for Auto and Manual is a fixture of silence. Every
@@ -47,7 +48,8 @@ extends Node
 const CYCLES := 3
 ## WHAT EACH NOTE IS MADE OF: the blocks a note of that make-up carries (`SONG` stands for the
 ## fixture's path). There is one kind of new note; these are what "+" would have made of it.
-const MODES := ["note", "auto", "manual", "story", "synthesis", "generative", "narrated", "cards", "proof", "masking"]
+const MODES := ["note", "auto", "manual", "story", "synthesis", "generative", "narrated", "cards", "proof",
+	"likeness", "masking"]
 const BLOCKS := {
 	"note": {},
 	"auto": {"song": {"path": "SONG"}, "picture": {"medium": "auto"}},
@@ -63,6 +65,8 @@ const BLOCKS := {
 	"cards": {"cards": {}},
 	# a ghost doing math at a desk: its card pins the desk, which must be let go on leaving
 	"proof": {"proof": {}},
+	# an actor reading the note: its card pins the likeness medium, and brings an Actor card beside it
+	"likeness": {"likeness": {}},
 	"masking": {"clip": {"path": ""}},
 }
 const ROOT := "user://teardown_check_notes"
@@ -99,6 +103,10 @@ func _run() -> void:
 				"%s #%d: the ⌂ shows while the mode is up" % [mode, cycle + 1])
 			if mode == "generative" and cycle == 0:
 				await _check_refused_while_preparing()
+			# "+" LIKENESS WRITES ITS OWN BLOCK ALONE, and the Actor it brings has its card all the same
+			if mode == "likeness" and cycle == 0:
+				_ok(_has_node_of(_main, ActorCard) and _has_node_of(_main, LikenessCard),
+					"likeness: the note shows its Likeness card and the Actor card it brings")
 			if mode == "story":
 				_open_timeline(cycle)
 				await _frames(6)
@@ -117,6 +125,16 @@ func _run() -> void:
 	await _control(song)
 	_clean()
 	_report()
+
+
+## Is a node of [param script]'s class anywhere under [param n]?
+func _has_node_of(n: Node, script: Script) -> bool:
+	if is_instance_of(n, script):
+		return true
+	for c in n.get_children():
+		if _has_node_of(c, script):
+			return true
+	return false
 
 
 ## Enter [param mode] the way the notes list does: a note made from the template (once), opened by the

@@ -74,7 +74,7 @@ const WORKSPACES := {
 		"blurb": "A voice reads the note: the cast, each speaker's delivery and room, the stream.",
 		"title": "Generative",
 		"hint": "Write or open a chapter. It is spoken in chunks, so the show starts while the rest is still being made. Edit lists every mark the reading understands - speakers, hesitations, pictures, pronunciations.",
-		"hosts": ["voice", "picture", "storyboard", "look", "bookends"],
+		"hosts": ["voice", "picture", "actor", "likeness", "storyboard", "look", "bookends"],
 		"classic": ["text", "voice", "picture", "illustrations", "look", "bookends"]},
 	"cards": {"label": "Cards", "section": "cards",
 		"blurb": "A show of cards: the episodes agents make from the note's brief, and the voice that reads them.",
@@ -166,6 +166,25 @@ const REGISTRY := {
 		"script": "res://src/proof/proof_card.gd",
 		"intro_tip": "Seconds the desk holds before the teacher speaks.",
 		"outro_tip": "Seconds held after the last word, the page on the desk, fading picture and sound out together."},
+	# AN ACTOR BUILT FROM THEIR OWN VIDEOS (next/likeness.md, 2026-10-21): its card makes and manages one of
+	# the Actors library - the footage surveyed and cut into sets, a still of the set in use, a model of them
+	# from every video - and hands it to a Likeness through a feed. It may stand alone on a note, which then
+	# just builds an actor.
+	"actor": {"label": "Actor", "family": &"picture",
+		"blurb": "Builds an actor from their own videos - a folder, or links to videos, playlists or a channel - for a Likeness to play: the footage surveyed and grouped by camera and look, a still of them chosen, and their motion, blinks and mouths learned from every video.",
+		"needs": [], "provides": ["actor"], "requires": [], "slots": [], "workspace": "",
+		"capabilities": ["subprocess", "ffmpeg", "python:face", "python:download", "agent:writer"], "marks": [],
+		"block": "actor", "card": "actor", "script": "res://src/likeness/actor_card.gd"},
+	# THE ACTOR READS THE NOTE (next/likeness.md): a still of them, moved by their own motion, the mouth and
+	# eyes drawn from their own as the voice's phones say. It brings an Actor and a Voice.
+	"likeness": {"label": "Likeness", "family": &"picture",
+		"blurb": "An actor reads the note in their own room: a still of them, their head moving as they move it, blinking, the mouth drawn from their own mouths to the voice's sounds. Every pixel of them is their own.",
+		"needs": ["reading", "actor"], "provides": ["picture"], "requires": ["actor", "voice"],
+		"slots": ["presentation"], "workspace": "",
+		"capabilities": ["forward_plus"], "marks": [],
+		"block": "likeness", "card": "likeness", "script": "res://src/likeness/likeness_card.gd",
+		"intro_tip": "Seconds the actor sits before starting to read.",
+		"outro_tip": "Seconds held after the last word, fading picture and sound out together."},
 	"clip": {"label": "Clip", "family": &"picture",
 		"blurb": "A video, cut and prepared from a file or a link, with chroma-key effects over it: markers, tracks and renders.",
 		"needs": [], "provides": ["picture", "audio"], "requires": [], "slots": ["clock", "presentation"], "workspace": "clip",
@@ -218,6 +237,10 @@ static func attach_blocks(key: String) -> Dictionary:
 			return {"cards": {}}
 		"proof":
 			return {"proof": {}}
+		"actor":
+			return {"actor": {}}
+		"likeness":
+			return {"likeness": {}}
 		"song":
 			return {"song": {"path": ""}}
 		"clip":
@@ -371,7 +394,25 @@ static func cannot_attach(key: String, attached: Array) -> String:
 		why = not_ready(key)
 	if why.is_empty():
 		why = needs_note(key, attached)
+	if why.is_empty():
+		why = host_note(key, attached)
 	return why
+
+
+## Why the panel a note with [param attached] would run on, once [param key] is attached, shows no
+## card for it (its workspace's `hosts`), "" when it does: an Actor on a show of cards would be a block
+## nothing shows. A panel with no `hosts` (the note's own) shows every card, and where the video goes
+## is every panel's own to build.
+static func host_note(key: String, attached: Array) -> String:
+	var row: Dictionary = REGISTRY.get(key, {})
+	if StringName(row.get("family", &"")) == &"publish":
+		return ""
+	var ws := workspace_of(attached + [key])
+	var hosts: Variant = (WORKSPACES.get(ws, {}) as Dictionary).get("hosts")
+	if not (hosts is Array) or (hosts as Array).has(key):
+		return ""
+	return "The %s panel shows no %s - it goes on a note of its own, or with what brings it." % [
+		String((WORKSPACES[ws] as Dictionary)["label"]), String(row.get("label", key))]
 
 
 ## THE "+" MENU: every component [method offered] a note with [param attached] - what can be
@@ -414,7 +455,7 @@ static func _menu_item(menu: PopupMenu, k: String, attached: Array) -> void:
 
 ## What attaching each need's provider looks like, for [method needs_note].
 const NEED_HINTS := {"text": "text", "audio": "a song or a voice", "reading": "a voice",
-	"picture": "a Picture", "places": "a Picture", "moments": "a song or a voice"}
+	"picture": "a Picture", "places": "a Picture", "moments": "a song or a voice", "actor": "an Actor"}
 
 
 ## The needs [param key] brings that nothing in [param attached] provides, as a sentence for the "+"

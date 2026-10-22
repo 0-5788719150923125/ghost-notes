@@ -1,0 +1,45 @@
+# THE AUDIT - looks at a set of an actor's footage before anything is tracked in it (next/likeness.md,
+# "The steps", 7). A SET is the shots the clustering found with one camera placement; what it cannot
+# see is what the person looks like and what is happening in a shot, and both matter: a mouth taken
+# from a shot with glasses, put on a frame without, is a different face. Their footage was looked at on
+# 2026-10-20: edited, with inserts (a handheld close-up, a walk outside in a hat), glasses on for some
+# minutes and off for the rest, a hand often on their face, a phone held up.
+#
+# THE SHOTS ARE NUMBERED ON THE SHEETS, so the answer names them by number and the code finds them.
+# Usable stretches are whole shots here: a hand at the mouth is found in every frame by the body's
+# points, and the agent is asked only what the points cannot tell.
+#
+# NO REASONING ASKED FOR (the reasoning_extraction safeguard): the answer is what was seen, each shot's
+# fault in a few words a person reads on the card.
+#
+# THE FORMAT IS PLACEHOLDERS ONLY: a sample answer comes back word for word.
+#
+# The code gives: {{name}}, {{shots}} (how many shots the set has), {{minutes}}, and the flag `more`
+# (the set has more shots than its sheets show).
+system: >-
+  You check video footage before it is used to animate a person, and say exactly what you see.
+  Answer with JSON only.
+prompt:
+  - >-
+      These pictures are frames from the videos of {{name}}, grouped into one set: {{shots}} shots,
+      {{minutes}} minutes in all, which a program found to share a camera placement. The first picture
+      is sixteen frames across the whole set. The others show each shot by one frame from its middle,
+      each labeled with its shot number.
+  - "{{#more}}The set has more shots than these sheets show; judge the ones you can see.{{/more}}"
+  - ""
+  - "Write:"
+  - >-
+      - look: how {{name}} looks in most of this set, in a few plain words - glasses or none, a hat or
+      none, the clothes, the hair, and how the camera frames them (how close, from which side).
+  - >-
+      - other: the shots in which they look different from that - glasses on where most have none, or
+      the other way, another hat or other clothes - as their numbers, with that other look in a few
+      words. Leave the list empty when every shot is one look.
+  - >-
+      - unusable: every shot that cannot be used to animate their face, each with its number and why, in
+      a few words: it is not them, or not only them; their face is not in it or is mostly out of the
+      frame; it is an insert (a close-up of something else, a different place, a handheld camera); a
+      phone, a cup or a hand is in front of their mouth for most of it; it is dark or blurred.
+  - ""
+  - "Answer with this JSON and nothing else:"
+  - '{"look": "...", "other": {"shots": [N, ...], "look": "..."}, "unusable": [{"shot": N, "why": "..."}]}'

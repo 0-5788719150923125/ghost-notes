@@ -172,6 +172,10 @@ static func glitch_glyph(wi: int, ch: int, t: float, ahead: int, simple: String,
 
 var words: Array = []               # [{text, t0, t1, sentence}] - may still be GROWING
                                     # (a live VoiceStream shares its array by reference)
+## Every sound of the reading with its time, `[{p, t0, t1}]`, beside [member words] and shared the
+## same way - what a medium whose mouth says them reads ([LikenessMedium]). Empty for a take whose
+## voice hands back none.
+var phones: Array = []
 var loop_length := 0.0              # >0 once a streamed take loops: wrap time by this
 var time_base := 0.0                # playback time when the current content started
 ## 0..1, eased. Multiplies every alpha the overlay draws, plate included.
@@ -276,6 +280,8 @@ func load_sidecar(path: String) -> bool:
 		push_warning("ghost: subtitle sidecar unreadable: " + path)
 		return false
 	words = parsed.words
+	if parsed.get("phones") is Array:
+		phones = parsed.phones
 	if parsed.get("book") is Dictionary:
 		document = parsed.book
 	return true

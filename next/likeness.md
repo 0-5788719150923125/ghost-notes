@@ -1,7 +1,271 @@
 # Likeness: an actor, played from his own frames
 
-Planned 2026-10-20, not built. This note is the build spec: "Go!" means build it in the order of
-**Build order**, top to bottom.
+Planned 2026-10-20; **built 2026-10-21** (M1 to M8 in code, M4 and M5 looked at on his footage).
+**The second build (2026-10-21, night): a still and a model** - the section right below. The rest of
+this note is the first build, kept for what it found; where the two differ, the second build holds.
+The first build's files are backed up in `dist/likeness_v1/` (they were never committed).
+
+## The second build: a still and a model (2026-10-21, night)
+
+**The user's verdict on the first build:** "it's pretty clear that there is no 'model' here. The actor
+is just a series of stitched-together frames ... The mouth is detected well enough, and it does move,
+but it doesn't track the voice at all really. Then there's all of the random gestures and the globe
+and such, which are cropped by the jump-cuts. Overall, it simply doesn't work in a way that would be
+usable in any capacity." And: the sets are pointless when only one is used - "I would be more
+inclined to extract features not into separate sets for each video, but into separate sets for each
+action, each pose, each mouth-shape"; "the average of all samples is likely to be a pretty normal,
+forward-facing actor, with a mouth that moves when speaking."
+
+**What was measured on his built set before changing anything:**
+- **The mouth picked from the library followed the voice's target closely** (jawOpen, drawn against
+  wanted: correlation 0.97 over 12 s) - but **the target scarcely moved**: the range visemes put "open"
+  at his 92nd percentile of jawOpen (0.26), the dominance blend held it near 0.09 +- 0.05, and on a
+  still frame the lips barely parted in three seconds of speech. His clean, visibly open mouths sit at
+  0.45 to 0.6.
+- **His own talking was under every frame:** the takes are him speaking, so his cheeks, beard and head
+  moved to words he said then, around a mouth moving to the voice.
+- **The library held faults:** its "most open" mouth was a hand over his mouth, others a smeared
+  mis-track, motion blur, an object across the lips. And three mouths mixed every frame doubled the
+  lips and teeth.
+- **His head turns widely** (yaw 43 degrees from the 5th to the 95th percentile, much of it toward his
+  monitor) **and 97% of its motion is under 2.5 Hz** - so the survey's five looks a second hold it, over
+  all eight videos (117 minutes facing the camera).
+- **A prototype, looked at:** one still of him, the mouth drawn from one clean real mouth per sound
+  class (exaggerated twice past his own, at most two mixed, a mask tight to the lips) and the head
+  turned 5 degrees through its 3D points - it read as speech (open with teeth on the vowels, closed on
+  the M's), and the turn was clean up close: hair, beard and room held.
+
+**The design:**
+- **The base of every frame is ONE STILL:** a real frame of the set, the most typical calm moment -
+  facing the camera, eyes open, mouth closed, hands at rest, nothing in front of them, sharp - chosen
+  from a few candidates (`stills`), and another can be picked on the card. No footage plays, so no
+  hand, prop or jump cut is ever seen.
+- **What moves is a model of them, from all their footage:**
+  - **the head** (`motion`, per actor): their own head motion where they face the camera, from every
+    video's survey, its slow drift taken out, played back in pieces from a seed, scaled to a calm size
+    and livelier while they speak; it turns the still's face through its 3D points;
+  - **the eyes:** blinks at their own rate, more often at pauses, drawn from their own closed and
+    half-closed eyes;
+  - **the mouth:** each sound class's PROTOTYPES - a few clean real mouths each, from any video, at the
+    still's turn, chosen for a target pushed past their own range by the Articulation setting
+    (`library`) - at most two mixed at a moment, by the voice's phones (the dominance functions as
+    before), inside a mask tight to the lips; silence is the still's own mouth.
+- **A set is only where the pixels come from:** its still, its rig and its library (minutes to build).
+  What is the actor's, not a set's - their range of mouth shapes and their motion - comes from every
+  video. **No track:** the 30 fps track, the takes, the frames extracted, the gestures, the habits and
+  the director are gone (the 80 minutes and 3.5 GB a set took).
+- **Gestures may come back as the head's own** - a nod, a tilt, the brows - placed by a director on the
+  words; not in this build.
+
+**Built (2026-10-21, night):**
+- **Steps** (`ActorSteps`): fetch, captions, probe, survey, shots, words, sets, audit as before; then
+  per actor `visemes` (their range, every video's survey) and `motion` (`motion.json`: runs of their
+  head's quick motion where they face the camera, which looks are speech, blinks a minute); per set
+  `stills` (six candidates, `stills/` and `stills.json`), `rig` (the mesh on the first still, the face's
+  box, `mask_mouth.png` tight to the lips, `mask_eyes.png` round the lids, `eye_weights`) and `library`
+  (`library.json`, `library/`: three prototype mouths a sound class, two eyes half closed and two shut;
+  the Articulation setting, default 2). Gone: track, takes, gestures, frames, the director, the gesture
+  mark, `ActorTrack`, `LikenessFrames`, `rules/likeness/gestures.yaml` and `director.yaml`.
+- **actor.py:** `survey_records` (every usable look of the given shots, across videos), `stills`
+  (scored against the set's median picture and person, the hands against their LOW resting place - the
+  hands seen are mostly raised ones, so their median is a gesture - the brows and smile at rest; then
+  looked at again at full size, sharpness counted), `rig`, `visemes`, `motion` (`high_pass`, `runs_of`,
+  a look past 4 of their spreads ends a run), `library` (candidates found in the surveys, seeked and
+  re-measured at full size by MediaPipe in IMAGE mode, a face straying from the others' median - a hand,
+  a mug - left out, a blurred one only where nothing else is; pushed targets on the shapes that show,
+  never mouthClose: pushed, it chose open jaws for P B M).
+- **Playing** (`LikenessPlan`, `LikenessFace`, the shader): the head - motion pieces drawn from the
+  seed, blended 0.8 s into each other, read between looks by Catmull-Rom, at 0.6 of their own size and
+  livelier while the voice speaks, eased past `MOST` - turns the still's 3D points about the neck;
+  blinks at their rate and at pauses (70 ms closing, 40 held, 130 opening); the mouth is the two
+  strongest pulls less the third, over the strongest, the rest the still's own mouth
+  (`Visemes.strongest`: continuous - stepped a tenth of a millisecond, no share moves 0.02). One layer,
+  one still texture, one library texture array: a frame costs about 0.5 ms (the first build's 2-8).
+- **The card:** a Still row (the set's six, the one in use marked, a click uses another - nothing made
+  again); the library line says mouths, sounds, eyes, minutes of motion and blinks a minute; a set
+  builds in a few minutes; the Likeness card has the Performance (the seed) and nothing else.
+
+**Looked at, on his footage (through a scratch copy; his folders only read):**
+- **Stills:** the first pick took a raised hand for rest (a wrist under the shoulders but mid-gesture),
+  the second took gestures for rest (the median of hands seen), the third - the low end - gave four of
+  six calm with hands down; the first of them is the default.
+- **The library on all eight videos:** 42 mouths for 14 sounds and 4 eyes in about two minutes, all from
+  the still's own set once another set cost 1.5; P B M pressed (cost 1.4-2.1 against 37-48 before
+  mouthClose was left alone).
+- **His motion:** 60 minutes kept in 164 runs; his quick motion's spread 3.3 degrees yaw, 3.5 pitch,
+  2.2 roll; 30 blinks a minute from the survey, 33 from the 30 fps track.
+- **Live, in the real app with the real voice** (`likeness_live_probe --stamp 1 --bake 1`): ready, the
+  library in, the phones arriving; the medium 0.4-0.6 ms a frame. A baked take of 30 s drawn frame by
+  frame (`likeness_look_probe --take`) and joined with its sound: the mouth opens on "fox" and "dog",
+  presses on "jumps"; the head moves and settles; blinks at pauses. **The drawn jaw (MediaPipe on the
+  frames) against each phone's intended openness: 0.59, peaking one frame after the phone starts** -
+  its middle, so no lag; against the voice's loudness only 0.08, but his own footage scores just
+  0.16-0.32 on that (loudness is a poor stand-in, and the room's ambience fills the pauses). It opens a
+  little less than he does at the top (jaw 0.20 at the 90th percentile while speaking, his 0.30):
+  Articulation raises it.
+
+**For the user to test:** Generate on the Actor card once (the new steps: about five minutes, no
+track), a still picked on the card if the default is not the one, ▶ on a note; then an export.
+
+## Status of the first build (2026-10-21)
+
+**Built:**
+- `src/likeness/` (a row in docs.py's `FOLDERS`, after `proof/`): `Actors` (the library),
+  `ActorFolder` (one actor on disk: the plan's `Actor`, renamed - `stage/cast.gd` has an inner
+  `Actor`), `ActorSteps` (the steps and the settings, as rows), `ActorBuilder` (the runner),
+  `ActorSources` (folders, links, captions), `ActorPrompts` (the agents' words in, their answers out),
+  `ActorFeed`, `ActorCard`, `ActorTrack` (reads `ACT1`), `Visemes`, `LikenessFace` (the rig, the
+  library, the mesh), `LikenessPlan` (the bed, gestures, the mouth), `LikenessFrames`,
+  `LikenessCard`, `LikenessMedium` (`likeness.gd`) and `likeness_warp.gdshader`.
+- `hosts/face/actor.py` (survey, shots, sets, track, rig, mouths, visemes, takes, candidates, frames)
+  and `hosts/face/test_actor.py`.
+- `rules/likeness/audit.yaml`, `gestures.yaml` (with the habits), `director.yaml`.
+- The component rows `actor` and `likeness`, the medium row `likeness`, `NoteCards.KEYS`, the reading
+  workspace's `hosts`, the `gesture` mark (`Manuscript.GESTURE`, group `gestures`).
+- **Phones ride with words:** the Piper host's token path hands back every phone with its time
+  (`_last_phones`, moved by every resample, trim and splice the word spans are), `ReadingJoin.phones`,
+  `Subtitles.phones`, the export's sidecar `phones`.
+- **Gates:** `actors_check`, `coarticulation_check`, `warp_check` (GPU), `likeness_determinism_check`
+  (GPU), `hosts/face/test_actor.py`, a Likeness note in `teardown_check`, the likeness prompts in
+  `rules_check`, the gesture mark in `script_marks_check`. Probes: `likeness_look_probe` (M4, M5), `likeness_live_probe` (▶ in the real main scene).
+
+**Looked at, on "Why I love writing" (3 minutes tracked):**
+- **M4a, the identity:** the frame redrawn through its own mesh came back with a mean difference of
+  0 and a worst pixel of 1/255. The layout coordinate rides in the vertex COLOR as a float
+  (`warp_check` holds it), so the fallback texture was not needed.
+- **M4b and M5:** another stretch's mouth drawn in (one mouth, and three mixed), and a sweep of 240
+  frames with his mouth from 40 s later: natural at full size, no seam in the beard, no color break,
+  no popping frame to frame. The video has no audio track, so M5 was judged without sound.
+- **Measured:** the survey ran at 0.28 of real time (14 min for 51 min); the track at about 2.6x the
+  footage (7m50 for 3 min, sharing the CPU with a survey); the mouths in a minute.
+
+**His footage, found while building:**
+- **His YouTube videos have no automatic captions** ("no automatic captions", "no subtitles", two
+  checked with a current yt-dlp). So no viseme is learned from captions: every class takes its place
+  in his own range (`Visemes.REGISTRY`'s `range`), which is what M4b used. A capture session's scripted
+  viseme take (Later) is the fix.
+- **"Why I love writing" has no audio** (the other seven do).
+- **One continuous take can hold a handheld stretch:** "Manuscript Day 45" opens with three minutes
+  handheld (him in a hat, walking in) before the camera is set down; "The Irony of Nature Content" is a
+  handheld selfie throughout. Hence shots split by camera motion (below).
+- **His channel holds 2,040 videos:** a captions-only link lists them in seconds and matches the
+  folder's eight by title.
+
+**End to end, through the real `ActorBuilder`** (a command-line driver, every step but the fetch of
+a video, on "Manuscript Day 45" with 2 minutes of its set followed): his channel listed (2,040 videos,
+the folder's 8 matched by title), the survey (10,789 samples), shots (14, 7 handheld), sets (7), the
+**audit agent** (his look in words, as it is: "no glasses, no hat, dark olive knit sweater, swept-back
+grey hair and grey beard; seated at a desk beside a large monitor, medium shot from slightly to his
+right"), the track (3,600 frames), the rig, 96 mouths, the visemes, 7 takes, and the **gestures agent**
+(4 named of 7 candidates - "raise pinched fingers", "raise index finger", "glance aside, open palm",
+"open palm to side" - and his habits). The **director agent** placed two marks in a paragraph, and the
+text with them removed was byte-identical. That actor is in the library as **"Ephemeral Rift
+(2-minute test)"**: a Likeness can play it at once, and Advanced → "Most minutes" and Generate grow it.
+**M6** was drawn by `likeness_look_probe --take` over a paragraph Piper read (156 phones in 14.5 s):
+the mouth moves with the sounds, closes on the M's and P's, and pops nowhere.
+
+**The user's first test (2026-10-21, evening):**
+- **A full Generate over all his footage, in the app:** every step made, eight videos (16:04 to 19:56):
+  29 sets, 10 audited, and the default set (set-0e8c1195, 76 usable minutes, 40 followed) built -
+  72,000 frames tracked in 80 minutes, 512 mouths, 158 takes, 26 gestures named.
+- **"Play this set" read as a preview.** It switched the set in use, and since a set's steps are its
+  own, the Likeness card's Generate then began building the other set from its track - which looked
+  like the first build being thrown away (it was kept). The button is **Use this set** ("In use" on the
+  one used), and each set says whether it is built and roughly how long building it takes.
+- **"Why are there two Generate stages?"** The Likeness card had a Generate that ran the Actor card's
+  steps for the set in use and then the director. **It has none now:** the Actor card builds; the
+  Likeness card says what the set in use still needs, directs, and plays.
+- **▶ "did nothing"** on a note with no words: the reading said "Nothing to speak yet." on its status
+  line only. The Likeness card now says to write the words first when the note has none, and the
+  reading says where to write them.
+- **Live playback, seen working** (`likeness_live_probe`, the real main scene and voice on his built
+  set through a copy of symlinks): him at his desk, the mouth following Piper's phones. A frame's
+  share of the medium measured 2 ms on a quiet stretch and up to 23 ms with the machine loaded, most of
+  it the frame's upload - now decoded to RGBA8 on the worker (7.5 ms to 1.5 at least), and not
+  uploaded again when a 60 fps show draws the same footage frame twice.
+- **The two cards held the main thread 57 ms every quarter second** (the Actor card 38, the Likeness
+  card 17), playing or not: `audit.json` parsed for every set question, the 3.9 MB `mouths.json` for
+  the library line, every step's every scope worked out again. Now the actor's json files are kept
+  while unchanged on disk (`ActorFolder.read_kept`), the library line and the step rows are made again
+  only when what they show changed, and the Likeness card asks the actor's state once a tick: 2.5 and
+  1.7 ms.
+- **Footage moved since a set was built played black, with nothing said:** "Ephemeral Rift (2-minute
+  test)" read his videos from Eidolon's folder, which moved to `~/Downloads/Ephemeral Rift` at 16:03.
+  A segment with no frames is a failure now (`actor.py frames`), and the stage names the missing video
+  (`LikenessFrames.trouble`).
+- **A restart made the built set stale** ("Stuff was stale, I had to regenerate"): the videos were
+  held in the order they were added (by file name) and `actor.json` was written sorted by id, so read
+  back after the restart they came in another order, and the Sets' fingerprint, which listed them as
+  held, changed - the sets, the audit and every step of the set were made again, the track too. Now a
+  fingerprint takes what a step reads by id (`ActorFolder.inputs_of`) and `actor.json` keeps the order
+  (actors_check holds it: an actor read again from its file finds every step as it was).
+- **"0 from captions" on Visemes is not a fault:** his videos have no captions (above), so each sound's
+  mouth is placed in his own range. The row now says so ("15 sounds, from their own range (no
+  captions)"). It also means the gestures were named from their pictures alone.
+
+**Not yet seen working, for the user to test:** an export, and the director on a real chapter.
+
+**How to try it:**
+1. On a note, "+" Likeness: it brings an Actor and a Voice.
+2. On the Actor card, pick "New actor…" and name him. Add folder… the Eidolon `videos/` folder, and
+   untick the four other creators' rows.
+3. Generate on the Actor card. The first time, ghost rebuilds the face and download environments
+   (about 520 MB), then surveys every ticked video (about two hours for his seven), groups the sets,
+   has the labeler audit each, learns their mouth's range and their motion from every video (seconds),
+   and builds the set in use - its stills, its rig, its library (a few minutes). The Still row then
+   shows six pictures of them; a click uses another.
+4. Write the words on the Script card; ▶ reads the note with them; ⤓ exports. The Likeness card's
+   Performance number is which pieces of their motion play and when they blink. A set is used with "Use
+   this set" on the Actor card; each is built on its own, and one built is kept. An upload asks for
+   their license on the Actor card (License…).
+5. To look without the app: `tests/likeness/likeness_look_probe.gd` (its header) draws the identity,
+   every sound's mouth, the eyes, and a take frame by frame; `likeness_live_probe` plays the real app
+   and bakes a take with its phones.
+
+## What changed from the plan
+
+1. **No new file.** The layout the mouths are kept in is the set's own mean face, aligned, with a
+   moderately open mouth (the frames between his 60th and 92nd percentile of `jawOpen`), not
+   MediaPipe's canonical UVs: the canonical mouth is closed, and an open mouth's teeth would have been
+   squeezed into a sliver. So `canonical_face_model.obj` has no row.
+2. **The target face is the chosen mouths' own shapes,** mixed by their weights and set into the
+   frame's pose by its steady points; no linear map from blendshapes to points is needed.
+   `visemes.json` holds the shapes per class only.
+3. **The mouth's key is measured against his own spread** (`actor.py`'s `key_scale`, `KEY_WEIGHT`):
+   his blendshapes span a few hundredths (`jawOpen` 0.01 to 0.22) and his head turns over 40°, so a key
+   of raw values chose every mouth by the turn alone and every viseme came out the same mouth.
+4. **One gain for all three channels** when a mouth is matched to a frame's light
+   (`LikenessFace.match_light`): a gain per channel turned a red lip teal.
+5. **Shots split where the camera starts or stops moving** (the background's own change, 0.1-0.3 on a
+   tripod, 1.5-20 handheld), and a set says it is `handheld`; steady sets come first, and the default
+   set is the steady one with the most usable minutes. A jump cut is confirmed at the full frame rate
+   (one frame-to-frame jump standing 2.2 times over the next).
+6. **A `captions` step:** a folder video matched to a link's entry fetches its captions before its
+   words. A video the site has no captions for is made, with none - never a step that blocks.
+7. **The hands' exclusion reaches down over the beard** (0.7 of the face's width below the chin): a
+   hand at his chin stood in a kept mouth.
+8. **The mouth image follows its box** (384 wide; 368 tall for his beard), not 384x192.
+9. **Frames are extracted per track segment** (20 s), 30 s ahead of a live show, two at a time, at
+   most 40 segments kept; an export extracts in step and waits. The Likeness card extracts the first
+   45 s of the plan as soon as the actor can play.
+11. **A phone holds the mouth until the next starts:** Piper times P, B and M at 12-24 ms (its own
+    frames, without the blanks), under a frame - the closure scarcely showed. And the five frames a
+    mouth is averaged over weigh 1, 2, 3, 2, 1.
+12. **A download that says nothing for five minutes is stopped and tried again** (an old yt-dlp hung
+    at "Downloading webpage" for good), and captions that could not be fetched never stop a video's
+    words.
+13. **The library on the Actor card is words for now:** the mouths by head turn, how many sounds were
+    learned from captions, the gestures by name and count - no thumbnails that play. The Likeness card
+    lists the set's gestures as buttons that put a mark at the cursor; the script's palette offers the
+    gesture mark itself, not each gesture by name.
+14. **"+" grays a component whose card the note's panel would not show** (`Components.host_note`): an
+    Actor goes on a note of its own or with a Likeness, never on a show of cards. And the reading builds
+    the cards of what its components bring, so "+" Likeness shows the Actor card at once.
+
+**Not built yet:** the disclosure line on a title card (the upload's description says it), the
+small deviations (gaze, brows), and the capture session.
+10. **The UI and the agents' rules say "the actor" and "they"**: the suite is for anyone, not one
+    person.
 
 **The goal.** An ASMR creator, Ephemeral Rift, asked for his likeness to read chapters of his
 upcoming book. Ghost makes a video of him reading the note's words, in his own room, from his own
@@ -45,7 +309,7 @@ footage. It is not generative: every pixel of him is a real pixel from his video
 - the agents are ghost's own;
 - the rest is GDScript and one canvas shader.
 
-The one new file is MediaPipe's `canonical_face_model.obj` (Apache), a file row in `face_venv`.
+No new file either (see What changed from the plan, 1).
 
 ## What his footage is (looked at 2026-10-20)
 
@@ -134,7 +398,7 @@ The card, top to bottom:
 4. **Generate** makes everything missing or stale, in order. **Stop** ends the running step,
    which resumes from its own last saved video or chunk.
 5. **Sets:** a thumbnail and a sample frame for each, its minutes, its look in words (from the
-   audit), and the chosen one.
+   audit), whether it is built, and the one in use ("Use this set").
 6. **The library:**
    - his gestures as a strip of named thumbnails, which play on click;
    - his visemes, one mouth per class;
@@ -155,10 +419,8 @@ The card, top to bottom:
 
 ### The Likeness card (component `likeness`) and medium (`likeness`): presents
 
-**The card:**
-- the set, from the actor's sets;
-- **Generate:** makes everything this note needs - the actor's missing steps through its feed,
-  then the gestures (see Direct);
+**The card** (it builds nothing - the Actor card does, and this card says what the set in use still
+needs; it had a Generate of its own until the user's first test asked why there were two):
 - **Direct:** the director places gesture marks in the note's text;
 - **Clear gestures.**
 - **Who directs:** an `AgentPick` row.
@@ -182,8 +444,8 @@ The card, top to bottom:
 - The Actor card answers `feeds()` with `{"actor": ActorFeed}`, collected by the panel as
   `episode_steps()` is.
 - The Likeness card asks the panel `feed("actor")`.
-- **`ActorFeed`** is a small typed contract: the folder, the chosen set, `generate()`, and
-  `status()`.
+- **`ActorFeed`** is a small typed contract: the folder, the chosen set, `status()`, the gestures
+  and the habits.
 
 ## The actor's folder
 
@@ -497,7 +759,7 @@ Each milestone ends with something to look at. Nothing past M4 is worth building
 - **M7 - Takes, joins, gestures, the director.** `actor.py takes|candidates`, the gestures job,
   `habits.md`, the director's job and its check, and the `gestures` palette group.
   - **Look:** 60 s with gestures on their words.
-- **M8 - The proof.** 2-3 minutes of a chapter: Generate on the Likeness card, then the export.
+- **M8 - The proof.** 2-3 minutes of a chapter: Generate on the Actor card, Direct, then the export.
   `likeness_determinism_check`.
   - **Look:** with him, if he wants.
 

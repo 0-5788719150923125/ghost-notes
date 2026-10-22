@@ -15,7 +15,7 @@ host_for(incoming)   - the node an arriving scene is added to. `full` returns th
 
 A medium is a Node2D mounted INSIDE the stage SubViewport, so the stage governor still owns it: when the governor stops the stage, it stops the medium and every panel viewport nested under it, together.
 
-Registry: `Medium.REGISTRY` in [src/media/medium.gd](../src/media/medium.gd) (8 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
+Registry: `Medium.REGISTRY` in [src/media/medium.gd](../src/media/medium.gd) (9 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
 
 ## `auto` - Auto
 
@@ -118,6 +118,20 @@ THE LOOK IS THE EPISODE'S. The cloth, the room, the card back and every face are
 FOIL. The brightest, most colorful parts of each painting - found per picture from its own luminance, never a fixed threshold - are printed as foil: they catch the light as a card tilts, breathe slowly, and now and then a glint sweeps across them, and the scene's bloom lets them bleed. The deck's look says how much foil it was printed with.
 
 Source: [src/table/table.gd](../src/table/table.gd)
+
+## `likeness` - Likeness
+
+_An actor reading the note in their own room, from their own footage: their real takes, joined where two frames nearly match, the mouth drawn from their own mouths to the voice's sounds through one mesh over the frame, their gestures on the words a director placed them. The Likeness component's own medium._
+
+LikenessMedium - an actor reads the note, in their own room (next/likeness.md, "The second build"): ONE STILL OF THEM and a model of how they move - their head's own motion, their blinks, their mouths for the voice's sounds (`LikenessPlan`). Every pixel of them is a real pixel of theirs, bent; no footage plays, so no hand, prop or jump cut is ever seen (2026-10-21, the user on the first build: "the random gestures and the globe and such, which are cropped by the jump-cuts").
+
+WHAT IT DRAWS FROM: the reading's document (`_subs.document`) carries `likeness` - the actor's folder, the set, the still, the seed - which the Likeness card hands the reading (`LikenessCard`); the words and the phones come from the voice as they are said (`_subs.words`, `_subs.phones`). The set's files and the actor's motion are the Actor's (`ActorFolder`, `ActorSteps`).
+
+ONE MESH OVER THE WHOLE FRAME, DRAWN WITH ONE CANVAS SHADER (`LikenessFace`, likeness_warp.gdshader): the still read through the mesh, the face turned by the head's motion, the lips and lids bent to the mouths and eyes drawn in where their own were.
+
+A PURE FUNCTION OF THE SHOW'S TIME: what is drawn at a moment depends on the plan and the phones, never on what was drawn before - so a seek lands where it should and an export draws what was heard.
+
+Source: [src/likeness/likeness.gd](../src/likeness/likeness.gd)
 
 ## `desk` - Desk
 

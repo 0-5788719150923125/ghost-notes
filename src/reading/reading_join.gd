@@ -29,6 +29,10 @@ var marks: Array = []
 ## Every word joined, timed in the take's seconds - handed in, and appended to in place (the live
 ## window's is the subtitle overlay's own list, held by reference).
 var words: Array = []
+## EVERY SOUND JOINED, timed as the words are (`{p, t0, t1}` in the take's seconds) - what a mouth
+## that says them follows ([LikenessMedium]). Handed in when wanted, appended to in place like
+## [member words]; a host that hands back no phones leaves it as it was.
+var phones: Array = []
 ## Chunk index -> the frame its audio starts at.
 var chunk_at := {}
 ## The frame the outro mark's fade starts at: the first fading chunk's (-1 until one is joined).
@@ -58,7 +62,8 @@ func _init(sample_rate := 22050, into: Array = [], lead := 0) -> void:
 ## it by ([param spans]), in a voice of settings [param s] at the Turn dial [param turn]: the audio to
 ## append - the seam's rest before it (none before the first chunk joined) and the take with its
 ## hesitations and hums spliced in ([method Splice.chunk]).
-func add(chunks: Array, idx: int, pcm: PackedFloat32Array, spans: Array, s: Dictionary, turn: float) -> PackedFloat32Array:
+func add(chunks: Array, idx: int, pcm: PackedFloat32Array, spans: Array, s: Dictionary, turn: float,
+		said: Array = []) -> PackedFloat32Array:
 	var ch: Dictionary = chunks[idx]
 	var who := String(ch.get("speaker", ""))
 	# THE TONE IS ALREADY IN IT: the host played the take back at the preset's ratio, and every
@@ -95,6 +100,12 @@ func add(chunks: Array, idx: int, pcm: PackedFloat32Array, spans: Array, s: Dict
 		d["t0"] = Splice.shifted(float(d["t0"]), spliced["cuts"], 1.0, true) + t0
 		d["t1"] = Splice.shifted(float(d["t1"]), spliced["cuts"], 1.0, false) + t0
 		words.append(d)
+	# THE PHONES MOVE AS THE WORDS DO: by the rests spliced in before them, then into the take's time
+	for ph in said:
+		var p: Dictionary = ph
+		phones.append({"p": String(p.get("p", "")),
+			"t0": Splice.shifted(float(p.get("t0", 0.0)), spliced["cuts"], 1.0, true) + t0,
+			"t1": Splice.shifted(float(p.get("t1", 0.0)), spliced["cuts"], 1.0, false) + t0})
 	chunk_at[idx] = frames
 	# THE OUTRO MARK: the fade starts where the first chunk after it does
 	if fade_at < 0 and bool(ch.get("fade", false)):
@@ -120,6 +131,9 @@ func end_at(end: int) -> int:
 	for i in range(words.size() - 1, -1, -1):
 		if float((words[i] as Dictionary).get("t0", 0.0)) >= cut:
 			words.remove_at(i)
+	for i in range(phones.size() - 1, -1, -1):
+		if float((phones[i] as Dictionary).get("t0", 0.0)) >= cut:
+			phones.remove_at(i)
 	return over
 
 

@@ -258,6 +258,16 @@ FOLDERS: List[Tuple[str, str, str]] = [
         "next/proof.md.",
     ),
     (
+        "likeness",
+        "Likeness",
+        "An actor played from their own footage: the library of actors, each built from their videos "
+        "(a folder, or links fetched) - surveyed, grouped into sets by camera and look, the agent that "
+        "audits them, a still of each set and a model of them from every video (their head's motion, "
+        "their blinks, their mouths for each sound) - the card that makes one, and the card and medium "
+        "that play them reading a note: the still, its head turned and its mouth and eyes drawn from "
+        "their own, through one mesh over the frame. Design: next/likeness.md.",
+    ),
+    (
         "masking",
         "Masking",
         "The video chroma-key masking editor - a second app surface inside "
@@ -611,6 +621,30 @@ ENGINE_FLAGS = {
     "--start",
     "--duration",
     "--background",
+    # hosts/face/actor.py's interface (the Likeness's ActorBuilder runs each step of an actor
+    # with it) - arguments to a subprocess.
+    "--ffmpeg",
+    "--face-model",
+    "--pose-model",
+    "--interval",
+    "--survey",
+    "--min-shot",
+    "--spec",
+    "--sheets",
+    "--threshold",
+    "--stills",
+    # yt-dlp's, as the Actor card lists and fetches a link's videos and captions.
+    "--flat-playlist",
+    "--no-warnings",
+    "--no-overwrites",
+    "--write-auto-subs",
+    "--sub-langs",
+    "--sub-format",
+    "--write-info-json",
+    "--skip-download",
+    "--merge-output-format",
+    "--download-archive",
+    "--socket-timeout",
     # setpriv's interface (subprocess.gd binds every child's lifetime to ghost's with it),
     # an argument to a subprocess, not a ghost flag.
     "--pdeathsig",

@@ -87,6 +87,7 @@ var _lead_in := 0.0            # the intro seeded into _pending by plan, in seco
 var _outro_queued := false     # the outro's silence is on the stream (see the drain)
 var _fade_done := false        # the outro mark's fade has run out: the reading is cut
 var _sub_words: Array = []     # shared BY REFERENCE with the Subtitles overlay
+var _sub_phones: Array = []    # ...and the phones, the same way (Subtitles.phones)
 ## THE TAKE BEING JOINED ([ReadingJoin]): the frames queued on the stream from its first (the intro's
 ## silence included), the room's marks - WHEN THE ROOM CHANGES, in those frames: the effects chain is
 ## stateful across chunk boundaries, which is the whole reason it runs here rather than in the host,
@@ -131,7 +132,7 @@ func play() -> void:
 	# their own editor with ghost open beside it.
 	var body := panel._reading_body().strip_edges()
 	if body.is_empty():
-		panel._set_status("Nothing to speak yet.")
+		panel._set_status("Nothing to read yet: write the words on the Script card, then press ▶.")
 		return
 	# The cast NOW, not at the next pause in typing: a name written a moment ago must read in
 	# its own voice from the first Play.
@@ -243,7 +244,9 @@ func _reset_playback() -> void:
 	_fade_done = false
 	Director.live_fade = 1.0
 	_sub_words.clear()          # cleared in place: Subtitles holds this by reference
+	_sub_phones.clear()
 	_join = ReadingJoin.new(panel._sr, _sub_words)
+	_join.phones = _sub_phones
 
 
 ## Play and Stop, from one place. Two buttons whose enabled state is set at each of the
@@ -498,7 +501,7 @@ func arrived(id: int, result: Dictionary) -> void:
 		return
 	panel._sr = int(result.get("sample_rate", panel._sr))
 	_ready_takes.append({"wav": wav, "index": idx,
-		"spans": result.get("tokens", [])})
+		"spans": result.get("tokens", []), "phones": result.get("phones", [])})
 	_drain_ready()
 	_pump()
 
@@ -538,7 +541,8 @@ func _drain_ready() -> void:
 		# chain now would put the next speaker's room over the end of this one's last sentence - the
 		# marks carry their frames and [method tick] dials each as the push reaches it.
 		_join.sr = panel._sr
-		_pending.append_array(_join.add(chunks, idx, pcm, take.get("spans", []), panel._cast.cfg_of(who), panel._cast.turn_scale()))
+		_pending.append_array(_join.add(chunks, idx, pcm, take.get("spans", []), panel._cast.cfg_of(who), panel._cast.turn_scale(),
+			take.get("phones", [])))
 		# ...and the reading ENDS where the fade does: the rest of this chunk, and every
 		# chunk after it, is never heard
 		var end := _join.fade_end(_fade_len)
@@ -593,6 +597,9 @@ func _drain_ready() -> void:
 			_stream_open = true
 			if panel.begin_stream.is_valid():
 				playback = panel.begin_stream.call(hash(panel._fingerprint_text()), panel._sr, _sub_words)
+				# the phones ride beside the words, by reference too
+				if panel.subtitles != null and is_instance_valid(panel.subtitles):
+					panel.subtitles.set("phones", _sub_phones)
 			# the place opens with the stream: its first sample is the stream's first, at the show
 			# time the stream's frame 0 is heard at
 			_open_environment(Spectrum.stream_origin())

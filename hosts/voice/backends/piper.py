@@ -398,6 +398,10 @@ LEAD_FRAME = 0.005
 _VOWELS = frozenset("aeiouyæɑɐɒɔəɚɛɜɝɪʊʌʏɘɵɨʉøœɤɯᵻ")
 _VOWEL_MARKS = frozenset("ː")
 _STRESS = "ˈ"
+# NOT A SOUND OF ITS OWN, in the phones handed back: the stress marks; and the length mark, which is
+# the vowel's before it.
+_UNSAID = frozenset({"ˈ", "ˌ", " "})
+_LENGTHENS = frozenset({"ː", "ˑ"})
 
 
 def _trail_weight(mark: str, params: dict) -> float:
@@ -2858,6 +2862,10 @@ class PiperBackend(Backend):
         sr = int(cfg["audio"]["sample_rate"])
         chunks: list = []
         times: list = []
+        # EVERY SOUND WITH ITS TIME ({p, t0, t1, w}, `w` the token it is of): moved by everything the
+        # spans are moved by - the resample, the trimmed rests, the spliced pauses - so a mouth that
+        # follows them says what the take says.
+        phones: list = []
         cursor = 0.0
         base = 0
         plan = _discourse_plan(groups, params)
@@ -2881,6 +2889,7 @@ class PiperBackend(Backend):
                 params.get("noise_w", cfg.get("inference", {}).get("noise_w", 0.333))
             ) * float(step["noise_w_mul"])
             audio, per_token = self._run(group, voice, gp, cfg, sess, phonemizer)
+            said = [dict(ph) for ph in getattr(self, "_last_phones", [])]
             # The frame plan's word-boundary rests and each word's sounds, before anything
             # resamples them.
             group_rests = list(self._last_rests)
@@ -2943,6 +2952,8 @@ class PiperBackend(Backend):
                 audio = shifted
                 # the alignment was measured before the resample, so it moves with it
                 per_token = {k: (v[0] / pr, v[1] / pr) for k, v in per_token.items()}
+                for ph in said:
+                    ph["t0"], ph["t1"] = ph["t0"] / pr, ph["t1"] / pr
                 group_rests = [(a / pr, b / pr, w) for a, b, w in group_rests]
                 edges = {k: (a / pr, b / pr) for k, (a, b) in edges.items()}
                 frame /= pr
@@ -2967,6 +2978,9 @@ class PiperBackend(Backend):
                     for k, v in per_token.items()
                 }
                 per_token = {k: (a, max(a, b)) for k, (a, b) in per_token.items()}
+                for ph in said:
+                    a0 = max(0.0, _shift(ph["t0"], cut, True))
+                    ph["t0"], ph["t1"] = a0, max(a0, _shift(ph["t1"], cut, False))
                 edges = {
                     k: (_shift(a, cut, True), _shift(b, cut, False))
                     for k, (a, b) in edges.items()
@@ -3012,6 +3026,10 @@ class PiperBackend(Backend):
             gap = None
             if gi < len(groups) - 1:
                 gap = _gap_for(str(group[-1].get("punct", "")) if group else "", params)
+            for ph in said:
+                phones.append({"p": ph["p"], "w": base + int(ph["w"]),
+                               "t0": round(_shift(float(ph["t0"]), inserted, True) + cursor, 4),
+                               "t1": round(_shift(float(ph["t1"]), inserted, False) + cursor, 4)})
             for ti, span in per_token.items():
                 # float(): numpy scalars are not JSON-serializable and the
                 # protocol is JSON
@@ -3042,7 +3060,7 @@ class PiperBackend(Backend):
         played = float(params.get("play_ratio", 1.0) or 1.0)
         if abs(played - 1.0) > 1e-4 and joined.size > 1:
             joined = _resample(joined, played)
-            for row in times:
+            for row in times + phones:
                 for key in ("t0", "t1", "rest"):
                     if key in row:
                         row[key] = round(row[key] / played, 4)
@@ -3052,6 +3070,7 @@ class PiperBackend(Backend):
             "sample_rate": sr,
             "duration": float(joined.size) / sr,
             "tokens": times,
+            "phones": phones,
             "aligned": bool(times),
             "sentences": len(groups),
             "played": played,
@@ -3190,6 +3209,10 @@ class PiperBackend(Backend):
         )
         ids: list[int] = [BOS]
         owner: list[int] = [-1]
+        # WHICH SYMBOL each id says, by its place in `symbols` (-1 for BOS, the pads and EOS): the
+        # phones handed back with their times (`_last_phones`), which a likeness's mouth follows
+        # (next/likeness.md, "The voice").
+        said_by: list[int] = [-1]
         missing: list[str] = []
         # Which ids are the REST between two words - the blanks and the word-space
         # itself. `_trim_rests` needs to know where a boundary rest starts and stops,
@@ -3240,6 +3263,7 @@ class PiperBackend(Backend):
                 opened = True
             ids.append(PAD)
             owner.append(src)
+            said_by.append(-1)
             rest_of.append(-1)
             sound.append(False)
             floor.append(0.0)
@@ -3247,6 +3271,7 @@ class PiperBackend(Backend):
             for k, m in enumerate(mapped):
                 ids.append(int(m))
                 owner.append(src)
+                said_by.append(j)
                 rest_of.append(src if sym == " " else -2)
                 sound.append(sym != " " and sym not in _MARK_SYMBOLS)
                 floor.append(rest if k == 0 else 0.0)
@@ -3254,12 +3279,14 @@ class PiperBackend(Backend):
             marked = src if sym in _MARK_SYMBOLS else (-1 if sym == " " else marked)
         ids.append(PAD)
         owner.append(-1)
+        said_by.append(-1)
         rest_of.append(-1)
         sound.append(False)
         floor.append(0.0)
         scale.append(1.0)
         ids.append(EOS)
         owner.append(-1)
+        said_by.append(-1)
         rest_of.append(-2)
         sound.append(False)
         floor.append(0.0)
@@ -3331,6 +3358,9 @@ class PiperBackend(Backend):
         self._last_rests: list = []
         # {token: (first sound start, last sound end)} in the same seconds - see `sound`.
         self._last_edges: dict = {}
+        # [{p, t0, t1, w}]: every sound with its time in the same seconds, `w` its token - see
+        # `said_by`. A length mark is its vowel's; stress marks, word-spaces and marks are no sound.
+        self._last_phones: list = []
         # The tokens that end on a hiss, for `_trail`. From the symbols, so with or without a plan.
         self._last_hisses: dict = _hiss_codas(symbols)
         if len(out) > 1:
@@ -3342,15 +3372,20 @@ class PiperBackend(Backend):
                 run_at = 0.0
                 run_of = -1
                 spoke = False
-                for dur, who, rest, heard in zip(
+                said: dict = {}
+                for dur, who, rest, heard, by in zip(
                     frames * HOP_LENGTH / float(cfg["audio"]["sample_rate"]),
                     owner,
                     rest_of,
                     sound,
+                    said_by,
                 ):
                     if heard and who >= 0:
                         e = self._last_edges.get(who)
                         self._last_edges[who] = (t if e is None else e[0], t + dur)
+                    if heard and by >= 0:
+                        e = said.get(by)
+                        said[by] = (t if e is None else e[0], t + dur)
                     if rest == -2:
                         # A rest is only a rest when speech stands on BOTH sides of it.
                         # The lead-in (see LEAD_IN_SPACES) and the utterance's own tail
@@ -3369,6 +3404,15 @@ class PiperBackend(Backend):
                         else:
                             spans[who][1] = t + dur
                     t += dur
+                for j in sorted(said):
+                    sym, src = symbols[j]
+                    a, b = said[j]
+                    if sym in _UNSAID:
+                        continue
+                    if sym in _LENGTHENS and self._last_phones and self._last_phones[-1]["w"] == src:
+                        self._last_phones[-1]["t1"] = b
+                        continue
+                    self._last_phones.append({"p": sym, "t0": a, "t1": b, "w": src})
         return audio, spans
 
     @staticmethod
