@@ -82,7 +82,7 @@ By family - the color a component's card, chip and marks are drawn in.
 - **Illustrations** (`illustrations`) - The book's pictures, painted by an agent from the marks in the text, or imported.
   - needs text, places; gives picture; brings Picture; asks for `forward_plus`; kept in `illustrations:`
 - **Actor** (`actor`) - Builds an actor from their own videos - a folder, or links to videos, playlists or a channel - for a Likeness to play: the footage surveyed and grouped by camera and look, a still of them chosen, and their motion, blinks and mouths learned from every video.
-  - gives actor; asks for `subprocess`, `ffmpeg`, `python:face`, `python:download`, `agent:writer`; kept in `actor:`
+  - gives actor; asks for `subprocess`, `ffmpeg`, `python:face`, `python:speech`, `python:download`, `agent:writer`; kept in `actor:`
 - **Likeness** (`likeness`) - An actor reads the note in their own room: a still of them, their head moving as they move it, blinking, the mouth drawn from their own mouths to the voice's sounds. Every pixel of them is their own.
   - needs reading, actor; gives picture; brings Actor, Voice; takes the presentation; asks for `forward_plus`; kept in `likeness:`
 - **Clip** (`clip`) - A video, cut and prepared from a file or a link, with chroma-key effects over it: markers, tracks and renders.
@@ -112,6 +112,7 @@ What a component may ask of the platform. Each is possible somewhere or not at a
 | `python:download` | the download environment | the desktop |
 | `python:capture` | the page-capture environment | the desktop |
 | `python:face` | the body and face-tracking environment | the desktop |
+| `python:speech` | the speech-recognition environment | the desktop |
 | `tex` | TeX | the desktop |
 | `python:math` | the math environment | the desktop |
 | `lean` | Lean and Mathlib | the desktop |

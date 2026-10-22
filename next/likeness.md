@@ -107,6 +107,190 @@ forward-facing actor, with a mouth that moves when speaking."
 **For the user to test:** Generate on the Actor card once (the new steps: about five minutes, no
 track), a still picked on the card if the default is not the one, ▶ on a note; then an export.
 
+## The fourth pass: a body, modeled (2026-10-22)
+
+**The user on the third pass:** "This is kind of working, but the actor's body is completely rigid, and
+it is just rocking around constantly. The hands remain in this strange open-palm gesture. The problem is
+that we're not modeling the body - we're just shifting it around a bunch. I would have expected a more
+relaxed, neutral posture - and one that isn't frozen in-place, rocking weirdly back and forth."
+
+**Why, each (measured on his footage):**
+- **The rocking:** the body played the quick part of his shoulders' motion (the slow drift taken out,
+  4 s): about 60% of it swings with a period of 1 to 4 seconds, 0.75 degrees of tilt about a pivot at the
+  frame's foot - 12 px at his head. It is his gestures pulling at his shoulders (the shoulders' quick
+  motion is 40-70% larger while his hands move most than while they move least), and a still whose hands
+  never move has nothing to pull them.
+- **Rigid:** one transform moved every vertex of the body - hands, arms and torso as one block.
+- **The open palms:** the still was chosen with its hands "against their low resting place", and his
+  open-palm gesture is held at the desk's height. No measure of the body's points told them apart: on 21
+  frames looked at by eye (8 at rest, 9 open-palmed, 4 holding a phone), the wrists' height, their
+  stillness over 5 s, their range over 10 s, the hands' distance apart and the turn of the hand's points
+  all overlapped. The stillest hands of the set were all holding a phone.
+
+**Built:**
+- **A skeleton on each still** (`rig`'s `stills`: `skeleton`, `skin`): from its pose - the hips (seen, or
+  1.35 shoulder widths under the neck, behind the desk), the neck, each shoulder, elbow, wrist and the
+  hand's end - and every vertex of its mesh weighed to its bones (actor.py `BONES`: the torso, the head,
+  each shoulder, upper arm, forearm and hand), the mesh given points along each arm and its sides so an
+  arm bends apart from what is behind it. A hand seen in the picture RESTS: it stays where it is (but for
+  its own small drift) while the torso moves, and its arm bends between it and the moved shoulder - the
+  elbow found as an arm's is (two bones keeping their lengths, bending the way they bent:
+  `LikenessFace.elbow`). A hand out of the picture goes with its shoulder.
+- **A posture, held and shifted** (`LikenessPlan.posture`): the torso holds a posture for about 1.8 of his
+  own holding time (`motion`'s `posture`: the lag at which his 6-second posture falls to 1/e of itself),
+  then shifts to another over 1 to 2.2 s - each drawn from his own range of posture with his axes' own
+  correlations, half of it (a third of his tilt), keeping half of the last - with a slow sway under it
+  (knots 3 s apart) so it is never frozen. Nothing quick is left in it: what is quicker than 4 s is 0.14
+  of the posture's motion on the gate's made motion, against the head's 1.09 (body_check). The breath
+  stretches the torso about the hips and lifts the shoulders, which also wander a little each on its own
+  (`lifts`); the hands settle somewhere new, a few pixels, as the body shifts (`hands`). The head keeps
+  turning on the neck by his own quick motion, and takes back 0.7 of the body's tilt, keeping its eyes
+  level.
+- **The still at rest** (`rest`, "At rest" on the card, an agent: `rules/likeness/rest.yaml`): the stills
+  step keeps 12 candidates (two of six were at rest before) and puts them on one numbered sheet; a
+  writer says which show him at ease - hands folded, resting or out of sight, nothing held, facing the
+  camera - most at ease first (`rest.json`). The Likeness is drawn on the first unless one is picked;
+  the card shows those first, marked; stills made again forget the pick.
+- **What stands before them** (`front_K.png`, `body_K.jpg`): the microphone stayed in still 4's matte -
+  its plain dark body has no texture for the third pass's test - and with the body bending it bent too.
+  Now a pixel that is still the still's in 60% of the set's frames (at half size, each still judged
+  against its own pixels in the first still's light: its color within 14 levels, and where the still has
+  texture its patch alike too) and still the still's in the frames where he is there hides him - in a
+  piece of 3000 pixels or more: it is drawn over him and never moves, his matte kept whole under it and his
+  picture there filled from round it, so he moves behind it. One that never moves at his matte's edge is
+  the wall his matte bled over: out of his matte, as before. Measured, still 10 of the new stills: by
+  texture alone the microphone's body never matched; by color without each still's own light it never
+  matched either (the light moves 15 levels over the hour); with it, half his dark sweater did too (its
+  knit is gone at half size); by color, and texture where the still has some, the microphone's body and a
+  few flecks. Its spider mount's thin rods and its cable are not found, and still move with him a little.
+- **The room's frames were the set's first sixth** (a third-pass bug, found here): the plate took the
+  first 90 of 540 looks spread over the set, in order - the session's first quarter hour, its light 13 to
+  28 levels off the later stills' on the microphone, which then matched none of them. Now 150 across
+  all of it.
+- **The room behind a head where they seldom sit:** the plate was trusted where a quarter of the frames
+  saw the room; behind still 10's head (he sits nearer the picture than usual) the wall shows in 4 to 14%
+  of them, so all of it was filled from round it - a smear where the picture's frame was. Trusted by six
+  frames alone, a patch of his own face came in at his hairline (frames whose segmentation missed his
+  head) and the globe behind an arm. Now: a quarter of the frames, or six that agree (three quarters of
+  them within 12 levels of their median: `trust`).
+- **A light halo round the head:** his shadow on the wall is in the still and not in the plate (made
+  where he is not), so the plate is now darkened or lightened as the still's wall just outside him is
+  against it, spread 30 px inward (`SHADE`).
+- **A light sliver in the gap between his arm and the chair:** his matte is soft there (0.2 to 0.5), and
+  under it the plate's wall showed where the still showed the chair. Away from the head the plate is now
+  used only where the still is mostly him (`SOFT`, 0.6): under a soft edge the room is the still's own, so
+  at rest the picture is the still. Round the head (2.3 of its radii) the plate still reaches 12 px past
+  his edge, so no hair is left on the wall as the head turns.
+
+**Looked at (2026-10-22, through scratch copies of his set; his folders only read):** 38 s of a Piper
+voice drawn on the new stills' 10th (hands folded; the one a writer would call most at ease of the
+sheet's 3, 4 and 10), `dist/likeness_v4_preview.mp4`. His resting hands move at most 2 px; his shoulders
+up to 13 px, held for 5 to 10 s and shifted over about a second; the wall not at all. The still drawn
+through its mesh at rest differs from the still by 0.0043 of full scale (0.0061 before the room's fixes).
+The microphone's body stays put; at the largest shift a thin seam shows at its lower right, and its
+mount's thin rods move a little with him. The stills step takes about 13 minutes on his set with the
+machine loaded (12 stills, 150 frames). **Not yet seen by the user;** At rest has not been asked of a
+writer on his sheet (the gate lands made answers).
+
+## The third pass: the whole of them (2026-10-22)
+
+**The user on the second build:** "not a terrible attempt ... it FEELS like we might be onto something
+that could become quite decent." What is wrong: NOTHING else moves - "the body doesn't shift at all, the
+head doesn't really pivot at all (it just sort of floats around) ... our edits are restricted to general
+regions"; the eyes never look around; "the region around the head smears quite a lot ... on the wall,
+and on the picture on the wall especially"; every mouth a different color, "blurry flickering
+patterns"; the mouth shapes weak - "Is there a simple and effective way we might be able to extract
+subtitles from video ...?"; "I also wonder if we might benefit from true learning of some sort. Some
+internal neurons, updated via a simple rule, and informed by ALL sets of videos. Maybe even some kind
+of ensemble method."; and whether any Gaussian splatting is in it (none).
+
+**Why, each:**
+- **The smear:** the only thing between the head and the frame's fixed edge was a ring of mesh, so
+  the wall stretched wherever the head went.
+- **The float:** the head was moved by where their face's box went in the footage AND turned about the
+  neck - two motions for one, and the turn's pivot never seen to bend anything.
+- **Nothing else moves:** no mesh over the body, so nothing to move it with.
+- **The colors:** each prototype matched to the still by their cheeks' mean only.
+- **The stare:** the library held no eye looking aside.
+
+**The plan, in order:**
+1. **Layers:** them over THE ROOM - a clean plate of the set made from its footage (each pixel the
+   frames where it is not them, each frame's light matched to the still's), the still's own room
+   wherever it shows - cut out by a person matte, so the room never moves and what the head uncovers is
+   the room.
+2. **The body:** a mesh over them from their pose (the shoulders, the neck, the silhouette, inside),
+   each vertex weighed between the head and the torso; the TORSO moved by their own body motion from
+   the same footage (the shoulders' place and tilt, how near), the HEAD turned on the neck by their
+   head's own turn relative to it, and the chest breathing in at the voice's pauses.
+3. **The colors:** every library image matched to the still round the lips and the lids (their mean
+   and spread in Lab), at build time.
+4. **The eyes:** their own eyes looking aside, down and up, in the library; glances drawn from the
+   seed.
+5. **Their words:** a local speech recognizer (faster-whisper) gives every usable stretch its words
+   and times where there are no captions; the visemes are then learned from them.
+6. **A model of their mouth, learned from every video:** an ensemble of small networks from the
+   voice's phones round a moment to their mouth's shape there, trained on every survey look against
+   its transcript.
+
+**Built (2026-10-22):**
+- **The room and the matte** (`stills`): each still's matte from MediaPipe's segmentation (COPIED: its
+  mask is a view of a buffer the next frame overwrites - every still had kept the last frame's), less
+  what stands before them - pixels whose texture matches the still's in 60% of the set's frames (the
+  microphone; a color test failed, the wall itself varies 22 levels as the sun moves). The ROOM: the
+  still's own where it is not them; behind them the MEDIAN of 90 frames where each pixel was not them,
+  each frame's light fitted to the still's (a mean had taken in the globe and ghosts of them), trusted
+  where a quarter of the frames saw it; the rest of the 70 px band their motion can uncover filled from
+  the room round it only (filled from them, the sweater smeared into the wall). `room_K.jpg`,
+  `matte_K.png`. The medium draws the room, then them through the matte: the wall and the picture never
+  move (a frame's difference to the first is zero on the room).
+- **The body** (`rig`'s `stills`): each still's mesh - its silhouette every 45 px, a band 55 px out, a
+  grid inside, the shoulders, elbows, wrists and neck - each vertex weighed to the head (all of it above
+  the neck's foot near the head, none at the shoulders) and to the body (on them and near; none out in
+  the room). `motion` now holds the shoulders' place, lean and tilt from the same looks, and the head's
+  turn relative to them (its roll's sign read from the data: head and shoulders lean together); the
+  head only TURNS, on the neck, and the body carries it (`LikenessFace.body_xf`), breathing in at the
+  voice's pauses (`LikenessPlan.breath`).
+- **The colors:** every library image matched to the still round the lips or the lids (mean and spread
+  in Lab, `color_like`); and GLANCES - their eyes looking left, right, up and down in the library, about
+  one every 4.5 s, held 0.35-1.2 s (`LikenessPlan.glance`).
+- **Their words** (`transcribe`, `hosts/speech/transcribe.py`, the `speech_venv` with faster-whisper and
+  Whisper's base English model, MIT, pinned by its sha256): each video without captions, its usable
+  steady shots up to the Listen setting's minutes (20), word by word; `words` reads captions or the
+  transcript. Measured on his footage: 9x faster than real time on the processor, the words right.
+- **Their mouth, learned** (`learn`, `mouth_model.json`): eight networks (the inputs: how much of each
+  of 15 sound classes fills each of 9 windows of 60 ms from -240 to +240 ms - shares, so the mouth moves
+  smoothly; 32 tanh neurons; their 23 mouth blendshapes), each trained by Adam on its own resample of
+  every survey look near their words, their mean the mouth. One video is held out first and the card
+  says what it explains there beside each sound's average mouth. The medium reads it as trained
+  (`LikenessPlan._inputs`, `_predict`: coarticulation_check holds a made one-neuron network to tanh(1),
+  tanh(0.5) and 0), pushes it past their own by Articulation and draws the two library mouths nearest
+  it, the nearest whole and the next by how far it is from the third (continuous as the order changes).
+  On a made voice whose lips close 120 ms before each closing sound, the ensemble explained 0.88 of the
+  mouth on unseen speech, each sound's mean mouth 0.57 (test_actor.py).
+
+**Measured on his footage (through scratch copies; his folders only read):**
+- **The room, the matte, the body:** a frame's difference to the first is zero on the wall, the picture
+  and the window, and spread over all of him - head, torso, arms, hands; the picture frame's edge beside
+  his head stays sharp as the head turns. The medium draws a frame in about 1.1 ms with the body.
+- **Transcribe:** six videos (two have no sound, or are handheld throughout), 20 minutes each, 18,229
+  words in about 14 minutes of processor; 59,836 phones from them.
+- **LEARNING HIS MOUTH FAILED ON THIS FOOTAGE, AND SAYS SO.** His measured mouth scarcely follows the
+  sounds: whether a vowel is being said against his jaw correlates 0.02-0.08 per video (at lag 0 - the
+  times agree), 0.05-0.12 on the full-size 30 fps track, and no better by the lips' gap, the lips'
+  height or the darkness between the lips; at the coarse level only (speaking against pauses) his jaw
+  is 0.1-0.4 of its spread higher while he speaks. His beard hides his mouth from MediaPipe, and a
+  phone's time is guessed within its word (Whisper times words, about 100 ms late here). The visemes
+  learned from the words span 19% of his jaw's range (the range's own 85%): every sound nearly the same
+  mouth, drawn it would scarcely move - so `visemes` keeps the range below 40% (`WORDS_SHOW`). The
+  ensemble, each video against its own mean, explains 2.5% of his mouth on the held-out video (each
+  sound's mean 0.9%, one network -1.1%): the ensemble beats both, but too little to draw from - the
+  medium uses it only past 15% and 5 points over each sound's mean (`LikenessPlan.LEARNED_LEAST`), and
+  the card says which.
+- **What would let it learn:** phone times in his speech, not word times (his transcript spoken by
+  Piper, whose phones are exact, and aligned to his sound by DTW over their spectra - no new dependency);
+  a measure of his mouth his beard does not hide; or the capture session - a short scripted reading,
+  his mouth lit and seen.
+
 ## Status of the first build (2026-10-21)
 
 **Built:**

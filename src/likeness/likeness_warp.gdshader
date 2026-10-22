@@ -1,5 +1,5 @@
-// THE LIKENESS'S ONE PASS (next/likeness.md, "The second build"): their still, bent by the mesh, with the
-// mouth and the eyes drawn from their own.
+// THE LIKENESS'S ONE PASS (next/likeness.md, "The second build", "The third pass"): their still, bent by
+// the mesh, with the mouth and the eyes drawn from their own, cut out by their matte over the room.
 //
 // The mesh is drawn over the whole frame. Each vertex sits where the moved and bent face puts it
 // (VERTEX), reads the still where that point really is (UV), and the library's box where it is in the
@@ -32,6 +32,10 @@ uniform vec3 e_off0 = vec3(0.0);
 uniform vec3 e_off1 = vec3(0.0);
 // 0 draws the still alone (the identity test, and a set with no library)
 uniform float library_on = 1.0;
+// THEIR MATTE, read where the still is: them, over the room drawn under (the third pass). Off, the
+// still is drawn whole, its own room and all.
+uniform sampler2D matte : filter_linear, repeat_disable;
+uniform float matte_on = 0.0;
 // a debug view: 1 shows where the masks reach
 uniform float show_mask = 0.0;
 
@@ -66,5 +70,5 @@ void fragment() {
 		col = mix(col, clamp(e, 0.0, 1.0), em);
 	}
 	col = mix(col, vec3(1.0, 0.0, 1.0), show_mask * max(mm, em) * 0.5);
-	COLOR = vec4(col, 1.0);
+	COLOR = vec4(col, matte_on > 0.5 ? texture(matte, UV).r : 1.0);
 }

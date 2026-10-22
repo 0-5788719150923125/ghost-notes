@@ -15,7 +15,9 @@ extends SceneTree
 ## alone (the CONTROL: a step started without its input), it starts nothing.
 ## GENERATE'S ORDER: each video's probe before its survey before its shots, every video's shots before
 ## the sets, the sets before the audit, the audit before the actor's visemes and motion and the set's
-## stills, the stills before the rig, and the rig and the visemes before the library.
+## stills, the stills before the rig and At rest, and the rig and the visemes before the library.
+## THE STILL DRAWN ON: the one picked, else the one At rest found most at ease, else the first; stills
+## made again forget the pick (an index into the old ones).
 ## A CHANGED INPUT MARKS STALE: a setting a step reads makes it stale, and only it, until it is made
 ## again - then what was made from it. ⟳ THROWS A STEP AWAY and makes it again; what is made from it
 ## directly is stale (and what is made from those, once they are made again). A video unticked makes
@@ -103,6 +105,7 @@ func _run() -> void:
 		"the stills, the visemes or the motion came before the audit")
 	_ok(_before("stills|" + s, "rig|" + s) and _before("rig|" + s, "library|" + s) and _before("visemes|", "library|" + s),
 		"the rig or the library came out of order")
+	_ok(_before("stills|" + s, "rest|" + s), "At rest came before the stills")
 	_ok(_made.has("motion|") and _made.has("library|" + s), "Generate left steps unmade: %s" % str(_made))
 	_ok(_actor.playable(), "a fully made actor is not playable")
 	_ok(not _made.has("fetch|" + v0), "a folder video was fetched")
@@ -131,10 +134,18 @@ func _run() -> void:
 	_ok(_made.has("shots|" + v0) and _made.has("sets|") and not _made.has("probe|" + v0),
 		"Generate after a change made %s" % str(_made))
 	_ok(_actor.state_of("rig", s) == "made", "Generate left the rig %s" % _actor.state_of("rig", s))
+	# THE STILL DRAWN ON: the first, then the one most at rest, then the one picked
+	var stills_at := _actor.set_dir(sid).path_join("stills.json")
+	_write(stills_at, JSON.stringify({"stills": [{}, {}, {}, {}]}))
+	_ok(_actor.still_of(sid) == 0, "with nothing at rest and nothing picked the still is %d" % _actor.still_of(sid))
+	_write(_actor.set_dir(sid).path_join("rest.json"), JSON.stringify({"rest": [3, 9, 1]}))
+	_ok(_actor.still_of(sid) == 3 and _actor.rest_of(sid) == [3, 1], "the still most at rest was not drawn on (%d, at rest %s)" % [
+		_actor.still_of(sid), str(_actor.rest_of(sid))])
 	# A STILL PICKED changes nothing that is made
 	_actor.set_still(sid, 1)
 	_actor.save()
 	_actor.forget()
+	_ok(_actor.still_of(sid) == 1, "the still picked was not drawn on")
 	_ok(_actor.state_of("library", s) == "made" and _actor.state_of("rig", s) == "made", "picking a still made the set stale")
 	# ⟳: the step thrown away and made again, what is made from it stale
 	_made = []
@@ -148,6 +159,7 @@ func _run() -> void:
 	_spin(b)
 	_actor.forget()
 	_ok(_made == ["stills|" + s], "⟳ on the stills made %s" % str(_made))
+	_ok(not (_actor.data["stills"] as Dictionary).has(sid), "the stills made again kept the pick of the old ones")
 	_ok(_actor.state_of("rig", s) == "stale", "the stills made again left the rig %s" % _actor.state_of("rig", s))
 	# ...and what is made from those, once they are made again: one step at a time, never all at once
 	_ok(_actor.state_of("library", s) == "made", "the library went stale before the rig was made again")
@@ -198,6 +210,12 @@ func _make(step: String, scope: String) -> String:
 		fa.store_string(text)
 		fa.close()
 	return ""
+
+
+static func _write(path: String, text: String) -> void:
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(text)
+	f.close()
 
 
 ## Every step whose state is not the same in the actor read again from its file (a restart).

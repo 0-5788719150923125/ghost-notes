@@ -1,0 +1,34 @@
+# THE STILLS AT REST - which of a set's candidate stills shows the person sitting at ease, the one a
+# Likeness is drawn on (next/likeness.md, "The fourth pass"). Every frame of the Likeness is that still
+# bent, so its hands and its posture are held for the whole reading: a hand caught mid-gesture is a
+# gesture frozen for minutes (the user, 2026-10-22: "The hands remain in this strange open-palm
+# gesture ... I would have expected a more relaxed, neutral posture"). The body's points cannot see a
+# hand's shape on their footage - open palms, folded hands and a phone held all came out alike - so a
+# writer looks.
+#
+# THE STILLS ARE NUMBERED ON THE SHEET, so the answer names them by number and the code finds them.
+#
+# NO REASONING ASKED FOR (the reasoning_extraction safeguard): the answer is the numbers.
+#
+# THE FORMAT IS PLACEHOLDERS ONLY: a sample answer comes back word for word.
+#
+# The code gives: {{name}}, {{count}} (how many stills the sheet shows).
+system: >-
+  You look at frames of video of a person and say exactly what you see. Answer with JSON only.
+prompt:
+  - >-
+      This picture shows {{count}} frames of {{name}}, each numbered in its corner. One of them will be
+      held as the picture an animation of them is drawn on while they read aloud: their head and mouth
+      will move, but their hands and the way they sit will stay as that frame shows them for as long as
+      the reading lasts.
+  - ""
+  - "Write:"
+  - >-
+      - rest: the numbers of the frames in which they sit at ease, most at ease first: their hands still
+      and relaxed - folded, resting on the desk or in their lap, or out of the picture - nothing in their
+      hands, their shoulders settled, facing the camera. Leave out every frame in which a hand is raised,
+      held open or out in a gesture, pointing, or holding anything. Leave the list empty when no frame
+      shows them at ease.
+  - ""
+  - "Answer with this JSON and nothing else:"
+  - '{"rest": [N, ...]}'

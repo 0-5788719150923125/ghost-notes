@@ -1,0 +1,7 @@
+# The Likeness's speech recognizer (transcribe.py): faster-whisper, which runs OpenAI's Whisper through
+# CTranslate2 on the CPU, for the words and their times in a video that has no captions. Installed into
+# ghost's OWN environment at user://speech_venv, built by uv on ghost's own Python.
+#
+# faster-whisper pulls ctranslate2, PyAV (it decodes nothing here: ffmpeg hands it the sound), tokenizers
+# and onnxruntime (its voice-activity filter). The floor is the version last verified (Python 3.14).
+faster-whisper>=1.2.1

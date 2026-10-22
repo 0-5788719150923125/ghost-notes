@@ -224,6 +224,37 @@ const MANAGED := [
 			+ "environment for both. Built the first time a clown or umbra layer plays.",
 	},
 	{
+		"key": "speech_venv",
+		"name": "Speech-recognition environment",
+		"kind": KIND_MANAGED,
+		"path": "user://speech_venv",
+		"requirements": "res://hosts/speech/requirements.txt",
+		"imports": "faster_whisper, ctranslate2",
+		"files": [
+			{"key": "whisper_model", "name": "speech model", "file": "whisper-base.en/model.bin",
+				"url": "https://huggingface.co/Systran/faster-whisper-base.en/resolve/3d3d5dee26484f91867d81cb899cfcf72b96be6c/model.bin",
+				"sha256": "2a166925539a16005f14ff328359f9b9adb9dc4fb631bb3b227526862e93e2ef",
+				"size": 145216508},
+			{"key": "whisper_config", "name": "speech model's settings", "file": "whisper-base.en/config.json",
+				"url": "https://huggingface.co/Systran/faster-whisper-base.en/resolve/3d3d5dee26484f91867d81cb899cfcf72b96be6c/config.json",
+				"sha256": "f3bc3821e9fc76a27bae538e11ae5b677dcdd352b4600429ce7951d398569aeb",
+				"size": 2227},
+			{"key": "whisper_tokenizer", "name": "speech model's tokenizer", "file": "whisper-base.en/tokenizer.json",
+				"url": "https://huggingface.co/Systran/faster-whisper-base.en/resolve/3d3d5dee26484f91867d81cb899cfcf72b96be6c/tokenizer.json",
+				"sha256": "929c5252409436dce1b38a75d1abbcb5e132d170d8e324e4e04ed915fa2d22df",
+				"size": 2128466},
+			{"key": "whisper_vocabulary", "name": "speech model's vocabulary", "file": "whisper-base.en/vocabulary.txt",
+				"url": "https://huggingface.co/Systran/faster-whisper-base.en/resolve/3d3d5dee26484f91867d81cb899cfcf72b96be6c/vocabulary.txt",
+				"sha256": "ff77588746d3a2595d32ab5b69ffd7b95ce2441ac57533cb66fc3eb575a115cf",
+				"size": 422309},
+		],
+		"size": "~420 MB, and its model ~150 MB",
+		"used_for": "faster-whisper and Whisper's small English model (MIT), for the words an actor says "
+			+ "in their own videos and when - the captions a video without them never had - from which a "
+			+ "Likeness learns their mouth for each sound. On the processor, about seven times faster than "
+			+ "the footage plays. Built the first time an actor's videos have no captions.",
+	},
+	{
 		"key": "math_venv",
 		"name": "Math environment",
 		"kind": KIND_MANAGED,

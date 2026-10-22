@@ -7,6 +7,7 @@ class_name ActorPrompts
 ## ([ActorBuilder]). Pure, so a gate reads every prompt whole and lands made-up answers.
 ##
 ##   audit     a set's contact sheets -> their look, shots of another look, unusable shots
+##   rest      a set's stills on one sheet -> the ones that show them at ease, most at ease first
 ##
 ## The gestures, their habits and the director went with the first build's footage (2026-10-21, night):
 ## a still plays no hand. They may come back as the head's own gestures.
@@ -86,3 +87,24 @@ static func _usable(shots: Array) -> float:
 		if not bool((sh as Dictionary).get("unusable", false)):
 			m += float((sh as Dictionary).get("usable", 0.0))
 	return snappedf(m / 60.0, 0.01)
+
+
+# --- the stills at rest ----------------------------------------------------------------------------
+
+## Which of [param count] stills of [param name] show them at rest: `{system, prompt}` (the caller adds the
+## sheet).
+static func rest(name: String, count: int) -> Dictionary:
+	var v := {"name": name, "count": str(count)}
+	return {"system": Rules.say("likeness/rest.system", v), "prompt": Rules.say("likeness/rest.prompt", v)}
+
+
+## The answer [param d] for [param count] stills, made sound: `{rest: [still index from 0, ...]}`, each a
+## still once, in the answer's order - or `{error}`.
+static func land_rest(d: Dictionary, count: int) -> Dictionary:
+	if not (d.get("rest") is Array):
+		return {"error": "the answer names no stills at rest"}
+	var out: Array = []
+	for n in d["rest"]:
+		if (n is float or n is int) and int(n) >= 1 and int(n) <= count and not out.has(int(n) - 1):
+			out.append(int(n) - 1)
+	return {"rest": out}

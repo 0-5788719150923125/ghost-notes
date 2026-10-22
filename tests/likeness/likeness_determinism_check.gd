@@ -9,7 +9,8 @@ extends SceneTree
 ## NOT `--headless`: every claim is a rendered frame read back.
 ##
 ## THE SET IS MADE, NOT FOUND: a made still (noise, and a face on it: points on an ellipse and inside it,
-## with depth), its rig and masks, a library of made mouths and eyes, and made motion - written into a
+## with depth), its rig (its body's skin and skeleton too) and masks, a library of made mouths and eyes,
+## and made motion with a posture - written into a
 ## folder of the gate's own, drawn through the real medium ([LikenessMedium]) with its own plan and face.
 ## Two moments apart are two pictures (the head moves, the mouth speaks).
 ##
@@ -100,7 +101,8 @@ func _draw(med: Dictionary, t: float) -> Array:
 	for i in 3:
 		await process_frame
 	var img := (med["vp"] as SubViewport).get_texture().get_image()
-	var said := JSON.stringify([Array(m._plan.head(t)), m._plan.eyes(t), m._plan.mouth(t)])
+	var said := JSON.stringify([Array(m._plan.motion(t)), m._plan.eyes(t), m._plan.mouth(t), str(m._plan.lifts(t)),
+		str(m._plan.hands(t))])
 	return [img.get_data().hex_encode().sha256_text() if img != null else "", said]
 
 
@@ -146,10 +148,24 @@ func _make_set(dir: String, sd: String) -> void:
 	for t in range(0, idx.size(), 3):
 		tris.append([idx[t], idx[t + 1], idx[t + 2]])
 	var box := [c.x - 45.0, c.y - 60.0, c.x + 45.0, c.y + 60.0]
+	# ITS BODY: the far ring on the torso (the head's half of it), the frame's edge the room's; arms that go
+	# with the shoulders
+	var skin := {}
+	for b in LikenessFace.BONES:
+		var col: Array = []
+		for i in OVAL + anchors.size():
+			col.append(0.5 if i < OVAL and (b == "torso" or b == "head") else 0.0)
+		skin[b] = col
+	var arm := {"shoulder": [c.x + 60.0, c.y + 90.0], "elbow": [c.x + 70.0, c.y + 140.0], "wrist": [c.x + 40.0, c.y + 170.0],
+		"tip": [c.x + 20.0, c.y + 175.0], "rests": false}
+	var other := {"shoulder": [c.x - 60.0, c.y + 90.0], "elbow": [c.x - 70.0, c.y + 140.0], "wrist": [c.x - 40.0, c.y + 170.0],
+		"tip": [c.x - 20.0, c.y + 175.0], "rests": false}
+	var body := {"body": [], "skin": skin, "triangles": tris, "skeleton": {"neck": [c.x, c.y + 90.0], "hip": [c.x, c.y + 220.0],
+		"width": 120.0, "l": arm, "r": other}}
 	_json(sd.path_join("rig.json"), {"size": [W, H], "layout": _pairs(_layout), "weights": Array(weights),
 		"eye_weights": Array(eye_weights), "oval": range(OVAL), "ring1": 1.35, "ring2": 2.0, "ring_moves": 0.6,
 		"anchors": anchors, "mean": _pairs(mean), "triangles": tris, "box": box, "image": [64, 64],
-		"masks": {"mouth": "mask_mouth.png", "eyes": "mask_eyes.png"}})
+		"masks": {"mouth": "mask_mouth.png", "eyes": "mask_eyes.png"}, "stills": [body]})
 	for m in [["mask_mouth.png", Rect2i(12, 34, 40, 20)], ["mask_eyes.png", Rect2i(8, 14, 48, 10)]]:
 		var mask := Image.create(64, 64, false, Image.FORMAT_L8)
 		mask.fill(Color.BLACK)
@@ -204,10 +220,12 @@ func _make_set(dir: String, sd: String) -> void:
 		for n in 120:
 			var t := float(n) / 5.0
 			rows.append([3.0 * sin(t * (0.9 + run)), 2.0 * sin(t * 1.7 + run), 1.0 * sin(t * 0.6), 0.02 * sin(t * 0.8),
-				0.015 * cos(t * 1.1), 0.01 * sin(t * 0.5)])
+				0.015 * cos(t * 1.1), 0.01 * sin(t * 0.5), 1.0 * sin(t * 0.7)])
 		runs.append({"vid": "v", "t0": 0.0, "talk": "1".repeat(120), "rows": rows})
-	_json(dir.path_join("motion.json"), {"rate": 5.0, "axes": ["yaw", "pitch", "roll", "x", "y", "near"],
-		"sd": [3.0, 2.0, 1.0, 0.02, 0.015, 0.01], "blinks_per_min": 50.0, "runs": runs})
+	# (a posture that holds a second or so, so a shift falls inside the moments drawn)
+	_json(dir.path_join("motion.json"), {"rate": 5.0, "axes": ["yaw", "pitch", "roll", "x", "y", "near", "tilt"],
+		"sd": [3.0, 2.0, 1.0, 0.02, 0.015, 0.01, 1.0], "blinks_per_min": 50.0, "runs": runs,
+		"posture": {"sd": [0.04, 0.03, 0.01, 1.4], "corr": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], "tau": 1.0}})
 
 
 static func _pairs(pts: PackedVector2Array) -> Array:

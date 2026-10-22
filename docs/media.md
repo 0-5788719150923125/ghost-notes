@@ -127,7 +127,9 @@ LikenessMedium - an actor reads the note, in their own room (next/likeness.md, "
 
 WHAT IT DRAWS FROM: the reading's document (`_subs.document`) carries `likeness` - the actor's folder, the set, the still, the seed - which the Likeness card hands the reading (`LikenessCard`); the words and the phones come from the voice as they are said (`_subs.words`, `_subs.phones`). The set's files and the actor's motion are the Actor's (`ActorFolder`, `ActorSteps`).
 
-ONE MESH OVER THE WHOLE FRAME, DRAWN WITH ONE CANVAS SHADER (`LikenessFace`, likeness_warp.gdshader): the still read through the mesh, the face turned by the head's motion, the lips and lids bent to the mouths and eyes drawn in where their own were.
+THEM OVER THEIR ROOM (the third pass, 2026-10-22: "The region around the head smears quite a lot ... on the wall, and on the picture on the wall especially"): the room drawn first, still - the still's own room, and behind them the room the set's frames showed (`_room`) - and them over it, cut out by their matte, through ONE MESH WITH ONE CANVAS SHADER (`LikenessFace`, likeness_warp.gdshader): the head turned on the neck, the body carrying it, the lips and lids bent to the mouths and eyes drawn in where their own were. What their moving uncovers is the room, never the wall stretched.
+
+WHAT STANDS BEFORE THEM IS DRAWN OVER THEM, still (the fourth pass, 2026-10-22: their bones bend them, and a microphone left in their matte bent with them): the still's `front_K.png` - the things that never move and hide them - over everything, and under it their picture filled from round it (`body_K.jpg`), so they move behind it.
 
 A PURE FUNCTION OF THE SHOW'S TIME: what is drawn at a moment depends on the plan and the phones, never on what was drawn before - so a seek lands where it should and an export draws what was heard.
 

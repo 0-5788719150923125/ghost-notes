@@ -37,30 +37,40 @@ const REGISTRY := {
 	"shots": {"label": "Shots", "per": "video", "needs": ["survey"], "runs": "python", "env": ["ffmpeg", "face_venv"],
 		"outputs": ["shots.json"], "settings": ["shortest_shot"], "version": 1,
 		"blurb": "Finds each video's cuts, each placed on its exact frame; shots shorter than the shortest shot are dropped."},
-	"words": {"label": "Words", "per": "video", "needs": ["probe", "captions"], "runs": "local", "env": [],
-		"outputs": ["words.json"], "settings": [], "version": 1,
-		"blurb": "Reads each video's automatic captions into words with their times - what they said, and when."},
+
 	"sets": {"label": "Sets", "per": "actor", "needs": ["shots"], "runs": "python", "env": ["ffmpeg", "face_venv"],
 		"outputs": ["sets.json"], "settings": ["set_threshold"], "version": 1,
 		"blurb": "Groups the shots of every ticked video into sets: one camera placement each, judged by the room's edges so the sun moving on a wall keeps a set whole. Makes the contact sheets the audit looks at."},
 	"audit": {"label": "Audit", "per": "actor", "needs": ["sets"], "runs": "agent", "env": [],
 		"outputs": ["audit.json"], "settings": [], "version": 1,
 		"blurb": "A writer looks at each set's contact sheets: their look in words, a shot in another look split off, and the shots that cannot be used (an insert, another person, a phone or a hand over their face)."},
+	"transcribe": {"label": "Transcribe", "per": "video", "needs": ["probe", "audit"], "runs": "python",
+		"env": ["ffmpeg", "speech_venv"], "outputs": ["transcript.json"], "settings": ["listen_minutes"], "version": 1,
+		"blurb": "Listens to a video with no captions - its usable stretches, at most the Listen setting's minutes - and writes what they say and when, word by word (Whisper, on this computer). About a seventh of the time it hears."},
+	"words": {"label": "Words", "per": "video", "needs": ["probe", "captions", "transcribe"], "runs": "local", "env": [],
+		"outputs": ["words.json"], "settings": [], "version": 2,
+		"blurb": "Each video's words with their times - what they said, and when: from its captions, or from what Transcribe heard."},
 	"visemes": {"label": "Visemes", "per": "actor", "needs": ["audit", "words"], "runs": "python", "env": ["face_venv"],
 		"outputs": ["visemes.json"], "settings": [], "version": 2,
 		"blurb": "Their mouth for each sound, from every video: from the captions' words turned into sounds, where they give enough of a sound, else from their own range."},
+	"learn": {"label": "Learn", "per": "actor", "needs": ["audit", "words"], "runs": "python", "env": ["face_venv"],
+		"outputs": ["mouth_model.json"], "settings": [], "version": 1,
+		"blurb": "Learns their mouth for the voice's sounds from every video: an ensemble of small networks, from the sounds heard round a moment to their mouth then, trained on every look near their words - and says how much of their mouth it explains on a video it never saw. A minute or two."},
 	"motion": {"label": "Motion", "per": "actor", "needs": ["audit"], "runs": "python", "env": ["face_venv"],
-		"outputs": ["motion.json"], "settings": [], "version": 1,
-		"blurb": "Their head's own motion wherever they face the camera, from every video - its slow drift taken out - and how often they blink: what moves the still, played back in pieces."},
+		"outputs": ["motion.json"], "settings": [], "version": 3,
+		"blurb": "Their own motion wherever they face the camera, from every video - the head's quick turns on the shoulders, played back in pieces; their posture, how far and which ways their body settles and how long it holds; and how often they blink."},
 	"stills": {"label": "Stills", "per": "set", "needs": ["audit"], "runs": "python", "env": ["ffmpeg", "face_venv"],
-		"outputs": ["stills.json", "stills"], "settings": [], "version": 1,
-		"blurb": "The set's most typical calm moments: facing the camera, eyes open, mouth closed, hands at rest, nothing in front of them, sharp. The Likeness is drawn on one of them; the card shows the others to pick from."},
+		"outputs": ["stills.json", "stills"], "settings": [], "version": 3,
+		"blurb": "The set's most typical calm moments: facing the camera, eyes open, mouth closed, nothing in front of them, sharp - each with its matte and the room behind them, made from the set's frames, and all of them on one sheet for At rest. The Likeness is drawn on one of them; the card shows the others to pick from."},
+	"rest": {"label": "At rest", "per": "set", "needs": ["stills"], "runs": "agent", "env": [],
+		"outputs": ["rest.json"], "settings": [], "version": 1,
+		"blurb": "A writer looks at the set's stills and says which show them at ease - hands folded, resting or out of sight, nothing held, facing the camera - most at ease first. The Likeness is drawn on the first unless another is picked: their hands and how they sit are held for the whole reading."},
 	"rig": {"label": "Rig", "per": "set", "needs": ["stills"], "runs": "python", "env": ["face_venv"],
-		"outputs": ["rig.json", "mask_mouth.png", "mask_eyes.png"], "settings": [], "version": 2,
-		"blurb": "The mesh on the still: their face, the rings round it out to the frame's edge, and the masks where their mouth and eyes are drawn."},
+		"outputs": ["rig.json", "mask_mouth.png", "mask_eyes.png"], "settings": [], "version": 4,
+		"blurb": "The mesh on each still and its skeleton: their face, the rings round it, their body from their pose and silhouette - the torso, the shoulders, each arm's upper arm, forearm and hand - the frame's edge, each vertex weighed to the bones it moves with; and the masks where their mouth and eyes are drawn."},
 	"library": {"label": "Library", "per": "set", "needs": ["rig", "visemes"], "runs": "python", "env": ["ffmpeg", "face_venv"],
-		"outputs": ["library.json", "library"], "settings": ["articulation"], "version": 1,
-		"blurb": "A few clean real mouths for each sound and their eyes half and fully closed, from any video, turned as the still is - each a real frame, never an average. A few minutes."},
+		"outputs": ["library.json", "library"], "settings": ["articulation"], "version": 2,
+		"blurb": "A few clean real mouths for each sound and their eyes half and fully closed and glancing aside, from any video, turned as the still is, matched to the still's colors - each a real frame, never an average. A few minutes."},
 }
 
 ## THE SETTINGS an actor is built under, on the card's Advanced fold: each a row, as a layer's FIELDS
@@ -72,13 +82,15 @@ const SETTINGS := {
 		"blurb": "Seconds: a jump cut shorter than this is dropped."},
 	"set_threshold": {"label": "Set likeness", "type": "float", "default": 0.55, "min": 0.1, "max": 2.0, "step": 0.05,
 		"blurb": "How different two shots' rooms may be and still be one set. Lower splits more."},
+	"listen_minutes": {"label": "Listen", "type": "float", "default": 20.0, "min": 2.0, "max": 120.0, "step": 1.0,
+		"blurb": "The most minutes of each video Transcribe listens to (where it has no captions): enough of their speech to learn their mouth for every sound."},
 	"articulation": {"label": "Articulation", "type": "float", "default": 2.0, "min": 1.0, "max": 3.0, "step": 0.1,
 		"blurb": "How much clearer than their own each sound's mouth is: their mouth is mostly near closed while they talk, so their own shapes read as nothing on a still. 1 is as they are."},
 }
 
 ## The order steps are made in.
-const ORDER := ["fetch", "captions", "probe", "survey", "shots", "words", "sets", "audit", "visemes", "motion",
-	"stills", "rig", "library"]
+const ORDER := ["fetch", "captions", "probe", "survey", "shots", "sets", "audit", "transcribe", "words", "visemes",
+	"learn", "motion", "stills", "rest", "rig", "library"]
 
 ## WHAT THE LIKENESS NEEDS OF AN ACTOR TO PLAY THEM: the chosen set's steps and the actor's own.
 const PLAYS := ["motion", "stills", "rig", "library"]

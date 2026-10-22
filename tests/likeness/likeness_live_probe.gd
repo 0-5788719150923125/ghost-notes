@@ -187,11 +187,11 @@ func _diag(lm: LikenessMedium) -> void:
 func _costs(lm: LikenessMedium) -> void:
 	if lm == null or not lm._ready_set:
 		return
-	var parts := {"head": [], "eyes": [], "mouth": [], "pose": [], "target+vertices": [], "draw_at": []}
+	var parts := {"head": [], "eyes": [], "mouth": [], "pose": [], "bones": [], "target+vertices": [], "draw_at": []}
 	for k in 30:
 		var t := lm._now + float(k) / 30.0
 		var c := Time.get_ticks_usec()
-		var hd := lm._plan.head(t)
+		var hd := lm._plan.motion(t)
 		parts["head"].append(Time.get_ticks_usec() - c)
 		c = Time.get_ticks_usec()
 		var ey := lm._plan.eyes(t)
@@ -203,7 +203,10 @@ func _costs(lm: LikenessMedium) -> void:
 		var posed := lm._face.pose(hd)
 		parts["pose"].append(Time.get_ticks_usec() - c)
 		c = Time.get_ticks_usec()
-		lm._face.vertices(posed, lm._face.target(posed, mo, ey))
+		var bn := lm._face.bones(posed, hd, lm._plan.breath(t), lm._plan.lifts(t), lm._plan.hands(t))
+		parts["bones"].append(Time.get_ticks_usec() - c)
+		c = Time.get_ticks_usec()
+		lm._face.vertices(posed, lm._face.target(posed, mo, ey), bn)
 		parts["target+vertices"].append(Time.get_ticks_usec() - c)
 		c = Time.get_ticks_usec()
 		lm.draw_at(t)

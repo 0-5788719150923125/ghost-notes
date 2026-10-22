@@ -262,6 +262,8 @@ func stamp_of(step: String, scope: String) -> Dictionary:
 ## [param step] is made for [param scope]: its stamp written with what it was made from, a new token
 ## and [param summary] - a few words for the card.
 func put_stamp(step: String, scope: String, summary := "") -> String:
+	if step == "stills" and scope.begins_with("s:"):
+		forget_still(scope.substr(2))
 	var all := _stamps(scope)
 	all[step] = {"inputs": inputs_of(step, scope), "token": ("%d|%d|%s" % [Time.get_ticks_usec(), randi(), step]).sha1_text().substr(0, 12),
 		"at": int(Time.get_unix_time_from_system()), "summary": summary}
@@ -285,8 +287,8 @@ func drop(step: String, scope: String) -> void:
 		write_file(scope_dir(scope).path_join(STAMPS), JSON.stringify(all, "\t"))
 
 
-## Is [param step] moot for [param scope]? A folder video has nothing to fetch, and one with no
-## captions link no captions.
+## Is [param step] moot for [param scope]? A folder video has nothing to fetch, one with no captions link
+## no captions, and one with captions nothing to transcribe.
 func moot(step: String, scope: String) -> bool:
 	if not scope.begins_with("v:"):
 		return false
@@ -295,13 +297,15 @@ func moot(step: String, scope: String) -> bool:
 			return not is_link(scope.substr(2))
 		"captions":
 			return String(video(scope.substr(2)).get("captions_url", "")).is_empty()
+		"transcribe":
+			return FileAccess.file_exists(String(video(scope.substr(2)).get("captions", "")))
 	return false
 
 
 ## The token [param step] made [param scope] with: what a step made from it records. A folder
 ## video's fetch is the file itself - its path, size and time.
 func token_of(step: String, scope: String) -> String:
-	if step == "captions" and moot(step, scope):
+	if (step == "captions" or step == "transcribe") and moot(step, scope):
 		return ""
 	if moot(step, scope):
 		var key := "file:" + scope
@@ -399,11 +403,34 @@ func stills_of(sid: String) -> Array:
 
 
 ## WHICH OF SET [param sid]'S STILLS A LIKENESS IS DRAWN ON: the one picked on the card while there is
-## one, else the best.
+## one, else the one most at rest ([method rest_of]), else the best.
 func still_of(sid: String) -> int:
-	var picked: Variant = (data.get("stills", {}) as Dictionary).get(sid, 0) if data.get("stills") is Dictionary else 0
-	var k := int(picked) if (picked is int or picked is float) else 0
-	return k if k >= 0 and k < stills_of(sid).size() else 0
+	var n := stills_of(sid).size()
+	var picked: Variant = (data.get("stills", {}) as Dictionary).get(sid, null) if data.get("stills") is Dictionary else null
+	if (picked is int or picked is float) and int(picked) >= 0 and int(picked) < n:
+		return int(picked)
+	var rest := rest_of(sid)
+	return int(rest[0]) if not rest.is_empty() else 0
+
+
+## THE STILLS OF SET [param sid] THAT SHOW THEM AT REST, most at ease first (`rest.json`, the writer's
+## answer: the fourth pass) - every one a still the set has.
+func rest_of(sid: String) -> Array:
+	var d: Variant = read_kept(set_dir(sid).path_join("rest.json"))
+	var n := stills_of(sid).size()
+	var out: Array = []
+	for k in ((d as Dictionary).get("rest", []) if d is Dictionary and (d as Dictionary).get("rest") is Array else []):
+		if (k is int or k is float) and int(k) >= 0 and int(k) < n:
+			out.append(int(k))
+	return out
+
+
+## Set [param sid]'s stills were made again ([method put_stamp]): what was picked of the last ones is no
+## pick of these.
+func forget_still(sid: String) -> void:
+	if data.get("stills") is Dictionary and (data["stills"] as Dictionary).has(sid):
+		(data["stills"] as Dictionary).erase(sid)
+		save()
 
 
 ## Draw set [param sid]'s Likeness on its still [param k] - nothing is made again: the library is the

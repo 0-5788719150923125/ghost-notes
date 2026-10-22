@@ -36,10 +36,12 @@ const STALL_S := 300
 const AUDIT_SHEETS := 14
 ## THE FILE A PROGRAM'S STEP IS JUDGED BY: written last, so newer than the run's start only when the
 ## step finished.
-const MAIN := {"survey": "survey.bin", "shots": "shots.json", "sets": "sets.json", "visemes": "visemes.json",
+const MAIN := {"survey": "survey.bin", "shots": "shots.json", "sets": "sets.json", "transcribe": "transcript.json",
+	"visemes": "visemes.json", "learn": "mouth_model.json",
 	"motion": "motion.json", "stills": "stills.json", "rig": "rig.json", "library": "library.json"}
-## Candidate stills a set keeps; prototype mouths per sound and eyes per state its library keeps.
-const STILLS := 6
+## Candidate stills a set keeps (enough that some show them at rest: on his footage two of six did, the
+## fourth pass); prototype mouths per sound and eyes per state its library keeps.
+const STILLS := 12
 const VARIANTS := 3
 const EYE_VARIANTS := 2
 ## The most minutes of their head's motion kept.
@@ -287,14 +289,6 @@ func _lacks(step: String) -> String:
 
 # --- running a step --------------------------------------------------------------------------------
 
-func _python() -> String:
-	return Deps.venv_bin("user://face_venv", "python")
-
-
-func _host() -> String:
-	return BundledHosts.path("res://hosts/face/actor.py")
-
-
 func _ffmpeg() -> String:
 	return Provision.tool_path("ffmpeg", "ffmpeg")
 
@@ -358,6 +352,30 @@ func _phase(run: Dictionary) -> String:
 			return _spawn_py(run, ["shots", "--ffmpeg", ff, "--video", actor.video_path(vid), "--survey",
 				out.path_join("survey.bin"), "--out", out.path_join("shots.json"), "--min-shot",
 				str(actor.settings()["shortest_shot"])], "finding cuts")
+		"transcribe":
+			var spans: Array = []
+			var heard := 0.0
+			var most := float(actor.settings()["listen_minutes"]) * 60.0
+			for sh in shots_of(actor):
+				var d: Dictionary = sh
+				if String(d["vid"]) != vid or heard >= most:
+					continue
+				var t1 := minf(float(d["end"]), float(d["start"]) + most - heard)
+				spans.append([float(d["start"]), t1])
+				heard += t1 - float(d["start"])
+			if spans.is_empty():
+				var e := ActorFolder.write_file(out.path_join("transcript.json"), JSON.stringify({"words": [], "seconds": 0}))
+				if not e.is_empty():
+					return e
+				actor.put_stamp(step, scope, "nothing usable to hear")
+				return "done"
+			var spec := out.path_join("transcribe.spec.json")
+			var e := ActorFolder.write_file(spec, JSON.stringify({"video": actor.video_path(vid), "spans": spans,
+				"out": out.path_join("transcript.json")}))
+			if not e.is_empty():
+				return e
+			return _spawn(run, "user://speech_venv", "res://hosts/speech/transcribe.py", ["--ffmpeg", ff, "--model",
+				Provision.file_path("whisper_model").get_base_dir(), "--spec", spec], "listening")
 		"words":
 			return _make_words(vid)
 		"sets":
@@ -385,6 +403,14 @@ func _phase(run: Dictionary) -> String:
 			if not e.is_empty():
 				return e
 			return _spawn_py(run, ["visemes", "--spec", spec, "--out", out.path_join("visemes.json")], "learning their mouth")
+		"learn":
+			var shots := shots_of(actor)
+			var spec := actor.dir.path_join("learn.spec.json")
+			var e := ActorFolder.write_file(spec, JSON.stringify({"videos": videos_spec(), "shots": shots,
+				"phones": phones_of(actor, shots), "classes": Visemes.REGISTRY.keys()}))
+			if not e.is_empty():
+				return e
+			return _spawn_py(run, ["learn", "--spec", spec, "--out", out.path_join("mouth_model.json")], "learning their mouth")
 		"motion":
 			var spec := actor.dir.path_join("motion.spec.json")
 			var e := ActorFolder.write_file(spec, JSON.stringify({"videos": videos_spec(), "shots": shots_of(actor),
@@ -400,6 +426,8 @@ func _phase(run: Dictionary) -> String:
 				return e
 			return _spawn_py(run, ["stills", "--ffmpeg", ff, "--face-model", Provision.file_path("face_model"),
 				"--pose-model", Provision.file_path("pose_model"), "--spec", spec], "finding their stills")
+		"rest":
+			return _rest(run, sid, out)
 		"rig":
 			return _spawn_py(run, ["rig", "--stills", out.path_join("stills.json"), "--out", out.path_join("rig.json")],
 				"building the rig")
@@ -419,10 +447,15 @@ func _phase(run: Dictionary) -> String:
 
 ## Start a program of the face environment: actor.py [param args].
 func _spawn_py(run: Dictionary, args: Array, said: String) -> String:
-	var py := _python()
-	var host := _host()
+	return _spawn(run, "user://face_venv", "res://hosts/face/actor.py", args, said)
+
+
+## Start [param host] (a script of ghost's) on the Python of the environment at [param venv].
+func _spawn(run: Dictionary, venv: String, host_path: String, args: Array, said: String) -> String:
+	var py := Deps.venv_bin(venv, "python")
+	var host := BundledHosts.path(host_path)
 	if host.is_empty() or not FileAccess.file_exists(py):
-		return "the face environment is missing"
+		return "the %s environment is missing" % venv.get_file().trim_suffix("_venv")
 	var tag := "%s_%s" % [run["step"], String(run["scope"]).replace(":", "_")]
 	run["log"] = _logs().path_join(tag + ".log")
 	run["progress"] = _logs().path_join(tag + ".progress")
@@ -431,8 +464,8 @@ func _spawn_py(run: Dictionary, args: Array, said: String) -> String:
 	for a in args:
 		argv.append(str(a))
 	argv.append_array(PackedStringArray(["--progress", String(run["progress"])]))
-	Provision.hold("face_venv", "actor")
-	run["held"] = "face_venv"
+	Provision.hold(venv.get_file(), "actor")
+	run["held"] = venv.get_file()
 	run["pid"] = Subprocess.start_logged(py, argv, String(run["log"]), "actor " + String(run["step"]))
 	run["kind"] = "process"
 	run["said"] = said
@@ -549,6 +582,42 @@ static func _tail(log: String) -> String:
 	return "it ended without a word (see %s)" % log.get_file()
 
 
+# --- the stills at rest ------------------------------------------------------------------------------
+
+## WHICH OF SET [param sid]'S STILLS SHOW THEM AT REST: the writer shown their sheet - or, once its answer
+## is kept, made.
+func _rest(run: Dictionary, sid: String, out: String) -> String:
+	var count := actor.stills_of(sid).size()
+	if bool(run["state"].get("landed", false)):
+		var d: Variant = ActorFolder.read_json(out.path_join("rest.json"))
+		var n := ((d as Dictionary).get("rest", []) as Array).size() if d is Dictionary else 0
+		actor.put_stamp("rest", run["scope"], "%d of %d at rest" % [n, count] if n > 0 else "none of %d at rest" % count)
+		return "done"
+	var sheet := out.path_join("stills").path_join("sheet.jpg")
+	if count == 0 or not FileAccess.file_exists(sheet):
+		return "the stills have no sheet: Generate makes them again"
+	var p := ActorPrompts.rest(actor.name(), count)
+	p["images"] = [{"path": sheet, "label": "The stills, numbered:"}]
+	run["said"] = "looking for them at rest"
+	return _submit(run, p, "at rest " + sid)
+
+
+## The writer's answer, kept as `rest.json`: `{rest: [still index, ...]}`, most at ease first.
+func _land_rest(run: Dictionary, text: String) -> String:
+	var d: Variant = TextGen.extract_json(text)
+	if not (d is Dictionary):
+		return "the answer was not JSON"
+	var sid := String(run["scope"]).substr(2)
+	var got := ActorPrompts.land_rest(d as Dictionary, actor.stills_of(sid).size())
+	if got.has("error"):
+		return String(got["error"])
+	var e := ActorFolder.write_file(actor.set_dir(sid).path_join("rest.json"), JSON.stringify(got))
+	if not e.is_empty():
+		return e
+	run["state"]["landed"] = true
+	return ""
+
+
 # --- landing a program's step ----------------------------------------------------------------------
 
 func _land_process(run: Dictionary) -> String:
@@ -582,7 +651,7 @@ func _land_process(run: Dictionary) -> String:
 			actor.save()
 			actor.put_stamp(step, scope, "%s, %d fps" % [Clock.text(float(info["duration"])), roundi(float(info["fps"]))])
 			return "done"
-		"survey", "shots", "sets", "visemes", "motion", "stills", "rig", "library":
+		"survey", "shots", "sets", "transcribe", "visemes", "learn", "motion", "stills", "rig", "library":
 			if not _made_by(out.path_join(String(MAIN[step])), run):
 				return _tail(String(run["log"]))
 			var said := _said_by(String(run["log"]), step)
@@ -722,15 +791,22 @@ func _poll_listing(source: int) -> bool:
 
 # --- words, from captions ----------------------------------------------------------------------------
 
+## A VIDEO'S WORDS: its captions', or, where it has none, what Transcribe heard.
 func _make_words(vid: String) -> String:
 	var cap := String(actor.video(vid).get("captions", ""))
 	var words: Array = []
+	var from := "captions"
 	if FileAccess.file_exists(cap):
 		words = ActorSources.words_of_json3(FileAccess.get_file_as_string(cap))
+	else:
+		from = "heard"
+		var t: Variant = ActorFolder.read_json(actor.video_dir(vid).path_join("transcript.json"))
+		for w in ((t as Dictionary).get("words", []) if t is Dictionary else []):
+			words.append({"text": String(w["text"]), "t0": float(w["t0"]), "t1": float(w["t1"])})
 	var e := ActorFolder.write_file(actor.video_dir(vid).path_join("words.json"), JSON.stringify({"vid": vid, "words": words}))
 	if not e.is_empty():
 		return e
-	actor.put_stamp("words", "v:" + vid, "%d words" % words.size() if not words.is_empty() else "no captions")
+	actor.put_stamp("words", "v:" + vid, ("%d words, %s" % [words.size(), from]) if not words.is_empty() else "no words")
 	return "done"
 
 
@@ -790,6 +866,8 @@ func _land_agent(run: Dictionary, res: Dictionary) -> String:
 	match step:
 		"audit":
 			err = _land_audit_part(run["state"]["set"], text)
+		"rest":
+			err = _land_rest(run, text)
 	if err.is_empty():
 		run["tries"] = 0
 		return ""

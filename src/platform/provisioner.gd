@@ -768,7 +768,8 @@ func _fetch_file(key: String, file: Dictionary) -> String:
 		return ""
 	DirAccess.make_dir_recursive_absolute(Provision.partial_dir())
 	DirAccess.make_dir_recursive_absolute(dest.get_base_dir())
-	var part := Provision.partial_dir().path_join("%s-%d" % [String(file["file"]), OS.get_process_id()])
+	# (a file kept in a folder of its own - a model of several files - is named flat while it downloads)
+	var part := Provision.partial_dir().path_join("%s-%d" % [String(file["file"]).replace("/", "_"), OS.get_process_id()])
 	var why: String = await _download(key, String(file["url"]), part,
 		"downloading the %s" % String(file.get("name", "model")), int(file.get("size", 0)))
 	if why.is_empty():

@@ -241,6 +241,10 @@ func _prompts() -> bool:
 	for more in [false, true]:
 		var au := ActorPrompts.audit("An Actor", a_set, more)
 		texts.append(String(au["system"]) + "\n" + String(au["prompt"]))
+	var re := ActorPrompts.rest("An Actor", 12)
+	texts.append(String(re["system"]) + "\n" + String(re["prompt"]))
+	_ok((ActorPrompts.land_rest({"rest": [3, 3, 0, 13, 1.0]}, 12)["rest"] as Array) == [2, 0]
+		and ActorPrompts.land_rest({"stills": [1]}, 12).has("error"), "the answer of At rest was not made sound")
 	_ok(Rules.missing.is_empty(), "rendering every prompt left these unfilled: %s" % str(Rules.missing.slice(0, 6)))
 	for t in texts:
 		_ok(_kinds_named(t).is_empty(), "a prompt over a fixture naming no kind of card names one: %s" % ", ".join(_kinds_named(t)))

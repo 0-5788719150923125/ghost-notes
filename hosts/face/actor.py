@@ -12,13 +12,16 @@ nothing else: no step knows about another except through what it wrote.
     sets        every video's shots grouped by camera placement (the background's EDGES, so the
                 sun moving on the wall keeps a set whole), with the contact sheets the audit sees
     stills      a set's most typical calm moments, facing the camera: the one frame a Likeness is
-                drawn on, and a few to pick from
+                drawn on, and a few to pick from - each with its room, its matte, what stands before
+                them, and all of them on one numbered sheet for the writer that finds them at rest
     rig         the mesh on the set's still: its face, the rings round it, the frame's edge, one
-                triangulation, and the face's box with a mask for the lips and one for the eyes
+                triangulation, and the face's box with a mask for the lips and one for the eyes; and
+                each still's skeleton, every vertex of its body weighed to its bones
     visemes     their mouth for each sound class, from caption-timed phones (or their own range),
                 over every video
     motion      their head's own motion where they face the camera, over every video: its quick part
-                in runs, which looks are speech, how often they blink
+                in runs, which looks are speech, how often they blink; and their posture - how far and
+                which ways their body settles, and how long it holds
     library     each sound class's prototype mouths and their eyes half and fully closed, from any
                 video at the still's turn, unwrapped into the box
 
@@ -398,7 +401,9 @@ class Watcher:
         if pr.pose_landmarks:
             rec["pose"] = [c for p in pr.pose_landmarks[0] for c in (p.x, p.y, p.z, p.visibility)]
         if pr.segmentation_masks:
-            rec["segmentation"] = pr.segmentation_masks[0].numpy_view()
+            # A COPY: the view is MediaPipe's own buffer, and the next frame writes over it (2026-10-22:
+            # every still kept the last frame's matte)
+            rec["segmentation"] = np.array(pr.segmentation_masks[0].numpy_view(), copy=True)
         return rec
 
 
@@ -957,6 +962,31 @@ def sharpness(rgb, pts, w: int, h: int, region) -> float:
 # gray levels (of 255): a globe held up, an arm out - while the sun's slow drift over the wall does not.
 STRAY = 28
 STILL_THUMB_W = 384
+# THE STILLS ON ONE SHEET, numbered from 1 (the fourth pass): what the rest step's writer is shown - the
+# hands at rest are a matter of what they look like, which the body's points cannot see (2026-10-22, his
+# footage: open palms, folded hands and a phone held all came out alike by every measure of the points).
+SHEET = "sheet.jpg"
+SHEET_TILE_W = 480
+
+
+def still_sheet(tiles, path: str, cols=4) -> None:
+    """The stills [tiles] (BGR, full size) on one sheet at [SHEET_TILE_W] each, numbered from 1 large in a
+    corner."""
+    import cv2
+    import numpy as np
+    if not tiles:
+        return
+    h0, w0 = tiles[0].shape[:2]
+    tw, th = SHEET_TILE_W, int(round(SHEET_TILE_W * h0 / w0))
+    rows = (len(tiles) + cols - 1) // cols
+    sheet = np.zeros((rows * th, cols * tw, 3), dtype=np.uint8)
+    for k, t in enumerate(tiles):
+        tile = cv2.resize(t, (tw, th), interpolation=cv2.INTER_AREA)
+        for color, width in (((0, 0, 0), 7), ((255, 255, 255), 2)):
+            cv2.putText(tile, str(k + 1), (10, 44), cv2.FONT_HERSHEY_SIMPLEX, 1.4, color, width, cv2.LINE_AA)
+        r, c = divmod(k, cols)
+        sheet[r * th:(r + 1) * th, c * tw:(c + 1) * tw] = tile
+    cv2.imwrite(path, sheet, [cv2.IMWRITE_JPEG_QUALITY, 88])
 
 
 def calm_of(R):
@@ -1005,10 +1035,305 @@ EXPRESSION = [BLEND_NAMES.index(n) for n in ["browInnerUp", "browOuterUpLeft", "
                                              "cheekSquintRight", "eyeWideLeft", "eyeWideRight"]]
 
 
+# THE ROOM'S PLATE: made from this many frames of the set, at least this many seconds apart.
+PLATE_FRAMES = 150
+PLATE_GAP = 4.0
+# A frame's pixel this likely to be them (the segmentation's) is not the room - nor any within this many
+# pixels of one, where their edge's color bleeds.
+PERSON = 0.3
+CLEAR = 12
+# A PIXEL OF THEIR MATTE THAT NEVER MOVES is not them (2026-10-22: the segmentation took the microphone in
+# front of them for them, and it would have moved with them): in this share of the set's frames it is still
+# the still's - its color within STEADY levels, the frame and the still both in the first still's light,
+# and where the still has texture (more than PLAIN over ALIKE_PATCH pixels) its patch alike too (normalized
+# correlation past ALIKE) - all at half size. Each still is judged against its own pixels. (The fourth
+# pass, measured on his footage: by texture alone the microphone's plain dark body never matched and stayed
+# in a still's matte; by color alone, without each still's own light, it never matched either - the light
+# moves 15 levels over the hour - and with it, half his dark sweater did, its knit gone at half size; by
+# color, and texture where there is some, the microphone alone, and a few flecks.)
+STILL_SHARE = 0.6
+ALIKE = 0.8
+ALIKE_PATCH = 11
+STEADY = 14
+PLAIN = 20.0
+# WHAT STANDS BEFORE THEM, not behind (the fourth pass: their bones bend their matte, and a microphone left
+# in it bent with them): a pixel that never moves which is still the still's in the frames where they are
+# there (at least FRONT_SEEN of the frames), in a piece of FRONT_LEAST pixels or more - it hides them. It
+# is drawn over them and never moves (`front_K.png`), and their own picture under it is filled from round
+# it (`body_K.jpg`), so that moving behind it they show no second microphone. A pixel within EDGE pixels of
+# their matte's edge that never moves and is not before them is the wall their matte bled over: taken out.
+FRONT_SEEN = 0.15
+FRONT_LEAST = 3000
+EDGE = 15
+# How far from their matte a thing before them may reach, and how far past what passed it is grown (pixels).
+NEAR = 60
+FRONT_GROW = 6
+# THE PLATE IS TRUSTED where a quarter of the frames saw the room - a median that outvotes the frames that
+# were their own shape the segmentation missed, or the globe they held up a while - or where at least
+# TRUSTED_FRAMES saw it and AGREE: AGREEING of them within AGREE levels of their median. Elsewhere it is
+# filled from round it. (The fourth pass: by the quarter alone, the wall behind a still's head where they
+# seldom sit - seen in 4 to 14% of the frames - was all filled, a smear where the picture's frame was; by
+# six frames alone, a patch of their own face came in at their hairline, and the globe behind an arm.)
+TRUSTED = 0.25
+TRUSTED_FRAMES = 6
+AGREE = 12
+AGREEING = 0.75
+# How far round them the still's room sets the plate's light, and how far in it spreads (pixels).
+SHADE = 30
+# Away from the head, the plate is used behind them only where their matte is past this.
+SOFT = 0.6
+# The head's reach, in the face's own radii from its middle.
+HEAD_REACH = 2.3
+# How far into their silhouette the plate is filled where the frames never showed the room (pixels):
+# what any motion of theirs can uncover.
+UNCOVER = 70
+
+
+def soft_matte(seg, h: int, w: int):
+    """The segmentation's person as an alpha, 0..1: its doubt cut, its soft edge kept."""
+    import cv2
+    import numpy as np
+    m = np.asarray(seg, dtype=np.float32).reshape(h, w)
+    m = np.clip((m - 0.25) / 0.5, 0.0, 1.0)
+    return cv2.GaussianBlur(m, (0, 0), 1.2)
+
+
+def light_fit(src, dst, where, most=20000, seed=0):
+    """EACH CHANNEL'S GAIN AND OFFSET taking [src]'s pixels to [dst]'s where both show [where]: least
+    squares over a sample of them, the gain kept within 0.7..1.4."""
+    import numpy as np
+    ys, xs = np.nonzero(where)
+    if ys.size < 500:
+        return np.ones(3), np.zeros(3)
+    pick = np.random.default_rng(seed).choice(ys.size, size=min(most, ys.size), replace=False)
+    s_ = src[ys[pick], xs[pick]].astype(np.float64)
+    d_ = dst[ys[pick], xs[pick]].astype(np.float64)
+    gain, off = np.ones(3), np.zeros(3)
+    for c in range(3):
+        g = np.linalg.lstsq(np.stack([s_[:, c], np.ones(s_.shape[0])], axis=1), d_[:, c], rcond=None)[0][0]
+        gain[c] = float(np.clip(g, 0.7, 1.4))
+        off[c] = float(np.mean(d_[:, c] - gain[c] * s_[:, c]))
+    return gain, off
+
+
+def room_plate(a, spec, R, stills_rgb, stills_person, watch, report):
+    """THE ROOM OF THE SET, WITHOUT THEM, from its frames - each frame's light matched to the first still's
+    on the room both show: per pixel, the MEDIAN of the frames where it is the room (a mean took in the
+    globe they held up a while, and ghosts of them where the segmentation missed them: 2026-10-22) and the
+    share of frames that saw it. And for each of [stills_rgb] (their people [stills_person]), WHAT NEVER
+    MOVES - at half size, the still in the first one's light too: the share of frames still the still's
+    there (its color within [STEADY], and where the still has texture its patch alike too: [patch_alike]),
+    and that share among the frames they are there in (what hides them); and the share of frames they are
+    there. `plate, trusted, [{still, front}], there, n` - trusted where the plate is ([TRUSTED])."""
+    import cv2
+    import warnings
+    import numpy as np
+    still_rgb = stills_rgb[0]
+    H, W = still_rgb.shape[:2]
+    half = (W // 2, H // 2)
+    frames, rooms = [], []
+    ker = np.ones((2 * CLEAR + 1, 2 * CLEAR + 1), np.uint8)
+    # EACH STILL AS THE FRAMES WILL BE: in the first still's light, at half size, with where it is plain
+    small_stills, small_grays, plains = [], [], []
+    for st, person in zip(stills_rgb, stills_person):
+        if st.shape != still_rgb.shape:
+            small_stills.append(None)
+            small_grays.append(None)
+            plains.append(None)
+            continue
+        out = ~cv2.dilate((person | stills_person[0]).astype(np.uint8), ker).astype(bool)
+        gain, off = light_fit(st, still_rgb, out)
+        lit = np.clip(st.astype(np.float64) * gain + off, 0, 255).astype(np.uint8)
+        small = cv2.resize(lit, half, interpolation=cv2.INTER_AREA)
+        gray = cv2.cvtColor(small, cv2.COLOR_RGB2GRAY).astype(np.float32)
+        small_stills.append(small.astype(np.int16))
+        small_grays.append(gray)
+        plains.append(texture(gray) <= PLAIN)
+    still_n = [np.zeros((H // 2, W // 2), np.float64) for _ in stills_rgb]
+    front_n = [np.zeros((H // 2, W // 2), np.float64) for _ in stills_rgb]
+    there_n = np.zeros((H // 2, W // 2), np.float64)
+    # ACROSS ALL OF THE SET (2026-10-22: the first PLATE_FRAMES of six times as many, taken in order, were
+    # its first sixth - the light of the session's first quarter hour, and the microphone of a still made
+    # later never matched them)
+    order = np.linspace(0, R["count"] - 1, num=min(R["count"], PLATE_FRAMES)).astype(int)
+    picks = spaced(order, R, PLATE_GAP, PLATE_FRAMES)
+    for j, i in enumerate(picks):
+        report(0.8 * j / max(1, len(picks)))
+        v = spec["videos"][R["vid"][i]]
+        if [int(v["size"][0]), int(v["size"][1])] != [W, H]:
+            continue
+        rgb = frame_at(a.ffmpeg, v["path"], float(R["time"][i]), W, H)
+        if rgb is None:
+            continue
+        seg = watch.look(rgb, 0).get("segmentation")
+        if seg is None:
+            continue
+        them = np.asarray(seg).reshape(H, W) > PERSON
+        room = cv2.dilate(them.astype(np.uint8), ker) == 0
+        gain, off = light_fit(rgb, still_rgb, room & ~stills_person[0], seed=j)
+        adj = np.clip(rgb.astype(np.float64) * gain + off, 0, 255).astype(np.uint8)
+        frames.append(adj)
+        rooms.append(room)
+        small = cv2.resize(adj, half, interpolation=cv2.INTER_AREA)
+        gray = cv2.cvtColor(small, cv2.COLOR_RGB2GRAY).astype(np.float32)
+        there = cv2.resize(them.astype(np.uint8), half, interpolation=cv2.INTER_NEAREST) > 0
+        there_n += there
+        small = small.astype(np.int16)
+        for k, st in enumerate(small_stills):
+            if st is None:
+                continue
+            like = (np.abs(small - st).max(axis=2) < STEADY) & (plains[k] | (patch_alike(gray, small_grays[k]) > 0))
+            still_n[k] += like
+            front_n[k] += like & there
+    n = len(frames)
+    plate = np.zeros((H, W, 3), np.float64)
+    seen = np.zeros((H, W), np.float64)
+    agree = np.zeros((H, W), np.float64)
+    if n:
+        # the median, a band of rows at a time (all of it at once is gigabytes)
+        for r0 in range(0, H, 60):
+            block = np.stack([f[r0:r0 + 60] for f in frames]).astype(np.float32)
+            where = np.stack([m[r0:r0 + 60] for m in rooms])
+            seen[r0:r0 + 60] = where.sum(axis=0)
+            block[~where] = np.nan
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")          # a pixel no frame saw: an all-empty median
+                plate[r0:r0 + 60] = np.nan_to_num(np.nanmedian(block, axis=0))
+                near = np.abs(block - plate[r0:r0 + 60].astype(np.float32)).max(axis=3) < AGREE
+            agree[r0:r0 + 60] = (near & where).sum(axis=0) / np.maximum(where.sum(axis=0), 1)
+            report(0.8 + 0.2 * r0 / H)
+
+    def full(m):
+        # (smoothed a little first: a thing before them is a piece, not a scatter of pixels that passed)
+        return cv2.resize(cv2.GaussianBlur(m.astype(np.float32), (0, 0), 2.0), (W, H), interpolation=cv2.INTER_LINEAR)
+
+    judged = [{"still": full(still_n[k] / max(1, n)), "front": full(front_n[k] / np.maximum(there_n, 1))}
+              for k in range(len(stills_rgb))]
+    return plate, trust(seen / max(1, n), agree, n), judged, cv2.resize((there_n / max(1, n)).astype(np.float32), (W, H)), n
+
+
+def trust(seen, agree, n: int):
+    """WHERE THE PLATE IS TRUSTED: seen in [TRUSTED] of the [n] frames, or by [TRUSTED_FRAMES] of them that
+    agree ([agree], the share of them near their median)."""
+    return (seen >= TRUSTED) | ((seen * n >= TRUSTED_FRAMES - 1e-9) & (agree >= AGREEING))
+
+
+def texture(gray):
+    """How much texture [gray] has round each pixel: its variance over [ALIKE_PATCH] pixels."""
+    import cv2
+    k = (ALIKE_PATCH, ALIKE_PATCH)
+    m = cv2.blur(gray, k)
+    return cv2.blur(gray * gray, k) - m * m
+
+
+def patch_alike(gray, still_gray):
+    """Where [gray]'s texture is the still's: the normalized correlation of the patches round each pixel
+    past [ALIKE], where the still has texture to correlate - more than [PLAIN] (1 there, else 0)."""
+    import cv2
+    import numpy as np
+    k = (ALIKE_PATCH, ALIKE_PATCH)
+    ma, mb = cv2.blur(gray, k), cv2.blur(still_gray, k)
+    va = cv2.blur(gray * gray, k) - ma * ma
+    vb = cv2.blur(still_gray * still_gray, k) - mb * mb
+    cov = cv2.blur(gray * still_gray, k) - ma * mb
+    ncc = cov / np.sqrt(np.maximum(va * vb, 1e-6))
+    return ((ncc > ALIKE) & (vb > PLAIN)).astype(np.float64)
+
+
+def still_room(still_rgb, matte, plate, trusted, judged, there, head=None):
+    """ONE STILL'S LAYERS: its matte with what never moves taken out - the room, where it is not before them -
+    and what stands BEFORE them (`front`, 0..1: drawn over them, never moving), their picture with the
+    front filled from round it (`body`), and the room - the still's own where it is not them, the plate's
+    (in the still's light) where it is and the plate is [trusted], filled in from round it where their
+    motion could uncover it and it is not. Round the [head] (a mask) the plate reaches [CLEAR] past their
+    edge, so no hair is left on the wall; elsewhere only where the still is mostly them ([SOFT]), so their
+    soft edge is the still's own room (the fourth pass: in a gap between their arm and the chair, a soft
+    edge over the plate's wall showed a light sliver where the still showed the chair). `matte, room,
+    front, body`."""
+    import cv2
+    import numpy as np
+    H, W = still_rgb.shape[:2]
+    rgb = still_rgb.astype(np.float64)
+    opened = np.ones((5, 5), np.uint8)
+    still = judged["still"] > STILL_SHARE
+    them = (matte > 0.5).astype(np.uint8)
+    # (near them: a microphone the segmentation left out of them is a hole as wide as it is)
+    near = cv2.dilate(them, np.ones((2 * NEAR + 1, 2 * NEAR + 1), np.uint8)) > 0
+    before = cv2.morphologyEx(((still & (judged["front"] > STILL_SHARE) & (there >= FRONT_SEEN) & near)
+                               .astype(np.uint8)), cv2.MORPH_OPEN, opened)
+    before = cv2.morphologyEx(before, cv2.MORPH_CLOSE, opened)
+    count, parts, stats, _ = cv2.connectedComponentsWithStats(before, connectivity=8)
+    for c in range(1, count):
+        if stats[c, cv2.CC_STAT_AREA] < FRONT_LEAST:
+            before[parts == c] = 0
+    # (grown past what passed: its lit rim, an edge at half size, was left in them and moved with them)
+    before = cv2.dilate(before, np.ones((2 * FRONT_GROW + 1, 2 * FRONT_GROW + 1), np.uint8)) & near.astype(np.uint8)
+    # (their edge where the front is not: a hole the segmentation left for the microphone is no edge of them)
+    whole = them | cv2.dilate(before, np.ones((2 * EDGE + 1, 2 * EDGE + 1), np.uint8))
+    edge = cv2.erode(whole, np.ones((2 * EDGE + 1, 2 * EDGE + 1), np.uint8)) == 0
+    behind = cv2.morphologyEx((still & (before == 0) & edge).astype(np.uint8), cv2.MORPH_OPEN, opened)
+    matte = matte * (1.0 - cv2.GaussianBlur(behind.astype(np.float32), (0, 0), 1.5))
+    front = None
+    if np.any(before):
+        front = cv2.GaussianBlur(before.astype(np.float32), (0, 0), 1.0) * (before > 0)
+        # THEY ARE BEHIND IT: their matte whole there, whatever the segmentation made of it - else a hole
+        # in them the front's shape would move with them
+        matte = np.maximum(matte, cv2.GaussianBlur(cv2.dilate(before, opened).astype(np.float32), (0, 0), 1.5))
+    body = still_rgb
+    if front is not None:
+        # their picture under it, filled from round it (at half size: a fill is smooth)
+        hole = cv2.dilate(before, np.ones((7, 7), np.uint8))
+        small = cv2.resize(still_rgb, (W // 2, H // 2), interpolation=cv2.INTER_AREA)
+        small_hole = cv2.resize(hole * 255, (W // 2, H // 2), interpolation=cv2.INTER_NEAREST)
+        filled = cv2.resize(cv2.inpaint(small, small_hole, 5, cv2.INPAINT_TELEA), (W, H), interpolation=cv2.INTER_LINEAR)
+        body = still_rgb.copy()
+        body[hole > 0] = filled[hole > 0]
+    ker = np.ones((2 * CLEAR + 1, 2 * CLEAR + 1), np.uint8)
+    person = cv2.dilate((matte > 0.05).astype(np.uint8), ker) > 0
+    if head is not None:
+        mostly = cv2.dilate((matte > SOFT).astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
+        person = np.where(head, person, mostly)
+    gain, off = light_fit(plate, still_rgb, trusted & ~person)
+    lit = np.clip(plate * gain + off, 0, 255)
+    # THE LIGHT ROUND THEM (the fourth pass: a light halo round their head): their shadow on the wall is in
+    # the still and not in the plate - made where they are not - so the plate is darkened, or lightened, as
+    # the still's room just outside them is against it, spread inward from there
+    band = ((cv2.dilate(person.astype(np.uint8), np.ones((2 * SHADE + 1, 2 * SHADE + 1), np.uint8)) > 0) & ~person
+            & trusted).astype(np.float32)
+    if band.sum() > 100:
+        ratio = np.clip((rgb + 8.0) / (lit + 8.0), 0.6, 1.4).astype(np.float32)
+        weight = cv2.GaussianBlur(band, (0, 0), SHADE)
+        shade = np.ones_like(ratio)
+        for c in range(3):
+            spread = cv2.GaussianBlur(ratio[:, :, c] * band, (0, 0), SHADE)
+            shade[:, :, c] = np.where(weight > 1e-3, spread / np.maximum(weight, 1e-3), 1.0)
+        lit = np.clip(lit * shade, 0, 255)
+    room = rgb.copy()
+    known = person & trusted
+    room[known] = lit[known]
+    # THE HOLE their motion could uncover: inside them, near their edge, the room not seen there enough
+    inside = cv2.distanceTransform(person.astype(np.uint8), cv2.DIST_L2, 5)
+    hole = person & ~trusted & (inside < UNCOVER)
+    out = np.clip(room, 0, 255).astype(np.uint8)
+    if np.any(hole):
+        # filled from the room round it - never from them (all of them unknown to the fill, though only
+        # the band is kept: from their own pixels, the sweater smeared into the wall) - at half size (a
+        # fill is smooth: half size loses nothing it has)
+        unknown = person & ~trusted
+        small = cv2.resize(out, (W // 2, H // 2), interpolation=cv2.INTER_AREA)
+        small_hole = cv2.resize(unknown.astype(np.uint8) * 255, (W // 2, H // 2), interpolation=cv2.INTER_NEAREST)
+        filled = cv2.resize(cv2.inpaint(small, small_hole, 5, cv2.INPAINT_TELEA), (W, H), interpolation=cv2.INTER_LINEAR)
+        out[hole] = filled[hole]
+    return matte, out, front, body
+
+
 def cmd_stills(a) -> int:
     """A SET'S STILLS: its most typical calm moments facing the camera, each a candidate for the one frame
     a Likeness is drawn on (next/likeness.md, "The second build"). Found in the survey, then looked at
-    again at full size - the face found, the eyes open, the mouth closed, sharp."""
+    again at full size - the face found, the eyes open, the mouth closed, sharp. Each with ITS MATTE (them,
+    not the room or what stands before them) and ITS ROOM (the room behind them, from the set's frames:
+    the third pass), so they are drawn over the room and the room never moves. And all of them on one
+    numbered sheet ([SHEET]), for the writer that says which show them at rest (the fourth pass)."""
     import cv2
     import numpy as np
     spec = read_json(a.spec)
@@ -1037,13 +1362,13 @@ def cmd_stills(a) -> int:
     score = base + face_cost(R["blend"], ang[:, 0], ang[:, 1], ang[:, 2])
     picks = spaced(np.argsort(score), R, 8.0, count * 4)
     progress(a.progress, 0.05)
-    watch = Watcher(a.face_model, a.pose_model, masks=False, image=True)
+    watch = Watcher(a.face_model, a.pose_model, masks=True, image=True)
     found = []
     for j, i in enumerate(picks):
         v = spec["videos"][R["vid"][i]]
         W, H = int(v["size"][0]), int(v["size"][1])
         rgb = frame_at(a.ffmpeg, v["path"], float(R["time"][i]), W, H)
-        progress(a.progress, 0.05 + 0.85 * (j + 1) / len(picks))
+        progress(a.progress, 0.05 + 0.45 * (j + 1) / len(picks))
         if rgb is None:
             continue
         rec = watch.look(rgb, 0)
@@ -1061,20 +1386,52 @@ def cmd_stills(a) -> int:
         f["score"] = float(base[f["i"]]) + f["face"] + 2.0 * max(0.0, 1.0 - f["sharp"] / med)
     found.sort(key=lambda f: f["score"])
     # (spaced already when they were picked)
-    chosen = found[:count]
+    chosen = [f for f in found if f["rec"].get("segmentation") is not None and "pose" in f["rec"]][:count]
+    if not chosen:
+        say("stills: no still had their body found")
+        return 2
+    for f in found:
+        if not any(f is c for c in chosen):
+            f.pop("rgb", None)
+            f["rec"].pop("segmentation", None)
+    # THE ROOM, made once for the set from the first still's light; what never moves, for each still
+    first = chosen[0]
+    W0, H0 = first["size"]
+    people = [soft_matte(f["rec"]["segmentation"], f["size"][1], f["size"][0]) > 0.05 for f in chosen]
+    plate, trusted, judged, there, frames_n = room_plate(a, spec, R, [f["rgb"] for f in chosen], people, watch,
+                                                      lambda f: progress(a.progress, 0.5 + 0.4 * f))
     out_dir = spec["out"]
     part = out_dir + ".part"
     shutil.rmtree(part, ignore_errors=True)
     os.makedirs(part)
     stills = []
+    sheet_tiles = []
     for k, f in enumerate(chosen):
         W, H = f["size"]
         rec = f["rec"]
         bgr = cv2.cvtColor(f["rgb"], cv2.COLOR_RGB2BGR)
         name, thumb = "still_%d.jpg" % k, "still_%d_thumb.jpg" % k
         cv2.imwrite(os.path.join(part, name), bgr, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        matte = soft_matte(rec["segmentation"], H, W)
+        room, front, body = f["rgb"], None, f["rgb"]
+        if [W, H] == [W0, H0]:
+            face = np.asarray(rec["points"], dtype=np.float64)[:FACE_POINTS, :2] * np.array([W, H])
+            hc = face[OVAL].mean(axis=0)
+            hr = float(np.hypot(*(face[OVAL] - hc).T).mean())
+            yy, xx = np.mgrid[0:H, 0:W]
+            head = np.hypot(xx - hc[0], yy - hc[1]) < HEAD_REACH * hr
+            matte, room, front, body = still_room(f["rgb"], matte, plate, trusted, judged[k], there, head)
+        cv2.imwrite(os.path.join(part, "room_%d.jpg" % k), cv2.cvtColor(room, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 93])
+        cv2.imwrite(os.path.join(part, "matte_%d.png" % k), np.clip(matte * 255 + 0.5, 0, 255).astype(np.uint8))
+        layers = {}
+        if front is not None:
+            bgra = np.dstack([bgr, np.clip(front * 255 + 0.5, 0, 255).astype(np.uint8)])
+            cv2.imwrite(os.path.join(part, "front_%d.png" % k), bgra)
+            cv2.imwrite(os.path.join(part, "body_%d.jpg" % k), cv2.cvtColor(body, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 95])
+            layers = {"front": "front_%d.png" % k, "body": "body_%d.jpg" % k}
         small = cv2.resize(bgr, (STILL_THUMB_W, int(round(STILL_THUMB_W * H / W))), interpolation=cv2.INTER_AREA)
         cv2.imwrite(os.path.join(part, thumb), small, [cv2.IMWRITE_JPEG_QUALITY, 88])
+        sheet_tiles.append(bgr)
         i = f["i"]
         stills.append({"file": name, "thumb": thumb, "vid": str(R["vid"][i]), "time": round(float(R["time"][i]), 3),
                        "set": str(R["set"][i]), "size": [W, H],
@@ -1083,12 +1440,15 @@ def cmd_stills(a) -> int:
                        "blend": [round(float(x), 4) for x in rec["blend"]],
                        "light": [round(float(x), 4) for x in cheek_light(f["rgb"], rec["points"], W, H)],
                        "yaw": round(f["angles"][0], 2), "pitch": round(f["angles"][1], 2), "roll": round(f["angles"][2], 2),
+                       "pose": [round(float(x), 5) for x in rec["pose"]],
+                       "room": "room_%d.jpg" % k, "matte": "matte_%d.png" % k, **layers,
                        "sharp": round(f["sharp"], 1), "score": round(f["score"], 3)})
+    still_sheet(sheet_tiles, os.path.join(part, SHEET))
     shutil.rmtree(out_dir, ignore_errors=True)
     os.replace(part, out_dir)
     write_json(spec["index"], {"stills": stills})
     progress(a.progress, 1.0)
-    say("stills: %d, the best of %d looked at in %d looks" % (len(stills), len(found), n))
+    say("stills: %d, the best of %d looked at in %d looks; the room from %d frames" % (len(stills), len(found), n, frames_n))
     return 0
 
 
@@ -1231,11 +1591,240 @@ def save_mask(path: str, m) -> None:
     os.replace(path + ".part.png", path)
 
 
+def smooth(e0: float, e1: float, x: float) -> float:
+    """0 at [e0] and 1 at [e1] (either way round), eased between."""
+    t = min(1.0, max(0.0, (x - e0) / (e1 - e0))) if e1 != e0 else 1.0
+    return t * t * (3.0 - 2.0 * t)
+
+
+# THE BODY'S BONES (the fourth pass, 2026-10-22, the user on the third: "the actor's body is completely
+# rigid, and it is just rocking around constantly ... we're not modeling the body - we're just shifting it
+# around a bunch"): a skeleton on each still from its pose, and every vertex of its mesh weighed to its
+# bones. What a vertex's weights leave is the room's: it stays where it is.
+BONES = ["torso", "head", "shoulder_l", "shoulder_r", "upper_l", "fore_l", "hand_l", "upper_r", "fore_r", "hand_r"]
+# A SEATED TORSO from the shoulders to the hips, in shoulder widths, where the hips are not seen (behind the
+# desk): they are the point it leans and breathes about.
+TORSO = 1.35
+# How thick each part of an arm is round its bone (its radius, in shoulder widths), and how far out from
+# the shoulder's joint the shoulder's own share reaches.
+ARM_R = {"upper": 0.18, "fore": 0.15, "hand": 0.14}
+SHOULDER_R = 0.42
+# How far past the hand's knuckles (the pose's index and pinky) its fingers reach, as a share of the hand.
+FINGERS = 0.5
+# A HAND RESTS where it is when a point of it (its wrist or knuckles) is seen this surely in the picture -
+# hands folded at the desk's edge are seen less surely than an elbow (0.4 to 0.9 on his stills), and their
+# wrist can be under the frame with the knuckles in it - or when, not seen, it is within TOGETHER shoulder
+# widths of a hand that rests: hands clasped rest together (one moved, the other held, they tore apart).
+WRIST_SEEN = 0.3
+TOGETHER = 0.6
+
+
+def skeleton(pose, w: int, h: int):
+    """THE STILL'S SKELETON from its pose, in pixels: the shoulders (`l` is theirs, on the picture's
+    right), the neck between them, the hips (where they are seen, else [TORSO] shoulder widths under the
+    neck), and each arm's shoulder, elbow, wrist and the hand's end - with whether the hand RESTS in the
+    picture, where it stays as the body moves ([WRIST_SEEN], [TOGETHER]; a hand unseen, or out of the
+    picture, goes with the body). None when the shoulders are not seen."""
+    import numpy as np
+    p = np.asarray(pose, dtype=np.float64).reshape(33, 4)
+    xy = p[:, :2] * np.array([w, h])
+    seen = p[:, 3] > 0.5
+    if not (seen[11] and seen[12]):
+        return None
+    neck = (xy[11] + xy[12]) * 0.5
+    sw = float(np.hypot(*(xy[11] - xy[12])))
+    hip = neck + np.array([0.0, TORSO * sw])
+    if seen[23] and seen[24]:
+        seen_hip = (xy[23] + xy[24]) * 0.5
+        if seen_hip[1] > neck[1] + 0.8 * sw:
+            hip = seen_hip
+    out = {"neck": neck, "hip": hip, "width": sw}
+    for side, (s, e, wr, pk, ix) in {"l": (11, 13, 15, 17, 19), "r": (12, 14, 16, 18, 20)}.items():
+        knuckles = (xy[pk] + xy[ix]) * 0.5
+        tip = xy[wr] + (knuckles - xy[wr]) * (1.0 + FINGERS)
+        rests = any(p[k, 3] > WRIST_SEEN and 0.0 <= xy[k][0] <= w and 0.0 <= xy[k][1] <= h for k in (wr, pk, ix))
+        out[side] = {"shoulder": xy[s], "elbow": xy[e], "wrist": xy[wr], "tip": tip, "rests": rests}
+    for side, other in (("l", "r"), ("r", "l")):
+        if not out[side]["rests"] and out[other]["rests"] \
+                and float(np.hypot(*(out[side]["wrist"] - out[other]["wrist"]))) < TOGETHER * sw:
+            out[side]["rests"] = True
+    return out
+
+
+def _segment_distance(q, a, b) -> float:
+    import numpy as np
+    ab = b - a
+    t = float(np.clip(np.dot(q - a, ab) / max(float(np.dot(ab, ab)), 1e-9), 0.0, 1.0))
+    return float(np.hypot(*(q - (a + t * ab))))
+
+
+def arm_bones(skel, side: str):
+    """Arm [side]'s bones: `[(name, a, b, radius)]` - the upper arm, the forearm and the hand."""
+    a = skel[side]
+    sw = skel["width"]
+    return [("upper_" + side, a["shoulder"], a["elbow"], ARM_R["upper"] * sw),
+            ("fore_" + side, a["elbow"], a["wrist"], ARM_R["fore"] * sw),
+            ("hand_" + side, a["wrist"], a["tip"], ARM_R["hand"] * sw)]
+
+
+def body_points(face2d, pose, matte, w: int, h: int, ring1: float, near):
+    """THE BODY'S VERTICES on a still: its silhouette every so often, a band 55 px out (their soft edge
+    moves with them, never stretched), a grid inside, the shoulders, elbows and wrists, the neck - and each
+    ARM along its bones and its two sides, so an arm bends apart from what is behind it (the fourth pass) -
+    none within the head's near ring, none crowding another or [near]."""
+    import cv2
+    import numpy as np
+    oval = face2d[OVAL]
+    hc = oval.mean(axis=0)
+    hr = float(np.hypot(*(oval - hc).T).mean())
+    m8 = (matte > 0.5).astype(np.uint8)
+
+    def along(mask, step):
+        cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        got = []
+        for c in cnts:
+            if cv2.contourArea(c) < 400:
+                continue
+            c = c[:, 0, :].astype(np.float64)
+            d = np.r_[0.0, np.cumsum(np.hypot(*np.diff(c, axis=0).T))]
+            for t in np.arange(0.0, d[-1], step):
+                got.append(c[min(len(c) - 1, int(np.searchsorted(d, t)))])
+        return got
+
+    cand = along(m8, 45.0) + along(cv2.dilate(m8, np.ones((111, 111), np.uint8)), 70.0)
+    inner = cv2.erode(m8, np.ones((41, 41), np.uint8))
+    for y in range(40, h, 80):
+        for x in range(40, w, 80):
+            if inner[y, x]:
+                cand.append(np.array([x, y], dtype=np.float64))
+    p = np.asarray(pose, dtype=np.float64).reshape(33, 4)
+    skel = skeleton(pose, w, h)
+    # THE ARMS FIRST: along each bone and its two sides, so the grid gives way to them
+    arms = []
+    if skel is not None:
+        for side in ("l", "r"):
+            for _, a, b, r in arm_bones(skel, side):
+                ab = b - a
+                length = float(np.hypot(*ab))
+                if length < 1.0:
+                    continue
+                across = np.array([-ab[1], ab[0]]) / length
+                for u in np.arange(0.0, 1.0 + 1e-6, min(1.0, 40.0 / length)):
+                    c = a + ab * u
+                    arms += [c, c + across * r, c - across * r]
+    cand = arms + cand
+    for k in (11, 12, 13, 14, 15, 16):
+        if p[k, 3] > 0.5:
+            cand.insert(0, p[k, :2] * np.array([w, h]))
+    if p[11, 3] > 0.5 and p[12, 3] > 0.5:
+        shoulders = (p[11, :2] + p[12, :2]) * 0.5 * np.array([w, h])
+        for u in (0.35, 0.7):
+            cand.append(face2d[CHIN] + (shoulders - face2d[CHIN]) * u)
+    out = [np.asarray(q, dtype=np.float64) for q in near]
+    first = len(out)
+    for q in cand:
+        q = np.asarray(q, dtype=np.float64)
+        if not (0.0 <= q[0] <= w and 0.0 <= q[1] <= h):
+            continue
+        if np.hypot(*(q - hc)) < hr * ring1 * 1.12:
+            continue
+        if any(np.hypot(*(q - o)) < 28.0 for o in out):
+            continue
+        out.append(q)
+    return np.array(out[first:]).reshape(-1, 2)
+
+
+def skin_weights(pts, face2d, pose, matte, w: int, h: int):
+    """EACH VERTEX'S WEIGHT ON EACH OF [BONES] (`[n, len(BONES)]`; what they leave is the room's, which
+    stays). THE HEAD: all of it near the head above the neck's foot, none at the shoulders - the neck bends
+    between. THE BODY'S share - all of it on them and near them, none out in the room - goes to an ARM
+    where the vertex is on one (by how near each of its bones is), to a SHOULDER round its joint, and the
+    rest to the TORSO."""
+    import cv2
+    import numpy as np
+    oval = face2d[OVAL]
+    hc = oval.mean(axis=0)
+    hr = float(np.hypot(*(oval - hc).T).mean())
+    p = np.asarray(pose, dtype=np.float64).reshape(33, 4)
+    seen = p[11, 3] > 0.5 and p[12, 3] > 0.5
+    shoulder_y = float(p[[11, 12], 1].mean() * h) if seen else float(face2d[CHIN][1] + 1.2 * hr)
+    neck_y = (float(face2d[CHIN][1]) + shoulder_y) * 0.5
+    away = cv2.distanceTransform((matte <= 0.5).astype(np.uint8), cv2.DIST_L2, 5)
+    skel = skeleton(pose, w, h)
+    col = {b: i for i, b in enumerate(BONES)}
+    out = np.zeros((len(pts), len(BONES)))
+    for n, q in enumerate(pts):
+        q = np.asarray(q, dtype=np.float64)
+        wh = smooth(1.9, 1.15, float(np.hypot(*(q - hc))) / hr) * smooth(shoulder_y, neck_y, float(q[1]))
+        x, y = int(np.clip(q[0], 0, w - 1)), int(np.clip(q[1], 0, h - 1))
+        wb = max(wh, smooth(150.0, 40.0, float(away[y, x])))
+        out[n, col["head"]] = wh
+        body = wb - wh
+        if body <= 0.0:
+            continue
+        if skel is None:
+            out[n, col["torso"]] = body
+            continue
+        # ON AN ARM: as much as it is inside the arm's nearest bone, shared among its bones by nearness
+        arm_total = 0.0
+        shares = {}
+        for side in ("l", "r"):
+            near = [(name, _segment_distance(q, a, b) / r) for name, a, b, r in arm_bones(skel, side)]
+            inside = max(smooth(1.6, 0.9, d) for _, d in near)
+            if inside <= 0.0:
+                continue
+            inv = np.array([1.0 / max(d, 0.05) ** 4 for _, d in near])
+            inv /= inv.sum()
+            for (name, _), f in zip(near, inv):
+                shares[name] = shares.get(name, 0.0) + inside * float(f)
+            arm_total += inside
+        if arm_total > 1.0:
+            shares = {k: v / arm_total for k, v in shares.items()}
+            arm_total = 1.0
+        for name, v in shares.items():
+            out[n, col[name]] = body * v
+        rest = body * (1.0 - arm_total)
+        # ROUND A SHOULDER'S JOINT, the shoulder's own
+        sh_total = 0.0
+        for side in ("l", "r"):
+            s = smooth(SHOULDER_R, SHOULDER_R * 0.3, float(np.hypot(*(q - skel[side]["shoulder"]))) / skel["width"])
+            out[n, col["shoulder_" + side]] = rest * s
+            sh_total += s
+        out[n, col["torso"]] = rest * max(0.0, 1.0 - sh_total)
+    return out
+
+
+def skeleton_json(skel, face2d, w: int, h: int) -> dict:
+    """[skel] as the rig keeps it (pixels, rounded); with none seen, a torso under the face whose arms go
+    with it."""
+    import numpy as np
+
+    def pt(v):
+        return [round(float(v[0]), 2), round(float(v[1]), 2)]
+
+    if skel is None:
+        c = face2d[CHIN]
+        fw = float(face2d[OVAL][:, 0].max() - face2d[OVAL][:, 0].min())
+        neck = c + np.array([0.0, 0.6 * fw])
+        skel = {"neck": neck, "hip": np.array([neck[0], float(h)]), "width": 2.0 * fw}
+        for side, sx in (("l", 1.0), ("r", -1.0)):
+            s = neck + np.array([sx * fw, 0.0])
+            skel[side] = {"shoulder": s, "elbow": s, "wrist": s, "tip": s, "rests": False}
+    out = {"neck": pt(skel["neck"]), "hip": pt(skel["hip"]), "width": round(float(skel["width"]), 2)}
+    for side in ("l", "r"):
+        a = skel[side]
+        out[side] = {k: pt(a[k]) for k in ("shoulder", "elbow", "wrist", "tip")}
+        out[side]["rests"] = bool(a["rests"])
+    return out
+
+
 def cmd_rig(a) -> int:
     """THE SET'S MESH, made on its first still: its face, the rings round it, the frame's edge, one
     triangulation - and the face's BOX, where the library keeps its mouths and eyes, with a mask for
     each: the lips with a little round them, and each eye's lids (the beard round the mouth stays the
-    still's, bent with the jaw, and never swaps from one mouth to the next)."""
+    still's, bent with the jaw, and never swaps from one mouth to the next). And for EVERY still its
+    body's mesh on its skeleton, each vertex weighed to its bones ([skeleton], [body_points],
+    [skin_weights])."""
     import numpy as np
     stills = read_json(a.stills)["stills"]
     if not stills:
@@ -1268,7 +1857,8 @@ def cmd_rig(a) -> int:
     mouth = feathered((img_h, img_w), [grown(lips, 1.18, 1.45)], mouth_w * 0.06)
     rims = [to_img(layout[EYE_RIGHT]), to_img(layout[EYE_LEFT])]
     eye_w = float(np.mean([r[:, 0].max() - r[:, 0].min() for r in rims]))
-    eye_mask = feathered((img_h, img_w), [grown(r, 1.45, 2.2) for r in rims], eye_w * 0.12)
+    # (no higher than the lids' fold: grown taller, a glance brought another moment's brows with it)
+    eye_mask = feathered((img_h, img_w), [grown(r, 1.45, 1.9) for r in rims], eye_w * 0.1)
     out_dir = os.path.dirname(a.out)
     save_mask(os.path.join(out_dir, "mask_mouth.png"), mouth)
     save_mask(os.path.join(out_dir, "mask_eyes.png"), eye_mask)
@@ -1277,13 +1867,35 @@ def cmd_rig(a) -> int:
     def moving(t):
         return min(max(weights[i], eyes[i]) if i < FACE_POINTS else 0.0 for i in t) > 0.5
     tris.sort(key=lambda t: 1 if moving(t) else 0)
+    # EACH STILL'S BODY: its own mesh - the face's points, its rings, its body's, the frame's edge - and
+    # each vertex's following of the head and of the body (the third pass: the whole of them moves)
+    import cv2
+    still_dir = os.path.join(os.path.dirname(a.stills), "stills")
+    bodies = []
+    for sk in stills:
+        face_k = to_pixels([sk["points"]], W, H)[0]
+        path = os.path.join(still_dir, str(sk.get("matte", "")))
+        m = cv2.imread(path, 0) if sk.get("matte") and os.path.exists(path) else None
+        matte = m.astype(np.float32) / 255.0 if m is not None and m.shape == (H, W) else np.zeros((H, W), np.float32)
+        pose = sk.get("pose") or [0.0] * 132
+        r1, r2 = ring_of(face_k, a.ring1), ring_of(face_k, a.ring2)
+        body = body_points(face_k, pose, matte, W, H, a.ring1, np.vstack([r2, anchors]))
+        pts = np.vstack([face_k, r1, r2, body, anchors])
+        tris_k = triangulate(pts, W, H)
+        tris_k.sort(key=lambda t: 1 if moving(t) else 0)
+        skin = skin_weights(np.vstack([r2, body, anchors]), face_k, pose, matte, W, H)
+        skin[-anchors.shape[0]:] = 0.0
+        skel = skeleton(pose, W, H)
+        bodies.append({"body": [[round(float(x), 2), round(float(y), 2)] for x, y in body],
+                       "skin": {b: [round(float(x), 3) for x in skin[:, i]] for i, b in enumerate(BONES)},
+                       "skeleton": skeleton_json(skel, face_k, W, H), "triangles": tris_k})
     rig = {
         "size": [W, H], "points": int(allpts.shape[0]), "face": FACE_POINTS, "oval": OVAL,
         "ring1": a.ring1, "ring2": a.ring2, "ring_moves": a.ring_moves,
         "layout": [[round(float(x), 3), round(float(y), 3)] for x, y in layout],
         "mean": [[round(float(x), 2), round(float(y), 2)] for x, y in allpts],
         "anchors": [[round(x / W, 5), round(y / H, 5)] for x, y in anchors],
-        "triangles": tris, "moving_triangles": sum(1 for t in tris if moving(t)),
+        "triangles": tris, "moving_triangles": sum(1 for t in tris if moving(t)), "stills": bodies,
         "weights": [round(float(x), 3) for x in weights],
         "eye_weights": [round(float(x), 3) for x in eyes],
         "box": [round(x0, 3), round(y0, 3), round(x1, 3), round(y1, 3)], "image": [img_w, img_h],
@@ -1291,7 +1903,8 @@ def cmd_rig(a) -> int:
         "lips": LIPS_OUTER + LIPS_INNER, "cheeks": [CHEEK_LEFT, CHEEK_RIGHT],
     }
     write_json(a.out, rig)
-    say("rig: %d points, %d triangles, the face's box %dx%d" % (allpts.shape[0], len(tris), img_w, img_h))
+    say("rig: %d points, %d triangles, %d body vertices, the face's box %dx%d" % (
+        allpts.shape[0], len(tris), len(bodies[0]["body"]) if bodies else 0, img_w, img_h))
     return 0
 
 
@@ -1390,8 +2003,9 @@ def unwrap(rgb, face2d, rig: Rig, tris):
 
 def cmd_visemes(a) -> int:
     """THEIR MOUTH FOR EACH SOUND CLASS, from every video's survey: the median of their mouth blendshapes
-    at the class's phones - where captions give enough of them - else the class's place in their own range
-    (each class's `range`: a percentile of their range per blendshape)."""
+    at the class's phones - where their words (captions, or what Transcribe heard) give enough of them -
+    else the class's place in their own range (each class's `range`: a percentile of their range per
+    blendshape)."""
     import numpy as np
     spec = read_json(a.spec)
     R = survey_records(spec["videos"], spec["shots"])
@@ -1425,32 +2039,49 @@ def cmd_visemes(a) -> int:
             hits.setdefault(cls, []).append(bl[idx[k]])
     out = {}
     least = int(spec.get("least", 30))
+    # DO THE WORDS SHOW IN THEIR MOUTH? The jaw the sounds' medians span, over the jaw their range spans:
+    # a mouth hidden by a beard, or words timed only to the word, give each sound nearly the same median
+    # (2026-10-22, his: "open" 0.095, P B M 0.072, his range 0.01 to 0.31) - and drawn from those the
+    # mouth would scarcely move. Below [WORDS_SHOW] every sound keeps its place in their range.
+    jaw = MOUTH_NAMES.index("jawOpen")
+    medians = [np.median(np.array(g), axis=0)[jaw] for g in hits.values() if len(g) >= least]
+    span = float(pct[95][jaw] - pct[5][jaw]) or 1.0
+    shows = (max(medians) - min(medians)) / span if len(medians) > 1 else 0.0
     for cls, row in spec["classes"].items():
         got = hits.get(cls, [])
-        if len(got) >= least:
+        if len(got) >= least and shows >= WORDS_SHOW:
             med = np.median(np.array(got), axis=0)
-            out[cls] = {"blend": [round(float(x), 4) for x in med], "n": len(got), "from": "captions"}
+            out[cls] = {"blend": [round(float(x), 4) for x in med], "n": len(got), "from": "words"}
             continue
         from_range = pct[50].copy()
         for name, q in (row.get("range") or {}).items():
             if name in MOUTH_NAMES:
                 from_range[MOUTH_NAMES.index(name)] = pct[min(pct, key=lambda p: abs(p - int(q)))][MOUTH_NAMES.index(name)]
         out[cls] = {"blend": [round(float(x), 4) for x in from_range], "n": len(got), "from": "range"}
-    write_json(a.out, {"names": MOUTH_NAMES, "classes": out,
+    write_json(a.out, {"names": MOUTH_NAMES, "classes": out, "words_show": round(shows, 3),
                        "range": {str(q): [round(float(x), 4) for x in v] for q, v in pct.items()}})
-    learned = sum(1 for c in out.values() if c["from"] == "captions")
+    learned = sum(1 for c in out.values() if c["from"] == "words")
     if learned:
-        say("visemes: %d sounds, %d learned from captions, the rest from their range" % (len(out), learned))
+        say("visemes: %d sounds, %d learned from their words, the rest from their range" % (len(out), learned))
+    elif medians:
+        say("visemes: %d sounds, from their own range (their words scarcely show in their mouth: %.2f)" % (len(out), shows))
     else:
-        say("visemes: %d sounds, from their own range (no captions)" % len(out))
+        say("visemes: %d sounds, from their own range (no words)" % len(out))
     return 0
+
+
+# The share of their jaw's range the sounds' medians must span before the words, not the range, place
+# each sound's mouth ([cmd_visemes]); the range's own places span about 0.85 of it.
+WORDS_SHOW = 0.4
 
 
 # --- motion ----------------------------------------------------------------------------------------
 
-# THE HEAD'S MOTION, a row per look: yaw, pitch and roll (degrees), where the face is across and down (in
-# face widths) and how near (the log of its width).
-AXES = ["yaw", "pitch", "roll", "x", "y", "near"]
+# THEIR MOTION, a row per look (the third pass: the head turns on the body, the body carries it): the
+# head's yaw, pitch and roll against the shoulders (degrees); where the shoulders are across and down (in
+# face widths), how near they lean (the log of the face's width) and the shoulders' tilt (degrees, as the
+# picture turns: the right of the picture lower is more).
+AXES = ["yaw", "pitch", "roll", "x", "y", "near", "tilt"]
 # A run is at least this many seconds; its quick part is what moves within this many.
 LEAST_RUN = 8.0
 DRIFT = 4.0
@@ -1458,6 +2089,11 @@ DRIFT = 4.0
 WILD = 4.0
 # A blink is caught by a look only when it falls in one: about the share of the spacing a blink lasts.
 CAUGHT = 0.55
+# THEIR POSTURE (the fourth pass, 2026-10-22: "rocking weirdly back and forth" - the body played its quick
+# part, 2-4 s swings that are mostly their gestures pulling at their shoulders): where the shoulders sit,
+# averaged over this many seconds, against the shot's own middle - how far they lean and settle, which
+# ways go together, and how long a posture holds (the lag their posture's likeness to itself falls to 1/e).
+POSTURE_S = 6.0
 
 
 def high_pass(X, k: int):
@@ -1494,15 +2130,20 @@ def runs_of(R, rate: float, facing):
     return out
 
 
-def head_rows(R, idx, aspect):
-    """The head's [AXES] at looks [idx]: the turn, and where the face's box is in face widths."""
+def motion_rows(R, idx, aspect, roll_sign: float):
+    """THEIR MOTION at looks [idx], [AXES]: the head's turn, its roll as the picture turns ([roll_sign]
+    makes it so) less the shoulders' tilt, and the shoulders' place, nearness and tilt."""
     import numpy as np
     box = R["box"][idx].astype(np.float64)
     bw = np.maximum(box[:, 2] - box[:, 0], 1e-4)
     fw = float(np.median(bw))
-    cx = (box[:, 0] + box[:, 2]) * 0.5 / fw
-    cy = (box[:, 1] + box[:, 3]) * 0.5 * aspect / fw
-    return np.column_stack([R["angles"][idx], cx, cy, np.log(bw / fw)])
+    pose = np.asarray(R["pose"][idx], dtype=np.float64).reshape(-1, 33, 4)
+    left, right = pose[:, 11, :2], pose[:, 12, :2]
+    tilt = np.degrees(np.arctan2((left[:, 1] - right[:, 1]) * aspect, np.maximum(left[:, 0] - right[:, 0], 1e-4)))
+    ang = R["angles"][idx]
+    x = (left[:, 0] + right[:, 0]) * 0.5 / fw
+    y = (left[:, 1] + right[:, 1]) * 0.5 * aspect / fw
+    return np.column_stack([ang[:, 0], ang[:, 1], ang[:, 2] * roll_sign - tilt, x, y, np.log(bw / fw), tilt])
 
 
 def blinks_per_minute(R, runs, rate: float) -> float:
@@ -1524,10 +2165,44 @@ def blinks_per_minute(R, runs, rate: float) -> float:
     return float(np.clip(events / minutes / CAUGHT, 6.0, 30.0))
 
 
+def posture_of(R, runs, rate: float, roll_sign: float, spec):
+    """THEIR POSTURE over [runs]: the shoulders' place, nearness and tilt ([AXES] 3 on) averaged over
+    [POSTURE_S] seconds, each run's own middle taken out: `{sd, corr, tau}` - each axis's spread, how the
+    axes go together, and the seconds a posture holds."""
+    import numpy as np
+    k = max(3, int(round(POSTURE_S * rate)) | 1)
+    slow, lags = [], []
+    for idx in runs:
+        v = spec["videos"].get(R["vid"][idx[0]], {})
+        size = v.get("size", [16, 9])
+        X = motion_rows(R, idx, float(size[1]) / float(size[0]), roll_sign)[:, 3:]
+        S = X - high_pass(X, k)
+        S = S - np.median(S, axis=0)
+        slow.append(S)
+        if S.shape[0] >= 4 * k:
+            c = S - S.mean(axis=0)
+            for j in range(c.shape[1]):
+                var = float(c[:, j].var())
+                if var < 1e-12:
+                    continue
+                for lag in range(1, S.shape[0] // 2):
+                    if float((c[:-lag, j] * c[lag:, j]).mean()) / var < 1.0 / math.e:
+                        lags.append(lag / rate)
+                        break
+    S = np.concatenate(slow) if slow else np.zeros((0, 4))
+    if S.shape[0] < 10:
+        return {"sd": [0.0] * 4, "corr": np.eye(4).tolist(), "tau": 5.0}
+    sd = S.std(axis=0)
+    corr = np.corrcoef(S.T) if np.all(sd > 0) else np.eye(4)
+    return {"sd": [round(float(x), 5) for x in sd], "corr": [[round(float(x), 3) for x in r] for r in corr],
+            "tau": round(float(np.median(lags)), 2) if lags else 5.0}
+
+
 def cmd_motion(a) -> int:
     """THEIR HEAD'S OWN MOTION, from every video's survey where they face the camera: its quick part (the
     slow drift out), in runs a Likeness plays back in pieces, which looks are speech, and how often they
-    blink (next/likeness.md, "The second build")."""
+    blink (next/likeness.md, "The second build"); and THEIR POSTURE - how far and which ways their body
+    settles, and how long it holds ([posture_of], the fourth pass)."""
     import numpy as np
     spec = read_json(a.spec)
     rate = float(spec.get("rate", 5.0))
@@ -1536,7 +2211,13 @@ def cmd_motion(a) -> int:
         say("motion: too little usable footage (%d looks)" % R["count"])
         return 2
     ang = R["angles"]
-    facing = (np.abs(ang[:, 0]) < FACING) & (np.abs(ang[:, 1]) < FACING)
+    pose = np.asarray(R["pose"], dtype=np.float64).reshape(-1, 33, 4)
+    shoulders = (pose[:, 11, 3] > 0.5) & (pose[:, 12, 3] > 0.5)
+    facing = (np.abs(ang[:, 0]) < FACING) & (np.abs(ang[:, 1]) < FACING) & shoulders
+    # THE HEAD'S ROLL AS THE PICTURE TURNS: the head and the shoulders lean together, so the roll's sign
+    # is whichever goes with the shoulders' tilt in their own looks
+    tilt = np.degrees(np.arctan2(pose[:, 11, 1] - pose[:, 12, 1], np.maximum(pose[:, 11, 0] - pose[:, 12, 0], 1e-4)))
+    roll_sign = 1.0 if facing.sum() < 50 or np.corrcoef(ang[facing, 2], tilt[facing])[0, 1] >= 0 else -1.0
     runs = runs_of(R, rate, facing)
     k = max(3, int(round(DRIFT * rate)) | 1)
     trim = int(round(rate))
@@ -1545,7 +2226,7 @@ def cmd_motion(a) -> int:
     for idx in runs:
         v = spec["videos"].get(R["vid"][idx[0]], {})
         size = v.get("size", [16, 9])
-        X = high_pass(head_rows(R, idx, float(size[1]) / float(size[0])), k)[trim:-trim]
+        X = high_pass(motion_rows(R, idx, float(size[1]) / float(size[0]), roll_sign), k)[trim:-trim]
         j = jaw[idx]
         spread = np.array([j[max(0, i - 5): i + 6].std() for i in range(j.size)])[trim:-trim]
         pieces.append((idx[trim:-trim], X, spread))
@@ -1577,9 +2258,220 @@ def cmd_motion(a) -> int:
         kept.append(r)
         total += len(r["rows"])
     blinks = blinks_per_minute(R, runs, rate)
+    posture = posture_of(R, runs, rate, roll_sign, spec)
     write_json(a.out, {"rate": rate, "axes": AXES, "sd": [round(float(x), 5) for x in sd],
-                       "blinks_per_min": round(blinks, 1), "runs": kept})
-    say("motion: %.0f minutes of their head in %d runs, %.0f blinks a minute" % (total / rate / 60.0, len(kept), blinks))
+                       "roll_sign": roll_sign, "blinks_per_min": round(blinks, 1), "posture": posture, "runs": kept})
+    say("motion: %.0f minutes of their head in %d runs, %.0f blinks a minute; a posture holds %.0f s" % (
+        total / rate / 60.0, len(kept), blinks, posture["tau"]))
+    return 0
+
+
+# --- learn -----------------------------------------------------------------------------------------
+
+# THEIR MOUTH, LEARNED (the third pass, 2026-10-22, the user: "true learning of some sort. Some internal
+# neurons, updated via a simple rule, and informed by ALL sets of videos. Maybe even some kind of ensemble
+# method."): from the sounds heard round a moment - which class at each of these offsets (seconds) - to
+# their mouth's shape at it.
+OFFSETS = [-0.24, -0.18, -0.12, -0.06, 0.0, 0.06, 0.12, 0.18, 0.24]
+# Each offset's window (seconds): the windows touch, so every sound in reach is counted once.
+WINDOW = 0.06
+# The ensemble: this many members, each this many neurons, trained this many passes on its own resample.
+MEMBERS = 8
+HIDDEN = 32
+EPOCHS = 40
+# A look this far (seconds) from every word heard is outside what was transcribed, and teaches nothing.
+NEAR_WORDS = 1.5
+
+
+def class_line(phones):
+    """[phones] (`[{vid, t0, t1, class}]`) as each video's line, in order: `{vid: (starts, ends, classes)}`, a
+    phone held until the next begins when the gap is short (as Visemes.timeline does)."""
+    import numpy as np
+    by = {}
+    for ph in phones:
+        if ph.get("class"):
+            by.setdefault(str(ph["vid"]), []).append((float(ph["t0"]), float(ph["t1"]), str(ph["class"])))
+    out = {}
+    for vid, ps in by.items():
+        ps.sort()
+        t0 = np.array([p[0] for p in ps])
+        t1 = np.array([p[1] for p in ps])
+        nxt = np.r_[t0[1:], np.inf]
+        t1 = np.where((nxt - t1 < 0.12) & (nxt > t1), nxt, t1)
+        out[vid] = (t0, t1, [p[2] for p in ps])
+    return out
+
+
+def contexts(line, vid, times, classes):
+    """THE INPUTS: for each moment in [times], how much of each of [classes] is heard in the window of
+    [WINDOW] seconds round each of [OFFSETS] from it (the rest wherever none is), window by window: [n,
+    len(OFFSETS) * len(classes)]. Shares, not a class at a point, so the mouth they make moves smoothly
+    as the sounds pass (LikenessPlan reads them so)."""
+    import numpy as np
+    k = len(classes)
+    rest = classes.index("rest")
+    times = np.asarray(times, dtype=np.float64)
+    X = np.zeros((len(times), len(OFFSETS) * k), dtype=np.float32)
+    got = line.get(vid)
+    for j, o in enumerate(OFFSETS):
+        a0 = times + o - WINDOW * 0.5
+        a1 = a0 + WINDOW
+        heard = np.zeros(len(times))
+        if got is not None:
+            t0, t1, cl = got
+            first = np.clip(np.searchsorted(t1, a0, side="right"), 0, len(t0))
+            for n in range(len(times)):
+                i = first[n]
+                while i < len(t0) and t0[i] < a1[n]:
+                    over = min(a1[n], t1[i]) - max(a0[n], t0[i])
+                    if over > 0:
+                        c = classes.index(cl[i]) if cl[i] in classes else rest
+                        X[n, j * k + c] += over / WINDOW
+                        heard[n] += over / WINDOW
+                    i += 1
+        X[:, j * k + rest] += np.clip(1.0 - heard, 0.0, 1.0)
+    return X
+
+
+def train_member(X, Y, seed: int, epochs=EPOCHS, hidden=HIDDEN, lr=3e-3, decay=1e-4, batch=256):
+    """ONE NETWORK: [X] to [Y] through [hidden] tanh neurons, trained by gradient descent (Adam, a little
+    weight decay) on mean squared error: `(w1, b1, w2, b2)`."""
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    n, d = X.shape
+    m = Y.shape[1]
+    w1 = rng.normal(0, 1.0 / math.sqrt(len(OFFSETS)), (d, hidden)).astype(np.float64)
+    b1 = np.zeros(hidden)
+    w2 = rng.normal(0, 1.0 / math.sqrt(hidden), (hidden, m))
+    b2 = np.zeros(m)
+    params = [w1, b1, w2, b2]
+    mom = [np.zeros_like(p) for p in params]
+    vel = [np.zeros_like(p) for p in params]
+    step = 0
+    for _ in range(epochs):
+        order = rng.permutation(n)
+        for b0 in range(0, n, batch):
+            idx = order[b0:b0 + batch]
+            x, y = X[idx], Y[idx]
+            h = np.tanh(x @ w1 + b1)
+            err = (h @ w2 + b2) - y
+            g2 = h.T @ err / len(idx) + decay * w2
+            gb2 = err.mean(axis=0)
+            dh = (err @ w2.T) * (1.0 - h * h)
+            g1 = x.T @ dh / len(idx) + decay * w1
+            gb1 = dh.mean(axis=0)
+            step += 1
+            for p, g, mo, ve in zip(params, [g1, gb1, g2, gb2], mom, vel):
+                mo *= 0.9
+                mo += 0.1 * g
+                ve *= 0.999
+                ve += 0.001 * g * g
+                p -= lr * (mo / (1 - 0.9 ** step)) / (np.sqrt(ve / (1 - 0.999 ** step)) + 1e-8)
+    return w1, b1, w2, b2
+
+
+def ensemble_predict(members, X):
+    """The members' mean: what the ensemble says."""
+    import numpy as np
+    out = 0.0
+    for w1, b1, w2, b2 in members:
+        out = out + np.tanh(X @ w1 + b1) @ w2 + b2
+    return out / len(members)
+
+
+def r2(pred, Y, weights):
+    """The share of [Y]'s spread [pred] explains, each column weighed by [weights]."""
+    import numpy as np
+    ss = ((Y - pred) ** 2).sum(axis=0)
+    st = ((Y - Y.mean(axis=0)) ** 2).sum(axis=0)
+    return float(1.0 - (ss * weights).sum() / max(1e-9, (st * weights).sum()))
+
+
+def cmd_learn(a) -> int:
+    """THEIR MOUTH FOR THE VOICE'S SOUNDS, LEARNED FROM EVERY VIDEO: an ensemble of small networks from the
+    sounds round a moment to their mouth's shape at it ([contexts], [train_member]), each member trained on
+    its own resample of every survey look near the words heard. One video is held out first, to say how
+    much of their mouth the ensemble explains there beside the plainest model (each sound's mean mouth),
+    then every video trains the ensemble kept."""
+    import numpy as np
+    spec = read_json(a.spec)
+    classes = list(spec["classes"])
+    R = survey_records(spec["videos"], spec["shots"])
+    line = class_line(spec.get("phones", []))
+    if R["count"] < 200 or not line:
+        say("learn: no words to learn from (%d looks, %d videos with words)" % (R["count"], len(line)))
+        return 2
+    ang = R["angles"]
+    facing = (np.abs(ang[:, 0]) < FACING) & (np.abs(ang[:, 1]) < FACING) & ~hands_at_mouth_all(R["pose"], R["box"])
+    # only the looks near words heard: elsewhere nothing was transcribed, and silence would be a lie
+    near = np.zeros(R["count"], dtype=bool)
+    for vid, (t0, t1, _cl) in line.items():
+        sel = np.nonzero(R["vid"] == vid)[0]
+        if sel.size == 0:
+            continue
+        tt = R["time"][sel]
+        j = np.clip(np.searchsorted(t0, tt), 1, len(t0) - 1)
+        gap = np.minimum(np.abs(tt - t0[j - 1]), np.minimum(np.abs(tt - t1[j - 1]), np.abs(tt - t0[j])))
+        near[sel] = (gap < NEAR_WORDS) | ((tt >= t0[j - 1]) & (tt <= t1[j - 1]))
+    use = np.nonzero(facing & near)[0]
+    if use.size < 500:
+        say("learn: too few looks near their words (%d)" % use.size)
+        return 2
+    X = np.zeros((use.size, len(OFFSETS) * len(classes)), dtype=np.float32)
+    for vid in set(R["vid"][use].tolist()):
+        rows = np.nonzero(R["vid"][use] == vid)[0]
+        X[rows] = contexts(line, vid, R["time"][use][rows], classes)
+    raw = R["blend"][use][:, MOUTH_INDEX].astype(np.float64)
+    mean, sd = raw.mean(axis=0), np.maximum(raw.std(axis=0), SPREAD_FLOOR)
+    # EACH VIDEO AGAINST ITS OWN MEAN AND SPREAD: a camera, a light, a distance each measure their mouth
+    # at a level of their own (their jaw while speaking 0.08 in one video, 0.16 in another), and what is
+    # learned is how it moves with the sounds, not where a video sits
+    Y = np.zeros_like(raw)
+    for vid in set(R["vid"][use].tolist()):
+        rows = R["vid"][use] == vid
+        Y[rows] = (raw[rows] - raw[rows].mean(axis=0)) / np.maximum(raw[rows].std(axis=0), SPREAD_FLOOR)
+    weights = np.array([KEY_WEIGHT.get(n, 0.5) for n in MOUTH_NAMES])
+    vids = R["vid"][use]
+    # HOW MUCH IT EXPLAINS, on a video it never saw: the one with the most looks held out
+    counts = {v: int((vids == v).sum()) for v in set(vids.tolist())}
+    held = max(counts, key=counts.get) if len(counts) > 1 else None
+    scores = {}
+    if held is not None:
+        tr, te = vids != held, vids == held
+        centre = OFFSETS.index(0.0) * len(classes)
+        # the plainest model: each sound's mean mouth, for whichever fills the middle window most
+        by_class = {}
+        for c in range(len(classes)):
+            rows = np.nonzero(tr & (X[:, centre + c] > 0))[0]
+            by_class[c] = Y[rows].mean(axis=0) if rows.size else np.zeros(Y.shape[1])
+        plain = np.array([by_class[int(np.argmax(x[centre:centre + len(classes)]))] for x in X[te]])
+        members = [train_member(X[tr][idx], Y[tr][idx], seed=k)
+                   for k, idx in enumerate(np.random.default_rng(7 + k).integers(0, int(tr.sum()), int(tr.sum())) for k in range(MEMBERS))]
+        jaw = MOUTH_NAMES.index("jawOpen")
+        ens = ensemble_predict(members, X[te])
+        one = ensemble_predict(members[:1], X[te])
+        scores = {"held_out": held, "looks": int(te.sum()),
+                  "each_sound_mean": round(r2(plain, Y[te], weights), 3), "one_network": round(r2(one, Y[te], weights), 3),
+                  "ensemble": round(r2(ens, Y[te], weights), 3),
+                  "ensemble_jaw": round(r2(ens[:, jaw:jaw + 1], Y[te][:, jaw:jaw + 1], np.ones(1)), 3)}
+        progress(a.progress, 0.5)
+    # THE ENSEMBLE KEPT: every look of every video, each member its own resample
+    rng = np.random.default_rng(11)
+    members = [train_member(X[idx], Y[idx], seed=100 + k) for k, idx in
+               enumerate(rng.integers(0, X.shape[0], X.shape[0]) for _ in range(MEMBERS))]
+    write_json(a.out, {"classes": classes, "offsets": OFFSETS, "window": WINDOW, "names": MOUTH_NAMES,
+                       "weights": [float(x) for x in weights], "pushed": [MOUTH_NAMES[i] for i in PUSHED],
+                       "mean": [round(float(x), 6) for x in mean], "sd": [round(float(x), 6) for x in sd],
+                       "members": [{"w1": [[round(float(v), 5) for v in row] for row in w1], "b1": [round(float(v), 5) for v in b1],
+                                    "w2": [[round(float(v), 5) for v in row] for row in w2], "b2": [round(float(v), 5) for v in b2]}
+                                   for w1, b1, w2, b2 in members],
+                       "looks": int(use.size), "scores": scores})
+    progress(a.progress, 1.0)
+    if scores:
+        say("learn: %d looks; on a video it never saw it explains %.0f%% of their mouth (each sound's mean mouth %.0f%%)" % (
+            use.size, 100 * scores["ensemble"], 100 * scores["each_sound_mean"]))
+    else:
+        say("learn: %d looks of one video" % use.size)
     return 0
 
 
@@ -1606,6 +2498,31 @@ OTHER_SET = 1.5
 CANDIDATES = 10
 # THE EYES' STATES the library keeps (both eyes' blink): the open one is the still's own.
 EYE_STATES = {"half": 0.45, "closed": 0.9}
+# THE EYES' GLANCES, as the picture turns (the third pass: "The eyes never look around"): each the
+# blendshapes that carry it, both eyes - their left eye looking out is the picture's right.
+GLANCES = {"look_right": ["eyeLookOutLeft", "eyeLookInRight"], "look_left": ["eyeLookInLeft", "eyeLookOutRight"],
+           "look_up": ["eyeLookUpLeft", "eyeLookUpRight"], "look_down": ["eyeLookDownLeft", "eyeLookDownRight"]}
+# How far a glance looks (the blendshapes' mean) in the library's.
+GLANCE = 0.55
+
+
+def color_like(img, ring, still_img):
+    """[img] in the still's colors round the part it is drawn into: its mean and spread in Lab on [ring]
+    taken to [still_img]'s there (the spread's ratio within 0.8..1.25), the whole image moved so (2026-10-22:
+    matched by the cheeks alone, every mouth came out a color of its own - "blurry flickering patterns")."""
+    import cv2
+    import numpy as np
+    a_ = cv2.cvtColor(img, cv2.COLOR_RGB2LAB).astype(np.float64)
+    b_ = cv2.cvtColor(still_img, cv2.COLOR_RGB2LAB).astype(np.float64)
+    where = ring & (img.sum(axis=2) > 0) & (still_img.sum(axis=2) > 0)
+    if where.sum() < 50:
+        return img
+    for c in range(3):
+        ma, sa = a_[..., c][where].mean(), a_[..., c][where].std()
+        mb, sb = b_[..., c][where].mean(), b_[..., c][where].std()
+        k = float(np.clip(sb / max(sa, 1e-3), 0.8, 1.25))
+        a_[..., c] = (a_[..., c] - ma) * k + mb
+    return cv2.cvtColor(np.clip(a_, 0, 255).astype(np.uint8), cv2.COLOR_LAB2RGB)
 
 
 def mouth_scale(blend):
@@ -1629,6 +2546,17 @@ ODD = 2.0
 BLURRED = 0.5
 
 
+def glance_cost(blend, looks, g):
+    """How far each look's eyes are from glancing [g]: its own blendshapes at [GLANCE], the others' and the
+    blink low, both eyes alike."""
+    import numpy as np
+    bl = np.asarray(blend, dtype=np.float64).reshape(-1, 52)
+    mine = bl[:, looks[g]]
+    others = sum(bl[:, looks[o]].mean(axis=1) for o in looks if o != g)
+    return (((mine.mean(axis=1) - GLANCE) / 0.12) ** 2 + ((mine[:, 0] - mine[:, 1]) / 0.2) ** 2
+            + (others / 0.15) ** 2 + (bl[:, BLINK].mean(axis=1) / 0.12) ** 2)
+
+
 def class_target(blend, rest, articulation: float):
     """A SOUND CLASS'S MOUTH, PUSHED PAST THEIR OWN: its [PUSHED] shapes moved [articulation] times as far
     from [rest] (their mouth is mostly near closed while they talk, so a sound's own median reads as
@@ -1642,9 +2570,9 @@ def class_target(blend, rest, articulation: float):
 
 def cmd_library(a) -> int:
     """THE SET'S LIBRARY: for each sound class a few clean real mouths, and their eyes half and fully
-    closed - from any video, at the still's turn, found in the surveys, then looked at again at full size
-    and unwrapped into the rig's box (next/likeness.md, "The second build"). Silence and open eyes are the
-    still's own."""
+    closed and glancing aside - from any video, at the still's turn, found in the surveys, then looked at
+    again at full size, unwrapped into the rig's box and matched to the still's colors (next/likeness.md,
+    the second build and the third pass). Silence and open eyes are the still's own."""
     import cv2
     import numpy as np
     spec = read_json(a.spec)
@@ -1688,6 +2616,13 @@ def cmd_library(a) -> int:
         for i in spaced(np.argsort(d), R, 1.5, CANDIDATES):
             if np.isfinite(d[i]):
                 wants.append({"kind": "eye", "name": state, "target": b, "i": i})
+    looks = {g: [BLEND_NAMES.index(n) for n in names] for g, names in GLANCES.items()}
+    for g in GLANCES:
+        d = glance_cost(R["blend"], looks, g) + turn
+        d[~near] = np.inf
+        for i in spaced(np.argsort(d), R, 1.5, CANDIDATES):
+            if np.isfinite(d[i]):
+                wants.append({"kind": "eye", "name": g, "target": GLANCE, "i": i})
     progress(a.progress, 0.05)
     # EACH LOOKED AT AGAIN AT FULL SIZE: found, turned as the still, no hand at the mouth, how near what
     # was wanted, how sharp - and unwrapped into the box at once (the frame itself is let go)
@@ -1713,6 +2648,9 @@ def cmd_library(a) -> int:
         if w["kind"] == "mouth":
             cost += float((((bl[MOUTH_INDEX] - w["target"]) * ks) ** 2).sum())
             region = LIPS_OUTER
+        elif w["name"] in GLANCES:
+            cost += float(glance_cost(bl.reshape(1, -1), looks, w["name"])[0])
+            region = EYE_RIGHT + EYE_LEFT
         else:
             cost += ((bl[BLINK].mean() - w["target"]) / 0.1) ** 2 + ((bl[BLINK[0]] - bl[BLINK[1]]) / 0.15) ** 2
             region = EYE_RIGHT + EYE_LEFT
@@ -1750,6 +2688,19 @@ def cmd_library(a) -> int:
     if not any(g["kind"] == "mouth" for g in kept):
         say("library: no mouth found at full size")
         return 2
+    # IN THE STILL'S COLORS: each image matched to the still's own face round the lips or the lids
+    still_rgb = cv2.cvtColor(cv2.imread(os.path.join(os.path.dirname(spec["stills"]), "stills", still["file"])), cv2.COLOR_BGR2RGB)
+    sh, sw = still_rgb.shape[:2]
+    still_face = to_pixels([still["points"]], sw, sh)[0]
+    still_img = unwrap(still_rgb, still_face, rig, tris)
+    rings = {}
+    for kind, name in (("mouth", "mask_mouth.png"), ("eye", "mask_eyes.png")):
+        mk = cv2.imread(os.path.join(os.path.dirname(spec["rig"]), name), 0)
+        inside = (mk > 25) if mk is not None else np.zeros((rig.img_h, rig.img_w), bool)
+        rings[kind] = (cv2.dilate(inside.astype(np.uint8), np.ones((31, 31), np.uint8)) > 0) & ~inside
+    for g in kept:
+        g["image"] = color_like(g["image"], rings[g["kind"]], still_img)
+        g["light"] = still["light"]
     out_dir = spec["out"]
     part = out_dir + ".part"
     shutil.rmtree(part, ignore_errors=True)
@@ -1772,6 +2723,7 @@ def cmd_library(a) -> int:
         else:
             e["state"] = g["name"]
             e["blink"] = round(float(g["blend"][BLINK].mean()), 3)
+            e["look"] = {k: round(float(g["blend"][[BLEND_NAMES.index(n) for n in v]].mean()), 3) for k, v in GLANCES.items()}
             eyes.append(e)
     shutil.rmtree(out_dir, ignore_errors=True)
     os.replace(part, out_dir)
@@ -1835,7 +2787,7 @@ def main(argv=None) -> int:
     p.add_argument("--box-width", type=int, default=512)
     p.set_defaults(fn=cmd_rig)
 
-    for name, fn in (("visemes", cmd_visemes), ("motion", cmd_motion)):
+    for name, fn in (("visemes", cmd_visemes), ("motion", cmd_motion), ("learn", cmd_learn)):
         p = sub.add_parser(name)
         p.add_argument("--progress", default="")
         p.add_argument("--spec", required=True)

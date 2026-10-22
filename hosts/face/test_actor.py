@@ -17,7 +17,10 @@ video FFmpeg makes from two colors - no footage of anyone. Each claim beside a c
 - a sound's target is pushed past their own on the shapes that show, never on mouthClose;
 - a hand up is costed and a hand at rest is not - where rest is the low end of where their hands are seen;
 - the rig made on a made still masks the lips and the eyes and nothing else, the lids move with the eyes
-  and the brows never.
+  and the brows never;
+- the learned mouth: on a made voice whose mouth closes AHEAD of each closing sound (as lips do), the
+  ensemble explains on unseen speech what each sound's mean mouth cannot; trained on shuffled mouths, it
+  explains nothing; the same seed trains the same network.
 """
 import argparse
 import json
@@ -366,6 +369,231 @@ def test_rig(tmp):
     check(ew[actor.EYE_RIGHT].min() == 1.0 and ew[actor.BROWS].max() == 0.0 and ew[actor.LIPS_OUTER].max() == 0.0,
           "the lids do not move with the eyes, or the brows or lips do")
     check(mw[actor.LIPS_OUTER].min() == 1.0 and mw[actor.EYE_RIGHT].max() == 0.0, "the lips do not move with the mouth, or the eyes do")
+    # its body: a weight for every bone and every vertex past the near ring, the frame's edge on none
+    body = rig["stills"][0]
+    rest = len(actor.OVAL) + len(body["body"]) + len(rig["anchors"])
+    check(sorted(body["skin"]) == sorted(actor.BONES) and all(len(v) == rest for v in body["skin"].values()),
+          "the still's skin does not weigh every vertex on every bone")
+    check(all(max(v[-len(rig["anchors"]):]) == 0.0 for v in body["skin"].values()), "the frame's edge moves with a bone")
+    check(set(body["skeleton"]) == {"neck", "hip", "width", "l", "r"}, "the still's skeleton is %s" % sorted(body["skeleton"]))
+
+
+def test_skin():
+    """THE BODY'S BONES (the fourth pass): a made seated pose's skeleton - the hips under the neck, a hand
+    seen in the picture resting and one seen too faintly not - and each place weighed to the bone it is on:
+    the torso's middle to the torso, a resting wrist to its hand, a forearm to the forearm, the head to the
+    head, the room to nothing; no place weighs more than whole."""
+    import numpy as np
+    W, H = 1920, 1080
+    pose = np.zeros((33, 4))
+
+    def put(k, x, y, v=0.9):
+        pose[k] = [x / W, y / H, 0.0, v]
+
+    put(11, 1150, 560)
+    put(12, 770, 560)
+    put(13, 1250, 820)
+    put(14, 670, 820)
+    put(15, 1050, 980)
+    put(16, 700, 990, 0.2)
+    put(17, 1010, 1010)
+    put(19, 1000, 990)
+    put(18, 680, 1030, 0.2)
+    put(20, 670, 1020, 0.2)
+    face = made_face() * 160.0 + np.array([960.0, 300.0])
+    matte = np.zeros((H, W), np.float32)
+    matte[440:, 600:1320] = 1.0
+    matte[120:440, 820:1100] = 1.0
+    skel = actor.skeleton(pose.reshape(-1), W, H)
+    check(skel["l"]["rests"] and not skel["r"]["rests"], "a hand seen in the picture does not rest, or one seen faintly does")
+    # hands clasped: one faint beside one that rests rests too
+    clasped = pose.copy()
+    clasped[16, :2] = [1000 / W, 1000 / H]
+    check(actor.skeleton(clasped.reshape(-1), W, H)["r"]["rests"], "a faint hand clasped in a resting one does not rest")
+    check(abs(skel["hip"][1] - (560 + actor.TORSO * 380)) < 1e-6 and abs(skel["hip"][0] - 960) < 1e-6,
+          "the unseen hips are not under the neck (%s)" % str(skel["hip"]))
+    places = {"torso": (960, 760), "hand_l": (1040, 985), "fore_l": (1150, 900), "head": (960, 300)}
+    pts = np.array(list(places.values()) + [(100.0, 100.0)], dtype=np.float64)
+    wts = actor.skin_weights(pts, face, pose.reshape(-1), matte, W, H)
+    for n, (bone, _) in enumerate(places.items()):
+        got = actor.BONES[int(wts[n].argmax())]
+        check(got == bone and wts[n].max() > 0.6, "a place on the %s weighs most on the %s (%.2f)" % (bone, got, wts[n].max()))
+    check(wts[-1].sum() < 1e-9, "the room weighs %.3f on the body" % wts[-1].sum())
+    check(wts.sum(axis=1).max() <= 1.0 + 1e-9, "a place weighs %.3f, more than whole" % wts.sum(axis=1).max())
+
+
+def test_front():
+    """WHAT NEVER MOVES ([still_room]): a thing that never moves and hides them where they are (a
+    microphone) is drawn before them - their matte kept whole under it and their picture filled there; one
+    that never moves where they are not (the wall their matte bled over) leaves their matte; what moves
+    (them) stays theirs. The control: with nothing still, there is no front and the matte is as it was."""
+    import numpy as np
+    H, W = 120, 200
+    rng = np.random.default_rng(5)
+    still = rng.integers(60, 120, (H, W, 3)).astype(np.uint8)
+    still[40:80, 90:110] = 10                       # the microphone: dark, before them
+    matte = np.zeros((H, W), np.float32)
+    matte[20:, 50:150] = 1.0                        # them
+    matte[40:80, 90:110] = 0.0                      # ...the segmentation left the microphone out
+    plate = np.full((H, W, 3), 128.0)
+    seen = matte <= 0.5
+    there = np.where(matte > 0.5, 0.8, 0.0)
+    there[40:80, 90:110] = 0.7
+    steady = np.zeros((H, W))
+    front = np.zeros((H, W))
+    steady[30:110, 85:125] = 0.9
+    front[30:110, 85:125] = 0.9
+    steady[20:120, 140:150] = 0.9                   # their matte's edge over the wall: still, not before them
+    steady[95:105, 60:70] = 0.9                     # a fleck of them that happened to stay: too small to be a thing
+    front[95:105, 60:70] = 0.9
+    steady[60:72, 68:80] = 0.9                      # ...and one inside them, not before them: theirs
+    m, room, fr, body = actor.still_room(still, matte, plate, seen, {"still": steady, "front": front}, there)
+    check(fr is not None and fr[60, 100] > 0.9 and fr[60, 70] == 0.0, "the microphone is not drawn before them, or they are")
+    check(m[60, 100] > 0.9, "their matte has a hole the microphone's shape (%.2f): it would move with them" % m[60, 100])
+    check(m[60, 146] < 0.1 and m[60, 120] > 0.9, "the wall stayed in their matte (%.2f), or they left it (%.2f)" % (m[60, 146], m[60, 120]))
+    check(np.abs(body[60, 100].astype(int) - 10).max() > 20, "their picture under the microphone is the microphone")
+    check(fr[100, 65] == 0.0 and m[66, 74] > 0.9, "a fleck of them was drawn before them, or cut out of them")
+    m2, _, fr2, body2 = actor.still_room(still, matte, plate, seen, {"still": np.zeros((H, W)), "front": np.zeros((H, W))}, there)
+    check(fr2 is None and np.allclose(m2, matte) and body2 is still, "with nothing still, a front was found or the matte changed")
+    # a microphone the segmentation left wholly out of them, as wide as a real one, is before them all the same
+    wide = matte.copy()
+    wide[30:110, 85:125] = 0.0
+    m3, _, fr3, _ = actor.still_room(still, wide, plate, seen, {"still": steady, "front": front}, there)
+    check(fr3 is not None and fr3[60, 105] > 0.9 and m3[60, 105] > 0.9,
+          "a microphone left out of their matte is not drawn before them, they not whole under it")
+
+
+def test_shade():
+    """THE LIGHT ROUND THEM: their shadow on the wall beside them in the still, not in the plate, darkens the
+    plate behind their edge - and a plate lit as the still is is left as it is (the control)."""
+    import numpy as np
+    H, W = 120, 200
+    still = np.full((H, W, 3), 150, np.uint8)
+    still[:, 100:] = 60                              # them, on the right
+    still[:, 80:100] = 110                           # their shadow on the wall beside them
+    matte = np.zeros((H, W), np.float32)
+    matte[:, 100:] = 1.0
+    plate = np.full((H, W, 3), 150.0)
+    trusted = np.ones((H, W), bool)
+    judged = {"still": np.zeros((H, W)), "front": np.zeros((H, W))}
+    _, room, _, _ = actor.still_room(still, matte, plate, trusted, judged, np.zeros((H, W)))
+    check(room[60, 105, 0] < 140, "the plate behind their edge is %d, not darkened as their shadow is" % room[60, 105, 0])
+    plain = still.copy()
+    plain[:, 80:100] = 150
+    _, room2, _, _ = actor.still_room(plain, matte, plate, trusted, judged, np.zeros((H, W)))
+    check(abs(int(room2[60, 105, 0]) - 150) <= 2, "a plate lit as the still is was changed (%d)" % room2[60, 105, 0])
+
+
+def test_soft_edge():
+    """THEIR SOFT EDGE AWAY FROM THE HEAD shows the still's own room - at rest the picture is the still - and
+    round the head the plate reaches past it (the control: no hair left on the wall)."""
+    import numpy as np
+    H, W = 120, 200
+    still = np.full((H, W, 3), 160, np.uint8)       # the wall
+    still[40:, 60:100] = 40                          # a dark chair behind their soft edge, below the head
+    still[:40, 90:100] = 50                          # ...and hair in it, round the head
+    still[:, 100:] = 90
+    matte = np.zeros((H, W), np.float32)
+    matte[:, 100:] = 1.0
+    matte[:, 90:100] = 0.3                           # the soft edge
+    plate = np.full((H, W, 3), 160.0)                # the wall the frames saw there
+    trusted = np.ones((H, W), bool)
+    judged = {"still": np.zeros((H, W)), "front": np.zeros((H, W))}
+    head = np.zeros((H, W), bool)
+    head[:40] = True
+    _, room, _, _ = actor.still_room(still, matte, plate, trusted, judged, np.zeros((H, W)), head)
+    check(abs(int(room[80, 95, 0]) - 40) <= 3, "under their soft edge the room is %d, not the still's own" % room[80, 95, 0])
+    check(int(room[20, 95, 0]) > 100, "round the head the room under their edge is the still's, hair and all (%d)" % room[20, 95, 0])
+
+
+def test_trust():
+    """THE PLATE IS TRUSTED where a quarter of the frames saw the room, or a few that agree - not a few that
+    do not (their own shape the segmentation missed, a globe held up), nor fewer than a few."""
+    import numpy as np
+    n = 150
+    seen = np.array([0.3, 6 / n, 6 / n, 3 / n, 0.3])
+    agree = np.array([0.2, 0.9, 0.4, 1.0, 1.0])
+    check(actor.trust(seen, agree, n).tolist() == [True, True, False, False, True],
+          "the plate is trusted at %s" % actor.trust(seen, agree, n).tolist())
+
+
+def test_posture():
+    """THEIR POSTURE ([posture_of]): from shoulders that wander slowly, with a quick sway on top, its spread
+    and how long it holds come back - and a posture that wanders quicker holds for less (the control)."""
+    import numpy as np
+
+    def made(tau, seed):
+        rng = np.random.default_rng(seed)
+        n = 4000
+        a = math.exp(-0.2 / tau)
+        x = np.zeros(n)
+        for i in range(1, n):
+            x[i] = a * x[i - 1] + math.sqrt(1 - a * a) * rng.normal(0.0, 0.03)
+        quick = 0.01 * np.sin(np.arange(n) * 0.2 * 2 * math.pi / 2.5)
+        pose = np.zeros((n, 33, 4))
+        pose[:, 11, :] = [0.6, 0.5, 0.0, 1.0]
+        pose[:, 12, :] = [0.4, 0.5, 0.0, 1.0]
+        pose[:, 11, 0] += x + quick
+        pose[:, 12, 0] += x + quick
+        R = {"count": n, "box": np.tile([0.45, 0.2, 0.55, 0.4], (n, 1)), "pose": pose.reshape(n, -1),
+             "angles": np.zeros((n, 3)), "vid": np.array(["v"] * n, dtype=object), "piece": np.zeros(n, dtype=int),
+             "time": np.arange(n) / 5.0}
+        return actor.posture_of(R, [np.arange(n)], 5.0, 1.0, {"videos": {"v": {"size": [1920, 1080]}}}), x
+
+    slow, x = made(10.0, 1)
+    want = x.std() / 0.1
+    check(abs(slow["sd"][0] - want) < 0.35 * want, "the posture's spread across is %.3f, not near %.3f" % (slow["sd"][0], want))
+    check(7.0 <= slow["tau"] <= 20.0, "a posture that wanders over 10 s holds %.1f s" % slow["tau"])
+    fast, _ = made(1.5, 2)
+    check(fast["tau"] < slow["tau"] * 0.6, "a quicker posture holds %.1f s against %.1f: the measure cannot tell" % (fast["tau"], slow["tau"]))
+
+
+def test_learn():
+    """The ensemble learns what lies round a moment: a mouth that starts closing 120 ms before a closing
+    sound, which each sound's mean mouth (one class at the moment) cannot know."""
+    import numpy as np
+    rng = np.random.default_rng(4)
+    classes = ["rest", "open", "pbm"]
+    phones, t = [], 0.0
+    while t < 1800.0:
+        c = rng.choice(["open", "pbm", "open"])
+        d = rng.uniform(0.06, 0.16)
+        phones.append({"vid": "v", "t0": t, "t1": t + d, "class": str(c)})
+        t += d + (rng.uniform(0.3, 0.8) if rng.random() < 0.08 else 0.0)
+    line = actor.class_line(phones)
+    t0, t1, cl = line["v"]
+    times = np.arange(0.5, t - 0.5, 0.2)
+
+    def truth(tt):
+        # open while a vowel is heard, but closing from 120 ms before a closing sound
+        i = np.searchsorted(t0, tt, side="right") - 1
+        later = np.searchsorted(t0, tt + 0.12, side="right") - 1
+        now_open = (i >= 0) & (tt < t1[np.clip(i, 0, None)]) & (np.array(cl)[np.clip(i, 0, None)] == "open")
+        soon = np.array(cl)[np.clip(later, 0, None)] == "pbm"
+        return np.where(now_open & ~soon, 1.0, 0.0)
+
+    X = actor.contexts(line, "v", times, classes)
+    Y = np.stack([truth(times)] + [rng.normal(0, 0.05, times.size) for _ in range(2)], axis=1) + rng.normal(0, 0.05, (times.size, 3))
+    split = int(times.size * 0.7)
+    weights = np.array([1.0, 0.01, 0.01])
+    members = [actor.train_member(X[:split], Y[:split], seed=k, epochs=15, hidden=16) for k in range(3)]
+    ens = actor.ensemble_predict(members, X[split:])
+    centre = actor.OFFSETS.index(0.0) * len(classes)
+    means = {c: Y[:split][np.argmax(X[:split, centre:centre + 3], axis=1) == c].mean(axis=0) for c in range(3)}
+    plain = np.array([means[int(np.argmax(x[centre:centre + 3]))] for x in X[split:]])
+    got, base = actor.r2(ens, Y[split:], weights), actor.r2(plain, Y[split:], weights)
+    check(got > base + 0.1, "the ensemble explains %.2f of the mouth on unseen speech, each sound's mean %.2f" % (got, base))
+    shuffled = Y[:split][rng.permutation(split)]
+    noise = [actor.train_member(X[:split], shuffled, seed=k, epochs=15, hidden=16) for k in range(2)]
+    check(actor.r2(actor.ensemble_predict(noise, X[split:]), Y[split:], weights) < 0.05,
+          "trained on shuffled mouths, it still explains the mouth (the check can fail)")
+    a_ = actor.train_member(X[:500], Y[:500], seed=3, epochs=2, hidden=8)
+    b_ = actor.train_member(X[:500], Y[:500], seed=3, epochs=2, hidden=8)
+    check(all(np.array_equal(p, q) for p, q in zip(a_, b_)), "one seed trained two networks")
+    # the shares sum to 1 in each window (the rest takes what nothing fills)
+    k = len(classes)
+    sums = X.reshape(X.shape[0], len(actor.OFFSETS), k).sum(axis=2)
+    check(np.allclose(sums, 1.0, atol=1e-5), "a window's shares do not sum to one (%.3f to %.3f)" % (sums.min(), sums.max()))
 
 
 def main():
@@ -389,6 +617,13 @@ def main():
         test_targets()
         test_hands()
         test_rig(tmp)
+        test_skin()
+        test_front()
+        test_trust()
+        test_shade()
+        test_soft_edge()
+        test_posture()
+        test_learn()
         if ffmpeg and os.path.exists(ffmpeg):
             test_cuts(ffmpeg, tmp)
         else:

@@ -173,7 +173,7 @@ const REGISTRY := {
 	"actor": {"label": "Actor", "family": &"picture",
 		"blurb": "Builds an actor from their own videos - a folder, or links to videos, playlists or a channel - for a Likeness to play: the footage surveyed and grouped by camera and look, a still of them chosen, and their motion, blinks and mouths learned from every video.",
 		"needs": [], "provides": ["actor"], "requires": [], "slots": [], "workspace": "",
-		"capabilities": ["subprocess", "ffmpeg", "python:face", "python:download", "agent:writer"], "marks": [],
+		"capabilities": ["subprocess", "ffmpeg", "python:face", "python:speech", "python:download", "agent:writer"], "marks": [],
 		"block": "actor", "card": "actor", "script": "res://src/likeness/actor_card.gd"},
 	# THE ACTOR READS THE NOTE (next/likeness.md): a still of them, moved by their own motion, the mouth and
 	# eyes drawn from their own as the voice's phones say. It brings an Actor and a Voice.

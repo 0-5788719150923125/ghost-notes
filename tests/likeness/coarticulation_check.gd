@@ -18,6 +18,14 @@ extends SceneTree
 ## fast speech one mouth gives way to the next in some 15 ms, so a millisecond's step is no test of a
 ## jump), since the two strongest pulls are each less the third's. The control is the plain two
 ## strongest, which must jump as a third overtakes one, however small the step.
+##
+## THE LEARNED MOUTH IS READ AS IT WAS TRAINED ([LikenessPlan], actor.py's `contexts`): a made network of one
+## neuron that opens the jaw by tanh of how much of "open" fills the window - a window full of it gives
+## tanh(1), half of it tanh(0.5), silence nothing; and the inputs of a moment's every window sum to one.
+##
+## THE BREATH GOES ON FROM WHERE IT WAS ([LikenessPlan.breath]): over speech with pauses long and short, it
+## never moves more than a little in a millisecond - and it does move (its control: it spans most of its
+## range, so the check is no flat line's).
 
 var _fails := 0
 var _checks := 0
@@ -96,6 +104,46 @@ func _run() -> void:
 		was_plain = now_plain
 	_ok(worst < 0.02, "a phone's share of the drawn mouth jumped %.3f in a tenth of a millisecond" % worst)
 	_ok(plain > 0.15, "the plain two strongest jumped only %.3f: the check cannot fail" % plain)
+	# THE LEARNED MOUTH, as trained
+	var plan := LikenessPlan.new()
+	plan._classes = ["rest", "open"]
+	plan._offsets = PackedFloat32Array([0.0])
+	plan._window = 0.06
+	plan._mean = PackedFloat32Array([0.0, 0.0])
+	plan._sd = PackedFloat32Array([1.0, 1.0])
+	plan._members = [{"w1": PackedFloat32Array([0.0, 1.0]), "b1": PackedFloat32Array([0.0]),
+		"w2": PackedFloat32Array([1.0, 0.0]), "b2": PackedFloat32Array([0.0, 0.0]), "hidden": 1}]
+	plan.set_voice([{"p": "AA", "t0": 1.0, "t1": 1.5}])
+	var full := plan._predict(plan._inputs(1.2))
+	var half := plan._predict(plan._inputs(1.5))
+	var none := plan._predict(plan._inputs(3.0))
+	_ok(absf(full[0] - tanh(1.0)) < 1e-4 and absf(half[0] - tanh(0.5)) < 1e-3 and absf(none[0]) < 1e-6,
+		"the learned mouth is not read as it was trained: %.4f, %.4f, %.4f (want %.4f, %.4f, 0)" % [full[0], half[0], none[0], tanh(1.0), tanh(0.5)])
+	var shares := plan._inputs(1.47)
+	var sum := 0.0
+	for i in shares:
+		sum += float(shares[i])
+	_ok(absf(sum - 1.0) < 1e-4, "a moment's window shares sum to %.4f, not one" % sum)
+	# THE BREATH
+	var talk := LikenessPlan.new()
+	var said: Array = []
+	var at := 0.8
+	for k in 60:
+		said.append({"p": "AA", "t0": at, "t1": at + 0.12})
+		at += 0.12 + (0.6 if k % 9 == 8 else (0.25 if k % 4 == 3 else 0.0))
+	talk.set_voice(said)
+	var lo_b := 1.0
+	var hi_b := 0.0
+	var step := 0.0
+	var last := talk.breath(0.0)
+	for i in range(1, int(at * 1000.0) + 2000):
+		var b := talk.breath(float(i) * 0.001)
+		step = maxf(step, absf(b - last))
+		lo_b = minf(lo_b, b)
+		hi_b = maxf(hi_b, b)
+		last = b
+	_ok(step < 0.01, "the breath jumped %.3f in a millisecond" % step)
+	_ok(hi_b - lo_b > 0.3, "the breath only spans %.2f: the check is a flat line's" % (hi_b - lo_b))
 	print("coarticulation_check: %s (%d checks, %d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _checks, _fails, "" if _fails == 1 else "s"])
 	quit(1 if _fails > 0 else 0)
 

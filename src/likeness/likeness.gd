@@ -12,9 +12,17 @@ class_name LikenessMedium
 ## and the phones come from the voice as they are said (`_subs.words`, `_subs.phones`). The set's files
 ## and the actor's motion are the Actor's ([ActorFolder], [ActorSteps]).
 ##
-## ONE MESH OVER THE WHOLE FRAME, DRAWN WITH ONE CANVAS SHADER ([LikenessFace], likeness_warp.gdshader):
-## the still read through the mesh, the face turned by the head's motion, the lips and lids bent to the
-## mouths and eyes drawn in where their own were.
+## THEM OVER THEIR ROOM (the third pass, 2026-10-22: "The region around the head smears quite a lot ... on
+## the wall, and on the picture on the wall especially"): the room drawn first, still - the still's own
+## room, and behind them the room the set's frames showed ([member _room]) - and them over it, cut out by
+## their matte, through ONE MESH WITH ONE CANVAS SHADER ([LikenessFace], likeness_warp.gdshader): the head
+## turned on the neck, the body carrying it, the lips and lids bent to the mouths and eyes drawn in where
+## their own were. What their moving uncovers is the room, never the wall stretched.
+##
+## WHAT STANDS BEFORE THEM IS DRAWN OVER THEM, still (the fourth pass, 2026-10-22: their bones bend them,
+## and a microphone left in their matte bent with them): the still's `front_K.png` - the things that never
+## move and hide them - over everything, and under it their picture filled from round it (`body_K.jpg`), so
+## they move behind it.
 ##
 ## A PURE FUNCTION OF THE SHOW'S TIME: what is drawn at a moment depends on the plan and the phones, never
 ## on what was drawn before - so a seek lands where it should and an export draws what was heard.
@@ -35,9 +43,12 @@ var _now := 0.0
 var _tried_ms := 0                 # when a set that was not ready was last tried
 
 var _back: Node2D
+var _room: Room
 var _layer: Warp
+var _front: Room
 var _note: Label
 var _still_tex: ImageTexture = null
+var _matte_tex: ImageTexture = null
 var _library_tex: Texture2DArray = null
 var _library_task := -1
 var _library_box: Array = []
@@ -65,6 +76,15 @@ class Warp extends Node2D:
 			PackedInt32Array(), PackedFloat32Array(), tex.get_rid())
 
 
+## THE ROOM, behind them: a picture of the frame's size, drawn where the layer is.
+class Room extends Node2D:
+	var tex: ImageTexture = null
+
+	func _draw() -> void:
+		if tex != null:
+			draw_texture(tex, Vector2.ZERO)
+
+
 ## The black behind the frame, where the stage is not the still's shape.
 class Back extends Node2D:
 	var area := Vector2(1920, 1080)
@@ -83,11 +103,15 @@ func mount(st: SubViewport) -> void:
 	add_child(_placeholder)
 	_back = Back.new()
 	add_child(_back)
+	_room = Room.new()
+	add_child(_room)
 	_layer = Warp.new()
 	var mat := ShaderMaterial.new()
 	mat.shader = SHADER
 	_layer.material = mat
 	add_child(_layer)
+	_front = Room.new()
+	add_child(_front)
 	_note = Label.new()
 	_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -138,8 +162,9 @@ func on_stage_resized(sz: Vector2) -> void:
 	_back.queue_redraw()
 	var src := _face.size if _ready_set else Vector2(1920, 1080)
 	var k := minf(sz.x / src.x, sz.y / src.y)
-	_layer.scale = Vector2(k, k)
-	_layer.position = (sz - src * k) * 0.5
+	for n in [_room, _layer, _front]:
+		(n as Node2D).scale = Vector2(k, k)
+		(n as Node2D).position = (sz - src * k) * 0.5
 	_note.position = Vector2(sz.x * 0.1, sz.y * 0.3)
 	_note.size = Vector2(sz.x * 0.8, sz.y * 0.4)
 
@@ -214,12 +239,25 @@ func load_set(dir: String, sid: String, still: int, seed_in: int) -> String:
 		var err := _face.load_set(sd.path_join("rig.json"), sd.path_join("library.json"))
 		if not err.is_empty():
 			return "The actor is not ready: %s. Generate on the Actor card builds it." % err
-		_face.set_still(stills[k])
-		var img := Image.load_from_file(sd.path_join("stills").path_join(String((stills[k] as Dictionary)["file"])))
+		_face.set_still(stills[k], k)
+		var st_k: Dictionary = stills[k]
+		# THEIR PICTURE: the still, filled from round what stands before them where something does
+		var body := sd.path_join("stills").path_join(String(st_k.get("body", "")))
+		var img := Image.load_from_file(body) if st_k.has("body") and FileAccess.file_exists(body) else null
+		if img == null:
+			img = Image.load_from_file(sd.path_join("stills").path_join(String(st_k["file"])))
 		if img == null:
 			return "The actor's still could not be read: Generate on the Actor card makes it again."
 		img.convert(Image.FORMAT_RGBA8)
 		_still_tex = ImageTexture.create_from_image(img)
+		# THEIR ROOM AND MATTE (a still from before the third pass has neither: drawn whole, as it was)
+		_room.tex = _picture(sd.path_join("stills").path_join(String(st_k.get("room", ""))))
+		_matte_tex = _mask(sd.path_join("stills").path_join(String(st_k.get("matte", ""))))
+		if _room.tex == null:
+			_matte_tex = null
+		_room.queue_redraw()
+		_front.tex = _picture(sd.path_join("stills").path_join(String(st_k.get("front", "")))) if _matte_tex != null else null
+		_front.queue_redraw()
 		_mask_mouth = _mask(_face.mask_mouth)
 		_mask_eyes = _mask(_face.mask_eyes)
 		_load_library()
@@ -241,8 +279,16 @@ func load_set(dir: String, sid: String, still: int, seed_in: int) -> String:
 
 
 static func _mask(path: String) -> ImageTexture:
-	var img := Image.load_from_file(path) if FileAccess.file_exists(path) else null
+	var img := Image.load_from_file(path) if FileAccess.file_exists(path) and not path.ends_with("/") else null
 	return ImageTexture.create_from_image(img) if img != null else null
+
+
+static func _picture(path: String) -> ImageTexture:
+	var img := Image.load_from_file(path) if FileAccess.file_exists(path) and not path.ends_with("/") else null
+	if img == null:
+		return null
+	img.convert(Image.FORMAT_RGBA8)
+	return ImageTexture.create_from_image(img)
 
 
 ## THE LIBRARY'S IMAGES as one texture array, decoded on a worker: the mouth and eyes are drawn once it
@@ -317,16 +363,20 @@ func _take_voice() -> void:
 
 # --- drawing --------------------------------------------------------------------------------------
 
-## DRAW SHOW TIME [param t]: the still, its head turned, its lips and lids bent to the mouth and eyes the
-## plan says there, those drawn in. Public for a probe.
+## DRAW SHOW TIME [param t]: them, their body posed on its bones and their head turned on it, their lips and
+## lids bent to the mouth and eyes the plan says there, those drawn in - over the room. Public for a probe.
 func draw_at(t: float) -> void:
 	if _still_tex == null:
 		return
 	var mouth := _plan.mouth(t)
 	var eyes := _plan.eyes(t)
-	var posed := _face.pose(_plan.head(t))
-	_layer.points = _face.vertices(posed, _face.target(posed, mouth, eyes))
+	var moved := _plan.motion(t)
+	var posed := _face.pose(moved)
+	var bones := _face.bones(posed, moved, _plan.breath(t), _plan.lifts(t), _plan.hands(t))
+	_layer.points = _face.vertices(posed, _face.target(posed, mouth, eyes), bones)
 	var mat := _layer.material as ShaderMaterial
+	mat.set_shader_parameter("matte", _matte_tex)
+	mat.set_shader_parameter("matte_on", 1.0 if _matte_tex != null else 0.0)
 	var on := _library_tex != null and _mask_mouth != null and _mask_eyes != null
 	mat.set_shader_parameter("library_on", 1.0 if on else 0.0)
 	if on:

@@ -586,12 +586,15 @@ func _build_time(_d: Dictionary) -> String:
 	return "a few minutes"
 
 
-## THE STILL THE LIKENESS IS DRAWN ON: the set in use's stills, the one picked marked, a click picking
-## another - nothing is made again (the library is the set's, matched to each still's light).
+## THE STILL THE LIKENESS IS DRAWN ON: the set in use's stills - those At rest found them at ease in
+## first, most at ease first, and marked - the one in use marked, a click picking another; nothing is made
+## again (the library is the set's, matched to each still's light).
 func _fill_stills() -> void:
 	var sid := _actor.chosen_set()
 	var p := _actor.set_dir(sid).path_join("stills.json") if not sid.is_empty() else ""
-	var key := "%s|%d|%d" % [sid, FileAccess.get_modified_time(p) if not p.is_empty() and FileAccess.file_exists(p) else 0,
+	var r := _actor.set_dir(sid).path_join("rest.json") if not sid.is_empty() else ""
+	var key := "%s|%d|%d|%d" % [sid, FileAccess.get_modified_time(p) if not p.is_empty() and FileAccess.file_exists(p) else 0,
+		FileAccess.get_modified_time(r) if not r.is_empty() and FileAccess.file_exists(r) else 0,
 		_actor.still_of(sid) if not sid.is_empty() else -1]
 	if key == _stills_seen:
 		return
@@ -602,7 +605,12 @@ func _fill_stills() -> void:
 		return
 	var stills := _actor.stills_of(sid)
 	var chosen := _actor.still_of(sid)
+	var rest := _actor.rest_of(sid)
+	var order := rest.duplicate()
 	for k in stills.size():
+		if not order.has(k):
+			order.append(k)
+	for k in order:
 		var d: Dictionary = stills[k]
 		var col := VBoxContainer.new()
 		col.add_theme_constant_override("separation", 0)
@@ -617,8 +625,9 @@ func _fill_stills() -> void:
 			tex.texture = ImageTexture.create_from_image(img)
 		tex.modulate = Color(1, 1, 1, 1.0 if k == chosen else 0.55)
 		tex.mouse_filter = Control.MOUSE_FILTER_STOP
-		tex.tooltip_text = "The still in use: every frame of the likeness is drawn on it." if k == chosen \
-			else "Draw the likeness on this still instead (nothing is made again)."
+		tex.tooltip_text = ("The still in use: every frame of the likeness is drawn on it." if k == chosen \
+			else "Draw the likeness on this still instead (nothing is made again).") \
+			+ ("\nAt rest found them at ease in it." if rest.has(k) else "")
 		tex.gui_input.connect(func(e: InputEvent) -> void:
 			if e is InputEventMouseButton and e.pressed and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 				_actor.set_still(sid, k)
@@ -626,7 +635,7 @@ func _fill_stills() -> void:
 				_say("The likeness is drawn on this still now."))
 		col.add_child(tex)
 		var l := Label.new()
-		l.text = "in use" if k == chosen else " "
+		l.text = "in use" if k == chosen else ("at rest" if rest.has(k) else " ")
 		l.add_theme_font_size_override("font_size", 10)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		col.add_child(l)
@@ -635,7 +644,8 @@ func _fill_stills() -> void:
 func _fill_library() -> void:
 	var sid := _actor.chosen_set()
 	# READ ONLY WHEN MADE AGAIN: this runs four times a second
-	var files := [_actor.dir.path_join("visemes.json"), _actor.dir.path_join("motion.json")]
+	var files := [_actor.dir.path_join("visemes.json"), _actor.dir.path_join("motion.json"),
+		_actor.dir.path_join("mouth_model.json")]
 	if not sid.is_empty():
 		files.append(_actor.set_dir(sid).path_join("library.json"))
 	var key := sid
@@ -645,7 +655,7 @@ func _fill_library() -> void:
 		return
 	_library_seen = key
 	var parts := PackedStringArray()
-	var l: Variant = ActorFolder.read_json(files[2]) if files.size() > 2 else null
+	var l: Variant = ActorFolder.read_json(files[3]) if files.size() > 3 else null
 	if l is Dictionary:
 		var sounds := {}
 		for m in (l as Dictionary).get("mouths", []):
@@ -657,10 +667,25 @@ func _fill_library() -> void:
 		var from_caps := 0
 		var cl: Dictionary = (v as Dictionary).get("classes", {})
 		for k in cl:
-			if String((cl[k] as Dictionary).get("from", "")) == "captions":
+			if String((cl[k] as Dictionary).get("from", "")) == "words":
 				from_caps += 1
-		parts.append(("Their mouth for %d sounds, %d learned from their captions" % [cl.size(), from_caps]) if from_caps > 0
-			else "Their mouth for %d sounds, each placed in their own range of movement (no captions to learn from)" % cl.size())
+		var shows := float((v as Dictionary).get("words_show", -1.0))
+		if from_caps > 0:
+			parts.append("Their mouth for %d sounds, %d learned from their words" % [cl.size(), from_caps])
+		elif shows >= 0.0:
+			parts.append("Their mouth for %d sounds, each placed in their own range: their words scarcely show in their mouth in this footage (the sounds' mouths span %d%% of their jaw's range)" % [cl.size(), int(round(100.0 * shows))])
+		else:
+			parts.append("Their mouth for %d sounds, each placed in their own range of movement (no words to learn from)" % cl.size())
+	# THE LEARNED MOUTH'S OWN MEASURE: how much of their mouth it explains on a video it never saw
+	var mm: Variant = ActorFolder.read_kept(files[2])
+	if mm is Dictionary and (mm as Dictionary).get("scores") is Dictionary and not ((mm as Dictionary)["scores"] as Dictionary).is_empty():
+		var sc: Dictionary = (mm as Dictionary)["scores"]
+		var used := float(sc.get("ensemble", 0.0)) >= LikenessPlan.LEARNED_LEAST \
+			and float(sc.get("ensemble", 0.0)) >= float(sc.get("each_sound_mean", 0.0)) + LikenessPlan.LEARNED_BEYOND
+		parts.append("Their mouth learned from %d looks by %d networks: on a video it never saw, it explains %d%% of their mouth (each sound's average mouth: %d%%) - %s" % [
+			int((mm as Dictionary).get("looks", 0)), ((mm as Dictionary).get("members", []) as Array).size(),
+			int(round(100.0 * float(sc.get("ensemble", 0.0)))), int(round(100.0 * float(sc.get("each_sound_mean", 0.0)))),
+			"the mouth is drawn from it" if used else "too little to draw from, so the mouth is placed by its sounds"])
 	var mo: Variant = ActorFolder.read_kept(files[1])
 	if mo is Dictionary:
 		var rows := 0
