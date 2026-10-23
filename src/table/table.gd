@@ -266,11 +266,7 @@ var _probe: ReflectionProbe
 var _probe_nudge := 1.0
 var _lights: Array = []             # a light per lit thing: {light, base, light_base, energy, flames: [{mesh, base, flicker, glow}]}
 var _lum := PackedFloat32Array()      # the table's linear luminance where candles may stand (LUM_RECT); empty: not yet built
-var _shuffle_room := INF             # how long the shuffle has, from its start to the first card
-var _jump_room := -1.0                # ...when that first card is a jumper (-1: it is not, or not placed yet)
-var _jump_scale := 1.0                # ...and the speed its action is performed at
 var _deck_gone := 0                   # deck meshes gone from the deck (a jumper thrown out of a wash)
-var wash_calm := true                # the fan-out calmed (CALM_HZ); a gate's control turns it off
 var _table_mt := -2                   # the table file's time when it was last built (-1: none)
 var _stage_was := {}                  # the stage's own settings, given back on leaving it
 var _deck: Array = []               # a MeshInstance3D per deck card (TablePlan.deck_n), bottom first
@@ -298,8 +294,6 @@ var _cur_base := Vector3.ZERO       # where the deck is at the moment being pose
 var _all_events: Array = []         # every card's timeline, as [method _times] last made it ([method _rest_lift])
 var _laps: Array = []               # per card: the cards its place overlaps ([method _laps_of]), for [member _laps_for]
 var _laps_for: Array = []
-var _moves: Array = []              # the shuffle: [{kind, t0, dur, seed}]
-var _move_rng := RandomNumberGenerator.new()
 var _noise := FastNoiseLite.new()
 var _mtimes := {}
 var _poll_t := 0.0
@@ -317,9 +311,10 @@ var _ride := {}                     # what the table is aboard (Rides.plan), or 
 var _movers: Array = []             # what moves with the ride and the wind: [{node, r, pivot, into, kind, at, contact}] (_tick_ride)
 
 
-## THE SHUFFLE is a part of its own ([TableShuffle]): every move the deck makes between readings
-## and where each card is during one. This file asks it seven things (`shuffle_xf`, `move_at`,
-## `deck_turns`, `riffle`, `wash`, `wash_jump`, `sweeps`) and hands it itself to read from.
+## THE SHUFFLE is a part of its own ([TableShuffle]): every move the deck makes between readings,
+## where each card is during one, and the chain of moves and the room it has to make them in. This
+## file asks it by public name (`plan_moves`, `fit_room`, `shuffle_xf`, `deck_turns`, `cut_off`,
+## `finish_xf`, `wash`, `wash_jump`, `sweeps`) and hands it itself to read from.
 var _shuffles := TableShuffle.new()
 
 
@@ -1730,9 +1725,7 @@ func _card_path(k: int, t0: float, dur: float, tm: Dictionary, wj: Dictionary) -
 ## changes. A wash's plan is made when it is first asked for ([method TableShuffle._whole]): the
 ## first frame of a reading that shuffles, and never for a table only looked at.
 func _plan_moves() -> void:
-	_move_rng.seed = hash([_plan.seed_value, "tarot-moves"])
-	_moves = []
-	_shuffles.move_at(120.0)
+	_shuffles.plan_moves(_plan.seed_value)
 
 
 ## When each card is drawn and laid, and when the shuffle starts and stops, from the placed
@@ -1944,12 +1937,10 @@ func _pose(t: float) -> void:
 	# thousand seconds in (the chain of moves is only made so far)
 	var ts := maxf(float(tm["shuffle"]), minf(0.0, _now))
 	var te := float(tm["end"])
-	_shuffle_room = te - ts if te < INF else INF
 	# a jumper's own riffle, on the jumper's clock (its action's scale) - or the wash it comes out of
 	var first: Array = tm["first"]
 	var jump_s := maxf(float(first[1]), 0.05) if not first.is_empty() and String(first[2]) == "jumper" else 0.0
-	_jump_room = te - ts if jump_s > 0.0 and te < INF else -1.0
-	_jump_scale = jump_s if jump_s > 0.0 else 1.0
+	_shuffles.fit_room(ts, te, jump_s)
 	var wj := _shuffles.wash_jump(ts)
 	_cur_base = _deck_at(t, tm, wj)
 	# THE JUMPER'S CARD IS NOT IN THE DECK once a wash throws it: its mesh is hidden while the wash

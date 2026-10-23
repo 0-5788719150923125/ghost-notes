@@ -50,13 +50,19 @@ const PANE := 1.25       # pane half-size, world units
 const NOMINAL_VAL := 0.85
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"pane": {"label": "Pane", "type": "choice", "options": "PANES", "default": null,
 		"blurb": "The shape of the intact pane before it breaks: a disc, a rectangle, a polygon or a tall portrait rectangle."},
 	"grain": {"label": "Grain", "type": "choice", "options": "GRAINS", "default": null,
 		"blurb": "How finely the pane breaks: into a few big planes of glass, a medium break, or fine splinters."},
+	"fov": {"label": "Field of view", "type": "num", "range": [38.0, 58.0], "default": null,
+		"blurb": "How wide the camera's view of the pane is."},
+	"view_angle": {"label": "View angle", "type": "num", "range": [0.35, 0.7], "default": null,
+		"blurb": "How far round to the side the camera looks at the pane."},
+	"sides": {"label": "Sides", "type": "num", "range": [5, 8], "default": null,
+		"blurb": "How many sides the pane has, when it is a polygon."},
 }
 
 
@@ -67,8 +73,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_hue = _sch.hue
 	_oneshot = rng.randf() < 0.4
 	lifecycle = "oneshot" if _oneshot else "loop"
-	lens.fov = rng.randf_range(38.0, 58.0)
-	_angle = rng.randf_range(0.35, 0.7)
+	lens.fov = number("fov", rng)
+	_angle = number("view_angle", rng)
 
 	var form := String(choice("pane", rng))
 	var gname := String(choice("grain", rng))
@@ -121,7 +127,7 @@ func _pane(form: String, rng: RandomNumberGenerator) -> PackedVector2Array:
 				var a := TAU * float(i) / float(n)
 				base.append(Vector2(cos(a), sin(a)) * PANE)
 		"polygon":
-			var n := rng.randi_range(5, 8)
+			var n: int = number("sides", rng)
 			var turn := rng.randf() * TAU
 			for i in n:
 				var a := TAU * float(i) / float(n) + turn

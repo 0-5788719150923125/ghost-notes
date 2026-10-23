@@ -52,11 +52,13 @@ var _frate := PackedFloat32Array()
 var _fglow := PackedFloat32Array()
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"body": {"label": "Body", "type": "choice", "options": "SOLID", "default": null,
 		"blurb": "The body's proportions: platonic, a tall obelisk, a flat slab, a thin blade, or a geodesic geode."},
+	"fov": {"label": "Field of view", "type": "num", "range": [42.0, 56.0], "default": null,
+		"blurb": "How wide the camera's view of the solid is."},
 }
 
 
@@ -83,7 +85,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	for i in nf:
 		_fphase.append(rng.randf() * TAU)
 		_frate.append(rng.randf_range(0.5, 2.6))
-	lens.fov = rng.randf_range(42.0, 56.0)
+	lens.fov = number("fov", rng)
 	lens.eye = Vector3(0.0, 0.0, rng.randf_range(3.4, 4.4))   # a touch of perspective
 	var ab: Array = sd["alpha"]
 	return {

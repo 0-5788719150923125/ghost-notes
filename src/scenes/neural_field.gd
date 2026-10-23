@@ -178,31 +178,41 @@ var _edge_gamma := 0.5
 var _node_gamma := 0.6
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"topology": {"label": "Topology", "type": "choice", "options": "TOPOLOGIES", "default": null,
 		"blurb": "How the sheets change size through the network: a slab of equal sheets, a funnel that narrows toward the output, a bottleneck that pinches in the middle, or a fan that widens."},
+	"sheets": {"label": "Sheets", "type": "num", "range": [3, 6], "default": null,
+		"blurb": "How many sheets of neurons the network is stacked in."},
+	"rows": {"label": "Rows", "type": "num", "range": [4, 9], "default": null,
+		"blurb": "How many rows of neurons each sheet has."},
+	"sheet_spacing": {"label": "Sheet spacing", "type": "num", "range": [0.5, 1.2], "default": null,
+		"blurb": "How far apart the sheets of neurons stand in depth."},
+	"connections": {"label": "Connections", "type": "num", "range": [2, 5], "default": null,
+		"blurb": "How many connections each neuron reaches out to the next sheet, at most."},
+	"neuron_size": {"label": "Neuron size", "type": "num", "range": [0.07, 0.14], "default": null,
+		"blurb": "How large each neuron's disc is drawn."},
 }
 
 
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "plane"                       # the yaw comes from the lens, not the shot
 	_sch = Scheme.pick(rng)                 # a graph is abstract: no mood is wrong for it
-	_layers = rng.randi_range(3, 6)
-	_rows = rng.randi_range(4, 9)
+	_layers = number("sheets", rng)
+	_rows = number("rows", rng)
 	# Draw the column count from what the per-sheet budget leaves, so the sampled range is
 	# honored wherever it can be and the item count is still bounded.
 	_cols = rng.randi_range(4, clampi(MAX_PER_SHEET / _rows, 4, 9))
 	var topo := String(choice("topology", rng))
 	var jitter := rng.randf_range(0.0, 0.35)
-	var spacing := rng.randf_range(0.5, 1.2)
+	var spacing: float = number("sheet_spacing", rng)
 	var wexp := rng.randf_range(0.6, 2.2)
 	var inhib := rng.randf_range(0.15, 0.40)
 	var reach := rng.randi_range(1, 3)      # how far sideways a neuron may look for a target
-	var k_want := rng.randi_range(2, 5)
+	var k_want: int = number("connections", rng)
 	_segs = rng.randi_range(3, 5)
-	_disc_r = rng.randf_range(0.07, 0.14)   # as a fraction of a cell, scaled below
+	_disc_r = number("neuron_size", rng)   # as a fraction of a cell, scaled below
 	_edge_w = rng.randf_range(0.8, 2.2)
 	_sides = rng.randi_range(5, 12)
 	_dark = rng.randf_range(0.05, 0.25)

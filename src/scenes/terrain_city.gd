@@ -88,8 +88,8 @@ var _pitch := 0.5
 var _beat_prev := 0.0
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"landform": {"label": "Landform", "type": "choice", "options": "TERRAINS", "default": null,
 		"blurb": "The land the city is built on: hills, a mesa, valleys or a canyon."},
@@ -97,6 +97,14 @@ const FIELDS := {
 		"blurb": "The city's plan: branching dendritic arms, a loose sprawl, thin ribbons, or separate towns."},
 	"skyline": {"label": "Skyline", "type": "choice", "options": "SKYLINES", "default": null,
 		"blurb": "How building heights are spread over the plots: mostly low with rare spires, an even mid-rise mass, stepped, or slabs."},
+	"plots": {"label": "Plots", "type": "num", "range": [26, 34], "default": null,
+		"blurb": "How many plots each side of the city grid has; fewer makes bigger blocks on a smaller town."},
+	"distance": {"label": "Camera distance", "type": "num", "range": [6.5, 8.5], "default": null,
+		"blurb": "How far from the city the camera orbits."},
+	"pitch": {"label": "Camera pitch", "type": "num", "range": [0.34, 0.55], "default": null,
+		"blurb": "How steeply the camera looks down on the city."},
+	"sun_height": {"label": "Sun height", "type": "num", "range": [0.34, 0.52], "default": null,
+		"blurb": "How high the sun stands; a low sun casts long shadows."},
 }
 
 
@@ -107,7 +115,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var climate := String(climates[rng.randi() % climates.size()])
 	# Plot size is the city's grain: a coarse grid gives big blocks on a small town, a fine
 	# one a dense field of smaller buildings over the same land.
-	C = rng.randi_range(26, 34)
+	C = number("plots", rng)
 	_terrain = Terrain.new()
 	_terrain.build(rng, ttype, 3.0, rng.randf_range(0.35, 0.55), null, climate)
 	# Buildings take a [Scheme] mood - concrete-gray, brass, bone, or a lit-up violet or teal
@@ -210,13 +218,13 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	for i in C * C:
 		_detach[i] = rng.randf_range(0.10, 0.30) if rng.randf() < float(lay.detach) else 0.0
 	lens.fov = rng.randf_range(56.0, 72.0)
-	_dist = rng.randf_range(6.5, 8.5)
-	_pitch = rng.randf_range(0.34, 0.55)
+	_dist = number("distance", rng)
+	_pitch = number("pitch", rng)
 	_yaw = rng.randf() * TAU
 	# A low key light so the mountains (and the skyline) cast long, gently sweeping shadows.
 	_light_az = rng.randf() * TAU
 	_light_dir = 1.0 if rng.randf() < 0.5 else -1.0
-	_light_el = rng.randf_range(0.34, 0.52)
+	_light_el = number("sun_height", rng)
 	_terrain.set_light(_light_az, _light_el)
 	return {"type": ttype, "climate": climate, "mood": sch.name,
 		"layout": layout, "skyline": skyline, "grid": C}

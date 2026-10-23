@@ -244,6 +244,7 @@ Text to narrated audio in two paths: ghost's own source-filter synthesizer (no m
 - [`voice_field.gd`](../src/voice/voice_field.gd) **VoiceField** - the belt as a field of interfering sources.
 - [`voice_fx.gd`](../src/voice/voice_fx.gd) **VoiceFX** - the ambience from Synthesis, over any PCM.
 - [`voice_host.gd`](../src/voice/voice_host.gd) **VoiceHost** - Godot's end of the neural voice subprocess (see VOICE_PLAN.md).
+- [`voice_party.gd`](../src/voice/voice_party.gd) **VoiceParty** - the Synthesis lab's party math: the belt of kept seeds and the candidate on the line, as numbers. A seed as a vector in the shared trait and genome space, how much the belt accepts each member, the party's acceptance-weighted center and blend, how well a candidate fits the party and how hard it is ...
 - [`voice_readers.gd`](../src/voice/voice_readers.gd) **VoiceReaders** - who a multi-speaker voice's speaker NUMBER actually is.
 - [`voice_sampler.gd`](../src/voice/voice_sampler.gd) **VoiceSampler** - "echo a living voice": record the player reading a fixed passage, MEASURE the voice (never keep it), and mint a brand-new seed whose traits and prosody genome mimic the source.
 - [`voice_stream.gd`](../src/voice/voice_stream.gd) **VoiceStream** - real-time speech on its own thread: render lag cannot break it.
@@ -256,6 +257,7 @@ What the show is carried on: the `Medium` base and its registry, each medium ([m
 - [`book.gd`](../src/media/book.gd) **BookMedium** - the reading as a printed novel, open on a desk, with the words lit as they are spoken.
 - [`book_layout.gd`](../src/media/book_layout.gd) **BookLayout** - a chapter typeset into the pages of a printed novel, for `BookMedium`.
 - [`comic.gd`](../src/media/comic.gd) **ComicMedium** - the show as an open comic book, flown over by a real perspective camera.
+- [`comic_camera.gd`](../src/media/comic_camera.gd) **ComicCamera** - THE EYE OVER THE SPREAD: where the camera is, where it is going, and the lens the page is drawn through. A part of `ComicMedium` (next/structure.md, "One file, one job").
 - [`comic_page.gd`](../src/media/comic_page.gd) **ComicPage** - one seeded page of comic panels. The layout half of `ComicMedium`.
 - [`comic_spread.gd`](../src/media/comic_spread.gd) **ComicSpread** - the two facing pages of an open comic book. What `ComicMedium` flies over.
 - [`film.gd`](../src/media/film.gd) **FilmScene** - a panel of real footage, cut into the comic among the drawn ones.
@@ -399,6 +401,7 @@ An actor played from their own footage: the library of actors, each built from t
 - [`likeness.gd`](../src/likeness/likeness.gd) **LikenessMedium** - an actor reads the note, in their own room (next/likeness.md, "The second build"): ONE STILL OF THEM and a model of how they move - their head's own motion, their blinks, their mouths for the voice's sounds (`LikenessPlan`). Every pixel of them is a real pixel of theirs, bent; no footage plays, so ...
 - [`likeness_face.gd`](../src/likeness/likeness_face.gd) **LikenessFace** - a set's rig and library, and the still a Likeness is drawn on (next/likeness.md, "The second build"). Read from `rig.json`, `library.json` and one of `stills.json`'s stills, which `actor.py rig`, `library` and `stills` make.
 - [`likeness_plan.gd`](../src/likeness/likeness_plan.gd) **LikenessPlan** - how the actor moves at each moment, on their still (next/likeness.md, "The second build"): the head, the body, the eyes and the mouth, each A PURE FUNCTION OF SHOW TIME - asked for any moment, the answer depends on nothing asked before it, so a seek and an export draw what the live show drew.
+- [`splat_head.gd`](../src/likeness/splat_head.gd) **SplatHead** - an actor's head as 3D Gaussian splats bound to their own face (next/likeness.md, "A head of splats"), drawn over their still: the avatar hosts/avatar/train.py learned, read from its `.json` and `.bin`.
 - [`visemes.gd`](../src/likeness/visemes.gd) **Visemes** - the mouth shapes a voice's sounds are seen as (next/likeness.md, "The lanes"): a row a class, the sounds in it and how strongly each holds the mouth to its shape. The mouth of a Likeness follows the voice's phones through these: each phone is a class, each class is THEIR mouth for it ([method ...
 
 ### `masking/` - Masking

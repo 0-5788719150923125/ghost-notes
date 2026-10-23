@@ -63,11 +63,13 @@ const FL_SPECIAL := 0.80   # specialize
 const NOMINAL := 16.0      # design length (used to pace in auto mode, where there is no fixed hold)
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"staging": {"label": "Staging", "type": "choice", "options": "STAGING", "default": null,
 		"blurb": "How the pair is staged: small prisms close together, a matched pair, or larger ones set apart."},
+	"tilt": {"label": "Tilt", "type": "num", "range": [-0.55, 0.55], "default": null,
+		"blurb": "How far the line between the two prisms leans from level."},
 }
 
 
@@ -98,7 +100,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var off := rng.randf_range(float(off_band[0]), float(off_band[1]))
 	# The pair's AXIS, not just its gap: level is only one of the ways two things can face
 	# each other, and a leaning pair re-composes the whole frame.
-	var tilt := rng.randf_range(-0.55, 0.55)
+	var tilt: float = number("tilt", rng)
 	var axis := Vector2(cos(tilt), sin(tilt))
 	_banch = axis * off
 	_ranch = -axis * off

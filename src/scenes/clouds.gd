@@ -28,11 +28,19 @@ const SKIES := {
 }
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"weather": {"label": "Weather", "type": "choice", "options": "SKIES", "default": null,
 		"blurb": "The weather in the sky: clear with starlight behind, dusk, or overcast with heavy haze."},
+	"sky": {"label": "Sky brightness", "type": "num", "range": [0.08, 0.17], "default": null,
+		"blurb": "How bright the sky behind the clouds is."},
+	"stars": {"label": "Stars", "type": "num", "range": [40, 180], "default": null,
+		"blurb": "How many stars show behind the clouds, when the weather lets them through."},
+	"haze": {"label": "Haze", "type": "num", "range": [0.02, 0.05], "default": null,
+		"blurb": "How thick the haze drifting in front of the clouds is, when there is haze."},
+	"haze_banks": {"label": "Haze banks", "type": "num", "range": [3, 7], "default": null,
+		"blurb": "How many soft banks of haze roll in front of the clouds, when there is haze."},
 }
 
 
@@ -46,12 +54,12 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	add_layer("bed", rng, {
 		"hue": sch.hue,
 		"sat": sch.sat * rng.randf_range(0.5, 0.95),
-		"val": rng.randf_range(0.08, 0.17),
+		"val": number("sky", rng),
 		"pools": rng.randi_range(int(pools[0]), int(pools[1])),
 	})
 	if rng.randf() < float(sky["stars"]):
 		# Starlight on the accent, so a violet sky gets its own kind of stars.
-		add_layer("stars", rng, {"z": "back", "count": rng.randi_range(40, 180), "hue": sch.accent})
+		add_layer("stars", rng, {"z": "back", "count": number("stars", rng), "hue": sch.accent})
 	# Real 3D clouds. Most weathers tint them to the sky's mood; a clear one usually leaves
 	# them sunlit-white, which is what makes a blue day read as a blue day.
 	var p := {"mode": "cloud"}
@@ -63,8 +71,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		add_layer("fog", rng, {
 			"hue": sch.vary(rng),
 			"sat": sch.sat * rng.randf_range(0.2, 0.5),
-			"alpha": rng.randf_range(0.02, 0.05),
-			"count": rng.randi_range(3, 7),
+			"alpha": number("haze", rng),
+			"count": number("haze_banks", rng),
 		})
 	return {"hue": sch.hue, "mood": sch.name, "weather": weather}
 

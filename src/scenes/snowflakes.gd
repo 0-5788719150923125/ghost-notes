@@ -21,6 +21,14 @@ var _spin := 0.0
 var _f: AudioFeatures = AudioFeatures.new()
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.number]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"flakes": {"label": "Flakes", "type": "num", "range": [26, 50], "default": null,
+		"blurb": "How many snowflakes tumble in the frame."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
@@ -30,7 +38,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_mode = "wind" if rng.randf() < 0.4 else "drift"
 	add_layer("bed", rng, {"hue": hue, "sat": 0.4, "val": 0.18, "pools": 2})
 	_flow = FlowField.new(rng.randi(), 1.6, 0.05)
-	var n := rng.randi_range(26, 50)
+	var n: int = number("flakes", rng)
 	for i in n:
 		var depth := rng.randf_range(0.35, 1.0)
 		# Each flake is a thin plate TUMBLING in 3D: a full starting orientation and a signed

@@ -20,6 +20,18 @@ const AIRS := [
 ]
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.number]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"haze": {"label": "Haze", "type": "num", "range": [0.02, 0.055], "default": null,
+		"blurb": "How thick the soft haze in the room is."},
+	"haze_banks": {"label": "Haze banks", "type": "num", "range": [3, 8], "default": null,
+		"blurb": "How many soft banks of haze drift through the room."},
+	"beam": {"label": "Beam position", "type": "num", "range": [-0.35, 0.35], "default": null,
+		"blurb": "Where the beam of light falls across the frame, from left to right."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
@@ -33,12 +45,12 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	add_layer("bed", rng, {"hue": sch.accent, "sat": sch.sat * 0.5,
 		"val": sch.val * rng.randf_range(0.12, 0.22), "pools": rng.randi_range(2, 4)})
 	add_layer("fog", rng, {"hue": sch.hue, "sat": sch.sat * 0.3,
-		"alpha": rng.randf_range(0.02, 0.055), "count": rng.randi_range(3, 8)})
+		"alpha": number("haze", rng), "count": number("haze_banks", rng)})
 	add_layer("dust", rng, {
 		"hue": sch.vary(rng, 0.6),
 		"count": rng.randi_range(int(air["count"][0]), int(air["count"][1])),
 		"shaft": bool(air["beam"]),
-		"shaft_x": rng.randf_range(-0.35, 0.35),
+		"shaft_x": number("beam", rng),
 		"speed": rng.randf_range(float(air["speed"][0]), float(air["speed"][1])),
 		"drift": rng.randf_range(float(air["drift"][0]), float(air["drift"][1])),
 	})

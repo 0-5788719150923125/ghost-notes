@@ -212,11 +212,21 @@ var _tip_rot := 0.0
 var _tip_ok := false
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"layout": {"label": "Layout", "type": "choice", "options": "LAYOUTS", "default": null,
 		"blurb": "How the writing is laid out: a page, a column, a banner, or a spiral that stops reading as paper."},
+	"margin": {"label": "Margin", "type": "num", "range": [0.04, 0.14], "default": null,
+		"blurb": "How wide the empty margin around the writing is."},
+	"line_spacing": {"label": "Line spacing", "type": "num", "range": [1.30, 2.10], "default": null,
+		"blurb": "How far apart the lines of writing are."},
+	"pace": {"label": "Writing pace", "type": "num", "range": [0.25, 0.80], "default": null,
+		"blurb": "How long the pen takes over each character, as a share of a beat."},
+	"word_pause": {"label": "Word pause", "type": "num", "range": [0.35, 0.95], "default": null,
+		"blurb": "How long the pen rests between words."},
+	"prefill": {"label": "Already written", "type": "num", "range": [0.15, 0.70], "default": null,
+		"blurb": "How much of the page is already written when the scene opens."},
 }
 
 
@@ -234,19 +244,19 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_sch = Scheme.pick(rng)
 	_layout = String(choice("layout", rng))
 	_centered = _layout == "banner"
-	_margin = rng.randf_range(0.04, 0.14)
+	_margin = number("margin", rng)
 	_col_frac = rng.randf_range(0.38, 0.60)
-	_line_h = rng.randf_range(1.30, 2.10)
+	_line_h = number("line_spacing", rng)
 	_bpg = rng.randi_range(1, 4)
 	# 0.25 to 0.8 of a beat per character: at a 120 bpm estimate that is 2.5 to 8 a
 	# second, which spans a quick scribble and a deliberate hand.
-	_char_beats = rng.randf_range(0.25, 0.80)
+	_char_beats = number("pace", rng)
 	# THE HAND RESTS, and not evenly. A pen lifts for a moment between characters, waits
 	# longer between words, and longest at the turn of a line - and that uneven rhythm is
 	# most of what separates writing from a teleprinter. Fractions of one nominal character's
 	# span, so they ride the tempo like everything else here.
 	_rest_char = rng.randf_range(0.05, 0.22)
-	_rest_word = rng.randf_range(0.35, 0.95)
+	_rest_word = number("word_pause", rng)
 	_rest_line = rng.randf_range(0.70, 1.80)
 	# How far into the text the camera sits. At 1.0 the whole page is in frame, which is
 	# the old look; past 2 the writing runs off both edges and the eye has to follow it.
@@ -264,7 +274,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# at 0.2 gives short, choppy ones. Both read as a language; sample the whole range.
 	_break_thr = rng.randf_range(0.18, 0.52)
 	_ease = rng.randf_range(0.20, 1.0)
-	_prefill = rng.randf_range(0.15, 0.70)
+	_prefill = number("prefill", rng)
 	_dry = rng.randf_range(1.2, 4.0)
 	_paper = rng.randf() < 0.5
 	_ruled = _paper and rng.randf() < 0.45

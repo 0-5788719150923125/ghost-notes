@@ -48,11 +48,13 @@ const STORMS := {
 }
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"storm": {"label": "Storm", "type": "choice", "options": "STORMS", "default": null,
 		"blurb": "What kind of rain falls: mist, drizzle, steady rain, a downpour, or rain in a lit street at night."},
+	"fisheye": {"label": "Flare fisheye", "type": "num", "range": [0.1, 0.28], "default": null,
+		"blurb": "How strongly the lamp's flare and its chain of discs bow outward, when a lamp shows."},
 }
 
 
@@ -102,7 +104,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	})
 	# The lamp itself, in front of the weather - what makes a lit storm read as lit.
 	if rng.randf() < float(st["flare"]):
-		add_layer("flare", rng, {"hue": sch.accent, "fisheye": rng.randf_range(0.1, 0.28)})
+		add_layer("flare", rng, {"hue": sch.accent, "fisheye": number("fisheye", rng)})
 	return {"hue": sch.hue, "mood": sch.name, "storm": storm, "count": count, "width": width}
 
 

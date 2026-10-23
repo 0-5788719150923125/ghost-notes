@@ -161,13 +161,23 @@ var _drive := 0.4
 var _ch := Vector2.ZERO
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"plate": {"label": "Plate", "type": "choice", "options": "SHAPES", "default": null,
 		"blurb": "The shape of the vibrating plate: a square, a circle or a hexagon, each with its own family of patterns."},
 	"finish": {"label": "Finish", "type": "choice", "options": "FINISHES", "default": null,
 		"blurb": "The plate's surface: brushed metal, matte black, slate, or chalk - a pale board with dark filings on it."},
+	"rim": {"label": "Rim", "type": "num", "range": [0.18, 0.50], "default": null,
+		"blurb": "How clearly the thin line around the plate's edge shows."},
+	"plate_size": {"label": "Plate size", "type": "num", "range": [0.70, 0.88], "default": null,
+		"blurb": "How much of the frame the vibrating plate fills."},
+	"lamp_height": {"label": "Lamp height", "type": "num", "range": [0.10, 0.45], "default": null,
+		"blurb": "How high the lamp at the side stands; a low lamp rakes long shadows across the ridges of sand."},
+	"grains": {"label": "Grains", "type": "num", "range": [4000, 14000], "default": null,
+		"blurb": "How many grains of sand lie on the plate."},
+	"hold": {"label": "Figure hold", "type": "num", "range": [4.0, 20.0], "default": null,
+		"blurb": "The fewest seconds one sand figure holds before the plate changes to another."},
 }
 
 
@@ -207,8 +217,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_plate_sat = rng.randf_range(float(fs[0]), float(fs[1]))
 	_plate_val = rng.randf_range(float(fv[0]), float(fv[1]))
 	_sheen = rng.randf_range(float(fsh[0]), float(fsh[1]))
-	_rim_a = rng.randf_range(0.18, 0.50)
-	_plate_size = rng.randf_range(0.70, 0.88)
+	_rim_a = number("rim", rng)
+	_plate_size = number("plate_size", rng)
 	_streaks = rng.randi_range(int(fst[0]), int(fst[1]))
 	_streak_a.resize(_streaks)
 	for i in _streaks:
@@ -219,7 +229,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# The rake. A low lamp is the whole reason the sand reads as MATTER rather than as dots:
 	# it is what puts a lit face and a shadowed face on every ridge the grains pile into.
 	var azimuth := rng.randf() * TAU
-	var elevation := rng.randf_range(0.10, 0.45)
+	var elevation: float = number("lamp_height", rng)
 	_lx = cos(azimuth)
 	_ly = sin(azimuth)
 	_rake_k = 0.38 / (0.16 + elevation)
@@ -235,7 +245,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_blur = rng.randf_range(0.35, 0.75)
 	_tint = rng.randf_range(0.20, 0.55)
 
-	_count = rng.randi_range(4000, 14000)
+	_count = number("grains", rng)
 	# Grain size shrinks as the count rises, so a dense plate stays a dust of separate specks
 	# instead of collapsing into a smear. 7000 is the nominal count the base range is set for.
 	_grain_r = rng.randf_range(0.0016, 0.0034) * sqrt(7000.0 / float(_count))
@@ -309,7 +319,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_damping = rng.randf_range(0.6, 2.4)
 	_w2 = rng.randf_range(0.10, 0.40)
 	_tau = rng.randf_range(0.4, 2.0)
-	_min_dwell = rng.randf_range(4.0, 20.0)
+	_min_dwell = number("hold", rng)
 
 	# The mode table and the chroma-to-mode permutation: this is what makes a given chord
 	# mean a different figure in every session while still meaning the SAME figure within one.

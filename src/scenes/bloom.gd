@@ -34,11 +34,19 @@ var _morph := 0.0
 var _sharp := 0.0
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"form": {"label": "Form", "type": "choice", "options": "FORMS", "default": null,
 		"blurb": "The contour's family of shape: a star, a flower, a ripple, a cog or a soft polygon."},
+	"rings": {"label": "Rings", "type": "num", "range": [1, 5], "default": null,
+		"blurb": "How many contours are stacked inside one another in the rosette."},
+	"size": {"label": "Size", "type": "num", "range": [0.18, 0.40], "default": null,
+		"blurb": "How large the rosette is in the frame."},
+	"line_width": {"label": "Line width", "type": "num", "range": [1.0, 4.0], "default": null,
+		"blurb": "How thick the rosette's lines are drawn."},
+	"spin": {"label": "Spin", "type": "num", "range": [-0.10, 0.10], "default": null,
+		"blurb": "How fast the rosette turns, and which way."},
 }
 
 
@@ -66,7 +74,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		n1 = rng.randf_range(float(n1_r[0]), float(n1_r[1]))
 		n2 = rng.randf_range(float(n2_r[0]), float(n2_r[1]))
 		n3 = rng.randf_range(float(n3_r[0]), float(n3_r[1]))
-	var layers := rng.randi_range(1, 5)
+	var layers: int = number("rings", rng)
 	# Either the stack sweeps base -> accent (a two-tone rosette) or it stays one color
 	# with each ring drifted slightly off it. Two quite different objects.
 	var gradient := rng.randf() < 0.55
@@ -84,9 +92,9 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"layers": layers,
 		"hues": hues,
 		"gradient": gradient,
-		"radius": rng.randf_range(0.18, 0.40),
-		"width": rng.randf_range(1.0, 4.0),
-		"spin_rate": rng.randf_range(-0.10, 0.10),
+		"radius": number("size", rng),
+		"width": number("line_width", rng),
+		"spin_rate": number("spin", rng),
 		"m_step": rng.randf() < 0.5,                 # neighboring layers shift symmetry
 		# Enough samples to keep a high-lobe contour smooth - a 26-fold ripple traced at a
 		# fixed 260 points showed its faceting.

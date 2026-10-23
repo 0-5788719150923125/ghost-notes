@@ -212,12 +212,12 @@ func _cut_short() -> void:
 	_ok(ms < CUT_MS, "and is cheap to make mid-reading (%.0f ms of %.0f)" % [ms, CUT_MS])
 	# too little room for a wash at all: the deck stays squared rather than snapping a spread back
 	var m := {"t0": 10.0, "dur": 30.0, "seed": 4242, "plan": full}
-	medium._shuffle_room = 10.0 + TableShuffle.WASH_ROOM - 1.0
+	medium._shuffles.shuffle_room = 10.0 + TableShuffle.WASH_ROOM - 1.0
 	_ok(medium._shuffles._wash_fit(m).is_empty() and medium._shuffles.wash(3, 2.0, m).is_equal_approx(medium._rest_xf(3)),
 		"with no room to wash, the deck waits squared")
-	medium._shuffle_room = 10.0 + 17.0
+	medium._shuffles.shuffle_room = 10.0 + 17.0
 	_ok(not medium._shuffles._wash_fit(m).is_empty() and float(m.get("cut_dur", 0.0)) == 17.0, "with room, it is cut to fit")
-	medium._shuffle_room = INF
+	medium._shuffles.shuffle_room = INF
 
 
 ## A JUMPER SPRINGS OUT OF A RIFFLE. The shuffle is made to go quiet long before the jumper (one
@@ -235,7 +235,7 @@ func _jumper() -> void:
 	medium._ensure_doc()
 	medium._follow.extend(subs.words)
 	medium._sched = medium._follow.place(medium._plan.parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
-	medium._moves = [{"kind": "riffle", "t0": 0.15, "dur": 2.4, "pause": 1000.0, "seed": 1}]   # then quiet
+	medium._shuffles.moves = [{"kind": "riffle", "t0": 0.15, "dur": 2.4, "pause": 1000.0, "seed": 1}]   # then quiet
 	var tm := medium._times()
 	var first: Array = tm["first"]
 	_ok(not first.is_empty() and String(first[2]) == "jumper", "the reading opens on a jumper")
@@ -436,8 +436,8 @@ func _posed() -> void:
 		var doc := {"show": "wash-check", "seed": s, "dir": "", "plan": {"look": {"candles": 2}}, "cards": []}
 		subs.document = {"source": CardReading.compose([{"kind": "shuffle", "card": 0, "text": "Shuffle."}]), "title": "Wash Check", "table": doc}
 		medium._ensure_doc()
-		medium._shuffle_room = INF
-		medium._jump_room = -1.0
+		medium._shuffles.shuffle_room = INF
+		medium._shuffles.jump_room = -1.0
 		var dur := 28.0
 		var plan: Dictionary = medium._shuffles._wash_plan(6000 + s, dur)
 		var m := {"kind": "wash", "t0": 0.0, "dur": dur, "pause": 0.0, "seed": 6000 + s, "plan": plan}
@@ -445,7 +445,7 @@ func _posed() -> void:
 		# THE FAN-OUT, at 30 frames a second: how often a card turns faster than 60 deg/s - calmed, and
 		# the bare rest as the control
 		for calm in [true, false]:
-			medium.wash_calm = calm
+			medium._shuffles.wash_calm = calm
 			var was: Array = []
 			for f in int((mix.x + 0.5) * 30.0):
 				var now: Array = []
@@ -455,7 +455,7 @@ func _posed() -> void:
 						(fan[calm] as Array)[0] += 1
 						(fan[calm] as Array)[1] += 1 if rad_to_deg(acos(clampf((now[i] as Vector3).dot(was[i]), -1.0, 1.0))) * 30.0 > 60.0 else 0
 				was = now
-		medium.wash_calm = true
+		medium._shuffles.wash_calm = true
 		var prev: Array = []
 		var prev_top := {}
 		var prev_up: Array = []
@@ -676,7 +676,7 @@ func _throw_facts(plan: Dictionary) -> void:
 		_thrown["soft"] = int(_thrown["soft"]) + (1 if float(fd.get("blow", 0.0)) < TableShuffle.EJECT_SPEED else 0)
 		_thrown["up"] = int(_thrown["up"]) + (1 if bool(fd["up"]) else 0)
 		_thrown["late"] = int(_thrown["late"]) + (1 if float(fd["t0"]) > mix.y - TableShuffle.EJECT_ROOM + 1e-4 or float(fd["t0"]) < mix.x else 0)
-		var card := TableShuffle._card_poly((fd["to"] as Vector2) + off, float(fd["lie"]))
+		var card := TableShuffle._card_corners((fd["to"] as Vector2) + off, float(fd["lie"]))
 		var off_cloth := false
 		var unseen := false
 		for c: Vector2 in card:
@@ -718,7 +718,7 @@ func _wash_jumper() -> void:
 		var sc := maxf(float(first[1]), 0.05)
 		# the deck is being washed as the jumper comes: twelve seconds into it
 		var w0 := maxf(0.15, te - ts - 12.0)
-		medium._moves = [{"kind": "wash", "t0": w0, "dur": 30.0, "pause": 1000.0, "seed": 4321,
+		medium._shuffles.moves = [{"kind": "wash", "t0": w0, "dur": 30.0, "pause": 1000.0, "seed": 4321,
 			"plan": medium._shuffles._wash_plan(4321, 30.0)}]
 		medium._now = te
 		medium._pose(te)
@@ -805,7 +805,7 @@ func _wash_jumper() -> void:
 			var mixing := covers and at - float(m["t0"]) >= float((medium._shuffles._whole(m)["mix"] as Vector2).x) + TableShuffle.JUMP_MIX \
 				and at - float(m["t0"]) <= float((medium._shuffles._whole(m)["mix"] as Vector2).y)
 			var early := 0
-			for mv in medium._moves:
+			for mv in medium._shuffles.moves:
 				if String((mv as Dictionary)["kind"]) == "wash" and float((mv as Dictionary)["t0"]) < medium._plan.wash_from - 6.0:
 					early += 1
 			_ok(mixing and early == 0, "a jumper's wash is held back for it: mixing when the jumper is reckoned to come (episode %d, %s)" % [sd, str(mixing)])

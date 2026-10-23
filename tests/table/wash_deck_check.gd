@@ -108,7 +108,7 @@ func _episode(more: Dictionary, seed: int) -> void:
 	subs.document = {"source": CardReading.compose([{"kind": "shuffle", "card": 0, "text": "Shuffle."}]),
 		"title": "Wash Deck Check", "table": table}
 	medium._ensure_doc()
-	medium._shuffle_room = INF
+	medium._shuffles.shuffle_room = INF
 
 
 ## THE DECK IS THE EPISODE'S: its count, its meshes, its height and a wash's cards.

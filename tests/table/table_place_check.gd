@@ -374,7 +374,7 @@ func _cards_go_round(table: Dictionary) -> Dictionary:
 				var tr: PackedVector4Array = PackedVector4Array(tracks[i] as Array) if tracks[i] is Array else tracks[i]
 				for q in tr:
 					var at := Vector2(q.x + medium._plan.mid.x, q.z + medium._plan.mid.z)
-					var card := TableShuffle._card_poly(at, q.w)
+					var card := TableShuffle._card_corners(at, q.w)
 					var hit := false
 					for st in medium._things_part.standing:
 						# the foot as it stands, without the margin a card keeps from it, less a hair

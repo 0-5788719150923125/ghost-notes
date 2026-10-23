@@ -22,11 +22,21 @@ var _swirl_vel := 0.0    # angular velocity - kicked on beats, decays between th
 var _beat_prev := 0.0
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"layout": {"label": "Layout", "type": "choice", "options": "LAYOUTS", "default": null,
 		"blurb": "How the lamps are arranged: scattered orbs in the haze, a row like street lighting, a ring around you, or a pair facing off across the frame."},
+	"lamps": {"label": "Lamps", "type": "num", "range": [2, 9], "default": null,
+		"blurb": "How many lamps glow in the haze, when they are scattered or set in a ring."},
+	"row_lamps": {"label": "Row lamps", "type": "num", "range": [3, 7], "default": null,
+		"blurb": "How many lamps stand in the row, when they are set in a row."},
+	"lamp_size": {"label": "Lamp size", "type": "num", "range": [0.10, 0.24], "default": null,
+		"blurb": "How large each lamp is when they are set in a row or a ring."},
+	"row_height": {"label": "Row height", "type": "num", "range": [-0.20, 0.20], "default": null,
+		"blurb": "How high or low in the frame the row of lamps sits."},
+	"fog": {"label": "Fog", "type": "num", "range": [0.025, 0.070], "default": null,
+		"blurb": "How thick the fog over the lamps is."},
 }
 
 
@@ -36,15 +46,15 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# moonlight - so the mood is unrestricted and the lamps drift around it by its spread.
 	var sch := Scheme.pick(rng)
 	var layout := String(choice("layout", rng))
-	var light_count := rng.randi_range(2, 9)
+	var light_count: int = number("lamps", rng)
 	if layout == "pair":
 		light_count = 2
 	elif layout == "row":
-		light_count = rng.randi_range(3, 7)
+		light_count = number("row_lamps", rng)
 	# An arranged layout wants lamps of a COMMON size (they read as the same fixture seen
 	# several times); a scatter wants them wildly unequal, which is what reads as depth.
-	var common := rng.randf_range(0.10, 0.24)
-	var row_y := rng.randf_range(-0.20, 0.20)
+	var common: float = number("lamp_size", rng)
+	var row_y: float = number("row_height", rng)
 	var ring_r := Vector2(rng.randf_range(0.28, 0.48), rng.randf_range(0.16, 0.38))
 	var ring_ph := rng.randf() * TAU
 	for i in light_count:
@@ -86,7 +96,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		# The cover sits on the scheme's own partner hue, so it veils rather than clashes.
 		"fog_tint": sch.accent,
 		"fog_sat": clampf(sch.sat * rng.randf_range(0.15, 0.4), 0.03, 0.5),
-		"fog_alpha": rng.randf_range(0.025, 0.070),
+		"fog_alpha": number("fog", rng),
 	}
 
 

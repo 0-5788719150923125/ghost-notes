@@ -104,11 +104,21 @@ var _light_drift := 0.0
 var _light_sigma := 0.8       # angular width of the lit arc of teeth
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"mechanism": {"label": "Mechanism", "type": "choice", "options": "MODES", "default": null,
 		"blurb": "What kind of machine is built: one big orrery, scattered gear trains, a clock with a ticking escapement, a chorus of equal wheels turning together, or a split composition."},
+	"tooth_size": {"label": "Tooth size", "type": "num", "range": [0.7, 1.6], "default": null,
+		"blurb": "How coarse the gear teeth are, from a fine-toothed instrument to a chunky mill drive."},
+	"trains": {"label": "Gear trains", "type": "num", "range": [2, 3], "default": null,
+		"blurb": "How many separate gear trains are scattered in frame, for the trains mechanism."},
+	"planets": {"label": "Planet wheels", "type": "num", "range": [3, 8], "default": null,
+		"blurb": "How many wheels mesh around the big central wheel, for the orrery mechanism."},
+	"columns": {"label": "Columns", "type": "num", "range": [2, 6], "default": null,
+		"blurb": "How many columns of wheels the chorus wall has."},
+	"rows": {"label": "Rows", "type": "num", "range": [2, 4], "default": null,
+		"blurb": "How many rows of wheels the chorus wall has."},
 }
 
 
@@ -139,7 +149,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_wear_kind = WEARS[rng.randi() % WEARS.size()]
 	# Tooth size, machine-wide: a fine-toothed instrument or a chunky mill drive. Every
 	# module sample below scales by this, so meshing stays exact - only the grain changes.
-	_mod_mul = rng.randf_range(0.7, 1.6)
+	_mod_mul = number("tooth_size", rng)
 	# Wear: a quarter of machines come out of the crate pristine, the rest corroded to
 	# varying degrees.
 	_wear = 0.0 if rng.randf() < 0.25 else rng.randf_range(0.20, 0.85)
@@ -152,7 +162,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"orrery":
 			_build_orrery(rng)
 		"trains":
-			var n := rng.randi_range(2, 3)
+			var n: int = number("trains", rng)
 			for t in n:
 				_build_train(rng, "tick" if rng.randf() < 0.45 else "smooth")   # some trains click
 		"clockwork":
@@ -332,7 +342,7 @@ func _build_orrery(rng: RandomNumberGenerator) -> void:
 	var center := Vector2(rng.randf_range(-0.12, 0.12), rng.randf_range(-0.12, 0.12))
 	var driver := _add_gear(grp, center, rc, nc, rng.randf_range(-PI, PI), 1.0, depth)
 	_groups[grp].tooth_step = TAU / float(nc)
-	var sat := rng.randi_range(3, 8)
+	var sat: int = number("planets", rng)
 	for i in sat:
 		var rs := rng.randf_range(0.10, 0.19)
 		var ns := maxi(7, roundi(2.0 * rs / module))
@@ -374,8 +384,8 @@ func _build_chorus(rng: RandomNumberGenerator) -> void:
 	# A chorus is a WALL, so the grid is sized first and the wheels are then fitted to
 	# it: a wide sparse rank of small clocks and a tight block of big ones are both
 	# choruses, but a fixed spacing could only ever draw one of them.
-	var cols := rng.randi_range(2, 6)
-	var rows := rng.randi_range(2, 4)
+	var cols: int = number("columns", rng)
+	var rows: int = number("rows", rng)
 	var gx := minf(rng.randf_range(0.30, 0.50), 1.75 / maxf(1.0, float(cols - 1)))
 	var gy := minf(gx, 1.25 / maxf(1.0, float(rows - 1)))
 	var r := minf(rng.randf_range(0.09, 0.22), minf(gx, gy) * 0.46)

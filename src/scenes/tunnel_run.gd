@@ -151,13 +151,23 @@ var _ch := Vector2.ZERO
 var _f: AudioFeatures = AudioFeatures.new()
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"track": {"label": "Track", "type": "choice", "options": "TRACKS", "default": null,
 		"blurb": "How hard the track turns: a gentle glide, a weave, a corkscrew that rolls, or a coaster that turns right over."},
 	"profile": {"label": "Cross-section", "type": "choice", "options": "PROFILES", "default": null,
 		"blurb": "The tube's cross-section: round, fluted, star-shaped, a duct, or ribbed."},
+	"twist": {"label": "Twist", "type": "num", "range": [-0.16, 0.16], "default": null,
+		"blurb": "How fast the tunnel's grooves spiral past, and which way."},
+	"width": {"label": "Tunnel width", "type": "num", "range": [1.0, 1.7], "default": null,
+		"blurb": "How wide the tunnel is."},
+	"chambers": {"label": "Chambers", "type": "num", "range": [0.10, 0.30], "default": null,
+		"blurb": "How much the tunnel opens out into wider chambers along its length."},
+	"seams": {"label": "Seams", "type": "num", "range": [0, 4], "default": null,
+		"blurb": "How many pale seams run along the tunnel wall."},
+	"speed": {"label": "Speed", "type": "num", "range": [4.0, 10.0], "default": null,
+		"blurb": "How fast the ride travels down the tunnel."},
 }
 
 
@@ -189,21 +199,21 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# THE TWIST is what stops a shaped cross-section reading as an extrusion. Without it the
 	# flutes are straight rails running to the vanishing point and the eye reads the tube as a
 	# static pipe however much the track bends; with it they spiral past.
-	_twist = rng.randf_range(-0.16, 0.16)
+	_twist = number("twist", rng)
 
-	_radius = rng.randf_range(1.0, 1.7)
-	_swell = rng.randf_range(0.10, 0.30)
+	_radius = number("width", rng)
+	_swell = number("chambers", rng)
 	_swell_w = rng.randf_range(26.0, 70.0)
 	_rib_every = rng.randi_range(5, 14)
 	_rib_depth = rng.randf_range(0.08, 0.22)
-	var seam_n := rng.randi_range(0, 4)
+	var seam_n: int = number("seams", rng)
 	var seam_off := rng.randi() % SIDES
 	for i in seam_n:
 		_seams.append((seam_off + i * int(SIDES / maxi(1, seam_n))) % SIDES)
 	_band_gain = rng.randf_range(0.09, 0.22)
 	_band_wind = rng.randf_range(0.015, 0.075)
 
-	_base_speed = rng.randf_range(4.0, 10.0)
+	_base_speed = number("speed", rng)
 	_speed = _base_speed
 	lens.fov = rng.randf_range(66.0, 92.0)          # wide: the walls have to rush past
 	_lit = rng.randf_range(0.85, 1.25)

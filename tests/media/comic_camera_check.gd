@@ -59,17 +59,17 @@ func _run() -> void:
 		Director.set_camera(float(sev))
 		var r := _measure(comic)
 		swing.append(r["swing"])
-		reach.append(comic._reach())
+		reach.append(comic._camera._reach())
 		jumps.append(r["jump"])
 		print("  camera %.1f -> mean shot-to-shot swing %.1f deg, %.0f%% jump cuts, "
 			% [sev, rad_to_deg(float(r["swing"])), 100.0 * float(r["jump"])]
 			+ "reach %.2f, walk stayed within %.1f deg"
-			% [comic._reach(), rad_to_deg(float(r["worst"]))])
+			% [comic._camera._reach(), rad_to_deg(float(r["worst"]))])
 		# THE WALK IS BOUNDED BY ITS ARC, at every setting. If this ever fails the clamp in
 		# _walk has been lost and the whole "spread over several shots" guarantee with it.
-		if float(r["worst"]) > ComicMedium.AZ_ARC * float(sev) + 1e-4:
+		if float(r["worst"]) > ComicCamera.AZ_ARC * float(sev) + 1e-4:
 			_fails.append("camera %.1f: the azimuth walk reached %.3f rad, outside its %.3f arc"
-				% [sev, float(r["worst"]), ComicMedium.AZ_ARC * float(sev)])
+				% [sev, float(r["worst"]), ComicCamera.AZ_ARC * float(sev)])
 
 	# THE KNOB IS MONOTONE. Not "different at the ends" - every step of it has to move the
 	# camera the same way, or it is a switch with a slider drawn on it.
@@ -123,26 +123,26 @@ func _measure(comic: ComicMedium) -> Dictionary:
 	comic._film_at = -1
 	comic._roll_plan()
 	comic._read = int(comic._plan[0])
-	comic._choose_spread_look()
+	comic._camera.choose_look()
 	var swing := 0.0
 	var jumps := 0
 	var worst := 0.0
 	var n := 0
 	for m in SHOTS + WARMUP:
-		var before: float = float(comic._cam.az)
-		comic._begin_shot(comic._read % comic._spread.panels.size())
+		var before: float = float(comic._camera._cam.az)
+		comic._camera.begin_shot(comic._read % comic._spread.panels.size())
 		# The planner's answer is the TARGET. Where the camera is on the way there is the
 		# follower's business, and is continuous by construction.
-		var az: float = float(comic._tgt.az)
+		var az: float = float(comic._camera._tgt.az)
 		if m >= WARMUP:
 			swing += absf(angle_difference(before, az))
-			worst = maxf(worst, absf(comic._az_walk))
-			if bool(ComicMedium.SHOTS[String(comic._shot["kind"])].get("hard", false)):
+			worst = maxf(worst, absf(comic._camera._az_walk))
+			if bool(ComicCamera.SHOTS[String(comic._camera._shot["kind"])].get("hard", false)):
 				jumps += 1
 			n += 1
 		# Stand the camera on its target so the next shot is planned from where this one led -
 		# what the running medium does once the follower has closed.
-		comic._cam = (comic._tgt as Dictionary).duplicate()
+		comic._camera._cam = (comic._camera._tgt as Dictionary).duplicate()
 	return {
 		"swing": swing / maxf(1.0, float(n)),
 		"jump": float(jumps) / maxf(1.0, float(n)),
@@ -159,13 +159,13 @@ func _measure(comic: ComicMedium) -> Dictionary:
 ##
 ## Asserted here rather than in the look probe because the look probe cannot see it: the film
 ## panel is the FIRST entry of the reading plan, so it has been read and left behind before the
-## probe's first capture. This drives _place_eye directly on the widest panel of a spread, with
+## probe's first capture. This drives place_eye directly on the widest panel of a spread, with
 ## and without the film flag, so the contain path is compared against the shot it replaces.
 func _check_film_fit(comic: ComicMedium) -> void:
 	comic._spread = ComicSpread.new(hash(["filmfit"]))
 	comic._spread_i = 3
-	comic._att = Vector3(0.3, 0.35, 0.15)
-	comic._att_basis = Basis.from_euler(comic._att)
+	comic._camera._att = Vector3(0.3, 0.35, 0.15)
+	comic._camera.att_basis = Basis.from_euler(comic._camera._att)
 	# The widest panel on the sheet - the one a height-only fit crops hardest.
 	var wide := 0
 	for i in comic._spread.panels.size():
@@ -180,16 +180,16 @@ func _check_film_fit(comic: ComicMedium) -> void:
 		# PIN THE WHOLE CAMERA STATE, not just the aim. az/el/roll/fov carry over from whatever
 		# the checks above left in _cam, so without this the two framings below are measured
 		# from different stations and the comparison - and the run-to-run numbers - drift.
-		comic._cam["aim"] = comic._spread.panel_center(wide)
-		comic._cam["fill"] = 1.2
-		comic._cam["az"] = 0.6
-		comic._cam["el"] = deg_to_rad(52.0)
-		comic._cam["roll"] = 0.08
-		comic._cam["fov"] = 46.0
-		comic._place_eye()
-		comic._prepare_lens()
-		out[as_film] = comic.read_panel_fit()
-		out["cov%s" % as_film] = comic.page_coverage()
+		comic._camera._cam["aim"] = comic._spread.panel_center(wide)
+		comic._camera._cam["fill"] = 1.2
+		comic._camera._cam["az"] = 0.6
+		comic._camera._cam["el"] = deg_to_rad(52.0)
+		comic._camera._cam["roll"] = 0.08
+		comic._camera._cam["fov"] = 46.0
+		comic._camera.place_eye()
+		comic._camera.prepare_lens()
+		out[as_film] = comic._camera.read_panel_fit()
+		out["cov%s" % as_film] = comic._camera.page_coverage()
 	print("  widest panel (aspect %.2f): as a scene %.2f of frame (page covers %.2f), "
 		% [comic._spread.panel_aspect(wide), out[false], out["covfalse"]]
 		+ "as film %.2f (page covers %.2f)" % [out[true], out["covtrue"]])

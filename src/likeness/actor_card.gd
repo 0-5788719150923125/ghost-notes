@@ -26,8 +26,9 @@ class_name ActorCard
 
 const KEY := "actor"
 
-## The block: the actor this note builds, and who labels their footage.
-const KNOBS := {"id": "", "writer": "claude", "writer_model": "", "writer_effort": ""}
+## The block: the actor this note builds, who labels their footage, and the renderer that plays them
+## ([constant ActorSteps.RENDERERS]).
+const KNOBS := {"id": "", "writer": "claude", "writer_model": "", "writer_effort": "", "renderer": "2d"}
 
 signal noted(text: String)
 
@@ -57,6 +58,9 @@ var _rows_seen := ""
 var _writer: AgentPick
 var _advanced: VBoxContainer
 var _setting_boxes := {}
+var _setting_rows := {}
+var _renderer: OptionButton
+var _library_head: Label
 var _body: VBoxContainer       # everything below the picker: hidden with no actor
 ## The reading this card is on (an Actor brings a Voice, so there is one): its status line says what the
 ## card says, and it plays them. Without one (a gate) the card only builds, and `noted` says.
@@ -108,9 +112,37 @@ func apply(cfg: Dictionary) -> void:
 			_knobs[k] = String(cfg[k])
 	if not TextGen.has(String(_knobs["writer"])):
 		_knobs["writer"] = "claude"
+	if not ActorSteps.RENDERERS.has(String(_knobs["renderer"])):
+		_knobs["renderer"] = "2d"
 	_show_writer()
 	if String(_knobs["id"]) != was or _actor == null:
 		_open(String(_knobs["id"]))
+	_show_renderer()
+
+
+## The renderer that plays them on this note.
+func renderer() -> String:
+	return String(_knobs["renderer"])
+
+
+## THE CARD FOR ITS RENDERER: the steps and settings it is made with, and those every renderer shares;
+## the others' are hidden, and their settings kept as they were for a turn back.
+func _show_renderer() -> void:
+	var r := renderer()
+	if _builder != null:
+		_builder.renderer = r
+	if _renderer != null:
+		_syncing = true
+		_renderer.select(ActorSteps.RENDERERS.keys().find(r))
+		_syncing = false
+	for step in _rows:
+		((_rows[step] as Dictionary)["row"] as Control).visible = ActorSteps.serves(String(step), r)
+	for k in _setting_rows:
+		(_setting_rows[k] as Control).visible = ActorSteps.setting_serves(String(k), r)
+	if _library_head != null:
+		_library_head.visible = r == "2d"
+		_library.visible = r == "2d"
+	_rows_seen = ""
 
 
 # --- what it hands the reading -------------------------------------------------------------------
@@ -154,7 +186,8 @@ func document() -> Dictionary:
 	if _actor == null:
 		return {}
 	var sid := _actor.chosen_set()
-	return {"dir": _actor.dir, "set": sid, "still": _actor.still_of(sid), "seed": performance(), "name": _actor.name()}
+	return {"dir": _actor.dir, "set": sid, "still": _actor.still_of(sid), "seed": performance(), "name": _actor.name(),
+		"renderer": renderer()}
 
 
 # --- the actor ---------------------------------------------------------------------------------
@@ -166,6 +199,7 @@ func _open(id: String) -> void:
 	_builder = ActorBuilder.new(_actor) if _actor != null else null
 	if _builder != null:
 		_builder.writer = _writer_choice()
+		_builder.renderer = renderer()
 		_builder.voice_published.connect(_voice_made)
 		ActorSources.rescan(_actor)
 		_actor.save()
@@ -453,11 +487,11 @@ func likeness_status() -> Dictionary:
 	if _actor == null:
 		return {"ready": false, "busy": false, "said": "The Actor card has no actor yet: pick one or make one."}
 	var busy := _builder != null and (_builder.running or _builder.busy())
-	if _actor.playable():
+	if _actor.playable("", renderer()):
 		return {"ready": true, "busy": busy, "said": ""}
 	var missing := PackedStringArray()
 	var sid := _actor.chosen_set()
-	for step in ActorSteps.PLAYS:
+	for step in ActorSteps.plays(renderer()):
 		var scope := ("s:" + sid) if ActorSteps.per(String(step)) == "set" else ""
 		if sid.is_empty() or _actor.state_of(String(step), scope) == "missing":
 			missing.append(String(Registry.field(ActorSteps.REGISTRY, step, "label", step)).to_lower())
@@ -484,7 +518,7 @@ func _refresh() -> void:
 	var line := ""
 	if not _builder.waiting.is_empty():
 		line = "Waiting: %s - Ghost Notes fetches these itself, once (see ⚙ for progress)." % _builder.waiting
-	elif _actor.playable():
+	elif _actor.playable("", renderer()):
 		line = "Ready to play: the set in use has everything they need to read."
 	_line.text = line
 	_fill_sets()
@@ -596,7 +630,7 @@ func _fill_sets() -> void:
 		# few minutes), so the row says whether this one is, and using another keeps this one's work
 		# (2026-10-21: "Play this set" read as a preview, and switching looked like losing a build)
 		var sid := String(d.get("id", ""))
-		var built := _actor.playable(sid)
+		var built := _actor.playable(sid, renderer())
 		var foot := HBoxContainer.new()
 		foot.add_theme_constant_override("separation", 8)
 		col.add_child(foot)
@@ -799,6 +833,28 @@ func _build() -> void:
 		_actor.data["name"] = t.strip_edges()
 		_actor.save())
 	nrow.add_child(_name)
+	var rrow := HBoxContainer.new()
+	_body.add_child(rrow)
+	var rl := Label.new()
+	rl.text = "Renderer"
+	rl.custom_minimum_size.x = 64
+	rl.add_theme_font_size_override("font_size", 12)
+	rrow.add_child(rl)
+	_renderer = OptionButton.new()
+	_renderer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_renderer.fit_to_longest_item = false
+	var tips := PackedStringArray()
+	for key in ActorSteps.RENDERERS:
+		_renderer.add_item(String(Registry.label(ActorSteps.RENDERERS, key)))
+		tips.append("%s: %s" % [Registry.label(ActorSteps.RENDERERS, key), Registry.blurb(ActorSteps.RENDERERS, key)])
+	_renderer.tooltip_text = ("How they are drawn on this note. Each has steps of its own; the steps they share are "
+		+ "made once, and a renderer's settings are kept while another is used.\n\n" + "\n".join(tips))
+	_renderer.item_selected.connect(func(i: int) -> void:
+		if _syncing:
+			return
+		_knobs["renderer"] = String(ActorSteps.RENDERERS.keys()[i])
+		_show_renderer())
+	rrow.add_child(_renderer)
 
 	_body.add_child(_heading("Sources"))
 	_sources_box = VBoxContainer.new()
@@ -859,7 +915,7 @@ func _build() -> void:
 		redo.tooltip_text = "Make this step again from scratch: what is made from it is marked stale."
 		redo.pressed.connect(_redo.bind(step))
 		r.add_child(redo)
-		_rows[step] = {"state": state, "make": make, "redo": redo}
+		_rows[step] = {"state": state, "make": make, "redo": redo, "row": r}
 	var grow := HBoxContainer.new()
 	grow.add_theme_constant_override("separation", 6)
 	_body.add_child(grow)
@@ -894,7 +950,8 @@ func _build() -> void:
 	_stills_box = HFlowContainer.new()
 	_stills_box.add_theme_constant_override("h_separation", 4)
 	_body.add_child(_stills_box)
-	_body.add_child(_heading("Library"))
+	_library_head = _heading("Library")
+	_body.add_child(_library_head)
 	_library = Label.new()
 	_library.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_library.add_theme_font_size_override("font_size", 11)
@@ -951,8 +1008,10 @@ func _build() -> void:
 			_actor.save())
 		r.add_child(sb)
 		_setting_boxes[k] = sb
+		_setting_rows[k] = r
 	_body.visible = false
 	_fill_pick()
+	_show_renderer()
 
 
 static func _heading(text: String) -> Label:

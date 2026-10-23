@@ -35,13 +35,19 @@ var _t := 0.0
 var _tb := TriBatch.new()
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"stack": {"label": "Stack", "type": "choice", "options": "STACKS", "default": null,
 		"blurb": "How many planes and how thick they sit: a few big slabs, a stack, or a deep stack receding."},
 	"profile": {"label": "Profile", "type": "choice", "options": "PROFILES", "default": null,
 		"blurb": "The line each plane's edge follows: smooth swells, ridges or terraces."},
+	"terraces": {"label": "Terraces", "type": "num", "range": [4, 11], "default": null,
+		"blurb": "How many treads a terraced edge steps through, when the profile is terraces."},
+	"waves": {"label": "Waves", "type": "num", "range": [1.0, 5.5], "default": null,
+		"blurb": "How many swells run across each plane's edge."},
+	"scroll": {"label": "Scroll speed", "type": "num", "range": [0.15, 0.45], "default": null,
+		"blurb": "How fast the planes' edges slide sideways."},
 }
 
 
@@ -62,14 +68,14 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"stack": kname,
 		"mood": sch.name,
 		"profile": String(choice("profile", rng)),
-		"steps": rng.randi_range(4, 11),        # terrace profile: how many treads
+		"steps": number("terraces", rng),        # terrace profile: how many treads
 		"hue": sch.hue,
 		"hue_span": to_accent * rng.randf_range(0.5, 1.3),
 		"sat": sch.sat,
 		"val": 0.75 + 0.30 * sch.val,           # the mood's brightness character
-		"wave_k": rng.randf_range(1.0, 5.5),    # spatial frequency across x
+		"wave_k": number("waves", rng),    # spatial frequency across x
 		"amp": rng.randf_range(float(am[0]), float(am[1])),   # crest height, fraction of unit
-		"scroll": rng.randf_range(0.15, 0.45),
+		"scroll": number("scroll", rng),
 		"alpha": rng.randf_range(float(al[0]), float(al[1])),
 	}
 

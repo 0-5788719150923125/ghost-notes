@@ -140,13 +140,23 @@ var _run_cap := 8
 var _ch := Vector2.ZERO
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"chamber": {"label": "Chamber", "type": "choice", "options": "SHAPE_BAG", "default": null,
 		"blurb": "The chamber the material falls through: ledges that break the fall into cascades, an hourglass that chokes the pour at a waist, a plain silo, or open sides it walks off."},
 	"wall": {"label": "Wall colors", "type": "choice", "options": "WALL_RAMPS", "default": null,
 		"blurb": "Which elevation ramp colors the strata of the chamber wall: earth, desert, alpine or ocean."},
+	"wall_brightness": {"label": "Wall brightness", "type": "num", "range": [0.30, 0.62], "default": null,
+		"blurb": "How bright the colored strata of the chamber wall are."},
+	"spouts": {"label": "Spouts", "type": "num", "range": [2, 5], "default": null,
+		"blurb": "How many spouts pour material into the chamber from the ceiling."},
+	"hatch_gap": {"label": "Hatch gap", "type": "num", "range": [3.5, 10.0], "default": null,
+		"blurb": "The fewest seconds between one opening of the floor hatches and the next."},
+	"hatch_open": {"label": "Hatch open", "type": "num", "range": [0.35, 1.3], "default": null,
+		"blurb": "How many seconds the floor hatches stay open each time they open."},
+	"fill": {"label": "Opening fill", "type": "num", "range": [0.10, 0.40], "default": null,
+		"blurb": "How full of material the chamber already is when the scene opens."},
 }
 
 
@@ -259,7 +269,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# Strata: the wall takes its color from an elevation ramp by row, which is the one
 	# place a [Palette] belongs here - everything else is matter, and matter has its own.
 	var ramp := Palette.named(String(choice("wall", rng)), rng)
-	var wall_v := rng.randf_range(0.30, 0.62)
+	var wall_v: float = number("wall_brightness", rng)
 	var band := PackedColorArray()
 	band.resize(_h)
 	for y in _h:
@@ -269,7 +279,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	sim.wall_band = band
 
 	# --- spouts ----------------------------------------------------------------------
-	var ns := rng.randi_range(2, 5)
+	var ns: int = number("spouts", rng)
 	for i in ns:
 		var mname := String(pours[i % pours.size()])
 		var cx := int(float(_w) * rng.randf_range(0.12, 0.88))
@@ -311,8 +321,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		var hw := maxi(2, int(float(_w) * _rand(ch["hatch_w"], rng)))
 		var hx := int(float(_w) * rng.randf_range(0.18, 0.82))
 		_hatches.append({"x0": maxi(1, hx - hw / 2), "x1": mini(_w - 2, hx + hw / 2)})
-	_hatch_gap = rng.randf_range(3.5, 10.0)
-	_hatch_dwell = rng.randf_range(0.35, 1.3)
+	_hatch_gap = number("hatch_gap", rng)
+	_hatch_dwell = number("hatch_open", rng)
 	# The tilt is sampled as an ANGLE off vertical and applied as its tangent, because a
 	# cellular gravity cannot rotate - it can only take a sideways step with some
 	# probability, and tan(angle) IS that probability for a given lean.
@@ -400,7 +410,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# and 42 at half - past which the worker stops keeping up with its own 20-30 Hz clock and
 	# the world runs in slow motion. A chamber that fills that far during a song has earned it;
 	# one that OPENS there has not.
-	var fill := rng.randf_range(0.10, 0.40)
+	var fill: float = number("fill", rng)
 	var seeded: Array = []
 	for sp in _spouts:
 		var d: Dictionary = sp

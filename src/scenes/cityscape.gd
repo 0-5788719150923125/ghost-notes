@@ -31,11 +31,19 @@ var _layers: Array = []
 var _sch: Scheme
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"skyline": {"label": "Skyline", "type": "choice", "options": "PROFILES", "default": null,
 		"blurb": "The skyline's profile: a dense downtown of many narrow blocks, a cluster of tall towers, a mix, or a low-rise spread."},
+	"snow_stars": {"label": "Stars with snow", "type": "num", "range": [80, 140], "default": null,
+		"blurb": "How many stars show in the sky behind the snow, on a snowy night."},
+	"snow": {"label": "Snowflakes", "type": "num", "range": [70, 120], "default": null,
+		"blurb": "How many snowflakes fall over the skyline, on a snowy night."},
+	"rain": {"label": "Raindrops", "type": "num", "range": [100, 170], "default": null,
+		"blurb": "How many raindrops fall over the skyline, on a rainy night."},
+	"stars": {"label": "Stars", "type": "num", "range": [90, 160], "default": null,
+		"blurb": "How many stars show over the skyline, on a clear night."},
 }
 
 
@@ -66,15 +74,15 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# the scheme's accent, so the sky is lit by the same city.
 	var weather := rng.randf()
 	if weather < 0.30:
-		add_layer("stars", rng, {"z": "back", "count": rng.randi_range(80, 140),
+		add_layer("stars", rng, {"z": "back", "count": number("snow_stars", rng),
 			"hue": _sch.accent, "sat": _sch.sat * 0.3})
-		add_layer("snow", rng, {"count": rng.randi_range(70, 120),
+		add_layer("snow", rng, {"count": number("snow", rng),
 			"hue": _sch.accent, "sat": _sch.sat * 0.25, "fall": 0.09})
 	elif weather < 0.50:
-		add_layer("rain", rng, {"count": rng.randi_range(100, 170),
+		add_layer("rain", rng, {"count": number("rain", rng),
 			"hue": _sch.accent, "sat": _sch.sat * 0.4, "slant": 0.22})
 	elif weather < 0.65:
-		add_layer("stars", rng, {"z": "back", "count": rng.randi_range(90, 160),
+		add_layer("stars", rng, {"z": "back", "count": number("stars", rng),
 			"hue": _sch.accent, "sat": _sch.sat * 0.3})
 	return {
 		"mood": _sch.name,

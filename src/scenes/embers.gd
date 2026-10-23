@@ -24,11 +24,21 @@ var _beat_prev := 0.0
 var _ch := Vector2.ZERO       # live tonal color (hue, strength) from the harmonic signature
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"form": {"label": "Form", "type": "choice", "options": "FORMS", "default": null,
 		"blurb": "The shape the sparks hold at rest: a loose cloud, a plume rising off a fire, or a ring riding the rim of an updraft."},
+	"sparks": {"label": "Sparks", "type": "num", "range": [60, 220], "default": null,
+		"blurb": "How many sparks drift in the frame."},
+	"spark_size": {"label": "Spark size", "type": "num", "range": [0.7, 1.8], "default": null,
+		"blurb": "How large the sparks are, from fine dust to fat drifting cinders."},
+	"spread": {"label": "Spread", "type": "num", "range": [0.18, 0.46], "default": null,
+		"blurb": "How far out from the middle the sparks' form reaches."},
+	"ring_width": {"label": "Ring width", "type": "num", "range": [0.04, 0.14], "default": null,
+		"blurb": "How thick the ring of sparks is, when the form is a ring."},
+	"plume_width": {"label": "Plume width", "type": "num", "range": [0.05, 0.16], "default": null,
+		"blurb": "How wide the plume of sparks is at its base, when the form is a plume."},
 }
 
 
@@ -40,12 +50,12 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var sch := Scheme.among(
 		["ember", "sodium", "dawn", "brass", "rose", "magenta", "violet", "toxic", "bone"], rng)
 	var form := String(choice("form", rng))
-	var n := rng.randi_range(60, 220)
+	var n: int = number("sparks", rng)
 	# The whole cloud's grain: some seeds are fine dust, some are fat drifting cinders.
-	var grain := rng.randf_range(0.7, 1.8)
-	var spread := rng.randf_range(0.18, 0.46)      # how far the form reaches
-	var ring_w := rng.randf_range(0.04, 0.14)      # ring thickness, if it is a ring
-	var stalk := rng.randf_range(0.05, 0.16)       # plume width at its base
+	var grain: float = number("spark_size", rng)
+	var spread: float = number("spread", rng)      # how far the form reaches
+	var ring_w: float = number("ring_width", rng)      # ring thickness, if it is a ring
+	var stalk: float = number("plume_width", rng)       # plume width at its base
 	for i in n:
 		var a := rng.randf() * TAU
 		var home: Vector2

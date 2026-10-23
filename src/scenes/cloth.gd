@@ -277,11 +277,21 @@ var _f: AudioFeatures = AudioFeatures.new()
 var _ch := Vector2.ZERO
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"pins": {"label": "Pins", "type": "choice", "options": "PIN_PATTERNS", "default": null,
 		"blurb": "How the sheet is pinned: along a line of pegs across the top, from its two top corners, down one side like a half-struck flag, or from a single peg at the center of the top edge."},
+	"width": {"label": "Width", "type": "num", "range": [1.00, 1.55], "default": null,
+		"blurb": "How wide the sheet is across the frame."},
+	"length": {"label": "Length", "type": "num", "range": [0.62, 0.92], "default": null,
+		"blurb": "How far the sheet hangs down from its line."},
+	"tear_delay": {"label": "Tear delay", "type": "num", "range": [1.2, 3.6], "default": null,
+		"blurb": "How many seconds the sheet hangs whole before it may start to tear."},
+	"wind": {"label": "Wind", "type": "num", "range": [0.05, 0.16], "default": null,
+		"blurb": "How hard the steady wind blows on the sheet when the music is quiet."},
+	"opacity": {"label": "Opacity", "type": "num", "range": [0.25, 0.80], "default": null,
+		"blurb": "How solid the fabric looks, from sheer to nearly opaque."},
 }
 
 
@@ -297,8 +307,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# The sheet's extent in ghost's centered unit-fraction space. Wide enough to fill a
 	# 16:9 frame edge to edge at the top of the range, tall enough that the free lower
 	# edge is well inside frame so its snap is visible.
-	var wide := rng.randf_range(1.00, 1.55)
-	var tall := rng.randf_range(0.62, 0.92)
+	var wide: float = number("width", rng)
+	var tall: float = number("length", rng)
 	_line_y = rng.randf_range(-0.44, -0.34)
 	var dx := wide / float(_cols - 1)
 	var dy := tall / float(_rows - 1)
@@ -382,7 +392,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var y_weft := minf(YIELD_MAX, y_warp * weave_bias)
 	var irr := rng.randf_range(0.06, 0.36)
 	_max_stretch = rng.randf_range(1.25, 1.5)
-	_tear_delay = rng.randf_range(1.2, 3.6)
+	_tear_delay = number("tear_delay", rng)
 	# Damage rate, and why it is this large. A seam sitting a little past yield should creep
 	# for many seconds; a crack TIP, which both carries the load its dead neighbor dropped and
 	# has had its own yield cut by the weakening field, sits several times further past and so
@@ -459,7 +469,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var wdir := rng.randf_range(-0.5, 0.5) + (0.0 if rng.randf() < 0.5 else PI)
 	_wind_dx = cos(wdir)
 	_wind_dy = sin(wdir) * 0.35
-	_wind_base = rng.randf_range(0.05, 0.16)
+	_wind_base = number("wind", rng)
 	_wind_gain = rng.randf_range(0.30, 0.85)
 	_turb_gain = rng.randf_range(8.0, 20.0)
 	_sway = rng.randf_range(0.004, 0.018)
@@ -478,7 +488,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 
 	# --- look --------------------------------------------------------------------
 	_persp = rng.randf_range(0.16, 0.48)
-	_opacity = rng.randf_range(0.25, 0.80)
+	_opacity = number("opacity", rng)
 	_trans = rng.randf_range(0.15, 0.60)
 	_amb = rng.randf_range(0.18, 0.38)
 	_diff = rng.randf_range(0.55, 0.95)

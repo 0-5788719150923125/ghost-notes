@@ -152,11 +152,11 @@ func _run() -> void:
 		medium.advance(Spectrum.current, DT, 1.0)
 		var tmed := medium as TableMedium
 		var dur := float(TableShuffle.RUNS["wash"]["dur"][1])
-		tmed._moves = [{"kind": "wash", "t0": 0.15, "dur": dur, "pause": 1000.0, "seed": _wash,
+		tmed._shuffles.moves = [{"kind": "wash", "t0": 0.15, "dur": dur, "pause": 1000.0, "seed": _wash,
 			"plan": tmed._shuffles._wash_plan(_wash, dur)}]
 		var at := float(tmed._times()["shuffle"]) + 0.15
 		print("table_look_probe: the wash runs %.1f-%.1f s, mixing %s s into it" % [at, at + dur,
-			str((tmed._moves[0]["plan"] as Dictionary)["mix"])])
+			str((tmed._shuffles.moves[0]["plan"] as Dictionary)["mix"])])
 		if _clip.y > _clip.x:
 			_clip += Vector2(at, at)
 	if _clip.y > _clip.x:

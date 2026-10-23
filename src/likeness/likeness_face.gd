@@ -90,7 +90,7 @@ var _arms: Array = []
 
 
 ## Read `rig.json` and `library.json`; "" when both are sound, else why not.
-func load_set(rig_path: String, library_path: String) -> String:
+func load_set(rig_path: String, library_path: String, need_library := true) -> String:
 	var r: Variant = ActorFolder.read_json(rig_path)
 	if not (r is Dictionary):
 		return "the rig is not made"
@@ -124,6 +124,15 @@ func load_set(rig_path: String, library_path: String) -> String:
 			steady.append(i)
 	var l: Variant = ActorFolder.read_json(library_path)
 	if not (l is Dictionary):
+		if not need_library:
+			# A HEAD OF SPLATS draws the mouth and eyes itself: the rig and the body are all it reads
+			files = []
+			shapes = []
+			lights = []
+			mouths_of = {}
+			eyes_of = {}
+			mouth_blends = {}
+			return ""
 		return "the library is not made"
 	files = []
 	shapes = []
@@ -276,6 +285,11 @@ func pose(m: PackedFloat32Array) -> PackedVector2Array:
 		var q := _pivot + b * (still_3d[i] - _pivot)
 		out[i] = Vector2(q.x, q.y)
 	return out
+
+
+## The point the head turns about (the neck, below the face and behind it), in the still's pixels.
+func pivot() -> Vector3:
+	return _pivot
 
 
 ## THE TORSO'S POSTURE [param m] (the motion's across, down - face widths - nearer, and tilt) with the

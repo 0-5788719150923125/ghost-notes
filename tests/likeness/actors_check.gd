@@ -19,6 +19,9 @@ extends SceneTree
 ## VOICE: each video's probe before its Hear, every video's Hear before the Utterances, the Utterances
 ## before the Voice; ▶ on the Voice makes those three and nothing of their picture, and the voice's
 ## lessons changed make the Voice stale and only it.
+## TWO RENDERERS: a run for the 2D renderer makes none of the head of splats, and the actor does not play
+## as one; a run for the gaussian renderer then makes its Frames, Face rig and Avatar in order, and nothing
+## else - the steps the two share are made once (THE CONTROL: the 2D run did make the 2D's library).
 ## THE STILL DRAWN ON: the one picked, else the one At rest found most at ease, else the first; stills
 ## made again forget the pick (an index into the old ones).
 ## A CHANGED INPUT MARKS STALE: a setting a step reads makes it stale, and only it, until it is made
@@ -157,6 +160,20 @@ func _run() -> void:
 	_ok(_made == ["voice|"], "▶ on the stale voice made %s" % str(_made))
 	_ok(ActorSteps.with_needs("voice").all(func(st: String) -> bool: return ActorSteps.is_voice(st) or st in ["fetch", "probe"]),
 		"the voice is made from steps of their picture: %s" % str(ActorSteps.with_needs("voice")))
+	# TWO RENDERERS: the 2D run made none of the head of splats; a gaussian run makes it, and only it
+	_ok(_ever.has("library|" + s), "control: the 2D run did not make the 2D's library")
+	_ok(not _ever.has("frames|" + s) and not _ever.has("avatar|" + s), "a 2D run made the head of splats: %s" % str(_ever))
+	_ok(_actor.playable("", "2d") and not _actor.playable("", "gaussian"), "with no head of splats the actor plays as one")
+	_made = []
+	b.renderer = "gaussian"
+	b.start()
+	_spin(b)
+	_actor.forget()
+	_ok(_made == ["frames|" + s, "face|" + s, "avatar|" + s], "a gaussian run after a 2D one made %s" % str(_made))
+	_ok(_actor.playable("", "gaussian"), "a head of splats made does not play")
+	_ok(ActorSteps.serves("motion", "gaussian") and ActorSteps.serves("motion", "2d") and not ActorSteps.serves("library", "gaussian")
+		and not ActorSteps.serves("avatar", "2d"), "a step serves the wrong renderer")
+	b.renderer = "2d"
 	# THE STILL DRAWN ON: the first, then the one most at rest, then the one picked
 	var stills_at := _actor.set_dir(sid).path_join("stills.json")
 	_write(stills_at, JSON.stringify({"stills": [{}, {}, {}, {}]}))
@@ -227,6 +244,7 @@ func _make(step: String, scope: String) -> String:
 			DirAccess.make_dir_recursive_absolute(p)
 			continue
 		var text := "made"
+		DirAccess.make_dir_recursive_absolute(p.get_base_dir())
 		if String(f) == "sets.json" or String(f) == "audit.json":
 			text = JSON.stringify({"sets": [{"id": "set-made", "usable": 5.0, "minutes": 6.0, "shots": [], "size": [64, 36]}]})
 		var fa := FileAccess.open(p, FileAccess.WRITE)

@@ -47,13 +47,23 @@ var _hue := 0.0
 var _beat_prev := 0.0
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"bins": {"label": "Bins", "type": "choice", "options": "BINS", "default": null,
 		"blurb": "How finely the map is binned: coarse blocky cells, the paper's 64, or fine bins that read as a smooth density cloud."},
 	"form": {"label": "Form", "type": "choice", "options": "FORMS", "default": null,
 		"blurb": "The latent's own structure: one plain iris ring, a banded iris of two rings, or one ring haloed by a sparse corona."},
+	"points": {"label": "Points", "type": "num", "range": [1500, 4200], "default": null,
+		"blurb": "How many points the density map is built from."},
+	"eye_width": {"label": "Eye width", "type": "num", "range": [1.0, 2.3], "default": null,
+		"blurb": "How far the eye shape is stretched sideways."},
+	"iris": {"label": "Iris size", "type": "num", "range": [0.45, 0.95], "default": null,
+		"blurb": "How large the iris ring is."},
+	"iris_width": {"label": "Iris thickness", "type": "num", "range": [0.06, 0.26], "default": null,
+		"blurb": "How thick the iris ring is."},
+	"pupil": {"label": "Pupil share", "type": "num", "range": [0.14, 0.40], "default": null,
+		"blurb": "How much of the map gathers in the dense pupil at the center."},
 }
 
 
@@ -66,7 +76,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_hue = _sch.hue
 	var bname := String(choice("bins", rng))
 	_g = int(BINS[bname])
-	_n = rng.randi_range(1500, 4200)
+	_n = number("points", rng)
 	# A placeholder shape only: the frame's size is not known until the node is in the tree,
 	# so the real grid is sized on the first draw (see _fit).
 	_gx = _g
@@ -80,12 +90,12 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# Sampled eye geometry: elongation (round through to very wide), iris ring, pupil
 	# nucleus, depth. The pupil can also sit OFF center, so the eye looks aside.
 	var form := String(choice("form", rng))
-	var ex := rng.randf_range(1.0, 2.3)
+	var ex: float = number("eye_width", rng)
 	var ey := rng.randf_range(0.55, 1.10)
-	var iris_r := rng.randf_range(0.45, 0.95)
-	var iris_w := rng.randf_range(0.06, 0.26)
+	var iris_r: float = number("iris", rng)
+	var iris_w: float = number("iris_width", rng)
 	var z_spread := rng.randf_range(0.10, 0.38)
-	var pupil_frac := rng.randf_range(0.14, 0.40)
+	var pupil_frac: float = number("pupil", rng)
 	var pupil_sig := rng.randf_range(0.08, 0.24)
 	var gaze := Vector3(rng.randf_range(-0.30, 0.30), rng.randf_range(-0.18, 0.18), 0.0)
 	# "banded" splits the iris into two concentric rings (two latent clusters at one

@@ -109,6 +109,149 @@ forward-facing actor, with a mouth that moves when speaking."
 **For the user to test:** Generate on the Actor card once (the new steps: about five minutes, no
 track), a still picked on the card if the default is not the one, ▶ on a note; then an export.
 
+## A head of splats (2026-10-22, night)
+
+**The user, on the 2D version:** "acceptable as a first attempt, a draft, a proof-of-concept. It sells
+the idea... though every single part of it is janky ... because of the uncanny valley." Then: "I want to
+come back to the gaussian splatting idea ... What would it take to try and support two modes for the
+'Actor' card ... 2D (the current) and gaussian". And: "try to minimize the number of external
+dependencies. If something can be reimplemented here, that might be the better approach."
+
+**What was decided:**
+- **No FLAME, no SMPL-X, no gsplat.** The face and body models need an account with the institute
+  that publishes them (credentials), and gsplat compiles CUDA with nvcc.
+- **The surface is MediaPipe's own face mesh,** which ghost already tracks. Its triangles are read off
+  its tessellation (854 cliques; 6 edges on more than two are cleaned), with the mouth's and the eyes'
+  holes filled.
+- **Splats are bound to its triangles** (GaussianAvatars' binding), or to the head for the hair and ears.
+- **The rasterizer is ours, in Triton,** which ships inside the PyTorch the voice already fetches.
+- **The renderer is ours, in Godot.** The camera is fixed and the head turns little, so the splats are
+  drawn in one order, back to front as the neutral face stands, and never sorted per frame.
+- **The head is splats; the body and room are the 2D still's,** drawn under it.
+
+**Built:**
+- **`hosts/avatar/frames.py`** (face_venv): the set's longest shot read twice a second at full resolution,
+  cropped round the head. Each frame gets MediaPipe's 478 points, its 52 scores, the head's matrix, the
+  body's points and the person mask; the set's stills are tracked alike.
+- **`hosts/avatar/rig.py`:** their neutral face; each frame's pose (a similarity fitted on the points
+  that move least); a ridge basis from the 52 scores to every point's offset (what drives the playing
+  head); the triangles; and `poses.json` (each still's pose and scores, their median scores, the shut
+  eye's score).
+- **`hosts/avatar/raster.py`** (+ `test_raster.py`, 4/4 with controls): a tile rasterizer, forward and
+  backward in Triton, held to a dense PyTorch reference to 3e-7. Forward plus backward takes 4 ms for
+  100k splats at 512 px. Its header lists the exact rules for a port.
+- **`hosts/avatar/train.py`** (voice_train_venv, the graphics card's lane):
+  - Each step takes one frame, places every splat from the tracked face, renders it over what is
+    behind the head, and scores it: L1 + D-SSIM inside a region round the head, plus cover against the
+    person.
+  - It has a colour correction per frame, 3DGS's densification, and GaussianAvatars' regularisers.
+  - **What is behind the head** is the room above the mouth, and below it their own body where the frame
+    shows it (a pixel near their clothing's colour). The first run painted the sweater round the beard
+    with splats bound to the jaw, a dark smudge.
+  - It writes `avatar.npz`, and `avatar.json` + `avatar.bin` for Godot.
+- **`hosts/avatar/look.py`:** held-out frames as played, with their poses, for the probe.
+- **`src/likeness/splat_head.gd` + `.gdshader`:** one instanced quad per splat. A data texture holds the
+  splats; a small float texture holds the binding frames, posed each frame in GDScript (6-8 ms) from the
+  scores. The vertex shader places each splat as the trainer does, and the canvas blends them over.
+- **The medium** (`LikenessMedium`, renderer "gaussian"): the splat head on a layer between their body
+  and what stands before them.
+  - **Its scores:** the still's own; each sound's mouth from `visemes.json`, weighed by the plan's pulls
+    and pushed past their own by the Articulation setting (as the 2D library is); the lids as far shut as
+    the blink; the glances (the Face rig's `looks`: the eyes and brows as they look that way most).
+  - **Its pose:** the still's, turned by their motion about the neck, carried by the torso.
+- **The Actor card's Renderer** (2D / Gaussian, the block's `renderer`):
+  - **Gaussian steps:** Frames, Face rig and Avatar.
+  - **2D only:** Library and Learn.
+  - **Shared:** everything else.
+  - The card shows and the builder makes the note's renderer's steps; the other's settings are kept.
+  - `ActorSteps.RENDERERS` says what each needs to play. `ActorBuilder.cannot_train` (was
+    `voice_unavailable`) leaves every graphics-card step alone without an NVIDIA card.
+
+**Measured, on his set (the long shot of "Wasting Precious Time", 75 minutes):**
+- **The frames:** 9,031 at 2 a second. Over the whole set, 8,632 frames had a face and no hand at the
+  mouth; hands anywhere round the head are left out of learning.
+- **The rig:**
+  - **Head pose:** fitted to 2.3 px on 143 points.
+  - **The scores alone** explain 58% of the face's movement on held-out frames: 69% of the lips', 72% of
+    the eyes'. Drawn over the frames, the rig's lips and lids sit on the tracked ones: wide open, half
+    open, blinks.
+- **Training:**
+  - **Speed:** about 40 ms a step at 512 px. It reaches 260k splats by step 15,000.
+  - **Held out:** 24 dB PSNR in the head's region, with no colour correction there.
+  - **By eye:** at 2,500 steps it is recognisably him; the played face (from scores alone) and the
+    tracked one look alike.
+- **Godot against the trainer** on the same poses (`tests/likeness/splat_head_probe.gd`): 30 dB on the
+  head and 37 dB over the square. The differences are fine edges, the price of one draw order. Loading
+  127k splats takes 130 ms.
+- **Live in the real app** (`likeness_live_probe --renderer gaussian`): it plays, reading in his own voice,
+  his head a 3D head over his body and room.
+
+**What it found on the way:**
+- **A set's shots are not one framing:** his first two are framed wider, so a head is learned from the
+  longest shot only (`ActorBuilder.avatar_shot`).
+- **A hand raised beside the head** is in the person mask, so such frames are left out.
+- **The sweater smudge** round the beard (above).
+
+**Since the first run:**
+- **Learned at full resolution** (704 px, the crop's own): 248k splats, 33 minutes, 24 dB on held-out
+  frames.
+- **The still's own head is cut out above the mouth** (`likeness_warp.gdshader`'s `head_cut`, from the
+  trainer's region): the room shows through the splats' soft edges, as they were learned.
+- **The played face mixes faces made once** (`SplatHead.face_of`): each sound's, the shut lids', each
+  glance's. A frame mixes three or four of them, not 52 basis arrays.
+- **A demo** of the probe's sentences in his own voice, frame by frame from a baked take
+  (`likeness_look_probe --renderer gaussian --take`): `dist/avatar/demo/splat_head_demo.mp4`.
+
+**Why it was soft, measured:**
+- **Not registration:** fitting each frame's pose with the splats held lowers the error only 1.5% (0.2
+  degrees, 0.9 px).
+- **Little the light:** learned on the 15 minutes round the still's time, it is 0.6 dB better on the
+  same held-out frames (25.06 against 24.48), and as soft by eye.
+- **Underfit:** its error on the frames it learned from is near its error on those it did not (L1 0.034
+  against 0.0385). One place and one colour for every expression average away what changes with it -
+  the teeth, the creases, the lips' own shapes.
+
+**So a splat changes with the expression** (GaussianBlendshapes, SIGGRAPH 2024):
+- **The expression** is the 52 scores' first 12 principal components over the frames learned from, each
+  scaled to its spread.
+- **Each splat** has 12 shifts of its place and 12 of its colour's logit, mixed by the expression, and
+  pulled toward none.
+- **In Godot:** the export writes the shader's data texture whole (28 texels a splat). The shader mixes
+  the shifts by `expr`, which `SplatHead.expr_of` makes from the scores. The medium makes each face's
+  expression once and mixes it with the face.
+- **More splats:** the most is now 400k.
+- **The gate** holds it: drawn at 0.8 of an expression, 0.48/255 from the rules; its control, drawn at
+  none, does not match.
+- **Its first run** (40k steps): his teeth show in a smile where the run before had a blur, and held-out
+  error is level (24.22 dB against 24.18).
+
+**And a fog:** that run's median splat stood 4 px wide. Only 15,544 of its 180k splats covered more than
+0.05, and 2,004 more than 0.7: the head was a fog of big faint splats, stacked, and a fog is soft.
+- **The cause:** densification copied whole every splat up to 1% of the square (7 px). 3DGS's 1% is of a
+  whole scene's extent; a head that fills the square needs a finer cut.
+- **The changes:** split above 0.2% (`SPLIT_SHARE`). Once the splats stop growing, each cover is pushed to
+  decide, on or off (its binary entropy, `DECIDE`), and the nearly clear are dropped every 1,000 steps.
+- **The result:** 7,566 splats at the end (from 222k at densification's height), held-out error level
+  (24.21 dB), and by eye the same as 180k. The splats were never what limited it.
+
+**So what is soft is what the frames teach.** A splat settles on the average of what it sees in every
+frame, and fine detail - pores, creases, strands - slides a pixel or two against MediaPipe's coarse mesh
+from frame to frame, the beard's strands on their own. The papers get sharp heads by tracking the face
+against the pixels themselves (photometric tracking, dense correspondence), which is the next piece of
+work if this is taken further. Kept: run4 (`dist/avatar/run4/`), light to draw. The demo is
+`dist/avatar/demo4/splat_head_demo.mp4`: the probe's sentences in his own voice, with sounds, blinks and
+glances.
+
+**Not yet:**
+- **The mouth opens less than his own;** Articulation pushes it.
+- **No export has been made with it** (the demo is the look probe's, frame by frame).
+- **Gates:** `tests/likeness/splat_head_check.gd` (GPU) holds the shader to the rules, worked out in
+  GDScript on a made avatar: 0.5/255 mean. Its control transposes every splat's turn and is 12.7/255 off.
+  Against a trained avatar, the probe prints the gap (30 dB on the head).
+
+**To try it:** Renderer → Gaussian on the Actor card, then Generate. Frames takes about 25 minutes on the
+processor for a 75-minute shot, Face rig seconds, Avatar about 25 minutes on the graphics card. Then ▶.
+
 ## Their own voice (2026-10-22)
 
 **The user, on the fourth pass:** "the model gives off the uncanny valley effect, and I'm doubtful we're
@@ -166,7 +309,7 @@ to give that a try next."
   from 7 videos (Hear across whole videos), 150 epochs in 99 minutes. Through the voice host it says a
   test sentence that Whisper (small.en) hears word for word.
 - **A machine that cannot train** (no NVIDIA card, or a platform PyTorch has no CUDA build for) leaves the
-  three steps alone; their rows say why (`ActorBuilder.voice_unavailable`).
+  three steps alone; their rows say why (`ActorBuilder.cannot_train`).
 
 **Measured** (no ear: the held-out sentences said by each voice through the voice host, against his own;
 his pitch, his long-term spectrum and his MFCCs' distribution - `dist/voice_train/probes/likeness.py` -

@@ -167,7 +167,9 @@ func build_params(_rng: RandomNumberGenerator) -> Dictionary:
 ## A SETTING A STORYBOARD ENTRY MAY TELL THIS SCENE (next/structure.md, step 27): one of the options its
 ## row in the scene's own `FIELDS` names ([method fields_of]) - the one the entry's `set` gives, when it
 ## gives one of them; else the seed's pick. The die is thrown either way, so telling one setting moves
-## nothing else the seed draws, and a scene told nothing is the scene it always was.
+## no draw made before or beside it, and a scene told nothing is the scene it always was - only a told
+## setting that changes how much is drawn after it (a kind with rolls of its own, a count that sizes a
+## loop) moves what follows, as the seed's own pick of it would.
 func choice(key: String, rng: RandomNumberGenerator) -> Variant:
 	var options := options_of(get_script(), key)
 	assert(not options.is_empty(), "%s: no options for the setting '%s'" % [get_script().resource_path, key])
@@ -186,6 +188,47 @@ func choice(key: String, rng: RandomNumberGenerator) -> Variant:
 	return drawn
 
 
+## A NUMBER A STORYBOARD ENTRY MAY TELL THIS SCENE (step 28): drawn from the `range` its `FIELDS` row gives
+## ([method fields_of]) - `rng.randi_range` when both ends are whole numbers, `randf_range` otherwise -
+## and, when the entry's `set` gives a number or a narrower `[lo, hi]`, that number, or the same draw
+## carried into that range (the seed's place in the scene's range, kept in the told one). What is told is
+## held to the scene's own range: a scene is made for its range. The die is thrown either way, as in
+## [method choice], and the same draw comes back when the whole range is told.
+func number(key: String, rng: RandomNumberGenerator) -> Variant:
+	var r: Array = (fields_of(get_script()).get(key, {}) as Dictionary).get("range", [])
+	assert(r.size() == 2, "%s: no range for the setting '%s'" % [get_script().resource_path, key])
+	var whole := typeof(r[0]) == TYPE_INT and typeof(r[1]) == TYPE_INT
+	var drawn: Variant = rng.randi_range(r[0], r[1]) if whole else rng.randf_range(r[0], r[1])
+	var said: Variant = told(key)
+	var span: Variant = null
+	if said is Array and (said as Array).size() == 2 and _is_number(said[0]) and _is_number(said[1]):
+		span = [minf(said[0], said[1]), maxf(said[0], said[1])]
+	elif _is_number(said):
+		span = [float(said), float(said)]
+	if span == null:
+		chosen[key] = drawn
+		return drawn
+	var lo := clampf(span[0], r[0], r[1])
+	var hi := clampf(span[1], r[0], r[1])
+	var out: Variant = drawn
+	if lo == float(r[0]) and hi == float(r[1]):
+		pass
+	elif whole:
+		var n := int(r[1]) - int(r[0]) + 1
+		var a := ceili(lo)
+		var b := maxi(floori(hi), a)
+		out = a + (int(drawn) - int(r[0])) * (b - a + 1) / n
+	else:
+		var at := (float(drawn) - float(r[0])) / (float(r[1]) - float(r[0]))
+		out = lo + at * (hi - lo)
+	chosen[key] = out
+	return out
+
+
+static func _is_number(v: Variant) -> bool:
+	return typeof(v) == TYPE_INT or typeof(v) == TYPE_FLOAT
+
+
 ## What the entry's `set` tells this scene of [param key], or null (nothing, or nothing named).
 func told(key: String) -> Variant:
 	var set: Variant = spec.get("set")
@@ -196,10 +239,11 @@ func told(key: String) -> Variant:
 
 
 ## WHAT A SCENE CAN BE TOLD: the rows of its own `FIELDS` (and an ancestor's), one per setting - `label`,
-## `type` ("choice"), `options` (the NAME of the scene's own table its choices are: a Dictionary's
-## keys, an Array's elements - repeats weight the seed's pick), `names` (for options that are indices,
-## the table of their names, which is what an entry may tell instead), `default` (null: drawn from the
-## seed), `blurb`. What the storyboard's inspector builds its rows from ([method SceneRoster.fields_of]) and
+## `type` ("choice", or "num" for a rolled number), `options` (a choice's: the NAME of the scene's own
+## table its choices are - a Dictionary's keys, an Array's elements, repeats weighting the seed's pick),
+## `names` (for options that are indices, the table of their names, which is what an entry may tell
+## instead), `range` (a number's: `[lo, hi]`, what the seed draws from - [method number]), `default`
+## (null: drawn from the seed), `blurb`. What the storyboard's inspector builds its rows from ([method SceneRoster.fields_of]) and
 ## docs/scenes.md shows; docs.py holds each row to the code that reads it.
 static func fields_of(script: Script) -> Dictionary:
 	var chain: Array = []

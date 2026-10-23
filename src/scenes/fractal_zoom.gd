@@ -172,13 +172,23 @@ var _ch := Vector2.ZERO
 var _ch_seeded := false
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"family": {"label": "Family", "type": "choice", "options": "FAMILY_BAG", "names": "FAMILIES", "default": null,
 		"blurb": "Which fractal family is drawn: the Mandelbrot set, a Julia set, the burning ship, the tricorn, the celtic or the buffalo."},
 	"direction": {"label": "Direction", "type": "choice", "options": "DIRECTION_BAG", "default": null,
 		"blurb": "Which way the zoom goes: falling inward (push) or climbing back out (pull)."},
+	"bands": {"label": "Color bands", "type": "num", "range": [0.007, 0.033], "default": null,
+		"blurb": "How tightly the bands of color repeat across the fractal."},
+	"color_flow": {"label": "Color flow", "type": "num", "range": [-0.045, 0.045], "default": null,
+		"blurb": "How fast the colors cycle through the bands, and which way."},
+	"vignette": {"label": "Vignette", "type": "num", "range": [0.10, 0.42], "default": null,
+		"blurb": "How much the corners of the frame darken."},
+	"interior": {"label": "Interior brightness", "type": "num", "range": [0.02, 0.16], "default": null,
+		"blurb": "How bright the inside of the set is drawn."},
+	"spin": {"label": "Spin", "type": "num", "range": [-0.055, 0.055], "default": null,
+		"blurb": "How fast the view turns as it zooms, and which way."},
 }
 
 
@@ -247,16 +257,16 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# One palette turn per 30 to 140 iterations. Faster than this and the bands are finer than
 	# the screen can resolve, which the mip sampling then averages back to a flat wash - the
 	# first cut ran to 0.075 (a turn every 13) and most of the frame came out as gray confetti.
-	_cycle = rng.randf_range(0.007, 0.033)
-	_phase_rate = rng.randf_range(-0.045, 0.045)
+	_cycle = number("bands", rng)
+	_phase_rate = number("color_flow", rng)
 	_gain = rng.randf_range(0.92, 1.18)
-	_vig = rng.randf_range(0.10, 0.42)
+	_vig = number("vignette", rng)
 
 	# The interior. Flat is right on a wide view where the set is a silhouette; on a deep one
 	# the frame can be most interior, and then how close the orbit came is the only structure
 	# there is - so the deep paths lean toward the treatments that show it.
 	_interior = [0, 0, 1, 2][rng.randi() % 4]
-	var iv := rng.randf_range(0.02, 0.16)
+	var iv: float = number("interior", rng)
 	_in_col = Color.from_hsv(fposmod(_sch.hue + rng.randf_range(-0.1, 0.1), 1.0),
 		clampf(_sch.sat * rng.randf_range(0.3, 0.9), 0.0, 1.0), iv)
 
@@ -280,7 +290,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# has one to two e-folds less to climb than a push has to fall.
 	var journey := rng.randf_range(JOURNEY_MIN, JOURNEY_MAX)
 	_speed = absf(_zl_bound() - _zl) / journey
-	_rot_rate = rng.randf_range(-0.055, 0.055)
+	_rot_rate = number("spin", rng)
 	_rot = rng.randf() * TAU
 
 	_build_ramp(rng)

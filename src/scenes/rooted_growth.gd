@@ -140,11 +140,13 @@ var _emit_t := 0.0           # countdown to the next sprout from the seed
 var _emit_interval := 0.6    # sampled seconds between new sprouts
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"season": {"label": "Season", "type": "choice", "options": "SEASONS", "default": null,
 		"blurb": "The time of year the growth is in: pale and dense spring, lush summer, sparse and bare autumn, or winter's few thick limbs drained of color."},
+	"shoots": {"label": "Starting shoots", "type": "num", "range": [2, 4], "default": null,
+		"blurb": "How many shoots are sprouting from the center when the scene opens."},
 }
 
 
@@ -197,7 +199,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# Start SPARSE - a few barely-sprouted shoots from the seed - and bloom outward over time
 	# (new shoots keep emitting from the center in update), rather than filling the frame at
 	# once and then holding a static shape.
-	var start := rng.randi_range(2, 4)
+	var start: int = number("shoots", rng)
 	for i in start:
 		var r := _new_root()
 		r.heading = -PI * 0.5 + TAU * float(i) / float(start) + rng.randf_range(-0.4, 0.4)

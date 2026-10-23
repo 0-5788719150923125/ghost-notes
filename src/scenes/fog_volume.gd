@@ -16,11 +16,13 @@ const AIRS := {
 }
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"air": {"label": "Air", "type": "choice", "options": "AIRS", "default": null,
 		"blurb": "The air the haze hangs in: thin and nearly clear with the sky showing through, tinted, or a starless layered soup."},
+	"stars": {"label": "Stars", "type": "num", "range": [50, 140], "default": null,
+		"blurb": "How many stars show above the haze, when the air is clear enough for them."},
 }
 
 
@@ -40,7 +42,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"pools": rng.randi_range(2, 5),
 	})
 	if rng.randf() < float(a["stars"]):
-		add_layer("stars", rng, {"z": "back", "count": rng.randi_range(50, 140), "hue": sch.accent})
+		add_layer("stars", rng, {"z": "back", "count": number("stars", rng), "hue": sch.accent})
 	var p := {"mode": "fog"}
 	if rng.randf() < float(a["tint"]):
 		p["hue"] = sch.vary(rng)        # a tinted haze; otherwise neutral gray fog

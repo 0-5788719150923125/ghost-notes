@@ -22,6 +22,18 @@ const SWARMS := [
 ]
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.number]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"haze": {"label": "Haze", "type": "num", "range": [0.02, 0.05], "default": null,
+		"blurb": "How thick the soft haze drifting over the dusk is."},
+	"haze_banks": {"label": "Haze banks", "type": "num", "range": [4, 8], "default": null,
+		"blurb": "How many soft banks of haze drift over the dusk."},
+	"motes": {"label": "Motes", "type": "num", "range": [40, 110], "default": null,
+		"blurb": "How many faint motes float in the air, when there are any."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
@@ -33,9 +45,9 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	add_layer("bed", rng, {"hue": sch.hue, "sat": sch.sat * 0.9,
 		"val": sch.val * rng.randf_range(0.16, 0.26), "pools": rng.randi_range(2, 4)})
 	add_layer("fog", rng, {"hue": sch.hue, "sat": sch.sat * 0.5,
-		"alpha": rng.randf_range(0.02, 0.05), "count": rng.randi_range(4, 8)})
+		"alpha": number("haze", rng), "count": number("haze_banks", rng)})
 	if rng.randf() < 0.6:
-		add_layer("dust", rng, {"hue": bug_hue, "count": rng.randi_range(40, 110), "shaft": false})
+		add_layer("dust", rng, {"hue": bug_hue, "count": number("motes", rng), "shaft": false})
 	add_layer("fireflies", rng, {
 		"hue": bug_hue,
 		"count": rng.randi_range(int(sw["count"][0]), int(sw["count"][1])),

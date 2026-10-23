@@ -25,11 +25,13 @@ const HEARTHS := {
 }
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"hearth": {"label": "Hearth", "type": "choice", "options": "HEARTHS", "default": null,
 		"blurb": "Where the fire is found: a forge, a bonfire, or a fire on a cold night, which sets the wash behind the flame, how widely the flames are laid and how heavily it smokes."},
+	"sparks": {"label": "Sparks", "type": "num", "range": [50, 160], "default": null,
+		"blurb": "How many sparks the fire can throw into the air at once."},
 }
 
 
@@ -50,7 +52,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# No hue passed to the flame itself: its palette is the temperature ramp in
 	# flame.gdshader, and a fire that took an arbitrary hue would stop reading as one.
 	add_layer("fire", rng, {
-		"count": rng.randi_range(50, 160),                       # the SPARK pool (born from heat)
+		"count": number("sparks", rng),                       # the SPARK pool (born from heat)
 		"spread": rng.randf_range(float(spread_r[0]), float(spread_r[1])),
 	})
 	# Smoke drifting off the top, sometimes - on the mood's accent, so a cold-night fire

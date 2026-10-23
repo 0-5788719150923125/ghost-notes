@@ -37,6 +37,16 @@ const WATERS := [
 ]
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.number]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"caustics": {"label": "Caustics", "type": "num", "range": [7, 11], "default": null,
+		"blurb": "How many wavy bands of light from the surface shimmer across the water."},
+	"sun": {"label": "Sun position", "type": "num", "range": [-0.4, 0.4], "default": null,
+		"blurb": "Where the distant sun glows across the top of the water, from left to right."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
@@ -47,8 +57,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# The lit surface far above (fills the dead space at the top with a real light source + caustics),
 	# then the god-rays through it, a floor of whatever grows in this water, and bubbles rising
 	# through it all. Deep waters get few rays and many glows; shallow ones the reverse.
-	add_layer("surface", rng, {"hue": fposmod(hue + 0.02, 1.0), "caustics": rng.randi_range(7, 11),
-		"sun_x": rng.randf_range(-0.4, 0.4)})
+	add_layer("surface", rng, {"hue": fposmod(hue + 0.02, 1.0), "caustics": number("caustics", rng),
+		"sun_x": number("sun", rng)})
 	add_layer("rays", rng, {"hue": fposmod(hue + 0.02, 1.0),
 		"count": rng.randi_range(int(w["rays"][0]), int(w["rays"][1]))})
 	add_layer("kelp", rng, {"hue": fposmod(hue - 0.04, 1.0), "form": String(w["form"]),

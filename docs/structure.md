@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 384 references inside a folder, 846 down the stack, 0 up it.
+Between scripts today: 390 references inside a folder, 846 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -13,7 +13,7 @@ Between scripts today: 384 references inside a folder, 846 down the stack, 0 up 
 | --- | --- | --- | --- |
 | `app/` | The shell | 13 | `masking`, `cards`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
 | `masking/` | Masking | 15 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
-| `likeness/` | Likeness | 11 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `agents`, `scene_kit`, `platform`, `data` |
+| `likeness/` | Likeness | 12 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `agents`, `scene_kit`, `platform`, `data` |
 | `proof/` | Proof | 6 | `desk`, `table`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `desk/` | The desk | 5 | `table`, `media`, `scene_kit`, `data` |
 | `cards/` | Cards | 10 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `geometry`, `audio`, `platform`, `data` |
@@ -22,8 +22,8 @@ Between scripts today: 384 references inside a folder, 846 down the stack, 0 up 
 | `export/` | Export | 4 | `show`, `voice`, `ui`, `notes`, `agents`, `stage`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
 | `show/` | The show | 9 | `media`, `ui`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
-| `media/` | Media | 19 | `voice`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
-| `voice/` | Synthesis (voice) | 13 | `audio`, `platform`, `data` |
+| `media/` | Media | 20 | `voice`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
+| `voice/` | Synthesis (voice) | 14 | `audio`, `platform`, `data` |
 | `ui/` | The panel kit | 11 | `notes`, `agents`, `platform`, `data` |
 | `notes/` | Notes | 7 | `agents`, `stage`, `platform`, `data` |
 | `agents/` | Agents | 6 | `platform`, `data` |
@@ -113,13 +113,13 @@ What every note's panel is built from, and what it asks of the window it is in: 
 
 Text to narrated audio in two paths: ghost's own source-filter synthesizer (no models, no weights, fully inspectable, and the only path that can sing), and a small local neural voice run by a subprocess host. Shared between them: the text front end and its normalization, the threaded real-time stream and the buffer effects. Design: next/voice.md.
 
-[`delivery`](../src/voice/delivery.gd), [`phonemes`](../src/voice/phonemes.gd), [`phrasing`](../src/voice/phrasing.gd), [`room_fx`](../src/voice/room_fx.gd), [`splice`](../src/voice/splice.gd), [`text_norm`](../src/voice/text_norm.gd), [`voice`](../src/voice/voice.gd), [`voice_field`](../src/voice/voice_field.gd), [`voice_fx`](../src/voice/voice_fx.gd), [`voice_host`](../src/voice/voice_host.gd), [`voice_readers`](../src/voice/voice_readers.gd), [`voice_sampler`](../src/voice/voice_sampler.gd), [`voice_stream`](../src/voice/voice_stream.gd)
+[`delivery`](../src/voice/delivery.gd), [`phonemes`](../src/voice/phonemes.gd), [`phrasing`](../src/voice/phrasing.gd), [`room_fx`](../src/voice/room_fx.gd), [`splice`](../src/voice/splice.gd), [`text_norm`](../src/voice/text_norm.gd), [`voice`](../src/voice/voice.gd), [`voice_field`](../src/voice/voice_field.gd), [`voice_fx`](../src/voice/voice_fx.gd), [`voice_host`](../src/voice/voice_host.gd), [`voice_party`](../src/voice/voice_party.gd), [`voice_readers`](../src/voice/voice_readers.gd), [`voice_sampler`](../src/voice/voice_sampler.gd), [`voice_stream`](../src/voice/voice_stream.gd)
 
 ### `media/` - Media
 
 What the show is carried on: the `Medium` base and its registry, each medium ([media.md](media.md)), the layouts they set (comic pages, a novel, a notebook, a tablet's pages), the films and pictures they show, and where a reading is in its document.
 
-[`auto`](../src/media/auto.gd), [`book`](../src/media/book.gd), [`book_layout`](../src/media/book_layout.gd), [`comic`](../src/media/comic.gd), [`comic_page`](../src/media/comic_page.gd), [`comic_spread`](../src/media/comic_spread.gd), [`film`](../src/media/film.gd), [`films`](../src/media/films.gd), [`full`](../src/media/full.gd), [`illustration_panel`](../src/media/illustration_panel.gd), [`illustrations`](../src/media/illustrations.gd), [`medium`](../src/media/medium.gd), [`notebook`](../src/media/notebook.gd), [`notebook_layout`](../src/media/notebook_layout.gd), [`page_capture`](../src/media/page_capture.gd), [`reading_follower`](../src/media/reading_follower.gd), [`tablet`](../src/media/tablet.gd), [`tablet_page`](../src/media/tablet_page.gd), [`tablet_script`](../src/media/tablet_script.gd)
+[`auto`](../src/media/auto.gd), [`book`](../src/media/book.gd), [`book_layout`](../src/media/book_layout.gd), [`comic`](../src/media/comic.gd), [`comic_camera`](../src/media/comic_camera.gd), [`comic_page`](../src/media/comic_page.gd), [`comic_spread`](../src/media/comic_spread.gd), [`film`](../src/media/film.gd), [`films`](../src/media/films.gd), [`full`](../src/media/full.gd), [`illustration_panel`](../src/media/illustration_panel.gd), [`illustrations`](../src/media/illustrations.gd), [`medium`](../src/media/medium.gd), [`notebook`](../src/media/notebook.gd), [`notebook_layout`](../src/media/notebook_layout.gd), [`page_capture`](../src/media/page_capture.gd), [`reading_follower`](../src/media/reading_follower.gd), [`tablet`](../src/media/tablet.gd), [`tablet_page`](../src/media/tablet_page.gd), [`tablet_script`](../src/media/tablet_script.gd)
 
 ### `show/` - The show
 
@@ -173,7 +173,7 @@ A ghost doing math, made by agents: a note's problem fixed, worked at the desk w
 
 An actor played from their own footage: the library of actors, each built from their videos (a folder, or links fetched) - surveyed, grouped into sets by camera and look, the agent that audits them, a still of each set and a model of them from every video (their head's motion, their blinks, their mouths for each sound, their voice) - the card that makes one and puts them on a note's stage, and the medium that plays them reading it: the still, its head turned and its mouth and eyes drawn from their own, through one mesh over the frame. Design: next/likeness.md.
 
-[`actor_builder`](../src/likeness/actor_builder.gd), [`actor_card`](../src/likeness/actor_card.gd), [`actor_folder`](../src/likeness/actor_folder.gd), [`actor_prompts`](../src/likeness/actor_prompts.gd), [`actor_sources`](../src/likeness/actor_sources.gd), [`actor_steps`](../src/likeness/actor_steps.gd), [`actors`](../src/likeness/actors.gd), [`likeness`](../src/likeness/likeness.gd), [`likeness_face`](../src/likeness/likeness_face.gd), [`likeness_plan`](../src/likeness/likeness_plan.gd), [`visemes`](../src/likeness/visemes.gd)
+[`actor_builder`](../src/likeness/actor_builder.gd), [`actor_card`](../src/likeness/actor_card.gd), [`actor_folder`](../src/likeness/actor_folder.gd), [`actor_prompts`](../src/likeness/actor_prompts.gd), [`actor_sources`](../src/likeness/actor_sources.gd), [`actor_steps`](../src/likeness/actor_steps.gd), [`actors`](../src/likeness/actors.gd), [`likeness`](../src/likeness/likeness.gd), [`likeness_face`](../src/likeness/likeness_face.gd), [`likeness_plan`](../src/likeness/likeness_plan.gd), [`splat_head`](../src/likeness/splat_head.gd), [`visemes`](../src/likeness/visemes.gd)
 
 ### `masking/` - Masking
 

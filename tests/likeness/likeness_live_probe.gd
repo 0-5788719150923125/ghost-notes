@@ -22,7 +22,8 @@ extends Node
 ## voice (an actor's own: `actor-<id>`), the default one's otherwise; `--bookends <intro>,<outro>` gives the note
 ## those holds (its `bookends:` block), `--words <file>` reads that note's body (its frontmatter left out) in
 ## place of the probe's own sentences, and each second's line says how bright the actor is drawn and the last
-## of the text's words the voice's timings have reached.
+## of the text's words the voice's timings have reached. `--renderer gaussian` plays them as a head of splats (the
+## copy's `avatar/`, put there by hand, stamped made by `--stamp 1` with the set's other steps).
 
 const WORDS := "Hello there. This is a short test of the likeness, read in my own voice. " \
 	+ "The quick brown fox jumps over the lazy dog. Maybe we should move on, but please, bear with me."
@@ -38,6 +39,7 @@ var _times: Array = [2.0, 4.0, 6.0, 9.0, 12.0, 16.0]
 var _voice := ""
 var _bookends := ""
 var _words := WORDS
+var _renderer := "2d"
 
 
 func _ready() -> void:
@@ -59,6 +61,7 @@ func _run() -> void:
 			"--bake": _bake = args[i + 1] == "1"
 			"--voice": _voice = args[i + 1]
 			"--bookends": _bookends = args[i + 1]
+			"--renderer": _renderer = args[i + 1]
 			"--words": _words = String(FrontMatter.split(FileAccess.get_file_as_string(args[i + 1])).body)
 			"--times":
 				_times = []
@@ -75,7 +78,7 @@ func _run() -> void:
 		var sid := a.chosen_set()
 		for st in ["visemes", "motion"]:
 			a.put_stamp(st, "", "stamped by the probe")
-		for st in ["stills", "rig", "library"]:
+		for st in ["stills", "rig", "library", "frames", "face", "avatar"]:
 			a.put_stamp(st, "s:" + sid, "stamped by the probe")
 		print("stamped the copy's set %s: playable %s" % [sid, a.playable()])
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_out))
@@ -92,7 +95,7 @@ func _run() -> void:
 	print("play with no words -> status: '%s'; live %s" % [panel._status.text, panel._stream.live()])
 	_main._chrome._home_button.pressed.emit()
 	await _frames(30)
-	var blocks := {"voice": {}} if _plain else {"actor": {"id": actor}}
+	var blocks := {"voice": {}} if _plain else {"actor": {"id": actor, "renderer": _renderer}}
 	if not _voice.is_empty():
 		blocks["voice"] = {"voices": {Manuscript.NARRATOR: {"voice": _voice}}}
 	if not _bookends.is_empty():

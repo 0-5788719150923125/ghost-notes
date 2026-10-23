@@ -250,11 +250,21 @@ var _mid_max := 34
 var _embed := 0.03
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"season": {"label": "Season", "type": "choice", "options": "SEASONS", "default": null,
 		"blurb": "The time of year the wood is in - spring, summer, autumn or winter - which sets its colors, how thick the leaves are, which climates it may take and what drifts through the air."},
+	"ridges": {"label": "Ridges or valleys", "type": "num", "range": [-1.0, 0.55], "default": null,
+		"blurb": "Whether the wood gathers down in the valleys or up along the ridges."},
+	"tree_line": {"label": "Tree line", "type": "num", "range": [0.55, 0.95], "default": null,
+		"blurb": "How high up the hills the trees grow before the wood gives out."},
+	"trees": {"label": "Trees", "type": "num", "range": [260, 620], "default": null,
+		"blurb": "How many trees the wood tries to grow on the hillside."},
+	"stands": {"label": "Stands", "type": "num", "range": [5, 14], "default": null,
+		"blurb": "How many separate stands of trees the wood is gathered into."},
+	"gust": {"label": "Gust strength", "type": "num", "range": [0.10, 0.26], "default": null,
+		"blurb": "How hard each gust of wind bends the trees as it crosses the wood."},
 }
 
 
@@ -416,8 +426,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# through a hash grid (the naive all-pairs version is 480k distance checks at this count,
 	# and build_params runs synchronously on the main thread at every cut).
 	# THE DENSITY FIELD (see _density_at) - sampled weights, not one of four rules.
-	_elev_bias = rng.randf_range(-1.0, 0.55)     # negative: valleys. positive: ridges.
-	_tree_line = rng.randf_range(0.55, 0.95)     # where the wood gives up, in normalized height
+	_elev_bias = number("ridges", rng)     # negative: valleys. positive: ridges.
+	_tree_line = number("tree_line", rng)     # where the wood gives up, in normalized height
 	_line_soft = rng.randf_range(0.10, 0.30)
 	_wet_k = rng.randf_range(0.8, 2.2)
 	_grove_f = Field.make("fbm", rng.randi(), rng.randf_range(0.55, 1.15), 3)
@@ -430,7 +440,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# A WOOD, not a specimen collection. 30 to 110 trees over a six-unit hillside is what
 	# "placement is far too sparse" was; the LOD bands (rank-capped, so the frame cost is
 	# bounded whatever this is) carry the rest as silhouettes.
-	var want := rng.randi_range(260, 620)
+	var want: int = number("trees", rng)
 	var margin: float = _terrain.half * 0.94
 	# SLOPE REJECTION, as a QUANTILE of this landform's own steepness rather than an absolute
 	# normal. An absolute threshold is untunable across the recipes: the same number that
@@ -476,7 +486,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var inv_cell := 1.0 / maxf(0.001, guard * 3.0)
 	# Stand size and spread, sampled: a wood of a few big stands is a different wood from one of
 	# many small copses, and both are woods.
-	var clump_n := rng.randi_range(5, 14)
+	var clump_n: int = number("stands", rng)
 	# THE STANDS MUST NOT TILE THE HILL. Sampling a count and a radius independently let the two
 	# multiply into full coverage - eighteen stands of a quarter-hill radius is one continuous
 	# wood, and its nearest-neighbor spread measured 0.21, back at a lattice. So the radius is
@@ -583,7 +593,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_wind = Vector3(cos(wa), 0.0, sin(wa))
 	_gust_speed = rng.randf_range(0.9, 2.6)
 	_gust_width = rng.randf_range(0.5, 1.4)
-	_gust_amp = rng.randf_range(0.10, 0.26)
+	_gust_amp = number("gust", rng)
 	_span = _terrain.half * 1.8
 	_front = -_span
 

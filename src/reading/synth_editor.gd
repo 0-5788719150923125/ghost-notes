@@ -32,8 +32,7 @@ const BELT_MAX := 23                # the Collection ceiling; oldest falls off p
 # Easy fishing: bites are LATENT - a strike latches an anchor that pulls for a
 # long while (slow decay), occasionally letting go on its own. No reflexes.
 const ANCHOR_TAU := 45.0            # seconds: how slowly an anchored pull fades
-const ANCHOR_VANISH := 0.03         # chance per check that the pull just leaves
-const ANCHOR_CHECK := 5.0           # seconds between vanish checks
+const ANCHOR_CHECK := 5.0         # seconds between vanish checks
 # Nibbles: each DISTINCT fresh strike that lands while the anchor still holds
 # counts as one - patience (sitting through several) steadies the pull odds,
 # rather than the anchor just re-latching to the same ceiling each time.
@@ -80,23 +79,8 @@ const FRAY_KEYS := ["grit", "air", "breath"]
 # render and export of that seed would pay it forever.
 const PACE_MIN := 0.55
 const PACE_MAX := 2.2
-# The trust region: a fresh draw is normalized RELATIVE to the pool being
-# harmonized with (the party's center; the curated default when the belt is
-# empty). A candidate landing beyond the radius is pulled back onto it -
-# extremes stay reachable by DRIFTING (the cage widens the region), they just
-# stop being a routine dice roll onto a broken voice (grit x air x pitch all
-# at the far edge at once synthesized as clicks and static, not character).
-const TEMPER_RADIUS := 0.85
-# How hard the interference field pushes a candidate, and the hard ceiling on
-# any one axis. The field colors a voice; it must never relocate one, or it
-# becomes a fourth attractor and every catch near the belt converges.
-const FIELD_LIFT := 0.55
-const FIELD_MAX := 0.25
-# How many belt members beyond the dominant parent may color a throw, and how
-# far each may pull it. Bounded so a combination is always a perturbation of one
-# recognizable parent rather than a march toward the belt's mean.
-const ENSEMBLE_MAX := 2
-const ENSEMBLE_W := 0.45
+# The party's own math - the trust region, the field's lift, the ensemble's
+# reach - and its constants are [VoiceParty]'s.
 
 
 ## The note this panel is (set by main before it is added), "" when started without one.
@@ -115,9 +99,9 @@ var _block_cards := {}
 ## no Picture and no Storyboard - a Look over them, and the holds at either end.
 const HOSTED := ["look", "bookends"]
 
-# Who contributed to the current candidate and how much - recorded by
-# _ensemble_traits so the sustain bank can be built from the same combination
-# rather than re-rolling one.
+# Who contributed to the current candidate and how much - what
+# VoiceParty.ensemble_traits handed back for the throw that made it, so the
+# sustain bank is built from the same combination rather than re-rolling one.
 var _ensemble_last: Array = []
 
 # The three MODES of fishing - what the line is doing, not just how reward is
@@ -164,7 +148,7 @@ const DRIFT_VMAX := 1.0 / 180.0     # raw maximum odometer/sec - deliberately sl
 const DRIFT_ACCEL := (1.0 / 180.0 - 1.0 / 600.0) / 8.0    # ramp crawl -> raw max over ~8s of unbroken drift
 const WARP_CHARGE := 6.0            # seconds of unbroken DRIFT before the drive charges
 const WARP_VEL := 1.0 / 16.0        # warp odometer/sec - the streaks that "move faster than velocity allows"
-const REEL_DECAY := 0.45            # bare-line retrieval (no hook) = EXPONENTIAL decay of the odometer (scaled by _reel_power) - unwinds from ANY distance in log-time, since the odometer is now unbounded
+const REEL_DECAY := 0.45            # bare-line retrieval (no hook) = EXPONENTIAL decay of the odometer (scaled by VoiceParty.reel_power) - unwinds from ANY distance in log-time, since the odometer is now unbounded
 # THE FIGHT IS FOUGHT ON THE LINE (2026-07-27): a hook no longer runs an
 # abstract progress timer while the odometer freezes. Reeling hauls the
 # odometer itself home in LOG-time (each equal slice of the arc closes an
@@ -577,15 +561,6 @@ func upload_meta(_take: String) -> Dictionary:
 	return _youtube.meta({"tags": []}) if _youtube != null else {}
 
 
-## The exporter's take provider: render the CURRENT text through the voice
-## once, write the WAV + subtitle sidecar, and hand back the path. A COROUTINE:
-## the snapshot (text + spec + take name) is taken on the main thread so the
-## worker never touches live UI or fishing state, then the render AND the
-## per-sample WAV encode run on a WorkerThreadPool task while the app keeps
-## drawing. Running them synchronously froze the whole window for as long as
-## the draft was long (synthesis is ~20x real time and the WAV encode is a
-## GDScript loop too) - and because the voice plays from its own thread, the
-## audio kept going, so the stall read as a hang, not a wait.
 ## Is there anything worth exporting? The export does NOT need the live player
 ## running - it renders from the seeds. A belt with seeds can always speak (the
 ## voice is the party's blend even before a cast); a voice already cast can
@@ -595,6 +570,15 @@ func can_export_take() -> bool:
 	return not _text.text.strip_edges().is_empty() and (_cast or not _belt.is_empty())
 
 
+## The exporter's take provider: render the CURRENT text through the voice
+## once, write the WAV + subtitle sidecar, and hand back the path. A COROUTINE:
+## the snapshot (text + spec + take name) is taken on the main thread so the
+## worker never touches live UI or fishing state, then the render AND the
+## per-sample WAV encode run on a WorkerThreadPool task while the app keeps
+## drawing. Running them synchronously froze the whole window for as long as
+## the draft was long (synthesis is ~20x real time and the WAV encode is a
+## GDScript loop too) - and because the voice plays from its own thread, the
+## audio kept going, so the stall read as a hang, not a wait.
 func export_take() -> String:
 	var text := Manuscript.unspoken(_doc.pull()).strip_edges()
 	if text.is_empty():
@@ -606,7 +590,7 @@ func export_take() -> String:
 	# whole collection rather than one arbitrary working candidate.
 	var spec := _current_spec()
 	if not _cast and not _belt.is_empty():
-		spec = Voice.Spec.from_traits(_background_traits(), int(_lineage[0]), _lineage)
+		spec = Voice.Spec.from_traits(VoiceParty.background_traits(_belt), int(_lineage[0]), _lineage)
 		spec.adrenochrome = _working_genome.duplicate()
 		var infl: Array = []
 		for e in _belt:
@@ -740,9 +724,10 @@ func _release_line() -> void:
 	# no active seed: the working candidate returns to the population baseline
 	# (the party's own blend, or the curated default when the belt is empty)
 	_lineage = [1]
-	_traits = _background_traits()
+	_traits = VoiceParty.background_traits(_belt)
 	_working_genome = {}
 	_working_loc = {}
+	_ensemble_last = []              # the baseline was composed by no throw
 	_restart_pending = false
 	_sync_line_button()
 	_update_reading_label()
@@ -772,9 +757,11 @@ func _throw() -> void:
 		_lineage = [randi() % 1000000]
 		var rng := RandomNumberGenerator.new()
 		rng.seed = _lineage[0]
-		_traits = _temper_traits(Voice.Spec.sample(rng).traits, drift)
+		_traits = VoiceParty.temper_traits(Voice.Spec.sample(rng).traits, drift, _belt,
+			_field_at_candidate())
 		_working_genome = {}         # wild = a fresh lineage-derived genome
 		_working_loc = {}
+		_ensemble_last = []          # ...composed of no member: its own cycle alone
 		_status.text = "thrown (wild) - the water is quiet"
 	else:
 		var parent: Dictionary = _pick_parent()
@@ -785,12 +772,14 @@ func _throw() -> void:
 			* (1.0 + 1.5 * drift)
 		var erng := RandomNumberGenerator.new()
 		erng.seed = hash(str(_lineage))
-		var t: Dictionary = _ensemble_traits(parent, erng)
+		var ens := VoiceParty.ensemble_traits(parent, erng, _belt, _field_at_candidate())
+		_ensemble_last = ens.contributions
+		var t: Dictionary = ens.traits
 		_traits = {}
 		for key in Voice.TRAIT_KEYS:
 			_traits[key] = clampf(
 				float(t.get(key, 0.0)) + randfn(0.0, maxf(jitter, 0.06)), -1.0, 1.0)
-		_traits = _temper_traits(_traits, drift)
+		_traits = VoiceParty.temper_traits(_traits, drift, _belt, _field_at_candidate())
 		# a child of an adrenochrome seed inherits the frozen genome verbatim -
 		# the reading still varies (gates, motifs, field ride the new lineage)
 		_working_genome = (parent.get("genome", {}) as Dictionary).duplicate()
@@ -836,12 +825,14 @@ func _throw_from(idx: int) -> void:
 	# LEADS, not that the rest of the collection stops existing
 	var erng := RandomNumberGenerator.new()
 	erng.seed = hash(str(_lineage))
-	var t: Dictionary = _ensemble_traits(parent, erng)
+	var ens := VoiceParty.ensemble_traits(parent, erng, _belt, _field_at_candidate())
+	_ensemble_last = ens.contributions
+	var t: Dictionary = ens.traits
 	_traits = {}
 	for key in Voice.TRAIT_KEYS:
 		_traits[key] = clampf(
 			float(t.get(key, 0.0)) + randfn(0.0, maxf(jitter, 0.06)), -1.0, 1.0)
-	_traits = _temper_traits(_traits, drift)
+	_traits = VoiceParty.temper_traits(_traits, drift, _belt, _field_at_candidate())
 	_working_genome = (parent.get("genome", {}) as Dictionary).duplicate()
 	_working_loc = (parent.get("loc", {}) as Dictionary).duplicate()
 	_jump_to_seed_scene(parent.lineage)
@@ -864,7 +855,8 @@ func _ensure_collection() -> void:
 	var lin: Array = [randi() % 1000000]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(lin[0])
-	var traits: Dictionary = _temper_traits(Voice.Spec.sample(rng).traits, 0.0)
+	var traits: Dictionary = VoiceParty.temper_traits(Voice.Spec.sample(rng).traits, 0.0, _belt,
+		_field_at_candidate())
 	_belt.append({
 		"lineage": lin, "traits": traits, "genome": {}, "scene": "",
 		"m": {"s": 0.0, "acts": 1, "restores": 0, "evolves": 0, "catches": 0,
@@ -874,125 +866,17 @@ func _ensure_collection() -> void:
 	_persist()
 
 
-## Normalize a candidate's trait vector against the pool it must harmonize
-## with: the party's acceptance-weighted center ({} = the curated default when
-## the belt is empty) anchors a trust region of TEMPER_RADIUS (RMS over the
-## trait axes); a draw beyond it is pulled back onto the boundary, direction
-## intact. Drifting widens the region - foreignness is EARNED by the cage,
-## not rolled.
-func _temper_traits(t: Dictionary, drift: float) -> Dictionary:
-	# The cage's CENTER moves with the field, it does not just widen. Previously
-	# distance only inflated a trust region still bolted to the belt's center of
-	# mass, so a candidate thirty lightyears out was still normalized toward the
-	# same point as one sitting on top of the belt - which is most of why
-	# drifting stopped changing anything. Now the field displaces the center, so
-	# where you stand decides what "ordinary" even means; far out the field dies,
-	# the center returns to the plain centroid, and the old behavior is the
-	# limit case rather than the only case.
-	var center := _background_traits()
-	var bias := _field_bias(_field_at_candidate().vec)
-	for key in bias:
-		center[key] = clampf(float(center.get(key, 0.0)) + float(bias[key]), -1.0, 1.0)
-	var radius := TEMPER_RADIUS * (1.0 + 0.8 * drift)
-	var dist := 0.0
-	for key in Voice.TRAIT_KEYS:
-		var dv := float(t.get(key, 0.0)) - float(center.get(key, 0.0))
-		dist += dv * dv
-	dist = sqrt(dist / Voice.TRAIT_KEYS.size())
-	if dist <= radius:
-		return t
-	var scale := radius / dist
-	var out := {}
-	for key in Voice.TRAIT_KEYS:
-		var c := float(center.get(key, 0.0))
-		out[key] = clampf(c + (float(t.get(key, 0.0)) - c) * scale, -1.0, 1.0)
-	return out
-
-
-## A throw's traits as a COMBINATION of belt members, not a copy of one.
-##
-## `_pick_parent` picks exactly one seed and the child was a jittered copy of
-## it, so the belt SELECTED rather than COMPOSED: adding a singer to the belt
-## did not let other lines pick up singing, it only added a lottery ticket, and
-## a third seed could not modulate a mode a second one had contributed. The
-## acceptance-weighted blend that IS the composition (`_background_traits`)
-## already existed and was never used to derive a throw.
-##
-## The form is `dominant + sum_i w_i * (member_i - dominant)`, which has the
-## properties this needs:
-##   - one seed on the belt, or no contributors drawn: identical to before
-##   - w > 0 pulls the child toward that member - a non-singing line can take
-##     on song from a singer on the belt, partway, and a third contributor can
-##     push it further
-##   - w < 0 pushes the child AWAY from that member. Combination that can
-##     SUBTRACT is the whole point: averaging toward the belt is how a
-##     collection collapses onto one voice, and a signed weight is what keeps
-##     variance alive while still composing.
-##   - bounded, and always an interpolation around the dominant, so no
-##     combination can run away
-##
-## The DOMINANT keeps its lineage, so identity, the genome, the seed's scene
-## and "restoring a seed returns to its place" are all unchanged - the others
-## contribute traits only.
-##
-## How many contribute is gated by the FIELD: sitting among the belt draws more
-## of it in, drifting away leaves the dominant alone. Same "near = modulated,
-## far = stable" rule the field itself follows, so the two mechanics agree.
-func _ensemble_traits(dominant: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
-	_ensemble_last = []
-	var base: Dictionary = (dominant.traits as Dictionary)
-	var out := {}
-	for key in Voice.TRAIT_KEYS:
-		out[key] = float(base.get(key, 0.0))
-	if _belt.size() < 2:
-		return out
-	var energy: float = clampf(float(_field_at_candidate().energy), 0.0, 1.0)
-	var reach: float = clampf(0.25 + 0.55 * energy, 0.0, 0.9)
-	var pool: Array = []
-	for e in _belt:
-		if e.lineage != dominant.lineage:
-			pool.append(e)
-	pool.shuffle()
-	var taken := 0
-	for e in pool:
-		if taken >= ENSEMBLE_MAX or rng.randf() > reach:
-			break
-		taken += 1
-		# signed and bounded; acceptance decides how much say a member has, its
-		# SIGN decides whether the child leans into it or away from it
-		var w: float = rng.randf_range(-ENSEMBLE_W, ENSEMBLE_W) \
-			* clampf(0.35 + _acceptance(e), 0.0, 1.6)
-		_ensemble_last.append({"traits": (e.traits as Dictionary).duplicate(), "w": w})
-		for key in Voice.TRAIT_KEYS:
-			var m: float = float((e.traits as Dictionary).get(key, 0.0))
-			out[key] = clampf(float(out[key]) + w * (m - float(out[key])), -1.0, 1.0)
-	return out
-
-
-## The sustain bank for the current combination: the dominant's own cycle plus
-## one per contributor, each at the SIGNED weight it contributed with.
-##
-## Blending the `song` scalar alone only changes how MUCH a voice sings. The
-## bank is what makes a combination sing DIFFERENTLY: each contributor brings
-## its own period and phase, the periods are incommensurate, and a negative
-## weight suppresses positions the dominant would have held. So two belts with
-## identical average `song` hold different words, and adding a third seed
-## rearranges the cadence instead of merely turning it up.
+## The sustain bank the working voice sings with: its own cycle and its throw's
+## contributors ([method VoiceParty.sustain_bank]).
 func _sustain_bank() -> Array:
-	var bank: Array = []
-	var own := Voice.Spec.sustain_cycle(_traits)
-	bank.append([own[0], own[1], 1.0])
-	for c in _ensemble_last:
-		var cyc := Voice.Spec.sustain_cycle(c.traits)
-		bank.append([cyc[0], cyc[1], float(c.w)])
-	return bank
+	return VoiceParty.sustain_bank(_traits, _ensemble_last)
 
 
 func _pick_parent() -> Dictionary:
 	var weights: Array = []
 	var total := 0.0
 	for e in _belt:
-		var w := 0.1 + _acceptance(e)
+		var w := 0.1 + VoiceParty.acceptance(e, _belt)
 		weights.append(w)
 		total += w
 	var roll := randf() * total
@@ -1022,30 +906,6 @@ func _fresh_strike() -> Vector2:
 			best = float(e.a)
 			best_t = float(e.t)
 	return Vector2(best, best_t)
-
-
-func _candidate_difficulty() -> float:
-	if _belt.is_empty():
-		return 0.35
-	var cg: Dictionary = _working_genome if not _working_genome.is_empty() \
-		else Voice.ProsodyWalk._lineage_genome(_lineage)
-	var best := 1.0
-	for e in _belt:
-		var dt := 0.0
-		for key in Voice.TRAIT_KEYS:
-			var dv: float = float(_traits.get(key, 0.0)) \
-				- float((e.traits as Dictionary).get(key, 0.0))
-			dt += dv * dv
-		dt = sqrt(dt / Voice.TRAIT_KEYS.size()) / 0.9
-		var eg: Dictionary = _member_genome(e)
-		var dg := 0.0
-		for key in Voice.ProsodyWalk.PRIOR:
-			var prior: float = float(Voice.ProsodyWalk.PRIOR[key])
-			dg += absf(float(cg.get(key, prior)) - float(eg.get(key, prior))) \
-				/ maxf(absf(prior), 0.001)
-		dg = (dg / Voice.ProsodyWalk.PRIOR.size()) / 0.35
-		best = minf(best, 0.5 * clampf(dt, 0.0, 1.0) + 0.5 * clampf(dg, 0.0, 1.0))
-	return clampf(best, 0.0, 1.0)
 
 
 func _catch_reward(difficulty: float) -> float:
@@ -1114,7 +974,7 @@ func _drift_reset() -> void:
 ##   ANCHOR - stop dead where you are (velocity 0, warp off); the position holds,
 ##            so you fish under the conditions of wherever you drifted to.
 ##   REEL   - retrieve: walk the line back toward home, faster with a seasoned
-##            belt (_reel_power) - the mirror of drifting out.
+##            belt (VoiceParty.reel_power) - the mirror of drifting out.
 func _advance_drift(delta: float) -> void:
 	if not _cast:
 		return
@@ -1150,7 +1010,7 @@ func _advance_drift(delta: float) -> void:
 			_warping = false
 			# exponential retrieval, so even a deep-warp distance unwinds in a
 			# sensible ~log-time; snap the last sliver to home
-			_drift_dist *= exp(-REEL_DECAY * _reel_power() * delta)
+			_drift_dist *= exp(-REEL_DECAY * VoiceParty.reel_power(_belt) * delta)
 			if _drift_dist < 0.002:
 				_drift_dist = 0.0
 
@@ -1229,46 +1089,6 @@ func _field_reception() -> Dictionary:
 		"freq": clampf(float(fld.freq) * (1.0 + 0.05 * shimmer), 90.0, 3000.0)}
 
 
-## Superseded by _field_reception's use of [VoiceField]; kept only for the
-## empty-belt beacon frequency.
-func _field_reception_legacy() -> Dictionary:
-	var x := minf(_drift_reach(), 2.0)
-	var t := float(Time.get_ticks_msec()) / 1000.0
-	var srcs: Array = [{"x": 0.8, "f": _location_freq(), "a0": 0.55}]
-	for e in _belt:
-		var hsh := absi(hash([e.lineage, "src"]))
-		var xi := 0.15 + 1.2 * float(hsh % 1000) / 1000.0
-		var pitch := clampf(float((e.traits as Dictionary).get("pitch", 0.0)), -1.0, 1.0)
-		var f0 := 130.0 * pow(2.0, 0.85 * pitch)
-		var fi := clampf(f0 * (3.0 + 2.0 * float((hsh / 1000) % 100) / 100.0), 90.0, 3000.0)
-		srcs.append({"x": xi, "f": fi,
-			"a0": 0.35 + 0.45 * clampf(_acceptance(e), 0.0, 1.5) / 1.5})
-	var amps: Array = []
-	var atot := 0.0
-	var amax := 0.0
-	var flog := 0.0
-	for s in srcs:
-		var a: float = float(s.a0) * exp(-absf(x - float(s.x)) / 0.20)
-		amps.append(a)
-		atot += a
-		amax = maxf(amax, a)
-		flog += a * log(float(s.f))
-	if atot < 0.003:
-		return {"prox": 0.0, "freq": 400.0}
-	var freq := exp(flog / atot)
-	var beat := 0.0
-	for i in srcs.size():
-		for j in range(i + 1, srcs.size()):
-			var ai: float = amps[i]
-			var aj: float = amps[j]
-			if ai < 0.02 or aj < 0.02:
-				continue                     # only genuinely overlapping pairs beat
-			var rate := clampf(absf(log(float(srcs[i].f) / float(srcs[j].f))) * 0.9, 0.05, 1.4)
-			beat += 2.0 * minf(ai, aj) / atot * cos(TAU * rate * t + float(i * 37 + j * 91))
-	return {"prox": clampf(amax * (1.0 + 0.30 * beat), 0.0, 1.0),
-		"freq": clampf(freq * (1.0 + 0.05 * beat), 90.0, 3000.0)}
-
-
 ## The source's frequency (Hz): a resonant band that SWEEPS UP with distance (so
 ## different places sound different) plus a per-cast offset from the lineage (so
 ## each line's source has its own color). This is the band the reception filter
@@ -1282,17 +1102,6 @@ func _location_freq() -> float:
 ## Planets become visible further out as the cage drifts - the cosmos opens.
 func _planet_threshold() -> float:
 	return 0.72 - 0.25 * _drift_norm()
-
-
-## Accumulated information is POWER on the line: a seasoned belt (hold time +
-## earned reward = what the party has LEARNED) resonates with a hooked catch
-## and retrieves it faster - in EVERY mode; knowledge is not a mode. This is
-## the reel's side of the fight: power against the creature's runs.
-func _reel_power() -> float:
-	var knowledge := 0.0
-	for e in _belt:
-		knowledge += e.m.s + 20.0 * float(e.m.get("r", 0.0))
-	return clampf(0.9 + knowledge / 600.0, 0.9, 2.2)
 
 
 ## PULL - the second axis. Something anchored pulls for a long while; pull
@@ -1359,12 +1168,12 @@ func _begin_hook(d: float) -> void:
 	var members: Array = []
 	var accs: Array = []
 	for e in _belt:
-		accs.append(_acceptance(e))
+		accs.append(VoiceParty.acceptance(e, _belt))
 	for i in _belt.size():
 		var e: Dictionary = _belt[i]
 		members.append({
 			"traits": (e.traits as Dictionary).duplicate(),
-			"g": _member_genome(e),
+			"g": VoiceParty.member_genome(e),
 			"w": 0.1 + float(accs[i]),
 			"sign": 1.0 if float(accs[i]) >= 1.0 else -1.0,
 		})
@@ -1385,7 +1194,7 @@ func _begin_hook(d: float) -> void:
 	_hook = {
 		"rng": rng, "step": 0, "t": 0.0,
 		"progress": 0.0, "run": 0.0, "run_t": frng.randf_range(2.0, 6.0),
-		"frng": frng, "power": _reel_power(),
+		"frng": frng, "power": VoiceParty.reel_power(_belt),
 		"d0": _drift_reach(),
 		"loc": _reception(),         # the SPOT's acoustics, frozen: the reel and
 		                             # the catch keep sounding like this place
@@ -1424,7 +1233,7 @@ func _adreno_step() -> void:
 	# Weighted by `cool` so the field matters most early in the fight, before
 	# the freeze - a catch should be decided near where it was hooked.
 	var fld := _field_at_candidate()
-	var fbias := _field_bias((fld.vec as Vector3) * cool)
+	var fbias := VoiceParty.field_bias((fld.vec as Vector3) * cool)
 	var fheat: float = 1.0 + 0.5 * float(fld.energy)
 	for key in Voice.TRAIT_KEYS:
 		var x: float = float(h.traits.get(key, 0.0))
@@ -1489,7 +1298,7 @@ func _finish_hook() -> void:
 	_pending = {"d": h.d, "reward": h.reward,
 		"traits": h.traits, "genome": h.genome, "loc": h.get("loc", {}),
 		"scene": Director.scene_title(hash(str(_lineage)))}
-	var fit := _relative_fit_of(h.traits, _lineage, h.genome)
+	var fit := VoiceParty.relative_fit(h.traits, _lineage, h.genome, _belt)
 	_card_glyph.seed_hash = hash(str(_lineage))
 	_card_glyph.fit = fit
 	_card_glyph.queue_redraw()
@@ -1502,46 +1311,6 @@ func _finish_hook() -> void:
 	_status.text = "caught - hold or fold?"
 
 
-## How close a belt member sits to the CURRENT candidate (cosine in the shared
-## trait+genome space) - the HUD draws members as tiny planets only when this
-## is genuinely high; the cosmos stays sparse.
-func _member_closeness(e: Dictionary) -> float:
-	return _cosine(
-		_seed_vector(e.traits, e.lineage, _member_genome(e)),
-		_seed_vector(_traits, _lineage, _working_genome))
-
-
-## A seed's genome: the frozen adrenochrome if it carries one, else derived
-## from the lineage as always.
-func _member_genome(e: Dictionary) -> Dictionary:
-	if e.has("genome") and not (e.genome as Dictionary).is_empty():
-		# a stored genome may be PARTIAL - an echoed (recorded) seed carries
-		# only its MEASURED genes, and older saves may predate newer genes.
-		# Backfill from the PRIOR (the same contract ProsodyWalk applies to a
-		# frozen adrenochrome) so every consumer - the tooltip, the hook's
-		# annealing members - always sees a complete genome.
-		var g: Dictionary = e.genome
-		for key in Voice.ProsodyWalk.PRIOR:
-			if not g.has(key):
-				g[key] = Voice.ProsodyWalk.PRIOR[key]
-		return g
-	return Voice.ProsodyWalk._lineage_genome(e.lineage)
-
-
-## Any candidate's fit (given explicit traits/genome, e.g. the mid-anneal
-## adrenochrome), RELATIVE to the party's own spread: raw cosines cluster too
-## tightly to see, so the scale stretches over what the bag actually contains.
-func _relative_fit_of(traits: Dictionary, lineage: Array, genome: Dictionary = {}) -> float:
-	if _belt.is_empty():
-		return 0.6
-	var party := _party_vector()
-	var sims: Array = [_cosine(_seed_vector(traits, lineage, genome), party)]
-	for e in _belt:
-		sims.append(_cosine(_seed_vector(e.traits, e.lineage, _member_genome(e)), party))
-	var norm := _relative_norm(sims)
-	return norm[0]
-
-
 func _fit_verdict(fit: float) -> String:
 	if fit < 0.25:
 		return "NOT a good fit for your party"
@@ -1550,24 +1319,6 @@ func _fit_verdict(fit: float) -> String:
 	if fit < 0.75:
 		return "a workable fit"
 	return "kin - it belongs with this party"
-
-
-## Min-max stretch a list to [0,1]; a degenerate spread parks everyone at 0.6
-## (no information = no alarm).
-func _relative_norm(values: Array) -> Array:
-	var lo := 1e9
-	var hi := -1e9
-	for v in values:
-		lo = minf(lo, float(v))
-		hi = maxf(hi, float(v))
-	var out: Array = []
-	if hi - lo < 0.05:
-		for _v in values:
-			out.append(0.6)
-		return out
-	for v in values:
-		out.append((float(v) - lo) / (hi - lo))
-	return out
 
 
 ## Accept the FROZEN creature: it joins the belt with its annealed traits and
@@ -1594,6 +1345,9 @@ func _accept_catch() -> void:
 	_traits = (_pending.traits as Dictionary).duplicate()
 	_working_genome = (_pending.genome as Dictionary).duplicate()
 	_working_loc = (_pending.get("loc", {}) as Dictionary).duplicate()
+	# the landed voice sings as ITSELF: its belt entry and the note keep no contributors,
+	# so the bank it is heard with now is the one it is heard with when it comes back
+	_ensemble_last = []
 	_belt.append({
 		"lineage": _lineage.duplicate(), "traits": _traits.duplicate(),
 		"genome": _working_genome.duplicate(),
@@ -1624,13 +1378,6 @@ func _release_catch() -> void:
 	_status.text = "released - nothing changes"
 
 
-## A recorded seed enters the Collection like a catch: fresh root lineage,
-## measured traits, measured (partial) genome riding the adrenochrome
-## contract (ProsodyWalk backfills unmeasured genes from the PRIOR).
-## Deliberately NOT tempered: the trust region cages rolled strangers, but
-## this voice was earned by being read aloud - it lands exactly where it
-## was measured. Difficulty is how foreign it sits from the party's center,
-## so fishing FROM it later fights like the outsider it is.
 ## A seed OWNS a scene (Director.jump derives it from the lineage hash - the
 ## same identity the catch stamped into entry.scene). Clicking or casting a
 ## seed brings its place back, DETERMINISTICALLY across runs - the session
@@ -1647,12 +1394,19 @@ func _jump_to_seed_scene(lineage: Array) -> void:
 	Director.jump(jh)
 
 
+## A recorded seed enters the Collection like a catch: fresh root lineage,
+## measured traits, measured (partial) genome riding the adrenochrome
+## contract (ProsodyWalk backfills unmeasured genes from the PRIOR).
+## Deliberately NOT tempered: the trust region cages rolled strangers, but
+## this voice was earned by being read aloud - it lands exactly where it
+## was measured. Difficulty is how foreign it sits from the party's center,
+## so fishing FROM it later fights like the outsider it is.
 func _add_recorded_seed(traits: Dictionary, genome: Dictionary, report: String) -> void:
 	# the root is DETERMINISTIC in the measurement: the same voice, read the
 	# same way, echoes to the same seed - re-records are comparable, and the
 	# few ornaments that survive the genome's damp are stable per person
 	var lin: Array = [absi(hash(str(traits)) ^ hash(report)) % 1000000]
-	var center := _background_traits()
+	var center := VoiceParty.background_traits(_belt)
 	var acc := 0.0
 	for key in Voice.TRAIT_KEYS:
 		var dv := float(traits.get(key, 0.0)) - float(center.get(key, 0.0))
@@ -1669,28 +1423,6 @@ func _add_recorded_seed(traits: Dictionary, genome: Dictionary, report: String) 
 	_rebuild_belt()
 	_persist()
 	_status.text = "a living voice echoed into the Collection - " + report
-
-
-func _restore_capture(idx: int) -> void:
-	if idx < 0 or idx >= _belt.size():
-		return
-	var entry: Dictionary = _belt[idx]
-	entry.m.restores += 1
-	entry.m.acts += 1
-	_cast = true
-	_landed = true                   # a belt seed is already yours: full voice
-	_lineage = (entry.lineage as Array).duplicate()
-	_traits = (entry.traits as Dictionary).duplicate()
-	_working_genome = (entry.get("genome", {}) as Dictionary).duplicate()
-	_working_loc = (entry.get("loc", {}) as Dictionary).duplicate()
-	_throw_ms = Time.get_ticks_msec()
-	_sync_line_button()
-	# the seed's scene is part of its identity: restoring it returns there
-	if not String(entry.get("scene", "")).is_empty():
-		Director.jump(hash(str(_lineage)))
-	_update_reading_label()
-	_persist()
-	_apply()
 
 
 func _release_capture(idx: int) -> void:
@@ -1732,7 +1464,7 @@ func _update_reading_label() -> void:
 	if _hud_glyph != null and is_instance_valid(_hud_glyph):
 		_hud_glyph.visible = true
 		_hud_glyph.seed_hash = hash(str(_lineage))
-		_hud_glyph.fit = _relative_fit_of(_traits, _lineage, _working_genome)
+		_hud_glyph.fit = VoiceParty.relative_fit(_traits, _lineage, _working_genome, _belt)
 		_hud_glyph.queue_redraw()
 
 
@@ -1746,161 +1478,45 @@ func _difficulty_word(d: float) -> String:
 	return "wild"
 
 
-# ---- similarity: the party, the vectors, the colors -----------------------
+# ---- the party on screen: the candidate, its bearings, the moons -------------------------------
 
 
-## A seed as a vector: its traits plus its genome (as deltas off the PRIOR),
-## the space the constellation colors attune in. An explicit genome (frozen
-## or mid-anneal adrenochrome) takes precedence over lineage derivation.
-func _seed_vector(traits: Dictionary, lineage: Array, genome: Dictionary = {}) -> PackedFloat32Array:
-	var v := PackedFloat32Array()
-	for key in Voice.TRAIT_KEYS:
-		v.append(float(traits.get(key, 0.0)))
-	var g: Dictionary = genome if not genome.is_empty() \
-		else Voice.ProsodyWalk._lineage_genome(lineage)
-	for key in Voice.ProsodyWalk.PRIOR:
-		var prior: float = float(Voice.ProsodyWalk.PRIOR[key])
-		# normalize by the gene's OWN SPREAD, not by the magnitude of its prior.
-		# Dividing by |prior| made a gene's weight in this space inversely
-		# proportional to how big its numbers happen to be: `hesit_bias` (prior
-		# 0.25) counted 38x more per unit than `breath_span` (prior 9.5), and
-		# measured 31% of all variance on its own, with effective dimensionality
-		# ~7.6 of 25. Every distance, every bearing, every acceptance-weighted
-		# center and the catch card's kinship color were all mostly reading one
-		# arbitrary gene. G_BOUNDS is the range the gene is actually sampled and
-		# clamped over, so it is the honest unit.
-		var b: Array = Voice.ProsodyWalk.G_BOUNDS.get(key, [])
-		var spread: float = (float(b[1]) - float(b[0])) if b.size() == 2 else maxf(absf(prior), 0.001)
-		v.append((float(g.get(key, prior)) - prior) / maxf(spread, 0.001))
-	return v
+## The voice on the line, as [VoiceParty] takes a candidate: what the members hold at this
+## moment. A throw sets its candidate a piece at a time, so a call made partway through one reads a
+## new lineage beside the traits and genome that are not yet replaced.
+func _candidate() -> Dictionary:
+	return {"traits": _traits, "lineage": _lineage, "genome": _working_genome}
 
 
-## THE INTERFERENCE FIELD (see [VoiceField]) - the belt as sources in space.
-##
-## Built fresh from the belt because acceptance moves as you listen. `scale` is
-## the belt's own median pairwise distance, so ranges are expressed in the units
-## of THIS belt rather than a constant: a tight belt has a tight field.
-func _field_sources() -> Array:
-	if _belt.is_empty():
-		return []
-	var vecs: Array = []
-	var reach: Array = []
-	for e in _belt:
-		var g: Dictionary = _member_genome(e)
-		vecs.append(_seed_vector(e.traits, e.lineage, g))
-		reach.append(maxf(float(g.get("ring", 0.6)) * (1.0 - float(g.get("damp", 0.35))), 0.02))
-	var dists: Array = []
-	for i in vecs.size():
-		for j in range(i + 1, vecs.size()):
-			dists.append((VoiceField.frame(vecs[i]) - VoiceField.frame(vecs[j])).length())
-	dists.sort()
-	reach.sort()
-	var scale: float = dists[dists.size() / 2] if not dists.is_empty() else 1.0
-	var rnorm: float = reach[reach.size() / 2]
-	var out: Array = []
-	for i in _belt.size():
-		var e: Dictionary = _belt[i]
-		out.append(VoiceField.source(e.traits, _member_genome(e), e.lineage,
-			_acceptance(e), vecs[i], rnorm, maxf(scale, 0.05)))
-	return out
-
-
-## Which combination rule THIS voice's water obeys. Derived from the lineage
-## root, so it is a property you fish for and inherit rather than a setting -
-## and so the four rules in [VoiceField.COMBINE] are all actually reachable in
-## play instead of one being hardcoded.
-func _field_mode() -> String:
-	if _lineage.is_empty():
-		return "sum"
-	var i := absi(hash([_lineage[0], "field"])) % VoiceField.COMBINE.size()
-	return String(VoiceField.COMBINE[i])
-
-
-## Where the candidate stands: its own place, pushed outward along its bearing
-## from the party by however far the line has been carried. The odometer stays a
-## scalar radius - the fight math, the HUD arc and the caption are all defined
-## on it as a magnitude - but it now moves a real POSITION through a real field,
-## which is what makes distance change the voice instead of only the caption.
+## Where the candidate stands in the belt's field, at the line's drift ([method VoiceParty.field_at]).
 func _field_at_candidate() -> Dictionary:
-	var srcs := _field_sources()
-	if srcs.is_empty():
-		return {"vec": Vector3.ZERO, "energy": 0.0, "prox": 0.0, "freq": 400.0}
-	var cand := VoiceField.frame(_seed_vector(_traits, _lineage, _working_genome))
-	var party := VoiceField.frame(_party_vector())
-	var u := (cand - party)
-	u = u.normalized() if u.length() > 0.0001 else Vector3(0.0, 0.0, 1.0)
-	return VoiceField.evaluate(srcs, cand + u * _drift_free(), _field_mode())
+	return VoiceParty.field_at(_candidate(), _belt, _drift_free())
 
 
-## Lift a field vector back into trait deltas - the frame's transpose. Bounded
-## hard: the field COLORS a candidate, it never relocates one.
-func _field_bias(vec: Vector3) -> Dictionary:
-	var b := {}
-	var put := func(key: String, v: float) -> void:
-		b[key] = clampf(v * 0.55 * FIELD_LIFT, -FIELD_MAX, FIELD_MAX)
-	put.call("pitch", vec.x)
-	put.call("lilt", vec.x)
-	put.call("song", vec.x * 0.7)
-	put.call("grit", vec.y)
-	put.call("air", vec.y)
-	put.call("breath", vec.y)
-	put.call("pace", vec.z)
-	put.call("drawl", vec.z)
-	put.call("tract", vec.z)
-	return b
+## How hard the candidate is to catch ([method VoiceParty.candidate_difficulty]).
+func _candidate_difficulty() -> float:
+	return VoiceParty.candidate_difficulty(_candidate(), _belt)
 
 
-## The party's center: acceptance-weighted mean of the belt's vectors.
+## The party's center ([method VoiceParty.party_vector]).
 func _party_vector() -> PackedFloat32Array:
-	var dims := Voice.TRAIT_KEYS.size() + Voice.ProsodyWalk.PRIOR.size()
-	var v := PackedFloat32Array()
-	v.resize(dims)
-	if _belt.is_empty():
-		return v
-	var total := 0.0
-	for e in _belt:
-		var w := 0.1 + _acceptance(e)
-		total += w
-		var sv := _seed_vector(e.traits, e.lineage)
-		for i in dims:
-			v[i] += sv[i] * w
-	for i in dims:
-		v[i] /= maxf(total, 0.001)
-	return v
+	return VoiceParty.party_vector(_belt)
 
 
-## The candidate's bearing FROM the party, as a 3D vector for the HUD compass -
-## direction is otherwise near-impossible to reason about in an 8D trait space.
-## The eight trait axes collapse onto three legible ones the ear can name:
-##   X = brightness  (pitch, lilt)      - how high/lively vs low/flat
-##   Y = damage      (grit, air, breath) - the FRAY axes: smooth vs abraded
-##   Z = drive       (pace, drawl, tract) - clipped/urgent vs drawn-out
-## Each is the candidate-minus-party offset summed over its group, softened into
-## roughly [-1, 1]. With an empty belt the party is the origin, so the compass
-## simply reads the voice's own place - still a direction worth seeing.
-func _bearing_of(cand: PackedFloat32Array, party: PackedFloat32Array) -> Vector3:
-	var off := func(i: int) -> float:
-		return float(cand[i]) - float(party[i]) if i < cand.size() and i < party.size() else 0.0
-	# indices in Voice.TRAIT_KEYS order: pitch0 lilt1 tract2 pace3 breath4 grit5 drawl6 air7
-	var gx: float = off.call(0) + off.call(1)
-	var gy: float = off.call(5) + off.call(7) + off.call(4)
-	var gz: float = off.call(3) + off.call(6) + off.call(2)
-	return Vector3(clampf(gx * 0.7, -1.0, 1.0),
-		clampf(gy * 0.55, -1.0, 1.0), clampf(gz * 0.55, -1.0, 1.0))
+## How close a belt member sits to the candidate - the HUD draws it as a tiny planet only when
+## this is genuinely high ([method VoiceParty.closeness]).
+func _member_closeness(e: Dictionary) -> float:
+	return VoiceParty.closeness(e, _candidate())
 
 
-func _bearing3() -> Vector3:
-	return _bearing_of(_seed_vector(_traits, _lineage, _working_genome), _party_vector())
-
-
-## A belt member's bearing in the SHARED party frame - the same frame for every
-## member, so the planets' colors and their shadow directions are mutually
-## consistent and do NOT depend on which candidate is currently being fished
-## (that is why the shadows "point in directions, consistently, no matter which
-## one we're anchored to"). Only an Accept, which moves the party, re-orients
-## the whole sky.
+## A belt member's bearing in the shared party frame ([method VoiceParty.member_bearing]).
 func _member_bearing(e: Dictionary, party: PackedFloat32Array) -> Vector3:
-	return _bearing_of(_seed_vector(e.traits, e.lineage, _member_genome(e)), party)
+	return VoiceParty.member_bearing(e, party)
+
+
+## The candidate's bearing from the party, for the HUD compass ([method VoiceParty.bearing_of]).
+func _bearing3() -> Vector3:
+	return VoiceParty.bearing_of(VoiceParty.seed_vector(_traits, _lineage, _working_genome), _party_vector())
 
 
 ## WHERE THE LINE SITS: the working candidate's position, pushed outward along
@@ -1912,7 +1528,7 @@ func _cast_vector() -> PackedFloat32Array:
 	var party := _party_vector()
 	if not _cast:
 		return party
-	var cand := _seed_vector(_traits, _lineage, _working_genome)
+	var cand := VoiceParty.seed_vector(_traits, _lineage, _working_genome)
 	var reach := 1.0 + 2.5 * _drift_norm()
 	var out := PackedFloat32Array()
 	out.resize(cand.size())
@@ -1948,34 +1564,6 @@ func _update_belt_shadows() -> void:
 		_hud_glyph.planet_dir = atan2(cb.y, cb.x)
 		_hud_glyph.planet_phase = 1.0 - 2.0 * depth
 		_hud_glyph.queue_redraw()
-
-
-func _cosine(a: PackedFloat32Array, b: PackedFloat32Array) -> float:
-	var dot := 0.0
-	var na := 0.0
-	var nb := 0.0
-	for i in mini(a.size(), b.size()):
-		dot += a[i] * b[i]
-		na += a[i] * a[i]
-		nb += b[i] * b[i]
-	if na < 0.000001 or nb < 0.000001:
-		return 0.0
-	return dot / (sqrt(na) * sqrt(nb))
-
-
-func _seed_value(e: Dictionary) -> float:
-	return 20.0 * float(e.m.get("r", 0.0)) + e.m.s / 30.0
-
-
-func _acceptance(e: Dictionary) -> float:
-	var own: float = _seed_value(e) / maxf(1.0, float(e.m.acts))
-	var total := 0.0
-	var plays := 0
-	for other in _belt:
-		total += _seed_value(other)
-		plays += int(other.m.acts)
-	var mean := total / maxf(1.0, float(plays))
-	return own / maxf(mean, 0.001)
 
 
 func _rebuild_belt() -> void:
@@ -2030,16 +1618,16 @@ func _refresh_inventory() -> void:
 	var sims: Array = []
 	var accs: Array = []
 	for e in _belt:
-		sims.append(_cosine(_seed_vector(e.traits, e.lineage), party))
-		accs.append(_acceptance(e))
-	var sim_n := _relative_norm(sims)
-	var acc_n := _relative_norm(accs)
+		sims.append(VoiceParty.cosine(VoiceParty.seed_vector(e.traits, e.lineage), party))
+		accs.append(VoiceParty.acceptance(e, _belt))
+	var sim_n := VoiceParty.relative_norm(sims)
+	var acc_n := VoiceParty.relative_norm(accs)
 	for i in mini(_belt.size(), _inv_labels.size()):
 		var e: Dictionary = _belt[i]
 		var label: Label = _inv_labels[i]
 		if not is_instance_valid(label):
 			continue
-		label.text = "%.0fs·%d× %.1fx" % [e.m.s, int(e.m.acts), _acceptance(e)]
+		label.text = "%.0fs·%d× %.1fx" % [e.m.s, int(e.m.acts), VoiceParty.acceptance(e, _belt)]
 		label.tooltip_text = _seed_tooltip(e)
 		if i < _inv_glyphs.size() and is_instance_valid(_inv_glyphs[i]):
 			var glyph: SeedGlyph = _inv_glyphs[i]
@@ -2055,7 +1643,7 @@ func _refresh_inventory() -> void:
 
 
 func _seed_tooltip(e: Dictionary) -> String:
-	var g: Dictionary = _member_genome(e)
+	var g: Dictionary = VoiceParty.member_genome(e)
 	var tv := ""
 	for key in Voice.TRAIT_KEYS:
 		var v := float((e.traits as Dictionary).get(key, 0.0))
@@ -2067,7 +1655,7 @@ func _seed_tooltip(e: Dictionary) -> String:
 		+ "breath every ~%.0f syllables · emphasis appetite %.2f\n"
 		+ "pitch gravity %.2f · resonance ring %.2f · strike bar %.1f\n"
 		+ "pace %.2f hot .. %.2f calm\n%s") % [
-		str(e.lineage), float(e.m.get("r", 0.0)), e.m.s, int(e.m.acts), _acceptance(e),
+		str(e.lineage), float(e.m.get("r", 0.0)), e.m.s, int(e.m.acts), VoiceParty.acceptance(e, _belt),
 		_difficulty_word(float(e.m.get("d", 0.35))),
 		int(e.m.restores), int(e.m.evolves), int(e.m.catches),
 		g.heat, g.baseline, 0.693 / maxf(g.settle, 0.001),
@@ -2243,7 +1831,7 @@ func _advance_reel(delta: float) -> void:
 			_status.text = "reeling - something in it is bending"
 		else:
 			_status.text = "reeling - it changes as it comes"
-		_hud_glyph.fit = _relative_fit_of(h.traits, _lineage, h.genome)
+		_hud_glyph.fit = VoiceParty.relative_fit(h.traits, _lineage, h.genome, _belt)
 		_hud_glyph.queue_redraw()
 	if float(h.progress) >= 1.0:
 		_finish_hook()
@@ -2309,32 +1897,31 @@ func _persist() -> void:
 
 
 func _load_persisted() -> void:
-	if true:
-		_traits = Settings.read("synth", "traits", {})
-		_lineage = Settings.read("synth", "lineage", [1])
-		_belt = Settings.read("synth", "belt", [])
-		_profile = str(Settings.read("synth", "profile", "anchor"))
-		# older saves used the reward-flavor names; map them onto the modes
-		if _profile == "snap":
-			_profile = "anchor"
-		elif _profile == "hunt":
-			_profile = "reel"
-		if not PROFILES.has(_profile):
-			_profile = "anchor"
-		_working_genome = Settings.read("synth", "adreno", {})
-		_working_loc = Settings.read("synth", "loc", {})
-		_reserve = float(Settings.read("synth", "reserve", 0.0))
-		_sync_switchboard()
-		for e in _belt:
-			if not e.has("m"):
-				e.m = {"s": 0.0, "acts": 0, "restores": 0, "evolves": 0,
-					"catches": 0, "t": 0}
-			if not e.m.has("r"):
-				e.m.r = 0.0
-				e.m.d = 0.35
-			e.erase("active")
+	_traits = Settings.read("synth", "traits", {})
+	_lineage = Settings.read("synth", "lineage", [1])
+	_belt = Settings.read("synth", "belt", [])
+	_profile = str(Settings.read("synth", "profile", "anchor"))
+	# older saves used the reward-flavor names; map them onto the modes
+	if _profile == "snap":
+		_profile = "anchor"
+	elif _profile == "hunt":
+		_profile = "reel"
+	if not PROFILES.has(_profile):
+		_profile = "anchor"
+	_working_genome = Settings.read("synth", "adreno", {})
+	_working_loc = Settings.read("synth", "loc", {})
+	_reserve = float(Settings.read("synth", "reserve", 0.0))
+	_sync_switchboard()
+	for e in _belt:
+		if not e.has("m"):
+			e.m = {"s": 0.0, "acts": 0, "restores": 0, "evolves": 0,
+				"catches": 0, "t": 0}
+		if not e.m.has("r"):
+			e.m.r = 0.0
+			e.m.d = 0.35
+		e.erase("active")
 	if _traits.is_empty():
-		_traits = _background_traits()
+		_traits = VoiceParty.background_traits(_belt)
 	_update_reading_label()
 	_rebuild_belt()
 
@@ -2382,8 +1969,9 @@ func _doc_apply(blocks: Dictionary) -> void:
 	_traits = _floats(cfg.get("traits", {}))
 	_working_genome = _floats(cfg.get("genome", {}))
 	_working_loc = _floats(cfg.get("reception", {}))
+	_ensemble_last = []              # a document's voice is its own: no throw composed it
 	if _traits.is_empty():
-		_traits = _background_traits()
+		_traits = VoiceParty.background_traits(_belt)
 	_update_reading_label()
 	_update_slot_highlights()
 	# Whatever is in the water is being spoken by the voice that was there a moment ago.
@@ -2403,22 +1991,6 @@ func _floats(v: Variant) -> Dictionary:
 	for k in v as Dictionary:
 		out[str(k)] = float((v as Dictionary)[k])
 	return out
-
-
-## The population-average background: the voice before any seed exists.
-func _background_traits() -> Dictionary:
-	var t := {}
-	if _belt.is_empty():
-		return t
-	var total := 0.0
-	for e in _belt:
-		total += 0.1 + _acceptance(e)
-	for key in Voice.TRAIT_KEYS:
-		var v := 0.0
-		for e in _belt:
-			v += float((e.traits as Dictionary).get(key, 0.0)) * (0.1 + _acceptance(e))
-		t[key] = v / maxf(total, 0.001)
-	return t
 
 
 func _apply() -> void:
@@ -2780,7 +2352,7 @@ class SeedGlyph:
 		return Color.from_hsv(lerpf(0.0, 0.42, clampf(f, 0.0, 1.0)), 0.9, 1.0)
 
 	## A seed's behavior as a full-spectrum color, from its 3D bearing (see
-	## SynthEditor._bearing_of): HUE is the direction in the brightness/damage
+	## VoiceParty.bearing_of): HUE is the direction in the brightness/damage
 	## plane (the whole wheel, so distinct voices land on distinct hues), SAT is
 	## how far it sits from the party (kin wash out, foreigners burn), and VALUE
 	## rides the drive axis. Every trait axis therefore reaches the eye.

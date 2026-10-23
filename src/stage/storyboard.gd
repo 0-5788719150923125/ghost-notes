@@ -68,7 +68,8 @@ const BOARD := {
 }
 ## What every entry says. Beside these, `set`: what the entry tells its scene, by the scene's own
 ## settings ([method GhostScene.fields_of]; the editor shows them under the entry) - each the seed's
-## until it is told, and telling one moves nothing else the seed draws.
+## until it is told ([method GhostScene.choice] says what a told one moves). A number may be told as a
+## narrower `[lo, hi]`: the scene's own draw lands in it ([method GhostScene.number]), never sampled here.
 const ENTRY := {
 	"scene": {"label": "Scene", "type": "scene", "default": "",
 		"blurb": "What is on screen. Stage is the one made of data: its actors and what they do are written in the entry itself."},

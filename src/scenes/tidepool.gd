@@ -178,6 +178,22 @@ var _glare_lo := 0.42
 var _glare_gain := 0.9
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.number]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"wave_speed": {"label": "Wave speed", "type": "num", "range": [0.08, 0.17], "default": null,
+		"blurb": "How fast the waves move across the pool."},
+	"wave_height": {"label": "Wave height", "type": "num", "range": [0.030, 0.075], "default": null,
+		"blurb": "How tall the waves stand for their length."},
+	"murk": {"label": "Murk", "type": "num", "range": [0.15, 0.85], "default": null,
+		"blurb": "How murky the water over the pool floor is."},
+	"stones": {"label": "Stones", "type": "num", "range": [20, 90], "default": null,
+		"blurb": "How many stones lie on the pool floor."},
+	"weed": {"label": "Weed", "type": "num", "range": [0.0, 0.9], "default": null,
+		"blurb": "How much of the pool floor is covered in weed."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
@@ -216,7 +232,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# both watchable and roughly what water of this apparent size does. The dispersion RELATION
 	# is untouched - long waves still outrun short ones by sqrt(g k) - because that relation is
 	# what makes a swell and a chop read as one body of water.
-	var tempo := rng.randf_range(0.08, 0.17)
+	var tempo: float = number("wave_speed", rng)
 	# A few percent of detune per component, so the field does not return to the same
 	# configuration on a fixed cycle. With one shared tempo every frequency is an exact function
 	# of its wavenumber, and the surface has an audible period; a small spread breaks that
@@ -224,7 +240,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var detune := rng.randf_range(0.02, 0.09)
 	var swell := rng.randf() * TAU               # the heading the whole sea arrives on
 	var fan := rng.randf_range(0.35, 1.25)       # how far components fan off that heading
-	var ratio := rng.randf_range(0.030, 0.075)   # amplitude as a fraction of wavelength
+	var ratio: float = number("wave_height", rng)   # amplitude as a fraction of wavelength
 	var q_lo := rng.randf_range(0.25, 0.45)
 	var q_hi := rng.randf_range(0.55, 0.95)
 	_move_gain = rng.randf_range(0.8, 2.2)
@@ -288,7 +304,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 
 	# --- the pool floor ------------------------------------------------------------------
 	var depth := rng.randf_range(0.05, 0.35) * _span
-	var turbid := rng.randf_range(0.15, 0.85)
+	var turbid: float = number("murk", rng)
 	var ior := rng.randf_range(1.30, 1.36)
 	var shelf := rng.randf() < 0.45
 	var shelf_ang := rng.randf() * TAU
@@ -326,12 +342,12 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# bilinear lookup can carry. The cost is build-time only - build_bed runs once per scene, not
 	# per frame - and is O(res^2), so this is about 4x of a number that was not in the frame.
 	var bed_res := rng.randi_range(200, 272)
-	var stones := rng.randi_range(20, 90)
+	var stones: int = number("stones", rng)
 	var ramp_name := "ocean" if rng.randf() < 0.55 else "earth"
 	var mix := {
 		"cobble": rng.randf_range(0.2, 1.0),
 		"sand": rng.randf_range(0.4, 1.0),
-		"weed": rng.randf_range(0.0, 0.9),
+		"weed": number("weed", rng),
 		"shell": rng.randf_range(0.0, 0.6),
 	}
 

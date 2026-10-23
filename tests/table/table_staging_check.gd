@@ -841,7 +841,7 @@ func _placement_drift() -> void:
 		until = minf(until, float((tm["first"] as Array)[0]))
 	var worst := 0.0
 	var seen := 0
-	for m in medium._moves:
+	for m in medium._shuffles.moves:
 		var d: Dictionary = m
 		for f in [0.0, 0.3, 0.6, 1.0, 1.01]:
 			# a move's times are seconds into the shuffle; the deck is asked at show time

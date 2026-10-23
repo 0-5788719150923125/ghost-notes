@@ -53,11 +53,15 @@ var _ch := Vector2.ZERO       # live tonal color (hue, strength) from the harmon
 var _sch: Scheme = null
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"figure": {"label": "Figure", "type": "choice", "options": "FIGURES", "default": null,
 		"blurb": "The figure the pen traces: a folding harmonograph rosette, a closed Lissajous braid, spirograph petal loops around an open ring, or a damped pendulum that spirals in."},
+	"opacity": {"label": "Line opacity", "type": "num", "range": [0.75, 0.95], "default": null,
+		"blurb": "How solid the traced lines are."},
+	"wash": {"label": "Background", "type": "num", "range": [0.05, 0.13], "default": null,
+		"blurb": "How bright the faint wash behind the line work is, when there is one."},
 }
 
 
@@ -66,7 +70,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var fig: Dictionary = FIGURES[figure]
 	_sch = Scheme.pick(rng)                  # any mood suits a line drawing
 	var n := rng.randi_range(int(fig["curves"][0]), int(fig["curves"][1]))
-	var alpha := rng.randf_range(0.75, 0.95)
+	var alpha: float = number("opacity", rng)
 	for c in n:
 		var cv := _shape(figure, fig, rng)
 		cv["amp"] = rng.randf_range(float(fig["amp"][0]), float(fig["amp"][1]))
@@ -81,7 +85,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		add_layer("bed", rng, {
 			"hue": _sch.accent,
 			"sat": clampf(_sch.sat * rng.randf_range(0.5, 0.9), 0.05, 1.0),
-			"val": rng.randf_range(0.05, 0.13),
+			"val": number("wash", rng),
 			"pools": rng.randi_range(1, 3),
 		})
 	return {"hue": _sch.hue, "mood": _sch.name, "figure": figure, "curves": n}

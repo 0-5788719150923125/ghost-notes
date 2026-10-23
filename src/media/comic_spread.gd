@@ -36,6 +36,43 @@ const PAGES := 2
 ## See [constant ComicMedium.POOL].
 const MAX_PANELS := ComicPage.MAX_PANELS * PAGES
 
+## ONE PAGE is this many units wide in the world, so the spread is twice it and is centered on the
+## origin with the spine on the world Y axis. Deliberately unchanged from the single-page medium: a
+## panel therefore has exactly the world size it always had, every framing constant of
+## [ComicCamera] keeps the meaning it was tuned with, and the only thing that grew is the sheet.
+const PAGE_W := 2.0
+
+## THE AIM NEVER LEAVES THE SHEET. Spread coordinates, as a margin inside the trim.
+##
+## A move that aims past the outer edge is aiming at the desk, and no framing distance can
+## then put paper across the whole frame - the covering solve has nothing to solve. Sweeps
+## and tracks deliberately run to and past the edges, so they are clamped here rather than
+## being written not to.
+const AIM_MARGIN := 0.06
+
+## HOW MUCH PANEL IS UNDER THE AIM: the shape of the falloff, in units of the panel's own
+## half-size, measured Chebyshev (so it is the panel's rectangle, not a disc inside it).
+##
+## THIS IS THE FIX FOR THE WHOLE REPORT, and it is one number turned into a constraint:
+## "focusing a zoom-in camera at the corner of a frame is terrible". Everything before this
+## tried to make the camera AIM well; nothing stopped it from being TIGHT while aiming
+## badly, and tight-while-badly-aimed is the only combination that actually looks broken.
+## Wide over a gutter shows four panels and reads as a page. Tight over a gutter shows
+## paper.
+##
+## So content is scored, and the framing is a function of it (see [ComicCamera]'s place_eye).
+## Inside CORE - the middle 55% of a panel - the score is 1 and the shot is exactly as tight as
+## the move asked for. By EDGE, just inside the panel's border, it is 0 and the shot has opened
+## to its OFF_FILL. Between them it is smooth, so a pan across a gutter WIDENS as it crosses and
+## closes again on the far panel, which is what a camera operator does without being told.
+const CONTENT_CORE := 0.55
+const CONTENT_EDGE := 0.98
+## How much content a move's RESTING aim must have. Not 1.0: snapping every terminal aim to
+## a panel's dead center would make every settled shot the same shot, and the whole point of
+## sampling a station is that it is not. This is "far enough inside the panel that the shot
+## is of the panel", and [method settle_aim] walks the aim in until it clears the bar.
+const SETTLE_CONTENT := 0.72
+
 ## The print style, shared by both leaves. Sampled here and handed down, see the note above.
 var aspect := 1.5
 var gutter := 0.045
@@ -147,7 +184,7 @@ func panel_point(i: int, uv: Vector2) -> Vector2:
 
 ## The inverse of [method panel_point] for a point already in spread space: where
 ## [param p] falls in panel [param i]'s own unit square. Outside 0..1 means outside the
-## panel, and by how much - which is what [method ComicMedium._content_at] reads to decide
+## panel, and by how much - which is what [method content_at] reads to decide
 ## whether the camera is looking at a picture or at the paper between pictures.
 func panel_uv(i: int, p: Vector2) -> Vector2:
 	var e: Dictionary = panels[i]
@@ -184,7 +221,173 @@ func panel_center(i: int) -> Vector2:
 	return r.position + r.size * 0.5
 
 
-## The middle of the spread - the point the aim is pulled toward so a shot on an outer panel
-## keeps paper across the frame. See [constant ComicMedium.AIM_PULL].
-func center() -> Vector2:
-	return Vector2(SPINE, aspect * 0.5)
+## The middle of the page panel [param i] is printed on - what an aim is pulled toward, and
+## what a swoop is pushed away from. See [constant ComicCamera.AIM_PULL] for why this is the page
+## and not the sheet.
+func page_center(i: int) -> Vector2:
+	return Vector2(float(side_of(i)) + 0.5, aspect * 0.5)
+
+
+## The panel with the most area on the sheet - what a page designer made big because it is the
+## one to look at, and therefore the fallback grabber when there is no footage.
+func largest_panel() -> int:
+	var best := 0
+	var best_a := -1.0
+	for i in panels.size():
+		var rr: Rect2 = panels[i]["rect"]
+		var a := rr.size.x * rr.size.y
+		if a > best_a:
+			best_a = a
+			best = i
+	return best
+
+
+## The panel whose aspect is nearest [param want] (width / height, above 0) - where a clip of
+## that shape is cropped least. Compared in LOG space, because aspect is a ratio: 2.0 and 0.5
+## are equally wrong for a square clip, and subtracting them would call one of them nearly right.
+func nearest_aspect(want: float) -> int:
+	var best := 0
+	var best_err := INF
+	for i in panels.size():
+		var err := absf(log(maxf(panel_aspect(i), 0.01) / want))
+		if err < best_err:
+			best_err = err
+			best = i
+	return best
+
+
+## HOW MUCH PANEL IS UNDER [param aim], 0 to 1. See CONTENT_CORE.
+##
+## The MAXIMUM over panels rather than a sum: two panels never overlap, so at most one can
+## contain the aim, and taking the max means a point just outside a big panel scores by its
+## distance from THAT panel rather than being diluted by the eleven it is nowhere near.
+func content_at(aim: Vector2) -> float:
+	var best := 0.0
+	for i in panels.size():
+		var q := panel_uv(i, aim)
+		var d := maxf(absf(q.x - 0.5), absf(q.y - 0.5)) * 2.0
+		var s := 1.0 - smoothstep(CONTENT_CORE, CONTENT_EDGE, d)
+		if s > best:
+			best = s
+			if best > 0.999:
+				break
+	return best
+
+
+## WHICH PANEL SETS THE FRAMING SCALE: the one the aim is most inside, and only failing that
+## the one whose center is nearest.
+##
+## [method nearest_panel] alone was wrong and measurably so. It compares CENTERS, so an aim
+## sitting squarely inside a wide panel can be nearer to the center of the small panel beside
+## it - and then the camera sizes the shot to the small panel, which is a framing computed for
+## something that is not in the middle of the picture.
+func framing_panel(aim: Vector2) -> int:
+	var best := -1
+	var best_s := 0.0
+	for i in panels.size():
+		var q := panel_uv(i, aim)
+		var d := maxf(absf(q.x - 0.5), absf(q.y - 0.5)) * 2.0
+		var s := 1.0 - smoothstep(CONTENT_CORE, CONTENT_EDGE, d)
+		if s > best_s:
+			best_s = s
+			best = i
+	return best if best >= 0 else nearest_panel(aim)
+
+
+## Which panel the camera is over. Nearest center in spread coordinates - the fallback for
+## [method framing_panel] when the aim is inside nothing at all.
+func nearest_panel(aim: Vector2) -> int:
+	var best := 0
+	var best_d := 1e9
+	for i in panels.size():
+		var d := aim.distance_squared_to(panel_center(i))
+		if d < best_d:
+			best_d = d
+			best = i
+	return best
+
+
+## Walk an aim in toward its panel until it is far enough inside to be worth stopping on.
+##
+## PULLED, NOT SNAPPED, and only as far as it has to go - see SETTLE_CONTENT. A move that
+## already ends well inside a panel is returned untouched, so this costs the vocabulary
+## nothing; a move that ends on a border is walked in until the shot would be of the panel
+## rather than of the rule around it.
+func settle_aim(aim: Vector2) -> Vector2:
+	var i := framing_panel(aim)
+	if i < 0:
+		return aim
+	var c: Vector2 = panel_center(i)
+	for _k in 8:
+		if content_at(aim) >= SETTLE_CONTENT:
+			break
+		aim = aim.lerp(c, 0.35)
+	return aim
+
+
+## Keep an aim on the paper - see AIM_MARGIN. Spread coordinates, so x runs to 2.
+func clamp_aim(p: Vector2) -> Vector2:
+	var b := printed_bounds()
+	return Vector2(clampf(p.x, b.position.x, b.end.x), clampf(p.y, b.position.y, b.end.y))
+
+
+## THE PRINTED AREA: the box that contains every panel on the spread, grown by AIM_MARGIN.
+##
+## The aim used to be clamped to the SHEET, so a move that ran past its subject - a track
+## overruns by nearly half a page width by design - came to rest out on the trim margin, in a
+## corner of the paper with no picture anywhere near it. The chain then took the camera back
+## toward the reading, which is the "drifts into a corner then bounces back from it again"
+## exactly: out to the corner because the move said so, back again because the reading did.
+##
+## Clamping to the PRINTED area instead means an overrun still leaves its panel - that is the
+## gesture, and it still passes over the gutter and out to the edge of the outermost panel -
+## but it cannot reach the blank margin, so there is no corner to be retrieved from. The
+## outset by AIM_MARGIN is what keeps "past the last panel" from meaning "exactly on its edge".
+func printed_bounds() -> Rect2:
+	if panels.is_empty():
+		return Rect2(AIM_MARGIN, AIM_MARGIN, 2.0 - AIM_MARGIN * 2.0, 1.0)
+	var r: Rect2 = panels[0]["rect"]
+	for i in panels.size():
+		r = r.merge(panels[i]["rect"])
+	return r.grow(AIM_MARGIN)
+
+
+## A point in SPREAD space (x 0..2 with the spine at 1, y 0..aspect and DOWN) -> world
+## space. Everything drawn on the sheet goes through this one call, so the paper, the
+## panels, the gutters and the ink can never disagree about where the spread is.
+##
+## [param m] IS THE WHOLE TRANSFORM, handed in already built: the spread's attitude for a
+## flat page, or the attitude times the leaf's hinge rotation for a turning one. It used to
+## build Basis.from_euler(att) here, per vertex - six trig calls and a matrix, roughly 2500
+## times a frame with an argument that had not changed - and the live-performance audit
+## (2026-09-03, perf_probe) attributed most of the page's cost to exactly that. Hoisting it is
+## not an approximation; the value was always identical.
+##
+## [param mirrored] reflects the point about the spine before placing it, which is what draws
+## the BACK of a turning leaf. See [method mirror].
+func world(p: Vector2, m: Basis, mirrored := false, depth := 0.0) -> Vector3:
+	var x := (2.0 * SPINE - p.x) if mirrored else p.x
+	# THE TURN HINGES ON THE SPINE, and on a spread the spine is the origin - so unlike the
+	# single page, which had to rotate about an off-center pivot to avoid reading as a card
+	# spinning in place, there is no pivot term here at all. The leaf's rotation is simply
+	# part of `m`.
+	return m * Vector3(
+		(x - SPINE) * PAGE_W,
+		-(p.y - aspect * 0.5) * PAGE_W,   # spread y is DOWN, world y is up
+		-depth * PAGE_W)                  # behind the sheet, along its own normal
+
+
+## The four world corners of panel [param i], cant applied, placed by [param m].
+func panel_world(i: int, m: Basis) -> Array:
+	var out: Array = []
+	for uv in [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]:
+		out.append(world(panel_point(i, uv), m))
+	return out
+
+
+## The four world corners of the whole spread, placed by [param m] - for the covering solve.
+func world_corners(m: Basis) -> Array:
+	var out: Array = []
+	for p in spread_corners():
+		out.append(world(p, m))
+	return out

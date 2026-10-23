@@ -38,11 +38,21 @@ var _cols := 56                     # samples across one ridgeline (its crispnes
 var _fog_bands := 3
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"relief": {"label": "Relief", "type": "choice", "options": "RELIEFS", "default": null,
 		"blurb": "The landform on the horizon: a few wide dunes, rolling swells, a crowded serration of ridges, or a massif."},
+	"fog_bands": {"label": "Fog bands", "type": "num", "range": [1, 4], "default": null,
+		"blurb": "How many bands of fog lie over the low ground."},
+	"snow": {"label": "Snowflakes", "type": "num", "range": [60, 110], "default": null,
+		"blurb": "How many snowflakes drift over the hills, on a snowy night."},
+	"stars": {"label": "Stars", "type": "num", "range": [100, 170], "default": null,
+		"blurb": "How many stars show above the hills, on a clear night."},
+	"fog_level": {"label": "Fog level", "type": "num", "range": [0.30, 0.52], "default": null,
+		"blurb": "How far down the frame the fog lies."},
+	"wind": {"label": "Fog wind", "type": "num", "range": [0.05, 0.18], "default": null,
+		"blurb": "How fast the fog flows sideways over the low ground."},
 }
 
 
@@ -65,7 +75,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_amps.resize(n)
 	# Fog is the scene's other half, so how much of it there is varies too: a thin single
 	# band clinging to the low ground, or a deep stack drowning the valleys.
-	_fog_bands = rng.randi_range(1, 4)
+	_fog_bands = number("fog_bands", rng)
 	# Sky + weather over the hills, composed from the Layer registry: stars behind the
 	# ridgelines, snow drifting over them - "snow on a hillside" from shared components.
 	# Both take the scheme's ACCENT, so the weather is lit by the same sky as the land.
@@ -73,10 +83,10 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	if sky < 0.35:
 		add_layer("stars", rng, {"z": "back", "count": rng.randi_range(80, 150),
 			"hue": _sch.accent, "sat": _sch.sat * 0.3})
-		add_layer("snow", rng, {"count": rng.randi_range(60, 110),
+		add_layer("snow", rng, {"count": number("snow", rng),
 			"hue": _sch.accent, "sat": _sch.sat * 0.25, "fall": 0.08})
 	elif sky < 0.55:
-		add_layer("stars", rng, {"z": "back", "count": rng.randi_range(100, 170),
+		add_layer("stars", rng, {"z": "back", "count": number("stars", rng),
 			"hue": _sch.accent, "sat": _sch.sat * 0.3})
 	return {
 		"mood": _sch.name,
@@ -88,8 +98,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"reach": rng.randf_range(0.25, 1.0),
 		"height": rng.randf_range(float(rl.height[0]), float(rl.height[1])),  # fraction of unit
 		"fog_bands": _fog_bands,
-		"fog_level": rng.randf_range(0.30, 0.52), # screen fraction the fog sits at
-		"wind": rng.randf_range(0.05, 0.18),
+		"fog_level": number("fog_level", rng), # screen fraction the fog sits at
+		"wind": number("wind", rng),
 	}
 
 

@@ -470,6 +470,91 @@ joins whatever chunk it is handed). What is not there is the stream's end: `Read
 its last planned chunk as the end of the reading, so an open one would have to pad silence while it
 waits (a stream that runs dry stops the session clock) and queue its outro only when it is closed.
 
+## The fifth round: the files no round had opened (2026-10-22)
+
+The user: "proceed with the remaining items" - the live reading aside. Each big file was read whole
+before anything was cut (a survey per two files), and each change was dumped before and after. The
+likeness study was working in the tree.
+
+28. **A scene's rolled numbers are settings too.** *Status, 2026-10-22: done.* A number a scene draws
+    once a build from a literal range - a rim's brightness, a count of grains, a lamp's height -
+    is a `FIELDS` row of type "num" with its `range`, drawn through `GhostScene.number(key, rng)`: the
+    same die (`randi_range` when both ends are whole, `randf_range` otherwise), and, when the
+    entry's `set` gives a number or a narrower `[lo, hi]`, that number, or the draw carried into that
+    range at the same place. What is told is held to the scene's own range. 170 numbers in 48 scenes,
+    chosen by what a person watching would name (at most five a scene; jitters, phases and the bed's
+    pools left as code); 51 are counts. Told nothing, all 74 scene and motion pairs on four seeds come
+    out byte for byte the same. WHAT A TOLD SETTING MOVES, said exactly now: no draw before or beside
+    it - but a count that sizes a loop, or a kind with rolls of its own, moves what is drawn after it,
+    as the seed's own pick would (the docs had said "nothing else"). The inspector shows a number's
+    row with its range while unset; docs/scenes.md lists the ranges; `docs.py --check` holds a
+    "num" row to a `number()` read and its range to two numbers low to high (a control). Gate:
+    scene_fields_check, all 229 settings - a number told the far end of its range takes it on some
+    build that draws it (seeds are searched: a blizzard's veil is drawn only in a blizzard, a ring's
+    width matters only to a ring), told its whole range moves nothing, told its upper half lands in
+    it, told past its top stops there; the dump looks two deep into what a scene made (its lens, its
+    layers, its particles - a lens's field of view was invisible to the first one). Mutation-tested
+    three ways: told ignored, no clamp, the whole range not passed through.
+29. **The shuffle owns its chain.** *Status, 2026-10-22: done.* The chain of moves, its seeded stream,
+    the room the schedule leaves it and the wash's calm lived on the medium, and only the shuffle
+    read them. They are `TableShuffle`'s now (`moves`, `plan_moves(seed)`, `fit_room(ts, te, jump_s)`,
+    `shuffle_room`, `jump_room`, `jump_scale`, `wash_calm`); the medium hands the room over as it
+    poses. Its one banner over 2,676 lines is twelve that hold what they say (the essay on the
+    deck's way round is the second one's prose; `_messy` beside the riffle), and `_card_poly` was
+    `_card_corners` line for line. Every card's pose through 64 episodes' shuffles, a quarter second
+    apart (a wash forced in eight of them): the same hash before and after. Gates: the table's nine.
+30. **The comic's camera is a part.** *Status, 2026-10-22: done.* `ComicCamera` (`media/`): about 30
+    members written only by the camera, the shot vocabulary, the follower, the framing solves and the
+    projection; the spread's own geometry went onto `ComicSpread`. Dead code went (five functions, two
+    constants, the dip - no shot was a dip). A 12,000-frame dump (84 shots of all eight kinds, eleven
+    spreads, a film panel) the same byte for byte. Found by the cut: a second attach on the same seed
+    played a different camera (the book's reset left the camera's state), and `release()` minted a
+    scene through the Director - a false cut in the log, and the next note's first scene picked
+    against one that never showed, so the same seed played another show. The book resets the camera;
+    release only resets, and `begin_session` turns to the first spread. Gates: comic_motion_check's
+    two new checks, each with a control (a camera whose reset does nothing, a comic with the old
+    release). `comic.gd` 2,849 lines to 1,349.
+31. **Synthesis' party math is a library.** *Status, 2026-10-22: done.* `VoiceParty` (`voice/`, static):
+    a seed as a vector, the belt's acceptance and center, a candidate's fit and difficulty, the
+    interference field, the trust region, a throw composed from members and its sustain bank - each
+    a function of the belt and the candidate it is handed, where they had read the editor's members
+    (and so, mid-throw, a half-made candidate without saying so). 3,396 results on fixed belts and
+    eight full sessions: the same before and after. ensemble_check now calls the real function (it
+    had kept a copy). Found: the ensemble's pool was shuffled by the GLOBAL generator, so the same
+    lineage could compose differently (its own generator now, seeded from the lineage, every other
+    draw where it was); a landed, released or applied voice sang with the last throw's sustain bank;
+    the genome getter wrote into the saved belt. Gates: ensemble_check, voice_party_check,
+    synth_bank_check. `synth_editor.gd` 2,856 lines to 2,428.
+32. **Read, and left as they are.** `props.gd` (4,495) is a library of 128 static functions with one
+    locked cache; `layer.gd` (2,685) is a registry of 22 self-contained layer classes, and docs.py
+    reads their docs and fields out of that one file (a class moved out would pass `check_fields`
+    silently); `lights.gd` (2,472) is 68 static functions and the built light's `Rig`. Cutting any of
+    them would move lines and make no state clearer. Their banners are not all true (props' "strands"
+    holds the sweeps and extrudes every shape uses); a sort is for the day one is cut.
+
+WHERE THE BIG FILES STAND NOW: `mask_editor.gd` 4,983; `props.gd` 4,495, `layer.gd` 2,685 and
+`lights.gd` 2,472, libraries; `table_shuffle.gd` 2,927, a part with true banners; `synth_editor.gd`
+2,428; `table.gd` 2,194; `comic.gd` 1,349 and `comic_camera.gd` 1,301; `reading_panel.gd` 1,104.
+
+FOUND AND NOT CHANGED, each a change to what a show does - the user's to decide (the Synthesis
+ones measured; the rest read in the code, not run):
+- Synthesis: the fishing game runs on while the transport is paused (the drift burns the reserve, a
+  catch can land); a throw's traits are tempered with the old genome and the new lineage (fixing it
+  changes 15-26% of seeded throws, mostly how many members color them); a catch that forks the
+  lineage is stamped with the pre-fork scene; an export's reception carries the wall-clock moment
+  Export was pressed, and the hook freezes it into every caught seed.
+- The wash: a jumper is never "the card a hard blow struck last" - its wash is resumed with no blows
+  counted and its layers all zero, so the jumper is picked by speed alone.
+- The comic: `LIVE_MAX` is `POOL`, though its doc says three, so the live-panel budget never binds.
+- Layers: Volumetric's clouds drift without wrapping, so a fog bank's edge slides into view after a
+  minute or two of one scene; Cosmos never rolls its planet, Petals never uses its curl breeze, the
+  bed's pools never read their band (removing those dead draws would change every seeded show).
+- Lights: a flock at the cap can come out one bird over it, and the seventeenth is never drawn.
+- Props: a lathe with lobes is built with at least eight facets a lobe, so its `sides` are lost.
+
+LEFT: a reading that stays open while text arrives (round four's note above); a scene's look as
+data (a `layers` entry).
+
 ## What the two futures need
 
 **A nonlinear timeline editor** (compose scenes from existing scenes, geometry and animation).

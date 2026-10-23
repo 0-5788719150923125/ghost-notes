@@ -12,17 +12,34 @@ class_name TableShuffle
 ##
 ## WHAT IT IS HANDED is written out: every `medium.` below is something the shuffle reads of the table
 ## it is part of (where the deck stands, how much room the cloth leaves, what stands on it, the
-## seed, the moves the schedule laid down), and none of it is written here but [member
-## TableMedium._moves], which this fills in on first ask. Its own state is what it works out and
-## keeps: a wash's plan, the way each card began, the rest each card comes to.
+## seed), and none of it is written here. ITS OWN STATE is the chain of moves ([member moves], made
+## on first ask from its own seeded stream, [method plan_moves]), the room the schedule leaves it
+## ([method fit_room]), and what it works out and keeps: a wash's plan, the way each card began, the
+## rest each card comes to.
 ##
-## THE TABLE ASKS EIGHT THINGS of it, the names without an underscore: [method shuffle_xf],
-## [method move_at], [method deck_turns], [method riffle], [method riffle_top], [method wash],
-## [method wash_jump], [method sweeps]. Everything else is how those are answered.
+## THE TABLE ASKS TWELVE THINGS of it, the names without an underscore: [method plan_moves], [method
+## fit_room], [method shuffle_xf], [method move_at], [method deck_turns], [method cut_off], [method
+## finish_xf], [method riffle], [method riffle_top], [method wash], [method wash_jump], [method sweeps].
+## Everything else is how those are answered.
 
 ## The [TableMedium] this is a part of: everything read through it is something this part
 ## is handed, and the list of them is what it depends on.
 var medium: TableMedium
+
+## THE CHAIN: every move laid down so far, `{kind, t0, dur, pause, seed}` and what each works out and
+## keeps on itself - made as far as it is asked ([method move_at]) from its own seeded stream, made
+## again from the start whenever the table changes ([method plan_moves]).
+var moves: Array = []
+var _move_rng := RandomNumberGenerator.new()
+## THE ROOM the schedule leaves the shuffle, as the table last posed it ([method fit_room]): how long
+## it has from its start to the first card (INF: the voice has not got there yet)...
+var shuffle_room := INF
+## ...when that first card is a jumper, how far into the shuffle it comes (-1: it is not, or not placed yet)...
+var jump_room := -1.0
+## ...and the speed its action is performed at.
+var jump_scale := 1.0
+## The fan-out calmed ([constant CALM_HZ]); a gate's control turns it off.
+var wash_calm := true
 
 const CLOTH := TablePositions.CLOTH
 ## HOW A READER SHUFFLES: in RUNS - several riffles, a string of cuts, a few overhand passes,
@@ -201,7 +218,7 @@ var _riffles := {}                   # "seed|n" -> the riffle's plan ([method _r
 # --- the shuffle ------------------------------------------------------------------------------
 
 ## Deck slot [param i] at [param u] seconds into the shuffle, posed about where the deck is
-## ([member _cur_base]). The shuffle is a chain of RUNS (see [constant RUNS], [method move_at]).
+## ([member TableMedium._cur_base]). The shuffle is a chain of RUNS (see [constant RUNS], [method move_at]).
 ##
 ## THE DECK'S MESHES ARE INTERCHANGEABLE: every move ends with slot i's mesh in some other slot
 ## j, and the next move starts it in slot i again. They are identical cards, and a slot's small
@@ -250,17 +267,19 @@ func finish_xf(i: int, t: float, ts: float, te: float, m: Dictionary) -> Transfo
 	return _move_xf(i, minf(v, dur), m)
 
 
-## THE DECK'S CARDS LIE THE WAY THEY LIE (2026-10-10, the user: "when shuffling, the orientation of the
-## very top card never changes" - and, once in a while, "then it reverts wrongly"). The deck's meshes
-## are interchangeable ([method shuffle_xf]), so a card's way round was not a thing of its own: the
-## top slot was turned for the next card drawn, always, whichever mesh a cut brought up, and a mesh
-## that had flown away turned was upright again the moment its move ended. Now every card has its way
-## ([constant DECK_TURNED] of them lie turned about), a move carries it from slot to slot
-## ([method _move_goes]: where each slot goes, and which cards the move turns over, a wash's), and
-## the card that comes to the top by the shuffle's end is the way the next card drawn comes up - made
-## so by the way the deck began ([method _deck_flip0]), the one card chosen back to its start.
-## [method _chain_at] is the deck between moves: where each slot's card began, and how often it has
-## been turned about since.
+# --- the deck's way round ---------------------------------------------------------------------
+
+# THE DECK'S CARDS LIE THE WAY THEY LIE (2026-10-10, the user: "when shuffling, the orientation of the
+# very top card never changes" - and, once in a while, "then it reverts wrongly"). The deck's meshes
+# are interchangeable ([method shuffle_xf]), so a card's way round was not a thing of its own: the
+# top slot was turned for the next card drawn, always, whichever mesh a cut brought up, and a mesh
+# that had flown away turned was upright again the moment its move ended. Now every card has its way
+# ([constant DECK_TURNED] of them lie turned about), a move carries it from slot to slot
+# ([method _move_goes]: where each slot goes, and which cards the move turns over, a wash's), and
+# the card that comes to the top by the shuffle's end is the way the next card drawn comes up - made
+# so by the way the deck began ([method _deck_flip0]), the one card chosen back to its start.
+# [method _chain_at] is the deck between moves: where each slot's card began, and how often it has
+# been turned about since.
 
 ## Where each slot of the deck goes in [param m], and which of its cards the move turned about:
 ## `{to: slot -> slot, turned}`.
@@ -301,10 +320,10 @@ func _move_goes(m: Dictionary) -> Dictionary:
 	return {"to": to, "turned": turned}
 
 
-## What [member _moves] key [method _chain_at] made its states for: they change with the room the
+## What [member moves] key [method _chain_at] made its states for: they change with the room the
 ## shuffle has, and the wash that is cut short to fit it.
 func _chain_key() -> String:
-	return "%s|%s|%s" % [medium._shuffle_room, medium._jump_room, medium._jump_scale]
+	return "%s|%s|%s" % [shuffle_room, jump_room, jump_scale]
 
 
 ## The deck at the START of move [param idx] (and so in the pause before it): `{src, turn}` - for
@@ -312,7 +331,7 @@ func _chain_key() -> String:
 ## number of times since. Kept on each move, for the frames after.
 func _chain_at(idx: int) -> Dictionary:
 	var key := _chain_key()
-	var n := mini(idx, medium._moves.size())
+	var n := mini(idx, moves.size())
 	var src0 := PackedInt32Array()
 	var turn0 := PackedByteArray()
 	src0.resize(medium._plan.deck_n)
@@ -322,13 +341,13 @@ func _chain_at(idx: int) -> Dictionary:
 	var state := {"src": src0, "turn": turn0}
 	var from := 0
 	for j in range(n, 0, -1):
-		var d: Dictionary = medium._moves[j - 1]
+		var d: Dictionary = moves[j - 1]
 		if String(d.get("chain_key", "")) == key:
 			state = d["after"]
 			from = j
 			break
 	for j in range(from, n):
-		var m: Dictionary = medium._moves[j]
+		var m: Dictionary = moves[j]
 		var go := _move_goes(m)
 		var to: PackedInt32Array = go["to"]
 		var turned: PackedByteArray = go["turned"]
@@ -351,11 +370,11 @@ func _chain_at(idx: int) -> Dictionary:
 ## the next - and so the state of the deck then ([method _chain_at]).
 func _move_index_at(u: float) -> int:
 	move_at(u)
-	for i in medium._moves.size():
-		var d: Dictionary = medium._moves[i]
+	for i in moves.size():
+		var d: Dictionary = moves[i]
 		if float(d["t0"]) + float(d["dur"]) > u:
 			return i
-	return medium._moves.size()
+	return moves.size()
 
 
 ## How each card of the deck lies at the shuffle's start: [constant DECK_TURNED] of them the other
@@ -364,7 +383,7 @@ func _move_index_at(u: float) -> int:
 ## gathered, with the jumper's card gone from it).
 func _deck_flip0(te: float, ts: float, tm: Dictionary, wj: Dictionary) -> PackedByteArray:
 	var key := "%s|%s|%s|%s" % [te, ts, wj.get("end", ""), _chain_key()]
-	if key == _flip_key and is_same(_flip_moves, medium._moves) and _flip0.size() == medium._plan.deck_n:
+	if key == _flip_key and is_same(_flip_moves, moves) and _flip0.size() == medium._plan.deck_n:
 		return _flip0
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([medium._plan.seed_value, "deck-turned"])
@@ -390,15 +409,15 @@ func _deck_flip0(te: float, ts: float, tm: Dictionary, wj: Dictionary) -> Packed
 			# a move the first card cuts off is finished ([method finish_xf]): the top is the card
 			# it brings there
 			st = _chain_at(idx + 1)
-		elif idx < medium._moves.size() and at >= float((medium._moves[idx] as Dictionary)["t0"]):
+		elif idx < moves.size() and at >= float((moves[idx] as Dictionary)["t0"]):
 			# a wash still under way when the shuffle ends: its cards go to their slots, turned
 			# as they were
-			turned = (_move_goes(medium._moves[idx]) as Dictionary)["turned"][slot]
+			turned = (_move_goes(moves[idx]) as Dictionary)["turned"][slot]
 		var lies := int((st["turn"] as PackedByteArray)[slot]) ^ turned
 		f0[(st["src"] as PackedInt32Array)[slot]] = (1 if want else 0) ^ lies
 	_flip0 = f0
 	_flip_key = key
-	_flip_moves = medium._moves
+	_flip_moves = moves
 	return f0
 
 
@@ -406,7 +425,7 @@ func _deck_flip0(te: float, ts: float, tm: Dictionary, wj: Dictionary) -> Packed
 ## of its move's pose: its card's way round, and - as the shuffle ends - a turn the move's pose had
 ## in it handed over, so the card is not seen to turn back ([method wash]'s cards turned half way
 ## round are squared a quarter turn at most, the rest of the turn is here). Past the end of the
-## shuffle only the top slot's turn is the table's own ([method _pose]).
+## shuffle only the top slot's turn is the table's own ([method TableMedium._pose]).
 func deck_turns(t: float, ts: float, te: float, tm: Dictionary, wj: Dictionary, jump_s: float) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	out.resize(medium._plan.deck_n)
@@ -417,10 +436,10 @@ func deck_turns(t: float, ts: float, te: float, tm: Dictionary, wj: Dictionary, 
 	var st := _chain_at(idx)
 	var src: PackedInt32Array = st["src"]
 	var turn: PackedByteArray = st["turn"]
-	var open := idx < medium._moves.size() and at >= float((medium._moves[idx] as Dictionary)["t0"])
+	var open := idx < moves.size() and at >= float((moves[idx] as Dictionary)["t0"])
 	var turned := PackedByteArray()
 	if open:
-		turned = (_move_goes(medium._moves[idx]) as Dictionary)["turned"]
+		turned = (_move_goes(moves[idx]) as Dictionary)["turned"]
 	if turned.is_empty():
 		turned.resize(medium._plan.deck_n)
 	if not wj.is_empty() and t >= float(wj["end"]):
@@ -447,6 +466,26 @@ func deck_turns(t: float, ts: float, te: float, tm: Dictionary, wj: Dictionary, 
 	return out
 
 
+# --- the chain of moves -----------------------------------------------------------------------
+
+## THE CHAIN MADE AGAIN from its start on the episode's seed [param seed_value], two minutes of it laid
+## down now rather than a frame at a time while it plays: the table calls this once the things on it
+## stand (a wash goes round them) and again whenever the table changes.
+func plan_moves(seed_value: int) -> void:
+	_move_rng.seed = hash([seed_value, "tarot-moves"])
+	moves = []
+	move_at(120.0)
+
+
+## THE ROOM, from the schedule the table poses: the shuffle runs from [param ts] to the first card at
+## [param te] (INF: not reached yet), and [param jump_s] is the first card's action scale when it is a
+## jumper (0: it is not).
+func fit_room(ts: float, te: float, jump_s: float) -> void:
+	shuffle_room = te - ts if te < INF else INF
+	jump_room = te - ts if jump_s > 0.0 and te < INF else -1.0
+	jump_scale = jump_s if jump_s > 0.0 else 1.0
+
+
 ## The move under way at [param u], or empty in a pause. RUNS, NOT A LOTTERY: a reader does not
 ## pick a new shuffle for every move - they riffle three times running, cut four times, and then
 ## leave the deck alone for a few seconds (now and then for a long while) while they talk. So a
@@ -454,15 +493,15 @@ func deck_turns(t: float, ts: float, te: float, tm: Dictionary, wj: Dictionary, 
 ## comes at most once, and never first. Moves are made as far as they are needed, in order, from
 ## their own seeded stream - so the chain is the same however a reading gets to a moment.
 func move_at(u: float) -> Dictionary:
-	while medium._moves.is_empty() or float((medium._moves[-1] as Dictionary)["t0"]) + float((medium._moves[-1] as Dictionary)["dur"]) \
-			+ float((medium._moves[-1] as Dictionary)["pause"]) < u:
+	while moves.is_empty() or float((moves[-1] as Dictionary)["t0"]) + float((moves[-1] as Dictionary)["dur"]) \
+			+ float((moves[-1] as Dictionary)["pause"]) < u:
 		var t0 := 0.15
 		var last := ""
 		var washed := false
-		for m in medium._moves:
+		for m in moves:
 			washed = washed or String((m as Dictionary)["kind"]) == "wash"
-		if not medium._moves.is_empty():
-			var p: Dictionary = medium._moves[-1]
+		if not moves.is_empty():
+			var p: Dictionary = moves[-1]
 			t0 = float(p["t0"]) + float(p["dur"]) + float(p["pause"])
 			last = String(p["kind"])
 		# the run's kind: weighted, never the same as the last run, no second wash, no wash first -
@@ -471,11 +510,11 @@ func move_at(u: float) -> Dictionary:
 		var total := 0.0
 		var pool: Array = []
 		for k in RUNS:
-			if k == last or (k == "wash" and (washed or medium._moves.is_empty() or held_back)):
+			if k == last or (k == "wash" and (washed or moves.is_empty() or held_back)):
 				continue
 			pool.append(k)
 			total += float((RUNS[k] as Dictionary)["weight"])
-		var pick := medium._move_rng.randf() * total
+		var pick := _move_rng.randf() * total
 		var kind := String(pool[0])
 		for k in pool:
 			pick -= float((RUNS[k] as Dictionary)["weight"])
@@ -483,32 +522,34 @@ func move_at(u: float) -> Dictionary:
 				kind = String(k)
 				break
 		# its time: the run after this one would begin past it
-		if held_back and not medium._moves.is_empty() and t0 >= medium._plan.wash_from - 6.0:
+		if held_back and not moves.is_empty() and t0 >= medium._plan.wash_from - 6.0:
 			kind = "wash"
 		var run: Dictionary = RUNS[kind]
-		var n := medium._move_rng.randi_range(int(run["n"][0]), int(run["n"][1]))
-		var tempo := medium._move_rng.randf_range(float(run["dur"][0]), float(run["dur"][1]))
+		var n := _move_rng.randi_range(int(run["n"][0]), int(run["n"][1]))
+		var tempo := _move_rng.randf_range(float(run["dur"][0]), float(run["dur"][1]))
 		for i in n:
-			var gap := medium._move_rng.randf_range(float(run["gap"][0]), float(run["gap"][1]))
+			var gap := _move_rng.randf_range(float(run["gap"][0]), float(run["gap"][1]))
 			if i == n - 1:
 				# the pause after a run: a few seconds, or now and then a long linger
-				gap = clampf(exp(medium._move_rng.randfn(IDLE_LOG.x, IDLE_LOG.y)), IDLE_RANGE.x, IDLE_RANGE.y)
-				if medium._move_rng.randf() < LINGER_CHANCE:
-					gap = medium._move_rng.randf_range(9.0, IDLE_RANGE.y)
-			var move := {"kind": kind, "t0": t0, "dur": tempo * medium._move_rng.randf_range(0.95, 1.05),
-				"pause": gap, "seed": medium._move_rng.randi()}
+				gap = clampf(exp(_move_rng.randfn(IDLE_LOG.x, IDLE_LOG.y)), IDLE_RANGE.x, IDLE_RANGE.y)
+				if _move_rng.randf() < LINGER_CHANCE:
+					gap = _move_rng.randf_range(9.0, IDLE_RANGE.y)
+			var move := {"kind": kind, "t0": t0, "dur": tempo * _move_rng.randf_range(0.95, 1.05),
+				"pause": gap, "seed": _move_rng.randi()}
 			if kind == "wash" and medium._plan.wash_held:
 				move["dur"] = clampf(medium._plan.wash_until - t0, float(run["dur"][0]), 44.0)
-			medium._moves.append(move)
+			moves.append(move)
 			t0 += float(move["dur"]) + gap
-		if medium._moves.size() > 400:
+		if moves.size() > 400:
 			break
-	for m in medium._moves:
+	for m in moves:
 		var d: Dictionary = m
 		if u >= float(d["t0"]) and u < float(d["t0"]) + float(d["dur"]):
 			return d
 	return {}
 
+
+# --- riffle, overhand, cut --------------------------------------------------------------------
 
 ## THE RIFFLE OF [param seed] for a deck of [param n] ([constant RIFFLE_STICK]): `{cut, to, at, nth,
 ## spread}` - the cut (the slots under it go to the left hand), where each slot lands, and for each
@@ -701,6 +742,19 @@ func _cut(i: int, v: float, dur: float, seed: int) -> Transform3D:
 	return xf2
 
 
+## A card just landed on the deck in place [param j], not yet squared - slipped as the card landing in
+## place [param like] is, when it came down stuck to it.
+func _messy(j: int, seed: int, like := -1) -> Transform3D:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed, j if like < 0 else like, "messy"])
+	var xf := medium._rest_xf(j)
+	xf.origin += Vector3(rng.randf_range(-0.003, 0.003), 0.0, rng.randf_range(-0.003, 0.003))
+	xf.basis = Basis(Vector3.UP, rng.randf_range(-0.07, 0.07)) * xf.basis
+	return xf
+
+
+# --- a wash posed, and its flights ------------------------------------------------------------
+
 ## A WASH, posed from its plan (see [method _wash_plan]): card [param i] at [param v] seconds in -
 ## where the plan has it, resting on what is under it ([method _wash_rest]), a card's own thickness
 ## once spread ([constant WASH_T]: a deck mesh stands for three); in the air if it is thrown
@@ -823,6 +877,8 @@ func _flight_clear(plan: Dictionary, i: int, v: float, xf: Transform3D) -> float
 	return maxf(need, 0.0)
 
 
+# --- cards resting on cards -------------------------------------------------------------------
+
 ## A card turned [param yaw] about the vertical and tipped to lie on a plane rising [param slope]
 ## (meters per meter across x and z): its long and short sides follow the plane, its face is square to it.
 static func _tipped(yaw: float, slope: Vector2) -> Basis:
@@ -878,7 +934,7 @@ func _wash_rest_at(plan: Dictionary, v: float, bare := false) -> Array:
 		_rest_lifts = {}
 	# THE FAN-OUT'S TILTS, calmed: each card's bare tilt averaged over a window on a fixed grid (so
 	# the frames after reuse it), between the two grid points round the moment
-	var calm := 0.0 if bare or not medium.wash_calm else \
+	var calm := 0.0 if bare or not wash_calm else \
 		1.0 - clampf((v - float((plan["mix"] as Vector2).x)) / CALM_SETTLE, 0.0, 1.0)
 	var calmed: Array = []
 	if calm > 0.0:
@@ -1198,17 +1254,19 @@ static func _held_down(rest: Vector3, corners: PackedVector2Array, mid: Vector2,
 	return Vector3(h, g.x, g.y)
 
 
+# --- which plan a wash plays ------------------------------------------------------------------
+
 ## A wash's plan for the time it has: the whole of it, or - when the first card comes before it
 ## would finish - one that mixes for less and gathers in time. The spreading and the hands are the
 ## same up to there (their own dice), so it is the same wash, cut short; without it the spread
-## went back into the deck in [constant SQUARE]. With too little room to spread, mix and gather at
+## went back into the deck in [constant TableMedium.SQUARE]. With too little room to spread, mix and gather at
 ## all, there is no wash: the deck waits, squared, for the first card (empty). When the first card
 ## is a jumper that comes while this wash is mixing, the wash runs on into it ([method _jumper_plan]).
 func _wash_fit(m: Dictionary) -> Dictionary:
 	var jp := _jumper_plan(m)
 	if not jp.is_empty():
 		return jp
-	var room := medium._shuffle_room - float(m["t0"])
+	var room := shuffle_room - float(m["t0"])
 	if room >= float(m["dur"]) - 0.05:
 		return _whole(m)
 	if room < WASH_ROOM:
@@ -1229,17 +1287,17 @@ func _whole(m: Dictionary) -> Dictionary:
 	return m["plan"]
 
 
-## A JUMPER OUT OF A WASH: when the first card is a jumper ([member _jump_room] into the shuffle, its
-## action at [member _jump_scale]) and wash [param m] is mixing as it comes, the wash planned on
+## A JUMPER OUT OF A WASH: when the first card is a jumper ([member jump_room] into the shuffle, its
+## action at [member jump_scale]) and wash [param m] is mixing as it comes, the wash planned on
 ## through it - mixing until the jumper is thrown [constant JUMP_EJECT] into its action, still while
-## it lies there, gathered once it is up ([constant JUMP_RISE]). Empty for any other wash, one only
+## it lies there, gathered once it is up ([constant TableMedium.JUMP_RISE]). Empty for any other wash, one only
 ## just spread ([constant JUMP_MIX]) or already gathering, or one with no card it could throw.
 func _jumper_plan(m: Dictionary) -> Dictionary:
-	if medium._jump_room < 0.0 or String(m.get("kind", "")) != "wash":
+	if jump_room < 0.0 or String(m.get("kind", "")) != "wash":
 		return {}
-	var into := medium._jump_room - float(m["t0"])
+	var into := jump_room - float(m["t0"])
 	var mix: Vector2 = _whole(m)["mix"]
-	var s := maxf(medium._jump_scale, 0.05)
+	var s := maxf(jump_scale, 0.05)
 	var at := into + JUMP_EJECT * s
 	if into < mix.x + JUMP_MIX or at > mix.y:
 		return {}
@@ -1257,9 +1315,9 @@ func _jumper_plan(m: Dictionary) -> Dictionary:
 ## plan, the card thrown, and when (show time) the wash began, the card leaves it and lands, and the
 ## wash ends - or empty when the jumper does not come out of a wash.
 func wash_jump(ts: float) -> Dictionary:
-	if medium._jump_room < 0.0:
+	if jump_room < 0.0:
 		return {}
-	var m := move_at(medium._jump_room - 0.001)
+	var m := move_at(jump_room - 0.001)
 	if m.is_empty():
 		return {}
 	var plan := _jumper_plan(m)
@@ -1270,6 +1328,8 @@ func wash_jump(ts: float) -> Dictionary:
 	return {"m": m, "plan": plan, "card": int(plan["jumper"]), "base": at, "eject": at + float(f["t0"]),
 		"land": at + float(f["t1"]), "end": at + float(plan["dur"])}
 
+
+# --- the washes' cards, as the air reads them -------------------------------------------------
 
 ## WHERE THE WASH'S CARDS ARE ON THE CLOTH, for what lies there (the user, 2026-10-14: a petal on the
 ## table was "completely unaffected by the card-washing" - the cards clipped through it): for each wash
@@ -1287,7 +1347,7 @@ func sweeps(ts: float, te: float, base_at: Callable, base_key: String) -> Array:
 		return []
 	var plans: Array = []
 	var key := [ts, te, base_key]
-	for m in medium._moves:
+	for m in moves:
 		var d: Dictionary = m
 		if String(d["kind"]) != "wash" or ts + float(d["t0"]) >= te:
 			continue
@@ -1347,6 +1407,8 @@ func _wash_spread_at(plan: Dictionary, i: int, v: float) -> float:
 	return clampf((v - t_out) / WASH_FLATTEN, 0.0, 1.0) * (1.0 - clampf((v - t_in) / 0.6, 0.0, 1.0))
 
 
+# --- what stands on the table -----------------------------------------------------------------
+
 ## [param at] (a card's middle, about the deck's place) moved out from anything standing on the
 ## table, by the least that keeps a card's whole reach clear of it; unchanged when clear.
 func _clear_of_standing(at: Vector2) -> Vector2:
@@ -1402,7 +1464,7 @@ func _card_clear(from: Vector2, want: Vector2, yaw: float) -> Vector2:
 			var c: Vector2 = medium._things_part.standing_c[i]
 			if (p + off).distance_to(c) > medium._things_part.standing_r[i] + reach:
 				continue
-			p += _push_out(_card_poly(p + off, yaw), medium._things_part.standing[i], (p + off) - c)
+			p += _push_out(_card_corners(p + off, yaw), medium._things_part.standing[i], (p + off) - c)
 	# clear of every one at once
 	for round in 4:
 		var clear := true
@@ -1410,7 +1472,7 @@ func _card_clear(from: Vector2, want: Vector2, yaw: float) -> Vector2:
 			var c: Vector2 = medium._things_part.standing_c[i]
 			if (p + off).distance_to(c) > medium._things_part.standing_r[i] + reach:
 				continue
-			var push := _push_out(_card_poly(p + off, yaw), medium._things_part.standing[i], (p + off) - c)
+			var push := _push_out(_card_corners(p + off, yaw), medium._things_part.standing[i], (p + off) - c)
 			if push != Vector2.ZERO:
 				p += push
 				clear = false
@@ -1508,16 +1570,9 @@ func _into_standing(at: Vector2, yaw: float) -> bool:
 	for i in medium._things_part.standing.size():
 		var c: Vector2 = medium._things_part.standing_c[i]
 		if (at + off).distance_to(c) <= medium._things_part.standing_r[i] + reach \
-				and _push_out(_card_poly(at + off, yaw), medium._things_part.standing[i], (at + off) - c) != Vector2.ZERO:
+				and _push_out(_card_corners(at + off, yaw), medium._things_part.standing[i], (at + off) - c) != Vector2.ZERO:
 			return true
 	return false
-
-
-## A card lying at [param at] turned [param yaw]: its four corners (x by z).
-static func _card_poly(at: Vector2, yaw: float) -> PackedVector2Array:
-	var ax := Vector2(cos(yaw), -sin(yaw)) * TableMedium.CARD.x * 0.5
-	var az := Vector2(sin(yaw), cos(yaw)) * TableMedium.CARD.y * 0.5
-	return PackedVector2Array([at - ax - az, at + ax - az, at + ax + az, at - ax + az])
 
 
 ## How far to move convex [param a] along [param dir] so it no longer overlaps convex [param b] -
@@ -1579,6 +1634,8 @@ static func _parted(d: Vector2, v: Vector2, a0: Vector2, a1: Vector2, b0: Vector
 	var rb := h.x * absf(b0.dot(v)) + h.y * absf(b1.dot(v))
 	return absf(d.dot(v)) > ra + rb
 
+
+# --- the wash's plan --------------------------------------------------------------------------
 
 ## THE WASH, planned once and sampled at [constant WASH_HZ] - because it is a SIMULATION, not a
 ## pose: two flat palms work the cloth and drag the cards under them along, and a pose that is a
@@ -2243,6 +2300,8 @@ func _wash_plan(seed: int, dur: float, base: Dictionary = {}, jump: Dictionary =
 		"jumper": jumper, "jumper_flight": jumper_flight}
 
 
+# --- flights and layers, for the plan ---------------------------------------------------------
+
 ## Whether card [param i] is in the air at [param t] in [param flights].
 static func _in_flight(flights: Array, i: int, t: float) -> bool:
 	for f in flights:
@@ -2346,7 +2405,7 @@ func _may_land(i: int, from: Vector2, to: Vector2, yaw: float, up: bool, flights
 	if not _path_clear(from, to):
 		return false
 	var off := Vector2(medium._plan.mid.x, medium._plan.mid.z)
-	var card := _card_poly(to + off, yaw)
+	var card := _card_corners(to + off, yaw)
 	var cloth := Rect2(-CLOTH.x * 0.5 + 0.01, -0.02 - CLOTH.y * 0.5 + 0.01, CLOTH.x - 0.02, CLOTH.y - 0.02)
 	var frame := Rect2(0.1, 0.1, 0.8, 0.8) if up else Rect2(0.03, 0.03, 0.94, 0.94)
 	for c: Vector2 in card:
@@ -2360,7 +2419,7 @@ func _may_land(i: int, from: Vector2, to: Vector2, yaw: float, up: bool, flights
 			return false
 	for f in flights:
 		var fd: Dictionary = f
-		if int(fd["card"]) != i and Geo.within(card, _card_poly((fd["to"] as Vector2) + off, float(fd["lie"])), 0.01):
+		if int(fd["card"]) != i and Geo.within(card, _card_corners((fd["to"] as Vector2) + off, float(fd["lie"])), 0.01):
 			return false
 	return true
 
@@ -2459,6 +2518,8 @@ static func _axes_overlap(d: Vector2, a0: Vector2, a1: Vector2, b0: Vector2, b1:
 			return false
 	return true
 
+
+# --- the hands --------------------------------------------------------------------------------
 
 ## THE HANDS OF A WASH: their own dice - so a wash cut short ([method _wash_fit]) has the same hands
 ## up to where it was cut - and their own FEEL, each wash sampled round the centers ([constant
@@ -2864,14 +2925,3 @@ static func _wash_into(p: Vector2, rx: float, rz: float, k: float) -> Vector2:
 		return p
 	q *= k / l
 	return Vector2(q.x * rx, q.y * rz - 0.01)
-
-
-## A card just landed on the deck in place [param j], not yet squared - slipped as the card landing in
-## place [param like] is, when it came down stuck to it.
-func _messy(j: int, seed: int, like := -1) -> Transform3D:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([seed, j if like < 0 else like, "messy"])
-	var xf := medium._rest_xf(j)
-	xf.origin += Vector3(rng.randf_range(-0.003, 0.003), 0.0, rng.randf_range(-0.003, 0.003))
-	xf.basis = Basis(Vector3.UP, rng.randf_range(-0.07, 0.07)) * xf.basis
-	return xf

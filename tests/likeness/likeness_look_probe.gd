@@ -5,7 +5,7 @@ extends SceneTree
 ##
 ##   xvfb-run -a godot --path . --script tests/likeness/likeness_look_probe.gd -- \
 ##       --actor <an actor's folder> --set <set id> --out <a folder> [--still K] [--seed N] [--take DIR]
-##       [--fps 30] [--width 960]
+##       [--fps 30] [--width 960] [--renderer gaussian]
 ##
 ## WHAT IT WRITES into --out:
 ##   identity.png   the still drawn through its own mesh with nothing moved and no library, beside the
@@ -15,6 +15,9 @@ extends SceneTree
 ##   take/NNNNN.png with --take DIR (a `take.json` of `{duration, phones}`, or a take's sidecar `.json` beside
 ##                  its `.wav`): the medium itself over the take, frame by frame at --fps, --width wide -
 ##                  the head moving, the blinks, the mouth (ffmpeg makes them a film with the take's sound)
+##
+## With `--renderer gaussian` the set's head of splats is drawn (its `avatar/`), and only the take: the identity,
+## the sounds and the eyes are the 2D library's.
 ##
 ## NOT `--headless`: every picture is a rendered frame read back. Nothing is written but --out.
 
@@ -26,6 +29,7 @@ var _seed := 1
 var _take := ""
 var _fps := 30.0
 var _width := 960
+var _renderer := "2d"
 
 
 func _init() -> void:
@@ -47,7 +51,13 @@ func _run() -> void:
 	_take = _arg(args, "--take", "")
 	_fps = float(_arg(args, "--fps", "30"))
 	_width = int(_arg(args, "--width", "960"))
+	_renderer = _arg(args, "--renderer", "2d")
 	DirAccess.make_dir_recursive_absolute(_out)
+	if _renderer != "2d":
+		await _play_take(Vector2i(1920, 1080))
+		print("likeness_look_probe: wrote %s" % _out)
+		quit(0)
+		return
 	var sz := Vector2i(1920, 1080)
 	var m := await _medium(sz)
 	if m == null:
@@ -112,7 +122,7 @@ func _medium(sz: Vector2i) -> LikenessMedium:
 	root.add_child(vp)
 	var m := LikenessMedium.new()
 	m.mount(vp)
-	var err := m.load_set(_actor, _set, _still, _seed)
+	var err := m.load_set(_actor, _set, _still, _seed, _renderer)
 	if not err.is_empty():
 		print("likeness_look_probe: " + err)
 		return null

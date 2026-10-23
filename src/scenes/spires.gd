@@ -68,6 +68,22 @@ var _mode_amp: Array = []        # base amplitude, per mode
 var _mode_pos: Array = []        # spectral position each mode is driven by
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.number]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"density": {"label": "Density", "type": "num", "range": [0.62, 1.0], "default": null,
+		"blurb": "How many of the city's lots hold a spire rather than a plaza or a gap."},
+	"downtown": {"label": "Downtown", "type": "num", "range": [-0.55, 0.9], "default": null,
+		"blurb": "Whether the tall towers ring the edge, spread evenly, or cluster downtown."},
+	"distance": {"label": "Camera distance", "type": "num", "range": [12.5, 16.0], "default": null,
+		"blurb": "How far back the camera stands from the city."},
+	"pitch": {"label": "Camera pitch", "type": "num", "range": [0.48, 0.68], "default": null,
+		"blurb": "How steeply the camera looks down on the city."},
+	"sun_height": {"label": "Sun height", "type": "num", "range": [0.34, 0.5], "default": null,
+		"blurb": "How high the sun stands over the city."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
 	_terrain = Terrain.new()
@@ -87,8 +103,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# to seed - only the noise under them changed. `density` opens plazas and
 	# gaps; `core` decides whether the tall towers cluster downtown (positive),
 	# ring the edge (negative), or spread evenly (near zero).
-	var density := rng.randf_range(0.62, 1.0)
-	var core := rng.randf_range(-0.55, 0.9)
+	var density: float = number("density", rng)
+	var core: float = number("downtown", rng)
 	# The shared profile modes: low modes shape the broad form, higher modes add fine tiers. Each is
 	# pinned to a spectral band, so the whole city's silhouette morphs coherently as the sound shifts.
 	for k in MODES:
@@ -142,13 +158,13 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 				"delay": clampf(t * 0.45 + rng.randf_range(0.0, 0.22), 0.0, 0.62),
 				"grow": 0.0})
 	lens.fov = rng.randf_range(46.0, 56.0)
-	_dist = rng.randf_range(12.5, 16.0)                  # back far enough to read the whole skyline
-	_pitch = rng.randf_range(0.48, 0.68)
+	_dist = number("distance", rng)                  # back far enough to read the whole skyline
+	_pitch = number("pitch", rng)
 	_yaw = rng.randf() * TAU
 	_yaw_dir = 1.0 if rng.randf() < 0.5 else -1.0
 	_light_az = rng.randf() * TAU
 	_light_dir = 1.0 if rng.randf() < 0.5 else -1.0
-	_light_el = rng.randf_range(0.34, 0.5)
+	_light_el = number("sun_height", rng)
 	_terrain.set_light(_light_az, _light_el)
 	return {"type": ttype, "palette": _palette_name}
 

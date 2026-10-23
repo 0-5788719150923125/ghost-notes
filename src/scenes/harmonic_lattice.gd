@@ -38,13 +38,23 @@ var _ch := Vector2.ZERO            # live tonal color (hue, strength) from the h
 var _sig := PackedFloat32Array()   # the 12 chroma channels + coarse shape (continuous)
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"density": {"label": "Density", "type": "choice", "options": "DENSITIES", "default": null,
 		"blurb": "How finely the field is divided: a few big coarse panels, a medium grid, or a fine mesh."},
 	"cell": {"label": "Cell", "type": "choice", "options": "FORMS", "default": null,
 		"blurb": "The shape of each cell: a square, a diamond, a triangle, a hexagon or a disc."},
+	"color_flow": {"label": "Color flow", "type": "num", "range": [0.10, 0.40], "default": null,
+		"blurb": "How fast the colors flow across the grid."},
+	"waves": {"label": "Waves", "type": "num", "range": [1.5, 4.0], "default": null,
+		"blurb": "How many waves of brightness cross the grid at once."},
+	"wave_speed": {"label": "Wave speed", "type": "num", "range": [0.5, 2.0], "default": null,
+		"blurb": "How fast the waves of brightness travel across the grid."},
+	"spin": {"label": "Spin", "type": "num", "range": [0.0, 1.0], "default": null,
+		"blurb": "How far each cell turns as it lights up."},
+	"stretch": {"label": "Cell stretch", "type": "num", "range": [0.70, 1.45], "default": null,
+		"blurb": "How stretched each cell is, from tall bars through squares to wide bars."},
 }
 
 
@@ -77,17 +87,17 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"hue_flow": to_accent * rng.randf_range(0.6, 1.6),    # horizontal hue gradient
 		"hue_flow_y": to_accent * rng.randf_range(0.10, 0.60),  # vertical hue gradient
 		"hue_wave": sch.spread * rng.randf_range(0.8, 2.2),   # amplitude of the traveling hue wave
-		"hue_drift": rng.randf_range(0.10, 0.40),    # how fast the whole palette flows
+		"hue_drift": number("color_flow", rng),    # how fast the whole palette flows
 		"sat": sch.sat,
 		"sat_var": sch.sat * rng.randf_range(0.08, 0.28),   # saturation variance across the field
 		"val": 0.75 + 0.30 * sch.val,                # the mood's brightness character
-		"wave_freq": rng.randf_range(1.5, 4.0),
-		"wave_speed": rng.randf_range(0.5, 2.0),
+		"wave_freq": number("waves", rng),
+		"wave_speed": number("wave_speed", rng),
 		"cell_fill": rng.randf_range(float(fr[0]), float(fr[1])),
-		"spin": rng.randf_range(0.0, 1.0),
+		"spin": number("spin", rng),
 		"sides": int(form["sides"]),
 		"turn": float(form["turn"]),
-		"aspect": rng.randf_range(0.70, 1.45),       # stretched cells: bars, not only squares
+		"aspect": number("stretch", rng),       # stretched cells: bars, not only squares
 	}
 
 

@@ -68,11 +68,13 @@ const SNOWS := {
 }
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"snow": {"label": "Snow", "type": "choice", "options": "SNOWS", "default": null,
 		"blurb": "What kind of snow falls: fine powder, a flurry of fat slow flakes, a blizzard, or a sparse hoar frost of real crystals."},
+	"whiteout": {"label": "Whiteout", "type": "num", "range": [0.35, 0.55], "default": null,
+		"blurb": "How close a blizzard's veil comes to a whiteout at its thickest, when there is one."},
 }
 
 
@@ -119,7 +121,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	if rng.randf() < float(s["veil"]):
 		add_layer("veil", rng, {
 			"hue": sch.hue, "sat": clampf(sch.sat * 0.12, 0.01, 0.2), "val": 1.0,
-			"floor": 0.08, "gain": 0.9, "max": rng.randf_range(0.35, 0.55),
+			"floor": 0.08, "gain": 0.9, "max": number("whiteout", rng),
 		})
 	return {"hue": sch.hue, "mood": sch.name, "snow": kind, "count": count, "crystal": crystal}
 

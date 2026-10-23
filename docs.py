@@ -634,6 +634,9 @@ ENGINE_FLAGS = {
     "--sheets",
     "--threshold",
     "--stills",
+    # hosts/avatar/rig.py's (the Actor card's Face rig step): arguments to a subprocess.
+    "--frames",
+    "--poses",
     # yt-dlp's, as the Actor card lists and fetches a link's videos and captions.
     "--flat-playlist",
     "--no-warnings",
@@ -1100,10 +1103,15 @@ def _render_scene_entry(name: str, info: SceneInfo) -> List[str]:
     text = (ROOT / s.rel).read_text()
     fields = _rows(text, "FIELDS")
     if fields:
-        # WHAT AN ENTRY CAN TELL IT (GhostScene.choice): its settings, each the seed's until told
-        out.extend(["An entry can tell it, under `set` (unset, the seed draws one):", "",
-                    "| Setting | Options | What it chooses |", "| --- | --- | --- |"])
+        # WHAT AN ENTRY CAN TELL IT (GhostScene.choice, number): its settings, each the seed's until told
+        out.extend(["An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a "
+                    "narrower range, `[lo, hi]`):", "",
+                    "| Setting | Options | What it sets |", "| --- | --- | --- |"])
         for k, row in fields.items():
+            if row.get("type") == "num":
+                lo, hi = (row.get("range") or [None, None])[:2]
+                out.append(f"| `{k}` {row.get('label', '')} | `{lo}` to `{hi}` | {_md(str(row.get('blurb', '')))} |")
+                continue
             opts = _table_options(text, str(row.get("options", "")))
             names = _table_options(text, str(row.get("names", ""))) if row.get("names") else []
             shown = []
@@ -2780,25 +2788,40 @@ def _field_problems(bodies: Dict[str, str], registry: List[Tuple[str, str]], bas
 
 def _scene_field_problems(text: str, name: str) -> List[str]:
     """What is wrong between a scene's FIELDS and the settings it takes from an entry
-    ([method GhostScene.choice], step 27): a setting chosen with no row, a row nothing chooses, a row
-    whose `options` (or `names`) names no table of the scene, and a default (a choice is the seed's
-    until it is told). Pure, so its control runs on a made-up scene."""
+    ([method GhostScene.choice] and [method GhostScene.number], steps 27 and 28): a setting chosen or numbered
+    with no row of its type, a row nothing reads, a choice whose `options` (or `names`) names no table
+    of the scene, a number whose `range` is not two numbers low to high, and a default (a setting is
+    the seed's until it is told). Pure, so its control runs on a made-up scene."""
     out = []
     code = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))
-    chosen = set(re.findall(r'\bchoice\("(\w+)"', code))
+    reads = {"choice": set(re.findall(r'\bchoice\("(\w+)"', code)),
+             "num": set(re.findall(r'(?<![\w.])number\("(\w+)"', code))}
     fields = _rows(text, "FIELDS")
     tables = set(re.findall(r"^const (\w+)\b", text, re.M))
-    for k in sorted(chosen - set(fields)):
-        out.append(f"{name} chooses `{k}` and its FIELDS has no row for it")
+    for kind, verb in (("choice", "chooses"), ("num", "numbers")):
+        for k in sorted(reads[kind]):
+            if k not in fields:
+                out.append(f"{name} {verb} `{k}` and its FIELDS has no row for it")
+            elif fields[k].get("type") != kind:
+                out.append(f"{name}.FIELDS `{k}` is a {fields[k].get('type')}, and the code reads a {kind}")
     for k, row in fields.items():
-        if k not in chosen:
-            out.append(f"{name}.FIELDS has `{k}`, which its code never chooses")
-        for part in ("options", "names"):
-            v = row.get(part)
-            if (part == "options" or v is not None) and (not isinstance(v, str) or v not in tables):
-                out.append(f"{name}.FIELDS `{k}`: its {part} name `{v}`, which is no table of the scene")
+        kind = row.get("type")
+        if kind not in reads:
+            out.append(f"{name}.FIELDS `{k}` is a {kind!r}: a scene's setting is a choice or a num")
+            continue
+        if k not in reads[kind]:
+            out.append(f"{name}.FIELDS has `{k}`, which its code never reads")
+        if kind == "choice":
+            for part in ("options", "names"):
+                v = row.get(part)
+                if (part == "options" or v is not None) and (not isinstance(v, str) or v not in tables):
+                    out.append(f"{name}.FIELDS `{k}`: its {part} name `{v}`, which is no table of the scene")
+        else:
+            r = row.get("range")
+            if not (isinstance(r, list) and len(r) == 2 and all(isinstance(x, (int, float)) for x in r) and r[0] < r[1]):
+                out.append(f"{name}.FIELDS `{k}`: its range {r!r} is not two numbers, low to high")
         if row.get("default") is not None:
-            out.append(f"{name}.FIELDS `{k}` defaults to {row.get('default')!r} - a choice is the seed's until told")
+            out.append(f"{name}.FIELDS `{k}` defaults to {row.get('default')!r} - a setting is the seed's until told")
     return out
 
 
@@ -2862,7 +2885,8 @@ def check_fields() -> None:
 
     THE CONTROL, run first: a made-up class that reads a setting its FIELDS lacks, and one whose row
     has the wrong default, must each be reported; and a made-up scene that chooses a setting with no
-    row, and one whose row names no table of it.
+    row, one whose row names no table of it, and one that numbers a setting with no row and has a
+    range high to low.
     """
     planted = {"A": 'func _init():\n\tvar n := num("count", 3)\n',
                "B": 'const FIELDS := {"count": {"type": "num", "default": 4}}\nfunc _init():\n\tvar n := num("count", 3)\n'}
@@ -2871,7 +2895,10 @@ def check_fields() -> None:
     scene_a = 'const KINDS := ["a", "b"]\nfunc build_params(rng):\n\tvar k = choice("kind", rng)\n'
     scene_b = ('const FIELDS := {"kind": {"label": "Kind", "type": "choice", "options": "SORTS", "default": null, '
                '"blurb": "x"}}\nconst KINDS := ["a"]\nfunc build_params(rng):\n\tvar k = choice("kind", rng)\n')
-    if len(_scene_field_problems(scene_a, "a")) != 1 or len(_scene_field_problems(scene_b, "b")) != 1:
+    scene_c = ('const FIELDS := {"size": {"label": "Size", "type": "num", "range": [2.0, 1.0], "default": null, '
+               '"blurb": "x"}}\nfunc build_params(rng):\n\tvar s = number("size", rng)\n\tvar r = number("rim", rng)\n')
+    if len(_scene_field_problems(scene_a, "a")) != 1 or len(_scene_field_problems(scene_b, "b")) != 1 \
+            or len(_scene_field_problems(scene_c, "c")) != 2:
         warn("check_fields: its scenes' control did not fail - the check proves nothing")
     for rel, base in [("src/scene_kit/layer.gd", "Base"), ("src/motion/primitives.gd", "Force")]:
         text = (ROOT / rel).read_text()

@@ -17,11 +17,17 @@ const FORMS := {
 }
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"form": {"label": "Form", "type": "choice", "options": "FORMS", "default": null,
 		"blurb": "How the curtain hangs: a couple of slow broad drapes, many fine ribbons, or a doubled curtain with a second set behind on the accent hue."},
+	"night": {"label": "Night brightness", "type": "num", "range": [0.05, 0.12], "default": null,
+		"blurb": "How bright the dark night sky behind the curtains is."},
+	"stars": {"label": "Stars", "type": "num", "range": [60, 220], "default": null,
+		"blurb": "How many stars fill the night sky behind the curtains."},
+	"back_ribbons": {"label": "Back ribbons", "type": "num", "range": [2, 3], "default": null,
+		"blurb": "How many ribbons hang in the second curtain behind, when the curtain is doubled."},
 }
 
 
@@ -43,10 +49,10 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	add_layer("bed", rng, {
 		"hue": bed_hue,
 		"sat": sch.sat * rng.randf_range(0.5, 0.9),
-		"val": rng.randf_range(0.05, 0.12),
+		"val": number("night", rng),
 		"pools": rng.randi_range(2, 4),
 	})
-	add_layer("stars", rng, {"hue": sch.accent, "count": rng.randi_range(60, 220)})
+	add_layer("stars", rng, {"hue": sch.accent, "count": number("stars", rng)})
 	add_layer("aurora", rng, {
 		"hue": sch.hue,
 		"sat": rng.randf_range(float(sat_r[0]), float(sat_r[1])),
@@ -57,7 +63,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		add_layer("aurora", rng, {
 			"hue": sch.accent,
 			"sat": rng.randf_range(float(sat_r[0]), float(sat_r[1])) * 0.8,
-			"count": rng.randi_range(2, 3),
+			"count": number("back_ribbons", rng),
 		})
 	return {"hue": sch.hue, "mood": sch.name, "form": form, "bed": "accent" if answered else "opposed"}
 

@@ -55,6 +55,8 @@ It is also simply correct. A comic panel IS a held moment; the page is a sequenc
 
 THE SPREAD IS REALLY IN 3D. Not a sheared 2D plane faking depth - two quads placed in a world and projected through a `Lens3D`, free to rotate on X, Y and Z at once. Panels are drawn as SUBDIVIDED grids of textured triangles whose vertices are each projected individually, because a two-triangle quad is affinely textured and warps: measured at a hard yaw, the seam of a two-tone test texture landed 28.5 px away from where perspective puts it, on a 512 px frame.
 
+THE CAMERA IS A PART OF ITS OWN, `ComicCamera`: the shots, the follower and the lens this draws through. What is here is the BOOK - the spread, its plan, its cast and its panels' render targets - and the drawing; where a point lies on the sheet is `ComicSpread`'s.
+
 Source: [src/media/comic.gd](../src/media/comic.gd)
 
 ## `book` - Novel

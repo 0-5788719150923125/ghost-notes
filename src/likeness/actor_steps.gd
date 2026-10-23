@@ -14,8 +14,10 @@ class_name ActorSteps
 ##             (ghost itself), "agent" (a writer shown pictures) or "train" (on the graphics card,
 ##             hosts/voice_train/train.py - a lane of its own, beside the processor's)
 ##   env       what it runs on that ghost installs, as [Deps] keys
-##   voice     a step of their own voice (next/likeness.md, "Their own voice"): moot on a machine that
-##             cannot train one ([method ActorFolder.can_train_voice])
+##   voice     a step of their own voice (next/likeness.md, "Their own voice"): on a machine that cannot
+##             train one ([method ActorBuilder.cannot_train]) it is left alone and its row says why
+##   renderer  the one renderer it is made for ([constant RENDERERS]), absent when both play from it: the
+##             Actor card shows and makes the note's renderer's steps alone
 ##   outputs   the files it makes, in its folder: the video's, the actor's or the set's
 ##   settings  the [constant SETTINGS] it is made under: one changed makes it stale
 ##   version   bumped when what the step makes changes, which makes every one made before stale
@@ -57,7 +59,7 @@ const REGISTRY := {
 		"outputs": ["visemes.json"], "settings": [], "version": 2,
 		"blurb": "Their mouth for each sound, from every video: from the captions' words turned into sounds, where they give enough of a sound, else from their own range."},
 	"learn": {"label": "Learn", "per": "actor", "needs": ["audit", "words"], "runs": "python", "env": ["face_venv"],
-		"outputs": ["mouth_model.json"], "settings": [], "version": 1,
+		"outputs": ["mouth_model.json"], "settings": [], "version": 1, "renderer": "2d",
 		"blurb": "Learns their mouth for the voice's sounds from every video: an ensemble of small networks, from the sounds heard round a moment to their mouth then, trained on every look near their words - and says how much of their mouth it explains on a video it never saw. A minute or two."},
 	"motion": {"label": "Motion", "per": "actor", "needs": ["audit"], "runs": "python", "env": ["face_venv"],
 		"outputs": ["motion.json"], "settings": [], "version": 3,
@@ -72,7 +74,7 @@ const REGISTRY := {
 		"outputs": ["rig.json", "mask_mouth.png", "mask_eyes.png"], "settings": [], "version": 4,
 		"blurb": "The mesh on each still and its skeleton: their face, the rings round it, their body from their pose and silhouette - the torso, the shoulders, each arm's upper arm, forearm and hand - the frame's edge, each vertex weighed to the bones it moves with; and the masks where their mouth and eyes are drawn."},
 	"library": {"label": "Library", "per": "set", "needs": ["rig", "visemes"], "runs": "python", "env": ["ffmpeg", "face_venv"],
-		"outputs": ["library.json", "library"], "settings": ["articulation"], "version": 2,
+		"outputs": ["library.json", "library"], "settings": ["articulation"], "version": 2, "renderer": "2d",
 		"blurb": "A few clean real mouths for each sound and their eyes half and fully closed and glancing aside, from any video, turned as the still is, matched to the still's colors - each a real frame, never an average. A few minutes."},
 
 	"hear": {"label": "Hear", "per": "video", "needs": ["probe"], "runs": "python", "env": ["ffmpeg", "speech_venv"],
@@ -85,6 +87,27 @@ const REGISTRY := {
 	"voice": {"label": "Voice", "per": "actor", "needs": ["utterances"], "runs": "train", "env": ["voice_train_venv"],
 		"outputs": ["voice.json", "voice"], "settings": ["voice_epochs"], "version": 1, "voice": true,
 		"blurb": "Teaches a voice to speak as they do: a public-domain voice fine-tuned on their sentences on the graphics card - an hour or more, beside the other steps - then offered on the Voice card under their name. Stop keeps what it has learned, and ▶ goes on from there."},
+
+	# A HEAD OF SPLATS (next/likeness.md, "A head of splats"): the set's frames, the face they show, and the
+	# head learned from them
+	"frames": {"label": "Frames", "per": "set", "needs": ["stills"], "runs": "python", "env": ["ffmpeg", "face_venv"],
+		"outputs": ["avatar/frames.npz", "avatar/img", "avatar/mask"], "settings": [], "version": 1, "renderer": "gaussian",
+		"blurb": "Reads the set's longest shot twice a second at full resolution, cropped round their head: their face's points and expressions in every frame, and where they are. About a third of the shot's length."},
+	"face": {"label": "Face rig", "per": "set", "needs": ["frames"], "runs": "python", "env": ["face_venv"],
+		"outputs": ["avatar/rig.npz", "avatar/poses.json"], "settings": [], "version": 1, "renderer": "gaussian",
+		"blurb": "Learns their face from the frames: their neutral face, each frame's head pose, and how each of MediaPipe's 52 expressions moves every point of it - what the head is played from. Seconds."},
+	"avatar": {"label": "Avatar", "per": "set", "needs": ["face"], "runs": "train", "env": ["voice_train_venv"],
+		"outputs": ["avatar/avatar.json", "avatar/avatar.bin"], "settings": ["avatar_steps"], "version": 1,
+		"renderer": "gaussian",
+		"blurb": "Learns their head as Gaussian splats bound to their face, from the frames, on the graphics card: hair, beard and skin as they look, moved by their face's expressions. Twenty minutes or so."},
+}
+
+## THE RENDERERS an actor is played with (the note's `renderer`): what each needs of an actor to play them.
+const RENDERERS := {
+	"2d": {"label": "2D", "plays": ["motion", "stills", "rig", "library"],
+		"blurb": "Their still, warped: the head turned through its points, the mouth and eyes drawn from real frames of theirs for each sound."},
+	"gaussian": {"label": "Gaussian", "plays": ["motion", "visemes", "stills", "rig", "avatar"],
+		"blurb": "Their head as 3D Gaussian splats learned from the set's frames, moved by their face's expressions - their body and room the still's."},
 }
 
 ## THE SETTINGS an actor is built under, on the card's Advanced fold: each a row, as a layer's FIELDS
@@ -99,17 +122,44 @@ const SETTINGS := {
 	"listen_minutes": {"label": "Listen", "type": "float", "default": 20.0, "min": 2.0, "max": 120.0, "step": 1.0,
 		"blurb": "The most minutes of each video Transcribe listens to (where it has no captions): enough of their speech to learn their mouth for every sound."},
 	"articulation": {"label": "Articulation", "type": "float", "default": 2.0, "min": 1.0, "max": 3.0, "step": 0.1,
-		"blurb": "How much clearer than their own each sound's mouth is: their mouth is mostly near closed while they talk, so their own shapes read as nothing on a still. 1 is as they are."},
+		"blurb": "How much clearer than their own each sound's mouth is: their mouth is mostly near closed while they talk, so their own shapes read as nothing on a still. 1 is as they are. Both renderers play it: the 2D library's mouths, the head of splats' sounds."},
 	"voice_epochs": {"label": "Voice lessons", "type": "int", "default": 150, "min": 20, "max": 1000, "step": 10,
 		"blurb": "How many times their voice hears every sentence of theirs while it learns. More is closer to them and longer on the graphics card (about 25 seconds each, an hour of their speech); raised after it is made, ▶ goes on from where it stopped."},
+	"avatar_steps": {"label": "Avatar steps", "type": "int", "default": 30000, "min": 3000, "max": 100000, "step": 1000,
+		"renderer": "gaussian",
+		"blurb": "How many frames the head of splats is shown while it learns, one at a time: more is sharper and longer on the graphics card (about 40 ms each)."},
 }
 
 ## The order steps are made in.
 const ORDER := ["fetch", "captions", "probe", "survey", "shots", "sets", "audit", "transcribe", "words", "visemes",
-	"learn", "motion", "stills", "rest", "rig", "library", "hear", "utterances", "voice"]
+	"learn", "motion", "stills", "rest", "rig", "library", "frames", "face", "avatar", "hear", "utterances", "voice"]
 
-## WHAT THE LIKENESS NEEDS OF AN ACTOR TO PLAY THEM: the chosen set's steps and the actor's own.
-const PLAYS := ["motion", "stills", "rig", "library"]
+
+## WHAT [param renderer] NEEDS OF AN ACTOR TO PLAY THEM: the chosen set's steps and the actor's own.
+static func plays(renderer: String) -> Array:
+	return Registry.field(RENDERERS, renderer if RENDERERS.has(renderer) else "2d", "plays", []) as Array
+
+
+## The renderer [param step] is made for, "" when every renderer plays from it.
+static func renderer_of(step: String) -> String:
+	return String(Registry.field(REGISTRY, step, "renderer", ""))
+
+
+## Is [param step] one [param renderer] is played from, or made from?
+static func serves(step: String, renderer: String) -> bool:
+	var r := renderer_of(step)
+	return r.is_empty() or r == renderer
+
+
+## Is [param setting] one of [param renderer]'s (or every renderer's)?
+static func setting_serves(setting: String, renderer: String) -> bool:
+	var r := String(Registry.field(SETTINGS, setting, "renderer", ""))
+	return r.is_empty() or r == renderer
+
+
+## Is [param step] taught on the graphics card, or made only for one that is - their voice, a head of splats?
+static func trains(step: String) -> bool:
+	return is_voice(step) or renderer_of(step) == "gaussian"
 
 
 static func per(step: String) -> String:

@@ -26,18 +26,28 @@ var _fog_col := Color(0.66, 0.70, 0.78)
 const TYPES := ["hills", "mountains", "valleys", "canyon", "islands", "mesa"]
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"landform": {"label": "Landform", "type": "choice", "options": "TYPES", "default": null,
 		"blurb": "Which landform is built: rolling hills, ridged mountains, river valleys, a fissured canyon, ocean islands, or a banded mesa."},
+	"relief": {"label": "Relief", "type": "num", "range": [1.1, 1.9], "default": null,
+		"blurb": "How tall the land's peaks rise above its valleys."},
+	"distance": {"label": "Camera distance", "type": "num", "range": [5.4, 7.2], "default": null,
+		"blurb": "How far from the land the camera orbits."},
+	"pitch": {"label": "Camera pitch", "type": "num", "range": [0.30, 0.52], "default": null,
+		"blurb": "How steeply the camera looks down on the land."},
+	"orbit_speed": {"label": "Orbit speed", "type": "num", "range": [0.05, 0.14], "default": null,
+		"blurb": "How fast the camera circles the land."},
+	"sun_height": {"label": "Sun height", "type": "num", "range": [0.32, 0.52], "default": null,
+		"blurb": "How high the sun stands; a low sun casts long shadows."},
 }
 
 
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	framing = "field"
 	var ttype: String = choice("landform", rng)
-	var relief := rng.randf_range(1.1, 1.9)
+	var relief: float = number("relief", rng)
 	# Mostly a natural biome (green lowland, brown/gray rock, snow peaks, blue water),
 	# biased by terrain type; sometimes a surreal palette (volcanic / alien) for variety.
 	var climate := ""
@@ -56,16 +66,16 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_terrain.build(rng, ttype, 4.0, relief, pal, climate)
 	# Sampled camera (never the same flyover twice).
 	lens.fov = rng.randf_range(50.0, 62.0)
-	_dist = rng.randf_range(5.4, 7.2)
-	_pitch = rng.randf_range(0.30, 0.52)
+	_dist = number("distance", rng)
+	_pitch = number("pitch", rng)
 	_yaw = rng.randf() * TAU
 	_yaw_dir = 1.0 if rng.randf() < 0.5 else -1.0
-	_yaw_speed = rng.randf_range(0.05, 0.14)
+	_yaw_speed = number("orbit_speed", rng)
 	# A low key light (long shadows) whose azimuth drifts slowly, so the mountains' cast shadows
 	# gently sweep across the land as it moves.
 	_light_az = rng.randf() * TAU
 	_light_dir = 1.0 if rng.randf() < 0.5 else -1.0
-	_light_el = rng.randf_range(0.32, 0.52)
+	_light_el = number("sun_height", rng)
 	_terrain.set_light(_light_az, _light_el)
 	_seed_atmosphere(rng, climate)
 	return {"type": ttype, "climate": climate, "surreal": pal != null}

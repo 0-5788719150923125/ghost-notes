@@ -167,7 +167,8 @@ static func script_of(name: String) -> Script:
 
 ## WHAT THE SCENE [param name] CAN BE TOLD, as rows a form builds from ([SchemaForm]): each of its
 ## settings ([method GhostScene.fields_of]) a pick among its options by name, the first of them ("")
-## leaving it to the seed. What the storyboard's inspector shows under an entry, written into its `set`.
+## leaving it to the seed - or, for a rolled number, a number or a narrower range, its own range shown
+## while it is unset. What the storyboard's inspector shows under an entry, written into its `set`.
 static func fields_of(name: String) -> Dictionary:
 	var script := script_of(name)
 	if script == null:
@@ -176,6 +177,11 @@ static func fields_of(name: String) -> Dictionary:
 	var fields := GhostScene.fields_of(script)
 	for key in fields:
 		var row: Dictionary = fields[key]
+		if String(row.get("type", "")) == "num":
+			var r: Array = row.get("range", [])
+			out[key] = {"label": row["label"], "type": "num", "default": r,
+				"blurb": String(row["blurb"]) + " A number or a narrower range (lo..hi); unset, the seed draws one from %s..%s." % [str(r[0]), str(r[1])]}
+			continue
 		var names := GhostScene.table_of(script, String(row.get("names", "")))
 		var shown: Array = [""]
 		for o in GhostScene.options_of(script, String(key)):

@@ -139,6 +139,22 @@ var _ext := Vector3(0.78, 0.44, 0.60)
 var _since_tick := 0.0
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.number]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"horizon": {"label": "Horizon", "type": "num", "range": [0.60, 0.93], "default": null,
+		"blurb": "How low in the frame the horizon sits."},
+	"birds": {"label": "Birds", "type": "num", "range": [900, 2400], "default": null,
+		"blurb": "How many birds are in the flock."},
+	"bird_speed": {"label": "Bird speed", "type": "num", "range": [0.10, 0.16], "default": null,
+		"blurb": "How fast the birds fly."},
+	"hawk_gap": {"label": "Hawk gap", "type": "num", "range": [6.0, 16.0], "default": null,
+		"blurb": "The fewest seconds between one hawk attack on the flock and the next."},
+	"bird_size": {"label": "Bird size", "type": "num", "range": [0.007, 0.014], "default": null,
+		"blurb": "How large each bird is."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "particles"
 	framing = "field"
@@ -148,7 +164,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_sky_hue_top = sch.opposed(sch.hue, 0.06)
 	# The horizon sits LOW, always: the subject is the sky and the flock in it, and a
 	# horizon near the middle turns the picture into a landscape with birds over it.
-	_horizon = rng.randf_range(0.60, 0.93)
+	_horizon = number("horizon", rng)
 	_horizon_val = rng.randf_range(0.76, 0.97)
 	_horizon_sat = rng.randf_range(0.04, 0.16)
 	# Sampled as a FRACTION of the horizon rather than freely, so the sky deepens upward
@@ -171,7 +187,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_dist = rng.randf_range(1.55, 2.35)
 	_eye_lift = rng.randf_range(-0.04, 0.20)
 
-	var count := rng.randi_range(900, 2400)
+	var count: int = number("birds", rng)
 	_flock = Boids.new()
 	_flock.ext = _ext
 	# THE WALLS HAVE TO BE ABLE TO MOVE OUT. `_ext` is seeded, and a seeded box has no idea where
@@ -195,7 +211,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# allowed to have.
 	_flock.scan_cap = _flock.k_cap + rng.randi_range(8, 16)
 	_flock.query_stride = 2 if count > 1600 else rng.randi_range(1, 2)
-	_flock.speed_min = rng.randf_range(0.10, 0.16)
+	_flock.speed_min = number("bird_speed", rng)
 	_flock.speed_max = _flock.speed_min + rng.randf_range(0.10, 0.24)
 	_flock.accel_max = rng.randf_range(0.9, 2.2)
 	_flock.alarm_tau = rng.randf_range(0.7, 1.6)
@@ -245,7 +261,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 
 	# --- the hawk ---------------------------------------------------------------------
 	_hawk_present = rng.randf() < 0.7
-	_hawk_cad = rng.randf_range(6.0, 16.0)
+	_hawk_cad = number("hawk_gap", rng)
 	_hawk_speed = rng.randf_range(0.45, 0.95)
 	_flock.hawk_radius = rng.randf_range(0.07, 0.15)
 	_flock.hawk_push = rng.randf_range(4.5, 10.0)
@@ -309,7 +325,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 			"hue": sch.accent, "alpha": rng.randf_range(0.03, 0.08)})
 
 	# --- the silhouette -----------------------------------------------------------------
-	var body := rng.randf_range(0.007, 0.014)
+	var body: float = number("bird_size", rng)
 	var span := body * rng.randf_range(1.5, 2.6)
 	var flap_amp := rng.randf_range(0.5, 1.1)
 

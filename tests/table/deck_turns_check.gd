@@ -151,7 +151,7 @@ func _chains() -> void:
 		var moves: Array
 		if s == 1:
 			# a wash in the chain: spread, mixed and gathered, then a cut, an overhand pass, a riffle
-			medium._moves = [
+			medium._shuffles.moves = [
 				{"kind": "wash", "t0": 0.3, "dur": 26.0, "pause": 3.0, "seed": 4321, "plan": medium._shuffles._wash_plan(4321, 26.0)},
 				{"kind": "cut", "t0": 29.3, "dur": 1.7, "pause": 3.0, "seed": 5},
 				{"kind": "overhand", "t0": 34.0, "dur": 2.6, "pause": 3.0, "seed": 9},
@@ -159,7 +159,7 @@ func _chains() -> void:
 				{"kind": "cut", "t0": 45.0, "dur": 1.7, "pause": 1000.0, "seed": 11}]
 		else:
 			medium._plan_moves()
-		moves = medium._moves
+		moves = medium._shuffles.moves
 		medium._now = te - 0.5
 		medium._pose(te - 0.5)     # the room the shuffle has
 		var last_top := -1
@@ -268,7 +268,7 @@ func _finished() -> void:
 			var ts: float = r["ts"]
 			var te: float = r["te"]
 			var dur := 2.4
-			medium._moves = [{"kind": kind, "t0": te - ts - dur * into, "dur": dur, "pause": 1000.0, "seed": 17 + n}]
+			medium._shuffles.moves = [{"kind": kind, "t0": te - ts - dur * into, "dur": dur, "pause": 1000.0, "seed": 17 + n}]
 			n += 1
 			var t := te - 0.05
 			medium._now = t
@@ -284,7 +284,7 @@ func _finished() -> void:
 				passes[kind] = int(passes[kind]) + _passes(prev, now)
 				prev = now
 			# the rest of the move at its own pace
-			var m: Dictionary = medium._moves[0]
+			var m: Dictionary = medium._shuffles.moves[0]
 			var v := te - ts - float(m["t0"])
 			var walked: Array = []
 			while v < dur - dt * 1.5:

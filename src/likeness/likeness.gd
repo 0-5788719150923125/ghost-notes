@@ -59,6 +59,34 @@ var _mask_eyes: ImageTexture = null
 ## loaded again.
 var _loaded := ""
 var _placeholder: GhostScene
+## A HEAD OF SPLATS (the note's renderer "gaussian": [SplatHead], next/likeness.md "A head of splats"): drawn
+## over their body, under what stands before them, from the set's avatar; the 2D mouth and eyes are not drawn.
+var _renderer := "2d"
+var _splat_layer: Node2D
+var _splat: SplatHead = null
+var _splat_crop := Vector2.ZERO
+var _class_scores := {}               # sound class -> the 52 scores of their mouth for it
+var _mouth_scores := PackedInt32Array()   # which of the 52 a sound sets
+var _still_scores := PackedFloat32Array()
+var _still_scale := 1.0
+var _still_rot := Basis.IDENTITY
+var _still_shift := Vector3.ZERO
+var _shut := Vector2(0.8, 0.8)
+var _head_cut: ImageTexture = null
+## The faces the player mixes, made once ([method SplatHead.face_of]): the still's, each sound's (its mouth
+## pushed past their own), and the still's with the lids shut.
+var _still_face := PackedFloat32Array()
+var _class_faces := {}
+var _shut_face := PackedFloat32Array()
+var _look_faces := {}                 # glance -> the still's face looking that way (the Face rig's `looks`)
+## ...and each one's expression, for the splats' own shifts ([method SplatHead.expr_of]), mixed alike.
+var _still_expr := PackedFloat32Array()
+var _class_exprs := {}
+var _shut_expr := PackedFloat32Array()
+var _look_exprs := {}
+## How far past their own each sound's mouth is played (their mouth scarcely moves while they talk: a
+## still's mouth shapes read as nothing): the actor's Articulation setting, as the 2D library's.
+var _push := 2.0
 
 
 ## One drawing of the mesh: the still, read through it.
@@ -110,6 +138,8 @@ func mount(st: SubViewport) -> void:
 	mat.shader = SHADER
 	_layer.material = mat
 	add_child(_layer)
+	_splat_layer = Node2D.new()
+	add_child(_splat_layer)
 	_front = Room.new()
 	add_child(_front)
 	_note = Label.new()
@@ -162,7 +192,7 @@ func on_stage_resized(sz: Vector2) -> void:
 	_back.queue_redraw()
 	var src := _face.size if _ready_set else Vector2(1920, 1080)
 	var k := minf(sz.x / src.x, sz.y / src.y)
-	for n in [_room, _layer, _front]:
+	for n in [_room, _layer, _splat_layer, _front]:
 		(n as Node2D).scale = Vector2(k, k)
 		(n as Node2D).position = (sz - src * k) * 0.5
 	_note.position = Vector2(sz.x * 0.1, sz.y * 0.3)
@@ -213,33 +243,38 @@ func _ensure_doc() -> void:
 	var src := String(d.get("source", ""))
 	var start: PackedStringArray = d.get("start_words", PackedStringArray()) \
 		if d.get("start_words") is PackedStringArray else PackedStringArray()
-	var key := "%s|%s|%d|%d|%d|%s" % [String(lk.get("dir", "")), String(lk.get("set", "")), int(lk.get("still", 0)),
-		int(lk.get("seed", 1)), src.hash(), " ".join(start)]
+	var key := "%s|%s|%d|%d|%d|%s|%s" % [String(lk.get("dir", "")), String(lk.get("set", "")), int(lk.get("still", 0)),
+		int(lk.get("seed", 1)), src.hash(), " ".join(start), String(lk.get("renderer", "2d"))]
 	if key == _doc_key:
 		return
 	_doc_key = key
-	var err := load_set(String(lk.get("dir", "")), String(lk.get("set", "")), int(lk.get("still", 0)), int(lk.get("seed", 1)))
+	var err := load_set(String(lk.get("dir", "")), String(lk.get("set", "")), int(lk.get("still", 0)), int(lk.get("seed", 1)),
+		String(lk.get("renderer", "2d")))
 	_ready_set = err.is_empty()
 	_why = err
 	load_text(src, start, int(d.get("start_index", -1)))
 
 
-## LOAD THE SET [param sid] of the actor in [param dir], drawn on its still [param still]: "" when it can
-## be played, else why not. Public for a probe, which hands it one by hand.
-func load_set(dir: String, sid: String, still: int, seed_in: int) -> String:
+## LOAD THE SET [param sid] of the actor in [param dir], drawn on its still [param still] by [param renderer]: ""
+## when it can be played, else why not. Public for a probe, which hands it one by hand.
+func load_set(dir: String, sid: String, still: int, seed_in: int, renderer := "2d") -> String:
 	if dir.is_empty() or sid.is_empty():
 		return "This Likeness has no actor to play yet: build one on the Actor card."
 	var sd := dir.path_join("sets").path_join(sid)
 	var st: Variant = ActorFolder.read_json(sd.path_join("stills.json"))
 	var stills: Array = (st as Dictionary).get("stills", []) if st is Dictionary else []
-	if stills.is_empty() or not FileAccess.file_exists(sd.path_join("library.json")):
+	var splats := renderer == "gaussian"
+	var avatar := sd.path_join("avatar").path_join("avatar")
+	if stills.is_empty() or not FileAccess.file_exists(avatar + ".json" if splats else sd.path_join("library.json")):
 		return "The actor's set in use is not built yet: Generate on the Actor card builds it."
 	var k := clampi(still, 0, stills.size() - 1)
-	var made := "%s|%d|%d|%d|%d" % [sd, k, FileAccess.get_modified_time(sd.path_join("rig.json")),
-		FileAccess.get_modified_time(sd.path_join("library.json")), FileAccess.get_modified_time(sd.path_join("stills.json"))]
+	var made := "%s|%d|%d|%d|%d|%s|%d" % [sd, k, FileAccess.get_modified_time(sd.path_join("rig.json")),
+		FileAccess.get_modified_time(sd.path_join("library.json")), FileAccess.get_modified_time(sd.path_join("stills.json")),
+		renderer, FileAccess.get_modified_time(avatar + ".bin")]
 	if made != _loaded:
 		_loaded = ""
-		var err := _face.load_set(sd.path_join("rig.json"), sd.path_join("library.json"))
+		_renderer = renderer
+		var err := _face.load_set(sd.path_join("rig.json"), sd.path_join("library.json"), not splats)
 		if not err.is_empty():
 			return "The actor is not ready: %s. Generate on the Actor card builds it." % err
 		_face.set_still(stills[k], k)
@@ -264,6 +299,9 @@ func load_set(dir: String, sid: String, still: int, seed_in: int) -> String:
 		_mask_mouth = _mask(_face.mask_mouth)
 		_mask_eyes = _mask(_face.mask_eyes)
 		_load_library()
+		var e3 := _load_splat(sd, dir, k) if splats else _drop_splat()
+		if not e3.is_empty():
+			return e3
 		_loaded = made
 	var err2 := _plan.setup(dir.path_join("motion.json"), _face, seed_in)
 	if not err2.is_empty():
@@ -279,6 +317,154 @@ func load_set(dir: String, sid: String, still: int, seed_in: int) -> String:
 	if stage != null:
 		on_stage_resized(Vector2(stage.size))
 	return ""
+
+
+## THE HEAD OF SPLATS of set folder [param sd], played from still [param k]: the avatar, the still's pose and
+## scores, their eyes' shut score (the Face rig's `poses.json`), and each sound's mouth as scores (`visemes.json`
+## of the actor in [param dir]: its mouth's scores over the still's own).
+func _load_splat(sd: String, dir: String, k: int) -> String:
+	if _splat == null:
+		_splat = SplatHead.new()
+		_splat_layer.add_child(_splat)
+	var err := _splat.load_avatar(sd.path_join("avatar").path_join("avatar"))
+	if not err.is_empty():
+		return "The actor's head is not ready: %s. Generate on the Actor card makes it." % err
+	var poses: Variant = ActorFolder.read_json(sd.path_join("avatar").path_join("poses.json"))
+	var stills: Array = (poses as Dictionary).get("stills", []) if poses is Dictionary else []
+	if k >= stills.size() or not (stills[k] is Dictionary):
+		return "The actor's head was not found in this still: pick another on the Actor card."
+	var sp: Dictionary = stills[k]
+	_still_scale = float(sp["scale"])
+	var r: Array = sp["rot"]
+	_still_rot = Basis(Vector3(r[0][0], r[1][0], r[2][0]), Vector3(r[0][1], r[1][1], r[2][1]), Vector3(r[0][2], r[1][2], r[2][2]))
+	var sh: Array = sp["shift"]
+	_still_shift = Vector3(sh[0], sh[1], sh[2])
+	_still_scores = PackedFloat32Array(sp["blend"])
+	var shut: Array = (poses as Dictionary).get("shut", [0.8, 0.8])
+	_shut = Vector2(float(shut[0]), float(shut[1]))
+	_splat_crop = Vector2(_splat.crop[0], _splat.crop[1])
+	_splat.position = _splat_crop
+	_splat.visible = true
+	_head_cut = _cut_of(_face.still_face, _face.size)
+	_class_scores = {}
+	_mouth_scores = PackedInt32Array()
+	var a: Variant = ActorFolder.read_json(dir.path_join("actor.json"))
+	_push = float(ActorSteps.settings_of((a as Dictionary).get("settings", {}) if a is Dictionary else {})["articulation"])
+	var v: Variant = ActorFolder.read_json(dir.path_join("visemes.json"))
+	if v is Dictionary:
+		var names: Array = (v as Dictionary).get("names", [])
+		for n in names:
+			_mouth_scores.append(SplatHead.SCORES.find(String(n)))
+		var classes: Dictionary = (v as Dictionary).get("classes", {})
+		for c in classes:
+			var b: Array = (classes[c] as Dictionary).get("blend", [])
+			var out := _still_scores.duplicate()
+			for j in mini(b.size(), _mouth_scores.size()):
+				var at := _mouth_scores[j]
+				if at >= 0:
+					out[at] = clampf(_still_scores[at] + (float(b[j]) - _still_scores[at]) * _push, 0.0, 1.0)
+			_class_scores[String(c)] = out
+	_still_face = _splat.face_of(_still_scores)
+	_still_expr = _splat.expr_of(_still_scores)
+	_class_faces = {}
+	_class_exprs = {}
+	for c in _class_scores:
+		_class_faces[c] = _splat.face_of(_class_scores[c])
+		_class_exprs[c] = _splat.expr_of(_class_scores[c])
+	var closed := _still_scores.duplicate()
+	closed[9] = _shut.x
+	closed[10] = _shut.y
+	_shut_face = _splat.face_of(closed)
+	_shut_expr = _splat.expr_of(closed)
+	_look_faces = {}
+	_look_exprs = {}
+	var looks: Dictionary = (poses as Dictionary).get("looks", {})
+	for g in looks:
+		var d: Array = looks[g]
+		var look := _still_scores.duplicate()
+		for j in mini(d.size(), look.size()):
+			look[j] = clampf(look[j] + float(d[j]), 0.0, 1.0)
+		_look_faces[String(g)] = _splat.face_of(look)
+		_look_exprs[String(g)] = _splat.expr_of(look)
+	return ""
+
+
+func _drop_splat() -> String:
+	if _splat != null:
+		_splat.queue_free()
+		_splat = null
+	_head_cut = null
+	return ""
+
+
+## WHERE THE STILL'S HEAD IS CUT OUT under a head of splats, in its own picture's terms: the trainer's region
+## above the mouth (hosts/avatar/train.py, `Frames._reach`) - an ellipse round the face grown up for the hair
+## and out for the ears, feathered - drawn from the still's face points [param face] at a quarter of [param size].
+static func _cut_of(face: PackedVector2Array, size: Vector2) -> ImageTexture:
+	if face.size() < 292:
+		return null
+	var lo := Vector2(INF, INF)
+	var hi := -lo
+	for i in mini(468, face.size()):
+		lo = lo.min(face[i])
+		hi = hi.max(face[i])
+	var w := hi.x - lo.x
+	var h := hi.y - lo.y
+	var mouth_y := (face[61].y + face[291].y) * 0.5
+	var top := lo.y - 0.45 * h
+	var c := Vector2((lo.x + hi.x) * 0.5, (top + hi.y) * 0.5)
+	var r := Vector2(0.95 * w, (hi.y - top) * 0.5)
+	var q := 4.0
+	var iw := int(ceil(size.x / q))
+	var ih := int(ceil(size.y / q))
+	var img := Image.create(iw, ih, false, Image.FORMAT_L8)
+	for y in ih:
+		var py := (float(y) + 0.5) * q
+		if py >= mouth_y:
+			continue
+		for x in iw:
+			var d := (Vector2((float(x) + 0.5) * q, py) - c) / r
+			var v := clampf((1.08 - d.length()) / 0.08, 0.0, 1.0)
+			if v > 0.0:
+				img.set_pixel(x, y, Color(v, v, v))
+	return ImageTexture.create_from_image(img)
+
+
+## THE HEAD OF SPLATS AT [param t]: their face - the still's own, moved toward each sound pulling at the mouth
+## by its pull (its face made once, the mouth pushed past their own by Articulation) and toward the lids shut
+## as far as the blink - and the head as the still holds it, turned by their motion [param moved] about the
+## neck, carried by the torso ([param torso]).
+func _pose_splat(t: float, moved: PackedFloat32Array, torso: Transform2D) -> void:
+	var v := _still_face.duplicate()
+	var e := _still_expr.duplicate()
+	for p in _plan.pulls(t):
+		var w := float(p[2])
+		if w > 1e-4 and _class_faces.has(String(p[1])):
+			_toward(v, _class_faces[String(p[1])], _still_face, w)
+			_toward(e, _class_exprs[String(p[1])], _still_expr, w)
+	var b := clampf(_plan.blink(t).x, 0.0, 1.0)
+	if b > 1e-4:
+		_toward(v, _shut_face, _still_face, b)
+		_toward(e, _shut_expr, _still_expr, b)
+	# A GLANCE: toward the face looking that way, as far as the glance has gone
+	var g := _plan.glance(t)
+	var gw := float(g[1]) if g.size() > 1 else 0.0
+	if gw > 1e-4 and _look_faces.has(String(g[0])):
+		_toward(v, _look_faces[String(g[0])], _still_face, gw)
+		_toward(e, _look_exprs[String(g[0])], _still_expr, gw)
+	_splat.set_expr(e)
+	var turn := Basis.IDENTITY
+	if moved.size() >= 3:
+		turn = Basis.from_euler(Vector3(deg_to_rad(-moved[1]), deg_to_rad(moved[0]), deg_to_rad(moved[2])))
+	var pv := _face.pivot() - Vector3(_splat_crop.x, _splat_crop.y, 0.0)
+	_splat.pose_face(v, _still_scale, turn * _still_rot, pv + turn * (_still_shift - pv))
+	_splat.transform = torso * Transform2D(0.0, _splat_crop)
+
+
+## [param v] moved [param w] of the way from [param from] toward [param to], in place.
+static func _toward(v: PackedFloat32Array, to: PackedFloat32Array, from: PackedFloat32Array, w: float) -> void:
+	for j in mini(v.size(), mini(to.size(), from.size())):
+		v[j] += w * (to[j] - from[j])
 
 
 static func _mask(path: String) -> ImageTexture:
@@ -380,7 +566,12 @@ func draw_at(t: float) -> void:
 	var mat := _layer.material as ShaderMaterial
 	mat.set_shader_parameter("matte", _matte_tex)
 	mat.set_shader_parameter("matte_on", 1.0 if _matte_tex != null else 0.0)
-	var on := _library_tex != null and _mask_mouth != null and _mask_eyes != null
+	var splats := _renderer == "gaussian" and _splat != null and _splat.splats > 0
+	if splats:
+		_pose_splat(t, moved, bones[0] as Transform2D)
+	mat.set_shader_parameter("head_cut", _head_cut)
+	mat.set_shader_parameter("head_cut_on", 1.0 if splats and _head_cut != null and _matte_tex != null else 0.0)
+	var on := not splats and _library_tex != null and _mask_mouth != null and _mask_eyes != null
 	mat.set_shader_parameter("library_on", 1.0 if on else 0.0)
 	if on:
 		mat.set_shader_parameter("library", _library_tex)

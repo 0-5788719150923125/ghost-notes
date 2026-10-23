@@ -16,8 +16,13 @@ class_name ActorBuilder
 ## THEIR OWN VOICE (next/likeness.md, "Their own voice"): Hear, Utterances and Voice teach a Piper voice
 ## their speech, and a voice made is PUBLISHED where the voice host finds voices trained here
 ## ([method publish_voice]), named after them, and [signal voice_published] tells the card (the reading
-## it is on lists it and reads in it). On a machine that cannot train one ([method voice_unavailable])
-## the three are left alone and their rows say why.
+## it is on lists it and reads in it).
+##
+## TWO RENDERERS ([member renderer], [constant ActorSteps.RENDERERS]): a run makes the steps the note's
+## renderer plays from and those both do - the 2D's library, or a head of splats (Frames, Face rig and
+## Avatar: hosts/avatar/, next/likeness.md "A head of splats"). On a machine that cannot train ([method
+## cannot_train]) the steps taught on the graphics card, and those made only for them, are left alone and
+## their rows say why.
 ##
 ## A STEP IS FILES: a program's step writes its output under a temporary name and renames it into
 ## place, so a step whose output is newer than its start succeeded - whatever its exit said - and a
@@ -48,6 +53,7 @@ const AUDIT_SHEETS := 14
 const MAIN := {"survey": "survey.bin", "shots": "shots.json", "sets": "sets.json", "transcribe": "transcript.json",
 	"visemes": "visemes.json", "learn": "mouth_model.json",
 	"motion": "motion.json", "stills": "stills.json", "rig": "rig.json", "library": "library.json",
+	"frames": "avatar/frames.npz", "face": "avatar/rig.npz", "avatar": "avatar/avatar.json",
 	"hear": "speech.json", "utterances": "utterances.json", "voice": "voice/voice.onnx"}
 ## Candidate stills a set keeps (enough that some show them at rest: on his footage two of six did, the
 ## fourth pass); prototype mouths per sound and eyes per state its library keeps.
@@ -63,8 +69,17 @@ const HEAR_PROMPT := "Umm, let me think, like, hmm... Okay, uh, here is what I a
 const VOICE_ESPEAK := "en-us"
 ## Sentences a training batch holds: an hour of speech in about 0.8 s a step on a 16 GB card.
 const VOICE_BATCH := 16
+## A HEAD OF SPLATS: frames a second read of the set's longest shot; the square round the head, as a share
+## of the face's height (the hair above, the beard below: on his footage a 302-pixel face took 704); the
+## side it is learned at.
+const AVATAR_RATE := 2.0
+const AVATAR_CROP := 2.33
+const AVATAR_SIZE := 512
 
 var actor: ActorFolder
+## The renderer the note plays them with: a run makes its steps and the shared ones ([method
+## ActorSteps.serves]).
+var renderer := "2d"
 ## Is a run asked for and not done?
 var running := false
 ## What the run waits to be installed, "" when nothing.
@@ -172,9 +187,9 @@ func row_of(step: String) -> Dictionary:
 	if scopes.is_empty():
 		out["state"] = "waiting"
 		return out
-	if ActorSteps.is_voice(step) and not make_with.is_valid() and not voice_unavailable().is_empty():
+	if ActorSteps.trains(step) and not make_with.is_valid() and not cannot_train().is_empty():
 		out["state"] = "unavailable"
-		out["said"] = voice_unavailable()
+		out["said"] = cannot_train()
 		return out
 	var states := {}
 	var moot := 0
@@ -240,7 +255,9 @@ func tick() -> void:
 		for step in ActorSteps.ORDER:
 			if not (only.is_empty() or only.has(step)):
 				continue
-			if ActorSteps.is_voice(step) and not make_with.is_valid() and not voice_unavailable().is_empty():
+			if not ActorSteps.serves(step, renderer):
+				continue
+			if ActorSteps.trains(step) and not make_with.is_valid() and not cannot_train().is_empty():
 				continue
 			var lane := String(LANES.get(String(Registry.field(ActorSteps.REGISTRY, step, "runs", "local")), "quick"))
 			for sc in actor.scopes_of(step):
@@ -487,6 +504,46 @@ func _phase(run: Dictionary) -> String:
 		"rig":
 			return _spawn_py(run, ["rig", "--stills", out.path_join("stills.json"), "--out", out.path_join("rig.json")],
 				"building the rig")
+		"frames":
+			var shot := avatar_shot(actor, sid)
+			if shot.is_empty():
+				return "the set has no shot to read"
+			var stills: Array = []
+			for k in actor.stills_of(sid).size():
+				stills.append(out.path_join("stills").path_join("still_%d.jpg" % k))
+			var spec := out.path_join("frames.spec.json")
+			var e := ActorFolder.write_file(spec, JSON.stringify({"video": actor.video_path(String(shot["vid"])),
+				"shots": [[shot["start"], shot["end"]]], "crop": shot["crop"], "rate": AVATAR_RATE,
+				"face_model": Provision.file_path("face_model"), "pose_model": Provision.file_path("pose_model"),
+				"stills": stills, "out": out.path_join("avatar")}))
+			if not e.is_empty():
+				return e
+			# frames.py reads its crop from its own folder's spec, as train.py does
+			DirAccess.make_dir_recursive_absolute(out.path_join("avatar"))
+			e = ActorFolder.write_file(out.path_join("avatar").path_join("spec.json"), FileAccess.get_file_as_string(spec))
+			if not e.is_empty():
+				return e
+			return _spawn(run, "user://face_venv", "res://hosts/avatar/frames.py", ["--ffmpeg", ff, "--spec", spec],
+				"reading their head's frames")
+		"face":
+			var dir := out.path_join("avatar")
+			return _spawn(run, "user://face_venv", "res://hosts/avatar/rig.py", ["--frames", dir, "--out",
+				dir.path_join("rig.npz"), "--poses", dir.path_join("poses.json")], "learning their face")
+		"avatar":
+			var dir := out.path_join("avatar")
+			var shot := avatar_shot(actor, sid)
+			var still := actor.still_of(sid)
+			var spec := out.path_join("avatar.spec.json")
+			var e := ActorFolder.write_file(spec, JSON.stringify({"frames": dir, "rig": dir.path_join("rig.npz"),
+				"room": out.path_join("stills").path_join("room_%d.jpg" % still),
+				"front": out.path_join("stills").path_join("front_%d.png" % still),
+				"out": dir.path_join("avatar.npz"), "steps": int(actor.settings()["avatar_steps"]), "size": AVATAR_SIZE,
+				"preview": dir.path_join("preview"), "span": [shot.get("start", 0.0), shot.get("end", 1e9)],
+				"face": "tracked"}))
+			if not e.is_empty():
+				return e
+			return _spawn(run, "user://voice_train_venv", "res://hosts/avatar/train.py", ["--spec", spec],
+				"learning their head")
 		"library":
 			var spec := out.path_join("library.spec.json")
 			var e := ActorFolder.write_file(spec, JSON.stringify({"rig": out.path_join("rig.json"),
@@ -707,7 +764,8 @@ func _land_process(run: Dictionary) -> String:
 			actor.save()
 			actor.put_stamp(step, scope, "%s, %d fps" % [Clock.text(float(info["duration"])), roundi(float(info["fps"]))])
 			return "done"
-		"survey", "shots", "sets", "transcribe", "visemes", "learn", "motion", "stills", "rig", "library", "hear", "utterances", "voice":
+		"survey", "shots", "sets", "transcribe", "visemes", "learn", "motion", "stills", "rig", "library", "frames", "face",\
+				"avatar", "hear", "utterances", "voice":
 			if not _made_by(out.path_join(String(MAIN[step])), run):
 				return _tail(String(run["log"]))
 			var said := _said_by(String(run["log"]), step)
@@ -976,15 +1034,15 @@ func _land_audit(all: Array) -> String:
 
 # --- their own voice ---------------------------------------------------------------------------------
 
-## WHY THIS MACHINE CANNOT TEACH A VOICE, "" when it can: the training environment has no build here, or
-## there is no NVIDIA graphics card (its driver, or the card the app draws on).
-static func voice_unavailable() -> String:
+## WHY THIS MACHINE CANNOT TRAIN - their voice, a head of splats - "" when it can: the training environment
+## has no build here, or there is no NVIDIA graphics card (its driver, or the card the app draws on).
+static func cannot_train() -> String:
 	var why := Provision.unsupported("voice_train_venv")
 	if not why.is_empty():
 		return "not on this computer: " + why
 	var vendor := RenderingServer.get_video_adapter_vendor()
 	if not FileAccess.file_exists("/proc/driver/nvidia/version") and not vendor.to_lower().contains("nvidia"):
-		return "not on this computer: a voice is trained on an NVIDIA graphics card, and it has none"
+		return "not on this computer: it is trained on an NVIDIA graphics card, and it has none"
 	return ""
 
 
@@ -1049,6 +1107,38 @@ func videos_spec() -> Dictionary:
 
 ## THE USABLE SHOTS of set [param sid], or with none of every steady set (a handheld one moves with
 ## the camera, not with them): `[{vid, start, end, set}]`, of ticked videos only.
+## THE SHOT A HEAD OF SPLATS IS LEARNED FROM: set [param sid]'s longest usable shot, one camera placement
+## (a set's shots can stand a little apart - his first two are framed wider than the third), with the
+## square round their head in it - [x, y, side], full-resolution pixels, AVATAR_CROP of the face's height,
+## a little above its middle for the hair, inside the frame. `{vid, start, end, crop}`, {} for none.
+static func avatar_shot(a: ActorFolder, sid: String) -> Dictionary:
+	var best := {}
+	for s in a.sets():
+		var d: Dictionary = s
+		if String(d.get("id", "")) != sid:
+			continue
+		for sh in d.get("shots", []):
+			var x: Dictionary = sh
+			if bool(x.get("unusable", false)) or not a.ticked().has(String(x.get("vid", ""))):
+				continue
+			if best.is_empty() or float(x.get("usable", 0.0)) > float(best.get("usable", 0.0)):
+				best = x
+	if best.is_empty():
+		return {}
+	var probe: Variant = ActorFolder.read_json(a.video_dir(String(best["vid"])).path_join("probe.json"))
+	var w := float((probe as Dictionary).get("width", 1920)) if probe is Dictionary else 1920.0
+	var h := float((probe as Dictionary).get("height", 1080)) if probe is Dictionary else 1080.0
+	var box: Array = best.get("box", [0.4, 0.2, 0.6, 0.5])
+	var face_h := (float(box[3]) - float(box[1])) * h
+	var side := clampf(roundf(AVATAR_CROP * face_h / 16.0) * 16.0, 256.0, minf(w, h))
+	var cx := (float(box[0]) + float(box[2])) * 0.5 * w
+	var cy := (float(box[1]) + float(box[3])) * 0.5 * h + 0.05 * face_h
+	var x0 := clampf(roundf(cx - side * 0.5), 0.0, w - side)
+	var y0 := clampf(roundf(cy - side * 0.5), 0.0, h - side)
+	return {"vid": String(best["vid"]), "start": float(best["start"]), "end": float(best["end"]),
+		"crop": [int(x0), int(y0), int(side)]}
+
+
 static func shots_of(a: ActorFolder, sid := "") -> Array:
 	var ticked := a.ticked()
 	var out: Array = []

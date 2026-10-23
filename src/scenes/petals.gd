@@ -40,11 +40,17 @@ const FALLS := {
 }
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"fall": {"label": "Fall", "type": "choice", "options": "FALLS", "default": null,
 		"blurb": "What is falling: blossom, autumn leaves, spring petals, or flakes of ash over a dark ground."},
+	"beam": {"label": "Beam position", "type": "num", "range": [-0.5, 0.5], "default": null,
+		"blurb": "Where the beam of light falls across the frame, when there is one."},
+	"drift": {"label": "Mote drift", "type": "num", "range": [0.004, 0.014], "default": null,
+		"blurb": "How fast the floating motes drift sideways."},
+	"smoke": {"label": "Smoke", "type": "num", "range": [0.25, 0.45], "default": null,
+		"blurb": "How thick the rolling smoke gets at its heaviest, when there is smoke."},
 }
 
 
@@ -66,8 +72,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"hue": sch.vary(rng),
 		"count": rng.randi_range(int(fl["dust"][0]), int(fl["dust"][1])),
 		"shaft": rng.randf() < float(fl["shaft"]),
-		"shaft_x": rng.randf_range(-0.5, 0.5),
-		"drift": rng.randf_range(0.004, 0.014),
+		"shaft_x": number("beam", rng),
+		"drift": number("drift", rng),
 	})
 	var count := rng.randi_range(int(fl["count"][0]), int(fl["count"][1]))
 	var sat: Array = fl["sat"]
@@ -93,7 +99,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	if rng.randf() < float(fl["veil"]):
 		add_layer("veil", rng, {
 			"hue": sch.vary(rng), "sat": clampf(sch.sat * 0.3, 0.02, 0.4), "val": 0.55,
-			"floor": 0.10, "gain": 0.75, "max": rng.randf_range(0.25, 0.45),
+			"floor": 0.10, "gain": 0.75, "max": number("smoke", rng),
 		})
 	return {"hue": sch.hue, "mood": sch.name, "season": season, "petals": count}
 

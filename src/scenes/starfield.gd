@@ -44,11 +44,13 @@ const SKIES := {
 }
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"sky": {"label": "Sky", "type": "choice", "options": "SKIES", "default": null,
 		"blurb": "Which part of space the sky shows: the crowded dusty core, an empty deep field, the inside of a nebula, or an orbit close over a world."},
+	"fisheye": {"label": "Flare fisheye", "type": "num", "range": [0.12, 0.3], "default": null,
+		"blurb": "How strongly the lens flare and its chain of discs bow outward, when there is a flare."},
 }
 
 
@@ -93,7 +95,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# A lens flare OVER everything (incl. the planet): the bright glows the user wanted up front,
 	# pulsing with the harmonics, gently fisheye-bowed. How likely is the sky's business.
 	if rng.randf() < float(sky["flare"]):
-		add_layer("flare", rng, {"hue": sch.hue_at(1, 3), "fisheye": rng.randf_range(0.12, 0.3)})
+		add_layer("flare", rng, {"hue": sch.hue_at(1, 3), "fisheye": number("fisheye", rng)})
 	return {"hue": sch.hue, "mood": sch.name, "sky": sky_name, "stars": count}
 
 

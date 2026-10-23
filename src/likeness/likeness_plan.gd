@@ -734,6 +734,13 @@ func mouth(t: float) -> Array:
 	return out
 
 
+## THE SOUNDS PULLING AT THE MOUTH AT [param t]: `[[_, class, weight]]`, the two strongest less the third
+## ([method Visemes.strongest]) - what the 2D mouth draws from the library, and a head of splats from each
+## sound's scores.
+func pulls(t: float) -> Array:
+	return Visemes.strongest(t, line, _line_from(t))
+
+
 ## One of [param images], drawn from the seed and [param key].
 func _one_of(images: Array, key: Array) -> int:
 	if images.is_empty():

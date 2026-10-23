@@ -88,11 +88,17 @@ var _vapor: Layer.Vapor = null
 var _ch_vec := Vector2.ZERO
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"character": {"label": "Character", "type": "choice", "options": "CHARACTERS", "default": null,
 		"blurb": "What the vapor is like: a drop of ink in still water, a nebula seen across light years, a pale gossamer cobweb, or hot plasma turning over fast."},
+	"stars": {"label": "Stars", "type": "num", "range": [60, 220], "default": null,
+		"blurb": "How many stars show behind the vapor, when there are any."},
+	"glow": {"label": "Glow", "type": "num", "range": [1.15, 1.50], "default": null,
+		"blurb": "How brightly the vapor glows overall."},
+	"motes": {"label": "Motes", "type": "num", "range": [40, 120], "default": null,
+		"blurb": "How many motes float in the vapor, when there are any."},
 }
 
 
@@ -115,7 +121,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	})
 	if rng.randf() < float(ch["stars"]):
 		add_layer("stars", rng, {
-			"z": "back", "count": rng.randi_range(60, 220), "hue": sch.accent})
+			"z": "back", "count": number("stars", rng), "hue": sch.accent})
 	_vapor = add_layer("vapor", rng, {
 		"hue": sch.hue,
 		"accent": sch.accent,              # the fringe / shadow chroma
@@ -136,7 +142,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"flow": _pick(rng, ch["flow"]),        # ...and how fast it travels while doing it
 		"haze": _pick(rng, ch["haze"]),
 		"shadow": _pick(rng, ch["shadow"]),
-		"gain": rng.randf_range(1.15, 1.50),
+		"gain": number("glow", rng),
 	}) as Layer.Vapor
 	# Motes draw onto the scene's own canvas, so the field (a child quad - see
 	# [Layer.FieldQuad]) composites OVER them whatever order they are added in. That is fine
@@ -148,7 +154,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# over a scene whose whole subject is light IN a medium. Rendered, looked at, removed.
 	if rng.randf() < float(ch["dust"]):
 		add_layer("dust", rng, {
-			"hue": sch.accent, "count": rng.randi_range(40, 120),
+			"hue": sch.accent, "count": number("motes", rng),
 			"shaft": false, "speed": rng.randf_range(0.01, 0.03)})
 	return {"hue": sch.hue, "mood": sch.name, "character": kind, "layout": layout}
 

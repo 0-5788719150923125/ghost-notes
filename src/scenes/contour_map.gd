@@ -269,11 +269,21 @@ var _luvs := PackedVector2Array()
 var _lidx := PackedInt32Array()
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"land": {"label": "Land", "type": "choice", "options": "KINDS", "default": null,
 		"blurb": "What kind of land the map shows: rolling hills (fbm), a ridged mountain chain, dunes (billow), or a fractured plateau of scarps (cells)."},
+	"span": {"label": "Span", "type": "num", "range": [1.1, 2.6], "default": null,
+		"blurb": "How wide a stretch of land the map sheet shows."},
+	"levels": {"label": "Contour lines", "type": "num", "range": [8, 22], "default": null,
+		"blurb": "How many contour lines are drawn across the land."},
+	"index_every": {"label": "Index spacing", "type": "num", "range": [4, 6], "default": null,
+		"blurb": "How many contour lines apart the heavier index lines fall."},
+	"hatch": {"label": "Hatch spacing", "type": "num", "range": [4.0, 12.0], "default": null,
+		"blurb": "How far apart the hatching lines are drawn."},
+	"sea_level": {"label": "Sea level", "type": "num", "range": [0.0, 0.35], "default": null,
+		"blurb": "How much of the low ground lies under the sea, when the map has water."},
 }
 
 
@@ -296,11 +306,11 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	if rng.randf() < 0.5:
 		warp_amt = rng.randf_range(0.08, 0.35)
 		_fld = _fld.warp(Field.make("fbm", rng.randi(), freq * 0.45, 2), warp_amt)
-	_span = rng.randf_range(1.1, 2.6)
+	_span = number("span", rng)
 	_res = rng.randi_range(112, 144)
 
-	_levels = rng.randi_range(8, 22)
-	_index_every = rng.randi_range(4, 6)
+	_levels = number("levels", rng)
+	_index_every = number("index_every", rng)
 	_index_phase = rng.randi_range(0, _index_every - 1)
 	_w_minor = rng.randf_range(0.8, 1.6)
 	_w_index = rng.randf_range(1.8, 3.2)
@@ -333,10 +343,10 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# on the sheet: the ruling is anchored, so changing its pitch moves every line by its own
 	# multiple of the change, and the whole hatched band slid sideways a couple of times a
 	# second. Density is the seed's now, and the music is in the ink instead.
-	_hatch_sp = rng.randf_range(4.0, 12.0)
+	_hatch_sp = number("hatch", rng)
 
 	_water = rng.randf() < 0.7
-	_sea_frac = rng.randf_range(0.0, 0.35)
+	_sea_frac = number("sea_level", rng)
 	_divs = rng.randi_range(6, 14)
 	_grat_every = rng.randi_range(2, 5)
 	_marks_max = rng.randi_range(3, 12)

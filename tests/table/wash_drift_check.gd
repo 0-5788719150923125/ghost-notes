@@ -70,7 +70,7 @@ func _run() -> void:
 	subs.document = {"source": script, "title": "Wash Drift Check",
 		"table": {"show": "wash-drift-check", "seed": 3, "dir": "", "plan": {"look": {"candles": 2}}, "cards": cards}}
 	medium._ensure_doc()
-	medium._shuffle_room = INF
+	medium._shuffles.shuffle_room = INF
 	var tot := _judged()
 	var pieces := 0
 	var moved := 0
@@ -79,7 +79,7 @@ func _run() -> void:
 	for sd: int in SEEDS:
 		var mv := {"kind": "wash", "t0": 0.0, "dur": WASH_S, "pause": 1000.0, "seed": 500 + sd}
 		mv["plan"] = medium._shuffles._wash_plan(500 + sd, WASH_S)
-		medium._moves = [mv]
+		medium._shuffles.moves = [mv]
 		var sw: Dictionary = (medium._shuffles.sweeps(10.0, INF, func(_t: float) -> Vector3: return Vector3.ZERO, "wash-drift %d" % sd) as Array)[0]
 		var root := Node3D.new()
 		add_child(root)

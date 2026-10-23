@@ -18,11 +18,13 @@ const BANKS := {
 }
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"bank": {"label": "Bank", "type": "choice", "options": "BANKS", "default": null,
 		"blurb": "How heavy the fog bank is: a thin veil, a rolling bank, or a deep one that buries the color in sheets."},
+	"pools": {"label": "Color pools", "type": "num", "range": [3, 7], "default": null,
+		"blurb": "How many soft pools of color breathe under the fog."},
 }
 
 
@@ -42,7 +44,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"hue": sch.hue,
 		"sat": clampf(sch.sat * rng.randf_range(0.85, 1.2), 0.05, 1.0),
 		"val": rng.randf_range(float(val_r[0]), float(val_r[1])),
-		"pools": rng.randi_range(3, 7),
+		"pools": number("pools", rng),
 	})
 	var sheets := rng.randi_range(int(sheet_r[0]), int(sheet_r[1]))
 	for i in sheets:

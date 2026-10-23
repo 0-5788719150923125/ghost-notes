@@ -73,11 +73,21 @@ var _twist_w := PI * 0.45
 var _twist_speed := 0.2
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"ring": {"label": "Ring", "type": "choice", "options": "RINGS", "default": null,
 		"blurb": "How the panels stand in their ring: evenly spaced, woven in and out of the circle, stepped at alternating heights, or scalloped with a little of both."},
+	"ring_size": {"label": "Ring size", "type": "num", "range": [1.9, 2.8], "default": null,
+		"blurb": "How wide the ring of panels is."},
+	"panel_width": {"label": "Panel width", "type": "num", "range": [0.09, 0.17], "default": null,
+		"blurb": "How wide each panel is."},
+	"panel_height": {"label": "Panel height", "type": "num", "range": [0.22, 0.70], "default": null,
+		"blurb": "How tall each panel is, from stubby tiles to tall blades."},
+	"slide": {"label": "Slide", "type": "num", "range": [0.55, 1.20], "default": null,
+		"blurb": "How far each panel slides up and down with the music."},
+	"panels": {"label": "Panels", "type": "num", "range": [14, 72], "default": null,
+		"blurb": "How many panels stand in the ring."},
 }
 
 
@@ -88,11 +98,11 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	_hue = _sch.hue
 	# Sample the whole shot: lens, orbit, ring - so the angle and framing vary every time.
 	lens.fov = rng.randf_range(54.0, 78.0)  # wide lens => forced perspective
-	_R = rng.randf_range(1.9, 2.8)
-	_bar_w = rng.randf_range(0.09, 0.17)
+	_R = number("ring_size", rng)
+	_bar_w = number("panel_width", rng)
 	# Panel proportions: tall blades through to stubby tiles, and how far they travel.
-	_panel_h = rng.randf_range(0.22, 0.70)
-	_slide = rng.randf_range(0.55, 1.20)
+	_panel_h = number("panel_height", rng)
+	_slide = number("slide", rng)
 	_orbit_dist = rng.randf_range(4.6, 7.0)
 	_pitch_base = rng.randf_range(0.10, 0.55)
 	_pitch_amp = rng.randf_range(0.03, 0.12)
@@ -118,7 +128,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var stagger := float(ring["stagger"]) * rng.randf_range(0.6, 1.4)
 	var lift := float(ring["lift"]) * rng.randf_range(0.6, 1.4)
 	# From a sparse colonnade of wide blades to a dense fine-toothed band.
-	var count := rng.randi_range(14, 72)
+	var count: int = number("panels", rng)
 	for i in count:
 		var a := float(i) / float(count) * TAU
 		# Palindrome spectrum mapping: t runs 0 -> 1 -> 0 around the ring, so the value at the

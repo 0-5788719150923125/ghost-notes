@@ -13,11 +13,15 @@ Bloom - elegant procedural rosette curves (the koch replacement).
 
 The old snowflake hard-coded a star and stepped its recursion depth in integer jumps (which popped). This draws the shape from a *formula* instead: the superformula, whose symmetry and pinch are a handful of numbers, traces a single smooth closed contour that can be a star, a flower, a gear, or a soft polygon - and morphs continuously between them. A few are layered concentrically with a hue gradient and a gentle sway; the audio sharpens and brightens them (through a nonlinear curve) without ever stepping. Classy, fluid, different every seed.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `form` Form | `star`, `flower`, `ripple`, `cog`, `polygon` | The contour's family of shape: a star, a flower, a ripple, a cog or a soft polygon. |
+| `rings` Rings | `1` to `5` | How many contours are stacked inside one another in the rosette. |
+| `size` Size | `0.18` to `0.4` | How large the rosette is in the frame. |
+| `line_width` Line width | `1.0` to `4.0` | How thick the rosette's lines are drawn. |
+| `spin` Spin | `-0.1` to `0.1` | How fast the rosette turns, and which way. |
 
 Source: [src/scenes/bloom.gd](../src/scenes/bloom.gd) (extends `GhostScene`)
 
@@ -31,11 +35,15 @@ Which city it is varies per session: a `Scheme` mood colors the blocks and its a
 
 layers: `rain`, `snow`, `stars`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `skyline` Skyline | `dense`, `towers`, `mixed`, `lowrise` | The skyline's profile: a dense downtown of many narrow blocks, a cluster of tall towers, a mix, or a low-rise spread. |
+| `snow_stars` Stars with snow | `80` to `140` | How many stars show in the sky behind the snow, on a snowy night. |
+| `snow` Snowflakes | `70` to `120` | How many snowflakes fall over the skyline, on a snowy night. |
+| `rain` Raindrops | `100` to `170` | How many raindrops fall over the skyline, on a rainy night. |
+| `stars` Stars | `90` to `160` | How many stars show over the skyline, on a clear night. |
 
 Source: [src/scenes/cityscape.gd](../src/scenes/cityscape.gd) (extends `GhostScene`)
 
@@ -49,11 +57,16 @@ meshing   - two gears mesh only if they share a module (tooth size); a child's t
 
 A scene's seed picks a mode (one big mechanism, scattered trains, a clock, a chorus) and then samples every constant, so it is never the same machine twice. Audio drives the turn rate, the tick, the glow, and the traveling specular highlight.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `mechanism` Mechanism | `orrery`, `trains`, `clockwork`, `chorus`, `split` | What kind of machine is built: one big orrery, scattered gear trains, a clock with a ticking escapement, a chorus of equal wheels turning together, or a split composition. |
+| `tooth_size` Tooth size | `0.7` to `1.6` | How coarse the gear teeth are, from a fine-toothed instrument to a chunky mill drive. |
+| `trains` Gear trains | `2` to `3` | How many separate gear trains are scattered in frame, for the trains mechanism. |
+| `planets` Planet wheels | `3` to `8` | How many wheels mesh around the big central wheel, for the orrery mechanism. |
+| `columns` Columns | `2` to `6` | How many columns of wheels the chorus wall has. |
+| `rows` Rows | `2` to `4` | How many rows of wheels the chorus wall has. |
 
 Source: [src/scenes/clockwork.gd](../src/scenes/clockwork.gd) (extends `GhostScene`)
 
@@ -63,11 +76,16 @@ Embers - a drift of sparks that twinkle and flare, each on its own.
 
 A cloud of point particles riding the wind (per-particle, so it drifts and rises asynchronously) with a weak spring + drag so they wander about home instead of escaping. The life is in the *light*, and it is async by construction: each spark twinkles on its own phase, and a beat lights only the sparks whose own threshold it crosses (through a nonlinear `spike`), so a hit ripples a *subset* alight - not the whole cloud throbbing in unison. Size barely moves; color and brightness carry the audio. (The old version pulsed every spark's size with the global beat and burst them all from center together - one synchronized throb. Fixed.)
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `form` Form | `cloud`, `plume`, `ring` | The shape the sparks hold at rest: a loose cloud, a plume rising off a fire, or a ring riding the rim of an updraft. |
+| `sparks` Sparks | `60` to `220` | How many sparks drift in the frame. |
+| `spark_size` Spark size | `0.7` to `1.8` | How large the sparks are, from fine dust to fat drifting cinders. |
+| `spread` Spread | `0.18` to `0.46` | How far out from the middle the sparks' form reaches. |
+| `ring_width` Ring width | `0.04` to `0.14` | How thick the ring of sparks is, when the form is a ring. |
+| `plume_width` Plume width | `0.05` to `0.16` | How wide the plume of sparks is at its base, when the form is a plume. |
 
 Source: [src/scenes/embers.gd](../src/scenes/embers.gd) (extends `GhostScene`)
 
@@ -77,11 +95,12 @@ Filaments - the procedural-growth primitive, showcased.
 
 One scene, three lives chosen by seed, all the same `Filament` mechanism on a curl-noise `Flow2D` field - proof that the primitive composes: lightning - arcs that strike on the beat: a jagged forked path floods in fast, blazes, then fades, and re-strikes on the next hit (slow-motion bolts). neural    - tendrils that creep from scattered seeds and slowly regrow, a living network coiling through the frame. thread    - long smooth threads flowing across on the flow, barely branching. Audio drives the strikes / growth surge and the brightness; nonlinearity (the flow's meander, the spike-shaped drive, the asymmetric flare) is what animates it. Each life draws its color from a `Scheme` mood in its own plausible set, and its count/weight from a density, so no two storms are the same storm.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `kind` Kind | `lightning`, `neural`, `thread` | What the filaments are: lightning bolts that strike, neural tendrils, or fiber threads. |
+| `strike_gap` Strike gap | `1.1` to `2.0` | The longest the lightning waits between strikes while the music plays, even with no beat to strike on. |
 
 Source: [src/scenes/filaments.gd](../src/scenes/filaments.gd) (extends `GhostScene`)
 
@@ -91,11 +110,16 @@ Fog lights - soft lights breathing under a drifting cloud cover.
 
 A few glowing orbs sit in the dark, each tied to a slice of the spectrum so it pulses with its own frequencies. Over them drift several big, low-alpha blobs - fog - that diffuse and occlude the lights as they pass. The result is atmospheric rather than graphic: light bleeding through cloud, the whole field swelling on the louder passages.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `layout` Layout | `scatter`, `row`, `ring`, `pair` | How the lamps are arranged: scattered orbs in the haze, a row like street lighting, a ring around you, or a pair facing off across the frame. |
+| `lamps` Lamps | `2` to `9` | How many lamps glow in the haze, when they are scattered or set in a ring. |
+| `row_lamps` Row lamps | `3` to `7` | How many lamps stand in the row, when they are set in a row. |
+| `lamp_size` Lamp size | `0.1` to `0.24` | How large each lamp is when they are set in a row or a ring. |
+| `row_height` Row height | `-0.2` to `0.2` | How high or low in the frame the row of lamps sits. |
+| `fog` Fog | `0.025` to `0.07` | How thick the fog over the lamps is. |
 
 Source: [src/scenes/fog_lights.gd](../src/scenes/fog_lights.gd) (extends `GhostScene`)
 
@@ -121,11 +145,16 @@ The land is not one shape or one color: a `Scheme` mood colors the ridgelines (w
 
 layers: `snow`, `stars`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `relief` Relief | `dunes`, `rolling`, `ridges`, `massif` | The landform on the horizon: a few wide dunes, rolling swells, a crowded serration of ridges, or a massif. |
+| `fog_bands` Fog bands | `1` to `4` | How many bands of fog lie over the low ground. |
+| `snow` Snowflakes | `60` to `110` | How many snowflakes drift over the hills, on a snowy night. |
+| `stars` Stars | `100` to `170` | How many stars show above the hills, on a clear night. |
+| `fog_level` Fog level | `0.3` to `0.52` | How far down the frame the fog lies. |
+| `wind` Fog wind | `0.05` to `0.18` | How fast the fog flows sideways over the low ground. |
 
 Source: [src/scenes/gaussian_landscape.gd](../src/scenes/gaussian_landscape.gd) (extends `GhostScene`)
 
@@ -135,12 +164,17 @@ Harmonic lattice - a grid of cells that breathe with the spectrum.
 
 A rows x cols lattice. Each cell samples the spectrum by its column (low bands left, high right) and a traveling wave whose phase is pushed by the bass, so energy visibly sweeps across the grid. Cells scale, spin, and shift hue. The field is overscanned so the view's tilt and drift never expose the edges.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `density` Density | `coarse`, `medium`, `fine` | How finely the field is divided: a few big coarse panels, a medium grid, or a fine mesh. |
 | `cell` Cell | `square`, `diamond`, `triangle`, `hex`, `disc` | The shape of each cell: a square, a diamond, a triangle, a hexagon or a disc. |
+| `color_flow` Color flow | `0.1` to `0.4` | How fast the colors flow across the grid. |
+| `waves` Waves | `1.5` to `4.0` | How many waves of brightness cross the grid at once. |
+| `wave_speed` Wave speed | `0.5` to `2.0` | How fast the waves of brightness travel across the grid. |
+| `spin` Spin | `0.0` to `1.0` | How far each cell turns as it lights up. |
+| `stretch` Cell stretch | `0.7` to `1.45` | How stretched each cell is, from tall bars through squares to wide bars. |
 
 Source: [src/scenes/harmonic_lattice.gd](../src/scenes/harmonic_lattice.gd) (extends `GhostScene`)
 
@@ -152,9 +186,9 @@ A large isometric landscape: Gaussian hills carry a grid of blocks whose heights
 
 What KIND of place it is is one roll, not several. The hue was already free here, but the character never was: always a 48x48 grid on the same rolling hills at the same mid saturation, so every seed built the same city in a different color. A `CHARACTER` now decides palette, block size, how flat the land is, how tall the buildings stand and how broad the hue districts are together - because those are the same decision. Ground takes the `Scheme`'s base and the buildings its counter hue, which is what the old "+0.3 to 0.6" offset was reaching for.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `place` Place | `countryside`, `megacity`, `dustbowl`, `neon` | What kind of place the city is: countryside, a megacity, a dustbowl or a neon city, which sets its block size, its land, its districts and its air. |
 
@@ -170,11 +204,16 @@ The ring's LAYOUT is sampled too (`RINGS`): even, woven, stepped or scalloped, s
 
 layers: `fog`, `stars`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `ring` Ring | `even`, `woven`, `stepped`, `scalloped` | How the panels stand in their ring: evenly spaced, woven in and out of the circle, stepped at alternating heights, or scalloped with a little of both. |
+| `ring_size` Ring size | `1.9` to `2.8` | How wide the ring of panels is. |
+| `panel_width` Panel width | `0.09` to `0.17` | How wide each panel is. |
+| `panel_height` Panel height | `0.22` to `0.7` | How tall each panel is, from stubby tiles to tall blades. |
+| `slide` Slide | `0.55` to `1.2` | How far each panel slides up and down with the music. |
+| `panels` Panels | `14` to `72` | How many panels stand in the ring. |
 
 Source: [src/scenes/planes.gd](../src/scenes/planes.gd) (extends `Scene3D`)
 
@@ -186,9 +225,9 @@ Each rock is a `Mesh3D` rotated by a genuine 3D basis and drawn depth-sorted and
 
 Nothing here is one fixed constant per style: the material, responsiveness, and reveal are all *sampled per rock* around the style's center, so two rocks of a kind still differ - every computation perturbed by sampling. Color is a `Scheme` mood chosen to suit the style (matte stone gets the earthy moods, the gem gets the jewel ones), and the stones either share a tight hue FAMILY or spread base-to-accent across the set. The composition is sampled too - a couple of colossal boulders, a resting cluster, or a wide scatter of scree - so the same subject is framed differently each time it is seeded.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `arrangement` Arrangement | `boulders`, `cluster`, `scree` | How many stones and how big: a couple of boulders filling the frame, a resting cluster, or a wide scatter of small scree. |
 
@@ -206,11 +245,12 @@ Each root runs an independent **lifecycle**, staggered and rate-varied so the fi
 
 Neither the color nor the silhouette is fixed. A SEASON is the first thing the seed chooses, and it bundles everything a season actually changes - the `Scheme` moods on offer, how dense the growth is, how thick and how long and how branched, how hard the color turns from base to tip, and what is in the air. Spring is pale and dense and fine, summer lush and deep, autumn sparse and bare and hard-turning, winter a few thick structural limbs with the saturation drained out. Within the season a growth HABIT sets the form, from a few long thick taproots through a dense fine mat to sparse long creepers.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `season` Season | `spring`, `summer`, `autumn`, `winter` | The time of year the growth is in: pale and dense spring, lush summer, sparse and bare autumn, or winter's few thick limbs drained of color. |
+| `shoots` Starting shoots | `2` to `4` | How many shoots are sprouting from the center when the scene opens. |
 
 Source: [src/scenes/rooted_growth.gd](../src/scenes/rooted_growth.gd) (extends `GhostScene`)
 
@@ -220,12 +260,15 @@ Shatter glass - a real pane of glass, shattering in true 3D.
 
 A flat pane stands in space and is seen at a three-quarter angle through the `Lens3D` camera (not pinned flat to the screen). On a beat it fractures into irregular angular shards - `Geo.fracture` cracks that radiate from an impact, not pizza slices - and the shards burst off the plane and **tumble through space**, each spiraling on its own 3D axis, before easing back together (loop) or drifting to rest (oneshot). Real depth: a shard in front occludes one behind, and the glass catches the light by how each shard faces the camera. The old version was flat shards sliding in the 2D plane; this one is dimensional.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `pane` Pane | `disc`, `rect`, `polygon`, `portrait` | The shape of the intact pane before it breaks: a disc, a rectangle, a polygon or a tall portrait rectangle. |
 | `grain` Grain | `coarse`, `medium`, `fine` | How finely the pane breaks: into a few big planes of glass, a medium break, or fine splinters. |
+| `fov` Field of view | `38.0` to `58.0` | How wide the camera's view of the pane is. |
+| `view_angle` View angle | `0.35` to `0.7` | How far round to the side the camera looks at the pane. |
+| `sides` Sides | `5` to `8` | How many sides the pane has, when it is a polygon. |
 
 Source: [src/scenes/shatter_glass.gd](../src/scenes/shatter_glass.gd) (extends `Scene3D`)
 
@@ -237,12 +280,17 @@ The whole band array is laid around a ring; each band pushes a bar outward by it
 
 The hue used to be a bare `randf()` - varied, but unrelated to anything, so the bars swept an arbitrary span from it. It now runs base -> accent along a `Scheme` mood, which also sets the ring's saturation and how bright it sits. Two other rolls decide what the ring IS: how a bar is drawn, and which way it grows off the rim - the same audio mapping, three silhouettes.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `form` Bar shape | `spoke`, `wedge`, `tick` | How each band's bar is drawn: a spoke, a wedge or a tick, so the ring reads as a spoke wheel, a sunburst or a dashed dial. |
 | `growth` Growth | `out`, `in`, `both` | Which way the bars grow off the rim: outward, inward like a closing iris, or both ways as two-ended spikes. |
+| `size` Ring size | `0.1` to `0.34` | How large the ring is in the frame. |
+| `bar_length` Bar length | `0.07` to `0.42` | How far each band's bar can reach off the ring. |
+| `spin` Spin | `-0.1` to `0.1` | How fast the ring turns, and which way. |
+| `mirror` Mirror | `1` to `2` | How many times the spectrum runs round the ring: once, or twice as a mirrored pair. |
+| `thickness` Bar thickness | `1.5` to `9.0` | How thick each bar is drawn. |
 
 Source: [src/scenes/spectrum_ring.gd](../src/scenes/spectrum_ring.gd) (extends `GhostScene`)
 
@@ -254,12 +302,15 @@ Horizontal planes are stacked back-to-front; each is a waveform whose height com
 
 By seed the stack is a few big slabs or a deep receding pile (`STACKS`), each plane's edge follows one of three laws (`PROFILES`) - swells, ridgelines or stepped terraces - and the whole thing is colored from one `Scheme`, depth carrying the palette from its base hue to its accent.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `stack` Stack | `slabs`, `stack`, `deep` | How many planes and how thick they sit: a few big slabs, a stack, or a deep stack receding. |
 | `profile` Profile | `smooth`, `ridge`, `terrace` | The line each plane's edge follows: smooth swells, ridges or terraces. |
+| `terraces` Terraces | `4` to `11` | How many treads a terraced edge steps through, when the profile is terraces. |
+| `waves` Waves | `1.0` to `5.5` | How many swells run across each plane's edge. |
+| `scroll` Scroll speed | `0.15` to `0.45` | How fast the planes' edges slide sideways. |
 
 Source: [src/scenes/strata.gd](../src/scenes/strata.gd) (extends `GhostScene`)
 
@@ -269,11 +320,15 @@ Voxel blocks - an isometric heightfield equalizer.
 
 A grid of iso cubes whose stack height tracks the spectrum, a 3D equalizer terrain. By seed it is one of three scales (see `SCALES`): plot    - a small grid held centered in the frame (the original look). terrace - a mid grid that just overflows the frame, stacks running tall. city    - thousands of blocks spilling off every edge, the camera down among them like a skyline. City blocks carry a structural base height so the skyline stands even in quiet, the spectrum bouncing on top. The iso squash and the color scheme are sampled too, so the same grid can be looked down on steeply or almost edge-on, in any of `Scheme`'s moods. Whichever it is, an `Activation` decides who moves: with sparsity some columns stay rooted (a still skyline) while others rise and fall - so it is not one uniform wall of motion (the "some could stay stationary" ask). Three flat faces per cube, painted back-to-front; always at least a one-block floor so it reads in silence.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `scale` Scale | `plot`, `terrace`, `city` | The scale the equalizer is built at: a small plot, a terrace that overflows the frame, or a vast city with the camera down among the blocks. |
+| `terrace_still` Terrace stillness | `0.2` to `0.65` | How many of a terrace's columns stand still as a skyline instead of moving with the music. |
+| `city_still` City stillness | `0.45` to `0.8` | How many of a city's columns stand still as a skyline instead of moving with the music. |
+| `tile` Tile size | `0.05` to `0.095` | How wide each block's tile is, when the build is a small plot. |
+| `pitch` View pitch | `0.4` to `0.66` | How steeply the view looks down on the blocks. |
 
 Source: [src/scenes/voxel_blocks.gd](../src/scenes/voxel_blocks.gd) (extends `GhostScene`)
 
@@ -285,11 +340,12 @@ A true cube / octahedron / tetrahedron / icosahedron (`Mesh3D`) projected throug
 
 The hue was already free, but everything AROUND it was not: the solid was always a regular polyhedron at 1:1:1 proportions and always mid-saturation, so every seed produced the same object in a different color. Now a `SOLID` rolls the form and the proportions together, and a `Scheme` supplies the saturation as well as the hue - which is what makes an ash body read as smoked glass and a toxic one as acid, rather than both reading as "a colored shape".
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `body` Body | `platonic`, `obelisk`, `slab`, `blade`, `geode` | The body's proportions: platonic, a tall obelisk, a flat slab, a thin blade, or a geodesic geode. |
+| `fov` Field of view | `42.0` to `56.0` | How wide the camera's view of the solid is. |
 
 Source: [src/scenes/wire_solid.gd](../src/scenes/wire_solid.gd) (extends `Scene3D`)
 
@@ -305,11 +361,14 @@ Wavy ribbons drift and undulate, each tied to a band of the spectrum so the curt
 
 layers: `aurora`, `bed`, `stars`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `form` Form | `drapes`, `ribbons`, `double` | How the curtain hangs: a couple of slow broad drapes, many fine ribbons, or a doubled curtain with a second set behind on the accent hue. |
+| `night` Night brightness | `0.05` to `0.12` | How bright the dark night sky behind the curtains is. |
+| `stars` Stars | `60` to `220` | How many stars fill the night sky behind the curtains. |
+| `back_ribbons` Back ribbons | `2` to `3` | How many ribbons hang in the second curtain behind, when the curtain is doubled. |
 
 Source: [src/scenes/aurora.gd](../src/scenes/aurora.gd) (extends `GhostScene`)
 
@@ -321,6 +380,15 @@ Bubbles wobble upward with rim highlights, fine suspended particles hang in the 
 
 layers: `bed`, `bubbles`, `dust`, `kelp`, `surface`
 
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
+
+| Setting | Options | What it sets |
+| --- | --- | --- |
+| `caustics` Caustics | `5` to `11` | How many wavy bands of light from the surface shimmer across the water. |
+| `sun` Sun position | `-0.4` to `0.4` | Where the distant sun glows across the top of the water, from left to right. |
+| `beam` Beam position | `-0.3` to `0.3` | Where the beam of light through the suspended particles falls across the frame. |
+| `drift` Particle drift | `0.002` to `0.008` | How fast the suspended particles drift sideways through the water. |
+
 Source: [src/scenes/bubbles.gd](../src/scenes/bubbles.gd) (extends `GhostScene`)
 
 ### `clouds` (canvas, drift, static)
@@ -331,11 +399,15 @@ A colored sky bed, sometimes stars behind, sometimes haze rolling in front, and 
 
 layers: `bed`, `fog`, `stars`, `volumetric`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `weather` Weather | `clear`, `dusk`, `overcast` | The weather in the sky: clear with starlight behind, dusk, or overcast with heavy haze. |
+| `sky` Sky brightness | `0.08` to `0.17` | How bright the sky behind the clouds is. |
+| `stars` Stars | `40` to `180` | How many stars show behind the clouds, when the weather lets them through. |
+| `haze` Haze | `0.02` to `0.05` | How thick the haze drifting in front of the clouds is, when there is haze. |
+| `haze_banks` Haze banks | `3` to `7` | How many soft banks of haze roll in front of the clouds, when there is haze. |
 
 Source: [src/scenes/clouds.gd](../src/scenes/clouds.gd) (extends `GhostScene`)
 
@@ -349,11 +421,12 @@ The flame's own colors are the shader's (a real fire is the temperature of its f
 
 layers: `bed`, `fire`, `fog`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `hearth` Hearth | `forge`, `bonfire`, `night` | Where the fire is found: a forge, a bonfire, or a fire on a cold night, which sets the wash behind the flame, how widely the flames are laid and how heavily it smokes. |
+| `sparks` Sparks | `50` to `160` | How many sparks the fire can throw into the air at once. |
 
 Source: [src/scenes/fire.gd](../src/scenes/fire.gd) (extends `GhostScene`)
 
@@ -365,6 +438,14 @@ Motes drift along a curl-noise breeze and blink on their own phase; a beat light
 
 layers: `bed`, `dust`, `fireflies`, `fog`
 
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
+
+| Setting | Options | What it sets |
+| --- | --- | --- |
+| `haze` Haze | `0.02` to `0.05` | How thick the soft haze drifting over the dusk is. |
+| `haze_banks` Haze banks | `4` to `8` | How many soft banks of haze drift over the dusk. |
+| `motes` Motes | `40` to `110` | How many faint motes float in the air, when there are any. |
+
 Source: [src/scenes/fireflies.gd](../src/scenes/fireflies.gd) (extends `GhostScene`)
 
 ### `fog_bank` (canvas, drift)
@@ -375,11 +456,12 @@ The explicit "rolling fog with colors underneath / inside" idea: a rich color be
 
 layers: `bed`, `fog`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `bank` Bank | `thin`, `rolling`, `deep` | How heavy the fog bank is: a thin veil, a rolling bank, or a deep one that buries the color in sheets. |
+| `pools` Color pools | `3` to `7` | How many soft pools of color breathe under the fog. |
 
 Source: [src/scenes/fog_bank.gd](../src/scenes/fog_bank.gd) (extends `GhostScene`)
 
@@ -389,11 +471,12 @@ Fog volume - REAL 3D fog: a low, wide bank of soft gaussian puffs receding into 
 
 layers: `bed`, `fog`, `stars`, `volumetric`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `air` Air | `thin`, `tinted`, `soup` | The air the haze hangs in: thin and nearly clear with the sky showing through, tinted, or a starless layered soup. |
+| `stars` Stars | `50` to `140` | How many stars show above the haze, when the air is clear enough for them. |
 
 Source: [src/scenes/fog_volume.gd](../src/scenes/fog_volume.gd) (extends `GhostScene`)
 
@@ -405,6 +488,14 @@ The quietest scene: light cuts the frame and countless fine motes hang and turn 
 
 layers: `bed`, `dust`, `fog`
 
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
+
+| Setting | Options | What it sets |
+| --- | --- | --- |
+| `haze` Haze | `0.02` to `0.055` | How thick the soft haze in the room is. |
+| `haze_banks` Haze banks | `3` to `8` | How many soft banks of haze drift through the room. |
+| `beam` Beam position | `-0.35` to `0.35` | Where the beam of light falls across the frame, from left to right. |
+
 Source: [src/scenes/motes.gd](../src/scenes/motes.gd) (extends `GhostScene`)
 
 ### `petals` (canvas, drift)
@@ -415,11 +506,14 @@ Flat petals tumble (in-plane spin + flutter, the flat-subject discipline) as the
 
 layers: `bed`, `dust`, `petals`, `veil`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `fall` Fall | `blossom`, `autumn`, `spring`, `ashfall` | What is falling: blossom, autumn leaves, spring petals, or flakes of ash over a dark ground. |
+| `beam` Beam position | `-0.5` to `0.5` | Where the beam of light falls across the frame, when there is one. |
+| `drift` Mote drift | `0.004` to `0.014` | How fast the floating motes drift sideways. |
+| `smoke` Smoke | `0.25` to `0.45` | How thick the rolling smoke gets at its heaviest, when there is smoke. |
 
 Source: [src/scenes/petals.gd](../src/scenes/petals.gd) (extends `GhostScene`)
 
@@ -431,11 +525,12 @@ Fast streaks fall at a wind-blown slant whose angle sways with the bass; a low c
 
 layers: `bed`, `flare`, `fog`, `rain`, `veil`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `storm` Storm | `mist`, `drizzle`, `steady`, `downpour`, `lit` | What kind of rain falls: mist, drizzle, steady rain, a downpour, or rain in a lit street at night. |
+| `fisheye` Flare fisheye | `0.1` to `0.28` | How strongly the lamp's flare and its chain of discs bow outward, when a lamp shows. |
 
 Source: [src/scenes/rainfall.gd](../src/scenes/rainfall.gd) (extends `GhostScene`)
 
@@ -447,11 +542,12 @@ The atmospheric weather scene (distinct from `snowflakes`, the hero crystal fiel
 
 layers: `bed`, `snow`, `veil`, `volumetric`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `snow` Snow | `powder`, `flurry`, `blizzard`, `hoar` | What kind of snow falls: fine powder, a flurry of fat slow flakes, a blizzard, or a sparse hoar frost of real crystals. |
+| `whiteout` Whiteout | `0.35` to `0.55` | How close a blizzard's veil comes to a whiteout at its thickest, when there is one. |
 
 Source: [src/scenes/snowfall.gd](../src/scenes/snowfall.gd) (extends `GhostScene`)
 
@@ -463,6 +559,12 @@ The hero crystal scene (distinct from `snowfall`, the soft atmospheric one). The
 
 layers: `bed`
 
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
+
+| Setting | Options | What it sets |
+| --- | --- | --- |
+| `flakes` Flakes | `26` to `50` | How many snowflakes tumble in the frame. |
+
 Source: [src/scenes/snowflakes.gd](../src/scenes/snowflakes.gd) (extends `GhostScene`)
 
 ### `starfield` (canvas, drift, static)
@@ -473,11 +575,12 @@ A parallax field of stars over a near-black nebula bed and a wisp of colored fog
 
 layers: `bed`, `cosmos`, `flare`, `fog`, `planet`, `stars`, `volumetric`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `sky` Sky | `core`, `deep`, `nebula`, `orbit` | Which part of space the sky shows: the crowded dusty core, an empty deep field, the inside of a nebula, or an orbit close over a world. |
+| `fisheye` Flare fisheye | `0.12` to `0.3` | How strongly the lens flare and its chain of discs bow outward, when there is a flare. |
 
 Source: [src/scenes/starfield.gd](../src/scenes/starfield.gd) (extends `GhostScene`)
 
@@ -488,6 +591,13 @@ Underwater - looking up through flowing water: shafts of light from the surface,
 A blue-green bed, swaying god-`Rays` from the surface above, and `Bubbles` drifting up through them. The light shafts brighten with the music; the whole frame drifts gently.
 
 layers: `bed`, `bubbles`, `dust`, `kelp`, `rays`, `surface`
+
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
+
+| Setting | Options | What it sets |
+| --- | --- | --- |
+| `caustics` Caustics | `7` to `11` | How many wavy bands of light from the surface shimmer across the water. |
+| `sun` Sun position | `-0.4` to `0.4` | Where the distant sun glows across the top of the water, from left to right. |
 
 Source: [src/scenes/underwater.gd](../src/scenes/underwater.gd) (extends `GhostScene`)
 
@@ -509,11 +619,14 @@ What kind of vapor it is comes from one roll, because these are not independent 
 
 layers: `bed`, `dust`, `stars`, `vapor`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `character` Character | `ink`, `nebula`, `gossamer`, `plasma` | What the vapor is like: a drop of ink in still water, a nebula seen across light years, a pale gossamer cobweb, or hot plasma turning over fast. |
+| `stars` Stars | `60` to `220` | How many stars show behind the vapor, when there are any. |
+| `glow` Glow | `1.15` to `1.5` | How brightly the vapor glows overall. |
+| `motes` Motes | `40` to `120` | How many motes float in the vapor, when there are any. |
 
 Source: [src/scenes/vapors.gd](../src/scenes/vapors.gd) (extends `GhostScene`)
 
@@ -527,12 +640,17 @@ Projection - a PCA-style density map of a latent geometry, eye-shaped.
 
 A nod to the research paper's geometry figure and the dashboard's projection maps: a 3D point cloud shaped like a CALM model's latent centers - an elongated blob with a dense pupil nucleus and an iris ring, the "single eye" those gaussian-ish latents settle into - projected through a slowly tumbling 3D pose down to 2D (the top-2 projection) and rendered as a **binned density grid with log color**, exactly the figure's look. Audio drives DRAMATIC poses: the pupil dilates, the eye stretches, and beats snap the projection to a new angle. Nonlinear activations shape the cloud and the drive. One eye, varied by seed - its structure (`FORMS`: a plain iris, two concentric bands, or an iris with a sparse corona), its elongation, where the pupil sits (so it can look aside), how many latents there are and how coarsely they bin (`BINS`) are all sampled, and the colormap is one `Scheme`'s ramp.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `bins` Bins | `coarse`, `paper`, `fine` | How finely the map is binned: coarse blocky cells, the paper's 64, or fine bins that read as a smooth density cloud. |
 | `form` Form | `plain`, `banded`, `haloed` | The latent's own structure: one plain iris ring, a banded iris of two rings, or one ring haloed by a sparse corona. |
+| `points` Points | `1500` to `4200` | How many points the density map is built from. |
+| `eye_width` Eye width | `1.0` to `2.3` | How far the eye shape is stretched sideways. |
+| `iris` Iris size | `0.45` to `0.95` | How large the iris ring is. |
+| `iris_width` Iris thickness | `0.06` to `0.26` | How thick the iris ring is. |
+| `pupil` Pupil share | `0.14` to `0.4` | How much of the map gathers in the dense pupil at the center. |
 
 Source: [src/scenes/projection.gd](../src/scenes/projection.gd) (extends `GhostScene`)
 
@@ -548,6 +666,16 @@ Prototyped from a photograph of ornate towered architecture (`reference/arcbot.w
 
 RENDERING follows the `FrameForge` contract: update() snapshots the frame's inputs into a `SpireJob` (a plain RefCounted - the worker's Callable keeps it alive, and it never touches the scene node), the job builds the whole frame - shadow pass, terrain merge, loft, sort, batch - off the main thread, and _draw() only submits the finished packet. The UI cannot block on this scene, whatever the city costs.
 
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
+
+| Setting | Options | What it sets |
+| --- | --- | --- |
+| `density` Density | `0.62` to `1.0` | How many of the city's lots hold a spire rather than a plaza or a gap. |
+| `downtown` Downtown | `-0.55` to `0.9` | Whether the tall towers ring the edge, spread evenly, or cluster downtown. |
+| `distance` Camera distance | `12.5` to `16.0` | How far back the camera stands from the city. |
+| `pitch` Camera pitch | `0.48` to `0.68` | How steeply the camera looks down on the city. |
+| `sun_height` Sun height | `0.34` to `0.5` | How high the sun stands over the city. |
+
 Source: [src/scenes/spires.gd](../src/scenes/spires.gd) (extends `Scene3D`)
 
 ### `terrain` (scene3d, drift, static)
@@ -556,11 +684,16 @@ Terrain - real 3D landscapes built from the composable `Field` / `Terrain` found
 
 By seed a different world: rolling hills, ridged mountains, river valleys, a fissured canyon, ocean islands, or a banded mesa - each a recipe of `Field`s sampled into a heightfield, colored by a `Palette` plus a fine surface-texture field and slope shading, with water pooling below its level. The camera orbits under a wide lens for forced perspective; audio drives the light, not the land (the terrain holds its form).
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `landform` Landform | `hills`, `mountains`, `valleys`, `canyon`, `islands`, `mesa` | Which landform is built: rolling hills, ridged mountains, river valleys, a fissured canyon, ocean islands, or a banded mesa. |
+| `relief` Relief | `1.1` to `1.9` | How tall the land's peaks rise above its valleys. |
+| `distance` Camera distance | `5.4` to `7.2` | How far from the land the camera orbits. |
+| `pitch` Camera pitch | `0.3` to `0.52` | How steeply the camera looks down on the land. |
+| `orbit_speed` Orbit speed | `0.05` to `0.14` | How fast the camera circles the land. |
+| `sun_height` Sun height | `0.32` to `0.52` | How high the sun stands; a low sun casts long shadows. |
 
 Source: [src/scenes/terrain.gd](../src/scenes/terrain.gd) (extends `Scene3D`)
 
@@ -572,13 +705,17 @@ The metropolis idea on the `Terrain` foundation: a `Swarm` development field cre
 
 Land, layout and color are all sampled per session rather than fixed. The terrain is any of four landforms under any climate that suits it; the LAYOUT decides whether the city reads as sparse dendritic arms, a broad sprawl, thin ribbons along the ridges or several separate towns; the SKYLINE law decides whether heights are even or a rare few spires tower over everything; and a `Scheme` mood colors the blocks, developed districts walking toward its accent.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `landform` Landform | `hills`, `mesa`, `valleys`, `canyon` | The land the city is built on: hills, a mesa, valleys or a canyon. |
 | `layout` Layout | `dendritic`, `sprawl`, `ribbon`, `towns` | The city's plan: branching dendritic arms, a loose sprawl, thin ribbons, or separate towns. |
 | `skyline` Skyline | `spires`, `even`, `stepped`, `slabs` | How building heights are spread over the plots: mostly low with rare spires, an even mid-rise mass, stepped, or slabs. |
+| `plots` Plots | `26` to `34` | How many plots each side of the city grid has; fewer makes bigger blocks on a smaller town. |
+| `distance` Camera distance | `6.5` to `8.5` | How far from the city the camera orbits. |
+| `pitch` Camera pitch | `0.34` to `0.55` | How steeply the camera looks down on the city. |
+| `sun_height` Sun height | `0.34` to `0.52` | How high the sun stands; a low sun casts long shadows. |
 
 Source: [src/scenes/terrain_city.gd](../src/scenes/terrain_city.gd) (extends `Scene3D`)
 
@@ -606,12 +743,17 @@ WHAT THE SEED DECIDES: the plate (square, circular, hexagonal - each with its ow
 
 layers: `bed`, `dust`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `plate` Plate | `square`, `circle`, `hex` | The shape of the vibrating plate: a square, a circle or a hexagon, each with its own family of patterns. |
 | `finish` Finish | `brushed`, `matte`, `slate`, `chalk` | The plate's surface: brushed metal, matte black, slate, or chalk - a pale board with dark filings on it. |
+| `rim` Rim | `0.18` to `0.5` | How clearly the thin line around the plate's edge shows. |
+| `plate_size` Plate size | `0.7` to `0.88` | How much of the frame the vibrating plate fills. |
+| `lamp_height` Lamp height | `0.1` to `0.45` | How high the lamp at the side stands; a low lamp rakes long shadows across the ridges of sand. |
+| `grains` Grains | `4000` to `14000` | How many grains of sand lie on the plate. |
+| `hold` Figure hold | `4.0` to `20.0` | The fewest seconds one sand figure holds before the plate changes to another. |
 
 Source: [src/scenes/chladni.gd](../src/scenes/chladni.gd) (extends `GhostScene`)
 
@@ -649,11 +791,16 @@ What the seed decides: the season and its mood; the wooded landform and a climat
 
 layers: `bed`, `rays`, `veil`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `season` Season | `spring`, `summer`, `autumn`, `winter` | The time of year the wood is in - spring, summer, autumn or winter - which sets its colors, how thick the leaves are, which climates it may take and what drifts through the air. |
+| `ridges` Ridges or valleys | `-1.0` to `0.55` | Whether the wood gathers down in the valleys or up along the ridges. |
+| `tree_line` Tree line | `0.55` to `0.95` | How high up the hills the trees grow before the wood gives out. |
+| `trees` Trees | `260` to `620` | How many trees the wood tries to grow on the hillside. |
+| `stands` Stands | `5` to `14` | How many separate stands of trees the wood is gathered into. |
+| `gust` Gust strength | `0.1` to `0.26` | How hard each gust of wind bends the trees as it crosses the wood. |
 
 Source: [src/scenes/canopy.gd](../src/scenes/canopy.gd) (extends `Scene3D`)
 
@@ -683,11 +830,16 @@ The simulation runs on a `SimClock` at 60 Hz with a two-tick ceiling per call. N
 
 layers: `bed`, `dust`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `pins` Pins | `line`, `corners`, `diagonal`, `point` | How the sheet is pinned: along a line of pegs across the top, from its two top corners, down one side like a half-struck flag, or from a single peg at the center of the top edge. |
+| `width` Width | `1.0` to `1.55` | How wide the sheet is across the frame. |
+| `length` Length | `0.62` to `0.92` | How far the sheet hangs down from its line. |
+| `tear_delay` Tear delay | `1.2` to `3.6` | How many seconds the sheet hangs whole before it may start to tear. |
+| `wind` Wind | `0.05` to `0.16` | How hard the steady wind blows on the sheet when the music is quiet. |
+| `opacity` Opacity | `0.25` to `0.8` | How solid the fabric looks, from sheer to nearly opaque. |
 
 Source: [src/scenes/cloth.gd](../src/scenes/cloth.gd) (extends `GhostScene`)
 
@@ -715,11 +867,16 @@ WHAT THE SEED DECIDES: the two spectral bases the land evolves through - how man
 
 HONEST DETERMINISM CAVEAT, the same one `glyphs` carries. The land, the ladder, the palette, the alphabet and the ring of warp offsets are seed-derived and reproduce exactly. WHICH summits get marked and when does not: the live analyzer and the offline bake do not produce identical beat streams. No rng is ever drawn on an audio-conditioned event - the warp offsets come from a pre-rolled ring taken by a counter.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `land` Land | `fbm`, `ridged`, `billow`, `cells` | What kind of land the map shows: rolling hills (fbm), a ridged mountain chain, dunes (billow), or a fractured plateau of scarps (cells). |
+| `span` Span | `1.1` to `2.6` | How wide a stretch of land the map sheet shows. |
+| `levels` Contour lines | `8` to `22` | How many contour lines are drawn across the land. |
+| `index_every` Index spacing | `4` to `6` | How many contour lines apart the heavier index lines fall. |
+| `hatch` Hatch spacing | `4.0` to `12.0` | How far apart the hatching lines are drawn. |
+| `sea_level` Sea level | `0.0` to `0.35` | How much of the low ground lies under the sea, when the map has water. |
 
 Source: [src/scenes/contour_map.gd](../src/scenes/contour_map.gd) (extends `GhostScene`)
 
@@ -743,12 +900,17 @@ COST. The sim and the batching BOTH run inside a `FrameForge` job that owns the 
 
 layers: `dust`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `chamber` Chamber | `ledges`, `hourglass`, `silo`, `open` | The chamber the material falls through: ledges that break the fall into cascades, an hourglass that chokes the pour at a waist, a plain silo, or open sides it walks off. |
 | `wall` Wall colors | `earth`, `desert`, `alpine`, `ocean` | Which elevation ramp colors the strata of the chamber wall: earth, desert, alpine or ocean. |
+| `wall_brightness` Wall brightness | `0.3` to `0.62` | How bright the colored strata of the chamber wall are. |
+| `spouts` Spouts | `2` to `5` | How many spouts pour material into the chamber from the ceiling. |
+| `hatch_gap` Hatch gap | `3.5` to `10.0` | The fewest seconds between one opening of the floor hatches and the next. |
+| `hatch_open` Hatch open | `0.35` to `1.3` | How many seconds the floor hatches stay open each time they open. |
+| `fill` Opening fill | `0.1` to `0.4` | How full of material the chamber already is when the scene opens. |
 
 Source: [src/scenes/falling_sand.gd](../src/scenes/falling_sand.gd) (extends `GhostScene`)
 
@@ -772,11 +934,16 @@ HONEST DETERMINISM CAVEAT. The alphabet, the hand, the layout and the pre-writte
 
 layers: `bed`, `dust`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `layout` Layout | `page`, `column`, `banner`, `spiral` | How the writing is laid out: a page, a column, a banner, or a spiral that stops reading as paper. |
+| `margin` Margin | `0.04` to `0.14` | How wide the empty margin around the writing is. |
+| `line_spacing` Line spacing | `1.3` to `2.1` | How far apart the lines of writing are. |
+| `pace` Writing pace | `0.25` to `0.8` | How long the pen takes over each character, as a share of a beat. |
+| `word_pause` Word pause | `0.35` to `0.95` | How long the pen rests between words. |
+| `prefill` Already written | `0.15` to `0.7` | How much of the page is already written when the scene opens. |
 
 Source: [src/scenes/glyphs.gd](../src/scenes/glyphs.gd) (extends `GhostScene`)
 
@@ -795,6 +962,16 @@ AUDIO, WHICH IS THE THREE WEIGHTS. Separation never moves - personal space is no
 MEASURED REALITY. f.energy is a mean over 64 bands and rarely passes 0.5; f.flux lives around 0.01-0.05. So the drives here are written for those ranges - alignment reads (f.high + f.treble) * 1.7 clamped, and the walk speed is movement + 14 * flux, not the nominal unit quantities a 0..1 reading would suggest. COST, AND AN HONEST COUNT. The solver and the batching both live in a `FrameForge` job; the scene never touches a bird. A real murmuration is tens of thousands of starlings, but that is not a number GDScript reaches: the working ceiling on a ghost worker is around half a million interpreted operations per tick (falling_sand's 23k-cell sweep at 25 Hz is the reference point), and a bird costs roughly three hundred of them once the eight-cell block query, the scan cap and the query stride are in. That puts the honest range at [900, 2400], which is what is sampled - a flock drawn as animals with wings that beat, rather than nine thousand dots that never render. The sim runs on a `SimClock` at a sampled 22-30 Hz and the renderer interpolates between the last two solver states, so the motion is smooth at display rate while the physics stays frame-rate independent - not optional here, since the Director sub-steps update() up to fifteen times in one frame, pre-warms every scene twelve times before it is drawn, and an Echo re-localize can fast-forward hundreds of calls.
 
 layers: `clouds`, `rays`
+
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
+
+| Setting | Options | What it sets |
+| --- | --- | --- |
+| `horizon` Horizon | `0.6` to `0.93` | How low in the frame the horizon sits. |
+| `birds` Birds | `900` to `2400` | How many birds are in the flock. |
+| `bird_speed` Bird speed | `0.1` to `0.16` | How fast the birds fly. |
+| `hawk_gap` Hawk gap | `6.0` to `16.0` | The fewest seconds between one hawk attack on the flock and the next. |
+| `bird_size` Bird size | `0.007` to `0.014` | How large each bird is. |
 
 Source: [src/scenes/murmuration.gd](../src/scenes/murmuration.gd) (extends `GhostScene`)
 
@@ -824,11 +1001,16 @@ The propagation and the packets run on a `SimClock`, not on `update()`: the Dire
 
 layers: `bed`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `topology` Topology | `slab`, `funnel`, `bottleneck`, `fan_out` | How the sheets change size through the network: a slab of equal sheets, a funnel that narrows toward the output, a bottleneck that pinches in the middle, or a fan that widens. |
+| `sheets` Sheets | `3` to `6` | How many sheets of neurons the network is stacked in. |
+| `rows` Rows | `4` to `9` | How many rows of neurons each sheet has. |
+| `sheet_spacing` Sheet spacing | `0.5` to `1.2` | How far apart the sheets of neurons stand in depth. |
+| `connections` Connections | `2` to `5` | How many connections each neuron reaches out to the next sheet, at most. |
+| `neuron_size` Neuron size | `0.07` to `0.14` | How large each neuron's disc is drawn. |
 
 Source: [src/scenes/neural_field.gd](../src/scenes/neural_field.gd) (extends `Scene3D`)
 
@@ -856,6 +1038,16 @@ The wave is analytic and needs no integration, but the drips and amplitude envel
 
 layers: `dust`
 
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
+
+| Setting | Options | What it sets |
+| --- | --- | --- |
+| `wave_speed` Wave speed | `0.08` to `0.17` | How fast the waves move across the pool. |
+| `wave_height` Wave height | `0.03` to `0.075` | How tall the waves stand for their length. |
+| `murk` Murk | `0.15` to `0.85` | How murky the water over the pool floor is. |
+| `stones` Stones | `20` to `90` | How many stones lie on the pool floor. |
+| `weed` Weed | `0.0` to `0.9` | How much of the pool floor is covered in weed. |
+
 Source: [src/scenes/tidepool.gd](../src/scenes/tidepool.gd) (extends `GhostScene`)
 
 ## Completely fixed frame suits a fall that is already all the motion there is
@@ -880,12 +1072,17 @@ FLOAT64 IS NOT OPTIONAL ON THIS SIDE. The anchor is held as two loose `float`s a
 
 WHAT THE SEED DECIDES: the family (mandelbrot / julia / burning ship / tricorn / celtic / buffalo) and its integer power; for a Julia set, where its parameter sits on the cardioid and how it drifts; the anchor, found by a local search that walks toward the boundary; the coloring (smooth escape count, stripe average, three orbit traps, exterior distance) and its parameters; the palette, built as a seamless cyclic ramp from a `Scheme`; how the interior is treated; the iteration budget; the zoom's direction, speed and turning points; the frame's slow rotation; and the vignette.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `family` Family | `mandelbrot`, `julia`, `burning_ship`, `tricorn`, `celtic`, `buffalo` | Which fractal family is drawn: the Mandelbrot set, a Julia set, the burning ship, the tricorn, the celtic or the buffalo. |
 | `direction` Direction | `push`, `pull` | Which way the zoom goes: falling inward (push) or climbing back out (pull). |
+| `bands` Color bands | `0.007` to `0.033` | How tightly the bands of color repeat across the fractal. |
+| `color_flow` Color flow | `-0.045` to `0.045` | How fast the colors cycle through the bands, and which way. |
+| `vignette` Vignette | `0.1` to `0.42` | How much the corners of the frame darken. |
+| `interior` Interior brightness | `0.02` to `0.16` | How bright the inside of the set is drawn. |
+| `spin` Spin | `-0.055` to `0.055` | How fast the view turns as it zooms, and which way. |
 
 Source: [src/scenes/fractal_zoom.gd](../src/scenes/fractal_zoom.gd) (extends `GhostScene`)
 
@@ -905,12 +1102,17 @@ WHAT THE MUSIC DOES. The SPEED, which is the whole feeling of the thing - loud i
 
 THE COST, AND WHY IT IS OFF-THREAD. A frame is around a thousand quads, each projected, culled, shaded and depth-sorted - five to fifteen milliseconds of GDScript, which is most of a frame budget. It is built inside a `FrameForge` job like the other scene3d scenes. The one frame of latency that costs is uniform (the job is kicked every frame and delivered in order), so it reads as a constant time offset rather than as judder.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `track` Track | `glide`, `weave`, `corkscrew`, `coaster` | How hard the track turns: a gentle glide, a weave, a corkscrew that rolls, or a coaster that turns right over. |
 | `profile` Cross-section | `round`, `fluted`, `star`, `duct`, `ribbed` | The tube's cross-section: round, fluted, star-shaped, a duct, or ribbed. |
+| `twist` Twist | `-0.16` to `0.16` | How fast the tunnel's grooves spiral past, and which way. |
+| `width` Tunnel width | `1.0` to `1.7` | How wide the tunnel is. |
+| `chambers` Chambers | `0.1` to `0.3` | How much the tunnel opens out into wider chambers along its length. |
+| `seams` Seams | `0` to `4` | How many pale seams run along the tunnel wall. |
+| `speed` Speed | `4.0` to `10.0` | How fast the ride travels down the tunnel. |
 
 Source: [src/scenes/tunnel_run.gd](../src/scenes/tunnel_run.gd) (extends `Scene3D`)
 
@@ -928,9 +1130,9 @@ The iris color comes from a `Scheme` mood and the eye's size on screen from a na
 
 morph out: `eye`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `size` Size | `distant`, `portrait`, `looming` | How big the eye is in the frame: a distant speck in the void, a portrait, or looming right up against the lens. |
 
@@ -946,9 +1148,9 @@ The two eyes' composition continues, but the RIGHT eye dissolves and CRYSTALLIZE
 
 morph in: `eyes` · morph out: `eye2prism`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `composition` Composition | `crowded`, `human`, `wide` | How the pair of eyes is placed: crowded close together, at human spacing, or set wide apart. |
 
@@ -964,9 +1166,9 @@ Color is a `Scheme` mood rather than the old blue-or-red coin flip. Only the hue
 
 THE SHELL DOES NOT VARY. It is the browser tetrahedron, every time - see `PrismBody`'s `form` for the five-way shell roll that briefly lived there and why it was taken out. A prism is a tetrahedron; the variety belongs in its color and its framing, not in its solid. The liberty this scene takes on top is PRESENCE.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `presence` Presence | `distant`, `portrait`, `looming` | How much of the frame the prism claims: a distant mote, a portrait, or a looming shape that overruns the view. |
 
@@ -980,9 +1182,9 @@ It begins as a SINGLE blue `PrismBody` at center. Energy builds a TENSION: a red
 
 Color and geometry both come off one roll. The pair takes a `Scheme` mood - the original on its base hue, the clone on the mood's counter hue (see `Scheme.opposed`) - so "blue splits into red" is now one outcome of many rather than the only one. The structural liberty is the SPLIT ITSELF: which way the thing comes apart, which is this scene's whole composition.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `split` Split | `lateral`, `diagonal`, `cleave` | How the prism comes apart: a wide sideways break, a diagonal one, or a tight vertical cleave. |
 
@@ -1000,9 +1202,9 @@ Both liberties this scene takes are about the SWARM: a `FORMATION` decides how m
 
 morph in: `prisms`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `formation` Formation | `file`, `pair`, `shoal` | The shape of the swarm flying the track: a file of six to eight prisms, a pair of a few large ones, or a shoal of a dozen small ones. |
 
@@ -1018,9 +1220,9 @@ Color comes from a `Scheme` mood (the same iris moods the single eye draws from)
 
 morph in: `eye` · morph out: `eyes`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `spacing` Spacing | `crowded`, `human`, `wide` | How far apart the eyes sit: crowded and front-set, at human spacing, or set wide like prey or something alien. |
 
@@ -1038,11 +1240,12 @@ The pair takes a `Scheme` mood: the lead on its base hue, the counter on the moo
 
 morph in: `eye2prism` · morph out: `prisms`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `staging` Staging | `close`, `paired`, `apart` | How the pair is staged: small prisms close together, a matched pair, or larger ones set apart. |
+| `tilt` Tilt | `-0.55` to `0.55` | How far the line between the two prisms leans from level. |
 
 Source: [src/scenes/two_prisms.gd](../src/scenes/two_prisms.gd) (extends `GhostScene`)
 
@@ -1060,11 +1263,13 @@ The seed picks a FIGURE first, and the four figures are different curves, not di
 
 layers: `bed`
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `figure` Figure | `harmonograph`, `lissajous`, `spirograph`, `pendulum` | The figure the pen traces: a folding harmonograph rosette, a closed Lissajous braid, spirograph petal loops around an open ring, or a damped pendulum that spirals in. |
+| `opacity` Line opacity | `0.75` to `0.95` | How solid the traced lines are. |
+| `wash` Background | `0.05` to `0.13` | How bright the faint wash behind the line work is, when there is one. |
 
 Source: [src/scenes/orbits.gd](../src/scenes/orbits.gd) (extends `GhostScene`)
 
@@ -1100,10 +1305,15 @@ THE ONE GUARD THIS SCENE NEEDS is multiplicative, and it is why the cell size is
 
 HOW IT DRAWS. The motif is identical in every cell, so the frame is built ONCE per cell - every coset, every element, fills then keylines, a few thousand triangles - and that single triangle array is then submitted per cell under a shifted transform. The cost is two RenderingServer calls per cell instead of the tens of thousands of GDScript vertex appends a naive full-plane batch would need; measured against the budget, that is the difference between about a millisecond and about twenty.
 
-An entry can tell it, under `set` (unset, the seed draws one):
+An entry can tell it, under `set` (unset, the seed draws one; a number may be told as a narrower range, `[lo, hi]`):
 
-| Setting | Options | What it chooses |
+| Setting | Options | What it sets |
 | --- | --- | --- |
 | `group` Group | `p1`, `p2`, `pm`, `pg`, `cm`, `pmm`, `pmg`, `pgg`, `cmm`, `p4`, `p4m`, `p4g`, `p3`, `p3m1`, `p31m`, `p6`, `p6m` | Which of the 17 wallpaper symmetry groups tiles the pattern, from a plain p1 repeat to the mirror and six-fold groups. |
+| `cell_ratio` Cell ratio | `0.72` to `1.4` | How stretched the repeating tile is, where the symmetry group allows it. |
+| `inks` Ink colors | `2` to `4` | How many related ink colors the pattern is printed in. |
+| `keyline` Keyline width | `0.8` to `2.4` | How thick the outline around each shape is. |
+| `glide_beats` Glide beats | `1` to `4` | How many beats pass between one glide of the pattern and the next. |
+| `cluster` Motif cluster | `0.05` to `0.2` | How tightly the shapes of each motif gather together. |
 
 Source: [src/scenes/wallpaper.gd](../src/scenes/wallpaper.gd) (extends `GhostScene`)

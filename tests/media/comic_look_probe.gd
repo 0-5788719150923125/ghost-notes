@@ -46,7 +46,7 @@ var _settle := 90
 ## framing that is not going anywhere.
 ##
 ## THE AIM, NOT THE EYE, and that distinction is the whole measurement. The sheet's attitude
-## drifts forever (ComicMedium.DRIFT), and the eye is placed relative to the sheet, so the
+## drifts forever (ComicCamera.DRIFT), and the eye is placed relative to the sheet, so the
 ## eye keeps moving at 0.05 world units a second even when the framing has been locked on
 ## one corner for twenty seconds. Measuring the eye says the camera is alive; measuring what
 ## it is LOOKING AT says it is not. The second one is what the report was about.
@@ -192,7 +192,7 @@ func _shoot() -> void:
 				_live.view.commit(DT)
 			medium.advance(Spectrum.current, DT, 1.0)
 			if comic:
-				var aim: Vector2 = medium._cam["aim"]
+				var aim: Vector2 = medium._camera._cam["aim"]
 				if i >= _settle - 30:
 					if i > _settle - 30:
 						travel += was_aim.distance_to(aim)

@@ -119,11 +119,21 @@ var _morph_target := 0.0
 var _reink_t := 0.0
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"group": {"label": "Group", "type": "choice", "options": "GROUP_POOL", "default": null,
 		"blurb": "Which of the 17 wallpaper symmetry groups tiles the pattern, from a plain p1 repeat to the mirror and six-fold groups."},
+	"cell_ratio": {"label": "Cell ratio", "type": "num", "range": [0.72, 1.40], "default": null,
+		"blurb": "How stretched the repeating tile is, where the symmetry group allows it."},
+	"inks": {"label": "Ink colors", "type": "num", "range": [2, 4], "default": null,
+		"blurb": "How many related ink colors the pattern is printed in."},
+	"keyline": {"label": "Keyline width", "type": "num", "range": [0.8, 2.4], "default": null,
+		"blurb": "How thick the outline around each shape is."},
+	"glide_beats": {"label": "Glide beats", "type": "num", "range": [1, 4], "default": null,
+		"blurb": "How many beats pass between one glide of the pattern and the next."},
+	"cluster": {"label": "Motif cluster", "type": "num", "range": [0.05, 0.20], "default": null,
+		"blurb": "How tightly the shapes of each motif gather together."},
 }
 
 
@@ -133,7 +143,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# A printed pattern is abstract matter - no mood is wrong for it, so take the whole set.
 	var sch := Scheme.pick(rng)
 	var gname := String(choice("group", rng))
-	var ratio := rng.randf_range(0.72, 1.40)
+	var ratio: float = number("cell_ratio", rng)
 	var angle := rng.randf_range(50.0, 90.0)
 	# Build the group once at unit cell length purely to learn its ORDER, which the element
 	# count has to be capped against before anything else can be sized.
@@ -144,7 +154,7 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	var n_el := rng.randi_range(2, clampi(int(30.0 / float(order)), 2, 5))
 
 	var high_key := rng.randf() < 0.5
-	var n_hue := rng.randi_range(2, 4)
+	var n_hue: int = number("inks", rng)
 	_inks = _build_inks(rng, sch, n_hue, high_key)
 	_key_col = (Color.from_hsv(sch.hue, 0.22, rng.randf_range(0.05, 0.11))
 		if high_key else Color.from_hsv(sch.hue, 0.08, rng.randf_range(0.88, 0.97)))
@@ -196,12 +206,12 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"ground_val": g_val,
 		"ground_hue": sch.hue,
 		"tint": rng.randf_range(0.20, 0.45),
-		"key_width": rng.randf_range(0.8, 2.4),
+		"key_width": number("keyline", rng),
 		"key_lo": key_lo,
 		"key_hi": minf(1.0, key_lo + rng.randf_range(0.10, 0.32)),
 		"budget": rng.randf_range(float(BUDGET[0]), float(BUDGET[1])),
 		"beat_thr": rng.randf_range(0.35, 0.60),
-		"glide_every": rng.randi_range(1, 4),
+		"glide_every": number("glide_beats", rng),
 		"glide_frac": rng.randf_range(0.35, 0.80),
 		"reink_hold": rng.randf_range(0.10, 0.30),
 		"morph_gain": rng.randf_range(0.8, 1.6),
@@ -258,7 +268,7 @@ func _build_motif(rng: RandomNumberGenerator, probe: WallpaperGroup, n_el: int, 
 	var rv: Array = region["v"]
 	var anchor := (probe.a1 * rng.randf_range(float(ru[0]), float(ru[1]))
 		+ probe.a2 * rng.randf_range(float(rv[0]), float(rv[1])))
-	var cluster := rng.randf_range(0.05, 0.20)
+	var cluster: float = number("cluster", rng)
 	var jit_amp := rng.randf_range(0.10, 0.50)
 	var out: Array = []
 	for i in n_el:

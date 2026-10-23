@@ -27,6 +27,20 @@ const COLUMNS := [
 ]
 
 
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.number]): a storyboard entry's `set`, by name;
+## a setting not told is drawn from the seed, as it always was.
+const FIELDS := {
+	"caustics": {"label": "Caustics", "type": "num", "range": [5, 11], "default": null,
+		"blurb": "How many wavy bands of light from the surface shimmer across the water."},
+	"sun": {"label": "Sun position", "type": "num", "range": [-0.4, 0.4], "default": null,
+		"blurb": "Where the distant sun glows across the top of the water, from left to right."},
+	"beam": {"label": "Beam position", "type": "num", "range": [-0.3, 0.3], "default": null,
+		"blurb": "Where the beam of light through the suspended particles falls across the frame."},
+	"drift": {"label": "Particle drift", "type": "num", "range": [0.002, 0.008], "default": null,
+		"blurb": "How fast the suspended particles drift sideways through the water."},
+}
+
+
 func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	render_kind = "canvas"
 	framing = "field"
@@ -40,14 +54,14 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	# Light pouring down from the surface (with caustics) - only where any reaches.
 	# A trench with a lit ceiling is not a trench.
 	if bool(col["lit"]):
-		add_layer("surface", rng, {"hue": sch.accent, "caustics": rng.randi_range(5, 11),
-			"sun_x": rng.randf_range(-0.4, 0.4)})
+		add_layer("surface", rng, {"hue": sch.accent, "caustics": number("caustics", rng),
+			"sun_x": number("sun", rng)})
 	add_layer("kelp", rng, {"hue": sch.vary(rng), "form": String(col["form"]),
 		"fronds": rng.randi_range(int(col["fronds"][0]), int(col["fronds"][1])),
 		"glows": rng.randi_range(int(col["glows"][0]), int(col["glows"][1]))})
 	add_layer("dust", rng, {"hue": sch.vary(rng), "shaft": bool(col["lit"]),
 		"count": rng.randi_range(int(col["dust"][0]), int(col["dust"][1])),
-		"shaft_x": rng.randf_range(-0.3, 0.3), "drift": rng.randf_range(0.002, 0.008)})
+		"shaft_x": number("beam", rng), "drift": number("drift", rng)})
 	add_layer("bubbles", rng, {
 		"hue": sch.vary(rng, 0.5),
 		"count": rng.randi_range(int(col["bubbles"][0]), int(col["bubbles"][1])),

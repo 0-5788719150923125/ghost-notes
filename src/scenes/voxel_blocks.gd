@@ -36,11 +36,19 @@ var _act: Activation
 var _sch: Scheme
 
 
-## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice]): a storyboard entry's `set`, by name;
-## a setting not told is drawn from the seed, as it always was.
+## WHAT THIS SCENE CAN BE TOLD ([method GhostScene.choice], [method GhostScene.number]): a storyboard
+## entry's `set`, by name; a setting not told is drawn from the seed, as it always was.
 const FIELDS := {
 	"scale": {"label": "Scale", "type": "choice", "options": "SCALES", "default": null,
 		"blurb": "The scale the equalizer is built at: a small plot, a terrace that overflows the frame, or a vast city with the camera down among the blocks."},
+	"terrace_still": {"label": "Terrace stillness", "type": "num", "range": [0.2, 0.65], "default": null,
+		"blurb": "How many of a terrace's columns stand still as a skyline instead of moving with the music."},
+	"city_still": {"label": "City stillness", "type": "num", "range": [0.45, 0.8], "default": null,
+		"blurb": "How many of a city's columns stand still as a skyline instead of moving with the music."},
+	"tile": {"label": "Tile size", "type": "num", "range": [0.050, 0.095], "default": null,
+		"blurb": "How wide each block's tile is, when the build is a small plot."},
+	"pitch": {"label": "View pitch", "type": "num", "range": [0.40, 0.66], "default": null,
+		"blurb": "How steeply the view looks down on the blocks."},
 }
 
 
@@ -62,9 +70,9 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 	if sname == "plot":
 		sparsity = 0.0 if rng.randf() < 0.4 else rng.randf_range(0.35, 0.7)
 	elif sname == "terrace":
-		sparsity = rng.randf_range(0.2, 0.65)
+		sparsity = number("terrace_still", rng)
 	else:
-		sparsity = rng.randf_range(0.45, 0.8)
+		sparsity = number("city_still", rng)
 	_act = Activation.new(grid * grid, rng, sparsity)
 	# Tall blocks travel toward the accent hue, so height is a color axis on the
 	# scheme rather than an arbitrary shift off an arbitrary hue.
@@ -74,8 +82,8 @@ func build_params(rng: RandomNumberGenerator) -> Dictionary:
 		"scale": sname,
 		"mood": _sch.name,
 		"over": rng.randf_range(float(ov[0]), float(ov[1])),   # >0 => span the frame
-		"tile": rng.randf_range(0.050, 0.095),                 # plot tile half-width
-		"pitch": rng.randf_range(0.40, 0.66),                  # iso squash: 2:1 was fixed
+		"tile": number("tile", rng),                 # plot tile half-width
+		"pitch": number("pitch", rng),                  # iso squash: 2:1 was fixed
 		"max_h": rng.randf_range(float(mh[0]), float(mh[1])),
 		"base": base,                                          # structural floor (skyline)
 		"hue": _sch.hue,

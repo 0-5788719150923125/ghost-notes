@@ -379,13 +379,13 @@ func made_count(step: String) -> Vector2i:
 	return Vector2i(n, all.size())
 
 
-## Can set [param set_id] (the chosen one by default) be played - every step the Likeness reads, made
-## (stale or not)?
-func playable(set_id := "") -> bool:
+## Can set [param set_id] (the chosen one by default) be played by [param renderer] - every step it reads,
+## made (stale or not)?
+func playable(set_id := "", renderer := "2d") -> bool:
 	var sid := set_id if not set_id.is_empty() else chosen_set()
 	if sid.is_empty():
 		return false
-	for step in ActorSteps.PLAYS:
+	for step in ActorSteps.plays(renderer):
 		if state_of(String(step), "s:" + sid if ActorSteps.per(String(step)) == "set" else "") == "missing":
 			return false
 	return true

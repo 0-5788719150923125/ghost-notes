@@ -15,10 +15,10 @@ extends Node
 ## stayed green while the reports were "the camera jumps to correct its position, landing on
 ## the exact same frame", "it never stops moving", "wild angles". Neither instrument could
 ## have caught any of it, because the defects live BETWEEN frames and BELOW the move layer:
-## _place_eye derives the rake from the panel being read, the scale from whichever panel the
-## aim is inside, and the distance from a solve that changes branch at the film panel's edge.
-## All three are step functions the move vocabulary cannot see, so no amount of measuring the
-## vocabulary reaches them.
+## ComicCamera.place_eye derives the rake from the panel being read, the scale from whichever
+## panel the aim is inside, and the distance from a solve that changes branch at the film panel's
+## edge. All three are step functions the move vocabulary cannot see, so no amount of measuring
+## the vocabulary reaches them.
 ##
 ## So this measures the SHEET'S SILHOUETTE IN SCREEN SPACE, frame to frame. That is the
 ## picture. Whatever moved it - a move, a rake step, a solve changing branch, a follower - it
@@ -59,6 +59,11 @@ extends Node
 ## It asserts nothing on the first run. Print the numbers, look at them, and set the bars from
 ## a build that has been WATCHED - a threshold invented before anyone has seen the baseline is
 ## how a gate ends up green against a broken picture.
+##
+## AND THE BOOK'S LIFE, which these do assert, each with a control that must fail: a second
+## attach on the same seed plays the same camera, frame for frame ([method _check_reattach]), and
+## a session's end makes nothing - no scene cast, no viewport left running, no pick made through
+## a Director already detached ([method _check_release]).
 
 var _fails: Array = []
 ## Seconds of camera driven per setting, at FPS. Long enough to contain several Director holds
@@ -97,6 +102,10 @@ const HOLD_FRAMES := 15
 ## was motionless for most of them. Expressed as a fraction of the page's on-screen size, so it
 ## means the same thing at every framing.
 const ZOOM_DEADBAND := 0.02
+## The reattach check: frames driven after each attach, and a Director cut every so many of them -
+## enough cuts to reach a page turn, at the busy end of the Camera knob where the shots vary most.
+const REATTACH_FRAMES := 360
+const REATTACH_CUT := 40
 
 
 func _ready() -> void:
@@ -117,6 +126,12 @@ func _run() -> void:
 	for sev: float in LEVELS:
 		Director.set_camera(sev)
 		_drive(comic, sev)
+	# THE BOOK'S LIFE, on no footage: an imported clip is warmed a window at a time, so the
+	# author's own library would make two attaches differ for a reason that is not the camera.
+	Films.use_for_test([], 0.0)
+	Director.set_camera(2.0)
+	_check_reattach(stage, comic)
+	_check_release(stage, comic)
 	Director.set_camera(was)
 	Director.detach()
 	stage.queue_free()
@@ -136,9 +151,9 @@ func _run() -> void:
 
 ## HOW MUCH DOES THE PICTURE MOVE WITH THE CAMERA PINNED?
 ##
-## The rig is page-local: `_place_eye` builds the eye offset in SPREAD space and rotates it by
+## The rig is page-local: `place_eye` builds the eye offset in SPREAD space and rotates it by
 ## the sheet's attitude, so the sheet's own drift is supposed to rotate the camera and the page
-## by the same matrix and leave the projection invariant. comic.gd states that as measured fact
+## by the same matrix and leave the projection invariant. The medium states that as measured fact
 ## - "1.1e-12 px over 60 s". If it is not true, the page slides under a camera that has been
 ## asked to hold, which is indistinguishable from a camera that will not hold, and no amount of
 ## work in the shot layer can fix it.
@@ -156,31 +171,31 @@ func _check_pinned(comic: ComicMedium) -> void:
 	# slightly WORSE, so what is left is float noise in the solve, not the drift.
 	for _w in int(8.0 / dt):
 		comic.advance(Spectrum.current, dt, 0.0)
-	var pinned: Dictionary = (comic._cam as Dictionary).duplicate()
+	var pinned: Dictionary = (comic._camera._cam as Dictionary).duplicate()
 	# A/B: the same run with the sheet's ATTITUDE also frozen. If the motion vanishes it is the
 	# page drift and the rig is not invariant to it; if it survives, it is something in
-	# _place_eye that is still converging or still stepping.
+	# place_eye that is still converging or still stepping.
 	var worst := 0.0
 	var worst_still := 0.0
 	var eye_move := 0.0
 	for pass_i in 2:
-		var att_frozen: Basis = comic._att_basis
+		var att_frozen: Basis = comic._camera.att_basis
 		var prev := PackedVector2Array()
-		var prev_eye: Vector3 = comic._eye
+		var prev_eye: Vector3 = comic._camera._eye
 		for i in int(20.0 / dt):
-			comic._cam = pinned.duplicate()
-			comic._tgt = pinned.duplicate()
-			# ...AND THE SHOT MUST NOT BE HOLDING, or _ease overwrites the target we just
-			# pinned with the hold creep and the camera chases a point that flips between the
+			comic._camera._cam = pinned.duplicate()
+			comic._camera._tgt = pinned.duplicate()
+			# ...AND THE SHOT MUST NOT BE HOLDING, or the camera's advance overwrites the target we
+			# just pinned with the hold creep and the camera chases a point that flips between the
 			# two every frame. That is the probe fighting the medium, and it showed up as a
 			# residual that was identical with the sheet's attitude frozen - which should have
 			# been the clue, since a drift artifact would have to change when the drift stops.
-			comic._shot["arrived"] = false
+			comic._camera._shot["arrived"] = false
 			comic.advance(Spectrum.current, dt, 0.0)
 			if pass_i == 1:
-				comic._att_basis = att_frozen
-				comic._place_eye(dt)
-			comic._prepare_lens()
+				comic._camera.att_basis = att_frozen
+				comic._camera.place_eye(dt)
+			comic._camera.prepare_lens()
 			var q := _grid(comic)
 			if q.size() == prev.size() and q.size() > 0:
 				for k in q.size():
@@ -189,9 +204,9 @@ func _check_pinned(comic: ComicMedium) -> void:
 					else:
 						worst_still = maxf(worst_still, q[k].distance_to(prev[k]))
 			if pass_i == 0:
-				eye_move = maxf(eye_move, comic._eye.distance_to(prev_eye))
+				eye_move = maxf(eye_move, comic._camera._eye.distance_to(prev_eye))
 			prev = q
-			prev_eye = comic._eye
+			prev_eye = comic._camera._eye
 	print("  camera+target PINNED 20s -> picture moved %.6f of frame per frame (eye moved %.6f world)"
 		% [worst, eye_move])
 	print("  ...and with the sheet's ATTITUDE frozen too -> %.6f" % worst_still)
@@ -201,6 +216,119 @@ func _check_pinned(comic: ComicMedium) -> void:
 	# keeping: freezing the sheet's attitude does not remove the residual, so the page-local
 	# rig's projection invariance is not the cause of anything - which is what it was written
 	# to test. Left in as a diagnostic to read, not as a bar to clear.
+
+
+## A SECOND ATTACH ON THE SAME SEED PLAYS THE SAME CAMERA.
+##
+## The medium outlives a session - main owns it, and a reading or a synthesis take attaches it
+## again - so whatever a new book does not put back, the second session inherits from the first:
+## the count that seeds every shot, the pose and its target, the walks, the sheet's attitude. On the
+## same seed the second show then frames other panels from other angles, and nothing in either
+## picture says why. This attaches twice and drives the same frames and cuts, comparing what the eye
+## sees (the grid nailed to the paper) and the pose behind it, frame by frame.
+##
+## TWO-SIDED: the same two attaches with the camera's reset skipped ([StuckCamera]) must differ,
+## or the comparison cannot see what it is here for.
+func _check_reattach(stage: SubViewport, comic: ComicMedium) -> void:
+	var a := _attached_run(stage, comic)
+	var b := _attached_run(stage, comic)
+	var at := _first_difference(a, b)
+	print("  attached twice on seed %d, %d frames, a cut every %d -> %s"
+		% [Director.session_seed(), REATTACH_FRAMES, REATTACH_CUT,
+			"the same camera" if at < 0 else "a different camera from frame %d" % at])
+	if at >= 0:
+		_fails.append("a second attach on the same seed played another camera (from frame %d)" % at)
+	var keep: ComicCamera = comic._camera
+	var stuck := StuckCamera.new()
+	stuck.medium = comic
+	comic._camera = stuck
+	var c := _attached_run(stage, comic)
+	var d := _attached_run(stage, comic)
+	comic._camera = keep
+	var ctl := _first_difference(c, d)
+	print("  ...and with the camera's reset skipped -> %s"
+		% ("the same camera" if ctl < 0 else "a different camera from frame %d" % ctl))
+	if ctl < 0:
+		_fails.append("control: a camera never reset played the same show twice - the reattach check sees nothing")
+
+
+## Attach [param comic] afresh and drive REATTACH_FRAMES frames, the Director cutting every
+## REATTACH_CUT: one line a frame of what the eye sees and the pose behind it.
+func _attached_run(stage: SubViewport, comic: ComicMedium) -> Array:
+	Director.detach()
+	Director.attach(stage, comic)
+	var dt := 1.0 / FPS
+	var out: Array = []
+	for i in REATTACH_FRAMES:
+		Director._elapsed += dt
+		if i > 0 and i % REATTACH_CUT == 0:
+			Director._begin_transition()
+		comic.advance(Spectrum.current, dt, 0.0)
+		out.append(var_to_str([comic._spread_i, comic._read, comic._camera._cam,
+			comic._camera._tgt, _grid(comic)]))
+	return out
+
+
+## The first frame two runs disagree on, or -1.
+func _first_difference(a: Array, b: Array) -> int:
+	for i in mini(a.size(), b.size()):
+		if String(a[i]) != String(b[i]):
+			return i
+	return -1 if a.size() == b.size() else mini(a.size(), b.size())
+
+
+## A SESSION'S END MAKES NOTHING.
+##
+## release() is the teardown (the Director detached), and main calls it twice as a note closes -
+## through Director.detach, and again as it clears the stage. A book reset there used to turn to
+## the first spread at once, which cast a panel at teardown: a scene minted and logged as a cut, its
+## viewport left running - and the second time through a Director already detached, whose pick
+## state it left set, so the next note's first scene was chosen against it. A new book is opened by
+## begin_session and nowhere else.
+##
+## TWO-SIDED: a medium whose release still turns the spread ([LeakyComic]) must be caught.
+func _check_release(stage: SubViewport, comic: ComicMedium) -> void:
+	var found := _teardown(stage, comic)
+	print("  a session torn down as main tears one down -> %s"
+		% ("nothing made" if found.is_empty() else "; ".join(found)))
+	for f in found:
+		_fails.append(f)
+	var leaky := LeakyComic.new()
+	leaky.key = "comic"
+	leaky.mount(stage)
+	var ctl := _teardown(stage, leaky)
+	print("  ...and a medium whose release turns the spread -> %s"
+		% ("nothing made" if ctl.is_empty() else "; ".join(ctl)))
+	if ctl.is_empty():
+		_fails.append("control: a release that casts a spread passed the teardown check")
+	leaky.queue_free()
+
+
+## Run a short session on [param comic], tear it down as main does, and say what it made.
+func _teardown(stage: SubViewport, comic: ComicMedium) -> Array:
+	Director.detach()
+	Director.attach(stage, comic)
+	for _i in 30:
+		comic.advance(Spectrum.current, 1.0 / FPS, 0.0)
+	Director.detach()               # the first release, through the Director
+	var out: Array = []
+	var held := 0
+	for sc in comic._cast:
+		if sc != null and is_instance_valid(sc) and not (sc as Node).is_queued_for_deletion():
+			held += 1
+	if held > 0:
+		out.append("the medium still holds %d cast scene(s) after its session ended" % held)
+	var running := 0
+	for vp: SubViewport in comic._slots:
+		if vp.render_target_update_mode != SubViewport.UPDATE_DISABLED:
+			running += 1
+	if running > 0:
+		out.append("%d panel viewport(s) still running after release" % running)
+	comic.release()                 # ...and again, as main._clear_stage does
+	if Director._index != -1 or not Director._kind_last.is_empty():
+		out.append("a second release minted a scene through the detached Director")
+	return out
+
 
 
 ## Drive the medium for SECONDS and report what the picture did.
@@ -266,25 +394,25 @@ func _drive(comic: ComicMedium, sev: float) -> void:
 			due = Director.hold_remaining()
 			cuts += 1
 		comic.advance(Spectrum.current, dt, 0.0)
-		# SAMPLED EVERY FRAME, because _begin_shot replaces `_shot` with a fresh dict AND bumps
+		# SAMPLED EVERY FRAME, because begin_shot replaces `_shot` with a fresh dict AND bumps
 		# `_shot_n` in the same call - so a probe that waits for the counter to change is
 		# reading the NEW shot's `arrived`, which is false by construction. This reported "no
 		# shot ever arrived" for a camera that was arriving perfectly well.
-		if comic._shot_n != was_shot:
-			if not comic._tgt.is_empty():
-				fills.append(float(comic._tgt.fill))
+		if comic._camera._shot_n != was_shot:
+			if not comic._camera._tgt.is_empty():
+				fills.append(float(comic._camera._tgt.fill))
 			if was_shot >= 0:
 				shots += 1
 				if not this_arrived:
 					never += 1
-			was_shot = comic._shot_n
+			was_shot = comic._camera._shot_n
 			this_arrived = false
-		if not this_arrived and bool(comic._shot.get("arrived", false)):
+		if not this_arrived and bool(comic._camera._shot.get("arrived", false)):
 			this_arrived = true
-			arrivals.append(comic._shot_t)
-		comic._prepare_lens()
+			arrivals.append(comic._camera._shot_t)
+		comic._camera.prepare_lens()
 		var q := _grid(comic)
-		var fp: int = comic._framing_panel(comic._clamp_aim(comic._cam.aim))
+		var fp: int = comic._spread.framing_panel(comic._spread.clamp_aim(comic._camera._cam.aim))
 		if q.size() == prev.size() and q.size() > 0:
 			# THE MEDIAN SAMPLE, NOT THE WORST. One point grazing the near plane projects to a
 			# huge coordinate, and a max over the grid is then a measurement of that one point
@@ -427,10 +555,10 @@ func _grid(comic: ComicMedium) -> PackedVector2Array:
 		for ix in 5:
 			var sp := Vector2(0.2 + 1.6 * float(ix) / 4.0,
 				comic._spread.aspect * (0.2 + 0.6 * float(iy) / 2.0))
-			var w: Vector3 = comic._world(sp, comic._att_basis)
-			if comic._lens.depth(w) <= comic._lens.near:
+			var w: Vector3 = comic._spread.world(sp, comic._camera.att_basis)
+			if comic._camera.lens.depth(w) <= comic._camera.lens.near:
 				return PackedVector2Array()     # any sample behind the eye voids the frame
-			var pr: Vector3 = comic._lens.project(w)
+			var pr: Vector3 = comic._camera.lens.project(w)
 			out.append(Vector2(pr.x, pr.y))
 	return out
 
@@ -444,3 +572,16 @@ func _spread_px(q: PackedVector2Array) -> float:
 		lo = lo.min(p)
 		hi = hi.max(p)
 	return (hi - lo).length()
+
+
+## The control for [method _check_reattach]: a camera whose reset does nothing.
+class StuckCamera extends ComicCamera:
+	func reset() -> void:
+		pass
+
+
+## The control for [method _check_release]: a release that opens the next book at once.
+class LeakyComic extends ComicMedium:
+	func release() -> void:
+		super()
+		_turn_spread(0)
