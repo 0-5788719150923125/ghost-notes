@@ -54,6 +54,7 @@ var _rate_row: HBoxContainer
 var _pause: HSlider
 var voice_meta: Array = []
 var _want_voice := ""          # remembered selection, applied once voices load
+var _made_voice := ""          # a voice made while the note is open, the reader's once the list has it
 var _fx_echo: HSlider
 var _dynamics: HSlider
 var _arc: HSlider
@@ -218,6 +219,14 @@ func build_voice(box: VBoxContainer) -> void:
 	var vrow := HBoxContainer.new()
 	vrow.add_theme_constant_override("separation", 8)
 	box.add_child(vrow)
+	# NAMED AS THE ROWS UNDER IT ARE (2026-10-22, the user, looking for an actor's own voice: "when I
+	# click on 'Browse' to see the list of Piper voices, none are clearly labeled") - Browse is one
+	# voice's readers; the voices are this list.
+	var vl := Label.new()
+	vl.text = "Voice"
+	vl.custom_minimum_size = Vector2(72, 0)
+	vl.add_theme_font_size_override("font_size", 12)
+	vrow.add_child(vl)
 	voice_pick = OptionButton.new()
 	voice_pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# SIZED BY THE ROW, NOT BY ITS LONGEST VOICE: Play becomes "Resume ●" beside it, and a picker
@@ -226,18 +235,8 @@ func build_voice(box: VBoxContainer) -> void:
 	voice_pick.clip_text = true
 	voice_pick.tooltip_text = "Which Piper model reads. Each is a different person with its own accent, recording and license - the license appears under the panel when you pick one. Changing this regenerates whatever has not been played yet."
 	voice_pick.item_selected.connect(func(_i: int) -> void:
-		if _syncing:
-			return
-		_show_voice_license()
-		capture_slot()
-		# A voice change is not a re-pace. _repace keeps the stream and appends
-		# at the new setting, which for a VOICE would splice a second speaker
-		# mid-narration; and leaving the old requests in flight keeps both
-		# models loaded and chunking, halving the throughput of each. So: kill
-		# the session and read again in the new voice.
-		if not panel._stream.chunks.is_empty():
-			panel._stream.restart()
-		panel.touch())
+		if not _syncing:
+			_voice_picked())
 	vrow.add_child(voice_pick)
 	# PLAY AND STOP ARE THE TRANSPORT'S, along the bottom of the stage (Space plays and pauses).
 
@@ -294,7 +293,7 @@ func build_voice(box: VBoxContainer) -> void:
 	var browse := Button.new()
 	browse.text = "Browse…"
 	browse.focus_mode = Control.FOCUS_NONE
-	browse.tooltip_text = "Every reader on this voice, with their gender and a description of how they sound (LibriTTS-P annotations). Filter, search, and pick one."
+	browse.tooltip_text = "Every reader on this voice, with their gender and a description of how they sound (LibriTTS-P annotations). Filter, search, and pick one. Another voice - an actor's own among them - is picked from the Voice list above."
 	browse.pressed.connect(_open_speaker_browser)
 	_speaker_row.add_child(browse)
 
@@ -974,6 +973,7 @@ func _show_ink(v: String) -> void:
 
 
 func fill_voices(voices: Array) -> void:
+	var keep := _selected_voice_id()  # asked again ([method voice_made]): what is picked stays picked
 	voice_meta = voices
 	voice_pick.clear()
 	for v in voices:
@@ -982,7 +982,7 @@ func fill_voices(voices: Array) -> void:
 	if voices.is_empty():
 		panel._set_status("No voices available - see the >_ log.")
 		return
-	var want := _want_voice if not _want_voice.is_empty() else ReadingPanel.DEFAULT_VOICE
+	var want := keep if not keep.is_empty() else ReadingPanel.DEFAULT_VOICE
 	for i in voices.size():
 		if String((voices[i] as Dictionary).get("id", "")) == want:
 			voice_pick.select(i)
@@ -991,6 +991,41 @@ func fill_voices(voices: Array) -> void:
 	_refresh_tab_labels()           # model names are known now, not just ids
 	panel._can_play = true            # from here on Play is always live
 	_show_voice_license()
+	if not _made_voice.is_empty():
+		_read_in(_made_voice)
+
+
+## A VOICE MADE WHILE THE NOTE IS OPEN (an actor's own, trained on the Actor card): the reader's from
+## the moment the list asked again holds it ([method ReadingPanel.voice_made]) - it was made to read this.
+func voice_made(id: String) -> void:
+	_made_voice = id
+
+
+func _read_in(id: String) -> void:
+	var tab := _names.find(reader())
+	for k in voice_meta.size():
+		if String((voice_meta[k] as Dictionary).get("id", "")) != id:
+			continue
+		_made_voice = ""
+		if tab >= 0 and tab != slot:
+			_select_tab(tab)
+		voice_pick.select(k)
+		_voice_picked()
+		return
+
+
+## The voice picked: the slot keeps it, and what was read in the old one is read again.
+func _voice_picked() -> void:
+	_show_voice_license()
+	capture_slot()
+	# A voice change is not a re-pace. _repace keeps the stream and appends
+	# at the new setting, which for a VOICE would splice a second speaker
+	# mid-narration; and leaving the old requests in flight keeps both
+	# models loaded and chunking, halving the throughput of each. So: kill
+	# the session and read again in the new voice.
+	if not panel._stream.chunks.is_empty():
+		panel._stream.restart()
+	panel.touch()
 
 
 ## Under the speaker number: who that reader is. Hidden on a single-speaker voice, or when nothing

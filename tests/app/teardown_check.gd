@@ -37,8 +37,8 @@ extends Node
 ##
 ## A NOTE'S MAKE-UP IS ITS BLOCKS: there is one kind of new note, so each is made with the blocks "+"
 ## would have written ([constant BLOCKS]) - a voice with a Picture and a storyboard among them, which
-## no template ever was. A Likeness's note carries its own block alone, as "+" writes it, and must show
-## the Actor card it brings (2026-10-21: the reading built only what was written, and no Actor card).
+## no template ever was. An Actor's note carries its own block alone, as "+" writes it, and must show its
+## card and the Voice it brings, and play them (2026-10-21: the reading built only what was written).
 ##
 ## MASKING OPENS ON NO CLIP (its panel asks for one): the author's sessions hold hand-placed markers that
 ## cannot be remade, and no gate opens one. A song for Auto and Manual is a fixture of silence. Every
@@ -65,8 +65,8 @@ const BLOCKS := {
 	"cards": {"cards": {}},
 	# a ghost doing math at a desk: its card pins the desk, which must be let go on leaving
 	"proof": {"proof": {}},
-	# an actor reading the note: its card pins the likeness medium, and brings an Actor card beside it
-	"likeness": {"likeness": {}},
+	# an actor reading the note: its card pins the likeness medium, and brings a Voice beside it
+	"likeness": {"actor": {}},
 	"masking": {"clip": {"path": ""}},
 }
 const ROOT := "user://teardown_check_notes"
@@ -103,10 +103,11 @@ func _run() -> void:
 				"%s #%d: the ⌂ shows while the mode is up" % [mode, cycle + 1])
 			if mode == "generative" and cycle == 0:
 				await _check_refused_while_preparing()
-			# "+" LIKENESS WRITES ITS OWN BLOCK ALONE, and the Actor it brings has its card all the same
+			# "+" ACTOR WRITES ITS OWN BLOCK ALONE, and the Voice it brings has its card all the same
 			if mode == "likeness" and cycle == 0:
-				_ok(_has_node_of(_main, ActorCard) and _has_node_of(_main, LikenessCard),
-					"likeness: the note shows its Likeness card and the Actor card it brings")
+				_ok(_has_node_of(_main, ActorCard) and _has_node_of(_main, VoiceCard),
+					"likeness: the note shows its Actor card and the Voice card it brings")
+				_ok(Director.medium_override == "likeness", "likeness: the Actor card does not pin its medium")
 			if mode == "story":
 				_open_timeline(cycle)
 				await _frames(6)

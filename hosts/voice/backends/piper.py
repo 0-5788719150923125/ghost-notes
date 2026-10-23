@@ -2064,6 +2064,12 @@ VOICES: dict[str, dict] = {
     },
 }
 
+# VOICES TRAINED HERE (next/likeness.md, "Their own voice"): an actor's voice, fine-tuned on this
+# computer from a clean base on their own speech, published by the Actor card as `<id>.onnx`, its
+# config `<id>.onnx.json` and `<id>.voice.json` ({name, license, chain, actor}) in this folder under the
+# voices' root. Listed beside the allowlist, never fetched.
+TRAINED = "trained"
+
 
 @register
 class PiperBackend(Backend):
@@ -2087,7 +2093,21 @@ class PiperBackend(Backend):
 
     @classmethod
     def owns(cls, voice: str) -> bool:
-        return voice in VOICES
+        return voice in VOICES or cls._trained(voice) is not None
+
+    @classmethod
+    def _trained(cls, voice: str):
+        """A voice trained here: its description ({name, license, chain, actor}), or None."""
+        if not voice or "/" in voice or voice.startswith("."):
+            return None
+        d = cls._root() / TRAINED
+        if not ((d / f"{voice}.onnx").exists() and (d / f"{voice}.onnx.json").exists()):
+            return None
+        try:
+            meta = json.loads((d / f"{voice}.voice.json").read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - absent or half-written: named after its file
+            meta = {}
+        return meta if isinstance(meta, dict) else {}
 
     def __init__(self) -> None:
         try:
@@ -2152,10 +2172,31 @@ class PiperBackend(Backend):
 
     def _files(self, voice: str) -> tuple[Path, Path]:
         root = self._root()
+        if voice not in VOICES and self._trained(voice) is not None:
+            root = root / TRAINED
         return root / f"{voice}.onnx", root / f"{voice}.onnx.json"
 
     def voices(self) -> list[dict]:
         out = []
+        trained = self._root() / TRAINED
+        for onnx in sorted(trained.glob("*.onnx")) if trained.is_dir() else []:
+            vid = onnx.name[: -len(".onnx")]
+            meta = self._trained(vid)
+            if meta is None:
+                continue
+            out.append(
+                {
+                    "id": vid,
+                    "name": str(meta.get("name", vid)),
+                    "backend": self.name,
+                    "license": str(meta.get("license", "")),
+                    "derivation": str(meta.get("chain", "")),
+                    "speakers": 1,
+                    "installed": True,
+                    "notes": str(meta.get("notes", "")),
+                    "actor": str(meta.get("actor", "")),
+                }
+            )
         for vid, meta in VOICES.items():
             onnx, cfg = self._files(vid)
             out.append(
@@ -2173,6 +2214,8 @@ class PiperBackend(Backend):
         return out
 
     def ensure(self, voice: str) -> dict:
+        if voice not in VOICES and self._trained(voice) is not None:
+            return {"voice": voice, "installed": True, "downloaded": False}
         if voice not in VOICES:
             raise BackendError(f"unknown or non-allowlisted voice '{voice}'")
         onnx, cfg = self._files(voice)

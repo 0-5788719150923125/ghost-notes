@@ -8,7 +8,7 @@ class_name LikenessMedium
 ## gestures and the globe and such, which are cropped by the jump-cuts").
 ##
 ## WHAT IT DRAWS FROM: the reading's document (`_subs.document`) carries `likeness` - the actor's folder,
-## the set, the still, the seed - which the Likeness card hands the reading ([LikenessCard]); the words
+## the set, the still, the seed - which the Actor card hands the reading ([ActorCard.Publish]); the words
 ## and the phones come from the voice as they are said (`_subs.words`, `_subs.phones`). The set's files
 ## and the actor's motion are the Actor's ([ActorFolder], [ActorSteps]).
 ##
@@ -190,10 +190,13 @@ func advance(_features, _delta: float, _bookend: float) -> void:
 	draw_at(_now)
 
 
-## UP FROM BLACK as the session starts, and down to it after the last word, over the outro.
+## UP FROM BLACK ACROSS THE INTRO, arriving as the held silence ends, as every picture's does ([method
+## Director._bookend_fade]; 2026-10-22, the user: "The fade-in/fade-out from the 'intro & outro' component
+## does not appear to work here" - it rose in its first second, then sat through the rest), and down to
+## it after the last word, black as the outro runs out.
 func _brightness(t: float) -> float:
-	return clampf(clampf(t / 1.0, 0.0, 1.0) * ShowOpening.end_fade(_now, _follower, _spoken_n, feed.tail())
-		* feed.live_fade, 0.0, 1.0)
+	return clampf(clampf(t / maxf(1.0, feed.lead()), 0.0, 1.0)
+		* ShowOpening.end_fade(_now, _follower, _spoken_n, feed.tail()) * feed.live_fade, 0.0, 1.0)
 
 
 # --- the document: which actor, which set, which still ---------------------------------------------

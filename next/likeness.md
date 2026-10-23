@@ -83,7 +83,9 @@ forward-facing actor, with a mouth that moves when speaking."
   one still texture, one library texture array: a frame costs about 0.5 ms (the first build's 2-8).
 - **The card:** a Still row (the set's six, the one in use marked, a click uses another - nothing made
   again); the library line says mouths, sounds, eyes, minutes of motion and blinks a minute; a set
-  builds in a few minutes; the Likeness card has the Performance (the seed) and nothing else.
+  builds in a few minutes; the Likeness card had the Performance (the seed) and nothing else - since
+  2026-10-22 there is no Likeness card: the Actor puts them on the stage, the seed the note's own (see
+  "The Actor puts them on the stage").
 
 **Looked at, on his footage (through a scratch copy; his folders only read):**
 - **Stills:** the first pick took a raised hand for rest (a wrist under the shoulders but mid-gesture),
@@ -106,6 +108,90 @@ forward-facing actor, with a mouth that moves when speaking."
 
 **For the user to test:** Generate on the Actor card once (the new steps: about five minutes, no
 track), a still picked on the card if the default is not the one, ▶ on a note; then an export.
+
+## Their own voice (2026-10-22)
+
+**The user, on the fourth pass:** "the model gives off the uncanny valley effect, and I'm doubtful we're
+ever going to get past that with this 2D method ... I would like to know how tough it would be to
+fine-tune this actor's voice as a Piper model. If you think we could wire up such a function, I would like
+to give that a try next."
+
+**What there was to work with (measured):**
+- **His sound:** eight videos, 7.1 hours; one ("Why I love writing") has no sound track at all. Clean:
+  his speech sits 25 to 42 dB over the room, nothing clipped, the full 11 kHz a 22 kHz voice holds.
+- **Five of the eight are whispered.** A third of their loud frames carry a pitch, against three fifths
+  in the two spoken ones ("Manuscript Day 45", "Wasting Precious Time": 128 minutes). A whisper is
+  another voice; it is left out (a whispered voice of him would be a second one, taught on those).
+- **Whisper's words, as Transcribe left them,** cover 20 minutes of each video (the Likeness needed no
+  more), base.en on the processor: a median word sure at 0.91, a fifth of runs holding one under 0.34,
+  and its errors are real ("Billings of year" for billions of years). Its word edges come early: his
+  voice runs on 30 to 48 dB over the room just past a word's end.
+- **Piper's trainer** is in its PyPI wheel (`piper-tts[train]` 1.8, GPL - fetched into an environment
+  of its own, never shipped; the voice it makes is data), on PyTorch 2.14 with CUDA 13, which runs on
+  this RTX 5060 Ti (sm_120). The wheel leaves its Cython alignment unbuilt: numba's, line for line the
+  same search (`hosts/voice_train/align.py`), takes 6 ms a batch. It takes our own ids
+  (`dataset_type phoneme_ids`), so the voice is taught exactly what the voice host will send it.
+- **Clean bases to fine-tune from** (`rhasspy/piper-checkpoints`): John (medium, male, LibriVox public
+  domain, itself fine-tuned from Kristin), LJSpeech (high, female, public domain), Kristin, Norman. Every
+  lessac-derived one is out (Blizzard's terms). A John checkpoint exported by our own exporter
+  (TorchScript, opset 15) loads, patches (one Ceil) and speaks through the voice host as Piper's own do.
+
+**Built:**
+- **Hear** (per video, the processor, speech_venv): the whole of each video heard by Whisper
+  (`transcribe.py`, now in pieces of 10 minutes), told the ums came before so it writes them.
+- **Utterances** (`hosts/voice/utterances.py`, voice_venv): his words in runs between pauses, 1 to 12 s,
+  every word heard surely; each edge walked out to where the sound falls and cut at the quietest frame of
+  the pause beyond (it must be within 12 dB of the room); none holding a sound no word was heard in (an
+  um Whisper left out, a laugh); spoken, not whispered; all at one level - and the ids are the voice
+  host's own (`ids_of`: its homographs, its eSpeak reading of the sentence, its lead-in spaces, its
+  layout). Every 25th is held out (`test.csv`) to measure the voice against. On his videos: 637
+  sentences, 46 minutes (42 of them from the two spoken videos), 26 held out; 475 whispered runs left out.
+- **Voice** (`hosts/voice_train/train.py`, voice_train_venv, a lane of its own - the graphics card -
+  beside the processor's): John warm-started (every weight, a fresh optimizer) and fine-tuned for the
+  Voice lessons setting's epochs (150), bf16, batch 16 - about 25 seconds an epoch, an hour all told.
+  The whole run is saved every 5 epochs under another name and renamed into place, so Stop loses a few
+  minutes and ▶ goes on; other sentences or another base start again from the base. When every epoch is
+  done the voice is exported and PUBLISHED (`ActorBuilder.publish_voice`): copied to
+  `<data>/ghost/voices/piper/trained/actor-<id>.onnx` with its config and a description
+  (`<id>.voice.json`: their name, what it was fine-tuned from), where the
+  voice host lists voices trained here beside its allowlist (`TRAINED`), never fetched. It is on every
+  note's Voice card as "<name> (their own voice)".
+- **The note it was trained on reads in it as it lands** (2026-10-22, the user after the first run in
+  the app: "When I click on the play button, it's still using the regular Piper voice"). The Voice card
+  had asked for its voices once, as the note opened, so a voice made in the hours after was never on it.
+  Now `ActorBuilder.voice_published` -> `ActorCard._voice_made` -> `ReadingPanel.voice_made`: the voices
+  are asked for again, and the reader's tab is set to it (`ReadingCast.voice_made`). A list asked again
+  keeps what is picked. On any other note, or after a restart, it is picked on the Voice card like any
+  voice. Gate: tests/reading/voice_made_check.gd. That first run: 915 utterances, 65 minutes of his voice
+  from 7 videos (Hear across whole videos), 150 epochs in 99 minutes. Through the voice host it says a
+  test sentence that Whisper (small.en) hears word for word.
+- **A machine that cannot train** (no NVIDIA card, or a platform PyTorch has no CUDA build for) leaves the
+  three steps alone; their rows say why (`ActorBuilder.voice_unavailable`).
+
+**Measured** (no ear: the held-out sentences said by each voice through the voice host, against his own;
+his pitch, his long-term spectrum and his MFCCs' distribution - `dist/voice_train/probes/likeness.py` -
+and what Whisper hears each say, `wer.py`):
+
+| voice | pitch median / IQR (Hz) | spectrum off (dB) | MFCC distance | Whisper's word errors |
+|---|---|---|---|---|
+| him, 26 other sentences of his | 154 / 53 | 0.96 | 0.22 | 2.5% (his own; mostly the transcript's) |
+| John, the base | 119 / 34 | 4.70 | 4.08 | 4.3% |
+| fine-tuned, epoch 10 | 135 / 31 | 1.32 | 2.07 | 31.6% |
+| fine-tuned, epoch 30 | 137 / 40 | 0.98 | 1.17 | 22.6% |
+| fine-tuned, epoch 120 | 140 / 43 | 0.81 | 0.82 | 18.9% |
+
+The run was stopped at epoch 120 of 150 by the machine running short of memory (its save at 120 kept: ▶
+goes on from it). **Their tone is there by epoch 30** (the spectrum as near his held-out speech as his own
+other sentences are); **clarity is not**: a fifth of its words misheard, against the base's 4%. Read 20%
+slower it is misheard just as often, so it is not the pace (it does speak quicker than John: the passage
+in 21 s against 28). What is misheard is mostly vowels - "pots and pans" heard as "pause and pence", "as
+many" as "his mink". **The likeliest cause, the next experiment:** John was taught on eSpeak's British
+labels (`espeak.voice "en"`, as every published Piper voice of the base's line) and is taught him in
+American ones, so the vowels' symbols are learned again from 46 minutes; taught in John's own labels, the
+vowels it knows carry over (the voice's config then says "en" and the host reads it so). Then: Whisper's
+errors in the sentences (base.en; small.en's second opinion was stopped with the run, 650 of 663 heard).
+Listening (`dist/voice_train/listen/`): `0_him_heldout.wav` (his own, held out), `1_john_base.wav` and
+`2_his_voice_epoch120.wav` (the same passage, the base and his voice).
 
 ## The fourth pass: a body, modeled (2026-10-22)
 
@@ -390,7 +476,7 @@ the mouth moves with the sounds, closes on the M's and P's, and pops nowhere.
 **Not yet seen working, for the user to test:** an export, and the director on a real chapter.
 
 **How to try it:**
-1. On a note, "+" Likeness: it brings an Actor and a Voice.
+1. On a note, "+" Actor: it brings a Voice, and the note is read by them.
 2. On the Actor card, pick "New actor…" and name him. Add folder… the Eidolon `videos/` folder, and
    untick the four other creators' rows.
 3. Generate on the Actor card. The first time, ghost rebuilds the face and download environments
@@ -398,10 +484,8 @@ the mouth moves with the sounds, closes on the M's and P's, and pops nowhere.
    has the labeler audit each, learns their mouth's range and their motion from every video (seconds),
    and builds the set in use - its stills, its rig, its library (a few minutes). The Still row then
    shows six pictures of them; a click uses another.
-4. Write the words on the Script card; ▶ reads the note with them; ⤓ exports. The Likeness card's
-   Performance number is which pieces of their motion play and when they blink. A set is used with "Use
-   this set" on the Actor card; each is built on its own, and one built is kept. An upload asks for
-   their license on the Actor card (License…).
+4. Write the words on the Script card; ▶ reads the note with them; ⤓ exports. A set is used with "Use
+   this set" on the Actor card; each is built on its own, and one built is kept.
 5. To look without the app: `tests/likeness/likeness_look_probe.gd` (its header) draws the identity,
    every sound's mouth, the eyes, and a take frame by frame; `likeness_live_probe` plays the real app
    and bakes a take with its phones.
@@ -540,13 +624,11 @@ and a card that presents.
 **`actor.json`:**
 - the name;
 - the sources: folders, links, and the videos found in each, each ticked or not;
-- the chosen set;
-- consent: a path to the signed license, or empty.
+- the chosen set.
 
-**Consent:**
-- Building is private, so it runs without consent on file.
-- **An export that would upload refuses** an actor with none, and says why. The card shows "no
-  consent on file" until there is.
+**No consent rule in the app** (removed 2026-10-22, the user: "trivial to circumvent, so not worth
+keeping ... That is what the legal system and platform terms of service are for"): an upload neither asks
+for a license on file nor refuses one; "Consent and disclosure" below is the advice it was built from.
 
 ### The Actor card (component `actor`): makes and manages
 
@@ -601,41 +683,47 @@ The card, top to bottom:
 - **A step that waits is not failed.** A step whose environment is installing waits, and says for
   what.
 
-### The Likeness card (component `likeness`) and medium (`likeness`): presents
+### The Actor puts them on the stage (component `actor`, medium `likeness`)
 
-**The card** (it builds nothing - the Actor card does, and this card says what the set in use still
-needs; it had a Generate of its own until the user's first test asked why there were two):
-- **Direct:** the director places gesture marks in the note's text;
-- **Clear gestures.**
-- **Who directs:** an `AgentPick` row.
+**One component since 2026-10-22.** It had been two: an Actor that built and a Likeness that played. The
+Likeness card lost its Generate (the user's first test: "why there are two Generate stages"), then its
+Performance (2026-10-22: "Do we really need this card with just one option?"), and was left a bare title
+bar. The user took it off with its × "because it was doing no work, except for existing" - and the
+video went with it. Then: "If we're doing all that pipeline work with Actor... then the implication is
+we want to use that actor in the scene." So the Actor card does what the Likeness card did:
+- **It pins the medium** while it is up (`Director.medium_override = "likeness"`, as Proof pins the
+  desk), and lets it go when it leaves.
+- **It hands the reading how it goes out** (`ActorCard.Publish`): an export waits for the set in use to
+  be built (saying what it still needs), the render's document carries `likeness` - the actor's folder,
+  the set, its still, the seed (`ActorCard.document`) - and an upload says whose likeness it is.
+- **The performance is the note's:** the seed of which pieces of their motion play, when they blink and
+  glance and when their posture shifts is drawn from the note's own file (`ActorCard.performance`), so
+  a note always plays the same way and an export is what was watched.
+- **The intro and outro fade them** (2026-10-22, the user: "The fade-in/fade-out from the 'intro &
+  outro' component does not appear to work here"). Measured live with 9 s holds: they rose from black
+  in the intro's first second and sat lit through the other eight. Now they rise across the whole intro
+  (`ShowFeed.lead` - the take's own lead-in in a render, else the note's intro hold), arriving as the
+  first word is said, as every picture does (`Director._bookend_fade`). They go down a beat after the
+  last word and are black as the outro runs out (`ShowOpening.end_fade`, the desk's and the table's).
+- **Gone:** `LikenessCard`, the `likeness` component and block (an older note's `likeness:` block is
+  carried untouched and means nothing), `ActorFeed` and the reading's `feed()` (only the two cards used
+  them). An Actor no longer stands alone on a note to build without playing: it takes the
+  presentation, so it cannot share a note with a Picture, Cards or Proof.
 
 **The medium** is a row in `Medium.REGISTRY` (`res://src/likeness/likeness.gd`, frames
 `["landscape"]`, needs `reading`). It renders, as a pure function of show time (see Rendering).
 
-**The components' rows** (`src/notes/components.gd`):
-- **`actor`:** family `picture`; needs nothing; provides `actor`; requires nothing; no slot.
-  - Capabilities: `subprocess`, `ffmpeg`, `python:face`, `python:download`, `agent:writer`.
-  - Block `actor` (its `id`); script `res://src/likeness/actor_card.gd`.
-  - It may stand alone on a note, which then just builds an actor.
-- **`likeness`:** family `picture`; needs `reading` and `actor`; provides `picture`; requires
-  `actor` and `voice`; slot `presentation`.
-  - Capabilities: `forward_plus`, `agent:writer`; marks `["gestures"]`.
-  - Block `likeness`; script `res://src/likeness/likeness_card.gd`.
-  - "+" Likeness brings an Actor card and a Voice, as Cards brings a Voice.
-- **The reading workspace's `hosts`** gains `actor` and `likeness`.
-
-**The cards never name each other.**
-- The Actor card answers `feeds()` with `{"actor": ActorFeed}`, collected by the panel as
-  `episode_steps()` is.
-- The Likeness card asks the panel `feed("actor")`.
-- **`ActorFeed`** is a small typed contract: the folder, the chosen set, `status()`, the gestures
-  and the habits.
+**The component's row** (`src/notes/components.gd`): **`actor`** - family `picture`; needs `reading`;
+provides `picture`; requires `voice`; slot `presentation`; capabilities `forward_plus`, `subprocess`,
+`ffmpeg`, `python:face`, `python:speech`, `python:download`, `agent:writer`; block `actor` (its `id`
+and who labels); script `res://src/likeness/actor_card.gd`. "+" Actor brings a Voice, as Cards brings
+one. The reading workspace's `hosts` holds `actor`.
 
 ## The actor's folder
 
 ```
 user://actors/<id>/
-  actor.json                 name, sources, ticks, chosen set, consent
+  actor.json                 name, sources, ticks, chosen set
   footage/                   fetched videos, .info.json, .en*.json3 captions, archive.txt
   videos/<vid>/              one folder per source video (<vid> = a hash of its path and size)
     probe.json               duration, fps, size, has captions

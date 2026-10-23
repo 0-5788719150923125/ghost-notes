@@ -17,7 +17,7 @@ A CARD ANY PANEL CAN SHOW IS A ROW'S `script`: the path of the script that build
 
 Static and free of autoload names, like `Capabilities`, so a gate can read it under `--script`.
 
-Registry: `Components.REGISTRY` in [src/notes/components.gd](../src/notes/components.gd) (17 components, 2 slots, 6 workspaces).
+Registry: `Components.REGISTRY` in [src/notes/components.gd](../src/notes/components.gd) (16 components, 2 slots, 6 workspaces).
 
 ## Slots
 
@@ -26,7 +26,7 @@ Where a note has room for exactly one. Components that take the same slot are al
 | Slot | What it is | Taken by |
 | --- | --- | --- |
 | `clock` | What the show is timed by, and how long it is: a song, a voice reading the text, or a clip. | Song, Voice, Voice lab, Clip |
-| `presentation` | What the show is seen in: the Picture and the medium it names, a card table, a voice lab's own show, or a clip's own frame. | Voice lab, Picture, Cards, Proof, Likeness, Clip |
+| `presentation` | What the show is seen in: the Picture and the medium it names, a card table, a voice lab's own show, or a clip's own frame. | Voice lab, Picture, Cards, Proof, Actor, Clip |
 
 ## Workspaces
 
@@ -81,10 +81,8 @@ By family - the color a component's card, chip and marks are drawn in.
   - needs picture; gives places; brings Scenes; takes the presentation; asks for `forward_plus`; kept in `picture:`
 - **Illustrations** (`illustrations`) - The book's pictures, painted by an agent from the marks in the text, or imported.
   - needs text, places; gives picture; brings Picture; asks for `forward_plus`; kept in `illustrations:`
-- **Actor** (`actor`) - Builds an actor from their own videos - a folder, or links to videos, playlists or a channel - for a Likeness to play: the footage surveyed and grouped by camera and look, a still of them chosen, and their motion, blinks and mouths learned from every video.
-  - gives actor; asks for `subprocess`, `ffmpeg`, `python:face`, `python:speech`, `python:download`, `agent:writer`; kept in `actor:`
-- **Likeness** (`likeness`) - An actor reads the note in their own room: a still of them, their head moving as they move it, blinking, the mouth drawn from their own mouths to the voice's sounds. Every pixel of them is their own.
-  - needs reading, actor; gives picture; brings Actor, Voice; takes the presentation; asks for `forward_plus`; kept in `likeness:`
+- **Actor** (`actor`) - An actor reads the note in their own room, built from their own videos - a folder, or links to videos, playlists or a channel: the footage surveyed and grouped by camera and look, a still of them chosen, and their motion, blinks, mouths and voice learned from every video. Every pixel of them is their own.
+  - needs reading; gives picture; brings Voice; takes the presentation; asks for `forward_plus`, `subprocess`, `ffmpeg`, `python:face`, `python:speech`, `python:download`, `agent:writer`; kept in `actor:`
 - **Clip** (`clip`) - A video, cut and prepared from a file or a link, with chroma-key effects over it: markers, tracks and renders.
   - gives picture, audio; takes the clock and the presentation; asks for `forward_plus`, `subprocess`, `ffmpeg`; kept in `clip:`
 

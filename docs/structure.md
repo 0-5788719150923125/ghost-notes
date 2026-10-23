@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 387 references inside a folder, 847 down the stack, 0 up it.
+Between scripts today: 384 references inside a folder, 846 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -13,7 +13,7 @@ Between scripts today: 387 references inside a folder, 847 down the stack, 0 up 
 | --- | --- | --- | --- |
 | `app/` | The shell | 13 | `masking`, `cards`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
 | `masking/` | Masking | 15 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
-| `likeness/` | Likeness | 13 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `agents`, `scene_kit`, `platform`, `data` |
+| `likeness/` | Likeness | 11 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `agents`, `scene_kit`, `platform`, `data` |
 | `proof/` | Proof | 6 | `desk`, `table`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `desk/` | The desk | 5 | `table`, `media`, `scene_kit`, `data` |
 | `cards/` | Cards | 10 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `geometry`, `audio`, `platform`, `data` |
@@ -171,9 +171,9 @@ A ghost doing math, made by agents: a note's problem fixed, worked at the desk w
 
 ### `likeness/` - Likeness
 
-An actor played from their own footage: the library of actors, each built from their videos (a folder, or links fetched) - surveyed, grouped into sets by camera and look, the agent that audits them, a still of each set and a model of them from every video (their head's motion, their blinks, their mouths for each sound) - the card that makes one, and the card and medium that play them reading a note: the still, its head turned and its mouth and eyes drawn from their own, through one mesh over the frame. Design: next/likeness.md.
+An actor played from their own footage: the library of actors, each built from their videos (a folder, or links fetched) - surveyed, grouped into sets by camera and look, the agent that audits them, a still of each set and a model of them from every video (their head's motion, their blinks, their mouths for each sound, their voice) - the card that makes one and puts them on a note's stage, and the medium that plays them reading it: the still, its head turned and its mouth and eyes drawn from their own, through one mesh over the frame. Design: next/likeness.md.
 
-[`actor_builder`](../src/likeness/actor_builder.gd), [`actor_card`](../src/likeness/actor_card.gd), [`actor_feed`](../src/likeness/actor_feed.gd), [`actor_folder`](../src/likeness/actor_folder.gd), [`actor_prompts`](../src/likeness/actor_prompts.gd), [`actor_sources`](../src/likeness/actor_sources.gd), [`actor_steps`](../src/likeness/actor_steps.gd), [`actors`](../src/likeness/actors.gd), [`likeness`](../src/likeness/likeness.gd), [`likeness_card`](../src/likeness/likeness_card.gd), [`likeness_face`](../src/likeness/likeness_face.gd), [`likeness_plan`](../src/likeness/likeness_plan.gd), [`visemes`](../src/likeness/visemes.gd)
+[`actor_builder`](../src/likeness/actor_builder.gd), [`actor_card`](../src/likeness/actor_card.gd), [`actor_folder`](../src/likeness/actor_folder.gd), [`actor_prompts`](../src/likeness/actor_prompts.gd), [`actor_sources`](../src/likeness/actor_sources.gd), [`actor_steps`](../src/likeness/actor_steps.gd), [`actors`](../src/likeness/actors.gd), [`likeness`](../src/likeness/likeness.gd), [`likeness_face`](../src/likeness/likeness_face.gd), [`likeness_plan`](../src/likeness/likeness_plan.gd), [`visemes`](../src/likeness/visemes.gd)
 
 ### `masking/` - Masking
 

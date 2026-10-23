@@ -11,8 +11,11 @@ class_name ActorSteps
 ##   needs     the steps whose outputs it reads - of the same video, or of every ticked video when it
 ##             covers more than one
 ##   runs      how: "download" (yt-dlp), "probe" (ffprobe), "python" (hosts/face/actor.py), "local"
-##             (ghost itself) or "agent" (a writer shown pictures)
+##             (ghost itself), "agent" (a writer shown pictures) or "train" (on the graphics card,
+##             hosts/voice_train/train.py - a lane of its own, beside the processor's)
 ##   env       what it runs on that ghost installs, as [Deps] keys
+##   voice     a step of their own voice (next/likeness.md, "Their own voice"): moot on a machine that
+##             cannot train one ([method ActorFolder.can_train_voice])
 ##   outputs   the files it makes, in its folder: the video's, the actor's or the set's
 ##   settings  the [constant SETTINGS] it is made under: one changed makes it stale
 ##   version   bumped when what the step makes changes, which makes every one made before stale
@@ -71,6 +74,17 @@ const REGISTRY := {
 	"library": {"label": "Library", "per": "set", "needs": ["rig", "visemes"], "runs": "python", "env": ["ffmpeg", "face_venv"],
 		"outputs": ["library.json", "library"], "settings": ["articulation"], "version": 2,
 		"blurb": "A few clean real mouths for each sound and their eyes half and fully closed and glancing aside, from any video, turned as the still is, matched to the still's colors - each a real frame, never an average. A few minutes."},
+
+	"hear": {"label": "Hear", "per": "video", "needs": ["probe"], "runs": "python", "env": ["ffmpeg", "speech_venv"],
+		"outputs": ["speech.json"], "settings": [], "version": 1, "voice": true,
+		"blurb": "Listens to the whole of each video for their voice: every word they say and when, their ums and uhs too (Whisper, on this computer). About a seventh of the video's own length."},
+	"utterances": {"label": "Utterances", "per": "actor", "needs": ["hear"], "runs": "python",
+		"env": ["ffmpeg", "voice_venv", "voice_train_venv"], "outputs": ["utterances.json", "utterances"], "settings": [],
+		"version": 1, "voice": true,
+		"blurb": "Cuts their speech into the sentences their voice is taught on: each between pauses, cut in the quiet, every word heard surely and nothing heard that the words lack, spoken rather than whispered, all at one level - and holds a few back to measure it by."},
+	"voice": {"label": "Voice", "per": "actor", "needs": ["utterances"], "runs": "train", "env": ["voice_train_venv"],
+		"outputs": ["voice.json", "voice"], "settings": ["voice_epochs"], "version": 1, "voice": true,
+		"blurb": "Teaches a voice to speak as they do: a public-domain voice fine-tuned on their sentences on the graphics card - an hour or more, beside the other steps - then offered on the Voice card under their name. Stop keeps what it has learned, and ▶ goes on from there."},
 }
 
 ## THE SETTINGS an actor is built under, on the card's Advanced fold: each a row, as a layer's FIELDS
@@ -86,11 +100,13 @@ const SETTINGS := {
 		"blurb": "The most minutes of each video Transcribe listens to (where it has no captions): enough of their speech to learn their mouth for every sound."},
 	"articulation": {"label": "Articulation", "type": "float", "default": 2.0, "min": 1.0, "max": 3.0, "step": 0.1,
 		"blurb": "How much clearer than their own each sound's mouth is: their mouth is mostly near closed while they talk, so their own shapes read as nothing on a still. 1 is as they are."},
+	"voice_epochs": {"label": "Voice lessons", "type": "int", "default": 150, "min": 20, "max": 1000, "step": 10,
+		"blurb": "How many times their voice hears every sentence of theirs while it learns. More is closer to them and longer on the graphics card (about 25 seconds each, an hour of their speech); raised after it is made, ▶ goes on from where it stopped."},
 }
 
 ## The order steps are made in.
 const ORDER := ["fetch", "captions", "probe", "survey", "shots", "sets", "audit", "transcribe", "words", "visemes",
-	"learn", "motion", "stills", "rest", "rig", "library"]
+	"learn", "motion", "stills", "rest", "rig", "library", "hear", "utterances", "voice"]
 
 ## WHAT THE LIKENESS NEEDS OF AN ACTOR TO PLAY THEM: the chosen set's steps and the actor's own.
 const PLAYS := ["motion", "stills", "rig", "library"]
@@ -98,6 +114,11 @@ const PLAYS := ["motion", "stills", "rig", "library"]
 
 static func per(step: String) -> String:
 	return String(Registry.field(REGISTRY, step, "per", "actor"))
+
+
+## Is [param step] one of their own voice's?
+static func is_voice(step: String) -> bool:
+	return bool(Registry.field(REGISTRY, step, "voice", false))
 
 
 static func needs(step: String) -> Array:

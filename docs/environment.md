@@ -31,6 +31,11 @@ godot --headless --path . -- --provision mathlib # Lean and Mathlib, for the Pro
   - Not on Intel Macs: mediapipe publishes no build for Intel Macs.
   - Not on Windows on ARM: opencv-contrib-python has no Windows-on-ARM build.
 - **Speech-recognition environment**, ~420 MB, and its model ~150 MB - faster-whisper and Whisper's small English model (MIT), for the words an actor says in their own videos and when - the captions a video without them never had - from which a Likeness learns their mouth for each sound. On the processor, about seven times faster than the footage plays. Built the first time an actor's videos have no captions.
+- **Voice-training environment**, ~6 GB, and its base voice ~850 MB - Piper's trainer (GPL; fetched, never shipped) and PyTorch with CUDA, for an actor's own voice: a public-domain voice (John, LibriVox) fine-tuned on their speech on the graphics card for an hour or more, then exported as a Piper voice the voice host plays. Built the first time an actor's Voice step runs.
+  - Not on Apple silicon Macs: a voice is trained on an NVIDIA graphics card (CUDA), which a Mac has none of.
+  - Not on Intel Macs: a voice is trained on an NVIDIA graphics card (CUDA), which a Mac has none of.
+  - Not on Windows (x86-64): PyPI's PyTorch for Windows has no CUDA build.
+  - Not on Windows on ARM: PyPI's PyTorch for Windows has no CUDA build.
 - **Math environment**, ~16 MB - fontTools, for hosts/math/typeset.py: it reads TeX's fonts for each glyph's name (and its outline, for a glyph no hand draws), so the desk's pen writes what TeX laid out; and svgelements, which reads a drawing's SVG for the pen (hosts/math/figure.py). Built the first time a Proof needs it.
 - **Compute environment**, ~220 MB - numpy, SciPy and SymPy, for the code a Proof solver RUNS (hosts/compute/run.py): a simulation, a fit, a derivation or a small model trained, inside a sandbox (bubblewrap), its numbers kept for the pad's drawings. Built the first time a Proof's solver works where the sandbox is installed.
 - **Mathlib**, ~7.5 GB - Mathlib, Lean's library of mathematics, downloaded already compiled, and the Lean REPL built against it: the workbench every proof the Proof component shows is checked in. Lake fetches them with git; Mathlib's cache tool downloads with curl. Built the first time a Proof needs it, and moved to each new Mathlib release.

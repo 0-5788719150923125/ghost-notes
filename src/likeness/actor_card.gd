@@ -2,8 +2,10 @@ extends VBoxContainer
 class_name ActorCard
 
 ## ActorCard - the Actor component's card: makes and manages an actor of the [Actors] library
-## (next/likeness.md, "The Actor card"). A note with an Actor on it builds that actor; a Likeness on
-## the same note plays them ([LikenessCard], which reads them through this card's [ActorFeed]).
+## (next/likeness.md, "The Actor card"), and PUTS THEM ON THE STAGE: a note with an Actor is read by them,
+## in their own room. One component since 2026-10-22 (it had been two, an Actor that built and a Likeness
+## that played; the user: "If we're doing all that pipeline work with Actor... then the implication is we
+## want to use that actor in the scene").
 ##
 ## TOP TO BOTTOM: the actor (picked from the library, or a new one) and their name; their SOURCES - a
 ## folder read where it is, a link (a video, a playlist, a channel) listed and fetched one video at a
@@ -11,8 +13,13 @@ class_name ActorCard
 ## the STEPS, a row each ([ActorSteps]): ✓ made, ⚠ stale, its share while it runs, ▶ to make it and
 ## what it needs, ⟳ to make it again; Generate and Stop; the SETS the footage fell into, each with its
 ## sheet, its minutes and its look in words, whether it is built, and the one in use ("Use this set");
-## the STILL the Likeness is drawn on, picked from the set's stills; what the library and their motion
-## hold; who labels; their consent; and the steps' settings, folded.
+## the STILL they are drawn on, picked from the set's stills; what the library and their motion hold;
+## who labels; and the steps' settings, folded.
+##
+## WHILE IT IS UP IT PINS ITS MEDIUM ([LikenessMedium], as Proof pins the desk: [member
+## Director.medium_override]) and HANDS THE READING how it goes out ([ActorCard.Publish]): an export waits
+## for the set in use to be built, and the document a render draws from carries the actor's folder, the
+## set, its still and the seed of their performance, which is the note's own ([method performance]).
 ##
 ## GENERATION IS EXPLICIT: nothing runs on open. The survey costs hours of CPU and the audit quota, so a
 ## button is the only caller ([ActorBuilder]).
@@ -27,7 +34,6 @@ signal noted(text: String)
 var _knobs := KNOBS.duplicate(true)
 var _actor: ActorFolder = null
 var _builder: ActorBuilder = null
-var _feed: Feed = null
 var _syncing := false
 var _row_t := 0.0
 
@@ -48,24 +54,32 @@ var _stills_seen := ""
 var _library: Label
 var _library_seen := ""
 var _rows_seen := ""
-var _consent: Label
 var _writer: AgentPick
 var _advanced: VBoxContainer
 var _setting_boxes := {}
 var _body: VBoxContainer       # everything below the picker: hidden with no actor
-## The reading this card is on, when it is on one: its status line says what the card says (a note's
-## own panel hears `noted`).
-var _panel: Object = null
+## The reading this card is on (an Actor brings a Voice, so there is one): its status line says what the
+## card says, and it plays them. Without one (a gate) the card only builds, and `noted` says.
+var _panel: ReadingPanel = null
 
 
 static func for_note(ctx: Dictionary) -> ActorCard:
 	var card := ActorCard.new()
-	card._panel = ctx.get("workspace") as Object
+	card._panel = ctx.get("workspace") as ReadingPanel
+	if card._panel != null:
+		card._panel.publish = Publish.new(card)
 	card._build()
 	return card
 
 
+func _enter_tree() -> void:
+	if _panel != null:
+		Director.medium_override = "likeness"
+
+
 func _exit_tree() -> void:
+	if _panel != null and Director.medium_override == "likeness":
+		Director.medium_override = ""
 	if _builder != null:
 		_builder.stop()
 
@@ -99,25 +113,48 @@ func apply(cfg: Dictionary) -> void:
 		_open(String(_knobs["id"]))
 
 
-## WHAT THIS CARD HANDS THE NOTE'S OTHER CARDS: the actor, as the Likeness reads them.
-func feeds() -> Dictionary:
-	if _feed == null:
-		_feed = Feed.new(self)
-	return {"actor": _feed}
+# --- what it hands the reading -------------------------------------------------------------------
 
-
-## The actor as a Likeness reads them ([ActorFeed]).
-class Feed extends ActorFeed:
+## HOW THEY GO OUT: an export waits for the set in use to be built, the render's document names the
+## actor, the set and its still, and an upload says whose likeness it is.
+class Publish extends ReadingPublish:
 	var card: ActorCard
 
 	func _init(c: ActorCard) -> void:
 		card = c
 
-	func actor() -> ActorFolder:
-		return card._actor
+	func before_take() -> bool:
+		var st := card.likeness_status()
+		if not bool(st["ready"]):
+			card._say(String(st["said"]))
+			return false
+		return true
 
-	func status() -> Dictionary:
-		return card.likeness_status()
+	func book(d: Dictionary, _body: String) -> Dictionary:
+		d["likeness"] = card.document()
+		return d
+
+	func upload_base(_take: String) -> Dictionary:
+		var a := card._actor
+		if a == null:
+			return {"tags": []}
+		return {"tags": [], "description": "A likeness of %s, animated from %s's own footage. Every pixel of them is a real one from their footage, bent; the voice is synthetic." % [a.name(), a.name()]}
+
+
+## THE PERFORMANCE: the seed their motion's pieces, blinks, glances and posture are drawn from - the
+## note's own file's, so the same note plays the same way (a draft with no file, always the first).
+func performance() -> int:
+	var doc := _panel.doc_source() if _panel != null else null
+	var path := doc.doc_path() if doc != null else ""
+	return 1 if path.is_empty() else 1 + absi(hash(path)) % 99999
+
+
+## THE DOCUMENT'S `likeness`: the actor's folder, the set and its still, the seed of their performance.
+func document() -> Dictionary:
+	if _actor == null:
+		return {}
+	var sid := _actor.chosen_set()
+	return {"dir": _actor.dir, "set": sid, "still": _actor.still_of(sid), "seed": performance(), "name": _actor.name()}
 
 
 # --- the actor ---------------------------------------------------------------------------------
@@ -129,6 +166,7 @@ func _open(id: String) -> void:
 	_builder = ActorBuilder.new(_actor) if _actor != null else null
 	if _builder != null:
 		_builder.writer = _writer_choice()
+		_builder.voice_published.connect(_voice_made)
 		ActorSources.rescan(_actor)
 		_actor.save()
 	_videos_seen = ""
@@ -212,9 +250,16 @@ func _show_actor() -> void:
 	_fill_sources()
 
 
+## THEIR OWN VOICE HAS LANDED: the reading this card is on asks for its voices again and reads in it
+## ([method ReadingPanel.voice_made]) - the list was asked for when the note opened, hours before.
+func _voice_made(voice: String) -> void:
+	if _panel != null and is_instance_valid(_panel):
+		_panel.voice_made(voice)
+
+
 func _say(text: String) -> void:
-	if _panel != null and is_instance_valid(_panel) and _panel.has_method("status"):
-		_panel.call("status", text)
+	if _panel != null and is_instance_valid(_panel):
+		_panel.status(text)
 	else:
 		noted.emit(text)
 
@@ -402,7 +447,8 @@ func _generate() -> void:
 	_say("Generating: every step that is missing or stale, in order. The survey of each video takes about a quarter of its length; the rest a few minutes.")
 
 
-## What the Likeness says of this actor ([ActorFeed.status]).
+## WHETHER THEY CAN PLAY: `{ready, busy, said}` - ready once the set in use is built, whether anything is
+## being made, and a line saying what is missing or under way.
 func likeness_status() -> Dictionary:
 	if _actor == null:
 		return {"ready": false, "busy": false, "said": "The Actor card has no actor yet: pick one or make one."}
@@ -415,7 +461,7 @@ func likeness_status() -> Dictionary:
 		var scope := ("s:" + sid) if ActorSteps.per(String(step)) == "set" else ""
 		if sid.is_empty() or _actor.state_of(String(step), scope) == "missing":
 			missing.append(String(Registry.field(ActorSteps.REGISTRY, step, "label", step)).to_lower())
-	# THE ACTOR CARD BUILDS, and the Likeness says so (2026-10-21: a Generate on each card confused)
+	# THE ACTOR CARD BUILDS, and an export held back says so (2026-10-21: a Generate on each card confused)
 	var said := ("Building %s on the Actor card: the set in use still needs %s." if busy
 		else "%s is not built yet (the set in use needs %s): Generate on the Actor card builds them.") % [_actor.name(), ", ".join(missing)]
 	return {"ready": false, "busy": busy, "said": said}
@@ -439,13 +485,11 @@ func _refresh() -> void:
 	if not _builder.waiting.is_empty():
 		line = "Waiting: %s - Ghost Notes fetches these itself, once (see ⚙ for progress)." % _builder.waiting
 	elif _actor.playable():
-		line = "Ready to play: the set in use has everything a Likeness needs."
+		line = "Ready to play: the set in use has everything they need to read."
 	_line.text = line
 	_fill_sets()
 	_fill_stills()
 	_fill_library()
-	_consent.text = ("Consent: " + _actor.consent().get_file()) if not _actor.consent().is_empty() \
-		else "Consent: none on file - building is private; an upload refuses until there is."
 
 
 ## What the step rows are made from: the actor's data (videos ticked, settings, the set in use), every
@@ -488,11 +532,13 @@ func _fill_rows(busy: bool) -> void:
 				said = "waits for the sets"
 			"moot":
 				said = "– read in place" if step == "fetch" else "– no captions link"
+			"unavailable":
+				said = "– " + String(row["said"])
 			_:
 				said = "– " + count
 		(r["state"] as Label).text = said
 		(r["state"] as Label).tooltip_text = said + "\n\n" + String(Registry.field(ActorSteps.REGISTRY, step, "blurb", ""))
-		(r["make"] as Button).disabled = busy or st == "running"
+		(r["make"] as Button).disabled = busy or st == "running" or st == "unavailable"
 		(r["redo"] as Button).disabled = busy or not (st == "made" or st == "stale" or st == "failed")
 
 
@@ -567,7 +613,7 @@ func _fill_sets() -> void:
 			_actor.data["set"] = sid
 			_actor.save()
 			_sets_seen = ""
-			_say("This set is used now. " + ("It is built: the Likeness can play it." if built
+			_say("This set is used now. " + ("It is built: they can play in it." if built
 				else "It is not built yet: Generate builds it (%s of CPU). Any set built before is kept." % _build_time(d))))
 		foot.add_child(use)
 		var said := Label.new()
@@ -694,21 +740,6 @@ func _fill_library() -> void:
 		parts.append("%d minutes of their head's own motion; they blink about %d times a minute" % [
 			int(round(rows / maxf(1.0, float((mo as Dictionary).get("rate", 5.0))) / 60.0)), int(round(float((mo as Dictionary).get("blinks_per_min", 0.0))))])
 	_library.text = "\n".join(parts)
-
-
-func _choose_consent() -> void:
-	var dlg := FileDialog.new()
-	dlg.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-	dlg.access = FileDialog.ACCESS_FILESYSTEM
-	dlg.title = "Their signed license for this likeness"
-	dlg.file_selected.connect(func(path: String) -> void:
-		dlg.queue_free()
-		_actor.data["consent"] = path
-		_actor.save()
-		_say("Consent on file: %s." % path.get_file()))
-	dlg.canceled.connect(dlg.queue_free)
-	add_child(dlg)
-	dlg.popup_centered_ratio(0.6)
 
 
 # --- who labels -----------------------------------------------------------------------------------
@@ -883,19 +914,6 @@ func _build() -> void:
 		if _builder != null:
 			_builder.writer = _writer_choice())
 	_body.add_child(_writer)
-
-	var crow := HBoxContainer.new()
-	_body.add_child(crow)
-	_consent = Label.new()
-	_consent.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_consent.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_consent.add_theme_font_size_override("font_size", 11)
-	crow.add_child(_consent)
-	var cb := Button.new()
-	cb.text = "License…"
-	cb.tooltip_text = "Their signed license for this likeness: its uses, their approval of each script and render, the term, revocation, deletion, pay and credit. An upload of a likeness refuses an actor with none on file."
-	cb.pressed.connect(_choose_consent)
-	crow.add_child(cb)
 
 	var fold := Button.new()
 	fold.text = "Advanced ▸"

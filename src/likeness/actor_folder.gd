@@ -3,7 +3,7 @@ class_name ActorFolder
 
 ## Actor - one actor of the [Actors] library, as it lies on disk (next/likeness.md, "The actor's
 ## folder"): `actor.json` (their name, their sources and their videos, which are ticked, the chosen set
-## and each set's still, consent) and a folder per thing a step covers - each video's (`videos/<vid>/`), the actor's own
+## and each set's still) and a folder per thing a step covers - each video's (`videos/<vid>/`), the actor's own
 ## (the folder itself) and each set's (`sets/<set>/`). EVERY STEP IS FILES ([constant
 ## ActorSteps.REGISTRY]'s `outputs`), and beside them, in the same folder's `steps.json`, what each
 ## was made from.
@@ -33,7 +33,7 @@ static var _kept := {}
 
 
 static func blank(name: String) -> Dictionary:
-	return {"name": name, "sources": [], "videos": {}, "set": "", "stills": {}, "consent": "", "settings": {}}
+	return {"name": name, "sources": [], "videos": {}, "set": "", "stills": {}, "settings": {}}
 
 
 static func open(actor_id: String) -> ActorFolder:
@@ -106,10 +106,6 @@ static func read_kept(path: String) -> Variant:
 
 func name() -> String:
 	return String(data.get("name", id))
-
-
-func consent() -> String:
-	return String(data.get("consent", ""))
 
 
 func settings() -> Dictionary:

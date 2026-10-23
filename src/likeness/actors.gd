@@ -8,8 +8,7 @@ class_name Actors
 ## ([ActorFolder], [ActorSteps]): the videos surveyed, cut into shots, the shots grouped into sets (one
 ## camera placement and one look each); from every video, their range of mouth shapes and their head's
 ## motion; and for the set in use, its stills, its rig and its library of their mouths and eyes. The
-## Actor card makes and manages one ([ActorCard]); the Likeness card plays it ([LikenessCard],
-## [LikenessMedium]).
+## Actor card makes and manages one and puts them on the stage ([ActorCard], [LikenessMedium]).
 ##
 ## ITS RULES ARE THE ILLUSTRATION LIBRARY'S: nothing builds on its own (a button is the only caller,
 ## since the survey costs hours of CPU and the audit quota); each step's output records what it

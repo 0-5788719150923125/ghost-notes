@@ -1,0 +1,13 @@
+# An actor's own voice (train.py): Piper's trainer, which fine-tunes a clean base checkpoint on their
+# speech, run on the graphics card. Installed into ghost's OWN environment at user://voice_train_venv,
+# built by uv on ghost's own Python - never the voice environment, which must stay small and free of GPL
+# code (hosts/voice/requirements.txt): this one is fetched on the machine that trains, and only the voice
+# it makes (an .onnx and its config, DATA) leaves it.
+#
+# piper-tts is GPL-3.0-or-later (its wheel vendors eSpeak-NG); its `train` extra brings PyTorch (CUDA
+# 13 on Linux; an RTX 50-series card needs 2.7 or later), Lightning, librosa (and numba, which the
+# alignment search runs on - align.py: the wheel leaves Piper's Cython unbuilt), pysilero-vad (the
+# silence trim) and onnx (the export). About 6 GB, nearly all of it CUDA's libraries. The floors are the
+# versions last verified (Python 3.14, 2026-10-22).
+piper-tts[train]>=1.8.0,<2
+torch>=2.14.1

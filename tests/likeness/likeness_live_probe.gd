@@ -1,11 +1,11 @@
 extends Node
 
-## NOT a gate. A Likeness played LIVE in a real boot: the real main scene opens a note carrying an
-## Actor and a Likeness, the real voice host reads it, and the stage is photographed as it plays -
+## NOT a gate. An actor played LIVE in a real boot: the real main scene opens a note carrying an
+## Actor, the real voice host reads it, and the stage is photographed as it plays -
 ## the path the app's ▶ takes, which the look probe (a set handed to the medium by hand) never ran.
 ##
 ##   GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 tests/run_boot_probe.sh tests/likeness/likeness_live_probe.gd 300 \
-##       --actors user://actors_live_probe --actor <id> --out <dir> --play 20 [--stamp 1] [--bake 1]
+##       --actors user://actors_live_probe --actor <id> --out <dir> --play 20 [--stamp 1] [--bake 1] [--voice <id>]
 ##
 ## `--actors` is a library of the probe's own (a copy: opening an actor rescans its sources and saves
 ## it); the notes are made in a folder of the probe's own (`NoteStore.root`). It first presses Play on
@@ -18,7 +18,11 @@ extends Node
 ## copy's still, rig, library and motion (put there by hand, from actor.py run on their footage) are
 ## stamped made, as Generate would have. With `--bake 1` the reading's own export take is made after
 ## playing - its sound and its phones, `take.wav` and `take.json` in --out - for the look probe to draw
-## frame by frame (`--take`), and the take's own files are taken away again.
+## frame by frame (`--take`), and the take's own files are taken away again. `--voice` reads the note in that
+## voice (an actor's own: `actor-<id>`), the default one's otherwise; `--bookends <intro>,<outro>` gives the note
+## those holds (its `bookends:` block), `--words <file>` reads that note's body (its frontmatter left out) in
+## place of the probe's own sentences, and each second's line says how bright the actor is drawn and the last
+## of the text's words the voice's timings have reached.
 
 const WORDS := "Hello there. This is a short test of the likeness, read in my own voice. " \
 	+ "The quick brown fox jumps over the lazy dog. Maybe we should move on, but please, bear with me."
@@ -26,11 +30,14 @@ const WORDS := "Hello there. This is a short test of the likeness, read in my ow
 var _main: Node
 var _out := "user://likeness_live"
 var _play := 20.0
-## A plain reading (a Voice alone) on the same words: the control the Likeness's own cost is read against.
+## A plain reading (a Voice alone) on the same words: the control the actor's own cost is read against.
 var _plain := false
 var _stamp := false
 var _bake := false
 var _times: Array = [2.0, 4.0, 6.0, 9.0, 12.0, 16.0]
+var _voice := ""
+var _bookends := ""
+var _words := WORDS
 
 
 func _ready() -> void:
@@ -50,6 +57,9 @@ func _run() -> void:
 			"--plain": _plain = args[i + 1] == "1"
 			"--stamp": _stamp = args[i + 1] == "1"
 			"--bake": _bake = args[i + 1] == "1"
+			"--voice": _voice = args[i + 1]
+			"--bookends": _bookends = args[i + 1]
+			"--words": _words = String(FrontMatter.split(FileAccess.get_file_as_string(args[i + 1])).body)
 			"--times":
 				_times = []
 				for s in String(args[i + 1]).split(","):
@@ -73,7 +83,7 @@ func _run() -> void:
 	add_child(_main)
 	await _frames(30)
 	# ▶ WITH NO WORDS: what the author saw
-	var panel := await _open(NoteStore.create("live likeness empty", "", {"actor": {"id": actor}, "likeness": {}}))
+	var panel := await _open(NoteStore.create("live likeness empty", "", {"actor": {"id": actor}}))
 	if panel == null:
 		return
 	_cards(panel)
@@ -82,8 +92,14 @@ func _run() -> void:
 	print("play with no words -> status: '%s'; live %s" % [panel._status.text, panel._stream.live()])
 	_main._chrome._home_button.pressed.emit()
 	await _frames(30)
-	panel = await _open(NoteStore.create("live likeness words", WORDS + "\n",
-		{"voice": {}} if _plain else {"actor": {"id": actor}, "likeness": {}}))
+	var blocks := {"voice": {}} if _plain else {"actor": {"id": actor}}
+	if not _voice.is_empty():
+		blocks["voice"] = {"voices": {Manuscript.NARRATOR: {"voice": _voice}}}
+	if not _bookends.is_empty():
+		var hold := _bookends.split(",")
+		blocks["bookends"] = {"intro": float(hold[0]), "outro": float(hold[1])}
+	panel = await _open(NoteStore.create("live likeness words", _words.strip_edges() + "\n", blocks))
+	print("reading in %s" % panel._cast._selected_voice_id())
 	if panel == null:
 		return
 	if not _plain:
@@ -102,8 +118,11 @@ func _run() -> void:
 		if int(t) != said:
 			said = int(t)
 			var subs: Node = _main._subtitles
-			print("t %4.1f  fps %d  process %.1f ms  show %.2f  medium %s  ready %s  why '%s'  library %s  words %d  phones %d  status '%s'" % [t,
-				Engine.get_frames_per_second(), Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, Director.show_time(), m.get_script().get_global_name() if m != null else "none",
+			print("t %4.1f  fps %d  process %.1f ms  show %.2f  bright %.2f  timed %s  medium %s  ready %s  why '%s'  library %s  words %d  phones %d  status '%s'" % [t,
+				Engine.get_frames_per_second(), Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, Director.show_time(),
+				lm.modulate.r if lm != null else -1.0,
+				("%d/%d" % [lm._follower.known_last(), lm._spoken_n]) if lm != null and lm._follower != null else "-",
+				m.get_script().get_global_name() if m != null else "none",
 				lm._ready_set if lm != null else false, lm._why if lm != null else "",
 				lm._library_tex != null if lm != null else false,
 				(subs.words as Array).size() if subs != null else -1,
@@ -221,9 +240,7 @@ func _costs(lm: LikenessMedium) -> void:
 ## WHAT THE TWO CARDS COST THE MAIN THREAD, four times a second: each one's refresh, the least of 5.
 func _card_costs() -> void:
 	var ac := _find(_main, ActorCard) as ActorCard
-	var lc := _find(_main, LikenessCard) as LikenessCard
 	for pair in [["actor card refresh", func() -> void: ac._refresh()],
-			["likeness card refresh", func() -> void: lc._row_t = 0.0; lc._process(0.0)],
 			["  step rows", func() -> void:
 				ac._actor.forget()
 				for st in ac._rows:
@@ -241,12 +258,10 @@ func _card_costs() -> void:
 		print("cost %-22s least %6d us" % [pair[0], least])
 
 
-## What the note's two cards say.
-func _cards(panel: ReadingPanel) -> void:
-	var f := panel.feed("actor") as ActorFeed
-	print("actor feed: %s; status %s" % [f != null, f.status() if f != null else {}])
-	var lc := _find(_main, LikenessCard) as LikenessCard
-	print("likeness card says: '%s'" % (lc._status.text if lc != null else "(no card)"))
+## What the Actor card says of them, and what it hands a render.
+func _cards(_panel: ReadingPanel) -> void:
+	var ac := _find(_main, ActorCard) as ActorCard
+	print("actor card: %s; document %s" % [ac.likeness_status() if ac != null else "(no card)", ac.document() if ac != null else {}])
 
 
 func _find(n: Node, script: Script) -> Node:

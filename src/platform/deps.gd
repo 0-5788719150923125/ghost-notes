@@ -255,6 +255,35 @@ const MANAGED := [
 			+ "the footage plays. Built the first time an actor's videos have no captions.",
 	},
 	{
+		"key": "voice_train_venv",
+		"name": "Voice-training environment",
+		"kind": KIND_MANAGED,
+		"path": "user://voice_train_venv",
+		"requirements": "res://hosts/voice_train/requirements.txt",
+		"imports": "piper.train.vits.lightning, torch, lightning, numba",
+		"files": [
+			{"key": "voice_base", "name": "base voice", "file": "piper-john-medium/john-2599.ckpt",
+				"url": "https://huggingface.co/datasets/rhasspy/piper-checkpoints/resolve/37d1bea250e21ca0d617818d2bef1db724edb80c/en/en_US/john/medium/john-2599.ckpt",
+				"sha256": "729c2da11c833fb6f890e614e4fca8584b6dc503081984d2c9ac82db55da9a4b",
+				"size": 845898697},
+			{"key": "voice_base_config", "name": "base voice's settings", "file": "piper-john-medium/config.json",
+				"url": "https://huggingface.co/datasets/rhasspy/piper-checkpoints/resolve/37d1bea250e21ca0d617818d2bef1db724edb80c/en/en_US/john/medium/config.json",
+				"sha256": "af60f177b6b550f3d7a302720c0fb89e7f94a82b5dca464775ef63b1c69ba09a",
+				"size": 4965},
+		],
+		"size": "~6 GB, and its base voice ~850 MB",
+		"unsupported": {
+			"macos-arm64": "a voice is trained on an NVIDIA graphics card (CUDA), which a Mac has none of",
+			"macos-x86_64": "a voice is trained on an NVIDIA graphics card (CUDA), which a Mac has none of",
+			"windows-x86_64": "PyPI's PyTorch for Windows has no CUDA build",
+			"windows-arm64": "PyPI's PyTorch for Windows has no CUDA build",
+		},
+		"used_for": "Piper's trainer (GPL; fetched, never shipped) and PyTorch with CUDA, for an actor's "
+			+ "own voice: a public-domain voice (John, LibriVox) fine-tuned on their speech on the "
+			+ "graphics card for an hour or more, then exported as a Piper voice the voice host plays. "
+			+ "Built the first time an actor's Voice step runs.",
+	},
+	{
 		"key": "math_venv",
 		"name": "Math environment",
 		"kind": KIND_MANAGED,

@@ -10,7 +10,14 @@ class_name ActorBuilder
 ## person pressing Generate or a step's ▶, since the steps cost hours of CPU and the agents quota.
 ##
 ## WHAT RUNS AT ONCE, by lane: one step that takes the processor (MediaPipe takes every core it is
-## given), one download (the network, beside it), one quick step, and one agent job.
+## given), one download (the network, beside it), one quick step, one agent job, and one step on the
+## graphics card (their voice's training, for an hour or more).
+##
+## THEIR OWN VOICE (next/likeness.md, "Their own voice"): Hear, Utterances and Voice teach a Piper voice
+## their speech, and a voice made is PUBLISHED where the voice host finds voices trained here
+## ([method publish_voice]), named after them, and [signal voice_published] tells the card (the reading
+## it is on lists it and reads in it). On a machine that cannot train one ([method voice_unavailable])
+## the three are left alone and their rows say why.
 ##
 ## A STEP IS FILES: a program's step writes its output under a temporary name and renames it into
 ## place, so a step whose output is newer than its start succeeded - whatever its exit said - and a
@@ -22,9 +29,11 @@ class_name ActorBuilder
 ## still, rig and library are the set's own, its library's mouths and eyes from any video.
 
 signal changed
+## Their own voice was published, under the voice id [param voice] ([method voice_id]).
+signal voice_published(voice: String)
 
 ## The lane each kind of step runs in.
-const LANES := {"download": "net", "probe": "quick", "local": "quick", "python": "cpu", "agent": "agent"}
+const LANES := {"download": "net", "probe": "quick", "local": "quick", "python": "cpu", "agent": "agent", "train": "gpu"}
 ## An agent step's reply that is not what was asked is asked again this many times.
 const RETRIES := 1
 ## A set is audited when it has at least this many usable minutes; a smaller one is kept as it is.
@@ -38,7 +47,8 @@ const AUDIT_SHEETS := 14
 ## step finished.
 const MAIN := {"survey": "survey.bin", "shots": "shots.json", "sets": "sets.json", "transcribe": "transcript.json",
 	"visemes": "visemes.json", "learn": "mouth_model.json",
-	"motion": "motion.json", "stills": "stills.json", "rig": "rig.json", "library": "library.json"}
+	"motion": "motion.json", "stills": "stills.json", "rig": "rig.json", "library": "library.json",
+	"hear": "speech.json", "utterances": "utterances.json", "voice": "voice/voice.onnx"}
 ## Candidate stills a set keeps (enough that some show them at rest: on his footage two of six did, the
 ## fourth pass); prototype mouths per sound and eyes per state its library keeps.
 const STILLS := 12
@@ -46,6 +56,13 @@ const VARIANTS := 3
 const EYE_VARIANTS := 2
 ## The most minutes of their head's motion kept.
 const MOTION_MINUTES := 60.0
+## WHAT HEAR TELLS WHISPER CAME BEFORE: it writes the ums and uhs it would otherwise leave out, and a
+## sentence whose text lacks a sound it holds teaches their voice to say what nobody asked for.
+const HEAR_PROMPT := "Umm, let me think, like, hmm... Okay, uh, here is what I am, like, thinking."
+## The eSpeak voice their speech is read in (the voice host reads a voice's own from its config).
+const VOICE_ESPEAK := "en-us"
+## Sentences a training batch holds: an hour of speech in about 0.8 s a step on a 16 GB card.
+const VOICE_BATCH := 16
 
 var actor: ActorFolder
 ## Is a run asked for and not done?
@@ -155,6 +172,10 @@ func row_of(step: String) -> Dictionary:
 	if scopes.is_empty():
 		out["state"] = "waiting"
 		return out
+	if ActorSteps.is_voice(step) and not make_with.is_valid() and not voice_unavailable().is_empty():
+		out["state"] = "unavailable"
+		out["said"] = voice_unavailable()
+		return out
 	var states := {}
 	var moot := 0
 	for sc in scopes:
@@ -218,6 +239,8 @@ func tick() -> void:
 			lanes[String((_runs[k] as Dictionary)["lane"])] = true
 		for step in ActorSteps.ORDER:
 			if not (only.is_empty() or only.has(step)):
+				continue
+			if ActorSteps.is_voice(step) and not make_with.is_valid() and not voice_unavailable().is_empty():
 				continue
 			var lane := String(LANES.get(String(Registry.field(ActorSteps.REGISTRY, step, "runs", "local")), "quick"))
 			for sc in actor.scopes_of(step):
@@ -428,6 +451,39 @@ func _phase(run: Dictionary) -> String:
 				"--pose-model", Provision.file_path("pose_model"), "--spec", spec], "finding their stills")
 		"rest":
 			return _rest(run, sid, out)
+		"hear":
+			var spec := out.path_join("hear.spec.json")
+			var e := ActorFolder.write_file(spec, JSON.stringify({"video": actor.video_path(vid),
+				"spans": [[0.0, float(actor.video(vid).get("duration", 0.0))]], "out": out.path_join("speech.json"),
+				"prompt": HEAR_PROMPT, "step": "hear"}))
+			if not e.is_empty():
+				return e
+			return _spawn(run, "user://speech_venv", "res://hosts/speech/transcribe.py", ["--ffmpeg", ff, "--model",
+				Provision.file_path("whisper_model").get_base_dir(), "--spec", spec], "listening for their voice")
+		"utterances":
+			var vids: Array = []
+			for v in actor.ticked():
+				var p := actor.video_path(String(v))
+				if not p.is_empty():
+					vids.append({"vid": v, "path": p, "words": actor.video_dir(String(v)).path_join("speech.json")})
+			var spec := actor.dir.path_join("utterances.spec.json")
+			var e := ActorFolder.write_file(spec, JSON.stringify({"videos": vids, "espeak": VOICE_ESPEAK,
+				"config": Provision.file_path("voice_base_config"), "out": actor.dir.path_join("utterances"),
+				"index": actor.dir.path_join("utterances.json")}))
+			if not e.is_empty():
+				return e
+			return _spawn(run, "user://voice_venv", "res://hosts/voice/utterances.py", ["--ffmpeg", ff, "--spec", spec],
+				"cutting their sentences")
+		"voice":
+			var spec := actor.dir.path_join("voice.spec.json")
+			var e := ActorFolder.write_file(spec, JSON.stringify({"data": actor.dir.path_join("utterances"),
+				"base": Provision.file_path("voice_base"), "work": actor.dir.path_join("voice").path_join("train"),
+				"out": actor.dir.path_join("voice").path_join("voice.onnx"), "name": actor.name(),
+				"espeak": VOICE_ESPEAK, "epochs": int(actor.settings()["voice_epochs"]), "batch": VOICE_BATCH}))
+			if not e.is_empty():
+				return e
+			return _spawn(run, "user://voice_train_venv", "res://hosts/voice_train/train.py", ["--spec", spec],
+				"teaching their voice")
 		"rig":
 			return _spawn_py(run, ["rig", "--stills", out.path_join("stills.json"), "--out", out.path_join("rig.json")],
 				"building the rig")
@@ -651,11 +707,18 @@ func _land_process(run: Dictionary) -> String:
 			actor.save()
 			actor.put_stamp(step, scope, "%s, %d fps" % [Clock.text(float(info["duration"])), roundi(float(info["fps"]))])
 			return "done"
-		"survey", "shots", "sets", "transcribe", "visemes", "learn", "motion", "stills", "rig", "library":
+		"survey", "shots", "sets", "transcribe", "visemes", "learn", "motion", "stills", "rig", "library", "hear", "utterances", "voice":
 			if not _made_by(out.path_join(String(MAIN[step])), run):
 				return _tail(String(run["log"]))
 			var said := _said_by(String(run["log"]), step)
+			if step == "voice":
+				var e := publish_voice(actor)
+				if not e.is_empty():
+					return e
+				said = "%s; on the Voice card as \"%s\"" % [said, voice_name(actor)]
 			actor.put_stamp(step, scope, said)
+			if step == "voice":
+				voice_published.emit(voice_id(actor))
 			return "done"
 	return "done"
 
@@ -909,6 +972,62 @@ func _land_audit(all: Array) -> String:
 	var looked := sets.filter(func(x: Dictionary) -> bool: return bool(x.get("audited", false))).size()
 	actor.put_stamp("audit", "", "%d set%s, %d looked at" % [sets.size(), "" if sets.size() == 1 else "s", looked])
 	return "done"
+
+
+# --- their own voice ---------------------------------------------------------------------------------
+
+## WHY THIS MACHINE CANNOT TEACH A VOICE, "" when it can: the training environment has no build here, or
+## there is no NVIDIA graphics card (its driver, or the card the app draws on).
+static func voice_unavailable() -> String:
+	var why := Provision.unsupported("voice_train_venv")
+	if not why.is_empty():
+		return "not on this computer: " + why
+	var vendor := RenderingServer.get_video_adapter_vendor()
+	if not FileAccess.file_exists("/proc/driver/nvidia/version") and not vendor.to_lower().contains("nvidia"):
+		return "not on this computer: a voice is trained on an NVIDIA graphics card, and it has none"
+	return ""
+
+
+## The voice host's id for [param a]'s voice: one an actor, and the same each time it is trained.
+static func voice_id(a: ActorFolder) -> String:
+	return "actor-" + a.id
+
+
+## Their voice's name on the Voice card.
+static func voice_name(a: ActorFolder) -> String:
+	return "%s (their own voice)" % a.name()
+
+
+## Where the voice host finds the voices trained here (hosts/voice/backends/piper.py, `TRAINED`).
+static func trained_voices_dir() -> String:
+	return Deps.data_dir().path_join("voices").path_join("piper").path_join("trained")
+
+
+## THEIR VOICE, PUBLISHED: the Voice step's voice and its config copied (each under another name, then
+## renamed into place) to where the voice host lists voices trained here, a description beside them - their
+## name and what it was fine-tuned from - and `voice.json` in the actor's folder. A
+## voice trained again replaces it, and the vowel probe the host kept of the old one goes with it.
+static func publish_voice(a: ActorFolder) -> String:
+	var src := a.dir.path_join("voice").path_join("voice.onnx")
+	var dest := trained_voices_dir()
+	DirAccess.make_dir_recursive_absolute(dest)
+	var vid := voice_id(a)
+	for pair in [[src, vid + ".onnx"], [src + ".json", vid + ".onnx.json"]]:
+		var part := dest.path_join(String(pair[1]) + ".part")
+		var err := DirAccess.copy_absolute(String(pair[0]), part)
+		if err == OK:
+			err = DirAccess.rename_absolute(part, dest.path_join(String(pair[1])))
+		if err != OK:
+			DirAccess.remove_absolute(part)
+			return "their voice could not be put where the voice host finds it (%s)" % error_string(err)
+	DirAccess.remove_absolute(dest.get_base_dir().path_join(vid + ".probe.json"))
+	var meta := {"name": voice_name(a), "actor": a.id, "license": "Their own voice",
+		"chain": "fine-tuned from John (LibriVox, public domain) on their own speech"}
+	var e := ActorFolder.write_file(dest.path_join(vid + ".voice.json"), JSON.stringify(meta, "\t"))
+	if not e.is_empty():
+		return e
+	return ActorFolder.write_file(a.dir.path_join("voice.json"), JSON.stringify({"voice": vid, "name": voice_name(a),
+		"published": dest.path_join(vid + ".onnx"), "at": int(Time.get_unix_time_from_system())}, "\t"))
 
 
 # --- what is made from what ------------------------------------------------------------------------

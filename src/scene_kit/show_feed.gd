@@ -113,6 +113,12 @@ func show_length() -> float:
 	return 0.0
 
 
+## The seconds held before the first word, on the clock the show is timed by: the take's own lead-in
+## where the bookend was baked into it (a render), else the note's intro hold.
+func lead() -> float:
+	return intro_hold
+
+
 ## The seconds held after the last word, on the clock the show is timed by: the take's own tail
 ## where the bookend was baked into it (a render), else the note's outro hold.
 func tail() -> float:

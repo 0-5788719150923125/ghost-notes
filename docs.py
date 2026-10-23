@@ -263,9 +263,10 @@ FOLDERS: List[Tuple[str, str, str]] = [
         "An actor played from their own footage: the library of actors, each built from their videos "
         "(a folder, or links fetched) - surveyed, grouped into sets by camera and look, the agent that "
         "audits them, a still of each set and a model of them from every video (their head's motion, "
-        "their blinks, their mouths for each sound) - the card that makes one, and the card and medium "
-        "that play them reading a note: the still, its head turned and its mouth and eyes drawn from "
-        "their own, through one mesh over the frame. Design: next/likeness.md.",
+        "their blinks, their mouths for each sound, their voice) - the card that makes one and puts "
+        "them on a note's stage, and the medium that plays them reading it: the still, its head turned "
+        "and its mouth and eyes drawn from their own, through one mesh over the frame. Design: "
+        "next/likeness.md.",
     ),
     (
         "masking",

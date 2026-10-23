@@ -15,7 +15,10 @@ extends SceneTree
 ## alone (the CONTROL: a step started without its input), it starts nothing.
 ## GENERATE'S ORDER: each video's probe before its survey before its shots, every video's shots before
 ## the sets, the sets before the audit, the audit before the actor's visemes and motion and the set's
-## stills, the stills before the rig and At rest, and the rig and the visemes before the library.
+## stills, the stills before the rig and At rest, and the rig and the visemes before the library. THEIR
+## VOICE: each video's probe before its Hear, every video's Hear before the Utterances, the Utterances
+## before the Voice; ▶ on the Voice makes those three and nothing of their picture, and the voice's
+## lessons changed make the Voice stale and only it.
 ## THE STILL DRAWN ON: the one picked, else the one At rest found most at ease, else the first; stills
 ## made again forget the pick (an index into the old ones).
 ## A CHANGED INPUT MARKS STALE: a setting a step reads makes it stale, and only it, until it is made
@@ -107,6 +110,12 @@ func _run() -> void:
 		"the rig or the library came out of order")
 	_ok(_before("stills|" + s, "rest|" + s), "At rest came before the stills")
 	_ok(_made.has("motion|") and _made.has("library|" + s), "Generate left steps unmade: %s" % str(_made))
+	for v in vids:
+		var sc := "v:" + String(v)
+		_ok(_ever.find("probe|" + sc) >= 0 and _ever.find("probe|" + sc) < _ever.find("hear|" + sc)
+			and _before("hear|" + sc, "utterances|"),
+			"a video was heard before its probe, or the utterances cut before it was heard: %s" % str(_made))
+	_ok(_before("utterances|", "voice|"), "the voice was taught before its utterances were cut: %s" % str(_made))
 	_ok(_actor.playable(), "a fully made actor is not playable")
 	_ok(not _made.has("fetch|" + v0), "a folder video was fetched")
 	# A RESTART CHANGES NOTHING: read again from its file, the actor finds every step as it was
@@ -134,6 +143,20 @@ func _run() -> void:
 	_ok(_made.has("shots|" + v0) and _made.has("sets|") and not _made.has("probe|" + v0),
 		"Generate after a change made %s" % str(_made))
 	_ok(_actor.state_of("rig", s) == "made", "Generate left the rig %s" % _actor.state_of("rig", s))
+	# THEIR VOICE ON ITS OWN: the lessons changed make the Voice stale, and only it; ▶ on it makes it and
+	# nothing of their picture (THE CONTROL: the Hear, made, is not made again)
+	(_actor.data["settings"] as Dictionary)["voice_epochs"] = 300
+	_actor.save()
+	_actor.forget()
+	_ok(_actor.state_of("voice", "") == "stale" and _actor.state_of("utterances", "") == "made"
+		and _actor.state_of("hear", v0) == "made", "the voice's lessons changed left the voice %s, the utterances %s" % [
+		_actor.state_of("voice", ""), _actor.state_of("utterances", "")])
+	_made = []
+	b.start(ActorSteps.with_needs("voice"))
+	_spin(b)
+	_ok(_made == ["voice|"], "▶ on the stale voice made %s" % str(_made))
+	_ok(ActorSteps.with_needs("voice").all(func(st: String) -> bool: return ActorSteps.is_voice(st) or st in ["fetch", "probe"]),
+		"the voice is made from steps of their picture: %s" % str(ActorSteps.with_needs("voice")))
 	# THE STILL DRAWN ON: the first, then the one most at rest, then the one picked
 	var stills_at := _actor.set_dir(sid).path_join("stills.json")
 	_write(stills_at, JSON.stringify({"stills": [{}, {}, {}, {}]}))

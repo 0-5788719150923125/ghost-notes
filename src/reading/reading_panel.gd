@@ -130,10 +130,6 @@ var _youtube: YouTubeCard
 ## (`episode_steps()` - the YouTube card's tags), for the card that makes episodes to list
 ## ([method episode_steps]). The two never name each other: this panel puts them together.
 var _steps: Array = []
-## WHAT THE NOTE'S CARDS HAND EACH OTHER, by name ([method feed]): a card answers `feeds()` -
-## `{name: object}` - and another asks the panel for it by that name, so the two never name each other
-## (the Actor card hands the actor a Likeness plays: [ActorFeed]).
-var _feeds := {}
 var _dirty := false
 var _last_edit_ms := 0
 
@@ -475,22 +471,13 @@ func _add_block(card: Object) -> void:
 	_offer_steps(card)
 
 
-## What [param card] adds to the note's episodes, if it adds anything (`episode_steps()`), and what it
-## hands the other cards (`feeds()`).
+## What [param card] adds to the note's episodes, if it adds anything (`episode_steps()`).
 func _offer_steps(card: Object) -> void:
-	if card.has_method("feeds"):
-		_feeds.merge(card.call("feeds") as Dictionary, true)
 	if not card.has_method("episode_steps"):
 		return
 	for s in card.call("episode_steps"):
 		if s is EpisodeStep and not _steps.has(s):
 			_steps.append(s)
-
-
-## WHAT A CARD HANDS THE OTHERS under [param name] (an `ActorFeed` under "actor"), null when no card
-## on this note hands one.
-func feed(name: String) -> Object:
-	return _feeds.get(name)
 
 
 ## THE STEPS THE NOTE'S CARDS ADD TO ITS EPISODES, as offered - all of them; the card that makes the
@@ -903,6 +890,14 @@ func _on_host_ready(backends: PackedStringArray) -> void:
 	_set_status("Voice host up (%s). Loading voices…" % ", ".join(backends))
 	_host.capabilities()
 	_host.list_voices()
+
+
+## A voice made while this note is open (an actor's own, from the Actor card): the voices asked for
+## again, and the reader reads in it ([method ReadingCast.voice_made]).
+func voice_made(id: String) -> void:
+	_cast.voice_made(id)
+	if _host != null and _host.is_up():
+		_host.list_voices()
 
 
 func _on_failed(stage: String, message: String) -> void:

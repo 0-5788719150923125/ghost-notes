@@ -673,6 +673,10 @@ func show_length() -> float:
 	return Spectrum.song_length()
 
 
+func lead() -> float:
+	return Spectrum.lead_in if Spectrum.bookend_baked else intro_hold
+
+
 func tail() -> float:
 	return Spectrum.tail if Spectrum.bookend_baked else outro_hold
 
