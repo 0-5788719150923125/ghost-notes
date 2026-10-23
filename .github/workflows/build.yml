@@ -51,15 +51,38 @@ jobs:
           key: godot-${{ hashFiles('scripts/setup_godot.py') }}
       - name: Install Godot
         run: echo "GODOT=$(python3 scripts/setup_godot.py --target linux --print-godot)" >> "$GITHUB_ENV"
-      # mask_portrait_check builds its video fixture with ffmpeg.
+      # mask_portrait_check builds its video fixture with ffmpeg, from Ubuntu's mirror, which can
+      # crawl: 4m50s to download what then unpacked in 5 s (2026-10-22), and past the step's limit the
+      # next night. So the packages are cached, keyed on the runner image, whose package lists fix
+      # the versions: a run on a known image downloads nothing, a new one only what changed (the
+      # last image's set restored, `autoclean` dropping what its lists no longer name). Saved right
+      # after the install, so a red gate later still keeps them.
       # Without `apt-get update` first: it is the slow part (a mirror can stall for minutes) and
       # the runner image's package lists are recent enough. Update only if the install fails.
+      - name: Name the runner image
+        run: echo "RUNNER_IMAGE=$ImageOS-$ImageVersion" >> "$GITHUB_ENV"
+      - uses: actions/cache/restore@v6
+        id: apt-cache
+        with:
+          path: ~/apt-archives
+          key: apt-ffmpeg-${{ env.RUNNER_IMAGE }}
+          restore-keys: apt-ffmpeg-
       - name: Install ffmpeg
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
-          apt_get() { sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 "$@"; }
-          apt_get install -y -qq --no-install-recommends ffmpeg \
-            || { apt_get update -qq && apt_get install -y -qq --no-install-recommends ffmpeg; }
+          mkdir -p ~/apt-archives/partial
+          apt_get() { sudo apt-get -q -o Dir::Cache::Archives="$HOME/apt-archives" \
+            -o APT::Keep-Downloaded-Packages=true -o APT::Sandbox::User=root \
+            -o Acquire::Retries=2 -o Acquire::http::Timeout=20 "$@"; }
+          apt_get install -y --no-install-recommends ffmpeg \
+            || { apt_get update -q && apt_get install -y --no-install-recommends ffmpeg; }
+          apt_get autoclean -y
+          sudo chown -R "$(id -u):$(id -g)" ~/apt-archives
+      - if: steps.apt-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/apt-archives
+          key: apt-ffmpeg-${{ env.RUNNER_IMAGE }}
       # How long each gate took the last time it passed. check.sh starts the longest first from it,
       # so no long gate is left running by itself at the end with the other cores idle (a run
       # without it still orders them, by their timeouts). A cache is never rewritten, so each run
