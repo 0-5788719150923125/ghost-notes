@@ -8,6 +8,11 @@
 // times exp(log-scale). Seen straight on (the camera is far and fixed), its footprint is the top-left 2x2 of
 // its covariance plus `low_pass`, and it is drawn as hosts/avatar/raster.py composites it: cover times the
 // Gaussian's falloff, at most 0.99, nothing under 1/255 - the instances drawn back to front, blended over.
+//
+// THE BODY BENDS (hosts/avatar/train.py's `second_of`): a splat on a bone may take a SECOND INFLUENCE (the colour
+// texel's fourth number: 0 for none, else (frame + 2) + 0.98 w) - a share w of another bone's move, or of none (frame
+// -1: the still itself) - so the seat stays while the chest leans, and a joint bends rather than tears. Each bone's
+// move (`moves`: six numbers a bone, a 2D transform's x, y and origin columns) is what took it from the still.
 shader_type canvas_item;
 render_mode blend_mix, unshaded;
 
@@ -26,6 +31,8 @@ uniform float shift_near = 1.0;
 uniform float shift_far = 2.0;
 // The trainer's 0.3 square pixels of blur, in the drawn pixels' terms.
 uniform float low_pass = 0.3;
+// Each bone's move from the still (SplatHead.pose_bones): six numbers a bone, at most 16 bones.
+uniform float moves[96];
 
 varying vec2 d;
 varying vec3 conic;
@@ -35,6 +42,23 @@ varying vec4 tint;
 
 vec4 texel(sampler2D t, int w, int j) {
 	return texelFetch(t, ivec2(j % w, j / w), 0);
+}
+
+// Point p moved by bone k's move...
+vec2 moved(int k, vec2 p) {
+	int o = k * 6;
+	return vec2(moves[o] * p.x + moves[o + 2] * p.y + moves[o + 4], moves[o + 1] * p.x + moves[o + 3] * p.y + moves[o + 5]);
+}
+
+// ...and taken back to where it stood in the still.
+vec2 unmoved(int k, vec2 p) {
+	int o = k * 6;
+	vec2 q = p - vec2(moves[o + 4], moves[o + 5]);
+	float det = moves[o] * moves[o + 3] - moves[o + 2] * moves[o + 1];
+	if (abs(det) < 1e-9) {
+		return p;
+	}
+	return vec2(moves[o + 3] * q.x - moves[o + 2] * q.y, -moves[o + 1] * q.x + moves[o] * q.y) / det;
 }
 
 mat3 rot_of(vec4 q) {
@@ -68,6 +92,14 @@ void vertex() {
 	vec4 x_axis = texel(frame_data, frame_width, f + 1);
 	mat3 ax = mat3(x_axis.xyz, texel(frame_data, frame_width, f + 2).xyz, texel(frame_data, frame_width, f + 3).xyz);
 	vec3 mean = o.xyz + o.w * (ax * place);
+	// a body splat's second influence: where it rested in the still, moved by the other bone (or not at all)
+	if (e.a > 0.5 && bound > triangles) {
+		int second = int(floor(e.a)) - 2;
+		float w = fract(e.a) / 0.98;
+		vec2 rest = unmoved(bound - triangles - 1, mean.xy);
+		vec2 other = second < 0 ? rest : moved(second - triangles - 1, rest);
+		mean.xy = mix(mean.xy, other, w);
+	}
 	mat3 r = ax * rot_of(normalize(c));
 	vec3 s = o.w * exp(b.xyz);
 	mat3 m = mat3(r[0] * s.x, r[1] * s.y, r[2] * s.z);

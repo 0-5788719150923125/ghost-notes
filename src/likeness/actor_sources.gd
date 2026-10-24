@@ -91,21 +91,48 @@ static func add_folder(actor: ActorFolder, folder: String) -> int:
 
 
 ## READ EVERY FOLDER AGAIN: a video added since gets its row; one gone keeps its row, and is missing
-## until it is back. Returns how many are new.
+## until it is back - or until A FILE OF ITS NAME turns up in another of their folders, when it is that video,
+## moved: its row, its id and all made from it go on (2026-10-23: the user merged one download folder into
+## another, and an id is its path's - eight videos would have been surveyed again as new, and the sets made of
+## them lost theirs). Returns how many are new.
 static func rescan(actor: ActorFolder) -> int:
 	var added := 0
 	var vids: Dictionary = actor.data["videos"]
+	# the files a row already names (a moved one's id is no longer its path's)
+	var named := {}
+	for vid in vids:
+		named[String((vids[vid] as Dictionary).get("path", ""))] = true
 	for si in (actor.data["sources"] as Array).size():
 		var s: Dictionary = actor.data["sources"][si]
 		if String(s.get("kind", "")) != "folder":
 			continue
 		for v in scan(String(s.get("path", ""))):
 			var vid := ActorFolder.vid_of_file(String(v["path"]), int(v["size"]))
-			if vids.has(vid):
+			if vids.has(vid) or named.has(String(v["path"])):
+				continue
+			var was := _moved_here(vids, String(v["path"]))
+			if not was.is_empty():
+				var row: Dictionary = vids[was]
+				if not row.has("found_at"):
+					row["found_at"] = String(row["path"])
+				row["path"] = String(v["path"])
+				row["source"] = si
+				named[String(v["path"])] = true
 				continue
 			vids[vid] = {"path": String(v["path"]), "title": String(v["title"]), "source": si, "ticked": true}
 			added += 1
 	return added
+
+
+## The folder video whose file is gone and which a file at [param path] is, moved: one of the same name, ""
+## for none.
+static func _moved_here(vids: Dictionary, path: String) -> String:
+	for vid in vids:
+		var row: Dictionary = vids[vid]
+		var was := String(row.get("path", ""))
+		if String(vid).begins_with("f-") and was.get_file() == path.get_file() and not FileAccess.file_exists(was):
+			return String(vid)
+	return ""
 
 
 ## ADD A LINK: a source, its entries to come from its listing ([method land_listing]).

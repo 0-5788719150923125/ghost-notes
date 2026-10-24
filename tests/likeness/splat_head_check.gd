@@ -26,6 +26,10 @@ extends SceneTree
 ## A BODY AND A LEANING TORSO: with a bone beside the face (a third of the splats on it) and the face carried by a
 ## torso turned and moved, it must be the rules with the face's frames carried so; a bone not seen must have its
 ## splats drawn clear. THE CONTROLS: the bone shown and not shown must differ, and so must the lean and none.
+##
+## THE BODY BENDS (train.py's `second_of`): the bone moved, and its splats each holding half of the still (a second
+## influence, frame -1), each must stand half way between where the bone took it and where it stood - the rules
+## so; THE CONTROL: the same move with no second influence must draw otherwise.
 
 const SIZE := 96
 const N := 40
@@ -87,6 +91,19 @@ func _run() -> void:
 	_ok(apart.x > 0.2 and apart.y > 20.0, "CONTROL: a bone shown and not shown drew alike (mean %.2f/255, most %.1f/255)" % [apart.x, apart.y])
 	_ok(_diff(body, _reference(h2, arr2, shift, false, 0.0, Transform2D.IDENTITY, 1)).x > 2.0,
 		"CONTROL: the torso's lean moved nothing")
+	# THE BODY BENDS: the bone moved, its splats half held by the still
+	var move := Transform2D(deg_to_rad(-20.0), Vector2(-14, 10))
+	var free := await _render(h2, arr2, shift, 0.0, Transform2D.IDENTITY, 1, move)
+	var second := PackedFloat32Array()
+	for i in N:
+		second.append(1.0 + 0.98 * 0.5 if (arr2["bind"] as PackedInt32Array)[i] == 2 else 0.0)
+	arr2["second"] = second
+	var held := await _render(h2, arr2, shift, 0.0, Transform2D.IDENTITY, 1, move)
+	var dh := _diff(held, _reference(h2, arr2, shift, false, 0.0, Transform2D.IDENTITY, 1, move))
+	_ok(dh.x < 1.5, "the bone moved and its splats half held by the still: the shader's are not the rules': mean %.2f/255" % dh.x)
+	var bent := _diff(held, free)
+	_ok(bent.x > 0.2 and bent.y > 20.0, "CONTROL: held by the still or not, the moved bone's splats drew alike (mean %.2f/255, most %.1f/255)"
+		% [bent.x, bent.y])
 	print("    the splats against the rules: mean %.2f/255, worst %.1f/255 (transposed turns: %.2f); at 0.8 of an expression %.2f/255; with a bone and a lean %.2f/255"
 		% [d.x, d.y, turned.x, de.x, db.x])
 	print("splat_head_check: %s (%d checks, %d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _checks, _fails,
@@ -145,7 +162,7 @@ static func _bone_axes() -> Basis:
 
 
 func _render(h: Dictionary, arr: Dictionary, shift: Vector3, expr := 0.0, torso := Transform2D.IDENTITY,
-		shown := 1) -> Image:
+		shown := 1, move := Transform2D.IDENTITY) -> Image:
 	var vp := SubViewport.new()
 	vp.size = Vector2i(SIZE, SIZE)
 	vp.disable_3d = true
@@ -162,7 +179,7 @@ func _render(h: Dictionary, arr: Dictionary, shift: Vector3, expr := 0.0, torso 
 	head.pose_face(head.face_of(blend), 1.0, Basis.IDENTITY, shift, torso)
 	if int(h.get("bones", 0)) > 0:
 		head.pose_bones(PackedVector3Array([BONE_AT]), [_bone_axes()], PackedFloat32Array([BONE_UNIT]),
-			[Transform2D.IDENTITY], PackedByteArray([shown]))
+			[move], PackedByteArray([shown]))
 	head.upload()
 	head.set_expr(PackedFloat32Array([expr]))
 	vp.add_child(head)
@@ -178,7 +195,7 @@ func _render(h: Dictionary, arr: Dictionary, shift: Vector3, expr := 0.0, torso 
 ## THE RULES IN GDSCRIPT: every pixel, the splats blended over in order, each placed and shaped as
 ## splat_head.gdshader places it - or, [param transposed], with its turn transposed (the control).
 func _reference(h: Dictionary, arr: Dictionary, shift: Vector3, transposed: bool, expr := 0.0,
-		torso := Transform2D.IDENTITY, shown := 1) -> Image:
+		torso := Transform2D.IDENTITY, shown := 1, move := Transform2D.IDENTITY) -> Image:
 	var canon: PackedFloat32Array = arr["canon"]
 	var p0 := SplatHead._carried(torso, Vector3(canon[0], canon[1], canon[2]) + shift)
 	var p1 := SplatHead._carried(torso, Vector3(canon[3], canon[4], canon[5]) + shift)
@@ -189,7 +206,8 @@ func _reference(h: Dictionary, arr: Dictionary, shift: Vector3, transposed: bool
 	var frames := [[(p0 + p1 + p2) / 3.0, Basis(e1, e2, nn), ((p1 - p0).length() + (p2 - p1).length() + (p0 - p2).length()) / 3.0],
 		[SplatHead._carried(torso, shift), Basis(SplatHead._turned(torso, Vector3.RIGHT), SplatHead._turned(torso, Vector3.UP),
 			SplatHead._turned(torso, Vector3.BACK)), float(h["head_unit"])],
-		[BONE_AT, _bone_axes(), BONE_UNIT]]
+		[SplatHead._carried(move, BONE_AT), Basis(SplatHead._turned(move, _bone_axes().x), SplatHead._turned(move,
+			_bone_axes().y), SplatHead._turned(move, _bone_axes().z)), BONE_UNIT * sqrt(absf(move.determinant()))]]
 	var shapes: Array = []
 	for i in N:
 		if (arr["bind"] as PackedInt32Array)[i] == 2 and shown == 0:
@@ -217,6 +235,13 @@ func _reference(h: Dictionary, arr: Dictionary, shift: Vector3, transposed: bool
 				var x := clampf(tint[c], 1e-4, 1.0 - 1e-4)
 				tint[c] = 1.0 / (1.0 + exp(-(log(x / (1.0 - x)) + w * expr * cd[i * 3 + c])))
 		var mean: Vector3 = f[0] + unit * (ax * at)
+		# a second influence: where it stood in the still, moved by the other bone or not at all (frame -1 here)
+		var sec: float = (arr["second"] as PackedFloat32Array)[i] if arr.has("second") else 0.0
+		if sec > 0.5:
+			var w := fposmod(sec, 1.0) / 0.98
+			var rest := move.affine_inverse() * Vector2(mean.x, mean.y)
+			var blended := Vector2(mean.x, mean.y).lerp(rest, w)
+			mean = Vector3(blended.x, blended.y, mean.z)
 		var r := ax * own
 		var s := unit * Vector3(exp(ls[i * 3]), exp(ls[i * 3 + 1]), exp(ls[i * 3 + 2]))
 		var m := Basis(r.x * s.x, r.y * s.y, r.z * s.z)

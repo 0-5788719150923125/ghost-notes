@@ -634,9 +634,10 @@ ENGINE_FLAGS = {
     "--sheets",
     "--threshold",
     "--stills",
-    # hosts/avatar/rig.py's (the Actor card's Face rig step): arguments to a subprocess.
+    # hosts/avatar/rig.py's (the Actor card's Head rig and Face rig steps): arguments to a subprocess.
     "--frames",
     "--poses",
+    "--shared",
     # yt-dlp's, as the Actor card lists and fetches a link's videos and captions.
     "--flat-playlist",
     "--no-warnings",

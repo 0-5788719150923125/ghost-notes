@@ -30,6 +30,12 @@ class_name ActorCard
 ## steps are done and again on their ⟳; an export that goes up makes them too, when the note's words have
 ## changed since. This card never asks what one is.
 ##
+## NOTHING HERE WAITS ON THE DISK (the user, 2026-10-23: "every single one of them comes with ~10 seconds of
+## reloading-freeze ... We shouldn't be blocking the main thread for ANY operation"): the steps' states are worked
+## out on a worker, on a folder of its own ([method ActorBuilder.states_of]), and the runs laid over them here; the
+## sets' and stills' pictures are read on a worker; a video ticked rebuilds no row. Tick all and Untick all take the
+## whole list at once.
+##
 ## GENERATION IS EXPLICIT: nothing runs on open. The survey costs hours of CPU and the audit quota, so a
 ## button is the only caller ([ActorBuilder]).
 
@@ -66,6 +72,21 @@ var _stills_seen := ""
 var _library: Label
 var _library_seen := ""
 var _rows_seen := ""
+## The steps' states, worked out on a worker ([method _work_rows]): its task, what it found, what the rows are drawn
+## from, whether it goes again once done, and whether the rows show the latest.
+var _rows_task := -1
+var _rows_found := {}
+var _rows_held := {}
+var _rows_again := false
+var _rows_drawn := false
+## Pictures read on a worker ([method _want_picture]): `[picture, path, size]` wanted, those being read, and what
+## was read, by path.
+var _pics_wanted: Array = []
+var _pics_task := -1
+var _pics_loading: Array = []
+var _pics_found := {}
+## Each video's tick, by id: what Tick all and Untick all set.
+var _ticks := {}
 var _writer: AgentPick
 var _advanced: VBoxContainer
 var _setting_boxes := {}
@@ -104,6 +125,22 @@ func _exit_tree() -> void:
 	if _builder != null:
 		_builder.stop()
 	_stop_steps()
+	_wait_workers()
+
+
+## A worker still reading is waited for, before this card goes: it writes into it (a card freed out of the tree -
+## a gate's - never leaves it).
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		_wait_workers()
+
+
+func _wait_workers() -> void:
+	for task in [_rows_task, _pics_task]:
+		if int(task) >= 0:
+			WorkerThreadPool.wait_for_task_completion(int(task))
+	_rows_task = -1
+	_pics_task = -1
 
 
 func _process(delta: float) -> void:
@@ -455,12 +492,14 @@ func _fill_videos() -> void:
 	if _actor != null:
 		for vid in _actor.videos():
 			var v: Dictionary = _actor.video(String(vid))
-			key += "%s|%s|%s|%s;" % [vid, v.get("ticked", true), v.get("path", ""), v.get("captions", "")]
+			# a video ticked rebuilds no row: its box shows it already
+			key += "%s|%s|%s;" % [vid, v.get("path", ""), v.get("captions", "")]
 	if key == _videos_seen:
 		return
 	_videos_seen = key
 	for c in _videos_box.get_children():
 		c.queue_free()
+	_ticks = {}
 	if _actor == null:
 		return
 	for vid in _actor.videos():
@@ -473,6 +512,7 @@ func _fill_videos() -> void:
 		tick.toggled.connect(func(on: bool) -> void:
 			(_actor.video(String(vid)))["ticked"] = on
 			_actor.save())
+		_ticks[String(vid)] = tick
 		row.add_child(tick)
 		var l := Label.new()
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -563,11 +603,16 @@ func _refresh() -> void:
 	var steps := _steps_asked or _steps_busy()
 	_gen_btn.disabled = busy or steps
 	_stop_btn.disabled = not (busy or steps)
-	# THE ROWS ARE WORKED OUT AGAIN ONLY WHEN WHAT THEY ARE MADE FROM CHANGED, or while something runs:
-	# every scope's state of every step took 10-20 ms, four times a second, under a playing show
-	var key := _rows_key(busy)
+	# THE STEPS' STATES ARE WORKED OUT AGAIN, ON A WORKER, ONLY WHEN WHAT THEY ARE MADE FROM CHANGED (every scope's
+	# state of every step took 10-20 ms four times a second under a playing show, and seconds once a video was ticked);
+	# the runs are laid over them here, which is cheap - so a running row moves every refresh
+	var key := _rows_key()
 	if key != _rows_seen:
 		_rows_seen = key
+		_work_rows()
+	_take_rows()
+	if not _rows_held.is_empty() and (busy or not _rows_drawn):
+		_rows_drawn = true
 		_fill_rows(busy)
 	var line := ""
 	if not _builder.waiting.is_empty():
@@ -579,14 +624,13 @@ func _refresh() -> void:
 	_fill_sets()
 	_fill_stills()
 	_fill_library()
+	_take_pictures()
 
 
-## What the step rows are made from: the actor's data (videos ticked, settings, the set in use), every
-## stamp file a row reads, what failed - and while anything runs, the time, so a running row moves.
-func _rows_key(busy: bool) -> String:
-	if busy:
-		return "busy %d" % Time.get_ticks_msec()
-	var parts := PackedStringArray([str(JSON.stringify(_actor.data).hash()), str(JSON.stringify(_builder.errors()).hash())])
+## What the steps' states are made from: the actor's data (videos ticked, settings, the set in use) and every stamp
+## file a row reads. What runs and what failed are laid over them every refresh ([method ActorBuilder.row_of]).
+func _rows_key() -> String:
+	var parts := PackedStringArray([str(JSON.stringify(_actor.data).hash())])
 	var scopes: Array = [""]
 	for v in _actor.ticked():
 		scopes.append("v:" + String(v))
@@ -598,10 +642,94 @@ func _rows_key(busy: bool) -> String:
 	return ",".join(parts)
 
 
+## THE STEPS' STATES WORKED OUT ON A WORKER, on a folder of its own ([method ActorBuilder.states_of]): one at a
+## time - asked again while it works, it goes again once done.
+func _work_rows() -> void:
+	if _rows_task >= 0:
+		_rows_again = true
+		return
+	var id := _actor.id
+	_rows_task = WorkerThreadPool.add_task(func() -> void:
+		var f := ActorFolder.open(id)
+		_rows_found = {"id": id, "states": ActorBuilder.states_of(f) if f != null else {}})
+
+
+## What the worker found, once it is done: the rows drawn from it (for the actor shown alone).
+func _take_rows() -> void:
+	if _rows_task < 0 or not WorkerThreadPool.is_task_completed(_rows_task):
+		return
+	WorkerThreadPool.wait_for_task_completion(_rows_task)
+	_rows_task = -1
+	if _actor != null and String(_rows_found.get("id", "")) == _actor.id:
+		_rows_held = _rows_found["states"]
+		_rows_drawn = false
+	_rows_found = {}
+	if _rows_again:
+		_rows_again = false
+		_work_rows()
+
+
+## TICK ALL, OR UNTICK ALL: every video of theirs used, or none - one save, every box set.
+func _tick_all(on: bool) -> void:
+	if _actor == null:
+		return
+	for vid in _actor.videos():
+		(_actor.video(String(vid)))["ticked"] = on
+	_actor.save()
+	for vid in _ticks:
+		if is_instance_valid(_ticks[vid]):
+			(_ticks[vid] as CheckBox).set_pressed_no_signal(on)
+	_say(("Every video of theirs is used: Generate reads the ones not read yet." if on
+		else "No video is used: tick the ones that are them, in their usual setting."))
+
+
+## A PICTURE READ ON A WORKER: [param path] into [param pic] once read, made [param most] pixels at most (a sheet
+## is shown far smaller than it is).
+func _want_picture(pic: TextureRect, path: String, most: Vector2i) -> void:
+	_pics_wanted.append([pic, path, most])
+	_read_pictures()
+
+
+func _read_pictures() -> void:
+	if _pics_task >= 0 or _pics_wanted.is_empty():
+		return
+	_pics_loading = _pics_wanted
+	_pics_wanted = []
+	var asked: Array = _pics_loading.map(func(w: Array) -> Array: return [String(w[1]), w[2]])
+	_pics_task = WorkerThreadPool.add_task(func() -> void:
+		var got := {}
+		for a in asked:
+			var path := String(a[0])
+			if got.has(path) or not FileAccess.file_exists(path):
+				continue
+			var img := Image.load_from_file(path)
+			var most: Vector2i = a[1]
+			if img != null and (img.get_width() > most.x or img.get_height() > most.y):
+				var k := minf(float(most.x) / img.get_width(), float(most.y) / img.get_height())
+				img.resize(maxi(1, int(img.get_width() * k)), maxi(1, int(img.get_height() * k)), Image.INTERPOLATE_BILINEAR)
+			got[path] = img
+		_pics_found = got)
+
+
+## The pictures read, put up - each where it still stands - and the next asked for.
+func _take_pictures() -> void:
+	if _pics_task < 0 or not WorkerThreadPool.is_task_completed(_pics_task):
+		return
+	WorkerThreadPool.wait_for_task_completion(_pics_task)
+	_pics_task = -1
+	for w in _pics_loading:
+		var img: Variant = _pics_found.get(String(w[1]))
+		if is_instance_valid(w[0]) and img is Image:
+			(w[0] as TextureRect).texture = ImageTexture.create_from_image(img)
+	_pics_loading = []
+	_pics_found = {}
+	_read_pictures()
+
+
 func _fill_rows(busy: bool) -> void:
 	for step in _rows:
 		var r: Dictionary = _rows[step]
-		var row := _builder.row_of(String(step))
+		var row := _builder.row_of(String(step), _rows_held)
 		var st := String(row["state"])
 		var count := ""
 		if ActorSteps.per(String(step)) == "video" and int(row["total"]) > 1:
@@ -781,13 +909,13 @@ func _fill_sets() -> void:
 		tex.custom_minimum_size = Vector2(120, 68)
 		tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		var img := Image.load_from_file(String(d.get("sheet", ""))) if FileAccess.file_exists(String(d.get("sheet", ""))) else null
-		if img != null:
-			tex.texture = ImageTexture.create_from_image(img)
+		if FileAccess.file_exists(String(d.get("sheet", ""))):
+			# read on a worker, at twice the size it is shown (a sheet is 1568 px wide)
+			_want_picture(tex, String(d.get("sheet", "")), Vector2i(240, 136))
 			tex.tooltip_text = "Click for the set's sheet"
-			tex.mouse_filter = Control.MOUSE_FILTER_STOP
+			tex.mouse_filter = Control.MOUSE_FILTER_PASS
 			tex.gui_input.connect(func(e: InputEvent) -> void:
-				if e is InputEventMouseButton and e.pressed:
+				if clicked(e):
 					OS.shell_open(String(d.get("sheet", ""))))
 		row.add_child(tex)
 		var col := VBoxContainer.new()
@@ -875,16 +1003,14 @@ func _fill_stills() -> void:
 		tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		var path := _actor.set_dir(sid).path_join("stills").path_join(String(d.get("thumb", "")))
-		var img := Image.load_from_file(path) if FileAccess.file_exists(path) else null
-		if img != null:
-			tex.texture = ImageTexture.create_from_image(img)
+		_want_picture(tex, path, Vector2i(224, 126))
 		tex.modulate = Color(1, 1, 1, 1.0 if k == chosen else 0.55)
-		tex.mouse_filter = Control.MOUSE_FILTER_STOP
+		tex.mouse_filter = Control.MOUSE_FILTER_PASS
 		tex.tooltip_text = ("The still in use: every frame of the likeness is drawn on it." if k == chosen \
 			else "Draw the likeness on this still instead (nothing is made again).") \
 			+ ("\nAt rest found them at ease in it." if rest.has(k) else "")
 		tex.gui_input.connect(func(e: InputEvent) -> void:
-			if e is InputEventMouseButton and e.pressed and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+			if clicked(e):
 				_actor.set_still(sid, k)
 				_actor.save()
 				_say("The likeness is drawn on this still now."))
@@ -1056,6 +1182,17 @@ func _build() -> void:
 	_videos_box = VBoxContainer.new()
 	_videos_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_videos_box)
+	var trow := HBoxContainer.new()
+	trow.add_theme_constant_override("separation", 6)
+	_body.add_child(trow)
+	for on in [true, false]:
+		var all := Button.new()
+		all.text = "Tick all" if on else "Untick all"
+		all.tooltip_text = ("Use every video listed: Generate reads each one not read yet - a long while for many." if on
+			else "Use none of them: then tick the ones that are them, in their usual setting.")
+		all.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		all.pressed.connect(_tick_all.bind(on))
+		trow.add_child(all)
 
 	_body.add_child(_heading("Steps"))
 	var steps := VBoxContainer.new()
@@ -1192,6 +1329,14 @@ func _build() -> void:
 	_body.visible = false
 	_fill_pick()
 	_show_renderer()
+
+
+## A PICTURE CLICKED: the left button's press, nothing else - the wheel's notches are button presses too (2026-10-23:
+## scrolling over the sets opened dozens of their sheets). The pictures pass what they do not take on (MOUSE_FILTER_PASS),
+## so the wheel scrolls the card under them.
+static func clicked(e: InputEvent) -> bool:
+	var mb := e as InputEventMouseButton
+	return mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT
 
 
 static func _heading(text: String) -> Label:

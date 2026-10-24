@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Tests for the fit of an avatar's body to its still (fit.py) and the head's reach (train.py's `astray`).
+"""Tests for the fit of an avatar's body to its still (fit.py), the head's reach (train.py's `astray`) and the
+room behind them (train.py's `room_of`, `fill_round`, `Scene`).
 
 Run it directly with the voice-training venv's python (its torch) - no pytest needed, no graphics card:
 
@@ -15,6 +16,18 @@ Run it directly with the voice-training venv's python (its torch) - no pytest ne
   THE STILL IS ONE MORE FRAME - its pose, scores, expression and bones appended as the poses' row has them, a
   bone's axes read as COLUMNS (as rig.py writes them: CONTROL, the axes are no symmetric matrix, so rows would
   differ); its points as tracked are its scores' face, so tracked and played draw it alike.
+  THE ROOM IS THE WALL THE FRAMES SHOW - a person moving over a wall, their middle never leaving it: where any
+  frames show the wall the plate is the wall, and where none does it is filled from round it with nothing of them
+  in it (CONTROL: the median of the frames as they are holds their face there); their hair painted a few pixels
+  past the mask is left out (CONTROL: with no margin it is in the plate); seen is 0 where no frame shows the wall
+  and 1 where every one does.
+  FILLED FROM ROUND IT - the known pixels kept exactly; a hole in a smooth ramp filled close to the ramp (CONTROL:
+  the hole as it was is far from it).
+  THE PLATE MOVES ONLY WHERE IT IS SEEN - moved everywhere, the plate where nothing showed it is still where it
+  started, and no pull reaches it (CONTROL: where it is seen, it moved).
+  A RUN ENDS WELL PAST ITS LAST RESET - of any length the Avatar steps setting allows, a third of the run at least
+  comes after the splats were last made faint, and the default run's schedule is as it was (CONTROL: growing until
+  DENSIFY_UNTIL whatever the length, 12,000 steps end on a reset).
 """
 
 from __future__ import annotations
@@ -170,6 +183,115 @@ def the_still_is_one_more_frame():
     played = train.Rig.face(rig, data, i, tracked=False)
     ok(torch.allclose(tracked, played, atol=1e-4), "tracked and played, its face is the same (largest gap %.1e)"
        % float((tracked - played).abs().max()))
+
+
+def a_wall_and_a_person(n=20, hair=0):
+    """[param n] frames of a person (a box, its middle never leaving one place) moving over a wall (a ramp with a
+    dark frame on it): (pictures, people, wall, middle) - the person red, their mask, the wall alone, and the
+    box that never leaves; [param hair] paints them that many pixels past their mask."""
+    import numpy as np
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    wall = np.stack([40 + xx * 0.6, 60 + yy * 0.5, 90 + (xx + yy) * 0.2], -1)
+    wall[30:34, 20:180] = 20.0
+    wall = wall.clip(0, 255).astype(np.uint8)
+    pictures, people = [], []
+    for k in range(n):
+        x0 = 60 + (k % 5) * 12
+        y0 = 40 + (k % 3) * 8
+        pic, mask = wall.copy(), np.zeros((H, W), np.uint8)
+        mask[y0:y0 + 70, x0:x0 + 60] = 255
+        pic[max(0, y0 - hair):y0 + 70 + hair, max(0, x0 - hair):x0 + 60 + hair] = (230, 30, 30)
+        pictures.append(pic)
+        people.append(mask)
+    return pictures, people, wall, (slice(56, 110), slice(108, 120))
+
+
+@check
+def the_room_is_the_wall_the_frames_show():
+    import numpy as np
+    pictures, people, wall, (ys, xs) = a_wall_and_a_person()
+    plate, seen = train.room_of(pictures, people, "cpu")
+    plate = plate.numpy() * 255.0
+    seen = seen.numpy()
+    shown = seen > 0
+    ok(shown.mean() > 0.5 and not shown.all(), "some of the wall is shown and some never is (%.0f%% shown)"
+       % (100 * shown.mean()))
+    ok(np.abs(plate[shown] - wall[shown]).max() < 1.0, "where frames show the wall, the plate is the wall")
+    ok(not shown[ys, xs].any() and seen[ys, xs].max() == 0.0, "where they always stand, nothing is seen")
+    red = plate[..., 0] - plate[..., 1]
+    ok(red[ys, xs].max() < red[shown].max() + 5.0, "nothing of them is in the plate where they always stand "
+       "(redness at most %.0f there)" % red[ys, xs].max())
+    as_is = np.median(np.stack(pictures).astype(np.float32), 0)
+    ok((as_is[..., 0] - as_is[..., 1])[ys, xs].min() > 150.0, "CONTROL: the frames' median as they are holds them")
+    ok(seen[0, 0] == 1.0, "a corner every frame shows is seen in full")
+
+
+@check
+def their_hair_past_the_mask_is_left_out():
+    pictures, people, wall, _m = a_wall_and_a_person(hair=4)
+
+    def off():
+        plate, seen = train.room_of(pictures, people, "cpu")
+        shown = seen > 0
+        return float((plate * 255.0 - torch.as_tensor(wall).float())[shown].abs().max())
+    gap = off()
+    ok(gap < 1.0, "hair painted 4 px past the mask is not in the plate (at most %.1f off the wall)" % gap)
+    keep = train.PLATE_GROW
+    try:
+        train.PLATE_GROW = 0
+        gap = off()
+    finally:
+        train.PLATE_GROW = keep
+    ok(gap > 100.0, "CONTROL: with no margin it is (%.0f off the wall)" % gap)
+
+
+@check
+def filled_from_round_it():
+    yy, xx = torch.meshgrid(torch.arange(H, dtype=torch.float32), torch.arange(W, dtype=torch.float32), indexing="ij")
+    ramp = torch.stack([xx / W, yy / H, (xx + yy) / (W + H)], -1)
+    known = torch.ones(H, W)
+    known[50:90, 70:130] = 0.0
+    holed = ramp * known[..., None]
+    out = train.fill_round(holed, known)
+    ok(torch.equal(out[known > 0], ramp[known > 0]), "the known pixels are kept exactly")
+    gap = (out - ramp)[known == 0].abs()
+    ok(float(gap.mean()) < 0.04 and float(gap.max()) < 0.15, "the hole is filled close to the ramp (%.3f off on the "
+       "mean, %.3f at most)" % (float(gap.mean()), float(gap.max())))
+    ok(float((holed - ramp)[known == 0].abs().max()) > 0.3, "CONTROL: the hole as it was is far from it")
+
+
+@check
+def the_plate_moves_only_where_it_is_seen():
+    class Data:
+        blend = torch.zeros(3, 52)
+    plate0 = torch.full((H, W, 3), 0.5)
+    seen = torch.zeros(H, W)
+    seen[:, : W // 2] = 1.0
+    scene = train.Scene(Data(), "cpu", plate0, seen)
+    with torch.no_grad():
+        scene.moved.fill_(0.25)
+    moved = scene.plate()
+    ok(torch.equal(moved[:, W // 2:], plate0[:, W // 2:]), "moved everywhere, the plate where nothing showed it "
+       "is where it started")
+    ok(torch.allclose(moved[:, : W // 2], plate0[:, : W // 2] + 0.25), "CONTROL: where it is seen, it moved")
+    scene.moved.grad = None
+    scene.behind(0, 0, 0, W, H).sum().backward()
+    ok(float(scene.moved.grad[:, W // 2:].abs().max()) == 0.0, "no pull reaches it where it is unseen")
+
+
+def last_reset(steps, until):
+    """The last step a run of [param steps] made every splat faint at, growing until [param until]; 0 for none."""
+    return max([s for s in range(train.OPACITY_RESET, steps + 1, train.OPACITY_RESET) if s < until], default=0)
+
+
+@check
+def a_run_ends_well_past_its_last_reset():
+    for steps in (3000, 4500, 9000, 12000, 15000, 30000, 60000, 100000):
+        tail = steps - last_reset(steps, train.until_of(steps))
+        ok(tail * 3 >= steps, "%d steps: %d after the last reset" % (steps, tail))
+    ok(train.until_of(30000) == train.DENSIFY_UNTIL, "the default run grows until %d, as before" % train.DENSIFY_UNTIL)
+    ok(12000 - last_reset(12000, train.DENSIFY_UNTIL) == 0, "CONTROL: growing until %d, 12,000 steps end on a reset"
+       % train.DENSIFY_UNTIL)
 
 
 def main() -> int:

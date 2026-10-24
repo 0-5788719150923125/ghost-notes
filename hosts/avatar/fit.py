@@ -4,7 +4,7 @@ holds it").
 
     <voice_train_venv python> fit.py --spec <spec.json> [--progress <file>]
 
-The spec: train.py's ({"frames", "rig", "room", "front", "span"}) and {"poses", "avatar", "still", "picture",
+The spec: train.py's ({"frames", "rig", "front", "span"}) and {"poses", "avatar", "still", "picture",
 "matte", "out", "steps"} - the rig's poses.json, the avatar train.py made, which still is played (an index into
 the poses' stills), its picture with what stands before them filled from round it (`body_K.jpg`) and its matte,
 where the fitted avatar goes and how many steps.
@@ -120,12 +120,12 @@ def main() -> int:
         return 2
     dev = torch.device("cuda")
     torch.manual_seed(0)
-    data = train.Frames(spec, dev)
+    # read with the components its splats were learned with (the actor's head's, for a head made from every video)
+    data = train.Frames({**spec, "expr": spec["avatar"]}, dev)
     rig = train.Rig(spec["rig"], dev)
     splats = train.load(spec["avatar"], dev)
-    scene = train.Scene(data, dev)
-    with torch.no_grad():
-        scene.plate.data = torch.tensor(np.load(spec["avatar"])["plate"], device=dev)
+    # the room as the avatar learned it, held
+    scene = train.Scene(data, dev, torch.tensor(np.load(spec["avatar"])["plate"], device=dev))
     stills = json.load(open(spec["poses"])).get("stills", [])
     k = int(spec["still"])
     if k >= len(stills) or not isinstance(stills[k], dict):
@@ -204,7 +204,9 @@ def main() -> int:
                                                                           time.time() - t0))
     with torch.no_grad():
         after = error(train.render(splats, rig, data, scene, i, 0, 0, data.W, data.H, tracked=False, learned=False)[0])
-    train.save(splats, rig, data, scene, spec["rig"], spec["out"], at=i, extra={"still": k})
+    # THE BODY BENDS as it is played: each body splat's second influence, by where it rests in the still
+    train.save(splats, rig, data, scene, spec["rig"], spec["out"], at=i, extra={"still": k},
+               second=train.second_of(splats, rig, data, i))
     say("still %d fitted: %.2f dB where it is fitted, from %.2f; %d splats; %.1f minutes" % (k, after, before, len(splats),
                                                                                           (time.time() - t0) / 60.0))
     train.progress(a.progress, 1.0)

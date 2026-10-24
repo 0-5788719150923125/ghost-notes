@@ -88,18 +88,31 @@ const REGISTRY := {
 		"outputs": ["voice.json", "voice"], "settings": ["voice_epochs"], "version": 1, "voice": true,
 		"blurb": "Teaches a voice to speak as they do: a public-domain voice fine-tuned on their sentences on the graphics card - an hour or more, beside the other steps - then offered on the Voice card under their name. Stop keeps what it has learned, and ▶ goes on from there."},
 
-	# A HEAD OF SPLATS (next/likeness.md, "A head of splats"): the set's frames, the face they show, and the
-	# head learned from them
+	# ONE HEAD FOR EVERY SET (next/likeness.md, "One head"): each video's moments, their face from all of them,
+	# and their head learned from every video at once
+	"head_frames": {"label": "Head frames", "per": "video", "needs": ["survey", "audit"], "runs": "python",
+		"env": ["ffmpeg", "face_venv"], "outputs": ["head/frames.npz", "head/img", "head/mask"], "settings": [],
+		"version": 1, "renderer": "gaussian",
+		"blurb": "Reads moments of the video picked from its survey: half for what they show - an open mouth, a pucker, a turned head, their whole range - and half spread through it; their face, body and where they are in each. Two or three minutes a video."},
+	"head_rig": {"label": "Head rig", "per": "actor", "needs": ["head_frames"], "runs": "python", "env": ["face_venv"],
+		"outputs": ["head/rig.npz", "head/poses.json"], "settings": [], "version": 1, "renderer": "gaussian",
+		"blurb": "Learns their face from every video's moments: one neutral face, how each of MediaPipe's 52 expressions moves every point of it, each moment's head pose and their body's bones. Seconds."},
+	"head": {"label": "Head", "per": "actor", "needs": ["head_rig"], "runs": "train", "env": ["voice_train_venv"],
+		"outputs": ["head/head.npz"], "settings": ["avatar_steps"], "version": 1, "renderer": "gaussian",
+		"blurb": "Learns their head as Gaussian splats from every video at once, on the graphics card: hair, beard and skin as they look, moved by their face's expressions, and each video's look - its light, the little that differs - learned beside it. An hour or so."},
+
+	# A SET'S AVATAR (next/likeness.md, "A head of splats", "One head"): its moments, posed against their face,
+	# their head baked as the set looks, and their body fitted to its still
 	"frames": {"label": "Frames", "per": "set", "needs": ["stills"], "runs": "python", "env": ["ffmpeg", "face_venv"],
-		"outputs": ["avatar/frames.npz", "avatar/img", "avatar/mask"], "settings": [], "version": 1, "renderer": "gaussian",
-		"blurb": "Reads the set's longest shot twice a second, whole, at full resolution: their face's points and expressions and their body's pose in every frame, and where they are. About half the shot's length."},
-	"face": {"label": "Face rig", "per": "set", "needs": ["frames"], "runs": "python", "env": ["face_venv"],
-		"outputs": ["avatar/rig.npz", "avatar/poses.json"], "settings": [], "version": 1, "renderer": "gaussian",
-		"blurb": "Learns their face and body from the frames: their neutral face, each frame's head pose, how each of MediaPipe's 52 expressions moves every point of it, and their body's bones - what they are played from. Seconds."},
-	"avatar": {"label": "Avatar", "per": "set", "needs": ["face"], "runs": "train", "env": ["voice_train_venv"],
-		"outputs": ["avatar/avatar.json", "avatar/avatar.bin"], "settings": ["avatar_steps"], "version": 1,
+		"outputs": ["avatar/frames.npz", "avatar/img", "avatar/mask"], "settings": [], "version": 2, "renderer": "gaussian",
+		"blurb": "Reads moments of the set's shots and its stills, whole, at full resolution: their face's points and expressions and their body's pose in each, and where they are - the set's room, and how its stills stand. A minute or two."},
+	"face": {"label": "Face rig", "per": "set", "needs": ["frames", "head_rig"], "runs": "python", "env": ["face_venv"],
+		"outputs": ["avatar/rig.npz", "avatar/poses.json"], "settings": [], "version": 2, "renderer": "gaussian",
+		"blurb": "Poses the set's moments and its stills against their face (the Head rig's): each one's head pose and their body's bones - what they are played from. Seconds."},
+	"avatar": {"label": "Avatar", "per": "set", "needs": ["face", "head"], "runs": "train", "env": ["voice_train_venv"],
+		"outputs": ["avatar/avatar.json", "avatar/avatar.bin"], "settings": [], "version": 3,
 		"renderer": "gaussian",
-		"blurb": "Learns them as Gaussian splats bound to their face and body, and their room as a picture behind them, from the frames, on the graphics card: hair, beard, skin and clothes as they look, moved by their face's expressions and their body's bones. Forty minutes or so."},
+		"blurb": "Makes the set's avatar from their head, on the graphics card: the head as learned from every video, in the set's own look, with the set's room behind them as its moments show it and their body laid on its bones. A minute or two."},
 	"fit": {"label": "Fit", "per": "set", "needs": ["avatar", "stills"], "runs": "train", "env": ["voice_train_venv"],
 		"outputs": ["avatar/fit.json", "avatar/fit.bin"], "settings": [], "version": 1, "renderer": "gaussian",
 		"blurb": "Fits their body's splats to the still they are played from, on the graphics card: the weave of their clothes and their hands as the still has them, where every frame together gave a blur. Picking another still fits it again. Two minutes or so."},
@@ -110,7 +123,7 @@ const RENDERERS := {
 	"2d": {"label": "2D", "plays": ["motion", "stills", "rig", "library"],
 		"blurb": "Their still, warped: the head turned through its points, the mouth and eyes drawn from real frames of theirs for each sound."},
 	"gaussian": {"label": "Gaussian", "plays": ["motion", "visemes", "stills", "rig", "avatar", "fit"],
-		"blurb": "Them as 3D Gaussian splats learned from the set's frames - head and body, moved by their face's expressions and their body's bones - over their room as learned with them."},
+		"blurb": "Them as 3D Gaussian splats: their head learned from every video at once, in the set's look, and their body fitted to the set's still - moved by their face's expressions and their body's bones - over the set's room."},
 }
 
 ## THE SETTINGS an actor is built under, on the card's Advanced fold: each a row, as a layer's FIELDS
@@ -128,15 +141,15 @@ const SETTINGS := {
 		"blurb": "How much clearer than their own each sound's mouth is: their mouth is mostly near closed while they talk, so their own shapes read as nothing on a still. 1 is as they are. Both renderers play it: the 2D library's mouths, the head of splats' sounds."},
 	"voice_epochs": {"label": "Voice lessons", "type": "int", "default": 150, "min": 20, "max": 1000, "step": 10,
 		"blurb": "How many times their voice hears every sentence of theirs while it learns. More is closer to them and longer on the graphics card (about 25 seconds each, an hour of their speech); raised after it is made, ▶ goes on from where it stopped."},
-	"avatar_steps": {"label": "Avatar steps", "type": "int", "default": 30000, "min": 3000, "max": 100000, "step": 1000,
+	"avatar_steps": {"label": "Head steps", "type": "int", "default": 60000, "min": 3000, "max": 200000, "step": 1000,
 		"renderer": "gaussian",
-		"blurb": "How many frames the head of splats is shown while it learns, one at a time: more is sharper and longer on the graphics card (about 40 ms each)."},
+		"blurb": "How many moments their head of splats is shown while it learns from every video, one at a time: more is sharper and longer on the graphics card (about 60 ms each - 60,000 is an hour)."},
 }
 
 ## The order steps are made in.
 const ORDER := ["fetch", "captions", "probe", "survey", "shots", "sets", "audit", "transcribe", "words", "visemes",
-	"learn", "motion", "stills", "rest", "rig", "library", "frames", "face", "avatar", "fit", "hear", "utterances",
-	"voice"]
+	"learn", "motion", "stills", "rest", "rig", "library", "head_frames", "head_rig", "head", "frames", "face", "avatar",
+	"fit", "hear", "utterances", "voice"]
 
 
 ## WHAT [param renderer] NEEDS OF AN ACTOR TO PLAY THEM: the chosen set's steps and the actor's own.

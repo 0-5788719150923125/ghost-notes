@@ -109,6 +109,164 @@ forward-facing actor, with a mouth that moves when speaking."
 **For the user to test:** Generate on the Actor card once (the new steps: about five minutes, no
 track), a still picked on the card if the default is not the one, ▶ on a note; then an export.
 
+## One head (2026-10-23, night)
+
+The user: "It's pointless to build a gaussian splatting model if the scenes can only generate from a single set
+of images. So yes, let us search for a kind of learned blend, which can inherit features from the actor across
+all sets." And of the body: "it never moves at all. It just floats around, weirdly, stiffly ... there must be a
+way to at least allow the body to shift and morph a little bit."
+
+**What is the actor's and what is the set's:**
+- **The actor's (every video):** each sound's mouth, motion, blinks, glances, posture, voice - and now THE HEAD.
+  - **Head frames** (per video, `hosts/avatar/head_frames.py`): about 300 moments picked from its survey, never
+    read whole. Half are taken farthest-first in the scores and the turn (the mouth weighted most); half are
+    spread evenly through the video; none is within 0.6 s of another or has a hand at the mouth. Each is read at
+    full size and looked at as frames.py looks.
+  - **Head rig** (`rig.py` over every folder): one neutral face, one basis, each frame's video.
+  - **Head** (`hosts/avatar/head.py`): one set of head splats, learned from every video at once. Each video has
+    a LOOK: a code of 8 numbers that mixes per-splat shifts of place and colour, as the expression does. Each
+    video also has its own room (`room_of`) and its own light body, so the head is never asked to paint a
+    video's clothes.
+- **The set's (one shot):** its moments (`head_frames.py` over its shots, 160, with its stills), posed against the
+  actor's face (`rig.py --shared`). Then `hosts/avatar/bake.py`: the head held, the set's look, room and body
+  fitted to its moments in 2,000 steps, the head baked in that look, written as an avatar. Then Fit, as before. A
+  new set costs minutes, not a 40-minute training.
+- **Godot reads the same avatar files.** `train.Frames` takes the components the splats were learned with
+  (`expr`): the head's.
+
+**Measured:**
+- **The moments read:** 21 videos, about 2.5 minutes each. 20 read; one's file had been moved.
+- **His open mouth:**
+  - The plaid video's 299 moments hold 17 with jawOpen past 0.35: 5.7%, against 1.5% of its 2-fps shot.
+  - All of them together hold about 260, against the plaid shot's 76.
+- **One face over 19 videos:** 5,353 frames, the head's pose fitted to 3.78 px (one video alone: 2.25). The
+  scores explain 52% of the face's movement (lips 64%), against 59% (lips 64%) for one set's.
+- **Trial** (5 videos, 600 steps): the looks start at none along with the shifts they mix, and neither was ever
+  pulled. The codes now start at 0.3 spread (`CODE_START`); the looks then shift the colours 0.15 to 0.41 (logit).
+- **The whole chain on the plaid set,** from the trial head: its moments (2.4 min), posed (3.06 px), baked (19.4 dB
+  on held-out moments round the face) and fitted (21.9 to 28.9 dB in 300 steps).
+- **The head, 19 videos, 40,000 steps** (`dist/head_test/head19`, 44 minutes, 53 ms a step):
+  - 21.0 dB round the face on 275 held-out moments of every video, each as its video looks; the plaid set's own
+    avatar scores 21.3 on its one shot. The score is flat from step 25,000.
+  - 134k head splats. The looks shift its colours 0.18 to 0.56 (logit).
+  - Its previews draw each video's light, expression and turn from one head (a pair of glasses it does not
+    draw), but softer than one set's own: his hair, worn every way, is the blurriest.
+- **The plaid set from it:** posed 2.85 px, baked 1.6 minutes, fitted to its still 21.9 to 33.3 dB (its own
+  avatar's fit: 33.4).
+  - Held whole, the head is soft, and below the beard it smears an average of every collar over the shirt's.
+  - **Adapted** (the bake fits the head's own numbers to the set, pulled toward the head's: the face's surface in
+    full, what is far from it or on the head at FREE_PULL): the face is sharper; the smear under the beard stays.
+    4,000 steps, 4.9 minutes; a new set is about ten minutes in all.
+  - **On a held-out moment of the set,** his mouth wide with his teeth showing: the render played from the scores
+    opens it and shows teeth, which the set's own (ASMR) avatar never saw. A dark streak sits on one cheek.
+  - `dist/head_test/per_set_vs_one_head.mp4`: the set's own avatar on the left, from the one head on the right,
+    over his voice's take.
+- **The smear, found:** drawn alone, the head's splats painted the neck, the collar and the shoulders: an
+  average of every collar. The body had a hole there - laid clear of a box round the head, and not fitted where
+  the head is solid.
+  - Pulled toward clear below the mouth, far from the face: 2k of them went.
+  - Below the chin: 21k of 50k went, and the rest still painted it. The neck's splats are bound to the jaw's
+    edge, near it, so "far from the face" missed them.
+- **Fixed: below the chin the head is the set's own.**
+  - Every shared splat below the chin is dropped (MediaPipe's 152 is the face's lowest point): 50k.
+  - The set's own are laid there from its moments, as train.py lays a set's: 10.8k, the beard bound to the jaw's
+    edge. They are free, and grown with the set's body.
+  - The body is laid below the chin up to the face (`up_to_face`).
+  - On the plaid set: the collar, the neck and the undershirt clean, the beard whole, the face near the set's own.
+    A green speck beside the nose in a frame (one stray splat).
+  - Bake 5.9 minutes, Fit 3.6 (33.3 dB). `dist/head_test/per_set_vs_one_head.mp4`.
+- **A step a program makes and the builder did not land** (`_land_process` listed its steps by name): Head frames
+  ended "done" with no stamp, so missing, and was started again - a video's moments read over and over, found by
+  running the steps for real on a copy of the actor. Now every step with a main file (`MAIN`) is landed and
+  stamped; `actors_check` holds every program's step to having one.
+- **Open:**
+  - The head's softness: more splats or steps, and a look of more than 8 numbers for his hair.
+  - Judging these by eye: a vision agent shown the bake's previews, as Cards' art director is shown each painting
+    (the user, 2026-10-23: "putting agents into that part of the loop"). PSNR called the held head as good as one
+    set's own, while the collar was a smear.
+
+**The body bends** (`train.second_of`, `splat_head.gdshader`):
+- **A second influence per body splat,** by where it rests in the still:
+  - The torso keeps more and more of the still from the chest down to the hips (0.9 at the seat), so the chest
+    and shoulders lean, settle and breathe over a seat that stays.
+  - A shoulder goes with the torso inward of its joint, and an arm with the bone above it near its start.
+- **Godot blends,** handed every bone's 2D move (`SplatHead.pose_bones` -> `moves`).
+- **Gate:** `splat_head_check` - the bone moved and its splats half held by the still, drawn as the rules say;
+  the control is the same move unheld.
+
+**A moved video is the same video** (`ActorSources.rescan`, `_moved_here`):
+- **The user merged** "Ephemeral Rift" into "Ephemeral Rift (more)", which left eight videos missing at their
+  paths. An id is its path's, so a rescan would have added them as new - to be surveyed again - and the sets
+  made of them would have lost them.
+- **Now a missing folder video takes a file of its name** found in another of their folders. Its fetch token is
+  named by where it was first found (`found_at`), so with `mv` keeping the file's time, nothing made from it goes
+  stale.
+- **Gate:** `actors_check` - moved, the same video with its survey still made; the control is a copy beside a
+  file still there, which is a video of its own.
+
+## The room behind them, and how far a set reaches (2026-10-23, evening)
+
+The user, on the plaid set (set-6f0cbf09) after the sweater one (set-0e8c1195): "The mouth barely seems to move
+at all, and it almost never makes a shape. Is the rigging and such bound to ONLY frames from within a set?" And:
+"the heavy blurring around the head ... when the wall is blurry, when the turtleneck of the sweater is blurry...
+it looks pretty bad."
+
+**What a set is, to the head of splats:**
+- **One shot of one video.** `ActorBuilder.avatar_shot` takes the set's longest usable shot. His 53 videos fell
+  into about 130 sets, and none of the large ones spans two videos: each video has its own outfit, framing and
+  often its own room. "Set likeness" splits nothing that is one place.
+- **The face rig, the splats, their 12 expression shifts, the body and the room are that shot's alone.** What is
+  every video's: each sound's mouth (`visemes.json`, at percentiles of his own range), the head's motion, the
+  blinks, glances and posture, and the voice.
+- **The rig moves the mouth alike on both sets.** At Articulation 2, "open" parts the lips 13 px on the sweater
+  set and 15 on the plaid (of a mouth 92 and 117 px wide); most sounds part them 2 to 8 px. The 12 components
+  carry jawOpen at 0.70 and 0.99.
+- **But the plaid shot barely opens his mouth.** It is an ASMR video. Frames with jawOpen past 0.35: 76 of
+  5,216, against 330 of 8,926 on the sweater shot; past 0.45, 6 against 57; puckered past 0.5, 213 against
+  1,464. So the splats there never learned his open mouth, and the same opening reads as nothing.
+- **Articulation 3** (playback only for this renderer; set on his actor) parts the lips a little more and breaks
+  nothing (`dist/look_mouth/plaid_a3`).
+
+**The blur round the head was HIS BODY IN THE PLATE.**
+- **The plate started from the set's room picture** (`room_K.jpg`). Where the room is never seen, that picture
+  keeps the still's own pixels. That is right for the 2D renderer, which draws them over it where they stand.
+- **No frame shows the wall there to unlearn it.** So the plaid set's learned plate held his face, beard,
+  shirt and clasped hands, sharp. The sweater set's held a smeared face in rainbow streaks.
+- **The splats leaned on it.** Anywhere not fully opaque showed the frozen copy: a smudged, see-through
+  collar, and a second edge beside the ear and cheek as the head moved off the still's pose.
+- **Now `train.room_of`:** each pixel is the median of the frames whose person mask (grown 12 px) leaves it,
+  over 160 frames of the shot (10 s). A pixel fewer than 3 show is filled from round it (`fill_round`: push-pull,
+  smoothed to a harmonic fill). The plate learns only as far as it is seen (`Scene.seen`).
+- **On the plaid shot,** 71% of the picture is seen.
+- **The Avatar step's version is 2:** every avatar made before is stale.
+
+**A short run ended faint.**
+- **The splats are made faint every 3,000 steps** until step 20,000, so a 12,000-step run ended on a reset:
+  21.2 dB at step 10,000, 17.0 at 12,000.
+- **The growing now ends at two thirds of a shorter run** (`train.until_of`). The default 30,000 is unchanged.
+
+**The test run** (`dist/look_mouth/plaid_v2`, 12,000 steps):
+- **Held-out frames:** 21.2 dB round the face and 18.0 round the body, against the old 30,000-step avatar's
+  21.3 and 18.1 with his body in its plate.
+- **Fitted to still 11:** 21.8 to 31.0 dB.
+- **In Godot** (`dist/look_mouth/old_vs_new.mp4`, the old fit on the left): the collar and neck under the beard
+  are whole, and the head has one edge against the wall as it moves.
+
+**Open: one head for every set.**
+- **The shared head:** the head's splats (face, hair, beard) learned from frames of many videos, each video with
+  a learned appearance code for its light (a per-video colour shift basis, as the expression shifts are mixed),
+  while the body and room stay the set's.
+- **What it buys:** hundreds of open-mouth frames, and his face from more angles.
+- **What it costs:** Frames for every video, a longer training, and his look changing between videos (hair up
+  or down, the beard's length).
+
+**Gates:** `hosts/avatar/test_fit.py`:
+- The room as the frames show it, with the plain median holding the person as the control.
+- The hair past the mask left out, with the control of no margin.
+- The fill of a ramp.
+- The plate moving only where seen.
+- A run of any length ending well past its last reset.
+
 ## The body as the still holds it (2026-10-23)
 
 **What the whole of them learned** (run 2, 40,000 steps, up to 600k splats): the face as good as before, the

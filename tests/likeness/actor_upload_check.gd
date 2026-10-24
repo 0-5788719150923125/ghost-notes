@@ -15,6 +15,10 @@ extends SceneTree
 ## note's tags; Stop stops one. The actor's steps are made by the gate ([member ActorBuilder.make_with]): no
 ## program runs, and no agent - and a step made so is made at once, so a run still under way (as one waiting
 ## for an install is) is held by hand.
+## A PICTURE ON THE CARD IS CLICKED by the left button's press alone (`ActorCard.clicked`): a wheel's notch, a release
+## or the right button opens nothing (2026-10-23: scrolling over the sets opened dozens of their sheets).
+## A VIDEO TICKED REBUILDS NO ROW (2026-10-23: every tick held the app for seconds while all of them were made again);
+## TICK ALL AND UNTICK ALL set every box and the actor's file (THE CONTROL: a video added does make the rows again).
 ## NOTHING OUTSIDE THE TEST ROOT: the actors in a library moved aside ([method Actors.use_for_test]), the note's
 ## folder under it, and no actor added to the author's library (its folders are only listed: the author's
 ## build may be writing inside one).
@@ -61,6 +65,17 @@ func _ok(cond: bool, what: String) -> void:
 
 
 func _check() -> void:
+	# A PICTURE CLICKED: the left button's press; THE CONTROLS: the wheel's notches, a release, the right button
+	var card_script = load("res://src/likeness/actor_card.gd")
+	var press := func(button: MouseButton, down: bool) -> InputEventMouseButton:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = button
+		ev.pressed = down
+		return ev
+	_ok(card_script.clicked(press.call(MOUSE_BUTTON_LEFT, true)) and not card_script.clicked(press.call(MOUSE_BUTTON_WHEEL_DOWN, true))
+		and not card_script.clicked(press.call(MOUSE_BUTTON_WHEEL_UP, true)) and not card_script.clicked(press.call(MOUSE_BUTTON_LEFT, false))
+		and not card_script.clicked(press.call(MOUSE_BUTTON_RIGHT, true)) and not card_script.clicked(InputEventMouseMotion.new()),
+		"a picture is clicked by the left button's press alone, never by the wheel")
 	# AN ACTOR WITH TWO VIDEOS (a few bytes is a video to the library, which reads only their names)
 	var footage := ProjectSettings.globalize_path(ROOT).path_join("footage_in")
 	DirAccess.make_dir_recursive_absolute(footage)
@@ -88,6 +103,28 @@ func _check() -> void:
 
 	var card = load("res://src/likeness/actor_card.gd").for_note({"workspace": ed})
 	card.apply({"id": made.id})
+	# A VIDEO TICKED REBUILDS NO ROW; TICK ALL AND UNTICK ALL TAKE EVERY ONE
+	card._refresh()
+	var rows_before: Array = card._videos_box.get_children()
+	var first_vid := String(card._ticks.keys()[0])
+	(card._ticks[first_vid] as CheckBox).button_pressed = false
+	card._refresh()
+	_ok(card._videos_box.get_children() == rows_before and not bool(card._actor.video(first_vid)["ticked"]),
+		"a video unticked made the rows again, or was not unticked")
+	card._tick_all(false)
+	var none_on: bool = card._ticks.values().all(func(c: CheckBox) -> bool: return not c.button_pressed) \
+		and Actors.open(made.id).ticked().is_empty()
+	card._tick_all(true)
+	var all_on: bool = card._ticks.values().all(func(c: CheckBox) -> bool: return c.button_pressed) \
+		and Actors.open(made.id).ticked().size() == card._ticks.size()
+	_ok(none_on and all_on, "Untick all or Tick all left a box or the actor's file as it was")
+	var more := ProjectSettings.globalize_path(ROOT).path_join("footage_in").path_join("Third talk.mp4")
+	var fa := FileAccess.open(more, FileAccess.WRITE)
+	fa.store_string("not really a video")
+	fa.close()
+	ActorSources.rescan(card._actor)
+	card._refresh()
+	_ok(card._videos_box.get_children() != rows_before, "CONTROL: a video added did not make the rows again")
 	_actor = card._actor
 	card._builder.make_with = _make
 	var said: Dictionary = ed._reading_of(WORDS)

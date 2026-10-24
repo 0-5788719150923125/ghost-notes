@@ -16,6 +16,9 @@ class_name SplatHead
 ## by each of the expression's components, the 52 scores' principal components over the frames it was learned
 ## from ([method expr_of]); [method set_expr] hands the shader the expression a frame shows.
 ##
+## THE BODY BENDS (hosts/avatar/train.py's `second_of`): a body splat may take a second bone's move, or the still's
+## own, in a share; [method pose_bones] hands the shader every bone's move, which it blends by.
+##
 ## DRAWN IN ORDER, NEVER SORTED: the camera is far and fixed and the head turns a little, so the order the
 ## export wrote them in - back to front as the neutral face stands straight on - stays right, and the canvas's
 ## own blending composites them as the trainer did.
@@ -56,6 +59,8 @@ var expr_basis := PackedFloat32Array()
 var expr_scale := PackedFloat32Array()
 ## The most components the shader mixes.
 const MOST_EXPRESSIONS := 16
+## The most bones whose moves the shader blends by.
+const MOST_BONES := 16
 
 var _mm: MultiMeshInstance2D
 var _mat: ShaderMaterial
@@ -119,6 +124,7 @@ func _texels(arr: Dictionary, per: int, width: int) -> PackedFloat32Array:
 	var cover: PackedFloat32Array = arr["cover"]
 	var bind: PackedInt32Array = arr["bind"]
 	var place_d: PackedFloat32Array = arr.get("place_d", PackedFloat32Array())
+	var second: PackedFloat32Array = arr.get("second", PackedFloat32Array())
 	var colour_d: PackedFloat32Array = arr.get("colour_d", PackedFloat32Array())
 	var rows := int(ceil(float(splats * per) / width))
 	var data := PackedFloat32Array()
@@ -134,6 +140,7 @@ func _texels(arr: Dictionary, per: int, width: int) -> PackedFloat32Array:
 		data[o + 7] = cover[i]
 		for c in 4:
 			data[o + 8 + c] = turn[i * 4 + c]
+		data[o + 15] = second[i] if i < second.size() else 0.0
 		for k in expressions:
 			for c in 3:
 				data[o + 16 + k * 8 + c] = place_d[(i * expressions + k) * 3 + c]
@@ -183,6 +190,7 @@ func _build(texels: PackedFloat32Array, width: int, per: int) -> void:
 	_mat.set_shader_parameter("per_splat", per)
 	_mat.set_shader_parameter("expressions", mini(expressions, MOST_EXPRESSIONS))
 	_mat.set_shader_parameter("triangles", tris.size() / 3)
+	_mat.set_shader_parameter("moves", _moves_of([]))
 	var k := float(size) / float(crop[2])
 	_mat.set_shader_parameter("low_pass", 0.3 / (k * k))
 	# one quad, its corners -1..1: the shader stretches it over each splat's three sigmas
@@ -276,6 +284,23 @@ func pose_bones(origins: PackedVector3Array, axes: Array, units: PackedFloat32Ar
 		var k := sqrt(absf(t.determinant()))
 		_put_frame(first + b, _carried(t, origins[b]), units[b] * k, _turned(t, ax.x), _turned(t, ax.y),
 			_turned(t, ax.z), b < shown.size() and shown[b] != 0)
+	if _mat != null:
+		_mat.set_shader_parameter("moves", _moves_of(moves))
+
+
+## Every bone's move as the shader reads them: six numbers a bone (x, y and origin), none moved past [param moves].
+static func _moves_of(moves: Array) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(MOST_BONES * 6)
+	for b in MOST_BONES:
+		var t: Transform2D = moves[b] if b < moves.size() else Transform2D.IDENTITY
+		out[b * 6] = t.x.x
+		out[b * 6 + 1] = t.x.y
+		out[b * 6 + 2] = t.y.x
+		out[b * 6 + 3] = t.y.y
+		out[b * 6 + 4] = t.origin.x
+		out[b * 6 + 5] = t.origin.y
+	return out
 
 
 ## The frames written, to the shader.

@@ -53,8 +53,11 @@ const AUDIT_SHEETS := 14
 const MAIN := {"survey": "survey.bin", "shots": "shots.json", "sets": "sets.json", "transcribe": "transcript.json",
 	"visemes": "visemes.json", "learn": "mouth_model.json",
 	"motion": "motion.json", "stills": "stills.json", "rig": "rig.json", "library": "library.json",
+	"head_frames": "head/frames.npz", "head_rig": "head/rig.npz", "head": "head/head.npz",
 	"frames": "avatar/frames.npz", "face": "avatar/rig.npz", "avatar": "avatar/avatar.json", "fit": "avatar/fit.json",
 	"hear": "speech.json", "utterances": "utterances.json", "voice": "voice/voice.onnx"}
+## THE WORD A STEP'S PROGRAM SAYS ITS LAST LINE WITH (`actor: <word>: ...`), where it is not the step's own name.
+const SAYS := {"head_frames": "head frames", "frames": "head frames", "head_rig": "face", "avatar": "bake"}
 ## Candidate stills a set keeps (enough that some show them at rest: on his footage two of six did, the
 ## fourth pass); prototype mouths per sound and eyes per state its library keeps.
 const STILLS := 12
@@ -69,13 +72,14 @@ const HEAR_PROMPT := "Umm, let me think, like, hmm... Okay, uh, here is what I a
 const VOICE_ESPEAK := "en-us"
 ## Sentences a training batch holds: an hour of speech in about 0.8 s a step on a 16 GB card.
 const VOICE_BATCH := 16
-## THEM AS SPLATS: frames a second read of the set's longest shot, whole (their face, body and room); the
-## square their face is read close in, as a share of the face's height (the hair above, the beard below: on
-## his footage a 302-pixel face took 704).
-const AVATAR_RATE := 2.0
-const AVATAR_FACE := 2.33
 ## Steps the body's splats are fitted to the still in (two minutes on a 16 GB card).
 const FIT_STEPS := 3000
+## ONE HEAD FOR EVERY SET (next/likeness.md, "One head"): the moments of each video their head is learned from
+## (hosts/avatar/head_frames.py), the moments of a set its room and body are fitted to, and the steps a set's
+## look, room and body are fitted in (hosts/avatar/bake.py, a minute or two).
+const HEAD_FRAMES := 300
+const SET_FRAMES := 160
+const BAKE_STEPS := 4000
 
 var actor: ActorFolder
 ## The renderer the note plays them with: a run makes its steps and the shared ones ([method
@@ -179,11 +183,33 @@ func errors() -> Dictionary:
 	return _errors
 
 
+## EVERY STEP OVER ITS SCOPES AS [param folder] HOLDS IT, read from its files alone - no run, no error: `{step:
+## {scopes, states: {scope: state}, moot: {scope: true}, summary}}`, what [method row_of] is made of but the runs. A
+## WORKER WORKS IT OUT on a folder of its own (the Actor card: 2026-10-23, every tick of a video held the main
+## thread for seconds while it was worked out there), and [method row_of] lays the runs over it.
+static func states_of(folder: ActorFolder) -> Dictionary:
+	var out := {}
+	for step in ActorSteps.ORDER:
+		var scopes := folder.scopes_of(String(step))
+		var states := {}
+		var moot := {}
+		for sc in scopes:
+			if folder.moot(String(step), String(sc)):
+				moot[String(sc)] = true
+			states[String(sc)] = folder.state_of(String(step), String(sc))
+		out[String(step)] = {"scopes": scopes, "states": states, "moot": moot,
+			"summary": folder.summary_of(String(step), String(scopes[0])) if scopes.size() == 1 else ""}
+	return out
+
+
 ## [param step] over all its scopes, for its row: `{state, made, total, progress, said, error}` - the
 ## row's state the worst of its scopes' (running first), `said` what the running one is doing; "moot"
 ## when it has nothing to do for any (a folder's videos are not fetched), and its moot scopes counted out.
-func row_of(step: String) -> Dictionary:
-	var scopes := actor.scopes_of(step)
+## With [param held] ([method states_of], worked out elsewhere) the folder is not read: only the runs are laid
+## over it.
+func row_of(step: String, held := {}) -> Dictionary:
+	var at: Dictionary = held.get(step, {})
+	var scopes: Array = at.get("scopes", []) if not at.is_empty() else actor.scopes_of(step)
 	var out := {"state": "missing", "made": 0, "total": scopes.size(), "progress": -1.0, "said": "", "error": ""}
 	if scopes.is_empty():
 		out["state"] = "waiting"
@@ -195,10 +221,11 @@ func row_of(step: String) -> Dictionary:
 	var states := {}
 	var moot := 0
 	for sc in scopes:
-		if actor.moot(step, String(sc)) and not _runs.has(_key(step, String(sc))):
+		var is_moot: bool = (at["moot"] as Dictionary).has(String(sc)) if not at.is_empty() else actor.moot(step, String(sc))
+		if is_moot and not _runs.has(_key(step, String(sc))):
 			moot += 1
 			continue
-		var st := state_of(step, String(sc))
+		var st := state_of(step, String(sc)) if at.is_empty() else _laid_over(step, String(sc), at)
 		states[st] = true
 		if st == "made" or st == "stale":
 			out["made"] = int(out["made"]) + 1
@@ -219,8 +246,20 @@ func row_of(step: String) -> Dictionary:
 			break
 	if out["state"] == "made" or out["state"] == "stale":
 		var one := String(scopes[0])
-		out["said"] = actor.summary_of(step, one) if scopes.size() == 1 else ""
+		if not at.is_empty():
+			out["said"] = String(at.get("summary", ""))
+		else:
+			out["said"] = actor.summary_of(step, one) if scopes.size() == 1 else ""
 	return out
+
+
+## A scope's state from [param at] (a step's [method states_of]), the runs laid over it.
+func _laid_over(step: String, scope: String, at: Dictionary) -> String:
+	if _runs.has(_key(step, scope)):
+		return "running"
+	if _errors.has(_key(step, scope)):
+		return "failed"
+	return String((at["states"] as Dictionary).get(scope, "missing"))
 
 
 func _progress_of(run: Dictionary) -> float:
@@ -298,8 +337,9 @@ func _needs_ready(step: String, scope: String) -> bool:
 			if _runs.has(key):
 				return false
 			# CAPTIONS THAT COULD NOT BE FETCHED are no captions: the words go on without them (and are
-			# stale once a later fetch brings some)
-			if String(need) == "captions" and _errors.has(key):
+			# stale once a later fetch brings some); A VIDEO WHOSE MOMENTS COULD NOT BE READ is left out of their
+			# head (its file gone, no face found): the others' make it
+			if (String(need) == "captions" or String(need) == "head_frames") and _errors.has(key):
 				continue
 			if actor.moot(String(need), String(sc)):
 				if String(need) == "fetch" and actor.video_path(String(sc).substr(2)).is_empty():
@@ -505,56 +545,90 @@ func _phase(run: Dictionary) -> String:
 		"rig":
 			return _spawn_py(run, ["rig", "--stills", out.path_join("stills.json"), "--out", out.path_join("rig.json")],
 				"building the rig")
+		"head_frames":
+			var shots := actor.head_shots(vid)
+			if shots.is_empty():
+				return "no usable shot of theirs in this video"
+			var spec := out.path_join("head.spec.json")
+			var e := ActorFolder.write_file(spec, JSON.stringify({"video": actor.video_path(vid),
+				"survey": out.path_join("survey.bin"), "shots": shots, "count": HEAD_FRAMES,
+				"face_model": Provision.file_path("face_model"), "pose_model": Provision.file_path("pose_model"),
+				"out": out.path_join("head")}))
+			if not e.is_empty():
+				return e
+			return _spawn(run, "user://face_venv", "res://hosts/avatar/head_frames.py", ["--ffmpeg", ff, "--spec", spec],
+				"reading their moments")
+		"head_rig":
+			var vids := head_videos()
+			if vids.is_empty():
+				return "no video's moments of theirs are read yet"
+			var args: Array = []
+			for v in vids:
+				args.append_array(["--frames", actor.video_dir(String(v)).path_join("head")])
+			var dir := out.path_join("head")
+			DirAccess.make_dir_recursive_absolute(dir)
+			# the order the rig holds them in: a set finds its video's look by it (bake.py's `video`)
+			var e := ActorFolder.write_file(dir.path_join("videos.json"), JSON.stringify(vids))
+			if not e.is_empty():
+				return e
+			args.append_array(["--out", dir.path_join("rig.npz"), "--poses", dir.path_join("poses.json")])
+			return _spawn(run, "user://face_venv", "res://hosts/avatar/rig.py", args, "learning their face from every video")
+		"head":
+			var dir := out.path_join("head")
+			var spec := dir.path_join("head.spec.json")
+			var e := ActorFolder.write_file(spec, JSON.stringify({"rig": dir.path_join("rig.npz"),
+				"out": dir.path_join("head.npz"), "steps": int(actor.settings()["avatar_steps"]),
+				"preview": dir.path_join("preview")}))
+			if not e.is_empty():
+				return e
+			return _spawn(run, "user://voice_train_venv", "res://hosts/avatar/head.py", ["--spec", spec],
+				"learning their head from every video")
 		"frames":
-			var shot := avatar_shot(actor, sid)
-			if shot.is_empty():
+			var main := set_video(actor, sid)
+			if main.is_empty():
 				return "the set has no shot to read"
 			var stills: Array = []
 			for k in actor.stills_of(sid).size():
 				stills.append(out.path_join("stills").path_join("still_%d.jpg" % k))
 			var spec := out.path_join("frames.spec.json")
-			var e := ActorFolder.write_file(spec, JSON.stringify({"video": actor.video_path(String(shot["vid"])),
-				"shots": [[shot["start"], shot["end"]]], "crop": shot["crop"], "face_crop": shot["face_crop"], "rate": AVATAR_RATE,
-				"face_model": Provision.file_path("face_model"), "pose_model": Provision.file_path("pose_model"),
-				"stills": stills, "out": out.path_join("avatar")}))
+			var e := ActorFolder.write_file(spec, JSON.stringify({"video": actor.video_path(String(main["vid"])),
+				"survey": actor.video_dir(String(main["vid"])).path_join("survey.bin"), "shots": main["shots"],
+				"count": SET_FRAMES, "face_model": Provision.file_path("face_model"),
+				"pose_model": Provision.file_path("pose_model"), "stills": stills, "out": out.path_join("avatar")}))
 			if not e.is_empty():
 				return e
-			# frames.py reads its crop from its own folder's spec, as train.py does
-			DirAccess.make_dir_recursive_absolute(out.path_join("avatar"))
-			e = ActorFolder.write_file(out.path_join("avatar").path_join("spec.json"), FileAccess.get_file_as_string(spec))
-			if not e.is_empty():
-				return e
-			return _spawn(run, "user://face_venv", "res://hosts/avatar/frames.py", ["--ffmpeg", ff, "--spec", spec],
-				"reading their head's frames")
+			return _spawn(run, "user://face_venv", "res://hosts/avatar/head_frames.py", ["--ffmpeg", ff, "--spec", spec],
+				"reading the set's moments")
 		"face":
 			var dir := out.path_join("avatar")
-			return _spawn(run, "user://face_venv", "res://hosts/avatar/rig.py", ["--frames", dir, "--out",
-				dir.path_join("rig.npz"), "--poses", dir.path_join("poses.json")], "learning their face")
+			return _spawn(run, "user://face_venv", "res://hosts/avatar/rig.py", ["--frames", dir, "--shared",
+				actor.dir.path_join("head").path_join("rig.npz"), "--out", dir.path_join("rig.npz"), "--poses",
+				dir.path_join("poses.json")], "posing the set against their face")
 		"avatar":
 			var dir := out.path_join("avatar")
-			var shot := avatar_shot(actor, sid)
 			var still := actor.still_of(sid)
 			var spec := out.path_join("avatar.spec.json")
+			var vids: Variant = ActorFolder.read_json(actor.dir.path_join("head").path_join("videos.json"))
+			var main := set_video(actor, sid)
+			var at := (vids as Array).find(String(main.get("vid", ""))) if vids is Array else -1
 			var e := ActorFolder.write_file(spec, JSON.stringify({"frames": dir, "rig": dir.path_join("rig.npz"),
-				"room": out.path_join("stills").path_join("room_%d.jpg" % still),
-				"front": out.path_join("stills").path_join("front_%d.png" % still),
-				"out": dir.path_join("avatar.npz"), "steps": int(actor.settings()["avatar_steps"]),
-				"preview": dir.path_join("preview"), "span": [shot.get("start", 0.0), shot.get("end", 1e9)]}))
+				"front": out.path_join("stills").path_join("front_%d.png" % still), "span": [0.0, 1e9],
+				"head": actor.dir.path_join("head").path_join("head.npz"), "video": at,
+				"out": dir.path_join("avatar.npz"), "steps": BAKE_STEPS, "preview": dir.path_join("preview")}))
 			if not e.is_empty():
 				return e
-			return _spawn(run, "user://voice_train_venv", "res://hosts/avatar/train.py", ["--spec", spec],
-				"learning them")
+			return _spawn(run, "user://voice_train_venv", "res://hosts/avatar/bake.py", ["--spec", spec],
+				"making the set's avatar from their head")
 		"fit":
 			# the body fitted to the still they are played from: its picture filled where something stands before
 			# them, its matte, and what stands there (hosts/avatar/fit.py)
 			var dir := out.path_join("avatar")
-			var shot := avatar_shot(actor, sid)
 			var still := actor.still_of(sid)
 			var st := out.path_join("stills")
 			var spec := out.path_join("fit.spec.json")
 			var e := ActorFolder.write_file(spec, JSON.stringify({"frames": dir, "rig": dir.path_join("rig.npz"),
-				"room": st.path_join("room_%d.jpg" % still), "front": st.path_join("front_%d.png" % still),
-				"span": [shot.get("start", 0.0), shot.get("end", 1e9)], "poses": dir.path_join("poses.json"),
+				"front": st.path_join("front_%d.png" % still),
+				"span": [0.0, 1e9], "poses": dir.path_join("poses.json"),
 				"avatar": dir.path_join("avatar.npz"), "still": still, "picture": st.path_join("body_%d.jpg" % still),
 				"matte": st.path_join("matte_%d.png" % still), "out": dir.path_join("fit.npz"), "steps": FIT_STEPS}))
 			if not e.is_empty():
@@ -696,10 +770,11 @@ static func _made_by(path: String, run: Dictionary) -> bool:
 static func _said_by(log: String, step: String) -> String:
 	var text := FileAccess.get_file_as_string(log)
 	var said := ""
+	var word := String(SAYS.get(step, step))
 	for line in text.split("\n"):
-		var at := line.find("actor: %s: " % step)
+		var at := line.find("actor: %s: " % word)
 		if at >= 0:
-			said = line.substr(at + 9 + step.length()).strip_edges()
+			said = line.substr(at + 9 + word.length()).strip_edges()
 	return said
 
 
@@ -781,8 +856,11 @@ func _land_process(run: Dictionary) -> String:
 			actor.save()
 			actor.put_stamp(step, scope, "%s, %d fps" % [Clock.text(float(info["duration"])), roundi(float(info["fps"]))])
 			return "done"
-		"survey", "shots", "sets", "transcribe", "visemes", "learn", "motion", "stills", "rig", "library", "frames", "face",\
-				"avatar", "fit", "hear", "utterances", "voice":
+		_:
+			# EVERY STEP A PROGRAM MAKES IS JUDGED BY ITS MAIN FILE AND STAMPED (2026-10-23: a step left out of a list
+			# here was "done" with no stamp, so missing, so started again - a video's moments read over and over)
+			if not MAIN.has(step):
+				return "done"
 			if not _made_by(out.path_join(String(MAIN[step])), run):
 				return _tail(String(run["log"]))
 			var said := _said_by(String(run["log"]), step)
@@ -1122,40 +1200,43 @@ func videos_spec() -> Dictionary:
 	return out
 
 
-## THE USABLE SHOTS of set [param sid], or with none of every steady set (a handheld one moves with
-## the camera, not with them): `[{vid, start, end, set}]`, of ticked videos only.
-## THE SHOT THEY ARE LEARNED FROM AS SPLATS: set [param sid]'s longest usable shot, one camera placement (a
-## set's shots can stand a little apart - his first two are framed wider than the third), read whole: `crop` is
-## the frame, [0, 0, width, height]; `face_crop` the square their face is read close in ([x, y, side]:
-## AVATAR_FACE of the face's height, a little above its middle, inside the frame). `{vid, start, end, crop,
-## face_crop}`, {} for none.
-static func avatar_shot(a: ActorFolder, sid: String) -> Dictionary:
-	var best := {}
+## THE VIDEO SET [param sid] IS READ FROM, as their splats: the ticked video it holds most of, and its usable shots
+## there - one camera placement, the set's room learned whole. `{vid, shots: [[start, end], ...]}`, {} for none.
+static func set_video(a: ActorFolder, sid: String) -> Dictionary:
+	var by := {}
 	for s in a.sets():
 		var d: Dictionary = s
 		if String(d.get("id", "")) != sid:
 			continue
 		for sh in d.get("shots", []):
 			var x: Dictionary = sh
-			if bool(x.get("unusable", false)) or not a.ticked().has(String(x.get("vid", ""))):
+			var vid := String(x.get("vid", ""))
+			if bool(x.get("unusable", false)) or not a.ticked().has(vid):
 				continue
-			if best.is_empty() or float(x.get("usable", 0.0)) > float(best.get("usable", 0.0)):
-				best = x
-	if best.is_empty():
-		return {}
-	var probe: Variant = ActorFolder.read_json(a.video_dir(String(best["vid"])).path_join("probe.json"))
-	var w := int((probe as Dictionary).get("width", 1920)) if probe is Dictionary else 1920
-	var h := int((probe as Dictionary).get("height", 1080)) if probe is Dictionary else 1080
-	var box: Array = best.get("box", [0.4, 0.2, 0.6, 0.5])
-	var face_h := (float(box[3]) - float(box[1])) * h
-	var side := clampf(roundf(AVATAR_FACE * face_h / 16.0) * 16.0, 256.0, float(mini(w, h)))
-	var cx := (float(box[0]) + float(box[2])) * 0.5 * w
-	var cy := (float(box[1]) + float(box[3])) * 0.5 * h + 0.05 * face_h
-	return {"vid": String(best["vid"]), "start": float(best["start"]), "end": float(best["end"]),
-		"crop": [0, 0, w, h], "face_crop": [int(clampf(roundf(cx - side * 0.5), 0.0, w - side)),
-			int(clampf(roundf(cy - side * 0.5), 0.0, h - side)), int(side)]}
+			if not by.has(vid):
+				by[vid] = {"vid": vid, "shots": [], "usable": 0.0}
+			(by[vid]["shots"] as Array).append([float(x.get("start", 0.0)), float(x.get("end", 0.0))])
+			by[vid]["usable"] = float(by[vid]["usable"]) + float(x.get("usable", 0.0))
+	var best := {}
+	for vid in by:
+		if best.is_empty() or float(by[vid]["usable"]) > float(best["usable"]):
+			best = by[vid]
+	return {} if best.is_empty() else {"vid": best["vid"], "shots": best["shots"]}
 
 
+## THE VIDEOS THEIR HEAD IS LEARNED FROM: every ticked one whose moments are read (its Head frames made, not moot),
+## in the order the actor holds them.
+func head_videos() -> Array:
+	var out: Array = []
+	for v in actor.ticked():
+		var scope := "v:" + String(v)
+		if not actor.moot("head_frames", scope) and actor.state_of("head_frames", scope) != "missing":
+			out.append(String(v))
+	return out
+
+
+## THE USABLE SHOTS of set [param sid], or with none of every steady set (a handheld one moves with
+## the camera, not with them): `[{vid, start, end, set}]`, of ticked videos only.
 static func shots_of(a: ActorFolder, sid := "") -> Array:
 	var ticked := a.ticked()
 	var out: Array = []

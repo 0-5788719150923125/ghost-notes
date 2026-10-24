@@ -2,7 +2,8 @@
 """rig.py - the surface an actor's head of splats is bound to, learned from their own frames (next/likeness.md,
 "A head of splats").
 
-    <face_venv python> rig.py --frames <frames folder> --out <rig.npz> [--poses <poses.json>]
+    <face_venv python> rig.py --frames <frames folder> [--frames <another> ...] --out <rig.npz>
+                              [--poses <poses.json>] [--shared <the actor's rig.npz>]
 
 MediaPipe's face mesh is the surface: its 478 points are tracked in every frame (frames.py), and its
 triangles come from its own tessellation. From the frames this learns:
@@ -30,6 +31,12 @@ Writes <out>: canon [V, 3], basis [52, V, 3], tris [T, 3], derived [V - 478, 478
 (the points the head's pose is fitted on), and per frame: keep [N] (a frame learned from), scale [N],
 rot [N, 3, 3], shift [N, 3], aligned [N, 478, 3] (its points on the neutral face's frame), blend [N, 52],
 bone_origin [N, B, 3], bone_axes [N, B, 3, 3] (columns), bone_unit [N, B], bone_seen [N, B].
+
+ONE FACE FOR EVERY VIDEO (next/likeness.md, "One head"): given several folders (head_frames.py's, one a video),
+their frames are posed and learned from together - one neutral face, one basis - and the rig says which folder
+each frame is from (`video` [N], `folders`). Given --shared (the actor's rig), nothing is learned: the folder's
+frames and stills are posed against the actor's neutral face (a set's own, played on the head learned from all),
+and the glances and the eyes' shut scores are the actor's (its poses.json beside it).
 
 And <poses>, what the head is played from ([SplatHead], the medium): each still's pose, scores and bones
 ({scale, rot (rows), shift, blend, bones: [{origin, axes (columns), unit, seen}]} - the head and body as they
@@ -218,53 +225,70 @@ def bones_of(pose, w: float, h: float, face=None):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--frames", required=True)
+    ap.add_argument("--frames", required=True, action="append")
     ap.add_argument("--out", required=True)
     ap.add_argument("--poses", default="")
+    ap.add_argument("--shared", default="")
     ap.add_argument("--progress", default="")
     a = ap.parse_args()
     import numpy as np
-    f = np.load(os.path.join(a.frames, "frames.npz"))
+    fs = [np.load(os.path.join(d, "frames.npz")) for d in a.frames]
+    f = {k: np.concatenate([g[k] for g in fs]) for k in ("points", "found", "hands", "blend", "pose")}
+    video = np.concatenate([np.full(g["found"].shape[0], k, np.int32) for k, g in enumerate(fs)])
+    sizes = []
+    for d in a.frames:
+        c = [int(v) for v in json.load(open(os.path.join(d, "spec.json")))["crop"]]
+        sizes.append((c[2], c[3]) if len(c) == 4 else (c[2], c[2]))
     pts = f["points"][:, :478].astype(np.float64)
     # EVERY FRAME WITH A FACE is posed (a hand at the mouth is theirs too, and the whole of them is learned);
     # the basis is fitted on those with no hand at the mouth, whose scores a hand does not spoil
     keep = f["found"].astype(bool)
     idx = np.nonzero(keep)[0]
-    canon, poses, aligned, rigid = fit(pts[idx], np.arange(468))
-    residual = aligned - canon
-    # THE BASIS: offsets from the neutral face as a linear function of the 52 scores, ridge, on all but the
-    # held-out frames; then measured on those
-    unspoiled = ~f["hands"].astype(bool)[idx]
-    blend = f["blend"][idx].astype(np.float64)[unspoiled]
-    residual = residual[unspoiled]
-    test = np.zeros(blend.shape[0], bool)
-    test[::HELD_OUT] = True
-    X = np.concatenate([blend, np.ones((blend.shape[0], 1))], 1)
-    Y = residual.reshape(blend.shape[0], -1)
-    A = X[~test]
-    lam = RIDGE * np.eye(X.shape[1])
-    lam[-1, -1] = 0.0
-    W = np.linalg.solve(A.T @ A + lam * A.shape[0], A.T @ Y[~test])
-    pred = X[test] @ W
-    def r2(rows):
-        cols = np.concatenate([[3 * r, 3 * r + 1, 3 * r + 2] for r in rows])
-        e = ((Y[test][:, cols] - pred[:, cols]) ** 2).sum()
-        v = ((Y[test][:, cols] - Y[test][:, cols].mean(0)) ** 2).sum()
-        return 1.0 - e / max(v, 1e-12)
-    canon = canon + W[-1].reshape(-1, 3)        # the neutral face is where every score is 0
-    basis = W[:52].reshape(52, -1, 3)
-    # THE SURFACE: MediaPipe's triangles, its holes filled
-    tris = clean(triangles(), canon[:, :2])
-    dw, dshift = derived(canon, LIPS_INNER)
-    back = 478
-    fill = [(LIPS_INNER[i], LIPS_INNER[(i + 1) % len(LIPS_INNER)], back) for i in range(len(LIPS_INNER))]
-    for loop, iris in ((EYE_LEFT, IRIS_LEFT), (EYE_RIGHT, IRIS_RIGHT)):
-        fill += [(loop[i], loop[(i + 1) % len(loop)], iris) for i in range(len(loop))]
-    canon_all = np.concatenate([canon, dw @ canon + dshift])
-    basis_all = np.concatenate([basis, np.einsum("dv,kvc->kdc", dw, basis)], 1)
+    shared = np.load(a.shared) if a.shared else None
+    if shared is not None:
+        # POSED AGAINST THE ACTOR'S FACE: its neutral face, basis, surface and rigid points, as they are
+        canon_all, basis_all = shared["canon"].astype(np.float64), shared["basis"].astype(np.float64)
+        canon, rigid = canon_all[:478], shared["rigid"].astype(np.int64)
+        tris, dw, dshift = [tuple(t) for t in shared["tris"]], shared["derived"], shared["derived_shift"]
+        fill = []
+        poses = [similarity(canon[rigid], pts[i][rigid]) for i in idx]
+        aligned = np.stack([(pts[i] - t) @ r / s for i, (s, r, t) in zip(idx, poses)]) if idx.size else np.zeros((0, 478, 3))
+    else:
+        canon, poses, aligned, rigid = fit(pts[idx], np.arange(468))
+        residual = aligned - canon
+        # THE BASIS: offsets from the neutral face as a linear function of the 52 scores, ridge, on all but the
+        # held-out frames; then measured on those
+        unspoiled = ~f["hands"].astype(bool)[idx]
+        blend = f["blend"][idx].astype(np.float64)[unspoiled]
+        residual = residual[unspoiled]
+        test = np.zeros(blend.shape[0], bool)
+        test[::HELD_OUT] = True
+        X = np.concatenate([blend, np.ones((blend.shape[0], 1))], 1)
+        Y = residual.reshape(blend.shape[0], -1)
+        A = X[~test]
+        lam = RIDGE * np.eye(X.shape[1])
+        lam[-1, -1] = 0.0
+        W = np.linalg.solve(A.T @ A + lam * A.shape[0], A.T @ Y[~test])
+        pred = X[test] @ W
+
+        def r2(rows):
+            cols = np.concatenate([[3 * r, 3 * r + 1, 3 * r + 2] for r in rows])
+            e = ((Y[test][:, cols] - pred[:, cols]) ** 2).sum()
+            v = ((Y[test][:, cols] - Y[test][:, cols].mean(0)) ** 2).sum()
+            return 1.0 - e / max(v, 1e-12)
+        canon = canon + W[-1].reshape(-1, 3)        # the neutral face is where every score is 0
+        basis = W[:52].reshape(52, -1, 3)
+        # THE SURFACE: MediaPipe's triangles, its holes filled
+        tris = clean(triangles(), canon[:, :2])
+        dw, dshift = derived(canon, LIPS_INNER)
+        back = 478
+        fill = [(LIPS_INNER[i], LIPS_INNER[(i + 1) % len(LIPS_INNER)], back) for i in range(len(LIPS_INNER))]
+        for loop, iris in ((EYE_LEFT, IRIS_LEFT), (EYE_RIGHT, IRIS_RIGHT)):
+            fill += [(loop[i], loop[(i + 1) % len(loop)], iris) for i in range(len(loop))]
+        canon_all = np.concatenate([canon, dw @ canon + dshift])
+        basis_all = np.concatenate([basis, np.einsum("dv,kvc->kdc", dw, basis)], 1)
     n = pts.shape[0]
-    spec_crop = [int(c) for c in json.load(open(os.path.join(a.frames, "spec.json")))["crop"]]
-    cw, ch = (spec_crop[2], spec_crop[3]) if len(spec_crop) == 4 else (spec_crop[2], spec_crop[2])
+    cw, ch = sizes[0]
     nb = len(BODY)
     b_origin = np.zeros((n, nb, 3))
     b_axes = np.tile(np.eye(3), (n, nb, 1, 1))
@@ -272,7 +296,7 @@ def main() -> int:
     b_seen = np.zeros((n, nb))
     for i in range(n):
         if bool(f["found"][i]):
-            b_origin[i], b_axes[i], b_unit[i], b_seen[i] = bones_of(f["pose"][i], cw, ch, pts[i])
+            b_origin[i], b_axes[i], b_unit[i], b_seen[i] = bones_of(f["pose"][i], *sizes[int(video[i])], pts[i])
     scale = np.zeros(n)
     rot = np.tile(np.eye(3), (n, 1, 1))
     shift = np.zeros((n, 3))
@@ -287,18 +311,20 @@ def main() -> int:
              scale=scale.astype(np.float32), rot=rot.astype(np.float32), shift=shift.astype(np.float32),
              aligned=al.astype(np.float32), blend=f["blend"].astype(np.float32),
              bone_origin=b_origin.astype(np.float32), bone_axes=b_axes.astype(np.float32),
-             bone_unit=b_unit.astype(np.float32), bone_seen=b_seen.astype(np.float32))
+             bone_unit=b_unit.astype(np.float32), bone_seen=b_seen.astype(np.float32), video=video,
+             folders=np.asarray([os.path.abspath(d) for d in a.frames]))
     os.replace(out, a.out)
     if a.poses:
         stills = []
-        for j in range(f["still_points"].shape[0] if "still_points" in f.files else 0):
-            if not bool(f["still_found"][j]):
+        g = fs[0]
+        for j in range(g["still_points"].shape[0] if "still_points" in g.files else 0):
+            if not bool(g["still_found"][j]):
                 stills.append(None)
                 continue
-            s, r, t = similarity(canon[rigid], f["still_points"][j][rigid].astype(np.float64))
-            row = {"scale": s, "rot": r.tolist(), "shift": t.tolist(), "blend": f["still_blend"][j].tolist()}
-            if "still_pose" in f.files:
-                bo, ba, bu, bs = bones_of(f["still_pose"][j], cw, ch, f["still_points"][j])
+            s, r, t = similarity(canon[rigid], g["still_points"][j][rigid].astype(np.float64))
+            row = {"scale": s, "rot": r.tolist(), "shift": t.tolist(), "blend": g["still_blend"][j].tolist()}
+            if "still_pose" in g.files:
+                bo, ba, bu, bs = bones_of(g["still_pose"][j], cw, ch, g["still_points"][j])
                 row["bones"] = [{"origin": bo[b].tolist(), "axes": ba[b].T.tolist(), "unit": float(bu[b]),
                                  "seen": float(bs[b])} for b in range(nb)]
             stills.append(row)
@@ -312,14 +338,23 @@ def main() -> int:
             # the eyes and brows alone: what else moves with a glance in their footage is their talking
             only = np.array([n.startswith(("eye", "brow")) for n in actor.BLEND_NAMES], np.float64)
             looks[name] = ((np.median(blends[most], 0) - rest) * only).tolist()
-        actor.write_json(a.poses, {"stills": stills, "rest": rest.tolist(), "looks": looks,
-                                   "shut": [float(np.percentile(blends[:, 9], 99)), float(np.percentile(blends[:, 10], 99))]})
+        own = {"stills": stills, "rest": rest.tolist(), "looks": looks,
+               "shut": [float(np.percentile(blends[:, 9], 99)), float(np.percentile(blends[:, 10], 99))]}
+        theirs = os.path.join(os.path.dirname(a.shared), "poses.json") if a.shared else ""
+        if theirs and os.path.exists(theirs):
+            # the actor's range, from every video: their rest, their glances, how far their eyes close
+            for key in ("rest", "looks", "shut"):
+                own[key] = actor.read_json(theirs)[key]
+        actor.write_json(a.poses, own)
     # what it holds, measured
     fit_px = np.sqrt((((aligned[:, rigid] - canon[rigid]) * np.asarray([s for s, _, _ in poses])[:, None, None]) ** 2)
                      .sum(-1).mean())
-    actor.say("face: %d frames, %d triangles (%d filled), the head's pose fitted to %.2f px on %d points; "
+    if shared is not None:
+        actor.say("face: %d frames posed against the actor's face, to %.2f px on %d points" % (idx.size, fit_px, rigid.size))
+        return 0
+    actor.say("face: %d folders, %d frames, %d triangles (%d filled), the head's pose fitted to %.2f px on %d points; "
               "the scores explain %.0f%% of the face's movement on held-out frames (lips %.0f%%, eyes %.0f%%)"
-              % (idx.size, len(tris) + len(fill), len(fill), fit_px, rigid.size, 100 * r2(range(478)),
+              % (len(a.frames), idx.size, len(tris) + len(fill), len(fill), fit_px, rigid.size, 100 * r2(range(478)),
                  100 * r2(sorted(set(LIPS_INNER) | {61, 291, 0, 17})), 100 * r2(EYE_LEFT + EYE_RIGHT)))
     return 0
 

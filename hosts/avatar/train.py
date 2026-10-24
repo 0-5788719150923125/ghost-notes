@@ -4,10 +4,10 @@ from one set's frames (next/likeness.md, "A head of splats", "The whole of them"
 
     <voice_train_venv python> train.py --spec <spec.json> [--progress <file>]
 
-The spec: {"frames", "rig", "room", "front", "out", "steps", "preview", "span"} - the folder frames.py wrote
-(whole frames), the rig rig.py wrote, the set's room plate and what stands before them (whole frames), where
-the avatar goes, how many steps, a folder for pictures of it against held-out frames, and the stretch of the
-video [t0, t1] it learns from (one camera placement: a set's shots can stand a little apart).
+The spec: {"frames", "rig", "front", "out", "steps", "preview", "span"} - the folder frames.py wrote (whole
+frames), the rig rig.py wrote, what stands before them (whole frames), where the avatar goes, how many steps, a
+folder for pictures of it against held-out frames, and the stretch of the video [t0, t1] it learns from (one
+camera placement: a set's shots can stand a little apart).
 
 EVERY SPLAT IS BOUND TO A FRAME OF ITS OWN that they carry (GaussianAvatars' binding): a triangle of the face -
 its centre, its edge and normal for axes, its mean edge for a unit; the head itself (hair, ears, the top of
@@ -17,10 +17,17 @@ splat keeps its place, turn and size in its frame's terms, so whatever moves its
 below the mouth is bound to the lower face's edge, which the jaw carries. A bone not seen in a frame (a hand
 under the desk: MediaPipe guesses where) has its splats drawn clear there - learned only where they are seen.
 
-THE ROOM IS A PLATE, LEARNED: the camera never moves, so the room is one picture seen from one place - the
-set's room plate to start, refined where the frames show it, with a gain per frame for the day's light. With
-the room behind them learned, the splats at their edges are not asked to paint the difference between a
-guessed room and the true one (the head alone, over a fixed plate, grew a halo against the wall).
+THE ROOM IS A PLATE, LEARNED: the camera never moves, so the room is one picture seen from one place, with a
+gain per frame for the day's light. With the room behind them learned, the splats at their edges are not asked
+to paint the difference between a guessed room and the true one (the head alone, over a fixed plate, grew a
+halo against the wall). IT IS THE ROOM AS THE FRAMES SHOW IT ([method room_of]), AND LEARNED ONLY THERE (the
+user, 2026-10-23: "the heavy blurring around the head ... so that the true wall might show through"): it had
+started as the set's room picture, which holds the still's own person where the room was never seen - right
+for the 2D renderer, which draws them over it where they stand - so the plate kept HIS FACE behind the head of
+splats (no frame shows the wall there to unlearn it, and it learned more of him through their soft edges), the
+splats leaned on it, and as the head turned a second face showed round it. Each pixel is the median of the
+frames whose person leaves it; a pixel none shows is filled from round it ([method fill_round]) and never
+learned, so the splats must paint all of them, and what shows past their edges is wall.
 
 EACH STEP: one frame and a WINDOW of it (WINDOW square; half of them round the face, where the most is), the
 face as it was tracked in it (MediaPipe's own points) and the body as its pose stands, every splat placed,
@@ -35,7 +42,9 @@ components over the frames learned from, each scaled to its spread (`Frames.expr
 splat far from its triangle - the beard's tip, the hair's edge - swings on a lever with every shift, and they
 flickered (2026-10-23: "the tip of the beard, along the sweater, around the head against the wall").
 
-THE SPLATS GROW WHERE THEY ARE WANTED (3DGS's densification): every DENSIFY_EVERY steps until DENSIFY_UNTIL,
+THE SPLATS GROW WHERE THEY ARE WANTED (3DGS's densification): every DENSIFY_EVERY steps until DENSIFY_UNTIL (or
+DENSIFY_SHARE of a shorter run: one that ended within OPACITY_RESET of a reset kept them faint - 12,000 steps ended
+on one, and its held-out frames fell from 21.2 dB to 17.0),
 a splat whose place on the picture is pulled hard is copied when it is small and split when it is large; one
 nearly clear is dropped; every OPACITY_RESET steps all are made faint again; after, those nearly clear are
 dropped every PRUNE_EVERY steps. NO PUSH FOR A SPLAT TO BE THERE OR NOT (it cut the whole of him from 116k to
@@ -68,6 +77,7 @@ FACE_WINDOWS = 0.5
 # Densification (3DGS's figures; its pull is on the picture's -1..1 coordinates, so a pixel's is scaled).
 DENSIFY_FROM = 500
 DENSIFY_UNTIL = 20000
+DENSIFY_SHARE = 2.0 / 3.0
 DENSIFY_EVERY = 100
 # A quarter of 3DGS's: learned in windows, the whole of them grew only 77k to 116k at its 0.0002.
 GRAD_PULL = 0.00005
@@ -102,12 +112,37 @@ MEASURED = 48
 # The head's own unit, in the neutral face's pixels: a splat bound to the head moves in steps of the same
 # size as one on a triangle (whose unit is its mean edge, about this).
 HEAD_UNIT = 16.0
+# THE ROOM AS THE FRAMES SHOW IT ([method room_of]): read from this many of the frames learned from; the person
+# in each (MediaPipe's segmentation, past PLATE_PERSON) grown by PLATE_GROW pixels - their hair's loose edge -
+# and left out; a pixel fewer than PLATE_LEAST of them show is filled from round it, and one PLATE_SURE of them
+# show is learned in full (one fewer frames show is learned less: a rare glimpse past their shoulder).
+PLATE_FRAMES = 160
+PLATE_PERSON = 0.2
+PLATE_GROW = 12
+PLATE_LEAST = 3
+PLATE_SURE = 0.1
+# Rows of the frames read together for the median (memory, not the answer).
+PLATE_BAND = 64
+# A fill's smoothing passes at each of its levels ([method fill_round]).
+FILL_SMOOTH = 24
 # A seated torso from the shoulders to the hips, in shoulder widths (actor.py's TORSO): its splats' reach.
 TORSO = 1.35
 # Frames read ahead of the step that wants them, on a thread of their own.
 AHEAD = 16
 # How far past their head's region (`head_region`) a splat bound to the head or the face may stand, in pixels.
 HEAD_REACH = 16
+# THE BODY BENDS ([method second_of]): how much of the still the torso's lowest splats keep (the seat, which does not
+# lean), from CHEST shoulder widths below the shoulders' line down to the hips (TORSO); and the most a splat at a
+# joint takes of the bone across it.
+HOLD_LOW = 0.9
+CHEST = 0.35
+JOINT = 0.5
+
+
+def until_of(steps: int) -> int:
+    """The step the splats stop growing at in a run of [param steps]: DENSIFY_UNTIL, or DENSIFY_SHARE of a shorter
+    run, so it ends at least a third of itself past the last time they were all made faint."""
+    return min(DENSIFY_UNTIL, int(steps * DENSIFY_SHARE))
 
 
 def say(*parts) -> None:
@@ -167,13 +202,18 @@ class Frames:
         _u, sv, vt = np.linalg.svd(b[self.train] - self.expr_mean, full_matrices=False)
         self.expr_basis = vt[:EXPRESSIONS].T
         self.expr_scale = sv[:EXPRESSIONS] / math.sqrt(max(1, self.train.size - 1))
+        if spec.get("expr"):
+            # THE COMPONENTS ITS SPLATS WERE LEARNED WITH (an avatar's, or the actor's head's - learned from every
+            # video): its shifts are mixed by those, never by these frames' own
+            e = np.load(spec["expr"])
+            self.expr_mean, self.expr_basis = e["expr_mean"].astype(np.float64), e["expr_basis"].astype(np.float64)
+            self.expr_scale = e["expr_scale"].astype(np.float64)
         self.expr = t((b - self.expr_mean) @ self.expr_basis / np.maximum(self.expr_scale, 1e-6))
         self.K = EXPRESSIONS
 
         def crop_of(path, mode):
             im = Image.open(path).convert(mode).crop((x0, y0, x0 + self.W, y0 + self.H))
             return torch.tensor(np.asarray(im, np.float32) / 255.0, device=device)
-        self.room = crop_of(spec["room"], "RGB")
         front = Image.open(spec["front"])
         self.front = crop_of(spec["front"], "RGBA")[..., 3] if front.mode == "RGBA" else crop_of(spec["front"], "L")
         self._queue = None
@@ -233,6 +273,74 @@ class Frames:
         wx = int(np.clip(cx - WINDOW / 2, 0, self.W - WINDOW))
         wy = int(np.clip(cy - WINDOW / 2, 0, self.H - WINDOW))
         return wx, wy
+
+    def room(self):
+        """THE ROOM AS THESE FRAMES SHOW IT ([method room_of]), read from PLATE_FRAMES of the frames learned from,
+        evenly through the shot: (plate [H, W, 3], seen [H, W])."""
+        import numpy as np
+        pick = self.train[np.linspace(0, self.train.size - 1, min(PLATE_FRAMES, self.train.size)).astype(int)]
+        got = [self._load(int(i)) for i in pick]
+        return room_of([g[0] for g in got], [g[1] for g in got], self.device)
+
+
+def room_of(pictures, people, device):
+    """THE ROOM AS FRAMES SHOW IT: [param pictures] ([H, W, 3] uint8) and the person in each ([param people],
+    [H, W] uint8: MediaPipe's segmentation) to (plate [H, W, 3] in 0..1, seen [H, W] in 0..1). Each pixel is the
+    median of the frames whose person - past PLATE_PERSON, grown by PLATE_GROW pixels - leaves it; one fewer than
+    PLATE_LEAST of them show is filled from round it ([method fill_round]) and seen 0; seen rises to 1 as
+    PLATE_SURE of them show it."""
+    import torch
+    import torch.nn.functional as F
+    pics = torch.stack([torch.tensor(p, device=device) for p in pictures])
+    covered = []
+    for m in people:
+        m = torch.tensor(m, device=device).float()[None, None] / 255.0
+        grown = F.max_pool2d((m > PLATE_PERSON).float(), 2 * PLATE_GROW + 1, stride=1, padding=PLATE_GROW)
+        covered.append(grown[0, 0] > 0.5)
+    covered = torch.stack(covered)
+    n, h, w = covered.shape
+    plate = torch.zeros((h, w, 3), device=device)
+    for y in range(0, h, PLATE_BAND):
+        band = pics[:, y:y + PLATE_BAND].float() / 255.0
+        band[covered[:, y:y + PLATE_BAND]] = float("nan")
+        plate[y:y + PLATE_BAND] = torch.nanmedian(band, dim=0).values
+    count = (~covered).sum(0).float()
+    known = count >= PLATE_LEAST
+    plate = fill_round(torch.where(known[..., None], torch.nan_to_num(plate), 0.0), known.float())
+    seen = ((count - PLATE_LEAST + 1.0) / max(1.0, PLATE_SURE * n)).clamp(0.0, 1.0) * known.float()
+    return plate, seen
+
+
+def fill_round(colour, known):
+    """[param colour] ([H, W, 3]) where [param known] ([H, W], 0..1) is 0, FILLED FROM ROUND IT: the known part's
+    weighted means made coarser and coarser (push-pull), then each level's gaps taken from the one coarser and
+    smoothed toward the mean of their neighbours FILL_SMOOTH times (a harmonic fill, solved coarse to fine: a ramp
+    is filled as a ramp) - the known pixels as they were. Nothing known, it is returned as it is."""
+    import torch
+    import torch.nn.functional as F
+    if float(known.sum()) <= 0.0:
+        return colour
+    c = (colour * known[..., None]).permute(2, 0, 1)[None]
+    k = known[None, None].float()
+    levels = []
+    while min(k.shape[-2:]) > 1:
+        levels.append((c, k))
+        c = F.avg_pool2d(c, 2, ceil_mode=True)
+        k = F.avg_pool2d(k, 2, ceil_mode=True)
+    # the coarsest: a cell with nothing known in it takes the mean of all that is
+    mean = (colour * known[..., None]).sum((0, 1)) / known.sum()
+    out = torch.where(k > 0, c / k.clamp_min(1e-8), mean[None, :, None, None])
+    cross = torch.tensor([[0.0, 0.25, 0.0], [0.25, 0.0, 0.25], [0.0, 0.25, 0.0]], device=colour.device)
+    cross = cross.expand(3, 1, 3, 3).contiguous()
+    for c, k in reversed(levels):
+        up = F.interpolate(out, size=k.shape[-2:], mode="bilinear", align_corners=False)
+        a = k.clamp(0.0, 1.0)
+        mine = c / k.clamp_min(1e-8)
+        out = mine * a + up * (1.0 - a)
+        for _ in range(FILL_SMOOTH):
+            round_it = F.conv2d(F.pad(out, (1, 1, 1, 1), mode="replicate"), cross, groups=3)
+            out = mine * a + round_it * (1.0 - a)
+    return out[0].permute(1, 2, 0)
 
 
 # --- the face and body, posed ---------------------------------------------------------------------
@@ -469,7 +577,7 @@ def _segment(q, a, b):
     return (q - (a + t[:, None] * ab)).norm(dim=-1)
 
 
-def initial(rig: Rig, data: Frames, device):
+def initial(rig: Rig, data: Frames, device, up_to_face=False):
     """The first splats:
     - PER_TRIANGLE on each triangle of the face at random places on it, and AROUND round it where the frame sees
       the person - the beard's (below the mouth) bound to the lower face's edge, the rest to the head - at the
@@ -545,8 +653,20 @@ def initial(rig: Rig, data: Frames, device):
                 segs.append((o[bb, :2], tip))
         x0b, y0b, x1b, y1b = data.face_box(i)
         not_head = torch.ones_like(person_b, dtype=torch.bool)
-        not_head[int(max(0, y0b - 0.5 * (y1b - y0b))):int(y1b + 0.6 * (y1b - y0b)),
-                 int(max(0, x0b - 0.4 * (x1b - x0b))):int(x1b + 0.4 * (x1b - x0b))] = False
+        if up_to_face:
+            # [param up_to_face]: below the chin, laid up to the face itself (its hull, as tracked there) - the neck
+            # and the collar under the beard are the body's (bake.py: a head learned from every video painted an
+            # average of every collar there); above it, the head's region is the head's (the hair, the ears)
+            hull_b = Image.new("L", (data.W, data.H), 0)
+            f2d = data.points[i][:468, :2]
+            ImageDraw.Draw(hull_b).polygon([tuple(map(float, f2d[j])) for j in _convex(f2d)], fill=255)
+            _o, _a, _u, v_b = rig.frames(data, i)
+            rows = torch.arange(data.H, device=device)[:, None] + 0.5
+            above = (rows < float(v_b[152, 1])).expand(data.H, data.W)
+            not_head &= ~(torch.tensor(np.asarray(hull_b) > 127, device=device) | (head_region(data, v_b) & above))
+        else:
+            not_head[int(max(0, y0b - 0.5 * (y1b - y0b))):int(y1b + 0.6 * (y1b - y0b)),
+                     int(max(0, x0b - 0.4 * (x1b - x0b))):int(x1b + 0.4 * (x1b - x0b))] = False
         ys, xs = torch.nonzero((person_b > 0.5) & not_head, as_tuple=True)
         if ys.numel() == 0:
             continue
@@ -647,23 +767,35 @@ def ssim_map(a, b):
 
 
 class Scene:
-    """What is learned besides the splats: the room's plate, its gain per frame, and the splats' colour
+    """What is learned besides the splats: the room's plate - [param plate] to start, moved only as far as the
+    frames show it there ([param seen], 0..1; none, it is held) - its gain per frame, and the splats' colour
     correction per frame ([3x3 | 3])."""
 
-    def __init__(self, data: Frames, device):
+    def __init__(self, data: Frames, device, plate, seen=None):
         import torch
         n = int(data.blend.shape[0])
-        self.plate0 = data.room.clone()
-        self.plate = torch.nn.Parameter(data.room.clone())
+        self.plate0 = plate
+        self.seen = (seen if seen is not None else torch.zeros(plate.shape[:2], device=device))[..., None]
+        self.moved = torch.nn.Parameter(torch.zeros_like(plate))
         self.gain = torch.nn.Parameter(torch.ones((n, 3), device=device))
         correct = torch.zeros((n, 4, 3), device=device)
         correct[:, :3] = torch.eye(3, device=device)
         self.correct = torch.nn.Parameter(correct)
-        self.opt = torch.optim.Adam([{"params": [self.plate], "lr": 2e-3}, {"params": [self.gain], "lr": 2e-3},
+        self.opt = torch.optim.Adam([{"params": [self.moved], "lr": 2e-3}, {"params": [self.gain], "lr": 2e-3},
                                      {"params": [self.correct], "lr": 2e-4}])
 
+    def plate(self, wx=0, wy=0, w=None, h=None):
+        """The plate as learned, or its window at (wx, wy), w x h."""
+        ys = slice(wy, None if h is None else wy + h)
+        xs = slice(wx, None if w is None else wx + w)
+        return self.plate0[ys, xs] + self.seen[ys, xs] * self.moved[ys, xs]
+
+    def pulled(self):
+        """How far the plate has moved from where it started, on the mean."""
+        return (self.seen * self.moved).abs().mean()
+
     def behind(self, i: int, wx: int, wy: int, w: int, h: int, light=True):
-        return (self.plate[wy:wy + h, wx:wx + w] * (self.gain[i] if light else 1.0)).clamp(0.0, 1.0)
+        return (self.plate(wx, wy, w, h) * (self.gain[i] if light else 1.0)).clamp(0.0, 1.0)
 
 
 def render(splats: Splats, rig: Rig, data: Frames, scene: Scene, i: int, wx: int, wy: int, w: int, h: int,
@@ -742,8 +874,9 @@ def export(npz: str, order, extra=None) -> None:
     so a renderer that draws them in order composites them as learned.
 
     `texels` IS THE SHADER'S DATA TEXTURE, byte for byte (RGBA floats, TEXEL_WIDTH wide): per splat, in order,
-    its place and binding, its log-scale and cover, its turn (w, x, y, z), its colour's logit, then for each of
-    the expression's components its place's shift and its colour's shift - 4 + 2K texels."""
+    its place and binding, its log-scale and cover, its turn (w, x, y, z), its colour's logit and its second
+    influence ([method second_of]; 0 for none), then for each of the expression's components its place's shift and
+    its colour's shift - 4 + 2K texels."""
     import numpy as np
     from PIL import Image
     a = np.load(npz)
@@ -759,6 +892,8 @@ def export(npz: str, order, extra=None) -> None:
     tex[:, 1, 3] = a["cover"][order]
     tex[:, 2, :] = a["turn"][order]
     tex[:, 3, :3] = a["colour_logit"][order]
+    if "second" in a.files:
+        tex[:, 3, 3] = a["second"][order]
     for j in range(k):
         tex[:, 4 + 2 * j, :3] = a["place_d"][order][:, j]
         tex[:, 5 + 2 * j, :3] = a["colour_d"][order][:, j]
@@ -791,9 +926,50 @@ def export(npz: str, order, extra=None) -> None:
     os.replace(base + ".json.part", base + ".json")
 
 
-def save(splats, rig, data, scene, rig_path: str, out: str, at=None, extra=None):
+def second_of(splats, rig, data, i: int):
+    """THE BODY BENDS (the user, 2026-10-23: "the body DOES look rather strange, because it never moves at all. It
+    just floats around, weirdly, stiffly"): each splat on a bone had been carried by that bone alone, so the torso
+    moved as one card - the seat and the desk with the chest. So each body splat takes a SECOND INFLUENCE, by where
+    it rests in frame [param i] (the still): the torso's keep more and more of the still from CHEST down to the hips
+    (HOLD_LOW at the seat), so the chest and shoulders lean, settle and breathe over a seat that stays; a shoulder's
+    goes with the torso inward of its joint, and an arm's with the bone above it near its start - each at most
+    JOINT. As the shader reads it (the colour texel's fourth number): 0 for none, else (frame + 2) + 0.98 w - w the
+    share of that frame's move the splat takes, frame -1 the still itself. [N] float32."""
+    import numpy as np
+    import torch
+    with torch.no_grad():
+        origin, axes, unit, _v = rig.frames(data, i)
+        means, _s, _t = splats.world(origin, axes, unit)
+        T = rig.T
+        b = splats.bind - T - 1
+        bo, bu = data.bone_origin[i], data.bone_unit[i]
+        sw = float(bu[0]) * 4.0
+        out = torch.zeros(len(splats), device=means.device)
+
+        def put(on, frame: int, w):
+            v = torch.where(w > 1e-3, (frame + 2.0) + 0.98 * w.clamp(0.0, 1.0), torch.zeros_like(w))
+            out[on] = v
+        torso = b == 0
+        if bool(torso.any()) and sw > 1.0:
+            top, bottom = float(bo[0, 1]) + CHEST * sw, float(bo[0, 1]) + TORSO * sw
+            put(torso, -1, HOLD_LOW * smoothstep(top, bottom, means[torso, 1]))
+        for bone in (1, 2):
+            on = b == bone
+            if bool(on.any()):
+                d = (means[on, :2] - bo[bone, :2]).norm(dim=-1)
+                put(on, T + 1, JOINT * smoothstep(0.1 * sw, 0.45 * sw, d))
+        for bone, above in ((3, 1), (4, 3), (6, 2), (7, 6)):
+            on = b == bone
+            if bool(on.any()):
+                d = (means[on, :2] - bo[bone, :2]).norm(dim=-1)
+                put(on, T + 1 + above, JOINT * (1.0 - smoothstep(0.0, 0.7 * float(bu[bone]), d)))
+        return out.cpu().numpy().astype(np.float32)
+
+
+def save(splats, rig, data, scene, rig_path: str, out: str, at=None, extra=None, second=None):
     """avatar.npz, then the export (with [param extra] in its header) in the order the splats stand back to front
-    in a frame of theirs ([param at], else the first measured)."""
+    in a frame of theirs ([param at], else the first measured); [param second], each splat's second influence
+    ([method second_of]), when it has one."""
     import numpy as np
     import torch
     r = np.load(rig_path)
@@ -808,9 +984,10 @@ def save(splats, rig, data, scene, rig_path: str, out: str, at=None, extra=None)
                  colour_logit=splats.p["colour"].cpu().numpy(), cover=splats.covers().cpu().numpy(),
                  place_d=splats.p["place_d"].cpu().numpy(), colour_d=splats.p["colour_d"].cpu().numpy(),
                  expr_mean=data.expr_mean.astype(np.float32), expr_basis=data.expr_basis.astype(np.float32),
-                 expr_scale=data.expr_scale.astype(np.float32), plate=scene.plate.cpu().numpy(),
+                 expr_scale=data.expr_scale.astype(np.float32), plate=scene.plate().cpu().numpy(),
                  canon=r["canon"], basis=r["basis"], tris=r["tris"], bones=np.int32(data.B),
-                 crop=np.asarray(data.crop, np.int32))
+                 crop=np.asarray(data.crop, np.int32),
+                 **({"second": np.asarray(second, np.float32)} if second is not None else {}))
     os.replace(out + ".part.npz", out)
     export(out, order, extra)
 
@@ -831,8 +1008,13 @@ def main() -> int:
     data = Frames(spec, dev)
     rig = Rig(spec["rig"], dev)
     splats = initial(rig, data, dev)
-    scene = Scene(data, dev)
+    with torch.no_grad():
+        plate, seen = data.room()
+    scene = Scene(data, dev, plate, seen)
+    say("the room as the frames show it: %.1f%% of it seen in at least %d of them, the rest filled from round it"
+        % (100.0 * float((seen > 0).float().mean()), PLATE_LEAST))
     steps = int(spec.get("steps", 40000))
+    until = until_of(steps)
     say("%d frames to learn from, %d held out; %d splats to start (%d bones); %d steps in %d px windows of %dx%d"
         % (len(data.train), len(data.held), len(splats), data.B, steps, WINDOW, data.W, data.H))
     rng = np.random.default_rng(0)
@@ -855,14 +1037,14 @@ def main() -> int:
         place = splats.p["place"][face]
         reg = torch.relu(place.norm(dim=-1) - STRAY).mean() + torch.relu(torch.exp(splats.p["log_scale"][face]) - LARGE).mean()
         shifts = (splats.p["place_d"] ** 2).mean() + (splats.p["colour_d"] ** 2).mean()
-        plate = (scene.plate - scene.plate0).abs().mean()
+        plate = scene.pulled()
         loss = ((1.0 - SSIM_SHARE) * l1 + SSIM_SHARE * dssim + COVER_SHARE * cov + REG_SHARE * reg
                 + DELTA_PULL * shifts + PLATE_PULL * plate)
         splats.opt.zero_grad(set_to_none=True)
         scene.opt.zero_grad(set_to_none=True)
         loss.backward()
         with torch.no_grad():
-            if step < DENSIFY_UNTIL and means2d.grad is not None:
+            if step < until and means2d.grad is not None:
                 p = means2d - torch.tensor([float(wx), float(wy)], device=dev)
                 r = radii.float()
                 there = (p[:, 0] + r > 0) & (p[:, 0] - r < WINDOW) & (p[:, 1] + r > 0) & (p[:, 1] - r < WINDOW)
@@ -870,7 +1052,7 @@ def main() -> int:
                 splats.seen[there] += 1.0
         splats.opt.step()
         scene.opt.step()
-        if DENSIFY_FROM <= step < DENSIFY_UNTIL and step % DENSIFY_EVERY == 0:
+        if DENSIFY_FROM <= step < until and step % DENSIFY_EVERY == 0:
             if step % 1000 == 0:
                 seen = splats.seen > 0
                 pull = (splats.pull[seen] / splats.seen[seen]) if bool(seen.any()) else torch.zeros(1, device=dev)
@@ -886,9 +1068,9 @@ def main() -> int:
             if bool(far.any()):
                 strays += int(far.sum())
                 splats._replace(~far, {})
-        if step % OPACITY_RESET == 0 and step < DENSIFY_UNTIL:
+        if step % OPACITY_RESET == 0 and step < until:
             splats.reset_cover()
-        if step > DENSIFY_UNTIL and step % PRUNE_EVERY == 0:
+        if step > until and step % PRUNE_EVERY == 0:
             gone = splats.prune()
             if step % 5000 == 0:
                 say("step %d: %d splats (dropped %d nearly clear; %d of the head's past its reach)"

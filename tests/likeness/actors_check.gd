@@ -20,7 +20,8 @@ extends SceneTree
 ## before the Voice; ▶ on the Voice makes those three and nothing of their picture, and the voice's
 ## lessons changed make the Voice stale and only it.
 ## TWO RENDERERS: a run for the 2D renderer makes none of the head of splats, and the actor does not play
-## as one; a run for the gaussian renderer then makes its Frames, Face rig, Avatar and Fit in order, and
+## as one; a run for the gaussian renderer then makes each video's Head frames, their Head rig and Head (ONE HEAD
+## FOR EVERY SET, learned from every video), then the set's Frames, Face rig, Avatar and Fit in order, and
 ## nothing else - the steps the two share are made once (THE CONTROL: the 2D run did make the 2D's library).
 ## THE STILL DRAWN ON: the one picked, else the one At rest found most at ease, else the first; stills
 ## made again forget the pick (an index into the old ones).
@@ -33,6 +34,8 @@ extends SceneTree
 ## held in an order their ids do not sort in (2026-10-21: `actor.json` was written sorted, read back in
 ## another order than the stamps were made in, and the user's built set went stale after a restart -
 ## the sets, the audit and every step of the set made again).
+## A VIDEO'S FILE MOVED to another of their folders keeps its id, and nothing made from it is stale (THE CONTROL:
+## a copy beside a file still there is a video of its own).
 ## NOTHING OUTSIDE THE TEST ROOT: the author's library is as it was.
 
 const ROOT := "user://actors_check"
@@ -170,10 +173,26 @@ func _run() -> void:
 	b.start()
 	_spin(b)
 	_actor.forget()
-	_ok(_made == ["frames|" + s, "face|" + s, "avatar|" + s, "fit|" + s], "a gaussian run after a 2D one made %s" % str(_made))
+	var heads: Array = []
+	for v in _actor.ticked():
+		heads.append("head_frames|v:" + String(v))
+	_ok(_made == heads + ["head_rig|", "head|", "frames|" + s, "face|" + s, "avatar|" + s, "fit|" + s],
+		"a gaussian run after a 2D one made %s" % str(_made))
+	# A VIDEO WITH NO SHOT OF THEIRS IN ANY SET has no moments for their head: its Head frames is moot, and made
+	# with no token (THE CONTROL: one with a shot is not)
+	_ok(_actor.moot("head_frames", "v:no-such-video") and _actor.token_of("head_frames", "v:no-such-video").is_empty()
+		and not _actor.moot("head_frames", "v:" + String(_actor.ticked()[0])),
+		"a video with no shot was not moot, or one with a shot was")
 	_ok(_actor.playable("", "gaussian"), "a head of splats made does not play")
 	_ok(ActorSteps.serves("motion", "gaussian") and ActorSteps.serves("motion", "2d") and not ActorSteps.serves("library", "gaussian")
 		and not ActorSteps.serves("avatar", "2d"), "a step serves the wrong renderer")
+	# A ROW FROM THE STATES A WORKER WORKS OUT (`states_of`, on a folder of its own) is the row worked out here
+	var worked := ActorBuilder.states_of(ActorFolder.open(_actor.id))
+	var apart: Array = []
+	for st in ActorSteps.ORDER:
+		if JSON.stringify(b.row_of(st)) != JSON.stringify(b.row_of(st, worked)):
+			apart.append(st)
+	_ok(apart.is_empty() and worked.size() == ActorSteps.ORDER.size(), "rows from the worker's states differ: %s" % str(apart))
 	b.renderer = "2d"
 	# THE STILL DRAWN ON: the first, then the one most at rest, then the one picked
 	var stills_at := _actor.set_dir(sid).path_join("stills.json")
@@ -212,6 +231,32 @@ func _run() -> void:
 	_actor.save()
 	_actor.forget()
 	_ok(_actor.state_of("sets", "") == "stale", "unticking a video left the sets %s" % _actor.state_of("sets", ""))
+	# A VIDEO'S FILE MOVED to another of their folders: the same video, nothing made from it stale
+	var mv := String(vids[0])
+	var old_path := String(_actor.video(mv)["path"])
+	var before_move := _actor.state_of("survey", "v:" + mv)
+	var more := ProjectSettings.globalize_path(ROOT).path_join("footage_more")
+	DirAccess.make_dir_recursive_absolute(more)
+	DirAccess.rename_absolute(old_path, more.path_join(old_path.get_file()))
+	var count := _actor.videos().size()
+	var added := ActorSources.add_folder(_actor, more)
+	_actor.save()
+	_actor.forget()
+	_ok(added == 0 and _actor.videos().size() == count and String(_actor.video(mv)["path"]) == more.path_join(old_path.get_file())
+		and _actor.state_of("survey", "v:" + mv) == before_move and before_move == "made",
+		"a moved video was not the same one (%d added, its survey %s, before %s)" % [added, _actor.state_of("survey", "v:" + mv), before_move])
+	# THE CONTROL: a copy beside the file, which is still there, is a video of its own
+	var copy_from := String(_actor.video(String(vids[1]))["path"])
+	DirAccess.copy_absolute(copy_from, more.path_join(copy_from.get_file()))
+	_ok(ActorSources.rescan(_actor) == 1, "CONTROL: a copy beside its original was taken for it")
+	# EVERY STEP A PROGRAM MAKES IS LANDED BY ITS MAIN FILE (a step without one would be "done" and never stamped,
+	# so made again for ever); THE CONTROL: a step that runs no program needs none
+	var unlanded: Array = []
+	for st in ActorSteps.ORDER:
+		var runs := String(Registry.field(ActorSteps.REGISTRY, st, "runs", ""))
+		if (runs == "python" or runs == "train") and not ActorBuilder.MAIN.has(st):
+			unlanded.append(st)
+	_ok(unlanded.is_empty() and not ActorBuilder.MAIN.has("fetch"), "steps a program makes with no main file: %s" % str(unlanded))
 	# THE LIBRARY: listed by name, opened by id
 	var listed := Actors.list()
 	_ok(listed.size() == 1 and String(listed[0]["name"]) == "A Person", "the library lists %s" % str(listed))
@@ -249,7 +294,11 @@ func _make(step: String, scope: String) -> String:
 		var text := "made"
 		DirAccess.make_dir_recursive_absolute(p.get_base_dir())
 		if String(f) == "sets.json" or String(f) == "audit.json":
-			text = JSON.stringify({"sets": [{"id": "set-made", "usable": 5.0, "minutes": 6.0, "shots": [], "size": [64, 36]}]})
+			# a usable shot of each video: their head is read from every one ("One head")
+			var shots: Array = []
+			for v in _actor.ticked():
+				shots.append({"vid": String(v), "start": 1.0, "end": 61.0, "usable": 50.0})
+			text = JSON.stringify({"sets": [{"id": "set-made", "usable": 5.0, "minutes": 6.0, "shots": shots, "size": [64, 36]}]})
 		var fa := FileAccess.open(p, FileAccess.WRITE)
 		fa.store_string(text)
 		fa.close()

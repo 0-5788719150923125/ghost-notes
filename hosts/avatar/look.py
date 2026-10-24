@@ -38,9 +38,7 @@ def main() -> int:
     data = train.Frames(spec, dev)
     rig = train.Rig(spec["rig"], dev)
     splats = train.load(a.avatar, dev)
-    scene = train.Scene(data, dev)
-    with torch.no_grad():
-        scene.plate.data = torch.tensor(np.load(a.avatar)["plate"], device=dev)
+    scene = train.Scene(data, dev, torch.tensor(np.load(a.avatar)["plate"], device=dev))
     os.makedirs(a.out, exist_ok=True)
 
     def png(t, path):
@@ -53,7 +51,7 @@ def main() -> int:
             played = train.render(splats, rig, data, scene, i, 0, 0, data.W, data.H, tracked=False, learned=False)[0]
             png(img, os.path.join(a.out, "%d_truth.png" % n))
             png(played, os.path.join(a.out, "%d_played.png" % n))
-            png(scene.plate, os.path.join(a.out, "%d_room.png" % n))
+            png(scene.plate(), os.path.join(a.out, "%d_room.png" % n))
             bones = [{"origin": data.bone_origin[i, b].tolist(), "axes": data.bone_axes[i, b].T.tolist(),
                       "unit": float(data.bone_unit[i, b]), "seen": float(data.bone_seen[i, b])} for b in range(data.B)]
             pose = {"frame": i, "blend": data.blend[i].tolist(), "scale": float(data.scale[i]),
