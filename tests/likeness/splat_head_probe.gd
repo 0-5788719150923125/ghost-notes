@@ -6,8 +6,8 @@ extends SceneTree
 ##   xvfb-run -a godot --path . --script tests/likeness/splat_head_probe.gd -- \
 ##       --avatar <dist/.../avatar> --look <look.py's folder> --out <folder>
 ##
-## For each `<k>_pose.json` in the look folder it draws `<k>_room.png` and over it the head posed so, at the
-## size it was learned at (the node scaled by the learning size over the crop's), writes `<k>_godot.png`, and
+## For each `<k>_pose.json` in the look folder it draws `<k>_room.png` and over it the face and body posed so,
+## at the crop's own size, writes `<k>_godot.png`, and
 ## prints how far it is from `<k>_played.png` - over the whole square and where the head is (where the
 ## trainer's picture is not its room). They differ by more than rounding: Godot draws the splats in one
 ## order (back to front as the neutral face stands), the trainer sorts them per pixel as each pose stands.
@@ -39,9 +39,9 @@ func _run() -> void:
 		var pose: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(look.path_join("%d_pose.json" % n)))
 		var room := Image.load_from_file(look.path_join("%d_room.png" % n))
 		var played := Image.load_from_file(look.path_join("%d_played.png" % n))
-		var size := int(pose["size"])
+		var crop: Array = pose["crop"]
 		var vp := SubViewport.new()
-		vp.size = Vector2i(size, size)
+		vp.size = Vector2i(int(crop[2]), int(crop[3]))
 		vp.disable_3d = true
 		vp.transparent_bg = false
 		vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
@@ -58,14 +58,28 @@ func _run() -> void:
 			return
 		var loaded := Time.get_ticks_msec() - t0
 		head.position = Vector2.ZERO
-		var k := float(pose["k"])
-		head.scale = Vector2(k, k)
 		var r: Array = pose["rot"]
 		var rot := Basis(Vector3(r[0][0], r[1][0], r[2][0]), Vector3(r[0][1], r[1][1], r[2][1]),
 			Vector3(r[0][2], r[1][2], r[2][2]))
 		var s: Array = pose["shift"]
 		t0 = Time.get_ticks_usec()
-		head.pose(PackedFloat32Array(pose["blend"]), float(pose["scale"]), rot, Vector3(s[0], s[1], s[2]))
+		head.pose_face(head.face_of(PackedFloat32Array(pose["blend"])), float(pose["scale"]), rot, Vector3(s[0], s[1], s[2]))
+		var at := PackedVector3Array()
+		var axes: Array = []
+		var units := PackedFloat32Array()
+		var shown := PackedByteArray()
+		var still: Array = []
+		for bd in pose.get("bones", []):
+			var o: Array = bd["origin"]
+			var ax: Array = bd["axes"]
+			at.append(Vector3(o[0], o[1], o[2]))
+			axes.append(Basis(Vector3(ax[0][0], ax[0][1], ax[0][2]), Vector3(ax[1][0], ax[1][1], ax[1][2]),
+				Vector3(ax[2][0], ax[2][1], ax[2][2])))
+			units.append(float(bd["unit"]))
+			shown.append(1 if float(bd["seen"]) >= 0.3 else 0)
+			still.append(Transform2D.IDENTITY)
+		head.pose_bones(at, axes, units, still, shown)
+		head.upload()
 		head.set_expr(head.expr_of(PackedFloat32Array(pose["blend"])))
 		var posed := Time.get_ticks_usec() - t0
 		vp.add_child(head)

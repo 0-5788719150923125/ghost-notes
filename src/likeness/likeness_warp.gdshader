@@ -36,10 +36,6 @@ uniform float library_on = 1.0;
 // still is drawn whole, its own room and all.
 uniform sampler2D matte : filter_linear, repeat_disable;
 uniform float matte_on = 0.0;
-// THEIR HEAD CUT OUT where a head of splats is drawn ([SplatHead]): above the mouth, the room the splats were
-// learned over shows through their soft edges, not the still's own head turned another way.
-uniform sampler2D head_cut : filter_linear, repeat_disable;
-uniform float head_cut_on = 0.0;
 // a debug view: 1 shows where the masks reach
 uniform float show_mask = 0.0;
 
@@ -74,6 +70,5 @@ void fragment() {
 		col = mix(col, clamp(e, 0.0, 1.0), em);
 	}
 	col = mix(col, vec3(1.0, 0.0, 1.0), show_mask * max(mm, em) * 0.5);
-	float cover = matte_on > 0.5 ? texture(matte, UV).r : 1.0;
-	COLOR = vec4(col, cover * (1.0 - head_cut_on * texture(head_cut, UV).r));
+	COLOR = vec4(col, matte_on > 0.5 ? texture(matte, UV).r : 1.0);
 }

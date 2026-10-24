@@ -16,13 +16,24 @@ triangles come from its own tessellation. From the frames this learns:
   fan to a point behind the lips (where the teeth and the dark of the mouth are learned), each eye by a fan
   to its iris centre (so the eye's own splats follow the gaze).
 
+THE BODY'S BONES (`BODY`, the 2D rig's bones less the head - actor.py's `BONES`): from each frame's pose
+(MediaPipe's 33 points), a frame of reference per bone - the torso at the neck, its axes the shoulders' line
+and the picture's down; each shoulder at its joint, the torso's axes; each upper arm, forearm and hand along
+its bone from its joint - with a unit (a quarter of the shoulders' width, half a limb's length) and how
+surely it is seen (its ends' least visibility). THE BONES LIE IN ONE PLANE, BODY_BEHIND shoulder widths
+behind the face's nose tip: MediaPipe's pose guesses at depth (on his frames its shoulders stood 240 px
+apart in it), the camera is fixed and the body turns little, so its places across the picture are taken and
+its depth is not - a splat's own depth on its bone is learned.
+
 Writes <out>: canon [V, 3], basis [52, V, 3], tris [T, 3], derived [V - 478, 478] with derived_shift
 [V - 478, 3] (the points that are not MediaPipe's: a mix of its points plus a fixed offset), rigid [K]
 (the points the head's pose is fitted on), and per frame: keep [N] (a frame learned from), scale [N],
-rot [N, 3, 3], shift [N, 3], aligned [N, 478, 3] (its points on the neutral face's frame), blend [N, 52].
+rot [N, 3, 3], shift [N, 3], aligned [N, 478, 3] (its points on the neutral face's frame), blend [N, 52],
+bone_origin [N, B, 3], bone_axes [N, B, 3, 3] (columns), bone_unit [N, B], bone_seen [N, B].
 
-And <poses>, what the head is played from ([SplatHead], the medium): each still's pose and scores
-({scale, rot (rows), shift, blend} - the head as it stands in the still, which the playing head starts from),
+And <poses>, what the head is played from ([SplatHead], the medium): each still's pose, scores and bones
+({scale, rot (rows), shift, blend, bones: [{origin, axes (columns), unit, seen}]} - the head and body as they
+stand in the still, which the playing ones start from),
 `rest` (their median scores: the face at ease, what a sound's mouth and a blink move from), `shut` (each
 eye's score when it is closed: the top of their own blinks) and `looks` (each glance of the plan's - the 2D
 library's `GLANCES`, the picture's left and right - as the 52 scores' move from their median when they look
@@ -34,6 +45,7 @@ talking that went on while they looked does not).
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 
@@ -60,6 +72,13 @@ RIDGE = 1e-2
 HELD_OUT = 10
 # A glance is learned from the frames looking that way most: this top share of them.
 LOOK_SHARE = 0.03
+# The body's bones (actor.py's BONES less the head, in its order), and the pose's points each runs between:
+# the shoulders and the arm's joints; a hand runs from its wrist to its knuckles (the index's and pinky's).
+BODY = ["torso", "shoulder_l", "shoulder_r", "upper_l", "fore_l", "hand_l", "upper_r", "fore_r", "hand_r"]
+ARMS = {"l": (11, 13, 15, 17, 19), "r": (12, 14, 16, 18, 20)}
+# The face's nose tip (MediaPipe's face mesh), and how far behind it the body's bones lie, in shoulder widths.
+FACE_NOSE = 1
+BODY_BEHIND = 0.5
 
 
 def triangles():
@@ -152,6 +171,51 @@ def derived(canon, lips_inner):
     return w, shift
 
 
+def bones_of(pose, w: float, h: float, face=None):
+    """THE BODY'S BONES in one picture's pose [33 * 4] (normalized): (origin [B, 3], axes [B, 3, 3] - columns,
+    unit [B], seen [B]) in its pixels, z on x's scale, put on [face]'s depth when it is given."""
+    import numpy as np
+    p = np.asarray(pose, np.float64).reshape(33, 4)
+    xyz = p[:, :3] * np.array([w, h, w])
+    vis = p[:, 3]
+    origin = np.zeros((len(BODY), 3))
+    axes = np.tile(np.eye(3), (len(BODY), 1, 1))
+    unit = np.ones(len(BODY))
+    seen = np.zeros(len(BODY))
+    sw = float(np.hypot(*(xyz[11] - xyz[12])[:2]))
+    if sw < 1.0:
+        return origin, axes, unit, seen
+    xyz[:, 2] = (float(face[FACE_NOSE][2]) if face is not None else 0.0) + BODY_BEHIND * sw
+    sl, sr = xyz[11], xyz[12]
+
+    def norm(v):
+        n = float(np.linalg.norm(v))
+        return v / n if n > 1e-9 else v
+    e1 = norm(sl - sr)
+    down = np.array([0.0, 1.0, 0.0])
+    e2 = norm(down - np.dot(down, e1) * e1)
+    e3 = np.cross(e1, e2)
+    torso = np.stack([e1, e2, e3], 1)
+    rows = [((sl + sr) * 0.5, torso, sw / 4.0, min(vis[11], vis[12])), (sl, torso, sw / 4.0, vis[11]),
+            (sr, torso, sw / 4.0, vis[12])]
+
+    def limb(a, b, sure):
+        d = xyz[b] - xyz[a] if isinstance(b, int) else b - xyz[a]
+        length = float(np.linalg.norm(d))
+        x = norm(d) if length > 1e-6 else e2
+        y = np.cross(e3, x)
+        y = norm(y) if np.linalg.norm(y) > 1e-6 else e1
+        return (xyz[a], np.stack([x, y, np.cross(x, y)], 1), max(length * 0.5, 1.0), sure)
+    for side in ("l", "r"):
+        s_, e_, w_, pk, ix = ARMS[side]
+        rows.append(limb(s_, e_, min(vis[s_], vis[e_])))
+        rows.append(limb(e_, w_, min(vis[e_], vis[w_])))
+        rows.append(limb(w_, (xyz[pk] + xyz[ix]) * 0.5, min(vis[w_], vis[pk], vis[ix])))
+    for b, (o, ax, u, sure) in enumerate(rows):
+        origin[b], axes[b], unit[b], seen[b] = o, ax, u, sure
+    return origin, axes, unit, seen
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--frames", required=True)
@@ -162,17 +226,21 @@ def main() -> int:
     import numpy as np
     f = np.load(os.path.join(a.frames, "frames.npz"))
     pts = f["points"][:, :478].astype(np.float64)
-    keep = f["found"].astype(bool) & ~f["hands"].astype(bool)
+    # EVERY FRAME WITH A FACE is posed (a hand at the mouth is theirs too, and the whole of them is learned);
+    # the basis is fitted on those with no hand at the mouth, whose scores a hand does not spoil
+    keep = f["found"].astype(bool)
     idx = np.nonzero(keep)[0]
     canon, poses, aligned, rigid = fit(pts[idx], np.arange(468))
     residual = aligned - canon
     # THE BASIS: offsets from the neutral face as a linear function of the 52 scores, ridge, on all but the
     # held-out frames; then measured on those
-    blend = f["blend"][idx].astype(np.float64)
-    test = np.zeros(idx.size, bool)
+    unspoiled = ~f["hands"].astype(bool)[idx]
+    blend = f["blend"][idx].astype(np.float64)[unspoiled]
+    residual = residual[unspoiled]
+    test = np.zeros(blend.shape[0], bool)
     test[::HELD_OUT] = True
-    X = np.concatenate([blend, np.ones((idx.size, 1))], 1)
-    Y = residual.reshape(idx.size, -1)
+    X = np.concatenate([blend, np.ones((blend.shape[0], 1))], 1)
+    Y = residual.reshape(blend.shape[0], -1)
     A = X[~test]
     lam = RIDGE * np.eye(X.shape[1])
     lam[-1, -1] = 0.0
@@ -195,6 +263,16 @@ def main() -> int:
     canon_all = np.concatenate([canon, dw @ canon + dshift])
     basis_all = np.concatenate([basis, np.einsum("dv,kvc->kdc", dw, basis)], 1)
     n = pts.shape[0]
+    spec_crop = [int(c) for c in json.load(open(os.path.join(a.frames, "spec.json")))["crop"]]
+    cw, ch = (spec_crop[2], spec_crop[3]) if len(spec_crop) == 4 else (spec_crop[2], spec_crop[2])
+    nb = len(BODY)
+    b_origin = np.zeros((n, nb, 3))
+    b_axes = np.tile(np.eye(3), (n, nb, 1, 1))
+    b_unit = np.ones((n, nb))
+    b_seen = np.zeros((n, nb))
+    for i in range(n):
+        if bool(f["found"][i]):
+            b_origin[i], b_axes[i], b_unit[i], b_seen[i] = bones_of(f["pose"][i], cw, ch, pts[i])
     scale = np.zeros(n)
     rot = np.tile(np.eye(3), (n, 1, 1))
     shift = np.zeros((n, 3))
@@ -207,7 +285,9 @@ def main() -> int:
              tris=np.asarray(list(tris) + fill, np.int32), derived=dw.astype(np.float32),
              derived_shift=dshift.astype(np.float32), rigid=rigid.astype(np.int32), keep=keep,
              scale=scale.astype(np.float32), rot=rot.astype(np.float32), shift=shift.astype(np.float32),
-             aligned=al.astype(np.float32), blend=f["blend"].astype(np.float32))
+             aligned=al.astype(np.float32), blend=f["blend"].astype(np.float32),
+             bone_origin=b_origin.astype(np.float32), bone_axes=b_axes.astype(np.float32),
+             bone_unit=b_unit.astype(np.float32), bone_seen=b_seen.astype(np.float32))
     os.replace(out, a.out)
     if a.poses:
         stills = []
@@ -216,7 +296,12 @@ def main() -> int:
                 stills.append(None)
                 continue
             s, r, t = similarity(canon[rigid], f["still_points"][j][rigid].astype(np.float64))
-            stills.append({"scale": s, "rot": r.tolist(), "shift": t.tolist(), "blend": f["still_blend"][j].tolist()})
+            row = {"scale": s, "rot": r.tolist(), "shift": t.tolist(), "blend": f["still_blend"][j].tolist()}
+            if "still_pose" in f.files:
+                bo, ba, bu, bs = bones_of(f["still_pose"][j], cw, ch, f["still_points"][j])
+                row["bones"] = [{"origin": bo[b].tolist(), "axes": ba[b].T.tolist(), "unit": float(bu[b]),
+                                 "seen": float(bs[b])} for b in range(nb)]
+            stills.append(row)
         blends = f["blend"][idx]
         rest = np.median(blends, 0)
         looks = {}

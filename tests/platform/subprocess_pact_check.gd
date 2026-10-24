@@ -81,7 +81,21 @@ func _registry_half() -> void:
 	_check(pid > 0, "a tracked child started (pid %d)" % pid)
 	_check(Subprocess.tracked() == before + 1, "it is registered (%d tracked)" % Subprocess.tracked())
 	_check(_running(pid), "and it is actually running")
+	# THE READERS ARE DONE WHEN THE REAP RETURNS: a killed child's log reader sees its pipe end only
+	# after a few empty reads (40 ms at least), then calls back into Subprocess, whose functions a
+	# closing engine has cleared by then. The control is a stop - kill, let go - which leaves its
+	# reader running, or finding none running after the reap proves nothing.
+	var log_path := OS.get_user_data_dir().path_join("subprocess_reap_probe.log")
+	var stopped := Subprocess.start_logged("sleep", [SLEEP_S], log_path, "reap control")
+	Subprocess.start_logged("sleep", [SLEEP_S], log_path, "reap probe")
+	Subprocess.stop(stopped)
+	_check(Subprocess._stray.any(func(t: Thread) -> bool: return t.is_alive()),
+		"control: a child stopped and let go leaves its log reader running")
 	var n := Subprocess.reap_all()
+	_check(Subprocess._stray.is_empty() and Subprocess._pumps.is_empty(),
+		"every log reader has finished and been joined when reap_all() returns (%d left)"
+		% (Subprocess._stray.size() + Subprocess._pumps.size()))
+	DirAccess.remove_absolute(log_path)
 	OS.delay_msec(400)
 	_check(n >= 1, "reap_all() reported killing %d" % n)
 	_check(Subprocess.closing(), "...and says ghost is closing, for whoever was watching a child")

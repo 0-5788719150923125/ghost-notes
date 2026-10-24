@@ -6,7 +6,8 @@ class_name ReadingPublish
 ##
 ## HANDED, NOT OVERRIDDEN (next/structure.md, step 12). A [ReadingPanel] renders the take, writes
 ## its sidecar and holds the YouTube card; the component whose show it is says the rest. This one
-## is a note read aloud: the exporter's own name, the note's title on the upload, nothing more.
+## is a note read aloud: the exporter's own name, the note's title on the upload, and the note as its
+## own episode - its description and tags on the YouTube card ([NoteUpload]).
 ## Cards hands an [EpisodePublish]: an episode's title for a name, the episode pinned through the
 ## minutes of a render, upload notes and a chapter per card.
 
@@ -51,3 +52,23 @@ func book(d: Dictionary, _body: String) -> Dictionary:
 ## The YouTube card is built: the component's own rows on it ([member YouTubeCard.extra]).
 func youtube_built(_card: YouTubeCard) -> void:
 	pass
+
+
+## WHETHER THE NOTE IS ITS OWN EPISODE: read as it is written, it goes up with the description written
+## on its YouTube card and its own tags, and the steps the note's other cards add are made from its words
+## there ([NoteUpload]). False for a component that makes episodes and says what each goes up with.
+func note_is_episode() -> bool:
+	return true
+
+
+## WHETHER A CARD ON THE NOTE LISTS THOSE STEPS UNDER ITS OWN, beside its Generate (the Actor card - the
+## user, 2026-10-23: "push the generate/regenerate step into the Actor card. Right now, it's buried at the
+## bottom of the YouTube card"), handed the note as their episode ([method ReadingPanel.note_upload]).
+## False, and the YouTube card lists them itself.
+func lists_steps() -> bool:
+	return false
+
+
+## Who writes for the note's uploads (its tags), `{agent, model, effort}` - {} for the default writer.
+func writer() -> Dictionary:
+	return {}

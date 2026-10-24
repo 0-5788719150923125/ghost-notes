@@ -11,7 +11,8 @@ class_name ActorCard
 ## folder read where it is, a link (a video, a playlist, a channel) listed and fetched one video at a
 ## time, or a link for captions only, matched to the folder's videos by title - with a tick per video;
 ## the STEPS, a row each ([ActorSteps]): ✓ made, ⚠ stale, its share while it runs, ▶ to make it and
-## what it needs, ⟳ to make it again; Generate and Stop; the SETS the footage fell into, each with its
+## what it needs, ⟳ to make it again; the steps the note's other cards add, under them; Generate and Stop;
+## the SETS the footage fell into, each with its
 ## sheet, its minutes and its look in words, whether it is built, and the one in use ("Use this set");
 ## the STILL they are drawn on, picked from the set's stills; what the library and their motion hold;
 ## who labels; and the steps' settings, folded.
@@ -19,7 +20,15 @@ class_name ActorCard
 ## WHILE IT IS UP IT PINS ITS MEDIUM ([LikenessMedium], as Proof pins the desk: [member
 ## Director.medium_override]) and HANDS THE READING how it goes out ([ActorCard.Publish]): an export waits
 ## for the set in use to be built, and the document a render draws from carries the actor's folder, the
-## set, its still and the seed of their performance, which is the note's own ([method performance]).
+## set, its still and the seed of their performance, which is the note's own ([method performance]). And
+## WHAT IS READ ([ActorCard.Walk]): the note's words, with no title announced before them.
+##
+## THE NOTE'S OTHER CARDS ADD STEPS OF THEIR OWN ([EpisodeStep]), as on Cards' and Proof's cards (the user,
+## 2026-10-23: "push the generate/regenerate step into the Actor card. Right now, it's buried at the bottom
+## of the YouTube card"): the ones wanted now - the YouTube card's tags - are rows under the actor's steps,
+## handed the note as their episode (it is its own, [NoteUpload]), made by Generate once the actor's own
+## steps are done and again on their ⟳; an export that goes up makes them too, when the note's words have
+## changed since. This card never asks what one is.
 ##
 ## GENERATION IS EXPLICIT: nothing runs on open. The survey costs hours of CPU and the audit quota, so a
 ## button is the only caller ([ActorBuilder]).
@@ -29,6 +38,8 @@ const KEY := "actor"
 ## The block: the actor this note builds, who labels their footage, and the renderer that plays them
 ## ([constant ActorSteps.RENDERERS]).
 const KNOBS := {"id": "", "writer": "claude", "writer_model": "", "writer_effort": "", "renderer": "2d"}
+## What makes the note's episode, as the rows of the steps the note's other cards add say it.
+const MAKES := "Generate, or an export that goes up"
 
 signal noted(text: String)
 
@@ -62,6 +73,11 @@ var _setting_rows := {}
 var _renderer: OptionButton
 var _library_head: Label
 var _body: VBoxContainer       # everything below the picker: hidden with no actor
+## Generate was asked for: the steps the note's other cards add are made once the actor's own are done.
+var _steps_asked := false
+var _step_box: VBoxContainer   # their rows, under the actor's steps
+var _step_rows := {}           # a step's key -> {step, state: Label, redo: Button}
+var _rows_steps := ""          # the steps the rows were built for
 ## The reading this card is on (an Actor brings a Voice, so there is one): its status line says what the
 ## card says, and it plays them. Without one (a gate) the card only builds, and `noted` says.
 var _panel: ReadingPanel = null
@@ -72,6 +88,7 @@ static func for_note(ctx: Dictionary) -> ActorCard:
 	card._panel = ctx.get("workspace") as ReadingPanel
 	if card._panel != null:
 		card._panel.publish = Publish.new(card)
+		card._panel.walk = Walk.new()
 	card._build()
 	return card
 
@@ -86,6 +103,7 @@ func _exit_tree() -> void:
 		Director.medium_override = ""
 	if _builder != null:
 		_builder.stop()
+	_stop_steps()
 
 
 func _process(delta: float) -> void:
@@ -95,6 +113,7 @@ func _process(delta: float) -> void:
 	_row_t = 0.25
 	if _builder != null:
 		_builder.tick()
+	_tick_steps()
 	_refresh()
 
 
@@ -148,7 +167,9 @@ func _show_renderer() -> void:
 # --- what it hands the reading -------------------------------------------------------------------
 
 ## HOW THEY GO OUT: an export waits for the set in use to be built, the render's document names the
-## actor, the set and its still, and an upload says whose likeness it is.
+## actor, the set and its still, and an upload says whose likeness it is and how it was made
+## ([method disclosure]) - under the description written on the YouTube card, the note being its own
+## episode ([NoteUpload]), whose steps this card lists.
 class Publish extends ReadingPublish:
 	var card: ActorCard
 
@@ -170,7 +191,36 @@ class Publish extends ReadingPublish:
 		var a := card._actor
 		if a == null:
 			return {"tags": []}
-		return {"tags": [], "description": "A likeness of %s, animated from %s's own footage. Every pixel of them is a real one from their footage, bent; the voice is synthetic." % [a.name(), a.name()]}
+		return {"tags": [], "description": ActorCard.disclosure(a.name(), card.renderer())}
+
+	# the note's tags are written by whoever labels their footage
+	func writer() -> Dictionary:
+		return {"agent": String(card._knobs["writer"]), "model": String(card._knobs["writer_model"]),
+			"effort": String(card._knobs["writer_effort"])}
+
+	# the steps made from the note's words are rows under the actor's, beside Generate
+	func lists_steps() -> bool:
+		return true
+
+
+## WHAT THEY READ: the note's own words, AND NO TITLE ANNOUNCED FIRST (the user, 2026-10-23: "In this mode,
+## the actor should NOT speak the title. It's very strange that the video starts with the actor saying, 'Bad
+## Yestermorrow'"). A reader announces a chapter; a person talking to the camera does not. A heading written
+## in the words is said, as everything written is.
+class Walk extends TextWalk:
+	func spoken(text: String, title: String) -> Dictionary:
+		var d := super.spoken(text, title)
+		d["title"] = ""
+		return d
+
+
+## WHOSE LIKENESS AN UPLOAD IS, AND HOW IT WAS MADE, said by the code under the description written for it:
+## [param name], played by [param renderer] - the 2D one bends their own pixels; Gaussian draws splats
+## learned from their footage, which are no pixel of it.
+static func disclosure(name: String, renderer: String) -> String:
+	if renderer == "gaussian":
+		return "A likeness of %s, learned from %s's own footage and drawn as Gaussian splats; the voice is synthetic." % [name, name]
+	return "A likeness of %s, animated from %s's own footage. Every pixel of them is a real one from their footage, bent; the voice is synthetic." % [name, name]
 
 
 ## THE PERFORMANCE: the seed their motion's pieces, blinks, glances and posture are drawn from - the
@@ -478,7 +528,10 @@ func _generate() -> void:
 		return
 	_builder.writer = _writer_choice()
 	_builder.start()
-	_say("Generating: every step that is missing or stale, in order. The survey of each video takes about a quarter of its length; the rest a few minutes.")
+	_steps_asked = true          # the steps under them: the other cards' too
+	var also := PackedStringArray(_listed().map(func(st: EpisodeStep) -> String: return st.label.to_lower()))
+	_say("Generating: every step that is missing or stale, in order. The survey of each video takes about a quarter of its length; the rest a few minutes."
+		+ ((" Then the note's %s, from its words." % ", ".join(also)) if not also.is_empty() else ""))
 
 
 ## WHETHER THEY CAN PLAY: `{ready, busy, said}` - ready once the set in use is built, whether anything is
@@ -507,8 +560,9 @@ func _refresh() -> void:
 	_actor.forget()
 	_fill_videos()
 	var busy := _builder.running or _builder.busy()
-	_gen_btn.disabled = busy
-	_stop_btn.disabled = not busy
+	var steps := _steps_asked or _steps_busy()
+	_gen_btn.disabled = busy or steps
+	_stop_btn.disabled = not (busy or steps)
 	# THE ROWS ARE WORKED OUT AGAIN ONLY WHEN WHAT THEY ARE MADE FROM CHANGED, or while something runs:
 	# every scope's state of every step took 10-20 ms, four times a second, under a playing show
 	var key := _rows_key(busy)
@@ -521,6 +575,7 @@ func _refresh() -> void:
 	elif _actor.playable("", renderer()):
 		line = "Ready to play: the set in use has everything they need to read."
 	_line.text = line
+	_refresh_step_rows()
 	_fill_sets()
 	_fill_stills()
 	_fill_library()
@@ -574,6 +629,126 @@ func _fill_rows(busy: bool) -> void:
 		(r["state"] as Label).tooltip_text = said + "\n\n" + String(Registry.field(ActorSteps.REGISTRY, step, "blurb", ""))
 		(r["make"] as Button).disabled = busy or st == "running" or st == "unavailable"
 		(r["redo"] as Button).disabled = busy or not (st == "made" or st == "stale" or st == "failed")
+
+
+# --- the steps the note's other cards add -------------------------------------------------------
+
+## The steps the note's other cards add, all of them, as the panel holds them
+## ([method ReadingPanel.episode_steps]).
+func _offered() -> Array:
+	return _panel.episode_steps() if _panel != null and is_instance_valid(_panel) else []
+
+
+## THE NOTE AS THEIR EPISODE: read as it is written, it is its own ([method ReadingPanel.note_upload]) - null
+## while it has no YouTube card.
+func _note_feed() -> EpisodeFeed:
+	var up := _panel.note_upload() if _panel != null and is_instance_valid(_panel) else null
+	return up.feed() if up != null else null
+
+
+## ...and the ones listed now, under the actor's steps: none while the note has no file to keep them by.
+func _listed() -> Array:
+	var feed := _note_feed()
+	return EpisodeStep.listed_of(_offered()) if feed != null and not feed.folder().is_empty() else []
+
+
+## What the rows were built for: the listed steps' keys.
+func _steps_key() -> String:
+	return ",".join(PackedStringArray(_listed().map(func(st: EpisodeStep) -> String: return st.key)))
+
+
+## This card as the steps' rows say where they are: "the Actor card".
+static func host_name() -> String:
+	return "the %s card" % String(Registry.field(Components.REGISTRY, KEY, "label", "Actor"))
+
+
+## EACH REFRESH: what the steps' jobs ended with, landed; the note said to the steps listed; and once the
+## actor's own steps are done, each listed step Generate asked for, made - from the note's words, so only
+## once they are written.
+func _tick_steps() -> void:
+	for st in _offered():
+		(st as EpisodeStep).tick()
+	var feed := _note_feed()
+	var listed := _listed()
+	for st in listed:
+		(st as EpisodeStep).listed(host_name(), feed, MAKES)
+	if _steps_asked and not (_builder != null and (_builder.running or _builder.busy())):
+		_steps_asked = false
+		for st in listed:
+			(st as EpisodeStep).generate(feed)
+
+
+## STOP what the steps are making of the note, and what Generate asked of them.
+func _stop_steps() -> void:
+	_steps_asked = false
+	var feed := _note_feed()
+	if feed == null:
+		return
+	for st in _offered():
+		(st as EpisodeStep).stop(feed)
+
+
+## Is a listed step being made for the note?
+func _steps_busy() -> bool:
+	var feed := _note_feed()
+	for st in _listed():
+		if (st as EpisodeStep).busy(feed):
+			return true
+	return false
+
+
+## ⟳ on a step's row: made again now, from the note's words - which must be written first.
+func _redo_step(step: EpisodeStep) -> void:
+	if not step.redo(_note_feed()):
+		_say("%s waits for the note's words: write them on the Script card." % step.label)
+
+
+## The steps' rows, under the actor's, one per step listed, as Proof's card draws them: built again when the
+## steps listed change. A step's ⟳ is offered once the note has words and while that step is not being made -
+## nothing the actor's steps make is read by it.
+func _refresh_step_rows() -> void:
+	if _steps_key() != _rows_steps:
+		_rows_steps = _steps_key()
+		for c in _step_box.get_children():
+			_step_box.remove_child(c)
+			c.queue_free()
+		_step_rows = {}
+		for st in _listed():
+			var step: EpisodeStep = st
+			var r := HBoxContainer.new()
+			r.add_theme_constant_override("separation", 4)
+			_step_box.add_child(r)
+			var name_l := Label.new()
+			name_l.text = step.label
+			name_l.custom_minimum_size.x = 64.0
+			name_l.add_theme_font_size_override("font_size", 12)
+			r.add_child(name_l)
+			var state := Label.new()
+			state.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			state.clip_text = true
+			state.add_theme_font_size_override("font_size", 11)
+			state.mouse_filter = Control.MOUSE_FILTER_STOP
+			r.add_child(state)
+			var redo := Button.new()
+			redo.text = "⟳"
+			redo.flat = true
+			redo.pressed.connect(_redo_step.bind(step))
+			r.add_child(redo)
+			_step_rows[step.key] = {"step": step, "state": state, "redo": redo}
+	var feed := _note_feed()
+	var words := feed != null and not feed.words().is_empty()
+	for k in _step_rows:
+		var r: Dictionary = _step_rows[k]
+		var step: EpisodeStep = r["step"]
+		var st := step.state(feed)
+		var lead := String({"ready": "✓", "running": "…", "queued": "…", "failed": "✗"}.get(st, "–"))
+		var said := step.said(feed)
+		(r["state"] as Label).text = lead + (" " + said if not said.is_empty() else "")
+		(r["state"] as Label).tooltip_text = (r["state"] as Label).text
+		var made := not step.made(feed).is_empty()
+		(r["redo"] as Button).disabled = step.busy(feed) or not words
+		(r["redo"] as Button).tooltip_text = (step.again if made else step.first) + (
+			"" if words else " - once the note has words")
 
 
 # --- the sets and the library --------------------------------------------------------------------
@@ -916,13 +1091,17 @@ func _build() -> void:
 		redo.pressed.connect(_redo.bind(step))
 		r.add_child(redo)
 		_rows[step] = {"state": state, "make": make, "redo": redo, "row": r}
+	# THE STEPS THE NOTE'S OTHER CARDS ADD, under the actor's ([method _refresh_step_rows])
+	_step_box = VBoxContainer.new()
+	_step_box.add_theme_constant_override("separation", 0)
+	_body.add_child(_step_box)
 	var grow := HBoxContainer.new()
 	grow.add_theme_constant_override("separation", 6)
 	_body.add_child(grow)
 	_gen_btn = Button.new()
 	_gen_btn.text = "Generate"
 	_gen_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_gen_btn.tooltip_text = "Make every step that is missing or stale, in order: the survey takes about a quarter of the footage's length in CPU, the rest a few minutes, and the audit the labeler's quota."
+	_gen_btn.tooltip_text = "Make every step that is missing or stale, in order: the survey takes about a quarter of the footage's length in CPU, the rest a few minutes, and the audit the labeler's quota. Then the steps listed under them (the note's tags), from the note's words."
 	_gen_btn.pressed.connect(_generate)
 	grow.add_child(_gen_btn)
 	_stop_btn = Button.new()
@@ -930,7 +1109,8 @@ func _build() -> void:
 	_stop_btn.tooltip_text = "Stop now. What is finished is kept; a survey loses at most the video in hand."
 	_stop_btn.pressed.connect(func() -> void:
 		if _builder != null:
-			_builder.stop())
+			_builder.stop()
+		_stop_steps())
 	grow.add_child(_stop_btn)
 	_line = Label.new()
 	_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

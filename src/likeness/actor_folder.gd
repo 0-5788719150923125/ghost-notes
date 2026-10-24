@@ -349,6 +349,9 @@ func inputs_of(step: String, scope: String) -> String:
 		parts.append("captions=%s|%d" % [cap, FileAccess.get_modified_time(cap) if FileAccess.file_exists(cap) else 0])
 	if step == "audit" or ActorSteps.per(step) == "set":
 		parts.append("set=" + scope)
+	# a body fitted to one still is stale once another is picked
+	if step == "fit" and scope.begins_with("s:"):
+		parts.append("still=%d" % still_of(scope.substr(2)))
 	return JSON.stringify(parts).sha256_text().substr(0, 16)
 
 

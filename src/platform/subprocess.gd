@@ -410,7 +410,8 @@ static func forget(pid: int) -> void:
 ## more than once. Deliberately does NOT call `OS.is_process_running` first: at shutdown
 ## Godot is reaping its own children on another path, and a same-frame
 ## `is_process_running` on the same pid races that reap into ECHILD - the crash-on-close
-## `assistant.gd` documents. `kill()` on an already-dead child is harmless.
+## `assistant.gd` documents. `kill()` on an already-dead child is harmless. It returns once the
+## killed children's log readers have finished ([method _await_pumps]).
 static func reap_all() -> int:
 	_closing = true
 	var n := 0
@@ -424,7 +425,7 @@ static func reap_all() -> int:
 	_tracked.clear()
 	for pid in _pumps.keys():
 		_release_pumps(int(pid))
-	_join_finished_pumps()
+	_await_pumps()
 	return n
 
 
@@ -532,6 +533,18 @@ static func _join_finished_pumps() -> void:
 		if not t.is_alive():
 			t.wait_to_finish()
 			_stray.erase(t)
+
+
+# THE READERS FINISH BEFORE THE SCRIPT DOES. A killed child's pipe ends at once, but its reader sees
+# that only after a few empty reads (about 60 ms) and then calls back into this script - and a closing
+# engine clears every script's functions under a thread still running: "Nonexistent function '_store'
+# in base 'GDScript'", after mask_tracks_check had passed (CI, 2026-10-23). So the close waits for
+# them, up to [constant _DRAIN_MS]; a grandchild holding a pipe open is left reading.
+static func _await_pumps() -> void:
+	var until := Time.get_ticks_msec() + _DRAIN_MS
+	while Time.get_ticks_msec() < until and _stray.any(func(t: Thread) -> bool: return t.is_alive()):
+		OS.delay_msec(10)
+	_join_finished_pumps()
 
 
 static func _is_windows() -> bool:

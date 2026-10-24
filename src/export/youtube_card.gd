@@ -33,6 +33,12 @@ class_name YouTubeCard
 ## writes REPLACES that list. The box stands at the top, beside "Upload after export" (the user: "where
 ## it belongs"); a line under the list says what the writer is doing to it.
 ##
+## A NOTE READ AS IT IS WRITTEN IS DESCRIBED HERE (2026-10-23, the user, of an actor's note: "I don't see
+## anywhere it would be possible to write a description for videos uploaded in this way"): its panel shows
+## the box ([method describe]) when nothing on the note writes its episodes' descriptions - a show's card
+## keeps its own - and the block keeps what is written; an upload takes it first, then what the panel adds
+## (an actor's likeness, said by the code).
+##
 ## TICKING "UPLOAD AFTER EXPORT" SETS UPLOADS UP as far as they need, visibly: the Google client file
 ## the first time, then the sign-in - and the box ticks once both are done (a cancel leaves it clear).
 ## A PLAYLIST takes more of the account than an upload, so the wider sign-in is asked for only when
@@ -46,7 +52,7 @@ const KEY := "youtube"
 ## A new card's block: nothing goes up until the box is ticked, and then privately.
 const DEFAULTS := {"upload": false, "title": YouTube.TITLE_TEMPLATE, "privacy": YouTube.PRIVACY,
 	"category": YouTube.CATEGORY, "playlist": "", "playlist_title": "", "channel": "", "channel_name": "",
-	"write_tags": false}
+	"write_tags": false, "description": ""}
 const TITLE_TIP := ("The video's title. %title% is the note's title, %episode% the episode's, %seed% its seed, %date% "
 	+ "today's; what a missing one leaves (a dangling \": \") goes, and a name is never said twice. "
 	+ "YouTube takes 100 characters.")
@@ -77,6 +83,7 @@ var _client: Button
 var _resume: Button
 var _state: Label
 var _write_tags: CheckBox
+var _desc: TextEdit
 var _tags_note: Label
 ## The step that writes each episode's tags, while the box is ticked.
 var _tags: YouTubeTags
@@ -116,7 +123,9 @@ func _init() -> void:
 	_write_tags.tooltip_text = ("The show's writer writes tags for each episode from what it says - its words, "
 		+ "title and description - and they REPLACE the note's tags below (the writer is shown those, and keeps "
 		+ "the ones that fit). The card that makes the episode lists them as a step: they are written along "
-		+ "with the episode, and ⟳ on their row writes them again.")
+		+ "with the episode, and ⟳ on their row writes them again. A note read as it is written is its own "
+		+ "episode: an export that goes up writes its tags from its words once they have changed, and ⟳ on "
+		+ "their row writes them now.")
 	_write_tags.toggled.connect(func(_on: bool) -> void: refresh())
 	boxes.add_child(_write_tags)
 	_chips = HFlowContainer.new()
@@ -179,6 +188,14 @@ func _init() -> void:
 	prow.add_child(_reload)
 	_row("Playlist", prow)
 	_fill_playlists()
+	_desc = TextEdit.new()
+	_desc.placeholder_text = "Description"
+	_desc.tooltip_text = ("The video's description, as it goes up. The playlist it joins is named and linked "
+		+ "under it, and what the note's cards add (an actor's likeness, said) between the two.")
+	_desc.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	_desc.custom_minimum_size = Vector2(0, 120)
+	_desc.visible = false
+	add_child(_desc)
 	extra = VBoxContainer.new()
 	extra.add_theme_constant_override("separation", 8)
 	add_child(extra)
@@ -266,7 +283,8 @@ func _process(dt: float) -> void:
 func capture() -> Dictionary:
 	return {"upload": _upload.button_pressed, "title": _title.text, "privacy": _privacy_key(),
 		"category": _category_key(), "playlist": String(_list["id"]), "playlist_title": String(_list["title"]),
-		"channel": String(_chan["id"]), "channel_name": _channel_name(), "write_tags": writes_tags()}
+		"channel": String(_chan["id"]), "channel_name": _channel_name(), "write_tags": writes_tags(),
+		"description": _desc.text}
 
 
 ## ...and back. A key the block does not name keeps the card's default; a privacy YouTube does not
@@ -280,6 +298,8 @@ func apply(block: Dictionary) -> void:
 	_tags_seen = []
 	if _title.text != str(b["title"]):
 		_title.text = str(b["title"])
+	if _desc.text != str(b["description"]):
+		_desc.text = str(b["description"])
 	var p := str(b["privacy"])
 	for i in _privacy.item_count:
 		if String(_privacy.get_item_metadata(i)) == p:
@@ -322,6 +342,16 @@ func writes_tags() -> bool:
 	return _write_tags.button_pressed
 
 
+## THE NOTE IS DESCRIBED HERE from now on: the box shows, and its words go up first.
+func describe() -> void:
+	_desc.visible = true
+
+
+## The description written here, "" when the box is not shown.
+func description() -> String:
+	return _desc.text.strip_edges() if _desc.visible else ""
+
+
 ## THE STEPS THIS CARD ADDS TO THE NOTE'S EPISODES ([EpisodeStep]), for whatever card makes them: each
 ## episode's tags. Listed only while [method writes_tags] (see [method YouTubeTags.wanted]).
 func episode_steps() -> Array:
@@ -344,11 +374,16 @@ func template() -> String:
 ## its description, tags (the note's one list), thumbnail moment and record, and the macros' `values`
 ## when they are not the panel's as it stands now (an episode an export rendered) - with this card's
 ## title, privacy, category, playlist (its id and title, which the description names) and channel laid
-## over it. {} when nothing is to go up: the box is clear, or the panel has nothing ({}).
+## over it, and the description written here ([method describe]) before the panel's. {} when nothing is to
+## go up: the box is clear, or the panel has nothing ({}).
 func meta(base: Dictionary) -> Dictionary:
 	if not ticked() or base.is_empty():
 		return {}
 	var out := base.duplicate()
+	var own := description()
+	if not own.is_empty():
+		var theirs := str(out.get("description", "")).strip_edges()
+		out["description"] = own + ("\n\n" + theirs if not theirs.is_empty() else "")
 	var given: Variant = out.get("values", {})
 	out.erase("values")
 	out["title"] = title_now(given if given is Dictionary else {})
@@ -515,9 +550,11 @@ func _refresh_tags() -> void:
 	elif not words:
 		t = "This episode's tags are written once its words are, along with it, replacing the tags above."
 	elif stale:
-		t = "This episode's words were written again after its tags: %s writes new ones over the tags above, and so does making the episode." % row
+		t = "This episode's words were written again after its tags: %s writes new ones over the tags above, and so does %s." % [
+			row, _tags.host_makes]
 	else:
-		t = "No tags are written for this episode yet: %s writes them over the tags above, and so does making the episode." % row
+		t = "No tags are written for this episode yet: %s writes them over the tags above, and so does %s." % [
+			row, _tags.host_makes]
 	_tags_note.text = t
 	_tags_note.visible = not t.is_empty()
 

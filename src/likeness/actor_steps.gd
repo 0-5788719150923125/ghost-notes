@@ -92,22 +92,25 @@ const REGISTRY := {
 	# head learned from them
 	"frames": {"label": "Frames", "per": "set", "needs": ["stills"], "runs": "python", "env": ["ffmpeg", "face_venv"],
 		"outputs": ["avatar/frames.npz", "avatar/img", "avatar/mask"], "settings": [], "version": 1, "renderer": "gaussian",
-		"blurb": "Reads the set's longest shot twice a second at full resolution, cropped round their head: their face's points and expressions in every frame, and where they are. About a third of the shot's length."},
+		"blurb": "Reads the set's longest shot twice a second, whole, at full resolution: their face's points and expressions and their body's pose in every frame, and where they are. About half the shot's length."},
 	"face": {"label": "Face rig", "per": "set", "needs": ["frames"], "runs": "python", "env": ["face_venv"],
 		"outputs": ["avatar/rig.npz", "avatar/poses.json"], "settings": [], "version": 1, "renderer": "gaussian",
-		"blurb": "Learns their face from the frames: their neutral face, each frame's head pose, and how each of MediaPipe's 52 expressions moves every point of it - what the head is played from. Seconds."},
+		"blurb": "Learns their face and body from the frames: their neutral face, each frame's head pose, how each of MediaPipe's 52 expressions moves every point of it, and their body's bones - what they are played from. Seconds."},
 	"avatar": {"label": "Avatar", "per": "set", "needs": ["face"], "runs": "train", "env": ["voice_train_venv"],
 		"outputs": ["avatar/avatar.json", "avatar/avatar.bin"], "settings": ["avatar_steps"], "version": 1,
 		"renderer": "gaussian",
-		"blurb": "Learns their head as Gaussian splats bound to their face, from the frames, on the graphics card: hair, beard and skin as they look, moved by their face's expressions. Twenty minutes or so."},
+		"blurb": "Learns them as Gaussian splats bound to their face and body, and their room as a picture behind them, from the frames, on the graphics card: hair, beard, skin and clothes as they look, moved by their face's expressions and their body's bones. Forty minutes or so."},
+	"fit": {"label": "Fit", "per": "set", "needs": ["avatar", "stills"], "runs": "train", "env": ["voice_train_venv"],
+		"outputs": ["avatar/fit.json", "avatar/fit.bin"], "settings": [], "version": 1, "renderer": "gaussian",
+		"blurb": "Fits their body's splats to the still they are played from, on the graphics card: the weave of their clothes and their hands as the still has them, where every frame together gave a blur. Picking another still fits it again. Two minutes or so."},
 }
 
 ## THE RENDERERS an actor is played with (the note's `renderer`): what each needs of an actor to play them.
 const RENDERERS := {
 	"2d": {"label": "2D", "plays": ["motion", "stills", "rig", "library"],
 		"blurb": "Their still, warped: the head turned through its points, the mouth and eyes drawn from real frames of theirs for each sound."},
-	"gaussian": {"label": "Gaussian", "plays": ["motion", "visemes", "stills", "rig", "avatar"],
-		"blurb": "Their head as 3D Gaussian splats learned from the set's frames, moved by their face's expressions - their body and room the still's."},
+	"gaussian": {"label": "Gaussian", "plays": ["motion", "visemes", "stills", "rig", "avatar", "fit"],
+		"blurb": "Them as 3D Gaussian splats learned from the set's frames - head and body, moved by their face's expressions and their body's bones - over their room as learned with them."},
 }
 
 ## THE SETTINGS an actor is built under, on the card's Advanced fold: each a row, as a layer's FIELDS
@@ -132,7 +135,8 @@ const SETTINGS := {
 
 ## The order steps are made in.
 const ORDER := ["fetch", "captions", "probe", "survey", "shots", "sets", "audit", "transcribe", "words", "visemes",
-	"learn", "motion", "stills", "rest", "rig", "library", "frames", "face", "avatar", "hear", "utterances", "voice"]
+	"learn", "motion", "stills", "rest", "rig", "library", "frames", "face", "avatar", "fit", "hear", "utterances",
+	"voice"]
 
 
 ## WHAT [param renderer] NEEDS OF AN ACTOR TO PLAY THEM: the chosen set's steps and the actor's own.

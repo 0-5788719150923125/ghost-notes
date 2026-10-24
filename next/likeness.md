@@ -109,6 +109,131 @@ forward-facing actor, with a mouth that moves when speaking."
 **For the user to test:** Generate on the Actor card once (the new steps: about five minutes, no
 track), a still picked on the card if the default is not the one, ▶ on a note; then an export.
 
+## The body as the still holds it (2026-10-23)
+
+**What the whole of them learned** (run 2, 40,000 steps, up to 600k splats): the face as good as before, the
+body a dark blob with ragged edges, the sweater's knit gone, the hands two flesh-colored smudges. On held-out
+frames, 23.2 dB round the face and 20.4 round the body: the same as run 1 with a third of the splats. More
+splats sharpened nothing, so the frames did not agree.
+
+**Measured: nothing holds a sweater still from frame to frame.**
+- **The pose's torso jumps where he sits still.** Every half second, its width moves 3.5% and its place 20 px
+  at the median (11% and 48 px at the 90th percentile), and its turn 1.8°. The face's own scale, from its
+  468 points, moves 1.6%.
+- **His chest, lined up by each candidate frame and medianed over 300 frames.** Each frame's share of its own
+  fine detail that the median kept:
+  - The whole patch, the desk and the microphone in it: 0.43 held at the set's median torso, 0.10 on the
+    pose's torso.
+  - The upper chest alone, between the shoulders and above the desk: at most 0.09 by any frame tried. Held
+    still 0.09; the pose 0.07; the pose smoothed over up to 17 frames, a share of it, or the head's own
+    shift and scale 0.04 to 0.07.
+- **Aligning each frame's chest to the median** (shift, scale, turn: congealing) ran away. Frames slid
+  42 px at the median and 198 at the 90th percentile, onto flat dark places where any frame matches.
+- **Even the frames with his arms at rest,** medianed, keep no knit, and the hands smear. He sways and
+  leans, and the knit stretches and folds as he breathes and moves his arms. No rigid frame of reference
+  undoes that, and there is no tracker precise enough on a loose sweater.
+
+**But the body that is played is the still's,** moved by its bones. So **THE FIT** (`hosts/avatar/fit.py`,
+the Fit step, about two minutes):
+- **Only the body's splats are fitted again,** to the one still played. The head's splats and the room are
+  held as learned.
+- **On his still 8:** 26.6 dB where it is fitted, before, and 32.3 after (run 2's avatar). The knit, the
+  folded hands and the forearms on the desk are the still's, and a torso turned 3° carries all of it as one
+  piece.
+- **Under the microphone** they are fitted to `body_K.jpg` (the still filled from round it), and their
+  outline is not asked for there. Left free, the splats under it had grown red and green garbage.
+- **Not where the head is solid** (cover over 0.9). Body splats fitted to one picture could paint its face
+  there, and the torso would carry it. What lies behind keeps what the frames taught, and it shows through
+  the beard's soft lower edge.
+- **Never needles:** a splat's longest side is at most `FIT_LONG` (6) times its next. Fitted beside the
+  beard, body splats grew into its strands.
+- **The splats may grow** to `FIT_MOST` (360k) in all: about 396k came out, 177 MB of `.bin`. Every body
+  splat still carries 24 texels of expression shifts that are always zero; the shader now skips reading
+  them, and a compact layout is open.
+- **Picking another still makes the Fit stale** (the still is in its fingerprint), and nothing else. Until
+  it is fitted again, the medium plays the still the fit was made for (`fit.json`'s `still`).
+
+**THE HEAD'S SPLATS HAD PAINTED HIS CHEST:**
+- **On run 2's avatar:** the head's splats covered past 2% across a fifth of the frame, and past 50% in
+  patches on the chest. 505 large faint ones, bound to the head with nothing holding them near it, did
+  that. It was part of the smear "along the sweater": a chest that turned with the head.
+- **Now dropped:** a splat of the head or the face whose centre stands past the head's region
+  (`train.head_region`, grown by `HEAD_REACH` 16 px) is dropped every 100 steps in training (`train.astray`)
+  and before the fit. Run 3 drops 500 to 1,700 every 1,000 steps.
+
+**Run 3** (the strays dropped in training, 36 minutes): the same scores on held-out frames (23.1 dB round the
+face, 20.4 round the body), none of the head's splats astray at the still's pose, and the body behind the
+beard a plausible dark turtleneck. Fitted to still 8: 26.8 to 32.0 dB, 401k splats. **In Godot**
+(`likeness_look_probe --renderer gaussian --take`, his own voice's take: `dist/avatar/demo_fit/fit_demo.mp4`):
+the knit, the folded hands, the turtleneck under the beard. Change per frame (1/255, mean / largest): the head
+1.14 / 4.06 and the beard's edge 0.90 / 4.55, against last night's head-only demo's 1.52 / 9.50 and 1.48 / 7.07
+(rendered 1280 wide, this one 960); the chest 0.30 / 1.82 and the hands 0.21 / 1.21, moving as the bones do.
+Loaded in 0.66 s (0.2 after), posed in 5 ms; drawn as the trainer draws it, 32 to 40 dB over the frame.
+
+**Its limit:** each splat is bound to one bone. A pose far from the still (a lean, an arm raised: a held-out
+frame) shatters the fitted sweater along its bones, in the trainer's drawing and Godot's alike. Played, the
+body stays near the still (posture shifts, breath), so it holds. Gestures would need splats skinned across
+bones, as the 2D body's mesh is.
+
+**Gate:** `hosts/avatar/test_fit.py` (the training venv, no graphics card): the needle cut, the head's splats
+past its reach (in the face and the hair kept; over the chest, far off and off the picture astray; a body
+splat there kept), and the still as one more frame (its bones' axes read as columns, against a non-symmetric
+control; tracked and played alike).
+
+## The whole of them (2026-10-23)
+
+**The user, on the head of splats:** "an EXTREMELY solid result ... the blurriness doesn't bother me that much
+- because it actually gives the head depth ... It looks like real 3D." And: "the movement is restricted to the
+head. I would like to see the gaussians applied to more of the scene ... such that his body might be able to
+move"; "the head region is somewhat unstable and jittery ... at the edges (the tip of the beard, along the
+sweater, around the head against the wall) - those parts are very smudged and smeared."
+
+**What the edges were, measured** (the demo's change from frame to frame round the head, its expression
+shifts on and off): with them, the beard's whole lower outline flickered as a bright ring, and the head's
+outline glowed. Without them, only the eyes and mouth changed (0.71/255 a frame against 0.47). The shifts were learned
+for the face, and a splat far from its triangle (the beard's tip, the hair's edge) swings on a lever with each
+one. Played, they were also pushed by Articulation past the range they were learned in.
+
+**Built:**
+- **Shifts only on the face, fading with distance:** a splat takes its shifts fully on its triangle and none
+  two of its units out (`SHIFT_NEAR`, `SHIFT_FAR`; train.py's `Splats.shift_weight`, the shader alike). The
+  expression a sound is played with is its own scores, not pushed: Articulation pushes the face's geometry
+  only.
+- **Whole frames** (frames.py takes [x, y, w, h]; the Frames step reads the shot whole) and **the body's bones**
+  (rig.py's `BODY`, the 2D rig's bones less the head):
+  - **The bones:** the torso, the shoulders, each arm's upper arm, forearm and hand, from the pose.
+  - **In one plane** half a shoulder width behind the face's nose tip. MediaPipe's pose guesses at depth (its
+    shoulders stood 240 px apart in it), the camera is fixed, and a splat's own depth on its bone is learned.
+  - **Every frame with a face is posed,** a hand at the mouth included (the hand is theirs). The expression
+    basis is fitted only on frames with no hand there.
+- **The trainer learns the whole of them over their room** (train.py, rewritten):
+  - **Binding:** the face's triangles, the head, the nine bones.
+  - **A bone not seen in a frame** has its splats drawn clear there, so a hand under the desk is not learned
+    from MediaPipe's guess. Each bone's first splats are laid in the frame where it is seen best.
+  - **The room is a learned plate:** the set's room plate to start, refined where the frames show it, with
+    a gain per frame for the light. The halo against the wall came from edge splats painting the gap
+    between a guessed room and the true one.
+  - **Each step** learns a 704 px window of a whole frame, half of them round the face.
+  - **The export** has the bones and `avatar.plate.png`.
+- **Godot** (`SplatHead`):
+  - **`pose_face`** carries the head on the torso (a 2D transform).
+  - **`pose_bones`** places the bones as the still holds them, each moved as the 2D body's bone is
+    (`LikenessFace.bones`: posture, breath, lifts, resting hands). A bone the still does not show is
+    flagged, and its splats are drawn clear.
+  - **The medium** draws the avatar's room and hides the still's 2D layer, so the head cut-out is gone.
+  - **The gate** holds a bone, a hidden bone and a leaning torso to the rules (10 checks).
+
+**Data, asked (the user: "Do we have enough training examples? This actor has hundreds of videos"):**
+- **More of this shot would add little:** 9,000 frames at 2 a second already sample his range.
+- **More videos add** expressions, mouth shapes and slightly different camera places.
+- **They also add his look's changes** (lighting, hair, beard, glasses, clothes), which pooled naively
+  would only be averaged.
+- **The plan:** unwrap his face from each video's frames onto the rig's canonical layout, compare videos
+  by the cosine similarity of their mean unwrapped faces, and let in those that show the same him,
+  weighted by it. Each keeps its own room plate and light gain.
+- `scripts/fetch_channel.py` fetches his newest N videos (Shorts left out) into a cache, standalone, with
+  its own yt-dlp kept current.
+
 ## A head of splats (2026-10-22, night)
 
 **The user, on the 2D version:** "acceptable as a first attempt, a draft, a proof-of-concept. It sells

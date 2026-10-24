@@ -19,11 +19,19 @@ extends SceneTree
 ## turn. A second control moves the face: posed elsewhere, the triangle's splats must move with it.
 ##
 ## A SPLAT CHANGES WITH THE EXPRESSION: given one expression's shifts of place and colour, drawn at 0.8 of it,
-## it must be the rules with 0.8 of each shift - its place moved, its colour's logit moved; THE CONTROL: drawn
+## it must be the rules with 0.8 of each shift - its place moved, its colour's logit moved - taken only by a
+## splat on a triangle, less the farther it stands from it (train.py's Splats.shift_weight); THE CONTROL: drawn
 ## at none, it must not.
+##
+## A BODY AND A LEANING TORSO: with a bone beside the face (a third of the splats on it) and the face carried by a
+## torso turned and moved, it must be the rules with the face's frames carried so; a bone not seen must have its
+## splats drawn clear. THE CONTROLS: the bone shown and not shown must differ, and so must the lean and none.
 
 const SIZE := 96
 const N := 40
+## The made bone: where it stands, its axes and its unit.
+const BONE_AT := Vector3(62, 30, 4)
+const BONE_UNIT := 3.0
 
 var _fails := 0
 var _checks := 0
@@ -64,15 +72,30 @@ func _run() -> void:
 	_ok(de.x < 1.5, "at 0.8 of an expression, the shader's splats are not the rules': mean %.2f/255" % de.x)
 	var none := await _render(h, arr, shift, 0.0)
 	_ok(_diff(none, _reference(h, arr, shift, false, 0.8)).x > 4.0, "CONTROL: with no expression the shifts still showed")
-	print("    the splats against the rules: mean %.2f/255, worst %.1f/255 (transposed turns: %.2f); at 0.8 of an expression %.2f/255"
-		% [d.x, d.y, turned.x, de.x])
+	# A BODY: a bone, a lean of the torso, the bone shown and not
+	var made2 := _avatar(true)
+	var h2: Dictionary = made2[0]
+	var arr2: Dictionary = made2[1]
+	var lean := Transform2D(deg_to_rad(6.0), Vector2(3, -2))
+	var body := await _render(h2, arr2, shift, 0.0, lean, 1)
+	var db := _diff(body, _reference(h2, arr2, shift, false, 0.0, lean, 1))
+	_ok(db.x < 1.5, "a bone and a leaning torso: the shader's splats are not the rules': mean %.2f/255" % db.x)
+	var hidden := await _render(h2, arr2, shift, 0.0, lean, 0)
+	_ok(_diff(hidden, _reference(h2, arr2, shift, false, 0.0, lean, 0)).x < 1.5, "a bone not seen: its splats were drawn")
+	# two drawings by the shader alike but for the bone's splats differ nowhere else: any difference is them
+	var apart := _diff(hidden, body)
+	_ok(apart.x > 0.2 and apart.y > 20.0, "CONTROL: a bone shown and not shown drew alike (mean %.2f/255, most %.1f/255)" % [apart.x, apart.y])
+	_ok(_diff(body, _reference(h2, arr2, shift, false, 0.0, Transform2D.IDENTITY, 1)).x > 2.0,
+		"CONTROL: the torso's lean moved nothing")
+	print("    the splats against the rules: mean %.2f/255, worst %.1f/255 (transposed turns: %.2f); at 0.8 of an expression %.2f/255; with a bone and a lean %.2f/255"
+		% [d.x, d.y, turned.x, de.x, db.x])
 	print("splat_head_check: %s (%d checks, %d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _checks, _fails,
 		"" if _fails == 1 else "s"])
 	quit(1 if _fails > 0 else 0)
 
 
 ## The made avatar: [header, arrays] as [method SplatHead.take] takes them.
-func _avatar() -> Array:
+func _avatar(with_bone := false) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
 	var canon := PackedFloat32Array([-18, -16, 0, 20, -12, 3, -2, 22, -2])
@@ -85,7 +108,7 @@ func _avatar() -> Array:
 	var colour := PackedFloat32Array()
 	var cover := PackedFloat32Array()
 	for i in N:
-		bind.append(i % 2)
+		bind.append(i % 3 if with_bone else i % 2)
 		for a in 3:
 			place.append(rng.randfn(0.0, 0.5 if i % 2 == 0 else 1.6))
 		var s := rng.randf_range(0.08, 0.3) if i % 2 == 0 else rng.randf_range(0.4, 1.4)
@@ -94,7 +117,8 @@ func _avatar() -> Array:
 		turn.append_array(PackedFloat32Array([q.w, q.x, q.y, q.z]))
 		colour.append_array(PackedFloat32Array([rng.randf(), rng.randf(), rng.randf()]))
 		cover.append(rng.randf_range(0.4, 0.95))
-	var h := {"splats": N, "verts": 3, "scores": 52, "head_unit": 4.0, "crop": [0, 0, SIZE], "size": SIZE}
+	var h := {"splats": N, "verts": 3, "scores": 52, "head_unit": 4.0, "crop": [0, 0, SIZE], "size": SIZE,
+		"bones": 1 if with_bone else 0}
 	var arr := {"bind": bind, "place": place, "log_scale": log_scale, "turn": turn, "colour": colour,
 		"cover": cover, "canon": canon, "basis": basis, "tris": PackedInt32Array([0, 1, 2])}
 	return [h, arr]
@@ -115,7 +139,13 @@ func _shifts(h: Dictionary, arr: Dictionary) -> void:
 	arr["colour_d"] = cd
 
 
-func _render(h: Dictionary, arr: Dictionary, shift: Vector3, expr := 0.0) -> Image:
+## The made bone's axes: turned 25 degrees in the picture.
+static func _bone_axes() -> Basis:
+	return Basis(Vector3(0, 0, 1), deg_to_rad(25.0))
+
+
+func _render(h: Dictionary, arr: Dictionary, shift: Vector3, expr := 0.0, torso := Transform2D.IDENTITY,
+		shown := 1) -> Image:
 	var vp := SubViewport.new()
 	vp.size = Vector2i(SIZE, SIZE)
 	vp.disable_3d = true
@@ -129,7 +159,11 @@ func _render(h: Dictionary, arr: Dictionary, shift: Vector3, expr := 0.0) -> Ima
 	head.take(h, arr)
 	var blend := PackedFloat32Array()
 	blend.resize(52)
-	head.pose(blend, 1.0, Basis.IDENTITY, shift)
+	head.pose_face(head.face_of(blend), 1.0, Basis.IDENTITY, shift, torso)
+	if int(h.get("bones", 0)) > 0:
+		head.pose_bones(PackedVector3Array([BONE_AT]), [_bone_axes()], PackedFloat32Array([BONE_UNIT]),
+			[Transform2D.IDENTITY], PackedByteArray([shown]))
+	head.upload()
 	head.set_expr(PackedFloat32Array([expr]))
 	vp.add_child(head)
 	root.add_child(vp)
@@ -143,18 +177,23 @@ func _render(h: Dictionary, arr: Dictionary, shift: Vector3, expr := 0.0) -> Ima
 
 ## THE RULES IN GDSCRIPT: every pixel, the splats blended over in order, each placed and shaped as
 ## splat_head.gdshader places it - or, [param transposed], with its turn transposed (the control).
-func _reference(h: Dictionary, arr: Dictionary, shift: Vector3, transposed: bool, expr := 0.0) -> Image:
+func _reference(h: Dictionary, arr: Dictionary, shift: Vector3, transposed: bool, expr := 0.0,
+		torso := Transform2D.IDENTITY, shown := 1) -> Image:
 	var canon: PackedFloat32Array = arr["canon"]
-	var p0 := Vector3(canon[0], canon[1], canon[2]) + shift
-	var p1 := Vector3(canon[3], canon[4], canon[5]) + shift
-	var p2 := Vector3(canon[6], canon[7], canon[8]) + shift
+	var p0 := SplatHead._carried(torso, Vector3(canon[0], canon[1], canon[2]) + shift)
+	var p1 := SplatHead._carried(torso, Vector3(canon[3], canon[4], canon[5]) + shift)
+	var p2 := SplatHead._carried(torso, Vector3(canon[6], canon[7], canon[8]) + shift)
 	var e1 := (p1 - p0).normalized()
 	var nn := (p1 - p0).cross(p2 - p0).normalized()
 	var e2 := nn.cross(e1)
 	var frames := [[(p0 + p1 + p2) / 3.0, Basis(e1, e2, nn), ((p1 - p0).length() + (p2 - p1).length() + (p0 - p2).length()) / 3.0],
-		[shift, Basis.IDENTITY, float(h["head_unit"])]]
+		[SplatHead._carried(torso, shift), Basis(SplatHead._turned(torso, Vector3.RIGHT), SplatHead._turned(torso, Vector3.UP),
+			SplatHead._turned(torso, Vector3.BACK)), float(h["head_unit"])],
+		[BONE_AT, _bone_axes(), BONE_UNIT]]
 	var shapes: Array = []
 	for i in N:
+		if (arr["bind"] as PackedInt32Array)[i] == 2 and shown == 0:
+			continue
 		var f: Array = frames[(arr["bind"] as PackedInt32Array)[i]]
 		var place: PackedFloat32Array = arr["place"]
 		var ls: PackedFloat32Array = arr["log_scale"]
@@ -171,10 +210,12 @@ func _reference(h: Dictionary, arr: Dictionary, shift: Vector3, transposed: bool
 		if int(h.get("expressions", 0)) > 0:
 			var pd: PackedFloat32Array = arr["place_d"]
 			var cd: PackedFloat32Array = arr["colour_d"]
-			at += expr * Vector3(pd[i * 3], pd[i * 3 + 1], pd[i * 3 + 2])
+			var on_triangle := (arr["bind"] as PackedInt32Array)[i] < 1
+			var w := (1.0 - smoothstep(1.0, 2.0, at.length())) if on_triangle else 0.0
+			at += w * expr * Vector3(pd[i * 3], pd[i * 3 + 1], pd[i * 3 + 2])
 			for c in 3:
 				var x := clampf(tint[c], 1e-4, 1.0 - 1e-4)
-				tint[c] = 1.0 / (1.0 + exp(-(log(x / (1.0 - x)) + expr * cd[i * 3 + c])))
+				tint[c] = 1.0 / (1.0 + exp(-(log(x / (1.0 - x)) + w * expr * cd[i * 3 + c])))
 		var mean: Vector3 = f[0] + unit * (ax * at)
 		var r := ax * own
 		var s := unit * Vector3(exp(ls[i * 3]), exp(ls[i * 3 + 1]), exp(ls[i * 3 + 2]))

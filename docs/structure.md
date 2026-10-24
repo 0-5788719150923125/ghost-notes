@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 390 references inside a folder, 846 down the stack, 0 up it.
+Between scripts today: 392 references inside a folder, 857 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -13,12 +13,12 @@ Between scripts today: 390 references inside a folder, 846 down the stack, 0 up 
 | --- | --- | --- | --- |
 | `app/` | The shell | 13 | `masking`, `cards`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
 | `masking/` | Masking | 15 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
-| `likeness/` | Likeness | 12 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `agents`, `scene_kit`, `platform`, `data` |
+| `likeness/` | Likeness | 12 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
 | `proof/` | Proof | 6 | `desk`, `table`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `desk/` | The desk | 5 | `table`, `media`, `scene_kit`, `data` |
 | `cards/` | Cards | 10 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `geometry`, `audio`, `platform`, `data` |
 | `table/` | The set | 23 | `media`, `scene_kit`, `geometry`, `audio`, `data` |
-| `reading/` | The voice's workspaces | 11 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
+| `reading/` | The voice's workspaces | 12 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
 | `export/` | Export | 4 | `show`, `voice`, `ui`, `notes`, `agents`, `stage`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
 | `show/` | The show | 9 | `media`, `ui`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
@@ -143,7 +143,7 @@ Rendering a session to video (bake + Movie Maker, background processes) and uplo
 
 The panels a voice runs in: the reading (script, cast, voice, stream, export), the Generative editor built on it, and the voice lab with the fishing game that breeds its voices.
 
-[`reading_audition`](../src/reading/reading_audition.gd), [`reading_bed`](../src/reading/reading_bed.gd), [`reading_cast`](../src/reading/reading_cast.gd), [`reading_join`](../src/reading/reading_join.gd), [`reading_panel`](../src/reading/reading_panel.gd), [`reading_plan`](../src/reading/reading_plan.gd), [`reading_publish`](../src/reading/reading_publish.gd), [`reading_stream`](../src/reading/reading_stream.gd), [`synth_editor`](../src/reading/synth_editor.gd), [`text_walk`](../src/reading/text_walk.gd), [`voice_card`](../src/reading/voice_card.gd)
+[`note_upload`](../src/reading/note_upload.gd), [`reading_audition`](../src/reading/reading_audition.gd), [`reading_bed`](../src/reading/reading_bed.gd), [`reading_cast`](../src/reading/reading_cast.gd), [`reading_join`](../src/reading/reading_join.gd), [`reading_panel`](../src/reading/reading_panel.gd), [`reading_plan`](../src/reading/reading_plan.gd), [`reading_publish`](../src/reading/reading_publish.gd), [`reading_stream`](../src/reading/reading_stream.gd), [`synth_editor`](../src/reading/synth_editor.gd), [`text_walk`](../src/reading/text_walk.gd), [`voice_card`](../src/reading/voice_card.gd)
 
 ### `table/` - The set
 

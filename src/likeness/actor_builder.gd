@@ -53,7 +53,7 @@ const AUDIT_SHEETS := 14
 const MAIN := {"survey": "survey.bin", "shots": "shots.json", "sets": "sets.json", "transcribe": "transcript.json",
 	"visemes": "visemes.json", "learn": "mouth_model.json",
 	"motion": "motion.json", "stills": "stills.json", "rig": "rig.json", "library": "library.json",
-	"frames": "avatar/frames.npz", "face": "avatar/rig.npz", "avatar": "avatar/avatar.json",
+	"frames": "avatar/frames.npz", "face": "avatar/rig.npz", "avatar": "avatar/avatar.json", "fit": "avatar/fit.json",
 	"hear": "speech.json", "utterances": "utterances.json", "voice": "voice/voice.onnx"}
 ## Candidate stills a set keeps (enough that some show them at rest: on his footage two of six did, the
 ## fourth pass); prototype mouths per sound and eyes per state its library keeps.
@@ -69,12 +69,13 @@ const HEAR_PROMPT := "Umm, let me think, like, hmm... Okay, uh, here is what I a
 const VOICE_ESPEAK := "en-us"
 ## Sentences a training batch holds: an hour of speech in about 0.8 s a step on a 16 GB card.
 const VOICE_BATCH := 16
-## A HEAD OF SPLATS: frames a second read of the set's longest shot; the square round the head, as a share
-## of the face's height (the hair above, the beard below: on his footage a 302-pixel face took 704); the
-## side it is learned at.
+## THEM AS SPLATS: frames a second read of the set's longest shot, whole (their face, body and room); the
+## square their face is read close in, as a share of the face's height (the hair above, the beard below: on
+## his footage a 302-pixel face took 704).
 const AVATAR_RATE := 2.0
-const AVATAR_CROP := 2.33
-const AVATAR_SIZE := 512
+const AVATAR_FACE := 2.33
+## Steps the body's splats are fitted to the still in (two minutes on a 16 GB card).
+const FIT_STEPS := 3000
 
 var actor: ActorFolder
 ## The renderer the note plays them with: a run makes its steps and the shared ones ([method
@@ -513,7 +514,7 @@ func _phase(run: Dictionary) -> String:
 				stills.append(out.path_join("stills").path_join("still_%d.jpg" % k))
 			var spec := out.path_join("frames.spec.json")
 			var e := ActorFolder.write_file(spec, JSON.stringify({"video": actor.video_path(String(shot["vid"])),
-				"shots": [[shot["start"], shot["end"]]], "crop": shot["crop"], "rate": AVATAR_RATE,
+				"shots": [[shot["start"], shot["end"]]], "crop": shot["crop"], "face_crop": shot["face_crop"], "rate": AVATAR_RATE,
 				"face_model": Provision.file_path("face_model"), "pose_model": Provision.file_path("pose_model"),
 				"stills": stills, "out": out.path_join("avatar")}))
 			if not e.is_empty():
@@ -537,13 +538,29 @@ func _phase(run: Dictionary) -> String:
 			var e := ActorFolder.write_file(spec, JSON.stringify({"frames": dir, "rig": dir.path_join("rig.npz"),
 				"room": out.path_join("stills").path_join("room_%d.jpg" % still),
 				"front": out.path_join("stills").path_join("front_%d.png" % still),
-				"out": dir.path_join("avatar.npz"), "steps": int(actor.settings()["avatar_steps"]), "size": AVATAR_SIZE,
-				"preview": dir.path_join("preview"), "span": [shot.get("start", 0.0), shot.get("end", 1e9)],
-				"face": "tracked"}))
+				"out": dir.path_join("avatar.npz"), "steps": int(actor.settings()["avatar_steps"]),
+				"preview": dir.path_join("preview"), "span": [shot.get("start", 0.0), shot.get("end", 1e9)]}))
 			if not e.is_empty():
 				return e
 			return _spawn(run, "user://voice_train_venv", "res://hosts/avatar/train.py", ["--spec", spec],
-				"learning their head")
+				"learning them")
+		"fit":
+			# the body fitted to the still they are played from: its picture filled where something stands before
+			# them, its matte, and what stands there (hosts/avatar/fit.py)
+			var dir := out.path_join("avatar")
+			var shot := avatar_shot(actor, sid)
+			var still := actor.still_of(sid)
+			var st := out.path_join("stills")
+			var spec := out.path_join("fit.spec.json")
+			var e := ActorFolder.write_file(spec, JSON.stringify({"frames": dir, "rig": dir.path_join("rig.npz"),
+				"room": st.path_join("room_%d.jpg" % still), "front": st.path_join("front_%d.png" % still),
+				"span": [shot.get("start", 0.0), shot.get("end", 1e9)], "poses": dir.path_join("poses.json"),
+				"avatar": dir.path_join("avatar.npz"), "still": still, "picture": st.path_join("body_%d.jpg" % still),
+				"matte": st.path_join("matte_%d.png" % still), "out": dir.path_join("fit.npz"), "steps": FIT_STEPS}))
+			if not e.is_empty():
+				return e
+			return _spawn(run, "user://voice_train_venv", "res://hosts/avatar/fit.py", ["--spec", spec],
+				"fitting their body to the still")
 		"library":
 			var spec := out.path_join("library.spec.json")
 			var e := ActorFolder.write_file(spec, JSON.stringify({"rig": out.path_join("rig.json"),
@@ -765,7 +782,7 @@ func _land_process(run: Dictionary) -> String:
 			actor.put_stamp(step, scope, "%s, %d fps" % [Clock.text(float(info["duration"])), roundi(float(info["fps"]))])
 			return "done"
 		"survey", "shots", "sets", "transcribe", "visemes", "learn", "motion", "stills", "rig", "library", "frames", "face",\
-				"avatar", "hear", "utterances", "voice":
+				"avatar", "fit", "hear", "utterances", "voice":
 			if not _made_by(out.path_join(String(MAIN[step])), run):
 				return _tail(String(run["log"]))
 			var said := _said_by(String(run["log"]), step)
@@ -1107,10 +1124,11 @@ func videos_spec() -> Dictionary:
 
 ## THE USABLE SHOTS of set [param sid], or with none of every steady set (a handheld one moves with
 ## the camera, not with them): `[{vid, start, end, set}]`, of ticked videos only.
-## THE SHOT A HEAD OF SPLATS IS LEARNED FROM: set [param sid]'s longest usable shot, one camera placement
-## (a set's shots can stand a little apart - his first two are framed wider than the third), with the
-## square round their head in it - [x, y, side], full-resolution pixels, AVATAR_CROP of the face's height,
-## a little above its middle for the hair, inside the frame. `{vid, start, end, crop}`, {} for none.
+## THE SHOT THEY ARE LEARNED FROM AS SPLATS: set [param sid]'s longest usable shot, one camera placement (a
+## set's shots can stand a little apart - his first two are framed wider than the third), read whole: `crop` is
+## the frame, [0, 0, width, height]; `face_crop` the square their face is read close in ([x, y, side]:
+## AVATAR_FACE of the face's height, a little above its middle, inside the frame). `{vid, start, end, crop,
+## face_crop}`, {} for none.
 static func avatar_shot(a: ActorFolder, sid: String) -> Dictionary:
 	var best := {}
 	for s in a.sets():
@@ -1126,17 +1144,16 @@ static func avatar_shot(a: ActorFolder, sid: String) -> Dictionary:
 	if best.is_empty():
 		return {}
 	var probe: Variant = ActorFolder.read_json(a.video_dir(String(best["vid"])).path_join("probe.json"))
-	var w := float((probe as Dictionary).get("width", 1920)) if probe is Dictionary else 1920.0
-	var h := float((probe as Dictionary).get("height", 1080)) if probe is Dictionary else 1080.0
+	var w := int((probe as Dictionary).get("width", 1920)) if probe is Dictionary else 1920
+	var h := int((probe as Dictionary).get("height", 1080)) if probe is Dictionary else 1080
 	var box: Array = best.get("box", [0.4, 0.2, 0.6, 0.5])
 	var face_h := (float(box[3]) - float(box[1])) * h
-	var side := clampf(roundf(AVATAR_CROP * face_h / 16.0) * 16.0, 256.0, minf(w, h))
+	var side := clampf(roundf(AVATAR_FACE * face_h / 16.0) * 16.0, 256.0, float(mini(w, h)))
 	var cx := (float(box[0]) + float(box[2])) * 0.5 * w
 	var cy := (float(box[1]) + float(box[3])) * 0.5 * h + 0.05 * face_h
-	var x0 := clampf(roundf(cx - side * 0.5), 0.0, w - side)
-	var y0 := clampf(roundf(cy - side * 0.5), 0.0, h - side)
 	return {"vid": String(best["vid"]), "start": float(best["start"]), "end": float(best["end"]),
-		"crop": [int(x0), int(y0), int(side)]}
+		"crop": [0, 0, w, h], "face_crop": [int(clampf(roundf(cx - side * 0.5), 0.0, w - side)),
+			int(clampf(roundf(cy - side * 0.5), 0.0, h - side)), int(side)]}
 
 
 static func shots_of(a: ActorFolder, sid := "") -> Array:

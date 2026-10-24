@@ -16,8 +16,9 @@ extends SceneTree
 ##                  its `.wav`): the medium itself over the take, frame by frame at --fps, --width wide -
 ##                  the head moving, the blinks, the mouth (ffmpeg makes them a film with the take's sound)
 ##
-## With `--renderer gaussian` the set's head of splats is drawn (its `avatar/`), and only the take: the identity,
-## the sounds and the eyes are the 2D library's.
+## With `--renderer gaussian` the set's splats are drawn (`avatar/fit`, the avatar fitted to its still, on that
+## still), and only the take: the identity, the sounds and the eyes are the 2D library's. `--no-shifts 1` draws
+## its splats without their expression shifts (to see what the shifts move).
 ##
 ## NOT `--headless`: every picture is a rendered frame read back. Nothing is written but --out.
 
@@ -160,6 +161,8 @@ func _play_take(sz: Vector2i) -> void:
 		duration += 1.0
 	var m := await _medium(sz)
 	m._plan.set_voice(phones)
+	if _arg(OS.get_cmdline_user_args(), "--no-shifts", "0") == "1" and m._splat != null:
+		m._splat._mat.set_shader_parameter("expressions", 0)
 	var vp := m.get_parent() as SubViewport
 	DirAccess.make_dir_recursive_absolute(_out.path_join("take"))
 	var n_frames := int(ceil(duration * _fps))

@@ -283,6 +283,10 @@ class Publish extends ReadingPublish:
 	func youtube_built(yt: YouTubeCard) -> void:
 		card.youtube_built(yt)
 
+	# its episodes say what they go up with, and list the other cards' steps themselves
+	func note_is_episode() -> bool:
+		return false
+
 
 ## THE EPISODE AS THE STEPS OTHER CARDS ADD TO IT READ IT ([EpisodeFeed]): its folder, the show's name,
 ## the episode's title and description, the show's tags (and a step's to write over them), its reading

@@ -17,8 +17,13 @@ uniform int splat_width = 1024;
 uniform int frame_width = 1024;
 uniform int per_splat = 4;
 // The expression a frame shows: its components (SplatHead.expr_of), and how many the splats were learned with.
+// Only a splat on a triangle of the face takes them, and less the farther it stands from its triangle (from
+// `shift_near` to `shift_far` of its triangle's units, as train.py's Splats.shift_weight).
 uniform int expressions = 0;
 uniform float expr[16];
+uniform int triangles = 0;
+uniform float shift_near = 1.0;
+uniform float shift_far = 2.0;
 // The trainer's 0.3 square pixels of blur, in the drawn pixels' terms.
 uniform float low_pass = 0.3;
 
@@ -48,17 +53,20 @@ void vertex() {
 	vec4 e = texel(splat_data, splat_width, base + 3);
 	vec3 place = a.xyz;
 	vec3 logit = e.rgb;
-	for (int k = 0; k < 16; k++) {
+	int bound = int(a.w + 0.5);
+	float shifted = bound < triangles ? 1.0 - smoothstep(shift_near, shift_far, length(a.xyz)) : 0.0;
+	// a splat that takes no shift (the body's, the head's, one far from its triangle) reads none of them
+	for (int k = 0; k < 16 && shifted > 0.0; k++) {
 		if (k >= expressions) {
 			break;
 		}
-		place += expr[k] * texel(splat_data, splat_width, base + 4 + 2 * k).xyz;
-		logit += expr[k] * texel(splat_data, splat_width, base + 5 + 2 * k).xyz;
+		place += shifted * expr[k] * texel(splat_data, splat_width, base + 4 + 2 * k).xyz;
+		logit += shifted * expr[k] * texel(splat_data, splat_width, base + 5 + 2 * k).xyz;
 	}
-	int f = int(a.w + 0.5) * 4;
+	int f = bound * 4;
 	vec4 o = texel(frame_data, frame_width, f);
-	mat3 ax = mat3(texel(frame_data, frame_width, f + 1).xyz, texel(frame_data, frame_width, f + 2).xyz,
-		texel(frame_data, frame_width, f + 3).xyz);
+	vec4 x_axis = texel(frame_data, frame_width, f + 1);
+	mat3 ax = mat3(x_axis.xyz, texel(frame_data, frame_width, f + 2).xyz, texel(frame_data, frame_width, f + 3).xyz);
 	vec3 mean = o.xyz + o.w * (ax * place);
 	mat3 r = ax * rot_of(normalize(c));
 	vec3 s = o.w * exp(b.xyz);
@@ -78,7 +86,8 @@ void vertex() {
 	VERTEX = mean.xy + off;
 	d = off;
 	conic = vec3(sc, -sb, sa) / det;
-	col = vec4(1.0 / (1.0 + exp(-logit)), b.w);
+	// a bone not seen: its splats clear (the frame's flag, its first axis's w)
+	col = vec4(1.0 / (1.0 + exp(-logit)), b.w * x_axis.w);
 	tint = COLOR;
 }
 

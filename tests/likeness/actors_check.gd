@@ -20,14 +20,15 @@ extends SceneTree
 ## before the Voice; ▶ on the Voice makes those three and nothing of their picture, and the voice's
 ## lessons changed make the Voice stale and only it.
 ## TWO RENDERERS: a run for the 2D renderer makes none of the head of splats, and the actor does not play
-## as one; a run for the gaussian renderer then makes its Frames, Face rig and Avatar in order, and nothing
-## else - the steps the two share are made once (THE CONTROL: the 2D run did make the 2D's library).
+## as one; a run for the gaussian renderer then makes its Frames, Face rig, Avatar and Fit in order, and
+## nothing else - the steps the two share are made once (THE CONTROL: the 2D run did make the 2D's library).
 ## THE STILL DRAWN ON: the one picked, else the one At rest found most at ease, else the first; stills
 ## made again forget the pick (an index into the old ones).
 ## A CHANGED INPUT MARKS STALE: a setting a step reads makes it stale, and only it, until it is made
 ## again - then what was made from it. ⟳ THROWS A STEP AWAY and makes it again; what is made from it
 ## directly is stale (and what is made from those, once they are made again). A video unticked makes
-## the sets stale. A STILL PICKED changes nothing that is made: the library is the set's.
+## the sets stale. A STILL PICKED changes nothing that is made but the body fitted to a still (the Fit: the
+## Avatar it is fitted from stays made): the library is the set's.
 ## A RESTART CHANGES NOTHING: the actor read again from its file finds every step as it was, its videos
 ## held in an order their ids do not sort in (2026-10-21: `actor.json` was written sorted, read back in
 ## another order than the stamps were made in, and the user's built set went stale after a restart -
@@ -169,7 +170,7 @@ func _run() -> void:
 	b.start()
 	_spin(b)
 	_actor.forget()
-	_ok(_made == ["frames|" + s, "face|" + s, "avatar|" + s], "a gaussian run after a 2D one made %s" % str(_made))
+	_ok(_made == ["frames|" + s, "face|" + s, "avatar|" + s, "fit|" + s], "a gaussian run after a 2D one made %s" % str(_made))
 	_ok(_actor.playable("", "gaussian"), "a head of splats made does not play")
 	_ok(ActorSteps.serves("motion", "gaussian") and ActorSteps.serves("motion", "2d") and not ActorSteps.serves("library", "gaussian")
 		and not ActorSteps.serves("avatar", "2d"), "a step serves the wrong renderer")
@@ -187,6 +188,8 @@ func _run() -> void:
 	_actor.forget()
 	_ok(_actor.still_of(sid) == 1, "the still picked was not drawn on")
 	_ok(_actor.state_of("library", s) == "made" and _actor.state_of("rig", s) == "made", "picking a still made the set stale")
+	_ok(_actor.state_of("avatar", s) == "made", "picking a still left the avatar %s" % _actor.state_of("avatar", s))
+	_ok(_actor.state_of("fit", s) == "stale", "picking a still left the body fitted to another %s" % _actor.state_of("fit", s))
 	# ⟳: the step thrown away and made again, what is made from it stale
 	_made = []
 	var stills_file := _actor.set_dir(sid).path_join("stills.json")

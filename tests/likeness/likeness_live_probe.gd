@@ -78,7 +78,7 @@ func _run() -> void:
 		var sid := a.chosen_set()
 		for st in ["visemes", "motion"]:
 			a.put_stamp(st, "", "stamped by the probe")
-		for st in ["stills", "rig", "library", "frames", "face", "avatar"]:
+		for st in ["stills", "rig", "library", "frames", "face", "avatar", "fit"]:
 			a.put_stamp(st, "s:" + sid, "stamped by the probe")
 		print("stamped the copy's set %s: playable %s" % [sid, a.playable()])
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_out))

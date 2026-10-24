@@ -45,6 +45,9 @@ var tier := "best"
 ## the card that offers the step say where it is.
 var host := ""
 var shown: EpisodeFeed = null
+## What makes the episode there, as the card offering the step says it ("making the episode"; a note read
+## as it is written, "an export that goes up").
+var host_makes := "making the episode"
 
 var _jobs := {}      # folder -> {id, feed, stamp}: a job making it for that episode
 var _errors := {}    # folder -> why it failed, once out of tries
@@ -63,10 +66,12 @@ func wanted() -> bool:
 	return true
 
 
-## The card listing it says so, each refresh: its name ([param by]) and the episode it shows.
-func listed(by: String, feed: EpisodeFeed) -> void:
+## The card listing it says so, each refresh: its name ([param by]), the episode it shows and what makes
+## it there ([param makes]).
+func listed(by: String, feed: EpisodeFeed, makes := "making the episode") -> void:
 	host = by
 	shown = feed
+	host_makes = makes
 
 
 ## The file it is kept in for [param feed]'s episode; "" with no episode.
@@ -120,7 +125,7 @@ func said(feed: EpisodeFeed) -> String:
 	if feed.words().is_empty():
 		return waits
 	if not made(feed).is_empty():
-		return "made from the words before they were written again - Generate or ⟳ makes it again"
+		return "made from the words before they were written again - ⟳ makes it again, and so does %s" % host_makes
 	return unmade
 
 

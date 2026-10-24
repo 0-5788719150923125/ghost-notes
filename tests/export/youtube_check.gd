@@ -83,6 +83,17 @@ extends SceneTree
 ##   card shows the note's tags as one list too, lists the step under the Script, hands it the note's tags
 ##   with the framer's, and uploads the note's list alone - the framer's go into an empty one, once, and
 ##   never in a read-only process (the control) - until the step writes over it.
+## - A NOTE READ AS IT IS WRITTEN IS ITS OWN EPISODE (2026-10-23, of an actor's note: "I don't see anywhere
+##   it would be possible to write a description ... be sure that the auto-tagging mechanism should work as
+##   well"): its YouTube card shows a description box (hidden on a card whose show describes its episodes -
+##   the control - and nothing of it going up while hidden), kept in its block lines and all, and the note's
+##   tags as one list; the upload takes the description first, then the component's (an actor's says how
+##   they were made - splats for Gaussian, their pixels bent for 2D), and the note's tags with any of its own.
+##   The tags step is listed on the card with the note as its episode, in the note's own folder, reading its
+##   words with the marks out, the title as it goes up, the description and the component's writer; only an
+##   export that goes up starts it (the control: one that does not starts nothing), refused here, said on its
+##   row; while its job runs the export waits; landed, it is ✓ with its ⟳ and replaces the note's tags on the
+##   card and going up; words written again make it stale.
 ## - A REAL SHOW FILE: the tags and the byline land as top-level lines above ghost's block - the
 ##   chapter format - the block holds the show's title and description and no record per episode, the
 ##   rest of the file is untouched, and a panel opening it fills a new episode from it at once.
@@ -115,7 +126,7 @@ func _run() -> void:
 	_wipe(TAROT)
 	_wipe(ROOT + "_files")
 	for check in [_client, _import, _channels, _pkce, _auth_url, _query, _wire, _fit, _body, _records, _episode_notes,
-			_menu, _card, _episode_tags, _tag_field, _panel_fields, _proof_steps, _doc_file]:
+			_menu, _card, _episode_tags, _tag_field, _panel_fields, _proof_steps, _note_steps, _doc_file]:
 		if not bool(check.call()):
 			_ok(false, "a check stopped part way (script error?)")
 	_wipe(ROOT)
@@ -486,16 +497,25 @@ func _card() -> bool:
 	card.exporter = ex
 	var cap: Dictionary = card.capture()
 	_ok(cap == {"upload": false, "title": "%title%: %episode%", "privacy": "private", "category": "22", "playlist": "",
-		"playlist_title": "", "channel": "", "channel_name": "", "write_tags": false},
+		"playlist_title": "", "channel": "", "channel_name": "", "write_tags": false, "description": ""},
 		"a new card uploads nothing, privately, as People & Blogs, titled by the template, to no channel yet (%s)" % str(cap))
 	card.values = func() -> Dictionary: return {"title": "Truthful Tarot", "episode": "The Tower"}
 	_ok(card.meta({"tags": ["a"]}).is_empty(), "unticked, it describes no upload whatever the panel has")
 	card.apply({"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted", "category": "27",
-		"playlist": "PL1", "playlist_title": "Readings", "channel": "UC-x", "channel_name": "@x", "write_tags": true})
+		"playlist": "PL1", "playlist_title": "Readings", "channel": "UC-x", "channel_name": "@x", "write_tags": true,
+		"description": "Line one.\n\nLine two."})
 	_ok(card.capture() == {"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted",
 		"category": "27", "playlist": "PL1", "playlist_title": "Readings", "channel": "UC-x", "channel_name": "@x",
-		"write_tags": true},
-		"its block round-trips (%s)" % str(card.capture()))
+		"write_tags": true, "description": "Line one.\n\nLine two."},
+		"its block round-trips, the description's lines and all (%s)" % str(card.capture()))
+	_ok(not card._desc.visible and card.description().is_empty() and card.meta({"tags": [], "description": "Theirs."}).get("description") == "Theirs.",
+		"control: its description box is hidden until the panel shows it, and then nothing of it goes up")
+	card.describe()
+	_ok(card._desc.visible and card.meta({"tags": [], "description": "Theirs."}).get("description") == "Line one.\n\nLine two.\n\nTheirs."
+		and card.meta({"tags": []}).get("description") == "Line one.\n\nLine two.",
+		"shown, what is written there goes up first, then the panel's (%s)" % str(card.meta({"tags": [], "description": "Theirs."}).get("description")))
+	card.apply({"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted", "category": "27",
+		"playlist": "PL1", "playlist_title": "Readings", "channel": "UC-x", "channel_name": "@x", "write_tags": true})
 	var m: Dictionary = card.meta({"tags": ["a"], "record": "r.json"})
 	_ok(m.get("title") == "Truthful Tarot - The Tower (%s)" % Time.get_date_string_from_system() and m.get("privacy") == "unlisted"
 		and m.get("category") == "27" and YouTube.video_body(m)["snippet"]["categoryId"] == "27"
@@ -608,6 +628,8 @@ func _proof_steps() -> bool:
 	ed._doc._fields = {"title": "Proofs", "tags": "math"}
 	var proof = ed._block_cards["proof"]
 	ed._attach("youtube")
+	_ok(ed._note_upload == null and not ed._youtube._desc.visible,
+		"control: a note whose card makes its episodes shows no description box of the YouTube card's, and lists no step there")
 	ed._youtube._upload.set_pressed_no_signal(true)
 	ed._youtube._write_tags.button_pressed = true
 	proof._open_episode()
@@ -653,6 +675,94 @@ func _proof_steps() -> bool:
 	_wipe(ProofEpisode.root)
 	ProofEpisode.root = keep
 	return true
+
+
+## A NOTE READ AS IT IS WRITTEN IS ITS OWN EPISODE (2026-10-23, of an actor's note: "I don't see anywhere it
+## would be possible to write a description ... be sure that the auto-tagging mechanism should work as well").
+func _note_steps() -> bool:
+	var keep: String = load("res://src/reading/note_upload.gd").root
+	load("res://src/reading/note_upload.gd").root = ROOT + "_readings"
+	var ed = load("res://src/reading/reading_panel.gd").new()
+	ed.workspace = "reading"
+	ed._build_panel()
+	ed._doc._sync = false
+	ed._doc._fields = {"title": "A Reading", "tags": "readings, voice"}
+	ed.note_path = ROOT + "_files/A Reading.md"
+	ed._text.text = "The quick brown fox <!-- a mark --> jumps over the lazy dog."
+	ed.publish = _own_publish()
+	ed._attach("youtube")
+	var up = ed._note_upload
+	_ok(up != null and ed._youtube._desc.visible and _tag_fields(ed._youtube) == 1,
+		"on the YouTube card: a description box, and the note's tags as one list")
+	ed._youtube._upload.set_pressed_no_signal(true)
+	ed._youtube._desc.text = "What this video is.\n\nA second paragraph."
+	var m: Dictionary = ed.upload_meta("")
+	_ok(m.get("description") == "What this video is.\n\nA second paragraph.\n\nA likeness of Someone, said."
+		and m.get("tags") == ["readings", "voice", "theirs"] and m.get("title") == "A Reading",
+		"the upload goes with the description written there, then the component's, and the note's tags with its own (%s)" % str(m))
+	var said: String = load("res://src/likeness/actor_card.gd").disclosure("Someone", "gaussian")
+	var bent: String = load("res://src/likeness/actor_card.gd").disclosure("Someone", "2d")
+	_ok(said.contains("Gaussian splats") and not said.contains("pixel") and bent.contains("Every pixel of them is a real one"),
+		"an actor's upload says how they were made: splats for Gaussian, their own pixels bent for 2D (control)")
+	# THE TAGS STEP, listed here with the note as its episode
+	var step = ed._youtube.episode_steps()[0]
+	up.refresh()
+	_ok(step.host.is_empty() and up._step_rows.is_empty(), "control: with the box clear, the step is not listed")
+	ed._youtube._write_tags.button_pressed = true
+	up.refresh()
+	var folder: String = up._feed.folder()
+	_ok(step.host == "this card" and step.shown == up._feed and up._step_rows.has(step.key)
+		and folder.begins_with(ProjectSettings.globalize_path(ROOT + "_readings")) and folder.get_file().begins_with("a-reading-"),
+		"ticked, it is listed on this card, the note its episode, kept in the note's own folder (%s)" % folder.get_file())
+	_ok(up._feed.words() == "The quick brown fox  jumps over the lazy dog." and up._feed.episode_title() == "A Reading"
+		and up._feed.description().begins_with("What this video is.") and Array(up._feed.tags()) == ["readings", "voice"]
+		and up._feed.writer()["agent"] == "codex",
+		"the step reads the note's words with the marks out, the title as it goes up, the description, the tags and the component's writer")
+	ed._youtube._refresh_tags()
+	_ok(ed._youtube._tags_note.text.ends_with("and so does an export that goes up."),
+		"the card says an export that goes up writes them (%s)" % ed._youtube._tags_note.text)
+	ed._youtube._upload.set_pressed_no_signal(false)
+	up.start()
+	_ok(step.state(up._feed) == "missing", "control: an export that does not go up starts nothing")
+	ed._youtube._upload.set_pressed_no_signal(true)
+	up.start()
+	up.refresh()
+	var r: Dictionary = up._step_rows[step.key]
+	_ok(step.state(up._feed) == "failed" and not up._busy() and (r["state"] as Label).text.contains("read-only"),
+		"one that goes up starts it - here refused, read-only, and said on its row (%s)" % (r["state"] as Label).text)
+	step._errors.clear()
+	AgentJobs._ended["text-youtube-check-note"] = {"ok": true, "text": "{\"tags\": [\"quick brown fox\", \"lazy dog\", \"reading\"]}"}
+	step._jobs[folder] = {"id": "text-youtube-check-note", "feed": up._feed, "stamp": up._feed.stamp()}
+	_ok(up._busy(), "while its job runs, an export waits for it")
+	up.refresh()
+	r = up._step_rows[step.key]
+	_ok(not up._busy() and (r["state"] as Label).text == "✓ 3 tags: quick brown fox, lazy dog, reading" and not (r["redo"] as Button).disabled,
+		"landed: its ✓, its tags, its ⟳ (%s)" % (r["state"] as Label).text)
+	_ok(ed._doc.field("tags") == "quick brown fox, lazy dog, reading" and Array(up._tags_field.get_tags()) == ["quick brown fox", "lazy dog", "reading"]
+		and ed.upload_meta("").get("tags") == ["quick brown fox", "lazy dog", "reading", "theirs"],
+		"they replace the note's tags: on the card, and going up (%s)" % ed._doc.field("tags"))
+	ed._text.text = "Words written again."
+	up.refresh()
+	_ok(step.state(up._feed) == "missing" and (up._step_rows[step.key]["state"] as Label).text.contains("written again"),
+		"words written again make them stale: the next export that goes up writes new ones")
+	ed.free()
+	_wipe(ROOT + "_readings")
+	load("res://src/reading/note_upload.gd").root = keep
+	return true
+
+
+## A component's publish with a part of its own in an upload, as an Actor's is - made here, not named: the
+## reading's scripts need the autoloads, which are only up by now.
+func _own_publish() -> Object:
+	var g := GDScript.new()
+	g.source_code = "\n".join(PackedStringArray([
+		"extends \"res://src/reading/reading_publish.gd\"",
+		"func upload_base(_take: String) -> Dictionary:",
+		"\treturn {\"tags\": [\"theirs\"], \"description\": \"A likeness of Someone, said.\"}",
+		"func writer() -> Dictionary:",
+		"\treturn {\"agent\": \"codex\", \"model\": \"\", \"effort\": \"\"}"]))
+	g.reload()
+	return g.new()
 
 
 ## The Episode card's row of the step another card added, {} for none.

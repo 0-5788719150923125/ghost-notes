@@ -125,6 +125,9 @@ var _attached: Array = []
 ## each answers `capture() -> Dictionary` and `apply(block)`. The voice is this panel's own.
 var _block_cards := {}
 var _youtube: YouTubeCard
+## THE NOTE AS ITS OWN EPISODE on the YouTube card ([NoteUpload]) - its description, its tags and the steps
+## made from its words - when [member publish] says it is one; null otherwise.
+var _note_upload: NoteUpload
 
 ## THE STEPS THE NOTE'S CARDS ADD TO ITS EPISODES ([EpisodeStep]): every one a card built here offers
 ## (`episode_steps()` - the YouTube card's tags), for the card that makes episodes to list
@@ -452,6 +455,9 @@ func _add_youtube() -> void:
 	if card != null and _status != null and _status.get_parent() == card.get_parent():
 		card.get_parent().move_child(card, _status.get_index())
 	publish.youtube_built(_youtube)
+	if publish.note_is_episode():
+		_note_upload = NoteUpload.new(self, _youtube)
+		_youtube.extra.add_child(_note_upload)
 
 
 ## What the YouTube title's macros are worth now (see [method YouTube.expand_title]): the note's
@@ -485,6 +491,12 @@ func _offer_steps(card: Object) -> void:
 ## its own at once.
 func episode_steps() -> Array:
 	return _steps
+
+
+## The note as its own episode ([NoteUpload]), for a card that lists the steps made from its words under its
+## own (the Actor card); null while the note has no YouTube card, or makes episodes.
+func note_upload() -> NoteUpload:
+	return _note_upload
 
 
 func _build_header(box: VBoxContainer) -> void:
@@ -933,10 +945,16 @@ func export_name() -> String:
 
 
 ## What an upload of the take at [param take] says (see [member Exporter.upload_provider]): the
-## YouTube card's title, visibility and playlist over what [member publish] adds; {} without a
-## card, or with its box clear.
+## YouTube card's title, visibility and playlist over what [member publish] adds - and, for a note that
+## is its own episode, its tags and the description written on the card; {} without a card, or with its
+## box clear.
 func upload_meta(take: String) -> Dictionary:
-	return _youtube.meta(publish.upload_base(take)) if _youtube != null else {}
+	if _youtube == null:
+		return {}
+	var base := publish.upload_base(take)
+	if _note_upload != null and not base.is_empty():
+		base = _note_upload.upload_of(base)
+	return _youtube.meta(base)
 
 
 ## Gate for the export button. The procedural path asks whether a seed has been
@@ -947,11 +965,16 @@ func can_export_take() -> bool:
 
 
 ## Render the WHOLE text to one WAV, independent of whatever is playing - with what the take is of
-## held by [member publish] while it renders, and what goes with it written after.
+## held by [member publish] while it renders, and what goes with it written after. A note that is its
+## own episode has what its upload takes made from its words meanwhile, and waits for it ([NoteUpload]).
 func export_take() -> String:
 	if not publish.before_take():
 		return ""
+	if _note_upload != null:
+		_note_upload.start()
 	var path: String = await _render_take()
+	if _note_upload != null and not path.is_empty():
+		await _note_upload.settled()
 	var said := publish.after_take(path)
 	if not said.is_empty():
 		_set_status(said)

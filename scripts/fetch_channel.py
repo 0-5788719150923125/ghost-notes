@@ -1,6 +1,7 @@
 """Fetch a YouTube channel's latest videos into a folder, unattended - an actor's footage cache.
 
     python3 scripts/fetch_channel.py <channel> --count N --out <folder> [--min-minutes 3] [--wait 45]
+                                     [--cookies-from-browser firefox] [--cookies <file>] [--backoff 3600]
                                      [--no-captions] [--list] [--no-upgrade]
 
     python3 scripts/fetch_channel.py @EphemeralRift --count 60 --out "/home/crow/Downloads/Ephemeral Rift (more)"
@@ -20,6 +21,13 @@ MADE TO RUN OVERNIGHT AND AGAIN:
 - A video that fails is tried once more at the end; the rest go on. A partial download is carried on
   from where it stopped (`--continue`).
 - It waits --wait seconds (give or take a third) between videos, and a second between requests.
+- WHEN YOUTUBE ASKS IF IT IS A BOT ("Sign in to confirm you're not a bot" - after a dozen videos in a row,
+  2026-10-23), it waits --backoff seconds (an hour: fifteen minutes was not enough) before the next, rather
+  than meeting the same answer for every one left; that video is tried again at the end. Signed in, it is asked less: --cookies-from-browser reads the
+  browser's own cookies (firefox, chrome, chromium, brave, edge, vivaldi, opera, safari; `name:profile` for a
+  profile), --cookies a cookies.txt - the same as yt-dlp's options, handed to it. The cookies stay where they
+  are; nothing is copied.
+- Ctrl+C stops it; what is fetched is kept, and running it again carries on.
 - Every line yt-dlp says goes to <out>/fetch.log as well; the end says what was fetched, what was there
   and what failed.
 
@@ -73,8 +81,9 @@ def ready(venv: Path, upgrade: bool) -> str:
         upgrade = True
     if upgrade:
         print("bringing yt-dlp and deno to their newest ...", flush=True)
+        # secretstorage: how yt-dlp reads a Chromium browser's cookies on Linux, where they are encrypted
         r = subprocess.run([str(py), "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "--upgrade",
-                            "yt-dlp[default]", "deno"])
+                            "yt-dlp[default]", "deno"] + (["secretstorage"] if sys.platform.startswith("linux") else []))
         if r.returncode != 0:
             return ""
     return str(py)
@@ -166,8 +175,9 @@ def already(out: Path) -> tuple:
     return ids, titles
 
 
-def fetch(py: str, rt: list, vid: str, out: Path, captions: bool, log: Log) -> bool:
-    """One video into [out], as the Actor card fetches one; yt-dlp's every line into the log."""
+def fetch(py: str, rt: list, vid: str, out: Path, captions: bool, log: Log) -> str:
+    """One video into [out], as the Actor card fetches one; yt-dlp's every line into the log. "ok", "bot" (YouTube
+    asked it to sign in, to prove it is not a bot) or "failed"."""
     cmd = [py, "-u", "-m", "yt_dlp", "--no-playlist", "--newline", "--no-overwrites", "--continue",
            "--socket-timeout", "30", "--retries", "10", "--fragment-retries", "10", "--sleep-requests", "1",
            "-f", FORMAT, "--merge-output-format", "mp4", "--throttled-rate", "100K", "--concurrent-fragments", "4",
@@ -177,8 +187,11 @@ def fetch(py: str, rt: list, vid: str, out: Path, captions: bool, log: Log) -> b
     cmd += rt + ["https://www.youtube.com/watch?v=" + vid]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
     last = 0.0
+    bot = False
     for line in p.stdout:
         line = line.rstrip()
+        if "not a bot" in line:
+            bot = True
         # the progress lines, once every half minute; everything else as it comes
         if "[download]" in line and "%" in line and "Destination" not in line:
             if time.time() - last < 30.0:
@@ -188,7 +201,9 @@ def fetch(py: str, rt: list, vid: str, out: Path, captions: bool, log: Log) -> b
         if "ERROR" in line or "Merging" in line or "has already been" in line:
             print("   " + line, flush=True)
     log.f.flush()
-    return p.wait() == 0
+    if p.wait() == 0:
+        return "ok"
+    return "bot" if bot else "failed"
 
 
 def main() -> int:
@@ -202,7 +217,20 @@ def main() -> int:
     ap.add_argument("--list", action="store_true", help="say what would be fetched, and fetch nothing")
     ap.add_argument("--no-upgrade", action="store_true", help="use the environment's yt-dlp as it is")
     ap.add_argument("--python", default="", help="another Python with yt_dlp in it, not the script's own")
+    ap.add_argument("--cookies-from-browser", default="", metavar="BROWSER",
+                    help="sign in as the browser is (firefox, chrome, ...; name:profile): YouTube asks less if it is a bot")
+    ap.add_argument("--cookies", default="", metavar="FILE", help="a cookies.txt to sign in with")
+    ap.add_argument("--backoff", type=float, default=3600.0,
+                    help="seconds to wait when YouTube asks if this is a bot, before the next video")
     a = ap.parse_args()
+    try:
+        return run(a)
+    except KeyboardInterrupt:
+        print("\nstopped - what is fetched is kept; run it again to carry on", flush=True)
+        return 130
+
+
+def run(a) -> int:
     venv = own_venv()
     py = a.python or ready(venv, not a.no_upgrade)
     if not py or not Path(py).exists():
@@ -213,9 +241,13 @@ def main() -> int:
     if not a.list:
         out.mkdir(parents=True, exist_ok=True)
     log = Log(None if a.list else out / "fetch.log")
-    rt = runtime(venv)
+    js = runtime(venv)
+    auth = (["--cookies-from-browser", a.cookies_from_browser] if a.cookies_from_browser else []) \
+        + (["--cookies", str(Path(a.cookies).expanduser())] if a.cookies else [])
+    rt = js + auth
     url = channel_url(a.channel)
-    log("listing %s (yt-dlp %s, %s)" % (url, ver, rt[1].split(":")[0] if rt else "no JavaScript runtime"))
+    log("listing %s (yt-dlp %s, %s%s)" % (url, ver, js[1].split(":")[0] if js else "no JavaScript runtime",
+                                         ", signed in as " + (a.cookies_from_browser or "cookies.txt") if auth else ""))
     entries = listing(py, rt, url, max(a.count * 2, a.count + 10), log)
     if not entries:
         return 1
@@ -254,16 +286,27 @@ def main() -> int:
     failed = []
     for n, e in enumerate(todo):
         log("[%d/%d] %s" % (n + 1, len(todo), e.get("title")))
-        if not fetch(py, rt, e["id"], out, not a.no_captions, log):
+        got = fetch(py, rt, e["id"], out, not a.no_captions, log)
+        if got != "ok":
             failed.append(e)
             log("   failed - tried again at the end")
         if n + 1 < len(todo):
-            time.sleep(a.wait * random.uniform(0.67, 1.33))
+            if got == "bot":
+                log("   YouTube asked if this is a bot: waiting %.0f minutes%s" % (a.backoff / 60.0,
+                    "" if auth else " (--cookies-from-browser makes it ask less)"))
+                time.sleep(a.backoff)
+            else:
+                time.sleep(a.wait * random.uniform(0.67, 1.33))
     still = []
     for e in failed:
         log("[again] %s" % e.get("title"))
         time.sleep(a.wait)
-        if not fetch(py, rt, e["id"], out, not a.no_captions, log):
+        got = fetch(py, rt, e["id"], out, not a.no_captions, log)
+        if got == "bot":
+            log("   YouTube asked again: waiting %.0f minutes" % (a.backoff / 60.0))
+            time.sleep(a.backoff)
+            got = fetch(py, rt, e["id"], out, not a.no_captions, log)
+        if got != "ok":
             still.append(e)
     log("done: %d fetched, %d already here, %d failed%s" % (len(todo) - len(still), len(have), len(still),
                                                           "".join("\n  failed: %s" % e.get("title") for e in still)))

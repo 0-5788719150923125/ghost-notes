@@ -1,13 +1,16 @@
 extends Node2D
 class_name SplatHead
 
-## SplatHead - an actor's head as 3D Gaussian splats bound to their own face (next/likeness.md, "A head of
-## splats"), drawn over their still: the avatar hosts/avatar/train.py learned, read from its `.json` and `.bin`.
+## SplatHead - an actor as 3D Gaussian splats bound to their own face and body (next/likeness.md, "A head of
+## splats", "The whole of them"): the avatar hosts/avatar/train.py learned, read from its `.json` and `.bin`
+## (its room is the `.plate.png` beside them, which the medium draws behind it).
 ##
-## THE FACE IS POSED HERE, the splats on the graphics card: [method pose] moves the rig's neutral face by
-## MediaPipe's 52 scores (the mouth's for a sound, the lids' for a blink), turns and places it as the head
-## stands, and writes every binding frame - each triangle's centre, axes and unit, then the head's own - to a
-## small float texture; the shader ([code]splat_head.gdshader[/code]) places each splat from it.
+## THE FACE AND BODY ARE POSED HERE, the splats on the graphics card: [method pose_face] moves the rig's
+## neutral face (by MediaPipe's 52 scores: [method face_of]), turns and places it as the head stands and carries
+## it on the torso; [method pose_bones] places the body's bones; each writes its binding frames - each
+## triangle's centre, axes and unit, the head's own, then each bone's - to a small float texture, which
+## [method upload] hands the shader ([code]splat_head.gdshader[/code]), and it places each splat from them. A
+## bone not seen is flagged in its frame and its splats are drawn clear, as they were learned.
 ##
 ## A SPLAT CHANGES WITH THE EXPRESSION (GaussianBlendshapes; hosts/avatar/train.py): its place and colour shift
 ## by each of the expression's components, the 52 scores' principal components over the frames it was learned
@@ -35,6 +38,8 @@ const TEX_W := 1024
 
 var splats := 0
 var verts := 0
+## The body's bones the splats are bound to beside the face (hosts/avatar/rig.py's BODY), after the head.
+var bones := 0
 var scores := 52
 var head_unit := 16.0
 ## [x, y, side]: the square of the still the head was learned in, in full-resolution pixels.
@@ -91,6 +96,7 @@ func take(h: Dictionary, arr: Dictionary) -> void:
 	crop = PackedInt32Array(h["crop"])
 	size = int(h["size"])
 	expressions = int(h.get("expressions", 0))
+	bones = int(h.get("bones", 0))
 	tris = arr["tris"]
 	canon = arr["canon"]
 	basis = arr["basis"]
@@ -163,7 +169,7 @@ func _build(texels: PackedFloat32Array, width: int, per: int) -> void:
 	var rows := int(ceil(float(texels.size() / 4) / width))
 	var splat_tex := ImageTexture.create_from_image(
 		Image.create_from_data(width, rows, false, Image.FORMAT_RGBAF, texels.to_byte_array()))
-	var n_frames := tris.size() / 3 + 1
+	var n_frames := tris.size() / 3 + 1 + bones
 	var frame_rows := int(ceil(float(n_frames * 4) / TEX_W))
 	_frames.resize(frame_rows * TEX_W * 4)
 	_frames_img = Image.create_from_data(TEX_W, frame_rows, false, Image.FORMAT_RGBAF, _frames.to_byte_array())
@@ -176,6 +182,7 @@ func _build(texels: PackedFloat32Array, width: int, per: int) -> void:
 	_mat.set_shader_parameter("frame_width", TEX_W)
 	_mat.set_shader_parameter("per_splat", per)
 	_mat.set_shader_parameter("expressions", mini(expressions, MOST_EXPRESSIONS))
+	_mat.set_shader_parameter("triangles", tris.size() / 3)
 	var k := float(size) / float(crop[2])
 	_mat.set_shader_parameter("low_pass", 0.3 / (k * k))
 	# one quad, its corners -1..1: the shader stretches it over each splat's three sigmas
@@ -207,9 +214,10 @@ func _build(texels: PackedFloat32Array, width: int, per: int) -> void:
 
 ## THE HEAD AT A MOMENT: the neutral face moved by [param blend] (MediaPipe's 52 scores), then [param scale],
 ## [param rot] (the neutral face's axes into the crop's) and [param shift] (the crop's pixels) - the rig's own
-## pose, as frames.py's points stand. Writes every binding frame for the shader.
+## pose, as frames.py's points stand - and handed to the shader.
 func pose(blend: PackedFloat32Array, scale: float, rot: Basis, shift: Vector3) -> void:
 	pose_face(face_of(blend), scale, rot, shift)
+	upload()
 
 
 ## THE FACE OF [param blend], unposed: the neutral face moved by the scores (the rig is linear in them, so a
@@ -227,14 +235,17 @@ func face_of(blend: PackedFloat32Array) -> PackedFloat32Array:
 	return v
 
 
-## [method pose] for a face [param v] already moved ([method face_of]).
-func pose_face(v: PackedFloat32Array, scale: float, rot: Basis, shift: Vector3) -> void:
+## THE FACE [param v] (already moved: [method face_of]) at [param scale], [param rot] and [param shift], then
+## carried by [param torso] (a 2D transform of the picture: the body's posture, which the head rides on) - its
+## triangles' frames and the head's written, for [method upload].
+func pose_face(v: PackedFloat32Array, scale: float, rot: Basis, shift: Vector3,
+		torso := Transform2D.IDENTITY) -> void:
 	if splats == 0:
 		return
 	var n := verts * 3
 	_posed.resize(n)
 	for i in verts:
-		var p := rot * Vector3(v[i * 3], v[i * 3 + 1], v[i * 3 + 2]) * scale + shift
+		var p := _carried(torso, rot * Vector3(v[i * 3], v[i * 3 + 1], v[i * 3 + 2]) * scale + shift)
 		_posed[i * 3] = p.x
 		_posed[i * 3 + 1] = p.y
 		_posed[i * 3 + 2] = p.z
@@ -248,16 +259,51 @@ func pose_face(v: PackedFloat32Array, scale: float, rot: Basis, shift: Vector3) 
 		var e2 := nn.cross(e1)
 		var unit := ((b - a).length() + (c - b).length() + (a - c).length()) / 3.0
 		_put_frame(t, (a + b + c) / 3.0, unit, e1, e2, nn)
-	_put_frame(t_n, shift, scale * head_unit, rot.x, rot.y, rot.z)
+	var k := sqrt(absf(torso.determinant()))
+	_put_frame(t_n, _carried(torso, shift), scale * head_unit * k, _turned(torso, rot.x), _turned(torso, rot.y),
+		_turned(torso, rot.z))
+
+
+## THE BODY'S BONES: each [param origins][b], its axes [param axes][b] (as columns) and its unit [param units][b]
+## as the still holds it, moved by [param moves][b] (a 2D transform of the picture: its share of the plan's
+## posture, breath, lifts and resting hands); a bone [param shown][b] false has its splats drawn clear.
+func pose_bones(origins: PackedVector3Array, axes: Array, units: PackedFloat32Array, moves: Array,
+		shown: PackedByteArray) -> void:
+	var first := tris.size() / 3 + 1
+	for b in mini(bones, origins.size()):
+		var t: Transform2D = moves[b] if b < moves.size() else Transform2D.IDENTITY
+		var ax: Basis = axes[b]
+		var k := sqrt(absf(t.determinant()))
+		_put_frame(first + b, _carried(t, origins[b]), units[b] * k, _turned(t, ax.x), _turned(t, ax.y),
+			_turned(t, ax.z), b < shown.size() and shown[b] != 0)
+
+
+## The frames written, to the shader.
+func upload() -> void:
+	if _frames_img == null:
+		return
 	_frames_img.set_data(TEX_W, _frames_img.get_height(), false, Image.FORMAT_RGBAF, _frames.to_byte_array())
 	_frames_tex.update(_frames_img)
+
+
+## [param p] carried by the picture's 2D transform [param t] (its depth kept).
+static func _carried(t: Transform2D, p: Vector3) -> Vector3:
+	var q := t * Vector2(p.x, p.y)
+	return Vector3(q.x, q.y, p.z)
+
+
+## An axis [param a] turned by [param t]'s turn (not its scale), still a unit.
+static func _turned(t: Transform2D, a: Vector3) -> Vector3:
+	var q := t.basis_xform(Vector2(a.x, a.y))
+	var k := sqrt(absf(t.determinant()))
+	return Vector3(q.x / maxf(k, 1e-6), q.y / maxf(k, 1e-6), a.z).normalized()
 
 
 func _vert(i: int) -> Vector3:
 	return Vector3(_posed[i * 3], _posed[i * 3 + 1], _posed[i * 3 + 2])
 
 
-func _put_frame(f: int, origin: Vector3, unit: float, e1: Vector3, e2: Vector3, nn: Vector3) -> void:
+func _put_frame(f: int, origin: Vector3, unit: float, e1: Vector3, e2: Vector3, nn: Vector3, shown := true) -> void:
 	var o := f * 16
 	_frames[o] = origin.x
 	_frames[o + 1] = origin.y
@@ -266,6 +312,7 @@ func _put_frame(f: int, origin: Vector3, unit: float, e1: Vector3, e2: Vector3, 
 	_frames[o + 4] = e1.x
 	_frames[o + 5] = e1.y
 	_frames[o + 6] = e1.z
+	_frames[o + 7] = 1.0 if shown else 0.0
 	_frames[o + 8] = e2.x
 	_frames[o + 9] = e2.y
 	_frames[o + 10] = e2.z
