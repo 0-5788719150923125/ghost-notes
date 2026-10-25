@@ -24,6 +24,11 @@ Each moment is read at full size (`actor.frame_at`) and looked at as frames.py l
 
 Writes, as frames.py does (head.py and train.Frames read either): <out>/img/<k>.jpg, <out>/mask/<k>.png,
 <out>/frames.npz (t, found, hands, points, blend, matrix, pose) and <out>/spec.json ({"crop": [0, 0, w, h]}).
+
+A VIDEO THAT SHOWS NO FACE OF THEIRS IS ANSWERED, NOT FAILED (2026-10-24: a video of ants found none in 131 s, and
+its error stood on the card): with no moment in its shots or no face found in any, a video's are written empty -
+the head learns nothing from it (head.py leaves out a video with too few) - but a set's (the spec's "stills") fail:
+a set is made from them.
 """
 
 from __future__ import annotations
@@ -39,6 +44,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "face"))
 
 import actor  # noqa: E402
 import frames  # noqa: E402
+import head  # noqa: E402
 
 # The share of the moments picked for what they show; the rest are spread evenly through the video.
 DIVERSE = 0.5
@@ -55,6 +61,9 @@ TURN_UNIT = 15.0
 SPACED = 0.6
 # The square the face is read close in: this many of the face's height, as the set's frames are read.
 AVATAR_FACE = 2.33
+# What one moment's row holds beyond the moment itself (an empty frames.npz is shaped as a full one).
+ROW = {"t": ((), "float64"), "found": ((), "bool"), "hands": ((), "bool"), "points": ((478, 3), "float32"),
+       "blend": ((52,), "float32"), "matrix": ((16,), "float32"), "pose": ((132,), "float32")}
 
 
 def features(R):
@@ -117,6 +126,30 @@ def face_crop(box, w: int, h: int):
     return [int(min(max(0, round(cx - side / 2)), w - side)), int(min(max(0, round(cy - side / 2)), h - side)), side]
 
 
+def write(out: str, w: int, h: int, video: str, rows: dict) -> None:
+    """<out>/spec.json and <out>/frames.npz, each written whole (a row-less key shaped as ROW has it)."""
+    import numpy as np
+    os.makedirs(out, exist_ok=True)
+    with open(os.path.join(out, "spec.json.part"), "w") as fh:
+        json.dump({"crop": [0, 0, w, h], "video": video}, fh)
+    os.replace(os.path.join(out, "spec.json.part"), os.path.join(out, "spec.json"))
+    shaped = lambda key, v: np.zeros((0,) + ROW[key][0], ROW[key][1]) if key in ROW and not len(v) else np.asarray(v)
+    np.savez(os.path.join(out, "frames.npz.part"), **{key: shaped(key, v) for key, v in rows.items()})
+    os.replace(os.path.join(out, "frames.npz.part.npz"), os.path.join(out, "frames.npz"))
+
+
+def none_of_theirs(a, spec: dict, w: int, h: int, why: str) -> int:
+    """A video with no moment of theirs to read: the head's are written empty (done), a set's fail."""
+    if "stills" in spec:
+        actor.say("head frames: %s" % why)
+        return 2
+    write(spec["out"], w, h, spec["video"], {key: [] for key in ROW})
+    actor.say("head frames: %s - the head learns nothing from this video" % why)
+    if a.progress:
+        actor.progress(a.progress, 1.0)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--ffmpeg", required=True)
@@ -136,8 +169,7 @@ def main() -> int:
                              [{"vid": "v", "start": float(t0), "end": float(t1)} for t0, t1 in spec["shots"]])
     picks = pick(R, int(spec.get("count", 300)), np.random.default_rng(0))
     if not picks:
-        actor.say("head frames: no moment of theirs in this video's shots")
-        return 2
+        return none_of_theirs(a, spec, w, h, "no moment of theirs in this video's shots")
     os.makedirs(os.path.join(out, "img"), exist_ok=True)
     os.makedirs(os.path.join(out, "mask"), exist_ok=True)
     watch = actor.Watcher(spec["face_model"], spec["pose_model"], masks=True, image=True)
@@ -177,8 +209,7 @@ def main() -> int:
         if a.progress and n % 10 == 0:
             actor.progress(a.progress, min(0.999, (n + 1) / len(picks)))
     if k == 0:
-        actor.say("head frames: no face found in any moment picked")
-        return 2
+        return none_of_theirs(a, spec, w, h, "no face of theirs found in the %d moments picked" % len(picks))
     # A SET'S STILLS (spec "stills": the set's own moments are read too, for its room and its still's pose): each
     # looked at whole to find the face, then close, as the moments are
     stills = {"still_points": [], "still_blend": [], "still_pose": [], "still_found": []}
@@ -193,14 +224,12 @@ def main() -> int:
         stills["still_pose"].append(np.asarray(rec.get("pose", [0.0] * 132), np.float32))
     if spec.get("stills"):
         rows.update(stills)
-    with open(os.path.join(out, "spec.json.part"), "w") as fh:
-        json.dump({"crop": [0, 0, w, h], "video": spec["video"]}, fh)
-    os.replace(os.path.join(out, "spec.json.part"), os.path.join(out, "spec.json"))
-    np.savez(os.path.join(out, "frames.npz.part"), **{key: np.asarray(v) for key, v in rows.items()})
-    os.replace(os.path.join(out, "frames.npz.part.npz"), os.path.join(out, "frames.npz"))
+    write(out, w, h, spec["video"], rows)
     jaw = np.asarray(rows["blend"])[:, actor.BLEND_NAMES.index("jawOpen")]
-    actor.say("head frames: %d moments of %d looks (jawOpen past 0.35 in %d, its 90th percentile %.2f)"
-              % (k, int(R["count"]), int((jaw > 0.35).sum()), float(np.percentile(jaw, 90))))
+    few = " - too few, the head leaves this video out" if k < head.LEAST and "stills" not in spec else ""
+    actor.say("head frames: %d moment%s of %d looks (jawOpen past 0.35 in %d, its 90th percentile %.2f)%s"
+              % (k, "" if k == 1 else "s", int(R["count"]), int((jaw > 0.35).sum()), float(np.percentile(jaw, 90)),
+                 few))
     if a.progress:
         actor.progress(a.progress, 1.0)
     return 0

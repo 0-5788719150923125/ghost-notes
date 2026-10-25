@@ -204,6 +204,31 @@ way to at least allow the body to shift and morph a little bit."
 - **Gate:** `actors_check` - moved, the same video with its survey still made; the control is a copy beside a
   file still there, which is a video of its own.
 
+**A video with too few moments of their face is left out** (2026-10-24, the user's first run over all 65 videos):
+- **Two failures:**
+  - "Feeding Backyard Ants Boiled Egg Yolk": the audit gave it 131 s of shots, and the close read found no face in
+    any moment. Its Head frames failed, and the error stood on the card.
+  - A timelapse found one face in 47 looks. Head held that one moment out, which left the video nothing to lay
+    its body from, and `train.initial` crashed (`argmax` of nothing). The ASMR in the woods found 15.
+- **Now a video of the head's that shows no face is answered, not failed.** Its moments are written empty
+  (`head_frames.none_of_theirs`) and its row says the head learns nothing from it. A set's moments still fail:
+  a set is made from them.
+- **Head leaves out a video with fewer than `head.LEAST` (20) moments:** no room, no body, and the others' mean
+  look as its code (`looks_of`). Its Head frames row says so. Each video's share of the steps is its share of the
+  moments, so a handful taught nothing anyway.
+- **Gate:** `test_fit.py` - videos of 30, 25, 3, 1 and 0 moments: the last three left out, the others learned from
+  and held out; the control, with no floor, holds out the one moment and leaves it nothing.
+- **A room is kept small** (`head.Rooms`). Measured on the real rig, 1000 steps:
+  - Before: 63 rooms held as train.Scene holds one (plate, seen and move in float, the move's Adam state too),
+    about 108 MB a video and 6.8 GB together. The peak was 7.65 GB at step 1000, heading for about 10 GB at
+    500k head splats, on a 16 GB card where Praxis trains too (3.5 to 7.7 GB).
+  - Now: the plate and seen are uint8, and the move is learned at half size and upsampled bilinearly (`move`: the
+    cells round a window, cut to it). The rooms take 1.30 GB, and training peaks at 2.60 GB. The one spike is room
+    building, 5.32 GB while a video's median is taken.
+  - Loss 0.1664 against 0.1672, and the held-out PSNR 16.26 against 16.22 dB. 44 s against 58 s.
+  - Gate: `test_fit.py` - over windows at the frame's edges and of odd sizes, the move is the whole move's
+    upsampling cut to the window; the control cuts with no margin of cells.
+
 ## The room behind them, and how far a set reaches (2026-10-23, evening)
 
 The user, on the plaid set (set-6f0cbf09) after the sweater one (set-0e8c1195): "The mouth barely seems to move
@@ -575,8 +600,12 @@ to give that a try next."
 - **Voice** (`hosts/voice_train/train.py`, voice_train_venv, a lane of its own - the graphics card -
   beside the processor's): John warm-started (every weight, a fresh optimizer) and fine-tuned for the
   Voice lessons setting's epochs (150), bf16, batch 16 - about 25 seconds an epoch, an hour all told.
-  The whole run is saved every 5 epochs under another name and renamed into place, so Stop loses a few
-  minutes and ▶ goes on; other sentences or another base start again from the base. When every epoch is
+  The whole run is saved every 5 epochs (and at an epoch's end 10 minutes past the last save) under another
+  name and renamed into place, so Stop loses a few minutes and ▶ goes on. AN EPOCH IS AS LONG AS THEIR
+  SPEECH (2026-10-24): all 65 of his videos gave 6,909 sentences, 8.3 hours, about 5 minutes an epoch -
+  150 epochs about 12 hours - so each epoch's line says the time to go; that run died of the graphics
+  card's memory at epoch 2 (8.3 GB of its own, the card shared with another trainer), and the allocator now
+  grows its segments (`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`); other sentences or another base start again from the base. When every epoch is
   done the voice is exported and PUBLISHED (`ActorBuilder.publish_voice`): copied to
   `<data>/ghost/voices/piper/trained/actor-<id>.onnx` with its config and a description
   (`<id>.voice.json`: their name, what it was fine-tuned from), where the

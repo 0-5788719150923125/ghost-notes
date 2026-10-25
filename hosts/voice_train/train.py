@@ -17,9 +17,16 @@ FROM THE BASE'S WEIGHTS, NOT ITS RUN: the base is warm-started (every weight cop
 schedule), since resuming its own run would carry on its epoch count and its decayed learning rate. Its
 shape (quality) is read from its own hyperparameters.
 
-STOPPED IS NOT LOST: every SAVE_EVERY epochs the run is saved whole (`last.ckpt`, written under another
-name and renamed into place, so a kill never leaves half of one), and the next run goes on from it. The
-voice is exported only when every epoch is done: the step's output is newer than its start only then.
+STOPPED IS NOT LOST: every SAVE_EVERY epochs, and at the first epoch's end past SAVE_MINUTES since the last
+save, the run is saved whole (`last.ckpt`, written under another name and renamed into place, so a kill never
+leaves half of one), and the next run goes on from it. The voice is exported only when every epoch is done:
+the step's output is newer than its start only then.
+
+AN EPOCH IS AS LONG AS THEIR SPEECH (2026-10-24: 6,909 sentences, 8.3 hours of his, about 5 minutes an
+epoch, where the first run's 65 minutes took 40 s): each epoch's line says how long the rest will take, from
+the epochs this run has done past its first (which builds the cache), and the card's row shows it. It died
+at epoch 2 with the card shared with another trainer, 8.3 GB of its own at the end, so the allocator grows
+its segments rather than leaving reserved memory in pieces (`PYTORCH_CUDA_ALLOC_CONF`).
 """
 
 from __future__ import annotations
@@ -35,9 +42,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+# Before torch is first imported: it reads this as CUDA starts.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
-# Epochs between saves of the whole run (at about 40 s an epoch, a stop loses at most a few minutes).
+# Epochs between saves of the whole run, and the most minutes between them (an epoch of hours of their
+# speech is minutes long): a stop loses at most a few minutes.
 SAVE_EVERY = 5
+SAVE_MINUTES = 10.0
 # The share of the utterances held out to measure the mel loss on, every VALIDATE_EVERY epochs.
 VALIDATION = 0.05
 VALIDATE_EVERY = 10
@@ -54,6 +65,14 @@ def progress(path: str, frac: float) -> None:
     with open(tmp, "w") as f:
         f.write("%.4f" % max(0.0, min(1.0, frac)))
     os.replace(tmp, path)
+
+
+def span(minutes: float) -> str:
+    """A time to go, as the row says it."""
+    if minutes < 90.0:
+        n = max(1, round(minutes))
+        return "about %d minute%s" % (n, "" if n == 1 else "s")
+    return "about %.0f hours" % (minutes / 60.0) if minutes >= 600.0 else "about %.1f hours" % (minutes / 60.0)
 
 
 def install_align() -> None:
@@ -155,18 +174,30 @@ def main(argv=None) -> int:
     begun = time.monotonic()
 
     class Keep(Callback):
-        """Progress each epoch; the whole run saved every SAVE_EVERY, atomically."""
+        """Progress each epoch, and how long the rest will take; the whole run saved every SAVE_EVERY or
+        SAVE_MINUTES, atomically."""
+
+        first = None  # (epoch, time) at this run's first epoch's end
+        saved = begun
 
         def on_train_epoch_end(self, trainer, module):
             e = trainer.current_epoch + 1
+            now = time.monotonic()
             mel = trainer.callback_metrics.get("train_mel")
             progress(a.progress, 0.99 * e / epochs)
-            say("epoch %d of %d: mel %.3f, %.0f minutes" % (e, epochs, float(mel) if mel is not None else -1.0,
-                                                            (time.monotonic() - begun) / 60.0))
-            if e % SAVE_EVERY == 0 or e == epochs:
+            if self.first is None:
+                self.first = (e, now)
+                each = now - begun
+            else:
+                each = (now - self.first[1]) / (e - self.first[0])
+            left = " - %s to go" % span((epochs - e) * each / 60.0) if e < epochs else ""
+            say("epoch %d of %d: mel %.3f, %.0f minutes%s" % (e, epochs, float(mel) if mel is not None else -1.0,
+                                                              (now - begun) / 60.0, left))
+            if e % SAVE_EVERY == 0 or e == epochs or now - self.saved >= SAVE_MINUTES * 60.0:
                 tmp = work / "last.part.ckpt"
                 trainer.save_checkpoint(str(tmp))
                 os.replace(tmp, last)
+                self.saved = time.monotonic()
 
     batch = int(spec.get("batch", 16))
     args = ["fit",

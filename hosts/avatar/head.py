@@ -24,7 +24,9 @@ SO THE HEAD IS SHARED AND EACH VIDEO HAS A LOOK:
   with the per-frame colour correction train.py has (the day's light);
 - EACH VIDEO HAS ITS OWN ROOM (train.room_of over its moments, learned only where seen) AND ITS OWN BODY: a few
   splats on its bones (BODY_START, at most BODY_MOST), a group of their own with an optimizer of their own, there
-  so the head is never asked to paint a video's clothes - a set's body is fitted to its own still (bake.py, fit.py).
+  so the head is never asked to paint a video's clothes - a set's body is fitted to its own still (bake.py, fit.py);
+- A VIDEO WITH TOO FEW MOMENTS OF THEIR FACE (LEAST: a timelapse, a video of ants) IS LEFT OUT - no room, no body,
+  and the others' mean look as its code.
 
 Each step: a frame of any video, a window of it (FACE_WINDOWS round the face), the head as that video looks and
 that video's body, over its room; L1 and SSIM, the cover against the person, train.py's regularisers. A video's
@@ -63,11 +65,17 @@ BODY_MOST = 40000
 BODIES_MOST = 600000
 # The head's splats at most.
 HEAD_MOST = 500000
+# A room's move is learned at 1/this of the frame's size (Rooms: a room kept small).
+ROOM_COARSE = 2
 # The share of windows round the face (the rest over the person: its body is learned there).
 FACE_WINDOWS = 0.8
 # Every n-th moment of each video is held out; this many are measured on, across the videos.
 HELD_OUT = 20
 MEASURED = 48
+# A video with fewer moments of theirs than this is left out (a timelapse showed their face in 1 of 47 looks, a
+# video of ants in none; the one held out, nothing was left to lay its body from): a handful teaches neither its
+# room nor its look - a video's share of the steps is its share of the moments - and its code is the others' mean.
+LEAST = 20
 
 
 def say(*parts) -> None:
@@ -79,7 +87,7 @@ def say(*parts) -> None:
 class Footage(train.Frames):
     """EVERY VIDEO'S MOMENTS, as train.Frames is one set's: the rig's per-frame arrays (its frames in folder order,
     `video` saying whose), each moment read from its own folder. The frame's size is the first folder's; a folder
-    of another size is left out."""
+    of another size is left out, and so is one with fewer than LEAST moments (`used`, `left_out`: its count)."""
 
     def __init__(self, rig_path: str, device):
         import numpy as np
@@ -103,8 +111,14 @@ class Footage(train.Frames):
             v = int(self.video[i])
             if keep[i] and (sizes[v] != sizes[0] or not os.path.exists(self._path(i, "mask", ".png"))):
                 keep[i] = False
+        counts = np.bincount(self.video[keep], minlength=self.V)
+        self.used = [v for v in range(self.V) if counts[v] >= LEAST]
+        self.left_out = {v: int(counts[v]) for v in range(self.V) if counts[v] < LEAST}
+        if not self.used:
+            raise ValueError("no video shows %d moments of their face" % LEAST)
+        keep &= np.isin(self.video, self.used)
         self.idx = np.nonzero(keep)[0]
-        self.held = np.concatenate([self.idx[self.video[self.idx] == v][::HELD_OUT] for v in range(self.V)])
+        self.held = np.concatenate([self.idx[self.video[self.idx] == v][::HELD_OUT] for v in self.used])
         self.train = np.setdiff1d(self.idx, self.held)
         self.measured = self.held[:: max(1, self.held.size // MEASURED)][:MEASURED]
         t = lambda x: torch.tensor(x, device=device, dtype=torch.float32)
@@ -201,17 +215,33 @@ class HeadSplats(train.Splats):
                                 self.p["colour_d"].clone(), k=self.p["place_d"].shape[1])
 
 
+def stored(x):
+    """[param x] in 0..1 as a room keeps it: uint8."""
+    import torch
+    return (x.clamp(0.0, 1.0) * 255.0 + 0.5).to(torch.uint8)
+
+
 class Rooms:
     """Every video's room - its plate, learned only as far as its moments show it - and each frame's gain and
-    colour correction, as train.Scene has them for one set."""
+    colour correction, as train.Scene has them for one set.
+
+    A ROOM IS KEPT SMALL (2026-10-24: 63 rooms as train.Scene keeps one, the plate, its seen and its move with the
+    move's optimizer in float, held 6.8 GB of a 16 GB card shared with another trainer): the plate and seen are
+    uint8 (the plate is the frames' median of uint8 pictures), and the move is learned at 1/ROOM_COARSE of the
+    frame's size, upsampled bilinearly - a correction to a plate that holds the room's own detail."""
 
     def __init__(self, data: Footage, device, plates, seens):
         import torch
+        import torch.nn.functional as F
         n = int(data.blend.shape[0])
         self.data = data
         self.plate0 = plates
-        self.seen = [s[..., None] for s in seens]
-        self.moved = [torch.nn.Parameter(torch.zeros_like(p)) for p in plates]
+        self.seen = seens
+        self.moved, self.seen_coarse = [], []
+        for s in seens:
+            coarse = F.avg_pool2d(s.float()[None, None] / 255.0, ROOM_COARSE, ceil_mode=True)[0, 0]
+            self.seen_coarse.append(coarse[..., None])
+            self.moved.append(torch.nn.Parameter(torch.zeros(coarse.shape + (3,), device=device)))
         self.gain = torch.nn.Parameter(torch.ones((n, 3), device=device))
         correct = torch.zeros((n, 4, 3), device=device)
         correct[:, :3] = torch.eye(3, device=device)
@@ -219,13 +249,26 @@ class Rooms:
         self.opt = torch.optim.Adam([{"params": self.moved, "lr": 2e-3}, {"params": [self.gain], "lr": 2e-3},
                                      {"params": [self.correct], "lr": 2e-4}])
 
+    def move(self, v: int, wx: int, wy: int, w: int, h: int):
+        """Video [param v]'s move over the window at (wx, wy), w x h, at the frame's size: the coarse cells round
+        it upsampled (a cell's margin on each side, so it is the whole move's upsampling cut to the window)."""
+        import torch.nn.functional as F
+        k, m = ROOM_COARSE, self.moved[v]
+        y0, x0 = max(0, wy // k - 1), max(0, wx // k - 1)
+        y1, x1 = min(m.shape[0], (wy + h) // k + 2), min(m.shape[1], (wx + w) // k + 2)
+        up = F.interpolate(m[y0:y1, x0:x1].permute(2, 0, 1)[None], scale_factor=k, mode="bilinear",
+                           align_corners=False)[0].permute(1, 2, 0)
+        return up[wy - k * y0: wy - k * y0 + h, wx - k * x0: wx - k * x0 + w]
+
     def plate(self, v: int, wx=0, wy=0, w=None, h=None):
-        ys = slice(wy, None if h is None else wy + h)
-        xs = slice(wx, None if w is None else wx + w)
-        return self.plate0[v][ys, xs] + self.seen[v][ys, xs] * self.moved[v][ys, xs]
+        H, W = self.plate0[v].shape[:2]
+        w, h = (W - wx) if w is None else w, (H - wy) if h is None else h
+        base = self.plate0[v][wy:wy + h, wx:wx + w].float() / 255.0
+        seen = self.seen[v][wy:wy + h, wx:wx + w, None].float() / 255.0
+        return base + seen * self.move(v, wx, wy, w, h)
 
     def pulled(self, v: int):
-        return (self.seen[v] * self.moved[v]).abs().mean()
+        return (self.seen_coarse[v] * self.moved[v]).abs().mean()
 
     def behind(self, i: int, wx: int, wy: int, w: int, h: int, light=True):
         v = int(self.data.video[i])
@@ -258,13 +301,17 @@ def render(head: HeadSplats, body, rig, data: Footage, rooms: Rooms, codes, i: i
 
 
 def bodies_of(rig, data: Footage, device):
-    """Each video's body to start: train.initial's, laid in that video's own moments, BODY_START of them."""
+    """Each video's body to start: train.initial's, laid in that video's own moments, BODY_START of them; None for
+    a video left out."""
     import torch
     keep_train, keep_on = data.train, train.ON_BODY
     out = []
     try:
         train.ON_BODY = BODY_START
         for v in range(data.V):
+            if v in data.left_out:
+                out.append(None)
+                continue
             data.train = data.of(v, keep_train)
             s = train.initial(rig, data, device)
             on = s.bind > rig.T
@@ -334,28 +381,38 @@ def preview(head, bodies, rig, data, rooms, codes, step: int, out_dir: str):
     Image.fromarray(pic).save(os.path.join(out_dir, "%06d.jpg" % step), quality=88)
 
 
+def looks_of(codes, data: Footage):
+    """Every video's code [V, LOOKS]: a video left out takes the mean of the others' (a set made from it starts there)."""
+    import torch
+    c = torch.stack([x.data for x in codes])
+    if data.left_out:
+        c[list(data.left_out)] = c[data.used].mean(0)
+    return c
+
+
 def save(head: HeadSplats, bodies, rooms: Rooms, codes, data: Footage, rig_path: str, out: str) -> None:
     """head.npz: the head's splats with their expression and look shifts, every video's code, room (uint8) and
-    body (its splats end to end, `body_video` saying whose), the expression's components, the rig's face."""
+    body (its splats end to end, `body_video` saying whose; a video left out has none, and a black room), the
+    expression's components, the rig's face."""
     import numpy as np
     import torch
     r = np.load(rig_path)
     with torch.no_grad():
-        cat = lambda name: torch.cat([b.p[name].data for b in bodies]).cpu().numpy()
+        held = [(v, b) for v, b in enumerate(bodies) if b is not None]
+        cat = lambda name: torch.cat([b.p[name].data for _v, b in held]).cpu().numpy()
         np.savez(out + ".part.npz", bind=head.bind.cpu().numpy().astype(np.int32),
                  place=head.p["place"].cpu().numpy(), log_scale=head.p["log_scale"].cpu().numpy(),
                  turn=torch.nn.functional.normalize(head.p["turn"], dim=-1).cpu().numpy(),
                  colour_logit=head.p["colour"].cpu().numpy(), cover=head.covers().cpu().numpy(),
                  place_d=head.p["place_d"].cpu().numpy(), colour_d=head.p["colour_d"].cpu().numpy(),
                  look_place=head.p["look_place"].cpu().numpy(), look_colour=head.p["look_colour"].cpu().numpy(),
-                 codes=torch.stack([c.data for c in codes]).cpu().numpy(),
-                 rooms=np.stack([(rooms.plate(v).clamp(0, 1).cpu().numpy() * 255.0 + 0.5).astype(np.uint8)
-                                 for v in range(data.V)]),
-                 body_video=np.concatenate([np.full(len(b), v, np.int32) for v, b in enumerate(bodies)]),
-                 body_bind=torch.cat([b.bind for b in bodies]).cpu().numpy().astype(np.int32),
+                 codes=looks_of(codes, data).cpu().numpy(),
+                 rooms=np.stack([stored(rooms.plate(v)).cpu().numpy() for v in range(data.V)]),
+                 body_video=np.concatenate([np.full(len(b), v, np.int32) for v, b in held]),
+                 body_bind=torch.cat([b.bind for _v, b in held]).cpu().numpy().astype(np.int32),
                  body_place=cat("place"), body_log_scale=cat("log_scale"),
-                 body_turn=torch.nn.functional.normalize(torch.cat([b.p["turn"].data for b in bodies]), dim=-1).cpu().numpy(),
-                 body_colour_logit=cat("colour"), body_cover=torch.cat([b.covers() for b in bodies]).cpu().numpy(),
+                 body_turn=torch.nn.functional.normalize(torch.cat([b.p["turn"].data for _v, b in held]), dim=-1).cpu().numpy(),
+                 body_colour_logit=cat("colour"), body_cover=torch.cat([b.covers() for _v, b in held]).cpu().numpy(),
                  expr_mean=data.expr_mean.astype(np.float32), expr_basis=data.expr_basis.astype(np.float32),
                  expr_scale=data.expr_scale.astype(np.float32), canon=r["canon"], basis=r["basis"], tris=r["tris"],
                  bones=np.int32(data.B), crop=np.asarray(data.crop, np.int32), folders=np.asarray(data.folders))
@@ -375,24 +432,38 @@ def main() -> int:
         return 2
     dev = torch.device("cuda")
     torch.manual_seed(0)
-    data = Footage(spec["rig"], dev)
+    try:
+        data = Footage(spec["rig"], dev)
+    except ValueError as exc:
+        say(str(exc))
+        return 2
     rig = train.Rig(spec["rig"], dev)
     head = head_of(rig, data, dev)
     bodies = bodies_of(rig, data, dev)
     plates, seens = [], []
     with torch.no_grad():
         for v in range(data.V):
+            if v in data.left_out:
+                plates.append(torch.zeros((data.H, data.W, 3), dtype=torch.uint8, device=dev))
+                seens.append(torch.zeros((data.H, data.W), dtype=torch.uint8, device=dev))
+                continue
             p, s = data.room_of_video(v)
-            plates.append(p)
-            seens.append(s)
+            plates.append(stored(p))
+            seens.append(stored(s))
+            del p, s
     rooms = Rooms(data, dev, plates, seens)
     g = torch.Generator(device="cpu").manual_seed(1)
     codes = [torch.nn.Parameter((torch.randn(LOOKS, generator=g) * CODE_START).to(dev)) for _ in range(data.V)]
     code_opt = torch.optim.Adam([{"params": codes, "lr": 5e-3}])
     steps = int(spec.get("steps", 60000))
     until = train.until_of(steps)
+    if data.left_out:
+        say("%d of %d videos left out, too few moments of their face (fewer than %d): %s"
+            % (len(data.left_out), data.V, LEAST, ", ".join("%s %d" % (os.path.basename(os.path.dirname(
+                data.folders[v])), n) for v, n in data.left_out.items())))
     say("%d videos, %d moments to learn from, %d held out; %d head splats and %d on their bodies to start; %d steps"
-        % (data.V, len(data.train), len(data.held), len(head), sum(len(b) for b in bodies), steps))
+        % (len(data.used), len(data.train), len(data.held), len(head), sum(len(b) for b in bodies if b is not None),
+           steps))
     rng = np.random.default_rng(0)
     order = np.concatenate([rng.permutation(data.train) for _ in range(steps // data.train.size + 1)])[:steps]
     data.read_ahead(order)
@@ -438,11 +509,11 @@ def main() -> int:
         if train.DENSIFY_FROM <= step < until and step % train.DENSIFY_EVERY == 0:
             made = head.densify(unit, HEAD_MOST)
             for b in bodies:
-                if float(b.seen.sum()) > 0:
-                    b.densify(unit, min(BODY_MOST, BODIES_MOST // data.V))
+                if b is not None and float(b.seen.sum()) > 0:
+                    b.densify(unit, min(BODY_MOST, BODIES_MOST // len(data.used)))
             if step % 1000 == 0:
                 say("step %d: %d head splats (copied %d, split %d, dropped %d; %d past its reach), %d on their bodies"
-                    % ((step, len(head)) + made + (strays, sum(len(b) for b in bodies))))
+                    % ((step, len(head)) + made + (strays, sum(len(b) for b in bodies if b is not None))))
                 strays = 0
         if step >= train.DENSIFY_FROM and step % train.DENSIFY_EVERY == 0:
             with torch.no_grad():
@@ -453,11 +524,13 @@ def main() -> int:
         if step % train.OPACITY_RESET == 0 and step < until:
             head.reset_cover()
             for b in bodies:
-                b.reset_cover()
+                if b is not None:
+                    b.reset_cover()
         if step > until and step % train.PRUNE_EVERY == 0:
             head.prune()
             for b in bodies:
-                b.prune()
+                if b is not None:
+                    b.prune()
         if step % 500 == 0:
             train.progress(a.progress, step / steps)
             say("step %d: loss %.4f (L1 %.4f, cover %.4f), %d head splats, %.0f s"
@@ -468,10 +541,13 @@ def main() -> int:
             say("step %d: held out - PSNR %.2f dB round the face" % (step, held_error(head, bodies, rig, data, rooms,
                                                                                      codes)))
     save(head, bodies, rooms, codes, data, spec["rig"], spec["out"])
-    shifts = torch.stack([torch.einsum("l,nlc->nc", c.data, head.p["look_colour"].data).abs().mean() for c in codes])
-    say("%d head splats; %d videos, their looks shift its colours %.3f to %.3f (logit, on the mean); on %d moments it never saw: PSNR %.2f dB round "
-        "the face; %d minutes" % (len(head), data.V, float(shifts.min()), float(shifts.max()), len(data.held),
-                                  held_error(head, bodies, rig, data, rooms, codes), int((time.time() - t0) / 60)))
+    shifts = torch.stack([torch.einsum("l,nlc->nc", codes[v].data, head.p["look_colour"].data).abs().mean()
+                          for v in data.used])
+    out = (" (%d more left out: too few moments of their face)" % len(data.left_out)) if data.left_out else ""
+    say("%d head splats; %d videos%s, their looks shift its colours %.3f to %.3f (logit, on the mean); on %d moments it never saw: PSNR %.2f dB round "
+        "the face; %d minutes" % (len(head), len(data.used), out, float(shifts.min()), float(shifts.max()),
+                                  len(data.held), held_error(head, bodies, rig, data, rooms, codes),
+                                  int((time.time() - t0) / 60)))
     return 0
 
 

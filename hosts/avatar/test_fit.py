@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Tests for the fit of an avatar's body to its still (fit.py), the head's reach (train.py's `astray`) and the
-room behind them (train.py's `room_of`, `fill_round`, `Scene`).
+"""Tests for the fit of an avatar's body to its still (fit.py), the head's reach (train.py's `astray`), the
+room behind them (train.py's `room_of`, `fill_round`, `Scene`) and the videos the head learns from (head.py's
+`Footage`).
 
 Run it directly with the voice-training venv's python (its torch) - no pytest needed, no graphics card:
 
@@ -28,6 +29,13 @@ Run it directly with the voice-training venv's python (its torch) - no pytest ne
   A RUN ENDS WELL PAST ITS LAST RESET - of any length the Avatar steps setting allows, a third of the run at least
   comes after the splats were last made faint, and the default run's schedule is as it was (CONTROL: growing until
   DENSIFY_UNTIL whatever the length, 12,000 steps end on a reset).
+  A VIDEO WITH TOO FEW MOMENTS IS LEFT OUT OF THE HEAD - of four videos with 30, 25, 3 and 1 moments (and one
+  with none, a video of ants), those with fewer than LEAST are left out: none of their moments is learned from
+  or held out, each other video has some of each, and a left-out video's code is the others' mean (CONTROL: with
+  no floor, the video of one moment has it held out and none to learn from - the head's crash, 2026-10-24).
+  A ROOM IS KEPT SMALL - its move learned at 1/ROOM_COARSE of the frame's size: over any window (at the frame's
+  edges, of odd sizes) the move is the whole move's upsampling cut to it, and with no move the plate is the plate
+  kept (CONTROL: cut with no margin of cells round the window, it is not).
 """
 
 from __future__ import annotations
@@ -43,6 +51,7 @@ if str(HERE) not in sys.path:
 import torch  # noqa: E402
 
 import fit  # noqa: E402
+import head  # noqa: E402
 import train  # noqa: E402
 
 CHECKS = []
@@ -292,6 +301,86 @@ def a_run_ends_well_past_its_last_reset():
     ok(train.until_of(30000) == train.DENSIFY_UNTIL, "the default run grows until %d, as before" % train.DENSIFY_UNTIL)
     ok(12000 - last_reset(12000, train.DENSIFY_UNTIL) == 0, "CONTROL: growing until %d, 12,000 steps end on a reset"
        % train.DENSIFY_UNTIL)
+
+
+def videos_of(counts, root):
+    """A rig over one folder a video, video k with [param counts][k] moments, as head_frames.py and rig.py write
+    them (a mask file each, the points and poses zero); its path."""
+    import json
+    import numpy as np
+    folders, video = [], []
+    for v, n in enumerate(counts):
+        d = root / ("v%d" % v)
+        (d / "mask").mkdir(parents=True)
+        (d / "spec.json").write_text(json.dumps({"crop": [0, 0, W, H]}))
+        np.savez(d / "frames.npz", points=np.zeros((n, 478, 3), np.float32))
+        for k in range(n):
+            (d / "mask" / ("%05d.png" % k)).write_bytes(b"")
+        folders.append(str(d))
+        video += [v] * n
+    n, B = len(video), 9
+    g = np.random.default_rng(0)
+    path = root / "rig.npz"
+    np.savez(path, folders=np.asarray(folders), video=np.asarray(video, np.int32), keep=np.ones(n, bool),
+             blend=g.random((n, 52)).astype(np.float32), scale=np.ones(n, np.float32),
+             rot=np.tile(np.eye(3, dtype=np.float32), (n, 1, 1)), shift=np.zeros((n, 3), np.float32),
+             aligned=np.zeros((n, 478, 3), np.float32), bone_origin=np.zeros((n, B, 3), np.float32),
+             bone_axes=np.tile(np.eye(3, dtype=np.float32), (n, B, 1, 1)), bone_unit=np.ones((n, B), np.float32),
+             bone_seen=np.ones((n, B), np.float32))
+    return str(path)
+
+
+@check
+def a_video_with_too_few_moments_is_left_out_of_the_head():
+    import tempfile
+    from pathlib import Path
+    counts = [30, 25, 3, 1, 0]
+    with tempfile.TemporaryDirectory() as tmp:
+        rig = videos_of(counts, Path(tmp))
+        data = head.Footage(rig, "cpu")
+        ok(data.used == [0, 1] and data.left_out == {2: 3, 3: 1, 4: 0}, "of %s moments, those under %d are left out "
+           "(%s)" % (counts, head.LEAST, data.left_out))
+        of = lambda frames: set(int(v) for v in data.video[frames])
+        ok(of(data.train) == {0, 1} and of(data.held) == {0, 1}, "none of theirs is learned from or held out, "
+           "and each other video has some of each")
+        codes = [torch.nn.Parameter(torch.full((head.LOOKS,), float(v))) for v in range(len(counts))]
+        looks = head.looks_of(codes, data)
+        ok(torch.allclose(looks[2], torch.full((head.LOOKS,), 0.5)) and torch.equal(looks[1], codes[1].data),
+           "a left-out video's code is the others' mean, theirs their own")
+        keep = head.LEAST
+        try:
+            head.LEAST = 0
+            bare = head.Footage(rig, "cpu")
+        finally:
+            head.LEAST = keep
+        ok(3 in of(bare.held) and 3 not in of(bare.train), "CONTROL: with no floor, the video of one moment has it "
+           "held out and none to learn from")
+
+
+@check
+def a_room_is_kept_small():
+    import torch.nn.functional as F
+
+    class Data:
+        blend = torch.zeros(2, 52)
+    Hh, Ww = 161, 203
+    g = torch.Generator().manual_seed(3)
+    plate = torch.rand((Hh, Ww, 3), generator=g)
+    rooms = head.Rooms(Data(), "cpu", [head.stored(plate)], [head.stored(torch.ones(Hh, Ww))])
+    ok(torch.allclose(rooms.plate(0), plate, atol=0.5 / 255 + 1e-6), "with no move the plate is the plate kept")
+    with torch.no_grad():
+        rooms.moved[0].copy_(torch.rand(rooms.moved[0].shape, generator=g))
+    k = head.ROOM_COARSE
+    whole = F.interpolate(rooms.moved[0].detach().permute(2, 0, 1)[None], scale_factor=k, mode="bilinear",
+                          align_corners=False)[0].permute(1, 2, 0)
+    windows = [(0, 0, 64, 64), (1, 3, 37, 29), (Ww - 50, Hh - 41, 50, 41), (77, 90, 101, 71), (0, 0, Ww, Hh)]
+    worst = max(float((rooms.move(0, *w) - whole[w[1]:w[1] + w[3], w[0]:w[0] + w[2]]).abs().max()) for w in windows)
+    ok(worst < 1e-5, "over any window the move is the whole move's upsampling cut to it (%.2g)" % worst)
+    wx, wy, w, h = 77, 90, 101, 71
+    bare = F.interpolate(rooms.moved[0].detach()[wy // k:(wy + h) // k + 1, wx // k:(wx + w) // k + 1]
+                         .permute(2, 0, 1)[None], scale_factor=k, mode="bilinear", align_corners=False)[0].permute(1, 2, 0)
+    bare = bare[wy - k * (wy // k):wy - k * (wy // k) + h, wx - k * (wx // k):wx - k * (wx // k) + w]
+    ok(float((bare - whole[wy:wy + h, wx:wx + w]).abs().max()) > 1e-3, "CONTROL: cut with no margin, it is not")
 
 
 def main() -> int:

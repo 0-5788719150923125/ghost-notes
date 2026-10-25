@@ -13,6 +13,8 @@ No graphics card is needed, and nothing is trained.
   PIPER FINDS IT - once installed, Piper's own `maximum_path` imports and runs on it (CONTROL: before,
   it does not import - the wheel ships the Cython unbuilt).
   A SAVED RUN IS JUDGED WHOLE - a checkpoint cut short is not taken for one (CONTROL: the whole one is).
+  THE TIME TO GO IS SAID in minutes, then hours (CONTROL: an hour and a half is not said in minutes), and
+  the trainer asks the allocator to grow its segments before torch starts CUDA.
 """
 
 from __future__ import annotations
@@ -112,6 +114,17 @@ def a_saved_run_is_judged_whole():
         cut.write_bytes(whole.read_bytes()[: whole.stat().st_size // 2])
         ok(train.sound(whole), "CONTROL: a whole run is taken")
         ok(not train.sound(cut), "a run cut short is not")
+
+
+@check
+def the_time_to_go_is_said():
+    import os
+    import train
+    ok(train.span(0.2) == "about 1 minute" and train.span(40) == "about 40 minutes", "minutes under an hour and a half")
+    ok(train.span(90) == "about 1.5 hours", "CONTROL: an hour and a half is said in hours")
+    ok(train.span(745) == "about 12 hours", "half a day in whole hours")
+    ok("expandable_segments:True" in os.environ.get("PYTORCH_CUDA_ALLOC_CONF", ""),
+       "the allocator grows its segments")
 
 
 def main() -> int:
