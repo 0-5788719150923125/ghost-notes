@@ -37,10 +37,25 @@ func upload_base(_take: String) -> Dictionary:
 	return {"tags": []}
 
 
-## What the YouTube title's macros are worth now ([method YouTube.expand_title]), given the
-## reading's own [param own] (the note's title).
-func upload_values(own: Dictionary) -> Dictionary:
-	return own
+## What the component adds to the YouTube title's macros ([constant YouTube.MACROS]), laid over the
+## note's Title and Episode, which the YouTube card reads from the Script card itself ([method
+## YouTubeCard.name_from]): a show's own name (never the note's file name) and its episode's title and
+## seed. {} adds nothing.
+func upload_values() -> Dictionary:
+	return {}
+
+
+## WHAT THE PICKED EPISODE IS CALLED, for a component that names its episodes (Cards' producer, Proof's
+## framer): what the Script card's Episode shows and edits ([method ScriptWriter.hand_field]) - null while
+## it has none to edit. A note that is its own episode ([method note_is_episode]) keeps its own Episode
+## (its `episode:` line), and this is never asked.
+func episode_title() -> Variant:
+	return null
+
+
+## ...and [param title] names it from now on: "" once written, else why not.
+func name_episode(_title: String) -> String:
+	return "nothing here names an episode"
 
 
 ## The document a book or a table is drawn from ([method ReadingPanel.book_document]), given the

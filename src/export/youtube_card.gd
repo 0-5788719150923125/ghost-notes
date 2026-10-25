@@ -7,11 +7,17 @@ class_name YouTubeCard
 ## client and the sign-in an upload needs, which used to live in the export button's menu. Its block
 ## in a document is `youtube:`.
 ##
-## THE TITLE IS A TEMPLATE ([method YouTube.expand_title]): `%title%` is the note's title (a show's,
-## in the Cards mode), `%episode%` the episode's, `%date%` today's - so one note makes many videos,
-## each named as it goes up. The panel says what the macros are worth ([member values]) and adds
-## what it alone knows (a show's description and tags, its thumbnail's moment) through [member extra],
-## a slot under the card's own rows, and [method meta].
+## THE TITLE IS A TEMPLATE ([method YouTube.expand_title]) of the macros in [constant YouTube.MACROS] - so
+## one note makes many videos, each named as it goes up. ITS NAMES ARE THE SCRIPT CARD'S (2026-10-25, the
+## user: "nowhere is an episode title actually an option here ... it shouldn't even be possible to keep
+## missing details like this"): every panel that shows this card binds it to its Script card ([method
+## name_from]), which shows Title and Episode from then on, and the card reads %title% and %episode% from
+## there itself - no panel fills them its own way. A panel adds only what it alone knows ([member values]:
+## a show's own name, its episode's seed). WHAT IT CLAIMS IS WHAT THE NOTE FILLS: the title box's tooltip
+## names only those macros, and a title naming one the note does not fill (%seed% on an actor's note) is
+## said under it and does not go up - the export refuses before it renders ([method why_not]). The rest of
+## an upload only the panel knows (a show's description and tags, its thumbnail's moment) comes through
+## [member extra], a slot under the card's own rows, and [method meta].
 ##
 ## THE CATEGORY is the card's too ([constant YouTube.CATEGORIES]): People & Blogs until it is changed,
 ## so a math channel's note can go up as Education.
@@ -53,13 +59,11 @@ const KEY := "youtube"
 const DEFAULTS := {"upload": false, "title": YouTube.TITLE_TEMPLATE, "privacy": YouTube.PRIVACY,
 	"category": YouTube.CATEGORY, "playlist": "", "playlist_title": "", "channel": "", "channel_name": "",
 	"write_tags": false, "description": ""}
-const TITLE_TIP := ("The video's title. %title% is the note's title, %episode% the episode's, %seed% its seed, %date% "
-	+ "today's; what a missing one leaves (a dangling \": \") goes, and a name is never said twice. "
-	+ "YouTube takes 100 characters.")
 
 signal noted(msg: String)
 
-## Set by the panel: () -> Dictionary, what the title's macros are worth now (`title`, `episode`).
+## Set by a panel that adds to the title's macros: () -> Dictionary, laid over the Script card's names - a
+## show's own name (never the note's file name), its picked episode's title and seed. Unset, the names alone.
 var values: Callable
 ## Where the panel puts rows of its own (a show's description and tags), under the card's.
 var extra: VBoxContainer
@@ -88,6 +92,8 @@ var _tags_note: Label
 ## The step that writes each episode's tags, while the box is ticked.
 var _tags: YouTubeTags
 var _tags_seen := []            # what the tag rows were last drawn for
+## The Script card the note's names are read from ([method name_from]); null until a panel binds it.
+var _names: ScriptWriter
 ## The channel the note's uploads go to, kept whole even when it is not signed in here: `{id, name}`.
 var _chan := {"id": "", "name": ""}
 ## The playlist the block names, kept whole even before the list is loaded: `{id, title}`.
@@ -144,7 +150,7 @@ func _init() -> void:
 	_chan = _first_channel()
 	_title = LineEdit.new()
 	_title.placeholder_text = YouTube.TITLE_TEMPLATE
-	_title.tooltip_text = TITLE_TIP
+	_title.tooltip_text = _title_tip({})
 	_title.text = YouTube.TITLE_TEMPLATE
 	_title.text_changed.connect(func(_t: String) -> void: refresh())
 	_row("Title", _title)
@@ -358,11 +364,57 @@ func episode_steps() -> Array:
 	return [_tags]
 
 
+## THE NOTE'S NAMES ARE [param writer]'S - its Script card's - from now on: %title% its Title (else the
+## note's file name), %episode% its Episode, both rows shown there, so whatever the title can say has a
+## place on the note to be written. Every panel that shows this card calls it.
+func name_from(writer: ScriptWriter) -> void:
+	_names = writer
+	writer.show_field("title")
+	writer.show_field("episode")
+	refresh()
+
+
+## WHAT THE TITLE'S MACROS ARE WORTH NOW - and so which this note fills: the Script card's Title and
+## Episode, under what the panel adds ([member values]). {} while no panel has bound the card: it fills
+## nothing, and nothing goes up.
+func values_now() -> Dictionary:
+	if _names == null:
+		return {}
+	var v := {"title": _names.title_or_name(), "episode": _names.field_value("episode")}
+	var more: Variant = values.call() if values.is_valid() else {}
+	if more is Dictionary:
+		v.merge(more, true)
+	return v
+
+
+## WHY THE TITLE CANNOT GO UP AS IT STANDS ("" when it can), with the macros' [param given] values - else
+## the note's now: it names a macro the note does not fill ([method YouTube.unfilled]), or no panel ever
+## said what the note is called.
+func why_not(given := {}) -> String:
+	var v: Dictionary = given if not given.is_empty() else values_now()
+	if v.is_empty():
+		return "This panel never says what the note is called, so the title cannot be made here."
+	var out := YouTube.unfilled(template(), v)
+	if out.is_empty():
+		return ""
+	var said := PackedStringArray()
+	for k in out:
+		said.append("%s (%s)" % [String(YouTube.MACROS[k]["label"]), String(YouTube.MACROS[k]["blurb"])])
+	return "The title names %s, which this note does not have: take %s out of the title, or nothing goes up." % [
+		" and ".join(said), "it" if out.size() == 1 else "them"]
+
+
+## The title box's tooltip: what each macro the note fills stands for - only those.
+static func _title_tip(v: Dictionary) -> String:
+	return ("The video's title, made of the words written here and these macros: %s What a missing one leaves "
+		% YouTube.macros_said(v) + "(a dangling \": \") goes, and a name is never said twice. YouTube takes 100 characters.")
+
+
 ## The title as it goes up: the template, its macros filled from [param given] - else from
-## [member values], as the panel stands now.
+## [method values_now], as the note stands now.
 func title_now(given := {}) -> String:
-	var v: Variant = given if not given.is_empty() else (values.call() if values.is_valid() else {})
-	return YouTube.fit_title(YouTube.expand_title(template(), v if v is Dictionary else {}))
+	var v: Dictionary = given if not given.is_empty() else values_now()
+	return YouTube.fit_title(YouTube.expand_title(template(), v))
 
 
 ## The title's template as it stands: the field's, else the one a new card starts with.
@@ -375,10 +427,15 @@ func template() -> String:
 ## when they are not the panel's as it stands now (an episode an export rendered) - with this card's
 ## title, privacy, category, playlist (its id and title, which the description names) and channel laid
 ## over it, and the description written here ([method describe]) before the panel's. {} when nothing is to
-## go up: the box is clear, or the panel has nothing ({}).
+## go up: the box is clear, or the panel has nothing ({}); `{refused: why}` when its title cannot be made
+## ([method why_not]) - the exporter says so, and nothing renders for it.
 func meta(base: Dictionary) -> Dictionary:
 	if not ticked() or base.is_empty():
 		return {}
+	var held: Variant = base.get("values", {})
+	var why := why_not(held if held is Dictionary else {})
+	if not why.is_empty():
+		return {"refused": why}
 	var out := base.duplicate()
 	var own := description()
 	if not own.is_empty():
@@ -400,8 +457,21 @@ func meta(base: Dictionary) -> Dictionary:
 func refresh() -> void:
 	if _preview == null:
 		return
-	var t := title_now()
-	_preview.text = ("Goes up as \"%s\"" % t) if not t.is_empty() else "The title is empty: the export's file name is used."
+	var v := values_now()
+	var tip := _title_tip(v)
+	if _title.tooltip_text != tip:
+		_title.tooltip_text = tip
+	var why := why_not(v)
+	var t := title_now(v) if not v.is_empty() else ""
+	if not why.is_empty():
+		_preview.text = "⚠  " + why
+	else:
+		_preview.text = ("Goes up as \"%s\"" % t) if not t.is_empty() else "The title is empty: the export's file name is used."
+	if _preview.has_theme_color_override("font_color") == why.is_empty():
+		if why.is_empty():
+			_preview.remove_theme_color_override("font_color")
+		else:
+			_preview.add_theme_color_override("font_color", Color(1.0, 0.85, 0.6))
 	_refresh_account()
 	_refresh_tags()
 

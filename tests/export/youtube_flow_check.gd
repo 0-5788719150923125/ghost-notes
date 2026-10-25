@@ -457,6 +457,12 @@ func _card_sign_in() -> bool:
 	var card = load("res://src/export/youtube_card.gd").new()
 	card.exporter = ex
 	holder.add_child(card)
+	# bound to a Script card, as every panel binds its own (YouTubeCard.name_from), kept in no file
+	var names = load("res://src/ui/script_writer.gd").new()
+	names.setup("youtube_flow_check", PackedStringArray(), "note")
+	names.doc._sync = false
+	names.doc._fields = {"title": "A Note"}
+	card.name_from(names)
 
 	# no client yet: its file is asked for first
 	YouTube.forget_client()
@@ -554,6 +560,7 @@ func _card_sign_in() -> bool:
 	_ok(ex._sign == "ok" and not first.is_empty() and ex._yt.sign_in_url.is_empty() and ex._yt.phase == "",
 		"the replaced one reports nothing over it")
 	holder.queue_free()
+	names.queue_free()          # with the card, which reads it until it goes
 	ex.free()
 	return true
 

@@ -102,22 +102,19 @@ var _export_pin := {}
 ## The take the last export rendered and the episode it is of: the upload describes them (see
 ## [method upload_base]) after the pin is let go. {take, episode}, or empty.
 var _taken := {}
-## THE YOUTUBE FIELDS: the picked episode's title (on the Episode card, edited in place in its plan),
-## and the show's description and tags (on the YouTube card - null without one).
+## THE YOUTUBE FIELDS: the show's description and tags (on the YouTube card - null without one). The
+## picked episode's title is the Script card's Episode ([method episode_title], edited in its plan).
 ## The picked episode, as the steps other cards add to it read it ([method _tick_steps]).
 var _feed: Feed = null
 ## Generate was pressed: the steps other cards add are made once its own are done.
 var _steps_asked := false
-var _yt_title: LineEdit
 var _yt_desc: TextEdit
 var _yt_tags: TagField
 var _yt_note: Label
-var _yt_dirty := 0.0       # seconds until edits are written into the plan; 0 = nothing waiting
-var _yt_seen := {}         # {path, mt}: the plan the fields were last filled from
-## THE SHOW'S YOUTUBE TITLE AND DESCRIPTION, kept in its document's block - global, never a record
-## per episode. The title is ONE value overwritten by whichever episode is picked (as the seed is);
-## the description is the show's, the same for every episode (see [method capture]).
-var _cur_title := ""
+var _yt_dirty := 0.0       # seconds until the description's edit is kept; 0 = nothing waiting
+var _yt_seen := {}         # {path, mt, ups}: the plan the fields were last filled for, and its uploads
+## THE SHOW'S YOUTUBE DESCRIPTION, kept in its document's block - global, the same for every episode,
+## never a record per episode (see [method capture]).
 var _cur_desc := ""
 
 
@@ -274,8 +271,14 @@ class Publish extends ReadingPublish:
 	func upload_base(take: String) -> Dictionary:
 		return card.upload_base(take)
 
-	func upload_values(_own: Dictionary) -> Dictionary:
+	func upload_values() -> Dictionary:
 		return card.upload_values()
+
+	func episode_title() -> Variant:
+		return card.episode_title()
+
+	func name_episode(title: String) -> String:
+		return card.name_episode(title)
 
 	func book(d: Dictionary, body: String) -> Dictionary:
 		return card.book(d, body)
@@ -410,7 +413,7 @@ func after_take(path: String) -> String:
 	var show := _doc.field("title")
 	var ep_title := String(ep.upload_notes()["title"])
 	var err := ep.write_upload_notes(path, _show_tags(), _cur_desc, _youtube.title_now(
-		{"title": show.strip_edges(), "episode": ep_title}) if _youtube != null else upload_title(show, ep_title))
+		{"title": show.strip_edges(), "episode": ep_title, "seed": str(ep.seed)}) if _youtube != null else upload_title(show, ep_title))
 	return ("Rendered the take; upload notes are in the episode's folder (upload.md)." if err.is_empty()
 		else "Rendered the take; the upload notes failed: " + err)
 
@@ -438,11 +441,41 @@ func upload_base(take: String) -> Dictionary:
 		"record": ep.file_of("youtube")}
 
 
-## The macros of the YouTube card's title as the card stands: the show's title and the picked
-## episode's.
+## The macros of the YouTube card's title as the card stands: the show's title (no file's name for it), the
+## picked episode's and its seed.
 func upload_values() -> Dictionary:
-	return {"title": _doc.field("title").strip_edges() if _doc != null else "", "episode": _cur_title,
+	var t: Variant = episode_title()
+	return {"title": _doc.field("title").strip_edges() if _doc != null else "", "episode": str(t) if t != null else "",
 		"seed": str(_episode.seed) if _episode != null else ""}
+
+
+## THE PICKED EPISODE'S TITLE, as its plan has it: the Script card's Episode (handed it by the panel -
+## [method ReadingPublish.episode_title]), the export's name, the picker's entry and `upload.md`. Null
+## before it has a plan: Generate names it.
+func episode_title() -> Variant:
+	if _episode == null or not _episode.has("plan"):
+		return null
+	return String(_episode.upload_notes()["title"])
+
+
+## [param title] NAMES THE PICKED EPISODE from now on: written into its plan, the rest of it kept, so the
+## export's file name, the episode picker and `upload.md` follow. "" once written, else why not - an
+## emptied title is not written (a video needs one).
+func name_episode(title: String) -> String:
+	var t := title.strip_edges()
+	var plan: Variant = _episode.read_json("plan") if _episode != null else null
+	if not (plan is Dictionary):
+		return "The episode has no plan yet - Generate names it."
+	if t.is_empty():
+		return "An episode needs a title: it names the export and the video."
+	if t == String((plan as Dictionary).get("episode_title", "")).strip_edges():
+		return ""
+	(plan as Dictionary)["episode_title"] = t
+	var err := _episode.write_json("plan", plan)
+	if not err.is_empty():
+		return "The title could not be saved into the episode's plan: " + err
+	_refresh_upload_note()
+	return ""
 
 
 ## THE UPLOAD'S TITLE as the YouTube card's default template makes it: the show's name, then the
@@ -517,10 +550,7 @@ func capture() -> Dictionary:
 	var t := {}
 	for k in KNOBS:
 		t[k] = _knobs[k]
-	# THE SHOW'S YOUTUBE TITLE AND DESCRIPTION: global values, the title overwritten as the episode
-	# changes (as the seed is)
-	if not _cur_title.is_empty():
-		t["episode_title"] = _cur_title
+	# THE SHOW'S YOUTUBE DESCRIPTION: a global value (each episode's title is its plan's)
 	if not _cur_desc.is_empty():
 		t["description"] = _cur_desc
 	return t
@@ -541,7 +571,6 @@ func apply(cfg: Dictionary) -> void:
 	var was := "%s#%d" % [String(_knobs["show"]), int(_knobs["seed"])]
 	_knobs = KNOBS.duplicate(true)
 	_take_knobs(cfg)
-	_cur_title = str(cfg.get("episode_title", ""))
 	_cur_desc = str(cfg.get("description", ""))
 	if _episode == null or "%s#%d" % [String(_knobs["show"]), int(_knobs["seed"])] != was:
 		_open_episode()
@@ -564,7 +593,6 @@ func _on_doc_mode(sync: bool) -> void:
 
 func _fresh_show() -> void:
 	_knobs = KNOBS.duplicate(true)
-	_cur_title = ""
 	_cur_desc = ""
 	_show_knobs()
 	_open_episode()
@@ -771,7 +799,6 @@ func _build() -> void:
 	_episode_note.add_theme_font_size_override("font_size", 11)
 	_episode_note.modulate = Color(1, 1, 1, 0.7)
 	box.add_child(_episode_note)
-	_build_title_field(box)
 	_show_knobs()
 
 
@@ -1318,27 +1345,16 @@ func _refresh_step_row(w: Dictionary, step: EpisodeStep) -> void:
 
 # --- the YouTube fields ------------------------------------------------------------------------
 
-## WHAT THE EPISODE GOES UP TO YOUTUBE AS. The title is the episode's - its plan's, edited on the
-## Episode card and written straight back into the plan, so the export's file name, the episode
-## picker, `upload.md` and the YouTube card's `%episode%` all say what the panel says. The
-## description and THE TAGS ARE THE SHOW'S, on the YouTube card when the note has one (2026-10-07):
-## the description in the show's block, the tags its document's own `tags:` line, the way North
-## Star's chapters keep theirs, edited as chips and going up with every episode. Nothing of any one
-## episode is kept in the document but the picked one's title, overwritten as the seed is (the user,
-## 2026-10-06: "I just don't want to store a bunch of episode-specific logic in the frontmatter of a
-## markdown file").
-func _build_title_field(box: VBoxContainer) -> void:
-	box.add_child(HSeparator.new())
-	_yt_title = LineEdit.new()
-	_yt_title.max_length = YouTube.TITLE_MAX
-	_yt_title.placeholder_text = "Episode title"
-	_yt_title.tooltip_text = ("The episode's title, at most 100 characters - the producer writes it with the "
-		+ "plan, and an edit is saved into the plan. It names the exported file, and is %episode% in the "
-		+ "YouTube card's title.")
-	_yt_title.text_changed.connect(func(_t: String) -> void: _upload_edited())
-	box.add_child(_yt_title)
-
-
+## WHAT THE EPISODE GOES UP TO YOUTUBE AS. The title is the episode's - its plan's, the Script card's
+## Episode (2026-10-25: it had been a box on this card, and %episode% no other note's), written straight
+## back into the plan ([method name_episode]), so the export's file name, the episode picker,
+## `upload.md` and the YouTube card's `%episode%` all say what the panel says. The description and THE
+## TAGS ARE THE SHOW'S, on the YouTube card when the note has one (2026-10-07): the description in the
+## show's block, the tags its document's own `tags:` line, the way North Star's chapters keep theirs,
+## edited as chips and going up with every episode. Nothing of any one episode is kept in the document
+## (the user, 2026-10-06: "I just don't want to store a bunch of episode-specific logic in the
+## frontmatter of a markdown file").
+##
 ## The show's description and tags, on the YouTube card ([member YouTubeCard.extra]).
 func youtube_built(card: YouTubeCard) -> void:
 	_youtube = card
@@ -1377,7 +1393,7 @@ func _upload_edited() -> void:
 
 
 func _upload_focused() -> bool:
-	return _yt_title != null and (_yt_title.has_focus() or (_yt_desc != null and _yt_desc.has_focus()))
+	return _yt_desc != null and _yt_desc.has_focus()
 
 
 static func _mtime(path: String) -> int:
@@ -1386,12 +1402,11 @@ static func _mtime(path: String) -> int:
 
 ## THE FIELDS SHOW THE SHOW'S GLOBAL VALUES from its document at once - on open, on New episode, on
 ## any pick (the user: "it should have been grabbed immediately, since that stuff is global"): the
-## description and the tags as the show keeps them, and the title the picked episode overwrites
-## when it has a plan (as the seed is overwritten) - a new episode shows the last until its plan
-## gives its own. Refilled when the plan changes on disk unless one is being typed in, or at once
-## with [param force]. A new upload refreshes the note.
+## description and the tags as the show keeps them. Refilled when another episode is picked or its plan
+## changes on disk, unless the description is being typed in, or at once with [param force]. A new
+## upload refreshes the note.
 func _fill_upload_fields(force := false) -> void:
-	if _yt_title == null:
+	if _yt_desc == null:
 		return
 	var path := _episode.file_of("plan") if _episode != null else ""
 	var mt := _mtime(path)
@@ -1404,19 +1419,11 @@ func _fill_upload_fields(force := false) -> void:
 		return
 	_yt_seen["path"] = path
 	_yt_seen["mt"] = mt
-	if mt >= 0:
-		var t := String(_episode.upload_notes()["title"])
-		if not t.is_empty():
-			_cur_title = t
 	var was := _syncing
 	_syncing = true
-	if _yt_title.text != _cur_title:
-		_yt_title.text = _cur_title
-	if _yt_desc != null and _yt_desc.text != _cur_desc:
+	if _yt_desc.text != _cur_desc:
 		_yt_desc.text = _cur_desc
 	_syncing = was
-	# the title is the episode's (an edit is written into its plan), so it waits for a plan
-	_yt_title.editable = mt >= 0
 	_refresh_show_fields()
 
 
@@ -1453,33 +1460,14 @@ func _seed_from_plan() -> void:
 			_refresh_show_fields()
 
 
-## The edited title and description - only when something was edited (with [param force], when the
-## edit's wait is over) and only what changed. The description is the show's (into its document);
-## the title is the picked episode's, written into its plan too, so the export's file name and the
-## episode picker follow. An emptied title is not written: a video needs one.
+## The edited description - only when it was edited (with [param force], when the edit's wait is over):
+## the show's, kept in its block.
 func _flush_upload_fields(force := false) -> void:
 	if not force and _yt_dirty <= 0.0:
 		return
 	_yt_dirty = 0.0
-	if _yt_title == null:
-		return
 	if _yt_desc != null:
 		_cur_desc = _yt_desc.text.strip_edges()
-	var title := _yt_title.text.strip_edges()
-	var plan: Variant = _episode.read_json("plan") if _episode != null else null
-	if title.is_empty() or not (plan is Dictionary):
-		_refresh_upload_note()
-		return
-	_cur_title = title
-	var p: Dictionary = plan
-	if title != String(p.get("episode_title", "")):
-		p["episode_title"] = title
-		var err := _episode.write_json("plan", p)
-		if not err.is_empty():
-			_set_status("The title could not be saved into the episode's plan: " + err)
-			return
-		_yt_seen["path"] = _episode.file_of("plan")
-		_yt_seen["mt"] = _mtime(_episode.file_of("plan"))
 	_refresh_upload_note()
 
 

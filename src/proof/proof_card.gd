@@ -177,7 +177,8 @@ func apply(cfg: Dictionary) -> void:
 
 ## HOW AN EPISODE GOES OUT, as a card show's does ([EpisodeCard.Publish]): named after the episode, the
 ## channel's name and byline over the desk while the intro holds, and its upload titled
-## `%title%: %episode%` - the note's Title, then the name the framer gave the episode.
+## `%title%: %episode%` - the note's Title, then the name the framer gave the episode (the Script card's
+## Episode, where it can be edited).
 class Publish extends ReadingPublish:
 	var card: ProofCard
 
@@ -206,8 +207,15 @@ class Publish extends ReadingPublish:
 	func upload_base(take: String) -> Dictionary:
 		return card.upload_base(take)
 
-	func upload_values(_own: Dictionary) -> Dictionary:
+	func upload_values() -> Dictionary:
 		return card.upload_values()
+
+	func episode_title() -> Variant:
+		var ep := card.current()
+		return card.episode_title() if ep != null and ep.has("problem") else null
+
+	func name_episode(title: String) -> String:
+		return card.name_episode(title)
 
 	func youtube_built(yt: YouTubeCard) -> void:
 		card.youtube_built(yt)
@@ -275,6 +283,26 @@ func episode_title() -> String:
 		return ""
 	var p: Variant = _episode.read_json("problem")
 	return str((p as Dictionary).get("episode_title", "")) if p is Dictionary else ""
+
+
+## [param title] NAMES THE EPISODE from now on - the Script card's Episode, edited: written into its problem
+## (the framer's), the rest kept, so its export, its entry in the list and %episode% follow. "" once
+## written, else why not - an emptied title is not written (a video needs one).
+func name_episode(title: String) -> String:
+	var t := title.strip_edges()
+	var p: Variant = _episode.read_json("problem") if _episode != null else null
+	if not (p is Dictionary):
+		return "The problem is not fixed yet - Make episode names the episode."
+	if t.is_empty():
+		return "An episode needs a title: it names the export and the video."
+	if t == str((p as Dictionary).get("episode_title", "")).strip_edges():
+		return ""
+	(p as Dictionary)["episode_title"] = t
+	var err := _episode.write_json("problem", p)
+	if not err.is_empty():
+		return "The title could not be saved into the episode's problem: " + err
+	_refill()
+	return ""
 
 
 ## THE CHANNEL'S NAME: the note's Title (its `title:` line), as a card show's is - on the title screen

@@ -1069,7 +1069,14 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
   card's "Replace client…" replaces the kept one; "Sign out" forgets the sign-in.
 - **The card**: the title is a template, `%title%: %episode%` by default (`%seed%`, `%date%` too;
   `YouTube.expand_title` drops what a missing value leaves dangling and never says the show's name
-  twice); Visibility is Private, Unlisted or Public (private by default); Playlist is None or one
+  twice). THE NAMES ARE THE SCRIPT CARD'S (2026-10-25: a note read as it is written had no episode
+  title anywhere, and the card claimed `%episode%` all the same): Title and Episode, read by the card
+  itself (`YouTubeCard.name_from`, which every panel calls and which shows both rows); a show hands the
+  Episode row its picked episode's title (`ScriptWriter.hand_field` -> `EpisodeCard.name_episode`,
+  written into the plan - the Episode card's own title box is gone, and no episode's title is kept in
+  the `cards:` block). The macros are rows (`YouTube.MACROS`): the card's tooltip names only those the
+  note fills, and a title naming one it does not (`%seed%` on a reading) is said under it and refused
+  at the export's click (`YouTubeCard.why_not`). Visibility is Private, Unlisted or Public (private by default); Playlist is None or one
   of the channel's, loaded with ↻ - listing them and adding a video take the `youtube` scope, so
   the first ↻ signs in again for it (`YouTube.granted` reads the scopes kept with the token). A
   playlist YouTube refuses leaves the video up, and the status line says why.

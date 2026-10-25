@@ -15,13 +15,16 @@ extends SceneTree
 ##   its own first frame, AFTER its seam, and a move nearer BEFORE the seam - and a handover written
 ##   after the player consumed every mark so far still lands on its own frame, never at 0;
 ## - THE WORDS, in the take's seconds: a chunk's word at its chunk's frame plus its span, a lead
-##   included, and a word after a hesitation moved by exactly the rest spliced in before it;
+##   included, and a word after a hesitation moved by exactly the rest spliced in before it - less
+##   what the voice already rested there for it (the host's `rested`: told of the rest, the model
+##   ends the word and pauses itself), so a hesitation is its own length, never that and the voice's;
 ## - THE FADE: it starts at the first fading chunk, and ending the take where it runs out drops what
 ##   was joined past it and every word that starts there - or, when the text ran out first, says how
 ##   much silence fills it out.
 ##
 ## THE CONTROLS, each the claim's other side: a chunk read with a different Turn rests differently, a
-## word before the hesitation does not move, and a word inside the take survives its end.
+## word before the hesitation does not move, a voice that rested the whole hesitation is cut nowhere,
+## and a word inside the take survives its end.
 ##
 ## Loaded by path after the tree is up: named here, the join would be compiled with this gate before
 ## the autoloads its libraries read exist.
@@ -44,6 +47,7 @@ func _run() -> void:
 	_check_seams_and_marks()
 	_check_started_part_way()
 	_check_words()
+	_check_rested()
 	_check_fade()
 	for f in _fails:
 		printerr("FAIL: ", f)
@@ -127,6 +131,22 @@ func _check_words() -> void:
 	_ok(absf(float(words[3]["t0"]) - (c1 + 0.25 + 0.5)) < 0.002,
 		"the word after the rest is at %s s, not moved by the 0.5 s spliced in" % words[3]["t0"])
 	_ok(String(words[3].get("speaker", "")) == "A", "a joined word lost who says it")
+
+
+func _check_rested() -> void:
+	var chunks := [_chunk(0, "A", 0.5)]
+	var spans := _spans()
+	(spans[0] as Dictionary)["rested"] = 0.2
+	var words: Array = []
+	var j: RefCounted = _join_script.new(SR, words)
+	var out: PackedFloat32Array = j.add(chunks, 0, _take(), spans, _slot, 1.0)
+	_ok(out.size() == 400 + 300, "a 0.5 s rest the voice began 0.2 s of spliced %d frames, not 300" % (out.size() - 400))
+	_ok(words.size() == 2 and absf(float(words[1]["t0"]) - (0.25 + 0.3)) < 0.002,
+		"the word after it is at %s s, not moved by what is left of the rest" % (words[1]["t0"] if words.size() == 2 else "-"))
+	var all := _spans()
+	(all[0] as Dictionary)["rested"] = 0.8
+	var whole: PackedFloat32Array = (_join_script.new(SR) as RefCounted).add(chunks, 0, _take(), all, _slot, 1.0)
+	_ok(whole.size() == 400 and whole == _take(), "control: a rest the voice rested whole was cut %d frames into" % (whole.size() - 400))
 
 
 func _check_fade() -> void:

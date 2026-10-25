@@ -548,9 +548,7 @@ func _rewrite(write: Callable) -> void:
 ## The YouTube card, after the Collection.
 func _add_youtube() -> void:
 	_youtube = YouTubeCard.new()
-	_youtube.values = func() -> Dictionary:
-		var t := _doc.field("title").strip_edges() if _doc != null else ""
-		return {"title": t if not t.is_empty() or note_path.is_empty() else NoteStore.title_of(note_path), "episode": ""}
+	_youtube.name_from(_writer)
 	_panel.add_card("youtube", "YouTube", &"publish", "youtube").add_child(_youtube)
 	_youtube.noted.connect(func(msg: String) -> void: _status.text = msg)
 

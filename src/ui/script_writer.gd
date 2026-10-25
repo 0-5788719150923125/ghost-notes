@@ -31,12 +31,22 @@ class_name ScriptWriter
 
 ## The document's own metadata - top-level frontmatter keys, not ghost's block - edited on the
 ## card, never in the editor. Each is read by something: the label, its tooltip, the panels
-## that use it.
+## that use it. A row stands in its `modes`, and in any other once what reads it shows it ([method
+## show_field]: a YouTube card shows Title and Episode, the names its title is made of).
+##
+## THE NOTE'S NAMES ARE HERE (2026-10-25, the user: "the YouTube card specifies an upload title of
+## '%title%: %episode%' - however nowhere is an episode title actually an option here"): Title and
+## EPISODE, what this video is called. A note read as it is written keeps its own (`episode:`); a show
+## that names its episodes hands the row its picked one's ([method hand_field]: Cards' plan, Proof's
+## problem), so its Episode is edited here too, never on a card of its own.
 const FIELDS := {
 	"title": {"label": "Title", "modes": ["generative", "cards", "proof", "note"],
-		"tip": "The chapter's title. Read aloud first, by the voice that opens the chapter, and set at the head of the chapter in the Novel and Notebook. For a card show or a Proof note, the channel's name: on the title screen while the intro holds, and the %title% of the YouTube title (each episode's own name is its %episode%)."},
+		"tip": "The chapter's title. Read aloud first, by the voice that opens the chapter, and set at the head of the chapter in the Novel and Notebook. For a card show or a Proof note, the channel's name: on the title screen while the intro holds. The %title% of the YouTube title."},
 	"byline": {"label": "Byline", "modes": ["cards", "proof"],
 		"tip": "A line under the channel's name on the title screen while the intro holds - \"with Pen & Ink\". Empty, the name stands alone."},
+	"episode": {"label": "Episode", "modes": ["cards", "proof"],
+		"wait": "named with the episode",
+		"tip": "What this video is called: the %episode% of the YouTube title. A card show's or a Proof note's is the picked episode's - its writer names it as it plans the episode, an edit here is written into the episode, and it names the export; an episode needs one. A note read as it is written names its own here."},
 	"author": {"label": "Author", "modes": ["generative"],
 		"tip": "Who wrote it. Printed on the cover in the Novel and Notebook."},
 	"book": {"label": "Book", "modes": ["generative"],
@@ -78,6 +88,11 @@ var _speakers_head: Label
 var _timer: Timer
 var _speaker_names := PackedStringArray()
 var _field_edits := {}          # key -> LineEdit
+var _field_rows := {}           # key -> [Label, LineEdit]: a row hidden outside its modes until shown
+var _fields_grid: GridContainer
+## Fields another part keeps, not the document: key -> {read: Callable, write: Callable} ([method hand_field]).
+var _handed := {}
+var _handed_t := 0.0
 var _open_btn: Button
 var _clear_btn: Button
 var _save_btn: Button
@@ -204,18 +219,20 @@ func open_as_note(path: String) -> void:
 		doc.tell("⚠  " + why)
 
 
-## The FIELDS this panel uses, as a two-column form under the summary. An edit is committed on
-## Enter or on leaving the box (not per keystroke - saved in a file, each commit is a write to it),
-## and the box then shows what the source holds, so a refused write is visible as a revert.
+## The FIELDS, as a two-column form under the summary: those of this panel's mode shown, the rest
+## until something shows them ([method show_field]). An edit is committed on Enter or on leaving the box
+## (not per keystroke - saved in a file, each commit is a write to it), and the box then shows what the
+## source holds, so a refused write is visible as a revert.
 func _build_fields() -> void:
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 8)
 	grid.add_theme_constant_override("v_separation", 2)
+	add_child(grid)
+	_fields_grid = grid
+	grid.visible = false
 	for k in FIELDS:
 		var f: Dictionary = FIELDS[k]
-		if not (f["modes"] as Array).has(_mode):
-			continue
 		var l := Label.new()
 		l.text = String(f["label"])
 		l.add_theme_font_size_override("font_size", 12)
@@ -234,16 +251,91 @@ func _build_fields() -> void:
 		e.focus_exited.connect(_commit_field.bind(key))
 		grid.add_child(e)
 		_field_edits[key] = e
-	if grid.get_child_count() > 0:
-		add_child(grid)
-	else:
-		grid.free()
+		_field_rows[key] = [l, e]
+		l.visible = (f["modes"] as Array).has(_mode)
+		e.visible = l.visible
+		grid.visible = grid.visible or l.visible
+
+
+## THE FIELD [param key] IS SHOWN from now on, whatever the mode: something reads it (a YouTube card, the
+## Title and Episode its title is made of).
+func show_field(key: String) -> void:
+	for c in _field_rows.get(key, []):
+		(c as Control).visible = true
+	_fields_grid.visible = _fields_grid.visible or _field_rows.has(key)
+
+
+## Is the field [param key] shown?
+func shows_field(key: String) -> bool:
+	return _field_rows.has(key) and ((_field_rows[key] as Array)[1] as Control).visible
+
+
+## A FIELD ANOTHER PART KEEPS, not the document - a show's Episode is its picked episode's: the box shows
+## what [param read] returns (a String; null while there is nothing to name - the box empty, not
+## editable, saying what it waits for), an edit goes to [param write] (the text; it returns "" once
+## written, else why not, said on the card), and the row is shown. Looked at again twice a second: what
+## it keeps changes with no word to this card (another episode picked, its plan written).
+func hand_field(key: String, read: Callable, write: Callable) -> void:
+	_handed[key] = {"read": read, "write": write}
+	show_field(key)
+	_refresh_handed()
+
+
+## WHAT THE FIELD [param key] HOLDS NOW: the part's that keeps it ([method hand_field]), else the
+## document's line; "" for none.
+func field_value(key: String) -> String:
+	if _handed.has(key):
+		var v: Variant = (_handed[key]["read"] as Callable).call()
+		return str(v).strip_edges() if v != null else ""
+	return doc.field(key).strip_edges() if doc != null else ""
+
+
+## THE NOTE'S NAME: its Title, else the name of the file it is kept in (as the notes list names it); ""
+## for words kept in no file.
+func title_or_name() -> String:
+	var t := field_value("title")
+	if t.is_empty() and doc != null and doc.is_sync():
+		t = doc.doc_path().get_file().get_basename()
+	return t
 
 
 func _commit_field(key: String) -> void:
 	var e: LineEdit = _field_edits[key]
+	if _handed.has(key):
+		var read: Variant = (_handed[key]["read"] as Callable).call()
+		if read != null and e.text.strip_edges() != str(read).strip_edges():
+			var why := str((_handed[key]["write"] as Callable).call(e.text))
+			if not why.is_empty():
+				doc.tell("⚠  " + why)
+		var now: Variant = (_handed[key]["read"] as Callable).call()
+		e.text = str(now) if now != null else ""
+		return
 	doc.set_field(key, e.text)
 	e.text = doc.field(key)
+
+
+## The handed fields' boxes from what keeps them, unless one is being typed in.
+func _refresh_handed() -> void:
+	for k in _handed:
+		var e: LineEdit = _field_edits.get(k)
+		if e == null or e.has_focus():
+			continue
+		var v: Variant = (_handed[k]["read"] as Callable).call()
+		e.editable = v != null
+		e.placeholder_text = "none" if v != null else String((FIELDS[k] as Dictionary).get("wait", "none"))
+		var t := str(v) if v != null else ""
+		if e.text != t:
+			e.text = t
+
+
+func _process(dt: float) -> void:
+	if _handed.is_empty():
+		return
+	_handed_t -= dt
+	if _handed_t > 0.0:
+		return
+	_handed_t = 0.5
+	_refresh_handed()
 
 
 func _recount_soon() -> void:
@@ -442,8 +534,9 @@ func _refresh() -> void:
 	_window.title = "%s - %s" % [_wording("window", "Script"), source]
 	for k in _field_edits:
 		var e: LineEdit = _field_edits[k]
-		if not e.has_focus():
+		if not e.has_focus() and not _handed.has(k):
 			e.text = doc.field(k)
+	_refresh_handed()
 	var spoken := Manuscript.unspoken(text)
 	var parts := PackedStringArray([_count(Manuscript._rx("\\S+").search_all(spoken).size(), "word")])
 	if _mode in ["generative", "cards"]:

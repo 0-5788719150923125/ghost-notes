@@ -13,13 +13,17 @@ extends SceneTree
 ##   that is, and so does the text before the first cue;
 ## - A PASSAGE'S RESTS ARE ITS OWN: each passage carries the lengths of its own hesitations, and its
 ##   chunks rest exactly those - none are left over to shift onto the next voice's;
+## - THE VOICE IS TOLD OF A REST: the word a hesitation follows carries its length to the host
+##   (`rest_after`), which reads that word as the end of a phrase and rests after it itself (piper.py
+##   `REST_AFTER_FLOOR`; 2026-10-25, "moved on to <!-- hesitation --> Someone" came back a "t" and a
+##   frame of schwa before the rest);
 ## - THE FADE IS THE PLAN'S: an outro mark fades for the Outro asked (at least half a second), and
 ##   text with no mark has none;
 ## - A READING CAN GROW: a second piece planned on from the first's `sentences` numbers its sentences
 ##   after the first's, says the same words it would have said as one script, and starts where the
 ##   scrub's estimate of the first ends.
 ##
-## THE CONTROLS: Hesitate off rests nowhere (and is a different plan), a reader asked by another
+## THE CONTROLS: Hesitate off rests nowhere and tells the voice of nothing (and is a different plan), a reader asked by another
 ## name gets the cue, and a second piece planned from sentence 0 collides with the first.
 ##
 ## Loaded by path after the tree is up: named here, the plan would be compiled with this gate before
@@ -42,6 +46,7 @@ func _run() -> void:
 	_check_pure(text, ask)
 	_check_reader(text, ask)
 	_check_rests(text, ask)
+	_check_told(ask)
 	_check_fade(ask)
 	_check_grows(ask)
 	for f in _fails:
@@ -94,6 +99,25 @@ func _check_rests(text: String, ask: Dictionary) -> void:
 	for p in _plan.passages(text, "", off):
 		none.append_array((p as Dictionary)["holds"])
 	_ok(none.is_empty(), "control: Hesitate off still rests %s" % str(none))
+
+
+func _check_told(ask: Dictionary) -> void:
+	var text := "It had moved on to <!-- hesitation --> someone new. It stopped. <!-- hesitation: 2 --> It waited."
+	var told := _told(text, ask)
+	_ok(told == [["to", 1.5], ["stopped", 2.0]], "the voice is told of the rests after %s" % str(told))
+	var off := ask.duplicate()
+	off["hesitate"] = false
+	_ok(_told(text, off).is_empty(), "control: Hesitate off still tells the voice of %s" % str(_told(text, off)))
+
+
+## Every token of [param text]'s plan the voice is told a rest follows, as [text, seconds].
+func _told(text: String, ask: Dictionary) -> Array:
+	var out: Array = []
+	for c in _plan.make(text, "", ask)["chunks"]:
+		for t in (c as Dictionary)["tokens"]:
+			if (t as Dictionary).has("rest_after"):
+				out.append([String((t as Dictionary)["text"]), float((t as Dictionary)["rest_after"])])
+	return out
 
 
 func _check_fade(ask: Dictionary) -> void:

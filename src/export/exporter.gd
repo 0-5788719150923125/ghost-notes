@@ -612,6 +612,13 @@ func _on_export() -> void:
 		_set_status("⚠  Nothing to export yet - play or speak something first",
 			Color(1.0, 0.85, 0.6))
 		return
+	# AN UPLOAD WHOSE TITLE CANNOT BE MADE says so now, before the render it would follow (the note's
+	# YouTube card names a macro the note does not fill - YouTubeCard.why_not)
+	var refused := str(_upload_peek().get("refused", ""))
+	if not refused.is_empty():
+		_note_t = 8.0
+		_set_status("⚠  " + refused, Color(1.0, 0.85, 0.6))
+		return
 	# Only the FISHING game has a game to automate. take_provider is no longer a
 	# proxy for that - the generative path sets one too - so the option is driven
 	# by an explicit flag and REMOVED rather than grayed where it is meaningless,
@@ -677,7 +684,7 @@ func _on_path(out_path: String) -> void:
 	# while the person is still at the machine to answer the browser - asking for what this upload
 	# needs (a playlist needs more than an upload), and runs beside the render rather than in front of it.
 	var peek := _upload_peek()
-	_upload_this = not peek.is_empty()
+	_upload_this = not peek.is_empty() and not peek.has("refused")
 	_upload_meta = {}
 	if _upload_this:
 		_check_sign_in(Callable(), scopes_for(peek), str(peek.get("channel", "")), str(peek.get("channel_name", "")))
@@ -704,6 +711,9 @@ func _on_path(out_path: String) -> void:
 	if _upload_this:
 		var meta: Variant = upload_provider.call(_song) if upload_provider.is_valid() else {}
 		_upload_meta = meta if meta is Dictionary else {}
+		if _upload_meta.has("refused"):
+			push_warning("ghost export: %s - the video is only saved" % str(_upload_meta["refused"]))
+			_upload_meta = {}
 		if _upload_meta.is_empty():
 			_upload_this = false
 			push_warning("ghost export: the mode described nothing to upload - the video is only saved")

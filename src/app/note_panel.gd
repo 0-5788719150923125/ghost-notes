@@ -93,7 +93,7 @@ func _ready() -> void:
 	_story = _cards.get("scenes") as StoryboardCard
 	_youtube = _cards.get("youtube") as YouTubeCard
 	if _youtube != null:
-		_youtube.values = func() -> Dictionary: return {"title": _title()}
+		_youtube.name_from(_writer)
 	for key in _cards:
 		if (_cards[key] as Object).has_signal("noted"):
 			(_cards[key] as Object).connect("noted", _note)

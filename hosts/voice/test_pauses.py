@@ -1511,7 +1511,8 @@ def check_real_voice_rests_after_a_word():
     rest, the model reads the word whole, rests there itself, and the cut ghost makes at the
     word's `rest` lands in that silence, which the row counts toward the hesitation. Two-sided
     on the same sentences at the tarot narrator's settings: without `rest_after` most cuts have
-    voice in the 30 ms before them, with it none do. Skipped when the voice is not installed.
+    voice in the 30 ms before them, with it none do (under 2 kHz, so a hiss is no voice).
+    Skipped when the voice is not installed.
     """
     import numpy as np
     from backends.piper import PiperBackend
@@ -1547,7 +1548,8 @@ def check_real_voice_rests_after_a_word():
             toks = [dict(t) for t in toks]
             if held:
                 toks[k]["rest_after"] = 1.5
-            for _ in range(4):
+            # eight draws: untold, about half of the report's own cut into its voice
+            for _ in range(8):
                 with tempfile.TemporaryDirectory() as td:
                     path = Path(td) / "a.wav"
                     res = be._synth_tokens(list(toks), voice, str(path), dict(params), cfg, sess)
@@ -1569,7 +1571,7 @@ def check_real_voice_rests_after_a_word():
     ok(max(told) < 0.01, "told, every cut is in the model's own rest")
     # the report's own sentence: a vowel into a lead hiss, the rest the model's silence (the
     # other ends on a /z/ into a /θ/, its rest mostly the two hisses - no silence to count)
-    ok(min(rested[:4]) > 0.03 and max(rested) <= 1.5, "and the row says how much of the rest it is")
+    ok(min(rested[:8]) > 0.03 and max(rested) <= 1.5, "and the row says how much of the rest it is")
 
 
 def check_hyphen_is_a_word_boundary():

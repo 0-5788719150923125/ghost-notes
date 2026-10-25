@@ -168,8 +168,8 @@ func build_cast(box: VBoxContainer) -> void:
 	_hesitate.tooltip_text = ("How long a bare <!-- hesitation --> rests, in seconds, on top of "
 		+ "whatever pause the text already has there. A marker that names its own length - "
 		+ "<!-- hesitation: 2.5 --> - keeps it whatever this says. Takes effect from the next "
-		+ "chunk; nothing already made is regenerated, because the rest is spliced in rather "
-		+ "than asked of the voice.")
+		+ "chunk; nothing already made is regenerated, because the rest's length is spliced "
+		+ "in rather than asked of the voice.")
 	hrow.add_child(_hesitate)
 	Card.readout(hrow, _hesitate, "s")
 	var on_hesitate := func(_v: Variant) -> void:

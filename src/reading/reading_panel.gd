@@ -297,6 +297,10 @@ func _build_panel() -> void:
 	add_child(_seek_timer)
 	# WHAT PRODUCES THE TEXT comes before the voice that reads it (a show of cards' episode)
 	_note_cards(true)
+	# A SHOW THAT NAMES ITS EPISODES keeps the Script card's Episode: the picked one's title
+	if not publish.note_is_episode():
+		_writer.hand_field("episode", func() -> Variant: return publish.episode_title(),
+			func(t: String) -> String: return publish.name_episode(t))
 	# THE REST ARE THE NOTE'S: the Voice ([VoiceCard], the cast this panel reads), the Picture, the
 	# Storyboard, the Look, the bookends...
 	_note_cards(false)
@@ -444,7 +448,8 @@ func _rewrite(write: Callable) -> void:
 ## while the panel is up is moved above the status line, where a card built with the panel stands.
 func _add_youtube() -> void:
 	_youtube = YouTubeCard.new()
-	_youtube.values = _upload_values
+	_youtube.values = func() -> Dictionary: return publish.upload_values()
+	_youtube.name_from(_writer)
 	_panel.add_card(YouTubeCard.KEY, "YouTube", &"publish", "youtube").add_child(_youtube)
 	_block_cards[YouTubeCard.KEY] = _youtube
 	_youtube.noted.connect(_set_status)
@@ -458,15 +463,6 @@ func _add_youtube() -> void:
 	if publish.note_is_episode():
 		_note_upload = NoteUpload.new(self, _youtube)
 		_youtube.extra.add_child(_note_upload)
-
-
-## What the YouTube title's macros are worth now (see [method YouTube.expand_title]): the note's
-## title, and what the reading's [member publish] makes of it.
-func _upload_values() -> Dictionary:
-	var t := _doc.field("title").strip_edges() if _doc != null else ""
-	if t.is_empty() and not note_path.is_empty():
-		t = NoteStore.title_of(note_path)
-	return publish.upload_values({"title": t, "episode": ""})
 
 
 ## Keep [param card]'s block in the document without a card of its own (one shown inside another).
