@@ -74,6 +74,11 @@ const REACH := 0.45
 const REST_GAP := 0.12
 ## Always a little rest, so a mouth far from every phone is at rest rather than undefined.
 const REST_FLOOR := 0.02
+## [method mix]'s smoothing: a Gaussian of this many seconds (a lip or a jaw takes tens of milliseconds to
+## move; the syllables, four or five a second, pass nearly whole), read at this many moments across two of it
+## either side.
+const SMOOTH := 0.02
+const SMOOTH_TAPS := 5
 
 static var _by_symbol := {}
 
@@ -199,6 +204,35 @@ static func blend_at(t: float, line: Array, targets: Dictionary, n: int, from :=
 	if total > 0.0:
 		for i in n:
 			out[i] /= total
+	return out
+
+
+## THE MOUTH AS A FACE THAT MIXES ANY NUMBER OF SHAPES TAKES IT (a head of splats: its faces are linear in the
+## scores): every pull ([method pulls]) as its share of them all - Cohen and Massaro's own weighted mean, so a
+## sound gives way to the next as their dominances cross - averaged over [constant SMOOTH_TAPS] moments a
+## Gaussian of [constant SMOOTH] seconds weighs: `{class: share}`, summing to 1, a pure function of [param t].
+## THE TWO STRONGEST ([method strongest]) ARE FOR TWO PICTURES: played on the splats (2026-10-24, the user:
+## "the face moves/morphs at EXACTLY the same time every phoneme changes"), each sound held its whole shape and
+## gave way to the next in some 15 ms - a jump within a frame, the mouth's largest 0.69 of a score from one
+## frame to the next on a real passage, its path twice this mix's.
+static func mix(t: float, line: Array, from := 0, rows: Dictionary = REGISTRY) -> Dictionary:
+	var out := {}
+	var weighed := 0.0
+	var half := (SMOOTH_TAPS - 1) / 2
+	for i in SMOOTH_TAPS:
+		var k := float(i - half) / float(maxi(half, 1)) * 2.0
+		var g := exp(-0.5 * k * k)
+		var at := t + k * SMOOTH
+		var all := pulls(at, line, from, rows)
+		var total := 0.0
+		for p in all:
+			total += float(p[2])
+		for p in all:
+			var c := String(p[1])
+			out[c] = float(out.get(c, 0.0)) + g * float(p[2]) / total
+		weighed += g
+	for c in out:
+		out[c] = float(out[c]) / weighed
 	return out
 
 

@@ -254,6 +254,40 @@ def _rest_floor(mark: str, params: dict) -> float:
     )
 
 
+# A REST THE CALLER SPLICES IN (a token's `rest_after`, in seconds): a hesitation, a tablet's
+# action, cut into the take after the word once it is made (ghost's `Splice.chunk`). Told nothing
+# of it, the model read on into the next word as if no rest were there (2026-10-25, the user, of
+# "it had moved on to <!-- hesitation --> Someone": the "to" "dropped to silent, and the pause was
+# much too long"): eSpeak read the "to" mid-sentence as /tə/, the model gave its schwa a frame or
+# two on its way into the /s/, and the 1.5 s cut in after it left a "t" and a hole. So the word
+# before such a rest is the word before a mark: read at the end of a phrase (`_in_sentence`, /tuː/),
+# held and trailing off by the weight its rest earns (`_trail_weight`), and floored by
+# REST_AFTER_FLOOR - the comma's dwell, enough for the model's own release of the word and onset of
+# the next (`_rest_floor`). Where no mark rests there, that rest is the caller's rest begun, never
+# added to it: the token's row says how much of it the model rendered (`rested`).
+REST_AFTER_FLOOR = DWELL[","]
+
+
+def _rest_after(tok: dict) -> float:
+    """Seconds of rest the caller splices in after `tok` (`rest_after`), 0 for none."""
+    try:
+        return max(0.0, float(tok.get("rest_after", 0.0) or 0.0))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _floor_of(tok: dict, params: dict) -> float:
+    """The rest floor on the word-space after `tok`: its mark's (`_rest_floor`), raised to
+    REST_AFTER_FLOOR - never past the rest itself - where the caller splices a rest in after it.
+    None after a sentence end, whose rest is the gap between groups."""
+    m = str(tok.get("punct", ""))
+    floor = _rest_floor(m, params)
+    after = _rest_after(tok)
+    if after > 0.0 and m not in SENTENCE_END:
+        floor = max(floor, min(REST_AFTER_FLOOR, after))
+    return floor
+
+
 # The graph input `_ensure_patched` adds: per-id frames the duration plan may not fall below.
 REST_FLOOR_INPUT = "rest_floor"
 # ...and the other one: a per-id multiplier on the planned frames, after the Ceil and before
@@ -404,21 +438,27 @@ _UNSAID = frozenset({"ˈ", "ˌ", " "})
 _LENGTHENS = frozenset({"ː", "ˑ"})
 
 
-def _trail_weight(mark: str, params: dict) -> float:
+def _trail_weight(mark: str, params: dict, after: float = 0.0) -> float:
     """How much of the trail the word before `mark` gets: 0 where it gets none.
 
-    None at a sentence end or a mark with no rest, and none at Pause 0, where the mark is no
-    boundary at all. Otherwise the share of TRAIL_REST_FULL the mark's rest reaches, times the
-    request's own `trail` (1 by default; 0 turns the whole thing off, 2 doubles it).
+    None at a sentence end, and none where nothing rests - a mark with no rest, or any mark at
+    Pause 0, where it is no boundary at all - unless the caller splices `after` seconds in after
+    the word (`REST_AFTER_FLOOR`), which is rest too. Otherwise the share of TRAIL_REST_FULL the
+    word's rest reaches, times the request's own `trail` (1 by default; 0 turns the whole thing
+    off, 2 doubles it).
     """
     m = str(mark)
-    if m in SENTENCE_END or PAUSE_AFTER.get(m, 0.0) <= 0.0:
+    if m in SENTENCE_END:
+        return 0.0
+    rest = max(0.0, float(after))
+    if PAUSE_AFTER.get(m, 0.0) > 0.0:
+        rest += (_dwell_for(m) + _top_up(m, params)) * _pause_multiplier(params)
+    if rest <= 0.0:
         return 0.0
     try:
         k = min(max(float(params.get("trail", 1.0)), 0.0), 2.0)
     except (TypeError, ValueError):
         k = 1.0
-    rest = (_dwell_for(m) + _top_up(m, params)) * _pause_multiplier(params)
     return k * min(1.0, rest / TRAIL_REST_FULL)
 
 
@@ -946,7 +986,7 @@ def _sound_from(audio, lo: int, hi: int, sr: int, peak: float) -> int:
 def _quiet_lead(audio, edges: dict, group: list, params: dict, sr: int):
     """The next word's hiss in a floored rest held to LEAD_KEEP seconds (see LEAD_KEEP).
 
-    Only where the rest was floored (`_rest_floor`): that is what lengthens the lead, and an
+    Only where the rest was floored (`_floor_of`): that is what lengthens the lead, and an
     unfloored boundary is the model's own. The lead is walked back from the next word's first
     sound and never past the plan's end of this one. A word's own final hiss runs past that end
     (see `_HISSES`) and is kept from it by the silence between the two: none of 100 such words
@@ -961,7 +1001,7 @@ def _quiet_lead(audio, edges: dict, group: list, params: dict, sr: int):
         nxt = edges.get(ti + 1)
         if ti not in edges or nxt is None or peak <= 0.0:
             continue
-        if _rest_floor(str(tok.get("punct", "")), params) <= 0.0:
+        if _floor_of(tok, params) <= 0.0:
             continue
         lo = int(round(float(edges[ti][1]) * sr))
         hi = min(audio.size, int(round(float(nxt[0]) * sr)))
@@ -985,7 +1025,8 @@ def _quiet_lead(audio, edges: dict, group: list, params: dict, sr: int):
 
 
 def _trail(audio, edges: dict, group: list, params: dict, sr: int, hisses=None):
-    """The fade and the sag of `TRAIL_*`, on each word that comes before a mid-sentence mark.
+    """The fade and the sag of `TRAIL_*`, on each word that comes before a mid-sentence mark
+    or a rest the caller splices in (`REST_AFTER_FLOOR`).
 
     `edges` is {token: (first sound, last sound)} in seconds. The voice's own end is looked for
     in the waveform - the last point within TRAIL_VOICED_DB of the final rime's peak - because
@@ -998,7 +1039,7 @@ def _trail(audio, edges: dict, group: list, params: dict, sr: int, hisses=None):
     import numpy as np
 
     todo = [
-        (ti, _trail_weight(str(t.get("punct", "")), params))
+        (ti, _trail_weight(str(t.get("punct", "")), params, _rest_after(t)))
         for ti, t in enumerate(group)
         if ti in edges
     ]
@@ -2493,9 +2534,15 @@ class PiperBackend(Backend):
         hyphen into a boundary, which is the whole point of that function - so the
         pieces are taken by COUNT rather than one apiece, and rejoined with the space
         that keeps the boundary the hyphen asked for.
+
+        A REST THE CALLER SPLICES IN ENDS A PHRASE (`REST_AFTER_FLOOR`): the sentence is read
+        in pieces broken after each word that has one, so that word is read as the end of
+        what is said - "to" before a hesitation is tuː, where running on into the next word
+        it is tə, a schwa the model gives a frame or two.
         """
         spoken: list[str] = []
         counts: dict[int, tuple[int, int]] = {}
+        ends: list[int] = []  # where in `spoken` each phrase but the last ends
         for i, t in enumerate(tokens):
             text = str(t.get("text", ""))
             if not text.strip():
@@ -2506,11 +2553,21 @@ class PiperBackend(Backend):
                 continue
             counts[i] = (len(spoken), len(parts))
             spoken.extend(parts)
+            if _rest_after(t) > 0.0:
+                ends.append(len(spoken))
         if not spoken:
             return {}
-        joined = (" %s " % WORD_BREAK).join(spoken)
+        cuts = [0] + [e for e in ends if e < len(spoken)] + [len(spoken)]
+        phrases = [(" %s " % WORD_BREAK).join(spoken[a:b]) for a, b in zip(cuts, cuts[1:])]
         try:
-            got = (self._espeak([joined], espeak_voice) or [""])[0].split()
+            read = self._espeak(phrases, espeak_voice) or []
+            pieces = [str(r).split() for r in read]
+            # a phrase that came back with another count of words cannot be laid on its own
+            if len(pieces) != len(phrases) or any(
+                len(p) != b - a for p, a, b in zip(pieces, cuts, cuts[1:])
+            ):
+                pieces = [[]]
+            got = [w for p in pieces for w in p]
         except BackendError:
             raise
         except (
@@ -3002,13 +3059,16 @@ class PiperBackend(Backend):
                 frame /= pr
             # A REST NOBODY ASKED FOR, shortened before the ones that were asked for are
             # put in. Unmarked boundaries only: a mark's rest belongs to `_splice_pauses`
-            # and to the Pause dial, and this must never be caught arguing with either.
+            # and to the Pause dial, and this must never be caught arguing with either -
+            # and a rest the caller splices in after a word is asked for too.
             audio, cut = _trim_rests(
                 audio,
                 [
                     (a, b)
                     for a, b, w in group_rests
-                    if w < len(group) and not str(group[w].get("punct", ""))
+                    if w < len(group)
+                    and not str(group[w].get("punct", ""))
+                    and _rest_after(group[w]) <= 0.0
                 ],
                 sr,
             )
@@ -3053,11 +3113,12 @@ class PiperBackend(Backend):
             audio, inserted = _splice_pauses(
                 audio, points, sr, _pause_multiplier(params)
             )
-            # WHERE A REST AFTER EACH WORD GOES - the editor splices its hesitations and
-            # action holds there (GenerativeEditor._splice_holds). The same window as a
-            # mark's, searched in the finished audio, so after a mark it is the middle of
-            # the silence already spliced in.
-            rests = {}
+            # WHERE A REST AFTER EACH WORD GOES - ghost splices its hesitations and action
+            # holds there (Splice.chunk). The same window as a mark's, searched in the
+            # finished audio, so after a mark or a floored rest (`REST_AFTER_FLOOR`) it is
+            # the middle of the silence already there - and where no mark rests, that
+            # silence is the caller's rest begun, said on the row as `rested`.
+            rests, rested = {}, {}
             quiet = SPLICE_QUIET * float(np.max(np.abs(audio))) if audio.size else 0.0
             for ti in per_token:
                 win = _gap_window(edges, ti, frame)
@@ -3065,7 +3126,11 @@ class PiperBackend(Backend):
                     continue
                 lo = int(round(_shift(win[0], inserted, False) * sr))
                 hi = int(round(_shift(win[1], inserted, True) * sr))
-                rests[ti] = _trough(audio, lo, hi, sr, quiet) / float(sr)
+                at = _trough(audio, lo, hi, sr, quiet)
+                rests[ti] = at / float(sr)
+                after = _rest_after(group[ti])
+                if after > 0.0 and PAUSE_AFTER.get(str(group[ti].get("punct", "")), 0.0) <= 0.0:
+                    rested[ti] = min(after, _silence_around(audio, at, quiet, sr))
             gap = None
             if gi < len(groups) - 1:
                 gap = _gap_for(str(group[-1].get("punct", "")) if group else "", params)
@@ -3083,6 +3148,8 @@ class PiperBackend(Backend):
                 }
                 if ti in rests:
                     row["rest"] = round(rests[ti] + cursor, 4)
+                if ti in rested:
+                    row["rested"] = round(rested[ti], 4)
                 elif ti == len(group) - 1 and gap is not None:
                     # the sentence's last word: the middle of the gap before the next
                     row["rest"] = round(cursor + len(audio) / sr + gap * 0.5, 4)
@@ -3104,7 +3171,7 @@ class PiperBackend(Backend):
         if abs(played - 1.0) > 1e-4 and joined.size > 1:
             joined = _resample(joined, played)
             for row in times + phones:
-                for key in ("t0", "t1", "rest"):
+                for key in ("t0", "t1", "rest", "rested"):
                     if key in row:
                         row[key] = round(row[key] / played, 4)
         self._write_wav(out_path, joined, sr)
@@ -3178,10 +3245,7 @@ class PiperBackend(Backend):
         # to render correctly - see `_load`, which is where that measurement happens,
         # and vowel_probe.py for what it is measuring.
         symbols = self._symbols(group, phonemizer, espeak_voice, voice)
-        floors = {
-            ti: _rest_floor(str(t.get("punct", "")), params)
-            for ti, t in enumerate(group)
-        }
+        floors = {ti: _floor_of(t, params) for ti, t in enumerate(group)}
         stretch = {
             ti: EMPHASIS[int(t.get("emph", 0) or 0)][0]
             for ti, t in enumerate(group)
@@ -3190,7 +3254,7 @@ class PiperBackend(Backend):
         # the word before a rest is held (`TRAIL_STRETCH`): its final rime, by this much
         held = {}
         for ti, t in enumerate(group):
-            w = _trail_weight(str(t.get("punct", "")), params)
+            w = _trail_weight(str(t.get("punct", "")), params, _rest_after(t))
             if w > 0.0:
                 held[ti] = 1.0 + TRAIL_STRETCH * w
         return self._render_symbols(
@@ -3215,8 +3279,8 @@ class PiperBackend(Backend):
         vowel is a symbol, and there is no other way to measure one. Nothing here
         interprets the source index; it is carried through and handed back.
 
-        `floors` is {source: seconds} of rest the model renders on the word-space after
-        that source's mark (`_rest_floor`), fed to the graph when it takes one.
+        `floors` is {source: seconds} of rest the model renders on the word-space that ends
+        that source (`_floor_of`), fed to the graph when it takes one.
 
         `stretch` is {source: multiplier} on that source's stressed vowel (`EMPHASIS`), and
         `opening` the seconds the first word's vowel may not fall below (`OPENING_VOWEL`),
@@ -3270,11 +3334,14 @@ class PiperBackend(Backend):
         # space and the next span starts the moment it ends.
         sound: list[bool] = [False]
         # Frames each id's duration may not fall below - nonzero only on the word-space
-        # right after a mark that has a floor (`_rest_floor`), so never the lead-in spaces.
+        # that ends a source with a floor (`_floor_of`: its mark's, or a rest the caller
+        # splices in after it), so never the lead-in spaces.
         floor: list[float] = [0.0]
         # The multiplier on each id's predicted duration - 1 everywhere but a leaned-on vowel.
         scale: list[float] = [1.0]
-        marked = -1  # the source whose mark is the latest symbol, until its word-space
+        # THE WORD-SPACE THAT ENDS EACH SOURCE - its last symbol, after its mark if it has one, never
+        # a space inside it (a hyphen's) - is where its rest is floored
+        ends = {src: j for j, (_sym, src) in enumerate(symbols)}
         opened = False  # the opening floor goes on the first id of the first nucleus only
         for j, (sym, src) in enumerate(symbols):
             mapped = pmap.get(sym)
@@ -3282,7 +3349,7 @@ class PiperBackend(Backend):
                 missing.append(sym)
                 continue
             rest = 0.0
-            if sym == " " and src == marked and floors:
+            if sym == " " and floors and j == ends.get(src):
                 rest = float(round(float(floors.get(src, 0.0)) / frame_s))
             core = j in nucleus
             mul = float(stretch.get(src, 1.0)) if stretch and core else 1.0
@@ -3319,7 +3386,6 @@ class PiperBackend(Backend):
                 sound.append(sym != " " and sym not in _MARK_SYMBOLS)
                 floor.append(rest if k == 0 else 0.0)
                 scale.append(mul)
-            marked = src if sym in _MARK_SYMBOLS else (-1 if sym == " " else marked)
         ids.append(PAD)
         owner.append(-1)
         said_by.append(-1)

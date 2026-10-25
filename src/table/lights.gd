@@ -75,6 +75,12 @@ const SOFT_SUNS := 3
 ## The render layer of the shadows out of the shot: every light that casts casts with them - the sun, a
 ## lamp of the light's own, the old lamp - and nothing draws them.
 const CASTER_LAYER := 1 << 17
+## HOW SOFT A CANDLE'S OR A LAMP'S SHADOW IS: its filter's radius in texels of its shadow map
+## ([ShadowFilter]), never a light's size - sized, a flame grazing the table printed rings round itself on
+## a card's back and drew a clock's rim on its face in stairs (feedback 0007). On the table's atlas (2048
+## texels a side for an omni light) 3 is about 3 mm at 1 m; wider, the normal bias it needs took the
+## clock's real shadow off its face - half of it at 4.5, nearly all at 6 (measured).
+const SHADOW_TEXELS := 3.0
 
 ## WHERE A LIGHT COMES FROM, by name: degrees round the table seen from above, clockwise from the
 ## reader's own side - 0 from behind the reader, over their shoulder; 90 from their right; 180 from
@@ -138,8 +144,8 @@ const BIRDS := {
 }
 
 ## A LAMP OUT OF THE SHOT: a point of light (`omni`) or one aimed at the table (`spot`), its color and
-## strength when none is given, how it flickers ([method flicker]), how wide its glow is (cm - its
-## shadows' softness), whether it casts by default, where it stands when not told (cm from the
+## strength when none is given, how it flickers ([method flicker]), whether it casts by default (its
+## shadows as soft as a candle's, [constant SHADOW_TEXELS]), where it stands when not told (cm from the
 ## table's middle, and above it), how often it comes when it comes and goes (`every`, seconds), and, for
 ## an electric light, how it FAILS when the set dresser says it is failing (`fails` - [method _failing]).
 ##
@@ -150,31 +156,31 @@ const BIRDS := {
 ## tables that flickered, one plan had asked for it. A light fails only when it is written `failing`.
 const LAMPS := {
 	"candles": {"about": "a few candles burning somewhere in the room - a warm, gently shifting fill", "kind": "omni",
-		"color": "#ffb066", "strength": 0.25, "flicker": "candle", "size": 2.0, "shadows": false, "distance": 120.0, "height": 30.0},
+		"color": "#ffb066", "strength": 0.25, "flicker": "candle", "shadows": false, "distance": 120.0, "height": 30.0},
 	"torch": {"about": "a torch on a wall or a post - bright and ragged, its light and its shadows dancing", "kind": "omni",
-		"color": "#ff9440", "strength": 0.6, "flicker": "torch", "size": 6.0, "shadows": true, "distance": 150.0, "height": 90.0},
+		"color": "#ff9440", "strength": 0.6, "flicker": "torch", "shadows": true, "distance": 150.0, "height": 90.0},
 	"fire": {"about": "an open fire, a hearth or a brazier - low and deep orange, pulsing slowly, crackling", "kind": "omni",
-		"color": "#ff7a30", "strength": 0.55, "flicker": "fire", "size": 8.0, "shadows": true, "distance": 170.0, "height": 15.0},
+		"color": "#ff7a30", "strength": 0.55, "flicker": "fire", "shadows": true, "distance": 170.0, "height": 15.0},
 	"lantern": {"about": "an oil lantern - warm and nearly steady", "kind": "omni", "color": "#ffbf73", "strength": 0.45,
-		"flicker": "lantern", "size": 3.0, "shadows": false, "distance": 110.0, "height": 60.0},
+		"flicker": "lantern", "shadows": false, "distance": 110.0, "height": 60.0},
 	"lamp": {"about": "an electric lamp with a shade - steady and warm, its light falling across the table", "kind": "spot",
-		"color": "#ffd6a0", "strength": 0.5, "flicker": "steady", "size": 4.0, "shadows": true, "distance": 110.0, "height": 70.0, "fails": "bulb"},
+		"color": "#ffd6a0", "strength": 0.5, "flicker": "steady", "shadows": true, "distance": 110.0, "height": 70.0, "fails": "bulb"},
 	"hanging lamp": {"about": "a shaded lamp hanging over the table, out of the frame - a steady pool of light", "kind": "spot",
-		"color": "#ffdcb0", "strength": 0.7, "flicker": "steady", "size": 4.0, "shadows": true, "distance": 45.0, "height": 85.0, "fails": "bulb"},
+		"color": "#ffdcb0", "strength": 0.7, "flicker": "steady", "shadows": true, "distance": 45.0, "height": 85.0, "fails": "bulb"},
 	"fluorescent": {"about": "fluorescent tubes overhead - cool, flat and steady", "kind": "omni",
-		"color": "#e8f0ff", "strength": 0.5, "flicker": "steady", "size": 8.0, "shadows": false, "distance": 80.0, "height": 160.0, "fails": "tube"},
+		"color": "#e8f0ff", "strength": 0.5, "flicker": "steady", "shadows": false, "distance": 80.0, "height": 160.0, "fails": "tube"},
 	"neon": {"about": "a neon sign in the room or outside a window - one saturated color, steady",
-		"kind": "omni", "color": "#ff3d7f", "strength": 0.4, "flicker": "steady", "size": 6.0, "shadows": false, "distance": 180.0, "height": 70.0, "fails": "sign"},
+		"kind": "omni", "color": "#ff3d7f", "strength": 0.4, "flicker": "steady", "shadows": false, "distance": 180.0, "height": 70.0, "fails": "sign"},
 	"screen": {"about": "a television's or a monitor's glow - cool, its brightness and color changing with each cut", "kind": "spot",
-		"color": "#b8d0ff", "strength": 0.35, "flicker": "screen", "size": 8.0, "shadows": false, "distance": 200.0, "height": 40.0},
+		"color": "#b8d0ff", "strength": 0.35, "flicker": "screen", "shadows": false, "distance": 200.0, "height": 40.0},
 	"street lamp": {"about": "a street lamp outside - sodium orange or cold white, steady, from high up", "kind": "spot",
-		"color": "#ffa040", "strength": 0.5, "flicker": "steady", "size": 6.0, "shadows": true, "distance": 300.0, "height": 250.0, "fails": "bulb"},
+		"color": "#ffa040", "strength": 0.5, "flicker": "steady", "shadows": true, "distance": 300.0, "height": 250.0, "fails": "bulb"},
 	"headlights": {"about": "a car's headlights passing outside now and then, their light sweeping across the table", "kind": "spot",
-		"color": "#f4f4ff", "strength": 0.6, "flicker": "pass", "size": 5.0, "shadows": true, "distance": 350.0, "height": 40.0, "every": 40.0},
+		"color": "#f4f4ff", "strength": 0.6, "flicker": "pass", "shadows": true, "distance": 350.0, "height": 40.0, "every": 40.0},
 	"lighthouse": {"about": "a lighthouse's beam sweeping round, crossing the table every few seconds", "kind": "spot",
-		"color": "#fff6e0", "strength": 0.6, "flicker": "beam", "size": 5.0, "shadows": false, "distance": 600.0, "height": 120.0, "every": 10.0},
+		"color": "#fff6e0", "strength": 0.6, "flicker": "beam", "shadows": false, "distance": 600.0, "height": 120.0, "every": 10.0},
 	"lightning": {"about": "a storm's lightning - now and then a blue-white flash: a strike's hard flickers, or the clouds glowing and flickering a moment, near and bright or far and faint, the room lit by it",
-		"kind": "omni", "color": "#dfe8ff", "strength": 1.0, "flicker": "lightning", "size": 0.0, "shadows": false, "distance": 500.0,
+		"kind": "omni", "color": "#dfe8ff", "strength": 1.0, "flicker": "lightning", "shadows": false, "distance": 500.0,
 		"height": 400.0, "every": 25.0},
 }
 
@@ -2156,18 +2162,18 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 			sp.spot_angle = clampf(rad_to_deg(atan(0.9 / dist)), 12.0, 60.0)
 			sp.spot_angle_attenuation = 1.2
 			sp.shadow_bias = 0.005
-			sp.shadow_normal_bias = 0.15
 			node = sp
 		else:
 			var om := OmniLight3D.new()
 			om.omni_range = dist * 2.5 + 1.0
 			om.omni_shadow_mode = OmniLight3D.SHADOW_CUBE
 			om.shadow_bias = 0.006
-			om.shadow_normal_bias = 0.12
 			node = om
 		node.name = "Lamp%d" % i
 		node.light_color = Color.html(String(l["color"]))
-		node.light_size = minf(float(info["size"]) * 0.01, 0.06)
+		# soft by a filter as the candles are, never by the lamp's size (a spot's size had also thrown a
+		# white glare off a geode's rim facing it)
+		ShadowFilter.filter(node, SHADOW_TEXELS)
 		node.shadow_enabled = bool(l["shadows"])
 		node.shadow_caster_mask = 0xFFFFFFFF & ~SCREEN_MASK
 		rig.root.add_child(node)

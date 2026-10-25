@@ -10,7 +10,7 @@ extends SceneTree
 ##
 ## THE SET IS MADE, NOT FOUND: a made still (noise, and a face on it: points on an ellipse and inside it,
 ## with depth), its rig (its body's skin and skeleton too) and masks, a library of made mouths and eyes,
-## and made motion with a posture - written into a
+## and made motion with a posture and their face's own ways of moving - written into a
 ## folder of the gate's own, drawn through the real medium ([LikenessMedium]) with its own plan and face.
 ## Two moments apart are two pictures (the head moves, the mouth speaks).
 ##
@@ -65,6 +65,8 @@ func _run() -> void:
 	_ok(other[0] != first[0], "another seed drew the same picture - the check cannot fail")
 	var drawn := (a["m"] as LikenessMedium)._plan.mouth(at).filter(func(e: Array) -> bool: return int(e[0]) >= 0)
 	_ok(not drawn.is_empty(), "no library mouth was drawn at a moment the voice speaks: %s" % first[1])
+	var pa := (a["m"] as LikenessMedium)._plan
+	_ok(pa.face(at).size() == 2 and pa.face(at) != pa.face(2.7), "their face's own motion was not read, or does not move: %s" % str(pa.face(at)))
 	for med in [a, b, c]:
 		(med["m"] as LikenessMedium).release()
 		(med["vp"] as SubViewport).queue_free()
@@ -102,7 +104,7 @@ func _draw(med: Dictionary, t: float) -> Array:
 		await process_frame
 	var img := (med["vp"] as SubViewport).get_texture().get_image()
 	var said := JSON.stringify([Array(m._plan.motion(t)), m._plan.eyes(t), m._plan.mouth(t), str(m._plan.lifts(t)),
-		str(m._plan.hands(t))])
+		str(m._plan.hands(t)), Array(m._plan.face(t)), m._plan.mouth_mix(t)])
 	return [img.get_data().hex_encode().sha256_text() if img != null else "", said]
 
 
@@ -217,14 +219,17 @@ func _make_set(dir: String, sd: String) -> void:
 	var runs: Array = []
 	for run in 2:
 		var rows: Array = []
+		var face_rows: Array = []
 		for n in 120:
 			var t := float(n) / 5.0
 			rows.append([3.0 * sin(t * (0.9 + run)), 2.0 * sin(t * 1.7 + run), 1.0 * sin(t * 0.6), 0.02 * sin(t * 0.8),
 				0.015 * cos(t * 1.1), 0.01 * sin(t * 0.5), 1.0 * sin(t * 0.7)])
-		runs.append({"vid": "v", "t0": 0.0, "talk": "1".repeat(120), "rows": rows})
+			face_rows.append([0.1 * sin(t * 0.4 + run), 0.05 * cos(t * 0.3)])
+		runs.append({"vid": "v", "t0": 0.0, "talk": "1".repeat(120), "rows": rows, "face": face_rows})
 	# (a posture that holds a second or so, so a shift falls inside the moments drawn)
 	_json(dir.path_join("motion.json"), {"rate": 5.0, "axes": ["yaw", "pitch", "roll", "x", "y", "near", "tilt"],
 		"sd": [3.0, 2.0, 1.0, 0.02, 0.015, 0.01, 1.0], "blinks_per_min": 50.0, "runs": runs,
+		"face": {"names": ["browInnerUp", "mouthSmileLeft"], "basis": [[1.0, 0.0], [0.0, 1.0]], "sd": [0.1, 0.05]},
 		"posture": {"sd": [0.04, 0.03, 0.01, 1.4], "corr": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], "tau": 1.0}})
 
 

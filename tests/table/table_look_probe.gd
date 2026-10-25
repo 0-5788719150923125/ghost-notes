@@ -15,13 +15,18 @@ extends Node
 ## `--root user://somewhere` reads the episode from another root than the author's (a copy restaged to look at).
 ## `--looks 1` prints when each held card looks at its back, and which looks are pirouettes - to
 ## aim a `--clip` at one.
+## `--size 2880x1600` renders at a reported resolution. To try a shadow without rebuilding the table:
+## `--candle light_size=0,shadow_blur=1.5` sets those properties on every candle's light,
+## `--atlas 8192` the stage's shadow atlas, `--quality 4` the soft shadow filter's quality
+## (RenderingServer.ShadowQuality). Each photograph's line says what the stage's last frame took on the GPU;
+## `--timing N` plays N frames on past the last one and prints their median.
 ## `--wash W` makes the shuffle one wash (seed W, its longest) and `--clip A,B` writes EVERY frame
 ## from A to B seconds into it (`<out>_c0000.png`...) - motion is judged in motion:
 ##   ffmpeg -framerate 30 -i <out>_c%04d.png -pix_fmt yuv420p wash.mp4
 ## Asserts only that a frame is not uniform.
 
-const W := 1280
-const H := 720
+var W := 1280
+var H := 720
 const DT := 1.0 / 30.0
 
 var _out := "user://table_look"
@@ -44,6 +49,10 @@ var _events := false    # --events 1: print the card timeline and landing slots
 var _name := "Truthful Tarot"
 var _byline := ""
 var _ink := ""          # --ink #rrggbb: the name's color, as a set dresser's choice
+var _candle := {}       # --candle k=v,...: properties set on every candle's light
+var _atlas := 0         # --atlas N: the stage's positional shadow atlas
+var _quality := -1      # --quality Q: the positional soft shadow filter's quality
+var _timing := 0        # --timing N: N frames played on past the last photograph, their median GPU time
 
 
 func _ready() -> void:
@@ -77,6 +86,17 @@ func _run() -> void:
 			"--name": _name = args[i + 1]
 			"--byline": _byline = args[i + 1]
 			"--ink": _ink = args[i + 1]
+			"--size":
+				var wh := String(args[i + 1]).split("x")
+				W = int(wh[0])
+				H = int(wh[1])
+			"--candle":
+				for kv in String(args[i + 1]).split(","):
+					var pair := kv.split("=")
+					_candle[pair[0]] = float(pair[1])
+			"--atlas": _atlas = int(args[i + 1])
+			"--quality": _quality = int(args[i + 1])
+			"--timing": _timing = int(args[i + 1])
 			"--clip":
 				var ab := String(args[i + 1]).split(",")
 				_clip = Vector2(float(ab[0]), float(ab[1]))
@@ -96,9 +116,14 @@ func _run() -> void:
 	stage.transparent_bg = false
 	stage.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(stage)
+	RenderingServer.viewport_set_measure_render_time(stage.get_viewport_rid(), true)
 	Director.detach()
 	var medium: Medium = Medium.make("table")
 	medium.mount(stage)
+	if _atlas > 0:
+		stage.positional_shadow_atlas_size = _atlas
+	if _quality >= 0:
+		RenderingServer.positional_soft_shadow_filter_set_quality(_quality as RenderingServer.ShadowQuality)
 	Director.attach(stage, medium)
 	Director.hold(true)
 	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
@@ -177,6 +202,9 @@ func _run() -> void:
 			medium.advance(Spectrum.current, DT, 1.0)
 			if not _ink.is_empty():
 				(medium as TableMedium)._title.ink = Color.html(_ink)
+			for f in (medium as TableMedium)._lights:
+				for key in _candle:
+					((f as Dictionary)["light"] as OmniLight3D).set(key, _candle[key])
 			for k in _dark:
 				if int(k) >= 0 and int(k) < (medium as TableMedium)._lights.size():
 					(((medium as TableMedium)._lights[int(k)] as Dictionary)["light"] as OmniLight3D).light_energy = 0.0
@@ -224,7 +252,25 @@ func _run() -> void:
 		if st < 0.02:
 			_flat += 1
 		if _clip.y <= _clip.x or frame == 1:
-			print("table_look_probe: t=%.1f -> %s (spread %.3f)" % [want, path, st])
+			print("table_look_probe: t=%.1f -> %s (spread %.3f, the stage's last frame %.2f ms on the GPU)" % [want, path, st,
+				RenderingServer.viewport_get_measured_render_time_gpu(stage.get_viewport_rid())])
+	if _timing > 0:
+		# the show plays on, so every flame flickers and every candle's shadow is drawn again each frame
+		var ms: Array = []
+		for _i in _timing:
+			t += DT
+			Spectrum.virtual_clock = t
+			Spectrum.current.time = t
+			subs._process(DT)
+			medium.advance(Spectrum.current, DT, 1.0)
+			for f in (medium as TableMedium)._lights:
+				for key in _candle:
+					((f as Dictionary)["light"] as OmniLight3D).set(key, _candle[key])
+			await get_tree().process_frame
+			ms.append(RenderingServer.viewport_get_measured_render_time_gpu(stage.get_viewport_rid()))
+		ms.sort()
+		print("table_look_probe: %d frames from %.1f s, the stage's GPU time: median %.2f ms, fastest %.2f ms" % [
+			_timing, float(_times.back()), float(ms[ms.size() / 2]), float(ms[0])])
 	print("table_look_probe: done, %d flat" % _flat)
 	Spectrum.virtual_clock = -1.0
 	Director.hold(false)

@@ -37,6 +37,21 @@ class_name TableMedium
 ## tilts, breathe slowly, and now and then a glint sweeps across them, and the scene's bloom
 ## lets them bleed. The deck's look says how much foil it was printed with.
 
+## THE STAGE AS THE TABLE SETS IT, given back when the table leaves. EDGES: 4x multisampling. SHADOWS:
+## the first two quadrants of the atlas hold a high-resolution shadow each (a lamp's); the others hold
+## four each, so four candles can all cast (an omni light takes two). 8192 (128 MB): a candle's slot is
+## 2048 texels, its cube drawn at half that - the normal bias a filter needs ([ShadowFilter]) is counted
+## in texels, so at 4096 every shadow was lifted twice as far off what cast it, and a clock's rim lost
+## its shadow on its face (feedback 0007; about 2 ms a frame at 2880 x 1600, measured). DEBANDING: a
+## candle's pool on something smooth and dark falls off over a few levels of 8 bits, and each level is a
+## ring round the flame; dithered, they were gone (a plane's light by distance from the flame, 0.63% off
+## a smooth curve to 0.06%, measured).
+const STAGE := {"msaa_3d": Viewport.MSAA_4X, "use_debanding": true, "positional_shadow_atlas_size": 8192,
+	"positional_shadow_atlas_quad_0": Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_1,
+	"positional_shadow_atlas_quad_1": Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_1,
+	"positional_shadow_atlas_quad_2": Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_4,
+	"positional_shadow_atlas_quad_3": Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_4}
+
 ## A card is 70 x 120 mm. World units are meters: the table is a table.
 const CARD := TablePositions.CARD
 const CARD_R := 0.0045
@@ -350,18 +365,10 @@ var _box_part := TableBox.new()
 
 func mount(st: SubViewport) -> void:
 	super.mount(st)
-	# EDGES: 4x multisampling on the stage, and a bigger atlas. The first two
-	# quadrants hold a high-resolution shadow each; the others hold four each so
-	# four candles and the lamp can all cast. Given back when the table leaves.
-	_stage_was = {"msaa": st.msaa_3d, "atlas": st.positional_shadow_atlas_size,
-		"quad": st.positional_shadow_atlas_quad_0, "quad1": st.positional_shadow_atlas_quad_1,
-		"quad2": st.positional_shadow_atlas_quad_2, "quad3": st.positional_shadow_atlas_quad_3}
-	st.msaa_3d = Viewport.MSAA_4X
-	st.positional_shadow_atlas_size = 4096
-	st.positional_shadow_atlas_quad_0 = Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_1
-	st.positional_shadow_atlas_quad_1 = Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_1
-	st.positional_shadow_atlas_quad_2 = Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_4
-	st.positional_shadow_atlas_quad_3 = Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_4
+	_stage_was = {}
+	for key in STAGE:
+		_stage_was[key] = st.get(key)
+		st.set(key, STAGE[key])
 	# the intro's bokeh: round, and fine enough to be a lens rather than a smear
 	RenderingServer.camera_attributes_set_dof_blur_bokeh_shape(RenderingServer.DOF_BOKEH_CIRCLE)
 	RenderingServer.camera_attributes_set_dof_blur_quality(RenderingServer.DOF_BLUR_QUALITY_HIGH, true)
@@ -427,7 +434,7 @@ func _build_world() -> void:
 	_lamp.spot_angle = 38.0
 	_lamp.spot_angle_attenuation = 2.2
 	_lamp.shadow_enabled = true
-	_lamp.shadow_blur = 1.6
+	_lamp.shadow_blur = ShadowFilter.blur(3.2)
 	# A TABLETOP'S BIASES, as the candles' are. At Godot's own (made for rooms) the depth and normal
 	# biases came to millimeters at the lamp's distance - more than a bowl's floor stands off the
 	# cloth - so anything low cast nothing, a bowl only its rim's ring (a crescent), and taller things
@@ -592,12 +599,8 @@ func release() -> void:
 
 func _exit_tree() -> void:
 	if stage != null and is_instance_valid(stage) and not _stage_was.is_empty():
-		stage.msaa_3d = _stage_was["msaa"]
-		stage.positional_shadow_atlas_size = _stage_was["atlas"]
-		stage.positional_shadow_atlas_quad_0 = _stage_was["quad"]
-		stage.positional_shadow_atlas_quad_1 = _stage_was["quad1"]
-		stage.positional_shadow_atlas_quad_2 = _stage_was["quad2"]
-		stage.positional_shadow_atlas_quad_3 = _stage_was["quad3"]
+		for key in _stage_was:
+			stage.set(key, _stage_was[key])
 
 
 func on_stage_resized(_size: Vector2) -> void:

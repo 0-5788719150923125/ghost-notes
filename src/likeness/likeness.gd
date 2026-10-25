@@ -95,9 +95,15 @@ var _class_exprs := {}                # each sound's expression from its own sco
                                       # learned inside their range, and pushed past it they swung
 var _shut_expr := PackedFloat32Array()
 var _look_exprs := {}
+## THEIR FACE'S OWN WAYS OF MOVING as the splats take them ([method LikenessPlan.face]): each way's face and
+## expression less the still's, made once a load.
+var _way_faces: Array = []
+var _way_exprs: Array = []
 ## How far past their own each sound's mouth is played (their mouth scarcely moves while they talk: a
-## still's mouth shapes read as nothing): the actor's Articulation setting, as the 2D library's.
+## still's mouth shapes read as nothing): the actor's Articulation setting, as the 2D library's - never past
+## [constant TOP] of their own range (`visemes.json`'s `range`, its percentiles of each mouth score).
 var _push := 2.0
+const TOP := "99"
 
 
 ## One drawing of the mesh: the still, read through it.
@@ -321,6 +327,7 @@ func load_set(dir: String, sid: String, still: int, seed_in: int, renderer := "2
 	var err2 := _plan.setup(dir.path_join("motion.json"), _face, seed_in)
 	if not err2.is_empty():
 		return "The actor is not ready: %s. Generate on the Actor card makes it." % err2
+	_take_face_ways()
 	var colors := PackedColorArray()
 	for uv in _face.lay_uv:
 		colors.append(Color(uv.x, uv.y, 0.0, 1.0))
@@ -388,6 +395,11 @@ func _load_splat(sd: String, dir: String, k: int) -> String:
 		for n in names:
 			_mouth_scores.append(SplatHead.SCORES.find(String(n)))
 		var classes: Dictionary = (v as Dictionary).get("classes", {})
+		# NEVER PAST WHAT THEY WERE SEEN DOING: a sound pushed by Articulation stops at their own TOP percentile of
+		# each score (2026-10-24: at 3, "open" asked the jaw 0.67, past all but a percent of the moments the head
+		# was learned from, and the splats bound to it stretched with it)
+		var range_of: Variant = (v as Dictionary).get("range")
+		var top: Array = (range_of as Dictionary).get(TOP, []) if range_of is Dictionary else []
 		for c in classes:
 			var b: Array = (classes[c] as Dictionary).get("blend", [])
 			var out := _still_scores.duplicate()
@@ -395,7 +407,8 @@ func _load_splat(sd: String, dir: String, k: int) -> String:
 			for j in mini(b.size(), _mouth_scores.size()):
 				var at := _mouth_scores[j]
 				if at >= 0:
-					out[at] = clampf(_still_scores[at] + (float(b[j]) - _still_scores[at]) * _push, 0.0, 1.0)
+					var most := maxf(_still_scores[at], float(top[j])) if j < top.size() else 1.0
+					out[at] = clampf(_still_scores[at] + (float(b[j]) - _still_scores[at]) * _push, 0.0, most)
 					raw[at] = clampf(float(b[j]), 0.0, 1.0)
 			_class_scores[String(c)] = out
 			raw_scores[String(c)] = raw
@@ -424,6 +437,29 @@ func _load_splat(sd: String, dir: String, k: int) -> String:
 	return ""
 
 
+## Each of their face's own ways of moving ([member LikenessPlan.face_basis]) as a face and an expression less the
+## still's - the rig and the expressions are linear in the scores, so a moment mixes them by how far along each.
+func _take_face_ways() -> void:
+	_way_faces = []
+	_way_exprs = []
+	if _splat == null or _renderer != "gaussian":
+		return
+	for b in _plan.face_basis:
+		var s := _still_scores.duplicate()
+		for i in mini(_plan.face_names.size(), (b as PackedFloat32Array).size()):
+			var at := SplatHead.SCORES.find(_plan.face_names[i])
+			if at >= 0 and at < s.size():
+				s[at] += (b as PackedFloat32Array)[i]
+		var f := _splat.face_of(s)
+		var x := _splat.expr_of(s)
+		for j in f.size():
+			f[j] -= _still_face[j]
+		for j in x.size():
+			x[j] -= _still_expr[j]
+		_way_faces.append(f)
+		_way_exprs.append(x)
+
+
 func _drop_splat() -> String:
 	if _splat != null:
 		_splat.queue_free()
@@ -432,19 +468,27 @@ func _drop_splat() -> String:
 	return ""
 
 
-## THEM AS SPLATS AT [param t]: their face - the still's own, moved toward each sound pulling at the mouth by its
-## pull (its face made once, the mouth pushed past their own by Articulation), toward the lids shut as far as the
-## blink, toward a glance - the head as the still holds it, turned by their motion [param moved] about the neck
-## and carried by the torso; and their body's bones as the still holds them, each moved as the 2D body's bone
-## is ([param moves]: [method LikenessFace.bones]).
+## THEM AS SPLATS AT [param t]: their face - the still's own, moved toward each sound shaping the mouth by its
+## share ([method LikenessPlan.mouth_mix]: every pull, smoothed; its face made once, the mouth pushed past their
+## own by Articulation), moved its own ways as their face moved ([method LikenessPlan.face]), toward the lids shut
+## as far as the blink, toward a glance - the head as the still holds it, turned by their motion [param moved] about
+## the neck and carried by the torso; and their body's bones as the still holds them, each moved as the 2D body's
+## bone is ([param moves]: [method LikenessFace.bones]).
 func _pose_splat(t: float, moved: PackedFloat32Array, moves: Array) -> void:
 	var v := _still_face.duplicate()
 	var e := _still_expr.duplicate()
-	for p in _plan.pulls(t):
-		var w := float(p[2])
-		if w > 1e-4 and _class_faces.has(String(p[1])):
-			_toward(v, _class_faces[String(p[1])], _still_face, w)
-			_toward(e, _class_exprs[String(p[1])], _still_expr, w)
+	var mix := _plan.mouth_mix(t)
+	for c in mix:
+		var w := float(mix[c])
+		if w > 1e-3 and _class_faces.has(c):
+			_toward(v, _class_faces[c], _still_face, w)
+			_toward(e, _class_exprs[c], _still_expr, w)
+	# THEIR FACE'S OWN MOTION: brows, lids, cheeks and the mouth's corners as they moved with the head's piece
+	var ways := _plan.face(t)
+	for k in mini(ways.size(), _way_faces.size()):
+		if absf(ways[k]) > 1e-4:
+			_add(v, _way_faces[k], ways[k])
+			_add(e, _way_exprs[k], ways[k])
 	var b := clampf(_plan.blink(t).x, 0.0, 1.0)
 	if b > 1e-4:
 		_toward(v, _shut_face, _still_face, b)
@@ -469,6 +513,12 @@ func _pose_splat(t: float, moved: PackedFloat32Array, moves: Array) -> void:
 	_splat.pose_bones(_bone_at, _bone_axes, _bone_unit, bone_moves, _bone_shown)
 	_splat.upload()
 	_splat.transform = Transform2D(0.0, _splat_crop)
+
+
+## [param v] moved by [param w] of [param d], in place.
+static func _add(v: PackedFloat32Array, d: PackedFloat32Array, w: float) -> void:
+	for j in mini(v.size(), d.size()):
+		v[j] += w * d[j]
 
 
 ## [param v] moved [param w] of the way from [param from] toward [param to], in place.

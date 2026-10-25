@@ -260,7 +260,7 @@ func _build_world() -> void:
 	lamp.spot_angle = 40.0
 	lamp.spot_angle_attenuation = 1.6
 	lamp.shadow_enabled = true
-	lamp.shadow_blur = 1.2
+	lamp.shadow_blur = ShadowFilter.blur(2.4)
 	_root3.add_child(lamp)
 	lamp.position = Vector3(-1.5, 3.4, -1.0)
 	lamp.look_at_from_position(lamp.position, Vector3(0.1, 0.0, 0.1), Vector3.UP)

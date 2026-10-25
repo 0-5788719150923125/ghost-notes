@@ -493,7 +493,7 @@ func _fill_videos() -> void:
 		for vid in _actor.videos():
 			var v: Dictionary = _actor.video(String(vid))
 			# a video ticked rebuilds no row: its box shows it already
-			key += "%s|%s|%s;" % [vid, v.get("path", ""), v.get("captions", "")]
+			key += "%s|%s|%s|%s;" % [vid, v.get("path", ""), v.get("captions", ""), v.get("duration", 0.0)]
 	if key == _videos_seen:
 		return
 	_videos_seen = key
@@ -509,6 +509,10 @@ func _fill_videos() -> void:
 		var tick := CheckBox.new()
 		tick.button_pressed = bool(v.get("ticked", true))
 		tick.tooltip_text = "Use this video. Untick one that is not them, or not in their usual setting."
+		var copy := _actor.copy_of(String(vid))
+		if not copy.is_empty():
+			tick.disabled = true
+			tick.tooltip_text = "A copy of \"%s\" (the same title and length): left out." % String(_actor.video(copy).get("title", copy))
 		tick.toggled.connect(func(on: bool) -> void:
 			(_actor.video(String(vid)))["ticked"] = on
 			_actor.save())
@@ -524,10 +528,12 @@ func _fill_videos() -> void:
 			marks += "↓ "
 		elif _actor.video_path(String(vid)).is_empty():
 			marks += "⚠ missing "
+		if not copy.is_empty():
+			marks += "⧉ copy "
 		if FileAccess.file_exists(String(v.get("captions", ""))):
 			marks += "💬 "
 		l.text = marks + String(v.get("title", vid)) + ("  %s" % Clock.text(dur) if dur > 0.0 else "")
-		l.tooltip_text = String(v.get("path", v.get("url", ""))) + "\n↓ not fetched yet · 💬 has captions"
+		l.tooltip_text = String(v.get("path", v.get("url", ""))) + "\n↓ not fetched yet · 💬 has captions · ⧉ a copy of another, left out"
 		row.add_child(l)
 
 

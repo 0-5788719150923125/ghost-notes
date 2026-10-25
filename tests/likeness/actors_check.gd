@@ -35,7 +35,8 @@ extends SceneTree
 ## another order than the stamps were made in, and the user's built set went stale after a restart -
 ## the sets, the audit and every step of the set made again).
 ## A VIDEO'S FILE MOVED to another of their folders keeps its id, and nothing made from it is stale (THE CONTROL:
-## a copy beside a file still there is a video of its own).
+## a copy beside a file still there is a row of its own). A COPY IS NOT ANOTHER VIDEO: once both are probed, the
+## same title and length as an earlier video leave it out of every step (THE CONTROL: another length is its own).
 ## NOTHING OUTSIDE THE TEST ROOT: the author's library is as it was.
 
 const ROOT := "user://actors_check"
@@ -152,7 +153,7 @@ func _run() -> void:
 	_ok(_actor.state_of("rig", s) == "made", "Generate left the rig %s" % _actor.state_of("rig", s))
 	# THEIR VOICE ON ITS OWN: the lessons changed make the Voice stale, and only it; ▶ on it makes it and
 	# nothing of their picture (THE CONTROL: the Hear, made, is not made again)
-	(_actor.data["settings"] as Dictionary)["voice_epochs"] = 300
+	(_actor.data["settings"] as Dictionary)["voice_steps"] = 9000
 	_actor.save()
 	_actor.forget()
 	_ok(_actor.state_of("voice", "") == "stale" and _actor.state_of("utterances", "") == "made"
@@ -249,6 +250,17 @@ func _run() -> void:
 	var copy_from := String(_actor.video(String(vids[1]))["path"])
 	DirAccess.copy_absolute(copy_from, more.path_join(copy_from.get_file()))
 	_ok(ActorSources.rescan(_actor) == 1, "CONTROL: a copy beside its original was taken for it")
+	# ...but once their lengths are known, the copy is left out of every step
+	var copy_id := ""
+	for vid in _actor.videos():
+		if String(_actor.video(String(vid))["path"]) == more.path_join(copy_from.get_file()):
+			copy_id = String(vid)
+	_actor.video(String(vids[1]))["duration"] = 61.25
+	_actor.video(copy_id)["duration"] = 61.25
+	_ok(_actor.copy_of(copy_id) == String(vids[1]) and not _actor.ticked().has(copy_id),
+		"a copy of the same title and length was taken for another video")
+	_actor.video(copy_id)["duration"] = 75.0
+	_ok(_actor.copy_of(copy_id).is_empty() and _actor.ticked().has(copy_id), "CONTROL: a video of another length was taken for a copy")
 	# EVERY STEP A PROGRAM MAKES IS LANDED BY ITS MAIN FILE (a step without one would be "done" and never stamped,
 	# so made again for ever); THE CONTROL: a step that runs no program needs none
 	var unlanded: Array = []

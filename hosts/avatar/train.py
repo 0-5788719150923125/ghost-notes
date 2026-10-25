@@ -93,6 +93,12 @@ SHIFT_FAR = 2.0
 # A splat's size where it is copied rather than split, as a share of the window: 3DGS's 1% is of a whole
 # scene's extent, and a head that fills the square needs a finer cut (at 1% the median splat stood 4 px wide).
 SPLIT_SHARE = 0.002
+# THE PLACES SETTLE (3DGS's own schedule, which these rates came from without it - 2026-10-24, the head's softness: no
+# rate fell in any loop, and every place went on wandering a step's worth to the end): the place, the expression's and
+# the look's shifts of place are learned at their rate times DECAY_TO ** (the share of the run done). On one video at
+# equal steps the eyes and nose came out 0.51 to 0.67 as sharp as the frame, the beard 0.31 to 0.55, the PSNR the same.
+DECAYS = ("place", "place_d", "look_place")
+DECAY_TO = 0.01
 # Once the splats stop growing, those nearly clear are dropped this often.
 PRUNE_EVERY = 1000
 # The loss: L1 and D-SSIM, the cover against the person, and the plate held near the room it started as.
@@ -304,7 +310,11 @@ def room_of(pictures, people, device):
         band = pics[:, y:y + PLATE_BAND].float() / 255.0
         band[covered[:, y:y + PLATE_BAND]] = float("nan")
         plate[y:y + PLATE_BAND] = torch.nanmedian(band, dim=0).values
-    count = (~covered).sum(0).float()
+    # counted a frame at a time: summed whole, the frames' masks were made 64-bit integers first (2.3 GB for a set's
+    # 146 at 1080p - a bake died of it, 2026-10-24, on a card shared with another trainer)
+    count = torch.zeros((h, w), device=device)
+    for c in covered:
+        count += (~c).float()
     known = count >= PLATE_LEAST
     plate = fill_round(torch.where(known[..., None], torch.nan_to_num(plate), 0.0), known.float())
     seen = ((count - PLATE_LEAST + 1.0) / max(1.0, PLATE_SURE * n)).clamp(0.0, 1.0) * known.float()
@@ -472,6 +482,12 @@ class Splats:
             c = torch.where(on_bone & (seen[b] < SEEN), torch.zeros_like(c), c)
         return c
 
+    def decay(self, done: float) -> None:
+        """THE PLACES SETTLE: the rates of DECAYS at DECAY_TO ** [param done] (0 at the run's start, 1 at its end)."""
+        for group in self.opt.param_groups:
+            if group["name"] in DECAYS:
+                group["lr"] = self.RATES[group["name"]] * DECAY_TO ** min(max(done, 0.0), 1.0)
+
     # densification: the optimizer's state is kept for those kept, and starts at zero for those made
     def _replace(self, keep, extra: dict):
         import torch
@@ -493,14 +509,15 @@ class Splats:
         self.pull = torch.zeros(len(self), device=self.bind.device)
         self.seen = torch.zeros(len(self), device=self.bind.device)
 
-    def densify(self, unit_of, most=MOST):
-        """Copy the small splats pulled hard, split the large ones, drop the clear ones; none made past [param most]."""
+    def densify(self, unit_of, most=MOST, least=0.0):
+        """Copy the small splats pulled hard, split the large ones, drop the clear ones; none made past [param most],
+        and no copy of one under [param least] pixels (bake.py: a copy of what is under a pixel draws nothing finer)."""
         import torch
         pull = self.pull / self.seen.clamp_min(1.0)
         size = (unit_of[self.bind][:, None] * torch.exp(self.p["log_scale"])).max(-1).values
         hard = pull > GRAD_PULL
         small = size <= SPLIT_SHARE * WINDOW
-        copy = hard & small
+        copy = hard & small & (size >= least)
         split = hard & ~small
         if most - len(self) <= 0:
             copy[:] = False
@@ -1050,6 +1067,7 @@ def main() -> int:
                 there = (p[:, 0] + r > 0) & (p[:, 0] - r < WINDOW) & (p[:, 1] + r > 0) & (p[:, 1] - r < WINDOW)
                 splats.pull[there] += means2d.grad[there].norm(dim=-1) * (WINDOW * 0.5)
                 splats.seen[there] += 1.0
+        splats.decay(step / steps)
         splats.opt.step()
         scene.opt.step()
         if DENSIFY_FROM <= step < until and step % DENSIFY_EVERY == 0:

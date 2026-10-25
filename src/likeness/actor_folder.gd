@@ -147,12 +147,39 @@ func video(vid: String) -> Dictionary:
 	return (data["videos"] as Dictionary).get(vid, {})
 
 
-## The ticked videos, in the order they were added - a linked one whether or not it is fetched yet.
+## The ticked videos, in the order they were added - a linked one whether or not it is fetched yet - but a copy of
+## another ([method copy_of]).
 func ticked() -> Array:
+	var copies := _copies()
 	var out: Array = []
 	for vid in data["videos"]:
-		if bool((data["videos"][vid] as Dictionary).get("ticked", true)):
+		if bool((data["videos"][vid] as Dictionary).get("ticked", true)) and not copies.has(String(vid)):
 			out.append(String(vid))
+	return out
+
+
+## A COPY IS NOT ANOTHER VIDEO (2026-10-24: their merged download folders held four videos twice, "(1080p)" and
+## "(1080p, h264)" - the voice was taught the same sentences twice and measured on some it had been taught): a video
+## whose title ([method ActorSources.comparable]) and length, to a tenth of a second, are an earlier one's is a copy
+## of it, left out of every step as if unticked - the earlier one's id, "" for none. Its length is known once probed.
+func copy_of(vid: String) -> String:
+	return String(_copies().get(vid, ""))
+
+
+func _copies() -> Dictionary:
+	var out := {}
+	var first := {}
+	for vid in data["videos"]:
+		var v: Dictionary = data["videos"][vid]
+		var dur := float(v.get("duration", 0.0))
+		var title := ActorSources.comparable(String(v.get("title", "")))
+		if dur <= 0.0 or title.is_empty():
+			continue
+		var key := "%s|%d" % [title, roundi(dur * 10.0)]
+		if first.has(key):
+			out[String(vid)] = first[key]
+		else:
+			first[key] = String(vid)
 	return out
 
 
@@ -311,6 +338,22 @@ func moot(step: String, scope: String) -> bool:
 			# sets are audited (before, every video would be, and their head made of none)
 			return not stamp_of("audit", "").is_empty() and head_shots(scope.substr(2)).is_empty()
 	return false
+
+
+## THE HEAD VIDEOS (hosts/avatar/head.py, "ENOUGH OF EACH VIDEO"): the ticked videos with the most usable minutes of
+## them facing the camera in the sets, at most [param most] of them, most first - their ids; none before the audit.
+func head_videos(most: int) -> Array:
+	var usable := {}
+	for s in sets():
+		for sh in (s as Dictionary).get("shots", []):
+			var x: Dictionary = sh
+			if not bool(x.get("unusable", false)):
+				var v := String(x.get("vid", ""))
+				usable[v] = float(usable.get(v, 0.0)) + float(x.get("usable", 0.0))
+	var vids: Array = ticked().filter(func(v: String) -> bool: return float(usable.get(v, 0.0)) > 0.0)
+	vids.sort_custom(func(a: String, b: String) -> bool:
+		return float(usable[a]) > float(usable[b]) or (float(usable[a]) == float(usable[b]) and a < b))
+	return vids.slice(0, most)
 
 
 ## THE SHOTS OF VIDEO [param vid] ITS MOMENTS ARE READ FROM, for their head ([ActorBuilder], head_frames): the

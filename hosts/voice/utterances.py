@@ -11,7 +11,8 @@ summary written last (`index`, the step's own file).
 
 Writes <out>/wav/<utt>.wav (22050 Hz, mono), <out>/metadata.csv (`utt|text|ids`: what training reads),
 <out>/test.csv (held out, never trained on: what the voice is measured against), <out>/phonemes.json (the
-map), then <index>: {utterances, minutes, held_out, by_video, left_out: {why: count}, voiced}.
+map), then <index>: {utterances, minutes, held_out, by_video, left_out: {why: count}, left_out_minutes: {why:
+minutes}, voiced, register, recording}.
 
 THE IDS ARE THE VOICE HOST'S OWN (backends/piper.py): its homographs, its eSpeak reading of the sentence, its
 lead-in spaces and its layout of the ids - so the voice is taught exactly what it will be sent.
@@ -28,6 +29,23 @@ WHAT IS KEPT, measured on Ephemeral Rift's videos (2026-10-22):
   a pitch, against three fifths in the spoken two); a whisper is another voice, so a run with less than
   VOICED of its loud frames pitched is left out;
 - each brought to one level (LEVEL, its peaks under PEAK): their videos sit 13 dB apart.
+
+ONE VOICE, NOT EVERY WAY THEY SOUND (2026-10-24, the user on the voice taught on all 65 of his videos: "really
+muddy and hard to understand ... quite inconsistent"; Whisper misheard 33.6% of its words, against 14-17% for the
+voices taught on two to seven): of the 480 minutes those videos gave, 220 were noisy - outdoors, wind, water, over a
+music bed - 32 soft and low (85 Hz, close to the microphone), 38 pitched high, 44 breathy, and 146 his ordinary
+voice; a voice of one speaker averages them all and draws among them sentence by sentence. Taught on the ordinary
+part alone (93 minutes from 19 videos) it was misheard half as often (15.9%) and held its register (its pitch from
+sentence to sentence varied 9 Hz, against 17). So every candidate is measured as it is cut (`signature`) and the
+ones kept are chosen together (`choose`), by measurement - never by a list of videos:
+- CLEAN: its speech CLEAN dB over its own pauses;
+- PACED AS SPEECH: RATE characters a second of loud sound (a music bed under it is loud with no words);
+- IN THEIR REGISTER: its pitch within REGISTER of their usual one (where the most minutes of the clean ones are);
+- NOT BREATHY: a harmonics-to-noise ratio of BREATHY dB or more;
+- ONE RECORDING: a video's mean spectrum (BANDS mel bands, its level taken out) within RECORDING dB of the most
+  typical video's (the one nearest all the others, by their minutes);
+- SAID ONCE: a sentence heard again (their downloads held four videos twice) is kept once, so nothing held out is
+  also taught.
 """
 
 from __future__ import annotations
@@ -62,6 +80,12 @@ VOICED = 0.45
 LEVEL = -20.0  # dB: the median of an utterance's loud frames
 PEAK = 0.966
 HELD_OUT = 25  # every this many utterances, one is held out
+CLEAN = 30.0  # dB: an utterance's speech (its loud frames' median) over its own pauses (its 10th percentile)
+RATE = (8.0, 30.0)  # characters a second of loud sound
+REGISTER = 1.3  # their usual pitch times or over this
+BREATHY = 3.6  # dB: the median harmonics-to-noise ratio of its pitched frames
+RECORDING = 2.0  # dB (RMS over the bands) from the most typical video's mean spectrum
+BANDS = 40
 MARKS = ",.;:!?"
 ENDS = ".!?"
 
@@ -108,6 +132,129 @@ def voiced(y, floor: float) -> float:
     ac = np.fft.irfft(np.abs(np.fft.rfft(fr, 2 * n, axis=1)) ** 2, axis=1)[:, :n]
     ac /= ac[:, :1] + 1e-12
     return float(np.mean(ac[:, SR // 300: SR // 70].max(1) > 0.5))
+
+
+def _mel_bank(n_fft=1024, n_mels=BANDS):
+    def hz2mel(f):
+        return 2595.0 * np.log10(1.0 + f / 700.0)
+
+    def mel2hz(m):
+        return 700.0 * (10.0 ** (m / 2595.0) - 1.0)
+    pts = mel2hz(np.linspace(hz2mel(60.0), hz2mel(10000.0), n_mels + 2))
+    bins = np.floor((n_fft + 1) * pts / SR).astype(int)
+    fb = np.zeros((n_mels, n_fft // 2 + 1))
+    for m in range(1, n_mels + 1):
+        a, b, c = bins[m - 1], bins[m], bins[m + 1]
+        fb[m - 1, a:b] = (np.arange(a, b) - a) / max(1, b - a)
+        fb[m - 1, b:c] = (c - np.arange(b, c)) / max(1, c - b)
+    return fb
+
+
+MEL = _mel_bank()
+
+
+def signature(y, text: str) -> dict:
+    """AN UTTERANCE'S SIGNATURE (ONE VOICE): {clean - its speech over its own pauses (dB), rate - characters a second
+    of loud sound, f0 - its pitched frames' median pitch (Hz; 0 for none), hnr - their median harmonics-to-noise
+    ratio (dB), spectrum - its loud frames' mean over BANDS mel bands (dB), its level taken out}."""
+    y = np.asarray(y, dtype=np.float64)
+    n = int(FRAME * SR)
+    k = len(y) // n
+    lv = 10.0 * np.log10((y[: k * n].reshape(k, n) ** 2).mean(1) + 1e-12) if k else np.zeros(1)
+    floor = float(np.percentile(lv, 10))
+    sp = lv[lv > floor + SOUND]
+    out = {"clean": float(np.median(sp) - floor) if len(sp) else 0.0, "rate": 0.0, "f0": 0.0, "hnr": -99.0,
+           "spectrum": np.zeros(BANDS)}
+    hop, size = 256, 1024
+    m = (len(y) - size) // hop
+    if m <= 0:
+        return out
+    fr = np.stack([y[i * hop: i * hop + size] for i in range(m)])
+    fr = fr - fr.mean(1, keepdims=True)
+    loud = 10.0 * np.log10((fr ** 2).mean(1) + 1e-12) > floor + SOUND
+    out["rate"] = len(text) / max(float(loud.sum()) * hop / SR, 0.3)
+    fl = fr[loud]
+    if not len(fl):
+        return out
+    ac = np.fft.irfft(np.abs(np.fft.rfft(fl, 2 * size, axis=1)) ** 2, axis=1)[:, :size]
+    ac /= ac[:, :1] + 1e-12
+    lo, hi = SR // 300, SR // 70
+    peak = ac[:, lo:hi].max(1)
+    lag = ac[:, lo:hi].argmax(1) + lo
+    pitched = peak > 0.5
+    if pitched.any():
+        r = np.clip(peak[pitched], 1e-3, 0.999)
+        out["hnr"] = float(np.median(10.0 * np.log10(r / (1.0 - r))))
+        out["f0"] = float(np.median(SR / lag[pitched]))
+    power = np.abs(np.fft.rfft(fl * np.hanning(size), axis=1)) ** 2 + 1e-12
+    bands = (10.0 * np.log10(power @ MEL.T + 1e-10)).mean(0)
+    out["spectrum"] = bands - bands.mean()
+    return out
+
+
+def said_as(text: str) -> str:
+    """A sentence as compared for SAID ONCE: lowercase letters, digits and single spaces."""
+    return " ".join("".join(ch for ch in text.lower() if ch.isalnum() or ch == " ").split())
+
+
+def choose(cands: list) -> tuple[list, dict]:
+    """WHICH CANDIDATES ARE KEPT (ONE VOICE): [cands] (`[{vid, text, seconds, clean, rate, f0, hnr, spectrum}]`) to
+    (the indices kept, in order; {why: {reason: [indices left out]}, register: their usual pitch (Hz), recording: the
+    most typical video's id})."""
+    why: dict = {}
+
+    def out(i, reason):
+        why.setdefault(reason, []).append(i)
+    alive = []
+    for i, c in enumerate(cands):
+        if c["clean"] < CLEAN:
+            out(i, "noisy")
+        elif not RATE[0] <= c["rate"] <= RATE[1]:
+            out(i, "not paced as speech")
+        elif c["f0"] <= 0.0:
+            out(i, "unpitched")
+        else:
+            alive.append(i)
+    register = 0.0
+    if alive:
+        h, e = np.histogram(np.log([cands[i]["f0"] for i in alive]), bins=40,
+                            weights=[cands[i]["seconds"] for i in alive])
+        register = float(np.exp((e[h.argmax()] + e[h.argmax() + 1]) / 2.0))
+    rest = []
+    for i in alive:
+        if abs(np.log(cands[i]["f0"] / register)) > np.log(REGISTER):
+            out(i, "another register")
+        elif cands[i]["hnr"] < BREATHY:
+            out(i, "breathy")
+        else:
+            rest.append(i)
+    alive = rest
+    recording = ""
+    vids = sorted({cands[i]["vid"] for i in alive})
+    if vids:
+        weight = np.array([sum(cands[i]["seconds"] for i in alive if cands[i]["vid"] == v) for v in vids])
+        mean = np.array([np.mean([cands[i]["spectrum"] for i in alive if cands[i]["vid"] == v], axis=0) for v in vids])
+        apart = np.sqrt(((mean[:, None] - mean[None]) ** 2).mean(2))
+        typical = int(np.argmin((apart * weight[None]).sum(1)))
+        recording = vids[typical]
+        near = {vids[j] for j in range(len(vids)) if apart[typical, j] <= RECORDING}
+        rest = []
+        for i in alive:
+            if cands[i]["vid"] in near:
+                rest.append(i)
+            else:
+                out(i, "another recording")
+        alive = rest
+    said = set()
+    kept = []
+    for i in alive:
+        key = said_as(cands[i]["text"])
+        if key in said:
+            out(i, "said twice")
+            continue
+        said.add(key)
+        kept.append(i)
+    return kept, {"why": why, "register": register, "recording": recording}
 
 
 def split_word(text: str) -> tuple[str, str]:
@@ -229,8 +376,7 @@ def main(argv=None) -> int:
     espeak = str(spec.get("espeak", "en-us"))
     from backends.piper import PiperBackend
     backend = PiperBackend()
-    train, test, kept, why, pitched = [], [], {}, {}, []
-    n = 0
+    cands, why, pitched = [], {}, []
     videos = spec["videos"]
     for vi, v in enumerate(videos):
         progress(a.progress, vi / max(1, len(videos)))
@@ -279,21 +425,37 @@ def main(argv=None) -> int:
             ids = ids_of(backend, [{"text": w["text"], "punct": w["punct"]} for w in r], pmap, espeak)
             utt = "%s_%05d" % (v["vid"], k)
             write_wav(out / "wav" / (utt + ".wav"), seg * gain)
-            row = "%s|%s|%s" % (utt, text.replace("|", " "), " ".join(map(str, ids)))
-            n += 1
-            (test if n % HELD_OUT == 0 else train).append(row)
-            kept[v["vid"]] = kept.get(v["vid"], 0.0) + len(seg) / SR
+            cands.append({"utt": utt, "vid": v["vid"], "text": text, "seconds": len(seg) / SR,
+                          "row": "%s|%s|%s" % (utt, text.replace("|", " "), " ".join(map(str, ids))),
+                          **signature(seg * gain, text)})
+    # ONE VOICE: the candidates chosen together, and the sound of the rest gone
+    chosen, found = choose(cands)
+    train, test, kept = [], [], {}
+    for n, i in enumerate(chosen, start=1):
+        c = cands[i]
+        (test if n % HELD_OUT == 0 else train).append(c["row"])
+        kept[c["vid"]] = kept.get(c["vid"], 0.0) + c["seconds"]
+    minutes_out = {}
+    for reason, idx in found["why"].items():
+        why[reason] = why.get(reason, 0) + len(idx)
+        minutes_out[reason] = round(sum(cands[i]["seconds"] for i in idx) / 60.0, 1)
+        for i in idx:
+            (out / "wav" / (cands[i]["utt"] + ".wav")).unlink(missing_ok=True)
     write_text(out / "metadata.csv", "\n".join(train) + "\n")
     write_text(out / "test.csv", "\n".join(test) + "\n")
     write_text(out / "phonemes.json", json.dumps(pmap, ensure_ascii=False))
     minutes = sum(kept.values()) / 60.0
     summary = {"utterances": len(train), "held_out": len(test), "minutes": round(minutes, 1),
                "by_video": {k: round(s / 60.0, 1) for k, s in kept.items()}, "left_out": why,
+               "left_out_minutes": minutes_out, "register": round(found["register"], 1),
+               "recording": found["recording"],
                "voiced": [round(float(x), 2) for x in np.percentile(pitched, [10, 50, 90])] if pitched else []}
     write_text(Path(spec["index"]), json.dumps(summary, indent=1))
     progress(a.progress, 1.0)
-    say("utterances: %d utterances, %.0f minutes of their voice from %d videos (%d whispered left out)"
-        % (len(train), minutes, len(kept), why.get("whispered", 0)))
+    heard = sum(c["seconds"] for c in cands) / 60.0
+    gone = ", ".join("%s %.0f" % (k, m) for k, m in sorted(minutes_out.items(), key=lambda x: -x[1])) or "none"
+    say("utterances: %d utterances, %.0f minutes of their voice from %d videos - one voice of the %.0f minutes cut "
+        "(minutes left out: %s; %d whispered runs)" % (len(train), minutes, len(kept), heard, gone, why.get("whispered", 0)))
     return 0
 
 

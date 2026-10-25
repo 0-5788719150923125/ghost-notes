@@ -2094,6 +2094,18 @@ CAUGHT = 0.55
 # averaged over this many seconds, against the shot's own middle - how far they lean and settle, which
 # ways go together, and how long a posture holds (the lag their posture's likeness to itself falls to 1/e).
 POSTURE_S = 6.0
+# THEIR FACE'S OWN MOTION (2026-10-24, the user on the head of splats: "when the actor is not talking - the face
+# is not moving at all"; his brows, cheeks and lids move three quarters as much silent as speaking): every score
+# but what a Likeness plays itself - the blinks and the gaze (its blinks and glances) and the lips' opening and
+# protrusion (the voice's sounds; a beard reads as a pucker besides, his 90th percentile 0.71) - its quick part
+# (as the head's), smoothed to what a face does slowly (a Gaussian of FACE_SMOOTH seconds: MediaPipe's scores
+# jitter from look to look, the slow part of them going on from one look to the next), as the principal
+# components holding FACE_SHARE of it, at most FACE_MOST.
+FACE_LEAVES = ("_neutral", "eyeBlink", "eyeLook", "jawOpen", "mouthClose", "mouthFunnel", "mouthPucker", "mouthRoll",
+               "mouthLowerDown", "mouthUpperUp")
+FACE_SMOOTH = 0.4
+FACE_SHARE = 0.9
+FACE_MOST = 6
 
 
 def high_pass(X, k: int):
@@ -2144,6 +2156,35 @@ def motion_rows(R, idx, aspect, roll_sign: float):
     x = (left[:, 0] + right[:, 0]) * 0.5 / fw
     y = (left[:, 1] + right[:, 1]) * 0.5 * aspect / fw
     return np.column_stack([ang[:, 0], ang[:, 1], ang[:, 2] * roll_sign - tilt, x, y, np.log(bw / fw), tilt])
+
+
+def face_names():
+    """The scores their face moves on its own ([FACE_LEAVES] left out), in MediaPipe's order."""
+    return [n for n in BLEND_NAMES if not n.startswith(FACE_LEAVES)]
+
+
+def smooth_looks(X, sigma: float):
+    """[X] ([n, d]) under a Gaussian of [sigma] looks, its ends held."""
+    import numpy as np
+    X = np.asarray(X, dtype=np.float64)
+    h = max(1, int(math.ceil(2.5 * sigma)))
+    g = np.exp(-0.5 * (np.arange(-h, h + 1) / max(sigma, 1e-6)) ** 2)
+    g /= g.sum()
+    pad = np.concatenate([np.repeat(X[:1], h, axis=0), X, np.repeat(X[-1:], h, axis=0)], axis=0)
+    return np.stack([np.convolve(pad[:, j], g, mode="valid") for j in range(X.shape[1])], axis=1)
+
+
+def face_components(F):
+    """THE WAYS THEIR FACE MOVES in [F] ([n, len(face_names())], its slow part): the principal components holding
+    [FACE_SHARE] of it, at most [FACE_MOST] - `(basis [K, d], sd [K])`, each row a unit direction."""
+    import numpy as np
+    F = np.asarray(F, dtype=np.float64)
+    w, V = np.linalg.eigh(np.cov((F - F.mean(axis=0)).T))
+    o = np.argsort(w)[::-1]
+    w, V = np.maximum(w[o], 0.0), V[:, o]
+    share = np.cumsum(w) / max(float(w.sum()), 1e-12)
+    k = int(min(FACE_MOST, np.searchsorted(share, FACE_SHARE) + 1))
+    return V[:, :k].T, np.sqrt(w[:k])
 
 
 def blinks_per_minute(R, runs, rate: float) -> float:
@@ -2201,8 +2242,10 @@ def posture_of(R, runs, rate: float, roll_sign: float, spec):
 def cmd_motion(a) -> int:
     """THEIR HEAD'S OWN MOTION, from every video's survey where they face the camera: its quick part (the
     slow drift out), in runs a Likeness plays back in pieces, which looks are speech, and how often they
-    blink (next/likeness.md, "The second build"); and THEIR POSTURE - how far and which ways their body
-    settles, and how long it holds ([posture_of], the fourth pass)."""
+    blink (next/likeness.md, "The second build"); THEIR POSTURE - how far and which ways their body
+    settles, and how long it holds ([posture_of], the fourth pass); and THEIR FACE'S OWN MOTION at the same
+    looks ([face_components]: `face` - its scores' names, the directions, their spreads - and each run's
+    `face` rows, how far along each the face is), so a piece moves their head and face as they moved together."""
     import numpy as np
     spec = read_json(a.spec)
     rate = float(spec.get("rate", 5.0))
@@ -2222,6 +2265,9 @@ def cmd_motion(a) -> int:
     k = max(3, int(round(DRIFT * rate)) | 1)
     trim = int(round(rate))
     jaw = R["blend"][:, JAW].astype(np.float64)
+    names = face_names()
+    cols = [BLEND_NAMES.index(n) for n in names]
+    blend = np.asarray(R["blend"], dtype=np.float64)
     pieces = []
     for idx in runs:
         v = spec["videos"].get(R["vid"][idx[0]], {})
@@ -2229,7 +2275,8 @@ def cmd_motion(a) -> int:
         X = high_pass(motion_rows(R, idx, float(size[1]) / float(size[0]), roll_sign), k)[trim:-trim]
         j = jaw[idx]
         spread = np.array([j[max(0, i - 5): i + 6].std() for i in range(j.size)])[trim:-trim]
-        pieces.append((idx[trim:-trim], X, spread))
+        F = smooth_looks(high_pass(blend[idx][:, cols], k), FACE_SMOOTH * rate)[trim:-trim]
+        pieces.append((idx[trim:-trim], X, spread, F))
     if not pieces:
         say("motion: no run of %d seconds facing the camera" % int(LEAST_RUN))
         return 2
@@ -2237,9 +2284,11 @@ def cmd_motion(a) -> int:
     sd = 1.4826 * np.median(np.abs(allx - np.median(allx, axis=0)), axis=0)
     sd = np.maximum(sd, 1e-6)
     talking = float(np.median(np.concatenate([p[2] for p in pieces])))
+    basis, face_sd = face_components(np.concatenate([p[3] for p in pieces]))
     # A LOOK FAR OUT ON ANY AXIS ENDS ITS RUN: what is kept is how they move while they talk to the camera
     out = []
-    for idx, X, spread in pieces:
+    for idx, X, spread, F in pieces:
+        C = F @ basis.T
         wild = (np.abs(X) > WILD * sd).any(axis=1)
         start = 0
         for i in range(X.shape[0] + 1):
@@ -2247,7 +2296,8 @@ def cmd_motion(a) -> int:
                 if i - start >= LEAST_RUN * rate:
                     out.append({"vid": str(R["vid"][idx[start]]), "t0": round(float(R["time"][idx[start]]), 2),
                                 "talk": "".join("1" if s > talking else "0" for s in spread[start:i]),
-                                "rows": [[round(float(x), 4) for x in r] for r in X[start:i]]})
+                                "rows": [[round(float(x), 4) for x in r] for r in X[start:i]],
+                                "face": [[round(float(x), 4) for x in r] for r in C[start:i]]})
                 start = i + 1
     out.sort(key=lambda r: -len(r["rows"]))
     most = int(float(spec.get("most_minutes", 60.0)) * 60.0 * rate)
@@ -2259,10 +2309,13 @@ def cmd_motion(a) -> int:
         total += len(r["rows"])
     blinks = blinks_per_minute(R, runs, rate)
     posture = posture_of(R, runs, rate, roll_sign, spec)
+    face = {"names": names, "basis": [[round(float(x), 5) for x in r] for r in basis],
+            "sd": [round(float(x), 5) for x in face_sd]}
     write_json(a.out, {"rate": rate, "axes": AXES, "sd": [round(float(x), 5) for x in sd],
-                       "roll_sign": roll_sign, "blinks_per_min": round(blinks, 1), "posture": posture, "runs": kept})
-    say("motion: %.0f minutes of their head in %d runs, %.0f blinks a minute; a posture holds %.0f s" % (
-        total / rate / 60.0, len(kept), blinks, posture["tau"]))
+                       "roll_sign": roll_sign, "blinks_per_min": round(blinks, 1), "posture": posture, "face": face,
+                       "runs": kept})
+    say("motion: %.0f minutes of their head in %d runs, %.0f blinks a minute; a posture holds %.0f s; their face "
+        "moves %d ways of its own" % (total / rate / 60.0, len(kept), blinks, posture["tau"], len(face_sd)))
     return 0
 
 

@@ -1368,6 +1368,210 @@ def check_real_voice_rests_at_a_mark():
     ok(max(floored) < 0.04, "with it, every cut is in the model's own rest")
 
 
+# -- 5. a rest the caller splices in (`rest_after`) -------------------------------
+
+
+def _held(tok: dict, secs: float = 1.5) -> dict:
+    return {**tok, "rest_after": secs}
+
+
+TOKENS_HELD = [
+    _tok("moved", "", ["M", "UW1", "V", "D"]),
+    _held(_tok("to", "", ["T", "UW0"])),
+    _tok("someone", ".", ["S", "AH1", "M", "W", "AH0", "N"]),
+]
+
+
+@check
+def test_a_rest_after_is_floored_on_its_word_space():
+    """The word before a rest the caller splices in is floored like the word before a mark.
+
+    On the word-space that ends it and nowhere else - not the lead-in spaces, not a space
+    inside a hyphenated word - by REST_AFTER_FLOOR, no more than the rest itself; a comma's
+    own floor where that is longer; nothing after a sentence end. Two-sided: the same
+    sentence without the rest floors nothing.
+    """
+    from backends.piper import HOP_LENGTH, REST_AFTER_FLOOR, PiperBackend
+
+    frame = HOP_LENGTH / float(SR)
+
+    def floored(tokens, params=None) -> list:
+        """[(which word-space, frames)] floored in the first sentence."""
+        cfg = _cfg()
+        sess = _FloorSession()
+        with tempfile.TemporaryDirectory() as td:
+            PiperBackend()._synth_tokens(
+                list(tokens), "fake", str(Path(td) / "a.wav"),
+                {"phonemizer": "ghost", "pause_scale": 1.0, **(params or {})}, cfg, sess,
+            )
+        ids, floor = sess.fed[0]
+        space = cfg["phoneme_id_map"].get(" ")[0]
+        spaces = [i for i, x in enumerate(ids) if x == space]
+        return [(spaces.index(i), float(f)) for i, f in enumerate(floor) if f > 0 and ids[i] == space]
+
+    want = float(round(REST_AFTER_FLOOR / frame))
+    # two lead-in spaces, then one after each word: the fourth is the one after "to"
+    eq(floored(TOKENS_HELD), [(3, want)], "the space after the held word, by REST_AFTER_FLOOR")
+    eq(floored([{k: v for k, v in t.items() if k != "rest_after"} for t in TOKENS_HELD]), [],
+       "control: without the rest nothing is floored")
+    eq(floored([TOKENS_HELD[0], _held(TOKENS_HELD[1], 0.05), TOKENS_HELD[2]]),
+       [(3, float(round(0.05 / frame)))], "never more than the rest asked for")
+    eq(floored([TOKENS_HELD[0], {**TOKENS_HELD[1], "punct": ","}, TOKENS_HELD[2]],
+               {"pause_scale": 6.5}),
+       [(3, float(round(max(REST_AFTER_FLOOR, 0.15) / frame)))],
+       "after a comma, the larger of the two floors once")
+    eq(floored([TOKENS_HELD[0], _tok("to", "", ["T", "UW0"]), _held(TOKENS_HELD[2])]), [],
+       "nothing after a sentence end: its rest is the gap")
+
+
+@check
+def test_a_rest_after_is_rest_the_word_trails_into():
+    """The trail's weight counts the caller's rest: an unmarked word before 1.5 s of it gets all
+    of the trail, its share below TRAIL_REST_FULL, none at a sentence end or with `trail` 0 -
+    and none without the rest (control)."""
+    from backends.piper import TRAIL_REST_FULL, _trail_weight
+
+    eq(_trail_weight("", {}), 0.0, "control: an unmarked word with no rest trails nowhere")
+    eq(_trail_weight("", {}, 1.5), 1.0, "a hesitation's word gets the whole trail")
+    near(_trail_weight("", {}, TRAIL_REST_FULL / 2), 0.5, "a short one its share")
+    eq(_trail_weight(".", {}, 1.5), 0.0, "a sentence end is the model's own")
+    eq(_trail_weight("", {"trail": 0.0}, 1.5), 0.0, "trail 0 turns it off")
+    eq(_trail_weight(",", {"pause_scale": 0.0}, 1.5), 1.0, "rest at Pause 0 too: Hesitate is its own dial")
+
+
+@check
+def test_a_rest_after_ends_its_phrase():
+    """eSpeak reads a word before a rest the caller splices in as the end of a phrase.
+
+    The sentence goes to eSpeak in two pieces broken there (a fake phonemizer records them),
+    so on the real one "to" is tuː, not the tə it is running on into the next word; the same
+    sentence without the rest is one piece and reads tə (control). The real half is skipped
+    without eSpeak.
+    """
+    from backends.piper import WORD_BREAK, PiperBackend
+
+    seen: list = []
+    orig = PiperBackend._espeak
+
+    def fake(cls, words, voice="en-us"):
+        seen.append(list(words))
+        return [" ".join("x" for _ in w.split(WORD_BREAK)) for w in words]
+
+    plain = [{k: v for k, v in t.items() if k != "rest_after"} for t in TOKENS_HELD]
+    PiperBackend._espeak = classmethod(fake)
+    try:
+        be = PiperBackend()
+        be._in_sentence(TOKENS_HELD, [0, 1, 2], "en-us")
+        be._in_sentence(plain, [0, 1, 2], "en-us")
+    finally:
+        PiperBackend._espeak = orig
+    b = " %s " % WORD_BREAK
+    eq(seen, [["moved" + b + "to", "someone"], ["moved" + b + "to" + b + "someone"]],
+       "two phrases broken after the held word; one without the rest")
+    be = PiperBackend()
+    try:
+        held = be._in_sentence(TOKENS_HELD, [1], "en-us")
+        ran = be._in_sentence(plain, [1], "en-us")
+    except Exception as exc:  # noqa: BLE001
+        print("    -- eSpeak is not here (%s); skipping the real reading" % exc)
+        return
+    ok("uː" in held.get(1, ""), "the held 'to' is read tuː (%s)" % held.get(1))
+    ok("ə" in ran.get(1, ""), "control: running on, it is tə (%s)" % ran.get(1))
+
+
+@check
+def test_a_rest_after_says_what_the_model_rested():
+    """The held word's row says how much of the rest the model already rendered (`rested`) -
+    where no mark rests there; after a comma the rest is the text's own and nothing is said,
+    and without the rest nothing is said (control). The fake voice never goes quiet, so the
+    figure itself is the real voice's to show (`check_real_voice_rests_after_a_word`)."""
+    from backends.piper import PiperBackend
+
+    def rows(tokens) -> dict:
+        with tempfile.TemporaryDirectory() as td:
+            res = PiperBackend()._synth_tokens(
+                list(tokens), "fake", str(Path(td) / "a.wav"),
+                {"phonemizer": "ghost", "pause_scale": 1.0}, _cfg(), _FloorSession(),
+            )
+        return {t["index"]: t for t in res["tokens"]}
+
+    eq(sorted(i for i, t in rows(TOKENS_HELD).items() if "rested" in t), [1], "the held word says")
+    comma = [TOKENS_HELD[0], {**TOKENS_HELD[1], "punct": ","}, TOKENS_HELD[2]]
+    eq([i for i, t in rows(comma).items() if "rested" in t], [], "after a comma it does not")
+    plain = [{k: v for k, v in t.items() if k != "rest_after"} for t in TOKENS_HELD]
+    eq([i for i, t in rows(plain).items() if "rested" in t], [], "control: no rest, nothing said")
+
+
+@check
+def check_real_voice_rests_after_a_word():
+    """On the real checkpoint, a word before a hesitation is ended by the model, not the splice.
+
+    The report (2026-10-25): "it had moved on to <!-- hesitation --> Someone", the "to" read tə
+    and run on into the /s/, the 1.5 s cut in after a "t" and a frame of schwa. Told of the
+    rest, the model reads the word whole, rests there itself, and the cut ghost makes at the
+    word's `rest` lands in that silence, which the row counts toward the hesitation. Two-sided
+    on the same sentences at the tarot narrator's settings: without `rest_after` most cuts have
+    voice in the 30 ms before them, with it none do. Skipped when the voice is not installed.
+    """
+    import numpy as np
+    from backends.piper import PiperBackend
+
+    voice = "en_US-libritts-high"
+    be = PiperBackend()
+    try:
+        sess, cfg = be._load(voice)
+    except Exception as exc:  # noqa: BLE001
+        print("    -- %s is not installed here (%s); skipping" % (voice, exc))
+        return
+    sr = int(cfg["audio"]["sample_rate"])
+    params = {"speaker": 13, "length_scale": 1.11, "noise_scale": 0.66, "noise_w": 0.333,
+              "pause_scale": 6.5}
+    sentences = [  # [tokens], the held word
+        ([_tok("it", "", []), _tok("had", "", []), _tok("moved", "", []), _tok("on", "", []),
+          _tok("to", "", []), _tok("someone", "", []), _tok("new", ".", [])], 4),
+        ([_tok("the", "", []), _tok("back", "", []), _tok("says", "", []), _tok("thirty-one", ".", [])], 2),
+    ]
+
+    def voiced(seg) -> float:
+        """RMS of `seg` under 2 kHz: the voice, never a hiss - a word's own final /z/ is kept to
+        the model's level before the rest (`_HISSES`), and the next word's lead hiss reaches into
+        it (LEAD_KEEP), neither of them a word cut off."""
+        spec = np.fft.rfft(seg)
+        spec[np.fft.rfftfreq(seg.size, 1.0 / sr) > 2000.0] = 0.0
+        return float(np.sqrt(np.mean(np.fft.irfft(spec, seg.size) ** 2)))
+
+    def cuts(held: bool) -> tuple:
+        """(voice in the 30 ms before each word's rest, as a share of the take's peak; `rested`)."""
+        before, rested = [], []
+        for toks, k in sentences:
+            toks = [dict(t) for t in toks]
+            if held:
+                toks[k]["rest_after"] = 1.5
+            for _ in range(4):
+                with tempfile.TemporaryDirectory() as td:
+                    path = Path(td) / "a.wav"
+                    res = be._synth_tokens(list(toks), voice, str(path), dict(params), cfg, sess)
+                    raw = path.read_bytes()
+                a = np.frombuffer(raw[44:], "<i2").astype(np.float32) / 32768.0
+                row = next(t for t in res["tokens"] if t["index"] == k)
+                at = int(round(float(row["rest"]) * sr))
+                seg = a[max(0, at - int(0.030 * sr)) : at].astype(np.float64)
+                before.append(voiced(seg) / float(np.max(np.abs(a))))
+                rested.append(float(row.get("rested", 0.0)))
+        return before, rested
+
+    bare, _ = cuts(False)
+    told, rested = cuts(True)
+    print("      voice before the cut, untold: %s" % " ".join("%.3f" % x for x in bare))
+    print("      voice before the cut, told:   %s" % " ".join("%.3f" % x for x in told))
+    print("      rested: %s" % " ".join("%.3f" % x for x in rested))
+    ok(max(bare) >= 0.01, "untold, a cut is in voice (control)")
+    ok(max(told) < 0.01, "told, every cut is in the model's own rest")
+    # the report's own sentence: a vowel into a lead hiss, the rest the model's silence (the
+    # other ends on a /z/ into a /θ/, its rest mostly the two hisses - no silence to count)
+    ok(min(rested[:4]) > 0.03 and max(rested) <= 1.5, "and the row says how much of the rest it is")
+
+
 def check_hyphen_is_a_word_boundary():
     """A hyphen INSIDE a word reaches the phonemizer as a word space.
 

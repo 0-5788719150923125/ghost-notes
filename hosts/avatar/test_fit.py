@@ -32,7 +32,9 @@ Run it directly with the voice-training venv's python (its torch) - no pytest ne
   A VIDEO WITH TOO FEW MOMENTS IS LEFT OUT OF THE HEAD - of four videos with 30, 25, 3 and 1 moments (and one
   with none, a video of ants), those with fewer than LEAST are left out: none of their moments is learned from
   or held out, each other video has some of each, and a left-out video's code is the others' mean (CONTROL: with
-  no floor, the video of one moment has it held out and none to learn from - the head's crash, 2026-10-24).
+  no floor, the video of one moment has it held out and none to learn from - the head's crash, 2026-10-24). And
+  THE HEAD VIDEOS: named some, only those it can learn from are, the rest unchosen with the mean look (CONTROL:
+  with none named, none is unchosen).
   A ROOM IS KEPT SMALL - its move learned at 1/ROOM_COARSE of the frame's size: over any window (at the frame's
   edges, of odd sizes) the move is the whole move's upsampling cut to it, and with no move the plate is the plate
   kept (CONTROL: cut with no margin of cells round the window, it is not).
@@ -310,7 +312,7 @@ def videos_of(counts, root):
     import numpy as np
     folders, video = [], []
     for v, n in enumerate(counts):
-        d = root / ("v%d" % v)
+        d = root / ("v%d" % v) / "head"
         (d / "mask").mkdir(parents=True)
         (d / "spec.json").write_text(json.dumps({"crop": [0, 0, W, H]}))
         np.savez(d / "frames.npz", points=np.zeros((n, 478, 3), np.float32))
@@ -355,6 +357,12 @@ def a_video_with_too_few_moments_is_left_out_of_the_head():
             head.LEAST = keep
         ok(3 in of(bare.held) and 3 not in of(bare.train), "CONTROL: with no floor, the video of one moment has it "
            "held out and none to learn from")
+        # THE HEAD VIDEOS: only those named are learned from, the rest taking the mean look
+        some = head.Footage(rig, "cpu", {"v1", "v2"})
+        ok(some.used == [1] and some.unchosen == [0] and of(some.train) == {1} and 2 in some.left_out,
+           "named v1 and v2, it learns from %s, leaves %s unchosen (v2 too few)" % (some.used, some.unchosen))
+        ok(torch.equal(head.looks_of(codes, some)[0], codes[1].data), "an unchosen video's code is the others' mean")
+        ok(head.Footage(rig, "cpu").unchosen == [], "CONTROL: with none named, none is left unchosen")
 
 
 @check

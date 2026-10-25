@@ -14,6 +14,8 @@ video FFmpeg makes from two colors - no footage of anyone. Each claim beside a c
   given, a little in from each cut, where a face was found;
 - the head's quick motion keeps a nod and drops a slow drift; its runs end at a gap and at a turn away,
   and a short one is dropped;
+- their face's own motion keeps a slow brow raise and calms the jitter round it, the raise its first way of
+  moving (jitter alone makes no such way), and leaves the blinks, the gaze and the lips' opening out;
 - a sound's target is pushed past their own on the shapes that show, never on mouthClose;
 - a hand up is costed and a hand at rest is not - where rest is the low end of where their hands are seen;
 - the rig made on a made still masks the lips and the eyes and nothing else, the lids move with the eyes
@@ -265,6 +267,35 @@ def test_motion():
     runs = actor.runs_of(R, 5.0, keep)
     lengths = [len(r) for r in runs]
     check(lengths == [100, 100, 65], "the runs are %s, not cut at the gap, the turn and the shot's end" % lengths)
+
+
+def test_face_motion():
+    """Their face's own motion keeps a slow brow raise under jitter, as its first way of moving, and leaves the
+    blinks, the gaze and the lips' opening to what plays them."""
+    import numpy as np
+    names = actor.face_names()
+    check("browInnerUp" in names and "mouthSmileLeft" in names and "eyeSquintLeft" in names,
+          "the face's own motion leaves out a brow, a smile or a squint")
+    check(not any(n.startswith("eyeBlink") or n.startswith("eyeLook") or n in ("jawOpen", "mouthPucker", "mouthClose")
+                  for n in names), "the face's own motion takes a blink, the gaze or the lips' opening")
+    rng = np.random.default_rng(3)
+    n = 600
+    t = np.arange(n) / 5.0
+    brow = 0.2 * np.sin(t * 2.0 * math.pi / 3.0)
+    F = rng.normal(0.0, 0.08, (n, len(names)))
+    F[:, names.index("browInnerUp")] += brow
+    S = actor.smooth_looks(F, actor.FACE_SMOOTH * 5.0)
+    j = names.index("browInnerUp")
+    kept = float(np.corrcoef(S[20:-20, j], brow[20:-20])[0, 1])
+    check(kept > 0.9, "smoothed, the brow goes with its slow raise only %.2f" % kept)
+    calm = actor.smooth_looks(rng.normal(0.0, 0.08, (n, 3)), actor.FACE_SMOOTH * 5.0)[20:-20].std()
+    check(calm < 0.4 * 0.08, "smoothed, the jitter is still %.3f of 0.08" % calm)
+    basis, sd = actor.face_components(S)
+    check(int(np.argmax(np.abs(basis[0]))) == j, "the first way their face moves is not the brow's")
+    check(1 <= len(sd) <= actor.FACE_MOST and np.allclose(np.linalg.norm(basis, axis=1), 1.0), "the ways are not unit directions")
+    # the control: the jitter alone holds no direction its own, so the raise is what made the first one
+    b0, _ = actor.face_components(actor.smooth_looks(rng.normal(0.0, 0.08, (n, len(names))), actor.FACE_SMOOTH * 5.0))
+    check(abs(b0[0][j]) < 0.9, "jitter alone made the brow the first way (the check cannot fail)")
 
 
 def test_targets():
@@ -614,6 +645,7 @@ def main():
         test_format(tmp)
         test_survey_records(tmp)
         test_motion()
+        test_face_motion()
         test_targets()
         test_hands()
         test_rig(tmp)

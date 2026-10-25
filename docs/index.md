@@ -121,7 +121,7 @@ From a song file to the typed per-frame `AudioFeatures` every scene consumes - l
 
 ### `render/` - Drawing
 
-How things get drawn and how a heavy scene stays interactive: thousands of shapes in one draw call, geometry built off the main thread, the lens, planes and meshes of the software 3D path, and color.
+How things get drawn and how a heavy scene stays interactive: thousands of shapes in one draw call, geometry built off the main thread, the lens, planes and meshes of the software 3D path, color, and how soft a light's shadow is.
 
 - [`frame_forge.gd`](../src/render/frame_forge.gd) **FrameForge** - scene geometry built OFF the main thread: the foundational fix for UI lag, not another mitigation.
 - [`lens3d.gd`](../src/render/lens3d.gd) **Lens3D** - a positionable perspective camera for the unified 3D path.
@@ -129,6 +129,7 @@ How things get drawn and how a heavy scene stays interactive: thousands of shape
 - [`palette.gd`](../src/render/palette.gd) **Palette** - a color ramp sampled by a scalar (0..1). The color half of the texture story: a `Field` gives a scalar (height, mottle, development); a Palette turns it into color. Themed presets map terrain elevation to believable bands (water -> shore -> green -> rock -> snow), but a Palette colors anything ...
 - [`plane3d.gd`](../src/render/plane3d.gd) **Plane3D** - a flat quad genuinely placed in 3D space, projected through a `Lens3D`.
 - [`scheme.gd`](../src/render/scheme.gd) **Scheme** - a scene's color identity, drawn from a named mood.
+- [`shadow_filter.gd`](../src/render/shadow_filter.gd) **ShadowFilter** - a positional light's shadow, softened by a filter of a set width and never by the light's size.
 - [`tri_batch.gd`](../src/render/tri_batch.gd) **TriBatch** - one canvas draw call for thousands of shapes.
 
 ### `motion/` - Motion & simulation

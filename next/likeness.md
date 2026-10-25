@@ -4,6 +4,160 @@ Planned 2026-10-20; **built 2026-10-21** (M1 to M8 in code, M4 and M5 looked at 
 **The second build (2026-10-21, night): a still and a model** - the section right below. The rest of
 this note is the first build, kept for what it found; where the two differ, the second build holds.
 The first build's files are backed up in `dist/likeness_v1/` (they were never committed).
+**The fifth pass (2026-10-24): an audit of the head of splats and the voice** - the section right below.
+
+## The fifth pass: an audit (2026-10-24)
+
+**The user, on the head of splats and the voice trained on all 65 videos:** "it's almost starting to feel
+like our results are getting worse ... the face moves/morphs at EXACTLY the same time every phoneme changes.
+So, when the actor is not talking - the face is not moving at all ... every 'sound' that comes from the actor
+also comes with a jarring shift in the face; and because of the heavy blurring, the face is extremely
+unstable"; "heavy black dots speckled throughout the actor's beard. They move and shift in a very much 3D
+manner"; "The generative voice sounds quite bad now ... really muddy and hard to understand. It's quite
+inconsistent."
+
+### The face moves only at the phones (found and fixed)
+
+**Every frame is drawn** (`LikenessMedium.draw_at` poses the splats each frame): what was stepped was what
+the plan handed them.
+
+- **The two strongest, made for two pictures, were played on the splats.** `Visemes.strongest` mixes at most
+  two sounds, each less the third, measured against the strongest - right for the 2D renderer, which draws
+  two library pictures. On a head of splats it held each sound's whole shape and gave way to the next in some
+  15 ms: a jump inside one frame. On a real passage (John's, 218 phones, 24 s; at 30 frames a second) the
+  mouth's scores travelled twice as far as Cohen and Massaro's own weighted mean of every pull, and moved by
+  as much as 0.69 of a score from one frame to the next (the mean of every pull: 0.26; smoothed by 20-25 ms:
+  0.21); a sound's share of the mouth moved up to 0.92 in a frame (every pull, smoothed: 0.30). The gate had
+  checked continuity a tenth of a millisecond at a time, where a 15 ms crossing is smooth. NOW a head of
+  splats mixes every pull, averaged over a Gaussian of 20 ms (`Visemes.mix`, `LikenessPlan.mouth_mix`), and
+  the lips still close at M (0.85 of the mouth in a fast "AA M AA"); coarticulation_check holds it frame by
+  frame, the two strongest its control.
+- **Articulation 3 took the mouth past anything the head saw.** Each sound's mouth is a place in their own
+  range (`visemes.json`, "their words scarcely show in their mouth: 0.19"), pushed from the still's own:
+  at 3, "open" asked jawOpen 0.67 and the lips' close 0.42, where the head's 99th percentile of its 17,192
+  moments is 0.49 and 0.25 (this set's 153 moments reach jawOpen 0.35 twice). The splats bound to the mesh
+  stretch with it. NOW no sound is pushed past their own 99th percentile of each score (`visemes.json`'s
+  `range`; `LikenessMedium.TOP`).
+- **Silent, nothing moved but the blinks and glances.** From every video's survey (five looks a second) and
+  the words heard: their brows, lids and cheeks move 0.74 to 0.82 as much in silence (a second from any word)
+  as while speaking, and their mouth 0.74. Some of it is MediaPipe's jitter: the slow part goes on from one
+  look to the next (lag-0.2 s correlation 0.43 to 0.58 for brows, squint and smile; 0.24 to 0.31 for the
+  mouth's quick components). NOW the Motion step learns THEIR FACE'S OWN MOTION at the head's looks
+  (`actor.py`: `face_names` - every score but the blinks, the gaze and the lips' opening and protrusion, which
+  the plan plays itself and a beard misreads, his pucker's 90th percentile 0.71 - high-passed as the head's,
+  smoothed over 0.4 s, `face_components`: on his footage six ways, two of the brows, a smile, a squint, a
+  stretch of the mouth's corner, the brows one against the other); the plan reads them from the same piece as
+  the head (`LikenessPlan.face`), at its calm, and the splats mix them (`LikenessMedium._take_face_ways`). The
+  Motion step's version is 4: it is made again (36 s on his 65 videos).
+
+The 2D renderer is unchanged: it still draws two library pictures.
+
+### The black dots are the bake's growth (found and fixed)
+
+**Not the player** (`dist/dots_audit/`): the trainer's own render of `fit` at the still has them (309 speck
+pixels the photo lacks: the forehead, along the beard, the neck), and drawn in the exported order or truly sorted
+by depth - at the still, turned 5 degrees, with "w" and "open" pushed three times - no pixel differs by more than
+0.3. They move "in 3D" because they are bound to the head's and the face's frames.
+
+**What they are:** splats under half a pixel (median 0.24 px; with the rasterizer's 0.3 low-pass each draws a
+1-2 px dot), wholly opaque (cover 1.0), dark (luminance 0.085), on the drawn surface. 90 of them make half of the
+specks, 359 four fifths. The shared head held 1 such splat; the set's bake 13,087, and Fit kept 10,006.
+
+**Why:** the bake grew the head freely - from 55k splats to 346k, on 146 moments (`HEAD_MOST` 500k, about 13k a
+densify round), copying splats already under a pixel - and over-fitted their darkest detail in a few moments. This
+set's moments (`dist/dots_audit/set_moments.jpg`) show glasses in 11 and a globe, bottles, game boxes, a keyboard
+and a broom before his face in some 25, none masked, and the black collar between the beard's strands. Baked again
+without any growth: no specks at all and 21.54 dB on the moments it never saw against 21.57 - the growth bought
+nothing there, only softness lost on the still.
+
+**NOW** (`bake.py`, NO SPECKS): the head grows to at most three times its own (`HEAD_GROWTH`), never copies a splat
+already under a pixel (`LEAST_COPY`; `train.Splats.densify`'s `least`), and before it is baked a head splat under a
+pixel darker than 60% of the face drawn round it in most of eight moments is dropped (`specks`) - relative, so his
+dark hair keeps its own. Baked so on his set (`dist/bake_test/`, 6.6 minutes): 4,774 specks dropped, a head of 139k;
+at the still 11 speck pixels the photo lacks against 216, on each unseen moment 47 against 279, and the face 21.85
+dB at the still (21.57) and 21.67 on unseen moments (21.57). And the room's frames are counted one at a time
+(`train.room_of`): summed whole, the masks of 146 frames became 2.3 GB of 64-bit integers, and the bake died of it on
+a card shared with another trainer.
+
+**Left:** a few faint specks in the beard. The moments with glasses or something held before the face are still
+learned from: the head draws them worst (of the 24 it draws worst, all but a few - `dist/bake_test/worst24.jpg`),
+but left out at a quarter of the steps (the 13 of 146 more than two spreads past the median) the set came out no
+better - 21.50 dB on the unseen moments against 21.67, 85 speck pixels on each against 47 - so they stay.
+
+### The voice is every way he sounds (found and fixed)
+
+**Measured** (`dist/voice_audit/`): 40 held-out sentences from 27 videos - none of their text taught, none from a
+video the old voices were taught on - said through the voice host's own path and heard by Whisper (base.en); the
+pitch from sentence to sentence; the long-term spectrum against his clean held-out speech.
+
+| voice | taught on | word errors | sentence pitch spread (Hz) | spectrum off (dB) |
+|---|---|---|---|---|
+| him (his own audio) | | 5.6% | 38 | 0 |
+| John, the base | | 7.5% | 15 | 5.3 |
+| the dev run at epoch 120 | 46 min, 2 spoken videos | 14.4% | 12 | 0.9 |
+| the first run in the app | 637-915 sentences | 17.4% | 23 | 1.4 |
+| **all 65 videos, 30 epochs** | 480 min, 58 videos | **33.6%** | 17 | 1.6 |
+| **one voice of them (the proof)** | 93 min, 19 videos, ~4.9k batches of 8 | **15.9%** | **9** | 1.2 |
+
+**Why:** of the 480 minutes, 220 were noisy (outdoors, wind, water, two over a music bed - "Human Laws" at 208 Hz and
+168 characters a second), 32 soft and low (85 Hz, close to the microphone), 38 high, 44 breathy, and 146 his ordinary
+voice. A voice of one speaker averages them and draws among them sentence by sentence: lowering its sampling noise
+helped it 11 points and the old voice 3. And FOUR VIDEOS WERE THERE TWICE ("(1080p)" and "(1080p, h264)", their merged
+download folders): 48 of the 287 held-out sentences were also taught. Ruled out: the trainer's settings (the same as
+the old runs'), clipping, too few batches (13k, more than the old runs), the transcripts (a second hearing, small.en,
+on 454 sentences: a median 3.9% of words differ, alike in clean and noisy videos).
+
+**NOW:** the Utterances step keeps ONE VOICE (`utterances.signature` measures each sentence as it is cut, `choose`
+keeps them together: its speech 30 dB over its own pauses; 8 to 30 characters a second of loud sound; its pitch
+within 1.3 times their usual one; a harmonics-to-noise ratio of 3.6 dB or more; its video's mean spectrum within 2 dB
+of the most typical video's; each sentence once) and says the minutes left out for each reason; A COPY IS NOT ANOTHER
+VIDEO (`ActorFolder.copy_of`: a video of the same title and length as an earlier one is left out of every step, the
+card marking it ⧉); and the Voice is taught in LESSONS, each a batch of 16 (`voice_steps`, 6,000 - about the proof's,
+under an hour), as many epochs as make them. Run on his 68 videos (`dist/utt_test/`, 21 minutes): of the 499
+minutes cut, 1,087 sentences and 45 held out, 88 minutes from 12 videos, his register 124 Hz; left out, in minutes:
+noisy 226, another register 72, breathy 46, another recording 46, said twice 18, not paced as speech 3. Untried:
+John's own labels ("en") in place of "en-us".
+
+### The head is soft: too little of each video, and nothing settles (found; fixed in part)
+
+**Measured** (`dist/blur_audit/`; sharpness is the render's mean |Laplacian| over the frame's in a region, 1.0 as
+sharp as the frame; regions from MediaPipe's points: the eyes and nose from the brows to the upper lip, the mouth and
+beard below). The shared head as built (63 videos, 60,000 steps): on its own training moments the eyes and nose 0.17
+at 21.7 dB, the beard 0.08, the hair 0.14 - and on unseen moments the same (0.21, 20.5 dB): it is not over-fitted, it
+is under-fitted. 42% of its face splats are nearly clear; its median splat is 7 px.
+
+| head (eyes and nose, on the same video's moments) | steps a video | trained on | unseen |
+|---|---|---|---|
+| shared, 63 videos | ~950 | 23.15 dB, 0.21 (beard 0.05) | 22.46 dB, 0.22 |
+| one video | 6,000 | 27.05, 0.51 (beard 0.31) | 22.86, 0.46 |
+| one video, each moment's pose refined | 6,000 | 27.06, 0.51 | 22.47, 0.46 |
+| one video, its places settling | 6,000 | 27.24, 0.67 (beard 0.55) | 22.81, 0.68 |
+| three videos, settling | 6,000 each | 26.21, 0.59 (beard 0.46) | 23.23, 0.55 |
+
+**Why, by evidence:** (1) some 950 steps a video, three or four looks at each moment; (2) no rate fell in any loop -
+3DGS's own rates, taken without its schedule, so every place wandered a step's worth to the end; (3) the bake starts
+from the head and is pulled toward it. Not the cause: each moment's pose (refined, it moved 0.3 px and gained
+nothing - though a 1 px error would cost a third of the sharpness), the moments' resolution (full 1080p, sharp), the
+rasterizer's low-pass.
+
+**NOW:** THE PLACES SETTLE in every loop (`train.Splats.decay`: the place, the expression's and the look's shifts of
+place at their rate times 0.01 ** the share done - head.py, bake.py, fit.py, train.py); and THE HEAD LEARNS ENOUGH OF
+EACH VIDEO: the Head videos (10) with the most usable minutes of them facing the camera
+(`ActorFolder.head_videos`), the Head steps (6,000) each - the same hour and three quarters as the 60,000 over all of
+them; a video it does not learn from takes the mean look, as one left out (`head.Footage`'s `unchosen`). On his
+footage they are his long talking videos, this set's among them. The Head, Avatar and Fit steps' versions are
+raised: they are made again.
+
+**Not done, measured mixed:** the bake freed (its pull toward the head off, its face growing anywhere): from a sharp
+head its eyes and nose went 0.41 to 0.51 trained and 0.49 to 0.63 unseen - but 21.71 to 21.30 dB unseen, and the two
+changes were not measured apart. **Not tried:** keeping the moments with something held before the face out of a
+set's frames (head_frames.py drops only a hand at the mouth); not pruning after the growth ends (3DGS does not).
+
+### What is made again
+
+Generate makes again, in order: Motion (36 s), Utterances (21 minutes on the processor) and Voice (6,000 lessons,
+under an hour); Head (about 1.7 hours); the set's Avatar (7 minutes) and Fit (3). A copy of a video is left out
+on the card at once.
 
 ## The second build: a still and a model (2026-10-21, night)
 

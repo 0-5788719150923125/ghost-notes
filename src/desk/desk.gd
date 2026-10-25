@@ -369,7 +369,7 @@ func _build_world() -> void:
 	_lamp.shadow_enabled = true
 	_lamp.shadow_bias = 0.005
 	_lamp.shadow_normal_bias = 0.15
-	_lamp.shadow_blur = 1.4
+	_lamp.shadow_blur = ShadowFilter.blur(2.8)
 	_root3.add_child(_lamp)
 	_fill = DirectionalLight3D.new()
 	_fill.light_energy = 0.18

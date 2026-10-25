@@ -15,6 +15,11 @@ eSpeak is real here (the ids are its reading); the sound is made, and no voice m
   THE CUT - lands in the quiet past where a word's sound falls; refused where the pause holds sound, or
   where a sound no word was heard in lies inside (CONTROL: the same sound under a word is kept).
   THE VOICE - a pitched sound counts as spoken, noise as whispered.
+  ITS SIGNATURE - a made voice at 125 Hz between quiet pauses reads its pitch, a clear harmonics-to-noise ratio and
+  speech well over its pauses; the same voice under a noise floor reads as noisy (CONTROL: noise alone has no pitch).
+  ONE VOICE - of made candidates, the noisy, the music-paced, the high, the breathy, the sentence said twice and the
+  video of another recording are each left out for their own reason, and the rest kept (CONTROL: with no limit on
+  the recording, the other video is kept).
   TRAINED VOICES - one published with its config is listed, owned and its files found where it lies, never
   fetched (CONTROL: without its config, or by a name with a path in it, it is not).
 """
@@ -166,6 +171,63 @@ def the_voice():
     noise = (0.2 * np.random.default_rng(1).standard_normal(U.SR)).astype(np.float32)
     ok(U.voiced(tone, -80.0) > 0.9, "a pitched sound is spoken (%.2f)" % U.voiced(tone, -80.0))
     ok(U.voiced(noise, -80.0) < 0.1, "CONTROL: noise is whispered (%.2f)" % U.voiced(noise, -80.0))
+
+
+def _voice_at(f0: float, noise: float, seed: int = 1):
+    """A second of a made voice at [f0] Hz between quiet pauses, under a noise floor of [noise]."""
+    rng = np.random.default_rng(seed)
+    t = np.arange(U.SR) / U.SR
+    tone = sum(0.3 / k * np.sin(2 * np.pi * f0 * k * t) for k in range(1, 8))
+    pause = np.zeros(int(0.3 * U.SR))
+    y = np.concatenate([pause, tone, pause])
+    return y + noise * rng.standard_normal(len(y))
+
+
+@check
+def its_signature():
+    sig = U.signature(_voice_at(125.0, 1e-4), "a sentence of thirty letters")
+    ok(abs(sig["f0"] - 125.0) < 6.0, "the made voice's pitch reads %.1f Hz (125)" % sig["f0"])
+    ok(sig["hnr"] > U.BREATHY and sig["clean"] > U.CLEAN, "its harmonics %.1f dB, its speech %.1f dB over its pauses" % (sig["hnr"], sig["clean"]))
+    ok(sig["spectrum"].shape == (U.BANDS,) and abs(float(sig["spectrum"].mean())) < 1e-6, "its spectrum is its bands less their level")
+    noisy = U.signature(_voice_at(125.0, 0.05), "a sentence of thirty letters")
+    ok(noisy["clean"] < U.CLEAN and noisy["hnr"] < sig["hnr"], "under a noise floor it reads %.1f dB over its pauses, its harmonics %.1f dB" % (noisy["clean"], noisy["hnr"]))
+    hiss = U.signature(0.2 * np.random.default_rng(2).standard_normal(U.SR), "hiss")
+    ok(hiss["f0"] == 0.0, "CONTROL: noise alone has no pitch (%.1f Hz)" % hiss["f0"])
+
+
+def _cands():
+    base = np.linspace(-6.0, 6.0, U.BANDS)
+    tilt = base + np.linspace(-4.0, 4.0, U.BANDS)
+    c = []
+    for n in range(30):
+        c.append({"vid": "a", "text": "sentence number %d" % n, "seconds": 4.0, "clean": 40.0, "rate": 15.0,
+                  "f0": 125.0 + (n % 5), "hnr": 6.0, "spectrum": base})
+    for n in range(10):
+        c.append({"vid": "b", "text": "another sentence %d" % n, "seconds": 4.0, "clean": 40.0, "rate": 15.0,
+                  "f0": 125.0, "hnr": 6.0, "spectrum": tilt})
+    odd = {"noisy": {"clean": 20.0}, "not paced as speech": {"rate": 40.0}, "another register": {"f0": 200.0},
+           "breathy": {"hnr": 2.0}, "said twice": {"text": "Sentence number 3!"}}
+    for reason, change in odd.items():
+        c.append({**c[0], "text": "odd one " + reason, **change})
+    return c, list(odd)
+
+
+@check
+def one_voice():
+    c, reasons = _cands()
+    kept, found = U.choose(c)
+    why = found["why"]
+    ok(all(len(why.get(r, [])) == 1 for r in reasons), "each odd one is left out for its own reason: %s" % why)
+    ok(len(why.get("another recording", [])) == 10, "the video of another recording is left out (%d of 10)" % len(why.get("another recording", [])))
+    ok(len(kept) == 30 and abs(found["register"] - 127.0) < 6.0 and found["recording"] == "a",
+       "the rest kept (%d of 30), their register %.1f Hz, the typical recording %s" % (len(kept), found["register"], found["recording"]))
+    was = U.RECORDING
+    try:
+        U.RECORDING = 99.0
+        kept2, found2 = U.choose(c)
+    finally:
+        U.RECORDING = was
+    ok(len(kept2) == 40 and "another recording" not in found2["why"], "CONTROL: with no limit, the other recording is kept")
 
 
 @check

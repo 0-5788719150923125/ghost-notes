@@ -4,9 +4,9 @@ at once (next/likeness.md, "One head").
 
     <voice_train_venv python> head.py --spec <spec.json> [--progress <file>]
 
-The spec: {"rig", "out", "steps", "preview"} - the actor's rig (rig.py over every video's head_frames.py folder:
-one neutral face, one basis, and which folder each frame is from), where the head goes, how many steps, and a
-folder for pictures of it against held-out frames.
+The spec: {"rig", "out", "steps", "preview", "videos"} - the actor's rig (rig.py over every video's head_frames.py
+folder: one neutral face, one basis, and which folder each frame is from), where the head goes, how many steps, a
+folder for pictures of it against held-out frames, and the videos it learns from (their ids; all, without it).
 
 WHY (the user, 2026-10-23: "It's pointless to build a gaussian splatting model if the scenes can only generate
 from a single set of images ... let us search for a kind of learned blend, which can inherit features from the
@@ -26,7 +26,13 @@ SO THE HEAD IS SHARED AND EACH VIDEO HAS A LOOK:
   splats on its bones (BODY_START, at most BODY_MOST), a group of their own with an optimizer of their own, there
   so the head is never asked to paint a video's clothes - a set's body is fitted to its own still (bake.py, fit.py);
 - A VIDEO WITH TOO FEW MOMENTS OF THEIR FACE (LEAST: a timelapse, a video of ants) IS LEFT OUT - no room, no body,
-  and the others' mean look as its code.
+  and the others' mean look as its code;
+- ENOUGH OF EACH VIDEO (2026-10-24, the user: "because of the heavy blurring, the face is extremely unstable"): 60,000
+  steps over 63 videos was some 950 a video, three or four looks at each moment, and the head drew his eyes and nose
+  at 0.2 of the frame's sharpness (its mean |Laplacian| over the frame's); a head given 6,000 steps a video drew them
+  at 0.5 to 0.67, three videos together at 0.59 with the best PSNR on unseen moments (23.2 dB on one video against
+  22.5). So it learns from the videos the spec names (`videos`: the Actor card's Head videos, those with the most of
+  them facing the camera), each its Head steps - a video it does not learn from takes the mean look, as one left out.
 
 Each step: a frame of any video, a window of it (FACE_WINDOWS round the face), the head as that video looks and
 that video's body, over its room; L1 and SSIM, the cover against the person, train.py's regularisers. A video's
@@ -87,9 +93,10 @@ def say(*parts) -> None:
 class Footage(train.Frames):
     """EVERY VIDEO'S MOMENTS, as train.Frames is one set's: the rig's per-frame arrays (its frames in folder order,
     `video` saying whose), each moment read from its own folder. The frame's size is the first folder's; a folder
-    of another size is left out, and so is one with fewer than LEAST moments (`used`, `left_out`: its count)."""
+    of another size is left out, and so is one with fewer than LEAST moments (`used`, `left_out`: its count), and one
+    not in [param only] (its folder's video ids; all, without it: `unchosen`)."""
 
-    def __init__(self, rig_path: str, device):
+    def __init__(self, rig_path: str, device, only=None):
         import numpy as np
         import torch
         r = np.load(rig_path)
@@ -112,8 +119,10 @@ class Footage(train.Frames):
             if keep[i] and (sizes[v] != sizes[0] or not os.path.exists(self._path(i, "mask", ".png"))):
                 keep[i] = False
         counts = np.bincount(self.video[keep], minlength=self.V)
-        self.used = [v for v in range(self.V) if counts[v] >= LEAST]
+        named = lambda v: os.path.basename(os.path.dirname(self.folders[v]))
         self.left_out = {v: int(counts[v]) for v in range(self.V) if counts[v] < LEAST}
+        self.unchosen = [v for v in range(self.V) if v not in self.left_out and only is not None and named(v) not in only]
+        self.used = [v for v in range(self.V) if v not in self.left_out and v not in self.unchosen]
         if not self.used:
             raise ValueError("no video shows %d moments of their face" % LEAST)
         keep &= np.isin(self.video, self.used)
@@ -309,7 +318,7 @@ def bodies_of(rig, data: Footage, device):
     try:
         train.ON_BODY = BODY_START
         for v in range(data.V):
-            if v in data.left_out:
+            if v not in data.used:
                 out.append(None)
                 continue
             data.train = data.of(v, keep_train)
@@ -382,11 +391,13 @@ def preview(head, bodies, rig, data, rooms, codes, step: int, out_dir: str):
 
 
 def looks_of(codes, data: Footage):
-    """Every video's code [V, LOOKS]: a video left out takes the mean of the others' (a set made from it starts there)."""
+    """Every video's code [V, LOOKS]: a video not learned from takes the mean of the others' (a set made from it starts
+    there)."""
     import torch
     c = torch.stack([x.data for x in codes])
-    if data.left_out:
-        c[list(data.left_out)] = c[data.used].mean(0)
+    rest = [v for v in range(data.V) if v not in data.used]
+    if rest:
+        c[rest] = c[data.used].mean(0)
     return c
 
 
@@ -433,7 +444,7 @@ def main() -> int:
     dev = torch.device("cuda")
     torch.manual_seed(0)
     try:
-        data = Footage(spec["rig"], dev)
+        data = Footage(spec["rig"], dev, set(spec["videos"]) if spec.get("videos") else None)
     except ValueError as exc:
         say(str(exc))
         return 2
@@ -443,7 +454,7 @@ def main() -> int:
     plates, seens = [], []
     with torch.no_grad():
         for v in range(data.V):
-            if v in data.left_out:
+            if v not in data.used:
                 plates.append(torch.zeros((data.H, data.W, 3), dtype=torch.uint8, device=dev))
                 seens.append(torch.zeros((data.H, data.W), dtype=torch.uint8, device=dev))
                 continue
@@ -461,6 +472,9 @@ def main() -> int:
         say("%d of %d videos left out, too few moments of their face (fewer than %d): %s"
             % (len(data.left_out), data.V, LEAST, ", ".join("%s %d" % (os.path.basename(os.path.dirname(
                 data.folders[v])), n) for v, n in data.left_out.items())))
+    if data.unchosen:
+        say("learning from %d of the %d videos with their face (the Head videos, %d steps each)"
+            % (len(data.used), len(data.used) + len(data.unchosen), steps // max(1, len(data.used))))
     say("%d videos, %d moments to learn from, %d held out; %d head splats and %d on their bodies to start; %d steps"
         % (len(data.used), len(data.train), len(data.held), len(head), sum(len(b) for b in bodies if b is not None),
            steps))
@@ -504,6 +518,8 @@ def main() -> int:
                 head.seen[there[:nh]] += 1.0
                 body.pull[there[nh:]] += g[nh:][there[nh:]]
                 body.seen[there[nh:]] += 1.0
+        head.decay(step / steps)
+        body.decay(step / steps)
         for opt in (head.opt, body.opt, rooms.opt, code_opt):
             opt.step()
         if train.DENSIFY_FROM <= step < until and step % train.DENSIFY_EVERY == 0:
@@ -543,7 +559,8 @@ def main() -> int:
     save(head, bodies, rooms, codes, data, spec["rig"], spec["out"])
     shifts = torch.stack([torch.einsum("l,nlc->nc", codes[v].data, head.p["look_colour"].data).abs().mean()
                           for v in data.used])
-    out = (" (%d more left out: too few moments of their face)" % len(data.left_out)) if data.left_out else ""
+    out = (" of the %d with their face" % (len(data.used) + len(data.unchosen))) if data.unchosen else ""
+    out += (" (%d more left out: too few moments of their face)" % len(data.left_out)) if data.left_out else ""
     say("%d head splats; %d videos%s, their looks shift its colours %.3f to %.3f (logit, on the mean); on %d moments it never saw: PSNR %.2f dB round "
         "the face; %d minutes" % (len(head), len(data.used), out, float(shifts.min()), float(shifts.max()),
                                   len(data.held), held_error(head, bodies, rig, data, rooms, codes),

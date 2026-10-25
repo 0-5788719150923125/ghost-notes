@@ -193,6 +193,7 @@ def main() -> int:
                 there = body & (p[:, 0] + r > 0) & (p[:, 0] - r < S) & (p[:, 1] + r > 0) & (p[:, 1] - r < S)
                 splats.pull[there] += means2d.grad[there].norm(dim=-1) * (S * 0.5)
                 splats.seen[there] += 1.0
+        splats.decay(step / steps)
         splats.opt.step()
         not_needles(splats, body)
         if step % train.DENSIFY_EVERY == 0 and step <= FIT_GROWS * steps:

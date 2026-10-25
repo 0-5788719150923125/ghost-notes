@@ -274,6 +274,7 @@ static func cut(body: String, sentence_no: int, holds: Array = []) -> Dictionary
 	var toks: Array = []
 	var words: Array = []
 	var rests: Array = []          # [{tok, sec, before}] - see Splice.chunk
+	var after := 0.0               # the rest spliced in after the token being built
 	var hold_i := 0
 	var sentences := 0
 	var parsed := Phonemes.parse(body)
@@ -285,6 +286,7 @@ static func cut(body: String, sentence_no: int, holds: Array = []) -> Dictionary
 			var ph: Array = w.phones
 			var st: Array = w.get("stress", [])
 			var start := toks.size()
+			after = 0.0
 			# HESITATIONS, in the order the phonemizer met their sentinels - which is the
 			# order [method passages] listed their lengths in.
 			for key in ["hold_before", "hold"]:
@@ -298,6 +300,15 @@ static func cut(body: String, sentence_no: int, holds: Array = []) -> Dictionary
 					hold_i += 1
 				if sec > 0.0:
 					rests.append({"tok": start, "sec": sec, "before": key == "hold_before"})
+					# ...AND THE VOICE IS TOLD, on the word the rest follows (`rest_after`), or it
+					# reads straight on into the next word: "moved on to <!-- hesitation -->
+					# Someone" came back "tə" - a "t" and a frame of schwa - with the rest cut in
+					# after it (piper.py `REST_AFTER_FLOOR`, 2026-10-25)
+					if key == "hold":
+						after += sec
+					elif not toks.is_empty():
+						var prev: Dictionary = toks[toks.size() - 1]
+						prev["rest_after"] = float(prev.get("rest_after", 0.0)) + sec
 			# A HUM IS HELD, not spoken in passing - see Splice.HUM_SECONDS.
 			var hum_key := String(w.text).to_lower()
 			if Splice.HUM_SECONDS.has(hum_key):
@@ -344,6 +355,8 @@ static func cut(body: String, sentence_no: int, holds: Array = []) -> Dictionary
 					"stop": punct = "."
 					"comma": punct = ","
 			var tok := {"text": String(w.text), "punct": punct, "fallback": arpa}
+			if after > 0.0:
+				tok["rest_after"] = after
 			if bool(w.get("literal", false)):
 				tok["arpa"] = arpa
 			# A WORD NO DICTIONARY HOLDS (the audit's UNKNOWN), spelled as written: eSpeak would be

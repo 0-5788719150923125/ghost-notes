@@ -115,21 +115,23 @@ func light_flames(flames: Array, own: int) -> void:
 	light.light_energy = 0.35
 	light.shadow_caster_mask = 0xFFFFFFFF & ~own & ~Lights.SCREEN_MASK
 	light.light_cull_mask = 0xFFFFFFFF & ~own
-	# a flame is a couple of centimeters across: the shadows it throws are soft at their ends. The
-	# biases are for a TABLETOP: at their defaults a deck's shadow began centimeters in front of it.
-	# The NORMAL bias is what holds the cloth smooth: a flame stands a few centimeters over it, so
-	# the cloth is lit at a grazing angle, and at 0.08 the cube map's texels printed themselves on
-	# it as rings and radial lines (feedback 0016) and dimmed the pool. 0.3 is about a millimeter
-	# there; the depth bias stays small, which is what keeps a card's own shadow.
-	light.light_size = 0.015
-	light.shadow_blur = 2.0
-	light.shadow_bias = 0.004
-	light.shadow_normal_bias = 0.3
-	light.omni_shadow_mode = OmniLight3D.SHADOW_CUBE
-	light.shadow_enabled = true
+	candle_shadow(light)
 	light.position = at + Vector3(0, 0.016, 0)
 	medium._props.add_child(light)
 	medium._lights.append({"light": light, "base": at, "light_base": light.position, "energy": 0.28, "flames": flames})
+
+
+## A CANDLE'S SHADOW, SOFT BY A FILTER AND NOT BY THE FLAME'S SIZE ([ShadowFilter]): a flame stands a few
+## centimeters over the cloth, so everything is lit at a graze, and sized (PCSS) it printed rings round
+## itself on a card's back and drew a clock's rim on its face in stairs (feedback 0007). The filter's
+## normal bias keeps the cloth out of its own shadow; the depth bias stays small (a tabletop's: at
+## Godot's own a deck's shadow began centimeters in front of it), which is what keeps a card's own
+## shadow. Its cube, as every omni light's here.
+static func candle_shadow(light: OmniLight3D) -> void:
+	ShadowFilter.filter(light, Lights.SHADOW_TEXELS)
+	light.shadow_bias = 0.004
+	light.omni_shadow_mode = OmniLight3D.SHADOW_CUBE
+	light.shadow_enabled = true
 
 
 ## A SHADOW-ONLY SLAB under [param foot]: the tabletop's shadow biases are larger than the gap

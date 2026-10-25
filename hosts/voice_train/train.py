@@ -7,7 +7,11 @@
 
 The spec: {"data": the utterances folder (metadata.csv, wav/, phonemes.json), "base": the base checkpoint,
 "work": where training keeps its cache and checkpoint, "out": the voice (.onnx; its config beside it as
-.onnx.json), "name", "espeak", "epochs", "batch"}.
+.onnx.json), "name", "espeak", "steps", "batch"}.
+
+LESSONS, NOT EPOCHS (2026-10-24): the voice is taught for "steps" batches however many sentences it has - an epoch is
+as long as their speech, and the 150 epochs sized for 637 sentences were 65k batches on 6,909 - as many epochs as
+make them (the last one whole).
 
 THE IDS ARE THE VOICE HOST'S: utterances.py wrote each utterance's phoneme ids as hosts/voice sends them
 at playback (its eSpeak reading, its homographs, its lead-in spaces), so the trainer reads them as given
@@ -150,7 +154,10 @@ def main(argv=None) -> int:
 
     hp = torch.load(spec["base"], map_location="cpu", weights_only=False, mmap=True)["hyper_parameters"]
     quality = str(hp.get("quality", "medium"))
-    epochs = int(spec.get("epochs", 200))
+    batch = int(spec.get("batch", 16))
+    sentences = sum(1 for line in (data / "metadata.csv").read_text(encoding="utf-8").splitlines() if line.strip())
+    each = max(1, int(sentences * (1.0 - VALIDATION)) // batch)
+    epochs = max(1, -(-int(spec.get("steps", 6000)) // each))
     last = work / "last.ckpt"
     # A SAVED RUN GOES ON only while it is the same lesson: the same base and the same sentences (only the
     # epochs asked for may change). Other sentences, or another base, start again from the base.
@@ -199,7 +206,7 @@ def main(argv=None) -> int:
                 os.replace(tmp, last)
                 self.saved = time.monotonic()
 
-    batch = int(spec.get("batch", 16))
+    say("%d sentences, %d batches an epoch: %d epochs" % (sentences, each, epochs))
     args = ["fit",
             "--data.voice_name", str(spec.get("name", "voice")),
             "--data.csv_path", str(data / "metadata.csv"),

@@ -537,7 +537,7 @@ func _phase(run: Dictionary) -> String:
 			var e := ActorFolder.write_file(spec, JSON.stringify({"data": actor.dir.path_join("utterances"),
 				"base": Provision.file_path("voice_base"), "work": actor.dir.path_join("voice").path_join("train"),
 				"out": actor.dir.path_join("voice").path_join("voice.onnx"), "name": actor.name(),
-				"espeak": VOICE_ESPEAK, "epochs": int(actor.settings()["voice_epochs"]), "batch": VOICE_BATCH}))
+				"espeak": VOICE_ESPEAK, "steps": int(actor.settings()["voice_steps"]), "batch": VOICE_BATCH}))
 			if not e.is_empty():
 				return e
 			return _spawn(run, "user://voice_train_venv", "res://hosts/voice_train/train.py", ["--spec", spec],
@@ -576,13 +576,16 @@ func _phase(run: Dictionary) -> String:
 		"head":
 			var dir := out.path_join("head")
 			var spec := dir.path_join("head.spec.json")
+			# THE HEAD VIDEOS, each its Head steps (head.py, "ENOUGH OF EACH VIDEO"); none chosen (no audit), all of them
+			var vids := actor.head_videos(int(actor.settings()["head_videos"]))
+			var many := vids.size() if not vids.is_empty() else actor.ticked().size()
 			var e := ActorFolder.write_file(spec, JSON.stringify({"rig": dir.path_join("rig.npz"),
-				"out": dir.path_join("head.npz"), "steps": int(actor.settings()["avatar_steps"]),
-				"preview": dir.path_join("preview")}))
+				"out": dir.path_join("head.npz"), "steps": int(actor.settings()["head_steps"]) * maxi(1, many),
+				"videos": vids, "preview": dir.path_join("preview")}))
 			if not e.is_empty():
 				return e
 			return _spawn(run, "user://voice_train_venv", "res://hosts/avatar/head.py", ["--spec", spec],
-				"learning their head from every video")
+				"learning their head from their videos")
 		"frames":
 			var main := set_video(actor, sid)
 			if main.is_empty():

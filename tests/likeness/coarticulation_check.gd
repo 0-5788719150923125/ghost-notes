@@ -19,6 +19,12 @@ extends SceneTree
 ## jump), since the two strongest pulls are each less the third's. The control is the plain two
 ## strongest, which must jump as a third overtakes one, however small the step.
 ##
+## THE SPLATS' MOUTH MOVES SMOOTHLY FRAME BY FRAME ([Visemes.mix], 2026-10-24: the two strongest, played on a
+## head of splats, morphed "at EXACTLY the same time every phoneme changes"): on the quick phrase at 30 frames a
+## second, from every phase, no sound's share moves more than 0.4 from one frame to the next, and at M's center
+## in the fast "AA M AA" the lips' share is still most of it. The control is the two strongest at the same
+## frames, which must move a share by more than 0.6 - the jump the check is for.
+##
 ## THE LEARNED MOUTH IS READ AS IT WAS TRAINED ([LikenessPlan], actor.py's `contexts`): a made network of one
 ## neuron that opens the jaw by tanh of how much of "open" fills the window - a window full of it gives
 ## tanh(1), half of it tanh(0.5), silence nothing; and the inputs of a moment's every window sum to one.
@@ -104,6 +110,28 @@ func _run() -> void:
 		was_plain = now_plain
 	_ok(worst < 0.02, "a phone's share of the drawn mouth jumped %.3f in a tenth of a millisecond" % worst)
 	_ok(plain > 0.15, "the plain two strongest jumped only %.3f: the check cannot fail" % plain)
+	# THE SPLATS' MOUTH, FRAME BY FRAME
+	var m_at := Visemes.mix(0.135, line)
+	_ok(float(m_at.get("pbm", 0.0)) > 0.7, "the lips' share at M's center in fast speech is only %.3f" % float(m_at.get("pbm", 0.0)))
+	var frame_mix := 0.0
+	var frame_two := 0.0
+	for ph in 10:
+		var was_m := {}
+		var was_two := {}
+		var tf := float(ph) / 300.0
+		while tf < t0:
+			var m := Visemes.mix(tf, ql)
+			var two := {}
+			for q in Visemes.strongest(tf, ql):
+				two[String(q[1])] = float(two.get(String(q[1]), 0.0)) + float(q[2])
+			if not was_m.is_empty():
+				frame_mix = maxf(frame_mix, _jump(was_m, m))
+				frame_two = maxf(frame_two, _jump(was_two, two))
+			was_m = m
+			was_two = two
+			tf += 1.0 / 30.0
+	_ok(frame_mix < 0.4, "a sound's share of the splats' mouth moved %.3f from one frame to the next" % frame_mix)
+	_ok(frame_two > 0.6, "the two strongest moved a share only %.3f a frame: the check cannot fail" % frame_two)
 	# THE LEARNED MOUTH, as trained
 	var plan := LikenessPlan.new()
 	plan._classes = ["rest", "open"]

@@ -21,6 +21,11 @@ class_name Splice
 ## closes it. Both sit inside the chunk rather than in the seam, so the live window and the
 ## export - which join chunks differently - cannot disagree about them.
 ##
+## HOW MUCH: the rest less what the voice already rests there for it (the word's `rested`): the
+## host is told of the rest (a token's `rest_after`, [method ReadingPlan.cut]) and the model ends
+## the word and pauses on its own (piper `REST_AFTER_FLOOR`) - so a hesitation is as long as it
+## says, never that and the model's pause.
+##
 ## THE EDGES: a raised-cosine ramp either side, as long as the level there needs - the voice
 ## often runs straight from one word into the next, and a ramp of a few milliseconds on a
 ## sounding vowel is a click. Mirrors piper `_edge_ramp`: HOLD_FADE in silence, up to a
@@ -40,6 +45,7 @@ static func chunk(pcm: PackedFloat32Array, holds: Array, spans: Array, ratio: fl
 	for sp in spans:
 		by_index[int((sp as Dictionary).get("index", -1))] = sp
 	var end := INF
+	var spent := {}                  # of each word's `rested`, what a rest has already taken
 	for h in holds:
 		var k := int((h as Dictionary)["tok"])
 		var cur: Variant = by_index.get(k)
@@ -50,8 +56,10 @@ static func chunk(pcm: PackedFloat32Array, holds: Array, spans: Array, ratio: fl
 					cuts.append(hc)
 			continue
 		var t := end
+		var own: Variant = cur        # the word the rest follows
 		if bool((h as Dictionary)["before"]):
 			var prev: Variant = by_index.get(k - 1)
+			own = prev if k > 0 else null
 			if k == 0:
 				t = 0.0
 			elif prev != null and cur != null:
@@ -68,7 +76,14 @@ static func chunk(pcm: PackedFloat32Array, holds: Array, spans: Array, ratio: fl
 				t = float(cur.get("rest", (float(cur["t1"]) + float(nxt["t0"])) * 0.5))
 			else:
 				t = float(nxt["t0"])
-		cuts.append({"t": t, "add": float((h as Dictionary)["sec"])})
+		var add := float((h as Dictionary)["sec"])
+		if own != null:
+			var w := int(own.get("index", -1))
+			var have := clampf(float(own.get("rested", 0.0)) - float(spent.get(w, 0.0)), 0.0, add)
+			spent[w] = float(spent.get(w, 0.0)) + have
+			add -= have
+		if add > 0.0:
+			cuts.append({"t": t, "add": add})
 	cuts.sort_custom(func(a, b): return float(a["t"]) < float(b["t"]))
 	var out := PackedFloat32Array()
 	var from := 0

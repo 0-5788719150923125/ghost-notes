@@ -12,6 +12,11 @@ class_name LikenessPlan
 ## read smoothly between the survey's looks, scaled to a calm size ([constant CALM] of their own, at most
 ## [constant MOST]) and livelier while the voice speaks; and kept LEVEL, taking back most of the body's tilt.
 ##
+## THEIR FACE MOVES ON ITS OWN ([method face], 2026-10-24, the user on the head of splats: "when the actor is not
+## talking - the face is not moving at all"): their brows, lids, cheeks and the mouth's corners as they moved at
+## the same looks as the head's piece (`motion.json`'s `face`: the slow part of those scores, along its few ways
+## of moving), at the head's calm and livelier while the voice speaks - a head of splats plays it.
+##
 ## THE BODY HOLDS A POSTURE AND SHIFTS IT ([method posture], the fourth pass, 2026-10-22, the user: "it is
 ## just rocking around constantly ... I would have expected a more relaxed, neutral posture - and one that
 ## isn't frozen in-place, rocking weirdly back and forth"): the quick part of their shoulders' motion is
@@ -36,7 +41,8 @@ class_name LikenessPlan
 ## LikenessFace.articulation]), drawn as the two library mouths nearest it - or the still's own - the
 ## farther less the third, so none pops. Without one, the voice's phones pulling ([Visemes.pulls]), the
 ## two strongest less the third ([Visemes.strongest]), each as one of its class's prototypes - which one
-## drawn from the seed and the phone. Silence is the still's own mouth.
+## drawn from the seed and the phone. Silence is the still's own mouth. A head of splats mixes every pull,
+## smoothed ([method mouth_mix]).
 
 ## THE LEARNED MOUTH IS DRAWN FROM only when, on the video it never saw, it explains at least this share of
 ## their mouth and this much more than each sound's mean mouth does (2026-10-22, his footage: 2.5% - his
@@ -55,6 +61,8 @@ const CALM := 0.6
 const MOST := [5.0, 4.0, 3.0, 0.05, 0.04, 0.03, 2.5]
 ## While they are silent the head moves at this share of what it does while they speak.
 const QUIET := 0.55
+## Their face's own motion never goes past this many of a way's spread (eased).
+const FACE_MOST := 2.5
 ## THE POSTURE: each axis (across, down, nearer, tilt) at this share of their own range - the tilt least, a
 ## seated body leans aside little; a posture held about this many of their own holding times (a gamma of
 ## shape 2), shifted from over this many seconds, keeping this much of the last; and the sway under it, a
@@ -105,6 +113,13 @@ const GLANCES := {"look_down": 0.35, "look_left": 0.25, "look_right": 0.25, "loo
 var seed_value := 1
 var rate := 5.0
 var runs: Array = []          # [PackedFloat32Array of rows * axes] per run
+## THEIR FACE'S OWN MOTION: the scores it moves (MediaPipe's names), its ways of moving (each a direction over
+## those scores), each way's spread, and each run's rows of how far along each way the face is - none when their
+## motion is from before it was learned.
+var face_names := PackedStringArray()
+var face_basis: Array = []    # [PackedFloat32Array over face_names] per way
+var _face_sd := PackedFloat32Array()
+var _face_runs: Array = []    # [PackedFloat32Array of rows * ways] per run
 var lengths := PackedInt32Array()
 var axes := 6
 var blinks_per_min := 16.0
@@ -171,6 +186,18 @@ func setup(motion_path: String, library: LikenessFace, seed_in: int) -> String:
 		_posture_sd.append((float(sd[a]) if a < sd.size() else 0.0) * float(POSTURE_CALM[a]))
 	_posture_mix = cholesky(po.get("corr", []) if po.get("corr") is Array else [], 4)
 	axes = clampi((d.get("axes", []) as Array).size(), 6, MOST.size()) if d.get("axes") is Array else 6
+	face_names = PackedStringArray()
+	face_basis = []
+	_face_sd = PackedFloat32Array()
+	_face_runs = []
+	var fc: Dictionary = d["face"] if d.get("face") is Dictionary else {}
+	for n in fc.get("names", []):
+		face_names.append(String(n))
+	for b in fc.get("basis", []):
+		face_basis.append(PackedFloat32Array(b))
+	for x in fc.get("sd", []):
+		_face_sd.append(float(x))
+	var ways := face_basis.size() if _face_sd.size() == face_basis.size() else 0
 	for r in d.get("runs", []):
 		var rows: Array = (r as Dictionary).get("rows", [])
 		if rows.size() < int(ceil(PIECE[0] * rate + BLEND * rate)) + 4:
@@ -182,6 +209,17 @@ func setup(motion_path: String, library: LikenessFace, seed_in: int) -> String:
 		runs.append(flat)
 		lengths.append(rows.size())
 		_total_rows += rows.size()
+		var face_rows: Array = (r as Dictionary).get("face", [])
+		if face_rows.size() != rows.size():
+			ways = 0
+		var faces := PackedFloat32Array()
+		for row in face_rows:
+			for i in ways:
+				faces.append(float(row[i]) if i < (row as Array).size() else 0.0)
+		_face_runs.append(faces)
+	if ways == 0:
+		face_basis = []
+		_face_runs = []
 	reset()
 	return "" if not runs.is_empty() else "their motion has no run long enough"
 
@@ -236,21 +274,39 @@ func _grow(until: float) -> void:
 ## A piece's motion at show time [param t]: its rows read between looks (Catmull-Rom). The rows are the
 ## quick part of their motion, round nothing, so a piece goes on from another through the blend alone.
 func _sample(p: Dictionary, t: float) -> PackedFloat32Array:
-	var flat: PackedFloat32Array = runs[int(p["run"])]
+	return _read(runs[int(p["run"])], axes, p, t)
+
+
+## [param flat] (a run's rows of [param width]) at show time [param t] in piece [param p], read between looks.
+func _read(flat: PackedFloat32Array, width: int, p: Dictionary, t: float) -> PackedFloat32Array:
 	var n := lengths[int(p["run"])]
 	var u := float(p["at"]) + (t - float(p["t0"])) * rate
 	var i := clampi(int(floor(u)), 1, n - 3)
 	var f := clampf(u - float(i), 0.0, 1.0)
 	var out := PackedFloat32Array()
-	out.resize(axes)
-	for a in axes:
-		var p0 := flat[(i - 1) * axes + a]
-		var p1 := flat[i * axes + a]
-		var p2 := flat[(i + 1) * axes + a]
-		var p3 := flat[(i + 2) * axes + a]
+	out.resize(width)
+	for a in width:
+		var p0 := flat[(i - 1) * width + a]
+		var p1 := flat[i * width + a]
+		var p2 := flat[(i + 1) * width + a]
+		var p3 := flat[(i + 2) * width + a]
 		out[a] = 0.5 * (2.0 * p1 + (p2 - p0) * f + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * f * f
 			+ (3.0 * p1 - p0 - 3.0 * p2 + p3) * f * f * f)
 	return out
+
+
+## The piece playing at show time [param t] (grown that far).
+func _piece_at(t: float) -> int:
+	_grow(t + 1.0)
+	var lo := 0
+	var hi := _pieces.size() - 1
+	while lo < hi:
+		var mid := (lo + hi + 1) >> 1
+		if float(_pieces[mid]["t0"]) <= t:
+			lo = mid
+		else:
+			hi = mid - 1
+	return lo
 
 
 ## THEIR MOTION AT SHOW TIME [param t]: the head's yaw, pitch and roll against the shoulders (degrees) -
@@ -265,15 +321,7 @@ func motion(t: float) -> PackedFloat32Array:
 	var body := posture(t)
 	for a in 4:
 		out[3 + a] = body[a]
-	_grow(t + 1.0)
-	var lo := 0
-	var hi := _pieces.size() - 1
-	while lo < hi:
-		var mid := (lo + hi + 1) >> 1
-		if float(_pieces[mid]["t0"]) <= t:
-			lo = mid
-		else:
-			hi = mid - 1
+	var lo := _piece_at(t)
 	var here := _sample(_pieces[lo], t)
 	# going into the next piece: the two mixed, eased
 	if lo + 1 < _pieces.size() and t > float(_pieces[lo + 1]["t0"]):
@@ -286,6 +334,30 @@ func motion(t: float) -> PackedFloat32Array:
 		var most := float(MOST[a])
 		out[a] = most * tanh(here[a] * CALM * lively / most)
 	out[2] -= LEVEL * out[6]
+	return out
+
+
+## THEIR FACE'S OWN MOTION AT SHOW TIME [param t]: how far along each of its ways ([member face_basis]) their face
+## is, read from the piece the head's [method motion] reads at the same moment - so their head and face move as
+## they moved together - at [constant CALM] of their own, livelier while the voice speaks, never past [constant
+## FACE_MOST] of a way's spread (eased). Empty when their motion has no face.
+func face(t: float) -> PackedFloat32Array:
+	var ways := face_basis.size()
+	var out := PackedFloat32Array()
+	out.resize(ways)
+	if ways == 0 or runs.is_empty():
+		return out
+	var lo := _piece_at(t)
+	var here := _read(_face_runs[int(_pieces[lo]["run"])], ways, _pieces[lo], t)
+	if lo + 1 < _pieces.size() and t > float(_pieces[lo + 1]["t0"]):
+		var k := smoothstep(0.0, 1.0, (t - float(_pieces[lo + 1]["t0"])) / BLEND)
+		var nxt := _read(_face_runs[int(_pieces[lo + 1]["run"])], ways, _pieces[lo + 1], t)
+		for a in ways:
+			here[a] = lerpf(here[a], nxt[a], k)
+	var lively := lerpf(QUIET, 1.0, speaking(t))
+	for a in ways:
+		var most := FACE_MOST * maxf(_face_sd[a], 1e-4)
+		out[a] = most * tanh(here[a] * CALM * lively / most)
 	return out
 
 
@@ -734,11 +806,11 @@ func mouth(t: float) -> Array:
 	return out
 
 
-## THE SOUNDS PULLING AT THE MOUTH AT [param t]: `[[_, class, weight]]`, the two strongest less the third
-## ([method Visemes.strongest]) - what the 2D mouth draws from the library, and a head of splats from each
-## sound's scores.
-func pulls(t: float) -> Array:
-	return Visemes.strongest(t, line, _line_from(t))
+## THE SOUNDS SHAPING A HEAD OF SPLATS' MOUTH AT [param t]: `{class: share}`, every pull's share, smoothed
+## ([method Visemes.mix]) - its faces mix any number, where the 2D mouth draws two library pictures
+## ([method mouth]).
+func mouth_mix(t: float) -> Dictionary:
+	return Visemes.mix(t, line, _line_from(t))
 
 
 ## One of [param images], drawn from the seed and [param key].

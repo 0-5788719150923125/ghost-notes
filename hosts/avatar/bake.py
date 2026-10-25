@@ -28,6 +28,18 @@ its surface, how it moves, the inside of the mouth. WHAT IS THE SET'S IS FITTED 
 - ITS BODY: train.initial's, laid on its bones, learned and grown here - and fitted to the still after (fit.py).
 Then the head is baked as the set's video looks (`HeadSplats.baked`), and the whole of them is written as
 train.py writes an avatar: what fit.py fits, and what Godot reads.
+
+NO SPECKS (2026-10-24, the user: "heavy black dots speckled throughout the actor's beard. They move and shift in a
+very much 3D manner"): grown freely on a set's 146 moments - glasses in 11, a globe, bottles, boxes and a broom held
+before the face in some 25, the black collar between the beard's strands - the head went from 55k splats to 346k, 13k
+of them under half a pixel, wholly opaque and dark, each drawn as a dot (the shared head held one), bound to the head
+and face so they turned with it; grown or not, the face held the same 21.6 dB on the moments it never saw. So the
+head grows to at most HEAD_GROWTH of its own, never copies a splat already under LEAST_COPY pixels, and before it is
+baked a splat under SPECK_SIZE pixels darker than SPECK_DARK of the face drawn round it (without such splats) in most of
+SPECK_MOMENTS moments is dropped (`specks`) - relative, so dark hair keeps its splats. (The moments with glasses or
+something held before the face are still learned from: the warm head draws them worst, but left out - the 13 of 146
+drawn more than two spreads past the median - the set's face came out no better, 21.50 dB on the moments it never saw
+against 21.67, with more specks.)
 """
 
 from __future__ import annotations
@@ -53,8 +65,16 @@ ADAPTS = ("place", "log_scale", "turn", "colour", "cover")
 ADAPT_PULL = 0.05
 # The share of the pull a splat far from the face's surface, or on the head, takes - and every colour.
 FREE_PULL = 0.1
-# The head's splats at most, here.
+# The head's splats at most, here: this many times the head's own, never past HEAD_MOST; no copy of a head splat under
+# LEAST_COPY pixels.
+HEAD_GROWTH = 3.0
 HEAD_MOST = 500000
+LEAST_COPY = 1.0
+# A SPECK: a head splat under SPECK_SIZE pixels darker than SPECK_DARK of the face drawn round it (a 9-pixel square's
+# mean) in most of SPECK_MOMENTS of the set's moments.
+SPECK_SIZE = 1.0
+SPECK_DARK = 0.6
+SPECK_MOMENTS = 8
 # The body's splats at most, here (fit.py may grow them further).
 BODY_MOST = 240000
 
@@ -125,6 +145,46 @@ def render(head, code, body, rig, data, scene, i: int, wx: int, wy: int, w: int,
     image, cover = raster.rasterize(shifted, conics, colours, covers, depth, radii, h, w,
                                     scene.behind(i, wx, wy, w, h, learned))
     return image, cover, means2d, radii, unit
+
+
+def lum(x):
+    return 0.299 * x[..., 0] + 0.587 * x[..., 1] + 0.114 * x[..., 2]
+
+
+def specks(head, code, body, rig, data, scene, moments):
+    """THE HEAD'S SPECKS (NO SPECKS): which of its splats, at each of [param moments], is under SPECK_SIZE pixels and
+    darker than SPECK_DARK of the frame drawn round it without such splats - those that are in most moments they are
+    drawn in."""
+    import torch
+    import raster
+    votes = torch.zeros(len(head), device=head.bind.device)
+    shown = torch.zeros(len(head), device=head.bind.device)
+    with torch.no_grad():
+        for i in moments:
+            i = int(i)
+            origin, axes, unit, _v = rig.frames(data, i)
+            expr = data.expr[i]
+            hm, hs, ht = head.world(origin, axes, unit, expr, code)
+            size = (unit[head.bind][:, None] * torch.exp(head.p["log_scale"])).max(-1).values
+            small = size < SPECK_SIZE
+            keep = ~small
+            bm, bs, bt = body.world(origin, axes, unit)
+            means2d, conics, depth, radii = raster.project(torch.cat([hm[keep], bm]), torch.cat([hs[keep], bs]),
+                                                           torch.cat([ht[keep], bt]))
+            hc = head.colours(expr, code)
+            colours = torch.cat([hc[keep], body.colours()])
+            covers = torch.cat([head.covers()[keep], body.covers(data.bone_seen[i])])
+            image, _c = raster.rasterize(means2d, conics, colours, covers, depth, radii, data.H, data.W,
+                                         scene.behind(i, 0, 0, data.W, data.H, False))
+            round_it = torch.nn.functional.avg_pool2d(lum(image)[None, None], 9, 1, 4)[0, 0]
+            at = raster.project(hm[small], hs[small], ht[small])[0].round().long()
+            inside = (at[:, 0] >= 0) & (at[:, 0] < data.W) & (at[:, 1] >= 0) & (at[:, 1] < data.H)
+            which = small.nonzero().squeeze(1)[inside]
+            at = at[inside]
+            dark = lum(hc[which]) < SPECK_DARK * round_it[at[:, 1], at[:, 0]]
+            votes[which] += dark.float()
+            shown[which] += 1.0
+    return (shown > 0) & (votes > 0.5 * shown)
 
 
 def whole(head_baked, body, k: int):
@@ -199,6 +259,7 @@ def main() -> int:
         return (w.reshape((-1,) + (1,) * (head.p[name].dim() - 1)) * (head.p[name] - head.held_at[name]) ** 2).mean()
     steps = int(spec.get("steps", 2000))
     until = train.until_of(steps)
+    head_most = min(HEAD_MOST, int(HEAD_GROWTH * len(head)))
     say("%d moments, %d held out; the head's %d splats as video %d looks, a body of %d to start; %d steps"
         % (len(data.train), len(data.held), len(head), v, len(body), steps))
     rng = np.random.default_rng(0)
@@ -237,11 +298,13 @@ def main() -> int:
                 free = there[:nh] & (head.weight <= FREE_PULL)
                 head.pull[free] += g[:nh][free]
                 head.seen[free] += 1.0
+        head.decay(step / steps)
+        body.decay(step / steps)
         for opt in (head.opt, body.opt, scene.opt, code_opt):
             opt.step()
         if train.DENSIFY_FROM <= step < until and step % train.DENSIFY_EVERY == 0:
             body.densify(unit, BODY_MOST)
-            head.densify(unit, HEAD_MOST)
+            head.densify(unit, head_most, least=LEAST_COPY)
         if step % train.OPACITY_RESET == 0 and step < until:
             body.reset_cover()
         if step > until and step % train.PRUNE_EVERY == 0:
@@ -252,6 +315,11 @@ def main() -> int:
                 % (step, l1.item(), cov.item(), len(body), float((code.detach() - torch.tensor(start, device=dev)).norm()),
                    time.time() - t0))
     head.prune()
+    picked = data.train[np.linspace(0, len(data.train) - 1, min(SPECK_MOMENTS, len(data.train))).astype(int)]
+    gone = specks(head, code.detach(), body, rig, data, scene, picked)
+    if bool(gone.any()):
+        head._replace(~gone, {})
+    say("%d specks dropped from the head (splats under %g px darker than the face round them)" % (int(gone.sum()), SPECK_SIZE))
     k = int(head.p["place_d"].shape[1])
     baked = head.baked(code.detach())
     splats = whole(baked, body, k)

@@ -106,7 +106,7 @@ FOLDERS: List[Tuple[str, str, str]] = [
         "Drawing",
         "How things get drawn and how a heavy scene stays interactive: thousands of shapes "
         "in one draw call, geometry built off the main thread, the lens, planes and meshes "
-        "of the software 3D path, and color.",
+        "of the software 3D path, color, and how soft a light's shadow is.",
     ),
     (
         "motion",

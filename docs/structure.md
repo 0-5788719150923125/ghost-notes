@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 392 references inside a folder, 857 down the stack, 0 up it.
+Between scripts today: 393 references inside a folder, 863 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -15,9 +15,9 @@ Between scripts today: 392 references inside a folder, 857 down the stack, 0 up 
 | `masking/` | Masking | 15 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
 | `likeness/` | Likeness | 12 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
 | `proof/` | Proof | 6 | `desk`, `table`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
-| `desk/` | The desk | 5 | `table`, `media`, `scene_kit`, `data` |
+| `desk/` | The desk | 5 | `table`, `media`, `scene_kit`, `render`, `data` |
 | `cards/` | Cards | 10 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `geometry`, `audio`, `platform`, `data` |
-| `table/` | The set | 23 | `media`, `scene_kit`, `geometry`, `audio`, `data` |
+| `table/` | The set | 23 | `media`, `scene_kit`, `geometry`, `render`, `audio`, `data` |
 | `reading/` | The voice's workspaces | 12 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
 | `export/` | Export | 4 | `show`, `voice`, `ui`, `notes`, `agents`, `stage`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
@@ -32,7 +32,7 @@ Between scripts today: 392 references inside a folder, 857 down the stack, 0 up 
 | `scene_kit/` | Scene substrate | 7 | `geometry`, `motion`, `render`, `audio` |
 | `geometry/` | Generative form | 12 | `motion`, `render` |
 | `motion/` | Motion & simulation | 13 | `render`, `audio` |
-| `render/` | Drawing | 7 | nothing |
+| `render/` | Drawing | 8 | nothing |
 | `audio/` | Audio & analysis | 7 | `platform` |
 | `platform/` | The machine | 9 | `data` |
 | `data/` | Plain data | 7 | nothing |
@@ -59,9 +59,9 @@ From a song file to the typed per-frame `AudioFeatures` every scene consumes - l
 
 ### `render/` - Drawing
 
-How things get drawn and how a heavy scene stays interactive: thousands of shapes in one draw call, geometry built off the main thread, the lens, planes and meshes of the software 3D path, and color.
+How things get drawn and how a heavy scene stays interactive: thousands of shapes in one draw call, geometry built off the main thread, the lens, planes and meshes of the software 3D path, color, and how soft a light's shadow is.
 
-[`frame_forge`](../src/render/frame_forge.gd), [`lens3d`](../src/render/lens3d.gd), [`mesh3d`](../src/render/mesh3d.gd), [`palette`](../src/render/palette.gd), [`plane3d`](../src/render/plane3d.gd), [`scheme`](../src/render/scheme.gd), [`tri_batch`](../src/render/tri_batch.gd)
+[`frame_forge`](../src/render/frame_forge.gd), [`lens3d`](../src/render/lens3d.gd), [`mesh3d`](../src/render/mesh3d.gd), [`palette`](../src/render/palette.gd), [`plane3d`](../src/render/plane3d.gd), [`scheme`](../src/render/scheme.gd), [`shadow_filter`](../src/render/shadow_filter.gd), [`tri_batch`](../src/render/tri_batch.gd)
 
 ### `motion/` - Motion & simulation
 

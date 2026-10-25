@@ -1,5 +1,5 @@
 {
-	"digest": "750198da0b8b010248f56c5461a634beb3f77cb5ae5353bab745860ae92dc7e2",
+	"digest": "51fef82fafccc5d8623a782aeaca601dab6a0e66f71a5fa4ca50b5ac70f85887",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -148,6 +148,7 @@
 		"res://src/render/palette.gd",
 		"res://src/render/plane3d.gd",
 		"res://src/render/scheme.gd",
+		"res://src/render/shadow_filter.gd",
 		"res://src/render/tri_batch.gd",
 		"res://src/scene_kit/ghost_scene.gd",
 		"res://src/scene_kit/layer.gd",
