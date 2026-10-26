@@ -19,9 +19,8 @@ class_name SplatHead
 ## shader the expression a frame shows.
 ##
 ## THE BODY BENDS (hosts/avatar/train.py's `second_of`): a body splat may take a second bone's move, or the still's
-## own, in a share; [method pose_bones] hands the shader every bone's move, which it blends by. AND THE NECK STRETCHES:
-## a head splat below the chin takes a share of the torso's move from where it stood in the still - the still's
-## frames, written once by [method hold_still] after the moment's own.
+## own, in a share; [method pose_bones] hands the shader every bone's move, which it blends by. A head splat takes
+## none: the beard and the neck ride the head, as they were learned.
 ##
 ## DRAWN IN ORDER, NEVER SORTED: the camera is far and fixed and the head turns a little, so the order the
 ## export wrote them in - back to front as the neutral face stands straight on - stays right, and the canvas's
@@ -181,8 +180,7 @@ func _build(texels: PackedFloat32Array, width: int, per: int) -> void:
 	var splat_tex := ImageTexture.create_from_image(
 		Image.create_from_data(width, rows, false, Image.FORMAT_RGBAF, texels.to_byte_array()))
 	var n_frames := tris.size() / 3 + 1 + bones
-	# the moment's frames, then the still's ([method hold_still])
-	var frame_rows := int(ceil(float(2 * n_frames * 4) / TEX_W))
+	var frame_rows := int(ceil(float(n_frames * 4) / TEX_W))
 	_frames.resize(frame_rows * TEX_W * 4)
 	_frames_img = Image.create_from_data(TEX_W, frame_rows, false, Image.FORMAT_RGBAF, _frames.to_byte_array())
 	_frames_tex = ImageTexture.create_from_image(_frames_img)
@@ -195,7 +193,6 @@ func _build(texels: PackedFloat32Array, width: int, per: int) -> void:
 	_mat.set_shader_parameter("per_splat", per)
 	_mat.set_shader_parameter("expressions", mini(expressions, MOST_EXPRESSIONS))
 	_mat.set_shader_parameter("triangles", tris.size() / 3)
-	_mat.set_shader_parameter("frames", n_frames)
 	_mat.set_shader_parameter("moves", _moves_of([]))
 	var k := float(size) / float(crop[2])
 	_mat.set_shader_parameter("low_pass", 0.3 / (k * k))
@@ -251,10 +248,9 @@ func face_of(blend: PackedFloat32Array) -> PackedFloat32Array:
 
 ## THE FACE [param v] (already moved: [method face_of]) at [param scale], [param rot] and [param shift], then
 ## carried by [param torso] (a 2D transform of the picture: the body's posture, which the head rides on) - its
-## triangles' frames and the head's written from frame [param at] (the still's: [method hold_still]), for
-## [method upload].
+## triangles' frames and the head's written, for [method upload].
 func pose_face(v: PackedFloat32Array, scale: float, rot: Basis, shift: Vector3,
-		torso := Transform2D.IDENTITY, at := 0) -> void:
+		torso := Transform2D.IDENTITY) -> void:
 	if splats == 0:
 		return
 	var n := verts * 3
@@ -273,17 +269,10 @@ func pose_face(v: PackedFloat32Array, scale: float, rot: Basis, shift: Vector3,
 		var nn := (b - a).cross(c - a).normalized()
 		var e2 := nn.cross(e1)
 		var unit := ((b - a).length() + (c - b).length() + (a - c).length()) / 3.0
-		_put_frame(at + t, (a + b + c) / 3.0, unit, e1, e2, nn)
+		_put_frame(t, (a + b + c) / 3.0, unit, e1, e2, nn)
 	var k := sqrt(absf(torso.determinant()))
-	_put_frame(at + t_n, _carried(torso, shift), scale * head_unit * k, _turned(torso, rot.x), _turned(torso, rot.y),
+	_put_frame(t_n, _carried(torso, shift), scale * head_unit * k, _turned(torso, rot.x), _turned(torso, rot.y),
 		_turned(torso, rot.z))
-
-
-## THE STILL'S FRAMES: the face [param v] posed as the still holds it ([param scale], [param rot], [param shift]),
-## written after the moment's own - where a head splat that takes the torso's move stood (the neck: train.py's
-## `second_of`). Once a load; [method upload] hands them over with the moment's.
-func hold_still(v: PackedFloat32Array, scale: float, rot: Basis, shift: Vector3) -> void:
-	pose_face(v, scale, rot, shift, Transform2D.IDENTITY, tris.size() / 3 + 1 + bones)
 
 
 ## THE BODY'S BONES: each [param origins][b], its axes [param axes][b] (as columns) and its unit [param units][b]

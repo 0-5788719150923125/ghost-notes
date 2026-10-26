@@ -323,6 +323,7 @@ func load_set(dir: String, sid: String, still: int, seed_in: int, renderer := "2
 		if not e3.is_empty():
 			return e3
 		_loaded = made
+	_plan.size_for(splats)
 	var err2 := _plan.setup(dir.path_join("motion.json"), _face, seed_in)
 	if not err2.is_empty():
 		return "The actor is not ready: %s. Generate on the Actor card makes it." % err2
@@ -391,8 +392,6 @@ func _load_splat(sd: String, dir: String, k: int) -> String:
 		return "The actor's set is from before their own mouths: Generate on the Actor card makes it again."
 	_still_face = _splat.face_of(_still_scores)
 	_still_expr = _splat.expr_of(_still_scores)
-	# where the neck's splats stood: the still's frames, from which they take the torso's move
-	_splat.hold_still(_still_face, _still_scale, _still_rot, _still_shift)
 	var own := own_mouths(_splat, rest_mouth(_still_scores, v), mouths, _push, top_of(v))
 	_class_faces = own["faces"]
 	_class_exprs = own["exprs"]

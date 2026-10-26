@@ -1068,6 +1068,15 @@ EDGE = 15
 # How far from their matte a thing before them may reach, and how far past what passed it is grown (pixels).
 NEAR = 60
 FRONT_GROW = 6
+# A THING BEFORE THEM HAS AN OUTLINE OF ITS OWN (2026-10-25, the user: the actor is "especially messy at the neck and
+# around the beard"): a plain region passes as never moving whatever it is - a black t-shirt on a dark wall, a dark
+# sweater's knit at half size - and pieces of their own clothes were drawn before them, frozen over the body as it moved
+# and cutting the beard as the head turned. So a piece is kept only where at least OUTLINE_SHARE of the band round its
+# edge (from 4 pixels outside it to 12 in) is a strong edge in the still - past OUTLINE_EDGE (a 3x3 Sobel of its grey,
+# 0..255). On his four sets: a microphone's and a shock mount's 0.10 to 0.45, the t-shirt's and the sweater's pieces
+# 0.00 to 0.06. (A microphone joined to a black shirt in one piece goes with it, and moves a little with them.)
+OUTLINE_EDGE = 60.0
+OUTLINE_SHARE = 0.08
 # THE PLATE IS TRUSTED where a quarter of the frames saw the room - a median that outvotes the frames that
 # were their own shape the segmentation missed, or the globe they held up a while - or where at least
 # TRUSTED_FRAMES saw it and AGREE: AGREEING of them within AGREE levels of their median. Elsewhere it is
@@ -1240,6 +1249,24 @@ def patch_alike(gray, still_gray):
     return ((ncc > ALIKE) & (vb > PLAIN)).astype(np.float64)
 
 
+def outlined(before, still_rgb):
+    """The pieces of [before] (uint8, 1 where something stands before them) with AN OUTLINE OF THEIR OWN in the still: at
+    least [OUTLINE_SHARE] of the band round each piece's edge a strong edge ([OUTLINE_EDGE]). The rest are a plain
+    region of them, still only for being plain."""
+    import cv2
+    import numpy as np
+    gray = cv2.cvtColor(still_rgb, cv2.COLOR_RGB2GRAY).astype(np.float32)
+    strong = np.hypot(cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3), cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)) > OUTLINE_EDGE
+    count, parts = cv2.connectedComponents(before, connectivity=8)
+    out = np.zeros_like(before)
+    for c in range(1, count):
+        piece = (parts == c).astype(np.uint8)
+        band = (cv2.dilate(piece, np.ones((9, 9), np.uint8)) > 0) & (cv2.erode(piece, np.ones((25, 25), np.uint8)) == 0)
+        if strong[band].mean() >= OUTLINE_SHARE:
+            out[parts == c] = 1
+    return out
+
+
 def still_room(still_rgb, matte, plate, trusted, judged, there, head=None):
     """ONE STILL'S LAYERS: its matte with what never moves taken out - the room, where it is not before them -
     and what stands BEFORE them (`front`, 0..1: drawn over them, never moving), their picture with the
@@ -1268,6 +1295,7 @@ def still_room(still_rgb, matte, plate, trusted, judged, there, head=None):
             before[parts == c] = 0
     # (grown past what passed: its lit rim, an edge at half size, was left in them and moved with them)
     before = cv2.dilate(before, np.ones((2 * FRONT_GROW + 1, 2 * FRONT_GROW + 1), np.uint8)) & near.astype(np.uint8)
+    before = outlined(before, still_rgb)
     # (their edge where the front is not: a hole the segmentation left for the microphone is no edge of them)
     whole = them | cv2.dilate(before, np.ones((2 * EDGE + 1, 2 * EDGE + 1), np.uint8))
     edge = cv2.erode(whole, np.ones((2 * EDGE + 1, 2 * EDGE + 1), np.uint8)) == 0

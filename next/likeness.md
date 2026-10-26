@@ -8,7 +8,68 @@ The first build's files are backed up in `dist/likeness_v1/` (they were never co
 **The sixth pass (2026-10-25): the mouth, the flicker and the edges** - below the seventh.
 **The seventh pass (2026-10-25, evening): the needles** - below the eighth.
 **The eighth pass (2026-10-25, night): the soft mouth and the neck, from the literature** - below the next.
-**Three alike videos, and is the approach convoluted? (2026-10-25, late)** - right below.
+**Three alike videos, and is the approach convoluted? (2026-10-25, late)** - below the next.
+**The ninth pass (2026-10-25, late night): a head that turns, a beard that stays on it** - right below.
+
+## The ninth pass: a head that turns, a beard that stays on it (2026-10-25, late night)
+
+**The user, on the set of the three alike videos:** "the new video is somewhat better I guess, but I still hate the fact
+that the actor doesn't feel truly 3D. It just feels like we're morphing/warping at edges, and it's especially messy at the
+neck and around the beard. If we were going to take some next steps here, what would you suggest?"
+
+### Measured (`dist/third_d/`, `dist/ceiling/`)
+
+- **The head is 3D; it is not played as one.** The head turned in the trainer by 6 to 18 degrees of yaw and 8 of pitch
+  holds as a head - face, hair, ponytail and beard (`turn.py`, `order.py`); drawn in Godot's one order (the still's,
+  never sorted) it is within 39 to 48 dB of the same turn sorted, under half a percent a pixel. But the plan plays their
+  head at `CALM` 0.6 of their own, 0.55 of that while silent, eased under `MOST` 5, 4 and 3 degrees - sizes for a still
+  bent by the motion. Over a take (`warp.py`, `follows.py`: the flow less the head's rigid motion), the head moved against
+  the body in 38 of 359 frame pairs, by 1.6 px; in 12 seconds of his own footage, in 272, by 3.9. Under his lips the take
+  moved 0.3 px a frame against the head, his own beard 2.1 (`bob.py`).
+- **The beard's lower half followed the torso** (0.93 of its motion, none of the head's): the eighth pass's neck stretch
+  gave every head splat a quarter face below the chin the torso's move - 34,861 of the set's - and no step that learned
+  them (the head, the bake, Fit's moments) ever drew them so. Played, a translucent blue-grey veil hung from the beard over
+  the collar as the head moved (`AB_beard.jpg`: as built above, riding the head below).
+- **What stands before them was his sweater.** This set's `front_K.png` held five pieces of the dark knit (one at the
+  collar's fold by the beard) and missed the microphone, which stands beside him. Over his four sets, the share of a
+  piece's rim that is a strong edge in the still: the microphone and its shock mount 0.10 to 0.45, the black t-shirt's and
+  the sweater's pieces 0.00 to 0.06 (`fronts.jpg`).
+- **The ceiling** (`ceiling.py`: the head frozen, each moment's expression codes, then its pose and points too, fitted to
+  the picture in its own light): on unseen moments 24.5 dB tracked, 23.3 played, 25.1 with the codes fitted, 25.6 with
+  everything - and on moments it learned from only 1.2 dB more (26.4). The head is the limit, and it underfits: it
+  scarcely draws even what it was taught. Three videos or ten score alike; the three hold twice the fine detail (0.16 to
+  0.21 of the frame's against 0.09 to 0.11).
+
+### Fixed
+
+- **A HEAD OF SPLATS TURNS AS THEY DO** (`LikenessPlan.size_for`, `SPLAT_CALM` 1, `SPLAT_MOST` 12, 9 and 6 degrees -
+  their own 95th percentile is 6, 5 and 3); the 2D renderer keeps its calm.
+- **THE HEAD RIDES THE HEAD** (`train.second_of`): no head splat takes the torso's move; the shader's second influence is
+  a body splat's alone, and `SplatHead.hold_still` and the still's frames are gone. Gates: test_fit
+  (`the_head_rides_the_head`), splat_head_check (a head splat written a share draws as with none).
+- **A THING BEFORE THEM HAS AN OUTLINE OF ITS OWN** (`actor.outlined`, OUTLINE_EDGE, OUTLINE_SHARE): a piece is kept only
+  where 8% of its rim is a strong edge. The t-shirt set's left microphone is one piece with the shirt and goes with it.
+  Gate: test_actor (`test_front_outlined`).
+
+Drawn by Godot over the take, left to right - as the user saw it, with their own motion, and the beard riding the head:
+`dist/third_d/now_motion_beard.mp4`.
+
+### What is made again
+
+Stills (version 4) and everything after it for each set: At rest, Rig, Frames, Face rig, Avatar, Fit (version 5).
+
+### Open
+
+- **The t-shirt set's neck** (set-2cacf4ef): its bare neck's skin rides the head now, and the specks the eighth pass
+  stretched away (black shirt splats unseen in the still, uncovered as it turns) may show again there. Telling skin that
+  stretches from hair that hangs needs the moments' say (a share learned in Fit) - but his tracked torso jumps 20 px every
+  half second, too loose to learn against.
+- **The jaw scarcely moves** (0.3 px a frame under the lips against 2.1 in his footage): MediaPipe sees no chin under his
+  beard, so the rig learned a jaw that barely drops; driven by the lips' parting it could.
+- **The head underfits** (the ceiling): first a head of one session trained far longer, to see whether its own frames
+  climb past 26 dB - the budget - or not - the representation.
+- **The body is the still bent in 2D** by its bones, by design.
+- A picture frame's edge on the wall by his head is a front piece in three of set-6f0cbf09's stills (outlined, so kept).
 
 ## Three alike videos, and is the approach convoluted? (2026-10-25, late)
 

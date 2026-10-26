@@ -10,7 +10,8 @@ class_name LikenessPlan
 ## out, where they face the camera - the head's turn against the shoulders), played in pieces drawn from the
 ## seed, each going into the next over [constant BLEND] seconds - the numbers mixed, so there is no cut -
 ## read smoothly between the survey's looks, scaled to a calm size ([constant CALM] of their own, at most
-## [constant MOST]) and livelier while the voice speaks; and kept LEVEL, taking back most of the body's tilt.
+## [constant MOST]; a head of splats their own, [method size_for]) and livelier while the voice speaks; and kept
+## LEVEL, taking back most of the body's tilt.
 ##
 ## THEIR FACE MOVES ON ITS OWN ([method face], 2026-10-24, the user on the head of splats: "when the actor is not
 ## talking - the face is not moving at all"): their brows, lids, cheeks and the mouth's corners as they moved at
@@ -59,6 +60,16 @@ const PIECE := [4.0, 9.0]
 ## still bent by it should move less.
 const CALM := 0.6
 const MOST := [5.0, 4.0, 3.0, 0.05, 0.04, 0.03, 2.5]
+## A HEAD OF SPLATS TURNS AS THEY DO (2026-10-25, the user: "the actor doesn't feel truly 3D. It just feels like we're
+## morphing/warping at edges"): a head of splats is a head, not a still bent - turned 18 degrees in the trainer it holds,
+## and drawn in the still's order it is within half a percent of one sorted - so its head takes their own motion, at
+## most these degrees of yaw, pitch and roll (their own 95th percentile: 6, 5 and 3). At [constant CALM] and [constant
+## MOST] the head turned against the body in 38 of a take's 359 frames, by 1.6 px; in their own footage, in 272, by 3.9.
+const SPLAT_CALM := 1.0
+const SPLAT_MOST := [12.0, 9.0, 6.0]
+## The head's motion as it is played ([method size_for]): [constant CALM] and [constant MOST], or a head of splats'.
+var head_calm := CALM
+var head_most: Array = MOST
 ## While they are silent the head moves at this share of what it does while they speak.
 const QUIET := 0.55
 ## Their face's own motion never goes past this many of a way's spread (eased).
@@ -331,10 +342,16 @@ func motion(t: float) -> PackedFloat32Array:
 			here[a] = lerpf(here[a], nxt[a], k)
 	var lively := lerpf(QUIET, 1.0, speaking(t))
 	for a in 3:
-		var most := float(MOST[a])
-		out[a] = most * tanh(here[a] * CALM * lively / most)
+		var top := float(head_most[a])
+		out[a] = top * tanh(here[a] * head_calm * lively / top)
 	out[2] -= LEVEL * out[6]
 	return out
+
+
+## THE HEAD'S MOTION SIZED FOR [param splats] (a head of splats, which turns as they do) or for a still bent by it.
+func size_for(splats: bool) -> void:
+	head_calm = SPLAT_CALM if splats else CALM
+	head_most = SPLAT_MOST if splats else MOST
 
 
 ## THEIR FACE'S OWN MOTION AT SHOW TIME [param t]: how far along each of its ways ([member face_basis]) their face

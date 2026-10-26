@@ -46,9 +46,8 @@ Run it directly with the voice-training venv's python (its torch) - no pytest ne
   the lip); each sound's mouth moves the lips as their frames do, and the brows that went with it not at all
   (CONTROL: the frames' own medians move them); the export takes each shift as far as its part reaches (CONTROL:
   with no reach kept, the lips' splat keeps an eye shift).
-  THE NECK STRETCHES (train.py's `second_of`) - a head splat above the chin takes nothing of the torso's move, one
-  half way down the neck half, one past it (or on a face's triangle there) all of it, each the torso's frame (CONTROL:
-  with the chin below them all, none takes it).
+  THE HEAD RIDES THE HEAD (train.py's `second_of`) - a splat of the head far below the chin, on the head or on a
+  face's triangle, takes nothing of the torso's move (CONTROL: the torso's own splat at the seat keeps the still).
   A MOMENT IS ASKED ONLY FOR WHAT IT SHOWS (fit.py's `moment_loss`) - a green speck of three pixels is far from the
   moment's picture in its coarse squares, and hair-fine strands whose mean is the picture's are not; a speck where
   something stands before them is not asked for (CONTROL: pixel by pixel, the strands are further off than the speck).
@@ -564,46 +563,33 @@ def the_export_takes_each_shift_as_far_as_its_part_reaches():
     ok(float(np.abs(shifts({})[1]).max()) > 1.0, "CONTROL: with no reach kept, the lips' splat keeps the eye's shift")
 
 
-class _NeckRig:
-    """A face whose forehead's top (10) stands at y 0 and chin (152) at y 100; every frame at the origin, unit 1."""
+class _BodyRig:
+    """Every binding frame at the origin, unit 1: [param triangles] of the face, the head, [param bones]."""
 
     def __init__(self, triangles, bones):
         self.T = triangles
         self.n = triangles + 1 + bones
-        self.v = torch.zeros(479, 3)
-        self.v[152, 1] = 100.0
-
-    def face(self, data, i, tracked=True):
-        return self.v
 
     def frames(self, data, i, tracked=True):
-        return torch.zeros(self.n, 3), torch.eye(3).repeat(self.n, 1, 1), torch.ones(self.n), self.v
+        return torch.zeros(self.n, 3), torch.eye(3).repeat(self.n, 1, 1), torch.ones(self.n), None
 
 
-class _NeckData:
+class _BodyData:
     def __init__(self, bones):
         self.bone_origin = torch.zeros((1, bones, 3))
         self.bone_unit = torch.ones((1, bones))
 
 
 @check
-def the_neck_stretches():
+def the_head_rides_the_head():
     T, B = 4, 2
-    rig, data = _NeckRig(T, B), _NeckData(B)
-    h = 100.0
-    ys = [90.0, 100.0 + 0.5 * train.NECK * h, 100.0 + 2.0 * train.NECK * h]
-    s = splats_at([T, T, T, 0], [[0, y, 0] for y in ys] + [[0, 150.0, 0]], [[1.0, 1.0, 1.0]] * 4, T)
+    rig, data = _BodyRig(T, B), _BodyData(B)
+    seat = train.TORSO * 4.0                        # the hips, a torso's unit being a quarter of the shoulders' width
+    s = splats_at([T, 0, T + 1], [[0, 300.0, 0], [0, 300.0, 0], [0, seat, 0]], [[1.0, 1.0, 1.0]] * 3, T)
     out = train.second_of(s, rig, data, 0)
-    frame = lambda v: int(math.floor(v)) - 2
-    share = lambda v: (v % 1.0) / 0.98
-    ok(out[0] == 0.0, "a head splat above the chin takes nothing of the torso's move")
-    ok(frame(out[1]) == T + 1 and abs(share(out[1]) - 0.5) < 0.01,
-       "one half way down the neck takes half of the torso's move (%.3f)" % share(out[1]))
-    ok(frame(out[2]) == T + 1 and share(out[2]) > 0.99, "one past the neck takes all of it (%.3f)" % share(out[2]))
-    ok(frame(out[3]) == T + 1 and share(out[3]) > 0.99, "and so does one on a triangle of the face")
-    rig.v[152, 1] = 400.0
-    low = train.second_of(s, rig, data, 0)
-    ok(float(abs(low[:4]).max()) == 0.0, "CONTROL: with the chin below them all, none takes it")
+    ok(float(abs(out[:2]).max()) == 0.0, "a splat of the head far below the chin, on the head or a triangle, takes nothing of the torso's move")
+    ok(int(math.floor(out[2])) - 2 == -1 and abs((out[2] % 1.0) / 0.98 - train.HOLD_LOW) < 0.01,
+       "CONTROL: the torso's own splat at the seat keeps the still (%.3f)" % out[2])
 
 
 @check

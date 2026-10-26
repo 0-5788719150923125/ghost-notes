@@ -154,8 +154,6 @@ HEAD_REACH = 16
 HOLD_LOW = 0.9
 CHEST = 0.35
 JOINT = 0.5
-# AND THE NECK STRETCHES: how far below the chin, in the face's heights, a head splat comes to move with the torso.
-NECK = 0.25
 
 
 def until_of(steps: int) -> int:
@@ -1040,13 +1038,13 @@ def second_of(splats, rig, data, i: int):
     it rests in frame [param i] (the still): the torso's keep more and more of the still from CHEST down to the hips
     (HOLD_LOW at the seat), so the chest and shoulders lean, settle and breathe over a seat that stays; a shoulder's
     goes with the torso inward of its joint, and an arm's with the bone above it near its start - each at most
-    JOINT. AND THE NECK STRETCHES (2026-10-25: as the head turned 3 degrees against the body, the dark shirt's splats
-    the neck's skin had hidden showed through it as specks - its skin was painted by the head's splats below the chin,
-    which turned with the head and slid off them): a head splat below the chin takes the torso's move, from where it
-    stood in the still, more and more to NECK of the face's height below it - the neck stretches between the two as a
-    neck does, as full-body avatars blend their skinning across it. As the shader reads it (the colour texel's fourth
-    number): 0 for none, else (frame + 2) + 0.98 w - w the share of that frame's move the splat takes, frame -1 the
-    still itself. [N] float32."""
+    JOINT. A SPLAT OF THE HEAD TAKES NONE (2026-10-25 late, the user: "it's especially messy at the neck and around the
+    beard"): below the chin it had taken the torso's move, more and more down a quarter of the face's height, so the
+    neck's skin would stretch to the shirt - but every step that learned it (the head, the bake, Fit's moments) drew it
+    riding the head, and played, his long beard's lower half followed the torso (0.93 of its motion, none of the
+    head's), a translucent veil over the collar as the head moved; riding the head, it is whole. As the shader reads it
+    (the colour texel's fourth number): 0 for none, else (frame + 2) + 0.98 w - w the share of that frame's move the
+    splat takes, frame -1 the still itself. [N] float32."""
     import numpy as np
     import torch
     with torch.no_grad():
@@ -1075,11 +1073,6 @@ def second_of(splats, rig, data, i: int):
             if bool(on.any()):
                 d = (means[on, :2] - bo[bone, :2]).norm(dim=-1)
                 put(on, T + 1 + above, JOINT * (1.0 - smoothstep(0.0, 0.7 * float(bu[bone]), d)))
-        head = splats.bind <= T
-        if bool(head.any()):
-            v = rig.face(data, i, tracked=False)
-            chin = float(v[152, 1])
-            put(head, T + 1, smoothstep(chin, chin + NECK * float((v[10] - v[152]).norm()), means[head, 1]))
         return out.cpu().numpy().astype(np.float32)
 
 

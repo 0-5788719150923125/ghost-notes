@@ -494,6 +494,27 @@ def test_front():
           "a microphone left out of their matte is not drawn before them, they not whole under it")
 
 
+def test_front_outlined():
+    """A THING BEFORE THEM HAS AN OUTLINE OF ITS OWN ([outlined]): them in a plain black shirt, two pieces judged never
+    to move where they are - a light microphone, its edge in the still, is drawn before them; a piece of the plain shirt,
+    still only for being plain, is not (the control: it passed every other test, its size and where they are)."""
+    import numpy as np
+    H, W = 160, 260
+    still = np.full((H, W, 3), 128, np.uint8)
+    still[30:, 40:220] = 20                         # them, in a black shirt
+    still[40:120, 140:190] = 150                    # the microphone before them
+    matte = np.zeros((H, W), np.float32)
+    matte[30:, 40:220] = 1.0
+    plate = np.full((H, W, 3), 128.0)
+    there = np.where(matte > 0.5, 0.8, 0.0)
+    judged = np.zeros((H, W))
+    judged[40:120, 140:190] = 0.9                   # the microphone
+    judged[60:140, 60:110] = 0.9                    # a plain piece of the shirt
+    _m, _room, fr, _body = actor.still_room(still, matte, plate, matte <= 0.5, {"still": judged, "front": judged}, there)
+    check(fr is not None and fr[80, 165] > 0.9, "the microphone, outlined, is not drawn before them")
+    check(fr is not None and fr[100, 85] == 0.0, "a plain piece of their shirt was drawn before them")
+
+
 def test_shade():
     """THE LIGHT ROUND THEM: their shadow on the wall beside them in the still, not in the plate, darkens the
     plate behind their edge - and a plate lit as the still is is left as it is (the control)."""
@@ -651,6 +672,7 @@ def main():
         test_rig(tmp)
         test_skin()
         test_front()
+        test_front_outlined()
         test_trust()
         test_shade()
         test_soft_edge()

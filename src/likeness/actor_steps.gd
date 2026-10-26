@@ -65,7 +65,7 @@ const REGISTRY := {
 		"outputs": ["motion.json"], "settings": [], "version": 4,
 		"blurb": "Their own motion wherever they face the camera, from every video - the head's quick turns on the shoulders and their face's slow changes with it (brows, lids, cheeks, the mouth's corners), played back in pieces; their posture, how far and which ways their body settles and how long it holds; and how often they blink."},
 	"stills": {"label": "Stills", "per": "set", "needs": ["audit"], "runs": "python", "env": ["ffmpeg", "face_venv"],
-		"outputs": ["stills.json", "stills"], "settings": [], "version": 3,
+		"outputs": ["stills.json", "stills"], "settings": [], "version": 4,
 		"blurb": "The set's most typical calm moments: facing the camera, eyes open, mouth closed, nothing in front of them, sharp - each with its matte and the room behind them, made from the set's frames, and all of them on one sheet for At rest. The Likeness is drawn on one of them; the card shows the others to pick from."},
 	"rest": {"label": "At rest", "per": "set", "needs": ["stills"], "runs": "agent", "env": [],
 		"outputs": ["rest.json"], "settings": [], "version": 1,
@@ -115,7 +115,7 @@ const REGISTRY := {
 		"renderer": "gaussian",
 		"blurb": "Makes the set's avatar from their head, on the graphics card: the head as learned from every video, in the set's own look and with its own mouth, with the set's room behind them as its moments show it and their body laid on its bones. A few minutes."},
 	"fit": {"label": "Fit", "per": "set", "needs": ["avatar", "stills"], "runs": "train", "env": ["voice_train_venv"],
-		"outputs": ["avatar/fit.json", "avatar/fit.bin"], "settings": [], "version": 4, "renderer": "gaussian",
+		"outputs": ["avatar/fit.json", "avatar/fit.bin"], "settings": [], "version": 5, "renderer": "gaussian",
 		"blurb": "Fits them to the still they are played from, on the graphics card: the weave of their clothes, their hands, hair, ears, beard and neck as the still has them, where every frame together gave a blur - all but their lips and eyes, which move as every video taught them - held to the set's own moments, so nothing breaks as they move. Picking another still fits it again. A few minutes."},
 }
 
