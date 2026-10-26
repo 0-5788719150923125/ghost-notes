@@ -25,6 +25,8 @@ extends SceneTree
 ## nothing else - the steps the two share are made once (THE CONTROL: the 2D run did make the 2D's library).
 ## THE STILL DRAWN ON: the one picked, else the one At rest found most at ease, else the first; stills
 ## made again forget the pick (an index into the old ones).
+## THE HEAD PINNED: one video pinned "head", the head learns from it alone and the Head (not its rig) is stale;
+## unpinned, made again as it was (THE CONTROL: with none pinned it learns from both).
 ## A CHANGED INPUT MARKS STALE: a setting a step reads makes it stale, and only it, until it is made
 ## again - then what was made from it. ⟳ THROWS A STEP AWAY and makes it again; what is made from it
 ## directly is stale (and what is made from those, once they are made again). A video unticked makes
@@ -226,6 +228,21 @@ func _run() -> void:
 	_ok(_actor.state_of("rig", s) == "stale", "the stills made again left the rig %s" % _actor.state_of("rig", s))
 	# ...and what is made from those, once they are made again: one step at a time, never all at once
 	_ok(_actor.state_of("library", s) == "made", "the library went stale before the rig was made again")
+	# THE HEAD PINNED TO ONE VIDEO: it alone is learned from, the Head (not its rig) stale; unpinned, as it was
+	var head_was := _actor.state_of("head", "")
+	var rig_was := _actor.state_of("head_rig", "")
+	_ok(_actor.head_videos(10).size() == 2, "CONTROL: with none pinned the head learns from %s" % str(_actor.head_videos(10)))
+	(_actor.video(String(vids[1])) as Dictionary)["head"] = true
+	_actor.save()
+	_actor.forget()
+	_ok(_actor.head_videos(10) == [String(vids[1])], "one pinned, the head learns from %s" % str(_actor.head_videos(10)))
+	_ok(head_was == "made" and _actor.state_of("head", "") == "stale" and _actor.state_of("head_rig", "") == rig_was,
+		"pinned, the Head is %s (was %s) and its rig %s (was %s)" % [_actor.state_of("head", ""), head_was,
+			_actor.state_of("head_rig", ""), rig_was])
+	(_actor.video(String(vids[1])) as Dictionary).erase("head")
+	_actor.save()
+	_actor.forget()
+	_ok(_actor.state_of("head", "") == "made", "unpinned, the Head is %s" % _actor.state_of("head", ""))
 	# A VIDEO UNTICKED: the sets are stale
 	b.make_with = _make
 	(_actor.video(String(vids[1])) as Dictionary)["ticked"] = false

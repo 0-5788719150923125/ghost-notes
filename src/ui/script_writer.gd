@@ -284,7 +284,7 @@ func hand_field(key: String, read: Callable, write: Callable) -> void:
 ## WHAT THE FIELD [param key] HOLDS NOW: the part's that keeps it ([method hand_field]), else the
 ## document's line; "" for none.
 func field_value(key: String) -> String:
-	if _handed.has(key):
+	if _kept(key):
 		var v: Variant = (_handed[key]["read"] as Callable).call()
 		return str(v).strip_edges() if v != null else ""
 	return doc.field(key).strip_edges() if doc != null else ""
@@ -301,7 +301,7 @@ func title_or_name() -> String:
 
 func _commit_field(key: String) -> void:
 	var e: LineEdit = _field_edits[key]
-	if _handed.has(key):
+	if _kept(key):
 		var read: Variant = (_handed[key]["read"] as Callable).call()
 		if read != null and e.text.strip_edges() != str(read).strip_edges():
 			var why := str((_handed[key]["write"] as Callable).call(e.text))
@@ -314,11 +314,22 @@ func _commit_field(key: String) -> void:
 	e.text = doc.field(key)
 
 
+## WHETHER A PART STILL KEEPS THE FIELD [param key]: one freed before this card (a panel taken down, its
+## card's lambdas bound to it) keeps it no more, and the field is the document's again.
+func _kept(key: String) -> bool:
+	if not _handed.has(key):
+		return false
+	if (_handed[key]["read"] as Callable).is_valid() and (_handed[key]["write"] as Callable).is_valid():
+		return true
+	_handed.erase(key)
+	return false
+
+
 ## The handed fields' boxes from what keeps them, unless one is being typed in.
 func _refresh_handed() -> void:
-	for k in _handed:
+	for k in _handed.keys():
 		var e: LineEdit = _field_edits.get(k)
-		if e == null or e.has_focus():
+		if not _kept(k) or e == null or e.has_focus():
 			continue
 		var v: Variant = (_handed[k]["read"] as Callable).call()
 		e.editable = v != null

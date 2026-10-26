@@ -144,7 +144,7 @@ const SETTINGS := {
 		"blurb": "How many lessons their voice is taught, each a batch of 16 of their sentences - however many sentences they gave. More is closer to them and longer on the graphics card (about half a second each: 6,000 is under an hour); raised after it is made, ▶ goes on from where it stopped."},
 	"head_videos": {"label": "Head videos", "type": "int", "default": 10, "min": 1, "max": 200, "step": 1,
 		"renderer": "gaussian",
-		"blurb": "How many of their videos their head of splats learns from: those with the most of them facing the camera. More is their face in more lights and moods, and longer on the graphics card (Head steps each); a video it does not learn from takes their usual look."},
+		"blurb": "How many of their videos their head of splats learns from: those with the most of them facing the camera - or of those pinned \"head\" in the videos' list, the pinned alone. More is their face in more lights and moods, and longer on the graphics card (Head steps each); a video it does not learn from takes their usual look."},
 	"head_steps": {"label": "Head steps", "type": "int", "default": 6000, "min": 1000, "max": 30000, "step": 500,
 		"renderer": "gaussian",
 		"blurb": "How many moments of each Head video their head of splats is shown while it learns, one at a time: more is sharper and longer on the graphics card (about a tenth of a second each - 6,000 for each of 10 videos is under two hours)."},

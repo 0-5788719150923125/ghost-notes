@@ -158,6 +158,14 @@ func ticked() -> Array:
 	return out
 
 
+## THE VIDEOS PINNED FOR THE HEAD (a video's `head`): the ticked ones their head of splats learns from alone, when any
+## is ([method head_videos]) - its ids, by id.
+func pinned() -> Array:
+	var out := ticked().filter(func(v: String) -> bool: return bool(video(v).get("head", false)))
+	out.sort()
+	return out
+
+
 ## A COPY IS NOT ANOTHER VIDEO (2026-10-24: their merged download folders held four videos twice, "(1080p)" and
 ## "(1080p, h264)" - the voice was taught the same sentences twice and measured on some it had been taught): a video
 ## whose title ([method ActorSources.comparable]) and length, to a tenth of a second, are an earlier one's is a copy
@@ -342,6 +350,9 @@ func moot(step: String, scope: String) -> bool:
 
 ## THE HEAD VIDEOS (hosts/avatar/head.py, "ENOUGH OF EACH VIDEO"): the ticked videos with the most usable minutes of
 ## them facing the camera in the sets, at most [param most] of them, most first - their ids; none before the audit.
+## THE PINNED ALONE when any is ([method pinned]: 2026-10-25, "reducing the number of videos to 3 very similar ones" -
+## a head of 3 alike videos drew a set's mouth with twice the detail of one of 10 in every light; unticking them would
+## have made the voice and every other step of the actor's again).
 func head_videos(most: int) -> Array:
 	var usable := {}
 	for s in sets():
@@ -350,7 +361,9 @@ func head_videos(most: int) -> Array:
 			if not bool(x.get("unusable", false)):
 				var v := String(x.get("vid", ""))
 				usable[v] = float(usable.get(v, 0.0)) + float(x.get("usable", 0.0))
-	var vids: Array = ticked().filter(func(v: String) -> bool: return float(usable.get(v, 0.0)) > 0.0)
+	var pins := pinned()
+	var vids: Array = (pins if not pins.is_empty() else ticked()).filter(
+		func(v: String) -> bool: return float(usable.get(v, 0.0)) > 0.0)
 	vids.sort_custom(func(a: String, b: String) -> bool:
 		return float(usable[a]) > float(usable[b]) or (float(usable[a]) == float(usable[b]) and a < b))
 	return vids.slice(0, most)
@@ -430,6 +443,9 @@ func inputs_of(step: String, scope: String) -> String:
 		parts.append("captions=%s|%d" % [cap, FileAccess.get_modified_time(cap) if FileAccess.file_exists(cap) else 0])
 	if step == "audit" or ActorSteps.per(step) == "set":
 		parts.append("set=" + scope)
+	# a head learned from the videos pinned is stale once others are (none pinned: as it always was)
+	if step == "head" and not pinned().is_empty():
+		parts.append("pinned=" + ",".join(PackedStringArray(pinned())))
 	# a body fitted to one still is stale once another is picked
 	if step == "fit" and scope.begins_with("s:"):
 		parts.append("still=%d" % still_of(scope.substr(2)))

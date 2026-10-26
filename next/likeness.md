@@ -7,7 +7,60 @@ The first build's files are backed up in `dist/likeness_v1/` (they were never co
 **The fifth pass (2026-10-24): an audit of the head of splats and the voice** - below the sixth.
 **The sixth pass (2026-10-25): the mouth, the flicker and the edges** - below the seventh.
 **The seventh pass (2026-10-25, evening): the needles** - below the eighth.
-**The eighth pass (2026-10-25, night): the soft mouth and the neck, from the literature** - right below.
+**The eighth pass (2026-10-25, night): the soft mouth and the neck, from the literature** - below the next.
+**Three alike videos, and is the approach convoluted? (2026-10-25, late)** - right below.
+
+## Three alike videos, and is the approach convoluted? (2026-10-25, late)
+
+**The user:** "it still feels wrong ... maybe it truly would be worth reducing the number of videos to 3 very similar
+ones, then to regenerate with those videos alone"; and "maybe there would be a better approach, which wouldn't require
+all of that body part-specific rigging? ... full-screen training, where the actor and scene and ALL of the behavior is
+synthesized through splats over time? ... the X most distinct poses, and embed them ... I don't know what's possible,
+given our constraints."
+
+### The set played had no lookalike
+
+The set played (set-2cacf4ef, "Unc ASMR") is the one video of the 68 against a black backdrop in a dark room; nearly all
+the others are the office - the green wall, the window's light, most in the same knit sweater. The head of 10 videos had
+learned the office's daylight and was stretched over the dark room. One frame of each video: `dist/sweep/all_videos.jpg`.
+
+### The three (`dist/sweep/`)
+
+By each video's median face light, chest colour, wall colour and the face's place and size in the picture (and by eye:
+`closest.jpg`): **"Sobriety & Personal Evolution"** (f-f0686b23ff, 77 usable minutes), **"Manuscript Day 131"**
+(f-ea1b92e172, 56) and **"Evolution is neat!"** (f-791f8b0499, 52) - the same chunky knit sweater, long beard and combed
+hair, the same room, light, camera distance and framing. The set played is now Manuscript Day 131's (set-8ed7fcfe: one
+continuous 56-minute shot). The actor's file before: `dist/sweep/actor.json.before-pins`.
+
+**THE HEAD PINNED, not the videos unticked:** unticking 65 videos would have made the audit, the sets, the visemes, the
+motion, the utterances and the voice stale - Generate would have taught the voice again for hours on three videos'
+speech. A video pinned "head" on the card (`ActorFolder.pinned`, `head_videos`) is what the head learns from, the pinned
+alone, every ticked video still read for everything else; the Head's fingerprint names the pins. Generate makes again the
+Head (3 videos x Head steps, about 20 minutes) and the new set's steps; the voice and the rest stay as they are. Gate:
+actors_check (one pinned, it alone; unpinned, as it was).
+
+### What the literature says (a third survey)
+
+- **No published paradigm clearly beats this one under these constraints:** splats bound to a mesh with a small linear
+  basis per splat is where real-time head avatars have ended up (GaussianAvatars, 3D Gaussian Blendshapes, RGBAvatar,
+  Gaussian Eigen Models). What is convoluted here is the averaging - one head of many sessions, then the set's bake, then
+  one still's fit - and the rules patching over it.
+- **Full-frame splats over time** (4DGS, Deformable 3DGS) only replay the timestamps filmed; re-driving them means
+  inventing a control space - a rig learned from weaker data - and a fixed camera is their worst case (DyCheck).
+- **"The most distinct poses, embedded"** belongs in the driving, not the renderer: a motion graph over their own tracked
+  code trajectories (Video Textures, Video Rewrite, Fried 2019) - retrieval of their own mouth snippets by phoneme
+  context, transitions by interpolation of codes, nothing new at playback.
+- **The data regime of the closest family** (talking portraits: ER-NeRF, TalkingGaussian, SyncTalk): one session, 3-6
+  minutes, a 512 px crop - 32 to 36 dB, but scored with the test video's own pose and blinks, often face-only or pasted
+  into the real frame. Pooled sessions help when each is short (PAV) and only when their differences have somewhere to go;
+  one of his sessions is some 15 times what those papers train on.
+- **The ceiling, measured apart from the driving:** freeze the model and fit each held-out frame's expression codes
+  photometrically. Near what it scores on frames it learned (27 dB on one video), the drive is what loses; near 23, the
+  representation (fine detail sliding on MediaPipe's coarse mesh) - then photometric tracking.
+- **Ranked:** keep the paradigm and cut the averaging (the ceiling test first; each session's own model; 20-50 learned
+  components in place of 12 PCA ones of the tracker's scores - GEM gained 2.4 dB from 10 to 30; the mouth's inside learned
+  at the shapes played); then a motion graph and phoneme-context retrieval for behaviour; not retrieval of real pixels (the
+  first build) nor 4DGS.
 
 ## The eighth pass: the soft mouth and the neck, from the literature (2026-10-25, night)
 

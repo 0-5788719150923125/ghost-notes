@@ -535,6 +535,26 @@ func _fill_videos() -> void:
 		l.text = marks + String(v.get("title", vid)) + ("  %s" % Clock.text(dur) if dur > 0.0 else "")
 		l.tooltip_text = String(v.get("path", v.get("url", ""))) + "\n↓ not fetched yet · 💬 has captions · ⧉ a copy of another, left out"
 		row.add_child(l)
+		# THE HEAD PINNED to a few alike videos (ActorFolder.head_videos): the rest stay ticked for everything else
+		var pin := Button.new()
+		pin.toggle_mode = true
+		pin.flat = true
+		pin.text = "head"
+		pin.add_theme_font_size_override("font_size", 10)
+		pin.button_pressed = bool(v.get("head", false))
+		pin.modulate.a = 1.0 if pin.button_pressed else 0.45
+		pin.tooltip_text = ("Learn their head of splats from this video. With any pinned, the head learns from the pinned "
+			+ "alone - a few alike videos (one room, one light, the same clothes) - and every ticked video is still "
+			+ "used for everything else: the voice, the mouth, the motion. With none pinned it learns from the Head "
+			+ "videos with the most of them facing the camera.")
+		pin.toggled.connect(func(on: bool) -> void:
+			if on:
+				(_actor.video(String(vid)))["head"] = true
+			else:
+				(_actor.video(String(vid))).erase("head")
+			pin.modulate.a = 1.0 if on else 0.45
+			_actor.save())
+		row.add_child(pin)
 
 
 # --- the steps ----------------------------------------------------------------------------------
