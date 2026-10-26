@@ -13,6 +13,8 @@
 // texel's fourth number: 0 for none, else (frame + 2) + 0.98 w) - a share w of another bone's move, or of none (frame
 // -1: the still itself) - so the seat stays while the chest leans, and a joint bends rather than tears. Each bone's
 // move (`moves`: six numbers a bone, a 2D transform's x, y and origin columns) is what took it from the still.
+// AND THE NECK STRETCHES: a splat of the head below the chin takes a share of the torso's move from where it stood in
+// the still - its frame as the still holds it, `frame_data`'s second block, after the `frames` the moment's own.
 shader_type canvas_item;
 render_mode blend_mix, unshaded;
 
@@ -33,6 +35,8 @@ uniform float shift_far = 2.0;
 uniform float low_pass = 0.3;
 // Each bone's move from the still (SplatHead.pose_bones): six numbers a bone, at most 16 bones.
 uniform float moves[96];
+// How many binding frames a moment has: the still's own (SplatHead.hold_still) stand after them.
+uniform int frames = 0;
 
 varying vec2 d;
 varying vec3 conic;
@@ -92,11 +96,21 @@ void vertex() {
 	vec4 x_axis = texel(frame_data, frame_width, f + 1);
 	mat3 ax = mat3(x_axis.xyz, texel(frame_data, frame_width, f + 2).xyz, texel(frame_data, frame_width, f + 3).xyz);
 	vec3 mean = o.xyz + o.w * (ax * place);
-	// a body splat's second influence: where it rested in the still, moved by the other bone (or not at all)
-	if (e.a > 0.5 && bound > triangles) {
+	// a second influence: where it rested in the still - a body splat's by its own bone's move undone, a head splat's
+	// placed by the still's frames - moved by the other bone (or not at all)
+	if (e.a > 0.5) {
 		int second = int(floor(e.a)) - 2;
 		float w = fract(e.a) / 0.98;
-		vec2 rest = unmoved(bound - triangles - 1, mean.xy);
+		vec2 rest;
+		if (bound > triangles) {
+			rest = unmoved(bound - triangles - 1, mean.xy);
+		} else {
+			int g = (frames + bound) * 4;
+			vec4 so = texel(frame_data, frame_width, g);
+			mat3 sax = mat3(texel(frame_data, frame_width, g + 1).xyz, texel(frame_data, frame_width, g + 2).xyz,
+				texel(frame_data, frame_width, g + 3).xyz);
+			rest = (so.xyz + so.w * (sax * place)).xy;
+		}
 		vec2 other = second < 0 ? rest : moved(second - triangles - 1, rest);
 		mean.xy = mix(mean.xy, other, w);
 	}

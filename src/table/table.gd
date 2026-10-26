@@ -1304,6 +1304,9 @@ func _slot_xf(i: int, quarter := 0, over := false) -> Transform3D:
 			elif _box_part.contents() != "file":
 				var inner: AABB = _box_part.stood["inner"]
 				placed.origin.y = minf(inner.end.y - CARD_T, placed.origin.y + CARD_T * 2.0)
+			if _righted(i) and not _box_part.stood.has("return_at"):
+				# it waited there upside down (TableBox._waits) and goes back the way the hand turned it
+				placed.basis = placed.basis * Basis(Vector3.UP, PI)
 			return placed
 	var s: Dictionary = _plan.slots[i] if i < _plan.slots.size() else {"pos": Vector3.ZERO, "yaw": 0.0}
 	var hand: Vector3 = _plan.lay_jit[i] if i < _plan.lay_jit.size() else Vector3.ZERO
@@ -1317,6 +1320,20 @@ func _slot_xf(i: int, quarter := 0, over := false) -> Transform3D:
 func _reversed(i: int) -> bool:
 	var cards: Array = _plan.pay.get("cards", [])
 	return i < cards.size() and bool((cards[i] as Dictionary).get("reversed", false))
+
+
+## Whether card [param i] came out upside down and is turned the right way up once it is pulled
+## ([constant CardTable.REVERSALS] "righted", [method TableCardPose.righting]): it lies and is read the
+## right way up.
+func _righted(i: int) -> bool:
+	var cards: Array = _plan.pay.get("cards", [])
+	return i < cards.size() and bool((cards[i] as Dictionary).get("righted", false))
+
+
+## Whether card [param i] waits in its source upside down - on the deck, in the box, riding a riffle:
+## read reversed, or righted once it is pulled.
+func _upside(i: int) -> bool:
+	return _reversed(i) or _righted(i)
 
 
 ## A card turned face up about its long side.
@@ -2021,14 +2038,14 @@ func _pose(t: float) -> void:
 
 
 ## The card waiting on top of the deck: the next to be taken off it ([method _leaves]) - a jumper until
-## its action begins - so the deck's top card is turned the way the card it is comes up, and the back
-## exposed when it is taken already lies the way of the card after it.
+## its action begins - so the deck's top card is turned the way the card it is comes up ([method _upside]),
+## and the back exposed when it is taken already lies the way of the card after it.
 func _top_deck_reversed(t: float, tm: Dictionary) -> bool:
 	var draws: Array = tm["draw"]
 	for k in mini(draws.size(), _cards.size()):
 		if t < (_leaves(k) if _from_top(k) else float((draws[k] as Array)[0])):
-			return _reversed(k)
-	return not _cards.is_empty() and _reversed(_cards.size() - 1)
+			return _upside(k)
+	return not _cards.is_empty() and _upside(_cards.size() - 1)
 
 
 ## The cards whose places on the cloth card [param k]'s overlaps ([method TablePositions.overlaps]) -
@@ -2069,7 +2086,7 @@ func _rest_xf(i: int) -> Transform3D:
 func _deck_top_xf(k: int) -> Transform3D:
 	var slot := _plan.deck_n - 1 - _deck_gone - _taken_before(k) + (0 if _from_top(k) else 1)
 	var j: Vector3 = _plan.slot_jit[slot] if slot >= 0 and slot < _plan.slot_jit.size() else Vector3.ZERO
-	return Transform3D(Basis(Vector3.UP, j.z + (PI if _reversed(k) else 0.0)),
+	return Transform3D(Basis(Vector3.UP, j.z + (PI if _upside(k) else 0.0)),
 		_cur_base + Vector3(j.x, float(slot) * DECK_T + CARD_T * 0.5, j.y))
 
 

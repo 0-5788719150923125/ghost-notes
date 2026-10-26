@@ -248,7 +248,7 @@ func _build_file() -> void:
 		free = range(maxi(0, count - maxi(medium._cards.size() * 4, 24)), count)
 	for k in medium._cards.size() if not piled else 0:
 		var j := int(free.pop_at(rng.randi_range(0, free.size() - 1)))
-		(stood["at_k"] as Array).append(xfs[j])
+		(stood["at_k"] as Array).append(_waits(k, xfs[j]))
 		xfs[j] = null
 	# THE PLACES A SEARCH LOOKS: cards of the file's own, front to back, each drawn up out of its place
 	# and let back into it (the piles' are their tops)
@@ -329,6 +329,16 @@ func _keep_searched(shoebox: bool) -> void:
 		card.transform = seats[i]
 		medium._root3.add_child(card)
 		searched.append(card)
+
+
+## DRAWN CARD [param k]'s PLACE [param xf] in the box, as it waits there: a half turn in its own plane,
+## about its middle, when it comes out upside down ([method TableMedium._upside]) - so it is pulled out
+## the way it comes up, never turned round on its way out ([method TableCardPose._pull_xf]). It fills the
+## same room in the file or on the pile either way up.
+func _waits(k: int, xf: Transform3D) -> Transform3D:
+	if medium._upside(k):
+		xf.basis = xf.basis * Basis(Vector3.UP, PI)
+	return xf
 
 
 ## THE CARDS LYING IN PILES in the box ([method TablePositions.box_piles]: a collection kept in piles, or
@@ -412,8 +422,8 @@ func _pile_places(inner: AABB, size: Vector2, count: int, pitch: float, rng: Ran
 					break
 			if not from.is_empty():
 				break
-		(stood["at_k"] as Array).append(from.pop_back() if not from.is_empty()
-			else Transform3D(Basis.IDENTITY, inner.get_center()))
+		(stood["at_k"] as Array).append(_waits(k, from.pop_back() if not from.is_empty()
+			else Transform3D(Basis.IDENTITY, inner.get_center())))
 	# the returns go on the top their pile has once the draws before them are made
 	if back >= 0:
 		var left: Array = (piles[back] as Dictionary)["cards"]

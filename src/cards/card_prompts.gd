@@ -112,9 +112,10 @@ static func box_range(n: int) -> Array:
 	return [lo, maxi(lo, int(BOX[1]))]
 
 
-## HOW AN EPISODE'S CARDS ARE STAGED, for the producer: where they come from, where their text is, and how
-## each position's card comes and lies - the registries' own words ([constant TableActions.SOURCES],
-## [constant CardTable.TEXTS], [constant TablePositions.COMES]).
+## HOW AN EPISODE'S CARDS ARE STAGED, for the producer: where they come from, where their text is, which
+## way up they come, and how each position's card comes and lies - the registries' own words
+## ([constant TableActions.SOURCES], [constant CardTable.TEXTS], [constant CardTable.REVERSALS],
+## [constant TablePositions.COMES]).
 static func staging_rule() -> String:
 	return Rules.say("cards/producer.staging", _staging_vars())
 
@@ -126,7 +127,10 @@ static func _staging_vars() -> Dictionary:
 	var texts: Array = []
 	for k in CardTable.TEXTS:
 		texts.append({"key": k, "about": String(CardTable.TEXTS[k])})
-	return {"sources": sources, "texts": texts}
+	var reversals: Array = []
+	for k in CardTable.REVERSALS:
+		reversals.append({"key": k, "about": String((CardTable.REVERSALS[k] as Dictionary)["about"])})
+	return {"sources": sources, "texts": texts, "reversals": reversals}
 
 
 ## THE PRINTED CARD, for the producer: what a deck's printer chooses beyond its painting - the frame's
@@ -231,14 +235,14 @@ static func _share(rng: RandomNumberGenerator, slots: Array, count: int, n: int)
 ## [param history] is the show's other episodes, newest first ([method CardEpisode.archive]).
 ## [param uploads_as] is the line the episode's title goes up in, [constant TITLE_MARK] where the title
 ## will stand ("Truthful Tarot: [episode_title]") - or "", and the producer is told of no line.
-static func producer(title: String, brief: String, seed: int, cards: int, reversals: bool,
+static func producer(title: String, brief: String, seed: int, cards: int,
 		faces: Dictionary, frames: Dictionary, history: Array, deck: Array = [], chooses := false,
 		uploads_as := "") -> Dictionary:
 	var d := dice(seed)
 	var past := PackedStringArray()
 	for i in mini(history.size(), PAST_FULL + PAST_LINES):
 		past.append(_past(_d(history[i])) if i < PAST_FULL else _past_line(_d(history[i])))
-	var vars := {"seed": seed, "cards": cards, "reversals": reversals, "chooses": chooses,
+	var vars := {"seed": seed, "cards": cards, "chooses": chooses,
 		"habits": not past.is_empty(), "past": "\n".join(past), "uploads_as": uploads_as.strip_edges(),
 		"place": String(d["place"]), "year": int(d["year"]), "hue": int(d["hue"]), "hour": int(d["hour"]), "direction": int(d["direction"]),
 		"frame_styles": ", ".join(frames.keys()), "windows": ", ".join(CardTable.WINDOWS.keys()), "corners": ", ".join(CardTable.CORNERS.keys()),
@@ -488,7 +492,8 @@ static func _card_now(plan: Dictionary, positions: Array, drawn: Array, k: int, 
 	var held := comes != "dealt"
 	var out := {"k": k, "card_line": _card_line(c), "meaning": String(c.get("meaning", "")).strip_edges(),
 		"position": String(pos.get("name", "")), "asks": String(pos.get("asks", "")), "held": held,
-		"reversed": bool(c.get("reversed", false)), "art": String(c.get("art", "")).strip_edges(), "not_first": k > 1,
+		"reversed": bool(c.get("reversed", false)), "righted": bool(c.get("righted", false)),
+		"art": String(c.get("art", "")).strip_edges(), "not_first": k > 1,
 		"after": after(plan, k, n)}
 	var first_swept := comes == "swept" and (k == 1 or String((positions[k - 2] as Dictionary).get("comes", "") if k - 2 < positions.size() and positions[k - 2] is Dictionary else "") != "swept")
 	if bool(c.get("jumper", false)):

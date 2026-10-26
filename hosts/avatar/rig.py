@@ -3,7 +3,7 @@
 "A head of splats").
 
     <face_venv python> rig.py --frames <frames folder> [--frames <another> ...] --out <rig.npz>
-                              [--poses <poses.json>] [--shared <the actor's rig.npz>]
+                              [--poses <poses.json>] [--shared <the actor's rig.npz>] [--visemes <visemes.json>]
 
 MediaPipe's face mesh is the surface: its 478 points are tracked in every frame (frames.py), and its
 triangles come from its own tessellation. From the frames this learns:
@@ -12,7 +12,9 @@ triangles come from its own tessellation. From the frames this learns:
 - EACH FRAME'S HEAD (`scale`, `rot`, `shift`): that similarity, from the neutral face into the frame's pixels;
 - HOW THEIR FACE MOVES (`basis`): the neutral face's offset at each point as a linear function of MediaPipe's
   52 expression scores, by ridge regression over every frame - what drives the head at playback, where a
-  sound's mouth and a blink are those scores (visemes.json, the plan's blinks);
+  blink, a glance and their face's own motion are those scores - A PART AT A TIME (`by_parts`, parts.py: each
+  point moved by the scores of the parts that reach it alone; fitted over every score, a glance had moved the
+  cheeks and the jaw);
 - THE SURFACE (`tris`): MediaPipe's triangles, with the mouth's and the eyes' holes filled - the mouth by a
   fan to a point behind the lips (where the teeth and the dark of the mouth are learned), each eye by a fan
   to its iris centre (so the eye's own splats follow the gaze).
@@ -46,7 +48,9 @@ eye's score when it is closed: the top of their own blinks) and `looks` (each gl
 library's `GLANCES`, the picture's left and right - as the 52 scores' move from their median when they look
 that way most: the median of the frames whose two scores for it are in their top LOOK_SHARE, less the
 median of all; the eyes' and brows' scores alone, so the lids and brows that go with it come too, and the
-talking that went on while they looked does not).
+talking that went on while they looked does not) - and, given --visemes (the actor's visemes.json), `mouths`: each
+sound's mouth as their face made it (`mouths_of`: the points' and scores' move from their rest, from every frame of
+the actor's) and how far their lips part (`gap`, its 1st and 99th percentiles).
 """
 
 from __future__ import annotations
@@ -57,9 +61,11 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "..", "face"))
 
 import actor  # noqa: E402
+import parts  # noqa: E402
 
 # The inner edge of the lips, round (MediaPipe's numbering) - the mouth's hole.
 LIPS_INNER = [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95]
@@ -68,6 +74,10 @@ EYE_LEFT = [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144,
 EYE_RIGHT = [263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249]
 IRIS_LEFT = 468
 IRIS_RIGHT = 473
+# EACH SOUND'S MOUTH is the median of the frames whose mouth's scores are nearest the sound's: this share of them,
+# at least MOUTH_LEAST.
+MOUTH_SHARE = 0.01
+MOUTH_LEAST = 30
 # How far behind the lips the mouth's back point stands, in the neutral face's units: a share of the
 # distance between the mouth's corners.
 MOUTH_DEPTH = 0.45
@@ -223,12 +233,77 @@ def bones_of(pose, w: float, h: float, face=None):
     return origin, axes, unit, seen
 
 
+def by_parts(X, Y, canon):
+    """THE BASIS, A PART AT A TIME ([param X]: the frames' scores and a 1, [N, 53]; [param Y]: their points' offsets
+    from the neutral face [param canon], [N, V * 3]): each point's offsets a ridge regression on the scores of the
+    parts that reach it alone (parts.py), each score's row then taken as far as its part reaches the point - so a
+    glance moves the eyes and nothing else, and a point no part reaches moves with nothing. [53, V * 3]: the scores'
+    rows, then the neutral face's correction."""
+    import numpy as np
+    reach = parts.reach_at(canon, canon)
+    own = [parts.scores_of(actor.BLEND_NAMES, row[1]) for row in parts.PARTS]
+    W = np.zeros((X.shape[1], Y.shape[1]))
+    groups = {}
+    for v in range(canon.shape[0]):
+        groups.setdefault(tuple(bool(x) for x in reach[v] > 0.0), []).append(v)
+    for key, vs in groups.items():
+        cols = sorted(set(j for p, on in enumerate(key) if on for j in own[p])) + [X.shape[1] - 1]
+        ys = np.array([[3 * v, 3 * v + 1, 3 * v + 2] for v in vs]).reshape(-1)
+        A = X[:, cols]
+        lam = RIDGE * np.eye(len(cols))
+        lam[-1, -1] = 0.0
+        W[np.ix_(cols, ys)] = np.linalg.solve(A.T @ A + lam * A.shape[0], A.T @ Y[:, ys])
+    for p, cols in enumerate(own):
+        W[cols] *= np.repeat(reach[:, p], 3)[None]
+    return W
+
+
+def mouths_of(aligned, blend, visemes: dict, canon, dw) -> dict:
+    """EACH SOUND'S MOUTH AS THEIR FACE MADE IT (2026-10-25, the user: "The mouth shape barely moves"): played from
+    each sound's scores through the basis, his mouth opened 0.044 to 0.062 of his face's height while it spoke - his
+    own lips, tracked, 0.013 to 0.11 - for a sound's scores were set one by one (the jaw at its place in his range,
+    the lips at their medians, where an open jaw drops the lower lip with it) and the beard leaves MediaPipe's scores
+    short of what the lips do. The head is learned on the tracked points, so the mouth is played from them: for each
+    sound of [param visemes] (visemes.json), the frames ([param aligned] [N, 478, 3] on the neutral face, [param blend]
+    [N, 52]) whose mouth's scores are nearest the sound's (each score over its spread; MOUTH_SHARE of them, at least
+    MOUTH_LEAST), their points' median less the rest's - where the mouth reaches (parts.py), the points the face adds
+    after them made from them ([param dw]) - and their mouth's scores' median less the rest's. With the inner lips' parting
+    over the face's height across every frame, its 1st and 99th percentiles: how far a mouth may go."""
+    import numpy as np
+    names = visemes.get("names", [])
+    cols = [actor.BLEND_NAMES.index(n) for n in names]
+    m = blend[:, cols].astype(np.float64)
+    sd = m.std(0) + 1e-6
+    n_near = min(len(m), max(MOUTH_LEAST, int(MOUTH_SHARE * len(m))))
+    mouth = [row[0] for row in parts.PARTS].index("mouth")
+    reach = parts.reach_at(canon, canon[:478])[:, mouth]
+    said = np.zeros(blend.shape[1])
+    said[parts.scores_of(actor.BLEND_NAMES[: blend.shape[1]], parts.PARTS[mouth][1])] = 1.0
+    made = {}
+    for c, row in visemes.get("classes", {}).items():
+        d = (((m - np.asarray(row["blend"], np.float64)) / sd) ** 2).sum(1)
+        near = np.argpartition(d, n_near - 1)[:n_near]
+        made[c] = (np.median(aligned[near], 0), np.median(blend[near], 0))
+    if "rest" not in made:
+        return {}
+    rest_points, rest_blend = made["rest"]
+    sounds = {}
+    for c, (points, scores) in made.items():
+        off = (points - rest_points) * reach[:, None]
+        off = np.concatenate([off, dw @ off])
+        sounds[c] = {"points": np.round(off, 4).tolist(), "blend": np.round((scores - rest_blend) * said, 4).tolist()}
+    gap = np.linalg.norm(aligned[:, 13] - aligned[:, 14], axis=1) / np.maximum(
+        np.linalg.norm(aligned[:, parts.TOP] - aligned[:, parts.CHIN], axis=1), 1e-6)
+    return {"sounds": sounds, "gap": [round(float(np.percentile(gap, 1)), 4), round(float(np.percentile(gap, 99)), 4)]}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--frames", required=True, action="append")
     ap.add_argument("--out", required=True)
     ap.add_argument("--poses", default="")
     ap.add_argument("--shared", default="")
+    ap.add_argument("--visemes", default="")
     ap.add_argument("--progress", default="")
     a = ap.parse_args()
     import numpy as np
@@ -265,10 +340,7 @@ def main() -> int:
         test[::HELD_OUT] = True
         X = np.concatenate([blend, np.ones((blend.shape[0], 1))], 1)
         Y = residual.reshape(blend.shape[0], -1)
-        A = X[~test]
-        lam = RIDGE * np.eye(X.shape[1])
-        lam[-1, -1] = 0.0
-        W = np.linalg.solve(A.T @ A + lam * A.shape[0], A.T @ Y[~test])
+        W = by_parts(X[~test], Y[~test], canon)
         pred = X[test] @ W
 
         def r2(rows):
@@ -345,6 +417,12 @@ def main() -> int:
             # the actor's range, from every video: their rest, their glances, how far their eyes close
             for key in ("rest", "looks", "shut"):
                 own[key] = actor.read_json(theirs)[key]
+        if a.visemes and os.path.exists(a.visemes):
+            # each sound's mouth from every frame of theirs: the actor's (--shared), else these
+            src = shared if shared is not None else {"aligned": al, "blend": f["blend"], "keep": keep}
+            k = np.asarray(src["keep"]).astype(bool)
+            own["mouths"] = mouths_of(np.asarray(src["aligned"])[k].astype(np.float64), np.asarray(src["blend"])[k],
+                                      actor.read_json(a.visemes), canon_all, dw)
         actor.write_json(a.poses, own)
     # what it holds, measured
     fit_px = np.sqrt((((aligned[:, rigid] - canon[rigid]) * np.asarray([s for s, _, _ in poses])[:, None, None]) ** 2)

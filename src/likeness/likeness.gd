@@ -67,8 +67,6 @@ var _renderer := "2d"
 var _splat_layer: Node2D
 var _splat: SplatHead = null
 var _splat_crop := Vector2.ZERO
-var _class_scores := {}               # sound class -> the 52 scores of their mouth for it
-var _mouth_scores := PackedInt32Array()   # which of the 52 a sound sets
 var _still_scores := PackedFloat32Array()
 var _still_scale := 1.0
 var _still_rot := Basis.IDENTITY
@@ -83,16 +81,15 @@ var _bone_shown := PackedByteArray()
 ## ones less the head), and how surely a bone must be seen in the still for its splats to be drawn (train.py's SEEN).
 const BONE_MOVES := [0, 2, 3, 4, 5, 6, 7, 8, 9]
 const SEEN := 0.3
-## The faces the player mixes, made once ([method SplatHead.face_of]): the still's, each sound's (its mouth
-## pushed past their own), and the still's with the lids shut.
+## The faces the player mixes, made once ([method SplatHead.face_of]): the still's, each sound's (their own mouth
+## for it, from their rest, pushed past their own: [method own_mouths]), and the still's with the lids shut.
 var _still_face := PackedFloat32Array()
 var _class_faces := {}
 var _shut_face := PackedFloat32Array()
 var _look_faces := {}                 # glance -> the still's face looking that way (the Face rig's `looks`)
 ## ...and each one's expression, for the splats' own shifts ([method SplatHead.expr_of]), mixed alike.
 var _still_expr := PackedFloat32Array()
-var _class_exprs := {}                # each sound's expression from its own scores, not pushed: the shifts were
-                                      # learned inside their range, and pushed past it they swung
+var _class_exprs := {}
 var _shut_expr := PackedFloat32Array()
 var _look_exprs := {}
 ## THEIR FACE'S OWN WAYS OF MOVING as the splats take them ([method LikenessPlan.face]): each way's face and
@@ -100,10 +97,12 @@ var _look_exprs := {}
 var _way_faces: Array = []
 var _way_exprs: Array = []
 ## How far past their own each sound's mouth is played (their mouth scarcely moves while they talk: a
-## still's mouth shapes read as nothing): the actor's Articulation setting, as the 2D library's - never past
-## [constant TOP] of their own range (`visemes.json`'s `range`, its percentiles of each mouth score).
+## still's mouth shapes read as nothing): the actor's Articulation setting, as the 2D library's - never past how far
+## their own lips part, nor a score past [constant TOP] of their own range (`visemes.json`'s `range`).
 var _push := 2.0
 const TOP := "99"
+## The most a sound's mouth may turn any of the face's triangles from the face at rest, in degrees ([method unfolded]).
+const FOLD_MOST := 40.0
 
 
 ## One drawing of the mesh: the still, read through it.
@@ -342,8 +341,8 @@ func load_set(dir: String, sid: String, still: int, seed_in: int, renderer := "2
 
 
 ## THEM AS SPLATS from set folder [param sd], played from still [param k]: the avatar and its room, the still's
-## pose, scores and bones, their eyes' shut score and glances (the Face rig's `poses.json`), and each sound's
-## mouth as scores (`visemes.json` of the actor in [param dir]: its mouth's scores over the still's own).
+## pose, scores and bones, their eyes' shut score, glances and own mouth for each sound (the Face rig's `poses.json`;
+## [method own_mouths], with `visemes.json` of the actor in [param dir]).
 func _load_splat(sd: String, dir: String, k: int) -> String:
 	if _splat == null:
 		_splat = SplatHead.new()
@@ -384,41 +383,19 @@ func _load_splat(sd: String, dir: String, k: int) -> String:
 			Vector3(ax[2][0], ax[2][1], ax[2][2])))
 		_bone_unit.append(float((bd as Dictionary)["unit"]))
 		_bone_shown.append(1 if float((bd as Dictionary)["seen"]) >= SEEN else 0)
-	_class_scores = {}
-	var raw_scores := {}
-	_mouth_scores = PackedInt32Array()
 	var a: Variant = ActorFolder.read_json(dir.path_join("actor.json"))
 	_push = float(ActorSteps.settings_of((a as Dictionary).get("settings", {}) if a is Dictionary else {})["articulation"])
 	var v: Variant = ActorFolder.read_json(dir.path_join("visemes.json"))
-	if v is Dictionary:
-		var names: Array = (v as Dictionary).get("names", [])
-		for n in names:
-			_mouth_scores.append(SplatHead.SCORES.find(String(n)))
-		var classes: Dictionary = (v as Dictionary).get("classes", {})
-		# NEVER PAST WHAT THEY WERE SEEN DOING: a sound pushed by Articulation stops at their own TOP percentile of
-		# each score (2026-10-24: at 3, "open" asked the jaw 0.67, past all but a percent of the moments the head
-		# was learned from, and the splats bound to it stretched with it)
-		var range_of: Variant = (v as Dictionary).get("range")
-		var top: Array = (range_of as Dictionary).get(TOP, []) if range_of is Dictionary else []
-		for c in classes:
-			var b: Array = (classes[c] as Dictionary).get("blend", [])
-			var out := _still_scores.duplicate()
-			var raw := _still_scores.duplicate()
-			for j in mini(b.size(), _mouth_scores.size()):
-				var at := _mouth_scores[j]
-				if at >= 0:
-					var most := maxf(_still_scores[at], float(top[j])) if j < top.size() else 1.0
-					out[at] = clampf(_still_scores[at] + (float(b[j]) - _still_scores[at]) * _push, 0.0, most)
-					raw[at] = clampf(float(b[j]), 0.0, 1.0)
-			_class_scores[String(c)] = out
-			raw_scores[String(c)] = raw
+	var mouths: Variant = (poses as Dictionary).get("mouths")
+	if not (v is Dictionary) or not (mouths is Dictionary) or not ((mouths as Dictionary).get("sounds") is Dictionary):
+		return "The actor's set is from before their own mouths: Generate on the Actor card makes it again."
 	_still_face = _splat.face_of(_still_scores)
 	_still_expr = _splat.expr_of(_still_scores)
-	_class_faces = {}
-	_class_exprs = {}
-	for c in _class_scores:
-		_class_faces[c] = _splat.face_of(_class_scores[c])
-		_class_exprs[c] = _splat.expr_of(raw_scores[c])
+	# where the neck's splats stood: the still's frames, from which they take the torso's move
+	_splat.hold_still(_still_face, _still_scale, _still_rot, _still_shift)
+	var own := own_mouths(_splat, rest_mouth(_still_scores, v), mouths, _push, top_of(v))
+	_class_faces = own["faces"]
+	_class_exprs = own["exprs"]
 	var closed := _still_scores.duplicate()
 	closed[9] = _shut.x
 	closed[10] = _shut.y
@@ -435,6 +412,131 @@ func _load_splat(sd: String, dir: String, k: int) -> String:
 		_look_faces[String(g)] = _splat.face_of(look)
 		_look_exprs[String(g)] = _splat.expr_of(look)
 	return ""
+
+
+## THE STILL'S SCORES WITH THEIR MOUTH AT REST: the mouth's scores of [param visemes] (`visemes.json`) at its "rest"
+## sound's - where every sound's mouth moves from ([method own_mouths]), and silence.
+static func rest_mouth(still: PackedFloat32Array, visemes: Dictionary) -> PackedFloat32Array:
+	var out := still.duplicate()
+	var names: Array = visemes.get("names", [])
+	var rest: Array = ((visemes.get("classes", {}) as Dictionary).get("rest", {}) as Dictionary).get("blend", [])
+	for j in mini(names.size(), rest.size()):
+		var at := SplatHead.SCORES.find(String(names[j]))
+		if at >= 0 and at < out.size():
+			out[at] = clampf(float(rest[j]), 0.0, 1.0)
+	return out
+
+
+## THE MOST EACH SCORE MAY BE PUSHED TO: their own [constant TOP] percentile of each of the mouth's scores in
+## [param visemes] (`range`), by its place among the 52.
+static func top_of(visemes: Dictionary) -> Dictionary:
+	var out := {}
+	var names: Array = visemes.get("names", [])
+	var r: Variant = visemes.get("range")
+	var top: Array = (r as Dictionary).get(TOP, []) if r is Dictionary else []
+	for j in mini(names.size(), top.size()):
+		var at := SplatHead.SCORES.find(String(names[j]))
+		if at >= 0:
+			out[at] = float(top[j])
+	return out
+
+
+## THEIR OWN MOUTH FOR EACH SOUND (the Face rig's `mouths`, hosts/avatar/rig.py; 2026-10-25, the user: "The mouth
+## shape barely moves" - played from each sound's scores through the basis, his lips parted 0.044 to 0.062 of his
+## face's height while it spoke, his own 0.013 to 0.11): the face [param base] (the still's scores, its mouth at
+## rest: [method rest_mouth]) moved by the sound's own move as their face made it - its points and its scores less
+## their rest's - pushed [param push] times (Articulation), NEVER PAST HOW FAR THEIR OWN LIPS PART (`gap`, the 1st
+## and 99th percentiles of the inner lips' parting over the face's height: a sound that opens stops at the most, one
+## that closes at the least), its scores never past their own [param top] ([method top_of]), NOR FOLDING THE FACE
+## ([method unfolded]). The expression is the pushed scores', as the face's.
+## `{faces: {sound: face}, exprs: {sound: expression}, pushed: {sound: times}}`.
+static func own_mouths(splat: SplatHead, base: PackedFloat32Array, mouths: Dictionary, push: float,
+		top: Dictionary) -> Dictionary:
+	var face := splat.face_of(base)
+	var gap: Array = mouths.get("gap", [0.0, 1.0])
+	var least := float(gap[0])
+	var most := float(gap[1])
+	var g0 := lips_parted(face)
+	var out := {"faces": {}, "exprs": {}, "pushed": {}}
+	var sounds: Dictionary = mouths.get("sounds", {})
+	for c in sounds:
+		var row: Dictionary = sounds[c]
+		var move := PackedFloat32Array()
+		for p in row.get("points", []):
+			move.append_array(PackedFloat32Array([float(p[0]), float(p[1]), float(p[2])]))
+		if move.size() != face.size():
+			continue
+		var moved := face.duplicate()
+		_add(moved, move, 1.0)
+		var g1 := lips_parted(moved)
+		var k := push
+		if g1 > g0 + 1e-6:
+			k = minf(k, (most - g0) / (g1 - g0))
+		elif g1 < g0 - 1e-6:
+			k = minf(k, (g0 - least) / (g0 - g1))
+		k = unfolded(splat.tris, face, move, maxf(k, 0.0))
+		var f := face.duplicate()
+		_add(f, move, k)
+		var s := base.duplicate()
+		var d: Array = row.get("blend", [])
+		for j in mini(d.size(), s.size()):
+			s[j] = clampf(s[j] + k * float(d[j]), 0.0, maxf(base[j], float(top.get(j, 1.0))))
+		out["faces"][String(c)] = f
+		out["exprs"][String(c)] = splat.expr_of(s)
+		out["pushed"][String(c)] = k
+	return out
+
+
+## A SOUND'S MOUTH NEVER FOLDS THE FACE (2026-10-25, the user: "needle-like fractures throughout it, especially near
+## the face, and especially noticeable when the face moves"): how far [param move] may push [param face] - at most
+## [param k] times - before any of its triangles ([param tris]) turns past FOLD_MOST from the face's. A sound's own
+## move is the median of their tracked points, and Articulation pushes all of it: on his set, their own mouths turn a
+## triangle at most 27 degrees, and pushed three times the corners of the mouth crossed over themselves - P B M 118, F V
+## 85, "open" 62 - and the splats bound there swung edge-on, streaks and specks along the beard's edges. Held to 40,
+## "open" still parts the lips 0.105 of the face's height (their own 95th percentile, 0.11); P B M and F V stop near
+## their own shape, pushed further only 2 to 3 pixels nearer closed. The most k within it, to 1/256 of it.
+static func unfolded(tris: PackedInt32Array, face: PackedFloat32Array, move: PackedFloat32Array, k: float) -> float:
+	var near: PackedInt32Array = []
+	for t in tris.size() / 3:
+		for c in 3:
+			var at := tris[t * 3 + c] * 3
+			if at + 2 < move.size() and absf(move[at]) + absf(move[at + 1]) + absf(move[at + 2]) > 0.0:
+				near.append(t)
+				break
+	var turns := func(w: float) -> bool:
+		for t in near:
+			var a := tris[t * 3] * 3
+			var b := tris[t * 3 + 1] * 3
+			var c := tris[t * 3 + 2] * 3
+			var p0 := Vector3(face[a], face[a + 1], face[a + 2])
+			var p1 := Vector3(face[b], face[b + 1], face[b + 2])
+			var p2 := Vector3(face[c], face[c + 1], face[c + 2])
+			var n0 := (p1 - p0).cross(p2 - p0).normalized()
+			p0 += w * Vector3(move[a], move[a + 1], move[a + 2])
+			p1 += w * Vector3(move[b], move[b + 1], move[b + 2])
+			p2 += w * Vector3(move[c], move[c + 1], move[c + 2])
+			var n1 := (p1 - p0).cross(p2 - p0).normalized()
+			if rad_to_deg(acos(clampf(n0.dot(n1), -1.0, 1.0))) > FOLD_MOST:
+				return true
+		return false
+	if not turns.call(k):
+		return k
+	var lo := 0.0
+	var hi := k
+	for _i in 8:
+		var mid := 0.5 * (lo + hi)
+		if turns.call(mid):
+			hi = mid
+		else:
+			lo = mid
+	return lo
+
+
+## How far the inner lips of face [param v] (its points, three numbers each) part, over the face's height (the
+## forehead's top, MediaPipe's 10, to the chin, 152) - as the Face rig measures their own (`gap`).
+static func lips_parted(v: PackedFloat32Array) -> float:
+	var p := func(i: int) -> Vector3: return Vector3(v[i * 3], v[i * 3 + 1], v[i * 3 + 2])
+	return (p.call(13) - p.call(14)).length() / maxf((p.call(10) - p.call(152)).length(), 1e-6)
 
 
 ## Each of their face's own ways of moving ([member LikenessPlan.face_basis]) as a face and an expression less the
@@ -469,8 +571,8 @@ func _drop_splat() -> String:
 
 
 ## THEM AS SPLATS AT [param t]: their face - the still's own, moved toward each sound shaping the mouth by its
-## share ([method LikenessPlan.mouth_mix]: every pull, smoothed; its face made once, the mouth pushed past their
-## own by Articulation), moved its own ways as their face moved ([method LikenessPlan.face]), toward the lids shut
+## share ([method LikenessPlan.mouth_mix]: every pull, smoothed; its face made once, their own mouth for it pushed
+## past their own by Articulation, silence their mouth at rest), moved its own ways as their face moved ([method LikenessPlan.face]), toward the lids shut
 ## as far as the blink, toward a glance - the head as the still holds it, turned by their motion [param moved] about
 ## the neck and carried by the torso; and their body's bones as the still holds them, each moved as the 2D body's
 ## bone is ([param moves]: [method LikenessFace.bones]).

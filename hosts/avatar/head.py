@@ -138,10 +138,8 @@ class Footage(train.Frames):
         self.B = int(r["bone_unit"].shape[1])
         self.device = device
         b = r["blend"].astype(np.float64)
-        self.expr_mean = b[self.train].mean(0)
-        _u, sv, vt = np.linalg.svd(b[self.train] - self.expr_mean, full_matrices=False)
-        self.expr_basis = vt[:train.EXPRESSIONS].T
-        self.expr_scale = sv[:train.EXPRESSIONS] / math.sqrt(max(1, self.train.size - 1))
+        self.expr_mean, self.expr_basis, self.expr_scale, self.expr_part = train.components(b, self.train)
+        self.expr_reach = None
         self.expr = t((b - self.expr_mean) @ self.expr_basis / np.maximum(self.expr_scale, 1e-6))
         self.K = train.EXPRESSIONS
         # nothing stands before them that the loss must leave out (a set's microphone is the set's own)
@@ -210,7 +208,7 @@ class HeadSplats(train.Splats):
             return super().colours(expr)
         c = self.p["colour"] + torch.einsum("l,nlc->nc", code, self.p["look_colour"])
         if expr is not None and self.p["colour_d"].shape[1] == expr.shape[0]:
-            c = c + self.shift_weight()[:, None] * torch.einsum("k,nkc->nc", expr, self.p["colour_d"])
+            c = c + torch.einsum("nk,nkc->nc", self.shift_weight() * expr[None], self.p["colour_d"])
         return torch.sigmoid(c)
 
     def baked(self, code):
@@ -219,9 +217,11 @@ class HeadSplats(train.Splats):
         with torch.no_grad():
             place = self.p["place"] + torch.einsum("l,nlc->nc", code, self.p["look_place"])
             colour = self.p["colour"] + torch.einsum("l,nlc->nc", code, self.p["look_colour"])
-            return train.Splats(self.bind.clone(), place.clone(), self.p["log_scale"].clone(), self.p["turn"].clone(),
-                                colour.clone(), self.p["cover"].clone(), self.T, self.p["place_d"].clone(),
-                                self.p["colour_d"].clone(), k=self.p["place_d"].shape[1])
+            s = train.Splats(self.bind.clone(), place.clone(), self.p["log_scale"].clone(), self.p["turn"].clone(),
+                             colour.clone(), self.p["cover"].clone(), self.T, self.p["place_d"].clone(),
+                             self.p["colour_d"].clone(), k=self.p["place_d"].shape[1])
+            s.reach = self.reach
+            return s
 
 
 def stored(x):
@@ -426,7 +426,8 @@ def save(head: HeadSplats, bodies, rooms: Rooms, codes, data: Footage, rig_path:
                  body_colour_logit=cat("colour"), body_cover=torch.cat([b.covers() for _v, b in held]).cpu().numpy(),
                  expr_mean=data.expr_mean.astype(np.float32), expr_basis=data.expr_basis.astype(np.float32),
                  expr_scale=data.expr_scale.astype(np.float32), canon=r["canon"], basis=r["basis"], tris=r["tris"],
-                 bones=np.int32(data.B), crop=np.asarray(data.crop, np.int32), folders=np.asarray(data.folders))
+                 bones=np.int32(data.B), crop=np.asarray(data.crop, np.int32), folders=np.asarray(data.folders),
+                 **train.expr_parts(data))
     os.replace(out + ".part.npz", out)
 
 
@@ -450,6 +451,7 @@ def main() -> int:
         return 2
     rig = train.Rig(spec["rig"], dev)
     head = head_of(rig, data, dev)
+    head.reach = train.reach_of(rig, data)
     bodies = bodies_of(rig, data, dev)
     plates, seens = [], []
     with torch.no_grad():

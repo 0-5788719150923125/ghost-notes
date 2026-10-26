@@ -14,7 +14,7 @@ class_name TableCardPose
 ## WHAT IT IS HANDED is written out: every `medium.` below is something it reads of the table -
 ## mostly the plan (`medium._plan`), the timing constants a show shares, and where the box and the
 ## deck are now. [method card_pose], [method looks], [method held_span], [method searched_xf],
-## [method search_looks] and [method jump_riffle] are what the table asks of it.
+## [method search_looks], [method jump_riffle] and [method righting] are what the table asks of it.
 
 ## The [TableMedium] this is a part of: everything read through it is something this part
 ## is handed, and the list of them is what it depends on.
@@ -77,6 +77,14 @@ const TURN_HOLD := Vector2(0.6, 5.0)
 ## it started - the hold, and how long the twirl takes. Rare, and once a card at most: the plain
 ## half turn is the common look.
 const PIROUETTE_CHANCE := 0.1
+## A CARD RIGHTED IN THE HAND ([constant CardTable.REVERSALS] "righted", the user, 2026-10-25: "start as a
+## reversal, but then is turned/reoriented to the upright position after we pull it"): it comes up upside
+## down and, this long after it faces the camera, is turned the right way up in its own plane - a half
+## turn either way, taking this long - well before it goes down ([method righting]).
+const RIGHT_AFTER := Vector2(0.5, 1.3)
+const RIGHT_TURN := Vector2(0.55, 0.8)
+## ...and it is turned the right way up at least this long before it goes down.
+const RIGHT_CLEAR := 0.3
 
 # --- posing everything ------------------------------------------------------------------------
 
@@ -616,12 +624,57 @@ func _present_xf(k: int, t: float, up_at := INF, until := INF) -> Transform3D:
 		# held alone in the middle: square to the lens, the hand's sway smaller
 		yaw *= 0.45
 	b = Basis(c.y, yaw + _turn_of(k, t, up_at, until)) * Basis(c.x, tilt) * Basis(c.z, roll) * b
-	if medium._reversed(k):
-		b = Basis(c.z, PI) * b
+	var spin := _held_turn(k, t)
+	if spin != 0.0:
+		b = Basis(c.z, spin) * b
 	var at := PRESENT_ALONE if medium._plan.alone else PRESENT
 	var off := Vector3(at.x + sin(t * 0.7 + rng_k) * 0.0012, at.y + sin(t * 0.9 + 1.3) * 0.0015,
 		-(PRESENT_ALONE_DIST if medium._plan.alone else TableMedium.PRESENT_DIST))
 	return Transform3D(b, medium._plan.cam_base * off)
+
+
+## How far from the right way up card [param k] is held at [param t], turned in its own plane: PI for a
+## card read reversed; for one righted in the hand ([method righting]) PI until the hand turns it, eased
+## through a half turn to a whole one (the right way up) as it ends; 0 for any other.
+func _held_turn(k: int, t: float) -> float:
+	if medium._reversed(k):
+		return PI
+	var r := righting(k)
+	if r.is_empty():
+		return 0.0
+	var f := TableMedium._ease(clampf((t - float(r["at"])) / float(r["turn"]), 0.0, 1.0))
+	return PI + float(r["way"]) * PI * f
+
+
+## WHEN CARD [param k] IS RIGHTED in the hand: `{at, turn, way}` - the half turn begins `at` (show time),
+## takes `turn` seconds, and goes `way` (1 or -1) - for a card that came out upside down ([method
+## TableMedium._righted]) and is held up as it arrives, drawn, pulled from the box or a jumper picked up
+## ([constant RIGHT_AFTER] after it is up). Empty for any other: a card dealt or swept out is turned the
+## right way up on its way down (the take's own turn, from its source to where it lies). Done
+## [constant RIGHT_CLEAR] before it goes down - a short hold turns it sooner, as it comes up. A card with
+## its text on its back is always turned as it comes up: its hold is for turning it over to read that
+## ([method looks]), and righted after it was up, a short passage's card was never turned over at all.
+func righting(k: int) -> Dictionary:
+	if not medium._righted(k) or k >= medium._all_events.size() or (medium._all_events[k] as Array).is_empty():
+		return {}
+	var ev: Array = medium._all_events[k]
+	var e: Dictionary = ev[0]
+	if String(e["k"]) != "arrive" or not String(e["how"]) in ["draw", "jumper"] or float(e["t0"]) == INF:
+		return {}
+	var s := maxf(float(e["s"]), 0.05)
+	var start := float(e["t0"]) + float(e["off"]) * s
+	var up_at := start + (TableMedium.JUMP_RISE if String(e["how"]) == "jumper" else TableMedium.RISE_END) * s
+	var until := float((ev[1] as Dictionary)["t0"]) if ev.size() > 1 and String((ev[1] as Dictionary)["k"]) == "lay" else INF
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([medium._plan.seed_value, k, "righted"])
+	var turn := rng.randf_range(RIGHT_TURN.x, RIGHT_TURN.y)
+	var after := rng.randf_range(RIGHT_AFTER.x, RIGHT_AFTER.y)
+	var way := 1.0 if rng.randf() < 0.5 else -1.0
+	# as it comes up: done as it faces the camera
+	var rising := up_at - turn
+	var at := rising if String(medium._plan.staging["text"]) == "back" else up_at + after
+	at = minf(at, maxf(until - turn - RIGHT_CLEAR, rising))
+	return {"at": maxf(at, start), "turn": turn, "way": way}
 
 
 ## How far card [param k] is turned over at [param t] (0 face on, PI showing its back - a whole
@@ -648,6 +701,10 @@ func looks(k: int, up_at: float, until: float) -> Array:
 	var out: Array = []
 	if up_at == INF:
 		return out
+	# a card righted in the hand is turned over only once it is the right way up
+	var r := righting(k)
+	if not r.is_empty():
+		up_at = maxf(up_at, float(r["at"]) + float(r["turn"]))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([medium._plan.seed_value, k, "turn"])
 	var at := 0.0
@@ -790,7 +847,7 @@ func _jump_ride(k: int, v: float) -> Transform3D:
 	var seed := hash([medium._plan.seed_value, "jumper-riffle"])
 	var top := medium._shuffles.riffle(medium._shuffles.riffle_top(seed), v, TableMedium.JUMP_RIFFLE, seed)
 	top.origin += top.basis.y.normalized() * TableMedium.DECK_T
-	top.basis = top.basis * Basis(Vector3.UP, PI if medium._reversed(k) else 0.0)
+	top.basis = top.basis * Basis(Vector3.UP, PI if medium._upside(k) else 0.0)
 	return medium._deck_top_xf(k).interpolate_with(top, TableMedium._ease(v / 0.35)) if v < 0.35 else top
 
 
@@ -821,7 +878,7 @@ static func _as_drawn(xf: Transform3D) -> Transform3D:
 ## A jumper at [param u] seconds into its action: riding a riffle's half, springing off it as the
 ## halves fall, flying to land face up, lying there a moment, then picked up and shown.
 func _jump_xf(k: int, u: float, pres: Transform3D) -> Transform3D:
-	var land := Transform3D(Basis(Vector3.UP, 0.6 + (PI if medium._reversed(k) else 0.0)) * TableMedium._face_up(),
+	var land := Transform3D(Basis(Vector3.UP, 0.6 + (PI if medium._upside(k) else 0.0)) * TableMedium._face_up(),
 		medium._plan.jump_land + Vector3(0, TableMedium.CARD_T * 0.5, 0))
 	if u < TableMedium.JUMP_FLY.x:
 		return _jump_ride(k, u)

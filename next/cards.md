@@ -5,8 +5,9 @@ deal, paint and write one card at a time, and ghost reads it aloud in the Genera
 table. Built 2026-10-04 as the tarot mode; renamed Cards on 2026-10-06 (the user: "the intent is to
 later support any kind of card: tarot, baseball cards, MTG, Pokemon, flashcards... I want to use
 'Card' as the name"). Its first deck, and so far its only recipe, is the tarot: the prompts, the 78
-and their elements, reversals and jumpers are the tarot's, and moving them into a show's guide is
-next/notes.md step 9's open part. First show: `rift/tarot/truthful-tarot.md` ("Truthful Tarot" -
+and their elements were the tarot's, and moving them into a show's guide was next/notes.md step 9 -
+reversals and jumpers, the last of them, are each episode's producer's since 2026-10-25 ("The
+staging", below). First show: `rift/tarot/truthful-tarot.md` ("Truthful Tarot" -
 the genre's format and voice, told true).
 
 In the code: `CardsEditor` (the panel), `CardEpisode`, `CardProducer`, `CardPrompts`, `CardReading`
@@ -77,8 +78,7 @@ seeds' hash salts keep their old `tarot-` names, so every episode already made c
 ## The show document
 
 Frontmatter: `title` is the channel. `ghost: tarot:` holds the knobs - `show` (the cache key,
-fixed at the first episode), `seed`, `cards: [lo, hi]`, `reversals`, `jumpers`, `writer`,
-`painter` - and the reader's voice (`voices`, `tab`, `picture`), exactly as a Generative chapter
+fixed at the first episode), `seed`, `cards: [lo, hi]`, `writer`, `painter` - and the reader's voice (`voices`, `tab`, `picture`), exactly as a Generative chapter
 carries its cast. The knobs are the document's exactly: a show opened with no block starts from
 the defaults, never from the show open before it (whose key would put its episodes in that
 show's folder). An export is of the episode open when it was asked for, whatever is picked
@@ -151,6 +151,20 @@ every one is data the table reads:
   (`TableMedium._build_file`, a MultiMesh per printing). A drawn card
   waits standing in the file and is pulled straight up past the rim. The reading opens with `open`
   instead of `shuffle`, and no first card waits for a push.
+- `plan.staging.reversals` (`CardTable.REVERSALS`) and `plan.staging.jumpers` (2026-10-25; the user:
+  the Episode card's Reversals and Jumpers switches "should be set by the agents during preparation for
+  an episode" - a tarot reading reads both, "elsewhere, we would almost never see reversals used", but "a
+  box full of Pokemon cards, or a pile of messy baseball cards" has a card come out upside down and turned
+  upright after it is pulled). `none` is the default; `read` - a card upside down lies and is read so (its
+  booklet's reversed meaning, the back symmetric under a half turn); `righted` - the seed's same cards
+  come out upside down (waiting so on the deck, riding a riffle, standing in the box's file or on its
+  piles: `TableBox._waits`) and are turned the right way up in the hand a beat after they are up
+  (`TableCardPose.righting`; as they come up when the text is on the back, which the hold is for - a short
+  passage's card was otherwise never turned over), or on the way down when dealt or swept, then read and
+  laid the right way up, the reader told so (`righted`). `jumpers` lets the seed's 30% throw the first
+  card out of the shuffle (`CardProducer.jumps`), never out of a box. A plan made before the fields reads
+  neither; its draw keeps what it drew. True Tarot's brief says it reads both. Gates: cards_check
+  `_ways_up`, `_burst_moments`; table_staging_check `_righted`.
 - `plan.staging.text` (`CardTable.TEXTS`): `booklet` - the page beside the card, held up on the left;
   `back` - the card's text printed in a panel over its printing's back (`CardFaces.Face.printed`), the
   card held up alone and turned over long enough to read (`TableMedium._looks`); or `front` - the art,

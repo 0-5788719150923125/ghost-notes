@@ -617,6 +617,7 @@ func document() -> Dictionary:
 			# the draw keeps the cards themselves (see CardProducer._make_draw)
 			var card := (c as Dictionary).duplicate()
 			card["reversed"] = bool(card.get("reversed", false))
+			card["righted"] = bool(card.get("righted", false))
 			card["jumper"] = bool(card.get("jumper", false))
 			card["position"] = (spread[i - 1] as Dictionary).duplicate() if i - 1 < spread.size() and spread[i - 1] is Dictionary else {}
 			if laid.has(i):

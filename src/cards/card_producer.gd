@@ -44,13 +44,14 @@ const REPAINTS := 2
 ## hand) and the most recent - the [Illustrations] chain, for the same reason: more attachments
 ## make a painter worse at matching, not better.
 const CHAIN_MAX := 2
-## The chance the first card is a jumper, when the show allows them.
+## The chance the first card is a jumper, when the plan lets one fly (`staging.jumpers`).
 const JUMPER_CHANCE := 0.3
 ## The steps made here, with no agent and no quota - see the class note.
 const LOCAL := ["draw", "script"]
 
 var episode: CardEpisode
-## {title, brief, cards: [lo, hi], reversals, jumpers, writer, painter}
+## {title, brief, cards: [lo, hi], writer, painter} - whether cards come up reversed and whether one
+## jumps are the plan's ([method CardTable.staging_of]), never the author's switches
 var spec: Dictionary = {}
 var running := false
 ## The steps this run was asked for; empty for the whole episode.
@@ -257,8 +258,7 @@ func _spread_n() -> int:
 func _make_plan() -> void:
 	var n := _spread_n()
 	var p := CardPrompts.producer(String(spec.get("title", "")), String(spec.get("brief", "")),
-		episode.seed, n, bool(spec.get("reversals", true)), CardTable.FACES,
-		CardTable.FRAMES, CardEpisode.archive(episode.show, episode.seed), _deck(), bool(spec.get("chooses", false)),
+		episode.seed, n, CardTable.FACES, CardTable.FRAMES, CardEpisode.archive(episode.show, episode.seed), _deck(), bool(spec.get("chooses", false)),
 		String(spec.get("uploads_as", "")))
 	_submit_text("plan", p, "best")
 
@@ -271,15 +271,20 @@ func _make_draw() -> String:
 		return "the plan has no spread"
 	# the show's own deck, shuffled from the seed - and each card WRITTEN INTO the draw, so the
 	# episode keeps the cards it drew whatever the show's deck becomes later
-	var deck := CardDeck.shuffled(_deck(), episode.seed, bool(spec.get("reversals", true)))
+	var deck := CardDeck.shuffled(_deck(), episode.seed, CardTable.reverses(plan))
 	if deck.size() < n:
 		return "the deck has %d cards and this spread needs %d (the plan was made for a bigger deck: New episode)" \
 			% [deck.size(), n]
-	var jumper := jumps(episode.seed, bool(spec.get("jumpers", true)), plan)
+	var jumper := jumps(episode.seed, plan)
+	var read := CardTable.reads_reversed(plan)
 	var cards: Array = []
 	for i in n:
 		var c: Dictionary = (deck[i] as Dictionary).duplicate()
 		c["jumper"] = jumper and i == 0
+		# A CARD THAT CAME OUT UPSIDE DOWN AND IS RIGHTED in the hand is read the right way up
+		if bool(c.get("reversed", false)) and not read:
+			c["reversed"] = false
+			c["righted"] = true
 		cards.append(c)
 	# ...and, of a box, THE CARDS IT LEFT IN: what the table prints the cards nobody drew as
 	# (TableMedium._left_in). The table's alone - no writer is handed a card that was not drawn.
@@ -294,18 +299,17 @@ func _make_draw() -> String:
 	return episode.write_json("draw", {"seed": episode.seed, "cards": cards, "left": left, "deck_n": deck.size()})
 
 
-## WHETHER A CARD JUMPS in episode [param seed] - a show that [param allowed] them, staged by [param plan] -
-## from the seed alone: how the reading goes, never which card. A JUMPER flies out of a shuffle: never
-## out of a box, and never into a card not drawn by hand.
-static func jumps(seed: int, allowed: bool, plan: Dictionary) -> bool:
+## WHETHER A CARD JUMPS in episode [param seed], staged by [param plan]: the plan lets one fly
+## (`staging.jumpers`, the producer's choice), and the seed says whether one does - how the reading
+## goes, never which card. A JUMPER flies out of a shuffle: never out of a box, and never into a card
+## not drawn by hand.
+static func jumps(seed: int, plan: Dictionary) -> bool:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed, "tarot-jumper"])
-	var jumper := allowed and rng.randf() < JUMPER_CHANCE
-	var staging := CardTable.staging_of(plan)
+	var jumper := bool(CardTable.staging_of(plan)["jumpers"]) and rng.randf() < JUMPER_CHANCE
 	var listed: Array = ((plan.get("spread", {}) as Dictionary).get("positions", []) as Array) if plan.get("spread") is Dictionary else []
 	var first_pos: Variant = listed[0] if not listed.is_empty() else {}
-	if not bool((TableActions.SOURCES[staging["source"]] as Dictionary)["jumpers"]) \
-			or (first_pos is Dictionary and String((first_pos as Dictionary).get("comes", "drawn")) != "drawn"):
+	if first_pos is Dictionary and String((first_pos as Dictionary).get("comes", "drawn")) != "drawn":
 		jumper = false
 	return jumper
 
@@ -321,6 +325,7 @@ func _card(k: int) -> Dictionary:
 		return {}
 	var card := (list[k - 1] as Dictionary).duplicate()
 	card["reversed"] = bool(card.get("reversed", false))
+	card["righted"] = bool(card.get("righted", false))
 	card["jumper"] = bool(card.get("jumper", false))
 	var design: Variant = episode.read_json("design:%d" % k)
 	if design is Dictionary:
@@ -349,7 +354,8 @@ func _make_design(k: int) -> void:
 		if not String(c.get("art", "")).is_empty():
 			siblings.append({"k": j, "name": String(c.get("name", "")), "art": String(c["art"])})
 	var p := CardPrompts.designer(String(spec.get("title", "")), String(spec.get("brief", "")),
-		CardTable.look_of(_look(), card), card, bool(spec.get("reversals", true)), CardEpisode.archive(episode.show, episode.seed),
+		CardTable.look_of(_look(), card), card, CardTable.reads_reversed(_plan()) or bool(card.get("reversed", false)),
+		CardEpisode.archive(episode.show, episode.seed),
 		String(CardTable.staging_of(_plan())["text"]), siblings)
 	_submit_text("design:%d" % k, p, "fast")
 
@@ -396,11 +402,11 @@ func _make_image(step: String) -> void:
 				name = String((s as Dictionary)["name"])
 				break
 		_submit_image(step, CardPrompts.back_image(CardTable.look_of(look, {"series": name}), target,
-			bool(spec.get("reversals", true)), printed), [])
+			CardTable.reads_reversed(_plan()), printed), [])
 		return
 	match String(parts[1]):
 		"back":
-			_submit_image(step, CardPrompts.back_image(look, target, bool(spec.get("reversals", true)), printed), [])
+			_submit_image(step, CardPrompts.back_image(look, target, CardTable.reads_reversed(_plan()), printed), [])
 		"surface":
 			_submit_image(step, CardPrompts.surface_image(look, target), [])
 		"height":
@@ -473,7 +479,7 @@ func _make_table() -> void:
 	var p := CardPrompts.set_dresser(String(spec.get("title", "")), String(spec.get("brief", "")), _plan(),
 		episode.seed, CardTable.headroom(episode.seed), seen.slice(0, 40), cloth,
 		SetDresserTools.LOOKS if not extra.is_empty() else 0, airs.slice(0, 24), String(spec.get("byline", "")),
-		tables.slice(0, 10), lights.slice(0, 10), room, jumps(episode.seed, bool(spec.get("jumpers", true)), _plan()))
+		tables.slice(0, 10), lights.slice(0, 10), room, jumps(episode.seed, _plan()))
 	var images: Array = []
 	if cloth:
 		images.append({"path": episode.file_of("image:surface"), "label": "The painting of this episode's surface, seen from above:", "flip": false})

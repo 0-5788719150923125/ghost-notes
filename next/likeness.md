@@ -4,9 +4,262 @@ Planned 2026-10-20; **built 2026-10-21** (M1 to M8 in code, M4 and M5 looked at 
 **The second build (2026-10-21, night): a still and a model** - the section right below. The rest of
 this note is the first build, kept for what it found; where the two differ, the second build holds.
 The first build's files are backed up in `dist/likeness_v1/` (they were never committed).
-**The fifth pass (2026-10-24): an audit of the head of splats and the voice** - the section right below.
+**The fifth pass (2026-10-24): an audit of the head of splats and the voice** - below the sixth.
+**The sixth pass (2026-10-25): the mouth, the flicker and the edges** - below the seventh.
+**The seventh pass (2026-10-25, evening): the needles** - below the eighth.
+**The eighth pass (2026-10-25, night): the soft mouth and the neck, from the literature** - right below.
 
-## The fifth pass: an audit (2026-10-24)
+## The eighth pass: the soft mouth and the neck, from the literature (2026-10-25, night)
+
+**The user:** "Can you please continue on the things still not fixed? If needed, perhaps do some foundational
+research, search the internet for techniques, etc. Don't rely too heavily on your intuition here, there might be
+better ways to do this stuff than what you're pushing for, right now." Still not fixed after the seventh pass: the
+mouth soft, and a few dark specks at the neck's sides as the head turns.
+
+**Read first** (two surveys; the papers' own words and ablations):
+- The mouth: per-frame refinement of the drive (GaussianAvatars, MonoGaussianAvatar, HRAvatar, NeRFace's latent
+  codes); TEETH OF THEIR OWN - GaussianAvatars' teeth triangles on the skull and the jaw, GaussianBlendshapes' ~14k
+  mouth splats on two teeth billboards with no expression shifts ("blurry or ghosting" teeth without), GeoAvatar's
+  part-wise mouth (+1.5 dB), TalkingGaussian's inside-mouth branch; a fan of triangles "naively connecting lip
+  vertices" is named as the design that blurs and sticks the teeth together (GeoAvatar, FlashAvatar); mouth-weighted
+  losses (FlashAvatar 40x on a mouth mask; RAD-NeRF's lip fine-tuning), densifying where the mouth is only sometimes
+  seen (STAvatar), moving lips rather than recolouring them (TalkingGaussian).
+- The neck: no paper lets two separately rigged layers both cover it. Full-body avatars (ExAvatar, HUGS, GART,
+  X-Avatar) BLEND THEIR SKINNING across the neck; talking-head methods (AD-NeRF, RAD-NeRF, ER-NeRF, TalkingGaussian)
+  give it one owner, the torso, trained on a picture with the neck painted up under the jaw; occluded splats take their
+  visible neighbours' colour (OccGaussian).
+
+### Measured before anything was changed (`dist/mouth/`)
+
+- **The head is soft everywhere, not at the mouth alone:** on the set's own frames the avatar keeps 12 to 20% of the
+  frame's fine detail (the Laplacian's energy) at the brow, the cheek, the nose and the lips alike, about 23 dB even
+  on frames it learned from. Fit then sharpens all of it from the still but where the face opens - so the mouth, and
+  the beard under it, stood out.
+- **Not the tracking:** each frame's pose and points, freed to fit the avatar, moved 0.3 px at the median (the lips
+  0.2), and on the frames with the mouth most open 0.1 - gaining 0.1 to 0.2 dB. The drive is where the mouth is.
+- **The teeth are a smear:** on the open mouths it learned from, the mouth opens to the right shape and the teeth are
+  yellow streaks - painted on the fan of triangles from the inner lips to a point behind them, which moves with the
+  lips, where teeth move with the skull (upper) and the jaw (lower).
+- **The neck:** the speck pixels on the neck's smooth skin (as the still shows it), with the head turned 3 degrees each
+  way against the body. Drawn as the trainer draws (sorted by depth) they were mostly the head's and the body's
+  layers swapping places; drawn as Godot draws - in the still's order - they are the black shirt's splats the head's
+  splats below the chin had hidden, uncovered as those slid away with the head (the 42 splats under nine tenths of the
+  specks: small, opaque, black, on a shoulder's bone, unseen in the still).
+
+### Tried and dropped
+
+- **The neck's skin held to the still as the head turns** (a turned head each Fit step): 322 speck pixels to 23, but
+  it ate the bottom of the beard, even in the still (36.0 dB from 38.0) - the beard does swing over the neck.
+- **Recolouring what no picture shows** (by the still and 24 moments): 30 splats, nothing changed; **recolouring what
+  hides under the neck's skin**, or under the head, from the body round it (`train.fill_round`): 322 to 222, and in
+  the still's order nothing.
+- **Fitting the whole mouth to the still**, held to the moments: the beard under it sharp (48% of the still's detail,
+  from 40) - but the still's closed lips showed in the openings again.
+
+### THE NECK STRETCHES (fixed)
+
+Each head splat below the chin takes the torso's move from where it stood in the still, more and more to a quarter of
+the face's height below it (`train.second_of`, `NECK`): the neck stretches between the head and the body as a neck
+does. The shader takes it as it takes the body's second influences, the head splat's place in the still from the
+still's frames (`SplatHead.hold_still`, written once a load after the moment's own). In the still's order, the speck
+pixels over the four turns: 179 to none; drawn by Godot over the take, the dotted line and the cross on the neck gone,
+the beard turning with the head. Gates: splat_head_check (the shader against the rules, and its control),
+test_fit (`the_neck_stretches`).
+
+### THE BEARD UNDER THE LIPS IS FITTED (fixed)
+
+Held to the moments, Fit no longer holds the beard below the lips (it had held as far as the lower lip goes, 0.15 of
+the face's height): only the lips' outline, fading out over 0.02 of the face's height. Played: 47% of the still's
+detail in the mouth's box, from 40, the openings as clean; a light hair across the lower lip is the still's own.
+
+### THE MOUTH IS THE SET'S TOO (fixed, in part)
+
+The bake pulled the face's surface in full toward the shared head, the mouth with it: every video's lips averaged.
+A head learned from 3 videos instead of 10 drew the set's open mouths with 28% of their fine detail where the real head
+drew 14% - so the bake now pulls the mouth's splats (on the lips', the corners' and the inside's triangles,
+`bake.mouth_of`) no harder than the hair's, and lets them grow: 22% (24.17 dB against 24.21), and played, with the
+lips-only Fit, 49% of the still's detail in the mouth's box (from 40% before this pass). Still soft.
+
+### Teeth of their own, and the mouth's inside its own (tried on scratch heads; not shipped)
+
+Four heads of the same 3 videos and 12,000 steps (`dist/mouth/teeth/`), each baked onto the set, on its 12 most open
+mouths (each frame's own light, as tracked):
+
+| head | the mouth | detail | what paints the opening |
+|---|---|---|---|
+| A: as it is | 24.99 dB | 28% | the lips' own splats 84-96%, the fan the rest |
+| B: teeth (upper on the head's frame, lower on a jaw's triangle, no expression shifts) | 24.89 | 28% | the teeth 16%, the lips 74% |
+| C: B, the mouth weighed 10x and open mouths drawn up to 4x | 22.98 | 45% | (speckled, jagged teeth) |
+| D: B, and the face's own splats' cover inside the open inner lips pulled to none (TalkingGaussian's decomposition) | 25.50 | 33% | the fan 82%, the teeth 17%, the lips 1% |
+
+- **The opening was painted by the lips:** their splats - centred on the lips, reaching in - painted the teeth, which then
+  moved with the lips and smeared. Teeth alone changed nothing: the lips went on painting over them.
+- **D drew the teeth as teeth** on the mouths it learned from (each tooth, the gaps). **Played, it tore:** the played
+  mouths are their tracked mouths pushed by Articulation, wider than any it learned, and the fan that paints the inside
+  stretched into a dark gash with fragments of teeth. Not shipped; the next step there is the inside learned at the
+  played shapes, or a push the inside follows.
+
+### Found, not fixed: what stands before them is his shirt
+
+`front_1.png` (what stands before them, drawn over the splats and never moving) holds his whole upper body - the black
+t-shirt, the shoulders - and not the microphone. By colour alone, where the picture is plain, a black shirt on a dark wall
+is the still's in every frame. Drawn over the splats, it holds his chest still and cuts the beard with a hard edge as the
+head turns past it (a notch at the beard's right side). `actor.py`'s `still_room` / FRONT_SEEN, STILL_SHARE.
+
+### What is made again
+
+Generate makes again each set's Avatar (its version is 6: the mouth the set's own) and Fit (4: the seventh pass's and
+this one's), about 10 minutes; the neck's stretch is written by Fit and drawn by the player. Drawn by Godot over the
+take: `dist/mouth/seventh_vs_eighth.mp4` (the seventh pass on the left, this one on the right).
+
+**For the user to test:** the neck as the head turns, the beard under the lips, the mouth.
+
+## The seventh pass: the needles (2026-10-25, evening)
+
+**The user, on the set made again after the sixth pass:** "This feels somewhat better, however the whole scene has
+needle-like fractures throughout it, especially near the face, and especially noticeable when the face moves.
+Otherwise, the motion itself is looking somewhat better (though the mouth is quite blurry still). But the fractures
+look really bad."
+
+**Looked at** (`dist/needles/`): the set (set-2cacf4ef, its Head of 60,000 steps on 10 videos, 64 minutes) drawn by
+Godot over the 12 s take; the frames the medium wrote for the splats at six moments of it (a scratch dump), drawn
+again by the trainer.
+
+### Godot and the trainer agree
+
+Drawn by the trainer from the very frames Godot wrote, the needles are the same ones, where they are: a dark line
+from the mouth's corner across the cheek, needles through the beard, green and purple specks on the neck, the
+beard's edges in streaks. The avatar before Fit, drawn from the same frames, had none of them but streaks at the
+beard's edge, where the mouth folded the face (below) - only its blur.
+
+### Fitted to one picture, the head came apart as it moved (found and fixed)
+
+- **Fit fitted the head's splats to the still alone.** Any layers that add up to that one picture would do: 41.4 dB on
+  it, but on the set's moments it never fitted 19.9 dB, where the avatar it started from held 21.75. Turned 3
+  degrees, the neck broke into coloured specks; played, the beard and cheek tore as the mouth opened.
+- **NOW THE MOMENTS KEEP IT WHOLE** (`fit.moment_loss`): each step one of the set's own moments is drawn too, as
+  tracked and in its own light, and asks the head for its picture in squares 4 pixels wide - what moves with the face
+  holds together as it did in them, the fine detail is the still's alone. On his set: 38.0 dB on the still (from
+  41.4), 21.4 on the moments it never fitted (the avatar's 21.75, the still's alone 19.9); squares of 8 held it as
+  well (21.25).
+
+### The mouth folded the face (found and fixed)
+
+- **Turned past the head's own turn, a triangle by the mouth's corner went 91 to 96 degrees** at two of the six
+  moments, and cheek triangles beside the nose some 35. Of what moves the played face, the face's own ways turned no
+  triangle more than 4 degrees, the blink the lids' 34 - and each sound's mouth up to 121.
+- **Why:** each sound's own mouth is the median of their tracked points (the sixth pass), and Articulation pushes all
+  of it three times. Their own mouths turn a triangle at most 27 degrees; pushed, the mouth's corners crossed over
+  themselves - P B M 118 degrees, F V 85, "open" 62 - and the splats bound there swung edge-on.
+- **NOW A SOUND'S MOUTH NEVER FOLDS THE FACE** (`LikenessMedium.unfolded`, `FOLD_MOST` 40 degrees): pushed no further
+  than turns any triangle past it. On his set "open" is pushed 1.85 (the lips parted 0.105 of the face's height,
+  their own 95th percentile 0.11), P B M 1.25 and F V 1.7 (pushed 3 they had moved the lips only 2 to 3 pixels nearer
+  closed), the rest 2.6 to 3.
+
+**Drawn by Godot** (the 12 s take; `dist/needles/now_vs_seventh_pass.mp4`, the set as Generate made it on the left,
+with both on the right): the line across the cheek, the needles through the beard, the specks and crosses on the
+neck gone; the beard's edges whole through a blink and as the mouth closes on P B M. A few dark specks remain at
+the neck's sides (the avatar has them too: below the chin the head's splats and the body's meet, and slide as the
+head turns). The still is 38 dB where it was 41.4 - a little of its finest detail given for it.
+
+### What is made again
+
+Generate makes again each set's Fit (its version is 4): about 5 minutes. The cap on the mouths is the player's
+own: nothing else is made again.
+
+**For the user to test:** Generate on the Actor card, then ▶ on the note: the beard's edges and the cheeks as the
+mouth opens and closes, and the neck as the head turns.
+
+**Still open:** the mouth is the head's, as soft as every video's mouths averaged - Fit holds it as the moments
+taught it, since fitted to the still it took the still's closed lips into every opening.
+
+## The sixth pass: the mouth, the flicker and the edges (2026-10-25)
+
+**The user, on the head of splats made again after the fifth pass:** "This new attempt is decent, but it still has
+some problems. The mouth shape barely moves. The shape/color of the face and head can be stable for several seconds,
+but then it 'flickers' into something else ... around the edges of the face is heavy artifacting: at the neck, black
+splotches and hard lines, and around the head - heavy blurring, such that ears just look like smears."
+
+**Looked at** (`dist/fifth_look/`): his set (set-2cacf4ef: a black t-shirt, a dark room) drawn by the medium over a
+24 s take (`likeness_look_probe --take`), and what the player hands the splats each frame (a scratch probe: the glance,
+the blink, the face's own ways, the expression).
+
+### The flicker is the glances (found and fixed)
+
+- **Nothing else moves the face in steps:** the face's own ways moved 0.01 a frame, the motion pieces blend over 0.8 s.
+  A glance (about one every 4.5 s, turned to in 60 ms, held 0.35 to 1.2 s) moved the expression's components by up to
+  3.4 of their spreads (look aside: components 3 and 8, the gaze's; look down: 2.6 of component 1, the lids' with the
+  gaze's), and a blink 1.1.
+- **Drawn, a glance re-made the face:** the cheek widened, its light went blotchy, the beard's edge moved - for the
+  whole of the glance, then back.
+- **Why:** both things that move the face mixed its parts.
+  - The splats' expression was the 52 scores' principal components over every score at once, and its shifts learned
+    whatever went with a score in his footage: a glance aside came with his head turned to a lit screen.
+  - The rig's basis was fitted over every score: a glance's scores moved the cheeks and the jaw. Measured from the
+    basis, the eyes' scores moved the points below the nose 0.97 as far as their most - what a score moves cannot be
+    read off a fit of correlated scores.
+- **NOW THE FACE HAS PARTS** (`hosts/avatar/parts.py`): the eyes, the brows and the mouth, each its scores, its anchors
+  (MediaPipe's points: the eyes' rims and irises; the brows; the lips and the jaw's edge round the chin) and a reach in
+  the face's heights (0.12, 0.15, 0.3: all of it within half, none past it). The rig's basis moves a point by the scores
+  of the parts that reach it alone (`rig.by_parts`; a point no part reaches - the nose, the upper cheeks, the forehead's
+  top - moves with none), and the expression has components of each part's scores alone (4, 2 and 6: `train.components`),
+  a splat taking a part's shifts only as far as the part reaches its triangle (`train.reach_of`; the export writes each
+  shift so, and the shader is as it was). On his frames the basis explains 40% of the face's movement where it had 54%
+  (the lips 62% from 67%): what it gave up is what the other parts' scores had explained by going with them.
+
+### The mouth scarcely moved (found and fixed)
+
+- **Played, his lips parted 0.044 to 0.062 of his face's height while he spoke; his own, tracked over all his frames,
+  0.013 to 0.11** (the 1st to 95th percentiles; 0.145 at the 99th). Each sound's mouth was its scores, set one at a time
+  (the jaw at its place in his range, every other mouth score at its median) and pushed from the still's own - whose
+  lips are parted 0.035 - so most consonants closed the mouth, and "open" at its most (the jaw at their 99th
+  percentile) parted the lips 0.064 through the basis. His wide mouths reach 0.11 to 0.145 with an ordinary jaw score:
+  the beard throws MediaPipe's jaw off.
+- **The head is learned on the tracked points, so the mouth is played from them.** NOW EACH SOUND'S MOUTH IS THEIR OWN
+  (the Face rig's `mouths`, `rig.mouths_of`): the frames of every video whose mouth's scores are nearest the sound's (a
+  percent of them), their points' median less the rest's - only where the mouth reaches - and their mouth's scores'
+  median less the rest's; and how far their lips part, the 1st and 99th percentiles. The player moves the still's face,
+  its mouth at rest, by them, pushed by Articulation and never past their own parting (`LikenessMedium.own_mouths`).
+  Silence is their mouth at rest. Simulated over the take at Articulation 3: 0.037 to 0.114 while speaking.
+- **Drawn:** the mouth opens on the vowels, its inside dark and the teeth showing, and closes on P B M.
+
+### The edges are the head's (found; fixed in part)
+
+- **The neck:** in the still, his neck shows between the beard and the t-shirt's collar; drawn, it was dark with a hard
+  curved edge and a ring of skin. The bake drops the head's splats below the chin and lays the set's own there from its
+  146 moments, and Fit fitted only the body - not where the head is solid.
+- **The hair and ears:** the head is every video's, adapted to the set's moments: soft, the ears a smear.
+- **Fitted to the still whole** (a scratch Fit, the head's splats too, their expression shifts held): 23.3 dB on the
+  whole still became 43.7, the hair in strands, the beard sharp, the neck the still's skin down to the collar - but
+  where the face opens it broke: the shut lids showed the still's open eye as coloured specks, and the parted mouth the
+  still's closed lips as specks and streaks. Held there - the places, the triangles on the lips and the eyes' rims, or
+  every splat the expression moves - it still did, or left blurred patches beside sharp ones: what shows in the
+  opening is whatever stands there, bound to anything.
+- **NOW FIT FITS THE HEAD TOO, BUT NOT WHERE THE FACE OPENS** (`fit.where_it_opens`): a head splat is held by where it
+  stands in the still - within the lips' sweep (their outline and itself 0.15 of the face's height lower) or an eye's
+  rim, wholly, fitted more and more past them (wholly at 0.06 and 0.04 of the face's height). On his set: 41.5 dB on
+  the whole still (from 23.3), the hair in strands, the ears and beard sharp, the neck the still's skin down to the
+  collar with no edge; the parted mouth and the shut lids clean, the soft mouth fading into the sharp beard round it.
+  A few coloured strands showed on a cheek during a glance down - the old basis moved the cheek with a glance.
+
+### All of it at once, on a scratch head
+
+A head learned with the parts (`dist/fifth_look/parts_run/`: three of the Head videos, 2,000 steps each - a tenth of a
+real Head, 8 minutes), the set baked from it (21.69 dB on the moments it never fitted, as the real head's set), Fit
+(39.7 dB on the whole still) and 12 s drawn with their own mouths: through a glance the lids lower and nothing else
+changes - the old head had changed the cheek's light, the nose's shading and the warmth of the whole face.
+`dist/fifth_look/now_vs_sixth_pass.mp4`: the set as it is on the left, as it will be on the right, over a passage in
+John's voice.
+
+### What is made again
+
+Generate makes again, in order: the Head rig (seconds), Head (about 1.7 hours), and each set's Face rig (seconds),
+Avatar (4 minutes) and Fit (4). Until its Face rig is made again a set refuses to play on the splats ("from before
+their own mouths").
+
+**For the user to test:** Generate on the Actor card, then ▶ on the note: the mouth at Articulation 3 (2 if it opens
+too far), a glance, the neck and the hair. Not yet looked at: a set with glasses (the head never draws them), and a
+still with the lips apart (silence is their mouth at rest now, not the still's).
 
 **The user, on the head of splats and the voice trained on all 65 videos:** "it's almost starting to feel
 like our results are getting worse ... the face moves/morphs at EXACTLY the same time every phoneme changes.

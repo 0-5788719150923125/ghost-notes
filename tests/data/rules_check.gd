@@ -174,7 +174,7 @@ func _prompts() -> bool:
 		"booklet": {"keywords": ["a", "b"], "upright": "up", "reversed": "down"}}
 	var texts: Array = []
 	for chooses in [false, true]:
-		texts.append(CardPrompts.producer("Show", "a brief", 7, 3, true, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards().slice(0, 12), chooses)["prompt"])
+		texts.append(CardPrompts.producer("Show", "a brief", 7, 3, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards().slice(0, 12), chooses)["prompt"])
 	_ok(String(texts[0]).contains("`text` \"front\""), "the producer can choose details on the front")
 	for text in ["booklet", "back", "front"]:
 		texts.append(CardPrompts.designer("Show", "## Format\na show", look, card, true, [], text)["prompt"])

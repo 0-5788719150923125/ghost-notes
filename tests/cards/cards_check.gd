@@ -71,7 +71,7 @@ func _init() -> void:
 	# nothing, and it used to leave a gate that had checked half of something reading ALL OK
 	for check in [_deck, _shuffle, _script, _schedule, _no_cheating, _redo, _helpers, _landing, _printing_inventory,
 			_lanes, _rerun_clears, _scrub_near, _clear_of_deck, _trash_episode, _pictures, _only_what_was_asked, _no_objects, _moves_after_words,
-			_few_remarks, _cards_meet, _art_director, _designed_in_order, _burst_moments,
+			_few_remarks, _cards_meet, _art_director, _designed_in_order, _burst_moments, _ways_up,
 			_table_step, _things_built, _stones, _card_stock, _candles, _room_prompt, _cloth_prompt, _familiar, _archive,
 			_title_screen, _card_frame, _borderless, _episode_title]:
 		_ok((check as Callable).call() == true, "%s stopped part way (a script error - see above)"
@@ -736,7 +736,7 @@ func _no_objects() -> bool:
 	var objects := ep.steps().filter(func(st: Variant) -> bool: return String(st).contains("object"))
 	_ok(objects.is_empty(), "a plan naming objects still makes steps for them: %s" % str(objects))
 	_ok(ep.steps().has("image:card:3") and ep.steps().has("image:surface"), "the plan's other steps went too: %s" % str(ep.steps()))
-	var p := CardPrompts.producer("T", "B", 7, 3, true, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards())
+	var p := CardPrompts.producer("T", "B", 7, 3, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards())
 	_ok(p.has("prompt") and not String(p["prompt"]).contains("\"objects\""), "the planner is still asked for objects")
 	return true
 
@@ -948,12 +948,81 @@ func _burst_moments() -> bool:
 		"a reading with no jumper is offered a burst on one")
 	_ok(with.contains("- \"jumper\":") and with.contains("the first card leaps out"), "control: a reading with a jumper is not offered its moment")
 	_ok(with.contains("\"which\""), "the set dresser is not told a burst can pick which time it marks")
+	# A CARD JUMPS ONLY WHERE THE PLAN LETS ONE (`staging.jumpers`, the producer's), and out of no box
+	var lets := plan.duplicate(true)
+	lets["staging"] = {"source": "deck", "jumpers": true}
+	var boxed := plan.duplicate(true)
+	boxed["staging"] = {"source": "box", "jumpers": true}
 	var jumped := 0
 	for seed in range(1, 201):
-		var j := CardProducer.jumps(seed, true, plan)
+		var j := CardProducer.jumps(seed, lets)
 		jumped += 1 if j else 0
-		_ok(not CardProducer.jumps(seed, false, plan), "a show without jumpers jumps")
+		_ok(not CardProducer.jumps(seed, plan), "a plan that lets no card jump jumps")
+		_ok(not CardProducer.jumps(seed, boxed), "a card jumps out of a box")
 	_ok(jumped > 30 and jumped < 90, "about %d%% of readings jump, not %d of 200" % [roundi(CardProducer.JUMPER_CHANCE * 100.0), jumped])
+	return true
+
+
+## WHICH WAY UP A CARD COMES, AND WHETHER ONE JUMPS, ARE THE PLAN'S (the user, 2026-10-25: reversals and
+## jumpers "should be set by the agents during preparation for an episode"): the staging keeps the
+## producer's choice - by default no reversals and no jumper, and never a jumper out of a box - and the
+## draw turns the seed's cards upside down only when the plan lets them come so: read reversed, or
+## righted (`righted`, read the right way up). The same seed turns the same cards either way, and a plan
+## of none turns none. The producer is told every choice; a reader is told its card was righted, and
+## only that reader.
+func _ways_up() -> bool:
+	var bare := CardTable.staging_of({})
+	_ok(String(bare["reversals"]) == "none" and not bool(bare["jumpers"]), "a plan that says nothing reads reversals or lets a card jump")
+	_ok(String(CardTable.staging_of({"staging": {"reversals": "sideways"}})["reversals"]) == "none", "a junk reversals was kept")
+	_ok(String(CardTable.staging_of({"staging": {"reversals": "Righted"}})["reversals"]) == "righted", "control: a righted plan was not kept")
+	_ok(bool(CardTable.staging_of({"staging": {"jumpers": true}})["jumpers"]), "control: a deck's plan that lets a card jump was refused")
+	_ok(not bool(CardTable.staging_of({"staging": {"source": "box", "jumpers": true}})["jumpers"]), "a card may jump out of a box")
+	_ok(not bool(CardTable.staging_of({"staging": {"jumpers": "yes"}})["jumpers"]), "a jumpers that is not true or false was taken")
+	CardEpisode.root = "user://cards_check"
+	var ep := CardEpisode.open("check-show", 4243)
+	var turned := {}
+	var prompts := {}
+	for way in ["none", "read", "righted"]:
+		ep.invalidate("plan")
+		var positions: Array = []
+		for i in 10:
+			positions.append({"name": "Position %d" % (i + 1), "asks": "a question"})
+		ep.write_json("plan", {"episode_title": "T", "spread": {"name": "S", "positions": positions},
+			"staging": {"reversals": way}, "look": CardTable.sanitize_look({"deck_name": "D"})})
+		var prod := CardProducer.new(ep, {"title": "T", "brief": "B", "deck": FixtureDeck.cards()})
+		prod._finish("draw", prod._make_draw())
+		var rev: Array = []
+		var right: Array = []
+		for k in range(1, ep.card_count() + 1):
+			var c := prod._card(k)
+			if bool(c["reversed"]):
+				rev.append(k)
+			if bool(c["righted"]):
+				right.append(k)
+		turned[way] = [rev, right]
+		if way == "righted" and not right.is_empty():
+			var plain := 1
+			while right.has(plain):
+				plain += 1
+			prompts = {"righted": String(prod.say_prompt(str(right[0])).get("prompt", "")),
+				"plain": String(prod.say_prompt(str(plain)).get("prompt", ""))}
+	ep.invalidate("plan")
+	_ok((turned["none"][0] as Array).is_empty() and (turned["none"][1] as Array).is_empty(), "a plan of no reversals drew a card upside down")
+	_ok(not (turned["read"][0] as Array).is_empty() and (turned["read"][1] as Array).is_empty(),
+		"a plan that reads reversals drew none reversed, or righted one: %s" % str(turned["read"]))
+	_ok((turned["righted"][0] as Array).is_empty() and turned["righted"][1] == turned["read"][0],
+		"a righted plan did not right the cards the seed turns (%s, reversed %s)" % [str(turned["righted"][1]), str(turned["read"][0])])
+	var said := "you turned it the right way up"
+	_ok(String(prompts.get("righted", "")).contains(said) and not String(prompts.get("plain", "x")).contains(said),
+		"the reader of a righted card was not told so, or the reader of another was")
+	var p := String(CardPrompts.producer("T", "B", 7, 3, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards())["prompt"])
+	var missing := PackedStringArray()
+	for k in CardTable.REVERSALS:
+		if not p.contains("`reversals` \"%s\"" % k):
+			missing.append(k)
+	_ok(missing.is_empty() and p.contains("`jumpers` true") and not p.contains("This show reads reversals"),
+		"the producer is not told every way a card can come up (%s), or whether one jumps" % ", ".join(missing))
+	print("cards_check: ways up - read %s, righted %s, of 10" % [str(turned["read"][0]), str(turned["righted"][1])])
 	return true
 
 
@@ -1444,13 +1513,13 @@ func _retired_heap(n: int, jit: float, radius: float, bounds: Dictionary, rng: R
 ## the line its title goes up in and asked for title case, and no code recases what it writes.
 func _episode_title() -> bool:
 	var line := "Test Tarot: " + CardPrompts.TITLE_MARK
-	var told := String(CardPrompts.producer("Test Tarot", "B", 7, 3, true, CardTable.FACES, CardTable.FRAMES, [],
+	var told := String(CardPrompts.producer("Test Tarot", "B", 7, 3, CardTable.FACES, CardTable.FRAMES, [],
 		FixtureDeck.cards(), false, line)["prompt"])
 	_ok(told.contains("The video goes up as \"%s\"" % line), "the producer is not shown the line its title goes up in")
 	_ok(told.contains("its own part of the line the video goes up as"), "the reply's title is not said to be one part of that line")
 	_ok(told.contains("THE TITLE, `episode_title`, is set in title case"), "the producer is not asked for title case")
 	_ok(not told.contains("as it appears on YouTube"), "the reply's title is still called the whole of the video's")
-	var bare := String(CardPrompts.producer("Test Tarot", "B", 7, 3, true, CardTable.FACES, CardTable.FRAMES, [],
+	var bare := String(CardPrompts.producer("Test Tarot", "B", 7, 3, CardTable.FACES, CardTable.FRAMES, [],
 		FixtureDeck.cards())["prompt"])
 	_ok(not bare.contains("goes up as") and bare.contains("is set in title case"),
 		"control: with no line to show, the producer is still told of one (or not of title case)")
@@ -1474,10 +1543,10 @@ func _episode_title() -> bool:
 func _card_stock() -> bool:
 	# shown an earlier deck's stock - two-sided: with no history that color is nowhere in the prompt
 	var past := [{"seed": 5, "plan": {"episode_title": "E", "look": {"frame": {"stock": "#2b1d3c"}}}}]
-	var p := String(CardPrompts.producer("T", "B", 1, 3, true, CardTable.FACES, CardTable.FRAMES, past)["prompt"])
+	var p := String(CardPrompts.producer("T", "B", 1, 3, CardTable.FACES, CardTable.FRAMES, past)["prompt"])
 	_ok(p.contains("THE CARD STOCK"), "the producer is not told what the card stock is")
 	_ok(p.contains("Card stock #2b1d3c"), "the producer is not shown an earlier deck's stock")
-	var fresh := String(CardPrompts.producer("T", "B", 1, 3, true, CardTable.FACES, CardTable.FRAMES, [])["prompt"])
+	var fresh := String(CardPrompts.producer("T", "B", 1, 3, CardTable.FACES, CardTable.FRAMES, [])["prompt"])
 	_ok(not fresh.contains("#2b1d3c"), "control: a stock no earlier episode used is in the prompt")
 	_ok(not CardPrompts.dice(1).has("stock"), "a die still decides the card stock")
 	# THE NAME READS ON ANY STOCK: an ink that does not is moved until it does, either way round...
@@ -1886,7 +1955,7 @@ func _cloth_prompt() -> bool:
 		and p.contains("no reflections") and p.contains("LANDSCAPE 3:2"),
 		"the cloth's picture is not asked for dry, bare, flat-lit and landscape")
 	_ok(p.contains("%d cm of the surface from side to side" % int(CardTable.CLOTH_PICTURE.x)), "the cloth's picture is not told its scale")
-	var plan := String(CardPrompts.producer("T", "B", 7, 3, true, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards())["prompt"])
+	var plan := String(CardPrompts.producer("T", "B", 7, 3, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards())["prompt"])
 	_ok(plan.contains("the bare material, dry"), "the producer is not told the surface is the bare material, dry")
 	var cloth := Vector2(1.2, 0.72)
 	for pic in [Vector2(1024, 1024), Vector2(1536, 1024), Vector2(1024, 1536), Vector2(2048, 800)]:
@@ -2000,7 +2069,7 @@ func _archive() -> bool:
 	ep.write_text("say:intro", "Opening of this episode.")
 	var prod := CardProducer.new(ep, {"title": "Test Tarot", "brief": brief, "deck": deck})
 	var producer := func() -> String:
-		return String(CardPrompts.producer("Test Tarot", brief, 4242, 3, true, CardTable.FACES, CardTable.FRAMES,
+		return String(CardPrompts.producer("Test Tarot", brief, 4242, 3, CardTable.FACES, CardTable.FRAMES,
 			CardEpisode.archive(show, 4242), deck)["prompt"])
 	var designer := func(k: int) -> String:
 		return String(CardPrompts.designer("Test Tarot", brief, prod._look(), prod._card(k), true,

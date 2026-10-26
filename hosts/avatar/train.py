@@ -36,11 +36,17 @@ MediaPipe sees there; what stands before them (the microphone) is no part of the
 correction per frame takes the day's changing light out of them.
 
 A SPLAT CHANGES WITH THE FACE'S EXPRESSION (GaussianBlendshapes, SIGGRAPH 2024): beside its place and colour,
-EXPRESSIONS shifts of each, mixed by the frame's expression - its 52 scores' first EXPRESSIONS principal
-components over the frames learned from, each scaled to its spread (`Frames.expr`) - pulled toward none
-(DELTA_PULL). ONLY ON THE FACE, AND FADING WITH DISTANCE from its triangle (SHIFT_NEAR to SHIFT_FAR units): a
-splat far from its triangle - the beard's tip, the hair's edge - swings on a lever with every shift, and they
-flickered (2026-10-23: "the tip of the beard, along the sweater, around the head against the wall").
+EXPRESSIONS shifts of each, mixed by the frame's expression - its 52 scores' principal components over the frames
+learned from, each scaled to its spread (`Frames.expr`) - pulled toward none (DELTA_PULL). ONLY ON THE FACE, AND
+FADING WITH DISTANCE from its triangle (SHIFT_NEAR to SHIFT_FAR units): a splat far from its triangle - the beard's
+tip, the hair's edge - swings on a lever with every shift, and they flickered (2026-10-23: "the tip of the beard,
+along the sweater, around the head against the wall"). AND EACH PART OF THE FACE ITS OWN (2026-10-25, the user: "The
+shape/color of the face and head can be stable for several seconds, but then it 'flickers' into something else"):
+the components of all 52 scores at once mixed the parts, and the shifts learned whatever went with a score in their
+footage - a glance aside came with the head turned to a lit screen, so a played glance, 3.4 of its component's
+spreads in 60 ms, widened the cheek and moved the face's light. So each part (parts.py: the eyes, the brows, the
+mouth) has components of its own scores alone (`components`), and a splat takes a part's shifts only as far as the
+part reaches its triangle (`reach_of`).
 
 THE SPLATS GROW WHERE THEY ARE WANTED (3DGS's densification): every DENSIFY_EVERY steps until DENSIFY_UNTIL (or
 DENSIFY_SHARE of a shorter run: one that ended within OPACITY_RESET of a reset kept them faint - 12,000 steps ended
@@ -66,6 +72,10 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(HERE, "..", "face"))
+
+import actor  # noqa: E402
+import parts  # noqa: E402
 
 # Splats laid on each triangle at the start, round the face (hair, ears, beard), and on the body.
 PER_TRIANGLE = 6
@@ -84,9 +94,10 @@ GRAD_PULL = 0.00005
 OPACITY_RESET = 3000
 PRUNE_BELOW = 0.005
 MOST = 600000
-# The expression's principal components a splat's place and colour shift by, and the pull toward no shift;
-# a splat's shifts fade from SHIFT_NEAR to SHIFT_FAR of its triangle's units away from it.
-EXPRESSIONS = 12
+# The expression's components a splat's place and colour shift by - each part's own (parts.py's PARTS: the eyes, the
+# brows, the mouth) - and the pull toward no shift. A splat's shifts fade from SHIFT_NEAR to SHIFT_FAR of its
+# triangle's units away from it, and it takes a part's as far as the part reaches its triangle.
+EXPRESSIONS = sum(row[2] for row in parts.PARTS)
 DELTA_PULL = 1e-3
 SHIFT_NEAR = 1.0
 SHIFT_FAR = 2.0
@@ -143,6 +154,8 @@ HEAD_REACH = 16
 HOLD_LOW = 0.9
 CHEST = 0.35
 JOINT = 0.5
+# AND THE NECK STRETCHES: how far below the chin, in the face's heights, a head splat comes to move with the torso.
+NECK = 0.25
 
 
 def until_of(steps: int) -> int:
@@ -166,6 +179,59 @@ def smoothstep(e0: float, e1: float, x):
     import torch
     t = ((x - e0) / (e1 - e0)).clamp(0.0, 1.0)
     return t * t * (3.0 - 2.0 * t)
+
+
+# --- the expression --------------------------------------------------------------------------------
+
+def components(blend, rows):
+    """THE EXPRESSION'S COMPONENTS over the frames [param rows] of [param blend] ([N, 52] scores): each part's own
+    (parts.py's PARTS - the principal components of its scores alone, the rest of its rows zero), each to its spread
+    - (mean [52], basis [52, K], scale [K], part [K]: which part each component is)."""
+    import numpy as np
+    b = blend[rows]
+    mean = b.mean(0)
+    basis = np.zeros((blend.shape[1], EXPRESSIONS))
+    scale = np.ones(EXPRESSIONS)
+    part = np.zeros(EXPRESSIONS, np.int32)
+    k = 0
+    for p, (_name, starts, n, _anchors, _reach) in enumerate(parts.PARTS):
+        cols = parts.scores_of(actor.BLEND_NAMES[: blend.shape[1]], starts)
+        _u, sv, vt = np.linalg.svd(b[:, cols] - mean[cols], full_matrices=False)
+        m = min(n, vt.shape[0])
+        basis[cols, k:k + m] = vt[:m].T
+        scale[k:k + m] = np.maximum(sv[:m] / math.sqrt(max(1, len(rows) - 1)), 1e-6)
+        part[k:k + n] = p
+        k += n
+    return mean, basis, scale, part
+
+
+def reach_of(rig, data):
+    """HOW FAR EACH COMPONENT REACHES, by binding frame: [F, K] (F the triangles, the head and the bones) - on a
+    triangle of the face, how far its component's part reaches the triangle's centre on the neutral face
+    (parts.reach_at); none on the head or a bone. The data's own (`expr_reach`, the head's or the avatar's it was
+    read with) where it has them, else made here and kept on it; None for components of every score at once (an
+    avatar from before the parts: each reaches everywhere)."""
+    import numpy as np
+    import torch
+    if data.expr_reach is None and data.expr_part is None:
+        return None
+    if data.expr_reach is None:
+        canon = rig.canon.cpu().numpy()
+        tris = rig.tris.cpu().numpy()
+        data.expr_reach = parts.reach_at(canon, canon[tris].mean(1))[:, data.expr_part].astype(np.float32)
+    on_face = torch.as_tensor(data.expr_reach, device=rig.basis.device)
+    return torch.cat([on_face, torch.zeros((1 + data.B, on_face.shape[1]), device=on_face.device)])
+
+
+def expr_parts(data) -> dict:
+    """What an npz keeps of the parts beside the components: which part each is, and how far each reaches."""
+    import numpy as np
+    out = {}
+    if data.expr_part is not None:
+        out["expr_part"] = np.asarray(data.expr_part, np.int32)
+    if data.expr_reach is not None:
+        out["expr_reach"] = np.asarray(data.expr_reach, np.float32)
+    return out
 
 
 # --- the data --------------------------------------------------------------------------------------
@@ -201,21 +267,17 @@ class Frames:
         self.bone_unit, self.bone_seen = t(r["bone_unit"]), t(r["bone_seen"])
         self.B = int(r["bone_unit"].shape[1])
         self.device = device
-        # THE EXPRESSION: the scores' first EXPRESSIONS principal components over the frames learned from,
-        # each to its spread - what a splat's shifts are mixed by
+        # THE EXPRESSION: each part's principal components over the frames learned from, each to its spread - what
+        # a splat's shifts are mixed by
         b = r["blend"].astype(np.float64)
-        self.expr_mean = b[self.train].mean(0)
-        _u, sv, vt = np.linalg.svd(b[self.train] - self.expr_mean, full_matrices=False)
-        self.expr_basis = vt[:EXPRESSIONS].T
-        self.expr_scale = sv[:EXPRESSIONS] / math.sqrt(max(1, self.train.size - 1))
+        self.expr_mean, self.expr_basis, self.expr_scale, self.expr_part = components(b, self.train)
+        self.expr_reach = None
         if spec.get("expr"):
             # THE COMPONENTS ITS SPLATS WERE LEARNED WITH (an avatar's, or the actor's head's - learned from every
             # video): its shifts are mixed by those, never by these frames' own
-            e = np.load(spec["expr"])
-            self.expr_mean, self.expr_basis = e["expr_mean"].astype(np.float64), e["expr_basis"].astype(np.float64)
-            self.expr_scale = e["expr_scale"].astype(np.float64)
+            self.take_expr(np.load(spec["expr"]))
         self.expr = t((b - self.expr_mean) @ self.expr_basis / np.maximum(self.expr_scale, 1e-6))
-        self.K = EXPRESSIONS
+        self.K = self.expr_basis.shape[1]
 
         def crop_of(path, mode):
             im = Image.open(path).convert(mode).crop((x0, y0, x0 + self.W, y0 + self.H))
@@ -223,6 +285,15 @@ class Frames:
         front = Image.open(spec["front"])
         self.front = crop_of(spec["front"], "RGBA")[..., 3] if front.mode == "RGBA" else crop_of(spec["front"], "L")
         self._queue = None
+
+    def take_expr(self, e) -> None:
+        """The expression's components as an avatar or a head ([param e], its npz) holds them, and how far each
+        reaches on its triangles."""
+        import numpy as np
+        self.expr_mean, self.expr_basis = e["expr_mean"].astype(np.float64), e["expr_basis"].astype(np.float64)
+        self.expr_scale = e["expr_scale"].astype(np.float64)
+        self.expr_part = e["expr_part"] if "expr_part" in e.files else None
+        self.expr_reach = e["expr_reach"].astype(np.float32) if "expr_reach" in e.files else None
 
     def read_ahead(self, order) -> None:
         """Read the frames of [order] (in the order they will be asked for) on a thread, AHEAD at most."""
@@ -447,11 +518,20 @@ class Splats:
     def __len__(self):
         return int(self.bind.shape[0])
 
-    def shift_weight(self):
-        """How much of its expression shifts a splat takes: on the face, fading with distance from its triangle;
-        none on the head or a bone."""
+    # How far each component reaches on each binding frame ([method reach_of], [F, K]); none, every one everywhere.
+    reach = None
+
+    def near(self):
+        """How near its triangle a splat stands, for its shifts: on the face, fading with distance from it; none on
+        the head or a bone. [N]"""
         w = 1.0 - smoothstep(SHIFT_NEAR, SHIFT_FAR, self.p["place"].detach().norm(dim=-1))
         return w * (self.bind < self.T).float()
+
+    def shift_weight(self):
+        """How much of each of its expression shifts a splat takes: as near as it is ([method near]), as far as the
+        component's part reaches its triangle. [N, K] (or [N, 1], every component alike)."""
+        w = self.near()[:, None]
+        return w * self.reach[self.bind] if self.reach is not None else w
 
     def world(self, origin, axes, unit, expr=None):
         """Every splat at expression [param expr]: (means3d, scales, rotations)."""
@@ -459,7 +539,7 @@ class Splats:
         o, ax, u = origin[self.bind], axes[self.bind], unit[self.bind]
         place = self.p["place"]
         if expr is not None and self.p["place_d"].shape[1] == expr.shape[0]:
-            place = place + self.shift_weight()[:, None] * torch.einsum("k,nkc->nc", expr, self.p["place_d"])
+            place = place + torch.einsum("nk,nkc->nc", self.shift_weight() * expr[None], self.p["place_d"])
         means = o + u[:, None] * torch.einsum("nij,nj->ni", ax, place)
         scales = u[:, None] * torch.exp(self.p["log_scale"])
         turns = quat_mul(quat_of(ax), torch.nn.functional.normalize(self.p["turn"], dim=-1))
@@ -469,7 +549,7 @@ class Splats:
         import torch
         c = self.p["colour"]
         if expr is not None and self.p["colour_d"].shape[1] == expr.shape[0]:
-            c = c + self.shift_weight()[:, None] * torch.einsum("k,nkc->nc", expr, self.p["colour_d"])
+            c = c + torch.einsum("nk,nkc->nc", self.shift_weight() * expr[None], self.p["colour_d"])
         return torch.sigmoid(c)
 
     def covers(self, seen=None):
@@ -569,9 +649,13 @@ def load(npz: str, device) -> Splats:
     def t(x):
         return torch.tensor(x, device=device)
     cov = np.clip(a["cover"], 1e-6, 1 - 1e-6)
-    return Splats(t(a["bind"]).long(), t(a["place"]), t(a["log_scale"]), t(a["turn"]), t(a["colour_logit"]),
-                  t(np.log(cov / (1 - cov))), int(a["tris"].shape[0]), t(a["place_d"]), t(a["colour_d"]),
-                  k=int(a["place_d"].shape[1]))
+    s = Splats(t(a["bind"]).long(), t(a["place"]), t(a["log_scale"]), t(a["turn"]), t(a["colour_logit"]),
+               t(np.log(cov / (1 - cov))), int(a["tris"].shape[0]), t(a["place_d"]), t(a["colour_d"]),
+               k=int(a["place_d"].shape[1]))
+    if "expr_reach" in a.files:
+        r = t(a["expr_reach"].astype(np.float32))
+        s.reach = torch.cat([r, torch.zeros((1 + int(a["bones"]), r.shape[1]), device=device)])
+    return s
 
 
 def _logit(x: float) -> float:
@@ -911,9 +995,15 @@ def export(npz: str, order, extra=None) -> None:
     tex[:, 3, :3] = a["colour_logit"][order]
     if "second" in a.files:
         tex[:, 3, 3] = a["second"][order]
+    # each shift as far as its part reaches the splat's triangle ([method reach_of]): the shader fades them by
+    # nearness alone
+    reach = np.ones((N, k), np.float32)
+    if "expr_reach" in a.files:
+        on_face = bind[order] < T
+        reach[on_face] = a["expr_reach"][bind[order][on_face]]
     for j in range(k):
-        tex[:, 4 + 2 * j, :3] = a["place_d"][order][:, j]
-        tex[:, 5 + 2 * j, :3] = a["colour_d"][order][:, j]
+        tex[:, 4 + 2 * j, :3] = a["place_d"][order][:, j] * reach[:, j:j + 1]
+        tex[:, 5 + 2 * j, :3] = a["colour_d"][order][:, j] * reach[:, j:j + 1]
     flat = tex.reshape(-1, 4)
     rows = -(-flat.shape[0] // TEXEL_WIDTH)
     texels = np.zeros((rows * TEXEL_WIDTH, 4), np.float32)
@@ -950,8 +1040,13 @@ def second_of(splats, rig, data, i: int):
     it rests in frame [param i] (the still): the torso's keep more and more of the still from CHEST down to the hips
     (HOLD_LOW at the seat), so the chest and shoulders lean, settle and breathe over a seat that stays; a shoulder's
     goes with the torso inward of its joint, and an arm's with the bone above it near its start - each at most
-    JOINT. As the shader reads it (the colour texel's fourth number): 0 for none, else (frame + 2) + 0.98 w - w the
-    share of that frame's move the splat takes, frame -1 the still itself. [N] float32."""
+    JOINT. AND THE NECK STRETCHES (2026-10-25: as the head turned 3 degrees against the body, the dark shirt's splats
+    the neck's skin had hidden showed through it as specks - its skin was painted by the head's splats below the chin,
+    which turned with the head and slid off them): a head splat below the chin takes the torso's move, from where it
+    stood in the still, more and more to NECK of the face's height below it - the neck stretches between the two as a
+    neck does, as full-body avatars blend their skinning across it. As the shader reads it (the colour texel's fourth
+    number): 0 for none, else (frame + 2) + 0.98 w - w the share of that frame's move the splat takes, frame -1 the
+    still itself. [N] float32."""
     import numpy as np
     import torch
     with torch.no_grad():
@@ -980,6 +1075,11 @@ def second_of(splats, rig, data, i: int):
             if bool(on.any()):
                 d = (means[on, :2] - bo[bone, :2]).norm(dim=-1)
                 put(on, T + 1 + above, JOINT * (1.0 - smoothstep(0.0, 0.7 * float(bu[bone]), d)))
+        head = splats.bind <= T
+        if bool(head.any()):
+            v = rig.face(data, i, tracked=False)
+            chin = float(v[152, 1])
+            put(head, T + 1, smoothstep(chin, chin + NECK * float((v[10] - v[152]).norm()), means[head, 1]))
         return out.cpu().numpy().astype(np.float32)
 
 
@@ -1004,7 +1104,8 @@ def save(splats, rig, data, scene, rig_path: str, out: str, at=None, extra=None,
                  expr_scale=data.expr_scale.astype(np.float32), plate=scene.plate().cpu().numpy(),
                  canon=r["canon"], basis=r["basis"], tris=r["tris"], bones=np.int32(data.B),
                  crop=np.asarray(data.crop, np.int32),
-                 **({"second": np.asarray(second, np.float32)} if second is not None else {}))
+                 **({"second": np.asarray(second, np.float32)} if second is not None else {}),
+                 **expr_parts(data))
     os.replace(out + ".part.npz", out)
     export(out, order, extra)
 
@@ -1025,6 +1126,7 @@ def main() -> int:
     data = Frames(spec, dev)
     rig = Rig(spec["rig"], dev)
     splats = initial(rig, data, dev)
+    splats.reach = reach_of(rig, data)
     with torch.no_grad():
         plate, seen = data.room()
     scene = Scene(data, dev, plate, seen)

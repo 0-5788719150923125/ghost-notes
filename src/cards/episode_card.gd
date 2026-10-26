@@ -36,7 +36,7 @@ const TagField := preload("res://src/ui/tag_field.gd")
 const KEY := "cards"
 ## The knobs a show keeps beside its voice. Also the schema: a stored value of the wrong shape
 ## falls back to these.
-const KNOBS := {"show": "", "seed": 1, "draw": [3, 6], "reversals": true, "jumpers": true, "environment": 0.5,
+const KNOBS := {"show": "", "seed": 1, "draw": [3, 6], "environment": 0.5,
 	"writer": "claude", "writer_model": "", "writer_effort": "", "painter": "codex", "painter_model": "",
 	"painter_effort": ""}
 ## Who makes each kind of step (a step's name up to its first ":"), as a row's status names them.
@@ -84,8 +84,6 @@ var _writer: AgentPick
 var _painter: AgentPick
 var _cards_lo: SpinBox
 var _cards_hi: SpinBox
-var _reversals: CheckBox
-var _jumpers: CheckBox
 var _environment_dial: HSlider
 var _rows_box: VBoxContainer
 var _episode_note: Label
@@ -540,7 +538,7 @@ func _spec() -> Dictionary:
 	return {"title": _show_title(), "byline": _show_byline(), "uploads_as": _uploads_as(),
 		"brief": CardPrompts.brief(body), "deck": CardDeck.of(body),
 		"chooses": CardDeck.chooses(body), "voices": reading.cast_names(),
-		"draw": _knobs["draw"], "reversals": _knobs["reversals"], "jumpers": _knobs["jumpers"],
+		"draw": _knobs["draw"],
 		"writer": _knobs["writer"], "writer_model": _knobs["writer_model"], "writer_effort": _knobs["writer_effort"],
 		"painter": _knobs["painter"], "painter_model": _knobs["painter_model"], "painter_effort": _knobs["painter_effort"]}
 
@@ -633,8 +631,6 @@ func _take_knobs(src: Dictionary) -> void:
 			"draw":
 				if v is Array and (v as Array).size() == 2:
 					_knobs[k] = [clampi(int(v[0]), 1, 10), clampi(int(v[1]), 1, 10)]
-			"reversals", "jumpers":
-				_knobs[k] = bool(v)
 			"environment":
 				_knobs[k] = clampf(float(v), 0.0, 1.0) if (v is float or v is int) else float(KNOBS[k])
 			"writer":
@@ -690,30 +686,9 @@ func _build() -> void:
 	dash.text = "-"
 	krow.add_child(dash)
 	_cards_hi = _spin(krow, "The most cards an episode draws. Each seed picks its own count in this range.")
-	# the two switches on a row of their own: beside the counts the row was wider than the panel
-	var orow := HBoxContainer.new()
-	orow.add_theme_constant_override("separation", 12)
-	box.add_child(orow)
-	_reversals = CheckBox.new()
-	_reversals.text = "Reversals"
-	_reversals.add_theme_font_size_override("font_size", 12)
-	_reversals.tooltip_text = "Cards can come up upside down, and are read that way."
-	_reversals.toggled.connect(func(on: bool) -> void:
-		if _syncing:
-			return
-		_knobs["reversals"] = on
-		_touch())
-	orow.add_child(_reversals)
-	_jumpers = CheckBox.new()
-	_jumpers.text = "Jumpers"
-	_jumpers.add_theme_font_size_override("font_size", 12)
-	_jumpers.tooltip_text = "Now and then the first card flies out of the shuffle on its own."
-	_jumpers.toggled.connect(func(on: bool) -> void:
-		if _syncing:
-			return
-		_knobs["jumpers"] = on
-		_touch())
-	orow.add_child(_jumpers)
+	# NO REVERSALS OR JUMPERS SWITCHES (the user, 2026-10-25: "options that should be set by the agents
+	# during preparation for an episode"): the producer chooses both from the brief, in the plan's
+	# staging ([constant CardTable.REVERSALS], `jumpers`)
 	# THE PLACE, HEARD: what the set dresser wrote as the table's `sound`, and its wind ([Soundscape])
 	_environment_dial = Card.slider_row(box, "Environment", 0.0, 1.0, 0.05, float(_knobs["environment"]),
 		("The place the reading is in, heard under the voice: the wind, the sea, rain, a fire - whatever "
@@ -836,8 +811,6 @@ func _show_knobs() -> void:
 	_syncing = true
 	_cards_lo.value = int((_knobs["draw"] as Array)[0])
 	_cards_hi.value = int((_knobs["draw"] as Array)[1])
-	_reversals.button_pressed = bool(_knobs["reversals"])
-	_jumpers.button_pressed = bool(_knobs["jumpers"])
 	_environment_dial.value = float(_knobs["environment"])
 	_writer.set_choice(String(_knobs["writer"]), String(_knobs["writer_model"]), String(_knobs["writer_effort"]))
 	_painter.set_choice(String(_knobs["painter"]), String(_knobs["painter_model"]), String(_knobs["painter_effort"]))

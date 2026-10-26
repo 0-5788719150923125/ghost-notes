@@ -638,6 +638,7 @@ ENGINE_FLAGS = {
     "--frames",
     "--poses",
     "--shared",
+    "--visemes",
     # yt-dlp's, as the Actor card lists and fetches a link's videos and captions.
     "--flat-playlist",
     "--no-warnings",

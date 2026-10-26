@@ -606,7 +606,8 @@ func _phase(run: Dictionary) -> String:
 			var dir := out.path_join("avatar")
 			return _spawn(run, "user://face_venv", "res://hosts/avatar/rig.py", ["--frames", dir, "--shared",
 				actor.dir.path_join("head").path_join("rig.npz"), "--out", dir.path_join("rig.npz"), "--poses",
-				dir.path_join("poses.json")], "posing the set against their face")
+				dir.path_join("poses.json"), "--visemes", actor.dir.path_join("visemes.json")],
+				"posing the set against their face")
 		"avatar":
 			var dir := out.path_join("avatar")
 			var still := actor.still_of(sid)

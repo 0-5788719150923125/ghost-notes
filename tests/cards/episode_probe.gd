@@ -43,8 +43,7 @@ func _init() -> void:
 	var want: Array = Array(only.split(",", false)) if not only.is_empty() else []
 	var body := Manuscript.strip_frontmatter(raw)
 	var prod := CardProducer.new(ep, {"title": title, "brief": CardDeck.strip(body), "deck": CardDeck.of(body), "chooses": CardDeck.chooses(body),
-		"draw": knobs.get("draw", [3, 6]), "reversals": bool(knobs.get("reversals", true)),
-		"jumpers": bool(knobs.get("jumpers", true)), "writer": String(knobs.get("writer", "claude")),
+		"draw": knobs.get("draw", [3, 6]), "writer": String(knobs.get("writer", "claude")),
 		"writer_model": String(knobs.get("writer_model", "")), "painter": String(knobs.get("painter", "codex")),
 		"painter_model": String(knobs.get("painter_model", ""))})
 	print("episode_probe: %s #%d -> %s" % [show, seed, ep.dir])

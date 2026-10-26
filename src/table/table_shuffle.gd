@@ -1306,7 +1306,7 @@ func _jumper_plan(m: Dictionary) -> Dictionary:
 		m["jump_key"] = key
 		var pick := into + TableMedium.JUMP_RISE * s
 		var plan := _wash_plan(int(m["seed"]), pick + JUMP_GATHER + 0.6, _whole(m),
-			{"at": at, "pick": pick, "reversed": medium._reversed(0)})
+			{"at": at, "pick": pick, "reversed": medium._upside(0)})
 		m["jump"] = plan if int(plan["jumper"]) >= 0 else {}
 	return m["jump"]
 

@@ -1417,6 +1417,13 @@ tapped later. New verbs `open`, `deal`, `fan`, `show`, `tap`, `untap`, `flip`. S
 card's size and face template, `flip` for the producer, more than one card held up at once, and the
 dealer run by a real agent. Gate: table_staging_check (next/cards.md, "The staging").
 
+**2026-10-25: reversals and jumpers from the guide.** The Episode card's Reversals and Jumpers switches
+are gone (the user: "options that should be set by the agents during preparation for an episode"): the
+producer chooses both in the plan's staging from the brief - `reversals` none, read or righted (a card out
+of a messy box upside down, turned the right way up in the hand), and `jumpers` - and the seed still says
+which cards come up upside down and whether the first one jumps. Details in next/cards.md ("The
+staging").
+
 ### Step 10: portrait
 
 Independent of steps 2-9: it can start any time after step 1. In order: the `frame` setting and

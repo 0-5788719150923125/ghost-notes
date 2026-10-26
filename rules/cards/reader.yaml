@@ -8,7 +8,7 @@
 # {{how}}), {{deck_name}}, {{surface}}, {{on_the_table}}; `said`, every passage so far; `on_table`, the
 # cards already down ({{line}}, `swept`: swept out with this one, not read yet); the step (`intro`,
 # `close` or `card`; each with {{keys}}, its keywords, or "") and, for a card, which way it came (`now_jumper`, `now_dealt`, `now_swept_first`,
-# `now_swept`, `now_boxed`, `now_drawn`), what may be said of its picture (`pic_quiet`, `pic_lying`,
+# `now_swept`, `now_boxed`, `now_drawn`; `righted`, it came out upside down and was turned), what may be said of its picture (`pic_quiet`, `pic_lying`,
 # `pic_held`, `pic_art`), and its text (`on_back` or `in_booklet`); `link`, a card read with the cards
 # already down; `heard`, how earlier episodes met this point; `passed`, a card put back in its box while
 # others stay out; {{handled}}, what is done after it to this card or one on the table (laid sideways, laid on
@@ -181,6 +181,14 @@ card:
   - when: now_drawn
     say: "NOW: you have just drawn card {{k}} of {{spread_size}} and turned it over."
   - "It is {{card_line}}."
+  # A CARD RIGHTED IN THE HAND (CardTable.REVERSALS "righted", 2026-10-25): it came out upside down, as
+  # cards do out of a messy box, and the viewer watches the hand turn it the right way up; it is read
+  # the right way up, and saying so every time would make a habit of a thing hands do without thinking
+  - when: righted
+    say: >-
+          It came out upside down, and you turned it the right way up as you {{#held}}held it
+          up{{/held}}{{^held}}put it down{{/held}} - the viewer saw that. Hands do it without a
+          thought: mention it only if it means something to you.
   - when: meaning
     say: "What it means in this deck: {{meaning}}"
   - 'It sits in position {{k}}, "{{position}}" - {{asks}}.'

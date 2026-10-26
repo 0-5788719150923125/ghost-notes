@@ -96,6 +96,7 @@ func _run() -> void:
 	medium.bind_captions(subs)
 	_deck_show()
 	_deck_reversals()
+	_righted()
 	_table_edge()
 	_placement_drift()
 	_box_show()
@@ -170,7 +171,9 @@ func _box_places() -> void:
 func _cards(positions: Array) -> Array:
 	var out: Array = []
 	for i in positions.size():
-		out.append({"key": "c%d" % i, "name": "Card %d" % (i + 1), "numeral": "", "reversed": false,
+		out.append({"key": "c%d" % i, "name": "Card %d" % (i + 1), "numeral": "",
+			"reversed": bool((positions[i] as Dictionary).get("reversed", false)),
+			"righted": bool((positions[i] as Dictionary).get("righted", false)),
 			"jumper": bool((positions[i] as Dictionary).get("jumper", false)),
 			"position": positions[i], "booklet": {"keywords": ["Shortstop", "Bats left"], "upright": "A kid with a glove."}, "art": ""})
 	return out
@@ -467,6 +470,77 @@ func _deck_reversals() -> void:
 	var next := medium._deck[medium._plan.deck_n - 3] as MeshInstance3D
 	_ok(next.visible and next.transform.basis.x.dot(medium._rest_xf(medium._plan.deck_n - 3).basis.x) > 0.99,
 		"the following upright card is ready under the reversed card")
+
+
+## A CARD RIGHTED IN THE HAND (2026-10-25, the user: "start as a reversal, but then is turned/reoriented
+## to the upright position after we pull it ... a box full of Pokemon cards, or a pile of messy baseball
+## cards"), out of a deck and out of a box: it waits upside down, comes up upside down, is turned the
+## right way up in the hand - a beat after it is up, or as it comes up when its text is on its back -
+## well before it goes down and never while its back is being looked at, and lies the right way up.
+## Two-sided: a card read reversed is held and laid upside down throughout, and a plain card is the right
+## way up throughout; a card with its text on its back is still turned over to show it (righted after it
+## was up, a short passage's never was). Out of the box, nothing upside down is turned round on its way
+## out of the file (a reversed card was: it stood in the file the right way up).
+func _righted() -> void:
+	for source in ["deck", "box"]:
+		print("-- a card righted in the hand, out of a %s" % source)
+		var deck: Array = []
+		for i in 12:
+			deck.append({"key": "c%d" % i, "name": "Card %d" % i})
+		_load(31, [{}, {"righted": true}, {"reversed": true}],
+			{"look": {"candles": 0}, "staging": {"source": source, "text": "back" if source == "box" else "booklet"}, "deck": deck})
+		var tm := medium._times()
+		var right := medium._card_poses.righting(1)
+		_ok(not right.is_empty() and medium._card_poses.righting(0).is_empty() and medium._card_poses.righting(2).is_empty(),
+			"only the righted card is righted in the hand")
+		if right.is_empty():
+			continue
+		var c := medium._plan.cam_base.basis
+		# the way its picture's top points as it lies: away from the reader is the right way up
+		var lies_up := func(xf: Transform3D) -> float:
+			return Vector2(-xf.basis.z.x, -xf.basis.z.z).normalized().dot(Vector2(-c.z.x, -c.z.z).normalized())
+		var held := func(k: int, t: float) -> float:
+			_posed(t)
+			return _top_up((medium._cards[k] as MeshInstance3D).transform)
+		var up := PackedFloat32Array()
+		for k in 3:
+			up.append(medium._card_poses.held_span(k, tm).x)
+		var done := float(right["at"]) + float(right["turn"])
+		var back: bool = source == "box"
+		_ok((absf(done - up[1]) < 0.01 if back else float(right["at"]) >= up[1] - 0.01)
+			and done <= _at(1, "lay") - TableCardPose.RIGHT_CLEAR + 0.01,
+			"it is turned %s and before it goes down (%.2f to %.2f s; up %.2f, down %.2f)"
+			% ["as it comes up" if back else "after it is up", right["at"], done, up[1], _at(1, "lay")])
+		var at_up := [held.call(0, up[0] + 0.1), held.call(1, float(right["at"]) - 0.05), held.call(2, up[2] + 0.1)]
+		_ok(float(at_up[0]) > 0.5 and float(at_up[1]) < -0.3 and float(at_up[2]) < -0.5,
+			"coming up, the righted card is upside down as the reversed one is, the plain one the right way up (%.2f, %.2f, %.2f)" % at_up)
+		var righted := float(held.call(1, done + 0.1))
+		var still := float(held.call(2, _at(2, "lay") - 0.2)) if _at(2, "lay") < INF else float(held.call(2, up[2] + 6.0))
+		_ok(righted > 0.5 and still < -0.5, "the hand turns it the right way up (%.2f); the reversed card stays upside down (%.2f)" % [righted, still])
+		var looked := 0
+		for l in medium._card_poses.looks(1, up[1], _at(1, "lay")):
+			looked += 1
+			_ok(float((l as Dictionary)["at"]) >= done, "its back is looked at only once it is the right way up")
+		if source == "box":
+			_ok(looked > 0, "control: a card with its text on its back is turned over to show it")
+		_posed(9999.0)
+		var lying := [lies_up.call((medium._cards[0] as MeshInstance3D).transform), lies_up.call((medium._cards[1] as MeshInstance3D).transform),
+			lies_up.call((medium._cards[2] as MeshInstance3D).transform)]
+		_ok(float(lying[0]) > 0.5 and float(lying[1]) > 0.5 and float(lying[2]) < -0.5,
+			"laid, it lies the right way up beside the plain card, the reversed card upside down (%.2f, %.2f, %.2f)" % lying)
+		if source != "box" or not medium._box_part.filed_on_edge():
+			continue
+		var waits := [_top_up((medium._box_part.stood["at_k"] as Array)[0]), _top_up((medium._box_part.stood["at_k"] as Array)[1]),
+			_top_up((medium._box_part.stood["at_k"] as Array)[2])]
+		_ok(float(waits[0]) > 0.9 and float(waits[1]) < -0.9 and float(waits[2]) < -0.9,
+			"in the file the upside-down cards stand upside down, the plain one the right way up (%.2f, %.2f, %.2f)" % waits)
+		for k in [1, 2]:
+			var t0 := _at(k, "arrive")
+			var until := float(right["at"]) if k == 1 else up[k]
+			var worst := -1.0
+			for i in 40:
+				worst = maxf(worst, float(held.call(k, lerpf(t0, until, float(i) / 39.0))))
+			_ok(worst < 0.0, "card %d comes out of the box the way it stood, never turned round (its top rose to %.2f)" % [k + 1, worst])
 
 
 func _table_edge() -> void:

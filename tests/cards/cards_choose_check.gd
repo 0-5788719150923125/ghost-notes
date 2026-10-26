@@ -78,7 +78,7 @@ func _framing() -> bool:
 		"the shared context is not the same words for every show")
 	_ok(tarot.contains("A tarot channel that tells the truth."), "control: a tarot brief did not reach the agents whole")
 	var plain_brief := "A collector opens a big lidded shoebox, then puts some cards back and makes a small pile of the rest."
-	var plain := CardPrompts.producer("S", plain_brief, 7, 4, false, CardTable.FACES, CardTable.FRAMES, [], [], true)
+	var plain := CardPrompts.producer("S", plain_brief, 7, 4, CardTable.FACES, CardTable.FRAMES, [], [], true)
 	var plain_context := String(plain["system"])
 	var plain_prompt := String(plain["prompt"])
 	_ok(plain_context.contains(plain_brief) and plain_context.contains("Read your role's instructions")
@@ -95,8 +95,8 @@ func _framing() -> bool:
 		and not aside_prompt.contains("HIDDEN DETAILS"),
 		"an aside leaves the held card entirely out of the writer's prompt")
 	# THE PRODUCER asks every show for its kind of cards, and names none of its own
-	var chosen := String(CardPrompts.producer("Show and Tell", BRIEF, 7, 4, false, CardTable.FACES, CardTable.FRAMES, [], [], true)["prompt"])
-	var listed := String(CardPrompts.producer("T", "B", 7, 4, true, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards())["prompt"])
+	var chosen := String(CardPrompts.producer("Show and Tell", BRIEF, 7, 4, CardTable.FACES, CardTable.FRAMES, [], [], true)["prompt"])
+	var listed := String(CardPrompts.producer("T", "B", 7, 4, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards())["prompt"])
 	for pr in [chosen, listed]:
 		_ok(String(pr).contains("\"kind\": \"what these cards are") and not String(pr).to_lower().contains("tarot"),
 			"a producer is not asked for its deck's kind, or is told of tarot by the rules")

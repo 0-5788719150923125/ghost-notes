@@ -1493,12 +1493,12 @@ func _air_troubles(e: Dictionary) -> PackedStringArray:
 	return out
 
 
-## A card leaps out of this episode's shuffle: its draw says so, once drawn; else the seed does.
+## A card leaps out of this episode's shuffle: its draw says so, once drawn; else the plan and the seed do.
 func _jumps() -> bool:
 	var draw: Variant = episode.read_json("draw")
 	if draw is Dictionary and (draw as Dictionary).get("cards") is Array and not ((draw as Dictionary)["cards"] as Array).is_empty():
 		return bool((((draw as Dictionary)["cards"] as Array)[0] as Dictionary).get("jumper", false))
-	return CardProducer.jumps(episode.seed, true, plan)
+	return CardProducer.jumps(episode.seed, plan)
 
 
 ## The air in a line, for the table's own picture: what is in it, and that a burst is watched.

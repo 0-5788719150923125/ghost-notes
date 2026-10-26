@@ -29,6 +29,10 @@ extends SceneTree
 ## neuron that opens the jaw by tanh of how much of "open" fills the window - a window full of it gives
 ## tanh(1), half of it tanh(0.5), silence nothing; and the inputs of a moment's every window sum to one.
 ##
+## THEIR OWN MOUTH FOR EACH SOUND ([LikenessMedium.own_mouths], a head of splats): pushed by Articulation, never
+## past how far their own lips part, nor a score past their own top (see `_own_mouths`), nor folding the face's
+## triangles past FOLD_MOST (see `_unfolded`; its control, the turn unheld).
+##
 ## THE BREATH GOES ON FROM WHERE IT WAS ([LikenessPlan.breath]): over speech with pauses long and short, it
 ## never moves more than a little in a millisecond - and it does move (its control: it spans most of its
 ## range, so the check is no flat line's).
@@ -172,8 +176,87 @@ func _run() -> void:
 		last = b
 	_ok(step < 0.01, "the breath jumped %.3f in a millisecond" % step)
 	_ok(hi_b - lo_b > 0.3, "the breath only spans %.2f: the check is a flat line's" % (hi_b - lo_b))
+	_own_mouths()
+	_unfolded()
 	print("coarticulation_check: %s (%d checks, %d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _checks, _fails, "" if _fails == 1 else "s"])
 	quit(1 if _fails > 0 else 0)
+
+
+## THEIR OWN MOUTH FOR EACH SOUND ([method LikenessMedium.own_mouths]): on a made face (the forehead's top at 0, the
+## chin 100 below, the inner lips 2 apart - parted 0.02 of its height) whose expression is the jaw's score alone, a
+## sound that parts the lips 3 more, pushed 3 times, stops where their own lips part most (0.08), and its jaw
+## score is pushed as far; one that closes them stops at their least (0.004); pushed once, a sound is their own
+## move; the rest moves nothing; a score never goes past their own top. THE CONTROL: with their range anything, the
+## same push opens it past their most.
+func _own_mouths() -> void:
+	var s := SplatHead.new()
+	s.verts = 479
+	s.scores = 52
+	s.canon.resize(479 * 3)
+	s.canon[10 * 3 + 1] = 0.0
+	s.canon[152 * 3 + 1] = 100.0
+	s.canon[13 * 3 + 1] = 60.0
+	s.canon[14 * 3 + 1] = 62.0
+	s.basis.resize(52 * 479 * 3)
+	var jaw := SplatHead.SCORES.find("jawOpen")
+	s.expressions = 1
+	s.expr_mean.resize(52)
+	s.expr_basis.resize(52)
+	s.expr_basis[jaw] = 1.0
+	s.expr_scale = PackedFloat32Array([1.0])
+	var still: Array = []
+	for i in 479:
+		still.append([0.0, 0.0, 0.0])
+	var open := still.duplicate(true)
+	open[14] = [0.0, 3.0, 0.0]
+	var shut := still.duplicate(true)
+	shut[14] = [0.0, -1.5, 0.0]
+	var blend: Array = []
+	blend.resize(52)
+	blend.fill(0.0)
+	var opened := blend.duplicate()
+	opened[jaw] = 0.1
+	var mouths := {"gap": [0.004, 0.08], "sounds": {"rest": {"points": still, "blend": blend},
+		"open": {"points": open, "blend": opened}, "pbm": {"points": shut, "blend": blend}}}
+	var base := PackedFloat32Array()
+	base.resize(52)
+	var got := LikenessMedium.own_mouths(s, base, mouths, 3.0, {jaw: 0.5})
+	var parted := func(c: String) -> float: return LikenessMedium.lips_parted(got["faces"][c])
+	_ok(absf(parted.call("open") - 0.08) < 1e-4, "a sound pushed past their most parts the lips %.4f, not 0.08" % parted.call("open"))
+	_ok(absf(float(got["exprs"]["open"][0]) - 0.2) < 1e-4, "its jaw score is %.3f, not pushed as far (0.2)" % float(got["exprs"]["open"][0]))
+	_ok(absf(parted.call("pbm") - 0.004) < 1e-4, "a sound that closes the lips stops at %.4f, not their least" % parted.call("pbm"))
+	_ok(absf(parted.call("rest") - 0.02) < 1e-6, "the rest moves the lips")
+	var once := LikenessMedium.own_mouths(s, base, mouths, 1.0, {jaw: 0.5})
+	_ok(absf(LikenessMedium.lips_parted(once["faces"]["open"]) - 0.05) < 1e-4, "pushed once, a sound is not their own move")
+	(mouths["sounds"]["open"]["blend"] as Array)[jaw] = 0.5
+	var high := LikenessMedium.own_mouths(s, base, mouths, 3.0, {jaw: 0.3})
+	_ok(absf(float(high["exprs"]["open"][0]) - 0.3) < 1e-4, "a score went past their own top: %.3f" % float(high["exprs"]["open"][0]))
+	mouths["gap"] = [0.0, 1.0]
+	var free := LikenessMedium.own_mouths(s, base, mouths, 3.0, {jaw: 0.5})
+	_ok(LikenessMedium.lips_parted(free["faces"]["open"]) > 0.1, "CONTROL: with their range anything, the push did not open it past their most")
+	s.free()
+
+
+## A SOUND'S MOUTH NEVER FOLDS THE FACE ([method LikenessMedium.unfolded]): a triangle whose corner its move lifts 5 a
+## push, 10 from the others, turns atan(w / 2) - pushed 3 it would turn 56 degrees, so it stops where it turns
+## FOLD_MOST (w = 2 tan 40 = 1.678); pushed once (27 degrees) it is as pushed; a triangle the move does not touch
+## never stops it.
+func _unfolded() -> void:
+	var tris := PackedInt32Array([0, 1, 2, 3, 4, 5])
+	var face := PackedFloat32Array([0, 0, 0, 10, 0, 0, 0, 10, 0, 20, 0, 0, 30, 0, 0, 20, 10, 0])
+	var move := PackedFloat32Array([0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	var most := 2.0 * tan(deg_to_rad(LikenessMedium.FOLD_MOST))
+	var at3 := LikenessMedium.unfolded(tris, face, move, 3.0)
+	_ok(at3 <= most + 1e-4 and at3 > most - 3.0 / 256.0 - 1e-4, "pushed 3, a folding mouth stops at %.3f, not %.3f" % [at3, most])
+	_ok(absf(LikenessMedium.unfolded(tris, face, move, 1.0) - 1.0) < 1e-6, "pushed once, within the fold, it is as pushed")
+	var turned := rad_to_deg(atan(3.0 * 5.0 / 10.0))
+	_ok(turned > LikenessMedium.FOLD_MOST, "CONTROL: pushed 3 it would turn %.0f degrees, past %.0f" % [turned, LikenessMedium.FOLD_MOST])
+	var flat := PackedFloat32Array(move)
+	flat[8] = 0.0
+	flat[17] = 50.0
+	flat.resize(18)
+	var other := PackedInt32Array([0, 1, 2])
+	_ok(absf(LikenessMedium.unfolded(other, face, flat, 3.0) - 3.0) < 1e-6, "a triangle the move does not touch never stops it")
 
 
 ## Each phone's share of a mix of pulls (`[[k, class, weight]]`), by its place in the line - [param

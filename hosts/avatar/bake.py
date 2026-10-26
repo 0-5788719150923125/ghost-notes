@@ -22,7 +22,12 @@ and the rest still painted it. So its splats below the chin (but the face's surf
 the set's moments as train.py lays a set's (`train.initial`'s splats round the face: the beard bound to the jaw's edge,
 which carries it), free, and grown here with the set's body - laid below the chin up to the face itself
 (`up_to_face`), so the collar is the body's, fitted to the still after. What is every video's is the face itself:
-its surface, how it moves, the inside of the mouth. WHAT IS THE SET'S IS FITTED TO ITS OWN MOMENTS, in STEPS:
+its surface and how it moves. THE MOUTH IS THE SET'S TOO (2026-10-25, the user: "the mouth is quite blurry still"): Fit
+holds the lips as the moments taught them, so the played mouth is the bake's - and pulled in full toward the head's, it
+was every video's lips averaged (on the set's open mouths it learned from, 14% of the frames' fine detail; a head of 3
+videos, 28%). Its splats (`mouth_of`: on the lips', the corners' and the inside's triangles) take FREE_PULL of the pull,
+as the hair does, and grow: 22%, as near the frames (24.2 dB). How it moves stays every video's: its shifts are held.
+WHAT IS THE SET'S IS FITTED TO ITS OWN MOMENTS, in STEPS:
 - ITS LOOK: the code its video learned (or the mean, for a video the head never saw), moved to the set's light;
 - ITS ROOM: train.room_of over its moments, learned where seen, with a gain and colour correction per moment;
 - ITS BODY: train.initial's, laid on its bones, learned and grown here - and fitted to the still after (fit.py).
@@ -56,6 +61,7 @@ sys.path.insert(0, HERE)
 
 import head as heads  # noqa: E402
 import train  # noqa: E402
+import actor  # noqa: E402  (train puts hosts/face, actor.py's, on the path)
 
 # The share of windows round the face (the rest over the body, which is fitted here).
 FACE_WINDOWS = 0.6
@@ -63,8 +69,10 @@ FACE_WINDOWS = 0.6
 # the mean): its expression and look shifts are held.
 ADAPTS = ("place", "log_scale", "turn", "colour", "cover")
 ADAPT_PULL = 0.05
-# The share of the pull a splat far from the face's surface, or on the head, takes - and every colour.
+# The share of the pull a splat far from the face's surface, or on the head, takes - and every colour, and the mouth's
+# (on a triangle whose centre stands within the lips' outline grown by MOUTH_MARGIN of the mouth's width).
 FREE_PULL = 0.1
+MOUTH_MARGIN = 0.05
 # The head's splats at most, here: this many times the head's own, never past HEAD_MOST; no copy of a head splat under
 # LEAST_COPY pixels.
 HEAD_GROWTH = 3.0
@@ -187,14 +195,25 @@ def specks(head, code, body, rig, data, scene, moments):
     return (shown > 0) & (votes > 0.5 * shown)
 
 
+def mouth_of(rig):
+    """THE MOUTH'S TRIANGLES (THE MOUTH IS THE SET'S TOO): those whose centre, in the neutral face, stands within the
+    lips' outline grown by MOUTH_MARGIN of the mouth's width - the lips, the corners, the inside. [T] bool"""
+    import fit
+    centre = rig.canon[rig.tris].mean(1)[:, :2]
+    lips = rig.canon[actor.LIPS_OUTER, :2]
+    return fit.outside(centre, lips) < MOUTH_MARGIN * float(lips[:, 0].max() - lips[:, 0].min())
+
+
 def whole(head_baked, body, k: int):
     """The head as baked and the body, one train.Splats (the body's expression shifts none)."""
     import torch
     n = len(body)
     z = torch.zeros((n, k, 3), device=body.bind.device)
     cat = lambda name, extra=None: torch.cat([head_baked.p[name].data, body.p[name].data if extra is None else extra])
-    return train.Splats(torch.cat([head_baked.bind, body.bind]), cat("place"), cat("log_scale"), cat("turn"),
-                        cat("colour"), cat("cover"), head_baked.T, cat("place_d", z), cat("colour_d", z), k=k)
+    s = train.Splats(torch.cat([head_baked.bind, body.bind]), cat("place"), cat("log_scale"), cat("turn"),
+                     cat("colour"), cat("cover"), head_baked.T, cat("place_d", z), cat("colour_d", z), k=k)
+    s.reach = head_baked.reach
+    return s
 
 
 def main() -> int:
@@ -214,6 +233,7 @@ def main() -> int:
     data = train.Frames({**spec, "expr": spec["head"]}, dev)
     rig = train.Rig(spec["rig"], dev)
     head, codes = held(spec["head"], dev)
+    head.reach = train.reach_of(rig, data)
     v = int(spec.get("video", -1))
     start = codes[v] if 0 <= v < codes.shape[0] else codes.mean(0)
     code = torch.nn.Parameter(torch.tensor(start, device=dev, dtype=torch.float32))
@@ -229,7 +249,8 @@ def main() -> int:
         # edge, stand near it (kept "on the face", 45k of 50k still painted the collar)
         under = means[:, 1] > chin
         head._replace(~under, {})
-        head.hold(FREE_PULL + (1.0 - FREE_PULL) * head.shift_weight())
+        free = mouth_of(rig)[head.bind.clamp(max=rig.T - 1)] & (head.bind < rig.T)
+        head.hold(torch.where(free, torch.full_like(head.near(), FREE_PULL), FREE_PULL + (1.0 - FREE_PULL) * head.near()))
         laid, _s, _t = s.world(origin, axes, unit)
         lo = rig.T * train.PER_TRIANGLE
         mine = torch.zeros(len(s), dtype=torch.bool, device=dev)
@@ -243,7 +264,8 @@ def main() -> int:
                        "cover": s.p["cover"].data[mine], "place_d": z(head.p["place_d"].shape[1]),
                        "colour_d": z(head.p["colour_d"].shape[1]), "look_place": z(head.p["look_place"].shape[1]),
                        "look_colour": z(head.p["look_colour"].shape[1])})
-    say("below the chin, %d of the head's splats dropped and %d laid from the set's moments" % (int(under.sum()), n_new))
+    say("below the chin, %d of the head's splats dropped and %d laid from the set's moments; the mouth's %d its own"
+        % (int(under.sum()), n_new, int(free.sum())))
     on = s.bind > rig.T
     body = train.Splats(s.bind[on], s.p["place"].data[on], s.p["log_scale"].data[on], s.p["turn"].data[on],
                         s.p["colour"].data[on], s.p["cover"].data[on], rig.T,

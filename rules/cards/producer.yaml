@@ -15,7 +15,7 @@
 # ("tarot deck", "minor-league baseball card set"): the designer and the painter are told that, and no
 # rule here names a kind of card.
 #
-# The code gives: {{seed}}, {{cards}} (the spread's size), the flags `reversals`, `chooses` (the producer
+# The code gives: {{seed}}, {{cards}} (the spread's size), the flags `chooses` (the producer
 # chooses the deck: the brief lists none) and `habits` (there are earlier episodes, given as `past`), the
 # dice ({{place}}, {{year}}, {{hue}}, {{hour}}, {{direction}}), the show's own deck ({{deck_size}},
 # {{deck_names}}) or the box's range ({{box_lo}} to {{box_hi}}), the line the episode's title goes up
@@ -30,8 +30,6 @@ prompt:
       THE SPREAD has exactly {{cards}} positions. Name the spread and each position, and say in a
       short phrase what each position asks. Positions are asked in order: position 1 is the first
       card drawn.
-  - when: reversals
-    say: "This show reads reversals: some cards will come up upside down."
   - ""
   - include: staging
   - ""
@@ -47,8 +45,8 @@ prompt:
       printed - a printing that has never existed - and the table it is shown on. Make it specific
       enough that an illustrator could paint every card in one consistent hand: what the cards
       picture (their cast) and how it is drawn, the medium and its influences, linework, texture,
-      palette. Then the card back{{#reversals}} (a design that reads the same when the card is
-      turned upside down - exactly symmetric under a half turn){{/reversals}}, how much of the deck
+      palette. Then the card back (when the staging's `reversals` is "read", a design that reads the
+      same when the card is turned upside down - exactly symmetric under a half turn), how much of the deck
       is printed in metallic foil (`foil`, 0 for matte ink to 1 for
       gold leaf everywhere), the surface the cards lie on (seen from directly above: the bare
       material, dry and clean of anything spilled or strewn - the table's shape, any other cloth
@@ -138,7 +136,7 @@ reply: |-
     "premise": "the episode's angle, in one or two sentences",
     "reader_mood": "how the reader is today",
     "running_bit": "any running bit for this episode - a bit the reader SAYS, never a thing done or an object shown (the viewer sees the table and the cards, never the reader), and never a way of speaking (the show's voice is fixed: no whispering, accents or singing)",
-    "staging": {"source": "deck or box", "text": "booklet, back or front", "box_style": "open or shoebox, when source is box", "contents": "file, piles or loose, when source is box", "keepsakes": ["optional coin, button, marble or ticket inside the box, at most three"], "pace": "reflective, mixed or quick"},
+    "staging": {"source": "deck or box", "text": "booklet, back or front", "box_style": "open or shoebox, when source is box", "contents": "file, piles or loose, when source is box", "keepsakes": ["optional coin, button, marble or ticket inside the box, at most three"], "pace": "reflective, mixed or quick", "reversals": "none, read or righted", "jumpers": false},
     "spread": {"name": "the spread's name", "positions": [{"name": "position name", "asks": "what it asks", "comes": "drawn, dealt, swept or searched - optional", "destination": "row, stack or box - optional", "comment": "none, brief, story or aside - optional", "linger": false, "lies": "sideways - optional", "on": false, "then": []}]},
   {{#chooses}}
     "deck": [{"name": "the name printed on the card", "group": "its set, team, suit or type, if it has one", "series": "its printing's name, when the deck mixes printings", "meaning": "what the card is and why it is in this box, one or two sentences"}],
@@ -149,7 +147,7 @@ reply: |-
       "card_size": "large, trading or baseball",
       "deck_style": "a paragraph an illustrator paints every card from",
       "palette": ["#rrggbb", "four to six colors"],
-      "card_back": "the back design{{#reversals}}, symmetric under a half turn{{/reversals}}",
+      "card_back": "the back design, symmetric under a half turn when reversals are read",
       "frame": {"style": "one of: {{frame_styles}}", "window": "one of: {{windows}}", "corners": "one of: {{corners}}", "ornament": "one of: {{ornaments}}", "stock": "#rrggbb card stock", "ink": "#rrggbb border and lettering", "accent": "#rrggbb"},
       "page": "one of: {{pages}}",
       "title_face": "one of: {{faces}}",
@@ -180,6 +178,22 @@ staging:
     say: '- `source` "{{key}}": {{about}}.'
   - each: texts
     say: '- `text` "{{key}}": {{about}}.'
+  # WHICH WAY UP A CARD COMES, AND WHETHER ONE JUMPS (the user, 2026-10-25: "options that should be set
+  # by the agents during preparation for an episode"): they were two switches on the Episode card, on for
+  # every show, so shows that never read a reversed card were dealt them. The brief says and the producer
+  # chooses (CardTable.REVERSALS, the registry's own words as `reversals`); the seed still says which
+  # cards come up upside down and whether one jumps (CardDeck.shuffled, CardProducer.jumps)
+  - >-
+      WHICH WAY UP THE CARDS COME, in `reversals`. THE DEFAULT IS "none". Choose "read" only when the
+      brief says this show reads reversed cards, and "righted" for a collection kept loose or jumbled
+      enough that a card comes out of it upside down - never for one kept squared and sorted.
+  - each: reversals
+    say: '- `reversals` "{{key}}": {{about}}.'
+  - >-
+      `jumpers` true lets the first card fly out of the shuffle on its own now and then - a jumper,
+      seen leaping from the deck. Set it only when the brief says this show makes something of a card
+      that jumps; it is false otherwise, and a box never has one. Which cards come up upside down, and
+      whether one jumps, are the seed's: plan nothing on either.
   - >-
       For a box, `box_style: "shoebox"` means a lidded cardboard shoebox brought in and opened
       before the first card. `box_style: "open"` means an already open container such as a tin.

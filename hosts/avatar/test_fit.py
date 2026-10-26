@@ -38,6 +38,20 @@ Run it directly with the voice-training venv's python (its torch) - no pytest ne
   A ROOM IS KEPT SMALL - its move learned at 1/ROOM_COARSE of the frame's size: over any window (at the frame's
   edges, of odd sizes) the move is the whole move's upsampling cut to it, and with no move the plate is the plate
   kept (CONTROL: cut with no margin of cells round the window, it is not).
+  EACH PART OF THE FACE ITS OWN (parts.py) - with a glance's score tied to the jaw's in the frames, each of the
+  expression's components reads its own part's scores alone (CONTROL: one set of components over every score mixes
+  the two); a part reaches its own points and not another's; a splat on a triangle the eyes do not reach takes none
+  of an eye component's shift, one by the eye all of it (CONTROL: with no reach, the lips' splat takes it too); a
+  score moves only its own part's points in the rig's basis (CONTROL: fitted over every score, the glance moves
+  the lip); each sound's mouth moves the lips as their frames do, and the brows that went with it not at all
+  (CONTROL: the frames' own medians move them); the export takes each shift as far as its part reaches (CONTROL:
+  with no reach kept, the lips' splat keeps an eye shift).
+  THE NECK STRETCHES (train.py's `second_of`) - a head splat above the chin takes nothing of the torso's move, one
+  half way down the neck half, one past it (or on a face's triangle there) all of it, each the torso's frame (CONTROL:
+  with the chin below them all, none takes it).
+  A MOMENT IS ASKED ONLY FOR WHAT IT SHOWS (fit.py's `moment_loss`) - a green speck of three pixels is far from the
+  moment's picture in its coarse squares, and hair-fine strands whose mean is the picture's are not; a speck where
+  something stands before them is not asked for (CONTROL: pixel by pixel, the strands are further off than the speck).
 """
 
 from __future__ import annotations
@@ -49,11 +63,14 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent / "face"))
 
 import torch  # noqa: E402
 
+import actor  # noqa: E402
 import fit  # noqa: E402
 import head  # noqa: E402
+import parts  # noqa: E402
 import train  # noqa: E402
 
 CHECKS = []
@@ -389,6 +406,237 @@ def a_room_is_kept_small():
                          .permute(2, 0, 1)[None], scale_factor=k, mode="bilinear", align_corners=False)[0].permute(1, 2, 0)
     bare = bare[wy - k * (wy // k):wy - k * (wy // k) + h, wx - k * (wx // k):wx - k * (wx // k) + w]
     ok(float((bare - whole[wy:wy + h, wx:wx + w]).abs().max()) > 1e-3, "CONTROL: cut with no margin, it is not")
+
+
+def made_face():
+    """A neutral face in MediaPipe's numbering, its height 1 (the forehead's top at 0, the chin at 1): every point
+    across the middle, the eyes' rims and irises at 0.33, the brows at 0.22, the lips and the jaw's edge at 0.8."""
+    import numpy as np
+    c = np.zeros((479, 3))
+    c[:, 0] = np.linspace(-0.4, 0.4, 479)
+    c[:, 1] = 0.55
+    for i in actor.EYE_RIGHT + actor.EYE_LEFT + parts.IRISES:
+        c[i, 1] = 0.33
+    for i in actor.BROWS:
+        c[i, 1] = 0.22
+    for i in actor.LIPS_OUTER + actor.LIPS_INNER + parts.JAW:
+        c[i, 1] = 0.8
+    c[parts.TOP] = [0.0, 0.0, 0.0]
+    c[parts.CHIN] = [0.0, 1.0, 0.0]
+    return c
+
+
+def tied_scores(n=400, seed=0):
+    """Frames whose glance (eyeLookOutLeft) comes with the jaw (jawOpen), the other scores small."""
+    import numpy as np
+    g = np.random.default_rng(seed)
+    b = g.random((n, 52)) * 0.05
+    jaw, look = actor.BLEND_NAMES.index("jawOpen"), actor.BLEND_NAMES.index("eyeLookOutLeft")
+    b[:, jaw] = g.random(n)
+    b[:, look] = b[:, jaw] + g.normal(0.0, 0.05, n)
+    return b, jaw, look
+
+
+@check
+def each_part_has_its_own_components():
+    import numpy as np
+    b, jaw, look = tied_scores()
+    _mean, basis, _scale, part = train.components(b, np.arange(b.shape[0]))
+    ok(basis.shape[1] == train.EXPRESSIONS, "as many components as the parts have")
+    for k in range(basis.shape[1]):
+        starts = parts.PARTS[int(part[k])][1]
+        rows = np.nonzero(np.abs(basis[:, k]) > 1e-9)[0]
+        ok(all(actor.BLEND_NAMES[r].startswith(starts) for r in rows),
+           "component %d, of the %s, reads its own scores: %s" % (k, parts.PARTS[int(part[k])][0], [actor.BLEND_NAMES[r] for r in rows]))
+    _u, _s, vt = np.linalg.svd(b - b.mean(0), full_matrices=False)
+    ok(abs(vt[0, jaw]) > 0.3 and abs(vt[0, look]) > 0.3, "CONTROL: one set over every score mixes the glance and the jaw")
+
+
+@check
+def a_part_reaches_its_own_points():
+    canon = made_face()
+    w = parts.reach_at(canon, canon)
+    eyes, brows, mouth = 0, 1, 2
+    ok(w[159, eyes] == 1.0 and w[14, mouth] == 1.0 and w[105, brows] == 1.0, "each part reaches its own points")
+    ok(w[14, eyes] == 0.0 and w[159, mouth] == 0.0 and w[105, mouth] == 0.0, "no part reaches another's points")
+
+
+@check
+def a_splat_takes_a_part_only_where_it_reaches():
+    import numpy as np
+    canon = made_face()
+    tris = np.array([[159, 160, 158], [14, 13, 87]])
+    _mean, _basis, _scale, part = train.components(tied_scores()[0], np.arange(400))
+    reach = parts.reach_at(canon, canon[tris].mean(1))[:, part]
+    s = splats_at([0, 1], [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], [[0.5, 0.5, 0.5]] * 2, 2)
+    eye = int(np.nonzero(part == 0)[0][0])
+    with torch.no_grad():
+        s.p["colour_d"].data[:, eye] = 2.0
+    expr = torch.zeros(train.EXPRESSIONS)
+    expr[eye] = 1.0
+    still = s.colours(torch.zeros(train.EXPRESSIONS))
+    s.reach = torch.cat([torch.tensor(reach, dtype=torch.float32), torch.zeros((1, reach.shape[1]))])
+    moved = s.colours(expr)
+    ok(float((moved[0] - still[0]).abs().max()) > 0.1, "the splat by the eye takes the eye's shift")
+    ok(float((moved[1] - still[1]).abs().max()) < 1e-6, "the splat on the lips takes none of it")
+    s.reach = None
+    ok(float((s.colours(expr)[1] - still[1]).abs().max()) > 0.1, "CONTROL: with no reach the lips' splat takes it too")
+
+
+@check
+def a_score_moves_only_its_own_part():
+    import numpy as np
+    import rig
+    canon = made_face()[:478]
+    b, jaw, look = tied_scores(600, 1)
+    Y = np.zeros((b.shape[0], 478, 3))
+    Y[:, 14, 1] = 10.0 * b[:, jaw]
+    Y[:, 159, 1] = 5.0 * b[:, look]
+    X = np.concatenate([b, np.ones((b.shape[0], 1))], 1)
+    W = rig.by_parts(X, Y.reshape(b.shape[0], -1), canon)
+    ok(abs(W[look, 14 * 3 + 1]) < 1e-9 and abs(W[jaw, 159 * 3 + 1]) < 1e-9, "no score moves another part's point")
+    ok(W[jaw, 14 * 3 + 1] > 8.0, "the jaw moves the lip as the frames do, less the ridge (%.2f of 10)" % W[jaw, 14 * 3 + 1])
+    A = X
+    plain = np.linalg.solve(A.T @ A + rig.RIDGE * A.shape[0] * np.eye(A.shape[1]), A.T @ Y.reshape(b.shape[0], -1))
+    ok(abs(plain[look, 14 * 3 + 1]) > 1.0, "CONTROL: fitted over every score, the glance moves the lip")
+
+
+@check
+def each_sounds_mouth_is_their_own():
+    import numpy as np
+    import rig
+    canon = made_face()
+    b, jaw, _look = tied_scores(600, 2)
+    aligned = np.repeat(canon[None, :478], b.shape[0], 0).copy()
+    aligned[:, 14, 1] += 0.2 * b[:, jaw]
+    aligned[:, 105, 1] -= 0.05 * b[:, jaw]
+    visemes = {"names": ["jawOpen"], "classes": {"rest": {"blend": [0.05]}, "open": {"blend": [0.9]}}}
+    dw = np.zeros((1, 478))
+    dw[0, 13], dw[0, 14] = 0.5, 0.5
+    out = rig.mouths_of(aligned, b, visemes, canon, dw)
+    o = np.array(out["sounds"]["open"]["points"])
+    ok(o.shape == (479, 3), "a sound's move is every point of the face")
+    ok(abs(o[14, 1] - 0.2 * 0.85) < 0.03, "the lips part as their frames do (%.3f)" % o[14, 1])
+    ok(abs(o[105, 1]) < 1e-9, "the brows that went with the mouth stay")
+    ok(abs(o[478, 1] - 0.5 * o[14, 1]) < 1e-6, "the point behind the lips is made from them")
+    ok(out["gap"][1] > out["gap"][0], "their lips' parting has a range")
+    near = np.argsort(np.abs(b[:, jaw] - 0.9))[:30]
+    far = np.argsort(np.abs(b[:, jaw] - 0.05))[:30]
+    ok(abs(np.median(aligned[near], 0)[105, 1] - np.median(aligned[far], 0)[105, 1]) > 0.02,
+       "CONTROL: the frames' own medians move the brows")
+
+
+@check
+def the_export_takes_each_shift_as_far_as_its_part_reaches():
+    import json as js
+    import numpy as np
+    import tempfile
+    canon = made_face()
+    tris = np.array([[159, 160, 158], [14, 13, 87]], np.int32)
+    _mean, _basis, _scale, part = train.components(tied_scores()[0], np.arange(400))
+    k = train.EXPRESSIONS
+    eye = int(np.nonzero(part == 0)[0][0])
+    colour_d = np.zeros((2, k, 3), np.float32)
+    colour_d[:, eye] = 2.0
+    arrays = {"bind": np.array([0, 1], np.int32), "place": np.zeros((2, 3), np.float32),
+              "log_scale": np.zeros((2, 3), np.float32), "turn": np.tile([1.0, 0, 0, 0], (2, 1)).astype(np.float32),
+              "colour_logit": np.zeros((2, 3), np.float32), "cover": np.full(2, 0.9, np.float32),
+              "place_d": np.zeros((2, k, 3), np.float32), "colour_d": colour_d, "canon": canon.astype(np.float32),
+              "basis": np.zeros((52, 479, 3), np.float32), "tris": tris, "expr_mean": np.zeros(52, np.float32),
+              "expr_basis": np.zeros((52, k), np.float32), "expr_scale": np.ones(k, np.float32),
+              "plate": np.zeros((4, 4, 3), np.float32), "bones": np.int32(0), "crop": np.array([0, 0, 4, 4], np.int32)}
+    reach = parts.reach_at(canon, canon[tris].mean(1))[:, part].astype(np.float32)
+
+    def shifts(extra):
+        with tempfile.TemporaryDirectory() as d:
+            npz = d + "/a.npz"
+            np.savez(npz, **arrays, **extra)
+            train.export(npz, np.arange(2))
+            head = js.load(open(d + "/a.json"))
+            raw = open(d + "/a.bin", "rb").read()
+            at = head["arrays"]["texels"]
+            tex = np.frombuffer(raw[at[0]: at[0] + at[1] * 4], np.float32).reshape(-1, 4)
+            per = head["per_splat"]
+            return [tex[n * per + 5 + 2 * eye, :3] for n in range(2)]
+    eye_splat, lip_splat = shifts({"expr_reach": reach})
+    ok(float(np.abs(eye_splat).max()) > 1.0 and float(np.abs(lip_splat).max()) < 1e-6,
+       "the export takes each shift as far as its part reaches")
+    ok(float(np.abs(shifts({})[1]).max()) > 1.0, "CONTROL: with no reach kept, the lips' splat keeps the eye's shift")
+
+
+class _NeckRig:
+    """A face whose forehead's top (10) stands at y 0 and chin (152) at y 100; every frame at the origin, unit 1."""
+
+    def __init__(self, triangles, bones):
+        self.T = triangles
+        self.n = triangles + 1 + bones
+        self.v = torch.zeros(479, 3)
+        self.v[152, 1] = 100.0
+
+    def face(self, data, i, tracked=True):
+        return self.v
+
+    def frames(self, data, i, tracked=True):
+        return torch.zeros(self.n, 3), torch.eye(3).repeat(self.n, 1, 1), torch.ones(self.n), self.v
+
+
+class _NeckData:
+    def __init__(self, bones):
+        self.bone_origin = torch.zeros((1, bones, 3))
+        self.bone_unit = torch.ones((1, bones))
+
+
+@check
+def the_neck_stretches():
+    T, B = 4, 2
+    rig, data = _NeckRig(T, B), _NeckData(B)
+    h = 100.0
+    ys = [90.0, 100.0 + 0.5 * train.NECK * h, 100.0 + 2.0 * train.NECK * h]
+    s = splats_at([T, T, T, 0], [[0, y, 0] for y in ys] + [[0, 150.0, 0]], [[1.0, 1.0, 1.0]] * 4, T)
+    out = train.second_of(s, rig, data, 0)
+    frame = lambda v: int(math.floor(v)) - 2
+    share = lambda v: (v % 1.0) / 0.98
+    ok(out[0] == 0.0, "a head splat above the chin takes nothing of the torso's move")
+    ok(frame(out[1]) == T + 1 and abs(share(out[1]) - 0.5) < 0.01,
+       "one half way down the neck takes half of the torso's move (%.3f)" % share(out[1]))
+    ok(frame(out[2]) == T + 1 and share(out[2]) > 0.99, "one past the neck takes all of it (%.3f)" % share(out[2]))
+    ok(frame(out[3]) == T + 1 and share(out[3]) > 0.99, "and so does one on a triangle of the face")
+    rig.v[152, 1] = 400.0
+    low = train.second_of(s, rig, data, 0)
+    ok(float(abs(low[:4]).max()) == 0.0, "CONTROL: with the chin below them all, none takes it")
+
+
+@check
+def a_moment_is_asked_only_for_what_it_shows():
+    S = 8 * fit.MOMENT_POOL
+    truth = torch.full((S, S, 3), 0.5)
+    person = torch.ones(S, S)
+    speck = truth.clone()
+    speck[20:23, 20:23] = torch.tensor([0.0, 1.0, 0.0])
+    strands = truth.clone()
+    strands[:, 0::2] = 0.3
+    strands[:, 1::2] = 0.7
+    drawn = {}
+    real = fit.train.render
+    fit.train.render = lambda *a, **k: (drawn["image"], torch.ones(S, S))
+    try:
+        def asked(image, front=None):
+            drawn["image"] = image
+            f = torch.ones(S, S) if front is None else front
+            return float(fit.moment_loss(None, None, None, None, 0, 0, 0, S, truth, person, f))
+        a_speck, the_strands = asked(speck), asked(strands)
+        hidden = torch.ones(S, S)
+        hidden[16:28, 16:28] = 0.0
+        behind = asked(speck, hidden)
+    finally:
+        fit.train.render = real
+    ok(a_speck > 1e-3 and the_strands < 1e-6,
+       "a green speck of 3 pixels is asked for (%.4f), hair-fine strands the still's own are not (%.1e)"
+       % (a_speck, the_strands))
+    ok(behind < 1e-6, "nor a speck where something stands before them (%.1e)" % behind)
+    fine_speck, fine_strands = float((speck - truth).abs().mean()), float((strands - truth).abs().mean())
+    ok(fine_strands > fine_speck, "CONTROL: asked pixel by pixel, the strands are further off (%.3f) than the speck "
+       "(%.4f)" % (fine_strands, fine_speck))
 
 
 def main() -> int:

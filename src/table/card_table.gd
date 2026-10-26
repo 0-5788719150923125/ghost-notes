@@ -149,8 +149,23 @@ const MOMENTS := {
 
 ## THE STAGING: how an episode's cards come and are shown, the producer's choice ([method staging_of]).
 ## `source` - where they come from ([constant TableActions.SOURCES]); `text` - where a card's text is
-## printed ([constant TEXTS]).
-const STAGING := {"source": "deck", "text": "booklet"}
+## printed ([constant TEXTS]); `reversals` - whether a card comes up upside down, and what then
+## ([constant REVERSALS]); `jumpers` - whether the first card may fly out of the shuffle on its own.
+const STAGING := {"source": "deck", "text": "booklet", "reversals": "none", "jumpers": false}
+## WHICH WAY UP A CARD COMES (the user, 2026-10-25: reversals and jumpers "should be set by the agents
+## during preparation for an episode"; a tarot reading reads them, "elsewhere, we would almost never see
+## reversals used" - but a box of trading cards or "a pile of messy baseball cards" has a card come out
+## upside down and turned upright once it is pulled). `comes`: the seed turns some cards upside down
+## ([method CardDeck.shuffled]); `read`: such a card lies and is read upside down - otherwise the hand
+## rights it ([method TableCardPose.righting]) and it is read the right way up.
+const REVERSALS := {
+	"none": {"comes": false, "read": false,
+		"about": "every card comes up the right way up - a deck or collection kept squared and sorted, as most are"},
+	"read": {"comes": true, "read": true,
+		"about": "a card may come up upside down and is read that way, by its reversed meaning - only a reading deck whose tradition reads reversed cards"},
+	"righted": {"comes": true, "read": false,
+		"about": "a card may come out upside down, as cards do in a messy box or a loose pile, and is turned the right way up in the hand once it is pulled, then read and laid the right way up"},
+}
 const BOX_STYLES := ["open", "shoebox"]
 const BOX_CONTENTS := ["file", "piles", "loose"]
 const BOX_OBJECTS := ["coin", "button", "marble", "ticket"]
@@ -492,11 +507,27 @@ static func staging_of(plan: Dictionary) -> Dictionary:
 	# A collection drawn from a box normally carries its own printing. A separate
 	# booklet remains available when the plan explicitly chooses one.
 	var default_text := "front" if safe_source == "box" else String(STAGING["text"])
+	var reversals := str(st.get("reversals", "")).strip_edges().to_lower()
+	# a jumper flies out of a shuffle: never out of a source that is not shuffled
+	var jumpers: Variant = st.get("jumpers", STAGING["jumpers"])
 	return {"source": safe_source,
 		"text": text if TEXTS.has(text) else default_text,
 		"box_style": box_style if box_style in BOX_STYLES else "open",
 		"contents": contents if contents in BOX_CONTENTS else "file",
-		"pace": pace if pace in PACES else "reflective", "keepsakes": objects}
+		"pace": pace if pace in PACES else "reflective", "keepsakes": objects,
+		"reversals": reversals if REVERSALS.has(reversals) else String(STAGING["reversals"]),
+		"jumpers": jumpers is bool and bool(jumpers) and bool((TableActions.SOURCES[safe_source] as Dictionary)["jumpers"])}
+
+
+## WHETHER [param plan]'s cards may come up upside down at all ([constant REVERSALS] `comes`).
+static func reverses(plan: Dictionary) -> bool:
+	return bool((REVERSALS[String(staging_of(plan)["reversals"])] as Dictionary)["comes"])
+
+
+## WHETHER A CARD UPSIDE DOWN IS READ THAT WAY in [param plan] ([constant REVERSALS] `read`): the booklet
+## gives its reversed meaning, the back reads the same either way up, and the card lies upside down.
+static func reads_reversed(plan: Dictionary) -> bool:
+	return bool((REVERSALS[String(staging_of(plan)["reversals"])] as Dictionary)["read"])
 
 
 static func card_size(look: Dictionary) -> Vector2:
