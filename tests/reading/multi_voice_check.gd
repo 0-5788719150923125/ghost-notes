@@ -522,6 +522,15 @@ func _check_reader_is_first() -> void:
 	_ok(_ed._cast._names == PackedStringArray(["Narrator", "Ryan"]) and absf(float(_ed._cast.cfg_of("Ryan")["pace"]) - 0.6) < 0.001
 			and absf(float(_ed._cast.cfg_of(Manuscript.NARRATOR)["pace"]) - 0.9) < 0.001,
 		"control: a cast that lists Narrator first did not keep it as its reader: %s" % [_ed._cast._names])
+	# NOTHING WRITTEN YET IS NOT A CAST OF ONE (2026-10-25: a Cards note's new episode, not yet made, showed
+	# its reader alone and its familiar out of reach): an empty script keeps every voice the note has as a
+	# tab - where words with no cue ("Just prose, no cues at all." above) are the reader's alone
+	_ed._text.text = ""
+	_ed._cast.apply({"voices": {"Ryan": {"pace": 0.6}, "Mo": {"pace": 1.2}}})
+	_ok(_ed._cast._names == PackedStringArray(["Ryan", "Mo"]), "an empty script hid a voice the note keeps: %s" % [_ed._cast._names])
+	_ed._text.text = "Only the reader now."
+	_ed._cast.refresh(_ed._cast_text())
+	_ok(_ed._cast._names == PackedStringArray(["Ryan"]), "control: words with no cue are not the reader's alone: %s" % [_ed._cast._names])
 	_ed._text.text = ""
 
 

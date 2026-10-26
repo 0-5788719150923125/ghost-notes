@@ -989,6 +989,52 @@ def still_sheet(tiles, path: str, cols=4) -> None:
     cv2.imwrite(path, sheet, [cv2.IMWRITE_JPEG_QUALITY, 88])
 
 
+# THEIR HANDS, CLOSER (2026-10-25, the user on the still At rest put first: "His resting pose is open palm, face-up -
+# which is bizarre, because it makes him look like a priest"): on the sheet a hand is some 40 pixels, and the writer
+# put two stills with open palms among its five at rest. So each still's hands are cropped for it too, numbered alike:
+# the box round the landmarks of the hands seen (MediaPipe's pose, wrists to thumbs: HAND_POINTS), HANDS_GROW times as
+# large and at least HANDS_LEAST shoulder widths across, at the frame's shape; no hand seen, the body below the shoulders.
+HANDS = "hands.jpg"
+HAND_POINTS = list(range(15, 23))
+HANDS_GROW = 1.6
+HANDS_LEAST = 1.2
+
+
+def hands_box(pose, w: int, h: int):
+    """Where the hands are in a still of [w] x [h] with [pose] (33 landmarks of x, y, z and how surely seen, flat):
+    (x0, y0, x1, y1) in pixels, at the frame's shape, inside it."""
+    import numpy as np
+    p = np.asarray(pose, np.float64).reshape(33, 4)
+    xy = p[:, :2] * np.array([w, h])
+    sw = max(float(np.hypot(*(xy[11] - xy[12]))), 1.0)
+    seen = [j for j in HAND_POINTS if p[j, 3] > 0.5]
+    if seen:
+        lo, hi = xy[seen].min(axis=0), xy[seen].max(axis=0)
+        (cx, cy), span = (lo + hi) / 2.0, (hi - lo) * HANDS_GROW
+    else:
+        cx, cy = (xy[11] + xy[12]) / 2.0 + np.array([0.0, 1.2 * sw])
+        span = np.array([2.0 * sw, 1.2 * sw])
+    bw = max(float(span[0]), float(span[1]) * w / h, HANDS_LEAST * sw)
+    bw = min(bw, float(w))
+    bh = bw * h / w
+    x0 = int(round(min(max(cx - bw / 2.0, 0.0), w - bw)))
+    y0 = int(round(min(max(cy - bh / 2.0, 0.0), h - bh)))
+    return x0, y0, x0 + int(round(bw)), y0 + int(round(bh))
+
+
+def hands_sheet(tiles, poses, path: str) -> None:
+    """Each of the stills [tiles] (BGR, full size) cropped to its hands ([hands_box], by its pose in [poses]), on a
+    sheet as [still_sheet] lays them, numbered alike."""
+    if not tiles:
+        return
+    h, w = tiles[0].shape[:2]
+    crops = []
+    for t, pose in zip(tiles, poses):
+        x0, y0, x1, y1 = hands_box(pose, t.shape[1], t.shape[0])
+        crops.append(t[y0:y1, x0:x1] if x1 > x0 and y1 > y0 else t)
+    still_sheet(crops, path)
+
+
 def calm_of(R):
     """How much each look moves: the head (degrees) and the hands (shares of the frame) against the looks
     either side in the same shot, each over its own median - 1 is their usual."""
@@ -1433,7 +1479,7 @@ def cmd_stills(a) -> int:
     shutil.rmtree(part, ignore_errors=True)
     os.makedirs(part)
     stills = []
-    sheet_tiles = []
+    sheet_tiles, sheet_poses = [], []
     for k, f in enumerate(chosen):
         W, H = f["size"]
         rec = f["rec"]
@@ -1460,6 +1506,7 @@ def cmd_stills(a) -> int:
         small = cv2.resize(bgr, (STILL_THUMB_W, int(round(STILL_THUMB_W * H / W))), interpolation=cv2.INTER_AREA)
         cv2.imwrite(os.path.join(part, thumb), small, [cv2.IMWRITE_JPEG_QUALITY, 88])
         sheet_tiles.append(bgr)
+        sheet_poses.append(rec["pose"])
         i = f["i"]
         stills.append({"file": name, "thumb": thumb, "vid": str(R["vid"][i]), "time": round(float(R["time"][i]), 3),
                        "set": str(R["set"][i]), "size": [W, H],
@@ -1472,6 +1519,7 @@ def cmd_stills(a) -> int:
                        "room": "room_%d.jpg" % k, "matte": "matte_%d.png" % k, **layers,
                        "sharp": round(f["sharp"], 1), "score": round(f["score"], 3)})
     still_sheet(sheet_tiles, os.path.join(part, SHEET))
+    hands_sheet(sheet_tiles, sheet_poses, os.path.join(part, HANDS))
     shutil.rmtree(out_dir, ignore_errors=True)
     os.replace(part, out_dir)
     write_json(spec["index"], {"stills": stills})

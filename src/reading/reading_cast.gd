@@ -233,7 +233,7 @@ func build_voice(box: VBoxContainer) -> void:
 	# as wide as "libritts high (downloads)" pushed the whole panel out (see SidePanel._check_width)
 	voice_pick.fit_to_longest_item = false
 	voice_pick.clip_text = true
-	voice_pick.tooltip_text = "Which Piper model reads. Each is a different person with its own accent, recording and license - the license appears under the panel when you pick one. Changing this regenerates whatever has not been played yet."
+	voice_pick.tooltip_text = "Which voice model reads: a Piper model, or kokoro. A model that holds more than one reader (libritts, kokoro) picks who reads on the Speaker row below. Each model has its own license - it appears under the panel when you pick one. Changing this regenerates whatever has not been played yet."
 	voice_pick.item_selected.connect(func(_i: int) -> void:
 		if not _syncing:
 			_voice_picked())
@@ -255,8 +255,8 @@ func build_voice(box: VBoxContainer) -> void:
 	_test.pressed.connect(panel._on_test)
 	vrow.add_child(_test)
 
-	# Multi-speaker checkpoints carry hundreds of readers under one model -
-	# libritts-high has 904 - and they are the only way to change WHO is
+	# Multi-speaker checkpoints carry many readers under one model - libritts-high
+	# has 904, kokoro 28 voicepacks - and they are the only way to change WHO is
 	# reading without changing the model. Hidden entirely for single-speaker
 	# voices, like every other capability-driven control here.
 	_speaker_row = HBoxContainer.new()
@@ -276,7 +276,7 @@ func build_voice(box: VBoxContainer) -> void:
 	# set by _show_voice_license once the voice's reader count is known.
 	_speaker.max_value = 100000
 	_speaker.step = 1
-	_speaker.tooltip_text = "Which reader, on a model that holds more than one (libritts carries 904). Same model and same accent, a different person - so it changes WHO is reading, not how. Grayed out on single-speaker voices. Regenerates the un-played chunks."
+	_speaker.tooltip_text = "Which reader, on a model that holds more than one (libritts carries 904 readers, kokoro 28 voices). Same model, a different person - so it changes WHO is reading, not how. Hidden on single-speaker voices. Regenerates the un-played chunks."
 	_speaker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_speaker.value_changed.connect(func(_v: float) -> void:
 		if _syncing:
@@ -293,7 +293,7 @@ func build_voice(box: VBoxContainer) -> void:
 	var browse := Button.new()
 	browse.text = "Browse…"
 	browse.focus_mode = Control.FOCUS_NONE
-	browse.tooltip_text = "Every reader on this voice, with their gender and a description of how they sound (LibriTTS-P annotations). Filter, search, and pick one. Another voice - an actor's own among them - is picked from the Voice list above."
+	browse.tooltip_text = "Every reader on this voice, with their gender and a description (libritts: how they sound, from LibriTTS-P; kokoro: accent and Kokoro's own grade). Filter, search, and pick one. Another voice - an actor's own among them - is picked from the Voice list above."
 	browse.pressed.connect(_open_speaker_browser)
 	_speaker_row.add_child(browse)
 
@@ -301,7 +301,7 @@ func build_voice(box: VBoxContainer) -> void:
 	_speaker_about.add_theme_font_size_override("font_size", 11)
 	_speaker_about.modulate = Color(1, 1, 1, 0.75)
 	_speaker_about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_speaker_about.tooltip_text = "Who this speaker number is: perceived gender and how the voice sounds, from LibriTTS-P (LINE Corporation, CC BY 4.0)."
+	_speaker_about.tooltip_text = "Who this speaker number is: perceived gender and a description - for libritts how the voice sounds (LibriTTS-P, LINE Corporation, CC BY 4.0), for kokoro its accent and Kokoro's own grade of its training data."
 	_speaker_row.add_sibling(_speaker_about)
 
 	var trow := HBoxContainer.new()
@@ -314,7 +314,7 @@ func build_voice(box: VBoxContainer) -> void:
 	trow.add_child(tl)
 	_tone = OptionButton.new()
 	_tone.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_tone.tooltip_text = "The reading's overall manner: pace, pitch, how much the model varies itself, how evenly it divides the words, and whether it is whispered or muffled - all of it the VOICE, and none of it the dials below, which stay yours. The pitch shift moves the formants with it, so the reader reads as a different SIZE - which is what makes Spooky larger and lower, Excited smaller and higher. Regenerates the un-played chunks."
+	_tone.tooltip_text = "The reading's overall manner: pace, pitch, how much the model varies itself, how evenly it divides the words, and whether it is whispered or muffled - all of it the VOICE, and none of it the dials below, which stay yours. The pitch shift moves the formants with it, so the reader reads as a different SIZE - which is what makes Spooky larger and lower, Excited smaller and higher. A kokoro voice takes the pace, pitch, whisper and muffle; it has no variation to set, so that part does nothing there. Regenerates the un-played chunks."
 	for k in Delivery.TONE_PRESETS:
 		_tone.add_item(String(k))
 	_tone.item_selected.connect(func(_i: int) -> void:
@@ -742,6 +742,12 @@ func refresh(body: String, want := "") -> void:
 	for n in Manuscript.speakers(body):
 		if not names.has(_who(n)):
 			names.append(_who(n))
+	# NOTHING WRITTEN YET IS NOT A CAST OF ONE (2026-10-25, the user: "Why is the True Tarot note only
+	# reading one available speaker now? What happened to the 'Familiar' voice?"). A show's new episode,
+	# not yet made, hands an empty script, and every voice but the reader went out of reach until it was.
+	# Until there are words, the tabs are every voice the note keeps; words with no cue are the reader's.
+	if body.strip_edges().is_empty() and not _order.is_empty():
+		names = _order.duplicate()
 	if names.is_empty():
 		names = PackedStringArray([reader()])
 	for n in names:
@@ -975,6 +981,10 @@ func _show_ink(v: String) -> void:
 func fill_voices(voices: Array) -> void:
 	var keep := _selected_voice_id()  # asked again ([method voice_made]): what is picked stays picked
 	voice_meta = voices
+	# a voice whose speakers the host describes itself (kokoro's voicepacks): the Speaker row reads them
+	for v in voices:
+		if (v as Dictionary).has("readers"):
+			VoiceReaders.offer(String(v.get("id", "")), v["readers"], String(v.get("readers_about", "")))
 	voice_pick.clear()
 	for v in voices:
 		var mark := "" if bool(v.get("installed", false)) else "  (downloads)"
@@ -991,6 +1001,7 @@ func fill_voices(voices: Array) -> void:
 	_refresh_tab_labels()           # model names are known now, not just ids
 	panel._can_play = true            # from here on Play is always live
 	_show_voice_license()
+	panel.warm_voice(_selected_voice_id())
 	if not _made_voice.is_empty():
 		_read_in(_made_voice)
 
@@ -1017,6 +1028,7 @@ func _read_in(id: String) -> void:
 ## The voice picked: the slot keeps it, and what was read in the old one is read again.
 func _voice_picked() -> void:
 	_show_voice_license()
+	panel.warm_voice(_selected_voice_id())
 	capture_slot()
 	# A voice change is not a re-pace. _repace keeps the stream and appends
 	# at the new setting, which for a VOICE would splice a second speaker
@@ -1066,7 +1078,7 @@ func _open_speaker_browser() -> void:
 	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(list)
 	var note := Label.new()
-	note.text = "Descriptions: LibriTTS-P, LINE Corporation (CC BY 4.0)."
+	note.text = VoiceReaders.about_of(_selected_voice_id())
 	note.add_theme_font_size_override("font_size", 10)
 	note.modulate = Color(1, 1, 1, 0.55)
 	box.add_child(note)

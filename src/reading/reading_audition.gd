@@ -19,14 +19,20 @@ class_name ReadingAudition
 
 ## The words every voice is auditioned with. The SAME passage for every speaker, so two
 ## voices are compared on identical material; chosen to exercise what a chapter will ask of
-## them - a long sentence with commas, a colon, a question, an exclamation, a number, a line
-## of dialogue in quotes and a short sentence landing after a long one. It OPENS on a short
-## sentence on purpose: the first sound waits for the first sentence to be made.
+## them - a long sentence with commas, a colon, a semicolon, a question, an exclamation, a
+## number, a list, a dash, lines of dialogue in quotes and a short sentence landing after a long
+## one. It OPENS on a short sentence on purpose: the first sound waits for the first sentence to
+## be made. About a minute long (2026-10-25, the user: "make the test audio a bit longer. There's
+## no reason for it to be so short" - it had been twenty-five seconds).
 const PASSAGE := """The rain had not stopped. Since morning it had kept on, and the lamps along the river were already lit by four o'clock. I counted them from the window: twelve on this side, eleven on the other, one of them out.
 
 "Are you coming, or not?" she asked from the doorway. I told her I would be a minute. It was closer to twenty.
 
-Some evenings are like that. You mean to leave, and the room keeps you, and by the time you notice it is dark. Still, I went. I am glad I did!"""
+Some evenings are like that. You mean to leave, and the room keeps you, and by the time you notice it is dark. Still, I went. I am glad I did!
+
+The street was empty but for a man and his dog, and the dog was plainly in charge. They crossed at the bakery, where the windows had fogged over and someone had written a name in the steam - not mine, though for a moment I hoped it was.
+
+"You took your time," she said when I arrived. I said that time had taken me; she did not find this as clever as I did. We ordered two coffees, a slice of lemon cake and, after a long look at the menu, a second slice. By nine the rain had eased to a hush, and we walked home the long way."""
 ## THE ROOM RUNS ON A WORKER. VoiceFX is GDScript DSP at about 15 microseconds a sample -
 ## measured, a third of the main thread for every second of audio, and 0.36 s in ONE frame
 ## when a sentence was processed whole: the reported "the entire UI keeps freezing, then

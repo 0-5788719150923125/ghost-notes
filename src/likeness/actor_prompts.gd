@@ -92,9 +92,9 @@ static func _usable(shots: Array) -> float:
 # --- the stills at rest ----------------------------------------------------------------------------
 
 ## Which of [param count] stills of [param name] show them at rest: `{system, prompt}` (the caller adds the
-## sheet).
-static func rest(name: String, count: int) -> Dictionary:
-	var v := {"name": name, "count": str(count)}
+## sheet, and with [param hands] the sheet of their hands).
+static func rest(name: String, count: int, hands := false) -> Dictionary:
+	var v := {"name": name, "count": str(count), "hands": hands}
 	return {"system": Rules.say("likeness/rest.system", v), "prompt": Rules.say("likeness/rest.prompt", v)}
 
 

@@ -48,6 +48,9 @@ Run it directly with the voice-training venv's python (its torch) - no pytest ne
   with no reach kept, the lips' splat keeps an eye shift).
   THE HEAD RIDES THE HEAD (train.py's `second_of`) - a splat of the head far below the chin, on the head or on a
   face's triangle, takes nothing of the torso's move (CONTROL: the torso's own splat at the seat keeps the still).
+  THE BEARD MOVES AS ONE (fit.py's `hang_beard`) - a splat on a turned triangle below the chin is hung from the head's
+  frame standing, sized and turned as it was, with no shifts; one under the lips keeps its triangle and loses its
+  shifts; one above them keeps both (CONTROL: its old numbers on the head's frame stand elsewhere).
   A MOMENT IS ASKED ONLY FOR WHAT IT SHOWS (fit.py's `moment_loss`) - a green speck of three pixels is far from the
   moment's picture in its coarse squares, and hair-fine strands whose mean is the picture's are not; a speck where
   something stands before them is not asked for (CONTROL: pixel by pixel, the strands are further off than the speck).
@@ -591,6 +594,52 @@ def the_head_rides_the_head():
     ok(int(math.floor(out[2])) - 2 == -1 and abs((out[2] % 1.0) / 0.98 - train.HOLD_LOW) < 0.01,
        "CONTROL: the torso's own splat at the seat keeps the still (%.3f)" % out[2])
 
+
+
+class _FaceRig:
+    """Two triangles' frames - the first turned 0.7 rad, unit 2, at (0, 120, 5); the second at the origin, unit 3 - and
+    the head's at the origin, unit 16; the face's top (10) at y 0, its chin at y 100, its lips' outline from y 70 to 80."""
+
+    def __init__(self):
+        self.T = 2
+        self.v = torch.zeros(479, 3)
+        self.v[parts.CHIN, 1] = 100.0
+        for k, j in enumerate(actor.LIPS_OUTER):
+            self.v[j, 1] = 70.0 + 10.0 * (k % 2)
+        c, s = math.cos(0.7), math.sin(0.7)
+        self.axes = torch.stack([torch.tensor([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]]), torch.eye(3), torch.eye(3)])
+        self.origin = torch.tensor([[0.0, 120.0, 5.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+        self.unit = torch.tensor([2.0, 3.0, 16.0])
+
+    def frames(self, data, i, tracked=True):
+        return self.origin, self.axes, self.unit, self.v
+
+
+@check
+def the_beard_moves_as_one():
+    import types
+    rig = _FaceRig()
+    data = types.SimpleNamespace(expr=torch.zeros(1, train.EXPRESSIONS))
+    s = splats_at([0, 1, 1], [[1.0, 3.0, 0.5], [0.0, 30.0, 0.0], [0.0, 20.0, 0.0]], [[1.0, 0.5, 0.2]] * 3, rig.T)
+    s.p["turn"].data[0] = torch.tensor([0.9, 0.1, 0.3, 0.2])
+    s.p["place_d"].data[:] = 0.1
+    s.p["colour_d"].data[:] = 0.1
+    o, a, u, _v = rig.frames(data, 0)
+    m0, s0, t0 = s.world(o, a, u, data.expr[0])
+    r0 = train._rot_of(t0[0]) * s0[0]
+    old = s.p["place"].data[0].clone()
+    hung, under = fit.hang_beard(s, rig, data, 0)
+    m1, s1, t1 = s.world(o, a, u, data.expr[0])
+    r1 = train._rot_of(t1[0]) * s1[0]
+    ok(hung == 1 and under == 1 and int(s.bind[0]) == rig.T, "one hung from the head below the chin, one under the lips")
+    ok(float((m1[0] - m0[0]).norm()) < 1e-4 and float((r1 @ r1.T - r0 @ r0.T).abs().max()) < 1e-4,
+       "the hung splat stands, sizes and turns as it did (%.2e off)" % float((m1[0] - m0[0]).norm()))
+    ok(float(s.p["place_d"][:2].abs().max()) == 0.0 and float(s.p["colour_d"][:2].abs().max()) == 0.0
+       and int(s.bind[1]) == 1, "the hung splat and the one under the lips take no shifts, that one on its triangle")
+    ok(float(s.p["place_d"][2].abs().min()) > 0.0, "the one above the lips keeps its shifts")
+    naive = o[rig.T] + u[rig.T] * (a[rig.T] @ old)
+    ok(float((naive - m0[0]).norm()) > 10.0, "CONTROL: its old numbers on the head's frame stand elsewhere (%.1f px off)"
+       % float((naive - m0[0]).norm()))
 
 @check
 def a_moment_is_asked_only_for_what_it_shows():

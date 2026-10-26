@@ -111,6 +111,17 @@ func list_voices() -> int:
 	return id
 
 
+## Prepare [param voice] without synthesizing (the host's `ensure`): fetched if it is missing, and a
+## model the host keeps warm (kokoro's graph, 325 MB) opened - so the first Play of a reading does not
+## wait seconds on it. The reply carries no audio and nothing reads it.
+func ensure(voice: String) -> int:
+	var id := _next_id
+	_next_id += 1
+	_pending[id] = {"op": "ensure"}
+	_send({"id": id, "op": "ensure", "voice": voice})
+	return id
+
+
 func is_up() -> bool:
 	return _state == "up"
 
@@ -269,7 +280,8 @@ func _handle(line: String) -> void:
 	if not bool(msg.get("ok", false)):
 		var err := String(msg.get("error", "unknown error"))
 		print("ghost/voice: request %d failed: %s" % [id, err])
-		failed.emit("synthesize", err)
+		# WHICH REQUEST: a failed `ensure` or listing is not a chunk the reading is waiting on
+		failed.emit(String(meta.get("op", "synthesize")), err)
 		return
 	synthesized.emit(id, msg)
 

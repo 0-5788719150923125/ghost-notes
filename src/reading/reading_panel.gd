@@ -909,9 +909,18 @@ func voice_made(id: String) -> void:
 
 
 func _on_failed(stage: String, message: String) -> void:
+	_set_status("%s failed: %s" % [stage, message])
+	if stage != "synthesize":
+		return
 	_can_play = true
 	_stream.failed()
-	_set_status("%s failed: %s" % [stage, message])
+
+
+## Have the host prepare [param voice] before it is asked to read in it ([method VoiceHost.ensure]):
+## the voice the list opens on and every voice picked after.
+func warm_voice(voice: String) -> void:
+	if not voice.is_empty() and _host != null and _host.is_up():
+		_host.ensure(voice)
 
 
 func _on_synthesized(id: int, result: Dictionary) -> void:

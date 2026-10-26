@@ -9,7 +9,44 @@ The first build's files are backed up in `dist/likeness_v1/` (they were never co
 **The seventh pass (2026-10-25, evening): the needles** - below the eighth.
 **The eighth pass (2026-10-25, night): the soft mouth and the neck, from the literature** - below the next.
 **Three alike videos, and is the approach convoluted? (2026-10-25, late)** - below the next.
-**The ninth pass (2026-10-25, late night): a head that turns, a beard that stays on it** - right below.
+**The ninth pass (2026-10-25, late night): a head that turns, a beard that stays on it** - below the next.
+**The tenth pass (2026-10-25, later): the beard moves as one, the hands at rest are seen** - right below.
+
+## The tenth pass: the beard moves as one, the hands at rest are seen (2026-10-25, later)
+
+**The user, on the set made again after the ninth pass:** "The places where there is a lot of movement is spiky, as if
+his beard is projecting beyond other features. His resting pose is open palm, face-up - which is bizarre, because it
+makes him look like a priest or something. Everything stretches and morphs." And: "the spikes are perceptual spikes.
+They happen when motion happens ... transitions between frames, they morph in a fractured/spiky kind of way."
+
+### Measured (`dist/tenth/`)
+
+- **The fracture** (`fracture.py`: consecutive frames, the later warped back by the smooth flow between them; what is
+  left, over the texture there): the beard 0.25 before the ninth pass, 0.27 with the head's own motion, 0.48 to 0.51 once
+  it rode the head; the collar 0.08 to 0.29-0.30. The bigger turns did little; the beard on the head did it.
+- **Why** (`levers.py`: the fitted avatar, the face eased from its still to its most open moment and back in small steps,
+  the head held; each beard splat's move against its 12 nearest): a splat parted from its neighbours by 0.435 px a step,
+  45% of its own move. Its expression shifts alone parted it by 0.286 (more than they moved it: they had learned noise -
+  hair has no shape that shifts with the face); its triangle alone, each turning its own way, by 0.220. Hung from the
+  head below the chin and with no shifts under the lips: 0.124.
+- **The still at rest**: the writer (Opus 5.5, shown the 12 stills on one sheet, a hand some 40 pixels) put stills 3
+  and 1 - both palms open - among its five, 3 first; cropped to the hands (`hands.jpg`), five are plainly open or
+  gesturing and three folded.
+- **The motion is not past theirs**: the head moved against the body in 55 of 359 frame pairs, by 1.9 px (their own
+  footage: 272, by 3.9). What stretches is the body bent in 2D under a head that now moves, and a still with both arms
+  out bends with every shift of posture.
+
+### Fixed
+
+- **THE BEARD MOVES AS ONE** (`fit.hang_beard`, Fit version 6): below the chin a splat on the face's triangles is hung
+  from the head's own frame where it stood, as the hair is; under the lips' outline it keeps its triangle (the jaw carries
+  it) and takes no expression shifts. Fit learns its moments so, and plays so. Gate: test_fit (`the_beard_moves_as_one`).
+- **THEIR HANDS, CLOSER** (`actor.hands_sheet`, Stills version 5; `rules/likeness/rest.yaml`): a second sheet, each still
+  cropped round its pose's hand landmarks, numbered alike, goes to the At rest writer with the first. Gate: test_actor
+  (`test_hands_sheet`).
+- **A still with nothing before them** (the Fit step failed, `front_7.png` not found: the outline rule had left none):
+  the specs take each still's layers from `stills.json` (`ActorBuilder.still_layers`), the trainer none for no front.
+  Gate: actors_check.
 
 ## The ninth pass: a head that turns, a beard that stays on it (2026-10-25, late night)
 

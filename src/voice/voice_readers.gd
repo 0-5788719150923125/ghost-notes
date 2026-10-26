@@ -12,11 +12,37 @@ class_name VoiceReaders
 ##
 ## Read only from files: the model config the voice host downloaded, and the data file. A voice
 ## that is not installed yet, or has no map, simply has no descriptions.
+##
+## ...OR SAID BY THE HOST (2026-10-25): a voice whose speakers are a list the host keeps itself -
+## Kokoro's voicepacks under the one "kokoro" voice - comes with `readers` on its row, handed in by
+## [method offer] as the host lists its voices, and they are described from those instead.
 
 const DATA := "res://data/libritts_speakers.json"
+const LIBRITTS_ABOUT := "Descriptions: LibriTTS-P, LINE Corporation (CC BY 4.0)."
 
 static var _readers := {}          # reader id -> {g, d}
 static var _maps := {}             # voice id -> PackedStringArray: speaker index -> reader id
+static var _given := {}            # voice id -> [{reader, g, d}], in speaker order (offer)
+static var _about := {}            # voice id -> who described them
+
+
+## The readers the host listed with [param voice_id] (`readers` on its row), in speaker order, and
+## who described them ([param about]). Asked again on every listing: what the host says now is what
+## a speaker number is.
+static func offer(voice_id: String, readers: Array, about := "") -> void:
+	var rows: Array = []
+	for r in readers:
+		if r is Dictionary:
+			rows.append({"reader": String(r.get("reader", "")), "g": String(r.get("g", "")),
+				"d": String(r.get("d", ""))})
+	_given[voice_id] = rows
+	_about[voice_id] = about
+
+
+## Who described [param voice_id]'s readers, said under the reader browser.
+static func about_of(voice_id: String) -> String:
+	var said := String(_about.get(voice_id, ""))
+	return said if not said.is_empty() else LIBRITTS_ABOUT
 
 
 static func _load_readers() -> void:
@@ -48,6 +74,9 @@ static func _map_of(voice_id: String) -> PackedStringArray:
 ## Speaker [param index] of [param voice_id]: `{reader, g, d}` (g "F", "M" or ""), or empty
 ## when nothing is known about it.
 static func describe(voice_id: String, index: int) -> Dictionary:
+	if _given.has(voice_id):
+		var rows: Array = _given[voice_id]
+		return (rows[index] as Dictionary).duplicate() if index >= 0 and index < rows.size() else {}
 	_load_readers()
 	var m := _map_of(voice_id)
 	if index < 0 or index >= m.size() or m[index].is_empty():
@@ -58,8 +87,15 @@ static func describe(voice_id: String, index: int) -> Dictionary:
 
 ## Every speaker of [param voice_id], in index order: `[{i, reader, g, d}]`.
 static func all(voice_id: String) -> Array:
-	_load_readers()
 	var out: Array = []
+	if _given.has(voice_id):
+		var rows: Array = _given[voice_id]
+		for i in rows.size():
+			var r: Dictionary = (rows[i] as Dictionary).duplicate()
+			r["i"] = i
+			out.append(r)
+		return out
+	_load_readers()
 	var m := _map_of(voice_id)
 	for i in m.size():
 		var r: Dictionary = _readers.get(m[i], {})

@@ -32,10 +32,18 @@ func cast_text(_written: String) -> String:
 	return _script()
 
 
+## A teacher's minute at the desk (2026-10-25, the user: "make the test audio a bit longer"): a
+## question, a definition with its examples, an argument a step at a time, and the end of it.
 func test_passage(_fallback: String) -> String:
 	return ("Here's a question that sounds too simple to be hard. Take the numbers that can't be split "
 		+ "into smaller equal groups - two, three, five, seven. Do they ever run out? Let's find out "
-		+ "together, one line at a time.")
+		+ "together, one line at a time. Suppose they do, and that we have written every one of them "
+		+ "down. Now multiply them all together: two times three times five times seven, and so on, "
+		+ "to the end of the list. Then add one. Divide that new number by two, and one is left over. "
+		+ "Divide it by three: one again. In fact, every number on our list leaves exactly one behind. "
+		+ "So either the new number can't be split at all, or it is built from one we never wrote "
+		+ "down. Either way, the list was missing something. There is no last one. That's the whole "
+		+ "proof, and it is more than two thousand years old.")
 
 
 ## An edit to the note changes the NEXT episode, never the lesson of this one.

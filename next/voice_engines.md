@@ -294,4 +294,334 @@ MaskGCT, OpenAudio S1. The worry that these are hard to steer is borne out.
 
 **Order:** the duration plan in Piper first - begun, see "Built" above; then a Kokoro prototype
 behind the backend registry (`hosts/voice/backends/`), whose explicit F0 input is the one thing
-Piper cannot have.
+Piper cannot have. The prototype is built: "Kokoro" below.
+
+## Kokoro (2026-10-25): an inference trial
+
+**The user:** "What would it take to wire up support for a more capable generative voice model, such
+as Kokoro? I'd want to make it available everywhere we currently use voice models ... and the
+likeness/actor modes. Especially with the latter, that means fine-tuning support. Is it possible,
+and would we lose any features by using a model like that one, instead of Piper?" Then: wire it up
+for inference only - "I just want to know what this would sound like reading prose with other
+modes, before I decide if we'll go for the fine-tuning aspect later."
+
+**What Kokoro is** (read in hexgrad's `kokoro/model.py`, `forward_with_tokens`): StyleTTS 2 without
+the diffusion, 82M parameters. PL-BERT reads the phonemes; a duration predictor plans each token
+(`round(sigmoid sum / speed)`, clipped at one frame); the F0 and energy curves are predicted from the
+aligned features (`F0Ntrain`); an iSTFTNet decoder takes the aligned text, F0, energy and the voice's
+timbre. So the durations AND the pitch are tensors between stages - split the graph and both are
+inputs. A voice is a style vector, 128 numbers of timbre (decoder) and 128 of prosody (predictor),
+taken by token count from a `[510, 1, 256]` pack. At most 510 tokens a call. 24 kHz. A duration frame
+is 600 samples, 25 ms (Piper's is 256 at 22,050, 11.6 ms).
+
+### Built
+
+- **`hosts/voice/backends/kokoro.py`** - `KokoroBackend(PiperBackend)`: everything around the model is
+  Piper's path, unchanged - ghost's tokens, eSpeak's reading (homographs, the lexicon), the rest
+  floors and splices, the trail, the lead, stress through `dur_scale`, the arc's pitch, the Tone
+  played back, words and phones handed back. What it replaces is the model: the ids (one per symbol,
+  a pad at each end, no blanks, no `LEAD_IN_SPACES` - Kokoro's first pad already rests 14 frames), the
+  graph, the frame, the voices. Piper gained three hooks for it, each a no-op on Piper: `hop`,
+  `_nominal` (the arc's length estimate, for a plan rounded rather than ceiled) and `_delivered`.
+- **The graph** is onnx-community's timestamped export (Apache-2.0, 325 MB, pinned by commit),
+  patched once where it is first opened (`_patch`), as a Piper voice is: `dur_scale` before the
+  Round, `rest_floor` after, and `durations` handing back the whole frames the decoder used (the
+  export's own output was the plan before rounding). Measured: unfed, the patched graph's audio is
+  the stock graph's sample for sample; frames x 600 is the take's length exactly; nothing in it
+  samples, so one text and one voice make one take.
+- **The symbols** (`kokoro_symbols`): Kokoro's English was taught misaki's notation - a letter per
+  diphthong (A eɪ, I aɪ, W aʊ, Y ɔɪ, O oʊ, Q əʊ), ʤ ʧ, T for the American flap, no American length
+  marks, ᵊ for a syllabic consonant - so eSpeak's reading is written in it by misaki's own table for
+  its eSpeak fallback. ghost's reading carries no tie marks, so a pair is merged where it stands in
+  one word. The phones go back in eSpeak's symbols (A's time shared by e and ɪ), so Visemes and the
+  desk read them as they read Piper's.
+- **One voice, its packs the speakers** (2026-10-25, the user: "I really dislike how all of the voices
+  are pushed into the 'Voice' list ... voice should be used more like a family of voices, then a
+  secondary option should be for selecting the various checkpoints within"): the host lists one
+  voice, `kokoro`, with 28 speakers - the English packs, a speaker number each in the fixed order of
+  `PACKS` (a note keeps the number, so a pack is only ever added at the end) - and says who each is
+  (`readers`: the pack, its accent, hexgrad's own grade; only af_heart A, af_bella A-, the men C+ at
+  best). The Speaker row and its Browse… read them as they read libritts' 904 readers
+  (`VoiceReaders.offer`). A British pack is read in British eSpeak. The graph and tokenizer are
+  fetched on first use, a pack (half a megabyte) when its number is first asked for, into
+  `<data>/ghost/voices/kokoro/`. A note saved with an earlier id (`kokoro-bf_emma`) reads in the
+  picked voice until kokoro is picked again.
+- **One rate:** rendered at 24 kHz, handed back at 22,050 through the band-limited resampler
+  (`_delivered`), so a cast mixing Kokoro and Piper joins at the one rate a reading has. It costs the
+  band from 11 to 12 kHz.
+- **A sentence over 510 tokens** is read in pieces cut after a mark (`_pieces`), each with its own
+  pads and style.
+- **A take's ends trimmed to the seam** (`_trim_ends`, SEAM_LEAD 0.044 s, SEAM_TAIL 0.14): the gap
+  between two sentences is spliced on Piper's measured silence at a take's ends (`DWELL`'s full stop),
+  and Kokoro's own ends hold more - its first pad rests 350 ms, a sentence's mark, word-space and pad
+  another 225 or so. On the passage below its seams ran 2.57-2.79 s where Piper's ran 1.89-2.06 at the
+  same Pause (its commas, which the splicer measures, already matched: 0.80-0.94 s against 0.90-0.95);
+  trimmed, 2.05-2.23 s - the rest is its own lengthening of a sentence's last word. Cut only where the
+  plan holds no sound and the waveform is quiet, the frames with the audio, so every time stays exact.
+- Nothing in Godot changed but the Voice picker's tooltip: the host lists every backend's voices, a
+  take says its rate, and a voice with no Piper config has no readers.
+
+Gate: `hosts/voice/test_kokoro.py` (fake session, no download: the symbols American and British, the
+ids, the comma's floor, stress, times, phones and rate, the pieces, the rounded estimate against brute
+force and against Piper's ceiled one, the patch on a toy graph and a graph of another shape refused).
+Piper's own tests pass unchanged; `test_cadence`'s "old rule spread over 2x" is a draw from the
+libritts voice's noise (1.92x once, 2.1-2.4x on three reruns, the committed backend's too).
+
+**Measured on this machine** (i7-4790K, four cores, nothing else running): the raw graph 2.2x real
+time. Through the whole host path, on three paragraphs of the Ephemeral Rift note: the actor's own
+Piper voice (medium) 11.3x, libritts-high 3.8x, the Kokoro voices 2.5-3.2x. A first call loads (and
+once, patches) the graph: 5 s. A live reading over a busy show has less headroom than on Piper.
+At the same Pace the Kokoro voices speak 10-20% slower (45-51 s of speech against 41).
+
+**Listening** (`dist/voice_ab/kokoro/`; `passage.txt` is the first three paragraphs of the Ephemeral
+Rift note, read at its own pace 0.9 and Pause 6.5 through the host alone - no Tone, room or presence):
+`1_actor_own_piper.wav` (the actor's trained Piper voice), `2_piper_libritts_high_s8.wav`, then Kokoro
+`3_am_michael`, `4_am_puck`, `5_am_fenrir`, `6_bm_george`, `7_af_heart`, `8_af_bella`.
+
+### The second round (2026-10-25 evening): families, every dial checked, the stall, a second checkpoint
+
+**The user:** "if any of the standard voice options would not work with Kokoro, we should disable them
+... I really dislike how all of the voices are pushed into the 'Voice' list ... During real-time
+playback with Kokoro, playback kept freezing ... Are we doing the sliding window approach here as well?"
+and "Are there any open source Kokoro checkpoints that may have higher quality? Specifically ... a better
+female GB voice. 'Emma' is decent, but it's a B-, and it does click/pop sometimes."
+
+**Every dial, checked by rendering** (`controls.py`: a passage with a comma, a stressed word and a
+hesitation, each request parameter moved off its default alone): on Kokoro only `noise_scale` and
+`noise_w` change nothing - the same request twice is the same take, sample for sample. Pace, Pause,
+Dynamics, Arc, Effort, the Tone's pitch, whisper and muffle, a delivery's pitch and effort, Near's hush,
+the speaker, the trail, stress and a hesitation all change the take; the room's dials (Echo, Room,
+Resonance, Presence, Lean, Near, Ambience) are Godot's and act on any voice. So NO CONTROL IS DEAD and
+none is hidden: the Tone keeps its pace, pitch, whisper and muffle on Kokoro and loses its liveliness.
+
+**Two checkpoints, one voice each, their packs the speakers:** `kokoro` (v1.0, 28 English packs) and
+`kokoro 1.1` (hexgrad's v1.1-zh, Apache-2.0: its English voices Maple, Sol and Vale - "an older British
+female" - an hour each of crowdsourced synthetic speech, ungraded; the card: "not a strict upgrade").
+Its export hands back the clipped plan already (`duration`), so `_patch` leaves that output alone
+(`_reaches`); its vocabulary keeps v1.0's ids and drops ɚ, which the table writes əɹ anyway. Each
+checkpoint is fetched into its own folder (`FAMILIES` `dir`) on first use.
+
+**The clicks are the v1.0 checkpoint's, not ours** (`dist/voice_ab/probes/quiet_clicks.py`: impulses
+standing out of quiet; the first 40 sentences of "What is the 7th Realm?", the note's own settings,
+counted after every stage of the host path):
+
+| voice | in the model's own output | in the finished take |
+|---|---|---|
+| Emma (v1.0, B-) | 172 in 219 s | 169 in 236 s |
+| Isabella (v1.0, C) | 203 in 223 s | 222 in 233 s |
+| Heart (v1.0, A) | 180 in 224 s | 181 in 238 s |
+| **Vale (v1.1)** | **16 in 237 s** | **30 in 247 s** |
+
+No stage of ours adds them on v1.0 (the lead, the trail, effort, the arc, the trims, the splices); on
+Vale's quieter floor the splices and the rate change show a few. Listening:
+`dist/voice_ab/kokoro_gb/` (the chapter's first paragraphs: `1_emma_v1.0`, `2_vale_v1.1`,
+`3_isabella_v1.0`, `4_heart_v1.0_reference`).
+
+**The stall: the window was Piper's, and the machine was busy.** Yes, Kokoro reads through the same
+sliding window - and there is no finer stream to be had from it: it plans a sentence and decodes every
+frame of it at once, so a sentence is the smallest unit it can hand back, which is how its own pipeline
+streams too. The window kept LOOKAHEAD_SECONDS (9 s) ahead, sized for Piper (4-11x real time); Kokoro
+made its takes 2.2-2.7x real time idle and 1.55x while other work ran (a gate run, renders and another
+session's avatar Fit, during the test), and replayed through the stream's policy over measured takes
+the old window ran dry once in 120 sentences at 2.2x, twice at 1.5x, fifteen times at 1.1x. Now:
+
+- **The window follows the host** (`ReadingStream.depth`, `cost_after`, `_measure`): each take's cost -
+  the seconds the host spent on it, from when it could start, per estimated second of its chunk - is
+  measured as it comes back (rising at once, falling slowly), and the window keeps DEPTH_SAFETY (1.5)
+  times what the next LOOKAHEAD chunks will take to make, never under 9 s (a fast host reads exactly as
+  before) nor over DEPTH_MOST (45 s, the latency of a pace change).
+- **The first sample waits for the next chunk** (`lead_for`): as long as it will take to make - a pause
+  before the first word in place of one inside a sentence. Replayed: at 1.5x no stall where there were
+  two (first sound after 10 s, was 2); at Piper's pace the first sound is where it was (0.74 s).
+- **The graph is opened before Play** (`VoiceHost.ensure`, `ReadingPanel.warm_voice`; Kokoro's `ensure`
+  opens and patches it): the first take no longer waits seconds on a 325 MB load. A failed `ensure`
+  is not a failed chunk (`VoiceHost.failed` says which request failed).
+- **A core is left to the show** (`KokoroBackend._options`): a thread a core but one and no spinning -
+  2.60x real time with 2.6 cores busy, where the default made 2.70x with 3.9 of the four busy.
+
+Gate: `tests/reading/stream_depth_check.gd` (boot probe; the replay's control: the old window runs dry at
+1.5x, the new one does not, and at 4x both start at once).
+
+**Faster still, not done:** the int8 graph (`model_quantized.onnx`, smaller and quicker on a processor,
+some quality lost - to be heard first), or the graphics card (onnxruntime's CUDA build: tens of times real
+time, but gigabytes of CUDA libraries in the voice environment, which is kept small on purpose).
+
+### One-word sentences (2026-10-25, late)
+
+**The user:** "I still like Emma the best. However, when I use the 'Test' feature, after 'Let's shuffle' -
+the two words spoken after that are completely imperceptible ... I think it might be a bug with
+single-word outputs." The Cards Test reads "Let's shuffle. Oh. Oh, wow." - a sentence a request, so
+Kokoro was asked for "Oh." alone, three tokens (its own notes: weak under 10 to 20).
+
+**Measured** (Whisper base.en on each take; `dist/voice_ab/kokoro_short/`):
+
+- **Not the host's plan:** the raw model, with no processing of ours, says it the same ("Loved it", "As
+  well"); the plan the host feeds it is the plan the model makes.
+- **Two faults of the takes, both fixed:** (1) Piper's path ends every utterance on a word-space, which
+  Kokoro was never taught - a short take ended on a sound 32 to 40 dB under its peak (Isabella's one-word
+  sentences heard "Ose. Wouse. Nouse.") - and `KokoroBackend._symbols` now drops it; (2) on a sentence
+  ending voiced, the model often lets go with a burst of hiss (on "Oh." 18 to 23 dB under the peak, 86 to
+  99% above 4 kHz, in Emma and Isabella alike), and `_quiet_tail` lets go of what follows the waveform's
+  last voiced run (TAIL_RUN frames) - only where the plan's last sound is voiced, never a final s, z, sh,
+  f, th or a stop's release. After both, Isabella reads "Let's shuffle. Oh, oh wow." where she read "Ose,
+  wouse"; Heart was right throughout.
+- **What is left is Emma's:** "Oh" alone still comes out "Low", and "Wow" "Well" - even opening a long
+  sentence, with Heart's prosody under her timbre, and with up to half of Isabella blended in. Only her
+  timbre half does it (Isabella's timbre with Emma's prosody says "Oh wow"). Spelled as two symbols
+  (`əʊ` for Q, `aʊ` for W - off misaki's notation), Whisper hears her right ("let's shuffle oh oh wow okay
+  I'm getting chills"): `emma_shuffle_as_shipped.wav` against `emma_shuffle_split_diphthongs.wav`. Not
+  made a rule: it changes every "no", "road" and "now" she says - the ear decides.
+
+The Test passages are a minute long now (the default 75 s, Cards 60 s, Proof 55 s; they had been 12 to
+25 s).
+
+### Rests and fades (2026-10-25, night)
+
+**The user:** "For Piper models, I believe we implemented a fade-in/fade-out at the start and end of
+every sentence. Here, with Kokoro models ... it might be too long, causing a kind of clipping sound."
+
+There is no fade at every sentence: what fades is clause-level - the trail before a comma (120 ms, 16 dB)
+and the splicer's ramps where a rest is cut in (2 to 30 ms, by how loud the voice still is there). The
+clipping was the cut landing on sounding voice, and its ramps fading the word out and the next one in:
+
+- **A floored rest is not a rest on Kokoro.** Piper given frames on a word-space renders silence there;
+  Kokoro holds the word through them (20 frames after "dawn," were 500 ms of voice 16 to 20 dB under the
+  peak; on the comma itself, a slow decay). Every comma and hesitation had 150 ms floored, and the rest
+  was cut through that hum. Now nothing is floored on Kokoro (the opening vowel still is), the word falls
+  away by itself, and the splicer measures that and rests the remainder.
+- **Its word edges are not its waveform's.** Over 198 commas of two voices the real gap lay from 130 ms
+  before to 140 after the plan's boundary, so Piper's window (the word's end to a frame into the next)
+  reached no quieter than 23 to 25 dB under the peak at half of them. Kokoro's window (`_gap`) runs within
+  the two words, at most GAP_REACH (150 ms) from the boundary; the splicer takes the middle of the
+  longest silence in it. And the trail's fade and the lead's cut, placed by the plan, are not made on
+  Kokoro (superseded the next day: the plan was found to run 50 ms late, corrected, and the trail made
+  again - "The plan runs late" below).
+
+Where the rest is cut (the 5 ms before the cut, re the peak; 198 commas each):
+
+| | in silence (under -40 dB) | -40 to -30 | -30 to -20 | louder than -20 |
+|---|---|---|---|---|
+| Emma, before | 56 | 45 | 57 | 40 |
+| **Emma, now** | **114** | 53 | 25 | **6** |
+| Heart, before | 67 | 41 | 56 | 34 |
+| **Heart, now** | **122** | 47 | 19 | **10** |
+
+**Left:** the commas Kokoro reads straight through, with no silence within 150 or 200 ms of either side.
+A pad token after the comma rests there but the model fills round it ("Gently air carefully or slowly");
+an ellipsis in its place barely rests. Listening: `dist/voice_ab/kokoro_gb/1_emma_v1.0.wav` (before)
+against `1_emma_v1.0_now.wav`, the chapter's opening at its own Pace and Pause.
+
+**Read through, or left unrested?** (the user: "Is Kokoro leaving commas unrested, or is it choosing to
+read through them quickly, as a natural speaker might do?") Each sentence rendered with the comma and
+without it (`commas.py`; 28 commas, two voices): at the commas it RESTS, the comma lengthens the word
+before it by 150 to 200 ms, deepens the dip at the boundary by 12 dB and holds the pitch up (a
+continuation: Heart +3.0 semitones over the word's end where without the comma she falls 1.0; Emma -0.6
+against -2.4); at the ones it READS THROUGH (5 to 7 of the 28), it still marks them, lightly - the word
+25 to 75 ms longer, the dip 2.5 to 5 dB deeper - with no continuation in the pitch. A quick read-through,
+as of a list ("Gently, carefully, slowly"), not a comma ignored; a full Pause spliced in there forces a
+stop on a word the voice did not slow for.
+
+**Kokoro's own pipeline does NOT read in pieces at commas** (`kokoro/pipeline.py`, `en_tokenize`,
+`waterfall_last`): it splits text at blank lines only, then packs as much as fits in 510 phoneme tokens
+into ONE call - most often a whole paragraph, several sentences - and cuts inside that only when it must,
+at a full stop first, then a colon or semicolon, a comma last. Splitting at commas is not its practice;
+its practice is the other way from ours - a sentence a call is shorter than its best range (100 to 200
+tokens), and its weakest case is the short one (the "Oh." of the Cards Test).
+
+Gates: `hosts/voice/test_kokoro.py` (no rest floored; the window, with Piper's as the control; neither the
+trail nor the lead made on Kokoro, both made on Piper).
+
+### The plan runs late: corrected (2026-10-26)
+
+**The user:** "the 'h' from 'happy' STARTS on the left side of the comma, then continues into the right
+... ANY break is going to sound bad there. This is EXACTLY why we had the fade-out for Piper." And then:
+"Instead of cutting, I wonder if it would be easier to just process each side of the comma separately?"
+
+- **Where the cut was:** in "Sore arms, happy heart." Kokoro reads the comma straight through - the z of
+  "arms" runs into the h of "happy" with no silence - and the wide window's longest silence was the
+  closure INSIDE "happy": the rest went in as "ha ... ppy" (Whisper, as shipped: "arms happy, be hurt").
+- **Why:** Kokoro's audio runs ahead of its plan by a nearly fixed amount - the voicing the plan puts in
+  each frame is heard a median 55 ms (Emma) and 48 (Heart) earlier over 20 sentences, the middle half
+  within 15 ms, the same in a sentence's first half as its second. Every time the plan reports is now
+  told PLAN_LEAD (50 ms) earlier - the words, their edges, the rests, the phones (so the subtitles and a
+  mouth too) - the cut is looked for GAP_REACH (50 ms) either side of that boundary, and the trail (the
+  word before a rest let go of: Piper's fade, the user's ask) is made on Kokoro again; the lead stays
+  off (no rest is floored here, and a floored rest is what made the lead long). The cut after "arms,"
+  now lands where the z ends; Whisper: "arms. Happy heart."
+- Counted by where a rest's cut lands against where the next word's voice begins (29 commas): Piper's
+  window on the uncorrected plan split the next word at 7 (Emma) and 4 (Heart), the wide window at 5
+  and 3, the corrected plan's at 3 and 2.
+- **Each side rendered on its own** (the user's question; `clauses.py`, 29 commas, both voices): the
+  first part ends as an utterance - the word before the comma 650 to 775 ms where the sentence whole
+  gives it 475 - and the next starts as a new one, 5.0 to 5.3 semitones above where the last ended (whole:
+  1.2 to 1.7). Whisper writes those commas as full stops ("at 3. Then spent ... panels. Because"), and the
+  clause alone came out "Saw arms every". Not taken: a comma would be heard as a sentence end. (Whether
+  a short call is worse than a long one in general is hexgrad's note, not measured here: Emma's "Oh"
+  was her pack's at any length; this isolated clause is one case for it.)
+
+Listening (`dist/voice_ab/kokoro_batch/`, the three sentences at the note's own settings):
+`A_as_shipped.wav`, `H_plan_corrected.wav`, `I_split_at_commas.wav`; and `D_no_comma_rest.wav`,
+`B_with_previous_raw.wav`, `C_with_next_raw.wav` (the model's own reading, nothing of ours).
+
+### Not in the trial, and what would be lost
+
+- **`noise_scale` and `noise_w`** have no meaning: Kokoro's prosody is fixed for a text and a voice.
+  The Tone presets' `noise` and `noise_w` columns, the delivery leans that move them and
+  `_discourse_plan`'s `noise_w` do nothing on these voices; best-of-N would have nothing to vary.
+  `noise` (how lively the melody is) would map onto a scale of the F0 curve's range once F0 is an
+  input; `noise_w` onto a seeded jitter of the plan.
+- **904 readers become 28 packs** of uneven quality. Partly made up for: packs blend linearly, and
+  the timbre half and the prosody half mix apart - a continuous space where libritts is a list.
+- **A coarser plan:** 25 ms frames, every token at least one. Piper times P B M at 12-24 ms; stress,
+  the opening floor and the trail's rime move in steps twice as large.
+- **The pause figures are Piper's** (`DWELL`, `PAUSE_AFTER`, the floors): measured on Piper voices.
+  Kokoro dwells on its own marks - in one sentence the comma's own token 1 frame and the final "d"
+  of a sentence 12 (300 ms) before the full stop's 6. The seams come out nearly right (`_trim_ends`);
+  the commas did NOT, at first - see "Rests and fades" below.
+- **F0 is not an input yet:** the arc and the Tone still resample and restore formants. Splitting the
+  graph at `F0Ntrain` -> decoder would make pitch a curve the host writes: the pitch accent on a
+  stressed word ("Still proposed" 4), the trail's sag and the delivery steps without a resample.
+- **The vowel probe** is not run (what it measures is a Piper checkpoint's).
+- **Provenance:** Apache-2.0 weights, but hexgrad trained partly on synthetic audio from closed
+  commercial voices.
+
+### Fine-tuning (looked at, not built)
+
+- **No official training code.** hexgrad's FAQ: continuing training is not feasible without the
+  models that were not released (the style encoders, the discriminators).
+- **A community recipe works:** [kikiri-tts](https://github.com/semidark/kikiri-tts) (Apache-2.0;
+  "fully functional" April 2026, German) converts `kokoro-v1_0.pth` into a patched StyleTTS 2 trainer:
+  stage 1 the decoder adversarially with a FRESH style encoder and fresh discriminators, stage 2 the
+  durations, F0 and energy; a voicepack is the mean of the style encoders' outputs over the speaker's
+  clips. It needs StyleTTS 2's ASR aligner, JDC pitch extractor and PL-BERT (training only). Their
+  single-speaker fine-tunes used 455 and 627 clips; our Utterances make 1,087 (88 minutes) of his.
+  "10GB+ VRAM", batch 4 on 12 GB - with Praxis on the card about 8 GB is free, and the Piper run died
+  at 8.3.
+- **A cheaper first step:** the model frozen, only the 256-number style fitted to his clips (a few
+  minutes, little memory) - his timbre partway, nothing outside what the model can already say.
+- What the Piper voice lacks is clarity (15.9% of words misheard), not tone; a far stronger base
+  should help that, but 93 minutes of one register is the same limit.
+
+### Other models (surveyed again 2026-10-25)
+
+What ghost's reading leans on: phoneme input (the homographs, the lexicon), a duration plan per
+phoneme (the rests rendered, stress, the trail, the hesitation), exact phones and words (subtitles,
+the desk's pen, an actor's mouth), and a CPU faster than real time. Kokoro keeps all four; nothing
+newer does.
+
+- **Better tuning, and they give up most of the four** - codec language models: VoxCPM2 (2B,
+  Apache-2.0, official LoRA from 5-10 minutes, about 20 GB to train), Qwen3-TTS (0.6B/1.7B,
+  Apache-2.0, official fine-tuning, cloning, a GPU), Chatterbox Turbo (350M, MIT, community
+  fine-tuning), NeuTTS Air (748M, Apache-2.0, a CPU via GGUF, a fine-tuning script), Pocket TTS
+  (100M, CC-BY-4.0, cloning on a CPU). MOSS-TTS takes IPA and a token count for the length, but is
+  1.7B and 8B. None hands back timings (a forced aligner would have to), none takes a plan per
+  phoneme, and an autoregressive model can skip or repeat words in a long reading.
+- **Phoneme models:** StyleTTS 2 has the official fine-tuning script Kokoro lacks, but older weights
+  whose license asks listeners be told the speech is synthetic; Supertonic 3 (99M, faster than Kokoro
+  on a CPU) is OpenRAIL-M, its repo archived, no training code; MeloTTS is MIT and trainable but about
+  Piper's quality; Inflect-Nano (4.6M) is buzzy.
+- One CPU benchmark (four Xeon cores): Kokoro 1.6x real time, UTMOS 4.44; Supertonic 3 4.2x, 4.32;
+  Pocket TTS 1.4x, 4.10.
+
+**Next, after listening:** Kokoro's own dwell measured and the pause figures made per backend; F0 as
+an input (the Tone's `noise` as the F0 range); then, for an actor, the style fit before the recipe.

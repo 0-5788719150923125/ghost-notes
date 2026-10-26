@@ -494,6 +494,31 @@ def test_front():
           "a microphone left out of their matte is not drawn before them, they not whole under it")
 
 
+def test_hands_sheet(tmp):
+    """THEIR HANDS, CLOSER ([hands_sheet]): a still whose hands (a white square, its pose's hand landmarks there) are a
+    speck on the sheet fills much of its tile on the hands' sheet (the control: on the stills' sheet it is a speck); a
+    still with no hand seen is cropped below the shoulders, inside the frame."""
+    import cv2
+    import numpy as np
+    H, W = 1080, 1920
+    still = np.full((H, W, 3), 40, np.uint8)
+    still[880:920, 1480:1520] = 255
+    pose = np.zeros((33, 4))
+    pose[11, :2], pose[12, :2] = [1400 / W, 500 / H], [1600 / W, 500 / H]
+    for j in actor.HAND_POINTS:
+        pose[j] = [(1490 + (j % 3) * 10) / W, (890 + (j % 2) * 20) / H, 0.0, 0.9]
+    actor.still_sheet([still], os.path.join(tmp, "sheet.jpg"))
+    actor.hands_sheet([still], [pose.reshape(-1)], os.path.join(tmp, "hands.jpg"))
+    white = lambda p: float((cv2.imread(p, cv2.IMREAD_GRAYSCALE)[60:] > 200).mean())
+    near, far = white(os.path.join(tmp, "hands.jpg")), white(os.path.join(tmp, "sheet.jpg"))
+    check(near > 0.01, "the hands fill %.3f of their tile" % near)
+    check(far * 20.0 < near, "CONTROL: on the stills' sheet the hands are a speck (%.4f against %.3f)" % (far, near))
+    pose[actor.HAND_POINTS, 3] = 0.0
+    x0, y0, x1, y1 = actor.hands_box(pose.reshape(-1), W, H)
+    check(0 <= x0 < x1 <= W and 0 <= y0 < y1 <= H and y0 > 500 - 100,
+          "no hand seen, the crop is below the shoulders and inside the frame (%d, %d, %d, %d)" % (x0, y0, x1, y1))
+
+
 def test_front_outlined():
     """A THING BEFORE THEM HAS AN OUTLINE OF ITS OWN ([outlined]): them in a plain black shirt, two pieces judged never
     to move where they are - a light microphone, its edge in the still, is drawn before them; a piece of the plain shirt,
@@ -673,6 +698,7 @@ def main():
         test_skin()
         test_front()
         test_front_outlined()
+        test_hands_sheet(tmp)
         test_trust()
         test_shade()
         test_soft_edge()

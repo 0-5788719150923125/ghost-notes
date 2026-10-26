@@ -12,15 +12,23 @@
 #
 # THE FORMAT IS PLACEHOLDERS ONLY: a sample answer comes back word for word.
 #
-# The code gives: {{name}}, {{count}} (how many stills the sheet shows).
+# THEIR HANDS, CLOSER (2026-10-25: on the sheet a hand is some 40 pixels, and Opus put two stills with open palms among
+# its five at rest - the user: "His resting pose is open palm, face-up ... it makes him look like a priest"): a second
+# sheet crops each still to its hands, numbered alike, and the hands are judged there.
+#
+# The code gives: {{name}}, {{count}} (how many stills the sheet shows), {{hands}} (the hands' sheet follows it).
 system: >-
   You look at frames of video of a person and say exactly what you see. Answer with JSON only.
 prompt:
   - >-
-      This picture shows {{count}} frames of {{name}}, each numbered in its corner. One of them will be
+      {{#hands}}The first{{/hands}}{{^hands}}This{{/hands}} picture shows {{count}} frames of {{name}}, each numbered in its corner. One of them will be
       held as the picture an animation of them is drawn on while they read aloud: their head and mouth
       will move, but their hands and the way they sit will stay as that frame shows them for as long as
       the reading lasts.
+  - when: hands
+    say: >-
+      The second picture shows the same frames closer, cropped to their hands, numbered alike: judge their hands
+      there.
   - ""
   - "Write:"
   - >-

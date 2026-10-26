@@ -112,3 +112,4 @@ def report(
 # Import for side effects. Each module registers itself and must not import its
 # heavy dependencies at module scope.
 from . import piper  # noqa: E402,F401
+from . import kokoro  # noqa: E402,F401

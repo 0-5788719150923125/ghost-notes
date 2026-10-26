@@ -616,7 +616,7 @@ func _phase(run: Dictionary) -> String:
 			var main := set_video(actor, sid)
 			var at := (vids as Array).find(String(main.get("vid", ""))) if vids is Array else -1
 			var e := ActorFolder.write_file(spec, JSON.stringify({"frames": dir, "rig": dir.path_join("rig.npz"),
-				"front": out.path_join("stills").path_join("front_%d.png" % still), "span": [0.0, 1e9],
+				"front": still_layers(actor, sid, still)["front"], "span": [0.0, 1e9],
 				"head": actor.dir.path_join("head").path_join("head.npz"), "video": at,
 				"out": dir.path_join("avatar.npz"), "steps": BAKE_STEPS, "preview": dir.path_join("preview")}))
 			if not e.is_empty():
@@ -629,11 +629,12 @@ func _phase(run: Dictionary) -> String:
 			var dir := out.path_join("avatar")
 			var still := actor.still_of(sid)
 			var st := out.path_join("stills")
+			var layers := still_layers(actor, sid, still)
 			var spec := out.path_join("fit.spec.json")
 			var e := ActorFolder.write_file(spec, JSON.stringify({"frames": dir, "rig": dir.path_join("rig.npz"),
-				"front": st.path_join("front_%d.png" % still),
+				"front": layers["front"],
 				"span": [0.0, 1e9], "poses": dir.path_join("poses.json"),
-				"avatar": dir.path_join("avatar.npz"), "still": still, "picture": st.path_join("body_%d.jpg" % still),
+				"avatar": dir.path_join("avatar.npz"), "still": still, "picture": layers["picture"],
 				"matte": st.path_join("matte_%d.png" % still), "out": dir.path_join("fit.npz"), "steps": FIT_STEPS}))
 			if not e.is_empty():
 				return e
@@ -805,8 +806,13 @@ func _rest(run: Dictionary, sid: String, out: String) -> String:
 	var sheet := out.path_join("stills").path_join("sheet.jpg")
 	if count == 0 or not FileAccess.file_exists(sheet):
 		return "the stills have no sheet: Generate makes them again"
-	var p := ActorPrompts.rest(actor.name(), count)
+	# their hands, closer, numbered alike (the Stills step's `hands.jpg`: on the sheet a hand is some 40 pixels)
+	var hands := out.path_join("stills").path_join("hands.jpg")
+	var has_hands := FileAccess.file_exists(hands)
+	var p := ActorPrompts.rest(actor.name(), count, has_hands)
 	p["images"] = [{"path": sheet, "label": "The stills, numbered:"}]
+	if has_hands:
+		p["images"].append({"path": hands, "label": "Their hands in each, numbered alike:"})
 	run["said"] = "looking for them at rest"
 	return _submit(run, p, "at rest " + sid)
 
@@ -1202,6 +1208,17 @@ func videos_spec() -> Dictionary:
 		var h := int((pr as Dictionary).get("height", 1080)) if pr is Dictionary else 1080
 		out[vid] = {"path": path, "survey": actor.video_dir(vid).path_join("survey.bin"), "size": [w, h]}
 	return out
+
+
+## THE LAYERS OF SET [param sid]'S STILL [param k] the trainers read, as `stills.json` names them: what stands before
+## them (`front`, "" when nothing does - the Stills step writes no front then, 2026-10-25: `actor.outlined`) and their
+## picture under it (`picture`: filled from round the front, else the still itself).
+static func still_layers(a: ActorFolder, sid: String, k: int) -> Dictionary:
+	var st := a.set_dir(sid).path_join("stills")
+	var all := a.stills_of(sid)
+	var row: Dictionary = all[k] if k >= 0 and k < all.size() and all[k] is Dictionary else {}
+	return {"front": st.path_join(String(row["front"])) if row.has("front") else "",
+		"picture": st.path_join(String(row.get("body", row.get("file", "still_%d.jpg" % k))))}
 
 
 ## THE VIDEO SET [param sid] IS READ FROM, as their splats: the ticked video it holds most of, and its usable shots

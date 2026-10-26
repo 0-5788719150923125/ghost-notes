@@ -42,6 +42,20 @@ const LOOKAHEAD_SECONDS := 9.0
 ## playback starves without a floor here. It is a LOWER bound on latency-to-first-word,
 ## which is why it is not larger.
 const LIVE_PREROLL := 2.5
+## THE WINDOW FOLLOWS THE HOST (2026-10-25, the user, reading a chapter in a Kokoro voice: "playback kept
+## freezing"). LOOKAHEAD_SECONDS was sized for Piper, which makes a take four to eleven times faster
+## than it is heard; Kokoro makes one two to three times faster, less on a busy machine, so a long
+## sentence could take longer to make than the audio ahead of it lasted, and the stream ran dry. So the
+## host's pace is MEASURED from what comes back ([method _measure]: the seconds it took per estimated
+## second of each chunk) and the window keeps DEPTH_SAFETY times what the next LOOKAHEAD chunks will
+## take to make ([method depth]) - never less than LOOKAHEAD_SECONDS, so a fast host reads as before,
+## and never more than DEPTH_MOST, the latency a pace or tone change may cost. The lead before the first
+## sample is as long as the next chunk will take to make ([method lead_for]): a host that slow would
+## have stopped there anyway, and a pause before the first word is better than one inside a sentence.
+## Replayed (tests/reading/stream_depth_check.gd): at 1.5x real time the old window ran dry twice in
+## fifteen sentences, this one never; at Piper's pace both start at the same moment.
+const DEPTH_SAFETY := 1.5
+const DEPTH_MOST := 45.0
 
 # THE PLAN on the stream ([ReadingPlan])
 var chunks: Array = []        # [{tokens, words, ...}] planned up front, cheap
@@ -71,8 +85,10 @@ var _ready_takes: Array = []   # [{wav, index, spans}] synthesized, awaiting the
 var _next_to_request := 0
 var _next_to_play := 0
 var _in_flight := 0
-var _req_chunk := {}           # request id -> {idx, epoch}
+var _req_chunk := {}           # request id -> {idx, epoch, sent}
 var _epoch := 0                # bumped on a pace change; stale replies are dropped
+var _cost := 0.0               # the host's seconds per estimated second of a chunk, 0 unmeasured
+var _done_ms := 0              # when the host last handed something back (it makes one at a time)
 
 # THE ONE CONTINUOUS STREAM
 var playback: AudioStreamGeneratorPlayback
@@ -225,6 +241,8 @@ func _reset_playback() -> void:
 	_next_to_request = 0
 	_next_to_play = 0
 	_in_flight = 0
+	_cost = 0.0
+	_done_ms = 0
 	_stream_open = false
 	playback = null
 	_pushed = 0
@@ -457,7 +475,7 @@ func _pump() -> void:
 	var intro_left := maxf(0.0, _lead_in - float(_pushed) / float(maxi(panel._sr, 1)))
 	var planned := false
 	while _in_flight < LOOKAHEAD and _next_to_request < chunks.size() \
-			and _buffered_seconds() - intro_left < LOOKAHEAD_SECONDS:
+			and _buffered_seconds() - intro_left < _depth_now():
 		var idx := _next_to_request
 		if not planned:
 			planned = true
@@ -467,7 +485,63 @@ func _pump() -> void:
 		var s := panel._cast.cfg_of(String((chunks[idx] as Dictionary).get("speaker", "")))
 		var id := panel._host.request("", panel._cast.voice_id_of(s),
 			ReadingPanel.TAKE_DIR + "/chunk_%d_%d.wav" % [idx, _epoch], panel._request_args(s, chunks[idx]), null)
-		_req_chunk[id] = {"idx": idx, "epoch": _epoch}
+		_req_chunk[id] = {"idx": idx, "epoch": _epoch, "sent": Time.get_ticks_msec()}
+
+
+## How deep the window is now: [method depth] over the chunks the pump would ask for next.
+func _depth_now() -> float:
+	var up := PackedFloat32Array()
+	for k in range(_next_to_request, mini(_next_to_request + LOOKAHEAD, _chunk_t.size() - 1)):
+		up.append(_chunk_t[k + 1] - _chunk_t[k])
+	return depth(_cost, up)
+
+
+## Seconds of audio the window keeps ahead of the playhead: DEPTH_SAFETY times what the chunks
+## [param upcoming] (their estimated seconds) will take to make at [param cost], held between
+## LOOKAHEAD_SECONDS and DEPTH_MOST. Unmeasured ([param cost] 0), the window it always was.
+static func depth(cost: float, upcoming: PackedFloat32Array) -> float:
+	var make := 0.0
+	for s in upcoming:
+		make += s
+	return clampf(DEPTH_SAFETY * cost * make, LOOKAHEAD_SECONDS, DEPTH_MOST)
+
+
+## The host's cost after one more chunk was seen to cost [param seen]: believed at once when it rises
+## (a machine gone busy starves the stream the first time), let go of slowly when it falls.
+static func cost_after(cost: float, seen: float) -> float:
+	if cost <= 0.0:
+		return seen
+	return lerpf(cost, seen, 0.5 if seen > cost else 0.2)
+
+
+## A reply came back: what it cost the host, from when the host could start on it (when it was asked,
+## or when the reply before it came back, whichever is later - the host makes one at a time) to now,
+## per estimated second of its chunk. A reply from before a re-pace frees the host all the same, but
+## its chunk is not this plan's, so it says nothing about the cost.
+func _measure(meta: Dictionary) -> void:
+	var now := Time.get_ticks_msec()
+	var began := maxi(int(meta.get("sent", now)), _done_ms)
+	_done_ms = now
+	var k := int(meta["idx"])
+	if int(meta["epoch"]) != _epoch or k < 0 or k + 1 >= _chunk_t.size():
+		return
+	var est := _chunk_t[k + 1] - _chunk_t[k]
+	if est >= 0.5:
+		_cost = cost_after(_cost, float(now - began) / 1000.0 / est)
+
+
+## The lead the stream waits for before its first sample, beyond its own floor: as long as the next
+## chunk to be heard will take to make. 0 until the host's cost is known.
+func _make_next() -> float:
+	if _next_to_play + 1 >= _chunk_t.size():
+		return 0.0
+	return lead_for(_cost, _chunk_t[_next_to_play + 1] - _chunk_t[_next_to_play])
+
+
+## How long a chunk of [param next_len] estimated seconds will take a host of [param cost] to make
+## (at most DEPTH_MOST): what the audio ahead of the first sample must cover. 0 at an unknown cost.
+static func lead_for(cost: float, next_len: float) -> float:
+	return minf(DEPTH_MOST, maxf(0.0, cost) * next_len)
 
 
 ## Whether the host's reply [param id] is a chunk of the reading on the stream - or one it asked for
@@ -480,6 +554,7 @@ func owns(id: int) -> bool:
 func arrived(id: int, result: Dictionary) -> void:
 	var meta: Dictionary = _req_chunk[id]
 	_req_chunk.erase(id)
+	_measure(meta)
 	# THE SLOT IS FREED WHETHER OR NOT THE RESULT IS WANTED, and this has to happen BEFORE
 	# the epoch check. It did not, and that is what made seeking slower than a cold start:
 	# an abandoned request still occupies the host - the protocol has no cancel - so a jump
@@ -579,7 +654,7 @@ func _drain_ready() -> void:
 		# continuous from here and a mid-reading stall is the pump's business, not this.
 		if not _stream_open:
 			var have := float(_pending.size() - _read) / float(panel._sr)
-			var lead := maxf(_lead_in, LIVE_PREROLL)
+			var lead := maxf(maxf(_lead_in, LIVE_PREROLL), _make_next())
 			if have < lead and _next_to_play < chunks.size():
 				continue          # keep accumulating; nothing is lost, it is all queued
 			# same text, same music: the pad's note choices are seeded

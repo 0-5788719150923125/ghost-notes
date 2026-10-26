@@ -50,6 +50,13 @@ class_name YouTubeCard
 ## A PLAYLIST takes more of the account than an upload, so the wider sign-in is asked for only when
 ## the list is first loaded ([constant YouTube.PLAYLIST_SCOPE]). The dialogs are the exporter's,
 ## beside the upload that waits on them (see [method Exporter.youtube_sign_in]).
+##
+## THE PLAYLIST IS NAMED AS YOUTUBE NAMES IT NOW (2026-10-26, the user: "every time I restart, it keeps
+## reverting to 'Tarot' ... I shouldn't have to reload"): the block kept the title it was picked under, ↻
+## showed the new one and never kept it, so a playlist renamed since came back by its old name at every
+## opening, and the description named it so. A loaded list's title is the block's, and a card opening on
+## a playlist loads the list itself when its sign-in may already see them, asking and saying nothing
+## ([method _look_quietly]).
 
 const YouTube := preload("res://src/export/youtube.gd")
 
@@ -99,6 +106,7 @@ var _chan := {"id": "", "name": ""}
 ## The playlist the block names, kept whole even before the list is loaded: `{id, title}`.
 var _list := {"id": "", "title": ""}
 var _lists: Array = []          # the channel's playlists, as last loaded
+var _looked := ""               # the channel they were last asked for, by ↻ or as the card opened
 var _loading := false
 var _poll := 0.0
 var _seen := []                 # what the account rows were last drawn for
@@ -317,6 +325,9 @@ func apply(block: Dictionary) -> void:
 	_chan = {"id": str(b["channel"]), "name": str(b["channel_name"])}
 	if String(_chan["id"]).is_empty():
 		_chan = _first_channel()
+	if String(_chan["id"]) != _looked:      # another channel's playlists are not this one's
+		_lists = []
+		_looked = ""
 	_list = {"id": str(b["playlist"]), "title": str(b["playlist_title"])}
 	_fill_playlists()
 	_seen = []
@@ -474,6 +485,7 @@ func refresh() -> void:
 			_preview.add_theme_color_override("font_color", Color(1.0, 0.85, 0.6))
 	_refresh_account()
 	_refresh_tags()
+	_look_quietly()
 
 
 func _refresh_account() -> void:
@@ -730,22 +742,27 @@ func _on_resume() -> void:
 
 ## THE CHANNEL'S PLAYLISTS, loaded on ↻: a sign-in that may see them first, when the kept one may
 ## only upload. The one the block names stays picked; one that has gone from the channel stays
-## listed, marked, until another is picked.
-func load_playlists() -> void:
+## listed, marked, until another is picked. [param quiet]: as the card opens - no sign-in, and nothing
+## said, either way.
+func load_playlists(quiet := false) -> void:
 	var ex := _exporter()
 	var id := String(_chan["id"])
 	if ex == null or _loading:
 		return
 	if id.is_empty():
-		noted.emit("No channel yet: + signs in to one.")
+		if not quiet:
+			noted.emit("No channel yet: + signs in to one.")
 		return
 	if not YouTube.granted(YouTube.PLAYLIST_SCOPE, id):
+		if quiet:
+			return
 		var again := func(_landed: String) -> void:
 			if is_instance_valid(self):
 				load_playlists()
 		ex.youtube_sign_in(again, [YouTube.SCOPE, YouTube.PLAYLIST_SCOPE], id, _channel_name())
 		return
 	_loading = true
+	_looked = id
 	_seen = []
 	var got: Dictionary = await ex.youtube().playlists(id)
 	if not is_instance_valid(self):
@@ -755,14 +772,28 @@ func load_playlists() -> void:
 	if id != String(_chan["id"]):
 		return                      # another channel was picked meanwhile: these are not its playlists
 	if got.has("error"):
-		noted.emit("⚠  The playlists could not be loaded: %s" % got["error"])
+		if not quiet:
+			noted.emit("⚠  The playlists could not be loaded: %s" % got["error"])
 		return
 	_lists = got["playlists"]
 	_fill_playlists()
-	noted.emit("%d playlist%s on the channel." % [_lists.size(), "" if _lists.size() == 1 else "s"])
+	if not quiet:
+		noted.emit("%d playlist%s on the channel." % [_lists.size(), "" if _lists.size() == 1 else "s"])
 
 
-## The dropdown: None, the loaded playlists, and the block's own when it is not among them.
+## A CARD OPENING ON A PLAYLIST LOADS THE LIST, so the playlist shows by its name now: once a channel,
+## when its sign-in may already see them and the card is where the exporter is. A sign-in that may only
+## upload waits for ↻, which asks for more.
+func _look_quietly() -> void:
+	var id := String(_chan["id"])
+	if _loading or id.is_empty() or _looked == id or String(_list["id"]).is_empty():
+		return
+	if _exporter() != null and YouTube.granted(YouTube.PLAYLIST_SCOPE, id):
+		load_playlists(true)
+
+
+## The dropdown: None, the loaded playlists, and the block's own when it is not among them - among them,
+## it takes the title YouTube gives it now, which the block keeps and the description names.
 func _fill_playlists() -> void:
 	_playlist.clear()
 	_playlist.add_item("None")
@@ -777,6 +808,7 @@ func _fill_playlists() -> void:
 		if String(d["id"]) == String(_list["id"]):
 			at = _playlist.item_count - 1
 			listed = true
+			_list["title"] = String(d.get("title", ""))
 	if not String(_list["id"]).is_empty() and not listed:
 		var name := String(_list["title"]) if not String(_list["title"]).is_empty() else String(_list["id"])
 		_playlist.add_item(name + ("  (not on the channel)" if not _lists.is_empty() else ""))

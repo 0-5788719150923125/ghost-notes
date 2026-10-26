@@ -25,6 +25,8 @@ extends SceneTree
 ## nothing else - the steps the two share are made once (THE CONTROL: the 2D run did make the 2D's library).
 ## THE STILL DRAWN ON: the one picked, else the one At rest found most at ease, else the first; stills
 ## made again forget the pick (an index into the old ones).
+## A STILL WITH NOTHING BEFORE THEM: the trainers are handed no front and its own picture (THE CONTROL: a still with
+## a front is handed it and its picture filled under it).
 ## THE HEAD PINNED: one video pinned "head", the head learns from it alone and the Head (not its rig) is stale;
 ## unpinned, made again as it was (THE CONTROL: with none pinned it learns from both).
 ## A CHANGED INPUT MARKS STALE: a setting a step reads makes it stale, and only it, until it is made
@@ -204,6 +206,16 @@ func _run() -> void:
 	_write(_actor.set_dir(sid).path_join("rest.json"), JSON.stringify({"rest": [3, 9, 1]}))
 	_ok(_actor.still_of(sid) == 3 and _actor.rest_of(sid) == [3, 1], "the still most at rest was not drawn on (%d, at rest %s)" % [
 		_actor.still_of(sid), str(_actor.rest_of(sid))])
+	# A STILL WITH NOTHING BEFORE THEM: no front for the trainers, and its own picture (THE CONTROL: one with a front)
+	_write(stills_at, JSON.stringify({"stills": [{"file": "still_0.jpg"}, {"file": "still_1.jpg", "front": "front_1.png",
+		"body": "body_1.jpg"}]}))
+	var bare := ActorBuilder.still_layers(_actor, sid, 0)
+	_ok(String(bare["front"]) == "" and String(bare["picture"]).ends_with("/stills/still_0.jpg"),
+		"a still with nothing before them was handed %s" % str(bare))
+	var fronted := ActorBuilder.still_layers(_actor, sid, 1)
+	_ok(String(fronted["front"]).ends_with("/stills/front_1.png") and String(fronted["picture"]).ends_with("/stills/body_1.jpg"),
+		"CONTROL: a still with something before them was handed %s" % str(fronted))
+	_write(stills_at, JSON.stringify({"stills": [{}, {}, {}, {}]}))
 	# A STILL PICKED changes nothing that is made
 	_actor.set_still(sid, 1)
 	_actor.save()

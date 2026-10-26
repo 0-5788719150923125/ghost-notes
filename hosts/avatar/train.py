@@ -5,7 +5,7 @@ from one set's frames (next/likeness.md, "A head of splats", "The whole of them"
     <voice_train_venv python> train.py --spec <spec.json> [--progress <file>]
 
 The spec: {"frames", "rig", "front", "out", "steps", "preview", "span"} - the folder frames.py wrote (whole
-frames), the rig rig.py wrote, what stands before them (whole frames), where the avatar goes, how many steps, a
+frames), the rig rig.py wrote, what stands before them (whole frames; "" when nothing does), where the avatar goes, how many steps, a
 folder for pictures of it against held-out frames, and the stretch of the video [t0, t1] it learns from (one
 camera placement: a set's shots can stand a little apart).
 
@@ -280,8 +280,12 @@ class Frames:
         def crop_of(path, mode):
             im = Image.open(path).convert(mode).crop((x0, y0, x0 + self.W, y0 + self.H))
             return torch.tensor(np.asarray(im, np.float32) / 255.0, device=device)
-        front = Image.open(spec["front"])
-        self.front = crop_of(spec["front"], "RGBA")[..., 3] if front.mode == "RGBA" else crop_of(spec["front"], "L")
+        if spec.get("front"):
+            front = Image.open(spec["front"])
+            self.front = crop_of(spec["front"], "RGBA")[..., 3] if front.mode == "RGBA" else crop_of(spec["front"], "L")
+        else:
+            # nothing stands before them (a still the Stills step wrote no front for)
+            self.front = torch.zeros((self.H, self.W), device=device)
         self._queue = None
 
     def take_expr(self, e) -> None:

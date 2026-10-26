@@ -49,7 +49,10 @@ extends SceneTree
 ##   playlist signs in again for the wider scope and loads them. A note with no channel takes the one
 ##   its tick signs in to; "+" signs in to another, which becomes the note's and clears the playlist;
 ##   a toggle switches back; a sign-in meant for one channel that lands on another fails, saying so,
-##   and the note's channel stays.
+##   and the note's channel stays. A NOTE OPENED ON A PLAYLIST RENAMED SINCE (2026-10-26, the user:
+##   "every time I restart, it keeps reverting to 'Tarot'") shows and keeps YouTube's title with no ↻,
+##   nothing asked or said; the control, a sign-in that may only upload, sends nothing and keeps the
+##   block's.
 
 const YouTube := preload("res://src/export/youtube.gd")
 const ROOT := "user://youtube_flow_check"
@@ -537,6 +540,35 @@ func _card_sign_in() -> bool:
 		"a toggle each, the new one pressed")
 	(chips[0] as Button).pressed.emit()
 	_ok(card.capture()["channel"] == "UC-arc" and ex._sign == "ok", "a toggle switches back, with nothing to sign in to")
+	# A NOTE OPENED ON A PLAYLIST RENAMED SINCE IT WAS PICKED: the card loads the list itself, asking and
+	# saying nothing, and the block takes YouTube's title; the control, a channel whose sign-in may only
+	# upload, is asked for nothing and keeps the block's title
+	var said: Array = []
+	var listed0: int = _fake.listed
+	var opens0 := _opens
+	var reopened = load("res://src/export/youtube_card.gd").new()
+	reopened.exporter = ex
+	reopened.noted.connect(func(m: String) -> void: said.append(m))
+	reopened.apply({"channel": "UC-arc", "channel_name": "@the-arc", "playlist": "PL-2", "playlist_title": "Old Shorts"})
+	holder.add_child(reopened)
+	_ok(await _until(func() -> bool: return reopened.capture()["playlist_title"] == "Shorts"),
+		"a note opened on a playlist renamed since takes YouTube's title, with no ↻")
+	_ok(reopened._playlist.get_item_text(reopened._playlist.selected) == "Shorts" and _fake.listed > listed0
+		and _opens == opens0 and said.is_empty() and ex._sign == "ok",
+		"it shows it, the list loaded with no sign-in and nothing said (%s)" % str(said))
+	var ink = load("res://src/export/youtube_card.gd").new()
+	ink.exporter = ex
+	ink.noted.connect(func(m: String) -> void: said.append(m))
+	ink.apply({"channel": "UC-ink", "channel_name": "@the-ink", "playlist": "PL-9", "playlist_title": "Old Ink"})
+	holder.add_child(ink)
+	var listed1: int = _fake.listed
+	await _frames(10)
+	_ok(not YouTube.granted(YouTube.PLAYLIST_SCOPE, "UC-ink") and not ink._loading and _fake.listed == listed1
+		and _opens == opens0 and said.is_empty() and ink.capture()["playlist_title"] == "Old Ink"
+		and ink._playlist.get_item_text(ink._playlist.selected) == "Old Ink",
+		"the control: a sign-in that may only upload is asked for nothing, and the block's title stays")
+	reopened.queue_free()
+	ink.queue_free()
 	# A SIGN-IN MEANT FOR ONE CHANNEL THAT LANDS ON ANOTHER
 	YouTube._drop_sign_in("UC-arc")
 	_fake.account = "UC-ink"

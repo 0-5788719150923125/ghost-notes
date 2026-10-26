@@ -2115,6 +2115,14 @@ TRAINED = "trained"
 @register
 class PiperBackend(Backend):
     name = "piper"
+    # Samples a duration frame stands for. A model under this one with another frame (kokoro.py)
+    # says its own, and the token path reads the plan through it.
+    hop = HOP_LENGTH
+    # The two shapings of a word's edge before a rest: the trail (the word before it let go of, its fade
+    # and sag) and the lead (the next word's hiss quieted in a floored rest - a floored rest is what made
+    # it long). A model that floors no rest (kokoro.py) makes no lead.
+    trails = True
+    quiets_lead = True
 
     @classmethod
     def describe(cls) -> dict:
@@ -2994,10 +3002,12 @@ class PiperBackend(Backend):
             # resamples them.
             group_rests = list(self._last_rests)
             edges = dict(self._last_edges)
-            frame = HOP_LENGTH / float(sr)
+            frame = self.hop / float(sr)
             audio = _emphasize(audio, edges, group, sr)
-            audio = _quiet_lead(audio, edges, group, params, sr)
-            audio = _trail(audio, edges, group, params, sr, dict(self._last_hisses))
+            if self.quiets_lead:
+                audio = _quiet_lead(audio, edges, group, params, sr)
+            if self.trails:
+                audio = _trail(audio, edges, group, params, sr, dict(self._last_hisses))
             # SAY WHICH WORDS CAME BACK WITHOUT A SPAN. ghost keeps them in the karaoke line
             # either way now (it interpolates their timing - see
             # GenerativeEditor._bridge_words), but a token the aligner cannot place is a real
@@ -3029,7 +3039,7 @@ class PiperBackend(Backend):
                 # scale. The pitch then moves by that same measured ratio rather than by the
                 # nominal one, which is a few percent either way of what was asked for and
                 # is the half of this trade nobody can hear.
-                nominal = _nominal_seconds(
+                nominal = self._nominal(
                     self._last_frames, _pitch_length(pr), sr, self._last_floor
                 )
                 played = float(audio.size) / float(sr)
@@ -3105,7 +3115,7 @@ class PiperBackend(Backend):
                         float(nxt[0]) if nxt is not None else 0.0,
                         _dwell_for(mark),
                     )
-                    win = _gap_window(edges, ti, frame)
+                    win = self._gap(edges, ti, frame)
                     points.append(point + win if win is not None else point)
                 else:
                     unplaceable.append(mark)
@@ -3121,7 +3131,7 @@ class PiperBackend(Backend):
             rests, rested = {}, {}
             quiet = SPLICE_QUIET * float(np.max(np.abs(audio))) if audio.size else 0.0
             for ti in per_token:
-                win = _gap_window(edges, ti, frame)
+                win = self._gap(edges, ti, frame)
                 if win is None:
                     continue
                 lo = int(round(_shift(win[0], inserted, False) * sr))
@@ -3174,6 +3184,7 @@ class PiperBackend(Backend):
                 for key in ("t0", "t1", "rest", "rested"):
                     if key in row:
                         row[key] = round(row[key] / played, 4)
+        joined, sr = self._delivered(joined, sr)
         self._write_wav(out_path, joined, sr)
         return {
             "wav": out_path,
@@ -3185,6 +3196,23 @@ class PiperBackend(Backend):
             "sentences": len(groups),
             "played": played,
         }
+
+    @staticmethod
+    def _gap(edges: dict, ti, frame: float):
+        """Where a rest after token `ti` may be cut - `_gap_window`, for a plan whose word edges are the
+        waveform's to within a frame or two. A model whose are not says its own."""
+        return _gap_window(edges, ti, frame)
+
+    @staticmethod
+    def _nominal(frames, ratio: float, sr: int, floor=None) -> float:
+        """How long a sentence would have run at `1/ratio` of its length scale - `_nominal_seconds`,
+        for a plan CEILED to whole frames of `hop` samples. A model that rounds its plan says so here."""
+        return _nominal_seconds(frames, ratio, sr, floor)
+
+    @staticmethod
+    def _delivered(audio, sr: int):
+        """The take as it is handed back: (audio, sample rate). Piper's, as rendered."""
+        return audio, sr
 
     @staticmethod
     def _fold_syllabic(symbols: list, pmap: dict) -> tuple[list, bool]:

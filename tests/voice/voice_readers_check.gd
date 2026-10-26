@@ -24,6 +24,18 @@ func _initialize() -> void:
 		"the LibriTTS-P data file loads")
 	_ok(VoiceReaders.all("no-such-voice").is_empty() and VoiceReaders.describe("no-such-voice", 0).is_empty(),
 		"a voice with no config has no descriptions, and nothing breaks")
+	# READERS THE HOST SAYS (kokoro's voicepacks): described from what was offered, in speaker order
+	VoiceReaders.offer("kokoro-check", [{"reader": "af_heart", "g": "F", "d": "heart, American, grade A"},
+		{"reader": "am_puck", "g": "M", "d": "puck, American, grade C+"}], "Grades: the host's own.")
+	var puck := VoiceReaders.describe("kokoro-check", 1)
+	_ok(String(puck.get("reader", "")) == "am_puck" and String(puck.get("g", "")) == "M",
+		"an offered speaker 1 is the second reader offered: %s" % str(puck))
+	_ok(VoiceReaders.describe("kokoro-check", 2).is_empty(), "past the offered readers is nobody")
+	var offered := VoiceReaders.all("kokoro-check")
+	_ok(offered.size() == 2 and int((offered[1] as Dictionary)["i"]) == 1, "all() numbers the offered readers")
+	_ok(VoiceReaders.about_of("kokoro-check") == "Grades: the host's own.", "the host says who described them")
+	_ok(VoiceReaders.about_of("no-such-voice") == VoiceReaders.LIBRITTS_ABOUT,
+		"a voice nothing was offered for keeps LibriTTS-P's credit")
 	var vid := "en_US-libritts-high"
 	if not FileAccess.file_exists(Deps.data_dir().path_join("voices/piper/%s.onnx.json" % vid)):
 		print("  (skipped: %s is not installed)" % vid)

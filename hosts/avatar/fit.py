@@ -92,6 +92,9 @@ LEAST_COPY = 1.0
 MOMENT_POOL = 4
 MOMENT_SHARE = 1.0
 LIGHT_RATES = (2e-3, 5e-3)
+# THE BEARD MOVES AS ONE ([method hang_beard]): how far below the lips' outline, in the face's heights, the beard under
+# them begins.
+BEARD_UNDER = 0.02
 
 
 def say(*parts) -> None:
@@ -167,6 +170,38 @@ def where_it_opens(splats, rig, data, i: int):
         return (1.0 - held) * (1.0 - body) + body
 
 
+def hang_beard(splats, rig, data, i: int):
+    """THE BEARD MOVES AS ONE (2026-10-25, the user: "transitions between frames, they morph in a fractured/spiky kind
+    of way"): with the jaw eased open, a beard splat parted from its 12 nearest by 0.44 px a step against the 0.96 it
+    moved - each on a triangle of its own that turned its own way (the jaw's edge, levers of up to 7 of its units), and
+    each with expression shifts of its own that had learned noise (alone they moved it 0.27 px a step, and parted it
+    from its neighbours by more). Hair has no shape to shift with the face. So, as it stands in the still (frame [param
+    i]): a splat on the face's triangles BELOW THE CHIN is hung from the head's own frame, as the hair is (its place,
+    size and turn in the head's terms, where it stood; the head's take no shifts), and one BELOW THE LIPS' OUTLINE
+    (BEARD_UNDER of the face's height past it) keeps its triangle, which the jaw carries, but takes no shifts: 0.12 px a
+    step. `(hung, under)`: how many of each."""
+    import torch
+    with torch.no_grad():
+        T = rig.T
+        origin, axes, unit, verts = rig.frames(data, i, tracked=False)
+        means, _s, _t = splats.world(origin, axes, unit, data.expr[i])
+        height = float((verts[parts.TOP] - verts[parts.CHIN]).norm())
+        on_tri = splats.bind < T
+        hung = on_tri & (means[:, 1] > float(verts[parts.CHIN, 1]))
+        under = on_tri & ~hung & (means[:, 1] > float(verts[actor.LIPS_OUTER, 1].max()) + BEARD_UNDER * height)
+        b = splats.bind[hung]
+        oh, ah, uh = origin[T], axes[T], unit[T]
+        p = splats.p
+        p["place"].data[hung] = (means[hung] - oh) @ ah / uh
+        p["log_scale"].data[hung] += torch.log(unit[b] / uh)[:, None]
+        to_head = torch.einsum("ji,njk->nik", ah, axes[b])
+        p["turn"].data[hung] = train.quat_mul(train.quat_of(to_head), torch.nn.functional.normalize(p["turn"].data[hung], dim=-1))
+        splats.bind[hung] = T
+        for name in ("place_d", "colour_d"):
+            p[name].data[hung | under] = 0.0
+        return int(hung.sum()), int(under.sum())
+
+
 def coarse(x):
     """[param x] ([H, W, C]) as the means of its squares MOMENT_POOL pixels wide ([C, H / MOMENT_POOL,
     W / MOMENT_POOL]): what a moment is asked for."""
@@ -227,6 +262,7 @@ def main() -> int:
         far = train.astray(splats, rig, data, i)
     if bool(far.any()):
         splats._replace(~far, {})
+    hung, under = hang_beard(splats, rig, data, i)
 
     def picture(path, mode):
         x0, y0, w, h = data.crop
@@ -262,8 +298,9 @@ def main() -> int:
     body = splats.bind > rig.T
     free = where_it_opens(splats, rig, data, i)
     say("still %d: %d of %d splats on the body, %d of the head's held where the face opens (%d past its reach dropped); "
+        "the beard: %d hung from the head below the chin, %d under the lips without shifts; "
         "%.2f dB on the still, %.2f where the body is; %d steps" % (k, int(body.sum()), len(splats), int((free < 0.5).sum()),
-                                                                  int(far.sum()), before, before_body, steps))
+                                                                  int(far.sum()), hung, under, before, before_body, steps))
     rng = np.random.default_rng(0)
     # THE MOMENTS, one a step, in their own light
     order = np.concatenate([rng.permutation(data.train) for _ in range(steps // max(1, data.train.size) + 1)])[:steps]
