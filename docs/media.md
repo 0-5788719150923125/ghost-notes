@@ -105,11 +105,11 @@ Source: [src/media/tablet.gd](../src/media/tablet.gd)
 
 ## `table` - Card table
 
-_A card reading at a table, seen from the reader's chair: the deck shuffles while the reader talks, each card is drawn, held up beside its booklet entry, read and laid into the spread. The Cards mode's own medium - its deck, pictures and spread come from the episode the agents produced._
+_A card reading at a table, seen from the reader's chair: the deck shuffles while the reader talks, each card is drawn, held up beside its booklet entry, read and laid into the spread. The Table mode's own medium - its deck, pictures and spread come from the episode the agents produced._
 
 TableMedium - a card reading at a table, seen from the reader's chair.
 
-The Cards mode's own medium (its row of `Medium.REGISTRY` names the mode): the episode's cloth on a table, its room out of focus beyond the far edge, its candles, and the deck. The reader is a voice, never a pair of hands - the cards move on their own:
+The Table mode's own medium (its row of `Medium.REGISTRY` names the mode): the episode's cloth on a table, its room out of focus beyond the far edge, its candles, and the deck. The reader is a voice, never a pair of hands - the cards move on their own:
 
 the intro      the deck shuffles in the middle of the table under the voice, in RUNS - riffles, overhand passes, strings of cuts, now and then a wash across the cloth - with long stretches of nothing between them (`RUNS`) the push       before the first card, the deck is squared and pushed to its side a draw         the deck squares, the top card slides off, turns over, and comes up to the camera on the LEFT; its booklet page opens on the RIGHT - shown, never read the reading    the card and the page float there while the voice talks about it, turning a little on their axes; now and then the card is turned to look at its back the lay        the page closes and the card goes down into its place in the spread a jumper       the first card flies out of the shuffle on its own, lands face up, and is picked up and shown like a drawn one the close      the whole spread lies on the table
 

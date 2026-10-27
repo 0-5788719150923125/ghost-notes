@@ -5,19 +5,19 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 393 references inside a folder, 864 down the stack, 0 up it.
+Between scripts today: 408 references inside a folder, 871 down the stack, 0 up it.
 
 ## The stack, top first
 
 | folder | what it is | scripts | names |
 | --- | --- | --- | --- |
-| `app/` | The shell | 13 | `masking`, `cards`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
+| `app/` | The shell | 13 | `masking`, `table_show`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `audio`, `platform`, `data` |
 | `masking/` | Masking | 15 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
 | `likeness/` | Likeness | 12 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
 | `proof/` | Proof | 6 | `desk`, `table`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `desk/` | The desk | 5 | `table`, `media`, `scene_kit`, `render`, `data` |
-| `cards/` | Cards | 10 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `geometry`, `audio`, `platform`, `data` |
-| `table/` | The set | 23 | `media`, `scene_kit`, `geometry`, `render`, `audio`, `data` |
+| `table_show/` | The table's show | 11 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `geometry`, `audio`, `platform`, `data` |
+| `table/` | The set | 26 | `media`, `scene_kit`, `geometry`, `render`, `audio`, `data` |
 | `reading/` | The voice's workspaces | 12 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
 | `export/` | Export | 4 | `show`, `voice`, `ui`, `notes`, `agents`, `stage`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
@@ -149,13 +149,13 @@ The panels a voice runs in: the reading (script, cast, voice, stream, export), t
 
 A place, seen and heard, built from a written description: the table itself (Tables), the things on it (Props), its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds), its sound (Soundscape), where cards go on it, what can be done with them and how a reading says so, the faces printed on them - and the medium that puts it all on the stage (`table.gd`, a row of `Medium.REGISTRY`).
 
-[`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`intro_blur`](../src/table/intro_blur.gd), [`lights`](../src/table/lights.gd), [`props`](../src/table/props.gd), [`rides`](../src/table/rides.gd), [`show_opening`](../src/table/show_opening.gd), [`soundscape`](../src/table/soundscape.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_light`](../src/table/table_light.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`table_things`](../src/table/table_things.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`winds`](../src/table/winds.gd)
+[`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`formula`](../src/table/formula.gd), [`intro_blur`](../src/table/intro_blur.gd), [`lights`](../src/table/lights.gd), [`motions`](../src/table/motions.gd), [`props`](../src/table/props.gd), [`rides`](../src/table/rides.gd), [`show_opening`](../src/table/show_opening.gd), [`soundscape`](../src/table/soundscape.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_light`](../src/table/table_light.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`table_things`](../src/table/table_things.gd), [`table_work`](../src/table/table_work.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`winds`](../src/table/winds.gd)
 
-### `cards/` - Cards
+### `table_show/` - The table's show
 
-A show of cards nobody writes: a show's brief, its episodes - each planned, dealt, painted and written by agents one card at a time, kept on disk step by step - and the set dresser that builds the table they are read at. The rules are every show's; the brief says what the cards are - tarot, baseball or trading cards, a card game's deck, flashcards, recipe cards - and lists them, or leaves each episode's deck to its producer. Design: next/cards.md.
+A show at a table nobody writes: a show's brief, its episodes - each planned, dealt, painted and written by agents a card or a beat of work at a time, kept on disk step by step - the set dresser that builds the table and the puppeteer that works what stands on it. The rules are every show's; the brief says what is done there - cards read (tarot, baseball or trading cards, a card game's deck, flashcards, recipe cards, listed or left to each episode's producer), things made, or both. Design: next/cards.md, next/table_work.md.
 
-[`card_deck`](../src/cards/card_deck.gd), [`card_episode`](../src/cards/card_episode.gd), [`card_producer`](../src/cards/card_producer.gd), [`card_prompts`](../src/cards/card_prompts.gd), [`dealer_tools`](../src/cards/dealer_tools.gd), [`episode_card`](../src/cards/episode_card.gd), [`episode_walk`](../src/cards/episode_walk.gd), [`set_dresser_tools`](../src/cards/set_dresser_tools.gd), [`table_blueprint`](../src/cards/table_blueprint.gd), [`table_preview`](../src/cards/table_preview.gd)
+[`card_deck`](../src/table_show/card_deck.gd), [`dealer_tools`](../src/table_show/dealer_tools.gd), [`episode_card`](../src/table_show/episode_card.gd), [`episode_walk`](../src/table_show/episode_walk.gd), [`puppeteer_tools`](../src/table_show/puppeteer_tools.gd), [`set_dresser_tools`](../src/table_show/set_dresser_tools.gd), [`table_blueprint`](../src/table_show/table_blueprint.gd), [`table_episode`](../src/table_show/table_episode.gd), [`table_preview`](../src/table_show/table_preview.gd), [`table_producer`](../src/table_show/table_producer.gd), [`table_prompts`](../src/table_show/table_prompts.gd)
 
 ### `desk/` - The desk
 

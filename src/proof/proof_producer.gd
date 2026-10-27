@@ -2,7 +2,7 @@ extends RefCounted
 class_name ProofProducer
 
 ## ProofProducer - makes whatever a Proof episode is missing, in the order a lesson happens
-## (next/proof.md, "How an episode is made"), the way [CardProducer] makes a card show's:
+## (next/proof.md, "How an episode is made"), the way [TableProducer] makes a card show's:
 ##
 ##   problem   the FRAMER fixes the problem from the note before anyone works on it: its words,
 ##             its TeX, how it is checked - a PROOF in Lean (its exact statement, the facts it may

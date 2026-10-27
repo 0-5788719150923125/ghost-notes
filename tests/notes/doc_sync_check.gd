@@ -138,11 +138,11 @@ func _ok(cond: bool, what: String) -> void:
 ## A fresh Cards show starts with bundled prose in the actual Edit field. A saved draft,
 ## an intentional empty field, and a synced document each keep their own text.
 func _check_cards_starter() -> void:
-	var sample := FileAccess.get_file_as_string("res://rules/cards/starter.md")
+	var sample := FileAccess.get_file_as_string("res://rules/table/starter.md")
 	_ok(sample.contains("# The Penalty Box") and sample.contains("## The host"),
 		"the bundled Cards brief is missing or incomplete")
 	var cards := ReadingPanel.new()
-	cards.workspace = "cards"
+	cards.workspace = "table"
 	cards._build_panel()
 	cards.remove_child(cards._cast._cast_timer)
 	add_child(cards._cast._cast_timer)
@@ -485,7 +485,7 @@ func _check_one_block_per_component() -> void:
 ## opened in it had no voices. And what the cards_panel panel then writes leaves the picture alone.
 func _check_the_voice_is_the_documents() -> void:
 	var cards_panel = load("res://src/reading/reading_panel.gd").new()
-	cards_panel.workspace = "cards"
+	cards_panel.workspace = "table"
 	cards_panel._build_panel()
 	cards_panel.remove_child(cards_panel._panel)     # in the tree, as the panel above is: sliders emit only there
 	add_child(cards_panel._panel)
@@ -510,8 +510,8 @@ func _check_the_voice_is_the_documents() -> void:
 	_ok(str(after.get("picture")) == str(before.get("picture"))
 		and str(after.get("illustrations")) == str(before.get("illustrations")),
 		"the cards_panel panel's save touched blocks it has no card for")
-	_ok(after.get("cards") is Dictionary and not (after["cards"] as Dictionary).has("voices"),
-		"the show's own block is not the knobs alone: %s" % str(after.get("cards")))
+	_ok(after.get("table") is Dictionary and not (after["table"] as Dictionary).has("voices"),
+		"the show's own block is not the knobs alone: %s" % str(after.get("table")))
 	cards_panel._panel.queue_free()
 	cards_panel.free()
 	# and this panel back on the chapter as the file now has it

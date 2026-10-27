@@ -1,0 +1,125 @@
+# THE DESIGNER - the deck's creator, once per drawn card: that card's illustration and its entry in the
+# deck's little booklet (or what is printed on its back). One card per run, in drawing order: it is shown
+# the pictures of the cards designed before it (`siblings`), never their entries, and never a card
+# drawn after it (TablePrompts.designer fills it in; src/data/rules.gd says how a rules file reads).
+#
+# What a card's group stands for (a suit's element, a team's city) is the brief's to say, beside the
+# group's heading in its Cards section; the designer reads it there.
+#
+# The code gives: {{deck_noun}} (the kind of cards the producer named, or "deck"), {{deck_name}},
+# {{deck_style}}, {{palette}}; the card's {{name}}, {{group}} and {{meaning}}; the flags `on_back` (its
+# text printed on its back), `ledger` (the booklet page lists keywords in two columns), `reversals`; and
+# `before`, how earlier decks pictured it; `siblings`, the cards of this draw designed before it - each
+# {{k}}, {{name}}, {{art}}.
+prompt:
+  - 'You are the DESIGNER of the {{deck_noun}} "{{deck_name}}", used on this show. Its look:'
+  - "{{deck_style}}"
+  - "Palette: {{palette}}."
+  - ""
+  - >-
+      Design ONE card of the deck: {{name}}{{#group}} ({{group}}){{/group}}.
+  - when: meaning
+    say: "What it means in this deck - grounding, not text to copy: {{meaning}}"
+  # THE KEYWORDS ARE ITS OWN: copied whole, every deck's booklet read alike
+  - when: [meaning, in_booklet]
+    say: >-
+          The words above are the deck's own, for reference. Choose your own keywords for this
+          deck's entry, as many as the entry wants: keep some, and put a synonym or a fresher word
+          in place of others now and then, so the entry is yours and not a copy.
+  - ""
+  - >-
+      1. THE ILLUSTRATION: what this card shows, for the illustrator who paints the whole deck -
+      subject, composition, what this card is and what it means, as this deck pictures it - the
+      symbols its kind of card traditionally carries, if it has any, carried into this deck's world.
+      Whatever it pictures is its own, described so it could not be
+      mistaken for another card's. {{^written}}Tall portrait format.{{/written}}{{#written}}This card is a
+      WRITTEN card - its writing is its face - and its picture is the small one beside the writing,
+      {{sketch}}: one clear subject, simply drawn.{{/written}} No words, letters or numbers anywhere in
+      the picture: {{^written}}the card's frame and name are printed separately{{/written}}{{#written}}the card's
+      writing is set separately{{/written}}.
+  # WHAT A PAINTING CAN BE TRUSTED TO SHOW (the user, 2026-10-17): a reading said a player shook hands
+  # with his left hand while the picture showed a right-handed shake (penalty-box 290660, card 1), and
+  # rinks were bent out of shape so a crowd would fit in the picture. An image generator draws left for
+  # right, miscounts past a few, and bends a place to fit its frame; a card whose point turns on one of
+  # them is contradicted by its own picture.
+  - >-
+      WHAT THE PICTURE MUST SHOW, IT SHOWS PLAINLY: what the card is about is large, central and
+      unmistakable. Never let the card's point - in its picture or in its printed text - turn on what
+      a painting cannot be trusted to show: which hand or which side, an exact count past three, a
+      small thing held in the fingers, or anything written. Every body is whole, and every place
+      keeps its real shape and size: a building, a room, a field or a rink is cropped by the edge of
+      the picture rather than bent to fit it, and a crowd is only where people could sit or stand.
+  - when: on_back
+    say: >-
+          2. WHAT IS PRINTED ON ITS BACK, which the viewer reads when the card is turned over - in
+          `booklet`: its short facts in `keywords` (one each, as that kind of card's back lists
+          them: a position and a team, a type and a weakness, a set number, a year), and its text in
+          `upright` (a bio, rules, flavor text, an answer). Write it exactly the way that kind of
+          card's back is written, as the brief says the backs read. It stands alone: never mention
+          another card.
+  - when: on_front
+    say: >-
+          2. WHAT IS PRINTED WITH THE ART ON ITS FRONT, in `booklet`: one to three short facts in
+          `keywords`, and twenty to forty words of rules, stats, instructions or flavor text in
+          `upright`. These fit in the panel beneath the picture. Write them as this kind of card
+          would print them. The back carries the printing's shared artwork, with no card-specific
+          text. The entry stands alone: never mention another card.
+  # A WRITTEN CARD'S WRITING (the user, 2026-10-26: "a box full of recipe cards"): what is written on it, which is
+  # its face, set in the deck's hand (CardFaces.written_layout) - a line of it to a line of the card
+  - when: written
+    say: >-
+          2. WHAT IS WRITTEN ON IT, which is the card itself and what the viewer reads when it is held
+          up - in `writing`: its `title`, as written across its top, and its `lines`, each one line of
+          writing as this kind of card has it, in order (for a recipe: what goes in, one to a line with
+          how much, then what is done, a step to a line), in the words and the hand of whoever wrote it,
+          as the brief says these cards are written. At most {{lines_most}} lines, each short - a line
+          holds about {{line_letters}} letters, and a longer one runs onto the next. It stands alone: never
+          mention another card.
+  - when: in_booklet
+    say: >-
+          2. ITS ENTRY IN THE DECK'S LITTLE BOOKLET, which is shown on screen beside the card, with
+          its `keywords`{{#ledger}} (this deck's page lists them in two columns: give an EVEN
+          number, four or six){{/ledger}}. Write it the way the brief says this deck's booklet
+          speaks (if it does not say, in the earnest, slightly old-fashioned voice decks' booklets
+          use). It stands alone: never mention another card.
+  # THE CARDS DESIGNED BEFORE IT IN THIS DRAW (the user, 2026-10-17, of penalty-box: "players will be in
+  # very similar poses/positions"): seven of ten designs of 901482 were two men nose to nose in the middle
+  # of the card, each designer blind to the others
+  - when: siblings
+    say: ""
+  - when: siblings
+    say: >-
+          THE CARDS ALREADY DESIGNED FOR TONIGHT'S DRAW, in the order they come up. The viewer sees
+          this card right after them, so picture it otherwise: another kind of moment, the eye
+          somewhere else (nearer or farther, higher or lower, from another side), other figures or
+          things at its center, another part of its world - unless this card really is the same
+          subject as one of them.
+  - each: siblings
+    say: "  {{k}}. {{name}}: {{art}}"
+  # AN EARLIER DECK'S PICTURE of this card, so this one pictures it otherwise
+  - when: before
+    say: ""
+  - when: before
+    say: >-
+          EARLIER DECKS on this show pictured this card like this. Picture it some other way, in its
+          subject and its composition both:
+  - when: before
+    insert: before
+  - ""
+  - "Reply with ONLY a JSON object, no other text:"
+  - when: written
+    say: |-
+          {
+            "art": "the picture, in one to three sentences",
+            "writing": {"title": "what is written across its top", "lines": ["each line written on the card, in order"]}
+          }
+  - when: "!written"
+    say: |-
+          {
+            "art": "the illustration, in two to four sentences",
+            "booklet": {
+              "keywords": ["{{#ledger_booklet}}four or six{{/ledger_booklet}}{{#plain_booklet}}three to six{{/plain_booklet}}{{#on_back}}three to five{{/on_back}}{{#on_front}}one to three{{/on_front}} words or short phrases"],
+              "upright": "the card's text{{#on_front}}, twenty to forty words{{/on_front}}{{^on_front}}, forty to seventy words{{/on_front}}"{{#reversals}},
+              "reversed": "the meaning reversed, twenty-five to forty-five words"{{/reversals}}
+            }
+          }

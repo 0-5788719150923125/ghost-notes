@@ -52,6 +52,7 @@ from .piper import (
     _VOWELS,
     DUR_SCALE_INPUT,
     REST_FLOOR_INPUT,
+    TRAIL_STRETCH,
     PiperBackend,
     _final_rimes,
     _hiss_codas,
@@ -75,7 +76,17 @@ MAX_TOKENS = 510
 # trail, the subtitles, a mouth) is placed on the sound. Uncorrected, the cut of the rest after "arms,"
 # had been looked for past the "h" and found the closure inside "happy": "ha ... ppy".
 PLAN_LEAD = 0.05
-GAP_REACH = 0.05  # how far either side of the (corrected) word boundary a rest's cut is looked for
+GAP_REACH = 0.05  # how far past the (corrected) word boundary a rest's cut is looked for
+# ...and how far before it (2026-10-26, "You've always felt it, haven't you, my love?"): reaching
+# GAP_REACH back into "it" found the silence of its t's closure, and the release went over the rest,
+# a tick before "haven't". A word's last sound ends by its corrected end, give or take this much.
+GAP_BACK = 0.015
+# THE WORD BEFORE A REST IS HELD AT LEAST THIS LONG ON ITS LAST VOWEL (seconds at length scale 1; the
+# trail's share of it, as its hold is). Piper's hold is a ratio (TRAIL_STRETCH) and on 25 ms frames a
+# ratio is wrong both ways: the 50 ms "oo" of "you," rounded 1.25 times back to two frames, and held
+# 1.6 times, "stays," and "flame," (five and six frames) were drawn out ("someone stayyys", the user,
+# 2026-10-26). A floor lengthens the short vowel alone and leaves a long one as planned.
+HOLD_LEAST = 0.09
 STYLE = 256
 PAD_ID = 0
 
@@ -246,6 +257,12 @@ class KokoroBackend(PiperBackend):
     # NO LEAD IS QUIETED: no rest is floored here, and a floored rest is what made the next word's lead
     # long. The trail - the word before a rest let go of - is made, on the plan told PLAN_LEAD earlier.
     quiets_lead = False
+    # ...and runs right up to where the next word starts: Kokoro holds a word through a comma it reads
+    # straight through, so the next word's start walked back over sound was the same word's vowel ("you,"
+    # faded half way, then back at full, and the cut in that dip put its second half before "my"). Where
+    # the voice runs into the next word, the trail's way back up runs on into it, never a step.
+    trail_early = 0.0
+    trail_through = True
 
     @classmethod
     def describe(cls) -> dict:
@@ -568,8 +585,9 @@ class KokoroBackend(PiperBackend):
     ):
         """(symbol, source) pairs -> audio, plus a time span per source - Piper's contract
         (`PiperBackend._render_symbols`), on Kokoro's ids: one id a symbol, a pad at each end, no
-        blanks between. What the plan is told is the same: a floor on the word-space that ends a
-        source, a stretch on its nucleus, a hold on its final rime, the opening vowel floored.
+        blanks between. What the plan is told: a stretch on a source's nucleus, a hold on its final
+        rime and its last vowel floored at HOLD_LEAST (shared with its length mark), the opening vowel
+        floored - and no rest (below).
 
         A sentence over MAX_TOKENS is read in pieces cut at a word-space - after a mark where one
         is in reach - each with its own pads and its own style, the pieces' plans laid end to end.
@@ -589,6 +607,23 @@ class KokoroBackend(PiperBackend):
         open_frames = float(np.ceil(opening * ls / frame_s - 1e-9)) if opening > 0.0 else 0.0
 
         units = kokoro_symbols(symbols, bool(kk["british"]))
+
+        def vowel_of_rime(ksym, src, at) -> bool:
+            """A unit of the final vowel of a held source: a vowel of its rime, or the length mark."""
+            return src in hold and any(j in rime for j in at) and (
+                ksym == "ː" or any(symbols[j][0] in _VOWELS for j in at))
+
+        # each held source's last vowel at least HOLD_LEAST in all, its units sharing it ("uː" is two)
+        least: dict = {}
+        if hold:
+            shares: dict = {}
+            for ksym, src, at in units:
+                if vowel_of_rime(ksym, src, at):
+                    shares[src] = shares.get(src, 0) + 1
+            for src, k in shares.items():
+                weight = max(0.0, (float(hold[src]) - 1.0) / TRAIL_STRETCH)
+                frames = float(np.ceil(HOLD_LEAST * weight * ls / frame_s - 1e-9))
+                least[src] = float(np.ceil(frames / k))
         ids: list[int] = []
         owner: list[int] = []
         rest_of: list[int] = []
@@ -607,12 +642,15 @@ class KokoroBackend(PiperBackend):
             # holds the word through them - 20 frames on the space after "dawn," rendered 500 ms of voice at
             # 16 to 20 dB under the peak - and the rest spliced in was cut through it. Unfloored, the word
             # falls away to 45 dB under by itself, and the splicer measures that and rests the remainder
-            # (`_splice_pauses`, in the window `_gap` searches). The opening vowel's floor is a vowel's.
+            # (`_splice_pauses`, in the window `_gap` searches). The opening vowel's floor is a vowel's,
+            # and so is the held one's.
             rest = 0.0
             core = any(j in nucleus for j in at)
             mul = float(stretch.get(src, 1.0)) if stretch and core else 1.0
             if hold and any(j in rime for j in at):
                 mul *= float(hold.get(src, 1.0))
+            if src in least and vowel_of_rime(ksym, src, at):
+                rest = least[src]
             if core and src == first and open_frames > 0.0 and not opened and ksym != _STRESS:
                 rest = max(rest, open_frames)
                 opened = True
@@ -718,14 +756,15 @@ class KokoroBackend(PiperBackend):
 
     @staticmethod
     def _gap(edges: dict, ti, frame: float):
-        """Where a rest after token `ti` may be cut: GAP_REACH either side of the boundary the plan, told
-        PLAN_LEAD earlier, puts between the two words - what is left of its error - and never past either
-        word. Not wider: where Kokoro reads through a comma there is no silence between the words, and a
-        window reaching into the next found the longest silence inside it ("happy"'s closure)."""
+        """Where a rest after token `ti` may be cut: from GAP_BACK before the end the plan, told PLAN_LEAD
+        earlier, gives the word to GAP_REACH past the next word's start - what is left of its error - and
+        never past either word. Not wider: where Kokoro reads through a comma there is no silence between
+        the words, and a window reaching into either found the longest silence inside it - "happy"'s
+        closure, and "it"'s, which put its t's release after the rest."""
         here, nxt = edges.get(ti), edges.get(ti + 1)
         if here is None or nxt is None:
             return None
-        lo = max(float(here[0]), float(here[1]) - GAP_REACH)
+        lo = max(float(here[0]), float(here[1]) - GAP_BACK)
         hi = min(float(nxt[1]), float(nxt[0]) + GAP_REACH)
         return (lo, hi) if hi > lo else None
 

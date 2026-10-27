@@ -175,7 +175,7 @@ func _upload() -> void:
 	ep.write_json("solve", {"verified": true, "lean": "4.35.0", "mathlib": "v4.35.0"})
 	var up: Dictionary = card.upload_of(ep, {"title": "Pen & Ink"}, PackedStringArray(["math"]), 9.0)
 	var at := float(up.get("thumbnail_at", -1.0))
-	var cards: Script = load("res://src/cards/episode_card.gd")
+	var cards: Script = load("res://src/table_show/episode_card.gd")
 	_check(absf(at - ShowOpening.thumbnail_moment(9.0)) < 0.001 and absf(at - float(cards.thumbnail_moment(9.0))) < 0.001,
 		"a Proof upload names the thumbnail's moment, the card shows' own (%.2f s)" % at)
 	_check(ShowOpening.title_alpha(at, 9.0, true) == 1.0 and ShowOpening.pull(at, 9.0, true) == 0.0,

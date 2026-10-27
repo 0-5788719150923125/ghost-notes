@@ -25,6 +25,10 @@ extends Node
 ##   - A ROW WRITTEN OUT IS ITS WORDS (2026-10-15: "at the end of subtitle lines... there is almost always a
 ##     trailing space"): the glitch centers a row, and sizes its plate, on its words and the gaps between
 ##     them - none after its last - two-sided: in the middle of a row, the gap after a written word counts.
+##   - A LINE BEING WRITTEN IS CENTERED (2026-10-26: "the subtitles appear to be shifted slightly right of
+##     center"): the plate round the words and the noise past them sits on the middle, on the mean, as the
+##     sweep crosses a row; a row written out is centered on its words - two-sided: centered on what is
+##     written alone, the noise hanging off its right end, the line sat right of center.
 ##   - BOTH DRAW: the overlay draws a line in either reveal without an error.
 ##
 ##   tests/run_boot_probe.sh tests/show/subtitle_reveal_check.gd 60
@@ -49,6 +53,7 @@ func _run() -> void:
 	_noise()
 	_choice()
 	_rows()
+	_centered()
 	await _draws()
 	print("subtitle_reveal_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
 	get_tree().quit(1 if _fails > 0 else 0)
@@ -207,6 +212,38 @@ func _rows() -> void:
 		% [whole, 30.0 + 30.0 + 40.0 + 2.0 * gap])
 	var mid := ov._written(row, 7.5, font, 24, gap)
 	_ok(is_equal_approx(mid, 30.0 + 30.0 + gap + gap * 0.5), "control: half way through the gap after a written word, it counts half of it (%.1f)" % mid)
+	ov.free()
+
+
+func _centered() -> void:
+	var ov := Subtitles.Overlay.new()
+	var font := ThemeDB.fallback_font
+	var fs := 30
+	var gap := 14.0
+	var row: Array = []
+	var c := 0
+	for w in ["Full", "dark", "already,", "and", "a", "sea", "fog", "pressed", "right", "up", "against", "the", "glass."]:
+		row.append({"idx": row.size(), "word": {"text": w}, "w": font.get_string_size(w, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x, "cstart": c})
+		c += w.length() + 1
+	var end := float(c - 1)
+	var cx := 960.0
+	var off := 0.0
+	var old_off := 0.0
+	var n := 0
+	# the sweep across the row as it is spoken, the noise's reach on its own clock
+	for st in 3000:
+		var sweep := end * float(st) / 3000.0
+		var reach := Subtitles.glitch_reach(7, float(st) / 30.0)
+		var drawn := ov._written(row, float(floori(sweep) + reach), font, fs, gap)
+		var x0 := ov._glitch_x(row, sweep, cx, font, fs, gap)
+		off += x0 + drawn * 0.5 - cx
+		old_off += cx - ov._written(row, sweep, font, fs, gap) * 0.5 + drawn * 0.5 - cx
+		n += 1
+	print("  centered: %.2f px now, %.2f px the old way" % [off / n, old_off / n])
+	_ok(absf(off / n) < 3.0, "a line being written sits %.1f px off center" % (off / n))
+	_ok(is_equal_approx(ov._glitch_x(row, end, cx, font, fs, gap), cx - ov._written(row, end, font, fs, gap) * 0.5), "a row written out is not centered on its words")
+	# control: centered on what is written alone (the first glitch), the line being written sits right of center
+	_ok(old_off / n > 8.0, "control: the old centering sits only %.1f px right" % (old_off / n))
 	ov.free()
 
 

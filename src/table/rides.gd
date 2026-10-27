@@ -136,7 +136,7 @@ const MEMORY_SMALL := 3.0
 const MAX_MOVERS := 64
 
 
-## THE VOCABULARY, as an agent reads it ([CardPrompts.set_dresser], `insert: rides`).
+## THE VOCABULARY, as an agent reads it ([TablePrompts.set_dresser], `insert: rides`).
 static func describe() -> String:
 	var lines := PackedStringArray()
 	lines.append("THE RIDE (`ride`): {\"on\", \"rough\" 0-1, \"speed\" 0-1, \"why\"} - what the table is aboard, when the reading is somewhere that moves. Leave it out for a table standing still. on:")

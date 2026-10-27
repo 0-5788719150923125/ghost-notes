@@ -119,8 +119,8 @@ func _ready() -> void:
 		if not note_path.is_empty():
 			var raw := FileAccess.get_file_as_string(note_path)
 			var block := FrontMatter.read_block(raw)
-			if raw.is_empty() or not block.ok or not Components.attached_of(block.data).has("cards"):
-				printerr("ghost/export-smoke: could not recognize a Cards note: ", note_path,
+			if raw.is_empty() or not block.ok or not Components.attached_of(block.data).has("table"):
+				printerr("ghost/export-smoke: could not recognize a Table note: ", note_path,
 					" (", block.error, ")")
 				get_tree().quit(1)
 				return
@@ -244,6 +244,8 @@ func _ready() -> void:
 	# When the current song finishes: an AUTO session returns to the home screen;
 	# MANUAL and SYNTH sessions are endless - handled inside _on_song_finished.
 	Spectrum.song_finished.connect(_on_song_finished)
+	# the episodes' folder, moved once since Cards became Table - before any way in that may open a show
+	_adopt_old_episodes()
 	# THE COMMAND LINE'S WORKSPACES, through the one path a note takes - BELOW the chrome,
 	# deliberately: every interactive mode gets the full furniture. `--mask-edit` used to be read
 	# before Chrome existed, so a command-line Masking session had none of it (step 7).
@@ -253,9 +255,9 @@ func _ready() -> void:
 	if args.has("--synth"):
 		start_workspace("lab")
 		return
-	# --cards: straight into the Cards workspace (its document is the one it last had open)
-	if args.has("--cards"):
-		start_workspace("cards")
+	# --table: straight into the Table workspace (its document is the one it last had open)
+	if args.has("--table"):
+		start_workspace("table")
 		return
 	# --note <path>: open one note, run by whatever its blocks say it is
 	if args.has("--note"):
@@ -264,7 +266,6 @@ func _ready() -> void:
 	if _wants_direct_boot():
 		_begin_session()                 # CLI flags: straight into a song session
 	else:
-		_adopt_old_episodes()
 		_show_list()
 
 
@@ -289,37 +290,21 @@ func _show_list() -> void:
 		_chrome.set_note("")
 
 
-## THE EPISODES MOVE ONCE (2026-10-06, when Tarot became Cards): they were kept under `user://tarot/`,
-## and the first launch after the rename moves that folder to [constant CardEpisode.ROOT] - a rename in
-## place, nothing copied - and rewrites the table's marks in each episode's script (`<!-- table: draw
-## 2 -->`, once `tarot:`). Never in a process that may not write the author's things, and never over a
-## folder already there. Remove once it has run.
+## THE EPISODES MOVE ONCE (2026-10-26, when Cards became Table - the user: "make those more generalized"):
+## they were kept under `user://cards/`, and the first launch after the rename moves that folder to
+## [constant TableEpisode.ROOT] - a rename in place, nothing copied (the Tarot folder moved the same way,
+## 2026-10-06). Never in a process that may not write the author's things, and never over a folder already
+## there. Remove once it has run.
 func _adopt_old_episodes() -> void:
-	var old := ProjectSettings.globalize_path("user://tarot")
-	var now := ProjectSettings.globalize_path(CardEpisode.ROOT)
-	if Settings.is_read_only() or CardEpisode.root != CardEpisode.ROOT \
+	var old := ProjectSettings.globalize_path("user://cards")
+	var now := ProjectSettings.globalize_path(TableEpisode.ROOT)
+	if Settings.is_read_only() or TableEpisode.root != TableEpisode.ROOT \
 			or not DirAccess.dir_exists_absolute(old) or DirAccess.dir_exists_absolute(now):
 		return
 	if DirAccess.rename_absolute(old, now) != OK:
 		push_warning("ghost: could not move the episodes from %s to %s" % [old, now])
 		return
-	var mark := RegEx.create_from_string("<!--\\s*tarot\\s*:")
-	var n := 0
-	for show in DirAccess.get_directories_at(now):
-		for ep in DirAccess.get_directories_at(now.path_join(show)):
-			var p := now.path_join(show).path_join(ep).path_join("script.md")
-			if not FileAccess.file_exists(p):
-				continue
-			var text := FileAccess.get_file_as_string(p)
-			var fixed := mark.sub(text, "<!-- table:", true)
-			if fixed == text:
-				continue
-			var f := FileAccess.open(p, FileAccess.WRITE)
-			if f != null:
-				f.store_string(fixed)
-				f.close()
-				n += 1
-	print("ghost: the episodes moved to %s (%d scripts' table marks rewritten)" % [now, n])
+	print("ghost: the episodes moved to %s" % now)
 
 
 ## OPEN A NOTE: every note opens the same way. What it has attached is read off its blocks
@@ -345,7 +330,7 @@ func open_note(path: String) -> void:
 	Director.reset_show()
 	Films.set_frequency(Films.FREQ_DEFAULT)
 	match ws:
-		"reading", "cards", "proof", "lab":
+		"reading", "table", "proof", "lab":
 			var section := String((Components.WORKSPACES[ws] as Dictionary)["section"])
 			Settings.write(section, "doc_path", path)
 			Settings.write(section, "sync", true)
@@ -429,7 +414,7 @@ func delete_note(path: String, answer: String) -> void:
 
 
 ## START A WORKSPACE - a key of [constant Components.WORKSPACES] - through one path: every note
-## opened, and the command line's `--synth`, `--cards` and `--mask-edit`. [param source] is the
+## opened, and the command line's `--synth`, `--table` and `--mask-edit`. [param source] is the
 ## clip (the `clip` workspace); [param note] the note it runs, "" from the command line. What is
 ## built: the note's own panel (its words, a song and its show), a panel that reads the text, or
 ## Masking's editor (which never touches the Director or Spectrum - just the editor on whatever
@@ -441,7 +426,7 @@ func start_workspace(key: String, source := "", note := "") -> void:
 				push_warning("ghost: a note's own panel needs a note - open one with --note")
 				return
 			_open_note_panel(note)
-		"reading", "cards", "proof":
+		"reading", "table", "proof":
 			_open_reading(key)
 		"lab":
 			_open_synth_editor()
@@ -814,7 +799,7 @@ func _process(delta: float) -> void:
 	# The same argument for a picture being painted: the job is a subprocess, and the panel
 	# that started it may have been closed or scrolled away long before it finishes.
 	Illustrations.pump()
-	# ...and every other agent's writing and painting (the Cards mode's episodes).
+	# ...and every other agent's writing and painting (the Table mode's episodes).
 	AgentJobs.pump()
 	# The background render reports its progress (playback position / length) so the
 	# live app's exporter can show a percentage in the status notification.

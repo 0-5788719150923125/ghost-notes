@@ -5,7 +5,7 @@ shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;
 
 // Props.MATERIALS: 0 painted, 1 metal, 2 wax, 4 crystal, 5 ceramic, 6 stone, 7 wood, 8 paper,
-// 9 leather, 10 fabric, 11 bone, 12 plant
+// 9 leather, 10 fabric, 11 bone, 12 plant, 13 liquid
 uniform int kind = 0;
 uniform vec3 color : source_color = vec3(0.7);
 uniform vec3 color2 : source_color = vec3(0.3);
@@ -15,6 +15,12 @@ uniform float pattern : hint_range(0.0, 1.0) = 0.5;
 uniform float clarity : hint_range(0.0, 1.0) = 0.5;
 // a lit candle's wax: its flame's brightness now (0 unlit), which glows in the top of it
 uniform float flame = 0.0;
+// WORK AT THE TABLE (TableWork): light of a part's own, 0-1 (a brew lit from within), and the show's time
+// and how hard a liquid boils, for a liquid's surface - the time is handed in, never TIME, so a render and
+// a scrub agree
+uniform float glow = 0.0;
+uniform float show_time = 0.0;
+uniform float boil = 0.0;
 #include "res://shaders/prop_common.gdshaderinc"
 
 void fragment() {
@@ -135,12 +141,38 @@ void fragment() {
 		rough = 0.68;
 		sss = 0.3 * (1.0 - wear);
 		back = albedo * 0.35 * (1.0 - wear);
+	} else if (kind == 13) {
+		// LIQUID: a wet surface that is never quite still - slow ripples, and bubbles that rise and break
+		// as hard as it `boil`s - with a little light in its depth (clarity) and foam in `color2` (pattern)
+		float st = show_time;
+		float ripple = vnoise(cpos * 0.35 + vec3(st * 0.31, 0.0, st * 0.23)) * 0.6
+			+ vnoise(cpos * 0.9 - vec3(st * 0.52, 0.0, -st * 0.17)) * 0.4;
+		relief += (ripple - 0.5) * 0.00045 * (0.35 + boil * 1.4);
+		float b = 0.0;
+		if (boil > 0.0) {
+			// each cell a bubble on its own clock: it swells, then breaks
+			vec3 c = cellsid(cpos * vec3(0.7, 0.0, 0.7) + vec3(0.0, 0.0, 0.0));
+			float life = fract(st * (0.35 + boil * 0.9) + c.z * 7.0);
+			float r = (1.0 - smoothstep(0.08, 0.3, c.x)) * smoothstep(0.0, 0.7, life) * (1.0 - smoothstep(0.85, 1.0, life));
+			b = r * step(1.0 - min(boil, 1.0) * 0.6, c.z);
+			relief += b * 0.0006;
+		}
+		albedo = color * (0.82 + 0.2 * ripple);
+		albedo = mix(albedo, color2, clamp(smoothstep(0.62, 0.9, fbm(cpos * 0.25 + vec3(st * 0.05)) + b * 0.4) * pattern, 0.0, 1.0));
+		rough = 0.03 + (1.0 - polish) * 0.35;
+		spec = 0.6;
+		coat = 0.8;
+		coat_rough = 0.02;
+		sss = 0.15 + 0.35 * clarity;
+		back = color * 0.25 * clarity;
 	} else {
 		// PAINTED or lacquered: a color, as glossy as its polish
 		albedo = color * (0.95 + 0.08 * n1);
 		rough = mix(0.85, 0.12, polish);
 		coat = polish * 0.6;
 	}
+	// LIGHT OF ITS OWN (TableWork's `glow`): the color itself, lit from inside
+	emit += color * glow * 1.6;
 	// THE PLAY OF LIGHT (Props.PLAYS). Where the flames are is the renderer's business, so what
 	// catches them is made of surface: a patch of layers or a flake is a small mirror facing its own
 	// way, colored as a metal is, which a flame or the room's reflection lights - or does not

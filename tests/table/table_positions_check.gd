@@ -135,9 +135,9 @@ func _given() -> void:
 
 func _dealer() -> void:
 	print("-- a dealer lays the cards")
-	CardEpisode.root = DIR
+	TableEpisode.root = DIR
 	_clean()
-	var ep := CardEpisode.open("dealer-check", 11)
+	var ep := TableEpisode.open("dealer-check", 11)
 	var plan := {"spread": {"positions": [{"name": "Root"}, {"name": "Crown"}, {"name": "Path"}]}}
 	ep.write_json("plan", plan)
 	ep.write_json("draw", {"cards": [{"key": "tower", "name": "The Tower"}, {"key": "star", "name": "The Star"},

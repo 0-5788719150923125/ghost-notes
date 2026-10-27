@@ -26,7 +26,7 @@ Where a note has room for exactly one. Components that take the same slot are al
 | Slot | What it is | Taken by |
 | --- | --- | --- |
 | `clock` | What the show is timed by, and how long it is: a song, a voice reading the text, or a clip. | Song, Voice, Voice lab, Clip |
-| `presentation` | What the show is seen in: the Picture and the medium it names, a card table, a voice lab's own show, or a clip's own frame. | Voice lab, Picture, Cards, Proof, Actor, Clip |
+| `presentation` | What the show is seen in: the Picture and the medium it names, a card table, a voice lab's own show, or a clip's own frame. | Voice lab, Picture, Table, Proof, Actor, Clip |
 
 ## Workspaces
 
@@ -36,7 +36,7 @@ The panels that run a note. Most components are a card on whichever panel is up;
 | --- | --- | --- |
 | **Note** (`note`) | no component: the default | The note's own panel: its words, and a card for each thing attached. |
 | **Reading** (`reading`) | Voice | A voice reads the note: the cast, each speaker's delivery and room, the stream. |
-| **Cards** (`cards`) | Cards | A show of cards: the episodes agents make from the note's brief, and the voice that reads them. |
+| **Table** (`table`) | Table | A show at a table: the episodes agents make from the note's brief - cards drawn, things made, or both - and the voice that reads them. |
 | **Proof** (`proof`) | Proof | A ghost doing math at a desk: the episodes agents make from the note's problem, and the voice that teaches them. |
 | **Voice lab** (`lab`) | Voice lab | Ghost Notes' own synthesizer and the fishing game that breeds its voices. |
 | **Masking** (`clip`) | Clip | A clip's editor: its markers, tracks, effects and timeline. |
@@ -54,8 +54,8 @@ By family - the color a component's card, chip and marks are drawn in.
 
 ### Producer
 
-- **Cards** (`cards`) - Agents plan, deal, paint and write a reading, one card at a time, at a table. The note's words are the show's brief: they say what the cards are.
-  - needs text; gives text, picture, moments; brings Voice; takes the presentation; asks for `forward_plus`, `subprocess`, `agent:writer`, `agent:painter`; kept in `cards:`
+- **Table** (`table`) - Agents plan, paint and write a show at a table, a beat at a time: cards drawn and read, things made - or both. The note's words are the show's brief: they say what is done there.
+  - needs text; gives text, picture, moments; brings Voice; takes the presentation; asks for `forward_plus`, `subprocess`, `agent:writer`, `agent:painter`; kept in `table:`
 - **Proof** (`proof`) - Agents work a math problem at a desk - the note's words are the problem - check the proof in Lean, and teach it: a pen writes each formula on a pad while the voice explains.
   - needs text; gives text, picture, moments; brings Voice; takes the presentation; asks for `forward_plus`, `subprocess`, `agent:writer`, `tex`, `lean`, `python:math`; kept in `proof:`
 

@@ -16,8 +16,10 @@ class_name TableActions
 ##
 ## THE OPENING VERB SAYS WHERE THE CARDS COME FROM ([constant SOURCES]): `shuffle` - a deck shuffled
 ## in the middle of the table and pushed aside before the first card - or `open` - a box the cards are
-## kept in, standing where the deck would, pulled from one at a time. A verb that takes a card from the
-## source waits for the push (`first`) only when the source pushes.
+## kept in, standing where the deck would, pulled from one at a time - or `begin`, a show that draws no
+## cards at all (the user, 2026-10-26: "that card dependency shouldn't exist ... we should start with a
+## mask every time - and just paint it while talking"): no deck, no box, and each of its beats opened by
+## `work`. A verb that takes a card from the source waits for the push (`first`) only when the source pushes.
 ##
 ## Tarot's verbs are draw, jumper and spread; a show of a collection adds `deal` (a card straight to
 ## its place, never held up), `fan` (a waterfall: several swept out at once, overlapping), `show` (a
@@ -63,6 +65,12 @@ const LINGER := 2.0
 ## A card turned where it lies: a quarter turn (tap, untap), or over (flip).
 const TURN := 0.9
 const FLIP := 1.2
+## WORK BEGINS ([TableWork], next/table_work.md): the card on display goes down, and the work of its beat
+## starts as the voice goes on - talked through, as a reader talks through a shuffle, so its rest is only
+## the moment it takes to begin.
+const WORK_LEAD := 0.4
+## A SHOW WITH NO CARDS BEGINS: only the moment it takes, as the shuffle's.
+const BEGIN_LEAD := 0.4
 
 ## THE VERBS. `written`: a reading's mark names it (`<!-- table: draw 3 -->`); `args`: what the mark
 ## takes after the verb; `rest`: the seconds the voice holds for it; `first`: added when it brings up
@@ -71,7 +79,8 @@ const FLIP := 1.2
 ## shown after it; `moments`: what it makes for the air.
 ## `source`: an opening verb's, where the cards come from; `takes`: it takes cards from the source
 ## (waiting for the push when it is the first); `range`: its mark names a run of cards (`fan 3-5`);
-## `turns`: it turns a card where it lies; `chapter`: a video chapter starts there.
+## `turns`: it turns a card where it lies; `chapter`: a video chapter starts there; `beat`: the number its
+## mark takes is a beat of the reading, never a card - none is drawn by it.
 const REGISTRY := {
 	"shuffle": {"written": true, "args": [], "rest": SHUFFLE_LEAD, "shows": false, "lays": false,
 		"ends": false, "moments": ["shuffle"], "source": "deck",
@@ -79,6 +88,9 @@ const REGISTRY := {
 	"open": {"written": true, "args": [], "rest": OPEN_LEAD, "shows": false, "lays": false,
 		"ends": false, "moments": [], "source": "box",
 		"about": "the box the cards are kept in stands open; the cards are pulled from it one at a time"},
+	"begin": {"written": true, "args": [], "rest": BEGIN_LEAD, "shows": false, "lays": false,
+		"ends": false, "moments": [], "source": "none",
+		"about": "a show that draws no cards begins: the table is set, and the words that follow open it"},
 	"draw": {"written": true, "args": ["card"], "rest": DRAW, "first": PUSH, "shows": true, "lays": true,
 		"ends": false, "moments": ["reveal", "pirouette"], "takes": true, "chapter": true,
 		"about": "the card on the table goes down into the spread (if one is up), then the named card is drawn, turned and held up beside its booklet entry"},
@@ -112,6 +124,9 @@ const REGISTRY := {
 	"flip": {"written": true, "args": ["card"], "rest": FLIP, "shows": false, "lays": true, "turns": true,
 		"ends": false, "moments": [],
 		"about": "the named card is turned over where it lies"},
+	"work": {"written": true, "args": ["card"], "rest": WORK_LEAD, "shows": false, "lays": true,
+		"ends": false, "moments": ["lay"], "beat": true,
+		"about": "the card on display goes down (if one is up), then the work of the named beat begins at the table, under the words that follow - in a show with no cards, every beat opens with it"},
 	# performed between the written ones, never written
 	"push": {"written": false, "args": [], "rest": PUSH, "shows": false, "lays": false, "ends": false,
 		"moments": [], "about": "the shuffled deck is squared and pushed to its side before the first card"},
@@ -147,6 +162,11 @@ static func takes_range(kind: String) -> bool:
 	return bool(REGISTRY.get(kind, {}).get("range", false))
 
 
+## Does [param kind]'s number name a beat of the reading rather than a card ([constant REGISTRY] `beat`)?
+static func names_beat(kind: String) -> bool:
+	return bool(REGISTRY.get(kind, {}).get("beat", false))
+
+
 ## Does [param kind] take cards from the source (the deck, the box)?
 static func takes_from_source(kind: String) -> bool:
 	return bool(REGISTRY.get(kind, {}).get("takes", false))
@@ -164,12 +184,15 @@ static func source_of(kind: String) -> String:
 
 ## THE SOURCES: what each opening means for the table. `pushes`: the deck is shuffled in the middle
 ## and pushed to its side before the first card; `shuffles`: it is shuffled at all; `jumpers`: a card
-## can fly out of it.
+## can fly out of it. `none` is a show that draws no cards: no producer chooses it for a show that does
+## ([method TableProducer._land_plan] sets it where the episode draws none, and takes it from any other).
 const SOURCES := {
 	"deck": {"opens": "shuffle", "pushes": true, "shuffles": true, "jumpers": true,
 		"about": "a deck, shuffled in the middle of the table while the host talks and pushed to one side before the first card"},
 	"box": {"opens": "open", "pushes": false, "shuffles": false, "jumpers": false,
 		"about": "a box the cards are kept in (a shoebox, a tin, a cigar box), standing open to one side; each card is pulled out of it"},
+	"none": {"opens": "begin", "pushes": false, "shuffles": false, "jumpers": false,
+		"about": "no cards at all: nothing is drawn, and the episode is the words and the work at the table"},
 }
 
 

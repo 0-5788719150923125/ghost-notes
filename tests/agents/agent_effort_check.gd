@@ -10,6 +10,10 @@ extends SceneTree
 ##   default for the model, read from `modelSettings` to label Default); the CLI's five levels.
 ## - CODEX: `-c model_reasoning_effort=<level>`, the chosen one or ghost's own (the writer's tier:
 ##   medium, low for designs; the painter: low); the levels each model's catalog entry offers.
+## - A WITHDRAWN MODEL IS NEVER ASKED FOR (2026-10-26: gpt-6.1-sol, gone from the account's Codex catalog, failed
+##   every painting): a model, or a config's default, the catalog does not hold runs as its first listed model by
+##   priority, and Default is labelled with it. The control: one the catalog holds - hidden too - is asked for as
+##   chosen, and with no catalog to ask, nothing is changed.
 ## - AMAZON NOVA: Nova 2's `reasoningConfig` when a level is chosen, nothing otherwise and nothing
 ##   for a model that does not think; at "high" no output cap, as Nova 2 requires.
 ## - THE PANEL: an Effort picker beside each model picker, its choice in the show's knobs and the
@@ -103,6 +107,26 @@ func _codex() -> bool:
 	_ok(_keys(TextGen.Codex.efforts("")) == ["", "low", "high", "max"], "Default model: the config's model's levels")
 	_ok(_keys(TextGen.Codex.efforts("not-listed")) == ["", "low", "medium", "high", "max"],
 		"a model the catalog does not list: every level any listed model takes")
+	# A WITHDRAWN MODEL IS NEVER ASKED FOR
+	var cat := ImageGen.Codex.catalog()
+	_ok(cat.size() == 2 and ImageGen.Codex.runnable("m-small", cat, "m-big") == "m-small" and ImageGen.Codex.runnable("", cat, "m-big") == "",
+		"the control: a model the catalog holds, and the config's own, are asked for as chosen")
+	var ranked := [{"slug": "hidden-first", "visibility": "hide", "priority": 1}, {"slug": "later", "visibility": "list", "priority": 9},
+		{"slug": "sooner", "visibility": "list", "priority": 5}]
+	_ok(ImageGen.Codex.runnable("gone-sol", ranked) == "sooner", "a withdrawn model runs as the catalog's first listed: %s" % ImageGen.Codex.runnable("gone-sol", ranked))
+	_ok(ImageGen.Codex.runnable("", ranked, "gone-sol") == "sooner", "...and a config's withdrawn default")
+	_ok(ImageGen.Codex.runnable("hidden-first", ranked) == "hidden-first", "the control: a hidden model the catalog holds is asked for")
+	_ok(ImageGen.Codex.runnable("gone-sol", [], "") == "gone-sol", "the control: with no catalog to ask, the choice is asked for as it is")
+	var gone := {"dir": "/tmp/x", "refs": [], "model": "gone-sol", "label": "a painting"}
+	ImageGen.Codex.run_offered(gone)
+	var gargs := ImageGen.Codex.argv(gone)
+	_ok(gargs.find("-m") >= 0 and gargs[gargs.find("-m") + 1] == "m-small", "a painter's job pinned to a withdrawn model asks for an offered one: %s" % " ".join(gargs))
+	var home := OS.get_environment("CODEX_HOME")
+	_put(home.path_join("config.toml"), "model = \"gone-sol\"\n")
+	var dflt := String(ImageGen.Codex.models()[0]["label"])
+	_put(home.path_join("config.toml"), "model = \"m-big\"\n")
+	_ok(dflt == "Default (m-small - gone-sol is not offered)" and String(ImageGen.Codex.models()[0]["label"]) == "Default (m-big)",
+		"Default is labelled with the model that runs: %s" % dflt)
 	return true
 
 
@@ -133,9 +157,9 @@ func _items(p: OptionButton) -> Array:
 
 func _panel() -> bool:
 	var panel = load("res://src/reading/reading_panel.gd").new()
-	panel.workspace = "cards"
+	panel.workspace = "table"
 	panel._build_panel()
-	var ed = panel._block_cards["cards"]      # the episode's card ([EpisodeCard])
+	var ed = panel._block_cards["table"]      # the episode's card ([EpisodeCard])
 	# NOT THE AUTHOR'S SHOW. A panel comes up synced to whatever document the person running
 	# this has open, and DocSource.set_field writes a synced document at once - so this gate read
 	# the author's real show (and failed on its tags) and could have written into it.

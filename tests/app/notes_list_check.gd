@@ -195,7 +195,7 @@ func _check_gating() -> void:
 	var plus: MenuButton = panel._panel.plus
 	plus.about_to_popup.emit()
 	var pop := plus.get_popup()
-	var cards := _menu_item(pop, "cards")
+	var cards := _menu_item(pop, "table")
 	_ok(cards >= 0, "\"+\" offers Cards")
 	if cards >= 0:
 		var tip := pop.get_item_tooltip(cards)
@@ -212,11 +212,11 @@ func _check_gating() -> void:
 		# a press on a grayed item attaches nothing
 		pop.id_pressed.emit(pop.get_item_id(cards))
 		await _frames(6)
-		_ok(_main._note_panel == panel and not NoteStore.blocks_of(panel.path).has("cards"),
+		_ok(_main._note_panel == panel and not NoteStore.blocks_of(panel.path).has("table"),
 			"a grayed component is not attached")
 		Deps._resolved = keep
 		plus.about_to_popup.emit()
-		cards = _menu_item(pop, "cards")
+		cards = _menu_item(pop, "table")
 		var lit := Capabilities.missing_roles(["writer", "painter"]).is_empty()
 		_ok(cards >= 0 and pop.is_item_disabled(cards) == not lit,
 			"with the agents back, Cards is lit exactly when both roles are filled")
@@ -465,10 +465,10 @@ func _check_new_card_starter() -> void:
 		return
 	var path: String = panel.path
 	# The gate in "+" is about installed agents; this is about what attaching writes.
-	panel._attach("cards")
+	panel._attach("table")
 	await _frames(20)
-	var starter := FileAccess.get_file_as_string("res://rules/cards/starter.md")
-	_ok(_main._note == path and NoteStore.blocks_of(path).get("cards") is Dictionary, "+ Cards writes the cards block into the note")
+	var starter := FileAccess.get_file_as_string("res://rules/table/starter.md")
+	_ok(_main._note == path and NoteStore.blocks_of(path).get("table") is Dictionary, "+ Table writes the table block into the note")
 	_ok(FileAccess.get_file_as_string(path).contains(starter), "...and the full starter brief, since the note had no words")
 	var editor := _main._generative as ReadingPanel
 	_ok(editor != null and editor._text.text == starter,
@@ -537,7 +537,7 @@ func _check_save_moves_the_note() -> void:
 	_ok(editor._writer._note.visible and editor._writer._note.text.contains("penalty-box.md")
 		and editor._writer._note.text.contains(old.get_file()), "...and says where the old one went: %s" % editor._writer._note.text)
 	var raw := FileAccess.get_file_as_string(now)
-	_ok(raw.contains("An open-top box.") and NoteStore.blocks_of(now).get("cards") is Dictionary,
+	_ok(raw.contains("An open-top box.") and NoteStore.blocks_of(now).get("table") is Dictionary,
 		"the file holds the brief as it was on screen, and the show's block")
 	ch._home_button.pressed.emit()
 	await _frames(12)
@@ -582,7 +582,7 @@ func _check_open_from_disk(dir: String, from: String) -> void:
 	print("-- Open… loads a file from disk")
 	var editor := _main._generative as ReadingPanel
 	var on_disk := dir.path_join("on-disk.md")
-	FrontMatter.create(on_disk, {"cards": {"show": "from-disk"}}, "A brief that was on disk.\n", "",
+	FrontMatter.create(on_disk, {"table": {"show": "from-disk"}}, "A brief that was on disk.\n", "",
 		FrontMatter.KEY, {"title": "From disk"})
 	var plain := dir.path_join("plain.md")
 	FrontMatter.create(plain, null, "Only words.\n")
@@ -600,7 +600,7 @@ func _check_open_from_disk(dir: String, from: String) -> void:
 	await _frames(14)
 	editor = _main._generative as ReadingPanel
 	_ok(_main._note == on_disk and editor != null and editor._doc.doc_path() == on_disk
-		and editor._text.text.contains("A brief that was on disk.") and String(editor._block_cards["cards"]._knobs["show"]) == "from-disk",
+		and editor._text.text.contains("A brief that was on disk.") and String(editor._block_cards["table"]._knobs["show"]) == "from-disk",
 		"the file chosen is the note: its own text and its own settings (%s)" % _main._note.get_file())
 	_ok(FileAccess.get_file_as_string(on_disk) == before, "...and opening it wrote nothing into it")
 	_ok(FileAccess.get_file_as_string(from).contains("Typed a moment before opening.") and NoteStore.is_added(from),

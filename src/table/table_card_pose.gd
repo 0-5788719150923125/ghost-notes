@@ -455,7 +455,7 @@ func _slid_out(k: int, lying: Transform3D, t: float) -> Transform3D:
 		away = Vector2.RIGHT
 	var keep := TablePositions.deck_keep(medium._plan.deck_base, medium._plan.box_keep(), medium._plan.box_center())
 	var cloth := Rect2(TablePositions.CLOTH_MIDDLE - TablePositions.CLOTH * 0.5, TablePositions.CLOTH).grow(-TablePositions.HEM)
-	if not cloth.encloses(CardTable.footprint(lying.origin, yaw, TableMedium.CARD)):
+	if not cloth.encloses(CardTable.footprint(lying.origin, yaw, CardTable.card_size(medium._plan.look))):
 		cloth = cloth.grow(1.0)      # a place given past the hem: the hem is no wall to it
 	var best := INF
 	var way := Vector2.ZERO
@@ -465,7 +465,7 @@ func _slid_out(k: int, lying: Transform3D, t: float) -> Transform3D:
 		while d < minf(best, SLIDE_MOST):
 			var p := at + dir * d
 			var moved := {"pos": Vector3(p.x, 0.0, p.y), "yaw": yaw}
-			var foot := CardTable.footprint(moved["pos"], yaw, TableMedium.CARD)
+			var foot := CardTable.footprint(moved["pos"], yaw, CardTable.card_size(medium._plan.look))
 			if foot.intersects(keep) or not cloth.encloses(foot) \
 					or beside.any(func(b: Dictionary) -> bool: return TablePositions.overlaps(moved, b)):
 				break
@@ -506,10 +506,11 @@ func _box_lift(from: Transform3D, to: Transform3D, f: float) -> float:
 		var xf := from.interpolate_with(to, fs)
 		var b := xf.basis
 		# half the card's extent along each world axis, turned as it is
+		var card := CardTable.card_size(medium._plan.look)
 		var half := Vector3(
-			TableMedium.CARD.x * absf(b.x.x) + TableMedium.CARD.y * absf(b.z.x) + TableMedium.CARD_T * absf(b.y.x),
-			TableMedium.CARD.x * absf(b.x.y) + TableMedium.CARD.y * absf(b.z.y) + TableMedium.CARD_T * absf(b.y.y),
-			TableMedium.CARD.x * absf(b.x.z) + TableMedium.CARD.y * absf(b.z.z) + TableMedium.CARD_T * absf(b.y.z)) * 0.5
+			card.x * absf(b.x.x) + card.y * absf(b.z.x) + TableMedium.CARD_T * absf(b.y.x),
+			card.x * absf(b.x.y) + card.y * absf(b.z.y) + TableMedium.CARD_T * absf(b.y.y),
+			card.x * absf(b.x.z) + card.y * absf(b.z.z) + TableMedium.CARD_T * absf(b.y.z)) * 0.5
 		if not Rect2(xf.origin.x - half.x, xf.origin.z - half.z, half.x * 2.0, half.z * 2.0).intersects(rim):
 			continue
 		var need := _over_box() + PULL_CLEAR + TableMedium.CARD_T * 2.0 + half.y - xf.origin.y
@@ -605,7 +606,8 @@ func _sweep_xf(k: int, v: float, to: Transform3D) -> Transform3D:
 	# TURNING OVER, its lower edge keeps to the line it travels: skimming at its middle's height, the
 	# tilted card cut into the deck it left and into the card it came to lie on
 	var b := xf.basis
-	xf.origin.y += sin(PI * f) * 0.018 + (TableMedium.CARD.x * absf(b.x.y) + TableMedium.CARD.y * absf(b.z.y)) * 0.5
+	var card := CardTable.card_size(medium._plan.look)
+	xf.origin.y += sin(PI * f) * 0.018 + (card.x * absf(b.x.y) + card.y * absf(b.z.y)) * 0.5
 	return xf
 
 

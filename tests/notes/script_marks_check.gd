@@ -19,7 +19,7 @@ extends SceneTree
 ## features missing from 'cards' editor mode?"), and each mark offered there is held to what it
 ## says of a BRIEF, which is not what it says of a script: a speaker cue is a voice of the show, a
 ## note to self never reaches an agent and a macro reaches them as its default ([method
-## CardPrompts.brief] - the control is the brief before it, which still carries both), a
+## TablePrompts.brief] - the control is the brief before it, which still carries both), a
 ## hesitation, a delivery and a stressed word survive from a line the brief dictates into the
 ## reader's passage and the reader is told to keep them (italic and bold as two levels of stress,
 ## never flattened into one), such a line is still known as the brief's own, and a card is colored
@@ -61,7 +61,7 @@ func _registry_shape() -> void:
 		_ok(ScriptMarks.GROUPS.has(e.get("group", "")), "%s names an unknown group" % k)
 		_ok(String(e.get("line", "")) in ["", "own", "start"], "%s has an unknown line rule" % k)
 		for m in e.get("modes", []):
-			_ok(m in ["generative", "synthesis", "cards"], "%s names an unknown mode %s" % [k, m])
+			_ok(m in ["generative", "synthesis", "table"], "%s names an unknown mode %s" % [k, m])
 		for m in e.get("blurbs", {}):
 			_ok((e["modes"] as Array).has(m) and not String(e["blurbs"][m]).is_empty(),
 				"%s words itself for %s, a panel it is not offered in" % [k, m])
@@ -73,13 +73,13 @@ func _registry_shape() -> void:
 			and ScriptMarks.for_mode("synthesis").size() > 0,
 		"the per-mode palettes are not what they should be")
 	# ...and so has a brief: its own marks, and none that need a page or a tablet
-	var cards := ScriptMarks.for_mode("cards")
+	var cards := ScriptMarks.for_mode("table")
 	for k in ["speaker", "deck", "card", "suit", "note", "macro", "hesitation", "delivery"]:
 		_ok(cards.has(k), "a Cards brief is not offered `%s`" % k)
 	for k in cards:
 		_ok(not String(ScriptMarks.REGISTRY[k]["group"]) in ["pictures", "tablet", "pronunciation"],
 			"a Cards brief is offered `%s`, which nothing there reads" % k)
-	_ok(ScriptMarks.blurb("speaker", "cards") != ScriptMarks.blurb("speaker", "generative")
+	_ok(ScriptMarks.blurb("speaker", "table") != ScriptMarks.blurb("speaker", "generative")
 			and ScriptMarks.blurb("speaker", "generative") == String(ScriptMarks.REGISTRY["speaker"]["blurb"]),
 		"a mark does not say what it does in a brief")
 
@@ -290,7 +290,7 @@ func _cards_brief() -> void:
 		"<!-- speaker: Rink Announcer -->", "",
 		"Sign off with: Keep your *stick* <!-- hesitation --> on the ice.", "",
 		"<!-- delivery: hushed -->", "Open with: Welcome back to the box. <!-- hesitation: 2 -->", ""]))
-	var brief := CardPrompts.brief(body)
+	var brief := TablePrompts.brief(body)
 	# the control: the brief before it is prepared still carries the note and the macro
 	_ok(CardDeck.strip(body).contains("check the count") and CardDeck.strip(body).contains("${TEAMS"),
 		"the control is wrong - the unprepared brief carries no note or macro")
@@ -302,9 +302,9 @@ func _cards_brief() -> void:
 			and brief.contains("<!-- delivery: hushed -->") and brief.contains("*stick*"),
 		"a dictated line's marks do not reach the agents: %s" % brief)
 	# ...the reader is told to keep them, and its passage does
-	_ok(Rules.say("cards/reader.spoken").contains("WORD FOR WORD") and Rules.say("cards/reader.spoken").contains("its marks included"),
+	_ok(Rules.say("table/reader.spoken").contains("WORD FOR WORD") and Rules.say("table/reader.spoken").contains("its marks included"),
 		"the reader is not told to keep a dictated line's marks")
-	var said := CardProducer.clean_spoken("<!-- delivery: hushed -->\nWelcome back to the box. <!-- hesitation: 2 -->\n\n"
+	var said := TableProducer.clean_spoken("<!-- delivery: hushed -->\nWelcome back to the box. <!-- hesitation: 2 -->\n\n"
 		+ "Keep your *stick* <!-- hesitation --> on the ice. <!-- table: draw 2 -->")
 	_ok(said.contains("<!-- delivery: hushed -->") and said.contains("<!-- hesitation: 2 -->")
 			and said.contains("*stick* <!-- hesitation --> on") and not said.contains("table:"),
@@ -313,7 +313,7 @@ func _cards_brief() -> void:
 		"a stressed word of a dictated line is not stressed in the reading")
 	# ITALIC HITS, BOLD HITS HARDER (2026-10-12): a reader's passage keeps the two apart, each leaves it
 	# as its own level (1, 2) - the level the voice leans by and the subtitle picks its face from
-	var two := CardProducer.clean_spoken("It was *never* about the card. You **must** rest.")
+	var two := TableProducer.clean_spoken("It was *never* about the card. You **must** rest.")
 	_ok(two.contains("*never*") and two.contains("**must**"), "a passage does not keep italic and bold apart: %s" % two)
 	# (what the voice makes of a level is the reading panel's and the host's: multi_voice_check's
 	# "a word leaned on is sent leaned on", hosts/voice/test_expression.py's "bold leans harder")
@@ -325,14 +325,14 @@ func _cards_brief() -> void:
 	_ok(levels.size() == 2 and int(levels.get("never", 0)) == TextNorm.EMPH_I and int(levels.get("must", 0)) == TextNorm.EMPH_B,
 		"italic and bold do not leave a passage as two levels: %s" % str(levels))
 	# a dictated line is still known as the brief's own with a mark in it; a line of the reader's is not
-	var left := CardPrompts.unfixed("Keep your stick on the ice. Something new happened today.", brief)
+	var left := TablePrompts.unfixed("Keep your stick on the ice. Something new happened today.", brief)
 	_ok(left == "Something new happened today.", "a dictated line with a mark in it is not known as the brief's: '%s'" % left)
 	# WHAT IS NOT OFFERED: a passage keeps no bracket, so an inline pronunciation would be lost
-	_ok(not CardProducer.clean_spoken("The [K AE T] sat down on the ice.").contains("["),
+	_ok(not TableProducer.clean_spoken("The [K AE T] sat down on the ice.").contains("["),
 		"a reader's passage keeps brackets now - offer the pronunciation mark in a brief")
 	# THE DECK IS COLORED AS ONE, and a list anywhere else is not
 	var te := TextEdit.new()
-	var hl := ScriptHighlighter.new("cards")
+	var hl := ScriptHighlighter.new("table")
 	te.syntax_highlighter = hl
 	te.text = "## The host\n- quick with a joke\n\n## Cards\n### Major Arcana\n- The Tower: upheaval\n<!-- image: a wolf -->"
 	var plain: Color = te.get_theme_color("font_color")

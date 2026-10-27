@@ -38,8 +38,8 @@ func _initialize() -> void:
 	for m in CardTable.MOMENTS:
 		_ok(TableActions.moments().has(m), "the air's '%s' is made by some verb" % m)
 	print("-- the marks")
-	_ok(TableActions.written() == ["shuffle", "open", "draw", "jumper", "spread", "deal", "fan", "show", "rummage", "linger", "tap", "untap", "flip"],
-		"the written verbs include searching and a silent hold (%s)" % str(TableActions.written()))
+	_ok(TableActions.written() == ["shuffle", "open", "begin", "draw", "jumper", "spread", "deal", "fan", "show", "rummage", "linger", "tap", "untap", "flip", "work"],
+		"the written verbs include searching, a silent hold, a card's work and a show with no cards (%s)" % str(TableActions.written()))
 	_ok(CardReading.rest_of("linger", true) == TableActions.LINGER and
 		CardReading.rest_of("rummage", true) == TableActions.LAY + TableActions.RUMMAGE,
 		"a silent hold preserves the shown card, while a search puts it down first")
@@ -59,7 +59,7 @@ func _initialize() -> void:
 		and composed.contains("<!-- table: spread -->"), "compose writes a card only for a verb that takes one")
 	print("-- a reader writes words, never the table's actions")
 	var reply := "Oh, look at this.\n<!-- table: draw 2 -->\n<!-- delivery: quicker -->\nThe second card. <!-- a note to myself -->\n<!-- speaker: Familiar -->\nHa."
-	var clean := CardProducer.clean_spoken(reply)
+	var clean := TableProducer.clean_spoken(reply)
 	_ok(not clean.contains("table:") and not clean.contains("a note to myself"), "a table mark and a stray note in a reply are dropped")
 	_ok(clean.contains("<!-- delivery: quicker -->") and clean.contains("<!-- speaker: Familiar -->"),
 		"the voice's own marks stay")

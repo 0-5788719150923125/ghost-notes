@@ -131,9 +131,9 @@ func _run() -> void:
 	if settings != null:
 		settings.set("_read_only", true)
 	var keep_root: String = YouTube.root
-	var keep_tarot := CardEpisode.root
+	var keep_tarot := TableEpisode.root
 	YouTube.root = ROOT
-	CardEpisode.root = TAROT
+	TableEpisode.root = TAROT
 	_wipe(ROOT)
 	_wipe(TAROT)
 	_wipe(ROOT + "_files")
@@ -145,7 +145,7 @@ func _run() -> void:
 	_wipe(TAROT)
 	_wipe(ROOT + "_files")
 	YouTube.root = keep_root
-	CardEpisode.root = keep_tarot
+	TableEpisode.root = keep_tarot
 	print("youtube_check: %s" % ("ALL OK" if _fails == 0 else "%d FAILED" % _fails))
 	quit(0 if _fails == 0 else 1)
 
@@ -435,7 +435,7 @@ func _records() -> bool:
 ## An episode on disk: a plan, a draw of two cards, a script with their marks, and a take whose
 ## words put the spread past the hour.
 func _episode_notes() -> bool:
-	var ep := CardEpisode.open("youtube-check", 7)
+	var ep := TableEpisode.open("youtube-check", 7)
 	DirAccess.make_dir_recursive_absolute(ep.dir)
 	ep.write_json("plan", {"episode_title": "Why You Keep Waking Up At 4AM",
 		"description": "Hello, my loves.\n\nThis one is for you.", "premise": "unused",
@@ -469,8 +469,8 @@ func _episode_notes() -> bool:
 		_ok(ch[1].ends_with(" Past - The Tower (reversed)") and ch[1].begins_with("1:0"), "a card's chapter names its position and how it fell (%s)" % ch[1])
 		_ok(ch[2].ends_with(" Future - The Star") and ch[2].begins_with("2:0"), "in the order drawn (%s)" % ch[2])
 		_ok(RegEx.create_from_string("^1:0\\d:\\d\\d The spread$").search(ch[3]) != null, "an hour on it reads h:mm:ss (%s)" % ch[3])
-	_ok(CardEpisode.chapter_clock(0) == "0:00" and CardEpisode.chapter_clock(65) == "1:05"
-		and CardEpisode.chapter_clock(3725) == "1:02:05", "chapter clocks read as YouTube reads them")
+	_ok(TableEpisode.chapter_clock(0) == "0:00" and TableEpisode.chapter_clock(65) == "1:05"
+		and TableEpisode.chapter_clock(3725) == "1:02:05", "chapter clocks read as YouTube reads them")
 	ep.write_json("plan", {"episode_title": "T", "description": "", "premise": "The premise."})
 	_ok(ep.upload_notes()["description"] == "The premise.", "no description: the premise stands in")
 	ep.write_json("plan", {"episode_title": "Why You Keep Waking Up At 4AM", "description": "Hello.",
@@ -903,9 +903,9 @@ func _pressed(card: Node) -> String:
 func _panel_fields() -> bool:
 	# loaded here, not named: the panel's scripts need the autoloads, which are only up by now
 	var ed = load("res://src/reading/reading_panel.gd").new()
-	ed.workspace = "cards"
+	ed.workspace = "table"
 	ed._build_panel()
-	var show = ed._block_cards["cards"]      # the episode's card ([EpisodeCard])
+	var show = ed._block_cards["table"]      # the episode's card ([EpisodeCard])
 	_ok(ed._youtube == null and show._yt_desc == null and ed.upload_meta("").is_empty(),
 		"a show with no YouTube card has no description or tags to edit, and uploads nothing")
 	ed._panel.plus.about_to_popup.emit()
@@ -940,7 +940,7 @@ func _panel_fields() -> bool:
 	# the author's real show (and failed on its tags) and could have written into it.
 	ed._doc._sync = false
 	ed._doc._fields = {}
-	var ep := CardEpisode.open("panel-check", 21)
+	var ep := TableEpisode.open("panel-check", 21)
 	ep.write_json("plan", {"episode_title": "The Producer's Title", "description": "The producer's words.",
 		"tags": ["tarot", "4am"], "premise": "p", "spread": {"positions": [{"name": "Past"}]}})
 	show._knobs["show"] = "panel-check"
@@ -966,7 +966,7 @@ func _panel_fields() -> bool:
 	show._upload_edited()
 	_ok(show._yt_dirty > 0.0, "an edit of the description waits a moment before it is kept")
 	show._flush_upload_fields(true)
-	var doc: Dictionary = ed._doc_capture()["cards"]
+	var doc: Dictionary = ed._doc_capture()["table"]
 	_ok(not doc.has("episode_title") and doc.get("description") == "Mine." and not doc.has("youtube"),
 		"the block holds the show's description - no episode's title, no record per episode")
 	_ok(ed.export_name() == "My Own Title", "and the title names the export")
@@ -1019,18 +1019,18 @@ func _panel_fields() -> bool:
 		"a new episode shows the show's description and tags at once")
 	_ok(episode.text.is_empty() and not episode.editable and episode.placeholder_text == "named with the episode",
 		"its Episode waits for its plan, saying so - never the last episode's")
-	var other := CardEpisode.open("panel-check", 23)
+	var other := TableEpisode.open("panel-check", 23)
 	other.write_json("plan", {"episode_title": "Another Episode"})
 	var take := ProjectSettings.globalize_path(ROOT + "_files/take_9.wav")
 	show._taken = {"take": take, "episode": ep}
 	show._knobs["seed"] = 23
 	show._open_episode()
 	ed._writer._refresh_handed()
-	_ok(episode.text == "Another Episode" and not ed._doc_capture()["cards"].has("episode_title")
+	_ok(episode.text == "Another Episode" and not ed._doc_capture()["table"].has("episode_title")
 		and show._yt_desc.text == "Mine.", "an episode with a plan shows its own title; the description stays the show's")
 	_ok(ed.upload_meta(take).get("title") == "My Own Title" and ed.upload_meta("").get("title") == "Another Episode",
 		"an export's upload describes the episode it rendered, not the one picked since")
-	_ok(not DirAccess.dir_exists_absolute(CardEpisode.open("panel-check", 22).dir), "nothing was written for the new episode")
+	_ok(not DirAccess.dir_exists_absolute(TableEpisode.open("panel-check", 22).dir), "nothing was written for the new episode")
 	# THE STEPS THE NOTE'S OTHER CARDS ADD: the YouTube card's tags, on the Episode card, neither naming the other
 	var tags_step = ed._youtube.episode_steps()[0]
 	_ok(ed.episode_steps() == [tags_step], "the panel holds the step the YouTube card offers")
@@ -1250,15 +1250,15 @@ func _tag_field() -> bool:
 ## back - and opened again by another panel, whose new episode is filled from it at once.
 func _doc_file() -> bool:
 	var ed = load("res://src/reading/reading_panel.gd").new()
-	ed.workspace = "cards"
+	ed.workspace = "table"
 	ed._build_panel()
-	var epi = ed._block_cards["cards"]      # the episode's card ([EpisodeCard])
+	var epi = ed._block_cards["table"]      # the episode's card ([EpisodeCard])
 	ed._attach("youtube")
-	var ep := CardEpisode.open("doc-check", 31)
+	var ep := TableEpisode.open("doc-check", 31)
 	ep.write_json("plan", {"episode_title": "Episode Thirty-One", "description": "First paragraph.\n\nSecond: with a colon.",
 		"tags": ["tarot", "pick a card"], "spread": {"positions": [{"name": "Past"}]}})
 	var body := "# The brief\n\nWhat the show is.\n"
-	var path := _file("show.md", "---\ntitle: Doc Check Show\nghost:\n  cards:\n    show: doc-check\n    seed: 31\n---\n" + body)
+	var path := _file("show.md", "---\ntitle: Doc Check Show\nghost:\n  table:\n    show: doc-check\n    seed: 31\n---\n" + body)
 	ed._doc._on_picked(path)
 	_ok(ed._doc.is_sync() and int(epi._knobs["seed"]) == 31 and ed._writer.field_value("episode") == "Episode Thirty-One",
 		"the show file opens on its episode")
@@ -1273,7 +1273,7 @@ func _doc_file() -> bool:
 		and head.find("byline:") < head.find("ghost:"),
 		"the tags and the byline are the file's own lines, above ghost's block, as a chapter keeps them:\n%s" % head)
 	var data: Variant = FrontMatter.read_block(raw).get("data")
-	var show: Dictionary = (data as Dictionary).get("cards", {}) if data is Dictionary else {}
+	var show: Dictionary = (data as Dictionary).get("table", {}) if data is Dictionary else {}
 	_ok(not show.has("episode_title") and show.get("description") == "First paragraph.\n\nSecond: with a colon."
 		and not show.has("youtube"), "the block holds the show's description, whole, and no episode's title or record")
 	var yt: Variant = (data as Dictionary).get("youtube") if data is Dictionary else null
@@ -1283,9 +1283,9 @@ func _doc_file() -> bool:
 	ed.free()
 	# ANOTHER PANEL OPENS THE FILE, AND MAKES A NEW EPISODE: filled from the file at once
 	var again = load("res://src/reading/reading_panel.gd").new()
-	again.workspace = "cards"
+	again.workspace = "table"
 	again._build_panel()
-	var again_show = again._block_cards["cards"]
+	var again_show = again._block_cards["table"]
 	again._attach("youtube")
 	again._doc._on_picked(path)
 	again_show._knobs["seed"] = 99

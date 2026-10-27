@@ -6,6 +6,8 @@ shader_type spatial;
 render_mode blend_mix, depth_draw_always, cull_back, diffuse_burley, specular_schlick_ggx;
 
 uniform sampler2D screen : hint_screen_texture, filter_linear_mipmap;
+// ...and how far away what is on the screen stands, so only what is BEHIND the glass is bent into it
+uniform sampler2D depth : hint_depth_texture, filter_nearest;
 uniform vec3 color : source_color = vec3(0.9, 0.93, 0.95);
 uniform vec3 color2 : source_color = vec3(0.3);
 uniform float polish : hint_range(0.0, 1.0) = 0.9;
@@ -26,7 +28,21 @@ void fragment() {
 	// thing shows what lies beyond its far side - the further away it stands, the smaller the bend
 	// is on the screen
 	float k = (0.02 + 0.025 * facing) / max(-VERTEX.z, 0.15);
-	vec3 seen = textureLod(screen, clamp(SCREEN_UV + NORMAL.xy * vec2(-1.0, bend_y) * k, vec2(0.0), vec2(1.0)), frost * 4.0).rgb;
+	vec2 bent = clamp(SCREEN_UV + NORMAL.xy * vec2(-1.0, bend_y) * k, vec2(0.0), vec2(1.0));
+	// ONLY WHAT IS BEHIND IT: the screen holds what stands in front of the glass too, and a card held up
+	// before a glass block was bent into it beside the card's own edge - a white strip that moved with the
+	// card (true-tarot 626717, every card held up). A bent sample nearer the lens than this point of the
+	// glass is not seen through it: the line of sight goes straight through instead
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+	vec3 ndc = vec3(bent, textureLod(depth, bent, 0.0).r) * 2.0 - 1.0;
+#else
+	vec3 ndc = vec3(bent * 2.0 - 1.0, textureLod(depth, bent, 0.0).r);
+#endif
+	vec4 there = INV_PROJECTION_MATRIX * vec4(ndc, 1.0);
+	if (-there.z / there.w < -VERTEX.z) {
+		bent = SCREEN_UV;
+	}
+	vec3 seen = textureLod(screen, bent, frost * 4.0).rgb;
 	vec3 tint = mix(vec3(1.0), color, 0.55);
 	// milky where it is not clear: some of its own color, lit
 	ALBEDO = color * 0.6 * frost;

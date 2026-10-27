@@ -104,7 +104,7 @@ var flourish: float = 1.0
 ## deliberately not the remembered setting).
 var medium := "full"
 ## A MEDIUM PINNED BY THE MODE THAT IS UP, for its sessions only: "" when the author's [member
-## medium] applies. Never saved - the Cards mode shows every reading on its table, and leaving it
+## medium] applies. Never saved - the Table mode shows every reading on its table, and leaving it
 ## must hand the next session back the medium the author chose. [method resolved_medium] honors
 ## it under an explicit `--medium`, and the exporter passes what that resolves to, so a render of
 ## a pinned session is drawn in the same medium.

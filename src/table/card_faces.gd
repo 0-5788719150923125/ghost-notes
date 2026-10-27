@@ -4,7 +4,7 @@ class_name CardFaces
 ## CardFaces - a card's face, its back and its booklet page, composed in 2D for the table.
 ##
 ## THE PAINTER PAINTS PICTURES; THE DECK PRINTS CARDS. A generated picture is the card's
-## illustration and nothing else (see [CardPrompts.card_image]) - the stock, the frame, the
+## illustration and nothing else (see [TablePrompts.card_image]) - the stock, the frame, the
 ## numeral and the name are printed around it here, from the episode's look, so every card of a
 ## deck shares one frame exactly and every name is spelled right. The back is the same: the
 ## painted design inside the deck's frame.
@@ -17,9 +17,15 @@ class_name CardFaces
 const ASPECT := 70.0 / 120.0
 const FACE_PX := Vector2i(560, 960)
 
+## A face's pixels: its SHORT side [constant FACE_PX]'s width - a card held sideways as sharp across its height as a
+## tall one across its width - or, for a written card's lines of writing, [constant WRITTEN_PX].
 static func face_px(look: Dictionary) -> Vector2i:
 	var size := CardTable.card_size(look)
-	return Vector2i(FACE_PX.x, roundi(float(FACE_PX.x) * size.y / size.x))
+	var short := WRITTEN_PX if CardTable.written(look) else FACE_PX.x
+	if size.x > size.y:
+		return Vector2i(roundi(float(short) * size.x / size.y), short)
+	return Vector2i(short, roundi(float(short) * size.y / size.x))
+const WRITTEN_PX := 720
 ## The booklet page: a little white booklet's page, a touch narrower than the card is tall.
 const PAGE_PX := Vector2i(660, 940)
 const PAGE_ASPECT := float(PAGE_PX.x) / float(PAGE_PX.y)
@@ -330,8 +336,10 @@ static func ornament(ci: CanvasItem, look: Dictionary, ink: Color, accent: Color
 ## A BORDERLESS card's picture is the whole card, face and back: its type is set over it ([method type_boxes]).
 static func window(back := false, look: Dictionary = {}) -> Rect2:
 	var sz := Vector2(face_px(look))
-	if borderless(look):
+	if borderless(look) or (back and CardTable.written(look)):
 		return Rect2(Vector2.ZERO, sz)
+	if CardTable.written(look):
+		return sketch_rect(look)
 	var m := sz.x * 0.06
 	if ornament_of(look) != "none":
 		m = sz.x * (ORNAMENT_INSET + ORNAMENT_BAND + frame_reach(look))
@@ -365,7 +373,96 @@ const BACK_PAD := 0.012
 ## borderless one sets that text over its painting, which still fills the card.
 static func front_window(look: Dictionary, details := false) -> Rect2:
 	var full := window(false, look)
+	if CardTable.written(look):
+		return full
 	return Rect2(full.position, Vector2(full.size.x, full.size.y * 0.48)) if details and not borderless(look) else full
+
+
+## WHERE A WRITTEN CARD'S PICTURE SITS ([constant CardTable.SKETCHES]), pixels: a square in the top corner beside
+## its title, or a band across its top.
+static func sketch_rect(look: Dictionary) -> Rect2:
+	var sz := Vector2(face_px(look))
+	var m := minf(sz.x, sz.y) * WRITTEN_MARGIN
+	var f: Dictionary = look.get("frame", {}) if look.get("frame") is Dictionary else {}
+	if String(f.get("sketch", "corner")) == "band":
+		return Rect2(m, m, sz.x - 2.0 * m, sz.y * 0.3)
+	var side := minf(sz.x, sz.y) * SKETCH_SIDE
+	return Rect2(sz.x - m - side, m, side, side)
+
+
+## A written card's margin and its corner picture's side, shares of the card's short side.
+const WRITTEN_MARGIN := 0.06
+const SKETCH_SIDE := 0.36
+## Its lines' pitch at the largest and the smallest, shares of the short side: the writing set as large as lets
+## every line fit.
+const PITCH := Vector2(0.115, 0.05)
+
+
+## A WRITTEN CARD'S WRITING LAID OUT ([member Face.writing]): its title [param title] on the head line, and
+## [param lines] each on a rule of its own, wrapped onto the next one, indented, where it runs long - beside a corner
+## picture, a line stops short of it. As large as fits every line, from [constant PITCH]'s largest down; past its
+## smallest, what does not fit is left off with an ellipsis. `{pitch, size, head, rules: [y], title: {at, size},
+## rows: [{text, at}]}` - pixels, in [param font] at its hand's [param scale] ([constant CardTable.HANDS]).
+static func written_layout(look: Dictionary, title: String, lines: PackedStringArray, font: Font, scale := 1.0) -> Dictionary:
+	var sz := Vector2(face_px(look))
+	var short := minf(sz.x, sz.y)
+	var m := short * WRITTEN_MARGIN
+	var pic := sketch_rect(look)
+	var corner := pic.position.y <= m + 0.5 and pic.size.x < sz.x * 0.6
+	var head := (m + short * 0.17) if corner else (pic.end.y + short * 0.13)
+	var title_w := (pic.position.x - m * 1.5) if corner else (sz.x - 2.0 * m)
+	var ts := mini(int(short * 0.1), _fit(font, title, int(short * 0.1), title_w))
+	var out := {"head": head, "title": {"at": Vector2(m, head - font.get_descent(ts) - short * 0.012), "size": ts, "width": title_w}}
+	var bottom := sz.y - m * 0.7
+	var px := short * PITCH.x
+	while true:
+		var fs := int(px * 0.74 * scale)
+		var indent := float(fs) * 0.9
+		var rows: Array = []
+		var y := head + px
+		var fits := true
+		for line in lines:
+			var words := String(line).strip_edges().split(" ", false)
+			var cur := ""
+			var lead := 0.0
+			var k := 0
+			while fits and k <= words.size():
+				# the rule's room: short of a corner picture beside it
+				var right := (pic.position.x - m * 0.6) if corner and y - px * 0.25 < pic.end.y else (sz.x - m)
+				if k < words.size():
+					var next := words[k] if cur.is_empty() else cur + " " + words[k]
+					if cur.is_empty() or font.get_string_size(next, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= right - m - lead:
+						cur = next
+						k += 1
+						continue
+				if cur.is_empty():
+					break
+				if y > bottom:
+					fits = false
+					break
+				rows.append({"text": cur, "at": Vector2(m + lead, y - px * 0.16)})
+				y += px
+				cur = ""
+				lead = indent
+				if k >= words.size():
+					break
+			if not fits:
+				break
+		if fits or px <= short * PITCH.y:
+			if not fits and not rows.is_empty():
+				(rows[rows.size() - 1] as Dictionary)["text"] = String((rows[rows.size() - 1] as Dictionary)["text"]) + " ..."
+			var rules: Array = []
+			var ry := head + px
+			while ry <= bottom + 0.5:
+				rules.append(ry)
+				ry += px
+			out["pitch"] = px
+			out["size"] = fs
+			out["rows"] = rows
+			out["rules"] = rules
+			return out
+		px = maxf(short * PITCH.y, px - 1.0)
+	return out
 
 
 static func borderless(look: Dictionary) -> bool:
@@ -676,6 +773,13 @@ class Face:
 		var accent := CardTable.color(String(frame.get("accent", "#c9a227")))
 		# the whole face is stock: the card's slab is cut to its corners ([method CardTable.corner_radius])
 		draw_rect(Rect2(Vector2.ZERO, sz), stock)
+		# A WRITTEN CARD is ruled first, its picture laid on the stock, its writing over the rules
+		var written := CardTable.written(look) and not back
+		var layout := {}
+		if written:
+			var wr := _writing_of()
+			layout = CardFaces.written_layout(look, String(wr["title"]), wr["lines"], _hand(), float(_hand_row().get("scale", 1.0)))
+			_ruling(layout, sz, accent)
 		var win := CardFaces.window(true, look) if back else CardFaces.front_window(look, details)
 		var shape := CardFaces.window_of(look)
 		# a back's arch is fitted to its design ([method CardFaces.back_arch]); the painting stays as it lies in win
@@ -692,12 +796,15 @@ class Face:
 		else:
 			CardFaces._placeholder(self, win, look.get("palette", []),
 				hash([seed, String(card.get("key", "back"))]), hole)
-		# a borderless card is its painting: no rules round it, no ornament, its type set on it
+		# a borderless card is its painting: no rules round it, no ornament, its type set on it - and a written one
+		# is its writing
 		var bare_card := CardFaces.borderless(look)
-		if not bare_card:
+		if not bare_card and not CardTable.written(look):
 			_frame(style, shape, frame_win, ink, accent, sz, dome)
 			CardFaces.ornament(self, look, ink, accent)
-		if details and not back:
+		if written:
+			_writing(layout, ink, sz)
+		elif details and not back:
 			_printed_front(win, stock, ink, accent)
 		elif not back and not anonymous:
 			if bare_card:
@@ -706,6 +813,77 @@ class Face:
 				_lettering(win, ink, sz)
 		elif printed:
 			_printed_back(win, stock, ink, accent)
+
+	## WHAT A WRITTEN CARD SAYS: its designer's `writing` - its title and its lines - else its name, and its entry's
+	## text a line to each line written.
+	func _writing_of() -> Dictionary:
+		var w: Dictionary = card.get("writing", {}) if card.get("writing") is Dictionary else {}
+		var lines := PackedStringArray(DataPath.strings(w.get("lines", [])))
+		if lines.is_empty() and card.get("booklet") is Dictionary:
+			lines = String((card["booklet"] as Dictionary).get("upright", "")).split("\n", false)
+		return {"title": String(w.get("title", card.get("name", ""))) if not anonymous else "", "lines": lines if not anonymous else PackedStringArray()}
+
+	## The hand a written card is written in ([constant CardTable.HANDS]), its row and its font.
+	func _hand_row() -> Dictionary:
+		var f: Dictionary = look.get("frame", {}) if look.get("frame") is Dictionary else {}
+		return CardTable.HANDS.get(String(f.get("hand", "neat")), CardTable.HANDS["neat"])
+
+	func _hand() -> Font:
+		return CardTable.font(String(_hand_row()["file"]))
+
+	## A WRITTEN CARD'S STOCK, ruled ([constant CardTable.RULINGS]) to [param layout]'s pitch ([method
+	## CardFaces.written_layout]): faint blue lines from edge to edge under a line of [param accent] below the title, or
+	## graph paper's squares - or nothing, on plain stock.
+	func _ruling(layout: Dictionary, sz: Vector2, accent: Color) -> void:
+		var f: Dictionary = look.get("frame", {}) if look.get("frame") is Dictionary else {}
+		var kind := String(f.get("ruling", "ruled"))
+		if kind == "plain" or layout.is_empty():
+			return
+		var head := float(layout["head"])
+		var px := float(layout["pitch"])
+		var w := maxf(1.5, minf(sz.x, sz.y) * 0.003)
+		if kind == "grid":
+			var step := px * 0.5
+			var x := fposmod(sz.x * 0.5, step)
+			while x < sz.x:
+				draw_line(Vector2(x, 0.0), Vector2(x, sz.y), Color(RULE_BLUE, 0.3), w * 0.6)
+				x += step
+			var y := fposmod(head, step)
+			while y < sz.y:
+				draw_line(Vector2(0.0, y), Vector2(sz.x, y), Color(RULE_BLUE, 0.3), w * 0.6)
+				y += step
+		else:
+			for ry in layout["rules"]:
+				draw_line(Vector2(0.0, float(ry)), Vector2(sz.x, float(ry)), RULE_BLUE, w)
+		draw_line(Vector2(0.0, head), Vector2(sz.x, head), Color(accent, 0.85), w * 1.4)
+
+	## An index card's blue.
+	const RULE_BLUE := Color(0.42, 0.58, 0.82, 0.55)
+
+	## A WRITTEN CARD'S WRITING, as [param layout] sets it, in [param ink] - or, on a card nobody wrote (one of a box's
+	## own, [member anonymous]), ink scribbled where a title and a few lines would be.
+	func _writing(layout: Dictionary, ink: Color, sz: Vector2) -> void:
+		var hand := _hand()
+		var t: Dictionary = layout["title"]
+		if anonymous:
+			var rng := RandomNumberGenerator.new()
+			rng.seed = hash([seed, String(card.get("key", "")), "scribbles"])
+			var px := float(layout["pitch"])
+			var m := minf(sz.x, sz.y) * CardFaces.WRITTEN_MARGIN
+			var scrawl := func(x0: float, x1: float, y: float, thick: float) -> void:
+				var x := x0
+				while x < x1 - thick:
+					var run := minf(thick * rng.randf_range(2.0, 7.0), x1 - x)
+					draw_rect(Rect2(x, y - thick, run, thick), Color(ink, 0.5))
+					x += run + thick * 1.1
+			scrawl.call(m, m + float(t["width"]) * rng.randf_range(0.4, 0.75), (t["at"] as Vector2).y, px * 0.2)
+			var rules: Array = layout["rules"]
+			for i in mini(rules.size(), rng.randi_range(3, maxi(3, rules.size()))):
+				scrawl.call(m, sz.x * rng.randf_range(0.35, 0.85), float(rules[i]) - px * 0.2, px * 0.12)
+			return
+		draw_string(hand, t["at"], String(_writing_of()["title"]), HORIZONTAL_ALIGNMENT_LEFT, float(t["width"]), int(t["size"]), ink)
+		for r in layout["rows"]:
+			draw_string(hand, (r as Dictionary)["at"], String((r as Dictionary)["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, int(layout["size"]), ink)
 
 	## THE PAINTING NO TYPE IS SET OVER on this front ([method CardFaces.bare]) - where foil may key it.
 	func bare() -> Rect2:

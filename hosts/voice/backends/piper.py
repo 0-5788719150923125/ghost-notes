@@ -1024,7 +1024,8 @@ def _quiet_lead(audio, edges: dict, group: list, params: dict, sr: int):
     return audio if out is None else out
 
 
-def _trail(audio, edges: dict, group: list, params: dict, sr: int, hisses=None):
+def _trail(audio, edges: dict, group: list, params: dict, sr: int, hisses=None,
+           walk_back=None, through: bool = False):
     """The fade and the sag of `TRAIL_*`, on each word that comes before a mid-sentence mark
     or a rest the caller splices in (`REST_AFTER_FLOOR`).
 
@@ -1035,6 +1036,11 @@ def _trail(audio, edges: dict, group: list, params: dict, sr: int, hisses=None):
     words that end on a hiss (`_hiss_codas`): theirs is found and left at the model's own level,
     the voice ending before it (see `_HISSES`). Returns a copy with the words changed, or
     `audio` itself where none is.
+
+    `walk_back` is how far the next word's start is walked back over sound (None: TRAIL_EARLY).
+    `through`: where the voice runs right up to the next word, the way back up (TRAIL_BACK) runs
+    on into it rather than shrinking to a one-sample step - 16 dB on sounding voice, heard as the
+    next word cut in (2026-10-26, Kokoro reading "haven't you, my love" straight through).
     """
     import numpy as np
 
@@ -1050,6 +1056,7 @@ def _trail(audio, edges: dict, group: list, params: dict, sr: int, hisses=None):
     out = np.array(audio, dtype=np.float32, copy=True)
     n_env = max(1, int(round(0.010 * sr)))
     guard = int(round(0.010 * sr))
+    reach = int(round((TRAIL_EARLY if walk_back is None else float(walk_back)) * sr))
     for ti, w in todo:
         first, last = (int(round(float(x) * sr)) for x in edges[ti])
         nxt = edges.get(ti + 1)
@@ -1058,7 +1065,7 @@ def _trail(audio, edges: dict, group: list, params: dict, sr: int, hisses=None):
         # sound does when that is before the plan's figure: never faded, and never mistaken
         # for this word's voice
         limit = _hiss_from(audio, last, limit, sr, peak)
-        early = max(last, limit - int(round(TRAIL_EARLY * sr)))
+        early = max(last, limit - reach)
         limit = _sound_from(audio, early, limit, sr, peak)
         lo = max(first, last - int(round(0.12 * sr)))
         hi = min(limit - guard, last + int(round(0.25 * sr)))
@@ -1093,8 +1100,11 @@ def _trail(audio, edges: dict, group: list, params: dict, sr: int, hisses=None):
                 _glide(out, end - span, end, end, TRAIL_SAG * w, stop, sr)
         depth = TRAIL_DB * w
         base = end - tip
+        back = int(round(TRAIL_BACK * sr))
+        if through and tail is None:
+            stop = max(stop, min(out.size, end + back))
         n = stop - base
-        back = min(int(round(TRAIL_BACK * sr)), stop - end)
+        back = min(back, stop - end)
         if tail is None:
             g = np.full(n, -depth)
             g[:tip] = -depth * (np.arange(tip) / float(tip)) ** 2
@@ -2123,6 +2133,12 @@ class PiperBackend(Backend):
     # it long). A model that floors no rest (kokoro.py) makes no lead.
     trails = True
     quiets_lead = True
+    # How far the trail walks the next word's start back over sound (None: TRAIL_EARLY, read when it is
+    # made), and whether its way back up may run on into the next word. A model whose corrected plan says
+    # where the next word starts, and which holds a word straight into it at a comma (kokoro.py), walks
+    # back none and lets the return run on.
+    trail_early = None
+    trail_through = False
 
     @classmethod
     def describe(cls) -> dict:
@@ -3007,7 +3023,8 @@ class PiperBackend(Backend):
             if self.quiets_lead:
                 audio = _quiet_lead(audio, edges, group, params, sr)
             if self.trails:
-                audio = _trail(audio, edges, group, params, sr, dict(self._last_hisses))
+                audio = _trail(audio, edges, group, params, sr, dict(self._last_hisses),
+                               walk_back=self.trail_early, through=self.trail_through)
             # SAY WHICH WORDS CAME BACK WITHOUT A SPAN. ghost keeps them in the karaoke line
             # either way now (it interpolates their timing - see
             # GenerativeEditor._bridge_words), but a token the aligner cannot place is a real

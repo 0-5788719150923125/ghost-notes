@@ -65,19 +65,19 @@ A few programs are part of the system or keep their own logins, so they stay you
 - **tar**, Linux, macOS - Unpacks ghost's own TeX, which TinyTeX publishes as a .tar.xz on Linux and macOS (GNU tar hands the .xz to the xz program; macOS's tar reads it itself). Windows gets a zip, which ghost opens itself.
   - Linux: `sudo pacman -S tar xz   ·   sudo apt install tar xz-utils   ·   sudo dnf install tar xz`
   - macOS: `part of macOS`
-- **Claude Code CLI** - A writer for the Cards mode (its plan, booklet and reading), and the Assistant (the 💬 panel's picker): with it chosen, a note left in the ` feedback console is dispatched to Claude Code as a one-shot fix against this checkout. It keeps its own login, so it stays yours to install, and it runs only when asked.
+- **Claude Code CLI** - A writer for the Table mode (its plan, booklet and reading), and the Assistant (the 💬 panel's picker): with it chosen, a note left in the ` feedback console is dispatched to Claude Code as a one-shot fix against this checkout. It keeps its own login, so it stays yours to install, and it runs only when asked.
   - Linux: `curl -fsSL https://claude.ai/install.sh | bash`
   - macOS: `curl -fsSL https://claude.ai/install.sh | bash`
   - Windows: `irm https://claude.ai/install.ps1 | iex   (PowerShell)   ·   winget install Anthropic.ClaudeCode`
-- **OpenAI Codex CLI** - The Cards mode's painter (and a writer it can pick), the pictures the book and notebook media print - both through Codex's built-in image generation - and the Assistant dropdown's Codex option (a ` feedback note dispatched to Codex as a one-shot fix against this checkout). It keeps its own login, so it stays yours to install, and it runs only when asked.
+- **OpenAI Codex CLI** - The Table mode's painter (and a writer it can pick), the pictures the book and notebook media print - both through Codex's built-in image generation - and the Assistant dropdown's Codex option (a ` feedback note dispatched to Codex as a one-shot fix against this checkout). It keeps its own login, so it stays yours to install, and it runs only when asked.
   - Linux: `curl -fsSL https://chatgpt.com/codex/install.sh | sh`
   - macOS: `curl -fsSL https://chatgpt.com/codex/install.sh | sh`
   - Windows: `npm install -g @openai/codex   (needs Node.js)`
-- **Grok Build CLI (xAI)** - xAI's Grok as a writer and a painter: the Cards mode's words, and its pictures and the book's and notebook's through Grok's built-in image tools. Run with no memory and none of the setup it would borrow from Claude, Cursor or Codex, and each run's session deleted once it ends. It keeps its own login, so it stays yours to install, and it runs only when asked.
+- **Grok Build CLI (xAI)** - xAI's Grok as a writer and a painter: the Table mode's words, and its pictures and the book's and notebook's through Grok's built-in image tools. Run with no memory and none of the setup it would borrow from Claude, Cursor or Codex, and each run's session deleted once it ends. It keeps its own login, so it stays yours to install, and it runs only when asked.
   - Linux: `curl -fsSL https://x.ai/cli/install.sh | bash`
   - macOS: `curl -fsSL https://x.ai/cli/install.sh | bash`
   - Windows: `irm https://x.ai/cli/install.ps1 | iex   (PowerShell)`
-- **AWS CLI** - Amazon Bedrock, as a writer and a painter: Amazon's own Nova models and the open models Bedrock hosts for the Cards mode's words, Stability AI's image models for its pictures and the book's illustrations. Called with your AWS credentials and region (set them with `aws configure`) and billed per token or per picture to your AWS account, so it runs only when asked.
+- **AWS CLI** - Amazon Bedrock, as a writer and a painter: Amazon's own Nova models and the open models Bedrock hosts for the Table mode's words, Stability AI's image models for its pictures and the book's illustrations. Called with your AWS credentials and region (set them with `aws configure`) and billed per token or per picture to your AWS account, so it runs only when asked.
   - Linux: `curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip && unzip awscliv2.zip && sudo ./aws/install   ·   Arch: sudo pacman -S aws-cli-v2`
   - macOS: `brew install awscli   ·   or the installer: https://awscli.amazonaws.com/AWSCLIV2.pkg`
   - Windows: `winget install Amazon.AWSCLI   ·   or msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi`

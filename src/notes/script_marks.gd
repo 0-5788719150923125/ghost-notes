@@ -24,11 +24,11 @@ class_name ScriptMarks
 ## or an agent is told to honor it. Those are offered ("cards" in `modes`), each saying what it
 ## does THERE (`blurbs`): a speaker cue gives the show another voice, a `## Cards` section is its
 ## deck, a macro reads as its default and a note to self is taken out before any agent sees the
-## brief ([method CardPrompts.brief]), and a hesitation, a delivery or a stressed word stands in
-## a line the brief gives the host word for word (rules/cards/reader.yaml, `spoken`). The marks of
+## brief ([method TablePrompts.brief]), and a hesitation, a delivery or a stressed word stands in
+## a line the brief gives the host word for word (rules/table/reader.yaml, `spoken`). The marks of
 ## a page or a tablet (pictures, scene lines, web pages) and the inline pronunciation are not: the
 ## table is the only medium there, its pictures are the painter's, and a reader's passage keeps no
-## bracket ([method CardProducer.clean_spoken]).
+## bracket ([method TableProducer.clean_spoken]).
 
 ## Fields of an entry:
 ##   label    the palette button
@@ -58,8 +58,8 @@ const REGISTRY := {
 		"group": "voices",
 		"blurb": "Hands everything after it to the named voice, until the next cue. The panel's voices list follows the names the script uses. Must be a line of its own, or it is only a note.",
 		"before": "<!-- speaker: ", "fill": "Name", "after": " -->", "line": "own",
-		"modes": ["generative", "cards"],
-		"blurbs": {"cards": "Gives the show another voice by this name: a tab of its own on the Voice card, and the reader writes its lines and hands them over. Say in the brief who it is and when it speaks. Must be a line of its own."},
+		"modes": ["generative", "table"],
+		"blurbs": {"table": "Gives the show another voice by this name: a tab of its own on the Voice card, and the reader writes its lines and hands them over. Say in the brief who it is and when it speaks. Must be a line of its own."},
 		"pattern": "(?m)^[ \\t]*(?:<!--\\s*speaker\\s*:\\s*.+?\\s*-->|\\[\\s*speaker\\s*:\\s*[^\\]]+?\\s*\\])[ \\t]*$",
 	},
 	"hesitation": {
@@ -67,8 +67,8 @@ const REGISTRY := {
 		"group": "timing",
 		"blurb": "A longer rest at exactly this point, mid-sentence included. Its length is the panel's Hesitate dial.",
 		"before": "<!-- hesitation -->", "fill": "", "after": "", "line": "",
-		"modes": ["generative", "cards"],
-		"blurbs": {"cards": "In a line the brief gives the host to say word for word, a rest at exactly this point; its length is the Voice card's Hesitate dial. Everywhere else the reader places its own."},
+		"modes": ["generative", "table"],
+		"blurbs": {"table": "In a line the brief gives the host to say word for word, a rest at exactly this point; its length is the Voice card's Hesitate dial. Everywhere else the reader places its own."},
 		"pattern": Manuscript.HESITATION,
 	},
 	"delivery": {
@@ -76,8 +76,8 @@ const REGISTRY := {
 		"group": "timing",
 		"blurb": "Lean how the rest of this paragraph is said, a step at a time: quicker / slower, brighter / graver, tighter / looser (pauses), louder / softer, or excited, serious, hushed, urgent, playful, tender, dry; steady is the voice's own. Small, and eased in and out over a few sentences.",
 		"before": "<!-- delivery: ", "fill": "quicker, brighter", "after": " -->", "line": "own",
-		"modes": ["generative", "cards"],
-		"blurbs": {"cards": "On a line of its own before words the brief gives the host to say word for word: leans how they are said - quicker / slower, brighter / graver, tighter / looser, louder / softer, or excited, serious, hushed, urgent, playful, tender, dry. Everywhere else the reader chooses its own."},
+		"modes": ["generative", "table"],
+		"blurbs": {"table": "On a line of its own before words the brief gives the host to say word for word: leans how they are said - quicker / slower, brighter / graver, tighter / looser, louder / softer, or excited, serious, hushed, urgent, playful, tender, dry. Everywhere else the reader chooses its own."},
 		"pattern": Manuscript.DELIVERY,
 	},
 	"hesitation_timed": {
@@ -85,8 +85,8 @@ const REGISTRY := {
 		"group": "timing",
 		"blurb": "A rest of exactly this many seconds, whatever the Hesitate dial says.",
 		"before": "<!-- hesitation: ", "fill": "2.5", "after": " -->", "line": "",
-		"modes": ["generative", "cards"],
-		"blurbs": {"cards": "In a line the brief gives the host to say word for word, a rest of exactly this many seconds."},
+		"modes": ["generative", "table"],
+		"blurbs": {"table": "In a line the brief gives the host to say word for word, a rest of exactly this many seconds."},
 		"pattern": Manuscript.HESITATION,
 	},
 	"timestamp": {
@@ -158,8 +158,8 @@ const REGISTRY := {
 		"group": "text",
 		"blurb": "A placeholder for a fact only the book's build knows. Ghost Notes reads the default after the colon, never the macro itself; one with no default is skipped and named in the panel.",
 		"before": "${", "fill": "CHAPTERS_BEFORE:twenty-one", "after": "}", "line": "",
-		"modes": ["generative", "synthesis", "cards"],
-		"blurbs": {"cards": "A placeholder for a fact only the build knows. The agents are handed the default after the colon, never the macro itself; one with no default is left out."},
+		"modes": ["generative", "synthesis", "table"],
+		"blurbs": {"table": "A placeholder for a fact only the build knows. The agents are handed the default after the colon, never the macro itself; one with no default is left out."},
 		"pattern": "\\$\\{[A-Za-z_][A-Za-z0-9_.]*(?::(?:[^{}]|\\{[^{}]*\\})*)?\\}",
 	},
 	"deck": {
@@ -167,7 +167,7 @@ const REGISTRY := {
 		"group": "deck",
 		"blurb": "Opens the show's own deck: every list item under this heading, down to the next heading of its level, is a card, and each episode's cards are a seeded shuffle of them. A brief with no such section leaves each episode's cards to the producer.",
 		"before": "## Cards", "fill": "", "after": "", "line": "own",
-		"modes": ["cards"],
+		"modes": ["table"],
 		"pattern": "(?im)^#{1,6}[ \\t]*(?:the[ \\t]+)?cards[ \\t]*:?[ \\t]*$",
 	},
 	"suit": {
@@ -175,7 +175,7 @@ const REGISTRY := {
 		"group": "deck",
 		"blurb": "Inside the deck: names the group the cards listed under it belong to - a suit, an arcana, a team.",
 		"before": "### ", "fill": "Major Arcana", "after": "", "line": "start",
-		"modes": ["cards"], "within": "deck",
+		"modes": ["table"], "within": "deck",
 		"pattern": "(?m)^#{1,6}[ \\t]+.+$",
 	},
 	"card": {
@@ -183,7 +183,7 @@ const REGISTRY := {
 		"group": "deck",
 		"blurb": "Inside the deck: one card - its name, then what it means after a colon. A numeral may lead it (XVI. The Tower). A writer is handed a card's meaning only once that card is drawn.",
 		"before": "- ", "fill": "The Tower: sudden upheaval, a structure that was never sound", "after": "", "line": "start",
-		"modes": ["cards"], "within": "deck",
+		"modes": ["table"], "within": "deck",
 		"pattern": "(?m)^[ \\t]*(?:[-*+]|\\d+[.)])[ \\t]+.+$",
 	},
 	"heading": {
@@ -191,8 +191,8 @@ const REGISTRY := {
 		"group": "typography",
 		"blurb": "Spoken like any line, set as a heading on the page. The frontmatter's title is read first on its own.",
 		"before": "# ", "fill": "Heading", "after": "", "line": "start",
-		"modes": ["generative", "synthesis", "cards"],
-		"blurbs": {"cards": "A section of the brief, for the agents to find their way by. One heading is read by Ghost Notes itself: Cards, the show's deck."},
+		"modes": ["generative", "synthesis", "table"],
+		"blurbs": {"table": "A section of the brief, for the agents to find their way by. One heading is read by Ghost Notes itself: Cards, the show's deck."},
 		"pattern": "(?m)^#{1,6}[ \\t].*$",
 	},
 	"scene_line": {
@@ -208,8 +208,8 @@ const REGISTRY := {
 		"group": "typography",
 		"blurb": "Shown in italics in the subtitles and on the page, and a word or a few so marked is hit: held longer and said louder. A longer run is typography, said plainly. The asterisks are never spoken.",
 		"before": "*", "fill": "emphasized", "after": "*", "line": "",
-		"modes": ["generative", "synthesis", "cards"],
-		"blurbs": {"cards": "In a line the brief gives the host to say word for word, the word the voice hits, shown in italics in the subtitle. Anywhere else it is emphasis for the agents reading the brief."},
+		"modes": ["generative", "synthesis", "table"],
+		"blurbs": {"table": "In a line the brief gives the host to say word for word, the word the voice hits, shown in italics in the subtitle. Anywhere else it is emphasis for the agents reading the brief."},
 		"pattern": "(?<![*\\w])\\*(?![*\\s])[^*\\n]*?[^*\\s]\\*(?![*\\w])|(?<![*\\w])\\*[^*\\s]\\*(?![*\\w])",
 	},
 	"bold": {
@@ -217,8 +217,8 @@ const REGISTRY := {
 		"group": "typography",
 		"blurb": "Shown in bold in the subtitles and on the page, and a word or a few so marked is hit harder than an italic one. The asterisks are never spoken.",
 		"before": "**", "fill": "strong", "after": "**", "line": "",
-		"modes": ["generative", "synthesis", "cards"],
-		"blurbs": {"cards": "In a line the brief gives the host to say word for word, the word the voice hits hardest, shown in bold in the subtitle. Anywhere else it is emphasis for the agents reading the brief."},
+		"modes": ["generative", "synthesis", "table"],
+		"blurbs": {"table": "In a line the brief gives the host to say word for word, the word the voice hits hardest, shown in bold in the subtitle. Anywhere else it is emphasis for the agents reading the brief."},
 		"pattern": "\\*\\*(?![*\\s])[^*\\n]*?\\*\\*",
 	},
 	"rule": {
@@ -322,8 +322,8 @@ const REGISTRY := {
 		"group": "notes",
 		"blurb": "Any other HTML comment is an authoring note: never spoken, never printed.",
 		"before": "<!-- ", "fill": "a note to yourself", "after": " -->", "line": "",
-		"modes": ["generative", "synthesis", "cards"],
-		"blurbs": {"cards": "Any other HTML comment is a note to yourself: taken out of the brief before any agent is handed it."},
+		"modes": ["generative", "synthesis", "table"],
+		"blurbs": {"table": "Any other HTML comment is a note to yourself: taken out of the brief before any agent is handed it."},
 		"pattern": Manuscript.COMMENT,
 	},
 }

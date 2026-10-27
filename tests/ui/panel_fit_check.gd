@@ -76,9 +76,9 @@ func _run() -> void:
 	add_child(_synth._panel)
 
 	_cards = ReadingPanel.new()
-	_cards.workspace = "cards"
+	_cards.workspace = "table"
 	_cards._build_panel()
-	_show = _cards._block_cards["cards"]
+	_show = _cards._block_cards["table"]
 	_cards.remove_child(_cards._panel)
 	add_child(_cards._panel)
 	_cards.remove_child(_cards._cast._repace_timer)
@@ -117,6 +117,7 @@ func _run() -> void:
 	await _check_width("Proof", _proof._panel)
 	await _check_long_items_would_widen()
 	await _check_episode_entry_follows()
+	await _check_rows_named()
 	await _check_short_panel_is_not_stretched()
 	await _check_the_old_arrangement_overflows()
 	await _check_wheel_skips_sliders(_ed._panel)
@@ -307,9 +308,9 @@ func _rows_in(body: Control) -> int:
 ## Two episodes on disk, under a root of the gate's own, with titles as long as a writer makes
 ## them, and the Cards panel pointed at them - its episode list and its rows then hold them.
 func _cards_episodes() -> void:
-	CardEpisode.root = "user://panel_fit_check_cards"
+	TableEpisode.root = "user://panel_fit_check_cards"
 	for seed in [11, 12]:
-		var ep := CardEpisode.open("fit-check", seed)
+		var ep := TableEpisode.open("fit-check", seed)
 		ep.write_json("plan", {"episode_title": "Why You Keep Waking Up At 4AM (And What The Universe Is "
 			+ "Trying To Tell You - It Is Usually Your Bladder) #%d" % seed,
 			"spread": {"positions": [{"name": "Past"}, {"name": "Present"}, {"name": "Future"}]}})
@@ -345,14 +346,14 @@ func _check_width(name: String, panel: SidePanel_) -> void:
 ## entry before the panel looks again - the stale one the report was about.
 func _check_episode_entry_follows() -> void:
 	var pick: OptionButton = _show._episode_pick
-	var fresh := CardEpisode.open("fit-check", 13)
+	var fresh := TableEpisode.open("fit-check", 13)
 	DirAccess.remove_absolute(fresh.file_of("plan"))       # a run before this one made it
 	_show._knobs["seed"] = 13
 	_show._open_episode()
 	var at := _show._episode_seeds.find(13)
 	_ok(at >= 0 and pick.get_item_text(at).ends_with("(not made yet)"),
 		"a fresh episode is listed as not made yet (%s)" % (pick.get_item_text(at) if at >= 0 else "missing"))
-	CardEpisode.open("fit-check", 13).write_json("plan", {"episode_title": "Made While You Watched",
+	TableEpisode.open("fit-check", 13).write_json("plan", {"episode_title": "Made While You Watched",
 		"spread": {"positions": [{"name": "Past"}]}})
 	_ok(pick.get_item_text(at).ends_with("(not made yet)"), "control: the entry is stale until the panel looks again")
 	_show._refresh_rows()
@@ -360,6 +361,42 @@ func _check_episode_entry_follows() -> void:
 		and pick.text.ends_with("Made While You Watched"),
 		"its entry takes the title once the plan lands, shown on the button (%s)" % pick.text)
 	DirAccess.remove_absolute(fresh.file_of("plan"))
+	_show._knobs["seed"] = 11
+	_show._open_episode()
+
+
+## THE ROWS ARE WHAT THE EPISODE HAS, CALLED WHAT ITS PRODUCER CALLS THEM (2026-10-26: "Shuffle" and "Card"
+## rows on an alchemy show): the plan's own word names each beat's row, with the beat's name beside it; the draw's
+## row is there only where cards are drawn, and the work's only where there is work - and the panel keeps its width
+## with a long word. The control: a plan that names no word has its cards' rows called Card.
+func _check_rows_named() -> void:
+	var titles := func() -> Array:
+		return _show._row_widgets.map(func(w: Dictionary) -> String: return (w["name"] as Label).text)
+	var text_of := func(title: String) -> String:
+		for w in _show._row_widgets:
+			if ((w as Dictionary)["name"] as Label).text == title:
+				return ((w as Dictionary)["text"] as Label).text
+		return ""
+	var ep := TableEpisode.open("fit-check", 14)
+	ep.write_json("plan", {"episode_title": "Brewed", "beat_word": "Ingredient",
+		"spread": {"positions": [{"name": "The Last-Light Base"}, {"name": "The Heart of the Brew"}]}})
+	_show._knobs["seed"] = 14
+	_show._open_episode()
+	var got: Array = titles.call()
+	_ok(got.has("Ingredient 1") and got.has("Ingredient 2") and got.has("Draw") and not got.has("Card 1") and not got.has("Work"),
+		"a plan's word names its beats' rows, and no work has no Work row: %s" % str(got))
+	_ok(String(text_of.call("Ingredient 1")).begins_with("The Last-Light Base"), "a beat's row shows its name: %s" % text_of.call("Ingredient 1"))
+	await _check_width("Cards (rows named by the plan)", _cards._panel)
+	ep.write_json("plan", {"episode_title": "Painted", "staging": {"source": "none"},
+		"spread": {"positions": [{"name": "The Base Coat", "work": "the white goes on"}]}})
+	_show._refresh_rows()
+	got = titles.call()
+	_ok(got.has("Beat 1") and got.has("Work") and not got.has("Draw"), "a show with no cards has no Draw row, and its work a Work row: %s" % str(got))
+	ep.write_json("plan", {"episode_title": "Read", "spread": {"positions": [{"name": "Past"}]}})
+	_show._refresh_rows()
+	got = titles.call()
+	_ok(got.has("Card 1") and not got.has("Ingredient 1") and not got.has("Beat 1"), "the control: a plan of cards naming no word has Card rows: %s" % str(got))
+	DirAccess.remove_absolute(ep.file_of("plan"))
 	_show._knobs["seed"] = 11
 	_show._open_episode()
 

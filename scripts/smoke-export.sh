@@ -34,7 +34,7 @@ cat >"$profile/work/cards-note.md" <<'EOF'
 ---
 title: Export smoke
 ghost:
-  cards:
+  table:
     show: export-smoke
 ---
 

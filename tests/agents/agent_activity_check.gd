@@ -14,8 +14,9 @@ extends SceneTree
 ##   no stream).
 ## - READ AS IT GROWS: each read takes only what was added since the last - nothing counted twice
 ##   (the control: the same lines read whole again would double the count).
-## - THE LINE: what, how much, how long; "nothing new" only past three minutes of a silent stream
-##   (the control: two minutes says nothing), and never while it is finishing.
+## - THE LINE: what, how much, how long - what it has thought said while it calls a tool; "nothing new" only
+##   past three minutes of a silent stream (the control: two minutes says nothing), and never while it is
+##   finishing.
 ## - THE QUEUE: a queued job is "waiting its turn", a job it does not hold says nothing; every agent
 ##   step of a Cards row has a maker to name.
 
@@ -163,6 +164,8 @@ func _line() -> bool:
 	_ok(TextGen.activity_line({"doing": "calling look"}, 3725, 200) == "calling look · 1:02:05 · nothing new for 3:20",
 		"three minutes silent: said (%s)" % TextGen.activity_line({"doing": "calling look"}, 3725, 200))
 	_ok(not TextGen.activity_line({"doing": "thinking"}, 300, 120).contains("nothing new"), "the control: two minutes is not")
+	_ok(TextGen.activity_line({"doing": "calling act", "tokens": 74495}, 1080) == "calling act · ~74K tokens thought · 18:00",
+		"what it has thought is said while it calls a tool (%s)" % TextGen.activity_line({"doing": "calling act", "tokens": 74495}, 1080))
 	var job := {"started": int(Time.get_unix_time_from_system()) - 400, "_now": {"doing": "finishing", "tokens": 0, "chars": 0,
 		"heard": int(Time.get_unix_time_from_system()) - 400}}
 	_ok(not TextGen.status_of(job).contains("nothing new"), "finishing is never 'nothing new' (%s)" % String(job["_status"]))
@@ -187,7 +190,7 @@ func _queue() -> bool:
 
 func _rows() -> bool:
 	print("-- the Cards rows")
-	var ed: GDScript = load("res://src/cards/episode_card.gd")
+	var ed: GDScript = load("res://src/table_show/episode_card.gd")
 	var makers: Dictionary = ed.MAKERS
 	var missing := PackedStringArray()
 	for r in ed.ROWS:

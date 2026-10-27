@@ -23,7 +23,7 @@ class_name TablePlan
 ## (next/structure.md, step 7), and work that is a pure function of a plan and a time can be done
 ## early, late or on another thread and still land where it belongs.
 
-var pay: Dictionary = {}           # the episode, as the panel handed it over (CardEpisode.document)
+var pay: Dictionary = {}           # the episode, as the panel handed it over (TableEpisode.document)
 var parse: Dictionary = {}
 var seed_value := 0
 var hold := 0.0                    # the show's intro hold, the past of a mid-way start is replayed after
@@ -141,14 +141,17 @@ static func table_of(table_json: Variant, look: Dictionary, seed: int) -> Dictio
 
 ## HOW MANY CARDS THE DECK HOLDS, as the episode says - the table never picks a number of its own
 ## (the user, 2026-10-14: "The agents define how many cards a deck will use"): what the draw was
-## shuffled from (`deck_n`, [method CardProducer._make_draw]; for an episode drawn before the draw
+## shuffled from (`deck_n`, [method TableProducer._make_draw]; for an episode drawn before the draw
 ## counted it, the deck its brief lists, [method EpisodeCard._table_doc]), else the deck the producer
 ## chose, else a box's drawn and left-in cards - and never fewer than the cards drawn. An episode that
-## says none of these (a made-up one) holds [constant TableMedium.DECK_FALLBACK].
+## says none of these (a made-up one) holds [constant TableMedium.DECK_FALLBACK]. A show that draws no
+## cards ([method CardTable.cardless]) has no deck.
 static func deck_count(pay: Dictionary) -> int:
 	var drawn: int = (pay.get("cards", []) as Array).size() if pay.get("cards") is Array else 0
 	var n := int(pay.get("deck_n", 0))
 	var plan: Dictionary = pay.get("plan", {}) if pay.get("plan") is Dictionary else {}
+	if CardTable.cardless(plan):
+		return 0
 	if n <= 0 and plan.get("deck") is Array:
 		n = (plan["deck"] as Array).size()
 	if n <= 0 and pay.get("left") is Array and not (pay["left"] as Array).is_empty():
@@ -184,6 +187,55 @@ func box_center() -> Vector3:
 	return TablePositions.SHOEBOX_AT if cards_from == "box" and String(staging.get("box_style", "open")) == "shoebox" else Vector3.ZERO
 
 
+## WHERE THE WORK IS DONE (the user, 2026-10-26, of the first alchemy episode: "we should shift objects to the
+## center screen/stage/table, as we use them ... the mortar and pestle was animated in the far left corner; we
+## should have brought it front-and-center"): the spot a thing is brought to while it is worked - the middle of
+## the picture, [constant WORK_AHEAD] toward the reader, where it is seen large and whole - the nearest to that
+## which keeps [constant WORK_CLEAR] from the cards' places, the deck and the box, and from [param feet]
+## (rectangles x by z: what stands on the table), on the top whose outline is [param top_o] ([method
+## Tables.top_outline]). Meters, the table's space, on its top. A pure function of the plan and the table. Nothing
+## keeps it clear: a show whose work is all done on one thing stands that thing in the middle (a mask, worked where
+## it stands), and the spot is then beside it.
+func work_spot(top_o: Dictionary, feet: Array = []) -> Vector3:
+	var fwd := -cam_base.basis.z
+	var aim := cam_base.origin + fwd * (-cam_base.origin.y / minf(fwd.y, -0.05))
+	var goal := Vector2(aim.x, aim.z + WORK_AHEAD)
+	var keep: Array = feet.duplicate()
+	var card := CardTable.card_size(look)
+	for sl in slots:
+		keep.append(CardTable.footprint((sl as Dictionary)["pos"], float((sl as Dictionary)["yaw"]), card))
+	if cards_from == "deck":
+		keep.append(TablePositions.deck_keep(deck_base))
+	elif cards_from == "box":
+		keep.append(TablePositions.deck_keep(deck_base, box_keep(), box_center()))
+	for clear in WORK_CLEAR:
+		var best := Vector2.INF
+		var best_d := INF
+		for gz in range(-10, 13):
+			for gx in range(-20, 21):
+				var p := goal + Vector2(float(gx), float(gz)) * 0.01
+				if Tables.sdf(top_o, p) > -float(clear) * 0.5:
+					continue
+				var free := true
+				for r in keep:
+					var b: Rect2 = r
+					if Vector2(maxf(0.0, maxf(b.position.x - p.x, p.x - b.end.x)), maxf(0.0, maxf(b.position.y - p.y, p.y - b.end.y))).length() < float(clear):
+						free = false
+						break
+				if free and p.distance_to(goal) < best_d:
+					best_d = p.distance_to(goal)
+					best = p
+		if best != Vector2.INF:
+			return Vector3(best.x, 0.0, best.y)
+	return Vector3(goal.x, 0.0, goal.y)
+
+
+## How far in front of the picture's middle the work is done (meters, toward the reader), and how clear of
+## everything its spot is kept - each tried in turn until one is found (meters).
+const WORK_AHEAD := 0.06
+const WORK_CLEAR := [0.1, 0.075, 0.05, 0.0]
+
+
 ## THE DECK PUT ASIDE ([constant TableMedium.DECK_CROWD]): the first card of the spread that would lie
 ## that near the deck, and the spot further out - in the frame, on [param top], as far from the spread
 ## as it can be, by the least slide - it is moved to before that card is drawn. None when nothing
@@ -199,7 +251,7 @@ func put_aside(top: Dictionary) -> void:
 			maxf(0.0, maxf(a.position.y - b.end.y, b.position.y - a.end.y))).length()
 	var feet: Array = []
 	for sl in slots:
-		feet.append(CardTable.footprint((sl as Dictionary)["pos"], float((sl as Dictionary)["yaw"]), TableMedium.CARD))
+		feet.append(CardTable.footprint((sl as Dictionary)["pos"], float((sl as Dictionary)["yaw"]), CardTable.card_size(look)))
 	var keep := TablePositions.deck_keep(deck_base)
 	var crowd := -1
 	for i in feet.size():

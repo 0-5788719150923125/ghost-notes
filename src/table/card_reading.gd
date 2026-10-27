@@ -15,9 +15,17 @@ class_name CardReading
 ##     <!-- table: spread -->     the last card goes down; the whole spread lies on the table
 ##
 ## and the rest of [TableActions]' written verbs - `open` (the cards come out of a box, not a deck),
-## `deal 2`, `fan 3-5` (a run of cards in one waterfall), `show 4`, `tap 2`, `untap 2`, `flip 2`.
+## `deal 2`, `fan 3-5` (a run of cards in one waterfall), `show 4`, `tap 2`, `untap 2`, `flip 2`, and
+## `work 2` (the card goes down and the work of its beat begins - [TableWork]).
 ##
-## THE READING IS WRITTEN FOR THE TABLE, by [CardProducer], one passage per mark - the intro
+## A READING WITH NO CARDS opens with `begin` and each of its beats with `work K` - K a beat, never a card -
+## and closes with `spread`: nothing is drawn, and each beat is a chapter of the video.
+##
+## AN ACT AT A WORD (next/table_work.md): inside speech, `<!-- act: grind -->` starts the episode's act
+## `grind` as the word after it is said - what is done is said as it is done. [method parse] lists each
+## (`cues`, `{name, si}`: the spoken word it starts at); the voice never hears the mark.
+##
+## THE READING IS WRITTEN FOR THE TABLE, by [TableProducer], one passage per mark - the intro
 ## after `shuffle`, one passage per card after its `draw`, the close after `spread` - and a
 ## hand-written one works the same way.
 ##
@@ -43,6 +51,10 @@ const DRAW := TableActions.DRAW
 const PUSH := TableActions.PUSH
 const JUMP := TableActions.JUMP
 const SETTLE := TableActions.SETTLE
+
+
+## An act cued at a word, inside speech: group 1 the act's name.
+const ACT_MARK := "<!--\\s*act\\s*:\\s*([\\w-]+)\\s*-->"
 
 
 static func _rx(pattern: String) -> RegEx:
@@ -104,6 +116,8 @@ static func parse(body: String) -> Dictionary:
 	passages.append(cur)
 	var out_passages: Array = []
 	var actions: Array = []
+	var cues: Array = []
+	var act_rx := _rx(ACT_MARK)
 	var spoken := PackedStringArray()
 	var speak := PackedStringArray()
 	var showing := false
@@ -117,6 +131,15 @@ static func parse(body: String) -> Dictionary:
 		# THE READER'S MARKS go on to the voice - a delivery, a hesitation, a change of speaker - but
 		# no comment is ever a word the table follows, and any other note is not read at all
 		var voiced := _voice_marks(text)
+		# AN ACT AT A WORD: the spoken words before its mark, counted as the table counts them
+		for m in act_rx.search_all(text):
+			var before := Manuscript._rx(Manuscript.COMMENT).sub(text.substr(0, m.get_start()), "", true)
+			var n_before := 0
+			for w in before.split(" ", false):
+				for piece in String(w).split("\n", false):
+					if not TabletScript.norm(piece).is_empty():
+						n_before += 1
+			cues.append({"name": m.get_string(1).strip_edges().to_lower(), "si": spoken.size() + n_before})
 		text = Manuscript._rx(Manuscript.COMMENT).sub(text, "", true).strip_edges()
 		if not kind.is_empty():
 			if not TableActions.source_of(kind).is_empty():
@@ -133,7 +156,7 @@ static func parse(body: String) -> Dictionary:
 				showing = true
 			elif TableActions.ends(kind) or (showing and TableActions.REGISTRY[kind]["lays"]):
 				showing = false
-			if TableActions.takes_card(kind):
+			if TableActions.takes_card(kind) and not TableActions.names_beat(kind):
 				cards = maxi(cards, last)
 		if kind.is_empty() and text.is_empty():
 			continue
@@ -155,7 +178,7 @@ static func parse(body: String) -> Dictionary:
 				if not cued.is_empty():
 					who = cued
 	return {"passages": out_passages, "actions": actions, "spoken": spoken,
-		"speakable": "\n\n".join(speak), "cards": cards, "source": source}
+		"speakable": "\n\n".join(speak), "cards": cards, "source": source, "cues": cues}
 
 
 ## [param text] with every comment taken out but the ones the voice acts on: a delivery, a
@@ -180,16 +203,18 @@ static func _voice_marks(text: String) -> String:
 ## THE VIDEO'S CHAPTERS, from a rendered take: when the intro, each card and the spread begin,
 ## found by following the take's own word timings ([param words], a sidecar's) through the reading
 ## exactly as the table does - so a chapter starts where the cards move. `[{t, kind, card}]`,
-## the first at 0.
+## the first at 0. A reading with no cards ([constant TableActions.SOURCES] `none`) has a chapter at
+## each beat: its `work` marks.
 static func chapters(body: String, words: Array) -> Array:
 	var p := parse(body)
 	var f := ReadingFollower.new()
 	f.reset(p["spoken"])
 	f.extend(words)
 	var out: Array = [{"t": 0.0, "kind": "intro", "card": 0}]
+	var beats := String(p["source"]) == "none"
 	for e in f.place(p["actions"], 0.0, 0.25, 0.2):
 		var a: Dictionary = (e as Dictionary)["a"]
-		if not TableActions.chapter(String(a["kind"])):
+		if not TableActions.chapter(String(a["kind"])) and not (beats and String(a["kind"]) == "work"):
 			continue
 		out.append({"t": maxf(0.0, float((e as Dictionary)["t0"])), "kind": String(a["kind"]),
 			"card": int(a["card"])})

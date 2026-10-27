@@ -82,7 +82,7 @@ mechanism" is a commitment in `docs/index.md`. Three differences shaped the plan
 3. **What a part reads is handed to it.** This is dependency injection in ghost's own terms, and
    it takes four forms, all in the code: an ARGUMENT (`update(features, delta)` - the scenes never
    touch the audio engine, which is why they are the cleanest code here), a SEAM (`NoteStore.root`,
-   `CardEpisode.root`, `Films.use_for_test`), HANDED STATE (`Director._pick` is given its state, so
+   `TableEpisode.root`, `Films.use_for_test`), HANDED STATE (`Director._pick` is given its state, so
    forecast and walk are one body), and a CONTRACT - a small typed base class in a low folder, which
    the thing above extends and the thing below is handed (`Shell`, `ShowFeed`, `SoundBed`). A part
    that needs the seed, the clock or a dial takes it one of these ways and never asks who owns it.

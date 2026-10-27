@@ -205,6 +205,8 @@ const MATERIALS := {
 		"about": "bone, ivory, horn, shell; `wear` yellows it toward `color2`"},
 	"plant": {"code": 12, "polish": 0.2, "wear": 0.0, "pattern": 0.5, "clarity": 0.5, "grain": 1.0,
 		"about": "leaves, petals, stems, herbs; `wear` dries them toward `color2`"},
+	"liquid": {"code": 13, "polish": 0.95, "wear": 0.0, "pattern": 0.25, "clarity": 0.4, "grain": 1.0,
+		"about": "what is IN a vessel - a brew, ink, oil, wine, water, honey - wet and never quite still, `pattern` its foam in `color2`, `clarity` the light in its depth; a part of its own filling the vessel to its surface (see WORKING PARTS: it boils, fills, empties, changes color and glows)"},
 	"painted": {"code": 0, "polish": 0.5, "wear": 0.0, "pattern": 0.0, "clarity": 0.5, "grain": 1.0,
 		"about": "lacquer, enamel or paint over anything"},
 }
@@ -283,6 +285,8 @@ static func describe() -> String:
 	lines.append("FLAMES: a thing's flames burn as ONE light, however many it has - a candelabra's tapers, a pillar's three wicks, a dish of tea lights - up to %d on one thing." % CardTable.MAX_FLAMES)
 	lines.append("")
 	lines.append(Rides.describe_moves())
+	lines.append("")
+	lines.append(Motions.describe_parts())
 	return "\n".join(lines)
 
 
@@ -358,8 +362,13 @@ static func _sanitize_parts(raw: Variant, mats: Dictionary, pal: Array, depth: i
 				continue
 			var kids := _sanitize_parts(d["parts"], mats, pal, depth + 1, budget)
 			if not kids.is_empty():
-				out.append({"parts": kids, "at": _vec3(d.get("at"), Vector3.ZERO, MAX_SIZE), "turn": _turn(d.get("turn")),
-					"wick": false, "copies": _copies_of(d), "move": {} if _burns(kids) else Rides.sanitize_move(d.get("move"))})
+				var group := {"parts": kids, "at": _vec3(d.get("at"), Vector3.ZERO, MAX_SIZE), "turn": _turn(d.get("turn")),
+					"wick": false, "copies": _copies_of(d), "move": {} if _burns(kids) else Rides.sanitize_move(d.get("move"))}
+				# WHAT IT DOES AT THE TABLE ([Motions]): never a lit one's (its flame stands where it was lit)
+				var gw := {} if _burns(kids) else Motions.sanitize_work(d)
+				if not gw.is_empty():
+					group["work"] = gw
+				out.append(group)
 			continue
 		var part := _sanitize_part(d, mats, pal)
 		if not part.is_empty():
@@ -551,6 +560,11 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 	# HOW IT MOVES with the ride and the wind ([Rides]): never a flame's (its light stands where it was lit), and
 	# never a strand laid across the table
 	out["move"] = {} if bool(out["wick"]) or String(out.get("lay", "")) == "drape" else Rides.sanitize_move(p.get("move"))
+	# WHAT IT DOES AT THE TABLE ([Motions]): its name, joint, points, states, what it runs and emits - never a
+	# flame's wax, and never a strand laid across the table
+	var work := {} if bool(out["wick"]) or String(out.get("lay", "")) == "drape" else Motions.sanitize_work(p)
+	if not work.is_empty():
+		out["work"] = work
 	return out
 
 
@@ -895,6 +909,8 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	# where it was built ([method _holder])
 	var movers: Array = []
 	var mover_at := {}
+	# WHAT WORKS ([Motions]): a node of its own for each working copy, made where its chain says
+	var works: Array = []
 	for leaf in leaves:
 		var part: Dictionary = leaf["part"]
 		var geos: Array = leaf["geos"]
@@ -921,7 +937,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 			var chains: Array = leaf["chains"]
 			for ci in xforms.size():
 				var nm := fixed if not fixed.is_empty() else String(names[ci % names.size()])
-				var holder := _holder(chains[ci] if ci < chains.size() else [], inner, movers, mover_at, seed)
+				var holder := _holder(chains[ci] if ci < chains.size() else [], inner, movers, mover_at, seed, works)
 				var tk := "%s|%d" % [nm, holder.get_instance_id()]
 				if not takers.has(tk):
 					takers[tk] = {"name": nm, "holder": holder, "ids": []}
@@ -952,7 +968,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	root.add_child(inner)
 	if all.is_empty():
 		return {"node": root, "size": AABB(), "foot": PackedVector2Array(), "outline": PackedVector2Array(),
-			"wicks": [], "glows": [], "meshes": [], "movers": []}
+			"wicks": [], "glows": [], "meshes": [], "movers": [], "works": []}
 	var box := AABB(all[0], Vector3.ZERO)
 	for p in all:
 		box = box.expand(p)
@@ -968,7 +984,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 		wicks[i] = ((wicks[i] as Vector3) + shift) * k
 	var size := AABB((box.position + shift) * k, box.size * k)
 	return {"node": root, "size": size, "foot": _foot(placed, FOOT_H), "outline": _hull(placed, INF),
-		"wicks": wicks, "glows": glows, "meshes": meshes, "movers": movers, "sized": k}
+		"wicks": wicks, "glows": glows, "meshes": meshes, "movers": movers, "works": works, "sized": k}
 
 
 ## THE NODE A COPY HANGS IN, for its [param chain] of movers ([method _assemble], outermost first): each a
@@ -977,11 +993,24 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 ## ([method TableMedium._tick_ride]). Listed in [param movers] as `{node, move, pivot and contact (the thing's
 ## space, meters, before it is sized), reach, salt, parent}` ([param at]: key to place). Past [constant
 ## Rides.MAX_MOVERS] a thing's copies stand as built, in the last that moves.
-static func _holder(chain: Array, inner: Node3D, movers: Array, at: Dictionary, seed: int) -> Node3D:
+static func _holder(chain: Array, inner: Node3D, movers: Array, at: Dictionary, seed: int, works: Array = []) -> Node3D:
 	var node := inner
 	var parent := -1
 	for m in chain:
 		var key := String((m as Dictionary)["key"])
+		# A WORKING LINK ([method _worker]): a node of its own, listed in [param works] as `{node, work}` - kept in
+		# [param at] as -2 less its place, so a mover's own places stay what they were
+		if (m as Dictionary).has("work"):
+			if not at.has(key):
+				if works.size() >= Motions.MAX_WORKS:
+					continue
+				var wn := Node3D.new()
+				wn.name = "works %d" % works.size()
+				node.add_child(wn)
+				at[key] = -2 - works.size()
+				works.append({"node": wn, "work": (m as Dictionary)["work"]})
+			node = (works[-2 - int(at[key])] as Dictionary)["node"]
+			continue
 		if not at.has(key):
 			if movers.size() >= Rides.MAX_MOVERS:
 				break
@@ -1024,6 +1053,9 @@ static func _assemble(parts: Array, seed: int, path: Array) -> Array:
 			var outer := _placements(part, rng, sized)
 			# A MOVING GROUP: each of its copies moves as one, held where its move says in the group's space
 			var held := _held(part["move"] if part.get("move") is Dictionary else {}, inner)
+			# A WORKING GROUP ([Motions]): each copy one node the work moves, its points where the group's `at` is
+			var gwork: Dictionary = part.get("work", {}) if part.get("work") is Dictionary else {}
+			var gbox := _leaves_box(inner) if not gwork.is_empty() else AABB()
 			for leaf in inner:
 				var xs: Array = []
 				var cs: Array = []
@@ -1031,10 +1063,17 @@ static func _assemble(parts: Array, seed: int, path: Array) -> Array:
 					var o: Transform3D = outer[oi]
 					for xi in (leaf["xforms"] as Array).size():
 						xs.append(o * (leaf["xforms"][xi] as Transform3D))
-						var chain: Array = [] if held.is_empty() else [_mover(held, here, oi, o)]
+						var chain: Array = [] if gwork.is_empty() else [_worker(gwork, o * gbox,
+							o * (outer[0] as Transform3D).affine_inverse(), "w%s#%d" % [str(here), oi])]
+						if not held.is_empty():
+							chain.append(_mover(held, here, oi, o))
 						for m in (leaf["chains"][xi] as Array):
 							var c := (m as Dictionary).duplicate()
 							c["key"] = "%s/%d" % [String(c["key"]), oi]
+							if c.has("work"):
+								c["work"] = _moved_work(c["work"], o)
+								chain.append(c)
+								continue
 							c["pivot"] = o * (c["pivot"] as Vector3)
 							var moved := PackedVector3Array()
 							for q in (c["contact"] as PackedVector3Array):
@@ -1062,16 +1101,63 @@ static func _assemble(parts: Array, seed: int, path: Array) -> Array:
 			leaf["xforms"] = _placements(leaf["part"], h[1], leaf["geos"], {}, _blocks(out, at.y * 0.01))
 		else:
 			leaf["xforms"] = _placements(leaf["part"], h[1], leaf["geos"], _walls(out, h[0], at * 0.01))
-	# A MOVING PART: each of its copies moves on its own, held where its move says in its own space
+	# A MOVING PART: each of its copies moves on its own, held where its move says in its own space - and A
+	# WORKING ONE ([Motions]) is a node of its own outside that, its points where its `at` is, each copy's moved
+	# as the copy is from the first
 	for li in own:
 		var leaf: Dictionary = out[li]
 		var mv: Variant = (leaf["part"] as Dictionary).get("move")
 		var held := _held(mv if mv is Dictionary else {}, [{"geos": leaf["geos"], "xforms": [Transform3D.IDENTITY]}])
+		var wk: Dictionary = (leaf["part"] as Dictionary).get("work", {}) if (leaf["part"] as Dictionary).get("work") is Dictionary else {}
+		var xs: Array = leaf["xforms"]
 		var cs: Array = []
-		for xi in (leaf["xforms"] as Array).size():
-			cs.append([] if held.is_empty() else [_mover(held, leaf["salt"], xi, leaf["xforms"][xi])])
+		for xi in xs.size():
+			var chain: Array = []
+			if not wk.is_empty():
+				chain.append(_worker(wk, _leaves_box([{"geos": leaf["geos"], "xforms": [xs[xi]]}]),
+					(xs[xi] as Transform3D) * (xs[0] as Transform3D).affine_inverse(), "w%s#%d" % [str(leaf["salt"]), xi]))
+			if not held.is_empty():
+				chain.append(_mover(held, leaf["salt"], xi, xs[xi]))
+			cs.append(chain)
 		leaf["chains"] = cs
 	return out
+
+
+## ONE COPY'S WORK ([Motions]), as a link in its chain ([method _holder]): `{key, work}` - its work as written
+## with what the table works it from, in its parent's space (meters): `box`, `middle`, `base` (the middle of
+## its foot, which a fill or a grow keeps), the joint's `pivot` and `axis`, and its `points` - [param box] where
+## this copy is, [param d] this copy's move from the first (where what was written is).
+static func _worker(work: Dictionary, box: AABB, d: Transform3D, key: String) -> Dictionary:
+	var w := work.duplicate(true)
+	var mid := box.get_center()
+	w["box"] = box
+	w["middle"] = mid
+	w["base"] = Vector3(mid.x, box.position.y, mid.z)
+	if w.get("joint") is Dictionary:
+		var j: Dictionary = w["joint"]
+		j["pivot"] = d * ((j["at"] as Vector3) * 0.01) if j.has("at") else mid
+		j["axis"] = (d.basis * (j.get("axis", Vector3.UP) as Vector3)).normalized()
+	var pts := {}
+	for k in (w.get("points", {}) as Dictionary):
+		pts[k] = d * (((w["points"] as Dictionary)[k] as Vector3) * 0.01)
+	w["points"] = pts
+	return {"key": key, "work": w}
+
+
+## A copy's work ([method _worker]) moved with the group copy it is in, by [param o].
+static func _moved_work(work: Dictionary, o: Transform3D) -> Dictionary:
+	var w := work.duplicate(true)
+	w["box"] = o * (w["box"] as AABB)
+	w["middle"] = o * (w["middle"] as Vector3)
+	w["base"] = o * (w["base"] as Vector3)
+	if w.get("joint") is Dictionary:
+		(w["joint"] as Dictionary)["pivot"] = o * ((w["joint"] as Dictionary)["pivot"] as Vector3)
+		(w["joint"] as Dictionary)["axis"] = (o.basis * ((w["joint"] as Dictionary)["axis"] as Vector3)).normalized()
+	var pts := {}
+	for k in (w["points"] as Dictionary):
+		pts[k] = o * ((w["points"] as Dictionary)[k] as Vector3)
+	w["points"] = pts
+	return w
 
 
 ## WHERE A MOVING PART OR GROUP IS HELD, in its own space (meters), from its `move` ([param move], made safe;

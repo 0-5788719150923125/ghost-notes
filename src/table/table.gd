@@ -3,7 +3,7 @@ class_name TableMedium
 
 ## TableMedium - a card reading at a table, seen from the reader's chair.
 ##
-## The Cards mode's own medium (its row of [constant Medium.REGISTRY] names the mode): the episode's cloth on a table,
+## The Table mode's own medium (its row of [constant Medium.REGISTRY] names the mode): the episode's cloth on a table,
 ## its room out of focus beyond the far edge, its candles, and the deck. The reader is a voice, never a pair of hands - the cards move on their own:
 ##
 ##   the intro      the deck shuffles in the middle of the table under the voice, in RUNS -
@@ -339,6 +339,7 @@ func _init() -> void:
 	_light_part.medium = self
 	_card_poses.medium = self
 	_shuffles.medium = self
+	_work.medium = self
 
 
 ## THE THINGS ON THE TABLE are a part of their own ([TableThings]): where each stands, and what
@@ -359,6 +360,14 @@ var _light_part := TableLight.new()
 ## THE BOX THE DECK IS KEPT IN is a part of its own ([TableBox]): built once per episode, holding
 ## the box, its files and what a search looks at.
 var _box_part := TableBox.new()
+
+
+## THE WORK AT THE TABLE is a part of its own ([TableWork], next/table_work.md): what the set dresser's
+## working parts do by themselves - a clock's hands, steam off a brew - and the puppeteer's acts, run when
+## the reading cues them.
+var _work := TableWork.new()
+var _acts_mt := -2                    # the acts file's time when the work was last built (-1: none)
+var _est := PackedFloat32Array()      # each spoken word's estimated time ([method TablePlan.estimated_times])
 
 
 # --- mount -----------------------------------------------------------------------------------
@@ -624,6 +633,7 @@ func advance(_features, delta: float, _bookend: float) -> void:
 		if n != _built_n:
 			_built_n = n
 			_sched = _follow.place(_plan.parse["actions"], maxf(feed.intro_hold, 0.6), LEAD, TAIL)
+			_work.schedule(_sched, _plan.parse, _follow.said0, _follow.said1, _est, _now)
 	# up from black as the session starts, down to it after the last word - the table owns its
 	# bookend, so the Director's whole-take fade is not used; an outro mark's fade still is
 	_env.adjustment_brightness = clampf(clampf(t / 1.2, 0.0, 1.0) * _end_fade(_now) * feed.live_fade, 0.0, 1.0)
@@ -631,6 +641,7 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_tick_focus(_now)
 	_tick_camera(_now)
 	_tick_ride(_now)
+	_work.tick(_now)
 	_light_part.tick_props(_now)
 	_light_part.tick(_now)
 	_tick_air(_now)
@@ -657,7 +668,8 @@ func _ensure_doc() -> void:
 	_plan = TablePlan.make(d, _table_json(pay), feed.intro_hold)
 	var spoken: PackedStringArray = _plan.parse.get("spoken", PackedStringArray()) if not _plan.parse.is_empty() \
 		else PackedStringArray()
-	_follow.reset(spoken, _plan.start_si, _plan.estimated_times(spoken.size()))
+	_est = _plan.estimated_times(spoken.size())
+	_follow.reset(spoken, _plan.start_si, _est)
 	_built_n = -1
 	_sched = []
 	var t0 := Time.get_ticks_msec()
@@ -878,7 +890,7 @@ func _unseen_fronts(name: String, cards: Array) -> Array:
 ## ([class CardFaces.Face]: its name and numeral, its group as its one fact, its meaning as its text) - at
 ## most [constant WRITTEN], picked on the seed. They are the plan's deck less the drawn cards when the
 ## producer chose it, and otherwise what the draw says it left of the show's own (`left`,
-## [method CardProducer._make_draw]). Empty when the episode lists neither.
+## [method TableProducer._make_draw]). Empty when the episode lists neither.
 func _left_in(name: String) -> Array:
 	var plan: Dictionary = _plan.pay.get("plan", {}) if _plan.pay.get("plan") is Dictionary else {}
 	var drawn := {}
@@ -1086,7 +1098,7 @@ func _poll_pictures(force := false) -> void:
 	# top, a runner...) - or each such surface's own color until it is painted
 	var cloth := _picture(dir.path_join("surface.png"), force)
 	# ...and its DEPTH, where the painter drew a height map that lies under it (`height.json` beside it
-	# is its fit: CardProducer._land_height)
+	# is its fit: TableProducer._land_height)
 	var depth := _picture(dir.path_join("height.png"), force) if FileAccess.file_exists(dir.path_join("height.json")) else null
 	if cloth != _painting_tex or depth != _height_tex:
 		var relit := cloth != _painting_tex
@@ -1106,6 +1118,11 @@ func _poll_pictures(force := false) -> void:
 	# whatever stands
 	var tpath := dir.path_join("table.json")
 	if (FileAccess.get_modified_time(tpath) if FileAccess.file_exists(tpath) else -1) != _table_mt:
+		_build_table()
+		_plan_moves()
+	# ...and THE WORK, blocked while it can already be playing: built again over the table as it stands
+	var apath := dir.path_join("acts.json")
+	if (FileAccess.get_modified_time(apath) if FileAccess.file_exists(apath) else -1) != _acts_mt:
 		_build_table()
 		_plan_moves()
 	var room := _picture(dir.path_join("backdrop.png"), force)
@@ -1364,6 +1381,7 @@ func _build_table(spec: Dictionary = {}) -> void:
 	_lights = []
 	_light_part._flame_n = 0
 	_things_part.clear(spec["layers"])
+	_work.clear()
 	_light_part._heat_cells = {}
 	# WHAT THE TABLE IS ABOARD, planned before anything stands on it: each thing's moving parts are made
 	# ready to answer it as they are put ([method TableThings.put])
@@ -1390,6 +1408,26 @@ func _build_table(spec: Dictionary = {}) -> void:
 	_light_part.light_the_table()
 	_reflect()
 	_build_air(spec)
+	_build_work(spec)
+
+
+## THE WORK, built over the things as they stand ([TableWork]): the episode's `acts.json` (read from the FILE,
+## as the table is, so a render stands what the live table stood) - and planned again on the schedule.
+func _build_work(spec: Dictionary) -> void:
+	var path := String(_plan.pay.get("dir", "")).path_join("acts.json")
+	_acts_mt = FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
+	var raw: Variant = null
+	if _acts_mt >= 0:
+		var j := JSON.new()
+		if j.parse(FileAccess.get_file_as_string(path)) == OK:
+			raw = j.data
+	# a beat a card's, or one of a show's that draws none (CardTable.beats)
+	var beats := maxi(CardTable.beats(_plan.pay.get("plan", {}) if _plan.pay.get("plan") is Dictionary else {}), (_plan.pay.get("cards", []) as Array).size())
+	_work.build(raw, beats, spec.get("sound", {}) if spec.get("sound") is Dictionary else {})
+	for n in _work.notes:
+		print("ghost: card table - work: %s" % n)
+	if not _sched.is_empty():
+		_work.schedule(_sched, _plan.parse, _follow.said0, _follow.said1, _est, _now)
 
 
 ## Catch the table again for the things to reflect: a probe that updates once does so again when
@@ -1578,7 +1616,7 @@ func _cover_at(p: Vector2, t: float, r: float) -> float:
 	_cur_base = _deck_at(t, tm, wj)
 	_deck_gone = 1 if not wj.is_empty() and t >= float(wj["end"]) else 0
 	var top := -INF
-	if _plan.cards_from != "box":
+	if _plan.cards_from == "deck":
 		var loose := 0.0
 		if t >= float(tm["shuffle"]) and t < float(tm["end"]) + SQUARE:
 			loose = 0.1

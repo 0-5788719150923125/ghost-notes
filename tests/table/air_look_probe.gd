@@ -46,9 +46,9 @@ func _run() -> void:
 			"--clip":
 				var ab := String(args[i + 1]).split(",")
 				clip = Vector2(float(ab[0]), float(ab[1]))
-	var source := CardEpisode.open(show, seed)
-	CardEpisode.root = ROOT
-	var ep := CardEpisode.open(show, seed)
+	var source := TableEpisode.open(show, seed)
+	TableEpisode.root = ROOT
+	var ep := TableEpisode.open(show, seed)
 	DirAccess.make_dir_recursive_absolute(ep.dir)
 	for f in DirAccess.get_files_at(source.dir):
 		DirAccess.copy_absolute(source.dir.path_join(f), ep.dir.path_join(f))

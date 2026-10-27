@@ -138,10 +138,10 @@ static func candle_shadow(light: OmniLight3D) -> void:
 ## under a bowl's sloping wall, so a ring of the lamp leaked in beside its base (feedback 0009). The
 ## slab stands a few millimeters over the cloth, draws nothing and shades what the thing already
 ## covers. It is on [param layer], so a candle's own flames still leave it out.
-func foot_shadow(foot: PackedVector2Array, layer: int) -> void:
+func foot_shadow(foot: PackedVector2Array, layer: int) -> MeshInstance3D:
 	var tris := Geometry2D.triangulate_polygon(foot)
 	if tris.is_empty():
-		return
+		return null
 	const H := 0.006
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -158,6 +158,7 @@ func foot_shadow(foot: PackedVector2Array, layer: int) -> void:
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 	mi.layers = layer
 	medium._props.add_child(mi)
+	return mi
 
 
 ## A soft shade on the cloth under [param foot] (a thing's outline where it meets it): what

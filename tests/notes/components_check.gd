@@ -21,7 +21,7 @@ extends SceneTree
 ##
 ## EVERYTHING ATTACHED COMES OFF: what "+" attaches, detach removes - the same blocks, and with a
 ## Picture the illustrations that only come with it. Two refusals, each with its reason: the text
-## is the note, and a Voice stays while the Cards that bring it do.
+## is the note, and a Voice stays while the Table that brings it does.
 ##
 ## THE TABLE ANSWERS FOR THE PLATFORM, two-sided: on this desktop every capability but the agents'
 ## is possible; asked as Android (`Deps.platform_override`), only the text is - every other
@@ -134,12 +134,12 @@ func _registry() -> void:
 		for written in Components.attach_blocks(k):
 			_ok(written == b, "%s: attaching it writes its own block ('%s', not '%s')" % [k, b, written])
 	# the blocks the panels keep are the components' blocks
-	for b in ["voice", "picture", "illustrations", "look", "bookends", "cards", "synthesis", "song", "clip", "scenes", "youtube"]:
+	for b in ["voice", "picture", "illustrations", "look", "bookends", "table", "synthesis", "song", "clip", "scenes", "youtube"]:
 		_ok(blocks.has(b), "the document block '%s' belongs to a component" % b)
 	_ok(not (Components as Script).get_script_constant_map().has("TEMPLATES"), "there is no table of kinds of note")
 	_ok(Components.unmet(["text", "voice"]).is_empty(), "text + voice needs nothing more")
 	_ok(Components.unmet(["voice"]) == ["text"], "a voice alone needs a text (%s)" % str(Components.unmet(["voice"])))
-	_ok(Components.with_required(["cards"]).has("voice"), "Cards brings a voice with it")
+	_ok(Components.with_required(["table"]).has("voice"), "Table brings a voice with it")
 	var song_media := Medium.offered(["audio"])
 	_ok(song_media.has("auto") and song_media.has("full") and song_media.has("comic")
 		and not song_media.has("book") and not song_media.has("notebook") and not song_media.has("tablet")
@@ -161,14 +161,14 @@ func _composition() -> void:
 		[{"voice": {}, "picture": {}, "scenes": {"storyboard": "default"}, "look": {}}, "reading", "a voice with a picture, a storyboard and a look"],
 		[{"synthesis": {}}, "lab", "a voice lab"],
 		[{"clip": {"path": ""}}, "clip", "a clip"],
-		[{"cards": {}}, "cards", "a show of cards"],
-		[{"cards": {}, "voice": {}, "look": {}}, "cards", "a show of cards with its voice written down"],
+		[{"table": {}}, "table", "a show of cards"],
+		[{"table": {}, "voice": {}, "look": {}}, "table", "a show of cards with its voice written down"],
 	]
 	for c in cases:
 		var ws := Components.workspace_of(Components.attached_of(c[0]))
 		_ok(ws == String(c[1]), "%s runs in the '%s' workspace (%s)" % [c[2], c[1], ws])
 	# two-sided: it is Cards that takes the voice's note from the reading, not the voice's absence
-	_ok(Components.workspace_of(["text", "voice"]) == "reading" and Components.workspace_of(["text", "voice", "cards"]) == "cards",
+	_ok(Components.workspace_of(["text", "voice"]) == "reading" and Components.workspace_of(["text", "voice", "table"]) == "table",
 		"the same voice is a reading alone, and a show's with the Cards that bring it")
 	for w in Components.WORKSPACES:
 		if w == "note":
@@ -203,11 +203,11 @@ func _slots() -> void:
 		"...and has room on a note with no clock")
 	_ok(Components.slot_note("song", ["text", "voice"]).contains("Voice"), "a Song on a reading is refused the same way")
 	_ok(Components.slot_note("clip", ["text", "song"]).contains("Song"), "a clip is a clock too")
-	why = Components.slot_note("picture", ["text", "cards"])
-	_ok(why.contains("presentation") and why.contains("Cards"), "a Picture on a show of cards: the table is its presentation (%s)" % why)
-	_ok(Components.slot_note("cards", ["text", "voice"]).is_empty(), "Cards on a reading with no Picture has room")
-	_ok(Components.slot_note("cards", ["text", "voice", "picture"]).contains("Picture"), "...and none once a Picture holds the presentation")
-	_ok(Components.slot_note("cards", ["text", "song"]).contains("Song"), "Cards brings a voice, so a song's clock is in its way too")
+	why = Components.slot_note("picture", ["text", "table"])
+	_ok(why.contains("presentation") and why.contains("Table"), "a Picture on a show of cards: the table is its presentation (%s)" % why)
+	_ok(Components.slot_note("table", ["text", "voice"]).is_empty(), "Cards on a reading with no Picture has room")
+	_ok(Components.slot_note("table", ["text", "voice", "picture"]).contains("Picture"), "...and none once a Picture holds the presentation")
+	_ok(Components.slot_note("table", ["text", "song"]).contains("Song"), "Table brings a voice, so a song's clock is in its way too")
 	_ok(Components.slot_note("look", ["text", "song", "voice"]).is_empty(), "a component with no slot is never refused for one")
 
 
@@ -222,9 +222,9 @@ func _detach() -> void:
 		_ok(Components.detach_blocker(k, ["text", k]).is_empty(), "%s: alone on a note, it can be detached" % k)
 	_ok(Components.blocks_of("picture").has("illustrations"), "a Picture takes the illustrations that only come with it")
 	_ok(not Components.detach_blocker("text", ["text"]).is_empty(), "the text cannot be detached: it is the note")
-	var why := Components.detach_blocker("voice", ["text", "cards", "voice"])
-	_ok(why.contains("Cards"), "a Voice stays while the Cards that bring it do (%s)" % why)
-	_ok(Components.detach_blocker("cards", ["text", "cards", "voice"]).is_empty(), "...and Cards itself comes off")
+	var why := Components.detach_blocker("voice", ["text", "table", "voice"])
+	_ok(why.contains("Table"), "a Voice stays while the Table that brings it does (%s)" % why)
+	_ok(Components.detach_blocker("table", ["text", "table", "voice"]).is_empty(), "...and Cards itself comes off")
 	_ok(Components.detach_blocker("picture", ["text", "song", "picture", "look"]).is_empty(),
 		"a Picture a Look depends on still comes off: the Look then says what it is waiting for")
 	_ok(not Components.needs_note("look", ["text", "song", "look"]).is_empty(), "...which it does")
@@ -273,7 +273,7 @@ func _menu() -> void:
 		Deps._resolved[prog] = ""
 	_ok(not Capabilities.not_ready("agent:writer").is_empty(), "the control: with %s gone, no writer is ready" % str(AGENT_PROGRAMS))
 	Components.attach_menu(menu, ["text"])
-	var cards := _item(menu, "cards")
+	var cards := _item(menu, "table")
 	_ok(cards >= 0 and menu.is_item_disabled(cards), "with no writer, Cards is offered GRAYED")
 	_ok(cards >= 0 and menu.get_item_tooltip(cards).contains("writer"),
 		"...and its tooltip says why ('%s')" % (menu.get_item_tooltip(cards).get_slice("\n\n", 1) if cards >= 0 else ""))
@@ -281,7 +281,7 @@ func _menu() -> void:
 	_ok(_item(menu, "scenes") < 0 and _item(menu, "masks") < 0 and _item(menu, "illustrations") < 0,
 		"what only comes with another component is not offered by itself")
 	# a plain note is offered everything that can be attached, with no list of what "decides" it
-	for k in ["song", "voice", "voice_lab", "clip", "cards", "picture", "storyboard", "look", "bookends", "youtube"]:
+	for k in ["song", "voice", "voice_lab", "clip", "table", "picture", "storyboard", "look", "bookends", "youtube"]:
 		_ok(_item(menu, k) >= 0, "a plain note's \"+\" offers %s" % k)
 	var look := _item(menu, "look")
 	_ok(look >= 0 and menu.is_item_disabled(look) and menu.get_item_tooltip(look).contains("Picture"),
@@ -313,8 +313,8 @@ func _menu() -> void:
 	_ok(Components.attach_blocks("youtube") == {"youtube": {}}, "attaching YouTube writes its block")
 	Deps._resolved = keep
 	Components.attach_menu(menu, ["text"])
-	cards = _item(menu, "cards")
-	_ok(cards >= 0 and menu.is_item_disabled(cards) == not Components.not_ready("cards").is_empty(),
+	cards = _item(menu, "table")
+	_ok(cards >= 0 and menu.is_item_disabled(cards) == not Components.not_ready("table").is_empty(),
 		"and with the agents back, Cards is lit exactly when this machine has a writer and a painter")
 	# asked as Android: nothing but what a phone can do
 	Deps.platform_override = "android"

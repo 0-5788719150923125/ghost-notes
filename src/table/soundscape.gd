@@ -144,6 +144,7 @@ const LAYERS := {
 	"stream": "running water - a brook, a fountain, a gutter after rain",
 	"insects": "insects of a warm evening or a summer day",
 	"ride": "the ride, heard - the table's own `ride`: a rumble through the floor and the roll of the wheels, every knock and jolt heard as it shakes the table",
+	"creatures": "animals heard and never seen, each made of numbers rather than a kind - a hatchling dragon dozing by the hearth, a cat asleep on a chair, frogs at the pond's edge, pigeons roosting under the eaves, an owl out in the yard, a puppy in its basket",
 }
 ## THE RIDE HEARD, by what the table is aboard ([method _ride_block]): the rumble's corner (Hz) and level,
 ## the wheels' roll (its middle, Hz - 0 none - and level), a jolt's thump and its tick (Hz - 0 none), and
@@ -196,12 +197,41 @@ const INSECTS := {
 	"crickets": "crickets in the grass - chirp after chirp, each at its own pace",
 	"cicadas": "cicadas in the trees - a dry buzz that swells and fades",
 }
+## THE CREATURES' CALLS ([method _creatures_block]): what each is, as an agent reads it, and how awake a body
+## is when it makes it (`awake`, 0 asleep to 1 lively: a dozing body snores and purrs, a lively one chirps and
+## squeaks). A call is made of the creature's numbers - its size, its breath - and never of a species.
+const CALLS := {
+	"chirp": {"about": "a short bright note, sliding up or down", "awake": 0.7},
+	"trill": {"about": "a quick warbling run of notes", "awake": 0.8},
+	"purr": {"about": "a low rattling hum running on through slow breaths in and out", "awake": 0.25},
+	"huff": {"about": "a short breathy puff, through the nose or the mouth", "awake": 0.5},
+	"snore": {"about": "a slow rattling breath in and a soft breath out, again and again", "awake": 0.0},
+	"squeak": {"about": "a tiny high note, over almost as soon as it starts", "awake": 0.9},
+	"coo": {"about": "a low round note that swells and falls", "awake": 0.4},
+	"croak": {"about": "a rough low buzz, a rattle in the throat", "awake": 0.55},
+}
+## The most creatures one place has, the most bodies one creature is (`count`), and the most calls sounding
+## at once (a new one waits for room, as a crowded voice would).
+const MAX_CREATURES := 4
+const MAX_BODIES := 6
+const MAX_CALLS := 12
+## THE CREATURES' PLAN is made a window at a time (seconds), each window from its own dice ([method _calls_in]):
+## the calls between any two moments are the same whoever asks - the sound, and whatever shows a huff's breath
+## ([method seen_calls]) - and however the samples are sliced. A call, or a bunch of them, may run on past its
+## window, at most this long (seconds).
+const CREATURE_WINDOW := 8.0
+const LONGEST_CALL := 24.0
+## THE CALLS THAT ARE SEEN as well as heard: a huff's breath, a puff of smoke past the table's edge.
+const SEEN_CALLS := ["huff"]
+## Each call's level, beside the rest of a place (measured alone: tests/table/creatures_check.gd).
+const CALL_LEVEL := {"chirp": 0.19, "trill": 0.14, "purr": 0.22, "huff": 0.65, "snore": 0.33, "squeak": 0.13,
+	"coo": 0.38, "croak": 0.5}
 
 
-## THE VOCABULARY, as an agent reads it ([CardPrompts.set_dresser], `insert: sounds`).
+## THE VOCABULARY, as an agent reads it ([TablePrompts.set_dresser], `insert: sounds`).
 static func describe() -> String:
 	var lines := PackedStringArray()
-	lines.append("THE SOUND (`sound`): {\"why\", \"wind\", \"water\", \"rain\", \"fire\", \"stream\", \"insects\"} - what the place sounds like behind the reader's voice, every part optional. Leave `sound` out, or a part of it, for a quiet room: the reader alone, as every earlier table was.")
+	lines.append("THE SOUND (`sound`): {\"why\", \"wind\", \"water\", \"rain\", \"fire\", \"stream\", \"insects\", \"creatures\"} - what the place sounds like behind the reader's voice, every part optional. Leave `sound` out, or a part of it, for a quiet room: the reader alone, as every earlier table was.")
 	lines.append("- why: a few words - where this is, heard.")
 	lines.append("- wind: {\"through\", \"level\" 0-1, \"from\"} - %s. through:" % String(LAYERS["wind"]))
 	for k in THROUGH:
@@ -219,6 +249,10 @@ static func describe() -> String:
 	for k in INSECTS:
 		lines.append("  - %s: %s" % [k, String(INSECTS[k])])
 	lines.append("- ride: {\"level\" 0-1} - %s. Heard only on a table with a `ride`: give it whenever the ride should be heard - a train's rumble and its wheels knocking, a cart's jolting, an airplane's drone (0.6 when left out)." % String(LAYERS["ride"]))
+	lines.append("- creatures: [{\"name\", \"size\" 0-1, \"breath\" 0-1, \"calls\", \"count\" 1-%d, \"rate\", \"side\" -1..1, \"near\" 0-1, \"awake\" [start, end], \"over\"}, ...] - %s; at most %d. What it sounds like is its numbers: `size` from small, quick and high (0) to large, slow and deep (1); `breath` from clear (0) to breathy (1); `calls`, the sounds it makes, any of:" % [MAX_BODIES, String(LAYERS["creatures"]), MAX_CREATURES])
+	for k in CALLS:
+		lines.append("  - %s: %s" % [k, String((CALLS[k] as Dictionary)["about"])])
+	lines.append("  count: how many of them there are, each its own voice; rate: about how many calls a minute when lively, fewer when drowsy, in uneven bunches; side: where they are, -1 the reader's far left to 1 the far right; near: 0 far off to 1 close by the table - quieter and duller far off; awake: how lively they are at the start and at the end, 0 fast asleep (snores and purrs) to 1 wide awake (chirps and squeaks), reached over `over` seconds (900 when left out). They are heard only - nothing on the table shows them.")
 	lines.append("  from: where a sound is, as a sun's `from` (front, right, back left, ... or degrees). distance: 0 at the table's edge, 1 far off - quieter and duller.")
 	lines.append("A sound belongs to the place the room's painting and the light show: the sea where the sea is, rain where the sky is gray, no fire where none burns. Most places have one or two sounds; a quiet room none.")
 	return "\n".join(lines)
@@ -288,6 +322,23 @@ static func sanitize(raw: Variant, notes: PackedStringArray = PackedStringArray(
 			"strength": Props._num((ins as Dictionary).get("strength"), 0.5, 0.0, 1.0)}
 	elif ins != null:
 		notes.append("the insects were not an object {kind, strength} - left out")
+	var cr: Variant = d.get("creatures")
+	if cr is Dictionary:
+		cr = [cr]
+	if cr is Array:
+		var kept: Array = []
+		for c in cr:
+			if not (c is Dictionary):
+				notes.append("a creature was not an object {name, size, breath, calls, ...} - left out")
+			elif kept.size() >= MAX_CREATURES:
+				notes.append("more than %d creatures - the rest left out" % MAX_CREATURES)
+				break
+			else:
+				kept.append(_creature(c, notes))
+		if not kept.is_empty():
+			out["creatures"] = kept
+	elif cr != null:
+		notes.append("the creatures were not a list of objects {name, size, breath, calls, ...} - left out")
 	if out.is_empty():
 		return {}
 	out["why"] = Props._text(d.get("why", ""), 200)
@@ -324,6 +375,10 @@ static func summary(sound: Dictionary) -> String:
 		parts.append(String((sound["insects"] as Dictionary)["kind"]))
 	if sound.get("ride") is Dictionary:
 		parts.append("the ride%s" % (", silent" if float((sound["ride"] as Dictionary)["level"]) < 0.01 else ""))
+	if sound.get("creatures") is Array:
+		for c in sound["creatures"]:
+			var nm := String((c as Dictionary)["name"])
+			parts.append("%s (%s)" % [nm if not nm.is_empty() else "a creature", ", ".join(PackedStringArray((c as Dictionary)["calls"]))])
 	return ", ".join(parts)
 
 
@@ -350,6 +405,193 @@ static func of_table(table: Dictionary, seed: int) -> Dictionary:
 		# a wind with no light's and none of its own: a breath, heard
 		plan = Winds.plan({}, hash([seed, "wind outside"]))
 	return {"sound": sound, "wind": plan, "ride": ride}
+
+
+# --- the creatures' plan ------------------------------------------------------------------------------
+
+## ONE CREATURE, made safe ([method sanitize]): every field there, its calls the ones [constant CALLS] knows.
+static func _creature(c: Dictionary, notes: PackedStringArray) -> Dictionary:
+	var calls: Array = []
+	var raw: Variant = c.get("calls")
+	if raw is String:
+		raw = [raw]
+	if raw is Array:
+		for k in raw:
+			var s := String(k).strip_edges().to_lower() if k is String else ""
+			if CALLS.has(s):
+				if not calls.has(s):
+					calls.append(s)
+			else:
+				notes.append("a creature's call \"%s\" is not one of %s - left out" % [str(k), ", ".join(PackedStringArray(CALLS.keys()))])
+	if calls.is_empty():
+		if raw != null:
+			notes.append("a creature with no call it can make - it chirps")
+		calls = ["chirp"]
+	var aw: Variant = c.get("awake")
+	var awake := [0.5, 0.5]
+	if aw is Array and (aw as Array).size() >= 2:
+		awake = [Props._num(aw[0], 0.5, 0.0, 1.0), Props._num(aw[1], 0.5, 0.0, 1.0)]
+	elif aw != null:
+		var a := Props._num(aw, 0.5, 0.0, 1.0)
+		awake = [a, a]
+	return {"name": Props._text(c.get("name", ""), 60), "size": Props._num(c.get("size"), 0.3, 0.0, 1.0),
+		"breath": Props._num(c.get("breath"), 0.4, 0.0, 1.0), "calls": calls,
+		"count": int(Props._num(c.get("count"), 1.0, 1.0, float(MAX_BODIES))), "rate": Props._num(c.get("rate"), 6.0, 0.2, 40.0),
+		"side": Props._num(c.get("side"), 0.0, -1.0, 1.0), "near": Props._num(c.get("near"), 0.5, 0.0, 1.0),
+		"awake": awake, "over": Props._num(c.get("over"), 900.0, 30.0, 7200.0)}
+
+
+## HOW LIVELY creature [param c] is at show time [param t], 0 asleep to 1 wide awake: from its `awake` at the
+## start to its end over its `over` seconds, eased, with a slow wander of its own about that - a dozing body
+## stirs and settles again. [param salt] is the creature's own.
+static func _awake_at(c: Dictionary, t: float, salt: int) -> float:
+	var aw: Array = c["awake"]
+	var a := lerpf(float(aw[0]), float(aw[1]), smoothstep(0.0, 1.0, clampf(t / float(c["over"]), 0.0, 1.0)))
+	var ph := float(salt & 0xFFFF) / 65536.0 * TAU
+	return clampf(a + 0.12 * sin(TAU * t / 97.0 + ph) + 0.06 * sin(TAU * t / 41.0 + 2.3 * ph), 0.0, 1.0)
+
+
+## THE BODIES creature [param ci] of a place is (its `count`): `[{side, pitch}]` - each a little apart from the
+## rest round the creature's `side`, and each its own voice, a little higher or lower.
+static func _bodies(c: Dictionary, seed: int, ci: int) -> Array:
+	var r := RandomNumberGenerator.new()
+	r.seed = hash([seed, "bodies", ci])
+	var n := int(c["count"])
+	var out: Array = []
+	for b in n:
+		var spread := 0.0 if n == 1 else r.randf_range(-0.22, 0.22)
+		out.append({"side": clampf(float(c["side"]) + spread, -1.0, 1.0), "pitch": exp(r.randf_range(-0.06, 0.06))})
+	return out
+
+
+## Which of [param calls] a body as lively as [param aw] makes next: the ones nearest how awake it is, most often.
+static func _pick_call(calls: Array, aw: float, r: RandomNumberGenerator) -> String:
+	var weights := PackedFloat32Array()
+	var total := 0.0
+	for k in calls:
+		var d := (float((CALLS[String(k)] as Dictionary)["awake"]) - aw) / 0.4
+		weights.append(exp(-d * d) + 0.02)
+		total += weights[weights.size() - 1]
+	var u := r.randf() * total
+	for i in calls.size():
+		u -= weights[i]
+		if u <= 0.0:
+			return String(calls[i])
+	return String(calls[calls.size() - 1])
+
+
+## THE CALLS creature [param ci] (made safe, [param c]) begins in window [param k] ([constant CREATURE_WINDOW]):
+## `[{t, call, body, dur, parts, pitch, amp, salt}]`, in order. A BODY MAKES ONE CALL AT A TIME: a call is left
+## out while its body is still making one - one of this window's kept before it, or any the windows before drew
+## that is still sounding ([method _drawn_in], as drawn: so this stays a closed form of the window, never a
+## chain back to the first).
+static func _calls_in(c: Dictionary, ci: int, k: int, seed: int) -> Array:
+	var busy: Array = []
+	for j in range(maxi(1, ceili(LONGEST_CALL / CREATURE_WINDOW)), 0, -1):
+		busy.append_array(_drawn_in(c, ci, k - j, seed))
+	var out: Array = []
+	for e in _drawn_in(c, ci, k, seed):
+		var t := float(e["t"])
+		var free := true
+		for b in busy:
+			if int(b["body"]) == int(e["body"]) and t < float(b["t"]) + float(b["dur"]) and t + float(e["dur"]) > float(b["t"]):
+				free = false
+				break
+		if free:
+			out.append(e)
+			busy.append(e)
+	return out
+
+
+## THE CALLS drawn for window [param k] from its own dice, before [method _calls_in] keeps a body to one at a time.
+## They come in BUNCHES - a run of chirps, two coos - more and closer together the livelier it is, the waits
+## between the bunches uneven (a Poisson count of them in the window, each at its own moment); a long call (a
+## purr, a snore) ends its bunch. A purr's `parts` are its breaths, a snore's its breath in, breath out and rest,
+## again (seconds).
+static func _drawn_in(c: Dictionary, ci: int, k: int, seed: int) -> Array:
+	var r := RandomNumberGenerator.new()
+	r.seed = hash([seed, "creature", ci, k])
+	var w0 := float(k) * CREATURE_WINDOW
+	var aw := _awake_at(c, w0 + CREATURE_WINDOW * 0.5, hash([seed, "awake", ci]))
+	var bunch := 1.0 + 1.6 * aw
+	var lam := float(c["rate"]) / 60.0 * CREATURE_WINDOW * lerpf(0.3, 1.0, aw) / bunch
+	# a Poisson count, by inversion
+	var n := 0
+	var p := exp(-lam)
+	var s := p
+	var u := r.randf()
+	while u > s and n < 40:
+		n += 1
+		p *= lam / float(n)
+		s += p
+	var starts: Array = []
+	for i in n:
+		starts.append(w0 + r.randf() * CREATURE_WINDOW)
+	starts.sort()
+	var calls: Array = c["calls"]
+	var df := lerpf(0.75, 1.5, float(c["size"]))
+	var out: Array = []
+	for st in starts:
+		var t := float(st)
+		var body := r.randi_range(0, int(c["count"]) - 1)
+		var m := 1
+		while m < 6 and r.randf() < (bunch - 1.0) / bunch:
+			m += 1
+		for j in m:
+			var kind := _pick_call(calls, aw, r)
+			var parts := PackedFloat32Array()
+			var dur := 0.0
+			match kind:
+				"purr":
+					var breath := r.randf_range(1.1, 2.0) * sqrt(df)
+					for b in r.randi_range(2, 5):
+						parts.append(breath * r.randf_range(0.9, 1.1))
+				"snore":
+					for b in r.randi_range(2, 3):
+						parts.append(r.randf_range(1.2, 1.8) * sqrt(df))
+						parts.append(r.randf_range(1.4, 2.2) * sqrt(df))
+						parts.append(r.randf_range(0.3, 0.9))
+				"chirp":
+					dur = r.randf_range(0.06, 0.16) * df
+				"trill":
+					dur = r.randf_range(0.3, 0.8) * df
+				"squeak":
+					dur = r.randf_range(0.04, 0.12) * df
+				"coo":
+					dur = r.randf_range(0.35, 0.8) * df
+				"croak":
+					dur = r.randf_range(0.2, 0.5) * df
+				_:
+					dur = r.randf_range(0.25, 0.6) * df
+			for x in parts:
+				dur += x
+			out.append({"t": t, "call": kind, "body": body, "dur": dur, "parts": parts, "pitch": exp(r.randf_range(-0.08, 0.08)),
+				"amp": exp(0.25 * r.randfn()) * lerpf(0.75, 1.1, aw), "salt": r.randi()})
+			if kind == "purr" or kind == "snore":
+				break
+			t += dur + r.randf_range(0.08, 0.6) * (1.6 - aw)
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["t"]) < float(b["t"]))
+	return out
+
+
+## THE CALLS THAT ARE SEEN between show times [param t0] and [param t1] ([constant SEEN_CALLS]: a huff's
+## breath), from the same plan the sound plays - for [param sound] as [method sanitize] gives it and the
+## [param seed] the soundscape was made with: `[{t, call, side, near, size, name}]`, in order of `t`. For the
+## medium, to put a puff of smoke past the table's edge on that side as each huff is heard.
+static func seen_calls(sound: Dictionary, seed: int, t0: float, t1: float) -> Array:
+	var out: Array = []
+	var cs: Array = sound["creatures"] if sound.get("creatures") is Array else []
+	for ci in cs.size():
+		var c: Dictionary = cs[ci]
+		var bodies := _bodies(c, seed, ci)
+		for k in range(floori((t0 - LONGEST_CALL) / CREATURE_WINDOW), floori(t1 / CREATURE_WINDOW) + 1):
+			for e in _calls_in(c, ci, k, seed):
+				var t := float(e["t"])
+				if t >= t0 and t < t1 and SEEN_CALLS.has(String(e["call"])):
+					out.append({"t": t, "call": String(e["call"]), "side": float((bodies[int(e["body"])] as Dictionary)["side"]),
+						"near": float(c["near"]), "size": float(c["size"]), "name": String(c["name"])})
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["t"]) < float(b["t"]))
+	return out
 
 
 # --- the synthesizer --------------------------------------------------------------------------------
@@ -420,6 +662,45 @@ class Eddy:
 	var s := PackedFloat64Array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])   # two svf stages, three pink poles
 
 
+## ONE CALL SOUNDING ([method _run_call]): its source - a TONE (a sine with a little of its octave: chirps,
+## trills, squeaks), a VOICE (a sawtooth with its edges smoothed so a high one does not alias: coos, croaks) or
+## BREATH (noise: huffs, purrs, snores) - through two formants, its pitch and its level each a closed form of
+## the call's own time, and its ears. Its own dice ([member rng]), so a call sounds the same whatever else
+## is sounding.
+class Call:
+	var kind := ""
+	var start := 0           # the sample it starts on, counted from the soundscape's first
+	var dur := 0.0
+	var parts := PackedFloat32Array()   # a purr's breaths; a snore's breath in, out and rest, again
+	var f0 := 440.0          # its pitch at the start (Hz), and how far it slides over the call
+	var glide := 1.0
+	var fm := 0.0            # a trill's warble (Hz), and how deep
+	var fm_depth := 0.0
+	var am := 0.0            # a purr's or a snore's rattle (Hz)
+	var tone := 1.0          # how much of it is the tone or the voice, and how much breath
+	var air := 0.0
+	var voiced := false      # a sawtooth, else a sine
+	var tonal := false       # its first formant follows its pitch: a whistle
+	var jitter := 0.0        # a croak's roughness: each period its own length and level
+	var f1 := 500.0
+	var q1 := 2.0
+	var f2 := 1500.0
+	var q2 := 3.0
+	var g2 := 0.0
+	var amp := 0.3
+	var attack := 0.01
+	var release := 0.05
+	var dull := 0.5          # a one-pole low-pass for distance, per sample
+	var gl := 0.5
+	var gr := 0.5
+	var ph := 0.0            # the source's phase, 0-1
+	var am_ph := 0.0
+	var per_amp := 1.0       # this period's level and length beside the pitch (a croak's jitter)
+	var per_len := 1.0
+	var rng := 1
+	var s := PackedFloat64Array([0.0, 0.0, 0.0, 0.0, 0.0])   # two svf (two each), the low-pass
+
+
 var _sr := 22050.0
 var _t0 := 0.0
 var _n := 0                       # samples rendered, whole blocks
@@ -482,6 +763,10 @@ var _st := {}
 var _in := {}
 var _ride := {}                   # the table's ride (Rides.plan), heard when the sound names it
 var _ri := {}
+var _seed := 0                    # the place's seed, as made: the creatures' plan is drawn from it
+var _cr: Array = []               # the creatures heard: [{c, ci, bodies, next_k, queue}]
+var _calls: Array[Call] = []      # their calls sounding now
+var _crng := 1                    # the creatures' own dice: a creature added changes nothing else in a place
 
 static var _noise := PackedFloat32Array()
 static var _noise_lock := Mutex.new()
@@ -498,6 +783,8 @@ func _init(sound: Dictionary, wind: Dictionary, seed: int, sample_rate: int, t0 
 	_wind = wind
 	_ride = ride
 	_rng = (hash([seed, "sound"]) & 0x7FFFFFFF) | 1
+	_seed = seed
+	_crng = (hash([seed, "creatures"]) & 0x7FFFFFFF) | 1
 	_breath = Vector3(_rand() * TAU, _rand() * TAU, _rand() * TAU)
 	_bl.resize(CR)
 	_br.resize(CR)
@@ -519,7 +806,7 @@ func _init(sound: Dictionary, wind: Dictionary, seed: int, sample_rate: int, t0 
 
 ## Whether there is anything to hear.
 func active() -> bool:
-	return not _bands.is_empty() or _in.has("crickets")
+	return not _bands.is_empty() or _in.has("crickets") or not _cr.is_empty()
 
 
 ## The dial's level at [param d], 0-1, in dB over the layers' own ([constant LEVEL_DB]).
@@ -848,6 +1135,12 @@ func _setup() -> void:
 				bands.append({"voices": voices, "t": _range(-8.0, 0.0), "rise": 3.0,
 					"hold": _range(4.0, 10.0), "fall": 2.5, "rest": _range(5.0, 18.0)})
 			_in = {"cicadas": bands, "strength": strength}
+	if _sound.get("creatures") is Array:
+		# each creature's plan from the window that could still be sounding when the soundscape starts
+		var cs: Array = _sound["creatures"]
+		for ci in cs.size():
+			_cr.append({"c": cs[ci], "ci": ci, "bodies": _bodies(cs[ci], _seed, ci),
+				"next_k": floori((_t0 - LONGEST_CALL) / CREATURE_WINDOW), "queue": []})
 
 
 # --- a block ------------------------------------------------------------------------------------------
@@ -875,6 +1168,8 @@ func _block() -> void:
 		_insects_block(t, dt)
 	if not _ri.is_empty():
 		_ride_block(t, dt)
+	if not _cr.is_empty():
+		_creatures_block(t, dt)
 	for b in _bands:
 		_run(b)
 	if _w.has("eddies"):
@@ -1827,3 +2122,367 @@ func _run(b: Band) -> void:
 	s[5] = brn
 	b.e1 = e1
 	b.e2 = e2
+
+
+# --- the creatures ------------------------------------------------------------------------------------
+
+## The creatures' own dice: an xorshift of their own, so a creature added to a place moves no draw of the rest.
+func _cr_rand() -> float:
+	var x := _crng
+	x ^= (x << 13) & 0xFFFFFFFF
+	x ^= x >> 17
+	x ^= (x << 5) & 0xFFFFFFFF
+	_crng = x
+	return float(x) / 4294967296.0
+
+
+## A call's own dice ([member Call.rng]).
+static func _call_rand(v: Call) -> float:
+	var x := v.rng
+	x ^= (x << 13) & 0xFFFFFFFF
+	x ^= x >> 17
+	x ^= (x << 5) & 0xFFFFFFFF
+	v.rng = x
+	return float(x) / 4294967296.0
+
+
+## THE CREATURES over the block: every window of their plan that has begun planned ([method _calls_in]), and
+## every call that begins before the block ends started where it begins - joined part way when it began before
+## the soundscape did - while there is room for it.
+func _creatures_block(t: float, dt: float) -> void:
+	for d in _cr:
+		var cd: Dictionary = d
+		var c: Dictionary = cd["c"]
+		var q: Array = cd["queue"]
+		while float(int(cd["next_k"])) * CREATURE_WINDOW < t + dt:
+			q.append_array(_calls_in(c, int(cd["ci"]), int(cd["next_k"]), _seed))
+			cd["next_k"] = int(cd["next_k"]) + 1
+			q.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["t"]) < float(b["t"]))
+		while not q.is_empty() and float((q[0] as Dictionary)["t"]) < t + dt:
+			var e: Dictionary = q.pop_front()
+			if float(e["t"]) + float(e["dur"]) > t and _calls.size() < MAX_CALLS:
+				_calls.append(_voice_of(c, (cd["bodies"] as Array)[int(e["body"])], e))
+	var left: Array[Call] = []
+	for v in _calls:
+		if not _run_call(v):
+			left.append(v)
+	_calls = left
+
+
+## A CALL MADE READY to sound, from its creature [param c], its body and its moment in the plan [param e]: its
+## source, its pitch and formants by the creature's size (formants move less than the pitch: a body's throat
+## is not its voice), its breath, and where it is heard - quieter and duller the further off.
+func _voice_of(c: Dictionary, body: Dictionary, e: Dictionary) -> Call:
+	var v := Call.new()
+	var kind := String(e["call"])
+	var size := float(c["size"])
+	var breath := float(c["breath"])
+	var sf := pow(2.0, lerpf(1.2, -1.2, size)) * float(body["pitch"]) * float(e["pitch"])
+	var root := sqrt(sf)
+	var r := RandomNumberGenerator.new()
+	r.seed = int(e["salt"])
+	v.kind = kind
+	v.start = int(round((float(e["t"]) - _t0) * _sr))
+	v.dur = float(e["dur"])
+	v.parts = e["parts"]
+	v.rng = (int(e["salt"]) & 0x7FFFFFFF) | 1
+	v.amp = float(CALL_LEVEL[kind]) * float(e["amp"])
+	match kind:
+		"chirp":
+			v.tonal = true
+			v.f0 = 2600.0 * sf
+			v.glide = r.randf_range(1.25, 1.6) if r.randf() < 0.4 else r.randf_range(0.6, 0.8)
+			v.air = 0.35 * breath
+			v.attack = 0.006
+			v.release = 0.03
+		"trill":
+			v.tonal = true
+			v.f0 = 2000.0 * sf
+			v.glide = r.randf_range(0.85, 1.15)
+			v.fm = r.randf_range(14.0, 26.0) * lerpf(1.2, 0.8, size)
+			v.fm_depth = r.randf_range(0.06, 0.14)
+			v.air = 0.3 * breath
+			v.attack = 0.02
+			v.release = 0.06
+		"squeak":
+			v.tonal = true
+			v.f0 = 3800.0 * sf
+			v.glide = r.randf_range(1.15, 1.4)
+			v.air = 0.15 * breath
+			v.attack = 0.004
+			v.release = 0.02
+		"coo":
+			v.voiced = true
+			v.f0 = 320.0 * sf
+			v.tone = 1.0 - 0.5 * breath
+			v.air = 0.3 * breath
+			v.f1 = 650.0 * root
+			v.q1 = 2.0
+			v.f2 = 1500.0 * root
+			v.q2 = 3.0
+			v.g2 = 0.35
+			v.attack = 0.06
+			v.release = 0.15
+		"croak":
+			v.voiced = true
+			v.f0 = 140.0 * sf
+			v.jitter = 0.15
+			v.tone = 1.0 - 0.3 * breath
+			v.air = 0.25 * breath
+			v.f1 = 520.0 * root
+			v.q1 = 3.0
+			v.f2 = 1500.0 * root
+			v.q2 = 4.0
+			v.g2 = 0.6
+			v.attack = 0.015
+			v.release = 0.05
+		"purr":
+			v.voiced = true
+			v.am = (26.0 - 6.0 * size) * r.randf_range(0.95, 1.05)
+			v.f0 = v.am * 2.0
+			v.tone = 0.25 * (1.0 - breath)
+			v.air = 1.0
+			v.f1 = 380.0 * root
+			v.q1 = 1.4
+			v.f2 = 1100.0 * root
+			v.q2 = 2.5
+			v.g2 = 0.5
+		"snore":
+			v.voiced = true
+			v.am = r.randf_range(30.0, 45.0)
+			v.f0 = 70.0 * sf
+			v.tone = 0.15
+			v.air = 1.0
+			v.f1 = 320.0 * root
+			v.q1 = 1.5
+			v.f2 = 950.0 * root
+			v.q2 = 2.5
+			v.g2 = 0.5
+		_:
+			# a huff: breath, and a little of a grunt under it
+			v.voiced = true
+			v.f0 = 110.0 * sf
+			v.tone = 0.25 * (1.0 - breath)
+			v.air = 1.0
+			v.f1 = 700.0 * root
+			v.q1 = 1.1
+			v.f2 = 1900.0 * root
+			v.q2 = 1.5
+			v.g2 = 0.4
+			v.attack = 0.012
+			v.release = 0.06
+	var near := float(c["near"])
+	var ears := _pan(float(body["side"]))
+	var g := lerpf(0.3, 1.0, near)
+	v.gl = ears.x * g
+	v.gr = ears.y * g
+	v.dull = 1.0 - exp(-TAU * minf(lerpf(2200.0, 10000.0, near), _sr * 0.45) / _sr)
+	return v
+
+
+## The pitch of call [param v] at [param tau] seconds into it (Hz), never near the top of the band.
+func _pitch_at(v: Call, tau: float) -> float:
+	var u := clampf(tau / maxf(v.dur, 1e-3), 0.0, 1.0)
+	var f := v.f0
+	match v.kind:
+		"chirp":
+			f = v.f0 * pow(v.glide, u)
+		"squeak":
+			f = v.f0 * pow(v.glide, minf(u / 0.7, 1.0)) * (1.0 - 0.08 * smoothstep(0.7, 1.0, u))
+		"trill":
+			f = v.f0 * pow(v.glide, u) * (1.0 + v.fm_depth * sin(TAU * v.fm * tau))
+		"coo":
+			# a hump: it rises a little, then falls away
+			f = v.f0 * (1.0 + 0.08 * smoothstep(0.0, 0.35, u) - 0.2 * smoothstep(0.35, 1.0, u))
+		"croak":
+			f = v.f0 * (1.0 - 0.1 * u)
+	return clampf(f, 20.0, _sr * 0.42)
+
+
+## Which part of a purr's or a snore's [member Call.parts] [param tau] falls in, and how far through it:
+## `Vector2(index, 0-1)`, or index -1 past the last.
+static func _part_at(v: Call, tau: float) -> Vector2:
+	var acc := 0.0
+	for j in v.parts.size():
+		var l := v.parts[j]
+		if tau < acc + l:
+			return Vector2(float(j), (tau - acc) / maxf(l, 1e-3))
+		acc += l
+	return Vector2(-1.0, 1.0)
+
+
+## THE LEVEL of call [param v] at [param tau] seconds into it, 0-1. A PURR BREATHES: louder breathing out
+## than in (5 dB), falling almost away where a breath turns, and faded in and out as a whole - its rattle is a pulse,
+## the one a place keeps, and a pulse held steady is a machine (see the class note). A snore is its breath in,
+## louder and rattling, its breath out, soft, and a rest.
+func _level_at(v: Call, tau: float) -> float:
+	if tau < 0.0 or tau >= v.dur:
+		return 0.0
+	var u := tau / maxf(v.dur, 1e-3)
+	match v.kind:
+		"purr":
+			var pa := _part_at(v, tau)
+			if pa.x < 0.0:
+				return 0.0
+			var e := 0.08 + 0.92 * smoothstep(0.0, 0.25, pa.y) * (1.0 - smoothstep(0.7, 1.0, pa.y))
+			return e * (1.0 if int(pa.x) % 2 == 0 else 0.55) * smoothstep(0.0, 0.5, tau) * (1.0 - smoothstep(v.dur - 0.6, v.dur, tau))
+		"snore":
+			var pa := _part_at(v, tau)
+			match int(pa.x) % 3 if pa.x >= 0.0 else 2:
+				0:
+					return pow(sin(PI * pa.y), 0.8)
+				1:
+					return 0.45 * sin(PI * pa.y)
+			return 0.0
+	var e := smoothstep(0.0, v.attack, tau) * (1.0 - smoothstep(v.dur - v.release, v.dur, tau))
+	match v.kind:
+		"chirp":
+			e *= 1.0 - 0.6 * u
+		"huff":
+			e *= pow(1.0 - u, 1.6)
+		"trill":
+			# its notes: the level rises and falls with the warble
+			e *= 0.55 + 0.45 * (0.5 + 0.5 * cos(TAU * v.fm * tau))
+	return e
+
+
+## How deep call [param v]'s rattle is at [param tau]: a purr's all through, a snore's only breathing in.
+static func _rattle_at(v: Call, tau: float) -> float:
+	match v.kind:
+		"purr":
+			return 0.85
+		"snore":
+			var pa := _part_at(v, tau)
+			return 0.6 if pa.x >= 0.0 and int(pa.x) % 3 == 0 else 0.05
+	return 0.0
+
+
+## How far call [param v]'s formants stand from their own at [param tau]: a huff's falls as the breath empties,
+## a purr breathing in and a snore breathing out are a little higher and airier.
+static func _formant_at(v: Call, tau: float) -> float:
+	match v.kind:
+		"huff":
+			return 1.0 - 0.35 * clampf(tau / maxf(v.dur, 1e-3), 0.0, 1.0)
+		"purr":
+			return 1.1 if int(_part_at(v, tau).x) % 2 == 1 else 1.0
+		"snore":
+			return 1.5 if int(_part_at(v, tau).x) % 3 == 1 else 1.0
+	return 1.0
+
+
+## ONE CALL over the block, from the sample it starts on (or the block's first) to the block's end or its own:
+## the source, its rattle, the two formants (Simper's state-variable band-passes, unit peak, as [method _run]'s),
+## the low-pass of distance, and its level eased across the block. True when it is over.
+func _run_call(v: Call) -> bool:
+	var i0 := maxi(0, v.start - _n)
+	if i0 >= CR:
+		return false
+	var tau0 := float(_n + i0 - v.start) / _sr
+	var tau1 := float(_n + CR - v.start) / _sr
+	var span := float(CR - i0)
+	var l0 := _level_at(v, tau0) * v.amp
+	var l1 := _level_at(v, tau1) * v.amp
+	var p0 := _pitch_at(v, tau0)
+	var p1 := _pitch_at(v, tau1)
+	var mid := (tau0 + tau1) * 0.5
+	var depth := _rattle_at(v, mid)
+	var fm := _formant_at(v, mid)
+	var dl := (l1 - l0) / span
+	var rr := pow(p1 / p0, 1.0 / span)
+	# the formants: a whistle's first follows its pitch
+	var fa := clampf(sqrt(p0 * p1) if v.tonal else v.f1 * fm, 30.0, _sr * 0.45)
+	var fb := clampf(v.f2 * fm, 30.0, _sr * 0.45)
+	var qa := 3.0 if v.tonal else v.q1
+	var ga := tan(PI * fa / _sr)
+	var ka := 1.0 / qa
+	var a1 := 1.0 / (1.0 + ga * (ga + ka))
+	var a2 := ga * a1
+	var a3 := ga * a2
+	var gb := tan(PI * fb / _sr)
+	var kb := 1.0 / v.q2
+	var b1 := 1.0 / (1.0 + gb * (gb + kb))
+	var b2 := gb * b1
+	var b3 := gb * b2
+	var g2 := v.g2
+	var s := v.s
+	var s1 := s[0]
+	var s2 := s[1]
+	var s3 := s[2]
+	var s4 := s[3]
+	var lp := s[4]
+	var dull := v.dull
+	var nz := _noise
+	var o := int(_call_rand(v) * 65536.0)
+	var obl := _bl
+	var obr := _br
+	var gl := v.gl
+	var gr := v.gr
+	var lvl := l0
+	var f := p0
+	var ph := v.ph
+	var aph := v.am_ph
+	var aw := v.am / _sr
+	var tone := v.tone
+	var air := v.air
+	var voiced := v.voiced
+	var per_amp := v.per_amp
+	var per_len := v.per_len
+	var jitter := v.jitter
+	for i in range(i0, CR):
+		var w := f / _sr / per_len
+		ph += w
+		if ph >= 1.0:
+			ph -= 1.0
+			if jitter > 0.0:
+				per_len = 1.0 + jitter * (_call_rand(v) * 2.0 - 1.0)
+				per_amp = maxf(0.2, 1.0 + 2.0 * jitter * (_call_rand(v) * 2.0 - 1.0))
+		var src := 0.0
+		if voiced:
+			# a sawtooth, its jump smoothed over a sample either side (polyBLEP)
+			src = 2.0 * ph - 1.0
+			if ph < w:
+				var x := ph / w
+				src -= x + x - x * x - 1.0
+			elif ph > 1.0 - w:
+				var x := (ph - 1.0) / w
+				src -= x * x + x + x + 1.0
+			src *= per_amp
+		else:
+			var sn := sin(TAU * ph)
+			src = sn + 0.3 * sn * cos(TAU * ph)
+		var x := tone * src + air * nz[(o + i) & _NM]
+		if depth > 0.0:
+			aph += aw
+			if aph >= 1.0:
+				aph -= 1.0
+			var pu := 0.5 - 0.5 * cos(TAU * aph)
+			x *= 1.0 - depth + depth * pu * pu * 2.67
+		var v3 := x - s2
+		var v1 := a1 * s1 + a2 * v3
+		var v2 := s2 + a2 * s1 + a3 * v3
+		s1 = 2.0 * v1 - s1
+		s2 = 2.0 * v2 - s2
+		var y := ka * v1
+		if g2 > 0.0:
+			var w3 := x - s4
+			var w1 := b1 * s3 + b2 * w3
+			var w2 := s4 + b2 * s3 + b3 * w3
+			s3 = 2.0 * w1 - s3
+			s4 = 2.0 * w2 - s4
+			y += g2 * kb * w1
+		lp += dull * (y - lp)
+		var out := lp * lvl
+		obl[i] += out * gl
+		obr[i] += out * gr
+		lvl += dl
+		f *= rr
+	s[0] = s1
+	s[1] = s2
+	s[2] = s3
+	s[3] = s4
+	s[4] = lp
+	v.ph = ph
+	v.am_ph = aph
+	v.per_amp = per_amp
+	v.per_len = per_len
+	return tau1 >= v.dur

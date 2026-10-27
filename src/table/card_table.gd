@@ -3,7 +3,7 @@ class_name CardTable
 
 ## CardTable - what an episode's look may name, and how a look is made safe to draw.
 ##
-## The producer invents a whole deck for every episode (see [CardPrompts.producer]), but some
+## The producer invents a whole deck for every episode (see [TablePrompts.producer]), but some
 ## of a look is drawn by ghost rather than painted: the card's frame and lettering, the booklet's
 ## type, the things standing on the table. Those are REGISTRIES - the producer picks keys from
 ## them, the table draws them - so a look can be anything an agent imagines and still always be
@@ -46,6 +46,28 @@ const FRAMES := {
 	"corners": "a border with ornamental brackets in the four corners",
 	"deco": "a border with stepped Art Deco corners",
 	"borderless": "no border at all: the painting fills the whole card to its edge (no window, no ornament), the name printed over its foot on a soft veil of the card stock - the further the ink stands from the stock, the lighter that veil can be",
+	"written": "a WRITTEN CARD - a recipe card, a note, a list, a letter: its writing is its face, the card's title and its lines written across it in a hand (`hand`) on its stock (`ruling`), and a small picture beside them (`sketch`) - no border round it and no ornament",
+}
+
+## A WRITTEN CARD ([constant FRAMES] `written`; the user, 2026-10-26: "we need to give the agents more control over
+## what they draw onto a card, because the current card design may not fit a box full of recipe cards"): the hand
+## its writing is in, its stock's ruling, and where its small picture sits - each the producer's.
+const HANDS := {
+	"neat": {"file": "res://fonts/hands/Kalam-Regular.ttf", "scale": 1.0, "about": "a careful, rounded hand - a cook copying a recipe out for keeps"},
+	"quick": {"file": "res://fonts/hands/Caveat-Variable.ttf", "scale": 1.3, "about": "a quick, slanted, looping hand - a note dashed off, a recipe taken down over the phone"},
+	"print": {"file": "res://fonts/hands/PatrickHand-Regular.ttf", "scale": 1.1, "about": "plain printed capitals and small letters, felt-tip or ballpoint - a label, a class's card"},
+	"typed": {"file": "res://fonts/cards/CourierPrime-Regular.ttf", "scale": 0.92, "about": "a typewriter - a typed card, an office's or a community cookbook's"},
+}
+## (A hand's `scale`: its size on a rule against the others' - Caveat's small letters set at Kalam's size read a size
+## smaller.)
+const RULINGS := {
+	"ruled": "an index card's ruling: a red line under the title, faint blue lines under the writing",
+	"plain": "plain stock, the writing kept level by eye",
+	"grid": "faint squares of graph paper, a darker line under the title",
+}
+const SKETCHES := {
+	"corner": "a small square picture in the top corner beside the title, as a printed card's vignette or a doodle",
+	"band": "a picture in a band across the top of the card, the writing under it",
 }
 
 ## THE CARD ITSELF, beyond its frame's rules (2026-10-07, the user: "Every single card we generate right
@@ -170,10 +192,14 @@ const BOX_STYLES := ["open", "shoebox"]
 const BOX_CONTENTS := ["file", "piles", "loose"]
 const BOX_OBJECTS := ["coin", "button", "marble", "ticket"]
 const PACES := ["reflective", "mixed", "quick"]
+## THE CARD'S SIZE AND WHICH WAY IT IS HELD, across by tall as it is read (meters). A card wider than it is tall is
+## printed and held SIDEWAYS (the user, 2026-10-26: "many recipe cards would be held sideways, not vertical").
 const CARD_SIZES := {
-	"large": Vector2(0.07, 0.12),
-	"trading": Vector2(0.0635, 0.0889),
-	"baseball": Vector2(0.0635, 0.0889),
+	"large": {"size": Vector2(0.07, 0.12), "about": "70 x 120 mm, tall: a large reading deck's card"},
+	"trading": {"size": Vector2(0.0635, 0.0889), "about": "63.5 x 88.9 mm, tall: a trading or game card"},
+	"baseball": {"size": Vector2(0.0635, 0.0889), "about": "63.5 x 88.9 mm, tall: a baseball or sports card"},
+	"index": {"size": Vector2(0.127, 0.0762), "about": "a 3 x 5 inch index card, read sideways: a recipe card, a note card, a library or flash card"},
+	"recipe": {"size": Vector2(0.1524, 0.1016), "about": "a 4 x 6 inch recipe card, read sideways: a recipe box's larger card, a postcard"},
 }
 ## WHERE A CARD'S TEXT IS, and so how a drawn card is shown: in a booklet beside it,
 ## on its own back, or with its illustration on the front.
@@ -431,6 +457,12 @@ static func sanitize_look(look: Dictionary) -> Dictionary:
 	if f["style"] == "borderless":
 		f["window"] = "rect"
 		f["ornament"] = "none"
+	# ...nor a written one, whose writing is its face: its hand, its ruling and where its picture sits
+	if f["style"] == "written":
+		f["ornament"] = "none"
+		for k in [["hand", HANDS, "neat"], ["ruling", RULINGS, "ruled"], ["sketch", SKETCHES, "corner"]]:
+			var v := String(frame.get(k[0], "") if frame.get(k[0]) is String else "").strip_edges().to_lower()
+			f[k[0]] = v if (k[1] as Dictionary).has(v) else String(k[2])
 	# the producer may print on any stock, black to white: the name must read on it
 	var ink := color(f["ink"])
 	var readable := legible_ink(ink, color(f["stock"]))
@@ -507,6 +539,9 @@ static func staging_of(plan: Dictionary) -> Dictionary:
 	# A collection drawn from a box normally carries its own printing. A separate
 	# booklet remains available when the plan explicitly chooses one.
 	var default_text := "front" if safe_source == "box" else String(STAGING["text"])
+	# A WRITTEN CARD'S WRITING IS ITS FRONT: it is held up alone and read, never a booklet's page beside it
+	if written(plan.get("look", {}) if plan.get("look") is Dictionary else {}):
+		text = "front"
 	var reversals := str(st.get("reversals", "")).strip_edges().to_lower()
 	# a jumper flies out of a shuffle: never out of a source that is not shuffled
 	var jumpers: Variant = st.get("jumpers", STAGING["jumpers"])
@@ -517,6 +552,36 @@ static func staging_of(plan: Dictionary) -> Dictionary:
 		"pace": pace if pace in PACES else "reflective", "keepsakes": objects,
 		"reversals": reversals if REVERSALS.has(reversals) else String(STAGING["reversals"]),
 		"jumpers": jumpers is bool and bool(jumpers) and bool((TableActions.SOURCES[safe_source] as Dictionary)["jumpers"])}
+
+
+## WHETHER [param plan] DRAWS NO CARDS ([constant TableActions.SOURCES] `none`): its episode is beats of words and
+## work, with no deck, no box and no room kept for a spread.
+static func cardless(plan: Dictionary) -> bool:
+	return String(staging_of(plan)["source"]) == "none"
+
+
+## THE WORK [param plan] HAS PLANNED AT THE TABLE (next/table_work.md): beat ("intro", "close", or a beat's
+## place) -> the work, in the producer's words - empty for a plan with none, as every plan before the work was.
+static func work_of(plan: Dictionary) -> Dictionary:
+	var out := {}
+	for k in ["intro", "close"]:
+		var w := String(plan.get("work_" + k, "")).strip_edges() if plan.get("work_" + k) is String else ""
+		if not w.is_empty():
+			out[k] = w
+	var pos: Array = ((plan.get("spread", {}) as Dictionary).get("positions", [])) as Array if plan.get("spread") is Dictionary else []
+	for i in pos.size():
+		var q: Variant = pos[i]
+		var w := String((q as Dictionary).get("work", "")).strip_edges() if q is Dictionary and (q as Dictionary).get("work") is String else ""
+		if not w.is_empty():
+			out[str(i + 1)] = w
+	return out
+
+
+## HOW MANY BEATS [param plan]'s reading has between its intro and its close: a card's each - or, in a show
+## that draws none ([method cardless]), the beats the producer planned. Both are its spread's positions.
+static func beats(plan: Dictionary) -> int:
+	return ((plan.get("spread", {}) as Dictionary).get("positions", []) as Array).size() \
+		if plan.get("spread") is Dictionary and (plan["spread"] as Dictionary).get("positions") is Array else 0
 
 
 ## WHETHER [param plan]'s cards may come up upside down at all ([constant REVERSALS] `comes`).
@@ -532,7 +597,14 @@ static func reads_reversed(plan: Dictionary) -> bool:
 
 static func card_size(look: Dictionary) -> Vector2:
 	var key := String(look.get("card_size", "large")).strip_edges().to_lower()
-	return CARD_SIZES.get(key, CARD_SIZES["large"])
+	return (CARD_SIZES.get(key, CARD_SIZES["large"]) as Dictionary)["size"]
+
+
+## WHETHER [param look]'s cards are WRITTEN CARDS ([constant FRAMES] `written`): a recipe, a note, a list - their
+## writing the face, in a hand, a small picture beside it.
+static func written(look: Dictionary) -> bool:
+	var f: Dictionary = look.get("frame", {}) if look.get("frame") is Dictionary else {}
+	return String(f.get("style", "")).strip_edges().to_lower() == "written"
 
 
 ## THE PRINTING [param card] belongs to, by name, in [param look]'s `series` - its own `series`, or its

@@ -67,7 +67,7 @@ func _run() -> void:
 		match args[i]:
 			"--out": _out = args[i + 1]
 			"--show": _show = args[i + 1]
-			"--root": CardEpisode.root = args[i + 1]
+			"--root": TableEpisode.root = args[i + 1]
 			"--seed": _seed = int(args[i + 1])
 			"--word": _word = float(args[i + 1])
 			"--every": _every = float(args[i + 1])
@@ -104,7 +104,7 @@ func _run() -> void:
 				_times = []
 				for s in String(args[i + 1]).split(","):
 					_times.append(float(s))
-	var ep := CardEpisode.open(_show, _seed)
+	var ep := TableEpisode.open(_show, _seed)
 	var script := ep.script()
 	if script.is_empty():
 		print("table_look_probe: episode %s #%d has no script yet (%s)" % [_show, _seed, ep.dir])

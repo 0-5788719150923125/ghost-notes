@@ -73,7 +73,7 @@ the decoder. Status: built, gated, waiting on the user's ear (`5_before.wav` aga
   `_emphasize`). Measured on six words of the Cards reading: +17-31 ms italic, +28-55 ms bold.
   Pitch, the strongest cue of stress, is not in it yet (see below). A run of more than `STRESS_RUN_MAX` (3) emphasized
   words is typography (an italic paragraph is a change of time or place) and is sent plain. The
-  Cards reader is told what an asterisk does now (`CardPrompts.SPOKEN_RULES`).
+  Cards reader is told what an asterisk does now (`TablePrompts.SPOKEN_RULES`).
 - **The opening vowel** - the first word's vowel may not fall below `OPENING_VOWEL` (50 ms at
   the request's length scale), through `rest_floor`. A floor, so a first word the model already
   gave its length is untouched.
@@ -528,8 +528,9 @@ at a full stop first, then a colon or semicolon, a comma last. Splitting at comm
 its practice is the other way from ours - a sentence a call is shorter than its best range (100 to 200
 tokens), and its weakest case is the short one (the "Oh." of the Cards Test).
 
-Gates: `hosts/voice/test_kokoro.py` (no rest floored; the window, with Piper's as the control; neither the
-trail nor the lead made on Kokoro, both made on Piper).
+Gates: `hosts/voice/test_kokoro.py` (no rest floored; the window, with Piper's as the control; the lead
+not made on Kokoro, made on Piper; and, below, a stop's release kept before the cut, the trail run up to
+the next word without a step, the short last vowel held).
 
 ### The plan runs late: corrected (2026-10-26)
 
@@ -562,6 +563,45 @@ trail nor the lead made on Kokoro, both made on Piper).
 Listening (`dist/voice_ab/kokoro_batch/`, the three sentences at the note's own settings):
 `A_as_shipped.wav`, `H_plan_corrected.wav`, `I_split_at_commas.wav`; and `D_no_comma_rest.wav`,
 `B_with_previous_raw.wav`, `C_with_next_raw.wav` (the model's own reading, nothing of ours).
+
+### A cut inside the word, and the way back up (2026-10-26, later)
+
+**The user,** on True Tarot 626717 as uploaded: "'You've always felt it, haven't you,' - both of these
+commas felt abrupt, like they truncated the sound badly. The 'it,' was almost acceptable, but the 'you,'
+was clearly cut in the wrong place." The export was rendered again by the host, cut for cut.
+
+- **"you,":** Kokoro holds the vowel straight through the comma into "my", no dip. The trail walked the
+  next word's start back over sound (TRAIL_EARLY, 60 ms, measured on Piper) - on Kokoro that sound was
+  the same vowel - so it faded half the vowel and let go one sample from 16 dB down to full level; the
+  cut went in that dip, and the vowel's second half played after the rest, before "my" (Whisper, under
+  the episode's bed: "haven't you, in my love"). Now the trail walks back none on Kokoro (its plan is
+  corrected) and fades the vowel right up to the next word.
+- **"it,":** the window reached GAP_REACH (50 ms) back into the word and found the silence of the t's
+  closure, so the release went after the rest, a tick before "haven't". Now it reaches GAP_BACK (15 ms).
+- **The way back up is never a step** (the user: "the cut should probably be a logarithmic fade-out and
+  fade-in, not a linear one"). The splicer's own ramps were measured first: at every cut in the test
+  sentences they are 2 to 5 ms long at 32 to 98 dB under the peak, so their shape cannot be heard -
+  reshaped to fall at a steady rate in dB, the take differed by 0 to 3 ms at each cut and nothing else.
+  The abrupt edge was the trail's: where the voice runs right up to the next word, TRAIL_BACK had no room
+  and came back in one sample, 16 dB on sounding voice (8 of 80 comma trails in two voices). Now it runs
+  on into the next word (`_trail`'s `through`), a fade in dB as it always was; 0 of 80 step.
+- **The short vowel held, not every rime** (the user, after M: "I would want to hear MORE of the
+  'you'"). Piper's hold is a ratio (TRAIL_STRETCH, 1.25) and on 25 ms frames it is wrong both ways: the
+  "oo" of "you," (two frames) rounded back to two, and held 1.6 or 2.0 times "stays," and "flame," (five
+  and six frames) were drawn out ("someone stayyys", "same flaaaame" - and Whisper began to hear commas
+  as full stops). Now the last vowel of the word before a rest is floored at HOLD_LEAST (90 ms at length
+  scale 1, the trail's share of it; "uː" shares it between its two symbols): over the six test sentences
+  only "you" (+2 frames), "it" and "inward" (+1) moved; the rest are sample for sample as before.
+- **Measured** (`dist/voice_ab/kokoro_commas/eval/`, 53 sentences with 83 commas - this episode's and
+  the earlier passages - in Emma and Heart, a dark bed at -28 dB, Whisper): Emma's words misheard 35 in
+  22 sentences as shipped, 28 in 18 with the cut moved; every comma-related change a fix ("Someone stay,
+  as you shine", "same flame, a new", "A fight to climb", "Am I love?" gone); Heart 18 either way; "Sore
+  arms," unchanged sample for sample before its rest.
+
+Listening (`dist/voice_ab/kokoro_commas/`, Emma at the Narrator's settings, six sentences):
+`listen_H_as_shipped.wav`, `listen_J_cut_moved.wav`, `listen_M_no_step.wav`, `listen_N1_hold_1.6.wav` and
+`listen_N2_hold_2.0.wav` (the ratio, rejected), `listen_O_short_vowel_held.wav` (as built: the code renders
+it sample for sample); `listen_L1_db_ramps.wav` (the splicer's ramps in dB: no difference).
 
 ### Not in the trial, and what would be lost
 

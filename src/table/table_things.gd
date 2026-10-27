@@ -232,8 +232,11 @@ func _drape(t: Dictionary, b: Dictionary, keep_out: Array) -> void:
 ## deck is shuffled, where a jumper lands - as rectangles on the table (x by z).
 func off_limits() -> Array:
 	var out: Array = []
+	# A SHOW WITH NO CARDS keeps no room for them: no spread, no deck, no jumper's landing - the middle is the work's
+	if medium._plan.cards_from == "none":
+		return out
 	for sl in medium._plan.slots:
-		out.append(CardTable.footprint((sl as Dictionary)["pos"], float((sl as Dictionary)["yaw"]), TableMedium.CARD).grow(0.03))
+		out.append(CardTable.footprint((sl as Dictionary)["pos"], float((sl as Dictionary)["yaw"]), CardTable.card_size(medium._plan.look)).grow(0.03))
 	out.append(Rect2(medium._plan.deck_base.x - 0.08, medium._plan.deck_base.z - 0.1, 0.16, 0.2))
 	if medium._plan.aside_card >= 0:
 		out.append(Rect2(medium._plan.deck_far.x - 0.08, medium._plan.deck_far.z - 0.1, 0.16, 0.2))
@@ -253,15 +256,17 @@ func off_limits() -> Array:
 	return out
 
 
-## The middle of the table, where the deck is shuffled (x by z).
+## The middle of the table, where the deck is shuffled (x by z) - none for a show that draws no cards.
 func shuffle_rect() -> Rect2:
+	if medium._plan.cards_from == "none":
+		return Rect2()
 	return Rect2(medium._plan.mid.x - 0.22, medium._plan.mid.z - 0.14, 0.44, 0.28)
 
 
 ## THE TABLE'S BLUEPRINT, as [TableBlueprint] draws it for the set dresser: everything that decides where
 ## a thing may stand, in the table's own space (meters; x to the reader's right, z toward the reader) -
 ## the top's outline and its layers' ([method Tables.top_outline]), the spread's cards (`{pos, yaw}`), the
-## deck, where nothing may stand ([method off_limits]), the shuffle, the reader's workspace, the line flames
+## deck (none in a show that draws no cards), where nothing may stand ([method off_limits]), the shuffle, the reader's workspace, the line flames
 ## stand behind, the camera - and each thing as it stood: its foot, which way its front faces, its height,
 ## where it was written and how far it was moved, and why; and each written thing that found no room.
 func blueprint() -> Dictionary:
@@ -282,11 +287,15 @@ func blueprint() -> Dictionary:
 			"front": Vector2(front.x, front.z).normalized(), "height": (d["box"] as AABB).end.y, "lit": int(d["lit"]),
 			"written": d.get("written"), "moved": float(d.get("moved", 0.0)), "why": String(d.get("why", "")),
 			"rect": d["rect"], "box": String(d["group"]) == "#the box"})
-	return {"top": medium._top_o, "layers": layers, "cards": cards, "card": TableMedium.CARD, "deck": Vector2(medium._plan.deck_base.x, medium._plan.deck_base.z),
+	var out := {"top": medium._top_o, "layers": layers, "cards": cards, "card": CardTable.card_size(medium._plan.look),
 		"keep_out": off_limits(), "shuffle": shuffle_rect(),
 		"workspace": Rect2(medium._plan.mid.x - WORKSPACE_HALF, medium._plan.mid.z + WORKSPACE_FROM, WORKSPACE_HALF * 2.0, 1.0),
 		"flames_behind": medium._plan.mid.z, "camera": medium._plan.cam_base, "fov": medium._cam.fov, "things": things,
 		"unstood": unstood.duplicate(true)}
+	# ...and the deck, where there is one
+	if medium._plan.cards_from != "none":
+		out["deck"] = Vector2(medium._plan.deck_base.x, medium._plan.deck_base.z)
+	return out
 
 
 ## ONE THING STOOD: the best free spot for [param t] (built as [param b]) on a grid over the table,
@@ -528,12 +537,15 @@ func put(t: Dictionary, b: Dictionary, spot: Dictionary, basis: Basis, group: St
 			flames.append(f)
 		medium._light_part.light_flames(flames, own)
 	var foot := Geo.moved(Geo.turned(b["foot"], basis), at)
+	var shades: Array = []          # its shade on the cloth, for the work to carry with it ([TableWork])
 	if foot.size() >= 3:
 		# A moving shoebox gets its own moving soft shade. A fixed decal projects onto
 		# its walls as it passes, and a fixed shadow slab leaves a ghost at its destination.
 		if not (group == "#the box" and String(medium._plan.staging.get("box_style", "open")) == "shoebox"):
-			medium._light_part.contact_shadow(foot)
-			medium._light_part.foot_shadow(foot, own)
+			shades.append(medium._light_part.contact_shadow(foot))
+			var slab := medium._light_part.foot_shadow(foot, own)
+			if slab != null:
+				shades.append(slab)
 		var grown := Geo.grown(foot, FOOT_MARGIN)
 		standing.append(grown)
 		var c := Vector2.ZERO
@@ -546,6 +558,7 @@ func put(t: Dictionary, b: Dictionary, spot: Dictionary, basis: Basis, group: St
 		standing_c.append(c)
 		standing_r.append(r)
 	medium._take_movers(b, node)
+	medium._work.take(t, b, node, shades)
 	on_table.append({"name": String(t.get("name", "")), "group": group, "place": String(t.get("place", "back")),
 		"node": node, "outline": spot["outline"], "bb": spot["bb"], "rect": spot["rect"], "foot": foot,
 		"box": node.transform * (b["size"] as AABB), "lit": wicks.size(), "lights": range(first, medium._lights.size()),

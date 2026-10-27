@@ -17,7 +17,7 @@ class_name Rules
 ##                                        a list, only when all are
 ##   - {insert: tables}                   a block the code makes - a registry's words, a list of earlier
 ##                                        episodes
-##   - {include: moves}                   another part of this file - or of another, "cards/reader.moves"
+##   - {include: moves}                   another part of this file - or of another, "table/reader.moves"
 ##   - {each: zones, say: ...}            the line once for each entry of a list the code gives, the
 ##                                        entry's own fields filled in
 ##
@@ -36,7 +36,7 @@ static var missing := PackedStringArray()
 static var _files := {}
 
 
-## THE PART [param path] ("cards/set_dresser.prompt": the file, then the part) as the agent reads it,
+## THE PART [param path] ("table/set_dresser.prompt": the file, then the part) as the agent reads it,
 ## with [param vars] filled in.
 static func say(path: String, vars: Dictionary = {}) -> String:
 	var dot := path.rfind(".")

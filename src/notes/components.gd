@@ -76,12 +76,13 @@ const WORKSPACES := {
 		"hint": "Write or open a chapter. It is spoken in chunks, so the show starts while the rest is still being made. Edit lists every mark the reading understands - speakers, hesitations, pictures, pronunciations.",
 		"hosts": ["voice", "picture", "actor", "storyboard", "look", "bookends"],
 		"classic": ["text", "voice", "picture", "illustrations", "look", "bookends"]},
-	"cards": {"label": "Cards", "section": "cards",
-		"blurb": "A show of cards: the episodes agents make from the note's brief, and the voice that reads them.",
-		"title": "Cards",
-		"hint": "Open a show: its body is the brief every agent works from. Each seed is one episode - planned, shuffled, painted and written one card at a time by the agents, then read here in the voice below, at the table.",
-		"hosts": ["cards", "voice", "look", "bookends"],
-		"classic": ["text", "cards", "voice", "look", "bookends"]},
+	# (its settings keep the section they had as Cards: renamed, the workspace would forget them)
+	"table": {"label": "Table", "section": "cards",
+		"blurb": "A show at a table: the episodes agents make from the note's brief - cards drawn, things made, or both - and the voice that reads them.",
+		"title": "Table",
+		"hint": "Open a show: its body is the brief every agent works from. Each seed is one episode - planned, shuffled, painted and written one card (or one beat of work) at a time by the agents, then read here in the voice below, at the table.",
+		"hosts": ["table", "voice", "look", "bookends"],
+		"classic": ["text", "table", "voice", "look", "bookends"]},
 	"proof": {"label": "Proof", "section": "proof",
 		"blurb": "A ghost doing math at a desk: the episodes agents make from the note's problem, and the voice that teaches them.",
 		"title": "Proof",
@@ -145,13 +146,13 @@ const REGISTRY := {
 	# reading what is read (the episode's script), where it is heard (the table's sound) and how it
 	# goes out (the episode's title and upload notes). `heading` is the card's title where it is
 	# not the label; the tips are what the bookends hold at a card table.
-	"cards": {"label": "Cards", "family": &"producer",
-		"blurb": "Agents plan, deal, paint and write a reading, one card at a time, at a table. The note's words are the show's brief: they say what the cards are.",
+	"table": {"label": "Table", "family": &"producer",
+		"blurb": "Agents plan, paint and write a show at a table, a beat at a time: cards drawn and read, things made - or both. The note's words are the show's brief: they say what is done there.",
 		"needs": ["text"], "provides": ["text", "picture", "moments"], "requires": ["voice"],
-		"slots": ["presentation"], "workspace": "cards", "starter": "res://rules/cards/starter.md",
+		"slots": ["presentation"], "workspace": "table", "starter": "res://rules/table/starter.md",
 		"capabilities": ["forward_plus", "subprocess", "agent:writer", "agent:painter"], "marks": [],
-		"block": "cards", "card": "episode", "heading": "Episode",
-		"script": "res://src/cards/episode_card.gd",
+		"block": "table", "card": "episode", "heading": "Episode",
+		"script": "res://src/table_show/episode_card.gd",
 		"intro_tip": "Seconds the table holds before the reader speaks, with the channel's name and the episode's title over it. The deck starts shuffling a beat before the first word.",
 		"outro_tip": "Seconds held after the last word, the spread on the table and the channel's name over it, fading picture and sound out together."},
 	# A GHOST DOING MATH AT A DESK (next/proof.md, 2026-10-15): its card is the episode - the problem
@@ -228,8 +229,8 @@ static func attach_blocks(key: String) -> Dictionary:
 			return {"voice": {}}
 		"voice_lab":
 			return {"synthesis": {}}
-		"cards":
-			return {"cards": {}}
+		"table":
+			return {"table": {}}
 		"proof":
 			return {"proof": {}}
 		"actor":

@@ -25,7 +25,7 @@ class_name NoteCards
 ## The components whose settings are a card any workspace can show, in the order they stand:
 ## the rows of [constant Components.REGISTRY] that name a `script`. Cards' and Proof's episodes
 ## first, then the voice that reads them: what produces the text stands above what shows it.
-const KEYS := ["cards", "proof", "voice", "picture", "actor", "storyboard", "look", "bookends", "youtube"]
+const KEYS := ["table", "proof", "voice", "picture", "actor", "storyboard", "look", "bookends", "youtube"]
 
 
 ## A card for each of [param attached] that is one of [constant KEYS] (and of [param ctx]'s

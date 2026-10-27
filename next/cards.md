@@ -10,16 +10,17 @@ reversals and jumpers, the last of them, are each episode's producer's since 202
 staging", below). First show: `rift/tarot/truthful-tarot.md` ("Truthful Tarot" -
 the genre's format and voice, told true).
 
-In the code: `CardsEditor` (the panel), `CardEpisode`, `CardProducer`, `CardPrompts`, `CardReading`
+In the code: `CardsEditor` (the panel), `TableEpisode`, `TableProducer`, `TablePrompts`, `CardReading`
 (the marks, `<!-- table: draw 2 -->`), `CardDeck`, `CardTable`, `CardFaces` and `TableMedium` (the
-`table` medium); a show's block is `ghost: cards:` (its draw range `draw:`), its episodes live under
-`user://cards/` (moved from `user://tarot/` once, at the first launch after the rename), and the
+`table` medium); a show's block is `ghost: table:` (how many cards an episode draws is the brief's to say and the producer's
+to choose, 2026-10-26 - there is no draw range), its episodes live under
+`user://table/` (moved from `user://tarot/` once, at the first launch after the rename), and the
 seeds' hash salts keep their old `tarot-` names, so every episode already made comes out the same.
 
 ## Using it
 
 1. New ▾ -> **Cards** makes a show's note; the Truthful Tarot note is in the notes list already
-   (`godot --path . -- --cards` opens the last show). **Edit** edits its body - the rules, and the
+   (`godot --path . -- --table` opens the last show). **Edit** edits its body - the rules, and the
    `## Cards`.
 2. **New episode** draws a fresh seed from the OS's randomness - and makes nothing. **Generate**
    makes the episode in order: ~1 minute per picture (back, cloth, room, then each card), the
@@ -55,16 +56,16 @@ seeds' hash salts keep their old `tarot-` names, so every episode already made c
 | `src/agents/text_gen.gd` | `TextGen`: who writes words - a registry beside `ImageGen` (`claude`, `codex`). Stateless writers; pictures go with the words. Claude runs with no tools; Codex is told to work from the message alone. |
 | `src/agents/agent_jobs.gd` | `AgentJobs`: one queue for every AI run (text and image) - limits per kind, LANES (one at a time, in order), timeouts, read-only refusal, and a rerun's folder cleared of the last run's output. Polled from `main._process`. |
 | `src/media/reading_follower.gd` | `ReadingFollower`: where the voice is in a document - the tablet's sequential word match, and the schedule that puts actions in the voice's rests. |
-| `src/cards/card_episode.gd` | `CardEpisode`: an episode on disk, one file per step, under `user://cards/<show>/<seed>/`. A redo is a delete. |
-| `src/cards/card_producer.gd` | `CardProducer`: makes whatever is missing, in drawing order. |
-| `src/cards/card_prompts.gd` | `CardPrompts`: which rules each agent is told, and what fills them in. Pure. |
-| `rules/cards/*.yaml`, `src/data/rules.gd` | The words themselves, one file per role (producer, designer, set_dresser, reader, painter, show), each rule's reason a comment above it; `Rules` reads them (items in order, `when` flags, `insert`, Mustache sections). Moved out of the code 2026-10-08 with every prompt byte for byte the same (227 prompts over three real episodes, compared before and after). |
+| `src/table_show/table_episode.gd` | `TableEpisode`: an episode on disk, one file per step, under `user://table/<show>/<seed>/`. A redo is a delete. |
+| `src/table_show/table_producer.gd` | `TableProducer`: makes whatever is missing, in drawing order. |
+| `src/table_show/table_prompts.gd` | `TablePrompts`: which rules each agent is told, and what fills them in. Pure. |
+| `rules/table/*.yaml`, `src/data/rules.gd` | The words themselves, one file per role (producer, designer, set_dresser, reader, painter, show), each rule's reason a comment above it; `Rules` reads them (items in order, `when` flags, `insert`, Mustache sections). Moved out of the code 2026-10-08 with every prompt byte for byte the same (227 prompts over three real episodes, compared before and after). |
 | `src/table/card_reading.gd` | `CardReading`: the reading's marks; one walk gives the voice its text and the table its actions. |
-| `src/cards/card_deck.gd` | `CardDeck`: the show's deck, parsed from its brief's `## Cards` section (none built in: a brief that lists no card leaves each episode's to its producer); the seeded shuffle; true-random seeds. |
+| `src/table_show/card_deck.gd` | `CardDeck`: the show's deck, parsed from its brief's `## Cards` section (none built in: a brief that lists no card leaves each episode's to its producer); the seeded shuffle; true-random seeds. |
 | `src/table/card_table.gd` | `CardTable`: what a look may name - title faces (`fonts/cards/`, OFL), frames, the zones things stand in - `sanitize_look`, `sanitize_table`, and the layout a prompt can know ahead (`layout_of`, `headroom`). |
 | `src/agents/agent_tools.gd` | `AgentTools`: tools ghost serves an agent WHILE it works - an MCP server (HTTP, JSON) inside the ghost process, a URL per job, every call logged beside the prompt (`tools.jsonl`, `look_NN.jpg`). Claude, Grok and Codex take them (`TextGen.Backend.takes_tools`; Grok through its `search_tool` / `use_tool`, the calls allowed by rule; Codex by config overrides, its token in its environment as a bearer); Bedrock is still one reply. |
-| `src/cards/set_dresser_tools.gd` | `SetDresserTools`: the set dresser's tools - `put`, `remove`, `look`, `set`, `watch`, `title`, `submit` - over a draft table. |
-| `src/cards/table_preview.gd` | `TablePreview`: what those tools show - a thing in a studio on a centimeter grid (four sides, or several in tiles), the draft on the episode's own table from the show's camera, and the opening (the show's name over that table thrown out of focus). |
+| `src/table_show/set_dresser_tools.gd` | `SetDresserTools`: the set dresser's tools - `put`, `remove`, `look`, `set`, `watch`, `title`, `submit` - over a draft table. |
+| `src/table_show/table_preview.gd` | `TablePreview`: what those tools show - a thing in a studio on a centimeter grid (four sides, or several in tiles), the draft on the episode's own table from the show's camera, and the opening (the show's name over that table thrown out of focus). |
 | `src/table/effects.gd` | `Effects`: the AIR - fog, motes, bursts - as data an agent writes (registries it reads, `sanitize`, `build`), posed from show time. Generic; the tarot table names its regions and moments (`CardTable.AIR`, `MOMENTS`). Shaders `effect_fog.gdshader`, `effect_sprite.gdshader`, `effect_smoke.gdshader`. |
 | `src/table/lights.gd` | `Lights`: the table's LIGHT built from a description - its sky, its sun (or the moon) and what the sun falls through (a window, blinds, a lattice, leaves, fronds, branches, slats, an awning, a parasol), clouds and birds, lamps out of the shot; registries an agent reads, `sanitize`, `build`, and the CPU's reckoning of where the sun falls. Shaders `light_screen.gdshader`, `light_bird.gdshader`, `light_noise.gdshaderinc` (the noise both reckon alike). See "THE LIGHT" below. |
 | `src/table/winds.gd` | `Winds`: the table's one wind - a breeze and planned gusts, its carry in closed form - shared by the light and the air. See "SHADE, WIND AND WHAT IT CARRIES" below. |
@@ -73,7 +74,7 @@ seeds' hash salts keep their old `tarot-` names, so every episode already made c
 | `src/table/props.gd` | `Props`: things built from a description - shapes (lathe, loft, tube, coil, extrude...), corners as data, a warp on any part, materials, ornaments (registries an agent reads), `sanitize`, `build`. Generic; the tarot table is its first user. Shaders `prop.gdshader`, `prop_glass.gdshader`, `prop_lens.gdshader`, `prop_common.gdshaderinc`. |
 | `src/table/card_faces.gd` | `CardFaces`: faces, backs and booklet pages, composed in 2D into stopped SubViewports. |
 | `src/table/table.gd` | `TableMedium`: the table. Pinned by the mode (`Medium.OWNED`, `Director.medium_override`). |
-| `src/cards/cards_editor.gd` | `CardsEditor extends GenerativeEditor`: the panel. |
+| `src/table_show/cards_editor.gd` | `CardsEditor extends GenerativeEditor`: the panel. |
 
 ## The show document
 
@@ -106,20 +107,20 @@ cards, or Pokemon cards, and they just want to show them to people"). Two parts 
 - A `## Format` (or `## The format`) section says what the show is. With one, no agent is told
   "tarot": the shared context says only that it is a show of cards at a table, and maps the
   recipe's working words (reader, reading, spread, positions, booklet) to the show's own, which
-  the section defines (`CardPrompts.show_context`). The producer names the deck's `kind`
+  the section defines (`TablePrompts.show_context`). The producer names the deck's `kind`
   ("minor-league baseball card set"), and the designer, the card, the back and the room are
-  painted as that (`CardPrompts.deck_noun`); the set dresser's reasons and stones are a reader's
+  painted as that (`TablePrompts.deck_noun`); the set dresser's reasons and stones are a reader's
   only without one. A show with no Format section is told exactly what it always was.
 - A `## Cards` section of PROSE ALONE, with no card listed, leaves the deck to each episode's
   producer (`CardDeck.chooses`): it lists a box in the plan's `deck`, at least twice the spread
-  and twelve, at most thirty (`CardPrompts.BOX`), and the seed draws from it as it draws from a
+  and twelve, at most thirty (`TablePrompts.BOX`), and the seed draws from it as it draws from a
   listed deck. The producer picks what is in the box, never what comes out; a box the size of the
   spread is refused. NO CHEATING holds: a reader is handed cards 1..K, never the rest of the box.
 
 **One set of rules for every show** (2026-10-08; the user: "there shouldn't be ANY tarot-gated rules
 or logic in the 'rules/' files ... for anything else that tarot might need - declare it in the markdown
 files"). The Format switch above is gone: every show gets the same shared context
-(`rules/cards/show.yaml`, `context`), every producer names the deck's `kind` from the brief, and a look
+(`rules/table/show.yaml`, `context`), every producer names the deck's `kind` from the brief, and a look
 with no `kind` is a plain "deck". What was the tarot's moved into `rift/cards/true-tarot.md`: its 78
 (it always listed them; `CardDeck.standard` and its generated deck are gone, and
 `data/decks/tarot/` was removed), the suits' elements (prose in its Cards section,
@@ -143,7 +144,7 @@ and backs would be different"). Every choice is the producer's, in the plan, ste
 every one is data the table reads:
 
 - `plan.staging.source` (`TableActions.SOURCES`): `deck` - shuffled in the middle, pushed aside, a
-  jumper possible - or `box`: one of the set dresser's things marked `holds_cards` (`CardPrompts.box_rule`;
+  jumper possible - or `box`: one of the set dresser's things marked `holds_cards` (`TablePrompts.box_rule`;
   a plain box of the deck's stock when it built none), stood where the deck would be
   (`TablePositions.box_at`, no bigger than `CardTable.BOX_MAX`, the spread kept clear of it), the cards
   filed in it on edge - upright, on a long edge, or flat in a shallow tin - as many as the planned
@@ -162,7 +163,7 @@ every one is data the table reads:
   (`TableCardPose.righting`; as they come up when the text is on the back, which the hold is for - a short
   passage's card was otherwise never turned over), or on the way down when dealt or swept, then read and
   laid the right way up, the reader told so (`righted`). `jumpers` lets the seed's 30% throw the first
-  card out of the shuffle (`CardProducer.jumps`), never out of a box. A plan made before the fields reads
+  card out of the shuffle (`TableProducer.jumps`), never out of a box. A plan made before the fields reads
   neither; its draw keeps what it drew. True Tarot's brief says it reads both. Gates: cards_check
   `_ways_up`, `_burst_moments`; table_staging_check `_righted`.
 - `plan.staging.text` (`CardTable.TEXTS`): `booklet` - the page beside the card, held up on the left;
@@ -185,11 +186,11 @@ every one is data the table reads:
 
 **The verbs.** `TableActions` holds them all, each with its rest: `open`, `deal`, `fan` (`fan 3-5`, a
 run), `show` (a card lying on the table picked up and held as a drawn one is), `tap`, `untap`, `flip`.
-`CardProducer.choreography` writes the reading's marks from the plan; `CardPrompts.after` tells each
+`TableProducer.choreography` writes the reading's marks from the plan; `TablePrompts.after` tells each
 reader what moves after its words (the same order). The table poses each card from its own TIMELINE
 (`TableMedium._times` `events`, `_card_pose`): arrive (draw, jumper, deal, fan), show, lay, turn - still
 a pure function of show time, and tarot's draw, jumper and lay keep their exact phases. NO CHEATING holds
-for a waterfall: the cards swept out together are revealed together (`CardEpisode.reveal_of`), so the
+for a waterfall: the cards swept out together are revealed together (`TableEpisode.reveal_of`), so the
 reader of its first card is handed them all, and no card past them. Gate: `table_staging_check` (the
 marks, the layouts over 40 seeds, the choreography, a deck show and a box show posed, the printings'
 backs), `table_actions_check` (the rests). `flip` has no producer field yet (a face-down card's reveal
@@ -241,11 +242,11 @@ draw before it even happened"). A passage is spoken whole and the table acts in 
 it, so the intro had been told to "end on the moment you stop shuffling to pull the first card" and
 wrote "And there. That's the first one." - with a hesitation, trying to time the draw itself - a
 beat before the card came out; a last card's "There. Beside the other two." came before it went
-down. Every reader prompt now says when the cards move (`CardPrompts.MOVES`): lead into the next
+down. Every reader prompt now says when the cards move (`TablePrompts.MOVES`): lead into the next
 move, never report it - the acknowledgement belongs to the passage after it. Scripts written before
 this keep their words until those passages are rewritten. Gate: cards_check `_moves_after_words`.
 
-The order is not written anywhere: a step starts when its inputs exist (`CardEpisode.needs`).
+The order is not written anywhere: a step starts when its inputs exist (`TableEpisode.needs`).
 A card's picture waits for the back and the card before it, but is not MADE from them: redoing
 one picture leaves the rest of the deck alone (the Illustrations rule). There is no "shuffle
 again": the draw is a function of the seed, so a different deal is a different episode.
@@ -253,8 +254,8 @@ A reply of the wrong shape (a position as a bare name, keywords as one string) i
 lands; a step that fails says why on its row.
 
 **No cheating.** The reader's passages are made in drawing order, each from the passages before
-it and `CardProducer._drawn(K)` - cards 1..K, nothing else. Every prompt is kept beside its
-reply in `jobs/`. `tests/cards/cards_check.gd` asserts no later card's name, booklet or picture
+it and `TableProducer._drawn(K)` - cards 1..K, nothing else. Every prompt is kept beside its
+reply in `jobs/`. `tests/table_show/cards_check.gd` asserts no later card's name, booklet or picture
 reaches a reader prompt - the builder's and the producer's own (`say_prompt`) - two-sided.
 A writer with tools could still read `draw.json` off the disk: Claude runs with none, and Codex
 (whose `exec` keeps a read-only shell) is told plainly to work from the message alone and open no
@@ -273,10 +274,10 @@ centered on nearly every card, seven of seven running bits were a status revised
 with the third revision the punchline, every title ended on a bracketed twist, three readers said
 "it is three in the afternoon where I am", and closes reused "typing I claim it claims a comment".
 The producer's history had shown 140 characters of each deck's style - the medium, never the cast -
-and no angle or running bit; nobody else saw any. Now `CardEpisode.archive(show, except)` reads
+and no angle or running bit; nobody else saw any. Now `TableEpisode.archive(show, except)` reads
 every other episode (plan, the cards drawn with each design's art and the reader's words, table
 things, intro, close; newest first, at most 40), and each role gets the part it decides, cut short
-(`CardPrompts.clip`/`tail`):
+(`TablePrompts.clip`/`tail`):
 - PRODUCER: the newest `PAST_FULL` (10) in full - title, audience, topic and angle, the reader and
   running bit, spread, deck style, WHAT ITS CARDS PICTURED (the designs' art, so the cast as
   painted), stock/ink/accent/frame/face/foil/palette, cloth, room, light - and `PAST_LINES` more
@@ -290,7 +291,7 @@ things, intro, close; newest first, at most 40), and each role gets the part it 
 - READER: what the audience has heard at this point of an episode (`HEARD`) - the start of
   earlier intros, the first words of earlier card passages (jumpers apart), the end of earlier
   closes - with the sentences the brief gives every episode word for word left out
-  (`CardPrompts.unfixed`: "Hello, my loves", the sign-off) and EVERY CARD NAME OF THE DECK MASKED
+  (`TablePrompts.unfixed`: "Hello, my loves", the sign-off) and EVERY CARD NAME OF THE DECK MASKED
   (`mask_cards`, "[card]"), so no card reaches a reader through another episode's words.
 The plan's `reader_mood` was split: `running_bit` is its own field (the reader is told "Your
 running bit"), so the record shows it exactly; older plans keep it inside `reader_mood`, which the
@@ -357,7 +358,7 @@ one side, so things throw shadows you can see.
 
 THE SET TABLE (2026-10-05; the user: "the lack of objects upon the table makes the whole scene
 rather boring... most tarot readers are very intentional about how they setup their
-workspaces"). A step of its own, `table` (`table.json`): the SET DRESSER (`CardPrompts.set_dresser`,
+workspaces"). A step of its own, `table` (`table.json`): the SET DRESSER (`TablePrompts.set_dresser`,
 best tier) sets the reader's table from the plan, LOOKING AT the cloth (it waits for it; a new
 cloth keeps the table), knowing no card. It invents the things of the episode's world - a
 field station's hurricane candle, rain gauge and calabash of rainwater; a harbor's votive stone
@@ -401,14 +402,14 @@ set dresser works a draft (`SetDresserTools`):
 - `remove`; `submit`, which writes `jobs/table/submitted.json` for the producer to land whatever
   the run's last words (and sends it to `set` once first, wherever a table can be stood, and asks
   once for the name's color).
-30 pictures, 1500 s. Any other writer gets the one-reply prompt (`CardPrompts.set_dresser`'s
+30 pictures, 1500 s. Any other writer gets the one-reply prompt (`TablePrompts.set_dresser`'s
 `looks` = 0). A PICTURE COMES WITH THE QUESTION TO ASK OF IT (`SetDresserTools.JUDGE_THING`,
 `JUDGE_TABLE`: say what it actually shows, then whether a stranger would name it so): in the first
 real run (Haiku, on a copy of #352029, 7 turns, ~22k output tokens) the loop worked end to end - put, three
 looks, set, submit - but the model called a 1 cm flat disc it had named a soapstone oil lamp, and a
 bare rod it had named a dried grass bundle, "perfect". The pictures showed both plainly. CLAUDE WITH TOOLS CANNOT RUN `--safe-mode`, which drops every MCP server (measured):
 a tool job loads no settings instead (`--setting-sources ""`), and was measured to see no
-CLAUDE.md, memory or skills. Gates `tests/agents/agent_tools_check.gd`, `tests/cards/set_dresser_tools_check.gd`.
+CLAUDE.md, memory or skills. Gates `tests/agents/agent_tools_check.gd`, `tests/table_show/set_dresser_tools_check.gd`.
 
 THE BLUEPRINT (2026-10-18; the user: "placement still feels awfully strange ... a blueprint-based system
 might work better ... do the planning and desired placements up-front, then verify with screenshots at
@@ -426,7 +427,7 @@ things in the back corners. Now:
   `_unstood`. What the CAMERA makes of it (cut by the frame, one thing before another) is the set dresser's
   to judge: a full table has both. A thing with no `at` (an old table, the one-reply writer) is hunted as
   before, after the written.
-- THE DRAWING (`TableBlueprint`, `src/cards/table_blueprint.gd`, from `TableMedium.blueprint()`): black on
+- THE DRAWING (`TableBlueprint`, `src/table_show/table_blueprint.gd`, from `TableMedium.blueprint()`): black on
   white, ruled in cm from the middle of the reading, rulers, the reader at the bottom; the top heavy, the
   line a foot stays inside, the cloths dashed and named; gray where the camera does not see; the cards'
   room hatched, the spread's cards, the deck; the reader's hands; the line flames stand behind; HOW TALL A
@@ -441,11 +442,11 @@ things in the back corners. Now:
   once at submit; `set` says each thing at its spot (`numbers: true` tags them in the picture), and moved,
   taller than its spot, or wholly out of the shot are faults. 60 looks (was 40). The prompt: zones for the
   blind reply only; with tools, plan the whole table on the blueprint, then verify through the camera.
-- HOW FULL (`CardPrompts.FILLS`): the range asked was 3-4 to 5-6 every episode, so tables held six things;
+- HOW FULL (`TablePrompts.FILLS`): the range asked was 3-4 to 5-6 every episode, so tables held six things;
   now a habit drawn per episode - 3-6, 6-10, 10-16 or 16-24 besides the lit ones - and a place crowded by
   nature may go up to `CardTable.MAX_THINGS` (32, was 12). The cost is the agent's geometry and looks;
   building is cheap (a written thing is placed without the hunt's grid).
-Gates `tests/table/written_place_check.gd` (boot probe), `tests/cards/set_dresser_tools_check.gd`; look with
+Gates `tests/table/written_place_check.gd` (boot probe), `tests/table_show/set_dresser_tools_check.gd`; look with
 `set_dresser_look_probe` (an old table is written where its hunt stood it, then drawn and set, numbered).
 OPEN: things stacked on things (a candle on a book) are still one thing's parts; a real run with an agent.
 
@@ -490,7 +491,7 @@ The set dresser writes `effects` beside its things; `Effects` builds them:
   any frame can be drawn alone. Tabletop scale: a few centimeters to a couple of hands.
 The set dresser sees it: `set` shows the air at a moment some way in; `watch` photographs one effect
 four times (a burst just after its staged moment, fog and motes 3 s apart). The show's taste is in the
-brief's "The table and its air". Gates `tests/table/effects_check.gd`, `tests/cards/set_dresser_tools_check.gd`;
+brief's "The table and its air". Gates `tests/table/effects_check.gd`, `tests/table_show/set_dresser_tools_check.gd`;
 look with `tests/table/air_look_probe.gd` on a COPY of an episode.
 
 THE TABLE ITSELF (2026-10-06; the user: "right now, the table is just a flat rectangular surface, with
@@ -545,7 +546,7 @@ tooling"). The set dresser now writes `top` and `layers` beside its things (`Tab
   cells over the table the camera can see) is now whatever is on top at each cell
   (`Tables.surface_lum`): the painting's pixels, a pattern's colors, the top's material, the floor.
 - THE SET DRESSER: told the vocabulary (`Tables.describe`), that the painting must be given a place,
-  about depth, and the earlier episodes' tables (`CardEpisode.archive` -> `furniture`); `put` takes
+  about depth, and the earlier episodes' tables (`TableEpisode.archive` -> `furniture`); `put` takes
   `top` and `layers` (answered with the table in words and whatever had to change); `remove` takes
   layers; `overhead` photographs the table from straight above with the camera's view outlined; `set`
   says the table in a line. 36 pictures, 1800 s.
@@ -555,15 +556,15 @@ put first and seen from above).
 THE PAINTING'S DEPTH, PAINTED (2026-10-07; the user: "the painter-made height map, especially, sounds
 like a novel idea - if you think it can truly work"). A step of its own, `image:height` (`height.png`),
 listed only once the table lays the painting where its depth is read - as a layer or as the top, its
-relief `painting` or its own (`CardEpisode.wants_height`, `Tables.wants_height`); it waits for the
+relief `painting` or its own (`TableEpisode.wants_height`, `Tables.wants_height`); it waits for the
 table and is made FROM the painting (a new cloth clears it, a new table does not). The painter is
 handed the painting and asked for the same image redrawn as gray height, every edge on its edge
-(`CardPrompts.height_image`). AN IMAGE MODEL MAY MOVE, ZOOM OR INVENT WHAT IT REDRAWS, so the map is
-MEASURED before it is used (`Tables.height_fit`, `CardProducer._land_height`): both images' structure
+(`TablePrompts.height_image`). AN IMAGE MODEL MAY MOVE, ZOOM OR INVENT WHAT IT REDRAWS, so the map is
+MEASURED before it is used (`Tables.height_fit`, `TableProducer._land_height`): both images' structure
 (the size of their gradients, blind to which way round the gray runs) at 96 px across, correlated at
 every shift up to 4 px; the best is kept in `height.json` with its shift, and under 0.35 the map is
 removed and the step fails (retried once) - the painting's own detail stands in. The map only
-deepens the table: an episode is complete without it (`CardEpisode.complete`), the Table row counts it
+deepens the table: an episode is complete without it (`TableEpisode.complete`), the Table row counts it
 only while it is made or when it failed, and an episode made before gets one from ⟳ "Paint the cloth's
 depth again". The shaders read it
 in place of that detail (its fine relief whole, its broad rise and fall at half), and a painted
@@ -656,7 +657,7 @@ The set dresser now writes `light` beside its things (`Lights`, `src/table/light
   low sun behind the table would throw it over the cards).
 - THE SET DRESSER: told the vocabulary (`Lights.describe`), to build the plan's light and make it agree
   with the room - whose PAINTING now comes with its prompt, the table step waiting for it (softly: a new
-  room keeps the table) - and earlier episodes' lights (`CardEpisode.archive` -> `light`). `put` takes
+  room keeps the table) - and earlier episodes' lights (`TableEpisode.archive` -> `light`). `put` takes
   `light` part by part (a part replaces that part; screens, lamps and shadows by name; null and `[]` take away)
   and answers with where the sun falls - how much of the table the camera sees, and of where the cards
   lie - by the CPU's own reckoning (`Lights._pattern`, line for line the shader's, on integer-hashed
@@ -912,8 +913,8 @@ BRIEF's (Truthful Tarot's "## The familiar"; its old name for the reader's since
 familiar", became "the spell"). The framework only hands lines over: the show's voices are its
 document's `voices:` (`CardsEditor._spec` -> `voices`), the reader prompt names the others and
 teaches the Generative panel's own cue, `<!-- speaker: Familiar -->` on a line of its own and
-`<!-- speaker: Narrator -->` to take it back (`CardPrompts.voices_rule`; a show with one voice is
-told nothing); a reply's cues are held to the show's names (`CardProducer.own_voices`: any
+`<!-- speaker: Narrator -->` to take it back (`TablePrompts.voices_rule`; a show with one voice is
+told nothing); a reply's cues are held to the show's names (`TableProducer.own_voices`: any
 spelling of one, anyone else's cue dropped with its words kept - a writer's "familiar" would have
 become a new voice, a copy of the reader's, kept in the document); `CardReading` keeps the cues for
 the voice (an inline one put on its own line) and opens every passage in the reader's voice, after
@@ -1098,7 +1099,7 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
   YouTube", it wrote a whole one ("Yes Or No Tarot: Ask As Many Times As It Takes", which went up
   after "True Tarot: " - two colons, "Tarot" twice). It is now shown the template with the show's
   name in it and its own part marked (`YouTube.title_shape`, `CardsEditor._uploads_as`, the
-  `episode_title` rule in `rules/cards/producer.yaml`), and asked for title case - the capital on
+  `episode_title` rule in `rules/table/producer.yaml`), and asked for title case - the capital on
   every word was the agents' own, no code recases a title. Not yet judged on a real run; the
   earlier episodes' titles still read back to it with every word capitalized.
 - **Google's "Access blocked"** (fixed 2026-10-06): an account that is not one of a Testing
@@ -1128,7 +1129,7 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
   - THE COLOR IS THE SET DRESSER'S (`title: {color, why}` in `table.json`, `CardTable.title_ink`):
     it is the agent that sees the painted cloth, and with tools the table set - the producer only
     describes a cloth before it is painted, and one planned "deep oxblood" was painted pale gold
-    (cream measured 1.3 against it). Its prompt says the frame is the thumbnail (`CardPrompts.
+    (cream measured 1.3 against it). Its prompt says the frame is the thumbnail (`TablePrompts.
     title_rule`); with tools, `title` shows it the opening and the WCAG contrast behind the name.
     A table set before this, or with no color, prints the name in cream (`TITLE_INK`) until the
     table is set again.
@@ -1167,10 +1168,10 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
 
 ## Probes and gates
 
-- `godot --headless --path . --script res://tests/cards/cards_check.gd` - the gate.
+- `godot --headless --path . --script res://tests/table_show/cards_check.gd` - the gate.
 - `godot --headless --path . --script res://tests/export/youtube_check.gd` and `youtube_flow_check.gd` -
   the upload's pieces, and sign-in + upload end to end against a stand-in for Google.
-- `tests/cards/episode_probe.gd` - make an episode headlessly (real quota); `--only table` sets
+- `tests/table_show/episode_probe.gd` - make an episode headlessly (real quota); `--only table` sets
   just the table.
 - `tests/run_quiet.sh -- res://tests/table/props_look_probe.gd --spec <table.json> --out x.png` - a
   table description's things side by side under candlelight, no tarot table around them (the camera
@@ -1181,9 +1182,9 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
   - the table over an episode with a synthetic voice. `--times 3.6 --name "Show" --byline "with X"
   --ink "#1d2f5c"` photographs the title screen with a set dresser's color.
 - `tests/run_quiet.sh intro_blur_check` - the intro's blur, in pixels (see "The title screen").
-- `GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 tests/run_boot_probe.sh tests/cards/cards_voice_probe.gd 900 --spec <md> --seed N --export 1`
+- `GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 tests/run_boot_probe.sh tests/table_show/cards_voice_probe.gd 900 --spec <md> --seed N --export 1`
   - the panel, the real voice and the table, end to end, and the export take.
-- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/cards/set_dresser_look_probe.gd 300 --show S --seed N`
+- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table_show/set_dresser_look_probe.gd 300 --show S --seed N`
   - what the set dresser's tools show, with no agent: an episode's table put, looked at and set, and
   the opening (`--ink`, `--name`, `--byline`). A `--spec` with `top`/`layers` builds the table itself first and shows
   it from above.
@@ -1191,10 +1192,10 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
 - `godot --headless --path . --script res://tests/table/lights_check.gd` - the light (`Lights`);
   `tests/run_boot_probe.sh tests/table/table_light_check.gd 300` - the table's own light in the medium;
   `tests/run_quiet.sh light_screen_check` - what the screens draw is what `Lights` reckons.
-- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/cards/set_dresser_look_probe.gd 380 --show S --seed N --light <light.json> --quick 1`
+- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table_show/set_dresser_look_probe.gd 380 --show S --seed N --light <light.json> --quick 1`
   - a light put on an episode's table through the set dresser's own tools, set, and every moving part
   watched (`--watch 0`: none).
-- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/cards/set_dresser_run_probe.gd 1600 --spec <md> --seed N [--model haiku]`
+- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table_show/set_dresser_run_probe.gd 1600 --spec <md> --seed N [--model haiku]`
   - the real set dresser at work through its tools (quota), on a COPY of an episode.
 - `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/air_look_probe.gd 400 --show S --seed N --spec <effects.json> --moments 1`
   - the air over a COPY of an episode, photographed at every moment a burst can mark.
@@ -1207,7 +1208,7 @@ description, chapters, tags, thumbnail moment and record). The export menu has n
   every card on "Oh, the ...", and described four paintings of five - the prompt itself gave "let me set
   this one down" as the example of how to lead into a move, and sent every painting. Now `MOVES` says the
   viewer watches every card come and go and a reader almost never says what their hands are doing; a
-  card's passage may stop on its painting only when `CardPrompts.remarks` (seeded, 15-40% of the cards,
+  card's passage may stop on its painting only when `TablePrompts.remarks` (seeded, 15-40% of the cards,
   never most) says so - the rest are sent no painting and no description. Each passage after the first
   is told not to open or end the way the last one did. Not yet tried on a real episode.
 - THE PRINTED CARD varies: `frame.window` (rect, rounded, arch - the "window-shaped" border - gothic,
@@ -1355,7 +1356,7 @@ the agents, then simply draw their attention to it".
   place (a four-line feedback delay network, dark, ~1.1 s, ~9 dB under the dry sound, wetter as the
   dial falls): nothing arrived dry at the ears before. The gust's rise limit is on loudness now, at
   every dial setting. Recorded or AI-generated wind was the other road - files to license or make. The fire roars, the rain thickens and the sea slaps harder in a gust.
-- The set dresser writes `sound` beside `light` (rules/cards/set_dresser.yaml, `insert: sounds`,
+- The set dresser writes `sound` beside `light` (rules/table/set_dresser.yaml, `insert: sounds`,
   `sound_example`); `put` / `remove "sound"` in its tools, and `put` answers with the sound in words.
 - HEARD UNDER THE READING: `ReadingPanel` mixes it after the voice's own effects (`_environment()` is
   the seam; `CardsEditor` reads the episode's `table.json`), live in the push loop and into the export
@@ -1461,13 +1462,13 @@ generative mode should also work here."
   (another voice of the show - this worked already, unadvertised), the deck (`## Cards`, a suit, a
   card - colored only inside the section, `CardDeck.span`), a template macro (the agents get its
   default) and a note to self (taken out before any agent sees the brief) - both new, in
-  `CardPrompts.brief` - a heading, italic and bold, and a hesitation, a timed hesitation and a
+  `TablePrompts.brief` - a heading, italic and bold, and a hesitation, a timed hesitation and a
   delivery, which stand in a line the brief gives the host word for word: the reader's `spoken` rule
   now says such a line keeps its marks.
 - **What it is not offered, and why.** Pictures, sketches, scene lines and breaks, log-entry times,
   the outro mark and everything of the tablet: the table is the only medium, its pictures are the
   painter's, and the outro is the bookends'. The inline pronunciation: a reader's passage keeps no
-  bracket (`CardProducer.clean_spoken`), so it would be lost - `script_marks_check` holds that, and
+  bracket (`TableProducer.clean_spoken`), so it would be lost - `script_marks_check` holds that, and
   says to offer the mark if that ever changes.
 - **Still open.** Whether a writer really keeps a dictated line's marks is the writer's doing: the
   rule is there and the pipeline keeps them, and no episode has been made with one yet. A way to give a name's
@@ -1528,7 +1529,7 @@ had no front, so a file standing face on was a box of border strips. They have o
   card, put in as that painting lands. No painter runs for a card that is only glanced at. A card with
   no name known (`anonymous`) keeps its band bare and its details ruled.
 - The cards left in are the plan's deck less the drawn ones when the producer chose it; for a show
-  with its own deck, the draw now keeps them (`draw.json` `left`, `CardEpisode.document`). No writer
+  with its own deck, the draw now keeps them (`draw.json` `left`, `TableEpisode.document`). No writer
   is handed one. Episodes drawn before this have none, and get the nameless fronts.
 - THE FILE STANDS FACE TO THE READER (`_build_file`'s `stand`): the drawn card comes up showing its
   face, as every card left in does. The turn round on the way up is gone with the reason for it.
@@ -1546,12 +1547,12 @@ wall, which the old look did too from a pile by that wall: `toward` is now held 
 **Back in the box.** Where a card goes was the producer's per position, and the rule was soft ("mix
 those outcomes only for a stated purpose"). 65803 planned `story` + `box` for its fourth card.
 
-- `CardProducer.back_only_passed`, as a plan lands: where some cards stay out, a card with a `story`
+- `TableProducer.back_only_passed`, as a plan lands: where some cards stay out, a card with a `story`
   stays out as they do (on the keep pile when the spread has one), a card put back with no length
   asked for becomes `brief`, and a quick, silent or aside look goes back as planned. A spread that
   puts EVERY card back is left alone. No card goes back into a box from a deck, or from where it was
   dealt or swept.
-- `CardProducer.passed` -> the reader's `passed` rule: its few words (15 to 40, whatever the plan's
+- `TableProducer.passed` -> the reader's `passed` rule: its few words (15 to 40, whatever the plan's
   comment says) are the only place the viewer learns why this one goes back, so they say what makes
   it one to put back. No sample reason is written into the rule: it would be said every episode.
 - `producer.yaml`'s staging says it flat: one pattern, or the talked-about stay out and only a card
@@ -1584,15 +1585,15 @@ aside, never dealt" and then staged a search, an aside, two put-backs and a wate
 "The Rubber-Banded Pair" (its reader said the band "had gone hard" over two loose cards); 21439 laid
 "The Squall - the accident nobody planned" sideways, and its reader was never told.
 
-- The history keeps where the cards came from, never how each was handled (`CardPrompts._past`), and
+- The history keeps where the cards came from, never how each was handled (`TablePrompts._past`), and
   the habits rule says handling is never varied for its own sake.
 - `producer.yaml`: the plain pull, show and lay is how cards are handled; a move is for a position whose
   own question is about it, in cards really handled that way. Sideways, `on` and `then` are a game's
   only. THE TABLE SHOWS THE CARDS, the box and the moves - no plan rests on a band, a clip, a sleeve.
-- `CardProducer.runs_of_three`: a waterfall is three or more swept positions; fewer come out one at a time.
+- `TableProducer.runs_of_three`: a waterfall is three or more swept positions; fewer come out one at a time.
 - `reader.yaml`: the viewer sees everything done to the cards, so a passage claims no arrangement the
   table does not show; a card laid sideways, laid on another or turned where it lies tells its reader so
-  (`handled`, `CardPrompts._handled`), and the reader says what it means. `after` names the sideways
+  (`handled`, `TablePrompts._handled`), and the reader says what it means. `after` names the sideways
   lay and the card it is laid on.
 
 **The box** (`TableBox`, `TableCardPose`; gate `tests/table/box_clip_check.gd`, frame by frame):

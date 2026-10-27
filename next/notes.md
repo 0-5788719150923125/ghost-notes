@@ -115,7 +115,7 @@ Masking plays on its own bus and never reaches Spectrum, and a film panel is mut
 soundtrack moves the scenes today. Pictures nearly meet in one place too: the Director owns the
 picture settings, and main.gd builds the medium and hands it to `Director.attach`.
 
-**A blackboard already runs.** `CardEpisode` is one: each step posts a file, a step runs when what it
+**A blackboard already runs.** `TableEpisode` is one: each step posts a file, a step runs when what it
 needs exists, and a redo invalidates what was made from it. That is the shape agents should keep
 when they work for any component.
 
@@ -324,7 +324,7 @@ over show time, and it is read, never delivered: a card that wants the voice's l
 at a time. Moments are not Godot signals either, though they are closer: a scrub and an export must
 find a moment again, so a moment is a row in a schedule, asked for by time, not an event fired once
 and gone. Godot's signals keep the job they have in ghost now: telling whoever listens that
-something happened, as `Director.filters_changed` and `CardProducer.changed` do, and a control
+something happened, as `Director.filters_changed` and `TableProducer.changed` do, and a control
 telling its card it was moved.
 
 **Modulation is the creative half.** The five points are plumbing: they make a combination work.
@@ -463,7 +463,7 @@ notes the first time the new shell starts, so nothing is lost, and ghost.cfg sto
 
 **Startup.** `main._ready` shows the list where it called `_show_splash`. Flags that open something
 directly keep doing so. `--no-splash` has nothing left to skip and goes; `--note <path>` opens one
-note; and once modes are templates, `--template tarot` replaces `--cards` and `--synth`. Today
+note; and once modes are templates, `--template tarot` replaces `--table` and `--synth`. Today
 `--mask-edit` builds its editor before Chrome exists, so a command-line Masking session has none of
 the shared furniture; with one session path, it does.
 
@@ -709,7 +709,7 @@ spread's shape, and code decides the sequence.
    user supplies as well as art an agent paints. A face template draws a card's fields onto its
    front and back, as Anki's card templates do; today's one face is a numeral, a name, an art window
    and a frame - no text box, no stats, no cost.
-5. **The recipe from the guide.** Which agents run and in what order (CardEpisode's step list is
+5. **The recipe from the guide.** Which agents run and in what order (TableEpisode's step list is
    code), how the script is composed, and the tarot nouns now in every prompt.
 6. **Agents choose.** The producer writes the layout, so the set dresser sees it. A reader may write
    registered marks, and an unknown one is dropped - today nothing guards this: `clean_spoken` keeps
@@ -1317,7 +1317,7 @@ the plan says a phone note is its text alone. `src/notes/components.gd` holds th
 family - the families moved here from Card - needs, provides, requires, capabilities, mark groups,
 block, card) and the six templates; the home screen builds its rows from the templates, and
 `main.start_template(key, source)` is the one session path for every row and for `--synth`,
-`--cards` and `--mask-edit`, which now runs after Chrome exists. "+" is `Components.attach_menu`:
+`--table` and `--mask-edit`, which now runs after Chrome exists. "+" is `Components.attach_menu`:
 impossible components left out, not-ready ones grayed with the reason. Where programs start,
 `Subprocess` and `Deps.execute` refuse when `subprocess` is impossible. Both new files name no
 autoload, so SceneTree gates and Subprocess can ask them; the agent registries are named by class,
@@ -1514,10 +1514,10 @@ The user tried the build and sent a round of revisions. **Status: done; gates be
   (`src/storyboards_card.gd`, the Workspace's list, which is gone) and the dial. "New -> Auto did
   nothing" was a song session started on an empty path: no audio, no panel, no transport.
 - **Tarot is Cards** ("I don't want Tarot in our refactor; I want to use Card as the name") - step
-  9's (7). The component and template `cards`, the panel `CardsEditor`, the classes `CardEpisode`,
-  `CardProducer`, `CardPrompts`, `CardReading`, `CardDeck`, `CardTable`, `CardFaces`, the medium
+  9's (7). The component and template `cards`, the panel `CardsEditor`, the classes `TableEpisode`,
+  `TableProducer`, `TablePrompts`, `CardReading`, `CardDeck`, `CardTable`, `CardFaces`, the medium
   `table` (`TableMedium`, "Card table"), the block `ghost: cards:` with its range `draw:`, the marks
-  `<!-- table: draw 2 -->`, `--cards`, `user://cards/` (moved from `user://tarot/` once, at the first
+  `<!-- table: draw 2 -->`, `--table`, `user://table/` (moved from `user://tarot/` once, at the first
   launch, the episodes' script marks rewritten; `main._adopt_old_episodes`, to delete once it has
   run), `fonts/cards/`, `data/decks/tarot/`, and the gates `cards_check`, `table_wash_check`,
   `table_place_check`. The card folds moved to `[folds]`, since `[cards]` is the panel's section now.

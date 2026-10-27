@@ -13,7 +13,10 @@ What is held, each with the case that must not change:
      word;
   2. the ids are one a symbol with a pad at each end, no blanks and no lead-in spaces, and the style
      is the pack's row for that many tokens;
-  3. a comma's rest floor lands on the word-space after it, and a sentence with no mark feeds none;
+  3. no rest is floored; the word before a rest has its last vowel held at HOLD_LEAST ("uː" sharing it),
+     less at a weaker boundary, none without the trail; a rest is cut in its window, after a stop's
+     release, never in its closure; the trail fades a vowel held into the next word whole and comes back
+     up without a step;
   4. a leaned-on word scales its stressed syllable alone, and an unmarked one feeds no scale;
   5. the spans and phones are the plan's frames of 600 samples at 24 kHz, the phones in eSpeak's
      symbols (A's time shared by e and ɪ), and the take is handed back at 22,050 with its seconds kept;
@@ -258,14 +261,15 @@ def test_no_rest_is_floored():
 
 @check
 def test_a_rest_is_cut_where_its_gap_is():
-    """The window a rest is cut in is GAP_REACH either side of the (corrected) boundary, never past either
-    word; Piper's runs from the word's end to a frame into the next."""
-    from backends.kokoro import GAP_REACH, KokoroBackend
+    """The window a rest is cut in runs from GAP_BACK before the (corrected) end of the word to GAP_REACH
+    past the next word's start, never past either word; Piper's runs from the word's end to a frame into
+    the next."""
+    from backends.kokoro import GAP_BACK, GAP_REACH, KokoroBackend
     from backends.piper import PiperBackend
 
     edges = {0: (0.0, 0.4), 1: (0.45, 0.9)}
     lo, hi = KokoroBackend._gap(edges, 0, 0.025)
-    ok(abs(lo - (0.4 - GAP_REACH)) < 1e-9 and abs(hi - (0.45 + GAP_REACH)) < 1e-9,
+    ok(abs(lo - (0.4 - GAP_BACK)) < 1e-9 and abs(hi - (0.45 + GAP_REACH)) < 1e-9,
        "Kokoro's window: %.3f to %.3f s" % (lo, hi))
     ok(hi < 0.675, "never as far as the middle of the next word (its closures are silences too)")
     short = {0: (0.0, 0.4), 1: (0.45, 0.47)}
@@ -273,6 +277,107 @@ def test_a_rest_is_cut_where_its_gap_is():
     plo, phi = PiperBackend._gap(edges, 0, 0.025)
     ok(abs(plo - 0.4) < 1e-9 and abs(phi - 0.475) < 1e-9, "Piper's is unchanged: %.3f to %.3f s" % (plo, phi))
     eq(KokoroBackend._gap(edges, 1, 0.025), None, "after the last word, none")
+
+
+@check
+def test_a_stops_release_stays_its_word():
+    """'it,' before 'haven't': the vowel, the silence of the t's closure, its release, the next word's
+    breath. Cut in Kokoro's window, the rest goes in after the release; reaching GAP_REACH back into the
+    word (the window as it was) found the closure and put the release after the rest (the control)."""
+    import numpy as np
+    from backends.kokoro import GAP_REACH, KokoroBackend
+    from backends.piper import SPLICE_QUIET, _trough
+
+    sr = 24000
+    rng = np.random.default_rng(3)
+    t = np.arange(int(0.8 * sr)) / sr
+    vowel = (0.5 * np.sin(2 * np.pi * 180.0 * t)).astype(np.float32)
+    a = np.zeros(t.size, np.float32)
+
+    def lay(t0, t1, x):
+        a[int(t0 * sr) : int(t1 * sr)] = x[int(t0 * sr) : int(t1 * sr)]
+
+    lay(0.10, 0.34, vowel)  # "i"; then the closure, silent, to 0.375
+    lay(0.375, 0.39, (0.3 * rng.uniform(-1.0, 1.0, t.size)).astype(np.float32))  # the t's release
+    lay(0.39, 0.47, (0.05 * rng.uniform(-1.0, 1.0, t.size)).astype(np.float32))  # "h"
+    lay(0.47, 0.80, vowel)  # "aven't"
+    edges = {0: (0.10, 0.40), 1: (0.45, 0.80)}
+    quiet = float(np.abs(a).max()) * SPLICE_QUIET
+    lo, hi = KokoroBackend._gap(edges, 0, 0.025)
+    cut = _trough(a, int(lo * sr), int(hi * sr), sr, quiet) / sr
+    ok(cut >= 0.39, "the rest goes in after the release", "%.3f s" % cut)
+    old = _trough(a, int((0.40 - GAP_REACH) * sr), int(hi * sr), sr, quiet) / sr
+    ok(0.34 <= old < 0.375, "control: reaching GAP_REACH back, the cut is in the closure", "%.3f s" % old)
+
+
+@check
+def test_a_held_vowel_fades_whole_without_a_step():
+    """At a comma it reads straight through, Kokoro holds the word's vowel up to the next word. The trail,
+    as Kokoro makes it, fades it right up to the next word's start, and the way back up runs on into that
+    word. Controls: walked back over sound (Piper's), the voice is at full level again before the next
+    word - the dip half way through the vowel, where the cut went; not run on, the way back is a step."""
+    import numpy as np
+    import backends.piper as P
+    from backends.kokoro import KokoroBackend
+
+    sr = 24000
+    t = np.arange(int(1.0 * sr)) / sr
+    a = (0.5 * np.sin(2 * np.pi * 180.0 * t)).astype(np.float32)  # one voice, sounding throughout
+    edges = {0: (0.10, 0.40), 1: (0.45, 0.90)}
+    group = [{"text": "you", "punct": ","}, {"text": "my", "punct": "."}]
+    params = {"pause_scale": 6.5}
+
+    def gain(out, t0, t1):
+        """The trail's gain in dB over [t0, t1), where the input is not near a zero crossing."""
+        x = a[int(t0 * sr) : int(t1 * sr)].astype(np.float64)
+        y = out[int(t0 * sr) : int(t1 * sr)].astype(np.float64)
+        keep = np.abs(x) > 0.1
+        return 20.0 * np.log10(np.abs(y[keep]) / np.abs(x[keep]))
+
+    def steepest(out):
+        return float(np.max(np.abs(np.diff(gain(out, 0.3, 0.6)))))
+
+    real = P.TRAIL_SAG
+    P.TRAIL_SAG = 0.0  # no pitch sag: what comes out is the input times the trail's gain
+    try:
+        made = P._trail(a, edges, group, params, sr, walk_back=KokoroBackend.trail_early,
+                        through=KokoroBackend.trail_through)
+        walked = P._trail(a, edges, group, params, sr)
+        stepped = P._trail(a, edges, group, params, sr, walk_back=KokoroBackend.trail_early, through=False)
+    finally:
+        P.TRAIL_SAG = real
+    late = float(np.median(gain(made, 0.425, 0.435)))
+    ok(late < -10.0, "the vowel is still fading 15 ms before the next word starts", "%+.1f dB" % late)
+    ok(steepest(made) < 1.0, "and comes back up without a step", "%.2f dB a sample at most" % steepest(made))
+    back = float(np.median(gain(walked, 0.425, 0.435)))
+    ok(back > -1.0, "control: walked back over the vowel, it is at full level there again", "%+.1f dB" % back)
+    ok(steepest(stepped) > 10.0, "control: not run on, it comes back in one step",
+       "%.1f dB" % steepest(stepped))
+
+
+@check
+def test_a_short_last_vowel_is_held():
+    """Before a rest, the word's last vowel is floored at HOLD_LEAST in all - "uː" sharing it between its
+    two symbols, "eɪ" (A) taking it alone - and a weaker boundary (Pause 1, half the trail) holds less; a
+    sentence's last word has no trail and is not held. Without the trail, the opening vowel alone (the
+    control)."""
+    import numpy as np
+    from backends.kokoro import HOLD_LEAST
+
+    toks = [_tok("so", "sˈəʊ"), _tok("you", "jˈuː", ","), _tok("say", "sˈeɪ", ","), _tok("it", "ˈɪt", ".")]
+
+    def floored(params):
+        _res, sess, _rate, _n = _render(toks, params, british=True)
+        fed = sess.fed[0]
+        return [(VOCAB[fed["ids"][i]], float(f)) for i, f in enumerate(fed["floor"]) if f > 0.0]
+
+    whole = float(np.ceil(HOLD_LEAST / 0.025 - 1e-9))  # at length scale 1, a full boundary: 4 frames
+    eq(floored({"pause_scale": 6.5, "trail": 1.0}),
+       [("Q", 2.0), ("u", whole / 2), ("ː", whole / 2), ("A", whole)],
+       "the opening vowel, then each held vowel at HOLD_LEAST: 'you''s shared, 'say''s alone, 'it.' none")
+    weak = dict(floored({"pause_scale": 1.0, "trail": 1.0}))
+    ok(weak["A"] < whole, "a weaker boundary holds less", "%d frames" % weak["A"])
+    eq(floored({"pause_scale": 6.5, "trail": 0.0}), [("Q", 2.0)], "control: no trail, no hold")
 
 
 @check

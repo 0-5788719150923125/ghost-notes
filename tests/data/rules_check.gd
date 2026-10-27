@@ -16,7 +16,12 @@ extends SceneTree
 ## - THE RULES ARE EVERY SHOW'S (the user, 2026-10-08: "there shouldn't be ANY tarot-gated rules or logic in
 ##   the 'rules/' files"): no word of any rules file, a flag's name included, names a kind of card - tarot,
 ##   its arcana, its suits - and no prompt rendered over a fixture that names none says one; what a show's
-##   cards are is its brief's. The control: a part that says "tarot" is found.
+##   cards are is its brief's. The control: a part that says "tarot" is found. NOR A KIND OF WORK
+##   (next/table_work.md; the user, 2026-10-25: "I don't want to implement a baking mode, or an alchemy mode"):
+##   no rules file says alchemy, a potion, baking or a jigsaw - the brief says what the work is. The control: a
+##   part that says "potion" is found. And the work's prompts - the producer told of work, the set dresser
+##   given the plan's work, the puppeteer with tools and without, a reader's work passage and an intro and a
+##   close with acts - render whole.
 ## - THE WORDS' OWN MARKS: a value filled in, a section kept only when its flag holds and an inverted one
 ##   only when it does not, a list of lines walked, a tag alone on its line taking its line with it, a
 ##   flag on an item and its negation - each against the other side.
@@ -27,6 +32,8 @@ extends SceneTree
 const FixtureDeck := preload("res://tests/fixture_deck.gd")
 ## What only a kind of card's own show may say: the rules name none of them.
 const KINDS := ["tarot", "arcana", "rider-waite", "pentacle"]
+## ...and what only a kind of work's own show may say (next/table_work.md).
+const WORKS := ["alchemy", "alchemist", "potion", "cauldron", "baking", "bakery", "jigsaw", "dragon"]
 
 var _fails := 0
 
@@ -110,7 +117,32 @@ func _every_show() -> bool:
 				_ok(false, "%s names a kind of card: %s" % [f.trim_prefix("res://rules/"), hit])
 	# the control: a part that says it, in a flag and in its words
 	_ok(_kinds_named({"p": ["a line", {"when": "!tarot", "say": "a Rider-Waite deck"}]}).size() == 2, "a part naming tarot was not found")
+	# NOR A KIND OF WORK: every word of every file
+	for f in _rules_files("res://rules"):
+		var got := MiniYaml.parse(FileAccess.get_file_as_string(f))
+		if bool(got["ok"]):
+			for hit in _named(got["data"], WORKS):
+				_ok(false, "%s names a kind of work: %s" % [f.trim_prefix("res://rules/"), hit])
+	_ok(_named({"p": [{"say": "stir the potion"}]}, WORKS).size() == 1, "the control: a part naming a potion was not found")
 	return true
+
+
+## Every word of [param v] naming one of [param words].
+func _named(v: Variant, words: Array) -> PackedStringArray:
+	var out := PackedStringArray()
+	if v is String:
+		for k in words:
+			var at := (v as String).to_lower().find(k)
+			if at >= 0:
+				out.append("%s, in \"...%s...\"" % [k, (v as String).substr(maxi(0, at - 30), 70).replace("\n", " ")])
+				break
+	elif v is Array:
+		for x in v:
+			out.append_array(_named(x, words))
+	elif v is Dictionary:
+		for k in v:
+			out.append_array(_named(v[k], words))
+	return out
 
 
 func _kinds_named(v: Variant) -> PackedStringArray:
@@ -174,63 +206,85 @@ func _prompts() -> bool:
 		"booklet": {"keywords": ["a", "b"], "upright": "up", "reversed": "down"}}
 	var texts: Array = []
 	for chooses in [false, true]:
-		texts.append(CardPrompts.producer("Show", "a brief", 7, 3, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards().slice(0, 12), chooses)["prompt"])
+		texts.append(TablePrompts.producer("Show", "a brief", 7, CardTable.FACES, CardTable.FRAMES, [], FixtureDeck.cards().slice(0, 12), chooses)["prompt"])
 	_ok(String(texts[0]).contains("`text` \"front\""), "the producer can choose details on the front")
 	for text in ["booklet", "back", "front"]:
-		texts.append(CardPrompts.designer("Show", "## Format\na show", look, card, true, [], text)["prompt"])
+		texts.append(TablePrompts.designer("Show", "## Format\na show", look, card, true, [], text)["prompt"])
 	var front_prompt := String(texts[texts.size() - 1])
 	_ok(front_prompt.contains("PRINTED WITH THE ART ON ITS FRONT") and front_prompt.contains("shared artwork"),
 		"the designer is told how to write a card with front details and a shared back")
 	for looks in [0, 40]:
-		texts.append(CardPrompts.set_dresser("Show", "a brief", plan, 7, CardTable.headroom(7), ["a bell"], true, looks, ["fog"], "by me",
+		texts.append(TablePrompts.set_dresser("Show", "a brief", plan, 7, CardTable.headroom(7), ["a bell"], true, looks, ["fog"], "by me",
 			["a table"], ["a light"], true, false)["prompt"])
 	for step in ["intro", "1", "2", "close"]:
 		var upto := 0 if step == "intro" else (3 if step == "close" else int(step))
-		texts.append(CardPrompts.reader("Show", "a brief", plan, step, ["hello"], [card, card, card].slice(0, upto), 3, true, [], [], ["Moth"])["prompt"])
+		texts.append(TablePrompts.reader("Show", "a brief", plan, step, ["hello"], [card, card, card].slice(0, upto), 3, true, [], [], ["Moth"])["prompt"])
 	var front_plan := plan.duplicate(true)
 	front_plan["staging"] = {"source": "box", "text": "front"}
 	front_plan["inventory"] = {"count": 12, "printings": {"": 12}}
-	var front_reader := String(CardPrompts.reader("Show", "a brief", front_plan, "1", ["hello"], [card], 3,
+	var front_reader := String(TablePrompts.reader("Show", "a brief", front_plan, "1", ["hello"], [card], 3,
 		true, [], [], ["Moth"])["prompt"])
 	_ok(front_reader.contains("share the front") and not front_reader.contains("<back>"),
 		"the reader sees the details on the front")
 	_ok(front_reader.contains("12 cards in all") and front_reader.contains("Usually do not mention the total"),
 		"the reader can check the story against the box without announcing a count")
-	texts.append(CardPrompts.card_image(look, card, "a cliff", "/x.png", true, 2))
+	texts.append(TablePrompts.card_image(look, card, "a cliff", "/x.png", true, 2))
 	# ...a painting sent back, a designer shown the cards before it, the art director, a reader of a card
 	# read with the ones down whose painting falls short
-	texts.append(CardPrompts.card_image(look, card, "a cliff", "/x.png", true, 2, false, PackedStringArray(["the wing is missing"])))
-	texts.append(CardPrompts.designer("Show", "a brief", look, card, true, [], "booklet", [{"k": 1, "name": "The Owl", "art": "an owl"}])["prompt"])
+	texts.append(TablePrompts.card_image(look, card, "a cliff", "/x.png", true, 2, false, PackedStringArray(["the wing is missing"])))
+	texts.append(TablePrompts.designer("Show", "a brief", look, card, true, [], "booklet", [{"k": 1, "name": "The Owl", "art": "an owl"}])["prompt"])
 	for earlier in [0, 1, 2]:
-		texts.append(CardPrompts.art_director("Show", "a brief", look, card, earlier, "back")["prompt"])
-	texts.append(CardPrompts.reader("Show", "a brief", plan, "2", ["hello"], [card, card], 3, true, [], [], ["Moth"], true, true,
+		texts.append(TablePrompts.art_director("Show", "a brief", look, card, earlier, "back")["prompt"])
+	texts.append(TablePrompts.reader("Show", "a brief", plan, "2", ["hello"], [card, card], 3, true, [], [], ["Moth"], true, true,
 		["the wing is missing"])["prompt"])
-	texts.append(CardPrompts.back_image(look, "/x.png", true, true))
+	# THE WORK AT THE TABLE (next/table_work.md): a plan with work, its set dresser, its puppeteer with tools and
+	# without, a work passage and an intro and a close done over acts
+	var worked := plan.duplicate(true)
+	worked["work_intro"] = "the kettle is filled"
+	worked["work_close"] = "the cups are set out"
+	((worked["spread"] as Dictionary)["positions"][1] as Dictionary)["work"] = "a leaf is dropped into the cup"
+	var acts := [{"name": "drop-leaf", "about": "a leaf is dropped into the cup", "length": 4.0, "under": false},
+		{"name": "stir", "about": "the tea is stirred", "length": 12.0, "under": true}]
+	texts.append(TablePrompts.set_dresser("Show", "a brief", worked, 7, CardTable.headroom(7), ["a bell"], true, 40, ["fog"], "by me",
+		["a table"], ["a light"], true, false)["prompt"])
+	_ok(String(texts[texts.size() - 1]).contains("THE WORK.") and not String(texts[5]).contains("THE WORK."),
+		"the set dresser is told the plan's work (and, the control, not when there is none)")
+	for looks in [0, 30]:
+		texts.append(TablePrompts.puppeteer("Show", "a brief", worked, 7, [card, card, card], "- \"a cup\": stands at [0, 0] cm", looks)["prompt"])
+	texts.append(TablePrompts.reader("Show", "a brief", worked, "work:2", ["hello"], [card, card], 3, false, [], [], ["Moth"],
+		true, false, [], acts)["prompt"])
+	var work_words := String(texts[texts.size() - 1])
+	_ok(work_words.contains("the work begins at the table") and work_words.contains("drop-leaf") and not work_words.contains("HOW EARLIER EPISODES MET"),
+		"a work passage is not told its acts as the work it talks through")
+	for step in ["intro", "close"]:
+		texts.append(TablePrompts.reader("Show", "a brief", worked, step, ["hello"], [card, card, card].slice(0, 0 if step == "intro" else 3), 3,
+			false, [], [], ["Moth"], true, false, [], acts)["prompt"])
+	texts.append(TablePrompts.back_image(look, "/x.png", true, true))
 	# a symmetric back is never made by blending the picture with its half turn (feedback 0012: every
 	# mark printed twice); the control is a back that is not asked to be symmetric
-	var symmetric := CardPrompts.back_image(look, "/x.png", true)
+	var symmetric := TablePrompts.back_image(look, "/x.png", true)
 	_ok(symmetric.contains("EXACTLY SYMMETRIC") and symmetric.contains("NEVER make it symmetric by blending"),
 		"a back asked to be symmetric is told never to blend the picture with a rotated copy")
-	_ok(not CardPrompts.back_image(look, "/x.png", false).contains("blending"),
+	_ok(not TablePrompts.back_image(look, "/x.png", false).contains("blending"),
 		"control: a back not asked to be symmetric is not told about blending")
 	# a back cut to a shaped window is told to keep its marks off the edge (feedback 0015: an arch sliced the
 	# wings the painter ran to the border); the control is a plain rectangle
 	var arched := look.duplicate(true)
 	arched["frame"] = {"window": "arch"}
-	var shaped_back := CardPrompts.back_image(arched, "/x.png", true)
+	var shaped_back := TablePrompts.back_image(arched, "/x.png", true)
 	_ok(shaped_back.contains("an arched window") and shaped_back.contains("outer sixth"),
 		"a back cut to an arch is told the window and to keep its marks inside it")
-	_ok(not CardPrompts.back_image(look, "/x.png", true).contains("outer sixth"),
+	_ok(not TablePrompts.back_image(look, "/x.png", true).contains("outer sixth"),
 		"control: a back with a plain rectangle window is not told to keep clear of its edge")
-	texts.append(CardPrompts.surface_image(look, "/x.png"))
-	texts.append(CardPrompts.height_image(look, "/x.png"))
-	texts.append(CardPrompts.backdrop_image(look, "/x.png"))
-	texts.append(CardPrompts.show_context("Show", "a brief"))
+	texts.append(TablePrompts.surface_image(look, "/x.png"))
+	texts.append(TablePrompts.height_image(look, "/x.png"))
+	texts.append(TablePrompts.backdrop_image(look, "/x.png"))
+	texts.append(TablePrompts.show_context("Show", "a brief"))
 	# what Grok is told beside them: a writer's pictures, the painter's system prompt and its references
 	var shown := "res://project.godot"
 	texts.append(TextGen.Grok.compose({"dir": "/x", "prompt": texts[6], "images": [{"path": shown, "label": "The card:"}]})["message"])
 	texts.append(Rules.say("agents/grok.painter"))
-	texts.append(ImageGen.Grok.compose({"dir": "/x", "prompt": CardPrompts.card_image(look, card, "a cliff", "/x.png", true, 2),
+	texts.append(ImageGen.Grok.compose({"dir": "/x", "prompt": TablePrompts.card_image(look, card, "a cliff", "/x.png", true, 2),
 		"refs": [shown, shown]})["message"])
 	# what the YouTube card's step tells the show's writer of an episode, for its tags
 	var tags_prompt: Dictionary = load("res://src/export/youtube_tags.gd").prompt("Show", "An Episode", "a description",
@@ -252,7 +306,7 @@ func _prompts() -> bool:
 		_ok(not String(t).contains("{{") and String(t).length() > 200, "a prompt with a mark left in it, or empty: %s" % String(t).left(120))
 	# the control: a part asked for with a name nobody gives
 	Rules.clear()
-	Rules.say("cards/set_dresser.box", {"box_x": 15, "box_z": 22})
+	Rules.say("table/set_dresser.box", {"box_x": 15, "box_z": 22})
 	_ok(Rules.missing.size() == 1 and Rules.missing[0].ends_with("box_y"), "a name nobody gave was not said: %s" % str(Rules.missing))
 	Rules.clear()
 	return true

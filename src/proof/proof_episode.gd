@@ -3,7 +3,7 @@ class_name ProofEpisode
 
 ## ProofEpisode - one episode of a Proof note, as it lies on disk (next/proof.md, "How an episode is
 ## made"). EVERY STEP IS A FILE under `user://proofs/<show>/<n>/`, written the moment it is made, as a
-## card show's episodes are ([CardEpisode]): re-opening an episode re-uses what it made, a ghost that
+## card show's episodes are ([TableEpisode]): re-opening an episode re-uses what it made, a ghost that
 ## quit half way picks up where it stopped, and REDOING A STEP IS DELETING IT ([method invalidate]
 ## removes the step and everything made from it; the producer makes what is missing).
 ##
@@ -37,7 +37,7 @@ const DRAFTING := ["draft", "review"]
 
 ## Where episodes live. Moved aside under test, so a gate never touches the author's episodes.
 static var root := ROOT
-## How a deleted episode's folder is thrown away, when set: the gate's seam (see [CardEpisode]).
+## How a deleted episode's folder is thrown away, when set: the gate's seam (see [TableEpisode]).
 static var discard: Callable = Callable()
 
 var show := ""

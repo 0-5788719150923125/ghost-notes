@@ -77,13 +77,13 @@ func _vocabulary() -> void:
 			return side / sqrt(2.0) >= (float(under.get_string(1)) + float(under.get_string(2))) * 0.5 - 0.5
 		_ok(reach.call(float(under.get_string(3))), "a diamond of the side told does not cover the cards' stretch")
 		_ok(not reach.call(float(under.get_string(3)) * 0.95), "control: a diamond 5% smaller covers the stretch too")
-	var p := CardPrompts.set_dresser("Show", "brief", {"look": {"candles": 1}}, 7, CardTable.headroom(7), [], true, 30, [], "",
+	var p := TablePrompts.set_dresser("Show", "brief", {"look": {"candles": 1}}, 7, CardTable.headroom(7), [], true, 30, [], "",
 		["a round top of oak, 120 cm across"])
 	var prompt := String(p["prompt"])
 	_ok(prompt.contains(Tables.describe()), "the set dresser is told the table's vocabulary")
 	_ok(prompt.contains("a round top of oak"), "the set dresser is told the earlier tables")
 	_ok(prompt.contains("`overhead`"), "the set dresser is told it can look from above")
-	var ex: Variant = JSON.parse_string("{" + Rules.say("cards/set_dresser.table_example") + "}")
+	var ex: Variant = JSON.parse_string("{" + Rules.say("table/set_dresser.table_example") + "}")
 	_ok(ex is Dictionary, "the table's example is JSON")
 	if ex is Dictionary:
 		var notes := PackedStringArray()
@@ -350,8 +350,8 @@ func _height_map() -> void:
 	_ok(Tables.relief_spread(seams) > Tables.EVEN_SPREAD,
 		"control: a map of boards is not even (%.2f)" % Tables.relief_spread(seams))
 	# THE STEP, on an episode of the gate's own
-	CardEpisode.root = "user://tables_check"
-	var ep := CardEpisode.open("tables-check", 7)
+	TableEpisode.root = "user://tables_check"
+	var ep := TableEpisode.open("tables-check", 7)
 	DirAccess.make_dir_recursive_absolute(ep.dir)
 	ep.write_json("plan", {"look": {}, "spread": {"positions": [{}]}})
 	_ok(not ep.steps().has("image:height"), "no height map before the table is set")
@@ -370,7 +370,7 @@ func _height_map() -> void:
 	ep.invalidate("image:surface")
 	_ok(not ep.has("image:height") and not FileAccess.file_exists(ep.dir.path_join("height.json")), "a new cloth clears it and its fit")
 	# LANDING IT: the even map is kept under the striped painting, unmoved; the boards' is taken away
-	var prod := CardProducer.new(ep, {"title": "T", "brief": "B"})
+	var prod := TableProducer.new(ep, {"title": "T", "brief": "B"})
 	striped.save_png(ep.file_of("image:surface"))
 	nap.save_png(ep.file_of("image:height"))
 	var landed := prod._land_height()
@@ -384,5 +384,5 @@ func _height_map() -> void:
 		"control: boards drawn somewhere else were kept under the painting (%s)" % landed)
 	for fn in DirAccess.get_files_at(ep.dir):
 		DirAccess.remove_absolute(ep.dir.path_join(fn))
-	CardEpisode.root = CardEpisode.ROOT
+	TableEpisode.root = TableEpisode.ROOT
 

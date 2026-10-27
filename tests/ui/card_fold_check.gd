@@ -30,7 +30,7 @@ func _run() -> void:
 	await _panel("Synthesis", func() -> Node: return SynthEditor.new())
 	await _panel("Cards", func() -> Node:
 		var cards := ReadingPanel.new()
-		cards.workspace = "cards"
+		cards.workspace = "table"
 		return cards)
 	await _note_panel()
 	await _masking()

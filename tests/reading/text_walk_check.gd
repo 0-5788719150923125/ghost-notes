@@ -12,8 +12,8 @@ extends SceneTree
 ## the plain note must come back out of the note's walk unchanged - a walk that returned a constant
 ## would pass neither.
 ##
-## READ-ONLY: the episode lives under `CardEpisode.root` set to a folder of this gate's own, and is
-## thrown away through `CardEpisode.discard`. The walks are loaded by path after the tree is up:
+## READ-ONLY: the episode lives under `TableEpisode.root` set to a folder of this gate's own, and is
+## thrown away through `TableEpisode.discard`. The walks are loaded by path after the tree is up:
 ## named here, they would be compiled with this gate before the autoloads their scripts name exist.
 
 var _fails: Array = []
@@ -26,8 +26,8 @@ func _initialize() -> void:
 func _run() -> void:
 	await process_frame
 	var walk_script := load("res://src/reading/text_walk.gd") as GDScript
-	var episode_walk := load("res://src/cards/episode_walk.gd") as GDScript
-	var episodes := load("res://src/cards/card_episode.gd") as GDScript
+	var episode_walk := load("res://src/table_show/episode_walk.gd") as GDScript
+	var episodes := load("res://src/table_show/table_episode.gd") as GDScript
 
 	print("-- the note's own walk")
 	var own: RefCounted = walk_script.new()

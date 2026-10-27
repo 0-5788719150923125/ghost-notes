@@ -57,7 +57,8 @@ const REVEALS := {
 ## characters past its front and pushed and popped ghosts beside them): the line is WRITTEN AS IT IS SPOKEN,
 ## in one steady sweep ([method glitch_front]) that has every word written within GLITCH_SETTLE seconds of its
 ## start (from GLITCH_EARLY before it) - so the word the voice is saying is never the scrambled one - and
-## goes on through a pause instead of waiting in it. Each row is centered on what is written of it. Past the
+## goes on through a pause instead of waiting in it. Each row is centered on what is written of it and the
+## noise's mean reach ([constant GLITCH_CENTERED]). Past the
 ## sweep, a few letters' places show NOISE ([method glitch_reach]: it reaches on a
 ## letter at a time, then falls back and reaches again, as a guess retracted); beyond that, nothing yet. The
 ## noise is a glyph from the sets below, each letter holding its own for GLITCH_HOLD - the simple set nearest
@@ -78,6 +79,13 @@ const GLITCH_STEPS := 12.0
 const GLITCH_AHEAD := 10
 const GLITCH_LEAST := 4
 const GLITCH_RUN := 48
+## THE NOISE IS COUNTED IN THE MIDDLE (2026-10-26: "the subtitles appear to be shifted slightly right of
+## center"): a row centered on what is written alone had its noise hang off its right end, and its plate with
+## it - a row's first noise grew rightward from the very middle - so a line being written sat right of center.
+## A row is centered on what is written and this many letters more: the noise's mean reach past the sweep
+## (measured over 400 lines, 3.1 letters from the front, which stands half a letter behind the sweep). A
+## constant, so the words hold still while the noise reaches on and backs off.
+const GLITCH_CENTERED := 2.6
 const GLITCH_SIMPLE := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?#$%^&*<>-_/\\[]{}|="
 const GLITCH_COMPLEX := "┌┐└┘├┤┬┴┼━┃┏┓┗┛┣┫┳┻╋※×○◎●△▲▽▼☉♠♡♢♣♤♥♦♧"
 
@@ -562,8 +570,8 @@ class Overlay:
 		# WRITTEN AS IT IS SPOKEN (the glitch): where the sweep is ([method Subtitles.glitch_front]) and how far past
 		# it the noise reaches; a letter beyond that is not drawn yet. Each row is CENTERED ON WHAT IS WRITTEN of
 		# it, so the words come out of the middle of the screen, where the eye already is (asked 2026-10-07:
-		# "the alignment/centering would be constantly compensating for the addition of new text") - its plate
-		# round what is drawn, noise and all
+		# "the alignment/centering would be constantly compensating for the addition of new text"), and on the
+		# noise's mean reach past it (GLITCH_CENTERED) - its plate round what is drawn, noise and all
 		var sweep := 0.0
 		var front := 1 << 30
 		var reach := 0
@@ -582,7 +590,7 @@ class Overlay:
 			var x0 := cx - total * 0.5
 			var drawn := total
 			if glitch:
-				x0 = cx - _written(row, sweep, font, fs, gap) * 0.5
+				x0 = _glitch_x(row, sweep, cx, font, fs, gap)
 				drawn = _written(row, float(front + reach), font, fs, gap)
 			starts.append(x0)
 			if drawn > 0.0:
@@ -652,6 +660,11 @@ class Overlay:
 					x += cw
 				x += gap
 			y += lh
+
+	## Where row [param row] starts, the glitch's sweep at letter [param sweep]: centered on [param cx] by what is
+	## written of it and [constant Subtitles.GLITCH_CENTERED] letters of noise.
+	func _glitch_x(row: Array, sweep: float, cx: float, font: Font, fs: int, gap: float) -> float:
+		return cx - _written(row, sweep + Subtitles.GLITCH_CENTERED, font, fs, gap) * 0.5
 
 	## How wide row [param row] is up to letter [param upto] of its sentence (a fraction of the next letter, and
 	## of the gap after a word, counted in), at size [param fs] - the glitch centers a row on it. NO GAP AFTER

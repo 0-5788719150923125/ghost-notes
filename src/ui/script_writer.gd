@@ -40,11 +40,11 @@ class_name ScriptWriter
 ## that names its episodes hands the row its picked one's ([method hand_field]: Cards' plan, Proof's
 ## problem), so its Episode is edited here too, never on a card of its own.
 const FIELDS := {
-	"title": {"label": "Title", "modes": ["generative", "cards", "proof", "note"],
+	"title": {"label": "Title", "modes": ["generative", "table", "proof", "note"],
 		"tip": "The chapter's title. Read aloud first, by the voice that opens the chapter, and set at the head of the chapter in the Novel and Notebook. For a card show or a Proof note, the channel's name: on the title screen while the intro holds. The %title% of the YouTube title."},
-	"byline": {"label": "Byline", "modes": ["cards", "proof"],
+	"byline": {"label": "Byline", "modes": ["table", "proof"],
 		"tip": "A line under the channel's name on the title screen while the intro holds - \"with Pen & Ink\". Empty, the name stands alone."},
-	"episode": {"label": "Episode", "modes": ["cards", "proof"],
+	"episode": {"label": "Episode", "modes": ["table", "proof"],
 		"wait": "named with the episode",
 		"tip": "What this video is called: the %episode% of the YouTube title. A card show's or a Proof note's is the picked episode's - its writer names it as it plans the episode, an edit here is written into the episode, and it names the export; an episode needs one. A note read as it is written names its own here."},
 	"author": {"label": "Author", "modes": ["generative"],
@@ -55,9 +55,9 @@ const FIELDS := {
 
 ## WHAT THE DOCUMENT IS CALLED, where it is not a script: a card show's body is the BRIEF its
 ## agents work from - written by hand, never read aloud. Its marks are its own ([ScriptMarks],
-## "cards"): what each does in a brief is the registry's `blurbs`.
+## "table"): what each does in a brief is the registry's `blurbs`.
 const WORDING := {
-	"cards": {"window": "Brief",
+	"table": {"window": "Brief",
 		"edit_tip": "Open the show's brief in an editor, with every mark a brief understands listed beside it - the deck, other voices, notes to yourself - ready to insert at the cursor. The brief is what the show is, who reads it and by what rules, and every agent behind every episode is handed it.",
 		"placeholder": "What is this show? Who reads it, how, and by what rules?",
 		"speakers": "Voices in this brief"},
@@ -191,7 +191,7 @@ func setup(section: String, blocks: PackedStringArray, mode: String) -> void:
 
 
 ## THE CARD IS A NOTE'S (2026-10-06): the note IS the file, so Clear (let go of this one) is not
-## offered. A panel started without a note (`--cards`, `--synth`) keeps it. Save… moves the note to
+## offered. A panel started without a note (`--table`, `--synth`) keeps it. Save… moves the note to
 ## the file chosen ([signal DocSource.moved]); Open… (hidden here until 2026-10-12, which left no way
 ## to load a file from inside a note) opens the file chosen AS THE NOTE ([method open_as_note]).
 func bind_note() -> void:
@@ -550,7 +550,7 @@ func _refresh() -> void:
 	_refresh_handed()
 	var spoken := Manuscript.unspoken(text)
 	var parts := PackedStringArray([_count(Manuscript._rx("\\S+").search_all(spoken).size(), "word")])
-	if _mode in ["generative", "cards"]:
+	if _mode in ["generative", "table"]:
 		var names := Manuscript.speakers(text)
 		parts.append(_count(names.size(), "voice"))
 		var pics := Manuscript.images(text).size()

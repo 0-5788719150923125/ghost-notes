@@ -34,7 +34,7 @@ func _run() -> void:
 	_clean()
 	NoteStore.root = ROOT
 	NoteStore.create("A chapter", "Words.\n", {"voice": {}, "picture": {"medium": "book"}})
-	NoteStore.create("A show of cards", "A brief.\n", {"cards": {}})
+	NoteStore.create("A show of cards", "A brief.\n", {"table": {}})
 	_main = preload("res://scenes/main.tscn").instantiate()
 	add_child(_main)
 	await _frames(40)

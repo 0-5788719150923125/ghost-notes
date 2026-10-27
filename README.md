@@ -16,7 +16,7 @@ Portable Linux and Windows release builds check for newer builds automatically. 
 
 ## description
 
-Ghost Notes is a notes app made with [Godot](https://godotengine.org/) 4.7, in which a note becomes whatever is attached to it. With a song it is a spectral audio visualizer - procedural and deterministic, so the same song always draws the same show, with no generative model in the render path. With a script it is a reading, in a voice synthesized from first principles or a small local neural one; with a show's brief, a show of cards made by AI agents, whatever the brief says the cards are - a tarot reading, a box of baseball cards, a card game's deck, flashcards, a tin of recipe cards; with a clip, a chroma-key effects editor. Any show exports to video. On a phone, it is a notes app and nothing more.
+Ghost Notes is a notes app made with [Godot](https://godotengine.org/) 4.7, in which a note becomes whatever is attached to it. With a song it is a spectral audio visualizer - procedural and deterministic, so the same song always draws the same show, with no generative model in the render path. With a script it is a reading, in a voice synthesized from first principles or a small local neural one; with a show's brief, a show at a table made by AI agents, whatever the brief says is done there - cards read (a tarot reading, a box of baseball cards, a card game's deck, flashcards, a tin of recipe cards), or things made and worked on the table, or both; with a clip, a chroma-key effects editor. Any show exports to video. On a phone, it is a notes app and nothing more.
 
 <details>
 

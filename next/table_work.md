@@ -15,7 +15,36 @@ the show's markdown brief and the agents' own instructions. The first show will 
 from `rift/cards/true-tarot.md`, about alchemy: the ingredients, the cauldron, the vials, the dragons
 heard in the background.
 
-This note is what was found, the design, and the plan in order. Nothing here is built yet.
+This note is what was found, the design, and the plan in order.
+
+**Status, 2026-10-26: the first build is in - the clock runs, the parts work, the puppeteer blocks acts, the
+readers talk the work through, the dragons are heard; nothing yet has run with real agents or been rendered
+on a real table.** Asked the same night ("please go ahead and start with this implementation ... Let us start
+with the alchemy, the cauldrons, the dragon sounds, the fog"), and built while an export rendered. What each
+step holds, and what is open, is in its Status below. The first show's brief is
+`rift/cards/the-quiet-crucible.md` (an alchemist's bench at night; ingredient cards; a raven on the shelf; the
+hatchlings by the hearth). Gates: `table_work_check`, `table_work_live_check` (the work on a mounted
+table: steam, a pour's stream, cue bursts, the hatchlings' puffs, a moving thing's shade) and
+`creatures_check` (`tests/table/`); `work_steps_check` and, on the GPU, `puppeteer_tools_check`
+(`tests/table_show/`); `rules_check` (now holding the rules to name no kind of work). Probe:
+`table_work_look_probe` (frames of a bench through its acts). SEEN 2026-10-26 on that probe's bench (no
+painted cloth or room): steam off the brew, the ink's stream mid-pour, the brew purple after it, the pestle
+grinding tilted in the bowl - and a moving thing's shade left where it had stood, now carried
+(`TableWork._tick_shades`: gone while lifted or tipped, under it where it is set down).
+
+## Trying it
+
+1. In the notes list, "Existing note..." and pick `rift/cards/the-quiet-crucible.md`: its `ghost: cards:` block
+   makes it a Cards show.
+2. On its Episode card, **New episode**, then **Generate**. The plan now says each position's work; the
+   **Table** row makes the set (the set dresser builds the bench's working parts) and then the work (the
+   puppeteer - its tools' calls show on the row as the set dresser's do); each card with work gets a second
+   reading, the words said while it is done.
+3. **Play**: the clock's hands should move; steam should rise off the brew; after each card is read, it goes
+   down and its work is done while the host talks; the hatchlings should be heard, and a puff of smoke rise
+   past the far edge when one huffs.
+4. **Folder** opens the episode: `acts.json` is the work as blocked, `table.json` the set, and `jobs/acts/`
+   the puppeteer's prompt, its tool calls (`tools.jsonl`) and what it saw.
 
 ## The verdict
 
@@ -47,7 +76,7 @@ it adds one more best-tier agent run with pictures to every episode.
 
 ## What was found
 
-**The clock.** `user://cards/true-tarot/274854/table.json`: "a wind-up alarm clock", "set for the next
+**The clock.** `user://table/true-tarot/274854/table.json`: "a wind-up alarm clock", "set for the next
 patrol; its hands stand at three". Its hands are two `box` parts placed at three o'clock. There is no
 way to say otherwise: `Rides.MOVES` (sway, tremble, swing, needle, rock, slosh) are all answers to a jolt
 or a gust, and the only thing on any table that turns at a rate is the Lights' `spin` caster - a ceiling
@@ -245,7 +274,7 @@ everything else (the sculpt's distance machinery), at the act's likely length an
 so an act that is stretched under a long passage is checked too.
 
 **The readers are told the acts**, as they are told what moves after their words today
-(`CardPrompts.after`): the acts of their own beat and those before it, by name, `about` and length. A
+(`TablePrompts.after`): the acts of their own beat and those before it, by name, `about` and length. A
 reader's mark naming no act is dropped (`voice_marks_only` already keeps a reply to the voice's marks).
 A reader of a work beat is sent a picture of the table as the act leaves it, as a card's reader is sent
 its painting: talk about what is actually there. NO CHEATING holds: no act of a later beat reaches a
@@ -406,6 +435,59 @@ What reads at table distance is cutting, stamping, pouring, layering and decorat
 and piping do not, and the brief steers away from them. Of the four, it asks the most of rigid parts, so
 it comes last.
 
+## 10. Five shows, and what each still needs
+
+Briefs written 2026-10-26 (the user: "scaffold the other remaining markdown guides"), each in `rift/cards/`,
+each telling its agents everything about its work in plain words, since the rules name none:
+
+| show | file | the cards | runs today? | what it still needs |
+|---|---|---|---|---|
+| The Quiet Crucible (alchemy) | `the-quiet-crucible.md` | one recipe card from a box of them (ingredients drawn until 2026-10-26) | yes | a recipe-box episode, by eye |
+| The Spare Bin (building bricks, unbranded) | `the-spare-bin.md` | challenge cards, each shaping the next stage of one build | no | the instanced assembly, `assemble`, brick kinds on the stud grid, `plastic`, the exact checks, the builder, the booklet (section 8) |
+| Corner by Corner (jigsaw) | `corner-by-corner.md` | find-it cards: details of the night's picture, the draw the order it is built in | no | the puzzle cut, a picture across the pieces (`image:picture`), the assembly, the box lid showing the same picture |
+| The Recipe Tin (baking) | `the-recipe-tin.md` | one recipe card from a tin of one baker's cards | in part | pieces and `apart`, `becomes`, time passing, a thick stream, `squash` and `roll`, spreading (the painted surface, section 11) |
+| Joker Motivation (clown makeup on a mask) | `joker-motivation.md` | none | in part | its fixed things; a mask form; the painted surface; `press` in any direction (section 11) - the show with no cards is built |
+
+THE MAKEUP SHOW (the user, 2026-10-26: "the artist would always apply extremely elaborate clown makeup on a
+standardized mask. Every video would start with that mask ... follow the 'Joker Motivation' script"; asked how,
+"Straight, as the genre does it"; "We should just co-opt the entire genre, and do it better"; and "the Joker is
+in the clown makeup. Not cards"). The genre, read from four transcripts of four channels (Dark Side of Life,
+Joker's Last Words, Veiled Mind, Dark Throne Motivation) and thirty-odd titles: a deep, slow voice in the second
+person to a "chosen one"; a cold open on the title's promise; flattering contradictions; a faceless "they" who
+gossip and plot; silence recast as strategy; one plea to like and subscribe "for every chosen one"; numbered
+truths, a "let's talk science" aside, an "I know someone who" story; vague prophecy; and a close of quiet
+vindication. The brief plays it straight, and fences off its worst corners: no revenge, no secret elites, no
+hostility to any group of people, never walking away from help, never the comic-book character himself.
+
+## 11. The painted surface, and the makeup show
+
+Designed 2026-10-26, for Joker Motivation; the same thing frosts a cake, letters a sign, paints a miniature.
+
+- **A SHOW WITH NO CARDS** (a plan of `beats`, section 6's open half): no deck, no shuffle, no card designer,
+  painter or art director; the producer's positions are beats of work alone; the script opens with no source,
+  then `work K` per beat, then the close; no deck stands on the table. *Built 2026-10-26 (the plan's step 11).*
+- **A SHOW'S FIXED THINGS**: the mask, its stand and its station are the same every episode, and today every set
+  dresser builds its own. A brief may carry things the table stands unchanged every episode - written out exactly
+  (a fenced JSON block under a heading the brief names), built by `Props` as any thing is - which the set dresser
+  builds round and never moves; and, when the brief says so, a fixed light and sound.
+- **A MASK FORM**: a face with no features to speak of - eyes and lips closed, no hair, no ears - as a shape of its
+  own (`mask`: width, length, depth), the second exception to "no body" after skulls; the set dresser's check
+  calls a carved head a body.
+- **THE PAINTED SURFACE**: a part's `skin` - a painting laid on it from one side, along the view it was painted
+  from (the mask's face from the front). THE PAINTING LINES UP WITH THE FORM because it is painted on the form: the
+  painter is handed the table's own render of the bare part from that side (orthographic) and paints the finished
+  design onto it (`image:skin:<thing>`), and the art director checks that nothing moved. STROKES REVEAL IT: a law
+  `paint` drives a brush - a free part, aimed and pressed onto the surface along the skin's side - along paths in
+  the painting's own coordinates (0-1 across and down), each with a width and a manner (`stipple`, dabs filling a
+  region; `line`; `fill`, sweeps); the design shows where the brush has passed. A PURE FUNCTION OF TIME, AND CHEAP:
+  when the acts are scheduled, every texel of the skin is given the moment the brush first covers it (a reveal-time
+  map, drawn once per schedule), and the shader shows the design wherever that moment has passed, its edge soft -
+  nothing painted frame by frame. Glitter and metal are the material's plays; a rhinestone is a small thing carried
+  and pressed. Gates: a stroke's revealed texels against its path (control: a texel off the path), a scrub against
+  a play.
+- **`press` IN ANY DIRECTION**: today it casts straight down; a brush on an upright mask presses along the skin's
+  side (`along`).
+
 ## The plan, in order
 
 Each step leaves ghost working, has a gate with a control that must fail, and the episodes already made
@@ -414,10 +496,17 @@ play as they did.
 ### 0. Spikes
 
 - **0a. The clock runs.** Joints and `turn` on the one table that had the bug (274854), copied to a test
-  root, watched over a minute of show time.
-- **0b. The shoebox as an act.** The oracle above, before any agent writes an act.
+  root, watched over a minute of show time. *Status, 2026-10-26: held by `table_work_check` on a clock built
+  for it (a minute hand 60 degrees on at ten minutes, the hour hand from three o'clock, a ticking second hand
+  on its steps; the control: the same hands unjointed stand still). 274854's own table is not changed: its
+  hands are plain boxes, and a table set from now on is told to joint them (`Motions.describe_parts`).*
+- **0b. The shoebox as an act.** The oracle above, before any agent writes an act. *Status: not built -
+  `_pose_box` is as it was.*
 - **0c. The evaluator.** Formulas parsed and evaluated in GDScript, refusing every name it does not know
-  (`instance_from_id`, `print`, `OS`); fuzzed against figure.py's on the same strings.
+  (`instance_from_id`, `print`, `OS`); fuzzed against figure.py's on the same strings. *Status, 2026-10-26:
+  built (`table/formula.gd`, `Formula`): numbers, the act's names, + - * / % ^, calls of 29 functions by name,
+  compiled once to postfix steps; refusals held by the gate, with Godot's `Expression` as the control. Not
+  fuzzed against figure.py.*
 
 ### 1. Working parts and laws that run
 
@@ -426,10 +515,22 @@ play as they did.
 `table_work_check` (the hand's angle at show time, a render against a scrub; control: a hand with no
 joint stays at its built angle).
 
+*Status, 2026-10-26: built but `look`.* A part's (or a top-level group's) `name`, `joint` (hinge, slide,
+free), `points`, `start`, `runs` and `emits` (`Motions.sanitize_work`, kept by `Props._sanitize_part`); each
+working copy a node of its own outside its ride mover (`Props._worker`, `_holder`'s `works`); the set dresser
+reads it all in Props' vocabulary (`Motions.describe_parts`). A lit candle's wax never works. `look` does not
+draw joints yet.
+
 ### 2. States, the liquid, effects from a point
 
 `state`, `emits`, the `liquid` material, the stream. *Done when* incense smokes from its stick and an
 hourglass runs out over the episode. Gate: states over time; control: a state with no law holds.
+
+*Status, 2026-10-26: built, not yet seen on a table.* States `fill`, `grow`, `tint`, `glow`, `shown`, `emit`
+and `boil` (`TableWork._pose_work`); material `liquid` (`prop.gdshader` kind 13 - ripples and bubbles on a
+handed-in `show_time`, never `TIME`; `glow` lights any opaque material) - compiled and drawn on the GPU under
+xvfb; `emits` plumes of steam, smoke or fumes from a point, a pool of puffs in closed form on the smoke shader
+(`TableWork._plume`); a pour's stream (`_stream`). No incense or hourglass has been watched yet.
 
 ### 3. Acts
 
@@ -439,27 +540,143 @@ a hand-written act grinds in a mortar with nothing passing through anything, and
 holds. Gates: the oracle; act determinism (a scrub, a live reading planned again, a render); a clip check
 in the manner of `box_clip_check` (control: an act driven through the bowl's wall must be caught).
 
+*Status, 2026-10-26: built but `roll` and the oracle.* `table/motions.gd` (`Motions`: the laws as rows, acts
+made safe) and `table/table_work.gd` (`TableWork`, the medium's part: channels, timelines, poses). Laws `turn`,
+`swing`, `to`, `path`, `circle`, `aim`, `carry`, `pour`, with `press` (a ray down onto a thing's surface,
+`TriangleMesh`, measured 1.8 us a ray) and `jitter`; tracks on one part take turns by their own stretch of the
+act; an aim or a circle brings its tool in from where it was, lifted over a rim (`BLEND_LIFT`). THE MARKS
+CHANGED FROM THE DESIGN: a card's work is a beat of its own - `<!-- table: work K -->` lays the card and opens
+its passage (`TableActions`), the beat's acts run in order under it, an act may start at a word (`<!-- act:
+name -->`, `CardReading.parse`'s `cues`), an "under" act fills what its beat leaves, and acts that would run
+past the beat's last word are quickened (never under half speed); no `do`/`begin`/`end` marks. A begun act
+never moves on a re-plan (`_begun`). The checker (`TableWork.check`): a moving thing's points against
+everything still, by parity of `TriangleMesh` hits, and the table's top; what a tool goes into (a heap being
+ground, a liquid) is soft. Held by `table_work_check` (the pestle pressed into the bowl at every moment, never
+through it; the control driven through its wall is caught; a carried jar stays, then goes back; the schedule
+from a parsed reading). Not built: `roll`, the shoebox oracle, a render against a scrub.
+
 ### 4. The puppeteer
 
-Its rules (`rules/cards/puppeteer.yaml`), tools, step and row; the readers told the acts. *Done when* a
+Its rules (`rules/table/puppeteer.yaml`), tools, step and row; the readers told the acts. *Done when* a
 real run blocks a real episode's work through its tools and submits. Gates: no reader prompt holds a
 later beat's act (two-sided, as `cards_check` `_archive`); an unknown act's mark is dropped; `rules_check`
 finds no kind of work in any rules file (control: a part that names one).
+
+*Status, 2026-10-26: built, never run with a real agent.* `cards/puppeteer_tools.gd` (`parts`, `act` - each
+act answered by `TableWork.check` - `remove`, `watch` - six frames through an act, `TablePreview.work_watch`
+- and `submit`, which asks once that every act be watched); the step `acts` (made from the plan, the draw and
+the table, `TableEpisode.needs`), `TableProducer._make_acts` / `_land_acts`, the Table row's ⟳; the producer's
+plan gains each position's `work`, `work_intro` and `work_close` (`rules/table/producer.yaml` `work`); the
+set dresser is told the plan's work (`set_dresser.yaml`, `TablePrompts.work_lines`). Held by `work_steps_check`
+(the steps and what each is made from; the `work K` move; a work passage handed its own beat's acts and no
+later beat's, the control the later beat's own; a cue kept only for its own acts) and `rules_check` (the work's
+prompts whole; no rules file names a kind of work, the control a part that says "potion").
+
+*Status, 2026-10-26, its first real run* (`the-quiet-crucible` #418273): it ran, and showed nothing on the
+card for half an hour. Three things were found and fixed. (1) A PART'S COPIES WERE PARTS OF THE SAME NAME, and
+a name found the first: the set dresser's "slips" (a line of 5, stacked) moved its bottom slip alone, into the
+four above it, so every `act` on it came back PASSES THROUGH, and the puppeteer spent 15 minutes on test acts
+("t-left", "t-up") looking for a way out. Now a part's name works all its copies, a move moving them as one
+(`TableWork.groups`, channel `g<i>:pose`, each copy carried by it), and "slips 3" one copy alone
+(`TableWork._part_of`); `parts` lists a part's copies once with each one's place, and the blind table text says
+how they are named (`Motions._parts_text`). A bed of "coals" glowing had lit one coal of nine. Gate:
+`table_work_check` `_copies` (the stack lifted as one passes clean, its top copy alone too, a glow on every
+copy; the control the bottom copy alone, caught passing into the rest). (2) The puppeteer's status sat at the
+end of the Table row, behind "back, cloth, room, depth, 15 things", cut off: the work is a row of its own
+now (Work, its ⟳ the block again), a running row says what is being done FIRST and wraps to say all of it,
+the puppeteer's last call and its looks are shown as the set dresser's are (`EpisodeCard._tools_progress`,
+`TableProducer.looks_of`), and every status line says what the agent has thought while it calls a tool
+(`TextGen.activity_line`: "calling act · ~74K tokens thought · 18:00"). (3) The rows were a tarot's: the
+draw's row (Draw, was Shuffle) shows only where cards are drawn, and each beat's row is called what the
+producer calls one (`beat_word` in the plan: an Ingredient, a Coat; Card or Beat when it names none) with the
+beat's own name beside it (panel_fit_check `_check_rows_named`). The Draw knob (the count of cards, 0 to 0 for
+none) went to the producer too, the same evening (the user: "The 'draw' option is confusing in modes like this
+one"): the brief says in prose how many its episodes draw ("A reading draws five to eight cards"), and the plan's
+spread is the draw (`TableProducer._land_plan`: cut to `SPREAD_MOST` and to a listed deck; a plan of `beats` draws
+none - one producer prompt offers both, `rules/table/producer.yaml`); earlier episodes show their counts, and how
+many cards they drew is one of the habits the producer names.
+
+*Status, 2026-10-26 afternoon, the first episode WATCHED* (`the-quiet-crucible` #142131; the user: "we shouldn't be
+doing a wash. We shouldn't even really have a deck of cards ... we might have a box to the side (like the Shoebox
+episodes), and we might pull ONE card, with ONE recipe on it ... we need to give the agents more control over what
+they draw onto a card ... many recipe cards would be held sideways"; and "we should shift objects to the center
+screen/stage/table, as we use them. In the current episode, the mortar and pestle was animated in the far left
+corner"). Found and changed:
+
+- THE WORK IS DONE WHERE IT IS SEEN. The puppeteer had ground at the mortar's own place (far left) because nothing
+  let it grind anywhere else: a thing's points were found where its node last stood and `press` cast onto its
+  surface as built, so a mortar carried to the middle could not be ground in there. Now a place is found where its
+  thing is at that moment (`TableWork._thing_world`, `_work_world`, `place_of(v, fallback, T)`; a press is cast in
+  the thing's own frame, `_press`; an end two passes deep, `_timelines`), a loose part left in its thing rides it
+  (`_ridden`: a pestle left in the mortar goes home with it, one laid on the table stays), and there is a WORK SPOT,
+  `"work"` in any place a law takes - the middle of the picture, 6 cm toward the reader, clear of the cards'
+  places, the box and what stands (`TablePlan.work_spot`, `Motions.SPOTS`); `parts` says where. The puppeteer is
+  told to bring each thing there to work it and put it back after (`rules/table/puppeteer.yaml`), the set dresser
+  to leave the middle free or stand there the one thing all the work is done on (a mask). Not kept clear by code:
+  the mask show's mask stands in the middle and is worked there.
+- THE CLOCK. Told only that `runs` takes "a law", the set dresser wrote `{"clock": "hour"}` on each hand and nothing
+  ran, so the puppeteer wrote the three hands' turns into all 31 of its acts (the clock ran in acts and stood still
+  between). Now the set dresser is shown the laws a part may run (`Motions.RUNNING`), a `clock` law keeps the
+  video's own time clockwise about the hinge's axis (`shows`/`time` move the hand from its built hour), the set
+  dresser's own `{"clock": "hour"}` is read as one, an act's turn on a running hand is left out and said, and a
+  hand an act sets runs on from there (`TableWork.value`). The `turn` blurb had told agents a minute hand is +0.1,
+  which runs a clock backward about an axis out of its dial.
+- 39 OF 69 `act` REPLIES SAID PASSES THROUGH, most "0.0 s in": a vial built standing in its rack, a ladle in its pot.
+  Now the room a part was built in is its own slot (going back into it is going home), a point inside something as
+  the act begins may come out, and a part back where it was built is as built (`TableWork.check`); a carry's `down`
+  sets a thing on whatever is under it, however it is turned (`_settle`) - the stopper, the lid and the pestle laid
+  down by hand-worked heights had gone into the table.
+- WRITTEN CARDS. A frame style `written` (`CardTable.FRAMES`): the card's writing is its face - a title and its lines
+  in a hand (`CardTable.HANDS`: neat, quick, print, typed - the notebook's OFL hands and Courier Prime), on ruled,
+  plain or grid stock (`RULINGS`), a small picture in its corner or a band across its top (`SKETCHES`) - laid out as
+  large as fits, a long line wrapped and indented, too many cut with an ellipsis (`CardFaces.written_layout`).
+  Card sizes are rows now (`CardTable.CARD_SIZES`), with `index` (3 x 5 in) and `recipe` (4 x 6 in) read SIDEWAYS:
+  wider than tall, the mesh, the held card, the box's files and the footprints follow (`CardFaces.face_px`, the short
+  side 720 px). The designer writes a written card's `writing` in place of a booklet entry (kept as its text for every
+  reader, `TableProducer._land_design`), the painter paints only the small picture (square, or 3:2 for a band), the
+  puppeteer is handed each written card's lines (a recipe's steps are the work) and waits for its design. Gate:
+  `tests/table/written_card_check.gd`.
+- THE BRIEF. `rift/cards/the-quiet-crucible.md` is now a recipe box: each episode's box the producer's (a dozen to
+  thirty brews of one alchemist, every one brewed from the shelf), one card drawn, the card a written index card read
+  sideways, its work the whole brew in the card's order; the 44 ingredients are `## The shelf` (no longer a deck).
+
+Not done: a written card propped up while the work goes on (it lies where its spread puts it, the work's spot in
+front of it); the shuffle's own moves still assume a tall card (`TableShuffle` reads `TableMedium.CARD`), so a
+written deck belongs in a box; the drift's cover of a card is the tall card's; nothing renders a written card's
+picture against its painting yet (seen on llvmpipe with placeholders only).
 
 ### 5. Beats
 
 Positions that draw nothing, shows that draw no card, the reader sent the table after its act, work in
 the archive. Gate: `cards_choose_check`'s pattern - the same context round any brief.
 
+*Status, 2026-10-26: in part.* A card's work has a passage of its own (`say:work:K`, after the card's, before
+the next card's - `TableEpisode.steps`), and the intro and the close carry their beat's acts. A SHOW THAT DRAWS
+NO CARD is built (section 11's first item, below). Not built: a position that draws nothing in a show that
+draws cards, the table's picture sent to a work passage's reader.
+
 ### 6. The alchemy brief, and its first episode
 
 The user's brief and the user's eyes. A first episode made, watched and reported on, as Proof's first
 was.
 
+*Status, 2026-10-26: the brief is written, the episode is the user's.* `rift/cards/the-quiet-crucible.md`,
+cloned in shape from `true-tarot.md`: 44 ingredient cards in eight shelves, four of them poisons whose jars
+stay sealed; the work as fetch, prepare, add, and the brew answers; a raven familiar (a voice) and the
+hatchlings (heard only); upload off. Facts in its "The truth" to check before an episode airs: Boyle and the
+1689 repeal, Berkeley's 1980 bismuth-to-gold, Pare's 1575 bezoar test, phosphorus "one of the first" elements
+with a known discoverer.
+
 ### 7. The work heard, and the creatures
 
 Contact sounds from acts; the creatures layer. The creatures need nothing above and could come first.
 Gates: levels rendered offline, each part alone; by ear.
+
+*Status, 2026-10-26: the creatures built, the contact sounds not.* `Soundscape`'s `creatures` layer (up to 4:
+`size`, `breath`, `calls` of chirp, trill, purr, huff, snore, squeak, coo and croak, `count`, `rate`, `side`,
+`near`, `awake` over `over` seconds): a source through two formants, events in closed form, a purr the only
+pulse and breathing; `Soundscape.seen_calls` gives its huffs, and the table puts a small puff of smoke past
+its far edge at each (`TableWork._huffs`). Held by `creatures_check`. Not heard by anyone yet - levels only.
 
 ### 8. The assembly, and the bricks
 
@@ -472,6 +689,21 @@ against a render.
 ### 9. The jigsaw, 10. Baking
 
 As above, each its own note when it is reached.
+
+### 11. No cards, fixed things, the mask, the painted surface
+
+Section 11, for Joker Motivation. *Status, 2026-10-26: A SHOW WITH NO CARDS is built (the user: "that card
+dependency shouldn't exist"); the fixed things, the mask form, the painted surface and `press` in any direction
+are designed, not built.* A plan of beats (the producer's, for a brief that draws no cards) is an episode
+staged from nowhere (`TableActions.SOURCES` `none`, opened by `begin`; `CardTable.cardless`, `CardTable.beats`):
+the producer plans `beats` (`rules/table/producer.yaml` `reply_beats`; `TableProducer._land_beats`
+keeps them as the spread's positions, at most `BEATS_MOST`, and takes `none` from any plan that draws cards);
+its steps are the plan, a draw of none, the cloth, the room, the table, the acts, the intro, a passage a beat
+(`say:K`, said while its work is done - `TableEpisode.steps`, `needs`) and the close; the script is `begin`,
+`work K` before each beat, the spread; the table stands no deck, card or box and keeps no room for them
+(`TablePlan.deck_count`, `TableThings.off_limits`); each beat is a chapter; the reader, the set dresser and the
+puppeteer are told of beats (`cardless` in their rules); the Episode card lists a row a beat. Gates:
+`tests/table_show/cardless_check.gd`, `tests/table/table_cardless_check.gd`. Not yet run with real agents.
 
 ## Decisions for the user
 

@@ -230,14 +230,15 @@ FOLDERS: List[Tuple[str, str, str]] = [
         "(`table.gd`, a row of `Medium.REGISTRY`).",
     ),
     (
-        "cards",
-        "Cards",
-        "A show of cards nobody writes: a show's brief, its episodes - each "
-        "planned, dealt, painted and written by agents one card at a time, kept "
-        "on disk step by step - and the set dresser that builds the table they are read "
-        "at. The rules are every show's; the brief says what the cards are - tarot, "
-        "baseball or trading cards, a card game's deck, flashcards, recipe cards - and "
-        "lists them, or leaves each episode's deck to its producer. Design: next/cards.md.",
+        "table_show",
+        "The table's show",
+        "A show at a table nobody writes: a show's brief, its episodes - each "
+        "planned, dealt, painted and written by agents a card or a beat of work at a time, "
+        "kept on disk step by step - the set dresser that builds the table and the puppeteer "
+        "that works what stands on it. The rules are every show's; the brief says what is "
+        "done there - cards read (tarot, baseball or trading cards, a card game's deck, "
+        "flashcards, recipe cards, listed or left to each episode's producer), things made, "
+        "or both. Design: next/cards.md, next/table_work.md.",
     ),
     (
         "desk",
@@ -443,10 +444,10 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
         False,
     ),
     (
-        "--cards",
+        "--table",
         "",
-        "Open the Cards mode: a show's brief, its episodes (planned, dealt, painted and written "
-        "by agents one card at a time) and the Generative voice that reads them at the table.",
+        "Open the Table mode: a show's brief, its episodes (planned, dealt, painted and written "
+        "by agents a card or a beat at a time) and the Generative voice that reads them at the table.",
         False,
     ),
     (
@@ -478,7 +479,7 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
     (
         "--export-smoke-note",
         "PATH",
-        "With `--export-smoke`: also check that this note is recognized as a Cards note.",
+        "With `--export-smoke`: also check that this note is recognized as a Table note.",
         True,
     ),
     (
@@ -1405,7 +1406,7 @@ def _render_script_doc(marks: Script) -> str:
                 warn(f"ScriptMarks.REGISTRY['{key}'] has no {name}")
         modes = re.search(r'"modes":\s*\[([^\]]*)\]', body)
         f["modes"] = re.findall(r'"(\w+)"', modes.group(1)) if modes else []
-        # what the mark does in a panel where that differs: {"cards": "..."}
+        # what the mark does in a panel where that differs: {"table": "..."}
         own = re.search(r'"blurbs":\s*\{(.*)\},?\s*$', body, re.M)
         f["blurbs"] = (
             {
@@ -1420,11 +1421,11 @@ def _render_script_doc(marks: Script) -> str:
         AUTOGEN_HEADER,
         "# Writing a script",
         "",
-        "Every mark a Generative or Synthesis script, or a Cards brief, may carry - "
+        "Every mark a Generative or Synthesis script, or a Table brief, may carry - "
         "the list the script editor's palette (**Edit** on the panel) is built "
         "from, and the patterns it highlights with. A script is Markdown; "
         "YAML frontmatter at the top is the panel's and never shown in the "
-        "editor or spoken. A Cards brief is handed to the show's agents rather "
+        "editor or spoken. A Table brief is handed to the show's agents rather "
         "than read aloud, so a mark offered there says what it does in a brief.",
         "",
         _full_doc(marks.doc),

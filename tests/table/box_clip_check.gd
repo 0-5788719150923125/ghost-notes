@@ -300,7 +300,7 @@ func _load(seed: int, positions: Array, plan: Dictionary, tin := false) -> void:
 	var cards := _cards(positions)
 	plan["spread"] = {"positions": positions}
 	var passages: Array = []
-	for m in CardProducer.choreography(plan, cards):
+	for m in TableProducer.choreography(plan, cards):
 		passages.append({"kind": m["kind"], "card": m.get("card", 0), "last": m.get("last", m.get("card", 0)),
 			"text": "Some words said about it, at an easy pace, for a while." if not String(m.get("say", "")).is_empty() else ""})
 	var script := CardReading.compose(passages)

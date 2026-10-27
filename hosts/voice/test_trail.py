@@ -520,7 +520,8 @@ def test_an_early_next_word_is_not_dipped():
 
 @check
 def test_the_plan_reaches_the_trail():
-    """`_synth_tokens` hands `_trail` the words that end on a hiss, by token."""
+    """`_synth_tokens` hands `_trail` the words that end on a hiss, by token, and Piper's own reach:
+    TRAIL_EARLY (None, read when the trail is made) and no running on into the next word."""
     from backends import piper as P
 
     toks = [
@@ -529,11 +530,13 @@ def test_the_plan_reaches_the_trail():
         _tok("asks", ".", ["AE1", "S", "K", "S"]),
     ]
     seen: list = []
+    reach: list = []
     real = P._trail
 
-    def spy(audio, edges, group, params, sr, hisses=None):
+    def spy(audio, edges, group, params, sr, hisses=None, **kw):
         seen.append(hisses)
-        return real(audio, edges, group, params, sr, hisses)
+        reach.append(kw)
+        return real(audio, edges, group, params, sr, hisses, **kw)
 
     P._trail = spy
     try:
@@ -541,6 +544,7 @@ def test_the_plan_reaches_the_trail():
     finally:
         P._trail = real
     eq(seen, [{0: 1, 2: 2}], "'cards' one run, 'card' none, 'asks' two")
+    eq(reach, [{"walk_back": None, "through": False}], "Piper's reach: TRAIL_EARLY, never on into the next word")
 
 
 def main() -> int:

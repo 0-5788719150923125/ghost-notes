@@ -48,7 +48,7 @@ extends Node
 const CYCLES := 3
 ## WHAT EACH NOTE IS MADE OF: the blocks a note of that make-up carries (`SONG` stands for the
 ## fixture's path). There is one kind of new note; these are what "+" would have made of it.
-const MODES := ["note", "auto", "manual", "story", "synthesis", "generative", "narrated", "cards", "proof",
+const MODES := ["note", "auto", "manual", "story", "synthesis", "generative", "narrated", "table", "proof",
 	"likeness", "masking"]
 const BLOCKS := {
 	"note": {},
@@ -62,7 +62,7 @@ const BLOCKS := {
 	# a voice with a Picture and a storyboard: a pairing no template had
 	"narrated": {"voice": {}, "picture": {"medium": "full"},
 		"scenes": {"loop": true, "sequence": [{"scene": "aurora", "hold": 4}]}},
-	"cards": {"cards": {}},
+	"table": {"table": {}},
 	# a ghost doing math at a desk: its card pins the desk, which must be let go on leaving
 	"proof": {"proof": {}},
 	# an actor reading the note: its card pins the likeness medium, and brings a Voice beside it

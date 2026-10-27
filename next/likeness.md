@@ -1775,7 +1775,7 @@ the samples.
 
 All Python is one entry point, `hosts/face/actor.py <step> ...`, one subcommand per step, in
 `face_venv`. Agent steps are `TextGen` jobs with pictures attached, like the art director's
-(`CardProducer`): the rules are in `rules/likeness/*.yaml`, and the reply is JSON, parsed and
+(`TableProducer`): the rules are in `rules/likeness/*.yaml`, and the reply is JSON, parsed and
 checked, with a malformed reply retried once.
 
 | # | Step | Per | Runs | Reads | Writes | Cost (est.) |

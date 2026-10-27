@@ -114,6 +114,7 @@ class Codex:
 			return -1
 		pf.store_string(String(job["prompt"]))
 		pf.close()
+		Codex.run_offered(job)
 		var pid := Subprocess.start_redirected(binary(), Codex.argv(job), {"stdin": prompt_path,
 			"out": String(job["events"]), "err": String(job["log"])}, "codex image")
 		if pid <= 0:
@@ -176,18 +177,65 @@ class Codex:
 		return h if not h.is_empty() else Deps.home().path_join(".codex")
 
 	## THE MODELS CODEX OFFERS, as a picker shows them: `[{key, label}]`, the CLI's own default first
-	## (key "", labelled with the model the author's config names). Read from the catalog the CLI
-	## keeps for itself (`models_cache.json` - what `codex debug models` prints), so it is the list
-	## this installation actually has, and reading it costs nothing. Hidden entries stay hidden.
+	## (key "", labelled with the model it runs - the author's config's, or what runs in its place,
+	## [method runnable]). Read from the catalog the CLI keeps for itself (`models_cache.json` - what
+	## `codex debug models` prints), so it is the list this installation actually has, and reading it
+	## costs nothing. Hidden entries stay hidden.
 	static func models() -> Array:
 		var dflt := Codex.default_model()
-		var out: Array = [{"key": "", "label": "Default" + ((" (%s)" % dflt) if not dflt.is_empty() else "")}]
-		var j := JSON.new()
-		if j.parse(FileAccess.get_file_as_string(home().path_join("models_cache.json"))) == OK and j.data is Dictionary:
-			for m in (j.data as Dictionary).get("models", []):
-				if m is Dictionary and String((m as Dictionary).get("visibility", "list")) == "list":
-					out.append({"key": String(m["slug"]), "label": String((m as Dictionary).get("display_name", m["slug"]))})
+		var cat := Codex.catalog()
+		var runs := Codex.runnable("", cat, dflt)
+		var shown := dflt if runs.is_empty() else "%s - %s is not offered" % [runs, dflt]
+		var out: Array = [{"key": "", "label": "Default" + ((" (%s)" % shown) if not shown.is_empty() else "")}]
+		for m in cat:
+			if String((m as Dictionary).get("visibility", "list")) == "list":
+				out.append({"key": String(m["slug"]), "label": String((m as Dictionary).get("display_name", m["slug"]))})
 		return out
+
+
+	## EVERY MODEL THIS ACCOUNT'S CATALOG HOLDS, listed or hidden - each `{slug, visibility, priority, ...}`, from
+	## the CLI's own `models_cache.json`; empty when there is none to read.
+	static func catalog() -> Array:
+		var j := JSON.new()
+		if j.parse(FileAccess.get_file_as_string(home().path_join("models_cache.json"))) != OK or not (j.data is Dictionary):
+			return []
+		var listed: Variant = (j.data as Dictionary).get("models", [])
+		return (listed as Array).filter(func(m: Variant) -> bool:
+			return m is Dictionary and not String((m as Dictionary).get("slug", "")).is_empty()) if listed is Array else []
+
+
+	## THE MODEL A JOB ASKS FOR, of [param chosen] ("" the author's config's, [param config]): itself while
+	## [param catalog] holds it, or when there is no catalog to ask - else ITS FIRST LISTED MODEL, by the
+	## catalog's own priority. A WITHDRAWN MODEL IS NEVER ASKED FOR (2026-10-26: this ChatGPT account's catalog,
+	## refreshed at 17:07, held no "sol" model any more - every show pinned gpt-6.1-sol and the config named
+	## gpt-6-sol - and every painting came back "The 'gpt-6.1-sol' model is not supported when using Codex with
+	## a ChatGPT account", each step twice). The choice stays the show's, marked on its row ([AgentPick]), so a
+	## model offered again is asked for again.
+	static func runnable(chosen: String, catalog: Array, config := "") -> String:
+		var want := chosen if not chosen.is_empty() else config
+		if want.is_empty() or catalog.is_empty() \
+				or catalog.any(func(m: Dictionary) -> bool: return String(m["slug"]) == want):
+			return chosen
+		var best := ""
+		var first := INF
+		for m in catalog:
+			var at := float((m as Dictionary).get("priority", INF))
+			if String((m as Dictionary).get("visibility", "list")) == "list" and (best.is_empty() or at < first):
+				best = String(m["slug"])
+				first = at
+		return best if not best.is_empty() else chosen
+
+
+	## [param job]'s model made one this account is offered ([method runnable]), and said in the log when it
+	## is another. The writer's job too ([TextGen.Codex]).
+	static func run_offered(job: Dictionary) -> void:
+		var chosen := String(job.get("model", ""))
+		var config := Codex.default_model()
+		var runs := Codex.runnable(chosen, Codex.catalog(), config)
+		if runs != chosen:
+			push_warning("ghost: Codex offers this account no %s - %s runs %s instead" % [
+				chosen if not chosen.is_empty() else config, String(job.get("label", "the job")), runs])
+			job["model"] = runs
 
 
 	## The model the author's config names (`model = ...` in config.toml), "" when it names none.

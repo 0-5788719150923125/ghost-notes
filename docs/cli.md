@@ -21,12 +21,12 @@ Ghost's own flags follow the Godot separator: `godot --path . -- <ghost flags>`.
 | `--seed` | `<N>` | Override the session seed (default derives from the audio's own content fingerprint, so the same song replays the same show). |  |
 | `--synth` | `[text-file]` | Open the voice-synthesis editor: write or paste a script, sample a voice by seed; each reading renders a WAV take and plays it as a normal session (scenes react to the narration; karaoke subtitles track it). |  |
 | `--say` |  | With `--synth`: speak the loaded text immediately on boot (automation, demos, headless checks). |  |
-| `--cards` |  | Open the Cards mode: a show's brief, its episodes (planned, dealt, painted and written by agents one card at a time) and the Generative voice that reads them at the table. |  |
+| `--table` |  | Open the Table mode: a show's brief, its episodes (planned, dealt, painted and written by agents a card or a beat at a time) and the Generative voice that reads them at the table. |  |
 | `--mask-edit` | `<session.json>` | Open the Masking editor on a session (also creates one from a video path). |  |
 | `--mask-render` | `<session.json>` | Render a Masking session to video (used with `--write-movie`). | _internal_ |
 | `--export` |  | Marks a Movie Maker render process (set by the exporter; `Boot` shrinks the window early). | _internal_ |
 | `--export-smoke` |  | Check that an exported desktop app starts and can unpack its bundled Python hosts, then exit. Used by `scripts/smoke-export.sh`. | _internal_ |
-| `--export-smoke-note` | `PATH` | With `--export-smoke`: also check that this note is recognized as a Cards note. | _internal_ |
+| `--export-smoke-note` | `PATH` | With `--export-smoke`: also check that this note is recognized as a Table note. | _internal_ |
 | `--app-version` |  | Print the embedded app build version as JSON, then exit (release diagnostics). | _internal_ |
 | `--apply-update` | `<target> <parent PID> <staged path> <sha256> <restart>` | Internal helper: after the parent exits, replace the portable executable with a verified update. | _internal_ |
 | `--update-smoke-hold` |  | Keep the exported app running briefly while the updater's replacement path is tested. | _internal_ |

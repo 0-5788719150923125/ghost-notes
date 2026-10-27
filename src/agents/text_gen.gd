@@ -5,7 +5,7 @@ class_name TextGen
 ##
 ## A backend turns ONE system prompt plus ONE prompt into ONE reply on disk. Everything above
 ## that - what is asked, what the reply is for, where it is kept - belongs to the caller (see
-## [AgentJobs], which queues the work, and [CardProducer], which asks for it), so a second
+## [AgentJobs], which queues the work, and [TableProducer], which asks for it), so a second
 ## writer is a registry entry and a class here, never a branch at a call site.
 ##
 ## THE CONTRACT is [ImageGen]'s, all on the main thread (spawns go through [Subprocess], whose
@@ -44,7 +44,7 @@ class_name TextGen
 ## fraction of the tokens of the painter's full size.
 const PICTURE_EDGE := 768
 
-## Keys are what `ghost: cards: writer` (and anything else that asks for words) stores.
+## Keys are what `ghost: table: writer` (and anything else that asks for words) stores.
 ##
 ## One row a backend, the one shape every registry here has (next/structure.md, step 6):
 ##   label    its name in a picker
@@ -212,7 +212,10 @@ static func tool_name(name: String) -> String:
 
 ## THE STATUS LINE: what the agent is doing, how much it has thought or written, for how long, and -
 ## past [param quiet_after] seconds with nothing new on a stream that should be growing - how long
-## it has said nothing. "thinking (~11K tokens) · 6:30".
+## it has said nothing. "thinking (~11K tokens) · 6:30". WHAT IT HAS THOUGHT IS SAID WHATEVER IT IS DOING
+## (2026-10-26: a puppeteer calling its tools for 18 minutes read "calling act" and a clock, and the user saw
+## "no token counts ... or anything to indicate if this is doing anything at all"): "calling act · ~74K
+## tokens thought · 18:00".
 static func activity_line(now: Dictionary, elapsed: int, quiet := 0, quiet_after := 180) -> String:
 	var doing := String(now.get("doing", "working"))
 	var line := doing
@@ -220,6 +223,8 @@ static func activity_line(now: Dictionary, elapsed: int, quiet := 0, quiet_after
 		line += " (~%s tokens)" % TextGen.count(int(now["tokens"]))
 	elif doing == "writing" and int(now.get("chars", 0)) > 0:
 		line += " (%s characters)" % TextGen.count(int(now["chars"]))
+	if doing != "thinking" and int(now.get("tokens", 0)) > 0:
+		line += " · ~%s tokens thought" % TextGen.count(int(now["tokens"]))
 	line += " · " + TextGen.clock(elapsed)
 	if quiet >= quiet_after:
 		line += " · nothing new for %s" % TextGen.clock(quiet)
@@ -571,6 +576,7 @@ class Codex:
 			job["error"] = err
 			return -1
 		var url := String(job.get("tools_url", ""))
+		ImageGen.Codex.run_offered(job)
 		var pid := Subprocess.start_redirected(binary(), Codex.argv(job, m["pictures"]),
 			{"cwd": String(job["dir"]), "stdin": String(p["prompt"]), "out": String(p["reply"]),
 			"err": String(p["log"]), "env": {TOKEN_ENV: AgentTools.token_of(url)} if not url.is_empty() else {}},

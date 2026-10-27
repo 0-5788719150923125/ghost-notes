@@ -1,5 +1,5 @@
 # WHAT EVERY SHOW'S EPISODE IS CALLED - one rule for every producer that names an episode: Cards'
-# producer (rules/cards/producer.yaml) and Proof's framer (rules/proof/framer.yaml) both include it
+# producer (rules/table/producer.yaml) and Proof's framer (rules/proof/framer.yaml) both include it
 # (the user, 2026-10-15, asking Proof for "a proper episode name" the way Cards makes one). The code
 # gives {{uploads_as}}: the YouTube card's template with the show's name in it and the episode's place
 # marked (YouTube.title_shape), or nothing when the line is the episode's title alone.

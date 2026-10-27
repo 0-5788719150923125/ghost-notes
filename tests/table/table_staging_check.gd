@@ -12,7 +12,7 @@ extends Node
 ##     under them, a waterfall's cards overlap in a run, a sideways card lies a quarter turn round - all
 ##     on the cloth, in the frame, clear of the deck or the box. A spread asking none of it is the seeded
 ##     preset, draw for draw (the control).
-##   - THE CHOREOGRAPHY ([method CardProducer.choreography]): the plan's positions become the verbs, in
+##   - THE CHOREOGRAPHY ([method TableProducer.choreography]): the plan's positions become the verbs, in
 ##     order - the opening by the source, drawn, dealt, swept then each shown, `then`'s taps after.
 ##   - THE TABLE, posed from show time. A deck show: a stacked card lies on the card before it, a dealt
 ##     card is never held up, a tap turns a lying card a quarter turn, a drawn card is held up LEFT of
@@ -234,15 +234,15 @@ func _choreography() -> void:
 		{"name": "d", "comes": "swept"}, {"name": "e", "then": ["tap 2"]}]}}
 	var cards := _cards([{}, {}, {}, {}, {}])
 	var got := PackedStringArray()
-	for m in CardProducer.choreography(plan, cards):
+	for m in TableProducer.choreography(plan, cards):
 		got.append("%s %d-%d" % [m["kind"], int(m.get("card", 0)), int(m.get("last", m.get("card", 0)))])
 	var want := PackedStringArray(["shuffle 0-0", "draw 1-1", "deal 2-2", "fan 3-4", "show 3-3", "show 4-4", "draw 5-5", "tap 2-2", "spread 0-0"])
 	_ok(got == want, "the positions become the verbs in order (%s)" % ", ".join(got))
 	plan["staging"] = {"source": "box"}
-	_ok(String((CardProducer.choreography(plan, cards)[0] as Dictionary)["kind"]) == "open", "a box's reading opens the box")
+	_ok(String((TableProducer.choreography(plan, cards)[0] as Dictionary)["kind"]) == "open", "a box's reading opens the box")
 	plan["spread"] = {"positions": [{"comment": "none", "linger": true, "destination": "box"},
 		{"comes": "searched", "destination": "stack"}]}
-	var search := CardProducer.choreography(plan, _cards([{}, {}]))
+	var search := TableProducer.choreography(plan, _cards([{}, {}]))
 	_ok(search.map(func(m: Dictionary) -> String: return String(m["kind"])) ==
 		["open", "draw", "linger", "rummage", "draw", "spread"],
 		"a wordless hold precedes the search and its eventual reveal")
@@ -377,7 +377,7 @@ func _load(seed: int, positions: Array, plan: Dictionary, series: Array = [],
 			(cards[i] as Dictionary)["series"] = series[i]
 	plan["spread"] = {"positions": positions}
 	var passages: Array = []
-	for m in CardProducer.choreography(plan, cards):
+	for m in TableProducer.choreography(plan, cards):
 		passages.append({"kind": m["kind"], "card": m.get("card", 0), "last": m.get("last", m.get("card", 0)),
 			"text": say if not String(m.get("say", "")).is_empty() else ""})
 	var script := CardReading.compose(passages)
@@ -1288,7 +1288,7 @@ func _pile_measure(piles: Array, size: Vector2) -> Dictionary:
 func _piles() -> void:
 	print("-- piles in a box")
 	var inner := AABB(Vector3(-0.16, 0.0, -0.105), Vector3(0.32, 0.1, 0.21))
-	var size: Vector2 = CardTable.CARD_SIZES["trading"]
+	var size: Vector2 = (CardTable.CARD_SIZES["trading"] as Dictionary)["size"]
 	var worst := {"low": 1.0, "gaps": INF, "ragged": INF}
 	var kept := true
 	var whole := true
