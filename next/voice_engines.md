@@ -787,3 +787,52 @@ Voice card: "Manzanita (their timbre)", "Manzanita (their intonation)".
 **Open:** more of their speech (4.6 minutes is little); CTranslate2 on the graphics card in the app (its CUDA 12
 libraries are not in the speech environment - medium.en on the processor is slow); a better aligner than a warp from
 another voice; teaching their delivery once the data is clean enough to carry it.
+
+### The user's ear (2026-10-27)
+
+The card run end to end in the app ("Matana", all 13 ticked videos): **"that voice sounded horrible. It's totally
+unusable. It sounds nothing like the original actress, and there's tons of static and electricity sound, very
+robotic."** What was found afterwards:
+
+- **The judges never taught a single voice.** The discriminators join at ADV_AFTER (1,000 steps), and every voice made -
+  each research run, both published Manzanita voices and the card's default (`kokoro_steps` 1,000) - stopped at step
+  1,000: the decoder was taught by log mel alone, which leaves its phase free (a vocoder's buzz).
+- **The words-misheard and spectrum figures never heard static.** Measured after, on eight unseen sentences: between
+  words the trained voices' floor is 46-47 dB under their speech, stock Kokoro's 70 (their own recordings: 26 - the
+  room the gate was meant to take out). The research voices have it as much as the card's.
+- **The card's run had a third of the research data:** 46 sentences cut, 28 agreed, 1.4 minutes (research: 4.6). The
+  Hear step's small Whisper was unsure of most of her words (301 sentences left out "unsure words"); research had
+  heard with medium.en.
+- Her ordinary speaking voice is ~12 of 5.5 hours (the rest whispered), and Kokoro's delivery is kept: af_heart's
+  rhythm and melody in her timbre.
+
+**Then, of the research voices:** "The voices you trained actually DO sound like the actress, though they are muffled
+and tinny/robotic/electric. There's no way to make the voice more clear?" Tried the same night, each on the 20 unseen
+sentences (edges: the quieter of a take's first and last 100 ms, under its speech; floor: its quietest tenth of frames
+under its loudest; words misheard by medium.en, of 188 - two or three either way is the swing between checkpoints):
+
+| | edges | floor | over 6 kHz | misheard |
+|---|---|---|---|---|
+| stock af_heart | -68 dB | -71 dB | -15 dB | 1.1% |
+| "(their timbre)": step 1,000, log mel alone | -40 | -47 | -24 | 4.8% |
+| "(judged)": on to 2,000, the judges teaching | -42 | -49 | -23 | 5.9% |
+| "(quiet edges)": the same, KOKORO'S PADS SILENT in what it is taught, 2,000 | -66.5 | -60 | -23 | 9.0% |
+| ...3,000 | -66.7 | -57 | -25 | 7.4% |
+| ..."(her pitch)": 3,000, Kokoro's pitch x1.15 | -67 | -56 | -26 | 9.0% |
+| ...4,000 | -66.5 | -53 | -25 | 12.2% |
+
+- **The hiss at a sentence's ends was taught:** the warp gives each sentence's first pad (median 6 frames) whatever
+  starts their clip - a breath, a word's tail, the room, 14 dB under their speech (gated, 23.5) - where Kokoro's own
+  pads are silence. Faded to nothing in what is taught (their energy there the sentence's quietest, unvoiced), the
+  voice's ends are Kokoro's (-66.5 dB).
+- **The gate does not thin them:** it takes 0.1-0.9 dB of their voice below 8 kHz and ~5 dB of hiss above.
+- **Muffled, measured:** against their own recordings the voices lack 3-6 dB between 2.4 and 8 kHz (where stops and
+  hisses are heard) - the misheard words are soft stops ("parked" heard "park", "card" "car", "slid" "lit"); stock is
+  8 dB brighter than THEM above 6 kHz.
+- **Their pitch is not Kokoro's:** her voiced frames 190-289 Hz (median 220), af_heart's plan 96-275 (median 192) - a
+  quarter of its frames under anything the decoder was taught on; no Kokoro pack is pitched as high (af_bella 193,
+  bf_isabella 199). A ratio is written into the predictor's F0 head (its weight and bias; published 227 Hz).
+- **Longer overfits:** 4.3 minutes; past 3,000 steps the floor rises and the words go.
+- Harmonic share, cepstral peak and flutter put every trained voice within their own recordings' range: no measure
+  here hears "electric". The three voices are on every Voice card for the ear ("Manzanita (judged)", "(quiet
+  edges)", "(her pitch)"); dist/kokoro_ft/evalset/ck/<run>/listen/said/ holds the 20 sentences of each.

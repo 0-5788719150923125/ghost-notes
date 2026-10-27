@@ -3,10 +3,10 @@ class_name IllustrationPanel
 
 ## IllustrationPanel - the Generative panel's controls for a book's pictures ([Illustrations]).
 ##
-## Four things, top to bottom: which painter ([ImageGen]); the STYLE every picture shares; the
-## REFERENCE images that show that style rather than describe it; and the chapter's own
-## pictures, one row each, with what exists, what is being painted and a button to make or
-## remake it.
+## Four things, top to bottom: which painter, its model and its effort ([AgentPick]); the STYLE
+## every picture shares; the REFERENCE images that show that style rather than describe it; and
+## the chapter's own pictures, one row each, with what exists, what is being painted and a button
+## to make or remake it.
 ##
 ## THE LIST FOLLOWS THE TEXT, not the library. [method set_script_text] is called with the
 ## chapter whenever it is read, so the rows are exactly the `<!-- image: -->` markers in it,
@@ -30,11 +30,12 @@ const REF_THUMB := 44
 var _images: Array = []            # [Manuscript.images] rows for the current text
 var _list: VBoxContainer
 var _refs: HFlowContainer
+var _refs_none: Label              # what stands in for the references while there are none
 var _style: TextEdit
 var _style_kind := "image"        # which of Illustrations.STYLE_KINDS the box is editing
 var _kind_pick: OptionButton
 var _self_ref: CheckBox
-var _pick: OptionButton
+var _pick: AgentPick
 var _missing_btn: Button
 var _all_btn: Button
 var _confirm: ConfirmationDialog = null
@@ -57,27 +58,14 @@ func _ready() -> void:
 		+ "picture spends your image quota.")
 	add_child(head)
 
-	var brow := HBoxContainer.new()
-	brow.add_theme_constant_override("separation", 8)
-	add_child(brow)
-	var bl := Label.new()
-	bl.text = "Painter"
-	bl.custom_minimum_size = Vector2(72, 0)
-	bl.add_theme_font_size_override("font_size", 12)
-	brow.add_child(bl)
-	var pick := OptionButton.new()
-	_pick = pick
-	pick.focus_mode = Control.FOCUS_NONE
-	pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var keys: Array = ImageGen.REGISTRY.keys()
-	var tip := "Which image model paints the pictures.\n"
-	for k in keys:
-		pick.add_item(Registry.label(ImageGen.REGISTRY, k))
-		tip += "\n%s - %s" % [Registry.label(ImageGen.REGISTRY, k), Registry.blurb(ImageGen.REGISTRY, k)]
-	pick.tooltip_text = tip
-	pick.select(maxi(0, keys.find(Illustrations.backend())))
-	pick.item_selected.connect(func(i: int) -> void: Illustrations.set_backend(String(keys[i])))
-	brow.add_child(pick)
+	# THE PAINTER IS EVERY CARD'S ROW ([AgentPick]: the agent, its model, how hard it reasons), kept in
+	# the look; this panel's own list of agents had no model and no effort (2026-10-27)
+	_pick = AgentPick.painter("Who paints the pictures. Takes effect at the next picture painted.")
+	_pick.set_choice(Illustrations.backend(), Illustrations.painter_model(), Illustrations.painter_effort())
+	_pick.changed.connect(func() -> void:
+		var c := _pick.choice()
+		Illustrations.set_painter(String(c["agent"]), String(c["model"]), String(c["effort"])))
+	add_child(_pick)
 
 	# ONE BOX, A PICKER FOR WHICH STYLE IT EDITS: pictures and sketches are briefed separately,
 	# and two boxes would double a panel that already scrolls.
@@ -147,6 +135,14 @@ func _ready() -> void:
 	_refs.add_theme_constant_override("h_separation", 4)
 	_refs.add_theme_constant_override("v_separation", 4)
 	add_child(_refs)
+	# "NONE" IS A ROW OF ITS OWN, and wraps. In the flow it could not: a flow gives each child its
+	# own width, so the one long line set the panel's - 357 px, past a card's room on a 380 px panel
+	# (the Letter card, which shows this panel whatever the medium; panel_fit_check 2026-10-27).
+	_refs_none = Label.new()
+	_refs_none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_refs_none.add_theme_font_size_override("font_size", 11)
+	_refs_none.modulate = Color(1, 1, 1, 0.6)
+	add_child(_refs_none)
 
 	var grow := HBoxContainer.new()
 	grow.add_theme_constant_override("separation", 8)
@@ -196,7 +192,7 @@ func apply(block: Dictionary) -> void:
 ## The library changed underneath the controls - a document brought its own look. Show it.
 func sync_from_library() -> void:
 	if _pick != null:
-		_pick.select(maxi(0, ImageGen.REGISTRY.keys().find(Illustrations.backend())))
+		_pick.set_choice(Illustrations.backend(), Illustrations.painter_model(), Illustrations.painter_effort())
 	if _style != null and _style.text != Illustrations.style(_style_kind):
 		_style.text = Illustrations.style(_style_kind)
 	if _self_ref != null:
@@ -557,13 +553,11 @@ func _refresh_refs() -> void:
 	for c in _refs.get_children():
 		c.queue_free()
 	var list := Illustrations.references(_style_kind)
+	_refs.visible = not list.is_empty()
+	_refs_none.visible = list.is_empty()
 	if list.is_empty():
-		var none := Label.new()
-		none.text = ("  (none - each is matched to the ones made before it in the chapter)"
+		_refs_none.text = ("  (none - each is matched to the ones made before it in the chapter)"
 			if Illustrations.self_reference(_style_kind) else "  (none - the style text alone decides the look)")
-		none.add_theme_font_size_override("font_size", 11)
-		none.modulate = Color(1, 1, 1, 0.6)
-		_refs.add_child(none)
 		return
 	for i in list.size():
 		var p := ProjectSettings.globalize_path(String(list[i]))

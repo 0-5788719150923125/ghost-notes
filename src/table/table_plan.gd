@@ -28,6 +28,8 @@ var parse: Dictionary = {}
 var seed_value := 0
 var hold := 0.0                    # the show's intro hold, the past of a mid-way start is replayed after
 var start_si := -1                 # a reading started mid-way: the spoken word it starts at (-1: the top)
+var since := 0.0                   # ...and how far into the reading that is (seconds, the scrub bar's; 0 from the top):
+                                   # what keeps the video's time - a clock's hands - keeps the reading's
 var look: Dictionary = {}
 var foil := 0.6                    # how much foil the deck was printed with
 var staging: Dictionary = CardTable.STAGING.duplicate()   # how the cards come and are shown (CardTable.staging_of)
@@ -83,6 +85,9 @@ static func make(document: Dictionary, table_json: Variant, intro_hold: float) -
 	var sw: Variant = document.get("start_words", PackedStringArray())
 	if sw is PackedStringArray and not (sw as PackedStringArray).is_empty() and not spoken.is_empty():
 		p.start_si = TabletScript.find_run(spoken, sw, int(document.get("start_index", -1)))
+	# A CLOCK ON THE TABLE KEEPS THE READING'S TIME, not the session's (the-quiet-crucible 181083: scrubbed back into the
+	# work, its chronometer began at 4:00 again while the voice said "four oh four" - "the minute hand never moves")
+	p.since = maxf(float(document.get("start_time", 0.0)), 0.0) if p.start_si > 0 else 0.0
 	p.table = table_of(table_json, p.look, p.seed_value)
 	# EVERYTHING SAMPLED FROM THE EPISODE'S SEED, on one stream: the camera, the lamp, the deck's place,
 	# the deck's own small differences, then the spread

@@ -256,7 +256,10 @@ func _run() -> void:
 			var table := medium as TableMedium
 			print("table_look_probe: schedule ", table._sched)
 			print("table_look_probe: events ", table._times()["events"])
-			print("table_look_probe: slots ", table._slots)
+			if "_slots" in table:
+				print("table_look_probe: slots ", table.get("_slots"))
+			for r in table._work.runs:
+				print("table_look_probe: act %s %.1f - %.1f" % [String((table._work.acts[int((r as Dictionary)["i"])] as Dictionary)["name"]), float(r["t0"]), float(r["t1"])])
 		if want == _times[0]:
 			var tmed := medium as TableMedium
 			var cur := stage.get_camera_3d()

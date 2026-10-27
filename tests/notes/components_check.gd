@@ -221,6 +221,13 @@ func _detach() -> void:
 		_ok(add.all(func(b: String) -> bool: return mine.has(b)), "%s: detaching removes what attaching wrote (%s)" % [k, str(mine)])
 		_ok(Components.detach_blocker(k, ["text", k]).is_empty(), "%s: alone on a note, it can be detached" % k)
 	_ok(Components.blocks_of("picture").has("illustrations"), "a Picture takes the illustrations that only come with it")
+	_ok(Components.blocks_of("letter").has("illustrations"), "...and so does a Letter, which shows them too")
+	var letter := Components.with_required(Components.attached_of({"voice": {}, "letter": {}, "illustrations": {}}))
+	_ok(letter.has("illustrations") and not letter.has("picture"),
+		"a letter keeping its pictures' look is not given a Picture (%s)" % str(letter))
+	# the control: chapter 40's shape, a voice and the look, and no `picture:` - it still has its pictures
+	_ok(Components.attached_of({"voice": {}, "illustrations": {}}).has("picture"),
+		"a note keeping the look with nothing that shows it has a Picture")
 	_ok(not Components.detach_blocker("text", ["text"]).is_empty(), "the text cannot be detached: it is the note")
 	var why := Components.detach_blocker("voice", ["text", "table", "voice"])
 	_ok(why.contains("Table"), "a Voice stays while the Table that brings it does (%s)" % why)

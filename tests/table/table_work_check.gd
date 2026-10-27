@@ -44,6 +44,19 @@ extends SceneTree
 ##   passes through nothing, every copy risen alike; its top copy by its number lifts alone; a glow on the
 ##   part glows every copy; the parts report says how many and how each is named. The control: the bottom
 ##   copy alone, lifted the same way, is caught passing into the ones above it.
+## - A MOVE GOES ON THROUGH ITS PLACES (181083: the snowmelt's vial "started, and stopped ... about 4 times"): a path
+##   through keys going on the same way, and carries one after another, do not stop between, and end where they end
+##   with nothing overshot. The controls: a key a path holds at, and carries a pause apart, stop.
+## - THE WORK AS A LIVE READING'S WORDS ARRIVE (181083, live: "absolute chaos"; scrubbed back, right): words arriving a
+##   sentence at a time ahead of a voice slower than the plan's estimate plan every act where the words known up front
+##   do, and nothing moved jumps in a frame (a pestle lying apart stays put while its mortar is carried). The control:
+##   the estimate taken for the words not yet heard begins acts before their words.
+## - A SCRUBBED READING'S CLOCK KEEPS THE READING'S TIME (181083: its chronometer began at 4:00 again): begun ten
+##   minutes in, a running hour hand stands as ten minutes in has it; the control, from the top, at its start.
+## - A POUR FALLS (181083's snowmelt: "a weird white line ... shoots out to the side"): a flask tipped across the view
+##   pours from the part's point its `lip` names, its stream falling under gravity onto the bowl's water, inside the
+##   bowl, only while it flows; the check says where it lands. The controls: a lip naming nothing is said and pours
+##   from the flask's mouth; tipped away from the camera, the check says the flask hides it.
 ## - MADE SAFE: an act with no beat, a law ghost does not know, a track naming nothing on the table are left
 ##   out and said; a thing holding a flame is never moved whole.
 
@@ -62,7 +75,8 @@ func _ok(cond: bool, what: String) -> void:
 
 func _run() -> void:
 	await process_frame
-	for check in [_formula, _clock, _clock_law, _grind, _at_the_spot, _seated, _set_down, _carry, _copies, _cued, _safe]:
+	for check in [_formula, _clock, _clock_law, _grind, _at_the_spot, _seated, _set_down, _carry, _through_keys, _copies, _cued,
+			_live_words, _pour, _safe]:
 		var done: Variant = (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("table_work_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -254,6 +268,16 @@ func _clock_law() -> bool:
 	_ok(absf(_turned(by["hour hand"]) - 95.0) < 0.05, "ten minutes in, the clock's hour hand stands at %s degrees, not 95" % _turned(by["hour hand"]))
 	m._work.tick(10.5)
 	_ok(absf(_turned(by["second hand"]) - 60.0) < 0.2, "the clock's second hand does not tick: %s degrees ten and a half seconds in" % _turned(by["second hand"]))
+	# A SCRUBBED READING'S CLOCK KEEPS THE READING'S TIME (181083: scrubbed back into the work, its chronometer began at
+	# 4:00 again while the voice said "four oh four"): begun ten minutes in, the hour hand stands where ten minutes into
+	# the video has it - the control, from the top, stands at three
+	m._work.since = 600.0
+	m._work.tick(0.0)
+	var scrubbed := _turned(by["hour hand"])
+	m._work.since = 0.0
+	m._work.tick(0.0)
+	_ok(absf(scrubbed - 95.0) < 0.05, "a reading begun ten minutes in shows the hour hand at %s degrees, not 95: its clock began again" % scrubbed)
+	_ok(absf(_turned(by["hour hand"]) - 90.0) < 0.01, "the control: from the top, the hour hand is not at three: %s" % _turned(by["hour hand"]))
 	# A HAND SET BY AN ACT GOES ON RUNNING from where it was set: set to 30 past at 104 s, then 49.6 more by 600 s
 	m._work.rehearse(100.0)
 	m._work.tick(104.0)
@@ -343,6 +367,26 @@ func _at_the_spot() -> bool:
 	_ok(worst < 0.03, "the pestle grinding round the mortar's floor strays %.1f cm from the moved bowl" % (worst * 100.0))
 	var c: Dictionary = m._work.check("grind")
 	_ok(int(c["through"]) == 0, "grinding in the moved mortar passes through something:\n%s" % String(c["text"]))
+	# BROUGHT TO WHERE IT GRINDS WITHOUT A JUMP (181083: its pestle leapt 6 cm up in a frame as the grind began - the
+	# hand's lift switched on whole as the law's place moved 2 cm off): frame by frame through the blend
+	var pnode: Node3D = (m._work.works[pw] as Dictionary)["node"]
+	var leap := 0.0
+	var was := Vector3.INF
+	for i in int((TableWork.BLEND_IN + 0.6) * 30.0):
+		m._work.tick(float(g[0]) + float(i) / 30.0)
+		var at: Vector3 = m._work._world_of(pnode).origin
+		if was != Vector3.INF:
+			leap = maxf(leap, at.distance_to(was))
+		was = at
+	_ok(leap < 0.012, "the pestle jumps %.1f cm in a frame as it is brought to where it grinds" % (leap * 100.0))
+	# ...and the hand's lift grows with how far it has to go, never in a step: half a millimeter further never lifts it
+	# more than 3 mm higher. The control: from where the law has it, no lift; from far off, a hand's whole lift
+	var steepest := 0.0
+	for k in 200:
+		steepest = maxf(steepest, absf(TableWork.blend_lift(0.5, float(k + 1) * 0.0005) - TableWork.blend_lift(0.5, float(k) * 0.0005)))
+	_ok(steepest < 0.003, "the hand's lift jumps %.1f cm for half a millimeter further to go" % (steepest * 100.0))
+	_ok(TableWork.blend_lift(0.5, 0.0) == 0.0 and is_equal_approx(TableWork.blend_lift(0.5, 0.1), TableWork.BLEND_LIFT),
+		"the control: the lift is not none from where the law has it and a hand's whole from far off")
 	# the control: the mortar's floor found where it stood (as places were found) is far from where it is ground
 	var then: Vector3 = m._work.place_of("mortar.floor", Vector3.ZERO)
 	_ok(Vector2(then.x - spot.x, then.z - spot.z).length() > 0.1, "the control: the floor where the mortar stood is near the spot")
@@ -461,6 +505,300 @@ func _carry() -> bool:
 	m._work.tick(50.0)
 	_ok(node.position.distance_to(at) < 0.001, "the jar was not carried back where it was built: %s" % node.position)
 	m._root3.free()
+	return true
+
+
+## A MOVE GOES ON THROUGH ITS PLACES (the-quiet-crucible 181083: the snowmelt's vial, carried the low way, "started, and
+## stopped, and started, and stopped ... about 4 times"): a path through keys that go on the same way does not stop at
+## them, nor a run of carries at the places where one ends and the next begins. The controls: a key the path holds at
+## stops it there, and carries with a pause between them stop between.
+func _through_keys() -> bool:
+	var m := _medium()
+	var spec := {"things": [{"name": "jar", "parts": [{"shape": "lathe", "profile": [[0, 0], [3, 0], [3, 8], [0, 8]], "material": "glass"}]}],
+		"materials": {"glass": {"kind": "ceramic", "color": "#5a7a6a"}}}
+	var jar: Node3D = _stand(m, spec, "jar", Vector3(Tables.ORIGIN.x - 0.2, 0.0, Tables.ORIGIN.y))["node"]
+	var carry := func(to: Array, between: Array) -> Dictionary:
+		return {"thing": "jar", "law": "carry", "to": to, "lift": 0, "between": between}
+	m._work.build({"acts": [
+		{"name": "on", "beat": 1, "length": 6, "tracks": [{"thing": "jar", "law": "path",
+			"keys": [{"at": 0.0}, {"at": 0.3, "by": [6, 3, 0]}, {"at": 0.6, "by": [12, 3, 0]}, {"at": 1.0, "by": [18, 0, 0]}]}]},
+		{"name": "held", "beat": 1, "length": 6, "tracks": [{"thing": "jar", "law": "path",
+			"keys": [{"at": 0.0}, {"at": 0.3, "by": [-6, 3, 0]}, {"at": 0.5, "by": [-6, 3, 0]}, {"at": 1.0, "by": [-18, 0, 0]}]}]},
+		{"name": "carried-on", "beat": 1, "length": 6, "tracks": [carry.call([-14, 4, 0], [0.0, 0.33]), carry.call([-8, 4, 0], [0.33, 0.66]),
+			carry.call([-2, 4, 0], [0.66, 1.0])]},
+		{"name": "carried-apart", "beat": 1, "length": 6, "tracks": [carry.call([-8, 4, 0], [0.0, 0.3]), carry.call([-14, 4, 0], [0.4, 0.66]),
+			carry.call([-20, 4, 0], [0.66, 1.0])]}]}, 1)
+	_ok((m._work.acts as Array).size() == 4, "the moves were not all kept: %s" % "; ".join(m._work.notes))
+	if (m._work.acts as Array).size() != 4:
+		m._root3.free()
+		return true
+	m._work.runs = [{"i": 0, "t0": 10.0, "t1": 16.0}, {"i": 1, "t0": 30.0, "t1": 36.0}, {"i": 2, "t0": 50.0, "t1": 56.0}, {"i": 3, "t0": 70.0, "t1": 76.0}]
+	m._work._timelines()
+	var speed := func(t: float) -> float:
+		m._work.tick(t - 0.02)
+		var a := jar.position
+		m._work.tick(t + 0.02)
+		return a.distance_to(jar.position) / 0.04
+	var on_keys := minf(float(speed.call(10.0 + 0.3 * 6.0)), float(speed.call(10.0 + 0.6 * 6.0)))
+	_ok(on_keys > 0.015, "a path stops at the keys it goes on through: %.1f cm a second there" % (on_keys * 100.0))
+	var held := float(speed.call(30.0 + 0.4 * 6.0))
+	_ok(held < 0.001, "the control: a path does not hold at a key it holds at: %.1f cm a second" % (held * 100.0))
+	var joins := minf(float(speed.call(50.0 + 0.33 * 6.0)), float(speed.call(50.0 + 0.66 * 6.0)))
+	_ok(joins > 0.015, "carries one after another stop where one hands on to the next: %.1f cm a second there" % (joins * 100.0))
+	var apart := float(speed.call(70.0 + 0.35 * 6.0))
+	_ok(apart < 0.001, "the control: carries with a pause between them do not stop in it: %.1f cm a second" % (apart * 100.0))
+	# ...and each still ends where it was taken, and goes nowhere past it
+	m._work.tick(56.5)
+	var end := Vector3(Tables.ORIGIN.x - 0.02, 0.04, Tables.ORIGIN.y)
+	_ok(jar.position.distance_to(end) < 0.002, "carries gone on through do not end where the last one takes it: %s, not %s" % [jar.position, end])
+	var widest := -INF
+	for i in 61:
+		m._work.tick(50.0 + float(i) * 0.1)
+		widest = maxf(widest, jar.position.x)
+	_ok(widest <= end.x + 0.0005, "carries gone on through overshoot their last place: %.1f cm past it" % ((widest - end.x) * 100.0))
+	m._root3.free()
+	return true
+
+
+## A reading's words for [method _live_words]: a slow voice (a word 0.55 s, a sentence's rest 0.6 s) - every spoken
+## word with its sentence.
+static func _slow_words(parse: Dictionary) -> Array:
+	var ends: Array = []
+	for p in parse["passages"]:
+		for w in String((p as Dictionary)["text"]).split(" ", false):
+			for piece in String(w).split("\n", false):
+				if not TabletScript.norm(piece).is_empty():
+					ends.append(String(piece).ends_with(".") or String(piece).ends_with("?"))
+	var rests := {}
+	for a in parse["actions"]:
+		rests[int((a as Dictionary)["after"])] = float((a as Dictionary)["dur"]) + 0.5
+	var out: Array = []
+	var t := 1.0
+	var sentence := 0
+	var spoken: PackedStringArray = parse["spoken"]
+	for i in spoken.size():
+		if rests.has(i):
+			t += float(rests[i])
+			sentence += 1
+		out.append({"text": spoken[i], "t0": t, "t1": t + 0.45, "sentence": sentence})
+		t += 0.55
+		if i < ends.size() and bool(ends[i]):
+			t += 0.6
+			sentence += 1
+	return out
+
+
+## The bench [method _live_words] works: a mortar with its pestle lying apart in a corner of it, and a jar.
+func _reading_bench() -> TableMedium:
+	var m := _medium()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	m._plan.cam_base = CardTable.sample_layout(rng)["camera"]
+	m._plan.cards_from = "none"
+	var spec := _mortar_spec()
+	var mortar: Dictionary = (spec["things"] as Array)[0]
+	var pestle: Dictionary = ((((spec["things"] as Array)[1] as Dictionary)["parts"] as Array)[0] as Dictionary).duplicate(true)
+	pestle["at"] = [16, 0, -6]
+	pestle["turn"] = [0, 0, 90]
+	pestle["points"] = {"tip": [16, 0.9, -6], "grip": [4, 0.9, -6]}
+	mortar["parts"] = [(mortar["parts"] as Array)[0], (mortar["parts"] as Array)[1], pestle]
+	(spec["things"] as Array).append({"name": "jar", "parts": [{"shape": "lathe", "profile": [[0, 0], [3, 0], [3, 8], [0, 8]], "material": "stone"}]})
+	_stand(m, spec, "mortar", Vector3(Tables.ORIGIN.x - 0.3, 0.0, Tables.ORIGIN.y - 0.14))
+	_stand(m, spec, "jar", Vector3(Tables.ORIGIN.x + 0.3, 0.0, Tables.ORIGIN.y - 0.14))
+	m._work.build({"acts": [
+		{"name": "fetch-mortar", "beat": 1, "length": 3, "tracks": [{"thing": "mortar", "law": "carry", "to": "work", "lift": 4}]},
+		{"name": "fetch-jar", "beat": 1, "length": 3, "tracks": [{"thing": "jar", "law": "carry", "to": "work", "by": [14, 0, 0], "lift": 4}]},
+		{"name": "take-pestle", "beat": 1, "length": 3, "tracks": [{"thing": "mortar", "part": "pestle", "law": "carry",
+			"to": "mortar.floor", "by": [0, 7, 0], "turn": [0, 0, 0], "lift": 6}]},
+		{"name": "grind", "beat": 1, "length": "under", "tracks": [{"thing": "mortar", "part": "pestle", "law": "aim",
+			"tip": {"point": "tip", "around": "mortar.floor", "radius": 1.5, "period": 1.5, "press": "mortar", "gap": 0.3},
+			"grip": {"point": "grip", "around": "mortar.floor", "lift": 12, "radius": 3.5, "period": 1.5}}]},
+		{"name": "jar-home", "beat": 1, "length": 3, "tracks": [{"thing": "jar", "law": "carry", "lift": 4}]}]}, 1)
+	return m
+
+
+## THE WORK AS A LIVE READING'S WORDS ARRIVE (the-quiet-crucible 181083, live: "absolute chaos ... the green dish moved
+## on top of the crucible, then floated back to its position ... tipped-over"; scrubbed back and played again, it was
+## right): a reading's words arriving a sentence at a time, a few seconds before they are said, by a voice slower than
+## the plan's estimate, plan every act exactly where the same words known from the first frame (an export's) do, and
+## nothing the work moves jumps from one frame to the next - the pestle lying apart stays where it lies while its mortar
+## is carried, though the act that takes it is not yet placed. The control: the estimate taken for words not yet heard,
+## as the plan had taken it, begins acts before their words are said.
+func _live_words() -> bool:
+	var script := "\n\n".join(PackedStringArray([
+		"<!-- table: shuffle -->", "Welcome back to the bench tonight. It is late, and the house is quiet, and the kettle has gone cold.",
+		"<!-- table: draw 1 -->", "Here is the first card of the night. It asks for the mortar, and for the ink, and for a little patience.",
+		"<!-- table: work 1 -->", "<!-- act: fetch-mortar --> First the mortar comes over to us. It is heavy, and cold to the touch. " +
+			"<!-- act: fetch-jar --> Then the jar of ink comes over beside it. " +
+			"<!-- act: take-pestle --> The pestle comes out of its corner, where it has been lying all evening. " +
+			"<!-- act: grind --> And we grind it round and round, slowly, until it is soft and fine. " +
+			"<!-- act: jar-home --> The jar goes back home now. That is all it needs from us tonight.",
+		"<!-- table: spread -->", "And that is the brew for tonight. Sleep well."]))
+	var parse := CardReading.parse(script)
+	var spoken: PackedStringArray = parse["spoken"]
+	var words := _slow_words(parse)
+	var plan := TablePlan.new()
+	plan.parse = parse
+	plan.hold = 1.0
+	var est := plan.estimated_times(spoken.size())
+	var end := float((words.back() as Dictionary)["t1"]) + 2.0
+	_ok(est[est.size() - 1] < end - 15.0, "the voice is not slower than the plan's estimate, as a hushed one is: %.0f s against %.0f" % [end, est[est.size() - 1]])
+	var played := {}
+	for mode in ["known", "arriving", "guessed"]:
+		var m := _reading_bench()
+		var f := ReadingFollower.new()
+		f.reset(spoken)
+		var heard: Array = []
+		var next := 0
+		if mode == "known":
+			f.extend(words)
+			m._work.schedule(f.place(parse["actions"], 1.0, TableMedium.LEAD, TableMedium.TAIL), parse, f.said0, f.said1, est, 0.0)
+		var last := {}
+		var most := 0.0
+		var most_at := ""
+		var t := 0.0
+		while t < end:
+			t += 1.0 / 30.0
+			var arrived := false
+			# a sentence's words come together, 3 s before its first is said
+			while mode != "known" and next < words.size() and float((words[next] as Dictionary)["t0"]) - 3.0 <= t:
+				var sn := int((words[next] as Dictionary)["sentence"])
+				while next < words.size() and int((words[next] as Dictionary)["sentence"]) == sn:
+					heard.append(words[next])
+					next += 1
+				arrived = true
+			if arrived:
+				f.extend(heard)
+				var s0 := f.said0
+				var s1 := f.said1
+				if mode == "guessed":
+					s0 = s0.duplicate()
+					s1 = s1.duplicate()
+					for i in s0.size():
+						if s0[i] == ReadingFollower.NO_TIME:
+							s0[i] = est[i]
+							s1[i] = est[i] + 0.4
+				m._work.schedule(f.place(parse["actions"], 1.0, TableMedium.LEAD, TableMedium.TAIL), parse, s0, s1, est, t)
+			m._work.tick(t)
+			var nodes: Array = (m._work.things as Array).map(func(th: Dictionary) -> Node3D: return th["node"])
+			nodes.append_array((m._work.works as Array).map(func(wk: Dictionary) -> Node3D: return wk["node"]))
+			for n in nodes:
+				var at: Vector3 = m._work._world_of(n).origin
+				if last.has(n):
+					var step := at.distance_to(last[n])
+					if step > most:
+						most = step
+						most_at = "%s at %.2f s" % [String(n.name), t]
+				last[n] = at
+		var runs := {}
+		for r in m._work.runs:
+			runs[String((m._work.acts[int((r as Dictionary)["i"])] as Dictionary)["name"])] = Vector2(float(r["t0"]), float(r["t1"]))
+		played[mode] = {"runs": runs, "most": most, "at": most_at}
+		m._root3.free()
+	var known: Dictionary = played["known"]["runs"]
+	var arriving: Dictionary = played["arriving"]["runs"]
+	_ok(known.size() == 5, "the work's acts were not all planned from the words known up front: %s" % str(known.keys()))
+	var off := 0.0
+	for nm in known:
+		var b: Vector2 = arriving.get(nm, Vector2(INF, INF))
+		off = maxf(off, maxf(absf(b.x - (known[nm] as Vector2).x), absf(b.y - (known[nm] as Vector2).y)))
+	_ok(off < 0.01, "as the words arrived the work was planned otherwise than from them all: %.2f s off\n  known up front %s\n  as they arrived %s" % [off, str(known), str(arriving)])
+	for mode in ["known", "arriving"]:
+		_ok(float(played[mode]["most"]) < 0.03, "%s: something the work moves jumped %.1f cm in a frame (%s)" % [mode, float(played[mode]["most"]) * 100.0, played[mode]["at"]])
+	# the control: acts begun on the estimate begin before their words
+	var cues := {}
+	var f2 := ReadingFollower.new()
+	f2.reset(spoken)
+	f2.extend(words)
+	for c in parse["cues"]:
+		cues[String((c as Dictionary)["name"])] = f2.said0[int((c as Dictionary)["si"])]
+	var early := 0.0
+	for nm in (played["guessed"]["runs"] as Dictionary):
+		if cues.has(nm):
+			early = maxf(early, float(cues[nm]) - ((played["guessed"]["runs"] as Dictionary)[nm] as Vector2).x)
+	_ok(early > 2.0, "the control: acts begun on the estimate did not begin before their words: at most %.1f s early" % early)
+	return true
+
+
+## A POUR FALLS (181083's snowmelt: "a weird white line projected from the left side of the vial ... it shoots out to
+## the side"; the user: liquids "should be using physics"): a flask tipped across the view over a bowl pours from the
+## lip its `lip` names as a part's point ("neck.mouth"), its stream falling from that lip under gravity - lower at every
+## drop, leaving along the flask's mouth - onto the bowl's water, inside the bowl; nothing falls before the flow, and
+## nothing once its tail has fallen; the act's check says where it lands. The controls: a lip naming nothing is said,
+## and the stream leaves from the flask's mouth all the same; tipped straight away from the camera, the check says the
+## flask hides it.
+func _pour() -> bool:
+	var spec := {"things": [
+		{"name": "flask", "parts": [
+			{"name": "neck", "shape": "lathe", "profile": [[0, 0], [2.5, 0], [2.5, 6], [1, 7.5], [1, 9], [0.8, 9], [0.8, 7.5], [2.3, 6], [2.3, 0.4], [0, 0.4]],
+				"material": "glass", "points": {"mouth": [0, 9, 0]}},
+			{"name": "ink", "shape": "lathe", "profile": [[0, 0.4], [2.3, 0.4], [2.3, 4], [0, 4]], "material": "ink"}]},
+		{"name": "bowl", "parts": [
+			{"shape": "lathe", "profile": [[0, 0], [6, 0], [8, 5], [8.4, 5.2], [7.6, 5], [5.6, 0.6], [0, 0.6]], "material": "clay"},
+			{"name": "water", "shape": "lathe", "profile": [[0, 0.6], [5.6, 0.6], [7, 3.5], [0, 3.5]], "material": "water"}]}],
+		"materials": {"glass": {"kind": "ceramic", "color": "#9ab0c0"}, "ink": {"kind": "liquid", "color": "#2a3a8a"},
+			"clay": {"kind": "ceramic", "color": "#8a6a4a"}, "water": {"kind": "liquid", "color": "#6a8aa0"}}}
+	var pour := func(lip: String, turn: Array) -> Dictionary:
+		return {"name": "pour-it", "beat": 1, "length": 8, "tracks": [
+			{"thing": "flask", "law": "carry", "to": [-14, 10.5, -10], "turn": turn, "lift": 4, "between": [0.0, 0.3]},
+			{"thing": "flask", "law": "carry", "turn": [0, 0, 0], "lift": 4, "between": [0.8, 1.0]},
+			{"law": "pour", "from": "flask/ink", "into": "bowl/water", "lip": lip, "amount": 0.6, "gain": 0.2, "between": [0.35, 0.75]}]}
+	var bench := func(lip: String, turn: Array) -> TableMedium:
+		var m := _medium()
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 7
+		m._plan.cam_base = CardTable.sample_layout(rng)["camera"]
+		_stand(m, spec, "flask", Vector3(Tables.ORIGIN.x + 0.25, 0.0, Tables.ORIGIN.y - 0.1))
+		_stand(m, spec, "bowl", Vector3(Tables.ORIGIN.x - 0.05, 0.0, Tables.ORIGIN.y - 0.1))
+		m._work.build({"acts": [pour.call(lip, turn)]}, 1)
+		m._work.runs = [{"i": 0, "t0": 10.0, "t1": 18.0}]
+		m._work._timelines()
+		return m
+	var m: TableMedium = bench.call("neck.mouth", [0, 0, -100])
+	_ok((m._work.acts as Array).size() == 1 and (m._work._streams as Array).size() == 1 and m._work.notes.is_empty(),
+		"the pour was not kept whole: %s" % "; ".join(m._work.notes))
+	if (m._work._streams as Array).size() != 1:
+		m._root3.free()
+		return true
+	var st: Dictionary = m._work._streams[0]
+	m._work.tick(10.0 + 0.3 * 8.0)
+	_ok(not (st["node"] as Node3D).visible, "a stream falls before the pour begins")
+	m._work.tick(10.0 + 0.55 * 8.0)
+	var pts: PackedVector3Array = st["pts"]
+	var neck: int = m._work._work_of(m._work._thing_named("flask"), "neck")
+	var mouth: Vector3 = m._work._world_of((m._work.works[neck] as Dictionary)["node"]) * ((((m._work.works[neck] as Dictionary)["w"] as Dictionary)["points"] as Dictionary)["mouth"] as Vector3)
+	_ok((st["node"] as Node3D).visible and pts.size() >= 3, "the stream does not fall while it pours")
+	if pts.size() >= 3:
+		_ok(pts[0].distance_to(mouth) < 0.002, "the stream does not leave from the lip named as the neck's mouth: %.1f cm from it" % (pts[0].distance_to(mouth) * 100.0))
+		var falls := true
+		for i in range(1, pts.size()):
+			falls = falls and pts[i].y < pts[i - 1].y
+		_ok(falls, "the stream does not fall at every drop: %s" % str(pts))
+		_ok(pts[1].x > pts[0].x, "the stream does not leave along the flask's mouth (tipped toward the bowl)")
+		var wi: int = m._work._work_of(m._work._thing_named("bowl"), "water")
+		var ww: Dictionary = (m._work.works[wi] as Dictionary)["w"]
+		var top: Vector3 = m._work._world_of((m._work.works[wi] as Dictionary)["node"]) * Vector3((ww["base"] as Vector3).x, (ww["box"] as AABB).end.y, (ww["base"] as Vector3).z)
+		var land := pts[pts.size() - 1]
+		_ok(absf(land.y - top.y) < 0.001, "the stream does not end on the water: %.1f cm off its surface" % ((land.y - top.y) * 100.0))
+		_ok(Vector2(land.x - top.x, land.z - top.z).length() < 0.06, "the stream lands outside the bowl: %.1f cm from its middle" % (Vector2(land.x - top.x, land.z - top.z).length() * 100.0))
+	m._work.tick(10.0 + 0.8 * 8.0)
+	_ok(not (st["node"] as Node3D).visible, "the stream still falls once the pour is over and its tail has fallen")
+	var said: String = m._work.check("pour-it")["text"]
+	_ok(said.contains("lands") and said.contains("in it") and not said.contains("hides it"), "the check does not say the stream lands in the bowl, seen:\n%s" % said)
+	m._root3.free()
+	# the controls: a lip naming nothing, and a flask tipped away from the camera
+	var lost: TableMedium = bench.call("nowhere.mouth", [0, 0, -100])
+	_ok("; ".join(lost._work.notes).contains("names no point"), "a lip naming nothing was not said: %s" % "; ".join(lost._work.notes))
+	lost._work.tick(10.0 + 0.55 * 8.0)
+	var lp: PackedVector3Array = (lost._work._streams[0] as Dictionary)["pts"]
+	var fl: Dictionary = lost._work.things[lost._work._thing_named("flask")]
+	var fm: Vector3 = lost._work._world_of(fl["node"]) * Vector3(0.0, (fl["box"] as AABB).end.y, 0.0)
+	_ok(not lp.is_empty() and lp[0].distance_to(fm) < 0.005, "the control: a lip naming nothing does not pour from the flask's mouth: %s" % (str(lp[0].distance_to(fm) * 100.0) + " cm" if not lp.is_empty() else "nothing falls"))
+	lost._root3.free()
+	var away: TableMedium = bench.call("neck.mouth", [-100, 0, 0])
+	var away_said: String = away._work.check("pour-it")["text"]
+	_ok(away_said.contains("away from") or away_said.contains("toward"), "the control: a flask tipped straight away from the camera is not said to hide its stream:\n%s" % away_said)
+	away._root3.free()
 	return true
 
 

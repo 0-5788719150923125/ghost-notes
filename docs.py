@@ -1981,9 +1981,10 @@ def _render_components_doc(comp: Script, caps: Script) -> str:
         for key, body in mine:
             lines.append(f"- **{labels[key]}** (`{key}`) - {_md(_gd_text(body, 'blurb'))}")
             facts = []
-            for field, word in (("needs", "needs"), ("provides", "gives"), ("requires", "brings")):
+            for field, word in (("needs", "needs"), ("provides", "gives"), ("requires", "brings"),
+                                ("comes_with", "comes with")):
                 vals = _gd_list(body, field)
-                if field == "requires":
+                if field in ("requires", "comes_with"):
                     vals = [labels.get(v, v) for v in vals]
                 if vals:
                     facts.append(f"{word} {', '.join(vals)}")

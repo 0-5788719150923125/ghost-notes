@@ -13,6 +13,8 @@ SLOTS SAY HOW MANY (`SLOTS`): components that name the same slot are alternative
 
 THE STAGE IS A CAPABILITY: anything shown on it asks for `forward_plus`, the desktop renderer, so on a phone - where a note is its text and nothing more - every component but the text is impossible and "+" offers nothing (`attach_menu`).
 
+A PART THAT COMES WITH ANOTHER IS A ROW'S `comes_with` (optional): it is never attached by itself and brings nothing, its block is kept by whichever of those components the note has (`blocks_of`) - a book's pictures' look, with a Picture or a Letter - and a note carrying its block with none of them has the first (`attached_of`). As `requires`, the Picture had come with it, and a letter's look would have brought a Picture into the letter.
+
 A CARD ANY PANEL CAN SHOW IS A ROW'S `script`: the path of the script that builds the component's card, loaded when a panel builds it (`NoteCards.make`). By path because this registry is under every card (docs/structure.md): a row is how it names one. The script answers `KEY` (its block), `for_note(ctx)`, `capture()` and `apply(block)`; `tests/notes/components_check.gd` loads each and holds it to that.
 
 Static and free of autoload names, like `Capabilities`, so a gate can read it under `--script`.
@@ -82,7 +84,7 @@ By family - the color a component's card, chip and marks are drawn in.
 - **Picture** (`picture`) - A show for the note, and what it is carried on: Auto (the seeded show, nothing to set), full frame, a comic, a book, a notebook, a tablet.
   - needs picture; gives places; brings Scenes; takes the presentation; asks for `forward_plus`; kept in `picture:`
 - **Illustrations** (`illustrations`) - The book's pictures, painted by an agent from the marks in the text, or imported.
-  - needs text, places; gives picture; brings Picture; asks for `forward_plus`; kept in `illustrations:`
+  - needs text, places; gives picture; comes with Picture, Letter; asks for `forward_plus`; kept in `illustrations:`
 - **Letter** (`letter`) - The note read as a letter written by hand at a desk: the pen writes each paragraph as the voice reads it, crosses lines out, draws the sketches the letter describes, taps while the writer thinks, and a picture takes the screen for a passage read over it.
   - needs reading; gives picture; brings Voice; takes the presentation; asks for `forward_plus`, `subprocess`, `agent:writer`, `tex`, `python:math`; kept in `letter:`
 - **Actor** (`actor`) - An actor reads the note in their own room, built from their own videos - a folder, or links to videos, playlists or a channel: the footage surveyed and grouped by camera and look, a still of them chosen, and their motion, blinks, mouths and voice learned from every video. Every pixel of them is their own.

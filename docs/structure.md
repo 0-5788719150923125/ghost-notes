@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 438 references inside a folder, 897 down the stack, 0 up it.
+Between scripts today: 438 references inside a folder, 896 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -23,7 +23,7 @@ Between scripts today: 438 references inside a folder, 897 down the stack, 0 up 
 | `export/` | Export | 4 | `show`, `voice`, `ui`, `notes`, `agents`, `stage`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
 | `show/` | The show | 9 | `media`, `ui`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
-| `media/` | Media | 20 | `voice`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
+| `media/` | Media | 20 | `voice`, `ui`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `voice/` | Synthesis (voice) | 14 | `audio`, `platform`, `data` |
 | `ui/` | The panel kit | 11 | `notes`, `agents`, `platform`, `data` |
 | `notes/` | Notes | 7 | `agents`, `stage`, `platform`, `data` |

@@ -793,7 +793,7 @@ func book_document(body := "") -> Dictionary:
 			inks[who] = v
 	return publish.book({"source": src, "title": _doc_field(src, "title"), "book": _doc_field(src, "book"),
 		"author": _doc_field(src, "author"), "inks": inks, "start_words": _stream.start_words(),
-		"start_index": _stream.start_index()}, body)
+		"start_index": _stream.start_index(), "start_time": _stream.start_time()}, body)
 
 
 ## A top-level frontmatter field (`title:`, `book:`): what the source says (the synced file,

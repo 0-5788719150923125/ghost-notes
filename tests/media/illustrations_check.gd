@@ -98,6 +98,18 @@ func _init() -> void:
 	var lk: Dictionary = I.look()
 	_check(lk["references"] is Dictionary and (lk["references"] as Dictionary).has("sketch"),
 		"the references are not written back by kind")
+	print("-- the painter")
+	I.set_look({"painter": "codex", "painter_model": "gpt-image-1", "painter_effort": "high"})
+	var lp: Dictionary = I.look()
+	_check(I.painter_model() == "gpt-image-1" and I.painter_effort() == "high"
+		and lp["painter_model"] == "gpt-image-1" and lp["painter_effort"] == "high",
+		"the painter's model and effort are kept and written back into the look")
+	I.set_look({"style": {"image": "x"}})
+	_check(I.painter_model() == "gpt-image-1" and I.painter_effort() == "high",
+		"a block naming no painter changed the machine's model or effort")
+	I.set_look({"painter": "codex"})
+	_check(I.painter_model().is_empty() and I.painter_effort().is_empty(),
+		"a block naming a painter and no model kept another chapter's (none named is the painter's default)")
 	I.set_look({"painter": "codex"})
 	_check(I.references("image").is_empty() and I.references("sketch").is_empty(),
 		"a chapter naming no references kept the last chapter's")

@@ -372,8 +372,8 @@ static func look() -> Dictionary:
 	for k in STYLE_KINDS:
 		rp[k] = ref_prompt("references", k)
 		sp[k] = ref_prompt("self_reference", k)
-	var out := {"painter": backend(), "self_reference": sr, "reference_prompt": rp,
-		"self_reference_prompt": sp}
+	var out := {"painter": backend(), "painter_model": painter_model(), "painter_effort": painter_effort(),
+		"self_reference": sr, "reference_prompt": rp, "self_reference_prompt": sp}
 	if not st.is_empty():
 		out["style"] = st
 	if not refs.is_empty():
@@ -387,7 +387,8 @@ static func look() -> Dictionary:
 ## THE BLOCK IS THE WHOLE LOOK. A style or a reference list the block does not name is NONE,
 ## not "whatever the last chapter left": a chapter written without reference images, opened
 ## after one written with them, would otherwise have been painted against the other chapter's
-## pictures, silently. Only the painter carries over - that is the machine's, not the book's.
+## pictures, silently. Only the painter carries over - that is the machine's, not the book's - and a
+## block naming one names its model and effort too (none named is the painter's own default).
 ## `style` and `references` may each be a map by kind or, as older documents wrote them, a
 ## bare string / list, which is the pictures'. Returns one line per file that could not be taken.
 static func set_look(d: Dictionary) -> PackedStringArray:
@@ -395,7 +396,7 @@ static func set_look(d: Dictionary) -> PackedStringArray:
 	if read_only():
 		return errs
 	if d.has("painter"):
-		set_backend(String(d["painter"]))
+		set_painter(String(d["painter"]), String(d.get("painter_model", "")), String(d.get("painter_effort", "")))
 	var st: Variant = d.get("style", {})
 	var rf: Variant = d.get("references", {})
 	if not (st is Dictionary):
@@ -445,6 +446,25 @@ static func backend() -> String:
 static func set_backend(key: String) -> void:
 	if ImageGen.REGISTRY.has(key):
 		_write("backend", key)
+
+
+## The model the painter runs and how hard it reasons ([AgentPick]'s choice, "" for the CLI's own),
+## handed to every job.
+static func painter_model() -> String:
+	return String(_read("painter_model", ""))
+
+
+static func painter_effort() -> String:
+	return String(_read("painter_effort", ""))
+
+
+## The painter, its model and its effort, as [AgentPick] chooses them.
+static func set_painter(key: String, model: String, effort: String) -> void:
+	if not ImageGen.REGISTRY.has(key):
+		return
+	set_backend(key)
+	_write("painter_model", model)
+	_write("painter_effort", effort)
 
 
 # --- the prompt --------------------------------------------------------------
@@ -800,6 +820,7 @@ static func _start(req: Dictionary) -> void:
 		"key": key, "dir": dir, "target": target, "refs": refs,
 		"placement": String(req["placement"]), "description": String(req["prompt"]),
 		"sig": current_signature(kind), "backend": backend(),
+		"model": painter_model(), "effort": painter_effort(),
 		# A second of slack: file mtimes are whole seconds and the clock read is not.
 		"started": int(Time.get_unix_time_from_system()) - 1,
 		"prompt": build_prompt(String(req["prompt"]), String(req["placement"]), style(kind),

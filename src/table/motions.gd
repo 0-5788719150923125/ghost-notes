@@ -52,7 +52,7 @@ const LAWS := {
 			["from", "where it starts (left out: where it is)"], ["between", "[u0, u1]: the stretch of the act it moves in (left out: all of it)"],
 			["ease", "\"both\" (slow in and out, the usual), \"in\", \"out\" or \"none\""]]},
 	"path": {"label": "Path", "on": ["angle", "offset", "fill", "grow", "glow", "emit", "boil", "pose"],
-		"blurb": "it goes through KEYS, eased from one to the next - a knife's chop, a vial lifted and tipped and set down, a lid lifted and laid aside",
+		"blurb": "it goes through KEYS, on through each one as a hand goes (it stops only at a key it holds or turns back at, and at its last) - a knife's chop, a vial lifted and tipped and set down, a lid lifted and laid aside",
 		"fields": [["keys", "[{at (0-1 through the act), value} ...] - or, for a part that moves freely, [{at, by: [x, y, z] centimeters from where it started, turn: [x, y, z] degrees from how it started}, ...]; the first key is where it is at the start"]]},
 	"circle": {"label": "Circle", "on": ["pose"],
 		"blurb": "it travels round and round a circle, keeping its turn - a spoon stirring, a whisk, a pendulum's bob seen from above",
@@ -73,7 +73,7 @@ const LAWS := {
 	"pour": {"label": "Pour", "on": [],
 		"blurb": "a vessel's contents leave it for another, in a stream from its lip - a jug into a bowl, tea into a cup, a vial into a flask, sand through an hourglass. Tip the vessel with its own track; this moves what is in it",
 		"fields": [["from", "the part that empties: \"thing/part\""], ["into", "the part that fills: \"thing/part\""],
-			["lip", "the point the stream leaves from: \"thing.point\""], ["amount", "the share of `from` that leaves (0-1)"],
+			["lip", "the point the stream leaves from: \"thing.point\" or \"part.point\" (left out: the mouth of the vessel it is in) - what is poured leaves it along the vessel's mouth and falls"], ["amount", "the share of `from` that leaves (0-1)"],
 			["gain", "how much fuller `into` ends (a share of its own; left out: 0.1)"], ["between", "[u0, u1]: when it flows"],
 			["color", "the stream's color (left out: `from`'s)"]]},
 }
@@ -127,6 +127,56 @@ const TRAIL_THIN := 0.3
 static func eased(x: float) -> float:
 	var u := clampf(x, 0.0, 1.0)
 	return 4.0 * u * u * u if u < 0.5 else 1.0 - pow(-2.0 * u + 2.0, 3.0) * 0.5
+
+
+## THROUGH ITS PLACES, NEVER STOPPING AT ONE (the-quiet-crucible 181083: the snowmelt's vial, carried the low way out
+## of its rack, "started, and stopped, and started, and stopped ... about 4 times"): each place's slope, for values
+## [param v] at times [param at] - Steffen's monotone cubic: where a value goes on the same way it goes on through,
+## where it holds or turns back it stops there, and it never passes beyond a place (a move kept low never dips through
+## what it is kept above). [param m0] and [param m1]: the slopes at the first and the last (at rest, zero).
+static func slopes(at: PackedFloat32Array, v: PackedVector3Array, m0 := Vector3.ZERO, m1 := Vector3.ZERO) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	out.resize(v.size())
+	for i in v.size():
+		if i == 0 or i == v.size() - 1:
+			out[i] = m0 if i == 0 else m1
+			continue
+		var h0 := maxf(at[i] - at[i - 1], 1e-6)
+		var h1 := maxf(at[i + 1] - at[i], 1e-6)
+		var m := Vector3.ZERO
+		for c in 3:
+			var d0 := (v[i][c] - v[i - 1][c]) / h0
+			var d1 := (v[i + 1][c] - v[i][c]) / h1
+			if d0 * d1 > 0.0:
+				var p := (d0 * h1 + d1 * h0) / (h0 + h1)
+				m[c] = 2.0 * signf(d0) * minf(minf(absf(d0), absf(d1)), 0.5 * absf(p))
+		out[i] = m
+	return out
+
+
+## From [param a] to [param b] over 0..1 ([param s]), leaving with slope [param ma] and arriving with [param mb] (each
+## per the whole stretch): a cubic through both - and, both at rest, [method eased], as a single move is.
+static func hermite(a: Vector3, b: Vector3, ma: Vector3, mb: Vector3, s: float) -> Vector3:
+	var u := clampf(s, 0.0, 1.0)
+	if ma == Vector3.ZERO and mb == Vector3.ZERO:
+		return a.lerp(b, eased(u))
+	var u2 := u * u
+	var u3 := u2 * u
+	return a * (2.0 * u3 - 3.0 * u2 + 1.0) + ma * (u3 - 2.0 * u2 + u) + b * (3.0 * u2 - 2.0 * u3) + mb * (u3 - u2)
+
+
+## The value at [param x] through values [param v] at times [param at] with slopes [param m] ([method slopes]): held
+## at the first before it, at the last after.
+static func through(at: PackedFloat32Array, v: PackedVector3Array, m: PackedVector3Array, x: float) -> Vector3:
+	if v.is_empty():
+		return Vector3.ZERO
+	if x <= at[0]:
+		return v[0]
+	for i in v.size() - 1:
+		if x <= at[i + 1]:
+			var h := maxf(at[i + 1] - at[i], 1e-6)
+			return hermite(v[i], v[i + 1], m[i] * h, m[i + 1] * h, (x - at[i]) / h)
+	return v[v.size() - 1]
 
 
 ## [param x] through [param kind]'s ease: "both", "in", "out" or "none".
@@ -736,18 +786,14 @@ static func point_at(law: Dictionary, center: Vector3, fixed: Variant, rest: Vec
 	if fixed is Vector3:
 		return fixed
 	if law.has("keys"):
+		# through its keys, stopping only where it holds or turns back ([method slopes])
 		var keys: Array = law["keys"]
-		var at := func(i: int) -> Vector3: return rest + ((keys[i] as Dictionary)["by"] as Vector3) * 0.01
-		var p: Vector3 = at.call(0)
-		for i in range(keys.size() - 1):
-			var k0: Dictionary = keys[i]
-			var k1: Dictionary = keys[i + 1]
-			if u >= float(k0["at"]) and u <= float(k1["at"]):
-				var s := eased((u - float(k0["at"])) / maxf(float(k1["at"]) - float(k0["at"]), 1e-6))
-				return (at.call(i) as Vector3).lerp(at.call(i + 1), s)
-			if u > float(k1["at"]):
-				p = at.call(i + 1)
-		return p
+		var at := PackedFloat32Array()
+		var v := PackedVector3Array()
+		for k in keys:
+			at.append(float((k as Dictionary)["at"]))
+			v.append(rest + ((k as Dictionary)["by"] as Vector3) * 0.01)
+		return through(at, v, slopes(at, v), u)
 	return rest
 
 

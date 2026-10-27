@@ -1423,6 +1423,7 @@ func _build_work(spec: Dictionary) -> void:
 			raw = j.data
 	# a beat a card's, or one of a show's that draws none (CardTable.beats)
 	var beats := maxi(CardTable.beats(_plan.pay.get("plan", {}) if _plan.pay.get("plan") is Dictionary else {}), (_plan.pay.get("cards", []) as Array).size())
+	_work.since = _plan.since
 	_work.build(raw, beats, spec.get("sound", {}) if spec.get("sound") is Dictionary else {})
 	for n in _work.notes:
 		print("ghost: card table - work: %s" % n)

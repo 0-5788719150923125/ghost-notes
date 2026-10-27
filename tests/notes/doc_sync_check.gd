@@ -107,6 +107,7 @@ func _ready() -> void:
 	_check_speak_takes_the_voice()
 	await _check_outside_edit_survives()
 	_check_the_look_travels()
+	await _check_a_letters_look_travels()
 	_check_the_picture_travels()
 	_check_one_block_per_component()
 	await _check_the_voice_is_the_documents()
@@ -553,6 +554,57 @@ func _check_the_look_travels() -> void:
 	_ok(Illustrations.references().size() == 1, "the reference images did not come back from the document")
 	_ok(String((_ed._block_cards.get("picture") as PictureCard).illustrations()._style.text) == style, "the panel's style box does not show the document's style")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(ref))
+
+
+## A LETTER'S PICTURES' LOOK IS ITS NOTE'S TOO (2026-10-27: the Letter card showed the style and the
+## note had none - the Letter kept no `illustrations:` block): written into the letter's frontmatter
+## with the painter's model and effort, and an edit made outside (an agent's) is the library's, and
+## the card's, at the next Play.
+func _check_a_letters_look_travels() -> void:
+	var path := DIR + "/letter.md"
+	var fh := FileAccess.open(path, FileAccess.WRITE)
+	fh.store_string("---\ntitle: A Letter\nghost:\n  voice: {}\n  letter: {}\n---\n\nDear Friend,\n\nYours,\n")
+	fh.close()
+	Illustrations.use_for_test({}, false)
+	var letter = load("res://src/reading/reading_panel.gd").new()
+	letter.note_path = path
+	letter._build_panel()
+	letter.remove_child(letter._panel)
+	add_child(letter._panel)
+	letter._doc._section = SECTION + "_letter"
+	letter._doc._sync = false
+	letter._doc._fields = {}
+	letter._doc._on_picked(path)
+	await get_tree().process_frame
+	_ok(letter._block_cards.get("illustrations") is IllustrationPanel and letter._doc_blocks().has("illustrations"),
+		"a Letter's panel does not keep its pictures' look: %s" % str(letter._doc_blocks()))
+	Illustrations.set_style("Pen and wash: \"loose\".")
+	Illustrations.set_painter("codex", "gpt-image-1", "high")
+	_ok(letter._doc.save(), "saving a letter's look into its note failed")
+	var data: Dictionary = FrontMatter.read_block(FileAccess.get_file_as_string(path)).data
+	var look: Dictionary = data.get("illustrations", {}) if data.get("illustrations") is Dictionary else {}
+	_ok(str((look.get("style", {}) as Dictionary).get("image", "")) == "Pen and wash: \"loose\"."
+		and str(look.get("painter_model", "")) == "gpt-image-1" and str(look.get("painter_effort", "")) == "high",
+		"the letter's look was not written into its note: %s" % str(data.keys()))
+	_ok(not data.has("picture"), "keeping a letter's look gave it a Picture: %s" % str(data.keys()))
+	# AN AGENT EDITS THE NOTE: the style and the effort, in the file, with the app's look unchanged
+	var raw := FileAccess.get_file_as_string(path)
+	look["style"] = {"image": "Charcoal on gray paper."}
+	look["painter_effort"] = "low"
+	data["illustrations"] = look
+	_ok(FrontMatter.write_block(path, data).is_empty(), "the outside edit could not be written")
+	_ok(FileAccess.get_file_as_string(path) != raw, "the control is wrong - the outside edit changed nothing")
+	letter._doc._saved = letter._doc._snapshot()      # no flush: the file must win
+	letter._doc.pull()
+	var card: IllustrationPanel = letter._block_cards["illustrations"]
+	_ok(Illustrations.style() == "Charcoal on gray paper." and Illustrations.painter_effort() == "low"
+		and card._style.text == "Charcoal on gray paper." and String(card._pick.choice()["effort"]) == "low",
+		"an outside edit of the letter's look did not reach the library and the card: %s, %s"
+		% [JSON.stringify(Illustrations.style()), Illustrations.painter_effort()])
+	letter._panel.queue_free()
+	letter.free()
+	Illustrations.use_for_test({}, false)
+	DirAccess.remove_absolute(path)
 
 
 ## THE DOCUMENT IS WRITTEN IN GHOST'S OWN EDITOR. Typed text reaches the file's body after

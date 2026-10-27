@@ -99,6 +99,13 @@ acts:
       built standing in its place - a vial in its rack, a ladle in its pot, a stopper in its bottle -
       comes out of that place and goes back into it freely. A thing that holds a flame is never moved
       whole.
+  # A POUR IS SEEN (the-quiet-crucible 181083: its snowmelt's vial was tipped straight away from the camera, and its
+  # stream - falling now as a stream falls, out of the mouth and down - was hidden behind the vial itself)
+  - >-
+      A POUR IS SEEN FROM THE SIDE: what is poured leaves the lip along the vessel's mouth and falls,
+      so hold the lip over what it pours into, a little above it, and tip the vessel across the view -
+      a turn about the front-to-back axis ([0, 0, degrees]), as a hand tips a jug sideways - never
+      straight toward or away from the camera, where the vessel hides its own stream.
   - >-
       WHAT CHANGES, CHANGES IN TIME with what is done to it: a brew's color turns as the ingredient
       goes in, powder rises as what is ground shrinks, steam thickens as it boils - a state's `to` over
@@ -108,7 +115,8 @@ with_tools:
   - >-
       HOW YOU WORK: `parts` shows the table as it is set and what on it can be worked; `act` puts acts
       in and answers, act by act, with what each does - how long it runs, how far and how fast each
-      moving thing goes, anything passing through anything - and what could not be kept, and why;
+      moving thing goes, anything passing through anything, where each pour's stream lands - and what
+      could not be kept, and why;
       `watch` shows one act from the camera's place, six pictures start to end; `remove` takes acts
       out; `submit` hands the work in. Every picture counts against the {{looks}} you have.
   - >-

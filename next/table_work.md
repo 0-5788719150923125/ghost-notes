@@ -671,6 +671,44 @@ its own share of the glow on a slow clock of its own). The clock lying face up w
 chronometer, as one sits in its box. Open: coals still reach up into the pot's underside where it hangs low over
 them (an overhang is no wall).
 
+*Status, 2026-10-27, 181083 played live* (the user: "around halfway through when we started using the moonlight, it
+was absolute chaos ... the green dish moved on top of the crucible, then floated back to it's position... tipped-over
+... when I used the timeline to skip backwards a bit, and view it again... the second attempt worked better").
+Reproduced by `tests/table/work_arrival_probe.gd` (the episode played twice through `advance`: every word known from
+the first frame, as an export's sidecar has them, and arriving a sentence at a time ahead of a hushed voice, as the
+live window gives them). The schedule had taken a word not yet heard at the plan's estimate from the top - 0.4 s a
+word, two minutes behind the voice by the work - so every act cued in the work's beat lay before the beat began: all
+of them began together at its start, quickened, and were held there as begun (the shell 39 cm in a frame, the
+moonlight's jar 38). An export never guessed; a scrub's estimates lie after its words (its show time starts again at
+0), which is why the second look was right. NOTHING BEGINS ON A GUESS now (`TableWork.schedule`: an act cued at an
+unheard word waits for it, and so does what follows it; a beat's end is guessed from the last word heard at the
+voice's own pace, `_guessed`; what the plan in force has begun stays begun; an act placed only once its moment has
+passed begins then, not part way through; no two acts move one part at once). Played both ways the episode now plans
+every act at the same moment, and nothing moves more than 1.6 cm in a frame. Found with it: a loose part the work
+moves rode its thing until its act was placed (`_moved`, from the acts, not the schedule: the pestle went to the
+middle with its mortar and jumped back to its corner); a part standing in its thing as built rides it until first
+picked up, and IN means standing in the thing's body, its loose parts aside (`_body_of`; an act begins where its
+part has been carried); and a hand's lift into a grind switched on whole at 2 cm off (`blend_lift`: the pestle up 6 cm
+in a frame).
+
+The same evening (the user: the snowmelt vial "started, and stopped, and started, and stopped ... about 4 times";
+"a weird white line projected from the left side of the vial ... it shoots out to the side ... liquids and snow and
+such should be using physics"; "the minute hand never moves ... the script keeps announcing the current time"). A
+path's keys were each eased from rest, and a run of carries stopped at every waypoint: a move now goes on through its
+places and stops only where it holds or turns back (`Motions.slopes`, Steffen's monotone cubic, so nothing overshoots
+a key into the table; `TableWork._chains` makes back-to-back carries and paths one move) - the vial stops once, at
+the top of its lift out of the rack. The stream had been a straight rope from a lip that named a part's point
+("mixing vial.mouth") and so found nothing, to the middle of the brew: a pour now falls (`_tick_stream`: each drop
+leaves the lip as the vessel held it when it left, along the vessel's mouth at a shallow head's Torricelli speed,
+under gravity, to the surface - a closed form of show time, thinning as it falls; `_lip_of` finds a part's point, and
+says when the lip names nothing). 181083's vial was tipped straight away from the camera, so its stream falls behind
+the vial: the puppeteer is told a pour is tipped across the view, and `act` says where each stream lands and when its
+vessel hides it. The clock was right - 6 degrees a minute, a real minute hand - but a scrub starts the session's time
+at 0, and the chronometer began at 4:00 again under "four oh four": what runs all the time keeps the reading's time
+(`TablePlan.since`, the document's `start_time`, `ReadingStream.start_time`). Gates: table_work_check (the words as
+they arrive, through its places, a pour falls, a scrubbed clock, the lift). Open: what is poured is liquid only - a
+powder tipped from a ladle is still a cue's burst; and this episode's acts were written before the pour rule.
+
 ### 5. Beats
 
 Positions that draw nothing, shows that draw no card, the reader sent the table after its act, work in

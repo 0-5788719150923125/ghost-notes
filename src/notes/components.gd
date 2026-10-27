@@ -26,6 +26,12 @@ class_name Components
 ## on a phone - where a note is its text and nothing more - every component but the text is
 ## impossible and "+" offers nothing ([method attach_menu]).
 ##
+## A PART THAT COMES WITH ANOTHER IS A ROW'S `comes_with` (optional): it is never attached by itself
+## and brings nothing, its block is kept by whichever of those components the note has ([method
+## blocks_of]) - a book's pictures' look, with a Picture or a Letter - and a note carrying its block
+## with none of them has the first ([method attached_of]). As `requires`, the Picture had come with
+## it, and a letter's look would have brought a Picture into the letter.
+##
 ## A CARD ANY PANEL CAN SHOW IS A ROW'S `script`: the path of the script that builds the
 ## component's card, loaded when a panel builds it ([method NoteCards.make]). By path because this
 ## registry is under every card (docs/structure.md): a row is how it names one. The script answers
@@ -139,7 +145,8 @@ const REGISTRY := {
 		"script": "res://src/show/picture_card.gd"},
 	"illustrations": {"label": "Illustrations", "family": &"picture",
 		"blurb": "The book's pictures, painted by an agent from the marks in the text, or imported.",
-		"needs": ["text", "places"], "provides": ["picture"], "requires": ["picture"], "slots": [], "workspace": "",
+		"needs": ["text", "places"], "provides": ["picture"], "requires": [], "comes_with": ["picture", "letter"],
+		"slots": [], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": ["pictures"], "block": "illustrations", "card": "picture"},
 	"look": {"label": "Look", "family": &"look",
 		"blurb": "A post-process over the whole picture: grain, noir, a vignette, and the rest.",
@@ -281,14 +288,15 @@ static func attach_blocks(key: String) -> Dictionary:
 
 
 ## THE BLOCKS THAT ARE [param key]'s in a note: its own, and those of what only comes with it (a
-## Picture's illustrations). What a panel showing the component keeps, and what the note loses
-## when it is detached.
+## Picture's or a Letter's illustrations). What a panel showing the component keeps, and what the
+## note loses when it is detached.
 static func blocks_of(key: String) -> Array:
 	var out: Array = attach_blocks(key).keys()
 	for k in REGISTRY:
 		var row: Dictionary = REGISTRY[k]
 		var b := String(row["block"])
-		if (row["requires"] as Array).has(key) and attach_blocks(k).is_empty() and not b.is_empty() and not out.has(b):
+		var with := (row["requires"] as Array).has(key) or (row.get("comes_with", []) as Array).has(key)
+		if with and attach_blocks(k).is_empty() and not b.is_empty() and not out.has(b):
 			out.append(b)
 	return out
 
@@ -308,7 +316,9 @@ static func detach_blocker(key: String, attached: Array) -> String:
 
 ## WHICH COMPONENTS A NOTE HAS, read off its blocks: the text always, each component whose block it
 ## carries, and a storyboard where the `scenes:` block holds or names one (the scenes themselves
-## come with the picture that shows them).
+## come with the picture that shows them). A part that comes with another, carried with none of
+## them, has the first: a voice's chapter keeping `illustrations:` and no `picture:` (written before
+## attaching a Picture wrote its block) is still shown with its pictures.
 static func attached_of(blocks: Dictionary) -> Array:
 	var out: Array = ["text"]
 	for k in REGISTRY:
@@ -318,6 +328,11 @@ static func attached_of(blocks: Dictionary) -> Array:
 				out.append(k)
 		elif not b.is_empty() and blocks.get(b) is Dictionary:
 			out.append(k)
+	for k in out.duplicate():
+		var hosts: Array = (REGISTRY.get(k, {}) as Dictionary).get("comes_with", [])
+		var have := with_required(out)
+		if not hosts.is_empty() and not hosts.any(func(h: String) -> bool: return have.has(h)):
+			out.append(hosts[0])
 	return out
 
 

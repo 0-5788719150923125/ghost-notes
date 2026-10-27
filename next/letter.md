@@ -129,7 +129,16 @@ rendered as silence).
   (`<!-- delivery: hushed -->`) away, or a rule;
 - a point at a sketch on a page already turned does nothing (the desk's rule); the camera could turn back;
 - the closing ("Godspeed," and the name) is set like any paragraph, not to the right;
-- the pictures' look (painter, style, references) is the Illustrations library's, kept on this machine:
-  `Components.blocks_of("letter")` does not take the `illustrations:` block into the note as a Picture's
-  does;
 - phase two, above.
+
+**The pictures' look is the note's (2026-10-27; the user: "I see style guides for the pictures in the UI,
+but not in the markdown ... so that external agents can actually update the style guide").** The card
+had shown the Illustrations library's look and kept none of it: the registry tied `illustrations:` to
+the Picture alone (its row's `requires`), so the Letter's blocks were `letter:` only. The row now says
+what it COMES WITH (`comes_with`: Picture, Letter) and brings nothing - as `requires`, a letter keeping
+the block would have been given a Picture - and a note carrying it with neither (chapter 40: a voice
+and the look) still has a Picture (`Components.attached_of`). Written with the rest of the note's
+settings at the next change, an outside edit read back at the next Play, as a Picture's. The painter
+is every card's row now ([AgentPick]: agent, model, effort; `painter_model`, `painter_effort` in the
+block), on a Picture's card too. Gates: doc_sync_check (a letter's look into its note and back),
+components_check, letter_card_check, illustrations_check.

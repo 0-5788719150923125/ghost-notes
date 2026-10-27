@@ -6,7 +6,7 @@ extends SceneTree
 ##
 ## - THE ROW: a Letter brings a Voice and is run by the reading, which shows its card; it holds the
 ##   note's presentation, so a Picture on a letter is refused with a sentence; its medium is its own, never
-##   offered by a picker.
+##   offered by a picker; its pictures' look is a block of the note's (`illustrations:`) that brings no Picture.
 ## - WHAT THE DRAWER IS TOLD ([constant LetterSketches.RULES]): the prompt renders whole, names each id a
 ##   point needs and what is said while it is drawn - and on a second try what the last drawing lacked or
 ##   why it could not be read (the control: a first try says neither).
@@ -63,6 +63,9 @@ func _row() -> void:
 		"it holds the presentation: a Picture on a letter is refused (on a voice alone, not)")
 	_check(Medium.mode_of("letter") == "letter" and not Medium.pickable().has("letter") and Medium.REGISTRY.has("letter"),
 		"its medium is its own, never offered by a picker")
+	_check(Components.blocks_of("letter").has("illustrations")
+		and not Components.with_required(Components.attached_of({"voice": {}, "letter": {}, "illustrations": {}})).has("picture"),
+		"its pictures' look is kept in the note (`illustrations:`), and keeping it brings no Picture")
 
 
 func _prompt() -> void:

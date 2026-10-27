@@ -325,6 +325,12 @@ func start_index() -> int:
 	return ReadingPlan.start_index(chunks, _start_chunk)
 
 
+## How far into the reading it starts (seconds, the scrub bar's estimated scale) - 0 from the top: what a medium
+## keeping the reading's own time (a clock on the table) is set to.
+func start_time() -> float:
+	return _chunk_t[_start_chunk] if _start_chunk > 0 and _start_chunk < _chunk_t.size() else 0.0
+
+
 ## The first words of the chunk a reading starts at, normalized ([method ReadingPlan.start_words]) -
 ## how a medium finds its place. Empty for a reading from the top.
 func start_words() -> PackedStringArray:
