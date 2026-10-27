@@ -645,6 +645,32 @@ front of it); the shuffle's own moves still assume a tall card (`TableShuffle` r
 written deck belongs in a box; the drift's cover of a card is the tall card's; nothing renders a written card's
 picture against its painting yet (seen on llvmpipe with placeholders only).
 
+*Status, 2026-10-26 evening, the second episode watched* (#181083, "a solid result"; the user: "the cards are
+protruding from the front of the box, through the wall of the box itself", and in the cauldron "a light dancing
+wildly upon the liquid ... revealing that the out-of-camera light source isn't a real thing"). The set dresser's
+chest had a brass handle on its front and posts at its corners: the cards were filed in its bounds less a 6 mm wall,
+the front ones before its front wall and the next through it - now the inside is measured from its own walls, clear
+across a card's width (`TableBox.inside_of`), a box is never shrunk under its cards, and an open box's room is as
+wide as its cards and more (`CardTable.box_most`, told the set dresser too; box_clip_check's chest). The light was
+the set dresser's lamp "the brazier's coals", written 4 cm up behind the table's middle - in the shot, so lifted
+behind the cauldron - mirrored by the brew (roughness 0.05) at the full glint a near, dim lamp is given, and moved
+by the fire's flicker: a lamp moved out of the shot now mirrors nothing (`Lights.build`; lights_check). Open: a
+glowing part (coals, a lit brew) casts no light of its own, so a set dresser lights one with a lamp.
+
+More of 181083, the same evening (the user: "the spoon is floating in the liquid", "the steam ... is coming in tufts",
+"some of the hot coals under the cauldron are clipping through the container", "the coals seem to pulse with
+heat/color at exactly the same rate"). The ladle was built level, its bowl at the brew's top, and every act put it
+back there: the set dresser is told a tool left in a vessel rests as let go (rules/table/set_dresser.yaml) - this
+episode's table is already set. The steam: 1.4 puffs a second asked, half dropped at random - now a plume's puffs are
+born half a puff's size apart as they rise, at least, and fade as it steams less (`TableWork._plume`,
+`Motions.TRAIL_THIN`; table_work_live_check). The coals: the heap's vessel was found only as one face reaching from
+the floor past a cut, and the brazier's sloped smooth-lathe wall is many short faces, so the heap spread to the
+radius asked, through it - now the wall is the vessel sliced just above the floor and its top found walking up
+(`Props._walls`; cards_check's smooth dish). Each coal glows its own way (prop.gdshader `apart`: a part with copies,
+its own share of the glow on a slow clock of its own). The clock lying face up was the set dresser's: a ship's
+chronometer, as one sits in its box. Open: coals still reach up into the pot's underside where it hangs low over
+them (an overhang is no wall).
+
 ### 5. Beats
 
 Positions that draw nothing, shows that draw no card, the reader sent the table after its act, work in

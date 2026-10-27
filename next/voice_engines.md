@@ -639,6 +639,12 @@ it sample for sample); `listen_L1_db_ramps.wav` (the splicer's ramps in dB: no d
   at 8.3.
 - **A cheaper first step:** the model frozen, only the 256-number style fitted to his clips (a few
   minutes, little memory) - his timbre partway, nothing outside what the model can already say.
+- **One clip to a voicepack, zero-shot** (looked at 2026-10-26):
+  [kokoro-inno-clone-tuner](https://huggingface.co/remsky/kokoro-inno-clone-tuner) - Kokoro frozen, a speaker
+  encoder (CC BY-SA 3.0) to the timbre half, a blend of stock packs for the prosody half; speaker similarity 0.288 on
+  LibriSpeech test-clean by its own count, one 3-30 s clip. Shallow, as it says; the style fit above can use hours.
+- **Built instead, the same day: our own loop** ("Training Kokoro", below) - the decoder and the prosody predictor
+  taught, not only the style.
 - What the Piper voice lacks is clarity (15.9% of words misheard), not tone; a far stronger base
   should help that, but 93 minutes of one register is the same limit.
 
@@ -665,3 +671,119 @@ newer does.
 
 **Next, after listening:** Kokoro's own dwell measured and the pause figures made per backend; F0 as
 an input (the Tone's `noise` as the F0 range); then, for an actor, the style fit before the recipe.
+
+## Training Kokoro (2026-10-26)
+
+**The user:** "Sadly, I likely won't use Piper models for anything other than testing now, given that Kokoro is so
+much better-sounding. So, you think fine-tuning Kokoro might be possible... I would ask you to give that a try. To be
+honest, I feel like our own custom training loop would probably be perfectly fine, and those other projects might
+have legacy code that would be hard to work with." The test voice: Manzanita's ASMR channel (15 videos, 5.5 hours).
+
+### The model, ours (`hosts/voice_train/kokoro_model.py`)
+
+hexgrad's kokoro 0.9.4 modules (Apache-2.0) with PL-BERT's ALBERT written out under the checkpoint's own key names -
+no `transformers`, no `huggingface_hub`. The checkpoint loads whole (only the AdaIN norms' affine weights absent, as
+in Kokoro's own lenient loader). **Measured against the voice host's ONNX graph:** the same 42 frames for a sentence,
+id for id, and the waveform correlated 0.99 - but 1.45 times louder: the export's inverse STFT (Kokoro's
+`CustomSTFT`) leaves out the window normalization, 1.5 for its Hann 20 / hop 5. So the host's Kokoro has always
+been ~3.5 dB over hexgrad's PyTorch; a voice taught here and written into that graph keeps the host's gain.
+
+### What it is taught on (`kokoro_data.py`)
+
+- **Their sentences, Kokoro's ids:** Utterances with `"engine": "kokoro"` cuts at 24 kHz and writes the host's own ids
+  (`KokoroBackend.ids_of`, the ids `_render_symbols` sends: test_kokoro.py holds them equal).
+- **Each id's frames, by warping Kokoro onto them:** Kokoro says the sentence (the base voice, its speed matched to
+  theirs) and its exact plan is carried onto their recording by DTW. Calibrated where the truth is known - two of
+  Kokoro's voices warped onto each other (four pairs: men, women, American, British; five sentences): log mel by
+  cosine puts a boundary within a frame 94% of the time (median error 0), MFCCs 75-78%; through the whole
+  preparation (silence padded, level moved, speed matched), af_heart's plan laid on af_bella's speech: 95% within a
+  frame, 97% within two.
+- **Pitch and energy as Kokoro's decoder reads them:** on its own speech, pYIN reads back the F0 it was given (median
+  ratio 1.003, the middle half within 1-2.5%; unvoiced it is given ~0, as pYIN says); StyleTTS 2's energy (log of the
+  norm of an 80-band power mel, n_fft 2048, window 1200) correlates 0.995 with what it was given, about 0.45 under it
+  (0.15-0.70 by voice and sentence: `N_OFFSET`).
+- **At Kokoro's level:** its own speech's loud frames sit at -27 dB (af_heart, af_bella; Sarah and Emma -24).
+
+### The loop (`kokoro_train.py`)
+
+PL-BERT and the text encoder held (Kokoro's reading of English); the decoder, the prosody predictor and one style
+taught. The decoder teacher-forced on 1.5 s stretches: multi-resolution log mel (x45), then after 1,000 steps HiFi-GAN's
+multi-period and UnivNet's multi-resolution discriminators (fresh: Kokoro's were never released), least squares and
+feature matching. The predictor on whole sentences: frames (L1 on the sum of sigmoids, BCE per bin), F0 and energy
+(smooth L1). The AdaIN norms' own scale and shift held at 1 and 0 (never taught by hexgrad, folded out of the graph).
+Six stretches a step (eight were 8.6 GB until the discriminators joined, then 11.5 and out of memory on a card the app
+shares), with the generator's residual blocks recomputed backward (kept, a Snake's tensors were 6 GB more): about a
+second a step on the 5060 Ti. On clean speech the loop does what it should: af_heart taught 2.5 minutes of af_bella
+for 300 steps came 0.90 to 0.52 of the way in log mel, its long-term spectrum 2.0 dB off to 0.2, and Whisper misheard
+1.9% of its words before and after.
+
+### Into the host's graph (`kokoro_export.py`)
+
+The onnx-community graph's weights are not under PyTorch's names (weight norm folded, LSTM gates repacked i o f c,
+some matrices transposed), so they are FOUND BY VALUE: of its 556, 477 are a form of a checkpoint parameter, the rest
+constants; every taught tensor reaches one, none is ambiguous but two ones-and-zeros constants (left alone). The
+taught values are written into a copy of the host's patched graph, and checked: a sentence plans PyTorch's frames
+exactly and sounds 0.995 alike (gain 1.45). The host lists such a voice from `kokoro/trained/<id>/` (graph,
+tokenizer, one pack, voice.json) beside the checkpoints, one speaker, never fetched (test_kokoro.py).
+
+### What their recordings taught (measured 2026-10-26)
+
+Every voice judged on TWENTY UNSEEN SENTENCES (188 words) by Whisper medium.en - base.en misheard a third of their own
+real speech, so it could not judge a voice of them - and by its long-term spectrum and pitch against their own.
+
+| | words misheard | spectrum off theirs |
+|---|---|---|
+| stock af_heart | 1.1% | 4.0 dB |
+| first run, their 12 minutes as cut, step 1,000 | 43.6% | - |
+| the room gated out | 33.5% | - |
+| ...the decoder's AdaIN projections alone taught | 20.7% | - |
+| strict sentences, the whole decoder, its own delivery | 33.0% | 1.7 dB |
+| **strict sentences, the whole decoder, Kokoro's delivery** | **4.8%** | **1.6 dB** |
+| ...with their own pitch and energy, Kokoro's timing | 10.1% | 1.4 dB |
+
+**Why, each found and measured:**
+- **Their words were not what their sound said.** A sentence's words came from hearing a whole 20-minute video, its cut
+  laid by those words' times: heard again alone, 83 of 192 said exactly their text - a word at an edge counted on the
+  wrong side ("I've"), a word the long hearing left out. The warp put a boundary 14+ frames from where another
+  reference voice put it for a tenth of them. On clean speech, alignments a median 2 frames off ALONE took the words
+  misheard from 1.1% to 33% (af_bella with her own plan jittered: 1 frame, 9%; 2 frames, 33%). Now each sentence is
+  HEARD AGAIN ALONE and cut to the words its sound says (hosts/speech/agree.py: 85 of 192 kept, 4.6 minutes).
+- **Their room:** soft ASMR speech ~19 dB over a high-gain microphone's hiss; the decoder learned to make breathy noise.
+  A stationary gate (`kokoro_data.quieted`) takes the room out of every sentence.
+- **Their energy never fell to Kokoro's silence** (their quietest twentieth 8 log units over it, even gated): mapped
+  quantile for quantile onto the energies Kokoro planned for the same sentences (`kokoro_range`).
+- **Their delivery cost the words:** taught, the predictor's timing (warped from another voice onto soft speech) and
+  its pitch and energy threw the taught decoder - each part alone stayed clear (the taught predictor through the stock
+  decoder 1.6%, the taught decoder on stock curves 4.3%), together 33-56%. So KOKORO'S DELIVERY IS KEPT by default
+  (`"predictor": "kept"`): the decoder and the timbre half of the style taught, the pack's prosody half the base's,
+  row by row.
+- **Tried and dropped:** a monotonic alignment search over a small model of their sound, started from the warp (it
+  repaired a jittered alignment from 44% within a frame to 60% on clean speech, but on theirs it crammed 53% of
+  phonemes into one frame, and a predictor taught that crammed too); teaching the decoder's AdaIN projections alone
+  (4.8M of its 53M: no clearer than the whole, less of them); Whisper's encoder as the warp's features (as consistent
+  as log mel on their recordings: 66% vs 51% within a frame between two references, the same long tail).
+
+**The data:** 15 videos, 5.5 hours; 6,878 words heard by medium.en (base.en: 6,650, and sure of 16 minutes where
+medium.en was of 26); two videos left out by content (a collab with another person, a character voice); the one-voice
+rules kept their soft voice once CLEAN was made relative (`CLEAN_FROM_BEST`) and RATE's ceiling raised - 12.1 minutes,
+4.6 once agreed.
+
+### Built
+
+The Voice training card is Kokoro's: Fetch (sound alone), Probe, Hear, Utterances (three phases - cut in Kokoro's
+rate and ids, each sentence heard again by Whisper medium.en and cut to its words, written again) and Voice
+(hosts/voice_train/kokoro_voice.py: prepare, teach, export into the host's graph, publish to
+`<data>/ghost/voices/kokoro/trained/kokoro-<id>/`). The voice host lists such voices (test_kokoro.py). Whisper
+medium.en and Kokoro's PyTorch checkpoint are files of the training environment (fetched by those who train);
+agree.py runs medium.en on the graphics card where CTranslate2 reaches CUDA 12's libraries, else on the processor.
+Gates: voice_training_check; hosts/voice/test_kokoro.py, test_utterances.py; hosts/voice_train/test_kokoro_train.py;
+hosts/speech/test_agree.py.
+
+**Listen** (`dist/voice_ab/kokoro_trained/`): `stock_heart/`, `manzanita_timbre/` (the card's recipe: their timbre,
+Kokoro's delivery), `manzanita_intonation/` (their pitch and energy too, Kokoro's timing), `theirs/` (their own
+sentences) - four unseen sentences each through the voice host's whole path. Both trained voices are also on every
+Voice card: "Manzanita (their timbre)", "Manzanita (their intonation)".
+
+**Open:** more of their speech (4.6 minutes is little); CTranslate2 on the graphics card in the app (its CUDA 12
+libraries are not in the speech environment - medium.en on the processor is slow); a better aligner than a warp from
+another voice; teaching their delivery once the data is clean enough to carry it.

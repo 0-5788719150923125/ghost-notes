@@ -116,8 +116,11 @@ const EMITS := {
 	"smoke": {"about": "a thread of gray smoke - incense, a snuffed wick, smoldering herbs", "color": "#b9b4ad", "rate": 4.0, "rise": 0.05, "life": 4.2, "size": 9.0, "grow": 3.2},
 	"fumes": {"about": "a colored vapor curling off a brew or a flask", "color": "#9fe0b0", "rate": 5.0, "rise": 0.06, "life": 3.4, "size": 18.0, "grow": 2.4},
 }
-## The most puffs one emitter keeps in the air at once.
-const MAX_PUFFS := 48
+## The most puffs one emitter keeps in the air at once: a thread of smoke's trail ([method TableWork._plume]) for
+## as long as its longest puff lives.
+const MAX_PUFFS := 64
+## The faintest a puff of a plume asked for less than a trail is drawn ([method TableWork._plume]).
+const TRAIL_THIN := 0.3
 
 
 ## An EASE in and out over 0..1: slow to start, slow to end - a hand's move.
@@ -165,7 +168,7 @@ static func describe_parts() -> String:
 			fields.append("`%s` %s" % [String(f[0]), String(f[1])])
 		lines.append("  - %s: %s. %s." % [k, String(row["blurb"]), "; ".join(fields)])
 	lines.append("  (a running `to` takes its `between` in seconds of the video.)")
-	lines.append("- `emits`: {\"kind\": %s, \"at\": a point's name, \"rate\" (puffs a second), \"color\"} - smoke or steam rising from it all the time, carried by the table's wind." % " or ".join(PackedStringArray(EMITS.keys())))
+	lines.append("- `emits`: {\"kind\": %s, \"at\": a point's name, \"rate\" (how thick it rises, in puffs a second: fewer than its kind's own is a fainter trail, never a broken one), \"color\"} - smoke or steam rising from it all the time, carried by the table's wind." % " or ".join(PackedStringArray(EMITS.keys())))
 	for k in EMITS:
 		lines.append("  - %s: %s" % [k, String((EMITS[k] as Dictionary)["about"])])
 	lines.append("- material \"liquid\": what is IN a vessel - a brew, ink, oil, wine - as its own part filling it to its surface; give it a `name` so the work can fill, empty, tint and light it.")

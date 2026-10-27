@@ -16,7 +16,11 @@ class_name ActorBuilder
 ## THEIR OWN VOICE (next/likeness.md, "Their own voice"): Hear, Utterances and Voice teach a Piper voice
 ## their speech, and a voice made is PUBLISHED where the voice host finds voices trained here
 ## ([method publish_voice]), named after them, and [signal voice_published] tells the card (the reading
-## it is on lists it and reads in it).
+## it is on lists it and reads in it). A VOICE ALONE ([method ActorFolder.sound_only], the Voice training card)
+## is KOKORO's (2026-10-26): its own Utterances and Voice (hosts/voice_train/kokoro_voice.py: Kokoro taught their
+## sentences by a loop of ours, written into the host's graph) and what they read, nothing else - whatever a run
+## asks - its links fetched as their sound, and the voice published where the host lists Kokoro voices taught here
+## ([method publish_kokoro]). Each kind runs its own steps ([method ActorSteps.of_kind]).
 ##
 ## TWO RENDERERS ([member renderer], [constant ActorSteps.RENDERERS]): a run makes the steps the note's
 ## renderer plays from and those both do - the 2D's library, or a head of splats (Frames, Face rig and
@@ -55,9 +59,11 @@ const MAIN := {"survey": "survey.bin", "shots": "shots.json", "sets": "sets.json
 	"motion": "motion.json", "stills": "stills.json", "rig": "rig.json", "library": "library.json",
 	"head_frames": "head/frames.npz", "head_rig": "head/rig.npz", "head": "head/head.npz",
 	"frames": "avatar/frames.npz", "face": "avatar/rig.npz", "avatar": "avatar/avatar.json", "fit": "avatar/fit.json",
-	"hear": "speech.json", "utterances": "utterances.json", "voice": "voice/voice.onnx"}
+	"hear": "speech.json", "utterances": "utterances.json", "voice": "voice/voice.onnx",
+	"kokoro_utterances": "kokoro/sentences.json", "kokoro_voice": "kokoro/voice/voice.json"}
 ## THE WORD A STEP'S PROGRAM SAYS ITS LAST LINE WITH (`actor: <word>: ...`), where it is not the step's own name.
-const SAYS := {"head_frames": "head frames", "frames": "head frames", "head_rig": "face", "avatar": "bake"}
+const SAYS := {"head_frames": "head frames", "frames": "head frames", "head_rig": "face", "avatar": "bake",
+	"kokoro_utterances": "utterances", "kokoro_voice": "voice"}
 ## Candidate stills a set keeps (enough that some show them at rest: on his footage two of six did, the
 ## fourth pass); prototype mouths per sound and eyes per state its library keeps.
 const STILLS := 12
@@ -72,6 +78,13 @@ const HEAR_PROMPT := "Umm, let me think, like, hmm... Okay, uh, here is what I a
 const VOICE_ESPEAK := "en-us"
 ## Sentences a training batch holds: an hour of speech in about 0.8 s a step on a 16 GB card.
 const VOICE_BATCH := 16
+## WHERE THE VOICE HOST FETCHES KOKORO'S GRAPH (hosts/voice/backends/kokoro.py, FAMILIES "kokoro" `base`): a voice
+## taught here is written into a copy of it, fetched from here where the host never has.
+const KOKORO_GRAPH := "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX-timestamped/resolve/dd4401a9add81ac692d20e240d22ec9dda82cc29"
+## Their stretches a Kokoro lesson holds, and how long each is: eight of 1.5 s were 8.6 GB until the discriminators
+## joined, then 11.5 and out of memory on a 16 GB card shared with the app; six fit.
+const KOKORO_BATCH := 6
+const KOKORO_SECONDS := 1.5
 ## Steps the body's splats are fitted to the still in (two minutes on a 16 GB card).
 const FIT_STEPS := 3000
 ## ONE HEAD FOR EVERY SET (next/likeness.md, "One head"): the moments of each video their head is learned from
@@ -292,10 +305,12 @@ func tick() -> void:
 		var lanes := {}
 		for k in _runs:
 			lanes[String((_runs[k] as Dictionary)["lane"])] = true
+		var chain := ActorSteps.voice_chain() if actor.sound_only() else []
 		for step in ActorSteps.ORDER:
 			if not (only.is_empty() or only.has(step)):
 				continue
-			if not ActorSteps.serves(step, renderer):
+			if not ActorSteps.serves(step, renderer) or not (chain.is_empty() or chain.has(step)) \
+					or not ActorSteps.of_kind(step, actor.kind()):
 				continue
 			if ActorSteps.trains(step) and not make_with.is_valid() and not cannot_train().is_empty():
 				continue
@@ -542,6 +557,22 @@ func _phase(run: Dictionary) -> String:
 				return e
 			return _spawn(run, "user://voice_train_venv", "res://hosts/voice_train/train.py", ["--spec", spec],
 				"teaching their voice")
+		"kokoro_utterances":
+			return _kokoro_utterances(run, ff)
+		"kokoro_voice":
+			var kdir := actor.dir.path_join("kokoro")
+			var spec := kdir.path_join("voice.spec.json")
+			var e := ActorFolder.write_file(spec, JSON.stringify({"utterances": kdir.path_join("sentences"),
+				"model": Provision.file_path("kokoro_model"), "config": Provision.file_path("kokoro_config"),
+				"base": Provision.file_path("kokoro_base"),
+				"graph": Deps.data_dir().path_join("voices").path_join("kokoro").path_join("model.onnx"),
+				"graph_url": KOKORO_GRAPH, "work": kdir.path_join("work"), "out": kdir.path_join("voice"),
+				"name": voice_name(actor), "british": false, "steps": int(actor.settings()["kokoro_steps"]),
+				"batch": KOKORO_BATCH, "seconds": KOKORO_SECONDS}))
+			if not e.is_empty():
+				return e
+			return _spawn(run, "user://voice_train_venv", "res://hosts/voice_train/kokoro_voice.py", ["--spec", spec],
+				"teaching Kokoro their voice")
 		"rig":
 			return _spawn_py(run, ["rig", "--stills", out.path_join("stills.json"), "--out", out.path_join("rig.json")],
 				"building the rig")
@@ -833,6 +864,45 @@ func _land_rest(run: Dictionary, text: String) -> String:
 	return ""
 
 
+## KOKORO'S UTTERANCES, IN THREE PHASES (2026-10-26): their sentences cut as an actor's are (utterances.py, in Kokoro's
+## rate and ids); EACH HEARD AGAIN, ALONE, by Whisper medium.en (hosts/speech/agree.py), and cut to the words its sound
+## says - only 85 of 192 had said exactly their text, and Kokoro taught on the rest mumbled; the agreed cuts written
+## as the sentences it is taught on (utterances.py's `agreed`), their ids made again.
+func _kokoro_utterances(run: Dictionary, ff: String) -> String:
+	var kdir := actor.dir.path_join("kokoro")
+	DirAccess.make_dir_recursive_absolute(kdir)
+	match int(run["phase"]):
+		0:
+			var vids: Array = []
+			for v in actor.ticked():
+				var p := actor.video_path(String(v))
+				if not p.is_empty():
+					vids.append({"vid": v, "path": p, "words": actor.video_dir(String(v)).path_join("speech.json")})
+			var spec := kdir.path_join("utterances.spec.json")
+			var e := ActorFolder.write_file(spec, JSON.stringify({"videos": vids, "espeak": VOICE_ESPEAK, "engine": "kokoro",
+				"family": "kokoro", "british": false, "out": kdir.path_join("utterances"), "index": kdir.path_join("utterances.json")}))
+			if not e.is_empty():
+				return e
+			return _spawn(run, "user://voice_venv", "res://hosts/voice/utterances.py", ["--ffmpeg", ff, "--spec", spec],
+				"cutting their sentences")
+		1:
+			var spec := kdir.path_join("agree.spec.json")
+			var e := ActorFolder.write_file(spec, JSON.stringify({"utterances": kdir.path_join("utterances"),
+				"model": Provision.file_path("whisper_medium").get_base_dir(), "out": kdir.path_join("agreed.json")}))
+			if not e.is_empty():
+				return e
+			return _spawn(run, "user://speech_venv", "res://hosts/speech/agree.py", ["--spec", spec],
+				"hearing each sentence again")
+	var spec := kdir.path_join("sentences.spec.json")
+	var e := ActorFolder.write_file(spec, JSON.stringify({"from": kdir.path_join("utterances"), "agreed": kdir.path_join("agreed.json"),
+		"out": kdir.path_join("sentences"), "index": kdir.path_join("sentences.json"), "engine": "kokoro", "family": "kokoro",
+		"british": false}))
+	if not e.is_empty():
+		return e
+	return _spawn(run, "user://voice_venv", "res://hosts/voice/utterances.py", ["--ffmpeg", ff, "--spec", spec],
+		"keeping the words they say")
+
+
 # --- landing a program's step ----------------------------------------------------------------------
 
 func _land_process(run: Dictionary) -> String:
@@ -864,7 +934,19 @@ func _land_process(run: Dictionary) -> String:
 				return e
 			v["duration"] = info["duration"]
 			actor.save()
-			actor.put_stamp(step, scope, "%s, %d fps" % [Clock.text(float(info["duration"])), roundi(float(info["fps"]))])
+			# A RECORDING WITH NO PICTURE (a voice alone's sound file) has no frame rate to name
+			actor.put_stamp(step, scope, ("%s, %d fps" % [Clock.text(float(info["duration"])), roundi(float(info["fps"]))])
+				if int(info["width"]) > 0 else "%s, sound" % Clock.text(float(info["duration"])))
+			return "done"
+		"kokoro_utterances":
+			# ITS FIRST TWO PHASES' FILES, each judged as a step's main file is, then the next phase
+			var made: String = ["utterances.json", "agreed.json", "sentences.json"][int(run["phase"])]
+			if not _made_by(actor.dir.path_join("kokoro").path_join(made), run):
+				return _tail(String(run["log"]))
+			if int(run["phase"]) < 2:
+				run["phase"] = int(run["phase"]) + 1
+				return ""
+			actor.put_stamp(step, scope, _said_by(String(run["log"]), step))
 			return "done"
 		_:
 			# EVERY STEP A PROGRAM MAKES IS JUDGED BY ITS MAIN FILE AND STAMPED (2026-10-23: a step left out of a list
@@ -874,13 +956,13 @@ func _land_process(run: Dictionary) -> String:
 			if not _made_by(out.path_join(String(MAIN[step])), run):
 				return _tail(String(run["log"]))
 			var said := _said_by(String(run["log"]), step)
-			if step == "voice":
-				var e := publish_voice(actor)
+			if step == "voice" or step == "kokoro_voice":
+				var e := publish_voice(actor) if step == "voice" else publish_kokoro(actor)
 				if not e.is_empty():
 					return e
 				said = "%s; on the Voice card as \"%s\"" % [said, voice_name(actor)]
 			actor.put_stamp(step, scope, said)
-			if step == "voice":
+			if step == "voice" or step == "kokoro_voice":
 				voice_published.emit(voice_id(actor))
 			return "done"
 	return "done"
@@ -937,9 +1019,9 @@ func _fetch(run: Dictionary, vid: String, captions_only: bool) -> String:
 	run["kind"] = "process"
 	Provision.hold("ytdlp_venv", "actor")
 	run["held"] = "ytdlp_venv"
-	run["pid"] = Subprocess.start_logged(_yt_python(), ActorSources.fetch_args(url, actor.footage_dir(), captions_only, _deno()),
-		String(run["log"]), "actor fetch")
-	run["said"] = "fetching captions" if captions_only else "downloading"
+	run["pid"] = Subprocess.start_logged(_yt_python(), ActorSources.fetch_args(url, actor.footage_dir(), captions_only, _deno(),
+		actor.sound_only()), String(run["log"]), "actor fetch")
+	run["said"] = "fetching captions" if captions_only else "downloading its sound" if actor.sound_only() else "downloading"
 	return "" if int(run["pid"]) > 0 else "yt-dlp could not start"
 
 
@@ -967,8 +1049,8 @@ func _land_fetch(run: Dictionary, vid: String, captions_only: bool) -> String:
 	if info is Dictionary and not captions_only:
 		v["title"] = String((info as Dictionary).get("title", v.get("title", "")))
 	actor.save()
-	actor.put_stamp(String(run["step"]), String(run["scope"]),
-		"with captions" if not String(got["captions"]).is_empty() else "no captions on the site")
+	actor.put_stamp(String(run["step"]), String(run["scope"]), "its sound" if actor.sound_only()
+		else "with captions" if not String(got["captions"]).is_empty() else "no captions on the site")
 	return "done"
 
 
@@ -1151,9 +1233,10 @@ static func cannot_train() -> String:
 	return ""
 
 
-## The voice host's id for [param a]'s voice: one an actor, and the same each time it is trained.
+## The voice host's id for [param a]'s voice: one a person, and the same each time it is trained - a voice alone's
+## Kokoro's, an actor's Piper's.
 static func voice_id(a: ActorFolder) -> String:
-	return "actor-" + a.id
+	return ("kokoro-" if a.sound_only() else "actor-") + a.id
 
 
 ## Their voice's name on the Voice card.
@@ -1191,6 +1274,28 @@ static func publish_voice(a: ActorFolder) -> String:
 		return e
 	return ActorFolder.write_file(a.dir.path_join("voice.json"), JSON.stringify({"voice": vid, "name": voice_name(a),
 		"published": dest.path_join(vid + ".onnx"), "at": int(Time.get_unix_time_from_system())}, "\t"))
+
+
+## Where the voice host finds the Kokoro voices taught here (hosts/voice/backends/kokoro.py, `TRAINED`).
+static func trained_kokoro_dir() -> String:
+	return Deps.data_dir().path_join("voices").path_join("kokoro").path_join("trained")
+
+
+## A VOICE ALONE, PUBLISHED: the Voice step's voice folder (its graph, tokenizer, pack and description) MOVED where the
+## voice host lists Kokoro voices taught here, whole - the old one gone first, the new one renamed into place - and
+## `kokoro/published.json` in their folder, the step's own record. A graph is 325 MB: it is moved, never copied twice.
+static func publish_kokoro(a: ActorFolder) -> String:
+	var src := a.dir.path_join("kokoro").path_join("voice")
+	if not FileAccess.file_exists(src.path_join("model.onnx")):
+		return "their voice was not made"
+	var dest := trained_kokoro_dir().path_join(voice_id(a))
+	DirAccess.make_dir_recursive_absolute(dest.get_base_dir())
+	if DirAccess.dir_exists_absolute(dest):
+		Actors._remove_tree(dest)
+	if DirAccess.rename_absolute(src, dest) != OK:
+		return "their voice could not be put where the voice host finds it"
+	return ActorFolder.write_file(a.dir.path_join("kokoro").path_join("published.json"), JSON.stringify({
+		"voice": voice_id(a), "name": voice_name(a), "published": dest, "at": int(Time.get_unix_time_from_system())}, "\t"))
 
 
 # --- what is made from what ------------------------------------------------------------------------

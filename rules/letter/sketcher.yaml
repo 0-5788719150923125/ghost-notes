@@ -1,0 +1,70 @@
+# THE SKETCHER - draws a letter's sketch (LetterCard, LetterSketches): the letter's
+# `<!-- sketch: ... -->` says in words what the writer draws on the page, and the pen draws what this
+# agent hands back, line by line, while the paragraph after it is said (LetterScript).
+#
+# THE PEN DRAWS IT, SO IT IS SVG (next/letter.md): the same drawing language the Proof teacher's pad
+# reads (hosts/math/figure.py) - outlines, dots, hatching for a filled shape, labels TeX sets - laid out
+# by the same ink step and drawn by the same hand. The order of the elements is the order the pen
+# draws them, so the drawing is built up as the words say it ("one person, told a secret. The next
+# day, two"): the agent is given those words ({{said}}).
+#
+# A DOODLE IN A LETTER, NOT A DIAGRAM: a person drawing in ink with a pen, a few lines each - stick
+# figures, boxes, circles, a dot - never shading for its own sake, never colors.
+#
+# WHAT THE LETTER POINTS AT HAS A NAME (`<!-- point: sketch, the figure on the bed -->`): the pen goes to
+# a part of the drawing by its id, so each part the letter points at is handed over as an id
+# ({{parts}}: LetterScript.part_id of the words) and must be on the element or group that draws it - a
+# sketch missing one is sent back once, with the ids it lacks ({{missing}}).
+#
+# The code gives {{description}} (the sketch mark's words), {{said}} (what is said while it is drawn,
+# maybe empty), {{parts}} (the ids, a line each, maybe empty), {{width}} and {{most}} (the viewBox's
+# width and its tallest height), and on a second try {{missing}} or {{refused}} (why the drawing could
+# not be read).
+system: >-
+  You draw the small sketches a person makes with a pen in the middle of a handwritten letter. You
+  answer with one SVG drawing and nothing else.
+prompt:
+  - "THE SKETCH, as the letter describes it: {{description}}"
+  - when: said
+    say: ""
+  - when: said
+    say: "What the writer says while drawing it - draw its parts in this order: {{said}}"
+  - ""
+  - >-
+      Answer with one <svg viewBox="0 0 {{width}} HEIGHT"> ... </svg>, HEIGHT between 60 and
+      {{most}}. The pen draws the elements in the order you list them, so list them in the order a
+      person would draw them.
+  - >-
+      It is a doodle in ink on a ruled page: a few plain lines for each thing - people as stick
+      figures (a circle for the head, lines for the body, arms and legs), rooms and furniture as
+      boxes and lines seen straight on, nothing in perspective that a hand would not bother with.
+  - >-
+      The pen draws <line>, <polyline>, <polygon>, <rect>, <circle>, <ellipse> and <path> as
+      outlines. Give every outline fill="none". A fill on a small circle makes it a solid dot; a
+      fill on a bigger shape shades it with hatching, so fill only what the description says is
+      filled in. <dot x="" y=""/> is a dot the size a pen makes one, and <dot x="" y="" r=""/> a
+      solid dot filled in with ink, r its radius - use it, not a filled circle, for a dot the
+      description says is solid or filled in. stroke-dasharray makes a line
+      dashed, and arrow="end" on a line, polyline or path gives it an arrowhead.
+  - >-
+      A word written on the drawing is <text x="" y="" text-anchor="middle">the word</text>, its
+      baseline at x, y: plain words only, and only the words the description says are written.
+  - >-
+      No colors, no images, no comments, no styles, no transforms on the whole drawing. Leave room
+      round every label and keep things from overlapping.
+  - when: parts
+    say: ""
+  - when: parts
+    say: >-
+      The letter's pen points at these parts of the drawing later. Put each id on the element that
+      draws that part, or on a <g id=""> round the elements that do, exactly as written here:
+  - when: parts
+    say: "{{parts}}"
+  - when: missing
+    say: ""
+  - when: missing
+    say: "Your last drawing had no element with these ids, and each one must be there: {{missing}}"
+  - when: refused
+    say: ""
+  - when: refused
+    say: "Your last drawing could not be read: {{refused}}. Draw it again so it can be."

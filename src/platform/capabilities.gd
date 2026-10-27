@@ -30,6 +30,7 @@ const TABLE := {
 	"python:capture": {"label": "the page-capture environment", "where": "desktop", "dep": "capture_venv"},
 	"python:face": {"label": "the body and face-tracking environment", "where": "desktop", "dep": "face_venv"},
 	"python:speech": {"label": "the speech-recognition environment", "where": "desktop", "dep": "speech_venv"},
+	"python:voice_train": {"label": "the voice-training environment", "where": "desktop", "dep": "voice_train_venv"},
 	"tex": {"label": "TeX", "where": "desktop", "dep": "tex"},
 	"python:math": {"label": "the math environment", "where": "desktop", "dep": "math_venv"},
 	"lean": {"label": "Lean and Mathlib", "where": "desktop", "dep": "mathlib"},

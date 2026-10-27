@@ -212,6 +212,9 @@ const TEXTS := {
 ## the set dresser made bigger is stood smaller, so the spread is laid clear of where it can stand.
 const BOX_MAX := Vector3(0.15, 0.12, 0.22)
 const SHOEBOX_MAX := Vector3(0.34, 0.14, 0.23)
+## How much wider than its cards an open box's room is at least: a wall each side and a finger's room
+## ([method box_most]).
+const BOX_ROOM := 0.035
 ## A full shoebox can show many physical copies of the collection's named cards.
 const SHOEBOX_FILL := 1000
 ## How many printings a deck may mix ([method look_of]).
@@ -593,6 +596,16 @@ static func reverses(plan: Dictionary) -> bool:
 ## gives its reversed meaning, the back reads the same either way up, and the card lies upside down.
 static func reads_reversed(plan: Dictionary) -> bool:
 	return bool((REVERSALS[String(staging_of(plan)["reversals"])] as Dictionary)["read"])
+
+
+## THE ROOM A BOX OF [param look]'s CARDS TAKES at most ([constant BOX_MAX], or [constant SHOEBOX_MAX] for a
+## [param shoebox]): an open box files its cards on edge, face to the reader, so it is at least as wide as they
+## are and [constant BOX_ROOM] more - a reading deck's box held index cards 12.7 cm wide with nothing to spare
+## (the-quiet-crucible 181083).
+static func box_most(look: Dictionary, shoebox: bool) -> Vector3:
+	if shoebox:
+		return SHOEBOX_MAX
+	return Vector3(maxf(BOX_MAX.x, card_size(look).x + BOX_ROOM), BOX_MAX.y, BOX_MAX.z)
 
 
 static func card_size(look: Dictionary) -> Vector2:

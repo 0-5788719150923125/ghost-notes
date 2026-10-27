@@ -202,7 +202,9 @@ prompt:
   # WORK AT THE TABLE (next/table_work.md; the user, 2026-10-25: "I want to build a system that is flexible
   # enough to allow agents to do this for themselves"): what the plan has done at the table, so what it is
   # done with is built to be worked - named, jointed, pointed, in the state it starts in. The work itself is
-  # the puppeteer's, once this table is set. No kind of work is named here: the brief says what it is
+  # the puppeteer's, once this table is set. No kind of work is named here: the brief says what it is. A TOOL
+  # LEFT IN A VESSEL RESTS AS LET GO (the-quiet-crucible 181083's ladle, built level with its bowl at the brew's
+  # top and put back there after every act - the user: "the spoon is floating in the liquid")
   - when: work
     say: >-
           THE WORK. In this episode work is done at the table while the reader talks - by no visible
@@ -220,8 +222,10 @@ prompt:
           back after, so leave that room clear - unless all the work is done on one thing, which then
           stands there from the start. Stand what is worked in the camera's sight, within an easy reach of
           the middle{{^cardless}} but never where the cards go{{/cardless}}, each tool where it is picked up
-          from - in or beside what it works. The puppeteer moves them once the table is set: build each
-          so a viewer would know what it is for.
+          from - in or beside what it works. A tool left in what it works rests there as it would when let
+          go: leaning on the rim, the end that works down in what the vessel holds and the handle tipped up
+          out of it - never lying level on the top of a liquid, as if it floated. The puppeteer moves them
+          once the table is set: build each so a viewer would know what it is for.
   # A BOX WHOSE CARDS THE WORK IS MADE OF (a recipe box): the table is set before a card comes up, so it is set for
   # any of them - each listed, none drawn
   - when: [work, box_cards]

@@ -366,7 +366,7 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 		"seen": ", ".join(PackedStringArray(seen)), "airs": ", ".join(PackedStringArray(airs)),
 	}
 	vars.merge(_box_size(String(CardTable.staging_of(plan)["box_style"]) == "shoebox",
-		String(CardTable.staging_of(plan)["contents"])))
+		String(CardTable.staging_of(plan)["contents"]), plan.get("look", {}) if plan.get("look") is Dictionary else {}))
 	# earlier episodes' tables and lights, each cut short
 	var earlier_tables: Array = []
 	for t in tables:
@@ -468,9 +468,9 @@ static func box_rule() -> String:
 	return Rules.say("table/set_dresser.box", _box_size())
 
 
-## The box's largest, in centimeters ([constant CardTable.BOX_MAX]), as the rules say it.
-static func _box_size(shoebox := false, contents := "file") -> Dictionary:
-	var most := (CardTable.SHOEBOX_MAX if shoebox else CardTable.BOX_MAX) * 100.0
+## The box's largest, in centimeters ([method CardTable.box_most], for [param look]'s cards), as the rules say it.
+static func _box_size(shoebox := false, contents := "file", look := {}) -> Dictionary:
+	var most := CardTable.box_most(look, shoebox) * 100.0
 	return {"box_x": roundi(most.x), "box_z": roundi(most.z), "box_y": roundi(most.y),
 		"shoebox": shoebox, "filed": contents == "file", "piled": contents == "piles", "loose": contents == "loose"}
 

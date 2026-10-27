@@ -42,7 +42,8 @@ extends SceneTree
 ##   GROUP copied round, groups nested only so deep, extruded outlines standing sound - and a table
 ##   lights no more things, and no thing more flames, than it may.
 ## - STONES: scattered copies never touch, heaped ones pile up without passing through each other
-##   or the floor, a list of materials goes to the copies in turn, a geode keeps its crystals
+##   or the floor, and stay in the dish they lie in - a smooth lathe's sloped one too (the control: heaped
+##   blind, some coals lie in its iron), a list of materials goes to the copies in turn, a geode keeps its crystals
 ##   inside it, and a play of light is kept only when the shader knows it.
 ## - THE CARD STOCK is the producer's choice, shown earlier decks' stocks; the card's name reads on
 ##   any stock, and the booklet is printed in the card's colors.
@@ -1372,6 +1373,36 @@ func _stones() -> bool:
 	_ok(blind_through > 0, "control: a heap laid with no wall to know of stayed inside the dish anyway")
 	var open := Props._walls(Props._assemble([dparts[1]], 1, []), 0, Vector3(0.0, 0.0035, 0.0))
 	_ok(open.is_empty(), "a heap on the open cloth found a wall: %s" % str(open))
+	# A HEAP IN A SMOOTH DISH STAYS IN IT (the-quiet-crucible 181083's brazier: a lathe's sloped wall is many short
+	# faces, none reaching from the floor past the cut, so it had no wall and its coals were heaped through it): no
+	# coal's side or foot lies in the dish's iron. Two-sided: heaped with no wall to know of, some do.
+	var brazier := Props.sanitize({"things": [{"name": "a brazier", "parts": [
+		{"shape": "lathe", "smooth": true, "profile": [[0.0, 0.0], [8.0, 0.0], [8.3, 0.5, 0.2], [10.8, 2.6], [11.2, 3.0, 0.0],
+			[10.6, 3.0, 0.0], [10.2, 2.5], [7.8, 0.8], [0.0, 0.7]]},
+		{"at": [0.0, 0.7, 0.0], "shape": "ball", "size": [3.2, 1.7, 3.2], "lumpy": 0.7, "facets": true,
+			"copies": {"heap": {"count": 18, "radius": 9.2}, "jitter": 0.5}}]}]}, ["#112233"])
+	var bparts: Array = (brazier["things"][0] as Dictionary)["parts"]
+	var in_iron := 0
+	var blind_iron := 0
+	var bwalls := {}
+	for sd in 4:
+		var leaves := Props._assemble(bparts, sd, [])
+		bwalls = Props._walls(leaves, 1, Vector3(0.0, 0.007, 0.0))
+		var faces := PackedVector3Array()
+		for e in (leaves[0] as Dictionary)["geos"]:
+			for xf in (leaves[0] as Dictionary)["xforms"]:
+				faces.append_array((xf as Transform3D) * ((e as Dictionary)["geo"] as Props.Tris).v)
+		var iron := TriangleMesh.new()
+		iron.create_from_faces(faces)
+		var bounds := Props._bounds((leaves[1] as Dictionary)["geos"], Transform3D.IDENTITY)
+		in_iron += _in_solid(_lumps((leaves[1] as Dictionary)["xforms"], bounds), iron)
+		var blind := RandomNumberGenerator.new()
+		blind.seed = sd
+		blind_iron += _in_solid(_lumps(Props._placements(bparts[1], blind, Props._geometry(bparts[1], blind)), bounds), iron)
+	_ok(not bwalls.is_empty() and in_iron == 0, "%d heaped coals lie in the iron of the smooth dish they lie in (its wall %s)" % [in_iron, str(bwalls)])
+	_ok(blind_iron > 0, "control: coals heaped with no wall to know of stayed out of the dish's iron anyway")
+	print("  a smooth dish: its wall %.1f cm out, %.1f cm high; %d coals in its iron when heaped blind" % [
+		float(bwalls.get("radius", 0.0)) * 100.0, float(bwalls.get("top", 0.0)) * 100.0, blind_iron])
 	# A LIST OF MATERIALS: one mesh for each, its copies in turn; every vertex knows its copy
 	var heap := Props.build(things[1], mats, 3)
 	var colors := {}
@@ -1464,6 +1495,24 @@ func _through_wall(lumps: Array, floor: float, walls: Dictionary) -> int:
 		var p: Vector3 = l[0]
 		if p.y - floor - float(l[2]) < float(walls["top"]) and Vector2(p.x, p.z).length() + float(l[1]) > float(walls["radius"]) + 0.001:
 			n += 1
+	return n
+
+
+## How many [param lumps] have a point of their side or foot inside [param solid] - an odd count of its surfaces
+## above the point ([method TableWork._inside]).
+func _in_solid(lumps: Array, solid: TriangleMesh) -> int:
+	var n := 0
+	for l in lumps:
+		var p: Vector3 = l[0]
+		var a := float(l[1]) * 0.9
+		var pts: Array = [p + Vector3(0.0, -float(l[2]) * 0.8, 0.0)]
+		for k in 8:
+			var d := Vector2.from_angle(TAU * k / 8.0) * a
+			pts.append(p + Vector3(d.x, 0.0, d.y))
+		for q in pts:
+			if TableWork._inside(solid, q):
+				n += 1
+				break
 	return n
 
 

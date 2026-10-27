@@ -9,7 +9,8 @@ extends Node
 ##
 ## `--marks 1` photographs each action instead: the moment it starts, a beat in, and the card
 ## held up after it. `--things 1` prints what stands on the table and every flame's light;
-## `--dark 0,2` puts out those lights (a lit thing's one light; -1 the lamp), to find which light does something.
+## `--dark 0,2` puts out those lights (a lit thing's one light; -1 the lamp), to find which light does something;
+## `--dark-lamps 0,2` the set dresser's lamps out of the shot (`light.lamps`, in order; the sun is -1).
 ## `--name N --byline B` set the title screen's name and byline (the show's own); `--ink #rrggbb` prints
 ## the name in that color, as a set dresser's choice would.
 ## `--root user://somewhere` reads the episode from another root than the author's (a copy restaged to look at).
@@ -42,6 +43,7 @@ var _from := -1         # --from N: start the reading at spoken word N, as a scr
 var _foil := -1.0       # --foil F: force the deck's foil amount
 var _things := false    # --things 1: print what stands on the table and every flame's light
 var _dark: Array = []   # --dark 0,2: put out those flames' lights (the flames still burn), to find a light
+var _dark_lamps: Array = []   # --dark-lamps 0,2: put out those of the set dresser's lamps (-1 its sun)
 var _wash := -1         # --wash W: the shuffle is one wash, of seed W
 var _clip := Vector2(-1.0, -1.0)   # --clip A,B: every frame from A to B seconds (into the wash, with --wash)
 var _looks := false     # --looks 1: print each held card's looks at its back
@@ -77,6 +79,9 @@ func _run() -> void:
 			"--from": _from = int(args[i + 1])
 			"--foil": _foil = float(args[i + 1])
 			"--things": _things = args[i + 1] == "1"
+			"--dark-lamps":
+				for x in String(args[i + 1]).split(","):
+					_dark_lamps.append(int(x))
 			"--dark":
 				for x in String(args[i + 1]).split(","):
 					_dark.append(int(x))
@@ -210,6 +215,13 @@ func _run() -> void:
 					(((medium as TableMedium)._lights[int(k)] as Dictionary)["light"] as OmniLight3D).light_energy = 0.0
 				elif int(k) == -1:
 					(medium as TableMedium)._lamp.light_energy = 0.0
+			var rig = (medium as TableMedium)._light_part._rig
+			for k in _dark_lamps:
+				if rig != null and int(k) >= 0 and int(k) < (rig.lamps as Array).size():
+					(((rig.lamps as Array)[int(k)] as Dictionary)["light"] as Light3D).light_energy = 0.0
+				elif rig != null and int(k) == -1:
+					for sn in rig.suns:
+						(sn as Light3D).light_energy = 0.0
 			# a real frame only now and then, and for the last few before a photograph - the
 			# cards' faces are drawn by viewports that need frames of their own to draw in
 			step += 1
@@ -230,6 +242,14 @@ func _run() -> void:
 					((f as Dictionary)["flames"] as Array).size(), "" if ((f as Dictionary)["flames"] as Array).size() == 1 else "s",
 					l.position.x, l.position.y, l.position.z, l.light_energy, float((f as Dictionary)["energy"]), str(l.shadow_enabled)])
 			print("table_look_probe: lamp energy %.2f shadows %s" % [tm._lamp.light_energy, str(tm._lamp.shadow_enabled)])
+			var rig = tm._light_part._rig
+			if rig != null:
+				for li in (rig.lamps as Array).size():
+					var lm: Dictionary = (rig.lamps as Array)[li]
+					var ll: Light3D = lm["light"]
+					print("table_look_probe: set dresser's lamp %d \"%s\" at (%.3f, %.3f, %.3f) energy %.3f%s" % [li,
+						String((lm["spec"] as Dictionary).get("name", "")), ll.global_position.x, ll.global_position.y, ll.global_position.z,
+						ll.light_energy, " (moved out of the shot)" if bool(lm.get("moved", false)) else ""])
 		if want == _times[0] and _looks:
 			_print_looks(medium as TableMedium)
 		if want == _times[0] and _events:

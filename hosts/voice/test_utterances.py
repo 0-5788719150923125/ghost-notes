@@ -205,7 +205,7 @@ def _cands():
     for n in range(10):
         c.append({"vid": "b", "text": "another sentence %d" % n, "seconds": 4.0, "clean": 40.0, "rate": 15.0,
                   "f0": 125.0, "hnr": 6.0, "spectrum": tilt})
-    odd = {"noisy": {"clean": 20.0}, "not paced as speech": {"rate": 40.0}, "another register": {"f0": 200.0},
+    odd = {"noisy": {"clean": 20.0}, "not paced as speech": {"rate": 70.0}, "another register": {"f0": 200.0},
            "breathy": {"hnr": 2.0}, "said twice": {"text": "Sentence number 3!"}}
     for reason, change in odd.items():
         c.append({**c[0], "text": "odd one " + reason, **change})
@@ -228,6 +228,25 @@ def one_voice():
     finally:
         U.RECORDING = was
     ok(len(kept2) == 40 and "another recording" not in found2["why"], "CONTROL: with no limit, the other recording is kept")
+
+
+@check
+def soft_spoken():
+    """THEIR OWN CLEAN (2026-10-26, an ASMR channel: soft speech over a high-gain microphone's hiss, a median 19 dB over
+    its pauses and 30 for none of 253): every sentence 19 to 25 dB keeps them all and leaves the noisy one out, where 30
+    dB whoever they are would keep none (THE CONTROL)."""
+    c, _ = _cands()
+    soft = [{**x, "clean": 19.0 + (i % 7)} for i, x in enumerate(c[:30])] + [{**c[0], "text": "a noisy one", "clean": 9.0}]
+    kept, found = U.choose(soft)
+    ok(len(kept) == 30 and found["why"].get("noisy") == [30] and abs(found["clean"] - 19.0) < 0.6,
+       "a soft voice keeps its clean ones (%d of 30), its noisy one left out, the floor %.1f dB" % (len(kept), found["clean"]))
+    was = U.CLEAN_FROM_BEST
+    try:
+        U.CLEAN_FROM_BEST = -99.0
+        kept2, _f2 = U.choose(soft)
+    finally:
+        U.CLEAN_FROM_BEST = was
+    ok(not kept2, "CONTROL: held to 30 dB whoever they are, it keeps none (%d)" % len(kept2))
 
 
 @check

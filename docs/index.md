@@ -36,15 +36,15 @@ core. The commitments:
 
 ## Feature registries
 
-- [Components](components.md) (16 components, 6 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
+- [Components](components.md) (18 components, 6 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
-- [Media](media.md) (9) - what the show is carried on.
+- [Media](media.md) (10) - what the show is carried on.
 - [Look filters](filters.md) (8) - the post-process over the whole picture.
 - [Layers](layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](forces.md) (8) - the physics primitives particles compose.
 - [Stage actors and verbs](stage.md) (3 actors, 22 verbs) - what a storyboard's `stage` entries are made of.
 - [Masking effects](masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
-- [Script marks](script.md) (33) - every mark a script may carry - the script editor's palette.
+- [Script marks](script.md) (41) - every mark a script may carry - the script editor's palette.
 - [Agents](agents.md) (4 writers, 3 painters, 2 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.
 
 ## Subsystems
@@ -374,13 +374,16 @@ A show at a table nobody writes: a show's brief, its episodes - each planned, de
 
 ### `desk/` - The desk
 
-A study where a ghost does math, seen and heard: the ink (formulas TeX lays out, written stroke by stroke in a seeded hand from the Hershey stroke fonts), the pad, the pen that moves by itself, the instruments it reaches for - a calculator, a tablet, a screen with Lean on it - and the medium that puts them on the stage. Its room is built from the table's parts. Design: next/proof.md.
+A study where a ghost does math, seen and heard: the ink (formulas TeX lays out, written stroke by stroke in a seeded hand from the Hershey stroke fonts), the pad, the pen that moves by itself, the instruments it reaches for - a calculator, a tablet, a screen with Lean on it - and the medium that puts them on the stage. Its room is built from the table's parts - and the letter written at the same desk: its own cursive hand (the Hershey script font, no TeX), what it says and writes, and its medium. Design: next/proof.md, next/letter.md.
 
 - [`desk.gd`](../src/desk/desk.gd) **DeskMedium** - a ghost doing math at a desk: a legal pad under a lamp, and a pen that writes on it by itself while the teacher reads aloud what it writes (next/proof.md, "The desk").
 - [`desk_look.gd`](../src/desk/desk_look.gd) **DeskLook** - what an episode's desk is made of and how it is lit, drawn from its seed (`DeskMedium`): the pad's paper, rules and binding, the ink, the pen, the desk's top and a mat on it, the lamp, and a few things lying about.
 - [`desk_script.gd`](../src/desk/desk_script.gd) **DeskScript** - a lesson as the voice reads it and the desk performs it.
 - [`ink.gd`](../src/desk/ink.gd) **Ink** - a formula written by hand, as a function of time.
 - [`legal_pad.gd`](../src/desk/legal_pad.gd) **LegalPad** - the desk's pad (`DeskMedium`): its cardboard back, its stack, the binding across its head, the page being written, and the pages turned over its head.
+- [`letter.gd`](../src/desk/letter.gd) **LetterMedium** - somebody writing a letter at a desk, reading it aloud as the pen puts it down (next/letter.md). The desk's medium (`DeskMedium`) - its pad, its pen, its camera, the voice followed word by word - with the letter's own hand and the letter's own moments (`LetterScript`).
+- [`letter_hand.gd`](../src/desk/letter_hand.gd) **LetterHand** - a letter's words in a cursive hand, as the pen's strokes.
+- [`letter_script.gd`](../src/desk/letter_script.gd) **LetterScript** - a letter as the voice reads it and the desk writes it (next/letter.md).
 
 ### `proof/` - Proof
 
@@ -393,15 +396,25 @@ A ghost doing math, made by agents: a note's problem fixed, worked at the desk w
 - [`proof_tools.gd`](../src/proof/proof_tools.gd) **ProofTools** - what the solver at the desk can do while it works (next/proof.md, "How an episode is made"): add to its lab NOTEBOOK, check a Lean file with LEAN, RUN code, and SUBMIT what it finished. Served as tools (`AgentTools`), as the set dresser's are, so any writer that takes tools works with them - and ...
 - [`proof_walk.gd`](../src/proof/proof_walk.gd) **ProofWalk** - a Proof note reads its EPISODE's lesson, never the note: the note is the problem the agents work from, and what the voice says is the lesson they wrote. A `TextWalk` the Proof card hands its reading, as Cards hands `EpisodeWalk`.
 
+### `letter/` - Letter
+
+A note read as a letter written by hand at a desk: the card that pins its medium, draws its sketches (an agent's SVG, laid out by the Proof pad's ink step) and paints its pictures (the Illustrations library's), and hands the reading the letter with the pen's rests in it. Design: next/letter.md.
+
+- [`letter_card.gd`](../src/letter/letter_card.gd) **LetterCard** - the Letter component's card: the note read as a letter, written by hand at a desk while the voice reads it (next/letter.md, `LetterMedium`).
+- [`letter_sketches.gd`](../src/letter/letter_sketches.gd) **LetterSketches** - a letter's sketches, made: each `<!-- sketch: ... -->` drawn as SVG by an agent from its words (`RULES`), then laid out by ghost's own TeX and figure reader (hosts/math/typeset.py, the Proof pad's ink step) into what the pen draws (`LetterMedium`).
+- [`letter_walk.gd`](../src/letter/letter_walk.gd) **LetterWalk** - a letter reads its own words, as the desk writes them: the voice is handed the letter with the pen's rests in it (`LetterScript.speakable`) - a turn of the page, a strike, a tap, a drawing the pen owes after its paragraph, a line written and never said - sized from what the Letter card made ...
+
 ### `likeness/` - Likeness
 
-An actor played from their own footage: the library of actors, each built from their videos (a folder, or links fetched) - surveyed, grouped into sets by camera and look, the agent that audits them, a still of each set and a model of them from every video (their head's motion, their blinks, their mouths for each sound, their voice) - the card that makes one and puts them on a note's stage, and the medium that plays them reading it: the still, its head turned and its mouth and eyes drawn from their own, through one mesh over the frame. Design: next/likeness.md.
+An actor played from their own footage: the library of actors, each built from their videos (a folder, or links fetched) - surveyed, grouped into sets by camera and look, the agent that audits them, a still of each set and a model of them from every video (their head's motion, their blinks, their mouths for each sound, their voice) - the card that makes one and puts them on a note's stage, and the medium that plays them reading it: the still, its head turned and its mouth and eyes drawn from their own, through one mesh over the frame; and a voice alone, taught their speech from their recordings by the Voice training card. Design: next/likeness.md.
 
 - [`actor_builder.gd`](../src/likeness/actor_builder.gd) **ActorBuilder** - makes whatever an actor is missing, in the order `ActorSteps` gives, the way `ProofProducer` makes a Proof episode's (next/likeness.md, "The runner").
 - [`actor_card.gd`](../src/likeness/actor_card.gd) **ActorCard** - the Actor component's card: makes and manages an actor of the `Actors` library (next/likeness.md, "The Actor card"), and PUTS THEM ON THE STAGE: a note with an Actor is read by them, in their own room. One component since 2026-10-22 (it had been two, an Actor that built and a Likeness that played; ...
 - [`actor_folder.gd`](../src/likeness/actor_folder.gd) **ActorFolder** - Actor - one actor of the `Actors` library, as it lies on disk (next/likeness.md, "The actor's folder"): `actor.json` (their name, their sources and their videos, which are ticked, the chosen set and each set's still) and a folder per thing a step covers - each video's (`videos/<vid>/`), the actor's ...
 - [`actor_prompts.gd`](../src/likeness/actor_prompts.gd) **ActorPrompts** - what the Likeness's agents are told, and what is made of their answers (next/likeness.md, "The agents"). The words are in `rules/likeness/` (`Rules`); this fills them in and reads the answers - each answer checked before anything is kept, a malformed one sent back (`ActorBuilder`). Pure, so a gate ...
-- [`actor_sources.gd`](../src/likeness/actor_sources.gd) **ActorSources** - where an actor's videos come from (next/likeness.md, "Sources"): a FOLDER, read in place and never copied or written, or a LINK - a video, a playlist or a channel - listed first and then fetched one video at a time into the actor's `footage/`. A link added CAPTIONS ONLY fetches no video: each of ...
+- [`actor_source_list.gd`](../src/likeness/actor_source_list.gd) **ActorSourceList** - where a person's recordings come from, on a card that builds something of them (the Actor card; the Voice training card, for a voice alone): their SOURCES - a folder read where it is, files picked one by one, a link (a video, a playlist or a channel) listed and then fetched a video at a time, or ...
+- [`actor_sources.gd`](../src/likeness/actor_sources.gd) **ActorSources** - where an actor's videos come from (next/likeness.md, "Sources"): a FOLDER, read in place and never copied or written, a FILE picked by itself (read in place too), or a LINK - a video, a playlist or a channel - listed first and then fetched one video at a time into the actor's `footage/` (a voice ...
+- [`actor_step_rows.gd`](../src/likeness/actor_step_rows.gd) **ActorStepRows** - a person's steps on a card that builds them (every step on the Actor card; the voice's alone on the Voice training card, `ActorSteps.voice_chain`), a row each (`ActorSteps`): ✓ made, ⚠ stale, its share while it runs, ▶ to make it and what it needs, ⟳ to make it again, after asking. Handed ...
 - [`actor_steps.gd`](../src/likeness/actor_steps.gd) **ActorSteps** - what an actor is made of, step by step (next/likeness.md, "The steps"): one row a step, in the order an actor is built. The Actor card lists them, `ActorBuilder` runs them, and `ActorFolder` keeps what each made.
 - [`actors.gd`](../src/likeness/actors.gd) **Actors** - the library of actors a Likeness plays: each a folder, `user://actors/<id>/`, shared by every note that uses it, as `Illustrations` and `Films` are (next/likeness.md, "The library").
 - [`likeness.gd`](../src/likeness/likeness.gd) **LikenessMedium** - an actor reads the note, in their own room (next/likeness.md, "The second build"): ONE STILL OF THEM and a model of how they move - their head's own motion, their blinks, their mouths for the voice's sounds (`LikenessPlan`). Every pixel of them is a real pixel of theirs, bent; no footage plays, so ...
@@ -409,6 +422,7 @@ An actor played from their own footage: the library of actors, each built from t
 - [`likeness_plan.gd`](../src/likeness/likeness_plan.gd) **LikenessPlan** - how the actor moves at each moment, on their still (next/likeness.md, "The second build"): the head, the body, the eyes and the mouth, each A PURE FUNCTION OF SHOW TIME - asked for any moment, the answer depends on nothing asked before it, so a seek and an export draw what the live show drew.
 - [`splat_head.gd`](../src/likeness/splat_head.gd) **SplatHead** - an actor as 3D Gaussian splats bound to their own face and body (next/likeness.md, "A head of splats", "The whole of them"): the avatar hosts/avatar/train.py learned, read from its `.json` and `.bin` (its room is the `.plate.png` beside them, which the medium draws behind it).
 - [`visemes.gd`](../src/likeness/visemes.gd) **Visemes** - the mouth shapes a voice's sounds are seen as (next/likeness.md, "The lanes"): a row a class, the sounds in it and how strongly each holds the mouth to its shape. The mouth of a Likeness follows the voice's phones through these: each phone is a class, each class is THEIR mouth for it ([method ...
+- [`voice_training_card.gd`](../src/likeness/voice_training_card.gd) **VoiceTrainingCard** - the Voice training component's card: teaches a voice to speak as someone does, from their own recordings, and the note reads in it (next/likeness.md, "A voice alone"). The user, 2026-10-26: "a new component/card, which we could attach to a note that already has the "Voice" component, to fine-tune a ...
 
 ### `masking/` - Masking
 

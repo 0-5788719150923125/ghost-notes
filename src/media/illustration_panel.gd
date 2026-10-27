@@ -633,6 +633,8 @@ static func _placement_label(im: Dictionary) -> String:
 	match String(im.get("placement", "")):
 		"full":
 			return "full page"
+		"screen":
+			return "the whole screen"
 		"sketch":
 			return "sketch"
 		"page":

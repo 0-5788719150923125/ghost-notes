@@ -26,9 +26,14 @@ marks in American. `kokoro_symbols` writes eSpeak's reading in it by misaki's ow
 eSpeak fallback (misaki/espeak.py, `EspeakFallback`), each symbol keeping the word it came from; the
 phones go back in eSpeak's symbols, so a mouth reads them as it reads Piper's.
 
-NOT HERE, an inference trial: `noise_scale` and `noise_w` (the Tone's `noise` columns do nothing on
-these voices), F0 as an input (the arc and the Tone still resample), Kokoro's own dwell at a mark (the
-pause figures are Piper's measurements), the vowel probe, and voices trained here.
+VOICES TRAINED HERE (2026-10-26, next/voice_engines.md "Training Kokoro"): a checkpoint of its own under
+`trained/<id>/` - the stock graph with the decoder's and the prosody predictor's weights written from a run
+(hosts/voice_train/kokoro_export.py), its tokenizer, ONE pack (`voices/voice.bin`, the taught style in every row)
+and `voice.json` ({name, license, chain, british}) - listed beside the stock checkpoints (`_family`), never fetched.
+
+NOT HERE: `noise_scale` and `noise_w` (the Tone's `noise` columns do nothing on these voices), F0 as an
+input (the arc and the Tone still resample), Kokoro's own dwell at a mark (the pause figures are Piper's
+measurements), the vowel probe.
 
 THE RATE. Rendered at 24 kHz and handed back at 22,050 (`OUT_RATE`) through the band-limited
 resampler: a reading joins its takes at one rate, and a cast may mix Kokoro and Piper voices.
@@ -130,6 +135,8 @@ PACKS: list[tuple[str, str, str, str]] = [
     ("bm_daniel", "GB", "M", "grade D"),
 ]
 ACCENTS = {"US": "American", "GB": "British"}
+# Where the voices taught here are, under the voices' root (`_family`).
+TRAINED = "trained"
 
 # THE ENGLISH PACKS of v1.1-zh: an hour each of crowdsourced synthetic English (its model card), ungraded.
 # Vale is "an older British female".
@@ -280,11 +287,34 @@ class KokoroBackend(PiperBackend):
 
     @classmethod
     def owns(cls, voice: str) -> bool:
-        return voice in FAMILIES
+        return voice in FAMILIES or cls._trained(voice) is not None
 
     @classmethod
     def _trained(cls, voice: str):
-        return None  # none are trained here (next/voice_engines.md, "Kokoro")
+        """A voice taught here (`TRAINED`): its description ({name, license, chain, british}), or None."""
+        if not voice or "/" in voice or voice.startswith(".") or voice in FAMILIES:
+            return None
+        d = cls._root() / TRAINED / voice
+        if not all((d / f).exists() for f in (MODEL, TOKENIZER, "voices/voice.bin", "voice.json")):
+            return None
+        try:
+            meta = json.loads((d / "voice.json").read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - half-written: not a voice yet
+            return None
+        return meta if isinstance(meta, dict) else None
+
+    @classmethod
+    def _family(cls, voice: str) -> dict:
+        """A checkpoint as FAMILIES describes one - a stock one, or one taught here (one pack, its own voice)."""
+        if voice in FAMILIES:
+            return FAMILIES[voice]
+        meta = cls._trained(voice)
+        if meta is None:
+            raise BackendError(f"unknown Kokoro voice '{voice}'")
+        accent = "GB" if bool(meta.get("british", False)) else "US"
+        return {"name": str(meta.get("name", voice)), "base": "", "dir": TRAINED + "/" + voice,
+                "derivation": str(meta.get("chain", "taught here")), "license": str(meta.get("license", "")),
+                "packs": [("voice", accent, "", "taught here")], "about": "A voice taught here, on their own speech."}
 
     def __init__(self) -> None:
         super().__init__()
@@ -302,25 +332,28 @@ class KokoroBackend(PiperBackend):
 
     @classmethod
     def _home(cls, family: str) -> Path:
-        d = FAMILIES[family]["dir"]
+        d = cls._family(family)["dir"]
         return cls._root() / d if d else cls._root()
 
     def voices(self) -> list[dict]:
         out = []
-        for vid, fam in FAMILIES.items():
+        trained = self._root() / TRAINED
+        taught = sorted(d.name for d in trained.iterdir() if self._trained(d.name) is not None) if trained.is_dir() else []
+        for vid in [*FAMILIES, *taught]:
+            fam = self._family(vid)
             home = self._home(vid)
             out.append(
                 {
                     "id": vid,
                     "name": fam["name"],
                     "backend": self.name,
-                    "license": LICENSE,
+                    "license": fam.get("license", LICENSE),
                     "derivation": fam["derivation"],
                     "speakers": len(fam["packs"]),
                     # WHO EACH SPEAKER NUMBER IS, said by the host (VoiceReaders.offer): the libritts
                     # readers are described from files, these from the tables above
                     "readers": [
-                        {"reader": pack, "g": sex, "d": "%s, %s, %s" % (pack.split("_", 1)[1], ACCENTS[accent], said)}
+                        {"reader": pack, "g": sex, "d": "%s, %s, %s" % (pack.split("_", 1)[-1], ACCENTS[accent], said)}
                         for pack, accent, sex, said in fam["packs"]
                     ],
                     "readers_about": fam["about"],
@@ -342,6 +375,8 @@ class KokoroBackend(PiperBackend):
         """The checkpoint's graph and tokenizer, fetched unless they are here: the bytes fetched."""
         if not self.owns(voice):
             raise BackendError(f"unknown Kokoro voice '{voice}'")
+        if voice not in FAMILIES:
+            return 0  # taught here: its files are here, or it is not listed
         home = self._home(voice)
         got = self._fetch(voice, home / MODEL, "onnx/" + MODEL, "voice " + FAMILIES[voice]["name"])
         got += self._fetch(voice, home / TOKENIZER, TOKENIZER)
@@ -378,6 +413,21 @@ class KokoroBackend(PiperBackend):
             self._vocabs[family] = {str(k): int(v) for k, v in tok["model"]["vocab"].items()}
         return self._models[family]
 
+    def ids_of(self, tokens: list, family: str = "kokoro", british: bool = False, phonemizer: str = "espeak") -> list:
+        """THE IDS THE GRAPH IS SENT FOR `tokens` (`_run`, `_render_symbols`): its homographs, eSpeak's reading in
+        misaki's symbols, a pad at each end - what a voice is taught on here (hosts/voice/utterances.py), so it
+        learns exactly what it will be asked. What the plan is told (floors, stretches) is the plan's, not the ids'."""
+        espeak = "en-gb" if british else "en-us"
+        if phonemizer == "espeak":
+            self._homographs.annotate(tokens, espeak)
+        units = kokoro_symbols(self._symbols(tokens, phonemizer, espeak, ""), british)
+        if family not in self._vocabs:
+            self._download(family)
+            tok = json.loads((self._home(family) / TOKENIZER).read_text(encoding="utf-8"))
+            self._vocabs[family] = {str(k): int(v) for k, v in tok["model"]["vocab"].items()}
+        vocab = self._vocabs[family]
+        return [PAD_ID, *[int(vocab[k]) for k, _src, _at in units if k in vocab], PAD_ID]
+
     def _pack_array(self, family: str, pack: str):
         """A pack's styles, [rows, 1, STYLE], fetched the first time (half a megabyte)."""
         import numpy as np
@@ -393,7 +443,7 @@ class KokoroBackend(PiperBackend):
         """Speaker `index` of a checkpoint, its cfg in the shape Piper's path reads (clamped to the packs
         there are): its pack, its checkpoint's symbols, and eSpeak in its own accent - a British pack is
         read British."""
-        packs = FAMILIES[family]["packs"]
+        packs = self._family(family)["packs"]
         i = min(max(int(index), 0), len(packs) - 1)
         if family not in self._vocabs:
             self._graph(family)  # the symbols are the graph's: a speaker built before it would have none

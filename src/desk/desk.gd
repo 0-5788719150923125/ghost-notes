@@ -485,7 +485,7 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	# UP FROM BLACK as the session starts, down to it after the last word - the desk owns its
 	# bookend, as the card table does; an outro mark's fade still is the feed's
 	_env.adjustment_brightness = clampf(clampf(t / 1.2, 0.0, 1.0)
-		* ShowOpening.end_fade(_now, _follower, _spoken_n, feed.tail()) * feed.live_fade, 0.0, 1.0)
+		* _end_fade() * feed.live_fade, 0.0, 1.0)
 	var opening := _opening()
 	ShowOpening.lens(ShowOpening.pull(_now, opening, _built_n > 0), _blur, _attrs)
 	_title.alpha = ShowOpening.title_alpha(_now, opening, _built_n > 0)
@@ -493,6 +493,11 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_show_pages()
 	_place_pen()
 	_tick_camera(delta)
+
+
+## THE CLOSE: 1 until the lesson is over, then down to black over the outro ([method ShowOpening.end_fade]).
+func _end_fade() -> float:
+	return ShowOpening.end_fade(_now, _follower, _spoken_n, feed.tail())
 
 
 ## THE VOICE'S WORDS SO FAR (the overlay's growing `words`), matched, and the plan made again when more
@@ -636,7 +641,7 @@ func _build_plan() -> void:
 		var turn_at := float(held.get("turn_at", INF))
 		if bool(a.get("turn", false)) and not held.has("start"):
 			# early enough for the pen to come back over the new page behind the sheet, at its pace
-			var back := DeskScript.TURN * PARK_BACK + maxf(PARK.distance_to(_action_point(a, true)) / REACH_SPEED, REACH_EASE)
+			var back := DeskScript.TURN * PARK_BACK + _travel(PARK.distance_to(_action_point(a, true)))
 			if not held.has("turn_at"):
 				turn_at = maxf(start - back - 0.1, prev_end + PARK_CLEAR)
 			var late := maxf(turn_at + DeskScript.TURN + 0.05, turn_at + back) - start
@@ -663,7 +668,13 @@ func _way(last: int, next: int) -> float:
 	if String(b["kind"]) == "point" and target_box(b).size.x < 0.0:
 		return 0.0
 	var from := PARK if _parks(last, next) else _action_point(_actions[last], false)
-	return maxf(from.distance_to(_action_point(b, true)) / REACH_SPEED, REACH_EASE)
+	return _travel(from.distance_to(_action_point(b, true)))
+
+
+## How long the nib takes over [param px] of the page between two actions: at [constant REACH_SPEED],
+## never under [constant REACH_EASE].
+func _travel(px: float) -> float:
+	return maxf(px / REACH_SPEED, REACH_EASE)
 
 
 ## THE LATEST DRAWING [param i] MAY END: as the talk about it ends (a drawing with none, the next mark
@@ -687,7 +698,7 @@ func _drawn_by(i: int) -> float:
 		elif kind != "point":
 			due = _guess(after - 1, true) + 0.25
 		if bool(b.get("turn", false)):
-			var back := DeskScript.TURN * PARK_BACK + maxf(PARK.distance_to(_action_point(b, true)) / REACH_SPEED, REACH_EASE)
+			var back := DeskScript.TURN * PARK_BACK + _travel(PARK.distance_to(_action_point(b, true)))
 			due = minf(due - _way(i, j), due - back - 0.1 - PARK_CLEAR)
 		else:
 			due -= _way(i, j)
@@ -1045,12 +1056,12 @@ func _parks(last: int, next: int) -> bool:
 func _reach(last: int, next: int) -> float:
 	var to := _action_point(_actions[next], true)
 	if last < 0:
-		return maxf(Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0).distance_to(to) / REACH_SPEED, REACH_EASE)
+		return _travel(Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0).distance_to(to))
 	var from := PARK if _parks(last, next) else _rest_near(_action_point(_actions[last], false))
 	var free := float(_plan[last]["end"])
 	if float(_plan[next]["turn_at"]) < INF:
 		free = maxf(free, float(_plan[next]["turn_at"]) + DeskScript.TURN * PARK_BACK)
-	return minf(maxf(from.distance_to(to) / REACH_SPEED, REACH_EASE), maxf(float(_plan[next]["start"]) - free, 0.01))
+	return minf(_travel(from.distance_to(to)), maxf(float(_plan[next]["start"]) - free, 0.01))
 
 
 ## How high the nib is as action [param a] begins and ends: on the paper for writing, just over it for
@@ -1262,10 +1273,15 @@ func _framing() -> Dictionary:
 			# a drawing is framed on its middle; a line of writing, on its baseline
 			var up := float(a.get("h", 0.0)) * 0.5 if String(a["kind"]) == "draw" else 0.0
 			line = Vector2((a["at"] as Vector2).x + float(a["w"]) * 0.5, (a["at"] as Vector2).y - up)
-	var known := _follower.known_last()
-	if _spoken_n > 0 and known >= _spoken_n - 1 and _now > _follower.st1[known]:
+	if _ended():
 		k = 0.0
 	return {"k": k, "line": line, "turn": turn}
+
+
+## Is the lesson over at [member _now] - its last word said?
+func _ended() -> bool:
+	var known := _follower.known_last()
+	return _spoken_n > 0 and known >= _spoken_n - 1 and _now > _follower.st1[known]
 
 
 func _tick_camera(delta: float) -> void:
@@ -1279,11 +1295,14 @@ func _tick_camera(delta: float) -> void:
 	var local_aim := _world(Vector2(clampf(line.x, PW * 0.35, PW * 0.65), clampf(line.y + 60.0, PH * 0.3, PH * 0.72)), 0.0)
 	var aim := wide_aim.lerp(local_aim, k)
 	var page := _pages().x
-	var yaw := (_hash01(page, 41) - 0.5) * 2.0 * YAW_SPREAD + sin(_now * 0.021 + float(_seed % 97)) * YAW_WANDER
-	var pitch := lerpf(float(WIDE["pitch"]), float(LOCAL["pitch"]), k) \
-		+ (_hash01(page, 67) - 0.5) * 2.0 * TILT_SPREAD + sin(_now * 0.029 + 1.3) * 0.8
-	var dist := lerpf(float(WIDE["dist"]), float(LOCAL["dist"]), k) * (1.0 + 0.012 * sin(_now * 0.033 + 2.1))
-	var roll := (_hash01(page, 53) - 0.5) * 2.0 * ROLL_SPREAD + sin(_now * 0.047 + 0.7) * 0.5
+	var wide: Dictionary = _wide_frame()
+	var close: Dictionary = _local_frame()
+	var w := _wander_time()
+	var yaw := (_hash01(page, 41) - 0.5) * 2.0 * YAW_SPREAD + sin(w * 0.021 + float(_seed % 97)) * YAW_WANDER
+	var pitch := lerpf(float(wide["pitch"]), float(close["pitch"]), k) \
+		+ (_hash01(page, 67) - 0.5) * 2.0 * TILT_SPREAD + sin(w * 0.029 + 1.3) * 0.8
+	var dist := lerpf(float(wide["dist"]), float(close["dist"]), k) * (1.0 + 0.012 * sin(w * 0.033 + 2.1))
+	var roll := (_hash01(page, 53) - 0.5) * 2.0 * ROLL_SPREAD + sin(w * 0.047 + 0.7) * 0.5
 	if _snap:
 		_snap = false
 		_c_aim = aim
@@ -1296,22 +1315,23 @@ func _tick_camera(delta: float) -> void:
 		_v_pitch = 0.0
 		_v_yaw = 0.0
 		_v_roll = 0.0
+	var tau := _spring_tau()
 	var steps := maxi(1, int(ceil(delta / (1.0 / 60.0))))
 	var h := delta / float(steps)
 	for _i in steps:
-		var res := BookMedium._spring3(_c_aim, _v_aim, aim, SPRING_TAU, h)
+		var res := BookMedium._spring3(_c_aim, _v_aim, aim, tau, h)
 		_c_aim = res[0]
 		_v_aim = res[1]
-		var rd := BookMedium._spring(_c_dist, _v_dist, dist, SPRING_TAU, h)
+		var rd := BookMedium._spring(_c_dist, _v_dist, dist, tau, h)
 		_c_dist = rd.x
 		_v_dist = rd.y
-		var rp := BookMedium._spring(_c_pitch, _v_pitch, pitch, SPRING_TAU, h)
+		var rp := BookMedium._spring(_c_pitch, _v_pitch, pitch, tau, h)
 		_c_pitch = rp.x
 		_v_pitch = rp.y
-		var ry := BookMedium._spring(_c_yaw, _v_yaw, yaw, SPRING_TAU * ANGLE_SLOW, h)
+		var ry := BookMedium._spring(_c_yaw, _v_yaw, yaw, tau * ANGLE_SLOW, h)
 		_c_yaw = ry.x
 		_v_yaw = ry.y
-		var rr := BookMedium._spring(_c_roll, _v_roll, roll, SPRING_TAU * ANGLE_SLOW, h)
+		var rr := BookMedium._spring(_c_roll, _v_roll, roll, tau * ANGLE_SLOW, h)
 		_c_roll = rr.x
 		_v_roll = rr.y
 	var p := deg_to_rad(_c_pitch)
@@ -1320,6 +1340,25 @@ func _tick_camera(delta: float) -> void:
 	_cam.position = _c_aim + dir * _c_dist
 	_cam.look_at(_c_aim, Vector3.UP)
 	_cam.rotate_object_local(Vector3.FORWARD, deg_to_rad(_c_roll))
+
+
+## The camera's wide and close framings ([constant WIDE], [constant LOCAL]).
+func _wide_frame() -> Dictionary:
+	return WIDE
+
+
+func _local_frame() -> Dictionary:
+	return LOCAL
+
+
+## The time the camera's slow wander is read at: now.
+func _wander_time() -> float:
+	return _now
+
+
+## How slowly the camera's springs follow ([constant SPRING_TAU]).
+func _spring_tau() -> float:
+	return SPRING_TAU
 
 
 static func _hash01(page: int, salt: int) -> float:

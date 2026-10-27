@@ -21,8 +21,14 @@ extends Node
 ## back to the eye (the user, 2026-10-13) swings its foot into the cards in front of it there, as a real
 ## card rocks in its file - unseen, and not counted.
 ##
+## - A CARD FILED IN A BOX IS INSIDE ITS WALLS (the-quiet-crucible 181083, the user: "the cards are protruding
+##   from the front of the box, through the wall of the box itself"): a set dresser's chest with brass posts at
+##   its corners and a handle on its front, holding index cards on edge - no point of a filed card lies in its
+##   wood ([method TableBox.inside_of]: the box's inside from its own walls, never its bounds less a wall).
+##
 ## Two-sided: the card put back laid instead on the pile a later card is drawn from is passed through
-## by that draw, and the check says so; a look half as long holds a front up too briefly.
+## by that draw, and the check says so; a look half as long holds a front up too briefly; a filed card
+## moved a centimeter toward the reader is in the chest's front wall.
 ##
 ##   tests/run_boot_probe.sh tests/table/box_clip_check.gd 300
 ##
@@ -35,6 +41,15 @@ const DIR := "user://box_clip_check"
 const TIN := {"things": [{"name": "the tin", "place": "by the deck", "holds_cards": true, "parts": [
 	{"shape": "extrude", "outline": "rect", "size": [14.0, 21.0], "height": 7.0, "wall": 0.25, "material": "tin"}]}],
 	"materials": {"tin": {"kind": "painted", "color": "#3f8a86", "color2": "#8a5434", "polish": 0.45, "wear": 0.35}}}
+## THE CHEST of the-quiet-crucible 181083, as its set dresser wrote it: 15 by 22 cm, 9 deep, walls of 1 cm, a
+## brass post at each corner and a handle on its front.
+const CHEST := {"things": [{"name": "the surgeon's recipe chest", "group": "chest", "holds_cards": true, "parts": [
+	{"bevel": 0.2, "height": 9.0, "material": "mahogany", "outline": "rect", "shape": "extrude", "size": [15.0, 22.0], "wall": 1.0},
+	{"at": [-6.85, 0.0, -10.35], "copies": {"line": {"count": 2.0, "step": [13.7, 0.0, 0.0]}}, "material": "brass", "round": 0.2, "shape": "box", "size": [1.6, 9.2, 1.6]},
+	{"at": [-6.85, 0.0, 10.35], "copies": {"line": {"count": 2.0, "step": [13.7, 0.0, 0.0]}}, "material": "brass", "round": 0.2, "shape": "box", "size": [1.6, 9.2, 1.6]},
+	{"material": "brass", "path": [[-3.0, 6.6, 11.05], [-2.6, 4.9, 11.7], [2.6, 4.9, 11.7], [3.0, 6.6, 11.05]], "radius": 0.25, "shape": "tube"}]}],
+	"materials": {"mahogany": {"color": "#5c2c1a", "color2": "#36180e", "grain": 0.6, "kind": "wood", "pattern": 0.4, "polish": 0.6},
+		"brass": {"color": "#b9903f", "color2": "#5e4a26", "kind": "metal", "polish": 0.7, "wear": 0.3}}}
 ## Frames a second the show is posed at.
 const FPS := 30.0
 ## The least a searched card's front is held to the eye, seconds.
@@ -90,6 +105,7 @@ func _run() -> void:
 		for seed in SEEDS:
 			_show(String(s[0]), seed, s[1] as Dictionary, String(s[2]), s[3] as Array)
 	_one_pile()
+	_chest()
 	_control()
 	Director.hold(false)
 	Director.detach()
@@ -288,12 +304,13 @@ func _cards(positions: Array) -> Array:
 
 
 ## Load [param positions] as an episode, timed as a voice would read it - its cards in the tin
-## ([constant TIN]) when [param tin], else in the box the table makes when no set dresser did.
-func _load(seed: int, positions: Array, plan: Dictionary, tin := false) -> void:
+## ([constant TIN]) when [param tin], in [param table]'s box when one is given, else in the box the table makes
+## when no set dresser did.
+func _load(seed: int, positions: Array, plan: Dictionary, tin := false, table := {}) -> void:
 	var spec := DIR.path_join("table.json")
-	if tin:
+	if tin or not table.is_empty():
 		var f := FileAccess.open(spec, FileAccess.WRITE)
-		f.store_string(JSON.stringify(TIN))
+		f.store_string(JSON.stringify(table if not table.is_empty() else TIN))
 		f.close()
 	elif FileAccess.file_exists(spec):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(spec))
@@ -311,6 +328,39 @@ func _load(seed: int, positions: Array, plan: Dictionary, tin := false) -> void:
 	medium._ensure_doc()
 	medium._follow.extend(subs.words)
 	medium._sched = medium._follow.place(medium._plan.parse["actions"], maxf(Director.intro_hold, 0.6), TableMedium.LEAD, TableMedium.TAIL)
+
+
+## A CARD FILED IN A BOX IS INSIDE ITS WALLS: the chest of 181083, index cards filed on edge.
+func _chest() -> void:
+	print("-- a chest with a handle on its front, of index cards on edge")
+	_load(181083, [{}], {"look": {"candles": 0, "card_size": "index", "frame": {"style": "written"}},
+		"staging": {"source": "box", "text": "front", "box_style": "open", "contents": "file"}, "deck": _deck(22)}, false, CHEST)
+	var box: Dictionary = medium._box_part.stood
+	_ok(medium._box_part.filed_on_edge() and not (box.get("filed", []) as Array).is_empty(), "the chest files its index cards on edge (%d)" % (box.get("filed", []) as Array).size())
+	var faces := PackedVector3Array()
+	for mi in (box["node"] as Node).find_children("*", "MeshInstance3D", true, false):
+		if (mi as MeshInstance3D).mesh != null:
+			faces.append_array((mi as MeshInstance3D).global_transform * (mi as MeshInstance3D).mesh.get_faces())
+	var wood := TriangleMesh.new()
+	wood.create_from_faces(faces)
+	var card := medium._mesh_for(medium._plan.look).get_faces()
+	var filed: Array = (box.get("filed", []) as Array) + (box.get("at_k", []) as Array) + (box.get("search", []) as Array)
+	var inside := func(xf: Transform3D) -> int:
+		var n := 0
+		for q in xf * card:
+			n += 1 if TableWork._inside(wood, q + Vector3.UP * 0.0005) else 0
+		return n
+	var bad := 0
+	var worst := 0
+	for xf in filed:
+		if xf is Transform3D:
+			var n: int = inside.call(xf)
+			bad += 1 if n > 0 else 0
+			worst = maxi(worst, n)
+	_ok(bad == 0, "no filed card lies in the chest's wood (%d of %d cards, at most %d of a card's points)" % [bad, filed.size(), worst])
+	# the control: a filed card a centimeter toward the reader is in the front wall
+	var front: Transform3D = (box["filed"] as Array)[0]
+	_ok(int(inside.call(front.translated(Vector3(0.0, 0.0, 0.01)))) > 0, "control: a filed card moved a centimeter forward lies in the chest's front wall")
 
 
 ## When card [param k]'s event of kind [param kind] begins.

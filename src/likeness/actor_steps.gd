@@ -18,6 +18,8 @@ class_name ActorSteps
 ##             train one ([method ActorBuilder.cannot_train]) it is left alone and its row says why
 ##   renderer  the one renderer it is made for ([constant RENDERERS]), absent when both play from it: the
 ##             Actor card shows and makes the note's renderer's steps alone
+##   of        the one kind of person it is made for ([method ActorFolder.kind]), absent when both are: an actor's
+##             voice is Piper's, a voice alone's Kokoro's (next/voice_engines.md, "Training Kokoro")
 ##   outputs   the files it makes, in its folder: the video's, the actor's or the set's
 ##   settings  the [constant SETTINGS] it is made under: one changed makes it stale
 ##   version   bumped when what the step makes changes, which makes every one made before stale
@@ -29,7 +31,7 @@ class_name ActorSteps
 const REGISTRY := {
 	"fetch": {"label": "Fetch", "per": "video", "needs": [], "runs": "download", "env": ["ytdlp_venv"],
 		"outputs": [], "settings": [], "version": 1,
-		"blurb": "Downloads a linked video (up to 1080p) with its automatic captions and its details, one at a time. A video from a folder is read where it is."},
+		"blurb": "Downloads a linked video (up to 1080p) with its automatic captions and its details, one at a time - for a voice alone, its sound alone. A video from a folder is read where it is."},
 	"captions": {"label": "Captions", "per": "video", "needs": [], "runs": "download", "env": ["ytdlp_venv"],
 		"outputs": [], "settings": [], "version": 1,
 		"blurb": "Fetches the automatic captions of a folder video from the link added for its captions, matched by title. A linked video's come with it."},
@@ -82,11 +84,23 @@ const REGISTRY := {
 		"blurb": "Listens to the whole of each video for their voice: every word they say and when, their ums and uhs too (Whisper, on this computer). About a seventh of the video's own length."},
 	"utterances": {"label": "Utterances", "per": "actor", "needs": ["hear"], "runs": "python",
 		"env": ["ffmpeg", "voice_venv", "voice_train_venv"], "outputs": ["utterances.json", "utterances"], "settings": [],
-		"version": 2, "voice": true,
+		"version": 2, "voice": true, "of": "actor",
 		"blurb": "Cuts their speech into the sentences their voice is taught on: each between pauses, cut in the quiet, every word heard surely and nothing heard that the words lack, spoken rather than whispered, all at one level - and keeps ONE VOICE of them, measured: clean, paced as speech, in their usual register, not breathy, from one recording setup, each sentence once. Holds a few back to measure it by."},
 	"voice": {"label": "Voice", "per": "actor", "needs": ["utterances"], "runs": "train", "env": ["voice_train_venv"],
-		"outputs": ["voice.json", "voice"], "settings": ["voice_steps"], "version": 1, "voice": true,
+		"outputs": ["voice.json", "voice"], "settings": ["voice_steps"], "version": 1, "voice": true, "of": "actor",
 		"blurb": "Teaches a voice to speak as they do: a public-domain voice fine-tuned on their sentences on the graphics card - an hour or more, beside the other steps - then offered on the Voice card under their name. Stop keeps what it has learned, and ▶ goes on from there."},
+
+	# A VOICE ALONE IS KOKORO'S (2026-10-26, the user: "I likely won't use Piper models for anything other than testing now,
+	# given that Kokoro is so much better-sounding"): their sentences cut at Kokoro's rate in its own ids, and Kokoro
+	# taught them by a loop of our own (hosts/voice_train/kokoro_*.py)
+	"kokoro_utterances": {"label": "Utterances", "per": "actor", "needs": ["hear"], "runs": "python",
+		"env": ["ffmpeg", "voice_venv", "speech_venv", "voice_train_venv"], "outputs": ["kokoro/sentences.json", "kokoro/sentences"],
+		"settings": [], "version": 2, "voice": true, "of": "voice",
+		"blurb": "Cuts their speech into the sentences Kokoro is taught on, at its 24 kHz and in the very ids the voice host sends it: each between pauses, cut in the quiet, spoken rather than whispered, all at one level, ONE VOICE of them (clean against how they record, paced as speech, their usual register, not breathy, one recording setup, each sentence once) - then HEARS EACH AGAIN, ALONE, with a careful ear, and keeps only the words its sound says: a sentence whose text and sound disagree teaches Kokoro to mumble. Holds a few back to listen by."},
+	"kokoro_voice": {"label": "Voice", "per": "actor", "needs": ["kokoro_utterances"], "runs": "train",
+		"env": ["voice_train_venv"], "outputs": ["kokoro/published.json"], "settings": ["kokoro_steps"], "version": 1,
+		"voice": true, "of": "voice",
+		"blurb": "Teaches Kokoro their sound, on the graphics card: each sentence said by Kokoro and laid on theirs, the room's steady noise taken out, their pitch and energy read, then Kokoro's decoder taught their sentences - its reading of English and its delivery (how it times and pitches speech) kept, which their few minutes of soft speech only blurred - and the voice written into Kokoro's own graph, checked against it and offered on the Voice card under their name. About an hour; Stop keeps what it has learned, and ▶ goes on from there."},
 
 	# ONE HEAD FOR EVERY SET (next/likeness.md, "One head"): each video's moments, their face from all of them,
 	# and their head learned from every video at once
@@ -145,6 +159,8 @@ const SETTINGS := {
 	"head_videos": {"label": "Head videos", "type": "int", "default": 10, "min": 1, "max": 200, "step": 1,
 		"renderer": "gaussian",
 		"blurb": "How many of their videos their head of splats learns from: those with the most of them facing the camera - or of those pinned \"head\" in the videos' list, the pinned alone. More is their face in more lights and moods, and longer on the graphics card (Head steps each); a video it does not learn from takes their usual look."},
+	"kokoro_steps": {"label": "Lessons", "type": "int", "default": 1000, "min": 500, "max": 40000, "step": 500, "of": "voice",
+		"blurb": "How many lessons Kokoro is taught their voice, each six 1.5 s stretches of their sentences - about a second each on a 16 GB graphics card (1,000 is about a quarter of an hour, and what was measured: on 4.6 minutes of their speech, their sound most of the way and 4.8% of unseen words misheard). More is closer to them; from a few minutes of their speech, too many learns those sentences rather than them (the held-out sentences, said every 1,000, tell which). Raised after it is made, ▶ goes on from where it stopped."},
 	"head_steps": {"label": "Head steps", "type": "int", "default": 6000, "min": 1000, "max": 30000, "step": 500,
 		"renderer": "gaussian",
 		"blurb": "How many moments of each Head video their head of splats is shown while it learns, one at a time: more is sharper and longer on the graphics card (about a tenth of a second each - 6,000 for each of 10 videos is under two hours)."},
@@ -153,7 +169,7 @@ const SETTINGS := {
 ## The order steps are made in.
 const ORDER := ["fetch", "captions", "probe", "survey", "shots", "sets", "audit", "transcribe", "words", "visemes",
 	"learn", "motion", "stills", "rest", "rig", "library", "head_frames", "head_rig", "head", "frames", "face", "avatar",
-	"fit", "hear", "utterances", "voice"]
+	"fit", "hear", "utterances", "voice", "kokoro_utterances", "kokoro_voice"]
 
 
 ## WHAT [param renderer] NEEDS OF AN ACTOR TO PLAY THEM: the chosen set's steps and the actor's own.
@@ -172,10 +188,17 @@ static func serves(step: String, renderer: String) -> bool:
 	return r.is_empty() or r == renderer
 
 
-## Is [param setting] one of [param renderer]'s (or every renderer's)?
-static func setting_serves(setting: String, renderer: String) -> bool:
+## Is [param setting] one of [param renderer]'s (or every renderer's), and of a person of [param kind]?
+static func setting_serves(setting: String, renderer: String, kind := "actor") -> bool:
 	var r := String(Registry.field(SETTINGS, setting, "renderer", ""))
-	return r.is_empty() or r == renderer
+	var k := String(Registry.field(SETTINGS, setting, "of", ""))
+	return (r.is_empty() or r == renderer) and (k.is_empty() or k == kind)
+
+
+## Is [param step] made for a person of [param kind] ("actor", or "voice" for a voice alone)?
+static func of_kind(step: String, kind: String) -> bool:
+	var k := String(Registry.field(REGISTRY, step, "of", ""))
+	return k.is_empty() or k == kind
 
 
 ## Is [param step] taught on the graphics card, or made only for one that is - their voice, a head of splats?
@@ -190,6 +213,12 @@ static func per(step: String) -> String:
 ## Is [param step] one of their own voice's?
 static func is_voice(step: String) -> bool:
 	return bool(Registry.field(REGISTRY, step, "voice", false))
+
+
+## THEIR VOICE AND WHAT IT IS MADE FROM, in order: all a voice alone is made of ([method ActorFolder.sound_only],
+## the Voice training card) - fetched, measured, heard, cut into sentences and Kokoro taught them.
+static func voice_chain() -> Array:
+	return with_needs("kokoro_voice")
 
 
 static func needs(step: String) -> Array:

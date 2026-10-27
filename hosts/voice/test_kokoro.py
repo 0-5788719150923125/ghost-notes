@@ -23,7 +23,9 @@ What is held, each with the case that must not change:
   6. a sentence over 510 tokens is read in pieces cut after a mark, each with its own pads;
   7. the length a pitch move is measured against is the ROUNDED plan's, exact at ratio 1;
   8. the graph patch: unfed, the stock graph's output; the scale before the Round, the floor after,
-     the plan handed back whole - and a graph of another shape is left alone.
+     the plan handed back whole - and a graph of another shape is left alone;
+  9. a voice taught here (trained/<id>/) is listed beside the checkpoints, one speaker, never fetched, read
+     in its own accent - and the ids a voice is taught on (`ids_of`) are the ones the graph is sent.
 
 Synthesis runs against a fake session, as in test_expression.py: no model download, no eSpeak.
 """
@@ -677,10 +679,12 @@ def test_owns_its_voices_only():
 
 @check
 def test_one_voice_its_packs_the_speakers():
-    """The Voice list names the model once; the Speaker row picks the pack, each described."""
+    """The Voice list names the model once; the Speaker row picks the pack, each described. (In a voices'
+    root of its own: the author's may hold voices taught here.)"""
     from backends.kokoro import PACKS, KokoroBackend
 
-    rows = KokoroBackend().voices()
+    with _voices_root():
+        rows = KokoroBackend().voices()
     eq([r["id"] for r in rows], ["kokoro", "kokoro-1.1"], "one voice a checkpoint")
     v = rows[0]
     eq((v["id"], v["speakers"]), ("kokoro", len(PACKS)), "its packs are its speakers")
@@ -690,6 +694,74 @@ def test_one_voice_its_packs_the_speakers():
     eq(v["readers"][20]["reader"], "bf_emma", "the numbers are the table's order")
     eq(rows[1]["readers"][2], {"reader": "bf_vale", "g": "F", "d": "vale, British, older, ungraded"},
        "v1.1's Vale, described as its card has her")
+
+
+class _voices_root:
+    """XDG_DATA_HOME moved to a folder of its own for the block: the voices' root, emptied."""
+
+    def __enter__(self):
+        import os
+
+        self.td = tempfile.TemporaryDirectory()
+        self.old = os.environ.get("XDG_DATA_HOME")
+        os.environ["XDG_DATA_HOME"] = self.td.name
+        return Path(self.td.name) / "ghost" / "voices"
+
+    def __exit__(self, *exc):
+        import os
+
+        if self.old is None:
+            os.environ.pop("XDG_DATA_HOME", None)
+        else:
+            os.environ["XDG_DATA_HOME"] = self.old
+        self.td.cleanup()
+
+
+@check
+def test_a_voice_taught_here():
+    """A VOICE TAUGHT HERE (trained/<id>/: its graph, tokenizer, one pack and voice.json) is listed beside the
+    checkpoints - one speaker, its own, under its name - owned, never fetched, and read in its own accent. THE
+    CONTROLS: a folder without its description is no voice, nor is a name with a path in it, nor a checkpoint's."""
+    import json
+
+    import numpy as np
+    from backends.kokoro import KokoroBackend
+
+    with _voices_root() as root:
+        d = root / "kokoro" / "trained" / "kokoro-someone"
+        (d / "voices").mkdir(parents=True)
+        (d / "model.onnx").write_bytes(b"not a graph")
+        (d / "tokenizer.json").write_text("{}")
+        np.zeros((510, 1, 256), np.float32).tofile(d / "voices" / "voice.bin")
+        (d / "voice.json").write_text(json.dumps({"name": "Someone (their own voice)", "british": True,
+                                                  "license": "theirs", "chain": "Kokoro, taught"}))
+        half = root / "kokoro" / "trained" / "kokoro-half"
+        half.mkdir(parents=True)
+        (half / "model.onnx").write_bytes(b"not a graph")
+        k = KokoroBackend()
+        rows = {r["id"]: r for r in k.voices()}
+        ok("kokoro-someone" in rows and rows["kokoro-someone"]["speakers"] == 1
+           and rows["kokoro-someone"]["name"] == "Someone (their own voice)" and rows["kokoro-someone"]["installed"],
+           "a voice taught here is listed under its name, one speaker, installed")
+        eq([r for r in rows][:2], ["kokoro", "kokoro-1.1"], "the checkpoints first, as they were")
+        eq((KokoroBackend.owns("kokoro-someone"), k._download("kokoro-someone")), (True, 0), "owned, and never fetched")
+        k._vocabs["kokoro-someone"] = {"a": 1}
+        sp = k._speaker("kokoro-someone", 0)
+        eq((sp["espeak"]["voice"], sp["kokoro"]["pack"].shape), ("en-gb", (510, 1, 256)),
+           "read in its own accent, from its own pack")
+        ok("kokoro-half" not in rows and not KokoroBackend.owns("kokoro-half"), "CONTROL: without its description, no voice")
+        ok(not KokoroBackend.owns("../trained/kokoro-someone"), "CONTROL: a name with a path in it is not")
+        eq(KokoroBackend._trained("kokoro"), None, "CONTROL: a checkpoint's name is never a voice taught here")
+
+
+@check
+def test_ids_of_are_what_the_graph_is_sent():
+    """What a voice is taught on is what it is sent (`ids_of`, utterances.py): the same ids `_render_symbols` fed the
+    graph for the same words - pads at both ends, no lead-in space, no word-space after the last word."""
+    k, cfg = _backend()
+    k._vocabs["kokoro"] = cfg["kokoro"]["vocab"]
+    _res, sess, _rate, _n = _render(SENTENCE)
+    eq(k.ids_of([dict(t) for t in SENTENCE], phonemizer="ghost"), sess.fed[0]["ids"], "taught on what it is sent")
 
 
 @check

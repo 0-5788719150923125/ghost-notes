@@ -13,10 +13,17 @@ class_name ActorFolder
 ## made. So a step made again makes everything made from it stale, a changed setting makes the steps
 ## that read it stale, and a video ticked or unticked makes the sets stale. A stale output is still
 ## used ([method state_of] says "stale", never "missing") until it is made again.
+##
+## A VOICE ALONE (`kind` "voice", the Voice training card; next/likeness.md, "A voice alone"): a person whose
+## voice is all that is learned of them - its steps the voice's alone ([method ActorSteps.voice_chain]), a link
+## fetched as its sound ([method sound_only]), and a folder's sound files listed beside its videos. An actor is
+## the rest (no `kind`).
 
 const FILE := "actor.json"
 const STAMPS := "steps.json"
 const VIDEO_EXTS := ["mp4", "mkv", "webm", "mov", "m4v", "avi"]
+## What a voice alone is also heard from: recordings with no picture.
+const SOUND_EXTS := ["m4a", "mp3", "wav", "flac", "ogg", "opus", "aac"]
 
 var id := ""
 ## Absolute.
@@ -121,6 +128,22 @@ func name() -> String:
 
 func settings() -> Dictionary:
 	return ActorSteps.settings_of(data.get("settings", {}))
+
+
+## "actor", or "voice" for a voice alone.
+func kind() -> String:
+	return String(data.get("kind", "actor"))
+
+
+## IS ALL THAT IS LEARNED OF THEM THEIR VOICE? Then a link is fetched as its sound alone - a playlist of hours is
+## megabytes, where its pictures would be gigabytes nothing reads.
+func sound_only() -> bool:
+	return kind() == "voice"
+
+
+## The files a folder of theirs is read for: videos, and for a voice alone sound files too.
+func exts() -> Array:
+	return VIDEO_EXTS + SOUND_EXTS if sound_only() else VIDEO_EXTS
 
 
 # --- the videos ----------------------------------------------------------------------------------

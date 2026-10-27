@@ -911,7 +911,8 @@ func _panel_fields() -> bool:
 	ed._panel.plus.about_to_popup.emit()
 	var pop: PopupMenu = ed._panel.plus.get_popup()
 	# "+" lists what a note can have; on a show of cards the clock and the presentation are taken,
-	# so YouTube is the one thing it can be given, and the rest is grayed with its reason
+	# so what takes neither is all it can be given - YouTube, and Voice training (its reader can be
+	# taught someone's voice) - and the rest is grayed with its reason
 	var at := -1
 	var lit: Array = []
 	for i in pop.item_count:
@@ -920,7 +921,8 @@ func _panel_fields() -> bool:
 			at = i
 		if not key.is_empty() and not pop.is_item_disabled(i):
 			lit.append(key)
-	_ok(at >= 0 and lit == ["youtube"], "its \"+\" offers YouTube, and nothing else that can be attached to a show of cards (%s)" % str(lit))
+	_ok(at >= 0 and lit == ["voice_training", "youtube"],
+		"its \"+\" offers YouTube and Voice training, and nothing that takes the show's clock or presentation (%s)" % str(lit))
 	if at >= 0:
 		pop.id_pressed.emit(pop.get_item_id(at))
 	_ok(ed._youtube != null and show._yt_desc != null and show._yt_desc.get_parent() == ed._youtube.extra,
@@ -933,7 +935,7 @@ func _panel_fields() -> bool:
 		twice = twice or key == "youtube"
 		if not key.is_empty() and not pop.is_item_disabled(i):
 			left.append(key)
-	_ok(not twice and left.is_empty(), "and \"+\" does not offer it twice - nothing it lists can be attached now (%s)" % str(left))
+	_ok(not twice and left == ["voice_training"], "and \"+\" does not offer it twice - Voice training is all it can be given now (%s)" % str(left))
 	ed._youtube._upload.set_pressed_no_signal(true)
 	# NOT THE AUTHOR'S SHOW. A panel comes up synced to whatever document the person running
 	# this has open, and DocSource.set_field writes a synced document at once - so this gate read

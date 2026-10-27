@@ -32,7 +32,8 @@ class_name ActorCard
 ##
 ## NOTHING HERE WAITS ON THE DISK (the user, 2026-10-23: "every single one of them comes with ~10 seconds of
 ## reloading-freeze ... We shouldn't be blocking the main thread for ANY operation"): the steps' states are worked
-## out on a worker, on a folder of its own ([method ActorBuilder.states_of]), and the runs laid over them here; the
+## out on a worker, on a folder of its own ([method ActorBuilder.states_of]), and the runs laid over them by their
+## rows ([ActorStepRows], with the sources and videos' [ActorSourceList] shared with the Voice training card); the
 ## sets' and stills' pictures are read on a worker; a video ticked rebuilds no row. Tick all and Untick all take the
 ## whole list at once.
 ##
@@ -58,10 +59,9 @@ var _row_t := 0.0
 var _pick: OptionButton
 var _picked: Array = []
 var _name: LineEdit
-var _sources_box: VBoxContainer
-var _videos_box: VBoxContainer
-var _videos_seen := ""
-var _rows := {}               # step -> {state: Label, make: Button, redo: Button}
+## Their sources and videos, and their steps' rows: parts shared with the Voice training card.
+var _sources: ActorSourceList
+var _steps: ActorStepRows
 var _gen_btn: Button
 var _stop_btn: Button
 var _line: Label
@@ -71,22 +71,12 @@ var _stills_box: HFlowContainer
 var _stills_seen := ""
 var _library: Label
 var _library_seen := ""
-var _rows_seen := ""
-## The steps' states, worked out on a worker ([method _work_rows]): its task, what it found, what the rows are drawn
-## from, whether it goes again once done, and whether the rows show the latest.
-var _rows_task := -1
-var _rows_found := {}
-var _rows_held := {}
-var _rows_again := false
-var _rows_drawn := false
 ## Pictures read on a worker ([method _want_picture]): `[picture, path, size]` wanted, those being read, and what
 ## was read, by path.
 var _pics_wanted: Array = []
 var _pics_task := -1
 var _pics_loading: Array = []
 var _pics_found := {}
-## Each video's tick, by id: what Tick all and Untick all set.
-var _ticks := {}
 var _writer: AgentPick
 var _advanced: VBoxContainer
 var _setting_boxes := {}
@@ -136,11 +126,11 @@ func _notification(what: int) -> void:
 
 
 func _wait_workers() -> void:
-	for task in [_rows_task, _pics_task]:
-		if int(task) >= 0:
-			WorkerThreadPool.wait_for_task_completion(int(task))
-	_rows_task = -1
+	if _pics_task >= 0:
+		WorkerThreadPool.wait_for_task_completion(_pics_task)
 	_pics_task = -1
+	if _steps != null:
+		_steps.wait()
 
 
 func _process(delta: float) -> void:
@@ -191,14 +181,12 @@ func _show_renderer() -> void:
 		_syncing = true
 		_renderer.select(ActorSteps.RENDERERS.keys().find(r))
 		_syncing = false
-	for step in _rows:
-		((_rows[step] as Dictionary)["row"] as Control).visible = ActorSteps.serves(String(step), r)
+	_steps.show_only(func(step: String) -> bool: return ActorSteps.serves(step, r) and ActorSteps.of_kind(step, "actor"))
 	for k in _setting_rows:
 		(_setting_rows[k] as Control).visible = ActorSteps.setting_serves(String(k), r)
 	if _library_head != null:
 		_library_head.visible = r == "2d"
 		_library.visible = r == "2d"
-	_rows_seen = ""
 
 
 # --- what it hands the reading -------------------------------------------------------------------
@@ -290,10 +278,10 @@ func _open(id: String) -> void:
 		_builder.voice_published.connect(_voice_made)
 		ActorSources.rescan(_actor)
 		_actor.save()
-	_videos_seen = ""
+	_sources.show_actor(_actor, _builder)
+	_steps.show_actor(_actor, _builder)
 	_sets_seen = ""
 	_stills_seen = ""
-	_rows_seen = ""
 	_library_seen = ""
 	_fill_pick()
 	_show_actor()
@@ -368,7 +356,6 @@ func _show_actor() -> void:
 	for k in _setting_boxes:
 		(_setting_boxes[k] as SpinBox).set_value_no_signal(float(s[k]))
 	_syncing = false
-	_fill_sources()
 
 
 ## THEIR OWN VOICE HAS LANDED: the reading this card is on asks for its voices again and reads in it
@@ -385,206 +372,7 @@ func _say(text: String) -> void:
 		noted.emit(text)
 
 
-# --- the sources --------------------------------------------------------------------------------
-
-func _fill_sources() -> void:
-	for c in _sources_box.get_children():
-		c.queue_free()
-	if _actor == null:
-		return
-	var sources: Array = _actor.data["sources"]
-	for i in sources.size():
-		var s: Dictionary = sources[i]
-		var row := HBoxContainer.new()
-		_sources_box.add_child(row)
-		var l := Label.new()
-		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		l.clip_text = true
-		l.add_theme_font_size_override("font_size", 11)
-		var what := ""
-		if String(s.get("kind", "")) == "folder":
-			what = "📁 " + String(s.get("path", "")).get_file()
-			l.tooltip_text = String(s.get("path", ""))
-		else:
-			var t := String(s.get("title", ""))
-			what = ("💬 " if bool(s.get("captions_only", false)) else "🔗 ") + (t if not t.is_empty() else String(s.get("url", "")))
-			var landed: Dictionary = s.get("landed", {}) if s.get("landed") is Dictionary else {}
-			if bool(s.get("captions_only", false)) and not landed.is_empty():
-				what += "  (captions for %d, %d unmatched)" % [int(landed.get("matched", 0)), int(landed.get("unmatched", 0))]
-			elif not landed.is_empty():
-				what += "  (%d videos)" % int(s.get("count", 0))
-			if not String(s.get("error", "")).is_empty():
-				what += "  ⚠ " + String(s["error"])
-			elif not bool(s.get("listed", false)):
-				what += "  - listing…" if _builder != null and _builder.listing(i) else "  - not listed"
-			l.tooltip_text = String(s.get("url", "")) + ("\nCaptions only: fetches no video; each caption is matched to a folder video by title." if bool(s.get("captions_only", false)) else "")
-		l.text = what
-		row.add_child(l)
-		if String(s.get("kind", "")) == "link":
-			var again := Button.new()
-			again.text = "⟳"
-			again.flat = true
-			again.tooltip_text = "List this link again: new videos in a playlist or channel get rows (fetched videos are not fetched twice)."
-			again.pressed.connect(_list.bind(i))
-			row.add_child(again)
-
-
-func _add_folder() -> void:
-	var dlg := FileDialog.new()
-	dlg.file_mode = FileDialog.FILE_MODE_OPEN_DIR
-	dlg.access = FileDialog.ACCESS_FILESYSTEM
-	dlg.title = "A folder of their videos (read where it is, never copied)"
-	dlg.dir_selected.connect(func(path: String) -> void:
-		dlg.queue_free()
-		var n := ActorSources.add_folder(_actor, path)
-		_actor.save()
-		_fill_sources()
-		_videos_seen = ""
-		_say("%d video%s found in %s. Untick any that are not them." % [n, "" if n == 1 else "s", path.get_file()]))
-	dlg.canceled.connect(dlg.queue_free)
-	add_child(dlg)
-	dlg.popup_centered_ratio(0.6)
-
-
-func _add_link() -> void:
-	var ask := ConfirmationDialog.new()
-	ask.title = "Add a link"
-	var box := VBoxContainer.new()
-	var l := Label.new()
-	l.text = "A video, a playlist or a channel:"
-	box.add_child(l)
-	var field := LineEdit.new()
-	field.custom_minimum_size.x = 420
-	field.placeholder_text = "https://www.youtube.com/…"
-	box.add_child(field)
-	var cap := CheckBox.new()
-	cap.text = "Captions only - match them to the folder's videos by title"
-	cap.tooltip_text = "Fetches no video: each video's automatic captions are matched to a video already in a folder source, by title, so its words get their times without the video being downloaded again."
-	box.add_child(cap)
-	ask.add_child(box)
-	ask.ok_button_text = "Add"
-	ask.confirmed.connect(func() -> void:
-		var url := field.text.strip_edges()
-		ask.queue_free()
-		if not url.begins_with("http"):
-			_say("That is not a link.")
-			return
-		var i := ActorSources.add_link(_actor, url, cap.button_pressed)
-		_actor.save()
-		_list(i))
-	ask.canceled.connect(ask.queue_free)
-	add_child(ask)
-	ask.popup_centered(Vector2i(460, 0))
-	field.grab_focus()
-
-
-func _list(i: int) -> void:
-	if _builder == null:
-		return
-	var err := _builder.list_link(i)
-	_say(err if not err.is_empty() else "Listing the link… its videos appear below as they are found.")
-	_fill_sources()
-
-
-## The videos' rows, built again when the videos change: a tick, the title, its length.
-func _fill_videos() -> void:
-	var key := ""
-	if _actor != null:
-		for vid in _actor.videos():
-			var v: Dictionary = _actor.video(String(vid))
-			# a video ticked rebuilds no row: its box shows it already
-			key += "%s|%s|%s|%s;" % [vid, v.get("path", ""), v.get("captions", ""), v.get("duration", 0.0)]
-	if key == _videos_seen:
-		return
-	_videos_seen = key
-	for c in _videos_box.get_children():
-		c.queue_free()
-	_ticks = {}
-	if _actor == null:
-		return
-	for vid in _actor.videos():
-		var v: Dictionary = _actor.video(String(vid))
-		var row := HBoxContainer.new()
-		_videos_box.add_child(row)
-		var tick := CheckBox.new()
-		tick.button_pressed = bool(v.get("ticked", true))
-		tick.tooltip_text = "Use this video. Untick one that is not them, or not in their usual setting."
-		var copy := _actor.copy_of(String(vid))
-		if not copy.is_empty():
-			tick.disabled = true
-			tick.tooltip_text = "A copy of \"%s\" (the same title and length): left out." % String(_actor.video(copy).get("title", copy))
-		tick.toggled.connect(func(on: bool) -> void:
-			(_actor.video(String(vid)))["ticked"] = on
-			_actor.save())
-		_ticks[String(vid)] = tick
-		row.add_child(tick)
-		var l := Label.new()
-		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		l.clip_text = true
-		l.add_theme_font_size_override("font_size", 11)
-		var dur := float(v.get("duration", 0.0))
-		var marks := ""
-		if _actor.is_link(String(vid)) and _actor.video_path(String(vid)).is_empty():
-			marks += "↓ "
-		elif _actor.video_path(String(vid)).is_empty():
-			marks += "⚠ missing "
-		if not copy.is_empty():
-			marks += "⧉ copy "
-		if FileAccess.file_exists(String(v.get("captions", ""))):
-			marks += "💬 "
-		l.text = marks + String(v.get("title", vid)) + ("  %s" % Clock.text(dur) if dur > 0.0 else "")
-		l.tooltip_text = String(v.get("path", v.get("url", ""))) + "\n↓ not fetched yet · 💬 has captions · ⧉ a copy of another, left out"
-		row.add_child(l)
-		# THE HEAD PINNED to a few alike videos (ActorFolder.head_videos): the rest stay ticked for everything else
-		var pin := Button.new()
-		pin.toggle_mode = true
-		pin.flat = true
-		pin.text = "head"
-		pin.add_theme_font_size_override("font_size", 10)
-		pin.button_pressed = bool(v.get("head", false))
-		pin.modulate.a = 1.0 if pin.button_pressed else 0.45
-		pin.tooltip_text = ("Learn their head of splats from this video. With any pinned, the head learns from the pinned "
-			+ "alone - a few alike videos (one room, one light, the same clothes) - and every ticked video is still "
-			+ "used for everything else: the voice, the mouth, the motion. With none pinned it learns from the Head "
-			+ "videos with the most of them facing the camera.")
-		pin.toggled.connect(func(on: bool) -> void:
-			if on:
-				(_actor.video(String(vid)))["head"] = true
-			else:
-				(_actor.video(String(vid))).erase("head")
-			pin.modulate.a = 1.0 if on else 0.45
-			_actor.save())
-		row.add_child(pin)
-
-
 # --- the steps ----------------------------------------------------------------------------------
-
-func _make(step: String) -> void:
-	if _builder == null:
-		return
-	_builder.writer = _writer_choice()
-	_builder.start(ActorSteps.with_needs(step))
-	_say("Making %s, and whatever it needs first." % String(Registry.field(ActorSteps.REGISTRY, step, "label", step)))
-
-
-func _redo(step: String) -> void:
-	if _builder == null:
-		return
-	var label := String(Registry.field(ActorSteps.REGISTRY, step, "label", step))
-	var ask := ConfirmationDialog.new()
-	ask.title = "Make %s again" % label
-	ask.dialog_text = ("Throw away what %s made and make it again?\n\nEverything made from it is marked stale (⚠): "
-		+ "it is still used until it is made again too - Generate does that.") % label
-	ask.dialog_autowrap = true
-	ask.ok_button_text = "Make again"
-	ask.confirmed.connect(func() -> void:
-		ask.queue_free()
-		_builder.writer = _writer_choice()
-		_builder.redo(step))
-	ask.canceled.connect(ask.queue_free)
-	add_child(ask)
-	ask.popup_centered(Vector2i(460, 0))
-
 
 func _generate() -> void:
 	if _builder == null:
@@ -624,22 +412,12 @@ func _refresh() -> void:
 	if _actor == null or _builder == null:
 		return
 	_actor.forget()
-	_fill_videos()
+	_sources.refresh()
 	var busy := _builder.running or _builder.busy()
 	var steps := _steps_asked or _steps_busy()
 	_gen_btn.disabled = busy or steps
 	_stop_btn.disabled = not (busy or steps)
-	# THE STEPS' STATES ARE WORKED OUT AGAIN, ON A WORKER, ONLY WHEN WHAT THEY ARE MADE FROM CHANGED (every scope's
-	# state of every step took 10-20 ms four times a second under a playing show, and seconds once a video was ticked);
-	# the runs are laid over them here, which is cheap - so a running row moves every refresh
-	var key := _rows_key()
-	if key != _rows_seen:
-		_rows_seen = key
-		_work_rows()
-	_take_rows()
-	if not _rows_held.is_empty() and (busy or not _rows_drawn):
-		_rows_drawn = true
-		_fill_rows(busy)
+	_steps.refresh(busy)
 	var line := ""
 	if not _builder.waiting.is_empty():
 		line = "Waiting: %s - Ghost Notes fetches these itself, once (see ⚙ for progress)." % _builder.waiting
@@ -651,62 +429,6 @@ func _refresh() -> void:
 	_fill_stills()
 	_fill_library()
 	_take_pictures()
-
-
-## What the steps' states are made from: the actor's data (videos ticked, settings, the set in use) and every stamp
-## file a row reads. What runs and what failed are laid over them every refresh ([method ActorBuilder.row_of]).
-func _rows_key() -> String:
-	var parts := PackedStringArray([str(JSON.stringify(_actor.data).hash())])
-	var scopes: Array = [""]
-	for v in _actor.ticked():
-		scopes.append("v:" + String(v))
-	if not _actor.chosen_set().is_empty():
-		scopes.append("s:" + _actor.chosen_set())
-	for sc in scopes:
-		var p := _actor.scope_dir(String(sc)).path_join(ActorFolder.STAMPS)
-		parts.append("%d|%d" % [FileAccess.get_modified_time(p), FileAccess.get_size(p)] if FileAccess.file_exists(p) else "-")
-	return ",".join(parts)
-
-
-## THE STEPS' STATES WORKED OUT ON A WORKER, on a folder of its own ([method ActorBuilder.states_of]): one at a
-## time - asked again while it works, it goes again once done.
-func _work_rows() -> void:
-	if _rows_task >= 0:
-		_rows_again = true
-		return
-	var id := _actor.id
-	_rows_task = WorkerThreadPool.add_task(func() -> void:
-		var f := ActorFolder.open(id)
-		_rows_found = {"id": id, "states": ActorBuilder.states_of(f) if f != null else {}})
-
-
-## What the worker found, once it is done: the rows drawn from it (for the actor shown alone).
-func _take_rows() -> void:
-	if _rows_task < 0 or not WorkerThreadPool.is_task_completed(_rows_task):
-		return
-	WorkerThreadPool.wait_for_task_completion(_rows_task)
-	_rows_task = -1
-	if _actor != null and String(_rows_found.get("id", "")) == _actor.id:
-		_rows_held = _rows_found["states"]
-		_rows_drawn = false
-	_rows_found = {}
-	if _rows_again:
-		_rows_again = false
-		_work_rows()
-
-
-## TICK ALL, OR UNTICK ALL: every video of theirs used, or none - one save, every box set.
-func _tick_all(on: bool) -> void:
-	if _actor == null:
-		return
-	for vid in _actor.videos():
-		(_actor.video(String(vid)))["ticked"] = on
-	_actor.save()
-	for vid in _ticks:
-		if is_instance_valid(_ticks[vid]):
-			(_ticks[vid] as CheckBox).set_pressed_no_signal(on)
-	_say(("Every video of theirs is used: Generate reads the ones not read yet." if on
-		else "No video is used: tick the ones that are them, in their usual setting."))
 
 
 ## A PICTURE READ ON A WORKER: [param path] into [param pic] once read, made [param most] pixels at most (a sheet
@@ -750,39 +472,6 @@ func _take_pictures() -> void:
 	_pics_loading = []
 	_pics_found = {}
 	_read_pictures()
-
-
-func _fill_rows(busy: bool) -> void:
-	for step in _rows:
-		var r: Dictionary = _rows[step]
-		var row := _builder.row_of(String(step), _rows_held)
-		var st := String(row["state"])
-		var count := ""
-		if ActorSteps.per(String(step)) == "video" and int(row["total"]) > 1:
-			count = "%d/%d " % [int(row["made"]), int(row["total"])]
-		var said := ""
-		match st:
-			"made":
-				said = "✓ " + count + String(row["said"])
-			"stale":
-				said = "⚠ " + count + "stale - made from inputs that changed; still used until made again"
-			"running":
-				var p := float(row["progress"])
-				said = "… " + count + ("%d%% " % int(p * 100.0) if p >= 0.0 else "") + String(row["said"])
-			"failed":
-				said = "✗ " + String(row["error"])
-			"waiting":
-				said = "waits for the sets"
-			"moot":
-				said = "– read in place" if step == "fetch" else "– no captions link"
-			"unavailable":
-				said = "– " + String(row["said"])
-			_:
-				said = "– " + count
-		(r["state"] as Label).text = said
-		(r["state"] as Label).tooltip_text = said + "\n\n" + String(Registry.field(ActorSteps.REGISTRY, step, "blurb", ""))
-		(r["make"] as Button).disabled = busy or st == "running" or st == "unavailable"
-		(r["redo"] as Button).disabled = busy or not (st == "made" or st == "stale" or st == "failed")
 
 
 # --- the steps the note's other cards add -------------------------------------------------------
@@ -1183,77 +872,18 @@ func _build() -> void:
 		_show_renderer())
 	rrow.add_child(_renderer)
 
-	_body.add_child(_heading("Sources"))
-	_sources_box = VBoxContainer.new()
-	_body.add_child(_sources_box)
-	var srow := HBoxContainer.new()
-	srow.add_theme_constant_override("separation", 6)
-	_body.add_child(srow)
-	var af := Button.new()
-	af.text = "Add folder…"
-	af.tooltip_text = "A folder of their videos: read where it is, never copied or written. Its videos are listed below, ticked."
-	af.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	af.pressed.connect(_add_folder)
-	srow.add_child(af)
-	var al := Button.new()
-	al.text = "Add link…"
-	al.tooltip_text = "A video, a playlist or a whole channel: listed at once, then each video fetched (up to 1080p, with its automatic captions) by Generate, one at a time. A playlist added again fetches only what is new."
-	al.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	al.pressed.connect(_add_link)
-	srow.add_child(al)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size.y = 120
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_body.add_child(scroll)
-	_videos_box = VBoxContainer.new()
-	_videos_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_videos_box)
-	var trow := HBoxContainer.new()
-	trow.add_theme_constant_override("separation", 6)
-	_body.add_child(trow)
-	for on in [true, false]:
-		var all := Button.new()
-		all.text = "Tick all" if on else "Untick all"
-		all.tooltip_text = ("Use every video listed: Generate reads each one not read yet - a long while for many." if on
-			else "Use none of them: then tick the ones that are them, in their usual setting.")
-		all.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		all.pressed.connect(_tick_all.bind(on))
-		trow.add_child(all)
+	_body.add_child(heading("Sources"))
+	_sources = ActorSourceList.new()
+	_sources.said.connect(_say)
+	_body.add_child(_sources)
 
-	_body.add_child(_heading("Steps"))
-	var steps := VBoxContainer.new()
-	steps.add_theme_constant_override("separation", 0)
-	_body.add_child(steps)
-	for step in ActorSteps.ORDER:
-		var r := HBoxContainer.new()
-		r.add_theme_constant_override("separation", 4)
-		steps.add_child(r)
-		var name_l := Label.new()
-		name_l.text = String(Registry.field(ActorSteps.REGISTRY, step, "label", step))
-		name_l.custom_minimum_size.x = 64.0
-		name_l.add_theme_font_size_override("font_size", 12)
-		name_l.tooltip_text = String(Registry.field(ActorSteps.REGISTRY, step, "blurb", ""))
-		name_l.mouse_filter = Control.MOUSE_FILTER_STOP
-		r.add_child(name_l)
-		var state := Label.new()
-		state.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		state.clip_text = true
-		state.add_theme_font_size_override("font_size", 11)
-		state.mouse_filter = Control.MOUSE_FILTER_STOP
-		r.add_child(state)
-		var make := Button.new()
-		make.text = "▶"
-		make.flat = true
-		make.tooltip_text = "Make this step - and whatever it needs first - where it is missing or stale."
-		make.pressed.connect(_make.bind(step))
-		r.add_child(make)
-		var redo := Button.new()
-		redo.text = "⟳"
-		redo.flat = true
-		redo.tooltip_text = "Make this step again from scratch: what is made from it is marked stale."
-		redo.pressed.connect(_redo.bind(step))
-		r.add_child(redo)
-		_rows[step] = {"state": state, "make": make, "redo": redo, "row": r}
+	_body.add_child(heading("Steps"))
+	_steps = ActorStepRows.new(ActorSteps.ORDER)
+	_steps.said.connect(_say)
+	_steps.before_start = func() -> void:
+		if _builder != null:
+			_builder.writer = _writer_choice()
+	_body.add_child(_steps)
 	# THE STEPS THE NOTE'S OTHER CARDS ADD, under the actor's ([method _refresh_step_rows])
 	_step_box = VBoxContainer.new()
 	_step_box.add_theme_constant_override("separation", 0)
@@ -1281,11 +911,11 @@ func _build() -> void:
 	_line.modulate = Color(1, 1, 1, 0.7)
 	_body.add_child(_line)
 
-	_body.add_child(_heading("Sets"))
+	_body.add_child(heading("Sets"))
 	_sets_box = VBoxContainer.new()
 	_sets_box.add_theme_constant_override("separation", 6)
 	_body.add_child(_sets_box)
-	var sh := _heading("Still")
+	var sh := heading("Still")
 	sh.tooltip_text = ("The one frame of the set in use the likeness is drawn on - its head, eyes and mouth moved by what "
 		+ "is learned of them. Their most typical calm moments, facing the camera; click another to use it.")
 	sh.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -1293,7 +923,7 @@ func _build() -> void:
 	_stills_box = HFlowContainer.new()
 	_stills_box.add_theme_constant_override("h_separation", 4)
 	_body.add_child(_stills_box)
-	_library_head = _heading("Library")
+	_library_head = heading("Library")
 	_body.add_child(_library_head)
 	_library = Label.new()
 	_library.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1365,7 +995,8 @@ static func clicked(e: InputEvent) -> bool:
 	return mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT
 
 
-static func _heading(text: String) -> Label:
+## A HEADING over a part of the card (the Voice training card's too).
+static func heading(text: String) -> Label:
 	var l := Label.new()
 	l.text = text
 	l.add_theme_font_size_override("font_size", 13)

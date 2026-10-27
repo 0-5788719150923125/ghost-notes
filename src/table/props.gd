@@ -953,6 +953,9 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 				var mi := MeshInstance3D.new()
 				mi.mesh = merged.mesh()
 				var mat := material(m, part.get("ornament", {}), g.girth, g.height, hash([seed, salt, gi, nm]), _solid(part), not String(part.get("shape", "")) in ["lathe", "extrude"])
+				# a part's copies each glow their own way (prop.gdshader `apart`)
+				if xforms.size() > 1:
+					mat.set_shader_parameter("apart", 1.0)
 				mi.material_override = mat
 				if see_through(m):
 					mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -1568,15 +1571,23 @@ static func _stacked(a: float, b: float, radius: float, mids: PackedVector3Array
 ## surface rising from the heap's floor, measured from its middle [param at] - `{radius, top}`,
 ## meters out and how high it stands above that floor. Empty when a line out from the middle in any
 ## direction meets no such surface - an open heap, on the cloth or beside a candle.
+##
+## THE WALL IS WHAT A LEVEL JUST ABOVE THE FLOOR CUTS ([constant WALL_CUT]), each face's slice of it, and its top is
+## where that wall ends going up, cut again every [constant WALL_STEP]: a wall is one tall face or many short ones.
+## Counted only as one face reaching from the floor past the cut, a smooth lathe's dish - every face of its sloped
+## wall too short - had no wall, and the-quiet-crucible 181083's coals were heaped out to the radius asked, through
+## the brazier (the user: "some of the hot coals under the cauldron are clipping through the container").
 static func _walls(leaves: Array, skip: int, at: Vector3) -> Dictionary:
 	const RAYS := 8
 	var mid := Vector2(at.x, at.z)
-	var hit := PackedFloat32Array()
-	hit.resize(RAYS)
-	hit.fill(INF)
-	var tops := PackedFloat32Array()
-	tops.resize(RAYS)
-	var nearest := INF
+	# every face above the cut, bucketed by the levels it reaches across
+	var cut := at.y + WALL_CUT
+	var levels := int(WALL_UP / WALL_STEP) + 1
+	var tris := PackedVector3Array()
+	var at_level: Array = []
+	at_level.resize(levels)
+	for k in levels:
+		at_level[k] = []
 	for li in leaves.size():
 		var leaf: Dictionary = leaves[li]
 		if li == skip or String(((leaf["part"] as Dictionary).get("copies", {}) as Dictionary).get("kind", "")) in ["scatter", "heap"]:
@@ -1589,30 +1600,86 @@ static func _walls(leaves: Array, skip: int, at: Vector3) -> Dictionary:
 					var p0 := xf * g.v[t]
 					var p1 := xf * g.v[t + 1]
 					var p2 := xf * g.v[t + 2]
-					# a wall rises from the heap's floor: its foot down at the floor, its top above it
-					if minf(p0.y, minf(p1.y, p2.y)) > at.y + 0.002 or maxf(p0.y, maxf(p1.y, p2.y)) < at.y + 0.004:
+					var lo := minf(p0.y, minf(p1.y, p2.y))
+					var hi := maxf(p0.y, maxf(p1.y, p2.y))
+					if hi <= cut or lo > cut + WALL_UP:
 						continue
-					var top := maxf(p0.y, maxf(p1.y, p2.y)) - at.y
-					var flat := [Vector2(p0.x, p0.z), Vector2(p1.x, p1.z), Vector2(p2.x, p2.z)]
-					for k in 3:
-						var u: Vector2 = flat[k]
-						var w: Vector2 = flat[(k + 1) % 3]
-						nearest = minf(nearest, mid.distance_to(Geometry2D.get_closest_point_to_segment(mid, u, w)))
-						for r in RAYS:
-							var cross: Variant = Geometry2D.segment_intersects_segment(mid, mid + Vector2.from_angle(TAU * r / RAYS), u, w)
-							if cross != null:
-								var d := mid.distance_to(cross as Vector2)
-								if d < hit[r] - 0.0005:
-									hit[r] = d
-									tops[r] = top
-								elif d < hit[r] + 0.0005:
-									tops[r] = maxf(tops[r], top)
+					var k0 := maxi(0, ceili((lo - cut) / WALL_STEP))
+					var k1 := mini(levels - 1, floori((hi - cut) / WALL_STEP))
+					if k1 < k0:
+						continue
+					var n := tris.size() / 3
+					tris.append(p0)
+					tris.append(p1)
+					tris.append(p2)
+					for k in range(k0, k1 + 1):
+						(at_level[k] as Array).append(n)
+	var first := _wall_slice(tris, at_level[0], cut, mid, RAYS)
+	var out: PackedFloat32Array = first["out"]
+	for r in RAYS:
+		if out[r] == INF:
+			return {}
+	var reach := PackedFloat32Array()
+	for r in RAYS:
+		reach.append(out[r] + WALL_BAND)
+	# up the wall, each way, while a slice of it stands where the floor's did (or nearer: a lip turned in) - its
+	# top the highest of the faces met on the way
+	var tops: PackedFloat32Array = (_wall_slice(tris, at_level[0], cut, mid, RAYS, reach)["top"] as PackedFloat32Array).duplicate()
+	var walled := PackedByteArray()
+	walled.resize(RAYS)
+	walled.fill(1)
+	for k in range(1, levels):
+		if not walled.has(1):
+			break
+		var up := _wall_slice(tris, at_level[k], cut + WALL_STEP * float(k), mid, RAYS, reach)
+		for r in RAYS:
+			if walled[r] == 0:
+				continue
+			if (up["out"] as PackedFloat32Array)[r] <= reach[r]:
+				tops[r] = maxf(tops[r], (up["top"] as PackedFloat32Array)[r])
+			else:
+				walled[r] = 0
 	var rim := INF
 	for r in RAYS:
-		if hit[r] == INF:
-			return {}
-		rim = minf(rim, tops[r])
-	return {"radius": nearest, "top": rim}
+		rim = minf(rim, tops[r] - at.y)
+	return {"radius": float(first["nearest"]), "top": rim}
+
+
+## The slice of the faces [param ids] of [param tris] at height [param y]: `{out: how far each of [param rays]
+## lines out from [param mid] goes before it meets the slice (INF where it meets none), top: the highest of the
+## faces each meets no further out than [param reach] says, nearest: the slice's nearest point}`.
+static func _wall_slice(tris: PackedVector3Array, ids: Array, y: float, mid: Vector2, rays: int,
+		reach := PackedFloat32Array()) -> Dictionary:
+	var out := PackedFloat32Array()
+	out.resize(rays)
+	out.fill(INF)
+	var top := PackedFloat32Array()
+	top.resize(rays)
+	top.fill(-INF)
+	var nearest := INF
+	for n in ids:
+		var ends: Array = []
+		var hi := -INF
+		for e in 3:
+			var a := tris[n * 3 + e]
+			var b := tris[n * 3 + (e + 1) % 3]
+			hi = maxf(hi, a.y)
+			if (a.y - y) * (b.y - y) < 0.0:
+				var f := (y - a.y) / (b.y - a.y)
+				ends.append(Vector2(lerpf(a.x, b.x, f), lerpf(a.z, b.z, f)))
+		if ends.size() < 2:
+			continue
+		var u: Vector2 = ends[0]
+		var w: Vector2 = ends[1]
+		nearest = minf(nearest, mid.distance_to(Geometry2D.get_closest_point_to_segment(mid, u, w)))
+		for r in rays:
+			var cross: Variant = Geometry2D.segment_intersects_segment(mid, mid + Vector2.from_angle(TAU * r / rays) * 10.0, u, w)
+			if cross != null:
+				var d := mid.distance_to(cross as Vector2)
+				out[r] = minf(out[r], d)
+				if not reach.is_empty() and d <= reach[r]:
+					top[r] = maxf(top[r], hi)
+	return {"out": out, "top": top, "nearest": nearest}
 
 
 ## How far rounded lumps nestle into each other: two touch where their half sizes, summed and taken
@@ -1622,6 +1689,13 @@ const NESTLE := 0.9
 ## lie still across the middle of a single lump under it. A rounder one rolls off unless a pocket
 ## holds it.
 const FLAT := 2.5
+## A HEAP'S VESSEL ([method _walls]): how far above the heap's floor its wall is cut to find it, how often it is cut
+## again going up to find its top, how far up at most, and how far past where a line out first met it the wall may
+## lean out and still be the same wall (meters).
+const WALL_CUT := 0.003
+const WALL_STEP := 0.004
+const WALL_UP := 0.12
+const WALL_BAND := 0.03
 
 
 ## Whether a lump [param a] wide and [param b] high with its middle at [param p] passes through none

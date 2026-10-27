@@ -66,6 +66,8 @@ void vertex() {
 		size *= 1.0 + grow * u;
 		fade = smoothstep(0.0, 0.06, u) * (1.0 - smoothstep(0.5, 1.0, u));
 		fade *= 1.0 - twinkle * 0.5 * (1.0 + sin(age * 29.0 + seed * 91.0));
+		// as thick as it was born (a plume's puff, TableWork._plume): every other layer's colors are opaque
+		fade *= COLOR.a;
 		turn = seed * 6.2831 + age * (seed - 0.5) * 6.0;
 	}
 	vec3 view = (VIEW_MATRIX * vec4(pos, 1.0)).xyz;

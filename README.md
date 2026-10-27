@@ -26,15 +26,15 @@ Ghost Notes is a notes app made with [Godot](https://godotengine.org/) 4.7, in w
 
 Ghost Notes is built from registries. Each page below is generated from one, listing every entry and where it lives; [docs/index.md](docs/index.md) is the whole map.
 
-- [Components](docs/components.md) (16 components, 6 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
+- [Components](docs/components.md) (18 components, 6 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](docs/scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
-- [Media](docs/media.md) (9) - what the show is carried on.
+- [Media](docs/media.md) (10) - what the show is carried on.
 - [Look filters](docs/filters.md) (8) - the post-process over the whole picture.
 - [Layers](docs/layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](docs/forces.md) (8) - the physics primitives particles compose.
 - [Stage actors and verbs](docs/stage.md) (3 actors, 22 verbs) - what a storyboard's `stage` entries are made of.
 - [Masking effects](docs/masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
-- [Script marks](docs/script.md) (33) - every mark a script may carry - the script editor's palette.
+- [Script marks](docs/script.md) (41) - every mark a script may carry - the script editor's palette.
 - [Agents](docs/agents.md) (4 writers, 3 painters, 2 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.
 
 <!-- AUTODOC:FEATURES:END -->

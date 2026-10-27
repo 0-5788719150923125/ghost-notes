@@ -11,7 +11,7 @@ AN ENTRY DOES NOT IMPLEMENT ITS MARK. The parsers of record stay where they are 
 
 A CARDS BRIEF IS NOT A SCRIPT, AND HAS MARKS OF ITS OWN (2026-10-12, the user: "why are all of the supported macros and features missing from 'cards' editor mode? I would expect that most if not all of the features from generative mode should also work here"). The palette was empty there because no entry named the mode: a show's document is the BRIEF its agents work from, never read aloud, so a mark in it does something only where the code reads it out of the brief or an agent is told to honor it. Those are offered ("cards" in `modes`), each saying what it does THERE (`blurbs`): a speaker cue gives the show another voice, a `## Cards` section is its deck, a macro reads as its default and a note to self is taken out before any agent sees the brief (`TablePrompts.brief`), and a hesitation, a delivery or a stressed word stands in a line the brief gives the host word for word (rules/table/reader.yaml, `spoken`). The marks of a page or a tablet (pictures, scene lines, web pages) and the inline pronunciation are not: the table is the only medium there, its pictures are the painter's, and a reader's passage keeps no bracket (`TableProducer.clean_spoken`).
 
-Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (33 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
+Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (41 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
 
 ## Voices
 
@@ -84,6 +84,19 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 | The deck | `## Cards` | Table | Opens the show's own deck: every list item under this heading, down to the next heading of its level, is a card, and each episode's cards are a seeded shuffle of them. A brief with no such section leaves each episode's cards to the producer. |
 | A suit | `### Major Arcana` | Table | Inside the deck: names the group the cards listed under it belong to - a suit, an arcana, a team. |
 | A card | `- The Tower: sudden upheaval, a structure that was never sound` | Table | Inside the deck: one card - its name, then what it means after a colon. A numeral may lead it (XVI. The Tower). A writer is handed a card's meaning only once that card is drawn. |
+
+## Letter
+
+| Mark | Example | Panels | What it does |
+|---|---|---|---|
+| Thought | `*She is always fine.*` | Generative | Letter: a paragraph in italics, whole, is a thought - said, and never written: the writer stops and thinks it, the pen lifted. |
+| Strike | `<!-- strike -->` | Generative | Letter: the pen crosses out the paragraph it last wrote, every line of it. |
+| Written, not said | `<!-- unspoken: Dear Ink, -->` | Generative | Letter: the pen writes this and the voice does not say it - it waits while it is written. |
+| Point | `<!-- point: sketch, the dot -->` | Generative | Letter: inside what is said, at the next word the pen points at the last sketch - or at the part of it so described - until the sentence ends. point: camera lifts the pen to whoever is watching. |
+| Tap | `<!-- tap -->` | Generative | Letter: the pen is turned over and its top tapped on the pad - tap: desk, on the desk beside it - while the writer thinks. The voice waits a moment; the taps run on under the next words. |
+| Picture ends | `<!-- /image -->` | Generative | Letter: ends the passage a picture is shown over - from its image mark to here the picture fills the screen, slowly panning, while the voice reads on and the pen writes on unseen; then the desk comes back. |
+| Hold still | `<!-- still -->` | Generative | Letter: from here to the next written line the camera holds dead still on the last sketch, and the pen is taken off the page - for something the viewer does on the screen. |
+| New page | `<!-- new page -->` | Generative | Letter: the next writing starts a page of its own (a page also turns by itself once it is full). |
 
 ## Notes
 

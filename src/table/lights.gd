@@ -2188,7 +2188,11 @@ static func build(light: Dictionary, stage: Dictionary, seed: int) -> Rig:
 		# A FAR LAMP IS NEVER SEEN: its energy grows with its distance to light the cloth as asked, and a
 		# polished edge (a desk's rim) mirrors that energy as a hot spot that blooms - the lamp itself, in
 		# the picture. So what it gives the specular is what it takes to light the cloth, inversely.
-		node.light_specular = clampf(LAMP_GLINT / maxf(energy, 0.01), 0.02, 0.5)
+		# A LAMP MOVED OUT OF THE SHOT IS NOT WHERE ITS LIGHT COMES FROM, so it lights from about there and
+		# mirrors nothing: the-quiet-crucible 181083's "brazier's coals", written 4 cm up behind the cauldron and
+		# lifted to 14 cm, hung a hot spot in the middle of the brew that danced with the fire's flicker (the
+		# user: "it's revealing that the out-of-camera light source isn't a real thing").
+		node.light_specular = 0.0 if bool(place["moved"]) else clampf(LAMP_GLINT / maxf(energy, 0.01), 0.02, 0.5)
 		rig.lamps.append({"spec": l, "light": node, "base": at, "energy": energy, "asked": energy, "moved": place["moved"],
 			"fk": flicker_of(l, hash([seed, i, String(l["name"]), "lamp"])), "dist": dist, "slant": slant})
 	# THE SHADOWS OUT OF THE SHOT, set up their lights' rays

@@ -10,7 +10,89 @@ The first build's files are backed up in `dist/likeness_v1/` (they were never co
 **The eighth pass (2026-10-25, night): the soft mouth and the neck, from the literature** - below the next.
 **Three alike videos, and is the approach convoluted? (2026-10-25, late)** - below the next.
 **The ninth pass (2026-10-25, late night): a head that turns, a beard that stays on it** - below the next.
-**The tenth pass (2026-10-25, later): the beard moves as one, the hands at rest are seen** - right below.
+**The tenth pass (2026-10-25, later): the beard moves as one, the hands at rest are seen** - below the next.
+**A voice alone: the Voice training card (2026-10-26)** - right below.
+
+## A voice alone: the Voice training card (2026-10-26)
+
+**NOW KOKORO'S (2026-10-26, later; next/voice_engines.md "Training Kokoro").** The user: "I likely won't use Piper
+models for anything other than testing now, given that Kokoro is so much better-sounding ... our own custom training
+loop would probably be perfectly fine." A voice alone's Utterances and Voice are Kokoro's own steps
+(`kokoro_utterances`, `kokoro_voice`; `ActorSteps.of_kind`: an actor's voice is still Piper's): its sentences heard
+again alone and cut to the words their sound says, Kokoro's decoder taught their sound, its delivery kept. The Piper
+account below is how the card began.
+
+**The user:** "I think I'd like to try for fine-tuning support, for voices. I am imagining a new component/card, which
+we could attach to a note that already has the "Voice" component, to fine-tune a new voice for that component. As with
+the other fine-tuning we've tried (the actor/likeness feature), I'd like to support importing a video from file, or by
+pointing to a YouTube URL or playlist URL. Could you please do some foundational research here, and if you think this
+will be possible, could you wire something up?"
+
+### What can be trained here (looked at 2026-10-26)
+
+- **Piper: built, and measured** ("Their own voice", and the fifth pass's "The voice is every way he sounds"). John
+  (public domain) fine-tuned on their sentences, an hour on the 5060 Ti. Their tone arrives by epoch 30 (the spectrum
+  as near their held-out speech as their own other sentences are). Clarity does not: one voice of his, 93 minutes, is
+  misheard 15.9% of words, where his own audio is 5.6% and John 7.5%. Untried: taught in John's own labels ("en").
+- **Kokoro: no training code of its own** (hexgrad: not feasible without the style encoders and discriminators it did
+  not release). Three routes outside it:
+  - [kikiri-tts](https://github.com/semidark/kikiri-tts) (Apache-2.0): a whole fine-tune through a patched StyleTTS 2
+    trainer - stage 1 the decoder again, adversarially, with a fresh style encoder and fresh discriminators; stage 2
+    durations, F0 and energy; StyleTTS 2's ASR aligner, JDC and PL-BERT to train with. Made for a NEW LANGUAGE (German,
+    about 51 hours for its base; its single-speaker voices 455 and 627 clips on top of that base), "10 GB+" of the
+    graphics card's memory where about 8 is free beside Praxis. Not a recipe for one English speaker on the official
+    weights.
+  - [kokoro-inno-clone-tuner](https://huggingface.co/remsky/kokoro-inno-clone-tuner) (code Apache-2.0, its speaker
+    encoder CC BY-SA 3.0): one 3 to 30 s clip to a native voicepack ([510, 1, 256]) in a second, Kokoro frozen - the
+    timbre half from a learned speaker encoder, the prosody half a blend of stock packs moved by the clip's pitch. Its
+    own numbers: speaker similarity 0.288 on LibriSpeech test-clean (shallow, as it says), UTMOS 4.45, no word errors
+    given. One clip, where we have hours.
+  - **Our own style fit** (next/voice_engines.md, "Fine-tuning"): Kokoro frozen, the 256 numbers fitted to all of
+    their sentences by gradient. Little memory and minutes; keeps Kokoro's clarity; how much of them it reaches is the
+    question. Not built.
+- **So the card trained Piper at first**, the trainer that ran here that day - and Kokoro the same evening, by a loop
+  of our own (above).
+
+### Built
+
+- **The Voice training component** (`voice_training`, family Voice; it brings a Voice, as the Actor does; shown on a
+  reading's, a table's and a proof's panel; `python:voice_train` among its capabilities, so where PyTorch has no CUDA
+  build - a Mac, Windows - "+" leaves it out). Its card (`VoiceTrainingCard`): whose voice (a picker, "New voice…"),
+  their name, their RECORDINGS (a folder, files, links), the five steps, Generate, Stop, **Read in it**, and the Voice
+  lessons. Made, the voice is "<name> (their own voice)" on every Voice card, and the note reads in it as it lands
+  (`ReadingPanel.voice_made`, as the Actor card's does).
+- **A voice alone is a person of the Actors library** (`actor.json`'s `kind` "voice"; `ActorFolder.sound_only`),
+  listed apart from the actors (`Actors.list(kind)`): the same folder, fingerprints, staleness and runner as an actor,
+  but MADE OF THE VOICE AND WHAT IT READS ALONE - Fetch, Probe, Hear, Utterances, Voice (`ActorSteps.voice_chain`),
+  whatever a run asks (`ActorBuilder.tick`). Kept apart, so its links can be FETCHED AS THEIR SOUND
+  (`ActorSources.SOUND_FORMAT`: the best AAC, no picture, no captions - Hear listens to all of it): a 19 s video was
+  302 KiB. An actor's folder listing one would have had its video fetched again later, and everything heard from it
+  made stale.
+- **Its folders list sound files beside videos** (`ActorFolder.SOUND_EXTS`: m4a, mp3, wav, flac, ogg, opus, aac), and
+  **a file can be picked by itself** on both cards (a source of kind "file", `ActorSources.add_file`).
+- **The two cards share their parts:** the sources and videos (`ActorSourceList`) and the steps' rows, worked out on a
+  worker (`ActorStepRows`), moved out of the Actor card as they were.
+
+### Verified
+
+- `tests/likeness/voice_training_check.gd`: listed apart (two-sided), a folder's sound files and a file picked by
+  itself, the fetch's arguments (the control: an actor's take the picture and captions), the sound file a fetch leaves
+  (never its `.part`), Generate making each recording's probe and Hear, the Utterances, the Voice and nothing else -
+  and a run asking for every step no more (the control: an actor's makes the survey); with the restriction taken out
+  of the runner the gate fails. Read in it waits for the voice, then hands the reading its id; so does a voice
+  landing. actor_upload_check, actors_check and components_check pass on the shared parts.
+- By hand, outside the app: the card's own yt-dlp arguments fetched a 19 s video's sound (`<id>.m4a`, 302 KiB, and its
+  details); ffprobe found no picture and 19.06 s (the probe's row says "0:19, sound"); Hear heard it whole (35 words);
+  Utterances read it (and kept none of that outdoor 2005 phone recording: measured as whispered).
+- **Not yet run end to end in the app** - a playlist fetched, heard, cut and taught from the card. That is the user's
+  test.
+
+### To try
+
+On a note with a Voice: "+" → Voice training → New voice… (their name) → Add link… (a playlist of them talking) or Add
+folder… / Add files… → untick what is not them → Generate. Hear takes about a seventh of the recordings' length on the
+processor, the Voice an hour or so on the graphics card (Voice lessons, 6,000); Stop keeps what is learned. Half an
+hour or more of their ordinary speaking voice is plenty; Utterances keeps one voice of them and says what it left out.
 
 ## The tenth pass: the beard moves as one, the hands at rest are seen (2026-10-25, later)
 

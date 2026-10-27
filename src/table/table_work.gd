@@ -82,7 +82,7 @@ var _plumes: Array = []
 var _streams: Array = []
 var _air = null               # the acts' cue bursts (Effects.Air), or null
 var _cues: Array = []         # [{act, at, every, where, name}]
-var _liquids: Array = []      # every liquid's material on the table: its surface follows show time
+var _timed: Array = []        # every material on the table that follows show time: a liquid's surface, copies glowing apart
 var _huffs: Array = []        # the creatures' huffs, heard and seen ([method Soundscape.seen_calls])
 var _soft := {}               # work index -> true: a part that changes (fills, grows, comes and goes) or is a liquid -
                               # what a tool goes into, never a surface it is pressed onto or kept out of
@@ -116,7 +116,7 @@ func clear() -> void:
 	_plumes = []
 	_streams = []
 	_cues = []
-	_liquids = []
+	_timed = []
 	_huffs = []
 	_soft = {}
 	_begun = {}
@@ -140,8 +140,9 @@ func take(t: Dictionary, b: Dictionary, node: Node3D, shades: Array = []) -> voi
 	for m in b.get("meshes", []):
 		var mat := (m as MeshInstance3D).material_override as ShaderMaterial if m is MeshInstance3D else null
 		var kd: Variant = mat.get_shader_parameter("kind") if mat != null else null
-		if kd != null and int(kd) == 13:
-			_liquids.append(mat)
+		var apart: Variant = mat.get_shader_parameter("apart") if mat != null else null
+		if (kd != null and int(kd) == 13) or (apart != null and float(apart) > 0.0):
+			_timed.append(mat)
 	for wv in b.get("works", []):
 		var wd: Dictionary = wv
 		var w: Dictionary = wd["work"]
@@ -1083,7 +1084,7 @@ func tick(t: float) -> void:
 		_tick_stream(s, t)
 	if _air != null:
 		_air.tick(t)
-	for m in _liquids:
+	for m in _timed:
 		(m as ShaderMaterial).set_shader_parameter("show_time", t)
 
 
@@ -1181,11 +1182,16 @@ func _pose_work(wi: int, t: float) -> void:
 # --- what smokes and pours -----------------------------------------------------------------------------
 
 ## A PLUME of work [param wi]'s `emits`: a pool of puffs ([constant Motions.MAX_PUFFS] at most), each born in
-## turn from its point and rising - in closed form, the k-th puff born at k over twice its rate, and kept
-## only when the dice and the part's `emit` say (so how hard it smokes can change and stay a function of time).
+## turn from its point and rising - in closed form, the k-th puff born at k over its rate - and as thick as the
+## part's `emit` says (so how hard it smokes can change and stay a function of time). A TRAIL, NEVER TUFTS: puffs
+## are born at least half a puff's size apart as they rise, and a plume asked for fewer is fainter, never broken
+## (the-quiet-crucible 181083: 1.4 puffs a second asked, half of them dropped by the dice, rose as tufts - the
+## user: "normal heat would produce consistent steam trails").
 func _plume(wi: int, e: Dictionary) -> Dictionary:
 	var look: Dictionary = Motions.EMITS[String(e["kind"])]
-	var rate := float(e["rate"]) * 2.0
+	var trail := float(look["rise"]) / (float(look["size"]) * 0.001 * 0.5)
+	var rate := maxf(float(e["rate"]), trail)
+	var thick := clampf(float(e["rate"]) / rate, Motions.TRAIL_THIN, 1.0)
 	var life := float(look["life"])
 	var n := mini(Motions.MAX_PUFFS, int(ceil(rate * life * 1.25)) + 2)
 	var layer := Effects._sprites(n, Effects.SMOKE_SHADER, _root)
@@ -1209,7 +1215,7 @@ func _plume(wi: int, e: Dictionary) -> Dictionary:
 		lives[i] = Vector2(-1.0e6, 0.01)
 		mm.set_instance_custom_data(i, Color(-1.0e6, 0.01, 0.0, 0.0))
 	var at := String(e.get("at", ""))
-	return {"wi": wi, "e": e, "look": look, "layer": layer, "rate": rate, "life": life, "n": n, "slots": slots, "lives": lives,
+	return {"wi": wi, "e": e, "look": look, "layer": layer, "rate": rate, "thick": thick, "life": life, "n": n, "slots": slots, "lives": lives,
 		"point": _point_local(wi, at) if not at.is_empty() else Vector3(((works[wi] as Dictionary)["w"]["box"] as AABB).get_center().x,
 			((works[wi] as Dictionary)["w"]["box"] as AABB).end.y, ((works[wi] as Dictionary)["w"]["box"] as AABB).get_center().z),
 		"color": Color.html(String(e["color"])).srgb_to_linear()}
@@ -1242,8 +1248,7 @@ func _tick_plume(p: Dictionary, t: float) -> void:
 		if slots[slot] == k:
 			continue
 		slots[slot] = k
-		var h := _hash01(k, 1)
-		if hidden or h >= strength * 0.5:
+		if hidden or strength <= 0.005:
 			mm.set_instance_custom_data(slot, Color(-1.0e6, 0.01, 0.0, 0.0))
 			lives[slot] = Vector2(-1.0e6, 0.01)
 			continue
@@ -1252,7 +1257,9 @@ func _tick_plume(p: Dictionary, t: float) -> void:
 		var vel := Vector3(side.x, float(look["rise"]) * lerpf(0.7, 1.25, _hash01(k, 4)), side.z)
 		var particle := {"born": born, "pos": from + Vector3(_hash01(k, 5) - 0.5, 0.0, _hash01(k, 6) - 0.5) * 0.01, "vel": vel}
 		mm.set_instance_transform(slot, Effects.particle_xform(particle, wind))
-		mm.set_instance_color(slot, p["color"])
+		# as thick as it smokes when it is born: the sprite fades by its color's alpha
+		var c: Color = p["color"]
+		mm.set_instance_color(slot, Color(c.r, c.g, c.b, clampf(strength, 0.0, 1.0) * float(p["thick"])))
 		lives[slot] = Vector2(born, life * lerpf(0.75, 1.2, _hash01(k, 7)))
 		mm.set_instance_custom_data(slot, Color(lives[slot].x, lives[slot].y, _hash01(k, 8),
 			float(look["size"]) * 0.001 * lerpf(0.7, 1.3, _hash01(k, 9))))

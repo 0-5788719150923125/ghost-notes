@@ -15,7 +15,7 @@ host_for(incoming)   - the node an arriving scene is added to. `full` returns th
 
 A medium is a Node2D mounted INSIDE the stage SubViewport, so the stage governor still owns it: when the governor stops the stage, it stops the medium and every panel viewport nested under it, together.
 
-Registry: `Medium.REGISTRY` in [src/media/medium.gd](../src/media/medium.gd) (9 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
+Registry: `Medium.REGISTRY` in [src/media/medium.gd](../src/media/medium.gd) (10 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
 
 ## `auto` - Auto
 
@@ -136,6 +136,30 @@ WHAT STANDS BEFORE THEM IS DRAWN OVER THEM, still (the fourth pass, 2026-10-22: 
 A PURE FUNCTION OF THE SHOW'S TIME: what is drawn at a moment depends on the plan and the phones, never on what was drawn before - so a seek lands where it should and an export draws what was heard.
 
 Source: [src/likeness/likeness.gd](../src/likeness/likeness.gd)
+
+## `letter` - Letter
+
+_Somebody writing a letter at a desk, reading it aloud as the pen puts it down in a cursive hand: a thought said and not written, a line crossed out, a sketch drawn as it is described, the pen tapped while the writer thinks or pointed at whoever watches, and a picture over the whole screen for a passage read over it. The Letter component's own medium._
+
+LetterMedium - somebody writing a letter at a desk, reading it aloud as the pen puts it down (next/letter.md). The desk's medium (`DeskMedium`) - its pad, its pen, its camera, the voice followed word by word - with the letter's own hand and the letter's own moments (`LetterScript`).
+
+WHAT IT DRAWS FROM: the reading's document (`_subs.document`) - its `source`, the letter with its marks, and its `letter`, what the Letter component hands the reading (`LetterCard.document`): the hand's `seed`, each sketch's SVG (`svgs`), the ink step's layout of them (`ink`) and each picture's file (`pictures`). The words are the hand's own, so nothing else is needed to write them: a letter whose sketches and pictures are not made yet plays all the same, its sketches' paragraphs said and its pictures' passages read over the desk.
+
+A LINE IS WRITTEN AS IT IS SAID: each line of the letter is a dictation of its own words, the pen as elastic over them as the desk's is over a formula's (`DeskMedium.elastic`); a line's way back to the margin is a quick return (`LINE_RETURN`), as a hand's is, never the slow reach across a pad between two formulas.
+
+A THOUGHT IS NOT WRITTEN: while the writer thinks a passage in italics the pen is lifted, and the camera eases back off the line (`THINK_K`) - the writer sitting back.
+
+THE PEN TAPS (`<!-- tap -->`): it is lifted, turned over in the hand and its top tapped on the pad, or the desk beside it, a few times, then turned back - `_tap_pose`, laid over the pen's own place while it lasts.
+
+THE PEN POINTS AT WHOEVER WATCHES (`<!-- point: camera -->`): lifted off the page and its nib turned to the lens for the sentence, then put back (`_camera_pose`).
+
+A PICTURE TAKES THE SCREEN (`<!-- image (full): -->` ... `<!-- /image -->`): it fades up over the desk as the passage under it begins, drifts slowly closer and across (a pan its length guessed from the script, never from the voice's times, so it never jumps as a live reading's words arrive) and fades back to the desk as the passage ends. The pen writes on under it: the page the camera comes back to has the passage on it.
+
+A STILL IS DEAD STILL (`<!-- still -->`: "the camera holds still on the cross and the dot, with the pen well clear of them, or the test cannot work"): from the mark to the next written line the camera frames the last drawing on the page, its slow wander stopped where it was, and the pen is sent off the pad.
+
+THE LETTER ENDS WHEN THE PEN DOES: an unspoken line after the last word ("Dear Ink," on a new page) is written before the camera stands back and the picture goes to black.
+
+Source: [src/desk/letter.gd](../src/desk/letter.gd)
 
 ## `desk` - Desk
 

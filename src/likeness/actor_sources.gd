@@ -2,8 +2,9 @@ extends RefCounted
 class_name ActorSources
 
 ## ActorSources - where an actor's videos come from (next/likeness.md, "Sources"): a FOLDER, read in
-## place and never copied or written, or a LINK - a video, a playlist or a channel - listed first and
-## then fetched one video at a time into the actor's `footage/`. A link added CAPTIONS ONLY fetches no
+## place and never copied or written, a FILE picked by itself (read in place too), or a LINK - a video, a
+## playlist or a channel - listed first and then fetched one video at a time into the actor's `footage/`
+## (a voice alone's as its sound: [method ActorFolder.sound_only]). A link added CAPTIONS ONLY fetches no
 ## video: each of its captions files is matched to a folder video by title, so a folder of their videos
 ## downloaded long ago gets the word times its captions carry without the gigabytes fetched again.
 ##
@@ -13,6 +14,8 @@ class_name ActorSources
 ## THE FORMAT FETCHED: up to 1080p, H.264 and AAC where the site has them (what Eidolon fetched), else
 ## the best up to 1080p.
 const FORMAT := "bv*[height<=1080][vcodec^=avc1]+ba[acodec^=mp4a]/b[height<=1080]"
+## A VOICE ALONE'S SOUND: the best AAC the site has (on YouTube, its 128 kbps .m4a), else its best sound.
+const SOUND_FORMAT := "ba[acodec^=mp4a]/ba"
 ## AUTOMATIC CAPTIONS CARRY A TIME FOR EVERY WORD (json3's `tOffsetMs`): the words a viseme is
 ## learned from.
 const SUB_LANGS := "en.*"
@@ -22,21 +25,28 @@ const SUB_PREFER := ["en-orig", "en", "en-US", "en-GB"]
 const WORD_MOST := 0.6
 
 
-## THE VIDEOS IN [param folder], not below it: `[{path, size, title}]`, by name.
-static func scan(folder: String) -> Array:
+## THE VIDEOS IN [param folder], not below it - the files of [param exts] (a voice alone's are sound files too,
+## [method ActorFolder.exts]): `[{path, size, title}]`, by name.
+static func scan(folder: String, exts: Array = ActorFolder.VIDEO_EXTS) -> Array:
 	var out: Array = []
 	var d := DirAccess.open(folder)
 	if d == null:
 		return out
 	for f in d.get_files():
-		if not ActorFolder.VIDEO_EXTS.has(f.get_extension().to_lower()) or f.begins_with("."):
+		if not exts.has(f.get_extension().to_lower()) or f.begins_with("."):
 			continue
-		var p := folder.path_join(f)
-		var fa := FileAccess.open(p, FileAccess.READ)
-		out.append({"path": p, "size": fa.get_length() if fa != null else 0, "title": title_of_file(f)})
+		out.append_array(scan_file(folder.path_join(f)))
 	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return String(a["path"]).naturalnocasecmp_to(String(b["path"])) < 0)
 	return out
+
+
+## THE FILE AT [param path] as a scan finds it: `[{path, size, title}]`, empty while it is not there.
+static func scan_file(path: String) -> Array:
+	var fa := FileAccess.open(path, FileAccess.READ)
+	if fa == null:
+		return []
+	return [{"path": path, "size": fa.get_length(), "title": title_of_file(path.get_file())}]
 
 
 ## A file's name as a title: no extension, and no "(1080p, h264)"-like tag a downloader put after it.
@@ -90,6 +100,16 @@ static func add_folder(actor: ActorFolder, folder: String) -> int:
 	return rescan(actor)
 
 
+## ADD THE FILE [param path] to [param actor]: a source of its own, and its row (ticked). Returns how many videos
+## are new - none when it is listed already, or in one of their folders.
+static func add_file(actor: ActorFolder, path: String) -> int:
+	for s in actor.data["sources"]:
+		if String((s as Dictionary).get("kind", "")) == "file" and String((s as Dictionary).get("path", "")) == path:
+			return rescan(actor)
+	(actor.data["sources"] as Array).append({"kind": "file", "path": path})
+	return rescan(actor)
+
+
 ## READ EVERY FOLDER AGAIN: a video added since gets its row; one gone keeps its row, and is missing
 ## until it is back - or until A FILE OF ITS NAME turns up in another of their folders, when it is that video,
 ## moved: its row, its id and all made from it go on (2026-10-23: the user merged one download folder into
@@ -104,9 +124,13 @@ static func rescan(actor: ActorFolder) -> int:
 		named[String((vids[vid] as Dictionary).get("path", ""))] = true
 	for si in (actor.data["sources"] as Array).size():
 		var s: Dictionary = actor.data["sources"][si]
-		if String(s.get("kind", "")) != "folder":
-			continue
-		for v in scan(String(s.get("path", ""))):
+		var found: Array = []
+		match String(s.get("kind", "")):
+			"folder":
+				found = scan(String(s.get("path", "")), actor.exts())
+			"file":
+				found = scan_file(String(s.get("path", "")))
+		for v in found:
 			var vid := ActorFolder.vid_of_file(String(v["path"]), int(v["size"]))
 			if vids.has(vid) or named.has(String(v["path"])):
 				continue
@@ -156,14 +180,20 @@ static func list_args(url: String, deno: String) -> PackedStringArray:
 
 ## THE ARGUMENTS THAT FETCH ONE VIDEO into [param footage] as `<id>.<ext>`, with its automatic
 ## captions and its details - or, [param captions_only], the captions and details alone. A video the
-## archive already lists is not fetched again.
-static func fetch_args(url: String, footage: String, captions_only: bool, deno: String) -> PackedStringArray:
+## archive already lists is not fetched again. [param sound_only] (a voice alone, [method
+## ActorFolder.sound_only]) fetches its sound and its details, no picture and no captions: Hear listens to all
+## of it, and its words come from what it hears.
+static func fetch_args(url: String, footage: String, captions_only: bool, deno: String, sound_only := false) -> PackedStringArray:
 	var a := PackedStringArray(["-u", "-m", "yt_dlp", "--no-playlist", "--newline", "--no-overwrites",
-		"--socket-timeout", "30",
-		"--write-auto-subs", "--sub-langs", SUB_LANGS, "--sub-format", "json3", "--write-info-json",
-		"-o", footage.path_join("%(id)s.%(ext)s")])
+		"--socket-timeout", "30"])
+	if not sound_only:
+		a.append_array(PackedStringArray(["--write-auto-subs", "--sub-langs", SUB_LANGS, "--sub-format", "json3"]))
+	a.append_array(PackedStringArray(["--write-info-json", "-o", footage.path_join("%(id)s.%(ext)s")]))
 	if captions_only:
 		a.append("--skip-download")
+	elif sound_only:
+		a.append_array(PackedStringArray(["-f", SOUND_FORMAT, "--download-archive", footage.path_join("archive.txt"),
+			"--throttled-rate", "100K", "--concurrent-fragments", "4"]))
 	else:
 		a.append_array(PackedStringArray(["-f", FORMAT, "--merge-output-format", "mp4",
 			"--download-archive", footage.path_join("archive.txt"),
@@ -262,7 +292,8 @@ static func land_listing(actor: ActorFolder, source: int, entries: Array) -> Dic
 
 
 ## THE FILES A FETCH OF ENTRY [param entry] LEFT in [param footage]: `{video, captions, info}`, each ""
-## when it is not there - the video by its id and a video extension, the captions the preferred track.
+## when it is not there - the video by its id and a video extension (or a sound file's, fetched for a voice
+## alone), the captions the preferred track.
 static func fetched(footage: String, entry: String) -> Dictionary:
 	var out := {"video": "", "captions": "", "info": ""}
 	var d := DirAccess.open(footage)
@@ -277,7 +308,7 @@ static func fetched(footage: String, entry: String) -> Dictionary:
 			out["info"] = footage.path_join(f)
 		elif rest.ends_with(".json3"):
 			subs[rest.trim_suffix(".json3")] = footage.path_join(f)
-		elif ActorFolder.VIDEO_EXTS.has(rest.to_lower()) and not f.ends_with(".part"):
+		elif (ActorFolder.VIDEO_EXTS.has(rest.to_lower()) or ActorFolder.SOUND_EXTS.has(rest.to_lower())) and not f.ends_with(".part"):
 			out["video"] = footage.path_join(f)
 	for lang in SUB_PREFER:
 		if subs.has(lang):

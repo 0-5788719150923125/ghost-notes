@@ -54,6 +54,7 @@ var _synth: SynthEditor
 var _cards: ReadingPanel
 var _show: EpisodeCard        # the Cards panel's episode
 var _proof: ReadingPanel      # a Proof note's panel (2026-10-15: its card asked for 448 px of 380)
+var _letter: ReadingPanel     # a Letter note's panel: its sketches' long words, its pictures (2026-10-26)
 
 
 func _ready() -> void:
@@ -96,25 +97,41 @@ func _run() -> void:
 	var proof_card: ProofCard = _proof._block_cards["proof"]
 	proof_card._pick.add_item("Episode 12 - Pick More Than Half, and One Divides Another, Every Time")
 	proof_card._pick.select(proof_card._pick.item_count - 1)
+	# A LETTER'S, read off a note that has one (a fixture, read and never written: a probe is read-only)
+	_letter = ReadingPanel.new()
+	_letter.note_path = "res://tests/fixtures/letter_note.md"
+	_letter._build_panel()
+	_letter.remove_child(_letter._panel)
+	add_child(_letter._panel)
+	_letter.remove_child(_letter._cast._repace_timer)
+	add_child(_letter._cast._repace_timer)
+	var letter_card: Object = _letter._block_cards.get("letter")
+	if letter_card != null:
+		letter_card.set("_seen", FileAccess.get_file_as_string(_letter.note_path))
+		letter_card.call("_build_rows")
+		letter_card.call("illustrations").set_script_text(LetterScript.pictures_only(String(letter_card.get("_seen"))))
+	_ok(letter_card != null, "a Letter note's panel has the Letter card")
 	# a voice list as the host fills it - its longest name is what a picker sized to its items
 	# would be as wide as
-	for e in [_ed, _cards, _proof]:
+	for e in [_ed, _cards, _proof, _letter]:
 		(e as ReadingPanel)._cast.voice_pick.add_item("libritts high  (downloads)")
 		(e as ReadingPanel)._cast.voice_pick.add_item("en_GB southern english female medium  (downloads)")
 
 	# OPEN, whatever the person running this has folded: a probe reads their real settings, and
 	# a panel with its cards folded is short enough to fit any window - which would prove nothing.
-	for p in [_ed._panel, _synth._panel, _cards._panel, _proof._panel]:
+	for p in [_ed._panel, _synth._panel, _cards._panel, _proof._panel, _letter._panel]:
 		for c in (p as SidePanel).cards():
 			(c as Card).folded = false
 	await _check_fits("Generative", _ed._panel)
 	await _check_fits("Synthesis", _synth._panel)
 	await _check_fits("Cards", _cards._panel)
 	await _check_fits("Proof", _proof._panel)
+	await _check_fits("Letter", _letter._panel)
 	await _check_width("Generative", _ed._panel)
 	await _check_width("Synthesis", _synth._panel)
 	await _check_width("Cards", _cards._panel)
 	await _check_width("Proof", _proof._panel)
+	await _check_width("Letter", _letter._panel)
 	await _check_long_items_would_widen()
 	await _check_episode_entry_follows()
 	await _check_rows_named()
@@ -126,10 +143,12 @@ func _run() -> void:
 	_ed._panel.queue_free()
 	_cards._panel.queue_free()
 	_proof._panel.queue_free()
+	_letter._panel.queue_free()
 	_synth.free()
 	_ed.free()
 	_cards.free()
 	_proof.free()
+	_letter.free()
 	if _fails.is_empty():
 		print("panel_fit_check: ALL OK")
 		get_tree().quit()

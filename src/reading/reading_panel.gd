@@ -347,10 +347,11 @@ func _note_cards(producers: bool) -> void:
 	var built := NoteCards.build(_panel, have, with)
 	for key in built:
 		_add_block(built[key])
-	# THE BOOK'S PICTURES are set inside the Picture's card and keep a block of their own
-	var picture := built.get("picture") as PictureCard
-	if picture != null:
-		_add_block(picture.illustrations())
+	# THE BOOK'S PICTURES are set inside a card - the Picture's, the Letter's - and keep a block of their own
+	for key in built:
+		var card: Object = built[key]
+		if card.has_method("illustrations"):
+			_add_block(card.call("illustrations"))
 
 
 ## Which of a note's component cards this workspace shows, of [constant NoteCards.KEYS]: its row's

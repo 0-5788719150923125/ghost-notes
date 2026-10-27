@@ -179,7 +179,7 @@ func estimated_times(n: int) -> PackedFloat32Array:
 ## Where the box the cards are kept in may stand, across and deep - kept clear by the spread - or zero
 ## when they come from a deck.
 func box_keep() -> Vector2:
-	var most := CardTable.SHOEBOX_MAX if String(staging.get("box_style", "open")) == "shoebox" else CardTable.BOX_MAX
+	var most := CardTable.box_most(look, String(staging.get("box_style", "open")) == "shoebox")
 	return Vector2(most.x, most.z) if cards_from == "box" else Vector2.ZERO
 
 

@@ -10,7 +10,9 @@ extends Node
 ## - THE WORK IS FOUND ON THE TABLE: every act kept, nothing said against it; each runs in its beat - card 1's
 ##   after `work 1` begins, the close's after the spread - and the cued one at its word.
 ## - WHAT RUNS, RUNS: the clock's minute hand 30 degrees on five minutes in; the brew's steam rising at every
-##   moment looked at; a jar poured into the brew shows its stream while it flows and none after; the brew is
+##   moment looked at, A TRAIL, NEVER TUFTS (the-quiet-crucible 181083: "normal heat would produce consistent steam
+##   trails") - its young puffs born no further apart than half a puff's size takes to rise (the control: every
+##   other one left out is caught); a jar poured into the brew shows its stream while it flows and none after; the brew is
 ##   its new color when the pour is done; a cue's burst and the hatchlings' huffs have their particles.
 ## - THE CONTROL: the same table with no acts - nothing scheduled, no stream, no cue - and its clock still runs.
 ##
@@ -195,6 +197,28 @@ func _worked() -> void:
 			steamy += 1
 	var why := "no plume" if (w._plumes as Array).is_empty() else "a pool of %d" % int((w._plumes[0] as Dictionary)["n"])
 	_ok(steamy == 4, "the brew's steam rises at %d of 4 moments looked at (%s)" % [steamy, why])
+	# A TRAIL: the puffs in the air born no further apart than a trail's spacing - those young enough to be seen
+	# whole (a puff thins from half its life on, and the oldest die each at their own age)
+	if not (w._plumes as Array).is_empty():
+		var p: Dictionary = w._plumes[0]
+		var look: Dictionary = p["look"]
+		var spacing := float(look["size"]) * 0.001 * 0.5 / float(look["rise"])
+		var young := float(p["life"]) * 0.75 * 0.45
+		_posed(77.0)
+		var births: Array = []
+		for life in (p["lives"] as PackedVector2Array):
+			if 77.0 - life.x >= 0.0 and 77.0 - life.x <= minf(life.y, young):
+				births.append(life.x)
+		births.sort()
+		var gap := func(list: Array) -> float:
+			var most := 0.0
+			for i in range(1, list.size()):
+				most = maxf(most, float(list[i]) - float(list[i - 1]))
+			return most
+		var halved: Array = births.filter(func(b: float) -> bool: return births.find(b) % 2 == 0)
+		_ok(births.size() > 4 and float(gap.call(births)) <= spacing + 0.001, "the steam is a trail: %d puffs in the air, at most %.3f s apart (a trail's %.3f)" % [
+			births.size(), float(gap.call(births)), spacing])
+		_ok(float(gap.call(halved)) > spacing + 0.001, "control: every other puff left out leaves gaps (%.3f s)" % float(gap.call(halved)))
 	# the pour's stream, while it flows and not after; the brew its new color once poured
 	var pour := _run_of("pour-ink")
 	if not pour.is_empty() and not (w._streams as Array).is_empty():

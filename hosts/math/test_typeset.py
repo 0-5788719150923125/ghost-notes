@@ -17,7 +17,8 @@ What is held, each with an input that must fail where a pass could be an acciden
   measured down from a baseline at its foot; a label TeX refuses fails the drawing alone, with TeX's
   words; a plot is computed (y = x squared through the right corner of its axes, 1/x broken at 0 and
   cut at the range's edge); an outline the SVG left unfilled is NOT shaded (SVG's own default fill is
-  black - the control), a small filled circle is a dot and a big one hatched; an arrow ends at its
+  black - the control), a small filled circle is a dot and a big one hatched, a dot given a size is
+  filled out to its edge (the control, one with none, the pen's own); an arrow ends at its
   line's end; and an expression that is not arithmetic in x is refused, names and calls alike.
 - A SERIES A RUN KEPT (hosts/compute/run.py's keep(), 2026-10-19): joined point to point and cut at
   the box's edge, thinned when long, dotted (inside the box only), barred from the axis to its height;
@@ -163,6 +164,19 @@ def _figures():
     check(kinds[0] == "line" and kinds[1] == "line" and first_hatch == 2,
           "an outline the SVG left unfilled is not shaded, and a filled one is hatched (%s)" % ", ".join(kinds[:4]))
     check(kinds.count("dot") == 1, "a small filled circle is a dot")
+    # A SOLID DOT OF ITS OWN SIZE (a letter's sketch, 2026-10-26): filled by the pen going round it out to
+    # its edge - the control, a dot with no size, stays the pen's own small one
+    sized = figure.compile_figure('<svg viewBox="0 0 360 60"><dot x="300" y="30" r="8" id="d"/><dot x="40" y="30"/></svg>')
+    big, small = sized["paths"][0], sized["paths"][1]
+    def reach(p):
+        cx = sum(q[0] for q in p["pts"]) / len(p["pts"])
+        cy = sum(q[1] for q in p["pts"]) / len(p["pts"])
+        return max(math.hypot(q[0] - cx, q[1] - cy) for q in p["pts"])
+    sc = figure.COLUMN_PT / figure.COLUMN
+    check(big["kind"] == "dot" and abs(reach(big) - 8 * sc) < 0.6 and len(big["pts"]) > 100 and big.get("id") == "d",
+          "a dot given r is filled out to its edge (%.1f pt of %.1f, %d points)" % (reach(big), 8 * sc, len(big["pts"])))
+    check(small["kind"] == "dot" and reach(small) <= figure.DOT_R + 0.3,
+          "and one with none is the pen's own (%.1f pt)" % reach(small))
     line = [p for p in shapes["paths"] if p["kind"] == "line"][-1]
     head = shapes["paths"][-1]
     check(head["kind"] == "arrow" and head["pts"][1] == line["pts"][-1], "an arrow's tip is its line's end")

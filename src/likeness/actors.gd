@@ -4,6 +4,9 @@ class_name Actors
 ## Actors - the library of actors a Likeness plays: each a folder, `user://actors/<id>/`, shared by
 ## every note that uses it, as [Illustrations] and [Films] are (next/likeness.md, "The library").
 ##
+## A VOICE ALONE IS ONE TOO ([method ActorFolder.sound_only]): a person whose voice is all the Voice training card
+## learns of them, listed apart from the actors ([method list]).
+##
 ## AN ACTOR IS BUILT FROM THEIR OWN VIDEOS and is nothing but what was made from them, a file per step
 ## ([ActorFolder], [ActorSteps]): the videos surveyed, cut into shots, the shots grouped into sets (one
 ## camera placement and one look each); from every video, their range of mouth shapes and their head's
@@ -42,8 +45,8 @@ static func _remove_tree(path: String) -> void:
 	DirAccess.remove_absolute(path)
 
 
-## Every actor in the library, by name: `[{id, name}]`.
-static func list() -> Array:
+## Every actor in the library of [param kind] ("actor", or "voice" for a voice alone), by name: `[{id, name}]`.
+static func list(kind := "actor") -> Array:
 	var out: Array = []
 	var base := ProjectSettings.globalize_path(root)
 	var d := DirAccess.open(base)
@@ -53,16 +56,16 @@ static func list() -> Array:
 		if not FileAccess.file_exists(base.path_join(id).path_join(ActorFolder.FILE)):
 			continue
 		var a := ActorFolder.open(id)
-		if a != null:
+		if a != null and a.kind() == kind:
 			out.append({"id": id, "name": a.name()})
 	out.sort_custom(func(x: Dictionary, y: Dictionary) -> bool:
 		return String(x["name"]).naturalnocasecmp_to(String(y["name"])) < 0)
 	return out
 
 
-## A new actor called [param name]: its folder and its `actor.json`. Its id is the name made safe
-## and a short stamp, so two actors of one name are two folders.
-static func create(name: String) -> ActorFolder:
+## A new actor called [param name], of [param kind] ("voice" for a voice alone): its folder and its `actor.json`.
+## Its id is the name made safe and a short stamp, so two actors of one name are two folders.
+static func create(name: String, kind := "actor") -> ActorFolder:
 	var shown := name.strip_edges()
 	if shown.is_empty():
 		shown = "Actor"
@@ -79,6 +82,8 @@ static func create(name: String) -> ActorFolder:
 	a.id = id
 	a.dir = ProjectSettings.globalize_path(root.path_join(id))
 	a.data = ActorFolder.blank(shown)
+	if kind != "actor":
+		a.data["kind"] = kind
 	DirAccess.make_dir_recursive_absolute(a.dir)
 	a.save()
 	return a

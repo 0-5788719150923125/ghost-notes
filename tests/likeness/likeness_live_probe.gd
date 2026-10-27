@@ -246,7 +246,7 @@ func _card_costs() -> void:
 	for pair in [["actor card refresh", func() -> void: ac._refresh()],
 			["  step rows", func() -> void:
 				ac._actor.forget()
-				for st in ac._rows:
+				for st in ac._steps._rows:
 					ac._builder.row_of(String(st))],
 			["  sets", func() -> void: ac._actor.forget(); ac._sets_seen = ""; ac._fill_sets()],
 			["  stills", func() -> void: ac._stills_seen = ""; ac._fill_stills()],

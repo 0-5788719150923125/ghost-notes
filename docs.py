@@ -247,7 +247,9 @@ FOLDERS: List[Tuple[str, str, str]] = [
         "written stroke by stroke in a seeded hand from the Hershey stroke fonts), the pad, "
         "the pen that moves by itself, the instruments it reaches for - a calculator, a "
         "tablet, a screen with Lean on it - and the medium that puts them on the stage. "
-        "Its room is built from the table's parts. Design: next/proof.md.",
+        "Its room is built from the table's parts - and the letter written at the same desk: its own "
+        "cursive hand (the Hershey script font, no TeX), what it says and writes, and its medium. "
+        "Design: next/proof.md, next/letter.md.",
     ),
     (
         "proof",
@@ -259,6 +261,14 @@ FOLDERS: List[Tuple[str, str, str]] = [
         "next/proof.md.",
     ),
     (
+        "letter",
+        "Letter",
+        "A note read as a letter written by hand at a desk: the card that pins its medium, draws its "
+        "sketches (an agent's SVG, laid out by the Proof pad's ink step) and paints its pictures (the "
+        "Illustrations library's), and hands the reading the letter with the pen's rests in it. Design: "
+        "next/letter.md.",
+    ),
+    (
         "likeness",
         "Likeness",
         "An actor played from their own footage: the library of actors, each built from their videos "
@@ -266,7 +276,8 @@ FOLDERS: List[Tuple[str, str, str]] = [
         "audits them, a still of each set and a model of them from every video (their head's motion, "
         "their blinks, their mouths for each sound, their voice) - the card that makes one and puts "
         "them on a note's stage, and the medium that plays them reading it: the still, its head turned "
-        "and its mouth and eyes drawn from their own, through one mesh over the frame. Design: "
+        "and its mouth and eyes drawn from their own, through one mesh over the frame; and a voice "
+        "alone, taught their speech from their recordings by the Voice training card. Design: "
         "next/likeness.md.",
     ),
     (

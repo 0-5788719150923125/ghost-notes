@@ -74,20 +74,20 @@ const WORKSPACES := {
 		"blurb": "A voice reads the note: the cast, each speaker's delivery and room, the stream.",
 		"title": "Generative",
 		"hint": "Write or open a chapter. It is spoken in chunks, so the show starts while the rest is still being made. Edit lists every mark the reading understands - speakers, hesitations, pictures, pronunciations.",
-		"hosts": ["voice", "picture", "actor", "storyboard", "look", "bookends"],
+		"hosts": ["voice", "voice_training", "picture", "letter", "actor", "storyboard", "look", "bookends"],
 		"classic": ["text", "voice", "picture", "illustrations", "look", "bookends"]},
 	# (its settings keep the section they had as Cards: renamed, the workspace would forget them)
 	"table": {"label": "Table", "section": "cards",
 		"blurb": "A show at a table: the episodes agents make from the note's brief - cards drawn, things made, or both - and the voice that reads them.",
 		"title": "Table",
 		"hint": "Open a show: its body is the brief every agent works from. Each seed is one episode - planned, shuffled, painted and written one card (or one beat of work) at a time by the agents, then read here in the voice below, at the table.",
-		"hosts": ["table", "voice", "look", "bookends"],
+		"hosts": ["table", "voice", "voice_training", "look", "bookends"],
 		"classic": ["text", "table", "voice", "look", "bookends"]},
 	"proof": {"label": "Proof", "section": "proof",
 		"blurb": "A ghost doing math at a desk: the episodes agents make from the note's problem, and the voice that teaches them.",
 		"title": "Proof",
 		"hint": "The note's words are the problem: write one, or press Invent a problem. Make episode has the agents fix it, solve it at the desk and check the proof in Lean, then write the lesson the voice below reads while the pen writes it on the pad.",
-		"hosts": ["proof", "voice", "look", "bookends"],
+		"hosts": ["proof", "voice", "voice_training", "look", "bookends"],
 		"classic": ["text", "proof", "voice", "look", "bookends"]},
 	"lab": {"label": "Voice lab", "section": "synth",
 		"blurb": "Ghost Notes' own synthesizer and the fishing game that breeds its voices."},
@@ -118,6 +118,15 @@ const REGISTRY := {
 		"needs": ["text"], "provides": ["audio", "reading", "moments"], "requires": [], "slots": ["clock"], "workspace": "reading",
 		"capabilities": ["stage", "subprocess", "python:voice"], "marks": ["voices", "timing", "pronunciation"],
 		"block": "voice", "card": "voice", "script": "res://src/reading/voice_card.gd"},
+	# SOMEONE'S OWN VOICE (2026-10-26, next/likeness.md "A voice alone"): its card teaches a voice to speak as a
+	# person does, from their recordings - a folder, files, or links fetched as their sound - and the note reads in
+	# it. The Actor card's voice steps, without their picture; it brings a Voice.
+	"voice_training": {"label": "Voice training", "family": &"voice",
+		"blurb": "Teaches a voice to speak as someone does, from their own recordings - a folder, files, or links to videos, playlists or a channel: their speech heard, cut into clean sentences, and a voice fine-tuned on them on the graphics card. The note reads in it, and every Voice card can pick it.",
+		"needs": ["reading"], "provides": [], "requires": ["voice"], "slots": [], "workspace": "",
+		"capabilities": ["subprocess", "ffmpeg", "python:voice", "python:speech", "python:download", "python:voice_train"],
+		"marks": [], "block": "voice_training", "card": "voice_training",
+		"script": "res://src/likeness/voice_training_card.gd"},
 	"voice_lab": {"label": "Voice lab", "family": &"voice",
 		"blurb": "Ghost Notes' own synthesizer reads the text, and the fishing game breeds its voices.",
 		"needs": ["text"], "provides": ["audio", "reading", "moments"], "requires": ["scenes"],
@@ -167,6 +176,17 @@ const REGISTRY := {
 		"script": "res://src/proof/proof_card.gd",
 		"intro_tip": "Seconds the desk holds before the teacher speaks.",
 		"outro_tip": "Seconds held after the last word, the page on the desk, fading picture and sound out together."},
+	# A LETTER WRITTEN AT A DESK (next/letter.md, 2026-10-26): the note's words are the letter, written by
+	# hand while the voice reads them; its card draws the sketches and paints the pictures its marks
+	# describe, and pins its medium. It brings a Voice.
+	"letter": {"label": "Letter", "family": &"picture",
+		"blurb": "The note read as a letter written by hand at a desk: the pen writes each paragraph as the voice reads it, crosses lines out, draws the sketches the letter describes, taps while the writer thinks, and a picture takes the screen for a passage read over it.",
+		"needs": ["reading"], "provides": ["picture"], "requires": ["voice"],
+		"slots": ["presentation"], "workspace": "",
+		"capabilities": ["forward_plus", "subprocess", "agent:writer", "tex", "python:math"], "marks": ["letter"],
+		"block": "letter", "card": "letter", "script": "res://src/letter/letter_card.gd",
+		"intro_tip": "Seconds the desk holds before the letter is begun, its title over it.",
+		"outro_tip": "Seconds held after the pen's last stroke, the page on the desk, fading picture and sound out together."},
 	# AN ACTOR READS THE NOTE (next/likeness.md): its card builds them from their own videos - the footage
 	# surveyed and cut into sets, a still of the set in use, a model of them and their voice from every
 	# video - and puts them on the stage, the still moved by their own motion, the mouth and eyes drawn
@@ -235,6 +255,10 @@ static func attach_blocks(key: String) -> Dictionary:
 			return {"proof": {}}
 		"actor":
 			return {"actor": {}}
+		"letter":
+			return {"letter": {}}
+		"voice_training":
+			return {"voice_training": {}}
 		"song":
 			return {"song": {"path": ""}}
 		"clip":

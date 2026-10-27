@@ -20,6 +20,8 @@ uniform float flame = 0.0;
 // a scrub agree
 uniform float glow = 0.0;
 uniform float show_time = 0.0;
+// EACH COPY GLOWS ITS OWN WAY (Props.build sets it for a part with copies - a heap of coals): 0 the part as one
+uniform float apart = 0.0;
 uniform float boil = 0.0;
 #include "res://shaders/prop_common.gdshaderinc"
 
@@ -171,8 +173,16 @@ void fragment() {
 		rough = mix(0.85, 0.12, polish);
 		coat = polish * 0.6;
 	}
-	// LIGHT OF ITS OWN (TableWork's `glow`): the color itself, lit from inside
-	emit += color * glow * 1.6;
+	// LIGHT OF ITS OWN (TableWork's `glow`): the color itself, lit from inside - and a part's copies each their own
+	// share of it, hotter or cooler than the next and wandering on a slow clock of its own, never in step
+	// (the-quiet-crucible 181083's coals: "pulse with heat/color at exactly the same rate, across all coals")
+	float own = 1.0;
+	if (apart > 0.0) {
+		float wander = vnoise(vec3(show_time * 0.21 + tag * 37.0, tag * 53.0, 1.0)) * 0.65
+			+ vnoise(vec3(show_time * 0.57 + tag * 11.0, 2.0, tag * 71.0)) * 0.35;
+		own = mix(1.0, (0.6 + 0.8 * fract(tag * 7.31)) * (0.55 + 0.9 * wander), apart);
+	}
+	emit += color * glow * 1.6 * own;
 	// THE PLAY OF LIGHT (Props.PLAYS). Where the flames are is the renderer's business, so what
 	// catches them is made of surface: a patch of layers or a flake is a small mirror facing its own
 	// way, colored as a metal is, which a flame or the room's reflection lights - or does not

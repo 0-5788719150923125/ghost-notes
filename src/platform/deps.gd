@@ -99,8 +99,9 @@ const FETCHED := [
 		"tier": TIER_FEATURE,
 		"size": "~55 MB (~250 MB on Windows), ~190 MB installed",
 		"used_for": "TeX itself, for the Proof component: it lays out every formula the desk's pen "
-			+ "writes (hosts/math/typeset.py) and typesets each episode's paper. TinyTeX's small build "
-			+ "of TeX Live, its newest monthly release. Downloaded the first time a Proof needs it.",
+			+ "writes (hosts/math/typeset.py) and typesets each episode's paper - and the labels of a "
+			+ "Letter's sketches. TinyTeX's small build of TeX Live, its newest monthly release. "
+			+ "Downloaded the first time a Proof or a Letter needs it.",
 		"sources": {
 			"linux-x86_64": {"via": "github", "repo": "rstudio/tinytex-releases",
 				"asset": "^TinyTeX-1-linux-x86_64-v([0-9.]+)\\.tar\\.xz$"},
@@ -270,6 +271,38 @@ const MANAGED := [
 				"url": "https://huggingface.co/datasets/rhasspy/piper-checkpoints/resolve/37d1bea250e21ca0d617818d2bef1db724edb80c/en/en_US/john/medium/config.json",
 				"sha256": "af60f177b6b550f3d7a302720c0fb89e7f94a82b5dca464775ef63b1c69ba09a",
 				"size": 4965},
+			# KOKORO, TAUGHT HERE (hosts/voice_train/kokoro_voice.py): hexgrad's PyTorch checkpoint (Apache-2.0), its
+			# config, and the pack a voice starts from (onnx-community's af_heart, the voice host's own)
+			{"key": "kokoro_model", "name": "Kokoro's weights", "file": "kokoro-82m/kokoro-v1_0.pth",
+				"url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/f3ff3571791e39611d31c381e3a41a3af07b4987/kokoro-v1_0.pth",
+				"sha256": "496dba118d1a58f5f3db2efc88dbdc216e0483fc89fe6e47ee1f2c53f18ad1e4",
+				"size": 327212226},
+			{"key": "kokoro_config", "name": "Kokoro's settings", "file": "kokoro-82m/config.json",
+				"url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/f3ff3571791e39611d31c381e3a41a3af07b4987/config.json",
+				"sha256": "5abb01e2403b072bf03d04fde160443e209d7a0dad49a423be15196b9b43c17f",
+				"size": 2351},
+			{"key": "kokoro_base", "name": "Kokoro's starting voice", "file": "kokoro-82m/af_heart.bin",
+				"url": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX-timestamped/resolve/dd4401a9add81ac692d20e240d22ec9dda82cc29/voices/af_heart.bin",
+				"sha256": "d583ccff3cdca2f7fae535cb998ac07e9fcb90f09737b9a41fa2734ec44a8f0b",
+				"size": 522240},
+			# THE EAR THAT CHECKS EACH SENTENCE (hosts/speech/agree.py, read by the speech environment): Whisper medium.en -
+			# base.en and small.en heard 32 and 50 of 79 clean clips of soft speech as written, medium.en all of them
+			{"key": "whisper_medium", "name": "the careful speech model", "file": "whisper-medium.en/model.bin",
+				"url": "https://huggingface.co/Systran/faster-whisper-medium.en/resolve/a29b04bd15381511a9af671baec01072039215e3/model.bin",
+				"sha256": "11b220779aea4c6f3ce9d2549c8a95ea869ed84066864b999531ef53e594fe5b",
+				"size": 1527904330},
+			{"key": "whisper_medium_config", "name": "its settings", "file": "whisper-medium.en/config.json",
+				"url": "https://huggingface.co/Systran/faster-whisper-medium.en/resolve/a29b04bd15381511a9af671baec01072039215e3/config.json",
+				"sha256": "4a1848ebabe7938d9797c15a2e8e4ce1d36e6fd4a43d096ae5955257c67c7962",
+				"size": 2643},
+			{"key": "whisper_medium_tokenizer", "name": "its tokenizer", "file": "whisper-medium.en/tokenizer.json",
+				"url": "https://huggingface.co/Systran/faster-whisper-medium.en/resolve/a29b04bd15381511a9af671baec01072039215e3/tokenizer.json",
+				"sha256": "929c5252409436dce1b38a75d1abbcb5e132d170d8e324e4e04ed915fa2d22df",
+				"size": 2128466},
+			{"key": "whisper_medium_vocabulary", "name": "its vocabulary", "file": "whisper-medium.en/vocabulary.txt",
+				"url": "https://huggingface.co/Systran/faster-whisper-medium.en/resolve/a29b04bd15381511a9af671baec01072039215e3/vocabulary.txt",
+				"sha256": "ff77588746d3a2595d32ab5b69ffd7b95ce2441ac57533cb66fc3eb575a115cf",
+				"size": 422309},
 		],
 		"size": "~6 GB, and its base voice ~850 MB",
 		"unsupported": {
@@ -278,10 +311,10 @@ const MANAGED := [
 			"windows-x86_64": "PyPI's PyTorch for Windows has no CUDA build",
 			"windows-arm64": "PyPI's PyTorch for Windows has no CUDA build",
 		},
-		"used_for": "Piper's trainer (GPL; fetched, never shipped) and PyTorch with CUDA, for an actor's "
-			+ "own voice: a public-domain voice (John, LibriVox) fine-tuned on their speech on the "
-			+ "graphics card for an hour or more, then exported as a Piper voice the voice host plays. "
-			+ "Built the first time an actor's Voice step runs.",
+		"used_for": "PyTorch with CUDA, for someone's own voice on the graphics card: Kokoro taught their "
+			+ "speech by Ghost Notes' own loop (the Voice training card), or - an actor's - Piper's trainer (GPL; "
+			+ "fetched, never shipped) fine-tuning a public-domain voice (John, LibriVox); an hour or so either "
+			+ "way, then written as a voice the voice host plays. Built the first time a Voice step runs.",
 	},
 	{
 		"key": "math_venv",
@@ -293,8 +326,8 @@ const MANAGED := [
 		"size": "~16 MB",
 		"used_for": "fontTools, for hosts/math/typeset.py: it reads TeX's fonts for each glyph's name "
 			+ "(and its outline, for a glyph no hand draws), so the desk's pen writes what TeX laid "
-			+ "out; and svgelements, which reads a drawing's SVG for the pen (hosts/math/figure.py). "
-			+ "Built the first time a Proof needs it.",
+			+ "out; and svgelements, which reads a drawing's SVG for the pen (hosts/math/figure.py) - a "
+			+ "Proof's figures and a Letter's sketches. Built the first time a Proof or a Letter needs it.",
 	},
 	{
 		"key": "compute_venv",

@@ -21,7 +21,10 @@ badly or not at all):
 
     arrow="end" | "start" | "both"   on a line, polyline or path: an arrowhead drawn by hand
                                      (marker-end and marker-start are read the same way)
-    <dot x="" y=""/>                 a dot, the size a pen makes one
+    <dot x="" y=""/>                 a dot, the size a pen makes one; with r="" a solid dot that big, the
+                                     pen going round and round it until it is filled with ink (a letter's
+                                     "solid round dot ... about the size of a fingernail" - hatched, as a
+                                     filled circle is, it read as a circle struck through)
     <angle x="" y="" r="" from="" to=""/>
                                      an angle marked at (x, y): an arc of radius r from one direction
                                      to another, in degrees counterclockwise from pointing right as
@@ -77,6 +80,9 @@ STEP = 2.0
 ## A filled shape no bigger than this (points, each way) is a dot; bigger is hatched this far apart.
 DOT_MAX = 9.0
 DOT_R = 2.2
+## A solid dot with its own size is filled by a spiral this far between its turns (points): with the
+## hand's nib for a dot, the ink runs together.
+FILL_STEP = 0.9
 HATCH = 4.5
 ## An arrowhead's wings: their length (points) and their angle off the line.
 HEAD = 6.5
@@ -649,8 +655,10 @@ def _plain(root, data=None):
                 child = a
                 tag = "polyline"
             if tag == "dot":
+                big = _num(child, "r") if child.get("r") is not None else 0.0
                 c = _el("circle", cx=_num(child, "x", _num(child, "cx", 0.0)),
-                        cy=_num(child, "y", _num(child, "cy", 0.0)), r="0.5", ghostdot="1")
+                        cy=_num(child, "y", _num(child, "cy", 0.0)),
+                        r=str(big) if big and big > 0 else "0.5", ghostdot="big" if big and big > 0 else "1")
                 if child.get("id"):
                     c.set("id", child.get("id"))
                 el.insert(list(el).index(child), c)
@@ -794,6 +802,22 @@ def _spiral(cx, cy, r):
     return pts
 
 
+def _filled_dot(cx, cy, r):
+    """A solid dot of radius `r` (points) as a pen fills one: a spiral out from the middle, its turns
+    FILL_STEP apart, to the edge, and once round the edge."""
+    turns = max(r / FILL_STEP, 1.0)
+    n = int(turns * 24)
+    pts = []
+    for i in range(n + 1):
+        u = i / n
+        a = u * turns * math.tau
+        pts.append((cx + math.cos(a) * r * u, cy + math.sin(a) * r * u))
+    for i in range(1, 25):
+        a = turns * math.tau + i / 24 * math.tau
+        pts.append((cx + math.cos(a) * r, cy + math.sin(a) * r))
+    return pts
+
+
 def _arrows(el):
     a = (el.values.get("arrow") or "").strip().lower()
     start = a in ("start", "both") or bool(el.values.get("marker-start"))
@@ -873,11 +897,13 @@ def compile_figure(svg_text, data=None):
         subs = [s for s in subs if s]
         if not subs:
             continue
-        if el.values.get("ghostdot") == "1":
+        if el.values.get("ghostdot") in ("1", "big"):
             xs = [p[0] for s in subs for p in s]
             ys = [p[1] for s in subs for p in s]
-            paths.append({"k": k, "id": gid, "kind": "dot",
-                          "pts": _spiral((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2, DOT_R)})
+            cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+            pts = _filled_dot(cx, cy, (max(xs) - min(xs)) / 2) if el.values.get("ghostdot") == "big" \
+                else _spiral(cx, cy, DOT_R)
+            paths.append({"k": k, "id": gid, "kind": "dot", "pts": pts})
             k += 1
             continue
         xs = [p[0] for s in subs for p in s]

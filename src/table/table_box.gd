@@ -69,10 +69,12 @@ func build(things: Array, built: Array) -> void:
 			built.remove_at(i)
 			break
 	var shoebox := String(medium._plan.staging.get("box_style", "open")) == "shoebox"
+	var card_wh := CardTable.card_size(medium._plan.look)
 	if t.is_empty():
 		var stock := CardTable.color(String((medium._plan.look.get("frame", {}) as Dictionary).get("stock", "#c9b38a")))
+		# an open box as wide as its cards stand, and more
 		t = {"name": "the box the cards are kept in", "place": "by the deck", "holds_cards": true, "parts": [
-			{"shape": "extrude", "outline": "rect", "size": [22.0, 33.0] if shoebox else [9.6, 17.0],
+			{"shape": "extrude", "outline": "rect", "size": [22.0, 33.0] if shoebox else [maxf(9.6, (card_wh.x * 1.03 + 0.012) * 100.0), 17.0],
 				"height": 11.0 if shoebox else 9.0, "wall": 0.5, "material": "card box"}]}
 		var mats := {"card box": Props.sanitize_material({"kind": "paper", "color": "#" + stock.darkened(0.25).to_html(false)}, "#a08060")}
 		b = Props.build(Props.sanitize({"things": [t], "materials": mats}, [])["things"][0], mats, hash([medium._plan.seed_value, "card box"]))
@@ -83,8 +85,13 @@ func build(things: Array, built: Array) -> void:
 	var turn := (PI * 0.5 if across else 0.0) if shoebox else (0.0 if across or is_equal_approx(size.size.x, size.size.z) else PI * 0.5)
 	var w := size.size.z if turn != 0.0 else size.size.x
 	var d := size.size.x if turn != 0.0 else size.size.z
-	var most := CardTable.SHOEBOX_MAX if shoebox else CardTable.BOX_MAX
+	var most := CardTable.box_most(medium._plan.look, shoebox)
 	var k := minf(1.0, minf(most.x / w, minf(most.z / d, most.y / maxf(size.size.y, 0.001))))
+	# ITS OWN INSIDE ([method inside_of]) - and an open box is never stood so small its cards no longer stand in
+	# it: one built to its room's edge with a handle on the front was shrunk to 95%
+	var own := TableBox.inside_of(b)
+	if not shoebox and own.has_volume():
+		k = maxf(k, minf(1.0, card_wh.x * 1.03 / (own.size.z if turn != 0.0 else own.size.x)))
 	var basis := Basis(Vector3.UP, turn).scaled(Vector3(k, k, k))
 	var want := medium._plan.box_center() if shoebox else TablePositions.box_at(medium._plan.deck_base)
 	# its own place in the room kept for it, the open box's toward the spread
@@ -109,8 +116,8 @@ func build(things: Array, built: Array) -> void:
 	var rect := CardTable.screen_rect(corners, Vector3(at.x, 0.0, at.y), medium._plan.cam_base.affine_inverse(), lens)
 	medium._things_part.put(t, b, {"at": at, "outline": shape, "bb": Rect2(lo, hi - lo), "rect": rect}, basis, "#the box")
 	var world := Transform3D(basis, Vector3(at.x, 0.0, at.y)) * size
-	var inner := AABB(world.position + Vector3(BOX_WALL, BOX_WALL, BOX_WALL),
-		world.size - Vector3(BOX_WALL * 2.0, BOX_WALL, BOX_WALL * 2.0))
+	var inner := Transform3D(basis, Vector3(at.x, 0.0, at.y)) * own if own.has_volume() else \
+		AABB(world.position + Vector3(BOX_WALL, BOX_WALL, BOX_WALL), world.size - Vector3(BOX_WALL * 2.0, BOX_WALL, BOX_WALL * 2.0))
 	stood = {"node": b["node"], "inner": inner, "world": world, "local_bounds": size,
 		"rest": (b["node"] as Node3D).transform}
 	# The box walls are real occluders. Its contact decal only darkens the cloth at
@@ -139,6 +146,73 @@ func build(things: Array, built: Array) -> void:
 		# across them in the positional atlas. The box keeps its soft tabletop shade.
 		for card in medium._cards:
 			(card as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## THE INSIDE OF A BOX [param b] AS BUILT ([method Props.build]: its space, meters): from over the middle of its
+## floor, the nearest of its own walls each way - at two heights - and the floor under it, whatever it was built
+## of; and THE FRONT AND BACK CLEAR ACROSS ITS WIDTH, where its cards stand, and its sides along its length, so a
+## post standing into a corner keeps the file behind it. Taken as its bounds less [constant BOX_WALL], the-quiet-
+## crucible 181083's chest - a handle on its front, brass posts at its corners - filed its front cards out in
+## front of its front wall and the next through it (the user: "the cards are protruding from the front of the
+## box, through the wall of the box itself"). Empty when a ray from the middle finds no wall or no floor: the box
+## is open on a side, or its middle is not inside it.
+static func inside_of(b: Dictionary) -> AABB:
+	var size: AABB = b.get("size", AABB())
+	var root: Node = b.get("node")
+	var faces := PackedVector3Array()
+	for m in b.get("meshes", []):
+		var mi := m as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var xf := Transform3D()
+		var n: Node = mi
+		while n != null and n != root:
+			if n is Node3D:
+				xf = (n as Node3D).transform * xf
+			n = n.get_parent()
+		faces.append_array(xf * mi.mesh.get_faces())
+	if faces.is_empty() or not size.has_volume():
+		return AABB()
+	var tm := TriangleMesh.new()
+	tm.create_from_faces(faces)
+	var c := size.get_center()
+	var down: Dictionary = tm.intersect_ray(Vector3(c.x, size.end.y + 0.01, c.z), Vector3.DOWN)
+	if down.is_empty():
+		return AABB()
+	var floor_y := (down["position"] as Vector3).y
+	var rim := size.end.y
+	if rim - floor_y < 0.005:
+		return AABB()
+	var lo := Vector3(-INF, floor_y, -INF)
+	var hi := Vector3(INF, rim, INF)
+	# how far a ray from [param o] along an axis [param dir] goes before a wall, or NAN past every wall
+	var wall := func(o: Vector3, dir: Vector3) -> float:
+		var hit: Dictionary = tm.intersect_ray(o, dir)
+		return ((hit["position"] as Vector3) - o).dot(dir) if not hit.is_empty() else NAN
+	var heights := [floor_y + minf(0.01, (rim - floor_y) * 0.25), lerpf(floor_y, rim, 0.6)]
+	for y in heights:
+		var o := Vector3(c.x, y, c.z)
+		var to := [wall.call(o, Vector3.LEFT), wall.call(o, Vector3.RIGHT), wall.call(o, Vector3.FORWARD), wall.call(o, Vector3.BACK)]
+		if to.any(func(d: float) -> bool: return is_nan(d)):
+			return AABB()
+		lo.x = maxf(lo.x, c.x - float(to[0]))
+		hi.x = minf(hi.x, c.x + float(to[1]))
+		lo.z = maxf(lo.z, c.z - float(to[2]))
+		hi.z = minf(hi.z, c.z + float(to[3]))
+	for y in heights:
+		for f in [0.03, 0.25, 0.75, 0.97]:
+			var o := Vector3(lerpf(lo.x, hi.x, f), y, c.z)
+			var back: float = wall.call(o, Vector3.FORWARD)
+			var front: float = wall.call(o, Vector3.BACK)
+			lo.z = maxf(lo.z, c.z - back) if not is_nan(back) else lo.z
+			hi.z = minf(hi.z, c.z + front) if not is_nan(front) else hi.z
+		for f in [0.25, 0.75]:
+			var o := Vector3(c.x, y, lerpf(lo.z, hi.z, f))
+			var left: float = wall.call(o, Vector3.LEFT)
+			var right: float = wall.call(o, Vector3.RIGHT)
+			lo.x = maxf(lo.x, c.x - left) if not is_nan(left) else lo.x
+			hi.x = minf(hi.x, c.x + right) if not is_nan(right) else hi.x
+	return AABB(lo, hi - lo) if hi.x > lo.x and hi.z > lo.z else AABB()
 
 
 static func _lid_piece(parent: Node3D, mat: Material, dimensions: Vector3, at: Vector3) -> void:

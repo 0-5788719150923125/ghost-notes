@@ -23,7 +23,9 @@ extends SceneTree
 ##   wheels back over the table more than once in a visit; a flock flies together.
 ## - LAMPS stand out of the shot - one asked for in it is moved up out of it, one asked for outside it
 ##   stays; each flickers its own way as a function of the time: headlights only as they pass, a screen
-##   changing with its cuts.
+##   changing with its cuts. A LAMP MOVED OUT OF THE SHOT MIRRORS NOTHING (the-quiet-crucible 181083: the
+##   brazier's lamp, lifted behind the cauldron, a hot spot dancing in the brew) - the control: one where it
+##   was written keeps its glint.
 ## - AN ELECTRIC LIGHT IS STEADY (the user, 2026-10-19: flickering "in nearly every episode ... it flickers
 ##   "all the way" on and off (when typically flickering would be more like a brown-out, with partial
 ##   failure, not complete loss of light)"): a lamp, tubes and a sign never dim unless written `failing`.
@@ -398,6 +400,15 @@ func _lamps() -> bool:
 	_ok(bool(placed["moved"]) and not bool(in_shot.call(placed["at"])), "a lamp asked for in the shot stays in it")
 	var out_lamp := Lights.sanitize({"lamps": [{"look": "torch", "from": "front left", "distance": 150, "height": 90}]})["lamps"][0] as Dictionary
 	_ok(not bool(Lights.lamp_place(out_lamp, middle, in_shot)["moved"]), "control: a torch behind the camera was moved")
+	var both := Lights.build(Lights.sanitize({"lamps": [{"name": "seen", "look": "lantern", "from": "back", "distance": 60, "height": 5},
+		{"name": "behind", "look": "torch", "from": "front left", "distance": 150, "height": 90}]}),
+		{"middle": middle, "bounds": _bounds(), "seen": _seen(), "env": Environment.new(), "room": null, "in_shot": in_shot}, 7)
+	var lit: Array = both.lamps
+	_ok(bool((lit[0] as Dictionary)["moved"]) and ((lit[0] as Dictionary)["light"] as Light3D).light_specular == 0.0,
+		"a lamp moved out of the shot mirrors nothing (%.3f)" % ((lit[0] as Dictionary)["light"] as Light3D).light_specular)
+	_ok(not bool((lit[1] as Dictionary)["moved"]) and ((lit[1] as Dictionary)["light"] as Light3D).light_specular > 0.0,
+		"control: a lamp where it was written keeps its glint (%.3f)" % ((lit[1] as Dictionary)["light"] as Light3D).light_specular)
+	both.root.free()
 	# each its own way
 	var hk := Lights.flicker_of(Lights.sanitize({"lamps": [{"look": "headlights", "every": 30}]})["lamps"][0], 7)
 	var passing := 0

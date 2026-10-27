@@ -273,6 +273,8 @@ func _parsers_agree() -> void:
 				for blk in b:
 					shown += String((blk as Dictionary).get("text", ""))
 				_ok(not shown.contains("quicker"), "a delivery mark reached the page")
+			"thought", "strike", "unspoken", "point", "tap", "image_end", "still", "new_page":
+				_letter_mark(k, ex)
 			_:
 				_ok(false, "%s has no check in script_marks_check - prove it before shipping it" % k)
 	# THE SYNTHESIS FIX, two-sided: the raw text DOES read a cue aloud, the stripped text not.
@@ -440,3 +442,56 @@ func _highlighter() -> void:
 		"the synthesis highlighter colors a cue it does not honor")
 	te.free()
 	te2.free()
+
+
+## A LETTER'S MARK ([LetterScript]), read by the letter's own parser: what each does to what the pen
+## writes, what the voice says and what the screen follows.
+func _letter_mark(k: String, ex: String) -> void:
+	var dot := "<svg viewBox=\"0 0 360 40\"><circle id=\"the-dot\" cx=\"300\" cy=\"20\" r=\"4\" fill=\"black\"/></svg>"
+	var svgs := {Manuscript.image_key("a dot"): dot}
+	match k:
+		"thought":
+			var d := LetterScript.parse("Written first.\n\n%s\n\nWritten after.\n" % ex)
+			var written := ""
+			for a in d["actions"]:
+				written += String(a.get("text", "")) + " "
+			_ok(not written.contains("fine") and written.contains("first") and (d["spoken"] as PackedStringArray).has("fine")
+				and (d["spans"] as Array).size() == 1 and String(d["spans"][0]["kind"]) == "thought",
+				"a thought is written, or not said")
+		"strike":
+			var d := LetterScript.parse("Kept.\n\nCrossed out.\n\n%s\n" % ex)
+			var of := -1
+			for a in d["actions"]:
+				if String(a["kind"]) == "strike":
+					of = int(a["of"])
+			_ok(of >= 0 and String(d["actions"][of]["text"]) == "Crossed out.", "a strike crosses out the wrong line")
+		"unspoken":
+			var d := LetterScript.parse("Said.\n\n%s\n" % ex)
+			var line: Dictionary = d["actions"].back()
+			_ok(String(line["text"]) == "Dear Ink," and int(line["span"]) == 0
+				and not String(d["speakable"]).contains("Dear"), "an unspoken line is said, or not written")
+		"point":
+			var d := LetterScript.parse("<!-- sketch: a dot -->\n\nA dot.\n\n%s *That one.*\n" % ex, 1, svgs)
+			var pt: Dictionary = d["actions"].back()
+			_ok(String(pt["kind"]) == "point" and String(pt["part"]) == "the-dot"
+				and String(d["actions"][int(pt["of"])]["kind"]) == "draw" and int(pt["after"]) == 2,
+				"a point does not go to the part of the sketch it names")
+			_ok(not String(d["speakable"]).contains("point"), "a point is read aloud")
+		"tap":
+			var d := LetterScript.parse("One.\n\n%s\n\n*Two.*\n" % ex)
+			_ok(String(d["actions"].back()["kind"]) == "tap" and String(d["speakable"]).contains("action-hold"),
+				"a tap is not the pen's, or the voice does not wait for it")
+		"image_end":
+			var d := LetterScript.parse("<!-- image (full): a street -->\n\nUnder it.\n\n%s\n\nAfter it.\n" % ex)
+			var sp: Dictionary = d["spans"][0]
+			_ok(String(sp["kind"]) == "image" and int(sp["from"]) == 0 and int(sp["to"]) == 2,
+				"a picture is not shown over exactly its passage")
+		"still":
+			var d := LetterScript.parse("<!-- sketch: a dot -->\n\nA dot.\n\n%s\n\n*Look.*\n\nWritten.\n" % ex, 1, svgs)
+			var sp: Dictionary = d["spans"][0]
+			_ok(String(sp["kind"]) == "still" and int(sp["from"]) == 2 and int(sp["to"]) == 3,
+				"a still does not hold from its mark to the next written line")
+		"new_page":
+			var d := LetterScript.parse("One.\n\n%s\n\nTwo.\n" % ex)
+			_ok(bool(d["actions"].back()["turn"]) and int(d["actions"].back()["page"]) == 1,
+				"a new page mark does not turn the page")

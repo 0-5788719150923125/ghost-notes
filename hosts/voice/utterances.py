@@ -7,7 +7,11 @@
 The spec: {"videos": [{"vid", "path", "words"}], "config", "espeak", "out", "index"} - each ticked video's file
 and every word heard in it (`words`: Hear's speech.json, {"words": [{"text", "t0", "t1", "p"}]}), the base
 voice's config (its phoneme map), the eSpeak voice they are read in, the folder the utterances go to and the
-summary written last (`index`, the step's own file).
+summary written last (`index`, the step's own file). FOR KOKORO (`"engine": "kokoro"`, its `family` and whether
+it reads `british`; next/voice_engines.md, "Training Kokoro"): no config - the sound is cut at Kokoro's 24 kHz and
+the ids are its graph's (`KokoroBackend.ids_of`), `phonemes.json` its vocabulary. AND AGAIN, AGREED (`"agreed"`: the
+cuts hosts/speech/agree.py found, each sentence heard again alone and cut to the words its sound says): those cuts of
+the `from` folder's sentences written as utterances, their ids made again from the words kept (`apply`).
 
 Writes <out>/wav/<utt>.wav (22050 Hz, mono), <out>/metadata.csv (`utt|text|ids`: what training reads),
 <out>/test.csv (held out, never trained on: what the voice is measured against), <out>/phonemes.json (the
@@ -38,8 +42,11 @@ voice; a voice of one speaker averages them all and draws among them sentence by
 part alone (93 minutes from 19 videos) it was misheard half as often (15.9%) and held its register (its pitch from
 sentence to sentence varied 9 Hz, against 17). So every candidate is measured as it is cut (`signature`) and the
 ones kept are chosen together (`choose`), by measurement - never by a list of videos:
-- CLEAN: its speech CLEAN dB over its own pauses;
-- PACED AS SPEECH: RATE characters a second of loud sound (a music bed under it is loud with no words);
+- CLEAN: its speech CLEAN dB over its own pauses - or, where none of theirs is (2026-10-26: an ASMR channel's soft
+  speech over a high-gain microphone's hiss, a median 19 dB, 30 for none of 253), within CLEAN_FROM_BEST of their
+  cleanest (the 90th percentile): what is noisy is noisy against how they record;
+- PACED AS SPEECH: RATE characters a second of loud sound (a music bed under it is loud with no words; soft speech
+  has few loud frames, so its rate reads high - 25 a second their median, a quarter over 34);
 - IN THEIR REGISTER: its pitch within REGISTER of their usual one (where the most minutes of the clean ones are);
 - NOT BREATHY: a harmonics-to-noise ratio of BREATHY dB or more;
 - ONE RECORDING: a video's mean spectrum (BANDS mel bands, its level taken out) within RECORDING dB of the most
@@ -80,8 +87,9 @@ VOICED = 0.45
 LEVEL = -20.0  # dB: the median of an utterance's loud frames
 PEAK = 0.966
 HELD_OUT = 25  # every this many utterances, one is held out
-CLEAN = 30.0  # dB: an utterance's speech (its loud frames' median) over its own pauses (its 10th percentile)
-RATE = (8.0, 30.0)  # characters a second of loud sound
+CLEAN = 30.0  # dB: an utterance's speech (its loud frames' median) over its own pauses (its 10th percentile)...
+CLEAN_FROM_BEST = 6.0  # ...or this much under their cleanest (the 90th percentile), where that is under CLEAN
+RATE = (8.0, 60.0)  # characters a second of loud sound
 REGISTER = 1.3  # their usual pitch times or over this
 BREATHY = 3.6  # dB: the median harmonics-to-noise ratio of its pitched frames
 RECORDING = 2.0  # dB (RMS over the bands) from the most typical video's mean spectrum
@@ -206,8 +214,9 @@ def choose(cands: list) -> tuple[list, dict]:
     def out(i, reason):
         why.setdefault(reason, []).append(i)
     alive = []
+    clean = min(CLEAN, float(np.percentile([c["clean"] for c in cands], 90)) - CLEAN_FROM_BEST) if cands else CLEAN
     for i, c in enumerate(cands):
-        if c["clean"] < CLEAN:
+        if c["clean"] < clean:
             out(i, "noisy")
         elif not RATE[0] <= c["rate"] <= RATE[1]:
             out(i, "not paced as speech")
@@ -254,7 +263,7 @@ def choose(cands: list) -> tuple[list, dict]:
             continue
         said.add(key)
         kept.append(i)
-    return kept, {"why": why, "register": register, "recording": recording}
+    return kept, {"why": why, "register": register, "recording": recording, "clean": clean}
 
 
 def split_word(text: str) -> tuple[str, str]:
@@ -361,6 +370,40 @@ def write_text(path: Path, text: str) -> None:
     os.replace(tmp, path)
 
 
+def apply(spec: dict) -> int:
+    """THE AGREED CUTS written: each kept sentence's stretch of its clip, its words' ids made again (Kokoro's), the held-out
+    ones held out still."""
+    from backends.kokoro import SR as KOKORO_SR, KokoroBackend
+
+    global SR
+    SR = KOKORO_SR
+    src, out = Path(spec["from"]), Path(spec["out"])
+    cuts = json.loads(Path(spec["agreed"]).read_text(encoding="utf-8"))
+    (out / "wav").mkdir(parents=True, exist_ok=True)
+    for old in (out / "wav").glob("*.wav"):
+        old.unlink()
+    backend = KokoroBackend()
+    family, british = str(spec.get("family", "kokoro")), bool(spec.get("british", False))
+    train, test, seconds = [], [], 0.0
+    for utt, c in cuts.items():
+        with wave.open(str(src / "wav" / (utt + ".wav"))) as w:
+            y = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float32) / 32768.0
+        seg = y[int(float(c["t0"]) * SR): int(float(c["t1"]) * SR)]
+        said = [{"text": t, "punct": p} for t, p in (split_word(str(tk)) for tk in c["tokens"]) if t]
+        write_wav(out / "wav" / (utt + ".wav"), seg)
+        row = "%s|%s|%s" % (utt, " ".join(w["text"] + w["punct"] for w in said),
+                            " ".join(map(str, backend.ids_of(said, family, british))))
+        (test if c.get("set") == "test.csv" else train).append(row)
+        seconds += len(seg) / SR
+    write_text(out / "metadata.csv", "\n".join(train) + "\n")
+    write_text(out / "test.csv", "\n".join(test) + "\n")
+    write_text(out / "phonemes.json", json.dumps(backend._vocabs[family], ensure_ascii=False))
+    write_text(Path(spec["index"]), json.dumps({"utterances": len(train), "held_out": len(test),
+                                               "minutes": round(seconds / 60.0, 1)}, indent=1))
+    say("utterances: %d sentences agreed, %.1f minutes of their voice" % (len(train) + len(test), seconds / 60.0))
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="utterances.py")
     ap.add_argument("--ffmpeg", required=True)
@@ -368,14 +411,27 @@ def main(argv=None) -> int:
     ap.add_argument("--progress", default="")
     a = ap.parse_args(argv)
     spec = json.loads(Path(a.spec).read_text(encoding="utf-8"))
+    if spec.get("agreed"):
+        return apply(spec)
     out = Path(spec["out"])
     (out / "wav").mkdir(parents=True, exist_ok=True)
     for old in (out / "wav").glob("*.wav"):
         old.unlink()
-    pmap = json.loads(Path(spec["config"]).read_text(encoding="utf-8"))["phoneme_id_map"]
+    pmap = json.loads(Path(spec["config"]).read_text(encoding="utf-8"))["phoneme_id_map"] if spec.get("config") else {}
     espeak = str(spec.get("espeak", "en-us"))
-    from backends.piper import PiperBackend
-    backend = PiperBackend()
+    kokoro = str(spec.get("engine", "piper")) == "kokoro"
+    if kokoro:
+        # KOKORO'S RATE AND ITS OWN IDS: every measure below reads SR, so the cut and the choice are the same
+        global SR
+        from backends.kokoro import SR as KOKORO_SR, KokoroBackend
+        SR = KOKORO_SR
+        backend = KokoroBackend()
+        family, british = str(spec.get("family", "kokoro")), bool(spec.get("british", False))
+        backend.ids_of([{"text": "a", "punct": ""}], family, british)
+        pmap = backend._vocabs[family]
+    else:
+        from backends.piper import PiperBackend
+        backend = PiperBackend()
     cands, why, pitched = [], {}, []
     videos = spec["videos"]
     for vi, v in enumerate(videos):
@@ -422,7 +478,8 @@ def main(argv=None) -> int:
                 why["quiet"] = why.get("quiet", 0) + 1
                 continue
             gain = min(10.0 ** ((LEVEL - float(np.median(speech))) / 20.0), PEAK / max(1e-6, float(np.abs(seg).max())))
-            ids = ids_of(backend, [{"text": w["text"], "punct": w["punct"]} for w in r], pmap, espeak)
+            said = [{"text": w["text"], "punct": w["punct"]} for w in r]
+            ids = backend.ids_of(said, family, british) if kokoro else ids_of(backend, said, pmap, espeak)
             utt = "%s_%05d" % (v["vid"], k)
             write_wav(out / "wav" / (utt + ".wav"), seg * gain)
             cands.append({"utt": utt, "vid": v["vid"], "text": text, "seconds": len(seg) / SR,
@@ -448,6 +505,7 @@ def main(argv=None) -> int:
     summary = {"utterances": len(train), "held_out": len(test), "minutes": round(minutes, 1),
                "by_video": {k: round(s / 60.0, 1) for k, s in kept.items()}, "left_out": why,
                "left_out_minutes": minutes_out, "register": round(found["register"], 1),
+               "clean": round(float(found.get("clean", CLEAN)), 1),
                "recording": found["recording"],
                "voiced": [round(float(x), 2) for x in np.percentile(pitched, [10, 50, 90])] if pitched else []}
     write_text(Path(spec["index"]), json.dumps(summary, indent=1))
