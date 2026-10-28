@@ -328,10 +328,10 @@ const REGISTRY := {
 	"strike": {
 		"label": "Strike",
 		"group": "letter",
-		"blurb": "Letter: the pen crosses out the paragraph it last wrote, every line of it.",
+		"blurb": "Letter: the writer stops to decide, then the pen crosses out the paragraph it last wrote, every line of it. The pause is about 3 seconds; strike: 5 makes it 5.",
 		"before": "<!-- strike -->", "fill": "", "after": "", "line": "own",
 		"modes": ["generative"],
-		"pattern": "<!--\\s*strike\\s*-->",
+		"pattern": "<!--\\s*strike\\s*(?::[^>]*)?-->",
 	},
 	"unspoken": {
 		"label": "Written, not said",

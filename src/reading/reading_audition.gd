@@ -10,7 +10,8 @@ class_name ReadingAudition
 ## STREAMED, like a reading: every sentence is requested at once (the host answers them in order),
 ## each is joined onto the stream the moment it and everything before it has arrived, and playback
 ## starts with the first sentence. The first cut waited for the whole passage and was reported as
-## "a solid 15 seconds of silence" - longer than a chapter takes to start.
+## "a solid 15 seconds of silence" - longer than a chapter takes to start. So a Stop cancels what
+## is still asked ([method stop]).
 ##
 ## A PART OF ITS PANEL (next/structure.md, step 19): its state is its own, and it asks the
 ## [ReadingPanel] it was made by for the host, a voice's settings and the request for a chunk. The
@@ -101,9 +102,14 @@ func owns(id: int) -> bool:
 	return _req.has(id)
 
 
-## Stop: replies still in flight are dropped on arrival, and a worker still decoding is waited for
-## rather than abandoned - it is a fraction of a second.
+## Stop: the sentences not yet made are CANCELLED on the host ([method VoiceHost.cancel]) and the one
+## being made is dropped on arrival; a worker still decoding is waited for rather than abandoned - it
+## is a fraction of a second. Only forgotten, every sentence was still made, and each Test after a
+## Stop waited for the whole passage before it (2026-10-27: pressed a few times, "it will not work
+## again until we restart the app").
 func stop() -> void:
+	if not _req.is_empty() and panel._host != null:
+		panel._host.cancel(_req.keys())
 	for k in _tasks:
 		WorkerThreadPool.wait_for_task_completion(int((_tasks[k] as Dictionary)["task"]))
 	_tasks = {}

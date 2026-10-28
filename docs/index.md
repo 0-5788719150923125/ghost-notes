@@ -382,7 +382,7 @@ A study where a ghost does math, seen and heard: the ink (formulas TeX lays out,
 - [`ink.gd`](../src/desk/ink.gd) **Ink** - a formula written by hand, as a function of time.
 - [`legal_pad.gd`](../src/desk/legal_pad.gd) **LegalPad** - the desk's pad (`DeskMedium`): its cardboard back, its stack, the binding across its head, the page being written, and the pages turned over its head.
 - [`letter.gd`](../src/desk/letter.gd) **LetterMedium** - somebody writing a letter at a desk, reading it aloud as the pen puts it down (next/letter.md). The desk's medium (`DeskMedium`) - its pad, its pen, its camera, the voice followed word by word - with the letter's own hand and the letter's own moments (`LetterScript`).
-- [`letter_hand.gd`](../src/desk/letter_hand.gd) **LetterHand** - a letter's words in a cursive hand, as the pen's strokes.
+- [`letter_hand.gd`](../src/desk/letter_hand.gd) **LetterHand** - a letter's words in a hand, as the pen's strokes.
 - [`letter_script.gd`](../src/desk/letter_script.gd) **LetterScript** - a letter as the voice reads it and the desk writes it (next/letter.md).
 
 ### `proof/` - Proof

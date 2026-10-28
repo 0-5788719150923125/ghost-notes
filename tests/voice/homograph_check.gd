@@ -1,24 +1,25 @@
 extends SceneTree
 
-## Gate for [Phonemes.SPEAK_AS] - the words ghost pronounces itself because eSpeak
-## reads them wrong.
+## Gate for the words ghost pronounces itself ([Phonemes.SPEAK_AS], the names, the letter A) -
+## and for the HOMOGRAPHS it leaves alone.
 ##
 ## Separate from `g2p_check.gd`, which grades `word_to_phones` one word at a time
-## against `data/reference.yml`. These entries cannot be tested that way: the whole
-## point of a homograph is that the reading depends on the NEIGHBORS, so a case is
-## a sentence, not a word.
+## against `data/reference.yml`. These cases are sentences, not words: the letter A is
+## the letter only mid-sentence, and a word's place in a line is what the tokenizer gets
+## wrong.
 ##
 ## Two halves, and the second is the one that matters:
-##   SWITCHES - the constructions the rule exists for. eSpeak is measurably wrong on
+##   SWITCHES - the constructions a rule exists for. eSpeak is measurably wrong on
 ##              each of these, so a regression here is the original bug returning.
-##   HOLDS    - the constructions the rule must NOT touch. Every entry in SPEAK_AS
-##              overrides a word that was previously handled by eSpeak, and eSpeak is
-##              right far more often than it is wrong; a rule that fires too eagerly
-##              breaks readings that already worked. This half is the safety net, and
-##              it should always outnumber the first.
+##   HOLDS    - the constructions a rule must NOT touch. eSpeak is right far more
+##              often than it is wrong; a rule that fires too eagerly breaks readings
+##              that already worked.
 ##
-## `lives` regressed once in the field with no test standing behind it. That is why
-## it is here alongside the entry that prompted this file.
+## A HOMOGRAPH IS THE VOICE HOST'S (2026-10-27): its part of speech is read from the
+## sentence there (hosts/voice/homographs.py, held by hosts/voice/test_homographs.py). This
+## table had picked `lives` and `record` by lists of neighbors, and a word it pinned never
+## reached the host - "Earlier lives leave things lying around" was read as the verb. So
+## PINNED holds that a homograph reaches the host unpinned.
 ##
 ## Run: godot --headless --path . --script tests/voice/homograph_check.gd
 
@@ -28,24 +29,6 @@ const SWITCHES := [
 	# start); read as the article it was a clipped, near-silent schwa. North-star ch40.
 	["Two groups, A and B, forty or so.", "a", "EY"],
 	["Plan A failed.", "a", "EY"],
-	# record: eSpeak reads the VERB as the NOUN after a plural-noun subject, because it
-	# parses "<noun> record" as a compound. Pronoun subjects it already gets right, and
-	# they are here so the rule is proven not to have BROKEN them on its way past.
-	["The ledgers record no discrepancy that spring.", "record", "R IH K AO R D"],
-	["The ledger records no discrepancy.", "records", "R IH K AO R D Z"],
-	["Historians record the year.", "record", "R IH K AO R D"],
-	["The books record a loss.", "record", "R IH K AO R D"],
-	["The clerks record every entry.", "record", "R IH K AO R D"],
-	["They record no discrepancy.", "record", "R IH K AO R D"],
-	["He records everything.", "records", "R IH K AO R D Z"],
-	["We record the sound.", "record", "R IH K AO R D"],
-	["He will record the meeting.", "record", "R IH K AO R D"],
-	["I want to record this.", "record", "R IH K AO R D"],
-	# lives: the same failure shape - "prisoner lives" parsed as a compound noun.
-	["The way a prisoner lives in his cell.", "lives", "L IH V Z"],
-	["He lives here.", "lives", "L IH V Z"],
-	["Their lives changed.", "lives", "L AY V Z"],
-	["Many lives were lost.", "lives", "L AY V Z"],
 	# hums: eSpeak spells these out ("hmm" -> həm, heard as "hem").
 	["Hmm, you said, the remote still raised.", "hmm", "M M"],
 	["Hm, he said.", "hm", "M M"],
@@ -55,17 +38,8 @@ const SWITCHES := [
 const HOLDS := [
 	["A man walked in.", "a", "AH"],
 	["It was a test.", "a", "AH"],
-	["The record shows nothing.", "record", "R EH K ER D"],
-	["A record of the year.", "record", "R EH K ER D"],
-	["She broke the record.", "record", "R EH K ER D"],
-	["He put on a record player.", "record", "R EH K ER D"],
-	["For the record, he lied.", "record", "R EH K ER D"],
-	["It was a record year.", "record", "R EH K ER D"],
-	["The records show nothing.", "records", "R EH K ER D Z"],
-	["The records of the parish.", "records", "R EH K ER D Z"],
-	# the veto: an object-like word follows, but a determiner precedes, so it is the noun
-	["The record a clerk kept was lost.", "record", "R EH K ER D"],
-	["Her records a stranger found.", "records", "R EH K ER D Z"],
+	# a hum is pinned; the word "hum" is not one
+	["A low hum came from the hive.", "hum", "HH AH M"],
 ]
 
 
@@ -96,6 +70,14 @@ const PINNED := [
 	["The sun is in Leo this month.", "leo", false],
 	["Leo's month is August.", "leo's", false],
 	["The reader's hand is raised.", "reader's", false],
+	# A HOMOGRAPH reaches the host unpinned, its part of speech read there - in both its readings
+	["Earlier lives leave things lying around.", "lives", false],
+	["The way a prisoner lives in his cell.", "lives", false],
+	["The ledgers record no discrepancy.", "record", false],
+	["The ledger records no discrepancy.", "records", false],
+	# ...and cut clean where the tokenizer used to weld a period to it (closing a quote, at a
+	# line break): "record." would have missed every reading the host has for it
+	["The ledgers record no discrepancy.\"\nHe signed it.", "record", false],
 ]
 
 # Markdown is typography and must never be spoken. eSpeak turns a bare asterisk into the
@@ -180,20 +162,12 @@ const GROUPING := [
 	["He counted. 5 was missing.", ["He counted.", "Five was missing."]],
 ]
 
-# The same trap, checked for the thing that actually breaks: a homograph in the position
-# where the tokenizer used to fail must still resolve.
-const SWITCHES_TRAILING := [
-	["The ledgers record no discrepancy.\"\nHe signed it.", "record", "R IH K AO R D"],
-]
-
-
 func _init() -> void:
 	var fails := 0
 	fails += _run("switches", SWITCHES)
 	fails += _run("holds", HOLDS)
 	fails += _run("names", NAMES)
 	fails += _pinned()
-	fails += _run("trailing", SWITCHES_TRAILING)
 	fails += _markup()
 	fails += _normalize()
 	fails += _grouping()
@@ -203,7 +177,7 @@ func _init() -> void:
 		return
 	print("homograph_check: ALL OK (%d cases)"
 		% (SWITCHES.size() + HOLDS.size() + NAMES.size() + PINNED.size() + MARKUP.size()
-			+ SWITCHES_TRAILING.size() + NORMALIZE.size() + GROUPING.size()))
+			+ NORMALIZE.size() + GROUPING.size()))
 	quit()
 
 

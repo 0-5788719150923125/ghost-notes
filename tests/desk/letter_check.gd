@@ -3,14 +3,19 @@ extends SceneTree
 ## Does a letter hold together without a voice, an agent or a renderer: the hand, the format, the voice's
 ## rests and the desk's clock ([LetterHand], [LetterScript], [LetterMedium]; next/letter.md)?
 ##
-## - THE HAND WRITES CURSIVE ([LetterHand]): a word is one stroke the pen never lifts from, its i's dotted
-##   after it; NO LETTER IS LOST (the first look, 2026-10-26: "Dear Pen," came out "Dea Pe ," - a joined
-##   stroke appended to a copy of a packed array) - a word's ink is at least its letters' written alone,
-##   the control a word with one letter fewer; seeded, the same line is the same strokes and another hand's
-##   differ, and a word's WIDTH is the font's whatever the hand, so the pages never move with the seed.
-## - THE FORMAT ([method LetterScript.parse]): a paragraph is written and said, the first not indented and
-##   the next indented, every line on a rule; a thought is said and never written; a strike crosses out
-##   the paragraph last written and not the one before (the control); a picture's span is exactly its
+## - THE HAND IS THE JOURNAL'S, WRITTEN ([LetterHand], 2026-10-27): every hand has strokes for every letter,
+##   digit and mark a letter uses, and a nib; an i's dot is made after its stem, above it; NO LETTER IS LOST
+##   (the first look, 2026-10-26: "Dear Pen," came out "Dea Pe ," - a joined stroke appended to a copy of a
+##   packed array) - a word's ink is at least its letters' written alone, the control a word with one
+##   letter fewer; seeded, the same line is the same strokes and another seed's differ, and a word's WIDTH
+##   is the font's whatever the seed, so the pages never move with it - but another hand's is its own.
+## - THE FORMAT ([method LetterScript.parse]): a paragraph is written and said, NONE INDENTED and A RULE LEFT
+##   EMPTY BETWEEN TWO (the user: "the hanging indents look wrong ... there should probably be a newline
+##   between each paragraph") - the control, two lines of one paragraph a rule apart - every line on a
+##   rule; a thought is said and never written; a strike crosses out the paragraph last written and not the
+##   one before (the control), and THE WRITER DECIDES FIRST (the user: it "IMMEDIATELY scratches it out"):
+##   the voice rests the pause and the strike, a bare mark's pause [constant LetterScript.DECIDE] and
+##   `<!-- strike: 5 -->`'s five, a word there no number (the control); a picture's span is exactly its
 ##   passage; a sketch is drawn as the paragraph after it is said, and that paragraph is never written -
 ##   with no drawing yet (the control) there is no draw and still no writing; a point goes to the part of
 ##   the sketch it names, a point in a written paragraph is set aside and said so (the control: the pen
@@ -22,15 +27,30 @@ extends SceneTree
 ##   nowhere inside one. A SKETCH STAYS WITH WHAT IS SAID ABOUT IT (the first look: the cross and the dot
 ##   at a page's foot, the test and the point at it a page on): one pointed at two paragraphs later starts
 ##   a page, so the point finds it - the control, the same sketch pointed at by nothing, stays at the foot.
-## - THE PEN TRAILS, AND THE VOICE WAITS ONLY PAST A LAG ([constant LetterScript.LAG_MOST]): a letter of
-##   ordinary paragraphs asks for no rest but its page turns; one paragraph with far more ink than words
-##   asks for what it owes past the lag (the control).
-## - THE DESK'S CLOCK ([LetterMedium], no stage): a line is written while its words are said, the pen on
-##   the paper; through a thought nothing is being written, the pen is up and the camera eased back; a tap
+## - THE PAGE LIES BLANK FIRST (the user: "the writing begins IMMEDIATELY after the intro disappears"): the
+##   voice opens on a rest of [constant LetterScript.BLANK_PAGE], and nothing is written before it.
+## - THE PEN WRITES TWO WORDS AHEAD ([LetterScript]; the user: "A person wants to read what is being said ...
+##   maybe 2 words ahead of the speaking?"): ordinary sentences are not waited for, a sentence of far more ink
+##   than its words is (the control); a paragraph after a thought is waited for its first words, one of more
+##   ink longer (the control, one of less); its first line is marked to begin as the voice gets there.
+## - THE CAMERA'S ARC ([method LetterMedium._arc]; the user: "The forward and backward zooming of the camera
+##   is nauseating"): its two framings under twice as far apart; wide as the intro ends and coming in over
+##   the blank page; close mid-page; let go before the page turns; and NOTHING ELSE MOVES IT IN OR OUT - a
+##   thought, a point at a sketch and a tap leave it where the arc has it, where a point at the camera
+##   stands it back (the control).
+## - THE DESK'S CLOCK ([LetterMedium], no stage): a line begins as the voice begins the word two before its
+##   first, no quicker than [constant LetterScript.QUICKEST] its ink's time, the pen on the paper; THE PEN IS AHEAD
+##   OF THE VOICE - a paragraph's first word on the page before it is said, most words written before they are
+##   said, none said long before - on a quicker voice too, where one far quicker than the pen can go leaves it
+##   behind (the control); the first line begins as the blank page ends,
+##   one after a thought once it is said, one a page turns for once the voice has read the page, one under a
+##   picture as it is said (the desk's dictation); the intro clears [constant LetterScript.BLANK_PAGE] before
+##   the first word; through a thought nothing is being written and the pen is up; a tap
 ##   turns the pen over and brings its top down on its spot, by the line last written; a point at the
 ##   camera holds the pen up with its top clear of the pad (the first pose put it 2 cm into it), the camera
-##   stood back; a picture is up over its passage and gone
-##   before and after; a still frames the sketch with the camera's wander stopped, the pen off the pad;
+##   stood back; a picture is up over its passage and gone before and after, and the voice goes on only
+##   once it is gone; a strike begins the pause after both the line's last word and its ink, and is done
+##   before the voice goes on; a still frames the sketch with the camera's wander stopped, the pen off the pad;
 ##   and the letter is not over - no fade - while the unspoken line after the last word is being written.
 ##
 ##   godot --headless --path . --script tests/desk/letter_check.gd
@@ -94,6 +114,7 @@ func _init() -> void:
 	_hand()
 	_format()
 	_turns()
+	_blank()
 	_lag()
 	_clock()
 	if _fails.is_empty():
@@ -119,19 +140,30 @@ static func _ink(strokes: Array) -> float:
 	return t
 
 
+## The box [param pts] lie in.
+static func _box(pts: PackedVector2Array) -> Rect2:
+	var r := Rect2(pts[0], Vector2.ZERO)
+	for p in pts:
+		r = r.expand(p)
+	return r
+
+
 func _hand() -> void:
 	print("-- the hand")
-	var word: Array = LetterHand.line(PackedStringArray(["minimum"]), [], 3, "a")["strokes"]
-	var tiny := 0
-	for s in word.slice(1):
-		var lo := Vector2(INF, INF)
-		var hi := -lo
-		for p in (s as Dictionary)["points"]:
-			lo = lo.min(p)
-			hi = hi.max(p)
-		if (hi - lo).length() < 3.0 * LetterHand.unit():
-			tiny += 1
-	_check(word.size() == 3 and tiny == 2, "\"minimum\" is one stroke, its two dots made after it (%d strokes)" % word.size())
+	var lacking := PackedStringArray()
+	for h in LetterHand.HANDS:
+		if LetterHand.nib(h) <= 0.0 or LetterHand.ascent_px(h) <= 0.0:
+			lacking.append("%s has no nib or no height" % h)
+		for ch in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,;:!?'\"-()&":
+			var g := LetterHand._glyph(ch, h)
+			if g.is_empty() or (g[2] as Array).is_empty():
+				lacking.append("%s %s" % [h, ch])
+	_check(lacking.is_empty(), "every hand has a nib and strokes for every letter, digit and mark %s" % ", ".join(lacking))
+	var i_strokes: Array = LetterHand.line(PackedStringArray(["i"]), [], 3, "a")["strokes"]
+	var stem := _box(i_strokes[0]["points"]) if i_strokes.size() == 2 else Rect2()
+	var dot := _box(i_strokes[1]["points"]) if i_strokes.size() == 2 else Rect2()
+	_check(i_strokes.size() == 2 and dot.end.y < stem.position.y and dot.size.length() < stem.size.length() * 0.5,
+		"an i's dot is made after its stem, above it (%d strokes)" % i_strokes.size())
 	var whole := _ink(LetterHand.line(PackedStringArray(["Dear"]), [], 3, "b")["strokes"])
 	var alone := 0.0
 	for ch in "Dear":
@@ -147,11 +179,11 @@ func _hand() -> void:
 	var a := LetterHand.line(PackedStringArray(["the", "pen"]), [], 3, "d")
 	var b := LetterHand.line(PackedStringArray(["the", "pen"]), [], 3, "d")
 	var c := LetterHand.line(PackedStringArray(["the", "pen"]), [], 4, "d")
+	var other := LetterHand.line(PackedStringArray(["the", "pen"]), [], 3, "d", "caveat")
 	_check(a["strokes"][0]["points"] == b["strokes"][0]["points"] and a["strokes"][0]["points"] != c["strokes"][0]["points"]
-		and is_equal_approx(float(a["width"]), float(c["width"])),
-		"the same line is the same strokes, another hand's differ, and its width is the words' alone")
-	_check(not LetterHand.line(PackedStringArray(["1974"]), [], 3, "e")["strokes"].is_empty(),
-		"a year is written (its digits the roman's)")
+		and is_equal_approx(float(a["width"]), float(c["width"])) and not is_equal_approx(float(a["width"]), float(other["width"])),
+		"the same line is the same strokes, another seed's differ, its width the words' alone - and another hand's its own")
+	_check(not LetterHand.line(PackedStringArray(["1974"]), [], 3, "e")["strokes"].is_empty(), "a year is written")
 
 
 ## The actions of [param kind] in [param d].
@@ -173,9 +205,15 @@ func _format() -> void:
 	var spoken: PackedStringArray = d["spoken"]
 	var lines := _of(d, "pad-text")
 	var written := _written(d)
-	_check(String(lines[0]["text"]) == "Dear Friend," and is_equal_approx((lines[0]["at"] as Vector2).x, DeskScript.TEXT_X)
-		and is_equal_approx((lines[1]["at"] as Vector2).x, DeskScript.TEXT_X + LetterScript.INDENT),
-		"a paragraph is written: the first not indented, the next indented")
+	var flush := true
+	for l in lines:
+		flush = flush and is_equal_approx((l["at"] as Vector2).x, DeskScript.TEXT_X)
+	var y_of := func(i: int) -> float: return ((lines[i] as Dictionary)["at"] as Vector2).y
+	_check(String(lines[0]["text"]) == "Dear Friend," and flush and bool(lines[1].get("para", false))
+		and is_equal_approx(y_of.call(1) - y_of.call(0), DeskScript.RULE * 2.0),
+		"a paragraph is written, none indented, a rule left empty above the next")
+	_check(not bool(lines[2].get("para", false)) and is_equal_approx(y_of.call(2) - y_of.call(1), DeskScript.RULE),
+		"and none between two lines of one paragraph (the control)")
 	var on_rules := true
 	for l in lines:
 		var y := (l["at"] as Vector2).y
@@ -186,6 +224,19 @@ func _format() -> void:
 	var strikes := _of(d, "strike")
 	_check(strikes.size() == 1 and String((d["actions"][int(strikes[0]["of"])] as Dictionary)["text"]) == "I hope you are well.",
 		"a strike crosses out the paragraph last written, not the one before")
+	var rest_before := func(parsed: Dictionary, words: String) -> float:
+		var said := String(parsed["speakable"])
+		var m := RegEx.create_from_string("action-hold: ([0-9.]+) -->\\s*" + words).search(said)
+		return float(m.get_string(1)) if m != null else 0.0
+	var timed := LetterScript.parse(LETTER.replace("<!-- strike -->", "<!-- strike: 5 -->"), 3, svgs)
+	var worded := LetterScript.parse(LETTER.replace("<!-- strike -->", "<!-- strike: soon -->"), 3, svgs)
+	var thought := "\\*She is always"
+	_check(float(strikes[0]["decide"]) == LetterScript.DECIDE
+		and rest_before.call(d, thought) >= LetterScript.DECIDE + LetterScript.STRIKE - 0.01,
+		"the writer decides first: the voice rests the pause and the strike (%.2f s)" % rest_before.call(d, thought))
+	_check(float(_of(timed, "strike")[0]["decide"]) == 5.0 and rest_before.call(timed, thought) >= 5.0 + LetterScript.STRIKE - 0.01
+		and float(_of(worded, "strike")[0]["decide"]) == LetterScript.DECIDE,
+		"a strike's own number is its pause (%.2f s), a word there no number (the control)" % rest_before.call(timed, thought))
 	var image: Dictionary = (d["spans"] as Array).filter(func(s: Dictionary) -> bool: return String(s["kind"]) == "image")[0]
 	_check(spoken[int(image["from"])] == "the" and spoken[int(image["to"]) - 1] == "left",
 		"a picture's span is exactly its passage")
@@ -237,41 +288,116 @@ static func _filler(n: int, words := 60) -> String:
 
 func _turns() -> void:
 	print("-- a page turns mid-sentence")
-	var long := LetterScript.parse(_filler(12))
+	# paragraphs a page does not hold a whole number of (at 60 words, three filled one exactly)
+	var per := 50
+	var long := LetterScript.parse(_filler(12, per))
 	var turned: Array = _of(long, "pad-text").filter(func(a: Dictionary) -> bool: return bool(a["turn"]))
-	var mid := turned.filter(func(a: Dictionary) -> bool: return int(a["after"]) % 60 != 0)
+	var mid := turned.filter(func(a: Dictionary) -> bool: return int(a["after"]) % per != 0)
 	var said := String(long["speakable"])
 	var at := -1
 	if not mid.is_empty():
 		var first := String((mid[0] as Dictionary)["text"]).get_slice(" ", 0)
-		var hold := "<!-- action-hold: %s --> " % String.num(LetterScript.TURN_REST, 2)
-		at = said.find(hold + first)
+		var m := RegEx.create_from_string("<!-- action-hold: ([0-9.]+) --> " + first).search(said)
+		if m != null and float(m.get_string(1)) >= LetterScript.TURN_REST - 0.01:
+			at = m.get_start()
 	_check(not mid.is_empty() and at > 0 and not said.substr(at - 2, 2).contains("\n"),
-		"the voice rests right before the first word of the line the page turns for, inside its paragraph")
+		"the voice rests right before the first word of the line the page turns for, inside its paragraph, the turn and more")
 	var short := LetterScript.parse(_filler(2))
-	_check(not String(short["speakable"]).contains("action-hold"), "and on a page it fits, nowhere (the control)")
-	# A SKETCH STAYS WITH WHAT IS SAID ABOUT IT: one near a page's foot, pointed at two paragraphs on
+	_check(RegEx.create_from_string("\\S <!-- action-hold").search(_past_blank(String(short["speakable"]))) == null,
+		"and on a page it fits, none inside a paragraph of one sentence (the control)")
+	# A SKETCH STAYS WITH WHAT IS SAID ABOUT IT: one near a page's foot, pointed at two paragraphs on - the
+	# words before it as many as leave it room at the foot, whatever the hand
 	var svgs := {Manuscript.image_key("a cross and a dot on one line"): DOT_SVG}
 	var tail := "\n<!-- sketch: a cross and a dot on one line -->\n\nA cross, and a dot.\n\n" + _filler(2, 40)
-	var pointed := LetterScript.parse(_filler(3) + tail + "\n<!-- point: sketch, the dot --> *That one.*\n", 3, svgs)
-	var unpointed := LetterScript.parse(_filler(3) + tail, 3, svgs)
+	var lead := ""
+	var unpointed := {}
+	for m in range(60, 0, -5):
+		lead = _filler(2) + "\n" + _filler(1, m)
+		unpointed = LetterScript.parse(lead + tail, 3, svgs)
+		var at_foot: Dictionary = _of(unpointed, "draw")[0]
+		if not bool(at_foot["turn"]):
+			break
+	var low: Dictionary = _of(unpointed, "draw")[0]
+	var pointed := LetterScript.parse(lead + tail + "\n<!-- point: sketch, the dot --> *That one.*\n", 3, svgs)
 	var draw: Dictionary = _of(pointed, "draw")[0]
 	var pt: Dictionary = _of(pointed, "point")[0]
 	_check(bool(draw["turn"]) and int(pt["page"]) == int(draw["page"]),
 		"a sketch pointed at later starts a page of its own, so the point finds it on the page")
-	_check(not bool((_of(unpointed, "draw")[0] as Dictionary)["turn"]),
-		"and with nothing pointing at it, it stays at the page's foot (the control)")
+	_check(not bool(low["turn"]) and (low["at"] as Vector2).y > DeskScript.PH * 0.6,
+		"and with nothing pointing at it, it stays at the page's foot (the control; %.0f px down)" % (low["at"] as Vector2).y)
+
+
+## [param said] past the blank page's rest it opens on (none of a letter's own).
+static func _past_blank(said: String) -> String:
+	var m := RegEx.create_from_string("^<!-- action-hold: [0-9.]+ -->").search(said)
+	return said.substr(m.get_end()) if m != null else said
+
+
+func _blank() -> void:
+	print("-- the blank page")
+	var d := LetterScript.parse(LETTER, 3)
+	var said := String(d["speakable"])
+	var head := RegEx.create_from_string("^<!-- action-hold: ([0-9.]+) -->").search(said)
+	_check(head != null and float(head.get_string(1)) >= LetterScript.BLANK_PAGE and said.count("<!-- action-hold") > 1,
+		"the voice opens on the blank page's rest, and the pen's head start")
+	var opening := LetterScript.parse("<!-- unspoken: Dear Friend, -->\n\nSaid.\n", 3)
+	_check(String(opening["speakable"]).begins_with("<!-- action-hold: "), "and a letter opening on a line written, not said, too")
 
 
 func _lag() -> void:
-	print("-- the pen trails the voice")
-	var calm := LetterScript.parse(_filler(3, 40))
-	_check(not String(calm["speakable"]).contains("action-hold"), "ordinary paragraphs ask for no rest")
-	var dense := LetterScript.parse("Incomprehensibilities, notwithstanding, counterrevolutionaries, institutionalization, "
-		+ "uncharacteristically, disproportionately, overcompensating, interdisciplinary.\n\nNext.\n")
-	var m := RegEx.create_from_string("action-hold: ([0-9.]+)").search(String(dense["speakable"]))
-	_check(m != null and float(m.get_string(1)) > 1.0, "a paragraph of far more ink than words asks for what it owes past the lag (%s)"
-		% (m.get_string(1) if m != null else "none"))
+	print("-- the pen writes two words ahead")
+	var inner_rest := RegEx.create_from_string("\\S <!-- action-hold")
+	var plain := _past_blank(String(LetterScript.parse("One is here. Two is there. Three is last.\n")["speakable"]))
+	var dense_mid := _past_blank(String(LetterScript.parse("It is here. Incomprehensibilities, notwithstanding, "
+		+ "counterrevolutionaries, institutionalization, uncharacteristically.\n")["speakable"]))
+	_check(inner_rest.search(plain) == null and inner_rest.search(dense_mid) != null,
+		"ordinary sentences are not waited for, a sentence of far more ink than its words is (the control)")
+	var hold_before := func(text: String, words: String) -> float:
+		var m := RegEx.create_from_string("action-hold: ([0-9.]+) -->\\s*" + words).search(_past_blank(text))
+		return float(m.get_string(1)) if m != null else 0.0
+	var short: float = hold_before.call(String(LetterScript.parse("*Thought.*\n\nIt is a cat.\n")["speakable"]), "It")
+	var dense: float = hold_before.call(String(LetterScript.parse("*Thought.*\n\nIncomprehensibilities, notwithstanding, "
+		+ "counterrevolutionaries.\n")["speakable"]), "Incomprehensibilities")
+	_check(short > 0.0 and dense > short + 0.5,
+		"a paragraph after a thought is waited for its first words (%.2f s), one of more ink longer (%.2f s, the control)" % [short, dense])
+	var gated := LetterScript.parse("*Thought.*\n\nIt is a cat.\n")
+	var line: Dictionary = _of(gated, "pad-text")[0]
+	_check(String(line.get("gate", "")) == "voice" and absf(float(line.get("gate_rest", -1.0)) - short) < 0.01,
+		"and its first line is marked to begin as the voice gets there")
+
+
+## THE PEN'S LEAD ON THE VOICE in [param m], heard as [param words] (by spoken index): `{first, worst, behind,
+## n}` - the least a paragraph's first word is on the page before it is said, the most any word is said before
+## it is written, and how many of the n words written ahead are said first. A word is written when the line's
+## ink reaches its end ([method LetterMedium._share]).
+static func _read_along(m: LetterMedium, words: Array) -> Dictionary:
+	var first := INF
+	var worst := -INF
+	var behind := 0
+	var n := 0
+	for i in m._actions.size():
+		var a: Dictionary = m._actions[i]
+		if String(a["kind"]) != "pad-text" or int(a.get("span", 0)) == 0 or m._pictured(a):
+			continue
+		var ends: PackedFloat32Array = a["ends"]
+		var write := float(a["write"])
+		for j in int(a["span"]):
+			var lo := float(m._plan[i]["start"])
+			var hi := float(m._plan[i]["end"])
+			for _it in 24:
+				var mid := (lo + hi) * 0.5
+				if m._share(i, mid) * write >= ends[j]:
+					hi = mid
+				else:
+					lo = mid
+			var lag := hi - float((words[int(a["after"]) + j] as Dictionary)["t0"])
+			worst = maxf(worst, lag)
+			n += 1
+			if lag > 0.0:
+				behind += 1
+			if j == 0 and bool(a.get("para", false)):
+				first = minf(first, -lag)
+	return {"first": first, "worst": worst, "behind": behind, "n": n}
 
 
 ## A typeset record for [constant DOT_SVG], as the ink step hands one: a line, the dot, its anchor.
@@ -286,6 +412,7 @@ func _clock() -> void:
 	print("-- the desk's clock")
 	var feed := ShowFeed.new()
 	feed.outro_hold = 4.0
+	feed.intro_hold = 1.0           # where the rehearsal's voice begins
 	var svgs := {Manuscript.image_key("a cross and a dot on one line"): DOT_SVG}
 	var id := String(DeskScript.item("draw", DOT_SVG)["id"])
 	var m := LetterMedium.new()
@@ -312,16 +439,66 @@ func _clock() -> void:
 				return i
 		return -1
 	var t0 := func(i: int) -> float: return float((words[i] as Dictionary)["t0"])
-	# a line, written as it is said
+	# a line, written ahead
 	var li := -1
 	for i in m._actions.size():
 		if String((m._actions[i] as Dictionary).get("text", "")).begins_with("I am writing"):
 			li = i
 	var a: Dictionary = m._actions[li]
-	m._now = (t0.call(int(a["after"])) + t0.call(int(a["after"]) + int(a["span"]) - 1)) * 0.5
-	var u := m._written(li)
-	_check(u > 0.1 and u < 0.95 and float(m.pen_at()["lift"]) <= DeskMedium.LIFT + 0.0001,
-		"a line is written while its words are said (%.2f of it half way), the pen on the paper" % u)
+	var ls := float(m._plan[li]["start"])
+	var two_back := float((words[int(a["after"]) - LetterScript.AHEAD_WORDS] as Dictionary)["t0"])
+	m._now = (ls + float(m._plan[li]["end"])) * 0.5
+	var pen_free := float(m._plan[li - 1]["end"]) + m._way(li - 1, li)
+	_check(absf(ls - maxf(two_back, pen_free)) < 0.05 and m._written(li) > 0.1 and m._written(li) < 0.9
+		and float(m.pen_at()["lift"]) <= DeskMedium.LIFT + 0.0001,
+		"a line begins as the voice begins the word %d before its first, or as the pen is free, the pen on the paper" % LetterScript.AHEAD_WORDS)
+	var paced := true
+	for i in m._actions.size():
+		var pa: Dictionary = m._actions[i]
+		if String(pa["kind"]) == "pad-text" and int(pa.get("span", 0)) > 0 and not m._pictured(pa):
+			var took := float(m._plan[i]["end"]) - float(m._plan[i]["start"])
+			paced = paced and took >= float(pa["write"]) / LetterScript.QUICKEST - 0.01
+	_check(paced, "no line is written quicker than %.1f times its ink's own time" % LetterScript.QUICKEST)
+	# THE PEN IS AHEAD OF THE VOICE
+	var along := _read_along(m, words)
+	var read_by := func(per: float) -> Dictionary:
+		var md := LetterMedium.new()
+		md.feed = feed
+		md._pad = LegalPad.new()
+		md.load_letter(LETTER, {"seed": 3, "svgs": svgs, "ink": {"items": [_dot_record(id)]}})
+		var heard := DeskScript.rehearsal(parsed, per, 0.2, 1.0)
+		md._now = 0.0
+		md.take_words(heard)
+		var got := _read_along(md, heard)
+		md.free()
+		return got
+	var quicker: Dictionary = read_by.call(0.34)
+	var behind: Dictionary = read_by.call(0.12)
+	_check(float(along["first"]) > 0.05 and int(along["behind"]) * 2 < int(along["n"])
+		and float(along["worst"]) <= LetterScript.OVERTAKE + 1.0,
+		"the pen is ahead of the voice: a paragraph's first word on the page %.1f s before it is said at the least, %d of %d words said first, none %.1f s after"
+		% [float(along["first"]), int(along["behind"]), int(along["n"]), float(along["worst"])])
+	_check(int(quicker["behind"]) * 2 < int(quicker["n"]) and float(quicker["worst"]) <= LetterScript.OVERTAKE + 1.0,
+		"and on a quicker voice too (%d of %d said first, none %.1f s after)" % [int(quicker["behind"]), int(quicker["n"]), float(quicker["worst"])])
+	_check(float(behind["worst"]) > LetterScript.OVERTAKE + 1.0,
+		"where a voice far quicker than the pen can go leaves it %.1f s behind (the control)" % float(behind["worst"]))
+	# where the pen waits for the voice
+	var first_line: Dictionary = m._actions[0]
+	var yours := -1
+	for i in m._actions.size():
+		if String((m._actions[i] as Dictionary).get("text", "")) == "Yours,":
+			yours = i
+	var them: int = at.call("them")
+	var street := -1
+	for i in m._actions.size():
+		if String((m._actions[i] as Dictionary).get("text", "")).begins_with("The street"):
+			street = i
+	_check(absf(float(m._plan[0]["start"]) - (feed.intro_hold + LetterScript.BLANK_PAGE)) < 0.05 and String(first_line["text"]) == "Dear Friend,"
+		and float(m._plan[yours]["start"]) >= float((words[them] as Dictionary)["t1"]) - 0.05
+		and absf(float(m._plan[street]["start"]) - (t0.call(int((m._actions[street] as Dictionary)["after"])) - DeskMedium.PEN_LEAD)) < 0.05,
+		"the first line begins as the blank page ends, one after a thought once it is said, one under a picture as it is said")
+	_check(absf(m._opening() - (float(m._plan[0]["start"]) - LetterScript.BLANK_PAGE)) < 0.05,
+		"the intro clears the blank page's rest before the pen first touches the page")
 	# a thought
 	var th: int = at.call("always")
 	m._now = t0.call(th) + 0.2
@@ -330,8 +507,9 @@ func _clock() -> void:
 		if String((m._actions[i] as Dictionary)["kind"]) == "pad-text":
 			var w := m._written(i)
 			writing = writing or (w > 0.0 and w < 1.0)
-	_check(not writing and float(m.pen_at()["lift"]) > DeskMedium.LIFT and float(m._framing()["k"]) <= LetterMedium.THINK_K,
-		"through a thought nothing is written, the pen is up and the camera eased back")
+	_check(not writing and float(m.pen_at()["lift"]) > DeskMedium.LIFT,
+		"through a thought nothing is written and the pen is up")
+	_check(is_equal_approx(float(m._framing()["k"]), m._arc()), "and the camera neither stands back nor comes in")
 	# the tap: the top comes down on its spot
 	var ti := -1
 	for i in m._actions.size():
@@ -379,6 +557,62 @@ func _clock() -> void:
 	_check(not held.is_empty() and float(held["f"]) == 1.0 and hx.origin.y > 0.1 and top_y > 0.03
 		and float(m._framing()["k"]) <= LetterMedium.CAMERA_K,
 		"a point at the camera holds the pen up over the page, its top %.1f cm clear of the pad, the camera stood back" % (top_y * 100.0))
+	# THE CAMERA'S ARC
+	var ratio := float(LetterMedium.LETTER_WIDE["dist"]) / float(LetterMedium.LETTER_LOCAL["dist"])
+	m._now = feed.intro_hold
+	var k_open := m._arc()
+	m._now = t0.call(0)
+	var k_first := m._arc()
+	m._now = feed.intro_hold + LetterMedium.ARRIVE + LetterMedium.ARC_IN + 1.0
+	var k_mid := m._arc()
+	_check(ratio < 2.0 and k_open == 0.0 and k_first > 0.0 and k_first < 0.6 and k_mid == 1.0,
+		"the camera's framings are %.2f times apart; wide as the intro ends, coming in over the blank page (%.2f at the first word), close mid-page"
+		% [ratio, k_first])
+	var turn_i := -1
+	for i in m._actions.size():
+		if bool((m._actions[i] as Dictionary).get("turn", false)):
+			turn_i = i
+	var ta := float(m._plan[turn_i]["turn_at"])
+	m._now = ta - LetterMedium.OUT_BEFORE - LetterMedium.ARC_OUT - 0.5
+	var k_before := m._arc()
+	m._now = ta - LetterMedium.OUT_BEFORE + 0.01
+	var k_let_go := m._arc()
+	_check(ta < INF and k_before == 1.0 and k_let_go == 0.0, "and lets go before the page turns, done %.0f s ahead of it" % LetterMedium.OUT_BEFORE)
+	# nothing else moves it in or out: on the same letter with a long paragraph after its point at the
+	# camera, so its turn is well past the points and the tap, which here all fall where the arc lets go -
+	# and one between the tap and the point at the camera, which here comes up within the tap
+	var long := LETTER.replace("*Not that.*", "*Not that.*\n\n" + _filler(1, 30)).replace("<!-- a note to myself -->",
+		_filler(1, 120))
+	var m2 := LetterMedium.new()
+	m2.feed = feed
+	m2._pad = LegalPad.new()
+	m2.load_letter(long, {"seed": 3, "svgs": svgs, "ink": {"items": [_dot_record(id)]}})
+	var parsed2 := LetterScript.parse(long, 3, svgs, LetterScript.lengths_of(records, 3), records)
+	var words2 := DeskScript.rehearsal(parsed2, 0.42, 0.35, 1.0)
+	m2._now = 0.0
+	m2.take_words(words2)
+	var steady := true
+	var seen := PackedStringArray()
+	for i in m2._actions.size():
+		var kind := String((m2._actions[i] as Dictionary)["kind"])
+		if kind in ["point", "tap"]:
+			m2._now = float(m2._plan[i]["start"]) + 0.2
+			steady = steady and m2._arc() == 1.0 and is_equal_approx(float(m2._framing()["k"]), 1.0)
+			seen.append(kind)
+	var cam2: Dictionary = (parsed2["spans"] as Array).filter(func(x: Dictionary) -> bool: return String(x["kind"]) == "camera")[0]
+	m2._now = (float((words2[int(cam2["after"])] as Dictionary)["t0"]) + float((words2[int(cam2["after"]) + int(cam2["span"]) - 1] as Dictionary)["t0"])) * 0.5
+	_check(steady and seen.size() == 2 and m2._arc() == 1.0 and float(m2._framing()["k"]) < 1.0,
+		"a point at a sketch and a tap leave the camera close, where a point at the camera stands it back (the control)")
+	var turned := 0
+	var read_first := true
+	for i in m2._actions.size():
+		var tl: Dictionary = m2._actions[i]
+		if String(tl["kind"]) == "pad-text" and bool(tl.get("turn", false)) and int(tl.get("span", 0)) > 0 and not m2._pictured(tl):
+			turned += 1
+			var read := float((words2[int(tl["after"]) - 1] as Dictionary)["t1"])
+			read_first = read_first and float(m2._plan[i]["turn_at"]) >= read - 0.05
+	_check(turned > 0 and read_first, "a page is turned for a line written ahead only once the voice has read it (%d turns)" % turned)
+	m2.free()
 	# the picture
 	var img := Image.create(4, 4, false, Image.FORMAT_RGB8)
 	var key := Manuscript.image_key("a quiet street at night, nobody on it")
@@ -390,10 +624,24 @@ func _clock() -> void:
 	var mid := m.picture_at()
 	m._now = t0.call(pf) - 2.0
 	var before := m.picture_at()
-	m._now = float((words[pl] as Dictionary)["t1"]) + 0.4 + LetterMedium.IMAGE_FADE + 0.1
+	m._now = float((words[pl] as Dictionary)["t1"]) + LetterScript.IMAGE_AFTER + LetterMedium.IMAGE_FADE + 0.05
 	var after := m.picture_at()
 	_check(String(mid["key"]) == key and float(mid["alpha"]) == 1.0 and float(before["alpha"]) == 0.0
 		and float(after["alpha"]) == 0.0, "a picture is up over its passage, and gone before and after it")
+	m._now = t0.call(pl + 1)
+	_check(float(m.picture_at()["alpha"]) == 0.0, "and the voice goes on only once it is gone")
+	# the strike: decided on, then made, before the voice goes on
+	var si := -1
+	for i in m._actions.size():
+		if String((m._actions[i] as Dictionary)["kind"]) == "strike":
+			si = i
+	var of := int(m._actions[si]["of"])
+	var said_end := float((words[int(m._actions[si]["after"]) - 1] as Dictionary)["t1"])
+	var free := maxf(float(m._plan[of]["end"]), said_end)
+	var waited := float(m._plan[si]["start"]) - free
+	_check(waited >= LetterScript.DECIDE - 0.01 and waited < LetterScript.DECIDE + 1.0
+		and float(m._plan[si]["end"]) <= t0.call(int(m._actions[si]["after"])) + 0.05,
+		"a strike begins %.2f s after the line's last word and ink, and is done before the voice goes on" % waited)
 	# the still
 	var sf: int = at.call("cross", at.call("look"))
 	m._now = float((words[sf] as Dictionary)["t1"]) + 2.6

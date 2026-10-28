@@ -22,7 +22,7 @@ func spoken(text: String, _title: String) -> Dictionary:
 	var records := LetterScript.records_of(d.get("ink", {}))
 	var fonts: Dictionary = (d["ink"] as Dictionary).get("fonts", {}) if d.get("ink") is Dictionary else {}
 	return {"body": LetterScript.speakable(text, int(d["seed"]), d["svgs"],
-		LetterScript.lengths_of(records, int(d["seed"]), fonts), records), "title": ""}
+		LetterScript.lengths_of(records, int(d["seed"]), fonts), records, String(d["hand"])), "title": ""}
 
 
 ## A letter's minute: what is written as it is said.

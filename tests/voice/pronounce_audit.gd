@@ -14,8 +14,9 @@ extends SceneTree
 ##   UNKNOWN     - not in CMUdict, not a compound of known words, not in `names`. An
 ##                 invented word or an unusual proper noun. The front end will guess.
 ##   HOMOGRAPH   - a word with two readings that are not interchangeable (`record` the
-##                 noun against `record` the verb). Some are resolved by the SPEAK_AS
-##                 table; the ones that are NOT are listed with their context so a
+##                 noun against `record` the verb). The voice host reads each one's part
+##                 of speech from its sentence (hosts/voice/homographs.py, whose own audit
+##                 prints what it decided); they are listed with their context so a
 ##                 human can judge, because several of them - `read` above all - are
 ##                 genuinely ambiguous from the neighbors alone and no rule can settle
 ##                 them without understanding the sentence.

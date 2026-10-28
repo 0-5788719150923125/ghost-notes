@@ -16,7 +16,8 @@ extends SceneTree
 ##   and the same sketch pointed at a new part is stale; the ink is ready with nothing to lay out, missing
 ##   before it is laid out, ready for the drawings it was made from and stale for others.
 ## - WHAT THE CARD HANDS THE READING (on the first frame: the card names the Director): its block round
-##   trips; without a note its desk is the first; the walk reads the letter as [method
+##   trips, its hand among it - one it does not know is Kalam (the control) - and the document carries it;
+##   without a note its desk is the first; the walk reads the letter as [method
 ##   LetterScript.speakable] does, with no title announced.
 ##
 ##   godot --headless --path . --script tests/letter/letter_card_check.gd
@@ -124,9 +125,12 @@ func _card() -> void:
 	_check((load("res://src/ui/note_cards.gd").get("KEYS") as Array).has("letter"), "every panel builds its card")
 	var script: GDScript = load("res://src/letter/letter_card.gd")
 	var card: Control = script.call("for_note", {})
-	card.apply({"seed": 42, "writer": "claude", "writer_model": "m", "writer_effort": ""})
+	card.apply({"seed": 42, "hand": "caveat", "writer": "claude", "writer_model": "m", "writer_effort": ""})
 	var block: Dictionary = card.capture()
-	_check(int(block["seed"]) == 42 and String(block["writer_model"]) == "m", "its block round trips")
+	_check(int(block["seed"]) == 42 and String(block["writer_model"]) == "m" and String(block["hand"]) == "caveat"
+		and String((card.call("document") as Dictionary)["hand"]) == "caveat", "its block round trips, and the document carries its hand")
+	card.apply({"hand": "comic"})
+	_check(String(card.capture()["hand"]) == LetterHand.DEFAULT, "a hand it does not know is Kalam (the control)")
 	card.apply({})
 	_check(int(card.call("desk_seed")) == 1, "without a note, its desk is the first")
 	var walk: TextWalk = load("res://src/letter/letter_walk.gd").new(card)

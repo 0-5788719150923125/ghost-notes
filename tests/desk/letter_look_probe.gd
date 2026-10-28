@@ -6,7 +6,7 @@ extends Node
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/desk/letter_look_probe.gd 400 \
 ##       --out <dir>/l --letter <a letter .md> [--svgs <key -> svg .json>] [--ink <typeset answer .json>] \
-##       [--picture <png>] [--seed N] --times 3,8,20 [--every S] [--page 1] [--words W]
+##       [--picture <png>] [--seed N] [--hand kalam] --times 3,8,20 [--every S] [--page 1] [--words W]
 ##
 ## `--svgs` and `--ink` are what the Letter card would hand it (a sketch's drawing by its key, and
 ## hosts/math/typeset.py's answer for them); `--picture` stands in for every picture the letter shows.
@@ -25,6 +25,7 @@ var _svgs := ""
 var _ink := ""
 var _picture := ""
 var _seed := 7
+var _hand := LetterHand.DEFAULT
 var _times: Array = [3.0, 10.0]
 var _every := 0.0
 var _page := false
@@ -48,6 +49,7 @@ func _run() -> void:
 			"--ink": _ink = args[i + 1]
 			"--picture": _picture = args[i + 1]
 			"--seed": _seed = int(args[i + 1])
+			"--hand": _hand = args[i + 1]
 			"--every": _every = float(args[i + 1])
 			"--page": _page = args[i + 1] == "1"
 			"--words": _word = float(args[i + 1])
@@ -67,11 +69,12 @@ func _run() -> void:
 		for s in LetterScript.parse(source, _seed)["spans"]:
 			if String((s as Dictionary)["kind"]) == "image":
 				pictures[String(s["key"])] = _picture
-	var letter := {"seed": _seed, "svgs": svgs if svgs is Dictionary else {}, "ink": ink if ink is Dictionary else {},
-		"pictures": pictures}
+	var letter := {"seed": _seed, "hand": _hand, "svgs": svgs if svgs is Dictionary else {},
+		"ink": ink if ink is Dictionary else {}, "pictures": pictures}
 	var records := LetterScript.records_of(letter["ink"])
 	var fonts: Dictionary = (letter["ink"] as Dictionary).get("fonts", {})
-	var parsed := LetterScript.parse(source, _seed, letter["svgs"], LetterScript.lengths_of(records, _seed, fonts), records)
+	var parsed := LetterScript.parse(source, _seed, letter["svgs"], LetterScript.lengths_of(records, _seed, fonts), records,
+		_hand)
 	var words := _rehearse(parsed, _word, SENTENCE, 1.0)
 	var stage := SubViewport.new()
 	stage.size = Vector2i(W, H)
@@ -132,8 +135,18 @@ func _run() -> void:
 		if st < 0.02:
 			_flat += 1
 		var desk := medium as DeskMedium
-		print("letter_look_probe: t=%.1f (spread %.3f) %s - the desk at %.2f, the pen at %s" % [want, st, path,
-			desk._now, desk.pen_at()["p"]])
+		# what is being said then, against what is being written
+		var saying := ""
+		for w in words:
+			if float((w as Dictionary)["t0"]) <= desk._now and float(w["t1"]) >= desk._now - 0.3:
+				saying = String(w["text"])
+		var writing := ""
+		for i in desk._actions.size():
+			var a: Dictionary = desk._actions[i]
+			if float(desk._plan[i]["start"]) <= desk._now and float(desk._plan[i]["end"]) > desk._now:
+				writing = String(a.get("text", a["kind"])).substr(0, 40)
+		print("letter_look_probe: t=%.1f (spread %.3f) %s - the desk at %.2f, the pen at %s - saying \"%s\", writing \"%s\"" % [want, st,
+			path, desk._now, desk.pen_at()["p"], saying, writing])
 	print("letter_look_probe: done, %d flat" % _flat)
 	Spectrum.virtual_clock = -1.0
 	Director.hold(false)

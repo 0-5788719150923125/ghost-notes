@@ -3,13 +3,24 @@ class_name LetterScript
 
 ## LetterScript - a letter as the voice reads it and the desk writes it (next/letter.md).
 ##
-## A LETTER IS WRITTEN AS IT IS SAID: every paragraph is put on the page by the pen while the voice reads
-## it, word for word, a line at a time ([LetterMedium]) - the desk's dictation ([DeskScript]) with the
-## writing and the words the same text. The rest is marks:
+## THE PEN WRITES TWO WORDS AHEAD OF THE VOICE (2026-10-27; the user, of the pen behind the voice: "A person wants
+## to read what is being said ... write ahead, and pause at the start of each sentence"; then, of the pen five or
+## six words ahead at a hand's pace: "It makes the pauses between sentences far too long ... maybe 2 words ahead
+## of the speaking?"): every paragraph is put on the page a line at a time, each word written while the voice says
+## the word [constant AHEAD_WORDS] before it - the desk's elastic pen ([LetterMedium]) on the voice's own times,
+## whatever its speed - and never quicker than [constant QUICKEST] the hand's pace. The voice waits at a
+## sentence's start only where the pen cannot be that far ahead: after a thought, a still or the blank page (the
+## pen begins as the voice gets there, and writes two words before it goes on), at a page turned (once the voice
+## has read the page), and where the words are more ink than the quickest pen can put down while they are said. Under a picture nobody reads along: the pen keeps with the
+## voice there, unseen. (A pen at a hand's own steady pace ahead of a voice two or three times quicker makes
+## the voice wait out the difference at every sentence - a letter as long as its writing, the chapter 43
+## minutes - whatever lead is asked for.) The rest is marks:
 ##
 ##     *A paragraph in italics, whole.*        A THOUGHT: said, never written - the writer stops and
 ##                                             thinks it, the pen lifted.
-##     <!-- strike -->                         crosses out the paragraph last written, every line of it.
+##     <!-- strike -->, <!-- strike: 4 -->     the writer stops, decides (a few seconds; the mark's own
+##                                             number of them), then crosses out the paragraph last
+##                                             written, every line of it.
 ##     <!-- unspoken: Dear Ink, -->            written and not said: the voice waits while the pen
 ##                                             writes it.
 ##     <!-- sketch: what it shows -->          a drawing the pen makes on the page - an agent draws it
@@ -42,9 +53,12 @@ class_name LetterScript
 ## ([LetterHand]), so its strokes and how long they take are known here; only a sketch's drawing comes
 ## from the ink step, handed in as [param lengths] and [param sizes] the way [DeskScript.parse] takes them.
 ##
-## THE PAGE IS FILLED: lines on the pad's rules, a paragraph's first indented, a sketch centered half a
-## rule clear of what is above it, and the page turned where the next line or drawing would run off its
-## foot - mid-sentence too, a rest the voice takes there.
+## THE PAGE IS FILLED: lines on the pad's rules, a rule left empty between two paragraphs and none
+## indented (2026-10-27, the user: "the hanging indents look wrong, when the first several paragraphs are
+## each just ~10 words long ... there should probably be a newline between each paragraph" - the book's
+## rule, [constant BookLayout.INDENT_EM]), a sketch centered half a rule clear of what is above it, and the
+## page turned where the next line or drawing would run off its foot - mid-sentence too, a rest the voice
+## takes there.
 
 ## The marks of their own line: group 1 the verb, group 2 what follows the colon.
 const MARK := "^\\s*<!--\\s*(strike|tap|still|new\\s+page|/\\s*image|unspoken)\\s*(?::\\s*([\\s\\S]*?))?\\s*-->\\s*$"
@@ -56,6 +70,22 @@ const THOUGHT := "^\\*(?!\\*)([^*]*[^*\\s])\\*$"
 const LEAD := 0.35
 ## A strike through one line.
 const STRIKE := 0.55
+## THE WRITER DECIDES BEFORE STRIKING (2026-10-27, the user: "The actor writes the line, then IMMEDIATELY
+## scratches it out. In reality, an actor would likely write the line, then pause, then scratch it out
+## after a few seconds of silent decision-making"): the pen done and the voice done, this long with the
+## pen held still over the line (seconds) - or the mark's own number, `<!-- strike: 4 -->`, held to
+## [constant DECIDE_MOST].
+const DECIDE := 3.0
+const DECIDE_MOST := 30.0
+## THE PAGE LIES BLANK A MOMENT FIRST (2026-10-27, the user: "the writing begins IMMEDIATELY after the intro
+## disappears. It's too quick. We should linger on the blank page for a bit before we do any writing"): the
+## voice rests this long (seconds) before its first word, and nothing is written before it, while the camera
+## comes in over the empty pad ([LetterMedium]).
+const BLANK_PAGE := 4.0
+## A PICTURE CLEARS BEFORE THE LETTER GOES ON: it fades out from just after the passage's last word, and the
+## voice rests until it is gone, so what the pen does next is seen from its start ([LetterMedium]).
+const IMAGE_AFTER := 0.1
+const IMAGE_FADE := 1.2
 ## A tap: how long the pen is turned over and tapping, and the rest the voice leaves for it before it
 ## goes on (the taps run on under the next words).
 const TAP := 2.4
@@ -63,23 +93,30 @@ const TAP_HOLD := 1.0
 ## A page turned between two lines: the pen goes off the pad, the sheet goes over, the pen comes back
 ## ([DeskMedium]'s turn, [constant DeskMedium.PARK_CLEAR] and the turn itself).
 const TURN_REST := DeskScript.TURN + 1.3
-## THE PEN MAY TRAIL THE VOICE, as a hand trails dictation: by this much (seconds) at a paragraph's end
-## before the voice waits for it - a lag a thought, a hesitation or a picture takes back. Sized against a
-## voice this quick a word (the measured word, [constant DeskScript.SAID_WORD], a little quicker: a voice
-## faster than the guess leaves the pen further behind, never the voice waiting longer).
-const LAG_MOST := 2.5
-const QUICK_WORD := DeskScript.SAID_WORD * 0.85
+## THE PEN AHEAD OF THE VOICE: each word written while the voice says the one this many words before it - and
+## where the voice must wait for the pen (a new paragraph, a turn, a dense sentence) until a sentence's first
+## that many words are on the page, its last said no more than OVERTAKE before it is written (the user: "the
+## voice can preempt the end of the written sentence a bit").
+const AHEAD_WORDS := 2
+const OVERTAKE := 0.6
+## The pen at its quickest, against the hand's own pace ([constant LetterHand.PACE]): past a quick voice's 180 words
+## a minute, so the pen keeps with the voice it has (at 2.0 a voice of 0.36 s a word left it 18 words behind).
+const QUICKEST := 2.5
+## A voice this quick a word inside a sentence (the chapter's is about 0.45), for the rests the voice is written:
+## the pen keeps to the voice's own times whatever they are.
+const READ_WORD := 0.45
+## A sentence's end: its stop, and any quote or bracket closing after it.
+const SENTENCE_END := "[.?!…][\"'’”)\\]]*$"
 ## A line's return to the margin, at the least (seconds) - [LetterMedium]'s pen, and the walk's guess of it.
 const RETURN := 0.28
-## The page, as the pad's: the first line's baseline (a rule below the pad's first), a paragraph's
-## indent, and how far a line may run (px).
+## The page, as the pad's: the first line's baseline (a rule below the pad's first) and how far a line may
+## run (px).
 const FIRST_LINE := DeskScript.FIRST_RULE + DeskScript.RULE
-const INDENT := 72.0
 const LINE_W := DeskScript.PW - DeskScript.RIGHT - DeskScript.TEXT_X
 ## A struck line is crossed through this high: the share of the hand's body above the baseline.
 const STRIKE_H := 20.0
-## Where a turn's rest goes inside a paragraph while its voice text is made: a character no script holds,
-## put back as the rest once the voice's own marks are taken out round it.
+## Where a rest goes inside a paragraph while its voice text is made (a turn's, a sentence's beat): a
+## character no script holds, put back as the rest once the voice's own marks are taken out round it.
 const HOLD_AT := "\ue000"
 
 
@@ -98,6 +135,13 @@ static func is_letter(body: String) -> bool:
 static func part_id(words: String) -> String:
 	var s := _rx("[^a-z0-9]+").sub(words.to_lower().strip_edges(), "-", true)
 	return s.trim_prefix("-").trim_suffix("-")
+
+
+## How long the writer decides before a strike: the mark's own number of seconds ([param arg], from
+## `<!-- strike: 4 -->`), else [constant DECIDE].
+static func decide_of(arg: String) -> float:
+	var a := arg.strip_edges().trim_suffix("s").strip_edges()
+	return clampf(a.to_float(), 0.0, DECIDE_MOST) if a.is_valid_float() else DECIDE
 
 
 ## THE SKETCHES of [param body], in order: `[{key, prompt, said, parts}]` - the key its description's
@@ -266,7 +310,8 @@ static func _written(text: String) -> Array:
 	return out
 
 
-## THE WALK. [param seed]: the hand's. [param svgs]: a sketch's key -> its SVG (one not drawn yet is left
+## THE WALK. [param seed]: the hand's unsteadiness. [param hand]: which hand writes it ([LetterHand]).
+## [param svgs]: a sketch's key -> its SVG (one not drawn yet is left
 ## off the page, and its paragraph is only said). [param lengths] and [param sizes]: a drawing's id ->
 ## its drawing time and typeset record, as [method DeskScript.parse] takes them. Returns:
 ##   actions   - the pen's, in [DeskMedium]'s shape (each with an `id`, "" for what puts no ink down)
@@ -280,7 +325,7 @@ static func _written(text: String) -> Array:
 ##   speakable - the text the voice reads
 ##   ignored   - the points the pen could not make (it was writing or drawing then), for the log
 static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dictionary = {},
-		sizes: Dictionary = {}) -> Dictionary:
+		sizes: Dictionary = {}, hand := LetterHand.DEFAULT) -> Dictionary:
 	var point := _rx(POINT)
 	var actions: Array = []
 	var spans: Array = []
@@ -294,8 +339,8 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 	var image := {}
 	var still := {}
 	var new_page := false
-	var first_para := true
 	var line_n := 0
+	voice.append({"hold": BLANK_PAGE, "act": -1})
 	for b in blocks(body):
 		var blk: Dictionary = b
 		var kind := String(blk["kind"])
@@ -313,10 +358,12 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 			waiting = false
 		match kind:
 			"strike":
+				var decide := decide_of(String(blk["arg"]))
 				for li in last_para:
-					voice.append({"hold": STRIKE, "act": actions.size(), "pen": STRIKE, "sync": true})
+					var wait := decide if li == last_para[0] else 0.0
+					voice.append({"hold": wait + STRIKE, "act": actions.size(), "pen": wait + STRIKE, "sync": true})
 					actions.append({"kind": "strike", "id": "", "of": int(li), "write": STRIKE, "dur": STRIKE,
-						"after": spoken.size(), "span": 0})
+						"after": spoken.size(), "span": 0, "decide": wait})
 				last_para = []
 			"tap":
 				var where := String(blk["arg"]).to_lower()
@@ -326,6 +373,8 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 			"still":
 				still = {"kind": "still", "from": spoken.size(), "to": -1}
 				spans.append(still)
+				# the pen off the page for it, and kept off it until the voice is past it
+				voice.append({"hold": 0.0, "act": -1, "sync": true, "still": true})
 			"page":
 				new_page = true
 			"image":
@@ -337,6 +386,7 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 			"image_end":
 				if not image.is_empty() and int(image["to"]) < 0:
 					image["to"] = spoken.size()
+					voice.append({"hold": IMAGE_AFTER + IMAGE_FADE, "act": -1})
 			"sketch":
 				var key := Manuscript.image_key(String(blk["arg"]))
 				var svg := String(svgs.get(key, ""))
@@ -355,7 +405,7 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 				actions.append(act)
 			"unspoken":
 				var from := actions.size()
-				for la in _lay_para(String(blk["arg"]), spoken.size(), seed, line_n, not first_para, new_page):
+				for la in _lay_para(String(blk["arg"]), spoken.size(), seed, line_n, new_page, hand):
 					var a: Dictionary = la
 					a["span"] = 0
 					a["dur"] = LEAD + float(a["write"])
@@ -364,7 +414,6 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 					actions.append(a)
 					line_n += 1
 				new_page = false
-				first_para = false
 				last_para = range(from, actions.size())
 				if not still.is_empty() and int(still["to"]) < 0:
 					still["to"] = spoken.size()
@@ -391,9 +440,8 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 					if point.search(text) != null and not String(_target(point.search(text).get_string(1))["at"]) == "camera":
 						voice.back()["sync"] = true
 				else:
-					var lines := _lay_para(text, base, seed, line_n, not first_para, new_page)
+					var lines := _lay_para(text, base, seed, line_n, new_page, hand)
 					new_page = false
-					first_para = false
 					last_para = []
 					for la in lines:
 						last_para.append(actions.size())
@@ -426,40 +474,48 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 		if int((s as Dictionary)["to"]) < 0:
 			s["to"] = spoken.size()
 	_keep_with(actions, spans)
-	actions = lay_out(actions, sizes)
+	actions = lay_out(actions, sizes, hand)
 	return {"actions": actions, "spans": spans, "spoken": spoken, "ignored": ignored,
-		"speakable": _voice_text(voice, actions)}
+		"speakable": _voice_text(voice, actions, spans)}
 
 
 ## THE VOICE'S TEXT from [param voice] (what [method parse] gathered, in order): each paragraph's words
 ## with the voice's own marks, ONE rest between two - the rests the pen asked for summed, a page's turn
-## among them where [param actions]' layout turned one for a silent thing - and a turn before a line
-## inside a paragraph put at that line's first word, mid-sentence.
+## among them where [param actions]' layout turned one for a silent thing - and inside a written paragraph
+## a rest at a sentence's start, or at the first word of a line the page turned for, where the voice waits
+## for the pen to be ahead.
 ##
-## THE PEN'S REST AFTER A PARAGRAPH is what it would still owe past [constant LAG_MOST]: the voice and the
-## pen are followed through the letter together as [LetterMedium]'s plan follows them - the voice a
-## [constant QUICK_WORD] a word; each line begun no sooner than its first word (less the pen's lead) nor
-## than the last line's end and a return ([constant RETURN]), and ended no sooner than its last word nor
-## than its ink at [constant DeskScript.MAX_PACE] - so a lag carries from one paragraph to the next until a
-## thought or a rest takes it back, and the voice waits only where it would grow past that. BUT THE PEN IS
-## ON TIME FOR WHAT IT DOES AT A MOMENT (the first look: "That's me" said while the pen was still a
-## paragraph behind, writing): before a strike, a tap, a drawing, an unspoken line or a paragraph the pen
-## points in (`sync`), the voice waits until the pen is free.
-static func _voice_text(voice: Array, actions: Array) -> String:
-	var turns := {}                  # spoken index -> true: a line or a drawing said from there turns a page
+## THE PEN AND THE VOICE ARE FOLLOWED THROUGH THE LETTER TOGETHER, as [LetterMedium]'s plan follows them:
+## the voice a [constant READ_WORD] a word; the pen line after line, each word as the voice says the one
+## [constant AHEAD_WORDS] before it and never quicker than [constant QUICKEST] its ink's own time, each line begun no sooner than the last's
+## end and a return ([constant RETURN]) - nor, after a thought, a still or the blank page, than the voice gets
+## there, nor, for a line a page turns for, than the voice has read the page and the page is turned. At each
+## sentence's start, and at a turned line's first word, the voice waits until the pen at its quickest can be
+## ahead of it there ([method _ahead], the words' times on the page by their lines' `ends`). A paragraph's first
+## line the voice is waited for at is handed that rest (`gate` "voice", `gate_rest`), and a line a page turns
+## for is marked ("turn"): [LetterMedium] begins them as the voice gets there. Before what needs
+## the pen free (`sync`: a strike, a tap, a drawing, an unspoken line, a point in a thought, a still) the
+## voice waits until it is. Under a picture ([param spans]' images) the voice reads on and the pen keeps up
+## with it, as the desk's does, unseen.
+static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
+	var turns := {}                  # spoken index -> true: a drawing said from there turns a page
 	for a in actions:
 		var act: Dictionary = a
-		if bool(act.get("turn", false)) and int(act.get("span", 0)) > 0:
+		if bool(act.get("turn", false)) and int(act.get("span", 0)) > 0 and String(act["kind"]) != "pad-text":
 			turns[int(act["after"])] = true
 	var speak := PackedStringArray()
 	var hold := 0.0
 	var tv := 0.0                    # where the voice is
 	var tp := 0.0                    # when the pen is free
+	var gated := true                # the next written paragraph waits for the voice to get to it (the blank page first)
+	var said0 := {}                  # a spoken word -> when the voice begins it (the written paragraphs')
 	for v in voice:
 		var e: Dictionary = v
 		if bool(e.get("sync", false)) and tp > tv + 0.05:
 			hold += tp - tv
 			tv = tp
+		if bool(e.get("still", false)):
+			gated = true
 		if e.has("hold"):
 			var h := float(e["hold"])
 			var ai := int(e.get("act", -1))
@@ -473,56 +529,165 @@ static func _voice_text(voice: Array, actions: Array) -> String:
 		var text := String(e["para"])
 		var base := int(e["base"])
 		var n := _words(text).size()
-		var inner: Array = []
-		for k in n:
-			if turns.has(base + k):
-				if k == 0:
-					hold += TURN_REST
-					tv += TURN_REST
-					tp = maxf(tp, tv)
-				else:
-					inner.append(k)
-		if hold > 0.005:
-			speak.append("<!-- action-hold: %s -->" % String.num(hold, 2))
-		hold = 0.0
-		var voiced := CardReading._voice_marks(_hold_before(text, inner) if not inner.is_empty() else text)
-		voiced = voiced.replace(HOLD_AT, "<!-- action-hold: %s -->" % String.num(TURN_REST, 2))
-		if not voiced.is_empty():
-			speak.append(voiced)
-		var said_from := tv
-		if e.has("lines"):
-			# line by line, as the plan writes them
+		var inner := {}                  # a spoken word of the paragraph -> the rest before it
+		var lines: Array = e.get("lines", [])
+		var pictured := _pictured(base, spans)
+		if not lines.is_empty() and not pictured:
+			# WRITTEN AHEAD: the voice waits at each sentence's start and each turned line's
+			var w_end := {}              # a spoken word of the paragraph -> when it is on the page
+			var li := 0
 			var t_word := tv
-			for li in e["lines"]:
-				var line: Dictionary = actions[int(li)]
-				if bool(line.get("turn", false)) and int(line["after"]) > base:
-					t_word += TURN_REST
-					tp = maxf(tp, t_word)
-				var words_end := t_word + float(int(line["span"])) * QUICK_WORD
-				var begin := maxf(tp + RETURN, t_word - 0.2)
-				tp = maxf(begin + float(line["write"]) / DeskScript.MAX_PACE, words_end)
-				t_word = words_end
+			var points := _beats(text).keys()
+			points.append(0)
+			for l in lines:
+				var line: Dictionary = actions[int(l)]
+				if bool(line.get("turn", false)):
+					points.append(int(line["after"]) - base)
+			points.sort()
+			var at := 0
+			while at < points.size():
+				var p := int(points[at])
+				var q := n
+				while at < points.size() and int(points[at]) == p:
+					at += 1
+				if at < points.size():
+					q = int(points[at])
+				# the pen's lines as far as this stretch's last word, as soon as they can be at its quickest -
+				# how long the voice must wait for it
+				var fresh: Array = []        # [line, the soonest it can begin]
+				var soonest := tp
+				while li < lines.size() and int((actions[int(lines[li])] as Dictionary)["after"]) - base < q:
+					var line: Dictionary = actions[int(lines[li])]
+					var k0 := int(line["after"]) - base
+					var begin := soonest + RETURN
+					line["gate"] = ""
+					if bool(line.get("turn", false)):
+						# the page is read before it turns: the voice has said all of it
+						begin = maxf(begin, t_word + TURN_REST)
+						line["gate"] = "turn"
+					elif li == 0 and gated:
+						begin = maxf(begin, tv)
+						line["gate"] = "voice"
+					var ends: PackedFloat32Array = line.get("ends", PackedFloat32Array())
+					for j in int(line["span"]):
+						w_end[k0 + j] = begin + (ends[j] if j < ends.size() else float(line["write"])) / QUICKEST
+					soonest = begin + float(line["write"]) / QUICKEST
+					fresh.append([line, begin])
+					li += 1
+				var head := mini(p + AHEAD_WORDS - 1, q - 1)
+				var wait := _ahead(t_word, float(w_end.get(head, t_word)), float(w_end.get(q - 1, t_word)), q - 1 - p)
+				if p == 0:
+					hold += wait
+					if not fresh.is_empty() and String((fresh[0][0] as Dictionary)["gate"]) == "voice":
+						(fresh[0][0] as Dictionary)["gate_rest"] = wait
+				elif wait > 0.0:
+					inner[p] = float(inner.get(p, 0.0)) + wait
+				for k in range(p, q):
+					said0[base + k] = t_word + wait + float(k - p) * READ_WORD
+				# ...and as the pen does write them: each word while the voice says the one AHEAD_WORDS before it,
+				# never quicker than its quickest
+				for f in fresh:
+					var line: Dictionary = f[0]
+					var first := int(line["after"]) - AHEAD_WORDS
+					var last := int(line["after"]) + int(line["span"]) - 1 - AHEAD_WORDS
+					var begin := maxf(maxf(float(f[1]), tp + RETURN), float(said0.get(first, -INF)))
+					tp = maxf(begin + float(line["write"]) / QUICKEST, float(said0.get(last, -INF)) + READ_WORD)
+				t_word += wait + float(q - p) * READ_WORD
+			gated = false
+			if hold > 0.005:
+				speak.append("<!-- action-hold: %s -->" % String.num(hold, 2))
+			hold = 0.0
 			tv = t_word
 		else:
-			tv += float(n) * QUICK_WORD + TURN_REST * float(inner.size())
-			var work := float(e.get("pen", 0.0))
-			if work > 0.0:
-				tp = maxf(maxf(tp, said_from) + work / DeskScript.MAX_PACE, tv)
-		var owed := tp - tv - LAG_MOST
-		if owed > 0.05 and (e.has("lines") or float(e.get("pen", 0.0)) > 0.0):
-			hold += owed
-			tv += owed
+			if turns.has(base):
+				hold += TURN_REST
+				tv += TURN_REST
+				tp = maxf(tp, tv)
+			if hold > 0.005:
+				speak.append("<!-- action-hold: %s -->" % String.num(hold, 2))
+			hold = 0.0
+			var said_from := tv
+			if not lines.is_empty():
+				# under a picture: the desk's dictation, the pen kept with the voice
+				var t_word := tv
+				for l in lines:
+					var line: Dictionary = actions[int(l)]
+					var words_end := t_word + float(int(line["span"])) * READ_WORD
+					var begin := maxf(tp + RETURN, t_word - 0.2)
+					tp = maxf(begin + float(line["write"]) / DeskScript.MAX_PACE, words_end)
+					t_word = words_end
+				tv = t_word
+			else:
+				for k in range(1, n):
+					if turns.has(base + k):
+						inner[k] = TURN_REST
+				tv += float(n) * READ_WORD + TURN_REST * float(inner.size())
+				var work := float(e.get("pen", 0.0))
+				if work > 0.0:
+					tp = maxf(maxf(tp, said_from) + work / DeskScript.MAX_PACE, tv)
+				elif n > 0 and is_thought(text):
+					# a thought: the writer stops and thinks it, the pen waits
+					gated = true
+		var voiced := CardReading._voice_marks(_hold_before(text, inner) if not inner.is_empty() else text)
+		# each mark, in the text's order, the rest of the word it stands before
+		for k in _sorted_keys(inner):
+			var cut := voiced.find(HOLD_AT)
+			if cut < 0:
+				break
+			voiced = voiced.substr(0, cut) + "<!-- action-hold: %s -->" % String.num(float(inner[k]), 2) \
+				+ voiced.substr(cut + HOLD_AT.length())
+		if not voiced.is_empty():
+			speak.append(voiced)
 	if hold > 0.005:
 		speak.append("<!-- action-hold: %s -->" % String.num(hold, 2))
 	return "\n\n".join(speak)
 
 
-## [param text] (a paragraph) with a turn's rest before each of its spoken words [param turns] (their
-## indices among its words), where the line the page turns for begins.
-static func _hold_before(text: String, turns: Array) -> String:
+## HOW LONG THE VOICE WAITS, come to a stretch at [param tv] that the pen has written its first [constant
+## AHEAD_WORDS] words of by [param head] and its last of by [param last], [param words] words on: until those
+## first words are on the page, and its last is said no more than [constant OVERTAKE] before it is written.
+static func _ahead(tv: float, head: float, last: float, words: int) -> float:
+	var w := maxf(head + 0.1 - tv, last - OVERTAKE - (tv + float(words) * READ_WORD))
+	return w if w > 0.05 else 0.0
+
+
+## Is the paragraph whose first spoken word is [param base] read under a picture ([param spans]' images)?
+static func _pictured(base: int, spans: Array) -> bool:
+	for s in spans:
+		var sp: Dictionary = s
+		if String(sp["kind"]) == "image" and base >= int(sp["from"]) and base < int(sp["to"]):
+			return true
+	return false
+
+
+## THE SENTENCES of paragraph [param text] after its first: their first spoken words (the indices among the
+## paragraph's spoken words) - where the voice may wait for the pen ([method _voice_text]).
+static func _beats(text: String) -> Dictionary:
+	var out := {}
+	var ended := false
+	for w in _written(text):
+		var k := int((w as Dictionary)["spoken"])
+		if k < 0:
+			continue
+		if ended:
+			out[k] = true
+		ended = _rx(SENTENCE_END).search(String(w["text"])) != null
+	return out
+
+
+## [param d]'s keys, smallest first.
+static func _sorted_keys(d: Dictionary) -> Array:
+	var keys := d.keys()
+	keys.sort()
+	return keys
+
+
+## [param text] (a paragraph) with a rest's mark before each of its spoken words [param rests] (their
+## indices among its words, the keys), where a sentence begins or a turned line does.
+static func _hold_before(text: String, rests: Dictionary) -> String:
 	var cuts: Array = []
 	for w in _written(text):
-		if turns.has(int((w as Dictionary)["spoken"])):
+		if rests.has(int((w as Dictionary)["spoken"])):
 			cuts.append(int(w["at"]))
 	cuts.reverse()
 	var out := text
@@ -531,33 +696,34 @@ static func _hold_before(text: String, turns: Array) -> String:
 	return out
 
 
-## THE LINES OF A PARAGRAPH: [param text] cut into lines as the page's width allows ([constant LINE_W],
-## the first indented when [param indent]), each a `pad-text` action with the hand's strokes - laid on
-## the page by [method lay_out]. [param base] is the paragraph's first spoken word, [param n] the letter's
-## line count so far (each line's hand is salted by its place), [param page_break] whether its first line
-## starts a page.
-static func _lay_para(text: String, base: int, seed: int, n: int, indent: bool, page_break: bool) -> Array:
+## THE LINES OF A PARAGRAPH: [param text] cut into lines as the page's width allows ([constant LINE_W]),
+## each a `pad-text` action with the [param hand]'s strokes - laid on the page by [method lay_out], the
+## first marked `para` (a rule is left empty above it). [param base] is the paragraph's first spoken word,
+## [param n] the letter's line count so far (each line's hand is salted by its place), [param page_break]
+## whether its first line starts a page.
+static func _lay_para(text: String, base: int, seed: int, n: int, page_break: bool, hand: String) -> Array:
 	var out: Array = []
 	var cur: Array = []
-	var x := INDENT if indent else 0.0
-	var sp := LetterHand.space() * DeskScript.PX_PER_PT
+	var x := 0.0
+	var sp := LetterHand.space(hand) * DeskScript.PX_PER_PT
 	for w in _written(text):
-		var adv := LetterHand.advance(String((w as Dictionary)["text"])) * DeskScript.PX_PER_PT
+		var adv := LetterHand.advance(String((w as Dictionary)["text"]), hand) * DeskScript.PX_PER_PT
 		if not cur.is_empty() and x + adv > LINE_W:
-			out.append(_line_action(cur, base, seed, n + out.size(), INDENT if indent and out.is_empty() else 0.0))
+			out.append(_line_action(cur, base, seed, n + out.size(), hand))
 			cur = []
 			x = 0.0
 		cur.append(w)
 		x += adv + sp
 	if not cur.is_empty():
-		out.append(_line_action(cur, base, seed, n + out.size(), INDENT if indent and out.is_empty() else 0.0))
+		out.append(_line_action(cur, base, seed, n + out.size(), hand))
 	if not out.is_empty():
 		(out[0] as Dictionary)["page_break"] = page_break
+		(out[0] as Dictionary)["para"] = true
 	return out
 
 
-## One line's action: its words written by the hand ([LetterHand]), timed by [method Ink.schedule].
-static func _line_action(words: Array, base: int, seed: int, n: int, indent: float) -> Dictionary:
+## One line's action: its words written by the [param hand] ([LetterHand]), timed by [method Ink.schedule].
+static func _line_action(words: Array, base: int, seed: int, n: int, hand: String) -> Dictionary:
 	var texts := PackedStringArray()
 	var emph: Array = []
 	var first := -1
@@ -570,19 +736,31 @@ static func _line_action(words: Array, base: int, seed: int, n: int, indent: flo
 			if first < 0:
 				first = int(w["spoken"])
 	var salt := "line-%d" % n
-	var hand := LetterHand.line(texts, emph, seed, salt)
-	var sched := Ink.schedule(hand["strokes"], seed, LetterHand.PACE)
-	return {"kind": "pad-text", "id": "l%d-%s" % [n, (" ".join(texts) + salt).sha256_text().substr(0, 8)],
-		"text": " ".join(texts), "strokes": sched, "write": float(sched["length"]),
+	var written := LetterHand.line(texts, emph, seed, salt, hand)
+	var sched := Ink.schedule(written["strokes"], seed, LetterHand.PACE)
+	# WHEN EACH SPOKEN WORD IS ON THE PAGE, seconds into the line: its last stroke's end (a word drawn with
+	# none, the one before's) - what the voice is held behind ([method _voice_text])
+	var done := {}
+	for st in sched["strokes"]:
+		done[int((st as Dictionary).get("k", 0))] = maxf(float(done.get(int(st.get("k", 0)), 0.0)), float(st["t1"]))
+	var ends := PackedFloat32Array()
+	var last := 0.0
+	for wi in words.size():
+		last = maxf(last, float(done.get(wi, last)))
+		if int((words[wi] as Dictionary)["spoken"]) >= 0:
+			ends.append(last)
+	return {"kind": "pad-text", "id": "l%d-%s" % [n, (" ".join(texts) + salt + hand).sha256_text().substr(0, 8)],
+		"text": " ".join(texts), "strokes": sched, "write": float(sched["length"]), "ends": ends,
 		"after": base + maxi(first, 0), "span": said, "about": 0, "tail": 0.0, "dur": 0.0,
-		"indent": indent, "w_pt": float(hand["width"])}
+		"w_pt": float(written["width"])}
 
 
 ## A SKETCH STAYS ON THE PAGE WITH WHAT IS SAID ABOUT IT (the first look, 2026-10-26: the cross and the dot
 ## at a page's foot, the page turned under the test the letter asks the viewer to do with them, and the
 ## pen pointing at a dot on a page already turned): each `draw` in [param actions] is told how many lines
-## are written after it before the last point at it, or before the end of a still after it (`keep`), and
-## [method lay_out] starts it on a page of its own when they would not fit under it.
+## are written after it before the last point at it, or before the end of a still after it (`keep`: rows,
+## a paragraph's empty rule above it among them), and [method lay_out] starts it on a page of its own when
+## they would not fit under it.
 static func _keep_with(actions: Array, spans: Array) -> void:
 	for di in actions.size():
 		var d: Dictionary = actions[di]
@@ -606,22 +784,24 @@ static func _keep_with(actions: Array, spans: Array) -> void:
 		for j in range(di + 1, actions.size()):
 			var a: Dictionary = actions[j]
 			if String(a["kind"]) == "pad-text" and int(a["after"]) < upto:
-				n += 1
+				n += 2 if n > 0 and bool(a.get("para", false)) else 1
 		d["keep"] = n
 
 
-## WHERE EACH ACTION GOES ON THE PAGE ([method DeskScript.lay_out]'s, for a letter's lines): a line on
-## the next rule, a sketch centered half a rule below what is above it, a page turned where the next line
+## WHERE EACH ACTION GOES ON THE PAGE ([method DeskScript.lay_out]'s, for a letter's lines, in [param hand]):
+## a line on the next rule - a paragraph's first a rule further, under a line of the paragraph before it -
+## a sketch centered half a rule below what is above it, a page turned where the next line
 ## or drawing would run off the foot - or where the letter asks for a new page - `turn` on what starts it.
 ## A strike stands on the page of what it crosses out; a point on the page it is made over, which may no
 ## longer hold what it names ([method DeskMedium.target_box]). Pure: a function of the actions and
 ## the typeset drawings.
-static func lay_out(actions: Array, sizes: Dictionary) -> Array:
+static func lay_out(actions: Array, sizes: Dictionary, hand := LetterHand.DEFAULT) -> Array:
 	var out: Array = []
 	var page := 0
 	var y := FIRST_LINE - DeskScript.RULE       # the last baseline used
 	var bottom := y                             # how far down the page is written
 	var started := false                        # anything on this page yet
+	var under_text := false                     # ...and the last of it a line of writing
 	var foot := DeskScript.PH - DeskScript.FOOT
 	for a in actions:
 		var act: Dictionary = (a as Dictionary).duplicate()
@@ -630,20 +810,22 @@ static func lay_out(actions: Array, sizes: Dictionary) -> Array:
 		act["turn"] = false
 		match String(act["kind"]):
 			"pad-text":
-				var base := _snap_rule(maxf(y + DeskScript.RULE, bottom + LetterHand.ascent_px() * 0.8))
-				if started and (bool(act.get("page_break", false)) or base + LetterHand.descent_px() > foot):
+				var gap := DeskScript.RULE if under_text and bool(act.get("para", false)) else 0.0
+				var base := _snap_rule(maxf(y + DeskScript.RULE, bottom + LetterHand.ascent_px(hand) * 0.8) + gap)
+				if started and (bool(act.get("page_break", false)) or base + LetterHand.descent_px(hand) > foot):
 					page += 1
 					act["turn"] = true
 					base = FIRST_LINE
 				act["page"] = page
-				act["at"] = Vector2(DeskScript.TEXT_X + float(act.get("indent", 0.0)), base)
+				act["at"] = Vector2(DeskScript.TEXT_X, base)
 				act["k"] = 1.0
 				act["w"] = float(act.get("w_pt", 0.0)) * DeskScript.PX_PER_PT
 				act["h"] = STRIKE_H
-				act["d"] = LetterHand.descent_px() * 0.5
+				act["d"] = LetterHand.descent_px(hand) * 0.5
 				y = base
-				bottom = base + LetterHand.descent_px() * 0.6
+				bottom = base + LetterHand.descent_px(hand) * 0.6
 				started = true
+				under_text = true
 			"draw":
 				var r: Dictionary = sizes.get(String(act["id"]), {})
 				if r.is_empty():
@@ -656,7 +838,7 @@ static func lay_out(actions: Array, sizes: Dictionary) -> Array:
 				var top := bottom + DeskScript.RULE * 0.5
 				# the lines kept with it: the first lands up to a rule and a half under it, each next a rule on
 				var keep := int(act.get("keep", 0))
-				var kept := (float(keep) + 1.0) * DeskScript.RULE + LetterHand.descent_px() if keep > 0 else 0.0
+				var kept := (float(keep) + 1.0) * DeskScript.RULE + LetterHand.descent_px(hand) if keep > 0 else 0.0
 				var fresh := FIRST_LINE - DeskScript.RULE * 0.5 + (h + d) * k + kept <= foot
 				if started and (bool(act.get("page_break", false)) or top + (h + d) * k > foot
 						or (fresh and top + (h + d) * k + kept > foot)):
@@ -672,6 +854,7 @@ static func lay_out(actions: Array, sizes: Dictionary) -> Array:
 				bottom = top + (h + d) * k + DeskScript.RULE * 0.25
 				y = _snap_rule(bottom) - DeskScript.RULE
 				started = true
+				under_text = false
 			"strike":
 				var of := int(act.get("of", -1))
 				act["page"] = int((out[of] as Dictionary)["page"]) if of >= 0 and of < out.size() else page
@@ -686,15 +869,15 @@ static func _snap_rule(y: float) -> float:
 
 ## [param body] as the voice reads it.
 static func speakable(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dictionary = {},
-		sizes: Dictionary = {}) -> String:
-	return String(parse(body, seed, svgs, lengths, sizes)["speakable"])
+		sizes: Dictionary = {}, hand := LetterHand.DEFAULT) -> String:
+	return String(parse(body, seed, svgs, lengths, sizes, hand)["speakable"])
 
 
 ## HOW LONG [param body] RUNS when it is read (seconds, the bookends aside): every spoken word at
 ## [constant DeskScript.SAID_WORD] and every rest the letter asks the voice for.
 static func runtime(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dictionary = {},
-		sizes: Dictionary = {}) -> float:
-	var parsed := parse(body, seed, svgs, lengths, sizes)
+		sizes: Dictionary = {}, hand := LetterHand.DEFAULT) -> float:
+	var parsed := parse(body, seed, svgs, lengths, sizes, hand)
 	var t := float((parsed["spoken"] as PackedStringArray).size()) * DeskScript.SAID_WORD
 	for m in _rx("<!--\\s*action-hold\\s*:\\s*([0-9.]+)\\s*-->").search_all(String(parsed["speakable"])):
 		t += float(m.get_string(1))

@@ -563,11 +563,12 @@ func arrived(id: int, result: Dictionary) -> void:
 	_measure(meta)
 	# THE SLOT IS FREED WHETHER OR NOT THE RESULT IS WANTED, and this has to happen BEFORE
 	# the epoch check. It did not, and that is what made seeking slower than a cold start:
-	# an abandoned request still occupies the host - the protocol has no cancel - so a jump
+	# an abandoned request still occupies the host - the stream does not cancel it (VoiceHost.cancel
+	# came later, for Test, whose Stop leaves a whole passage behind; this leaves two) - so a jump
 	# that zeroed the counter let _pump send a full lookahead on top of work already
 	# queued, and the chunk actually being waited for ended up third or fourth in line.
 	# Counting abandoned work as in-flight means the new request enters the queue exactly
-	# when a slot frees, which without a cancel is the best available.
+	# when a slot frees.
 	_in_flight = maxi(0, _in_flight - 1)
 	if int(meta["epoch"]) != _epoch:
 		# Superseded by a pace change or a jump. Nothing to keep, but the pump may now

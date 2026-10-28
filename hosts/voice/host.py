@@ -28,11 +28,26 @@ of megabytes and Godot can load a WAV directly.
   <- {"id": 3, "ok": true, "wav": "...", "sample_rate": 22050, "duration": 4.2,
       "words": [{"text": "the", "t0": 0.0, "t1": 0.12}], "phones": [...]}
 
-  -> {"id": 4, "op": "shutdown"}
+  -> {"id": 4, "op": "cancel", "ids": [2, 3]}
+  <- {"id": 3, "ok": false, "cancelled": true}
+  <- {"id": 4, "ok": true, "dropped": 1}
+
+  -> {"id": 5, "op": "shutdown"}
 
 Every response carries "ok". On failure it is false and "error" holds a
 user-safe string. The host never exits on a bad request - the model load is the
 slow part and we want it to stay warm.
+
+REQUESTS WAIT IN LINE, AND A CANCEL REACHES THEM. Requests are read on a thread
+of their own into a line the main loop takes from, one at a time, in order; a
+`cancel` is answered by that thread at once, each named request still in line
+answered `cancelled` and never made (the one being made finishes, and its reply
+is the caller's to drop). Read in turn, a cancel would have waited behind the
+very requests it names: Test asks for its whole passage at once, and a Stop only
+forgot the replies - pressed a few times, every new Test waited for each old
+passage to be made in full ("it will not work again until we restart the app",
+2026-10-27). Read on a thread, stdin is also always drained, so ghost's write of
+a request never blocks its frame on a full pipe.
 
 STDOUT IS THE PROTOCOL. Anything a backend prints would corrupt it, so stdout is
 redirected for the whole process and only the protocol writer holds the real
@@ -44,7 +59,9 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 import traceback
+from collections import deque
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -102,12 +119,16 @@ class Host:
         sys.stdin.reconfigure(encoding="utf-8")
         self._backends: dict = {}
         backends.progress = self._download_progress
+        self._sending = threading.Lock()  # replies come from both threads
+        self._line: deque = deque()  # requests waiting to be made; None is the end of stdin
+        self._waiting = threading.Condition()
 
     # -- transport ---------------------------------------------------------
 
     def send(self, payload: dict) -> None:
-        self._out.write(json.dumps(payload) + "\n")
-        self._out.flush()
+        with self._sending:
+            self._out.write(json.dumps(payload) + "\n")
+            self._out.flush()
 
     def _download_progress(
         self, name: str, done: int, total: int, finished: bool, error: str
@@ -125,15 +146,14 @@ class Host:
                 "backends": sorted(REGISTRY.keys()),
             }
         )
-        for line in sys.stdin:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                req = json.loads(line)
-            except json.JSONDecodeError as exc:
-                self.send({"ok": False, "error": f"malformed request: {exc}"})
-                continue
+        threading.Thread(target=self._read, name="requests", daemon=True).start()
+        while True:
+            with self._waiting:
+                while not self._line:
+                    self._waiting.wait()
+                req = self._line.popleft()
+            if req is None:
+                return 0
             rid = req.get("id")
             op = req.get("op", "")
             if op == "shutdown":
@@ -148,7 +168,41 @@ class Host:
                 self.send(
                     {"id": rid, "ok": False, "error": f"{type(exc).__name__}: {exc}"}
                 )
-        return 0
+
+    def _read(self) -> None:
+        """stdin, a line at a time, into the line - a cancel acted on here, as it arrives."""
+        try:
+            for line in sys.stdin:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    req = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    self.send({"ok": False, "error": f"malformed request: {exc}"})
+                    continue
+                if req.get("op") == "cancel":
+                    self._cancel(req)
+                    continue
+                with self._waiting:
+                    self._line.append(req)
+                    self._waiting.notify()
+        except Exception:  # noqa: BLE001 - a reader that dies ends the host, as the loop it was did
+            traceback.print_exc()
+        with self._waiting:
+            self._line.append(None)
+            self._waiting.notify()
+
+    def _cancel(self, req: dict) -> None:
+        """Every request `ids` names that is still in line, taken out of it and answered `cancelled`."""
+        ids = set(req.get("ids") or [])
+        with self._waiting:
+            dropped = [r for r in self._line if r is not None and r.get("id") in ids]
+            for r in dropped:
+                self._line.remove(r)
+        for r in dropped:
+            self.send({"id": r.get("id"), "ok": False, "cancelled": True})
+        self.send({"id": req.get("id"), "ok": True, "dropped": len(dropped)})
 
     # -- operations --------------------------------------------------------
 

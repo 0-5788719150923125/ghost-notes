@@ -612,13 +612,14 @@ func _build_plan() -> void:
 		var start := INF
 		var end := INF
 		if String(a["kind"]) in DeskScript.WRITES and span > 0:
-			var t0 := _word_t0(after)
-			if t0 == INF:
+			var due := _due(i, _word_t0(after))
+			if due == INF:
 				break
-			start = float(held.get("start", maxf(t0 - PEN_LEAD, ready)))
+			start = float(held.get("start", maxf(due, ready)))
 			var said := _word_t1(after + span - 1)
 			end = clampf(said if said < INF else start + float(span) * DeskScript.EST_WORD,
 				start + write / DeskScript.MAX_PACE, start + write / DeskScript.MIN_PACE)
+			end = _paced_end(i, start, end)
 			if String(a["kind"]) == "draw":
 				end = maxf(end, minf(start + write / DRAW_PACE, _drawn_by(i)))
 		elif String(a["kind"]) == "point":
@@ -633,10 +634,14 @@ func _build_plan() -> void:
 				if next < INF:
 					end = maxf(minf(end, next - PEN_LEAD - REACH_EASE), start + 0.3)
 		else:
-			var before := _word_t1(after - 1) if after > 0 else maxf(feed.intro_hold, 0.6) - 0.25
+			var before := _word_t1(after - 1) if after > 0 else maxf(feed.intro_hold, 0.6) + _blank() - 0.25
 			if before == INF:
 				break
-			start = float(held.get("start", maxf(before + 0.25, ready)))
+			# an action the writer DECIDES on first (a letter's strike, [constant LetterScript.DECIDE]): the
+			# voice and the pen both done, then that long, the pen held still
+			var decide := float(a.get("decide", 0.0))
+			var due := maxf(before, prev_end) + decide if decide > 0.0 else before + 0.25
+			start = float(held.get("start", maxf(due, ready)))
 			end = start + write
 		var turn_at := float(held.get("turn_at", INF))
 		if bool(a.get("turn", false)) and not held.has("start"):
@@ -1359,6 +1364,24 @@ func _wander_time() -> float:
 ## How slowly the camera's springs follow ([constant SPRING_TAU]).
 func _spring_tau() -> float:
 	return SPRING_TAU
+
+
+## How long the page lies blank after the intro before anything is done on it (seconds): none at the desk.
+func _blank() -> float:
+	return 0.0
+
+
+## WHEN DICTATED action [param i] MAY BEGIN, its first word said at [param t0] (INF while it is not): at the
+## desk, as it is said - a little before, the pen's lead. INF holds the plan there until it is known.
+## A medium whose pen writes ahead (a letter's, [LetterMedium]) answers for itself.
+func _due(_i: int, t0: float) -> float:
+	return t0 - PEN_LEAD if t0 < INF else INF
+
+
+## WHEN DICTATED action [param i], begun at [param start], ends: [param end], the elastic pen's - the
+## desk's writing keeps time with the words it is dictated.
+func _paced_end(_i: int, _start: float, end: float) -> float:
+	return end
 
 
 static func _hash01(page: int, salt: int) -> float:

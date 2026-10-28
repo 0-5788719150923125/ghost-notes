@@ -16,15 +16,16 @@ class_name LetterCard
 ## ([LetterWalk]: the letter as the voice says it, the pen's rests in it, no title announced) and how it
 ## goes out ([LetterCard.Publish]: the document a render draws the letter from).
 ##
-## THE DESK AND THE HAND ARE THE NOTE'S: their seed is the note's own file's unless the card is given one
-## ([method desk_seed]), so the same letter is written the same way every time.
+## THE DESK AND THE HAND ARE THE NOTE'S: the desk's seed is the note's own file's unless the card is given
+## one ([method desk_seed]), so the same letter is written the same way every time; the hand is one of the
+## journal's ([LetterHand], the Notebook's), Kalam unless the card names another.
 ##
 ## GENERATION IS EXPLICIT: Generate draws the sketches not drawn, then lays them out; a sketch's ⟳ draws
 ## it again. Nothing runs on open.
 
 const KEY := "letter"
-## The block: the desk's seed (0: the note's own) and who draws the sketches.
-const KNOBS := {"seed": 0, "writer": "claude", "writer_model": "", "writer_effort": ""}
+## The block: the desk's seed (0: the note's own), the hand it is written in and who draws the sketches.
+const KNOBS := {"seed": 0, "hand": LetterHand.DEFAULT, "writer": "claude", "writer_model": "", "writer_effort": ""}
 
 signal noted(text: String)
 
@@ -40,6 +41,7 @@ var _ink_tried := ""             # the drawings the ink step last failed on, not
 var _installing := ""            # what the ink step waits to be installed, "" for nothing
 
 var _seed_box: SpinBox
+var _hand_pick: OptionButton
 var _writer: AgentPick
 var _rows_box: VBoxContainer
 var _rows := {}                  # a sketch's key -> {sketch, state: Label, redo: Button}
@@ -105,6 +107,7 @@ func apply(cfg: Dictionary) -> void:
 			_knobs[k] = int(cfg[k]) if k == "seed" else String(cfg[k])
 	if not TextGen.has(String(_knobs["writer"])):
 		_knobs["writer"] = "claude"
+	_knobs["hand"] = LetterHand.of(String(_knobs["hand"]))
 	_show_knobs()
 
 
@@ -137,8 +140,8 @@ func desk_seed() -> int:
 	return 1 if path.is_empty() else 1 + absi(hash(path)) % 99999
 
 
-## THE DOCUMENT'S `letter`: the seed, each sketch's drawing that is laid out, the ink, and each picture's
-## file - what [LetterMedium] and [LetterWalk] read, so the voice's rests and the pen are sized alike.
+## THE DOCUMENT'S `letter`: the seed, the hand, each sketch's drawing that is laid out, the ink, and each
+## picture's file - what [LetterMedium] and [LetterWalk] read, so the voice's rests and the pen are sized alike.
 func document() -> Dictionary:
 	var body := _body()
 	var ink := _sketches.ink()
@@ -153,7 +156,8 @@ func document() -> Dictionary:
 		var path := Illustrations.path_for(String((im as Dictionary)["key"]))
 		if not path.is_empty():
 			pictures[String(im["key"])] = ProjectSettings.globalize_path(path)
-	return {"seed": desk_seed(), "svgs": svgs, "ink": ink, "pictures": pictures}
+	return {"seed": desk_seed(), "hand": LetterHand.of(String(_knobs["hand"])), "svgs": svgs, "ink": ink,
+		"pictures": pictures}
 
 
 func _body() -> String:
@@ -257,9 +261,9 @@ func _build() -> void:
 	_seed_box.max_value = 99999
 	_seed_box.step = 1
 	_seed_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_seed_box.tooltip_text = ("Which desk the letter is written at, and in which hand: its paper, ink, pen, "
-		+ "lamp and the things lying about, and how each word wavers. 0 is the note's own, the same every "
-		+ "time; any other number is a desk of its own.")
+	_seed_box.tooltip_text = ("Which desk the letter is written at: its paper, ink, pen, lamp and the things "
+		+ "lying about, and how each word wavers. 0 is the note's own, the same every time; any other number "
+		+ "is a desk of its own.")
 	_seed_box.value_changed.connect(func(v: float) -> void:
 		if _syncing:
 			return
@@ -268,9 +272,33 @@ func _build() -> void:
 	srow.add_child(_seed_box)
 	var again := Button.new()
 	again.text = "New desk"
-	again.tooltip_text = "Another desk and hand, drawn at random."
+	again.tooltip_text = "Another desk, drawn at random."
 	again.pressed.connect(func() -> void: _seed_box.value = randi_range(1, 99999))
 	srow.add_child(again)
+
+	# THE HAND: the journal's (the Picture card's Handwriting row has the same three)
+	var hrow := HBoxContainer.new()
+	hrow.add_theme_constant_override("separation", 6)
+	add_child(hrow)
+	var hl := Label.new()
+	hl.text = "Hand"
+	hl.custom_minimum_size.x = 64.0
+	hl.add_theme_font_size_override("font_size", 12)
+	hrow.add_child(hl)
+	_hand_pick = OptionButton.new()
+	_hand_pick.focus_mode = Control.FOCUS_NONE
+	_hand_pick.fit_to_longest_item = false
+	_hand_pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_hand_pick.tooltip_text = ("The handwriting the letter is written in - the Notebook's hands, each written "
+		+ "stroke by stroke by the pen. Where the lines and pages break follows it, so the voice's rests do too.")
+	for k in _hand_keys():
+		_hand_pick.add_item(String(LetterHand.HANDS[k]["label"]))
+	_hand_pick.item_selected.connect(func(i: int) -> void:
+		if _syncing:
+			return
+		_knobs["hand"] = String(_hand_keys()[i])
+		_touch())
+	hrow.add_child(_hand_pick)
 
 	_writer = AgentPick.writer(("Who draws the letter's sketches: each one's words, turned into a drawing the "
 		+ "pen makes. Takes effect at the next Generate or ⟳."),
@@ -345,7 +373,15 @@ func _show_knobs() -> void:
 	_syncing = true
 	_writer.set_choice(String(_knobs["writer"]), String(_knobs["writer_model"]), String(_knobs["writer_effort"]))
 	_seed_box.value = int(_knobs["seed"])
+	_hand_pick.select(maxi(0, _hand_keys().find(LetterHand.of(String(_knobs["hand"])))))
 	_syncing = false
+
+
+## The hands, in the order the Picture card lists them.
+static func _hand_keys() -> Array:
+	var keys: Array = LetterHand.HANDS.keys()
+	keys.sort()
+	return keys
 
 
 func _touch() -> void:

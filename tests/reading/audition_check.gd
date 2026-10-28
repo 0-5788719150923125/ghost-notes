@@ -15,10 +15,13 @@ extends Node
 ##   voice's between each two, a second of silence after the last so the room rings out - and every
 ##   joined frame goes through the room, none lost and none twice;
 ## - a take is taken off the disk once it is joined;
-## - Stop drops the replies still in flight: a late one is no longer the audition's.
+## - Stop drops the replies still in flight: a late one is no longer the audition's - and CANCELS
+##   them on the host, every sentence still asked and no other (2026-10-27: only forgotten, each was
+##   still made, and every Test after a few Stops waited behind whole passages).
 ##
-## THE CONTROL: a reply held back (out of order) leaves nothing joined until the one ahead arrives,
-## so "joined" above is something that can be withheld.
+## THE CONTROLS: a reply held back (out of order) leaves nothing joined until the one ahead arrives,
+## so "joined" above is something that can be withheld; a Stop once every sentence has arrived
+## cancels nothing, so "cancelled" is something a Stop can leave undone.
 ##
 ## The panel is built by hand and never added to the tree (its `_ready` starts the python voice
 ## host); the audition is handed a player that IS in it, so the ring can be fed.
@@ -30,6 +33,11 @@ class Host extends VoiceHost:
 			params: Dictionary = {}, phonemes: Variant = null) -> int:
 		asked.append({"voice": voice, "out": out_path, "params": params})
 		return 1000 + asked.size()
+
+	var cancelled: Array = []
+
+	func cancel(ids: Array) -> void:
+		cancelled.append_array(ids)
 
 	func is_up() -> bool:
 		return true
@@ -102,12 +110,18 @@ func _run() -> void:
 	var wet: int = a._pushed + (a._hold.size() - a._read)
 	_ok(wet == whole and a._dry.is_empty(), "%d frames came out of the room for %d joined" % [wet, whole])
 	_ok(files.all(func(f: String) -> bool: return not FileAccess.file_exists(f)), "a joined take was left on the disk")
-	# Stop drops what is in flight
+	# Stop drops what is in flight, and cancels it on the host
 	_ed._stop_test()
+	_ok(_host.cancelled.is_empty(), "control: a Stop with every sentence arrived cancelled %d requests" % _host.cancelled.size())
+	var before := _host.asked.size()
 	_ed._on_test()
 	var late := 1000 + _host.asked.size()
 	_ed._stop_test()
 	_ok(not a.busy() and not a.owns(late) and _ed._cast._test.text == "Test", "Stop kept a reply in flight as the audition's")
+	var asked_now: Array = range(1001 + before, 1001 + _host.asked.size())
+	var gone := _host.cancelled.duplicate()
+	gone.sort()
+	_ok(gone == asked_now, "Stop cancelled %d of the %d sentences still asked on the host" % [gone.size(), asked_now.size()])
 	print("")
 	if _fails.is_empty():
 		print("audition_check: ALL OK")

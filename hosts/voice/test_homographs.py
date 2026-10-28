@@ -158,6 +158,14 @@ SWITCHES = [
     ("I read it last night.", "read", "past", PAST_NARRATIVE),
     # other homographs the same machinery covers, for free
     ("Historians record the year.", "record", "verb", ()),
+    # ...and the ones ghost's own table (Phonemes.SPEAK_AS) had picked by lists of neighbors
+    # until 2026-10-27, when its pick never reached this pass: eSpeak alone reads each as the
+    # noun - "prisoner lives" as a compound - and the tagger reads the clause
+    ("The way a prisoner lives in his cell.", "lives", "verb", ()),
+    ("She lives by the river.", "lives", "verb", ()),
+    ("The man who lives next door is kind.", "lives", "verb", ()),
+    ("The ledgers record no discrepancy that spring.", "record", "verb", ()),
+    ("The ledger records no discrepancy.", "records", "verb", ()),
     ("They will present the case.", "present", "verb", ()),
     ("The refuse was piled by the door.", "refuse", "noun", ()),
     ("He had wound the clock too tight.", "wound", "wound", ()),
@@ -219,6 +227,12 @@ HOLDS = [
     # the noun reading of a pair whose default IS the noun
     ("The record shows nothing.", "record", ()),
     ("A record of the year.", "record", ()),
+    ("The record a clerk kept was lost.", "record", ()),
+    # THE REPORT (north-star ch43, 2026-10-27): ghost's table read this "lives" as the verb, its
+    # neighbors on none of its lists - the noun, as the tagger has it, is eSpeak's own reading
+    ("Earlier lives leave things lying around, and later ones pick them up.", "lives", ()),
+    ("Their lives changed overnight.", "lives", ()),
+    ("Lives were lost.", "lives", ()),
     ("The present was wrapped.", "present", ()),
     # A NOUN SLOT beats a verb tag: nothing but a noun can follow "the most
     # legible", and the tagger called this one a verb.

@@ -1,5 +1,5 @@
 {
-	"digest": "39b8f1ea417285718e289e22a5d36dbe17c26c2a5e972017a38b0ae1542afdd8",
+	"digest": "3a6aac28a2cc446412f8643310ea61458ab7187736a1d8355ba5e8de75c3ab94",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -245,6 +245,7 @@
 		"res://src/timeline/storyboard_lanes.gd",
 		"res://src/timeline/storyboard_strip.gd",
 		"res://src/timeline/timeline_view.gd",
+		"res://src/ui/agent_pick.gd",
 		"res://src/ui/card.gd",
 		"res://src/ui/card_row.gd",
 		"res://src/ui/note_cards.gd",

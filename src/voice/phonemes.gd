@@ -415,7 +415,7 @@ static func parse(text: String) -> Array:
 	_settle_holds(words, sentences, hold_acc)
 	if words.size() > 0:
 		sentences.append(words)
-	_resolve_homographs(sentences)
+	_pin_words(sentences)
 	return sentences
 
 
@@ -1132,85 +1132,23 @@ static func _ends_sentence(toks: PackedStringArray, at: int) -> bool:
 	return not (c >= "a" and c <= "z")
 
 
-## Words ghost pronounces ITSELF, because eSpeak reads them wrong.
+## Words ghost pronounces ITSELF, because eSpeak reads them wrong in EVERY context.
 ##
-## eSpeak picks these from its own part-of-speech guess, and on some very common constructions it
-## is confidently wrong: "the way a prisoner lives in his cell" comes back with the NOUN reading
-## (lˈaɪvz), because it parses "prisoner lives" as a compound noun. Sentence context does not
-## rescue it - measured, the whole-sentence transcription returns the same wrong answer as the word
-## in isolation, so this is not something a phonemizer setting can fix.
+## Each entry is one reading, always. The resolved word is marked `literal`, which makes ghost's
+## own ARPAbet win for that word only - the rest of the sentence still gets eSpeak's transcription,
+## so nothing else about the reading changes.
 ##
-## Each entry gives the reading to use by DEFAULT and the reading to switch to when the word before
-## or after says otherwise. The resolved word is marked `literal`, which makes ghost's own ARPAbet
-## win for that word only - the rest of the sentence still gets eSpeak's transcription, so nothing
-## else about the reading changes.
+## NO HOMOGRAPH IS PICKED HERE. Which of two readings a word takes is its part of speech, and the
+## voice host reads that from the whole sentence (hosts/voice/homographs.py: nltk's tagger, the
+## clause's tense, the reading asked of eSpeak in a frame that forces it). This table had held
+## `lives`, `record` and `records`, each a default flipped by lists of the words beside it - and a
+## pinned word never reaches the host's pass: "Earlier lives leave things lying around" had no
+## listed neighbor and was read as the verb (2026-10-27, north-star ch43). The host's pass reads
+## that one, and every sentence these entries were written for, right (hosts/voice/test_homographs.py).
 ##
-## Add sparingly and only where eSpeak is measurably wrong: a bad rule here mispronounces a word
-## that was previously fine, which is worse than the occasional homograph.
-# Shared by `record` / `records`, which take the same contexts. Named constants rather than
-# two inline copies, so the pair can never drift apart.
-#
-#   VERB_PREV - a subject pronoun, modal, or infinitive marker: only a verb can follow.
-#   VERB_NEXT - a determiner or quantifier opening an OBJECT, so the word is transitive.
-#   NOUN_PREV - a determiner or preposition directly before it, which always makes it a noun
-#               ("for the record", "on record"). Vetoes VERB_NEXT, so "the record a clerk
-#               kept" does not switch on that "a".
-const _RECORD_VERB_PREV := ["i", "we", "they", "you", "he", "she", "who", "to", "will",
-	"would", "shall", "should", "can", "could", "cannot", "must", "may", "might",
-	"do", "does", "did", "don't", "didn't", "never", "not", "also", "please", "let",
-	"help", "helps", "helped", "carefully", "dutifully", "faithfully"]
-const _RECORD_VERB_NEXT := ["a", "an", "the", "no", "every", "each", "all", "any", "some",
-	"this", "that", "these", "those", "his", "her", "its", "their", "our", "my", "your",
-	"it", "them", "him", "everything", "nothing", "what", "how", "only", "both",
-	"more", "less", "fewer", "several", "many", "much",
-	"two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]
-const _RECORD_NOUN_PREV := ["the", "a", "an", "this", "that", "these", "those", "his", "her",
-	"its", "their", "my", "your", "our", "every", "each", "one", "another", "same",
-	"new", "old", "world", "official", "public", "written", "permanent", "track",
-	"on", "off", "for", "of", "in", "into", "by", "with", "at", "from", "without"]
-
+## Add sparingly and only where eSpeak is measurably wrong whatever the sentence: a bad entry
+## mispronounces a word that was previously fine, which is worse than the occasional miss.
 const SPEAK_AS := {
-	"lives": {
-		"base": "L IH1 V Z",       # the VERB - "a prisoner lives here"
-		"alt": "L AY1 V Z",        # the NOUN  - "their lives changed"
-		"alt_prev": ["the", "their", "our", "your", "my", "his", "her", "its", "these",
-			"those", "many", "all", "both", "few", "several", "countless", "other",
-			"two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-			"young", "past"],
-		"alt_next": ["were", "are", "of", "matter", "lost", "hang", "depend"],
-	},
-	# RECORD. The same failure as `lives`, found the same way: eSpeak reads the VERB as the NOUN
-	# whenever the subject is a plural noun rather than a pronoun, because it parses "<noun>
-	# record" as a compound. Measured -
-	#   "They record no discrepancy."         -> ɹᵻkˈɔːɹd   correct (verb)
-	#   "He records everything."              -> ɹᵻkˈɔːɹdz  correct (verb)
-	#   "The ledgers record no discrepancy."  -> ɹˈɛkɚd     WRONG  (noun)
-	#   "The ledger records no discrepancy."  -> ɹˈɛkɚdz    WRONG  (noun)
-	#   "Historians record the year."         -> ɹˈɛkɚd     WRONG  (noun)
-	#
-	# Every noun context it already gets right ("the record shows", "a record of", "record
-	# player", "she broke the record") returns ɹˈɛkɚd, and `base` here maps through
-	# arpabet.to_symbols to exactly ɹˈɛkɚd - so a rule that does NOT fire changes nothing.
-	# That is the safety property: this can only ever alter the reading it fires on.
-	#
-	# The switch is keyed to what FOLLOWS, because a transitive verb takes an object - a
-	# determiner or quantifier after the word means it is being DONE, not held. `keep_prev`
-	# vetoes the one construction that test would otherwise fool ("the record a clerk kept"),
-	# since a determiner or preposition directly before the word always makes it the noun.
-	"record": {
-		"base": "R EH1 K ER0 D",      # the NOUN - "the record shows", "a record of"
-		"alt": "R IH0 K AO1 R D",     # the VERB - "the ledgers record no discrepancy"
-		"alt_prev": _RECORD_VERB_PREV,
-		"alt_next": _RECORD_VERB_NEXT,
-		"keep_prev": _RECORD_NOUN_PREV,
-	},
-	"records": {
-		"base": "R EH1 K ER0 D Z",
-		"alt": "R IH0 K AO1 R D Z",
-		"alt_prev": _RECORD_VERB_PREV,
-		"alt_next": _RECORD_VERB_NEXT,
-		"keep_prev": _RECORD_NOUN_PREV,
-	},
 	# HUMS. eSpeak spells these out instead of humming them - measured, it returns
 	#   "hmm" -> həm ("hem"),  "hm" -> ˌeɪtʃˈɛm ("aitch em"),  "mmm" -> ˌɛmˌɛmˈɛm ("em em em").
 	#
@@ -1232,8 +1170,10 @@ const SPEAK_AS := {
 }
 
 
-## Pick each homograph's reading from its neighbors, once the whole sentence is known.
-static func _resolve_homographs(sentences: Array) -> void:
+## The words ghost pronounces itself, pinned (`literal`) so the neural voice says them as written:
+## a name, then a word of [constant SPEAK_AS]. A homograph is left to the voice host, which reads its
+## part of speech from the sentence.
+static func _pin_words(sentences: Array) -> void:
 	for s in sentences:
 		var sent: Array = s
 		for i in sent.size():
@@ -1257,21 +1197,7 @@ static func _resolve_homographs(sentences: Array) -> void:
 				continue
 			if not SPEAK_AS.has(key):
 				continue
-			var rule: Dictionary = SPEAK_AS[key]
-			var prev := String(sent[i - 1].get("text", "")).to_lower() if i > 0 else ""
-			var nxt := String(sent[i + 1].get("text", "")).to_lower() if i + 1 < sent.size() else ""
-			# An entry with no `alt` is a plain override: one reading, always.
-			#
-			# `keep_prev` is a VETO, checked first and beating both alt lists. Without it a
-			# rule keyed to the following word cannot tell "the ledgers record a loss" (verb)
-			# from "the record a clerk kept" (noun) - the word after is "a" in both. A
-			# determiner or preposition immediately before the word settles it, so that case
-			# is answered by the left neighbor and never reaches the right one.
-			var vetoed: bool = (rule.get("keep_prev", []) as Array).has(prev)
-			var alt: bool = rule.has("alt") and not vetoed \
-				and ((rule.get("alt_prev", []) as Array).has(prev) \
-					or (rule.get("alt_next", []) as Array).has(nxt))
-			var got := _parse_cmu(String(rule["alt"] if alt else rule["base"]))
+			var got := _parse_cmu(String((SPEAK_AS[key] as Dictionary)["base"]))
 			w["phones"] = got.phones
 			w["stress"] = got.stress
 			w["literal"] = true

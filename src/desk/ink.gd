@@ -128,7 +128,7 @@ const FAINT := ["grid"]
 const WANDER := 0.006
 const WANDER_RANGE := Vector2(0.12, 0.9)
 
-static var _fonts := {}          # font name -> [[left, right, strokes], ...], ASCII order from 32
+static var _fonts := {}          # font name or path -> [[left, right, strokes], ...], ASCII order from 32
 static var _names := {}          # glyph name -> "font:character", NAMED with the letters filled in
 static var _lock := Mutex.new()
 
@@ -584,15 +584,16 @@ static func _partial(pts: PackedVector2Array, f: float) -> PackedVector2Array:
 
 # --- the stroke fonts ------------------------------------------------------------
 
-## One glyph of a Hershey font by its ASCII character: [left, right, strokes], [] when none. The
-## fonts are the original data (.jhf, one glyph a line from code 32), read once and kept; locked,
-## because a desk may build off the main thread.
+## One glyph of a Hershey font by its ASCII character: [left, right, strokes], [] when none. [param font]
+## is a name of [constant FONTS] or a .jhf file's path (a letter's hands, [LetterHand]). The fonts are
+## the original data (.jhf, one glyph a line from code 32), read once and kept; locked, because a desk
+## may build off the main thread.
 static func _hershey(font: String, ch: String) -> Array:
 	if ch.is_empty():
 		return []
 	_lock.lock()
 	if not _fonts.has(font):
-		_fonts[font] = _parse_jhf(String(FONTS.get(font, "")))
+		_fonts[font] = _parse_jhf(String(FONTS.get(font, font)))
 	var glyphs: Array = _fonts[font]
 	_lock.unlock()
 	var i := ch.unicode_at(0) - 32

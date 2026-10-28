@@ -122,6 +122,18 @@ func ensure(voice: String) -> int:
 	return id
 
 
+## Take requests [param ids] out of the host's line: each one still waiting is answered `cancelled`
+## and never made, and the one being made finishes. Neither answer is signaled - whoever cancels has
+## let them go. Without it a request let go was still made, and everything asked after it waited.
+func cancel(ids: Array) -> void:
+	if ids.is_empty() or _state != "up":
+		return
+	var id := _next_id
+	_next_id += 1
+	_pending[id] = {"op": "cancel"}
+	_send({"id": id, "op": "cancel", "ids": ids})
+
+
 func is_up() -> bool:
 	return _state == "up"
 
@@ -277,6 +289,8 @@ func _handle(line: String) -> void:
 	var id := int(msg.get("id", -1))
 	var meta: Dictionary = _pending.get(id, {})
 	_pending.erase(id)
+	if bool(msg.get("cancelled", false)) or String(meta.get("op", "")) == "cancel":
+		return
 	if not bool(msg.get("ok", false)):
 		var err := String(msg.get("error", "unknown error"))
 		print("ghost/voice: request %d failed: %s" % [id, err])

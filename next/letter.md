@@ -25,14 +25,22 @@ pen, lamp, camera, the voice followed word by word, the elastic pen - with the l
 moments. Its parts are the desk's; the hooks it needed are small and the desk's behavior is unchanged
 (`_end_fade`, `_ended`, `_travel`, `_wide_frame`/`_local_frame`, `_wander_time`).
 
-**A hand of its own, no TeX** ([LetterHand], `src/desk/letter_hand.gd`): the Hershey simplex SCRIPT
-font (`fonts/hands/hershey/scripts.jhf`, already in the repo for `\mathcal`), a centerline cursive.
-Measured on the font: every lowercase letter leaves at its right margin about half way up its body and
-most come in at their left margin there, so letters set at their advance join, and a word is one stroke
-the pen never lifts from. Where a letter starts elsewhere (a, c, d, g, o, q start their bowl at the top)
-a connecting stroke rises to it; dots and crosses (i, j, t, x) are made after the word; digits and the
-marks the script font draws doubled come from the simplex roman. Strokes come back in [Ink]'s shape, so
-`Ink.schedule` and `Ink.at` time and draw them.
+**The journal's hands, written by the pen, no TeX** ([LetterHand], `src/desk/letter_hand.gd`; 2026-10-27,
+the user: "the font looks awful ... the journal medium had nicer fonts"): Kalam (the default), Caveat or
+Patrick Hand - the Notebook's ([NotebookLayout]) at its sizes - picked on the Letter card's Hand row and kept
+in the block (`hand`). An outline font is a shape to fill, so each is traced ONCE into the lines a pen draws
+it with (`scripts/hand_strokes.py`, numpy and Pillow, a development tool): every printable ASCII character
+rendered at 400 px an em, thinned to its centerline (Zhang-Suen), cut where it branches - two junctions
+closer than a stroke's width one crossing, the stubs thinning leaves at a corner dropped - and walked into
+strokes as a hand writes: from the top left, on through a branch the way the line was going, lifting at a
+turn sharper than 110 degrees, a line begun at its tail turned round (an a, an e, a g), a ring from its top
+counterclockwise, a dot (an i's, a period) last as a small spiral. Kept in Hershey's own format
+(`fonts/hands/strokes/*.jhf`, which [Ink] reads and the export ships with the plotter fonts); what the
+format cannot hold (units to the em, the baseline, the reach, the nib) is the tracer's printed row in
+`LetterHand.HANDS`. Drawn with a round nib as wide as the font's own stroke (its ink over its centerline's
+length), the page is the font. A print hand: the pen lifts between letters. The first pass was the Hershey
+simplex SCRIPT font, a centerline cursive, its letters joined into one stroke a word - thin and spindly
+at the letter's close camera.
 
 ## The marks ([LetterScript], `src/desk/letter_script.gd`; ScriptMarks group "letter")
 
@@ -40,7 +48,7 @@ marks the script font draws doubled come from the simplex roman. Strokes come ba
 |---|---|
 | a paragraph | written while it is said, a line at a time, each line a dictation of its own words |
 | `*a paragraph in italics, whole*` | a THOUGHT: said, never written; the pen up, the camera eased back |
-| `<!-- strike -->` | the paragraph last written crossed out, every line |
+| `<!-- strike -->`, `<!-- strike: 5 -->` | the writer stops to decide (3 s, or the mark's own seconds), the pen still, then crosses out the paragraph last written, every line |
 | `<!-- unspoken: Dear Ink, -->` | written, never said; the voice waits |
 | `<!-- sketch: words -->` | drawn by the pen while the paragraph after it is said - that paragraph is the drawing's, never written |
 | `<!-- point: sketch -->`, `<!-- point: sketch, the dot -->` | in a thought (or any paragraph the pen is not busy with): at the next word the pen points at the last sketch, or its named part, to the sentence's end |
@@ -58,29 +66,69 @@ exactly that.
 
 ## Decisions, and what was measured
 
+- **No indent; a rule left empty between paragraphs** (2026-10-27, the user: "the hanging indents look
+  wrong, when the first several paragraphs are each just ~10 words long ... there should probably be a
+  newline between each paragraph"): the book's rule ([BookLayout] `INDENT_EM` 0). A paragraph after a
+  sketch keeps the sketch's own spacing; a sketch kept with the lines that point at it counts their empty
+  rules (`_keep_with`).
+- **The writer decides before striking** (2026-10-27: "The actor writes the line, then IMMEDIATELY scratches
+  it out ... an actor would likely write the line, then pause, then scratch it out after a few seconds of
+  silent decision-making"; then: "the user could specify their own delay time in the marker"): the voice
+  and the pen both done, the pen held still over the line `LetterScript.DECIDE` (3 s) or the mark's own
+  number, then the strike; the voice rests through both (`decide` on the action, `DeskMedium._build_plan`).
+- **A picture clears before the letter goes on** (2026-10-27, the user: "the first full-screen picture
+  seemed to linger for far too long"): it fades out from 0.1 s after its passage's last word over 1.2 s,
+  and the voice rests until it is gone, so the next thing the pen does is seen from its start. It had faded
+  from 0.4 s over 1.4 s with no rest, so the chapter's first sketch began under it. The passage itself is
+  the author's: the chapter's first picture is up over 94 words, the next three over 170, 123 and 122.
+
 - **The paragraph after a sketch is its narration, not written.** The pen cannot write and draw at once,
   and the only words to draw under are the next ones. In the chapter every sketch is followed by words
   about it ("A cross, and a dot, on the same line, about a hand apart.") - the drawing is said as it is
   drawn, the desk's rule.
-- **The hand writes at a fluent pace** (`LetterHand.PACE` 1.5 of the desk's pen, which is a careful hand
-  setting formulas at about 3.3 cm of the page a second; fluent cursive runs 4 to 5). At the desk's pace
-  the chapter's ink was 1.9 s a word against a voice at about 0.45 - the voice would have waited nine
-  minutes in all.
-- **The pen trails the voice, as a hand trails dictation**, by up to `LetterScript.LAG_MOST` (2.5 s) at a
-  paragraph's end before the voice waits; a thought, a hesitation or a picture takes the lag back. The
-  walk follows the voice and the pen line by line, as the medium's plan does (a paragraph-level guess
-  missed every line's return and its words' floor). The chapter: 3,467 spoken words, 15 pages, about 2.8
-  times the hand's fluent pace on average, about a minute of rests in all - most of them the 14 page
-  turns. Measured on the plan: lines a median 0.28 s behind their words.
-- **But the pen is on time for what it does at a moment**: before a strike, a tap, a drawing, an
-  unspoken line or a thought it points in, the voice waits until the pen is free (`sync`) - on the plan,
-  every point and tap of the chapter starts on its word.
+- **The pen writes two words ahead of the voice** (2026-10-27, the fifth pass). How it got here:
+  - the first two passes kept the pen with the voice word for word (the desk's elastic pen, `LAG_MOST` 2.5 s
+    of trail): the user, "Something about this mode feels wrong and bad ... the pen writes very fast
+    simultaneously";
+  - the third let the voice lead, the pen at a hand's pace (48 words a minute), and TIME SKIPPED under 1.2 s
+    dissolves (62 in the chapter): "A person wants to read what is being said, and while the pen is so far
+    behind the voice... they can't do that ... write ahead, and pause at the start of each sentence";
+  - the fourth wrote ahead at a hand's steady pace (86 words a minute), the voice waiting at each sentence's
+    start: "on average, 5 or 6 words ahead of the speaking ... It makes the pauses between sentences far too
+    long ... maybe 2 words ahead of the speaking?" A pen slower than the voice makes the voice wait out the
+    difference at every sentence, whatever lead is asked for (the chapter 43 minutes, and longer the slower
+    the hand); and its rests were sized against a guessed voice, quicker than the user's.
+
+  Now each word is written while the voice says the one `AHEAD_WORDS` (2) before it: the desk's elastic
+  dictation on the voice's OWN times, so at any voice's speed (`LetterMedium._due`, `_ahead_times`,
+  `_paced_end`, `_share`), never quicker than `QUICKEST` (2.5) times the hand's pace (at 2.0 a voice of 0.36 s a
+  word outran it by 18 words). The voice waits only where the pen cannot be two words ahead: a paragraph after a
+  thought, a still or the blank page, for its first two words (the line's `gate` "voice" and `gate_rest`, the
+  pen beginning as the voice gets there); a page turn, once the voice has read the page ("turn"); and a run of
+  words far longer in ink than in speech. Measured on the chapter: 28.3 minutes on a voice of 0.45 s a word, 23.1
+  on 0.36, 1.8 minutes of rests in all (24 inside a paragraph, mostly turns); the pen 1.2 to 1.4 words ahead as
+  each word is finished (it writes the word two on from the one being said), 7% of words said a moment before
+  they are finished at 0.45 s a word. Under a picture the desk's own dictation, unseen. The pen moves at about
+  the voice's speed again - the price of short pauses - but two words ahead of it, never on it.
 - **A page turns where it runs out, mid-sentence too** (`TURN_REST`, the voice resting at that line's
   first word). The legal pad of the desk, 24 lines to a page, about 230 words.
-- **The camera is closer than the desk's** (0.38 m to 0.82): a line of cursive is small. Close on a line
-  it sees under half the page, so for what the pen does away from the line - a point at a sketch, a tap -
-  it sets off `AWAY_LEAD` (3.5 s) early and frames a little wider; the first look had the pen pointing
-  above the frame.
+- **The camera's arc over a page, gentle** (2026-10-27, the user: "The forward and backward zooming of the
+  camera is nauseating. Like the journal and tablet mediums, we really need to dial that behavior back"):
+  as the book's and the tablet's, a page opens on the whole pad (`LETTER_WIDE`, 0.85 m), closes in on the
+  writing over 9 s once it has come up (`LETTER_LOCAL`, 0.47 m: three fifths of the page's height and all
+  its width) and lets go over 9 s, done 7 s before its turn - its springs the tablet's (4.2 s), which run
+  about twice their time behind (simulated: a fifth of the way in as the sheet lifts). A turn not planned
+  yet is guessed from its first word. Nothing else moves it in or out: a thought, a point at a sketch and a
+  tap move where it looks, never how close; only a point at the camera stands it back (`CAMERA_K` 0.7, a
+  fifth further), and a still holds close on its drawing. Across, it holds the column's middle. The first
+  pass ran from the desk's 1.45 m to 0.38 (near four times), all the way out 3 s before each of the
+  chapter's 18 turns and back, a step back of 70% for every thought, 50% for every point and tap, on
+  3.2 s springs; and it swung across between a short line and a long one. For what the pen does away
+  from the line it still sets off `AWAY_LEAD` (3.5 s) early.
+- **The page lies blank a moment first** (2026-10-27: "the writing begins IMMEDIATELY after the intro
+  disappears ... We should linger on the blank page for a bit"): the voice opens on a rest of
+  `LetterScript.BLANK_PAGE` (4 s), nothing is written before it (`DeskMedium._blank`, a hook: none at the
+  Proof desk), and the camera comes in over the empty pad.
 - **A sketch stays on the page with what points at it** (`LetterScript._keep_with`): the first look put
   the cross and the dot at a page's foot, so the blind-spot test and "That's me" were a page on, with the
   pen pointing at nothing. A sketch now starts a page of its own when the lines up to its last point (or a

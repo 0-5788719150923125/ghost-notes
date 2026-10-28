@@ -90,7 +90,7 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 | Mark | Example | Panels | What it does |
 |---|---|---|---|
 | Thought | `*She is always fine.*` | Generative | Letter: a paragraph in italics, whole, is a thought - said, and never written: the writer stops and thinks it, the pen lifted. |
-| Strike | `<!-- strike -->` | Generative | Letter: the pen crosses out the paragraph it last wrote, every line of it. |
+| Strike | `<!-- strike -->` | Generative | Letter: the writer stops to decide, then the pen crosses out the paragraph it last wrote, every line of it. The pause is about 3 seconds; strike: 5 makes it 5. |
 | Written, not said | `<!-- unspoken: Dear Ink, -->` | Generative | Letter: the pen writes this and the voice does not say it - it waits while it is written. |
 | Point | `<!-- point: sketch, the dot -->` | Generative | Letter: inside what is said, at the next word the pen points at the last sketch - or at the part of it so described - until the sentence ends. point: camera lifts the pen to whoever is watching. |
 | Tap | `<!-- tap -->` | Generative | Letter: the pen is turned over and its top tapped on the pad - tap: desk, on the desk beside it - while the writer thinks. The voice waits a moment; the taps run on under the next words. |

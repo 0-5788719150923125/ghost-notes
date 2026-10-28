@@ -73,6 +73,31 @@ SR = 24000
 HOP = 600
 OUT_RATE = 22050
 MAX_TOKENS = 510
+# THE OPENING WORD IS SAID: the graph is sent LEAD_IN word-spaces after its first pad, ahead of the
+# sentence (2026-10-27, the user: in "A mind does not film the world." "the 'A' is dropped entirely. You
+# can't hear it at all"). Started on its first phoneme, Kokoro lays its onset ON that phoneme, as Piper's
+# VITS did (LEAD_IN_SPACES): measured over 22 sentences opening on short words in Puck at Pace 1.6, the
+# first word against the sentence's speech was "A" -167 dB (digital silence, in both "A"s), "At" -107,
+# "Of" -66, "If" -56, "It" -55, "In" -50, "An" -42, "The" -32, and Whisper medium.en lost the first word
+# of 6 ("Mine does not film the world", "9 the rain at east", "Ringing us up"). With the lead-in:
+#
+#   lead   first word lost   opening "A"   words after the first   head before the first sound
+#     0         6 of 22        -167 dB             -                     75 ms
+#     2         1               -17               +1.4%                  82
+#     3         0               -10               +2.5%                  97
+#     4         0                -5               +2.8%                 105
+#     4, the head trimmed through it:  0  -6     -0.9%                  45 (SEAM_LEAD is 44)
+#
+# Four meets the criterion Piper's two was chosen by - the opening word no weaker than the same word
+# later in a sentence (a mid-sentence "a" is -4 dB) - and the first word keeps its length (82 ms at
+# 2, 3 and 4: no drawl). Nothing sounds in the lead-in (the head before the word stays 50 dB under the
+# peak). It is the render's, not the sentence's: the style is the pack's row for the sentence's own
+# symbols (counted, the lead-in moved it two rows at two, and the words after the first ran 2.4% long
+# where they run 1.4%), `ids_of` - what a voice is taught on - is the sentence's own, and the head is
+# trimmed through it (`_trim_ends`).
+LEAD_IN = 4
+# A floor that says a plan entry is a take's trimmed end (`_nominal`): fixed seconds, at any scale.
+HELD = float("inf")
 # ITS AUDIO RUNS AHEAD OF ITS PLAN (2026-10-25, the user: "the 'h' from 'happy' STARTS on the left side
 # of the comma"): the voicing the plan puts in each frame is heard PLAN_LEAD earlier - measured over 20
 # sentences of two voices, a median 55 ms (Emma) and 48 (Heart), the middle half of them within 15 ms of
@@ -416,7 +441,9 @@ class KokoroBackend(PiperBackend):
     def ids_of(self, tokens: list, family: str = "kokoro", british: bool = False, phonemizer: str = "espeak") -> list:
         """THE IDS THE GRAPH IS SENT FOR `tokens` (`_run`, `_render_symbols`): its homographs, eSpeak's reading in
         misaki's symbols, a pad at each end - what a voice is taught on here (hosts/voice/utterances.py), so it
-        learns exactly what it will be asked. What the plan is told (floors, stretches) is the plan's, not the ids'."""
+        learns exactly what it will be asked. What the plan is told (floors, stretches) is the plan's, not the ids',
+        and so is the lead-in the render puts after the first pad (LEAD_IN): it opens the utterance, it is not
+        the sentence, and the predictor it acts on is Kokoro's own in a voice taught here."""
         espeak = "en-gb" if british else "en-us"
         if phonemizer == "espeak":
             self._homographs.annotate(tokens, espeak)
@@ -606,9 +633,9 @@ class KokoroBackend(PiperBackend):
         return self._synth_tokens(list(tokens), voice, out_path, params, cfg, sess)
 
     def _symbols(self, tokens: list, phonemizer: str, espeak_voice: str = "en-us", voice: str = "") -> list:
-        """Piper's, without its lead-in spaces (LEAD_IN_SPACES) or its last word-space: the lead-in gives a VITS graph somewhere to
-        start that is not a word, and Kokoro's first pad already carries its own (14 frames, 350 ms,
-        in the first sentence measured - more than the seam allows, so it is trimmed, `_trim_ends`)."""
+        """Piper's, without its lead-in spaces (LEAD_IN_SPACES) or its last word-space: the sentence's own
+        symbols. Kokoro's lead-in is its render's (LEAD_IN, `_render_symbols`), so what a voice is taught
+        on (`ids_of`) and the style row it is read in count the sentence alone."""
         out = super()._symbols(tokens, phonemizer, espeak_voice, voice)
         k = 0
         while k < len(out) and out[k] == (" ", 0):
@@ -729,17 +756,20 @@ class KokoroBackend(PiperBackend):
         lay_sound: list[bool] = []
         lay_unit: list[int] = []
         lay_floor: list[float] = []
-        for a, b in _pieces(ids, units, unit_of):
+        # each piece opens on the lead-in (LEAD_IN), a pad's in every way but its id: no word's, no sound
+        lead = [int(vocab[" "])] * LEAD_IN if " " in vocab else []
+        opens = [-1] * (1 + len(lead))
+        for a, b in _pieces(ids, units, unit_of, MAX_TOKENS - len(lead)):
             body = ids[a:b]
             n = max(1, len(body))
             pack = kk["pack"]
             feeds = {
-                "input_ids": np.array([[PAD_ID, *body, PAD_ID]], dtype=np.int64),
+                "input_ids": np.array([[PAD_ID, *lead, *body, PAD_ID]], dtype=np.int64),
                 "style": np.asarray(pack[min(n, pack.shape[0]) - 1], dtype=np.float32).reshape(1, STYLE),
                 "speed": np.array([speed], dtype=np.float32),
             }
-            fl = [0.0, *floor[a:b], 0.0]
-            sc = [1.0, *scale[a:b], 1.0]
+            fl = [0.0] * len(opens) + [*floor[a:b], 0.0]
+            sc = [1.0] * len(opens) + [*scale[a:b], 1.0]
             if fed_floor and REST_FLOOR_INPUT in takes:
                 feeds[REST_FLOOR_INPUT] = np.array(fl, dtype=np.float32)
             if fed_scale and DUR_SCALE_INPUT in takes:
@@ -749,10 +779,10 @@ class KokoroBackend(PiperBackend):
             planned = np.asarray(out[1]).reshape(-1).astype(np.float64)
             # an unpatched graph hands back the plan before its Round and Clip: done here as there
             frames_parts.append(planned if REST_FLOOR_INPUT in takes else np.maximum(np.round(planned), 1.0))
-            lay_owner += [-1, *owner[a:b], -1]
-            lay_rest += [-2, *rest_of[a:b], -2]
-            lay_sound += [False, *sound[a:b], False]
-            lay_unit += [-1, *unit_of[a:b], -1]
+            lay_owner += [*opens, *owner[a:b], -1]
+            lay_rest += [-2] * len(opens) + [*rest_of[a:b], -2]
+            lay_sound += [False] * len(opens) + [*sound[a:b], False]
+            lay_unit += [*opens, *unit_of[a:b], -1]
             lay_floor += fl
         audio = np.concatenate(audio_parts) if audio_parts else np.zeros(1, dtype=np.float32)
         frames = np.concatenate(frames_parts) if frames_parts else np.zeros(0)
@@ -771,8 +801,15 @@ class KokoroBackend(PiperBackend):
         if frames.size != len(lay_owner):
             return audio, spans
         self._last_frames = frames
-        if fed_floor and REST_FLOOR_INPUT in takes:
-            self._last_floor = np.array(lay_floor, dtype=np.float32)
+        floors = np.array(lay_floor if fed_floor and REST_FLOOR_INPUT in takes else [0.0] * frames.size, np.float64)
+        # what `_trim_ends` left at the ends is seconds, not plan: counted by `_nominal` as whole frames, the
+        # pad and the lead-in cut to slivers made a pitch move resample the words 5.3% long (22 sentences;
+        # counted as they stand, 0.9% short of the takes before the lead-in, whose pad was counted whole too)
+        heard = [k for k, s in enumerate(lay_sound) if s]
+        if heard:
+            floors[: heard[0]] = HELD
+            floors[heard[-1] + 1 :] = HELD
+        self._last_floor = floors
         # every time from here on is the plan's less PLAN_LEAD (never before the take's start)
         t = -PLAN_LEAD
         run_at = 0.0
@@ -823,7 +860,8 @@ class KokoroBackend(PiperBackend):
         """`_nominal_seconds` for a ROUNDED plan: a token planned at `m` frames was asked for between
         m - 1/2 and m + 1/2, so at another scale it falls in that interval over the ratio, and the
         mean of the Round over it is closed form (the integral of a staircase). One frame is the
-        clip's, and a floored token keeps its floor."""
+        clip's, a floored token keeps its floor, and a take's trimmed ends (a floor of HELD) are the
+        seconds they were cut to, the same at any scale."""
         import numpy as np
 
         if frames is None or ratio <= 0.0:
@@ -839,11 +877,12 @@ class KokoroBackend(PiperBackend):
         hi = (m + 0.5) / ratio
         width = np.maximum(hi - lo, 1e-12)
         exp = (area(hi + 0.5) - area(lo + 0.5)) / width
-        exp = np.where(m <= 1.0, 1.0, exp)
+        exp = np.maximum(np.where(m <= 1.0, 1.0, exp), 1.0)
         if floor is not None:
             f = np.asarray(floor, dtype=np.float64)
-            exp = np.where((f > 0.0) & (m <= f), m, exp)
-        return float(np.maximum(exp, 1.0).sum()) * HOP / float(sr)
+            exp = np.where((f > 0.0) & (m <= f), np.maximum(m, 1.0), exp)
+            exp = np.where(f == HELD, m, exp)
+        return float(exp.sum()) * HOP / float(sr)
 
     @staticmethod
     def _delivered(audio, sr: int):
@@ -931,10 +970,10 @@ def _quiet_tail(audio, last: str):
 
 def _trim_ends(audio, frames, sound: list, frame_s: float):
     """(audio, frames) with the take's head cut to SEAM_LEAD before its first sound and its tail to
-    SEAM_TAIL after its last - each cut only where the plan holds no sound (the first pad's frames at
-    the head, the marks, word-space and pad after the last sounding token at the tail) and only where
-    the waveform is quiet. The frames are cut with the audio, so they still add up to it and every time
-    read off them stays exact."""
+    SEAM_TAIL after its last - each cut only where the plan holds no sound (the first pad's and the
+    lead-in's frames at the head, told PLAN_LEAD early as every plan time is; the marks, word-space and
+    pad after the last sounding token at the tail) and only where the waveform is quiet. The frames are
+    cut with the audio, so they still add up to it and every time read off them stays exact."""
     import numpy as np
 
     sr = HOP / frame_s
@@ -952,7 +991,9 @@ def _trim_ends(audio, frames, sound: list, frame_s: float):
     heard_from = loud[0] * step / sr
     heard_to = (loud[-1] + 1) * step / sr
     frames = frames.astype(np.float64).copy()
-    head = max(0.0, min(heard_from, frames[0] * frame_s) - SEAM_LEAD)
+    first = next((k for k, s in enumerate(sound) if s), len(sound))
+    opening = float(frames[:first].sum()) * frame_s - PLAN_LEAD
+    head = max(0.0, min(heard_from, opening) - SEAM_LEAD)
     last = max((k for k, s in enumerate(sound) if s), default=-1)
     total = float(frames.sum()) * frame_s
     said_to = float(frames[: last + 1].sum()) * frame_s
@@ -961,7 +1002,13 @@ def _trim_ends(audio, frames, sound: list, frame_s: float):
     cut1 = int(round(tail * sr))
     if cut0 + cut1 >= audio.size:
         return audio, frames
-    frames[0] -= cut0 / sr / frame_s
+    left = cut0 / sr / frame_s
+    for k in range(first):
+        take = min(frames[k], left)
+        frames[k] -= take
+        left -= take
+        if left <= 0.0:
+            break
     left = cut1 / sr / frame_s
     for k in range(frames.size - 1, last, -1):
         take = min(frames[k], left)
@@ -1006,16 +1053,16 @@ def _reaches(graph, name: str, outputs: list) -> bool:
     return any(o in seen for o in outputs)
 
 
-def _pieces(ids: list, units: list, unit_of: list) -> list:
-    """[(a, b)] spans of `ids` of at most MAX_TOKENS each, cut after a word-space - the one after a
+def _pieces(ids: list, units: list, unit_of: list, most: int = MAX_TOKENS) -> list:
+    """[(a, b)] spans of `ids` of at most `most` each, cut after a word-space - the one after a
     mark nearest the limit where there is one in the piece's second half, else the last."""
     out: list = []
     a = 0
     n = len(ids)
-    while n - a > MAX_TOKENS:
-        hi = a + MAX_TOKENS
+    while n - a > most:
+        hi = a + most
         cut = None
-        for k in range(hi - 1, a + MAX_TOKENS // 2, -1):
+        for k in range(hi - 1, a + most // 2, -1):
             if units[unit_of[k]][0] == " " and k > a and units[unit_of[k - 1]][0] in _MARK_SYMBOLS:
                 cut = k + 1
                 break
