@@ -22,13 +22,22 @@ class_name DeskLook
 ## reading cloth [method Tables.sanitize] lays when it is handed no layers - is never chosen, so a desk
 ## needs no painter and no agent (proof_check holds it).
 ##
+## THE DESK IS LIT AS A TABLE IS (2026-10-27, the user: "some nice ambient lighting, maybe some open-flame light
+## sources, which cast nice shadows ... akin to what the agents produce in True Tarot episodes ... leverage the
+## Table primitives"): each desk has a MOOD ([constant MOODS]) - the lamp at night, candles, a window's daylight,
+## a low sun at dusk - and the light it writes is the card table's ([Lights]: the sky's fill, the sun or the moon
+## through a window, lamps out of the shot), drawn here as the set dresser would write it and built by
+## [DeskLight]; the candles it puts on the desk are things like any other ([Props], a wick on the wax), their flames
+## the table's. Before, every desk had one spot lamp over the same flat warm fill.
+##
 ## WHAT IS ON THE DESK STAYS OUT OF THE PEN'S WAY AND THE PAGES': nothing on the pad or behind it (the
 ## turned pages lie there, [LegalPad]), nothing tall beside the pad's right edge, where the pen leans
 ## out as it writes and waits ([constant DeskMedium.PARK]), and nothing tall in front of it, where the
 ## camera looks over it ([method _placed]).
 
 ## THE THINGS a desk may have. `tall`: kept back from the pad (it would stand in the pen's or the
-## camera's way); `weight`: how often it is chosen.
+## camera's way); `weight`: how often it is chosen among the things lying about - none for a candle, which
+## its desk's mood sets down ([constant MOODS]); `lit`: it burns.
 const THINGS := {
 	"mug": {"label": "a mug", "blurb": "A glazed mug, often with coffee or tea in it, its handle any way round.", "tall": true, "weight": 3.0},
 	"pencil": {"label": "a pencil", "blurb": "A hexagonal pencil lying down, sharpened, an eraser in a metal band at its end.", "tall": false, "weight": 3.0},
@@ -39,7 +48,33 @@ const THINGS := {
 	"cards": {"label": "index cards", "blurb": "A stack of index cards or a pad of sticky notes.", "tall": false, "weight": 1.5},
 	"ruler": {"label": "a ruler", "blurb": "A straight ruler of wood or steel.", "tall": false, "weight": 1.0},
 	"cactus": {"label": "a cactus", "blurb": "A small ribbed cactus in a clay pot.", "tall": true, "weight": 1.0},
+	"taper": {"label": "a candle", "blurb": "A taper burning in a candlestick of brass, pewter, glazed clay or turned wood, its wax dripping.", "tall": true, "weight": 0.0, "lit": true},
+	"pillar": {"label": "a pillar candle", "blurb": "A thick candle burning on a small dish, one wick or a few.", "tall": true, "weight": 0.0, "lit": true},
+	"tealights": {"label": "tea lights", "blurb": "Two or three tea lights burning in their tins on a saucer.", "tall": false, "weight": 0.0, "lit": true},
 }
+## THE DESK'S MOOD: how it is lit, each a row - `weight` how often, `lamp` the share of the desk lamp's light
+## that is on (0 off), `candles` how many burn on the desk ([least, most]) and whether one of them is the KEY,
+## lighting the page as the lamp would (`leads`). The rest of the light is the room's ([method _light]).
+const MOODS := {
+	"lamplight": {"label": "Lamplight", "blurb": "Night: the desk lamp lights the page, the room dark round it - a screen's glow, a street lamp, a fire, the moon in a window.",
+		"weight": 4.0, "lamp": 1.0, "candles": [0, 1], "leads": false},
+	"candlelight": {"label": "Candlelight", "blurb": "Night with the lamp off: candles on the desk light the page, their shadows moving with their flames.",
+		"weight": 2.5, "lamp": 0.0, "candles": [1, 2], "leads": true},
+	"daylight": {"label": "Daylight", "blurb": "Day: the sun falls through a window across the desk, the bars' shadows over it, the sky filling the room.",
+		"weight": 2.0, "lamp": 0.0, "candles": [0, 0], "leads": false},
+	"dusk": {"label": "Dusk", "blurb": "Evening: a low gold sun through the window, long shadows, and the lamp on.",
+		"weight": 1.5, "lamp": 0.6, "candles": [0, 1], "leads": false},
+}
+## Where the desk's light comes from ([constant Lights.FROM]'s degrees: 270 the writer's left): the left, as for
+## a right hand, whose shadow then falls away from the line.
+const FROM_LEFT := Vector2(215.0, 305.0)
+## WHERE A CANDLE STANDS: just beside the pad's left (meters from its middle), where the wide framing sees its
+## flame and its light falls across the page from the writer's left - not back in the dark past the frame. Nearer
+## than a tall thing may stand ([constant TALL_LEFT]): the camera stands over the pad, so a candle there leans out
+## of the picture, away from the page, and covers none of it. A flame stands at most about 20 cm up (a taper's
+## holder and wax, [method _thing]): the higher it burns the nearer the lens, and the further out of the frame.
+const CANDLE_BAND := Rect2(-0.24, -0.16, 0.08, 0.24)
+const CANDLE_WIDER := Rect2(-0.38, -0.3, 0.22, 0.48)
 ## How many things a desk has, by weight: none to five.
 const FILLS := [[0, 0.5], [1, 1.0], [2, 2.0], [3, 2.0], [4, 1.2], [5, 0.5]]
 ## Where things may stand, meters from the pad's middle (x right, z toward the reader): the stretch
@@ -54,9 +89,10 @@ const TALL_H := 0.04
 
 
 ## THE LOOK of the desk with seed [param seed]: `paper`, `rule`, `margin`, `ink`, `binding`, `board`
-## (colors); `pen` ({body, trim, metal}); `lamp` ({color, energy, at}); `fill` (a color); `top` and
-## `layers` ([Tables]' spec, `materials` its materials) and `things` ([{kind, thing, materials}], not
-## yet placed - [method dress] places them).
+## (colors); `pen` ({body, trim, metal}); `lamp` ({color, energy, at, share - of it on}); `fill` (a color);
+## `mood` ([constant MOODS]) and `light` (the room's, [method Lights.sanitize]d); `top` and `layers`
+## ([Tables]' spec, `materials` its materials) and `things` ([{kind, thing, materials}], not yet placed -
+## [method dress] places them; the candles first).
 static func of(seed: int) -> Dictionary:
 	var out := {}
 	var r := _rng(seed, "paper")
@@ -105,11 +141,82 @@ static func of(seed: int) -> Dictionary:
 	out["lamp"] = {"color": _kelvin(r.randf_range(2700.0, 4300.0)), "energy": r.randf_range(1.3, 1.7),
 		"at": Vector3(r.randf_range(-0.7, -0.42), r.randf_range(0.82, 1.1), r.randf_range(-0.42, -0.08))}
 	out["fill"] = Color.from_hsv(r.randf_range(0.55, 0.65), r.randf_range(0.1, 0.25), r.randf_range(0.8, 0.95))
+	r = _rng(seed, "mood")
+	var weights: Array = []
+	for k in MOODS:
+		weights.append([k, float((MOODS[k] as Dictionary)["weight"])])
+	var mood := String(_pick(r, weights))
+	out["mood"] = mood
+	(out["lamp"] as Dictionary)["share"] = float((MOODS[mood] as Dictionary)["lamp"])
+	out["light"] = Lights.sanitize(_light(seed, mood))
 	var desk := _desk(seed)
 	out["top"] = desk["top"]
 	out["layers"] = desk["layers"]
 	out["materials"] = desk["materials"]
-	out["things"] = _things(seed)
+	out["things"] = _candles(seed, mood) + _things(seed)
+	return out
+
+
+## THE ROOM'S LIGHT for a desk of [param mood], as the set dresser writes a table's ([Lights]): the sky's fill
+## and what else lights the room. Night is a dim blue sky and perhaps a lamp out of the shot or the moon in a
+## window; day the sun through a window aimed across the pad, clouds passing now and then; dusk a low gold sun
+## through it. Every sun and moon comes from the writer's left ([constant FROM_LEFT]).
+static func _light(seed: int, mood: String) -> Dictionary:
+	var r := _rng(seed, "light")
+	var from := r.randf_range(FROM_LEFT.x, FROM_LEFT.y)
+	var window := {"name": "the window", "kind": String(_pick(r, [["window", 5.0], ["lattice", 1.0]])),
+		"at": [r.randf_range(-12.0, 12.0), r.randf_range(-15.0, 8.0)], "size": [r.randf_range(80.0, 130.0), r.randf_range(100.0, 150.0)],
+		"panes": [r.randi_range(1, 3), r.randi_range(2, 4)], "bars": r.randf_range(1.5, 3.0),
+		"pattern": String(_pick(r, [["grid", 2.0], ["diamonds", 1.0], ["hexes", 0.5]])), "cell": r.randf_range(9.0, 18.0)}
+	var night_sky := {"color": _hex(Color.from_hsv(r.randf_range(0.58, 0.68), r.randf_range(0.2, 0.45), r.randf_range(0.35, 0.6))),
+		"strength": r.randf_range(0.1, 0.25)}
+	var out := {}
+	match mood:
+		"daylight":
+			out["sky"] = {"color": _hex(Color.from_hsv(r.randf_range(0.56, 0.62), r.randf_range(0.08, 0.2), r.randf_range(0.82, 0.95))),
+				"strength": r.randf_range(0.45, 0.8), "shadows": r.randf_range(0.3, 0.7)}
+			out["sun"] = {"look": "sun", "from": from, "height": r.randf_range(28.0, 55.0), "strength": r.randf_range(0.6, 0.9),
+				"softness": r.randf_range(0.1, 0.25)}
+			out["through"] = [window]
+			if r.randf() < 0.4:
+				out["clouds"] = {"cover": r.randf_range(0.2, 0.5), "size": r.randf_range(0.3, 0.7), "speed": r.randf_range(0.2, 0.5)}
+			if r.randf() < 0.15:
+				out["birds"] = {"look": String(_pick(r, [["pigeon", 2.0], ["crow", 1.0], ["gull", 1.0], ["swallow", 1.0]])),
+					"every": r.randf_range(40.0, 120.0)}
+		"dusk":
+			out["sky"] = {"color": _hex(Color.from_hsv(r.randf_range(0.7, 0.8), r.randf_range(0.15, 0.35), r.randf_range(0.5, 0.75))),
+				"strength": r.randf_range(0.2, 0.4)}
+			out["sun"] = {"look": "sun", "from": from, "height": r.randf_range(8.0, 18.0), "strength": r.randf_range(0.5, 0.8),
+				"color": _hex(_kelvin(r.randf_range(2200.0, 3000.0))), "softness": r.randf_range(0.15, 0.35)}
+			out["through"] = [window]
+		"candlelight":
+			night_sky["strength"] = r.randf_range(0.05, 0.14)
+			out["sky"] = night_sky
+			if r.randf() < 0.5:
+				out["lamps"] = [{"name": "the room's light", "look": String(_pick(r, [["fire", 1.5], ["candles", 1.5], ["lantern", 1.0]])),
+					"from": r.randf_range(0.0, 360.0), "strength": r.randf_range(0.3, 0.7)}]
+		_:
+			out["sky"] = night_sky
+			if r.randf() < 0.6:
+				out["lamps"] = [{"name": "the room's light", "look": String(_pick(r, [["screen", 1.5], ["street lamp", 1.5], ["candles", 1.2],
+					["fire", 1.0], ["lantern", 0.6]])), "from": r.randf_range(0.0, 360.0), "strength": r.randf_range(0.3, 0.7)}]
+			if r.randf() < 0.35:
+				out["sun"] = {"look": "moon", "from": from, "height": r.randf_range(25.0, 50.0)}
+				out["through"] = [window]
+	return out
+
+
+## THE CANDLES a desk of [param mood] burns ([constant MOODS]): as many as it says, each a [constant THINGS]
+## candle ([method _thing]) - `{kind, thing, materials}`, made safe, as [method _things] gives.
+static func _candles(seed: int, mood: String) -> Array:
+	var r := _rng(seed, "candles")
+	var span: Array = (MOODS[mood] as Dictionary)["candles"]
+	var out: Array = []
+	for i in r.randi_range(int(span[0]), int(span[1])):
+		var kind := String(_pick(r, [["taper", 3.0], ["pillar", 2.0], ["tealights", 1.0]]))
+		var safe := Props.sanitize(_thing(kind, _rng(seed, "candle %d" % i)), ["#888888"])
+		if not (safe["things"] as Array).is_empty():
+			out.append({"kind": kind, "thing": (safe["things"] as Array)[0], "materials": safe["materials"]})
 	return out
 
 
@@ -170,7 +277,8 @@ static func _things(seed: int) -> Array:
 	var n := int(_pick(r, FILLS))
 	var weights: Array = []
 	for k in THINGS:
-		weights.append([k, float((THINGS[k] as Dictionary)["weight"])])
+		if float((THINGS[k] as Dictionary)["weight"]) > 0.0:
+			weights.append([k, float((THINGS[k] as Dictionary)["weight"])])
 	var out: Array = []
 	var had := {}
 	for i in n:
@@ -274,7 +382,59 @@ static func _thing(kind: String, r: RandomNumberGenerator) -> Dictionary:
 			parts.append({"shape": "lathe", "material": "green", "smooth": true, "at": [0, ph - 0.8, 0],
 				"profile": [[0, 0], [cr * 0.85, 0], [cr, ch * 0.35], [cr * 0.9, ch * 0.75], [cr * 0.5, ch * 0.95], [0, ch]],
 				"ornament": {"kind": "flutes", "count": r.randi_range(8, 14), "depth": 0.6}})
+		"taper":
+			var h := r.randf_range(6.0, 10.0)
+			var hold := String(_pick(r, [["brass", 2.0], ["pewter", 1.2], ["clay", 1.0], ["wood", 0.8]]))
+			mats["holder"] = {"kind": "metal" if hold in ["brass", "pewter"] else ("wood" if hold == "wood" else "ceramic"),
+				"color": {"brass": "#b08d4a", "pewter": "#8e9094", "clay": _hex(Color.from_hsv(r.randf(), r.randf_range(0.1, 0.5), r.randf_range(0.3, 0.85))),
+					"wood": _hex(Color.from_hsv(r.randf_range(0.06, 0.1), r.randf_range(0.4, 0.6), r.randf_range(0.25, 0.5)))}[hold],
+				"polish": r.randf_range(0.4, 0.8)}
+			var foot := r.randf_range(3.8, 5.0)
+			parts.append({"shape": "lathe", "material": "holder", "smooth": true, "profile": [[0, 0], [foot, 0, 0], [foot, 0.6, 0.3],
+				[foot * 0.45, 1.6], [0.8, 2.6], [0.75, h - 2.4], [1.9, h - 1.3], [2.1, h, 0], [1.25, h, 0], [1.25, h - 1.1, 0], [0, h - 1.1]]})
+			mats["wax"] = _wax(r)
+			# burned down some way, or new
+			var wax_h := r.randf_range(10.0, 15.0) * r.randf_range(0.45, 1.0)
+			parts.append({"shape": "lathe", "material": "wax", "at": [0, h - 1.1, 0], "profile": [[0, 0], [1.1, 0], [1.05, wax_h], [0, wax_h]],
+				"wick": true, "drips": r.randf_range(0.0, 0.6)})
+		"pillar":
+			var rad := r.randf_range(3.0, 4.8)
+			var h := r.randf_range(6.0, 14.0)
+			mats["wax"] = _wax(r)
+			mats["dish"] = {"kind": String(_pick(r, [["ceramic", 2.0], ["metal", 1.0]])),
+				"color": _hex(Color.from_hsv(r.randf(), r.randf_range(0.0, 0.4), r.randf_range(0.3, 0.9))), "polish": r.randf_range(0.4, 0.8)}
+			var dr := rad + r.randf_range(1.0, 2.5)
+			parts.append({"shape": "lathe", "material": "dish", "profile": [[0, 0], [dr * 0.8, 0, 0.2], [dr, 0.9, 0.2], [dr - 0.3, 0.9, 0.1], [dr * 0.8 - 0.3, 0.4], [0, 0.4]]})
+			var pillar := {"shape": "lathe", "material": "wax", "at": [0, 0.4, 0], "profile": [[0, 0], [rad, 0, 0.3], [rad, h, 0.4], [0, h]],
+				"drips": r.randf_range(0.0, 0.5)}
+			if rad > 4.2 and r.randf() < 0.5:
+				pillar["wicks"] = r.randi_range(2, 3)
+			else:
+				pillar["wick"] = true
+			parts.append(pillar)
+		"tealights":
+			mats["saucer"] = {"kind": String(_pick(r, [["ceramic", 2.0], ["metal", 1.0]])),
+				"color": _hex(Color.from_hsv(r.randf(), r.randf_range(0.0, 0.4), r.randf_range(0.4, 0.95))), "polish": r.randf_range(0.5, 0.85)}
+			mats["tin"] = {"kind": "metal", "color": "#c4c6ca", "polish": 0.7}
+			mats["wax"] = _wax(r)
+			var n := r.randi_range(2, 3)
+			var sr := 3.6 if n == 2 else 4.6
+			parts.append({"shape": "lathe", "material": "saucer", "smooth": true, "profile": [[0, 0], [sr + 0.6, 0, 0], [sr + 1.6, 0.9],
+				[sr + 1.4, 1.0], [sr + 0.4, 0.4], [0, 0.4]]})
+			var a0 := r.randf_range(0.0, TAU)
+			for k in n:
+				var a := a0 + TAU * float(k) / float(n)
+				var at := [cos(a) * (sr - 2.0), 0.4, sin(a) * (sr - 2.0)]
+				parts.append({"shape": "lathe", "material": "tin", "at": at, "profile": [[0, 0], [1.9, 0], [1.9, 1.6], [1.75, 1.6], [1.75, 0.15], [0, 0.15]]})
+				parts.append({"shape": "lathe", "material": "wax", "at": [at[0], 0.55, at[2]], "profile": [[0, 0], [1.74, 0], [1.74, 1.0], [0, 1.0]], "wick": true})
 	return {"things": [{"name": String((THINGS[kind] as Dictionary)["label"]), "parts": parts}], "materials": mats}
+
+
+## A candle's wax: ivory or white mostly, now and then a color.
+static func _wax(r: RandomNumberGenerator) -> Dictionary:
+	var c: Color = _pick(r, [[Color.from_hsv(r.randf_range(0.1, 0.14), r.randf_range(0.08, 0.2), r.randf_range(0.9, 0.97)), 4.0],
+		[Color(0.96, 0.95, 0.92), 2.0], [Color.from_hsv(r.randf(), r.randf_range(0.4, 0.7), r.randf_range(0.4, 0.8)), 1.0]])
+	return {"kind": "wax", "color": _hex(c), "clarity": r.randf_range(0.4, 0.7)}
 
 
 ## A pencil standing on its eraser's end, [param length] long: a painted hexagonal body, its sharpened
@@ -299,8 +459,9 @@ static func _pencil(r: RandomNumberGenerator, mats: Dictionary, length: float, n
 
 ## THE DESK, DRESSED: the top and what lies on it ([method Tables.build]) and every thing standing where
 ## [method _placed] puts it, under one node, the top's face at [param face] (the pad's frame, the pad's
-## middle at x = z = 0). Built off the tree; the caller adds it.
-static func dress(look: Dictionary, seed: int, face: float) -> Node3D:
+## middle at x = z = 0). Built off the tree; the caller adds it. `{node, lit}`: `lit` the things that burn,
+## each `{node, wicks, glows, meshes}` as [method Props.build] gives them (`wicks` in the thing's own space).
+static func dress(look: Dictionary, seed: int, face: float) -> Dictionary:
 	var root := Node3D.new()
 	root.name = "Desk"
 	var spec := Tables.sanitize(look["top"], look["layers"], look["materials"], [])
@@ -310,6 +471,7 @@ static func dress(look: Dictionary, seed: int, face: float) -> Node3D:
 	furniture.position = Vector3(-Tables.ORIGIN.x, face, -Tables.ORIGIN.y)
 	root.add_child(furniture)
 	var taken: Array = []
+	var lit: Array = []
 	var mat := _mat_rect(spec)
 	for i in (look["things"] as Array).size():
 		var t: Dictionary = look["things"][i]
@@ -317,7 +479,14 @@ static func dress(look: Dictionary, seed: int, face: float) -> Node3D:
 		var size: AABB = made["size"]
 		var rad := 0.5 * Vector2(size.size.x, size.size.z).length()
 		var tall := bool((THINGS[String(t["kind"])] as Dictionary)["tall"]) or size.size.y >= TALL_H
-		var at := _placed(_rng(seed, "place %d" % i), rad, tall, taken)
+		var near := bool((THINGS[String(t["kind"])] as Dictionary).get("lit", false))
+		var r := _rng(seed, "place %d" % i)
+		var at := _placed(r, rad, tall and not near, taken, CANDLE_BAND if near else REACH)
+		if near and at.x == INF:
+			# a candle is the light: past the frame's edge, or anywhere it fits, before none at all
+			at = _placed(r, rad, false, taken, CANDLE_WIDER)
+			if at.x == INF:
+				at = _placed(r, rad, tall, taken)
 		if at.x == INF:
 			(made["node"] as Node).free()
 			continue
@@ -330,7 +499,9 @@ static func dress(look: Dictionary, seed: int, face: float) -> Node3D:
 			# lying beside the pad, along it
 			node.rotation.y = PI * 0.5 + _rng(seed, "turn %d" % i).randf_range(-0.35, 0.35)
 		root.add_child(node)
-	return root
+		if not (made["wicks"] as Array).is_empty():
+			lit.append({"node": node, "wicks": made["wicks"], "glows": made["glows"], "meshes": made["meshes"]})
+	return {"node": root, "lit": lit}
 
 
 ## Where the desk mat lies (meters, the pad's frame), or an empty rect: no mat.
@@ -345,14 +516,16 @@ static func _mat_rect(spec: Dictionary) -> Rect2:
 
 
 ## WHERE A THING STANDS (x, z meters from the pad's middle), [param rad] its reach, [param tall] whether it
-## stands up, clear of the things [param taken] ([x, z, reach]); (INF, INF) when no place is found. Never
-## on the pad nor behind it (where turned pages lie), a tall one never close beside it nor in front.
-static func _placed(r: RandomNumberGenerator, rad: float, tall: bool, taken: Array) -> Vector2:
+## stands up, clear of the things [param taken] ([x, z, reach]), somewhere in [param within] (its middle; the
+## desk's whole [constant REACH] by default, a candle's [constant CANDLE_BAND]); (INF, INF) when no place is found.
+## Never on the pad nor behind it (where turned pages lie), a tall one never close beside it nor in front.
+static func _placed(r: RandomNumberGenerator, rad: float, tall: bool, taken: Array, within := REACH) -> Vector2:
 	var pad_x := LegalPad.W * 0.5 + PAD_ROOM + rad
 	var pad_top := -LegalPad.H * 0.5 - LegalPad.BIND_W - PAD_ROOM - rad
 	var pad_foot := LegalPad.H * 0.5 + PAD_ROOM + rad
+	var area := within if within == REACH else within.grow(rad)
 	for _try in 80:
-		var p := Vector2(r.randf_range(REACH.position.x + rad, REACH.end.x - rad), r.randf_range(REACH.position.y + rad, REACH.end.y - rad))
+		var p := Vector2(r.randf_range(area.position.x + rad, area.end.x - rad), r.randf_range(area.position.y + rad, area.end.y - rad))
 		if absf(p.x) < pad_x and p.y < pad_foot:
 			continue            # on the pad, or behind it where the turned pages lie
 		if tall and (p.x > -TALL_LEFT - rad and p.x < TALL_RIGHT + rad or p.y > pad_foot - 0.04):

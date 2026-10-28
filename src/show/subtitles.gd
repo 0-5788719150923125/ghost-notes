@@ -195,6 +195,11 @@ var document: Dictionary = {}
 ## True when a medium shows the words itself: the clock and the eased cursor keep running,
 ## because that medium reads them, and only the drawing stops.
 var overlay_hidden := false
+## A MEDIUM THAT SHOWS SOME OF THE WORDS ITSELF says which lines are captioned (the letter: none it has
+## written where they can be read - [LetterMedium]): handed a line's first and last word (indices of
+## [member words]) and the time, it answers whether the line is drawn; the line eases out and in as
+## any does. Unset, every line is.
+var captions: Callable = Callable()
 ## WHERE THE FRAME IS in the window (main sets it as the stage fits): the subtitles lay out in the
 ## show's frame, not the window - an empty rect means the whole viewport (an export, where they are
 ## one). A portrait frame keeps its safe area clear ([constant SAFE]).
@@ -353,15 +358,17 @@ func _spans_now() -> Array:
 		return _spans
 	_spans = []
 	var at := {}                       # sentence id -> its position in _spans
-	for w in words:
+	for k in n:
+		var w: Dictionary = words[k]
 		var si := int(w.sentence)
 		if at.has(si):
 			var e: Dictionary = _spans[int(at[si])]
 			e.lo = minf(float(e.lo), float(w.t0))
 			e.hi = maxf(float(e.hi), float(w.t1))
+			e.w1 = k
 		else:
 			at[si] = _spans.size()
-			_spans.append({"si": si, "lo": float(w.t0), "hi": float(w.t1)})
+			_spans.append({"si": si, "lo": float(w.t0), "hi": float(w.t1), "w0": k, "w1": k})
 	_spans_n = n
 	_spans_tail = tail
 	return _spans
@@ -408,10 +415,17 @@ func span_at(t: float) -> int:
 
 
 ## Should anything be on screen at time [param t], and how strongly? 1 while a sentence is
-## selected by [method span_at], 0 otherwise - the same question the draw asks, so the plate and
-## the text can never disagree about whether there is anything to read.
+## selected by [method span_at] - and the medium captions it ([member captions]) - 0 otherwise: the
+## same question the draw asks, so the plate and the text can never disagree about whether there is
+## anything to read.
 func _presence_target(t: float) -> float:
-	return 1.0 if span_at(t) >= 0 else 0.0
+	var i := span_at(t)
+	if i < 0:
+		return 0.0
+	if captions.is_valid():
+		var e: Dictionary = _spans_now()[i]
+		return 1.0 if bool(captions.call(int(e.w0), int(e.w1), t)) else 0.0
+	return 1.0
 
 
 func _process(delta: float) -> void:

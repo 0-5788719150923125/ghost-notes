@@ -360,7 +360,7 @@ const REGISTRY := {
 	"image_end": {
 		"label": "Picture ends",
 		"group": "letter",
-		"blurb": "Letter: ends the passage a picture is shown over - from its image mark to here the picture fills the screen, slowly panning, while the voice reads on and the pen writes on unseen; then the desk comes back.",
+		"blurb": "Letter: ends the passage a picture is shown over - from its image mark to here the picture fills the screen, slowly moving, while the voice reads on and the pen writes on unseen; then the desk comes back. An image mark straight after it, or before it, dissolves into its own picture instead, the page never seen between.",
 		"before": "<!-- /image -->", "fill": "", "after": "", "line": "own",
 		"modes": ["generative"],
 		"pattern": "<!--\\s*/\\s*image\\s*-->",

@@ -25,6 +25,10 @@ extends Node
 ## pause, and its control is the case that must still go dark: a real silence between sentences.
 ## Asking only the presence path would have passed while the bug was live.
 ##
+## THE MEDIUM'S SAY ([member Subtitles.captions]; the letter captions only what cannot be read on its page): a
+## line the medium does not caption goes dark, and the one after, captioned, is on again - the control,
+## the same line with no medium asked, on.
+##
 ## Run inside a real boot (the overlay is a CanvasLayer, and Subtitles reads the
 ## Spectrum autoload):
 ##   tests/run_boot_probe.sh tests/show/subtitle_presence_check.gd 90
@@ -121,6 +125,27 @@ func _ready() -> void:
 		_fails.append("control: a 3.5s silence between sentences never cleared the line - the "
 			+ "rule now holds a line on screen through anything")
 	colon.queue_free()
+
+	# --- THE MEDIUM'S SAY: a line it does not caption is dark, the next it does is on ---
+	var asked := Subtitles.new()
+	add_child(asked)
+	asked.words = [
+		{"text": "Written", "t0": 1.00, "t1": 1.40, "sentence": 0},
+		{"text": "here.", "t0": 1.40, "t1": 1.80, "sentence": 0},
+		{"text": "Thought", "t0": 2.20, "t1": 2.60, "sentence": 1},
+		{"text": "aloud.", "t0": 2.60, "t1": 3.00, "sentence": 1},
+	]
+	var unasked := asked._presence_target(1.5)
+	asked.captions = func(w0: int, _w1: int, _t: float) -> bool: return w0 >= 2
+	var written_off := asked._presence_target(1.5)
+	var thought_on := asked._presence_target(2.5)
+	print("subtitle_presence_check: a line the medium does not caption %.0f, the next it does %.0f, asked of no medium %.0f"
+		% [written_off, thought_on, unasked])
+	if written_off != 0.0 or thought_on != 1.0:
+		_fails.append("a medium's say: the line it does not caption is %.0f, the one it does %.0f" % [written_off, thought_on])
+	if unasked != 1.0:
+		_fails.append("control: with no medium asked, a line being spoken is %.0f" % unasked)
+	asked.queue_free()
 
 	subs.queue_free()
 	if _fails.is_empty():

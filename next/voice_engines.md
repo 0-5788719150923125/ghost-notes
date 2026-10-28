@@ -288,7 +288,8 @@ jenny_dioco. Every `*-low` voice is ryan-derived (CC BY-NC-SA).
 
 **Generative models.** None takes a duration plan or a pitch contour; their "emotion" is a global
 vector or a tag, and most need a GPU. The only small one that is commercially usable is
-Chatterbox-Nano (110M, MIT, CPU, an `exaggeration` dial, watermarked, no timings). Pocket TTS
+Chatterbox-Nano (110M, MIT, CPU, watermarked, no timings; its `exaggeration` dial is the original's - Nano
+ignores it, read 2026-10-27). Pocket TTS
 (100M) is CC-BY-4.0, gated, cloning only. Non-commercial and excluded: F5-TTS, Spark-TTS, Llasa,
 MaskGCT, OpenAudio S1. The worry that these are hard to steer is borne out.
 
@@ -603,6 +604,66 @@ Listening (`dist/voice_ab/kokoro_commas/`, Emma at the Narrator's settings, six 
 `listen_N2_hold_2.0.wav` (the ratio, rejected), `listen_O_short_vowel_held.wav` (as built: the code renders
 it sample for sample); `listen_L1_db_ramps.wav` (the splicer's ramps in dB: no difference).
 
+### Every sentence ends alike (2026-10-27): the model's, not ours
+
+**The user,** of north-star ch43 "Secular Haze" in Puck (speaker 13): "EVERY sentence ends with a downward
+inflection ... the very last word ALWAYS sounds the same, with a downward curve. Like a valley girl accent."
+Chapter 42 had read in Piper's libritts-high 13 and varied.
+
+**Measured** (pYIN on the last word's OWN voicing - from its start until 40 ms unvoiced - against its
+sentence's median pitch; "falls": over 1.5 st across the word; "no pitch": pYIN found none - creak, or under
+60 Hz; "alike": mean correlation of the last words' contours, 1 every one the same), 22 sentences of the chapter
+alone, as the reading sends them:
+
+| voice | last word ends | falls | no pitch | alike |
+|---|---|---|---|---|
+| Piper libritts-high 13 | -1.4 st | 7 of 18 | 4 of 22 | 0.31 |
+| Kokoro Heart | -1.1 | 3 of 14 | 8 | 0.02 |
+| Kokoro Emma | -3.3 | 15 of 18 | 3 | 0.85 |
+| Kokoro Puck | -5.1 | 5 of 11 | 11 | 0.24 |
+| Kokoro Michael / Onyx / Fenrir / Liam | -3.2 / -3.8 / -8.4 / -5.7 | 5/11, 9/18, 9/14, 11/16 | 11, 4, 8, 6 | 0.32-0.77 |
+| Kokoro Eric / George / Daniel | -8.6 / -10.3 / -6.4 | 18/19, 18/19, 15/19 | 2 each | 0.61-0.87 |
+
+Every male pack falls, most into creak (Puck's half of its endings: the "valley girl" fry). Heart alone varies
+as Piper did. Not ours: LEAD_IN 0 falls the same (Puck -5.7), nothing after the render touches pitch.
+
+**What does not change it** (the 18 sentences another follows in their paragraph):
+
+- **The words after it heard.** Rendered with the next sentence's first 2 or 4 words, or the whole of it, or
+  inside its whole paragraph as one utterance: Emma -3.2, -3.2, -3.3, -3.1 st (alone -3.3), Puck about the
+  same. Built, then measured through the host and reverted (the patch: next sentence's 4 words after the
+  sentence, cut in the 120 ms of quiet Kokoro leaves at a full stop). AN ERROR TO NOT REPEAT: measured over
+  the word's span plus 80 ms, these looked like a fix (Puck -3.3, Emma 0.0) - a span ends where the next word
+  begins, and the window took in the next sentence's reset pitch. Measure a word by its own voicing.
+- **Another mark** in place of the full stop, in what Kokoro is sent alone: `…`, `;`, `,`, `—`, none at all,
+  and the vocab's unused `→`: Emma -2.7 to -3.3 st, 11 to 14 of 15 falling, every one; Puck -5.1 to -6.3.
+  The fall is the utterance's end, whatever ends it.
+- **The last word's stress** (eSpeak read without a break at the sentence's end demotes it, `dˈWn` ->
+  `dˌWn`): the same fall.
+- **`…` inside an utterance** (the next 4 words after it): Puck 4 of 10 falling at -4.0 st against 8 of 12 at
+  -5.0 with a `.` there, 7 creaking against 5; Emma no change (11 of 14). Too weak and too mixed to build
+  unheard - and it would cost the words' render (about 30% more processor time).
+
+**The lever: F0 as an input** ("Not in the trial" below). The predictor's pitch curve is one tensor
+(`/encoder/Reshape_output_0`, from `F0_proj`, read by the decoder alone) and so is its energy
+(`/encoder/Reshape_1_output_0`, from `N_proj`). A listening prototype, NOT the product (the user, 2026-10-27,
+wary it "would end badly, and just make it sound like asking a question, or chipmunk voice"; a copy of the
+graph at `dist/voice_ab/kokoro_f0/model_f0.onnx` handing both out and taking replacements, run twice a sentence):
+
+- **The ending is planned unvoiced.** Puck's last vowel is predicted at 0 Hz ("left": 100 -> 69 Hz into the
+  l, then the whole ɛ at 0; "down": the W and the n; "are": the ɑ and the ɹ) - the fry is the plan, not the
+  decoder.
+- **Pitch alone does not voice it:** 100 Hz written across the word voiced two or three frames more. Pitch with
+  the energy held through the last vowel voices it at the pitch written - and held whole, the last consonant
+  (planned ~400 ms, the model's own fade) drew out ("downnnn"), so the energy is let go over 100 ms after the
+  vowel into the model's own.
+- **The demo** (the note's dials; a sentence another follows falls a seeded 1.5-3.5 st "gentle" or 0-1.5
+  "level", a paragraph's last 4-6; never above the word's start, never up past its peak): the last word voiced
+  in 20 of 22 sentences against 10 as now; measured median end against start -1.5 / -0.7 st, -4.2 as now.
+  Still a rise heard back in places the curve written has none: "...know what you are" +2.7 st in both, "...a
+  letter from a stranger" +1.0 in level. Files `now.wav`, `gentle.wav`, `level.wav` there. Waiting on the
+  user's ear.
+
 ### Not in the trial, and what would be lost
 
 - **`noise_scale` and `noise_w`** have no meaning: Kokoro's prosody is fixed for a text and a voice.
@@ -836,3 +897,66 @@ under its loudest; words misheard by medium.en, of 188 - two or three either way
 - Harmonic share, cepstral peak and flutter put every trained voice within their own recordings' range: no measure
   here hears "electric". The three voices are on every Voice card for the ear ("Manzanita (judged)", "(quiet
   edges)", "(her pitch)"); dist/kokoro_ft/evalset/ck/<run>/listen/said/ holds the 20 sentences of each.
+
+### kikiri-tts read again (2026-10-27)
+
+The user, of the research voices ("far too muffled ... a weird electric resonance ... almost like a coiled spring"):
+would more of her data help, and does [kikiri-tts](https://github.com/semidark/kikiri-tts) show how to teach Kokoro
+better? Its recipe (StyleTTS 2's two stages, patched; read in its fork `semidark/StyleTTS2`) against ours:
+
+- **Every voice it published is synthetic speech** (Polly voices: the base "51 speakers synthetic", 30,800 clips; the
+  two voices 455 and 627 clips, marked synthetic). Clean, alike from clip to clip, no room: it shows the method works,
+  not that it works on soft real recordings. Its data step filters by Whisper's confidence alone.
+- **The decoder is taught on the curves it will be given:** stage 2 decodes the recording from the PREDICTOR's pitch
+  and energy (`F0Ntrain`), not the measured ones. Ours is taught on hers and played on af_heart's (a quarter of its
+  frames under anything it was taught on) - the gap "taught decoder on stock curves" measured.
+- **A speech model's ear on every step:** L1 between WavLM-base-plus's 13 layers for theirs and ours (`WavLMLoss`,
+  weight 1, both stages), and in stage 2 a WavLM discriminator. Nothing of ours hears what sound is said; the misheard
+  words are soft stops. The training environment has no WavLM (no torchaudio, no transformers).
+- **Its own aligner:** StyleTTS 2's ASR aligner (pretrained on LibriTTS - English) taught on the speaker's audio with
+  a monotonic loss, soft attention half the time; ours is a warp from another voice.
+- **Seasoned judges:** the voices start from a base whose discriminators had learned on 30,800 clips, adversarial from
+  the first step (a relativistic term besides least squares); ours start fresh on 4.6 minutes and overfit past 3,000.
+- **A style per clip:** a style encoder reads each clip and the voice is their mean; ours is one style for every
+  recording.
+
+**More of her:** of the 13 videos read, four gave her ordinary voice (12.1 minutes before agreement: "Follow My
+Instructions - Exam Edition" 5.7, "A Completely False Time Capsule Opening" 2.5, "A Very Generic ASMR Video" 2.1,
+"Taking Your Picture" 1.8); whispered, no-talking and soft-spoken videos gave none. More data narrows the gap in clips
+(ours 85), but misplaced cuts should not average away: a loss frame by frame learns a burst placed early in one clip
+and late in another as a smear at both - muffled, a stop lost - and more data makes the smear surer, not sharper.
+Untested at scale; af_bella's synthetic speech, jittered as before at 2.5 and 20+ minutes, would say.
+
+## Chatterbox read (2026-10-27)
+
+The user: Kokoro "is likely a heavily distilled model ... trained on AWS Polly synthetic examples. I feel like we might
+be barking up the wrong tree" - is Chatterbox's 110M variant worth trying, inference first, tuning after? Read in
+`resemble-ai/chatterbox` (5de7a54, 2026-07-21) and the safetensors headers on Hugging Face:
+
+- **"110M" is the language model alone.** Nano is Turbo's pipeline with a GPT-2 small T3 (85M in its layers; Turbo's
+  is GPT-2 medium, 302M). Behind it is the same S3Gen as Turbo's: a flow encoder (38M) and decoder (73M, two meanflow
+  steps), the HiFT vocoder (21M) and an x-vector (7M) - and the speech tokenizer (124M), run only on a reference clip.
+  About 330M to read a sentence. Files: 870 MB and 1.06 GB, fp32. MIT, not gated, uploaded 2026-07-21.
+- **Text in as GPT-2's BPE of plain English, speech out as 25 tokens a second, sampled** (temperature 0.8, top-p 0.95,
+  repetition penalty 1.2): no phonemes, no plan, no timings, a different take every time, and an autoregressive
+  model can skip or repeat words. Nano and Turbo warn that CFG and exaggeration "will be ignored". Tags such as
+  `[sigh]` and `[laugh]` are read. A built-in voice (`conds.pt`), so it reads with nothing cloned.
+- **Every take is watermarked** (Perth, `apply_watermark` - one line in their code, MIT).
+- **Dependencies:** torch, transformers, diffusers, conformer, s3tokenizer, librosa, perth, omegaconf (their pins
+  ignored). "3x real time on 8 cores" is theirs; this machine's four cores are not measured.
+- **What ghost loses** (the four the reading leans on, "Other models" above): the homographs, the lexicon, a word
+  pinned; emphasis, the trail, the rests and the hesitation's rest; the words' times for the subtitles, the desk's pen
+  and a cue at a word (a forced aligner would have to give them back - Whisper's word times are in speech_venv);
+  and the same take from the same text.
+- **Taught more easily, in one way:** neither half needs an alignment. T3 learns from text and her speech tokens (the
+  agreed utterances are that), and S3Gen from her audio alone - her tokens to her mel, no text, so every hour of her
+  ordinary voice, not only what Whisper agreed with. Only community scripts (`stlohrey/chatterbox-finetuning`, WIP,
+  the original model; LoRA on T3 for languages); nothing official, nothing for Nano.
+- **Voice conversion keeps everything Kokoro gives** (`vc.py`): S3Gen alone - speech to tokens to speech in the
+  reference's voice, at a fixed 25 tokens and 50 mel frames a second, so a take comes back its own length and its
+  word times hold to a token (40 ms). Kokoro would read as it does now and S3Gen re-voice the take; how much of
+  Kokoro's intonation lives through tokens that keep mostly the words is for the ear.
+
+**Proposed, nothing built:** inference only, a standalone script on a venv of its own - Nano with its built-in voice,
+then with ten seconds of her; then a Kokoro take re-voiced by S3Gen into the same clip. Measured: the speed on this
+CPU, words misheard (`hosts/speech/agree.py`), one sentence read five times, and the word times after conversion.

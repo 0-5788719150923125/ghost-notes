@@ -10,7 +10,9 @@ on the table, while the author thinks to himself."
 **Phase two, named by the user and not built:** the set dresser's agents populating the desk - things
 on it, another texture for its top - as they do the card table ([cards.md](cards.md), `Tables`,
 `Props`). The desk is already built from those parts ([DeskLook], from the seed), so the seam is
-`DeskLook.dress`: a letter's table spec, written by an agent, in place of the seeded one.
+`DeskLook.dress`: a letter's table spec, written by an agent, in place of the seeded one. **Its light
+is built and seeded (2026-10-27)**, in the table's own words, so an agent can write it later: below,
+"The desk is lit as the card table is".
 
 ## What it is
 
@@ -54,7 +56,7 @@ at the letter's close camera.
 | `<!-- point: sketch -->`, `<!-- point: sketch, the dot -->` | in a thought (or any paragraph the pen is not busy with): at the next word the pen points at the last sketch, or its named part, to the sentence's end |
 | `<!-- point: camera -->` | the pen lifted, its nib turned to the lens for the sentence |
 | `<!-- tap -->`, `<!-- tap: desk -->` | the pen turned over, its top tapped three times on the pad (or the desk), turned back |
-| `<!-- image (full): words -->` ... `<!-- /image -->` | the picture over the whole screen for the passage between, faded in and out, drifting slowly closer and across; the pen writes on unseen |
+| `<!-- image (full): words -->` ... `<!-- /image -->` | the picture over the whole screen for the passage between, faded in and out over 2.5 s, each moving its own way (closer, back, across); the pen writes on unseen. Another image mark before the close, or straight after it, dissolves into its picture - the page not seen between |
 | `<!-- still -->` | to the next written line: the camera dead still on the last sketch, the pen off the pad |
 | `<!-- new page -->` | the next writing starts a page of its own |
 
@@ -82,6 +84,79 @@ exactly that.
   from 0.4 s over 1.4 s with no rest, so the chapter's first sketch began under it. The passage itself is
   the author's: the chapter's first picture is up over 94 words, the next three over 170, 123 and 122.
 
+- **Pictures dissolve into one another; every fade is 2.5 s** (2026-10-27, the user: "it would be nice if we
+  could blend from one picture into a second one, or a third one, directly without ever seeing the page again
+  ... each with different panning/zooming behavior"; then, of the fades: "seems to be too fast. A 2 or 3
+  second fade might look better"). Back-to-back image marks had been parsed as a run already (a mark closes the
+  one before), but the screen drew one picture: the first faded to the desk, then the next popped up whole. Now
+  a picture whose passage begins where the last one's ends - its mark before that one's `/image`, or straight
+  after it - is its span's `blend`: it comes up over the one before, held whole under it until it is in, the
+  voice reading on with no rest for the page (`LetterMedium.pictures_at`, the plate drawing them bottom first,
+  `cover_of`). Each picture takes a move of `LetterMedium.MOVES` (closer, back, across) by the seed, never the
+  one before's, drifting at least a quarter turn from its way (`moves_of`). `LetterScript.IMAGE_FADE` 1.2 to
+  2.5 s for every fade, so the rest the voice takes for the page to come back is 2.6 s.
+- **A page turned inside a paragraph is read on through** (2026-10-27, the user: "the voice speaks "You do
+  not" - then holds for X seconds until the page turns ... It would probably feel most natural to just keep
+  speaking there, and to force the pen to catch up after the page turn"). The voice had waited at the turned
+  line's first word for the page to be read, turned and the pen two words into it - 3.5 s and more,
+  mid-sentence. Now the voice reads the paragraph on (`LetterScript._voice_text`'s `turned_in`: no wait at the
+  turn nor after it in that paragraph); the page still turns once the voice has said its last word, and the
+  pen comes back behind the voice. Even at its quickest the pen is hardly quicker than the voice (on the gate's
+  letter it is 4 s behind and still 3.7 s behind a line on), so it catches up at the next paragraph, where the
+  voice waits for it if it must - on the chapter 1.7 s before "Mine were:", where the writer would pause. A
+  turn between two paragraphs is still rested for: the writer turning the page is the pause there.
+- **The desk is lit as the card table is** (2026-10-27, the user: "It's not clear to me what the 'Desk' value
+  under the 'Letter' card is doing. Is that just a random seed? ... I am wanting for some more detail in the
+  scene, akin to what the agents produce in True Tarot episodes. Just, some nice ambient lighting, maybe some
+  open-flame light sources, which cast nice shadows ... some weird stripey rings of light across the desk and
+  paper ... leverage the Table primitives"). The Desk number is the seed of the desk's whole look; the card now
+  says the MOOD it picked beside it. Each desk has one (`DeskLook.MOODS`): lamplight (the lamp, a dark room -
+  a screen's glow, a street lamp, a fire or the moon in a window), candlelight (the lamp off, one to three
+  candles on the desk, the one that lights the page most the key), daylight (the sun through a window across
+  the desk, clouds now and then) and dusk (a low gold sun through it, the lamp part on). The room's light is a
+  `Lights` spec written as the set dresser writes a table's and built by `Lights.build` on the desk's stage,
+  fitted to the paper; the candles are `Props` things with wicks, their flames the table's (`TableLight`'s
+  flame quad, flicker and filtered shadow, made static for any host), each held to what the page can take
+  (`DeskLight.PAGE_HEAT`) and turned to face a camera that looks nearly straight down. THE STRIPES were the
+  lamp's shadow map: on the stage's own atlas (2048, its first quadrant split four ways) the lamp had 512
+  texels for the whole desk, and the page and desk wore a fine diagonal moire of it; the desk now sets the
+  card table's stage (`TableMedium.STAGE`: 8192, a quadrant of its own for the lamp, debanding, 4x MSAA) and
+  gives it back as it leaves. Proof's desk takes all of it too.
+- **The desk is drawn only as it changes** (2026-10-27, the user: "performance can be really quite laggy in the
+  realtime viewer ... the scene itself is pretty simple"). Measured on the chapter, frame by frame at the viewer's
+  rate - by the thread's own processor time, and under a real renderer (xvfb on the card; xvfb's own empty frame
+  costs 12.9 ms of the main thread, which a real display does not):
+  - THE PAGE RENDERED EVERY FRAME: both page viewports were `UPDATE_ALWAYS`, a page of handwriting about 2,100 draw
+    calls, 1.9 ms of the main thread a frame whatever changed. Now its finished ink is a viewport of its own inside
+    the page (rendered first), rendered as a line is finished; the page under the line being written is rendered as
+    the pen moves; the turning page once a turn - 0.2 ms, about 130 draw calls. Read back frame by frame across four
+    lines' ends, no frame loses a line.
+  - A LINE'S END REBUILT THE PAGE: the whole page's ink was made again point by point, a 20 to 35 ms frame every few
+    seconds; now a finished action's ink is made once (`DeskMedium._done_ink_of`) and moved onto the page in one
+    native step (`Transform2D * PackedVector2Array`), the line being written 0.35 ms to 0.2.
+  - EVERY FRAME WALKED EVERY ACTION, a dozen times: whether each line on the page is written (the elastic dictation
+    word by word, for lines done minutes ago - now 1 past its end, `_written`), the pages, the pen from the letter's
+    first action, the camera's framing, the close, a tap. Now the actions are indexed by page, kind and turn once a
+    letter is laid out (`_page_actions`, `_of_kind`, `_turn_actions`), the pages and each line's ink time are kept for
+    the moment and the plan (`_plan_rev`), the pen's walk goes on from where it found all done, and the follower
+    keeps its last known word. The script's frame, about 3.3 ms with 34 ms spikes, is about 1.3 ms.
+  - A LIVE READING MADE ITS PLAN AGAIN as each sentence's words arrived, working out every action - for the finished
+    ones only to overwrite them with what was kept; now they are kept as they are: 9.9 ms to 2.0 three quarters in.
+  What is left: the desk's 3D (0.4 ms of the main thread, 2.4 ms of the card) and its shadows (about 1 ms), and the
+  voice host, which synthesizes ahead on every core but one while the reading plays. letter_check holds each fix as a
+  share of its control.
+- **A dense sketch is dashed off** (2026-10-27, the user, of the chapter's tree of dots: "the final row with 32
+  dots has zero lines connecting any of them. I think that was a bug, because the text below it sort of gets
+  frozen for a few seconds as well, with the pen not moving"). The unjoined row is the sketch mark's own words ("a
+  long row of dots too many to count trailing off"): the drawing agent drew what it was asked, 23 dots and no
+  lines. The freeze was the VOICE: the tree's 47.5 s of ink at the desk's quickest (4 times the hand's pace) ran
+  6.5 s past its 13 words, and the voice waited 7.5 s after "Then eight" while the pen dotted its last two rows, the
+  caption held. Replayed with every word known and with each sentence's words arriving 3 s ahead, the pen never
+  stops, and its wet ink costs 0.4 ms a frame. Now a sketch with more ink than its words leave time for is drawn
+  quicker, up to `LetterScript.DRAW_QUICKEST` (7) the hand's pace, to be done `DRAW_TAIL` (1.5 s) after them
+  (`draw_pace`): the voice's rest is sized by it and the desk draws to it (`LetterMedium._paced_end`), filling to
+  the next line as before. The tree: 7.1 s, done 1.5 s after its words, the voice on 2.9 s after "Then eight". A
+  sketch with room keeps its pace. To have the long row joined, the mark can say so and the sketch be drawn again.
 - **The paragraph after a sketch is its narration, not written.** The pen cannot write and draw at once,
   and the only words to draw under are the next ones. In the chapter every sketch is followed by words
   about it ("A cross, and a dot, on the same line, about a hand apart.") - the drawing is said as it is
@@ -110,6 +185,21 @@ exactly that.
   each word is finished (it writes the word two on from the one being said), 7% of words said a moment before
   they are finished at 0.45 s a word. Under a picture the desk's own dictation, unseen. The pen moves at about
   the voice's speed again - the price of short pauses - but two words ahead of it, never on it.
+- **The subtitles caption only what cannot be read on the page** (2026-10-27, the user: "the subtitles can
+  be a bit of a distraction ... hide the subtitles for any text that is already being written on the page ...
+  anything we can't see or didn't write directly on the page will need subtitles"): a line is drawn while a
+  picture covers the screen, or when any word of it is not written - a thought, a sketch's narration
+  (`LetterMedium._captioned`, handed the overlay as `Subtitles.captions`, a hook any medium may set; the
+  line eases out and in as any does). A passage under a picture with no painting is read over the desk, and
+  not captioned.
+- **The writer hesitates too** (2026-10-27, the user: "after "Dear Pen," - why was there no hesitation at
+  all? Why wasn't the marker respected?"). The voice did rest there - in the chapter's own voice, joined as
+  the reading joins it, 2.4 s of silence after "Pen," (the hesitation's 1.5 s and the voice's own) - but the
+  pen, two words ahead, wrote straight on into "Isn't it suspicious". Now a hesitation, on a line of its own
+  or inside a written line (`LetterScript.parse`'s `pauses`), stops the pen after the word before it, and
+  the pen is taken up again `RESUME_LEAD` (0.9 s) before the voice goes on (`LetterMedium._resume_floor`).
+  Only hesitations: an `action-hold` is often the voice waiting for the pen, and stopping the pen there
+  would lengthen it.
 - **A page turns where it runs out, mid-sentence too** (`TURN_REST`, the voice resting at that line's
   first word). The legal pad of the desk, 24 lines to a page, about 230 words.
 - **The camera's arc over a page, gentle** (2026-10-27, the user: "The forward and backward zooming of the

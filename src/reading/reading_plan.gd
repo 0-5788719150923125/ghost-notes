@@ -354,7 +354,7 @@ static func cut(body: String, sentence_no: int, holds: Array = []) -> Dictionary
 				match String(w.pause_after):
 					"stop": punct = "."
 					"comma": punct = ","
-			var tok := {"text": String(w.text), "punct": punct, "fallback": arpa}
+			var tok := {"text": String(w.text), "cased": String(w.get("cased", w.text)), "punct": punct, "fallback": arpa}
 			if after > 0.0:
 				tok["rest_after"] = after
 			if bool(w.get("literal", false)):

@@ -94,7 +94,7 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 | Written, not said | `<!-- unspoken: Dear Ink, -->` | Generative | Letter: the pen writes this and the voice does not say it - it waits while it is written. |
 | Point | `<!-- point: sketch, the dot -->` | Generative | Letter: inside what is said, at the next word the pen points at the last sketch - or at the part of it so described - until the sentence ends. point: camera lifts the pen to whoever is watching. |
 | Tap | `<!-- tap -->` | Generative | Letter: the pen is turned over and its top tapped on the pad - tap: desk, on the desk beside it - while the writer thinks. The voice waits a moment; the taps run on under the next words. |
-| Picture ends | `<!-- /image -->` | Generative | Letter: ends the passage a picture is shown over - from its image mark to here the picture fills the screen, slowly panning, while the voice reads on and the pen writes on unseen; then the desk comes back. |
+| Picture ends | `<!-- /image -->` | Generative | Letter: ends the passage a picture is shown over - from its image mark to here the picture fills the screen, slowly moving, while the voice reads on and the pen writes on unseen; then the desk comes back. An image mark straight after it, or before it, dissolves into its own picture instead, the page never seen between. |
 | Hold still | `<!-- still -->` | Generative | Letter: from here to the next written line the camera holds dead still on the last sketch, and the pen is taken off the page - for something the viewer does on the screen. |
 | New page | `<!-- new page -->` | Generative | Letter: the next writing starts a page of its own (a page also turns by itself once it is full). |
 

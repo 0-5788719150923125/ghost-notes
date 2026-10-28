@@ -66,7 +66,8 @@ class_name DeskMedium
 ## it.
 ##
 ## EACH EPISODE'S DESK IS ITS OWN ([DeskLook], from the episode's seed): the pad's paper and binding,
-## the ink, the pen, the desk's top and a mat on it, the lamp, and a few things lying about.
+## the ink, the pen, the desk's top and a mat on it, the lamp, a few things lying about, and how it is lit -
+## the room's light and the candles burning on it, the card table's ([DeskLight]).
 ##
 ## THE CAMERA IS THE BOOK'S KIND ([BookMedium]: "something closer to what we did with the 'book' medium,
 ## with a further zoom and mostly vertical orientation ... the actor swapping for a calculator, or a
@@ -169,6 +170,9 @@ const PEN_UP := Vector3(0.42, 0.64, -0.40)
 ## mostly looking down. Distances in meters, pitches in degrees above the desk.
 const VFOV := 20.0
 const WIDE := {"dist": 1.45, "pitch": 74.0}
+## The room's light where the desk's look writes none ([DeskLight]): a warm gray.
+const AMBIENT := Color(0.55, 0.5, 0.45)
+const AMBIENT_ENERGY := 0.35
 const LOCAL := {"dist": 0.82, "pitch": 79.0}
 const SPRING_TAU := 3.2
 const YAW_SPREAD := 4.0
@@ -200,11 +204,33 @@ var _follower := ReadingFollower.new()
 var _built_n := -1
 var _plan: Array = []              # per action: {start, end, turn_at} (seconds), INF while not placed
 var _held := {}                    # action -> what was shown of it when the plan was made again
+## WORKED OUT ONCE, NOT EVERY FRAME (2026-10-27, the user: "performance can be really quite laggy in the realtime
+## viewer"): the plans made so far, which a frame's answers are kept for ([method _pages]), and each finished
+## action's ink, the same at any later moment ([method _done_ink_of]) - a page of handwriting was rebuilt point by
+## point every time a line was finished, a 20 to 35 ms frame every few seconds.
+var _plan_rev := 0
+var _done_ink := {}
+var _pages_now := NAN
+var _pages_rev := -1
+var _pages_got := Vector2i.ZERO
+var _by_page := {}                  # a page -> its actions, in order ([method _page_actions]), for the actions in _by_page_of
+var _turning: Array = []            # ...and the actions a page is turned for, in order
+var _by_kind := {}                  # ...and each kind's ([method _of_kind])
+var _by_page_of: Array = []
+## WHERE THE PEN'S WALK GOES ON FROM ([method pen_at]): the actions before [member _pen_k] are all done at any moment
+## from [member _pen_upto] on, the last of them the pen did [member _pen_last] - for the plan [member _pen_rev].
+var _pen_k := 0
+var _pen_last := -1
+var _pen_upto := -INF
+var _pen_rev := -1
+var _ink_t := {}                    # [method _ink_time] by moment, then action, for the plan [member _ink_t_rev]
+var _ink_t_rev := -1
 var _now := 0.0
 var _last_now := -1.0
 var _snap := true
 
-var _vp: SubViewport               # the page being written
+var _vp: SubViewport               # the page being written: the dry page under the wet ink
+var _vp_dry: SubViewport           # ...its paper, rules and finished ink, inside it
 var _vp_turn: SubViewport          # the page turning away
 var _canvas: PadCanvas             # the page being written: its dry ink
 var _wet: PadCanvas                # and over it, what the pen is writing now
@@ -216,6 +242,9 @@ var _attrs: CameraAttributesPractical
 var _env: Environment
 var _pad: LegalPad
 var _desk: Node3D                  # the desk's top and the things on it
+## THE DESK'S LIGHT beyond its lamp: the room's and the candles' ([DeskLight]).
+var _light := DeskLight.new()
+var _stage_was := {}                  # the stage's own settings, given back on leaving it
 var _lamp: SpotLight3D
 var _fill: DirectionalLight3D
 var _lacquer: StandardMaterial3D   # the pen's body
@@ -286,7 +315,19 @@ class PadCanvas extends Node2D:
 			return
 		var ink: Color = look["ink"]
 		var faint := Color(ink, FAINT_ALPHA)
-		for line in desk.page_ink(page, part):
+		# what is shown is what was worked out for it this frame ([method DeskMedium.page_state]): the dry its
+		# finished actions, the wet `[action, share, ...]` - never the page walked again
+		var lines: Array = []
+		match part:
+			"dry":
+				for i in _shown:
+					lines.append_array(desk._done_ink_of(int(i)))
+			"wet":
+				for k in range(0, _shown.size(), 2):
+					lines.append_array(desk._ink_of(int(_shown[k])))
+			_:
+				lines = desk.page_ink(page, part)
+		for line in lines:
 			var pts: PackedVector2Array = line["points"]
 			var c := faint if bool(line.get("faint", false)) else ink
 			if pts.size() >= 2:
@@ -299,13 +340,35 @@ class PadCanvas extends Node2D:
 
 func mount(st: SubViewport) -> void:
 	super.mount(st)
+	# THE STAGE AS THE CARD TABLE SETS IT ([constant TableMedium.STAGE]): the lamp's shadow in a slot of its own of
+	# a big atlas, debanded - on the stage's own the page and the desk wore a fine diagonal moire of the lamp's
+	# shadow map (2026-10-27, the user: "weird stripey rings of light across the desk and paper")
+	_stage_was = {}
+	for key in TableMedium.STAGE:
+		_stage_was[key] = st.get(key)
+		st.set(key, TableMedium.STAGE[key])
+	_light.medium = self
 	_placeholder = GhostScene.new()
 	_placeholder.init_with_seed(1, "drift")
 	_placeholder.visible = false
 	add_child(_placeholder)
-	_vp = _page_viewport(["dry", "wet"])
-	_canvas = _vp.get_child(0) as PadCanvas
-	_wet = _vp.get_child(1) as PadCanvas
+	# A PAGE IS RENDERED ONLY WHEN IT CHANGES (2026-10-27, the user: "performance can be really quite laggy"): both
+	# had rendered every frame, a page of handwriting some 2,100 draw calls - its finished ink is a viewport of its
+	# own, rendered as a line is finished; the page the pad shows is that under the line being written, rendered as
+	# the pen moves; the turning page once a turn ([method _show_pages])
+	_vp_dry = _page_viewport(["dry"])
+	_canvas = _vp_dry.get_child(0) as PadCanvas
+	_vp = _page_viewport([])
+	# inside the page it is drawn under, so it is rendered before it
+	remove_child(_vp_dry)
+	_vp.add_child(_vp_dry)
+	var under := TextureRect.new()
+	under.texture = _vp_dry.get_texture()
+	_vp.add_child(under)
+	_wet = PadCanvas.new()
+	_wet.desk = self
+	_wet.part = "wet"
+	_vp.add_child(_wet)
 	_vp_turn = _page_viewport(["all"])
 	_canvas_turn = _vp_turn.get_child(0) as PadCanvas
 	_build_world()
@@ -328,7 +391,7 @@ func _page_viewport(parts: Array) -> SubViewport:
 	vp.size = Vector2i(int(PW), int(PH))
 	vp.disable_3d = true
 	vp.transparent_bg = false
-	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 	add_child(vp)
 	for part in parts:
 		var c := PadCanvas.new()
@@ -345,8 +408,8 @@ func _build_world() -> void:
 	_env.background_mode = Environment.BG_COLOR
 	_env.background_color = Color(0.02, 0.018, 0.016)
 	_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	_env.ambient_light_color = Color(0.55, 0.5, 0.45)
-	_env.ambient_light_energy = 0.35
+	_env.ambient_light_color = AMBIENT
+	_env.ambient_light_energy = AMBIENT_ENERGY
 	_env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	_env.adjustment_enabled = true
 	_cam = Camera3D.new()
@@ -401,16 +464,23 @@ func _dress() -> void:
 	_dressed = _seed
 	if _desk != null:
 		_desk.queue_free()
-	_desk = DeskLook.dress(look, _seed, LegalPad.DESK_Y)
+	var dressed := DeskLook.dress(look, _seed, LegalPad.DESK_Y)
+	_desk = dressed["node"]
 	_root3.add_child(_desk)
 	_pad.seed = _seed
 	_pad.build(look, _vp.get_texture(), _vp_turn.get_texture())
 	var lamp: Dictionary = look["lamp"]
 	_lamp.light_color = lamp["color"]
-	_lamp.light_energy = float(lamp["energy"])
+	_lamp.light_energy = float(lamp["energy"]) * float(lamp.get("share", 1.0))
+	_lamp.visible = float(lamp.get("share", 1.0)) > 0.0
 	_lamp.position = lamp["at"]
 	_lamp.look_at_from_position(_lamp.position, Vector3(0.02, 0.0, 0.02), Vector3.UP)
 	_fill.light_color = look["fill"]
+	# the room's light and the candles ([DeskLight]); the old flat fill only where the look writes no room
+	_env.ambient_light_color = AMBIENT
+	_env.ambient_light_energy = AMBIENT_ENERGY
+	_light.build(look, dressed["lit"], _seed)
+	_fill.visible = not _light.lights_room()
 	var pen: Dictionary = look["pen"]
 	_lacquer.albedo_color = pen["body"]
 	_trim.albedo_color = pen["trim"]
@@ -493,6 +563,14 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_show_pages()
 	_place_pen()
 	_tick_camera(delta)
+	_light.tick(_now)
+
+
+func _exit_tree() -> void:
+	_light.release()
+	if stage != null and is_instance_valid(stage) and not _stage_was.is_empty():
+		for key in _stage_was:
+			stage.set(key, _stage_was[key])
 
 
 ## THE CLOSE: 1 until the lesson is over, then down to black over the outro ([method ShowOpening.end_fade]).
@@ -578,6 +656,8 @@ func load_lesson(source: String, desk: Dictionary, start := PackedStringArray(),
 	_built_n = -1
 	_held = {}
 	_plan = []
+	_plan_rev += 1
+	_done_ink = {}
 	for i in _actions.size():
 		_plan.append({"start": INF, "end": INF, "turn_at": INF})
 	_snap = true
@@ -598,6 +678,7 @@ func load_lesson(source: String, desk: Dictionary, start := PackedStringArray(),
 ## past is kept: a start, a turn, a done action's end; one under way ends no sooner than the pen can
 ## finish it from where it is.
 func _build_plan() -> void:
+	_plan_rev += 1
 	var prev_end := -INF
 	var last := -1                  # the last action the pen does
 	for i in _actions.size():
@@ -605,6 +686,14 @@ func _build_plan() -> void:
 	for i in _actions.size():
 		var a: Dictionary = _actions[i]
 		var held: Dictionary = _held.get(i, {})
+		if held.has("start") and held.has("end"):
+			# DONE BEFORE THE PLAN WAS MADE AGAIN, and kept as it was - all that is worked out below for it is then
+			# overwritten (a live reading makes the plan again as each sentence's words arrive)
+			_plan[i] = {"start": float(held["start"]), "end": float(held["end"]), "turn_at": float(held.get("turn_at", INF))}
+			prev_end = float(held["end"])
+			if not (String(a["kind"]) == "point" and target_box(a).size.x < 0.0):
+				last = i
+			continue
 		var ready := prev_end + (_way(last, i) if last >= 0 else 0.0)
 		var after := int(a.get("after", 0))
 		var span := int(a.get("span", 0))
@@ -768,6 +857,21 @@ func _word_t1(si: int) -> float:
 ## was made again ([member _held]) goes on from what was written then: the rest of it is spread over
 ## what the new plan has left of it, so the ink never goes back and never jumps.
 func _ink_time(i: int) -> float:
+	# asked of the line being written four or five times a frame - the page, its wet ink, the pen now and a moment
+	# before - and each works the dictation out word by word
+	if _ink_t_rev != _plan_rev or _ink_t.size() > 8:
+		_ink_t = {}
+		_ink_t_rev = _plan_rev
+	# by the moment exactly (a float key is the whole double), then the action
+	var at_now: Dictionary = _ink_t.get_or_add(_now, {})
+	if at_now.has(i):
+		return at_now[i]
+	var got := _ink_time_now(i)
+	at_now[i] = got
+	return got
+
+
+func _ink_time_now(i: int) -> float:
 	var u := _share(i, _now)
 	var h: Dictionary = _held.get(i, {})
 	if h.has("u"):
@@ -871,6 +975,9 @@ static func _said_area(t: float, t0s: PackedFloat32Array, t1s: PackedFloat32Arra
 ## The page being written at [member _now], and the one turning away (-1 when none is): a page begins
 ## as the turn before it does.
 func _pages() -> Vector2i:
+	# asked several times a frame (the pages, the camera's arc and framing): the same moment, the same plan
+	if _now == _pages_now and _plan_rev == _pages_rev:
+		return _pages_got
 	var page := 0
 	var turning := -1
 	for i in _actions.size():
@@ -881,21 +988,29 @@ func _pages() -> Vector2i:
 		page = int(a["page"])
 		var ta := float(_plan[i]["turn_at"])
 		turning = page - 1 if ta < INF and _now < ta + DeskScript.TURN else -1
-	return Vector2i(page, turning)
+	_pages_now = _now
+	_pages_rev = _plan_rev
+	_pages_got = Vector2i(page, turning)
+	return _pages_got
 
 
 func _show_pages() -> void:
 	var p := _pages()
 	var now := page_state(p.x)
-	_canvas.show_page(p.x, now["dry"])
-	_wet.show_page(p.x, now["wet"])
+	var dry := _canvas.show_page(p.x, now["dry"])
+	var wet := _wet.show_page(p.x, now["wet"])
+	if dry:
+		_vp_dry.render_target_update_mode = SubViewport.UPDATE_ONCE
+	if dry or wet:
+		_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 	if p.y < 0:
 		_pad.show_turned(p.x, -1.0)
 		return
-	_canvas_turn.show_page(p.y, page_state(p.y)["all"])
+	if _canvas_turn.show_page(p.y, page_state(p.y)["all"]):
+		_vp_turn.render_target_update_mode = SubViewport.UPDATE_ONCE
 	var ta := INF
-	for i in _actions.size():
-		if int((_actions[i] as Dictionary)["page"]) == p.x and float(_plan[i]["turn_at"]) < INF:
+	for i in _page_actions(p.x):
+		if float(_plan[i]["turn_at"]) < INF:
 			ta = float(_plan[i]["turn_at"])
 			break
 	# the pages before it lie over the pad's head, and it goes over them
@@ -907,10 +1022,18 @@ func _show_pages() -> void:
 func page_ink(page: int, part := "all") -> Array:
 	var out: Array = []
 	for i in _on_page(page):
-		if part != "all" and (_written(i) >= 1.0) != (part == "dry"):
+		var done := _written(i) >= 1.0
+		if part != "all" and done != (part == "dry"):
 			continue
-		out.append_array(_ink_of(i))
+		out.append_array(_done_ink_of(i) if done else _ink_of(i))
 	return out
+
+
+## A FINISHED ACTION'S INK, made once: all of it, at any moment after its end ([method _ink_of]).
+func _done_ink_of(i: int) -> Array:
+	if not _done_ink.has(i):
+		_done_ink[i] = _ink_of(i)
+	return _done_ink[i]
 
 
 ## What page [param page] shows at [member _now], as its [PadCanvas]es key it: the actions finished
@@ -931,7 +1054,7 @@ func page_state(page: int) -> Dictionary:
 ## strikes).
 func _on_page(page: int) -> Array:
 	var out: Array = []
-	for i in _actions.size():
+	for i in _page_actions(page):
 		var a: Dictionary = _actions[i]
 		if float(_plan[i]["start"]) > _now or int(a["page"]) != page or String(a["kind"]) == "point":
 			continue
@@ -941,6 +1064,40 @@ func _on_page(page: int) -> Array:
 				continue
 		out.append(i)
 	return out
+
+
+## THE ACTIONS LAID ON PAGE [param page], in order - made once a lesson or a letter is laid out: the pages, the pen
+## and the camera ask every frame, and walking every action of a letter from its first had cost a frame milliseconds.
+func _page_actions(page: int) -> Array:
+	_index()
+	return _by_page.get(page, [])
+
+
+## The actions of [param kind] (a tap, a point...), in order ([method _page_actions]'s index).
+func _of_kind(kind: String) -> Array:
+	_index()
+	return _by_kind.get(kind, [])
+
+
+## The actions a page is turned for, in order ([method _page_actions]'s index).
+func _turn_actions() -> Array:
+	_index()
+	return _turning
+
+
+func _index() -> void:
+	if is_same(_by_page_of, _actions):
+		return
+	_by_page = {}
+	_turning = []
+	_by_kind = {}
+	for i in _actions.size():
+		var a: Dictionary = _actions[i]
+		(_by_page.get_or_add(int(a["page"]), []) as Array).append(i)
+		(_by_kind.get_or_add(String(a["kind"]), []) as Array).append(i)
+		if bool(a.get("turn", false)):
+			_turning.append(i)
+	_by_page_of = _actions
 
 
 ## How long action [param i] takes the pen: its ink's, else what the script gave it.
@@ -954,6 +1111,10 @@ func _written(i: int) -> float:
 	var a: Dictionary = _actions[i]
 	if String(a["kind"]) == "strike":
 		return clampf((_now - float(_plan[i]["start"])) / maxf(float(a["write"]), 0.01), 0.0, 1.0)
+	# DONE IS DONE: past its end its share is 1 whatever the dictation ([method _share], held or not) - and this is
+	# asked of every action on the page every frame, where the dictation is worked out word by word
+	if _now >= float(_plan[i]["end"]):
+		return 1.0
 	var length := _length(i)
 	return 1.0 if length <= 0.0 else clampf(_ink_time(i) / length, 0.0, 1.0)
 
@@ -967,12 +1128,12 @@ func _ink_of(i: int) -> Array:
 			var sched: Dictionary = _strokes.get(String(a["id"]), {})
 			if sched.is_empty():
 				return out
-			var at: Vector2 = a["at"]
 			var k := float(a["k"]) * DeskScript.PX_PER_PT
+			# onto the page in one native step, never point by point: a line of handwriting is thousands of them,
+			# and the line being written is drawn again every frame
+			var to_page := Transform2D(0.0, Vector2(k, k), 0.0, a["at"] as Vector2)
 			for s in Ink.at(sched, _ink_time(i))["ink"]:
-				var pts := PackedVector2Array()
-				for q in (s as Dictionary)["points"]:
-					pts.append(at + (q as Vector2) * k)
+				var pts: PackedVector2Array = to_page * PackedVector2Array((s as Dictionary)["points"])
 				var faint := bool((s as Dictionary).get("faint", false))
 				out.append({"points": pts, "width": maxf(FAINT_W if faint else 2.4, float((s as Dictionary)["width"]) * k * 1.35),
 					"faint": faint})
@@ -998,9 +1159,22 @@ static func _strike_line(a: Dictionary) -> Array:
 func pen_at() -> Dictionary:
 	var rest := {"p": Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0), "lift": REST_LIFT}
 	var last := -1                  # the last action the pen did
-	for i in _actions.size():
+	# FROM WHERE THE LAST WALK FOUND ALL DONE (asked twice a frame, it had walked from the letter's first action): a
+	# done action stays done as the time goes on, and which points aim at nothing is the layout's
+	if _pen_rev != _plan_rev:
+		_pen_rev = _plan_rev
+		_pen_k = 0
+		_pen_last = -1
+		_pen_upto = -INF
+	var from := 0
+	if _now >= _pen_upto:
+		from = _pen_k
+		last = _pen_last
+	for i in range(from, _actions.size()):
 		var a: Dictionary = _actions[i]
 		if String(a["kind"]) == "point" and target_box(a).size.x < 0.0:
+			if i == _pen_k:
+				_pen_k += 1
 			continue        # at nothing on this page: the pen stays where it is
 		var start := float(_plan[i]["start"])
 		if start == INF:
@@ -1014,6 +1188,10 @@ func pen_at() -> Dictionary:
 		if _now < float(_plan[i]["end"]):
 			return _pen_during(a, i, start)
 		last = i
+		if i == _pen_k:
+			_pen_k += 1
+			_pen_last = i
+			_pen_upto = maxf(_pen_upto, float(_plan[i]["end"]))
 	return _waiting(last, -1) if last >= 0 else rest
 
 
@@ -1259,7 +1437,8 @@ func _framing() -> Dictionary:
 		k = 1.0
 	var ahead := _now + CAM_LEAD
 	var page := _pages().x
-	for i in _actions.size():
+	# the page's actions and the next's - an earlier page's frame nothing and turned long ago
+	for i in _page_actions(page) + _page_actions(page + 1):
 		var a: Dictionary = _actions[i]
 		var start := float(_plan[i]["start"])
 		var ta := float(_plan[i]["turn_at"])

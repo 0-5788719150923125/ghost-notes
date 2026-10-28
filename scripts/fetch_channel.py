@@ -1,14 +1,15 @@
 """Fetch a YouTube channel's latest videos into a folder, unattended - an actor's footage cache.
 
-    python3 scripts/fetch_channel.py <channel> --count N --out <folder> [--min-minutes 3] [--wait 45]
+    python3 scripts/fetch_channel.py <channel> --count N --out <folder> [--min-minutes 0] [--wait 45]
                                      [--cookies-from-browser firefox] [--cookies <file>] [--backoff 3600]
                                      [--no-captions] [--list] [--no-upgrade]
 
     python3 scripts/fetch_channel.py @EphemeralRift --count 60 --out "/home/crow/Downloads/Ephemeral Rift (more)"
 
 <channel> is a handle (`@EphemeralRift`) or a channel's link. Its Videos tab is read newest first - the tab
-YouTube keeps Shorts and live streams out of - and anything shorter than --min-minutes, still to premiere,
-or not public is passed over, until N are found. Each is fetched as the Actor card fetches a link
+YouTube keeps Shorts and live streams out of - and anything still to premiere or not public is passed over,
+until N are found. Every length is taken (2026-10-27: a two-minute video is another sound and setting to
+learn from); --min-minutes passes over the shorter. Each is fetched as the Actor card fetches a link
 (src/likeness/actor_sources.gd, `fetch_args`): up to 1080p, H.264 and AAC where the site has them, its
 automatic captions (json3: a time for every word) and its details beside it, named
 `@<channel> - <title> (1080p).mp4`, so the Actor card reads the folder in place and finds each video's
@@ -20,6 +21,11 @@ MADE TO RUN OVERNIGHT AND AGAIN:
   the Actor card compares titles, its "(1080p, h264)" tag aside) and written into the archive.
 - A video that fails is tried once more at the end; the rest go on. A partial download is carried on
   from where it stopped (`--continue`).
+- A VIDEO'S CAPTIONS NEVER COST IT THE VIDEO (2026-10-27: "HTTP Error 429: Too Many Requests" on the captions of
+  every captioned video, and so none of them fetched): yt-dlp asks for YouTube's captions as a browser would,
+  through curl_cffi - without it they are refused - and a caption refused is a warning, the video fetched all
+  the same (`--ignore-errors`: a video that fails still fails); its captions are asked for alone at the end. A
+  video left without them is heard by the Actor card's Hear instead.
 - It waits --wait seconds (give or take a third) between videos, and a second between requests.
 - WHEN YOUTUBE ASKS IF IT IS A BOT ("Sign in to confirm you're not a bot" - after a dozen videos in a row,
   2026-10-23), it waits --backoff seconds (an hour: fifteen minutes was not enough) before the next, rather
@@ -32,7 +38,7 @@ MADE TO RUN OVERNIGHT AND AGAIN:
   and what failed.
 
 ITS OWN yt-dlp, KEPT CURRENT: an environment of its own (`~/.cache/fetch_channel/venv`, made with the Python
-that runs this the first time), brought to the newest yt-dlp and deno at the start of every run - YouTube
+that runs this the first time), brought to the newest yt-dlp (with curl_cffi) and deno at the start of every run - YouTube
 changes how it hands out video, and an older yt-dlp meets it as "HTTP Error 403: Forbidden" on every
 download (2026-10-23, yt-dlp 2026.07.04). --no-upgrade skips that; --python names another Python with
 yt_dlp in it. yt-dlp is given a JavaScript runtime for YouTube's challenges: the environment's deno, else deno
@@ -81,9 +87,10 @@ def ready(venv: Path, upgrade: bool) -> str:
         upgrade = True
     if upgrade:
         print("bringing yt-dlp and deno to their newest ...", flush=True)
-        # secretstorage: how yt-dlp reads a Chromium browser's cookies on Linux, where they are encrypted
+        # secretstorage: how yt-dlp reads a Chromium browser's cookies on Linux, where they are encrypted;
+        # curl-cffi: how it asks for YouTube's captions as a browser (without it, "HTTP Error 429")
         r = subprocess.run([str(py), "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "--upgrade",
-                            "yt-dlp[default]", "deno"] + (["secretstorage"] if sys.platform.startswith("linux") else []))
+                            "yt-dlp[default,curl-cffi]", "deno"] + (["secretstorage"] if sys.platform.startswith("linux") else []))
         if r.returncode != 0:
             return ""
     return str(py)
@@ -175,23 +182,41 @@ def already(out: Path) -> tuple:
     return ids, titles
 
 
-def fetch(py: str, rt: list, vid: str, out: Path, captions: bool, log: Log) -> str:
-    """One video into [out], as the Actor card fetches one; yt-dlp's every line into the log. "ok", "bot" (YouTube
-    asked it to sign in, to prove it is not a bot) or "failed"."""
+# yt-dlp's warning that it cannot ask as a browser, said in the terminal once a run
+TOLD = set()
+
+
+def fetch(py: str, rt: list, vid: str, out: Path, captions: bool, log: Log, captions_only: bool = False) -> str:
+    """One video into [out], as the Actor card fetches one; yt-dlp's every line into the log. "ok", "captions"
+    (the video fetched, its captions refused), "bot" (YouTube asked it to sign in, to prove it is not a bot) or
+    "failed". [captions_only]: its captions alone, named as its video is - the archive, which lists the video,
+    would pass it over."""
     cmd = [py, "-u", "-m", "yt_dlp", "--no-playlist", "--newline", "--no-overwrites", "--continue",
            "--socket-timeout", "30", "--retries", "10", "--fragment-retries", "10", "--sleep-requests", "1",
-           "-f", FORMAT, "--merge-output-format", "mp4", "--throttled-rate", "100K", "--concurrent-fragments", "4",
-           "--download-archive", str(out / "archive.txt"), "--write-info-json", "-o", str(out / NAME)]
-    if captions:
+           "-f", FORMAT, "--ignore-errors", "-o", str(out / NAME)]
+    if captions_only:
+        cmd += ["--skip-download"]
+    else:
+        cmd += ["--merge-output-format", "mp4", "--throttled-rate", "100K", "--concurrent-fragments", "4",
+                "--download-archive", str(out / "archive.txt"), "--write-info-json"]
+    if captions or captions_only:
         cmd += ["--write-auto-subs", "--sub-langs", SUB_LANGS, "--sub-format", "json3"]
     cmd += rt + ["https://www.youtube.com/watch?v=" + vid]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
     last = 0.0
     bot = False
+    refused = False
     for line in p.stdout:
         line = line.rstrip()
         if "not a bot" in line:
             bot = True
+        if "Unable to download video subtitles" in line:
+            refused = True
+            print("   " + line, flush=True)
+        if "no impersonate target is available" in line and "impersonate" not in TOLD:
+            TOLD.add("impersonate")
+            print("   yt-dlp cannot ask as a browser (no curl_cffi in its Python): YouTube refuses captions more "
+                  "often", flush=True)
         # the progress lines, once every half minute; everything else as it comes
         if "[download]" in line and "%" in line and "Destination" not in line:
             if time.time() - last < 30.0:
@@ -202,7 +227,7 @@ def fetch(py: str, rt: list, vid: str, out: Path, captions: bool, log: Log) -> s
             print("   " + line, flush=True)
     log.f.flush()
     if p.wait() == 0:
-        return "ok"
+        return "captions" if refused else "ok"
     return "bot" if bot else "failed"
 
 
@@ -211,7 +236,7 @@ def main() -> int:
     ap.add_argument("channel", help="a handle (@Name) or a channel's link")
     ap.add_argument("--count", type=int, required=True, help="how many videos to have fetched (newest first)")
     ap.add_argument("--out", required=True, help="the folder they go to (made if missing)")
-    ap.add_argument("--min-minutes", type=float, default=3.0, help="shorter videos are passed over (Shorts run to 3)")
+    ap.add_argument("--min-minutes", type=float, default=0.0, help="shorter videos are passed over (none by default)")
     ap.add_argument("--wait", type=float, default=45.0, help="seconds between videos, give or take a third")
     ap.add_argument("--no-captions", action="store_true", help="fetch no automatic captions")
     ap.add_argument("--list", action="store_true", help="say what would be fetched, and fetch nothing")
@@ -283,11 +308,14 @@ def run(a) -> int:
         for e in todo:
             log("  would fetch: %s (%.0f min)" % (e.get("title"), float(e.get("duration") or 0) / 60.0))
         return 0
-    failed = []
+    failed, uncaptioned = [], []
     for n, e in enumerate(todo):
         log("[%d/%d] %s" % (n + 1, len(todo), e.get("title")))
         got = fetch(py, rt, e["id"], out, not a.no_captions, log)
-        if got != "ok":
+        if got == "captions":
+            uncaptioned.append(e)
+            log("   fetched, but not its captions - asked for again at the end")
+        elif got != "ok":
             failed.append(e)
             log("   failed - tried again at the end")
         if n + 1 < len(todo):
@@ -306,10 +334,20 @@ def run(a) -> int:
             log("   YouTube asked again: waiting %.0f minutes" % (a.backoff / 60.0))
             time.sleep(a.backoff)
             got = fetch(py, rt, e["id"], out, not a.no_captions, log)
-        if got != "ok":
+        if got == "captions":
+            uncaptioned.append(e)
+        elif got != "ok":
             still.append(e)
-    log("done: %d fetched, %d already here, %d failed%s" % (len(todo) - len(still), len(have), len(still),
-                                                          "".join("\n  failed: %s" % e.get("title") for e in still)))
+    bare = []
+    for e in uncaptioned:
+        log("[captions] %s" % e.get("title"))
+        time.sleep(a.wait)
+        if fetch(py, rt, e["id"], out, True, log, captions_only=True) != "ok":
+            bare.append(e)
+    log("done: %d fetched, %d already here, %d failed%s%s" % (
+        len(todo) - len(still), len(have), len(still),
+        "".join("\n  failed: %s" % e.get("title") for e in still),
+        "".join("\n  no captions (Hear will transcribe it): %s" % e.get("title") for e in bare)))
     return 1 if still else 0
 
 

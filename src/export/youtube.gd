@@ -65,14 +65,17 @@ const CATEGORIES := {"2": "Autos & Vehicles", "23": "Comedy", "27": "Education",
 ## THE TITLE A NEW YOUTUBE CARD STARTS WITH: macros every note fills ([constant MACROS]).
 const TITLE_TEMPLATE := "%title%: %episode%"
 ## THE TITLE'S MACROS, a row each: `%key%` in a template ([method expand_title]), and what it stands for.
-## A NOTE FILLS THOSE ITS CARD'S VALUES HOLD ([method YouTubeCard.values_now]: its Script card's Title and
-## Episode, which every note has, and what its panel adds - a show's seed), and an `always` one whatever
-## it is: the card offers only those, and a title naming one the note does not fill does not go up
-## ([method unfilled]; 2026-10-25, the user: "It shouldn't be possible to use the YouTube card if the
-## underlying macros we claim to support would not even work here" - %episode% had been a show's alone).
+## A NOTE FILLS THOSE ITS CARD'S VALUES HOLD ([method YouTubeCard.values_now]: its Script card's Title,
+## Episode, Author and Book, which every note has, and what its panel adds - a show's seed), and an
+## `always` one whatever it is: the card offers only those, and a title naming one the note does not
+## fill does not go up ([method unfilled]; 2026-10-25, the user: "It shouldn't be possible to use the
+## YouTube card if the underlying macros we claim to support would not even work here" - %episode% had
+## been a show's alone).
 const MACROS := {
 	"title": {"label": "%title%", "blurb": "the note's Title, on its Script card (a show's name; the note's file name when it has none)"},
 	"episode": {"label": "%episode%", "blurb": "what this video is called: the Episode on the Script card"},
+	"author": {"label": "%author%", "blurb": "who wrote it: the Author on the Script card"},
+	"book": {"label": "%book%", "blurb": "the book it belongs to: the Book on the Script card"},
 	"seed": {"label": "%seed%", "blurb": "the episode's seed - a card show's, or a Proof episode's number"},
 	"date": {"label": "%date%", "blurb": "the day it goes up", "always": true},
 }

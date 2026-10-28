@@ -41,6 +41,7 @@ var _ink_tried := ""             # the drawings the ink step last failed on, not
 var _installing := ""            # what the ink step waits to be installed, "" for nothing
 
 var _seed_box: SpinBox
+var _mood: Label                 # what the desk's number picked, in a word ([constant DeskLook.MOODS])
 var _hand_pick: OptionButton
 var _writer: AgentPick
 var _rows_box: VBoxContainer
@@ -261,15 +262,22 @@ func _build() -> void:
 	_seed_box.max_value = 99999
 	_seed_box.step = 1
 	_seed_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_seed_box.tooltip_text = ("Which desk the letter is written at: its paper, ink, pen, lamp and the things "
-		+ "lying about, and how each word wavers. 0 is the note's own, the same every time; any other number "
-		+ "is a desk of its own.")
+	_seed_box.tooltip_text = ("Which desk the letter is written at, by number: its paper, ink and pen, its top and "
+		+ "the things on it, how it is lit - the lamp, candles, a window's daylight or a low sun - and how each word "
+		+ "wavers. 0 is the note's own, the same every time; any other number is a desk of its own.")
 	_seed_box.value_changed.connect(func(v: float) -> void:
-		if _syncing:
-			return
-		_knobs["seed"] = int(v)
-		_touch())
+		if not _syncing:
+			_knobs["seed"] = int(v)
+			_touch()
+		_show_mood())
 	srow.add_child(_seed_box)
+	# WHAT THE NUMBER PICKED, in a word (2026-10-27, the user: "It's not clear to me what the 'Desk' value ... is
+	# doing. Is that just a random seed?")
+	_mood = Label.new()
+	_mood.add_theme_font_size_override("font_size", 12)
+	_mood.modulate = Color(1, 1, 1, 0.7)
+	_mood.mouse_filter = Control.MOUSE_FILTER_PASS
+	srow.add_child(_mood)
 	var again := Button.new()
 	again.text = "New desk"
 	again.tooltip_text = "Another desk, drawn at random."
@@ -373,8 +381,19 @@ func _show_knobs() -> void:
 	_syncing = true
 	_writer.set_choice(String(_knobs["writer"]), String(_knobs["writer_model"]), String(_knobs["writer_effort"]))
 	_seed_box.value = int(_knobs["seed"])
+	_show_mood()
 	_hand_pick.select(maxi(0, _hand_keys().find(LetterHand.of(String(_knobs["hand"])))))
 	_syncing = false
+
+
+## The desk's mood beside its number: how the desk the letter is written at is lit.
+func _show_mood() -> void:
+	if _mood == null:
+		return
+	var mood := String(DeskLook.of(desk_seed())["mood"])
+	var row: Dictionary = DeskLook.MOODS[mood]
+	_mood.text = String(row["label"])
+	_mood.tooltip_text = String(row["blurb"])
 
 
 ## The hands, in the order the Picture card lists them.

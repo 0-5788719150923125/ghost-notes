@@ -53,6 +53,7 @@ var _j := 0
 var _rem := ""
 var _loose: Array = []              # [t0, t1] of each voice word since the last one matched
 var _gaps := {}                     # spoken index -> [t0, t1] of the voice's loose words just before it
+var _known := -2                    # [method known_last], kept until a word is matched (-2: not worked out)
 
 
 ## Start over against [param norms] (the document's spoken words, normalized - see
@@ -65,6 +66,7 @@ func reset(norms: PackedStringArray, from_si := -1, est := PackedFloat32Array())
 	_rem = ""
 	_loose = []
 	_gaps = {}
+	_known = -2
 	var n := norms.size()
 	st0 = PackedFloat32Array()
 	st0.resize(n)
@@ -113,6 +115,7 @@ func extend(words: Array) -> void:
 					_gaps[got] = [float(_loose[0][0]), float(_loose.back()[1])]
 		map.append(got)
 		if got >= 0:
+			_known = -2
 			st1[got] = float(w.get("t1", 0.0))
 			if st0[got] == NO_TIME:
 				st0[got] = float(w.get("t0", 0.0))
@@ -157,10 +160,16 @@ func _fill() -> void:
 
 ## The last spoken index whose end is known, -1 for none.
 func known_last() -> int:
+	# KEPT UNTIL A WORD IS MATCHED: a medium asks every frame, and early in a live reading the search walks back
+	# over every word not heard yet
+	if _known != -2:
+		return _known
+	_known = -1
 	for i in range(st1.size() - 1, -1, -1):
 		if st1[i] != NO_TIME:
-			return i
-	return -1
+			_known = i
+			break
+	return _known
 
 
 ## The spoken word being read at the overlay's [param cursor] (its eased word position) and how

@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 439 references inside a folder, 898 down the stack, 0 up it.
+Between scripts today: 443 references inside a folder, 905 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -16,7 +16,7 @@ Between scripts today: 439 references inside a folder, 898 down the stack, 0 up 
 | `likeness/` | Likeness | 15 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
 | `letter/` | Letter | 3 | `desk`, `reading`, `show`, `media`, `ui`, `agents`, `platform`, `data` |
 | `proof/` | Proof | 6 | `desk`, `table`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
-| `desk/` | The desk | 8 | `table`, `media`, `scene_kit`, `render`, `data` |
+| `desk/` | The desk | 9 | `table`, `media`, `scene_kit`, `render`, `data` |
 | `table_show/` | The table's show | 11 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `geometry`, `audio`, `platform`, `data` |
 | `table/` | The set | 26 | `media`, `scene_kit`, `geometry`, `render`, `audio`, `data` |
 | `reading/` | The voice's workspaces | 12 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
@@ -162,7 +162,7 @@ A show at a table nobody writes: a show's brief, its episodes - each planned, de
 
 A study where a ghost does math, seen and heard: the ink (formulas TeX lays out, written stroke by stroke in a seeded hand from the Hershey stroke fonts), the pad, the pen that moves by itself, the instruments it reaches for - a calculator, a tablet, a screen with Lean on it - and the medium that puts them on the stage. Its room is built from the table's parts - and the letter written at the same desk: its own cursive hand (the Hershey script font, no TeX), what it says and writes, and its medium. Design: next/proof.md, next/letter.md.
 
-[`desk`](../src/desk/desk.gd), [`desk_look`](../src/desk/desk_look.gd), [`desk_script`](../src/desk/desk_script.gd), [`ink`](../src/desk/ink.gd), [`legal_pad`](../src/desk/legal_pad.gd), [`letter`](../src/desk/letter.gd), [`letter_hand`](../src/desk/letter_hand.gd), [`letter_script`](../src/desk/letter_script.gd)
+[`desk`](../src/desk/desk.gd), [`desk_light`](../src/desk/desk_light.gd), [`desk_look`](../src/desk/desk_look.gd), [`desk_script`](../src/desk/desk_script.gd), [`ink`](../src/desk/ink.gd), [`legal_pad`](../src/desk/legal_pad.gd), [`letter`](../src/desk/letter.gd), [`letter_hand`](../src/desk/letter_hand.gd), [`letter_script`](../src/desk/letter_script.gd)
 
 ### `proof/` - Proof
 

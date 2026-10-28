@@ -67,6 +67,18 @@ static func near_wick(mesh: MeshInstance3D, wicks: Array) -> bool:
 ## own wax glows with it, through [param glow] (its material's `flame`). The flame, as
 ## `{mesh, base, flicker, glow}`.
 func add_flame(at: Vector3, own: int, glow: Variant = null) -> Dictionary:
+	var made := flame_nodes(at, own)
+	for n in made:
+		medium._props.add_child(n)
+	var flame: MeshInstance3D = made[1]
+	_flame_n += 1
+	return {"mesh": flame, "base": flame.position, "flicker": _flicker_of(_flame_n - 1), "glow": glow, "open": 1.0}
+
+
+## A FLAME'S NODES at [param at], the top of a wick: `[wick, flame]`, the wick on its candle's layer
+## [param own], the flame a quad of [constant TableMedium.FLAME_SHADER] standing on it - for any host to add
+## where it keeps its things (the desk's candles too, [DeskLight]).
+static func flame_nodes(at: Vector3, own: int) -> Array:
 	var wick := MeshInstance3D.new()
 	var wm := CylinderMesh.new()
 	wm.top_radius = 0.0006
@@ -81,7 +93,6 @@ func add_flame(at: Vector3, own: int, glow: Variant = null) -> Dictionary:
 	wick.material_override = wmat
 	wick.position = at + Vector3(0.0, 0.0035, 0.0)
 	wick.layers = own
-	medium._props.add_child(wick)
 	var flame := MeshInstance3D.new()
 	var q := QuadMesh.new()
 	q.size = Vector2(0.012, FLAME_QUAD)
@@ -93,9 +104,7 @@ func add_flame(at: Vector3, own: int, glow: Variant = null) -> Dictionary:
 	fm.shader = sh
 	flame.material_override = fm
 	flame.position = at + Vector3(0, 0.016, 0)
-	medium._props.add_child(flame)
-	_flame_n += 1
-	return {"mesh": flame, "base": flame.position, "flicker": _flicker_of(_flame_n - 1), "glow": glow, "open": 1.0}
+	return [wick, flame]
 
 
 ## A LIT THING'S ONE LIGHT, for every flame on it: a candelabra's tapers or a pillar's three wicks
@@ -421,11 +430,16 @@ func heat_cell(at: Vector3) -> float:
 ## HOW A FLAME FLICKERS - its own way, so no two keep time: a tempo, how steadily it burns, and
 ## how often a draft finds it. They all shared one tempo and one swing, and pulsed together.
 func _flicker_of(salt: Variant) -> Dictionary:
+	return flicker_seeded(medium._plan.seed_value, salt)
+
+
+## [method _flicker_of] for any host: a flame's own way of flickering, from [param seed] and [param salt].
+static func flicker_seeded(seed: int, salt: Variant) -> Dictionary:
 	var r := RandomNumberGenerator.new()
-	r.seed = hash([medium._plan.seed_value, "flicker", salt])
+	r.seed = hash([seed, "flicker", salt])
 	return {"seed": r.randf() * 1000.0, "rate": exp(r.randf_range(log(0.5), log(2.0))),
 		"calm": r.randf_range(0.04, 0.12), "slot": r.randf_range(4.0, 12.0), "drafts": r.randf_range(0.3, 0.65),
-		"salt": hash([medium._plan.seed_value, "draft", salt])}
+		"salt": hash([seed, "draft", salt])}
 
 
 ## A flame at show time [param t]: (brightness about 1, height about 1, lean). Mostly a steady burn
@@ -434,11 +448,16 @@ func _flicker_of(salt: Variant) -> Dictionary:
 ## hash, so this is a pure function of time and a render and a scrub see the same flame. The room's
 ## drafts are still air's ([param drafts]): in the light's wind the wind is the draft ([method tick_props]).
 func _flame_at(fk: Dictionary, t: float, drafts := true) -> Vector3:
+	return flame_burn(medium._noise, fk, t, drafts)
+
+
+## [method _flame_at] for any host, on its own [param noise] (simplex, frequency 1).
+static func flame_burn(noise: FastNoiseLite, fk: Dictionary, t: float, drafts := true) -> Vector3:
 	var s := float(fk["seed"])
 	var r := float(fk["rate"])
 	var calm := float(fk["calm"])
-	var slow := medium._noise.get_noise_2d(t * 0.8 * r, s)
-	var fast := medium._noise.get_noise_2d(t * 7.0 * r, s + 31.0)
+	var slow := noise.get_noise_2d(t * 0.8 * r, s)
+	var fast := noise.get_noise_2d(t * 7.0 * r, s + 31.0)
 	var slot := float(fk["slot"])
 	var k := floori(t / slot)
 	var h := hash([int(fk["salt"]), k])
@@ -451,10 +470,10 @@ func _flame_at(fk: Dictionary, t: float, drafts := true) -> Vector3:
 		if u > 0.0 and u < 1.0:
 			env = pow(sin(PI * u), 2.0)
 			strength = 0.18 + 0.2 * float((h >> 8) & 0xFF) / 255.0
-	var gust := medium._noise.get_noise_2d(t * 13.0 * r, s + 57.0)
+	var gust := noise.get_noise_2d(t * 13.0 * r, s + 57.0)
 	return Vector3(1.0 + calm * (0.65 * slow + 0.35 * fast) + env * strength * (gust - 0.35),
 		1.0 + calm * 2.5 * slow + env * strength * 1.4 * gust,
-		medium._noise.get_noise_2d(t * 1.3 * r, s + 7.0) * 0.4 + env * gust * 1.6)
+		noise.get_noise_2d(t * 1.3 * r, s + 7.0) * 0.4 + env * gust * 1.6)
 
 
 ## A soft round shade, dark at its middle, made once: what a candle's base presses into the cloth.

@@ -10,8 +10,9 @@ class_name LetterScript
 ## the word [constant AHEAD_WORDS] before it - the desk's elastic pen ([LetterMedium]) on the voice's own times,
 ## whatever its speed - and never quicker than [constant QUICKEST] the hand's pace. The voice waits at a
 ## sentence's start only where the pen cannot be that far ahead: after a thought, a still or the blank page (the
-## pen begins as the voice gets there, and writes two words before it goes on), at a page turned (once the voice
-## has read the page), and where the words are more ink than the quickest pen can put down while they are said. Under a picture nobody reads along: the pen keeps with the
+## pen begins as the voice gets there, and writes two words before it goes on), at a page turned between two
+## paragraphs (once the voice has read the page; one turned inside a paragraph it reads on through, the pen
+## catching up after), and where the words are more ink than the quickest pen can put down while they are said. Under a picture nobody reads along: the pen keeps with the
 ## voice there, unseen. (A pen at a hand's own steady pace ahead of a voice two or three times quicker makes
 ## the voice wait out the difference at every sentence - a letter as long as its writing, the chapter 43
 ## minutes - whatever lead is asked for.) The rest is marks:
@@ -37,7 +38,9 @@ class_name LetterScript
 ##     <!-- image (full): what it shows -->  ... <!-- /image -->
 ##                                             a picture over the whole screen, panned slowly, from the
 ##                                             word after it to the close: a flashback the voice reads
-##                                             over, while the pen goes on writing unseen.
+##                                             over, while the pen goes on writing unseen. Another image
+##                                             mark before the close, or straight after it, DISSOLVES
+##                                             INTO ITS PICTURE (`blend`): the page is not seen between.
 ##     <!-- still -->                          from here to the next written line the camera holds dead
 ##                                             still on what was last drawn, the pen off the page (a
 ##                                             test the viewer does on the screen).
@@ -57,8 +60,8 @@ class_name LetterScript
 ## indented (2026-10-27, the user: "the hanging indents look wrong, when the first several paragraphs are
 ## each just ~10 words long ... there should probably be a newline between each paragraph" - the book's
 ## rule, [constant BookLayout.INDENT_EM]), a sketch centered half a rule clear of what is above it, and the
-## page turned where the next line or drawing would run off its foot - mid-sentence too, a rest the voice
-## takes there.
+## page turned where the next line or drawing would run off its foot - mid-sentence too, where the voice reads
+## on and the pen catches up after the turn ([method _voice_text]).
 
 ## The marks of their own line: group 1 the verb, group 2 what follows the colon.
 const MARK := "^\\s*<!--\\s*(strike|tap|still|new\\s+page|/\\s*image|unspoken)\\s*(?::\\s*([\\s\\S]*?))?\\s*-->\\s*$"
@@ -83,9 +86,11 @@ const DECIDE_MOST := 30.0
 ## comes in over the empty pad ([LetterMedium]).
 const BLANK_PAGE := 4.0
 ## A PICTURE CLEARS BEFORE THE LETTER GOES ON: it fades out from just after the passage's last word, and the
-## voice rests until it is gone, so what the pen does next is seen from its start ([LetterMedium]).
+## voice rests until it is gone, so what the pen does next is seen from its start ([LetterMedium]) - unless
+## another picture comes up over it there. Every fade, in, out and from one picture into the next, is this long
+## (seconds; 2026-10-27, the user, of 1.2: "seems to be too fast. A 2 or 3 second fade might look better").
 const IMAGE_AFTER := 0.1
-const IMAGE_FADE := 1.2
+const IMAGE_FADE := 2.5
 ## A tap: how long the pen is turned over and tapping, and the rest the voice leaves for it before it
 ## goes on (the taps run on under the next words).
 const TAP := 2.4
@@ -99,6 +104,12 @@ const TURN_REST := DeskScript.TURN + 1.3
 ## voice can preempt the end of the written sentence a bit").
 const AHEAD_WORDS := 2
 const OVERTAKE := 0.6
+## A DRAWING DASHED OFF (2026-10-27, the user, of the chapter's tree of dots: the text "sort of gets frozen for a few
+## seconds ... with the pen not moving" - the voice waited 7.5 s after its words while the pen dotted its last two
+## rows): a sketch with more ink than its words leave time for at the desk's quickest ([constant DeskScript.MAX_PACE])
+## is drawn quicker, up to DRAW_QUICKEST the hand's pace, to be done DRAW_TAIL (seconds) after them ([method draw_pace]).
+const DRAW_QUICKEST := 7.0
+const DRAW_TAIL := 1.5
 ## The pen at its quickest, against the hand's own pace ([constant LetterHand.PACE]): past a quick voice's 180 words
 ## a minute, so the pen keeps with the voice it has (at 2.0 a voice of 0.36 s a word left it 18 words behind).
 const QUICKEST := 2.5
@@ -320,10 +331,13 @@ static func _written(text: String) -> Array:
 ##               `strike` per struck line, a `point` (in a paragraph the pen is not busy with), a `tap`
 ##               (`target` desk or pad)
 ##   spans     - what the camera and the screen follow, by spoken word (`from` to `to`, exclusive):
-##               `image` (`key`, `prompt`), `still`, `thought`, `camera` (a point at whoever watches)
+##               `image` (`key`, `prompt`, `blend` when it comes up over the picture before it), `still`,
+##               `thought`, `camera` (a point at whoever watches)
 ##   spoken    - PackedStringArray: every spoken word, normalized
 ##   speakable - the text the voice reads
 ##   ignored   - the points the pen could not make (it was writing or drawing then), for the log
+##   pauses    - the spoken words a hesitation follows (on a line of its own, or in a written paragraph):
+##               the writer stops there too ([LetterMedium])
 static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dictionary = {},
 		sizes: Dictionary = {}, hand := LetterHand.DEFAULT) -> Dictionary:
 	var point := _rx(POINT)
@@ -340,6 +354,7 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 	var still := {}
 	var new_page := false
 	var line_n := 0
+	var pauses: Array = []           # the spoken words a hesitation follows, where the writer stops too
 	voice.append({"hold": BLANK_PAGE, "act": -1})
 	for b in blocks(body):
 		var blk: Dictionary = b
@@ -348,6 +363,8 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 		var said := _words(text) if kind == "para" else PackedStringArray()
 		if kind == "para" and said.is_empty():
 			voice.append({"para": text, "base": spoken.size()})      # a hesitation on a line of its own
+			if spoken.size() > 0 and _rx(Manuscript.HESITATION).search(text) != null:
+				pauses.append(spoken.size() - 1)
 			continue
 		if (pending >= 0 or waiting) and kind != "para":
 			# A SKETCH WITH NO PARAGRAPH OF ITS OWN is drawn in silence: the voice waits it out
@@ -378,15 +395,23 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 			"page":
 				new_page = true
 			"image":
+				# A PICTURE STRAIGHT AFTER ANOTHER'S PASSAGE comes up over it: nothing between to see the page for,
+				# and no rest for the page to come back
+				var blend := false
 				if not image.is_empty() and int(image["to"]) < 0:
 					image["to"] = spoken.size()
+					blend = spoken.size() > int(image["from"])
+				elif not image.is_empty() and int(image["to"]) == spoken.size() and spoken.size() > int(image["from"]) \
+						and bool((voice.back() as Dictionary).get("image_end", false)):
+					voice.pop_back()
+					blend = true
 				image = {"kind": "image", "key": Manuscript.image_key(String(blk["arg"])),
-					"prompt": String(blk["arg"]), "from": spoken.size(), "to": -1}
+					"prompt": String(blk["arg"]), "from": spoken.size(), "to": -1, "blend": blend}
 				spans.append(image)
 			"image_end":
 				if not image.is_empty() and int(image["to"]) < 0:
 					image["to"] = spoken.size()
-					voice.append({"hold": IMAGE_AFTER + IMAGE_FADE, "act": -1})
+					voice.append({"hold": IMAGE_AFTER + IMAGE_FADE, "act": -1, "image_end": true})
 			"sketch":
 				var key := Manuscript.image_key(String(blk["arg"]))
 				var svg := String(svgs.get(key, ""))
@@ -448,6 +473,11 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 						actions.append(la)
 						line_n += 1
 					voice.append({"para": text, "base": base, "lines": last_para.duplicate()})
+					# THE WRITER HESITATES TOO: a hesitation in what is written stops the pen where it is
+					for m in _rx(Manuscript.HESITATION).search_all(text):
+						var before := _words(text.substr(0, m.get_start())).size()
+						if before > 0:
+							pauses.append(base + before - 1)
 					if not still.is_empty() and int(still["to"]) < 0:
 						still["to"] = base
 				# THE POINTS IN IT: at the word after the mark, held to its sentence's end
@@ -475,23 +505,28 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 			s["to"] = spoken.size()
 	_keep_with(actions, spans)
 	actions = lay_out(actions, sizes, hand)
-	return {"actions": actions, "spans": spans, "spoken": spoken, "ignored": ignored,
+	return {"actions": actions, "spans": spans, "spoken": spoken, "ignored": ignored, "pauses": pauses,
 		"speakable": _voice_text(voice, actions, spans)}
 
 
 ## THE VOICE'S TEXT from [param voice] (what [method parse] gathered, in order): each paragraph's words
 ## with the voice's own marks, ONE rest between two - the rests the pen asked for summed, a page's turn
 ## among them where [param actions]' layout turned one for a silent thing - and inside a written paragraph
-## a rest at a sentence's start, or at the first word of a line the page turned for, where the voice waits
-## for the pen to be ahead.
+## a rest at a sentence's start where the voice waits for the pen to be ahead - but never at or after a page
+## turned inside the paragraph.
 ##
 ## THE PEN AND THE VOICE ARE FOLLOWED THROUGH THE LETTER TOGETHER, as [LetterMedium]'s plan follows them:
 ## the voice a [constant READ_WORD] a word; the pen line after line, each word as the voice says the one
 ## [constant AHEAD_WORDS] before it and never quicker than [constant QUICKEST] its ink's own time, each line begun no sooner than the last's
 ## end and a return ([constant RETURN]) - nor, after a thought, a still or the blank page, than the voice gets
 ## there, nor, for a line a page turns for, than the voice has read the page and the page is turned. At each
-## sentence's start, and at a turned line's first word, the voice waits until the pen at its quickest can be
-## ahead of it there ([method _ahead], the words' times on the page by their lines' `ends`). A paragraph's first
+## sentence's start the voice waits until the pen at its quickest can be ahead of it there ([method _ahead], the
+## words' times on the page by their lines' `ends`) - but A PAGE TURNED INSIDE A PARAGRAPH IS NOT WAITED FOR
+## (2026-10-27, the user, of "You do not" said and a rest for the turn before "remember agreeing to them": "It
+## would probably feel most natural to just keep speaking there, and to force the pen to catch up after the page
+## turn"): the voice reads the paragraph on through it, the pen comes back behind and catches up at its quickest,
+## and the voice waits for it only at the next paragraph, if it is still behind. A turn between two paragraphs is
+## still waited for: the writer turning the page is the pause there. A paragraph's first
 ## line the voice is waited for at is handed that rest (`gate` "voice", `gate_rest`), and a line a page turns
 ## for is marked ("turn"): [LetterMedium] begins them as the voice gets there. Before what needs
 ## the pen free (`sync`: a strike, a tap, a drawing, an unspoken line, a point in a thought, a still) the
@@ -545,6 +580,7 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 					points.append(int(line["after"]) - base)
 			points.sort()
 			var at := 0
+			var turned_in := false       # a page turned inside the paragraph: the voice reads it on through
 			while at < points.size():
 				var p := int(points[at])
 				var q := n
@@ -565,6 +601,7 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 						# the page is read before it turns: the voice has said all of it
 						begin = maxf(begin, t_word + TURN_REST)
 						line["gate"] = "turn"
+						turned_in = turned_in or k0 > 0
 					elif li == 0 and gated:
 						begin = maxf(begin, tv)
 						line["gate"] = "voice"
@@ -580,6 +617,10 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 					hold += wait
 					if not fresh.is_empty() and String((fresh[0][0] as Dictionary)["gate"]) == "voice":
 						(fresh[0][0] as Dictionary)["gate_rest"] = wait
+				elif turned_in:
+					# A PAGE TURNED INSIDE A PARAGRAPH IS NOT WAITED FOR, nor is the pen after it: it comes back
+					# behind the voice and catches up at its quickest, the voice waiting at the next paragraph if it must
+					wait = 0.0
 				elif wait > 0.0:
 					inner[p] = float(inner.get(p, 0.0)) + wait
 				for k in range(p, q):
@@ -624,7 +665,7 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 				tv += float(n) * READ_WORD + TURN_REST * float(inner.size())
 				var work := float(e.get("pen", 0.0))
 				if work > 0.0:
-					tp = maxf(maxf(tp, said_from) + work / DeskScript.MAX_PACE, tv)
+					tp = maxf(maxf(tp, said_from) + work / draw_pace(work, float(n) * READ_WORD), tv)
 				elif n > 0 and is_thought(text):
 					# a thought: the writer stops and thinks it, the pen waits
 					gated = true
@@ -649,6 +690,14 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 static func _ahead(tv: float, head: float, last: float, words: int) -> float:
 	var w := maxf(head + 0.1 - tv, last - OVERTAKE - (tv + float(words) * READ_WORD))
 	return w if w > 0.05 else 0.0
+
+
+## HOW FAST A SKETCH IS DRAWN, against the hand's pace: [param work] seconds of ink at the hand's own, to be done
+## [constant DRAW_TAIL] after the [param said] seconds of its words - never slower than the desk's quickest, which
+## a drawing with room is drawn at, nor quicker than [constant DRAW_QUICKEST] ([LetterMedium] draws one as slowly
+## as the next line leaves it time for).
+static func draw_pace(work: float, said: float) -> float:
+	return clampf(work / maxf(said + DRAW_TAIL, 0.1), DeskScript.MAX_PACE, DRAW_QUICKEST)
 
 
 ## Is the paragraph whose first spoken word is [param base] read under a picture ([param spans]' images)?

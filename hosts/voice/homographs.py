@@ -166,6 +166,16 @@ BE_HAVE = frozenset("be been being am is are was were have has had having".split
 # actual definition - an imperative has none.
 PRE_IMPERATIVE = frozenset(("RB", "RBR", "RBS", "UH", "CC"))
 
+# AN IMPERATIVE THE TAGGER MISSED (2026-10-27, north-star ch43, the user: "Live like a Spartan" used the wrong
+# pronunciation for "Live"). The perceptron has seen few imperatives: a sentence's first word comes back a proper
+# noun for its capital, and in lower case an adjective or a noun ("live simply" JJ, "record the year" NN) - so
+# `Live` fell to eSpeak's default, the adjective lˈaɪv. What a tag cannot say, the clause can (`_imperative`).
+# The tags a bare verb is mistaken for; never a plural or a marked form, which no imperative is.
+BARE_GUESSES = frozenset(("NN", "NNP", "JJ", "RB", "VB", "VBP"))
+# ...and what may follow a first word that is a modifier rather than a verb: what it modifies ("Live music",
+# "Close friends", "Present company").
+MODIFIED = frozenset(("NN", "NNS", "NNP", "NNPS", "JJ", "JJS", "CD", "POS", "VBG"))
+
 # A word directly after one of these is a NOUN or an adjective; nothing else can
 # follow "the most legible". The tagger called `object` a verb in "the most legible
 # object a person ever makes" and the sentence's `is` then made it a present-tense
@@ -238,6 +248,42 @@ def _tense_at(tags: list, lower: list, j: int) -> str:
     if tag == "VBZ" or (tag == "VBP" and lower[j] in BE_HAVE):
         return "present"
     return ""
+
+
+def _imperative(tags: list, lower: list) -> bool:
+    """Is a sentence's FIRST WORD its clause's verb - an imperative - by the clause alone?
+
+    It must have something after it that is not what a modifier modifies (a preposition, a determiner,
+    an adverb: "Live like a Spartan", "Record the year", "Live simply" - never "Live music played"); its
+    clause, to the first break, must hold no other verb (that one would be the clause's); and the
+    clause must end the sentence or hand over to a coordinator or an adverb ("..., so there's enough")
+    rather than to a new subject - "Close to midnight, the bells rang" is a fronted phrase and its
+    clause's verb is `rang`. A word alone before a break ("Refuse, not cannot") is anyone's guess and
+    is left to the rules after this one, as before. And a noun the preposition after it repeats - "Project
+    after project", "day after day", "step by step" - is the English pattern for a noun again and again:
+    no verb takes itself for its object. An adverb right after the first word counts only where it ends the
+    clause.
+    """
+    n = len(tags)
+    if n < 2 or tags[1] in CLAUSE_BREAK or tags[1] in MODIFIED:
+        return False
+    if tags[1] == "IN" and n > 2 and lower[2] == lower[0]:
+        return False
+    # an adverb after it only where the adverb ends the clause ("Live simply."): before more, "Present only as
+    # an absence" (a fragment, the adjective) and "Live only for today" (the verb) are tagged alike
+    if tags[1] in ("RB", "RBR", "RBS") and n > 2 and tags[2] not in CLAUSE_BREAK:
+        return False
+    b = 1
+    while b < n and tags[b] not in CLAUSE_BREAK:
+        if tags[b] in VERB_TAGS or tags[b] == "MD":
+            return False
+        b += 1
+    if b >= n or tags[b] in (".", "CC"):
+        return True
+    after = b + 1
+    while after < n and tags[after] in CLAUSE_BREAK and tags[after] != "CC":
+        after += 1
+    return after >= n or tags[after] in ("CC", "IN", "RB", "WRB", "TO")
 
 
 def _shape(s: str) -> tuple:
@@ -489,7 +535,10 @@ class Homographs:
         # full caps comes back NNP - "Refuse not, cannot" and "FOR THE COURTS THAT
         # DO NOT CONVENE" both did. Neither is a proper noun and neither wants a
         # noun frame, and the capital carries no information here because the
-        # position or the shouting explains it. Left alone rather than guessed at.
+        # position or the shouting explains it. Left alone rather than guessed at - unless its clause says
+        # it is the verb (`_imperative`).
+        if wi == 0 and penn in BARE_GUESSES and _imperative(tags, lower):
+            return "VB", "the clause's verb: no subject, and nothing else in it a verb"
         if penn in ("NNP", "NNPS") and (wi == 0 or word.isupper()):
             return None, "capitalized by position, not a proper noun"
 
@@ -655,7 +704,12 @@ class Homographs:
         words: list[str] = []
         owner: list[int] = []
         for ti, tok in enumerate(tokens):
-            text = str(tok.get("text", "")).strip()
+            # AS THE PAGE HAS IT: ghost sends each word lower-cased for the phoneme lookup, and its source
+            # spelling as `cased` - the tagger reads grammar off capitals. Lower-cased, "i live in hell" tagged
+            # `i` an adjective, rule 2 put `live` in a noun slot, and the reading said lˈaɪv (2026-10-27, the
+            # user: "The 'live' in 'I live in hell, Pen.' was also pronounced wrong") - where every test and the
+            # audit, reading the text as written, had it right.
+            text = str(tok.get("cased") or tok.get("text", "")).strip()
             if text:
                 words.append(text)
                 # An authored [R EH1 D] arrives with `arpa` and outranks this

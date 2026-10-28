@@ -11,9 +11,11 @@ class_name YouTubeCard
 ## one note makes many videos, each named as it goes up. ITS NAMES ARE THE SCRIPT CARD'S (2026-10-25, the
 ## user: "nowhere is an episode title actually an option here ... it shouldn't even be possible to keep
 ## missing details like this"): every panel that shows this card binds it to its Script card ([method
-## name_from]), which shows Title and Episode from then on, and the card reads %title% and %episode% from
-## there itself - no panel fills them its own way. A panel adds only what it alone knows ([member values]:
-## a show's own name, its episode's seed). WHAT IT CLAIMS IS WHAT THE NOTE FILLS: the title box's tooltip
+## name_from]), which shows Title, Episode, Author and Book from then on, and the card reads %title%,
+## %episode%, %author% and %book% from there itself - no panel fills them its own way. A panel adds only
+## what it alone knows ([member values]: a show's own name, its episode's seed), and what it hands with an
+## export (the episode rendered) is laid over the note's names, never in place of them. WHAT IT CLAIMS IS
+## WHAT THE NOTE FILLS: the title box's tooltip
 ## names only those macros, and a title naming one the note does not fill (%seed% on an actor's note) is
 ## said under it and does not go up - the export refuses before it renders ([method why_not]). The rest of
 ## an upload only the panel knows (a show's description and tags, its thumbnail's moment) comes through
@@ -66,6 +68,9 @@ const KEY := "youtube"
 const DEFAULTS := {"upload": false, "title": YouTube.TITLE_TEMPLATE, "privacy": YouTube.PRIVACY,
 	"category": YouTube.CATEGORY, "playlist": "", "playlist_title": "", "channel": "", "channel_name": "",
 	"write_tags": false, "description": ""}
+## The Script card's rows the title's macros are read from ([method name_from]): [constant YouTube.MACROS]'
+## keys of the same names.
+const NAMES := ["title", "episode", "author", "book"]
 
 signal noted(msg: String)
 
@@ -110,6 +115,7 @@ var _looked := ""               # the channel they were last asked for, by ↻ o
 var _loading := false
 var _poll := 0.0
 var _seen := []                 # what the account rows were last drawn for
+var _tip := ""                  # the title's tooltip as last set, before Boot.wrap_tip folded it on hover
 
 
 ## This card for a note's panel, from what the panel says of itself ([method NoteCards.make]):
@@ -376,33 +382,44 @@ func episode_steps() -> Array:
 
 
 ## THE NOTE'S NAMES ARE [param writer]'S - its Script card's - from now on: %title% its Title (else the
-## note's file name), %episode% its Episode, both rows shown there, so whatever the title can say has a
-## place on the note to be written. Every panel that shows this card calls it.
+## note's file name), %episode% its Episode, %author% its Author, %book% its Book, every row shown there,
+## so whatever the title can say has a place on the note to be written. Every panel that shows this card
+## calls it.
 func name_from(writer: ScriptWriter) -> void:
 	_names = writer
-	writer.show_field("title")
-	writer.show_field("episode")
+	for k in NAMES:
+		writer.show_field(k)
 	refresh()
 
 
-## WHAT THE TITLE'S MACROS ARE WORTH NOW - and so which this note fills: the Script card's Title and
-## Episode, under what the panel adds ([member values]). {} while no panel has bound the card: it fills
-## nothing, and nothing goes up.
+## WHAT THE TITLE'S MACROS ARE WORTH NOW - and so which this note fills: the Script card's Title, Episode,
+## Author and Book, under what the panel adds ([member values]). {} while no panel has bound the card: it
+## fills nothing, and nothing goes up.
 func values_now() -> Dictionary:
 	if _names == null:
 		return {}
-	var v := {"title": _names.title_or_name(), "episode": _names.field_value("episode")}
+	var v := {}
+	for k in NAMES:
+		v[k] = _names.field_value(k)
+	v["title"] = _names.title_or_name()
 	var more: Variant = values.call() if values.is_valid() else {}
 	if more is Dictionary:
 		v.merge(more, true)
 	return v
 
 
-## WHY THE TITLE CANNOT GO UP AS IT STANDS ("" when it can), with the macros' [param given] values - else
-## the note's now: it names a macro the note does not fill ([method YouTube.unfilled]), or no panel ever
-## said what the note is called.
+## The macros' values: [param given] (an export's own - the episode it rendered) laid over the note's now.
+func _values(given: Dictionary) -> Dictionary:
+	var v := values_now()
+	v.merge(given, true)
+	return v
+
+
+## WHY THE TITLE CANNOT GO UP AS IT STANDS ("" when it can), with the macros' [param given] values laid
+## over the note's now: it names a macro the note does not fill ([method YouTube.unfilled]), or no panel
+## ever said what the note is called.
 func why_not(given := {}) -> String:
-	var v: Dictionary = given if not given.is_empty() else values_now()
+	var v := _values(given)
 	if v.is_empty():
 		return "This panel never says what the note is called, so the title cannot be made here."
 	var out := YouTube.unfilled(template(), v)
@@ -421,10 +438,10 @@ static func _title_tip(v: Dictionary) -> String:
 		% YouTube.macros_said(v) + "(a dangling \": \") goes, and a name is never said twice. YouTube takes 100 characters.")
 
 
-## The title as it goes up: the template, its macros filled from [param given] - else from
-## [method values_now], as the note stands now.
+## The title as it goes up: the template, its macros filled from [param given] laid over
+## [method values_now], the note as it stands now.
 func title_now(given := {}) -> String:
-	var v: Dictionary = given if not given.is_empty() else values_now()
+	var v := _values(given)
 	return YouTube.fit_title(YouTube.expand_title(template(), v))
 
 
@@ -469,8 +486,12 @@ func refresh() -> void:
 	if _preview == null:
 		return
 	var v := values_now()
+	# ONLY WHEN IT CHANGES: Boot.wrap_tip rewrites a tooltip as it is hovered, so the field's own text is
+	# never the tip as made - compared with it, the tip went back unwrapped twice a second, under the
+	# tooltip's own delay, and ran off the screen in one line
 	var tip := _title_tip(v)
-	if _title.tooltip_text != tip:
+	if tip != _tip:
+		_tip = tip
 		_title.tooltip_text = tip
 	var why := why_not(v)
 	var t := title_now(v) if not v.is_empty() else ""

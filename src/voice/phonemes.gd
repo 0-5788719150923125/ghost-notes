@@ -320,6 +320,9 @@ static func parse(text: String) -> Array:
 			bare = bare.strip_edges()
 			if bare == before:
 				break
+		# the word as the page has it, its capitals kept: for the voice host's tagger, which reads a sentence's
+		# grammar off them ("i live in hell" came back an adjective and then a noun, `I` a pronoun - Homographs)
+		var cased := bare
 		bare = bare.to_lower()
 		# %HESITATION (the ASR transcript token for a filled pause): an authored
 		# "um" - low, flat, reduced. Shows as an ellipsis in the karaoke.
@@ -389,6 +392,7 @@ static func parse(text: String) -> Array:
 					span_open = in_span
 				var entry := {
 					"text": bare,
+					"cased": cased,
 					"display": shown,
 					"src_span": in_span,
 					"phones": phones,

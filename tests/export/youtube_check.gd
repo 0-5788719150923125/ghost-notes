@@ -38,10 +38,14 @@ extends SceneTree
 ## - THE NOTE'S NAMES ARE ITS SCRIPT CARD'S (2026-10-25, the user: "nowhere is an episode title actually an
 ##   option here ... It shouldn't be possible to use the YouTube card if the underlying macros we claim to
 ##   support would not even work here"): a card no panel bound fills nothing and nothing goes up (the
-##   control); bound, it shows Title and Episode on a Script card that had neither, and reads them; an empty
-##   Episode leaves the Title alone. WHAT IT CLAIMS IS WHAT THE NOTE FILLS: its tooltip names only those
-##   macros, and %seed% on a note with no episodes is said under the title and refused (the control: a
-##   panel that adds the seed fills it, and the same title goes up).
+##   control); bound, it shows Title, Episode, Author and Book on a Script card that had none of them, and
+##   reads them (%author% and %book% too, 2026-10-27); an empty Episode leaves the Title alone, and the
+##   values an export hands are laid over the note's (its %author% kept). WHAT IT CLAIMS IS WHAT THE NOTE
+##   FILLS: its tooltip names only those macros, and %seed% on a note with no episodes is said under the
+##   title and refused (the control: a panel that adds the seed fills it, and the same title goes up). THE
+##   TOOLTIP STAYS WRAPPED (2026-10-27: "overflowing the screen"): folded by Boot.wrap_tip on hover, the
+##   card's twice-a-second refresh leaves it folded (the control: the note's values changed, it is made
+##   again).
 ## - THE YOUTUBE CARD: a new one goes up nothing and privately, its block round-trips (an unknown
 ##   privacy reads as private, an unknown category as People & Blogs); unticked it describes no upload
 ##   whatever the panel has, ticked it lays its title - the template's macros filled, nothing
@@ -517,11 +521,13 @@ func _card() -> bool:
 	_ok(cap == {"upload": false, "title": "%title%: %episode%", "privacy": "private", "category": "22", "playlist": "",
 		"playlist_title": "", "channel": "", "channel_name": "", "write_tags": false, "description": ""},
 		"a new card uploads nothing, privately, as People & Blogs, titled by the template, to no channel yet (%s)" % str(cap))
-	var names = _names({"title": "Truthful Tarot", "episode": "The Tower"})
-	_ok(not names.shows_field("title") and not names.shows_field("episode"), "a Voice lab's Script card shows no Title or Episode of its own")
+	var names = _names({"title": "Truthful Tarot", "episode": "The Tower", "author": "Pen", "book": "Major Arcana"})
+	_ok(not names.shows_field("title") and not names.shows_field("episode") and not names.shows_field("author")
+		and not names.shows_field("book"), "a Voice lab's Script card shows no Title, Episode, Author or Book of its own")
 	card.name_from(names)
-	_ok(names.shows_field("title") and names.shows_field("episode") and card.values_now() == {"title": "Truthful Tarot", "episode": "The Tower"},
-		"bound, the card shows both on it and reads the note's names from there (%s)" % str(card.values_now()))
+	_ok(names.shows_field("title") and names.shows_field("episode") and names.shows_field("author") and names.shows_field("book")
+		and card.values_now() == {"title": "Truthful Tarot", "episode": "The Tower", "author": "Pen", "book": "Major Arcana"},
+		"bound, the card shows all four on it and reads the note's names from there (%s)" % str(card.values_now()))
 	_ok(card.meta({"tags": ["a"]}).is_empty(), "unticked, it describes no upload whatever the panel has")
 	card.apply({"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted", "category": "27",
 		"playlist": "PL1", "playlist_title": "Readings", "channel": "UC-x", "channel_name": "@x", "write_tags": true,
@@ -545,6 +551,20 @@ func _card() -> bool:
 		and m.get("channel") == "UC-x" and m.get("channel_name") == "@x" and m.get("record") == "r.json",
 		"ticked, it lays its title, privacy, category, playlist and channel over the panel's part (%s)" % str(m))
 	_ok(card.meta({}).is_empty(), "...and describes nothing when the panel has nothing")
+	card._title.text = "%book% %episode% by %author%"
+	card.refresh()
+	_ok(card.why_not().is_empty() and card.title_now() == "Major Arcana The Tower by Pen"
+		and card._title.tooltip_text.contains("%author%") and card._title.tooltip_text.contains("%book%"),
+		"%%author%% and %%book%% are the Script card's Author and Book, and the tooltip names them (%s)" % card.title_now())
+	_ok(card.meta({"tags": [], "values": {"title": "Show", "episode": "Rendered One", "seed": "7"}}).get("title")
+		== "Major Arcana Rendered One by Pen",
+		"an export's own values are laid over the note's: its episode, the note's author and book")
+	names.doc._fields["author"] = ""
+	_ok(card.why_not().is_empty() and card.title_now().begins_with("Major Arcana The Tower"),
+		"an empty Author is filled, and nothing is refused (%s)" % card.title_now())
+	names.doc._fields["author"] = "Pen"
+	card.apply({"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted", "category": "27",
+		"playlist": "PL1", "playlist_title": "Readings", "channel": "UC-x", "channel_name": "@x", "write_tags": true})
 	_ok(card.meta({"values": {"title": "Show", "episode": "Rendered One"}}).get("title").begins_with("Show - Rendered One")
 		and not card.meta({"values": {"title": "S"}}).has("values"),
 		"the values a panel hands with its part (the episode an export rendered) win, and do not go up")
@@ -557,10 +577,18 @@ func _card() -> bool:
 	_ok(card._title.tooltip_text.contains("%title%") and card._title.tooltip_text.contains("%episode%")
 		and card._title.tooltip_text.contains("%date%") and not card._title.tooltip_text.contains("%seed%"),
 		"the title's tooltip names only the macros the note fills (%s)" % card._title.tooltip_text)
+	# THE TOOLTIP STAYS WRAPPED: Boot folds it on hover, and the card's refresh must not unfold it
+	var folded: String = load("res://src/platform/boot.gd").wrap_tip(card._title.tooltip_text)
+	card._title.tooltip_text = folded
+	card.refresh()
+	card.refresh()
+	_ok(folded.contains("\n") and card._title.tooltip_text == folded,
+		"folded on hover, the title's tooltip stays folded through the card's refresh (%d lines)" % folded.count("\n"))
 	card.values = func() -> Dictionary: return {"seed": "7"}
 	card.refresh()
-	_ok(card.why_not().is_empty() and card.meta({"tags": []}).get("title") == "Truthful Tarot #7" and card._title.tooltip_text.contains("%seed%"),
-		"control: a panel that adds the seed fills it, and the same title goes up")
+	_ok(card.why_not().is_empty() and card.meta({"tags": []}).get("title") == "Truthful Tarot #7" and card._title.tooltip_text.contains("%seed%")
+		and card._title.tooltip_text != folded,
+		"control: a panel that adds the seed fills it, the same title goes up, and the tooltip is made again")
 	card.values = Callable()
 	card._title.text = YouTube.TITLE_TEMPLATE
 	names.doc._fields["episode"] = ""

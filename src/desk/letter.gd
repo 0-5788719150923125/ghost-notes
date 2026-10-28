@@ -43,14 +43,24 @@ class_name LetterMedium
 ## the lens for the sentence, then put back ([method _camera_pose]).
 ##
 ## A PICTURE TAKES THE SCREEN (`<!-- image (full): -->` ... `<!-- /image -->`): it fades up over the desk
-## as the passage under it begins, drifts slowly closer and across (a pan its length guessed from the
-## script, never from the voice's times, so it never jumps as a live reading's words arrive) and fades back
-## to the desk as the passage ends. The pen writes on under it: the page the camera comes back to has
-## the passage on it.
+## as the passage under it begins, moves slowly in its own way ([constant MOVES]: a pan its length guessed
+## from the script, never from the voice's times, so it never jumps as a live reading's words arrive) and
+## fades back to the desk as the passage ends. The pen writes on under it: the page the camera comes back
+## to has the passage on it. PICTURES DISSOLVE INTO ONE ANOTHER (2026-10-27, the user: "blend from one picture
+## into a second one, or a third one, directly without ever seeing the page again ... each with different
+## panning/zooming behavior"): one whose passage begins where the last one's ends (its span's `blend`) comes
+## up over it, the one under held whole until it has, so the page is never seen between them
+## ([method pictures_at]); and no picture moves as the one before it did.
 ##
 ## A STILL IS DEAD STILL (`<!-- still -->`: "the camera holds still on the cross and the dot, with the pen
 ## well clear of them, or the test cannot work"): from the mark to the next written line the camera frames
 ## the last drawing on the page, its slow wander stopped where it was, and the pen is sent off the pad.
+##
+## THE SUBTITLES CAPTION ONLY WHAT CANNOT BE READ ON THE PAGE (2026-10-27, the user: "hide the subtitles for any
+## text that is already being written on the page ... anything we can't see or didn't write directly on the page
+## will need subtitles"): a line is drawn when any of its words is not written - a thought, a sketch's narration -
+## or while a picture covers the screen ([method _captioned], [member Subtitles.captions]); a line of the
+## letter, written two words ahead of the voice, is read on the page instead.
 ##
 ## THE LETTER ENDS WHEN THE PEN DOES: an unspoken line after the last word ("Dear Ink," on a new page) is
 ## written before the camera stands back and the picture goes to black.
@@ -72,12 +82,21 @@ const OUT_BEFORE := 7.0
 ## A line's return to the margin: as fast as a hand's (px of the page a second), and never quicker than
 ## [constant LetterScript.RETURN], which the voice's rests are sized by.
 const LINE_RETURN := 2600.0
-## A PICTURE: its fade (seconds) - out from just after its passage's last word, the voice resting until it
-## is gone ([constant LetterScript.IMAGE_FADE]) - how much it grows from first to last, and how far it
-## drifts across what is left over of it (a share of that slack).
+## A PICTURE: its fade (seconds) - up, out from just after its passage's last word, the voice resting until it
+## is gone, and over the picture before it ([constant LetterScript.IMAGE_FADE]).
 const IMAGE_FADE := LetterScript.IMAGE_FADE
-const IMAGE_GROW := Vector2(1.04, 1.16)
-const IMAGE_DRIFT := 0.7
+## HOW A PICTURE MOVES while it is up, each a row: how big it is at its start and at its end (a share over
+## just covering the screen) and how far it drifts across what is left over of it (a share of that slack, at
+## the least and the most). Each picture takes one by the seed, never the one the picture before it took, and
+## drifts at least a quarter turn away from that one's way ([method moves_of]).
+const MOVES := {
+	"in": {"label": "Closer", "blurb": "Comes slowly closer, drifting a little across.",
+		"grow": [1.04, 1.16], "drift": [0.4, 0.7]},
+	"out": {"label": "Back", "blurb": "Starts close and slowly draws back, drifting a little across.",
+		"grow": [1.16, 1.04], "drift": [0.4, 0.7]},
+	"across": {"label": "Across", "blurb": "Held a little close and carried slowly across.",
+		"grow": [1.15, 1.15], "drift": [0.8, 1.0]},
+}
 ## THE TAP: where the top comes down - by the line last written, where the camera is (px of the page:
 ## on the paper a rule and a half under it, toward the right; or on the desk beside the pad, level with
 ## it), how long it takes to turn the pen over and back, how many taps, how high it lifts between them
@@ -105,36 +124,42 @@ const CAMERA_K := 0.7
 ## THE CAMERA LOOKS AT WHAT THE PEN DOES AWAY FROM THE LINE - a point, a tap - from this long before it (its
 ## springs are slow, and close it sees three fifths of the page), as close as it was.
 const AWAY_LEAD := 3.5
+## THE WRITER HESITATES TOO (2026-10-27, the user: "after "Dear Pen," - why was there no hesitation at all?" - the
+## voice rested 2.4 s there, and the pen, two words ahead, wrote straight on): through a hesitation the pen stops
+## after the word before it and takes up again this long (seconds) before the voice goes on ([method
+## _resume_floor]).
+const RESUME_LEAD := 0.9
 ## A STILL IS STILL FROM ITS FIRST MOMENT: the camera heads for the drawing [constant AWAY_LEAD] early, on
 ## springs this much quicker than its own, so it has settled when the still begins (on its own it was
 ## still drifting 15 px three seconds in - a test the viewer does on the screen cannot be done on a
 ## moving one).
 const STILL_SPRING := 0.3
 
-## The plate a picture is shown on, over the desk ([method _show_picture]).
+## The plate the pictures are shown on, over the desk ([method _show_picture]): each up, bottom first.
 class Plate extends Node2D:
-	var tex: Texture2D = null
-	var alpha := 0.0
-	var grow := 1.0
-	var drift := Vector2.ZERO
+	var layers: Array = []          # {tex, alpha, grow, drift}
 
 	func _draw() -> void:
-		if tex == null or alpha <= 0.0:
-			return
 		var view := get_viewport_rect().size
-		var ts := tex.get_size()
-		if ts.x <= 0.0 or ts.y <= 0.0:
+		var cover := LetterMedium.cover_of(layers)
+		if cover <= 0.0:
 			return
-		var s := maxf(view.x / ts.x, view.y / ts.y) * grow
-		var size := ts * s
-		var slack := size - view
-		var at := -slack * 0.5 + slack * 0.5 * drift
-		draw_rect(Rect2(Vector2.ZERO, view), Color(0.0, 0.0, 0.0, alpha))
-		draw_texture_rect(tex, Rect2(at, size), false, Color(1.0, 1.0, 1.0, alpha))
+		draw_rect(Rect2(Vector2.ZERO, view), Color(0.0, 0.0, 0.0, cover))
+		for l in layers:
+			var tex: Texture2D = l["tex"]
+			var ts := tex.get_size()
+			if ts.x <= 0.0 or ts.y <= 0.0:
+				continue
+			var size := ts * maxf(view.x / ts.x, view.y / ts.y) * float(l["grow"])
+			var slack := size - view
+			var at := -slack * 0.5 + slack * 0.5 * (l["drift"] as Vector2)
+			draw_texture_rect(tex, Rect2(at, size), false, Color(1.0, 1.0, 1.0, float(l["alpha"])))
 
 
 var _spans: Array = []
 var _pictures := {}            # an image's key -> its texture
+var _written_words := PackedByteArray()  # a spoken word -> 1 when a line of the letter writes it
+var _pauses := {}              # a spoken word a hesitation follows -> true ([member LetterScript] `pauses`)
 var _plate: Plate
 var _still_from := -1.0        # when the still up now began (its wander's time), -1 for none
 
@@ -178,8 +203,9 @@ func _ensure_doc() -> void:
 	var letter: Dictionary = d.get("letter", {}) if d.get("letter") is Dictionary else {}
 	var start: PackedStringArray = d.get("start_words", PackedStringArray()) \
 		if d.get("start_words") is PackedStringArray else PackedStringArray()
-	var key := "%d|%d|%s|%s|%s|%s" % [src.hash(), int(letter.get("seed", 0)), String(letter.get("hand", "")),
-		str(letter.get("svgs", {})).hash(), str(letter.get("pictures", {})).hash(), " ".join(start)]
+	# hashed as they are, never printed first: every sketch's SVG made into one string, every frame
+	var key := "%d|%d|%s|%d|%d|%s" % [src.hash(), int(letter.get("seed", 0)), String(letter.get("hand", "")),
+		hash(letter.get("svgs", {})), hash(letter.get("pictures", {})), " ".join(start)]
 	if key == _doc_key:
 		return
 	_doc_key = key
@@ -208,6 +234,10 @@ func load_letter(source: String, letter: Dictionary, start := PackedStringArray(
 		LetterHand.of(String(letter.get("hand", ""))))
 	_actions = parsed["actions"]
 	_spans = parsed["spans"]
+	var moves := moves_of(_spans, _seed)
+	for i in moves.size():
+		if not (moves[i] as Dictionary).is_empty():
+			(_spans[i] as Dictionary)["move"] = moves[i]
 	var last_y := DeskScript.FIRST_RULE
 	var last_page := 0
 	for a in _actions:
@@ -228,6 +258,16 @@ func load_letter(source: String, letter: Dictionary, start := PackedStringArray(
 		push_warning("ghost: letter - %s is in a paragraph the pen writes or draws through, and is not made" % p)
 	var spoken: PackedStringArray = parsed["spoken"]
 	_spoken_n = spoken.size()
+	_written_words = PackedByteArray()
+	_written_words.resize(_spoken_n)
+	_pauses = {}
+	for h in parsed.get("pauses", []):
+		_pauses[int(h)] = true
+	for a in _actions:
+		var act: Dictionary = a
+		if String(act["kind"]) == "pad-text":
+			for k in range(int(act.get("after", 0)), mini(int(act.get("after", 0)) + int(act.get("span", 0)), _spoken_n)):
+				_written_words[k] = 1
 	var from := TabletScript.find_run(spoken, start, near) if not start.is_empty() else -1
 	var est := PackedFloat32Array()
 	if from > 0:
@@ -237,6 +277,8 @@ func load_letter(source: String, letter: Dictionary, start := PackedStringArray(
 	_built_n = -1
 	_held = {}
 	_plan = []
+	_plan_rev += 1
+	_done_ink = {}
 	for i in _actions.size():
 		_plan.append({"start": INF, "end": INF, "turn_at": INF})
 	_load_pictures(letter.get("pictures", {}) if letter.get("pictures") is Dictionary else {})
@@ -296,43 +338,92 @@ func _window(sp: Dictionary) -> Vector2:
 	return Vector2(_guess(from, false), _guess(to - 1, true))
 
 
-## THE PICTURE UP NOW, on the plate over the desk ([method picture_at]).
+## THE PICTURES UP NOW, on the plate over the desk ([method pictures_at]).
 func _show_picture() -> void:
-	var p := picture_at()
-	var tex: Texture2D = _pictures.get(String(p["key"])) if not String(p["key"]).is_empty() else null
-	var a := float(p["alpha"]) if tex != null else 0.0
-	var changed := a != _plate.alpha or tex != _plate.tex or float(p["grow"]) != _plate.grow
-	_plate.alpha = a
-	_plate.tex = tex
-	_plate.grow = float(p["grow"])
-	_plate.drift = p["drift"]
-	if changed:
+	var layers: Array = []
+	for p in pictures_at():
+		var tex: Texture2D = _pictures.get(String(p["key"]))
+		if tex != null and float(p["alpha"]) > 0.0:
+			layers.append({"tex": tex, "alpha": float(p["alpha"]), "grow": float(p["grow"]), "drift": p["drift"]})
+	if layers != _plate.layers:
+		_plate.layers = layers
 		_plate.queue_redraw()
 
 
-## WHAT THE SCREEN SHOWS OF A PICTURE at [member _now]: `{key, alpha, grow, drift}` - the picture up (""
-## for none), faded in from the end of the word before its passage and out after the passage's last
-## word, grown and drifted along by how far through the passage the script says it is. Only a picture
-## there is a file for is shown. Pure: a function of the voice's times.
-func picture_at() -> Dictionary:
+## WHAT THE SCREEN SHOWS OF THE PICTURES at [member _now], bottom first: each `{key, alpha, grow, drift}` -
+## faded in from the end of the word before its passage, over the desk or over the picture before it (which is
+## held whole under it until it is in), and out after the passage's last word, unless the next comes up over it
+## there; grown and drifted along its move ([constant MOVES]) by how far through the passage the script says it
+## is. Only a picture there is a file for is shown. Pure: a function of the voice's times.
+func pictures_at() -> Array:
+	var shown: Array = []
 	for s in _spans:
 		var sp: Dictionary = s
-		if String(sp["kind"]) != "image" or not _pictures.has(String(sp["key"])):
-			continue
+		if String(sp["kind"]) == "image" and _pictures.has(String(sp["key"])) and int(sp["to"]) > int(sp["from"]):
+			shown.append(sp)
+	var out: Array = []
+	for i in shown.size():
+		var sp: Dictionary = shown[i]
 		var from := int(sp["from"])
 		var to := int(sp["to"])
-		if to <= from:
-			continue
-		var t0 := _guess(from - 1, true) + 0.1 if from > 0 else _guess(from, false) - IMAGE_FADE
+		var nxt: Dictionary = shown[i + 1] if i + 1 < shown.size() else {}
+		var under := not nxt.is_empty() and bool(nxt.get("blend", false)) and int(nxt["from"]) == to
+		# its fade begins as the next's would over it: the same moment, so a dissolve has no gap
+		var t0 := _guess(from - 1, true) + LetterScript.IMAGE_AFTER if from > 0 else _guess(from, false) - IMAGE_FADE
 		var t1 := _guess(to - 1, true) + LetterScript.IMAGE_AFTER
 		if t0 == INF or _now < t0 or _now > t1 + IMAGE_FADE:
 			continue
-		var a := minf(clampf((_now - t0) / IMAGE_FADE, 0.0, 1.0), 1.0 - clampf((_now - t1) / IMAGE_FADE, 0.0, 1.0))
+		var a := clampf((_now - t0) / IMAGE_FADE, 0.0, 1.0)
+		if not under:
+			a = minf(a, 1.0 - clampf((_now - t1) / IMAGE_FADE, 0.0, 1.0))
 		var u := clampf((_now - t0) / maxf(float(to - from) * DeskScript.SAID_WORD + IMAGE_FADE * 2.0, 1.0), 0.0, 1.0)
-		var dir := Vector2.from_angle(TAU * _hash01(hash(sp["key"]), 91))
-		return {"key": String(sp["key"]), "alpha": a * a * (3.0 - 2.0 * a),
-			"grow": lerpf(IMAGE_GROW.x, IMAGE_GROW.y, u), "drift": dir * lerpf(-IMAGE_DRIFT, IMAGE_DRIFT, u)}
-	return {"key": "", "alpha": 0.0, "grow": 1.0, "drift": Vector2.ZERO}
+		var mv: Dictionary = sp.get("move", {"grow": Vector2(1.04, 1.16), "way": Vector2.RIGHT, "drift": 0.5})
+		var grow: Vector2 = mv["grow"]
+		out.append({"key": String(sp["key"]), "alpha": a * a * (3.0 - 2.0 * a), "grow": lerpf(grow.x, grow.y, u),
+			"drift": (mv["way"] as Vector2) * lerpf(-float(mv["drift"]), float(mv["drift"]), u)})
+	return out
+
+
+## The picture on top at [member _now] ([method pictures_at]): `{key, alpha, grow, drift}`, key "" for none.
+func picture_at() -> Dictionary:
+	var up := pictures_at()
+	return up.back() if not up.is_empty() else {"key": "", "alpha": 0.0, "grow": 1.0, "drift": Vector2.ZERO}
+
+
+## How much of the screen [param layers] (each with an `alpha`) cover, one over another: 0 the desk, 1 none of it.
+static func cover_of(layers: Array) -> float:
+	var through := 1.0
+	for l in layers:
+		through *= 1.0 - clampf(float((l as Dictionary)["alpha"]), 0.0, 1.0)
+	return 1.0 - through
+
+
+## EACH PICTURE'S MOVE by [param spans]' index (`{}` for a span that is no picture): `{kind, grow, way, drift}` - a
+## row of [constant MOVES] drawn from [param seed] and the picture's place in the letter, never the row the picture
+## before it took, `grow` its start and end, `way` its drift's direction (at least a quarter turn from the one
+## before), `drift` how far along it.
+static func moves_of(spans: Array, seed: int) -> Array:
+	var out: Array = []
+	var last := ""
+	var angle := INF
+	var n := 0
+	for s in spans:
+		var sp: Dictionary = s
+		if String(sp["kind"]) != "image":
+			out.append({})
+			continue
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash(["letter-picture", seed, n])
+		n += 1
+		var kinds: Array = MOVES.keys().filter(func(k: String) -> bool: return k != last)
+		var kind := String(kinds[rng.randi() % kinds.size()])
+		var row: Dictionary = MOVES[kind]
+		angle = rng.randf() * TAU if angle == INF else angle + rng.randf_range(PI * 0.5, PI * 1.5)
+		var drift: Array = row["drift"]
+		out.append({"kind": kind, "grow": Vector2(float(row["grow"][0]), float(row["grow"][1])),
+			"way": Vector2.from_angle(angle), "drift": rng.randf_range(float(drift[0]), float(drift[1]))})
+		last = kind
+	return out
 
 
 ## WHEN A LINE MAY BEGIN: as the voice begins the word [constant LetterScript.AHEAD_WORDS] before its first; for a
@@ -346,18 +437,36 @@ func _due(i: int, t0: float) -> float:
 	if t0 == INF:
 		return INF
 	var k0 := int(a["after"])
+	var due := t0
 	match String(a.get("gate", "")):
 		"voice":
-			return t0 - float(a.get("gate_rest", 0.0))
+			due = t0 - float(a.get("gate_rest", 0.0))
 		"turn":
 			var read := _word_t1(k0 - 1)
-			return read + LetterScript.TURN_REST if read < INF else INF
-	return _word_t0(k0 - LetterScript.AHEAD_WORDS) if k0 >= LetterScript.AHEAD_WORDS else t0
+			due = read + LetterScript.TURN_REST if read < INF else INF
+		_:
+			due = _word_t0(k0 - LetterScript.AHEAD_WORDS) if k0 >= LetterScript.AHEAD_WORDS else t0
+	return maxf(due, _resume_floor(k0))
+
+
+## THE WRITER HESITATES TOO: the soonest the pen may write spoken word [param k] - [constant RESUME_LEAD] before
+## the voice goes on from a hesitation that comes between the word the voice is on as the pen writes it
+## ([constant LetterScript.AHEAD_WORDS] back) and the word itself; -INF for none.
+func _resume_floor(k: int) -> float:
+	var soonest := -INF
+	for h in range(maxi(k - LetterScript.AHEAD_WORDS, 0), k):
+		if _pauses.has(h):
+			var on := _word_t0(h + 1)
+			if on == INF:
+				on = _guess(h + 1, false)
+			soonest = maxf(soonest, on - RESUME_LEAD)
+	return soonest
 
 
 ## The times the pen writes line [param a]'s spoken words by, begun at [param start]: `[t0s, t1s]` - each word
 ## the voice's word [constant LetterScript.AHEAD_WORDS] before it, never before the line may begin (the first
-## words of a paragraph the voice waits for, written as it gets there).
+## words of a paragraph the voice waits for, written as it gets there), nor past a hesitation before the pen
+## is taken up again ([method _resume_floor]).
 func _ahead_times(a: Dictionary, start: float) -> Array:
 	var t0s := PackedFloat32Array()
 	var t1s := PackedFloat32Array()
@@ -370,6 +479,11 @@ func _ahead_times(a: Dictionary, start: float) -> Array:
 		if w0 == INF or w1 == INF:
 			w0 = last + 0.05
 			w1 = w0 + DeskScript.EST_WORD * 0.9
+		# the writer hesitating: nothing past the hesitation before the pen is taken up again
+		var resume := _resume_floor(k0 + j)
+		if resume > w0:
+			w1 = maxf(w1, resume + (w1 - w0))
+			w0 = resume
 		t0s.append(maxf(w0, start))
 		t1s.append(maxf(w1, start + 0.01))
 		last = t1s[t1s.size() - 1]
@@ -383,10 +497,19 @@ func _pictured(a: Dictionary) -> bool:
 
 
 ## WHEN A LINE WRITTEN AHEAD ENDS: as the voice ends the word [constant LetterScript.AHEAD_WORDS] before its last,
-## never quicker than [constant LetterScript.QUICKEST] its ink's own time nor slower than the desk's slowest pen;
-## one under a picture, and anything else, as the desk's.
+## never quicker than [constant LetterScript.QUICKEST] its ink's own time nor slower than the desk's slowest pen; a
+## sketch, as its words end, no quicker than [method LetterScript.draw_pace]; one under a picture, and anything else,
+## as the desk's.
 func _paced_end(i: int, start: float, end: float) -> float:
 	var a: Dictionary = _actions[i]
+	if String(a["kind"]) == "draw" and int(a.get("span", 0)) > 0:
+		# A SKETCH DASHED OFF where its ink outruns its words ([method LetterScript.draw_pace], the pace the voice's rest
+		# after them was sized by); the desk then draws it as slowly as the next line leaves it time for
+		var said := _word_t1(int(a["after"]) + int(a["span"]) - 1)
+		if said == INF:
+			return end
+		var ink := float(a.get("write", 0.0))
+		return clampf(said, start + ink / LetterScript.draw_pace(ink, said - start), start + ink / DeskScript.MIN_PACE)
 	if String(a["kind"]) != "pad-text" or _pictured(a) or int(a.get("span", 0)) <= 0:
 		return end
 	var write := float(a.get("write", 0.0))
@@ -419,6 +542,31 @@ func _opening() -> float:
 	return (touch if touch < INF else t - float(first.get("gate_rest", 0.0))) - LetterScript.BLANK_PAGE
 
 
+## The subtitles are the letter's to caption ([method _captioned]); the desk's own binding otherwise.
+func bind_captions(subs) -> bool:
+	var own := super.bind_captions(subs)
+	# asked by name: a gate that builds the medium has no overlay's autoloads to compile it against
+	if subs != null and "captions" in subs:
+		subs.captions = _captioned
+	return own
+
+
+## IS THE LINE FROM SUBTITLE WORD [param w0] TO [param w1] CAPTIONED at [param _t]? While a picture covers the
+## screen, yes - the page is not seen; else only when some word of it is not written on the page (a thought, a
+## sketch's narration, a word the voice says that no line has).
+func _captioned(w0: int, w1: int, _t: float) -> bool:
+	if cover_of(pictures_at()) >= 0.5:
+		return true
+	var map: Array = _follower.map
+	for w in range(w0, w1 + 1):
+		var si := int(map[w]) if w >= 0 and w < map.size() else -1
+		if si < 0:
+			continue
+		if si >= _written_words.size() or _written_words[si] == 0:
+			return true
+	return false
+
+
 ## THE CLOSE waits for the pen: down to black over the outro once the last word is said AND the last
 ## thing written is done.
 func _end_fade() -> float:
@@ -426,6 +574,8 @@ func _end_fade() -> float:
 	if _spoken_n == 0 or last < _spoken_n - 1:
 		return 1.0
 	var end := _follower.st1[last]
+	if _now < end:
+		return 1.0          # nothing fades before the last word is said: the plan is not walked every frame
 	for p in _plan:
 		var e := float((p as Dictionary)["end"])
 		if e == INF:
@@ -494,10 +644,8 @@ func _place_pen() -> void:
 ## times - `{xf, f}` (the pose, and how far into it the pen is: 0 as the tap begins and ends, 1 between).
 ## {} when no tap is under way.
 func _tap_pose(_base: Transform3D) -> Dictionary:
-	for i in _actions.size():
+	for i in _of_kind("tap"):
 		var a: Dictionary = _actions[i]
-		if String(a["kind"]) != "tap":
-			continue
 		var s := float(_plan[i]["start"])
 		var e := float(_plan[i]["end"])
 		if s == INF or _now < s or _now > e:
@@ -584,10 +732,8 @@ func _arc() -> float:
 	var opening := _opening()
 	var opened := opening if opening < INF else maxf(feed.intro_hold, 0.0)
 	var turns := INF
-	for i in _actions.size():
+	for i in _turn_actions():
 		var a: Dictionary = _actions[i]
-		if not bool(a.get("turn", false)):
-			continue
 		var ta := float(_plan[i]["turn_at"])
 		if ta == INF:
 			ta = _guess(int(a.get("after", 0)), false) - DeskScript.TURN
@@ -634,12 +780,12 @@ func _framing() -> Dictionary:
 				f["k"] = minf(float(f["k"]), CAMERA_K)
 	# a point or a tap, under way or soon: framed on what it is about, as close as it was
 	var page := _pages().x
-	for i in _actions.size():
+	for i in _page_actions(page):
 		var a: Dictionary = _actions[i]
 		var start := float(_plan[i]["start"])
 		if start == INF or start > _now + AWAY_LEAD:
 			break
-		if float(_plan[i]["end"]) < _now or int(a["page"]) != page:
+		if float(_plan[i]["end"]) < _now:
 			continue
 		if String(a["kind"]) == "point":
 			var b := target_box(a)
@@ -683,11 +829,11 @@ func _wander_time() -> float:
 func _last_drawn() -> Rect2:
 	var page := _pages().x
 	var out := Rect2(Vector2.ZERO, Vector2(-1.0, -1.0))
-	for i in _actions.size():
+	for i in _page_actions(page):
 		var a: Dictionary = _actions[i]
 		if float(_plan[i]["start"]) > _now:
 			break
-		if String(a["kind"]) == "draw" and int(a["page"]) == page and a.has("at"):
+		if String(a["kind"]) == "draw" and a.has("at"):
 			var at: Vector2 = a["at"]
 			out = Rect2(at.x, at.y - float(a["h"]), float(a["w"]), float(a["h"]) + float(a["d"]))
 	return out

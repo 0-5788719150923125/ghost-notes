@@ -155,9 +155,11 @@ THE PEN TAPS (`<!-- tap -->`): it is lifted, turned over in the hand and its top
 
 THE PEN POINTS AT WHOEVER WATCHES (`<!-- point: camera -->`): lifted off the page and its nib turned to the lens for the sentence, then put back (`_camera_pose`).
 
-A PICTURE TAKES THE SCREEN (`<!-- image (full): -->` ... `<!-- /image -->`): it fades up over the desk as the passage under it begins, drifts slowly closer and across (a pan its length guessed from the script, never from the voice's times, so it never jumps as a live reading's words arrive) and fades back to the desk as the passage ends. The pen writes on under it: the page the camera comes back to has the passage on it.
+A PICTURE TAKES THE SCREEN (`<!-- image (full): -->` ... `<!-- /image -->`): it fades up over the desk as the passage under it begins, moves slowly in its own way (`MOVES`: a pan its length guessed from the script, never from the voice's times, so it never jumps as a live reading's words arrive) and fades back to the desk as the passage ends. The pen writes on under it: the page the camera comes back to has the passage on it. PICTURES DISSOLVE INTO ONE ANOTHER (2026-10-27, the user: "blend from one picture into a second one, or a third one, directly without ever seeing the page again ... each with different panning/zooming behavior"): one whose passage begins where the last one's ends (its span's `blend`) comes up over it, the one under held whole until it has, so the page is never seen between them (`pictures_at`); and no picture moves as the one before it did.
 
 A STILL IS DEAD STILL (`<!-- still -->`: "the camera holds still on the cross and the dot, with the pen well clear of them, or the test cannot work"): from the mark to the next written line the camera frames the last drawing on the page, its slow wander stopped where it was, and the pen is sent off the pad.
+
+THE SUBTITLES CAPTION ONLY WHAT CANNOT BE READ ON THE PAGE (2026-10-27, the user: "hide the subtitles for any text that is already being written on the page ... anything we can't see or didn't write directly on the page will need subtitles"): a line is drawn when any of its words is not written - a thought, a sketch's narration - or while a picture covers the screen (`_captioned`, `Subtitles.captions`); a line of the letter, written two words ahead of the voice, is read on the page instead.
 
 THE LETTER ENDS WHEN THE PEN DOES: an unspoken line after the last word ("Dear Ink," on a new page) is written before the camera stands back and the picture goes to black.
 
@@ -185,7 +187,7 @@ A DRAWING TAKES ITS TIME (the user, 2026-10-20: "a lot of the chart and picture-
 
 THE PAD: a page of a legal pad (8.5 x 11 in), ruled, filled top to bottom - every formula on the next rules (`DeskScript.lay_out`) - and TURNED only when the next would run off the foot: the written sheet is lifted at its foot, rolls up over the binding and is folded round the back of the pad, its head lifted for it, and stays there; the clean page is under it (`LegalPad`; the user: "a page with text on it is just 'wiped' clean, for seemingly no reason ... use all of the available space on a page, and then turn the page if we need more space"). A struck line gets a stroke through it.
 
-EACH EPISODE'S DESK IS ITS OWN (`DeskLook`, from the episode's seed): the pad's paper and binding, the ink, the pen, the desk's top and a mat on it, the lamp, and a few things lying about.
+EACH EPISODE'S DESK IS ITS OWN (`DeskLook`, from the episode's seed): the pad's paper and binding, the ink, the pen, the desk's top and a mat on it, the lamp, a few things lying about, and how it is lit - the room's light and the candles burning on it, the card table's (`DeskLight`).
 
 THE CAMERA IS THE BOOK'S KIND (`BookMedium`: "something closer to what we did with the 'book' medium, with a further zoom and mostly vertical orientation ... the actor swapping for a calculator, or a tablet, or a laptop"): a long lens, looking down at the desk from high and a little in front; wide over the intro and as a page turns, closer while the pen writes, following the line being written through one slow critically damped spring; each page its own slight yaw and tilt, and a wander over minutes, so it never sits dead still and never reads as a move.
 

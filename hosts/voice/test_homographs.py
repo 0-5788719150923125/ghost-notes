@@ -169,6 +169,11 @@ SWITCHES = [
     ("They will present the case.", "present", "verb", ()),
     ("The refuse was piled by the door.", "refuse", "noun", ()),
     ("He had wound the clock too tight.", "wound", "wound", ()),
+    # THE REPORT (north-star ch43, 2026-10-27: "Live like a Spartan" used the wrong pronunciation): a first
+    # word is tagged a proper noun for its capital, and was left to eSpeak's default, the adjective
+    ("Live like a Spartan, so there's enough to go around.", "live", "verb", ()),
+    ("Record the year.", "record", "verb", ()),
+    ("Live simply.", "live", "verb", ()),
 ]
 
 # What each expected reading IS, asked of eSpeak rather than written down here -
@@ -246,6 +251,14 @@ HOLDS = [
     # CAPITALS ARE NOT A PART OF SPEECH - both of these come back NNP.
     ("THAT DO NOT CONVENE.", "that", ()),
     ("Refuse, not cannot.", "refuse", ()),
+    # ...and a first word that IS the adjective stays one, read as it would be mid-sentence
+    ("Live music played all night.", "live", ()),
+    # ...and a fronted phrase is not an imperative: its clause's verb comes after a new subject
+    ("Close to midnight, the bells rang.", "close", ()),
+    # ...nor a noun again and again: no verb takes itself for its object (north-star ch43)
+    ("Project after project, as fast as I could build them.", "project", ()),
+    # ...nor a fragment the adverb goes on from, tagged as an imperative's would be (an essay in rift)
+    ("Present only as an absence.", "present", ()),
     # FUNCTION WORDS, which are tagged as verbs and get reduced inside any frame.
     # This is the case the first version shipped without: every one of these sits
     # after an auxiliary, which is exactly where the participle rule fires.
@@ -389,7 +402,30 @@ def check_probe_is_cached() -> None:
     print(f"    {first} probes for the first pass, 0 for the repeat")
 
 
+def check_page_case() -> None:
+    """The tagger reads the sentence as the page has it - `cased`, beside the lower-cased `text` ghost sends.
+
+    Every other check here hands the pass the text as written; a reading sends each word lower-cased for the
+    phoneme lookup (Phonemes.parse), and its source spelling as `cased`. Read lower-cased, "i live in hell"
+    tagged `i` an adjective, rule 2 put `live` in a noun slot, and the reading said lˈaɪv (north-star ch43,
+    2026-10-27) - the control below, the tokens as they were sent before.
+    """
+    want = _speak(["they will live them"])[0].split()[2]
+    for sentence in ("I live in hell, Pen.", "Live like a Spartan, so there's enough to go around."):
+        sent = [dict(t, text=t["text"].lower(), cased=t["text"]) for t in _tokens(sentence)]
+        homographs.Homographs(_speak).annotate(sent, LANG)
+        got = next(t for t in sent if t["text"] == "live").get("ipa", "")
+        assert got == want, f"{sentence!r} as ghost sends it: live -> {got or 'unchanged'}, wanted {want}"
+        print(f"    {sentence[:58]:60s} live -> {got}")
+    bare = [dict(t, text=t["text"].lower()) for t in _tokens("I live in hell, Pen.")]
+    homographs.Homographs(_speak).annotate(bare, LANG)
+    was = next(t for t in bare if t["text"] == "live").get("ipa", "") or _bare("live")
+    assert was != want, f"the control: lower-cased alone, live -> {was}, which should not be the verb"
+    print(f"    the control, lower-cased alone: live -> {was}")
+
+
 CHECKS = [
+    check_page_case,
     check_switches,
     check_present_coordination,
     check_holds,

@@ -32,7 +32,7 @@ class_name ScriptWriter
 ## The document's own metadata - top-level frontmatter keys, not ghost's block - edited on the
 ## card, never in the editor. Each is read by something: the label, its tooltip, the panels
 ## that use it. A row stands in its `modes`, and in any other once what reads it shows it ([method
-## show_field]: a YouTube card shows Title and Episode, the names its title is made of).
+## show_field]: a YouTube card shows Title, Episode, Author and Book, the names its title is made of).
 ##
 ## THE NOTE'S NAMES ARE HERE (2026-10-25, the user: "the YouTube card specifies an upload title of
 ## '%title%: %episode%' - however nowhere is an episode title actually an option here"): Title and
@@ -48,9 +48,9 @@ const FIELDS := {
 		"wait": "named with the episode",
 		"tip": "What this video is called: the %episode% of the YouTube title. A card show's or a Proof note's is the picked episode's - its writer names it as it plans the episode, an edit here is written into the episode, and it names the export; an episode needs one. A note read as it is written names its own here."},
 	"author": {"label": "Author", "modes": ["generative"],
-		"tip": "Who wrote it. Printed on the cover in the Novel and Notebook."},
+		"tip": "Who wrote it. Printed on the cover in the Novel and Notebook. The %author% of the YouTube title."},
 	"book": {"label": "Book", "modes": ["generative"],
-		"tip": "The book this chapter belongs to. Printed on the cover in the Novel and Notebook."},
+		"tip": "The book this chapter belongs to. Printed on the cover in the Novel and Notebook. The %book% of the YouTube title."},
 }
 
 ## WHAT THE DOCUMENT IS CALLED, where it is not a script: a card show's body is the BRIEF its
@@ -258,7 +258,7 @@ func _build_fields() -> void:
 
 
 ## THE FIELD [param key] IS SHOWN from now on, whatever the mode: something reads it (a YouTube card, the
-## Title and Episode its title is made of).
+## Title, Episode, Author and Book its title is made of).
 func show_field(key: String) -> void:
 	for c in _field_rows.get(key, []):
 		(c as Control).visible = true
