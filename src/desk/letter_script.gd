@@ -22,8 +22,21 @@ class_name LetterScript
 ##     <!-- strike -->, <!-- strike: 4 -->     the writer stops, decides (a few seconds; the mark's own
 ##                                             number of them), then crosses out the paragraph last
 ##                                             written, every line of it.
+##     like <!-- struck: morning --> mourning   INSIDE A WRITTEN LINE: the struck words written and said,
+##                                             then the writer stops to decide ([constant DECIDE]), the
+##                                             pen crosses out those words alone and writes the words
+##                                             after the mark beside them, on the same rule.
+##     <!-- color: red -->, <!-- color: default -->
+##                                             THE PEN'S INK from here on - a name of [constant
+##                                             NotebookLayout.INKS], a hex color, or the desk's own: the
+##                                             writer puts the pen in hand down and picks up that ink's
+##                                             ([constant SWAP]; a pen each ink the letter uses lies by the
+##                                             pad from the start, [method pens_of]). Inside a written line
+##                                             the line stops there and goes on beside it in the new ink.
 ##     <!-- unspoken: Dear Ink, -->            written and not said: the voice waits while the pen
-##                                             writes it.
+##                                             writes it. Inside a written line, words written in it and
+##                                             never said ([constant UNSAID]): `like <!-- struck: morning
+##                                             --> <!-- unspoken: mourning. -->` says "like morning."
 ##     <!-- sketch: what it shows -->          a drawing the pen makes on the page - an agent draws it
 ##                                             from the words as SVG ([LetterCard]), TeX's figure
 ##                                             reader lays it out - while the paragraph after it is
@@ -31,7 +44,9 @@ class_name LetterScript
 ##     <!-- point: sketch -->, <!-- point: sketch, the dot on its own -->
 ##                                             INSIDE SPEECH: at the next word the pen points at the
 ##                                             last sketch, or at the part of it so described (the
-##                                             agent names that part, [method part_id]).
+##                                             agent names that part, [method part_id]) - in a
+##                                             thought held [constant POINT_LINGER] past its
+##                                             sentence, the voice resting.
 ##     <!-- point: camera -->                  the pen is lifted and pointed at whoever is watching.
 ##     <!-- tap -->, <!-- tap: desk -->        the pen turned over and its top tapped on the pad, or on
 ##                                             the desk beside it, while the writer thinks.
@@ -64,9 +79,27 @@ class_name LetterScript
 ## on and the pen catches up after the turn ([method _voice_text]).
 
 ## The marks of their own line: group 1 the verb, group 2 what follows the colon.
-const MARK := "^\\s*<!--\\s*(strike|tap|still|new\\s+page|/\\s*image|unspoken)\\s*(?::\\s*([\\s\\S]*?))?\\s*-->\\s*$"
+const MARK := "^\\s*<!--\\s*(strike|tap|still|new\\s+page|/\\s*image|unspoken|color)\\s*(?::\\s*([\\s\\S]*?))?\\s*-->\\s*$"
 ## A point inside speech: group 1 what it points at.
 const POINT := "<!--\\s*point\\s*:\\s*([^>]*?)\\s*-->"
+## Words written and struck inside a line, the words after the mark written beside them: group 1 the struck words.
+const STRUCK := "<!--\\s*struck\\s*:\\s*([^>]*?)\\s*-->"
+## The pen's ink from here on: group 1 its name ([method ink_of]).
+const COLOR := "<!--\\s*color\\s*:\\s*([^>]*?)\\s*-->"
+## WORDS WRITTEN AND NEVER SAID inside a line (2026-10-28, the user, of "morning" struck and "mourning" written beside
+## it: "it feels like the second 'mourning' should not have been spoken"): the unspoken mark inside a written
+## paragraph - group 1 its words - kept in the line between UNSAID_OPEN and UNSAID_CLOSE, characters no script holds,
+## written ([method _written]: none of them said) and taken out of everything the voice is given.
+const UNSAID := "<!--\\s*unspoken\\s*:\\s*([^>]*?)\\s*-->"
+const UNSAID_OPEN := "\ue002"
+const UNSAID_CLOSE := "\ue003"
+## A PEN EACH INK (2026-10-28, the user: "a single pen would not be able to create 2 different font colors. So, could
+## we render multiple pens at the start, and pick them up/put them down as we use them?"): the writer changes ink by
+## putting down the pen in hand at its place by the pad (SWAP_DOWN, seconds) and picking up the other (SWAP_UP) - the
+## voice resting through it ([LetterMedium]).
+const SWAP_DOWN := 1.0
+const SWAP_UP := 1.6
+const SWAP := SWAP_DOWN + SWAP_UP
 ## A passage the writer thinks and does not write: a paragraph in single asterisks, whole.
 const THOUGHT := "^\\*(?!\\*)([^*]*[^*\\s])\\*$"
 ## The rest before a paragraph's pen comes down, and before a strike, a tap and an unspoken line.
@@ -95,6 +128,11 @@ const IMAGE_FADE := 2.5
 ## goes on (the taps run on under the next words).
 const TAP := 2.4
 const TAP_HOLD := 1.0
+## A POINT LINGERS (2026-10-28, the user, of Secular Haze's "That one's me." at the dot: "the camera moves there
+## quickly, and the pen retreats immediately, and the camera moves again, and it feels jarring. We need the linger
+## when we point"): a point in a thought - at a sketch or at whoever watches - is held this long (seconds) after its
+## sentence is said, the voice resting through it ([LetterMedium]: the pen on what it points at, the camera there).
+const POINT_LINGER := 3.0
 ## A page turned between two lines: the pen goes off the pad, the sheet goes over, the pen comes back
 ## ([DeskMedium]'s turn, [constant DeskMedium.PARK_CLEAR] and the turn itself).
 const TURN_REST := DeskScript.TURN + 1.3
@@ -132,6 +170,10 @@ const STRIKE_H := 20.0
 ## Where a rest goes inside a paragraph while its voice text is made (a turn's, a sentence's beat): a
 ## character no script holds, put back as the rest once the voice's own marks are taken out round it.
 const HOLD_AT := "\ue000"
+## Where an ink changes INSIDE A WORD (2026-10-28, Secular Haze's "Pen<!-- color: red -->.<!-- color: default -->": the
+## closing stop alone in red): a character no script holds, splitting the word there into two pieces written with no
+## space between ([method _written]'s `glued`), never said.
+const GLUE := "\ue001"
 
 
 static func _rx(pattern: String) -> RegEx:
@@ -279,7 +321,18 @@ static func is_thought(text: String) -> bool:
 
 ## A paragraph's spoken words, normalized - what the voice says of it ([method DeskScript._words]).
 static func _words(text: String) -> PackedStringArray:
-	return DeskScript._words(text)
+	return DeskScript._words(_voiced(text))
+
+
+## [param text] as the voice is given it: words written and never said ([constant UNSAID]) out, and the splits of words
+## an ink changes in ([constant GLUE]).
+static func _voiced(text: String) -> String:
+	if not text.contains(UNSAID_OPEN) and not text.contains(GLUE):
+		return text
+	# with the space before them, so a stop after them is the last word's ("morning." - never "morning .") - and the
+	# sentence's own marks they end on kept: `<!-- unspoken: mourning. -->` still ends the sentence it is in
+	return _rx("\\s*" + UNSAID_OPEN + "[^" + UNSAID_CLOSE + "]*?([.,;:!?…]*)" + UNSAID_CLOSE).sub(text, "$1", true) \
+		.replace(GLUE, "")
 
 
 ## THE WRITTEN WORDS of paragraph [param text]: `[{text, emph, spoken, at}]` - each word as the hand
@@ -294,16 +347,24 @@ static func _written(text: String) -> Array:
 		spans.append(Vector2i(m.get_start(), m.get_end()))
 	var spoken := 0
 	var emph := false
-	var tok := _rx("\\S+")
+	var unsaid := false              # inside words written and never said ([constant UNSAID])
+	var tok := _rx("[^\\s\\x{E001}]+")
 	for m in tok.search_all(text):
 		var at := m.get_start()
+		var glued := at > 0 and text[at - 1] == GLUE
+		var piece := m.get_string()
+		var quiet := unsaid or piece.contains(UNSAID_OPEN)
+		if piece.contains(UNSAID_OPEN):
+			unsaid = true
+		if piece.contains(UNSAID_CLOSE):
+			unsaid = false
 		var inside := false
 		for s in spans:
 			if at >= (s as Vector2i).x and at < (s as Vector2i).y:
 				inside = true
 		if inside:
 			continue
-		var raw := comment.sub(m.get_string(), "", true)
+		var raw := comment.sub(piece, "", true).replace(UNSAID_OPEN, "").replace(UNSAID_CLOSE, "")
 		if raw.is_empty():
 			continue
 		var opens := raw.begins_with("*") or raw.begins_with("_")
@@ -318,8 +379,9 @@ static func _written(text: String) -> Array:
 		if raw.ends_with("*") or raw.ends_with("_") or raw.rstrip(".,;:!?)'\"").ends_with("*"):
 			emph = false
 		var n := TabletScript.norm(bare)
-		out.append({"text": bare, "emph": on, "spoken": spoken if not n.is_empty() else -1, "at": at})
-		if not n.is_empty():
+		var said := not n.is_empty() and not quiet
+		out.append({"text": bare, "emph": on, "spoken": spoken if said else -1, "at": at, "glued": glued})
+		if said:
 			spoken += 1
 	return out
 
@@ -359,13 +421,31 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 	var new_page := false
 	var line_n := 0
 	var pauses: Array = []           # the spoken words a hesitation follows, where the writer stops too
+	var pens := pens_of(body)
+	var ink := ""                    # the ink the letter asks for now ([constant COLOR])
+	var held := -1                   # the pen in hand (pens' index), -1 before the first is picked up
 	voice.append({"hold": BLANK_PAGE, "act": -1})
 	for b in blocks(body):
 		var blk: Dictionary = b
 		var kind := String(blk["kind"])
 		var text := String(blk.get("text", ""))
+		# WORDS STRUCK INSIDE A WRITTEN LINE are its words, written and said, and a color mark in one changes the pen
+		# there: where each run of them ends, and each change, is a cut
+		var cuts: Array = []
+		var ink_to := ink
+		if kind == "para" and not is_thought(text) and (_rx(STRUCK).search(text) != null or _rx(COLOR).search(text) != null
+				or _rx(UNSAID).search(text) != null):
+			var un := _marked(text, ink)
+			text = String(un["text"])
+			cuts = un["cuts"]
+			ink = String(un["first"])
+			ink_to = String(un["last"])
+		elif kind == "para":
+			ink_to = _ink_after(text, ink)
 		var said := _words(text) if kind == "para" else PackedStringArray()
+		var thought: Dictionary = {}     # the voice's entry for a thought paragraph, where a point's linger rests
 		if kind == "para" and said.is_empty():
+			ink = ink_to
 			voice.append({"para": text, "base": spoken.size()})      # a hesitation on a line of its own
 			if spoken.size() > 0 and _rx(Manuscript.HESITATION).search(text) != null:
 				pauses.append(spoken.size() - 1)
@@ -380,12 +460,16 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 		match kind:
 			"strike":
 				var decide := decide_of(String(blk["arg"]))
+				if not last_para.is_empty():
+					held = _hold_pen(actions, voice, held, pens.find(ink), spoken.size())
 				for li in last_para:
 					var wait := decide if li == last_para[0] else 0.0
 					voice.append({"hold": wait + STRIKE, "act": actions.size(), "pen": wait + STRIKE, "sync": true})
 					actions.append({"kind": "strike", "id": "", "of": int(li), "write": STRIKE, "dur": STRIKE,
-						"after": spoken.size(), "span": 0, "decide": wait})
+						"after": spoken.size(), "span": 0, "decide": wait, "ink": pens[held]})
 				last_para = []
+			"color":
+				ink = ink_of(String(blk["arg"]))
 			"tap":
 				var where := String(blk["arg"]).to_lower()
 				voice.append({"hold": TAP_HOLD, "act": actions.size(), "pen": TAP, "sync": true})
@@ -429,15 +513,19 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 				act["write"] = float(lengths.get(String(act["id"]), DeskScript.estimate(svg)))
 				act["dur"] = LEAD + float(act["write"])
 				new_page = false
+				held = _hold_pen(actions, voice, held, pens.find(ink), spoken.size())
+				act["ink"] = pens[held]
 				pending = actions.size()
 				last_sketch = pending
 				voice.append({"hold": LEAD, "act": pending, "sync": true})
 				actions.append(act)
 			"unspoken":
+				held = _hold_pen(actions, voice, held, pens.find(ink), spoken.size())
 				var from := actions.size()
 				for la in _lay_para(String(blk["arg"]), spoken.size(), seed, line_n, new_page, hand):
 					var a: Dictionary = la
 					a["span"] = 0
+					a["ink"] = pens[held]
 					a["dur"] = LEAD + float(a["write"])
 					voice.append({"hold": LEAD + float(a["write"]), "act": actions.size(), "pen": LEAD + float(a["write"]),
 						"sync": true})
@@ -465,19 +553,60 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 				elif is_thought(text):
 					spans.append({"kind": "thought", "from": base, "to": base + said.size()})
 					voice.append({"para": text, "base": base})
+					thought = voice.back()
 					busy = false
 					# a point in it needs the pen there at its word: the voice waits for the pen first
 					if point.search(text) != null and not String(_target(point.search(text).get_string(1))["at"]) == "camera":
 						voice.back()["sync"] = true
 				else:
-					var lines := _lay_para(text, base, seed, line_n, new_page, hand)
+					var struck: Array = []
+					var lines := _lay_para(text, base, seed, line_n, new_page, hand, cuts, struck)
 					new_page = false
 					last_para = []
-					for la in lines:
+					held = _hold_pen(actions, voice, held, pens.find(ink), spoken.size())
+					# A STRUCK RUN ENDS ITS PART OF THE PARAGRAPH: said and written up to it, the writer decides, the pen
+					# crosses those words out, and the rest is the paragraph's next part, written on beside them - and
+					# so does a change of ink, the writer putting one pen down and picking up the other there
+					var ws := _written(text)
+					var part_lines: Array = []
+					var part_at := 0             # where the part begins in the text
+					var part_base := base
+					for li in lines.size():
 						last_para.append(actions.size())
-						actions.append(la)
+						part_lines.append(actions.size())
+						var line_i := actions.size()
+						(lines[li] as Dictionary)["ink"] = pens[held]
+						actions.append(lines[li])
 						line_n += 1
-					voice.append({"para": text, "base": base, "lines": last_para.duplicate()})
+						var c := int((lines[li] as Dictionary).get("cut", -1))
+						if c < 0:
+							continue
+						var at_word := int((cuts[c] as Dictionary)["at"])
+						# the voice's part runs on to the next word said: a stop in another ink is said with its sentence
+						var next_said := at_word
+						while next_said < ws.size() and int((ws[next_said] as Dictionary)["spoken"]) < 0:
+							next_said += 1
+						var end := int((ws[next_said] as Dictionary)["at"]) if next_said < ws.size() else text.length()
+						_voice_part(voice, actions, text.substr(part_at, end - part_at), part_base, part_lines)
+						var said_to := base
+						for wi in at_word:
+							if int((ws[wi] as Dictionary)["spoken"]) >= 0:
+								said_to += 1
+						var first := true
+						for st in struck:
+							if int((st as Dictionary)["cut"]) != c:
+								continue
+							var wait := DECIDE if first else 0.0
+							first = false
+							voice.append({"hold": wait + STRIKE, "act": actions.size(), "pen": wait + STRIKE, "sync": true})
+							actions.append({"kind": "strike", "id": "", "of": line_i - li + int(st["line"]),
+								"x0": float(st["x0"]), "x1": float(st["x1"]), "write": STRIKE, "dur": STRIKE,
+								"after": said_to, "span": 0, "decide": wait, "ink": pens[held]})
+						held = _hold_pen(actions, voice, held, pens.find(String(cuts[c]["ink"])), said_to)
+						part_lines = []
+						part_at = end
+						part_base = said_to
+					_voice_part(voice, actions, text.substr(part_at), part_base, part_lines)
 					# THE WRITER HESITATES TOO: a hesitation in what is written stops the pen where it is
 					for m in _rx(Manuscript.HESITATION).search_all(text):
 						var before := _words(text.substr(0, m.get_start())).size()
@@ -485,23 +614,37 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 							pauses.append(base + before - 1)
 					if not still.is_empty() and int(still["to"]) < 0:
 						still["to"] = base
-				# THE POINTS IN IT: at the word after the mark, held to its sentence's end
+				# THE POINTS IN IT: at the word after the mark, held to its sentence's end - and in a thought, lingered
+				# on past it ([constant POINT_LINGER]): the voice rests at the next sentence, or after the paragraph
+				var linger_after := false
 				for m in point.search_all(text):
 					var t := _target(m.get_string(1))
 					var rest := text.substr(m.get_end())
 					var stop := _rx("[.?!](?=[*_\\s]|$)").search(rest)
 					var after := base + _words(text.substr(0, m.get_start())).size()
 					var span := maxi(1, _words(rest.substr(0, stop.get_end()) if stop != null else rest).size())
+					var linger := POINT_LINGER if not thought.is_empty() else 0.0
 					if String(t["at"]) == "camera":
 						spans.append({"kind": "camera", "after": after, "span": span, "from": after,
-							"to": after + span})
+							"to": after + span, "linger": linger})
 					elif busy:
 						ignored.append(m.get_string().strip_edges())
+						linger = 0.0
 					else:
 						actions.append({"kind": "point", "id": "", "target": String(t["at"]), "part": String(t["part"]),
 							"of": last_sketch if String(t["at"]) == "sketch" else -1, "after": after,
-							"span": span, "write": 0.0, "dur": 0.0, "tail": 0.0})
+							"span": span, "write": 0.0, "dur": 0.0, "tail": 0.0, "linger": linger})
+					if linger > 0.0:
+						var k := after + span - base
+						if k < said.size():
+							var rests: Dictionary = thought.get_or_add("rests", {})
+							rests[k] = maxf(float(rests.get(k, 0.0)), linger)
+						else:
+							linger_after = true
+				if linger_after:
+					voice.append({"hold": POINT_LINGER, "act": -1})
 				spoken.append_array(said)
+				ink = ink_to
 	if pending >= 0:
 		var w := float((actions[pending] as Dictionary)["write"])
 		voice.append({"hold": w, "act": -1, "pen": w})
@@ -510,7 +653,14 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 			s["to"] = spoken.size()
 	_keep_with(actions, spans)
 	actions = lay_out(actions, sizes, hand)
+	# the pen picked up at the start: the first one anything is written with
+	var first_pen := 0
+	for a in actions:
+		if (a as Dictionary).has("ink"):
+			first_pen = pens.find(String(a["ink"]))
+			break
 	return {"actions": actions, "spans": spans, "spoken": spoken, "ignored": ignored, "pauses": pauses,
+		"pens": pens, "first_pen": first_pen,
 		"speakable": _voice_text(voice, actions, spans)}
 
 
@@ -672,7 +822,14 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 				for k in range(1, n):
 					if turns.has(base + k):
 						inner[k] = TURN_REST
-				tv += float(n) * READ_WORD + TURN_REST * float(inner.size())
+				# ...and a point's linger at its next sentence ([constant POINT_LINGER])
+				var rests: Dictionary = e.get("rests", {})
+				for k in rests:
+					inner[int(k)] = float(inner.get(int(k), 0.0)) + float(rests[k])
+				var resting := 0.0
+				for k in inner:
+					resting += float(inner[k])
+				tv += float(n) * READ_WORD + resting
 				var work := float(e.get("pen", 0.0))
 				if work > 0.0:
 					tp = maxf(maxf(tp, said_from) + work / draw_pace(work, float(n) * READ_WORD), tv)
@@ -771,30 +928,193 @@ static func _hold_before(text: String, rests: Dictionary) -> String:
 	return out
 
 
+## A color mark's ink as the letter keeps it: "" the desk's own ("default", or nothing), else its name lower-cased
+## ([NotebookLayout.ink_color] reads it).
+static func ink_of(arg: String) -> String:
+	var k := arg.strip_edges().to_lower()
+	return "" if k in ["", "default"] else k
+
+
+## THE PENS [param body] WRITES WITH, scanned before anything is written: the desk's own first, then each ink its
+## color marks name, in the order they first do - every one lying by the pad from the start ([LetterMedium]).
+static func pens_of(body: String) -> PackedStringArray:
+	var out := PackedStringArray([""])
+	for m in _rx(COLOR).search_all(Manuscript.strip_frontmatter(body)):
+		var k := ink_of(m.get_string(1))
+		if not out.has(k):
+			out.append(k)
+	return out
+
+
+## The ink in force after [param text], begun in [param ink]: its last color mark's, else [param ink].
+static func _ink_after(text: String, ink: String) -> String:
+	for m in _rx(COLOR).search_all(text):
+		ink = ink_of(m.get_string(1))
+	return ink
+
+
+## [param text] (a written paragraph) begun in [param ink], with each `<!-- struck: words -->` made its words and
+## each color mark read: `{text, cuts, first, last}` - a cut `{at, struck, ink}` where the writer stops (the written
+## word after it, [method _written]'s count; how many words before it were struck; the ink after it), `first` the ink
+## of its first word, `last` the ink it ends in. A color mark straight after a struck run is that run's cut: the
+## writer strikes with the pen in hand, then changes it. One before any word is the paragraph's own; one after the
+## last is left for whatever is written next.
+static func _marked(text: String, ink: String) -> Dictionary:
+	var out := ""
+	var at := 0
+	var cuts: Array = []
+	var first := ink
+	var cur := ink
+	for m in _rx(STRUCK + "|" + COLOR + "|" + UNSAID).search_all(text):
+		out += text.substr(at, m.get_start() - at)
+		at = m.get_end()
+		var before := _written(out).size()
+		if m.get_start(3) >= 0:
+			var unsaid := m.get_string(3).strip_edges()
+			if not unsaid.is_empty():
+				out += UNSAID_OPEN + unsaid + UNSAID_CLOSE
+			continue
+		if m.get_start(1) >= 0:
+			var words := m.get_string(1).strip_edges()
+			if words.is_empty():
+				continue
+			out += words
+			var after := _written(out).size()
+			if after > before:
+				cuts.append({"at": after, "struck": after - before, "ink": cur})
+			continue
+		cur = ink_of(m.get_string(2))
+		# inside a word: the word split there, its pieces written with no space between
+		if not out.is_empty() and not out[out.length() - 1] in [" ", "\t", "\n"] and at < text.length() \
+				and not text[at] in [" ", "\t", "\n"]:
+			out += GLUE
+		if before == 0:
+			first = cur
+		elif not cuts.is_empty() and int((cuts.back() as Dictionary)["at"]) == before:
+			cuts.back()["ink"] = cur
+		else:
+			cuts.append({"at": before, "struck": 0, "ink": cur})
+	out += text.substr(at)
+	var n := _written(out).size()
+	while not cuts.is_empty() and int((cuts.back() as Dictionary)["at"]) >= n and int(cuts.back()["struck"]) == 0:
+		cuts.pop_back()
+	return {"text": out, "cuts": cuts, "first": first, "last": cur}
+
+
+## A PART OF A WRITTEN PARAGRAPH, to the voice ([method parse]: the parts between where the writer stops): [param part]
+## of its text, its first word said [param base], its lines [param lines] - said as a paragraph is, or with nothing in
+## it to say (a stop in another ink, words written and never said) the pen's alone, the voice resting while its lines
+## are written as for an unspoken line, the rests either side of it one.
+static func _voice_part(voice: Array, actions: Array, part: String, base: int, lines: Array) -> void:
+	var said := _voiced(part)
+	if not _words(said).is_empty() or said.contains("<!--"):
+		voice.append({"para": said, "base": base, "lines": lines})
+		return
+	var w := 0.0
+	for li in lines:
+		w += float((actions[int(li)] as Dictionary).get("write", 0.0))
+	if w > 0.0:
+		voice.append({"hold": LEAD + w, "act": int(lines[0]), "pen": LEAD + w, "sync": true})
+
+
+## THE PEN IN HAND for ink [param want] ([param pens]' index): [param held] as it is, or the pen there is to change
+## to - a `swap` action ([constant SWAP]) and the voice's rest for it put in, after spoken word [param after]. The
+## first pen asked for is the one picked up at the start, with no swap. Returns the pen held after.
+static func _hold_pen(actions: Array, voice: Array, held: int, want: int, after: int) -> int:
+	if held < 0 or held == want:
+		return want
+	voice.append({"hold": SWAP, "act": actions.size(), "pen": SWAP, "sync": true})
+	actions.append({"kind": "swap", "id": "", "pen": want, "from": held, "write": SWAP, "dur": SWAP, "after": after,
+		"span": 0})
+	return want
+
+
 ## THE LINES OF A PARAGRAPH: [param text] cut into lines as the page's width allows ([constant LINE_W]),
 ## each a `pad-text` action with the [param hand]'s strokes - laid on the page by [method lay_out], the
 ## first marked `para` (a rule is left empty above it). [param base] is the paragraph's first spoken word,
 ## [param n] the letter's line count so far (each line's hand is salted by its place), [param page_break]
 ## whether its first line starts a page.
-static func _lay_para(text: String, base: int, seed: int, n: int, page_break: bool, hand: String) -> Array:
+##
+## AT A CUT ([param cuts], [method _marked]) the line ends - with the struck words, if it struck any - marked `cut`, the cut's
+## index - and the next goes on beside them on the same rule (`cont`, `cont_x` px along it), unless its first
+## word will not fit there; [param struck] is handed, for each line a struck run crosses, `{cut, line, x0, x1}`
+## (px along that line, its local index).
+static func _lay_para(text: String, base: int, seed: int, n: int, page_break: bool, hand: String,
+		cuts: Array = [], struck: Array = []) -> Array:
 	var out: Array = []
 	var cur: Array = []
 	var x := 0.0
+	var from_x := 0.0                # where the line being built begins, along its rule
 	var sp := LetterHand.space(hand) * DeskScript.PX_PER_PT
-	for w in _written(text):
-		var adv := LetterHand.advance(String((w as Dictionary)["text"]), hand) * DeskScript.PX_PER_PT
-		if not cur.is_empty() and x + adv > LINE_W:
-			out.append(_line_action(cur, base, seed, n + out.size(), hand))
+	var ends := {}                   # a written word's index after a struck run -> the cut's index
+	for c in cuts.size():
+		ends[int((cuts[c] as Dictionary)["at"])] = c
+	var placed: Array = []           # every word laid: [local line, x0, x1]
+	var said := 0                    # the spoken words laid before the line being built
+	var ws := _written(text)
+	for wi in ws.size():
+		var w: Dictionary = ws[wi]
+		var adv := LetterHand.advance(String(w["text"]), hand) * DeskScript.PX_PER_PT
+		# a piece of a word split by a change of ink sits against the piece before it
+		if bool(w.get("glued", false)) and x > 0.0:
+			x -= sp
+			if cur.is_empty():
+				from_x = x
+		if x + adv > LINE_W and (not cur.is_empty() or from_x > 0.0):
+			if not cur.is_empty():
+				out.append(_line_of(cur, base, seed, n + out.size(), hand, from_x, -1, said))
+				said += _said_in(cur)
 			cur = []
 			x = 0.0
+			from_x = 0.0
 		cur.append(w)
+		placed.append([out.size(), x - from_x, x - from_x + adv])
 		x += adv + sp
+		if ends.has(wi + 1):
+			var c := int(ends[wi + 1])
+			# the struck run, crossed out on each line it lies on
+			var runs := {}
+			for k in range(wi + 1 - int((cuts[c] as Dictionary)["struck"]), wi + 1):
+				var pl: Array = placed[k]
+				var r: Array = runs.get(int(pl[0]), [float(pl[1]), float(pl[2])])
+				runs[int(pl[0])] = [minf(float(r[0]), float(pl[1])), maxf(float(r[1]), float(pl[2]))]
+			for li in runs:
+				struck.append({"cut": c, "line": int(li), "x0": float(runs[li][0]), "x1": float(runs[li][1])})
+			out.append(_line_of(cur, base, seed, n + out.size(), hand, from_x, c, said))
+			said += _said_in(cur)
+			cur = []
+			from_x = x
 	if not cur.is_empty():
-		out.append(_line_action(cur, base, seed, n + out.size(), hand))
+		out.append(_line_of(cur, base, seed, n + out.size(), hand, from_x, -1, said))
 	if not out.is_empty():
 		(out[0] as Dictionary)["page_break"] = page_break
 		(out[0] as Dictionary)["para"] = true
 	return out
+
+
+## A line of [method _lay_para]'s: [method _line_action], going on along its rule from [param from_x] px (`cont`),
+## and ending a struck run [param cut] (`cut`; -1 none) - one with no word in it said (a stop written in another
+## ink) after the [param said] words said before it in its paragraph.
+static func _line_of(words: Array, base: int, seed: int, n: int, hand: String, from_x: float, cut: int,
+		said := 0) -> Dictionary:
+	var act := _line_action(words, base, seed, n, hand)
+	if int(act["span"]) == 0:
+		act["after"] = base + said
+	if from_x > 0.0:
+		act["cont"] = true
+		act["cont_x"] = from_x
+	if cut >= 0:
+		act["cut"] = cut
+	return act
+
+
+## How many of [param words] ([method _written]'s) are said.
+static func _said_in(words: Array) -> int:
+	var k := 0
+	for w in words:
+		if int((w as Dictionary)["spoken"]) >= 0:
+			k += 1
+	return k
 
 
 ## One line's action: its words written by the [param hand] ([LetterHand]), timed by [method Ink.schedule].
@@ -887,12 +1207,17 @@ static func lay_out(actions: Array, sizes: Dictionary, hand := LetterHand.DEFAUL
 			"pad-text":
 				var gap := DeskScript.RULE if under_text and bool(act.get("para", false)) else 0.0
 				var base := _snap_rule(maxf(y + DeskScript.RULE, bottom + LetterHand.ascent_px(hand) * 0.8) + gap)
-				if started and (bool(act.get("page_break", false)) or base + LetterHand.descent_px(hand) > foot):
+				var x := DeskScript.TEXT_X
+				if bool(act.get("cont", false)) and started and under_text:
+					# BESIDE THE WORDS STRUCK: on the same rule, from where they end ([method _lay_para])
+					base = y
+					x += float(act.get("cont_x", 0.0))
+				elif started and (bool(act.get("page_break", false)) or base + LetterHand.descent_px(hand) > foot):
 					page += 1
 					act["turn"] = true
 					base = FIRST_LINE
 				act["page"] = page
-				act["at"] = Vector2(DeskScript.TEXT_X, base)
+				act["at"] = Vector2(x, base)
 				act["k"] = 1.0
 				act["w"] = float(act.get("w_pt", 0.0)) * DeskScript.PX_PER_PT
 				act["h"] = STRIKE_H

@@ -13,7 +13,8 @@ What is held, each with the case that must not change:
      `trail` 0 (`_trail_weight`);
   3. the hold scales that rime through `dur_scale`, and nothing else; trail 0 feeds nothing;
   4. the fade takes the word's end down by TRAIL_DB and leaves everything before its tip and
-     the next word alone; trail 0 and a full stop return the audio untouched;
+     the next word alone; trail 0 and a full stop return the audio untouched; the word before a
+     colon is not faded, and still sags (TRAIL_FADE - the same word before a comma is faded);
   5. the sag lowers the tip's pitch by TRAIL_SAG semitones and keeps the length; a glide that
      would reach the next word is not made;
   6. the next word's hiss in a floored rest is held to LEAD_KEEP, and voice, a short lead and an
@@ -223,6 +224,28 @@ def test_fade_takes_the_end_down():
     ok(_trail(a, edges, GROUP, {**PAUSED, "trail": 0.0}, SR) is a, "trail 0: the same array")
     stop = [dict(GROUP[0], punct="."), GROUP[1]]
     ok(_trail(a, edges, stop, PAUSED, SR) is a, "a full stop: the same array")
+
+
+@check
+def test_a_colon_is_not_faded():
+    """The word before a colon keeps its level to its end (TRAIL_FADE: "Mine were:" had been heard "Mind where"),
+    its pitch still sagging; the same word before a comma is faded."""
+    import math
+
+    from backends.piper import TRAIL_DB, TRAIL_SAG, _trail
+
+    a, edges = _scene()
+    colon = [dict(GROUP[0], punct=":"), GROUP[1]]
+    out = _trail(a, edges, colon, PAUSED, SR)
+    tip = _rms_db(a, out, 0.485, 0.495)
+    # (the sag's slower read alone moves the last 10 ms a dB or two; the fade takes TRAIL_DB)
+    ok(-3.0 < tip < 1.0, "before a colon, the word's end keeps its level", "%+.1f dB" % tip)
+    w = int(0.03 * SR)
+    end = int(0.5 * SR)
+    sag = 12 * math.log2(_f0(out[end - w : end]) / 150.0)
+    ok(-TRAIL_SAG - 0.2 < sag < -TRAIL_SAG * 0.6, "and its pitch still sags", "%+.2f st" % sag)
+    comma = _rms_db(a, _trail(a, edges, GROUP, PAUSED, SR), 0.485, 0.495)
+    ok(comma < -TRAIL_DB + 3.0, "CONTROL: before a comma, the same word is faded", "%.1f dB" % comma)
 
 
 # -- 5. the sag ---------------------------------------------------------------------

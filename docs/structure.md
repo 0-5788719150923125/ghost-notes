@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 459 references inside a folder, 921 down the stack, 0 up it.
+Between scripts today: 459 references inside a folder, 923 down the stack, 0 up it.
 
 ## The stack, top first
 

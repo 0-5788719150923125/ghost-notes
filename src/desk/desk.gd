@@ -314,7 +314,6 @@ class PadCanvas extends Node2D:
 		if page < 0:
 			return
 		var ink: Color = look["ink"]
-		var faint := Color(ink, FAINT_ALPHA)
 		# what is shown is what was worked out for it this frame ([method DeskMedium.page_state]): the dry its
 		# finished actions, the wet `[action, share, ...]` - never the page walked again
 		var lines: Array = []
@@ -329,7 +328,8 @@ class PadCanvas extends Node2D:
 				lines = desk.page_ink(page, part)
 		for line in lines:
 			var pts: PackedVector2Array = line["points"]
-			var c := faint if bool(line.get("faint", false)) else ink
+			var own: Color = line.get("color", ink)
+			var c := Color(own, FAINT_ALPHA) if bool(line.get("faint", false)) else own
 			if pts.size() >= 2:
 				draw_polyline(pts, c, float(line["width"]), true)
 			elif pts.size() == 1:
@@ -717,7 +717,9 @@ func _build_plan() -> void:
 				break
 			start = float(held.get("start", maxf(t0, ready)))
 			var said := _word_t1(after + maxi(span, 1) - 1)
-			end = maxf(said if said < INF else start + float(span) * DeskScript.EST_WORD, start + POINT_MIN)
+			# held its `linger` past its words, where the script rests the voice for it (a letter's, LetterScript.POINT_LINGER)
+			end = maxf((said if said < INF else start + float(span) * DeskScript.EST_WORD) + float(a.get("linger", 0.0)),
+				start + POINT_MIN)
 			if i + 1 < _actions.size():
 				var next := _word_t0(int((_actions[i + 1] as Dictionary).get("after", 0)))
 				if next < INF:
@@ -1138,17 +1140,34 @@ func _ink_of(i: int) -> Array:
 				out.append({"points": pts, "width": maxf(FAINT_W if faint else 2.4, float((s as Dictionary)["width"]) * k * 1.35),
 					"faint": faint})
 		"strike":
-			var line := _strike_line(_actions[int(a["of"])])
+			var line := _struck_line(a)
 			out.append({"points": PackedVector2Array([line[0], line[0].lerp(line[1], _written(i))]), "width": 3.2})
+	# IN ITS PEN'S INK: a letter's action names the ink it is written in ([constant LetterScript.COLOR]); none, the desk's
+	var named := String(a.get("ink", ""))
+	if not named.is_empty():
+		var col := NotebookLayout.ink_color(named)
+		for d in out:
+			(d as Dictionary)["color"] = col
 	return out
 
 
-## The stroke a cross-out draws through a written action: across its middle, a little rising.
-static func _strike_line(a: Dictionary) -> Array:
+## The stroke a cross-out draws through a written action: across its middle, a little rising - the whole of it, or
+## from [param from] to [param to] px along it alone (a letter's words struck inside a line, LetterScript.STRUCK),
+## running past them a little less.
+static func _strike_line(a: Dictionary, from := 0.0, to := -1.0) -> Array:
 	var at: Vector2 = a.get("at", Vector2.ZERO)
 	var w := float(a.get("w", 100.0))
 	var h := float(a.get("h", 30.0))
-	return [at + Vector2(-14.0, -h * 0.32), at + Vector2(w + 14.0, -h * 0.45)]
+	if to < 0.0:
+		return [at + Vector2(-14.0, -h * 0.32), at + Vector2(w + 14.0, -h * 0.45)]
+	return [at + Vector2(from - 5.0, -h * 0.34), at + Vector2(to + 5.0, -h * 0.40)]
+
+
+## The stroke strike [param s] draws through what it strikes (its `of`): across its words alone where it names
+## them (`x0`, `x1`).
+func _struck_line(s: Dictionary) -> Array:
+	var a: Dictionary = _actions[int(s["of"])]
+	return _strike_line(a, float(s.get("x0", 0.0)), float(s.get("x1", -1.0)))
 
 
 # --- the pen ---------------------------------------------------------------------------------
@@ -1288,7 +1307,7 @@ func _pen_during(a: Dictionary, i: int, start: float) -> Dictionary:
 		"strike":
 			var of := int(a.get("of", -1))
 			if of >= 0:
-				var line := _strike_line(_actions[of])
+				var line := _struck_line(a)
 				var u := clampf((_now - start) / maxf(float(a["write"]), 0.01), 0.0, 1.0)
 				return {"p": (line[0] as Vector2).lerp(line[1], u), "lift": 0.0}
 		"point":
@@ -1312,7 +1331,7 @@ func _action_point(a: Dictionary, first: bool) -> Vector2:
 		"strike":
 			var of := int(a.get("of", -1))
 			if of >= 0:
-				return _strike_line(_actions[of])[0 if first else 1]
+				return _struck_line(a)[0 if first else 1]
 		"point":
 			return point_path(a)[0 if first else 2]
 	return Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0)
@@ -1386,12 +1405,18 @@ func _pen_xf() -> Transform3D:
 	_now = keep
 	var moved := (p - before) / MOTION_DT
 	var d := drift(_now, _seed, lift)
-	var up := lean(PEN_UP, _now, _seed, p.x / PW,
+	var up := lean(_pen_up(), _now, _seed, p.x / PW,
 		Vector3(moved.x / PW * PAD_W, 0.0, moved.y / PH * PAD_H))
 	var nib := _world(p + (d["dp"] as Vector2), lift + float(d["dlift"]))
 	var x := up.cross(Vector3.FORWARD).normalized()
 	var z := x.cross(up).normalized()
 	return Transform3D(Basis(x, up, z), nib)
+
+
+## How the pen leans from its nib as it writes, before the hand's sway ([method lean]): at the desk, [constant
+## PEN_UP]. A letter's leans its own way ([LetterMedium]).
+func _pen_up() -> Vector3:
+	return PEN_UP
 
 
 ## THE PEN'S LEAN at [param now]: [param base] swayed slowly about the vertical and in its rise (the

@@ -82,6 +82,13 @@ const LEAD := 0.07
 const CLEAR := 0.0004
 ## Paper is not quite white under the lamp: what the page's texture is multiplied by.
 const TINT := Color(0.93, 0.92, 0.88)
+## PAPER IS THIN (2026-10-28, the user: "When pages turn, I think the back of the paper might be pure black"): this
+## much of the light on one side of a sheet comes through to the other ([constant SHEET_SHADER]'s BACKLIGHT). A sheet
+## rolled up and over turns its back to the camera and away from every light on the desk - the lamp, the candles on
+## its left - and opaque, its back took only the room's night-blue fill: (9, 8, 15) mid-turn, where the lamp on its
+## face now shows through it warm, (206, 149, 73), the writing faintly through it the other way round. What is left
+## dark is its shadow, on itself and the page under it, as dark as any shadow on the desk.
+const THROUGH := 0.45
 
 const SHEET_SHADER := """
 shader_type spatial;
@@ -90,6 +97,8 @@ uniform sampler2D front : source_color, filter_linear;
 uniform float has_front = 1.0;
 uniform vec3 tint : source_color = vec3(0.93, 0.92, 0.88);
 uniform vec3 back : source_color = vec3(0.9, 0.88, 0.8);
+// how much of the light on one side comes through to the other (LegalPad.THROUGH)
+uniform float through = 0.45;
 
 // A small box filter over the pixel's footprint (the book's, BookMedium.LEAF_SHADER): a page's target
 // has no mipmaps, and its thin rules minified without them broke into dashes in a wide shot.
@@ -107,6 +116,14 @@ vec4 tap(sampler2D tex, vec2 uv) {
 void fragment() {
 	// the page's face is written; its back is plain paper
 	ALBEDO = FRONT_FACING && has_front > 0.5 ? tap(front, UV).rgb * tint : back;
+	// paper is thin: the lamp behind a lifted sheet comes through it - and through a written one, the writing
+	// on its face shows on its back where it does, the other way round (its rules and ink keep some light back)
+	BACKLIGHT = ALBEDO * through;
+	if (!FRONT_FACING && has_front > 0.5) {
+		vec3 seen = tap(front, UV).rgb * tint;
+		float kept = clamp(dot(seen, vec3(0.3, 0.59, 0.11)) / max(dot(back, vec3(0.3, 0.59, 0.11)), 0.01), 0.0, 1.0);
+		BACKLIGHT *= mix(1.0, kept, 0.6);
+	}
 	ROUGHNESS = 0.92;
 	SPECULAR = 0.12;
 }
@@ -199,6 +216,7 @@ static func _sheet_material(front: Texture2D, written: bool) -> ShaderMaterial:
 	mat.set_shader_parameter("front", front)
 	mat.set_shader_parameter("has_front", 1.0 if written else 0.0)
 	mat.set_shader_parameter("tint", TINT)
+	mat.set_shader_parameter("through", THROUGH)
 	return mat
 
 

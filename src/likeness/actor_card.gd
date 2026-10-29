@@ -105,12 +105,12 @@ static func for_note(ctx: Dictionary) -> ActorCard:
 
 func _enter_tree() -> void:
 	if _panel != null:
-		Director.medium_override = "likeness"
+		Director.pin_medium("likeness", self)
 
 
 func _exit_tree() -> void:
-	if _panel != null and Director.medium_override == "likeness":
-		Director.medium_override = ""
+	if _panel != null:
+		Director.unpin_medium(self)
 	if _builder != null:
 		_builder.stop()
 	_added.stop(_note_feed())

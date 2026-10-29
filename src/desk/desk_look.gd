@@ -87,14 +87,19 @@ const TALL_LEFT := 0.19
 const TALL_RIGHT := 0.23
 ## A thing this high or higher is tall, whatever its row says (meters).
 const TALL_H := 0.04
-## WHERE THE PEN LIES ([method pen_rest]): its nib this far right of the pad's right edge and this far toward the
-## reader from the pad's middle (meters, [least, most]), its body turned out from the pad by this much (degrees
-## from straight away from the writer), and as long as [DeskMedium] builds it, nib to top. Where the wide framing
-## sees it, beside the page's upper half.
+## WHERE THE PEN LIES ([method pen_rest]): its nib this far right of the pad's right edge and this far from the pad's
+## middle toward the reader - up the pad, so less than none (meters, [least, most]), its body turned out from the pad
+## by this much (degrees from straight toward the writer), and as long as [DeskMedium] builds it, nib to top. Where
+## the wide framing sees it, beside the page's upper half.
 const PEN_OFF := Vector2(0.024, 0.04)
-const PEN_DOWN := Vector2(0.03, 0.06)
+const PEN_AT := Vector2(-0.125, -0.095)
 const PEN_TURN := Vector2(4.0, 16.0)
 const PEN_LONG := 0.155
+## A PEN EACH INK (a letter's, [constant LetterScript.SWAP]): the others lie beside the first, each this much further out
+## from the pad (meters), set down a little differently - this much along it and turned this much (at most, either way).
+const PEN_APART := 0.026
+const PEN_SHIFT := 0.012
+const PEN_SWAY := 4.0
 
 
 ## THE LOOK of the desk with seed [param seed]: `paper`, `rule`, `margin`, `ink`, `binding`, `board`
@@ -148,7 +153,8 @@ static func of(seed: int) -> Dictionary:
 		"copper": Color(0.76, 0.46, 0.33)}[trim]}
 	# where it lies ([method pen_rest]), on a generator of its own, so nothing else on the desk moves for it
 	r = _rng(seed, "pen rest")
-	out["pen"]["rest"] = {"nib": Vector2(LegalPad.W * 0.5 + r.randf_range(PEN_OFF.x, PEN_OFF.y), r.randf_range(PEN_DOWN.x, PEN_DOWN.y)),
+	out["pen"]["seed"] = seed
+	out["pen"]["rest"] = {"nib": Vector2(LegalPad.W * 0.5 + r.randf_range(PEN_OFF.x, PEN_OFF.y), r.randf_range(PEN_AT.x, PEN_AT.y)),
 		"turn": deg_to_rad(r.randf_range(PEN_TURN.x, PEN_TURN.y))}
 	r = _rng(seed, "lamp")
 	out["lamp"] = {"color": _kelvin(r.randf_range(2700.0, 4300.0)), "energy": r.randf_range(1.3, 1.7),
@@ -519,27 +525,36 @@ static func dress(look: Dictionary, seed: int, face: float) -> Dictionary:
 
 ## WHERE THE PEN LIES when nobody holds it (a letter's, before its writer picks it up - [LetterMedium]; 2026-10-28,
 ## the user: "it would be better if the pen started from a resting place upon the table, to the right of the
-## paper"): beside the pad's right edge, its nib toward the writer and its top turned a little out from the pad,
-## on the desk or on the mat there - `{nib, top}`, the ends of its axis on the surface under it (meters, the pad's
-## frame, [param face] the desk's face; the pen's own radius is the medium's).
-static func pen_rest(look: Dictionary, face: float) -> Dictionary:
+## paper"): beside the pad's right edge, its top toward the writer and turned a little out from the pad - as a right
+## hand set it down, and as it picks it up again ([constant LetterMedium.LEAN]) - on the desk or on the mat there -
+## `{nib, top}`, the ends of its axis on the surface under it (meters, the pad's frame, [param face] the desk's face;
+## the pen's own radius is the medium's).
+##
+## Pen [param k] of a letter's (`look["pens"]` of them, [constant PEN_APART]): beside the first, further out.
+static func pen_rest(look: Dictionary, face: float, k := 0) -> Dictionary:
 	var rest: Dictionary = (look["pen"] as Dictionary)["rest"]
 	var nib: Vector2 = rest["nib"]
 	var turn := float(rest["turn"])
-	var top := nib + Vector2(sin(turn), -cos(turn)) * PEN_LONG
+	if k > 0:
+		var r := _rng(int((look["pen"] as Dictionary).get("seed", 0)), "pen %d" % k)
+		nib += Vector2(PEN_APART * float(k), r.randf_range(-PEN_SHIFT, PEN_SHIFT))
+		turn += deg_to_rad(r.randf_range(-PEN_SWAY, PEN_SWAY))
+	var top := nib + Vector2(sin(turn), cos(turn)) * PEN_LONG
 	var mat := _mat_rect(Tables.sanitize(look["top"], look["layers"], look["materials"], []))
 	var y := face + (Tables.LAYER_FLOOR + 0.0001 if mat.has_point((nib + top) * 0.5) else 0.0)
 	return {"nib": Vector3(nib.x, y, nib.y), "top": Vector3(top.x, y, top.y)}
 
 
-## The pen's place, as [method _placed] keeps things off it: `[x, z, reach]` along it, a pen's width apart.
+## The pens' places (`look["pens"]` of them, one by default), as [method _placed] keeps things off them: `[x, z,
+## reach]` along each, a pen's width apart.
 static func _pen_taken(look: Dictionary, face: float) -> Array:
-	var pen := pen_rest(look, face)
 	var out: Array = []
-	var n := int(ceil(PEN_LONG / 0.01))
-	for k in n + 1:
-		var p := (pen["nib"] as Vector3).lerp(pen["top"], float(k) / float(n))
-		out.append(Vector3(p.x, p.z, 0.006))
+	for j in maxi(1, int(look.get("pens", 1))):
+		var pen := pen_rest(look, face, j)
+		var n := int(ceil(PEN_LONG / 0.01))
+		for k in n + 1:
+			var p := (pen["nib"] as Vector3).lerp(pen["top"], float(k) / float(n))
+			out.append(Vector3(p.x, p.z, 0.006))
 	return out
 
 

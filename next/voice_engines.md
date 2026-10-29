@@ -730,6 +730,27 @@ short vowel it learned: in Puck, "babysitter"'s middle vowel measured F1 360, F2
 - **Open:** a voice taught here is taught on `ids_of`, whose tokens carry no dictionary reading, so it learns
   eSpeak's ɪ where it is now sent i; utterances.py would need CMUdict to match.
 
+### A colon is not faded (2026-10-28)
+
+The user: "colons almost always get munged, as if they are silenced/faded-out too early. At 'Mine were: you do not
+ask' - the 'were' is almost completely deleted." Its level said otherwise (the trail took 4-8 dB off its last 90
+ms); Whisper medium.en, hearing the reading's own requests, did not: "Mind where you do not ask". Ten colons from
+North Star and six commas, in Puck with the note's dials, the trail as made and with each of its three parts off:
+
+| | word before a colon heard | its confidence | before a comma |
+|---|---|---|---|
+| as made | 8 of 10 | 0.79 | 6 of 6, 0.99 |
+| no trail | 10 of 10 | 0.94 | 6 of 6 |
+| no fade | 10 of 10 | 0.98 | 6 of 6 |
+| no sag | 8 of 10 | 0.79 | 6 of 6 |
+| no hold | 7 of 10 | 0.67 | 6 of 6 |
+
+libritts-high, default dials: 7 of 10 (0.63) as made, 10 of 10 (0.98) with no fade, commas 6 of 6 either way. So
+the word before a colon is held and sags but is not faded (`TRAIL_FADE`), in both models; a comma's and a
+semicolon's trail are as they were. A colon announces what follows - the voice holds up into it - and the short
+word one so often follows ("were:", "said:") lost its end to the fade. Gate: hosts/voice/test_trail.py
+`test_a_colon_is_not_faded`.
+
 ### Not in the trial, and what would be lost
 
 - **`noise_scale` and `noise_w`** have no meaning: Kokoro's prosody is fixed for a text and a voice.

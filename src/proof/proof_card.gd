@@ -118,7 +118,7 @@ func serve(panel: ReadingPanel) -> void:
 ## is for Cards; see Director.medium_override).
 func _enter_tree() -> void:
 	if reading != null:
-		Director.medium_override = "desk"
+		Director.pin_medium("desk", self)
 
 
 func _exit_tree() -> void:
@@ -128,8 +128,8 @@ func _exit_tree() -> void:
 	if _note_job != "":
 		AgentJobs.cancel(_note_job)
 		AgentJobs.forget(_note_job)
-	if reading != null and Director.medium_override == "desk":
-		Director.medium_override = ""
+	if reading != null:
+		Director.unpin_medium(self)
 
 
 func _process(delta: float) -> void:

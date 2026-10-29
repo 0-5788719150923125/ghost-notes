@@ -207,6 +207,47 @@ exactly that.
   hesitation stands before (`after_hesitation` on its span) comes up as the pen is taken up again, `RESUME_LEAD`
   before its first word (`LetterMedium._comes_up`), the desk seen through the pause; one dissolved from is held
   whole through it, and a live reading not yet past the pause keeps the desk. Gate: letter_check.
+- **A point lingers** (2026-10-28, the user, of "That one's me." at the dot: "the camera moves there quickly, and
+  the pen retreats immediately, and the camera moves again, and it feels jarring. We need the linger when we
+  point"). A point was held only while its sentence was said - three words, about a second - while the camera
+  had set off for it 3.5 s before (`AWAY_LEAD`), so it arrived as the pen left. Now a point in a thought, at a
+  sketch or at the camera, carries `linger` (`LetterScript.POINT_LINGER`, 3 s): the voice rests that long after
+  its sentence (at the next sentence, or after the paragraph), the desk holds the pen on its target through it
+  (desk.gd's point plan, `linger` on the action - Proof's points carry none), the camera stays on a point under
+  way rather than setting off for what comes next (`_framing`), and a point at the camera holds the pen up
+  through its rest (`_camera_until`). In Secular Haze the voice rests 3.4 to 3.8 s after each of its three.
+  Gate: letter_check.
+- **The tree's loose row is gone** (2026-10-28, feedback 0008, "See the extra row of unconnected dots? They are a
+  problem"; the user: "just removing it might work best - because the pen would have to draw extremely fast
+  there"). The chapter's description no longer asks for "a long row of dots too many to count", and the drawing
+  the agent had made was kept, its 23-dot row taken out and its height cut to match (`sketches/b737f232b21e1ddc.json`,
+  fingerprinted as drawn from the new words; the ink laid out again). The point at "the dot on its own" is kept.
+- **Words struck inside a line** (2026-10-28, the user: `like <!-- struck: morning --> mourning` - "Rather than a
+  full-line replacement, this would replace a single word or a sequence of words ... write the original, pause for
+  a bit, then strikethrough and write the replacement words beside it"). The struck words are the paragraph's,
+  written and said (as a struck paragraph is said); the paragraph is cut after them into parts (`_marked`, a cut
+  `{at, struck, ink}`): the voice reads the first part, rests `DECIDE` and the strike, the pen crosses out those
+  words alone (a strike's `x0`, `x1` along its line - `DeskMedium._struck_line`), and the next part goes on beside
+  them on the same rule (`cont`, `cont_x`; `lay_out`), or at the margin if its first word will not fit. A run
+  over a line's end is crossed out on each line. In Secular Haze "morning ... mourning" with a 4.6 s rest - then
+  (the user: "it feels like the second 'mourning' should not have been spoken") WORDS WRITTEN AND NEVER SAID inside
+  a line: the unspoken mark there (`UNSAID`, kept between two characters no script holds) is written and none of it
+  said, the closing marks it ends on left to the voice (`_voiced`: `<!-- unspoken: mourning. -->` still ends the
+  sentence), and a part with nothing in it to say rests the voice while it is written (`_voice_part`). The chapter
+  now says "...it looks like morning." and rests 6.35 s while "morning" is crossed out and "mourning." written.
+- **A pen each ink** (2026-10-28, the user: `<!-- color: red -->` / `<!-- color: default -->`, then: "a single pen
+  would not be able to create 2 different font colors. So, could we render multiple pens at the start, and pick them
+  up/put them down as we use them? We would need to pre-scan the entire script"). `LetterScript.pens_of` scans the
+  letter first - the desk's own pen, then each ink named (`NotebookLayout.INKS`, a hex color; `default` the desk's)
+  - and `LetterMedium._lay_pens` lays a pen for each past the first beside it, further out (`DeskLook.PEN_APART`,
+  the desk's things kept off them all), its body lacquered in its ink. A change of ink is a `swap` action
+  (`LetterScript.SWAP`: the pen in hand put down at its place over 1 s - the opening pick-up run back, `_lift` - and
+  the other picked up over 1.6), the voice resting through it; a change on a line of its own waits for the next
+  thing written, one inside a written line cuts it there as struck words do (a strike then a change: crossed out
+  with the old pen, the correction in the new), and one INSIDE A WORD splits it with no space (`GLUE`; the chapter's
+  `Pen<!-- color: red -->.<!-- color: default -->`, its closing stop alone in red - "Pen." still said whole, one
+  rest of 5.8 s for both changes). Every line, strike and sketch carries its pen's ink, and the canvas draws each
+  stroke in it. Gate: letter_check `_pens`, `_struck`; script_marks_check. Not yet seen rendered.
 - **A page turns where it runs out, mid-sentence too.** The legal pad of the desk, 24 lines to a page,
   about 230 words. The voice rests for the turn (`TURN_REST` and the pen's first words) between two
   paragraphs, and - 2026-10-28, the user: "if a page ended with punctuation, we can hold the voice until
@@ -257,12 +298,21 @@ exactly that.
 - **The pen is picked up from the desk** (2026-10-28, the user: "the pen starts floating in the air already.
   I think it would be better if the pen started from a resting place upon the table, to the right of the
   paper, and if we gently picked it up at the beginning, after the intro-blur"). It lies beside the pad's
-  right edge, its nib toward the writer and its top turned out 4 to 16 degrees (`DeskLook.pen_rest`, seeded;
+  right edge, its top toward the writer and turned out 4 to 16 degrees (`DeskLook.pen_rest`, seeded;
   `dress` sets nothing down there), through the intro and its focus pull; 1.5 s after the opening it is
   lifted by its grip, turned up into the hand and carried over the pad's edge in an arc, over 2.2 s, to
   hover over the first stroke as the blank page ends (`LetterMedium._pick_up_pose`, laid over the desk's
   `_pen_xf`; at most 4 mm a frame, its nib never into the desk or the pad). The Proof desk is as it was:
   its pen's first stroke comes with the first word, inside the focus pull.
+- **The pen leans to the right and a little down as it writes** (2026-10-28, the user: "it would be more
+  common for the top of the pen to point to the bottom-right (though gently, trending closer to pure right
+  than directly to the bottom right corner)"): back over the hand toward the writer's right shoulder, as a
+  right hand holds one, seen from the camera on the writer's side (`LetterMedium.LEAN` through the desk's
+  `_pen_up` hook: 48 degrees up from the nib as before, 30 degrees toward the writer from straight right -
+  on the screen 14 degrees under the level on average, 3 to 31 with the forearm's turn and the hand's sway).
+  Its body lies over the paper not yet written; the desk's lean to the top right lay over the lines already
+  written above the nib. The Proof desk keeps its own (its user's call, 2026-10-16), and the pen lies on
+  the desk top toward the writer, as it is picked up.
 - **A sketch stays on the page with what points at it** (`LetterScript._keep_with`): the first look put
   the cross and the dot at a page's foot, so the blind-spot test and "That's me" were a page on, with the
   pen pointing at nothing. A sketch now starts a page of its own when the lines up to its last point (or a

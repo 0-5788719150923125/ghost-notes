@@ -34,7 +34,7 @@ Ghost Notes is built from registries. Each page below is generated from one, lis
 - [Forces](docs/forces.md) (8) - the physics primitives particles compose.
 - [Stage actors and verbs](docs/stage.md) (3 actors, 22 verbs) - what a storyboard's `stage` entries are made of.
 - [Masking effects](docs/masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
-- [Script marks](docs/script.md) (41) - every mark a script may carry - the script editor's palette.
+- [Script marks](docs/script.md) (43) - every mark a script may carry - the script editor's palette.
 - [Agents](docs/agents.md) (4 writers, 3 painters, 2 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.
 
 <!-- AUTODOC:FEATURES:END -->

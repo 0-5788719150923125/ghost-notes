@@ -47,7 +47,8 @@ class_name LetterMedium
 ## while it lasts.
 ##
 ## THE PEN POINTS AT WHOEVER WATCHES (`<!-- point: camera -->`): lifted off the page and its nib turned to
-## the lens for the sentence, then put back ([method _camera_pose]).
+## the lens for the sentence - and in a thought for the rest after it ([constant LetterScript.POINT_LINGER]),
+## as a point at a sketch lingers on what it points at - then put back ([method _camera_pose]).
 ##
 ## A PICTURE TAKES THE SCREEN (`<!-- image (full): -->` ... `<!-- /image -->`): it fades up over the desk
 ## as the passage under it begins, moves slowly in its own way ([constant MOVES]: a pan its length guessed
@@ -120,6 +121,10 @@ const TAP_RISE := 0.016
 const TAP_LEAN := Vector3(0.32, 0.86, 0.4)
 ## The pen's length from nib to top (m), as [DeskMedium] builds it.
 const PEN_TOP := PEN_LEN + 0.02
+## HOW THE PEN LEANS AS IT WRITES ([method _pen_up]): from its nib up as the desk's does (48 degrees), and across the
+## desk to the right and 30 degrees toward the writer - on the screen, from the camera on the writer's side, to the
+## right and a little down (about 15 to 20 degrees under the level, the forearm's turn and the hand's sway about it).
+const LEAN := Vector3(0.582, 0.741, 0.336)
 ## THE PICK-UP ([method _pick_up_pose]): how long it takes, from lying on the desk to over the first stroke
 ## (seconds); where the fingers hold it, up from the nib (m); the share of the way it is turned up into the hand
 ## over, and the share it is raised alone before it is carried; and how high its grip arcs over the pad (m) - its
@@ -188,6 +193,10 @@ var _written_words := PackedByteArray()  # a spoken word -> 1 when a line of the
 var _pauses := {}              # a spoken word a hesitation follows -> true ([member LetterScript] `pauses`)
 var _plate: Plate
 var _still_from := -1.0        # when the still up now began (its wander's time), -1 for none
+var _inks := PackedStringArray([""])   # each pen's ink ([method LetterScript.pens_of]); pen 0 the desk's own, [member _pen]
+var _first_pen := 0            # the pen picked up at the start
+var _more_pens: Array = []     # the pens past the desk's own, lying by it ([constant DeskLook.PEN_APART])
+var _swaps: Array = []         # the swap actions, in order ([constant LetterScript.SWAP])
 var _rests := PackedFloat32Array()  # a spoken word -> the rest the script writes before it ([method rests_of])
 var _let_go := {}              # a page -> the turn to it the camera lets go for, once it has begun to ([method _letting_go])
 var _let_go_at := -INF         # ...as of this moment
@@ -247,7 +256,14 @@ func _ensure_doc() -> void:
 func load_letter(source: String, letter: Dictionary, start := PackedStringArray(), near := -1) -> void:
 	_seed = int(letter.get("seed", _seed))
 	look = DeskLook.of(_seed)
+	# A PEN EACH INK, every one lying by the pad from the start: the desk keeps its things off them all
+	var pens := LetterScript.pens_of(source)
+	look["pens"] = pens.size()
+	if pens != _inks:
+		_dressed = -1
+	_inks = pens
 	_dress()
+	_lay_pens()
 	_let_go = {}
 	var svgs: Dictionary = letter.get("svgs", {}) if letter.get("svgs") is Dictionary else {}
 	var ink: Dictionary = letter.get("ink", {}) if letter.get("ink") is Dictionary else {}
@@ -264,6 +280,11 @@ func load_letter(source: String, letter: Dictionary, start := PackedStringArray(
 		LetterHand.of(String(letter.get("hand", ""))))
 	_actions = parsed["actions"]
 	_spans = parsed["spans"]
+	_first_pen = int(parsed.get("first_pen", 0))
+	_swaps = []
+	for i in _actions.size():
+		if String((_actions[i] as Dictionary)["kind"]) == "swap":
+			_swaps.append(i)
 	var moves := moves_of(_spans, _seed)
 	for i in moves.size():
 		if not (moves[i] as Dictionary).is_empty():
@@ -700,12 +721,21 @@ func _parks(last: int, next: int) -> bool:
 func _action_point(a: Dictionary, first: bool) -> Vector2:
 	if String(a["kind"]) == "tap":
 		return a.get("spot", TAP_SPOTS["pad"])
+	if String(a["kind"]) == "swap":
+		# a pen put down from where the last stroke ended, the other brought to where the next begins
+		var i := int(a.get("i", -1))
+		if first and i > 0:
+			return _action_point(_actions[i - 1], false)
+		if not first and i >= 0 and i + 1 < _actions.size():
+			return _action_point(_actions[i + 1], true)
 	return super._action_point(a, first)
 
 
 func _pen_during(a: Dictionary, i: int, start: float) -> Dictionary:
 	if String(a["kind"]) == "tap":
 		return {"p": _action_point(a, true), "lift": REST_LIFT}
+	if String(a["kind"]) == "swap":
+		return {"p": _action_point(a, _now - start < LetterScript.SWAP_DOWN), "lift": REST_LIFT}
 	return super._pen_during(a, i, start)
 
 
@@ -715,10 +745,21 @@ func _pen_xf() -> Transform3D:
 	var base := super._pen_xf()
 	var pose := _pick_up_pose(base)
 	if pose.is_empty():
+		pose = _swap_pose(base)
+	if pose.is_empty():
 		pose = _tap_pose(base)
 	if pose.is_empty():
 		pose = _camera_pose(base)
 	return base if pose.is_empty() else _blend(base, pose["xf"], float(pose["f"]))
+
+
+## THE PEN LEANS TO THE RIGHT AND A LITTLE DOWN (2026-10-28, the user: "it would be more common for the top of the pen
+## to point to the bottom-right (though gently, trending closer to pure right than directly to the bottom right
+## corner)"): back over the hand toward the writer's right shoulder, as a right hand holds one, its body over the paper
+## not yet written - the desk's leans to the top right ([constant DeskMedium.PEN_UP], the Proof desk's), over the lines
+## already written above the nib.
+func _pen_up() -> Vector3:
+	return LEAN
 
 
 ## Before the first thing is done the nib waits over its first stroke, where the pen is carried to from the desk
@@ -766,20 +807,94 @@ func _pick_up_pose(base: Transform3D) -> Dictionary:
 	var w := _pick_up()
 	if w.y < INF and _now >= w.y:
 		return {}
-	var rest := DeskLook.pen_rest(look, LegalPad.DESK_Y)
-	var lie := Vector3.UP * PEN_R * 1.04
-	var nib: Vector3 = _pad.transform * ((rest["nib"] as Vector3) + lie)
-	var lying := _pen_frame(nib, _pad.transform * ((rest["top"] as Vector3) + lie) - nib)
 	var u := clampf((_now - w.x) / PICK_UP, 0.0, 1.0) if w.x < INF else 0.0
+	return {"xf": _lift(base, _first_pen, u), "f": 1.0}
+
+
+## PEN [param k] ON ITS WAY between its place and the hand: lying where it is at [param u] 0; held by its grip
+## ([constant PICK_GRIP] up from the nib), raised and turned up into the hand over the first [constant PICK_TURN] of
+## the way, carried over the pad from [constant PICK_CARRY] of it in an arc [constant PICK_ARC] high, and brought down
+## to the desk's own pose [param base], which it is at 1. A pen put down goes the same way back.
+func _lift(base: Transform3D, k: int, u: float) -> Transform3D:
+	var lying := _lying(k)
 	if u <= 0.0:
-		return {"xf": lying, "f": 1.0}
+		return lying
 	var turned := Basis(lying.basis.get_rotation_quaternion().slerp(base.basis.get_rotation_quaternion(),
 		_ease(clampf((u - 0.05) / PICK_TURN, 0.0, 1.0))))
 	var grip := (lying.origin + lying.basis.y * PICK_GRIP).lerp(base.origin + base.basis.y * PICK_GRIP,
 		_ease(clampf((u - PICK_CARRY) / (1.0 - PICK_CARRY), 0.0, 1.0)))
 	# up off the desk first, over the pad's edge, then down onto the line
 	grip.y += PICK_ARC * _ease(clampf(u / 0.4, 0.0, 1.0)) * (1.0 - _ease(clampf((u - 0.55) / 0.45, 0.0, 1.0)))
-	return {"xf": Transform3D(turned, grip - turned.y * PICK_GRIP), "f": 1.0}
+	return Transform3D(turned, grip - turned.y * PICK_GRIP)
+
+
+## Pen [param k] lying at its place ([method DeskLook.pen_rest]), on its widest.
+func _lying(k: int) -> Transform3D:
+	var rest := DeskLook.pen_rest(look, LegalPad.DESK_Y, k)
+	var lie := Vector3.UP * PEN_R * 1.04
+	var nib: Vector3 = _pad.transform * ((rest["nib"] as Vector3) + lie)
+	return _pen_frame(nib, _pad.transform * ((rest["top"] as Vector3) + lie) - nib)
+
+
+## THE PENS PAST THE DESK'S OWN ([member _inks]): each built as [DeskMedium] builds its pen, its body lacquered in its
+## ink, and lying at its place till it is picked up.
+func _lay_pens() -> void:
+	for p in _more_pens:
+		(p as Node3D).queue_free()
+	_more_pens = []
+	if _pen == null:
+		return
+	for k in range(1, _inks.size()):
+		var body := StandardMaterial3D.new()
+		body.metallic = 0.3
+		body.roughness = 0.28
+		body.albedo_color = NotebookLayout.ink_color(_inks[k]).darkened(0.1)
+		var pen := Node3D.new()
+		pen.add_child(_cyl(PEN_R * 0.85, 0.0005, 0.02, 0.01, _trim))
+		pen.add_child(_cyl(PEN_R, PEN_R * 0.92, PEN_LEN, 0.02 + PEN_LEN * 0.5, body))
+		pen.add_child(_cyl(PEN_R * 1.04, PEN_R * 1.04, 0.006, 0.02 + PEN_LEN * 0.62, _trim))
+		_pen.get_parent().add_child(pen)
+		_more_pens.append(pen)
+
+
+## WHICH PEN IS IN HAND at [member _now]: the first, then each swap's once it has put the last one down.
+func _pen_in_hand() -> int:
+	var hand := _first_pen
+	for i in _swaps:
+		var start := float(_plan[i]["start"]) if i < _plan.size() else INF
+		if start == INF or _now < start + LetterScript.SWAP_DOWN:
+			break
+		hand = int((_actions[i] as Dictionary)["pen"])
+	return hand
+
+
+## WHILE A PEN IS CHANGED ([constant LetterScript.SWAP]): the pen in hand put down at its place over
+## [constant LetterScript.SWAP_DOWN], then the other picked up and brought to the next stroke - `{xf, f}`, {} when
+## no change is under way.
+func _swap_pose(base: Transform3D) -> Dictionary:
+	for i in _swaps:
+		var start := float(_plan[i]["start"]) if i < _plan.size() else INF
+		if start == INF or _now < start:
+			break
+		var t := _now - start
+		if t >= LetterScript.SWAP:
+			continue
+		var a: Dictionary = _actions[i]
+		if t < LetterScript.SWAP_DOWN:
+			return {"xf": _lift(base, int(a["from"]), 1.0 - t / LetterScript.SWAP_DOWN), "f": 1.0}
+		return {"xf": _lift(base, int(a["pen"]), (t - LetterScript.SWAP_DOWN) / LetterScript.SWAP_UP), "f": 1.0}
+	return {}
+
+
+## EVERY PEN PLACED: the one in hand as the desk places it, with the poses over it ([method _pen_xf]), and the rest
+## lying where they were put down.
+func _place_pen() -> void:
+	var hand := _pen_in_hand()
+	var held := _pen_xf()
+	for k in _inks.size():
+		var node: Node3D = _pen if k == 0 else _more_pens[k - 1] if k - 1 < _more_pens.size() else null
+		if node != null:
+			node.global_transform = held if k == hand else _lying(k)
 
 
 ## WHILE A TAP LASTS: the pen upside down over its spot, its top coming down on it [constant TAP_N]
@@ -812,7 +927,7 @@ func _camera_pose(_base: Transform3D) -> Dictionary:
 		if String(sp["kind"]) != "camera":
 			continue
 		var t0 := _guess(int(sp["after"]), false)
-		var t1 := _guess(int(sp["after"]) + int(sp["span"]) - 1, true) + CAMERA_HOLD
+		var t1 := _camera_until(sp)
 		if t0 == INF or t1 == INF or _now < t0 - CAMERA_EASE or _now > t1 + CAMERA_EASE:
 			continue
 		var f := minf(clampf((_now - (t0 - CAMERA_EASE)) / CAMERA_EASE, 0.0, 1.0),
@@ -824,6 +939,13 @@ func _camera_pose(_base: Transform3D) -> Dictionary:
 		var up := (-to_lens + Vector3(CAMERA_OFF, CAMERA_OFF * 0.4, -CAMERA_OFF * 0.6)).normalized()
 		return {"xf": _pen_frame(nib, up), "f": f * f * (3.0 - 2.0 * f)}
 	return {}
+
+
+## WHEN A POINT AT THE CAMERA LETS GO ([param sp], its span): [constant CAMERA_HOLD] after its words - or, lingered
+## on ([constant LetterScript.POINT_LINGER]), as the voice's rest for it ends, the pen back by then.
+func _camera_until(sp: Dictionary) -> float:
+	var said := _guess(int(sp["after"]) + int(sp["span"]) - 1, true)
+	return said + maxf(CAMERA_HOLD, float(sp.get("linger", 0.0)) - CAMERA_EASE)
 
 
 ## The pen's transform with its nib at [param nib] and its body along [param up] (nib to top), as
@@ -982,7 +1104,7 @@ func _framing() -> Dictionary:
 		var sp: Dictionary = s
 		if String(sp["kind"]) == "camera":
 			var t0 := _guess(int(sp["after"]), false)
-			var t1 := _guess(int(sp["after"]) + int(sp["span"]) - 1, true) + CAMERA_HOLD
+			var t1 := _camera_until(sp)
 			if t0 < INF and _now > t0 - AWAY_LEAD and _now < t1 + CAMERA_EASE:
 				f["k"] = minf(float(f["k"]), CAMERA_K)
 	# a point or a tap, under way or soon: framed on what it is about, as close as it was
@@ -998,6 +1120,10 @@ func _framing() -> Dictionary:
 			var b := target_box(a)
 			if b.size.x >= 0.0:
 				f["line"] = b.get_center() - Vector2(0.0, 60.0)
+				# ...and one under way keeps it there till it is done, lingering (LetterScript.POINT_LINGER), never
+				# taken off to the next thing before it is
+				if start <= _now:
+					break
 		elif String(a["kind"]) == "tap":
 			f["line"] = (a["spot"] as Vector2) - Vector2(0.0, 60.0)
 	return f

@@ -107,8 +107,10 @@ var medium := "full"
 ## medium] applies. Never saved - the Table mode shows every reading on its table, and leaving it
 ## must hand the next session back the medium the author chose. [method resolved_medium] honors
 ## it under an explicit `--medium`, and the exporter passes what that resolves to, so a render of
-## a pinned session is drawn in the same medium.
+## a pinned session is drawn in the same medium. A card pins it with [method pin_medium], and only it takes it
+## back ([method unpin_medium]).
 var medium_override := ""
+var _pinned_by := 0            # the instance that pinned [member medium_override] ([method pin_medium]), 0 for none
 ## THE FRAME a show is made in - "landscape" (1920x1080) or "portrait" (1080x1920) - a property of
 ## the show like the medium, kept beside it in the note's picture block (next/notes.md step 10).
 ## What a run actually uses is [method resolved_frame].
@@ -359,6 +361,7 @@ func set_pacing(v: float) -> void:
 ## the same.
 func reset_show() -> void:
 	medium_override = ""
+	_pinned_by = 0
 	set_medium("full")
 	set_frame("landscape")
 	set_pacing(1.0)
@@ -508,6 +511,24 @@ func resolved_filters() -> Dictionary:
 	if over is Dictionary:
 		return over as Dictionary
 	return Filters.sanitize(filters)
+
+
+## PIN [param key] AS THE MEDIUM while [param by] is up ([member medium_override]): a mode's card that is its
+## medium (the Letter's, the Proof's desk, the card table, the Actor), as it enters the tree.
+func pin_medium(key: String, by: Object) -> void:
+	medium_override = key
+	_pinned_by = by.get_instance_id()
+
+
+## ...and let it go as [param by] leaves - ONLY ITS OWN PIN (2026-10-28, the user: "adding the "Look" component
+## suddenly add[ed] the underwater scene to my video", attached while it played): a note opened again for a
+## component attached or taken off builds its new card while the old one is only queued to be freed, and the old
+## card, leaving the tree a frame later, let go of the medium by its name - the new card's pin. The next Play
+## mounted the author's remembered medium, and the seeded scenes came up.
+func unpin_medium(by: Object) -> void:
+	if _pinned_by == by.get_instance_id():
+		medium_override = ""
+		_pinned_by = 0
 
 
 ## The medium this run actually uses: `--medium NAME` if given and known, else the

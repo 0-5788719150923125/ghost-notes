@@ -181,15 +181,15 @@ func _on_reading_ready() -> void:
 ## leaves no pin behind.
 func _enter_tree() -> void:
 	if reading != null:
-		Director.medium_override = "table"
+		Director.pin_medium("table", self)
 
 
 func _exit_tree() -> void:
 	if _producer != null:
 		_producer.stop()
 	_added.stop(_feed)
-	if reading != null and Director.medium_override == "table":
-		Director.medium_override = ""
+	if reading != null:
+		Director.unpin_medium(self)
 
 
 func _process(delta: float) -> void:

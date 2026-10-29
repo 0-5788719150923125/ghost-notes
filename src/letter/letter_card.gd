@@ -81,15 +81,15 @@ static func for_note(ctx: Dictionary) -> LetterCard:
 ## THE LETTER IS THE MEDIUM, pinned while the card is up.
 func _enter_tree() -> void:
 	if _panel != null:
-		Director.medium_override = "letter"
+		Director.pin_medium("letter", self)
 
 
 func _exit_tree() -> void:
 	if _sketches != null:
 		_sketches.stop()
 	_added.stop(_note_feed())
-	if _panel != null and Director.medium_override == "letter":
-		Director.medium_override = ""
+	if _panel != null:
+		Director.unpin_medium(self)
 
 
 func _process(delta: float) -> void:

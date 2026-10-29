@@ -25,6 +25,9 @@ extends SceneTree
 ##   CONTROL: the box clear, no row anywhere); the YouTube card's line names the Letter card. Generate makes it
 ##   once the sketches are drawn - not while one is (held by hand) - here refused, read-only, and said on its
 ##   row; a job landed gives its ✓ and replaces the note's tags; Stop stops one.
+## - A NOTE OPENED AGAIN KEEPS ITS MEDIUM ([method Director.pin_medium]; 2026-10-28, the user: attaching a Look to a
+##   letter being watched "suddenly add[ed] the underwater scene to my video"): the old card leaving the tree after
+##   the new one has pinned the letter leaves it pinned - the control, the new card's own leaving, lets it go.
 ##
 ##   godot --headless --path . --script tests/letter/letter_card_check.gd
 
@@ -145,6 +148,7 @@ func _card() -> void:
 		"the walk reads the letter as the letter's own format does, with no title announced")
 	card.free()
 	_steps()
+	_reopened()
 	_finish()
 
 
@@ -210,6 +214,38 @@ func _steps() -> void:
 	card.free()
 	ed.free()
 	note_upload.root = keep
+
+
+## A NOTE OPENED AGAIN KEEPS ITS MEDIUM: the old panel's card leaves the tree after the new one has come up.
+func _reopened() -> void:
+	print("-- a note opened again keeps its medium")
+	var made: Array = []
+	for _k in 2:
+		var ed = load("res://src/reading/reading_panel.gd").new()
+		ed.workspace = "reading"
+		ed._build_panel()
+		ed._doc._sync = false
+		made.append([ed, load("res://src/letter/letter_card.gd").for_note({"workspace": ed})])
+	var old: Node = made[0][1]
+	var new: Node = made[1][1]
+	# (by the tree: the autoloads are not up when this script compiles)
+	var director: Node = root.get_node("Director")
+	director.reset_show()
+	root.add_child(old)
+	var pinned: bool = director.resolved_medium() == "letter"
+	# opened again: the new card comes up, and the old one, only queued to be freed, leaves after it
+	director.reset_show()
+	root.add_child(new)
+	root.remove_child(old)
+	var kept: String = director.resolved_medium()
+	root.remove_child(new)
+	var left: String = director.medium_override
+	_check(pinned and kept == "letter" and left.is_empty(),
+		"the old card leaving after the new one has come up leaves the letter the medium (%s) - the new card's own leaving lets it go (the control: %s)"
+		% [kept, "\"%s\"" % left])
+	for m in made:
+		(m[1] as Node).free()
+		(m[0] as Node).free()
 
 
 ## A refresh of the note and the card, as their _process makes one.

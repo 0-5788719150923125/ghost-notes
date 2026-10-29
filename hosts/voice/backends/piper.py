@@ -359,6 +359,16 @@ TRAIL_SAG_SPAN = 0.09
 # A rest this long is a strong enough boundary for the whole trail; a shorter one gets a share of
 # it. Boundary strength is what pre-boundary lengthening follows, and the rest is the strength.
 TRAIL_REST_FULL = 0.5
+# A COLON IS NOT FADED (2026-10-28, the user: "colons almost always get munged, as if they are silenced/faded-out
+# too early. At 'Mine were: you do not ask' - the 'were' is almost completely deleted"). A colon announces what
+# follows, and the voice holds up into it; the fade is the voice falling away, and on the short word a colon so
+# often follows it took the word's end with it. Heard by Whisper (medium.en) over ten colons from North Star and
+# six commas, in the reading's own requests: in Kokoro's Puck the word before a colon was heard in 8 of 10 with
+# the trail ("Mine were" heard "Mind where", "It said" "It's that"), 10 of 10 without its fade (confidence 0.79
+# to 0.98) - the hold and the sag kept: without the hold 7 of 10; in libritts-high 7 of 10 to 10 of 10 (0.63 to
+# 0.98). The commas were heard 6 of 6 either way, and keep it. How much of the fade the word before a mark takes,
+# one not here taking all of it:
+TRAIL_FADE = {":": 0.0}
 # How far under the final rime's own peak the voice still counts as sounding (`_trail` looks for
 # its end in the waveform: the model keeps voicing through the mark, so the plan's last sound is
 # 50 ms early to 80 ms late), how long the level takes to come back before the next word, and how
@@ -1098,7 +1108,7 @@ def _trail(audio, edges: dict, group: list, params: dict, sr: int, hisses=None,
             c = min(end + int(round(TRAIL_SAG_TAIL * sr)), stop)
             if not _glide(out, end - span, end, c, TRAIL_SAG * w, stop, sr):
                 _glide(out, end - span, end, end, TRAIL_SAG * w, stop, sr)
-        depth = TRAIL_DB * w
+        depth = TRAIL_DB * w * TRAIL_FADE.get(str(group[ti].get("punct", "")), 1.0)
         base = end - tip
         back = int(round(TRAIL_BACK * sr))
         if through and tail is None:

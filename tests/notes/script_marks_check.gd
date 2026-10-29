@@ -273,7 +273,7 @@ func _parsers_agree() -> void:
 				for blk in b:
 					shown += String((blk as Dictionary).get("text", ""))
 				_ok(not shown.contains("quicker"), "a delivery mark reached the page")
-			"thought", "strike", "unspoken", "point", "tap", "image_end", "still", "new_page":
+			"thought", "strike", "struck", "color", "unspoken", "point", "tap", "image_end", "still", "new_page":
 				_letter_mark(k, ex)
 			_:
 				_ok(false, "%s has no check in script_marks_check - prove it before shipping it" % k)
@@ -465,11 +465,33 @@ func _letter_mark(k: String, ex: String) -> void:
 				if String(a["kind"]) == "strike":
 					of = int(a["of"])
 			_ok(of >= 0 and String(d["actions"][of]["text"]) == "Crossed out.", "a strike crosses out the wrong line")
+		"struck":
+			var d := LetterScript.parse("It looks like %s mourning.\n" % ex)
+			var st: Dictionary = {}
+			for a in d["actions"]:
+				if String(a["kind"]) == "strike":
+					st = a
+			_ok(not st.is_empty() and st.has("x1") and String(d["actions"][int(st["of"])]["text"]).ends_with("morning")
+				and bool(d["actions"].back().get("cont", false)) and (d["spoken"] as PackedStringArray).has("morning")
+				and not String(d["speakable"]).contains("struck"),
+				"struck words are not written, said and crossed out alone, the words after them beside them")
+		"color":
+			var d := LetterScript.parse("Before %s after.\n" % ex)
+			var swap: Dictionary = {}
+			for a in d["actions"]:
+				if String(a["kind"]) == "swap":
+					swap = a
+			_ok(Array(d["pens"]) == ["", "red"] and not swap.is_empty() and String(d["actions"].back()["ink"]) == "red"
+				and not String(d["speakable"]).contains("color"),
+				"an ink mark does not change the pen there, or is read aloud")
 		"unspoken":
 			var d := LetterScript.parse("Said.\n\n%s\n" % ex)
 			var line: Dictionary = d["actions"].back()
 			_ok(String(line["text"]) == "Dear Ink," and int(line["span"]) == 0
 				and not String(d["speakable"]).contains("Dear"), "an unspoken line is said, or not written")
+			var inline := LetterScript.parse("I said %s goodbye.\n" % ex)
+			_ok(String(inline["actions"][0]["text"]) == "I said Dear Ink, goodbye." and not String(inline["speakable"]).contains("Dear")
+				and String(inline["speakable"]).contains("goodbye"), "unspoken words inside a line are said, or not written")
 		"point":
 			var d := LetterScript.parse("<!-- sketch: a dot -->\n\nA dot.\n\n%s *That one.*\n" % ex, 1, svgs)
 			var pt: Dictionary = d["actions"].back()
