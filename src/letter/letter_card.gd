@@ -22,10 +22,17 @@ class_name LetterCard
 ##
 ## GENERATION IS EXPLICIT: Generate draws the sketches not drawn, then lays them out; a sketch's ⟳ draws
 ## it again. Nothing runs on open.
+##
+## THE NOTE'S OTHER CARDS ADD STEPS OF THEIR OWN ([EpisodeSteps] - the YouTube card's tags), and this card,
+## handing the reading how it goes out, lists them: rows under the Ink, beside Generate (the user, 2026-10-28:
+## they had waited at the bottom of the YouTube card), the note their episode - it is its own ([NoteUpload]) -
+## made by Generate once the sketches are drawn, and by an export that goes up.
 
 const KEY := "letter"
 ## The block: the desk's seed (0: the note's own), the hand it is written in and who draws the sketches.
 const KNOBS := {"seed": 0, "hand": LetterHand.DEFAULT, "writer": "claude", "writer_model": "", "writer_effort": ""}
+## What makes the note's episode, as the rows of the steps the note's other cards add say it.
+const MAKES := "Generate, or an export that goes up"
 
 signal noted(text: String)
 
@@ -39,6 +46,9 @@ var _listed: Array = []          # ...and its sketches ([method LetterScript.ske
 var _asked := false              # Generate or a ⟳ asked: the ink is laid out once the drawings are in
 var _ink_tried := ""             # the drawings the ink step last failed on, not tried again unasked
 var _installing := ""            # what the ink step waits to be installed, "" for nothing
+## THE STEPS THE NOTE'S OTHER CARDS ADD, listed here: this card hands the reading how it goes out.
+var _added := EpisodeSteps.new(host_name(), Callable(), MAKES)
+var _added_rows: EpisodeStepRows # their rows, under the Ink
 
 var _seed_box: SpinBox
 var _mood: Label                 # what the desk's number picked, in a word ([constant DeskLook.MOODS])
@@ -58,7 +68,8 @@ static func for_note(ctx: Dictionary) -> LetterCard:
 	card._panel = ctx.get("workspace") as ReadingPanel
 	if card._panel != null:
 		card._panel.walk = LetterWalk.new(card)
-		card._panel.publish = Publish.new(card)
+		card._panel.hand_publish(Publish.new(card), host_name())
+		card._added = EpisodeSteps.new(host_name(), card._panel.episode_steps, MAKES)
 		var doc := card._panel.doc_source()
 		card._sketches = LetterSketches.new(doc.doc_path() if doc != null else "")
 	else:
@@ -76,6 +87,7 @@ func _enter_tree() -> void:
 func _exit_tree() -> void:
 	if _sketches != null:
 		_sketches.stop()
+	_added.stop(_note_feed())
 	if _panel != null and Director.medium_override == "letter":
 		Director.medium_override = ""
 
@@ -92,6 +104,7 @@ func _process(delta: float) -> void:
 		_pictures.set_script_text(LetterScript.pictures_only(body))
 		_build_rows()
 	_lay_out_when_drawn()
+	_tick_steps()
 	_refresh()
 
 
@@ -184,7 +197,10 @@ func _generate() -> void:
 	_sketches.generate(sketches)
 	_asked = true
 	_ink_tried = ""
-	_say("Drawing the sketches…" if _sketches.busy() else "Every sketch is drawn.")
+	_added.asked = true          # the steps under them: the other cards' too
+	var also := _added.names(_note_feed())
+	_say(("Drawing the sketches…" if _sketches.busy() else "Every sketch is drawn.")
+		+ ((" Then the note's %s, from its words." % ", ".join(also)) if not also.is_empty() else ""))
 
 
 func _redo(key: String) -> void:
@@ -200,7 +216,34 @@ func _redo(key: String) -> void:
 func _stop() -> void:
 	_sketches.stop()
 	_asked = false
+	_added.stop(_note_feed())
 	_say("Stopped - what was drawn is kept.")
+
+
+# --- the steps the note's other cards add -------------------------------------------------------
+
+## THE NOTE AS THEIR EPISODE: read as it is written, it is its own ([method ReadingPanel.note_upload]) - null
+## while it has no YouTube card.
+func _note_feed() -> EpisodeFeed:
+	var up := _panel.note_upload() if _panel != null and is_instance_valid(_panel) else null
+	return up.feed() if up != null else null
+
+
+## This card as the steps' rows say where they are: "the Letter card".
+static func host_name() -> String:
+	return "the %s card" % String(Registry.field(Components.REGISTRY, KEY, "label", "Letter"))
+
+
+## EACH REFRESH ([EpisodeSteps]): the note said to the steps listed, and once the sketches are drawn, each
+## Generate asked for made - from the note's words, so only once they are written.
+func _tick_steps() -> void:
+	_added.tick(_note_feed(), _sketches.busy())
+
+
+## ⟳ on a step's row: made again now, from the note's words - which must be written first.
+func _redo_step(step: EpisodeStep) -> void:
+	if not step.redo(_note_feed()):
+		_say("%s waits for the note's words: write them on the Script card." % step.label)
 
 
 ## ONCE THE DRAWINGS ARE IN, THE INK: laid out by TeX when they are not the ones it was laid out from -
@@ -342,6 +385,10 @@ func _build() -> void:
 	_ink_state.add_theme_font_size_override("font_size", 11)
 	_ink_state.mouse_filter = Control.MOUSE_FILTER_STOP
 	irow.add_child(_ink_state)
+	# THE STEPS THE NOTE'S OTHER CARDS ADD, under the Ink
+	_added_rows = EpisodeStepRows.new(_added, " - once the note has words")
+	_added_rows.redo.connect(_redo_step)
+	add_child(_added_rows)
 
 	var brow := HBoxContainer.new()
 	brow.add_theme_constant_override("separation", 6)
@@ -349,7 +396,8 @@ func _build() -> void:
 	_gen_btn = Button.new()
 	_gen_btn.text = "Generate"
 	_gen_btn.tooltip_text = ("Draw every sketch not drawn yet (or drawn from words since changed), then lay them "
-		+ "out with TeX. Spends the drawer's quota. The pictures are painted below, each on its own.")
+		+ "out with TeX. Spends the drawer's quota. Then the steps listed above it (the note's tags), from the "
+		+ "note's words. The pictures are painted below, each on its own.")
 	_gen_btn.pressed.connect(_generate)
 	brow.add_child(_gen_btn)
 	_stop_btn = Button.new()
@@ -458,8 +506,11 @@ func _build_rows() -> void:
 
 func _refresh() -> void:
 	var busy := _sketches.busy()
-	_gen_btn.disabled = busy
-	_stop_btn.disabled = not busy
+	var feed := _note_feed()
+	var steps := _added.asked or _added.busy(feed)
+	_gen_btn.disabled = busy or steps
+	_stop_btn.disabled = not (busy or steps)
+	_added_rows.refresh(feed)
 	var refused := _sketches.refused()
 	var all := _sketches.svgs(_listed)
 	for key in _rows:

@@ -11,7 +11,13 @@ extends Node
 ##   - `watch` hands back a sheet of six frames of an act, each a picture of the table (not one flat color),
 ##     and the frames differ as the pestle goes round (the control: two pictures of one moment do not);
 ##   - `submit` asks once for what was never watched, then hands the acts in - `submitted.json`, which the
-##     producer lands as `acts.json` ([method TableProducer._land_acts]).
+##     producer lands as `acts.json` ([method TableProducer._land_acts]);
+##   - A BAKE GOES ON TO THE NEXT CALL ([method TablePhysics.carry]): the grinding put again, its table takes up
+##     what the last call baked, and answers as before. The control: the first call's table, with nothing baked
+##     before it, takes nothing up;
+##   - THE APP DRAWS WHILE THE WORK BAKES ([method TablePreview._bake]): a long act put, the app's own thread
+##     sees its bake part way through and closes the tools, and the call answers that it was given up (baked on
+##     the app's thread, no frame could ever see it part way).
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table_show/puppeteer_tools_check.gd 400
 ##
@@ -69,6 +75,13 @@ func _run() -> void:
 	_ok(smash_line.contains("PASSES THROUGH"), "the control: act does not catch the pestle driven through the bowl: %s" % smash_line)
 	_ok(answer.contains("a jar nobody built"), "act does not say an act naming a thing the table lacks was left out:\n%s" % answer)
 	await tools.call_tool("remove", {"names": ["smash", "ghost-jar"]})
+	# A BAKE GOES ON TO THE NEXT CALL: the grinding put again as it was
+	var first_ph = tools._preview._medium._work.physics
+	_ok(first_ph != null and first_ph._clear_at == 0.0, "the control: the first act call's table took up a bake, none made before it (at %s s)" % (str(first_ph._clear_at) if first_ph != null else "-"))
+	var again: Dictionary = await tools.call_tool("act", {"acts": [acts[2]]})
+	var next_ph = tools._preview._medium._work.physics
+	_ok(next_ph != null and next_ph != first_ph and next_ph._clear_at > 0.0, "the second act call baked its table from the start (taken up at %s s)" % (str(next_ph._clear_at) if next_ph != null else "-"))
+	_ok(_block(String(again.get("text", "")), "grind").contains("Nothing passes through anything"), "put again as it was, the grinding's answer changed:\n%s" % String(again.get("text", "")))
 	# WATCH: six frames of the grinding, each a picture, and they differ
 	var watched: Dictionary = await tools.call_tool("watch", {"name": "grind"})
 	var sheet: Image = (watched.get("images", []) as Array)[0] if not (watched.get("images", []) as Array).is_empty() else null
@@ -93,6 +106,32 @@ func _run() -> void:
 	var prod := TableProducer.new(ep, {"title": "Brews", "brief": "A brief."})
 	var err := prod._land_acts(FileAccess.get_file_as_string(ep.job_dir("acts").path_join(PuppeteerTools.SUBMITTED)))
 	_ok(err.is_empty() and ep.has("acts"), "the handed-in acts did not land: %s" % err)
+	# THE APP DRAWS WHILE THE WORK BAKES: a long act put, the tools closed from a frame that sees its bake part way
+	var long: Dictionary = (acts[2] as Dictionary).duplicate(true)
+	long["name"] = "grind-long"
+	long["beat"] = "close"
+	long["length"] = 120
+	var was = tools._preview._medium._work.physics
+	var box := {}
+	var go := func() -> void:
+		box["got"] = await tools.call_tool("act", {"acts": [long]})
+	go.call()
+	var seen := -1
+	var full := -1
+	while not box.has("got"):
+		await get_tree().process_frame
+		var m = tools._preview._medium
+		var ph = m._work.physics if m != null and is_instance_valid(m) and m._work != null else null
+		if seen < 0 and ph != null and ph != was and int(ph._k) > int(float(ph._clear_at) * TablePhysics.FPS) + TablePhysics.FPS:
+			# ...how far the call bakes: through the end of the long act, the last of the rehearsal
+			var end := 0.0
+			for r in m._work.runs:
+				end = maxf(end, float((r as Dictionary)["t1"]))
+			full = int(ceil((end + TablePhysics.REPORT_AFTER) * TablePhysics.FPS))
+			seen = int(ph._k)
+			tools.release()
+	_ok(seen > 0 and seen < full - TablePhysics.FPS, "the app's thread never saw the long act's bake part way through (at frame %d of %d) - it was baked on the app's own thread" % [seen, full])
+	_ok(String((box["got"] as Dictionary).get("text", "")).contains("closed while it was baked"), "closed part way through its bake, the call did not say it was given up:\n%s" % String((box["got"] as Dictionary).get("text", "")))
 	tools.release()
 	_done()
 

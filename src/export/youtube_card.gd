@@ -365,9 +365,11 @@ func writes_tags() -> bool:
 	return _write_tags.button_pressed
 
 
-## THE NOTE IS DESCRIBED HERE from now on: the box shows, and its words go up first.
+## THE NOTE IS DESCRIBED HERE from now on: the box shows, and its words go up first. It is its own
+## episode, so the tags written are the note's.
 func describe() -> void:
 	_desc.visible = true
+	_write_tags.text = "Write the note's tags"
 
 
 ## The description written here, "" when the box is not shown.

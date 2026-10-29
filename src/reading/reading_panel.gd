@@ -156,8 +156,14 @@ var workspace := "reading":
 var bed: ReadingBed = ReadingBed.new()
 
 ## HOW THE READING GOES OUT ([ReadingPublish]): what its export is called, what is held while the
-## take renders, what an upload says. A note's own, unless a component hands another.
+## take renders, what an upload says. A note's own, unless a component's card hands another
+## ([method hand_publish]).
 var publish: ReadingPublish = ReadingPublish.new()
+
+## THE CARD THAT LISTS THE STEPS THE NOTE'S CARDS ADD ([EpisodeSteps]), as their rows name it ("the
+## Letter card"): the one that handed the reading how it goes out. "" while none has - a Voice alone -
+## and the YouTube card lists them itself ([NoteUpload]).
+var steps_by := ""
 
 ## THE AUTHOR CHANGED THE SCRIPT by hand (never a document arriving): for a component that keeps
 ## count of what an edit changes - Cards' brief changes the NEXT episode, not this one.
@@ -491,9 +497,19 @@ func episode_steps() -> Array:
 
 
 ## The note as its own episode ([NoteUpload]), for a card that lists the steps made from its words under its
-## own (the Actor card); null while the note has no YouTube card, or makes episodes.
+## own (the Actor's, the Letter's); null while the note has no YouTube card, or makes episodes.
 func note_upload() -> NoteUpload:
 	return _note_upload
+
+
+## A CARD HANDS THE READING HOW IT GOES OUT ([param p]) AND SO LISTS THE STEPS THE NOTE'S OTHER CARDS ADD
+## under its own, beside its Generate ([EpisodeSteps]), named as their rows say it ([param by]): what makes
+## what goes out is where what goes up with it is made (the user, 2026-10-23, of the Actor card: "push the
+## generate/regenerate step into the Actor card"). The one way a card hands a publish (docs.py's
+## `check_publish_handed`), so none can make what goes out and leave the steps on the YouTube card.
+func hand_publish(p: ReadingPublish, by: String) -> void:
+	publish = p
+	steps_by = by
 
 
 func _build_header(box: VBoxContainer) -> void:

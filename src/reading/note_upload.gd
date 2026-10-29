@@ -9,9 +9,10 @@ class_name NoteUpload
 ## YouTubeCard.describe]), the note's tags as one list (its `tags:` line, as a show's), and THE STEPS THE
 ## NOTE'S OTHER CARDS ADD ([EpisodeStep] - the YouTube card's tags), listed here with the note as their
 ## episode ([Feed]): a row each with its ⟳ - UNLESS A CARD ON THE NOTE LISTS THEM UNDER ITS OWN, beside its
-## Generate (the Actor card, handed this note's [method feed] - the user, 2026-10-23: "push the
-## generate/regenerate step into the Actor card. Right now, it's buried at the bottom of the YouTube card";
-## [method ReadingPublish.lists_steps]). With no such card - a Voice alone - the rows are here.
+## Generate: the card that handed the reading how it goes out (the Actor's, the Letter's - handed this
+## note's [method feed]; the user, 2026-10-23: "push the generate/regenerate step into the Actor card. Right
+## now, it's buried at the bottom of the YouTube card"; [method ReadingPanel.hand_publish]). With no such
+## card - a Voice alone - the rows are here ([EpisodeSteps], [EpisodeStepRows]).
 ##
 ## AN EXPORT THAT GOES UP MAKES THEM, when they are not made from the words as they are: started as the
 ## take starts rendering ([method start]) and waited for once it is rendered ([method settled], at most
@@ -38,9 +39,8 @@ var reading: ReadingPanel
 var youtube: YouTubeCard
 var _feed: Feed
 var _tags_field: TagField
-var _step_box: VBoxContainer
-var _step_rows := {}             # key -> {step, state: Label, redo: Button}
-var _rows_steps := ""
+var _added: EpisodeSteps          # the steps the note's other cards add, the note their episode
+var _added_rows: EpisodeStepRows  # ...and their rows, while no card on the note lists them
 var _words := ""
 var _t := 0.0
 
@@ -85,14 +85,15 @@ func _init(panel: ReadingPanel, card: YouTubeCard) -> void:
 	youtube.describe()
 	_tags_field = TagField.new()
 	_tags_field.tooltip_text = ("The note's tags - its `tags:` line - the one list its videos go up with. With "
-		+ "\"Write each episode's tags\" ticked above, the writer replaces it with tags written from the note's "
+		+ "\"Write the note's tags\" ticked above, the writer replaces it with tags written from the note's "
 		+ "words. × removes one; type in the box and a comma (or Enter) makes it a tag. YouTube takes 500 "
 		+ "characters of tags in all; a dimmed tag is past that.")
 	_tags_field.changed.connect(_save_tags)
 	add_child(_tags_field)
-	_step_box = VBoxContainer.new()
-	_step_box.add_theme_constant_override("separation", 4)
-	add_child(_step_box)
+	_added = EpisodeSteps.new(HOST, reading.episode_steps, MAKES)
+	_added_rows = EpisodeStepRows.new(_added, " - once the note has words")
+	_added_rows.redo.connect(_redo)
+	add_child(_added_rows)
 
 
 ## The note as the steps read it, for a card that lists them under its own.
@@ -102,7 +103,7 @@ func feed() -> EpisodeFeed:
 
 ## Whether the steps are listed here: no card on the note lists them under its own.
 func hosting() -> bool:
-	return not reading.publish.lists_steps()
+	return reading.steps_by.is_empty()
 
 
 func _ready() -> void:
@@ -161,16 +162,9 @@ func refresh() -> void:
 	var box := reading.source_box()
 	_words = Manuscript.unspoken(reading.walk.body(box.text if box != null else "")).strip_edges()
 	if hosting():
-		for s in reading.episode_steps():
-			(s as EpisodeStep).tick()
-		for s in _listed():
-			(s as EpisodeStep).listed(HOST, _feed, MAKES)
-	_refresh_rows()
+		_added.tick(_feed)
+	_added_rows.refresh(_feed if hosting() else null)
 	_refresh_tags()
-
-
-func _listed() -> Array:
-	return EpisodeStep.listed_of(reading.episode_steps()) if not _feed.folder().is_empty() else []
 
 
 ## An export starts: each listed step not made from the note's words as they are, made now - only when it
@@ -179,28 +173,20 @@ func start() -> void:
 	if not youtube.ticked():
 		return
 	refresh()
-	for s in _listed():
-		(s as EpisodeStep).generate(_feed)
+	_added.generate(_feed)
 
 
 ## A COROUTINE: the take is rendered, and the upload waits for the steps making what it takes - at most
 ## [constant SETTLE_MOST] - saying so on the panel's line.
 func settled() -> void:
-	if not youtube.ticked() or not _busy():
+	if not youtube.ticked() or not _added.busy(_feed):
 		return
 	reading.status("Writing the note's tags for the upload…")
 	var t0 := Time.get_ticks_msec()
-	while _busy() and float(Time.get_ticks_msec() - t0) < SETTLE_MOST * 1000.0:
+	while _added.busy(_feed) and float(Time.get_ticks_msec() - t0) < SETTLE_MOST * 1000.0:
 		await get_tree().create_timer(0.25).timeout
-	if _busy():
+	if _added.busy(_feed):
 		reading.status("The note's tags were still being written: this upload takes them as they were.")
-
-
-func _busy() -> bool:
-	for s in _listed():
-		if (s as EpisodeStep).busy(_feed):
-			return true
-	return false
 
 
 ## ⟳ on a step's row: made again now, from the note's words - which must be written first.
@@ -208,54 +194,6 @@ func _redo(step: EpisodeStep) -> void:
 	if not step.redo(_feed):
 		reading.status("%s waits for the note's words: write them on the Script card." % step.label)
 	refresh()
-
-
-## The rows, one per step listed, as a show's card draws its own: built again when the steps listed change.
-## None while a card on the note lists them.
-func _refresh_rows() -> void:
-	var listed := _listed() if hosting() else []
-	var key := ",".join(PackedStringArray(listed.map(func(s: EpisodeStep) -> String: return s.key)))
-	if key != _rows_steps:
-		_rows_steps = key
-		for c in _step_box.get_children():
-			_step_box.remove_child(c)
-			c.queue_free()
-		_step_rows = {}
-		for s in listed:
-			var step: EpisodeStep = s
-			var r := HBoxContainer.new()
-			r.add_theme_constant_override("separation", 6)
-			_step_box.add_child(r)
-			var name_l := Label.new()
-			name_l.text = step.label
-			name_l.custom_minimum_size.x = 64.0
-			name_l.add_theme_font_size_override("font_size", 12)
-			r.add_child(name_l)
-			var state := Label.new()
-			state.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			state.clip_text = true
-			state.add_theme_font_size_override("font_size", 11)
-			state.mouse_filter = Control.MOUSE_FILTER_STOP
-			r.add_child(state)
-			var redo := Button.new()
-			redo.text = "⟳"
-			redo.flat = true
-			redo.pressed.connect(_redo.bind(step))
-			r.add_child(redo)
-			_step_rows[step.key] = {"step": step, "state": state, "redo": redo}
-	var words := not _words.is_empty()
-	for k in _step_rows:
-		var r: Dictionary = _step_rows[k]
-		var step: EpisodeStep = r["step"]
-		var st := step.state(_feed)
-		var lead := String({"ready": "✓", "running": "…", "queued": "…", "failed": "✗"}.get(st, "–"))
-		var said := step.said(_feed)
-		(r["state"] as Label).text = lead + (" " + said if not said.is_empty() else "")
-		(r["state"] as Label).tooltip_text = (r["state"] as Label).text
-		var made := not step.made(_feed).is_empty()
-		(r["redo"] as Button).disabled = step.busy(_feed) or not words
-		(r["redo"] as Button).tooltip_text = (step.again if made else step.first) + (
-			"" if words else " - once the note has words")
 
 
 ## The chips follow the note's line, unless they are being typed in.

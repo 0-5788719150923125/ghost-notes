@@ -664,6 +664,72 @@ graph at `dist/voice_ab/kokoro_f0/model_f0.onnx` handing both out and taking rep
   letter from a stranger" +1.0 in level. Files `now.wav`, `gentle.wav`, `level.wav` there. Waiting on the
   user's ear.
 
+### It comes out hot (2026-10-28)
+
+The user: "Even at max volume, the 'ambience' level is almost inaudible with the newly-implemented Kokoro
+models." Measured on four paragraphs of Secular Haze through the real host, speaking RMS: Puck (13) 0.141 with
+the note's dials and 0.148 without them, its takes at full scale (most sentences peak at 1.000, 198 samples
+clipped in 59 s); Heart (0) 0.086, peak 0.93; libritts-high 0.065, peak under 0.6. Neither backend levels its
+output - Piper only puts the level back after its effort filter - so the model's own level is what VoiceFX gets,
+and the bed, at a fixed level, sat 17.7 dB under Puck where it sits 9 under Piper.
+
+- **Fixed: the bed follows the voice** (`VoiceFX.PAD_VOICE_REF`, `_level_pad`): its level and its duck scaled by
+  the voice's speaking level (the RMS of the windows the pitch tracker finds voiced, over 8 s of voice, primed
+  with the key from the take's first 12 s), against libritts-high's (0.06), so Piper's bed is where it was and
+  every voice's sits 8-10 dB under it. Gate: tests/voice/pad_level_check.gd.
+- **Built: every voice at one level** (the user: "Especially if we're going to continue adding voice model
+  support, we're going to want a sane way to keep the volume even across them all"; hosts/voice/level.py). Each
+  voice and speaker is measured once, as the vowel probe measures a checkpoint: two plain sentences through the
+  backend's own `_run`, nothing delivered, the noise off (a VITS render moved 0.7 dB from one to the next) and
+  what the noise adds back as the backend says (`level_noise`, measured: libritts-high 1.14 and 1.16 over twelve
+  renders; Kokoro samples nothing), its speaking level the RMS of the frames within 30 dB of its loud ones. Its
+  gain is TARGET - libritts-high speaker 0's own level, so the default voice and the bed's staging are where they
+  were - over that, applied to every take as it leaves the model, before the host's shaping. One gain a voice,
+  never a take. Kept in `levels.json` beside the weights, by the model files' sizes and times. 2 to 4 s a voice,
+  once. Measured: Puck 0.1315 (played at 0.42), Emma 0.1105, Heart 0.0853, Maple 0.0499, libritts-high speaker
+  4 0.0333 (1.6). Read in the chapter after, the four voices' speech came within 1.2 dB of each other (they
+  had been 7.7 dB apart) and none reached full scale (Puck had clipped 198 samples in 59 s). Gate:
+  hosts/voice/test_level.py.
+- **And the bed's tones** (the user, after: "a very strange tone being 'plucked' a few times per minute ...
+  super distracting, dissonant ... always the same tone"): the bass swell, which at the bed's new level was
+  heard at last. Its key had been the first voiced window's pitch, rounded to A440's grid - a reading opens
+  high, and Puck's came out C where he speaks at A#, inside the key's hysteresis so it never moved - and its
+  root sat in [41, 82) Hz whatever the voice, so on a low voice its partials were in his own register, the
+  second (131 Hz) a whole step over his middle (115). Now the key is the voice's own (`KEY_HEARD`: the median
+  of its first 3 s of voiced windows, primed from 12 s; `PAD_REGISTER`: the register a median of the last 20
+  s - a Hz average had drifted 3 semitones up on the tracker's octave slips), never snapped to a grid; the
+  bass's second partial stays a fifth under the voice's middle (`BASS_UNDER`), none under A0
+  (`BASS_FLOOR`); and it swells over 1.2 s, not 0.35. The scale was never the fault: the bed's minor
+  pentatonic has no two notes a semitone apart. Gate: tests/voice/pad_key_check.gd.
+- **Then staged by the ear** (the user: "The ambience is far too quiet. I can barely hear it at all anymore"). In
+  Puck's own key, a fifth under him, every tone of the bed was under 80 Hz: at the same power against the voice as
+  libritts-high's bed (-6.7 dB), it was -30.4 dB A-weighted where the bed the user had liked on Piper is -22.1, and
+  no small speaker plays it. Now a tone under 120 Hz takes octave partials (2x and 4x, 0.6 and 0.35 an octave
+  under it; octaves only, so no note the scale did not choose) at its own power, and the tones are lifted by how
+  much less audible their register is than the one the bed was staged in (`PAD_EAR_KEY`, `_audibility`: the
+  A-weighting over every tone the bed can play) - Puck 1.40 (plain tones would have needed 3.25, 10 dB of
+  sub-bass), libritts-high 1.10, Heart 1.03, a child's register 0.70. Measured A-weighted against the voice: Puck
+  -19.2, libritts-high -21.0, Heart -20.2. The swell is not lifted: it is felt more than heard. Gate:
+  pad_key_check ("heard under a low voice as under a high one").
+
+### The happy vowel (2026-10-28)
+
+The user: "babysitter" "sort of sounds like 'bay-bah-sitter'". eSpeak reads a word's unstressed "ee" (CMUdict's
+IY0) as lax ɪ in compounds and before vowels - "babysitter" bˈeɪbɪsˌɪɾɚ where "baby" alone is bˈeɪbi - and in 65
+words of North Star: "everything" (184 times), "anything" (165), "anybody", "everyone", "video", "radio",
+"earlier", "happiness". Kokoro was taught on misaki's dictionary, which writes that vowel i, so it says ɪ as the
+short vowel it learned: in Puck, "babysitter"'s middle vowel measured F1 360, F2 1670 - between ɪ and ə, the "bah".
+
+- **Built** (`kokoro.py` `happy_vowels`, the hook `PiperBackend._dictionary_reading`): where the word's dictionary
+  reading (the token's `fallback`) has IY0 and eSpeak ɪ in the same place, vowel for vowel, Kokoro is sent i -
+  after a stressed syllable or before a vowel. An unstressed prefix before a consonant keeps eSpeak's ɪ ("pretend",
+  "prepare", "prediction": the dictionary's IY0 is careful speech there, and "prih-tend" is how it is said), as do
+  a word whose vowels do not line up, a word no dictionary holds (`rare`) and every word Piper reads (taught on
+  eSpeak's own readings). Measured after, in Puck: F1 300, F2 2200 in both sentences tried - an "ee". Gate:
+  hosts/voice/test_kokoro.py `test_the_happy_vowel`.
+- **Open:** a voice taught here is taught on `ids_of`, whose tokens carry no dictionary reading, so it learns
+  eSpeak's ɪ where it is now sent i; utterances.py would need CMUdict to match.
+
 ### Not in the trial, and what would be lost
 
 - **`noise_scale` and `noise_w`** have no meaning: Kokoro's prosody is fixed for a text and a voice.
@@ -926,6 +992,61 @@ Instructions - Exam Edition" 5.7, "A Completely False Time Capsule Opening" 2.5,
 (ours 85), but misplaced cuts should not average away: a loss frame by frame learns a burst placed early in one clip
 and late in another as a smear at both - muffled, a stop lost - and more data makes the smear surer, not sharper.
 Untested at scale; af_bella's synthetic speech, jittered as before at 2.5 and 20+ minutes, would say.
+
+### The kikiri revisions tried (2026-10-27, the night)
+
+The user, with 58 new videos of hers fetched (12.8 hours): "If you'd like to go ahead and try those pipeline revisions we
+discussed, let's do that now." Measured as before: twenty unseen sentences, words misheard by medium.en of 188; the floor
+and what is over 6 kHz; and each band against her own held-out recordings, the level matched under 2.4 kHz (bands.py).
+Scripts and runs in dist/kokoro_ft/ (scratch/night.sh, after.sh), every voice for the ear in dist/voice_ab/manzanita_night/.
+
+**More of her, and what stood in the way:**
+- **Whisper's voice-activity filter dropped her speech whole.** Hear runs Silero's VAD (`vad_filter`, hosts/speech/
+  transcribe.py - the card's Hear too): 36 of 73 videos heard no word; without it, 69,439 words against 7,989 ("giving
+  you a random pep talk", 9 minutes: none, then full sentences). What Whisper invents in silence the utterance and
+  agreement steps leave out. NOT CHANGED IN THE PRODUCT: Hear serves an actor's mouth too, where words invented in
+  silence would move it - proposed for a voice alone.
+- **"Their usual pitch" was the search's edge** (fixed: utterances.py `signature`, test_utterances.py): 109 runs read
+  exactly 300 Hz - a correlation that only falls peaks at the shortest lag searched - and the register came out 300 Hz
+  against her voice's 205-235, keeping 6 minutes. A pitch is now the correlation coming back: register 207.6 Hz, 30
+  minutes from 9 videos before agreement (the first data: 12.1 from 4), 209 sentences agreed, **12.2 minutes** (4.6).
+  (Cut as the first data was: utt_dump.py's clean 17 dB, rate 6-60, recording 3 dB.)
+- **More data alone is not clearer:** 9.6% misheard, and duller - 7 dB short from 2.4 to 8 kHz. Its nine recordings'
+  4-8 kHz differ by 9.5 dB and are taught as one voice; the data itself is no darker than the first.
+
+**The loop** (kokoro_train.py `"predictor": "pitch"` and `"ear"`, wavlm.py):
+
+| | misheard | floor | over 6 kHz | 2.4-4 kHz | 4-8 kHz |
+|---|---|---|---|---|---|
+| stock af_heart | 1.1% | -71 dB | -15 dB | -3.1 | -2.8 |
+| "(judged)", the first data | 5.9% | -49 | -23 | -3.2 | -2.3 |
+| "(quiet edges)", the first data | 9.0% | -60 | -23 | -4.5 | -3.3 |
+| the first data, the ear | 8.5% | -56 | -24 | -3.8 | -2.9 |
+| the first data, pitch, played with its own | 15.4% | -70 | -22 | -4.5 | -1.4 |
+| the new data, as before | 9.6% | -55 | -31 | -6.9 | -7.0 |
+| the new data, the ear | 8.0% | -49 | -28 | -6.6 | -5.5 |
+| the new data, pitch and ear, played with its own | 22.9% | -70 | -22 | -4.5 | +1.1 |
+| **the same, played with Kokoro's delivery: "(clearest)"** | **5.3%** | -61 | -25 | -5.7 | -1.3 |
+| ...3,000 steps | 5.9% | -57 | -25 | -3.9 | -1.9 |
+| the new data, taught on Kokoro's own curves | 20.2% | -68 | -27 | -1.5 | -0.3 |
+
+- **The decoder is best taught on the predictor's curves and played on Kokoro's own.** Taught on them (its pitch and
+  energy taught alongside, at her level) it is brighter and its floor quieter - Kokoro's curves are smooth where hers
+  move twice as sharply frame to frame. But with no style read from the recording (Kokoro has none; StyleTTS 2 reads one
+  from the target), the taught pitch follows hers r = 0.01, and played with it every word smeared: crossed, its decoder
+  with Kokoro's own predictor said 5.9%, the clear decoder with the taught predictor 31.9%. So the export leaves a pitch
+  run's taught pitch and energy behind (kokoro_export.py).
+- **Taught on Kokoro's own curves** - its level, 192 Hz - the decoder learned to raise the pitch it was given (it says
+  230 Hz) and smeared the words: 20.2%. On the predictor's energy and her own pitch, 25.5%; its curves for half a batch,
+  21.3% (both dropped).
+- **The ear helps a little and costs little:** 8.5% against 9.0, 8.0 against 9.6, each a dB or so brighter, no slower a
+  step. WavLM Base+ is CC BY-SA 3.0, used only to teach (StyleTTS 2's weight held: 18 against our mel, measured).
+- **Single runs:** two or three words either way is the swing between checkpoints; 5.3% against 9.6% is 10 against 18.
+
+On every Voice card: **"Manzanita (clearest)"** and "Manzanita (more of her)" (the new data with the ear). The card still
+teaches as before (kept, no ear, Hear with the VAD) until the user has listened.
+
+**Still open:** the floor between words (61 dB down, stock 71); 2.4-4 kHz 5.7 dB short; a style per recording.
 
 ## Chatterbox read (2026-10-27)
 

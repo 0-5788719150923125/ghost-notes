@@ -27,7 +27,11 @@ What is held, each with the case that must not change:
   8. the graph patch: unfed, the stock graph's output; the scale before the Round, the floor after,
      the plan handed back whole - and a graph of another shape is left alone;
   9. a voice taught here (trained/<id>/) is listed beside the checkpoints, one speaker, never fetched, read
-     in its own accent - and the ids a voice is taught on (`ids_of`) are the ones the graph is sent.
+     in its own accent - and the ids a voice is taught on (`ids_of`) are the ones the graph is sent;
+ 10. the happy vowel: where the word's dictionary reading has an unstressed "ee" and eSpeak a lax ɪ, after a
+     stress or before a vowel, Kokoro is sent i ("babysitter", "everything", "video", "reaction") - an
+     unstressed prefix before a consonant ("pretend"), vowels that do not line up, a word no dictionary holds
+     and every word Piper reads are left as eSpeak read them.
 
 Synthesis runs against a fake session, as in test_expression.py: no model download, no eSpeak.
 """
@@ -224,6 +228,33 @@ def test_units_keep_their_places():
     got = kokoro_symbols(_syms("sˈeɪ", 3), False)
     eq([(s, src, at) for s, src, at in got], [("s", 3, (0,)), ("ˈ", 3, (1,)), ("A", 3, (2, 3))],
        "A was written from places 2 and 3")
+
+
+@check
+def test_the_happy_vowel():
+    """eSpeak's readings, as measured, against the words' dictionary readings (ghost's CMUdict ARPAbet)."""
+    from backends.kokoro import KokoroBackend, happy_vowels
+    from backends.piper import PiperBackend
+
+    def arpa(s):
+        return [p if p[-1].isdigit() else p + "0" for p in s.split()]
+
+    sitter = arpa("B EY1 B IY0 S IH2 T ER0")
+    eq(happy_vowels("bˈeɪbɪsˌɪɾɚ", sitter), "bˈeɪbisˌɪɾɚ", "babysitter: the y after the stress is 'ee'")
+    eq(happy_vowels("ˈɛvɹɪθˌɪŋ", arpa("EH1 V R IY0 TH IH2 NG")), "ˈɛvɹiθˌɪŋ", "everything")
+    eq(happy_vowels("vˈɪdɪoʊ", arpa("V IH1 D IY0 OW0")), "vˈɪdioʊ", "video: before a vowel")
+    eq(happy_vowels("ɹɪˈækʃən", arpa("R IY0 AE1 K SH AH0 N")), "ɹiˈækʃən", "reaction: before a vowel, ahead of the stress")
+    eq(happy_vowels("pɹɪtˈɛnd", arpa("P R IY0 T EH1 N D")), "pɹɪtˈɛnd",
+       "CONTROL: pretend - an unstressed prefix before a consonant is said as eSpeak reads it")
+    eq(happy_vowels("bˈeɪbsˌɪɾɚ", sitter), "bˈeɪbsˌɪɾɚ", "CONTROL: vowels that do not line up are left alone")
+    eq(happy_vowels("bˈeɪbi", arpa("B EY1 B IY0")), "bˈeɪbi", "CONTROL: a happy vowel eSpeak already reads is as it was")
+    tok = {"text": "babysitter", "fallback": sitter}
+    k = KokoroBackend()
+    eq(k._dictionary_reading("bˈeɪbɪsˌɪɾɚ", tok), "bˈeɪbisˌɪɾɚ", "Kokoro is sent the dictionary's vowel")
+    eq(k._dictionary_reading("bˈeɪbɪsˌɪɾɚ", {**tok, "rare": True}), "bˈeɪbɪsˌɪɾɚ",
+       "CONTROL: a word no dictionary holds (its ARPAbet a guess), as eSpeak read it")
+    eq(PiperBackend()._dictionary_reading("bˈeɪbɪsˌɪɾɚ", tok), "bˈeɪbɪsˌɪɾɚ",
+       "CONTROL: Piper, taught on eSpeak's own readings, is sent them")
 
 
 # -- 2. the ids ----------------------------------------------------------------

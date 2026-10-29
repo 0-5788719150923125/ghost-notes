@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for teaching Kokoro a voice (kokoro_model.py, kokoro_data.py, kokoro_train.py, kokoro_export.py).
+"""Tests for teaching Kokoro a voice (kokoro_model.py, kokoro_data.py, kokoro_train.py, kokoro_export.py, wavlm.py).
 
 Run it directly with the voice-training venv's python - no pytest needed:
 
@@ -18,6 +18,11 @@ drawn at random.
   folded, matrices transposed, LSTMs' gates repacked) has each found, and a taught model's values written into it
   where they belong (CONTROL: a weight two parameters share is left alone).
   THEIR PITCH AND ENERGY - pYIN reads a 220 Hz tone at 220, at twice the frame rate, and none in silence.
+  WHAT EACH WAY TEACHES - Kokoro's reading of text is always held; "kept" holds the whole predictor, "pitch" its
+  timing alone, its pitch and energy taught (CONTROL: "taught" teaches its timing too).
+  THE EAR - WavLM's checkpoint folds its weight norm as weight_norm(dim=2) makes it, the model gives 13 states of 768
+  at 50 a second, the same audio is heard as nothing apart and other audio as more; 24 kHz comes down to 16 with a
+  1 kHz tone kept and a 10 kHz one taken out (CONTROL: read off at 16 kHz by interpolation, it folds back to 6 kHz).
 """
 
 from __future__ import annotations
@@ -177,6 +182,65 @@ def their_pitch_and_energy():
     ok(abs(float(np.median(tone)) - 220.0) < 3.0 and float(f0[-20:].max()) == 0.0,
        "a 220 Hz tone read at %.1f, and silence unvoiced" % float(np.median(tone)))
     ok(float(n[10]) > float(n[-10]) + 5.0, "the tone's energy over silence's")
+
+
+@check
+def what_each_way_teaches():
+    from kokoro_model import KModel
+    from kokoro_train import DELIVERIES, hold
+
+    d = _model()
+    taught = {}
+    for way in DELIVERIES:
+        m = KModel.load(d["weights"], d["config"])
+        hold(m, way)
+        taught[way] = {n.split(".")[0] for n, p in m.predictor.named_parameters() if p.requires_grad}
+        ok(not any(p.requires_grad for part in (m.bert, m.bert_encoder, m.text_encoder) for p in part.parameters()),
+           "%s: Kokoro's reading of text held" % way)
+    ok(taught["kept"] == set(), "kept: the whole predictor held")
+    ok(taught["pitch"] == {"shared", "F0", "N", "F0_proj", "N_proj"}, "pitch: its pitch and energy taught, its timing held (%s)"
+       % sorted(taught["pitch"]))
+    ok({"duration_proj", "lstm", "text_encoder"} <= taught["taught"], "CONTROL: taught, its timing is taught too")
+
+
+@check
+def the_ear():
+    import torch
+    from torch.nn.utils import weight_norm
+    from wavlm import Ear, WavLM, folded
+
+    conv = weight_norm(torch.nn.Conv1d(8, 8, 6, groups=2), name="weight", dim=2)
+    with torch.no_grad():
+        conv.weight_g.uniform_(0.5, 2.0)
+    conv(torch.zeros(1, 8, 10))  # weight_norm makes `weight` on a forward
+    state = {"encoder.pos_conv_embed.conv.weight_g": conv.weight_g.detach(), "encoder.pos_conv_embed.conv.weight_v":
+             conv.weight_v.detach(), "masked_spec_embed": torch.zeros(4)}
+    w = folded(state)["encoder.pos_conv_embed.conv.weight"]
+    ok(torch.allclose(w, conv.weight.detach(), atol=1e-6) and "masked_spec_embed" not in folded(state),
+       "the checkpoint's weight norm folds as weight_norm(dim=2) makes it")
+    torch.manual_seed(0)
+    model = WavLM().eval()
+    ear = Ear(model, "cpu")
+    t = np.arange(24000, dtype=np.float32) / 24000
+    y = torch.from_numpy(0.3 * np.sin(2 * np.pi * 300.0 * t))[None]
+    other = torch.from_numpy(0.3 * np.sin(2 * np.pi * 750.0 * t) * np.sin(2 * np.pi * 3.0 * t))[None]
+    with torch.no_grad():
+        states = model(ear.resample(y))
+        same, apart = float(ear(y, y)), float(ear(other, y))
+    ok(len(states) == 13 and all(tuple(h.shape) == (1, 49, 768) for h in states), "13 states of 768, 49 frames in a second")
+    ok(same == 0.0 and apart > 0.01, "the same audio heard as nothing apart (%.3g), other audio as more (%.3f)" % (same, apart))
+
+    def level(z, sr, hz):
+        spec = np.abs(np.fft.rfft(z * np.hanning(len(z))))
+        return 20 * np.log10(spec[int(round(hz * len(z) / sr))] + 1e-9)
+
+    kept = ear.resample(torch.from_numpy(np.sin(2 * np.pi * 1000.0 * t))[None])[0].numpy()
+    high = ear.resample(torch.from_numpy(np.sin(2 * np.pi * 10000.0 * t))[None])[0].numpy()
+    ok(len(kept) == 16000 and abs(level(kept, 16000, 1000.0) - level(np.sin(2 * np.pi * 1000.0 * np.arange(16000) / 16000), 16000, 1000.0)) < 0.2,
+       "24 kHz to 16: a 1 kHz tone kept at its level")
+    ok(level(high, 16000, 6000.0) < level(kept, 16000, 1000.0) - 40.0, "a 10 kHz tone taken out (over 40 dB down)")
+    naive = np.interp(np.arange(16000) / 16000, t, np.sin(2 * np.pi * 10000.0 * t))
+    ok(level(naive, 16000, 6000.0) > level(kept, 16000, 1000.0) - 20.0, "CONTROL: interpolated, it folds back to 6 kHz")
 
 
 def main() -> int:

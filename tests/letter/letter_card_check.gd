@@ -19,6 +19,12 @@ extends SceneTree
 ##   trips, its hand among it - one it does not know is Kalam (the control) - and the document carries it;
 ##   without a note its desk is the first; the walk reads the letter as [method
 ##   LetterScript.speakable] does, with no title announced.
+## - THE STEPS THE NOTE'S OTHER CARDS ADD (the YouTube card's tags; 2026-10-28, they had waited at the bottom
+##   of the YouTube card): the card hands the reading how it goes out, so it lists them - with the box ticked
+##   the row is on the Letter card, under the Ink and above Generate, and the YouTube card draws none (THE
+##   CONTROL: the box clear, no row anywhere); the YouTube card's line names the Letter card. Generate makes it
+##   once the sketches are drawn - not while one is (held by hand) - here refused, read-only, and said on its
+##   row; a job landed gives its ✓ and replaces the note's tags; Stop stops one.
 ##
 ##   godot --headless --path . --script tests/letter/letter_card_check.gd
 
@@ -138,7 +144,79 @@ func _card() -> void:
 	_check(String(read["title"]).is_empty() and String(read["body"]) == LetterScript.speakable(LETTER, 1),
 		"the walk reads the letter as the letter's own format does, with no title announced")
 	card.free()
+	_steps()
 	_finish()
+
+
+func _steps() -> void:
+	print("-- the steps the note's other cards add")
+	var note_upload = load("res://src/reading/note_upload.gd")
+	var keep: String = note_upload.root
+	note_upload.root = _scratch.path_join("readings")
+	# THE NOTE, read by a panel built by hand (its _ready would start the voice host)
+	var ed = load("res://src/reading/reading_panel.gd").new()
+	ed.workspace = "reading"
+	ed._build_panel()
+	ed._doc._sync = false
+	ed._doc._fields = {"title": "A Letter", "tags": "letters"}
+	ed.note_path = _scratch.path_join("notes/A Letter.md")
+	ed._text.text = LETTER
+	var card = load("res://src/letter/letter_card.gd").for_note({"workspace": ed})
+	ed._attach("youtube")
+	var up = ed._note_upload
+	var step = ed._youtube.episode_steps()[0]
+	_check(ed.steps_by == "the Letter card" and up != null and not up.hosting(),
+		"the card hands the reading how it goes out, so it lists the steps - the note its own episode")
+	_tick_steps(card, up)
+	_check(not card._added_rows.has_row(step.key) and not up._added_rows.has_row(step.key) and step.host.is_empty(),
+		"control: with the box clear, no row anywhere")
+	ed._youtube._write_tags.button_pressed = true
+	_tick_steps(card, up)
+	var feed = up.feed()
+	_check(step.host == "the Letter card" and step.shown == feed and card._added_rows.has_row(step.key)
+		and not up._added_rows.has_row(step.key), "ticked: its row is on the Letter card, and the YouTube card draws none")
+	var at: int = card._added_rows.get_index()
+	_check(at > (card._ink_state as Control).get_parent().get_index() and at < (card._gen_btn as Control).get_parent().get_index(),
+		"the row stands under the Ink, above Generate")
+	ed._youtube._refresh_tags()
+	var line: String = ed._youtube._tags_note.text
+	_check(line.contains("Tags row on the Letter card") and line.ends_with("and so does Generate, or an export that goes up."),
+		"the YouTube card says where the row is and what makes it (%s)" % line)
+	# GENERATE: the sketches first, then the note's tags
+	card._sketches._jobs["held"] = {"id": "text-letter-card-check-sketch", "sketch": {}, "tries": 1}
+	card._generate()
+	_tick_steps(card, up)
+	_check(step.state(feed) == "missing" and card._gen_btn.disabled and not card._stop_btn.disabled,
+		"while a sketch is drawn, the tags wait for it (%s)" % step.state(feed))
+	card._sketches._jobs.erase("held")
+	_tick_steps(card, up)
+	var r: Dictionary = card._added_rows.row(step.key)
+	_check(step.state(feed) == "failed" and (r["state"] as Label).text.contains("read-only"),
+		"then Generate starts the tags - here refused, read-only, and said on the Letter card's row (%s)" % (r["state"] as Label).text)
+	# A JOB LANDED: its ✓, and the note's tags replaced
+	step._errors.clear()
+	AgentJobs._ended["text-letter-card-check"] = {"ok": true, "text": "{\"tags\": [\"a letter\", \"a cross\", \"a dot\"]}"}
+	step._jobs[feed.folder()] = {"id": "text-letter-card-check", "feed": feed, "stamp": feed.stamp()}
+	card._refresh()
+	_check(card._added.busy(feed) and card._gen_btn.disabled and (r["redo"] as Button).disabled,
+		"while its job runs, Generate and its ⟳ wait")
+	_tick_steps(card, up)
+	_check((r["state"] as Label).text == "✓ 3 tags: a letter, a cross, a dot" and ed._doc.field("tags") == "a letter, a cross, a dot"
+		and not card._gen_btn.disabled, "landed: its ✓ on the Letter card, and the note's tags replaced (%s)" % (r["state"] as Label).text)
+	# STOP stops a job writing them
+	step._jobs[feed.folder()] = {"id": "text-letter-card-check-2", "feed": feed, "stamp": feed.stamp()}
+	card._stop_btn.pressed.emit()
+	_check(not step.busy(feed) and not card._added.busy(feed), "Stop stops the tags being written")
+	card.free()
+	ed.free()
+	note_upload.root = keep
+
+
+## A refresh of the note and the card, as their _process makes one.
+func _tick_steps(card: Object, up: Object) -> void:
+	up.refresh()
+	card._tick_steps()
+	card._refresh()
 
 
 func _finish() -> void:

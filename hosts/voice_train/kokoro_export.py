@@ -16,8 +16,9 @@ Every taught tensor reaches the graph but the AdaIN norms' own scale and shift, 
 
 The voice folder: `model.onnx`, `tokenizer.json` (copied beside the graph it came with), `voices/<pack>.bin` - their
 taught timbre (the style's first 128) in every row of a [510, 1, 256] pack and, where Kokoro's delivery was kept (the
-run's `delivery`), the base pack's own prosody row by row, as the base voice reads a sentence of each length; else the
-taught style whole in every row - and `voice.json` ({name, chain, license, british}). THE EXPORT IS
+run's `delivery` "kept" or "pitch" - a pitch run's taught pitch and energy only taught its decoder, and are left behind
+with Kokoro's own predictor: played with them its words smeared, kokoro_train.py), the base pack's own prosody row by
+row, as the base voice reads a sentence of each length; else the taught style whole in every row - and `voice.json` ({name, chain, license, british}). THE EXPORT IS
 CHECKED before it is kept: a sentence through the graph plans the frames PyTorch plans, and sounds as it sounds.
 """
 
@@ -127,7 +128,9 @@ def main(argv=None) -> int:
     run = torch.load(a.run, map_location="cpu", weights_only=False)
     taught_model = KModel.load(a.model, a.config)
     taught_model.decoder.load_state_dict(run["decoder"])
-    taught_model.predictor.load_state_dict(run["predictor"])
+    kept = str(run.get("delivery", "taught")) in ("kept", "pitch")
+    if str(run.get("delivery", "taught")) != "pitch":
+        taught_model.predictor.load_state_dict(run["predictor"])
     taught = derived(taught_model)
     moved = 0
     for t in graph.graph.initializer:
@@ -143,7 +146,7 @@ def main(argv=None) -> int:
     onnx.save(graph, str(tmp))
     style = run["style"].detach().cpu().numpy().astype(np.float32).reshape(1, 1, 256)
     pack = np.repeat(style, ROWS, axis=0)
-    if str(run.get("delivery", "taught")) == "kept":
+    if kept:
         if not a.base:
             say("error: Kokoro's delivery was kept, and the pack it was kept from was not given (--base)")
             return 1
@@ -181,7 +184,7 @@ def main(argv=None) -> int:
     shutil.copyfile(Path(a.graph).with_name("tokenizer.json"), out / "tokenizer.json")
     meta = {"name": a.name, "license": "Their own voice; Kokoro-82M's weights are Apache-2.0",
             "chain": "Kokoro-82M v1.0, its decoder taught their own speech" + (
-                ", its delivery the base voice's" if str(run.get("delivery", "taught")) == "kept" else " and its delivery too"),
+                ", its delivery the base voice's" if kept else " and its delivery too"),
             "british": a.british,
             "steps": int(run.get("step", 0))}
     (out / "voice.json.part").write_text(json.dumps(meta, indent=1), encoding="utf-8")

@@ -99,24 +99,40 @@ acts:
       built standing in its place - a vial in its rack, a ladle in its pot, a stopper in its bottle -
       comes out of that place and goes back into it freely. A thing that holds a flame is never moved
       whole.
+  # WHAT IS IN THINGS IS REAL (the user, 2026-10-28: "The liquids are not liquids"; the snow should be "particles ...
+  # With physics and collision"; the tipped dish's crystals "do not move and tumble, and they do not fall"; the
+  # mortar's grinding should "destroy those things" - next/table_physics.md). A pour is the tip, never a law.
+  - >-
+      WHAT IS IN THINGS IS REAL, and moves by itself: a liquid pours when its vessel is tipped until it
+      reaches the rim, grains spill from a tipped mouth, loose things tumble out of what holds them and
+      fall, and a tool pressed into loose things and moved over them grinds them to pieces and powder.
+      There is no law that pours: you tip, hold and tip back, and what is in the vessel does the rest.
+      So tip far enough - a vessel half full must go well past level before it flows, a shallow dish
+      must go steep before its contents slide out - and hold it there as long as it should flow;
+      `act` says what poured, spilled, fell or broke, and where it went, and how far a tip that
+      poured nothing would have to go. A stopper in a vessel's mouth keeps everything in: take it out
+      first (its `shown` to 0). To put a little of something somewhere that has no vessel to tip, let
+      it fall from a point (`sprinkle`). To grind, bring the tool down into what is to be ground and
+      go round over it, pressed onto the bowl, for as long as it takes - pieces break off as it goes.
   # A POUR IS SEEN (the-quiet-crucible 181083: its snowmelt's vial was tipped straight away from the camera, and its
   # stream - falling now as a stream falls, out of the mouth and down - was hidden behind the vial itself)
   - >-
-      A POUR IS SEEN FROM THE SIDE: what is poured leaves the lip along the vessel's mouth and falls,
+      A POUR IS SEEN FROM THE SIDE: what is poured leaves over the rim where it is lowest and falls,
       so hold the lip over what it pours into, a little above it, and tip the vessel across the view -
       a turn about the front-to-back axis ([0, 0, degrees]), as a hand tips a jug sideways - never
       straight toward or away from the camera, where the vessel hides its own stream.
   - >-
-      WHAT CHANGES, CHANGES IN TIME with what is done to it: a brew's color turns as the ingredient
-      goes in, powder rises as what is ground shrinks, steam thickens as it boils - a state's `to` over
-      the stretch of the act it happens in (`between`).
+      WHAT CHANGES, CHANGES IN TIME with what is done to it: a liquid's color turns as something goes
+      into it, a glow comes up, steam thickens as it boils - a state's `to` over the stretch of the act
+      it happens in (`between`). What is poured, ground or dropped needs no state: it moves itself.
 
 with_tools:
   - >-
       HOW YOU WORK: `parts` shows the table as it is set and what on it can be worked; `act` puts acts
       in and answers, act by act, with what each does - how long it runs, how far and how fast each
-      moving thing goes, anything passing through anything, where each pour's stream lands - and what
-      could not be kept, and why;
+      moving thing goes, anything passing through anything, and what the physics did: what poured,
+      spilled, fell, sank, floated, dissolved or broke, and where it went - and what could not be
+      kept, and why;
       `watch` shows one act from the camera's place, six pictures start to end; `remove` takes acts
       out; `submit` hands the work in. Every picture counts against the {{looks}} you have.
   - >-

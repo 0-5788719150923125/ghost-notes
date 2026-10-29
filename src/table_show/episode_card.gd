@@ -113,8 +113,8 @@ var _taken := {}
 ## picked episode's title is the Script card's Episode ([method episode_title], edited in its plan).
 ## The picked episode, as the steps other cards add to it read it ([method _tick_steps]).
 var _feed: Feed = null
-## Generate was pressed: the steps other cards add are made once its own are done.
-var _steps_asked := false
+## THE STEPS THE NOTE'S OTHER CARDS ADD, listed here: this card hands the reading how it goes out.
+var _added := EpisodeSteps.new(host_name(), Callable())
 var _yt_desc: TextEdit
 var _yt_tags: TagField
 var _yt_note: Label
@@ -155,7 +155,8 @@ func serve(panel: ReadingPanel) -> void:
 	_text = reading.source_box()
 	reading.walk = EpisodeWalk.new(func() -> TableEpisode: return _episode)
 	reading.bed = Bed.new(self)
-	reading.publish = Publish.new(self)
+	reading.hand_publish(Publish.new(self), host_name())
+	_added = EpisodeSteps.new(host_name(), reading.episode_steps)
 	_doc.opened.connect(_on_show_opened)
 	_doc.mode_changed.connect(_on_doc_mode)
 	reading.source_edited.connect(func() -> void: _brief_changed = true)
@@ -186,7 +187,7 @@ func _enter_tree() -> void:
 func _exit_tree() -> void:
 	if _producer != null:
 		_producer.stop()
-	_stop_steps(_feed)
+	_added.stop(_feed)
 	if reading != null and Director.medium_override == "table":
 		Director.medium_override = ""
 
@@ -731,7 +732,7 @@ func _build() -> void:
 	_halt_btn.pressed.connect(func() -> void:
 		if _producer != null:
 			_producer.stop()
-		_stop_steps(_feed))
+		_added.stop(_feed))
 	grow.add_child(_halt_btn)
 	var folder := Button.new()
 	folder.text = "Folder"
@@ -806,7 +807,7 @@ func _open_episode() -> void:
 		return
 	if _producer != null and _producer.running:
 		_producer.stop()
-	_stop_steps(_feed)          # ...and what the other cards were making of it
+	_added.stop(_feed)          # ...and what the other cards were making of it
 	_flush_upload_fields()      # an edit still waiting belongs to the episode being left
 	var seed := int(_knobs["seed"])
 	_episode = TableEpisode.open(_show_key(), seed)
@@ -882,7 +883,7 @@ func _run(steps: Array) -> void:
 	_producer.spec = _spec()
 	_brief_changed = false
 	# THE WHOLE EPISODE IS WHAT THE OTHER CARDS' STEPS ARE MADE WITH: a redo of one part is that part
-	_steps_asked = steps.is_empty()
+	_added.asked = steps.is_empty()
 	_producer.start(steps)
 	_refresh_rows()
 
@@ -921,7 +922,7 @@ func _delete_episode(ep: TableEpisode) -> void:
 	var open := _episode != null and _episode.dir == ep.dir
 	if open and _producer != null:
 		_producer.stop()
-	_stop_steps(Feed.new(self, ep))
+	_added.stop(Feed.new(self, ep), _feed)
 	if _live_episode_dir() == ep.dir:
 		reading.stop_speaking()
 	var err := ep.trash()
@@ -1006,9 +1007,9 @@ func _rebuild_rows() -> void:
 		else:
 			_add_row(label, label, r[1], 0)
 	# THE STEPS THE NOTE'S OTHER CARDS ADD, under the Close
-	for st in _listed():
+	for st in _added.listed(_feed):
 		_add_row((st as EpisodeStep).label, "", [], 0, st as EpisodeStep)
-	_rows_steps = _steps_key()
+	_rows_steps = _added.key(_feed)
 	_rows_word = word
 	_rows_work = made.call("acts")
 	# ...their names one column wide, whatever the producer called a beat
@@ -1127,7 +1128,7 @@ func _refresh_rows() -> void:
 			_episode_pick.set_item_text(at, label)
 	if _episode.card_count() != _rows_for or (_episode.beat_count() if _episode.cardless() else 0) != _rows_beats \
 			or ",".join(_episode.printings()) != _rows_backs \
-			or _steps_key() != _rows_steps or _episode.beat_word() != _rows_word or _episode.steps().has("acts") != _rows_work:
+			or _added.key(_feed) != _rows_steps or _episode.beat_word() != _rows_word or _episode.steps().has("acts") != _rows_work:
 		_rebuild_rows()
 		return
 	var doc := {}
@@ -1237,8 +1238,8 @@ func _refresh_rows() -> void:
 		var own := CardDeck.parse(_text.text)
 		_deck_note.text = ("Deck: %d cards, from the brief's Cards." % own.size()) if not own.is_empty() \
 			else "Deck: the producer's choice, each episode (the brief lists no cards)."
-	var busy := _producer.running or _producer.busy() or _steps_asked or _steps_busy()
-	var whole := _episode.complete() and not _steps_missing()
+	var busy := _producer.running or _producer.busy() or _added.asked or _added.busy(_feed)
+	var whole := _episode.complete() and not _added.missing(_feed)
 	_gen_btn.disabled = busy or whole
 	_halt_btn.disabled = not busy
 	_del_btn.disabled = not DirAccess.dir_exists_absolute(_episode.dir) or _exporting(_episode)
@@ -1248,11 +1249,7 @@ func _refresh_rows() -> void:
 	elif busy:
 		note = "Making episode #%d…" % _episode.seed
 	elif _episode.complete():
-		var left := PackedStringArray()
-		for st in _listed():
-			if (st as EpisodeStep).state(_feed) != "ready":
-				left.append((st as EpisodeStep).label.to_lower())
-		note = "Ready to play - Generate makes its %s." % ", ".join(left)
+		note = "Ready to play - Generate makes its %s." % ", ".join(_added.names(_feed, true))
 	elif _episode.has("plan"):
 		note = "Partly made - Generate finishes it."
 	else:
@@ -1265,69 +1262,15 @@ func _refresh_rows() -> void:
 
 # --- the steps the note's other cards add -------------------------------------------------------
 
-## The steps the note's other cards add, all of them, as the panel holds them
-## ([method ReadingPanel.episode_steps]).
-func _offered() -> Array:
-	return reading.episode_steps() if reading != null else []
-
-
-## ...and the ones listed now, under the Close.
-func _listed() -> Array:
-	return EpisodeStep.listed_of(_offered())
-
-
-## What the rows were built for: the listed steps' keys.
-func _steps_key() -> String:
-	return ",".join(PackedStringArray(_listed().map(func(s: EpisodeStep) -> String: return s.key)))
-
-
 ## This card as the steps' rows say where they are: "the Episode card".
 static func host_name() -> String:
 	return "the %s card" % String(Registry.field(Components.REGISTRY, KEY, "heading", "Episode"))
 
 
-## EACH REFRESH: what the steps' jobs ended with, landed; the picked episode said to the steps listed;
-## and once Generate's own steps are done, each listed step made - from the episode's words, so only
-## when they were written.
+## EACH REFRESH ([EpisodeSteps]): the picked episode said to the steps listed, and once Generate's own steps
+## are done, each made - from the episode's words, so only when they were written.
 func _tick_steps() -> void:
-	for s in _offered():
-		(s as EpisodeStep).tick()
-	var listed := _listed()
-	for s in listed:
-		(s as EpisodeStep).listed(host_name(), _feed)
-	if _steps_asked and _producer != null and not (_producer.running or _producer.busy()):
-		_steps_asked = false
-		for s in listed:
-			(s as EpisodeStep).generate(_feed)
-
-
-## STOP what the steps are making of [param feed]'s episode - and, for the picked one, what Generate asked
-## of them.
-func _stop_steps(feed: Feed) -> void:
-	if feed == null or _feed == null or feed.folder() == _feed.folder():
-		_steps_asked = false
-	if feed == null:
-		return
-	for s in _offered():
-		(s as EpisodeStep).stop(feed)
-
-
-## Is a listed step being made for the picked episode?
-func _steps_busy() -> bool:
-	for s in _listed():
-		if (s as EpisodeStep).busy(_feed):
-			return true
-	return false
-
-
-## Is a listed step not made for the picked episode, as its words are now?
-func _steps_missing() -> bool:
-	if _feed == null:
-		return false
-	for s in _listed():
-		if (s as EpisodeStep).state(_feed) != "ready":
-			return true
-	return false
+	_added.tick(_feed, _producer == null or _producer.running or _producer.busy())
 
 
 ## ⟳ on a step's row: made again now, from the episode's words - which must be written first.

@@ -2139,6 +2139,11 @@ class PiperBackend(Backend):
     # back none and lets the return run on.
     trail_early = None
     trail_through = False
+    # WHAT THE NOISE ADDS TO ITS LEVEL (level.py, which measures a voice with the noise off so a level kept is the
+    # same wherever it is measured): VITS samples its sound on every render, and in use libritts-high speaks this
+    # much louder than with none - speaker 0 1.14 times, speaker 4 1.16, the means of twelve renders each. A model
+    # that samples nothing (kokoro.py) says 1.
+    level_noise = 1.14
 
     @classmethod
     def describe(cls) -> dict:
@@ -2183,6 +2188,7 @@ class PiperBackend(Backend):
                 "onnxruntime/numpy are not installed in the voice environment"
             ) from exc
         import homographs  # ghost's own; HERE is on sys.path - see host.py
+        import level
         import lexicon
         import vowel_probe
 
@@ -2203,6 +2209,9 @@ class PiperBackend(Backend):
         self._vowels = vowel_probe.VowelProbe(
             self._espeak, self._render_symbols, self._root()
         )
+        # EVERY VOICE AT ONE LEVEL: each voice and speaker measured once and played at one gain,
+        # kept beside its weights - see level.py.
+        self._levels = level.Levels(self._root())
         # The frame plan of the most recent render - see `_render_symbols`.
         self._last_frames = None
         self._last_floor = None
@@ -2730,10 +2739,10 @@ class PiperBackend(Backend):
                 for ch in written(got):
                     out.append((ch, i))
             elif t.get("ipa"):
-                for ch in written(str(t["ipa"])):
+                for ch in written(self._dictionary_reading(str(t["ipa"]), t)):
                     out.append((ch, i))
             elif i in espoke:
-                for ch in written(espoke[i]):
+                for ch in written(self._dictionary_reading(espoke[i], t)):
                     out.append((ch, i))
             elif t.get("text"):
                 # no eSpeak: fall back to ghost's ARPAbet if it sent any
@@ -2775,7 +2784,8 @@ class PiperBackend(Backend):
 
         tokens = params.get("tokens")
         if tokens:
-            return self._synth_tokens(list(tokens), voice, out_path, params, cfg, sess)
+            return self._synth_tokens(list(tokens), voice, out_path, self._leveled(voice, params, cfg, sess),
+                                      cfg, sess)
         sentences = _split_sentences(list(phonemes))
         if len(sentences) > 1:
             chunks, phones_all, cursor = [], [], 0.0
@@ -3013,6 +3023,8 @@ class PiperBackend(Backend):
                 params.get("noise_w", cfg.get("inference", {}).get("noise_w", 0.333))
             ) * float(step["noise_w_mul"])
             audio, per_token = self._run(group, voice, gp, cfg, sess, phonemizer)
+            # every voice at one level, as it comes out of the model (level.py)
+            audio = audio * float(params.get("level_gain", 1.0))
             said = [dict(ph) for ph in getattr(self, "_last_phones", [])]
             # The frame plan's word-boundary rests and each word's sounds, before anything
             # resamples them.
@@ -3604,6 +3616,21 @@ class PiperBackend(Backend):
             )
             cursor += dur
         return out
+
+    def _dictionary_reading(self, ipa: str, token: dict) -> str:
+        """eSpeak's reading `ipa` of `token`, as this model should be sent it given the word's dictionary reading
+        (its `fallback`, ghost's CMUdict ARPAbet). Piper was taught on eSpeak's own readings: as it is. A model
+        taught on another dictionary's says where they part (kokoro.py)."""
+        return ipa
+
+    def _leveled(self, voice: str, params: dict, cfg: dict, sess) -> dict:
+        """`params` with the gain `voice`'s speaker is played at (`level_gain`, level.py)."""
+        speaker = int(params.get("speaker", 0) or 0)
+        return {**params, "level_gain": self._levels.gain(self, voice, speaker, cfg, sess)}
+
+    def _level_files(self, voice: str, speaker: int) -> list:
+        """The files `voice`'s `speaker` sounds as it does because of: a level kept is kept while they are."""
+        return [self._files(voice)[0]]
 
     @staticmethod
     def _write_wav(path: str, audio, sample_rate: int) -> None:

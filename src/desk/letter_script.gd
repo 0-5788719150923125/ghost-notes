@@ -118,6 +118,9 @@ const QUICKEST := 2.5
 const READ_WORD := 0.45
 ## A sentence's end: its stop, and any quote or bracket closing after it.
 const SENTENCE_END := "[.?!…][\"'’”)\\]]*$"
+## ...and any mark the voice pauses at - a stop, a comma, a semicolon, a colon, a dash: a page that ends on one is
+## turned with the voice waiting ([method _voice_text]).
+const PAUSE_END := "[.?!…,;:—–][\"'’”)\\]]*$"
 ## A line's return to the margin, at the least (seconds) - [LetterMedium]'s pen, and the walk's guess of it.
 const RETURN := 0.28
 ## The page, as the pad's: the first line's baseline (a rule below the pad's first) and how far a line may
@@ -331,7 +334,8 @@ static func _written(text: String) -> Array:
 ##               `strike` per struck line, a `point` (in a paragraph the pen is not busy with), a `tap`
 ##               (`target` desk or pad)
 ##   spans     - what the camera and the screen follow, by spoken word (`from` to `to`, exclusive):
-##               `image` (`key`, `prompt`, `blend` when it comes up over the picture before it), `still`,
+##               `image` (`key`, `prompt`, `blend` when it comes up over the picture before it,
+##               `after_hesitation` when a hesitation stands between the word before it and its mark), `still`,
 ##               `thought`, `camera` (a point at whoever watches)
 ##   spoken    - PackedStringArray: every spoken word, normalized
 ##   speakable - the text the voice reads
@@ -406,7 +410,8 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 					voice.pop_back()
 					blend = true
 				image = {"kind": "image", "key": Manuscript.image_key(String(blk["arg"])),
-					"prompt": String(blk["arg"]), "from": spoken.size(), "to": -1, "blend": blend}
+					"prompt": String(blk["arg"]), "from": spoken.size(), "to": -1, "blend": blend,
+					"after_hesitation": pauses.has(spoken.size() - 1)}
 				spans.append(image)
 			"image_end":
 				if not image.is_empty() and int(image["to"]) < 0:
@@ -521,12 +526,15 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 ## end and a return ([constant RETURN]) - nor, after a thought, a still or the blank page, than the voice gets
 ## there, nor, for a line a page turns for, than the voice has read the page and the page is turned. At each
 ## sentence's start the voice waits until the pen at its quickest can be ahead of it there ([method _ahead], the
-## words' times on the page by their lines' `ends`) - but A PAGE TURNED INSIDE A PARAGRAPH IS NOT WAITED FOR
-## (2026-10-27, the user, of "You do not" said and a rest for the turn before "remember agreeing to them": "It
-## would probably feel most natural to just keep speaking there, and to force the pen to catch up after the page
-## turn"): the voice reads the paragraph on through it, the pen comes back behind and catches up at its quickest,
-## and the voice waits for it only at the next paragraph, if it is still behind. A turn between two paragraphs is
-## still waited for: the writer turning the page is the pause there. A paragraph's first
+## words' times on the page by their lines' `ends`). A PAGE TURNED INSIDE A PARAGRAPH IS WAITED FOR WHERE THE PAGE
+## ENDS ON A MARK ([constant PAUSE_END]: a stop, a comma, a dash) - the writer turning the page is the pause there,
+## as it is between two paragraphs - BUT A SENTENCE IT BREAKS IS READ ON TO ITS END (2026-10-27, the user, of "You do
+## not" said and a rest for the turn before "remember agreeing to them": "It would probably feel most natural to just
+## keep speaking there, and to force the pen to catch up after the page turn"), and the voice then waits for the pen
+## before the next sentence (2026-10-28: "if a page ended with punctuation, we can hold the voice until after the
+## page turn. However if a sentence was broken by a page turn, we should just finish the thought/voice - and then we
+## should wait for the pen to catch up, before proceeding with the next sentence"; it had waited only at the next
+## paragraph, the pen at its quickest all the way there - "like 5x speed"). A paragraph's first
 ## line the voice is waited for at is handed that rest (`gate` "voice", `gate_rest`), and a line a page turns
 ## for is marked ("turn"): [LetterMedium] begins them as the voice gets there. Before what needs
 ## the pen free (`sync`: a strike, a tap, a drawing, an unspoken line, a point in a thought, a still) the
@@ -580,7 +588,8 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 					points.append(int(line["after"]) - base)
 			points.sort()
 			var at := 0
-			var turned_in := false       # a page turned inside the paragraph: the voice reads it on through
+			var paused := _paused(text)
+			var read_on := {}            # a turned line's first word the voice reads on through: the page broke its sentence
 			while at < points.size():
 				var p := int(points[at])
 				var q := n
@@ -601,7 +610,8 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 						# the page is read before it turns: the voice has said all of it
 						begin = maxf(begin, t_word + TURN_REST)
 						line["gate"] = "turn"
-						turned_in = turned_in or k0 > 0
+						if k0 > 0 and not paused.has(k0):
+							read_on[k0] = true
 					elif li == 0 and gated:
 						begin = maxf(begin, tv)
 						line["gate"] = "voice"
@@ -617,9 +627,9 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 					hold += wait
 					if not fresh.is_empty() and String((fresh[0][0] as Dictionary)["gate"]) == "voice":
 						(fresh[0][0] as Dictionary)["gate_rest"] = wait
-				elif turned_in:
-					# A PAGE TURNED INSIDE A PARAGRAPH IS NOT WAITED FOR, nor is the pen after it: it comes back
-					# behind the voice and catches up at its quickest, the voice waiting at the next paragraph if it must
+				elif read_on.has(p):
+					# A SENTENCE A PAGE BREAKS IS READ ON TO ITS END: the pen comes back behind the voice, and the voice
+					# waits for it at the next sentence (or paragraph) if it must
 					wait = 0.0
 				elif wait > 0.0:
 					inner[p] = float(inner.get(p, 0.0)) + wait
@@ -721,6 +731,22 @@ static func _beats(text: String) -> Dictionary:
 		if ended:
 			out[k] = true
 		ended = _rx(SENTENCE_END).search(String(w["text"])) != null
+	return out
+
+
+## THE WORDS OF PARAGRAPH [param text] AFTER A MARK THE VOICE MAY PAUSE AT ([constant PAUSE_END]): their spoken
+## indices - where a page turned is waited for ([method _voice_text]).
+static func _paused(text: String) -> Dictionary:
+	var out := {}
+	var after := false
+	for w in _written(text):
+		var k := int((w as Dictionary)["spoken"])
+		if k < 0:
+			after = after or _rx(PAUSE_END).search(String(w["text"])) != null
+			continue
+		if after:
+			out[k] = true
+		after = _rx(PAUSE_END).search(String(w["text"])) != null
 	return out
 
 

@@ -84,11 +84,9 @@ var _setting_rows := {}
 var _renderer: OptionButton
 var _library_head: Label
 var _body: VBoxContainer       # everything below the picker: hidden with no actor
-## Generate was asked for: the steps the note's other cards add are made once the actor's own are done.
-var _steps_asked := false
-var _step_box: VBoxContainer   # their rows, under the actor's steps
-var _step_rows := {}           # a step's key -> {step, state: Label, redo: Button}
-var _rows_steps := ""          # the steps the rows were built for
+## THE STEPS THE NOTE'S OTHER CARDS ADD, listed here: this card hands the reading how it goes out.
+var _added := EpisodeSteps.new(host_name(), Callable(), MAKES)
+var _added_rows: EpisodeStepRows   # their rows, under the actor's steps
 ## The reading this card is on (an Actor brings a Voice, so there is one): its status line says what the
 ## card says, and it plays them. Without one (a gate) the card only builds, and `noted` says.
 var _panel: ReadingPanel = null
@@ -98,8 +96,9 @@ static func for_note(ctx: Dictionary) -> ActorCard:
 	var card := ActorCard.new()
 	card._panel = ctx.get("workspace") as ReadingPanel
 	if card._panel != null:
-		card._panel.publish = Publish.new(card)
+		card._panel.hand_publish(Publish.new(card), host_name())
 		card._panel.walk = Walk.new()
+		card._added = EpisodeSteps.new(host_name(), card._panel.episode_steps, MAKES)
 	card._build()
 	return card
 
@@ -114,7 +113,7 @@ func _exit_tree() -> void:
 		Director.medium_override = ""
 	if _builder != null:
 		_builder.stop()
-	_stop_steps()
+	_added.stop(_note_feed())
 	_wait_workers()
 
 
@@ -222,10 +221,6 @@ class Publish extends ReadingPublish:
 	func writer() -> Dictionary:
 		return {"agent": String(card._knobs["writer"]), "model": String(card._knobs["writer_model"]),
 			"effort": String(card._knobs["writer_effort"])}
-
-	# the steps made from the note's words are rows under the actor's, beside Generate
-	func lists_steps() -> bool:
-		return true
 
 
 ## WHAT THEY READ: the note's own words, AND NO TITLE ANNOUNCED FIRST (the user, 2026-10-23: "In this mode,
@@ -382,8 +377,8 @@ func _generate() -> void:
 		return
 	_builder.writer = _writer_choice()
 	_builder.start()
-	_steps_asked = true          # the steps under them: the other cards' too
-	var also := PackedStringArray(_listed().map(func(st: EpisodeStep) -> String: return st.label.to_lower()))
+	_added.asked = true          # the steps under them: the other cards' too
+	var also := _added.names(_note_feed())
 	_say("Generating: every step that is missing or stale, in order. The survey of each video takes about a quarter of its length; the rest a few minutes."
 		+ ((" Then the note's %s, from its words." % ", ".join(also)) if not also.is_empty() else ""))
 
@@ -414,7 +409,7 @@ func _refresh() -> void:
 	_actor.forget()
 	_sources.refresh()
 	var busy := _builder.running or _builder.busy()
-	var steps := _steps_asked or _steps_busy()
+	var steps := _added.asked or _added.busy(_note_feed())
 	_gen_btn.disabled = busy or steps
 	_stop_btn.disabled = not (busy or steps)
 	_steps.refresh(busy)
@@ -424,7 +419,7 @@ func _refresh() -> void:
 	elif _actor.playable("", renderer()):
 		line = "Ready to play: the set in use has everything they need to read."
 	_line.text = line
-	_refresh_step_rows()
+	_added_rows.refresh(_note_feed())
 	_fill_sets()
 	_fill_stills()
 	_fill_library()
@@ -476,12 +471,6 @@ func _take_pictures() -> void:
 
 # --- the steps the note's other cards add -------------------------------------------------------
 
-## The steps the note's other cards add, all of them, as the panel holds them
-## ([method ReadingPanel.episode_steps]).
-func _offered() -> Array:
-	return _panel.episode_steps() if _panel != null and is_instance_valid(_panel) else []
-
-
 ## THE NOTE AS THEIR EPISODE: read as it is written, it is its own ([method ReadingPanel.note_upload]) - null
 ## while it has no YouTube card.
 func _note_feed() -> EpisodeFeed:
@@ -489,109 +478,21 @@ func _note_feed() -> EpisodeFeed:
 	return up.feed() if up != null else null
 
 
-## ...and the ones listed now, under the actor's steps: none while the note has no file to keep them by.
-func _listed() -> Array:
-	var feed := _note_feed()
-	return EpisodeStep.listed_of(_offered()) if feed != null and not feed.folder().is_empty() else []
-
-
-## What the rows were built for: the listed steps' keys.
-func _steps_key() -> String:
-	return ",".join(PackedStringArray(_listed().map(func(st: EpisodeStep) -> String: return st.key)))
-
-
 ## This card as the steps' rows say where they are: "the Actor card".
 static func host_name() -> String:
 	return "the %s card" % String(Registry.field(Components.REGISTRY, KEY, "label", "Actor"))
 
 
-## EACH REFRESH: what the steps' jobs ended with, landed; the note said to the steps listed; and once the
-## actor's own steps are done, each listed step Generate asked for, made - from the note's words, so only
-## once they are written.
+## EACH REFRESH ([EpisodeSteps]): the note said to the steps listed, and once the actor's own steps are done,
+## each Generate asked for made - from the note's words, so only once they are written.
 func _tick_steps() -> void:
-	for st in _offered():
-		(st as EpisodeStep).tick()
-	var feed := _note_feed()
-	var listed := _listed()
-	for st in listed:
-		(st as EpisodeStep).listed(host_name(), feed, MAKES)
-	if _steps_asked and not (_builder != null and (_builder.running or _builder.busy())):
-		_steps_asked = false
-		for st in listed:
-			(st as EpisodeStep).generate(feed)
-
-
-## STOP what the steps are making of the note, and what Generate asked of them.
-func _stop_steps() -> void:
-	_steps_asked = false
-	var feed := _note_feed()
-	if feed == null:
-		return
-	for st in _offered():
-		(st as EpisodeStep).stop(feed)
-
-
-## Is a listed step being made for the note?
-func _steps_busy() -> bool:
-	var feed := _note_feed()
-	for st in _listed():
-		if (st as EpisodeStep).busy(feed):
-			return true
-	return false
+	_added.tick(_note_feed(), _builder != null and (_builder.running or _builder.busy()))
 
 
 ## ⟳ on a step's row: made again now, from the note's words - which must be written first.
 func _redo_step(step: EpisodeStep) -> void:
 	if not step.redo(_note_feed()):
 		_say("%s waits for the note's words: write them on the Script card." % step.label)
-
-
-## The steps' rows, under the actor's, one per step listed, as Proof's card draws them: built again when the
-## steps listed change. A step's ⟳ is offered once the note has words and while that step is not being made -
-## nothing the actor's steps make is read by it.
-func _refresh_step_rows() -> void:
-	if _steps_key() != _rows_steps:
-		_rows_steps = _steps_key()
-		for c in _step_box.get_children():
-			_step_box.remove_child(c)
-			c.queue_free()
-		_step_rows = {}
-		for st in _listed():
-			var step: EpisodeStep = st
-			var r := HBoxContainer.new()
-			r.add_theme_constant_override("separation", 4)
-			_step_box.add_child(r)
-			var name_l := Label.new()
-			name_l.text = step.label
-			name_l.custom_minimum_size.x = 64.0
-			name_l.add_theme_font_size_override("font_size", 12)
-			r.add_child(name_l)
-			var state := Label.new()
-			state.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			state.clip_text = true
-			state.add_theme_font_size_override("font_size", 11)
-			state.mouse_filter = Control.MOUSE_FILTER_STOP
-			r.add_child(state)
-			var redo := Button.new()
-			redo.text = "⟳"
-			redo.flat = true
-			redo.pressed.connect(_redo_step.bind(step))
-			r.add_child(redo)
-			_step_rows[step.key] = {"step": step, "state": state, "redo": redo}
-	var feed := _note_feed()
-	var words := feed != null and not feed.words().is_empty()
-	for k in _step_rows:
-		var r: Dictionary = _step_rows[k]
-		var step: EpisodeStep = r["step"]
-		var st := step.state(feed)
-		var lead := String({"ready": "✓", "running": "…", "queued": "…", "failed": "✗"}.get(st, "–"))
-		var said := step.said(feed)
-		(r["state"] as Label).text = lead + (" " + said if not said.is_empty() else "")
-		(r["state"] as Label).tooltip_text = (r["state"] as Label).text
-		var made := not step.made(feed).is_empty()
-		(r["redo"] as Button).disabled = step.busy(feed) or not words
-		(r["redo"] as Button).tooltip_text = (step.again if made else step.first) + (
-			"" if words else " - once the note has words")
 
 
 # --- the sets and the library --------------------------------------------------------------------
@@ -884,10 +785,11 @@ func _build() -> void:
 		if _builder != null:
 			_builder.writer = _writer_choice()
 	_body.add_child(_steps)
-	# THE STEPS THE NOTE'S OTHER CARDS ADD, under the actor's ([method _refresh_step_rows])
-	_step_box = VBoxContainer.new()
-	_step_box.add_theme_constant_override("separation", 0)
-	_body.add_child(_step_box)
+	# THE STEPS THE NOTE'S OTHER CARDS ADD, under the actor's
+	_added_rows = EpisodeStepRows.new(_added, " - once the note has words")
+	_added_rows.add_theme_constant_override("separation", 0)
+	_added_rows.redo.connect(_redo_step)
+	_body.add_child(_added_rows)
 	var grow := HBoxContainer.new()
 	grow.add_theme_constant_override("separation", 6)
 	_body.add_child(grow)
@@ -903,7 +805,7 @@ func _build() -> void:
 	_stop_btn.pressed.connect(func() -> void:
 		if _builder != null:
 			_builder.stop()
-		_stop_steps())
+		_added.stop(_note_feed()))
 	grow.add_child(_stop_btn)
 	_line = Label.new()
 	_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

@@ -607,6 +607,9 @@ func release() -> void:
 
 
 func _exit_tree() -> void:
+	# the physics' own thread stopped with it (what is asked after bakes on the caller's thread: [method TablePhysics.clear])
+	if _work != null and _work.physics != null:
+		_work.physics.clear()
 	if stage != null and is_instance_valid(stage) and not _stage_was.is_empty():
 		for key in _stage_was:
 			stage.set(key, _stage_was[key])
@@ -1382,6 +1385,7 @@ func _build_table(spec: Dictionary = {}) -> void:
 	_light_part._flame_n = 0
 	_things_part.clear(spec["layers"])
 	_work.clear()
+	_work.materials = spec["materials"]
 	_light_part._heat_cells = {}
 	# WHAT THE TABLE IS ABOARD, planned before anything stands on it: each thing's moving parts are made
 	# ready to answer it as they are put ([method TableThings.put])

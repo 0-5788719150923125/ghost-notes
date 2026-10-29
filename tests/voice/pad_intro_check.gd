@@ -22,9 +22,11 @@ const INTRO := 5.0
 const VOICE := 3.0
 ## Measured reference: real narration through this chain sits at RMS ~0.047 (see
 ## VoiceFX.pad_level's staging notes). A bed should be clearly under the voice and
-## clearly above nothing.
+## clearly above nothing. UNDER IT AS A SHARE OF IT (2026-10-28): the bed follows the
+## voice's level now (VoiceFX.PAD_VOICE_REF), so 0.030 under that narration is CEIL of
+## whatever voice it is under - this one is ten times as loud.
 const FLOOR := 0.0015
-const CEIL := 0.030
+const CEIL := 0.030 / 0.047
 
 var _fails: Array = []
 
@@ -41,9 +43,9 @@ func _init() -> void:
 	_ok(primed["intro"] > FLOOR,
 		"primed: the pad must actually SOUND through the intro - got RMS %.6f, needs > %.4f"
 		% [primed["intro"], FLOOR])
-	_ok(primed["intro"] < CEIL,
+	_ok(primed["intro"] < CEIL * primed["voice"],
 		"primed: the bed must sit UNDER the voice, not compete with it - got RMS %.6f, max %.3f"
-		% [primed["intro"], CEIL])
+		% [primed["intro"], CEIL * primed["voice"]])
 	_ok(primed["voice"] > 0.1,
 		"primed: the narration itself must survive the chain (got %.4f)" % primed["voice"])
 	# The bed swells; it must not arrive at full level. A pad that is already flat out at

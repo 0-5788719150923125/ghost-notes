@@ -32,6 +32,12 @@ class_name TablePreview
 ## shared with the build while it runs (rebuilding the stage in the tree would free its old nodes on the
 ## main thread under the worker). Its report and its picture are the ones a main-thread build gives,
 ## pixel for pixel.
+##
+## SO IS WHAT IS IN THINGS ([method _bake]): the work's physics is baked on a worker too, the app drawing on
+## while it waits - and a table stood again with other acts takes up what the last one baked, as far as their
+## plans agree ([method TablePhysics.carry]). Each of a puppeteer's `act`s had stood a table and baked the work
+## from its start on the app's own thread (2026-10-28: a draft 105 s long took one to six minutes a call, and
+## Ghost Notes would not close for two).
 
 ## The size of every picture handed back, and how wide the studio's lens is (degrees, vertical).
 const SHEET := Vector2i(1280, 720)
@@ -126,6 +132,7 @@ var _table: SubViewport = null
 var _medium = null               # a TableMedium, loaded by class name
 var _doc: Doc
 var _releases := 0               # how many times it was given back ([method release]): a table built across one is dropped
+var _halted := false             # a bake under way given up ([method halt])
 
 
 ## [param dir]: the folder the preview keeps its copies in (inside the job's own). [param name] and
@@ -160,6 +167,14 @@ func release() -> void:
 	_studio = null
 	_table = null
 	_medium = null
+
+
+## A BAKE UNDER WAY GIVEN UP ([method _bake]): the tools closed while it ran. The call it was for answers with an
+## error, and nothing is baked after.
+func halt() -> void:
+	_halted = true
+	if _medium != null and is_instance_valid(_medium) and _medium._work != null and _medium._work.physics != null:
+		_medium._work.physics.halt()
 
 
 # --- the studio -------------------------------------------------------------------------------------
@@ -830,6 +845,11 @@ func _stand(raw: Dictionary, acts: Variant = null) -> String:
 		m._textures = (_medium._textures as Dictionary).duplicate()
 		m._mtimes = (_medium._mtimes as Dictionary).duplicate()
 	m.aside = true
+	# WHAT THE LAST TABLE BAKED goes on to this one ([method TablePhysics.carry]): stood over the same table, it bakes
+	# only from where the two plans part - with acts only (a table only set has no plan to carry)
+	var carried: Variant = null
+	if acts != null and _medium != null and is_instance_valid(_medium) and _medium._work != null and _medium._work.physics != null:
+		carried = _medium._work.physics.carry()
 	var build := func() -> void:
 		m.mount(vp)
 		m.bind_captions(doc)
@@ -843,6 +863,8 @@ func _stand(raw: Dictionary, acts: Variant = null) -> String:
 	if _releases != releases:
 		vp.free()
 		return "the table's stage was given back while it was built"
+	if carried != null and m._work != null and m._work.physics != null:
+		m._work.physics.adopt(carried)
 	_tree().root.add_child(vp)
 	if _table != null and is_instance_valid(_table):
 		_table.queue_free()
@@ -930,15 +952,24 @@ func work(raw: Dictionary, acts: Variant) -> Dictionary:
 	return {"parts": w.parts_report(), "notes": Array(w.notes), "acts": (w.acts as Array).map(func(a: Dictionary) -> String: return String(a["name"]))}
 
 
-## ACT [param name] OF [param acts] played on the table [param raw], in numbers ([method TableWork.check]):
-## `{text, through}`, or `{error}`.
-func work_check(raw: Dictionary, acts: Variant, name: String) -> Dictionary:
+## ACTS [param names] OF [param acts] played on the table [param raw], in numbers ([method TableWork.check]) - ONE
+## table stood for them all, and what is in things baked once through the last of them: `{texts: {name: text},
+## notes}` (what of the acts could not be kept), or `{error}`.
+func work_checks(raw: Dictionary, acts: Variant, names: Array) -> Dictionary:
 	var err: String = await _stand(raw, acts)
 	if not err.is_empty():
 		return {"error": err}
-	var got: Dictionary = _medium._work.check(name)
-	got["notes"] = Array(_medium._work.notes)
-	return got
+	var w = _medium._work
+	if not names.is_empty() and not await _bake(w.checks_reach(w.rehearsed(), names)):
+		return {"error": "the work's tools were closed while it was baked"}
+	var texts := {}
+	for nm in names:
+		texts[String(nm)] = String((w.check(String(nm)) as Dictionary)["text"])
+		# ...the app drawing between one act's check and the next's
+		await _tree().process_frame
+		if _halted:
+			return {"error": "the work's tools were closed while it was checked"}
+	return {"texts": texts, "notes": Array(w.notes)}
 
 
 ## ACT [param name] OF [param acts] played on the table [param raw] and photographed from the camera's place
@@ -948,11 +979,13 @@ func work_watch(raw: Dictionary, acts: Variant, name: String, n := 6) -> Diction
 	if not err.is_empty():
 		return {"error": err}
 	var m = _medium
-	var times: Dictionary = m._work.rehearse(AIR_AT)
+	var times: Dictionary = m._work.rehearsed()
 	if not times.has(name):
 		return {"error": "no act called \"%s\" was kept%s" % [name, (": " + "; ".join(m._work.notes)) if not (m._work.notes as PackedStringArray).is_empty() else ""]}
 	var t0 := float((times[name] as Array)[0])
 	var t1 := float((times[name] as Array)[1])
+	if not await _bake(t1):
+		return {"error": "the work's tools were closed while it was baked"}
 	var cols := 3
 	var rows := int(ceil(float(n) / float(cols)))
 	var sheet := Image.create(SHEET.x, SHEET.y, false, Image.FORMAT_RGB8)
@@ -974,6 +1007,21 @@ func work_watch(raw: Dictionary, acts: Variant, name: String, n := 6) -> Diction
 		img.resize(tw, th, Image.INTERPOLATE_LANCZOS)
 		sheet.blit_rect(img, Rect2i(Vector2i.ZERO, img.get_size()), Vector2i((i % cols) * (SHEET.x / cols) + 1, (i / cols) * (SHEET.y / rows) + 1))
 	return {"image": sheet, "frames": frames}
+
+
+## WHAT IS IN THINGS BAKED through rehearsal time [param t] ([method TablePhysics.bake_until]) on a worker, the app's own
+## thread drawing on while it waits: false when it was given up ([method halt]) or the preview given back. What is
+## asked of the table after finds it baked.
+func _bake(t: float) -> bool:
+	var ph = _medium._work.physics if _medium != null and _medium._work != null else null
+	if ph == null or _halted:
+		return not _halted
+	var releases := _releases
+	var task := WorkerThreadPool.add_task(Callable(ph, "bake_until").bind(t, true), false, "what is in things, baked")
+	while not WorkerThreadPool.is_task_completed(task):
+		await _tree().process_frame
+	WorkerThreadPool.wait_for_task_completion(task)
+	return not _halted and _releases == releases and _medium != null
 
 
 ## The episode's pictures beside the description, copied again when the episode's change (the room

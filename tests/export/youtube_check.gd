@@ -711,8 +711,10 @@ func _proof_steps() -> bool:
 	proof._open_episode()
 	proof._refresh()
 	var step = ed._youtube.episode_steps()[0]
-	_ok(proof._step_rows.has(step.key) and proof._step_box.get_index() > (proof._rows["script"]["state"] as Label).get_parent().get_index(),
+	_ok(proof._added_rows.has_row(step.key) and proof._added_rows.get_index() > (proof._rows["script"]["state"] as Label).get_parent().get_index(),
 		"its row stands under the Script")
+	_ok(ed.steps_by == "the Proof card" and ed._youtube._write_tags.text == "Write each episode's tags",
+		"the card that hands the reading how it goes out lists the steps, and the box names each episode's tags")
 	proof._tick_steps()
 	_ok(step.host == "the Proof card" and step.shown == proof._feed, "the Proof card says it lists the step, and which episode it shows")
 	proof._episode.write_json("problem", {"episode_title": "Why Two Is Prime", "description": "Two is prime.", "tags": ["primes", "math"]})
@@ -738,7 +740,7 @@ func _proof_steps() -> bool:
 	step._jobs[proof._feed.folder()] = {"id": "text-youtube-check-proof", "feed": proof._feed, "stamp": proof._feed.stamp()}
 	step.tick()
 	proof._refresh()
-	var r: Dictionary = proof._step_rows[step.key]
+	var r: Dictionary = proof._added_rows.row(step.key)
 	_ok((r["state"] as Label).text == "✓ 3 tags: prime numbers, two, proof" and not (r["redo"] as Button).disabled,
 		"made: its ✓, its tags, and its ⟳ (%s)" % (r["state"] as Label).text)
 	_ok(ed._doc.field("tags") == "prime numbers, two, proof" and Array(proof._tags_field.get_tags()) == ["prime numbers", "two", "proof"]
@@ -746,7 +748,7 @@ func _proof_steps() -> bool:
 		"landed, they replace the note's tags: the one list on the card, and what goes up (%s)" % ed._doc.field("tags"))
 	ed._youtube._write_tags.button_pressed = false
 	proof._refresh()
-	_ok(not proof._step_rows.has(step.key) and ed.upload_meta("").get("tags") == ["prime numbers", "two", "proof"],
+	_ok(not proof._added_rows.has_row(step.key) and ed.upload_meta("").get("tags") == ["prime numbers", "two", "proof"],
 		"box cleared: the row goes, and the list stays as it was written")
 	# A NOTE WITH NO TAGS TAKES THE FRAMER'S, once
 	ed._doc._fields.erase("tags")
@@ -804,11 +806,13 @@ func _note_steps() -> bool:
 	# THE TAGS STEP, listed here with the note as its episode
 	var step = ed._youtube.episode_steps()[0]
 	up.refresh()
-	_ok(step.host.is_empty() and up._step_rows.is_empty(), "control: with the box clear, the step is not listed")
+	_ok(step.host.is_empty() and not up._added_rows.has_row(step.key), "control: with the box clear, the step is not listed")
+	_ok(ed.steps_by.is_empty() and up.hosting() and ed._youtube._write_tags.text == "Write the note's tags",
+		"no card handed the reading how it goes out, so the YouTube card lists the steps, its box the note's tags")
 	ed._youtube._write_tags.button_pressed = true
 	up.refresh()
 	var folder: String = up._feed.folder()
-	_ok(step.host == "this card" and step.shown == up._feed and up._step_rows.has(step.key)
+	_ok(step.host == "this card" and step.shown == up._feed and up._added_rows.has_row(step.key)
 		and folder.begins_with(ProjectSettings.globalize_path(ROOT + "_readings")) and folder.get_file().begins_with("a-reading-"),
 		"ticked, it is listed on this card, the note its episode, kept in the note's own folder (%s)" % folder.get_file())
 	_ok(up._feed.words() == "The quick brown fox  jumps over the lazy dog." and up._feed.episode_title() == "A Reading"
@@ -824,23 +828,23 @@ func _note_steps() -> bool:
 	ed._youtube._upload.set_pressed_no_signal(true)
 	up.start()
 	up.refresh()
-	var r: Dictionary = up._step_rows[step.key]
-	_ok(step.state(up._feed) == "failed" and not up._busy() and (r["state"] as Label).text.contains("read-only"),
+	var r: Dictionary = up._added_rows.row(step.key)
+	_ok(step.state(up._feed) == "failed" and not up._added.busy(up._feed) and (r["state"] as Label).text.contains("read-only"),
 		"one that goes up starts it - here refused, read-only, and said on its row (%s)" % (r["state"] as Label).text)
 	step._errors.clear()
 	AgentJobs._ended["text-youtube-check-note"] = {"ok": true, "text": "{\"tags\": [\"quick brown fox\", \"lazy dog\", \"reading\"]}"}
 	step._jobs[folder] = {"id": "text-youtube-check-note", "feed": up._feed, "stamp": up._feed.stamp()}
-	_ok(up._busy(), "while its job runs, an export waits for it")
+	_ok(up._added.busy(up._feed), "while its job runs, an export waits for it")
 	up.refresh()
-	r = up._step_rows[step.key]
-	_ok(not up._busy() and (r["state"] as Label).text == "✓ 3 tags: quick brown fox, lazy dog, reading" and not (r["redo"] as Button).disabled,
+	r = up._added_rows.row(step.key)
+	_ok(not up._added.busy(up._feed) and (r["state"] as Label).text == "✓ 3 tags: quick brown fox, lazy dog, reading" and not (r["redo"] as Button).disabled,
 		"landed: its ✓, its tags, its ⟳ (%s)" % (r["state"] as Label).text)
 	_ok(ed._doc.field("tags") == "quick brown fox, lazy dog, reading" and Array(up._tags_field.get_tags()) == ["quick brown fox", "lazy dog", "reading"]
 		and ed.upload_meta("").get("tags") == ["quick brown fox", "lazy dog", "reading", "theirs"],
 		"they replace the note's tags: on the card, and going up (%s)" % ed._doc.field("tags"))
 	ed._text.text = "Words written again."
 	up.refresh()
-	_ok(step.state(up._feed) == "missing" and (up._step_rows[step.key]["state"] as Label).text.contains("written again"),
+	_ok(step.state(up._feed) == "missing" and (up._added_rows.row(step.key)["state"] as Label).text.contains("written again"),
 		"words written again make them stale: the next export that goes up writes new ones")
 	ed.free()
 	_wipe(ROOT + "_readings")
@@ -1076,13 +1080,13 @@ func _panel_fields() -> bool:
 		"the card says it lists the step, and which episode it shows")
 	show._refresh_rows()
 	_ok((row["status"] as Label).text == "·" and (row["text"] as Label).text == tags_step.waits and (row["redo"] as MenuButton).disabled
-		and show._steps_missing(), "before the reading is written the row waits, its ⟳ too")
+		and show._added.missing(show._feed), "before the reading is written the row waits, its ⟳ too")
 	show._episode.write_text("script", "<!-- table: draw 1 -->\nThe first card is the moon.")
 	_ok(show._feed.words() == "The first card is the moon.", "the step reads the reading as it is said, its marks out (%s)" % show._feed.words())
-	show._steps_asked = true
+	show._added.asked = true
 	show._tick_steps()
 	show._refresh_rows()
-	_ok(not show._steps_asked and tags_step.state(show._feed) == "failed" and (row["status"] as Label).text == "✗"
+	_ok(not show._added.asked and tags_step.state(show._feed) == "failed" and (row["status"] as Label).text == "✗"
 		and (row["text"] as Label).text.contains("read-only"),
 		"once the card's own steps are done, Generate makes it - here refused, read-only, and said on its row")
 	tags_step._errors.clear()
@@ -1094,7 +1098,7 @@ func _panel_fields() -> bool:
 	show._refresh_rows()
 	_ok((row["status"] as Label).text == "✓" and (row["text"] as Label).text == "3 tags: the moon, night, cards"
 		and not (row["redo"] as MenuButton).disabled and (row["redo"] as MenuButton).get_popup().get_item_text(0) == tags_step.again
-		and not show._steps_missing(), "made: its ✓, its tags and its ⟳ to write them again")
+		and not show._added.missing(show._feed), "made: its ✓, its tags and its ⟳ to write them again")
 	_ok(ed._doc.field("tags") == "the moon, night, cards" and Array(show._yt_tags.get_tags()) == ["the moon", "night", "cards"]
 		and _tag_fields(ed._youtube) == 1 and ed.upload_meta("").get("tags") == ["the moon", "night", "cards"],
 		"landed, they replace the show's tags: still one list on the card, and what goes up (%s)" % ed._doc.field("tags"))

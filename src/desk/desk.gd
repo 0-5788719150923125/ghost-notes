@@ -1155,9 +1155,9 @@ static func _strike_line(a: Dictionary) -> Array:
 
 ## WHERE THE NIB IS NOW, on the page (px), and how high above it (m): writing, it is the ink's nib;
 ## between strokes it lifts and travels; between actions it waits ([method _waiting]) and reaches the
-## next as it begins ([method _reach]); before the first, it waits at the page's right.
+## next as it begins ([method _reach]); before the first, it waits where [method _before_first] says.
 func pen_at() -> Dictionary:
-	var rest := {"p": Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0), "lift": REST_LIFT}
+	var rest := _before_first()
 	var last := -1                  # the last action the pen did
 	# FROM WHERE THE LAST WALK FOUND ALL DONE (asked twice a frame, it had walked from the letter's first action): a
 	# done action stays done as the time goes on, and which points aim at nothing is the layout's
@@ -1217,6 +1217,12 @@ func _waiting(last: int, next: int) -> Dictionary:
 	return {"p": p, "lift": lift}
 
 
+## WHERE THE NIB WAITS BEFORE THE FIRST ACTION: `{p, lift}` (page px, m) - at the desk, at the page's right, a
+## little lifted. A letter's waits over its first stroke, where it is carried from the desk ([LetterMedium]).
+func _before_first() -> Dictionary:
+	return {"p": Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0), "lift": REST_LIFT}
+
+
 ## Does the pen get out of the way between action [param last] and action [param next] (-1: the lesson's
 ## end)? When [constant PARK_WORDS] words or more are said between them, or [param next] turns the page.
 ## Read off the script, never the voice's times, so it never changes its mind as a voice's words arrive.
@@ -1239,7 +1245,7 @@ func _parks(last: int, next: int) -> bool:
 func _reach(last: int, next: int) -> float:
 	var to := _action_point(_actions[next], true)
 	if last < 0:
-		return _travel(Vector2(PW * 0.84, DeskScript.FIRST_RULE + DeskScript.RULE * 2.0).distance_to(to))
+		return _travel((_before_first()["p"] as Vector2).distance_to(to))
 	var from := PARK if _parks(last, next) else _rest_near(_action_point(_actions[last], false))
 	var free := float(_plan[last]["end"])
 	if float(_plan[next]["turn_at"]) < INF:
@@ -1365,6 +1371,12 @@ func _world(p: Vector2, lift: float) -> Vector3:
 
 
 func _place_pen() -> void:
+	_pen.global_transform = _pen_xf()
+
+
+## THE PEN'S TRANSFORM at [member _now]: its nib where [method pen_at] says, its body leaning as the hand does
+## ([method lean], [method drift]). A medium that lays poses of its own over it answers for itself.
+func _pen_xf() -> Transform3D:
 	var at := pen_at()
 	var p: Vector2 = at["p"]
 	var lift := float(at["lift"])
@@ -1379,7 +1391,7 @@ func _place_pen() -> void:
 	var nib := _world(p + (d["dp"] as Vector2), lift + float(d["dlift"]))
 	var x := up.cross(Vector3.FORWARD).normalized()
 	var z := x.cross(up).normalized()
-	_pen.global_transform = Transform3D(Basis(x, up, z), nib)
+	return Transform3D(Basis(x, up, z), nib)
 
 
 ## THE PEN'S LEAN at [param now]: [param base] swayed slowly about the vertical and in its rise (the

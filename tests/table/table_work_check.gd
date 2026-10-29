@@ -53,10 +53,8 @@ extends SceneTree
 ##   the estimate taken for the words not yet heard begins acts before their words.
 ## - A SCRUBBED READING'S CLOCK KEEPS THE READING'S TIME (181083: its chronometer began at 4:00 again): begun ten
 ##   minutes in, a running hour hand stands as ten minutes in has it; the control, from the top, at its start.
-## - A POUR FALLS (181083's snowmelt: "a weird white line ... shoots out to the side"): a flask tipped across the view
-##   pours from the part's point its `lip` names, its stream falling under gravity onto the bowl's water, inside the
-##   bowl, only while it flows; the check says where it lands. The controls: a lip naming nothing is said and pours
-##   from the flask's mouth; tipped away from the camera, the check says the flask hides it.
+## - A POUR IS THE TIP'S: tests/table/physics_check.gd holds it (a vessel tipped until its liquid reaches its rim pours by
+##   itself, next/table_physics.md).
 ## - MADE SAFE: an act with no beat, a law ghost does not know, a track naming nothing on the table are left
 ##   out and said; a thing holding a flame is never moved whole.
 
@@ -76,7 +74,7 @@ func _ok(cond: bool, what: String) -> void:
 func _run() -> void:
 	await process_frame
 	for check in [_formula, _clock, _clock_law, _grind, _at_the_spot, _seated, _set_down, _carry, _through_keys, _copies, _cued,
-			_live_words, _pour, _safe]:
+			_live_words, _safe]:
 		var done: Variant = (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("table_work_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -385,7 +383,8 @@ func _at_the_spot() -> bool:
 	for k in 200:
 		steepest = maxf(steepest, absf(TableWork.blend_lift(0.5, float(k + 1) * 0.0005) - TableWork.blend_lift(0.5, float(k) * 0.0005)))
 	_ok(steepest < 0.003, "the hand's lift jumps %.1f cm for half a millimeter further to go" % (steepest * 100.0))
-	_ok(TableWork.blend_lift(0.5, 0.0) == 0.0 and is_equal_approx(TableWork.blend_lift(0.5, 0.1), TableWork.BLEND_LIFT),
+	var peak := Hands.LIFT_SHAPE.x / (Hands.LIFT_SHAPE.x + Hands.LIFT_SHAPE.y)
+	_ok(TableWork.blend_lift(peak, 0.0) == 0.0 and is_equal_approx(TableWork.blend_lift(peak, 0.1), TableWork.BLEND_LIFT),
 		"the control: the lift is not none from where the law has it and a hand's whole from far off")
 	# the control: the mortar's floor found where it stood (as places were found) is far from where it is ground
 	var then: Vector3 = m._work.place_of("mortar.floor", Vector3.ZERO)
@@ -541,8 +540,9 @@ func _through_keys() -> bool:
 		return a.distance_to(jar.position) / 0.04
 	var on_keys := minf(float(speed.call(10.0 + 0.3 * 6.0)), float(speed.call(10.0 + 0.6 * 6.0)))
 	_ok(on_keys > 0.015, "a path stops at the keys it goes on through: %.1f cm a second there" % (on_keys * 100.0))
+	# held still in the air, it is as still as a hand holds it: no faster than the hand's own drift ([method Hands.drift_most])
 	var held := float(speed.call(30.0 + 0.4 * 6.0))
-	_ok(held < 0.001, "the control: a path does not hold at a key it holds at: %.1f cm a second" % (held * 100.0))
+	_ok(held < Hands.drift_most(), "the control: a path does not hold at a key it holds at: %.1f cm a second" % (held * 100.0))
 	var joins := minf(float(speed.call(50.0 + 0.33 * 6.0)), float(speed.call(50.0 + 0.66 * 6.0)))
 	_ok(joins > 0.015, "carries one after another stop where one hands on to the next: %.1f cm a second there" % (joins * 100.0))
 	var apart := float(speed.call(70.0 + 0.35 * 6.0))
@@ -717,88 +717,6 @@ func _live_words() -> bool:
 		if cues.has(nm):
 			early = maxf(early, float(cues[nm]) - ((played["guessed"]["runs"] as Dictionary)[nm] as Vector2).x)
 	_ok(early > 2.0, "the control: acts begun on the estimate did not begin before their words: at most %.1f s early" % early)
-	return true
-
-
-## A POUR FALLS (181083's snowmelt: "a weird white line projected from the left side of the vial ... it shoots out to
-## the side"; the user: liquids "should be using physics"): a flask tipped across the view over a bowl pours from the
-## lip its `lip` names as a part's point ("neck.mouth"), its stream falling from that lip under gravity - lower at every
-## drop, leaving along the flask's mouth - onto the bowl's water, inside the bowl; nothing falls before the flow, and
-## nothing once its tail has fallen; the act's check says where it lands. The controls: a lip naming nothing is said,
-## and the stream leaves from the flask's mouth all the same; tipped straight away from the camera, the check says the
-## flask hides it.
-func _pour() -> bool:
-	var spec := {"things": [
-		{"name": "flask", "parts": [
-			{"name": "neck", "shape": "lathe", "profile": [[0, 0], [2.5, 0], [2.5, 6], [1, 7.5], [1, 9], [0.8, 9], [0.8, 7.5], [2.3, 6], [2.3, 0.4], [0, 0.4]],
-				"material": "glass", "points": {"mouth": [0, 9, 0]}},
-			{"name": "ink", "shape": "lathe", "profile": [[0, 0.4], [2.3, 0.4], [2.3, 4], [0, 4]], "material": "ink"}]},
-		{"name": "bowl", "parts": [
-			{"shape": "lathe", "profile": [[0, 0], [6, 0], [8, 5], [8.4, 5.2], [7.6, 5], [5.6, 0.6], [0, 0.6]], "material": "clay"},
-			{"name": "water", "shape": "lathe", "profile": [[0, 0.6], [5.6, 0.6], [7, 3.5], [0, 3.5]], "material": "water"}]}],
-		"materials": {"glass": {"kind": "ceramic", "color": "#9ab0c0"}, "ink": {"kind": "liquid", "color": "#2a3a8a"},
-			"clay": {"kind": "ceramic", "color": "#8a6a4a"}, "water": {"kind": "liquid", "color": "#6a8aa0"}}}
-	var pour := func(lip: String, turn: Array) -> Dictionary:
-		return {"name": "pour-it", "beat": 1, "length": 8, "tracks": [
-			{"thing": "flask", "law": "carry", "to": [-14, 10.5, -10], "turn": turn, "lift": 4, "between": [0.0, 0.3]},
-			{"thing": "flask", "law": "carry", "turn": [0, 0, 0], "lift": 4, "between": [0.8, 1.0]},
-			{"law": "pour", "from": "flask/ink", "into": "bowl/water", "lip": lip, "amount": 0.6, "gain": 0.2, "between": [0.35, 0.75]}]}
-	var bench := func(lip: String, turn: Array) -> TableMedium:
-		var m := _medium()
-		var rng := RandomNumberGenerator.new()
-		rng.seed = 7
-		m._plan.cam_base = CardTable.sample_layout(rng)["camera"]
-		_stand(m, spec, "flask", Vector3(Tables.ORIGIN.x + 0.25, 0.0, Tables.ORIGIN.y - 0.1))
-		_stand(m, spec, "bowl", Vector3(Tables.ORIGIN.x - 0.05, 0.0, Tables.ORIGIN.y - 0.1))
-		m._work.build({"acts": [pour.call(lip, turn)]}, 1)
-		m._work.runs = [{"i": 0, "t0": 10.0, "t1": 18.0}]
-		m._work._timelines()
-		return m
-	var m: TableMedium = bench.call("neck.mouth", [0, 0, -100])
-	_ok((m._work.acts as Array).size() == 1 and (m._work._streams as Array).size() == 1 and m._work.notes.is_empty(),
-		"the pour was not kept whole: %s" % "; ".join(m._work.notes))
-	if (m._work._streams as Array).size() != 1:
-		m._root3.free()
-		return true
-	var st: Dictionary = m._work._streams[0]
-	m._work.tick(10.0 + 0.3 * 8.0)
-	_ok(not (st["node"] as Node3D).visible, "a stream falls before the pour begins")
-	m._work.tick(10.0 + 0.55 * 8.0)
-	var pts: PackedVector3Array = st["pts"]
-	var neck: int = m._work._work_of(m._work._thing_named("flask"), "neck")
-	var mouth: Vector3 = m._work._world_of((m._work.works[neck] as Dictionary)["node"]) * ((((m._work.works[neck] as Dictionary)["w"] as Dictionary)["points"] as Dictionary)["mouth"] as Vector3)
-	_ok((st["node"] as Node3D).visible and pts.size() >= 3, "the stream does not fall while it pours")
-	if pts.size() >= 3:
-		_ok(pts[0].distance_to(mouth) < 0.002, "the stream does not leave from the lip named as the neck's mouth: %.1f cm from it" % (pts[0].distance_to(mouth) * 100.0))
-		var falls := true
-		for i in range(1, pts.size()):
-			falls = falls and pts[i].y < pts[i - 1].y
-		_ok(falls, "the stream does not fall at every drop: %s" % str(pts))
-		_ok(pts[1].x > pts[0].x, "the stream does not leave along the flask's mouth (tipped toward the bowl)")
-		var wi: int = m._work._work_of(m._work._thing_named("bowl"), "water")
-		var ww: Dictionary = (m._work.works[wi] as Dictionary)["w"]
-		var top: Vector3 = m._work._world_of((m._work.works[wi] as Dictionary)["node"]) * Vector3((ww["base"] as Vector3).x, (ww["box"] as AABB).end.y, (ww["base"] as Vector3).z)
-		var land := pts[pts.size() - 1]
-		_ok(absf(land.y - top.y) < 0.001, "the stream does not end on the water: %.1f cm off its surface" % ((land.y - top.y) * 100.0))
-		_ok(Vector2(land.x - top.x, land.z - top.z).length() < 0.06, "the stream lands outside the bowl: %.1f cm from its middle" % (Vector2(land.x - top.x, land.z - top.z).length() * 100.0))
-	m._work.tick(10.0 + 0.8 * 8.0)
-	_ok(not (st["node"] as Node3D).visible, "the stream still falls once the pour is over and its tail has fallen")
-	var said: String = m._work.check("pour-it")["text"]
-	_ok(said.contains("lands") and said.contains("in it") and not said.contains("hides it"), "the check does not say the stream lands in the bowl, seen:\n%s" % said)
-	m._root3.free()
-	# the controls: a lip naming nothing, and a flask tipped away from the camera
-	var lost: TableMedium = bench.call("nowhere.mouth", [0, 0, -100])
-	_ok("; ".join(lost._work.notes).contains("names no point"), "a lip naming nothing was not said: %s" % "; ".join(lost._work.notes))
-	lost._work.tick(10.0 + 0.55 * 8.0)
-	var lp: PackedVector3Array = (lost._work._streams[0] as Dictionary)["pts"]
-	var fl: Dictionary = lost._work.things[lost._work._thing_named("flask")]
-	var fm: Vector3 = lost._work._world_of(fl["node"]) * Vector3(0.0, (fl["box"] as AABB).end.y, 0.0)
-	_ok(not lp.is_empty() and lp[0].distance_to(fm) < 0.005, "the control: a lip naming nothing does not pour from the flask's mouth: %s" % (str(lp[0].distance_to(fm) * 100.0) + " cm" if not lp.is_empty() else "nothing falls"))
-	lost._root3.free()
-	var away: TableMedium = bench.call("neck.mouth", [-100, 0, 0])
-	var away_said: String = away._work.check("pour-it")["text"]
-	_ok(away_said.contains("away from") or away_said.contains("toward"), "the control: a flask tipped straight away from the camera is not said to hide its stream:\n%s" % away_said)
-	away._root3.free()
 	return true
 
 

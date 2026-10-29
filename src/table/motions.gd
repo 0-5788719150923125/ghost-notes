@@ -70,12 +70,12 @@ const LAWS := {
 			["by", "[x, y, z] centimeters past that"], ["lift", "centimeters it rises on the way (6 is a hand's)"],
 			["turn", "[x, y, z] degrees it ends turned, from as it was built"], ["between", "[u0, u1]: the stretch of the act it travels in"],
 			["down", "true: SET DOWN on what is under it - its lowest point comes to rest on the table or on the thing below, however it is turned (a lid laid aside, a spoon put down on its side, a jar stood on a shelf); `to`'s height is then only roughly where"]]},
-	"pour": {"label": "Pour", "on": [],
-		"blurb": "a vessel's contents leave it for another, in a stream from its lip - a jug into a bowl, tea into a cup, a vial into a flask, sand through an hourglass. Tip the vessel with its own track; this moves what is in it",
-		"fields": [["from", "the part that empties: \"thing/part\""], ["into", "the part that fills: \"thing/part\""],
-			["lip", "the point the stream leaves from: \"thing.point\" or \"part.point\" (left out: the mouth of the vessel it is in) - what is poured leaves it along the vessel's mouth and falls"], ["amount", "the share of `from` that leaves (0-1)"],
-			["gain", "how much fuller `into` ends (a share of its own; left out: 0.1)"], ["between", "[u0, u1]: when it flows"],
-			["color", "the stream's color (left out: `from`'s)"]]},
+	"sprinkle": {"label": "Sprinkle", "on": [],
+		"blurb": "a little of something falls from a point, as grains - a pinch of salt from fingers nobody sees, herbs crumbled off a bundle, seeds shaken from a pod, ash tapped off; they fall, land and heap or sink where they land, as any grains do. (A vessel needs no law to pour: tipped until what is in it reaches its rim, it pours by itself)",
+		"fields": [["at", "where it falls from: a point (\"bundle.flowers\") or [x, y, z] - hold it over what it falls into"],
+			["material", "a material of the table's (its look, how heavy it is, whether it dissolves)"],
+			["grain", "a grain's size in centimeters (0.1 a powder, drawn as small clumps, to 1)"], ["amount", "how many grains fall (up to 120)"],
+			["spread", "how wide it falls, centimeters (left out: 1)"], ["between", "[u0, u1]: when they fall"]]},
 }
 ## THE CHANNELS a state can be: what a part's `start` and a law's `state` may name, as an agent reads it.
 const STATES := {
@@ -106,7 +106,7 @@ const MAX_TRACKS := 12
 const MAX_CUES := 8
 const MAX_KEYS := 16
 const MAX_POINTS := 8
-const MAX_WORKS := 96
+const MAX_WORKS := 192
 ## How far a thing's work may reach (centimeters): a place past it is no place on this table.
 const REACH := 200.0
 ## THE KINDS OF SMOKE a part may emit, and how each looks: color, puffs a second, how fast they rise
@@ -123,10 +123,11 @@ const MAX_PUFFS := 64
 const TRAIL_THIN := 0.3
 
 
-## An EASE in and out over 0..1: slow to start, slow to end - a hand's move.
+## An EASE in and out over 0..1: slow to start, slow to end - a hand's move, as MINIMUM JERK has it ([method
+## Hands.smooth]). The cubic in and out it had been stepped its acceleration from +12 to -12 at the middle of every
+## move: a jolt half way, which the user saw as "somewhat jerky" (2026-10-28).
 static func eased(x: float) -> float:
-	var u := clampf(x, 0.0, 1.0)
-	return 4.0 * u * u * u if u < 0.5 else 1.0 - pow(-2.0 * u + 2.0, 3.0) * 0.5
+	return Hands.smooth(x)
 
 
 ## THROUGH ITS PLACES, NEVER STOPPING AT ONE (the-quiet-crucible 181083: the snowmelt's vial, carried the low way out
@@ -221,7 +222,8 @@ static func describe_parts() -> String:
 	lines.append("- `emits`: {\"kind\": %s, \"at\": a point's name, \"rate\" (how thick it rises, in puffs a second: fewer than its kind's own is a fainter trail, never a broken one), \"color\"} - smoke or steam rising from it all the time, carried by the table's wind." % " or ".join(PackedStringArray(EMITS.keys())))
 	for k in EMITS:
 		lines.append("  - %s: %s" % [k, String((EMITS[k] as Dictionary)["about"])])
-	lines.append("- material \"liquid\": what is IN a vessel - a brew, ink, oil, wine - as its own part filling it to its surface; give it a `name` so the work can fill, empty, tint and light it.")
+	lines.append("- material \"liquid\": what is IN a vessel - a brew, ink, oil, wine, water - as its own part filling the vessel's inside from its floor to the liquid's surface (a hollow part: its profile comes back down inside it); give it a `name` so the work can tint and light it. It is REAL: its surface stays level however its vessel is turned, it slops when its vessel is carried and turns when it is stirred, it pours over the rim once it is tipped far enough, and things that fall into it ring it, splash it, sink in it or float on it. A vessel's inside is as deep as the vessel is: draw it full only as far as it is full. A stopper across its mouth (a part of the same thing there) keeps it in, until the work takes the stopper away (`shown` 0).")
+	lines.append("- WHAT IS IN A THING IS WHAT IT IS (next/table_physics.md): a liquid is a liquid part, loose stuff poured in quantity is a `grains` part in its vessel, a loose thing lying in or on something is `loose`; each falls, pours, tumbles and lands for real when what holds it tips.")
 	return "\n".join(lines)
 
 
@@ -236,7 +238,9 @@ static func describe_laws() -> String:
 		for f in row["fields"]:
 			lines.append("    `%s`: %s" % [String(f[0]), String(f[1])])
 	lines.append("Any number may be a formula instead, a string of arithmetic in t (seconds into the act), u (0-1 through it), d (its length), T (the video's time) and n (whole periods done): \"30 * sin(tau * t / 2)\". Functions: %s." % ", ".join(PackedStringArray(Formula.FUNCS.keys())))
-	lines.append("Any track may add `jitter` (centimeters or degrees of a hand's unsteadiness) and `rate` (how quickly it wanders, per second).")
+	lines.append("Any track may add `jitter` (centimeters or degrees of a hand's unsteadiness) and `rate` (how quickly it wanders, per second) - a held thing already moves as a hand holds it: never quite still, bowed a little as it is carried, leaning with the pull of its moves.")
+	lines.append("")
+	lines.append("WHAT IS IN THINGS IS REAL (there is no law for it): a LIQUID stays level in its vessel, sloshes as it is carried and swirls as it is stirred; tipped until it reaches the rim it POURS BY ITSELF from the lowest point of the rim, faster the further it is tipped, in a stream that falls under gravity into whatever is under it - and nothing pours from a vessel stoppered or not tipped far enough. GRAINS in a vessel slide and spill out of its mouth when it is tipped. A LOOSE thing slides, rolls and tumbles out of what holds it when that is tipped, falls, and sinks or floats in a liquid; carried by a law, it is held, and falls from where it is let go. A tool `press`ed into loose things and moved over them (a pestle going round in a bowl) CRUSHES them - stones and crystals break into pieces and the pieces into powder; metal, glass and wood never break. To pour or tip something out: bring the vessel over what is to catch it, tip it across the view and hold it there for as long as it should flow, then tip it back.")
 	return "\n".join(lines)
 
 
@@ -275,6 +279,10 @@ static func _parts_text(parts: Array, lines: PackedStringArray, pad: String) -> 
 				bits.append("runs")
 			if w.has("emits"):
 				bits.append("emits " + String((w["emits"] as Dictionary)["kind"]))
+			if bool(w.get("loose", false)):
+				bits.insert(0, "loose")
+			if String(d.get("shape", "")) == "grains":
+				bits.insert(0, "grains")
 			# a part with copies is worked as one by its name, a copy alone by its number ([method TableWork._part_of])
 			var n := int((d["copies"] as Dictionary).get("count", 1)) if d.get("copies") is Dictionary else 1
 			if n > 1:
@@ -340,6 +348,13 @@ static func sanitize_work(p: Dictionary, notes: PackedStringArray = PackedString
 			out["emits"] = {"kind": kind, "at": Props._text(e.get("at", ""), 40),
 				"rate": Props._num(e.get("rate"), float(base["rate"]), 0.2, 20.0),
 				"color": Props._color(e.get("color", ""), String(base["color"]))}
+	# LOOSE ([Particles]): not fixed to its thing - it lies where it is, falls, slides and tumbles when nothing holds it,
+	# and is picked up as a free part is (a strand's own `loose` is a number, how unkempt it lies: [method Props._sanitize_part])
+	var lv: Variant = p.get("loose")
+	if (lv is bool and lv) or ((lv is float or lv is int) and float(lv) >= 1.0):
+		out["loose"] = true
+		if not out.has("joint"):
+			out["joint"] = {"kind": "free", "axis": Vector3.UP}
 	return out
 
 
@@ -518,21 +533,15 @@ static func sanitize_law(raw: Variant, notes: PackedStringArray, running := fals
 			out["between"] = _between(d.get("between"))
 			if d.get("down") == true:
 				out["down"] = true
-		"pour":
-			for k in ["from", "into"]:
-				var s := Props._text(d.get(k, ""), 100)
-				if not s.contains("/"):
-					notes.append("pour's `%s` names a part as \"thing/part\" - it pours nothing" % k)
-					return {}
-				out[k] = s
-			var lip: Variant = _place(d.get("lip"))
-			if lip != null:
-				out["lip"] = lip
-			out["amount"] = Props._num(d.get("amount"), 0.5, 0.0, 1.0)
-			out["gain"] = Props._num(d.get("gain"), 0.1, 0.0, 1.0)
+		"sprinkle":
+			var at: Variant = _place(d.get("at"))
+			if at != null:
+				out["at"] = at
+			out["material"] = Props._text(d.get("material", ""), 60)
+			out["grain"] = Props._num(d.get("grain"), 0.3, 0.05, 1.5)
+			out["amount"] = int(Props._num(d.get("amount"), 24.0, 1.0, 120.0))
+			out["spread"] = Props._num(d.get("spread"), 1.0, 0.0, 10.0)
 			out["between"] = _between(d.get("between"))
-			if Props._is_color(d.get("color")):
-				out["color"] = Props._color(d["color"], "#808080")
 	if d.has("jitter"):
 		out["jitter"] = Props._num(d.get("jitter"), 0.0, 0.0, 5.0)
 		out["rate"] = Props._num(d.get("rate"), 0.7, 0.05, 8.0)
@@ -645,7 +654,7 @@ static func sanitize_acts(raw: Variant, beats: int) -> Dictionary:
 			if law.is_empty():
 				continue
 			var thing := Props._text((t as Dictionary).get("thing", ""), 100)
-			if thing.is_empty() and String(law["law"]) != "pour":
+			if thing.is_empty() and String(law["law"]) != "sprinkle":
 				notes.append("%s: a track names no thing - left out" % nm)
 				continue
 			law["thing"] = thing
@@ -782,6 +791,13 @@ static func point_at(law: Dictionary, center: Vector3, fixed: Variant, rest: Vec
 		var r: Vector2 = law["radius"]
 		var a := deg_to_rad(float(law.get("start", 0.0))) + float(law.get("dir", 1.0)) * TAU * t / maxf(period, 1e-6)
 		var lift := num(law.get("lift", 0.0), vars)
+		# A ROUND IS NEVER THE SAME TWICE ([method Hands.round_of]): the hand's own pace, reach and middle, the same for
+		# both ends of a tool so it goes round whole
+		if law.has("_hand"):
+			var h := Hands.round_of(t, period, int(law["_hand"]))
+			a += float(h["phase"]) * float(law.get("dir", 1.0))
+			r *= float(h["radius"])
+			center += h["middle"]
 		return center + Vector3(cos(a) * r.x, lift, sin(a) * r.y) * 0.01
 	if fixed is Vector3:
 		return fixed

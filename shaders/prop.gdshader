@@ -5,7 +5,7 @@ shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;
 
 // Props.MATERIALS: 0 painted, 1 metal, 2 wax, 4 crystal, 5 ceramic, 6 stone, 7 wood, 8 paper,
-// 9 leather, 10 fabric, 11 bone, 12 plant, 13 liquid
+// 9 leather, 10 fabric, 11 bone, 12 plant, 13 liquid, 14 powder
 uniform int kind = 0;
 uniform vec3 color : source_color = vec3(0.7);
 uniform vec3 color2 : source_color = vec3(0.3);
@@ -167,6 +167,16 @@ void fragment() {
 		coat_rough = 0.02;
 		sss = 0.15 + 0.35 * clarity;
 		back = color * 0.25 * clarity;
+	} else if (kind == 14) {
+		// POWDER: loose fine stuff, matte and soft - snow, flour, ash, salt - a few grains catching the light (pattern)
+		albedo = color * (0.9 + 0.16 * n2);
+		vec3 c = cellsid(cpos * 7.0 + vec3(seed * 5.0));
+		float spark = (1.0 - smoothstep(0.12, 0.28, c.x)) * step(1.0 - pattern * 0.6, c.z);
+		albedo = mix(albedo, color2 * 1.3, spark * 0.6);
+		rough = mix(0.93, 0.22, spark);
+		spec = mix(0.3, 0.9, spark);
+		sss = 0.15 + 0.3 * clarity;
+		back = color * 0.12 * clarity;
 	} else {
 		// PAINTED or lacquered: a color, as glossy as its polish
 		albedo = color * (0.95 + 0.08 * n1);

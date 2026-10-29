@@ -17,6 +17,13 @@ heard in the background.
 
 This note is what was found, the design, and the plan in order.
 
+**2026-10-28: what is in things is real, and moves are a hand's** - next/table_physics.md (the user, of #181083: liquids
+"not liquids", the snow should be particles, the tipped dish's crystals "remain attached to the dish", the mortar should
+grind what goes into it, the moves "jerky ... straight lines"). Liquids keep their volume in a vessel's inside and pour over
+its rim when tipped, `grains` and `loose` parts are particles and bodies baked over show time, a pestle breaks what it is
+pressed into, and every move is minimum jerk, bowed, leaning and never quite still (`Hands`). `pour` is gone: the tip is
+the pour.
+
 **Status, 2026-10-26: the first build is in - the clock runs, the parts work, the puppeteer blocks acts, the
 readers talk the work through, the dragons are heard; nothing yet has run with real agents or been rendered
 on a real table.** Asked the same night ("please go ahead and start with this implementation ... Let us start

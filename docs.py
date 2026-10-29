@@ -1755,6 +1755,38 @@ def check_settings_owner() -> None:
             )
 
 
+def _publish_assignments(text: str) -> List[str]:
+    """The lines of GDScript [text] that assign a reading's `publish` (comments aside)."""
+    return [line for line in text.splitlines()
+            if not line.lstrip().startswith("#") and re.search(r"\.publish\s*=(?!=)", line)]
+
+
+def check_publish_handed() -> None:
+    """A card hands the reading how it goes out through `ReadingPanel.hand_publish`, never by setting
+    `publish`.
+
+    The card that makes what goes out lists the steps the note's other cards add (the YouTube card's
+    tags, `EpisodeSteps`) beside its Generate. `hand_publish` takes the card's name with its publish,
+    so handing one is listing them. A card that set `reading.publish` itself listed nothing, and the
+    steps waited at the bottom of the YouTube card out of reach of its Generate - the Letter's did
+    (2026-10-28, the user: "keeping this tagging updated is going to be a game of whack-a-mole").
+
+    THE CONTROL, run first: a planted assignment must be found, and a comparison, a comment and a
+    call must not.
+    """
+    if len(_publish_assignments("\tcard._panel.publish = Publish.new(card)")) != 1 or _publish_assignments(
+            "\tif reading.publish == p:\n\t## reading.publish = Publish.new(self)\n"
+            "\treading.hand_publish(Publish.new(self), host_name())"):
+        warn("check_publish_handed: its control did not fail - the check proves nothing")
+    for path in sorted(SCRIPTS.rglob("*.gd")):
+        if path.name == "reading_panel.gd":
+            continue
+        for line in _publish_assignments(path.read_text(encoding="utf-8")):
+            warn(f"{path.relative_to(ROOT).as_posix()}: sets a reading's publish ({line.strip()}) - a card "
+                 "hands it with ReadingPanel.hand_publish(publish, its name), which lists the steps the "
+                 "note's other cards add under it")
+
+
 def _scan_flags() -> Dict[str, List[str]]:
     """Every `--flag` string literal in the GDScript, mapped to the scripts
     that mention it."""
@@ -3303,6 +3335,7 @@ def main() -> int:
     check_fields()
     check_panel_controls()
     check_settings_owner()
+    check_publish_handed()
     check_films_pumped()
 
     layer = scripts["layer"]

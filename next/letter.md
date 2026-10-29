@@ -200,15 +200,50 @@ exactly that.
   the pen is taken up again `RESUME_LEAD` (0.9 s) before the voice goes on (`LetterMedium._resume_floor`).
   Only hesitations: an `action-hold` is often the voice waiting for the pen, and stopping the pen there
   would lengthen it.
-- **A page turns where it runs out, mid-sentence too** (`TURN_REST`, the voice resting at that line's
-  first word). The legal pad of the desk, 24 lines to a page, about 230 words.
+- **A hesitation before a picture is the writer's first** (2026-10-28, the user, of Secular Haze's
+  "Housing came into my room looking for you." and the `<!-- hesitation: 3 -->` under it: "the picture that
+  follows is immediately displayed - not waiting for the hesitation at all"). A picture came up from the end
+  of the word before its passage, and the hesitation sits after that word. Now a picture whose mark a
+  hesitation stands before (`after_hesitation` on its span) comes up as the pen is taken up again, `RESUME_LEAD`
+  before its first word (`LetterMedium._comes_up`), the desk seen through the pause; one dissolved from is held
+  whole through it, and a live reading not yet past the pause keeps the desk. Gate: letter_check.
+- **A page turns where it runs out, mid-sentence too.** The legal pad of the desk, 24 lines to a page,
+  about 230 words. The voice rests for the turn (`TURN_REST` and the pen's first words) between two
+  paragraphs, and - 2026-10-28, the user: "if a page ended with punctuation, we can hold the voice until
+  after the page turn. However if a sentence was broken by a page turn, we should just finish the
+  thought/voice - and then we should wait for the pen to catch up, before proceeding with the next
+  sentence" - inside one where the page ends on a mark (`LetterScript.PAUSE_END`: a stop, a comma, a
+  semicolon, a colon, a dash). A sentence the page breaks is read on to its end, and the voice waits for
+  the pen at the next sentence (it had waited only at the next paragraph, with the pen at its quickest all
+  the way there: "the pen has to go at like 5x speed to catch up"). The words said before a line begins
+  are written at the pen's quickest (`LetterMedium._ahead_times`): given the line's start all at once, the
+  elastic pen had smoothed them over its window and written them at near half that, two seconds late.
+  Over Secular Haze's 20 turns: after a mark, about 4 s rested; a broken sentence, 3.5 to 4.3 s at the
+  next sentence; the pen never past its 2.5 times over the page seen.
+- **A line runs on into the voice's pause after it** (2026-10-28, the user, of "my line of work. It is |
+  called a zero-knowledge protocol": "the pen just stops moving at "it is", for a second, before it moves
+  to the new line"). A line ends as the voice ends the word two before its last, and the next begins as
+  the voice begins the word two before its first: where a sentence ends two words before a line's end, the
+  voice's pause after it fell between the two, and the pen stood at the line's end through it - 22 times
+  in Secular Haze, read by a voice that pauses 0.7 s at a stop. Inside a line the elastic pen slows through
+  the same pause. Now the line is written on into it, done as the nib must leave for the next
+  (`LetterMedium._runs_on_to`) - never across a hesitation, where the writer stops too.
 - **The camera's arc over a page, gentle** (2026-10-27, the user: "The forward and backward zooming of the
   camera is nauseating. Like the journal and tablet mediums, we really need to dial that behavior back"):
   as the book's and the tablet's, a page opens on the whole pad (`LETTER_WIDE`, 0.85 m), closes in on the
   writing over 9 s once it has come up (`LETTER_LOCAL`, 0.47 m: three fifths of the page's height and all
   its width) and lets go over 9 s, done 7 s before its turn - its springs the tablet's (4.2 s), which run
   about twice their time behind (simulated: a fifth of the way in as the sheet lifts). A turn not planned
-  yet is guessed from its first word. Nothing else moves it in or out: a thought, a point at a sketch and a
+  yet is guessed from its first word, AND ONCE THE CAMERA HAS BEGUN TO LET GO FOR IT, IT LETS GO FOR THE
+  SOONEST GUESS YET (2026-10-28, the user, of the end of Secular Haze's first page: "it bounces forward and
+  back a couple times, right at the very last few sentences ... the camera tries to catch-up"): a live
+  reading's words arrive a sentence at a time, and the guess - at the desk's steady 0.33 s a word, no rest
+  counted - ran ten seconds early twenty words out and moved later with each sentence (past the hesitation
+  in "In both worlds, I was expelled.", past the rest as the picture clears), so the camera came back in
+  twice as it let go (replayed without a renderer: its aim's closeness 0.49 back to 0.77, then 0.00 back to
+  0.22). `LetterMedium._letting_go` keeps the soonest, and `_turn_guess` paces the guess on the voice's own
+  last 40 words and the rests the script writes (`rests_of`): let go once, 3.5 s before an export would.
+  Nothing else moves it in or out: a thought, a point at a sketch and a
   tap move where it looks, never how close; only a point at the camera stands it back (`CAMERA_K` 0.7, a
   fifth further), and a still holds close on its drawing. Across, it holds the column's middle. The first
   pass ran from the desk's 1.45 m to 0.38 (near four times), all the way out 3 s before each of the
@@ -219,6 +254,15 @@ exactly that.
   disappears ... We should linger on the blank page for a bit"): the voice opens on a rest of
   `LetterScript.BLANK_PAGE` (4 s), nothing is written before it (`DeskMedium._blank`, a hook: none at the
   Proof desk), and the camera comes in over the empty pad.
+- **The pen is picked up from the desk** (2026-10-28, the user: "the pen starts floating in the air already.
+  I think it would be better if the pen started from a resting place upon the table, to the right of the
+  paper, and if we gently picked it up at the beginning, after the intro-blur"). It lies beside the pad's
+  right edge, its nib toward the writer and its top turned out 4 to 16 degrees (`DeskLook.pen_rest`, seeded;
+  `dress` sets nothing down there), through the intro and its focus pull; 1.5 s after the opening it is
+  lifted by its grip, turned up into the hand and carried over the pad's edge in an arc, over 2.2 s, to
+  hover over the first stroke as the blank page ends (`LetterMedium._pick_up_pose`, laid over the desk's
+  `_pen_xf`; at most 4 mm a frame, its nib never into the desk or the pad). The Proof desk is as it was:
+  its pen's first stroke comes with the first word, inside the focus pull.
 - **A sketch stays on the page with what points at it** (`LetterScript._keep_with`): the first look put
   the cross and the dot at a page's foot, so the blind-spot test and "That's me" were a page on, with the
   pen pointing at nothing. A sketch now starts a page of its own when the lines up to its last point (or a

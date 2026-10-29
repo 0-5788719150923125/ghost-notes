@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.request
 from pathlib import Path
@@ -230,6 +231,44 @@ _BRITISH = {**_SHARED, "eə": "ɛː", "iə": "ɪə", "əʊ": "Q"}
 SYLLABIC = "̩"
 SMALL_SCHWA = "ᵊ"
 
+# THE HAPPY VOWEL IS SAID "EE" (2026-10-28, the user: "babysitter" "sort of sounds like 'bay-bah-sitter'"). eSpeak
+# reads a word's unstressed "ee" (the dictionary's IY0) as lax ɪ in 65 words of one book - "babysitter"
+# bˈeɪbɪsˌɪɾɚ where "baby" alone is bˈeɪbi, "everything" ˈɛvɹɪθˌɪŋ (184 times), "anything", "video" vˈɪdɪoʊ,
+# "happiness" - and Kokoro, taught on misaki's dictionary, which writes that vowel i, says ɪ there as the short
+# vowel it was taught it is, "bah". So where the word's dictionary reading (the token's `fallback`, ghost's
+# CMUdict) has IY0 and eSpeak ɪ in the same place, it is written i - AFTER A STRESSED SYLLABLE (ba|by|sitter,
+# ev|ery|thing, hap|pi|ness) OR BEFORE A VOWEL (vid|e|o, re|action, the|ology); an unstressed prefix before a
+# consonant keeps eSpeak's ɪ, as it is said ("pretend", "prepare", "prediction": the dictionary's IY0 there is
+# careful speech). A word whose vowels do not line up one for one is left as eSpeak read it.
+_ARPA_VOWELS = frozenset(("AA", "AE", "AH", "AO", "AW", "AY", "EH", "ER", "EY", "IH", "IY", "OW", "OY", "UH", "UW"))
+# eSpeak's vowel nuclei, longest first: a diphthong, a long vowel or a vowel with its r is one
+_NUCLEUS = re.compile(r"aɪ|aʊ|eɪ|oʊ|ɔɪ|əʊ|eə|ɪə|ʊə|ɑːɹ|ɔːɹ|ɛɹ|ɪɹ|ʊɹ|ɜːɹ|iː|uː|ɑː|ɔː|ɜː|i|ɪ|ɛ|æ|ɑ|ɒ|ɔ|ʊ|u|ʌ|ə|ɚ|ɐ|ᵻ|ɜ|o|e|a")
+
+
+def happy_vowels(ipa: str, arpa: list) -> str:
+    """eSpeak's reading `ipa` of a word with its happy vowel written i where the dictionary's `arpa` says so
+    (above): `ipa` as it is where the two do not line up, or nothing is to change."""
+    vowels = []  # (stress, whether a vowel comes straight after it)
+    for k, ph in enumerate(arpa):
+        base = str(ph).rstrip("012")
+        if base in _ARPA_VOWELS:
+            after = str(arpa[k + 1]).rstrip("012") if k + 1 < len(arpa) else ""
+            vowels.append((str(ph)[len(base):], after in _ARPA_VOWELS, base))
+    if not any(b == "IY" and st == "0" for st, _v, b in vowels):
+        return ipa
+    nuclei = list(_NUCLEUS.finditer(ipa))
+    if len(nuclei) != len(vowels):
+        return ipa
+    out = ipa
+    for k in reversed(range(len(vowels))):
+        stress, before_vowel, base = vowels[k]
+        if base != "IY" or stress != "0" or nuclei[k].group(0) != "ɪ":
+            continue
+        after_stress = any(st in ("1", "2") for st, _v, _b in vowels[:k])
+        if after_stress or before_vowel:
+            out = out[: nuclei[k].start()] + "i" + out[nuclei[k].end():]
+    return out
+
 
 def kokoro_symbols(symbols: list, british: bool) -> list:
     """eSpeak's (symbol, source) pairs as Kokoro's: [(symbol, source, positions)], `positions` the
@@ -295,6 +334,8 @@ class KokoroBackend(PiperBackend):
     # the voice runs into the next word, the trail's way back up runs on into it, never a step.
     trail_early = 0.0
     trail_through = True
+    # Kokoro samples nothing: its level is the same render to render (level.py, PiperBackend.level_noise).
+    level_noise = 1.0
 
     @classmethod
     def describe(cls) -> dict:
@@ -630,7 +671,22 @@ class KokoroBackend(PiperBackend):
             raise BackendError(f"unknown Kokoro voice '{voice}'")
         sess = self._graph(voice)
         cfg = self._speaker(voice, int(params.get("speaker", 0) or 0))
-        return self._synth_tokens(list(tokens), voice, out_path, params, cfg, sess)
+        return self._synth_tokens(list(tokens), voice, out_path, self._leveled(voice, params, cfg, sess), cfg, sess)
+
+    def _level_files(self, voice: str, speaker: int) -> list:
+        """The checkpoint's graph and the speaker's pack (level.py)."""
+        packs = self._family(voice)["packs"]
+        pack = packs[min(max(int(speaker), 0), len(packs) - 1)][0]
+        home = self._home(voice)
+        return [home / MODEL, home / "voices" / f"{pack}.bin"]
+
+    def _dictionary_reading(self, ipa: str, token: dict) -> str:
+        """eSpeak's reading with the happy vowel misaki's dictionary writes (`happy_vowels`), from the word's own
+        dictionary reading - none for a word no dictionary holds (`rare`), whose ARPAbet is a guess."""
+        arpa = token.get("fallback")
+        if not arpa or token.get("rare"):
+            return ipa
+        return happy_vowels(ipa, list(arpa))
 
     def _symbols(self, tokens: list, phonemizer: str, espeak_voice: str = "en-us", voice: str = "") -> list:
         """Piper's, without its lead-in spaces (LEAD_IN_SPACES) or its last word-space: the sentence's own

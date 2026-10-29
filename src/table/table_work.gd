@@ -33,19 +33,11 @@ const BLEND_LIFT := 0.1
 const BLEND_NEAR := Vector2(0.01, 0.05)
 ## How far above a pressed point its ray starts (meters): above the point, below a vessel's rim.
 const PRESS_FROM := 0.06
-## A POUR'S STREAM ([method _tick_stream]): its radius where it leaves the lip (meters) - thinner as it falls - and
-## how deep the liquid stands over the lip as it pours (meters), which gives what leaves it its speed (Torricelli's:
-## the speed of a fall from that height), under gravity (meters a second, squared). It is drawn through this many
-## drops, this many sides round, and seen through: what is behind it shows through all but this share.
-const STREAM_R := 0.0028
-const STREAM_HEAD := 0.006
-const GRAVITY := 9.81
-const STREAM_SPEED := sqrt(2.0 * GRAVITY * STREAM_HEAD)
-const STREAM_DROPS := 16
-const STREAM_SIDES := 8
-const STREAM_SEEN := 0.55
-## THE CHECK OF AN ACT ([method check]): the moments it is looked at, the most points of a moving thing tried,
-## and how far through the table's top a point may go before it is through it (meters).
+## THE CHECK OF AN ACT ([method check]): where its rehearsal begins (seconds; every picture of the work rehearses from
+## there too, [TablePreview], so what one baked the next takes up - [method TablePhysics.carry]), the moments it is
+## looked at, the most points of a moving thing tried, and how far through the table's top a point may go before it is
+## through it (meters).
+const REHEARSAL := 10.0
 const CHECK_STEPS := 24
 const CHECK_POINTS := 260
 const THROUGH_TOP := 0.002
@@ -96,7 +88,6 @@ var _chan := {}               # channel -> [{t0, t1, track, from, end, i}] in or
 var _rest := {}               # channel -> its value before anything acts on it
 var _runs_of := {}            # channel -> the laws its part follows all the time
 var _plumes: Array = []
-var _streams: Array = []
 var _air = null               # the acts' cue bursts (Effects.Air), or null
 var _cues: Array = []         # [{act, at, every, where, name}]
 var _timed: Array = []        # every material on the table that follows show time: a liquid's surface, copies glowing apart
@@ -114,6 +105,11 @@ var since := 0.0
 var _plan_key := ""
 var _spot := Vector3.INF      # the work's spot, once found ([method work_spot])
 var _depth := 0               # how deep a place is being found through another thing's moves ([method _thing_world])
+## The table's materials, made safe ([method Props.sanitize]): what each part is made of, as the physics reads it.
+var materials := {}
+## WHAT IS IN THINGS ([TablePhysics], next/table_physics.md): the liquids, the grains and the loose things, and the
+## solids they meet - baked over show time from the schedule this keeps.
+var physics: TablePhysics = null
 
 
 # --- building -----------------------------------------------------------------------------------
@@ -126,6 +122,9 @@ func clear() -> void:
 	if _air != null:
 		_air.release()
 	_air = null
+	if physics != null:
+		physics.clear()
+	physics = null
 	things = []
 	works = []
 	groups = []
@@ -137,7 +136,6 @@ func clear() -> void:
 	_rest = {}
 	_runs_of = {}
 	_plumes = []
-	_streams = []
 	_cues = []
 	_timed = []
 	_huffs = []
@@ -156,6 +154,7 @@ func clear() -> void:
 ## shade on the cloth ([param shades]: the contact shade and the slab that casts its foot's), which goes with it.
 func take(t: Dictionary, b: Dictionary, node: Node3D, shades: Array = []) -> void:
 	var ti := things.size()
+	var first := works.size()
 	var held: Array = []
 	for sh in shades:
 		if sh is Node3D:
@@ -199,6 +198,10 @@ func take(t: Dictionary, b: Dictionary, node: Node3D, shades: Array = []) -> voi
 				_group_of[wi] = groups.size()
 			groups.append({"thing": ti, "name": String((works[members[0]] as Dictionary)["name"]), "members": members, "middle": Vector3.ZERO})
 	things.append(entry)
+	if physics == null:
+		physics = TablePhysics.new()
+		physics.work = self
+	physics.take(ti, t, b, node, first)
 
 
 ## THE ACTS of this episode ([param raw], `acts.json` as parsed, or null) for a reading of [param beats]
@@ -270,6 +273,16 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 			kept.append(tr)
 		a["tracks"] = kept
 	acts = acts.filter(func(a: Dictionary) -> bool: return not (a["tracks"] as Array).is_empty())
+	# EACH MOVE ITS OWN HAND ([Hands]): a seed a track, from the episode's and the act's - a tool's two ends share theirs
+	for a in acts:
+		var tracks: Array = a["tracks"]
+		for k in tracks.size():
+			var tr: Dictionary = tracks[k]
+			var hs := hash([medium._plan.seed_value, String(a["name"]), k])
+			tr["_hand"] = hs
+			for end in ["tip", "grip"]:
+				if tr.get(end) is Dictionary:
+					(tr[end] as Dictionary)["_hand"] = hs
 	# WHAT THE WORK MOVES, from every act, scheduled or not: a loose part an act will pick up lies where it was put
 	# until then - it had ridden its thing until its act was placed, and a live reading places an act only as its
 	# words are heard (the pestle went to the middle of the bench with its mortar, and jumped back to its corner)
@@ -286,14 +299,12 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 	for a in acts:
 		for t in a["tracks"]:
 			var tr: Dictionary = t
-			if String(tr["law"]) == "pour":
-				_soft[int(tr["_from"])] = true
-				_soft[int(tr["_into"])] = true
-			elif String(tr.get("_ch", "")).get_slice(":", 1) in ["fill", "grow", "shown"]:
+			if String(tr.get("_ch", "")).get_slice(":", 1) in ["fill", "grow", "shown"]:
 				_soft[int(tr["_wi"])] = true
 	for wi in works.size():
 		var start: Dictionary = ((works[wi] as Dictionary)["w"] as Dictionary).get("start", {})
-		if start.has("fill") or start.has("grow") or start.has("shown"):
+		# ...and what is loose: a tool pushes it about, never passes through it ([TablePhysics])
+		if start.has("fill") or start.has("grow") or start.has("shown") or bool(((works[wi] as Dictionary)["w"] as Dictionary).get("loose", false)):
 			_soft[wi] = true
 		for m in (works[wi] as Dictionary)["mats"]:
 			var kd: Variant = (m as ShaderMaterial).get_shader_parameter("kind")
@@ -314,17 +325,10 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 			var b: AABB = (x0.affine_inverse() * _world_of(wk["node"])) * ((wk["w"] as Dictionary).get("box", AABB()) as AABB)
 			box = b if k == 0 else box.merge(b)
 		g["middle"] = box.get_center()
-	# THE STREAMS a pour makes, and THE BURSTS an act's cues throw
+	# THE BURSTS an act's cues throw
 	var fxs: Array = []
 	var moments: Array = []
 	for a in acts:
-		for t in a["tracks"]:
-			if String((t as Dictionary)["law"]) == "pour":
-				(t as Dictionary)["_stream"] = _streams.size()
-				var made_s := _stream(t as Dictionary)
-				if not String((made_s["lip"] as Dictionary).get("note", "")).is_empty():
-					notes.append("%s: %s" % [String(a["name"]), String(made_s["lip"]["note"])])
-				_streams.append(made_s)
 		for ci in (a["cues"] as Array).size():
 			var c: Dictionary = (a["cues"] as Array)[ci]
 			var nm := "cue %d" % _cues.size()
@@ -348,19 +352,29 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 			_root.add_child(_air.root)
 	_plan_key = ""
 	plan_cues()
+	# READY FOR THE PHYSICS' OWN THREAD ([TablePhysics]): each thing's place as it stood, its surface, the work's spot - nothing
+	# the bake reads may need a node
+	for ti in things.size():
+		(things[ti] as Dictionary)["rest_world"] = _world_rest_thing(ti)
+	for ti in things.size():
+		_mesh_of(ti)
+	work_spot()
+	if physics != null:
+		physics.build()
+		for n in physics.notes:
+			notes.append(n)
 
 
-## Where [param track]'s law acts, found on the table: its `_ch` (a channel - `w3:angle`, `t1:pose`...),
-## or for a pour its two vessels' fills - "" when found, else why not.
+## Where [param track]'s law acts, found on the table: its `_ch` (a channel - `w3:angle`, `t1:pose`...) - "" when
+## found, else why not. A sprinkle has none: the physics lets its grains fall.
 func _resolve(track: Dictionary) -> String:
 	var law := String(track["law"])
-	if law == "pour":
-		var a := _work_named(String(track["from"]))
-		var b := _work_named(String(track["into"]))
-		if a < 0 or b < 0:
-			return "pour names \"%s\" and \"%s\" - each must be a thing's named part, \"thing/part\"" % [String(track["from"]), String(track["into"])]
-		track["_from"] = a
-		track["_into"] = b
+	if law == "sprinkle":
+		# grains let fall from a point: the physics' ([TablePhysics]), on no channel of the work's
+		if not String(track.get("thing", "")).is_empty() and _thing_named(String(track["thing"])) < 0:
+			return "no thing on the table is called \"%s\"" % String(track["thing"])
+		if not track.has("at") and String(track.get("thing", "")).is_empty():
+			return "a sprinkle names neither a thing nor where it falls from (`at`)"
 		return ""
 	var ti := _thing_named(String(track["thing"]))
 	if ti < 0:
@@ -518,6 +532,8 @@ func _parent_world(node: Node3D) -> Transform3D:
 ## Thing [param ti] as it stood, in the table's space.
 func _world_rest_thing(ti: int) -> Transform3D:
 	var th: Dictionary = things[ti]
+	if th.has("rest_world"):
+		return th["rest_world"]
 	return _parent_world(th["node"]) * (th["rest"] as Transform3D)
 
 
@@ -600,7 +616,8 @@ func _work_world(wi: int, T: float) -> Transform3D:
 			x = _ridden(wi, x, T)
 			_depth -= 1
 			return x
-	return _thing_world(ti, T) * _world_rest_thing(ti).affine_inverse() * (_rest.get("w%d:pose" % wi, _world_of(wk["node"])) as Transform3D)
+	var at_rest: Transform3D = _rest["w%d:pose" % wi] if _rest.has("w%d:pose" % wi) else _world_of(wk["node"])
+	return _thing_world(ti, T) * _world_rest_thing(ti).affine_inverse() * at_rest
 
 
 ## A LOOSE PART RIDES ITS THING: a free part let go IN its own thing (a pestle left in its mortar), or standing in it
@@ -678,7 +695,7 @@ func _is_soft(mi: Node) -> bool:
 ## Thing [param ti]'s surface AS IT STOOD, for a ray to meet: made once, whatever the work has posed it at since.
 func _mesh_of(ti: int) -> TriangleMesh:
 	var th: Dictionary = things[ti]
-	if th["mesh"] != null:
+	if th["mesh"] != null or bool(th.get("meshless", false)):
 		return th["mesh"]
 	var faces := PackedVector3Array()
 	var to_rest := _world_rest_thing(ti) * _world_of(th["node"]).affine_inverse()
@@ -697,6 +714,8 @@ func _mesh_of(ti: int) -> TriangleMesh:
 		for q in mi.mesh.get_faces():
 			faces.append(xf * q)
 	if faces.is_empty():
+		# known to have none: never measured again (the physics' thread asks, and may touch no node)
+		th["meshless"] = true
 		return null
 	var tm := TriangleMesh.new()
 	tm.create_from_faces(faces)
@@ -878,12 +897,12 @@ static func _guessed(said0: PackedFloat32Array, said1: PackedFloat32Array, est: 
 		return said1[last] + maxf(est[si] - est[last], 0.0) * pace
 
 
-## The channels act [param a] works: each track's, and a pour's two vessels'.
+## The channels act [param a] works: each track's.
 static func _channels_of(a: Dictionary) -> PackedStringArray:
 	var out := PackedStringArray()
 	for t in a["tracks"]:
 		var tr: Dictionary = t
-		var chs: Array = ["w%d:fill" % int(tr["_from"]), "w%d:fill" % int(tr["_into"])] if String(tr["law"]) == "pour" else [String(tr.get("_ch", ""))]
+		var chs: Array = [String(tr.get("_ch", ""))]
 		for ch in chs:
 			if not String(ch).is_empty() and not out.has(ch):
 				out.append(ch)
@@ -920,6 +939,21 @@ func rehearse(from: float) -> Dictionary:
 	return times
 
 
+## THE REHEARSAL every picture of the work is taken on ([method check], [TablePreview]): from [constant REHEARSAL].
+func rehearsed() -> Dictionary:
+	return rehearse(REHEARSAL)
+
+
+## How far into a rehearsal (its [param times], [method rehearse]) a check of acts [param names] bakes what is in things
+## ([method TablePhysics.report]): the end of the last of them and what it set falling - 0 for none.
+func checks_reach(times: Dictionary, names: Array) -> float:
+	var t := 0.0
+	for nm in names:
+		if times.has(String(nm)):
+			t = maxf(t, float((times[String(nm)] as Array)[1]) + TablePhysics.REPORT_AFTER)
+	return t
+
+
 ## EACH CHANNEL'S TIMELINE, from [member runs]: every act's tracks, each with where its channel was as it
 ## began (`from`) and where it left it (`end`) - the end of one the start of the next. A track holds its
 ## channel over ITS OWN STRETCH of its act (`s0`..`s1`: its `between`, or a path's first and last keys), so an
@@ -935,10 +969,8 @@ func _timelines() -> void:
 		for t in a["tracks"]:
 			var tr: Dictionary = t
 			var w := _window(tr)
-			var sides: Array = ["_from", "_into"] if String(tr["law"]) == "pour" else [""]
-			for side in sides:
-				var ch := ("w%d:fill" % int(tr[side])) if not String(side).is_empty() else String(tr["_ch"])
-				items.append({"ch": ch, "side": side, "track": tr, "t0": t0, "t1": t1, "i": int(r["i"]), "order": order,
+			if not String(tr.get("_ch", "")).is_empty():
+				items.append({"ch": String(tr["_ch"]), "track": tr, "t0": t0, "t1": t1, "i": int(r["i"]), "order": order,
 					"s0": t0 + w.x * (t1 - t0), "s1": t0 + w.y * (t1 - t0)})
 			order += 1
 	items.sort_custom(func(x: Dictionary, y: Dictionary) -> bool:
@@ -959,16 +991,14 @@ func _timelines() -> void:
 					and float(until.get(ch, -INF)) < float(e["s0"]) - CHAIN_GAP:
 				e["from"] = _work_world(int(ch.substr(1, ch.find(":") - 1)), float(e["s0"]) - 1e-4)
 			until[ch] = maxf(float(until.get(ch, -INF)), float(e["s1"]))
-			if String(e.get("side", "")).is_empty():
-				e.erase("side")
-				e["end"] = _eval(e, float(e["s1"]) - float(e["t0"]), float(e["s1"]))
-			else:
-				e["end"] = _pour_fill(e["track"], String(e["side"]), float(e["from"]), 1.0)
+			e["end"] = _eval(e, float(e["s1"]) - float(e["t0"]), float(e["s1"]))
 			now[ch] = e["end"]
 			if pass_i == 0:
 				_add(ch, e)
 	_chains()
 	plan_cues()
+	if physics != null:
+		physics.replan()
 
 
 ## ONE MOVE THROUGH ITS PLACES: a run of carries and paths on one thing or part, each begun as the last ended (a vial
@@ -1078,8 +1108,6 @@ func value(ch: String, t: float) -> Variant:
 		if last["end"] is float and _runs_of.has(ch):
 			return float(last["end"]) + float(_run_value(ch, t)) - float(_run_value(ch, float(last["s1"])))
 		return last["end"]
-	if last.has("side"):
-		return _pour_fill(last["track"], String(last["side"]), float(last["from"]), _pour_s(last["track"], (t - float(last["t0"])) / maxf(float(last["t1"]) - float(last["t0"]), 1e-6)))
 	return _eval(last, t - float(last["t0"]), t)
 
 
@@ -1093,19 +1121,6 @@ func _eval(e: Dictionary, tau: float, T: float) -> Variant:
 	if e["from"] is Color:
 		return Motions.tint(tr, e["from"], tau, d, T) if String(tr["law"]) == "to" else e["from"]
 	return Motions.scalar(tr, float(e["from"]), tau, d, T)
-
-
-## How far a pour has flowed at [param u] of its act: its `between`, eased.
-static func _pour_s(tr: Dictionary, u: float) -> float:
-	var w: Vector2 = tr.get("between", Vector2(0.0, 1.0))
-	return Motions.eased((u - w.x) / maxf(w.y - w.x, 1e-6))
-
-
-## A pour's [param side] ("_from" or "_into") vessel's fill, from [param from], [param s] of the way through.
-static func _pour_fill(tr: Dictionary, side: String, from: float, s: float) -> float:
-	if side == "_from":
-		return clampf(from - float(tr["amount"]) * s, 0.0, 1.0)
-	return clampf(from + float(tr["gain"]) * s, 0.0, 2.0)
 
 
 ## A POSE at [param tau] of [param d] seconds into its act: where the part or the thing is, in the table's
@@ -1127,16 +1142,23 @@ func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 		"carry":
 			var w: Vector2 = tr["between"]
 			var lin := clampf((u - w.x) / maxf(w.y - w.x, 1e-6), 0.0, 1.0)
-			var s := Motions.eased(lin)
+			var s := Hands.timing(lin)
 			var to := _carried_to(tr, q0, T)
 			var r_to := Basis.from_euler((tr["turn"] as Vector3) * (PI / 180.0)) if tr.has("turn") else r_from
 			# on through where the carry before it left it and where the one after takes it up ([method _chains])
 			var m: PackedVector3Array = e.get("_m", PackedVector3Array())
 			var h := (w.y - w.x) * d
-			var p := (Motions.hermite(p_from, to, m[0] * h, m[1] * h, lin) if m.size() == 2 else p_from.lerp(to, s)) \
-				+ Vector3(0.0, float(tr["lift"]) * 0.01 * sin(PI * s), 0.0)
+			var ma := m[0] * h if m.size() == 2 else Vector3.ZERO
+			var mb := m[1] * h if m.size() == 2 else Vector3.ZERO
+			# AS A HAND CARRIES IT ([Hands]): minimum jerk, bowed a little to one side, lifted early and lowered late,
+			# leaning with the hand's pull, and never quite still while it is off the table
+			var seed := int(tr.get("_hand", 0))
+			var lift := float(tr["lift"]) * 0.01
+			var p := Hands.carried(p_from, to, ma, mb, lift, lin, seed)
 			var r := Basis(Quaternion(r_from).slerp(Quaternion(r_to.orthonormalized()), s))
-			out = _rebuilt(r, p, q0, x0)
+			r = Hands.lean(func(x: float) -> Vector3: return Hands.carried(p_from, to, ma, mb, lift, x, seed), lin, h) * r
+			var dr: Array = Hands.drift(T, seed, Hands.held(lin))
+			out = _rebuilt((dr[1] as Basis) * r, p + (dr[0] as Vector3), q0, x0)
 			# SET DOWN on what is under it: how far is found once, where it ends, and taken over the way there
 			if tr.get("down", false):
 				if not e.has("_down"):
@@ -1144,42 +1166,31 @@ func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 				out.origin.y += float(e["_down"]) * s
 		"path":
 			var keys: Array = tr["keys"]
-			var p := p_from
+			var seed := int(tr.get("_hand", 0))
+			var mk: PackedVector3Array = e.get("_m", PackedVector3Array())
 			var r := r_from
-			var at := func(i: int) -> Array:
-				var k: Dictionary = keys[i]
-				var kp := p_from + (k.get("by", Vector3.ZERO) as Vector3) * 0.01
-				var kr := Basis.from_euler((k.get("turn", Vector3.ZERO) as Vector3) * (PI / 180.0)) * r_from
-				return [kp, kr]
-			var first: Array = at.call(0)
-			p = first[0]
-			r = first[1]
 			for i in range(keys.size() - 1):
 				var k0: Dictionary = keys[i]
 				var k1: Dictionary = keys[i + 1]
 				if u >= float(k0["at"]) and u <= float(k1["at"]):
-					var s := Motions.eased((u - float(k0["at"])) / maxf(float(k1["at"]) - float(k0["at"]), 1e-6))
-					var a: Array = at.call(i)
-					var b: Array = at.call(i + 1)
-					p = (a[0] as Vector3).lerp(b[0], s)
-					r = Basis(Quaternion((a[1] as Basis).orthonormalized()).slerp(Quaternion((b[1] as Basis).orthonormalized()), s))
+					var s := Hands.timing((u - float(k0["at"])) / maxf(float(k1["at"]) - float(k0["at"]), 1e-6))
+					var ra := Basis.from_euler((k0.get("turn", Vector3.ZERO) as Vector3) * (PI / 180.0)) * r_from
+					var rb := Basis.from_euler((k1.get("turn", Vector3.ZERO) as Vector3) * (PI / 180.0)) * r_from
+					r = Basis(Quaternion(ra.orthonormalized()).slerp(Quaternion(rb.orthonormalized()), s))
 					break
 				if u > float(k1["at"]):
-					var b: Array = at.call(i + 1)
-					p = b[0]
-					r = b[1]
-			# ITS PLACE GOES ON THROUGH ITS KEYS ([method _chains]: their slopes, a second's, to the act's whole)
-			var mk: PackedVector3Array = e.get("_m", PackedVector3Array())
-			if mk.size() == keys.size():
-				var ats := PackedFloat32Array()
-				var ps := PackedVector3Array()
-				var ms := PackedVector3Array()
-				for i in keys.size():
-					ats.append(float((keys[i] as Dictionary)["at"]))
-					ps.append(p_from + ((keys[i] as Dictionary).get("by", Vector3.ZERO) as Vector3) * 0.01)
-					ms.append(mk[i] * d)
-				p = Motions.through(ats, ps, ms, u)
-			out = _rebuilt(r, p, q0, x0)
+					r = Basis.from_euler((k1.get("turn", Vector3.ZERO) as Vector3) * (PI / 180.0)) * r_from
+			if u < float((keys[0] as Dictionary)["at"]):
+				r = Basis.from_euler(((keys[0] as Dictionary).get("turn", Vector3.ZERO) as Vector3) * (PI / 180.0)) * r_from
+			# ITS PLACE GOES ON THROUGH ITS KEYS ([method _chains]: their slopes, a second's, to the act's whole), or eases
+			# from each to the next - bowed between them as a hand goes ([method _path_at])
+			var where := func(x: float) -> Vector3: return _path_at(keys, mk, p_from, d, x, seed)
+			var p: Vector3 = where.call(u)
+			# ...leaning with the hand's pull, never quite still while it is held off the table
+			r = Hands.lean(where, u, d) * r
+			var win := _window(tr)
+			var dr: Array = Hands.drift(T, seed, Hands.held((u - win.x) / maxf(win.y - win.x, 1e-6)))
+			out = _rebuilt((dr[1] as Basis) * r, p + (dr[0] as Vector3), q0, x0)
 		"circle":
 			var c := place_of(tr.get("around"), q0, T)
 			var p := Motions.point_at(tr, c, null, q0, tau, d, T)
@@ -1204,9 +1215,10 @@ func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 			out = Transform3D(r, A - r * a0) * x0
 	if String(tr["law"]) in ["aim", "circle"] and tau < BLEND_IN:
 		# A HAND BRINGS IT THERE FIRST: from where it was to where the law has it, over the first moment - lifted
-		# in an arc, so it goes over a rim rather than through it
-		var s := Motions.eased(tau / BLEND_IN)
-		var lift := blend_lift(s, from.origin.distance_to(out.origin))
+		# in an arc, so it goes over a rim rather than through it, early, as a hand lifts a tool before it reaches
+		var lin := tau / BLEND_IN
+		var s := Hands.timing(lin)
+		var lift := blend_lift(lin, from.origin.distance_to(out.origin))
 		out = from.interpolate_with(out, s)
 		out.origin.y += lift
 	var j := Motions.jitter_of(tr, tau)
@@ -1219,7 +1231,33 @@ func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 ## off: as far as it has to go - a step from no lift at all to the whole of one, as the law's place moved 2 cm off,
 ## threw 181083's pestle 6 cm up in a frame as it began to grind.
 static func blend_lift(s: float, far: float) -> float:
-	return BLEND_LIFT * sin(PI * clampf(s, 0.0, 1.0)) * smoothstep(BLEND_NEAR.x, BLEND_NEAR.y, far)
+	return BLEND_LIFT * Hands.lift_at(s) * smoothstep(BLEND_NEAR.x, BLEND_NEAR.y, far)
+
+
+## A PATH'S PLACE at [param u] through its act ([param d] seconds): through its [param keys] from [param p_from] - on
+## through them with slopes [param mk] (meters a second, [method _chains]) or eased from each to the next - and bowed
+## between each two a little to one side, as a hand goes ([method Hands.bow], [param seed]).
+static func _path_at(keys: Array, mk: PackedVector3Array, p_from: Vector3, d: float, u: float, seed: int) -> Vector3:
+	var ps := PackedVector3Array()
+	var ats := PackedFloat32Array()
+	for k in keys:
+		ats.append(float((k as Dictionary)["at"]))
+		ps.append(p_from + ((k as Dictionary).get("by", Vector3.ZERO) as Vector3) * 0.01)
+	if u <= ats[0]:
+		return ps[0]
+	if u >= ats[ats.size() - 1]:
+		return ps[ps.size() - 1]
+	var i := 0
+	while i < ats.size() - 2 and u > ats[i + 1]:
+		i += 1
+	var lin := (u - ats[i]) / maxf(ats[i + 1] - ats[i], 1e-6)
+	var p := ps[i].lerp(ps[i + 1], Hands.timing(lin))
+	if mk.size() == keys.size():
+		var ms := PackedVector3Array()
+		for m in mk:
+			ms.append(m * d)
+		p = Motions.through(ats, ps, ms, u)
+	return p + Hands.bow(ps[i], ps[i + 1], lin, hash([seed, i]))
 
 
 ## The point a pose track [param tr] moves its thing or part by, where it stood as built (the table's space, meters):
@@ -1335,13 +1373,14 @@ func tick(t: float) -> void:
 		var th: Dictionary = things[ti]
 		var node: Node3D = th["node"]
 		node.transform = _parent_world(node).affine_inverse() * (value(ch, t) as Transform3D)
+	# WHAT IS IN THINGS, baked as far as this moment: its loose parts posed by it ([method _pose_work])
+	if physics != null:
+		physics.tick(t)
 	for wi in works.size():
 		_pose_work(wi, t)
 	_tick_shades()
 	for p in _plumes:
 		_tick_plume(p, t)
-	for s in _streams:
-		_tick_stream(s, t)
 	if _air != null:
 		_air.tick(t)
 	for m in _timed:
@@ -1397,8 +1436,12 @@ func _pose_work(wi: int, t: float) -> void:
 	var base: Vector3 = w.get("base", Vector3.ZERO)
 	var fill := float(value("w%d:fill" % wi, t))
 	var grow := float(value("w%d:grow" % wi, t))
+	# A LIQUID THE PHYSICS KEEPS is as full as it is, its surface cut level ([TablePhysics]): never scaled
+	var kept := physics.liquid_volume(wi, t) if physics != null else -1.0
+	if kept >= 0.0:
+		fill = 1.0 if kept > 1e-9 else 0.0
 	var s := Transform3D.IDENTITY
-	if not is_equal_approx(fill, 1.0) or not is_equal_approx(grow, 1.0):
+	if kept < 0.0 and (not is_equal_approx(fill, 1.0) or not is_equal_approx(grow, 1.0)):
 		var k := maxf(grow, 0.0005)
 		s = Transform3D(Basis.from_scale(Vector3(k, k * maxf(fill, 0.0005), k)), base) * Transform3D(Basis.IDENTITY, -base)
 	var j := Transform3D.IDENTITY
@@ -1421,11 +1464,18 @@ func _pose_work(wi: int, t: float) -> void:
 			j = Transform3D(Basis.IDENTITY, (jt["axis"] as Vector3) * o)
 		"free":
 			# moved by the work where the work moved it - a copy as its set is moved, from where the set stood,
-			# and a part left in its thing riding it ([method _work_world])
-			if _part_moves(wi):
+			# and a part left in its thing riding it ([method _work_world]) - or, LOOSE, where the physics has it, held
+			# or let go ([TablePhysics])
+			var loose: Variant = physics.pose_of(wi, t) if physics != null and bool(w.get("loose", false)) else null
+			if loose != null:
+				j = _parent_world(node).affine_inverse() * (loose as Transform3D)
+			elif _part_moves(wi):
 				j = _parent_world(node).affine_inverse() * _work_world(wi, t)
 	node.transform = j * s
 	node.visible = float(value("w%d:shown" % wi, t)) > 0.5 and grow > 0.001 and fill > 0.001
+	# a loose thing ground to pieces is drawn as its pieces
+	if node.visible and physics != null and bool(w.get("loose", false)) and not physics.whole(wi, t):
+		node.visible = false
 	var mats: Array = wk["mats"]
 	if not mats.is_empty():
 		var tint: Variant = value("w%d:tint" % wi, t)
@@ -1532,176 +1582,6 @@ static func _hash01(k: int, salt: int) -> float:
 	return float(h & 0xFFFFFF) / float(0x1000000)
 
 
-## A POUR'S STREAM: what is poured, falling. Every drop leaves the lip as the vessel held it when it left - along
-## the vessel's mouth, at the speed a shallow head of liquid gives it ([constant STREAM_HEAD]) - and falls under
-## gravity until it meets the surface it is poured onto: a closed form of the show time, so a seek and an export see
-## the stream a live picture sees. Its head falls from the lip as the pour begins, its tail after it ends, and it
-## thins as it falls (as much flows through it at every height). It had been a straight rope from the lip to the
-## middle of the surface, and a lip named by a part's point ("mixing vial.mouth") found nothing and stood where the
-## surface's middle lay in the vial's space - 181083's snowmelt "a weird white line ... shoots out to the side".
-func _stream(tr: Dictionary) -> Dictionary:
-	var mi := MeshInstance3D.new()
-	var mesh := ImmediateMesh.new()
-	mi.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	var from := int(tr["_from"])
-	var c: Color = Color.html(String(tr["color"])) if tr.has("color") else (works[from] as Dictionary)["color"]
-	# a liquid's body: what is behind it seen through it, its light caught along it
-	mat.albedo_color = Color(c.r, c.g, c.b, STREAM_SEEN)
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.roughness = 0.05
-	mat.metallic_specular = 0.9
-	mat.rim_enabled = true
-	mat.rim = 0.4
-	mat.rim_tint = 0.6
-	mi.material_override = mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mi.visible = false
-	_root.add_child(mi)
-	return {"track": tr, "node": mi, "mesh": mesh, "lip": _lip_of(tr)}
-
-
-## Where pour [param tr]'s stream leaves from, found once: `{wi, at}` - a point of work `wi` in its own space, which
-## goes with it as it is tipped and carried (`{ti, at}`: of thing `ti`) - or `{fixed}`, a place on the table. Its `lip` names a thing's point
-## ("jug.spout") or a part's ("mixing vial.mouth" - the part of the poured thing first, then of any); left out, or
-## naming nothing (said in `note`), the mouth of the vessel what is poured is in - the part that holds it, else what
-## is poured itself: the middle of its top.
-func _lip_of(tr: Dictionary) -> Dictionary:
-	var from := int(tr["_from"])
-	var v: Variant = tr.get("lip")
-	if v is Vector3:
-		return {"fixed": place_of(v, Vector3.ZERO)}
-	var note := ""
-	if v is String and not String(v).is_empty():
-		var s := String(v)
-		var at := s.rfind(".")
-		var who := s.substr(0, at).strip_edges().to_lower() if at >= 0 else ""
-		var pt := s.substr(at + 1).strip_edges().to_lower() if at >= 0 else ""
-		var tried: Array = []
-		var ti := _thing_named(who) if not who.is_empty() else -1
-		if ti >= 0:
-			tried.append_array((things[ti] as Dictionary)["works"])
-		for wi in works.size():
-			if String((works[wi] as Dictionary)["name"]).to_lower() == who and int((works[wi] as Dictionary)["thing"]) == int((works[from] as Dictionary)["thing"]):
-				tried.append(wi)
-		for wi in works.size():
-			if String((works[wi] as Dictionary)["name"]).to_lower() == who:
-				tried.append(wi)
-		for wi in tried:
-			var pts: Dictionary = ((works[int(wi)] as Dictionary)["w"] as Dictionary).get("points", {})
-			for k in pts:
-				if String(k).to_lower() == pt:
-					return {"wi": int(wi), "at": pts[k]}
-		note = "its lip \"%s\" names no point of a thing or a part - the stream leaves from the mouth of what it pours from" % s
-	# THE VESSEL'S MOUTH: the part that holds what is poured (its node one of the liquid's own parents), else the
-	# thing it is in, whole
-	var p := ((works[from] as Dictionary)["node"] as Node).get_parent()
-	while p != null and p != medium._root3:
-		for wi in works.size():
-			if (works[wi] as Dictionary)["node"] == p:
-				var box: AABB = ((works[wi] as Dictionary)["w"] as Dictionary).get("box", AABB())
-				return {"wi": wi, "at": Vector3(box.get_center().x, box.end.y, box.get_center().z), "note": note}
-		p = p.get_parent()
-	var ti := int((works[from] as Dictionary)["thing"])
-	var tb: AABB = (things[ti] as Dictionary)["box"]
-	return {"ti": ti, "at": Vector3(tb.get_center().x, tb.end.y, tb.get_center().z), "note": note}
-
-
-## The lip at show time [param T] and which way what leaves it goes (the vessel's mouth's way, never up): `[place, way]`.
-func _lip_at(lip: Dictionary, T: float) -> Array:
-	if lip.has("fixed"):
-		return [lip["fixed"], Vector3.ZERO]
-	var x := _work_world(int(lip["wi"]), T) if lip.has("wi") else _thing_world(int(lip["ti"]), T)
-	var up := x.basis.y.normalized()
-	var way := Vector3(up.x, minf(up.y, 0.0), up.z)
-	return [x * (lip["at"] as Vector3), way.normalized() if way.length() > 1e-4 else Vector3.ZERO]
-
-
-func _tick_stream(s: Dictionary, t: float) -> void:
-	var tr: Dictionary = s["track"]
-	var node: MeshInstance3D = s["node"]
-	var mesh: ImmediateMesh = s["mesh"]
-	# THE POUR'S STRETCH: when it begins to flow, and when it stops
-	var flow := Vector2(INF, INF)
-	for e in _chan.get("w%d:fill" % int(tr["_from"]), []):
-		if (e as Dictionary)["track"] == tr and String(e.get("side", "")) == "_from":
-			flow = Vector2(float(e["s0"]), float(e["s1"]))
-	var lip: Dictionary = s["lip"]
-	# WHAT IT FALLS ONTO: the surface it is poured into, over that vessel - and past it, the table (a pour that misses
-	# goes on down, never ending in the air at the surface's height)
-	var into := int(tr["_into"])
-	var iw: Dictionary = (works[into] as Dictionary)["w"]
-	var base: Vector3 = iw.get("base", Vector3.ZERO)
-	var ix := _world_of((works[into] as Dictionary)["node"])
-	var top := ix * Vector3(base.x, (iw["box"] as AABB).end.y, base.z)
-	var reach := minf((iw["box"] as AABB).size.x, (iw["box"] as AABB).size.z) * 0.5 * ix.basis.get_scale().x
-	var under := func(q: Vector3) -> float:
-		return top.y if Vector2(q.x - top.x, q.z - top.z).length() <= reach else 0.0
-	var surface := top.y
-	mesh.clear_surfaces()
-	node.visible = false
-	s["pts"] = PackedVector3Array()
-	s["way"] = Vector3.ZERO
-	if t <= flow.x or flow.x == INF:
-		return
-	# the youngest drop in the air, and the oldest: what left as the pour began, still falling - or what left the
-	# lip as long ago as a drop from it now takes to fall, a little past it (the lip moves)
-	var young := maxf(t - flow.y, 0.0)
-	var now: Array = _lip_at(lip, minf(t, flow.y))
-	var v0 := (now[1] as Vector3) * STREAM_SPEED
-	var drop := maxf((now[0] as Vector3).y - minf(surface, 0.0), 0.0)
-	var fall := (maxf(v0.y, 0.0) + sqrt(v0.y * v0.y + 2.0 * GRAVITY * drop)) / GRAVITY
-	var old := minf(t - flow.x, fall * 1.3 + 0.02)
-	if young >= old:
-		return
-	var pts := PackedVector3Array()
-	var speeds := PackedFloat32Array()
-	for i in STREAM_DROPS:
-		var tau := lerpf(young, old, float(i) / float(STREAM_DROPS - 1))
-		var at: Array = _lip_at(lip, t - tau)
-		var v := (at[1] as Vector3) * STREAM_SPEED
-		var p := (at[0] as Vector3) + v * tau + Vector3.DOWN * (0.5 * GRAVITY * tau * tau)
-		var floor_y := float(under.call(p))
-		if p.y <= floor_y:
-			# where it meets the surface, and no further
-			if not pts.is_empty():
-				var q := pts[pts.size() - 1]
-				var k := (q.y - floor_y) / maxf(q.y - p.y, 1e-6)
-				pts.append(q.lerp(p, k))
-				speeds.append(speeds[speeds.size() - 1])
-			break
-		pts.append(p)
-		speeds.append((v + Vector3.DOWN * GRAVITY * tau).length())
-	if pts.size() < 2:
-		return
-	s["pts"] = pts
-	s["way"] = now[1]
-	# A TUBE along it, thinning as it speeds: as much passes every height
-	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-	var rings: Array = []
-	for i in pts.size():
-		var along := (pts[mini(i + 1, pts.size() - 1)] - pts[maxi(i - 1, 0)]).normalized()
-		if along.length() < 0.5:
-			along = Vector3.DOWN
-		var side := along.cross(Vector3.FORWARD if absf(along.dot(Vector3.FORWARD)) < 0.9 else Vector3.RIGHT).normalized()
-		var other := along.cross(side)
-		var r := STREAM_R * clampf(sqrt(maxf(STREAM_SPEED, 0.05) / maxf(speeds[i], 0.05)), 0.35, 1.0)
-		var ring: Array = []
-		for j in STREAM_SIDES:
-			var a := TAU * float(j) / float(STREAM_SIDES)
-			var n := side * cos(a) + other * sin(a)
-			ring.append([pts[i] + n * r, n])
-		rings.append(ring)
-	for i in rings.size() - 1:
-		for j in STREAM_SIDES:
-			var j1 := (j + 1) % STREAM_SIDES
-			for vtx in [rings[i][j], rings[i + 1][j], rings[i + 1][j1], rings[i][j], rings[i + 1][j1], rings[i][j1]]:
-				mesh.surface_set_normal(vtx[1])
-				mesh.surface_add_vertex(vtx[0])
-	mesh.surface_end()
-	node.visible = true
-
-
 ## THE CUES' MOMENTS, when the schedule is made: each burst at its act's moment, at its point as it is then.
 func plan_cues() -> void:
 	if _air == null:
@@ -1794,8 +1674,14 @@ func parts_report() -> String:
 				bits.append("runs " + ", ".join(PackedStringArray((w["runs"] as Array).map(func(l: Dictionary) -> String: return String(l["law"])))))
 			if w.has("emits"):
 				bits.append("emits " + String((w["emits"] as Dictionary)["kind"]))
+			if bool(w.get("loose", false)):
+				bits.insert(0, "LOOSE")
 			var nm := String(wk["name"])
 			lines.append("    - %s: %s" % [("part \"%s\"" % nm) if not nm.is_empty() else "an unnamed part", "; ".join(bits) if not bits.is_empty() else "it only changes (fill, grow, tint, glow, shown)"])
+		# ...and what is in it, as the physics has it
+		if physics != null:
+			for c in physics.contents_of(ti):
+				lines.append("    - %s" % c)
 	return "\n".join(lines)
 
 
@@ -1803,7 +1689,7 @@ func parts_report() -> String:
 ## thing travels and how fast at the most, and ANYTHING PASSING THROUGH ANYTHING - a moving thing's points
 ## inside another thing, or through the table's top - with the moment it happens. `{text, through}`.
 func check(name: String) -> Dictionary:
-	var times := rehearse(10.0)
+	var times := rehearsed()
 	if not times.has(name):
 		return {"text": "no act called \"%s\" could be played (%s)" % [name, "; ".join(notes) if not notes.is_empty() else "none was kept"], "through": 0}
 	var span: Array = times[name]
@@ -1841,9 +1727,10 @@ func check(name: String) -> Dictionary:
 				"slot": (_rest["w%d:pose" % wi] as Transform3D) * (((works[wi] as Dictionary)["w"] as Dictionary).get("box", AABB()) as AABB)})
 	var lines := PackedStringArray()
 	lines.append("\"%s\" (beat %s) runs %.1f s%s." % [name, String(act["beat"]), t1 - t0, " here (\"under\": as long as its words leave it)" if bool(act["under"]) else ""])
-	lines.append_array(_pours_said(act, t0, t1))
+	var physics_said := physics.report(t0, t1) if physics != null else PackedStringArray()
 	if movers.is_empty():
 		lines.append("Nothing in it moves from its place: it changes what things are (their fill, size, color, glow).")
+		lines.append_array(physics_said)
 		tick(t1)
 		return {"text": "\n".join(lines), "through": 0}
 	var still := TriangleMesh.new()
@@ -1945,42 +1832,9 @@ func check(name: String) -> Dictionary:
 			("PASSES THROUGH: %d of its points at the moments looked at - first %s. Fix it: move it clear, `press` it onto the surface, or lift it." % [hits + below, first_hit])
 				if hits + below > 0 else "Nothing passes through anything.",
 			(" It starts seated in something (%d of its points, as it was built or left): coming out of it is not counted." % seated_n) if seated_n > 0 else ""])
+	lines.append_array(physics_said)
 	tick(t1)
 	return {"text": "\n".join(lines), "through": through}
-
-
-## WHERE EACH POUR OF [param act] FALLS (its run [param t0]..[param t1]), halfway through its flow: how far its stream
-## falls, whether it lands in what it is poured into, and whether the camera sees it - a stream leaving the lip
-## straight toward or away from the camera is hidden by its own vessel (181083's snowmelt, tipped away: nothing seen).
-func _pours_said(act: Dictionary, t0: float, t1: float) -> PackedStringArray:
-	var out := PackedStringArray()
-	var fwd := -(medium._plan.cam_base as Transform3D).basis.z
-	for st in _streams:
-		var tr: Dictionary = (st as Dictionary)["track"]
-		if not (act["tracks"] as Array).has(tr):
-			continue
-		var w: Vector2 = tr.get("between", Vector2(0.0, 1.0))
-		tick(lerpf(t0, t1, lerpf(w.x, w.y, 0.5)))
-		var pts: PackedVector3Array = (st as Dictionary).get("pts", PackedVector3Array())
-		var what := "the pour from %s into %s" % [String(tr["from"]), String(tr["into"])]
-		if pts.size() < 2:
-			out.append("- %s: halfway through it nothing falls - its lip is not above what it pours into. Hold it over it, higher." % what)
-			continue
-		var into := int(tr["_into"])
-		var iw: Dictionary = (works[into] as Dictionary)["w"]
-		var box: AABB = iw["box"]
-		var ix := _world_of((works[into] as Dictionary)["node"])
-		var mid := ix * Vector3(box.get_center().x, box.end.y, box.get_center().z)
-		var land := pts[pts.size() - 1]
-		var reach := minf(box.size.x, box.size.z) * 0.5 * ix.basis.get_scale().x
-		var off := Vector2(land.x - mid.x, land.z - mid.z).length()
-		var way: Vector3 = (st as Dictionary).get("way", Vector3.ZERO)
-		var across := Vector2(way.x, way.z).normalized().dot(Vector2(fwd.x, fwd.z).normalized()) if Vector2(way.x, way.z).length() > 0.1 else 0.0
-		out.append("- %s: its stream falls %.0f cm from the lip and lands %.0f cm from the middle of the surface - %s.%s" % [what,
-			(pts[0].y - land.y) * 100.0, off * 100.0, "in it" if off <= reach else "OUTSIDE IT (its surface reaches %.0f cm): bring the lip over it" % (reach * 100.0),
-			" It leaves the lip straight %s the camera, so the vessel hides it: tip it across the view (a turn about the front-to-back axis, [0, 0, deg])." % ("away from" if across > 0.0 else "toward")
-				if absf(across) > 0.8 else ""])
-	return out
 
 
 ## Whether [param p] is inside [param tm]: an odd count of its surfaces straight above it.

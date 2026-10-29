@@ -12,8 +12,9 @@ extends Node
 ## - WHAT RUNS, RUNS: the clock's minute hand 30 degrees on five minutes in; the brew's steam rising at every
 ##   moment looked at, A TRAIL, NEVER TUFTS (the-quiet-crucible 181083: "normal heat would produce consistent steam
 ##   trails") - its young puffs born no further apart than half a puff's size takes to rise (the control: every
-##   other one left out is caught); a jar poured into the brew shows its stream while it flows and none after; the brew is
-##   its new color when the pour is done; a cue's burst and the hatchlings' huffs have their particles.
+##   other one left out is caught); a jar of ink tipped over the brew pours by itself (next/table_physics.md) - its stream
+##   shows while it flows and none after, the jar holds less and the brew more; the brew is its new color when the pour is
+##   done; a cue's burst and the hatchlings' huffs have their particles.
 ## - THE CONTROL: the same table with no acts - nothing scheduled, no stream, no cue - and its clock still runs.
 ##
 ## A BOOT probe (the medium reaches the Director); no GPU - what is checked is where things are, never pixels.
@@ -53,7 +54,8 @@ static func _table() -> Dictionary:
 			{"name": "pestle", "shape": "lathe", "profile": [[0, 0], [1.1, 0, 0.5], [0.8, 4], [0.9, 12], [0, 12.4]], "smooth": true,
 				"material": "stone", "joint": {"kind": "free"}, "points": {"tip": [0, 0, 0], "grip": [0, 12, 0]}}]},
 		{"name": "jar", "at": [-48, -10], "parts": [
-			{"shape": "lathe", "profile": [[0, 0], [3, 0], [3, 8], [2.4, 8.6], [2.4, 9.4], [0, 9.4]], "material": "glass"},
+			{"shape": "lathe", "profile": [[0, 0], [3, 0], [3, 8], [2.4, 8.6], [2.4, 9.4], [2.1, 9.4], [2.1, 8.6], [2.7, 8], [2.7, 0.3], [0, 0.3]],
+				"material": "glass"},
 			{"name": "ink", "shape": "lathe", "profile": [[0, 0.3], [2.7, 0.3], [2.7, 7], [0, 7]], "material": "ink", "points": {"lip": [2.4, 9.4, 0]}}]},
 		{"name": "clock", "at": [50, -32], "parts": [
 			{"shape": "lathe", "profile": [[0, 0], [5, 0], [5, 1], [0, 1]], "turn": [90, 0, 0], "at": [0, 7, 0], "material": "brass"},
@@ -67,9 +69,9 @@ static func _table() -> Dictionary:
 static func _acts() -> Dictionary:
 	return {"acts": [
 		{"name": "fetch-jar", "beat": 1, "about": "the jar is carried to the cauldron", "length": 3,
-			"tracks": [{"thing": "jar", "law": "carry", "to": "cauldron.mouth", "by": [8, 4, 0], "lift": 8}]},
+			"tracks": [{"thing": "jar", "law": "carry", "to": "cauldron.mouth", "by": [14, 6, 0], "lift": 8}]},
 		{"name": "pour-ink", "beat": 1, "about": "the ink is poured into the brew", "length": 4,
-			"tracks": [{"law": "pour", "from": "jar/ink", "into": "cauldron/brew", "lip": "jar.lip", "amount": 0.8, "gain": 0.05, "between": [0.2, 0.8]},
+			"tracks": [{"thing": "jar", "law": "path", "keys": [{"at": 0.1}, {"at": 0.35, "turn": [0, 0, 110]}, {"at": 0.75, "turn": [0, 0, 110]}, {"at": 0.9}]},
 				{"thing": "cauldron", "part": "brew", "law": "to", "value": "#5a2a6a", "between": [0.3, 0.9]}],
 			"cues": [{"at": 0.5, "where": "cauldron.mouth", "burst": {"look": "smoke", "count": 12, "colors": ["#c0a8d8"]}}]},
 		{"name": "grind", "beat": 2, "about": "the herbs are ground", "length": "under",
@@ -219,19 +221,44 @@ func _worked() -> void:
 		_ok(births.size() > 4 and float(gap.call(births)) <= spacing + 0.001, "the steam is a trail: %d puffs in the air, at most %.3f s apart (a trail's %.3f)" % [
 			births.size(), float(gap.call(births)), spacing])
 		_ok(float(gap.call(halved)) > spacing + 0.001, "control: every other puff left out leaves gaps (%.3f s)" % float(gap.call(halved)))
-	# the pour's stream, while it flows and not after; the brew its new color once poured
+	# THE TIP IS THE POUR: its stream while it flows and not after, the jar emptier and the brew fuller; the brew its new
+	# color once poured
 	var pour := _run_of("pour-ink")
-	if not pour.is_empty() and not (w._streams as Array).is_empty():
-		var stream: MeshInstance3D = (w._streams[0] as Dictionary)["node"]
-		_posed(lerpf(float(pour["t0"]), float(pour["t1"]), 0.5))
-		var mid_shown := stream.visible
-		_posed(float(pour["t1"]) + 1.0)
-		_ok(mid_shown and not stream.visible, "the stream shows while the ink pours (%s) and not after (%s)" % [mid_shown, stream.visible])
+	var ph: TablePhysics = w.physics
+	var ink := -1
+	var brew := -1
+	for li in ph.liquids.size():
+		var nm := String((w.things[int((ph.liquids[li] as Dictionary)["thing"])] as Dictionary)["name"])
+		if bool((ph.liquids[li] as Dictionary)["made"]):
+			if nm == "jar":
+				ink = li
+			elif nm == "cauldron":
+				brew = li
+	if not pour.is_empty() and ink >= 0 and brew >= 0:
+		_posed(float(pour["t0"]))
+		var ink0 := float(((ph.frame_at(float(pour["t0"])) as Dictionary)["liq"] as PackedFloat32Array)[ink * 16])
+		var brew0 := float(((ph.frame_at(float(pour["t0"])) as Dictionary)["liq"] as PackedFloat32Array)[brew * 16])
+		# a wide jar tipped past level empties in about a second, as it tips: looked for through the whole act
+		var mid_shown := false
+		for k in 28:
+			_posed(lerpf(float(pour["t0"]), float(pour["t1"]), 0.05 + 0.03 * float(k)))
+			for s in ph._streams:
+				mid_shown = mid_shown or (s as MeshInstance3D).visible
+		_posed(float(pour["t1"]) + 1.5)
+		var after_shown := false
+		for s in ph._streams:
+			after_shown = after_shown or (s as MeshInstance3D).visible
+		_ok(mid_shown and not after_shown, "the stream shows while the ink pours (%s) and not after (%s)" % [mid_shown, after_shown])
+		var f1: Dictionary = ph.frame_at(float(pour["t1"]) + 1.5)
+		var ink1 := float((f1["liq"] as PackedFloat32Array)[ink * 16])
+		var brew1 := float((f1["liq"] as PackedFloat32Array)[brew * 16])
+		_ok(ink1 < ink0 * 0.8 and brew1 > brew0 + (ink0 - ink1) * 0.5, "tipped over the brew, the jar went from %.0f to %.0f ml and the brew from %.0f to %.0f" % [
+			ink0 * 1e6, ink1 * 1e6, brew0 * 1e6, brew1 * 1e6])
 		var bi: int = w._work_of(w._thing_named("cauldron"), "brew")
 		var c: Color = ((w.works[bi] as Dictionary)["mats"][0] as ShaderMaterial).get_shader_parameter("color")
 		_ok(c.is_equal_approx(Color.html("#5a2a6a")), "the brew is not its new color once poured: %s" % c.to_html(false))
 	else:
-		_ok(false, "the pour or its stream was not built")
+		_ok(false, "the pour, the jar's ink or the cauldron's brew was not found (%d, %d)" % [ink, brew])
 	# THE PESTLE'S SHADE goes with it: gone while it grinds in the bowl, back where it stood before
 	var pi: int = w._thing_named("pestle")
 	var shade: Node3D = ((w.things[pi] as Dictionary)["shades"][0] as Dictionary)["node"] if not ((w.things[pi] as Dictionary)["shades"] as Array).is_empty() else null
@@ -253,7 +280,7 @@ func _worked() -> void:
 func _control() -> void:
 	_build(null)
 	var w = medium._work
-	_ok((w.acts as Array).is_empty() and (w.runs as Array).is_empty() and (w._streams as Array).is_empty(),
+	_ok((w.acts as Array).is_empty() and (w.runs as Array).is_empty() and (w.physics == null or (w.physics._streams as Array).is_empty()),
 		"the control: a table with no acts schedules work - %d acts, %d runs" % [(w.acts as Array).size(), (w.runs as Array).size()])
 	_posed(300.0)
 	var turned := false

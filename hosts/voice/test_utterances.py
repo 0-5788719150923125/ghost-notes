@@ -17,6 +17,8 @@ eSpeak is real here (the ids are its reading); the sound is made, and no voice m
   THE VOICE - a pitched sound counts as spoken, noise as whispered.
   ITS SIGNATURE - a made voice at 125 Hz between quiet pauses reads its pitch, a clear harmonics-to-noise ratio and
   speech well over its pauses; the same voice under a noise floor reads as noisy (CONTROL: noise alone has no pitch).
+  A voice at 280 Hz reads 280, and a rumble - its correlation only falling - reads no pitch, never the search's edge
+  (CONTROL: by its correlation's peak alone it would read pitched, at the edge; the code before read it 302 Hz).
   ONE VOICE - of made candidates, the noisy, the music-paced, the high, the breathy, the sentence said twice and the
   video of another recording are each left out for their own reason, and the rest kept (CONTROL: with no limit on
   the recording, the other video is kept).
@@ -193,6 +195,22 @@ def its_signature():
     ok(noisy["clean"] < U.CLEAN and noisy["hnr"] < sig["hnr"], "under a noise floor it reads %.1f dB over its pauses, its harmonics %.1f dB" % (noisy["clean"], noisy["hnr"]))
     hiss = U.signature(0.2 * np.random.default_rng(2).standard_normal(U.SR), "hiss")
     ok(hiss["f0"] == 0.0, "CONTROL: noise alone has no pitch (%.1f Hz)" % hiss["f0"])
+    high = U.signature(_voice_at(280.0, 1e-4), "a sentence of thirty letters")
+    ok(abs(high["f0"] - 280.0) < 10.0, "a voice at 280 Hz reads %.1f" % high["f0"])
+    rumble = np.random.default_rng(3).standard_normal(U.SR)
+    for i in range(1, len(rumble)):  # a one-pole low pass: its correlation falls as 0.995 a sample
+        rumble[i] += 0.995 * rumble[i - 1]
+    pause = np.zeros(int(0.3 * U.SR))
+    rumble = np.concatenate([pause, 0.3 * rumble / np.abs(rumble).max(), pause]) + 1e-4 * np.random.default_rng(4).standard_normal(U.SR + 2 * len(pause))
+    ok(U.signature(rumble, "a sentence of thirty letters")["f0"] == 0.0, "a rumble reads no pitch (%.1f Hz)"
+       % U.signature(rumble, "a sentence of thirty letters")["f0"])
+    fr = rumble[len(pause) + 2048: len(pause) + 2048 + 1024]
+    fr = fr - fr.mean()
+    ac = np.fft.irfft(np.abs(np.fft.rfft(fr, 2048)) ** 2)[:1024]
+    ac /= ac[0]
+    window = ac[U.SR // 300: U.SR // 70]
+    ok(window.max() > 0.5 and window.argmax() == 0, "CONTROL: by its correlation's peak alone it reads pitched, at %.0f Hz"
+       % (U.SR / (U.SR // 300)))
 
 
 def _cands():

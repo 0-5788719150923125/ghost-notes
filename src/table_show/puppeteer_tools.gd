@@ -11,7 +11,9 @@ class_name PuppeteerTools
 ##            runs and emits ([method TableWork.parts_report])
 ##   act      acts put into the draft - one of the same name is replaced - each answered with what it does:
 ##            how long, how far and how fast each moving thing goes, and ANYTHING PASSING THROUGH ANYTHING
-##            ([method TableWork.check]), and what of it could not be kept, and why
+##            ([method TableWork.check]), and what of it could not be kept, and why - every act of a call on one
+##            table ([method TablePreview.work_checks]), what is in things baked on from the last call's
+##            ([method TablePhysics.carry])
 ##   remove   acts taken out, by name
 ##   watch    one act photographed from the camera's place, six times start to end
 ##            ([method TablePreview.work_watch])
@@ -59,10 +61,13 @@ func _init(ep: TableEpisode, episode_plan: Dictionary, job_dir: String, table: D
 			DirAccess.remove_absolute(dir.path_join(fs))
 
 
+## The tools closed: the preview given back now, or - while a call bakes - its bake given up, and given back after.
 func release() -> void:
 	_released = true
 	if not _busy:
 		_preview.release()
+	else:
+		_preview.halt()
 
 
 func instructions() -> String:
@@ -164,20 +169,21 @@ func _act(args: Dictionary) -> Dictionary:
 		for n in made["notes"]:
 			lines.append("- " + String(n))
 		return {"text": "\n".join(lines)}
+	# ONE TABLE FOR THE CALL: every act put checked on it, and what could not be kept read off it - a table stood for each
+	# act and once more for the notes had baked the work from its start every time (2026-10-28: 330 s for four acts)
+	var checking: Array = put.filter(func(nm: String) -> bool: return kept.has(nm))
+	var got: Dictionary = await _preview.work_checks(_table, draft(), checking)
 	for nm in put:
 		if not kept.has(nm):
 			lines.append("\"%s\" could not be kept." % nm)
-			continue
-		var got: Dictionary = await _preview.work_check(_table, draft(), nm)
-		if got.has("error"):
+		elif got.has("error"):
 			lines.append("\"%s\" could not be played: %s" % [nm, String(got["error"])])
-			continue
-		lines.append(String(got["text"]))
+		else:
+			lines.append(String((got["texts"] as Dictionary).get(nm, "")))
 	var notes: Array = []
 	for n in made["notes"]:
 		notes.append(String(n))
-	var stood: Dictionary = await _preview.work(_table, draft())
-	for n in stood.get("notes", []):
+	for n in got.get("notes", []):
 		if not notes.has(String(n)):
 			notes.append(String(n))
 	if not notes.is_empty():

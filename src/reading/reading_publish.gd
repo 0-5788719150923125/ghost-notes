@@ -71,17 +71,10 @@ func youtube_built(_card: YouTubeCard) -> void:
 
 ## WHETHER THE NOTE IS ITS OWN EPISODE: read as it is written, it goes up with the description written
 ## on its YouTube card and its own tags, and the steps the note's other cards add are made from its words
-## there ([NoteUpload]). False for a component that makes episodes and says what each goes up with.
+## ([NoteUpload] - listed by the card that handed this, [method ReadingPanel.hand_publish]). False for a
+## component that makes episodes and says what each goes up with.
 func note_is_episode() -> bool:
 	return true
-
-
-## WHETHER A CARD ON THE NOTE LISTS THOSE STEPS UNDER ITS OWN, beside its Generate (the Actor card - the
-## user, 2026-10-23: "push the generate/regenerate step into the Actor card. Right now, it's buried at the
-## bottom of the YouTube card"), handed the note as their episode ([method ReadingPanel.note_upload]).
-## False, and the YouTube card lists them itself.
-func lists_steps() -> bool:
-	return false
 
 
 ## Who writes for the note's uploads (its tags), `{agent, model, effort}` - {} for the default writer.

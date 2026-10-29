@@ -87,11 +87,9 @@ var _tags_field: TagField     # the note's tags on it
 var _rows := {}               # step -> {state: Label, redo: Button}
 ## The picked episode, as the steps other cards add to it read it ([method _tick_steps]).
 var _feed: Feed = null
-## Making was asked for: the steps other cards add are made once the episode's own are done.
-var _steps_asked := false
-var _step_box: VBoxContainer  # their rows, under the Script
-var _step_rows := {}          # a step's key -> {step, state: Label, redo: Button}
-var _rows_steps := ""         # the steps the rows were built for
+## THE STEPS THE NOTE'S OTHER CARDS ADD, listed here: this card hands the reading how it goes out.
+var _added := EpisodeSteps.new(host_name(), Callable())
+var _added_rows: EpisodeStepRows  # their rows, under the Script
 var _note: Label
 
 
@@ -110,7 +108,8 @@ func serve(panel: ReadingPanel) -> void:
 	_doc = reading.doc_source()
 	_text = reading.source_box()
 	reading.walk = ProofWalk.new(func() -> ProofEpisode: return _episode)
-	reading.publish = Publish.new(self)
+	reading.hand_publish(Publish.new(self), host_name())
+	_added = EpisodeSteps.new(host_name(), reading.episode_steps)
 	reading.ready.connect(_open_episode, CONNECT_ONE_SHOT)
 	_build()
 
@@ -125,7 +124,7 @@ func _enter_tree() -> void:
 func _exit_tree() -> void:
 	if _producer != null:
 		_producer.stop()
-	_stop_steps(_feed)
+	_added.stop(_feed)
 	if _note_job != "":
 		AgentJobs.cancel(_note_job)
 		AgentJobs.forget(_note_job)
@@ -449,7 +448,7 @@ func _open_episode() -> void:
 		return
 	if _producer != null:
 		_producer.stop()
-	_stop_steps(_feed)
+	_added.stop(_feed)
 	_episode = ProofEpisode.open(_show_key(), int(_knobs["episode"]))
 	_feed = Feed.new(self, _episode)
 	_producer = ProofProducer.new(_episode, {})
@@ -529,7 +528,7 @@ func _remake(ep: ProofEpisode) -> void:
 
 func _start_making(verb: String) -> void:
 	_producer.spec = _spec()
-	_steps_asked = true
+	_added.asked = true
 	_producer.start()
 	_set_status("%s episode %d: the problem is fixed first, then solved at the desk with Lean, then taught."
 		% [verb, _episode.number])
@@ -565,7 +564,7 @@ func _delete_episode(ep: ProofEpisode) -> void:
 	var open := _episode != null and _episode.dir == ep.dir
 	if open and _producer != null:
 		_producer.stop()
-	_stop_steps(Feed.new(self, ep))
+	_added.stop(Feed.new(self, ep), _feed)
 	if open and reading.reading_live():
 		reading.stop_speaking()
 	var err := ep.trash()
@@ -629,122 +628,27 @@ func _redo(step: String) -> void:
 	_episode.invalidate(step)
 	reading.mark_stale()
 	_producer.spec = _spec()
-	_steps_asked = true          # the steps after it: the other cards' too
+	_added.asked = true          # the steps after it: the other cards' too
 	_producer.start()
 
 
 # --- the steps the note's other cards add -------------------------------------------------------
-
-## The steps the note's other cards add, all of them, as the panel holds them
-## ([method ReadingPanel.episode_steps]).
-func _offered() -> Array:
-	return reading.episode_steps() if reading != null else []
-
-
-## ...and the ones listed now, under the Script.
-func _listed() -> Array:
-	return EpisodeStep.listed_of(_offered())
-
-
-## What the rows were built for: the listed steps' keys.
-func _steps_key() -> String:
-	return ",".join(PackedStringArray(_listed().map(func(s: EpisodeStep) -> String: return s.key)))
-
 
 ## This card as the steps' rows say where they are: "the Proof card".
 static func host_name() -> String:
 	return "the %s card" % String(Registry.field(Components.REGISTRY, KEY, "heading", "Proof"))
 
 
-## EACH REFRESH: what the steps' jobs ended with, landed; the picked episode said to the steps listed;
-## and once the episode's own steps are done, each listed step made - from its words, so only when they
-## were written.
+## EACH REFRESH ([EpisodeSteps]): the picked episode said to the steps listed, and once the episode's own
+## steps are done, each made - from its words, so only when they were written.
 func _tick_steps() -> void:
-	for s in _offered():
-		(s as EpisodeStep).tick()
-	var listed := _listed()
-	for s in listed:
-		(s as EpisodeStep).listed(host_name(), _feed)
-	if _steps_asked and _producer != null and not (_producer.running or _producer.busy()):
-		_steps_asked = false
-		for s in listed:
-			(s as EpisodeStep).generate(_feed)
-
-
-## STOP what the steps are making of [param feed]'s episode - and, for the picked one, what making it asked
-## of them.
-func _stop_steps(feed: Feed) -> void:
-	if feed == null or _feed == null or feed.folder() == _feed.folder():
-		_steps_asked = false
-	if feed == null:
-		return
-	for s in _offered():
-		(s as EpisodeStep).stop(feed)
-
-
-## Is a listed step being made for the picked episode?
-func _steps_busy() -> bool:
-	for s in _listed():
-		if (s as EpisodeStep).busy(_feed):
-			return true
-	return false
+	_added.tick(_feed, _producer == null or _producer.running or _producer.busy())
 
 
 ## ⟳ on a step's row: made again now, from the episode's words - which must be written first.
 func _redo_step(step: EpisodeStep) -> void:
 	if not step.redo(_feed):
 		_set_status("%s waits for the episode's words - Make episode writes them." % step.label)
-
-
-## The steps' rows, under the Script, one per step listed: built again when the steps listed change.
-func _build_step_rows() -> void:
-	for c in _step_box.get_children():
-		_step_box.remove_child(c)
-		c.queue_free()
-	_step_rows = {}
-	for s in _listed():
-		var step: EpisodeStep = s
-		var r := HBoxContainer.new()
-		r.add_theme_constant_override("separation", 6)
-		_step_box.add_child(r)
-		var name_l := Label.new()
-		name_l.text = step.label
-		name_l.custom_minimum_size.x = 64.0
-		name_l.add_theme_font_size_override("font_size", 12)
-		r.add_child(name_l)
-		var state := Label.new()
-		state.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		state.clip_text = true
-		state.add_theme_font_size_override("font_size", 11)
-		state.mouse_filter = Control.MOUSE_FILTER_STOP
-		r.add_child(state)
-		var redo := Button.new()
-		redo.text = "⟳"
-		redo.flat = true
-		redo.pressed.connect(_redo_step.bind(step))
-		r.add_child(redo)
-		_step_rows[step.key] = {"step": step, "state": state, "redo": redo}
-	_rows_steps = _steps_key()
-
-
-## What each step's row says, as the episode's own rows do, and its ⟳ - offered once the episode's
-## words are written and nothing is being made.
-func _refresh_step_rows(busy: bool) -> void:
-	if _steps_key() != _rows_steps:
-		_build_step_rows()
-	var words := _feed != null and not _feed.words().is_empty()
-	for k in _step_rows:
-		var r: Dictionary = _step_rows[k]
-		var step: EpisodeStep = r["step"]
-		var st := step.state(_feed)
-		var lead := String({"ready": "✓", "running": "…", "queued": "…", "failed": "✗"}.get(st, "–"))
-		var said := step.said(_feed)
-		(r["state"] as Label).text = lead + (" " + said if not said.is_empty() else "")
-		(r["state"] as Label).tooltip_text = (r["state"] as Label).text
-		var made := not step.made(_feed).is_empty()
-		(r["redo"] as Button).disabled = busy or not words
-		(r["redo"] as Button).tooltip_text = (step.again if made else step.first) + (
-			"" if words else " - once the episode's words are written")
 
 
 # --- the note's words: "Invent a problem" and "Refine" ---------------------------------------
@@ -889,7 +793,7 @@ func _build() -> void:
 	_stop_btn.pressed.connect(func() -> void:
 		if _producer != null:
 			_producer.stop()
-		_stop_steps(_feed))
+		_added.stop(_feed))
 	grow.add_child(_stop_btn)
 	_del_btn = Button.new()
 	_del_btn.text = "Delete…"
@@ -943,9 +847,10 @@ func _build() -> void:
 		redo.pressed.connect(func() -> void: _redo(step))
 		r.add_child(redo)
 		_rows[step] = {"state": state, "redo": redo, "maker": String(row[2]), "again": String(row[3])}
-	# THE STEPS THE NOTE'S OTHER CARDS ADD, under the Script ([method _build_step_rows])
-	_step_box = VBoxContainer.new()
-	add_child(_step_box)
+	# THE STEPS THE NOTE'S OTHER CARDS ADD, under the Script
+	_added_rows = EpisodeStepRows.new(_added)
+	_added_rows.redo.connect(_redo_step)
+	add_child(_added_rows)
 
 	_note = Label.new()
 	_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -966,7 +871,7 @@ func _show_knobs() -> void:
 func _refresh() -> void:
 	if _episode == null or _producer == null:
 		return
-	var busy := _producer.running or _producer.busy() or _steps_asked or _steps_busy()
+	var busy := _producer.running or _producer.busy() or _added.asked or _added.busy(_feed)
 	var made := made_any(_episode)
 	_make_btn.disabled = busy
 	_make_btn.text = "Remake episode" if made else "Make episode"
@@ -1007,7 +912,7 @@ func _refresh() -> void:
 		(r["redo"] as Button).disabled = busy or not (st == "ready" or go_on)
 		(r["redo"] as Button).tooltip_text = String(r["again"]) if st == "ready" \
 			else "Make this step and the ones after it - what is made before it is kept"
-	_refresh_step_rows(busy)
+	_added_rows.refresh(_feed, busy)
 	var line := ""
 	if not _producer.waiting.is_empty():
 		line = "Waiting: %s - Ghost Notes fetches these itself, once (see ⚙ for progress)." % _producer.waiting

@@ -22,6 +22,13 @@ class_name LetterMedium
 ## with the voice, unseen. A line's way back to the margin is a quick return ([constant LINE_RETURN]), as a
 ## hand's is.
 ##
+## THE PEN IS PICKED UP FROM THE DESK (2026-10-28, the user: "at the beginning, the pen starts floating in the air
+## already. I think it would be better if the pen started from a resting place upon the table, to the right of the
+## paper, and if we gently picked it up at the beginning, after the intro-blur"): it lies beside the pad's right edge
+## ([method DeskLook.pen_rest], nothing else on the desk set down there) through the intro and its focus pull, and
+## over the page's blank moment is lifted, turned up into the hand and carried to the first stroke
+## ([method _pick_up_pose]).
+##
 ## A THOUGHT IS NOT WRITTEN: while the writer thinks a passage in italics the pen is lifted.
 ##
 ## THE CAMERA'S ARC OVER A PAGE (2026-10-27, the user: "The forward and backward zooming of the camera is
@@ -50,7 +57,11 @@ class_name LetterMedium
 ## into a second one, or a third one, directly without ever seeing the page again ... each with different
 ## panning/zooming behavior"): one whose passage begins where the last one's ends (its span's `blend`) comes
 ## up over it, the one under held whole until it has, so the page is never seen between them
-## ([method pictures_at]); and no picture moves as the one before it did.
+## ([method pictures_at]); and no picture moves as the one before it did. A HESITATION BEFORE ITS MARK IS THE
+## WRITER'S FIRST (2026-10-28, the user, of Secular Haze's "Housing came into my room looking for you." and the
+## `<!-- hesitation: 3 -->` after it: "the picture that follows is immediately displayed - not waiting for the
+## hesitation at all"): the picture comes up as the pen is taken up again, [constant RESUME_LEAD] before the voice
+## goes on, the desk seen through the pause - and one it dissolves from is held whole through it.
 ##
 ## A STILL IS DEAD STILL (`<!-- still -->`: "the camera holds still on the cross and the dot, with the pen
 ## well clear of them, or the test cannot work"): from the mark to the next written line the camera frames
@@ -109,6 +120,15 @@ const TAP_RISE := 0.016
 const TAP_LEAN := Vector3(0.32, 0.86, 0.4)
 ## The pen's length from nib to top (m), as [DeskMedium] builds it.
 const PEN_TOP := PEN_LEN + 0.02
+## THE PICK-UP ([method _pick_up_pose]): how long it takes, from lying on the desk to over the first stroke
+## (seconds); where the fingers hold it, up from the nib (m); the share of the way it is turned up into the hand
+## over, and the share it is raised alone before it is carried; and how high its grip arcs over the pad (m) - its
+## nib clears the pad's edge by about the height the desk's pen waits at ([constant DeskMedium.REST_LIFT]).
+const PICK_UP := 2.2
+const PICK_GRIP := 0.05
+const PICK_TURN := 0.45
+const PICK_CARRY := 0.25
+const PICK_ARC := 0.05
 ## POINTING AT THE CAMERA: the nib held this high (m) over where the camera looks, the pen turned this
 ## far off the lens's own line, how long it takes to get there and back, and how long it is held after the
 ## sentence. A camera looking all but straight down has the pen's body running down from the nib: at 11 cm
@@ -134,6 +154,12 @@ const RESUME_LEAD := 0.9
 ## still drifting 15 px three seconds in - a test the viewer does on the screen cannot be done on a
 ## moving one).
 const STILL_SPRING := 0.3
+## A TURN NOT PLANNED YET is guessed at the pace the voice has kept over its last this many words heard, rests and all
+## ([method _turn_guess]).
+const PACE_WORDS := 40
+## A bare hesitation's length (seconds), for that guess: the Voice card's Hesitate row as it comes ([ReadingCast]'s
+## default; named there, the medium would pull the reading's autoloads into every gate that builds it).
+const HESITATE := 1.5
 
 ## The plate the pictures are shown on, over the desk ([method _show_picture]): each up, bottom first.
 class Plate extends Node2D:
@@ -162,6 +188,9 @@ var _written_words := PackedByteArray()  # a spoken word -> 1 when a line of the
 var _pauses := {}              # a spoken word a hesitation follows -> true ([member LetterScript] `pauses`)
 var _plate: Plate
 var _still_from := -1.0        # when the still up now began (its wander's time), -1 for none
+var _rests := PackedFloat32Array()  # a spoken word -> the rest the script writes before it ([method rests_of])
+var _let_go := {}              # a page -> the turn to it the camera lets go for, once it has begun to ([method _letting_go])
+var _let_go_at := -INF         # ...as of this moment
 
 
 func mount(st: SubViewport) -> void:
@@ -219,6 +248,7 @@ func load_letter(source: String, letter: Dictionary, start := PackedStringArray(
 	_seed = int(letter.get("seed", _seed))
 	look = DeskLook.of(_seed)
 	_dress()
+	_let_go = {}
 	var svgs: Dictionary = letter.get("svgs", {}) if letter.get("svgs") is Dictionary else {}
 	var ink: Dictionary = letter.get("ink", {}) if letter.get("ink") is Dictionary else {}
 	var fonts: Dictionary = ink.get("fonts", {}) if ink.get("fonts") is Dictionary else {}
@@ -263,6 +293,7 @@ func load_letter(source: String, letter: Dictionary, start := PackedStringArray(
 	_pauses = {}
 	for h in parsed.get("pauses", []):
 		_pauses[int(h)] = true
+	_rests = rests_of(parsed)
 	for a in _actions:
 		var act: Dictionary = a
 		if String(act["kind"]) == "pad-text":
@@ -351,10 +382,10 @@ func _show_picture() -> void:
 
 
 ## WHAT THE SCREEN SHOWS OF THE PICTURES at [member _now], bottom first: each `{key, alpha, grow, drift}` -
-## faded in from the end of the word before its passage, over the desk or over the picture before it (which is
-## held whole under it until it is in), and out after the passage's last word, unless the next comes up over it
-## there; grown and drifted along its move ([constant MOVES]) by how far through the passage the script says it
-## is. Only a picture there is a file for is shown. Pure: a function of the voice's times.
+## faded in as it comes up ([method _comes_up]), over the desk or over the picture before it (which is held whole
+## under it until it is in), and out after the passage's last word, unless the next comes up over it there; grown
+## and drifted along its move ([constant MOVES]) by how far through the passage the script says it is. Only a
+## picture there is a file for is shown. Pure: a function of the voice's times.
 func pictures_at() -> Array:
 	var shown: Array = []
 	for s in _spans:
@@ -368,9 +399,9 @@ func pictures_at() -> Array:
 		var to := int(sp["to"])
 		var nxt: Dictionary = shown[i + 1] if i + 1 < shown.size() else {}
 		var under := not nxt.is_empty() and bool(nxt.get("blend", false)) and int(nxt["from"]) == to
-		# its fade begins as the next's would over it: the same moment, so a dissolve has no gap
-		var t0 := _guess(from - 1, true) + LetterScript.IMAGE_AFTER if from > 0 else _guess(from, false) - IMAGE_FADE
-		var t1 := _guess(to - 1, true) + LetterScript.IMAGE_AFTER
+		var t0 := _comes_up(sp)
+		# under the next, its fade begins as the next comes up over it: the same moment, so a dissolve has no gap
+		var t1 := _comes_up(nxt) if under else _guess(to - 1, true) + LetterScript.IMAGE_AFTER
 		if t0 == INF or _now < t0 or _now > t1 + IMAGE_FADE:
 			continue
 		var a := clampf((_now - t0) / IMAGE_FADE, 0.0, 1.0)
@@ -382,6 +413,20 @@ func pictures_at() -> Array:
 		out.append({"key": String(sp["key"]), "alpha": a * a * (3.0 - 2.0 * a), "grow": lerpf(grow.x, grow.y, u),
 			"drift": (mv["way"] as Vector2) * lerpf(-float(mv["drift"]), float(mv["drift"]), u)})
 	return out
+
+
+## WHEN PICTURE [param sp] BEGINS TO COME UP: just after the word before its passage; for one a hesitation stands
+## before, as the pen is taken up again ([constant RESUME_LEAD] before its passage's first word - INF until that
+## word is heard, for a live reading's guess knows nothing of the pause); for one that opens the letter, so it is
+## whole at its first word.
+func _comes_up(sp: Dictionary) -> float:
+	var from := int(sp["from"])
+	if from <= 0:
+		return _guess(from, false) - IMAGE_FADE
+	var t := _guess(from - 1, true) + LetterScript.IMAGE_AFTER
+	if bool(sp.get("after_hesitation", false)):
+		t = maxf(t, _word_t0(from) - RESUME_LEAD)
+	return t
 
 
 ## The picture on top at [member _now] ([method pictures_at]): `{key, alpha, grow, drift}`, key "" for none.
@@ -466,12 +511,16 @@ func _resume_floor(k: int) -> float:
 ## The times the pen writes line [param a]'s spoken words by, begun at [param start]: `[t0s, t1s]` - each word
 ## the voice's word [constant LetterScript.AHEAD_WORDS] before it, never before the line may begin (the first
 ## words of a paragraph the voice waits for, written as it gets there), nor past a hesitation before the pen
-## is taken up again ([method _resume_floor]).
+## is taken up again ([method _resume_floor]). A WORD SAID BEFORE THE LINE BEGINS IS WRITTEN AT THE PEN'S QUICKEST: no
+## sooner than [constant LetterScript.QUICKEST] the ink's time from the line's start - all of them given the start, the
+## elastic pen smoothed them over its window and wrote the first words of a line behind the voice (after a page turned
+## inside a sentence) at near half that, two seconds later than the voice's rest for them was sized by.
 func _ahead_times(a: Dictionary, start: float) -> Array:
 	var t0s := PackedFloat32Array()
 	var t1s := PackedFloat32Array()
 	var k0 := int(a["after"])
 	var last := start
+	var ends: PackedFloat32Array = a.get("ends", PackedFloat32Array())
 	for j in int(a["span"]):
 		var k := k0 + j - LetterScript.AHEAD_WORDS
 		var w0 := _word_t0(k) if k >= 0 and (String(a.get("gate", "")) == "" or k >= k0) else -INF
@@ -484,6 +533,10 @@ func _ahead_times(a: Dictionary, start: float) -> Array:
 		if resume > w0:
 			w1 = maxf(w1, resume + (w1 - w0))
 			w0 = resume
+		if w0 < start:
+			# said already: at the pen's quickest from the line's start
+			w0 = maxf(w0, start + (ends[j - 1] if j > 0 and j - 1 < ends.size() else 0.0) / LetterScript.QUICKEST)
+			w1 = maxf(w1, start + (ends[j] if j < ends.size() else 0.0) / LetterScript.QUICKEST)
 		t0s.append(maxf(w0, start))
 		t1s.append(maxf(w1, start + 0.01))
 		last = t1s[t1s.size() - 1]
@@ -499,7 +552,7 @@ func _pictured(a: Dictionary) -> bool:
 ## WHEN A LINE WRITTEN AHEAD ENDS: as the voice ends the word [constant LetterScript.AHEAD_WORDS] before its last,
 ## never quicker than [constant LetterScript.QUICKEST] its ink's own time nor slower than the desk's slowest pen; a
 ## sketch, as its words end, no quicker than [method LetterScript.draw_pace]; one under a picture, and anything else,
-## as the desk's.
+## as the desk's. A LINE RUNS ON INTO THE VOICE'S PAUSE AFTER IT ([method _runs_on_to]).
 func _paced_end(i: int, start: float, end: float) -> float:
 	var a: Dictionary = _actions[i]
 	if String(a["kind"]) == "draw" and int(a.get("span", 0)) > 0:
@@ -514,8 +567,35 @@ func _paced_end(i: int, start: float, end: float) -> float:
 		return end
 	var write := float(a.get("write", 0.0))
 	var times := _ahead_times(a, start)
-	var wanted: float = (times[1] as PackedFloat32Array)[int(a["span"]) - 1]
+	var wanted: float = maxf((times[1] as PackedFloat32Array)[int(a["span"]) - 1], _runs_on_to(i))
 	return clampf(wanted, start + write / LetterScript.QUICKEST, start + write / DeskScript.MIN_PACE)
+
+
+## WHEN LINE [param i] MAY END AT THE LATEST and the next still begin on time: as the nib must leave for it, where the
+## next line of the paragraph begins as the voice begins the word [constant LetterScript.AHEAD_WORDS] before its first;
+## -INF where it begins otherwise (a turn, a paragraph the voice waits for, under a picture), across a hesitation
+## (the writer stops there too, [method _resume_floor]), or before that word is heard. 2026-10-28, the user, of "There's
+## a name for his trouble in my line of work. It is | called a zero-knowledge protocol": "the pen just stops moving at
+## "it is", for a second, before it moves to the new line ... most newlines don't have that extra pause" - a line ends
+## as the voice ends the word two before its last, and where that word ends a sentence the next line could not begin
+## until the voice was past the pause after it, the pen standing at the line's end through it; inside a line the
+## elastic pen slows through the same pause ([method DeskMedium.elastic]). Now the line is written on into it.
+func _runs_on_to(i: int) -> float:
+	if i + 1 >= _actions.size():
+		return -INF
+	var a: Dictionary = _actions[i]
+	var b: Dictionary = _actions[i + 1]
+	if String(b["kind"]) != "pad-text" or int(b.get("span", 0)) <= 0 or bool(b.get("turn", false)) \
+			or bool(b.get("para", false)) or not String(b.get("gate", "")).is_empty() or _pictured(b):
+		return -INF
+	var k1 := int(b["after"])
+	if k1 != int(a["after"]) + int(a["span"]) or k1 < LetterScript.AHEAD_WORDS:
+		return -INF
+	for h in range(maxi(k1 - LetterScript.AHEAD_WORDS - 1, 0), k1):
+		if _pauses.has(h):
+			return -INF
+	var due := _word_t0(k1 - LetterScript.AHEAD_WORDS)
+	return due - _way(i, i + 1) if due < INF else -INF
 
 
 ## How far through its writing action [param i] is at [param t]: a line written ahead by the desk's elastic
@@ -629,15 +709,77 @@ func _pen_during(a: Dictionary, i: int, start: float) -> Dictionary:
 	return super._pen_during(a, i, start)
 
 
-## THE PEN, as the desk places it - and then turned over to tap, or lifted to point at the lens.
-func _place_pen() -> void:
-	super._place_pen()
-	var base := _pen.global_transform
-	var pose := _tap_pose(base)
+## THE PEN, as the desk places it - and then lying on the desk until it is picked up, turned over to tap, or
+## lifted to point at the lens.
+func _pen_xf() -> Transform3D:
+	var base := super._pen_xf()
+	var pose := _pick_up_pose(base)
+	if pose.is_empty():
+		pose = _tap_pose(base)
 	if pose.is_empty():
 		pose = _camera_pose(base)
-	if not pose.is_empty():
-		_pen.global_transform = _blend(base, pose["xf"], float(pose["f"]))
+	return base if pose.is_empty() else _blend(base, pose["xf"], float(pose["f"]))
+
+
+## Before the first thing is done the nib waits over its first stroke, where the pen is carried to from the desk
+## ([method _pick_up_pose]); with nothing to do at all, where the desk's does.
+func _before_first() -> Dictionary:
+	var i := _first_done()
+	if i < 0:
+		return super._before_first()
+	return {"p": _action_point(_actions[i], true), "lift": REST_LIFT}
+
+
+## The first action the pen does - a point at nothing on its page it leaves be, as [method pen_at] does; -1 for none.
+func _first_done() -> int:
+	for i in _actions.size():
+		var a: Dictionary = _actions[i]
+		if not (String(a["kind"]) == "point" and target_box(a).size.x < 0.0):
+			return i
+	return -1
+
+
+## WHEN THE PEN IS PICKED UP: `(from, to)`, seconds - [constant PICK_UP] long, over as the nib sets off down to the
+## first stroke ([method _reach]), which is as the blank page ends ([method _opening]), so well after the intro's blur
+## has lifted. A first action not planned yet is guessed from the opening; INF while neither is known, and for a
+## letter the pen never does anything in: it lies where it is.
+func _pick_up() -> Vector2:
+	var i := _first_done()
+	if i < 0 or i >= _plan.size():
+		return Vector2(INF, INF)
+	var start := float(_plan[i]["start"])
+	if start == INF:
+		var opening := _opening()
+		if opening == INF:
+			return Vector2(INF, INF)
+		start = opening + LetterScript.BLANK_PAGE
+	var to := start - _reach(-1, i)
+	return Vector2(to - PICK_UP, to)
+
+
+## THE PEN PICKED UP from where it lies ([method DeskLook.pen_rest]): `{xf, f}` as [method _tap_pose] gives it, the
+## pose whole - lying on its widest until [method _pick_up] begins; then held by its grip ([constant PICK_GRIP] up
+## from the nib), raised and turned up into the hand over the first [constant PICK_TURN] of the way, carried over the
+## pad from [constant PICK_CARRY] of it in an arc [constant PICK_ARC] high, and brought down to the desk's own pose
+## [param base], which it is as the pick-up ends; {} from then on.
+func _pick_up_pose(base: Transform3D) -> Dictionary:
+	var w := _pick_up()
+	if w.y < INF and _now >= w.y:
+		return {}
+	var rest := DeskLook.pen_rest(look, LegalPad.DESK_Y)
+	var lie := Vector3.UP * PEN_R * 1.04
+	var nib: Vector3 = _pad.transform * ((rest["nib"] as Vector3) + lie)
+	var lying := _pen_frame(nib, _pad.transform * ((rest["top"] as Vector3) + lie) - nib)
+	var u := clampf((_now - w.x) / PICK_UP, 0.0, 1.0) if w.x < INF else 0.0
+	if u <= 0.0:
+		return {"xf": lying, "f": 1.0}
+	var turned := Basis(lying.basis.get_rotation_quaternion().slerp(base.basis.get_rotation_quaternion(),
+		_ease(clampf((u - 0.05) / PICK_TURN, 0.0, 1.0))))
+	var grip := (lying.origin + lying.basis.y * PICK_GRIP).lerp(base.origin + base.basis.y * PICK_GRIP,
+		_ease(clampf((u - PICK_CARRY) / (1.0 - PICK_CARRY), 0.0, 1.0)))
+	# up off the desk first, over the pad's edge, then down onto the line
+	grip.y += PICK_ARC * _ease(clampf(u / 0.4, 0.0, 1.0)) * (1.0 - _ease(clampf((u - 0.55) / 0.45, 0.0, 1.0)))
+	return {"xf": Transform3D(turned, grip - turned.y * PICK_GRIP), "f": 1.0}
 
 
 ## WHILE A TAP LASTS: the pen upside down over its spot, its top coming down on it [constant TAP_N]
@@ -685,7 +827,7 @@ func _camera_pose(_base: Transform3D) -> Dictionary:
 
 
 ## The pen's transform with its nib at [param nib] and its body along [param up] (nib to top), as
-## [method DeskMedium._place_pen] builds one.
+## [method DeskMedium._pen_xf] builds one.
 static func _pen_frame(nib: Vector3, up: Vector3) -> Transform3D:
 	var y := up.normalized()
 	var x := y.cross(Vector3.FORWARD)
@@ -736,16 +878,81 @@ func _arc() -> float:
 		var a: Dictionary = _actions[i]
 		var ta := float(_plan[i]["turn_at"])
 		if ta == INF:
-			ta = _guess(int(a.get("after", 0)), false) - DeskScript.TURN
+			ta = _turn_guess(int(a.get("after", 0))) - DeskScript.TURN
 		if int(a["page"]) == page:
 			opened = ta + DeskScript.TURN
 		elif int(a["page"]) > page:
-			turns = ta
+			turns = _letting_go(int(a["page"]), ta)
 			break
 	var k := smoothstep(opened + ARRIVE, opened + ARRIVE + ARC_IN, _now)
 	if turns < INF:
 		k = minf(k, 1.0 - smoothstep(turns - OUT_BEFORE - ARC_OUT, turns - OUT_BEFORE, _now))
 	return k
+
+
+## THE TURN THE CAMERA LETS GO FOR ONLY EVER COMES SOONER (2026-10-28, the user, of the end of Secular Haze's first
+## page: "it bounces forward and back a couple times, right at the very last few sentences"): a turn not planned yet is
+## a guess at a word not heard yet ([method _turn_guess]), and a live reading's words arrive a sentence at a time - each
+## moved it later (the hesitation in "In both worlds, I was expelled.", the rest the voice takes as the picture clears),
+## and the camera, letting go, came in again, twice. Once it has begun to let go for the turn to [param page], it lets
+## go for the soonest [param ta] it has been told; a jump in time forgets it. An export knows every word's time, and is
+## only ever told one.
+func _letting_go(page: int, ta: float) -> float:
+	if absf(_now - _let_go_at) > 1.0:
+		_let_go = {}
+	_let_go_at = _now
+	var held := float(_let_go.get(page, INF))
+	var t := minf(held, ta)
+	if held < INF or _now >= ta - OUT_BEFORE - ARC_OUT:
+		_let_go[page] = t
+	return t
+
+
+## WHEN THE LINE A TURN IS FOR BEGINS, its first word [param si] not heard yet: from the last word heard, at the pace
+## the voice has kept over its last [constant PACE_WORDS] words (less the rests the script wrote among them), and with
+## the rests the script writes before the words to come ([method rests_of]) - never quicker than the desk's steady
+## guess ([constant DeskScript.EST_WORD] a word), which, counting no rest, ran ten seconds early twenty words out on
+## Secular Haze's first page.
+func _turn_guess(si: int) -> float:
+	var known := _follower.known_last()
+	if known < 1 or si <= known or si >= _rests.size():
+		return _guess(si, false)
+	var back := maxi(known - PACE_WORDS, 0)
+	var t0 := _word_t0(back)
+	var t1 := _word_t1(known)
+	if t0 == INF or t1 == INF:
+		return _guess(si, false)
+	var rested := 0.0
+	for j in range(back + 1, known + 1):
+		rested += _rests[j]
+	var pace := maxf((t1 - t0 - rested) / float(known - back + 1), DeskScript.EST_WORD)
+	var t := t1 + float(si - known - 1) * pace
+	for j in range(known + 1, si + 1):
+		t += _rests[j]
+	return t
+
+
+## THE RESTS THE SCRIPT WRITES the voice, before each of [param parsed]'s spoken words (seconds): the rests its marks
+## hold for ([LetterScript]'s `action-hold`: the blank page, a picture clearing, a strike decided...) and the writer's
+## hesitations (a bare one at [constant HESITATE]) - read off the text the voice reads, word by
+## word as [method DeskScript.rehearsal] reads it.
+static func rests_of(parsed: Dictionary) -> PackedFloat32Array:
+	var n := (parsed["spoken"] as PackedStringArray).size()
+	var out := PackedFloat32Array()
+	out.resize(n + 1)
+	var token := RegEx.create_from_string("<!--\\s*action-hold\\s*:\\s*([0-9.]+)\\s*-->|<!--\\s*hesitation\\s*(?::\\s*([0-9.]+))?\\s*-->|<!--.*?-->|\\S+")
+	var k := 0
+	var rest := 0.0
+	for m in token.search_all(String(parsed["speakable"])):
+		if not m.get_string(1).is_empty():
+			rest += float(m.get_string(1))
+		elif m.get_string().contains("hesitation") and m.get_string().begins_with("<!--"):
+			rest += float(m.get_string(2)) if not m.get_string(2).is_empty() else HESITATE
+		elif not m.get_string().begins_with("<!--") and not TabletScript.norm(m.get_string()).is_empty() and k < n:
+			out[k] = rest
+			rest = 0.0
+			k += 1
+	return out
 
 
 ## THE FRAMING: the desk's place on the page, the column's middle across, as close as the page's arc

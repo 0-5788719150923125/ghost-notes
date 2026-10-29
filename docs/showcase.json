@@ -1,5 +1,5 @@
 {
-	"digest": "874badf73f69ccc8450e47b244eca8c4cdbf2049b98b251ae5f92de05ad2d3c9",
+	"digest": "451cf827f38199e1f315e20e5ca19cf50db42214233e255d71487cb7edfbb0c4",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -116,6 +116,7 @@
 		"res://src/notes/doc_source.gd",
 		"res://src/notes/episode_feed.gd",
 		"res://src/notes/episode_step.gd",
+		"res://src/notes/episode_steps.gd",
 		"res://src/notes/note_store.gd",
 		"res://src/notes/save_mark.gd",
 		"res://src/notes/script_marks.gd",
@@ -229,6 +230,7 @@
 		"res://src/table/drifts.gd",
 		"res://src/table/effects.gd",
 		"res://src/table/formula.gd",
+		"res://src/table/hands.gd",
 		"res://src/table/lights.gd",
 		"res://src/table/motions.gd",
 		"res://src/table/props.gd",
@@ -248,6 +250,7 @@
 		"res://src/ui/agent_pick.gd",
 		"res://src/ui/card.gd",
 		"res://src/ui/card_row.gd",
+		"res://src/ui/episode_step_rows.gd",
 		"res://src/ui/note_cards.gd",
 		"res://src/ui/schema_form.gd",
 		"res://src/ui/script_highlighter.gd",

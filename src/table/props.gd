@@ -60,6 +60,7 @@ const SHAPES := {
 	"bone": "a bone, lying on its side along x: `kind` \"femur\" (a thigh bone: a ball on a neck at one end, two knuckles at the other), \"long\" (an arm or leg bone, knobbed at both ends), \"rib\" (a curved, flattened bar), \"small\" (a chicken's or a small animal's - thin, knobbed, a little bent: copy it in a `heap` for a pile of them) or \"wishbone\"; `length` and `thickness` (the shaft's, centimeters). Its material is most often `bone`.",
 	"skull": "a skull, resting on its jaw and facing the thing's front: `kind` \"human\", \"horned\" (a cow's, a goat's or a ram's, long-snouted, with `horns` \"straight\", \"curved\" or \"curled\", or \"none\") or \"bird\" (a long beak); `length` (centimeters, front to back - a person's is about 19). Its sockets are deep and its openings go through. It is bone, not a head: no eyes, no skin, nothing living.",
 	"sculpt": "a form modeled freely, as clay is, from STROKES - for what no other shape makes: the skull or the jaw of a creature not listed, a shell, an antler, a gnarled root, a seed pod, a mushroom, a stone worn into a shape, a carved charm. `strokes` [{`points` [[x, y, z, r], ...]}, ...] in order: each stroke a rod through its points (curving through them; `smooth` false joins them straight), r its thickness there (a radius, centimeters), so it swells and narrows as it goes; one point is a ball, stretched to `size` [width, height, depth] if given. Each stroke melts into what came before it, `blend` centimeters soft (0 a crisp seam); `carve` true cuts it out of what came before instead - a socket, a groove, a hollow, a hole right through, the gap under an arch. `mirror` true makes it the same on both sides of x = 0: draw only its middle and its right side. It is one surface, its hollows shut in from the light; a rod much thinner than a hundredth of the whole comes out broken. Draw it blind and you will not get it right first: look at it from every side, and put it again.",
+	"grains": "LOOSE STUFF, poured and never one piece: sand, salt, sugar, snow, ash, flour, seeds, peppercorns, ground herbs, tea, powder, gravel, beads. Drawn where it lies, `at` inside the vessel that holds it - it fills that vessel's inside from the bottom up to `fill` (0-1 of the way to its rim) - or on the cloth or a dish, where it lies in a little heap of `amount` grains (up to 240). `grain`: one grain's size in centimeters (0.1 sugar or flour, drawn as small clumps, to 1 a pea or a bead); its material is its look, and how it behaves - heavy or light, whether it dissolves. It is REAL: tipped, its vessel spills it from the mouth and it falls, runs and heaps where it lands, and in a liquid it sinks, floats or dissolves.",
 	"extrude": "an outline raised straight up: trays, tiles, plaques, tablets, boxes, dishes and candles of any plan - a star, a hexagon, a heart. `outline` (polygon with `sides` 3-12, star with `sides` points, circle, rect, heart, lens (pointed at both ends, as a leaf or an eye is) or drop (round behind, pointed in front) - or `points` [[x, z], ...] for any outline, which may go in and out), `size` [width, depth], `height`; optional `taper` 0-0.9 (narrower at the top), `bevel` (centimeters cut off the top edge), `wall` (centimeters: hollow, as a tray or a dish is, its floor as thick as its wall). A wax extrude takes `wick` or `wicks` as a turned candle does.",
 }
 
@@ -179,35 +180,39 @@ const WARPS := {"taper": Vector2(-1.0, 0.95), "twist": Vector2(-1080.0, 1080.0),
 
 ## THE MATERIALS, each with its shader `code` and its defaults. `polish` is how smooth it is,
 ## `wear` how used, `pattern` how strong its natural pattern, `clarity` how far light goes into
-## it, `grain` the pattern's size in centimeters.
+## it, `grain` the pattern's size in centimeters. AS MATTER ([Particles], next/table_physics.md): its
+## `density` (grams a cubic centimeter: under a liquid's 1 it floats), its `strength` against a pestle (0 never
+## breaks), and how many seconds a grain of it takes to `dissolve` in a liquid (0 never).
 const MATERIALS := {
-	"metal": {"code": 1, "polish": 0.62, "wear": 0.2, "pattern": 0.0, "clarity": 0.5, "grain": 1.5,
+	"metal": {"code": 1, "polish": 0.62, "wear": 0.2, "pattern": 0.0, "clarity": 0.5, "grain": 1.5, "density": 7.8, "strength": 0.0, "dissolves": 0.0,
 		"about": "brass, copper, bronze, silver, iron, pewter, gold; `wear` is tarnish or patina in `color2`, `pattern` a hammered surface"},
-	"wax": {"code": 2, "polish": 0.2, "wear": 0.0, "pattern": 0.0, "clarity": 0.5, "grain": 2.0,
+	"wax": {"code": 2, "polish": 0.2, "wear": 0.0, "pattern": 0.0, "clarity": 0.5, "grain": 2.0, "density": 0.9, "strength": 0.6, "dissolves": 0.0,
 		"about": "candle wax - beeswax, paraffin, tallow; `clarity` how much the light glows through it"},
-	"glass": {"code": 3, "polish": 0.92, "wear": 0.0, "pattern": 0.0, "clarity": 0.85, "grain": 2.0,
+	"glass": {"code": 3, "polish": 0.92, "wear": 0.0, "pattern": 0.0, "clarity": 0.85, "grain": 2.0, "density": 2.5, "strength": 0.0, "dissolves": 0.0,
 		"about": "see-through; `color` tints it, a low `clarity` frosts it, an ornament on glass is etched"},
-	"crystal": {"code": 4, "polish": 0.85, "wear": 0.0, "pattern": 0.2, "clarity": 0.5, "grain": 1.2,
+	"crystal": {"code": 4, "polish": 0.85, "wear": 0.0, "pattern": 0.2, "clarity": 0.5, "grain": 1.2, "density": 2.6, "strength": 1.0, "dissolves": 0.0,
 		"about": "quartz, amethyst, citrine, obsidian, selenite, any mineral; `clarity` from milky 0 to water-clear 1, `pattern` banding in `color2` - curving round in rings with `rings` true (agate, malachite, onyx)"},
-	"ceramic": {"code": 5, "polish": 0.6, "wear": 0.0, "pattern": 0.15, "clarity": 0.5, "grain": 1.0,
+	"ceramic": {"code": 5, "polish": 0.6, "wear": 0.0, "pattern": 0.15, "clarity": 0.5, "grain": 1.0, "density": 2.3, "strength": 1.6, "dissolves": 0.0,
 		"about": "glazed or bare clay - porcelain, stoneware, terracotta, faience; `polish` is the glaze, `pattern` speckle, `wear` crazing, `color2` where the glaze pools"},
-	"stone": {"code": 6, "polish": 0.3, "wear": 0.1, "pattern": 0.4, "clarity": 0.5, "grain": 2.5,
+	"stone": {"code": 6, "polish": 0.3, "wear": 0.1, "pattern": 0.4, "clarity": 0.5, "grain": 2.5, "density": 2.7, "strength": 1.4, "dissolves": 0.0,
 		"about": "marble, slate, granite, soapstone, alabaster, jasper; `pattern` veins in `color2` - curving round in rings with `rings` true (banded jasper) - and `wear` flecks"},
-	"wood": {"code": 7, "polish": 0.4, "wear": 0.0, "pattern": 0.55, "clarity": 0.5, "grain": 1.2,
+	"wood": {"code": 7, "polish": 0.4, "wear": 0.0, "pattern": 0.55, "clarity": 0.5, "grain": 1.2, "density": 0.6, "strength": 0.0, "dissolves": 0.0,
 		"about": "any timber, carved or turned; `pattern` its grain in `color2`, `polish` oil or varnish"},
-	"paper": {"code": 8, "polish": 0.05, "wear": 0.2, "pattern": 0.0, "clarity": 0.5, "grain": 3.0,
+	"paper": {"code": 8, "polish": 0.05, "wear": 0.2, "pattern": 0.0, "clarity": 0.5, "grain": 3.0, "density": 0.7, "strength": 0.3, "dissolves": 0.0,
 		"about": "paper, card, parchment; `wear` stains in `color2`"},
-	"leather": {"code": 9, "polish": 0.35, "wear": 0.3, "pattern": 0.0, "clarity": 0.5, "grain": 0.8,
+	"leather": {"code": 9, "polish": 0.35, "wear": 0.3, "pattern": 0.0, "clarity": 0.5, "grain": 0.8, "density": 0.9, "strength": 0.0, "dissolves": 0.0,
 		"about": "hide and leather bindings; `wear` scuffs in `color2`"},
-	"fabric": {"code": 10, "polish": 0.3, "wear": 0.0, "pattern": 0.0, "clarity": 0.5, "grain": 2.0,
+	"fabric": {"code": 10, "polish": 0.3, "wear": 0.0, "pattern": 0.0, "clarity": 0.5, "grain": 2.0, "density": 0.4, "strength": 0.0, "dissolves": 0.0,
 		"about": "cloth, velvet, silk, cord; `polish` is a velvet's sheen"},
-	"bone": {"code": 11, "polish": 0.4, "wear": 0.4, "pattern": 0.0, "clarity": 0.5, "grain": 2.0,
+	"bone": {"code": 11, "polish": 0.4, "wear": 0.4, "pattern": 0.0, "clarity": 0.5, "grain": 2.0, "density": 1.9, "strength": 1.8, "dissolves": 0.0,
 		"about": "bone, ivory, horn, shell; `wear` yellows it toward `color2`"},
-	"plant": {"code": 12, "polish": 0.2, "wear": 0.0, "pattern": 0.5, "clarity": 0.5, "grain": 1.0,
+	"plant": {"code": 12, "polish": 0.2, "wear": 0.0, "pattern": 0.5, "clarity": 0.5, "grain": 1.0, "density": 0.35, "strength": 0.12, "dissolves": 0.0,
 		"about": "leaves, petals, stems, herbs; `wear` dries them toward `color2`"},
-	"liquid": {"code": 13, "polish": 0.95, "wear": 0.0, "pattern": 0.25, "clarity": 0.4, "grain": 1.0,
+	"liquid": {"code": 13, "polish": 0.95, "wear": 0.0, "pattern": 0.25, "clarity": 0.4, "grain": 1.0, "density": 1.0, "strength": 0.0, "dissolves": 0.0,
 		"about": "what is IN a vessel - a brew, ink, oil, wine, water, honey - wet and never quite still, `pattern` its foam in `color2`, `clarity` the light in its depth; a part of its own filling the vessel to its surface (see WORKING PARTS: it boils, fills, empties, changes color and glows)"},
-	"painted": {"code": 0, "polish": 0.5, "wear": 0.0, "pattern": 0.0, "clarity": 0.5, "grain": 1.0,
+	"powder": {"code": 14, "polish": 0.1, "wear": 0.0, "pattern": 0.3, "clarity": 0.3, "grain": 0.5, "density": 0.6, "strength": 0.0, "dissolves": 3.0,
+		"about": "loose fine stuff, and what is ground: snow, flour, ash, chalk, salt, sugar, pollen, ground spice, dust - matte and soft, `pattern` the sparkle of the grains that catch the light (snow, salt, sugar) in `color2`; its grains dissolve in a liquid in `dissolves` seconds (snow melts in 2, sugar in 6, salt in 10; 0 never - ash, sand)"},
+	"painted": {"code": 0, "polish": 0.5, "wear": 0.0, "pattern": 0.0, "clarity": 0.5, "grain": 1.0, "density": 1.0, "strength": 0.0, "dissolves": 0.0,
 		"about": "lacquer, enamel or paint over anything"},
 }
 
@@ -260,7 +265,7 @@ static func describe() -> String:
 	for k in SHAPES:
 		lines.append("- %s: %s" % [k, SHAPES[k]])
 	lines.append("")
-	lines.append("MATERIALS: name each one used under `materials`, then give a part its name. A material is {\"kind\", \"color\", \"color2\", \"polish\", \"wear\", \"pattern\", \"clarity\", \"grain\", \"play\", \"rings\"} - all but kind and color optional, numbers 0-1 except grain (centimeters). Kinds:")
+	lines.append("MATERIALS: name each one used under `materials`, then give a part its name. A material is {\"kind\", \"color\", \"color2\", \"polish\", \"wear\", \"pattern\", \"clarity\", \"grain\", \"play\", \"rings\", \"density\", \"dissolves\"} - all but kind and color optional, numbers 0-1 except grain (centimeters), density (grams a cubic centimeter: below 1 a loose thing of it floats on a liquid - the kind's own when left out) and dissolves (seconds a grain of it takes to dissolve or melt in a liquid - snow 2, sugar 6, salt 10; 0 never). Kinds:")
 	for k in MATERIALS:
 		lines.append("- %s: %s" % [k, String((MATERIALS[k] as Dictionary)["about"])])
 	lines.append("")
@@ -271,6 +276,8 @@ static func describe() -> String:
 	lines.append("ORNAMENT: a part's surface can carry one: {\"kind\", \"count\", \"depth\" 0-1 (relief), \"color\" (paint or inlay; leave it out for relief alone), \"from\" and \"to\" (the band of the part's height it covers, 0 the bottom, 1 the top)}. Kinds:")
 	for k in ORNAMENTS:
 		lines.append("- %s: %s" % [k, String((ORNAMENTS[k] as Dictionary)["about"])])
+	lines.append("")
+	lines.append("LOOSE: a part written `loose`: true is not fixed to its thing - it lies where it is drawn, in a dish, a bowl, a jar or on the cloth, and when what holds it tips it slides, rolls and tumbles out under gravity, falls into what is below, sinks in a liquid (or floats, if it is light), and a pestle pressed into it and moved over it breaks it to pieces and to powder (metal, glass, wood and cloth never break). A loose part can also be picked up by the work like a free one, and falls from where it is let go. What lies in or on something to be poured out, tipped out or taken out is loose: crystals and stones in a dish, seeds in a pod, a coin in a bowl, a sprig on a plate. A heap's or a scatter's copies are loose unless written `loose`: false (a part that must stay put, a knob, a rivet, is never loose). For loose stuff poured in quantity - sand, salt, snow, powder - use the `grains` shape instead.")
 	lines.append("")
 	lines.append("COPIES: a part's `copies` repeats it - \"copies\": {\"ring\": {\"count\": 5, \"radius\": 4}} round the vertical axis (`arc` less than 360 makes it an arc, from `start` degrees: 0 the thing's right, 90 its front, 270 its back), {\"line\": {\"count\": 3, \"step\": [x, y, z]}}, {\"scatter\": {\"count\": 9, \"radius\": 6}} strewn about, never touching (stones set out on the cloth), or {\"heap\": {\"count\": 12, \"radius\": 3}} piled up, each resting on the ones under it (stones heaped in a dish or a shell, a pile of coins) - with `jitter` 0-1 so the copies differ a little. A copied part's `material` can be a LIST of names, which its copies take in turn: a handful of stones of five kinds, books in three bindings. A copied candle's wax lights a flame on every copy.")
 	lines.append("")
@@ -327,6 +334,9 @@ static func sanitize_material(m: Variant, fallback: String) -> Dictionary:
 		"grain": _num(d.get("grain"), float(base["grain"]), 0.2, 20.0), "rings": _flag(d.get("rings"))}
 	for k in ["polish", "wear", "pattern", "clarity"]:
 		out[k] = _num(d.get(k), float(base[k]), 0.0, 1.0)
+	# AS MATTER: how heavy it is, and how fast it dissolves - the class's, unless the set dresser says
+	out["density"] = _num(d.get("density"), float(base["density"]), 0.05, 20.0)
+	out["dissolves"] = _num(d.get("dissolves"), float(base["dissolves"]), 0.0, 120.0)
 	var play := String(d["play"]).strip_edges().to_lower() if d.get("play") is String else ""
 	if PLAYS.has(play):
 		out["play"] = play
@@ -548,6 +558,10 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			if (out["strokes"] as Array).is_empty():
 				return {}
 			out["mirror"] = _flag(p.get("mirror"))
+		"grains":
+			out["grain"] = _num(p.get("grain"), 0.3, 0.05, 1.5)
+			out["fill"] = _num(p.get("fill"), 0.4, 0.0, 1.0)
+			out["amount"] = int(_num(p.get("amount"), 0.0, 0.0, 240.0))
 		"bloom":
 			out["petals"] = int(_num(p.get("petals"), 8.0, 3.0, 24.0))
 			out["layers"] = int(_num(p.get("layers"), 2.0, 1.0, 4.0))
@@ -563,6 +577,18 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 	# WHAT IT DOES AT THE TABLE ([Motions]): its name, joint, points, states, what it runs and emits - never a
 	# flame's wax, and never a strand laid across the table
 	var work := {} if bool(out["wick"]) or String(out.get("lay", "")) == "drape" else Motions.sanitize_work(p)
+	# A HEAP'S OR A SCATTER'S COPIES LIE LOOSE unless written otherwise ([Particles]): a dish's stones, a pot's cloves,
+	# a brazier's coals tumble out when what holds them tips (the user, 2026-10-28: the shell's crystals "remain attached
+	# to the dish")
+	if shape != "strand" and not bool(out["wick"]) and String((out["copies"] as Dictionary).get("kind", "")) in ["heap", "scatter"] \
+			and not (p.get("loose") is bool and p.get("loose") == false) and not work.has("joint"):
+		work["loose"] = true
+		work["joint"] = {"kind": "free", "axis": Vector3.UP}
+	# grains and a strand are never a loose body: grains are already loose, and a strand's `loose` is how unkempt it lies
+	if shape in ["grains", "strand"]:
+		work.erase("loose")
+		if shape == "grains":
+			work.erase("joint")
 	if not work.is_empty():
 		out["work"] = work
 	return out
@@ -911,6 +937,10 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	var mover_at := {}
 	# WHAT WORKS ([Motions]): a node of its own for each working copy, made where its chain says
 	var works: Array = []
+	# WHAT IS SOLID, and WHAT IS POURED ([TablePhysics]): every copy of every part where it is in the node it hangs in -
+	# its own box as built, and its meshes - and every grains part, which has no geometry of its own
+	var solids: Array = []
+	var grains: Array = []
 	for leaf in leaves:
 		var part: Dictionary = leaf["part"]
 		var geos: Array = leaf["geos"]
@@ -918,6 +948,16 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 		var salt: Variant = leaf["salt"]
 		if xforms.is_empty():
 			continue
+		if leaf.has("grains"):
+			var gch: Array = leaf["chains"]
+			for ci in xforms.size():
+				grains.append({"part": part, "xform": xforms[ci], "holder": _holder(gch[ci] if ci < gch.size() else [], inner, movers, mover_at, seed, works)})
+			continue
+		var own_box := AABB()
+		for gi in geos.size():
+			var gb := _bounds_of((geos[gi] as Dictionary)["geo"])
+			own_box = gb if gi == 0 else own_box.merge(gb)
+		var held_meshes := {}     # holder -> its meshes of this part
 		# A FLAME FOR EVERY WICK on the top of a candle that is not turned (a turned one's are set
 		# where its pool is, in [method _lathe])
 		var g0: Tris = (geos[0] as Dictionary)["geo"]
@@ -952,6 +992,10 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 				var m: Dictionary = materials.get(nm, sanitize_material({}, "#808080"))
 				var mi := MeshInstance3D.new()
 				mi.mesh = merged.mesh()
+				var hid := ((takers[tk] as Dictionary)["holder"] as Node3D).get_instance_id()
+				if not held_meshes.has(hid):
+					held_meshes[hid] = []
+				(held_meshes[hid] as Array).append(mi)
 				var mat := material(m, part.get("ornament", {}), g.girth, g.height, hash([seed, salt, gi, nm]), _solid(part), not String(part.get("shape", "")) in ["lathe", "extrude"])
 				# a part's copies each glow their own way (prop.gdshader `apart`)
 				if xforms.size() > 1:
@@ -967,11 +1011,16 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 						for w in g.wicks:
 							wicks.append((xf as Transform3D) * w)
 							glows.append(mat)
+		var sch: Array = leaf["chains"]
+		for ci in xforms.size():
+			var holder := _holder(sch[ci] if ci < sch.size() else [], inner, movers, mover_at, seed, works)
+			solids.append({"part": part, "xform": xforms[ci], "holder": holder, "box": own_box,
+				"meshes": held_meshes.get(holder.get_instance_id(), [])})
 	var root := Node3D.new()
 	root.add_child(inner)
 	if all.is_empty():
 		return {"node": root, "size": AABB(), "foot": PackedVector2Array(), "outline": PackedVector2Array(),
-			"wicks": [], "glows": [], "meshes": [], "movers": [], "works": []}
+			"wicks": [], "glows": [], "meshes": [], "movers": [], "works": works, "solids": solids, "grains": grains, "inner": inner}
 	var box := AABB(all[0], Vector3.ZERO)
 	for p in all:
 		box = box.expand(p)
@@ -987,7 +1036,8 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 		wicks[i] = ((wicks[i] as Vector3) + shift) * k
 	var size := AABB((box.position + shift) * k, box.size * k)
 	return {"node": root, "size": size, "foot": _foot(placed, FOOT_H), "outline": _hull(placed, INF),
-		"wicks": wicks, "glows": glows, "meshes": meshes, "movers": movers, "works": works, "sized": k}
+		"wicks": wicks, "glows": glows, "meshes": meshes, "movers": movers, "works": works, "sized": k, "solids": solids, "grains": grains,
+		"inner": inner}
 
 
 ## THE NODE A COPY HANGS IN, for its [param chain] of movers ([method _assemble], outermost first): each a
@@ -1088,6 +1138,12 @@ static func _assemble(parts: Array, seed: int, path: Array) -> Array:
 				leaf["chains"] = cs
 				out.append(leaf)
 			continue
+		# GRAINS are laid by the physics into whatever holds them ([TablePhysics]): no geometry of their own, only where
+		# they are
+		if String(part.get("shape", "")) == "grains":
+			own.append(out.size())
+			out.append({"part": part, "geos": [], "xforms": _placements(part, rng, []), "salt": here, "grains": true})
+			continue
 		var geos := _geometry(part, rng)
 		if geos.is_empty():
 			continue
@@ -1116,7 +1172,10 @@ static func _assemble(parts: Array, seed: int, path: Array) -> Array:
 		var cs: Array = []
 		for xi in xs.size():
 			var chain: Array = []
-			if not wk.is_empty():
+			if not wk.is_empty() and leaf.has("grains"):
+				var at: Vector3 = (xs[xi] as Transform3D).origin
+				chain.append(_worker(wk, AABB(at - Vector3.ONE * 0.005, Vector3.ONE * 0.01), Transform3D.IDENTITY, "w%s#%d" % [str(leaf["salt"]), xi]))
+			elif not wk.is_empty():
 				chain.append(_worker(wk, _leaves_box([{"geos": leaf["geos"], "xforms": [xs[xi]]}]),
 					(xs[xi] as Transform3D) * (xs[0] as Transform3D).affine_inverse(), "w%s#%d" % [str(leaf["salt"]), xi]))
 			if not held.is_empty():
@@ -2007,27 +2066,7 @@ static func _warped(q: Vector3, w: Dictionary, frame: Dictionary) -> Vector3:
 ## TWIST turns it with height, and wax DRIPS run down from the top - which is melted into a pool
 ## when the part carries a wick.
 static func _lathe(p: Dictionary, rng: RandomNumberGenerator) -> Tris:
-	var pts: Array = []
-	for q in (p["profile"] as Array):
-		pts.append((q as Vector2) * 0.01)
-	var rounds := _rounds_m(p, pts.size())
-	var smooth := bool(p.get("smooth", false))
-	# A FLAT BASE AND A FLAT TOP STAY FLAT in a smooth profile: curved through, a teapot's base sagged
-	# below the cloth and its top domed up, and the pot came out a ball
-	if smooth and pts.size() >= 3:
-		var m := pts.size()
-		if rounds[1] < 0.0 and (pts[0] as Vector2).x <= 0.0002 and absf((pts[1] as Vector2).y - (pts[0] as Vector2).y) < 0.0001:
-			rounds[1] = 0.0
-		if rounds[m - 2] < 0.0 and (pts[m - 1] as Vector2).x <= 0.0002 and absf((pts[m - 2] as Vector2).y - (pts[m - 1] as Vector2).y) < 0.0001:
-			rounds[m - 2] = 0.0
-	if pts.size() >= 3:
-		pts = _curve(pts, rounds, smooth, 6)["pts"]
-		for i in pts.size():
-			pts[i] = Vector2(maxf((pts[i] as Vector2).x, 0.0), (pts[i] as Vector2).y)
-	if (pts[0] as Vector2).x > 0.0002:
-		pts.insert(0, Vector2(0.0, (pts[0] as Vector2).y))
-	if (pts[-1] as Vector2).x > 0.0002:
-		pts.append(Vector2(0.0, (pts[-1] as Vector2).y))
+	var pts := lathe_profile(p)
 	# THE POOL a burning candle melts round its wicks, and where its rim is
 	var rim := Vector2.ZERO
 	if bool(p.get("wick", false)):
@@ -2176,6 +2215,34 @@ static func _lathe(p: Dictionary, rng: RandomNumberGenerator) -> Tris:
 			var f := minf((sp as Vector2).length() / maxf(R, 1e-6), 1.0)
 			g.wicks.append(Vector3((sp as Vector2).x, top_y - sink * (1.0 - f * f), (sp as Vector2).y))
 	return g
+
+
+## A LATHE'S PROFILE as it is turned (meters, [radius, height] from the bottom's middle round to its end): curved
+## through its points as the part says, a flat base and top kept flat, and closed onto the axis at both ends - what
+## [method _lathe] spins, and what a solid's field ([ShapeField]) and a vessel's inside ([Vessel]) are measured on.
+static func lathe_profile(p: Dictionary) -> Array:
+	var pts: Array = []
+	for q in (p["profile"] as Array):
+		pts.append((q as Vector2) * 0.01)
+	var rounds := _rounds_m(p, pts.size())
+	var smooth := bool(p.get("smooth", false))
+	# A FLAT BASE AND A FLAT TOP STAY FLAT in a smooth profile: curved through, a teapot's base sagged
+	# below the cloth and its top domed up, and the pot came out a ball
+	if smooth and pts.size() >= 3:
+		var m := pts.size()
+		if rounds[1] < 0.0 and (pts[0] as Vector2).x <= 0.0002 and absf((pts[1] as Vector2).y - (pts[0] as Vector2).y) < 0.0001:
+			rounds[1] = 0.0
+		if rounds[m - 2] < 0.0 and (pts[m - 1] as Vector2).x <= 0.0002 and absf((pts[m - 2] as Vector2).y - (pts[m - 1] as Vector2).y) < 0.0001:
+			rounds[m - 2] = 0.0
+	if pts.size() >= 3:
+		pts = _curve(pts, rounds, smooth, 6)["pts"]
+		for i in pts.size():
+			pts[i] = Vector2(maxf((pts[i] as Vector2).x, 0.0), (pts[i] as Vector2).y)
+	if (pts[0] as Vector2).x > 0.0002:
+		pts.insert(0, Vector2(0.0, (pts[0] as Vector2).y))
+	if (pts[-1] as Vector2).x > 0.0002:
+		pts.append(Vector2(0.0, (pts[-1] as Vector2).y))
+	return pts
 
 
 ## How far drip [param drops] push the wall out at angle [param th], [param yf] up the part (0..1):

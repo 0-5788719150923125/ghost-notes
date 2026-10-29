@@ -5,7 +5,8 @@ Kokoro"; the user, 2026-10-26: "our own custom training loop would probably be p
     <voice_train_venv python> kokoro_train.py --spec <spec.json> [--progress <file>]
 
 The spec: {"data": the prepared folder (kokoro_data.py), "model": kokoro-v1_0.pth, "config": its config.json,
-"base": the pack it starts from (.bin), "work": where the run is kept, "steps", "batch", "seconds"}.
+"base": the pack it starts from (.bin), "work": where the run is kept, "steps", "batch", "seconds"}, and optionally
+"predictor" ("kept", "pitch" or "taught") and "ear" (WavLM Base+'s pytorch_model.bin).
 
 WHAT IS TAUGHT, AND WHAT IS NOT. Kokoro's reading of text - PL-BERT and the text encoder - is held: it was taught on
 far more English than anyone's videos hold, and it is what makes the ids say the words. Taught: THE DECODER (their
@@ -13,6 +14,23 @@ timbre, from the aligned text, their pitch and their energy) and the 128 numbers
 DELIVERY - the prosody predictor (how long each sound is held, its pitch and energy) and the 128 it reads - is the
 base voice's unless the spec says `"predictor": "taught"`: on soft speech warped from another voice it was what cost
 the words (`keep_delivery`).
+
+`"predictor": "pitch"` IS STYLETTS 2'S SECOND STAGE, THE TIMING KEPT (2026-10-27, after kikiri-tts): the predictor's
+pitch and energy (`shared`, `F0`, `N` and their projections) are taught on their curves, its timing held, and after
+CURVES_AFTER steps the decoder is taught from THE PREDICTOR'S curves along their alignment (`F0Ntrain`), the mel's
+gradient reaching the predictor through them - curves like the ones it will be played with, at their level. Kept, the
+decoder was taught on their measured pitch and energy and played on the base voice's planned ones, smooth where theirs
+move twice as sharply (energy, frame to frame) and lower (theirs a median 220 Hz, af_heart's 192). Each sentence's
+prosody style is the base pack's row for its length, as it is read. THE VOICE IS PLAYED WITH KOKORO'S OWN DELIVERY
+(kokoro_export.py leaves the taught pitch and energy behind; 2026-10-28, an ASMR channel's 12 minutes, twenty unseen
+sentences): with no style read from the recording - Kokoro has none - the taught pitch follows theirs r = 0.01, and
+played with it the words smeared (22.9% misheard); with Kokoro's own, 5.3%, the best taught voice yet (kept: 9.6%), its
+floor between words 61 dB down (kept: 55) and its 4-8 kHz 1.3 dB under their own recordings (kept: 7.0). Taught on
+Kokoro's own curves instead - its level, not theirs - the decoder learned to raise the pitch it was given and smeared
+the words (20.2%); on the predictor's energy with their own pitch, 25.5%; on its curves for half a batch, 21.3%.
+
+`"ear"` LISTENS AS STYLETTS 2 DOES: the L1 between WavLM's 13 hidden states for their audio and ours (wavlm.py,
+EAR_WEIGHT), from the first step - a speech model hears a stop said or smeared, which a frame-by-frame mel does not.
 
 THE LOSSES, StyleTTS 2's second stage less its diffusion and its speech-model discriminator:
 - the decoder TEACHER-FORCED on a stretch of each sentence (their alignment, pitch and energy, `seconds` long):
@@ -57,6 +75,10 @@ ADV_WEIGHT = 1.0
 DUR_WEIGHT = 1.0
 F0_WEIGHT = 0.1
 N_WEIGHT = 1.0
+# StyleTTS 2 weighs its ear 1 against 5 x its own mel loss, about one to one on a taught voice; ours is 45 x a log-mel L1
+# that runs 18 times theirs on the same audio (2026-10-27, eight batches of hers through two taught decoders)
+EAR_WEIGHT = 18.0
+CURVES_AFTER = 1000
 LR = 1e-4
 STYLE_LR = 1e-3
 D_LR = 2e-4
@@ -252,6 +274,37 @@ def window(z, crop, w: int, per: int = 1):
 
 # --- the run ------------------------------------------------------------------------------------------
 
+DELIVERIES = ("kept", "pitch", "taught")
+
+
+def hold(model, delivery: str) -> None:
+    """What is not taught, held: Kokoro's reading of text always, and the predictor as [delivery] says."""
+    import torch
+
+    for part in (model.bert, model.bert_encoder, model.text_encoder):
+        part.requires_grad_(False)
+        part.eval()
+    # THE ADAIN NORMS' OWN SCALE AND SHIFT ARE HELD at 1 and 0: Kokoro never taught them (they are not in its checkpoint -
+    # an affine norm only for an old exporter's sake) and its graph folds them away, so a value taught there could
+    # never reach the voice host
+    for mod in model.modules():
+        if isinstance(mod, torch.nn.InstanceNorm1d):
+            mod.weight.requires_grad_(False)
+            mod.bias.requires_grad_(False)
+    # KOKORO'S DELIVERY, KEPT unless `"predictor": "taught"` (2026-10-26, measured on an ASMR channel's soft speech; next/
+    # voice_engines.md "Training Kokoro"): the prosody predictor and the half of the style it reads are held. Taught, its
+    # timing was the noisiest thing in their data - warped from another voice onto soft speech - and its pitch and energy
+    # threw the taught decoder: twenty unseen sentences were misheard 22-56% of their words; with Kokoro's delivery, 4.8%,
+    # and their timbre most of the way (the long-term spectrum 1.6 dB off theirs, stock af_heart's 4.0). `pitch`: its
+    # timing held, its pitch and energy taught
+    if delivery == "kept":
+        model.predictor.requires_grad_(False)
+        model.predictor.eval()
+    elif delivery == "pitch":
+        for part in (model.predictor.text_encoder, model.predictor.lstm, model.predictor.duration_proj):
+            part.requires_grad_(False)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="kokoro_train.py")
     ap.add_argument("--spec", required=True)
@@ -278,36 +331,33 @@ def main(argv=None) -> int:
     steps, size, seconds = int(spec.get("steps", 6000)), int(spec.get("batch", 6)), float(spec.get("seconds", 1.5))
 
     model = KModel.load(spec["model"], spec["config"]).to(dev)
-    for part in (model.bert, model.bert_encoder, model.text_encoder):
-        part.requires_grad_(False)
-        part.eval()
     pack = np.fromfile(spec["base"], dtype=np.float32).reshape(-1, 256)
     typical = int(np.median([len(x["ids"]) - 2 for x in train]))
     style = torch.nn.Parameter(torch.from_numpy(pack[min(typical, len(pack)) - 1].copy())[None].to(dev))
     disc = _discriminators().to(dev)
-    # THE ADAIN NORMS' OWN SCALE AND SHIFT ARE HELD at 1 and 0: Kokoro never taught them (they are not in its checkpoint -
-    # an affine norm only for an old exporter's sake) and its graph folds them away, so a value taught there could
-    # never reach the voice host
-    for mod in model.modules():
-        if isinstance(mod, torch.nn.InstanceNorm1d):
-            mod.weight.requires_grad_(False)
-            mod.bias.requires_grad_(False)
-    # KOKORO'S DELIVERY, KEPT unless `"predictor": "taught"` (2026-10-26, measured on an ASMR channel's soft speech; next/
-    # voice_engines.md "Training Kokoro"): the prosody predictor and the half of the style it reads are held. Taught, its
-    # timing was the noisiest thing in their data - warped from another voice onto soft speech - and its pitch and energy
-    # threw the taught decoder: twenty unseen sentences were misheard 22-56% of their words; with Kokoro's delivery, 4.8%,
-    # and their timbre most of the way (the long-term spectrum 1.6 dB off theirs, stock af_heart's 4.0)
-    keep_delivery = str(spec.get("predictor", "kept")) != "taught"
-    if keep_delivery:
-        model.predictor.requires_grad_(False)
-        model.predictor.eval()
+    delivery = str(spec.get("predictor", "kept"))
+    if delivery not in DELIVERIES:
+        say("error: the predictor is kept, pitch or taught, not %s" % delivery)
+        return 2
+    keep_delivery = delivery == "kept"
+    pitch = delivery == "pitch"
+    hold(model, delivery)
+    # each sentence's prosody style as it is read: the base pack's row for its length (Kokoro's own `pack[len - 1]`)
+    rows = torch.from_numpy(pack[:, 128:].copy()).to(dev)
+    ear = None
+    if spec.get("ear"):
+        from wavlm import Ear, WavLM
+
+        ear = Ear(WavLM.load(spec["ear"]), dev)
     taught = [p for p in list(model.decoder.parameters()) + list(model.predictor.parameters()) if p.requires_grad]
     opt_g = torch.optim.AdamW([{"params": taught, "lr": LR}, {"params": [style], "lr": STYLE_LR}], betas=(0.8, 0.99),
                               weight_decay=0.0)
     opt_d = torch.optim.AdamW(disc.parameters(), lr=D_LR, betas=(0.8, 0.99), weight_decay=0.0)
     mel = MelLoss(dev)
 
-    lesson = hashlib.sha256((json.dumps(index["utterances"]) + str(spec["base"])).encode()).hexdigest()[:16]
+    # a run taught another way is another lesson (nothing said for the default, so a run made before goes on)
+    way = "" if keep_delivery and ear is None else "|%s|%s" % (delivery, "ear" if ear is not None else "")
+    lesson = hashlib.sha256((json.dumps(index["utterances"]) + str(spec["base"]) + way).encode()).hexdigest()[:16]
     last = work / "last.pt"
     step = 0
     if last.exists():
@@ -329,7 +379,7 @@ def main(argv=None) -> int:
 
     def save():
         tmp = work / "last.part.pt"
-        torch.save({"lesson": lesson, "step": step, "delivery": "kept" if keep_delivery else "taught", "decoder": model.decoder.state_dict(),
+        torch.save({"lesson": lesson, "step": step, "delivery": delivery, "decoder": model.decoder.state_dict(),
                     "predictor": model.predictor.state_dict(), "style": style.detach().cpu(), "disc": disc.state_dict(),
                     "opt_g": opt_g.state_dict(), "opt_d": opt_d.state_dict(), "base": str(spec["base"])}, tmp)
         os.replace(tmp, last)
@@ -365,8 +415,9 @@ def main(argv=None) -> int:
         if not keep_delivery:
             model.predictor.train()
 
-    say("%d sentences (%.1f minutes), %d held out: %d steps of %d, %.1f s stretches" % (
-        len(train), sum(int(x["frames"].sum()) for x in train) * HOP / SR / 60.0, len(held), steps, size, seconds))
+    say("%s%s: %d sentences (%.1f minutes), %d held out: %d steps of %d, %.1f s stretches" % (
+        {"kept": "Kokoro's delivery kept", "pitch": "its pitch and energy taught", "taught": "its delivery taught"}[delivery],
+        ", WavLM listening" if ear is not None else "", len(train), sum(int(x["frames"].sum()) for x in train) * HOP / SR / 60.0, len(held), steps, size, seconds))
     if step == 0 and held:
         listen()
     model.decoder.train()
@@ -380,9 +431,13 @@ def main(argv=None) -> int:
         b = batch(items, dev, seconds)
         bs = len(items)
         s_d = style[:, :128].expand(bs, -1)
-        s_p = (style[:, 128:].detach() if keep_delivery else style[:, 128:]).expand(bs, -1)
-        # THE PREDICTOR, on the whole sentence: their frames, pitch and energy (none of it, its delivery kept)
-        with torch.set_grad_enabled(not keep_delivery):
+        if delivery == "taught":
+            s_p = style[:, 128:].expand(bs, -1)
+        else:
+            s_p = rows[(b["lengths"] - 3).clamp(0, rows.shape[0] - 1)]
+        # THE PREDICTOR, on the whole sentence: their frames, pitch and energy (none of it, its delivery kept; their
+        # pitch and energy alone, `pitch`)
+        with torch.set_grad_enabled(delivery == "taught"):
             d, t_en, logits = model.encode(b["ids"], b["lengths"], s_p)
         inner = KModel.masks(b["lengths"], b["ids"].shape[1]).logical_not()
         inner[:, 0] = False
@@ -396,10 +451,11 @@ def main(argv=None) -> int:
             fmask = (torch.arange(b["f0"].shape[1], device=dev)[None] < 2 * b["flen"][:, None])
             f0_l = F.smooth_l1_loss(f0_hat[fmask], b["f0"][fmask])
             n_l = F.smooth_l1_loss(n_hat[fmask], b["n"][fmask])
-        # THE DECODER, teacher-forced on a stretch of each
+        # THE DECODER, teacher-forced on a stretch of each - on the predictor's curves once it has learned theirs
         w = b["w"]
         asr = window(t_en.detach() @ b["aln"], b["crop"], w)
-        y_hat = model.decoder(asr, window(b["f0"], b["crop"], w, 2), window(b["n"], b["crop"], w, 2), s_d).squeeze(1)
+        f0_in, n_in = (f0_hat, n_hat) if pitch and step >= CURVES_AFTER else (b["f0"], b["n"])
+        y_hat = model.decoder(asr, window(f0_in, b["crop"], w, 2), window(n_in, b["crop"], w, 2), s_d).squeeze(1)
         y = b["audio"][:, : y_hat.shape[-1]]
         y_hat = y_hat[:, : y.shape[-1]]
         # the discriminators
@@ -410,7 +466,13 @@ def main(argv=None) -> int:
         opt_d.step()
         # the voice
         lm = mel(y_hat, y)
-        loss = MEL_WEIGHT * lm + (0.0 if keep_delivery else DUR_WEIGHT * dur + F0_WEIGHT * f0_l + N_WEIGHT * n_l)
+        loss = MEL_WEIGHT * lm + (0.0 if keep_delivery else F0_WEIGHT * f0_l + N_WEIGHT * n_l)
+        if delivery == "taught":
+            loss = loss + DUR_WEIGHT * dur
+        le = torch.zeros((), device=dev)
+        if ear is not None:
+            le = ear(y_hat, y)
+            loss = loss + EAR_WEIGHT * le
         if adv:
             # their audio's pass needs no gradient (its features are targets): kept, it ran the card out of memory
             with torch.no_grad():
@@ -423,14 +485,15 @@ def main(argv=None) -> int:
         torch.nn.utils.clip_grad_norm_(taught + [style], 5.0)
         opt_g.step()
         step += 1
-        for k, v in (("mel", lm), ("dur", dur), ("f0", f0_l), ("n", n_l), ("d", ld)):
+        for k, v in (("mel", lm), ("dur", dur), ("f0", f0_l), ("n", n_l), ("d", ld), ("ear", le)):
             v = float(v.detach())
             keep[k] = keep[k] * 0.98 + v * 0.02 if k in keep else v
         if step % 50 == 0 or step == steps:
             progress(a.progress, 0.99 * step / steps)
             each = (time.monotonic() - begun) / max(1, step - first)
-            say("step %d of %d: mel %.3f, frames %.3f, pitch %.2f, energy %.3f, judge %.3f%s - %s to go" % (
-                step, steps, keep["mel"], keep["dur"], keep["f0"], keep["n"], keep["d"], "" if adv else " (judges learning)",
+            say("step %d of %d: mel %.3f, frames %.3f, pitch %.2f, energy %.3f, judge %.3f%s%s - %s to go" % (
+                step, steps, keep["mel"], keep["dur"], keep["f0"], keep["n"], keep["d"],
+                ", ear %.3f" % keep["ear"] if ear is not None else "", "" if adv else " (judges learning)",
                 span((steps - step) * each / 60.0)))
         if step % SAVE_EVERY == 0 or step == steps:
             save()

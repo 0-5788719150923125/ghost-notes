@@ -1403,18 +1403,18 @@ func _stones() -> bool:
 	_ok(blind_iron > 0, "control: coals heaped with no wall to know of stayed out of the dish's iron anyway")
 	print("  a smooth dish: its wall %.1f cm out, %.1f cm high; %d coals in its iron when heaped blind" % [
 		float(bwalls.get("radius", 0.0)) * 100.0, float(bwalls.get("top", 0.0)) * 100.0, blind_iron])
-	# A LIST OF MATERIALS: one mesh for each, its copies in turn; every vertex knows its copy
+	# A LIST OF MATERIALS: its copies take them in turn; every vertex knows its copy. A HEAP'S COPIES ARE LOOSE (each its own
+	# body, next/table_physics.md), so each is a mesh of its own; written not loose, one mesh a material holds them all
 	var heap := Props.build(things[1], mats, 3)
 	var colors := {}
-	var counts: Array = []
 	var stray := 0
 	for m in heap["meshes"]:
 		var mi: MeshInstance3D = m
-		colors[str((mi.material_override as ShaderMaterial).get_shader_parameter("color"))] = true
+		var col := str((mi.material_override as ShaderMaterial).get_shader_parameter("color"))
 		var arr := (mi.mesh as ArrayMesh).surface_get_arrays(0)
 		var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
 		var c: PackedFloat32Array = arr[Mesh.ARRAY_CUSTOM0] if arr[Mesh.ARRAY_CUSTOM0] is PackedFloat32Array else PackedFloat32Array()
-		counts.append(v.size())
+		colors[col] = int(colors.get(col, 0)) + v.size()
 		if c.size() != v.size() * 4:
 			stray += v.size()
 			continue
@@ -1422,10 +1422,18 @@ func _stones() -> bool:
 			# a vertex's copy middle is near it: within the reach of one stone
 			if Vector3(c[i * 4], c[i * 4 + 1], c[i * 4 + 2]).distance_to(v[i]) > 0.02:
 				stray += 1
-	_ok((heap["meshes"] as Array).size() == 3 and colors.size() == 3, "a heap in 3 materials built %d meshes in %d colors" % [(heap["meshes"] as Array).size(), colors.size()])
+	var counts: Array = colors.values()
+	_ok((heap["meshes"] as Array).size() == 18 and colors.size() == 3, "a loose heap of 18 in 3 materials built %d meshes in %d colors" % [(heap["meshes"] as Array).size(), colors.size()])
 	_ok(counts.size() == 3 and counts[0] == counts[1] and counts[1] == counts[2], "18 copies in 3 materials did not go 6 to each: %s vertices" % str(counts))
 	_ok(stray == 0, "%d vertices do not know their copy's middle" % stray)
 	(heap["node"] as Node).free()
+	var fixed_thing: Dictionary = (things[1] as Dictionary).duplicate(true)
+	for fp in fixed_thing["parts"]:
+		if (fp as Dictionary).get("work") is Dictionary and bool(((fp as Dictionary)["work"] as Dictionary).get("loose", false)):
+			(fp as Dictionary).erase("work")
+	var fixed := Props.build(fixed_thing, mats, 3)
+	_ok((fixed["meshes"] as Array).size() == 3, "the control: a heap of 18 in 3 materials, not loose, built %d meshes, not one a material" % (fixed["meshes"] as Array).size())
+	(fixed["node"] as Node).free()
 	# THE GEODE: its lining in the part's material, its rock in plain stone, the crystals inside
 	var geo := Props.build(things[2], mats, 5)
 	var meshes: Array = geo["meshes"]

@@ -32,8 +32,9 @@ class_name DeskLook
 ##
 ## WHAT IS ON THE DESK STAYS OUT OF THE PEN'S WAY AND THE PAGES': nothing on the pad or behind it (the
 ## turned pages lie there, [LegalPad]), nothing tall beside the pad's right edge, where the pen leans
-## out as it writes and waits ([constant DeskMedium.PARK]), and nothing tall in front of it, where the
-## camera looks over it ([method _placed]).
+## out as it writes and waits ([constant DeskMedium.PARK]), nothing tall in front of it, where the
+## camera looks over it ([method _placed]), and nothing where the pen lies before a letter's writer picks it up
+## ([method pen_rest]).
 
 ## THE THINGS a desk may have. `tall`: kept back from the pad (it would stand in the pen's or the
 ## camera's way); `weight`: how often it is chosen among the things lying about - none for a candle, which
@@ -86,10 +87,18 @@ const TALL_LEFT := 0.19
 const TALL_RIGHT := 0.23
 ## A thing this high or higher is tall, whatever its row says (meters).
 const TALL_H := 0.04
+## WHERE THE PEN LIES ([method pen_rest]): its nib this far right of the pad's right edge and this far toward the
+## reader from the pad's middle (meters, [least, most]), its body turned out from the pad by this much (degrees
+## from straight away from the writer), and as long as [DeskMedium] builds it, nib to top. Where the wide framing
+## sees it, beside the page's upper half.
+const PEN_OFF := Vector2(0.024, 0.04)
+const PEN_DOWN := Vector2(0.03, 0.06)
+const PEN_TURN := Vector2(4.0, 16.0)
+const PEN_LONG := 0.155
 
 
 ## THE LOOK of the desk with seed [param seed]: `paper`, `rule`, `margin`, `ink`, `binding`, `board`
-## (colors); `pen` ({body, trim, metal}); `lamp` ({color, energy, at, share - of it on}); `fill` (a color);
+## (colors); `pen` ({body, trim, rest - its nib and turn, [method pen_rest]}); `lamp` ({color, energy, at, share - of it on}); `fill` (a color);
 ## `mood` ([constant MOODS]) and `light` (the room's, [method Lights.sanitize]d); `top` and `layers`
 ## ([Tables]' spec, `materials` its materials) and `things` ([{kind, thing, materials}], not yet placed -
 ## [method dress] places them; the candles first).
@@ -137,6 +146,10 @@ static func of(seed: int) -> Dictionary:
 	var trim := String(_pick(r, [["brass", 3.0], ["silver", 2.0], ["copper", 0.7]]))
 	out["pen"] = {"body": body, "trim": {"brass": Color(0.78, 0.62, 0.32), "silver": Color(0.8, 0.8, 0.82),
 		"copper": Color(0.76, 0.46, 0.33)}[trim]}
+	# where it lies ([method pen_rest]), on a generator of its own, so nothing else on the desk moves for it
+	r = _rng(seed, "pen rest")
+	out["pen"]["rest"] = {"nib": Vector2(LegalPad.W * 0.5 + r.randf_range(PEN_OFF.x, PEN_OFF.y), r.randf_range(PEN_DOWN.x, PEN_DOWN.y)),
+		"turn": deg_to_rad(r.randf_range(PEN_TURN.x, PEN_TURN.y))}
 	r = _rng(seed, "lamp")
 	out["lamp"] = {"color": _kelvin(r.randf_range(2700.0, 4300.0)), "energy": r.randf_range(1.3, 1.7),
 		"at": Vector3(r.randf_range(-0.7, -0.42), r.randf_range(0.82, 1.1), r.randf_range(-0.42, -0.08))}
@@ -470,7 +483,7 @@ static func dress(look: Dictionary, seed: int, face: float) -> Dictionary:
 	# the reading's middle ([constant Tables.ORIGIN]) under the pad's
 	furniture.position = Vector3(-Tables.ORIGIN.x, face, -Tables.ORIGIN.y)
 	root.add_child(furniture)
-	var taken: Array = []
+	var taken := _pen_taken(look, face)
 	var lit: Array = []
 	var mat := _mat_rect(spec)
 	for i in (look["things"] as Array).size():
@@ -502,6 +515,32 @@ static func dress(look: Dictionary, seed: int, face: float) -> Dictionary:
 		if not (made["wicks"] as Array).is_empty():
 			lit.append({"node": node, "wicks": made["wicks"], "glows": made["glows"], "meshes": made["meshes"]})
 	return {"node": root, "lit": lit}
+
+
+## WHERE THE PEN LIES when nobody holds it (a letter's, before its writer picks it up - [LetterMedium]; 2026-10-28,
+## the user: "it would be better if the pen started from a resting place upon the table, to the right of the
+## paper"): beside the pad's right edge, its nib toward the writer and its top turned a little out from the pad,
+## on the desk or on the mat there - `{nib, top}`, the ends of its axis on the surface under it (meters, the pad's
+## frame, [param face] the desk's face; the pen's own radius is the medium's).
+static func pen_rest(look: Dictionary, face: float) -> Dictionary:
+	var rest: Dictionary = (look["pen"] as Dictionary)["rest"]
+	var nib: Vector2 = rest["nib"]
+	var turn := float(rest["turn"])
+	var top := nib + Vector2(sin(turn), -cos(turn)) * PEN_LONG
+	var mat := _mat_rect(Tables.sanitize(look["top"], look["layers"], look["materials"], []))
+	var y := face + (Tables.LAYER_FLOOR + 0.0001 if mat.has_point((nib + top) * 0.5) else 0.0)
+	return {"nib": Vector3(nib.x, y, nib.y), "top": Vector3(top.x, y, top.y)}
+
+
+## The pen's place, as [method _placed] keeps things off it: `[x, z, reach]` along it, a pen's width apart.
+static func _pen_taken(look: Dictionary, face: float) -> Array:
+	var pen := pen_rest(look, face)
+	var out: Array = []
+	var n := int(ceil(PEN_LONG / 0.01))
+	for k in n + 1:
+		var p := (pen["nib"] as Vector3).lerp(pen["top"], float(k) / float(n))
+		out.append(Vector3(p.x, p.z, 0.006))
+	return out
 
 
 ## Where the desk mat lies (meters, the pad's frame), or an empty rect: no mat.

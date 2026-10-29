@@ -139,15 +139,15 @@ func _check() -> void:
 		"the note is its own episode on the YouTube card (its description box), and the Actor card lists its steps")
 	var step = ed._youtube.episode_steps()[0]
 	_tick(card, up)
-	_ok(card._step_rows.is_empty() and up._step_rows.is_empty() and step.host.is_empty(),
+	_ok(not card._added_rows.has_row(step.key) and not up._added_rows.has_row(step.key) and step.host.is_empty(),
 		"control: with \"Write each episode's tags\" clear, no row anywhere")
 
 	ed._youtube._write_tags.button_pressed = true
 	_tick(card, up)
 	var feed = up.feed()
-	_ok(step.host == "the Actor card" and step.shown == feed and card._step_rows.has(step.key) and up._step_rows.is_empty(),
+	_ok(step.host == "the Actor card" and step.shown == feed and card._added_rows.has_row(step.key) and not up._added_rows.has_row(step.key),
 		"ticked: its row is on the Actor card, the note its episode, and the YouTube card draws none")
-	_ok(card._step_box.get_parent() == card._body and card._step_box.get_index() < card._gen_btn.get_parent().get_index(),
+	_ok(card._added_rows.get_parent() == card._body and card._added_rows.get_index() < card._gen_btn.get_parent().get_index(),
 		"the row stands under the actor's steps, above Generate")
 	ed._youtube._refresh_tags()
 	var line: String = ed._youtube._tags_note.text
@@ -163,7 +163,7 @@ func _check() -> void:
 		"while the actor's steps run, the tags wait for them (%s)" % step.state(feed))
 	card._builder.running = false
 	_tick(card, up)
-	var r: Dictionary = card._step_rows[step.key]
+	var r: Dictionary = card._added_rows.row(step.key)
 	_ok(step.state(feed) == "failed" and (r["state"] as Label).text.contains("read-only"),
 		"then Generate starts the tags - here refused, read-only, and said on the Actor card's row (%s)" % (r["state"] as Label).text)
 
@@ -172,7 +172,7 @@ func _check() -> void:
 	AgentJobs._ended["text-actor-upload-check"] = {"ok": true, "text": "{\"tags\": [\"quick brown fox\", \"lazy dog\", \"reading\"]}"}
 	step._jobs[feed.folder()] = {"id": "text-actor-upload-check", "feed": feed, "stamp": feed.stamp()}
 	card._refresh()
-	_ok(card._steps_busy() and card._gen_btn.disabled and not card._stop_btn.disabled and (r["redo"] as Button).disabled,
+	_ok(card._added.busy(feed) and card._gen_btn.disabled and not card._stop_btn.disabled and (r["redo"] as Button).disabled,
 		"while its job runs: Generate and its ⟳ wait, Stop is offered")
 	_tick(card, up)
 	_ok((r["state"] as Label).text == "✓ 3 tags: quick brown fox, lazy dog, reading" and not (r["redo"] as Button).disabled
@@ -182,7 +182,7 @@ func _check() -> void:
 	# STOP stops a job writing them
 	step._jobs[feed.folder()] = {"id": "text-actor-upload-check-2", "feed": feed, "stamp": feed.stamp()}
 	card._stop_btn.pressed.emit()
-	_ok(not step.busy(feed) and not card._steps_busy(), "Stop stops the tags being written")
+	_ok(not step.busy(feed) and not card._added.busy(feed), "Stop stops the tags being written")
 
 	# WORDS WRITTEN AGAIN: stale, and the row says what makes them again
 	ed._text.text = "Words written again."

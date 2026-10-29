@@ -164,7 +164,12 @@ MEL = _mel_bank()
 def signature(y, text: str) -> dict:
     """AN UTTERANCE'S SIGNATURE (ONE VOICE): {clean - its speech over its own pauses (dB), rate - characters a second
     of loud sound, f0 - its pitched frames' median pitch (Hz; 0 for none), hnr - their median harmonics-to-noise
-    ratio (dB), spectrum - its loud frames' mean over BANDS mel bands (dB), its level taken out}."""
+    ratio (dB), spectrum - its loud frames' mean over BANDS mel bands (dB), its level taken out}.
+
+    A PITCH IS THE CORRELATION COMING BACK (2026-10-27, an ASMR channel heard whole): a frame is pitched where its
+    correlation, having fallen under half its peak, rises to that peak inside the 70-300 Hz searched - never at its
+    edge. A breath or a rumble's correlation only falls, and read as the search's edge, 109 runs said exactly 300 Hz
+    and "their usual pitch" became 300 against her voice's 205-235."""
     y = np.asarray(y, dtype=np.float64)
     n = int(FRAME * SR)
     k = len(y) // n
@@ -188,8 +193,10 @@ def signature(y, text: str) -> dict:
     ac /= ac[:, :1] + 1e-12
     lo, hi = SR // 300, SR // 70
     peak = ac[:, lo:hi].max(1)
-    lag = ac[:, lo:hi].argmax(1) + lo
-    pitched = peak > 0.5
+    at = ac[:, lo:hi].argmax(1)
+    lag = at + lo
+    fell = np.minimum.accumulate(ac, axis=1)[np.arange(len(ac)), lag]
+    pitched = (peak > 0.5) & (at > 0) & (at < hi - lo - 1) & (fell < 0.5 * peak)
     if pitched.any():
         r = np.clip(peak[pitched], 1e-3, 0.999)
         out["hnr"] = float(np.median(10.0 * np.log10(r / (1.0 - r))))

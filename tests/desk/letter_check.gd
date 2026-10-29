@@ -67,12 +67,41 @@ extends SceneTree
 ##   line comes up from the desk, the voice resting for the page first (the control); the passage under a
 ##   dissolve is captioned; every fade is [constant LetterScript.IMAGE_FADE] ("A 2 or 3 second fade might look
 ##   better"); and no picture moves as the one before it did, nor drifts within a quarter turn of its way.
+## - A HESITATION BEFORE A PICTURE IS THE WRITER'S FIRST (2026-10-28, the user, of Secular Haze's `<!-- hesitation: 3 -->`
+##   before its first picture: "the picture that follows is immediately displayed - not waiting for the hesitation at
+##   all"): the desk is seen through it and the picture comes up as the pen is taken up again; a dissolve with one before
+##   the next picture holds the one before whole through it; a live reading not yet past it keeps the desk - with no
+##   hesitation mark and the same voice, the picture comes up in the pause each time (the control).
 ##
 ## - A DENSE SKETCH IS DASHED OFF ([method LetterScript.draw_pace]; the user, of the chapter's tree of dots: the text
 ##   "sort of gets frozen for a few seconds ... with the pen not moving" - the voice had waited 7.5 s for it): a
 ##   drawing of far more ink than its two words leave time for is done soon after them, the voice resting only that
 ##   long - the control, the desk's quickest pen, would have rested it several times as long - and the pen goes
 ##   from its last mark to the next line with no pause; one with room is drawn no quicker than before.
+## - THE PEN IS PICKED UP FROM THE DESK ([method LetterMedium._pick_up_pose]; 2026-10-28, the user: "the pen starts
+##   floating in the air already ... started from a resting place upon the table, to the right of the paper, and ...
+##   gently picked it up at the beginning, after the intro-blur"): through the intro and its focus pull it lies level on
+##   the desk beside the pad's right edge, where it rests on its widest; it is picked up only once the intro's blur has
+##   lifted and the name is gone, and is over the first stroke as the line begins; on the way it moves on, a frame at a
+##   time, no further than a hand would - the control, the desk's own pen hovering over the first stroke, is a jump of
+##   many centimeters from where it lies - and never goes into the desk or the pad. NOTHING ELSE LIES THERE ([method
+##   DeskLook.pen_rest]): a thing is never set down on the pen - the control, the same draws with its place not taken,
+##   lands on it.
+## - A PAGE IS TURNED WITH THE VOICE WAITING WHERE IT ENDS ON A MARK, AND A SENTENCE IT BREAKS IS FINISHED FIRST ([method
+##   LetterScript._voice_text]; 2026-10-28, the user: "if a page ended with punctuation, we can hold the voice until after
+##   the page turn. However if a sentence was broken by a page turn, we should just finish the thought/voice - and then we
+##   should wait for the pen to catch up, before proceeding with the next sentence"): over a letter of many sentences, a
+##   page turned inside a paragraph after a mark is rested for, at least the turn's own rest, and one that breaks a
+##   sentence is not (the two sides of one rule); the voice then waits at the next sentence, and its first word is on the
+##   page before it is said - the control, the same voice without that rest, says it with the pen behind.
+## - A LINE RUNS ON INTO THE VOICE'S PAUSE AFTER IT ([method LetterMedium._runs_on_to]; the user, of "my line of work. It
+##   is | called": "the pen just stops moving at "it is", for a second, before it moves to the new line"): read by a voice
+##   that pauses at each sentence's end, no line of a paragraph leaves the pen standing at its end - the control, each
+##   line ended as the voice ends the word two before its last, stands at several.
+## - THE CAMERA LETS GO BEFORE A TURN ONCE ([method LetterMedium._letting_go]; the user, of the end of Secular Haze's first
+##   page: "it bounces forward and back a couple times, right at the very last few sentences"): its words arriving a
+##   sentence at a time, past a hesitation and a picture's passage, the camera never comes back in once it has begun to
+##   let go before the turn - the control, the turn the arc had guessed at the desk's steady pace, comes back in.
 ## - THE FRAME IS CHEAP (2026-10-27, the user: "performance can be really quite laggy in the realtime viewer"), each
 ##   held as a share of its control by this thread's own processor time ([WorkClock], the least of several runs - never
 ##   the machine's speed): a line written long ago is asked whether it is written for a small share of the line being
@@ -163,7 +192,30 @@ A lamp was lit in the window.
 <!-- /image -->
 """
 
-const DOT_SVG := "<svg viewBox=\"0 0 360 40\"><line x1=\"30\" y1=\"20\" x2=\"50\" y2=\"20\"/><circle id=\"the-dot\" cx=\"300\" cy=\"20\" r=\"4\" fill=\"black\"/></svg>"
+## A picture a hesitation stands before (Secular Haze's "Housing came into my room looking for you." and the
+## `<!-- hesitation: 3 -->` under it), and a dissolve into one a hesitation stands before.
+const HESITANT := """Dear Friend,
+
+Housing came into my room looking for you.
+
+<!-- hesitation: 3 -->
+
+<!-- image (full): a narrow room at night, nobody in it -->
+
+They brought a key and a form.
+
+<!-- hesitation -->
+
+<!-- image (full): a form on a clipboard -->
+
+They wrote her down.
+
+<!-- /image -->
+
+Yours.
+"""
+
+const DOT_SVG :="<svg viewBox=\"0 0 360 40\"><line x1=\"30\" y1=\"20\" x2=\"50\" y2=\"20\"/><circle id=\"the-dot\" cx=\"300\" cy=\"20\" r=\"4\" fill=\"black\"/></svg>"
 
 var _fails: Array = []
 
@@ -176,7 +228,12 @@ func _init() -> void:
 	_lag()
 	_clock()
 	_pictures()
+	_hesitant_picture()
 	_dense_sketch()
+	_pick_up()
+	_turn_waits()
+	_line_breaks()
+	_let_go()
 	_frame_cost()
 	if _fails.is_empty():
 		print("letter_check: ALL OK")
@@ -943,6 +1000,419 @@ func _pictures() -> void:
 		and (late["drift"] as Vector2) != (early["drift"] as Vector2),
 		"a picture moves along its own move while it is up (%s)" % String(mv1["kind"]))
 	m.free()
+
+
+func _hesitant_picture() -> void:
+	print("-- a picture after a hesitation")
+	# the control: the same letter and the same voice, the marks gone
+	var hasty := RegEx.create_from_string("<!-- hesitation[^>]*-->\\n\\n").sub(HESITANT, "", true)
+	var got := {}
+	for text in [HESITANT, hasty]:
+		var d := LetterScript.parse(text, 3)
+		var pics: Array = (d["spans"] as Array).filter(func(x: Dictionary) -> bool: return String(x["kind"]) == "image")
+		var words := DeskScript.rehearsal(d, 0.42, 0.35, 1.0)
+		# the hesitations, which a rehearsal does not time: three seconds before each picture's words - the control's
+		# voice pausing alike
+		for i in range(int(pics[0]["from"]), words.size()):
+			words[i]["t0"] = float(words[i]["t0"]) + (3.0 if i < int(pics[1]["from"]) else 6.0)
+			words[i]["t1"] = float(words[i]["t1"]) + (3.0 if i < int(pics[1]["from"]) else 6.0)
+		var img := Image.create(4, 4, false, Image.FORMAT_RGB8)
+		var made := func(heard: Array) -> LetterMedium:
+			var feed := ShowFeed.new()
+			feed.outro_hold = 4.0
+			feed.intro_hold = 1.0
+			var m := LetterMedium.new()
+			m.feed = feed
+			m._pad = LegalPad.new()
+			m.load_letter(text, {"seed": 3})
+			m._now = 0.0
+			m.take_words(heard)
+			for p in pics:
+				m._pictures[String(p["key"])] = ImageTexture.create_from_image(img)
+			return m
+		var alpha_of := func(m: LetterMedium, key: String) -> float:
+			for p in m.pictures_at():
+				if String((p as Dictionary)["key"]) == key:
+					return float(p["alpha"])
+			return 0.0
+		var m: LetterMedium = made.call(words)
+		var you := float((words[int(pics[0]["from"]) - 1] as Dictionary)["t1"])
+		var resumed := float((words[int(pics[0]["from"])] as Dictionary)["t0"]) - LetterMedium.RESUME_LEAD
+		# through the hesitation, the desk
+		var most := 0.0
+		var t := you
+		while t < resumed:
+			m._now = t
+			most = maxf(most, LetterMedium.cover_of(m.pictures_at()))
+			t += 0.05
+		m._now = resumed + LetterMedium.IMAGE_FADE + 0.01
+		var whole: float = alpha_of.call(m, String(pics[0]["key"]))
+		# the dissolve: the first held whole through the second hesitation, the second not up in it
+		var form := float((words[int(pics[1]["from"]) - 1] as Dictionary)["t1"])
+		var resumed2 := float((words[int(pics[1]["from"])] as Dictionary)["t0"]) - LetterMedium.RESUME_LEAD
+		var least := 1.0
+		var second := 0.0
+		t = form
+		while t < resumed2:
+			m._now = t
+			least = minf(least, LetterMedium.cover_of(m.pictures_at()))
+			second = maxf(second, alpha_of.call(m, String(pics[1]["key"])))
+			t += 0.05
+		m._now = resumed2 + LetterMedium.IMAGE_FADE + 0.01
+		var second_in: float = alpha_of.call(m, String(pics[1]["key"]))
+		var dissolved := m.pictures_at().size() == 2
+		(m.feed as ShowFeed).free()
+		m.free()
+		# a live reading that has heard no word past the hesitation yet
+		var live: LetterMedium = made.call(words.slice(0, int(pics[0]["from"])))
+		live._now = you + 2.0
+		var live_cover := LetterMedium.cover_of(live.pictures_at())
+		(live.feed as ShowFeed).free()
+		live.free()
+		got[text] = {"marked": pics.map(func(x: Dictionary) -> bool: return bool(x.get("after_hesitation", false))),
+			"blend": bool(pics[1].get("blend", false)), "most": most, "whole": whole, "least": least,
+			"second": second, "second_in": second_in, "dissolved": dissolved, "live": live_cover}
+	var h: Dictionary = got[HESITANT]
+	var c: Dictionary = got[hasty]
+	_check(h["marked"] == [true, true] and c["marked"] == [false, false] and bool(h["blend"]) and bool(c["blend"]),
+		"a picture's mark after a hesitation is marked so, and a dissolve still dissolves; with no hesitation neither is (the control)")
+	_check(float(h["most"]) == 0.0 and float(h["whole"]) == 1.0 and float(c["most"]) > 0.5,
+		"the desk is seen through the hesitation before a picture (covered at most %.2f), the picture whole %.1f s after the pen is taken up; with no hesitation it comes up in the pause (the control: %.2f)"
+		% [float(h["most"]), LetterMedium.IMAGE_FADE, float(c["most"])])
+	_check(float(h["least"]) > 0.999 and float(h["second"]) == 0.0 and float(h["second_in"]) == 1.0 and not bool(h["dissolved"])
+		and float(c["second"]) > 0.5,
+		"through a hesitation before a dissolve the picture before is held whole (at least %.4f covered) and the next waits for the pen; with none it comes in during the pause (the control: %.2f)"
+		% [float(h["least"]), float(c["second"])])
+	_check(float(h["live"]) == 0.0 and float(c["live"]) > 0.5,
+		"a live reading that has not heard the words after a hesitation keeps the desk; with no hesitation the picture is up from the word before (the control: %.2f)"
+		% float(c["live"]))
+
+
+## THE PEN IS PICKED UP FROM THE DESK, and nothing else lies where it does.
+func _pick_up() -> void:
+	print("-- the pen picked up")
+	var feed := ShowFeed.new()
+	feed.outro_hold = 4.0
+	feed.intro_hold = 1.0
+	var svgs := {Manuscript.image_key("a cross and a dot on one line"): DOT_SVG}
+	var id := String(DeskScript.item("draw", DOT_SVG)["id"])
+	var m := LetterMedium.new()
+	m.feed = feed
+	m._pad = LegalPad.new()
+	m.load_letter(LETTER, {"seed": 3, "svgs": svgs, "ink": {"items": [_dot_record(id)]}})
+	var records := {id: _dot_record(id)}
+	var parsed := LetterScript.parse(LETTER, 3, svgs, LetterScript.lengths_of(records, 3), records)
+	m._now = 0.0
+	m.take_words(DeskScript.rehearsal(parsed, 0.42, 0.35, 1.0))
+	var opening := m._opening()
+	var w := m._pick_up()
+	var first := m._first_done()
+	var start := float(m._plan[first]["start"])
+	var rest := DeskLook.pen_rest(m.look, LegalPad.DESK_Y)
+	var lies: Vector3 = (rest["nib"] as Vector3) + Vector3.UP * DeskMedium.PEN_R * 1.04
+	# LYING THERE through the intro and its focus pull
+	var lying := true
+	for t in [0.0, opening - 1.0, opening + ShowOpening.FOCUS_PULL.y * 0.5, w.x - 0.02]:
+		m._now = t
+		var xf := m._pen_xf()
+		var top := xf.origin + xf.basis.y * LetterMedium.PEN_TOP
+		lying = lying and xf.origin.distance_to(lies) < 0.0005 and absf(xf.basis.y.y) < 0.01 \
+			and minf(xf.origin.x, top.x) > LegalPad.W * 0.5 + 0.015 and absf(top.y - xf.origin.y) < 0.001
+	_check(lying, "through the intro and its focus pull the pen lies level on the desk, beside the pad's right edge")
+	_check(w.x < INF and ShowOpening.pull(w.x, opening, true) >= ShowOpening.INTRO_LIFT
+		and ShowOpening.title_alpha(w.x, opening, true) == 0.0 and w.y < start and start - w.y < 0.5,
+		"it is picked up once the intro's blur has lifted and the name is gone (%.1f s after the opening), and is over the first stroke as the line begins (%.2f s before)"
+		% [w.x - opening, start - w.y])
+	# THE WAY: on, a frame at a time, and never into the desk or the pad
+	var dt := 1.0 / 60.0
+	var worst := 0.0
+	var lowest := INF
+	var prev := Transform3D()
+	var t := w.x - 0.2
+	var k := 0
+	while t <= start + 0.2:
+		m._now = t
+		var xf := m._pen_xf()
+		if k > 0 and t <= start:
+			# up to the paper: the pick-up and the nib's way down, not the writing after it
+			worst = maxf(worst, maxf(xf.origin.distance_to(prev.origin),
+				(xf.origin + xf.basis.y * LetterMedium.PEN_TOP).distance_to(prev.origin + prev.basis.y * LetterMedium.PEN_TOP)))
+		if t < start:
+			# its axis over what is under it: the nib clear of it, the body (2 cm up) by about its radius
+			for along in [0.0, 0.02, 0.06, 0.1, LetterMedium.PEN_TOP]:
+				var q: Vector3 = xf.origin + xf.basis.y * float(along)
+				var on_pad := absf(q.x) <= LegalPad.W * 0.5 + DeskMedium.PEN_R and absf(q.z) <= LegalPad.H * 0.5 + DeskMedium.PEN_R
+				var over: float = q.y - (0.0003 if on_pad else LegalPad.DESK_Y) - (0.0 if float(along) == 0.0 else DeskMedium.PEN_R * 0.9)
+				lowest = minf(lowest, over)
+		prev = xf
+		t += dt
+		k += 1
+	m._now = w.x
+	var hover := m._world(m._before_first()["p"], DeskMedium.REST_LIFT)
+	_check(worst < 0.005 and hover.distance_to(lies) > 0.1,
+		"on the way it moves at most %.1f mm a frame - the control, the desk's own pen hovering over the first stroke, is %.0f cm from where it lies"
+		% [worst * 1000.0, hover.distance_to(lies) * 100.0])
+	_check(lowest > -0.0002, "and it never goes into the desk or the pad (%.1f mm clear at the least)" % (lowest * 1000.0))
+	m._now = start + 0.05
+	_check(m._pick_up_pose(Transform3D.IDENTITY).is_empty() and float(m.pen_at()["lift"]) <= DeskMedium.LIFT + 0.0001,
+		"and once the line begins the pen is the desk's own, on the paper")
+	m.free()
+	# NOTHING ELSE LIES THERE
+	var on := 0
+	var ctl := 0
+	var placed := 0
+	for seed in 600:
+		var look := DeskLook.of(seed)
+		var pen := DeskLook.pen_rest(look, LegalPad.DESK_Y)
+		var a := Vector2((pen["nib"] as Vector3).x, (pen["nib"] as Vector3).z)
+		var b := Vector2((pen["top"] as Vector3).x, (pen["top"] as Vector3).z)
+		var r := DeskLook._rng(seed, "pen probe")
+		var rad := r.randf_range(0.04, 0.12)
+		var r_ctl := DeskLook._rng(seed, "pen probe")
+		r_ctl.randf_range(0.04, 0.12)
+		var at := DeskLook._placed(r, rad, false, DeskLook._pen_taken(look, LegalPad.DESK_Y))
+		var free := DeskLook._placed(r_ctl, rad, false, [])
+		if at.x < INF:
+			placed += 1
+			on += int(at.distance_to(Geometry2D.get_closest_point_to_segment(at, a, b)) < rad + DeskMedium.PEN_R)
+		if free.x < INF:
+			ctl += int(free.distance_to(Geometry2D.get_closest_point_to_segment(free, a, b)) < rad + DeskMedium.PEN_R)
+	_check(placed > 500 and on == 0 and ctl > 0,
+		"nothing is set down where the pen lies (%d placed; the control, its place not taken, %d on it)" % [placed, ctl])
+
+
+## A LETTER OF MANY SENTENCES: [param paras] paragraphs of sentences [param lengths] words long in turn, a comma in
+## every third - where a page may turn after a mark or inside a sentence.
+static func _prose(paras: int, lengths: Array) -> String:
+	var vocab := ["the", "letter", "was", "written", "slowly", "by", "lamplight", "and", "nobody", "read", "it", "twice"]
+	var out := PackedStringArray()
+	var n := 0
+	var s := 0
+	for i in paras:
+		var para := PackedStringArray()
+		for _k in 4:
+			var words := PackedStringArray()
+			var len := int(lengths[s % lengths.size()])
+			for w in len:
+				words.append(String(vocab[(n * 7 + w * 5) % vocab.size()]))
+				n += 1
+			if s % 3 == 1:
+				words[len / 2] += ","
+			var sentence := " ".join(words)
+			para.append(sentence.substr(0, 1).to_upper() + sentence.substr(1) + ".")
+			s += 1
+		out.append(" ".join(para))
+	return "\n\n".join(out) + "\n"
+
+
+## A VOICE THAT PAUSES AS A REAL ONE DOES, for [param parsed]: [param word] a word, [param stop] more at a sentence's end
+## and a third of it at a comma, the rests and hesitations the script writes, and each word's `sentence` - for words
+## handed a sentence at a time, as a live reading's arrive.
+static func _voiced(parsed: Dictionary, word := LetterScript.READ_WORD, stop := 0.7, lead := 1.0) -> Array:
+	var spoken: PackedStringArray = parsed["spoken"]
+	var token := RegEx.create_from_string("<!--\\s*action-hold\\s*:\\s*([0-9.]+)\\s*-->|<!--\\s*hesitation\\s*(?::\\s*([0-9.]+))?\\s*-->|<!--.*?-->|\\S+")
+	var ends := RegEx.create_from_string(LetterScript.SENTENCE_END)
+	var out: Array = []
+	var t := lead
+	var sentence := 0
+	for chunk in String(parsed["speakable"]).split("\n\n"):
+		var said := false
+		for m in token.search_all(String(chunk)):
+			var tok := m.get_string()
+			if not m.get_string(1).is_empty():
+				t += float(m.get_string(1))
+			elif tok.begins_with("<!--") and tok.contains("hesitation"):
+				t += float(m.get_string(2)) if not m.get_string(2).is_empty() else LetterMedium.HESITATE
+			elif not tok.begins_with("<!--") and not TabletScript.norm(tok).is_empty() and out.size() < spoken.size():
+				out.append({"text": spoken[out.size()], "t0": t, "t1": t + word * 0.9, "sentence": sentence})
+				t += word
+				said = true
+				if ends.search(tok) != null:
+					t += stop
+					sentence += 1
+				elif tok.ends_with(",") or tok.ends_with(";") or tok.ends_with(":"):
+					t += stop / 3.0
+		if said:
+			t += 0.35
+			sentence += 1
+	return out
+
+
+## A letter's medium, off the stage, read by [param words] (all of them known, as an export's are).
+func _medium(text: String, words: Array) -> LetterMedium:
+	var feed := ShowFeed.new()
+	feed.outro_hold = 4.0
+	feed.intro_hold = 1.0
+	var m := LetterMedium.new()
+	m.feed = feed
+	m._pad = LegalPad.new()
+	m.load_letter(text, {"seed": 1})
+	m._now = 0.0
+	if not words.is_empty():
+		m.take_words(words)
+	return m
+
+
+## A PAGE IS TURNED WITH THE VOICE WAITING WHERE IT ENDS ON A MARK, and a sentence it breaks is finished first.
+func _turn_waits() -> void:
+	print("-- a page turned on a mark, and one inside a sentence")
+	var marked := 0
+	var broken := 0
+	var rested_marked := INF
+	var rested_broken := 0.0
+	var next_rest := INF
+	var nexts: Array = []          # [the letter, the next sentence's first word after a turn that broke one]
+	for lengths in [[7, 11, 9, 13, 8, 10], [6, 9, 12, 8], [10, 7, 13, 9], [5, 8, 11, 14, 7], [9, 9, 10, 12], [8, 13, 6, 11, 9]]:
+		var text := _prose(24, lengths)
+		var parsed := LetterScript.parse(text)
+		var rests := LetterMedium.rests_of(parsed)
+		var acts: Array = parsed["actions"]
+		for i in acts.size():
+			var a: Dictionary = acts[i]
+			if String(a["kind"]) != "pad-text" or not bool(a.get("turn", false)) or bool(a.get("para", false)) or i == 0:
+				continue
+			var k0 := int(a["after"])
+			var prev := String((acts[i - 1] as Dictionary).get("text", "")).strip_edges()
+			if RegEx.create_from_string(LetterScript.PAUSE_END).search(prev) != null:
+				marked += 1
+				rested_marked = minf(rested_marked, rests[k0])
+				continue
+			broken += 1
+			rested_broken = maxf(rested_broken, rests[k0])
+			# the next sentence in the paragraph: the first word after a stop
+			var j := i
+			var ks := -1
+			while ks < 0 and j < acts.size() and String((acts[j] as Dictionary)["kind"]) == "pad-text" \
+					and (j == i or not bool((acts[j] as Dictionary).get("para", false))):
+				var said := String((acts[j] as Dictionary)["text"]).split(" ", false)
+				for w in said.size() - 1:
+					if RegEx.create_from_string(LetterScript.SENTENCE_END).search(said[w]) != null:
+						ks = int((acts[j] as Dictionary)["after"]) + w + 1
+						break
+				j += 1
+			if ks > k0:
+				next_rest = minf(next_rest, rests[ks])
+				nexts.append([text, ks, rests[ks]])
+	_check(marked > 0 and broken > 0 and rested_marked >= LetterScript.TURN_REST - 0.05 and rested_broken == 0.0,
+		"a page turned inside a paragraph after a mark is rested for (%d, %.2f s at the least), one that breaks a sentence is read on through (%d)"
+		% [marked, rested_marked, broken])
+	_check(not nexts.is_empty() and next_rest > 0.3,
+		"and after one that breaks a sentence, the voice waits at the next (%.2f s at the least)" % next_rest)
+	# ...and the pen is caught up there: its first word on the page before it is said - without that rest, behind
+	var text0 := String(nexts[0][0])
+	var ks0 := int(nexts[0][1])
+	var words := _voiced(LetterScript.parse(text0))
+	var m := _medium(text0, words)
+	var late := _late(m, words, ks0)
+	m.free()
+	var hurried: Array = []
+	for w in words.size():
+		var d: Dictionary = (words[w] as Dictionary).duplicate()
+		if w >= ks0:
+			d["t0"] = float(d["t0"]) - float(nexts[0][2])
+			d["t1"] = float(d["t1"]) - float(nexts[0][2])
+		hurried.append(d)
+	var mh := _medium(text0, hurried)
+	var late_h := _late(mh, hurried, ks0)
+	mh.free()
+	_check(late < 0.05 and late_h > 0.3,
+		"the next sentence's first word is on the page %.2f s before it is said - the control, the voice without that rest, says it %.2f s before it is written"
+		% [-late, late_h])
+
+
+## How long after spoken word [param k] is said it is on [param m]'s page (seconds; less than 0 when it is there first).
+static func _late(m: LetterMedium, words: Array, k: int) -> float:
+	for i in m._actions.size():
+		var a: Dictionary = m._actions[i]
+		if String(a["kind"]) == "pad-text" and int(a["after"]) <= k and k < int(a["after"]) + int(a.get("span", 0)):
+			return _written_at(m, i, k - int(a["after"])) - float((words[k] as Dictionary)["t0"])
+	return INF
+
+
+## A LINE RUNS ON INTO THE VOICE'S PAUSE AFTER IT.
+func _line_breaks() -> void:
+	print("-- a line runs on into the voice's pause")
+	var text := _prose(12, [7, 11, 9, 13, 8, 10])
+	var parsed := LetterScript.parse(text)
+	var words := _voiced(parsed)
+	var m := _medium(text, words)
+	var stood := 0
+	var was := 0
+	var worst := 0.0
+	for i in m._actions.size() - 1:
+		var a: Dictionary = m._actions[i]
+		var b: Dictionary = m._actions[i + 1]
+		if String(a["kind"]) != "pad-text" or String(b["kind"]) != "pad-text" or bool(b.get("para", false)) or bool(b.get("turn", false)):
+			continue
+		var start := float(m._plan[i]["start"])
+		var idle := float(m._plan[i + 1]["start"]) - float(m._plan[i]["end"]) - m._way(i, i + 1)
+		var own: float = (m._ahead_times(a, start)[1] as PackedFloat32Array)[int(a["span"]) - 1]
+		own = clampf(own, start + float(a["write"]) / LetterScript.QUICKEST, start + float(a["write"]) / DeskScript.MIN_PACE)
+		worst = maxf(worst, idle)
+		stood += int(idle > 0.15)
+		was += int(float(m._plan[i + 1]["start"]) - own - m._way(i, i + 1) > 0.3)
+	m.free()
+	_check(stood == 0 and was >= 2,
+		"read by a voice that pauses at each sentence's end, no line leaves the pen standing at its end (%.2f s at the most) - the control, each ended as the voice ends the word two before its last, stands at %d"
+		% [worst, was])
+
+
+## THE CAMERA LETS GO BEFORE A TURN ONCE, its words arriving a sentence at a time.
+func _let_go() -> void:
+	print("-- the camera lets go before a turn once")
+	var text := "Dear Friend,\n\n" + _prose(2, [9, 7, 12]) + "\n<!-- hesitation: 1.5 -->\n\n<!-- image (full): an empty room at night -->\n\n" \
+		+ _prose(2, [8, 12, 10]) + "\n<!-- /image -->\n\n" + _prose(8, [10, 7, 13, 9])
+	var parsed := LetterScript.parse(text)
+	var words := _voiced(parsed)
+	var m := _medium(text, [])
+	var ti := -1
+	for i in m._actions.size():
+		if bool((m._actions[i] as Dictionary).get("turn", false)):
+			ti = i
+			break
+	var handed := 0
+	var t := 0.0
+	var rises := 0
+	var old_rises := 0
+	var k_was := INF
+	var old_was := INF
+	var letting := false
+	var old_letting := false
+	var turned := INF
+	while t < turned:
+		m._now = t
+		var n := handed
+		while n < words.size() and float((words[n] as Dictionary)["t0"]) <= t + 3.0:
+			var sn := int((words[n] as Dictionary)["sentence"])
+			while n < words.size() and int((words[n] as Dictionary)["sentence"]) == sn:
+				n += 1
+		if n != handed:
+			handed = n
+			m.take_words(words.slice(0, n))
+		var ta := float(m._plan[ti]["turn_at"])
+		if ta < INF and t >= ta:
+			turned = t
+			break
+		var k := m._arc()
+		# the control: the turn as the arc had guessed it, the desk's steady pace from the last word heard
+		var opening := m._opening()
+		var guess := ta if ta < INF else m._guess(int((m._actions[ti] as Dictionary)["after"]), false) - DeskScript.TURN
+		var opened := opening if opening < INF else 1.0
+		var old := minf(smoothstep(opened + LetterMedium.ARRIVE, opened + LetterMedium.ARRIVE + LetterMedium.ARC_IN, t),
+			1.0 - smoothstep(guess - LetterMedium.OUT_BEFORE - LetterMedium.ARC_OUT, guess - LetterMedium.OUT_BEFORE, t))
+		if letting and k > k_was + 0.01:
+			rises += 1
+		if old_letting and old > old_was + 0.01:
+			old_rises += 1
+		letting = letting or (k_was > 0.99 and k < k_was - 0.001)
+		old_letting = old_letting or (old_was > 0.99 and old < old_was - 0.001)
+		k_was = k
+		old_was = old
+		t += 1.0 / 30.0
+	m.free()
+	_check(turned < INF and letting and rises == 0 and old_rises > 0,
+		"its words arriving a sentence at a time, the camera lets go before the turn once and never comes back in - the control, the turn guessed at the desk's steady pace, comes back in %d times"
+		% old_rises)
 
 
 func _frame_cost() -> void:
