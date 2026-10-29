@@ -70,9 +70,9 @@ extends SceneTree
 ##   one value the picked episode overwrites (and an edit writes into its plan; an emptied one is
 ##   not); a show with none takes the picked episode's once; a NEW EPISODE shows them at once; the
 ##   byline on the document card right under Title (the user: "right under the title field"); the
-##   upload described from all that - once the note has a YouTube card and its box is ticked -
-##   with the title screen's thumbnail moment, for the episode an export rendered even after another
-##   is picked. The description and tags are the YouTube card's; THE TITLE IS THE SCRIPT CARD'S EPISODE,
+##   upload described from all that - once the note has a YouTube card and its box is ticked - with
+##   no thumbnail of the episode card's own and its folder kept off the wire, for the episode an export
+##   rendered even after another is picked. The description and tags are the YouTube card's; THE TITLE IS THE SCRIPT CARD'S EPISODE,
 ##   handed the picked episode's: an edit written into its plan, an emptied one not, none kept in the block,
 ##   and a new episode's empty and waiting for its plan. A Proof note's Episode is its framer's title, an
 ##   edit written into its problem; a note read as it is written shows its own once it has a YouTube card
@@ -113,7 +113,20 @@ extends SceneTree
 ## - A REAL SHOW FILE: the tags and the byline land as top-level lines above ghost's block - the
 ##   chapter format - the block holds the show's title and description and no record per episode, the
 ##   rest of the file is untouched, and a panel opening it fills a new episode from it at once.
-## - THE THUMBNAIL'S MOMENT and ffmpeg's arguments for taking it.
+## - THE THUMBNAIL IS THE CARD'S CHOICE (2026-10-28, the user: "I'm not a fan of this implicit,
+##   undocumented behavior"): a new card's is YouTube's, and its upload names none; its block keeps the
+##   choice and the writer and painter of a painted one (one it does not know is YouTube's). The title
+##   screen's frame is taken at its moment where the take opened on its title, and not where it opened on
+##   nothing, which is said (the control); a painted one goes up once it is painted for the episode, and
+##   is said missing until then. THE PAINTED STEP ([YouTubeThumbnail]): wanted only while Painted; the
+##   writer is told the episode, shown its own pictures numbered (none said where it has none - the
+##   control), and its answer kept with what to paint, the words trimmed and the pictures it named, each
+##   once and only those that exist - no picture to paint is refused; the writer's answer hands the
+##   card's painter a job (here refused, read-only, said); the painter is told the words exactly, or no
+##   text at all, the pictures' look when it follows them, and the frame's shape first; the painting
+##   landed is cut about its middle to 1280x720 (720x1280 for a portrait video), kept with the fingerprint
+##   of the words, said on the card, and goes up.
+## - THE TITLE SCREEN'S MOMENT and ffmpeg's arguments for taking a frame.
 
 ## By path, not by class name: a new class is unknown to `--script` runs until the editor rescans.
 const YouTube := preload("res://src/export/youtube.gd")
@@ -142,7 +155,7 @@ func _run() -> void:
 	_wipe(TAROT)
 	_wipe(ROOT + "_files")
 	for check in [_client, _import, _channels, _pkce, _auth_url, _query, _wire, _fit, _body, _records, _episode_notes,
-			_menu, _card, _episode_tags, _tag_field, _panel_fields, _proof_steps, _note_steps, _doc_file]:
+			_menu, _card, _episode_tags, _thumbnails, _tag_field, _panel_fields, _proof_steps, _note_steps, _doc_file]:
 		if not bool(check.call()):
 			_ok(false, "a check stopped part way (script error?)")
 	_wipe(ROOT)
@@ -519,8 +532,10 @@ func _card() -> bool:
 	card.exporter = ex
 	var cap: Dictionary = card.capture()
 	_ok(cap == {"upload": false, "title": "%title%: %episode%", "privacy": "private", "category": "22", "playlist": "",
-		"playlist_title": "", "channel": "", "channel_name": "", "write_tags": false, "description": ""},
-		"a new card uploads nothing, privately, as People & Blogs, titled by the template, to no channel yet (%s)" % str(cap))
+		"playlist_title": "", "channel": "", "channel_name": "", "write_tags": false, "description": "",
+		"thumbnail": "youtube", "thumbnail_writer": "claude", "thumbnail_writer_model": "", "thumbnail_writer_effort": "",
+		"thumbnail_painter": "codex", "thumbnail_painter_model": "", "thumbnail_painter_effort": ""},
+		"a new card uploads nothing, privately, as People & Blogs, titled by the template, to no channel yet, with YouTube's thumbnail (%s)" % str(cap))
 	var names = _names({"title": "Truthful Tarot", "episode": "The Tower", "author": "Pen", "book": "Major Arcana"})
 	_ok(not names.shows_field("title") and not names.shows_field("episode") and not names.shows_field("author")
 		and not names.shows_field("book"), "a Voice lab's Script card shows no Title, Episode, Author or Book of its own")
@@ -529,13 +544,14 @@ func _card() -> bool:
 		and card.values_now() == {"title": "Truthful Tarot", "episode": "The Tower", "author": "Pen", "book": "Major Arcana"},
 		"bound, the card shows all four on it and reads the note's names from there (%s)" % str(card.values_now()))
 	_ok(card.meta({"tags": ["a"]}).is_empty(), "unticked, it describes no upload whatever the panel has")
-	card.apply({"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted", "category": "27",
+	var block := {"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted", "category": "27",
 		"playlist": "PL1", "playlist_title": "Readings", "channel": "UC-x", "channel_name": "@x", "write_tags": true,
-		"description": "Line one.\n\nLine two."})
-	_ok(card.capture() == {"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted",
-		"category": "27", "playlist": "PL1", "playlist_title": "Readings", "channel": "UC-x", "channel_name": "@x",
-		"write_tags": true, "description": "Line one.\n\nLine two."},
-		"its block round-trips, the description's lines and all (%s)" % str(card.capture()))
+		"description": "Line one.\n\nLine two.", "thumbnail": "painted", "thumbnail_writer": "claude",
+		"thumbnail_writer_model": "m1", "thumbnail_writer_effort": "high", "thumbnail_painter": "grok",
+		"thumbnail_painter_model": "", "thumbnail_painter_effort": ""}
+	card.apply(block)
+	_ok(card.capture() == block, "its block round-trips, the description's lines and all (%s)" % str(card.capture()))
+	card.apply(block.merged({"thumbnail": "youtube"}, true))
 	_ok(not card._desc.visible and card.description().is_empty() and card.meta({"tags": [], "description": "Theirs."}).get("description") == "Theirs.",
 		"control: its description box is hidden until the panel shows it, and then nothing of it goes up")
 	card.describe()
@@ -899,6 +915,10 @@ class FakeFeed extends "res://src/notes/episode_feed.gd":
 	var said := ""
 	var note_tags := PackedStringArray()
 	var refuse := ""
+	var pics := PackedStringArray()
+
+	func pictures() -> PackedStringArray:
+		return pics
 
 	func replace_tags(tags: PackedStringArray) -> String:
 		if refuse.is_empty():
@@ -1016,8 +1036,8 @@ func _panel_fields() -> bool:
 	_ok(meta.get("title") == "My Own Title" and meta.get("description") == "Mine." and meta.get("chapters") == []
 		and meta.get("tags") == ["tarot", "satire"] and String(meta.get("record", "")).ends_with("/21/youtube.json"),
 		"the upload: the episode's title, the show's description and tags")
-	_ok(is_equal_approx(float(meta.get("thumbnail_at", -1.0)), show.thumbnail_moment(show._take_intro(""))),
-		"and the title screen's moment for its thumbnail")
+	_ok(not meta.has("thumbnail_at") and not meta.has("thumbnail") and not meta.has("folder"),
+		"and no thumbnail the episode card chose: the YouTube card's is YouTube's, and the folder stays off the wire")
 	ed._doc._fields["title"] = "Truthful Tarot"
 	_ok(ed.upload_meta("").get("title") == "Truthful Tarot: My Own Title" and ed.export_name() == "My Own Title",
 		"the upload's title is the show's name, then the episode's - the file keeps the episode's alone")
@@ -1037,10 +1057,20 @@ func _panel_fields() -> bool:
 	_ok(long_title.begins_with("Truthful Tarot: ") and long_title.length() <= 100, "cut to 100 characters, the name stands")
 	ed._doc._fields.erase("title")
 	_ok(show._spec().get("uploads_as") == "", "control: a show with no name has no line round its episode's title")
-	# THE BYLINE, on the document card right under Title
+	# THE BYLINE, on the document card right under Title - SHOWN, with the brief's marks and its name: the card
+	# is in the table's mode, never its settings section ("cards" since the rename; 2026-10-29, the user, of a
+	# byline on the title screen: "It's not displayed in the UI anywhere")
 	var card = ed._writer
 	var edits: Array = card._field_edits.keys()
 	_ok(edits.find("byline") == edits.find("title") + 1, "the byline is the card's field right under Title (%s)" % str(edits))
+	var marks: GDScript = load("res://src/notes/script_marks.gd")
+	_ok(card.shows_field("byline") and card._mode == "table" and marks.for_mode(card._mode).has("speaker")
+		and card._wording("window", "") == "Brief" and ed._cast._hesitate.get_parent().visible,
+		"it is shown on a table's Script card, which offers a brief's marks and calls it a Brief - and the Voice card its Hesitate row")
+	_ok(ed.section() == "cards" and marks.for_mode(ed.section()).is_empty()
+		and String((card.WORDING.get(ed.section(), {}) as Dictionary).get("window", "")).is_empty()
+		and not (card.FIELDS["byline"]["modes"] as Array).has(ed.section()),
+		"the control: the table's settings section names no marks, no wording and no Byline - a card set up in it shows none of them")
 	(card._field_edits["byline"] as LineEdit).text = "with Pen & Ink"
 	card._commit_field("byline")
 	_ok(ed._doc.field("byline") == "with Pen & Ink" and ed.book_document()["byline"] == "with Pen & Ink",
@@ -1067,7 +1097,8 @@ func _panel_fields() -> bool:
 	_ok(not DirAccess.dir_exists_absolute(TableEpisode.open("panel-check", 22).dir), "nothing was written for the new episode")
 	# THE STEPS THE NOTE'S OTHER CARDS ADD: the YouTube card's tags, on the Episode card, neither naming the other
 	var tags_step = ed._youtube.episode_steps()[0]
-	_ok(ed.episode_steps() == [tags_step], "the panel holds the step the YouTube card offers")
+	_ok(ed.episode_steps() == ed._youtube.episode_steps() and ed.episode_steps().size() == 2,
+		"the panel holds the steps the YouTube card offers: the tags and the thumbnail")
 	show._refresh_rows()
 	_ok(_step_row(show).is_empty(), "box clear, the Episode card lists no tags")
 	ed._youtube._write_tags.button_pressed = true
@@ -1107,8 +1138,8 @@ func _panel_fields() -> bool:
 	show._refresh_rows()
 	_ok(_step_row(show).is_empty() and ed.upload_meta("").get("tags") == ["the moon", "night", "cards"],
 		"box cleared: the row goes, and the list stays as it was written")
-	_ok(show.thumbnail_moment(9.0) == 3.6 and show.thumbnail_moment(3.0) == 1.5 and show.thumbnail_moment(0.5) == 1.5,
-		"the thumbnail is taken with the name up and the table still out of focus")
+	_ok(Openings.title_moment(9.0) == 3.6 and Openings.title_moment(3.0) == 1.5 and Openings.title_moment(0.5) == 1.5,
+		"the title screen's frame is taken with the name up and the table still out of focus")
 	var args: PackedStringArray = load("res://src/export/exporter.gd").thumbnail_args("/v/a b.mp4", "/v/a b.thumbnail.jpg", 3.6)
 	_ok(Array(args) == ["-y", "-nostdin", "-loglevel", "error", "-ss", "3.600", "-i", "/v/a b.mp4", "-frames:v", "1",
 		"-vf", "scale=1280:720:flags=lanczos", "-q:v", "2", "/v/a b.thumbnail.jpg"], "one frame, at the moment, 1280x720")
@@ -1196,7 +1227,7 @@ func _episode_tags() -> bool:
 	var names = _names({"title": "The Show", "episode": "The Tower Falls"})
 	card.name_from(names)
 	card.apply({"upload": true})
-	var mine = card.episode_steps()[0] if card.episode_steps().size() == 1 else null
+	var mine = card.episode_steps()[0] if card.episode_steps().size() == 2 else null
 	_ok(mine != null and not mine.wanted() and not card.capture()["write_tags"], "the card offers its step, not wanted while the box is clear")
 	var base := {"tags": ["the note's"]}
 	_ok(card.meta(base).get("tags") == ["the note's"], "box clear: the panel's tags go up")
@@ -1218,6 +1249,150 @@ func _episode_tags() -> bool:
 	card._write_tags.button_pressed = false
 	card._refresh_tags()
 	_ok(not card._tags_note.visible, "box clear: nothing of them")
+	card.free()
+	names.free()
+	ex.free()
+	return true
+
+
+## THE THUMBNAIL: the card's choice, what an upload of a take takes, and the step that paints one.
+func _thumbnails() -> bool:
+	var Thumb: GDScript = load("res://src/export/youtube_thumbnail.gd")
+	var Ex: GDScript = load("res://src/export/exporter.gd")
+	var ex = Ex.new()
+	ex._build_ui()
+	var card = load("res://src/export/youtube_card.gd").new()
+	card.exporter = ex
+	var names = _names({"title": "The Show", "episode": "The Tower Falls"})
+	card.name_from(names)
+	card.apply({"upload": true})
+	var files := ProjectSettings.globalize_path(ROOT + "_files")
+	var dir := files.path_join("thumb_episode")
+	DirAccess.make_dir_recursive_absolute(dir)
+	var m: Dictionary = card.meta({"tags": [], "folder": dir})
+	_ok(card.thumbnail() == "youtube" and card.capture()["thumbnail"] == "youtube" and not m.has("thumbnail")
+		and not m.has("thumbnail_at") and not m.has("thumbnail_why") and not m.has("folder") and not card._thumb_writer.visible,
+		"a new card's thumbnail is YouTube's choice: its upload names none, and the episode's folder stays off the wire")
+	# THE BLOCK
+	card.apply({"upload": true, "thumbnail": "painted", "thumbnail_writer": "claude", "thumbnail_writer_model": "m1",
+		"thumbnail_writer_effort": "high", "thumbnail_painter": "grok"})
+	var c: Dictionary = card.capture()
+	_ok(c["thumbnail"] == "painted" and c["thumbnail_writer"] == "claude" and c["thumbnail_writer_model"] == "m1"
+		and c["thumbnail_writer_effort"] == "high" and c["thumbnail_painter"] == "grok" and card._thumb_writer.visible
+		and card._thumb_painter.visible, "its block keeps the choice and a painted one's writer and painter, shown only then")
+	card.apply({"upload": true, "thumbnail": "sparkles"})
+	_ok(card.thumbnail() == "youtube" and card.capture()["thumbnail_painter"] == "codex",
+		"a thumbnail it does not know is YouTube's, and a block naming no painter has the card's own")
+	# THE TITLE SCREEN, asked of the take
+	card._select(card._thumbnail, "title")
+	var titled := _file("takes/titled.json", JSON.stringify({"bookend": {"in": 9.0, "out": 6.0}, "opening": "title"})).get_basename() + ".wav"
+	var bare := _file("takes/bare.json", JSON.stringify({"bookend": {"in": 9.0, "out": 6.0}, "opening": "none"})).get_basename() + ".wav"
+	var mt: Dictionary = card.meta({"tags": []}, titled)
+	_ok(is_equal_approx(float(mt.get("thumbnail_at", -1.0)), Openings.title_moment(9.0)) and not mt.has("thumbnail_why"),
+		"Title screen: a frame of a take that opened on its title, at its moment (%.1f s)" % float(mt.get("thumbnail_at", -1.0)))
+	var mb: Dictionary = card.meta({"tags": []}, bare)
+	_ok(not mb.has("thumbnail_at") and String(mb.get("thumbnail_why", "")).contains("does not open on its title"),
+		"the control: a take that opened on nothing has no title screen, and the upload says so (%s)" % mb.get("thumbnail_why", ""))
+	# PAINTED, asked of the episode's folder
+	card._select(card._thumbnail, "painted")
+	var step = card.episode_steps()[1]
+	_ok(step.wanted() and step.key == "youtube_thumbnail", "Painted: the card's thumbnail step is wanted")
+	_ok(String(card.meta({"tags": [], "folder": dir}, titled).get("thumbnail_why", "")).contains("no thumbnail is painted")
+		and String(card.meta({"tags": []}, titled).get("thumbnail_why", "")).contains("nothing on this note makes an episode"),
+		"until it is painted the upload says so - and on a note with no episode, that nothing makes one")
+	card._select(card._thumbnail, "youtube")
+	_ok(not step.wanted() and EpisodeStep.listed_of([step]).is_empty(), "the control: on YouTube's choice the step is not one")
+	card._select(card._thumbnail, "painted")
+	# WHAT THE WRITER ANSWERS, landed
+	var pics := PackedStringArray(["/p/one.png", "/p/two.png", "/p/three.png"])
+	var got: Variant = Thumb.land(JSON.parse_string("{\"picture\": \"A lantern on a dark table.\", \"words\": \" \\\"THE LAST CARD\\\" \", \"after\": [2, \"1\", 2, 9, 0]}"), pics)
+	_ok(got is Dictionary and got["picture"] == "A lantern on a dark table." and got["words"] == "THE LAST CARD"
+		and got["after"] == ["/p/two.png", "/p/one.png"],
+		"the writer's answer is kept: what to paint, the words trimmed, the pictures it named - each once, only those there (%s)" % str(got))
+	_ok(Thumb.land({"picture": " ", "words": "x"}, pics) is String and Thumb.land(null, pics) is String
+		and (Thumb.land({"picture": "A lantern."}, pics) as Dictionary)["after"] == [],
+		"the controls: nothing to paint and no JSON are refused; naming no picture follows none")
+	# WHAT THE WRITER IS TOLD
+	Rules.clear()
+	var p: Dictionary = Thumb.prompt("The Show", "The Tower Falls", "A reading of three.", "The first card is the tower.", pics)
+	var text := String(p["prompt"])
+	var images: Array = p["images"]
+	_ok(Rules.missing.is_empty() and not text.contains("{{") and not String(p["system"]).is_empty()
+		and text.contains("The first card is the tower.") and text.contains("printed under the thumbnail: The Tower Falls")
+		and text.contains("numbered 1 to 3") and text.contains("\"after\"") and images.size() == 3
+		and (images[1] as Dictionary)["path"] == "/p/two.png" and (images[1] as Dictionary)["label"] == "Picture 2:",
+		"the writer is told the episode and shown its pictures, numbered (%s)" % str(Rules.missing))
+	var none: Dictionary = Thumb.prompt("", "", "", "Words.", PackedStringArray())
+	_ok(not String(none["prompt"]).contains("attached") and not String(none["prompt"]).contains("\"after\"")
+		and not String(none["prompt"]).contains("THE SHOW:") and (none["images"] as Array).is_empty() and Rules.missing.is_empty(),
+		"the control: an episode with no pictures and no name is told of neither")
+	# WHAT THE PAINTER IS TOLD
+	var said: String = Thumb.painting(got, false)
+	_ok(Rules.missing.is_empty() and said.contains("A lantern on a dark table.") and said.contains("exactly these and no others: \"THE LAST CARD\"")
+		and said.contains("paint in their look") and ImageGen.Bedrock.ratio_in(said) == "16:9",
+		"the painter is told what to paint, the words exactly, the pictures' look, and 16:9 first")
+	var plain: String = Thumb.painting({"picture": "A lantern.", "words": "", "after": []}, true)
+	_ok(plain.contains("No text, letters or numbers") and not plain.contains("paint in their look") and ImageGen.Bedrock.ratio_in(plain) == "9:16",
+		"the control: no words is no text at all, no pictures no look to follow, and a portrait video's is 9:16")
+	# THE PAINTING, CUT
+	var src := files.path_join("painted.png")
+	var img := Image.create(1536, 1024, false, Image.FORMAT_RGB8)
+	img.fill(Color.GREEN)
+	img.fill_rect(Rect2i(0, 0, 1536, 70), Color.RED)
+	img.fill_rect(Rect2i(0, 1024 - 70, 1536, 70), Color.RED)
+	img.save_png(src)
+	var jpg := files.path_join("cut.jpg")
+	var err: String = Thumb.fit(src, jpg, false)
+	var cut := Image.load_from_file(jpg) if err.is_empty() else null
+	_ok(cut != null and cut.get_size() == Vector2i(1280, 720) and cut.get_pixel(640, 2).g > 0.8 and cut.get_pixel(640, 717).g > 0.8
+		and cut.get_pixel(640, 2).r < 0.3, "a 3:2 painting is cut about its middle to 1280x720, what was painted past 16:9 gone (%s)" % err)
+	_ok(Thumb.fit(src, jpg, true).is_empty() and Image.load_from_file(jpg).get_size() == Vector2i(720, 1280),
+		"a portrait video's, to 720x1280")
+	_ok(not Thumb.fit(src + ".none", jpg, false).is_empty(), "the control: no painting, no thumbnail, and why")
+	# THE STEP: the writer, then the painter, then kept
+	var feed := FakeFeed.new()
+	feed.dir = dir
+	feed.said = "The first card is the tower."
+	feed.pics = pics
+	_ok(step._writer(feed) == card._thumb_writer.choice(), "its writer is the card's")
+	var job: Dictionary = step._after({"picture": "A lantern.", "words": "", "after": ["/p/one.png"]}, feed)
+	_ok(job.get("kind") == "image" and job.get("backend") == card._thumb_painter.choice()["agent"] and job.get("refs") == ["/p/one.png"]
+		and job.get("target") == dir.path_join("youtube_thumbnail.png") and String(job.get("prompt")).contains("A lantern."),
+		"the writer's answer is the card's painter's job, into the episode's folder")
+	AgentJobs._ended["text-youtube-check-thumb"] = {"ok": true, "text": "{\"picture\": \"A lantern.\", \"words\": \"\", \"after\": [1]}"}
+	step._jobs[dir] = {"id": "text-youtube-check-thumb", "feed": feed, "stamp": feed.stamp(), "who": "writer"}
+	step._tries[dir] = 2
+	step.tick()
+	_ok(step.state(feed) == "failed" and step.said(feed).contains("read-only") and Thumb.image_in(dir).is_empty()
+		and not FileAccess.file_exists(dir.path_join("youtube_thumbnail.json")),
+		"the writer's answer starts the painter - here refused, read-only, and said - and nothing is kept before the painting")
+	step._errors.clear()
+	var painted := dir.path_join("youtube_thumbnail.png")
+	img.save_png(painted)
+	AgentJobs._ended["image-youtube-check-thumb"] = {"ok": true, "path": painted}
+	step._jobs[dir] = {"id": "image-youtube-check-thumb", "feed": feed, "stamp": feed.stamp(), "who": "painter",
+		"got": {"picture": "A lantern.", "words": "THE LAST CARD", "after": ["/p/one.png"]}}
+	step.tick()
+	var made: String = Thumb.image_in(dir)
+	var want := Vector2i(720, 1280) if Thumb._portrait() else Vector2i(1280, 720)
+	var kept: Variant = JSON.parse_string(FileAccess.get_file_as_string(dir.path_join("youtube_thumbnail.json")))
+	_ok(step.state(feed) == "ready" and made == dir.path_join("youtube_thumbnail.jpg") and Image.load_from_file(made).get_size() == want
+		and step.said(feed).begins_with("painted with \"THE LAST CARD\": A lantern.") and kept is Dictionary
+		and (kept as Dictionary).get("from") == feed.stamp(),
+		"the painting landed is cut beside it and the step made, with the fingerprint of the words (%s)" % step.said(feed))
+	step.listed("the Episode card", feed)
+	card._refresh_thumbnail()
+	_ok(card._thumb_note.text.contains("goes up with it") and card._thumb_note.text.contains("the Episode card") and card._thumb_view.visible,
+		"the card shows it, and says it goes up (%s)" % card._thumb_note.text)
+	_ok(card.meta({"tags": [], "folder": dir}, titled).get("thumbnail") == made, "and it goes up")
+	feed.said = "Other words."
+	card._refresh_thumbnail()
+	_ok(card._thumb_note.text.contains("before the episode's words were written again")
+		and card.meta({"tags": [], "folder": dir}, titled).get("thumbnail") == made,
+		"words written again: it says so, and goes up as it is until another is painted")
+	var video := files.path_join("v.mp4")
+	_ok(Ex._beside(made, video) == files.path_join("v.thumbnail.jpg") and FileAccess.file_exists(files.path_join("v.thumbnail.jpg")),
+		"the exporter puts a painted thumbnail beside the video it goes up with")
 	card.free()
 	names.free()
 	ex.free()

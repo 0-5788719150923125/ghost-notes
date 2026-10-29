@@ -7,7 +7,7 @@ class_name NoteUpload
 ## episodes - its words are the author's, read by a Voice or an Actor - so its YouTube card holds what a
 ## show's card holds for its episodes: the description its uploads take (the card's own box, [method
 ## YouTubeCard.describe]), the note's tags as one list (its `tags:` line, as a show's), and THE STEPS THE
-## NOTE'S OTHER CARDS ADD ([EpisodeStep] - the YouTube card's tags), listed here with the note as their
+## NOTE'S OTHER CARDS ADD ([EpisodeStep] - the YouTube card's tags and painted thumbnail), listed here with the note as their
 ## episode ([Feed]): a row each with its ⟳ - UNLESS A CARD ON THE NOTE LISTS THEM UNDER ITS OWN, beside its
 ## Generate: the card that handed the reading how it goes out (the Actor's, the Letter's - handed this
 ## note's [method feed]; the user, 2026-10-23: "push the generate/regenerate step into the Actor card. Right
@@ -16,7 +16,7 @@ class_name NoteUpload
 ##
 ## AN EXPORT THAT GOES UP MAKES THEM, when they are not made from the words as they are: started as the
 ## take starts rendering ([method start]) and waited for once it is rendered ([method settled], at most
-## [constant SETTLE_MOST]), so the upload takes the tags they wrote. What a step makes is kept in the note's
+## [constant SETTLE_MOST]), so the upload takes the tags and the thumbnail they made. What a step makes is kept in the note's
 ## own folder ([method folder_of]).
 ##
 ## Built by the [ReadingPanel] on its YouTube card when its publish says the note is its own episode
@@ -26,8 +26,9 @@ class_name NoteUpload
 const YouTube := preload("res://src/export/youtube.gd")
 const TagField := preload("res://src/ui/tag_field.gd")
 
-## How long an export waits for the steps an upload takes, in seconds.
-const SETTLE_MOST := 180.0
+## How long an export waits for the steps an upload takes, in seconds: a painted thumbnail is a writer's
+## brief and then a painting, minutes of both.
+const SETTLE_MOST := 360.0
 ## Where the steps' rows say they are, and what makes the note's episode, when they are listed here.
 const HOST := "this card"
 const MAKES := "an export that goes up"
@@ -145,9 +146,10 @@ func write_tags(tags: PackedStringArray) -> String:
 
 
 ## What an upload of the note says, over the panel's part [param base]: the note's tags, and any the panel
-## gives that they do not hold.
+## gives that they do not hold - and the note's folder, where the steps keep what they made of it.
 func upload_of(base: Dictionary) -> Dictionary:
 	var out := base.duplicate()
+	out["folder"] = _feed.folder()
 	var tags := note_tags()
 	for t in DataPath.strings(base.get("tags", [])):
 		if not tags.has(t):
@@ -176,17 +178,17 @@ func start() -> void:
 	_added.generate(_feed)
 
 
-## A COROUTINE: the take is rendered, and the upload waits for the steps making what it takes - at most
-## [constant SETTLE_MOST] - saying so on the panel's line.
+## A COROUTINE: the take is rendered, and the upload waits for the steps making what it takes (its tags,
+## its painted thumbnail) - at most [constant SETTLE_MOST] - saying so on the panel's line.
 func settled() -> void:
 	if not youtube.ticked() or not _added.busy(_feed):
 		return
-	reading.status("Writing the note's tags for the upload…")
+	reading.status("Making the note's %s for the upload…" % ", ".join(_added.names(_feed, true)))
 	var t0 := Time.get_ticks_msec()
 	while _added.busy(_feed) and float(Time.get_ticks_msec() - t0) < SETTLE_MOST * 1000.0:
 		await get_tree().create_timer(0.25).timeout
 	if _added.busy(_feed):
-		reading.status("The note's tags were still being written: this upload takes them as they were.")
+		reading.status("The note's %s were still being made: this upload takes them as they were." % ", ".join(_added.names(_feed, true)))
 
 
 ## ⟳ on a step's row: made again now, from the note's words - which must be written first.

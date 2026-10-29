@@ -31,6 +31,12 @@ const BLEND_IN := 0.8
 ## all from nearer than BLEND_NEAR.x, wholly from further than BLEND_NEAR.y (meters).
 const BLEND_LIFT := 0.1
 const BLEND_NEAR := Vector2(0.01, 0.05)
+## HOW HEAVY WHAT IS SET DOWN IS ([method set_down]): the share of a thing's box that is its stuff - a whole thing
+## mostly hollow (a jar, a pot), a part of one mostly solid (a stopper, a pestle).
+const HOLLOW := 0.25
+const SOLID := 0.6
+## A liquid boils, and is heard to, past this much `boil` ([method boiling]).
+const BOIL_HEARD := 0.02
 ## How far above a pressed point its ray starts (meters): above the point, below a vessel's rim.
 const PRESS_FROM := 0.06
 ## THE CHECK OF AN ACT ([method check]): where its rehearsal begins (seconds; every picture of the work rehearses from
@@ -88,6 +94,7 @@ var _chan := {}               # channel -> [{t0, t1, track, from, end, i}] in or
 var _rest := {}               # channel -> its value before anything acts on it
 var _runs_of := {}            # channel -> the laws its part follows all the time
 var _plumes: Array = []
+var _writing := {}            # work -> the words written on it, as its last `write` says, and once drawn their skin
 var _air = null               # the acts' cue bursts (Effects.Air), or null
 var _cues: Array = []         # [{act, at, every, where, name}]
 var _timed: Array = []        # every material on the table that follows show time: a liquid's surface, copies glowing apart
@@ -214,6 +221,7 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 	medium._root3.add_child(_root)
 	var made := Motions.sanitize_acts(raw if raw != null else {}, beats)
 	notes = made["notes"]
+	_writing = {}
 	acts = []
 	for a in made["acts"]:
 		var act: Dictionary = (a as Dictionary).duplicate(true)
@@ -238,6 +246,9 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 			continue
 		act["tracks"] = kept
 		acts.append(act)
+		for tr in kept:
+			if String((tr as Dictionary)["law"]) == "write":
+				_writing[int(tr["_wi"])] = {"text": tr["text"], "hand": tr["hand"], "ink": tr["ink"]}
 	# WHAT EACH PART IS BEFORE ANYTHING ACTS ON IT, and what it follows all the time
 	for wi in works.size():
 		var wk: Dictionary = works[wi]
@@ -249,6 +260,7 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 		_rest["w%d:glow" % wi] = float(start.get("glow", 0.0))
 		_rest["w%d:emit" % wi] = float(start.get("emit", 1.0))
 		_rest["w%d:boil" % wi] = float(start.get("boil", 0.0))
+		_rest["w%d:written" % wi] = 0.0
 		_rest["w%d:angle" % wi] = 0.0
 		_rest["w%d:offset" % wi] = 0.0
 		_rest["w%d:tint" % wi] = Color.html(String(start["tint"])) if start.has("tint") else wk["color"]
@@ -400,6 +412,9 @@ func _resolve(track: Dictionary) -> String:
 	track["_wi"] = wi
 	if gi >= 0:
 		track["_copies"] = ((groups[gi] as Dictionary)["members"] as Array).slice(1)
+	if law == "write" and not ((works[wi] as Dictionary)["w"] as Dictionary).has("sheet"):
+		track.erase("_copies")
+		return "\"%s\" of \"%s\" is not a sheet: only a sheet (a slip, a label, a page) is written on" % [part, String(track["thing"])]
 	if not state.is_empty():
 		track["_ch"] = "w%d:%s" % [wi, state]
 		return ""
@@ -485,6 +500,22 @@ func _part_label(wi: int) -> String:
 	var nm := String((works[wi] as Dictionary)["name"])
 	var gi := int(_group_of.get(wi, -1))
 	return nm if gi < 0 else "%s %d" % [nm, ((groups[gi] as Dictionary)["members"] as Array).find(wi) + 1]
+
+
+## WHAT IS IN THINGS OUTRUN: whether a live show at [param t] is past the last frame [member physics] has baked and the
+## work has held loose work [param wi] since that frame - then it is where the work has it, never where the bake last saw
+## it. A live reading's bake can fall behind the reading, and a plan changed as its words arrive is baked again from the
+## change: the-quiet-crucible 707668's slip, carried over the cauldron, "poofed" back to the middle of the table where the
+## bake had last set it down, and the mortar was set down on it.
+func _outran(wi: int, t: float) -> bool:
+	var baked := physics.baked_to()
+	if t <= baked:
+		return false
+	for ch in ["w%d:pose" % wi, "g%d:pose" % int(_group_of.get(wi, -1))]:
+		for e in _chan.get(ch, []):
+			if float((e as Dictionary)["s1"]) >= baked and float((e as Dictionary)["s0"]) <= t:
+				return true
+	return false
 
 
 ## Whether work [param wi] is moved in any act: on its own, or with its copies.
@@ -668,19 +699,25 @@ func _point_local(wi: int, name: String) -> Vector3:
 ## centimeters above it - the thing where it is at show time [param T], its surface carried there - or as it was
 ## where nothing is below it.
 func _press(target: String, p: Vector3, gap: float, T := NAN) -> Vector3:
+	var y := _surface_under(target, p, T)
+	return p if is_nan(y) else Vector3(p.x, y + gap * 0.01, p.z)
+
+
+## The height of thing [param target]'s surface under [param p] (meters, the table's space) at show time [param T],
+## or NAN where nothing of it is under it.
+func _surface_under(target: String, p: Vector3, T := NAN) -> float:
 	var ti := _thing_named(target)
 	if ti < 0:
-		return p
+		return NAN
 	var tm := _mesh_of(ti)
 	if tm == null:
-		return p
+		return NAN
 	# the ray in the thing's own place as it stood, where its surface was taken
 	var back := _world_rest_thing(ti) * _thing_world(ti, T).affine_inverse()
 	var hit: Dictionary = tm.intersect_ray(back * (p + Vector3(0.0, PRESS_FROM, 0.0)), (back.basis * Vector3.DOWN).normalized())
 	if hit.is_empty():
-		return p
-	var y := (back.affine_inverse() * (hit["position"] as Vector3)).y
-	return Vector3(p.x, y + gap * 0.01, p.z)
+		return NAN
+	return (back.affine_inverse() * (hit["position"] as Vector3)).y
 
 
 ## Whether [param mi] is part of something a tool goes into ([member _soft]): a heap being ground, a liquid.
@@ -1466,7 +1503,7 @@ func _pose_work(wi: int, t: float) -> void:
 			# moved by the work where the work moved it - a copy as its set is moved, from where the set stood,
 			# and a part left in its thing riding it ([method _work_world]) - or, LOOSE, where the physics has it, held
 			# or let go ([TablePhysics])
-			var loose: Variant = physics.pose_of(wi, t) if physics != null and bool(w.get("loose", false)) else null
+			var loose: Variant = physics.pose_of(wi, t) if physics != null and bool(w.get("loose", false)) and not _outran(wi, t) else null
 			if loose != null:
 				j = _parent_world(node).affine_inverse() * (loose as Transform3D)
 			elif _part_moves(wi):
@@ -1487,6 +1524,152 @@ func _pose_work(wi: int, t: float) -> void:
 				mat.set_shader_parameter("color", tint)
 			mat.set_shader_parameter("glow", glow)
 			mat.set_shader_parameter("boil", boil)
+	if _writing.has(wi):
+		_written(wi, t)
+
+
+## Whether work [param wi] is of a material a blade cuts ([constant TablePhysics.CUTS]).
+func _cuttable(wi: int) -> bool:
+	var mats: Array = (works[wi] as Dictionary)["mats"]
+	if mats.is_empty() or (mats[0] as ShaderMaterial).get_shader_parameter("kind") == null:
+		return false
+	var code := int((mats[0] as ShaderMaterial).get_shader_parameter("kind"))
+	for k in TablePhysics.CUTS:
+		if int((Props.MATERIALS[k] as Dictionary)["code"]) == code:
+			return true
+	return false
+
+
+## WORDS WRITTEN ON SHEET [param wi] ([SheetWriting]) as far as the pen has got at [param t] - drawn the first time any
+## of them is.
+func _written(wi: int, t: float) -> void:
+	var wr: Dictionary = _writing[wi]
+	var got := float(value("w%d:written" % wi, t))
+	if not wr.has("node"):
+		if got <= 0.0:
+			return
+		var wk: Dictionary = works[wi]
+		wr["node"] = SheetWriting.node((wk["w"] as Dictionary)["sheet"], String(wr["text"]), String(wr["hand"]), Color.html(String(wr["ink"])))
+		(wk["node"] as Node3D).add_child(wr["node"])
+	((wr["node"] as MeshInstance3D).material_override as ShaderMaterial).set_shader_parameter("written", got)
+
+
+# --- what the work sounds like ([WorkSounds]) ----------------------------------------------------------
+
+## WHAT IS SET DOWN from show time [param t0] up to [param t1]: each carry `down` that ends then, `{t, at (the table's
+## space), mass (kilograms, about), kind (its material's), size (meters, its widest)}`.
+func set_down(t0: float, t1: float) -> Array:
+	var out: Array = []
+	for ch in _chan:
+		if not String(ch).ends_with(":pose"):
+			continue
+		for e in _chan[ch]:
+			var tr: Dictionary = (e as Dictionary)["track"]
+			var land := float((e as Dictionary)["s1"])
+			if land < t0 or land >= t1 or String(tr["law"]) != "carry" or not bool(tr.get("down", false)):
+				continue
+			out.append(_heft(tr, land))
+	return out
+
+
+## How heavy what track [param tr] moves is, what it is made of and how big, where it is at [param T] ([method set_down]).
+## A whole thing is reckoned mostly hollow (a jar, a pot), a part mostly solid (a stopper, a pestle).
+func _heft(tr: Dictionary, T: float) -> Dictionary:
+	var box: AABB
+	var at: Vector3
+	var code := 0
+	var solid := HOLLOW
+	var n := 1
+	if tr.has("_ti"):
+		var ti := int(tr["_ti"])
+		var th: Dictionary = things[ti]
+		box = _world_rest_thing(ti) * (th["box"] as AABB)
+		at = _thing_world(ti, T) * (th["box"] as AABB).get_center()
+		for m in th["meshes"]:
+			var mat := (m as MeshInstance3D).material_override as ShaderMaterial if m is MeshInstance3D else null
+			if mat != null and mat.get_shader_parameter("kind") != null:
+				code = int(mat.get_shader_parameter("kind"))
+				break
+	else:
+		var wi := int(tr.get("_wi", -1))
+		if tr.has("_gi"):
+			var members: Array = (groups[int(tr["_gi"])] as Dictionary)["members"]
+			wi = int(members[0])
+			n = members.size()
+		var wk: Dictionary = works[wi]
+		box = _work_world(wi, NAN) * ((wk["w"] as Dictionary).get("box", AABB()) as AABB)
+		at = _work_world(wi, T) * ((wk["w"] as Dictionary).get("middle", Vector3.ZERO) as Vector3)
+		solid = SOLID
+		var mats: Array = wk["mats"]
+		if not mats.is_empty() and (mats[0] as ShaderMaterial).get_shader_parameter("kind") != null:
+			code = int((mats[0] as ShaderMaterial).get_shader_parameter("kind"))
+	var kind := "painted"
+	for k in Props.MATERIALS:
+		if int((Props.MATERIALS[k] as Dictionary)["code"]) == code:
+			kind = String(k)
+	var density := float((Props.MATERIALS[kind] as Dictionary)["density"]) * 1000.0
+	return {"t": T, "at": at, "kind": kind, "size": maxf(box.size.x, maxf(box.size.y, box.size.z)),
+		"mass": box.size.x * box.size.y * box.size.z * density * solid * float(n)}
+
+
+## WHAT IS PRESSED ONTO SOMETHING at show time [param t] - a pestle's tip in its mortar, as an `aim` or a `circle`
+## `press`es it: `[{wi, at (its pressed point, the table's space), touch (meters over the surface, past the gap it is
+## held at; INF where none of it is under), kind (what it is pressed onto)}]`.
+func pressed(t: float) -> Array:
+	var out: Array = []
+	for ch in _chan:
+		if not String(ch).begins_with("w") or not String(ch).ends_with(":pose"):
+			continue
+		for e in _chan[ch]:
+			var tr: Dictionary = (e as Dictionary)["track"]
+			if t < float((e as Dictionary)["s0"]) or t >= float((e as Dictionary)["s1"]):
+				continue
+			var ends: Array = []
+			if String(tr["law"]) == "aim":
+				ends = [tr["tip"], tr["grip"]]
+			elif String(tr["law"]) == "circle":
+				ends = [tr]
+			var wi := int(tr["_wi"])
+			var w: Dictionary = (works[wi] as Dictionary)["w"]
+			var pts: Dictionary = w.get("points", {})
+			for end in ends:
+				var ed: Dictionary = end
+				# an aim presses its named point; a circle, the foot of what it carries round
+				var local: Variant = pts.get(String(ed.get("point", ""))) if String(tr["law"]) == "aim" else w.get("base", Vector3.ZERO)
+				if not ed.has("press") or not (local is Vector3):
+					continue
+				var p := _work_world(wi, t) * (local as Vector3)
+				var y := _surface_under(String(ed["press"]), p, t)
+				var ti := _thing_named(String(ed["press"]))
+				var code := 0
+				for m in (things[ti] as Dictionary)["meshes"]:
+					var mat := (m as MeshInstance3D).material_override as ShaderMaterial if m is MeshInstance3D else null
+					if mat != null and mat.get_shader_parameter("kind") != null:
+						code = int(mat.get_shader_parameter("kind"))
+						break
+				var kind := "stone"
+				for k in Props.MATERIALS:
+					if int((Props.MATERIALS[k] as Dictionary)["code"]) == code:
+						kind = String(k)
+				out.append({"wi": wi, "at": p, "touch": INF if is_nan(y) else maxf(p.y - y - float(ed.get("gap", 0.15)) * 0.01, 0.0), "kind": kind})
+	return out
+
+
+## WHAT BOILS at show time [param t] ([constant Motions.STATES] `boil`): `[{wi, boil, at (its surface's middle, the
+## table's space), size (meters across)}]` - those boiling at all.
+func boiling(t: float) -> Array:
+	var out: Array = []
+	for wi in works.size():
+		var ch := "w%d:boil" % wi
+		if not _chan.has(ch) and not _runs_of.has(ch) and float(_rest.get(ch, 0.0)) <= 0.0:
+			continue
+		var b := float(value(ch, t))
+		if b <= BOIL_HEARD:
+			continue
+		var box: AABB = ((works[wi] as Dictionary)["w"] as Dictionary).get("box", AABB())
+		var top := _work_world(wi, t) * Vector3(box.get_center().x, box.end.y, box.get_center().z)
+		out.append({"wi": wi, "boil": b, "at": top, "size": maxf(box.size.x, box.size.z)})
+	return out
 
 
 # --- what smokes and pours -----------------------------------------------------------------------------
@@ -1674,6 +1857,12 @@ func parts_report() -> String:
 				bits.append("runs " + ", ".join(PackedStringArray((w["runs"] as Array).map(func(l: Dictionary) -> String: return String(l["law"])))))
 			if w.has("emits"):
 				bits.append("emits " + String((w["emits"] as Dictionary)["kind"]))
+			if w.has("sheet"):
+				bits.append("a sheet, blank: words can be written on it (`write`)")
+			if bool(w.get("edge", false)):
+				bits.append("a BLADE: what soft loose thing it is brought down through, it cuts")
+			if bool(w.get("loose", false)) and _cuttable(wi):
+				bits.append("soft: a blade cuts it")
 			if bool(w.get("loose", false)):
 				bits.insert(0, "LOOSE")
 			var nm := String(wk["name"])

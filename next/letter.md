@@ -313,6 +313,92 @@ exactly that.
   Its body lies over the paper not yet written; the desk's lean to the top right lay over the lines already
   written above the nib. The Proof desk keeps its own (its user's call, 2026-10-16), and the pen lies on
   the desk top toward the writer, as it is picked up.
+- **What is on the desk and its light are chosen; the number only places them** (2026-10-29, the user:
+  "It's really hard to find a good seed, because generating the scenes is kind of slow (startup is like 20
+  seconds). I think it would be better to provide a multi-select bank of the standard objects ... Then, when
+  we change the seed - the only thing being changed would be the placement of objects, and textures"): the
+  Letter card's "On the desk" bank, a tick a `DeskLook.THINGS` row (the mat and the candles among them),
+  and a Light row of the moods in place of the mood shown beside the number. Chosen (`DeskLook.of`'s picks:
+  the block's `things` and `mood`), each thing is drawn from a generator of its own kind and placed by it, so
+  another seed moves and recolors them and ticking another changes nothing about how the rest look; until
+  chosen they are what the number drew, and the first change of anything on the desk keeps them
+  (`LetterCard._hold_desk`). A candlelit desk given no candle gets a taper - its page would have no light.
+  Ticked while the letter plays, the desk is dressed again at once, the letter untouched
+  (`LetterMedium._set_desk`). **The number is the desk's alone**: it had seeded the hand too - each word's
+  wavers, so where the lines break and the rests the voice takes ([LetterWalk]) - so a new desk was a new take,
+  the 20 seconds of a Play to see it. The hand's seed is now the note's own (the document's `seed`,
+  `LetterCard.hand_seed`) and the number the desk's (`desk`, [LetterMedium]'s `_seed`; `_hand` the hand's), so a
+  number changed while it plays, paused or not, dresses the desk again at once. The Hand row still waits for a Play.
+  **Measured: the camera sees little of the desk.** The lens is 20 degrees high: at 0.85 m the widest framing,
+  its corners cast onto the desk, sees 56 cm across at the binding and 52 at its foot, 31 deep (`DeskLook.SEEN`),
+  where `REACH`, "the stretch the wide camera sees", is 90 by 62; close, as the pen writes (0.47 m, following
+  the line down the page), it sees 4 cm past the pad's sides. The first chosen desks put the dog tag and the
+  pencil out of the frame on both seeds rendered.
+  **A chosen desk is packed in to the paper** (2026-10-29, the user, testing: "almost all of the objects placed on
+  the table are outside of the camera's view. Could we add some pressure that would push items inward, closer to
+  the paper, in a more dense fashion? ... with just tea lights and the dog tags now... I still can't even see the
+  dog tags ... certain items are better candidates to push outside (like candles, which cast light regardless of
+  where they exist)"): `DeskLook._pack` tries each thing at 160 places, three in four snug against the pad's left,
+  and sets it where it is closest to the paper and most in the wide frame (a share out of `SEEN` weighs 0.4 m) -
+  its footprint its own turned rectangle (a circle had given a 5 by 8 cm tag a disc 9.4 cm wide), a long thing
+  along the pad. Flat things first, smallest first (a small thing is seen only in the frame, a big one half out of
+  it); then what stands, kept back from the pad as always; the candles last, nearest their band. The pad's right
+  edge is the pen's - it rests there, taps the desk 2 cm out and parks off the top right - so things go left.
+  Measured: tea lights and a dog tag, the tag within 4 cm of the paper and in the wide frame on 16 of 16 seeds (a
+  circle anywhere in the frame, 4); a crowded desk of nine, 59 of 60 flat things in the frame and 0 of 36 candles.
+  Dressing a desk of nine takes about 0.4 s. **Candles on both sides** (2026-10-29, the user: "I don't think I've
+  seen a candle placed on the right side even one time ... The scenes look best when lighting comes from both
+  directions"): they had stood beside the pad's left alone - chosen so the right hand's shadow falls away from the
+  line. Each candle now takes a side by turns from a seeded first (`DeskLook._candle_right`), drawn desks and chosen
+  alike; the right's band (`CANDLE_RIGHT`) stands past the stretch the pen keeps (it leans out, rests, taps the desk
+  and parks there), at the frame's edge or past it - its light across the page from the right, the pen's shadow
+  then falling left. Measured: 48 of 95 candles on the right over 60 candlelit desks, every desk of two lit from both.
+  **Things on both sides of the pad** (2026-10-29, the user: "the pencil and dog tags and probably other objects as
+  well are NEVER placed on the right ... desk layouts are often pretty similar now ... the pencil could obviously be
+  set alongside the pens on the right. Also on the right, at the bottom corner, there is NEVER anything placed
+  there, even though there is space for it"): the packer had kept every chosen thing off the whole stretch beside
+  the pad's right and tried snug places on the left alone. What the pen needs there is less: its rest (kept clear
+  as a thing is), the lane by the paper where it taps the desk (`TAP_LANE`, 3.5 cm - its tap is 2 cm out), and room
+  from anything tall where it leans out and parks (`TALL_RIGHT`, as before). Each thing now leans to a side by the
+  seed (`PACK_RIGHT` 0.45; the other side costs it `PACK_SIDE`, 3 cm), its snug tries on both sides, the choice
+  among good places looser (`PACK_JITTER` 4.5 cm), long things now and then at an angle (`PACK_ASKEW`), others half
+  the time square to the pad. Measured over 24 desks: pencil 11 on the right, eraser 10, tea lights 15, the tag 9,
+  23 things in the stretch beside the pad's right; none in the tap lane or on a pen. A dog tag with a run before its
+  heap is wider than either strip beside the pad, and the overhang had fallen on its bone: a `THINGS` row's `face`
+  (the tag's: its bone) is kept in the frame first, the rest weighed a quarter, and any overhang costs a step
+  (`PACK_EDGE`) - the bone wholly in the frame on 16 of 16.
+  **Two tea lights had stood in each other** (the user: "the tea lights are clipping through each other"): two tins
+  1.6 cm either side of the saucer's middle, 3.2 apart, each 1.9 round; now as far out as keeps every two apart, the
+  saucer for two 2 mm wider (`TEA_TIN`; desk_light_check: 416 pairs over 200 saucers). Everything ticked at once leaves the ruler or the books off - said
+  in the log ("no room for"). Seen (dist/tag_look/p7, p8): the tag beside the page wide and as it writes. On a
+  varnished top the tea lights' light makes a large glare on the desk beside them - their light, not the packing.
+- **A dog tag cut as a dog's bone** (2026-10-29, the user: "Exactly like a military-issued tag might be,
+  except that the tag needs to be literally dog-bone shaped"): `DeskLook._dog_tag`, only ever chosen (weight 0).
+  **The first** was a stamped steel plate with a rolled rim on a ball chain through a hole at one end. **Reworked
+  by their picture** (a bone pendant on a girl's necklace: "The chain is connected to the center of the bone, not
+  to the side. It has sort of a V-shaped thing attached to the middle of the bone ... The chain itself is true
+  chain ... Not tiny spheres ... the edges do not appear to be raised ... simple and flat ... more shiny/polished
+  ... the chain needs to be much longer ... the bone hangs to roughly the middle of her chest"): a flat plate,
+  3.6-4.4 cm, round lobes and a bar a little over half an end's width, no rim, polished (0.9-0.97); a V bail,
+  blunt over the plate and round at its far end, clipped over the middle of the long edge and tipped down to the
+  desk; a jump ring; a fine cable chain (1.5 mm links) 76-89 cm long, with its clasp. **Dropped, not looped**
+  (the user: "in every seed, the chain has ~3 loops, which are more or less the same shape. But a normal person
+  doesn't loop their chain into neat little circles ... They just drop it there, chaotically ... more of a dense
+  pile"): `DeskLook._dropped`, a walk of 37 places out of the ring and back - its heading turning smoothly or in
+  kinks by drawn amounts, drawn toward a heap's middle (0.9 to 2.2 cm, dense to loose) the further it strays, now
+  and then a run pulled out straight first, its last stretch home to the ring, the gap left spread back along it;
+  it turns off the bone as it goes, and is dropped again (up to six times) while the curve Props smooths through
+  its places still crosses the bone (5 of 24 single drops had) - then drawn again until it is its length.
+  **What Props needed:** an extrude cut in meters lost its small corners - Godot's ear clipping weighs each turn
+  against a fixed epsilon, and the first tag's hole was filled on 21 of 24 - so `Props._extrude_face` cuts the
+  outline at its own unit size (a notched strip: 11 of 80 filled in meters, none now); a small bead and a small
+  link were whole 18x32 spheres and 64x12 rings, so a 2.4 mm ball chain stopped half way at the strand's 400k
+  corners and a necklace's thousand links would have been millions - `_ball` and `_ring` take a `fine` that goes
+  with their size, and a fine chain goes past the 360 links a thick one stops at (default sizes unchanged); and
+  **prop.gdshader's metal grain fades past polish 0.7** - its few broad patches of color and roughness clouded a
+  4 cm polished face. Looked at (dist/tag_look/q7): polished silver, warm from the room as the bone in their
+  picture is, the dark V and the fine chain. A flat mirror facing up shows what is above it - the desk's dark
+  background - so it reads silver from the light on it, and a candle close by can glare on it (a seed's call).
 - **A sketch stays on the page with what points at it** (`LetterScript._keep_with`): the first look put
   the cross and the dot at a page's foot, so the blind-spot test and "That's me" were a page on, with the
   pen pointing at nothing. A sketch now starts a page of its own when the lines up to its last point (or a

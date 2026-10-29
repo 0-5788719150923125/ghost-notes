@@ -71,8 +71,9 @@ acts:
       it belongs; a tool is brought to where it works before it works, and put back where it rests
       when it is done with. Moves take the time a hand takes - a jar fetched across the table about 3
       seconds, a pour 3 to 5, a lid lifted 1 - and continuous work is "under". Large, clear moves the
-      camera at the host's chair can see; nothing fiddly, nothing out of the frame. Each step of the
-      work is an act of its own, so the reader can say it as it happens.
+      camera at the host's chair can see; nothing fiddly, and the work itself never out of the frame -
+      a thing may be fetched in from out of the shot and taken back out, but what is done with it is
+      done in view. Each step of the work is an act of its own, so the reader can say it as it happens.
   # THE WORK IS DONE WHERE IT IS SEEN (the user, 2026-10-26, of the first real episode: "we should shift objects
   # to the center screen/stage/table, as we use them ... the mortar and pestle was animated in the far left
   # corner; we should have brought it front-and-center ... we poured it into a dish that was far to the right: we
@@ -101,11 +102,16 @@ acts:
       whole.
   # WHAT IS IN THINGS IS REAL (the user, 2026-10-28: "The liquids are not liquids"; the snow should be "particles ...
   # With physics and collision"; the tipped dish's crystals "do not move and tumble, and they do not fall"; the
-  # mortar's grinding should "destroy those things" - next/table_physics.md). A pour is the tip, never a law.
+  # mortar's grinding should "destroy those things" - next/table_physics.md). A pour is the tip, never a law. A DIP
+  # FILLS (the-quiet-crucible 707668: its ladle "draws up a measure" and came up empty, and the vial it poured into was
+  # filled by a `to` on its fill instead - unseen, "it slowly fills with liquid finally ... far too late")
   - >-
       WHAT IS IN THINGS IS REAL, and moves by itself: a liquid pours when its vessel is tipped until it
       reaches the rim, grains spill from a tipped mouth, loose things tumble out of what holds them and
       fall, and a tool pressed into loose things and moved over them grinds them to pieces and powder.
+      A vessel under a liquid's surface fills from it as far as it is under: a ladle or a cup dipped
+      and drawn up level comes up full, carries what it holds, and pours it when tipped. A LOOSE thing
+      carried and not set `down` is let go where its carry ends, and falls into whatever is under it.
       There is no law that pours: you tip, hold and tip back, and what is in the vessel does the rest.
       So tip far enough - a vessel half full must go well past level before it flows, a shallow dish
       must go steep before its contents slide out - and hold it there as long as it should flow;
@@ -124,7 +130,26 @@ acts:
   - >-
       WHAT CHANGES, CHANGES IN TIME with what is done to it: a liquid's color turns as something goes
       into it, a glow comes up, steam thickens as it boils - a state's `to` over the stretch of the act
-      it happens in (`between`). What is poured, ground or dropped needs no state: it moves itself.
+      it happens in (`between`). What is poured, ground or dropped needs no state: it moves itself, and
+      what a pour or a dip fills is never filled by a `to` on its `fill` as well - the stream fills it,
+      as it lands.
+  # A BLADE CUTS (the user, 2026-10-29: "pull the cutting board from outside the camera view, put it in the center, put a
+  # carrot or mandrake root or whatever on the board, cut it into pieces ... with real cutting dynamics, put the pieces in
+  # the cauldron, move the rest to the side")
+  - >-
+      A BLADE CUTS: a part `parts` calls a blade, brought down through a soft loose thing (`parts` says
+      which are soft), cuts it along the blade, for real. To cut, bring the board to the work's spot and
+      lay the thing on it, then bring the knife down through it square across it onto the board, lift
+      it, move it along a slice's width and bring it down again - each stroke a cut (a `path` through
+      its keys). The pieces part and lie where they fall, and go where what holds them goes: carry the
+      board over a pot and tip it, and they slide in; what was not cut stays on the board.
+  # WORDS ARE WRITTEN (the-quiet-crucible 707668: a poison's "name on a slip" went in as a blank white square - the user:
+  # "The slip should show writing, if the script says it should")
+  - >-
+      WORDS ARE WRITTEN, only where the script or a card says they are: a sheet (`parts` says which can be
+      written on) takes them by `write`, written by the unseen pen as the reader says so, where the
+      camera sees them - at the work's spot, before the sheet goes on its way. Nothing else on the table
+      carries words.
 
 with_tools:
   - >-

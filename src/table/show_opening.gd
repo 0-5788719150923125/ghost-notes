@@ -14,7 +14,12 @@ class_name ShowOpening
 ##   [constant INTRO_SHARP] (half a pixel at 1080), and is taken off; the lens's own near-to-far pull
 ##   carries on from there; the name goes as the pull starts.
 ##   THE OUTRO: black a beat after the voice's last word, exactly as the outro's silence runs out.
-##   THE THUMBNAIL: the moment the name is fully up over the blur, before the pull.
+##
+## WHETHER IT OPENS SO IS THE NOTE'S (2026-10-28, the user: "these should be optional, but not a
+## requirement"): the medium hands each function its feed's [member ShowFeed.opening] - the name and the
+## blur ([Openings] "title"), the blur alone ("blur"), or neither, the picture up sharp from black ("none",
+## a note's default). A thumbnail of the title screen is the YouTube card's to take ([method
+## Openings.title_moment]), never this one's.
 ##
 ## Pure functions of show time, so a live reading, a scrub and an export open and close alike.
 
@@ -30,8 +35,11 @@ const INTRO_SHARP := 0.0005
 
 ## THE NAME'S ALPHA at [param t]: up by 1.4 s, gone as the show opens at [param opening] (INF while it
 ## is not known) - and only then: with the show's actions [param placed] and still no opening, it is
-## down (the show ends on the picture fading to black, not on the name again).
-static func title_alpha(t: float, opening: float, placed: bool) -> float:
+## down (the show ends on the picture fading to black, not on the name again). Never up where
+## [param style] ([constant Openings.ROWS]) shows no title.
+static func title_alpha(style: String, t: float, opening: float, placed: bool) -> float:
+	if not Openings.titled(style):
+		return 0.0
 	var a := clampf((t - 0.3) / 1.1, 0.0, 1.0)
 	if opening < INF:
 		a *= 1.0 - clampf((t - (opening - 0.6)) / 0.9, 0.0, 1.0)
@@ -42,8 +50,11 @@ static func title_alpha(t: float, opening: float, placed: bool) -> float:
 
 ## HOW FAR THE FOCUS PULL IS at [param t], 0 (the intro, all out of focus) to 1 (sharp): it runs from
 ## [constant FOCUS_PULL]`.x` before [param opening] to `.y` after. A show with nothing placed yet is
-## still in its intro; one placed with no opening has nothing to wait for.
-static func pull(t: float, opening: float, placed: bool) -> float:
+## still in its intro; one placed with no opening has nothing to wait for. Sharp throughout where
+## [param style] ([constant Openings.ROWS]) is never out of focus.
+static func pull(style: String, t: float, opening: float, placed: bool) -> float:
+	if not Openings.blurred(style):
+		return 1.0
 	if opening < INF:
 		return clampf((t - (opening - FOCUS_PULL.x)) / (FOCUS_PULL.x + FOCUS_PULL.y), 0.0, 1.0)
 	return 1.0 if placed else 0.0
@@ -77,27 +88,6 @@ static func end_fade(t: float, follower: ReadingFollower, total: int, outro: flo
 	var o := maxf(outro, 0.0)
 	var beat := minf(0.8, o * 0.15)
 	return 1.0 - _ease((t - (follower.st1[last] + beat)) / maxf(o - beat, 0.05))
-
-
-## WHERE THE THUMBNAIL IS TAKEN, seconds into the video: the title screen with the name fully up over
-## the blur - after the name fades in (by 1.4 s) and before the focus pull, which starts
-## [constant FOCUS_PULL]`.x` before the show opens at the intro's end. [param intro] is the take's
-## intro hold.
-static func thumbnail_moment(intro: float) -> float:
-	return clampf(intro * 0.4, 1.5, maxf(1.5, intro - 1.6))
-
-
-## The intro hold a take was rendered with (its sidecar's bookend), else [param fallback] - the
-## caller's (the Director's: a part a show mounts never names it).
-static func take_intro(take: String, fallback: float) -> float:
-	var side := take.get_basename() + ".json"
-	if take.is_empty() or not FileAccess.file_exists(side):
-		return fallback
-	var j := JSON.new()
-	if j.parse(FileAccess.get_file_as_string(side)) != OK or not (j.data is Dictionary):
-		return fallback
-	var b: Variant = (j.data as Dictionary).get("bookend", {})
-	return float((b as Dictionary).get("in", fallback)) if b is Dictionary else fallback
 
 
 static func _ease(x: float) -> float:

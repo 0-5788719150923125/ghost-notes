@@ -39,6 +39,22 @@ extends SceneTree
 ##   the start puts it; with the tip written otherwise, it is taken up before the jar turns - in the middle of its carry -
 ##   and comes to the same. The controls: the nudge changes the grains (it was baked), the jar stood elsewhere takes
 ##   nothing, and a bake halted bakes no further.
+## - A HEAP AT REST SLEEPS WHOLE (the-quiet-crucible 707668, 2026-10-29: a jar of iron filings set back on the bench
+##   trembled awake for the rest of the show, and the bake ran at half the show's pace): the filings tipped a little and
+##   stood back are all asleep 1.9 s later. The control: while the jar turns, they are awake.
+## - A SPLASH IS ONE THING'S (707668: "the splash was far too intense: it splattered everywhere"): the filings tipped into
+##   water ring it and throw no drop; a heavy stone dropped from 15 cm splashes once, no higher than its speed sends the
+##   drops. The control: the stone let go 1 cm over the water splashes nothing.
+## - A DIP FILLS (707668's ladle came up empty): a cup dipped under the water and drawn up level holds it, the bowl the
+##   less by it, and tipped pours it out. The control: dipped short of the surface, it comes up empty.
+## - A THING LET GO FALLS, AND WHERE THE BAKE HAS NOT GOT TO, THE WORK PLACES WHAT IT HOLDS (707668's slip "poofed" back
+##   to where the bake had last set it down): the stone let go over the water lies in the bowl, and with the bake short of
+##   its carry it is the work's to place. The controls: at a moment baked, and past the bake before the work holds it, it
+##   is the bake's.
+## - A BLADE CUTS (the user, 2026-10-29: "cut it into pieces (Fruit Ninja style, which is to say - with real cutting
+##   dynamics)"): a knife brought down twice through a carrot on a board cuts it into three pieces, each drawn as the
+##   carrot's mesh kept behind its cuts and faced over them, lying apart, the middle one as long as between the strokes;
+##   the act says so. The controls: the knife stopped short cuts nothing, and nor does it cut a stone.
 
 var _fails := 0
 
@@ -55,7 +71,8 @@ func _ok(cond: bool, what: String) -> void:
 
 func _run() -> void:
 	await process_frame
-	for check in [_field, _vessel, _pour, _grains, _tumble, _grind, _same_twice, _sprinkle, _threaded, _let_go, _carried]:
+	for check in [_field, _vessel, _pour, _grains, _tumble, _grind, _same_twice, _sprinkle, _threaded, _let_go, _carried,
+			_heap_sleeps, _splash, _dip, _let_fall, _cut]:
 		var t0 := Time.get_ticks_msec()
 		var done: Variant = (check as Callable).call()
 		print("  %s: %.1f s" % [(check as Callable).get_method(), float(Time.get_ticks_msec() - t0) / 1000.0])
@@ -610,4 +627,241 @@ func _carried() -> bool:
 	_ok(e._work.physics._k == 0, "a bake halted went on to frame %d" % e._work.physics._k)
 	for m in [a, b, c, d, e, f]:
 		(m as TableMedium)._root3.free()
+	return true
+
+
+# --- the-quiet-crucible 707668, 2026-10-29 ------------------------------------------------------------------------
+
+## A jar of iron filings (dense, coarse as packed), a bowl of water, and a dish with one heavy stone in it.
+const FILINGS_SPEC := {"things": [
+	{"name": "jar", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [2.2, 0], [2.2, 4.4], [1.7, 5.0], [1.5, 5.0], [1.5, 4.6], [2.0, 4.1], [2.0, 0.4], [0, 0.4]], "material": "glass"},
+		{"name": "filings", "shape": "grains", "at": [0, 0.5, 0], "fill": 0.5, "grain": 0.15, "material": "iron"}]},
+	{"name": "bowl", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [6, 0], [8, 5], [8.4, 5.2], [7.6, 5], [5.6, 0.6], [0, 0.6]], "material": "clay"},
+		{"name": "water", "shape": "lathe", "profile": [[0, 0.6], [5.6, 0.6], [7, 3.5], [0, 3.5]], "material": "water"}]},
+	{"name": "dish", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [2.2, 0], [4.3, 0.9], [5.4, 1.9], [5.25, 2.05, 0], [4.0, 1.1], [1.8, 0.4], [0, 0.3]], "material": "clay"},
+		{"name": "stone", "shape": "ball", "size": [3.0, 2.6, 3.0], "lumpy": 0.3, "material": "stone", "at": [0, 0.4, 0], "loose": true}]},
+	{"name": "cup", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [1.5, 0], [1.5, 2.0], [1.3, 2.0], [1.3, 0.2], [0, 0.2]], "material": "clay"}]}],
+	"materials": {"glass": {"kind": "glass", "color": "#9ab0c0"}, "iron": {"kind": "metal", "color": "#3a3a3a"},
+		"clay": {"kind": "ceramic", "color": "#8a6a4a"}, "water": {"kind": "liquid", "color": "#6a8aa0"},
+		"stone": {"kind": "stone", "color": "#8a8a80"}}}
+
+
+## The bench: the jar of filings tipped [param deg] into the bowl's water (4 s to 12 s) and set back; the stone carried
+## [param drop] cm over the water and let go (14 s to 17 s); the cup dipped into the bowl, its foot [param dip] cm over the
+## table (the water stands at 3.5, the cup's rim 2 over its foot), held and drawn up level (18 s to 24 s), then tipped
+## [param pour] degrees (25 s to 28 s).
+func _filings_bench(deg: float, drop: float, dip: float, pour := 0.0) -> TableMedium:
+	var m := _medium()
+	_stand(m, FILINGS_SPEC, "jar", _at(Vector3(25, 0, -10)))
+	_stand(m, FILINGS_SPEC, "bowl", _at(Vector3(-5, 0, -10)))
+	_stand(m, FILINGS_SPEC, "dish", _at(Vector3(-30, 0, -10)))
+	_stand(m, FILINGS_SPEC, "cup", _at(Vector3(15, 0, 10)))
+	m._work.build({"acts": [{"name": "tip-filings", "beat": 1, "length": 8, "tracks": [
+		{"thing": "jar", "law": "carry", "to": [-11, 10, -10], "lift": 4, "between": [0.0, 0.3]},
+		{"thing": "jar", "law": "path", "keys": [{"at": 0.32}, {"at": 0.5, "turn": [0, 0, -deg]}, {"at": 0.75, "turn": [0, 0, -deg]}, {"at": 0.85}]},
+		{"thing": "jar", "law": "carry", "lift": 4, "between": [0.86, 1.0]}]},
+		{"name": "drop-stone", "beat": 1, "length": 3, "tracks": [
+			{"thing": "dish", "part": "stone", "law": "carry", "to": [-5, 3.5 + drop, -10], "lift": 4, "between": [0.0, 0.6]}]},
+		{"name": "dip-cup", "beat": 1, "length": 6, "tracks": [
+			{"thing": "cup", "law": "carry", "to": [-2, dip, -10], "lift": 6, "between": [0.0, 0.5]},
+			{"thing": "cup", "law": "carry", "to": [-2, 12, -10], "lift": 0, "between": [0.7, 1.0]}]},
+		{"name": "pour-cup", "beat": 1, "length": 3, "tracks": [
+			{"thing": "cup", "law": "path", "keys": [{"at": 0.0}, {"at": 0.4, "turn": [0, 0, pour]}, {"at": 1.0, "turn": [0, 0, pour]}]}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 4.0, "t1": 12.0}, {"i": 1, "t0": 14.0, "t1": 17.0}, {"i": 2, "t0": 18.0, "t1": 24.0},
+		{"i": 3, "t0": 25.0, "t1": 28.0}]
+	m._work._timelines()
+	return m
+
+
+func _awake(ph: TablePhysics) -> int:
+	var n := 0
+	for i in ph.sim.n:
+		if ph.sim.alive[i] == 1 and ph.sim.asleep[i] == 0:
+			n += 1
+	return n
+
+
+## A HEAP AT REST SLEEPS WHOLE: the jar of filings tipped a little (they slide, none leaves it) and stood back - they come
+## to rest and every one sleeps, where a few trembling ones had kept the rest awake for the whole show. The control: while
+## the jar is still moving, they are awake.
+func _heap_sleeps() -> bool:
+	var m := _filings_bench(40.0, 15.0, 6.0)
+	var ph: TablePhysics = m._work.physics
+	m._work.tick(7.0)
+	var moving := _awake(ph)
+	_ok(moving > 20, "the control: tipped 40 degrees, only %d of the jar's filings are awake" % moving)
+	m._work.tick(13.9)
+	var left := _awake(ph)
+	_ok(left == 0, "set back 1.9 s ago, %d of the jar's filings are still awake" % left)
+	m._root3.free()
+	return true
+
+
+## A SPLASH IS ONE THING'S: the filings tipped into the water ring it and throw no drop; the heavy stone dropped into it
+## from 15 cm throws a few, no higher than its own speed sends them. The control: the stone dropped from 1 cm throws none.
+func _splash() -> bool:
+	var m := _filings_bench(130.0, 15.0, 6.0)
+	var ph: TablePhysics = m._work.physics
+	m._work.tick(20.0)
+	var water := _liquid(m, "bowl")
+	var rings := 0
+	var from_grains := 0
+	var from_stone: Array = []
+	for r in ph.ripples:
+		if int((r as Dictionary)["liquid"]) == water and float((r as Dictionary)["t"]) < 13.0:
+			rings += 1
+	for sp in ph.splashes:
+		var t := float((sp as Dictionary)["t"])
+		if t < 13.0:
+			from_grains += 1
+		elif t >= 14.0:
+			from_stone.append(sp)
+	_ok(rings > 3, "the filings tipped into the water rang it %d times" % rings)
+	_ok(from_grains == 0, "the filings tipped into the water splashed it %d times" % from_grains)
+	_ok(from_stone.size() >= 1 and from_stone.size() <= 2, "the stone dropped into the water from 15 cm splashed it %d times" % from_stone.size())
+	if not from_stone.is_empty():
+		var sp: Dictionary = from_stone[0]
+		var high := -INF
+		for k in 40:
+			for d in ph._drops_at(float(sp["t"]) + float(k) / 60.0):
+				high = maxf(high, ((d as Array)[0] as Vector3).y - (sp["at"] as Vector3).y)
+		var most := pow(sqrt(2.0 * TablePhysics.GRAVITY * 0.15) * TablePhysics.SPLASH_UP, 2.0) / (2.0 * TablePhysics.GRAVITY)
+		_ok(int(sp["count"]) <= TablePhysics.DROPS_EACH and high > 0.0 and high <= most * 1.2,
+			"the stone's splash threw %d drops %.1f mm high (no higher than %.1f mm)" % [int(sp["count"]), high * 1000.0, most * 1000.0])
+	m._root3.free()
+	var c := _filings_bench(130.0, 1.0, 6.0)
+	c._work.tick(20.0)
+	var late := 0
+	for sp in c._work.physics.splashes:
+		late += 1 if float((sp as Dictionary)["t"]) >= 14.0 else 0
+	_ok(late == 0, "the control: the stone let go 1 cm over the water splashed it %d times" % late)
+	c._root3.free()
+	return true
+
+
+## A DIP FILLS: the cup dipped under the water's surface and drawn up level holds water, and the bowl the less by it; tipped,
+## it pours it out. The control: dipped short of the surface, it comes up empty.
+func _dip() -> bool:
+	var m := _filings_bench(0.0, 1.0, 0.7, 110.0)
+	var cup := _liquid(m, "cup")
+	var water := _liquid(m, "bowl")
+	_ok(cup >= 0 and water >= 0, "the cup has no inside a liquid may fill, or the bowl no water")
+	if cup < 0 or water < 0:
+		m._root3.free()
+		return true
+	m._work.tick(17.5)
+	var bowl0 := _volume(m, water, 17.5)
+	m._work.tick(24.5)
+	var held := _volume(m, cup, 24.5)
+	var full := float((m._work.physics.liquids[cup] as Dictionary)["full_v"])
+	_ok(held > full * 0.6, "dipped and drawn up, the cup holds %.1f of its %.1f ml" % [held * 1e6, full * 1e6])
+	_ok(absf((bowl0 - _volume(m, water, 24.5)) - held) < full * 0.2, "the bowl gave %.1f ml for the cup's %.1f" % [(bowl0 - _volume(m, water, 24.5)) * 1e6, held * 1e6])
+	m._work.tick(29.0)
+	_ok(_volume(m, cup, 29.0) < held * 0.5, "tipped 110 degrees, the cup kept %.1f of its %.1f ml" % [_volume(m, cup, 29.0) * 1e6, held * 1e6])
+	m._root3.free()
+	var c := _filings_bench(0.0, 1.0, 4.5, 110.0)
+	c._work.tick(24.5)
+	_ok(_volume(c, _liquid(c, "cup"), 24.5) < 1e-9, "the control: dipped short of the surface, the cup holds %.2f ml" % (_volume(c, _liquid(c, "cup"), 24.5) * 1e6))
+	c._root3.free()
+	return true
+
+
+## A THING LET GO FALLS, AND IS SEEN WHERE THE WORK HOLDS IT WHILE THE BAKE HAS NOT GOT THERE: the stone carried over the
+## water and let go lies in the bowl after; and with the bake only as far as the carry's start, the stone, held after it,
+## is the work's to place (707668's slip "poofed" back to where the bake had last set it down). The controls: the stone at
+## a moment the bake has reached, and past it before the work holds it, is the bake's.
+func _let_fall() -> bool:
+	var m := _filings_bench(0.0, 8.0, 6.0)
+	m._work.tick(17.5)
+	_ok(_loose_in(m, "bowl", 17.5) == 1, "the stone carried over the water and let go is not in the bowl")
+	m._root3.free()
+	var b := _filings_bench(0.0, 8.0, 6.0)
+	b._work.tick(13.0)
+	var ti := -1
+	for i in b._work.things.size():
+		if String((b._work.things[i] as Dictionary)["name"]) == "dish":
+			ti = i
+	var wi := int((b._work._part_of(ti, "stone") as Dictionary)["wi"])
+	_ok(b._work._outran(wi, 15.5), "the bake at 13 s, the stone carried from 14 s is drawn where the bake last had it at 15.5 s")
+	_ok(not b._work._outran(wi, 12.0), "the control: at 12 s, which the bake has reached, the stone is not the bake's")
+	_ok(not b._work._outran(wi, 13.5), "the control: at 13.5 s, past the bake but before the work holds it, the stone is not the bake's")
+	b._root3.free()
+	return true
+
+
+## A board, something on it to cut - a carrot along it, or a stone - and a knife standing over it, its blade square across.
+func _cut_bench(what: String, down: float) -> TableMedium:
+	var spec := {"things": [
+		# what is cut lies on the board as a part of it: a thing of its own is stood with its lowest point on the cloth
+		{"name": "board", "parts": [{"shape": "box", "size": [24, 1.5, 12], "material": "wood"},
+			{"name": "carrot", "shape": "lathe", "profile": [[0, 0], [1.3, 0], [1.2, 8], [0.5, 12], [0, 12.2]], "smooth": true,
+				"material": "carrot" if what == "carrot" else "stone", "turn": [0, 0, -90], "at": [-6, 1.5 + 1.3, 0], "loose": true}]},
+		{"name": "knife", "parts": [
+			{"shape": "box", "size": [0.15, 4, 11], "material": "steel", "at": [0, 0, 0], "edge": true},
+			{"shape": "box", "size": [1.2, 1.6, 7], "material": "wood", "at": [0, 3.2, 8]}]}],
+		"materials": {"wood": {"kind": "wood", "color": "#8a6a4a"}, "carrot": {"kind": "plant", "color": "#e0742a", "density": 1.0},
+			"stone": {"kind": "stone", "color": "#8a8a80"}, "steel": {"kind": "metal", "color": "#c8ccd0"}}}
+	var m := _medium()
+	_stand(m, spec, "board", _at(Vector3(0, 0, 0)))
+	_stand(m, spec, "knife", _at(Vector3(-2, 1.5 + 2.6 + 1.0, 0)))
+	# down through it and onto the board, up, along four centimeters, down again, up
+	m._work.build({"acts": [{"name": "chop", "beat": 1, "length": 6, "tracks": [{"thing": "knife", "law": "path", "keys": [
+		{"at": 0.0}, {"at": 0.2, "by": [0, -down, 0]}, {"at": 0.35, "by": [0, 0, 0]}, {"at": 0.5, "by": [4, 0, 0]},
+		{"at": 0.7, "by": [4, -down, 0]}, {"at": 0.85, "by": [4, 0, 0]}]}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 2.0, "t1": 8.0}]
+	m._work._timelines()
+	return m
+
+
+func _pieces_of(ph: TablePhysics, t: float) -> Array:
+	var out: Array = []
+	for c in (ph.frame_at(t) as Dictionary).get("cut", []):
+		if int((c as Array)[0]) != -1:
+			out.append(c)
+	return out
+
+
+## A BLADE CUTS (the user, 2026-10-29: "cut it into pieces (Fruit Ninja style, which is to say - with real cutting
+## dynamics)"): a knife brought down twice through a carrot on a board cuts it into three pieces, each piece's mesh on
+## its own side of its cuts with a face over them, lying apart along the board, the middle one as long as between the
+## strokes - and the act says so. The controls: the knife stopped short of the carrot cuts nothing, and nor does it a stone.
+func _cut() -> bool:
+	var m := _cut_bench("carrot", 5.0)
+	var ph: TablePhysics = m._work.physics
+	m._work.tick(10.0)
+	var cut := _pieces_of(ph, 10.0)
+	_ok(cut.size() == 3, "a carrot cut twice is in %d pieces" % cut.size())
+	if cut.size() == 3:
+		var spans: Array = []
+		for c in cut:
+			var node := ph._piece_node(int(c[1]), c[2])
+			var mesh := (node.get_child(0) as MeshInstance3D).mesh
+			var worst := 0.0
+			for q in mesh.get_faces():
+				for pl in c[2]:
+					worst = maxf(worst, (pl as Plane).distance_to(q))
+			_ok(worst < 1e-4 and mesh.get_surface_count() >= 2, "a piece's mesh reaches %.2f mm past its cut, in %d surfaces" % [worst * 1000.0, mesh.get_surface_count()])
+			var box: AABB = (c[3] as Transform3D) * mesh.get_aabb()
+			spans.append(Vector2(box.position.x, box.end.x))
+			node.free()
+		spans.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
+		var apart := (spans[0] as Vector2).y <= (spans[1] as Vector2).x + 0.001 and (spans[1] as Vector2).y <= (spans[2] as Vector2).x + 0.001
+		var middle := (spans[1] as Vector2).y - (spans[1] as Vector2).x
+		_ok(apart and middle > 0.035 and middle < 0.045, "the three pieces lie at %s cm along the board, the middle one %.1f cm long" % [
+			str(spans.map(func(v: Vector2) -> String: return "%.1f..%.1f" % [(v.x - Tables.ORIGIN.x) * 100.0, (v.y - Tables.ORIGIN.x) * 100.0])), middle * 100.0])
+		var said: String = m._work.check("chop")["text"]
+		_ok(said.contains("CUT into 3 pieces"), "the act does not say the carrot was cut:\n%s" % said)
+	m._root3.free()
+	var c := _cut_bench("carrot", 1.0)
+	c._work.tick(10.0)
+	_ok(_pieces_of(c._work.physics, 10.0).is_empty(), "the control: the knife stopped short of the carrot cut it into %d pieces" % _pieces_of(c._work.physics, 10.0).size())
+	c._root3.free()
+	var s := _cut_bench("stone", 5.0)
+	s._work.tick(10.0)
+	_ok(_pieces_of(s._work.physics, 10.0).is_empty(), "the control: a stone was cut into %d pieces" % _pieces_of(s._work.physics, 10.0).size())
+	s._root3.free()
 	return true

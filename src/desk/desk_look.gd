@@ -15,6 +15,13 @@ class_name DeskLook
 ## and colors drawn here. Every value is drawn from a range, each kind of choice from its own hash of
 ## the seed ([method _rng]), so adding a choice never moves the others.
 ##
+## WHAT IS ON IT AND ITS LIGHT MAY BE CHOSEN (2026-10-29, the user of the Letter's desk: "It's really hard to find a
+## good seed, because generating the scenes is kind of slow ... provide a multi-select bank of the standard objects
+## ... Then, when we change the seed - the only thing being changed would be the placement of objects, and
+## textures"): handed `picks` ([method of]: the things, the mat among them, and the mood), the seed only places them
+## and draws how each looks - each from a generator of its own kind, so ticking another moves nothing about how the
+## rest look. A desk handed none (a Proof's) draws them all, as before.
+##
 ## NOTHING HERE IS PAINTED (the user, 2026-10-19: "There is nowhere to set the 'Painter' on the Proof
 ## card; so how would the generative table and props even work there?"): a top's grain, a stone's
 ## veins, a mat's weave and every thing are shapes and shader patterns from the numbers drawn here. The
@@ -38,7 +45,9 @@ class_name DeskLook
 
 ## THE THINGS a desk may have. `tall`: kept back from the pad (it would stand in the pen's or the
 ## camera's way); `weight`: how often it is chosen among the things lying about - none for a candle, which
-## its desk's mood sets down ([constant MOODS]); `lit`: it burns.
+## its desk's mood sets down ([constant MOODS]), and none for what is only ever chosen ([method of]'s `picks`);
+## `lit`: it burns; `layer`: it lies under the pad, not on the desk ([method _desk]); `face`: the material of what must be
+## seen of it, kept in the frame before the rest ([method _pack]; a dog tag's bone, its chain may hang past the edge).
 const THINGS := {
 	"mug": {"label": "a mug", "blurb": "A glazed mug, often with coffee or tea in it, its handle any way round.", "tall": true, "weight": 3.0},
 	"pencil": {"label": "a pencil", "blurb": "A hexagonal pencil lying down, sharpened, an eraser in a metal band at its end.", "tall": false, "weight": 3.0},
@@ -52,6 +61,8 @@ const THINGS := {
 	"taper": {"label": "a candle", "blurb": "A taper burning in a candlestick of brass, pewter, glazed clay or turned wood, its wax dripping.", "tall": true, "weight": 0.0, "lit": true},
 	"pillar": {"label": "a pillar candle", "blurb": "A thick candle burning on a small dish, one wick or a few.", "tall": true, "weight": 0.0, "lit": true},
 	"tealights": {"label": "tea lights", "blurb": "Two or three tea lights burning in their tins on a saucer.", "tall": false, "weight": 0.0, "lit": true},
+	"dog_tag": {"label": "a dog tag", "blurb": "A flat, polished steel tag cut in the shape of a dog's bone, a V-shaped bail at the middle of its edge and a long fine chain through it - dropped beside it in a heap, its clasp along it.", "tall": false, "weight": 0.0, "face": "tag"},
+	"mat": {"label": "a desk mat", "blurb": "A mat of felt, wool, linen or cotton under the pad, now and then with a border.", "tall": false, "weight": 0.0, "layer": true},
 }
 ## THE DESK'S MOOD: how it is lit, each a row - `weight` how often, `lamp` the share of the desk lamp's light
 ## that is on (0 off), `candles` how many burn on the desk ([least, most]) and whether one of them is the KEY,
@@ -76,12 +87,48 @@ const FROM_LEFT := Vector2(215.0, 305.0)
 ## holder and wax, [method _thing]): the higher it burns the nearer the lens, and the further out of the frame.
 const CANDLE_BAND := Rect2(-0.24, -0.16, 0.08, 0.24)
 const CANDLE_WIDER := Rect2(-0.38, -0.3, 0.22, 0.48)
+## ...OR BESIDE ITS RIGHT (2026-10-29, the user: "I don't think I've seen a candle placed on the right side even one
+## time ... The scenes look best when lighting comes from both directions"): past the stretch beside the pad's right
+## edge that the pen keeps for itself as it leans out, rests, taps the desk and waits ([constant TALL_RIGHT]), at the
+## frame's edge or just past it - its light across the page from the right. A desk's candles take their sides by turns
+## from a seeded first ([method _candle_right]), so two light it from both.
+const CANDLE_RIGHT := Rect2(0.27, -0.12, 0.08, 0.24)
+const CANDLE_RIGHT_WIDER := Rect2(0.25, -0.3, 0.18, 0.48)
 ## How many things a desk has, by weight: none to five.
 const FILLS := [[0, 0.5], [1, 1.0], [2, 2.0], [3, 2.0], [4, 1.2], [5, 0.5]]
+## A tea light's tin, round (centimeters).
+const TEA_TIN := 1.9
 ## Where things may stand, meters from the pad's middle (x right, z toward the reader): the stretch
 ## the wide camera sees, the pad's footprint with room round it, and how far from the pad's edges a
 ## tall thing keeps on its left and its right (where the pen leans out).
 const REACH := Rect2(-0.45, -0.34, 0.9, 0.62)
+## What the Letter's widest framing sees of the desk ([constant LetterMedium.LETTER_WIDE] through [constant
+## DeskMedium.VFOV]'s narrow lens at 16:9, its corners cast onto the desk: 56 cm across at the binding, 52 at the
+## frame's foot, 31 cm deep), where a thing CHOSEN for the desk lies when it can ([method _pack]) - the whole [constant
+## REACH] is mostly past the frame. Close, as the pen writes, it sees about 4 cm past the pad's sides.
+const SEEN := [Vector2(-0.27, -0.175), Vector2(0.27, -0.175), Vector2(0.25, 0.13), Vector2(-0.25, 0.13)]
+## PACKING A CHOSEN DESK ([method _pack]): places tried for each thing, the gap kept between two things (meters), how
+## far a long thing lying along the pad turns off it (radians, either way), how much a place's share out of [constant
+## SEEN] weighs against its distance from the paper (meters for all of it out), and the seeded spread among the best.
+const PACK_TRIES := 160
+const PACK_GAP := 0.01
+const PACK_SWAY := 0.2
+const PACK_SEEN := 0.8
+const PACK_JITTER := 0.045
+## What any of a thing out of [constant SEEN] costs it beside its share (meters): the more random the choice, the more a
+## little overhang had won - a dog tag's bone 7 mm past the frame's edge.
+const PACK_EDGE := 0.05
+## ...and BOTH SIDES OF THE PAD (2026-10-29, the user: "the pencil and dog tags and probably other objects as well are
+## NEVER placed on the right ... the pencil could obviously be set alongside the pens on the right. Also on the right,
+## at the bottom corner, there is NEVER anything placed there, even though there is space for it"): how often a thing
+## leans to the right, what lying on its other side costs it (meters), how often a long thing lies at any angle
+## rather than along the pad, and the lane kept clear beside the pad's right edge, where the pen taps the desk
+## ([constant LetterMedium.TAP_SPOTS] `desk`, 2 cm out) - past it the pen's rest is kept clear as a thing is, and
+## what stands keeps back to [constant TALL_RIGHT] as always (the pen leans out over it as it writes, and parks there).
+const PACK_RIGHT := 0.45
+const PACK_SIDE := 0.03
+const PACK_ASKEW := 0.3
+const TAP_LANE := 0.035
 const PAD_ROOM := 0.012
 const TALL_LEFT := 0.19
 const TALL_RIGHT := 0.23
@@ -100,6 +147,19 @@ const PEN_LONG := 0.155
 const PEN_APART := 0.026
 const PEN_SHIFT := 0.012
 const PEN_SWAY := 4.0
+## A DOG TAG ([method _dog_tag], centimeters): the plate's thickness, the steps round each lobe of its outline, its bail's
+## width and length (a V from over the plate out past its edge), its chain's links (a fine cable chain's 1.5 mm), the
+## chain's length (a necklace's, 30 to 35 inches: the bone hangs to the middle of the chest), the places along it as it
+## is dropped (all a strand's path may have, less its two ends: [constant Props.MAX_POINTS]) and how many times it may be
+## dropped again to keep off the bone, and its clasp's radius and length.
+const TAG_THICK := 0.1
+const TAG_ARC := 9
+const TAG_BAIL := Vector2(0.5, 0.8)
+const TAG_LINK := 0.15
+const TAG_LONG := Vector2(76.0, 89.0)
+const TAG_DROP := 37
+const TAG_DROPS := 6
+const TAG_CLASP := Vector2(0.09, 0.5)
 
 
 ## THE LOOK of the desk with seed [param seed]: `paper`, `rule`, `margin`, `ink`, `binding`, `board`
@@ -107,7 +167,11 @@ const PEN_SWAY := 4.0
 ## `mood` ([constant MOODS]) and `light` (the room's, [method Lights.sanitize]d); `top` and `layers`
 ## ([Tables]' spec, `materials` its materials) and `things` ([{kind, thing, materials}], not yet placed -
 ## [method dress] places them; the candles first).
-static func of(seed: int) -> Dictionary:
+##
+## [param picks] is what was chosen for it ([method picks_of]): `things` (the [constant THINGS] keys on it, the mat
+## among them - each once, any order) and `mood`. What it leaves out is drawn from the seed; given `things`, the look
+## is `picked` ([method _chosen]).
+static func of(seed: int, picks := {}) -> Dictionary:
 	var out := {}
 	var r := _rng(seed, "paper")
 	var paper_kind := String(_pick(r, [["canary", 5.0], ["white", 3.0], ["pastel", 2.0]]))
@@ -164,15 +228,48 @@ static func of(seed: int) -> Dictionary:
 	var weights: Array = []
 	for k in MOODS:
 		weights.append([k, float((MOODS[k] as Dictionary)["weight"])])
-	var mood := String(_pick(r, weights))
+	var mood := String(picks.get("mood", ""))
+	if not MOODS.has(mood):
+		mood = String(_pick(r, weights))
 	out["mood"] = mood
 	(out["lamp"] as Dictionary)["share"] = float((MOODS[mood] as Dictionary)["lamp"])
 	out["light"] = Lights.sanitize(_light(seed, mood))
-	var desk := _desk(seed)
+	var chosen: Variant = picks.get("things")
+	var desk := _desk(seed, ("mat" in (chosen as Array)) if chosen is Array else null)
 	out["top"] = desk["top"]
 	out["layers"] = desk["layers"]
 	out["materials"] = desk["materials"]
-	out["things"] = _candles(seed, mood) + _things(seed)
+	if chosen is Array:
+		out["things"] = _chosen(seed, mood, chosen)
+		out["picked"] = true
+	else:
+		out["things"] = _candles(seed, mood) + _things(seed)
+	return out
+
+
+## WHAT A DOCUMENT'S `letter` CHOSE for its desk ([LetterCard]): `things` and `mood` where it carries them - [method
+## of]'s `picks`.
+static func picks_of(letter: Dictionary) -> Dictionary:
+	var out := {}
+	if letter.get("things") is Array:
+		out["things"] = (letter["things"] as Array).duplicate()
+	if MOODS.has(String(letter.get("mood", ""))):
+		out["mood"] = String(letter["mood"])
+	return out
+
+
+## WHAT [param look] HAS ON IT, by [constant THINGS] key in its order - the mat among them when one lies under the pad:
+## what the Letter card shows ticked for a desk it has chosen nothing for.
+static func kinds(look: Dictionary) -> Array:
+	var have := {}
+	for t in look.get("things", []):
+		have[String((t as Dictionary)["kind"])] = true
+	if not (look.get("layers", []) as Array).is_empty():
+		have["mat"] = true
+	var out: Array = []
+	for k in THINGS:
+		if have.has(k):
+			out.append(k)
 	return out
 
 
@@ -239,8 +336,9 @@ static func _candles(seed: int, mood: String) -> Array:
 	return out
 
 
-## THE DESK'S TOP and what lies on it, as the set dresser would write them ([Tables]).
-static func _desk(seed: int) -> Dictionary:
+## THE DESK'S TOP and what lies on it, as the set dresser would write them ([Tables]): a mat under the pad when
+## [param mat_chosen] says so, or now and then when it is null (nothing chosen) - its look drawn the same either way.
+static func _desk(seed: int, mat_chosen: Variant = null) -> Dictionary:
 	var r := _rng(seed, "top")
 	var kind := String(_pick(r, [["wood", 6.5], ["painted", 1.2], ["stone", 1.2], ["leather", 0.6], ["fabric", 0.5]]))
 	var mat := {"kind": kind}
@@ -276,7 +374,8 @@ static func _desk(seed: int) -> Dictionary:
 			mat["color"] = _hex(Color.from_hsv(r.randf_range(0.28, 0.42) if r.randf() < 0.6 else r.randf(), r.randf_range(0.3, 0.6), r.randf_range(0.12, 0.35)))
 	var layers: Array = []
 	r = _rng(seed, "mat")
-	if r.randf() < 0.45:
+	var drawn := r.randf() < 0.45
+	if bool(mat_chosen) if mat_chosen != null else drawn:
 		var mc := Color.from_hsv(r.randf(), r.randf_range(0.15, 0.6), r.randf_range(0.12, 0.45))
 		var lay := {"name": "the desk mat", "what": "a mat to write on", "outline": "rect",
 			"size": [r.randf_range(52.0, 75.0), r.randf_range(38.0, 55.0)], "at": [r.randf_range(-3.0, 3.0), r.randf_range(-2.0, 5.0)],
@@ -311,6 +410,31 @@ static func _things(seed: int) -> Array:
 		if (safe["things"] as Array).is_empty():
 			continue
 		out.append({"kind": kind, "thing": (safe["things"] as Array)[0], "materials": safe["materials"]})
+	return out
+
+
+## THE THINGS CHOSEN for the desk of [param seed] ([param kinds], [constant THINGS] keys; the mat is the top's, [method
+## _desk]): each once, in [constant THINGS]' order, the candles first as [method dress] places them, each drawn from a
+## generator of its own kind. A desk lit by candles ([constant MOODS] `leads`) and given none has a taper set down: its
+## page would have no light of its own.
+static func _chosen(seed: int, mood: String, kinds: Array) -> Array:
+	var want := {}
+	var lit := false
+	for k in kinds:
+		var row: Dictionary = THINGS.get(String(k), {})
+		if not row.is_empty() and not bool(row.get("layer", false)):
+			want[String(k)] = true
+			lit = lit or bool(row.get("lit", false))
+	if bool((MOODS[mood] as Dictionary)["leads"]) and not lit:
+		want["taper"] = true
+	var out: Array = []
+	for burning in [true, false]:
+		for kind in THINGS:
+			if not want.has(kind) or bool((THINGS[kind] as Dictionary).get("lit", false)) != burning:
+				continue
+			var safe := Props.sanitize(_thing(kind, _rng(seed, "chosen " + kind)), ["#888888"])
+			if not (safe["things"] as Array).is_empty():
+				out.append({"kind": kind, "thing": (safe["things"] as Array)[0], "materials": safe["materials"]})
 	return out
 
 
@@ -437,15 +561,21 @@ static func _thing(kind: String, r: RandomNumberGenerator) -> Dictionary:
 			mats["tin"] = {"kind": "metal", "color": "#c4c6ca", "polish": 0.7}
 			mats["wax"] = _wax(r)
 			var n := r.randi_range(2, 3)
-			var sr := 3.6 if n == 2 else 4.6
+			var sr := 3.8 if n == 2 else 4.6
 			parts.append({"shape": "lathe", "material": "saucer", "smooth": true, "profile": [[0, 0], [sr + 0.6, 0, 0], [sr + 1.6, 0.9],
 				[sr + 1.4, 1.0], [sr + 0.4, 0.4], [0, 0.4]]})
 			var a0 := r.randf_range(0.0, TAU)
+			# THE TINS APART (2026-10-29, the user: "the tea lights are clipping through each other"): two had stood 1.6 cm
+			# either side of the middle, 3.2 apart, each 1.9 round - far enough out that no two of them meet
+			var out := maxf(sr - 2.0, (TEA_TIN + 0.12) / sin(PI / float(n)))
 			for k in n:
 				var a := a0 + TAU * float(k) / float(n)
-				var at := [cos(a) * (sr - 2.0), 0.4, sin(a) * (sr - 2.0)]
-				parts.append({"shape": "lathe", "material": "tin", "at": at, "profile": [[0, 0], [1.9, 0], [1.9, 1.6], [1.75, 1.6], [1.75, 0.15], [0, 0.15]]})
+				var at := [cos(a) * out, 0.4, sin(a) * out]
+				parts.append({"shape": "lathe", "material": "tin", "at": at, "profile": [[0, 0], [TEA_TIN, 0], [TEA_TIN, 1.6], [TEA_TIN - 0.15, 1.6],
+					[TEA_TIN - 0.15, 0.15], [0, 0.15]]})
 				parts.append({"shape": "lathe", "material": "wax", "at": [at[0], 0.55, at[2]], "profile": [[0, 0], [1.74, 0], [1.74, 1.0], [0, 1.0]], "wick": true})
+		"dog_tag":
+			parts = _dog_tag(r, mats)
 	return {"things": [{"name": String((THINGS[kind] as Dictionary)["label"]), "parts": parts}], "materials": mats}
 
 
@@ -454,6 +584,204 @@ static func _wax(r: RandomNumberGenerator) -> Dictionary:
 	var c: Color = _pick(r, [[Color.from_hsv(r.randf_range(0.1, 0.14), r.randf_range(0.08, 0.2), r.randf_range(0.9, 0.97)), 4.0],
 		[Color(0.96, 0.95, 0.92), 2.0], [Color.from_hsv(r.randf(), r.randf_range(0.4, 0.7), r.randf_range(0.4, 0.8)), 1.0]])
 	return {"kind": "wax", "color": _hex(c), "clarity": r.randf_range(0.4, 0.7)}
+
+
+## A DOG TAG CUT AS A DOG'S BONE (2026-10-29, the user: "Exactly like a military-issued tag might be, except that the
+## tag needs to be literally dog-bone shaped"; then, of the first, a stamped steel tag with a rolled rim on a ball
+## chain through a hole at its end, by their picture: "The chain is connected to the center of the bone, not to the
+## side. It has sort of a V-shaped thing attached to the middle of the bone, where the chain connects. The chain itself
+## is true chain: like the necklace a girl would wear ... the bone is just simple and flat ... more shiny/polished ...
+## the chain needs to be much longer ... the bone hangs to roughly the middle of her chest"): a flat plate of polished
+## steel ([method _bone]), a V-shaped bail clipped over the middle of its long edge, a jump ring through the bail, and a
+## fine link chain through that - a necklace long enough to hang to the middle of the chest, dropped beside the bone
+## ([method _dropped]), its clasp somewhere along it where it lies on the desk. The parts are laid about their middle, so the
+## thing stands where it is placed ([method _pack] keeps its rectangle). Its materials go into [param mats].
+static func _dog_tag(r: RandomNumberGenerator, mats: Dictionary) -> Array:
+	# POLISHED: a near mirror, the metal's grain gone from it (prop.gdshader) - less polished, a nearby flame's light
+	# spread across its whole face and bloomed it white
+	mats["tag"] = {"kind": "metal", "color": "#d2d4d7", "polish": r.randf_range(0.9, 0.97), "wear": 0.0}
+	mats["chain"] = {"kind": "metal", "color": "#cdcfd2", "polish": 0.85}
+	var bone := _bone(r)
+	var edge := -float(bone["bar"])
+	# THE BAIL: a V, blunt where it is clipped over the plate and round at its far end, out past the edge and tipped down
+	# to the desk beyond it, its jump ring at the round end
+	var bail: Array = [[-TAG_BAIL.x * 0.1, TAG_BAIL.y * 0.3], [TAG_BAIL.x * 0.1, TAG_BAIL.y * 0.3]]
+	for k in 9:
+		var a := PI * float(k) / 8.0
+		bail.append([cos(a) * TAG_BAIL.x * 0.5, -TAG_BAIL.y * 0.45 - sin(a) * TAG_BAIL.x * 0.5])
+	var tip := Vector2(0.0, edge - TAG_BAIL.y * 0.45)
+	# THE CHAIN, dropped ([method _dropped]): out of the ring and back to it, a necklace long - and dropped again while the
+	# curve it lies along (smoothed between its places) crosses the bone, which it would cut through
+	var outline := PackedVector2Array()
+	for q in bone["outline"]:
+		outline.append(Vector2(float(q[0]), float(q[1])))
+	var long := r.randf_range(TAG_LONG.x, TAG_LONG.y)
+	var path: Array = []
+	var least := INF
+	for _drop in TAG_DROPS:
+		var tried := _dropped(r, tip, long, outline)
+		var over := float(_over(tried, outline))
+		if over < least:
+			least = over
+			path = tried
+		if over == 0.0:
+			break
+	var chain := {"shape": "strand", "material": "chain", "kind": "chain", "thickness": TAG_LINK, "lay": "path", "path": path, "loose": 0.0}
+	# EVERYTHING ABOUT ITS MIDDLE: the bone and the loops' reach
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for q in (bone["outline"] as Array) + path:
+		lo = lo.min(Vector2(float(q[0]), float(q[1])))
+		hi = hi.max(Vector2(float(q[0]), float(q[1])))
+	var c := (lo + hi) * 0.5
+	var at := [-c.x, 0.0, -c.y]
+	var parts: Array = [
+		{"shape": "extrude", "material": "tag", "points": bone["outline"], "height": TAG_THICK, "bevel": 0.015, "at": at},
+		# clipped over the plate's edge, its far end tipped down onto the desk
+		{"shape": "extrude", "material": "tag", "points": bail, "height": 0.05, "at": [-c.x, TAG_THICK, edge - c.y],
+			"turn": [-rad_to_deg(atan2(TAG_THICK, TAG_BAIL.y * 0.7)), 0.0, 0.0]},
+		{"shape": "ring", "material": "chain", "radius": 0.11, "thickness": 0.035, "at": [tip.x - c.x, 0.0, tip.y - c.y]},
+		chain.merged({"at": at}),
+	]
+	# THE CLASP, where the chain lies on the desk nearest a seeded place along it, as the chain lies ([method
+	# Props.strand_line])
+	var laid := Props.sanitize({"things": [{"name": "chain", "parts": [chain]}], "materials": {"chain": mats["chain"]}}, ["#888888"])
+	if not (laid["things"] as Array).is_empty():
+		var line := Props.strand_line((laid["things"][0]["parts"] as Array)[0], RandomNumberGenerator.new())
+		var rest := TAG_LINK * 0.005 + 1e-5
+		var aim := floori(line.size() * r.randf_range(0.25, 0.75))
+		var best := -1
+		for i in line.size():
+			if line[i].y <= rest and (best < 0 or absi(i - aim) < absi(best - aim)):
+				best = i
+		if best > 0 and best < line.size() - 1:
+			var tan := (line[best + 1] - line[best - 1]).normalized() * TAG_CLASP.y * 0.005
+			var p0 := (line[best] - tan) * 100.0
+			var p1 := (line[best] + tan) * 100.0
+			parts.append({"shape": "tube", "material": "chain", "radius": TAG_CLASP.x, "path": [[p0.x, p0.y, p0.z], [p1.x, p1.y, p1.z]], "at": at})
+	return parts
+
+
+## A CHAIN AS IT WAS DROPPED (2026-10-29, the user: "a normal person doesn't loop their chain into neat little circles,
+## before putting on the table. They just drop it there, chaotically. ... typically it wouldn't be a giant circle of
+## chain, but more of a dense pile, or whatever"): a path [[x, z], ...] (centimeters) out of the ring at [param tip] and
+## back to it, [param long] along. A walk: its heading turns as it goes, smoothly or in kinks, by drawn amounts the seed
+## makes gentle or wild, and is drawn toward a heap's middle the further it strays (the heap drawn dense to loose); now
+## and then a run of it is pulled out nearly straight first, and its last stretch heads back to the ring. It turns away
+## from the bone ([param bone], grown) rather than cross it - the curve between two places too - what gap is left to the
+## ring is spread back along it, and it is drawn again until it is as long as it should be ([constant TAG_DROP] places).
+static func _dropped(r: RandomNumberGenerator, tip: Vector2, long: float, bone: PackedVector2Array) -> Array:
+	var steps := TAG_DROP
+	var heap := r.randf_range(0.9, 2.2)
+	var wander := r.randf_range(0.45, 1.3)
+	var kinks := r.randf_range(0.0, 0.3)
+	var pull := r.randf_range(0.35, 0.7)
+	var run := r.randi_range(2, 4) if r.randf() < 0.25 else 0
+	var home := r.randi_range(4, 7)
+	var away := -PI * 0.5 + r.randf_range(-0.7, 0.7)
+	var turns := PackedFloat32Array()
+	for k in steps:
+		var hard := r.randf() < kinks
+		turns.append(r.randf_range(-1.0, 1.0) * (2.4 if hard else wander))
+	var clear: PackedVector2Array = Geometry2D.offset_polygon(bone, 0.3)[0]
+	var middle := Vector2.ZERO
+	for q in bone:
+		middle += q
+	middle /= float(bone.size())
+	var step := long / float(steps)
+	var out: Array = []
+	for _fit in 4:
+		var pts: Array = [tip]
+		var a := away
+		var curl := 0.0
+		var p := tip
+		# the heap's middle a pile's reach and a step off the bone, so it lies beside it rather than round it
+		var mid := tip + Vector2(cos(away), sin(away)) * (step * float(run) * 0.9 + heap + step + 0.3)
+		for k in steps:
+			curl = lerpf(curl, turns[k], 0.6)
+			a += curl * (0.12 if k < run else 1.0)
+			if k >= steps - home:
+				# the last stretch, back to the ring
+				a = lerp_angle(a, (tip - p).angle(), 0.6)
+			elif k >= run:
+				var to := mid - p
+				a = lerp_angle(a, to.angle(), clampf(to.length() / heap, 0.0, 1.5) * pull * 0.5)
+			# AWAY FROM THE BONE: turned off it, toward the side it came from, until the step and the curve to it are clear
+			var next := p + Vector2(cos(a), sin(a)) * step
+			var side := 1.0 if (p - middle).cross(next - p) > 0.0 else -1.0
+			for _turn in 10:
+				if k >= steps - 1 or not (Geometry2D.is_point_in_polygon(next, clear) or Geometry2D.is_point_in_polygon((p + next) * 0.5, clear)):
+					break
+				a += 0.45 * side
+				next = p + Vector2(cos(a), sin(a)) * step
+			p = next
+			pts.append(p)
+		# HOME: the gap to the ring spread back along it, then anything left on the bone pushed off it
+		var gap: Vector2 = (pts[pts.size() - 1] as Vector2) - tip
+		for k in pts.size():
+			pts[k] = (pts[k] as Vector2) - gap * float(k) / float(pts.size() - 1)
+		for k in range(2, pts.size() - 2):
+			var q: Vector2 = pts[k]
+			var tries := 0
+			while Geometry2D.is_point_in_polygon(q, clear) and tries < 40:
+				q += (q - middle).normalized() * 0.15
+				tries += 1
+			pts[k] = q
+		var got := 0.0
+		for k in pts.size() - 1:
+			got += (pts[k] as Vector2).distance_to(pts[k + 1])
+		step *= long / maxf(got, 1.0)
+		# its two runs side by side where they leave the ring
+		out = []
+		for k in pts.size():
+			var q: Vector2 = pts[k]
+			out.append([q.x + (0.06 if k == 0 else (-0.06 if k == pts.size() - 1 else 0.0)), q.y])
+	return out
+
+
+## How much of a chain laid along [param path] ([method _dropped]) lies over [param outline]: its curve's points on it, as
+## Props lays it ([method Props.strand_line]).
+static func _over(path: Array, outline: PackedVector2Array) -> int:
+	var laid := Props.sanitize({"things": [{"name": "chain", "parts": [{"shape": "strand", "material": "m", "kind": "chain",
+		"thickness": TAG_LINK, "lay": "path", "path": path, "loose": 0.0}]}], "materials": {"m": {"kind": "metal", "color": "#888888"}}}, ["#888888"])
+	if (laid["things"] as Array).is_empty():
+		return 0
+	var n := 0
+	for q in Props.strand_line((laid["things"][0]["parts"] as Array)[0], RandomNumberGenerator.new()):
+		n += int(Geometry2D.is_point_in_polygon(Vector2(q.x, q.z) * 100.0, outline))
+	return n
+
+
+## A BONE'S OUTLINE (centimeters, its long way along x, its middle at the origin): two round lobes at each end and the
+## bar between them, as the user's picture has it - the bar a little over half an end's width. `outline` [[x, z], ...]
+## round it, `bar` half the bar's width (its long edges at z = +-bar).
+static func _bone(r: RandomNumberGenerator) -> Dictionary:
+	var length := r.randf_range(3.6, 4.4)
+	var wide := length * r.randf_range(0.5, 0.56)        # across an end's two lobes
+	var lobe := wide * 0.28
+	var off := wide * 0.5 - lobe                         # a lobe's middle off the long axis
+	var bar := wide * r.randf_range(0.26, 0.3)            # half the bar's width
+	var cx := length * 0.5 - lobe
+	# the upper right lobe, from the cleft between the right end's lobes round over its end to the bar's edge
+	var a0 := -asin(off / lobe)
+	var a1 := PI + asin(clampf((off - bar) / lobe, -1.0, 1.0))
+	var arc: Array = []
+	for i in TAG_ARC + 1:
+		var a := lerpf(a0, a1, float(i) / float(TAG_ARC))
+		arc.append(Vector2(cx, off) + Vector2(cos(a), sin(a)) * lobe)
+	# the other three by mirroring it, each the way round the outline goes
+	var ul: Array = []
+	var ll: Array = []
+	var lr: Array = []
+	for q in arc:
+		ul.push_front(Vector2(-(q as Vector2).x, (q as Vector2).y))
+		ll.append(-(q as Vector2))
+		lr.push_front(Vector2((q as Vector2).x, -(q as Vector2).y))
+	# the end's two lobes share their cleft, and the last comes back to where the first began
+	var outline: Array = []
+	for q in arc + ul + ll.slice(1) + lr.slice(0, lr.size() - 1):
+		outline.append([(q as Vector2).x, (q as Vector2).y])
+	return {"outline": outline, "bar": bar}
 
 
 ## A pencil standing on its eraser's end, [param length] long: a painted hexagonal body, its sharpened
@@ -492,6 +820,9 @@ static func dress(look: Dictionary, seed: int, face: float) -> Dictionary:
 	var taken := _pen_taken(look, face)
 	var lit: Array = []
 	var mat := _mat_rect(spec)
+	if bool(look.get("picked", false)):
+		_pack(look, seed, face, root, taken, mat, lit)
+		return {"node": root, "lit": lit}
 	for i in (look["things"] as Array).size():
 		var t: Dictionary = look["things"][i]
 		var made := Props.build(t["thing"], t["materials"], hash([seed, "desk thing", i]))
@@ -500,10 +831,12 @@ static func dress(look: Dictionary, seed: int, face: float) -> Dictionary:
 		var tall := bool((THINGS[String(t["kind"])] as Dictionary)["tall"]) or size.size.y >= TALL_H
 		var near := bool((THINGS[String(t["kind"])] as Dictionary).get("lit", false))
 		var r := _rng(seed, "place %d" % i)
-		var at := _placed(r, rad, tall and not near, taken, CANDLE_BAND if near else REACH)
+		# a candle on the right keeps out of the pen's stretch as a tall thing does
+		var right := near and _candle_right(seed, lit.size())
+		var at := _placed(r, rad, (tall and not near) or right, taken, (CANDLE_RIGHT if right else CANDLE_BAND) if near else REACH)
 		if near and at.x == INF:
 			# a candle is the light: past the frame's edge, or anywhere it fits, before none at all
-			at = _placed(r, rad, false, taken, CANDLE_WIDER)
+			at = _placed(r, rad, right, taken, CANDLE_RIGHT_WIDER if right else CANDLE_WIDER)
 			if at.x == INF:
 				at = _placed(r, rad, tall, taken)
 		if at.x == INF:
@@ -511,6 +844,7 @@ static func dress(look: Dictionary, seed: int, face: float) -> Dictionary:
 			continue
 		taken.append(Vector3(at.x, at.y, rad))
 		var node: Node3D = made["node"]
+		node.set_meta("kind", String(t["kind"]))
 		var on_mat := mat.has_point(at)
 		node.position = Vector3(at.x, face + (Tables.LAYER_FLOOR + 0.0001 if on_mat else 0.0), at.y)
 		node.rotation.y = _rng(seed, "turn %d" % i).randf_range(0.0, TAU)
@@ -521,6 +855,237 @@ static func dress(look: Dictionary, seed: int, face: float) -> Dictionary:
 		if not (made["wicks"] as Array).is_empty():
 			lit.append({"node": node, "wicks": made["wicks"], "glows": made["glows"], "meshes": made["meshes"]})
 	return {"node": root, "lit": lit}
+
+
+## A CHOSEN DESK'S THINGS PACKED IN TO THE PAPER ([method _chosen]; 2026-10-29, the user: "almost all of the objects
+## placed on the table are outside of the camera's view. Could we add some pressure that would push items inward,
+## closer to the paper, in a more dense fashion? ... certain items are better candidates to push outside (like
+## candles, which cast light regardless of where they exist)"). The lens is narrow: the widest framing sees the stretch
+## [constant SEEN], and while the pen writes the camera sees about four centimeters past the pad's sides. So each thing
+## is tried at many places ([constant PACK_TRIES]), most snug against the pad, and set where it is CLOSEST TO THE PAPER
+## and most IN THE WIDE FRAME - its footprint its own turned rectangle, a long thing lying along the pad, never the
+## circle round it (a dog tag 5 by 8 cm had kept a disc 9.4 cm wide). Flat things first, smallest first: a small thing
+## is seen only in the frame, a big one half out of it; then what stands, kept back from the pad as always
+## ([constant TALL_LEFT], [constant TALL_RIGHT]); and the candles last, wherever is left nearest their bands - their light
+## falls on the page from anywhere. On either side of the pad, each thing leaning to one by the seed ([constant
+## PACK_RIGHT]); nothing lies on the pad or behind it, nor in the lane beside its right edge where the pen taps the desk
+## ([constant TAP_LANE]), nor on the pens ([method pen_rest]), and nothing tall where the pen leans out and waits
+## ([constant DeskMedium.PARK]). Each thing's tries are its own kind's ([method _rng]), so a seed moves them all. Each is added under [param root], what
+## burns to [param lit] as [method dress] gives it.
+static func _pack(look: Dictionary, seed: int, face: float, root: Node3D, taken: Array, mat: Rect2, lit: Array) -> void:
+	var things: Array = look["things"]
+	var made_all: Array = []
+	var rank: Array = []
+	for i in things.size():
+		var t: Dictionary = things[i]
+		var made := Props.build(t["thing"], t["materials"], hash([seed, "desk thing", String(t["kind"])]))
+		made_all.append(made)
+		var size: AABB = made["size"]
+		var row: Dictionary = THINGS[String(t["kind"])]
+		var band := 2.0 if bool(row.get("lit", false)) else (1.0 if bool(row["tall"]) or size.size.y >= TALL_H else 0.0)
+		rank.append(band * 10.0 + size.size.x * size.size.z)
+	var order: Array = range(things.size())
+	order.sort_custom(func(a: int, b: int) -> bool: return float(rank[a]) < float(rank[b]))
+	# what is in the way: the pens lying by the pad, then each thing as it is set down (corners, with half the gap)
+	var placed: Array = []
+	for j in maxi(1, int(look.get("pens", 1))):
+		var pen := pen_rest(look, face, j)
+		var nib := Vector2((pen["nib"] as Vector3).x, (pen["nib"] as Vector3).z)
+		var top := Vector2((pen["top"] as Vector3).x, (pen["top"] as Vector3).z)
+		var side := (top - nib).orthogonal().normalized() * (0.006 + PACK_GAP * 0.5)
+		var along := (top - nib).normalized() * 0.006
+		placed.append(PackedVector2Array([nib - along - side, top + along - side, top + along + side, nib - along + side]))
+	var pad_top := -LegalPad.H * 0.5 - LegalPad.BIND_W
+	var seen := PackedVector2Array(SEEN)
+	var forbid := [
+		# the pad and the turned pages behind it, and beside its right edge the lane where the pen taps the desk
+		_box(Vector2(-LegalPad.W * 0.5 - PAD_ROOM, -9.0), Vector2(LegalPad.W * 0.5 + TAP_LANE, LegalPad.H * 0.5 + PAD_ROOM)),
+	]
+	var tall_forbid := forbid + [
+		# a tall thing keeps back from the pad's sides and from in front of it, where the camera looks over it
+		_box(Vector2(-TALL_LEFT, -9.0), Vector2(TALL_RIGHT, 9.0)),
+		_box(Vector2(-9.0, LegalPad.H * 0.5 - 0.028), Vector2(9.0, 9.0)),
+	]
+	var candle_k := 0
+	for i in order:
+		var t: Dictionary = things[i]
+		var made: Dictionary = made_all[i]
+		var kind := String(t["kind"])
+		var row: Dictionary = THINGS[kind]
+		var size: AABB = made["size"]
+		var burns := bool(row.get("lit", false))
+		var tall := not burns and (bool(row["tall"]) or size.size.y >= TALL_H)
+		var half := Vector2(size.size.x, size.size.z) * 0.5
+		var mid := Vector2(size.position.x, size.position.z) + half
+		var long := maxf(half.x, half.y) > 1.6 * maxf(minf(half.x, half.y), 1e-4)
+		# ITS FACE, what must be seen of it ([constant THINGS] `face`; none: all of it): its rectangle in the thing's own space
+		var shown := _face(t, row)
+		var r := _rng(seed, "pack " + kind)
+		# A CANDLE'S SIDE, by turns: on the right it keeps out of the pen's stretch as a tall thing does
+		var right := burns and _candle_right(seed, candle_k)
+		candle_k += int(burns)
+		# the side this thing leans to: it lies on the other only when its own has no better place
+		var leans_right := r.randf() < PACK_RIGHT
+		var band := (CANDLE_RIGHT if right else CANDLE_BAND) if burns else Rect2()
+		var best := {}
+		for _try in PACK_TRIES:
+			# turned: a long thing mostly along the pad's side, either end first; any other half the time square to the pad,
+			# as things are set down beside a page, and half any way round
+			var th := r.randf() * TAU
+			if long and r.randf() >= PACK_ASKEW:
+				th = (PI * 0.5 if half.x > half.y else 0.0) + r.randf_range(-PACK_SWAY, PACK_SWAY) + (PI if r.randf() < 0.5 else 0.0)
+			elif not long and r.randf() < 0.5:
+				th = PI * 0.5 * float(r.randi_range(0, 3)) + r.randf_range(-PACK_SWAY, PACK_SWAY)
+			var reach := Vector2.ZERO
+			for c in [Vector2(half.x, half.y), Vector2(half.x, -half.y)]:
+				var w := _turned(c, th)
+				reach = reach.max(Vector2(absf(w.x), absf(w.y)))
+			# MOSTLY SNUG beside the pad, on the side it leans to more often than not (or, for what stands, as near as it may
+			# come; a candle, round its band), the rest anywhere it reaches
+			var at := Vector2(r.randf_range(REACH.position.x, REACH.end.x), r.randf_range(REACH.position.y, REACH.end.y))
+			var on_right := r.randf() < (0.7 if leans_right else 0.3)
+			if r.randf() < 0.75:
+				if burns:
+					var around := band.grow(0.12)
+					at = Vector2(r.randf_range(around.position.x, around.end.x), r.randf_range(around.position.y, around.end.y))
+				elif on_right:
+					var edge := LegalPad.W * 0.5 + TAP_LANE if not tall else TALL_RIGHT
+					at.x = edge + reach.x + 0.001 + pow(r.randf(), 2.0) * 0.18
+				else:
+					var edge := -LegalPad.W * 0.5 - PAD_ROOM if not tall else -TALL_LEFT
+					at.x = edge - reach.x - 0.001 - pow(r.randf(), 2.0) * 0.18
+			if at.y < pad_top - 0.3 or not REACH.has_point(at):
+				continue
+			var foot := PackedVector2Array()
+			var bare := PackedVector2Array()
+			for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+				foot.append(at + _turned((half + Vector2.ONE * PACK_GAP * 0.5) * (c as Vector2), th))
+				bare.append(at + _turned(half * (c as Vector2), th))
+			var clear := true
+			for f in tall_forbid if tall or right else forbid:
+				if _overlap(bare, f):
+					clear = false
+					break
+			for f in placed:
+				if clear and _overlap(foot, f):
+					clear = false
+			if not clear:
+				continue
+			var score := r.randf() * PACK_JITTER
+			if burns:
+				# a candle: as near its band as is left
+				score += at.distance_to(band.get_center())
+			else:
+				# out of the frame at all costs a step, and then by how much: wholly in it wherever there is room
+				var outside := 1.0 - _area(Geometry2D.intersect_polygons(bare, seen)) / maxf(_area([bare]), 1e-8)
+				if shown.size.x > 0.0:
+					# a face kept in the frame first, the rest of it after: a dog tag's chain may hang past the edge, its bone not
+					var seen_face := PackedVector2Array()
+					for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+						seen_face.append(at + _turned(shown.get_center() - mid + shown.size * 0.5 * (c as Vector2), th))
+					var rest := outside
+					outside = 1.0 - _area(Geometry2D.intersect_polygons(seen_face, seen)) / maxf(_area([seen_face]), 1e-8)
+					score += PACK_SEEN * 0.25 * rest
+				score += _gap(bare) + PACK_SEEN * outside + (PACK_EDGE if outside > 0.01 else 0.0) \
+					+ (PACK_SIDE if (at.x > 0.0) != leans_right else 0.0)
+			if best.is_empty() or score < float(best["score"]):
+				best = {"score": score, "at": at, "turn": th, "foot": foot, "bare": bare}
+		if best.is_empty():
+			print("ghost: desk - no room for %s; left off" % String(row["label"]))
+			(made["node"] as Node).free()
+			continue
+		placed.append(best["foot"])
+		var at: Vector2 = best["at"]
+		var node: Node3D = made["node"]
+		node.set_meta("kind", kind)
+		node.set_meta("foot", best["bare"])
+		node.rotation.y = float(best["turn"])
+		var off := _turned(mid, float(best["turn"]))
+		node.position = Vector3(at.x - off.x, face + (Tables.LAYER_FLOOR + 0.0001 if mat.has_point(at) else 0.0), at.y - off.y)
+		root.add_child(node)
+		if not (made["wicks"] as Array).is_empty():
+			lit.append({"node": node, "wicks": made["wicks"], "glows": made["glows"], "meshes": made["meshes"]})
+
+
+## WHETHER CANDLE [param k] of the desk of [param seed] stands beside the pad's right ([constant CANDLE_RIGHT]) or its left
+## ([constant CANDLE_BAND]): the first's side drawn even, each after it on the other side from the last.
+static func _candle_right(seed: int, k: int) -> bool:
+	return (_rng(seed, "candle side").randf() < 0.5) != (k % 2 == 1)
+
+
+## [param v] (x, z) turned [param th] about the vertical, as a node's `rotation.y` turns it.
+static func _turned(v: Vector2, th: float) -> Vector2:
+	var w := Basis(Vector3.UP, th) * Vector3(v.x, 0.0, v.y)
+	return Vector2(w.x, w.z)
+
+
+## An axis-aligned box from [param lo] to [param hi] as a polygon (x, z).
+static func _box(lo: Vector2, hi: Vector2) -> PackedVector2Array:
+	return PackedVector2Array([lo, Vector2(hi.x, lo.y), hi, Vector2(lo.x, hi.y)])
+
+
+## WHAT MUST BE SEEN OF [param t] (a [constant THINGS] row [param row] with a `face`: the material of its parts that must be
+## in the frame): their rectangle in the thing's own space (meters, x z) - or an empty one, all of it.
+static func _face(t: Dictionary, row: Dictionary) -> Rect2:
+	var material := String(row.get("face", ""))
+	if material.is_empty():
+		return Rect2()
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for p in (t["thing"] as Dictionary)["parts"]:
+		var part: Dictionary = p
+		if String(part.get("material", "")) != material or not (part.get("points") is Array):
+			continue
+		var at: Vector3 = part.get("at", Vector3.ZERO) if part.get("at") is Vector3 else Vector3.ZERO
+		for q in part["points"]:
+			var v := (Vector2(at.x, at.z) + (q as Vector2)) * 0.01
+			lo = lo.min(v)
+			hi = hi.max(v)
+	return Rect2(lo, hi - lo) if lo.x < INF else Rect2()
+
+
+## Whether two convex polygons overlap: no axis of either's edges parts them.
+static func _overlap(a: PackedVector2Array, b: PackedVector2Array) -> bool:
+	for poly in [a, b]:
+		var p: PackedVector2Array = poly
+		for i in p.size():
+			var axis := (p[(i + 1) % p.size()] - p[i]).orthogonal()
+			var a0 := INF
+			var a1 := -INF
+			for q in a:
+				a0 = minf(a0, axis.dot(q))
+				a1 = maxf(a1, axis.dot(q))
+			var b0 := INF
+			var b1 := -INF
+			for q in b:
+				b0 = minf(b0, axis.dot(q))
+				b1 = maxf(b1, axis.dot(q))
+			if a1 <= b0 or b1 <= a0:
+				return false
+	return true
+
+
+## How far [param foot] lies from the pad's edge (meters; it never lies on it) - on the right, from the lane past it where
+## the pen taps the desk ([constant TAP_LANE]), so neither side is nearer.
+static func _gap(foot: PackedVector2Array) -> float:
+	var pad := Rect2(-LegalPad.W * 0.5, -LegalPad.H * 0.5 - LegalPad.BIND_W, LegalPad.W + TAP_LANE - PAD_ROOM, LegalPad.H + LegalPad.BIND_W)
+	var least := INF
+	for q in foot:
+		var d := Vector2(maxf(maxf(pad.position.x - q.x, q.x - pad.end.x), 0.0), maxf(maxf(pad.position.y - q.y, q.y - pad.end.y), 0.0))
+		least = minf(least, d.length())
+	return least
+
+
+## The area of [param polys] together (each a polygon, as [method Geometry2D.intersect_polygons] gives them).
+static func _area(polys: Array) -> float:
+	var out := 0.0
+	for poly in polys:
+		var p: PackedVector2Array = poly
+		var s := 0.0
+		for i in p.size():
+			s += p[i].cross(p[(i + 1) % p.size()])
+		out += absf(s) * 0.5
+	return out
 
 
 ## WHERE THE PEN LIES when nobody holds it (a letter's, before its writer picks it up - [LetterMedium]; 2026-10-28,

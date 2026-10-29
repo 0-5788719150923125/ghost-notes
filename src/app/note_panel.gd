@@ -222,8 +222,8 @@ func _choose_song(song: String) -> void:
 
 ## What an upload of this note's export says (see [member Exporter.upload_provider]): the YouTube
 ## card's title, visibility and playlist; {} without a card, or with its box clear.
-func upload_meta(_take: String) -> Dictionary:
-	return _youtube.meta({"tags": []}) if _youtube != null else {}
+func upload_meta(take: String) -> Dictionary:
+	return _youtube.meta({"tags": []}, take) if _youtube != null else {}
 
 
 ## A component picked from "+": its block into the note, and the note opened again as what it now is.

@@ -111,6 +111,17 @@ prompt:
   - >-
       Every thing is a real object, set out in earnest. Nothing on the table carries words, letters,
       numbers or labels.
+  # ...but the work may write them (the user, 2026-10-29: "The slip should show writing, if the script says it should")
+  - when: work
+    say: >-
+          What the work will write on - a slip, a label, a page - is built blank, a `sheet` part with a name,
+          a free joint and loose, and the work writes on it.
+  # A BLADE CUTS (the user, 2026-10-29: "I would like to see a knife and a cutting board used")
+  - when: work
+    say: >-
+          What the work cuts is a `loose` part of a soft material (a root, a carrot, a fruit, a candle),
+          lying where it is taken from; it is cut on a board, with a knife whose blade has `edge` - both
+          built where the work can fetch them, the board out of the shot if the table has no room.
   # NO BODIES: built from balls and rods, a body reads as a crude toy or a monster; bones are the one
   # exception (next/cards.md)
   - >-
@@ -167,6 +178,13 @@ prompt:
       workspace - their hands work there. Nothing of yours stands in it, however low: use the sides and
       the back, and push things out toward the edges.{{^cardless}} A thing that must be by the deck
       stands beside it, never in front of it.{{/cardless}}
+  # ...but what the work is done in where it stands is not pushed out (the-quiet-crucible 707668: its cauldron over
+  # its coals stood in the top left corner of the shot, cut by the frame - the user: "we can barely see any of the
+  # interactions with it")
+  - when: work
+    say: >-
+          One thing is not pushed out: what the work is done in where it stands, as THE WORK says
+          below.
   - when: "!tools"
     say: >-
           Things that share a `group` (any word) stand together, the tallest behind; a thing with no
@@ -204,7 +222,11 @@ prompt:
   # done with is built to be worked - named, jointed, pointed, in the state it starts in. The work itself is
   # the puppeteer's, once this table is set. No kind of work is named here: the brief says what it is. A TOOL
   # LEFT IN A VESSEL RESTS AS LET GO (the-quiet-crucible 181083's ladle, built level with its bowl at the brew's
-  # top and put back there after every act - the user: "the spoon is floating in the liquid")
+  # top and put back there after every act - the user: "the spoon is floating in the liquid"). WHAT CANNOT BE BROUGHT
+  # STANDS BY THE WORK'S SPOT (707668's cauldron in the top left corner: "When we poured the first vial, it was
+  # off-screen for most of the animation"), and A THING MAY WAIT OUT OF THE SHOT (the user, 2026-10-29: "objects can
+  # exist outside of the viewport. If we're running out of desk space, it is entirely acceptable to just put the cutting
+  # board outside of the camera's view, until a time that we need to bring it into view")
   - when: work
     say: >-
           THE WORK. In this episode work is done at the table while the reader talks - by no visible
@@ -225,9 +247,16 @@ prompt:
           what has to stay shut a stopper. The work is done in the middle of the
           picture, a little toward the reader: each thing is brought there while it is worked and taken
           back after, so leave that room clear - unless all the work is done on one thing, which then
-          stands there from the start. Stand what is worked in the camera's sight, within an easy reach of
+          stands there from the start. WHAT CANNOT BE BROUGHT THERE IS WORKED WHERE IT STANDS - a pot over
+          its fire, anything too heavy or too hot to carry - and everything else is brought to it: stand it
+          beside the work's spot from the start, near the reader and whole in the camera's full view, never
+          at the frame's edge, at the back, or behind other things. Stand the rest of what is worked in
+          the camera's sight, within an easy reach of
           the middle{{^cardless}} but never where the cards go{{/cardless}}, each tool where it is picked up
-          from - in or beside what it works. A tool left in what it works rests there as it would when let
+          from - in or beside what it works. A THING NEEDED ONLY FOR A WHILE MAY WAIT OUT OF THE SHOT, on
+          the table past the frame's sides where the blueprint shows it going on, to be brought in when it
+          is used and taken back out after - a table short of room keeps a big tool there (a board, a tray,
+          a basket) rather than crowd the shot. A tool left in what it works rests there as it would when let
           go: leaning on the rim, the end that works down in what the vessel holds and the handle tipped up
           out of it - never lying level on the top of a liquid, as if it floated. The puppeteer moves them
           once the table is set: build each so a viewer would know what it is for.

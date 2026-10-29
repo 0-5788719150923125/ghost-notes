@@ -370,6 +370,7 @@ func reset_show() -> void:
 	set_hand("kalam")
 	set_intro_hold(INTRO_DEFAULT)
 	set_outro_hold(OUTRO_DEFAULT)
+	set_opening(Openings.DEFAULT)
 	for k in filters.keys():
 		set_filter(String(k), 0.0)
 
@@ -398,6 +399,22 @@ func set_outro_hold(v: float) -> void:
 		return
 	outro_hold = s
 	_save_pacing()
+
+
+## How the show opens through its intro ([constant Openings.ROWS]); an unknown key is none. Like the
+## holds, it takes effect on the next reading or render.
+func set_opening(key: String) -> void:
+	var k := Openings.known(key)
+	if k == opening:
+		return
+	opening = k
+	_save_pacing()
+
+
+## THE OPENING THE PICTURE WILL SHOW: the one set, where the medium this run uses draws one ([method
+## Medium.uses] "opening"), else none - what a take records it opened with.
+func opening_shown() -> String:
+	return opening if Medium.uses(resolved_medium(), "opening") else Openings.DEFAULT
 
 
 ## The flourish knob.
@@ -554,6 +571,7 @@ func _load_pacing() -> void:
 	hand = h if (h == "random" or NotebookLayout.HANDS.has(h)) else "kalam"
 	intro_hold = clampf(float(Settings.read("director", "intro", intro_hold)), INTRO_MIN, INTRO_MAX)
 	outro_hold = clampf(float(Settings.read("director", "outro", outro_hold)), OUTRO_MIN, OUTRO_MAX)
+	opening = Openings.known(String(Settings.read("director", "opening", opening)))
 	# `vehicle` was this key's name until 2026-09-24; read it once so the choice survives
 	var v := String(Settings.read("director", "medium", Settings.read("director", "vehicle", "full")))
 	medium = v if Medium.pickable().has(v) else "full"
@@ -577,6 +595,7 @@ func _save_pacing() -> void:
 	Settings.write("director", "hand", hand)
 	Settings.write("director", "intro", intro_hold)
 	Settings.write("director", "outro", outro_hold)
+	Settings.write("director", "opening", opening)
 	Settings.write("director", "medium", medium)
 	Settings.write("director", "frame", frame)
 	Settings.write("director", "filters", filters)

@@ -322,7 +322,7 @@ func _build_panel() -> void:
 	# draft or a file on disk re-read at every cast; see ScriptWriter and DocSource.
 	box = _panel.add_card("script", "Script", &"paper")
 	_writer = preload("res://src/ui/script_writer.gd").new()
-	_writer.setup("synth", PackedStringArray(_doc_blocks()), "synthesis")
+	_writer.setup("synth", PackedStringArray(_doc_blocks()), Components.script_mode("lab"))
 	if not note_path.is_empty():
 		_writer.bind_note()
 		_writer.doc.moved.connect(_on_note_moved)
@@ -555,8 +555,8 @@ func _add_youtube() -> void:
 
 ## What an upload of the take says (see [member Exporter.upload_provider]): the YouTube card's
 ## title, visibility and playlist; {} without a card, or with its box clear.
-func upload_meta(_take: String) -> Dictionary:
-	return _youtube.meta({"tags": []}) if _youtube != null else {}
+func upload_meta(take: String) -> Dictionary:
+	return _youtube.meta({"tags": []}, take) if _youtube != null else {}
 
 
 ## Is there anything worth exporting? The export does NOT need the live player

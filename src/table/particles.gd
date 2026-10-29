@@ -13,7 +13,7 @@ class_name Particles
 ## grinding to destroy those things". So:
 ##
 ##   - WHAT RESTS COSTS NOTHING: a particle still for [constant SLEEP_AFTER] sleeps on its HOST, the solid it lies in,
-##     and goes where its host goes ([method follow]); it wakes when its host tips or jolts, when another moving solid
+##     and goes where its host goes ([method follow]) - a heap at rest whole, its trembling grains with it; it wakes when its host tips or jolts, when another moving solid
 ##     comes near it, or when something awake strikes it ([method wake_near], [method wake_host]).
 ##   - EVERY SOLID IS A FIELD ([ShapeField]): a particle in one is pushed out along its way out, and its slide along it
 ##     held by friction against the solid's own motion - a tipped dish's stones slide, a carried one's ride.
@@ -55,10 +55,21 @@ const PART_MOST := 0.25
 ## A HEAP COMES TO REST: a sphere held up by something and slower than this (meters a second) loses this share of its
 ## speed a substep - one pass of the constraints leaves a heap trembling, never still enough to sleep.
 const SETTLE := Vector2(0.04, 0.3)
+## A HEAP TREMBLING, not moving: the fastest one of its grains goes while the heap is at rest ([method _settle]) - meters
+## a second (a grain rolling off a heap's shoulder goes faster).
+const TREMBLE := 0.15
+## A BLADE CUTS ([method _cut_through]): once its lowest point is this share of a thing's height below the thing's top,
+## and the two sides are pushed apart this fast (meters a second), as the wedge of a blade parts them.
+const CUT_INTO := 0.1
+## A moving solid under a thing, its surface facing up more than this, carries it - never presses it.
+const CARRIED := 0.5
+const WEDGE := 0.025
+## ...and how far past the blade's own half-width each side is parted as it is cut (meters).
+const PARTED := 0.0012
 const THIN := 0.0016
 ## A body's spheres: none smaller than this nor larger (meters), and no more than this many.
 const SPHERE := Vector2(0.0012, 0.007)
-const BODY_MOST := 18
+const BODY_MOST := 36
 ## The spatial hash's size (a power of two).
 const HASH := 8192
 
@@ -116,6 +127,7 @@ var _ni: Array = []
 var _n0: Array = []
 var _nb: Array = []
 var _nid := PackedInt32Array()
+var _ne := PackedByteArray()          # this substep: which of the near solids is a blade ([method _cut_through])
 var _pi := PackedInt32Array()         # the pairs that may meet this frame ([method _find_pairs])
 var _ride := PackedInt32Array()       # this frame: the moving solid whose inside each awake one is in, which carries it, or -1
 var _vessels: Array = []              # [{solid, vessel}]: every inside on the table, as the world hands them
@@ -123,9 +135,10 @@ var _pj := PackedInt32Array()
 
 
 ## MATTER as a row: [param density] (grams a cubic centimeter), [param strength] (0 never breaks), [param dissolves]
-## (seconds to dissolve in a liquid, 0 never).
-func add_matter(density: float, strength: float, dissolves: float, friction := FRICTION) -> int:
-	matter.append({"density": maxf(density, 0.05), "strength": maxf(strength, 0.0), "dissolves": maxf(dissolves, 0.0), "friction": friction})
+## (seconds to dissolve in a liquid, 0 never), and whether a blade [param cuts] it ([method _cut_through]).
+func add_matter(density: float, strength: float, dissolves: float, friction := FRICTION, cuts := false) -> int:
+	matter.append({"density": maxf(density, 0.05), "strength": maxf(strength, 0.0), "dissolves": maxf(dissolves, 0.0), "friction": friction,
+		"cuts": cuts})
 	return matter.size() - 1
 
 
@@ -338,6 +351,7 @@ func step(dt: float, world: Dictionary) -> void:
 			if alive[i] == 1 and asleep[i] == 0 and inact[i] == 0:
 				act.append(i)
 				inact[i] = 1
+	_cut_through()
 	_settle(dt, act)
 	_break()
 	follow(true)
@@ -457,9 +471,11 @@ func _substep(h: float, a: float, act: PackedInt32Array, _world: Dictionary) -> 
 	_n0 = []
 	_nb = []
 	_nid = PackedInt32Array()
+	_ne = PackedByteArray()
 	for si in _near:
 		var sd: Dictionary = _solids[si]
 		_nid.append(si)
+		_ne.append(1 if bool(sd.get("edge", false)) else 0)
 		_nf.append(sd["field"])
 		_nb.append((sd["wbox"] as AABB).grow(SPHERE.y))
 		if bool(sd.get("moving", false)):
@@ -584,13 +600,16 @@ func _solid_pass(i: int) -> void:
 	if pieces > 1:
 		for k in range(1, pieces):
 			var q := from + way * (float(k) / float(pieces))
-			if _deepest(q) < 0.0:
+			if _deepest(q, bool((matter[mat[i]] as Dictionary).get("cuts", false))) < 0.0:
 				p = from + way * (float(k - 1) / float(pieces))
 				break
 	var ms := mus[i]
 	var mk := muk[i]
+	# A BLADE GOES THROUGH WHAT IT CUTS, never shoving it: pushed out of a blade's thin edge, a sphere it had just come
+	# down past was flung across the table, and crushed against the board in going ([method _cut_through])
+	var soft := bool((matter[mat[i]] as Dictionary).get("cuts", false))
 	for c in _nid.size():
-		if not (_nb[c] as AABB).has_point(p):
+		if not (_nb[c] as AABB).has_point(p) or (soft and _ne[c] == 1):
 			continue
 		var inv: Transform3D = _ni[c]
 		var local := inv * p
@@ -604,7 +623,9 @@ func _solid_pass(i: int) -> void:
 		touch[i] = _nid[c]
 		# the solid's own motion at that point over the substep - none, to what rides in it
 		var sv := Vector3.ZERO if (i < _ride.size() and _ride[i] == _nid[c]) else xf * local - (_n0[c] as Transform3D) * local
-		if sv.length_squared() > 1e-10:
+		# PRESSED by a moving solid on its side or over it (a pestle); one under it carries it (a board carried and tipped:
+		# taken as squeezing, a carrot's cut pieces were crushed to lumps on the way to the pot)
+		if sv.length_squared() > 1e-10 and nn.dot(Vector3.UP) < CARRIED:
 			_pressed[i] += pen
 		else:
 			_held_by[i] = 1
@@ -625,10 +646,10 @@ func _solid_pass(i: int) -> void:
 
 
 ## How far [param q] is inside the nearest solid: less than 0 where it is in one.
-func _deepest(q: Vector3) -> float:
+func _deepest(q: Vector3, soft := false) -> float:
 	var best := INF
 	for c in _nid.size():
-		if not (_nb[c] as AABB).has_point(q):
+		if not (_nb[c] as AABB).has_point(q) or (soft and _ne[c] == 1):
 			continue
 		best = minf(best, (_nf[c] as ShapeField).sample((_ni[c] as Transform3D) * q).x)
 	return best
@@ -823,16 +844,50 @@ func _match(bi: int) -> void:
 
 ## WHAT IS STILL SLEEPS, on its host: the solid it is in or last met - or, resting on others, theirs.
 func _settle(dt: float, act: PackedInt32Array) -> void:
+	# A HEAP AT REST SLEEPS WHOLE: one pass of the constraints leaves a few of a heap's grains trembling however they
+	# are damped ([constant SETTLE]) - in the-quiet-crucible 707668's jar of iron filings, set back on the bench, a dozen
+	# of 165 at 1 to 7 cm a second while the rest lay still - and each pushed its sleeping neighbors awake, so the heap
+	# never slept and the bake ran at half the show's pace from then on. Grains of one part slower than SLEEP_SPEED on
+	# the whole, none of them faster than TREMBLE, are at rest: the trembling ones are still with them. And they sleep
+	# TOGETHER, once most of them have been still SLEEP_AFTER - a few asleep under the rest give them nothing to rest on
+	# but what no longer gives, they are jolted, and wake the sleepers again: measured, a quarter-second cycle of it.
+	var heaps := {}
+	for i in act:
+		if alive[i] == 0 or body[i] >= 0:
+			continue
+		var hp: Vector3 = heaps.get(owner[i], Vector3.ZERO)
+		var sp := v[i].length()
+		heaps[owner[i]] = Vector3(hp.x + sp, hp.y + 1.0, maxf(hp.z, sp))
+	var resting := {}
+	for o in heaps:
+		var hp: Vector3 = heaps[o]
+		if hp.x / hp.y < SLEEP_SPEED and hp.z < TREMBLE:
+			resting[o] = true
+	# A BODY IS HELD UP AS A WHOLE: its upper spheres touch nothing but itself, and a thing in layers (a carrot two spheres
+	# thick) had never slept once woken
+	var borne := {}
+	for i in act:
+		if body[i] >= 0 and _held_by[i] == 1:
+			borne[body[i]] = true
 	var calm := PackedInt32Array()
+	var ripe := {}
 	for i in act:
 		if alive[i] == 0 or _is_held(i):
 			continue
-		if v[i].length() < SLEEP_SPEED and _held_by[i] == 1:
+		var heap := body[i] < 0 and resting.has(owner[i])
+		if (v[i].length() < SLEEP_SPEED and (_held_by[i] == 1 or borne.has(body[i]))) or heap:
 			still[i] = maxf(still[i], 0.0) + dt
 		else:
 			still[i] = 0.0
-		if still[i] >= SLEEP_AFTER:
+		if heap:
+			ripe[owner[i]] = (ripe.get(owner[i], Vector2i.ZERO) as Vector2i) + Vector2i(1 if still[i] >= SLEEP_AFTER else 0, 1)
+		elif still[i] >= SLEEP_AFTER:
 			calm.append(i)
+	for i in act:
+		if alive[i] == 1 and body[i] < 0 and ripe.has(owner[i]) and not _is_held(i):
+			var c: Vector2i = ripe[owner[i]]
+			if c.x * 2 >= c.y:
+				calm.append(i)
 	if calm.is_empty():
 		return
 	# a body sleeps whole, or not at all
@@ -862,8 +917,13 @@ func _settle(dt: float, act: PackedInt32Array) -> void:
 		if b["held"] != null or not body_asleep(bi):
 			continue
 		var ids: PackedInt32Array = b["ids"]
+		# its spheres share one host: what holds it up - a sphere's that touches something, not one over the rest of it
+		# (an upper sphere of a carrot cut through took the knife beside it, and the piece rode off on the knife)
 		var hs := host[ids[0]]
-		# its spheres share one host
+		for i in ids:
+			if alive[i] == 1 and touch[i] >= 0:
+				hs = host[i]
+				break
 		for i in ids:
 			if alive[i] == 1:
 				host[i] = hs
@@ -895,12 +955,13 @@ func _host_of(i: int) -> int:
 			best = host[j]
 	if best >= 0:
 		return best
-	# in a hollow, by its field: the nearest solid within a few centimeters
+	# in a hollow, by its field: the nearest solid within a few centimeters - never a blade, to what a blade cuts
 	var near := -1
 	var nd := 0.03
+	var soft := bool((matter[mat[i]] as Dictionary).get("cuts", false))
 	for si in _solids.size():
 		var s: Dictionary = _solids[si]
-		if not (s["wbox"] as AABB).grow(0.03).has_point(x[i]):
+		if not (s["wbox"] as AABB).grow(0.03).has_point(x[i]) or (soft and bool(s.get("edge", false))):
 			continue
 		var d := (s["field"] as ShapeField).sample((s["inv"] as Transform3D) * x[i]).x
 		if d < nd:
@@ -957,12 +1018,95 @@ func _split_body(bi: int, live: PackedInt32Array) -> void:
 		a = live.slice(0, live.size() / 2)
 		bb = live.slice(live.size() / 2)
 	b["intact"] = false
+	# a piece ground apart is drawn as its pieces, cut or not
+	b["cut"] = false
 	_reform(bi, a)
 	var nb := bodies.size()
 	bodies.append({"ids": PackedInt32Array(), "rest": PackedVector3Array(), "c0": c, "c": c, "q": Quaternion.IDENTITY, "intact": false,
 		"held": null, "hrel": Transform3D.IDENTITY, "made_by": int(b.get("made_by", -1)), "piece_of": int(b.get("piece_of", bi))})
 	_reform(nb, bb)
 	events.append({"kind": "break", "body": int(b.get("piece_of", bi))})
+
+
+## A BLADE CUTS ([constant TablePhysics] gives a solid with an `edge` its `edge`): a loose thing of matter a blade cuts (a
+## root, a candle, a sheet - [method add_matter]) that a moving blade has come down into - the blade's lowest point
+## [constant CUT_INTO] of the thing's height below its top - is parted along the blade's own plane (its thinnest way),
+## each side a body of its own and rigid, and the wedge of the blade pushes them [constant WEDGE] apart. A side with
+## none of its spheres is no cut: the blade went past it. The user, 2026-10-29: "cut it into pieces (Fruit Ninja style,
+## which is to say - with real cutting dynamics)".
+func _cut_through() -> void:
+	for si in _near:
+		var sd: Dictionary = _solids[si]
+		if not bool(sd.get("edge", false)) or not bool(sd.get("moving", false)) or not bool(sd.get("on", true)):
+			continue
+		var box: AABB = sd["box"]
+		var xf: Transform3D = sd["xf"]
+		var thin := Vector3.RIGHT
+		var width := box.size.x
+		if box.size.y < box.size.x and box.size.y <= box.size.z:
+			thin = Vector3.UP
+			width = box.size.y
+		elif box.size.z < box.size.x:
+			thin = Vector3.BACK
+			width = box.size.z
+		var nn := (xf.basis * thin).normalized()
+		width *= (xf.basis * thin).length()
+		var p0 := xf * box.get_center()
+		var wb: AABB = sd["wbox"]
+		for bi in bodies.size():
+			var b: Dictionary = bodies[bi]
+			if b["held"] != null:
+				continue
+			var live := PackedInt32Array()
+			var lo := Vector3(INF, INF, INF)
+			var hi := Vector3(-INF, -INF, -INF)
+			for i in (b["ids"] as PackedInt32Array):
+				if alive[i] == 1:
+					live.append(i)
+					lo = lo.min(x[i] - Vector3.ONE * r[i])
+					hi = hi.max(x[i] + Vector3.ONE * r[i])
+			if live.size() < 2 or not bool((matter[mat[live[0]]] as Dictionary).get("cuts", false)):
+				continue
+			if not wb.intersects(AABB(lo, hi - lo)) or wb.position.y > hi.y - CUT_INTO * (hi.y - lo.y):
+				continue
+			var a := PackedInt32Array()
+			var bb := PackedInt32Array()
+			for i in live:
+				if nn.dot(x[i] - p0) < 0.0:
+					a.append(i)
+				else:
+					bb.append(i)
+			if a.is_empty() or bb.is_empty():
+				continue
+			_cut_body(bi, a, bb, nn, p0, width)
+
+
+## Body [param bi] cut along the plane through [param p0] square to [param nn] by a blade [param width] across: [param a]
+## (behind it) stays body [param bi], [param bb] is a body of its own - both drawn as pieces of what was cut
+## ([TablePhysics]) - and each side moved off the blade by half its width and [constant PARTED] more: where the blade
+## went, the two are apart (left touching, the pieces of a carrot cut through lay flush and read as a carrot uncut).
+func _cut_body(bi: int, a: PackedInt32Array, bb: PackedInt32Array, nn: Vector3, p0: Vector3, width: float) -> void:
+	var b: Dictionary = bodies[bi]
+	var was := body_pose(bi)
+	b["intact"] = false
+	b["cut"] = true
+	_reform(bi, a)
+	var c := Vector3.ZERO
+	for i in bb:
+		c += x[i]
+	c /= float(bb.size())
+	var nb := bodies.size()
+	bodies.append({"ids": PackedInt32Array(), "rest": PackedVector3Array(), "c0": c, "c": c, "q": Quaternion.IDENTITY, "intact": false,
+		"cut": true, "held": null, "hrel": Transform3D.IDENTITY, "made_by": int(b.get("made_by", -1)), "piece_of": int(b.get("piece_of", bi))})
+	_reform(nb, bb)
+	var off := width * 0.5 + PARTED
+	for i in a:
+		v[i] -= nn * WEDGE
+		x[i] -= nn * off
+	for i in bb:
+		v[i] += nn * WEDGE
+		x[i] += nn * off
+	events.append({"kind": "cut", "body": bi, "new": nb, "was": was, "plane": Plane(nn, nn.dot(p0))})
 
 
 ## Body [param bi] made again of the spheres [param ids], as they are now.
@@ -1072,23 +1216,55 @@ func restore(s: Dictionary) -> void:
 ## SPHERES FILLING A SHAPE: the middles of an even packing of spheres of radius [param rad] inside [param f] (a field in
 ## its own space) within [param box], carried by [param xf] - at most [param most], and at least the box's middle.
 static func fill_shape(f: ShapeField, box: AABB, rad: float, xf: Transform3D, most: int) -> PackedVector3Array:
+	# SPHERES TO ITS EDGES: each way as many as reach from one face of its box to the other, the outermost touching them -
+	# a long round thing lying on its side rests on its own surface (a 2.6 cm carrot, one row of 7 mm spheres along its
+	# middle, had lain 6 mm into the board under it) - and no more than [param most], the way with the most given fewer
+	var n := Vector3i(_across(box.size.x, rad), _across(box.size.y, rad), _across(box.size.z, rad))
+	while n.x * n.y * n.z > most:
+		if n.x >= n.y and n.x >= n.z and n.x > 1:
+			n.x -= 1
+		elif n.y >= n.z and n.y > 1:
+			n.y -= 1
+		elif n.z > 1:
+			n.z -= 1
+		else:
+			break
+	# ...section by section along its longest way, and where a thing narrows past the spheres across it (a carrot's tip),
+	# one down its middle - every slice of it has something to be cut from
+	var long := 0 if box.size.x >= box.size.y and box.size.x >= box.size.z else (1 if box.size.y >= box.size.z else 2)
 	var out := PackedVector3Array()
-	var step := rad * 2.0
-	var nx := maxi(int(floor(box.size.x / step)), 1)
-	var ny := maxi(int(floor(box.size.y / step)), 1)
-	var nz := maxi(int(floor(box.size.z / step)), 1)
 	var c := box.get_center()
-	for j in ny:
-		for i in nx:
-			for k in nz:
-				var p := c + Vector3((float(i) - float(nx - 1) * 0.5) * step, (float(j) - float(ny - 1) * 0.5) * step, (float(k) - float(nz - 1) * 0.5) * step)
-				if f == null or f.sample(p).x < -rad * 0.25:
+	for s in n[long]:
+		var here := 0
+		for a in n[(long + 1) % 3]:
+			for b in n[(long + 2) % 3]:
+				var idx := Vector3i.ZERO
+				idx[long] = s
+				idx[(long + 1) % 3] = a
+				idx[(long + 2) % 3] = b
+				var p := Vector3(_at_across(box.position.x, box.size.x, rad, idx.x, n.x), _at_across(box.position.y, box.size.y, rad, idx.y, n.y),
+					_at_across(box.position.z, box.size.z, rad, idx.z, n.z))
+				if (f == null or f.sample(p).x < -rad * 0.25) and out.size() < most:
 					out.append(xf * p)
-				if out.size() >= most:
-					return out
+					here += 1
+		if here == 0 and out.size() < most:
+			var p := c
+			p[long] = _at_across(box.position[long], box.size[long], rad, s, n[long])
+			if f == null or f.sample(p).x < 0.0:
+				out.append(xf * p)
 	if out.is_empty():
 		out.append(xf * c)
 	return out
+
+
+## How many spheres of [param rad] go across [param size] (meters), the outermost touching its ends.
+static func _across(size: float, rad: float) -> int:
+	return 1 if size <= rad * 2.5 else int(ceil((size - rad * 2.0) / (rad * 2.0))) + 1
+
+
+## Where the [param i]-th of [param n] spheres of [param rad] across [param size] from [param lo] stands.
+static func _at_across(lo: float, size: float, rad: float, i: int, n: int) -> float:
+	return lo + size * 0.5 if n <= 1 else lo + rad + (size - rad * 2.0) * float(i) / float(n - 1)
 
 
 ## THE RADIUS of the spheres a body of size [param size] (meters) is made of.

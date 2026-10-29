@@ -157,6 +157,7 @@ var _client_then := Callable() # what an imported client file leads on to
 var _upload_this := false      # this export goes to YouTube once it is saved
 var _upload_meta := {}         # what it goes up as: asked of the mode once the take was rendered
 var _upload_file := ""         # the file going up (an earlier export's, on a resume)
+var _thumb_why := ""           # why the YouTube card's thumbnail could not be had for it, "" when it could
 var _sign := ""                # the sign-in an upload needs: "" | checking | client | signing_in | ok | failed
 var _sign_why := ""
 var _sign_attempt := 0         # which sign-in may still report: a newer one, or a cancel, moves it on
@@ -216,7 +217,9 @@ var automation_available := false
 
 ## What an upload of the take at the given path says: `{title, description, chapters, tags, privacy,
 ## playlist, playlist_title, channel, channel_name, record}` - `channel` the id of the channel it goes
-## up to, "" when the note has none yet, and `record` a file the upload's result is kept in - or {}
+## up to, "" when the note has none yet, and `record` a file the upload's result is kept in - and its
+## thumbnail, as the YouTube card chose it: `thumbnail` (a picture), `thumbnail_at` (a moment of the
+## video to take a frame at) or neither, `thumbnail_why` saying why the choice could not be had - or {}
 ## when nothing is to go up (no YouTube card, or its "Upload after export" not ticked). Asked with ""
 ## as the save path is chosen, which decides whether this export goes up; asked again with the take
 ## once it is rendered, so a mode can time chapters from it and describe the episode the take was
@@ -1606,12 +1609,17 @@ func _client_failed(why: String) -> void:
 ## leaves it resumable - and goes up once the sign-in settles (see the `upload_wait` state).
 func _queue_upload() -> void:
 	_upload_this = false
-	# THE THUMBNAIL FIRST, when the mode names a moment for one (the card table's title screen): a frame of
-	# the saved video itself, so it is exactly what the video shows. A frame that cannot be taken
-	# only costs the thumbnail.
+	# THE THUMBNAIL FIRST, as the YouTube card chose it: a picture made for it (a painted one), beside the
+	# video so the queued upload holds its own; or a frame of the saved video itself at the moment named
+	# (its title screen), so it is exactly what the video shows. One that cannot be had only costs the
+	# thumbnail, and the line says why.
 	var thumb := ""
+	var given := str(_upload_meta.get("thumbnail", ""))
 	var at := float(_upload_meta.get("thumbnail_at", -1.0))
-	if at >= 0.0:
+	_thumb_why = str(_upload_meta.get("thumbnail_why", ""))
+	if not given.is_empty():
+		thumb = _beside(given, _out)
+	elif at >= 0.0:
 		_state = "preparing"
 		thumb = await _take_thumbnail(_out, at)
 	# the note's channel; a note with none yet goes to the one its sign-in lands on
@@ -1650,6 +1658,16 @@ func _take_thumbnail(video: String, at: float) -> String:
 	return jpg
 
 
+## The picture at [param image] copied beside [param video] as its thumbnail: the copy's path - or, when
+## it cannot be copied, the picture's own.
+static func _beside(image: String, video: String) -> String:
+	var to := video.get_basename() + ".thumbnail." + image.get_extension().to_lower()
+	if not FileAccess.file_exists(image):
+		return ""
+	DirAccess.remove_absolute(to)
+	return to if DirAccess.copy_absolute(image, to) == OK else image
+
+
 ## ffmpeg's arguments for [method _take_thumbnail]: seek, one frame, scaled to 1280x720 - or, cut at a
 ## portrait frame's shape, 720x1280 (a landscape scale squashed it).
 static func thumbnail_args(video: String, jpg: String, at: float, portrait := false) -> PackedStringArray:
@@ -1668,6 +1686,7 @@ func _resume_upload() -> void:
 	var p: Dictionary = YouTube.pending()
 	if p.is_empty():
 		return
+	_thumb_why = ""
 	_upload_file = str(p.get("file", ""))
 	_state = "upload_wait"
 	_check_sign_in(Callable(), scopes_for(p), str(p.get("channel", "")))
@@ -1699,7 +1718,7 @@ func _run_upload() -> void:
 		push_warning("ghost: YouTube kept the upload %s - uploads from a Cloud project that has not "
 			% privacy + "passed YouTube's API audit stay private until it does")
 		return
-	var thumb_err := str(res.get("thumbnail_error", ""))
+	var thumb_err := str(res.get("thumbnail_error", "")) if not str(res.get("thumbnail_error", "")).is_empty() else _thumb_why
 	if not thumb_err.is_empty():
 		push_warning("ghost: YouTube - the thumbnail was not set: " + thumb_err)
 	var list_err := str(res.get("playlist_error", ""))

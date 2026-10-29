@@ -334,6 +334,14 @@ class Feed extends EpisodeFeed:
 	func words() -> String:
 		return Manuscript.unspoken(episode.script()).strip_edges()
 
+	# the drawn cards' paintings, in drawing order
+	func pictures() -> PackedStringArray:
+		var out := PackedStringArray()
+		for k in episode.card_count():
+			if episode.has("image:card:%d" % k):
+				out.append(ProjectSettings.globalize_path(episode.file_of("image:card:%d" % k)))
+		return out
+
 	func writer() -> Dictionary:
 		return {"agent": String(card._knobs["writer"]), "model": String(card._knobs["writer_model"]),
 			"effort": String(card._knobs["writer_effort"])}
@@ -426,14 +434,14 @@ func after_take(path: String) -> String:
 		else "Rendered the take; the upload notes failed: " + err)
 
 
-## WHAT AN UPLOAD SAYS, under the YouTube card's title, visibility and playlist (see
+## WHAT AN UPLOAD SAYS, under the YouTube card's title, visibility, playlist and thumbnail (see
 ## [member Exporter.upload_provider]): the episode's description and a chapter per card timed from
 ## [param take] (apart, so the playlist goes between them - [method YouTube.description_of]), the
 ## SHOW'S tags (its document's `tags:` line, the one list - a step that writes an episode's writes over
-## it), the moment of the title screen to take the thumbnail from, the file its uploads are recorded in,
-## and the show's and the episode's titles for the card's `%title%` and `%episode%`. For the take an
-## export just rendered it describes THAT episode, whichever is picked now; with no take, the picked
-## one. {} while the episode has no plan.
+## it), the episode's folder (where the steps other cards add keep what they made of it), the file its
+## uploads are recorded in, and the show's and the episode's titles for the card's `%title%` and
+## `%episode%`. For the take an export just rendered it describes THAT episode, whichever is picked now;
+## with no take, the picked one. {} while the episode has no plan.
 func upload_base(take: String) -> Dictionary:
 	var ep: TableEpisode = _episode
 	if not take.is_empty() and String(_taken.get("take", "")) == take:
@@ -445,8 +453,8 @@ func upload_base(take: String) -> Dictionary:
 		return {}
 	var desc := _cur_desc if not _cur_desc.is_empty() else String(n["description"])
 	return {"values": {"title": _doc.field("title").strip_edges(), "episode": String(n["title"]), "seed": str(ep.seed)},
-		"description": desc, "chapters": Array(n["chapters"] as PackedStringArray), "tags": Array(_show_tags()), "thumbnail_at": thumbnail_moment(_take_intro(take)),
-		"record": ep.file_of("youtube")}
+		"description": desc, "chapters": Array(n["chapters"] as PackedStringArray), "tags": Array(_show_tags()),
+		"folder": ep.dir, "record": ep.file_of("youtube")}
 
 
 ## The macros of the YouTube card's title as the card stands: the show's title (no file's name for it), the
@@ -506,17 +514,6 @@ func _uploads_as() -> String:
 	return YouTube.title_shape(_youtube.template() if _youtube != null else YouTube.TITLE_TEMPLATE,
 		{"title": _doc.field("title").strip_edges() if _doc != null else "",
 		"seed": str(_episode.seed) if _episode != null else ""}, TablePrompts.TITLE_MARK)
-
-
-## WHERE THE THUMBNAIL IS TAKEN, seconds into the video: the title screen with the show's name fully
-## up over the out-of-focus table ([method ShowOpening.thumbnail_moment], every opening's).
-static func thumbnail_moment(intro: float) -> float:
-	return ShowOpening.thumbnail_moment(intro)
-
-
-## The intro hold a take was rendered with (its sidecar's bookend), else the Director's.
-static func _take_intro(take: String) -> float:
-	return ShowOpening.take_intro(take, Director.intro_hold)
 
 
 ## THE SHOW'S TAGS: its document's own `tags:` line, as North Star's chapters keep theirs

@@ -76,7 +76,17 @@ const LAWS := {
 			["material", "a material of the table's (its look, how heavy it is, whether it dissolves)"],
 			["grain", "a grain's size in centimeters (0.1 a powder, drawn as small clumps, to 1)"], ["amount", "how many grains fall (up to 120)"],
 			["spread", "how wide it falls, centimeters (left out: 1)"], ["between", "[u0, u1]: when they fall"]]},
+	# WORDS ARE WRITTEN, NEVER LAID ON (the-quiet-crucible 707668: its brief puts a poison in as "its name on a slip of
+	# paper", and nothing on the table may carry words - the user, 2026-10-29, of the white square that went in: "a little
+	# white square kind of looks like nothing ... The slip should show writing, if the script says it should")
+	"write": {"label": "Write", "on": ["written"],
+		"blurb": "words written onto a sheet (a part of the `sheet` shape) by an unseen pen, left to right and line by line, in a hand - a name on a slip, a label, a line on a page; write only what the script or a card says is written there",
+		"fields": [["text", "the words, a line or a few (\\n between lines)"], ["hand", "neat, quick or print (left out: neat)"],
+			["ink", "\"#rrggbb\" (left out: a brown-black)"], ["between", "[u0, u1]: the stretch of the act the pen writes in (left out: all of it)"]]},
 }
+## The hands a `write` may be in ([constant CardTable.HANDS], a typewriter's aside), and its ink unless it says.
+const WRITING_HANDS := ["neat", "quick", "print"]
+const WRITING_INK := "#241c16"
 ## THE CHANNELS a state can be: what a part's `start` and a law's `state` may name, as an agent reads it.
 const STATES := {
 	"fill": "how full a liquid or a heap is, 0-1 of how it was built (it is lowered from the top)",
@@ -86,6 +96,7 @@ const STATES := {
 	"shown": "whether it is there at all, 0 or 1",
 	"emit": "how hard its `emits` smokes or steams, 0-2 of as written",
 	"boil": "how hard a liquid bubbles, 0 (still, only stirring) to 2 (a rolling boil)",
+	"written": "how much of the words a `write` puts on a sheet are written, 0-1",
 }
 ## THE PLACES ON THE TABLE A LAW MAY NAME BY A WORD, beside a thing's points ([method _place]; [TableWork] finds
 ## them): where the work is done ([method TablePlan.work_spot]).
@@ -224,6 +235,8 @@ static func describe_parts() -> String:
 		lines.append("  - %s: %s" % [k, String((EMITS[k] as Dictionary)["about"])])
 	lines.append("- material \"liquid\": what is IN a vessel - a brew, ink, oil, wine, water - as its own part filling the vessel's inside from its floor to the liquid's surface (a hollow part: its profile comes back down inside it); give it a `name` so the work can tint and light it. It is REAL: its surface stays level however its vessel is turned, it slops when its vessel is carried and turns when it is stirred, it pours over the rim once it is tipped far enough, and things that fall into it ring it, splash it, sink in it or float on it. A vessel's inside is as deep as the vessel is: draw it full only as far as it is full. A stopper across its mouth (a part of the same thing there) keeps it in, until the work takes the stopper away (`shown` 0).")
 	lines.append("- WHAT IS IN A THING IS WHAT IT IS (next/table_physics.md): a liquid is a liquid part, loose stuff poured in quantity is a `grains` part in its vessel, a loose thing lying in or on something is `loose`; each falls, pours, tumbles and lands for real when what holds it tips.")
+	# A BLADE CUTS (the user, 2026-10-29: "a knife and a cutting board ... cut it into pieces ... with real cutting dynamics")
+	lines.append("- `edge`: true on a BLADE - a knife's, a cleaver's, the blade of a pair of shears - built thin (a `box` or a `sheet` a millimeter or two across its flat) and its tool free or a whole thing. Brought down through a `loose` thing of a soft material (%s) - a root, a carrot, a fruit, a candle, a sheet of paper - it CUTS it along the blade, and the pieces come apart, fall and lie for real. Lay what is to be cut on a board the blade comes down onto." % ", ".join(PackedStringArray(["plant", "wax", "paper", "leather", "fabric"])))
 	return "\n".join(lines)
 
 
@@ -240,7 +253,7 @@ static func describe_laws() -> String:
 	lines.append("Any number may be a formula instead, a string of arithmetic in t (seconds into the act), u (0-1 through it), d (its length), T (the video's time) and n (whole periods done): \"30 * sin(tau * t / 2)\". Functions: %s." % ", ".join(PackedStringArray(Formula.FUNCS.keys())))
 	lines.append("Any track may add `jitter` (centimeters or degrees of a hand's unsteadiness) and `rate` (how quickly it wanders, per second) - a held thing already moves as a hand holds it: never quite still, bowed a little as it is carried, leaning with the pull of its moves.")
 	lines.append("")
-	lines.append("WHAT IS IN THINGS IS REAL (there is no law for it): a LIQUID stays level in its vessel, sloshes as it is carried and swirls as it is stirred; tipped until it reaches the rim it POURS BY ITSELF from the lowest point of the rim, faster the further it is tipped, in a stream that falls under gravity into whatever is under it - and nothing pours from a vessel stoppered or not tipped far enough. GRAINS in a vessel slide and spill out of its mouth when it is tipped. A LOOSE thing slides, rolls and tumbles out of what holds it when that is tipped, falls, and sinks or floats in a liquid; carried by a law, it is held, and falls from where it is let go. A tool `press`ed into loose things and moved over them (a pestle going round in a bowl) CRUSHES them - stones and crystals break into pieces and the pieces into powder; metal, glass and wood never break. To pour or tip something out: bring the vessel over what is to catch it, tip it across the view and hold it there for as long as it should flow, then tip it back.")
+	lines.append("WHAT IS IN THINGS IS REAL (there is no law for it): a LIQUID stays level in its vessel, sloshes as it is carried and swirls as it is stirred; tipped until it reaches the rim it POURS BY ITSELF from the lowest point of the rim, faster the further it is tipped, in a stream that falls under gravity into whatever is under it - and nothing pours from a vessel stoppered or not tipped far enough. A vessel under a liquid's surface FILLS from it as far as it is under (a ladle dipped comes up full). GRAINS in a vessel slide and spill out of its mouth when it is tipped. A LOOSE thing slides, rolls and tumbles out of what holds it when that is tipped, falls, and sinks or floats in a liquid; carried by a law, it is held, and falls from where it is let go. A tool `press`ed into loose things and moved over them (a pestle going round in a bowl) CRUSHES them - stones and crystals break into pieces and the pieces into powder; metal, glass and wood never break. To pour or tip something out: bring the vessel over what is to catch it, tip it across the view and hold it there for as long as it should flow, then tip it back.")
 	return "\n".join(lines)
 
 
@@ -510,6 +523,22 @@ static func sanitize_law(raw: Variant, notes: PackedStringArray, running := fals
 				notes.append("a path needs two keys at least - it stands still")
 				return {}
 			out["keys"] = keys
+		"write":
+			if running:
+				notes.append("a write is an act's, never a part's `runs`")
+				return {}
+			var text := String(d.get("text", "")).strip_edges().replace("\\n", "\n").left(160)
+			if text.is_empty():
+				notes.append("a write names no `text` - nothing is written")
+				return {}
+			var hand := String(d.get("hand", "neat")).strip_edges().to_lower()
+			out["text"] = text
+			out["hand"] = hand if hand in WRITING_HANDS else "neat"
+			out["ink"] = Props._color(d.get("ink", WRITING_INK), WRITING_INK) if Props._is_color(d.get("ink", WRITING_INK)) else WRITING_INK
+			out["state"] = "written"
+			out["value"] = 1.0
+			out["ease"] = "none"
+			out["between"] = _between(d.get("between"))
 		"circle":
 			_point_law(d, out, notes)
 		"aim":
@@ -730,7 +759,7 @@ static func scalar(law: Dictionary, from: float, t: float, d: float, T: float) -
 			var settle := float(law.get("settle", 0.0))
 			var fade := exp(-t / settle) if settle > 0.0 else 1.0
 			out = from + amp * fade * sin(TAU * (t / maxf(period, 1e-6) + float(law.get("phase", 0.0))))
-		"to":
+		"to", "write":
 			var a := num(law["from"], vars) if law.has("from") and not (law["from"] is String) else from
 			var b := num(law["value"], vars) if not (law["value"] is String) else from
 			var w: Vector2 = law.get("between", Vector2(0.0, 1.0))

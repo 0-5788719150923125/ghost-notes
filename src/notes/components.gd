@@ -68,7 +68,12 @@ const SLOTS := {
 
 ## THE WORKSPACES: the panels that run a note. Most components are a card on whichever panel is
 ## up; a few are an editor of their own, and name the workspace that is ([method workspace_of]).
-## `section` is the panel's [Settings] section, and the name its script's marks are offered under.
+## `section` is the panel's [Settings] section, and `mode` the name its Script card works in - the rows
+## it shows, what its words are called and the marks it offers ([ScriptWriter], [ScriptMarks] `modes`) -
+## the section's where the row names none ([method script_mode]). The two were one name until Cards
+## became Table (2026-10-26): the table's settings kept their section, and its Script card, built in the
+## section, showed no Byline, no brief's marks and no "Brief" (2026-10-29: "It's not displayed in the UI
+## anywhere").
 ## The two a [ReadingPanel] runs say the rest of that panel too, so nothing extends it: `title` and
 ## `hint` (its heading and the line under it), `hosts` (which of a note's component cards it can
 ## show - a card table is its own presentation, so it shows no Picture) and `classic` (what a panel
@@ -83,7 +88,7 @@ const WORKSPACES := {
 		"hosts": ["voice", "voice_training", "picture", "letter", "actor", "storyboard", "look", "bookends"],
 		"classic": ["text", "voice", "picture", "illustrations", "look", "bookends"]},
 	# (its settings keep the section they had as Cards: renamed, the workspace would forget them)
-	"table": {"label": "Table", "section": "cards",
+	"table": {"label": "Table", "section": "cards", "mode": "table",
 		"blurb": "A show at a table: the episodes agents make from the note's brief - cards drawn, things made, or both - and the voice that reads them.",
 		"title": "Table",
 		"hint": "Open a show: its body is the brief every agent works from. Each seed is one episode - planned, shuffled, painted and written one card (or one beat of work) at a time by the agents, then read here in the voice below, at the table.",
@@ -95,7 +100,7 @@ const WORKSPACES := {
 		"hint": "The note's words are the problem: write one, or press Invent a problem. Make episode has the agents fix it, solve it at the desk and check the proof in Lean, then write the lesson the voice below reads while the pen writes it on the pad.",
 		"hosts": ["proof", "voice", "voice_training", "look", "bookends"],
 		"classic": ["text", "proof", "voice", "look", "bookends"]},
-	"lab": {"label": "Voice lab", "section": "synth",
+	"lab": {"label": "Voice lab", "section": "synth", "mode": "synthesis",
 		"blurb": "Ghost Notes' own synthesizer and the fishing game that breeds its voices."},
 	"clip": {"label": "Masking", "section": "",
 		"blurb": "A clip's editor: its markers, tracks, effects and timeline."},
@@ -224,6 +229,11 @@ const REGISTRY := {
 		"capabilities": ["movie_export", "subprocess", "ffmpeg"], "marks": [], "block": "youtube", "card": "youtube",
 		"script": "res://src/export/youtube_card.gd"},
 }
+
+
+## THE MODE THE SCRIPT CARD OF WORKSPACE [param key] WORKS IN: its row's `mode`, else its section.
+static func script_mode(key: String) -> String:
+	return String(Registry.field(WORKSPACES, key, "mode", Registry.field(WORKSPACES, key, "section", "generative")))
 
 
 ## WHICH WORKSPACE RUNS A NOTE with [param attached]: the one its components name - a voice's, a

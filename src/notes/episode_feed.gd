@@ -54,6 +54,12 @@ func words() -> String:
 	return ""
 
 
+## THE EPISODE'S OWN PICTURES, absolute paths - a show's paintings - for a step that may be shown them;
+## none for an episode painted nothing.
+func pictures() -> PackedStringArray:
+	return PackedStringArray()
+
+
 ## Who writes for the episode, `{agent, model, effort}`: the maker's own writer, so a step's words are
 ## written by whoever the show's are.
 func writer() -> Dictionary:

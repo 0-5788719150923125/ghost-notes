@@ -10,7 +10,8 @@ extends SceneTree
 ##   file naming one that does not, which the check finds.
 ## - EVERY PROMPT RENDERS WHOLE: the producer, the designer, the set dresser (with tools and without), a
 ##   reader's intro, card and close, every picture, what Grok is told beside them (a writer's
-##   pictures, the painter's system prompt and references) and an episode's YouTube tags, over a fixture plan, leave nothing unfilled
+##   pictures, the painter's system prompt and references) and an episode's YouTube tags and painted thumbnail (the
+##   writer's and the painter's), over a fixture plan, leave nothing unfilled
 ##   ([member Rules.missing] empty, no `{{` left) - against a part asked for a name nobody gives, which is
 ##   said.
 ## - THE RULES ARE EVERY SHOW'S (the user, 2026-10-08: "there shouldn't be ANY tarot-gated rules or logic in
@@ -290,6 +291,12 @@ func _prompts() -> bool:
 	var tags_prompt: Dictionary = load("res://src/export/youtube_tags.gd").prompt("Show", "An Episode", "a description",
 		PackedStringArray(["a", "b"]), "the words of a reading")
 	texts.append(String(tags_prompt["system"]) + "\n" + String(tags_prompt["prompt"]))
+	# ...and of its painted thumbnail: the writer shown the episode's pictures, and the painter
+	var Thumb: GDScript = load("res://src/export/youtube_thumbnail.gd")
+	var thumb_prompt: Dictionary = Thumb.prompt("Show", "An Episode", "a description", "the words of a reading",
+		PackedStringArray([shown]))
+	texts.append(String(thumb_prompt["system"]) + "\n" + String(thumb_prompt["prompt"]))
+	texts.append(Thumb.painting({"picture": "a lantern on a table", "words": "THE END", "after": [shown]}, false))
 	# A LIKENESS'S AGENT (rules/likeness/): the audit of a set, whole, over a made set
 	var a_set := {"id": "set-x", "minutes": 12.5, "shots": [{"vid": "v", "n": 0}, {"vid": "v", "n": 1}]}
 	for more in [false, true]:

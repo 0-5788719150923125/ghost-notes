@@ -7,14 +7,21 @@ extends SceneTree
 ## - EVERY MOOD COMES UP across 400 desks, each what it says: lamplight's lamp on, no sun but the moon; candlelight's
 ##   lamp off and a candle burning on the desk, no sun; daylight's sun through a window, the lamp off; dusk's sun low,
 ##   the lamp part on. The same seed is the same light, another seed another.
-## - EVERY CANDLE IS SET DOWN, and most where the frame sees them: on 60 candlelit desks each candle the mood asks for
-##   is placed (one had found no room beside the pad and was dropped), most beside the pad's left ([constant
-##   DeskLook.CANDLE_BAND]).
+## - EVERY CANDLE IS SET DOWN, and most in their bands: on 60 candlelit desks each candle the mood asks for is placed
+##   (one had found no room beside the pad and was dropped; a candle with no room in its band goes past it), most beside
+##   the pad's left or past the pen's stretch on its right ([constant DeskLook.CANDLE_BAND], [constant
+##   DeskLook.CANDLE_RIGHT]). ON BOTH SIDES (2026-10-29, the user: "I
+##   don't think I've seen a candle placed on the right side even one time ... The scenes look best when lighting comes
+##   from both directions"): about half on the right, and every desk of two or more lit from both - the control, the
+##   left's band alone, holds under two thirds of them.
 ## - A CANDLE BURNS: a candlelight desk, dressed and lit off the stage, has a flame on every wick and one light a
 ##   candle, its shadow filtered and never sized ([ShadowFilter]); THE KEY is the candle that lights the page most,
 ##   and burns brighter than the fills.
 ## - NO PAGE BURNS OUT: every candle lights the page, where it falls hardest, no hotter than [constant DeskLight.PAGE_HEAT] -
 ##   the control, a key at full strength beside the pad, past it.
+## - TEA LIGHTS NEVER STAND IN EACH OTHER (2026-10-29, the user: "the tea lights are clipping through each other"): over
+##   200 saucers every two tins are apart and every tin on its saucer's floor - the control, two as they had stood,
+##   1.6 cm either side of the middle, met.
 ## - A FLAME FACES THE CAMERA: looked down on, its quad faces the lens - the control, the table's upright quad,
 ##   faces it at under a quarter.
 ## - THE STAGE IS THE CARD TABLE'S: a mounted desk sets [constant TableMedium.STAGE] on its stage (the big shadow
@@ -36,6 +43,7 @@ func _process(_delta: float) -> bool:
 	_ran = true
 	_moods()
 	_candles()
+	_tea_lights()
 	_stage()
 	if _fails.is_empty():
 		print("desk_light_check: ALL OK")
@@ -91,6 +99,10 @@ func _moods() -> void:
 	var placed := 0
 	var banded := 0
 	var desks := 0
+	var rights := 0
+	var pairs := 0
+	var both := 0
+	var lefts_only := 0
 	for seed in 400:
 		var l := DeskLook.of(seed)
 		if String(l["mood"]) != "candlelight":
@@ -99,16 +111,29 @@ func _moods() -> void:
 		for t in l["things"]:
 			asked += int(bool((DeskLook.THINGS[String((t as Dictionary)["kind"])] as Dictionary).get("lit", false)))
 		var dressed := DeskLook.dress(l, seed, LegalPad.DESK_Y)
+		var sides := Vector2i.ZERO
 		for t in dressed["lit"]:
 			placed += 1
 			var at := ((t as Dictionary)["node"] as Node3D).position
-			banded += int(DeskLook.CANDLE_BAND.has_point(Vector2(at.x, at.z)))
+			banded += int(DeskLook.CANDLE_BAND.has_point(Vector2(at.x, at.z)) or DeskLook.CANDLE_RIGHT.has_point(Vector2(at.x, at.z)))
+			sides += Vector2i(int(at.x < 0.0), int(at.x > 0.0))
+			# THE CONTROL: the band beside the left alone, as candles had stood
+			lefts_only += int(DeskLook.CANDLE_BAND.has_point(Vector2(at.x, at.z)))
+		rights += sides.y
+		if (dressed["lit"] as Array).size() >= 2:
+			pairs += 1
+			both += int(sides.x > 0 and sides.y > 0)
 		(dressed["node"] as Node).free()
 		if desks >= 60:
 			break
-	_check(asked > 60 and placed == asked and banded > asked * 0.7 and placed > banded,
-		"every candle 60 candlelit desks ask for is set down (%d of %d), %d beside the pad in the frame (the control: %d found no room there, and the band alone would have dropped them)"
+	_check(asked > 60 and placed == asked and banded > asked * 0.7,
+		"every candle 60 candlelit desks ask for is set down (%d of %d), %d in their bands beside the pad - with a band on each side, %d went past them"
 		% [placed, asked, banded, placed - banded])
+	# BOTH SIDES (2026-10-29, the user: "I don't think I've seen a candle placed on the right side even one time ... The
+	# scenes look best when lighting comes from both directions")
+	_check(pairs > 10 and both == pairs and rights > placed / 3 and rights < placed * 2 / 3 and lefts_only < placed * 2 / 3,
+		"the candles stand on both sides: %d of %d on the right, and every desk of two or more lit from both (%d of %d) - the control, the left's band alone, held %d"
+		% [rights, placed, both, pairs, lefts_only])
 
 
 ## A candlelight desk of two candles or more, the first found.
@@ -193,6 +218,34 @@ func _candles() -> void:
 	light.release()
 	m._root3.free()
 	m.free()
+
+
+## TEA LIGHTS NEVER STAND IN EACH OTHER (2026-10-29, the user: "the tea lights are clipping through each other. There
+## are two of them, and they are clipped into each other").
+func _tea_lights() -> void:
+	print("-- tea lights")
+	var pairs := 0
+	var apart := 0
+	var ctl_in := 0
+	var in_dish := true
+	for seed in 200:
+		var spec := DeskLook._thing("tealights", DeskLook._rng(seed, "tea"))
+		var parts: Array = spec["things"][0]["parts"]
+		var tins: Array = parts.filter(func(p: Dictionary) -> bool: return p["material"] == "tin")
+		var dish := float((parts[0]["profile"] as Array)[4][0])
+		for a in tins.size():
+			var pa := Vector2(float(tins[a]["at"][0]), float(tins[a]["at"][2]))
+			in_dish = in_dish and pa.length() + DeskLook.TEA_TIN <= dish + 1e-4
+			for b in range(a + 1, tins.size()):
+				var pb := Vector2(float(tins[b]["at"][0]), float(tins[b]["at"][2]))
+				pairs += 1
+				apart += int(pa.distance_to(pb) >= 2.0 * DeskLook.TEA_TIN)
+				# THE CONTROL: the tins as they had stood, each the dish's own radius less two from its middle
+				var sr := 3.6 if tins.size() == 2 else 4.6
+				ctl_in += int(2.0 * (sr - 2.0) * sin(PI / float(tins.size())) < 2.0 * DeskLook.TEA_TIN)
+	_check(pairs > 300 and apart == pairs and in_dish and ctl_in > 0,
+		"no two tea lights stand in each other (%d pairs over 200 saucers, every one apart, every tin on its saucer's floor) - the control, the tins as they had stood, met in %d"
+		% [pairs, ctl_in])
 
 
 func _stage() -> void:

@@ -19,6 +19,13 @@ extends SceneTree
 ##   trips, its hand among it - one it does not know is Kalam (the control) - and the document carries it;
 ##   without a note its desk is the first; the walk reads the letter as [method
 ##   LetterScript.speakable] does, with no title announced.
+## - WHAT IS ON THE DESK AND ITS LIGHT ARE CHOSEN ON THE CARD (2026-10-29, the user: "provide a multi-select bank of
+##   the standard objects ... Then, when we change the seed - the only thing being changed would be the placement of
+##   objects, and textures"): with nothing chosen the desk is what its number drew, ticked so on a bank of every thing;
+##   another number keeps them and the light - the control, that number's own desk, is another - and is the desk's
+##   alone, the letter said the same at either (the control, the hand seeded by the number, otherwise); a tick and a light are
+##   kept in the block and carried by the document; the block round trips through the frontmatter, an empty desk too,
+##   and a thing or a light it does not know is dropped.
 ## - THE STEPS THE NOTE'S OTHER CARDS ADD (the YouTube card's tags; 2026-10-28, they had waited at the bottom
 ##   of the YouTube card): the card hands the reading how it goes out, so it lists them - with the box ticked
 ##   the row is on the Letter card, under the Ink and above Generate, and the YouTube card draws none (THE
@@ -147,9 +154,72 @@ func _card() -> void:
 	_check(String(read["title"]).is_empty() and String(read["body"]) == LetterScript.speakable(LETTER, 1),
 		"the walk reads the letter as the letter's own format does, with no title announced")
 	card.free()
+	_desk()
 	_steps()
 	_reopened()
 	_finish()
+
+
+## WHAT IS ON THE DESK AND ITS LIGHT, CHOSEN ON THE CARD: what the number drew until anything on the desk changes, then
+## kept - the number moving them, never choosing them.
+func _desk() -> void:
+	print("-- what is on the desk, chosen")
+	var script: GDScript = load("res://src/letter/letter_card.gd")
+	var card: Control = script.call("for_note", {})
+	# in the tree, as it is on a panel: a Range out of it never says its value changed
+	root.add_child(card)
+	card.apply({"seed": 42})
+	var drawn := DeskLook.kinds(DeskLook.of(42))
+	var mood := String(DeskLook.of(42)["mood"])
+	var bank: Dictionary = card.get("_bank")
+	var ticked := true
+	for k in bank:
+		ticked = ticked and (bank[k] as CheckBox).button_pressed == (k in drawn)
+	_check(card.call("desk_things") == drawn and card.call("desk_mood") == mood and not card.capture().has("things")
+		and bank.size() == DeskLook.THINGS.size() and ticked,
+		"with nothing chosen the desk is what its number drew, ticked so on the bank of every thing (%s, %s)" % [", ".join(drawn), mood])
+	# another number, whose own desk is not this one's
+	var other := 43
+	while DeskLook.kinds(DeskLook.of(other)) == drawn and String(DeskLook.of(other)["mood"]) == mood:
+		other += 1
+	(card.get("_seed_box") as SpinBox).value = other
+	var block: Dictionary = card.capture()
+	var its_own := DeskLook.kinds(DeskLook.of(other)) != drawn or String(DeskLook.of(other)["mood"]) != mood
+	_check(int(block["seed"]) == other and block.get("things") == drawn and String(block["mood"]) == mood and its_own,
+		"another number keeps what was on the desk and its light - the control, that number's own desk, is another (%s, %s)"
+		% [", ".join(DeskLook.kinds(DeskLook.of(other))), String(DeskLook.of(other)["mood"])])
+	# THE NUMBER IS THE DESK'S ALONE: the words written and said as they were
+	var long := LETTER + "\n" + "I keep the tag by the lamp, where I can see it while I write to you about the days we had. ".repeat(6) + "\n"
+	var walk: TextWalk = load("res://src/letter/letter_walk.gd").new(card)
+	var at_other: String = walk.spoken(long, "")["body"]
+	(card.get("_seed_box") as SpinBox).value = 777
+	var doc_now: Dictionary = card.call("document")
+	_check(int(doc_now["desk"]) == 777 and int(doc_now["seed"]) == int(card.call("hand_seed"))
+		and String(walk.spoken(long, "")["body"]) == at_other and LetterScript.speakable(long, 777) != LetterScript.speakable(long, other),
+		"the number is the desk's alone: the document's hand is the note's own, and the letter is said the same at either desk - the control, the hand seeded by the number, is said otherwise")
+	(bank["dog_tag"] as CheckBox).button_pressed = true
+	var light: OptionButton = card.get("_light_pick")
+	var dusk := DeskLook.MOODS.keys().find("dusk")
+	light.select(dusk)
+	light.item_selected.emit(dusk)
+	block = card.capture()
+	var doc: Dictionary = card.call("document")
+	_check((block["things"] as Array).has("dog_tag") and String(block["mood"]) == "dusk"
+		and doc["things"] == block["things"] and String(doc["mood"]) == "dusk",
+		"a thing ticked and a light picked are kept in the block, and the document a render reads carries them")
+	# THE BLOCK AS THE NOTE KEEPS IT: written and read back
+	var again: Control = script.call("for_note", {})
+	again.apply(MiniYaml.parse(MiniYaml.emit({"letter": block}))["data"]["letter"])
+	var none: Control = script.call("for_note", {})
+	none.apply(MiniYaml.parse(MiniYaml.emit({"letter": {"seed": other, "things": [], "mood": "dusk"}}))["data"]["letter"])
+	var odd: Control = script.call("for_note", {})
+	odd.apply({"seed": other, "things": ["mug", "a spaceship"], "mood": "noon"})
+	_check(again.call("desk_things") == block["things"] and again.call("desk_mood") == "dusk"
+		and (none.call("desk_things") as Array).is_empty() and odd.call("desk_things") == ["mug"]
+		and odd.call("desk_mood") == String(DeskLook.of(other)["mood"]),
+		"the block round trips through the note's frontmatter, an empty desk too; a thing or a light it does not know is dropped")
+	for c in [card, again, none, odd]:
+		(c as Node).free()
 
 
 func _steps() -> void:

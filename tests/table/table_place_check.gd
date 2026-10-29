@@ -28,10 +28,11 @@ extends Node
 ##     flicker (one tempo for all) as the control; and the room's out-of-shot candles are out of
 ##     shot, throw no shadows, and flicker too;
 ##   - the outro: lit while the voice speaks, fading to black after its last word and black as the
-##     outro runs out; the channel's name over the intro and never again (it came back at the end);
-##     the table thrown out of focus all the while the name is up, the thumbnail's moment included,
-##     the blur lifting as the focus pulls and off for the reading - a box's reading as a deck's,
-##     though a box is never shuffled (control: its shuffle time is none).
+##     outro runs out; opening on its title, the channel's name over the intro and never again (it
+##     came back at the end); the table thrown out of focus all the while the name is up, the title
+##     screen's moment included, the blur lifting as the focus pulls and off for the reading - a box's
+##     reading as a deck's, though a box is never shuffled (control: its shuffle time is none); and
+##     opening on nothing (a note's default, 2026-10-28), no name and the table sharp throughout.
 ##
 ##   tests/run_boot_probe.sh tests/table/table_place_check.gd 1800
 ##
@@ -554,7 +555,9 @@ func _backdrop() -> void:
 
 func _outro() -> void:
 	var outro_was := Director.outro_hold
+	var opening_was := Director.opening
 	Director.outro_hold = 6.0
+	Director.opening = "title"
 	var cards: Array = []
 	for i in 3:
 		cards.append({"key": "c%d" % i, "name": "Card %d" % i, "numeral": str(i), "reversed": false,
@@ -582,7 +585,7 @@ func _outro() -> void:
 		shown += 1 if medium._title_alpha(t) > 0.001 else 0
 		t += 0.25
 	_ok(shown == 0, "and never again, the end included (%d moments)" % shown)
-	# THE INTRO IS A WASH OF COLOR all the while the name is up - the thumbnail's moment with it - and
+	# THE INTRO IS A WASH OF COLOR all the while the name is up - the title screen's moment with it - and
 	# lifts as the focus pulls, never widening again, off for the whole reading
 	var wide := CardTable.TITLE_BLUR
 	var full := 0
@@ -594,10 +597,10 @@ func _outro() -> void:
 		moments += 1
 		t1 += 0.25
 	_ok(moments > 0 and full == moments, "the table is thrown out of focus all the while the name is up (%d of %d moments)" % [full, moments])
-	var thumb := EpisodeCard.thumbnail_moment(Director.intro_hold)
+	var thumb := Openings.title_moment(Director.intro_hold)
 	medium._tick_focus(thumb)
 	_ok(medium._title_alpha(thumb) > 0.999 and medium._blur.visible and is_equal_approx(_blur_sigma(), wide),
-		"the thumbnail's moment (%.1f s) has the name fully up over the table out of focus" % thumb)
+		"the title screen's moment (%.1f s) has the name fully up over the table out of focus" % thumb)
 	var was := wide
 	var widened := 0
 	t1 = ts - TableMedium.FOCUS_PULL.x
@@ -632,11 +635,21 @@ func _outro() -> void:
 		"control: a box reading opens (%.2f s) with no shuffle (%s)" % [to, str(tb["shuffle"])])
 	medium._tick_focus(thumb)
 	_ok(medium._title_alpha(thumb) > 0.999 and medium._blur.visible and is_equal_approx(_blur_sigma(), wide),
-		"a box's thumbnail moment (%.1f s) has the name fully up over the table out of focus (%.2f)" % [thumb, medium._title_alpha(thumb)])
+		"a box's title screen (%.1f s) has the name fully up over the table out of focus (%.2f)" % [thumb, medium._title_alpha(thumb)])
 	medium._tick_focus(to + TableMedium.FOCUS_PULL.y + 0.1)
 	_ok(medium._title_alpha(to + 1.0) < 0.001 and not medium._blur.visible,
 		"and the name is gone and the table sharp once the box is open")
+	# OPENING ON NOTHING, a note's default: no name and no blur through the intro, the table sharp
+	Director.opening = "none"
+	var bare := 0
+	t1 = 0.0
+	while t1 < to + TableMedium.FOCUS_PULL.y:
+		medium._tick_focus(t1)
+		bare += 1 if medium._title_alpha(t1) > 0.001 or medium._blur.visible or medium._attrs.dof_blur_far_enabled else 0
+		t1 += 0.25
+	_ok(bare == 0, "opening on nothing, the name never comes up and the table is never out of focus (%d moments)" % bare)
 	Director.outro_hold = outro_was
+	Director.opening = opening_was
 
 
 ## The intro blur's sigma as the medium last set it.

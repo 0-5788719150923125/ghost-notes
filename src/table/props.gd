@@ -589,6 +589,11 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 		work.erase("loose")
 		if shape == "grains":
 			work.erase("joint")
+	# A BLADE ([Particles]): what soft thing it is brought down through, it cuts
+	if p.get("edge") == true and not bool(out["wick"]):
+		out["edge"] = true
+		if not work.is_empty():
+			work["edge"] = true
 	if not work.is_empty():
 		out["work"] = work
 	return out
@@ -1176,8 +1181,11 @@ static func _assemble(parts: Array, seed: int, path: Array) -> Array:
 				var at: Vector3 = (xs[xi] as Transform3D).origin
 				chain.append(_worker(wk, AABB(at - Vector3.ONE * 0.005, Vector3.ONE * 0.01), Transform3D.IDENTITY, "w%s#%d" % [str(leaf["salt"]), xi]))
 			elif not wk.is_empty():
-				chain.append(_worker(wk, _leaves_box([{"geos": leaf["geos"], "xforms": [xs[xi]]}]),
-					(xs[xi] as Transform3D) * (xs[0] as Transform3D).affine_inverse(), "w%s#%d" % [str(leaf["salt"]), xi]))
+				var link := _worker(wk, _leaves_box([{"geos": leaf["geos"], "xforms": [xs[xi]]}]),
+					(xs[xi] as Transform3D) * (xs[0] as Transform3D).affine_inverse(), "w%s#%d" % [str(leaf["salt"]), xi])
+				if String((leaf["part"] as Dictionary).get("shape", "")) == "sheet":
+					(link["work"] as Dictionary)["sheet"] = sheet_top(leaf["part"], xs[xi])
+				chain.append(link)
 			if not held.is_empty():
 				chain.append(_mover(held, leaf["salt"], xi, xs[xi]))
 			cs.append(chain)
@@ -2478,11 +2486,11 @@ static func _box(p: Dictionary) -> Tris:
 
 ## A SPHERE stretched to [param size] (centimeters), resting on y = 0: smooth, LUMPY (pushed in and
 ## out by noise, as a stone or a fruit is) or FACETED (a coarse, jittered, flat-faced one, as a
-## rough stone is).
-static func _ball(size: Vector3, lumpy: float, facets: bool, rng: RandomNumberGenerator) -> Tris:
+## rough stone is). A smooth one's rings and segments are [param fine] of its full 18 by 32 (a small bead's).
+static func _ball(size: Vector3, lumpy: float, facets: bool, rng: RandomNumberGenerator, fine := 1.0) -> Tris:
 	var s := size * 0.01
-	var rings := 6 if facets else 18
-	var segs := 8 if facets else 32
+	var rings := 6 if facets else maxi(6, roundi(18.0 * fine))
+	var segs := 8 if facets else maxi(10, roundi(32.0 * fine))
 	var noise := FastNoiseLite.new()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	noise.seed = rng.randi()
@@ -2715,11 +2723,12 @@ static func _geode(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 	return [{"geo": lining}, {"geo": rock, "material": String(p["base"])}]
 
 
-## A RING lying flat round the vertical axis, resting on y = 0: a torus, or part of one.
-static func _ring(radius: float, thick: float, arc_deg: float) -> Tris:
+## A RING lying flat round the vertical axis, resting on y = 0: a torus, or part of one - [param fine] of its full
+## 64 segments round and 12 round its band (a small link's).
+static func _ring(radius: float, thick: float, arc_deg: float, fine := 1.0) -> Tris:
 	var g := Tris.new()
-	var segs := clampi(roundi(arc_deg / 360.0 * 64.0), 8, 64)
-	var tsegs := 12
+	var segs := clampi(roundi(arc_deg / 360.0 * 64.0 * fine), 8, 64)
+	var tsegs := maxi(4, roundi(12.0 * fine))
 	var arc := deg_to_rad(arc_deg)
 	for i in segs:
 		for j in tsegs:
@@ -3727,7 +3736,9 @@ static func _strand(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 			if kind == "beads":
 				# the thread, then a bead every bead's width along it
 				g.append(_sweep(spine, none, _rings_of(n, t * 0.1, 8), _sharp(8), hollow))
-				var bead := _ball(Vector3.ONE * t * 100.0, 0.08, false, rng)
+				# A BEAD AS FINE AS IT IS SEEN: a small one is a few pixels across, and a ball chain's 2.4 mm beads, each a
+				# whole 18 by 32 sphere, had run the strand past its cap half way along it (2026-10-29, a dog tag's chain)
+				var bead := _ball(Vector3.ONE * t * 100.0, 0.08, false, rng, clampf(t / (float((STRANDS["beads"] as Dictionary)["thickness"]) * 0.01), 0.35, 1.0))
 				var each := t * 1.08
 				var s := each * 0.5
 				while s < along[along.size() - 1] and g.v.size() < 400000:
@@ -3737,12 +3748,16 @@ static func _strand(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 			else:
 				var R := t * 0.36
 				var wire := t * 0.13
-				var link := _ring(R, wire, 360.0)
+				# A LINK AS FINE AS IT IS SEEN, as a bead is: a necklace's 1.5 mm links, each a whole 64 by 12 ring, ran a
+				# thousand of them to millions of corners (2026-10-29, a dog tag's chain) - and past the 360 links a
+				# thick chain stops at, a fine one goes on to the strand's cap
+				var fine := clampf(t / (float((STRANDS["chain"] as Dictionary)["thickness"]) * 0.01), 0.2, 1.0)
+				var link := _ring(R, wire, 360.0, fine)
 				link.lift(-wire)
 				var pitch := (2.0 * R - wire) * 1.45
 				var s := pitch * 0.5
 				var k := 0
-				while s < along[along.size() - 1] and k < 360:
+				while s < along[along.size() - 1] and (k < 360 or (fine < 1.0 and g.v.size() + link.v.size() < 400000)):
 					var at := _at_length(spine, along, s)
 					var tan: Vector3 = at[1]
 					var side := tan.cross(Vector3.UP)
@@ -4233,15 +4248,43 @@ static func _sweep_skin(g: Tris, rows: Array, tans: Array, corner: PackedByteArr
 ## A SHEET into [param g]: its outline (a named one, or `points`), its base at the origin and its
 ## length along +z, a little thickness, the tip curled up by `bend` and the sides lifted by
 ## `fold`; placed by [param xf].
+## HOW A SHEET LIFTS off its flat at [param x] across it and [param z] along it from its base (meters) - a [param w] by
+## [param l] sheet whose tip curls up by [param bend] and whose sides lift by [param fold]: its top is that far over its
+## thickness. What [method _sheet] builds, and what words written on it lie on ([SheetWriting]).
+static func sheet_lift(x: float, z: float, w: float, l: float, bend: float, fold: float) -> float:
+	var t := clampf(z / maxf(l, 1e-6), 0.0, 1.0)
+	var s := clampf(x / maxf(w * 0.5, 1e-6), -1.0, 1.0)
+	return bend * l * 0.35 * t * t + fold * w * 0.3 * s * s
+
+
+## A SHEET PART'S TOP as [method _sheet] builds it, placed in its thing by [param place]: `{place (its flat's space in
+## the thing's), x0 and z0 (the middle of its width and the start of its length there), w, l (meters), bend, fold, thick
+## (meters), outline}` - for words written on it ([SheetWriting]).
+static func sheet_top(p: Dictionary, place: Transform3D) -> Dictionary:
+	var sz: Vector2 = (p["size"] as Vector2) * 0.01
+	var out := {"bend": float(p.get("bend", 0.0)), "fold": float(p.get("fold", 0.0)), "thick": float(p.get("thickness", 0.08)) * 0.01,
+		"outline": String(p.get("outline", "leaf"))}
+	var pts: Array = p.get("points", [])
+	if pts.size() >= 3:
+		var lo := Vector2(INF, INF)
+		var hi := Vector2(-INF, -INF)
+		for q in pts:
+			lo = lo.min((q as Vector2) * 0.01)
+			hi = hi.max((q as Vector2) * 0.01)
+		out.merge({"place": place, "x0": (lo.x + hi.x) * 0.5, "z0": lo.y, "w": hi.x - lo.x, "l": hi.y - lo.y, "outline": "points"})
+	else:
+		# placed by its middle ([method _shape]'s "sheet")
+		out.merge({"place": place * Transform3D(Basis(), Vector3(0.0, 0.0, -sz.y * 0.5)), "x0": 0.0, "z0": 0.0, "w": sz.x, "l": sz.y})
+	return out
+
+
 static func _sheet(g: Tris, p: Dictionary, xf: Transform3D) -> void:
 	var sz: Vector2 = (p["size"] as Vector2) * 0.01
 	var bend := float(p.get("bend", 0.0))
 	var fold := float(p.get("fold", 0.0))
 	var thick := float(p.get("thickness", 0.08)) * 0.01
 	var lift := func(x: float, z: float, w: float, l: float) -> float:
-		var t := clampf(z / maxf(l, 1e-6), 0.0, 1.0)
-		var s := clampf(x / maxf(w * 0.5, 1e-6), -1.0, 1.0)
-		return bend * l * 0.35 * t * t + fold * w * 0.3 * s * s
+		return sheet_lift(x, z, w, l, bend, fold)
 	var pts: Array = p.get("points", [])
 	if pts.size() >= 3:
 		var poly := PackedVector2Array()
@@ -4553,7 +4596,14 @@ static func _extrude_face(g: Tris, r: Array, up: float, h: float) -> void:
 	var nrm := Vector3(0.0, up, 0.0)
 	var y := (r[0] as Vector3).y
 	var hf := y / maxf(h, 1e-6)
-	var tris := Geometry2D.triangulate_polygon(flat)
+	# CUT AT ITS OWN SIZE: Godot's ear clipping weighs each corner's turn against a fixed epsilon, and a small outline in
+	# meters fell under it (2026-10-29, a dog tag's half: a corner of its hole's notch taken for convex, a triangle laid
+	# across the hole) - drawn to a unit square, every turn is weighed as it is
+	var unit := PackedVector2Array()
+	var most := maxf(span.x, span.y)
+	for v in flat:
+		unit.append((v - lo) / most)
+	var tris := Geometry2D.triangulate_polygon(unit)
 	if tris.is_empty():
 		var c := Vector3.ZERO
 		for q in r:

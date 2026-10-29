@@ -71,6 +71,10 @@ const INTRO_DEFAULT := 5.0
 const OUTRO_DEFAULT := 6.0
 var intro_hold := INTRO_DEFAULT
 var outro_hold := OUTRO_DEFAULT
+## WHAT THE PICTURE DOES THROUGH THE INTRO, for a medium that draws an opening: a key of
+## [constant Openings.ROWS] - none, the picture out of focus, or the show's name over it. Set through
+## [method Director.set_opening]; persisted as `[director] opening`.
+var opening := Openings.DEFAULT
 ## A LIVE reading's own fade-out, 0..1 - the outro mark's, driven by the Generative panel from
 ## the sample being heard. 1 always in a render, where the take's own length and bookend do it.
 var live_fade := 1.0

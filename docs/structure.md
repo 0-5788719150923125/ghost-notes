@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 459 references inside a folder, 923 down the stack, 0 up it.
+Between scripts today: 470 references inside a folder, 939 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -15,12 +15,12 @@ Between scripts today: 459 references inside a folder, 923 down the stack, 0 up 
 | `masking/` | Masking | 15 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
 | `likeness/` | Likeness | 15 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
 | `letter/` | Letter | 3 | `desk`, `reading`, `show`, `media`, `ui`, `notes`, `agents`, `platform`, `data` |
-| `proof/` | Proof | 6 | `desk`, `table`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
+| `proof/` | Proof | 6 | `desk`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `desk/` | The desk | 9 | `table`, `media`, `scene_kit`, `render`, `data` |
 | `table_show/` | The table's show | 11 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `geometry`, `audio`, `platform`, `data` |
-| `table/` | The set | 31 | `media`, `scene_kit`, `geometry`, `render`, `audio`, `data` |
+| `table/` | The set | 34 | `media`, `scene_kit`, `geometry`, `render`, `audio`, `data` |
 | `reading/` | The voice's workspaces | 12 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
-| `export/` | Export | 4 | `show`, `voice`, `ui`, `notes`, `agents`, `stage`, `audio`, `platform`, `data` |
+| `export/` | Export | 5 | `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
 | `show/` | The show | 9 | `media`, `ui`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `media/` | Media | 20 | `voice`, `ui`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
@@ -30,7 +30,7 @@ Between scripts today: 459 references inside a folder, 923 down the stack, 0 up 
 | `agents/` | Agents | 6 | `platform`, `data` |
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
 | `stage/` | Storyboards & stage | 4 | `geometry`, `render`, `audio`, `data` |
-| `scene_kit/` | Scene substrate | 7 | `geometry`, `motion`, `render`, `audio` |
+| `scene_kit/` | Scene substrate | 8 | `geometry`, `motion`, `render`, `audio`, `data` |
 | `geometry/` | Generative form | 12 | `motion`, `render` |
 | `motion/` | Motion & simulation | 13 | `render`, `audio` |
 | `render/` | Drawing | 8 | nothing |
@@ -80,7 +80,7 @@ Self-contained generators a scene composes rather than hand-models - each one sa
 
 What every scene is built on: the `GhostScene` base and its 3D sibling, the camera, framing pools, lighting, the visual layers scenes compose by key (`Layer`), and `ShowFeed` - what the show hands the parts it mounts.
 
-[`ghost_scene`](../src/scene_kit/ghost_scene.gd), [`layer`](../src/scene_kit/layer.gd), [`lighting`](../src/scene_kit/lighting.gd), [`scene3d`](../src/scene_kit/scene3d.gd), [`scene_view`](../src/scene_kit/scene_view.gd), [`shots`](../src/scene_kit/shots.gd), [`show_feed`](../src/scene_kit/show_feed.gd)
+[`ghost_scene`](../src/scene_kit/ghost_scene.gd), [`layer`](../src/scene_kit/layer.gd), [`lighting`](../src/scene_kit/lighting.gd), [`openings`](../src/scene_kit/openings.gd), [`scene3d`](../src/scene_kit/scene3d.gd), [`scene_view`](../src/scene_kit/scene_view.gd), [`shots`](../src/scene_kit/shots.gd), [`show_feed`](../src/scene_kit/show_feed.gd)
 
 ### `stage/` - Storyboards & stage
 
@@ -138,7 +138,7 @@ The card that keeps a note's storyboard and the dock it opens: a strip of entrie
 
 Rendering a session to video (bake + Movie Maker, background processes) and uploading it to YouTube. Under the workspaces: a reading and a show of cards export a take and fill in an upload, and the exporter names neither.
 
-[`exporter`](../src/export/exporter.gd), [`youtube`](../src/export/youtube.gd), [`youtube_card`](../src/export/youtube_card.gd), [`youtube_tags`](../src/export/youtube_tags.gd)
+[`exporter`](../src/export/exporter.gd), [`youtube`](../src/export/youtube.gd), [`youtube_card`](../src/export/youtube_card.gd), [`youtube_tags`](../src/export/youtube_tags.gd), [`youtube_thumbnail`](../src/export/youtube_thumbnail.gd)
 
 ### `reading/` - The voice's workspaces
 
@@ -150,7 +150,7 @@ The panels a voice runs in: the reading (script, cast, voice, stream, export), t
 
 A place, seen and heard, built from a written description: the table itself (Tables), the things on it (Props), its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds), its sound (Soundscape), where cards go on it, what can be done with them and how a reading says so, the faces printed on them - and the medium that puts it all on the stage (`table.gd`, a row of `Medium.REGISTRY`).
 
-[`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`formula`](../src/table/formula.gd), [`hands`](../src/table/hands.gd), [`intro_blur`](../src/table/intro_blur.gd), [`lights`](../src/table/lights.gd), [`motions`](../src/table/motions.gd), [`particles`](../src/table/particles.gd), [`props`](../src/table/props.gd), [`rides`](../src/table/rides.gd), [`shape_field`](../src/table/shape_field.gd), [`show_opening`](../src/table/show_opening.gd), [`soundscape`](../src/table/soundscape.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_light`](../src/table/table_light.gd), [`table_physics`](../src/table/table_physics.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`table_things`](../src/table/table_things.gd), [`table_work`](../src/table/table_work.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`vessel`](../src/table/vessel.gd), [`winds`](../src/table/winds.gd)
+[`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`formula`](../src/table/formula.gd), [`hands`](../src/table/hands.gd), [`intro_blur`](../src/table/intro_blur.gd), [`lights`](../src/table/lights.gd), [`mesh_cut`](../src/table/mesh_cut.gd), [`motions`](../src/table/motions.gd), [`particles`](../src/table/particles.gd), [`props`](../src/table/props.gd), [`rides`](../src/table/rides.gd), [`shape_field`](../src/table/shape_field.gd), [`sheet_writing`](../src/table/sheet_writing.gd), [`show_opening`](../src/table/show_opening.gd), [`soundscape`](../src/table/soundscape.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_light`](../src/table/table_light.gd), [`table_physics`](../src/table/table_physics.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`table_things`](../src/table/table_things.gd), [`table_work`](../src/table/table_work.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`vessel`](../src/table/vessel.gd), [`winds`](../src/table/winds.gd), [`work_sounds`](../src/table/work_sounds.gd)
 
 ### `table_show/` - The table's show
 

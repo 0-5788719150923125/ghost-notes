@@ -366,6 +366,7 @@ var _box_part := TableBox.new()
 ## working parts do by themselves - a clock's hands, steam off a brew - and the puppeteer's acts, run when
 ## the reading cues them.
 var _work := TableWork.new()
+var _sounds: WorkSounds = null        # the work heard ([method advance])
 var _acts_mt := -2                    # the acts file's time when the work was last built (-1: none)
 var _est := PackedFloat32Array()      # each spoken word's estimated time ([method TablePlan.estimated_times])
 
@@ -607,6 +608,8 @@ func release() -> void:
 
 
 func _exit_tree() -> void:
+	if _sounds != null:
+		_sounds.stop()
 	# the physics' own thread stopped with it (what is asked after bakes on the caller's thread: [method TablePhysics.clear])
 	if _work != null and _work.physics != null:
 		_work.physics.clear()
@@ -645,6 +648,12 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_tick_camera(_now)
 	_tick_ride(_now)
 	_work.tick(_now)
+	# THE WORK, HEARD ([WorkSounds]): the table on the stage only - a preview stands one and never advances it
+	if _sounds == null or _sounds.work != _work:
+		if _sounds != null:
+			_sounds.stop()
+		_sounds = WorkSounds.new(_work)
+	_sounds.tick(_now, self)
 	_light_part.tick_props(_now)
 	_light_part.tick(_now)
 	_tick_air(_now)
@@ -1543,12 +1552,13 @@ func _tick_ride(t: float) -> void:
 		node.transform = Transform3D(rot, pivot - rot * pivot)
 
 
-## THE INTRO IS OUT OF FOCUS: the whole frame thrown far out of focus while the channel's name is
-## up - nothing on the table to be made out, only its colors - then the focus PULLS as the reading
-## opens (the deck's shuffle, the box's opening): the wide blur lifts, and the lens carries on near
-## to far, the cloth in front of the reader first, and is off for the reading. The end card leaves it alone.
+## THE INTRO IS OUT OF FOCUS, where the note opens so ([member ShowFeed.opening]): the whole frame
+## thrown far out of focus while the channel's name is up - nothing on the table to be made out, only
+## its colors - then the focus PULLS as the reading opens (the deck's shuffle, the box's opening): the
+## wide blur lifts, and the lens carries on near to far, the cloth in front of the reader first, and is
+## off for the reading. The end card leaves it alone. A note that opens on nothing is sharp throughout.
 func _tick_focus(t: float) -> void:
-	_lens(ShowOpening.pull(t, float(_times()["opening"]), not _sched.is_empty()))
+	_lens(ShowOpening.pull(feed.opening, t, float(_times()["opening"]), not _sched.is_empty()))
 
 
 ## The lens at [param pull] of the intro's focus pull ([method ShowOpening.lens]).
@@ -2241,9 +2251,9 @@ static func _ease(x: float) -> float:
 
 ## The channel's name over the table while the intro holds, gone as the reading opens (the deck's
 ## shuffle, the box's opening) - and only then: the reading ends on the table fading to black, not
-## on the name again.
+## on the name again. Only where the note opens on its title ([member ShowFeed.opening]).
 func _title_alpha(t: float) -> float:
-	return ShowOpening.title_alpha(t, float(_times()["opening"]), not _sched.is_empty())
+	return ShowOpening.title_alpha(feed.opening, t, float(_times()["opening"]), not _sched.is_empty())
 
 
 ## THE OUTRO: once the voice has said its last word, the table fades to black - a beat after it,

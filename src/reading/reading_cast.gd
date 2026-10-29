@@ -179,9 +179,10 @@ func build_cast(box: VBoxContainer) -> void:
 		panel.touch()
 	_hesitate.value_changed.connect(on_hesitate)
 	_hesitate_on.toggled.connect(on_hesitate)
-	# SHOWN WHERE THE SCRIPT CAN CARRY THE MARK: a panel whose palette has no hesitation mark
-	# (the Cards panel's - its agents write none) keeps the values in the voice block and shows no row.
-	hrow.visible = ScriptMarks.for_mode(panel.section()).has("hesitation")
+	# SHOWN WHERE THE SCRIPT CAN CARRY THE MARK, by its Script card's mode (never its settings section:
+	# a table's is "cards", which offers nothing): a panel whose palette has no hesitation mark (a Proof
+	# note's - its words are the problem, never read) keeps the values in the voice block and shows no row.
+	hrow.visible = ScriptMarks.for_mode(panel.script_mode()).has("hesitation")
 
 	# THE TABS - one per name the script cues, derived rather than managed (see the note on
 	# the speaker cues above). Everything below this row belongs to the selected tab; the

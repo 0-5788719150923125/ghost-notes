@@ -74,7 +74,7 @@ func _ok(cond: bool, what: String) -> void:
 func _run() -> void:
 	await process_frame
 	for check in [_formula, _clock, _clock_law, _grind, _at_the_spot, _seated, _set_down, _carry, _through_keys, _copies, _cued,
-			_live_words, _safe]:
+			_live_words, _safe, _write]:
 		var done: Variant = (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("table_work_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -845,3 +845,64 @@ func _safe() -> bool:
 	_ok((m._work.acts as Array).is_empty() and "\n".join(m._work.notes).contains("flame"), "a lit candle was carried: %s" % str(m._work.notes))
 	m._root3.free()
 	return true
+
+
+## WORDS ARE WRITTEN, NEVER LAID ON (the-quiet-crucible 707668's poison "name on a slip", a blank white square - the user:
+## "The slip should show writing, if the script says it should"): a slip written "Mandrake" by an act is blank before
+## it, half way through has its first letters down and not its last, and after it is written whole - its words in ink, on
+## the slip's top. The controls: a `write` on a part that is no sheet is refused, and before the pen begins there are no
+## words at all.
+func _write() -> bool:
+	var m := _medium()
+	var spec := {"things": [{"name": "dish", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [5, 0], [5, 1], [0, 1]], "material": "clay"},
+		{"name": "slip", "shape": "sheet", "outline": "rect", "size": [4.2, 1.8], "material": "paper", "at": [0, 1.0, 0], "joint": {"kind": "free"}},
+		{"name": "lid", "shape": "lathe", "profile": [[0, 0], [2, 0], [2, 0.3], [0, 0.3]], "material": "clay", "at": [8, 0, 0], "joint": {"kind": "free"}}]}],
+		"materials": {"clay": {"kind": "ceramic", "color": "#8a6a4a"}, "paper": {"kind": "paper", "color": "#efe6d2"}}}
+	var dish := _stand(m, spec, "dish", Vector3(0.2, 0.0, -0.1))
+	m._work.build({"acts": [{"name": "name-it", "beat": 1, "length": 4, "tracks": [
+		{"thing": "dish", "part": "slip", "law": "write", "text": "Mandrake", "between": [0.25, 0.75]},
+		{"thing": "dish", "part": "lid", "law": "write", "text": "Lid"}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 10.0, "t1": 14.0}]
+	m._work._timelines()
+	_ok(" ".join(m._work.notes).contains("is not a sheet"), "the control: a write on the lid, no sheet, was not refused: %s" % "; ".join(m._work.notes))
+	var wi := -1
+	for i in m._work.works.size():
+		if String((m._work.works[i] as Dictionary)["name"]) == "slip":
+			wi = i
+	var slip: Node3D = (m._work.works[wi] as Dictionary)["node"]
+	m._work.tick(10.5)
+	_ok(slip.get_node_or_null("written") == null, "the control: before the pen begins, the slip carries words")
+	m._work.tick(12.0)
+	var words: MeshInstance3D = slip.get_node_or_null("written")
+	_ok(words != null, "half way through its write, the slip carries no words")
+	if words == null:
+		m._root3.free()
+		return true
+	var mat := words.material_override as ShaderMaterial
+	_ok(absf(float(mat.get_shader_parameter("written")) - 0.5) < 0.02, "half way through its write, the pen has got %.2f of the way" % float(mat.get_shader_parameter("written")))
+	# the picture: ink, put down left to right - what is down at 0.5 is the word's left half
+	var img: Image = (mat.get_shader_parameter("words") as ImageTexture).get_image()
+	var ink := 0
+	var left := 0.0
+	var right := 0.0
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			if c.r > 0.5:
+				ink += 1
+				if x < img.get_width() / 4:
+					left = maxf(left, c.g)
+				elif x > img.get_width() * 3 / 4:
+					right = maxf(right, c.g)
+	_ok(ink > 200 and left < 0.4 and right > 0.6, "the words' picture: %d points of ink, put down by %.2f at the left and %.2f at the right" % [ink, left, right])
+	# on the slip's top, within it
+	var box: AABB = ((m._work.works[wi] as Dictionary)["w"] as Dictionary)["box"]
+	var lay := words.mesh.get_aabb()
+	_ok(lay.position.x >= box.position.x and lay.end.x <= box.end.x and lay.position.z >= box.position.z and lay.end.z <= box.end.z
+		and absf(lay.position.y - box.end.y) < 0.0005, "the words lie at %s, the slip at %s" % [lay, box])
+	m._work.tick(15.0)
+	_ok(is_equal_approx(float(mat.get_shader_parameter("written")), 1.0), "after its write, the slip's words are %.2f written" % float(mat.get_shader_parameter("written")))
+	m._root3.free()
+	return true
+

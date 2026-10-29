@@ -6,12 +6,14 @@ extends Node
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/desk/letter_look_probe.gd 400 \
 ##       --out <dir>/l --letter <a letter .md> [--svgs <key -> svg .json>] [--ink <typeset answer .json>] \
-##       [--picture <png>] [--seed N] [--hand kalam] --times 3,8,20 [--every S] [--page 1] [--words W]
+##       [--picture <png>] [--seed N] [--hand kalam] [--things mug,dog_tag] [--mood lamplight] \
+##       --times 3,8,20 [--every S] [--page 1] [--words W]
 ##
 ## `--svgs` and `--ink` are what the Letter card would hand it (a sketch's drawing by its key, and
 ## hosts/math/typeset.py's answer for them); `--picture` stands in for every picture the letter shows.
 ## `--every S` photographs every S seconds to the end instead of `--times`; `--page 1` also writes the
-## flat pad texture beside each frame. `--words W` reads at W seconds a word (0.32 by default).
+## flat pad texture beside each frame. `--words W` reads at W seconds a word (0.32 by default). `--things` and
+## `--mood` are what the card chose for the desk ([method DeskLook.picks_of]; none: the seed's).
 ## It asserts only that a frame is not uniform.
 
 const W := 1280
@@ -31,6 +33,8 @@ var _every := 0.0
 var _page := false
 var _word := 0.32
 var _flat := 0
+var _things: Variant = null
+var _mood := ""
 
 
 func _ready() -> void:
@@ -53,6 +57,8 @@ func _run() -> void:
 			"--every": _every = float(args[i + 1])
 			"--page": _page = args[i + 1] == "1"
 			"--words": _word = float(args[i + 1])
+			"--things": _things = Array(String(args[i + 1]).split(",", false))
+			"--mood": _mood = args[i + 1]
 			"--times":
 				_times = []
 				for s in String(args[i + 1]).split(","):
@@ -71,6 +77,10 @@ func _run() -> void:
 				pictures[String(s["key"])] = _picture
 	var letter := {"seed": _seed, "hand": _hand, "svgs": svgs if svgs is Dictionary else {},
 		"ink": ink if ink is Dictionary else {}, "pictures": pictures}
+	if _things is Array:
+		letter["things"] = _things
+	if not _mood.is_empty():
+		letter["mood"] = _mood
 	var records := LetterScript.records_of(letter["ink"])
 	var fonts: Dictionary = (letter["ink"] as Dictionary).get("fonts", {})
 	var parsed := LetterScript.parse(source, _seed, letter["svgs"], LetterScript.lengths_of(records, _seed, fonts), records,

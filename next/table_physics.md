@@ -270,6 +270,85 @@ over the whole bake (`CHECKS_NEAR` dense, the older thinned), every picture rehe
 a watch had rehearsed from 40 s and a check from 10, so neither's bake served the other), and the bake on a worker that
 the tools' closing halts (puppeteer_tools_check).
 
+WATCHED IN THE APP (2026-10-29, 707668 played live; the user: the cauldron "so far to the top-left that we can barely see
+any of the interactions with it"; the iron's splash "far too intense: it splattered everywhere"; the mandrake slip "pulled
+... to the center, then moved it over to the cauldron - but never put it in. Then suddenly ... 'poofed' back to the
+center. Then, we placed the mortar and pestle directly on top of the root"; the ladle "supposedly puts liquid into a vial -
+but we cannot see it", the vial's color change unseen, and "when the vial is put into the rack, it slowly fills with liquid
+finally ... far too late"). Measured on a copy of the episode:
+
+- THE LIVE BAKE FELL BEHIND THE SHOW. From the iron on, 10 s of show took 14 to 23 s to bake: the filings left in their jar
+  never slept (a dozen of ~165 trembling at 1 to 18 cm a second, a single constraint pass's residue, and each time a few fell
+  asleep the rest lost what they rested on, were jolted, and woke them - a quarter-second cycle). A live show past the last
+  frame baked draws that frame, and a plan changed as a sentence's words arrive is baked again from the change - so the slip
+  stood where the bake had last set it down while the mortar (no physics) came down on it, and the vial filled once the bake
+  got there. Now A HEAP AT REST SLEEPS WHOLE (`Particles._settle`: grains of one part slower than SLEEP_SPEED on the whole,
+  none past TREMBLE, sleep together once most have been still SLEEP_AFTER): 10 s of 707668 bakes in 3 to 6.4 s, the whole
+  way through. Where a live show does outrun its bake, a loose thing the work has held since the last frame baked is where
+  the work has it (`TableWork._outran`), and the log says when what is in things is behind and when it caught up.
+- A SPLASH SUMMED A FRAME'S GRAINS: every frame's entries into a liquid made one splash of their momenta together, so the
+  filings, a few spheres a frame, splashed 37 times in five seconds, 64 drops at once, 6 cm over the brew - and each sphere
+  stands for a clump of filings. Now a splash is one thing's, as it first goes in: a drop for every 2 g of it, entering
+  faster than 0.5 m/s, thrown up at 0.35 of its speed, a grain as heavy as it is drawn (`TablePhysics._events`): the iron
+  rings the brew 32 times and throws nothing; a 30 g stone from 15 cm throws a few drops a centimeter or two.
+- A DIP FILLED NOTHING: no vessel took liquid from one it was under, so the ladle "drew up a measure" of nothing, poured
+  nothing, and the vial was filled by the puppeteer's `to` on its fill (magic, no stream). Now a vessel under a liquid's
+  surface fills over its rim as a weir does until it stands as high inside as out (`TablePhysics._dips`), and a liquid's
+  color follows the work's tint, so what is dipped or poured out carries the color it has now. The ladle, resting in the
+  brew, is full from the start, carries ~10 ml out and pours a stream; the puppeteer is told a dip fills and never to fill
+  by magic what a pour fills.
+- THE CAULDRON IN THE CORNER is the set dresser's: told to push everything out toward the edges and to leave the work's
+  spot clear, it stood the one thing that cannot be brought to the spot at the frame's edge. It is told now that what
+  cannot be brought is worked where it stands and stands beside the spot, whole in view; and that a thing needed only for
+  a while may wait out of the shot, on the table past the frame's sides (the user: "objects can exist outside of the
+  viewport"), to be fetched in.
+- THE SLIP IS THE BRIEF'S: the-quiet-crucible's brief puts a poison in "as its name on a slip of paper", and nothing on the
+  table carries words - so the slip is a blank white square. The user: "The slip should show writing, if the script says
+  it should" - a sheet is written on by the work now (`write`, below).
+
+Gates: physics_check `_heap_sleeps`, `_splash`, `_dip`, `_let_fall`, each failing with its fix broken (169 filings awake;
+151 splashes; the cup empty; the stone the bake's).
+
+### Built the same day (2026-10-29): words written, the work heard, a blade that cuts
+
+The user: "The slip should show writing, if the script says it should. And we definitely want to try the sounds, and
+support the cutting board. But please make sure the sounds are not distracting; they need to be subdued and quieter than
+the voice."
+
+WORDS ARE WRITTEN (`Motions.LAWS` `write`, state `written`; `SheetWriting`): a sheet part (`Props.sheet_top` keeps its top
+surface on its work) is written on by the work - `{"law": "write", "text", "hand", "ink", "between"}` - in one of the
+recipe card's hands (`CardTable.HANDS`: neat, quick, print), drawn on the processor from the font's own glyphs into a picture
+(red the ink, green when each point is put down, line by line) on a thin skin over the sheet's bend and fold, shown as far
+as the pen has got (`shaders/sheet_writing.gdshader`). Nothing on a table is set written; the puppeteer writes only what
+the script or a card says, at the work's spot. Gate: table_work_check `_write`. Seen: "Mandrake" on a slip, legible from
+the reader's chair.
+
+THE WORK, HEARD (`WorkSounds`, owned by the table on the stage, played as its picture is drawn - live, and in a render, whose
+Movie Maker records the engine's sound): a thing set down (`TableWork.set_down`: a carry `down`, its mass from its box and
+material) thumps the table and rings as its material does; a point pressed onto something (`TableWork.pressed`) grits only
+while it touches, as fast as it moves; a liquid at a `boil` (`TableWork.boiling`) bubbles, steam alone is silent; a pour's
+stream landing trickles (the physics' frame). Levels, the voice at ~0.06 RMS: an iron pot set down peaks 0.045, a glass
+jar 0.0077, a paper slip nothing; grinding 0.004 RMS; a boil's bubbles 0.0085; the loudest 0.4 s of a busy bench 0.0068 RMS.
+Gate: work_sounds_check (silent before a landing, while lifted, before the boil, a held thing never). NOT YET HEARD BY THE
+USER, and not yet in a real export.
+
+A BLADE CUTS (a part's `edge`; `Particles._cut_through`, `TablePhysics._cut`, `MeshCut`): a moving blade come down into a
+loose thing of soft matter (`TablePhysics.CUTS`: plant, wax, paper, leather, fabric) parts its spheres along its own plane
+into two rigid bodies, set off the blade by its width (`PARTED`), and each piece is drawn as the thing's own mesh kept behind
+every cut it has had, each cut faced in a lighter color. Measured on the way: a blade shoving what it cuts (a sphere 1 mm
+from its plane) crushed it against the board and flung it 20 cm, so soft matter passes through a blade; a body's upper
+spheres, touching nothing but itself, took the knife beside them as their host and the piece rode off on the knife; a board
+carried counted as squeezing what lay on it (`CARRIED`: a solid under a thing carries it); and the carrot lay 6 mm into the
+board on one row of spheres along its middle, its tip unfilled - a body is now filled to its box's faces, a sphere down its
+middle where it narrows (`fill_shape`, `BODY_MOST` 36), and held up as a whole (`_settle`'s `borne`), or a body in layers
+never slept. Gate: physics_check `_cut` (three pieces, apart, the act saying so; the knife short, and a stone, cut nothing).
+Seen: a carrot chopped three times on a board into four pieces, the board carried over a pot and tipped, the pieces falling
+in, cut faces showing.
+
+Open: the tip of a tapered thing rests 2-3 mm high on its 7 mm spheres; slices thinner than the sphere spacing (~1.4 cm)
+are not cut (a stroke with no sphere on one side passes); a thing to be cut must lie on the board as a part of it or be
+carried there (a thing of its own is stood with its lowest point on the cloth).
+
 ## Risks
 
 - **Cost.** A few hundred awake particles at 240 Hz in GDScript are milliseconds a frame of simulated time; on a thread

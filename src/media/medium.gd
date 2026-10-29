@@ -50,7 +50,9 @@ class_name Medium
 ##           displayed that ONLY work with the comic book medium". Declared here rather than
 ##           branched on in the panel: a medium added later says what it uses and the panel
 ##           follows. A setting EVERY medium uses (scene hold, flourishes, the Look, the holds)
-##           needs no tag.
+##           needs no tag. `opening`: it draws an opening of its own through the intro hold - out of
+##           focus, the show's name over it ([Openings], [ShowOpening]) - and the Intro & outro card
+##           offers the choice of one.
 ##   frames  THE FRAMES IT CAN BE SHOWN IN (next/notes.md, "Two frames"): landscape 16:9 for every
 ##           one, portrait 9:16 only where it was measured to work. The full-frame show does -
 ##           scenes size everything off the frame's short side. The tablet needs its camera
@@ -89,16 +91,16 @@ const REGISTRY := {
 		"uses": ["camera", "illustrations"], "frames": ["landscape"], "needs": ["reading"],
 		"blurb": "Somebody browsing on a tablet lying on a desk: the chapter is web pages (`<!-- url: -->`), read aloud as they are scrolled, with searches, new tabs, a turn to landscape and links followed between them - every tap and keystroke timed into the rests the voice leaves for it."},
 	"table": {"label": "Card table", "script": "res://src/table/table.gd",
-		"uses": [], "frames": ["landscape"], "mode": "table",
+		"uses": ["opening"], "frames": ["landscape"], "mode": "table",
 		"blurb": "A card reading at a table, seen from the reader's chair: the deck shuffles while the reader talks, each card is drawn, held up beside its booklet entry, read and laid into the spread. The Table mode's own medium - its deck, pictures and spread come from the episode the agents produced."},
 	"likeness": {"label": "Likeness", "script": "res://src/likeness/likeness.gd",
 		"uses": [], "frames": ["landscape"], "needs": ["reading"], "mode": "likeness",
 		"blurb": "An actor reading the note in their own room, from their own footage: their real takes, joined where two frames nearly match, the mouth drawn from their own mouths to the voice's sounds through one mesh over the frame, their gestures on the words a director placed them. The Likeness component's own medium."},
 	"letter": {"label": "Letter", "script": "res://src/desk/letter.gd",
-		"uses": [], "frames": ["landscape"], "needs": ["reading"], "mode": "letter",
+		"uses": ["opening"], "frames": ["landscape"], "needs": ["reading"], "mode": "letter",
 		"blurb": "Somebody writing a letter at a desk, reading it aloud as the pen puts it down in a cursive hand: a thought said and not written, a line crossed out, a sketch drawn as it is described, the pen tapped while the writer thinks or pointed at whoever watches, and a picture over the whole screen for a passage read over it. The Letter component's own medium."},
 	"desk": {"label": "Desk", "script": "res://src/desk/desk.gd",
-		"uses": [], "frames": ["landscape"], "mode": "proof",
+		"uses": ["opening"], "frames": ["landscape"], "mode": "proof",
 		"blurb": "A ghost doing math at a desk: a legal pad under a lamp, and a pen that writes each formula on it by itself while the teacher talks, in a hand drawn from TeX's own layout. The Proof component's own medium - what it writes comes from the lesson its agents made."},
 }
 

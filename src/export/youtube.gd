@@ -80,6 +80,18 @@ const MACROS := {
 	"date": {"label": "%date%", "blurb": "the day it goes up", "always": true},
 }
 const CATEGORY := "22"
+## WHAT A VIDEO'S THUMBNAIL IS, the note's YouTube card's choice, never a mode's (the user, 2026-10-28:
+## "The default is nothing: just allow YouTube to select a thumbnail automatically"): YouTube's own, a
+## frame of the video's title screen (only a take that opened on its title has one - [method
+## Openings.of_take]), or a picture painted for the episode ([YouTubeThumbnail]).
+const THUMBNAILS := {
+	"youtube": {"label": "YouTube's choice", "blurb": "No thumbnail is set: YouTube offers frames of the video and shows one until another is picked in YouTube Studio."},
+	"title": {"label": "Title screen", "blurb": "A frame of the video's opening with the show's name fully up over the picture out of focus - only when the video opens on its title (Opening, on the Intro & outro card)."},
+	"painted": {"label": "Painted", "blurb": "Painted for each episode from what it says: a writer reads the episode and describes a thumbnail that is true of it and makes a viewer want to watch, and a painter paints it. The card that makes the episode lists it as a step, and ⟳ on its row paints it again."},
+}
+const THUMBNAIL := "youtube"
+## A thumbnail's size, as YouTube recommends it (a portrait video's, turned).
+const THUMBNAIL_SIZE := Vector2i(1280, 720)
 ## A playlist's page, as the description links it: the playlist's id follows.
 const PLAYLIST_LINK := "https://www.youtube.com/playlist?list="
 const PAID_PROMOTION := false

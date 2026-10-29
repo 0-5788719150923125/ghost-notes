@@ -41,6 +41,14 @@ class_name YouTubeCard
 ## writes REPLACES that list. The box stands at the top, beside "Upload after export" (the user: "where
 ## it belongs"); a line under the list says what the writer is doing to it.
 ##
+## THE THUMBNAIL IS CHOSEN HERE, AND ONLY HERE (the user, 2026-10-28: "I'm not a fan of this implicit,
+## undocumented behavior"): a show's card had handed every upload a frame of its title screen. Now the
+## card's Thumbnail says ([constant YouTube.THUMBNAILS]): YouTube's own choice (a new card's), a frame of
+## the title screen - asked of the take, which says whether it opened on its title ([method
+## Openings.of_take]) - or one PAINTED for the episode by the writer and the painter picked under it, a
+## step this card offers the card that makes the episode ([YouTubeThumbnail]), shown here once it is
+## painted. What cannot be had is said under it, and the video goes up with YouTube's.
+##
 ## A NOTE READ AS IT IS WRITTEN IS DESCRIBED HERE (2026-10-23, the user, of an actor's note: "I don't see
 ## anywhere it would be possible to write a description for videos uploaded in this way"): its panel shows
 ## the box ([method describe]) when nothing on the note writes its episodes' descriptions - a show's card
@@ -67,7 +75,9 @@ const KEY := "youtube"
 ## A new card's block: nothing goes up until the box is ticked, and then privately.
 const DEFAULTS := {"upload": false, "title": YouTube.TITLE_TEMPLATE, "privacy": YouTube.PRIVACY,
 	"category": YouTube.CATEGORY, "playlist": "", "playlist_title": "", "channel": "", "channel_name": "",
-	"write_tags": false, "description": ""}
+	"write_tags": false, "description": "", "thumbnail": YouTube.THUMBNAIL,
+	"thumbnail_writer": "claude", "thumbnail_writer_model": "", "thumbnail_writer_effort": "",
+	"thumbnail_painter": "codex", "thumbnail_painter_model": "", "thumbnail_painter_effort": ""}
 ## The Script card's rows the title's macros are read from ([method name_from]): [constant YouTube.MACROS]'
 ## keys of the same names.
 const NAMES := ["title", "episode", "author", "book"]
@@ -103,6 +113,15 @@ var _desc: TextEdit
 var _tags_note: Label
 ## The step that writes each episode's tags, while the box is ticked.
 var _tags: YouTubeTags
+var _thumbnail: OptionButton
+var _thumb_writer: AgentPick
+var _thumb_painter: AgentPick
+var _thumb_note: Label
+var _thumb_view: TextureRect
+## The step that paints each episode's thumbnail, while the Thumbnail is Painted.
+var _thumb: YouTubeThumbnail
+var _thumb_seen := []           # what the thumbnail's rows were last drawn for
+var _thumb_shown := ""          # the picture the preview holds, with its time
 var _tags_seen := []            # what the tag rows were last drawn for
 ## The Script card the note's names are read from ([method name_from]); null until a panel binds it.
 var _names: ScriptWriter
@@ -208,6 +227,7 @@ func _init() -> void:
 	prow.add_child(_reload)
 	_row("Playlist", prow)
 	_fill_playlists()
+	_build_thumbnail()
 	_desc = TextEdit.new()
 	_desc.placeholder_text = "Description"
 	_desc.tooltip_text = ("The video's description, as it goes up. The playlist it joins is named and linked "
@@ -259,6 +279,41 @@ func _ready() -> void:
 	refresh()
 
 
+## THE THUMBNAIL'S ROWS: the choice, the writer and the painter of a painted one (shown only then), the
+## line that says what goes up, and the painted one itself.
+func _build_thumbnail() -> void:
+	_thumbnail = OptionButton.new()
+	_thumbnail.fit_to_longest_item = false
+	_thumbnail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var tips := PackedStringArray(["The picture the video is shown by before it is watched."])
+	for k in YouTube.THUMBNAILS:
+		_thumbnail.add_item(Registry.label(YouTube.THUMBNAILS, k))
+		_thumbnail.set_item_metadata(_thumbnail.item_count - 1, k)
+		tips.append("%s: %s" % [Registry.label(YouTube.THUMBNAILS, k), Registry.blurb(YouTube.THUMBNAILS, k)])
+	_thumbnail.tooltip_text = "\n\n".join(tips) + ("\n\nA channel YouTube has not verified (youtube.com/verify) "
+		+ "cannot set one of its own: YouTube's stays.")
+	_select(_thumbnail, YouTube.THUMBNAIL)
+	_thumbnail.item_selected.connect(func(_i: int) -> void: refresh())
+	_row("Thumbnail", _thumbnail)
+	_thumb_writer = AgentPick.writer("Reads the episode and writes what its thumbnail shows - the subject, the "
+		+ "light, the colors, a few words on it or none - and which of the episode's own pictures the painter follows.")
+	_thumb_writer.changed.connect(refresh)
+	add_child(_thumb_writer)
+	_thumb_painter = AgentPick.painter("Paints the thumbnail the writer describes, cut to YouTube's 16:9.")
+	_thumb_painter.changed.connect(refresh)
+	add_child(_thumb_painter)
+	_thumb = YouTubeThumbnail.new(func() -> bool: return thumbnail() == "painted", _thumb_writer.choice,
+		_thumb_painter.choice)
+	_thumb_note = _small("")
+	add_child(_thumb_note)
+	_thumb_view = TextureRect.new()
+	_thumb_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_thumb_view.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_thumb_view.custom_minimum_size = Vector2(0, 126)
+	_thumb_view.visible = false
+	add_child(_thumb_view)
+
+
 ## The step that writes each episode's tags, and the line that says where it stands (the box that turns
 ## it on is at the top, beside "Upload after export"; the list it writes is the panel's, above).
 func _build_tags() -> void:
@@ -301,15 +356,19 @@ func _process(dt: float) -> void:
 
 ## The block for a document.
 func capture() -> Dictionary:
+	var w := _thumb_writer.choice()
+	var p := _thumb_painter.choice()
 	return {"upload": _upload.button_pressed, "title": _title.text, "privacy": _privacy_key(),
 		"category": _category_key(), "playlist": String(_list["id"]), "playlist_title": String(_list["title"]),
 		"channel": String(_chan["id"]), "channel_name": _channel_name(), "write_tags": writes_tags(),
-		"description": _desc.text}
+		"description": _desc.text, "thumbnail": thumbnail(),
+		"thumbnail_writer": w["agent"], "thumbnail_writer_model": w["model"], "thumbnail_writer_effort": w["effort"],
+		"thumbnail_painter": p["agent"], "thumbnail_painter_model": p["model"], "thumbnail_painter_effort": p["effort"]}
 
 
 ## ...and back. A key the block does not name keeps the card's default; a privacy YouTube does not
-## know is Private, a category it does not offer is People & Blogs, and no channel is the first one
-## kept here.
+## know is Private, a category it does not offer is People & Blogs, a thumbnail it does not know is
+## YouTube's choice, and no channel is the first one kept here.
 func apply(block: Dictionary) -> void:
 	var b := DEFAULTS.duplicate()
 	b.merge(block, true)
@@ -328,6 +387,11 @@ func apply(block: Dictionary) -> void:
 		_privacy.select(0)
 	var cat := str(b["category"])
 	_select(_category, cat if YouTube.CATEGORIES.has(cat) else YouTube.CATEGORY)
+	var th := str(b["thumbnail"])
+	_select(_thumbnail, th if YouTube.THUMBNAILS.has(th) else YouTube.THUMBNAIL)
+	_thumb_writer.set_choice(str(b["thumbnail_writer"]), str(b["thumbnail_writer_model"]), str(b["thumbnail_writer_effort"]))
+	_thumb_painter.set_choice(str(b["thumbnail_painter"]), str(b["thumbnail_painter_model"]), str(b["thumbnail_painter_effort"]))
+	_thumb_seen = []
 	_chan = {"id": str(b["channel"]), "name": str(b["channel_name"])}
 	if String(_chan["id"]).is_empty():
 		_chan = _first_channel()
@@ -346,6 +410,11 @@ func _privacy_key() -> String:
 
 func _category_key() -> String:
 	return String(_category.get_item_metadata(_category.selected)) if _category.selected >= 0 else YouTube.CATEGORY
+
+
+## The thumbnail picked ([constant YouTube.THUMBNAILS]).
+func thumbnail() -> String:
+	return String(_thumbnail.get_item_metadata(_thumbnail.selected)) if _thumbnail.selected >= 0 else YouTube.THUMBNAIL
 
 
 ## Select the item of [param box] whose metadata is [param key].
@@ -378,9 +447,10 @@ func description() -> String:
 
 
 ## THE STEPS THIS CARD ADDS TO THE NOTE'S EPISODES ([EpisodeStep]), for whatever card makes them: each
-## episode's tags. Listed only while [method writes_tags] (see [method YouTubeTags.wanted]).
+## episode's tags, listed only while [method writes_tags] (see [method YouTubeTags.wanted]), and its
+## thumbnail, only while it is Painted.
 func episode_steps() -> Array:
-	return [_tags]
+	return [_tags, _thumb]
 
 
 ## THE NOTE'S NAMES ARE [param writer]'S - its Script card's - from now on: %title% its Title (else the
@@ -452,14 +522,15 @@ func template() -> String:
 	return _title.text if not _title.text.strip_edges().is_empty() else YouTube.TITLE_TEMPLATE
 
 
-## WHAT AN UPLOAD SAYS (see [member Exporter.upload_provider]): [param base] - the panel's own part,
-## its description, tags (the note's one list), thumbnail moment and record, and the macros' `values`
-## when they are not the panel's as it stands now (an episode an export rendered) - with this card's
-## title, privacy, category, playlist (its id and title, which the description names) and channel laid
-## over it, and the description written here ([method describe]) before the panel's. {} when nothing is to
-## go up: the box is clear, or the panel has nothing ({}); `{refused: why}` when its title cannot be made
-## ([method why_not]) - the exporter says so, and nothing renders for it.
-func meta(base: Dictionary) -> Dictionary:
+## WHAT AN UPLOAD OF [param take] SAYS (see [member Exporter.upload_provider]): [param base] - the
+## panel's own part, its description, tags (the note's one list), the episode's folder and record, and the
+## macros' `values` when they are not the panel's as it stands now (an episode an export rendered) - with
+## this card's title, privacy, category, playlist (its id and title, which the description names), channel
+## and thumbnail ([method thumbnail_of]) laid over it, and the description written here ([method describe])
+## before the panel's. {} when nothing is to go up: the box is clear, or the panel has nothing ({});
+## `{refused: why}` when its title cannot be made ([method why_not]) - the exporter says so, and nothing
+## renders for it.
+func meta(base: Dictionary, take := "") -> Dictionary:
 	if not ticked() or base.is_empty():
 		return {}
 	var held: Variant = base.get("values", {})
@@ -480,7 +551,29 @@ func meta(base: Dictionary) -> Dictionary:
 	out["playlist_title"] = String(_list["title"])
 	out["channel"] = String(_chan["id"])
 	out["channel_name"] = _channel_name()
+	out.merge(thumbnail_of(take, String(out.get("folder", ""))), true)
+	out.erase("folder")
 	return out
+
+
+## THE THUMBNAIL AN UPLOAD OF [param take] TAKES, as the card's Thumbnail says - a painted one the episode's
+## in [param folder]: `{thumbnail}` (an image), `{thumbnail_at}` (a moment of the take, its frame taken
+## there), or neither - with `thumbnail_why` when the choice cannot be had, and YouTube's goes up.
+func thumbnail_of(take: String, folder: String) -> Dictionary:
+	match thumbnail():
+		"title":
+			var o := Openings.of_take(take, {"opening": Director.opening_shown(), "intro": Director.intro_hold})
+			if not Openings.titled(String(o["opening"])):
+				return {"thumbnail_why": "the video does not open on its title (Opening, on the Intro & outro card)"}
+			return {"thumbnail_at": Openings.title_moment(float(o["intro"]))}
+		"painted":
+			if folder.is_empty():
+				return {"thumbnail_why": "nothing on this note makes an episode to paint one for"}
+			var img := YouTubeThumbnail.image_in(folder)
+			if img.is_empty():
+				return {"thumbnail_why": "no thumbnail is painted for this episode yet"}
+			return {"thumbnail": img}
+	return {}
 
 
 ## The line under the title: how it goes up, and where this note's episode already is.
@@ -508,6 +601,7 @@ func refresh() -> void:
 			_preview.add_theme_color_override("font_color", Color(1.0, 0.85, 0.6))
 	_refresh_account()
 	_refresh_tags()
+	_refresh_thumbnail()
 	_look_quietly()
 
 
@@ -662,6 +756,70 @@ func _refresh_tags() -> void:
 			row, _tags.host_makes]
 	_tags_note.text = t
 	_tags_note.visible = not t.is_empty()
+
+
+# --- the thumbnail -------------------------------------------------------------------------------
+
+## UNDER THE THUMBNAIL: the writer and painter rows of a painted one, what goes up as it stands - a frame
+## of the title screen and when, or what the painter is doing for the episode the card that makes it shows
+## - and the painted one itself. Drawn again only when something it says has changed.
+func _refresh_thumbnail() -> void:
+	var th := thumbnail()
+	var feed: EpisodeFeed = _thumb.shown if th == "painted" and not _thumb.host.is_empty() else null
+	var st := _thumb.state(feed) if feed != null else ""
+	var img := YouTubeThumbnail.image_in(feed.folder()) if feed != null else ""
+	var words := feed != null and not feed.words().is_empty()
+	var stale := feed != null and not _thumb.made(feed).is_empty() and not _thumb.fresh(feed)
+	var now := [th, Director.opening_shown(), Director.intro_hold, _thumb.host, feed.folder() if feed != null else "",
+		st, img, FileAccess.get_modified_time(img) if not img.is_empty() else 0, words, stale,
+		_thumb.said(feed) if st in ["failed", "running", "queued"] else ""]
+	if now == _thumb_seen:
+		return
+	_thumb_seen = now
+	_thumb_writer.visible = th == "painted"
+	_thumb_painter.visible = th == "painted"
+	var row := "⟳ on its Thumbnail row on %s" % _thumb.host
+	var t := ""
+	match th:
+		"title":
+			if Openings.titled(Director.opening_shown()):
+				t = "A frame of the title screen, %.1f s in, goes up as the thumbnail." % Openings.title_moment(Director.intro_hold)
+			elif Medium.uses(Director.resolved_medium(), "opening"):
+				t = "⚠  This note does not open on its title (Opening, on the Intro & outro card): YouTube chooses the thumbnail."
+			else:
+				t = "⚠  This note's picture has no title screen: YouTube chooses the thumbnail."
+		"painted":
+			if feed == null:
+				t = "⚠  Nothing on this note makes episodes, so nothing paints their thumbnails: YouTube chooses."
+			elif st == "running" or st == "queued":
+				t = "Painting this episode's thumbnail: %s…" % _thumb.said(feed)
+			elif st == "failed":
+				t = "⚠  This episode's thumbnail could not be painted: %s. YouTube chooses one until %s tries again." % [
+					_thumb.said(feed), row]
+			elif not img.is_empty() and stale:
+				t = ("This thumbnail was painted before the episode's words were written again: it goes up as it is until "
+					+ "%s paints another, or %s does.") % [row, _thumb.host_makes]
+			elif not img.is_empty():
+				t = "This episode's thumbnail goes up with it. %s paints it again." % row
+			elif not words:
+				t = "This episode's thumbnail is painted once its words are written, along with it."
+			else:
+				t = "No thumbnail is painted for this episode yet: %s paints one, and so does %s. Until then YouTube chooses." % [
+					row, _thumb.host_makes]
+	_thumb_note.text = t
+	_thumb_note.visible = not t.is_empty()
+	_show_painted(img if th == "painted" else "")
+
+
+## The painted thumbnail at [param path] on the card, read again only when it changes; none for "".
+func _show_painted(path: String) -> void:
+	var key := ("%s|%d" % [path, FileAccess.get_modified_time(path)]) if not path.is_empty() else ""
+	if key == _thumb_shown:
+		return
+	_thumb_shown = key
+	var img := Image.load_from_file(path) if not path.is_empty() else null
+	_thumb_view.texture = ImageTexture.create_from_image(img) if img != null and not img.is_empty() else null
+	_thumb_view.visible = _thumb_view.texture != null
 
 
 # --- the channel ---------------------------------------------------------------------------------

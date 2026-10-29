@@ -1,5 +1,5 @@
 {
-	"digest": "a194ba2c999ee80eb2cbb9f2cb3d835812616019fc3de2752f98ba40ec80d056",
+	"digest": "1cd13f1b4a6feaf33e8c3d03e499b4dd570945c7bf755958f7d7d572b24fa4a4",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -64,6 +64,7 @@
 		"res://src/export/youtube.gd",
 		"res://src/export/youtube_card.gd",
 		"res://src/export/youtube_tags.gd",
+		"res://src/export/youtube_thumbnail.gd",
 		"res://src/geometry/branch3d.gd",
 		"res://src/geometry/contour.gd",
 		"res://src/geometry/crystal.gd",
@@ -152,6 +153,7 @@
 		"res://src/scene_kit/ghost_scene.gd",
 		"res://src/scene_kit/layer.gd",
 		"res://src/scene_kit/lighting.gd",
+		"res://src/scene_kit/openings.gd",
 		"res://src/scene_kit/scene3d.gd",
 		"res://src/scene_kit/scene_view.gd",
 		"res://src/scene_kit/shots.gd",

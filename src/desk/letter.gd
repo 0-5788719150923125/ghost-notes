@@ -200,6 +200,12 @@ var _swaps: Array = []         # the swap actions, in order ([constant LetterScr
 var _rests := PackedFloat32Array()  # a spoken word -> the rest the script writes before it ([method rests_of])
 var _let_go := {}              # a page -> the turn to it the camera lets go for, once it has begun to ([method _letting_go])
 var _let_go_at := -INF         # ...as of this moment
+var _picks := {}               # what was chosen for the desk ([method DeskLook.picks_of]) as it was last dressed
+## THE HAND'S SEED, the document's `seed`: how each word wavers and so where every line breaks, and the rests the voice
+## takes with them ([LetterWalk]) - the desk's own is [member _seed], its `desk`, so a desk drawn again changes nothing
+## the voice says (2026-10-29, the user: "when we change the seed - the only thing being changed would be the
+## placement of objects, and textures").
+var _hand := 1
 
 
 func mount(st: SubViewport) -> void:
@@ -245,25 +251,28 @@ func _ensure_doc() -> void:
 	var key := "%d|%d|%s|%d|%d|%s" % [src.hash(), int(letter.get("seed", 0)), String(letter.get("hand", "")),
 		hash(letter.get("svgs", {})), hash(letter.get("pictures", {})), " ".join(start)]
 	if key == _doc_key:
+		# THE DESK, WHAT IS ON IT AND ITS LIGHT, chosen while it plays ([LetterCard]): the desk dressed again, the letter
+		# as it is - nothing it writes, and nothing the voice says, depends on them
+		var picks := DeskLook.picks_of(letter)
+		if picks != _picks or _desk_of(letter) != _seed:
+			_set_desk(picks, _desk_of(letter))
 		return
 	_doc_key = key
 	load_letter(src, letter, start, int(d.get("start_index", -1)))
 
 
-## LOAD A LETTER: [param source] (its text, its marks in it) and [param letter] (`{seed, hand, svgs, ink,
-## pictures}`, any of them missing); for a reading started mid-way its first words [param start]
-## (normalized), [param near] the index they are about. Public for a gate, which hands it one by hand.
+## LOAD A LETTER: [param source] (its text, its marks in it) and [param letter] (`{seed, desk, hand, svgs, ink,
+## pictures, things, mood}`, any of them missing - `seed` the hand's ([member _hand]), `desk` the desk's (the hand's
+## when missing), its things and mood [method DeskLook.picks_of]); for a reading started mid-way its first words
+## [param start] (normalized), [param near] the index they are about. Public for a gate, which hands it one by hand.
 func load_letter(source: String, letter: Dictionary, start := PackedStringArray(), near := -1) -> void:
-	_seed = int(letter.get("seed", _seed))
-	look = DeskLook.of(_seed)
+	_hand = int(letter.get("seed", _hand))
 	# A PEN EACH INK, every one lying by the pad from the start: the desk keeps its things off them all
 	var pens := LetterScript.pens_of(source)
-	look["pens"] = pens.size()
 	if pens != _inks:
 		_dressed = -1
 	_inks = pens
-	_dress()
-	_lay_pens()
+	_set_desk(DeskLook.picks_of(letter), _desk_of(letter))
 	_let_go = {}
 	var svgs: Dictionary = letter.get("svgs", {}) if letter.get("svgs") is Dictionary else {}
 	var ink: Dictionary = letter.get("ink", {}) if letter.get("ink") is Dictionary else {}
@@ -272,11 +281,11 @@ func load_letter(source: String, letter: Dictionary, start := PackedStringArray(
 	_strokes = {}
 	var lengths := {}
 	for id in _records:
-		var got := Ink.strokes_of(_records[id], _seed, fonts)
-		var sched := Ink.schedule(got["strokes"], _seed)
+		var got := Ink.strokes_of(_records[id], _hand, fonts)
+		var sched := Ink.schedule(got["strokes"], _hand)
 		_strokes[id] = sched
 		lengths[id] = float(sched["length"])
-	var parsed := LetterScript.parse(source, _seed, svgs, lengths, _records,
+	var parsed := LetterScript.parse(source, _hand, svgs, lengths, _records,
 		LetterHand.of(String(letter.get("hand", ""))))
 	_actions = parsed["actions"]
 	_spans = parsed["spans"]
@@ -285,7 +294,7 @@ func load_letter(source: String, letter: Dictionary, start := PackedStringArray(
 	for i in _actions.size():
 		if String((_actions[i] as Dictionary)["kind"]) == "swap":
 			_swaps.append(i)
-	var moves := moves_of(_spans, _seed)
+	var moves := moves_of(_spans, _hand)
 	for i in moves.size():
 		if not (moves[i] as Dictionary).is_empty():
 			(_spans[i] as Dictionary)["move"] = moves[i]
@@ -834,6 +843,24 @@ func _lying(k: int) -> Transform3D:
 	var lie := Vector3.UP * PEN_R * 1.04
 	var nib: Vector3 = _pad.transform * ((rest["nib"] as Vector3) + lie)
 	return _pen_frame(nib, _pad.transform * ((rest["top"] as Vector3) + lie) - nib)
+
+
+## The desk's seed a document's `letter` names: its `desk`, or the hand's where it names none.
+func _desk_of(letter: Dictionary) -> int:
+	return int(letter.get("desk", letter.get("seed", _hand)))
+
+
+## THE DESK'S LOOK from its seed ([param desk], the desk's [member _seed]) and what was chosen for it ([param picks]),
+## dressed again when they changed - and its pens laid by it.
+func _set_desk(picks: Dictionary, desk: int) -> void:
+	if picks != _picks:
+		_dressed = -1
+	_picks = picks
+	_seed = desk
+	look = DeskLook.of(_seed, picks)
+	look["pens"] = _inks.size()
+	_dress()
+	_lay_pens()
 
 
 ## THE PENS PAST THE DESK'S OWN ([member _inks]): each built as [DeskMedium] builds its pen, its body lacquered in its

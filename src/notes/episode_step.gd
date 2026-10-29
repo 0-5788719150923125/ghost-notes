@@ -21,7 +21,10 @@ class_name EpisodeStep
 ## not know what was made from it - the step shows as not made, and Generate makes it again.
 ##
 ## A step of another kind sets its names and overrides [method _prompt], [method _land] and
-## [method summary].
+## [method summary] - and, where the writer's answer is a brief for another agent (a painter's), [method
+## _after] and [method _land_after]: the second job is run before anything is kept, so a step is made
+## only once all of it is ([YouTubeThumbnail]). Its writer is the maker's unless it names its own
+## ([method _writer]).
 
 ## A job that fails is tried this many more times before the step stops on it.
 const RETRIES := 1
@@ -119,7 +122,8 @@ func said(feed: EpisodeFeed) -> String:
 		"ready":
 			return summary(made(feed))
 		"running", "queued":
-			return "writer " + AgentJobs.activity(String((_jobs[feed.folder()] as Dictionary)["id"]))
+			var job: Dictionary = _jobs[feed.folder()]
+			return "%s %s" % [String(job.get("who", "writer")), AgentJobs.activity(String(job["id"]))]
 		"failed":
 			return String(_errors[feed.folder()])
 	if feed.words().is_empty():
@@ -169,7 +173,8 @@ func stop(feed: EpisodeFeed) -> void:
 	_jobs.erase(dir)
 
 
-## Land what ended, each refresh: kept, tried once more, or stopped on with why.
+## Land what ended, each refresh: kept, handed on to the job after it ([method _after]), tried once more,
+## or stopped on with why.
 func tick() -> void:
 	for dir in _jobs.keys():
 		var job: Dictionary = _jobs[dir]
@@ -184,8 +189,16 @@ func tick() -> void:
 		if st == "failed":
 			err = String(res.get("error", "the job failed"))
 		elif st == "done":
-			var got: Variant = _land(String(res.get("text", "")), job["feed"])
-			err = _keep(job["feed"], got as Dictionary, String(job["stamp"])) if got is Dictionary else str(got)
+			var feed: EpisodeFeed = job["feed"]
+			var got: Variant = _land_after(res, job["got"], feed) if job.has("got") \
+				else _land(String(res.get("text", "")), feed)
+			var after := _after(got as Dictionary, feed) if got is Dictionary and not job.has("got") else {}
+			if not after.is_empty():
+				err = _submit(feed, after, String(job["stamp"]), got)
+				if err.is_empty():
+					continue
+			else:
+				err = _keep(feed, got as Dictionary, String(job["stamp"])) if got is Dictionary else str(got)
 		if err.is_empty():
 			_errors.erase(dir)
 			continue
@@ -203,15 +216,30 @@ func _start(feed: EpisodeFeed) -> void:
 	if not p.has("system") or not p.has("prompt"):
 		_errors[dir] = "its prompt could not be built (see the log)"
 		return
-	var w := feed.writer()
-	var id := AgentJobs.submit({"kind": "text", "backend": String(w.get("agent", "claude")), "tier": tier,
-		"dir": dir.path_join("jobs").path_join(key), "system": String(p["system"]), "prompt": String(p["prompt"]),
-		"label": "%s %s" % [label.to_lower(), dir.get_file()], "model": String(w.get("model", "")),
-		"effort": String(w.get("effort", ""))})
+	var w := _writer(feed)
+	var err := _submit(feed, {"kind": "text", "backend": String(w.get("agent", "claude")), "tier": tier,
+		"system": String(p["system"]), "prompt": String(p["prompt"]), "images": p.get("images", []),
+		"model": String(w.get("model", "")), "effort": String(w.get("effort", ""))}, feed.stamp())
+	if not err.is_empty():
+		_errors[dir] = err
+
+
+## The job [param spec] queued for [param feed]'s episode, in a folder of its own under the episode's
+## `jobs/` - the writer's, or the one after it, [param got] what the writer's answer was landed as - its
+## [param stamp] the words' it was made from. "" once queued, else why not.
+func _submit(feed: EpisodeFeed, spec: Dictionary, stamp: String, got: Variant = null) -> String:
+	var dir := feed.folder()
+	var job := spec.duplicate()
+	var kind := String(spec.get("kind", "text"))
+	job["dir"] = dir.path_join("jobs").path_join(key if got == null else "%s_%s" % [key, kind])
+	job["label"] = "%s %s" % [label.to_lower(), dir.get_file()]
+	var id := AgentJobs.submit(job)
 	if id.is_empty():
-		_errors[dir] = "this session cannot start agents (read-only)"
-		return
-	_jobs[dir] = {"id": id, "feed": feed, "stamp": feed.stamp()}
+		return "this session cannot start agents (read-only)"
+	_jobs[dir] = {"id": id, "feed": feed, "stamp": stamp, "who": "writer" if kind == "text" else "painter"}
+	if got != null:
+		_jobs[dir]["got"] = got
+	return ""
 
 
 ## What landed, kept with the fingerprint of the words its job was sent ([param stamp]).
@@ -241,14 +269,32 @@ func _write(feed: EpisodeFeed, d: Dictionary) -> String:
 
 # --- what a step of another kind says ------------------------------------------------------------
 
-## The job's `{system, prompt}` for [param feed]'s episode, {} when it cannot be built.
+## The job's `{system, prompt}` for [param feed]'s episode - and `images`, the pictures the writer is
+## shown ([method TextGen.Backend], `images`) - {} when it cannot be built.
 func _prompt(_feed: EpisodeFeed) -> Dictionary:
 	return {}
+
+
+## Who writes it, `{agent, model, effort}`: the maker's own writer ([method EpisodeFeed.writer]).
+func _writer(feed: EpisodeFeed) -> Dictionary:
+	return feed.writer()
 
 
 ## The writer's answer [param text], as kept (a Dictionary), or why it cannot be (a String).
 func _land(_text: String, _feed: EpisodeFeed) -> Variant:
 	return "nothing is landed for this step"
+
+
+## THE JOB AFTER THE WRITER'S, for the answer landed as [param got]: an [AgentJobs] spec (its `kind`,
+## `backend`, `prompt`... - its folder is the step's), or {} when the answer is kept as it is.
+func _after(_got: Dictionary, _feed: EpisodeFeed) -> Dictionary:
+	return {}
+
+
+## What that job's result [param res] ([method AgentJobs.result]) makes of [param got]: as kept, or why
+## it cannot be.
+func _land_after(_res: Dictionary, _got: Dictionary, _feed: EpisodeFeed) -> Variant:
+	return "nothing is landed after this step"
 
 
 ## What its row says of what was made ([param m], as kept).

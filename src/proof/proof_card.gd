@@ -401,20 +401,18 @@ func upload_values() -> Dictionary:
 
 ## THE UPLOAD: the episode's name in the title, the framer's description - and, said by the code from
 ## what Lean answered, whether the proof was checked and by what (never the agents' to claim) - the
-## note's tags (the one list, as the YouTube card shows it), and THE THUMBNAIL's moment: the channel's
-## name over the desk out of focus, as a card show's is ([method ShowOpening.thumbnail_moment], at the
-## intro [param take] was rendered with). Without one the exporter takes none and YouTube picks a frame
-## of its own (2026-10-16, the user: "did not use the proper thumbnail ... the same thumbnail that
-## cards-based modes use"). {} before the episode has a name.
-func upload_base(take: String) -> Dictionary:
+## note's tags (the one list, as the YouTube card shows it), and the episode's folder, where the steps
+## other cards add keep what they made of it. The thumbnail is the YouTube card's to choose. {} before
+## the episode has a name.
+func upload_base(_take: String) -> Dictionary:
 	if _episode == null or episode_title().is_empty():
 		return {}
-	return upload_of(_episode, upload_values(), _show_tags(), ShowOpening.take_intro(take, Director.intro_hold))
+	return upload_of(_episode, upload_values(), _show_tags())
 
 
-## [method upload_base] for episode [param ep], with the title's macros [param values], the note's
-## [param tags] and the [param intro] its take was rendered with. Static and pure for the gate.
-static func upload_of(ep: ProofEpisode, values: Dictionary, tags: PackedStringArray, intro: float) -> Dictionary:
+## [method upload_base] for episode [param ep], with the title's macros [param values] and the note's
+## [param tags]. Static and pure for the gate.
+static func upload_of(ep: ProofEpisode, values: Dictionary, tags: PackedStringArray) -> Dictionary:
 	var p: Dictionary = ep.read_json("problem") if ep.read_json("problem") is Dictionary else {}
 	var s: Variant = ep.read_json("solve")
 	var solve: Dictionary = s if s is Dictionary else {}
@@ -433,8 +431,7 @@ static func upload_of(ep: ProofEpisode, values: Dictionary, tags: PackedStringAr
 			else "The formal check in Lean did not finish for this episode, and the video says so.")
 	var desc := String(p.get("description", "")).strip_edges()
 	return {"values": values, "description": (desc + ("\n\n" + check if not check.is_empty() else "")).strip_edges(),
-		"tags": Array(tags), "record": ep.dir.path_join("youtube.json"),
-		"thumbnail_at": ShowOpening.thumbnail_moment(intro)}
+		"tags": Array(tags), "folder": ep.dir, "record": ep.dir.path_join("youtube.json")}
 
 
 # --- the episode ---------------------------------------------------------------------------------

@@ -43,8 +43,11 @@ void fragment() {
 	if (kind == 1) {
 		// METAL: tarnish and patina gather where the surface is worked and where noise says
 		metal = 1.0;
-		albedo = color * (0.9 + 0.2 * n1);
-		rough = clamp(rough + (n2 - 0.5) * 0.14, 0.04, 1.0);
+		// its grain fades as it is polished past 0.7: a polished face has none, and on one 4 cm across (a steel tag,
+		// 2026-10-29) the grain's few broad patches clouded it
+		float worked = 1.0 - smoothstep(0.7, 0.95, polish);
+		albedo = color * (1.0 + 0.2 * (n1 - 0.5) * worked);
+		rough = clamp(rough + (n2 - 0.5) * 0.14 * worked, 0.04, 1.0);
 		float groove = o.x * (1.0 - orn_paint);
 		float pm = smoothstep(0.5, 0.85, n1 * 0.55 + n2 * 0.45 + wear * 0.45 - 0.2 + groove * 0.5) * wear;
 		albedo = mix(albedo, color2, pm);

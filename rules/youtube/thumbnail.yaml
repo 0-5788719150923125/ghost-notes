@@ -1,0 +1,85 @@
+# A THUMBNAIL PAINTED FOR EACH EPISODE (the user, 2026-10-28: "an agentic workflow ... which would ask an
+# agent to produce a compelling and relevant thumbnail. This flow might benefit from both the writer and
+# the painter"). The YouTube card's Thumbnail, Painted, adds this step to the card that makes the episode
+# (YouTubeThumbnail, an EpisodeStep): the writer reads the episode and writes what the painter paints, the
+# painter paints it, and the code cuts it to YouTube's shape (1280x720).
+#
+# TRUE OF THE VIDEO: a thumbnail that promises what the video does not hold misleads the viewer who
+# clicks it - and YouTube counts it as misleading - so the writer shows something the video holds.
+#
+# THE WORDS ON IT ARE THE WRITER'S CHOICE, few or none: a thumbnail is often seen no bigger than a stamp,
+# and the title is printed under it already. The painter writes them exactly as given and nothing more:
+# an image model left to itself letters in words of its own.
+#
+# THE EPISODE'S OWN PICTURES (a show's paintings), when it has any, are shown to the writer, who names the
+# ones the painter is handed to paint after - so the thumbnail keeps the show's look.
+#
+# NO SAMPLE BRIEF: a sample in a prompt comes back word for word, every run, so the format is placeholders
+# only.
+#
+# The code gives: {{show}}, {{title}}, {{description}}, each maybe empty; {{words}}; {{pictures}} (how
+# many pictures the writer is shown, 0 for none). The painter's part: {{picture}}, {{words}} (maybe empty),
+# {{refs}} (whether it is handed pictures to follow) and {{portrait}} (a portrait video's thumbnail).
+system: >-
+  You design the thumbnail a video goes up to YouTube with. Answer with the JSON asked for and nothing
+  else.
+prompt:
+  - >-
+      Design the thumbnail for one video: the picture a viewer sees before choosing to watch it, often
+      no bigger than a stamp in a list on a phone.
+  - ""
+  - when: show
+    say: "THE SHOW: {{show}}"
+  - when: title
+    say: "THIS VIDEO'S TITLE, printed under the thumbnail: {{title}}"
+  - when: description
+    say: "ITS DESCRIPTION: {{description}}"
+  - ""
+  - "WHAT THE VIDEO SAYS, as its voice reads it:"
+  - ""
+  - "{{words}}"
+  - ""
+  - when: pictures
+    say: >-
+      THE VIDEO'S OWN PICTURES are attached, numbered 1 to {{pictures}} in the order the video shows
+      them. The painter can be handed any of them to paint after, so the thumbnail keeps the video's
+      look.
+  - >-
+      Show one thing this video holds that would make a viewer want to see it: a moment, an object, a
+      figure or a place from it. One clear subject, large in the frame, on a ground plain enough to read
+      at a glance, with strong light and dark and colors that stand apart. Nothing the video does not
+      hold: no scene, promise or person that is not in it.
+  - >-
+      Words on it are your choice: none, or at most four that the title does not already say, large
+      enough to read at the size of a stamp. No logo, no watermark, no border, and no channel's name
+      unless the title says it.
+  - >-
+      Write for the painter everything it must paint: the subject, where it is, the light, the colors
+      and how it is framed. The painter sees only what you write{{#pictures}} and the pictures you
+      hand it{{/pictures}}.
+  - ""
+  - "Answer with ONE JSON object and nothing else:"
+  - ""
+  - when: pictures
+    say: '{"picture": "<what the painter paints>", "words": "<the words on it, or empty>", "after": [<the numbers of the pictures the painter is handed, or none>]}'
+  - when: "!pictures"
+    say: '{"picture": "<what the painter paints>", "words": "<the words on it, or empty>"}'
+painter:
+  - "Paint the thumbnail of a YouTube video."
+  - ""
+  - "{{picture}}"
+  - ""
+  - when: words
+    say: >-
+      THE WORDS ON IT, exactly these and no others: "{{words}}" - large, bold and clean, in a typeface
+      that suits the picture, set where they cover nothing that matters.
+  - when: "!words"
+    say: "No text, letters or numbers anywhere in it."
+  - when: refs
+    say: >-
+      The attached pictures are the video's own: paint in their look - their style, their colors, their
+      world - and never copy one whole.
+  - >-
+      FORMAT: {{#portrait}}PORTRAIT 9:16{{/portrait}}{{^portrait}}LANDSCAPE 16:9{{/portrait}}. It is
+      cut to exactly that shape from whatever size is painted, so keep everything that matters away from
+      the edges. No border, no frame, no watermark, no signature.

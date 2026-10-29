@@ -21,7 +21,7 @@ class_name ScriptMarks
 ## not all of the features from generative mode should also work here"). The palette was empty
 ## there because no entry named the mode: a show's document is the BRIEF its agents work from,
 ## never read aloud, so a mark in it does something only where the code reads it out of the brief
-## or an agent is told to honor it. Those are offered ("cards" in `modes`), each saying what it
+## or an agent is told to honor it. Those are offered ("table" in `modes`), each saying what it
 ## does THERE (`blurbs`): a speaker cue gives the show another voice, a `## Cards` section is its
 ## deck, a macro reads as its default and a note to self is taken out before any agent sees the
 ## brief ([method TablePrompts.brief]), and a hesitation, a delivery or a stressed word stands in
@@ -38,7 +38,8 @@ class_name ScriptMarks
 ##            ends up in the fill is left selected so typing replaces it.
 ##   line     "own": the mark goes on a line of its own; "start": at the head of the line;
 ##            "" anywhere
-##   modes    the panels that honor it ("generative", "synthesis", "cards")
+##   modes    the Script cards that offer it, by their workspace's mode ([method Components.script_mode]:
+##            "generative", "synthesis", "table")
 ##   blurbs   optional, {mode: blurb}: what it does in a panel where that differs ([method blurb])
 ##   within   optional, a key of [constant REGIONS]: colored only inside that section of the script
 ##   pattern  how [ScriptHighlighter] finds it. Registry ORDER is highlight priority: a span

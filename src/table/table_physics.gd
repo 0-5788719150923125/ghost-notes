@@ -40,6 +40,11 @@ const REPORT_AFTER := 1.0
 ## A bake carried to another table is taken up to this long before the first moment the plans differ (seconds): a
 ## solid may move a frame or two either side of its stretch ([method _may_move], [method _moves_at]).
 const CARRY_MARGIN := 0.25
+## How far past the last frame baked a live show may run before the log says what is in things is behind (seconds).
+const OUTRUN := 0.5
+## WHAT A BLADE CUTS: loose things of these kinds of material ([constant Props.MATERIALS]) - a root, a candle, a sheet of
+## paper, cloth, leather ([method Particles._cut_through]).
+const CUTS := ["plant", "wax", "paper", "leather", "fabric"]
 ## The most grains one grains part is laid as, and how full a cubic packing of spheres is.
 const GRAINS_MOST := 240
 const PACKED := 0.52
@@ -55,10 +60,16 @@ const PARCEL_LIFE := 2.5
 ## A STREAM drawn: its thinnest and thickest (meters).
 const STREAM_R := Vector2(0.0004, 0.004)
 ## RIPPLES and SPLASHES: how high a ring rises for what struck it (meters a kilogram-meter-a-second, and its least and
-## most), how long a splash's drops fly at most (seconds), and how many drops are drawn at once.
+## most); a splash's drops - one for every SPLASH_MASS (kilograms) of the thing that entered, if it entered faster than
+## SPLASH_SPEED (meters a second), thrown up at SPLASH_UP of that speed, no more than DROPS_EACH: a stone dropped from a
+## hand's height throws a few a centimeter or two, and a resin tear, a slip or a pinch of anything none; how long a
+## splash's drops fly at most (seconds), and how many drops are drawn at once.
 const RING_GAIN := 6.0
 const RING := Vector2(0.0002, 0.0025)
-const SPLASH_FROM := 0.0004
+const SPLASH_MASS := 0.002
+const SPLASH_SPEED := 0.5
+const SPLASH_UP := 0.35
+const DROPS_EACH := 8
 const DROP_LIFE := 0.7
 const DROPS := 64
 ## A grain drawn: how much larger than its sphere its lump is, so a heap reads whole.
@@ -90,6 +101,9 @@ var _loose_of := {}           # work -> its loose entry
 var frames: Array = []        # {x, r, alive, bp, bi, liq, hit} a frame
 var parcels: Array = []       # [{t0, p, v, vol, from, t1, into}]
 var ripples: Array = []       # [{t, liquid, at, size}]
+var pieces: Array = []        # [{li, body, D, planes, key}]: each piece a blade cut, as it was cut ([method _cut])
+var _piece_at := {}           # body -> its latest piece
+var _piece_nodes := {}        # a piece's key -> its node, made the first time it is drawn
 var splashes: Array = []      # [{t, at, color, size, k}]
 var _liq: Array = []          # the liquids' own state as it is baked
 var _held := {}               # a held loose thing's entry -> it re-based on where the physics had it
@@ -114,7 +128,8 @@ var _drops: MultiMeshInstance3D = null
 var _clear_at := 0.0          # where the bake was restarted from
 var _layout := 0              # what this table's physics is made of, as a number ([method _layout_of])
 var _carried: Variant = null  # a bake from a table stood before, until the first plan is taken ([method adopt])
-var _halt := false            # a bake given up ([method halt])
+var _halt := false
+var _outrun := false            # a live show past the last frame baked, as last said            # a bake given up ([method halt])
 var notes := PackedStringArray()
 
 
@@ -136,6 +151,9 @@ func take(ti: int, t: Dictionary, b: Dictionary, node: Node3D, first: int) -> vo
 			"wi": own.get("wi", -1), "meshes": sd.get("meshes", []), "holder": sd["holder"], "xform": sd["xform"], "loose": own.get("loose", -1)}
 		if _is_liquid(part, mats):
 			entry["liquid_part"] = true
+		# A BLADE ([method Particles._cut_through]): what it comes down through, it cuts
+		if bool(part.get("edge", false)):
+			entry["edge"] = true
 		solids.append(entry)
 	for g in b.get("grains", []):
 		var gd: Dictionary = g
@@ -608,7 +626,8 @@ func _matter_of(name: String, mats: Dictionary) -> int:
 		fr = Vector2(0.6, 0.45)
 	elif String(m.get("kind", "")) in ["glass", "crystal", "metal"]:
 		fr = Vector2(0.45, 0.3)
-	var i := sim.add_matter(float(m.get("density", row["density"])), float(row["strength"]), float(m.get("dissolves", row["dissolves"])), fr)
+	var i := sim.add_matter(float(m.get("density", row["density"])), float(row["strength"]), float(m.get("dissolves", row["dissolves"])), fr,
+		String(m.get("kind", "")) in CUTS)
 	_matter[name] = i
 	return i
 
@@ -720,6 +739,8 @@ func _frames_reset() -> void:
 	parcels = []
 	ripples = []
 	splashes = []
+	pieces = []
+	_piece_at = {}
 	_runs_seen = (work.runs as Array).duplicate(true)
 	_checkpoint()
 
@@ -728,7 +749,7 @@ func _checkpoint() -> void:
 	var liq: Array = []
 	for s in _liq:
 		liq.append((s as Dictionary).duplicate(true))
-	_ck.append({"k": _k, "sim": sim.snapshot(), "liq": liq, "np": parcels.size(), "nr": ripples.size(), "ns": splashes.size(),
+	_ck.append({"k": _k, "sim": sim.snapshot(), "liq": liq, "np": parcels.size(), "nr": ripples.size(), "ns": splashes.size(), "npc": pieces.size(),
 		"sprinkled": _sprinkles.map(func(s: Dictionary) -> int: return int(s.get("done", 0))),
 		"sprinkled_ids": _sprinkles.map(func(s: Dictionary) -> PackedInt32Array: return (grains[int(s["grains"])] as Dictionary)["ids"]),
 		"held": _held.duplicate(true)})
@@ -758,6 +779,10 @@ func _restore(ck: Dictionary) -> void:
 			(p as Dictionary)["into"] = -2
 	ripples = ripples.filter(func(r: Dictionary) -> bool: return float(r["t"]) < t)
 	splashes = splashes.filter(func(s: Dictionary) -> bool: return float(s["t"]) < t)
+	pieces = pieces.slice(0, int(ck.get("npc", 0)))
+	_piece_at = {}
+	for k in pieces.size():
+		_piece_at[int((pieces[k] as Dictionary)["body"])] = k
 	var done: Array = ck["sprinkled"]
 	var done_ids: Array = ck.get("sprinkled_ids", [])
 	for i in _sprinkles.size():
@@ -804,6 +829,7 @@ func _take_carried(c: Dictionary) -> bool:
 	parcels = c["parcels"]
 	ripples = c["ripples"]
 	splashes = c["splashes"]
+	pieces = c.get("pieces", [])
 	_ck = (c["ck"] as Array).duplicate()
 	_restore(ck)
 	return true
@@ -817,7 +843,7 @@ func carry() -> Dictionary:
 		return _carried
 	_lock.lock()
 	var out := {"layout": _layout, "k": _k, "frames": frames.slice(0, _k), "ck": _ck.duplicate(), "parcels": parcels.duplicate(),
-		"ripples": ripples.duplicate(), "splashes": splashes.duplicate(), "plan": _plan_of()}
+		"ripples": ripples.duplicate(), "splashes": splashes.duplicate(), "pieces": pieces.duplicate(), "plan": _plan_of()}
 	_lock.unlock()
 	return out
 
@@ -1104,6 +1130,11 @@ func _liquids_step(t: float, dt: float) -> Dictionary:
 				S["v"] = float(S["v"]) + (f - float(S["f"])) * float(L["built_v"])
 			S["f"] = f
 		S["v"] = clampf(float(S["v"]), 0.0, float(L["full_v"]))
+		# ...AND ITS COLOR AS THE WORK TINTS IT: what is poured or dipped out of it carries the color it is now
+		if wi >= 0 and twin._chan.has("w%d:tint" % wi):
+			var tint: Variant = twin.value("w%d:tint" % wi, t)
+			if tint is Color:
+				S["color"] = tint
 		var up := (binv * Vector3.UP).normalized()
 		var share := float(S["v"]) / maxf(float(L["full_v"]), 1e-12)
 		var s := vs.level(up, share)
@@ -1177,10 +1208,50 @@ func _liquids_step(t: float, dt: float) -> Dictionary:
 			"solid": int(L["solid"])})
 		S["n"] = n_w
 		S["c"] = c_w
+	_dips(dt)
 	var vessels: Array = []
 	for L in liquids:
 		vessels.append({"solid": int((L as Dictionary)["solid"]), "vessel": (L as Dictionary)["vessel"]})
 	return {"solids": solids, "liquids": lw, "top": 0.0, "vessels": vessels}
+
+
+## A VESSEL UNDER A LIQUID FILLS FROM IT - a ladle in its pot, a cup pushed under, a jar sunk: where the liquid's surface
+## stands above the dipped vessel's rim, in the liquid's own inside, it flows in over that rim as a weir does (the flow it
+## would pour out by, [method Vessel.overflow]) until it stands as high inside as out, or there is none left outside. The
+## inside of anything is filled so, and empties again by tipping. (the-quiet-crucible 707668: the ladle "dips into the
+## finished brew, draws up a measure" - and came up empty, so its pour into the vial poured nothing.)
+func _dips(dt: float) -> void:
+	for bi in liquids.size():
+		var LB: Dictionary = liquids[bi]
+		var SB: Dictionary = _liq[bi]
+		var sb: Dictionary = solids[int(LB["solid"])]
+		if not bool(sb["on"]) or float(SB["v"]) >= float(LB["full_v"]):
+			continue
+		var xb: Transform3D = sb["xf"]
+		var ib := xb.affine_inverse()
+		var vb: Vessel = LB["vessel"]
+		var up := (xb.basis.inverse() * Vector3.UP).normalized()
+		for ai in liquids.size():
+			var LA: Dictionary = liquids[ai]
+			var SA: Dictionary = _liq[ai]
+			if ai == bi or int(LA["solid"]) == int(LB["solid"]) or float(SA["v"]) <= 1e-9:
+				continue
+			var sa: Dictionary = solids[int(LA["solid"])]
+			if not bool(sa["on"]) or not (sa["wbox"] as AABB).intersects(sb["wbox"]):
+				continue
+			# its surface along the up the dipped vessel sees, in that vessel's own space
+			var s := (ib * (SA["c"] as Vector3)).dot(up)
+			var of := vb.overflow(up, s)
+			if float(of["q"]) <= 0.0 or not (LA["vessel"] as Vessel).contains((sa["inv"] as Transform3D) * (xb * vb.rim[int(of["at"])])):
+				continue
+			var want := vb.share_under(up, s) * float(LB["full_v"]) - float(SB["v"])
+			var dv := minf(minf(float(of["q"]) * absf(xb.basis.determinant()) * dt, want), float(SA["v"]))
+			if dv <= 1e-12:
+				continue
+			SA["v"] = float(SA["v"]) - dv
+			SB["v"] = float(SB["v"]) + dv
+			if not bool(LB["made"]) or float(SB["v"]) <= dv * 1.01:
+				SB["color"] = (SB["color"] as Color).lerp(SA["color"], clampf(dv / float(SB["v"]), 0.0, 1.0))
 
 
 ## Whether a liquid's fill is being changed by the work at [param t].
@@ -1360,11 +1431,20 @@ func _sprinkle_step(t: float, _dt: float) -> void:
 		sd["done"] = due
 
 
-## WHAT THE STEP SAID: things entering a liquid ring it (and, hard enough, splash it).
+## WHAT THE STEP SAID: things entering a liquid ring it, all of a frame's together - and a heavy thing entering fast
+## splashes it, ONE THING AT A TIME: by its own mass and speed, never what the frame's grains add up to (the-quiet-crucible
+## 707668's iron filings, tipped in a little at a time, summed to 37 splashes in five seconds and 64 drops in the air at
+## once, 6 cm over the brew - the user: "the splash was far too intense: it splattered everywhere, which isn't really what
+## you want hot liquid to do"). A grain weighs what it is drawn as, not the sphere that stands for a clump of them: fine
+## stuff rings a surface and throws nothing.
 func _events(t: float) -> void:
 	var by := {}
+	var each := {}
 	for e in sim.events:
 		var ed: Dictionary = e
+		if String(ed["kind"]) == "cut":
+			_cut(ed)
+			continue
 		if String(ed["kind"]) != "enter":
 			continue
 		var li := int(ed["liquid"])
@@ -1374,13 +1454,80 @@ func _events(t: float) -> void:
 		b["at"] = (b["at"] as Vector3) + (ed["at"] as Vector3)
 		b["m"] = float(b["m"]) + float(ed["strength"])
 		b["n"] = int(b["n"]) + 1
+		var i := int(ed["i"])
+		var bi := sim.body[i]
+		var key := bi if bi >= 0 else -1 - i
+		if not each.has(key):
+			each[key] = {"li": li, "at": ed["at"], "m": _body_mass(bi) if bi >= 0 else _grain_mass(i), "v": 0.0, "n": 0}
+		each[key]["v"] = maxf(float(each[key]["v"]), float(ed["strength"]) * sim.w[i])
+		each[key]["n"] = int(each[key]["n"]) + 1
+	# ...as it first goes in: a thing whose spheres were in already splashed as it entered
+	for key in each.keys():
+		if int(key) >= 0:
+			var wet := 0
+			for i in (sim.bodies[int(key)] as Dictionary)["ids"]:
+				wet += 1 if sim.alive[i] == 1 and sim.wet[i] == int(each[key]["li"]) else 0
+			if wet > int(each[key]["n"]):
+				each.erase(key)
 	for li in by:
 		var b: Dictionary = by[li]
 		var at: Vector3 = (b["at"] as Vector3) / float(int(b["n"]))
 		var size := clampf(float(b["m"]) * RING_GAIN, RING.x, RING.y)
 		ripples.append({"t": t, "liquid": int(li), "at": at, "size": size})
-		if size >= SPLASH_FROM:
-			splashes.append({"t": t, "at": at, "size": size, "color": (_liq[int(li)] as Dictionary)["color"], "k": ripples.size()})
+	for key in each:
+		var d: Dictionary = each[key]
+		var count := mini(int(float(d["m"]) / SPLASH_MASS), DROPS_EACH) if float(d["v"]) >= SPLASH_SPEED else 0
+		if count >= 1:
+			splashes.append({"t": t, "at": d["at"], "count": count, "up": float(d["v"]) * SPLASH_UP,
+				"color": (_liq[int(d["li"])] as Dictionary)["color"], "k": ripples.size()})
+
+
+## A BLADE'S CUT ([method Particles._cut_through]): its two sides, each a piece of the loose thing it was cut from, drawn
+## as that thing's mesh kept behind every cut it has had ([MeshCut]) - each cut a plane in the thing's own space, so a
+## piece cut again keeps its first cut too.
+func _cut(e: Dictionary) -> void:
+	var bi := int(e["body"])
+	var was: Transform3D = e["was"]
+	var li := -1
+	var d := Transform3D.IDENTITY
+	var planes: Array = []
+	if _piece_at.has(bi):
+		var old: Dictionary = pieces[int(_piece_at[bi])]
+		li = int(old["li"])
+		d = was * (old["D"] as Transform3D)
+		planes = (old["planes"] as Array).duplicate()
+	else:
+		for k in loose.size():
+			if int((loose[k] as Dictionary)["body"]) == bi:
+				li = k
+		if li < 0:
+			return
+		d = was * ((loose[li] as Dictionary)["n0"] as Transform3D)
+	var local: Plane = d.affine_inverse() * (e["plane"] as Plane)
+	for side in [[bi, local], [int(e["new"]), -local]]:
+		var ps := planes.duplicate()
+		ps.append(side[1])
+		var key := hash([li, ps.map(func(p: Plane) -> Array: return [p.normal.snapped(Vector3.ONE * 1e-4), snappedf(p.d, 1e-5)])])
+		_piece_at[int(side[0])] = pieces.size()
+		pieces.append({"li": li, "body": int(side[0]), "D": d, "planes": ps, "key": key})
+
+
+## Loose thing [param bi]'s mass (kilograms): its spheres' still whole.
+func _body_mass(bi: int) -> float:
+	var m := 0.0
+	for i in (sim.bodies[bi] as Dictionary)["ids"]:
+		if sim.alive[i] == 1:
+			m += 1.0 / maxf(sim.w[i], 1e-12)
+	return m
+
+
+## Grain [param i]'s mass (kilograms) as large as its part draws a grain - the sphere it is may stand for a clump.
+func _grain_mass(i: int) -> float:
+	var r := sim.r[i]
+	var o := sim.owner[i]
+	if o >= 0 and o < grains.size() and (grains[o] as Dictionary).get("part") is Dictionary:
+		r = minf(r, float(((grains[o] as Dictionary)["part"] as Dictionary).get("grain", 0.3)) * 0.005)
+	return sim.rho[i] * 1000.0 * 4.0 / 3.0 * PI * r * r * r
 
 
 ## The frame as it stands: every particle, each loose thing's pose and wholeness, each liquid.
@@ -1410,7 +1557,22 @@ func _record(_t: float) -> Dictionary:
 	return {"x": last["x"] if same else sim.x.duplicate(), "r": last["r"] if same else sim.r.duplicate(),
 		"alive": last["alive"] if same else sim.alive.duplicate(), "owner": last["owner"] if same else sim.owner.duplicate(),
 		"body": last["body"] if same else sim.body.duplicate(), "bp": bp, "bi": bi, "liq": liq,
-		"streams": _streams_at(_t), "rings": _rings_at(_t), "drops": _drops_at(_t)}
+		"streams": _streams_at(_t), "rings": _rings_at(_t), "drops": _drops_at(_t), "cut": _cuts_now()}
+
+
+## EVERY PIECE A BLADE HAS CUT, where it is now: `[[key, loose thing, its planes, its pose (the table's space)]]` - and,
+## its key -1 past the last, which bodies are pieces (a PackedByteArray by body), whose spheres are never drawn as lumps.
+func _cuts_now() -> Array:
+	var out: Array = []
+	var cut := PackedByteArray()
+	cut.resize(sim.bodies.size())
+	for bi in sim.bodies.size():
+		if bool((sim.bodies[bi] as Dictionary).get("cut", false)) and _piece_at.has(bi):
+			var pc: Dictionary = pieces[int(_piece_at[bi])]
+			out.append([int(pc["key"]), int(pc["li"]), pc["planes"], sim.body_pose(bi) * (pc["D"] as Transform3D)])
+			cut[bi] = 1
+	out.append([-1, cut])
+	return out
 
 
 ## Whether no sprinkle let a grain fall at [param t] (a grain made then is in the solver, not yet in any frame).
@@ -1480,12 +1642,11 @@ func _drops_at(t: float) -> Array:
 			continue
 		if tau > DROP_LIFE:
 			break
-		var count := clampi(int(float(sp["size"]) / RING.y * 10.0), 3, 10)
-		for j in count:
+		for j in int(sp["count"]):
 			if out.size() >= DROPS:
 				return out
 			var a := TAU * Hands.share(int(sp["k"]) * 31 + j, 3)
-			var up := lerpf(0.5, 1.1, Hands.share(int(sp["k"]) * 31 + j, 4)) * sqrt(float(sp["size"]) / RING.y)
+			var up := lerpf(0.7, 1.0, Hands.share(int(sp["k"]) * 31 + j, 4)) * float(sp["up"])
 			var vel := Vector3(cos(a) * up * 0.35, up, sin(a) * up * 0.35)
 			var p := (sp["at"] as Vector3) + vel * tau + Vector3.DOWN * (0.5 * GRAVITY * tau * tau)
 			if p.y < (sp["at"] as Vector3).y - 0.002:
@@ -1505,9 +1666,15 @@ func tick(t: float) -> void:
 		_lock.lock()
 		_want = t + HORIZON
 		var behind := float(_k) / float(FPS) <= _want
+		var at := float(frames.size()) / float(FPS)
 		_lock.unlock()
 		if behind:
 			_sem.post()
+		# OUTRUN: the show past the last frame baked draws that frame (a loose thing the work has moved since is where the
+		# work has it, [method TableWork._outran]) - said once a stretch, so a log says when what is in things lagged
+		if (t > at + OUTRUN) != _outrun:
+			_outrun = not _outrun
+			print("ghost: what is in things %s (the show at %.1f s, baked to %.1f s)" % ["is behind the show" if _outrun else "caught up", t, at])
 	var f: Variant = frame_at(t)
 	if f == null:
 		return
@@ -1517,6 +1684,7 @@ func tick(t: float) -> void:
 		_draw_particles(fd)
 		_draw_streams(fd)
 		_draw_drops(fd)
+		_draw_pieces(fd)
 		_drawn = fd
 	_draw_liquids(fd, t)
 
@@ -1529,6 +1697,14 @@ func frame_at(t: float) -> Variant:
 		out = frames[clampi(int(floor(maxf(t, 0.0) * float(FPS))), 0, frames.size() - 1)]
 	_lock.unlock()
 	return out
+
+
+## How far the bake has gone (show seconds): the last frame there is.
+func baked_to() -> float:
+	_lock.lock()
+	var n := frames.size()
+	_lock.unlock()
+	return float(n - 1) / float(FPS)
 
 
 ## Where loose work [param wi]'s node is at [param t] (the table's space), or null - and whether it is whole.
@@ -1574,6 +1750,9 @@ func _draw_particles(f: Dictionary) -> void:
 	var alive: PackedByteArray = f["alive"]
 	var owner: PackedInt32Array = f["owner"]
 	var bi: PackedByteArray = f["bi"]
+	var body: PackedInt32Array = f["body"]
+	# a piece a blade cut is drawn as its own mesh ([method _draw_pieces]), never as lumps
+	var cut: PackedByteArray = ((f.get("cut", []) as Array).back() as Array)[1] if not (f.get("cut", []) as Array).is_empty() else PackedByteArray()
 	var counts := {}
 	for i in x.size():
 		if alive[i] == 0:
@@ -1583,6 +1762,8 @@ func _draw_particles(f: Dictionary) -> void:
 		if o >= 1000:
 			var li := o - 1000
 			if li < bi.size() and bi[li] == 1:
+				continue
+			if i < body.size() and body[i] >= 0 and body[i] < cut.size() and cut[body[i]] == 1:
 				continue
 			mm = ((loose[li] as Dictionary)["mm"] as MultiMeshInstance3D).multimesh
 		elif o >= 0 and o < grains.size():
@@ -1723,6 +1904,57 @@ static func _tube(mesh: ImmediateMesh, pts: PackedVector3Array, rad: PackedFloat
 				mesh.surface_set_normal(vtx[1])
 				mesh.surface_add_vertex(vtx[0])
 	mesh.surface_end()
+
+
+## THE PIECES A BLADE CUT in frame [param f]: each where it is, made the first time it is seen ([method _piece_node]).
+func _draw_pieces(f: Dictionary) -> void:
+	var seen := {}
+	for c in f.get("cut", []):
+		var key := int((c as Array)[0])
+		if key == -1:
+			continue
+		if not _piece_nodes.has(key):
+			_piece_nodes[key] = _piece_node(int(c[1]), c[2])
+		var node: Node3D = _piece_nodes[key]
+		if node == null:
+			continue
+		node.transform = c[3]
+		node.visible = true
+		seen[key] = true
+	for key in _piece_nodes:
+		if not seen.has(key) and _piece_nodes[key] != null:
+			(_piece_nodes[key] as Node3D).visible = false
+
+
+## A PIECE of loose thing [param li], kept behind [param planes] (its own space): its meshes cut, each cut faced
+## ([MeshCut]) - its words too, if it was written on.
+func _piece_node(li: int, planes: Array) -> Node3D:
+	var wn: Node3D = (work.works[int((loose[li] as Dictionary)["wi"])] as Dictionary)["node"]
+	var holder := Node3D.new()
+	holder.name = "piece"
+	_root.add_child(holder)
+	for m in wn.find_children("*", "MeshInstance3D", true, false):
+		var mi := m as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		var xf := mi.transform
+		var p := mi.get_parent()
+		while p != null and p != wn and p is Node3D:
+			xf = (p as Node3D).transform * xf
+			p = p.get_parent()
+		var skin: Material = mi.material_override
+		var mats: Array = []
+		for s in mi.mesh.get_surface_count():
+			mats.append(skin if skin != null else mi.mesh.surface_get_material(s))
+		var cut := MeshCut.cut(mi.mesh, xf, planes, mats, MeshCut.inside_of(mats[0] if not mats.is_empty() else null))
+		if cut == null:
+			continue
+		var out := MeshInstance3D.new()
+		out.mesh = cut
+		out.layers = mi.layers
+		out.cast_shadow = mi.cast_shadow
+		holder.add_child(out)
+	return holder
 
 
 ## THE SPLASHES' DROPS of frame [param f].
@@ -1875,6 +2107,24 @@ func report(t0: float, t1: float) -> PackedStringArray:
 				pieces += 1
 				if r1[i] < Particles.POWDER * 1.5:
 					fine += 1
+		# ...or CUT, by a blade: the pieces it is in now, and where they lie
+		var cut0 := 0
+		var cut1 := 0
+		var lie := {}
+		for c in (f0 as Dictionary).get("cut", []):
+			if int((c as Array)[0]) != -1 and int(c[1]) == li:
+				cut0 += 1
+		for c in (f1 as Dictionary).get("cut", []):
+			if int((c as Array)[0]) != -1 and int(c[1]) == li:
+				cut1 += 1
+				var w := _where((c[3] as Transform3D).origin)
+				lie[w] = int(lie.get(w, 0)) + 1
+		if cut1 > cut0:
+			var bits := PackedStringArray()
+			for w in lie:
+				bits.append("%d %s" % [int(lie[w]), w])
+			out.append("- %s: CUT into %d pieces - %s." % [String(L["name"]), cut1, ", ".join(bits)])
+			continue
 		if p0.distance_to(p1) > 0.01 or broke:
 			out.append("- %s: %s%s." % [String(L["name"]), "now " + _where(p1) if p0.distance_to(p1) > 0.01 else "where it was",
 				(" - BROKEN into %d pieces, %d of them ground to powder" % [pieces, fine]) if ((f1 as Dictionary)["bi"] as PackedByteArray)[li] == 0 else ""])

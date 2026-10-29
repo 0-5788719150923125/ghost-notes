@@ -38,7 +38,8 @@ extends SceneTree
 ## - THE DESK'S CLOCK ([DeskMedium], no stage): the pen down as its dictation starts and done as it
 ##   ends, the ink as far through as the words are - within the pen's pace - a page turned in the rest
 ##   before the formula that needs it and never over writing, the camera wide over the intro and a turn
-##   and close while the pen writes, and the title up until the first word ([ShowOpening]).
+##   and close while the pen writes, and - opening on its title - the title up until the first word
+##   ([ShowOpening]).
 ## - A DRAWING ([DeskScript], the user, 2026-10-16: "it might be useful if it could draw something"): a
 ##   `draw` mark over several lines is one action, a figure for the ink, dictated by the line after it,
 ##   centered on the page and never spoken - with the SVG's text in the speech as the control.
@@ -126,10 +127,12 @@ extends SceneTree
 ##   goes back, a mended second is taken, and what the first was sent back for is still in the prompt a
 ##   take after TeX's send-back gets - a fresh lesson's is not; a take out of tries is kept with its
 ##   faults named for the log, a mended one has none.
-## - THE THUMBNAIL (the user: "did not use the proper thumbnail ... the same thumbnail that cards-based
-##   modes use"): a Proof upload names the title screen's moment, the name fully up over the blur - on
-##   the first frame, since [ProofCard] names the Director, which a script's `_init` has not got. Its
-##   tags are the note's alone, the one list the YouTube card shows (2026-10-19).
+## - THE UPLOAD (on the first frame, since [ProofCard] names the Director, which a script's `_init` has
+##   not got) names no thumbnail - the YouTube card chooses one (2026-10-28) - and names its episode's
+##   folder; at the title screen's moment the name is fully up over the desk out of focus where it opens
+##   on its title, and neither is where it opens on nothing (the control). What a take opened with is
+##   read from its sidecar. Its tags are the note's alone, the one list the YouTube card shows
+##   (2026-10-19).
 ## - DELETE AND REMAKE (the user, 2026-10-16: "There is currently no way to delete an episode. There is
 ##   also no way to entirely remake one"): an episode with nothing made is made, one with anything made
 ##   is remade (Make becomes Remake) and a remake leaves nothing of it; a delete throws away the
@@ -173,28 +176,32 @@ func _upload() -> void:
 	var ep := ProofEpisode.open("thumb-note", 1)
 	ep.write_json("problem", {"episode_title": "Odd Squares", "description": "Sums of odd numbers.", "tags": ["induction"]})
 	ep.write_json("solve", {"verified": true, "lean": "4.35.0", "mathlib": "v4.35.0"})
-	var up: Dictionary = card.upload_of(ep, {"title": "Pen & Ink"}, PackedStringArray(["math"]), 9.0)
-	var at := float(up.get("thumbnail_at", -1.0))
-	var cards: Script = load("res://src/table_show/episode_card.gd")
-	_check(absf(at - ShowOpening.thumbnail_moment(9.0)) < 0.001 and absf(at - float(cards.thumbnail_moment(9.0))) < 0.001,
-		"a Proof upload names the thumbnail's moment, the card shows' own (%.2f s)" % at)
-	_check(ShowOpening.title_alpha(at, 9.0, true) == 1.0 and ShowOpening.pull(at, 9.0, true) == 0.0,
-		"and at that moment the name is fully up over the desk out of focus")
+	var up: Dictionary = card.upload_of(ep, {"title": "Pen & Ink"}, PackedStringArray(["math"]))
+	_check(not up.has("thumbnail_at") and not up.has("thumbnail") and String(up.get("folder", "")) == ep.dir,
+		"a Proof upload names no thumbnail of its own - the YouTube card chooses it - and names its episode's folder")
+	var at := Openings.title_moment(9.0)
+	_check(ShowOpening.title_alpha("title", at, 9.0, true) == 1.0 and ShowOpening.pull("title", at, 9.0, true) == 0.0,
+		"the title screen's moment (%.2f s) has the name fully up over the desk out of focus, where it opens on its title" % at)
+	_check(ShowOpening.title_alpha("none", at, 9.0, true) == 0.0 and ShowOpening.pull("none", at, 9.0, true) == 1.0
+		and ShowOpening.title_alpha("blur", at, 9.0, true) == 0.0 and ShowOpening.pull("blur", at, 9.0, true) == 0.0,
+		"the control: opening on nothing, no name and no blur, the desk sharp; out of focus, the blur and no name")
 	_check(String(up.get("description", "")).contains("checked by the Lean theorem prover (Lean 4.35.0")
 		and up.get("tags", []) == ["math"], "with the description, the check, and the note's tags alone - the framer's \"induction\" is not added unseen")
 	var comp := ProofEpisode.open("thumb-note", 2)
 	comp.write_json("problem", COMPUTED.merged({"description": "The pendulum, integrated."}))
 	comp.write_json("solve", {"verified": false, "computed": true, "runs": 4})
-	var cdesc := String(card.upload_of(comp, {"title": "Pen & Ink"}, PackedStringArray(), 9.0).get("description", ""))
+	var cdesc := String(card.upload_of(comp, {"title": "Pen & Ink"}, PackedStringArray()).get("description", ""))
 	_check(cdesc.contains("come from code that was run for it") and not cdesc.contains("Lean"),
 		"a computed episode's upload says its numbers were computed, and never names Lean")
 	var take := _scratch.path_join("take_1.wav")
 	# closed here: a temporary FileAccess can live (unflushed) to the end of the function
 	var side := FileAccess.open(take.get_basename() + ".json", FileAccess.WRITE)
-	side.store_string(JSON.stringify({"bookend": {"in": 9.0, "out": 9.0}}))
+	side.store_string(JSON.stringify({"bookend": {"in": 9.0, "out": 9.0}, "opening": "title"}))
 	side.close()
-	_check(ShowOpening.take_intro(take, 2.0) == 9.0 and ShowOpening.take_intro(_scratch.path_join("none.wav"), 2.0) == 2.0,
-		"the moment comes from the intro the take was rendered with; the control, a take with no sidecar, the live one")
+	var live := {"opening": "none", "intro": 2.0}
+	_check(Openings.of_take(take, live) == {"opening": "title", "intro": 9.0}
+		and Openings.of_take(_scratch.path_join("none.wav"), live) == live,
+		"what a take opened with, and its intro, come from its sidecar; the control, a take with no sidecar, the live ones")
 	print("-- delete and remake")
 	var fresh := ProofEpisode.open("delete-note", 1)
 	_check(not card.made_any(fresh), "an episode with nothing made is made (the button says Make episode)")
@@ -1575,7 +1582,13 @@ func _look() -> void:
 			kinds[String((t as Dictionary)["kind"])] = true
 		worst = minf(worst, _contrast(l["ink"], l["paper"]))
 		ctl_worst = minf(ctl_worst, _contrast((l["paper"] as Color).darkened(0.1), l["paper"]))
-	_check(papers.size() > 10 and tops.size() >= 4 and kinds.size() == DeskLook.THINGS.size() and counts.size() >= 5,
+	# every thing a desk may be given unasked: drawn among the things lying about, or a candle its mood sets down -
+	# never one only ever chosen (the Letter card's) nor the mat, which lies under the pad
+	var drawable := 0
+	for k in DeskLook.THINGS:
+		var row: Dictionary = DeskLook.THINGS[k]
+		drawable += int(not bool(row.get("layer", false)) and (float(row["weight"]) > 0.0 or bool(row.get("lit", false))))
+	_check(papers.size() > 10 and tops.size() >= 4 and kinds.size() == drawable and not kinds.has("dog_tag") and counts.size() >= 5,
 		"across 300 desks: %d papers, %d kinds of top, %d kinds of thing, %d counts of things" % [papers.size(), tops.size(), kinds.size(), counts.size()])
 	_check(worst > 7.0 and ctl_worst < 3.0, "the ink always reads on its paper (contrast at least %.1f; the control, the paper a shade darker, %.1f)" % [worst, ctl_worst])
 	# WHERE THINGS GO: never on the pad nor behind it, a tall one never beside its right edge or in front
@@ -1685,8 +1698,8 @@ func _desk() -> void:
 	_turned()
 	_look()
 	# THE TITLE AND THE CAMERA: up and wide over the intro until the first word, close as the pen writes
-	_check(ShowOpening.title_alpha(0.1, INF, false) == 0.0 and ShowOpening.title_alpha(1.6, INF, false) == 1.0,
-		"the channel's name comes up over the intro")
+	_check(ShowOpening.title_alpha("title", 0.1, INF, false) == 0.0 and ShowOpening.title_alpha("title", 1.6, INF, false) == 1.0,
+		"the channel's name comes up over a titled intro")
 	_check(desk._opening() == f.st0[0], "the lesson opens on its first word")
 	desk._now = float(f.st0[0]) - 2.0
 	_check(float(desk._framing()["k"]) == 0.0, "the camera is wide over the intro")
@@ -1736,7 +1749,7 @@ func _desk() -> void:
 	wet_c.free()
 	var none := DeskMedium.new()
 	none.load_lesson(LESSON, {"seed": 3})
-	_check(none._opening() == INF and ShowOpening.title_alpha(8.0, none._opening(), false) == 1.0,
+	_check(none._opening() == INF and ShowOpening.title_alpha("title", 8.0, none._opening(), false) == 1.0,
 		"the control: with no word heard, the name stays up")
 	none.free()
 	desk.free()

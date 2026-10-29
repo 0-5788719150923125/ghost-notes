@@ -137,19 +137,23 @@ var _dirty := false
 var _last_edit_ms := 0
 
 ## The [Settings] section this panel's own state lives in (its draft, its remembered document, an
-## unsynced script's cast), and the mode its script's marks are offered for (see [ScriptMarks]):
-## the workspace's (its row's `section`). A SYNCED document's settings are not per mode: its blocks
-## are the components' ([method _doc_blocks]), so two panels reading one chapter share its voice.
+## unsynced script's cast): the workspace's (its row's `section`). A SYNCED document's settings are not
+## per mode: its blocks are the components' ([method _doc_blocks]), so two panels reading one chapter
+## share its voice.
 var _section := "generative"
+## The mode its Script card works in - its rows, its wording and the marks it offers ([method
+## Components.script_mode]): a table's is "table", though its settings keep the section "cards".
+var _mode := "generative"
 
 ## THE WORKSPACE THIS PANEL RUNS, a key of [constant Components.WORKSPACES] - `reading` (a note read
-## aloud) or `cards` (a show of cards) - set by main before the panel is added. Its row says the
+## aloud), `table` (a show at a table) or `proof` - set by main before the panel is added. Its row says the
 ## panel's section, title and hint, which of a note's cards it can show (`hosts`) and every card a
 ## panel started without a note has (`classic`).
 var workspace := "reading":
 	set(key):
 		workspace = key
 		_section = String(Registry.field(Components.WORKSPACES, key, "section", "generative"))
+		_mode = Components.script_mode(key)
 
 ## WHERE THE READING IS HEARD ([ReadingBed]): no place, unless a component hands one - Cards hands
 ## the episode's table, heard.
@@ -540,10 +544,10 @@ func _build_header(box: VBoxContainer) -> void:
 
 ## THE SCRIPT: a card here, the writing in the editor window it opens. Where the words
 ## come from (a draft, or a file on disk re-read at every Play) is the DocSource inside it.
-## The card's section, block and marks are this panel's own (see [member _section]).
+## The card's section, blocks and mode are this panel's own (see [member _section], [member _mode]).
 func _build_source(box: VBoxContainer) -> void:
 	_writer = preload("res://src/ui/script_writer.gd").new()
-	_writer.setup(_section, _doc_blocks(), _section)
+	_writer.setup(_section, _doc_blocks(), _mode)
 	if not note_path.is_empty():
 		_writer.bind_note()
 		_writer.doc.moved.connect(_on_note_moved)
@@ -625,6 +629,11 @@ func source_box() -> TextEdit:
 ## The [Settings] section this panel keeps its own state in.
 func section() -> String:
 	return _section
+
+
+## The mode its Script card works in ([member _mode]): what marks its words may carry.
+func script_mode() -> String:
+	return _mode
 
 
 ## A line on the panel's status row.
@@ -967,16 +976,16 @@ func export_name() -> String:
 
 
 ## What an upload of the take at [param take] says (see [member Exporter.upload_provider]): the
-## YouTube card's title, visibility and playlist over what [member publish] adds - and, for a note that
-## is its own episode, its tags and the description written on the card; {} without a card, or with its
-## box clear.
+## YouTube card's title, visibility, playlist and thumbnail over what [member publish] adds - and, for a
+## note that is its own episode, its tags and the description written on the card; {} without a card, or
+## with its box clear.
 func upload_meta(take: String) -> Dictionary:
 	if _youtube == null:
 		return {}
 	var base := publish.upload_base(take)
 	if _note_upload != null and not base.is_empty():
 		base = _note_upload.upload_of(base)
-	return _youtube.meta(base)
+	return _youtube.meta(base, take)
 
 
 ## Gate for the export button. The procedural path asks whether a seed has been
@@ -1154,9 +1163,10 @@ func _render_take() -> String:
 		# THE BOOK rides along: a render has no editor, and a medium that typesets
 		# pages needs the chapter those words came from (see BookMedium).
 		# ...AND THE PHONES, each sound timed as the words are, for a medium whose mouth says them
+		# ...AND THE OPENING it was rendered with ([Openings]): a thumbnail of its title screen asks the take
 		side.store_string(JSON.stringify({
 			"words": words, "phones": phones, "bookend": {"in": intro, "out": outro},
-			"book": book_document(body)}))
+			"opening": Director.opening_shown(), "book": book_document(body)}))
 		side.close()
 	_set_status("Rendered %.1fs for export (%.0fs intro, %.0fs outro)." % [spoken, intro, outro])
 	return abs_path

@@ -110,6 +110,38 @@ extends SceneTree
 ##   page: "it bounces forward and back a couple times, right at the very last few sentences"): its words arriving a
 ##   sentence at a time, past a hesitation and a picture's passage, the camera never comes back in once it has begun to
 ##   let go before the turn - the control, the turn the arc had guessed at the desk's steady pace, comes back in.
+## - WHAT IS ON THE DESK AND ITS LIGHT ARE CHOSEN, THE SEED ONLY PLACING THEM ([method DeskLook.of]'s picks; 2026-10-29,
+##   the user: "when we change the seed - the only thing being changed would be the placement of objects, and
+##   textures"): chosen, every seed has the same things and light, each looking its own way - the control, nothing
+##   chosen, a different set on nearly every seed; ticking another leaves how the rest look as they were; a desk lit by
+##   candles and given none has a taper set down (one given its own keeps it, a lamplit desk none - the control); what
+##   lies flat and was chosen lies where the widest framing sees it ([constant DeskLook.SEEN]) - the control, the same
+##   things drawn by the seed, almost never.
+## - A CHOSEN DESK IS PACKED IN TO THE PAPER, THE CANDLES THE FIRST PUSHED OUT ([method DeskLook._pack]; 2026-10-29, the
+##   user: "almost all of the objects placed on the table are outside of the camera's view ... with just tea lights and
+##   the dog tags now... I still can't even see the dog tags"): with tea lights and a dog tag, the tag lies within 4 cm
+##   of the paper - where the camera sees it as the pen writes - and its bone wholly in the wide frame, on every desk - the
+##   control, a circle round it anywhere in the frame beside the pad, on few; a crowded desk keeps what lies flat in the
+##   frame and pushes the candles out first ("candles, which cast light regardless of where they exist"); its candles
+##   take their sides by turns ("The scenes look best when lighting comes from both directions"): one alone on either,
+##   two on both - and none in the pen's stretch beside the pad's right; ITS THINGS ON BOTH SIDES OF THE PAD (the user:
+##   "the pencil and dog tags and probably other objects as well are NEVER placed on the right ... the pencil could
+##   obviously be set alongside the pens on the right ... at the bottom corner, there is NEVER anything placed there"),
+##   each leaning to a side by the seed - the stretch beside the pad's right, where nothing had been let lie, in use -
+##   never in the lane where the pen taps the desk ([constant DeskLook.TAP_LANE]), never on a pen.
+## - A DOG TAG CUT AS A DOG'S BONE ([method DeskLook._dog_tag]; the user: "literally dog-bone shaped", then of the first
+##   one, by their picture: "The chain is connected to the center of the bone ... It has sort of a V-shaped thing
+##   attached to the middle of the bone ... true chain: like the necklace a girl would wear ... simple and flat ...
+##   much longer"): on every tag one flat bone, mirrored both ways and no rim round it, its V bail at the middle of its
+##   long edge, the chain a chain of links from the bail's ring; whole to its end, a necklace's length - the control,
+##   the 360 links a thick chain stops at, would have stopped every one part way; DROPPED, NOT LOOPED (the user: "a
+##   normal person doesn't loop their chain into neat little circles ... They just drop it there, chaotically"): off
+##   the bone on every tag - the control, a single drop, lies on it now and then - each heap its own size and shape. A SMALL OUTLINE IS CUT AT ITS OWN SIZE
+##   ([method Props._extrude_face]): a notch in its edge left open - the control, cut in meters as it had been (the
+##   first tag's hole filled on 21 of 24), fills some.
+## - TICKED WHILE THE LETTER PLAYS, THE DESK IS DRESSED AGAIN ([method LetterMedium._set_desk]): a mounted letter's
+##   desk has the thing at once, and another desk's number another desk (its own seed, the hand's kept), the letter
+##   as it was - the control, another hand, loads the letter again.
 ## - THE FRAME IS CHEAP (2026-10-27, the user: "performance can be really quite laggy in the realtime viewer"), each
 ##   held as a share of its control by this thread's own processor time ([WorkClock], the least of several runs - never
 ##   the machine's speed): a line written long ago is asked whether it is written for a small share of the line being
@@ -249,6 +281,10 @@ func _run() -> void:
 	_turn_waits()
 	_line_breaks()
 	_let_go()
+	_chosen_desk()
+	_packed()
+	_dog_tag()
+	_redressed()
 	_frame_cost()
 	if _fails.is_empty():
 		print("letter_check: ALL OK")
@@ -1160,9 +1196,9 @@ func _pick_up() -> void:
 		lying = lying and xf.origin.distance_to(lies) < 0.0005 and absf(xf.basis.y.y) < 0.01 \
 			and minf(xf.origin.x, top.x) > LegalPad.W * 0.5 + 0.015 and absf(top.y - xf.origin.y) < 0.001
 	_check(lying, "through the intro and its focus pull the pen lies level on the desk, beside the pad's right edge")
-	_check(w.x < INF and ShowOpening.pull(w.x, opening, true) >= ShowOpening.INTRO_LIFT
-		and ShowOpening.title_alpha(w.x, opening, true) == 0.0 and w.y < start and start - w.y < 0.5,
-		"it is picked up once the intro's blur has lifted and the name is gone (%.1f s after the opening), and is over the first stroke as the line begins (%.2f s before)"
+	_check(w.x < INF and ShowOpening.pull("title", w.x, opening, true) >= ShowOpening.INTRO_LIFT
+		and ShowOpening.title_alpha("title", w.x, opening, true) == 0.0 and w.y < start and start - w.y < 0.5,
+		"it is picked up once a titled intro's blur has lifted and the name is gone (%.1f s after the opening), and is over the first stroke as the line begins (%.2f s before)"
 		% [w.x - opening, start - w.y])
 	# THE WAY: on, a frame at a time, and never into the desk or the pad
 	var dt := 1.0 / 60.0
@@ -1306,6 +1342,372 @@ static func _voiced(parsed: Dictionary, word := LetterScript.READ_WORD, stop := 
 
 
 ## A letter's medium, off the stage, read by [param words] (all of them known, as an export's are).
+## WHAT IS ON THE DESK AND ITS LIGHT ARE CHOSEN, the seed only placing them and drawing how they look.
+func _chosen_desk() -> void:
+	print("-- what is on the desk, chosen")
+	var kinds := ["mug", "pencil", "dog_tag", "mat"]
+	var picks := {"things": kinds, "mood": "daylight"}
+	var first := DeskLook.of(11, picks)
+	var same := true
+	var moved := false
+	var drawn := {}
+	for seed in range(12, 40):
+		var l := DeskLook.of(seed, picks)
+		same = same and DeskLook.kinds(l) == kinds and String(l["mood"]) == "daylight"
+		moved = moved or str(l["things"]) != str(first["things"]) or str(l["materials"]) != str(first["materials"])
+		var own := DeskLook.of(seed)
+		drawn[str(DeskLook.kinds(own)) + String(own["mood"])] = true
+	_check(same and moved and drawn.size() > 10,
+		"chosen, every seed has the same things and light, each looking its own way - the control, nothing chosen: %d sets of things and light over 28 seeds"
+		% drawn.size())
+	var more := DeskLook.of(11, {"things": kinds + ["eraser"], "mood": "daylight"})
+	var kept := true
+	for t in first["things"]:
+		var twin: Array = (more["things"] as Array).filter(func(o: Dictionary) -> bool: return o["kind"] == t["kind"])
+		kept = kept and twin.size() == 1 and str(twin[0]) == str(t)
+	_check(kept and DeskLook.kinds(more) == ["mug", "pencil", "eraser", "dog_tag", "mat"],
+		"ticking another thing leaves how the rest look as they were")
+	var dark := DeskLook.kinds(DeskLook.of(11, {"things": ["mug"], "mood": "candlelight"}))
+	var own_candle := DeskLook.kinds(DeskLook.of(11, {"things": ["mug", "pillar"], "mood": "candlelight"}))
+	var lamp := DeskLook.kinds(DeskLook.of(11, {"things": ["mug"], "mood": "lamplight"}))
+	_check(dark == ["mug", "taper"] and own_candle == ["mug", "pillar"] and lamp == ["mug"],
+		"a desk lit by candles and given none has a taper set down - one given its own keeps it, and a lamplit desk has none (the control)")
+	_check(DeskLook.picks_of({"things": ["mug"], "mood": "dusk", "seed": 3}) == {"things": ["mug"], "mood": "dusk"}
+		and DeskLook.picks_of({"mood": "noon"}).is_empty(), "a document's letter hands its things and light, never a light there is not")
+	# WHERE THE FRAME SEES THEM: what lies flat and was chosen, beside the pad in the widest framing
+	var flat := ["pencil", "eraser", "clips", "dog_tag"]
+	var seen := 0
+	var all := 0
+	var ctl_seen := 0
+	var ctl_all := 0
+	for seed in range(1, 13):
+		for chosen in [true, false]:
+			var l := DeskLook.of(seed, {"things": flat} if chosen else {})
+			var dressed := DeskLook.dress(l, seed, LegalPad.DESK_Y)
+			for c in (dressed["node"] as Node).get_children():
+				if not (c as Node).has_meta("kind") or not (String(c.get_meta("kind")) in flat):
+					continue
+				var p := Vector2((c as Node3D).position.x, (c as Node3D).position.z)
+				if chosen:
+					all += 1
+					seen += int(Geometry2D.is_point_in_polygon(p, PackedVector2Array(DeskLook.SEEN)))
+				else:
+					ctl_all += 1
+					ctl_seen += int(Geometry2D.is_point_in_polygon(p, PackedVector2Array(DeskLook.SEEN)))
+			(dressed["node"] as Node).free()
+	_check(all >= 40 and float(seen) >= 0.75 * float(all) and float(ctl_seen) < 0.4 * float(ctl_all),
+		"what lies flat and was chosen lies where the wide framing sees it (%d of %d) - the control, the same things drawn by the seed, %d of %d"
+		% [seen, all, ctl_seen, ctl_all])
+
+
+## A CHOSEN DESK PACKED IN TO THE PAPER, the candles the first pushed out of the frame.
+func _packed() -> void:
+	print("-- a chosen desk packed in to the paper")
+	var seen := PackedVector2Array(DeskLook.SEEN)
+	var edge := -LegalPad.W * 0.5
+	var snug := 0
+	var whole := 0
+	var ctl_snug := 0
+	var n := 16
+	for seed in range(1, n + 1):
+		var l := DeskLook.of(seed, {"things": ["tealights", "dog_tag"], "mood": "lamplight"})
+		var dressed := DeskLook.dress(l, seed, LegalPad.DESK_Y)
+		for c in (dressed["node"] as Node).get_children():
+			if (c as Node).has_meta("kind") and String(c.get_meta("kind")) == "dog_tag":
+				var foot: PackedVector2Array = c.get_meta("foot")
+				var near := DeskLook._gap(foot)
+				snug += int(near >= 0.0 and near <= 0.04)
+				# THE BONE ITSELF, as it lies: its outline through the thing's place on the desk
+				var plate: Dictionary = Props.sanitize(DeskLook._thing("dog_tag", DeskLook._rng(seed, "chosen dog_tag")), ["#888888"])["things"][0]["parts"][0]
+				var bone_in := true
+				for q in plate["points"]:
+					var w := (c as Node3D).transform * (((plate["at"] as Vector3) + Vector3((q as Vector2).x, 0.0, (q as Vector2).y)) * 0.01)
+					bone_in = bone_in and Geometry2D.is_point_in_polygon(Vector2(w.x, w.z), seen)
+				whole += int(bone_in)
+		(dressed["node"] as Node).free()
+		# THE CONTROL: placed as it had been, a circle round it anywhere in the frame beside the pad, the tea lights in
+		# their band first
+		var r := DeskLook._rng(seed, "control")
+		var taken := DeskLook._pen_taken(l, LegalPad.DESK_Y)
+		var lights := DeskLook._placed(r, 0.06, false, taken, DeskLook.CANDLE_BAND)
+		taken.append(Vector3(lights.x, lights.y, 0.06))
+		var at := DeskLook._placed(r, 0.047, false, taken, Rect2(-0.26, -0.175, 0.52, 0.305))
+		ctl_snug += int(at.x != INF and edge - (at.x + 0.025) <= 0.04)
+	_check(snug == n and whole == n and ctl_snug * 2 < n,
+		"tea lights and a dog tag: the tag lies within 4 cm of the paper and its bone wholly in the wide frame on all %d desks (%d, %d) - the control, a circle round it anywhere in the frame, on %d"
+		% [n, snug, whole, ctl_snug])
+	var crowd := ["pencil", "eraser", "clips", "cards", "dog_tag", "mug", "tealights", "taper", "pillar"]
+	var flat_in := 0
+	var flat_all := 0
+	var lit_in := 0
+	var lit_all := 0
+	for seed in range(1, 13):
+		var dressed := DeskLook.dress(DeskLook.of(seed, {"things": crowd, "mood": "lamplight"}), seed, LegalPad.DESK_Y)
+		for c in (dressed["node"] as Node).get_children():
+			if not (c as Node).has_meta("kind"):
+				continue
+			var kind := String(c.get_meta("kind"))
+			var inside := Geometry2D.is_point_in_polygon(Vector2((c as Node3D).position.x, (c as Node3D).position.z), seen)
+			if bool((DeskLook.THINGS[kind] as Dictionary).get("lit", false)):
+				lit_all += 1
+				lit_in += int(inside)
+			elif not bool((DeskLook.THINGS[kind] as Dictionary)["tall"]):
+				flat_all += 1
+				flat_in += int(inside)
+		(dressed["node"] as Node).free()
+	_check(flat_all >= 55 and float(flat_in) >= 0.9 * float(flat_all) and float(lit_in) / float(lit_all) < float(flat_in) / float(flat_all) - 0.3,
+		"a crowded desk keeps what lies flat in the frame (%d of %d) and pushes the candles out first (%d of %d in it) - their light falls on the page from anywhere"
+		% [flat_in, flat_all, lit_in, lit_all])
+	# ITS THINGS ON BOTH SIDES OF THE PAD, each leaning to one: never in the lane where the pen taps the desk, never on a
+	# pen - and where nothing had been let lie, the stretch beside the pad's right (the control: none there before)
+	var things := ["pencil", "dog_tag", "eraser", "cards", "tealights"]
+	var right := {}
+	var stretch := 0
+	var in_lane := 0
+	var on_pen := 0
+	for seed in range(1, 25):
+		var l := DeskLook.of(seed, {"things": things, "mood": "lamplight"})
+		var dressed := DeskLook.dress(l, seed, LegalPad.DESK_Y)
+		var pens: Array = []
+		for j in maxi(1, int(l.get("pens", 1))):
+			var pen := DeskLook.pen_rest(l, LegalPad.DESK_Y, j)
+			pens.append([Vector2((pen["nib"] as Vector3).x, (pen["nib"] as Vector3).z), Vector2((pen["top"] as Vector3).x, (pen["top"] as Vector3).z)])
+		for c in (dressed["node"] as Node).get_children():
+			if not (c as Node).has_meta("kind"):
+				continue
+			var kind := String(c.get_meta("kind"))
+			var foot: PackedVector2Array = c.get_meta("foot")
+			var mid := Vector2((c as Node3D).position.x, (c as Node3D).position.z)
+			right[kind] = int(right.get(kind, 0)) + int(mid.x > 0.0)
+			stretch += int(mid.x > LegalPad.W * 0.5 and mid.x < DeskLook.TALL_RIGHT and absf(mid.y) < LegalPad.H * 0.5)
+			for q in foot:
+				in_lane += int(q.x > LegalPad.W * 0.5 + 0.001 and q.x < LegalPad.W * 0.5 + DeskLook.TAP_LANE - 0.001 and absf(q.y) < LegalPad.H * 0.5)
+			for pen in pens:
+				for k in 11:
+					on_pen += int(Geometry2D.is_point_in_polygon((pen[0] as Vector2).lerp(pen[1], float(k) / 10.0), foot))
+		(dressed["node"] as Node).free()
+	var sided := true
+	for kind in things:
+		sided = sided and int(right.get(kind, 0)) >= 4 and int(right.get(kind, 0)) <= 20
+	_check(sided and stretch >= 10 and in_lane == 0 and on_pen == 0,
+		"a chosen desk's things lie on both sides of the pad (on the right of 24: %s), %d in the stretch beside its right where none had lain (the control, the rule before: none) - none in the pen's tap lane, none on a pen"
+		% [str(right), stretch])
+	# ITS CANDLES ON BOTH SIDES, by turns: one alone on either; two or more on each
+	var alone := Vector2i.ZERO
+	var lit_both := 0
+	var lit_desks := 0
+	var clear := true
+	for seed in range(1, 25):
+		for kinds in [["dog_tag", "taper"], ["dog_tag", "taper", "tealights"]]:
+			var dressed := DeskLook.dress(DeskLook.of(seed, {"things": kinds, "mood": "lamplight"}), seed, LegalPad.DESK_Y)
+			var sides := Vector2i.ZERO
+			for t in dressed["lit"]:
+				var at := ((t as Dictionary)["node"] as Node3D).position
+				sides += Vector2i(int(at.x < 0.0), int(at.x > 0.0))
+				# never in the pen's stretch beside the pad's right
+				var foot: PackedVector2Array = ((t as Dictionary)["node"] as Node).get_meta("foot")
+				for q in foot:
+					clear = clear and not (q.x > 0.0 and q.x < DeskLook.TALL_RIGHT and q.y < LegalPad.H * 0.5 + DeskLook.PAD_ROOM)
+			if kinds.size() == 2:
+				alone += sides
+			else:
+				lit_desks += 1
+				lit_both += int(sides.x > 0 and sides.y > 0)
+			(dressed["node"] as Node).free()
+	_check(alone.x >= 6 and alone.y >= 6 and lit_both == lit_desks and clear,
+		"a chosen desk's candles take their sides by turns: one alone on the left %d times and the right %d, two on both sides on all %d - and none in the pen's stretch beside the pad's right"
+		% [alone.x, alone.y, lit_desks])
+
+
+## A DOG TAG CUT AS A DOG'S BONE: flat, hung by its bail from the middle of its edge on a long fine chain, whole.
+func _dog_tag() -> void:
+	print("-- a dog tag")
+	var n := 24
+	var shaped := 0
+	var whole := 0
+	var ctl_capped := 0
+	var longest := 0.0
+	var shortest := INF
+	var off_bone := 0
+	var ctl_over := 0
+	var shapes := {}
+	for seed in range(1, n + 1):
+		var spec := DeskLook._thing("dog_tag", DeskLook._rng(seed, "chosen dog_tag"))
+		var parts: Array = Props.sanitize(spec, ["#888888"])["things"][0]["parts"]
+		var plate: Dictionary = parts[0]
+		var bail: Dictionary = parts[1]
+		var chain: Dictionary = parts.filter(func(p: Dictionary) -> bool: return p["shape"] == "strand")[0]
+		# THE BONE: one flat plate, the same mirrored both ways, and nothing laid round its edge (no rim)
+		var pts: Array = plate["points"]
+		var mirrored := true
+		for q in pts:
+			var twins := 0
+			for o in pts:
+				twins += int((o as Vector2).distance_to(Vector2(-(q as Vector2).x, (q as Vector2).y)) < 1e-4) \
+					+ int((o as Vector2).distance_to(Vector2((q as Vector2).x, -(q as Vector2).y)) < 1e-4)
+			mirrored = mirrored and twins == 2
+		var tubes := parts.filter(func(p: Dictionary) -> bool: return p["shape"] == "tube").size()
+		# THE BAIL at the middle of the long edge, over it; the chain's two runs from the ring at its end
+		var plate_at: Vector3 = plate["at"]
+		var bail_at: Vector3 = bail["at"]
+		# the long edge's middle: where the outline crosses x = 0 on the bail's side
+		var waist := INF
+		for i in pts.size():
+			var a: Vector2 = pts[i]
+			var b: Vector2 = pts[(i + 1) % pts.size()]
+			if a.x * b.x <= 0.0 and a.x != b.x and a.y < 0.0:
+				waist = lerpf(a.y, b.y, a.x / (a.x - b.x))
+		var line := Props.strand_line(chain, RandomNumberGenerator.new())
+		var ends := line[0].distance_to(line[line.size() - 1])
+		shaped += int(mirrored and tubes <= 1 and absf(bail_at.x - plate_at.x) < 1e-4 and bail["shape"] == "extrude"
+			and absf(bail_at.z - plate_at.z - waist) < 1e-3 and String(chain["kind"]) == "chain" and ends < 0.003)
+		var along := Props._lengths(Array(line))[-1]
+		longest = maxf(longest, along)
+		shortest = minf(shortest, along)
+		# THE CHAIN WHOLE: a link where its last run comes back to the ring, past where whole rings a link had stopped it
+		var geo = Props._strand(chain, RandomNumberGenerator.new())[0]["geo"]
+		var t := float(chain["thickness"]) * 0.01
+		var late: Vector3 = line[int(line.size() * 0.97)]
+		var found := false
+		for v in geo.v:
+			if (v as Vector3).distance_to(late) < t:
+				found = true
+				break
+		whole += int(found and geo.v.size() < 400000)
+		var pitch := (2.0 * t * 0.36 - t * 0.13) * 1.45
+		ctl_capped += int(along / pitch > 360.0)
+		# DROPPED, NOT LOOPED: off the bone - the control, the first drop alone, on it now and then - and each its own shape
+		var outline := PackedVector2Array()
+		for q in pts:
+			outline.append(q as Vector2)
+		# (the chain and the plate are laid about the same middle: each in the bone's own frame)
+		var over := 0
+		for q in line:
+			over += int(Geometry2D.is_point_in_polygon(Vector2(q.x, q.z) * 100.0, outline))
+		off_bone += int(over == 0)
+		var r0 := DeskLook._rng(seed, "first drop")
+		var tip := ((chain["path"][0] as Vector2) + (chain["path"][-1] as Vector2)) * 0.5
+		ctl_over += int(DeskLook._over(DeskLook._dropped(r0, tip, 80.0, outline), outline) > 0)
+		var lo2 := Vector2(INF, INF)
+		var hi2 := -lo2
+		for q in line:
+			lo2 = lo2.min(Vector2(q.x, q.z))
+			hi2 = hi2.max(Vector2(q.x, q.z))
+		shapes[str(((hi2 - lo2) * 1000.0).round())] = true
+	_check(shaped == n,
+		"one flat bone on every tag, the same mirrored both ways and no rim round it, its V bail at the middle of its long edge, the chain a chain of links from the bail's ring (%d of %d)"
+		% [shaped, n])
+	_check(whole == n and ctl_capped == n and shortest > DeskLook.TAG_LONG.x * 0.0095 and longest < DeskLook.TAG_LONG.y * 0.0105,
+		"its chain is whole, links to its end on all %d, %.0f to %.0f cm - a necklace's - where the 360 links a thick chain stops at would have stopped %d"
+		% [n, shortest * 100.0, longest * 100.0, ctl_capped])
+	_check(off_bone == n and ctl_over > 0 and shapes.size() == n,
+		"its chain is dropped, never looped: off the bone on all %d (the control, a single drop, on it %d times), each heap its own size and shape (%d of %d)"
+		% [n, ctl_over, shapes.size(), n])
+	# A SMALL OUTLINE CUT AT ITS OWN SIZE ([method Props._extrude_face]): a notch in its edge left open - the control, cut in
+	# meters as it had been, filled now and then (the first tag's hole had been)
+	var notched := 0
+	var ctl_filled := 0
+	var tried := 0
+	for i in 40:
+		var sz := 0.8 + 0.01 * float(i)
+		for flip in [false, true]:
+			var pts := _notched(4.0 * sz, 1.0 * sz, -1.4 * sz, 0.16 * sz, flip)
+			var cm: Array = []
+			for q in pts:
+				cm.append([q.x, q.y])
+			var safe := Props.sanitize({"things": [{"name": "n", "parts": [{"shape": "extrude", "material": "m", "points": cm, "height": 0.1}]}],
+				"materials": {"m": {"kind": "metal", "color": "#888888"}}}, ["#888888"])
+			var g = Props._extrude(safe["things"][0]["parts"][0])
+			var flat := PackedVector2Array()
+			for v in g.v:
+				flat.append(Vector2((v as Vector3).x, (v as Vector3).z))
+			var meters := PackedVector2Array()
+			for q in pts:
+				meters.append(q * 0.01)
+			var notch := Vector2(-1.4 * sz, 0.0) * 0.01
+			tried += 1
+			notched += int(not _fills(flat, range(flat.size()), notch, 0.0016 * sz, flip))
+			ctl_filled += int(_fills(meters, Array(Geometry2D.triangulate_polygon(meters)), notch, 0.0016 * sz, flip))
+	_check(notched == tried and ctl_filled > 0,
+		"a small outline with a notch in its edge is cut round it at its own size, on all %d - the control, cut in meters as it had been, filled %d"
+		% [tried, ctl_filled])
+
+
+## A strip [param w] by [param h] (centimeters) with a half round notch of [param nr] at [param nx] in its edge on z = 0
+## - its mirror, wound back, when [param flip].
+func _notched(w: float, h: float, nx: float, nr: float, flip: bool) -> PackedVector2Array:
+	var pts: Array = [Vector2(w * 0.5, 0.0), Vector2(w * 0.5, h), Vector2(-w * 0.5, h), Vector2(-w * 0.5, 0.0)]
+	for k in 5:
+		var a := PI - PI * float(k) / 4.0
+		pts.append(Vector2(nx + cos(a) * nr, sin(a) * nr))
+	var out := PackedVector2Array()
+	for q in pts:
+		out.append(Vector2(q.x, -q.y) if flip else q)
+	if flip:
+		out.reverse()
+	return out
+
+
+## Whether any triangle of [param poly] (corners [param tris], three a triangle) lies in the notch of [param nr] at
+## [param notch].
+func _fills(poly: PackedVector2Array, tris: Array, notch: Vector2, nr: float, flip: bool) -> bool:
+	for t in range(0, tris.size() - 2, 3):
+		var a := poly[int(tris[t])]
+		var b := poly[int(tris[t + 1])]
+		var c := poly[int(tris[t + 2])]
+		for ring in [0.3, 0.6, 0.85]:
+			for k in 12:
+				var u := PI * (float(k) + 0.5) / 12.0
+				var q := notch + Vector2(cos(u), (-1.0 if flip else 1.0) * sin(u)) * nr * float(ring)
+				if Geometry2D.point_is_inside_triangle(q, a, b, c):
+					return true
+	return false
+
+
+## TICKED WHILE THE LETTER PLAYS: the desk dressed again, the letter as it was.
+func _redressed() -> void:
+	print("-- the desk dressed again while it plays")
+	var vp := SubViewport.new()
+	vp.size = Vector2i(320, 180)
+	root.add_child(vp)
+	var m := LetterMedium.new()
+	var feed := ShowFeed.new()
+	m.feed = feed
+	m.mount(vp)
+	var subs_script := GDScript.new()
+	subs_script.source_code = "extends Node\nvar document := {}\nvar words := []\nfunc now() -> float:\n\treturn 0.0\n"
+	subs_script.reload()
+	var subs = subs_script.new()
+	subs.document = {"source": "Dear Pen,\n\nThe tag is on the desk.\n", "letter": {"seed": 5, "things": ["pencil"], "mood": "lamplight"}}
+	m._subs = subs
+	m._ensure_doc()
+	var actions: Array = m._actions
+	var desk_before: Node3D = m._desk
+	(subs.document["letter"] as Dictionary)["things"] = ["pencil", "dog_tag"]
+	m._ensure_doc()
+	var has_tag := false
+	for c in m._desk.get_children():
+		has_tag = has_tag or ((c as Node).has_meta("kind") and String(c.get_meta("kind")) == "dog_tag")
+	var redressed := m._desk != desk_before and has_tag and is_same(m._actions, actions)
+	# ANOTHER DESK: drawn again, every word as it was
+	var paper: Color = m.look["paper"]
+	var desk_mid: Node3D = m._desk
+	(subs.document["letter"] as Dictionary)["desk"] = 9
+	m._ensure_doc()
+	var other_desk: bool = m._desk != desk_mid and m._seed == 9 and m._hand == 5 and m.look["paper"] != paper \
+		and is_same(m._actions, actions)
+	(subs.document["letter"] as Dictionary)["hand"] = "caveat"
+	m._ensure_doc()
+	_check(redressed and other_desk and not is_same(m._actions, actions),
+		"a thing ticked or another desk's number while it plays is on the desk at once, the letter as it was - the control, another hand, loads the letter again")
+	m._subs = null
+	vp.remove_child(m)
+	m.free()
+	feed.free()
+	(subs as Node).free()
+	vp.queue_free()
+
+
 func _medium(text: String, words: Array) -> LetterMedium:
 	var feed := ShowFeed.new()
 	feed.outro_hold = 4.0
