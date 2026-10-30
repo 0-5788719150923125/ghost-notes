@@ -12,8 +12,14 @@ extends SceneTree
 ## - GRINDING IS HEARD ONLY WHILE IT TOUCHES ("sound specifically when the pestle touches the mortar (not in the gaps
 ##   where it isn't touching)"): a pestle going round pressed into its mortar grits; lifted clear between its rounds, it
 ##   is silent.
+## - WHAT BREAKS IS HEARD AS IT BREAKS (119515: the user "couldn't hear the grinding"): a piece the physics breaks off
+##   crunches at that moment, and forty broken off in 0.4 s stay under the levels below. The control: the moment before
+##   it, nothing.
 ## - A BOIL BUBBLES, STEAM DOES NOT ("only if it is brought to a boil though, not when it's just steaming"): a pot brought
 ##   to the boil bubbles from then; before, it is silent.
+## - A PAUSED SHOW HOLDS ITS SOUND ("I clicked "pause" in the real-time viewer, and the environmental cauldron boiling
+##   sounds continue to play"): the show's time standing still, the player is held where it is; going on, it plays. The
+##   control: one tick at the same time (a frame the clock did not tick over) does not hold it.
 ## - SUBDUED ("they need to be subdued and quieter than the voice"): nothing peaks past [constant WorkSounds.PEAK_MOST],
 ##   and no 0.4 s of it is louder than a third of the voice's speaking level ([constant VoiceFX.PAD_VOICE_REF]).
 
@@ -103,6 +109,10 @@ func _bench() -> bool:
 		{"i": 3, "t0": 14.0, "t1": 16.0}, {"i": 4, "t0": 18.0, "t1": 22.0}, {"i": 5, "t0": 22.0, "t1": 24.0},
 		{"i": 6, "t0": 24.0, "t1": 27.0}, {"i": 7, "t0": 29.0, "t1": 33.0}]
 	m._work._timelines()
+	# a piece broken off, as the bake would say it - and a lump crushed to forty pieces in a moment
+	m._work.physics.breaks.append({"t": 13.0, "at": Vector3(Tables.ORIGIN.x, 0.04, Tables.ORIGIN.y - 0.05), "size": 0.003})
+	for k in 40:
+		m._work.physics.breaks.append({"t": 17.2 + float(k) * 0.01, "at": Vector3(Tables.ORIGIN.x, 0.04, Tables.ORIGIN.y - 0.05), "size": 0.004})
 	var ws := WorkSounds.new(m._work)
 	var s := ws.render(34 * WorkSounds.RATE)
 	var peak := func(a: float, b: float) -> float:
@@ -124,6 +134,8 @@ func _bench() -> bool:
 	_ok(pot > jar, "the iron pot set down peaks at %.4f, the glass jar at %.4f" % [pot, jar])
 	_ok(float(peak.call(11.98, 12.5)) < 0.001, "the paper slip set down is heard: %.4f" % float(peak.call(11.98, 12.5)))
 	_ok(float(peak.call(15.5, 17.0)) < 1e-5, "the control: the jar held up, never set down, sounds %.4f" % float(peak.call(15.5, 17.0)))
+	# A PIECE BROKEN OFF
+	_ok(float(peak.call(12.6, 12.99)) < 1e-5 and float(peak.call(12.99, 13.2)) > 0.002, "a piece broken off at 13 s: %.5f before, %.4f as it breaks" % [float(peak.call(12.6, 12.99)), float(peak.call(12.99, 13.2))])
 	# GRINDING, only while it touches
 	var grit := float(rms.call(19.0, 21.5))
 	var lifted := float(rms.call(22.8, 23.8))
@@ -143,6 +155,19 @@ func _bench() -> bool:
 		"the work peaks at %.4f (no more than %.3f) and its loudest 0.4 s is %.4f RMS (no more than %.3f)" % [float(peak.call(0.0, 34.0)),
 		WorkSounds.PEAK_MOST, loudest, VoiceFX.PAD_VOICE_REF / 3.0])
 	print("  levels: jar %.4f, pot %.4f, grinding %.4f RMS, boiling %.4f, loudest 0.4 s %.4f RMS" % [jar, pot, grit, boiling, loudest])
+	# A PAUSED SHOW
+	var host := Node.new()
+	root.add_child(host)
+	var live := WorkSounds.new(m._work)
+	live.tick(30.0, host)
+	live.tick(30.0, host)
+	var once := live._player.stream_paused
+	live.tick(30.0, host)
+	var held := live._player.stream_paused
+	live.tick(30.02, host)
+	_ok(not once and held and not live._player.stream_paused, "paused: one tick still holds the sound %s, two %s, the show going on %s" % [once, held, live._player.stream_paused])
+	live.stop()
+	host.free()
 	m._root3.free()
 	m.free()
 	return true

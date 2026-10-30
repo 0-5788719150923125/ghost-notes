@@ -596,6 +596,9 @@ func _blueprint(args: Dictionary) -> Dictionary:
 	_looks += 1
 	lines.append("The blueprint - the table from above, in centimeters from the middle of the reading; each thing numbered as put numbers it:")
 	lines.append_array(_plan_lines(got["placed"]))
+	if got.get("work") is Vector2:
+		var ws: Vector2 = got["work"]
+		lines.append("The work's spot (the cross): at [%.0f, %.0f] - each thing is brought here while it is worked; what is worked where it stands (a pot over its fire) stands right beside it, near the reader and large in the shot." % [(ws.x - Tables.ORIGIN.x) * 100.0, (ws.y - Tables.ORIGIN.y) * 100.0])
 	lines.append(JUDGE_BLUEPRINT)
 	lines.append(_looks_line(true))
 	return {"text": "\n".join(lines), "images": [got["image"]]}

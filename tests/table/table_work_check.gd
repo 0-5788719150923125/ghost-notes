@@ -74,7 +74,7 @@ func _ok(cond: bool, what: String) -> void:
 func _run() -> void:
 	await process_frame
 	for check in [_formula, _clock, _clock_law, _grind, _at_the_spot, _seated, _set_down, _carry, _through_keys, _copies, _cued,
-			_live_words, _safe, _write]:
+			_live_words, _safe, _write, _held_up, _loose_size]:
 		var done: Variant = (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("table_work_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -221,7 +221,7 @@ func _grind() -> bool:
 		var t := float(g[0]) + TableWork.BLEND_IN + 0.1 + float(i) * 0.4
 		m._work.tick(t)
 		var tip: Vector3 = m._work._world_of((m._work.works[pw] as Dictionary)["node"]) * Vector3.ZERO
-		var hit: Dictionary = tm.intersect_ray(tip + Vector3(0, 0.06, 0), Vector3.DOWN)
+		var hit: Dictionary = TableWork._ray(tm, tip + Vector3(0, 0.06, 0), Vector3.DOWN)
 		if hit.is_empty():
 			worst = INF
 			break
@@ -546,9 +546,10 @@ func _through_keys() -> bool:
 	var joins := minf(float(speed.call(50.0 + 0.33 * 6.0)), float(speed.call(50.0 + 0.66 * 6.0)))
 	_ok(joins > 0.015, "carries one after another stop where one hands on to the next: %.1f cm a second there" % (joins * 100.0))
 	var apart := float(speed.call(70.0 + 0.35 * 6.0))
-	_ok(apart < 0.001, "the control: carries with a pause between them do not stop in it: %.1f cm a second" % (apart * 100.0))
+	# ...stopped, though held up in the air: as a hand holds it ([method _held_up]), never as one moves it
+	_ok(apart < 0.006, "the control: carries with a pause between them do not stop in it: %.1f cm a second" % (apart * 100.0))
 	# ...and each still ends where it was taken, and goes nowhere past it
-	m._work.tick(56.5)
+	m._work.tick(56.0)
 	var end := Vector3(Tables.ORIGIN.x - 0.02, 0.04, Tables.ORIGIN.y)
 	_ok(jar.position.distance_to(end) < 0.002, "carries gone on through do not end where the last one takes it: %s, not %s" % [jar.position, end])
 	var widest := -INF
@@ -906,3 +907,57 @@ func _write() -> bool:
 	m._root3.free()
 	return true
 
+
+## A THING HELD UP BETWEEN MOVES IS NEVER STILL (the-quiet-crucible 119515: "when the actor is holding the pestle in the
+## air, it is perfectly still: but you would expect it to be gently bobbing/moving, since a hand cannot remain perfectly
+## still"): a jar carried up and left in the air sways as a hand holds it, a few millimeters from where it was sent. The
+## control: carried onto the table, it lies still.
+func _held_up() -> bool:
+	var out := {}
+	for where in ["air", "table"]:
+		var m := _medium()
+		var spec := {"things": [{"name": "jar", "parts": [{"shape": "lathe", "profile": [[0, 0], [3, 0], [3, 8], [0, 8]], "material": "glass"}]}],
+			"materials": {"glass": {"kind": "ceramic", "color": "#5a7a6a"}}}
+		var node: Node3D = _stand(m, spec, "jar", Vector3(0.3, 0.0, -0.2))["node"]
+		m._work.build({"acts": [{"name": "up", "beat": 1, "length": 3, "tracks": [{"thing": "jar", "law": "carry",
+			"to": [0, 8 if where == "air" else 0, 5], "lift": 6}]}]}, 1)
+		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 5.0}]
+		m._work._timelines()
+		var sent := Vector3(Tables.ORIGIN.x, 0.08 if where == "air" else 0.0, Tables.ORIGIN.y + 0.05)
+		var most := 0.0
+		var far := 0.0
+		var last := Vector3.INF
+		var t := 7.0
+		while t < 12.0:
+			m._work.tick(t)
+			if last != Vector3.INF:
+				most = maxf(most, node.position.distance_to(last) / 0.05)
+			last = node.position
+			far = maxf(far, node.position.distance_to(sent))
+			t += 0.05
+		out[where] = [most, far]
+		m._root3.free()
+	_ok(float(out["air"][0]) > 0.0005 and float(out["air"][1]) < 0.008, "a jar held up in the air sways at most %.2f cm a second, %.1f mm from where it was sent" % [
+		float(out["air"][0]) * 100.0, float(out["air"][1]) * 1000.0])
+	_ok(float(out["table"][0]) < 1e-5 and float(out["table"][1]) < 0.001, "the control: a jar set on the table moves %.3f cm a second" % (float(out["table"][0]) * 100.0))
+	return true
+
+
+## A LOOSE THING'S SIZE IS ITS OWN (119515: its dragon's blood "didn't crush: they just scaled down"): a `grow` on a loose
+## part is refused, the note saying how to grind it. The control: a `grow` on a part that is not loose is kept.
+func _loose_size() -> bool:
+	var m := _medium()
+	var spec := {"things": [{"name": "dish", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [4, 0], [4, 1], [0, 1]], "material": "clay"},
+		{"name": "lump", "shape": "ball", "size": [1, 1, 1], "material": "clay", "at": [0, 1, 0], "loose": true},
+		{"name": "bloom", "shape": "ball", "size": [1, 1, 1], "material": "clay", "at": [2, 1, 0], "start": {"grow": 0.5}}]}],
+		"materials": {"clay": {"kind": "stone", "color": "#8a6a4a"}}}
+	_stand(m, spec, "dish", Vector3(0.0, 0.0, -0.2))
+	m._work.build({"acts": [{"name": "shrink", "beat": 1, "length": 3, "tracks": [{"thing": "dish", "part": "lump", "law": "to", "state": "grow", "value": 0.6}]},
+		{"name": "bloom", "beat": 1, "length": 3, "tracks": [{"thing": "dish", "part": "bloom", "law": "to", "state": "grow", "value": 1.0}]}]}, 1)
+	var said := "; ".join(m._work.notes)
+	_ok(said.contains("is loose: its size is its own"), "a loose lump shrunk by `grow` was not refused: %s" % said)
+	var kept := (m._work.acts as Array).map(func(a: Dictionary) -> String: return String(a["name"]))
+	_ok(kept.has("bloom"), "the control: a `grow` on a part that is not loose was not kept: %s" % said)
+	m._root3.free()
+	return true

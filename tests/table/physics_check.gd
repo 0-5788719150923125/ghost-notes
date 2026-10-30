@@ -22,7 +22,8 @@ extends SceneTree
 ## - LOOSE THINGS TUMBLE: a dish's heap of stones (loose without being told) tipped over a cauldron falls out of it and
 ##   lands in the cauldron's brew. The control: the dish carried level, its stones stay in it.
 ## - A PESTLE GRINDS: a crystal lying loose in a mortar, the pestle pressed into the bowl going round over it, breaks
-##   into pieces. The control: the pestle held still above it, the crystal stays whole.
+##   into pieces, and the act says nothing passes through anything. The controls: the pestle held still above it, the
+##   crystal stays whole; going round too wide for the bowl, its head driven into the wall, it is said to pass through it.
 ## - THE SAME BAKE TWICE: the jar tipped on two tables built alike leaves every grain in the same place - and A FRAME IS ITS
 ##   OWN MOMENT: baked on to the end, the frame of a moment before the tip still has every grain in the jar (a frame had held
 ##   the solver's own arrays, and every frame was the latest).
@@ -55,6 +56,13 @@ extends SceneTree
 ##   dynamics)"): a knife brought down twice through a carrot on a board cuts it into three pieces, each drawn as the
 ##   carrot's mesh kept behind its cuts and faced over them, lying apart, the middle one as long as between the strokes;
 ##   the act says so. The controls: the knife stopped short cuts nothing, and nor does it cut a stone.
+## - WHAT THE HAND HOLDS MEETS WHAT IT IS CARRIED INTO (the-quiet-crucible 119515: a dragon's scale "clips, because it is
+##   larger than the vial ... have proper collision handle how it falls, where it settles"): a scale wider than a vial's
+##   mouth, lowered into it, stays out of it. The control: a bead that fits goes in and lies on the vial's floor.
+## - A LOOSE THING IS A BODY ONCE ANYTHING COMES TO IT (119515: of its table's 125 loose things, 114 had been left rigid -
+##   the solver held no more - and its dragon's blood "didn't crush ... they don't rest on the bottom of the mortar"): set,
+##   a dish's heap of forty beads nothing touches costs no particle, before the work comes to it and after. The control:
+##   what the work carries is a body.
 
 var _fails := 0
 
@@ -72,7 +80,7 @@ func _ok(cond: bool, what: String) -> void:
 func _run() -> void:
 	await process_frame
 	for check in [_field, _vessel, _pour, _grains, _tumble, _grind, _same_twice, _sprinkle, _threaded, _let_go, _carried,
-			_heap_sleeps, _splash, _dip, _let_fall, _cut]:
+			_heap_sleeps, _splash, _dip, _let_fall, _cut, _held_meets]:
 		var t0 := Time.get_ticks_msec()
 		var done: Variant = (check as Callable).call()
 		print("  %s: %.1f s" % [(check as Callable).get_method(), float(Time.get_ticks_msec() - t0) / 1000.0])
@@ -368,8 +376,9 @@ func _loose_in(m: TableMedium, thing: String, t: float) -> int:
 	var n := 0
 	for l in ph.loose:
 		var pose: Variant = ph.pose_of(int((l as Dictionary)["wi"]), t)
+		# one nothing has come to yet lies as it was built, where the work has it
 		if pose == null:
-			continue
+			pose = m._work._work_world(int((l as Dictionary)["wi"]), t)
 		var c := (pose as Transform3D) * ((m._work.works[int((l as Dictionary)["wi"])] as Dictionary)["w"]["box"] as AABB).get_center()
 		if ((ph.liquids[li] as Dictionary)["vessel"] as Vessel).contains(xf.affine_inverse() * c):
 			n += 1
@@ -409,13 +418,19 @@ const MORTAR_SPEC := {"things": [
 		"wood": {"kind": "wood", "color": "#5a3a22"}}}
 
 
-func _mortar_bench(grind: bool) -> TableMedium:
+func _mortar_bench(grind: bool, round := 1.0, seated := false) -> TableMedium:
 	var m := _medium()
-	_stand(m, MORTAR_SPEC, "mortar", _at(Vector3(0, 0, -8)))
+	var spec: Dictionary = MORTAR_SPEC.duplicate(true)
+	if seated:
+		# the pestle standing in the bowl, its tip on the floor
+		var pestle: Dictionary = (((spec["things"] as Array)[0] as Dictionary)["parts"] as Array)[2]
+		pestle["at"] = [0, 2.0, 0]
+		pestle["points"] = {"tip": [0, 2.2, 0], "grip": [0, 12, 0]}
+	_stand(m, spec, "mortar", _at(Vector3(0, 0, -8)))
 	var tracks: Array = []
 	if grind:
 		tracks.append({"thing": "mortar", "part": "pestle", "law": "aim",
-			"tip": {"point": "tip", "around": "mortar.floor", "radius": 1.0, "period": 1.6, "lift": 0.4, "press": "mortar"},
+			"tip": {"point": "tip", "around": "mortar.floor", "radius": round, "period": 1.6, "lift": 0.4, "press": "mortar"},
 			"grip": {"point": "grip", "around": "mortar.floor", "radius": 2.6, "period": 1.6, "lift": 9.5}})
 	else:
 		tracks.append({"thing": "mortar", "part": "pestle", "law": "carry", "to": "mortar.floor", "by": [0, 9, 0], "turn": [0, 0, 0], "lift": 2})
@@ -443,6 +458,16 @@ func _grind() -> bool:
 			pieces += 1
 	_ok(not ph.whole(wi, 16.0) and pieces >= 4, "ground for 14 seconds, the crystal is %s (%d pieces)" % ["whole" if ph.whole(wi, 16.0) else "broken", pieces])
 	m._root3.free()
+	# A TOOL PRESSED ONTO WHAT IT WORKS IN MEETS IT (119515's puppeteer, told its pestle passed through the mortar, lifted it
+	# clear of what it ground): the act says nothing passes through - and, the control, its head driven into the bowl's wall by
+	# a round too wide for it, it does
+	var seated := _mortar_bench(true, 1.0, true)
+	var said: Dictionary = seated._work.check("grind")
+	_ok(int(said["through"]) == 0, "a pestle pressed onto its mortar's floor is said to pass through it:\n%s" % String(said["text"]))
+	seated._root3.free()
+	var deep := _mortar_bench(true, 3.6, true)
+	_ok(int(deep._work.check("grind")["through"]) > 0, "the control: a pestle ground round wider than its mortar's floor, its head in the wall, is not said to pass through it")
+	deep._root3.free()
 	var c := _mortar_bench(false)
 	var cwi := int((c._work.physics.loose[0] as Dictionary)["wi"])
 	c._work.tick(16.0)
@@ -864,4 +889,80 @@ func _cut() -> bool:
 	s._work.tick(10.0)
 	_ok(_pieces_of(s._work.physics, 10.0).is_empty(), "the control: a stone was cut into %d pieces" % _pieces_of(s._work.physics, 10.0).size())
 	s._root3.free()
+	return true
+
+
+# --- the-quiet-crucible 119515, 2026-10-29 ------------------------------------------------------------------------
+
+## A narrow vial (its mouth 1.3 cm across), a tray with a scale 3.2 cm wide and a bead 0.8 cm across, both loose, and a
+## dish of forty loose beads nothing comes near.
+const VIAL_SPEC := {"things": [
+	{"name": "vial", "parts": [{"shape": "lathe", "profile": [[0, 0], [1.2, 0], [1.2, 6], [0.8, 7], [0.8, 7.8], [0.65, 7.8], [0.65, 7.1],
+		[1.05, 6], [1.05, 0.2], [0, 0.2]], "material": "glass"}]},
+	{"name": "tray", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [6, 0], [6, 1], [5.6, 1], [5.6, 0.3], [0, 0.3]], "material": "clay"},
+		{"name": "scale", "shape": "box", "size": [3.2, 0.3, 3.2], "material": "stone", "at": [-2.5, 0.3, 0], "loose": true},
+		{"name": "bead", "shape": "ball", "size": [0.8, 0.8, 0.8], "material": "stone", "at": [2.5, 0.3, 0], "loose": true}]},
+	{"name": "dish", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [5, 0], [5, 1.2], [4.6, 1.2], [4.6, 0.3], [0, 0.3]], "material": "clay"},
+		{"name": "beads", "shape": "ball", "size": [0.9, 0.9, 0.9], "material": "stone", "at": [0, 0.3, 0], "copies": {"heap": {"count": 40, "radius": 3}}}]}],
+	"materials": {"glass": {"kind": "glass", "color": "#9ab0c0"}, "clay": {"kind": "ceramic", "color": "#8a6a4a"},
+		"stone": {"kind": "stone", "color": "#8a8a80"}}}
+
+
+## The vial bench: [param what] (the scale or the bead) lifted over the vial's mouth (2 s to 5 s) and lowered straight
+## down into it, to 2 cm over the table (5 s to 7 s), and let go.
+func _vial_bench(what: String) -> TableMedium:
+	var m := _medium()
+	_stand(m, VIAL_SPEC, "vial", _at(Vector3(0, 0, -10)))
+	_stand(m, VIAL_SPEC, "tray", _at(Vector3(15, 0, -10)))
+	_stand(m, VIAL_SPEC, "dish", _at(Vector3(-35, 0, 5)))
+	m._work.build({"acts": [{"name": "in", "beat": 1, "length": 5, "tracks": [
+		{"thing": "tray", "part": what, "law": "carry", "to": [0, 12, -10], "lift": 4, "between": [0.0, 0.6]},
+		{"thing": "tray", "part": what, "law": "carry", "to": [0, 2, -10], "lift": 0, "between": [0.6, 1.0]}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 2.0, "t1": 7.0}]
+	m._work._timelines()
+	return m
+
+
+## Where loose part [param part] of the tray is at [param t] (the table's space), and whether it is a body.
+func _tray_part(m: TableMedium, part: String, t: float) -> Array:
+	var ti := -1
+	for i in m._work.things.size():
+		if String((m._work.things[i] as Dictionary)["name"]) == "tray":
+			ti = i
+	var wi := int((m._work._part_of(ti, part) as Dictionary)["wi"])
+	var pose: Variant = m._work.physics.pose_of(wi, t)
+	var box: AABB = ((m._work.works[wi] as Dictionary)["w"] as Dictionary).get("box", AABB())
+	var at: Vector3 = ((pose as Transform3D) if pose != null else m._work._work_world(wi, t)) * box.get_center()
+	return [at, pose != null]
+
+
+func _held_meets() -> bool:
+	var m := _vial_bench("scale")
+	var ph: TablePhysics = m._work.physics
+	_ok(ph.sim.n == 0, "set, the table's loose things already hold %d particles - a heap nothing touches should cost none" % ph.sim.n)
+	m._work.tick(1.5)
+	_ok(not bool(_tray_part(m, "scale", 1.5)[1]), "before the work comes to it, the scale is a body already")
+	m._work.tick(9.0)
+	var sc: Array = _tray_part(m, "scale", 9.0)
+	var mouth := _at(Vector3(0, 0, -10))
+	var c: Vector3 = sc[0]
+	var inside := Vector2(c.x - mouth.x, c.z - mouth.z).length() < 0.0105 and c.y < 0.065
+	_ok(bool(sc[1]) and not inside, "the scale 3.2 cm wide lowered into a vial 1.3 cm across its mouth went in: its middle at %.1f cm up, %.1f cm off the vial's axis" % [
+		c.y * 100.0, Vector2(c.x - mouth.x, c.z - mouth.z).length() * 100.0])
+	var heaped := 0
+	for L in ph.loose:
+		if String((L as Dictionary)["name"]).begins_with("beads") and int((L as Dictionary)["body"]) >= 0:
+			heaped += 1
+	_ok(heaped == 0, "%d of the dish's beads, which nothing came near, were made bodies" % heaped)
+	m._root3.free()
+	var b := _vial_bench("bead")
+	b._work.tick(9.0)
+	var bd: Array = _tray_part(b, "bead", 9.0)
+	var d: Vector3 = bd[0]
+	_ok(bool(bd[1]) and Vector2(d.x - mouth.x, d.z - mouth.z).length() < 0.0105 and d.y < 0.015,
+		"the control: the bead 0.8 cm across lowered into the vial lies at %.1f cm up, %.1f cm off its axis - not on its floor" % [
+		d.y * 100.0, Vector2(d.x - mouth.x, d.z - mouth.z).length() * 100.0])
+	b._root3.free()
 	return true

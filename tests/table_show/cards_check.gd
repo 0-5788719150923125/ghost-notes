@@ -1392,8 +1392,8 @@ func _stones() -> bool:
 		for e in (leaves[0] as Dictionary)["geos"]:
 			for xf in (leaves[0] as Dictionary)["xforms"]:
 				faces.append_array((xf as Transform3D) * ((e as Dictionary)["geo"] as Props.Tris).v)
-		var iron := TriangleMesh.new()
-		iron.create_from_faces(faces)
+		# cast on as the work casts ([method TableWork._ray_mesh]: in centimeters)
+		var iron := TableWork._ray_mesh(faces)
 		var bounds := Props._bounds((leaves[1] as Dictionary)["geos"], Transform3D.IDENTITY)
 		in_iron += _in_solid(_lumps((leaves[1] as Dictionary)["xforms"], bounds), iron)
 		var blind := RandomNumberGenerator.new()
@@ -1506,8 +1506,8 @@ func _through_wall(lumps: Array, floor: float, walls: Dictionary) -> int:
 	return n
 
 
-## How many [param lumps] have a point of their side or foot inside [param solid] - an odd count of its surfaces
-## above the point ([method TableWork._inside]).
+## How many [param lumps] have a point of their side or foot inside [param solid] (a [method TableWork._ray_mesh]) - an
+## odd count of its surfaces above the point ([method TableWork._inside]).
 func _in_solid(lumps: Array, solid: TriangleMesh) -> int:
 	var n := 0
 	for l in lumps:

@@ -74,8 +74,8 @@ const SLOTS := {
 ## became Table (2026-10-26): the table's settings kept their section, and its Script card, built in the
 ## section, showed no Byline, no brief's marks and no "Brief" (2026-10-29: "It's not displayed in the UI
 ## anywhere").
-## The two a [ReadingPanel] runs say the rest of that panel too, so nothing extends it: `title` and
-## `hint` (its heading and the line under it), `hosts` (which of a note's component cards it can
+## The two a [ReadingPanel] runs say the rest of that panel too, so nothing extends it: `hint` (the
+## line under its title row, which names no mode - [method SidePanel.pin_title_row]), `hosts` (which of a note's component cards it can
 ## show - a card table is its own presentation, so it shows no Picture) and `classic` (what a panel
 ## started without a note - the command line, a gate - is made of).
 const WORKSPACES := {
@@ -83,20 +83,17 @@ const WORKSPACES := {
 		"blurb": "The note's own panel: its words, and a card for each thing attached."},
 	"reading": {"label": "Reading", "section": "generative",
 		"blurb": "A voice reads the note: the cast, each speaker's delivery and room, the stream.",
-		"title": "Generative",
 		"hint": "Write or open a chapter. It is spoken in chunks, so the show starts while the rest is still being made. Edit lists every mark the reading understands - speakers, hesitations, pictures, pronunciations.",
 		"hosts": ["voice", "voice_training", "picture", "letter", "actor", "storyboard", "look", "bookends"],
 		"classic": ["text", "voice", "picture", "illustrations", "look", "bookends"]},
 	# (its settings keep the section they had as Cards: renamed, the workspace would forget them)
 	"table": {"label": "Table", "section": "cards", "mode": "table",
 		"blurb": "A show at a table: the episodes agents make from the note's brief - cards drawn, things made, or both - and the voice that reads them.",
-		"title": "Table",
 		"hint": "Open a show: its body is the brief every agent works from. Each seed is one episode - planned, shuffled, painted and written one card (or one beat of work) at a time by the agents, then read here in the voice below, at the table.",
 		"hosts": ["table", "voice", "voice_training", "look", "bookends"],
 		"classic": ["text", "table", "voice", "look", "bookends"]},
 	"proof": {"label": "Proof", "section": "proof",
 		"blurb": "A ghost doing math at a desk: the episodes agents make from the note's problem, and the voice that teaches them.",
-		"title": "Proof",
 		"hint": "The note's words are the problem: write one, or press Invent a problem. Make episode has the agents fix it, solve it at the desk and check the proof in Lean, then write the lesson the voice below reads while the pen writes it on the pad.",
 		"hosts": ["proof", "voice", "voice_training", "look", "bookends"],
 		"classic": ["text", "proof", "voice", "look", "bookends"]},

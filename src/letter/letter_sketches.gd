@@ -28,7 +28,8 @@ const RETRIES := 1
 const PAD_WIDTH := 270.0
 
 ## Where the notes' folders are: moved aside by a gate.
-static var root := "user://letters"
+const ROOT := "user://letters"
+static var root := ROOT
 
 var dir := ""
 ## Who draws: `{agent, model, effort}` ([AgentPick]'s choice).
@@ -49,6 +50,21 @@ static func folder_of(note: String) -> String:
 	var abs := ProjectSettings.globalize_path(note)
 	var base := abs.get_file().get_basename().strip_edges().to_lower().replace(" ", "-").validate_filename()
 	return ProjectSettings.globalize_path(root.path_join("%s-%s" % [base, abs.md5_text().substr(0, 8)]))
+
+
+## A NOTE MOVED TAKES ITS SKETCHES WITH IT ([signal DocSource.moved]; 2026-10-29, a chapter saved under another name
+## had lost its drawings - kept still, in the folder of the name it had: "that workflow should definitely rename the
+## underlying generated files path as well"): the folder of the note at [param from] renamed to the one at
+## [param to]'s - never over one already there, and the author's only where the caller [param may] write them (a
+## gate's own root always). "" once moved or with nothing to move, else why not.
+static func carry(from: String, to: String, may: bool) -> String:
+	var was := folder_of(from)
+	var now := folder_of(to)
+	if was.is_empty() or now.is_empty() or was == now or not DirAccess.dir_exists_absolute(was) or (not may and root == ROOT):
+		return ""
+	if DirAccess.dir_exists_absolute(now):
+		return "%s has sketches of its own already, so those of %s are left in %s." % [to.get_file(), from.get_file(), was]
+	return "" if DirAccess.rename_absolute(was, now) == OK else "Its sketches could not be moved from %s to %s." % [was, now]
 
 
 func _init(note := "") -> void:

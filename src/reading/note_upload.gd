@@ -34,7 +34,8 @@ const HOST := "this card"
 const MAKES := "an export that goes up"
 
 ## Where each note's folder is: what the steps made from its words. A gate points it at its own.
-static var root := "user://readings"
+const ROOT := "user://readings"
+static var root := ROOT
 
 var reading: ReadingPanel
 var youtube: YouTubeCard
@@ -127,6 +128,19 @@ static func folder_of(note: String) -> String:
 	var abs := ProjectSettings.globalize_path(note)
 	var base := abs.get_file().get_basename().strip_edges().to_lower().replace(" ", "-").validate_filename()
 	return ProjectSettings.globalize_path(root.path_join("%s-%s" % [base, abs.md5_text().substr(0, 8)]))
+
+
+## A NOTE MOVED TAKES WHAT ITS STEPS MADE WITH IT, as [method LetterSketches.carry] its sketches: the folder of the note
+## at [param from] renamed to the one at [param to]'s, never over one already there, and the author's only where the
+## caller [param may] write them (a gate's own root always). "" once moved or with nothing to move, else why not.
+static func carry(from: String, to: String, may: bool) -> String:
+	var was := folder_of(from)
+	var now := folder_of(to)
+	if was.is_empty() or now.is_empty() or was == now or not DirAccess.dir_exists_absolute(was) or (not may and root == ROOT):
+		return ""
+	if DirAccess.dir_exists_absolute(now):
+		return "%s has its own steps' work already, so that of %s is left in %s." % [to.get_file(), from.get_file(), was]
+	return "" if DirAccess.rename_absolute(was, now) == OK else "What its steps made could not be moved from %s to %s." % [was, now]
 
 
 ## The note's `tags:` line, as a list.

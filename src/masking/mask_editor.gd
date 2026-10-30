@@ -916,21 +916,6 @@ func _prompt_for_source() -> void:
 	_open_dialog.popup_centered()
 
 
-## THE PANEL'S HEADER, as every note's panel has it: "‹ Notes", the note's title, its "⋯".
-func _header_row() -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	row.add_child(Shell.back_button(self))
-	var title := Label.new()
-	title.text = NoteStore.title_of(note_path) if not note_path.is_empty() else "Masking"
-	title.add_theme_font_size_override("font_size", 20)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	row.add_child(title)
-	row.add_child(Shell.note_menu(self))
-	return row
-
-
 ## A NOTE'S CLIP COMES OFF AGAIN: the Clip card's × on [param panel] takes the `clip:` block out of
 ## the note and opens it as what is left ([method NoteCards.detach]) - its words, as a plain note.
 ## The session Masking keeps for the clip is its own file and is left as it is. Not while an export
@@ -969,7 +954,7 @@ func _build_source_panel() -> void:
 	_note_detach(_src_panel)
 	add_child(_src_panel)
 	_src_panel.body.add_theme_constant_override("separation", 8)
-	_src_panel.pin_header(_header_row())
+	_src_panel.pin_title_row(self, false)
 	var chips := CardRow.new()
 	_src_panel.body.add_child(chips)
 	_src_panel.card_row = chips
@@ -2784,7 +2769,7 @@ func _build_panel() -> void:
 	_note_detach(_panel)
 	_chrome_host().add_child(_panel)
 	_panel.body.add_theme_constant_override("separation", 8)
-	_panel.pin_header(_header_row())
+	_panel.pin_title_row(self, false)
 	var chips := CardRow.new()
 	_panel.body.add_child(chips)
 	_panel.card_row = chips

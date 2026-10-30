@@ -52,7 +52,7 @@ at the letter's close camera.
 | `*a paragraph in italics, whole*` | a THOUGHT: said, never written; the pen up, the camera eased back |
 | `<!-- strike -->`, `<!-- strike: 5 -->` | the writer stops to decide (3 s, or the mark's own seconds), the pen still, then crosses out the paragraph last written, every line |
 | `<!-- unspoken: Dear Ink, -->` | written, never said; the voice waits |
-| `<!-- sketch: words -->` | drawn by the pen while the paragraph after it is said - that paragraph is the drawing's, never written |
+| `<!-- sketch: words -->` | drawn by the pen while the paragraph after it is said - that paragraph is the drawing's, then written under it while the voice waits |
 | `<!-- point: sketch -->`, `<!-- point: sketch, the dot -->` | in a thought (or any paragraph the pen is not busy with): at the next word the pen points at the last sketch, or its named part, to the sentence's end |
 | `<!-- point: camera -->` | the pen lifted, its nib turned to the lens for the sentence |
 | `<!-- tap -->`, `<!-- tap: desk -->` | the pen turned over, its top tapped three times on the pad (or the desk), turned back |
@@ -157,10 +157,18 @@ exactly that.
   (`draw_pace`): the voice's rest is sized by it and the desk draws to it (`LetterMedium._paced_end`), filling to
   the next line as before. The tree: 7.1 s, done 1.5 s after its words, the voice on 2.9 s after "Then eight". A
   sketch with room keeps its pace. To have the long row joined, the mark can say so and the sketch be drawn again.
-- **The paragraph after a sketch is its narration, not written.** The pen cannot write and draw at once,
-  and the only words to draw under are the next ones. In the chapter every sketch is followed by words
-  about it ("A cross, and a dot, on the same line, about a hand apart.") - the drawing is said as it is
-  drawn, the desk's rule.
+- **The paragraph after a sketch is its narration, said as it is drawn - and then written under it.** The
+  pen cannot write and draw at once, and the only words to draw under are the next ones. In the chapter every
+  sketch is followed by words about it ("A cross, and a dot, on the same line, about a hand apart.") - the
+  drawing is said as it is drawn, the desk's rule. Not written at first; on 2026-10-29 the user, of the tree
+  of dots in Secular Hazing: "why is this line not written at all? ... it fails to write down the context Pen
+  would need to have here" - the letter is Pen's to read later, and a drawing with no words reads as nothing.
+  Chosen of four (written as said and drawn after; a mark per sketch; the `unspoken` mark by hand): drawn
+  while said, then written as `unspoken` words are, the voice waiting (about 10 s for that paragraph at the
+  hand's pace) - its caption stays while it is said, the words not on the page yet. A sketch not drawn yet has
+  its paragraph written as it is said. And a rule is left empty under every drawing
+  (`LetterScript.UNDER_SKETCH`; the user: "Both sketches are too squished today, with text that is too close
+  to them") - the text had gone on the first rule clear of it.
 - **The pen writes two words ahead of the voice** (2026-10-27, the fifth pass). How it got here:
   - the first two passes kept the pen with the voice word for word (the desk's elastic pen, `LAG_MOST` 2.5 s
     of trail): the user, "Something about this mode feels wrong and bad ... the pen writes very fast
@@ -389,6 +397,35 @@ exactly that.
   and then a run pulled out straight first, its last stretch home to the ring, the gap left spread back along it;
   it turns off the bone as it goes, and is dropped again (up to six times) while the curve Props smooths through
   its places still crosses the bone (5 of 24 single drops had) - then drawn again until it is its length.
+  **The bail a pointed loop** (the user: "it needs to be a V, a triangle, a pointed loop ... The one in the
+  reference connects to the chain via an upside-down V shape"): first a wire triangle, its point 7.5 mm out (the
+  blunt V sheet and jump ring before it read as a needle) - then, by the picture again, **a V cast with the bone**
+  ("the inner part of the bone is not quite so narrow, and the V-shape is not a separate thing: it is a part of the
+  bone itself, as if the entire bone and V were cut from the same cast. The point of the V protrudes roughly as far
+  outward as the curve of the bone-knobs do - but the one you're rendering now is almost twice as far"): the bar
+  now 0.64-0.72 of an end's width (it had been 0.52-0.6), and out of the middle of its long edge a V in the plate
+  itself, its sides straight to a round point (1.7 mm) at the knobs' reach, a 1.5 mm hole in it for the chain -
+  then **a V, not a hole** ("2 straight pieces of metal, which make a V ... replace the circular hole with a
+  triangular one, which is also larger. The bottom of the triangle should be level with the center of the bone's
+  inner side"): two straight struts 0.8 mm wide meeting at a point rounded 0.8 mm, the triangle between them open
+  from its apex down to the bar's edge (`TAG_STRUT`; at 1 mm the shortest V's opening was only half again the hole's
+  size, at 0.8 at least that on every tag), the chain through it by the apex. The plate is two halves along its axis,
+  each the other's mirror with half the opening a notch in it (an extrude has no holes; the first tag's slit-bridged
+  hole had been filled now and then); no bevel, or the halves' faces would pull apart at the seam. Where the chain
+  goes through the V and over its point it lies on the plate, as it should: the drop's check against the bone leaves
+  it out within `TAG_THROUGH` (`_over`). A changed V moves the chain's heap - it is dropped from the V - so a desk's
+  layout moves with it. **A name, now and then** (the user: "generate random words to use
+  as names, engraved into the dog tag ... must be a name that is generated by the hash function: not something we
+  just naively hack into the code ... ~75% of the time - there should be no name on tags at all"; then "just simple
+  lettering", like a collar's or an army tag): `DeskLook.tag_name` - one desk in four, its name the tablet's made-up
+  syllables (`TabletMedium.made_up`, shared, the tablet's draws unchanged) on a generator of its own salted with
+  `TAG_NAME_SALT`, 88283: the first salt from 0 under which desk 4230 - the user's desk for their first video - draws
+  a name and draws the one they chose (a search over 88,283 salts, 0.18 s, with `DeskLook._rng` itself). THE NAME IS
+  NEVER WRITTEN IN THE CODE (the user: "please do not mention [it] at all ... anywhere we will commit code. It's an
+  easter egg"): letter_check holds it by its SHA-256 (`DESK_NAME`). To move it to another desk, search again from 0
+  for that desk with the generator's own steps. Engraved as plain capitals with Godot's `Label3D` in its fallback face, dark, flat on the bone, its top
+  toward the bail; lifted 0.6 mm off the face (at 0.2 mm the plate drew over it - measured by height). 991 of 4000
+  desks named, 977 names.
   **What Props needed:** an extrude cut in meters lost its small corners - Godot's ear clipping weighs each turn
   against a fixed epsilon, and the first tag's hole was filled on 21 of 24 - so `Props._extrude_face` cuts the
   outline at its own unit size (a notched strip: 11 of 80 filled in meters, none now); a small bead and a small

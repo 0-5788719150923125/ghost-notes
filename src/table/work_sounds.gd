@@ -14,7 +14,8 @@ class_name WorkSounds
 ## FROM THE WORK ITSELF, at the moment it happens ([TableWork]): what is set down when its carry ends `down`, how heavy
 ## it is and what it is made of ([method TableWork.set_down]); what is pressed onto something and whether it touches it
 ## now, and how fast it goes ([method TableWork.pressed]); how hard a liquid boils, its `boil` ([method
-## TableWork.boiling]); and where a pour's stream lands, the physics' ([TablePhysics]). The table plays them itself, as
+## TableWork.boiling]); and, the physics' ([TablePhysics]), where a pour's stream lands and each piece a pestle breaks off
+## ([method TablePhysics.breaks_in]) - crunched as it breaks, however the grinding was written. The table plays them itself, as
 ## its picture is drawn (live, a frame at a time; in a render, the frames Movie Maker records - which records the sound
 ## too), so they keep the reading's own time as the work does, a live reading's acts moved as its words arrive.
 ##
@@ -45,10 +46,12 @@ const THUD_HEAVY := 2.0
 const THUD_LEAST := 0.002
 ## GRINDING: its grit at a brisk round (GRIND_SPEED meters a second), crunches a second at that pace, and how near its
 ## surface a pressed point is touching it (meters, past the gap it is held at).
-const GRIND := 0.025
+const GRIND := 0.035
 const GRIND_SPEED := 0.12
 const CRUNCHES := 7.0
 const TOUCH := 0.0025
+## A piece broken off this big (meters, a sphere's radius) crunches at its loudest and lowest; a speck, faint and high.
+const BREAK_BIG := 0.004
 ## A BOIL: bubbles a second at a boil of 1, a bubble's peak, and the hiss under them at a boil of 1.
 const BUBBLES := 7.0
 const BUBBLE := 0.009
@@ -73,6 +76,8 @@ const RINGS := {
 	"bone": {"f": 1300.0, "ratios": [1.0, 2.6], "decay": 0.05, "amp": 0.25},
 	"wood": {"f": 650.0, "ratios": [1.0, 2.6], "decay": 0.04, "amp": 0.35},
 }
+## Ticks with the show's time unmoved before the sound is held where it is.
+const STILL_TICKS := 2
 ## The most sines and noise bursts sounding at once.
 const VOICES := 40
 const BURSTS := 12
@@ -81,6 +86,8 @@ var work: TableWork
 var _player: AudioStreamPlayer
 var _pb: AudioStreamGeneratorPlayback
 var _at := NAN                    # show time of the next sample made
+var _last_t := NAN                # the show's time at the last tick, and how many ticks since it moved
+var _still := 0
 var _rng := 0x2545f491
 # the sines: phase step and its glide a sample, amplitude and its decay a sample, phase, the two ears
 var _vw := PackedFloat32Array()
@@ -112,6 +119,8 @@ var _hiss_want := 0.0
 var _hiss_pan := Vector2(0.7, 0.7)
 var _pressed_was := {}            # work -> where its pressed point was a step ago
 var _due := {}                    # what is spawned at a rate -> how much of the next one is due
+var _broke := {}                  # the biggest piece broken off since the last crunch, and when that crunch was
+var _crunched := -INF
 
 
 func _init(w: TableWork) -> void:
@@ -135,7 +144,9 @@ func _init(w: TableWork) -> void:
 
 
 ## THE SHOW AT [param t]: the sound kept [constant LEAD] ahead of it in a player under [param host] (made the first time) -
-## begun again where the show jumped, and nothing made while it stands still.
+## begun again where the show jumped, and HELD WHERE IT IS while the show stands still (the user, 2026-10-29: "I clicked
+## "pause" in the real-time viewer, and the environmental cauldron boiling sounds continue to play ... Audio should pause
+## when the video does"): what is queued waits in the player, and goes on as the show does.
 func tick(t: float, host: Node) -> void:
 	if _player == null:
 		var gen := AudioStreamGenerator.new()
@@ -145,6 +156,16 @@ func tick(t: float, host: Node) -> void:
 		_player.name = "WorkSounds"
 		_player.stream = gen
 		host.add_child(_player)
+	# A SHOW STANDING STILL: two ticks at one time (a single one can be a frame the clock did not tick over)
+	_still = _still + 1 if t == _last_t else 0
+	_last_t = t
+	if _still >= STILL_TICKS and not _pb_paused():
+		_player.stream_paused = true
+		return
+	if _still >= STILL_TICKS:
+		return
+	if _pb_paused():
+		_player.stream_paused = false
 	if not _player.playing or is_nan(_at) or t < _at - LEAD - RESET or t > _at + RESET:
 		_player.stop()
 		_player.play()
@@ -153,6 +174,10 @@ func tick(t: float, host: Node) -> void:
 	var n := mini(int((t + LEAD - _at) * float(RATE)), _pb.get_frames_available())
 	if n > 0:
 		_pb.push_buffer(render(n))
+
+
+func _pb_paused() -> bool:
+	return _player != null and _player.stream_paused
 
 
 ## Let go: the player stopped and taken off its host.
@@ -172,6 +197,8 @@ func _restart(t: float) -> void:
 	_hiss_level = 0.0
 	_pressed_was = {}
 	_due = {}
+	_broke = {}
+	_crunched = -INF
 
 
 ## THE NEXT [param n] SAMPLES from where the sound is ([member _at]), the show's time going on with them: stereo.
@@ -227,6 +254,20 @@ func _look(t0: float, t1: float) -> Array:
 	_grit_want = GRIND * grit
 	if grit > 0.0:
 		_grit_pan = gp
+	# A PIECE BROKEN OFF, as the physics broke it: a crunch, the bigger the piece the lower and louder - no more than
+	# CRUNCHES a second however many break at once (a lump crushed splits into dozens in a moment, which heard each had
+	# stacked far past the voice), each as big as the biggest since the last
+	if work.physics != null:
+		for b in work.physics.breaks_in(t0, t1):
+			var bd: Dictionary = b
+			if float(bd["size"]) > float(_broke.get("size", 0.0)):
+				_broke = bd
+		if not _broke.is_empty() and t0 - _crunched >= 1.0 / CRUNCHES:
+			var big := clampf(float(_broke["size"]) / BREAK_BIG, 0.25, 1.0)
+			spawn.append([clampi(int((maxf(float(_broke["t"]), t0) - t0) * float(RATE)), 0, STEP - 1),
+				_crunch.bind(big, _ears(_broke["at"]), lerpf(3200.0, 1600.0, big))])
+			_crunched = t0
+			_broke = {}
 	# A BOIL, and A POUR LANDING
 	var hiss := 0.0
 	for b in work.boiling(t0):
@@ -362,8 +403,8 @@ func _thud(d: Dictionary) -> void:
 
 
 ## A CRUNCH under a grinding point going at [param pace] of a brisk round.
-func _crunch(pace: float, ears: Vector2) -> void:
-	_burst(lerpf(2400.0, 3400.0, _rand()), 0.9, 0.006, GRIND * 1.6 * pace * lerpf(0.4, 1.0, _rand()), ears)
+func _crunch(pace: float, ears: Vector2, f := 0.0) -> void:
+	_burst(f * lerpf(0.85, 1.15, _rand()) if f > 0.0 else lerpf(2400.0, 3400.0, _rand()), 0.9, 0.006, GRIND * 1.6 * pace * lerpf(0.4, 1.0, _rand()), ears)
 
 
 ## A BUBBLE closing (Minnaert): a sine at [param f] rising a fifth as it dies, [param amp] at its peak.

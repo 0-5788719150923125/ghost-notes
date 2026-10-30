@@ -283,7 +283,7 @@ func _build_panel() -> void:
 	# and a Control outside a container is never asked to fit anything - the rows past the
 	# bottom edge were unreachable rather than clipped. See side_panel.gd.
 	_panel = preload("res://src/ui/side_panel.gd").new(380.0)
-	_panel.title = _row("title")
+	_panel.title = _row("label")
 	if not note_path.is_empty():
 		_attached = Components.attached_of(NoteStore.blocks_of(note_path))
 		# a note's components come off again: each card's × (see SidePanel.add_card)
@@ -517,22 +517,8 @@ func hand_publish(p: ReadingPublish, by: String) -> void:
 
 
 func _build_header(box: VBoxContainer) -> void:
-	var title_row := HBoxContainer.new()
-	# pinned over the scrolling body, so "⋯" and "–" never scroll away (SidePanel.pin_header)
-	(_panel as SidePanel).pin_header(title_row)
-	title_row.add_child(Shell.back_button(self))
-	var title := Label.new()
-	title.text = _row("title")
-	title.add_theme_font_size_override("font_size", 20)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_row.add_child(title)
-	title_row.add_child(Shell.note_menu(self))
-	var hide := Button.new()
-	hide.text = "–"
-	hide.tooltip_text = "Hide panel (F2)"
-	hide.custom_minimum_size = Vector2(28, 28)
-	hide.pressed.connect(func() -> void: _panel.visible = false)
-	title_row.add_child(hide)
+	# pinned over the scrolling body, so "⋯" and "–" never scroll away - and naming no mode (SidePanel.pin_title_row)
+	(_panel as SidePanel).pin_title_row(self)
 
 	var hint := Label.new()
 	hint.text = _row("hint")

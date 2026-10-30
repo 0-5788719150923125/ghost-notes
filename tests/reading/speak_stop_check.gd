@@ -136,25 +136,31 @@ func _check_the_transport_follows_the_state() -> void:
 ## SPACE PLAYS AND PAUSES WHEREVER THE FOCUS IS (2026-10-05: "When I click the Tarot/collapse
 ## button in the top-left corner, the spacebar's ability to Play/Pause the scene stops working").
 ## Space had only ever been the Play button's own key, pressing whatever button had the focus -
-## and the panel's collapse button takes the focus when clicked, which the control shows. The
-## TRANSPORT takes Space first now (Transport.space_toggles), with that button focused or the panel
-## hidden, unless someone types - in every mode, not only this panel.
+## and the panel's collapse button took the focus when clicked. The TRANSPORT takes Space first now
+## (Transport.space_toggles), with a button focused or the panel hidden, unless someone types - in
+## every mode, not only this panel; and the collapse button, the title row's (SidePanel.pin_title_row),
+## no longer takes the focus at all. The control: a button on the panel that does take it.
 func _check_space_plays_wherever_the_focus_is() -> void:
 	print("")
 	print("space_plays_wherever_the_focus_is")
 	var collapse: Button = null
+	var focused: Button = null
 	for b in _ed._panel.find_children("*", "Button", true, false):
 		if (b as Button).text == "–":
 			collapse = b
+		elif focused == null and (b as Button).focus_mode != Control.FOCUS_NONE:
+			focused = b
 	_ok(collapse != null, "the panel has its collapse button")
-	if collapse == null:
+	if collapse == null or focused == null:
+		_ok(focused != null, "the panel has a button that takes the focus")
 		return
-	_ok(collapse.focus_mode != Control.FOCUS_NONE,
-		"control: clicking the collapse button takes the keyboard focus (which is why Space went to it)")
+	_ok(collapse.focus_mode == Control.FOCUS_NONE, "clicking the collapse button leaves the keyboard focus where it was")
+	_ok(focused.focus_mode != Control.FOCUS_NONE,
+		"control: clicking \"%s\" takes the keyboard focus (which is why Space went to the collapse button once)" % focused.text)
 	var space := InputEventKey.new()
 	space.keycode = KEY_SPACE
 	space.pressed = true
-	_ok(Transport.space_toggles(space, collapse), "Space plays with the collapse button focused")
+	_ok(Transport.space_toggles(space, focused), "Space plays with a button focused")
 	_ok(Transport.space_toggles(space, null), "and with nothing focused")
 	_ed._panel.visible = false
 	_ok(Transport.space_toggles(space, null), "and with the panel collapsed")

@@ -341,8 +341,8 @@ func _chest() -> void:
 	for mi in (box["node"] as Node).find_children("*", "MeshInstance3D", true, false):
 		if (mi as MeshInstance3D).mesh != null:
 			faces.append_array((mi as MeshInstance3D).global_transform * (mi as MeshInstance3D).mesh.get_faces())
-	var wood := TriangleMesh.new()
-	wood.create_from_faces(faces)
+	# cast on as the work casts ([method TableWork._ray_mesh]: in centimeters)
+	var wood := TableWork._ray_mesh(faces)
 	var card := medium._mesh_for(medium._plan.look).get_faces()
 	var filed: Array = (box.get("filed", []) as Array) + (box.get("at_k", []) as Array) + (box.get("search", []) as Array)
 	var inside := func(xf: Transform3D) -> int:

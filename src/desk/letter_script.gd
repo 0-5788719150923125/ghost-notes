@@ -40,7 +40,11 @@ class_name LetterScript
 ##     <!-- sketch: what it shows -->          a drawing the pen makes on the page - an agent draws it
 ##                                             from the words as SVG ([LetterCard]), TeX's figure
 ##                                             reader lays it out - while the paragraph after it is
-##                                             said: that paragraph is the drawing's, said, not written.
+##                                             said: that paragraph is the drawing's, said as it is drawn
+##                                             and then written under it, the voice waiting for the pen
+##                                             (Pen reads the letter later); a rule is left empty under
+##                                             it ([constant UNDER_SKETCH]). Not drawn yet, the paragraph
+##                                             is written as it is said, as any other.
 ##     <!-- point: sketch -->, <!-- point: sketch, the dot on its own -->
 ##                                             INSIDE SPEECH: at the next word the pen points at the
 ##                                             last sketch, or at the part of it so described (the
@@ -164,6 +168,9 @@ const RETURN := 0.28
 ## The page, as the pad's: the first line's baseline (a rule below the pad's first) and how far a line may
 ## run (px).
 const FIRST_LINE := DeskScript.FIRST_RULE + DeskScript.RULE
+## RULES LEFT EMPTY UNDER A SKETCH before the writing goes on (2026-10-29, the user: "Both sketches are too squished
+## today, with text that is too close to them") - it had gone on the first rule clear of the drawing.
+const UNDER_SKETCH := 1.0
 const LINE_W := DeskScript.PW - DeskScript.RIGHT - DeskScript.TEXT_X
 ## A struck line is crossed through this high: the share of the hand's body above the baseline.
 const STRIKE_H := 20.0
@@ -444,6 +451,7 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 			ink_to = _ink_after(text, ink)
 		var said := _words(text) if kind == "para" else PackedStringArray()
 		var thought: Dictionary = {}     # the voice's entry for a thought paragraph, where a point's linger rests
+		var narrated := ""               # a sketch's paragraph, said as it is drawn: written under it once it is
 		if kind == "para" and said.is_empty():
 			ink = ink_to
 			voice.append({"para": text, "base": spoken.size()})      # a hesitation on a line of its own
@@ -538,18 +546,17 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 			"para":
 				var base := spoken.size()
 				var busy := true             # the pen writes or draws through it: no point in it
-				if pending >= 0 or waiting:
-					# THE SKETCH'S OWN PARAGRAPH: said while it is drawn, and never written
-					var drawn := 0.0
-					if pending >= 0:
-						var s: Dictionary = actions[pending]
-						s["dur"] = LEAD
-						s["after"] = base
-						s["span"] = said.size()
-						drawn = float(s["write"])
-					voice.append({"para": text, "base": base, "pen": drawn, "sync": true})
+				# A SKETCH NOT DRAWN YET has nothing to say its paragraph over: it is written as it is said
+				waiting = false
+				if pending >= 0:
+					# THE SKETCH'S OWN PARAGRAPH: said while it is drawn - and then written under it (below)
+					var s: Dictionary = actions[pending]
+					s["dur"] = LEAD
+					s["after"] = base
+					s["span"] = said.size()
+					voice.append({"para": text, "base": base, "pen": float(s["write"]), "sync": true})
 					pending = -1
-					waiting = false
+					narrated = text
 				elif is_thought(text):
 					spans.append({"kind": "thought", "from": base, "to": base + said.size()})
 					voice.append({"para": text, "base": base})
@@ -645,6 +652,25 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 					voice.append({"hold": POINT_LINGER, "act": -1})
 				spoken.append_array(said)
 				ink = ink_to
+				# ...AND THEN WRITTEN UNDER IT, as words written and not said are: the voice waits while the pen puts
+				# them on the page (2026-10-29, the user of the paragraph under a tree of dots: "it fails to write down
+				# the context Pen would need to have here") - said with the drawing, they are Pen's to read after it
+				if not narrated.is_empty():
+					held = _hold_pen(actions, voice, held, pens.find(ink), spoken.size())
+					var from := actions.size()
+					for la in _lay_para(narrated, spoken.size(), seed, line_n, new_page, hand):
+						var a: Dictionary = la
+						a["span"] = 0
+						a["ink"] = pens[held]
+						a["dur"] = LEAD + float(a["write"])
+						voice.append({"hold": LEAD + float(a["write"]), "act": actions.size(), "pen": LEAD + float(a["write"]),
+							"sync": true})
+						actions.append(a)
+						line_n += 1
+					new_page = false
+					last_para = range(from, actions.size())
+					if not still.is_empty() and int(still["to"]) < 0:
+						still["to"] = spoken.size()
 	if pending >= 0:
 		var w := float((actions[pending] as Dictionary)["write"])
 		voice.append({"hold": w, "act": -1, "pen": w})
@@ -1236,9 +1262,9 @@ static func lay_out(actions: Array, sizes: Dictionary, hand := LetterHand.DEFAUL
 				var room := DeskScript.PW - DeskScript.RIGHT - DeskScript.TEXT_X
 				var k := minf(1.0, room / w) if w > 0.0 else 1.0
 				var top := bottom + DeskScript.RULE * 0.5
-				# the lines kept with it: the first lands up to a rule and a half under it, each next a rule on
+				# the lines kept with it: the first lands up to a rule and a half under it past the rule left empty, each next a rule on
 				var keep := int(act.get("keep", 0))
-				var kept := (float(keep) + 1.0) * DeskScript.RULE + LetterHand.descent_px(hand) if keep > 0 else 0.0
+				var kept := (float(keep) + 1.0 + UNDER_SKETCH) * DeskScript.RULE + LetterHand.descent_px(hand) if keep > 0 else 0.0
 				var fresh := FIRST_LINE - DeskScript.RULE * 0.5 + (h + d) * k + kept <= foot
 				if started and (bool(act.get("page_break", false)) or top + (h + d) * k > foot
 						or (fresh and top + (h + d) * k + kept > foot)):
@@ -1251,7 +1277,7 @@ static func lay_out(actions: Array, sizes: Dictionary, hand := LetterHand.DEFAUL
 				act["w"] = w * k
 				act["h"] = h * k
 				act["d"] = d * k
-				bottom = top + (h + d) * k + DeskScript.RULE * 0.25
+				bottom = top + (h + d) * k + DeskScript.RULE * (0.25 + UNDER_SKETCH)
 				y = _snap_rule(bottom) - DeskScript.RULE
 				started = true
 				under_text = false

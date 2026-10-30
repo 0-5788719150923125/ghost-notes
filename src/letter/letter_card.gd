@@ -8,8 +8,8 @@ class_name LetterCard
 ## the words only describe - each SKETCH, drawn as SVG by an agent and laid out by ghost's own TeX
 ## ([LetterSketches]), so the pen draws it; and each PICTURE a passage is read over, painted by the
 ## Illustrations library's painter from its mark ([IllustrationPanel], handed the letter's pictures and
-## never its sketches). A letter plays without either: a sketch not drawn yet leaves its paragraph only
-## said, a picture not painted leaves its passage over the desk.
+## never its sketches). A letter plays without either: a sketch not drawn yet leaves its paragraph written
+## as it is said, a picture not painted leaves its passage over the desk.
 ##
 ## A CARD ON THE READING, as the Actor's and Proof's are: built by [NoteCards] from the `letter` row, it
 ## PINS ITS MEDIUM while it is up ([member Director.medium_override]) and HANDS the reading what is read
@@ -87,6 +87,9 @@ static func for_note(ctx: Dictionary) -> LetterCard:
 		card._added = EpisodeSteps.new(host_name(), card._panel.episode_steps, MAKES)
 		var doc := card._panel.doc_source()
 		card._sketches = LetterSketches.new(doc.doc_path() if doc != null else "")
+		# a note saved elsewhere has its sketches carried there ([method LetterSketches.carry]): read them there
+		if doc != null:
+			doc.moved.connect(func(_from: String, to: String) -> void: card._sketches.dir = LetterSketches.folder_of(to))
 	else:
 		card._sketches = LetterSketches.new()
 	card._build()

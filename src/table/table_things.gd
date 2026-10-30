@@ -240,7 +240,7 @@ func off_limits() -> Array:
 	out.append(Rect2(medium._plan.deck_base.x - 0.08, medium._plan.deck_base.z - 0.1, 0.16, 0.2))
 	if medium._plan.aside_card >= 0:
 		out.append(Rect2(medium._plan.deck_far.x - 0.08, medium._plan.deck_far.z - 0.1, 0.16, 0.2))
-	# the middle, where the deck is shuffled - and, whatever the source, where the spread lies
+	# the middle, where the deck is shuffled - and, whatever the source, where the spread lies ([method shuffle_rect])
 	out.append(shuffle_rect())
 	if medium._plan.cards_from == "box":
 		# nothing stands where the box would, nor where a pulled card rises past it
@@ -256,10 +256,20 @@ func off_limits() -> Array:
 	return out
 
 
-## The middle of the table, where the deck is shuffled (x by z) - none for a show that draws no cards.
+## The middle of the table, where the deck is shuffled (x by z) - none for a show that draws no cards, and for one that
+## draws them from a box, where nothing is shuffled, only where its spread lies: its cards and between them. (The-quiet-
+## crucible 119515 draws one recipe card from a box: the 44 cm of a shuffle kept bare round it left its cauldron, written
+## beside the work's spot, nowhere to stand but the back corner - the user: "The cauldron is one of the core components
+## of this entire animation: you would expect it to be more prominent in the camera view".)
 func shuffle_rect() -> Rect2:
 	if medium._plan.cards_from == "none":
 		return Rect2()
+	if medium._plan.cards_from == "box":
+		var r := Rect2()
+		for sl in medium._plan.slots:
+			var f := CardTable.footprint((sl as Dictionary)["pos"], float((sl as Dictionary)["yaw"]), CardTable.card_size(medium._plan.look))
+			r = f if r.size == Vector2.ZERO else r.merge(f)
+		return r.grow(0.03)
 	return Rect2(medium._plan.mid.x - 0.22, medium._plan.mid.z - 0.14, 0.44, 0.28)
 
 

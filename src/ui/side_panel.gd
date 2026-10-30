@@ -29,7 +29,8 @@ class_name SidePanel
 ##
 ## A HEADER IS PINNED over the scrolling body ([method pin_header]): the panel's title row - "‹ Notes", its
 ## "⋯" and its "–" - stays in view however far the body is scrolled (asked 2026-10-07: "I have to keep
-## scrolling to the top, to click those buttons"), and goes with the panel when it is hidden.
+## scrolling to the top, to click those buttons"), and goes with the panel when it is hidden. A note's
+## panel names no mode there ([method pin_title_row]).
 ##
 ## A FOOTER CAN BE PINNED under the scrolling body ([method add_footer_card]): a card that stays in
 ## view however far the body is scrolled, taken off the room the body has. Masking's marker list
@@ -63,7 +64,7 @@ var plus: MenuButton
 ## The panel's own name in its cards' fold keys ("<prefix>.<card>", see [Card]). One per mode,
 ## so the Generative panel's Voice and the Cards panel's Voice fold separately.
 var card_prefix := ""
-## What the restore button says - the panel's own name, so it is clear what comes back.
+## The panel's own name in the log ([method _check_width]) - never shown.
 var title := ""
 ## HOW A COMPONENT COMES OFF THE NOTE: `(component: String) -> void`, set by a panel that shows a
 ## note BEFORE its cards are added - a card added with a component then carries an × that asks and
@@ -75,9 +76,10 @@ var _detach_buttons: Array = []     # [Button, component, tooltip]
 var _detach_t := 0.0
 ## THE WAY BACK. Hiding the panel (its – button) left nothing on screen to bring it back but
 ## F2, which nobody knows: "if I minimize the left-side panel, there is no clear way to
-## restore it". A small button in the corner the panel occupied, shown exactly while the
-## panel is hidden. A SIBLING, not a child - a child would be hidden with the panel.
-var _restore: Button
+## restore it". A small "›" in the corner the panel occupied, shown exactly while the
+## panel is hidden - after a small "‹" home on a note's panel ([method pin_title_row]). A
+## SIBLING, not a child - a child would be hidden with the panel.
+var _restore: HBoxContainer
 
 var _col: VBoxContainer
 var _scroll: ScrollContainer
@@ -260,6 +262,53 @@ func pin_header(row: Control) -> void:
 	_fit()
 
 
+## THE TITLE ROW OF A NOTE'S PANEL, pinned ([method pin_header]): "‹ Notes" at its left, "⋯" and - where
+## [param hides] - "–" at its right, and NO NAME BETWEEN THEM (2026-10-29, the user of "Table" or "Generative" there:
+## "a legacy thing, which no longer belongs in modern versions of Ghost Notes, which use a compositional model and try
+## to discourage discrete modes"). Hidden, the panel leaves a small "‹" before its "›" ("a smaller "<" back button
+## will be a better look") - the two one style, chevrons as "‹ Notes" is ("The < and > buttons each have a different
+## style. Pick a lane, please" - the "›" had been a solid "▸"). [param owner] is the panel's mode, which [Shell] is asked through.
+func pin_title_row(owner: Node, hides := true) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.add_child(Shell.back_button(owner))
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(gap)
+	row.add_child(Shell.note_menu(owner))
+	if hides:
+		var hide := Button.new()
+		hide.text = "–"
+		hide.tooltip_text = "Hide panel (F2)"
+		hide.focus_mode = Control.FOCUS_NONE
+		hide.custom_minimum_size = Vector2(28, 28)
+		hide.pressed.connect(func() -> void: visible = false)
+		row.add_child(hide)
+	var home := Shell.back_button(owner)
+	home.text = "‹"
+	home.flat = false
+	home.custom_minimum_size = Vector2(28, 28)
+	_corner().add_child(home)
+	_corner().move_child(home, 0)
+	pin_header(row)
+	return row
+
+
+## The corner the panel leaves when hidden ([member _restore]), made the first time it is asked for.
+func _corner() -> HBoxContainer:
+	if _restore == null:
+		_restore = HBoxContainer.new()
+		_restore.add_theme_constant_override("separation", 4)
+		var open := Button.new()
+		open.text = "›"
+		open.tooltip_text = "Show the panel again (F2)"
+		open.focus_mode = Control.FOCUS_NONE
+		open.custom_minimum_size = Vector2(28, 28)
+		open.pressed.connect(func() -> void: visible = true)
+		_restore.add_child(open)
+	return _restore
+
+
 ## Every card on the panel, top to bottom, the pinned ones last.
 func cards() -> Array:
 	return (body.get_children() + _footer.get_children()).filter(func(c: Node) -> bool: return c is Card)
@@ -267,14 +316,10 @@ func cards() -> Array:
 
 func _ready() -> void:
 	add_to_group(GROUP)
-	_restore = Button.new()
-	_restore.text = ("▸  " + title) if not title.is_empty() else "▸"
-	_restore.tooltip_text = "Show the panel again (F2)"
-	_restore.focus_mode = Control.FOCUS_NONE
-	_restore.position = position
-	_restore.visible = not visible
-	_restore.pressed.connect(func() -> void: visible = true)
-	add_sibling.call_deferred(_restore)
+	var corner := _corner()
+	corner.position = position
+	corner.visible = not visible
+	add_sibling.call_deferred(corner)
 	# The content's height, not just the window's - see the note at the top.
 	body.minimum_size_changed.connect(_fit)
 	get_viewport().size_changed.connect(_fit)

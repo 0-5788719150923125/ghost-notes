@@ -349,6 +349,72 @@ Open: the tip of a tapered thing rests 2-3 mm high on its 7 mm spheres; slices t
 are not cut (a stroke with no sphere on one side passes); a thing to be cut must lie on the board as a part of it or be
 carried there (a thing of its own is stood with its lowest point on the cloth).
 
+### Watched again (2026-10-29, the-quiet-crucible 119515): the ingredients made real
+
+The user: the grinding not heard; the dragon's blood and the pumpkin seeds "didn't crush: they just scaled down a bit ...
+no collision, they don't rest on the bottom of the mortar, and they appear to be floating"; the pestle held up "perfectly
+still"; the ambience going on through a pause; the cauldron still in the top left; a dragon's scale lowered into a vial
+"clips, because it is larger than the vial ... We really want that behavior everywhere there is interaction between
+components, because faking it looks bad"; the vial drawn from twice, empty the second time, and reused at all ("The old
+vial is contaminated"); the last cork put in sideways. What was found, and done:
+
+- THE SOLVER WAS FULL. 119515's table had 125 loose things; its grains took 712 of `Particles.MOST`'s 900 particles and
+  its lavender and sage the rest, so 114 were left rigid - drawn where the work put them, colliding with nothing, never
+  crushed: the dragon's blood, the seeds, the nails, the scale. A LOOSE THING IS NOW A BODY ONLY ONCE SOMETHING COMES TO IT
+  (`TablePhysics._wake_loose`): the work takes it up, its holder moves, a moving solid or something awake comes within a
+  few millimeters (`Particles.awake_in`, by cells - one box round everything awake had woken the whole bench between two
+  busy places). Untouched, it costs nothing; touched, it is never rigid. `MOST` 1600. A frame shares what did not change
+  (sizes, what is alive, owners, bodies) with the last. Gate: physics_check `_held_meets` (an untouched heap of forty costs
+  no particle).
+- A HELD THING MEETS WHAT IT IS CARRIED INTO (`Particles._held_way`): moved whole toward the hand only as far as nothing is
+  deeper in a solid than it already is (a conservative advance, halved four times), then on along what stopped it, level
+  or upright. A free body does the same after its shape match where nothing near it moves (`_way`): one sphere at a time,
+  a scale's spheres 6 mm apart had let a vial's 1.5 mm glass slip between them, and a ratchet of a slack per substep had
+  walked a held one through the wall. A held loose thing now makes its frame be stepped (alone on a still table, nothing
+  had been). Gate: physics_check `_held_meets` (a 3.2 cm scale stays out of a 1.3 cm mouth; a bead goes in, onto the floor).
+- GRINDING IS THE PHYSICS'. The puppeteer's transcript: told every time that its pestle "PASSES THROUGH" the mortar, it
+  lifted the pestle 2.8 cm clear and shrank the lumps with `grow`. Two causes: a `press`ed tool's head touching the bowl's
+  sloping wall as it goes round was counted as passing through (`TableWork._pressed_into`: within `PRESS_INTO` of what it
+  presses, it meets it); and GODOT'S RAY AND TRIANGLE TEST, whose epsilon (0.00001 on the edges' product) passes a ray
+  through any triangle smaller than a few millimeters in meters - a lathe bowl's floor within 2 cm of its axis - so a pestle
+  pressed in a mortar's middle went to the table under it. The work's ray meshes are kept in centimeters
+  (`TableWork._ray_mesh`, `_ray`; `TableBox`'s are not yet). A `grow` on a loose part is refused, saying how to grind it;
+  `parts` says which loose things break. Gates: physics_check `_grind` (a seated pestle pressed round the floor passes
+  through nothing; too wide a round, its head in the wall, does), table_work_check `_loose_size`.
+- HEARD: each piece the physics breaks off crunches (`TablePhysics.breaks_in`); the grit a little louder (`GRIND` 0.035,
+  0.0055 RMS). A PAUSE HOLDS IT: the show's time unmoved two ticks, the player is held (`WorkSounds.tick`) - a starved
+  generator had been restarted at the same moment over and over. And a pour's landing kept a quiet frame busy until it
+  died away: frozen in the last frame, its bubbles had gone on to the end of the show. Gates: work_sounds_check.
+- A HAND HOLDING A THING UP SWAYS (`TableWork._held_up`): left between moves touching nothing (a pestle lifted out of its
+  mortar, a vial over a pot), it drifts as a hand holds it, `Hands.HOLD_SWAY` times the drift of a careful move, coming on
+  as the move ends and dying away before the next. Set down, or resting on or against anything, it is still. Gate:
+  table_work_check `_held_up`.
+- THE CAULDRON: a show drawing its cards from a box kept a shuffle's 44 by 28 cm bare in the middle, where nothing is
+  shuffled - the set dresser's pot, first written right beside the work's spot, had nowhere to stand but the back corner.
+  Only its spread is kept bare now (`TableThings.shuffle_rect`), and the blueprint draws the work's spot (a cross; the
+  text gives it in centimeters) for what is worked where it stands to be set beside. Rule: the set dresser's THE WORK.
+- THE BRIEF (rift/cards/the-quiet-crucible.md): a vessel that has held one thing is never used for another - a clean vial
+  each time, two or three on the rack. The second dip came up full in the bake (5.3 ml); live, the bake was behind the show
+  there (the log's "behind the show" at 248 s) and the vial was drawn as it had been. `parts` gives the `turn` that stands
+  a thing laid on its side upright (the stopper); the puppeteer is told a held thing meets what it is carried into.
+
+- THE BAKE KEEPS AHEAD OF THE SHOW (measured on a copy of 119515, its 167 s of acts, under xvfb): 243 s to bake before,
+  129 s after. Made bodies take more of a frame, so what a frame did for nothing went: an empty inside is no longer levelled,
+  sloshed and poured every frame (18 of the table's 24); with nothing moving, the loops over every sleeper are skipped; what
+  rides a moving vessel is looked for only near it; the stretches the work holds a loose thing are found once a plan; a
+  stream's parcels are looked at only while one could still be falling (a pot lapping over its own rim back into itself
+  had made thousands, every one scanned every frame); what floats on a calm liquid sleeps there (`Particles._afloat`) and
+  wakes as it is stirred, tipped or struck - three seeds afloat had kept 24 particles awake to the end; and a body no
+  blade will cut (not soft, or under 3 cm) spaces its spheres up to twice their touching (`BODY_SPREAD`: a pumpkin seed 8,
+  not 20). Still over the show's pace: ten seeds tumbling into the mortar (1.1x) and a scale and a cobweb taken up (1.35x),
+  each some 20 s - the live bake runs up to 20 s ahead (`HORIZON`).
+
+Open: a new episode, for the set dresser's and the puppeteer's new rules; the user to hear the grinding and watch a pause;
+119515's pot laps over its own rim into itself through every act (its brew at 68% of a bellied pot's inside, sloshed by the
+stir) - unseen, but a stream the whole show;
+`TableBox`'s rays in meters; things a hand carries along a path through another thing now catch on it and drop (119515's
+lumps on the gimbal candle) - `act` says where they land.
+
 ## Risks
 
 - **Cost.** A few hundred awake particles at 240 Hz in GDScript are milliseconds a frame of simulated time; on a thread

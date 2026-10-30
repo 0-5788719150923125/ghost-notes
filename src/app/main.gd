@@ -374,8 +374,9 @@ func open_file(path: String) -> String:
 ## edits are even being used"). ONE NOTE, ONE FILE: a note Ghost Notes was keeping in its own folder
 ## goes to the trash once the new file is written (two rows of one note is how the wrong one gets
 ## opened), a file added by hand leaves the list, and both of those - like a file in an added
-## folder, which stays listed with its folder - are the author's files, left exactly as they were.
-## Returns what became of [param from], as a sentence for the panel to say.
+## folder, which stays listed with its folder - are the author's files, left exactly as they were. What
+## was made for it, kept in folders named by its path (a letter's sketches, its steps' work), is moved
+## to the new path's. Returns what became of [param from], as a sentence for the panel to say.
 func note_moved(from: String, to: String) -> String:
 	if _note.is_empty() or from.simplify_path() != _note.simplify_path() \
 			or to.simplify_path() == from.simplify_path() or not FileAccess.file_exists(to):
@@ -384,16 +385,25 @@ func note_moved(from: String, to: String) -> String:
 	NoteStore.add(to)
 	if _chrome != null and is_instance_valid(_chrome):
 		_chrome.set_note(_note, delete_note, open_file)
+	# WHAT WAS MADE FOR IT GOES WITH IT: each folder kept by the note's path, renamed to the new path's (2026-10-29: a
+	# chapter saved under another name drew none of its sketches - "that workflow should definitely rename the
+	# underlying generated files path as well")
+	var kept := ""
+	var may := not Settings.is_read_only()
+	for why in [LetterSketches.carry(from, to, may), NoteUpload.carry(from, to, may)]:
+		if not String(why).is_empty():
+			push_warning("ghost: " + String(why))
+			kept += " " + String(why)
 	if NoteStore.is_own(from):
 		var err := NoteStore.trash(from)
 		if not err.is_empty():
 			push_warning("ghost: " + err)
-			return err
-		return "%s, which Ghost Notes was keeping for it, went to the trash." % from.get_file()
+			return err + kept
+		return "%s, which Ghost Notes was keeping for it, went to the trash.%s" % [from.get_file(), kept]
 	if NoteStore.is_added(from):
 		NoteStore.remove(from)
-		return "%s is left as it was, and is off the list." % from.get_file()
-	return "%s is left as it was." % from.get_file()
+		return "%s is left as it was, and is off the list.%s" % [from.get_file(), kept]
+	return "%s is left as it was.%s" % [from.get_file(), kept]
 
 
 ## DELETE THE NOTE OPEN NOW (its panel's "⋯", once asked - see [DeleteDialog]): it is left the way the

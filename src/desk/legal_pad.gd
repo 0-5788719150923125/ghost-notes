@@ -88,6 +88,17 @@ const TINT := Color(0.93, 0.92, 0.88)
 ## its left - and opaque, its back took only the room's night-blue fill: (9, 8, 15) mid-turn, where the lamp on its
 ## face now shows through it warm, (206, 149, 73), the writing faintly through it the other way round. What is left
 ## dark is its shadow, on itself and the page under it, as dark as any shadow on the desk.
+##
+## ONLY THE LIGHT ON ITS OTHER SIDE (2026-10-29, the user: "You can see written text on the back of pages ... the text
+## disappears immediately after the page turn settles ... at the binding ... you would not expect to see as much text as
+## we do - because that's the header section"): Godot's own BACKLIGHT adds `(1/PI - diffuse) * BACKLIGHT` whichever side
+## a light is on (its 4.7 scene_forward_lights_inc.glsl), so a sheet's back lit straight by the lamp showed the writing on
+## its face as well - the first line and a half lie on the binding's top, face down, its back up (the newest page's loop
+## takes its first 179 px, the binding the next 120; the first line is at 242), and there it showed until the sheet
+## settled, when the sheet round the head is drawn unwritten. On its back a sheet now passes only what falls on its face
+## ([constant SHEET_SHADER]'s light()): written where its face is lit (lifted, turning toward the lamp), dark where its
+## face is down on the binding, so a settling sheet's writing has gone before it is drawn plain. Its face is lit exactly
+## as Godot lights it, that term and all - the page under the candles was tuned in it.
 const THROUGH := 0.45
 
 const SHEET_SHADER := """
@@ -99,6 +110,10 @@ uniform vec3 tint : source_color = vec3(0.93, 0.92, 0.88);
 uniform vec3 back : source_color = vec3(0.9, 0.88, 0.8);
 // how much of the light on one side comes through to the other (LegalPad.THROUGH)
 uniform float through = 0.45;
+// the paper's own specular (SPECULAR), named once: light() reads it as the engine's model would
+const float SHEEN = 0.12;
+// 1 where the sheet's back is seen: only there does light() count the light through it by the side it falls on
+varying float seen_back;
 
 // A small box filter over the pixel's footprint (the book's, BookMedium.LEAF_SHADER): a page's target
 // has no mipmaps, and its thin rules minified without them broke into dashes in a wide shot.
@@ -124,8 +139,38 @@ void fragment() {
 		float kept = clamp(dot(seen, vec3(0.3, 0.59, 0.11)) / max(dot(back, vec3(0.3, 0.59, 0.11)), 0.01), 0.0, 1.0);
 		BACKLIGHT *= mix(1.0, kept, 0.6);
 	}
+	seen_back = FRONT_FACING ? 0.0 : 1.0;
 	ROUGHNESS = 0.92;
-	SPECULAR = 0.12;
+	SPECULAR = SHEEN;
+}
+
+float schlick(float u) {
+	float m = 1.0 - u;
+	float m2 = m * m;
+	return m2 * m2 * m;
+}
+
+// GODOT'S OWN LIGHT (4.7's light_compute: Burley's diffuse, Schlick-GGX's specular, its backlight term on the face) -
+// but on the back, the light through the sheet is only what falls on its face, as much as falls there
+void light() {
+	float ndl = dot(NORMAL, LIGHT);
+	float cl = max(ndl, 0.0);
+	float nv = max(dot(NORMAL, VIEW), 1e-4);
+	vec3 h = normalize(VIEW + LIGHT);
+	float lh = clamp(dot(LIGHT, h), 0.0, 1.0);
+	float fd90 = 2.0 * lh * lh * ROUGHNESS - 0.5;
+	float brdf = (1.0 / PI) * (1.0 + fd90 * schlick(nv)) * (1.0 + fd90 * schlick(cl)) * cl;
+	DIFFUSE_LIGHT += LIGHT_COLOR * brdf * ATTENUATION;
+	float passed = seen_back > 0.5 ? max(-ndl, 0.0) / PI : 1.0 / PI - brdf;
+	DIFFUSE_LIGHT += LIGHT_COLOR * passed * BACKLIGHT * ATTENUATION;
+	float a = ROUGHNESS * ROUGHNESS;
+	float nh = clamp(dot(NORMAL, h), 0.0, 1.0);
+	float k = a / (1.0 - nh * nh + nh * a * nh * a);
+	float d = k * k / PI;
+	float g = clamp(0.5 / mix(2.0 * cl * nv, cl + nv, a), 0.0, 1.0);
+	float f0 = 0.16 * SHEEN * SHEEN;
+	float f = f0 + (clamp(f0 * 50.0 * 0.33 * 3.0, 0.0, 1.0) - f0) * schlick(lh);
+	SPECULAR_LIGHT += vec3(cl * d * f * g) * LIGHT_COLOR * ATTENUATION * SPECULAR_AMOUNT;
 }
 """
 

@@ -290,22 +290,8 @@ func _build_panel() -> void:
 	var box: VBoxContainer = _panel.body
 	box.add_theme_constant_override("separation", 8)
 
-	var title_row := HBoxContainer.new()
-	# pinned over the scrolling body, so "⋯" and "–" never scroll away (SidePanel.pin_header)
-	(_panel as SidePanel).pin_header(title_row)
-	title_row.add_child(Shell.back_button(self))
-	var title := Label.new()
-	title.text = "Synthesis"
-	title.add_theme_font_size_override("font_size", 20)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_row.add_child(title)
-	title_row.add_child(Shell.note_menu(self))
-	var hide := Button.new()
-	hide.text = "–"
-	hide.tooltip_text = "Hide panel (F2)"
-	hide.custom_minimum_size = Vector2(28, 28)
-	hide.pressed.connect(func(): _panel.visible = false)
-	title_row.add_child(hide)
+	# pinned over the scrolling body, so "⋯" and "–" never scroll away - and naming no mode (SidePanel.pin_title_row)
+	(_panel as SidePanel).pin_title_row(self)
 
 	var hint := Label.new()
 	hint.text = "Write, then throw - the water is silent until you cast. Pull when it anchors; the reel is the fight; hold or fold."

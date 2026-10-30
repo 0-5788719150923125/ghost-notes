@@ -1447,10 +1447,16 @@ func _draw_home(ci: CanvasItem, o: int) -> void:
 
 ## A made-up app name: two or three syllables, from the seed. Not words, on purpose.
 func _app_name(i: int) -> String:
-	var cons := "bcdfghklmnprstvz"
-	var vow := "aeiou"
 	var r := RandomNumberGenerator.new()
 	r.seed = hash([_seed, "app", i])
+	return made_up(r)
+
+
+## A MADE-UP NAME from [param r]: two or three syllables, each a consonant and a vowel, capitalized - an app's on the
+## tablet, a dog's on its tag ([method DeskLook.tag_name]).
+static func made_up(r: RandomNumberGenerator) -> String:
+	var cons := "bcdfghklmnprstvz"
+	var vow := "aeiou"
 	var s := ""
 	for k in r.randi_range(2, 3):
 		s += cons[r.randi() % cons.length()] + vow[r.randi() % vow.length()]

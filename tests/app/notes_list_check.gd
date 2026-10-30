@@ -51,9 +51,12 @@ extends Node
 ## Save… and a [SaveMark], the editor window has no button of the kind, and Save… asks for a file
 ## every time. Saved into a file elsewhere, the note IS that file - for main, for "⋯", for the list -
 ## the one Ghost Notes was keeping goes (the gate's `discard`), and left and opened again it is still
-## that file, with the words typed before and after. A file of the author's own that a note is saved
+## that file, with the words typed before and after - AND WHAT WAS MADE FOR IT GOES WITH IT (2026-10-29: a
+## chapter saved under another name drew none of its sketches, "that workflow should definitely rename the
+## underlying generated files path as well"): a letter's sketches and its steps' work, kept in folders named
+## by its path, are in the new file's (the gate's own roots). A file of the author's own that a note is saved
 ## out of stays on disk and leaves the list. THE CONTROL is the old behavior: a script sent to a file
-## the note does not follow is the old file again the next time the note opens.
+## the note does not follow is the old file again the next time the note opens, its folders where they were.
 ##
 ## OPEN… LOADS A FILE FROM DISK (the user, the same day: "The 'Save' button would just overwrite the
 ## file on disk"): in a note it asks for a file to open, and the file chosen becomes the note - its
@@ -63,6 +66,7 @@ extends Node
 var _fails: Array = []
 var _main: Node
 const ROOT := "user://notes_list_check"
+const MADE := "user://notes_list_check_made"   # the gate's own roots for what is made for a note
 const AGENT_PROGRAMS := ["claude", "codex", "grok", "aws"]
 const PROBE_WAIT_MS := 120000     # a backstop for the Environment panel's first probe
 const FixtureAudio := preload("res://tests/fixture_audio.gd")
@@ -93,6 +97,8 @@ func _run() -> void:
 	await _check_new_card_starter()
 	await _check_save_moves_the_note()
 	NoteStore.discard = Callable()
+	LetterSketches.root = LetterSketches.ROOT
+	NoteUpload.root = NoteUpload.ROOT
 	_clean()
 	_report()
 
@@ -507,10 +513,21 @@ func _check_save_moves_the_note() -> void:
 		_ok(dlg != null and dlg.file_mode == FileDialog.FILE_MODE_SAVE_FILE, "Save… asks for a file, every time")
 		editor._doc._close_dialog()
 		await _frames(2)
+	# WHAT WAS MADE FOR IT, kept in folders named by its path (a letter's sketches, its steps' work) - the gate's own roots
+	LetterSketches.root = MADE.path_join("letters")
+	NoteUpload.root = MADE.path_join("readings")
+	var made := [LetterSketches.folder_of(old).path_join("sketches").path_join("a.json"),
+		NoteUpload.folder_of(old).path_join("youtube_tags.json")]
+	for f in made:
+		DirAccess.make_dir_recursive_absolute((f as String).get_base_dir())
+		FileAccess.open(f, FileAccess.WRITE).store_string("{}")
 	# THE CONTROL - what "Sync to…" did in a note: the script goes, the note does not follow
 	editor._doc.moved.disconnect(editor._on_note_moved)
 	var astray := dir.path_join("astray.md")
 	_ok(editor._doc.save_to(astray) and _main._note == old, "the control: the script was sent where the note did not follow")
+	_ok(FileAccess.file_exists(made[0]) and FileAccess.file_exists(made[1])
+		and not DirAccess.dir_exists_absolute(LetterSketches.folder_of(astray)),
+		"the control: what was made for the note stays in the old file's folders")
 	ch._home_button.pressed.emit()
 	await _frames(12)
 	_main._list._open(old)
@@ -532,6 +549,10 @@ func _check_save_moves_the_note() -> void:
 	_ok(_main._note == now and ch._note_path == now and editor.note_path == now,
 		"the note is that file: for main, for \"⋯\" and for its panel (%s)" % _main._note.get_file())
 	_ok(not FileAccess.file_exists(old), "the one Ghost Notes was keeping for it is gone")
+	_ok(FileAccess.file_exists(LetterSketches.folder_of(now).path_join("sketches").path_join("a.json"))
+		and FileAccess.file_exists(NoteUpload.folder_of(now).path_join("youtube_tags.json"))
+		and not DirAccess.dir_exists_absolute(LetterSketches.folder_of(old)) and not DirAccess.dir_exists_absolute(NoteUpload.folder_of(old)),
+		"what was made for it went with it: its sketches and its steps' work are in the new file's folders")
 	_ok(editor._writer._name.text == "penalty-box.md" and mark.writes > writes and mark.flashing(),
 		"the card names the new file and its mark ticked (%s)" % editor._writer._name.text)
 	_ok(editor._writer._note.visible and editor._writer._note.text.contains("penalty-box.md")
@@ -677,6 +698,7 @@ func _find(n: Node, cls: String) -> Node:
 
 
 func _clean() -> void:
+	_wipe(ProjectSettings.globalize_path(MADE))
 	var abs := ProjectSettings.globalize_path(ROOT)
 	if DirAccess.dir_exists_absolute(abs):
 		for d in [abs.path_join("elsewhere"), abs]:
@@ -707,3 +729,14 @@ func _report() -> void:
 	for f in _fails:
 		print("   ", f)
 	get_tree().quit(1)
+
+
+## [param d] and everything in it (the gate's own folder of what is made for a note).
+func _wipe(d: String) -> void:
+	if not DirAccess.dir_exists_absolute(d):
+		return
+	for sub in DirAccess.get_directories_at(d):
+		_wipe(d.path_join(sub))
+	for f in DirAccess.get_files_at(d):
+		DirAccess.remove_absolute(d.path_join(f))
+	DirAccess.remove_absolute(d)

@@ -79,7 +79,7 @@ GPU=(clown_anchor_check clown_coat_check clown_controls_check clown_coverage_che
 	ambience_severity_check feedback_ask_check film_clock_check fractal_depth_check
 	strata_band_check tunnel_face_check tunnel_smooth_check vapor_check portrait_render_check
 	light_screen_check table_thread_check card_veil_check warp_check likeness_determinism_check
-	splat_head_check table_shadow_check table_lens_check puppeteer_tools_check)
+	splat_head_check table_shadow_check table_lens_check puppeteer_tools_check sheet_light_check)
 
 gpu=0
 keep=0

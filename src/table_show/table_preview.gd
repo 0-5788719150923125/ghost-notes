@@ -697,6 +697,15 @@ func blueprint(raw: Dictionary, numbers: Dictionary) -> Dictionary:
 		return {"error": err}
 	var data: Dictionary = _medium._things_part.blueprint()
 	data["numbers"] = numbers
+	# THE WORK'S SPOT, where the show has work: where each thing is brought to be worked, clear of what stands - so what
+	# is worked where it stands can be set beside it ([method TablePlan.work_spot])
+	if not TablePrompts.work_lines(plan).is_empty():
+		var feet: Array = []
+		for th in data["things"]:
+			if (th as Dictionary).get("rect") is Rect2 and ((th as Dictionary)["rect"] as Rect2).has_area():
+				feet.append((th as Dictionary)["rect"])
+		var spot: Vector3 = _medium._plan.work_spot(_medium._top_o, feet)
+		data["work"] = Vector2(spot.x, spot.z)
 	var placed := _placed(CardTable.sanitize_table(raw, CardTable.sanitize_look(plan.get("look", {}) if plan.get("look") is Dictionary else {})))
 	var vp := SubViewport.new()
 	vp.size = TableBlueprint.SHEET
@@ -712,7 +721,7 @@ func blueprint(raw: Dictionary, numbers: Dictionary) -> Dictionary:
 		vp.queue_free()
 	if img == null:
 		return {"error": "no picture could be taken"}
-	return {"image": img, "placed": placed}
+	return {"image": img, "placed": placed, "work": data.get("work")}
 
 
 ## The stretch of the table the episode's camera sees, as a thin line laid on it.

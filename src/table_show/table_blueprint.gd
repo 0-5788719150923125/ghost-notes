@@ -94,6 +94,12 @@ func _draw() -> void:
 	var shuffle: Rect2 = data.get("shuffle", Rect2())
 	if shuffle.has_area():
 		late.append([_to_px(v, Vector2(shuffle.get_center().x, shuffle.position.y)) + Vector2(0.0, -5.0), "the cards' room", INK, true])
+	# the work's spot, where the show has work: a cross, named
+	if data.get("work") is Vector2:
+		var c := _to_px(v, data["work"])
+		_line(PackedVector2Array([c + Vector2(-9.0, -9.0), c + Vector2(9.0, 9.0)]), INK, 2.0, room_poly, 0.0, false)
+		_line(PackedVector2Array([c + Vector2(-9.0, 9.0), c + Vector2(9.0, -9.0)]), INK, 2.0, room_poly, 0.0, false)
+		late.append([c + Vector2(0.0, 22.0), "the work's spot", INK, true])
 	# the reader's workspace, and the line the flames stand behind
 	var ws: Rect2 = data.get("workspace", Rect2())
 	if ws.has_area():

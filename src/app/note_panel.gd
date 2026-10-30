@@ -43,7 +43,6 @@ var restage: Callable
 var _panel: SidePanel
 var _writer: ScriptWriter
 var _status: Label
-var _heading: Label
 var _blocks := {}             # the note's blocks, as it opened
 var _attached: Array = []     # the components it has (Components.attached_of)
 var _cards := {}              # block key -> a card with capture() / apply()
@@ -128,30 +127,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 
 func _build_header(_box: VBoxContainer) -> void:
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 6)
-	# pinned over the scrolling body, so "⋯" and "–" never scroll away (SidePanel.pin_header)
-	_panel.pin_header(head)
-	head.add_child(Shell.back_button(self))
-	var title := Label.new()
-	_heading = title
-	title.text = _title()
-	title.add_theme_font_size_override("font_size", 20)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	head.add_child(title)
-	head.add_child(Shell.note_menu(self))
-	var hide := Button.new()
-	hide.text = "–"
-	hide.tooltip_text = "Hide panel (F2)"
-	hide.focus_mode = Control.FOCUS_NONE
-	hide.custom_minimum_size = Vector2(28, 28)
-	hide.pressed.connect(func() -> void: _panel.visible = false)
-	head.add_child(hide)
-
-
-func _title() -> String:
-	return NoteStore.title_of(path) if not path.is_empty() else "Note"
+	# pinned over the scrolling body, so "⋯" and "–" never scroll away - and naming nothing (SidePanel.pin_title_row)
+	_panel.pin_title_row(self)
 
 
 func _note(msg: String) -> void:
@@ -194,7 +171,6 @@ func _doc_apply(blocks: Dictionary) -> void:
 ## and main makes it the note everywhere else (see [method ReadingPanel._on_note_moved]).
 func _on_note_moved(from: String, to: String) -> void:
 	path = to
-	_heading.text = _title()
 	var said := String(note_moved.call(from, to)) if note_moved.is_valid() else ""
 	_writer.doc.tell("✓  This note is %s now - every change is saved there. %s" % [to.get_file(), said])
 

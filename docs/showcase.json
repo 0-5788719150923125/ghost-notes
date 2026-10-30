@@ -1,5 +1,5 @@
 {
-	"digest": "1cd13f1b4a6feaf33e8c3d03e499b4dd570945c7bf755958f7d7d572b24fa4a4",
+	"digest": "2fccc5f36a172b61feaee10ca3786ca0e503fb5e3ed62cb266215fb7d0821b3e",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -76,6 +76,7 @@
 		"res://src/geometry/prism_body.gd",
 		"res://src/geometry/shadow_field.gd",
 		"res://src/geometry/terrain.gd",
+		"res://src/letter/letter_sketches.gd",
 		"res://src/masking/mask_audio_fx.gd",
 		"res://src/masking/mask_editor.gd",
 		"res://src/masking/mask_export.gd",

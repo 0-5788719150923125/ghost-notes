@@ -38,12 +38,19 @@ const LEAN_MOST := 0.14
 ## How far through a move its unsteadiness grows from nothing, and dies back to nothing ([method held]).
 const HELD_IN := 0.18
 ## THE DRIFT of a held thing ([method drift]): each wave's frequency range (hertz), how far it moves the thing (meters)
-## and how far it turns it (radians) - a slow drift, a waver over it, and a faint quick one.
+## and how far it turns it (radians) - a slow drift, a waver over it, and a faint quick one - and how much of it is up
+## and down.
 const DRIFT := [
 	{"hz": Vector2(0.3, 0.55), "move": 0.0008, "turn": 0.008},
 	{"hz": Vector2(0.9, 1.5), "move": 0.00035, "turn": 0.004},
 	{"hz": Vector2(2.3, 3.4), "move": 0.00012, "turn": 0.0015},
 ]
+const DRIFT_UP := 0.5
+## A HAND HOLDING A THING UP, WAITING, sways this many times as much as one moving it with care: an arm held out sways
+## millimeters (the user, 2026-10-29, of a pestle held up between moves: "you would expect it to be gently
+## bobbing/moving"), where a stroke of a knife or a cork brought to a mouth is steady to a fraction of one - at that
+## drift a held thing had been seen perfectly still.
+const HOLD_SWAY := 3.0
 ## A ROUND'S WANDER ([method round_of]): how far its phase leads and lags (radians), how much its radius breathes (a
 ## share), and how far its middle wanders (meters), each over a few rounds.
 const ROUND_PHASE := 0.2
@@ -129,7 +136,7 @@ static func held(lin: float) -> float:
 
 
 ## A HELD THING'S DRIFT at show time [param T] (its waves keep going through one move after another), as much of it as
-## [param amount] (0..1, [method held]): `[place (meters), turn]`.
+## [param amount] (0..1, [method held]; to [constant HOLD_SWAY] for a thing held up between moves): `[place (meters), turn]`.
 static func drift(T: float, seed: int, amount: float) -> Array:
 	if amount <= 0.0:
 		return [Vector3.ZERO, Basis.IDENTITY]
@@ -142,7 +149,7 @@ static func drift(T: float, seed: int, amount: float) -> Array:
 			var f := lerpf(hz.x, hz.y, share(seed, 10 + i * 6 + c))
 			var ph := TAU * share(seed, 40 + i * 6 + c)
 			var s := sin(TAU * f * T + ph)
-			p[c] += s * float(w["move"]) * (0.5 if c == 1 else 1.0)
+			p[c] += s * float(w["move"]) * (DRIFT_UP if c == 1 else 1.0)
 			r[c] += sin(TAU * f * 0.83 * T + ph * 1.7) * float(w["turn"])
 	return [p * amount, Basis.from_euler(r * amount)]
 
@@ -152,7 +159,7 @@ static func drift(T: float, seed: int, amount: float) -> Array:
 static func drift_most() -> float:
 	var most := 0.0
 	for w in DRIFT:
-		most += TAU * float(((w as Dictionary)["hz"] as Vector2).y) * float((w as Dictionary)["move"]) * sqrt(2.25)
+		most += TAU * float(((w as Dictionary)["hz"] as Vector2).y) * float((w as Dictionary)["move"]) * sqrt(2.0 + DRIFT_UP * DRIFT_UP)
 	return most
 
 

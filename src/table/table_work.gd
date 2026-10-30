@@ -78,6 +78,15 @@ const GUESS_FROM := 10.0
 ## A carry or path begun within this long of the last one's end on the same thing goes on from it, one move ([method
 ## _chains]) (seconds).
 const CHAIN_GAP := 0.05
+## HELD UP between moves ([method _held_up]): how long a hand's unsteadiness takes to come on after a move and to die
+## away before the next (seconds), and how near anything a thing is touching it (meters).
+const HOLD_IN := 0.6
+const TOUCHING := 0.004
+## How far into what it is pressed onto a tool may go and still be meeting it, not passing through it ([method check]):
+## its head on a bowl's sloping wall as it goes round (meters).
+const PRESS_INTO := 0.006
+## The scale the work's meshes are cast on in ([method _ray_mesh]): centimeters.
+const RAY_SCALE := 100.0
 
 var things: Array = []        # [{name, node, rest, works: [i], lit, box (the thing's own), mesh (world, lazily)}]
 var works: Array = []         # [{thing, name, node, w (Props._worker's work), kind, mats, color, glow}]
@@ -95,6 +104,8 @@ var _rest := {}               # channel -> its value before anything acts on it
 var _runs_of := {}            # channel -> the laws its part follows all the time
 var _plumes: Array = []
 var _writing := {}            # work -> the words written on it, as its last `write` says, and once drawn their skin
+var _aloft_of := {}           # a channel and where a move left it -> whether it touches nothing there ([method _held_up])
+var _steady := false          # while that is found: nothing drifts
 var _air = null               # the acts' cue bursts (Effects.Air), or null
 var _cues: Array = []         # [{act, at, every, where, name}]
 var _timed: Array = []        # every material on the table that follows show time: a liquid's surface, copies glowing apart
@@ -222,6 +233,7 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 	var made := Motions.sanitize_acts(raw if raw != null else {}, beats)
 	notes = made["notes"]
 	_writing = {}
+	_aloft_of = {}
 	acts = []
 	for a in made["acts"]:
 		var act: Dictionary = (a as Dictionary).duplicate(true)
@@ -415,6 +427,13 @@ func _resolve(track: Dictionary) -> String:
 	if law == "write" and not ((works[wi] as Dictionary)["w"] as Dictionary).has("sheet"):
 		track.erase("_copies")
 		return "\"%s\" of \"%s\" is not a sheet: only a sheet (a slip, a label, a page) is written on" % [part, String(track["thing"])]
+	# A LOOSE THING'S SIZE IS ITS OWN: ground, it breaks (the-quiet-crucible 119515's dragon's blood and pumpkin seeds were
+	# shrunk with `grow` while the pestle went round over them - the user: "They didn't crush: they just scaled down a bit")
+	if state == "grow" and bool(((works[wi] as Dictionary)["w"] as Dictionary).get("loose", false)):
+		track.erase("_copies")
+		return ("\"%s\" of \"%s\" is loose: its size is its own, never grown or shrunk - to grind it, bring a tool's point down " +
+			"onto it, pressed into what holds it (an `aim` whose point `press`es the mortar, going round over it), and it breaks " +
+			"into pieces and powder by itself") % [part, String(track["thing"])]
 	if not state.is_empty():
 		track["_ch"] = "w%d:%s" % [wi, state]
 		return ""
@@ -714,7 +733,7 @@ func _surface_under(target: String, p: Vector3, T := NAN) -> float:
 		return NAN
 	# the ray in the thing's own place as it stood, where its surface was taken
 	var back := _world_rest_thing(ti) * _thing_world(ti, T).affine_inverse()
-	var hit: Dictionary = tm.intersect_ray(back * (p + Vector3(0.0, PRESS_FROM, 0.0)), (back.basis * Vector3.DOWN).normalized())
+	var hit: Dictionary = _ray(tm, back * (p + Vector3(0.0, PRESS_FROM, 0.0)), (back.basis * Vector3.DOWN).normalized())
 	if hit.is_empty():
 		return NAN
 	return (back.affine_inverse() * (hit["position"] as Vector3)).y
@@ -754,10 +773,33 @@ func _mesh_of(ti: int) -> TriangleMesh:
 		# known to have none: never measured again (the physics' thread asks, and may touch no node)
 		th["meshless"] = true
 		return null
-	var tm := TriangleMesh.new()
-	tm.create_from_faces(faces)
+	var tm := _ray_mesh(faces)
 	th["mesh"] = tm
 	return tm
+
+
+## A MESH RAYS ARE CAST ON, from [param faces] (meters): kept in centimeters ([constant RAY_SCALE]). Godot's ray and
+## triangle test takes a triangle whose edges' product is under its epsilon (0.00001) for one the ray runs along - in
+## meters, a lathe's slivers round its axis, a bowl's floor two centimeters across: a pestle pressed into a mortar's
+## middle fell through its floor to the table, and a thing set down there sank to the bottom of its base. Cast on with
+## [method _ray].
+static func _ray_mesh(faces: PackedVector3Array) -> TriangleMesh:
+	var big := PackedVector3Array()
+	big.resize(faces.size())
+	for i in faces.size():
+		big[i] = faces[i] * RAY_SCALE
+	var tm := TriangleMesh.new()
+	tm.create_from_faces(big)
+	return tm
+
+
+## The first of [method _ray_mesh]'s mesh [param tm] a ray from [param from] along [param dir] meets (meters): its
+## `position`, or empty.
+static func _ray(tm: TriangleMesh, from: Vector3, dir: Vector3) -> Dictionary:
+	var hit: Dictionary = tm.intersect_ray(from * RAY_SCALE, dir)
+	if hit.is_empty():
+		return hit
+	return {"position": (hit["position"] as Vector3) / RAY_SCALE, "normal": hit.get("normal", Vector3.UP)}
 
 
 # --- when each act runs ---------------------------------------------------------------------------
@@ -1133,10 +1175,12 @@ func _run_value(ch: String, T: float) -> Variant:
 func value(ch: String, t: float) -> Variant:
 	var list: Array = _chan.get(ch, [])
 	var last: Dictionary = {}
+	var next: Dictionary = {}
 	for e in list:
 		if float((e as Dictionary)["s0"]) <= t:
 			last = e
 		else:
+			next = e
 			break
 	if last.is_empty():
 		return _run_value(ch, t)
@@ -1144,8 +1188,80 @@ func value(ch: String, t: float) -> Variant:
 		# A PART THAT RUNS GOES ON RUNNING from where an act let it go: a clock set by hand keeps time after
 		if last["end"] is float and _runs_of.has(ch):
 			return float(last["end"]) + float(_run_value(ch, t)) - float(_run_value(ch, float(last["s1"])))
+		# A HAND HOLDING A THING UP IS NEVER STILL ([method _held_up])
+		if last["end"] is Transform3D:
+			var up := _held_up(ch, last, next, t)
+			if up > 0.0:
+				var dr: Array = Hands.drift(t, int((last["track"] as Dictionary).get("_hand", 0)), up * Hands.HOLD_SWAY)
+				var end: Transform3D = last["end"]
+				return Transform3D((dr[1] as Basis) * end.basis, end.origin + (dr[0] as Vector3))
 		return last["end"]
 	return _eval(last, t - float(last["t0"]), t)
+
+
+## HELD UP BETWEEN ITS MOVES: how much of a hand's unsteadiness ([method Hands.drift]) a thing or part has at [param t],
+## the move [param e] on channel [param ch] having left it where it touches nothing - a pestle lifted out of its mortar
+## and held aside, a vial held over a pot - coming on as the move ends and dying away before [param next] begins, so a
+## move still begins where it was sent. The user, 2026-10-29: "when the actor is holding the pestle in the air, it is
+## perfectly still: but you would expect it to be gently bobbing/moving, since a hand cannot remain perfectly still".
+## None for what was set `down` or rests on or against anything, or what the physics holds (a loose thing let go falls),
+## and none in the twin the physics bakes by (it touches nothing, so nothing it meets would tell).
+func _held_up(ch: String, e: Dictionary, next: Dictionary, t: float) -> float:
+	if physics == null or _steady or bool((e["track"] as Dictionary).get("down", false)):
+		return 0.0
+	var key := ch + str(((e["end"] as Transform3D).origin * 1000.0).round())
+	if not _aloft_of.has(key):
+		# its touching found where nothing drifts - nor asks again while it is found
+		_aloft_of[key] = false
+		_steady = true
+		_aloft_of[key] = _aloft(ch, e["end"], float(e["s1"]))
+		_steady = false
+	if not bool(_aloft_of[key]):
+		return 0.0
+	var up := smoothstep(0.0, HOLD_IN, t - float(e["s1"]))
+	if not next.is_empty():
+		up *= smoothstep(0.0, HOLD_IN, float(next["s0"]) - t)
+	return up
+
+
+## Whether channel [param ch]'s thing or part, posed [param x] at show time [param T], touches nothing: no point of its
+## box within [constant TOUCHING] of the table's top or of any solid but its own, where each is then.
+func _aloft(ch: String, x: Transform3D, T: float) -> bool:
+	var box: AABB
+	var own_t := -1
+	var own_w := -1
+	var idx := int(ch.substr(1, ch.find(":") - 1))
+	if ch.begins_with("t"):
+		own_t = idx
+		box = (things[idx] as Dictionary)["box"]
+	elif ch.begins_with("w"):
+		own_w = idx
+		var w: Dictionary = (works[idx] as Dictionary)["w"]
+		if bool(w.get("loose", false)):
+			return false
+		box = w.get("box", AABB())
+	else:
+		return false
+	var pts: Array = []
+	var span := AABB(x * box.position, Vector3.ZERO)
+	for i in 8:
+		var p := x * box.get_endpoint(i)
+		pts.append(p)
+		span = span.expand(p)
+		if p.y < TOUCHING:
+			return false
+	for sd in physics.solids:
+		var d: Dictionary = sd
+		if int(d["thing"]) == own_t or int(d["wi"]) == own_w or not d.has("field"):
+			continue
+		var pose: Transform3D = (_thing_world(int(d["oi"]), T) if String(d["owner"]) == "t" else _work_world(int(d["oi"]), T)) * (d["local"] as Transform3D)
+		if not (pose * (d["box"] as AABB)).grow(TOUCHING).intersects(span):
+			continue
+		var inv := pose.affine_inverse()
+		for p in pts:
+			if (d["field"] as ShapeField).sample(inv * (p as Vector3)).x < TOUCHING:
+				return false
+	return true
 
 
 ## Entry [param e]'s law at [param tau] seconds into its act (show time [param T]).
@@ -1342,7 +1458,7 @@ func _settle(tr: Dictionary, x: Transform3D, T: float) -> float:
 			if tm == null:
 				continue
 			var back := _world_rest_thing(tj) * _thing_world(tj, T).affine_inverse()
-			var hit: Dictionary = tm.intersect_ray(back * from, (back.basis * Vector3.DOWN).normalized())
+			var hit: Dictionary = _ray(tm, back * from, (back.basis * Vector3.DOWN).normalized())
 			if not hit.is_empty():
 				var y := (back.affine_inverse() * (hit["position"] as Vector3)).y
 				if y < top:
@@ -1537,6 +1653,18 @@ func _cuttable(wi: int) -> bool:
 	for k in TablePhysics.CUTS:
 		if int((Props.MATERIALS[k] as Dictionary)["code"]) == code:
 			return true
+	return false
+
+
+## Whether loose work [param wi] is of matter that breaks under a pressing tool ([constant Props.MATERIALS]' `strength`).
+func _brittle(wi: int) -> bool:
+	var mats: Array = (works[wi] as Dictionary)["mats"]
+	if mats.is_empty() or (mats[0] as ShaderMaterial).get_shader_parameter("kind") == null:
+		return false
+	var code := int((mats[0] as ShaderMaterial).get_shader_parameter("kind"))
+	for k in Props.MATERIALS:
+		if int((Props.MATERIALS[k] as Dictionary)["code"]) == code:
+			return float((Props.MATERIALS[k] as Dictionary)["strength"]) > 0.0
 	return false
 
 
@@ -1863,6 +1991,15 @@ func parts_report() -> String:
 				bits.append("a BLADE: what soft loose thing it is brought down through, it cuts")
 			if bool(w.get("loose", false)) and _cuttable(wi):
 				bits.append("soft: a blade cuts it")
+			if bool(w.get("loose", false)) and _brittle(wi):
+				bits.append("it breaks: a tool's point pressed down onto it (`press`), going round over it, grinds it to pieces and powder")
+			# ON ITS SIDE AS BUILT (the-quiet-crucible 119515's stopper, laid down in its tray, went into its vial's mouth
+			# sideways - the user: "it is attached sideways")
+			if String(wk["kind"]) == "free" and _rest.has("w%d:pose" % wi) \
+					and (_rest["w%d:pose" % wi] as Transform3D).basis.y.normalized().angle_to(Vector3.UP) > deg_to_rad(45.0):
+				# a carry's `turn` is from as it was built: the one that brings its own up to the world's
+				var up := Basis(Quaternion((_rest["w%d:pose" % wi] as Transform3D).basis.y.normalized(), Vector3.UP)).get_euler() * (180.0 / PI)
+				bits.append("lies on its side as built: a carry's `turn` [%.0f, %.0f, %.0f] stands it upright, as it was made to stand" % [up.x, up.y, up.z])
 			if bool(w.get("loose", false)):
 				bits.insert(0, "LOOSE")
 			var nm := String(wk["name"])
@@ -1941,7 +2078,7 @@ func check(name: String) -> Dictionary:
 			for q in mi.mesh.get_faces():
 				faces.append(xf * q)
 	if not faces.is_empty():
-		still.create_from_faces(faces)
+		still = _ray_mesh(faces)
 	var through := 0
 	for mv in movers:
 		var node: Node3D = (mv["nodes"] as Array)[0]
@@ -1976,6 +2113,10 @@ func check(name: String) -> Dictionary:
 		var seated := PackedByteArray()
 		seated.resize(pts.size())
 		var seated_n := 0
+		# A TOOL PRESSED ONTO A THING meets it, never passes through it: a pestle's head ground round a mortar's floor
+		# touches its sloping wall as it goes (the-quiet-crucible 119515's puppeteer, told its pestle passed through the
+		# mortar, lifted it clear of what it was grinding - and shrank the lumps instead)
+		var pressed := _pressed_by(act, mv)
 		for s in CHECK_STEPS + 1:
 			var t := lerpf(t0, t1, float(s) / float(CHECK_STEPS))
 			tick(t)
@@ -1999,7 +2140,8 @@ func check(name: String) -> Dictionary:
 				var p: Vector3 = (cache[m] as Transform3D) * pts[i]
 				var in_top := p.y < -THROUGH_TOP and Tables.inside(medium._top, Vector2(p.x, p.z), 0.0)
 				# ...and the room it stood in as built is its own slot: going back into it is going home
-				var in_thing := not in_top and not faces.is_empty() and not slot.has_point(p) and _inside(still, p)
+				var in_thing := not in_top and not faces.is_empty() and not slot.has_point(p) and _inside(still, p) \
+					and not (not pressed.is_empty() and _pressed_into(pressed, p, t))
 				if (s == 0 or home) and (in_top or in_thing):
 					if seated[i] == 0 and s == 0:
 						seated_n += 1
@@ -2026,12 +2168,51 @@ func check(name: String) -> Dictionary:
 	return {"text": "\n".join(lines), "through": through}
 
 
+## The things a mover [param mv] of [param act] is pressed onto (a law's `press`, its tip's or its grip's): `{tis: their
+## numbers, own: the mover's own works}` - none pressed, empty.
+func _pressed_by(act: Dictionary, mv: Dictionary) -> Dictionary:
+	var tis: Array = []
+	var own: Array = []
+	for t in act["tracks"]:
+		var tr: Dictionary = t
+		if not String(tr.get("_ch", "")).ends_with(":pose") or not tr.has("_wi"):
+			continue
+		if not (mv["nodes"] as Array).has((works[int(tr["_wi"])] as Dictionary)["node"]):
+			continue
+		own.append(int(tr["_wi"]))
+		for end in [tr, tr.get("tip", {}), tr.get("grip", {})]:
+			if end is Dictionary and (end as Dictionary).has("press"):
+				var ti := _thing_named(String((end as Dictionary)["press"]))
+				if ti >= 0 and not tis.has(ti):
+					tis.append(ti)
+	return {} if tis.is_empty() else {"tis": tis, "own": own}
+
+
+## Whether [param p] (the table's space) is no deeper than [constant PRESS_INTO] inside any of the things a tool is
+## pressed onto ([param pressed], [method _pressed_by]) at show time [param t] - where it meets them - the tool's own
+## solids aside.
+func _pressed_into(pressed: Dictionary, p: Vector3, t: float) -> bool:
+	if physics == null:
+		return false
+	for sd in physics.solids:
+		var d: Dictionary = sd
+		if not (pressed["tis"] as Array).has(int(d["thing"])) or (pressed["own"] as Array).has(int(d["wi"])) or not d.has("field"):
+			continue
+		var pose: Transform3D = (_thing_world(int(d["oi"]), t) if String(d["owner"]) == "t" else _work_world(int(d["oi"]), t)) * (d["local"] as Transform3D)
+		if not (pose * (d["box"] as AABB)).grow(PRESS_INTO).has_point(p):
+			continue
+		var f := (d["field"] as ShapeField).sample(pose.affine_inverse() * p).x
+		if f < 0.0 and f > -PRESS_INTO:
+			return true
+	return false
+
+
 ## Whether [param p] is inside [param tm]: an odd count of its surfaces straight above it.
 static func _inside(tm: TriangleMesh, p: Vector3) -> bool:
 	var o := p
 	var n := 0
 	for i in 12:
-		var hit: Dictionary = tm.intersect_ray(o, Vector3.UP)
+		var hit: Dictionary = _ray(tm, o, Vector3.UP)
 		if hit.is_empty():
 			break
 		n += 1
