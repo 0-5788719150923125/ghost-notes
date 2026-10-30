@@ -59,6 +59,19 @@ extends SceneTree
 ## - WHAT THE HAND HOLDS MEETS WHAT IT IS CARRIED INTO (the-quiet-crucible 119515: a dragon's scale "clips, because it is
 ##   larger than the vial ... have proper collision handle how it falls, where it settles"): a scale wider than a vial's
 ##   mouth, lowered into it, stays out of it. The control: a bead that fits goes in and lies on the vial's floor.
+## - WHAT FALLS ON A SLOPE GOES DOWN IT, AND NOTHING FLINGS IT (841899: a resin tear "lands ON TOP of the pestle, and just
+##   sits there"; wedged between the pestle and its mortar's wall, a tear had been slid 8 cm up and out in a frame): a tear
+##   dropped on a bronze pestle lying across its mortar, at five places along it, comes to rest on the mortar's floor every
+##   time. The control: a flat chip dropped on a wooden board tilted 12 degrees stays where it fell on it.
+## - WHAT IS IN A THING GOES WITH IT, AND RESTS ON WHAT IS UNDER IT (841899: crushed frankincense "left behind" as its
+##   mortar was lifted, sulfur that "clips through" its jar as the jar was moved and "remains on the table", and a lump of
+##   sulfur that "just floats above" a balance's thin pan): a jar's lumps, asleep on one another after a first carry, go
+##   with it on a second, every one; a lump let fall on a pan 1.5 mm thick lies on it. The control: the jar went 25 cm.
+## - A LIQUID'S SURFACE IS MOVED BY WHAT CROSSES IT (the-quiet-crucible 841899, the ladle going round in its cauldron: "I am
+##   not seeing any water physics, surface tension, or any of that ... better liquid physics, which would react to
+##   ANYTHING we put into them"): a spoon stirring a pot of water ripples it, millimeters high, the ripples running out
+##   across most of it, and turns it, its middle dipping; let be, it goes still. The control: the spoon going round just
+##   over the water leaves it at rest.
 ## - A LOOSE THING IS A BODY ONCE ANYTHING COMES TO IT (119515: of its table's 125 loose things, 114 had been left rigid -
 ##   the solver held no more - and its dragon's blood "didn't crush ... they don't rest on the bottom of the mortar"): set,
 ##   a dish's heap of forty beads nothing touches costs no particle, before the work comes to it and after. The control:
@@ -80,7 +93,7 @@ func _ok(cond: bool, what: String) -> void:
 func _run() -> void:
 	await process_frame
 	for check in [_field, _vessel, _pour, _grains, _tumble, _grind, _same_twice, _sprinkle, _threaded, _let_go, _carried,
-			_heap_sleeps, _splash, _dip, _let_fall, _cut, _held_meets]:
+			_heap_sleeps, _splash, _dip, _let_fall, _cut, _held_meets, _waves, _rolls_off, _rides_in]:
 		var t0 := Time.get_ticks_msec()
 		var done: Variant = (check as Callable).call()
 		print("  %s: %.1f s" % [(check as Callable).get_method(), float(Time.get_ticks_msec() - t0) / 1000.0])
@@ -965,4 +978,190 @@ func _held_meets() -> bool:
 		"the control: the bead 0.8 cm across lowered into the vial lies at %.1f cm up, %.1f cm off its axis - not on its floor" % [
 		d.y * 100.0, Vector2(d.x - mouth.x, d.z - mouth.z).length() * 100.0])
 	b._root3.free()
+	return true
+
+
+const WAVE_SPEC := {"things": [
+	{"name": "pot", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [10, 0], [11, 9], [11.4, 9.2], [10.6, 9], [9.6, 0.6], [0, 0.6]], "material": "clay",
+			"points": {"floor": [0, 0.6, 0]}},
+		{"name": "water", "shape": "lathe", "profile": [[0, 0.6], [9.6, 0.6], [10.2, 6], [0, 6]], "material": "water"},
+		{"name": "spoon", "shape": "lathe", "profile": [[0, 0], [0.7, 0], [0.5, 18], [0, 18.2]], "material": "wood", "at": [15, 0, 0],
+			"joint": {"kind": "free"}, "points": {"tip": [15, 0.5, 0], "grip": [15, 17, 0]}}]}],
+	"materials": {"clay": {"kind": "ceramic", "color": "#8a6a4a"}, "water": {"kind": "liquid", "color": "#6a8aa0"},
+		"wood": {"kind": "wood", "color": "#5a3a22"}}}
+
+
+## The pot of water stirred by its spoon (2 s to 10 s), its tip [param lift] cm over the pot's floor - the water stands
+## 5.4 cm deep - going round 4 cm out from its middle every 2 s.
+func _wave_bench(lift: float) -> TableMedium:
+	var m := _medium()
+	_stand(m, WAVE_SPEC, "pot", _at(Vector3(0, 0, -8)))
+	m._work.build({"acts": [{"name": "stir", "beat": 1, "length": 8, "tracks": [{"thing": "pot", "part": "spoon", "law": "aim",
+		"tip": {"point": "tip", "around": "pot.floor", "radius": 4.0, "period": 2.0, "lift": lift},
+		"grip": {"point": "grip", "around": "pot.floor", "radius": 1.5, "period": 2.0, "lift": lift + 15.0}}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 2.0, "t1": 10.0}]
+	m._work._timelines()
+	return m
+
+
+## The water's ripples in frame [param t]: `[most (meters), share of its cells over 0.1 mm, its dip]` - or nulls at rest.
+func _ripples(m: TableMedium, li: int, t: float) -> Array:
+	var f: Dictionary = m._work.physics.frame_at(t)
+	var dp: PackedVector2Array = f.get("dips", PackedVector2Array())
+	var dip := dp[li].x if li < dp.size() else 0.0
+	var wb: Variant = (f.get("waves", []) as Array)[li] if li < (f.get("waves", []) as Array).size() else null
+	if wb == null:
+		return [0.0, 0.0, dip]
+	var W: SurfaceWaves = (m._work.physics.liquids[li] as Dictionary)["waves"]
+	var most := 0.0
+	var over := 0
+	var cells := 0
+	for c in (wb as PackedByteArray).size():
+		if W.mask[c] == 0:
+			continue
+		cells += 1
+		var h := absf(float(int((wb as PackedByteArray)[c]) - 128) * SurfaceWaves.QUANTUM)
+		most = maxf(most, h)
+		over += 1 if h > 0.0001 else 0
+	return [most, float(over) / float(maxi(cells, 1)), dip]
+
+
+func _waves() -> bool:
+	var m := _wave_bench(2.5)
+	var water := _liquid(m, "pot")
+	_ok(water >= 0, "the pot's water is not a liquid in its vessel")
+	if water < 0:
+		m._root3.free()
+		return true
+	var most := 0.0
+	var spread := 0.0
+	var dip := 0.0
+	var t := 4.0
+	while t <= 9.5:
+		m._work.tick(t)
+		var r := _ripples(m, water, t)
+		most = maxf(most, float(r[0]))
+		spread = maxf(spread, float(r[1]))
+		dip = maxf(dip, float(r[2]))
+		t += 0.25
+	_ok(most > 0.0005 and most < 0.006, "the spoon stirring the water raised ripples %.2f mm high (0.5 to 6)" % (most * 1000.0))
+	_ok(spread > 0.4, "the stir's ripples reached %.0f%% of the water's surface (more than 40%%)" % (spread * 100.0))
+	_ok(dip > 1.0, "the stirred water turned none: its middle dips %.2f m a square meter" % dip)
+	print("  stirred: ripples %.2f mm, over %.0f%% of it, its curve %.2f m a square meter" % [most * 1000.0, spread * 100.0, dip])
+	m._work.tick(19.0)
+	var still := _ripples(m, water, 19.0)
+	_ok(float(still[0]) == 0.0, "9 s after the stir, the water still ripples %.3f mm" % (float(still[0]) * 1000.0))
+	m._root3.free()
+	var c := _wave_bench(7.5)
+	var above := 0.0
+	t = 4.0
+	while t <= 9.5:
+		c._work.tick(t)
+		above = maxf(above, float(_ripples(c, _liquid(c, "pot"), t)[0]))
+		t += 0.25
+	_ok(above == 0.0, "the control: the spoon going round over the water rippled it %.3f mm" % (above * 1000.0))
+	c._root3.free()
+	return true
+
+
+const ROLL_SPEC := {"things": [
+	{"name": "mortar", "parts": [
+		{"name": "bowl", "material": "bronze", "points": {"floor": [0, 1.9, 0], "mouth": [0, 8.4, 0]}, "smooth": true, "shape": "lathe",
+			"profile": [[0, 0], [5.2, 0, 0], [5.4, 0.6, 0], [4.8, 1.2], [5, 6.4], [6.3, 7.6], [6.6, 8.4, 0], [5.8, 8.4, 0], [4.6, 7.3], [4, 4], [2.6, 2], [0, 1.8]]},
+		{"name": "pestle", "material": "bronze", "smooth": true, "shape": "lathe", "at": [-1.4, 2.6, 0], "turn": [0, 0, -50], "joint": {"kind": "free"},
+			"profile": [[0, 0], [1.3, 0], [1.55, 0.8], [1.2, 2.4], [0.7, 3.8], [0.75, 10.8], [1.05, 11.6], [0.8, 12.3], [0, 12.5]]}]},
+	{"name": "board", "parts": [{"shape": "box", "size": [14, 1, 7], "material": "oak", "at": [0, 3, 0], "turn": [0, 0, 12]}]},
+	{"name": "jar", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [3, 0], [3, 1], [2.6, 1], [2.6, 0.3], [0, 0.3]], "material": "clay"},
+		{"name": "tear", "shape": "ball", "size": [1.0, 0.8, 0.9], "lumpy": 0.6, "material": "resin", "at": [0, 0.3, 0], "loose": true},
+		{"name": "chip", "shape": "box", "size": [1.8, 0.5, 1.8], "material": "resin", "at": [1.5, 0.3, 0], "loose": true}]}],
+	"materials": {"bronze": {"kind": "metal", "color": "#8f6a3a"}, "clay": {"kind": "ceramic", "color": "#8a6a4a"},
+		"resin": {"kind": "crystal", "color": "#e6d49a", "clarity": 0.4}, "oak": {"kind": "wood", "color": "#7a5530"}}}
+
+
+## The tear carried from its jar and let go [param drop] (cm from the middle of the reading) over [param onto], at 3 s:
+## where it is at 6 s (the table's space).
+func _tear_onto(onto: String, drop: Vector3, what := "tear") -> Vector3:
+	var m := _medium()
+	_stand(m, ROLL_SPEC, onto, _at(Vector3(0, 0, -8)))
+	_stand(m, ROLL_SPEC, "jar", _at(Vector3(18, 0, -8)))
+	m._work.build({"acts": [{"name": "drop", "beat": 1, "length": 2, "tracks": [
+		{"thing": "jar", "part": what, "law": "carry", "to": [drop.x, drop.y, drop.z], "lift": 4}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 1.0, "t1": 3.0}]
+	m._work._timelines()
+	var ph: TablePhysics = m._work.physics
+	m._work.tick(6.0)
+	var wi := -1
+	for L in ph.loose:
+		if String((L as Dictionary)["name"]) == what:
+			wi = int((L as Dictionary)["wi"])
+	var pose: Variant = ph.pose_of(wi, 6.0)
+	var at: Vector3 = (pose as Transform3D).origin if pose != null else Vector3.INF
+	m._root3.free()
+	return at
+
+
+func _rolls_off() -> bool:
+	var axis := _at(Vector3(0, 0, -8))
+	var where := PackedStringArray()
+	var bad := 0
+	for x in [-1.5, 0.0, 1.0, 2.0, 3.0]:
+		var at := _tear_onto("mortar", Vector3(x, 12.0, -8.0))
+		var off := Vector2(at.x - axis.x, at.z - axis.z).length()
+		where.append("%.1f cm over it, %.1f cm out" % [at.y * 100.0, off * 100.0])
+		bad += 0 if at.y < 0.035 and off < 0.05 else 1
+	_ok(bad == 0, "the tear dropped on the pestle across its mortar does not come to rest on the mortar's floor every time: %s" % ", ".join(where))
+	var on := _tear_onto("board", Vector3(0.0, 8.0, -8.0), "chip")
+	_ok(on.y > 0.01 and absf(on.x - axis.x) < 0.03, "the control: a flat chip dropped on a wooden board tilted 12 degrees is %.1f cm up, %.1f cm along - not where it fell on it" % [
+		on.y * 100.0, (on.x - axis.x) * 100.0])
+	return true
+
+
+const RIDE_SPEC := {"things": [
+	{"name": "jars", "parts": [{"name": "jar", "joint": {"kind": "free"}, "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [2.2, 0], [2.4, 0.3], [2.4, 4.6], [2, 5.2], [1.8, 5.4], [1.8, 6], [1.55, 6], [1.55, 5.4], [2.05, 4.7], [2.1, 0.4], [0, 0.4]],
+			"material": "clay"},
+		{"name": "lumps", "shape": "ball", "size": [1.1, 0.9, 1.0], "lumpy": 0.5, "material": "sulfur", "at": [0, 0.4, 0],
+			"copies": {"heap": {"count": 6, "radius": 1.4}, "jitter": 0.5}, "loose": true}]}]},
+	{"name": "pan", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [1.4, 0], [3, 0.7], [3.2, 0.9], [2.95, 0.9], [2.75, 0.65], [1.3, 0.15], [0, 0.15]], "material": "brass", "at": [0, 3.8, 0]},
+		{"shape": "box", "size": [1.6, 3.8, 1.6], "material": "brass"}]}],
+	"materials": {"clay": {"kind": "ceramic", "color": "#8a6a4a"}, "sulfur": {"kind": "crystal", "color": "#e8d23a"},
+		"brass": {"kind": "metal", "color": "#b8924c"}}}
+
+
+func _rides_in() -> bool:
+	var m := _medium()
+	_stand(m, RIDE_SPEC, "jars", _at(Vector3(0, 0, -8)))
+	_stand(m, RIDE_SPEC, "pan", _at(Vector3(30, 0, -8)))
+	m._work.build({"acts": [
+		{"name": "there", "beat": 1, "length": 2, "tracks": [{"thing": "jars", "part": "jar", "law": "path", "keys": [{"at": 0.0}, {"at": 0.3, "by": [0, 6, 0]}, {"at": 0.8, "by": [-25, 6, 0]}, {"at": 1.0, "by": [-25, 0, 0]}]}]},
+		{"name": "back", "beat": 1, "length": 2, "tracks": [{"thing": "jars", "part": "jar", "law": "path", "keys": [{"at": 0.0}, {"at": 0.3, "by": [0, 6, 0]}, {"at": 0.8, "by": [25, 6, 0]}, {"at": 1.0, "by": [25, 0, 0]}]}]},
+		{"name": "lump", "beat": 1, "length": 2, "tracks": [{"thing": "jars", "part": "lumps 1", "law": "carry", "to": [30, 5.5, -8], "lift": 4}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 2.0, "t1": 4.0}, {"i": 1, "t0": 8.0, "t1": 10.0}, {"i": 2, "t0": 12.0, "t1": 14.0}]
+	m._work._timelines()
+	var ph: TablePhysics = m._work.physics
+	m._work.tick(11.0)
+	var jar: Vector3 = _at(Vector3(0, 0, -8))
+	var out := 0
+	var far := 0.0
+	for L in ph.loose:
+		var pose: Variant = ph.pose_of(int((L as Dictionary)["wi"]), 11.0)
+		var c: Vector3 = (pose as Transform3D).origin if pose != null else Vector3.INF
+		var off := Vector2(c.x - jar.x, c.z - jar.z).length()
+		far = maxf(far, off)
+		out += 0 if off < 0.025 and c.y < 0.05 else 1
+	_ok(ph.loose.size() == 6 and out == 0, "carried 25 cm and back, %d of the jar's %d lumps are not in it (the furthest %.1f cm from its axis)" % [out, ph.loose.size(), far * 100.0])
+	m._work.tick(16.0)
+	var L1: Dictionary = {}
+	for L in ph.loose:
+		if String((L as Dictionary)["name"]) == "lumps 1":
+			L1 = L
+	var low := INF
+	if not L1.is_empty() and int(L1["body"]) >= 0:
+		for i in (ph.sim.bodies[int(L1["body"])] as Dictionary)["ids"]:
+			low = minf(low, ph.sim.x[i].y - ph.sim.r[i])
+	_ok(absf(low - 0.0395) < 0.001, "the lump let fall on the pan lies %.1f mm over the pan's floor (at 39.5 mm)" % ((low - 0.0395) * 1000.0))
+	m._root3.free()
 	return true

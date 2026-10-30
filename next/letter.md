@@ -157,18 +157,44 @@ exactly that.
   (`draw_pace`): the voice's rest is sized by it and the desk draws to it (`LetterMedium._paced_end`), filling to
   the next line as before. The tree: 7.1 s, done 1.5 s after its words, the voice on 2.9 s after "Then eight". A
   sketch with room keeps its pace. To have the long row joined, the mark can say so and the sketch be drawn again.
-- **The paragraph after a sketch is its narration, said as it is drawn - and then written under it.** The
-  pen cannot write and draw at once, and the only words to draw under are the next ones. In the chapter every
-  sketch is followed by words about it ("A cross, and a dot, on the same line, about a hand apart.") - the
-  drawing is said as it is drawn, the desk's rule. Not written at first; on 2026-10-29 the user, of the tree
-  of dots in Secular Hazing: "why is this line not written at all? ... it fails to write down the context Pen
-  would need to have here" - the letter is Pen's to read later, and a drawing with no words reads as nothing.
-  Chosen of four (written as said and drawn after; a mark per sketch; the `unspoken` mark by hand): drawn
-  while said, then written as `unspoken` words are, the voice waiting (about 10 s for that paragraph at the
-  hand's pace) - its caption stays while it is said, the words not on the page yet. A sketch not drawn yet has
-  its paragraph written as it is said. And a rule is left empty under every drawing
-  (`LetterScript.UNDER_SKETCH`; the user: "Both sketches are too squished today, with text that is too close
-  to them") - the text had gone on the first rule clear of it.
+- **A sketch is drawn where its mark is** (2026-10-29, second decision). First the paragraph after a sketch
+  was its narration, said as it was drawn and never written; then (the user, of the tree of dots: "why is this
+  line not written at all? ... it fails to write down the context Pen would need") said as drawn and then written
+  under it, the voice waiting. Watched, the user: "It's also weird how we say 'A cross, and a dot ...', then
+  draw the doodle, then write that text... long after we've already said it ... there is no obvious reason why
+  text written AFTER the sketch marker is read BEFORE the sketch. And we should just rely on markers, which do the
+  things we need them to do. The implicit behavior is confusing." Now the letter goes in its order: words before
+  the mark written and said, the drawing, then what comes after. The voice waits for the pen before the next
+  written words, silent while it draws; a thought right after the mark (said, never written - the marker for it),
+  with no point in it, is thought while it is drawn, the drawing paced across its words as the narration's was
+  (`draw_pace`); one with a point waits for the drawing. In Secular Hazing the cross and dot's line was moved
+  above its mark ("the text should have been written first"); the tree's line stays after it, written once it is
+  drawn. A rule is left empty under every drawing (`LetterScript.UNDER_SKETCH`; the user: "Both sketches are too
+  squished today, with text that is too close to them") - the text had gone on the first rule clear of it.
+- **The camera catches on a drawing** (2026-10-29, the user: "it might work if the camera could sort of 'catch'
+  on the sketch, making drifting further from it more difficult ... a bias to linger on doodles for a bit longer,
+  before panning away from them"). The cross and dot, kept with its point (`_keep_with`), had begun a page: the
+  pen drew it 1.8 s after the turn, in 3.3 s, while the camera was still coming in from the turn's wide framing,
+  and the column's reach (the camera aims no higher than 0.3 of the page) put a drawing at the page's head at the
+  frame's top edge. `LetterMedium._caught`: from `AWAY_LEAD` before the pen begins a drawing the camera is close
+  and holds it at the frame's middle - as high as `CATCH_TOP` of the page - while the line written under it is
+  within `CATCH_LOW` (360 px; close, the frame sees about 425 either side), on springs `CATCH_SPRING` of its own;
+  then it lets go to exactly where it would be with no drawing. A page that opens on a drawing brings the camera
+  in from the turn's middle to `CATCH_IN` after it, and the pen waits `LetterScript.DRAW_SETTLE` (1.5 s, the
+  action's `settle`, read by the desk's plan and the voice's rests). Two passes before it, each watched: held for
+  six rules of writing, it let go during "Close your left eye ..." and by "give her a minute" "the circle is
+  halfway off the screen"; then following the writing down as far as kept the drawing in, with a point at it
+  held for, "The writing is super far down on the screen, and the writing keeps escaping the camera's view, and
+  the camera keeps drifting to correct itself. But it never returns to its natural place." On the chapter
+  (rehearsed): the dot at the frame's middle through the test and "Give her a minute", let go at "There is a
+  spot", the point at the dot brings the camera back to it and the writing after it. **It lets go slowly** (the
+  user: "cap the camera speed - because the return to normal position seems quite fast"): on its springs alone
+  the 420 px back to the writing peaked at about 74 px of the page a second; now what it aims at goes from the
+  drawing toward the writing at most `LET_GO` (30) a second, easing up to it over `LET_GO_EASE` (2 s), from
+  `LET_GO_LEAD` (3 s) before the line that lets it go - a function of the plan and the time, as every framing is.
+  Simulated on the chapter with the desk's own spring: 30 px a second at most, the line written at most 325 px
+  under the frame's middle. The user, watching: "Nothing felt bad or unnatural". Not capped: the swing to a
+  point's target and back (90-100 px a second there), which the user has not asked about.
 - **The pen writes two words ahead of the voice** (2026-10-27, the fifth pass). How it got here:
   - the first two passes kept the pen with the voice word for word (the desk's elastic pen, `LAG_MOST` 2.5 s
     of trail): the user, "Something about this mode feels wrong and bad ... the pen writes very fast
@@ -196,7 +222,7 @@ exactly that.
 - **The subtitles caption only what cannot be read on the page** (2026-10-27, the user: "the subtitles can
   be a bit of a distraction ... hide the subtitles for any text that is already being written on the page ...
   anything we can't see or didn't write directly on the page will need subtitles"): a line is drawn while a
-  picture covers the screen, or when any word of it is not written - a thought, a sketch's narration
+  picture covers the screen, or when any word of it is not written - a thought, one said while a sketch is drawn
   (`LetterMedium._captioned`, handed the overlay as `Subtitles.captions`, a hook any medium may set; the
   line eases out and in as any does). A passage under a picture with no painting is read over the desk, and
   not captioned.
@@ -436,6 +462,22 @@ exactly that.
   4 cm polished face. Looked at (dist/tag_look/q7): polished silver, warm from the room as the bone in their
   picture is, the dark V and the fine chain. A flat mirror facing up shows what is above it - the desk's dark
   background - so it reads silver from the light on it, and a candle close by can glare on it (a seed's call).
+- **Words on the index cards** (2026-10-29, the user: "add a property to the frontmatter that would allow us to write
+  something on the index cards ... an input box - which only appears if we've selected the index cards. We'd have to
+  handle orientation there: we would not want to write it upside-down"): the `letter` block's `card_text`, a box under
+  the desk's bank shown while Index cards is ticked (typing holds the desk, as any change does, and a playing letter's
+  desk takes the words once they rest 0.6 s, `CARD_SETTLE`). `DeskLook._write` writes it on the top card or sticky note
+  with Godot's `Label3D`, in the letter's hand (the Notebook's font) and the desk's ink, from the top left inside an 8 mm
+  margin. **Nothing on the desk moves for it:** a first pass laid a written card across the view and made a written
+  stack index cards, never sticky notes - and the user's chosen desk came out another layout ("you broke the layout of
+  my scene ... The original layout was best. You should have just written on the card in portrait ... Just write the
+  text in whatever orientation is closest to 'up'"). The stack is the one the number drew, where it drew it, and the
+  writing takes the quarter turn on it nearest upright from the writer's seat - down a card lying along the pad
+  (portrait), across the rest; letter_check holds every thing on 24 desks where it lay unwritten. **As the pad is
+  written:** the hand's own size on a pixel of the pad's page, its lines a rule apart; a line too long for the card
+  (portrait, a sticky note) makes it smaller, to 0.7 of that, before it is wrapped, and more lines than the card holds
+  smaller again. The first look wrote it at a ruled index card's quarter inch with the font rastered at 96 px: from
+  across the desk, the mipmaps averaged the thin strokes into a pale orange tint where the ink is near black.
 - **A sketch stays on the page with what points at it** (`LetterScript._keep_with`): the first look put
   the cross and the dot at a page's foot, so the blind-spot test and "That's me" were a page on, with the
   pen pointing at nothing. A sketch now starts a page of its own when the lines up to its last point (or a

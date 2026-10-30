@@ -70,7 +70,7 @@ class_name LetterMedium
 ##
 ## THE SUBTITLES CAPTION ONLY WHAT CANNOT BE READ ON THE PAGE (2026-10-27, the user: "hide the subtitles for any
 ## text that is already being written on the page ... anything we can't see or didn't write directly on the page
-## will need subtitles"): a line is drawn when any of its words is not written - a thought, a sketch's narration -
+## will need subtitles"): a line is drawn when any of its words is not written - a thought, one said as a sketch is drawn -
 ## or while a picture covers the screen ([method _captioned], [member Subtitles.captions]); a line of the
 ## letter, written two words ahead of the voice, is read on the page instead.
 ##
@@ -159,6 +159,29 @@ const RESUME_LEAD := 0.9
 ## still drifting 15 px three seconds in - a test the viewer does on the screen cannot be done on a
 ## moving one).
 const STILL_SPRING := 0.3
+## THE CAMERA CATCHES ON A DRAWING (2026-10-29, the user: "it might work if the camera could sort of 'catch' on the
+## sketch, making drifting further from it more difficult ... a bias to linger on doodles for a bit longer, before
+## panning away from them" - the cross and the dot, begun as their page came up, were drawn with the camera still wide and
+## at the frame's top edge): from [constant AWAY_LEAD] before the pen begins it, the camera is close and holds it at the
+## frame's middle ([method _caught]) while the line written under it is no more than CATCH_LOW (px of the page) below it -
+## close, the frame sees about 425 px either side. Past that it lets go, to exactly where it would be with no drawing, its
+## own slow springs carrying it there. (Held for six rules, it let go before "give her a minute" and the dot went to the
+## frame's edge; following the writing down as far as kept the drawing in, "The writing is super far down on the screen,
+## and the writing keeps escaping the camera's view ... it never returns to its natural place".) IT LETS GO SLOWLY (the
+## user: "cap the camera speed - because the return to normal position seems quite fast"; on its springs alone, about 75
+## px a second): from LET_GO_LEAD (seconds) before the line past CATCH_LOW begins, what it aims at goes from the drawing
+## toward the writing at most LET_GO (px of the page a second), taking LET_GO_EASE (seconds) to get up to it, on the
+## camera's own slow springs - a function of the plan and the time, as every framing is. Caught, its springs are
+## CATCH_SPRING of its own; on a drawing at the page's head it stands as high as CATCH_TOP of the page (the column's is
+## held lower); and on a page that opens on one it comes in from the turn's middle to CATCH_IN (seconds) after it, not
+## over the page's slow arc - the pen waits for it ([constant LetterScript.DRAW_SETTLE]).
+const CATCH_LOW := 360.0
+const CATCH_TOP := 0.2
+const CATCH_IN := 1.0
+const CATCH_SPRING := 0.5
+const LET_GO := 30.0
+const LET_GO_EASE := 2.0
+const LET_GO_LEAD := 3.0
 ## A TURN NOT PLANNED YET is guessed at the pace the voice has kept over its last this many words heard, rests and all
 ## ([method _turn_guess]).
 const PACE_WORDS := 40
@@ -663,7 +686,7 @@ func bind_captions(subs) -> bool:
 
 ## IS THE LINE FROM SUBTITLE WORD [param w0] TO [param w1] CAPTIONED at [param _t]? While a picture covers the
 ## screen, yes - the page is not seen; else only when some word of it is not written on the page (a thought, a
-## sketch's narration, a word the voice says that no line has).
+## thought said as a sketch is drawn, a word the voice says that no line has).
 func _captioned(w0: int, w1: int, _t: float) -> bool:
 	if cover_of(pictures_at()) >= 0.5:
 		return true
@@ -1013,10 +1036,10 @@ func _wide_frame() -> Dictionary:
 
 
 ## HOW CLOSE THE CAMERA IS MEANT TO BE at [member _now], 0 wide to 1 close: the page's arc - in over
-## [constant ARC_IN] once it has come up, out over [constant ARC_OUT] before its turn - wide before the
-## letter opens and once it is over. A turn not planned yet (a live reading's words arrive a sentence at a
+## [constant ARC_IN] once it has come up ([param caught] on a drawing, from the turn's middle to [constant CATCH_IN] after it),
+## out over [constant ARC_OUT] before its turn - wide before the letter opens and once it is over. A turn not planned yet (a live reading's words arrive a sentence at a
 ## time) is guessed from its first word's ([method DeskMedium._guess]), so the camera lets go in time.
-func _arc() -> float:
+func _arc(caught := false) -> float:
 	if _ended():
 		return 0.0
 	var page := _pages().x
@@ -1034,6 +1057,8 @@ func _arc() -> float:
 			turns = _letting_go(int(a["page"]), ta)
 			break
 	var k := smoothstep(opened + ARRIVE, opened + ARRIVE + ARC_IN, _now)
+	if caught:
+		k = smoothstep(opened - DeskScript.TURN * 0.5, opened + CATCH_IN, _now)
 	if turns < INF:
 		k = minf(k, 1.0 - smoothstep(turns - OUT_BEFORE - ARC_OUT, turns - OUT_BEFORE, _now))
 	return k
@@ -1105,11 +1130,21 @@ static func rests_of(parsed: Dictionary) -> PackedFloat32Array:
 
 
 ## THE FRAMING: the desk's place on the page, the column's middle across, as close as the page's arc
-## ([method _arc]) - and for a still, close on the last drawing on the page.
+## ([method _arc]) - caught on a drawing ([method _caught]), and for a still, close on the last drawing on the page.
 func _framing() -> Dictionary:
 	var f := super._framing()
-	f["k"] = _arc()
+	var caught := _caught()
+	f["k"] = _arc(not caught.is_empty())
 	f["line"] = Vector2(DeskScript.TEXT_X + LetterScript.LINE_W * 0.5, (f["line"] as Vector2).y)
+	if not caught.is_empty():
+		# (the desk aims 60 px under the line it is handed) - letting go, toward the writing no quicker than LET_GO
+		var natural := (f["line"] as Vector2).y + 60.0
+		var held := float(caught["aim"])
+		if caught.has("from"):
+			held = minf(natural, held + let_go_travel(_now - float(caught["from"])))
+		if held < natural - 0.01 or not caught.has("from"):
+			f["line"] = Vector2((f["line"] as Vector2).x, held - 60.0)
+			f["top"] = CATCH_TOP
 	var still := _span_now("still")
 	if still.is_empty() and _still_soon():
 		var box := _last_drawn()
@@ -1156,6 +1191,43 @@ func _framing() -> Dictionary:
 	return f
 
 
+## THE DRAWING THE CAMERA IS CAUGHT ON ([constant CATCH_LOW]): `{aim}` - the page's y it holds at the frame's middle, the
+## drawing's - or {} for none: the last drawing on the page up now begun, or to be within [constant AWAY_LEAD]; and from
+## [constant LET_GO_LEAD] before the first line under it past CATCH_LOW begins, `from` - when it lets go ([method
+## let_go_travel]).
+func _caught() -> Dictionary:
+	var page := _pages().x
+	var drawn := -1
+	for i in _page_actions(page):
+		var a: Dictionary = _actions[i]
+		var start := float(_plan[i]["start"])
+		if String(a["kind"]) == "draw" and a.has("at") and start <= _now + AWAY_LEAD:
+			drawn = i
+		elif start > _now:
+			break
+	if drawn < 0:
+		return {}
+	var d: Dictionary = _actions[drawn]
+	var at: Vector2 = d["at"]
+	var mid := (at.y - float(d["h"]) + at.y + float(d["d"])) * 0.5
+	for i in _page_actions(page):
+		var a: Dictionary = _actions[i]
+		if i > drawn and String(a["kind"]) == "pad-text" and a.has("at") and (a["at"] as Vector2).y - mid > CATCH_LOW:
+			var from := float(_plan[i]["start"]) - LET_GO_LEAD
+			return {"aim": mid, "from": from} if _now >= from else {"aim": mid}
+	return {"aim": mid}
+
+
+## HOW FAR THE CAMERA'S AIM HAS GONE [param s] seconds after it began to let go of a drawing (px of the page): up to
+## [constant LET_GO] a second over [constant LET_GO_EASE], then at it.
+static func let_go_travel(s: float) -> float:
+	if s <= 0.0:
+		return 0.0
+	if s < LET_GO_EASE:
+		return LET_GO * s * s / (2.0 * LET_GO_EASE)
+	return LET_GO * (s - LET_GO_EASE * 0.5)
+
+
 ## Is a still about to begin - within [constant AWAY_LEAD]?
 func _still_soon() -> bool:
 	for s in _spans:
@@ -1167,12 +1239,13 @@ func _still_soon() -> bool:
 	return false
 
 
-## The camera's springs: the tablet's slow ones ([constant LETTER_TAU]), quick through a still and the
-## run-up to it.
+## The camera's springs: the tablet's slow ones ([constant LETTER_TAU]), quicker caught on a drawing ([constant
+## CATCH_SPRING]), quick through a still and the run-up to it.
 func _spring_tau() -> float:
 	if _still_soon() or not _span_now("still").is_empty():
 		return SPRING_TAU * STILL_SPRING
-	return LETTER_TAU
+	var caught := _caught()
+	return LETTER_TAU * (CATCH_SPRING if not caught.is_empty() and not caught.has("from") else 1.0)
 
 
 ## The page lies blank before the first thing is written ([constant LetterScript.BLANK_PAGE]).

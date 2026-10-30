@@ -10,8 +10,13 @@ extends SceneTree
 ##   moment and not before it; an iron pot set down sounds louder; a paper slip set down is not heard. The control: the
 ##   jar carried and held up, never set `down`, makes no sound.
 ## - GRINDING IS HEARD ONLY WHILE IT TOUCHES ("sound specifically when the pestle touches the mortar (not in the gaps
-##   where it isn't touching)"): a pestle going round pressed into its mortar grits; lifted clear between its rounds, it
+##   where it isn't touching)"): a pestle going round pressed into its mortar scrapes; lifted clear between its rounds, it
 ##   is silent.
+## - GRINDING IS A SCRAPE, LOW AND ROUGH (the-quiet-crucible 841899: "Stone on stone should be a scraping sound, low and
+##   rough, abrasive. What it does now sounds a lot closer to T.V. static. I also think it's a touch too loud"): most of
+##   its energy is under 1 kHz, its loudness in 20 ms pieces varies as a scrape's does, and it is quieter than the 0.0055
+##   RMS it had been. The control: steady noise through a band at 2.2 kHz - the static it had been - is neither low nor
+##   rough by the same measures.
 ## - WHAT BREAKS IS HEARD AS IT BREAKS (119515: the user "couldn't hear the grinding"): a piece the physics breaks off
 ##   crunches at that moment, and forty broken off in 0.4 s stay under the levels below. The control: the moment before
 ##   it, nothing.
@@ -42,6 +47,40 @@ func _run() -> void:
 	_ok(done == true, "the bench stopped part way (a script error - see above)")
 	print("work_sounds_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
 	quit(1 if _fails > 0 else 0)
+
+
+## How much of [param x]'s energy is under 1 kHz: what two one-pole filters there keep of it.
+static func _low_share(x: PackedFloat32Array) -> float:
+	var a := 1.0 - exp(-TAU * 1000.0 / float(WorkSounds.RATE))
+	var y1 := 0.0
+	var y2 := 0.0
+	var lo := 0.0
+	var all := 0.0
+	for v in x:
+		y1 += a * (v - y1)
+		y2 += a * (y1 - y2)
+		lo += y2 * y2
+		all += v * v
+	return lo / maxf(all, 1e-18)
+
+
+## How much [param x]'s loudness varies from one 20 ms piece to the next: their RMS's spread over its mean.
+static func _roughness(x: PackedFloat32Array) -> float:
+	var w := int(0.02 * WorkSounds.RATE)
+	var ls := PackedFloat32Array()
+	for k in range(0, x.size() - w, w):
+		var e := 0.0
+		for i in range(k, k + w):
+			e += x[i] * x[i]
+		ls.append(sqrt(e / float(w)))
+	var mean := 0.0
+	for l in ls:
+		mean += l
+	mean /= maxf(float(ls.size()), 1.0)
+	var sd := 0.0
+	for l in ls:
+		sd += (l - mean) * (l - mean)
+	return sqrt(sd / maxf(float(ls.size()), 1.0)) / maxf(mean, 1e-12)
 
 
 static func _medium() -> TableMedium:
@@ -140,7 +179,27 @@ func _bench() -> bool:
 	var grit := float(rms.call(19.0, 21.5))
 	var lifted := float(rms.call(22.8, 23.8))
 	_ok(grit > 0.002 and lifted < 1e-4, "the pestle grinding pressed into the mortar: %.4f; lifted clear of it: %.5f" % [grit, lifted])
-	_ok(float(rms.call(25.0, 26.5)) > 0.002, "the pestle back at it grits only %.4f" % float(rms.call(25.0, 26.5)))
+	_ok(float(rms.call(25.0, 26.5)) > 0.002, "the pestle back at it scrapes only %.4f" % float(rms.call(25.0, 26.5)))
+	# ...LOW AND ROUGH, and quieter than it was
+	var scrape := PackedFloat32Array()
+	for i in range(int(19.0 * WorkSounds.RATE), int(21.5 * WorkSounds.RATE)):
+		scrape.append(s[i].x + s[i].y)
+	var low := _low_share(scrape)
+	var rough := _roughness(scrape)
+	_ok(low > 0.5 and rough > 0.3 and grit < 0.0055, "the grinding is %.0f%% under 1 kHz (more than 50%%), its 20 ms loudness varies by %.2f (more than 0.3), at %.4f RMS (under 0.0055)" % [
+		low * 100.0, rough, grit])
+	var hiss := PackedFloat32Array()
+	var b := [0.0, 0.0]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	var fc := 2.0 * sin(PI * 2200.0 / float(WorkSounds.RATE))
+	for i in scrape.size():
+		b[0] = float(b[0]) + fc * float(b[1])
+		b[1] = float(b[1]) + fc * (rng.randf_range(-1.0, 1.0) - float(b[0]) - float(b[1]))
+		hiss.append(float(b[1]))
+	_ok(_low_share(hiss) < 0.5 and _roughness(hiss) < 0.3, "the control: steady noise in a band at 2.2 kHz reads %.0f%% under 1 kHz and varies by %.2f" % [
+		_low_share(hiss) * 100.0, _roughness(hiss)])
+	print("  grinding: %.0f%% under 1 kHz, roughness %.2f" % [low * 100.0, rough])
 	# A BOIL
 	var before := float(peak.call(27.8, 28.9))
 	var boiling := float(peak.call(30.0, 33.0))

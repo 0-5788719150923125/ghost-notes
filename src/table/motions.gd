@@ -66,7 +66,7 @@ const LAWS := {
 			["grip", "its other point and its way, the same"], ["roll", "degrees it is turned about the line between them"]]},
 	"carry": {"label": "Carry", "on": ["pose"],
 		"blurb": "picked up, carried in an arc and set down somewhere else, turned on the way as a hand would - a jar fetched from the back of the table, a cup taken to the reader's side, a book set on a stack, a thing put back",
-		"fields": [["to", "where its middle goes: a thing's point or [x, y, z]; left out, back where it was built"],
+		"fields": [["to", "where its middle goes: a thing's point or [x, y, z]; left out, back where it was built - turned as it was built, and a part into its own thing where that thing stands now (a stopper back in its jar, upright)"],
 			["by", "[x, y, z] centimeters past that"], ["lift", "centimeters it rises on the way (6 is a hand's)"],
 			["turn", "[x, y, z] degrees it ends turned, from as it was built"], ["between", "[u0, u1]: the stretch of the act it travels in"],
 			["down", "true: SET DOWN on what is under it - its lowest point comes to rest on the table or on the thing below, however it is turned (a lid laid aside, a spoon put down on its side, a jar stood on a shelf); `to`'s height is then only roughly where"]]},

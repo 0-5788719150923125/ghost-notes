@@ -2,7 +2,10 @@
 // cut away above its surface - and, where the cut is seen through, the surface itself at its true depth, level in
 // the table's space however the vessel is turned. The user, 2026-10-28: "The liquids are not liquids". The surface's
 // place, its turning (the swirl), the rings on it and where a stream falls on it are handed in by the physics' bake,
-// all in the mesh's own space, and the time is handed in - never TIME - so a render and a scrub agree.
+// all in the mesh's own space, and the time is handed in - never TIME - so a render and a scrub agree. ITS SHAPE TOO
+// (2026-10-29, the ladle going round in its cauldron: "I am not seeing any water physics, surface tension, or any of
+// that"): the heights its ripples stand at (src/table/surface_waves.gd), and its curve as it turns - the cut along the
+// glass follows them, and the surface is where the eye's ray meets them, its light by their slope.
 shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_disabled, diffuse_burley, specular_schlick_ggx;
 
@@ -40,6 +43,16 @@ uniform vec2 cavity_mid = vec2(0.0);
 uniform float cavity_r[32];
 uniform float cavity_a[32];
 uniform bool cavity_known = false;
+// THE SURFACE'S SHAPE: its ripples' heights over a grid in the vessel's own space (a byte a cell, 128 its level, a step
+// of wave_quantum meters) - where the grid's corner is (x, z) and how far it spans - and how it curves as it turns
+// (meters a square meter from its middle, and its level's share: dip (r^2 - dip_r2))
+uniform sampler2D wave_heights : filter_linear, repeat_disable;
+uniform bool wave_on = false;
+uniform vec2 wave_o = vec2(0.0);
+uniform float wave_span = 1.0;
+uniform float wave_quantum = 0.00005;
+uniform float dip = 0.0;
+uniform float dip_r2 = 0.0;
 
 varying vec3 mpos;
 
@@ -71,6 +84,22 @@ bool in_cavity(vec3 m) {
 	int j = int(clamp(fa, 0.0, 30.999));
 	float ra = mix(cavity_a[j], cavity_a[j + 1], fract(fa));
 	return length(d) <= r * ra + 0.0008;
+}
+
+// How far above its level the surface stands over [m] (the mesh's space): its ripples there, and its curve as it turns.
+float surf_h(vec3 m) {
+	float h = 0.0;
+	if (wave_on) {
+		vec3 q = (cavity_xf * vec4(m, 1.0)).xyz;
+		vec2 uv = (q.xz - wave_o) / wave_span;
+		h += (texture(wave_heights, uv).r * 255.0 - 128.0) * wave_quantum;
+	}
+	if (dip > 0.0) {
+		vec3 d = m - surface_at;
+		float along = dot(d, surface_up);
+		h += dip * (dot(d, d) - along * along - dip_r2);
+	}
+	return h;
 }
 
 // The surface's height above its plane at [q] (the mesh's space) and its slope there: rings, a stream's train, and
@@ -112,8 +141,9 @@ vec3 waves(vec3 q, vec3 e1, vec3 e2) {
 }
 
 void fragment() {
-	// ABOVE ITS SURFACE THERE IS NO LIQUID
-	if (dot(mpos - surface_at, surface_up) > 0.0) {
+	// ABOVE ITS SURFACE THERE IS NO LIQUID - where its ripples and its turning have it
+	bool shaped = wave_on || dip > 0.0;
+	if (dot(mpos - surface_at, surface_up) > (shaped ? surf_h(mpos) : 0.0)) {
 		discard;
 	}
 	mat4 mv = VIEW_MATRIX * MODEL_MATRIX;
@@ -128,6 +158,13 @@ void fragment() {
 		float den0 = dot(d0, surface_up);
 		float t0 = abs(den0) > 1e-7 ? dot(surface_up, surface_at - eye) / den0 : -1.0;
 		hit0 = eye + d0 * clamp(t0, 0.0, 1.0);
+		// ...where the ray meets it as its ripples and its turning have it, found again a few times from the plane
+		if (shaped && abs(den0) > 1e-7) {
+			for (int it = 0; it < 4; it++) {
+				t0 = dot(surface_up, surface_at + surface_up * surf_h(hit0) - eye) / den0;
+				hit0 = eye + d0 * clamp(t0, 0.0, 1.0);
+			}
+		}
 		cap = t0 > 0.0 && t0 <= 1.0 && in_cavity(hit0);
 	}
 	if (cap) {
@@ -148,7 +185,13 @@ void fragment() {
 		float rx = vnoise((cq + vec3(0.3, 0.0, 0.0)) * 0.35 + vec3(st * 0.31, 0.0, st * 0.23)) - vnoise((cq - vec3(0.3, 0.0, 0.0)) * 0.35 + vec3(st * 0.31, 0.0, st * 0.23));
 		float rz = vnoise((cq + vec3(0.0, 0.0, 0.3)) * 0.35 + vec3(st * 0.31, 0.0, st * 0.23)) - vnoise((cq - vec3(0.0, 0.0, 0.3)) * 0.35 + vec3(st * 0.31, 0.0, st * 0.23));
 		float calm = 0.06 * (0.35 + boil * 1.4);
-		vec3 n = normalize(surface_up - e1 * (wv.y + rx * calm) - e2 * (wv.z + rz * calm));
+		// its own slope, from its heights either side
+		vec2 sl = vec2(0.0);
+		if (shaped) {
+			float eps = max(wave_span / 96.0, 0.0015);
+			sl = vec2(surf_h(hit + e1 * eps) - surf_h(hit - e1 * eps), surf_h(hit + e2 * eps) - surf_h(hit - e2 * eps)) / (2.0 * eps);
+		}
+		vec3 n = normalize(surface_up - e1 * (wv.y + rx * calm + sl.x) - e2 * (wv.z + rz * calm + sl.y));
 		float b = 0.0;
 		if (boil > 0.0) {
 			// each cell a bubble on its own clock: it swells, then breaks

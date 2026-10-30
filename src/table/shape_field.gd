@@ -15,14 +15,18 @@ class_name ShapeField
 ##   - anything else as that box, its corners rounded.
 ##
 ## A warp's `scale` is undone before a point is measured (its distance scaled back by the least of it); its other
-## bends are not. The 2D fields are kept only near the outline (a narrow band of [constant BAND] cells): what is
-## further than that is far, which is all a particle asks.
+## bends are not. The 2D fields are kept only near the outline (a band of [constant BAND] cells, at least
+## [constant FAR_LEAST] wide): what is further than that is far, which is all a particle asks.
 
 ## A 2D field's cells along its longest side (at most), and the least and most a cell may be (meters).
 const CELLS := 72
 const CELL := Vector2(0.0003, 0.0016)
-## How many cells either side of an outline its distance is measured (beyond, it is this far and no further).
+## How many cells either side of an outline its distance is measured (beyond, it is this far and no further) - and
+## never nearer than FAR_LEAST (meters): past the band every point reads the band's distance, and a thin pan's fine
+## cells had made that 2.7 mm, under the radius of the spheres a lump is made of - the-quiet-crucible 841899's sulfur
+## lay 8 mm over its balance's pan, touching it, as far as the pan could tell.
 const BAND := 6
+const FAR_LEAST := 0.012
 
 var kind := "box"             # lathe, extrude, box, ball, ring, capsules
 ## The part's box as built, in its own space (meters): what a broad test asks of it.
@@ -53,6 +57,8 @@ var ring_t := 0.0
 var caps_a := PackedVector3Array()
 var caps_b := PackedVector3Array()
 var caps_r := PackedFloat32Array()
+var _surface := PackedVector3Array()   # [method surface_points], once made
+static var _making := Mutex.new()
 
 
 ## THE SOLID PART [param part] (made safe, [method Props.sanitize]) whose geometry as built lies in [param built] (its
@@ -146,12 +152,43 @@ func hollow() -> bool:
 	return top - (prof[prof.size() - 1] as Vector2).y > 0.003
 
 
+## POINTS ON ITS SURFACE, about [param most] of them spread evenly over it (its own space, meters, warped): an even
+## grid over its box, each point near the surface brought onto it along the way out - what another solid is measured
+## against, a shape's own (a round lid's box corners stand out past a crock's rim: [method TableWork._aloft]). Made once.
+func surface_points(most := 400) -> PackedVector3Array:
+	if not _surface.is_empty():
+		return _surface
+	prepare()
+	var b := box.grow(0.001)
+	var s := b.size
+	var area := maxf(2.0 * (s.x * s.y + s.y * s.z + s.z * s.x) * 0.6, 1e-6)
+	var c := maxf(sqrt(area / float(most)), 0.0008)
+	var n := Vector3i(maxi(int(ceil(s.x / c)), 1), maxi(int(ceil(s.y / c)), 1), maxi(int(ceil(s.z / c)), 1))
+	# ...made aside and kept whole: the bake's thread and the picture's may both ask first
+	var pts := PackedVector3Array()
+	for i in n.x:
+		for j in n.y:
+			for k in n.z:
+				var q := b.position + Vector3((float(i) + 0.5) * s.x / float(n.x), (float(j) + 0.5) * s.y / float(n.y), (float(k) + 0.5) * s.z / float(n.z))
+				var f := sample(q)
+				if absf(f.x) < c * 0.6:
+					pts.append(q - Vector3(f.y, f.z, f.w) * f.x)
+	if pts.is_empty():
+		pts.append(box.get_center())
+	_surface = pts
+	return pts
+
+
 ## THE 2D FIELD, made once: a lathe's by radius and height, an extrude's across its plan - each cell its distance to the
 ## outline (within the band; further is the band's), less inside.
 func prepare() -> void:
 	if ready:
 		return
-	ready = true
+	# ...ONE THREAD MAKES IT, and it is said ready once whole: the bake's thread samples it as the picture's measures it
+	_making.lock()
+	if ready:
+		_making.unlock()
+		return
 	var lo := Vector2(INF, INF)
 	var hi := Vector2(-INF, -INF)
 	for q in prof:
@@ -159,13 +196,14 @@ func prepare() -> void:
 		hi = Vector2(maxf(hi.x, (q as Vector2).x), maxf(hi.y, (q as Vector2).y))
 	var ext := maxf(hi.x - lo.x, hi.y - lo.y)
 	cell = clampf(ext / float(CELLS), CELL.x, CELL.y)
-	var margin := cell * float(BAND + 2)
+	var band := maxi(BAND, int(ceil(FAR_LEAST / cell)))
+	var margin := cell * float(band + 2)
 	if kind == "lathe":
 		lo.x = 0.0
 	g0 = lo - Vector2(0.0 if kind == "lathe" else margin, margin)
 	gw = int(ceil((hi.x + margin - g0.x) / cell)) + 1
 	gh = int(ceil((hi.y + margin - g0.y) / cell)) + 1
-	var far := cell * float(BAND)
+	var far := cell * float(band)
 	grid = PackedFloat32Array()
 	grid.resize(gw * gh)
 	grid.fill(far)
@@ -176,10 +214,10 @@ func prepare() -> void:
 	for e in edges:
 		var a: Vector2 = prof[e]
 		var b: Vector2 = prof[(e + 1) % n]
-		var i0 := maxi(int(floor((minf(a.x, b.x) - g0.x) / cell)) - BAND, 0)
-		var i1 := mini(int(ceil((maxf(a.x, b.x) - g0.x) / cell)) + BAND, gw - 1)
-		var j0 := maxi(int(floor((minf(a.y, b.y) - g0.y) / cell)) - BAND, 0)
-		var j1 := mini(int(ceil((maxf(a.y, b.y) - g0.y) / cell)) + BAND, gh - 1)
+		var i0 := maxi(int(floor((minf(a.x, b.x) - g0.x) / cell)) - band, 0)
+		var i1 := mini(int(ceil((maxf(a.x, b.x) - g0.x) / cell)) + band, gw - 1)
+		var j0 := maxi(int(floor((minf(a.y, b.y) - g0.y) / cell)) - band, 0)
+		var j1 := mini(int(ceil((maxf(a.y, b.y) - g0.y) / cell)) + band, gh - 1)
 		var ab := b - a
 		var l2 := maxf(ab.length_squared(), 1e-14)
 		for j in range(j0, j1 + 1):
@@ -212,6 +250,8 @@ func prepare() -> void:
 				c += 1
 			if c % 2 == 1:
 				grid[row + i] = -grid[row + i]
+	ready = true
+	_making.unlock()
 
 
 ## A 2D field's distance at [param q] and its slope: `Vector3(d, dd/dx, dd/dy)`. Off the field, the edge's, and as far

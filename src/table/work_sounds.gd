@@ -22,9 +22,17 @@ class_name WorkSounds
 ## SYNTHESIZED, as the place is ([Soundscape]; Farnell, "Designing Sound", 2010): a thing set down is a thump of the
 ## table's wood under it and the ring of what it is made of - glass clinks high and long, metal rings lower and longer,
 ## stone and pottery tock, wood knocks, and paper and cloth are all but silent - lower for a bigger thing, louder for a
-## heavier one; grinding is grit, filtered noise, and a few small crunches, only while the point touches and as fast as
-## it goes; a boil is bubbles (Minnaert's: a sine that rises as it dies) and a little hiss under them; a pour is a run of
-## small high bubbles where it lands.
+## heavier one; a boil is bubbles (Minnaert's: a sine that rises as it dies) and a little hiss under them; a pour is a run
+## of small high bubbles where it lands.
+##
+## GRINDING IS A SCRAPE, only while the point touches and as fast as it goes (the user, 2026-10-29, of the grit it had
+## been - noise through a band at 2.2 kHz, steady: "Stone on stone should be a scraping sound, low and rough, abrasive.
+## What it does now sounds a lot closer to T.V. static. I also think it's a touch too loud"): as van den Doel, Kry and
+## Pai's FoleyAutomatic (SIGGRAPH 2001) makes one - the surface under the point read at the speed it slides, so its
+## grain sounds higher as it goes faster ([constant SCRAPE_FINE]), its bumps roughening it at random, never in a beat
+## ([constant SCRAPE_BUMP]); the point catching and slipping on grit ([constant CATCHES]); and all of it ringing what is
+## ground in, damped by the hand on it - the vessel's own low body and its material's modes for its size, the bigger the
+## lower ([method _modes_for]).
 ##
 ## SUBDUED: the voice speaks at about [constant VoiceFX.PAD_VOICE_REF] RMS; nothing here peaks past [constant PEAK_MOST],
 ## a heavy pot set down about that, a jar a third of it, a slip of paper nothing - and what goes on (grinding, a boil)
@@ -44,12 +52,35 @@ const PEAK_MOST := 0.06
 const THUD := 0.045
 const THUD_HEAVY := 2.0
 const THUD_LEAST := 0.002
-## GRINDING: its grit at a brisk round (GRIND_SPEED meters a second), crunches a second at that pace, and how near its
-## surface a pressed point is touching it (meters, past the gap it is held at).
-const GRIND := 0.035
+## GRINDING: how loud its scrape is at a brisk round (GRIND_SPEED meters a second), and how near its surface a pressed
+## point is touching it (meters, past the gap it is held at); the most crunches a second of what it breaks.
+const GRIND := 0.0025
 const GRIND_SPEED := 0.12
-const CRUNCHES := 7.0
 const TOUCH := 0.0025
+const CRUNCHES := 7.0
+const CRUNCH := 0.009
+## ...ITS SCRAPE: the surface's grain (meters - read at the speed the point slides, its finest ripple sounds at speed / this:
+## 600 Hz at a brisk round), the lowest of it heard (Hz), its bumps (meters, a random roughening of the scrape at speed /
+## this), how hard they roughen it, how often the point catches on a grit and slips (a meter slid), how hard a catch
+## strikes against the scrape, and how much of the scrape is heard as itself beside what it rings. Measured on its own,
+## a scrape of stone at a brisk round has the middle of its spectrum at about 560 Hz, and its loudness in 20 ms pieces
+## varies by 0.45 of itself; the grit it had been, 4.7 kHz and 0.03.
+const SCRAPE_FINE := 0.0002
+const SCRAPE_LOWEST := 130.0
+const SCRAPE_BUMP := 0.006
+const ROUGH := 1.6
+const CATCHES := 900.0
+const CATCH := 4.0
+const DIRECT := 1.0
+## ...WHAT IT RINGS: the vessel's body (Hz for one 10 cm across - a bigger one lower) and how much of the scrape it takes,
+## how much its material's modes take, how long a mode rings under the hand (seconds; its material's own, this much of
+## it, at most SCRAPE_RING), and the most modes.
+const BODY := 160.0
+const BODY_SHARE := 0.25
+const MODE_SHARE := 0.8
+const DAMPED := 0.12
+const SCRAPE_RING := 0.05
+const MODES := 4
 ## A piece broken off this big (meters, a sphere's radius) crunches at its loudest and lowest; a speck, faint and high.
 const BREAK_BIG := 0.004
 ## A BOIL: bubbles a second at a boil of 1, a bubble's peak, and the hiss under them at a boil of 1.
@@ -108,11 +139,20 @@ var _bbd := PackedFloat32Array()
 var _bl := PackedFloat32Array()
 var _br := PackedFloat32Array()
 var _nb := 0
-# what goes on: grit (two bands), a boil's hiss, a pour's hiss - their filters' states, levels now and wanted, ears
-var _grit := [0.0, 0.0, 0.0, 0.0]
-var _grit_level := 0.0
-var _grit_want := 0.0
-var _grit_pan := Vector2(0.7, 0.7)
+# what goes on: a scrape, a boil's hiss, a pour's hiss - levels now and wanted, ears
+var _scrape_level := 0.0
+var _scrape_want := 0.0
+var _scrape_pan := Vector2(0.7, 0.7)
+var _scrape_v := 0.0              # how fast the point slides (meters a second), as wanted and as it eases
+var _scrape_v_want := 0.0
+var _scrape_of := ""              # what it rings: its material and size, as last made into modes
+var _sf := [0.0, 0.0, 0.0, 0.0]   # the grain's two filters, the bumps' and the grain's lowest'
+# the modes it rings: each one's two coefficients, its gain, its two states
+var _mc1 := PackedFloat32Array()
+var _mc2 := PackedFloat32Array()
+var _mg := PackedFloat32Array()
+var _my1 := PackedFloat32Array()
+var _my2 := PackedFloat32Array()
 var _hiss := [0.0, 0.0]
 var _hiss_level := 0.0
 var _hiss_want := 0.0
@@ -193,7 +233,11 @@ func _restart(t: float) -> void:
 	_at = t
 	_nv = 0
 	_nb = 0
-	_grit_level = 0.0
+	_scrape_level = 0.0
+	_scrape_v = 0.0
+	_sf = [0.0, 0.0, 0.0, 0.0]
+	_my1.fill(0.0)
+	_my2.fill(0.0)
 	_hiss_level = 0.0
 	_pressed_was = {}
 	_due = {}
@@ -226,9 +270,8 @@ func _look(t0: float, t1: float) -> Array:
 	# A THING SET DOWN
 	for d in work.set_down(t0, t1):
 		spawn.append([int((float((d as Dictionary)["t"]) - t0) * float(RATE)), _thud.bind(d)])
-	# A POINT PRESSED ONTO SOMETHING, touching it and moving over it
-	var grit := 0.0
-	var gp := Vector2.ZERO
+	# A POINT PRESSED ONTO SOMETHING, touching it and moving over it: its scrape
+	var pace := 0.0
 	var seen := {}
 	for p in work.pressed(t0):
 		var pd: Dictionary = p
@@ -239,21 +282,17 @@ func _look(t0: float, t1: float) -> Array:
 		_pressed_was[wi] = at
 		if was == null or float(pd["touch"]) > TOUCH:
 			continue
-		var pace := clampf((at - (was as Vector3)).length() / maxf(dt, 1e-4) / GRIND_SPEED, 0.0, 1.3)
-		if pace > grit:
-			grit = pace
-			gp = _ears(at)
-		var key := "crunch %d" % wi
-		_due[key] = float(_due.get(key, _rand())) + CRUNCHES * pace * dt
-		while float(_due[key]) >= 1.0:
-			_due[key] = float(_due[key]) - 1.0
-			spawn.append([int(_rand() * float(STEP)), _crunch.bind(pace, _ears(at))])
+		var speed := (at - (was as Vector3)).length() / maxf(dt, 1e-4)
+		if speed / GRIND_SPEED > pace:
+			pace = minf(speed / GRIND_SPEED, 1.3)
+			_scrape_pan = _ears(at)
+			_scrape_v_want = minf(speed, GRIND_SPEED * 1.3)
+			_modes_for(String(pd.get("kind", "stone")), float(pd.get("size", 0.12)))
 	for wi in _pressed_was.keys():
 		if not seen.has(wi):
 			_pressed_was.erase(wi)
-	_grit_want = GRIND * grit
-	if grit > 0.0:
-		_grit_pan = gp
+	# ...louder the faster, as the grain it reads is struck harder and oftener
+	_scrape_want = GRIND * sqrt(pace)
 	# A PIECE BROKEN OFF, as the physics broke it: a crunch, the bigger the piece the lower and louder - no more than
 	# CRUNCHES a second however many break at once (a lump crushed splits into dozens in a moment, which heard each had
 	# stacked far past the voice), each as big as the biggest since the last
@@ -265,7 +304,7 @@ func _look(t0: float, t1: float) -> Array:
 		if not _broke.is_empty() and t0 - _crunched >= 1.0 / CRUNCHES:
 			var big := clampf(float(_broke["size"]) / BREAK_BIG, 0.25, 1.0)
 			spawn.append([clampi(int((maxf(float(_broke["t"]), t0) - t0) * float(RATE)), 0, STEP - 1),
-				_crunch.bind(big, _ears(_broke["at"]), lerpf(3200.0, 1600.0, big))])
+				_crunch.bind(big, _ears(_broke["at"]), lerpf(1800.0, 700.0, big))])
 			_crunched = t0
 			_broke = {}
 	# A BOIL, and A POUR LANDING
@@ -318,11 +357,22 @@ func _pouring(t: float) -> Dictionary:
 func _run(out: PackedVector2Array, i: int, m: int, spawn: Array) -> void:
 	var si := 0
 	var gk := 1.0 - exp(-1.0 / (0.02 * float(RATE)))
-	var f_hi := 2.0 * sin(PI * 2200.0 / float(RATE))
-	var f_lo := 2.0 * sin(PI * 420.0 / float(RATE))
 	var f_hs := 2.0 * sin(PI * 3200.0 / float(RATE))
-	var g := _grit
 	var h := _hiss
+	# THE SCRAPE'S FILTERS for how fast the point slides this step: its grain and bumps each at the speed over their
+	# length, made as loud as white noise again (a one-pole's noise gain is a / (2 - a); two in a row, a^4 (1 + b) /
+	# (1 - b)^3 with b = (1 - a)^2), and how likely a catch is a sample
+	_scrape_v += (_scrape_v_want - _scrape_v) * minf(1.0, float(m) / (0.05 * float(RATE)))
+	var sv := maxf(_scrape_v, 0.005)
+	var af := 1.0 - exp(-TAU * clampf(sv / SCRAPE_FINE, 40.0, 5000.0) / float(RATE))
+	var bf := (1.0 - af) * (1.0 - af)
+	var nf := 1.0 / sqrt(maxf(af * af * af * af * (1.0 + bf) / pow(1.0 - bf, 3.0), 1e-12))
+	var ac := 1.0 - exp(-TAU * clampf(sv / SCRAPE_BUMP, 2.0, 400.0) / float(RATE))
+	var nc := 1.0 / sqrt(maxf(ac / (2.0 - ac), 1e-12))
+	var catch_p := CATCHES * sv / float(RATE)
+	var ah := 1.0 - exp(-TAU * SCRAPE_LOWEST / float(RATE))
+	var sf := _sf
+	var nm := _mc1.size()
 	for k in m:
 		while si < spawn.size() and int(spawn[si][0]) <= k:
 			(spawn[si][1] as Callable).call()
@@ -357,17 +407,28 @@ func _run(out: PackedVector2Array, i: int, m: int, spawn: Array) -> void:
 				_drop_burst(b, _nb)
 				continue
 			b += 1
-		# what goes on: grit, and the hiss of a boil or a pour
-		_grit_level += (_grit_want - _grit_level) * gk
-		if _grit_level > 1e-6:
-			var x := _noise() * _grit_level
-			g[0] += f_hi * g[1]
-			g[1] += f_hi * (x - g[0] - 1.0 * g[1])
-			g[2] += f_lo * g[3]
-			g[3] += f_lo * (x - g[2] - 1.2 * g[3])
-			var s := float(g[1]) + float(g[3]) * 0.6
-			l += s * _grit_pan.x
-			r += s * _grit_pan.y
+		# what goes on: the scrape, and the hiss of a boil or a pour
+		_scrape_level += (_scrape_want - _scrape_level) * gk
+		if _scrape_level > 1e-6:
+			# the grain under the point, read as it slides; its bumps, roughening it; a catch on a grit now and then
+			sf[0] = float(sf[0]) + af * (_noise() * 1.732 - float(sf[0]))
+			sf[1] = float(sf[1]) + af * (float(sf[0]) - float(sf[1]))
+			sf[2] = float(sf[2]) + ac * (_noise() * 1.732 - float(sf[2]))
+			sf[3] = float(sf[3]) + ah * (float(sf[1]) - float(sf[3]))
+			var grain := (float(sf[1]) - float(sf[3])) * nf * clampf(1.0 + ROUGH * float(sf[2]) * nc, 0.0, 3.0)
+			var e := grain
+			if _rand() < catch_p:
+				e += CATCH * -log(maxf(_rand(), 1e-6)) * (1.0 if _rand() < 0.5 else -1.0)
+			# ...ringing what is ground in
+			var rung := 0.0
+			for q in nm:
+				var y := _mc1[q] * _my1[q] - _mc2[q] * _my2[q] + _mg[q] * e
+				_my2[q] = _my1[q]
+				_my1[q] = y
+				rung += y
+			var s := (rung + grain * DIRECT) * _scrape_level
+			l += s * _scrape_pan.x
+			r += s * _scrape_pan.y
 		_hiss_level += (_hiss_want - _hiss_level) * gk
 		if _hiss_level > 1e-6:
 			var x := _noise() * _hiss_level
@@ -402,9 +463,47 @@ func _thud(d: Dictionary) -> void:
 				_sine(f, float(row["decay"]) / (1.0 + 0.5 * k), amp * float(row["amp"]) / (1.0 + k), ears)
 
 
-## A CRUNCH under a grinding point going at [param pace] of a brisk round.
-func _crunch(pace: float, ears: Vector2, f := 0.0) -> void:
-	_burst(f * lerpf(0.85, 1.15, _rand()) if f > 0.0 else lerpf(2400.0, 3400.0, _rand()), 0.9, 0.006, GRIND * 1.6 * pace * lerpf(0.4, 1.0, _rand()), ears)
+## A CRUNCH of something breaking under a grinding point, [param big] (0-1) of the loudest, around [param f] Hz.
+func _crunch(big: float, ears: Vector2, f: float) -> void:
+	_burst(f * lerpf(0.85, 1.15, _rand()), 0.9, 0.008, CRUNCH * big * lerpf(0.5, 1.0, _rand()), ears)
+
+
+## THE MODES A SCRAPE RINGS in what is ground in, of material [param kind] and [param size] meters across ([constant
+## WorkSounds.RINGS]): its body low, the bigger the lower, and its material's partials for its size - each a resonator
+## (two poles at the mode's frequency, damped as the hand on it damps it), as loud for the grain as the next. Made again
+## only when what is ground in changes.
+func _modes_for(kind: String, size: float) -> void:
+	var key := "%s %.3f" % [kind, size]
+	if key == _scrape_of:
+		return
+	_scrape_of = key
+	var fs := PackedFloat32Array([clampf(BODY * sqrt(0.1 / maxf(size, 0.02)), 70.0, 260.0)])
+	var ds := PackedFloat32Array([0.03])
+	var amps := PackedFloat32Array([BODY_SHARE])
+	var row: Variant = RINGS.get(kind)
+	if row is Dictionary:
+		var f0 := float(row["f"]) * pow(RING_SIZE / maxf(size, 0.02), 0.6)
+		var ratios: Array = row["ratios"]
+		for k in mini(ratios.size(), MODES - 1):
+			var f := f0 * float(ratios[k])
+			if f < float(RATE) * 0.4:
+				fs.append(f)
+				ds.append(minf(float(row["decay"]) * DAMPED, SCRAPE_RING))
+				amps.append(MODE_SHARE / (1.0 + float(k)))
+	_mc1.resize(fs.size())
+	_mc2.resize(fs.size())
+	_mg.resize(fs.size())
+	_my1.resize(fs.size())
+	_my2.resize(fs.size())
+	for k in fs.size():
+		var rr := exp(-1.0 / (maxf(ds[k], 0.004) * float(RATE)))
+		var w := TAU * fs[k] / float(RATE)
+		_mc1[k] = 2.0 * rr * cos(w)
+		_mc2[k] = rr * rr
+		# a resonator's noise gain is about 1 / (2 (1 - r^2) sin^2 w): each made as loud as white noise, then weighed
+		_mg[k] = sin(w) * sqrt(2.0 * (1.0 - rr * rr)) * amps[k]
+		_my1[k] = 0.0
+		_my2[k] = 0.0
 
 
 ## A BUBBLE closing (Minnaert): a sine at [param f] rising a fifth as it dies, [param amp] at its peak.

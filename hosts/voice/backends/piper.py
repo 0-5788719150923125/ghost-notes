@@ -230,8 +230,9 @@ def _dwell_for(mark: str, base: float | None = None) -> float:
     return DWELL["."] if base is not None else 0.0
 
 
-def _rest_floor(mark: str, params: dict) -> float:
-    """Seconds of rest the MODEL renders at a mid-sentence mark, before any splice.
+def _rest_floor(mark: str, params: dict, share: float = 1.0) -> float:
+    """Seconds of rest the MODEL renders at a mid-sentence mark, before any splice; `share` the
+    part of its rest the mark gets (`_tail_share`).
 
     en_US-libritts-high does not end a word at a comma: it lengthens the vowel through the
     mark and runs on into the next word, so silence spliced there cuts the word off
@@ -250,8 +251,50 @@ def _rest_floor(mark: str, params: dict) -> float:
         return 0.0
     dwell = _dwell_for(m)
     return max(
-        0.0, min(dwell, (dwell + _top_up(m, params)) * _pause_multiplier(params))
+        0.0,
+        min(dwell, (dwell + _top_up(m, params)) * _pause_multiplier(params) * share),
     )
+
+
+# A COMMA THAT LEAVES ITS SENTENCE A WORD OR TWO RESTS A THIRD AS LONG (2026-10-29, the user: sentences
+# ending ", too" "feel kind of awkward to hear ... with shorter ones like this (1 or 2 words after a comma),
+# it just feels really slow"). At the user's Pause of 7 a comma rests a second, half a full stop, and "This
+# letter is a copy, too." stopped for it before a word said in a breath. Such a tail ("too", "either", "of
+# course", "I think") is an afterthought said on the clause it follows, and a pause is shorter the shorter
+# the phrase beside it (Zvonik & Cummins 2003, Krivokapic 2007). So a comma whose tail runs to its
+# sentence's end in SHORT_TAIL words or fewer, with no mark and no rest between, gets SHORT_TAIL_REST of a
+# comma's whole rest - the dial still on all of it - and the word before it is held and trails off by what
+# that rest earns (`_trail_weight`). Its intonation is the model's, as at every comma. A colon or a
+# semicolon keeps its rest (what follows a colon is announced), and so does a comma whose tail ends at
+# another mark (an aside) - or whose own run is as short and follows one: a list's last item ("one, two,
+# three.") rests as its others do.
+SHORT_TAIL = 2
+SHORT_TAIL_REST = 0.35
+
+
+def _tail_share(group: list, ti: int) -> float:
+    """The share of its mark's rest `group[ti]` gets: SHORT_TAIL_REST after a comma whose sentence ends
+    SHORT_TAIL words or fewer later, 1 otherwise. `group` is one sentence's tokens."""
+    if str(group[ti].get("punct", "")) != ",":
+        return 1.0
+    head = 1
+    for t in reversed(group[:ti]):
+        if str(t.get("punct", "")):
+            if head <= SHORT_TAIL:
+                return 1.0
+            break
+        head += 1 if str(t.get("text", "")).strip() else 0
+    words = 0
+    for t in group[ti + 1:]:
+        if str(t.get("text", "")).strip():
+            words += 1
+        m = str(t.get("punct", ""))
+        if m:
+            return SHORT_TAIL_REST if m in SENTENCE_END and 0 < words <= SHORT_TAIL else 1.0
+        if words > SHORT_TAIL or _rest_after(t) > 0.0:
+            return 1.0
+    # a group that ends without a sentence's end is a passage cut short, its sentence going on
+    return 1.0
 
 
 # A REST THE CALLER SPLICES IN (a token's `rest_after`, in seconds): a hesitation, a tablet's
@@ -276,12 +319,12 @@ def _rest_after(tok: dict) -> float:
         return 0.0
 
 
-def _floor_of(tok: dict, params: dict) -> float:
-    """The rest floor on the word-space after `tok`: its mark's (`_rest_floor`), raised to
-    REST_AFTER_FLOOR - never past the rest itself - where the caller splices a rest in after it.
-    None after a sentence end, whose rest is the gap between groups."""
+def _floor_of(tok: dict, params: dict, share: float = 1.0) -> float:
+    """The rest floor on the word-space after `tok`: its mark's (`_rest_floor`, `share` of its rest -
+    `_tail_share`), raised to REST_AFTER_FLOOR - never past the rest itself - where the caller splices
+    a rest in after it. None after a sentence end, whose rest is the gap between groups."""
     m = str(tok.get("punct", ""))
-    floor = _rest_floor(m, params)
+    floor = _rest_floor(m, params, share)
     after = _rest_after(tok)
     if after > 0.0 and m not in SENTENCE_END:
         floor = max(floor, min(REST_AFTER_FLOOR, after))
@@ -448,21 +491,21 @@ _UNSAID = frozenset({"ˈ", "ˌ", " "})
 _LENGTHENS = frozenset({"ː", "ˑ"})
 
 
-def _trail_weight(mark: str, params: dict, after: float = 0.0) -> float:
+def _trail_weight(mark: str, params: dict, after: float = 0.0, share: float = 1.0) -> float:
     """How much of the trail the word before `mark` gets: 0 where it gets none.
 
     None at a sentence end, and none where nothing rests - a mark with no rest, or any mark at
     Pause 0, where it is no boundary at all - unless the caller splices `after` seconds in after
     the word (`REST_AFTER_FLOOR`), which is rest too. Otherwise the share of TRAIL_REST_FULL the
-    word's rest reaches, times the request's own `trail` (1 by default; 0 turns the whole thing
-    off, 2 doubles it).
+    word's rest reaches - the mark's own `share` of its rest (`_tail_share`) - times the request's
+    own `trail` (1 by default; 0 turns the whole thing off, 2 doubles it).
     """
     m = str(mark)
     if m in SENTENCE_END:
         return 0.0
     rest = max(0.0, float(after))
     if PAUSE_AFTER.get(m, 0.0) > 0.0:
-        rest += (_dwell_for(m) + _top_up(m, params)) * _pause_multiplier(params)
+        rest += (_dwell_for(m) + _top_up(m, params)) * _pause_multiplier(params) * share
     if rest <= 0.0:
         return 0.0
     try:
@@ -1055,7 +1098,7 @@ def _trail(audio, edges: dict, group: list, params: dict, sr: int, hisses=None,
     import numpy as np
 
     todo = [
-        (ti, _trail_weight(str(t.get("punct", "")), params, _rest_after(t)))
+        (ti, _trail_weight(str(t.get("punct", "")), params, _rest_after(t), _tail_share(group, ti)))
         for ti, t in enumerate(group)
         if ti in edges
     ]
@@ -3147,12 +3190,14 @@ class PiperBackend(Backend):
                     nxt = per_token.get(ti + 1)
                     # (mark's token end, top-up, next token start, the table's dwell): the
                     # splicer measures what the model already rests there and tops it up to
-                    # the target - see `_rest_from`. The window is where the cut may go.
+                    # the target - see `_rest_from`, the mark's share of it `_tail_share`'s.
+                    # The window is where the cut may go.
+                    share = _tail_share(group, ti)
                     point = (
                         float(per_token[ti][1]),
-                        _top_up(mark, params),
+                        _top_up(mark, params) * share,
                         float(nxt[0]) if nxt is not None else 0.0,
-                        _dwell_for(mark),
+                        _dwell_for(mark) * share,
                     )
                     win = self._gap(edges, ti, frame)
                     points.append(point + win if win is not None else point)
@@ -3312,7 +3357,7 @@ class PiperBackend(Backend):
         # to render correctly - see `_load`, which is where that measurement happens,
         # and vowel_probe.py for what it is measuring.
         symbols = self._symbols(group, phonemizer, espeak_voice, voice)
-        floors = {ti: _floor_of(t, params) for ti, t in enumerate(group)}
+        floors = {ti: _floor_of(t, params, _tail_share(group, ti)) for ti, t in enumerate(group)}
         stretch = {
             ti: EMPHASIS[int(t.get("emph", 0) or 0)][0]
             for ti, t in enumerate(group)
@@ -3321,7 +3366,7 @@ class PiperBackend(Backend):
         # the word before a rest is held (`TRAIL_STRETCH`): its final rime, by this much
         held = {}
         for ti, t in enumerate(group):
-            w = _trail_weight(str(t.get("punct", "")), params, _rest_after(t))
+            w = _trail_weight(str(t.get("punct", "")), params, _rest_after(t), _tail_share(group, ti))
             if w > 0.0:
                 held[ti] = 1.0 + TRAIL_STRETCH * w
         return self._render_symbols(

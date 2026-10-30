@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 473 references inside a folder, 940 down the stack, 0 up it.
+Between scripts today: 478 references inside a folder, 941 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -18,7 +18,7 @@ Between scripts today: 473 references inside a folder, 940 down the stack, 0 up 
 | `proof/` | Proof | 6 | `desk`, `reading`, `export`, `show`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `desk/` | The desk | 9 | `table`, `media`, `scene_kit`, `render`, `data` |
 | `table_show/` | The table's show | 11 | `table`, `reading`, `export`, `show`, `voice`, `ui`, `notes`, `agents`, `geometry`, `audio`, `platform`, `data` |
-| `table/` | The set | 34 | `media`, `scene_kit`, `geometry`, `render`, `audio`, `data` |
+| `table/` | The set | 35 | `media`, `scene_kit`, `geometry`, `render`, `audio`, `data` |
 | `reading/` | The voice's workspaces | 12 | `export`, `show`, `media`, `voice`, `ui`, `notes`, `audio`, `platform`, `data` |
 | `export/` | Export | 5 | `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 5 | `show`, `ui`, `scenes`, `stage`, `audio`, `data` |
@@ -150,7 +150,7 @@ The panels a voice runs in: the reading (script, cast, voice, stream, export), t
 
 A place, seen and heard, built from a written description: the table itself (Tables), the things on it (Props), its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds), its sound (Soundscape), where cards go on it, what can be done with them and how a reading says so, the faces printed on them - and the medium that puts it all on the stage (`table.gd`, a row of `Medium.REGISTRY`).
 
-[`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`formula`](../src/table/formula.gd), [`hands`](../src/table/hands.gd), [`intro_blur`](../src/table/intro_blur.gd), [`lights`](../src/table/lights.gd), [`mesh_cut`](../src/table/mesh_cut.gd), [`motions`](../src/table/motions.gd), [`particles`](../src/table/particles.gd), [`props`](../src/table/props.gd), [`rides`](../src/table/rides.gd), [`shape_field`](../src/table/shape_field.gd), [`sheet_writing`](../src/table/sheet_writing.gd), [`show_opening`](../src/table/show_opening.gd), [`soundscape`](../src/table/soundscape.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_light`](../src/table/table_light.gd), [`table_physics`](../src/table/table_physics.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`table_things`](../src/table/table_things.gd), [`table_work`](../src/table/table_work.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`vessel`](../src/table/vessel.gd), [`winds`](../src/table/winds.gd), [`work_sounds`](../src/table/work_sounds.gd)
+[`card_faces`](../src/table/card_faces.gd), [`card_reading`](../src/table/card_reading.gd), [`card_table`](../src/table/card_table.gd), [`drifts`](../src/table/drifts.gd), [`effects`](../src/table/effects.gd), [`formula`](../src/table/formula.gd), [`hands`](../src/table/hands.gd), [`intro_blur`](../src/table/intro_blur.gd), [`lights`](../src/table/lights.gd), [`mesh_cut`](../src/table/mesh_cut.gd), [`motions`](../src/table/motions.gd), [`particles`](../src/table/particles.gd), [`props`](../src/table/props.gd), [`rides`](../src/table/rides.gd), [`shape_field`](../src/table/shape_field.gd), [`sheet_writing`](../src/table/sheet_writing.gd), [`show_opening`](../src/table/show_opening.gd), [`soundscape`](../src/table/soundscape.gd), [`surface_waves`](../src/table/surface_waves.gd), [`table`](../src/table/table.gd), [`table_actions`](../src/table/table_actions.gd), [`table_box`](../src/table/table_box.gd), [`table_card_pose`](../src/table/table_card_pose.gd), [`table_light`](../src/table/table_light.gd), [`table_physics`](../src/table/table_physics.gd), [`table_plan`](../src/table/table_plan.gd), [`table_positions`](../src/table/table_positions.gd), [`table_shuffle`](../src/table/table_shuffle.gd), [`table_things`](../src/table/table_things.gd), [`table_work`](../src/table/table_work.gd), [`tables`](../src/table/tables.gd), [`title_card`](../src/table/title_card.gd), [`vessel`](../src/table/vessel.gd), [`winds`](../src/table/winds.gd), [`work_sounds`](../src/table/work_sounds.gd)
 
 ### `table_show/` - The table's show
 

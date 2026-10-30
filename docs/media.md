@@ -161,7 +161,7 @@ A PICTURE TAKES THE SCREEN (`<!-- image (full): -->` ... `<!-- /image -->`): it 
 
 A STILL IS DEAD STILL (`<!-- still -->`: "the camera holds still on the cross and the dot, with the pen well clear of them, or the test cannot work"): from the mark to the next written line the camera frames the last drawing on the page, its slow wander stopped where it was, and the pen is sent off the pad.
 
-THE SUBTITLES CAPTION ONLY WHAT CANNOT BE READ ON THE PAGE (2026-10-27, the user: "hide the subtitles for any text that is already being written on the page ... anything we can't see or didn't write directly on the page will need subtitles"): a line is drawn when any of its words is not written - a thought, a sketch's narration - or while a picture covers the screen (`_captioned`, `Subtitles.captions`); a line of the letter, written two words ahead of the voice, is read on the page instead.
+THE SUBTITLES CAPTION ONLY WHAT CANNOT BE READ ON THE PAGE (2026-10-27, the user: "hide the subtitles for any text that is already being written on the page ... anything we can't see or didn't write directly on the page will need subtitles"): a line is drawn when any of its words is not written - a thought, one said as a sketch is drawn - or while a picture covers the screen (`_captioned`, `Subtitles.captions`); a line of the letter, written two words ahead of the voice, is read on the page instead.
 
 THE LETTER ENDS WHEN THE PEN DOES: an unspoken line after the last word ("Dear Ink," on a new page) is written before the camera stands back and the picture goes to black.
 

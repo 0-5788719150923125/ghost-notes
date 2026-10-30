@@ -899,6 +899,59 @@ def test_semicolon_and_bang():
 
 
 @check
+def test_a_short_tail_rests_a_share_of_a_comma():
+    """A comma that leaves its sentence a word or two ("a copy, too.") rests SHORT_TAIL_REST of a comma
+    (2026-10-29, the user: ", too" "just feels really slow"), at the user's own Pause of 7, and its word
+    trails by that rest; the control, three words left ("a copy, and so on."), rests a whole comma. A
+    list's last comma, a comma before another mark, a colon and a sentence cut short keep theirs."""
+    from backends.piper import (
+        PAUSE_AFTER,
+        SHORT_TAIL_REST,
+        _dwell_for,
+        _pause_multiplier,
+        _rest_from,
+        _tail_share,
+        _trail_weight,
+    )
+
+    def said(line: str) -> list:
+        out = []
+        for w in line.split():
+            word, mark = w.rstrip(",.:?"), w[len(w.rstrip(",.:?")):]
+            out.append(_tok(word, mark, ["AH1", "N"]))
+        return out
+
+    paused = {"pause_scale": 7.0}
+    mult = _pause_multiplier(paused)
+    comma = (",", PAUSE_AFTER[","])
+
+    def added(line: str) -> int:
+        return (synth(said(line), paused)["bytes"] - synth(said(line), {"pause_scale": 0.0})["bytes"]) // 2
+
+    short = _rest_from(_dwell_for(",") * SHORT_TAIL_REST, comma[1] * SHORT_TAIL_REST, mult, 0.0)
+    whole = _rest_from(_dwell_for(","), comma[1], mult, 0.0)
+    within(added("This letter is a copy, too."), round(short * SR), "one word left: a share of a comma's rest")
+    within(added("I did it at night, of course."), round(short * SR), "two words left: the same")
+    within(added("This letter is a copy, and so on."), round(whole * SR), "control: three words left, a whole comma")
+    ok(short < whole * 0.5, "%.2f s where a comma rests %.2f" % (short, whole))
+
+    def shares(line: str) -> list:
+        g = said(line)
+        return [_tail_share(g, i) for i in range(len(g))]
+
+    eq(shares("Then four, then eight."), [1.0, SHORT_TAIL_REST, 1.0, 1.0], "a short head is no list")
+    eq(shares("One, two, three."), [1.0, 1.0, 1.0], "a list's last comma rests as its others")
+    eq(shares("It was late, too late, and cold.")[2], 1.0, "a comma whose tail ends at another keeps its rest")
+    eq(shares("Mine were: this."), [1.0, 1.0, 1.0], "a colon keeps its rest")
+    eq(shares("a copy, too")[1], 1.0, "a sentence cut short (no end in the group) keeps it")
+    ok(
+        _trail_weight(",", paused, 0.0, SHORT_TAIL_REST) < _trail_weight(",", paused),
+        "the word before it trails less: %.2f of a comma's %.2f"
+        % (_trail_weight(",", paused, 0.0, SHORT_TAIL_REST), _trail_weight(",", paused)),
+    )
+
+
+@check
 def test_phones_path_inserts_the_right_totals():
     from backends.piper import PAUSE_AFTER, _dwell_for, _gap_for, _rest_from
 
@@ -1260,7 +1313,7 @@ def check_real_voice_comma():
 
     P._splice_pauses = spy
     floor = P._rest_floor
-    P._rest_floor = lambda mark, params: 0.0
+    P._rest_floor = lambda mark, params, share=1.0: 0.0
     try:
         for _ in range(5):
             seen.clear()
@@ -1347,7 +1400,7 @@ def check_real_voice_rests_at_a_mark():
         return out
 
     floor = P._rest_floor
-    P._rest_floor = lambda mark, params: 0.0
+    P._rest_floor = lambda mark, params, share=1.0: 0.0
     try:
         bare = before_cuts()
     finally:

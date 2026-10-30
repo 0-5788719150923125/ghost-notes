@@ -37,14 +37,13 @@ class_name LetterScript
 ##                                             writes it. Inside a written line, words written in it and
 ##                                             never said ([constant UNSAID]): `like <!-- struck: morning
 ##                                             --> <!-- unspoken: mourning. -->` says "like morning."
-##     <!-- sketch: what it shows -->          a drawing the pen makes on the page - an agent draws it
-##                                             from the words as SVG ([LetterCard]), TeX's figure
-##                                             reader lays it out - while the paragraph after it is
-##                                             said: that paragraph is the drawing's, said as it is drawn
-##                                             and then written under it, the voice waiting for the pen
-##                                             (Pen reads the letter later); a rule is left empty under
-##                                             it ([constant UNDER_SKETCH]). Not drawn yet, the paragraph
-##                                             is written as it is said, as any other.
+##     <!-- sketch: what it shows -->          a drawing the pen makes on the page WHERE THE MARK IS - an
+##                                             agent draws it from the words as SVG ([LetterCard]), TeX's
+##                                             figure reader lays it out - the voice waiting for the pen
+##                                             before the next written words; a rule is left empty under
+##                                             it ([constant UNDER_SKETCH]). A thought right after it (no
+##                                             point in it) is thought while it is drawn. Not drawn yet,
+##                                             nothing is.
 ##     <!-- point: sketch -->, <!-- point: sketch, the dot on its own -->
 ##                                             INSIDE SPEECH: at the next word the pen points at the
 ##                                             last sketch, or at the part of it so described (the
@@ -171,6 +170,10 @@ const FIRST_LINE := DeskScript.FIRST_RULE + DeskScript.RULE
 ## RULES LEFT EMPTY UNDER A SKETCH before the writing goes on (2026-10-29, the user: "Both sketches are too squished
 ## today, with text that is too close to them") - it had gone on the first rule clear of the drawing.
 const UNDER_SKETCH := 1.0
+## A DRAWING THAT OPENS A PAGE WAITS FOR THE CAMERA (seconds after the turn; the action's `settle`, which [DeskMedium]'s
+## plan and the voice's rests both read): the turn is seen wide, and [LetterMedium]'s camera comes in on the drawing
+## from its middle - drawn at once, the cross and the dot were done before the camera was in.
+const DRAW_SETTLE := 1.5
 const LINE_W := DeskScript.PW - DeskScript.RIGHT - DeskScript.TEXT_X
 ## A struck line is crossed through this high: the share of the hand's body above the baseline.
 const STRIKE_H := 20.0
@@ -419,8 +422,7 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 	var voice: Array = []            # in order: {hold, act} (a rest, and the action it is for) or {para, base}
 	var spoken := PackedStringArray()
 	var ignored := PackedStringArray()
-	var pending := -1                # a sketch waiting for its paragraph (its action), -1 for none
-	var waiting := false             # ...or one with no drawing yet, whose paragraph is still its own
+	var pending := -1                # a sketch being drawn (its action), what comes after it not reached yet: -1 for none
 	var last_sketch := -1
 	var last_para: Array = []        # the lines of the paragraph last written
 	var image := {}
@@ -451,20 +453,20 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 			ink_to = _ink_after(text, ink)
 		var said := _words(text) if kind == "para" else PackedStringArray()
 		var thought: Dictionary = {}     # the voice's entry for a thought paragraph, where a point's linger rests
-		var narrated := ""               # a sketch's paragraph, said as it is drawn: written under it once it is
 		if kind == "para" and said.is_empty():
 			ink = ink_to
 			voice.append({"para": text, "base": spoken.size()})      # a hesitation on a line of its own
 			if spoken.size() > 0 and _rx(Manuscript.HESITATION).search(text) != null:
 				pauses.append(spoken.size() - 1)
 			continue
-		if (pending >= 0 or waiting) and kind != "para":
-			# A SKETCH WITH NO PARAGRAPH OF ITS OWN is drawn in silence: the voice waits it out
-			if pending >= 0:
-				var w := float((actions[pending] as Dictionary)["write"])
-				voice.append({"hold": w, "act": -1, "pen": w})
+		# A SKETCH IS DRAWN WHERE ITS MARK IS (2026-10-29, the user: "there is no obvious reason why text written AFTER the
+		# sketch marker is read BEFORE the sketch ... we should just rely on markers"): what comes after it waits for the
+		# pen - the voice silent while it draws - but a thought, which needs no pen, is thought while it draws (one with a
+		# point in it needs the pen, and waits)
+		if pending >= 0 and not (kind == "para" and is_thought(text) and point.search(text) == null):
+			var w := float((actions[pending] as Dictionary)["write"])
+			voice.append({"hold": w, "act": -1, "pen": w})
 			pending = -1
-			waiting = false
 		match kind:
 			"strike":
 				var decide := decide_of(String(blk["arg"]))
@@ -512,8 +514,7 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 			"sketch":
 				var key := Manuscript.image_key(String(blk["arg"]))
 				var svg := String(svgs.get(key, ""))
-				waiting = svg.is_empty()
-				if waiting:
+				if svg.is_empty():
 					continue
 				var act := {"kind": "draw", "key": key, "span": 0, "about": 0, "tail": 0.0,
 					"after": spoken.size(), "page_break": new_page}
@@ -546,17 +547,14 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 			"para":
 				var base := spoken.size()
 				var busy := true             # the pen writes or draws through it: no point in it
-				# A SKETCH NOT DRAWN YET has nothing to say its paragraph over: it is written as it is said
-				waiting = false
 				if pending >= 0:
-					# THE SKETCH'S OWN PARAGRAPH: said while it is drawn - and then written under it (below)
+					# A THOUGHT AS THE SKETCH IS DRAWN: said, never written, the pen drawing across its words
 					var s: Dictionary = actions[pending]
 					s["dur"] = LEAD
 					s["after"] = base
 					s["span"] = said.size()
 					voice.append({"para": text, "base": base, "pen": float(s["write"]), "sync": true})
 					pending = -1
-					narrated = text
 				elif is_thought(text):
 					spans.append({"kind": "thought", "from": base, "to": base + said.size()})
 					voice.append({"para": text, "base": base})
@@ -652,25 +650,6 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 					voice.append({"hold": POINT_LINGER, "act": -1})
 				spoken.append_array(said)
 				ink = ink_to
-				# ...AND THEN WRITTEN UNDER IT, as words written and not said are: the voice waits while the pen puts
-				# them on the page (2026-10-29, the user of the paragraph under a tree of dots: "it fails to write down
-				# the context Pen would need to have here") - said with the drawing, they are Pen's to read after it
-				if not narrated.is_empty():
-					held = _hold_pen(actions, voice, held, pens.find(ink), spoken.size())
-					var from := actions.size()
-					for la in _lay_para(narrated, spoken.size(), seed, line_n, new_page, hand):
-						var a: Dictionary = la
-						a["span"] = 0
-						a["ink"] = pens[held]
-						a["dur"] = LEAD + float(a["write"])
-						voice.append({"hold": LEAD + float(a["write"]), "act": actions.size(), "pen": LEAD + float(a["write"]),
-							"sync": true})
-						actions.append(a)
-						line_n += 1
-					new_page = false
-					last_para = range(from, actions.size())
-					if not still.is_empty() and int(still["to"]) < 0:
-						still["to"] = spoken.size()
 	if pending >= 0:
 		var w := float((actions[pending] as Dictionary)["write"])
 		voice.append({"hold": w, "act": -1, "pen": w})
@@ -717,11 +696,11 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 ## voice waits until it is. Under a picture ([param spans]' images) the voice reads on and the pen keeps up
 ## with it, as the desk's does, unseen.
 static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
-	var turns := {}                  # spoken index -> true: a drawing said from there turns a page
+	var turns := {}                  # spoken index -> the rest: a drawing said from there turns a page
 	for a in actions:
 		var act: Dictionary = a
 		if bool(act.get("turn", false)) and int(act.get("span", 0)) > 0 and String(act["kind"]) != "pad-text":
-			turns[int(act["after"])] = true
+			turns[int(act["after"])] = TURN_REST + float(act.get("settle", 0.0))
 	var speak := PackedStringArray()
 	var hold := 0.0
 	var tv := 0.0                    # where the voice is
@@ -740,7 +719,7 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 			var ai := int(e.get("act", -1))
 			if ai >= 0 and bool((actions[ai] as Dictionary).get("turn", false)) \
 					and int((actions[ai] as Dictionary).get("span", 0)) == 0:
-				h += TURN_REST
+				h += TURN_REST + float((actions[ai] as Dictionary).get("settle", 0.0))
 			tp = maxf(tp, tv) + float(e.get("pen", 0.0)) + (h - float(e["hold"]))
 			hold += h
 			tv += h
@@ -827,8 +806,8 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 			tv = t_word
 		else:
 			if turns.has(base):
-				hold += TURN_REST
-				tv += TURN_REST
+				hold += float(turns[base])
+				tv += float(turns[base])
 				tp = maxf(tp, tv)
 			if hold > 0.005:
 				speak.append("<!-- action-hold: %s -->" % String.num(hold, 2))
@@ -847,7 +826,7 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 			else:
 				for k in range(1, n):
 					if turns.has(base + k):
-						inner[k] = TURN_REST
+						inner[k] = float(turns[base + k])
 				# ...and a point's linger at its next sentence ([constant POINT_LINGER])
 				var rests: Dictionary = e.get("rests", {})
 				for k in rests:
@@ -1270,6 +1249,7 @@ static func lay_out(actions: Array, sizes: Dictionary, hand := LetterHand.DEFAUL
 						or (fresh and top + (h + d) * k + kept > foot)):
 					page += 1
 					act["turn"] = true
+					act["settle"] = DRAW_SETTLE
 					top = FIRST_LINE - DeskScript.RULE * 0.5
 				act["page"] = page
 				act["at"] = Vector2(DeskScript.TEXT_X + maxf(0.0, (room - w * k) * 0.5), top + h * k)

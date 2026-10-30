@@ -8,8 +8,8 @@ class_name LetterCard
 ## the words only describe - each SKETCH, drawn as SVG by an agent and laid out by ghost's own TeX
 ## ([LetterSketches]), so the pen draws it; and each PICTURE a passage is read over, painted by the
 ## Illustrations library's painter from its mark ([IllustrationPanel], handed the letter's pictures and
-## never its sketches). A letter plays without either: a sketch not drawn yet leaves its paragraph written
-## as it is said, a picture not painted leaves its passage over the desk.
+## never its sketches). A letter plays without either: a sketch not drawn yet is not drawn, the words round it
+## as they are, a picture not painted leaves its passage over the desk.
 ##
 ## A CARD ON THE READING, as the Actor's and Proof's are: built by [NoteCards] from the `letter` row, it
 ## PINS ITS MEDIUM while it is up ([member Director.medium_override]) and HANDS the reading what is read
@@ -41,12 +41,16 @@ class_name LetterCard
 ## made by Generate once the sketches are drawn, and by an export that goes up.
 
 const KEY := "letter"
-## The block: the desk's seed (0: the note's own), its light ("": the seed's), the hand it is written in and who draws
-## the sketches - and, once chosen, `things` (what is on the desk, [constant DeskLook.THINGS] keys; none written: the
-## seed's).
-const KNOBS := {"seed": 0, "mood": "", "hand": LetterHand.DEFAULT, "writer": "claude", "writer_model": "", "writer_effort": ""}
+## The block: the desk's seed (0: the note's own), its light ("": the seed's), the hand it is written in, who draws
+## the sketches and what is written on the index cards (`card_text`, [method DeskLook.picks_of]) - and, once chosen,
+## `things` (what is on the desk, [constant DeskLook.THINGS] keys; none written: the seed's).
+const KNOBS := {"seed": 0, "mood": "", "hand": LetterHand.DEFAULT, "writer": "claude", "writer_model": "", "writer_effort": "",
+	"card_text": ""}
 ## What makes the note's episode, as the rows of the steps the note's other cards add say it.
 const MAKES := "Generate, or an export that goes up"
+## How long the index cards' words rest unchanged before a playing letter's desk is dressed again with them (seconds):
+## a desk is not built again a keystroke.
+const CARD_SETTLE := 0.6
 
 signal noted(text: String)
 
@@ -67,6 +71,9 @@ var _added_rows: EpisodeStepRows # their rows, under the Ink
 var _seed_box: SpinBox
 var _light_pick: OptionButton    # the desk's light ([constant DeskLook.MOODS])
 var _bank := {}                  # a [constant DeskLook.THINGS] key -> its CheckBox
+var _card_row: VBoxContainer     # what is written on the index cards, shown while they are on the desk
+var _card_box: TextEdit
+var _card_due := 0.0             # seconds till a playing letter's desk takes the cards' words, 0 for nothing waiting
 var _hand_pick: OptionButton
 var _writer: AgentPick
 var _rows_box: VBoxContainer
@@ -111,6 +118,10 @@ func _exit_tree() -> void:
 
 
 func _process(delta: float) -> void:
+	if _card_due > 0.0:
+		_card_due -= delta
+		if _card_due <= 0.0:
+			_redress_live()
 	_row_t -= delta
 	if _row_t > 0.0:
 		return
@@ -184,8 +195,8 @@ func hand_seed() -> int:
 
 
 ## THE DOCUMENT'S `letter`: the hand's seed (`seed`) and the desk's (`desk`), the hand, each sketch's drawing that is
-## laid out, the ink, each picture's file, and what is on the desk and its light - what [LetterMedium] and [LetterWalk]
-## read, so the voice's rests and the pen are sized alike.
+## laid out, the ink, each picture's file, and what is on the desk, its light and what is written on its index cards -
+## what [LetterMedium] and [LetterWalk] read, so the voice's rests and the pen are sized alike.
 func document() -> Dictionary:
 	var body := _body()
 	var ink := _sketches.ink()
@@ -201,7 +212,7 @@ func document() -> Dictionary:
 		if not path.is_empty():
 			pictures[String(im["key"])] = ProjectSettings.globalize_path(path)
 	return {"seed": hand_seed(), "desk": desk_seed(), "hand": LetterHand.of(String(_knobs["hand"])), "svgs": svgs,
-		"ink": ink, "pictures": pictures, "things": desk_things(), "mood": desk_mood()}
+		"ink": ink, "pictures": pictures, "things": desk_things(), "mood": desk_mood(), "card_text": String(_knobs["card_text"])}
 
 
 ## WHAT IS ON THE DESK ([constant DeskLook.THINGS] keys, in its order): what was ticked, or what the number drew.
@@ -226,7 +237,7 @@ func _hold_desk() -> void:
 		_knobs["mood"] = desk_mood()
 
 
-## THE DESK DRESSED AGAIN WHILE THE LETTER PLAYS: its number, what is on it and its light, handed to the reading's
+## THE DESK DRESSED AGAIN WHILE THE LETTER PLAYS: its number, what is on it, its light and the cards' words, handed to the reading's
 ## live document ([LetterMedium] dresses the desk again when they change, the letter as it is).
 func _redress_live() -> void:
 	var subs: Node = _panel.subtitles if _panel != null and is_instance_valid(_panel) else null
@@ -237,6 +248,7 @@ func _redress_live() -> void:
 		(doc["letter"] as Dictionary)["desk"] = desk_seed()
 		(doc["letter"] as Dictionary)["things"] = desk_things()
 		(doc["letter"] as Dictionary)["mood"] = desk_mood()
+		(doc["letter"] as Dictionary)["card_text"] = String(_knobs["card_text"])
 
 
 func _body() -> String:
@@ -435,6 +447,33 @@ func _build() -> void:
 		bank.add_child(box)
 		_bank[kind] = box
 
+	# WHAT IS WRITTEN ON THE INDEX CARDS (2026-10-29, the user: "an input box - which only appears if we've selected the
+	# index cards"), the right way up from the writer's seat ([method DeskLook._write])
+	_card_row = VBoxContainer.new()
+	_card_row.add_theme_constant_override("separation", 2)
+	add_child(_card_row)
+	var cl := Label.new()
+	cl.text = "On the index cards"
+	cl.add_theme_font_size_override("font_size", 12)
+	_card_row.add_child(cl)
+	_card_box = TextEdit.new()
+	_card_box.custom_minimum_size.y = 84.0
+	_card_box.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	_card_box.placeholder_text = "Nothing - the cards are blank"
+	_card_box.add_theme_font_size_override("font_size", 12)
+	_card_box.tooltip_text = ("Written on the top index card or sticky note in the letter's hand and the desk's ink, line "
+		+ "for line as typed here - smaller where it needs the room, wrapped to the card's width. Nothing on the desk moves "
+		+ "for it: the cards lie where the desk's number put them, and the writing turns to read the nearest way up from "
+		+ "the writer's seat - down a card lying along the pad. Seen at once while the letter plays, paused or not.")
+	_card_box.text_changed.connect(func() -> void:
+		if _syncing:
+			return
+		_hold_desk()
+		_knobs["card_text"] = _card_box.text
+		_touch()
+		_card_due = CARD_SETTLE)
+	_card_row.add_child(_card_box)
+
 	# THE HAND: the journal's (the Picture card's Handwriting row has the same three)
 	var hrow := HBoxContainer.new()
 	hrow.add_theme_constant_override("separation", 6)
@@ -539,6 +578,8 @@ func _show_knobs() -> void:
 	_seed_box.value = int(_knobs["seed"])
 	_show_desk()
 	_hand_pick.select(maxi(0, _hand_keys().find(LetterHand.of(String(_knobs["hand"])))))
+	if _card_box.text != String(_knobs["card_text"]):
+		_card_box.text = String(_knobs["card_text"])
 	_syncing = false
 
 
@@ -552,6 +593,7 @@ func _show_desk() -> void:
 	var on := desk_things()
 	for k in _bank:
 		(_bank[k] as CheckBox).set_pressed_no_signal(k in on)
+	_card_row.visible = "cards" in on
 	_syncing = was
 
 

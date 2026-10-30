@@ -70,6 +70,8 @@ const HOME_TURN := 0.09
 const SLOT_GROW := 0.002
 ## A thing set down rests this far above what it is set on (meters): on it, never in it.
 const SET_GAP := 0.0005
+## ...and what it stands on is under the points of its surface this near its lowest (meters, [method _foot]).
+const FOOT := 0.003
 ## A loose part let go within this much of its own thing's box (meters) is IN it, and rides it ([method _ridden]).
 const RIDE_GROW := 0.01
 ## The voice's pace against the plan's estimate is measured once it has said this much of the estimate (seconds)
@@ -105,6 +107,8 @@ var _runs_of := {}            # channel -> the laws its part follows all the tim
 var _plumes: Array = []
 var _writing := {}            # work -> the words written on it, as its last `write` says, and once drawn their skin
 var _aloft_of := {}           # a channel and where a move left it -> whether it touches nothing there ([method _held_up])
+var _parent_work := {}        # work index -> the work it is a part of, or -1 ([method _within])
+var _solids_ref: Array = []   # the physics' solids, their fields - this work's and its twin's ([method _foot])
 var _steady := false          # while that is found: nothing drifts
 var _air = null               # the acts' cue bursts (Effects.Air), or null
 var _cues: Array = []         # [{act, at, every, where, name}]
@@ -376,10 +380,18 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 			_root.add_child(_air.root)
 	_plan_key = ""
 	plan_cues()
-	# READY FOR THE PHYSICS' OWN THREAD ([TablePhysics]): each thing's place as it stood, its surface, the work's spot - nothing
-	# the bake reads may need a node
+	# READY FOR THE PHYSICS' OWN THREAD ([TablePhysics]): each thing's place as it stood, its surface, the work's spot, which
+	# part is in which - nothing the bake reads may need a node
 	for ti in things.size():
 		(things[ti] as Dictionary)["rest_world"] = _world_rest_thing(ti)
+	var of_node := {}
+	for wi in works.size():
+		of_node[(works[wi] as Dictionary)["node"]] = wi
+	for wi in works.size():
+		var n: Node = ((works[wi] as Dictionary)["node"] as Node).get_parent()
+		while n != null and not of_node.has(n):
+			n = n.get_parent()
+		_parent_work[wi] = int(of_node[n]) if n != null else -1
 	for ti in things.size():
 		_mesh_of(ti)
 	work_spot()
@@ -1225,34 +1237,43 @@ func _held_up(ch: String, e: Dictionary, next: Dictionary, t: float) -> float:
 
 
 ## Whether channel [param ch]'s thing or part, posed [param x] at show time [param T], touches nothing: no point of its
-## box within [constant TOUCHING] of the table's top or of any solid but its own, where each is then.
+## own surface within [constant TOUCHING] of the table's top or of any solid but its own, where each is then. ITS
+## SURFACE, NEVER ITS BOX: a round lid set on its crock has its box's corners out in the air past the rim, and was held
+## up, swaying, to the end of the show (the-quiet-crucible 841899: "moving about wildly on top of the pot, never
+## stopping").
 func _aloft(ch: String, x: Transform3D, T: float) -> bool:
-	var box: AABB
 	var own_t := -1
 	var own_w := -1
 	var idx := int(ch.substr(1, ch.find(":") - 1))
 	if ch.begins_with("t"):
 		own_t = idx
-		box = (things[idx] as Dictionary)["box"]
 	elif ch.begins_with("w"):
 		own_w = idx
-		var w: Dictionary = (works[idx] as Dictionary)["w"]
-		if bool(w.get("loose", false)):
+		if bool(((works[idx] as Dictionary)["w"] as Dictionary).get("loose", false)):
 			return false
-		box = w.get("box", AABB())
 	else:
 		return false
+	# its own solids' surfaces where it is posed: the node a solid hangs from carried as the channel's node is
+	var rest: Transform3D = _rest.get(ch, Transform3D.IDENTITY)
+	var moved := x * rest.affine_inverse()
 	var pts: Array = []
-	var span := AABB(x * box.position, Vector3.ZERO)
-	for i in 8:
-		var p := x * box.get_endpoint(i)
-		pts.append(p)
-		span = span.expand(p)
-		if p.y < TOUCHING:
-			return false
+	var span := AABB()
 	for sd in physics.solids:
 		var d: Dictionary = sd
-		if int(d["thing"]) == own_t or int(d["wi"]) == own_w or not d.has("field"):
+		if not d.has("field") or not (int(d["thing"]) == own_t or (own_w >= 0 and _within(int(d["wi"]), own_w) == 1)):
+			continue
+		var pose: Transform3D = moved * (_thing_world(int(d["oi"]), NAN) if String(d["owner"]) == "t" else _work_world(int(d["oi"]), NAN)) * (d["local"] as Transform3D)
+		for q in (d["field"] as ShapeField).surface_points():
+			var p := pose * (q as Vector3)
+			if p.y < TOUCHING:
+				return false
+			span = AABB(p, Vector3.ZERO) if pts.is_empty() else span.expand(p)
+			pts.append(p)
+	if pts.is_empty():
+		return false
+	for sd in physics.solids:
+		var d: Dictionary = sd
+		if int(d["thing"]) == own_t or (own_w >= 0 and _within(int(d["wi"]), own_w) != 0) or not d.has("field"):
 			continue
 		var pose: Transform3D = (_thing_world(int(d["oi"]), T) if String(d["owner"]) == "t" else _work_world(int(d["oi"]), T)) * (d["local"] as Transform3D)
 		if not (pose * (d["box"] as AABB)).grow(TOUCHING).intersects(span):
@@ -1262,6 +1283,21 @@ func _aloft(ch: String, x: Transform3D, T: float) -> bool:
 			if (d["field"] as ShapeField).sample(inv * (p as Vector3)).x < TOUCHING:
 				return false
 	return true
+
+
+## Work [param wi] to work [param own]: 1 when it is that work or a part in it that goes where it goes (a stopper in its
+## jar), -1 a part in it that the work moves on its own (taken out, it is wherever it was put), 0 another.
+func _within(wi: int, own: int) -> int:
+	if wi < 0:
+		return 0
+	if wi == own:
+		return 1
+	var up := int(_parent_work.get(wi, -1))
+	while up >= 0 and up != own:
+		up = int(_parent_work.get(up, -1))
+	if up != own:
+		return 0
+	return -1 if _moved.has("w%d:pose" % wi) else 1
 
 
 ## Entry [param e]'s law at [param tau] seconds into its act (show time [param T]).
@@ -1297,7 +1333,11 @@ func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 			var lin := clampf((u - w.x) / maxf(w.y - w.x, 1e-6), 0.0, 1.0)
 			var s := Hands.timing(lin)
 			var to := _carried_to(tr, q0, T)
-			var r_to := Basis.from_euler((tr["turn"] as Vector3) * (PI / 180.0)) if tr.has("turn") else r_from
+			# ...BACK WHERE IT WAS BUILT, AS IT WAS BUILT, unless turned: a stopper laid on its side goes back in upright (the
+			# the-quiet-crucible 841899: the sulfur's cork went back into its jar on its side)
+			var r_to := Basis.from_euler((tr["turn"] as Vector3) * (PI / 180.0)) if tr.has("turn") else (r_from if tr.has("to") else Basis.IDENTITY)
+			if not tr.has("to"):
+				r_to = _home_of(tr, float(e["t0"]) + w.y * d).basis.orthonormalized() * r_to
 			# on through where the carry before it left it and where the one after takes it up ([method _chains])
 			var m: PackedVector3Array = e.get("_m", PackedVector3Array())
 			var h := (w.y - w.x) * d
@@ -1430,7 +1470,22 @@ func _pivot(tr: Dictionary) -> Vector3:
 ## Where carry [param tr] takes its pivot [param q0] (show time [param T]): its `to`, `by` past it - or by that much
 ## from where it was built.
 func _carried_to(tr: Dictionary, q0: Vector3, T: float) -> Vector3:
-	return place_of(tr.get("to"), q0, T) + (tr["by"] as Vector3) * 0.01 if tr.has("to") else q0 + (tr["by"] as Vector3) * 0.01
+	return place_of(tr.get("to"), q0, T) + (tr["by"] as Vector3) * 0.01 if tr.has("to") else _home_of(tr, T) * q0 + (tr["by"] as Vector3) * 0.01
+
+
+## HOME, for carry [param tr] with no `to` (show time [param T]): for a thing, where it was built; for a part, where it was
+## built IN ITS THING, the thing as it stands now - a pestle put back goes into its mortar where the mortar is, never into
+## the air or the wall where the mortar had stood (the-quiet-crucible 841899). As a move from where it was built.
+func _home_of(tr: Dictionary, T: float) -> Transform3D:
+	if tr.has("_ti"):
+		return Transform3D.IDENTITY
+	var wi := int(tr.get("_wi", -1))
+	if tr.has("_gi"):
+		wi = int(((groups[int(tr["_gi"])] as Dictionary)["members"] as Array)[0])
+	if wi < 0:
+		return Transform3D.IDENTITY
+	var ti := int((works[wi] as Dictionary)["thing"])
+	return _thing_world(ti, T) * _world_rest_thing(ti).affine_inverse()
 
 
 ## HOW FAR A THING SET DOWN rises or falls to rest on what is under it (carry's `down`, [constant Motions.LAWS]):
@@ -1448,6 +1503,15 @@ func _settle(tr: Dictionary, x: Transform3D, T: float) -> float:
 		low = minf(low, c.y)
 		top = maxf(top, c.y)
 		probes.append(c)
+	# ITS FOOT, NEVER ITS BOX: what it stands on is what is under its own lowest surface - a round mortar's box corners stand
+	# out past its base, over the edge of what is beside it, and it was set down 9 mm up on that (the-quiet-crucible 841899:
+	# its pestle, put back where it was built in it, went into its wall)
+	var foot := _foot(tr, x)
+	if not foot.is_empty():
+		probes = foot
+		low = INF
+		for c in foot:
+			low = minf(low, (c as Vector3).y)
 	var under := 0.0
 	for c in probes:
 		var from := Vector3((c as Vector3).x, top + 0.02, (c as Vector3).z)
@@ -1464,6 +1528,39 @@ func _settle(tr: Dictionary, x: Transform3D, T: float) -> float:
 				if y < top:
 					under = maxf(under, y)
 	return under - low + SET_GAP
+
+
+## WHERE TRACK [param tr]'s THING OR PART STANDS, posed [param x]: the points of its own surfaces within [constant FOOT]
+## of its lowest ([method ShapeField.surface_points]) - none where the physics' solids are not to hand.
+func _foot(tr: Dictionary, x: Transform3D) -> Array:
+	if _solids_ref.is_empty():
+		return []
+	var ch := String(tr["_ch"])
+	var moved := x * (_rest.get(ch, Transform3D.IDENTITY) as Transform3D).affine_inverse()
+	var own_t := int(tr.get("_ti", -1))
+	var own_w := int(tr.get("_wi", -1))
+	if tr.has("_gi"):
+		own_w = int(((groups[int(tr["_gi"])] as Dictionary)["members"] as Array)[0])
+	var pts: Array = []
+	var low := INF
+	for sd in _solids_ref:
+		var d: Dictionary = sd
+		if not d.has("field"):
+			continue
+		var mine := (own_t >= 0 and int(d["thing"]) == own_t and (int(d["wi"]) < 0 or not _moved.has("w%d:pose" % int(d["wi"])))) \
+			or (own_w >= 0 and _within(int(d["wi"]), own_w) == 1)
+		if not mine:
+			continue
+		var pose: Transform3D = moved * (_world_rest_thing(int(d["oi"])) if String(d["owner"]) == "t" else (_rest["w%d:pose" % int(d["oi"])] as Transform3D)) * (d["local"] as Transform3D)
+		for q in (d["field"] as ShapeField).surface_points():
+			var p := pose * (q as Vector3)
+			pts.append(p)
+			low = minf(low, p.y)
+	var out: Array = []
+	for p in pts:
+		if (p as Vector3).y <= low + FOOT:
+			out.append(p)
+	return out
 
 
 ## A point of an aim ([param end]) where its law has it: round its middle, at its place, or along its keys
@@ -1742,7 +1839,7 @@ func _heft(tr: Dictionary, T: float) -> Dictionary:
 
 ## WHAT IS PRESSED ONTO SOMETHING at show time [param t] - a pestle's tip in its mortar, as an `aim` or a `circle`
 ## `press`es it: `[{wi, at (its pressed point, the table's space), touch (meters over the surface, past the gap it is
-## held at; INF where none of it is under), kind (what it is pressed onto)}]`.
+## held at; INF where none of it is under), kind (what it is pressed onto), size (meters, how wide that is)}]`.
 func pressed(t: float) -> Array:
 	var out: Array = []
 	for ch in _chan:
@@ -1779,7 +1876,9 @@ func pressed(t: float) -> Array:
 				for k in Props.MATERIALS:
 					if int((Props.MATERIALS[k] as Dictionary)["code"]) == code:
 						kind = String(k)
-				out.append({"wi": wi, "at": p, "touch": INF if is_nan(y) else maxf(p.y - y - float(ed.get("gap", 0.15)) * 0.01, 0.0), "kind": kind})
+				var tb: AABB = _world_rest_thing(ti) * ((things[ti] as Dictionary)["box"] as AABB)
+				out.append({"wi": wi, "at": p, "touch": INF if is_nan(y) else maxf(p.y - y - float(ed.get("gap", 0.15)) * 0.01, 0.0), "kind": kind,
+					"size": maxf(tb.size.x, tb.size.z)})
 	return out
 
 

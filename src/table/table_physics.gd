@@ -76,6 +76,18 @@ const SPLASH_UP := 0.35
 const DROPS_EACH := 8
 const DROP_LIFE := 0.7
 const DROPS := 64
+## A SOLID'S SURFACE, by its kind of material ([constant Props.MATERIALS]): its friction, static and kinetic, against
+## what rests on it - met with that thing's own as their geometric mean. Polished metal and glass are slick: a resin tear
+## dropped on a bronze pestle lying across its mortar slides off it into the bowl (the-quiet-crucible 841899: it "lands
+## ON TOP of the pestle, and just sits there"), where stone and cloth hold it.
+const SURFACES := {"metal": Vector2(0.35, 0.25), "glass": Vector2(0.35, 0.25), "crystal": Vector2(0.35, 0.25),
+	"ceramic": Vector2(0.45, 0.35), "bone": Vector2(0.4, 0.3), "wax": Vector2(0.4, 0.3), "stone": Vector2(0.6, 0.45),
+	"wood": Vector2(0.5, 0.4), "paper": Vector2(0.6, 0.5), "leather": Vector2(0.6, 0.5), "fabric": Vector2(0.7, 0.55),
+	"plant": Vector2(0.6, 0.5), "powder": Vector2(0.7, 0.55)}
+const SURFACE_ELSE := Vector2(0.5, 0.4)
+## How deep what falls into a liquid dents its surface for the ring it makes ([member ripples]' `size`) - the dent's
+## depth, a share of it.
+const DENT := 0.8
 ## A grain drawn: how much larger than its sphere its lump is, so a heap reads whole.
 const LUMP := 1.25
 const GRAVITY := 9.81
@@ -223,10 +235,14 @@ func build() -> void:
 			(loose_parts[int(sd["loose"])] as Array).append(sd)
 			continue
 		sd["field"] = ShapeField.of(sd["part"], sd["box"])
+		sd["mu"] = _surface_friction(String((sd["part"] as Dictionary).get("material", "")))
 		sd["rest"] = _pose_owner(sd, 0.0) * (sd["local"] as Transform3D)
 		sd["shown_ch"] = "w%d:shown" % int(sd["wi"]) if int(sd["wi"]) >= 0 else ""
 		kept.append(sd)
 	solids = kept
+	# ...whose fields the work and its twin set things down by ([method TableWork._foot])
+	work._solids_ref = solids
+	twin._solids_ref = solids
 	for si in solids.size():
 		var sd: Dictionary = solids[si]
 		sd["xf"] = sd["rest"]
@@ -284,6 +300,7 @@ func _make_twin() -> void:
 	twin._chan = work._chan
 	twin.runs = work.runs
 	twin.materials = work.materials
+	twin._parent_work = work._parent_work
 
 
 ## The pose of the node solid [param sd] hangs from at show time [param t], by the twin.
@@ -409,10 +426,11 @@ func _add_liquid(si: int, vs: Vessel, ld: Dictionary, mats: Dictionary) -> void:
 	entry["holder"] = sd["holder"]
 	entry["xform"] = sd["xform"]
 	entry["rest"] = sd["rest"]
+	entry["waves"] = SurfaceWaves.of(vs)
 	_vessel_of[si] = liquids.size()
 	liquids.append(entry)
 	_liq.append({"v": v0, "d": Vector2.ZERO, "dd": Vector2.ZERO, "swirl": 0.0, "angle": 0.0, "c1": Vector3.INF, "c2": Vector3.INF,
-		"color": entry["color"], "f": -1.0, "hit": Vector4.ZERO})
+		"color": entry["color"], "f": -1.0, "hit": Vector4.ZERO, "w": (entry["waves"] as SurfaceWaves).fresh()})
 
 
 ## THE INSIDE HANDED TO A LIQUID'S SHADER ([method Vessel.shader_tables]): [param mesh]'s space carried into vessel
@@ -699,6 +717,13 @@ func _host_at(p: Vector3, ti: int) -> int:
 			bd = d
 			best = si
 	return best
+
+
+## How a solid of table material [param name] holds what rests on it: its surface's own friction, static and kinetic
+## ([constant SURFACES]), met with a particle's own ([Particles]).
+func _surface_friction(name: String) -> Vector2:
+	var m: Variant = work.materials.get(name)
+	return SURFACES.get(String((m as Dictionary).get("kind", "")) if m is Dictionary else "", SURFACE_ELSE)
 
 
 ## The matter row of table material [param name] ([param mats]): its class's, or what the set dresser wrote.
@@ -1096,6 +1121,9 @@ func _frame(k: int) -> Dictionary:
 		# ...and a stream's landing dying away: kept by a quiet frame, its last bubbles went on to the end of the show
 		if ((s as Dictionary)["hit"] as Vector4).w > 0.0:
 			busy = true
+		# ...and its surface still moving
+		if bool(((s as Dictionary)["w"] as Dictionary)["on"]):
+			busy = true
 	busy = busy or _sprinkling(t) or _liquid_fills(t)
 	# NOTHING MOVES AND NOTHING IS MOVING: the frame before, with nothing reckoned
 	if not busy and not _may_move(t) and k > 0 and k - 1 < frames.size():
@@ -1264,6 +1292,8 @@ func _liquids_step(t: float, dt: float) -> Dictionary:
 			S["swirl"] = 0.0
 			S["n"] = Vector3.UP
 			S["c"] = xf.origin
+			if bool((S["w"] as Dictionary)["on"]):
+				S["w"] = (L["waves"] as SurfaceWaves).fresh()
 			lw.append({"vessel": vs, "xf": xf, "inv": sd["inv"], "n": Vector3.UP, "c": xf.origin, "axis": xf.origin, "swirl": 0.0,
 				"volume": 0.0, "solid": int(L["solid"])})
 			continue
@@ -1336,8 +1366,11 @@ func _liquids_step(t: float, dt: float) -> Dictionary:
 				var carried := (lip - ((sd["xf0"] as Transform3D) * vs.lip[k])) / dt
 				parcels.append({"t0": t, "p": lip, "v": way * sqrt(GRAVITY * head * 0.667) + carried, "vol": out, "from": li, "t1": INF,
 					"into": -2, "color": S["color"]})
+		# ITS SURFACE MOVED by what crosses it ([SurfaceWaves])
+		_waves_step(li, binv * Vector3.UP, s, dt)
 		lw.append({"vessel": vs, "xf": xf, "inv": sd["inv"], "n": n_w, "c": c_w, "axis": c_w, "swirl": S["swirl"], "volume": S["v"],
-			"solid": int(L["solid"])})
+			"solid": int(L["solid"]), "waves": L["waves"], "w": S["w"], "dip": _dip(li), "r2": R * R * 0.5})
+		S["r2"] = R * R * 0.5
 		S["n"] = n_w
 		S["c"] = c_w
 	_dips(dt)
@@ -1345,6 +1378,97 @@ func _liquids_step(t: float, dt: float) -> Dictionary:
 	for L in liquids:
 		vessels.append({"solid": int((L as Dictionary)["solid"]), "vessel": (L as Dictionary)["vessel"]})
 	return {"solids": solids, "liquids": lw, "top": 0.0, "vessels": vessels}
+
+
+## LIQUID [param li]'s SURFACE ([SurfaceWaves]) a frame of [param dt] on, its level [param s] along [param up] (its vessel's
+## own space): each solid crossing it pushes up the cells it comes into and lets down those it leaves - a share of a cell
+## at a time, by its field where the surface is - and the ripples run, come back off the walls and die. Tipped far (a
+## pour), it is let be.
+func _waves_step(li: int, up: Vector3, s: float, dt: float) -> void:
+	var L: Dictionary = liquids[li]
+	var S: Dictionary = _liq[li]
+	var W: SurfaceWaves = L["waves"]
+	var st: Dictionary = S["w"]
+	if up.normalized().y < 0.7:
+		if bool(st["on"]):
+			S["w"] = W.fresh()
+		return
+	var u := up.normalized()
+	W.remask(L["vessel"], u, s)
+	var vsi := int(L["solid"])
+	var xf: Transform3D = (solids[vsi] as Dictionary)["xf"]
+	var inv: Transform3D = (solids[vsi] as Dictionary)["inv"]
+	# the surface's own box in the table's space, a sphere's width above and below
+	var span := AABB(xf * W.point(0, u, s), Vector3.ZERO)
+	for c in [W.n - 1, W.n * (W.n - 1), W.n * W.n - 1]:
+		span = span.expand(xf * W.point(int(c), u, s))
+	span = span.grow(0.01)
+	var occ: Dictionary = st["occ"]
+	for sj in solids.size():
+		if sj == vsi:
+			continue
+		var o: Dictionary = solids[sj]
+		# WHAT HAS NOT MOVED has not changed what it holds of the surface - unless it is taken away; and what a solid holds as
+		# it is first found moving there is where the surface began, never a push (a ladle standing in its pot from the start
+		# had heaved the surface up round it as it first stirred)
+		var seen := occ.has(sj)
+		var quiet := not bool(o["moving"])
+		if quiet and not seen:
+			continue
+		var was: Dictionary = occ.get(sj, {})
+		var near := bool(o["on"]) and (o["wbox"] as AABB).intersects(span)
+		if quiet and near:
+			continue
+		var now := {}
+		if near:
+			# the cells under its box, by its field at the surface
+			var b: AABB = inv * (o["wbox"] as AABB)
+			var i0 := clampi(int(floor((b.position.x - W.o.x) / W.cell)), 0, W.n - 1)
+			var i1 := clampi(int(floor((b.end.x - W.o.x) / W.cell)), 0, W.n - 1)
+			var j0 := clampi(int(floor((b.position.z - W.o.y) / W.cell)), 0, W.n - 1)
+			var j1 := clampi(int(floor((b.end.z - W.o.y) / W.cell)), 0, W.n - 1)
+			var oi: Transform3D = o["inv"]
+			var f: ShapeField = o["field"]
+			for j in range(j0, j1 + 1):
+				for i in range(i0, i1 + 1):
+					var c := j * W.n + i
+					if W.mask[c] == 0:
+						continue
+					var d := f.sample(oi * (xf * W.point(c, u, s))).x
+					var share := clampf(0.5 - d / W.cell, 0.0, 1.0)
+					if share > 0.0:
+						now[c] = share
+		if seen:
+			for c in now:
+				var dv := float(now[c]) - float(was.get(c, 0.0))
+				if absf(dv) > 1e-4:
+					W.push(st, int(c), SurfaceWaves.WAKE * dv)
+			for c in was:
+				if not now.has(c):
+					W.push(st, int(c), -SurfaceWaves.WAKE * float(was[c]))
+		# kept while it is near, even holding none of it (-1: seen, crossing nothing)
+		if near:
+			occ[sj] = now if not now.is_empty() else {-1: 0.0}
+		else:
+			occ.erase(sj)
+	st["occ"] = occ
+	W.step(st, dt)
+
+
+## How a turning liquid's surface curves (meters a square meter out from its middle, ω² / 2g): a stirred pot's stands low in
+## the middle and up its wall, its level kept - ω² / 2g (r² - R² / 2), R its surface's radius ([Particles], the shader).
+func _dip(li: int) -> float:
+	var w := float((_liq[li] as Dictionary)["swirl"])
+	return w * w / (2.0 * GRAVITY)
+
+
+## A DENT in liquid [param li]'s surface at [param at] (the table's space) as big as ring [param size] (meters): where
+## something has fallen in.
+func _dent(li: int, at: Vector3, size: float) -> void:
+	var L: Dictionary = liquids[li]
+	var W: SurfaceWaves = L["waves"]
+	var inv: Transform3D = (solids[int(L["solid"])] as Dictionary)["inv"]
+	W.dent((_liq[li] as Dictionary)["w"], inv * at, size * DENT, maxf(W.cell, size * 6.0))
 
 
 ## A VESSEL UNDER A LIQUID FILLS FROM IT - a ladle in its pot, a cup pushed under, a jar sunk: where the liquid's surface
@@ -1633,6 +1757,7 @@ func _events(t: float) -> void:
 		var at: Vector3 = (b["at"] as Vector3) / float(int(b["n"]))
 		var size := clampf(float(b["m"]) * RING_GAIN, RING.x, RING.y)
 		ripples.append({"t": t, "liquid": int(li), "at": at, "size": size})
+		_dent(int(li), at, size)
 	for key in each:
 		var d: Dictionary = each[key]
 		var count := mini(int(float(d["m"]) / SPLASH_MASS), DROPS_EACH) if float(d["v"]) >= SPLASH_SPEED else 0
@@ -1700,8 +1825,18 @@ func _record(_t: float) -> Dictionary:
 		bp.append_array([pose.basis.x, pose.basis.y, pose.basis.z, pose.origin])
 		bi.append(LYING if lb < 0 else (1 if bool((sim.bodies[lb] as Dictionary)["intact"]) else 0))
 	var liq := PackedFloat32Array()
+	var waves: Array = []
+	var dips := PackedVector2Array()
+	var last_waves: Array = (frames[_k - 1] as Dictionary).get("waves", []) if _k > 0 and _k - 1 < frames.size() else []
 	for li in _liq.size():
 		var S: Dictionary = _liq[li]
+		var st: Dictionary = S["w"]
+		# its surface as bytes - none at rest, and the last frame's own where it has not moved since
+		var wb: Variant = (liquids[li]["waves"] as SurfaceWaves).bytes(st) if bool(st["on"]) else null
+		if wb != null and li < last_waves.size() and last_waves[li] != null and last_waves[li] == wb:
+			wb = last_waves[li]
+		waves.append(wb)
+		dips.append(Vector2(_dip(li), float(S.get("r2", 0.0))))
 		var n: Vector3 = S.get("n", Vector3.UP)
 		var c: Vector3 = S.get("c", Vector3.ZERO)
 		var col: Color = S["color"]
@@ -1718,7 +1853,7 @@ func _record(_t: float) -> Dictionary:
 	# it and the body it is in change only as things break, dissolve or come to be
 	return {"x": last["x"] if same else sim.x.duplicate(), "r": _kept(last, "r", sim.r), "alive": _kept(last, "alive", sim.alive),
 		"owner": _kept(last, "owner", sim.owner), "body": _kept(last, "body", sim.body), "bp": bp, "bi": bi, "liq": liq,
-		"streams": _streams_at(_t), "rings": _rings_at(_t), "drops": _drops_at(_t), "cut": _cuts_now()}
+		"streams": _streams_at(_t), "rings": _rings_at(_t), "drops": _drops_at(_t), "cut": _cuts_now(), "waves": waves, "dips": dips}
 
 
 ## The last frame's [param key] if [param now] is the same, else a copy of [param now].
@@ -2011,6 +2146,36 @@ func _draw_liquids(f: Dictionary, t: float) -> void:
 			mat.set_shader_parameter("stream_at", Vector4(hp.x, hp.y, hp.z, hit.w))
 			if not bool(L["made"]):
 				mat.set_shader_parameter("color", col)
+			# ITS SHAPE: its ripples' heights, and its curve as it turns
+			var tex: Variant = _wave_texture(li, (f.get("waves", []) as Array)[li] if li < (f.get("waves", []) as Array).size() else null)
+			mat.set_shader_parameter("wave_on", tex != null)
+			if tex != null:
+				var W: SurfaceWaves = L["waves"]
+				mat.set_shader_parameter("wave_heights", tex)
+				mat.set_shader_parameter("wave_o", W.o)
+				mat.set_shader_parameter("wave_span", W.cell * float(W.n))
+				mat.set_shader_parameter("wave_quantum", SurfaceWaves.QUANTUM)
+			var dp: PackedVector2Array = f.get("dips", PackedVector2Array())
+			mat.set_shader_parameter("dip", dp[li].x if li < dp.size() else 0.0)
+			mat.set_shader_parameter("dip_r2", dp[li].y if li < dp.size() else 0.0)
+
+
+## Liquid [param li]'s ripples [param bytes] (a frame's, [method SurfaceWaves.bytes]) as a texture its shader reads - made
+## once, written again only as a frame brings other heights - or null, at rest.
+func _wave_texture(li: int, bytes: Variant) -> Variant:
+	if bytes == null:
+		return null
+	var L: Dictionary = liquids[li]
+	if L.has("tex") and is_same(L.get("tex_of"), bytes):
+		return L["tex"]
+	var W: SurfaceWaves = L["waves"]
+	var img := Image.create_from_data(W.n, W.n, false, Image.FORMAT_R8, bytes)
+	if L.has("tex"):
+		(L["tex"] as ImageTexture).update(img)
+	else:
+		L["tex"] = ImageTexture.create_from_image(img)
+	L["tex_of"] = bytes
+	return L["tex"]
 
 
 ## The inside of empty vessel [param li], made as a liquid is first poured or dipped into it.

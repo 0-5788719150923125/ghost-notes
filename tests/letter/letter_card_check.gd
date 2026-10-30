@@ -25,7 +25,10 @@ extends SceneTree
 ##   another number keeps them and the light - the control, that number's own desk, is another - and is the desk's
 ##   alone, the letter said the same at either (the control, the hand seeded by the number, otherwise); a tick and a light are
 ##   kept in the block and carried by the document; the block round trips through the frontmatter, an empty desk too,
-##   and a thing or a light it does not know is dropped.
+##   and a thing or a light it does not know is dropped. WHAT IS WRITTEN ON THE INDEX CARDS (the user: "an input box -
+##   which only appears if we've selected the index cards"): the box shown with the cards ticked and hidden without
+##   them (the control); typed into, kept in the block, carried by the document to the desk with the letter's hand, and
+##   round trips through the frontmatter, its lines and all.
 ## - THE STEPS THE NOTE'S OTHER CARDS ADD (the YouTube card's tags; 2026-10-28, they had waited at the bottom
 ##   of the YouTube card): the card hands the reading how it goes out, so it lists them - with the box ticked
 ##   the row is on the Letter card, under the Ink and above Generate, and the YouTube card draws none (THE
@@ -218,7 +221,27 @@ func _desk() -> void:
 		and (none.call("desk_things") as Array).is_empty() and odd.call("desk_things") == ["mug"]
 		and odd.call("desk_mood") == String(DeskLook.of(other)["mood"]),
 		"the block round trips through the note's frontmatter, an empty desk too; a thing or a light it does not know is dropped")
-	for c in [card, again, none, odd]:
+	# WHAT IS WRITTEN ON THE INDEX CARDS
+	var cards_row: Control = card.get("_card_row")
+	var cards_box: TextEdit = card.get("_card_box")
+	(bank["cards"] as CheckBox).button_pressed = false
+	var hidden := not cards_row.visible
+	(bank["cards"] as CheckBox).button_pressed = true
+	var shown := cards_row.visible
+	var address := "Send letters to:\nRyan Brooks\n1500 Southwest Chandler Avenue\nBend, OR 97702"
+	cards_box.text = address
+	cards_box.text_changed.emit()
+	block = card.capture()
+	doc = card.call("document")
+	var picks := DeskLook.picks_of(doc)
+	var back: Dictionary = MiniYaml.parse(MiniYaml.emit({"letter": block}))["data"]["letter"]
+	var reread: Control = script.call("for_note", {})
+	reread.apply(back)
+	_check(hidden and shown and String(block["card_text"]) == address and String(doc["card_text"]) == address
+		and String(picks.get("card_text", "")) == address and String(picks.get("hand", "")) == String(doc["hand"])
+		and String(reread.capture()["card_text"]) == address and (reread.get("_card_box") as TextEdit).text == address,
+		"the cards' box is shown with the cards ticked - the control, without them, hidden - and what is typed in it is kept in the block, carried by the document to the desk with the letter's hand, and round trips through the frontmatter, its lines and all")
+	for c in [card, again, none, odd, reread]:
 		(c as Node).free()
 
 

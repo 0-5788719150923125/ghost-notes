@@ -362,7 +362,8 @@ def test_a_held_vowel_fades_whole_without_a_step():
     t = np.arange(int(1.0 * sr)) / sr
     a = (0.5 * np.sin(2 * np.pi * 180.0 * t)).astype(np.float32)  # one voice, sounding throughout
     edges = {0: (0.10, 0.40), 1: (0.45, 0.90)}
-    group = [{"text": "you", "punct": ","}, {"text": "my", "punct": "."}]
+    group = [{"text": "you", "punct": ","}, {"text": "my", "punct": ""}, {"text": "love", "punct": ""},
+             {"text": "again", "punct": "."}]  # a comma's whole rest: more than SHORT_TAIL words after it
     params = {"pause_scale": 6.5}
 
     def gain(out, t0, t1):

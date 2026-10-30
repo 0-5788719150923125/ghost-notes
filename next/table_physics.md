@@ -415,6 +415,64 @@ stir) - unseen, but a stream the whole show;
 `TableBox`'s rays in meters; things a hand carries along a path through another thing now catch on it and drop (119515's
 lumps on the gimbal candle) - `act` says where they land.
 
+### Watched again (2026-10-29, the-quiet-crucible 841899): what rests, what is put back, what a liquid feels
+
+The user, watching it live: a frankincense tear dropped into the mortar "lands ON TOP of the pestle, and just sits there";
+the grinding "sounds a lot closer to T.V. static ... a touch too loud" where "Stone on stone should be a scraping sound,
+low and rough, abrasive"; the ladle going round in the cauldron with no "water physics, surface tension, or any of that
+... better liquid physics, which would react to ANYTHING we put into them"; the crushed frankincense "left behind,
+spinning weirdly on the table" as the mortar was lifted; the pestle put back "clipping through the side of the mortar,
+completely"; the sulfur that "never settles into the bowl" of the balance, "just floats above the scale"; the sulfur's
+cork put back "sideways", and the jar moved with its sulfur clipping through it and left on the table; one face of a
+piece of sulfur "glowing brightly, for no apparent reason"; the ash crock's lid "moving about wildly on top of the pot,
+never stopping". Probed on a copy of the episode (its acts as kept, `rehearsed()` times), and done:
+
+- A BODY WAS FLUNG, and so it spun. The whole-body advance (`Particles._way`) slid what stopped a body on by the rest of
+  the way between two poses' ORIGINS - which lie where the body was made, a meter off - so the least turn between them slid
+  it centimeters: a tear wedged between the pestle and its mortar went 8 cm up and out in a frame, at the solver's 2.5 m/s.
+  The slide is now its middle's, and a body's poses are passed through about its middle (`Particles._between`). Of six
+  places along a pestle a tear was dropped on, three had flung it 30 cm to 1.8 m; none does.
+- WHAT FALLS ON A SLOPE GOES DOWN IT: a solid's surface holds what rests on it by its own friction as well as the thing's
+  (`TablePhysics.SURFACES`, met as their geometric mean) - polished metal and glass slick, stone and cloth not. The tear sat
+  on the pestle's head, sloping 28 degrees, which the one friction for everything (0.65, 33 degrees) held. Gate:
+  physics_check `_rolls_off`, a board tilted 12 degrees the control.
+- WHAT IS IN A THING GOES WITH IT: a sleeper slept on the solid it had last met in the substep's loop - the pestle pressing
+  it from above, or nothing, resting on other lumps - and stayed where it was as its mortar or jar was carried off. It sleeps
+  on the inside it is in, else on what holds it up (`Particles._host_of`, `_inside_at`; `touch` the contact facing up
+  most, the table's top `TABLE`), and one asleep in an inside that is carried is carried with it (`_rehost`). On the copy,
+  all 64 of the crushed frankincense ride the mortar up to the pot and back.
+- A THIN THING'S FIELD WAS TOO SHORT: past a band of six cells every point reads the band's distance, and a balance's pan
+  1.5 mm thick has 0.44 mm cells - 2.7 mm, under a lump's spheres' 3.5 mm, so the sulfur lay 8 mm over the pan touching
+  it. The band is at least `ShapeField.FAR_LEAST` (12 mm). The pan's beam is still the puppeteer's path, now with the
+  lump lying in it.
+- PUT BACK AS IT WAS: a carry with no `to` goes back where the thing was built, and now AS it was built, unless `turn`
+  says (the cork laid on its side went back in sideways); a part goes back where it was built IN ITS THING, the thing as it
+  stands now (`TableWork._home_of`: the pestle went back to where it had been built on the table, under the mortar now 9 mm
+  higher); and a thing set down stands on what is under its own foot (`_foot`: its surfaces' lowest points), never its
+  box's corners - the round mortar had been set down on the edge of what was beside its box. Gate: table_work_check
+  `_put_back`.
+- A THING AT REST IS NOT HELD UP: whether a hand holds a thing between moves (`_held_up`, it sways) was asked of its
+  box's corners; a round lid on its crock has them out in the air past the rim, and swayed to the end of the show. It is
+  asked of its own surface now (`ShapeField.surface_points`). Gate: table_work_check `_put_back`.
+- GRINDING IS A SCRAPE (`WorkSounds`; van den Doel, Kry and Pai's FoleyAutomatic): the surface under the point read at the
+  speed it slides (its finest grain at speed / 0.2 mm), its bumps roughening it at random, the point catching on grit, and
+  all of it ringing what is ground in - its body low, the bigger the lower, its material's modes damped by the hand. The
+  middle of its spectrum 560 Hz where the grit's was 4.7 kHz, its loudness in 20 ms pieces varying by 0.45 of itself where
+  the grit's held to 0.03; 0.0034 RMS on the bench where it had been 0.0055. Gate: work_sounds_check (low and rough, and
+  steady noise at 2.2 kHz neither, the control).
+- A LIQUID'S SURFACE IS MOVED BY WHAT CROSSES IT (`SurfaceWaves`): its heights over a grid across its vessel, a damped wave
+  equation at 0.23 m/s - water's slowest ripple, at 1.7 cm, where its surface tension and its weight pull alike - coming back
+  off its walls; a solid coming into a cell of the surface pushes it up, going lets it down (a bow wave and a wake), and
+  what falls in dents it; stirred, it curves as a turning liquid does (ω² / 2g); what floats rides both. Kept a frame at a
+  time as a byte a cell, drawn by its shader as the surface's shape - the cut along the glass follows it, and the eye's ray
+  meets it. Gate: physics_check `_waves` (a spoon stirring a pot: 2 mm ripples over 79% of it; still 9 s after; the
+  spoon going round over the water, the control, leaves it at rest).
+
+Open: the glowing face of the sulfur (not yet seen - likely a polished crystal's facet catching a candle, or a facet's
+normal); tools are still the work's own poses - a pestle the puppeteer drives into a wall goes into it (said by `act`),
+where a held tool meeting what it is moved into, and one let go falling to rest, would make it the physics'; a balance's
+beam is the puppeteer's path, not the weight in its pans; a solid sunk in a liquid does not raise its level.
+
 ## Risks
 
 - **Cost.** A few hundred awake particles at 240 Hz in GDScript are milliseconds a frame of simulated time; on a thread
@@ -435,6 +493,9 @@ lumps on the gimbal candle) - `act` says where they land.
 - Macklin, Storey, Lu, Terdiman, Chentanez, Jeschke and Muller, "Small Steps in Physics Simulation" (SCA 2019)
 - Macklin and Muller, "Position Based Fluids" (SIGGRAPH 2013) - weighed, not taken
 - Muller, "Fast Water Simulation for Games Using Height Fields" (GDC 2008)
+- Lamb, "Hydrodynamics" (6th ed., 1932), on capillary-gravity waves: the slowest ripple on water, 0.23 m/s at 1.7 cm
+- van den Doel, Kry and Pai, "FoleyAutomatic: Physically-based Sound Effects for Interactive Simulation and Animation"
+  (SIGGRAPH 2001)
 - Ibrahim, "Liquid Sloshing Dynamics: Theory and Applications" (Cambridge, 2005)
 - Mayer and Krechetnikov, "Walking with coffee: Why does it spill?" (Physical Review E, 2012)
 - Potyondy and Cundall, "A bonded-particle model for rock" (Int. J. Rock Mech. Min. Sci., 2004)

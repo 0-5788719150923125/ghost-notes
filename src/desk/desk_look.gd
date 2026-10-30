@@ -180,6 +180,21 @@ const ENGRAVE_WIDE := 0.72
 const ENGRAVE_COLOR := Color(0.2, 0.21, 0.23)
 const ENGRAVE_LIFT := 0.0006
 const TAG_CLASP := Vector2(0.09, 0.5)
+## WHAT IS WRITTEN ON THE INDEX CARDS ([method picks_of]'s `card_text`; 2026-10-29, the user: "a property to the frontmatter
+## that would allow us to write something on the index cards ... We'd have to handle orientation there: we would not want
+## to write it upside-down"): on the top card of the stack, in the letter's hand and the desk's ink, AS ON THE PAD - the hand's
+## size on a pixel of the pad's page, its lines a rule apart, smaller only as the words need ([method _write]) - and NOTHING
+## ON THE DESK MOVES FOR IT (the user, of a first pass that laid a written card across the view and never a sticky note:
+## "you broke the layout of my scene ... The original layout was best"): the stack is the one the number drew, where it
+## drew it, and the writing turns to it. Its margin (centimeters), how small it may come before a line too long for the
+## card is wrapped (a share of the pad's size), the hair it is turned off square (radians, either way) and how far off the
+## card it lies (meters, as an engraving does).
+const CARD_MARGIN := 0.8
+const CARD_LEAST := 0.7
+const CARD_TILT := 0.025
+const CARD_LIFT := 0.0006
+
+static var _card_fonts := {}     # a hand -> its font for a card ([method _card_font])
 
 
 ## THE LOOK of the desk with seed [param seed]: `paper`, `rule`, `margin`, `ink`, `binding`, `board`
@@ -189,8 +204,8 @@ const TAG_CLASP := Vector2(0.09, 0.5)
 ## [method dress] places them; the candles first).
 ##
 ## [param picks] is what was chosen for it ([method picks_of]): `things` (the [constant THINGS] keys on it, the mat
-## among them - each once, any order) and `mood`. What it leaves out is drawn from the seed; given `things`, the look
-## is `picked` ([method _chosen]).
+## among them - each once, any order), `mood`, and what is written on its index cards (`card_text`, in `hand`). What
+## it leaves out is drawn from the seed; given `things`, the look is `picked` ([method _chosen]).
 static func of(seed: int, picks := {}) -> Dictionary:
 	var out := {}
 	var r := _rng(seed, "paper")
@@ -260,21 +275,25 @@ static func of(seed: int, picks := {}) -> Dictionary:
 	out["layers"] = desk["layers"]
 	out["materials"] = desk["materials"]
 	if chosen is Array:
-		out["things"] = _chosen(seed, mood, chosen)
+		out["things"] = _chosen(seed, mood, chosen, String(picks.get("card_text", "")), String(picks.get("hand", "")))
 		out["picked"] = true
 	else:
 		out["things"] = _candles(seed, mood) + _things(seed)
 	return out
 
 
-## WHAT A DOCUMENT'S `letter` CHOSE for its desk ([LetterCard]): `things` and `mood` where it carries them - [method
-## of]'s `picks`.
+## WHAT A DOCUMENT'S `letter` CHOSE for its desk ([LetterCard]): `things` and `mood` where it carries them, and what is
+## written on its index cards (`card_text`) with the hand it is written in - [method of]'s `picks`.
 static func picks_of(letter: Dictionary) -> Dictionary:
 	var out := {}
 	if letter.get("things") is Array:
 		out["things"] = (letter["things"] as Array).duplicate()
 	if MOODS.has(String(letter.get("mood", ""))):
 		out["mood"] = String(letter["mood"])
+	var card := String(letter.get("card_text", "")).strip_edges()
+	if not card.is_empty():
+		out["card_text"] = card
+		out["hand"] = LetterHand.of(String(letter.get("hand", "")))
 	return out
 
 
@@ -436,8 +455,9 @@ static func _things(seed: int) -> Array:
 ## THE THINGS CHOSEN for the desk of [param seed] ([param kinds], [constant THINGS] keys; the mat is the top's, [method
 ## _desk]): each once, in [constant THINGS]' order, the candles first as [method dress] places them, each drawn from a
 ## generator of its own kind. A desk lit by candles ([constant MOODS] `leads`) and given none has a taper set down: its
-## page would have no light of its own.
-static func _chosen(seed: int, mood: String, kinds: Array) -> Array:
+## page would have no light of its own. The index cards carry [param card] written on them in [param hand] (`writing`,
+## [method _write]).
+static func _chosen(seed: int, mood: String, kinds: Array, card := "", hand := "") -> Array:
 	var want := {}
 	var lit := false
 	for k in kinds:
@@ -452,20 +472,25 @@ static func _chosen(seed: int, mood: String, kinds: Array) -> Array:
 		for kind in THINGS:
 			if not want.has(kind) or bool((THINGS[kind] as Dictionary).get("lit", false)) != burning:
 				continue
-			var spec := _thing(kind, _rng(seed, "chosen " + kind), seed)
+			var spec := _thing(kind, _rng(seed, "chosen " + kind), seed, card if kind == "cards" else "")
 			var safe := Props.sanitize(spec, ["#888888"])
 			if not (safe["things"] as Array).is_empty():
-				out.append({"kind": kind, "thing": (safe["things"] as Array)[0], "materials": safe["materials"],
-					"engraving": spec.get("engraving", {})})
+				var entry := {"kind": kind, "thing": (safe["things"] as Array)[0], "materials": safe["materials"],
+					"engraving": spec.get("engraving", {})}
+				if spec.get("writing") is Dictionary:
+					entry["writing"] = (spec["writing"] as Dictionary).merged({"hand": LetterHand.of(hand)})
+				out.append(entry)
 	return out
 
 
 ## One thing of [param kind], its sizes and colors drawn from [param r] (centimeters, as [Props] reads) - a dog tag's
-## name from the desk's [param seed] (none for -1), handed back as `engraving` ([method _engrave]).
-static func _thing(kind: String, r: RandomNumberGenerator, seed := -1) -> Dictionary:
+## name from the desk's [param seed] (none for -1), handed back as `engraving` ([method _engrave]); index cards with
+## [param written] on them, handed back as `writing` ({text, card: its size}, [method _write]).
+static func _thing(kind: String, r: RandomNumberGenerator, seed := -1, written := "") -> Dictionary:
 	var mats := {}
 	var parts: Array = []
 	var extra := {}
+	var wrote := {}
 	match kind:
 		"mug":
 			var rad := r.randf_range(3.7, 4.5)
@@ -529,7 +554,10 @@ static func _thing(kind: String, r: RandomNumberGenerator, seed := -1) -> Dictio
 			mats["card"] = {"kind": "paper", "color": _hex(Color.from_hsv(r.randf(), r.randf_range(0.35, 0.6), r.randf_range(0.9, 1.0))
 				if sticky else Color.from_hsv(r.randf_range(0.1, 0.15), r.randf_range(0.0, 0.06), r.randf_range(0.93, 0.99)))}
 			var side := r.randf_range(7.3, 7.8)
-			parts.append({"shape": "box", "material": "card", "size": [side if sticky else 12.7, r.randf_range(0.6, 1.4) if sticky else r.randf_range(0.3, 1.0), side], "round": 0.03})
+			var size := [side if sticky else 12.7, r.randf_range(0.6, 1.4) if sticky else r.randf_range(0.3, 1.0), side]
+			parts.append({"shape": "box", "material": "card", "size": size, "round": 0.03})
+			if not written.is_empty():
+				wrote = {"text": written, "card": Vector3(size[0], size[1], size[2])}
 		"ruler":
 			var steel := r.randf() < 0.4
 			mats["rule"] = {"kind": "metal" if steel else "wood", "color": "#c0c2c6" if steel else _hex(Color.from_hsv(r.randf_range(0.08, 0.12), r.randf_range(0.3, 0.5), r.randf_range(0.6, 0.85))),
@@ -603,6 +631,8 @@ static func _thing(kind: String, r: RandomNumberGenerator, seed := -1) -> Dictio
 	var out := {"things": [{"name": String((THINGS[kind] as Dictionary)["label"]), "parts": parts}], "materials": mats}
 	if not extra.is_empty():
 		out["engraving"] = extra
+	if not wrote.is_empty():
+		out["writing"] = wrote
 	return out
 
 
@@ -724,6 +754,84 @@ static func _engrave(node: Node3D, e: Dictionary) -> void:
 	label.rotation = Vector3(-PI * 0.5, 0.0, 0.0)
 	label.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	node.add_child(label)
+
+
+## WORDS WRITTEN ON THE TOP INDEX CARD ([param w], `{text, card, hand}` - the card's size in centimeters, as [method _thing]
+## builds it about its middle): in the letter's hand ([constant NotebookLayout.HANDS]' font) and [param ink], from the card's
+## top left inside [constant CARD_MARGIN], turned a hair off square ([constant CARD_TILT], from [param r]). AS THE PAD IS
+## WRITTEN: the hand's size ([method LetterHand.size_px]) on a pixel of the pad's page ([constant DeskScript.PH] to [constant
+## LegalPad.H]), its lines a rule apart ([constant DeskScript.RULE]) - smaller where a line is too long for the card, to
+## [constant CARD_LEAST] of it, then wrapped, and smaller again only where the lines overrun it. Rastered finer than that, a
+## glyph's thin strokes were averaged away by its mipmaps from across the desk, the dark ink a pale tint. THE RIGHT WAY UP
+## FROM THE WRITER'S SEAT: the card lies however the number turned it ([param turn], its node's `rotation.y`), and the
+## writing is turned on it by the quarter turn that leaves it nearest upright - across a card lying across the view, down
+## one lying along the pad (portrait). Godot's own [Label3D], as the dog tag's name is.
+static func _write(node: Node3D, w: Dictionary, turn: float, ink: Color, r: RandomNumberGenerator) -> void:
+	var card: Vector3 = w["card"]
+	var font := _card_font(String(w["hand"]))
+	var text := String(w["text"])
+	# the quarter turn on the card nearest upright on the desk: a card's turn and its writing's, added, nearest none
+	var quarter := roundi(-turn / (PI * 0.5))
+	var across := posmod(quarter, 2) == 0
+	var room := (Vector2(card.x, card.z) if across else Vector2(card.z, card.x)) - Vector2.ONE * CARD_MARGIN * 2.0
+	room *= 0.01
+	var px := int(LetterHand.size_px(String(w["hand"])))
+	# meters a pixel of the font's: the pad's - smaller while its longest line is wider than the card, to CARD_LEAST of it,
+	# and then while the words wrapped to the card's width overrun it
+	var pad := LegalPad.H / DeskScript.PH
+	var size := pad
+	var widest := 0.0
+	for line in text.split("\n"):
+		widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x)
+	for _smaller in 80:
+		var long := widest * size > room.x and size > pad * CARD_LEAST
+		if not long and card_lines(font, text, room.x / size, px) * DeskScript.RULE * size <= room.y:
+			break
+		size *= 0.97
+	var label := Label3D.new()
+	label.name = "writing"
+	label.text = text
+	label.font = font
+	label.font_size = px
+	label.line_spacing = DeskScript.RULE - font.get_height(px)
+	label.outline_size = 0
+	label.modulate = ink
+	label.shaded = true
+	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.width = room.x / size
+	label.pixel_size = size
+	label.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# flat on the card, its first line's top left at the margin's corner: the text runs +x and down the card toward +z
+	label.position = Vector3(-room.x * 0.5, 0.0, -room.y * 0.5)
+	label.rotation = Vector3(-PI * 0.5, 0.0, 0.0)
+	var on := Node3D.new()
+	on.name = "card writing"
+	on.position = Vector3(0.0, card.y * 0.01 + CARD_LIFT, 0.0)
+	on.rotation.y = float(quarter) * PI * 0.5 + r.randf_range(-CARD_TILT, CARD_TILT)
+	on.add_child(label)
+	node.add_child(on)
+
+
+## How many lines [param text] takes in [param font] at [param px], wrapped to [param wide] of its pixels, as a [Label3D]
+## wraps it.
+static func card_lines(font: Font, text: String, wide: float, px: int) -> int:
+	var breaks := TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE
+	var tall := font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, wide, px, -1, breaks).y
+	return roundi(tall / font.get_height(px))
+
+
+## The font [param hand] is written in on a card ([constant NotebookLayout.HANDS]' own), its glyphs with mipmaps: a card is
+## seen from across the desk, several of a glyph's pixels to one of the screen's.
+static func _card_font(hand: String) -> Font:
+	var key := LetterHand.of(hand)
+	if not _card_fonts.has(key):
+		var f := (load(String(NotebookLayout.HANDS[key]["regular"])) as FontFile).duplicate() as FontFile
+		f.generate_mipmaps = true
+		_card_fonts[key] = f
+	return _card_fonts[key]
 
 
 ## A CHAIN AS IT WAS DROPPED (2026-10-29, the user: "a normal person doesn't loop their chain into neat little circles,
@@ -1043,6 +1151,7 @@ static func _pack(look: Dictionary, seed: int, face: float, root: Node3D, taken:
 		# the side this thing leans to: it lies on the other only when its own has no better place
 		var leans_right := r.randf() < PACK_RIGHT
 		var band := (CANDLE_RIGHT if right else CANDLE_BAND) if burns else Rect2()
+		var written := t.get("writing") is Dictionary
 		var best := {}
 		for _try in PACK_TRIES:
 			# turned: a long thing mostly along the pad's side, either end first; any other half the time square to the pad,
@@ -1117,6 +1226,8 @@ static func _pack(look: Dictionary, seed: int, face: float, root: Node3D, taken:
 		node.set_meta("foot", best["bare"])
 		if not (t.get("engraving", {}) as Dictionary).is_empty():
 			_engrave(node, t["engraving"])
+		if written:
+			_write(node, t["writing"], float(best["turn"]), look.get("ink", Color(0.1, 0.1, 0.12)), _rng(seed, "card writing"))
 		node.rotation.y = float(best["turn"])
 		var off := _turned(mid, float(best["turn"]))
 		node.position = Vector3(at.x - off.x, face + (Tables.LAYER_FLOOR + 0.0001 if mat.has_point(at) else 0.0), at.y - off.y)

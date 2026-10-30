@@ -740,7 +740,8 @@ func _build_plan() -> void:
 			var back := DeskScript.TURN * PARK_BACK + _travel(PARK.distance_to(_action_point(a, true)))
 			if not held.has("turn_at"):
 				turn_at = maxf(start - back - 0.1, prev_end + PARK_CLEAR)
-			var late := maxf(turn_at + DeskScript.TURN + 0.05, turn_at + back) - start
+			# ...and what waits a while once the page is over (a letter's drawing, for the camera: its `settle`)
+			var late := maxf(turn_at + DeskScript.TURN + 0.05 + float(a.get("settle", 0.0)), turn_at + back) - start
 			if late > 0.0:
 				start += late
 				end += late
@@ -1512,8 +1513,10 @@ func _tick_camera(delta: float) -> void:
 	# the whole pad, its binding too, with the desk round it - and as a page turns, its head, where
 	# the page goes over and round
 	var wide_aim := _world(Vector2(PW * 0.5, PH * (TURN_AIM if bool(f["turn"]) else 0.45)), 0.0)
-	# local: the line being written, held a little below the frame's middle, never off the pad
-	var local_aim := _world(Vector2(clampf(line.x, PW * 0.35, PW * 0.65), clampf(line.y + 60.0, PH * 0.3, PH * 0.72)), 0.0)
+	# local: the line being written, held a little below the frame's middle, never off the pad (as high as the framing's
+	# `top` of it allows, 0.3 for none)
+	var local_aim := _world(Vector2(clampf(line.x, PW * 0.35, PW * 0.65), clampf(line.y + 60.0, PH * float(f.get("top", 0.3)),
+		PH * 0.72)), 0.0)
 	var aim := wide_aim.lerp(local_aim, k)
 	var page := _pages().x
 	var wide: Dictionary = _wide_frame()

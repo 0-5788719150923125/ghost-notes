@@ -85,7 +85,10 @@ def _scene(rest=None):
     return a, {0: (0.1, 0.5), 1: (0.9, 1.2)}
 
 
-GROUP = [{"text": "end", "punct": ","}, {"text": "sweet", "punct": "."}]
+# A comma with its whole rest: its sentence goes on past SHORT_TAIL words (a shorter tail rests a share of
+# one, test_pauses.py) - the scene's edges are its first two words'.
+GROUP = [{"text": "end", "punct": ","}, {"text": "sweet", "punct": ""}, {"text": "and", "punct": ""},
+         {"text": "slow", "punct": "."}]
 
 
 def _rms_db(a, b, t0: float, t1: float) -> float:
@@ -165,7 +168,9 @@ def test_hold_scales_the_final_rime_only():
     toks = [
         _tok("wait", "", ["W", "EY1", "T"]),
         _tok("end", ",", ["EH1", "N", "D"]),
-        _tok("sweet", ".", ["S", "W", "IY1", "T"]),
+        _tok("sweet", "", ["S", "W", "IY1", "T"]),
+        _tok("so", "", ["S", "OW1"]),
+        _tok("slow", ".", ["S", "L", "OW1"]),
     ]
     _res, sess, pmap, _pcm = _render(toks, PAUSED)
     fed = sess.fed[0]
@@ -192,7 +197,8 @@ def test_hold_meets_stress_by_multiplying():
     """A leaned-on word before a comma: its stressed vowel gets both."""
     from backends.piper import EMPHASIS, TRAIL_STRETCH
 
-    toks = [_tok("end", ",", ["EH1", "N", "D"], emph=1), _tok("now", ".", ["N", "AW1"])]
+    toks = [_tok("end", ",", ["EH1", "N", "D"], emph=1), _tok("now", "", ["N", "AW1"]),
+            _tok("so", "", ["S", "OW1"]), _tok("slow", ".", ["S", "L", "OW1"])]
     _res, sess, pmap, _pcm = _render(toks, PAUSED)
     fed = sess.fed[0]
     v = fed["ids"].index(pmap.get("ɛ")[0])

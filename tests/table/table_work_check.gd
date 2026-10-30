@@ -57,6 +57,13 @@ extends SceneTree
 ##   itself, next/table_physics.md).
 ## - MADE SAFE: an act with no beat, a law ghost does not know, a track naming nothing on the table are left
 ##   out and said; a thing holding a flame is never moved whole.
+## - PUT BACK AS IT WAS (the-quiet-crucible 841899: a cork put back in its jar "sideways"; a lid set back on its crock "moving
+##   about wildly on top of the pot, never stopping"; a pestle put back in its mortar "clipping through the side of the
+##   mortar, completely"): a lid laid aside on its side and carried home goes back on upright, and rests there, never
+##   swaying; a pestle laid aside, its mortar carried 20 cm, and the pestle carried home goes into the mortar where it
+##   is; and a round mortar set down by a low tray that comes under its box's corner but not under its foot stands on the
+##   table. The controls: a lid carried to a place with no turn keeps its side; a lid left held over its crock sways; the
+##   mortar set down over the tray stands on it.
 
 var _fails := 0
 
@@ -74,7 +81,7 @@ func _ok(cond: bool, what: String) -> void:
 func _run() -> void:
 	await process_frame
 	for check in [_formula, _clock, _clock_law, _grind, _at_the_spot, _seated, _set_down, _carry, _through_keys, _copies, _cued,
-			_live_words, _safe, _write, _held_up, _loose_size]:
+			_live_words, _safe, _write, _held_up, _loose_size, _put_back]:
 		var done: Variant = (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("table_work_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -960,4 +967,91 @@ func _loose_size() -> bool:
 	var kept := (m._work.acts as Array).map(func(a: Dictionary) -> String: return String(a["name"]))
 	_ok(kept.has("bloom"), "the control: a `grow` on a part that is not loose was not kept: %s" % said)
 	m._root3.free()
+	return true
+
+
+const BACK_SPEC := {"things": [
+	{"name": "crock", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [4, 0], [4.1, 6], [3.4, 6.4], [3.3, 6], [3.55, 0.6], [0, 0.6]], "material": "clay"},
+		{"name": "lid", "shape": "lathe", "profile": [[0, 0], [3.2, 0], [3.3, 0.4], [3.9, 0.45], [3.9, 0.9], [1, 1], [0.75, 1.5], [0, 1.7]],
+			"material": "wood", "at": [0, 6.4, 0], "joint": {"kind": "free"}}]},
+	{"name": "mortar", "parts": [
+		{"shape": "lathe", "profile": [[0, 0], [5.2, 0], [5.4, 0.6], [4.8, 1.2], [5, 6.4], [6.3, 7.6], [6.6, 8.4], [5.8, 8.4], [4.6, 7.3], [4, 4], [2.6, 2], [0, 1.8]],
+			"material": "stone", "smooth": true},
+		{"name": "pestle", "shape": "lathe", "profile": [[0, 0], [1.3, 0], [1.55, 0.8], [1.2, 2.4], [0.7, 3.8], [0.75, 10.8], [1.05, 11.6], [0.8, 12.3], [0, 12.5]],
+			"material": "stone", "smooth": true, "at": [-1.4, 2.6, 0], "turn": [0, 0, -50], "joint": {"kind": "free"}}]},
+	{"name": "tray", "parts": [{"shape": "box", "size": [6, 1.2, 14], "material": "wood"}]}],
+	"materials": {"clay": {"kind": "ceramic", "color": "#8a6a4a"}, "wood": {"kind": "wood", "color": "#5a3a22"},
+		"stone": {"kind": "stone", "color": "#8a8580"}}}
+
+
+func _put_back() -> bool:
+	# THE LID: laid aside on its side (2-4 s), carried home (6-8 s) - or, the controls, carried to its home point and left
+	# held there over its crock
+	for how in ["home", "to", "held"]:
+		var m := _medium()
+		_stand(m, BACK_SPEC, "crock", Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y - 0.1))
+		var back: Dictionary = {"thing": "crock", "part": "lid", "law": "carry", "lift": 4}
+		if how != "home":
+			back["to"] = [0, 9.5 if how == "held" else 6.4, -10]
+		if how == "held":
+			back["turn"] = [0, 0, 0]
+		if how != "held":
+			back["down"] = true
+		m._work.build({"acts": [
+			{"name": "off", "beat": 1, "length": 2, "tracks": [{"thing": "crock", "part": "lid", "law": "carry", "to": [12, 0, -10], "turn": [0, 0, 90], "lift": 4, "down": true}]},
+			{"name": "on", "beat": 1, "length": 2, "tracks": [back]}]}, 1)
+		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 4.0}, {"i": 1, "t0": 6.0, "t1": 8.0}]
+		m._work._timelines()
+		var wi := int((m._work._part_of(0, "lid") as Dictionary)["wi"])
+		var up: Vector3 = (m._work._work_world(wi, 9.0) as Transform3D).basis.y.normalized()
+		var most := 0.0
+		var last := Vector3.INF
+		var t := 9.0
+		while t < 13.0:
+			m._work.tick(t)
+			var p: Vector3 = (m._work._work_world(wi, t) as Transform3D).origin
+			if last != Vector3.INF:
+				most = maxf(most, p.distance_to(last))
+			last = p
+			t += 0.05
+		match how:
+			"home":
+				_ok(up.y > 0.99 and most < 1e-6, "the lid carried home stands with its up %s, and moves %.3f mm a tick on its crock" % [str(up.snapped(Vector3.ONE * 0.01)), most * 1000.0])
+			"to":
+				_ok(up.y < 0.2, "the control: the lid carried to a place with no turn stands upright: %s" % str(up.snapped(Vector3.ONE * 0.01)))
+			"held":
+				_ok(most > 1e-5, "the control: the lid held over its crock never sways")
+		m._root3.free()
+	# THE PESTLE: laid aside (2-4 s), its mortar carried 20 cm (5-7 s), the pestle carried home (8-10 s)
+	var p := _medium()
+	_stand(p, BACK_SPEC, "mortar", Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y - 0.1))
+	p._work.build({"acts": [
+		{"name": "aside", "beat": 1, "length": 2, "tracks": [{"thing": "mortar", "part": "pestle", "law": "carry", "to": [-15, 0, -10], "turn": [0, 0, 90], "lift": 4, "down": true}]},
+		{"name": "move", "beat": 1, "length": 2, "tracks": [{"thing": "mortar", "law": "carry", "to": [20, 0, -10], "lift": 6, "down": true}]},
+		{"name": "home", "beat": 1, "length": 2, "tracks": [{"thing": "mortar", "part": "pestle", "law": "carry", "lift": 6}]}]}, 1)
+	p._work.runs = [{"i": 0, "t0": 2.0, "t1": 4.0}, {"i": 1, "t0": 5.0, "t1": 7.0}, {"i": 2, "t0": 8.0, "t1": 10.0}]
+	p._work._timelines()
+	var pw := int((p._work._part_of(0, "pestle") as Dictionary)["wi"])
+	var want: Transform3D = p._work._thing_world(0, 11.0) * p._work._world_rest_thing(0).affine_inverse() * (p._work._rest["w%d:pose" % pw] as Transform3D)
+	var got: Transform3D = p._work._work_world(pw, 11.0)
+	var built: Transform3D = p._work._rest["w%d:pose" % pw]
+	_ok(got.origin.distance_to(want.origin) < 0.002 and got.basis.y.angle_to(want.basis.y) < 0.02 and want.origin.distance_to(built.origin) > 0.15,
+		"the pestle carried home stands %.1f cm from its place in its mortar (%.1f cm from where it was built), turned %.1f degrees off" % [
+		got.origin.distance_to(want.origin) * 100.0, got.origin.distance_to(built.origin) * 100.0, rad_to_deg(got.basis.y.angle_to(want.basis.y))])
+	p._root3.free()
+	# THE MORTAR SET DOWN by the tray, its box's corner over it - and, the control, over it
+	for over in [false, true]:
+		var q := _medium()
+		_stand(q, BACK_SPEC, "mortar", Vector3(Tables.ORIGIN.x - 0.3, 0.0, Tables.ORIGIN.y - 0.1))
+		_stand(q, BACK_SPEC, "tray", Vector3(Tables.ORIGIN.x + (0.06 if over else 0.086), 0.0, Tables.ORIGIN.y - 0.1))
+		q._work.build({"acts": [{"name": "down", "beat": 1, "length": 2, "tracks": [{"thing": "mortar", "law": "carry", "to": [0, 0, -10], "lift": 6, "down": true}]}]}, 1)
+		q._work.runs = [{"i": 0, "t0": 2.0, "t1": 4.0}]
+		q._work._timelines()
+		var y := (q._work._thing_world(0, 5.0) as Transform3D).origin.y
+		if over:
+			_ok(y > 0.010, "the control: the mortar set down over the tray stands %.1f mm up, not on it" % (y * 1000.0))
+		else:
+			_ok(y < 0.002, "the mortar set down by the tray, its box's corner over it, stands %.1f mm up - on the tray's edge, not its own foot" % (y * 1000.0))
+		q._root3.free()
 	return true
