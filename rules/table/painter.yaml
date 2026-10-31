@@ -23,22 +23,14 @@ card:
   - 'THE PICTURE: the illustration for {{name}} in the {{deck_noun}} "{{deck_name}}": {{art}}'
   - ""
   - include: style
-  - when: "!written"
-    say: >-
-          FORMAT: PORTRAIT 2:3 (1024x1536). The card's picture only, composed for a tall card and
-          running to every edge: no border, no frame, no panel, no title, no numbers, no letters or
-          writing of any kind - {{^borderless}}the frame and the card's name are printed around it{{/borderless}}{{#borderless}}the
-          card's name is printed over it{{/borderless}} separately. Keep the important things away from the
-          outer tenth on each side.
-  # A WRITTEN CARD (CardTable.FRAMES `written`): its writing is its face, printed by the engine in a hand; the
-  # picture is the small one beside it (CardTable.SKETCHES)
-  - when: written
-    say: >-
-          FORMAT: {{#band}}LANDSCAPE 3:2 (1536x1024){{/band}}{{^band}}SQUARE (1024x1024){{/band}}. This is the
-          small picture on a WRITTEN CARD - {{sketch}} - whose writing is set beside it separately: one clear
-          subject, simply drawn, on a plain ground of the card's own stock, running to every edge. No
-          border, no frame, no letters or writing of any kind.
-  - when: ["!borderless", "!written"]
+  # (A WRITTEN CARD, CardTable.FRAMES `written`, is never painted: its writing is all its face is.)
+  - >-
+      FORMAT: PORTRAIT 2:3 (1024x1536). The card's picture only, composed for a tall card and
+      running to every edge: no border, no frame, no panel, no title, no numbers, no letters or
+      writing of any kind - {{^borderless}}the frame and the card's name are printed around it{{/borderless}}{{#borderless}}the
+      card's name is printed over it{{/borderless}} separately. Keep the important things away from the
+      outer tenth on each side.
+  - when: "!borderless"
     say: >-
           The engine cuts the picture to the card's window ({{window}}): paint the WHOLE rectangle, the
           scene running into every corner - never an arch, oval or panel of your own on a white or blank

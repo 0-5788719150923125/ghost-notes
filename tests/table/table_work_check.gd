@@ -220,10 +220,12 @@ func _grind() -> bool:
 		return true
 	var times: Dictionary = m._work.rehearse(10.0)
 	var g: Array = times["grind"]
-	# THE TIP IS ON THE BOWL'S SURFACE, past the moment the hand brings it there
+	# THE TIP IS ON THE BOWL'S SURFACE, past the moment the hand brings it there - as the law puts it (`_planned`: the physics
+	# then keeps the pestle's head out of the bowl's wall, physics_check's to hold)
 	var tm: TriangleMesh = m._work._mesh_of(m._work._thing_named("mortar"))
 	var pw: int = m._work._work_of(m._work._thing_named("pestle"), "pestle")
 	var worst := 0.0
+	m._work._planned = true
 	for i in 12:
 		var t := float(g[0]) + TableWork.BLEND_IN + 0.1 + float(i) * 0.4
 		m._work.tick(t)
@@ -233,6 +235,7 @@ func _grind() -> bool:
 			worst = INF
 			break
 		worst = maxf(worst, absf(tip.y - (hit["position"] as Vector3).y - 0.003))
+	m._work._planned = false
 	_ok(worst < 0.0006, "the pestle's tip leaves the bowl's surface by %s mm while it grinds" % str(snappedf(worst * 1000.0, 0.01)))
 	var ok_check: Dictionary = m._work.check("grind")
 	_ok(int(ok_check["through"]) == 0, "grinding pressed into the bowl is said to pass through something:\n%s" % String(ok_check["text"]))
@@ -330,8 +333,10 @@ func _bench(laid: bool) -> TableMedium:
 			"tip": {"point": "tip", "around": "mortar.floor", "radius": 1.5, "period": 1.5, "press": "mortar", "gap": 0.3},
 			"grip": {"point": "grip", "around": "mortar.floor", "lift": 13, "radius": 3.5, "period": 1.5}}]}]
 	if laid:
-		acts.append({"name": "lay-pestle", "beat": "intro", "length": 2, "tracks": [{"thing": "mortar", "part": "pestle", "law": "carry",
-			"to": [12, 1, 6], "turn": [0, 0, 90], "lift": 5}]})
+		# ...lifted up out of the bowl first, then carried over and laid down (carried straight off, it went through the rim)
+		acts.append({"name": "lay-pestle", "beat": "intro", "length": 3, "tracks": [
+			{"thing": "mortar", "part": "pestle", "law": "path", "keys": [{"at": 0.0}, {"at": 0.35, "by": [0, 10, 0]}]},
+			{"thing": "mortar", "part": "pestle", "law": "carry", "to": [12, 1, 6], "turn": [0, 0, 90], "lift": 3, "between": [0.36, 1.0]}]})
 	acts.append({"name": "mortar-home", "beat": "intro", "length": 3, "tracks": [{"thing": "mortar", "law": "carry", "lift": 4}]})
 	m._work.build({"acts": acts}, 0)
 	return m
@@ -362,6 +367,10 @@ func _at_the_spot() -> bool:
 	var tip_at: Vector3 = ((m._work.works[pw] as Dictionary)["w"]["points"] as Dictionary)["tip"]
 	var g: Array = times["grind"]
 	var worst := 0.0
+	# ...THE MORTAR HOLDING STILL while it is ground in, never shoved about by its pestle or what it grinds (841899: the mortar
+	# slid across the table, "even when the video is paused")
+	var still_at := Vector3.INF
+	var slid := 0.0
 	for i in 10:
 		var t := float(g[0]) + TableWork.BLEND_IN + 0.1 + float(i) * 0.45
 		m._work.tick(t)
@@ -369,7 +378,11 @@ func _at_the_spot() -> bool:
 		worst = maxf(worst, Vector2(tip.x - mortar.position.x, tip.z - mortar.position.z).length())
 		# ...and on the bowl's floor, 1.2 cm up, its gap of 3 mm over it
 		worst = maxf(worst, absf(tip.y - 0.012 - 0.003) * 10.0)
+		if still_at == Vector3.INF:
+			still_at = mortar.position
+		slid = maxf(slid, mortar.position.distance_to(still_at))
 	_ok(worst < 0.03, "the pestle grinding round the mortar's floor strays %.1f cm from the moved bowl" % (worst * 100.0))
+	_ok(slid < 0.001, "the mortar moves %.1f mm while it is ground in" % (slid * 1000.0))
 	var c: Dictionary = m._work.check("grind")
 	_ok(int(c["through"]) == 0, "grinding in the moved mortar passes through something:\n%s" % String(c["text"]))
 	# BROUGHT TO WHERE IT GRINDS WITHOUT A JUMP (181083: its pestle leapt 6 cm up in a frame as the grind began - the
@@ -399,7 +412,8 @@ func _at_the_spot() -> bool:
 	# A PESTLE LEFT IN ITS MORTAR GOES HOME WITH IT
 	m._work.tick(float((times["mortar-home"] as Array)[1]) + 0.1)
 	var tip_home: Vector3 = m._work._world_of((m._work.works[pw] as Dictionary)["node"]) * tip_at
-	_ok(Vector2(tip_home.x - mortar.position.x, tip_home.z - mortar.position.z).length() < 0.03, "a pestle left in its mortar stayed behind when the mortar was carried home: %.0f cm off" % (Vector2(tip_home.x - mortar.position.x, tip_home.z - mortar.position.z).length() * 100.0))
+	# (in its bowl, 5 cm across at its floor: let go after the grind, it leans in it, its tip 3 cm from the middle)
+	_ok(Vector2(tip_home.x - mortar.position.x, tip_home.z - mortar.position.z).length() < 0.05, "a pestle left in its mortar stayed behind when the mortar was carried home: %.0f cm off" % (Vector2(tip_home.x - mortar.position.x, tip_home.z - mortar.position.z).length() * 100.0))
 	m._root3.free()
 	# ...and the control: one laid down on the table stays where it was laid
 	var l := _bench(true)
@@ -409,7 +423,8 @@ func _at_the_spot() -> bool:
 	var laid_at: Vector3 = l._work._world_of((l._work.works[lw] as Dictionary)["node"]).origin
 	l._work.tick(float((lt["mortar-home"] as Array)[1]) + 0.1)
 	var after: Vector3 = l._work._world_of((l._work.works[lw] as Dictionary)["node"]).origin
-	_ok(after.distance_to(laid_at) < 0.001, "the control: a pestle laid on the table went with the mortar: %.1f cm" % (after.distance_to(laid_at) * 100.0))
+	# (a few millimeters: let go, it settles where it was laid - [RigidParts]; carried home with the mortar it would go 29 cm)
+	_ok(after.distance_to(laid_at) < 0.005, "the control: a pestle laid on the table went with the mortar: %.1f cm" % (after.distance_to(laid_at) * 100.0))
 	l._root3.free()
 	return true
 
@@ -654,6 +669,9 @@ func _live_words() -> bool:
 	var played := {}
 	for mode in ["known", "arriving", "guessed"]:
 		var m := _reading_bench()
+		# ...the plan as its words arrive, as the acts move what they move (`_planned`): a contact the physics meets is
+		# physics_check's
+		m._work._planned = true
 		var f := ReadingFollower.new()
 		f.reset(spoken)
 		var heard: Array = []
@@ -759,6 +777,8 @@ func _copies() -> bool:
 	# played in turn: the stack risen whole, then the top copy again on its own
 	m._work.runs = [{"i": 0, "t0": 10.0, "t1": 12.0}, {"i": 1, "t0": 20.0, "t1": 22.0}, {"i": 3, "t0": 30.0, "t1": 32.0}]
 	m._work._timelines()
+	# ...as the acts move them (`_planned`: let go in the air, the physics lets them fall - [RigidParts], physics_check's to hold)
+	m._work._planned = true
 	var rest: Array = members.map(func(wi: int) -> Vector3: return (m._work._rest["w%d:pose" % wi] as Transform3D).origin)
 	m._work.tick(15.0)
 	var risen := true
@@ -770,6 +790,7 @@ func _copies() -> bool:
 	var y_top: float = m._work._world_of((m._work.works[members[3]] as Dictionary)["node"]).origin.y - (rest[3] as Vector3).y
 	var y_low: float = m._work._world_of((m._work.works[members[0]] as Dictionary)["node"]).origin.y - (rest[0] as Vector3).y
 	_ok(absf(y_top - 0.08) < 0.001 and absf(y_low - 0.04) < 0.001, "the top copy alone did not rise from where the stack left it: top %.3f, bottom %.3f" % [y_top, y_low])
+	m._work._planned = false
 	var glows := members.map(func(wi: int) -> float: return float(m._work.value("w%d:glow" % wi, 40.0)))
 	_ok(glows.all(func(v: float) -> bool: return absf(v - 1.0) < 1e-4), "a glow on the part did not glow every copy: %s" % str(glows))
 	m._root3.free()
@@ -917,8 +938,9 @@ func _write() -> bool:
 
 ## A THING HELD UP BETWEEN MOVES IS NEVER STILL (the-quiet-crucible 119515: "when the actor is holding the pestle in the
 ## air, it is perfectly still: but you would expect it to be gently bobbing/moving, since a hand cannot remain perfectly
-## still"): a jar carried up and left in the air sways as a hand holds it, a few millimeters from where it was sent. The
-## control: carried onto the table, it lies still.
+## still"): a jar carried up and left in the air until its next move sways as a hand holds it, a few millimeters from where
+## it was sent - in the bake too, now that a whole thing is a body ([method TablePhysics._held_aloft]; after its last move,
+## it is let go). The control: carried onto the table, it lies still.
 func _held_up() -> bool:
 	var out := {}
 	for where in ["air", "table"]:
@@ -927,8 +949,9 @@ func _held_up() -> bool:
 			"materials": {"glass": {"kind": "ceramic", "color": "#5a7a6a"}}}
 		var node: Node3D = _stand(m, spec, "jar", Vector3(0.3, 0.0, -0.2))["node"]
 		m._work.build({"acts": [{"name": "up", "beat": 1, "length": 3, "tracks": [{"thing": "jar", "law": "carry",
-			"to": [0, 8 if where == "air" else 0, 5], "lift": 6}]}]}, 1)
-		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 5.0}]
+			"to": [0, 8 if where == "air" else 0, 5], "lift": 6}]},
+			{"name": "down", "beat": 1, "length": 3, "tracks": [{"thing": "jar", "law": "carry", "lift": 2, "down": true}]}]}, 1)
+		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 5.0}, {"i": 1, "t0": 14.0, "t1": 17.0}]
 		m._work._timelines()
 		var sent := Vector3(Tables.ORIGIN.x, 0.08 if where == "air" else 0.0, Tables.ORIGIN.y + 0.05)
 		var most := 0.0

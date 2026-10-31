@@ -68,10 +68,15 @@ static func _table() -> Dictionary:
 ## The work: card 1's jar poured into the brew, card 2's herbs ground, the close's brew lit.
 static func _acts() -> Dictionary:
 	return {"acts": [
+		# ...up, over the cauldron's rim and down beside it, never through it, and set down on the table after its pour: carried
+		# in a low arc its foot had gone through the rim on the way, and left in the air after the pour it was let go over the
+		# brew - now that a thing an act moves is solid, it was stopped at the rim and fell into the brew
 		{"name": "fetch-jar", "beat": 1, "about": "the jar is carried to the cauldron", "length": 3,
-			"tracks": [{"thing": "jar", "law": "carry", "to": "cauldron.mouth", "by": [14, 6, 0], "lift": 8}]},
+			"tracks": [{"thing": "jar", "law": "path", "keys": [{"at": 0.0}, {"at": 0.35, "by": [0, 22, 0]}, {"at": 0.8, "by": [32, 22, -10]},
+				{"at": 1.0, "by": [32, 15, -10]}]}]},
 		{"name": "pour-ink", "beat": 1, "about": "the ink is poured into the brew", "length": 4,
-			"tracks": [{"thing": "jar", "law": "path", "keys": [{"at": 0.1}, {"at": 0.35, "turn": [0, 0, 110]}, {"at": 0.75, "turn": [0, 0, 110]}, {"at": 0.9}]},
+			"tracks": [{"thing": "jar", "law": "path", "keys": [{"at": 0.1}, {"at": 0.35, "turn": [0, 0, 110]}, {"at": 0.75, "turn": [0, 0, 110]}, {"at": 0.85}]},
+				{"thing": "jar", "law": "carry", "to": [-8, 0, -10], "lift": 8, "down": true, "between": [0.86, 1.0]},
 				{"thing": "cauldron", "part": "brew", "law": "to", "value": "#5a2a6a", "between": [0.3, 0.9]}],
 			"cues": [{"at": 0.5, "where": "cauldron.mouth", "burst": {"look": "smoke", "count": 12, "colors": ["#c0a8d8"]}}]},
 		{"name": "grind", "beat": 2, "about": "the herbs are ground", "length": "under",

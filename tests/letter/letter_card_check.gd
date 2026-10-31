@@ -292,13 +292,13 @@ func _steps() -> void:
 		"then Generate starts the tags - here refused, read-only, and said on the Letter card's row (%s)" % (r["state"] as Label).text)
 	# A JOB LANDED: its ✓, and the note's tags replaced
 	step._errors.clear()
-	AgentJobs._ended["text-letter-card-check"] = {"ok": true, "text": "{\"tags\": [\"a letter\", \"a cross\", \"a dot\"]}"}
+	AgentJobs._ended["text-letter-card-check"] = {"ok": true, "text": "{\"tags\": [\"handwriting\", \"a cross\", \"a dot\"]}"}
 	step._jobs[feed.folder()] = {"id": "text-letter-card-check", "feed": feed, "stamp": feed.stamp()}
 	card._refresh()
 	_check(card._added.busy(feed) and card._gen_btn.disabled and (r["redo"] as Button).disabled,
 		"while its job runs, Generate and its ⟳ wait")
 	_tick_steps(card, up)
-	_check((r["state"] as Label).text == "✓ 3 tags: a letter, a cross, a dot" and ed._doc.field("tags") == "a letter, a cross, a dot"
+	_check((r["state"] as Label).text == "✓ 3 tags: handwriting, a cross, a dot" and ed._doc.field("tags") == "handwriting, a cross, a dot"
 		and not card._gen_btn.disabled, "landed: its ✓ on the Letter card, and the note's tags replaced (%s)" % (r["state"] as Label).text)
 	# STOP stops a job writing them
 	step._jobs[feed.folder()] = {"id": "text-letter-card-check-2", "feed": feed, "stamp": feed.stamp()}

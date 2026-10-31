@@ -193,7 +193,7 @@ reply: |-
       "deck_style": "a paragraph an illustrator paints every card from",
       "palette": ["#rrggbb", "four to six colors"],
       "card_back": "the back design, symmetric under a half turn when reversals are read",
-      "frame": {"style": "one of: {{frame_styles}}", "window": "one of: {{windows}}", "corners": "one of: {{corners}}", "ornament": "one of: {{ornaments}}", "stock": "#rrggbb card stock", "ink": "#rrggbb border and lettering", "accent": "#rrggbb", "hand": "a written card's: one of {{hands}}", "ruling": "a written card's: one of {{rulings}}", "sketch": "a written card's: one of {{sketches}}"},
+      "frame": {"style": "one of: {{frame_styles}}", "window": "one of: {{windows}}", "corners": "one of: {{corners}}", "ornament": "one of: {{ornaments}}", "stock": "#rrggbb card stock", "ink": "#rrggbb border and lettering", "accent": "#rrggbb", "hand": "a written card's: one of {{hands}}", "ruling": "a written card's: one of {{rulings}}"},
       "page": "one of: {{pages}}",
       "title_face": "one of: {{faces}}",
       "foil": 0.6,

@@ -80,8 +80,12 @@ extends SceneTree
 ## - EACH EPISODE'S TAGS (2026-10-18, the user: "allow the 'Generate' button to override/rewrite those
 ##   tags ... it would not be okay to tightly-couple the two cards"): the writer's answer is cleaned (no
 ##   hashtag sign, no comma inside), each tag once, a bare list taken too - and no JSON, no list or too few
-##   usable tags are not kept. Its prompt renders whole with the show, the episode's title, description and
-##   words, the note's tags and YouTube's limit, and says nothing of what an episode does not have. The
+##   usable tags are not kept. NOTHING THE TITLE OR DESCRIPTION SAYS ALREADY (2026-10-30: "keeps choosing
+##   keywords that already exist in the title and description"): a tag whose every word is in the show's
+##   name, the title or the description is left out, whatever its case or order, and said on the row - one
+##   with a word of its own is kept (the control), and an answer left with too few says why. Its prompt
+##   renders whole with the show, the episode's title, description and words, the note's tags, YouTube's
+##   limit and the rule to leave their words out, and says nothing of what an episode does not have. The
 ##   step ([YouTubeTags], an [EpisodeStep]) is one only while the card's box is ticked; it waits for the
 ##   episode's words (neither Generate nor ⟳ starts it before); started in a read-only gate it says why
 ##   it cannot; a job that ended is kept in the episode's folder with the fingerprint of the words it was
@@ -125,7 +129,20 @@ extends SceneTree
 ##   card's painter a job (here refused, read-only, said); the painter is told the words exactly, or no
 ##   text at all, the pictures' look when it follows them, and the frame's shape first; the painting
 ##   landed is cut about its middle to 1280x720 (720x1280 for a portrait video), kept with the fingerprint
-##   of the words, said on the card, and goes up.
+##   of the words, said on the card, and goes up. MATCHED TO THE VIDEO'S PICTURES (2026-10-30: "akin to the
+##   full-screen images' 'match earlier' option"): ticked, the writer is told to design one more of them, and
+##   the painter, handed none by name, is handed a few spread through them and told to paint one more frame
+##   of the video; cleared, the writer is shown none and the painter handed none (the control); with no
+##   pictures to match the card says so; and a note read as it is written hands the step its painted
+##   pictures, in its order (one its words call for that is not painted, none - the control). EVERY ONE
+##   PAINTED IS KEPT (2026-10-30): painted again,
+##   the writer is shown the briefs and words already kept and told to make another (the first time, none -
+##   the control); the next painting has files of its own, is kept beside the first and goes up; the card
+##   steps between them (‹ chooses the first, which goes up again; nothing before the first - the control);
+##   ✕ pressed once only asks, pressed again deletes the one shown with its painting; the last deleted
+##   leaves none; and a record kept before there were versions is one, its files named in it. A CLICK ON
+##   IT OPENS IT FULL SIZE: the window holds the one chosen, its words and brief, and which version it is,
+##   ‹ there choosing the one before; with none left it holds nothing (the control).
 ## - THE TITLE SCREEN'S MOMENT and ffmpeg's arguments for taking a frame.
 
 ## By path, not by class name: a new class is unknown to `--script` runs until the editor rescans.
@@ -534,8 +551,8 @@ func _card() -> bool:
 	_ok(cap == {"upload": false, "title": "%title%: %episode%", "privacy": "private", "category": "22", "playlist": "",
 		"playlist_title": "", "channel": "", "channel_name": "", "write_tags": false, "description": "",
 		"thumbnail": "youtube", "thumbnail_writer": "claude", "thumbnail_writer_model": "", "thumbnail_writer_effort": "",
-		"thumbnail_painter": "codex", "thumbnail_painter_model": "", "thumbnail_painter_effort": ""},
-		"a new card uploads nothing, privately, as People & Blogs, titled by the template, to no channel yet, with YouTube's thumbnail (%s)" % str(cap))
+		"thumbnail_painter": "codex", "thumbnail_painter_model": "", "thumbnail_painter_effort": "", "thumbnail_match": true},
+		"a new card uploads nothing, privately, as People & Blogs, titled by the template, to no channel yet, with YouTube's thumbnail - matched to the video's pictures once painted (%s)" % str(cap))
 	var names = _names({"title": "Truthful Tarot", "episode": "The Tower", "author": "Pen", "book": "Major Arcana"})
 	_ok(not names.shows_field("title") and not names.shows_field("episode") and not names.shows_field("author")
 		and not names.shows_field("book"), "a Voice lab's Script card shows no Title, Episode, Author or Book of its own")
@@ -548,7 +565,7 @@ func _card() -> bool:
 		"playlist": "PL1", "playlist_title": "Readings", "channel": "UC-x", "channel_name": "@x", "write_tags": true,
 		"description": "Line one.\n\nLine two.", "thumbnail": "painted", "thumbnail_writer": "claude",
 		"thumbnail_writer_model": "m1", "thumbnail_writer_effort": "high", "thumbnail_painter": "grok",
-		"thumbnail_painter_model": "", "thumbnail_painter_effort": ""}
+		"thumbnail_painter_model": "", "thumbnail_painter_effort": "", "thumbnail_match": false}
 	card.apply(block)
 	_ok(card.capture() == block, "its block round-trips, the description's lines and all (%s)" % str(card.capture()))
 	card.apply(block.merged({"thumbnail": "youtube"}, true))
@@ -752,19 +769,19 @@ func _proof_steps() -> bool:
 	_ok(_tag_fields(ed._youtube) == 1 and Array(proof._tags_field.get_tags()) == ["math"]
 		and ed.upload_meta("").get("tags") == ["math"],
 		"the YouTube card shows the note's tags as one list, and the upload takes it alone - the framer's are not added unseen")
-	AgentJobs._ended["text-youtube-check-proof"] = {"ok": true, "text": "{\"tags\": [\"prime numbers\", \"two\", \"proof\"]}"}
+	AgentJobs._ended["text-youtube-check-proof"] = {"ok": true, "text": "{\"tags\": [\"prime numbers\", \"divisors\", \"proof\"]}"}
 	step._jobs[proof._feed.folder()] = {"id": "text-youtube-check-proof", "feed": proof._feed, "stamp": proof._feed.stamp()}
 	step.tick()
 	proof._refresh()
 	var r: Dictionary = proof._added_rows.row(step.key)
-	_ok((r["state"] as Label).text == "✓ 3 tags: prime numbers, two, proof" and not (r["redo"] as Button).disabled,
+	_ok((r["state"] as Label).text == "✓ 3 tags: prime numbers, divisors, proof" and not (r["redo"] as Button).disabled,
 		"made: its ✓, its tags, and its ⟳ (%s)" % (r["state"] as Label).text)
-	_ok(ed._doc.field("tags") == "prime numbers, two, proof" and Array(proof._tags_field.get_tags()) == ["prime numbers", "two", "proof"]
-		and ed.upload_meta("").get("tags") == ["prime numbers", "two", "proof"],
+	_ok(ed._doc.field("tags") == "prime numbers, divisors, proof" and Array(proof._tags_field.get_tags()) == ["prime numbers", "divisors", "proof"]
+		and ed.upload_meta("").get("tags") == ["prime numbers", "divisors", "proof"],
 		"landed, they replace the note's tags: the one list on the card, and what goes up (%s)" % ed._doc.field("tags"))
 	ed._youtube._write_tags.button_pressed = false
 	proof._refresh()
-	_ok(not proof._added_rows.has_row(step.key) and ed.upload_meta("").get("tags") == ["prime numbers", "two", "proof"],
+	_ok(not proof._added_rows.has_row(step.key) and ed.upload_meta("").get("tags") == ["prime numbers", "divisors", "proof"],
 		"box cleared: the row goes, and the list stays as it was written")
 	# A NOTE WITH NO TAGS TAKES THE FRAMER'S, once
 	ed._doc._fields.erase("tags")
@@ -848,20 +865,26 @@ func _note_steps() -> bool:
 	_ok(step.state(up._feed) == "failed" and not up._added.busy(up._feed) and (r["state"] as Label).text.contains("read-only"),
 		"one that goes up starts it - here refused, read-only, and said on its row (%s)" % (r["state"] as Label).text)
 	step._errors.clear()
-	AgentJobs._ended["text-youtube-check-note"] = {"ok": true, "text": "{\"tags\": [\"quick brown fox\", \"lazy dog\", \"reading\"]}"}
+	AgentJobs._ended["text-youtube-check-note"] = {"ok": true, "text": "{\"tags\": [\"quick brown fox\", \"lazy dog\", \"fable\"]}"}
 	step._jobs[folder] = {"id": "text-youtube-check-note", "feed": up._feed, "stamp": up._feed.stamp()}
 	_ok(up._added.busy(up._feed), "while its job runs, an export waits for it")
 	up.refresh()
 	r = up._added_rows.row(step.key)
-	_ok(not up._added.busy(up._feed) and (r["state"] as Label).text == "✓ 3 tags: quick brown fox, lazy dog, reading" and not (r["redo"] as Button).disabled,
+	_ok(not up._added.busy(up._feed) and (r["state"] as Label).text == "✓ 3 tags: quick brown fox, lazy dog, fable" and not (r["redo"] as Button).disabled,
 		"landed: its ✓, its tags, its ⟳ (%s)" % (r["state"] as Label).text)
-	_ok(ed._doc.field("tags") == "quick brown fox, lazy dog, reading" and Array(up._tags_field.get_tags()) == ["quick brown fox", "lazy dog", "reading"]
-		and ed.upload_meta("").get("tags") == ["quick brown fox", "lazy dog", "reading", "theirs"],
+	_ok(ed._doc.field("tags") == "quick brown fox, lazy dog, fable" and Array(up._tags_field.get_tags()) == ["quick brown fox", "lazy dog", "fable"]
+		and ed.upload_meta("").get("tags") == ["quick brown fox", "lazy dog", "fable", "theirs"],
 		"they replace the note's tags: on the card, and going up (%s)" % ed._doc.field("tags"))
 	ed._text.text = "Words written again."
 	up.refresh()
 	_ok(step.state(up._feed) == "missing" and (up._added_rows.row(step.key)["state"] as Label).text.contains("written again"),
 		"words written again make them stale: the next export that goes up writes new ones")
+	# ITS OWN PICTURES, for a thumbnail painted in their look
+	var painted := _file("pictures/harbor.png", "")
+	Image.create(8, 8, false, Image.FORMAT_RGB8).save_png(painted)
+	ed._text.text = "Words. <!-- image: A harbor at dawn. --> More. <!-- image: A storm not yet painted. --> <!-- image: A harbor at dawn. -->"
+	Illustrations.use_for_test({"index": {Manuscript.image_key("A harbor at dawn."): {"versions": [{"file": painted, "sig": ""}], "current": 0}}}, true)
+	_ok(Array(up._feed.pictures()) == [painted], "the note hands the step its painted pictures, each once - one not painted, none (%s)" % str(up._feed.pictures()))
 	ed.free()
 	_wipe(ROOT + "_readings")
 	load("res://src/reading/note_upload.gd").root = keep
@@ -1123,20 +1146,20 @@ func _panel_fields() -> bool:
 	tags_step._errors.clear()
 	_ok(_tag_fields(ed._youtube) == 1 and ed.upload_meta("").get("tags") == ["tarot", "satire"],
 		"the YouTube card shows one list of tags, and it is what goes up")
-	AgentJobs._ended["text-youtube-check-cards"] = {"ok": true, "text": "{\"tags\": [\"the moon\", \"night\", \"cards\"]}"}
+	AgentJobs._ended["text-youtube-check-cards"] = {"ok": true, "text": "{\"tags\": [\"lunar omens\", \"nocturne\", \"divination\"]}"}
 	tags_step._jobs[show._feed.folder()] = {"id": "text-youtube-check-cards", "feed": show._feed, "stamp": show._feed.stamp()}
 	tags_step.tick()
 	show._refresh_rows()
-	_ok((row["status"] as Label).text == "✓" and (row["text"] as Label).text == "3 tags: the moon, night, cards"
+	_ok((row["status"] as Label).text == "✓" and (row["text"] as Label).text == "3 tags: lunar omens, nocturne, divination"
 		and not (row["redo"] as MenuButton).disabled and (row["redo"] as MenuButton).get_popup().get_item_text(0) == tags_step.again
 		and not show._added.missing(show._feed), "made: its ✓, its tags and its ⟳ to write them again")
-	_ok(ed._doc.field("tags") == "the moon, night, cards" and Array(show._yt_tags.get_tags()) == ["the moon", "night", "cards"]
-		and _tag_fields(ed._youtube) == 1 and ed.upload_meta("").get("tags") == ["the moon", "night", "cards"],
+	_ok(ed._doc.field("tags") == "lunar omens, nocturne, divination" and Array(show._yt_tags.get_tags()) == ["lunar omens", "nocturne", "divination"]
+		and _tag_fields(ed._youtube) == 1 and ed.upload_meta("").get("tags") == ["lunar omens", "nocturne", "divination"],
 		"landed, they replace the show's tags: still one list on the card, and what goes up (%s)" % ed._doc.field("tags"))
-	_ok(ed.upload_meta(take).get("tags") == ["the moon", "night", "cards"], "an export of another episode goes up with the same list")
+	_ok(ed.upload_meta(take).get("tags") == ["lunar omens", "nocturne", "divination"], "an export of another episode goes up with the same list")
 	ed._youtube._write_tags.button_pressed = false
 	show._refresh_rows()
-	_ok(_step_row(show).is_empty() and ed.upload_meta("").get("tags") == ["the moon", "night", "cards"],
+	_ok(_step_row(show).is_empty() and ed.upload_meta("").get("tags") == ["lunar omens", "nocturne", "divination"],
 		"box cleared: the row goes, and the list stays as it was written")
 	_ok(Openings.title_moment(9.0) == 3.6 and Openings.title_moment(3.0) == 1.5 and Openings.title_moment(0.5) == 1.5,
 		"the title screen's frame is taken with the name up and the table still out of focus")
@@ -1157,6 +1180,17 @@ func _episode_tags() -> bool:
 	_ok(Tags.land(["one", "two", "three"]) is Dictionary, "a bare list is an answer too")
 	_ok(Tags.land(null) is String and Tags.land({"tags": "one, two, three"}) is String and Tags.land({"tags": ["one", "#", "two"]}) is String,
 		"the controls: no JSON, no list, and too few usable tags are not kept")
+	var already := "The Show\nThe Tower Falls\nA reading of three cards, and what they say."
+	var trimmed: Variant = Tags.land({"tags": ["The Tower Falls", "falls tower", "the show", "three cards", "tower card",
+		"tarot spread", "fortune telling", "major arcana"]}, already)
+	_ok(trimmed is Dictionary and (trimmed as Dictionary)["tags"] == ["tower card", "tarot spread", "fortune telling", "major arcana"]
+		and (trimmed as Dictionary)["said"] == ["The Tower Falls", "falls tower", "the show", "three cards"]
+		and Tags.new().summary(trimmed).ends_with("left out, as the title or description says them: The Tower Falls, falls tower, the show, three cards"),
+		"a tag whose every word the show's name, the title or the description says is left out, and said; one with a word of its own is kept (%s)" % str(trimmed))
+	var few: Variant = Tags.land({"tags": ["the tower", "three cards", "major arcana"]}, already)
+	_ok(few is String and String(few).contains("2 more only said what the title or description says")
+		and Tags.land({"tags": ["the tower", "three cards", "major arcana"]}) is Dictionary,
+		"left with too few, the answer is refused saying why - and with nothing said already, all three are tags (%s)" % str(few))
 	# WHAT THE WRITER IS TOLD
 	Rules.clear()
 	var p: Dictionary = Tags.prompt("The Show", "The Tower Falls", "A reading of three.", PackedStringArray(["readings", "cards"]),
@@ -1165,8 +1199,9 @@ func _episode_tags() -> bool:
 	_ok(Rules.missing.is_empty() and not text.contains("{{") and not String(p["system"]).is_empty()
 		and text.contains("The first card is the tower.") and text.contains("THIS VIDEO'S TITLE: The Tower Falls")
 		and text.contains("ITS DESCRIPTION: A reading of three.") and text.contains("readings, cards")
-		and text.contains("THE SHOW'S TAGS NOW, which yours replace: readings, cards") and text.contains(str(YouTube.TAGS_MAX)),
-		"the writer is told the show, the episode's title, description and words, the note's tags (which its answer replaces) and YouTube's limit (%s)" % str(Rules.missing))
+		and text.contains("THE SHOW'S TAGS NOW, which yours replace: readings, cards") and text.contains(str(YouTube.TAGS_MAX))
+		and text.contains("YouTube searches them already"),
+		"the writer is told the show, the episode's title, description and words, the note's tags (which its answer replaces), YouTube's limit and to leave out what they say already (%s)" % str(Rules.missing))
 	var bare := String(Tags.prompt("", "", "", PackedStringArray(), "Words.")["prompt"])
 	_ok(not bare.contains("THE SHOW:") and not bare.contains("TAGS NOW") and not bare.contains("DESCRIPTION") and bare.contains("Words."),
 		"the control: what an episode does not have is not said")
@@ -1187,7 +1222,7 @@ func _episode_tags() -> bool:
 	step._errors.clear()
 	# THE CONTROL: a note that cannot keep tags - the answer is not landed, and the step says why
 	feed.refuse = "the note is gone"
-	AgentJobs._ended["text-youtube-check-0"] = {"ok": true, "text": "{\"tags\": [\"the tower\", \"cards\", \"readings\"]}"}
+	AgentJobs._ended["text-youtube-check-0"] = {"ok": true, "text": "{\"tags\": [\"tarot\", \"cards\", \"readings\"]}"}
 	step._jobs[feed.folder()] = {"id": "text-youtube-check-0", "feed": feed, "stamp": feed.stamp()}
 	step._tries[feed.folder()] = 2
 	step.tick()
@@ -1197,13 +1232,14 @@ func _episode_tags() -> bool:
 	step._errors.clear()
 	step._tries.clear()
 	feed.refuse = ""
-	AgentJobs._ended["text-youtube-check-1"] = {"ok": true, "text": "{\"tags\": [\"the tower\", \"cards\", \"readings\", \"fortune\"]}"}
+	AgentJobs._ended["text-youtube-check-1"] = {"ok": true, "text": "{\"tags\": [\"the tower\", \"tarot\", \"cards\", \"readings\", \"fortune\"]}"}
 	step._jobs[feed.folder()] = {"id": "text-youtube-check-1", "feed": feed, "stamp": feed.stamp()}
 	_ok(step.busy(feed) and step.state(feed) == "queued", "while its job is out, it is being made")
 	step.tick()
-	_ok(step.state(feed) == "ready" and step.fresh(feed) and Array(feed.note_tags) == ["the tower", "cards", "readings", "fortune"]
-		and step.said(feed) == "4 tags: the tower, cards, readings, fortune" and not step.busy(feed),
-		"a job that ended replaces the note's tags, and the step is made (%s)" % step.said(feed))
+	_ok(step.state(feed) == "ready" and step.fresh(feed) and Array(feed.note_tags) == ["tarot", "cards", "readings", "fortune"]
+		and step.said(feed) == "4 tags: tarot, cards, readings, fortune - left out, as the title or description says them: the tower"
+		and not step.busy(feed),
+		"a job that ended replaces the note's tags - less the one its title says already - and the step is made (%s)" % step.said(feed))
 	var kept: Variant = JSON.parse_string(FileAccess.get_file_as_string(feed.folder().path_join("youtube_tags.json")))
 	_ok(kept is Dictionary and (kept as Dictionary).get("from") == feed.stamp(), "kept in the episode's folder, with the fingerprint of the words it was sent")
 	feed.note_tags = PackedStringArray(["edited by hand"])
@@ -1329,10 +1365,10 @@ func _thumbnails() -> bool:
 	# WHAT THE PAINTER IS TOLD
 	var said: String = Thumb.painting(got, false)
 	_ok(Rules.missing.is_empty() and said.contains("A lantern on a dark table.") and said.contains("exactly these and no others: \"THE LAST CARD\"")
-		and said.contains("paint in their look") and ImageGen.Bedrock.ratio_in(said) == "16:9",
+		and said.contains("frames of the video itself") and ImageGen.Bedrock.ratio_in(said) == "16:9",
 		"the painter is told what to paint, the words exactly, the pictures' look, and 16:9 first")
 	var plain: String = Thumb.painting({"picture": "A lantern.", "words": "", "after": []}, true)
-	_ok(plain.contains("No text, letters or numbers") and not plain.contains("paint in their look") and ImageGen.Bedrock.ratio_in(plain) == "9:16",
+	_ok(plain.contains("No text, letters or numbers") and not plain.contains("frames of the video") and ImageGen.Bedrock.ratio_in(plain) == "9:16",
 		"the control: no words is no text at all, no pictures no look to follow, and a portrait video's is 9:16")
 	# THE PAINTING, CUT
 	var src := files.path_join("painted.png")
@@ -1357,8 +1393,33 @@ func _thumbnails() -> bool:
 	_ok(step._writer(feed) == card._thumb_writer.choice(), "its writer is the card's")
 	var job: Dictionary = step._after({"picture": "A lantern.", "words": "", "after": ["/p/one.png"]}, feed)
 	_ok(job.get("kind") == "image" and job.get("backend") == card._thumb_painter.choice()["agent"] and job.get("refs") == ["/p/one.png"]
-		and job.get("target") == dir.path_join("youtube_thumbnail.png") and String(job.get("prompt")).contains("A lantern."),
+		and job.get("target") == dir.path_join("youtube_thumbnail_1.png") and String(job.get("prompt")).contains("A lantern."),
 		"the writer's answer is the card's painter's job, into the episode's folder")
+	# MATCHED TO THE VIDEO'S PICTURES
+	var eight := PackedStringArray(["/p/0", "/p/1", "/p/2", "/p/3", "/p/4", "/p/5", "/p/6", "/p/7"])
+	_ok(Thumb.spread(eight, 4) == ["/p/0", "/p/2", "/p/5", "/p/7"] and Thumb.spread(pics, 4) == Array(pics),
+		"a few spread through the pictures: the first and the last among them, in order (%s)" % str(Thumb.spread(eight, 4)))
+	var told: Dictionary = step._prompt(feed)
+	var free: Dictionary = step._after({"picture": "A lantern.", "words": "", "after": []}, feed)
+	_ok(step.matching() and (told["images"] as Array).size() == 3
+		and String(told["prompt"]).contains("look like one more of them") and String(told["prompt"]).contains("in the pictures' own colors")
+		and not String(told["prompt"]).contains("colors that stand apart") and free.get("refs") == Array(pics)
+		and String(free.get("prompt")).contains("frames of the video itself"),
+		"matching, the writer is told to design one more of the video's pictures, and the painter handed some of them though none were named")
+	card._thumb_match.button_pressed = false
+	told = step._prompt(feed)
+	free = step._after({"picture": "A lantern.", "words": "", "after": []}, feed)
+	_ok(not step.matching() and (told["images"] as Array).is_empty() and not String(told["prompt"]).contains("attached")
+		and String(told["prompt"]).contains("colors that stand apart") and (free.get("refs") as Array).is_empty()
+		and not String(free.get("prompt")).contains("frames of the video") and card.capture()["thumbnail_match"] == false,
+		"the control: cleared, the writer is shown none and the painter handed none")
+	card._thumb_match.button_pressed = true
+	feed.pics = PackedStringArray()
+	step.listed("the Episode card", feed)
+	card._refresh_thumbnail()
+	_ok(card._thumb_match.visible and card._thumb_note.text.contains("no pictures of its own yet"),
+		"with none to match, the card says so (%s)" % card._thumb_note.text)
+	feed.pics = pics
 	AgentJobs._ended["text-youtube-check-thumb"] = {"ok": true, "text": "{\"picture\": \"A lantern.\", \"words\": \"\", \"after\": [1]}"}
 	step._jobs[dir] = {"id": "text-youtube-check-thumb", "feed": feed, "stamp": feed.stamp(), "who": "writer"}
 	step._tries[dir] = 2
@@ -1367,7 +1428,7 @@ func _thumbnails() -> bool:
 		and not FileAccess.file_exists(dir.path_join("youtube_thumbnail.json")),
 		"the writer's answer starts the painter - here refused, read-only, and said - and nothing is kept before the painting")
 	step._errors.clear()
-	var painted := dir.path_join("youtube_thumbnail.png")
+	var painted := String(job["target"])
 	img.save_png(painted)
 	AgentJobs._ended["image-youtube-check-thumb"] = {"ok": true, "path": painted}
 	step._jobs[dir] = {"id": "image-youtube-check-thumb", "feed": feed, "stamp": feed.stamp(), "who": "painter",
@@ -1376,9 +1437,9 @@ func _thumbnails() -> bool:
 	var made: String = Thumb.image_in(dir)
 	var want := Vector2i(720, 1280) if Thumb._portrait() else Vector2i(1280, 720)
 	var kept: Variant = JSON.parse_string(FileAccess.get_file_as_string(dir.path_join("youtube_thumbnail.json")))
-	_ok(step.state(feed) == "ready" and made == dir.path_join("youtube_thumbnail.jpg") and Image.load_from_file(made).get_size() == want
+	_ok(step.state(feed) == "ready" and made == dir.path_join("youtube_thumbnail_1.jpg") and Image.load_from_file(made).get_size() == want
 		and step.said(feed).begins_with("painted with \"THE LAST CARD\": A lantern.") and kept is Dictionary
-		and (kept as Dictionary).get("from") == feed.stamp(),
+		and ((kept as Dictionary).get("versions", []) as Array).size() == 1 and step.made(feed).get("from") == feed.stamp(),
 		"the painting landed is cut beside it and the step made, with the fingerprint of the words (%s)" % step.said(feed))
 	step.listed("the Episode card", feed)
 	card._refresh_thumbnail()
@@ -1393,6 +1454,64 @@ func _thumbnails() -> bool:
 	var video := files.path_join("v.mp4")
 	_ok(Ex._beside(made, video) == files.path_join("v.thumbnail.jpg") and FileAccess.file_exists(files.path_join("v.thumbnail.jpg")),
 		"the exporter puts a painted thumbnail beside the video it goes up with")
+	# ANOTHER, KEPT BESIDE IT (2026-10-30, the user: "no way to cycle backward/forward through generated
+	# thumbnails"; "essentially been exactly the same thing, right down to the exact same text")
+	feed.said = "The first card is the tower."
+	var again: String = step._prompt(feed)["prompt"]
+	_ok(Rules.missing.is_empty() and again.contains("ALREADY PAINTED") and again.contains("1. A lantern.")
+		and again.contains("Its words: \"THE LAST CARD\"") and not again.contains("{{"),
+		"painted again, the writer is shown the thumbnail kept - its brief and its words - and told to make another (%s)" % str(Rules.missing))
+	_ok(not text.contains("ALREADY PAINTED"), "the control: the first time, it is shown none")
+	var job2: Dictionary = step._after({"picture": "A tower.", "words": "", "after": []}, feed)
+	var painted2 := String(job2.get("target", ""))
+	_ok(painted2 == dir.path_join("youtube_thumbnail_2.png"), "the next painting has files of its own (%s)" % painted2)
+	img.save_png(painted2)
+	AgentJobs._ended["image-youtube-check-thumb-2"] = {"ok": true, "path": painted2}
+	step._jobs[dir] = {"id": "image-youtube-check-thumb-2", "feed": feed, "stamp": feed.stamp(), "who": "painter",
+		"got": {"picture": "A tower.", "words": "", "after": []}}
+	step.tick()
+	var second: String = Thumb.image_in(dir)
+	_ok(step.versions(feed).size() == 2 and step.chosen(feed) == 1 and second == dir.path_join("youtube_thumbnail_2.jpg")
+		and FileAccess.file_exists(made) and card.meta({"tags": [], "folder": dir}, titled).get("thumbnail") == second
+		and step.said(feed).begins_with("painted: A tower."),
+		"the one painted after it is kept beside the first, and goes up (%s)" % step.said(feed))
+	card._refresh_thumbnail()
+	_ok(card._thumb_steps.visible and card._thumb_at.text == "v2/2" and not card._thumb_back.disabled and card._thumb_on.disabled
+		and card._thumb_note.text.contains("2 painted"), "the card steps between them, the latest shown (%s)" % card._thumb_note.text)
+	card._fill_thumb_window()
+	var big: Array = card._thumb_window.find_children("*", "TextureRect", true, false)
+	var said_big := " ".join(card._thumb_window.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text))
+	_ok(card._thumb_view.mouse_filter == Control.MOUSE_FILTER_STOP and big.size() == 1 and (big[0] as TextureRect).texture != null
+		and Vector2i((big[0] as TextureRect).texture.get_size()) == want and said_big.contains("No words on it.")
+		and said_big.contains("A tower.") and said_big.contains("version 2 of 2"),
+		"a click opens it full size: the one chosen, its brief, and which version it is (%s)" % said_big)
+	var back: Array = card._thumb_window.find_children("*", "Button", true, false).filter(func(b: Button) -> bool: return b.text == "‹ previous")
+	back[0].pressed.emit()
+	_ok(step.chosen(feed) == 0 and Thumb.image_in(dir) == made and card._thumb_at.text == "v1/2" and card._thumb_back.disabled
+		and step.said(feed).contains("THE LAST CARD"), "‹ there chooses the first: it goes up again, and the step says so")
+	card._fill_thumb_window()
+	said_big = " ".join(card._thumb_window.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text))
+	_ok(said_big.contains("Its words: \"THE LAST CARD\"") and said_big.contains("version 1 of 2"), "and the window shows it (%s)" % said_big)
+	card._choose_thumb(-1)
+	_ok(step.chosen(feed) == 0, "the control: there is nothing before the first")
+	card._thumb_del.pressed.emit()
+	_ok(step.versions(feed).size() == 2 and card._thumb_del.text == "Delete?", "✕ pressed once only asks")
+	card._thumb_del.pressed.emit()
+	_ok(step.versions(feed).size() == 1 and step.chosen(feed) == 0 and Thumb.image_in(dir) == second
+		and not FileAccess.file_exists(made) and not FileAccess.file_exists(painted) and not card._thumb_back.visible
+		and card._thumb_del.text == "✕", "pressed again, the one shown is deleted with its painting, and the other goes up")
+	_ok(step.delete(feed, 0).is_empty() and step.versions(feed).is_empty() and Thumb.image_in(dir).is_empty()
+		and not FileAccess.file_exists(dir.path_join("youtube_thumbnail.json")) and step.state(feed) == "missing",
+		"the last one deleted, the episode has none")
+	card._fill_thumb_window()
+	_ok(card._thumb_window.get_child_count() == 0, "the control: with none left the window holds nothing")
+	img.save_jpg(dir.path_join("youtube_thumbnail.jpg"))
+	var f := FileAccess.open(dir.path_join("youtube_thumbnail.json"), FileAccess.WRITE)
+	f.store_string(JSON.stringify({"picture": "Kept before.", "words": "", "after": [], "from": feed.stamp(),
+		"image": "youtube_thumbnail.jpg"}))
+	f.close()
+	_ok(step.versions(feed).size() == 1 and step.state(feed) == "ready" and Thumb.image_in(dir) == dir.path_join("youtube_thumbnail.jpg")
+		and Thumb._next_in(dir) == "youtube_thumbnail_1", "a record kept before there were versions is one, its files named in it")
 	card.free()
 	names.free()
 	ex.free()

@@ -27,28 +27,29 @@ prompt:
           deck's entry, as many as the entry wants: keep some, and put a synonym or a fresher word
           in place of others now and then, so the entry is yours and not a copy.
   - ""
-  - >-
-      1. THE ILLUSTRATION: what this card shows, for the illustrator who paints the whole deck -
-      subject, composition, what this card is and what it means, as this deck pictures it - the
-      symbols its kind of card traditionally carries, if it has any, carried into this deck's world.
-      Whatever it pictures is its own, described so it could not be
-      mistaken for another card's. {{^written}}Tall portrait format.{{/written}}{{#written}}This card is a
-      WRITTEN card - its writing is its face - and its picture is the small one beside the writing,
-      {{sketch}}: one clear subject, simply drawn.{{/written}} No words, letters or numbers anywhere in
-      the picture: {{^written}}the card's frame and name are printed separately{{/written}}{{#written}}the card's
-      writing is set separately{{/written}}.
+  # A WRITTEN CARD HAS NO PICTURE (the user, 2026-10-29, of a recipe card's painting in its corner: "where would
+  # that picture have come from? ... just text"): nothing is painted for it
+  - when: "!written"
+    say: >-
+          1. THE ILLUSTRATION: what this card shows, for the illustrator who paints the whole deck -
+          subject, composition, what this card is and what it means, as this deck pictures it - the
+          symbols its kind of card traditionally carries, if it has any, carried into this deck's world.
+          Whatever it pictures is its own, described so it could not be mistaken for another card's.
+          Tall portrait format. No words, letters or numbers anywhere in the picture: the card's frame
+          and name are printed separately.
   # WHAT A PAINTING CAN BE TRUSTED TO SHOW (the user, 2026-10-17): a reading said a player shook hands
   # with his left hand while the picture showed a right-handed shake (penalty-box 290660, card 1), and
   # rinks were bent out of shape so a crowd would fit in the picture. An image generator draws left for
   # right, miscounts past a few, and bends a place to fit its frame; a card whose point turns on one of
   # them is contradicted by its own picture.
-  - >-
-      WHAT THE PICTURE MUST SHOW, IT SHOWS PLAINLY: what the card is about is large, central and
-      unmistakable. Never let the card's point - in its picture or in its printed text - turn on what
-      a painting cannot be trusted to show: which hand or which side, an exact count past three, a
-      small thing held in the fingers, or anything written. Every body is whole, and every place
-      keeps its real shape and size: a building, a room, a field or a rink is cropped by the edge of
-      the picture rather than bent to fit it, and a crowd is only where people could sit or stand.
+  - when: "!written"
+    say: >-
+          WHAT THE PICTURE MUST SHOW, IT SHOWS PLAINLY: what the card is about is large, central and
+          unmistakable. Never let the card's point - in its picture or in its printed text - turn on what
+          a painting cannot be trusted to show: which hand or which side, an exact count past three, a
+          small thing held in the fingers, or anything written. Every body is whole, and every place
+          keeps its real shape and size: a building, a room, a field or a rink is cropped by the edge of
+          the picture rather than bent to fit it, and a crowd is only where people could sit or stand.
   - when: on_back
     say: >-
           2. WHAT IS PRINTED ON ITS BACK, which the viewer reads when the card is turned over - in
@@ -68,8 +69,8 @@ prompt:
   # its face, set in the deck's hand (CardFaces.written_layout) - a line of it to a line of the card
   - when: written
     say: >-
-          2. WHAT IS WRITTEN ON IT, which is the card itself and what the viewer reads when it is held
-          up - in `writing`: its `title`, as written across its top, and its `lines`, each one line of
+          WHAT IS WRITTEN ON IT, which is the whole card - it has no picture - and what the viewer reads
+          when it is held up - in `writing`: its `title`, as written across its top, and its `lines`, each one line of
           writing as this kind of card has it, in order (for a recipe: what goes in, one to a line with
           how much, then what is done, a step to a line), in the words and the hand of whoever wrote it,
           as the brief says these cards are written. At most {{lines_most}} lines, each short - a line
@@ -110,7 +111,6 @@ prompt:
   - when: written
     say: |-
           {
-            "art": "the picture, in one to three sentences",
             "writing": {"title": "what is written across its top", "lines": ["each line written on the card, in order"]}
           }
   - when: "!written"

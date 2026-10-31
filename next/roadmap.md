@@ -64,6 +64,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **The synthesized voice: the room, landmarks, the actor**
       Voice.md's open rungs: room acoustics, a murmuring crowd and the air between voice and listener, all carried in the genome; landmark labels within a reading; and the voice as a Cast kind, so a storyboard speaks. See [voice.md](voice.md).
 
+- [ ] **Rendering in the cloud**
+      An export takes about 9x the video's length on this PC (6.5 fps at 2880x1620). Cut into time spans rendered at once on spot GPU instances and stitched, a 30-minute video could take about 20 minutes on ten machines for about $1.50. Asked 2026-10-30; nothing built. See [cloud_render.md](cloud_render.md).
+
 - [ ] **A week behind the edge, and helpers in a sandbox**
       Take nothing from upstream until it is seven days old (no pins), and run every helper program in a sandbox that is on by default, asked about once if it fails, with a checkbox on the Environment panel - not Docker. Decided 2026-10-26, waiting. See [supply_chain.md](supply_chain.md).
 

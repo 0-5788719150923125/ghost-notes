@@ -47,7 +47,14 @@ class_name YouTubeCard
 ## the title screen - asked of the take, which says whether it opened on its title ([method
 ## Openings.of_take]) - or one PAINTED for the episode by the writer and the painter picked under it, a
 ## step this card offers the card that makes the episode ([YouTubeThumbnail]), shown here once it is
-## painted. What cannot be had is said under it, and the video goes up with YouTube's.
+## painted. What cannot be had is said under it, and the video goes up with YouTube's. EVERY ONE PAINTED IS
+## KEPT (2026-10-30, the user: "there is no way to cycle backward/forward through generated thumbnails, as
+## the generated in-episode pictures can be cycled through"): ‹ › under it picks the one that goes up, as a
+## book's pictures are stepped through, and ✕, pressed twice, deletes the one shown. A CLICK ON IT OPENS IT
+## FULL SIZE (2026-10-30: "like we do elsewhere"), in a window of its own as a book's pictures open
+## ([method open_thumbnail]), with what the writer asked of it and the same steps through its versions. "MATCH
+## THE VIDEO'S PICTURES" (2026-10-30: "akin to the full-screen images' 'match earlier' option"), ticked on a new
+## card, paints it in the look of the episode's own pictures, as a book's picture is matched to the ones before it.
 ##
 ## A NOTE READ AS IT IS WRITTEN IS DESCRIBED HERE (2026-10-23, the user, of an actor's note: "I don't see
 ## anywhere it would be possible to write a description for videos uploaded in this way"): its panel shows
@@ -77,7 +84,7 @@ const DEFAULTS := {"upload": false, "title": YouTube.TITLE_TEMPLATE, "privacy": 
 	"category": YouTube.CATEGORY, "playlist": "", "playlist_title": "", "channel": "", "channel_name": "",
 	"write_tags": false, "description": "", "thumbnail": YouTube.THUMBNAIL,
 	"thumbnail_writer": "claude", "thumbnail_writer_model": "", "thumbnail_writer_effort": "",
-	"thumbnail_painter": "codex", "thumbnail_painter_model": "", "thumbnail_painter_effort": ""}
+	"thumbnail_painter": "codex", "thumbnail_painter_model": "", "thumbnail_painter_effort": "", "thumbnail_match": true}
 ## The Script card's rows the title's macros are read from ([method name_from]): [constant YouTube.MACROS]'
 ## keys of the same names.
 const NAMES := ["title", "episode", "author", "book"]
@@ -116,8 +123,15 @@ var _tags: YouTubeTags
 var _thumbnail: OptionButton
 var _thumb_writer: AgentPick
 var _thumb_painter: AgentPick
+var _thumb_match: CheckBox
 var _thumb_note: Label
 var _thumb_view: TextureRect
+var _thumb_steps: HBoxContainer   # ‹ v2/3 › ✕ under the painted one
+var _thumb_back: Button
+var _thumb_at: Label
+var _thumb_on: Button
+var _thumb_del: Button
+var _thumb_window: Window = null  # the thumbnail at full size, opened by a click on it
 ## The step that paints each episode's thumbnail, while the Thumbnail is Painted.
 var _thumb: YouTubeThumbnail
 var _thumb_seen := []           # what the thumbnail's rows were last drawn for
@@ -167,6 +181,18 @@ func _init() -> void:
 		+ "their row writes them now.")
 	_write_tags.toggled.connect(func(_on: bool) -> void: refresh())
 	boxes.add_child(_write_tags)
+	# WITH THE CARD'S OTHER BOXES (the user, 2026-10-30: "at the top, near the other options"), shown while the
+	# Thumbnail is Painted
+	_thumb_match = CheckBox.new()
+	_thumb_match.text = "Match the video's pictures"
+	_thumb_match.add_theme_font_size_override("font_size", 12)
+	_thumb_match.button_pressed = true
+	_thumb_match.tooltip_text = ("Paint each episode's thumbnail (Thumbnail: Painted, below) in the look of the video's own "
+		+ "pictures - a show's paintings, a letter's or a book's pictures - as each picture of a book is matched to the "
+		+ "ones before it: the writer is shown them, and the painter is handed a few to paint after. Clear, it is "
+		+ "designed and painted free of them.")
+	_thumb_match.toggled.connect(func(_on: bool) -> void: refresh())
+	boxes.add_child(_thumb_match)
 	_chips = HFlowContainer.new()
 	_chips.add_theme_constant_override("h_separation", 4)
 	_chips.add_theme_constant_override("v_separation", 4)
@@ -303,7 +329,7 @@ func _build_thumbnail() -> void:
 	_thumb_painter.changed.connect(refresh)
 	add_child(_thumb_painter)
 	_thumb = YouTubeThumbnail.new(func() -> bool: return thumbnail() == "painted", _thumb_writer.choice,
-		_thumb_painter.choice)
+		_thumb_painter.choice, func() -> bool: return _thumb_match.button_pressed)
 	_thumb_note = _small("")
 	add_child(_thumb_note)
 	_thumb_view = TextureRect.new()
@@ -311,7 +337,29 @@ func _build_thumbnail() -> void:
 	_thumb_view.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_thumb_view.custom_minimum_size = Vector2(0, 126)
 	_thumb_view.visible = false
+	_thumb_view.mouse_filter = Control.MOUSE_FILTER_STOP
+	_thumb_view.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_thumb_view.tooltip_text = "Click to see it full size."
+	_thumb_view.gui_input.connect(func(e: InputEvent) -> void:
+		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
+				and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+			open_thumbnail())
 	add_child(_thumb_view)
+	_thumb_steps = HBoxContainer.new()
+	_thumb_steps.alignment = BoxContainer.ALIGNMENT_CENTER
+	_thumb_steps.add_theme_constant_override("separation", 4)
+	_thumb_steps.visible = false
+	add_child(_thumb_steps)
+	_thumb_back = _thumb_button("‹", "Show the thumbnail painted before this one: it goes up instead.")
+	_thumb_back.pressed.connect(func() -> void: _choose_thumb(-1))
+	_thumb_at = Label.new()
+	_thumb_at.add_theme_font_size_override("font_size", 11)
+	_thumb_at.modulate = Color(1, 1, 1, 0.7)
+	_thumb_steps.add_child(_thumb_at)
+	_thumb_on = _thumb_button("›", "Show the thumbnail painted after this one: it goes up instead.")
+	_thumb_on.pressed.connect(func() -> void: _choose_thumb(1))
+	_thumb_del = _armed_delete("✕", _delete_thumb)
+	_thumb_steps.add_child(_thumb_del)
 
 
 ## The step that writes each episode's tags, and the line that says where it stands (the box that turns
@@ -363,7 +411,8 @@ func capture() -> Dictionary:
 		"channel": String(_chan["id"]), "channel_name": _channel_name(), "write_tags": writes_tags(),
 		"description": _desc.text, "thumbnail": thumbnail(),
 		"thumbnail_writer": w["agent"], "thumbnail_writer_model": w["model"], "thumbnail_writer_effort": w["effort"],
-		"thumbnail_painter": p["agent"], "thumbnail_painter_model": p["model"], "thumbnail_painter_effort": p["effort"]}
+		"thumbnail_painter": p["agent"], "thumbnail_painter_model": p["model"], "thumbnail_painter_effort": p["effort"],
+		"thumbnail_match": _thumb_match.button_pressed}
 
 
 ## ...and back. A key the block does not name keeps the card's default; a privacy YouTube does not
@@ -391,6 +440,7 @@ func apply(block: Dictionary) -> void:
 	_select(_thumbnail, th if YouTube.THUMBNAILS.has(th) else YouTube.THUMBNAIL)
 	_thumb_writer.set_choice(str(b["thumbnail_writer"]), str(b["thumbnail_writer_model"]), str(b["thumbnail_writer_effort"]))
 	_thumb_painter.set_choice(str(b["thumbnail_painter"]), str(b["thumbnail_painter_model"]), str(b["thumbnail_painter_effort"]))
+	_thumb_match.set_pressed_no_signal(bool(b["thumbnail_match"]))
 	_thumb_seen = []
 	_chan = {"id": str(b["channel"]), "name": str(b["channel_name"])}
 	if String(_chan["id"]).is_empty():
@@ -765,19 +815,32 @@ func _refresh_tags() -> void:
 ## - and the painted one itself. Drawn again only when something it says has changed.
 func _refresh_thumbnail() -> void:
 	var th := thumbnail()
-	var feed: EpisodeFeed = _thumb.shown if th == "painted" and not _thumb.host.is_empty() else null
+	var feed := _thumb_feed()
 	var st := _thumb.state(feed) if feed != null else ""
-	var img := YouTubeThumbnail.image_in(feed.folder()) if feed != null else ""
+	var img := _thumb.image(feed) if feed != null else ""
 	var words := feed != null and not feed.words().is_empty()
 	var stale := feed != null and not _thumb.made(feed).is_empty() and not _thumb.fresh(feed)
+	var n := _thumb.versions(feed).size() if feed != null else 0
+	var at := _thumb.chosen(feed) if feed != null else -1
+	var none_to_match := feed != null and _thumb.matching() and feed.pictures().is_empty()
 	var now := [th, Director.opening_shown(), Director.intro_hold, _thumb.host, feed.folder() if feed != null else "",
-		st, img, FileAccess.get_modified_time(img) if not img.is_empty() else 0, words, stale,
+		st, img, FileAccess.get_modified_time(img) if not img.is_empty() else 0, words, stale, n, at, none_to_match,
 		_thumb.said(feed) if st in ["failed", "running", "queued"] else ""]
 	if now == _thumb_seen:
 		return
 	_thumb_seen = now
+	_thumb_steps.visible = th == "painted" and n > 0
+	_thumb_back.visible = n > 1
+	_thumb_on.visible = n > 1
+	_thumb_at.visible = n > 1
+	_thumb_at.text = "v%d/%d" % [at + 1, n]
+	_thumb_back.disabled = at <= 0
+	_thumb_on.disabled = at >= n - 1
+	if _thumb_window != null and _thumb_window.visible:
+		_fill_thumb_window()
 	_thumb_writer.visible = th == "painted"
 	_thumb_painter.visible = th == "painted"
+	_thumb_match.visible = th == "painted"
 	var row := "⟳ on its Thumbnail row on %s" % _thumb.host
 	var t := ""
 	match th:
@@ -799,16 +862,162 @@ func _refresh_thumbnail() -> void:
 			elif not img.is_empty() and stale:
 				t = ("This thumbnail was painted before the episode's words were written again: it goes up as it is until "
 					+ "%s paints another, or %s does.") % [row, _thumb.host_makes]
+			elif not img.is_empty() and n > 1:
+				t = "The thumbnail shown goes up with this episode - ‹ › picks another of the %d painted. %s paints one more." % [n, row]
 			elif not img.is_empty():
-				t = "This episode's thumbnail goes up with it. %s paints it again." % row
+				t = "This episode's thumbnail goes up with it. %s paints another, and this one is kept." % row
 			elif not words:
 				t = "This episode's thumbnail is painted once its words are written, along with it."
 			else:
 				t = "No thumbnail is painted for this episode yet: %s paints one, and so does %s. Until then YouTube chooses." % [
 					row, _thumb.host_makes]
+	if th == "painted" and none_to_match and not t.begins_with("⚠"):
+		t += " This episode has no pictures of its own yet, so there is no look to match: it is painted free of one."
 	_thumb_note.text = t
 	_thumb_note.visible = not t.is_empty()
 	_show_painted(img if th == "painted" else "")
+
+
+func _thumb_button(text: String, tip: String) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.tooltip_text = tip
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_font_size_override("font_size", 12)
+	_thumb_steps.add_child(b)
+	return b
+
+
+## The episode the card that makes them shows, while its thumbnail is Painted; null otherwise.
+func _thumb_feed() -> EpisodeFeed:
+	return _thumb.shown if thumbnail() == "painted" and not _thumb.host.is_empty() else null
+
+
+## ‹ or › ([param step] -1 or 1): the thumbnail painted before or after the one shown goes up instead.
+func _choose_thumb(step: int) -> void:
+	var feed := _thumb_feed()
+	if feed == null:
+		return
+	var err := _thumb.choose(feed, _thumb.chosen(feed) + step)
+	if not err.is_empty():
+		noted.emit("The thumbnail could not be chosen: %s." % err)
+	_refresh_thumbnail()
+
+
+## ✕, pressed twice: the thumbnail shown is deleted, its painting too.
+func _delete_thumb() -> void:
+	var feed := _thumb_feed()
+	if feed == null:
+		return
+	var err := _thumb.delete(feed, _thumb.chosen(feed))
+	if not err.is_empty():
+		noted.emit("The thumbnail could not be deleted: %s." % err)
+	_refresh_thumbnail()
+
+
+## A DELETE PRESSED TWICE, as a book's picture is deleted ([IllustrationPanel]): the first press arms it for
+## 3 s ("Delete?"), the second calls [param act].
+func _armed_delete(text: String, act: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.tooltip_text = "Delete this thumbnail - its painting too. The one before it goes up instead, or none."
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_font_size_override("font_size", 12)
+	var disarm := Timer.new()
+	disarm.one_shot = true
+	disarm.wait_time = 3.0
+	var calm := func() -> void:
+		b.set_meta("armed", false)
+		b.text = text
+		b.remove_theme_color_override("font_color")
+	disarm.timeout.connect(calm)
+	b.add_child(disarm)
+	b.pressed.connect(func() -> void:
+		if not bool(b.get_meta("armed", false)):
+			b.set_meta("armed", true)
+			b.text = "Delete?"
+			b.add_theme_color_override("font_color", Color(1.0, 0.55, 0.5))
+			if disarm.is_inside_tree():
+				disarm.start()
+			return
+		disarm.stop()
+		calm.call()
+		act.call())
+	return b
+
+
+## THE THUMBNAIL AT FULL SIZE, in a window of its own as a book's pictures open ([IllustrationPanel]): the
+## one chosen, what the writer asked of it, and its versions to step through or delete there. Escape or
+## the window's close hides it.
+func open_thumbnail() -> void:
+	if _thumb_feed() == null or not is_inside_tree():
+		return
+	_fill_thumb_window()
+	var vp := get_viewport().get_visible_rect().size
+	_thumb_window.size = Vector2i(int(vp.x * 0.8), int(vp.y * 0.85))
+	_thumb_window.popup_centered()
+
+
+## What the full-size window holds for the thumbnail chosen now - drawn again whenever the card's is
+## ([method _refresh_thumbnail]) - and hidden once there is none.
+func _fill_thumb_window() -> void:
+	if _thumb_window == null:
+		_thumb_window = Window.new()
+		_thumb_window.visible = false
+		_thumb_window.close_requested.connect(_thumb_window.hide)
+		_thumb_window.window_input.connect(func(e: InputEvent) -> void:
+			if e is InputEventKey and (e as InputEventKey).pressed and (e as InputEventKey).keycode == KEY_ESCAPE:
+				_thumb_window.hide())
+		add_child(_thumb_window)
+	for c in _thumb_window.get_children():
+		_thumb_window.remove_child(c)
+		c.queue_free()
+	var feed := _thumb_feed()
+	var vs := _thumb.versions(feed) if feed != null else []
+	if vs.is_empty():
+		_thumb_window.hide()
+		return
+	var at := _thumb.chosen(feed)
+	var v: Dictionary = vs[at]
+	_thumb_window.title = "Thumbnail  ·  %s" % (feed.episode_title() if not feed.episode_title().is_empty() else "this episode")
+	var bg := PanelContainer.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_thumb_window.add_child(bg)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 8)
+	bg.add_child(col)
+	var pic := TextureRect.new()
+	pic.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var path := _thumb.image(feed)
+	var img := Image.load_from_file(path) if not path.is_empty() else null
+	if img != null and not img.is_empty():
+		pic.texture = ImageTexture.create_from_image(img)
+	col.add_child(pic)
+	var words := String(v.get("words", ""))
+	var desc := Label.new()
+	desc.text = ("Its words: \"%s\"\n\n" % words if not words.is_empty() else "No words on it.\n\n") + String(v.get("picture", ""))
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.add_theme_font_size_override("font_size", 12)
+	col.add_child(desc)
+	var bar := HBoxContainer.new()
+	bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	bar.add_theme_constant_override("separation", 8)
+	col.add_child(bar)
+	for step in [-1, 1]:
+		var b := Button.new()
+		b.text = "‹ previous" if step < 0 else "next ›"
+		b.focus_mode = Control.FOCUS_NONE
+		b.disabled = at + step < 0 or at + step >= vs.size()
+		b.pressed.connect(_choose_thumb.bind(step))
+		bar.add_child(b)
+		if step < 0:
+			var n := Label.new()
+			n.text = "version %d of %d%s" % [at + 1, vs.size(), "  (painted before the words were written again)"
+				if not _thumb.fresh(feed) else ""]
+			bar.add_child(n)
+	bar.add_child(_armed_delete("Delete this version", _delete_thumb))
 
 
 ## The painted thumbnail at [param path] on the card, read again only when it changes; none for "".

@@ -733,7 +733,7 @@ func _build_plan() -> void:
 			var decide := float(a.get("decide", 0.0))
 			var due := maxf(before, prev_end) + decide if decide > 0.0 else before + 0.25
 			start = float(held.get("start", maxf(due, ready)))
-			end = start + write
+			end = _paced_end(i, start, start + write)
 		var turn_at := float(held.get("turn_at", INF))
 		if bool(a.get("turn", false)) and not held.has("start"):
 			# early enough for the pen to come back over the new page behind the sheet, at its pace
@@ -748,7 +748,7 @@ func _build_plan() -> void:
 		if held.has("end"):
 			end = float(held["end"])
 		elif held.has("at"):
-			end = maxf(end, float(held["at"]) + maxf((1.0 - float(held.get("u", 0.0))) * write / DeskScript.MAX_PACE, 0.3))
+			end = maxf(end, float(held["at"]) + maxf((1.0 - float(held.get("u", 0.0))) * write / _quickest(i), 0.3))
 		_plan[i] = {"start": start, "end": end, "turn_at": turn_at}
 		prev_end = end
 		if not (String(a["kind"]) == "point" and target_box(a).size.x < 0.0):
@@ -1597,10 +1597,19 @@ func _due(_i: int, t0: float) -> float:
 	return t0 - PEN_LEAD if t0 < INF else INF
 
 
-## WHEN DICTATED action [param i], begun at [param start], ends: [param end], the elastic pen's - the
-## desk's writing keeps time with the words it is dictated.
+## WHEN action [param i], begun at [param start], ends: [param end], the desk's - a dictated one's the elastic
+## pen's, keeping time with its words, and one done in silence its ink's at the hand's pace. A medium that paces
+## its pen otherwise answers for itself ([LetterMedium]).
 func _paced_end(_i: int, _start: float, end: float) -> float:
 	return end
+
+
+## THE QUICKEST action [param i] is ever done, against the hand's pace: one under way when the plan is made again
+## ends no sooner than the rest of it takes at this ([method _build_plan]). A medium that dashes some off quicker
+## answers for itself ([LetterMedium]'s sketches) - held to the desk's, a live reading's next sentence slowed one
+## mid-stroke.
+func _quickest(_i: int) -> float:
+	return DeskScript.MAX_PACE
 
 
 static func _hash01(page: int, salt: int) -> float:

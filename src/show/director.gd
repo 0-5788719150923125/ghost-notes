@@ -725,6 +725,10 @@ func signature() -> PackedFloat32Array:
 	return Spectrum.harmonic_signature()
 
 
+func wait_for(who: String, on: bool) -> void:
+	Spectrum.set_waiting(who, on)
+
+
 # The session seed, by priority:
 #   1. an explicit --seed N (the exporter passes it so a render reproduces a session, and
 #      it is the way to roll a *different* show for the same song on purpose) - taken

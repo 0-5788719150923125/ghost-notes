@@ -34,6 +34,7 @@ var _script_cache := {}
 var _cards_stamp := "-"           # the plan and draw files the printings and waterfalls were last read from
 var _printing_keys: Array = []      # per drawn card: its printing's file key, "" the deck's own
 var _swept: Array = []              # per spread position: swept out in a waterfall
+var _written: Array = []            # per drawn card: a written card, nothing painted for it ([method written_card])
 var _height_stamp := "-"          # the table file the height map's wanting was last read from
 var _height_wanted := false
 
@@ -258,6 +259,8 @@ func beat_count() -> int:
 ## were checked (2026-10-17) keeps its pictures and its words, so `check:K` is a step only where its
 ## file is, or card K has not been read yet.
 ##
+## A WRITTEN CARD ([method written_card]) is its writing: no painting and no check.
+##
 ## A SHOW THAT DRAWS NO CARDS ([method cardless]) has none of a card's steps - no design, no back, no
 ## painting, no check - and no work passage of a card's: each beat's passage `say:K` is said while its work
 ## is done.
@@ -290,6 +293,8 @@ func steps() -> Array:
 	if not works.is_empty():
 		out.append("acts")
 	for k in range(1, n + 1):
+		if written_card(k):
+			continue
 		out.append("image:card:%d" % k)
 		if checks(k):
 			out.append("check:%d" % k)
@@ -356,8 +361,12 @@ func needs(step: String) -> Array:
 				var k := int(parts[2])
 				var key := printing_of(k)
 				var out := ["design:%d" % k, "image:back" if key.is_empty() else "image:back:%s" % key]
-				if k > 1:
-					out.append("image:card:%d" % (k - 1))
+				# ...the last card before it painted at all: a written one is not
+				var j := k - 1
+				while j >= 1 and written_card(j):
+					j -= 1
+				if j >= 1:
+					out.append("image:card:%d" % j)
 				return out
 			if parts.size() == 3 and String(parts[1]) == "back":
 				# a printing's back waits for the shuffle, which says which printings are drawn
@@ -390,7 +399,7 @@ func needs(step: String) -> Array:
 			# a card's passage is written LOOKING AT the card: it waits for its picture, checked, and a
 			# card painted again is a passage written again (see TableProducer.say_prompt)
 			var k := int(who)
-			var out := ["design:%d" % k, "image:card:%d" % k, "check:%d" % k, _before(k, works)]
+			var out := ["design:%d" % k, _before(k, works)] if written_card(k) else ["design:%d" % k, "image:card:%d" % k, "check:%d" % k, _before(k, works)]
 			# a card swept out in a waterfall is read with the cards that came out with it: their entries too
 			for j in range(k + 1, reveal_of(k) + 1):
 				out.append("design:%d" % j)
@@ -557,6 +566,7 @@ func _read_cards() -> void:
 	_cards_stamp = stamp
 	_printing_keys = []
 	_swept = []
+	_written = []
 	var p: Variant = read_json("plan")
 	var d: Variant = read_json("draw")
 	var plan: Dictionary = p if p is Dictionary else {}
@@ -566,6 +576,14 @@ func _read_cards() -> void:
 	for c in (d as Dictionary).get("cards", []) if d is Dictionary else []:
 		var name := CardTable.series_of(look, c as Dictionary) if c is Dictionary else ""
 		_printing_keys.append(CardTable.series_key(name) if not name.is_empty() else "")
+		_written.append(c is Dictionary and CardTable.written(CardTable.look_of(CardTable.sanitize_look(look), c as Dictionary)))
+
+
+## WHETHER CARD [param k] IS A WRITTEN CARD ([constant CardTable.FRAMES] `written`): its writing is its face, and nothing
+## is painted for it - no picture, so no art director's look at one.
+func written_card(k: int) -> bool:
+	_read_cards()
+	return k >= 1 and k <= _written.size() and bool(_written[k - 1])
 
 
 ## WHETHER THE PAINTING'S HEIGHT MAP IS WANTED: the table is set and lays the painting where its depth

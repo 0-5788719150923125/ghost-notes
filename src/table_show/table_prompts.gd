@@ -42,8 +42,10 @@ class_name TablePrompts
 ## than twice the cards drawn, so the seed, not the producer, decides which come out.
 const BOX := [12, 30]
 
-## How many words each passage runs to - the length of an episode comes from these.
+## How many words each passage runs to - the length of an episode comes from these - and a work's own passage, for each
+## second of its work at the voice's pace: at least enough to cover it, and room for a story.
 const WORDS := {"intro": [130, 190], "card": [110, 170], "close": [90, 140]}
+const WORK_WORDS := Vector2(1.0, 1.8)
 
 ## How many earlier episodes the producer reads in full, and how many more in a line each.
 const PAST_FULL := 10
@@ -152,8 +154,7 @@ static func _printed_vars() -> Dictionary:
 			opts.append("\"%s\" (%s)" % [k, String((reg[1] as Dictionary)[k])])
 		printed.append({"what": reg[0], "options": "; ".join(opts)})
 	# A WRITTEN CARD's own choices ([constant CardTable.FRAMES] `written`), each with its words
-	for reg in [["`frame.hand`, a written card's hand", CardTable.HANDS], ["`frame.ruling`, a written card's stock", CardTable.RULINGS],
-			["`frame.sketch`, where a written card's picture sits", CardTable.SKETCHES]]:
+	for reg in [["`frame.hand`, a written card's hand", CardTable.HANDS], ["`frame.ruling`, a written card's stock", CardTable.RULINGS]]:
 		var opts := PackedStringArray()
 		for k in reg[1]:
 			var v: Variant = (reg[1] as Dictionary)[k]
@@ -166,19 +167,7 @@ static func _printed_vars() -> Dictionary:
 	for k in CardTable.CARD_SIZES:
 		sizes.append("\"%s\" (%s)" % [k, String((CardTable.CARD_SIZES[k] as Dictionary)["about"])])
 	return {"printed": printed, "corner_options": "; ".join(corners), "card_sizes": ", ".join(CardTable.CARD_SIZES.keys()),
-		"card_size_options": "; ".join(sizes), "hands": ", ".join(CardTable.HANDS.keys()), "rulings": ", ".join(CardTable.RULINGS.keys()),
-		"sketches": ", ".join(CardTable.SKETCHES.keys())}
-
-
-## WHERE A WRITTEN CARD'S PICTURE SITS ([constant CardTable.SKETCHES]), its key and in words.
-static func _sketch_of(look: Dictionary) -> String:
-	var f: Dictionary = look.get("frame", {}) if look.get("frame") is Dictionary else {}
-	var k := String(f.get("sketch", "")).strip_edges().to_lower()
-	return k if CardTable.SKETCHES.has(k) else "corner"
-
-
-static func _sketch_about(look: Dictionary) -> String:
-	return String(CardTable.SKETCHES[_sketch_of(look)])
+		"card_size_options": "; ".join(sizes), "hands": ", ".join(CardTable.HANDS.keys()), "rulings": ", ".join(CardTable.RULINGS.keys())}
 
 
 ## About how many letters a line of a written card holds, as its designer is told it ([method CardFaces.written_layout]
@@ -301,11 +290,11 @@ static func designer(title: String, brief: String, look: Dictionary, card: Dicti
 		"meaning": String(card.get("meaning", "")).strip_edges(), "on_back": on_back, "on_front": on_front,
 		"in_booklet": not on_back and not on_front and not written, "ledger": ledger, "ledger_booklet": ledger and not on_back and not on_front and not written,
 		"plain_booklet": not ledger and not on_back and not on_front and not written, "reversals": reversals and not written,
-		"written": written, "sketch": _sketch_about(look), "lines_most": TableProducer.WRITING_MOST, "line_letters": WRITTEN_LETTERS,
+		"written": written, "lines_most": TableProducer.WRITING_MOST, "line_letters": WRITTEN_LETTERS,
 		"before": "\n".join(_pictured_before(history, String(card.get("name", ""))))}
-	# THE CARDS DESIGNED BEFORE IT IN THIS DRAW, their pictures only, each cut short
+	# THE CARDS DESIGNED BEFORE IT IN THIS DRAW, their pictures only, each cut short - none, for a card with no picture
 	var sib: Array = []
-	for c in siblings:
+	for c in siblings if not written else []:
 		sib.append({"k": int((c as Dictionary).get("k", 0)), "name": String((c as Dictionary).get("name", "")),
 			"art": clip(String((c as Dictionary).get("art", "")), 60)})
 	vars["siblings"] = sib
@@ -602,8 +591,10 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		vars["work_acts"] = acts
 		vars["work_seconds"] = roundi(seconds)
 		if work_k > 0:
-			# a passage for the work alone, as long as the work - spoken at about two words a second
-			lo_hi = [maxi(30, roundi(seconds / SAID_WORD * 0.8)), maxi(60, roundi(seconds / SAID_WORD * 1.3))]
+			# a passage for the work alone, at least as long as the work - spoken at about two words a second - and room
+			# for the stories told around it (the user, 2026-10-29: "it would be nice if they told stories ... The videos are
+			# quite short now"): its acts wait for the words that start them
+			lo_hi = [maxi(30, roundi(seconds / SAID_WORD * WORK_WORDS.x)), maxi(60, roundi(seconds / SAID_WORD * WORK_WORDS.y))]
 		else:
 			lo_hi = [maxi(int(lo_hi[0]), roundi(seconds / SAID_WORD * 0.8)), maxi(int(lo_hi[1]), roundi(seconds / SAID_WORD * 1.2))]
 	if work_k > 0:
@@ -653,7 +644,11 @@ static func _card_now(plan: Dictionary, positions: Array, drawn: Array, k: int, 
 		out["now_boxed"] = true
 	else:
 		out["now_drawn"] = true
-	if not remark:
+	# A WRITTEN CARD has no picture: its writing is what the viewer reads on it ([constant CardTable.FRAMES] `written`)
+	var written := c.get("writing") is Dictionary
+	if written:
+		out["on_card"] = true
+	elif not remark:
 		out["pic_quiet"] = true
 	elif pictured and not held:
 		out["pic_lying"] = true
@@ -663,7 +658,8 @@ static func _card_now(plan: Dictionary, positions: Array, drawn: Array, k: int, 
 		out["pic_art"] = true
 	var b: Dictionary = c.get("booklet", {}) if c.get("booklet") is Dictionary else {}
 	if not b.is_empty():
-		out["on_back" if text_side == "back" else ("on_front" if text_side == "front" else "in_booklet")] = true
+		if not written:
+			out["on_back" if text_side == "back" else ("on_front" if text_side == "front" else "in_booklet")] = true
 		out["keywords"] = ", ".join(DataPath.strings(b.get("keywords", [])))
 		out["text"] = String(b.get("upright", "")) if text_side != "booklet" \
 			else String(b.get("reversed" if bool(c.get("reversed", false)) and b.has("reversed") else "upright", ""))
@@ -1019,8 +1015,7 @@ static func card_image(look: Dictionary, card: Dictionary, art: String, target: 
 	vars["sent_back"] = Array(sent_back)
 	vars.merge({"name": String(card.get("name", "")), "art": art.strip_edges(), "has_back": has_back, "chain": chain,
 		"chain_many": chain > 1, "window": String(CardTable.WINDOWS.get(CardFaces.window_of(look), "a plain rectangle")),
-		"borderless": CardFaces.borderless(look), "details": details, "written": CardTable.written(look),
-		"sketch": _sketch_about(look), "band": _sketch_of(look) == "band",
+		"borderless": CardFaces.borderless(look), "details": details,
 		"numbered": not String(card.get("numeral", "")).is_empty()}, true)
 	return Rules.say("table/painter.card", vars)
 

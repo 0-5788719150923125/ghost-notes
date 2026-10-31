@@ -129,6 +129,13 @@ func tail() -> float:
 	return outro_hold
 
 
+## HOLD THE SHOW'S TIME for [param who] while [param on]: something a part draws is not ready for the moment it is at (a
+## table's physics, baked on a thread of its own, behind a live reading) - and it would rather wait than draw what an export
+## never would. A feed with no clock to hold ignores it; [Director]: the session clock waits, unpaused.
+func wait_for(_who: String, _on: bool) -> void:
+	pass
+
+
 ## The music's harmonic signature now (12 chroma bins and a coarse shape - [HarmonicSignature]),
 ## empty when nothing is heard: the continuous half of harmonic seeding, a scene's palette pulled
 ## toward the music's key.

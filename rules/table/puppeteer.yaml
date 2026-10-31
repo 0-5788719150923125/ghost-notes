@@ -104,7 +104,9 @@ acts:
   # With physics and collision"; the tipped dish's crystals "do not move and tumble, and they do not fall"; the
   # mortar's grinding should "destroy those things" - next/table_physics.md). A pour is the tip, never a law. A DIP
   # FILLS (the-quiet-crucible 707668: its ladle "draws up a measure" and came up empty, and the vial it poured into was
-  # filled by a `to` on its fill instead - unseen, "it slowly fills with liquid finally ... far too late")
+  # filled by a `to` on its fill instead - unseen, "it slowly fills with liquid finally ... far too late"). A PINCH IS NO
+  # POUR (841899: a mortar tipped 30 degrees two centimeters short of the cauldron and under its rim, while a sprinkle from
+  # a point over the brew put its powder in - the user saw it "to the side, tipping onto the table")
   - >-
       WHAT IS IN THINGS IS REAL, and moves by itself: a liquid pours when its vessel is tipped until it
       reaches the rim, grains spill from a tipped mouth, loose things tumble out of what holds them and
@@ -121,11 +123,26 @@ acts:
       `act` says what poured, spilled, fell or broke, and where it went, and how far a tip that
       poured nothing would have to go. A stopper in a vessel's mouth keeps everything in: take it out
       first (its `shown` to 0). To put a little of something somewhere that has no vessel to tip, let
-      it fall from a point (`sprinkle`). To grind, bring the tool down into what is to be ground and
+      it fall from a point (`sprinkle`) - never what is in a vessel you are moving: bring the vessel
+      over what it pours into, its lip past the rim and above it, and tip it. To grind, bring the tool down into what is to be ground and
       go round over it, its point `press`ed onto the bowl's floor where the pieces lie, for as long as
       it takes - pieces break off as it goes, and `act` says what broke. A tool pressed onto what it
       works in meets it as it goes round: that is not passing through it. Nothing loose is ever grown
       or shrunk to look ground: it breaks by itself, or not at all.
+  # EVERYTHING PICKED UP IS A BODY (the user, 2026-10-29: "physics everywhere"; a pestle put back had stood through its
+  # mortar's wall, and a beam tipped by an act while the lump laid on its pan floated above it): what a hand moves meets
+  # what it is moved into and falls when let go, and a hinge that hangs free is swung by weight alone
+  # ...A WHOLE THING TOO (the user, 2026-10-30, of 841899's mortar tipped through the cauldron's rim: "why can we not just
+  # add collision to most if not all objects"), and what the hand left in the air between two moves it holds there
+  - >-
+      WHAT YOU PICK UP IS SOLID, a part or a whole thing alike: moved into something, it stops against it
+      or slides along it - it never passes through - and `act` says when it was HELD BACK, by what, and
+      how far short of where you sent it: lift it over what is in its way, or bring it round. Left
+      touching nothing between two of its moves, it stays held where you left it until the next; let go
+      anywhere but on something after its last, it falls and comes to rest where it lands, so set each
+      thing `down` where it belongs. A part on a hinge whose weight hangs below the hinge
+      swings by its own weight and by what lies on it, and no act turns it: what you lay on it, or take
+      off it, moves it.
   # A POUR IS SEEN (the-quiet-crucible 181083: its snowmelt's vial was tipped straight away from the camera, and its
   # stream - falling now as a stream falls, out of the mouth and down - was hidden behind the vial itself)
   - >-

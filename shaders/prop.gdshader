@@ -125,11 +125,20 @@ void fragment() {
 		albedo = mix(albedo, color2, smoothstep(0.6, 0.9, n1) * wear);
 		rough = mix(0.78, 0.35, polish);
 	} else if (kind == 10) {
-		// FABRIC: a weave, and velvet's sheen at the edges
+		// FABRIC: a weave, and velvet's sheen at the edges - only there. Godot's rim light asks nothing
+		// of where the light is (no facing, no distance, no shadow), and at a fabric's roughness it
+		// spread over the whole face: a feather held up with the candles behind it glowed on the side
+		// they never reached, its weave drawn in a checker over it and its glitter (too smooth to take
+		// that glow) black holes in it (the-quiet-crucible 841899). The weave fades out as its repeat
+		// (1.1 mm across the diagonal) comes under six pixels and is gone at three: finer, it cannot be
+		// drawn, only aliased into a coarse checker over the cloth (the same feather at the table's
+		// distance). The branch is the material's, so every pixel of a part takes it and its derivatives
+		// are sound
 		albedo = color * (0.88 + 0.18 * n1);
-		relief += sin(cpos.x * 40.0) * sin(cpos.z * 40.0 + cpos.y * 40.0) * 0.00004;
+		float cm_px = max(length(dFdx(cpos)), length(dFdy(cpos)));
+		relief += sin(cpos.x * 40.0) * sin(cpos.z * 40.0 + cpos.y * 40.0) * 0.00004 * (1.0 - smoothstep(0.019, 0.037, cm_px));
 		rough = 0.96;
-		rim = polish * 0.8;
+		rim = polish * 0.8 * pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.0);
 		spec = 0.25;
 	} else if (kind == 11) {
 		// BONE: pores, and the yellow of age
@@ -238,12 +247,17 @@ void fragment() {
 		mirror = colored * 0.6;
 	} else if (play == 4) {
 		// GLITTER: tiny flat flakes of `color2` all through it, each facing its own way, so a few at
-		// a time catch a flame
+		// a time catch a flame - and the rest still seen, flecks of their color: a flake is mostly its
+		// color, a little mirror. All mirror, one showed only the dim room it faced, a dark disc ringed
+		// by its soft edge - a phoenix feather read as full of holes (the-quiet-crucible 841899) and a
+		// lapis's pyrite as pits; at fire's 0.6 the feather held up with the candles behind it was
+		// still flecked with dull olive specks
 		vec3 c = cellsid(cpos * 7.5 + vec3(seed * 3.0));
-		mirror = (1.0 - smoothstep(0.26, 0.36, c.x)) * step(0.45, c.z);
+		float flake = (1.0 - smoothstep(0.26, 0.36, c.x)) * step(0.45, c.z);
 		tilt = tipped(c.z, 0.65);
-		albedo = mix(albedo, color2 * 1.25, mirror);
-		rough = mix(rough, 0.07, mirror);
+		albedo = mix(albedo, color2 * 1.25, flake);
+		rough = mix(rough, 0.07, flake);
+		mirror = flake * 0.3;
 	} else if (play == 5) {
 		// RAINBOW: a thin film over it, colored by its thickness and the angle it is seen at - in
 		// what it reflects, as a film colors light, so a black stone stays black but for its sheen;

@@ -46,12 +46,14 @@ const FRAMES := {
 	"corners": "a border with ornamental brackets in the four corners",
 	"deco": "a border with stepped Art Deco corners",
 	"borderless": "no border at all: the painting fills the whole card to its edge (no window, no ornament), the name printed over its foot on a soft veil of the card stock - the further the ink stands from the stock, the lighter that veil can be",
-	"written": "a WRITTEN CARD - a recipe card, a note, a list, a letter: its writing is its face, the card's title and its lines written across it in a hand (`hand`) on its stock (`ruling`), and a small picture beside them (`sketch`) - no border round it and no ornament",
+	"written": "a WRITTEN CARD - a recipe card, a note, a list, a letter: its writing is its face, the card's title and its lines written across it in a hand (`hand`) on its stock (`ruling`), and nothing else - no picture, no border round it and no ornament",
 }
 
 ## A WRITTEN CARD ([constant FRAMES] `written`; the user, 2026-10-26: "we need to give the agents more control over
 ## what they draw onto a card, because the current card design may not fit a box full of recipe cards"): the hand
-## its writing is in, its stock's ruling, and where its small picture sits - each the producer's.
+## its writing is in and its stock's ruling, each the producer's. NO PICTURE ON IT (2026-10-29, of a recipe card's
+## postage-stamp painting in its corner: "it begs the question: where would that picture have come from? It would
+## probably be best to just treat these like a baker's recipe card... just text"): nothing is painted for one.
 const HANDS := {
 	"neat": {"file": "res://fonts/hands/Kalam-Regular.ttf", "scale": 1.0, "about": "a careful, rounded hand - a cook copying a recipe out for keeps"},
 	"quick": {"file": "res://fonts/hands/Caveat-Variable.ttf", "scale": 1.3, "about": "a quick, slanted, looping hand - a note dashed off, a recipe taken down over the phone"},
@@ -64,10 +66,6 @@ const RULINGS := {
 	"ruled": "an index card's ruling: a red line under the title, faint blue lines under the writing",
 	"plain": "plain stock, the writing kept level by eye",
 	"grid": "faint squares of graph paper, a darker line under the title",
-}
-const SKETCHES := {
-	"corner": "a small square picture in the top corner beside the title, as a printed card's vignette or a doodle",
-	"band": "a picture in a band across the top of the card, the writing under it",
 }
 
 ## THE CARD ITSELF, beyond its frame's rules (2026-10-07, the user: "Every single card we generate right
@@ -460,10 +458,10 @@ static func sanitize_look(look: Dictionary) -> Dictionary:
 	if f["style"] == "borderless":
 		f["window"] = "rect"
 		f["ornament"] = "none"
-	# ...nor a written one, whose writing is its face: its hand, its ruling and where its picture sits
+	# ...nor a written one, whose writing is its face: its hand and its ruling
 	if f["style"] == "written":
 		f["ornament"] = "none"
-		for k in [["hand", HANDS, "neat"], ["ruling", RULINGS, "ruled"], ["sketch", SKETCHES, "corner"]]:
+		for k in [["hand", HANDS, "neat"], ["ruling", RULINGS, "ruled"]]:
 			var v := String(frame.get(k[0], "") if frame.get(k[0]) is String else "").strip_edges().to_lower()
 			f[k[0]] = v if (k[1] as Dictionary).has(v) else String(k[2])
 	# the producer may print on any stock, black to white: the name must read on it

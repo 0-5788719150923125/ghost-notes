@@ -17,6 +17,13 @@
 # NO SAMPLE TAGS: a sample in a prompt comes back word for word, every run, so the format is
 # placeholders only.
 #
+# NOTHING THE TITLE OR DESCRIPTION SAYS ALREADY (the user, 2026-10-30: "The tag-writer keeps choosing
+# keywords that already exist in the title and description ... YouTube tags are for relevant, similar
+# themes and ideas, or things that might be in the video but not in text/metadata"): told to name what
+# the video is about, the writer had copied what it was shown - a whole title as a tag, the show's name,
+# a phrase from the description. The show's name, the title and the description go up with the video
+# and are searched already; the code drops a tag whose every word is in them as well (YouTubeTags.land).
+#
 # YOUTUBE'S LIMIT is held by the code (YouTube.fit_tags drops what is past {{most}} characters, counted
 # as YouTube counts them); the writer is told it so the tags that matter most come first.
 #
@@ -45,10 +52,17 @@ prompt:
   - "{{words}}"
   - ""
   - >-
-      Name what this video is about: its subject, the particular things it covers and the names it
-      uses, the kind of video it is, and the show's subject. Put the most particular first, then the
-      wider ones. Every tag must be true of this video: nothing it does not hold, no other channel's
-      or creator's name unless the video is about them, and no brand it does not name.
+      The show's name, the title and the description go up with the video, and YouTube searches them
+      already: a tag that says only what they say adds nothing. Leave out every tag whose words are all
+      in them - the title or a piece of it, the show's name, a name or phrase from the description -
+      even one of the show's tags above.
+  - >-
+      Name what a viewer might search for and be glad to find this video: the particular things it
+      covers and the names it uses that the title and description leave out, the other words people use
+      for its subject, and the related subjects, themes and ideas it touches, the kind of video it is
+      among them. Put the most particular first, then the wider ones. Every tag must be true of this
+      video: nothing it does not hold, no other channel's or creator's name unless the video is about
+      them, and no brand it does not name.
   - >-
       Each tag is a word or a short phrase of a few words, written the way people search: in
       lowercase except for names, in the language the video speaks, with no hashtag sign, no comma

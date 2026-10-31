@@ -13,6 +13,10 @@ extends Node
 ## stop reach it; after Stop nothing is left on the rail, and once the panel is gone NO HOOK IS
 ## LEFT - the three Callables this replaced were never cleared by anything.
 ##
+## WAITING IS NOT A PAUSE ([method Spectrum.set_waiting]: a table's physics behind a live show): the clock stands still in the
+## intro and the music, the transport still plays and says it is catching up, and a pause taken while it waits outlasts the
+## wait (the control: the wait over, the clock runs).
+##
 ## SPACE plays and pauses through the transport, even with a button focused.
 
 const FixtureAudio := preload("res://tests/fixture_audio.gd")
@@ -93,6 +97,12 @@ func _song() -> void:
 	_ok(Spectrum.transport_playing(), "▶ plays it again")
 	var ran := await _moved(0.5)
 	_ok(ran > 0.3, "control: unpaused, the intro clock runs (%.2fs in 0.5s)" % ran)
+	# WAITING HOLDS THE INTRO TOO, unpaused
+	Spectrum.set_waiting("check", true)
+	await _frames(2)
+	still = await _moved(0.5)
+	_ok(absf(still) < 0.001 and not Spectrum.paused, "waiting, the intro clock stands still, unpaused (moved %.3fs)" % still)
+	Spectrum.set_waiting("check", false)
 	# SEEK through the rail: a click at three quarters
 	var r := _bar._rail()
 	var click := InputEventMouseButton.new()
@@ -116,6 +126,24 @@ func _song() -> void:
 	still = await _moved(0.5)
 	_ok(Spectrum.paused and absf(still) < 0.001, "paused in the music, the clock stands still (moved %.3fs)" % still)
 	_bar._play.pressed.emit()
+	# WAITING IS NOT A PAUSE (the table's physics behind a live show, [method Spectrum.set_waiting]): the clock stands still,
+	# the transport still plays and says it is catching up, and a pause taken meanwhile outlasts the wait
+	await _frames(2)
+	Spectrum.set_waiting("check", true)
+	await _frames(2)
+	still = await _moved(0.5)
+	_ok(absf(still) < 0.001, "waiting in the music, the clock stands still (moved %.3fs)" % still)
+	_ok(not Spectrum.paused and Spectrum.transport_playing(), "and waiting is not paused: the transport still plays")
+	_ok(_bar._label.text.contains("catching up"), "and its time says it is catching up: %s" % _bar._label.text)
+	Spectrum.transport_pause()
+	Spectrum.set_waiting("check", false)
+	await _frames(2)
+	still = await _moved(0.3)
+	_ok(Spectrum.paused and absf(still) < 0.001, "paused while it waited, the wait over, it stays paused (moved %.3fs)" % still)
+	Spectrum.transport_play()
+	await _frames(2)
+	ran = await _moved(0.5)
+	_ok(ran > 0.3 and not _bar._label.text.contains("catching up"), "control: the wait over and played, the clock runs (%.2fs in 0.5s)" % ran)
 	# INTO THE TAIL, then pause there
 	Spectrum.seek(LEAD + LEN - 0.15)
 	var waited := 0.0

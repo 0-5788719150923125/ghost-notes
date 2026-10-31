@@ -336,10 +336,8 @@ static func ornament(ci: CanvasItem, look: Dictionary, ink: Color, accent: Color
 ## A BORDERLESS card's picture is the whole card, face and back: its type is set over it ([method type_boxes]).
 static func window(back := false, look: Dictionary = {}) -> Rect2:
 	var sz := Vector2(face_px(look))
-	if borderless(look) or (back and CardTable.written(look)):
+	if borderless(look) or CardTable.written(look):
 		return Rect2(Vector2.ZERO, sz)
-	if CardTable.written(look):
-		return sketch_rect(look)
 	var m := sz.x * 0.06
 	if ornament_of(look) != "none":
 		m = sz.x * (ORNAMENT_INSET + ORNAMENT_BAND + frame_reach(look))
@@ -378,39 +376,24 @@ static func front_window(look: Dictionary, details := false) -> Rect2:
 	return Rect2(full.position, Vector2(full.size.x, full.size.y * 0.48)) if details and not borderless(look) else full
 
 
-## WHERE A WRITTEN CARD'S PICTURE SITS ([constant CardTable.SKETCHES]), pixels: a square in the top corner beside
-## its title, or a band across its top.
-static func sketch_rect(look: Dictionary) -> Rect2:
-	var sz := Vector2(face_px(look))
-	var m := minf(sz.x, sz.y) * WRITTEN_MARGIN
-	var f: Dictionary = look.get("frame", {}) if look.get("frame") is Dictionary else {}
-	if String(f.get("sketch", "corner")) == "band":
-		return Rect2(m, m, sz.x - 2.0 * m, sz.y * 0.3)
-	var side := minf(sz.x, sz.y) * SKETCH_SIDE
-	return Rect2(sz.x - m - side, m, side, side)
-
-
-## A written card's margin and its corner picture's side, shares of the card's short side.
+## A written card's margin, a share of the card's short side.
 const WRITTEN_MARGIN := 0.06
-const SKETCH_SIDE := 0.36
 ## Its lines' pitch at the largest and the smallest, shares of the short side: the writing set as large as lets
 ## every line fit.
 const PITCH := Vector2(0.115, 0.05)
 
 
 ## A WRITTEN CARD'S WRITING LAID OUT ([member Face.writing]): its title [param title] on the head line, and
-## [param lines] each on a rule of its own, wrapped onto the next one, indented, where it runs long - beside a corner
-## picture, a line stops short of it. As large as fits every line, from [constant PITCH]'s largest down; past its
+## [param lines] each on a rule of its own, wrapped onto the next one, indented, where it runs long, across the whole
+## card (it has no picture: [constant CardTable.FRAMES] `written`). As large as fits every line, from [constant PITCH]'s largest down; past its
 ## smallest, what does not fit is left off with an ellipsis. `{pitch, size, head, rules: [y], title: {at, size},
 ## rows: [{text, at}]}` - pixels, in [param font] at its hand's [param scale] ([constant CardTable.HANDS]).
 static func written_layout(look: Dictionary, title: String, lines: PackedStringArray, font: Font, scale := 1.0) -> Dictionary:
 	var sz := Vector2(face_px(look))
 	var short := minf(sz.x, sz.y)
 	var m := short * WRITTEN_MARGIN
-	var pic := sketch_rect(look)
-	var corner := pic.position.y <= m + 0.5 and pic.size.x < sz.x * 0.6
-	var head := (m + short * 0.17) if corner else (pic.end.y + short * 0.13)
-	var title_w := (pic.position.x - m * 1.5) if corner else (sz.x - 2.0 * m)
+	var head := m + short * 0.17
+	var title_w := sz.x - 2.0 * m
 	var ts := mini(int(short * 0.1), _fit(font, title, int(short * 0.1), title_w))
 	var out := {"head": head, "title": {"at": Vector2(m, head - font.get_descent(ts) - short * 0.012), "size": ts, "width": title_w}}
 	var bottom := sz.y - m * 0.7
@@ -427,8 +410,7 @@ static func written_layout(look: Dictionary, title: String, lines: PackedStringA
 			var lead := 0.0
 			var k := 0
 			while fits and k <= words.size():
-				# the rule's room: short of a corner picture beside it
-				var right := (pic.position.x - m * 0.6) if corner and y - px * 0.25 < pic.end.y else (sz.x - m)
+				var right := sz.x - m
 				if k < words.size():
 					var next := words[k] if cur.is_empty() else cur + " " + words[k]
 					if cur.is_empty() or font.get_string_size(next, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= right - m - lead:
@@ -790,7 +772,10 @@ class Face:
 			frame_win = fit["win"]
 			dome = fit["dome"]
 		var hole := CardFaces.outline(shape, frame_win, 0.0, dome)
-		if art != null:
+		if written:
+			# ...nothing painted on it: its writing is all a written card's face is
+			pass
+		elif art != null:
 			# a reversed card is printed the right way up: the TABLE turns it over
 			CardFaces._cover_shape(self, art, win, hole, part)
 		else:

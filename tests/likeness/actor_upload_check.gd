@@ -169,14 +169,14 @@ func _check() -> void:
 
 	# A JOB LANDED: its ✓, and the note's tags replaced
 	step._errors.clear()
-	AgentJobs._ended["text-actor-upload-check"] = {"ok": true, "text": "{\"tags\": [\"quick brown fox\", \"lazy dog\", \"reading\"]}"}
+	AgentJobs._ended["text-actor-upload-check"] = {"ok": true, "text": "{\"tags\": [\"quick brown fox\", \"lazy dog\", \"fable\"]}"}
 	step._jobs[feed.folder()] = {"id": "text-actor-upload-check", "feed": feed, "stamp": feed.stamp()}
 	card._refresh()
 	_ok(card._added.busy(feed) and card._gen_btn.disabled and not card._stop_btn.disabled and (r["redo"] as Button).disabled,
 		"while its job runs: Generate and its ⟳ wait, Stop is offered")
 	_tick(card, up)
-	_ok((r["state"] as Label).text == "✓ 3 tags: quick brown fox, lazy dog, reading" and not (r["redo"] as Button).disabled
-		and ed._doc.field("tags") == "quick brown fox, lazy dog, reading" and not card._gen_btn.disabled,
+	_ok((r["state"] as Label).text == "✓ 3 tags: quick brown fox, lazy dog, fable" and not (r["redo"] as Button).disabled
+		and ed._doc.field("tags") == "quick brown fox, lazy dog, fable" and not card._gen_btn.disabled,
 		"landed: its ✓ on the Actor card, and the note's tags replaced (%s)" % (r["state"] as Label).text)
 
 	# STOP stops a job writing them

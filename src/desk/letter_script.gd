@@ -40,8 +40,9 @@ class_name LetterScript
 ##     <!-- sketch: what it shows -->          a drawing the pen makes on the page WHERE THE MARK IS - an
 ##                                             agent draws it from the words as SVG ([LetterCard]), TeX's
 ##                                             figure reader lays it out - the voice waiting for the pen
-##                                             before the next written words; a rule is left empty under
-##                                             it ([constant UNDER_SKETCH]). A thought right after it (no
+##                                             before the next written words (a big one dashed off, [method
+##                                             drawn_alone]); a rule is left empty under it ([constant
+##                                             UNDER_SKETCH]). A thought right after it (no
 ##                                             point in it) is thought while it is drawn. Not drawn yet,
 ##                                             nothing is.
 ##     <!-- point: sketch -->, <!-- point: sketch, the dot on its own -->
@@ -151,6 +152,11 @@ const OVERTAKE := 0.6
 ## is drawn quicker, up to DRAW_QUICKEST the hand's pace, to be done DRAW_TAIL (seconds) after them ([method draw_pace]).
 const DRAW_QUICKEST := 7.0
 const DRAW_TAIL := 1.5
+## A SKETCH DRAWN ALONE, the voice waiting it out (2026-10-29, the user, of the chapter's tree of dots once it was
+## drawn where its mark is: it "felt like it took a solid 30 or 45 seconds to draw" - 35 s of ink at the hand's own
+## pace, where dashed off over its words it had taken 7): done in this long (seconds), or at the hand's pace if that
+## is sooner ([method drawn_alone]).
+const DRAW_ALONE := 5.0
 ## The pen at its quickest, against the hand's own pace ([constant LetterHand.PACE]): past a quick voice's 180 words
 ## a minute, so the pen keeps with the voice it has (at 2.0 a voice of 0.36 s a word left it 18 words behind).
 const QUICKEST := 2.5
@@ -464,7 +470,7 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 		# pen - the voice silent while it draws - but a thought, which needs no pen, is thought while it draws (one with a
 		# point in it needs the pen, and waits)
 		if pending >= 0 and not (kind == "para" and is_thought(text) and point.search(text) == null):
-			var w := float((actions[pending] as Dictionary)["write"])
+			var w := drawn_alone(float((actions[pending] as Dictionary)["write"]))
 			voice.append({"hold": w, "act": -1, "pen": w})
 			pending = -1
 		match kind:
@@ -520,7 +526,7 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 					"after": spoken.size(), "page_break": new_page}
 				act.merge(DeskScript.item("draw", svg), true)
 				act["write"] = float(lengths.get(String(act["id"]), DeskScript.estimate(svg)))
-				act["dur"] = LEAD + float(act["write"])
+				act["dur"] = LEAD + drawn_alone(float(act["write"]))
 				new_page = false
 				held = _hold_pen(actions, voice, held, pens.find(ink), spoken.size())
 				act["ink"] = pens[held]
@@ -651,7 +657,7 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 				spoken.append_array(said)
 				ink = ink_to
 	if pending >= 0:
-		var w := float((actions[pending] as Dictionary)["write"])
+		var w := drawn_alone(float((actions[pending] as Dictionary)["write"]))
 		voice.append({"hold": w, "act": -1, "pen": w})
 	for s in spans:
 		if int((s as Dictionary)["to"]) < 0:
@@ -870,6 +876,13 @@ static func _ahead(tv: float, head: float, last: float, words: int) -> float:
 ## as the next line leaves it time for).
 static func draw_pace(work: float, said: float) -> float:
 	return clampf(work / maxf(said + DRAW_TAIL, 0.1), DeskScript.MAX_PACE, DRAW_QUICKEST)
+
+
+## HOW LONG A SKETCH DRAWN ALONE TAKES, the voice waiting it out: its [param work] seconds of ink at the hand's own
+## pace while that is done within [constant DRAW_ALONE], else that long, never quicker than [constant DRAW_QUICKEST]
+## the hand's pace - the rest the voice is given, and what [LetterMedium] draws it in.
+static func drawn_alone(work: float) -> float:
+	return work / clampf(work / DRAW_ALONE, 1.0, DRAW_QUICKEST)
 
 
 ## Is the paragraph whose first spoken word is [param base] read under a picture ([param spans]' images)?

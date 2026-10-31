@@ -9,7 +9,7 @@
 # cards already down ({{line}}, `swept`: swept out with this one, not read yet); the step (`intro`,
 # `close` or `card`; each with {{keys}}, its keywords, or "") and, for a card, which way it came (`now_jumper`, `now_dealt`, `now_swept_first`,
 # `now_swept`, `now_boxed`, `now_drawn`; `righted`, it came out upside down and was turned), what may be said of its picture (`pic_quiet`, `pic_lying`,
-# `pic_held`, `pic_art`), and its text (`on_back` or `in_booklet`); `link`, a card read with the cards
+# `pic_held`, `pic_art`), and its text (`on_back` or `in_booklet` - or `on_card`, a written card's writing, which has no picture); `link`, a card read with the cards
 # already down; `heard`, how earlier episodes met this point; `passed`, a card put back in its box while
 # others stay out; {{handled}}, what is done after it to this card or one on the table (laid sideways, laid on
 # another, turned where it lies); {{after}}, what the table
@@ -285,6 +285,18 @@ card:
       Facts: {{keywords}}
       {{text}}
       </front>
+  # A WRITTEN CARD (CardTable.FRAMES `written`): its writing is the whole card - there is no picture on it to
+  # describe or point at
+  - when: on_card
+    say: >-
+          It is a written card: what is written on it is all there is on it, no picture - the viewer
+          reads it on the card as you hold it up. Read out what serves you, in your own way; never
+          describe a picture on it, for there is none:
+  - when: on_card
+    say: |-
+      <card>
+      {{text}}
+      </card>
   - when: in_booklet
     say: >-
           The deck's booklet entry for it is on screen beside the card - the viewer can read it.
@@ -462,12 +474,22 @@ work_list:
   - "WHAT IS DONE WHILE YOU SPEAK, in this order:"
   - each: work_acts
     say: '  - {{about}} ({{#under}}for as long as your words around it take{{/under}}{{^under}}about {{seconds}} seconds{{/under}}; it is called `{{name}}`)'
+  # THE WORK IS SEEN, SO IT NEED NOT ALL BE SAID (the user, 2026-10-29: "the script sounds very much like the narrator
+  # just narrating every single action. Which is fine, but I also think it would be nice if they told stories, or
+  # deviated into parallel topics"): a step named where it helps, what it changes noticed as it changes, and between
+  # them the words go where the brief lets its voice go - each step started at its own word, so the work keeps the
+  # words' pace and they may run on past it. What a step WRITES is still said as it is written (Proof's rule above)
   - >-
-      WHAT IS DONE IS SAID AS IT IS DONE: talk the viewer through each step while it happens - what
-      you are doing, why, what it changes - never announcing a step before it starts, and never
-      reporting one long after it is done. Each starts where the one before it ends; to start one at
-      an exact word, put <!-- act: its name --> just before that word, on the same line. No other mark.
-      The work takes about {{work_seconds}} seconds in all: say enough to cover it.
+      THE VIEWER SEES THE WORK, SO YOU NEED NOT NARRATE ALL OF IT: name a step in a few words as it
+      begins where that helps, and notice what it changes as it changes - never announcing a step
+      before it starts, and never reporting one long after it is done. Around and between the steps,
+      talk the way the brief says this voice talks - a story, a memory, a piece of history, a tangent
+      the work brings to mind - and come back to the work where it does something worth a word. Words
+      a step writes are said as they are written. Start each step at the word it belongs to: put
+      <!-- act: its name --> just before that word, on the same line, and the work waits for it (a
+      step with no mark starts where the one before it ends). No other mark. The work takes about
+      {{work_seconds}} seconds in all: say at least enough to cover it, and more where you have a
+      story to tell.
   # A SHOW WHOSE WORDS ARE ABOUT SOMETHING ELSE while the work is seen (the brief says so): the work answers the
   # words, never the other way round
   - >-

@@ -620,6 +620,9 @@ func say_prompt(who: String) -> Dictionary:
 			var label := ("Card %d, just turned over - its painting, as the viewer sees it:" % k) if who != "close" \
 				else ("Card %d%s - %s%s:" % [k, (" (" + where + ")") if not where.is_empty() else "",
 					String(c.get("name", "")), ", reversed" if bool(c.get("reversed", false)) else ""])
+			# ...a written card has none: its writing is its face
+			if episode.written_card(k):
+				continue
 			images.append({"path": episode.file_of("image:card:%d" % k), "label": label,
 				"flip": bool(c.get("reversed", false))})
 	var names: Array = []
@@ -1105,20 +1108,20 @@ func _land_check(step: String, text: String) -> String:
 
 func _land_design(step: String, text: String) -> String:
 	var d: Variant = TextGen.extract_json(text)
-	if not (d is Dictionary) or _str((d as Dictionary).get("art", "")).is_empty():
-		return "the design was not JSON with an illustration"
+	var k := int(step.get_slice(":", 1))
 	# A WRITTEN CARD'S WRITING ([constant CardTable.FRAMES] `written`): its title and its lines, kept as written -
-	# and as its entry's text, a line to each, for every reader and the work that read a card's entry
-	if CardTable.written(CardTable.sanitize_look(_look())):
+	# and as its entry's text, a line to each, for every reader and the work that read a card's entry. It has no picture.
+	if d is Dictionary and CardTable.written(CardTable.look_of(_look(), _card(k))):
 		var w: Variant = (d as Dictionary).get("writing", {})
 		var lines := DataPath.strings((w as Dictionary).get("lines", [])) if w is Dictionary else PackedStringArray()
 		if lines.is_empty():
 			return "the design has no writing: a written card needs its `writing`, a title and its lines"
 		var writing := {"title": _str((w as Dictionary).get("title", "")), "lines": Array(lines.slice(0, WRITING_MOST))}
 		if String(writing["title"]).is_empty():
-			writing["title"] = String(_card(int(step.get_slice(":", 1))).get("name", ""))
-		return episode.write_json(step, {"art": _str((d as Dictionary)["art"]), "writing": writing,
-			"booklet": {"keywords": [], "upright": "\n".join(PackedStringArray(writing["lines"]))}})
+			writing["title"] = String(_card(k).get("name", ""))
+		return episode.write_json(step, {"writing": writing, "booklet": {"keywords": [], "upright": "\n".join(PackedStringArray(writing["lines"]))}})
+	if not (d is Dictionary) or _str((d as Dictionary).get("art", "")).is_empty():
+		return "the design was not JSON with an illustration"
 	var b: Variant = (d as Dictionary).get("booklet", {})
 	if not (b is Dictionary) or _str((b as Dictionary).get("upright", "")).is_empty():
 		return "the design has no booklet entry"

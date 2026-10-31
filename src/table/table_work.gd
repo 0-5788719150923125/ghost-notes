@@ -68,6 +68,9 @@ const HOME_TURN := 0.09
 ## ...and the room it stood in as built, grown this much (meters), is its own slot: a vial set back down into its
 ## rack goes home through no wall of the rack.
 const SLOT_GROW := 0.002
+## A PINCH FALLS FROM WHAT HOLDS IT: a sprinkle naming a thing the same act moves falls within this much of it (meters), or
+## [method check] says how far off it falls ([method _sprinkles_said]).
+const PINCH_NEAR := 0.03
 ## A thing set down rests this far above what it is set on (meters): on it, never in it.
 const SET_GAP := 0.0005
 ## ...and what it stands on is under the points of its surface this near its lowest (meters, [method _foot]).
@@ -109,6 +112,21 @@ var _writing := {}            # work -> the words written on it, as its last `wr
 var _aloft_of := {}           # a channel and where a move left it -> whether it touches nothing there ([method _held_up])
 var _parent_work := {}        # work index -> the work it is a part of, or -1 ([method _within])
 var _solids_ref: Array = []   # the physics' solids, their fields - this work's and its twin's ([method _foot])
+## WHAT THE PHYSICS MOVES, not the acts ([TablePhysics]): each hinge that hangs free and swings by its weight and what
+## lies on it - a balance's beam - and each part hung from one, kept level (`{from: the hinge, at: where it hangs, axis}`,
+## its node's own space)...
+var swings := {}
+var hung := {}
+## ...and, on the bake's own twin, where it has them as it bakes: each swinging hinge's angle (degrees), each part it
+## moves as a rigid body ([RigidParts]) and each whole thing - the work itself asks the bake's frames ([method
+## TablePhysics.swing_of], [method TablePhysics.thing_pose_of]).
+var swung := {}
+var posed := {}
+var posed_things := {}
+var _first_drawn := {}        # each part's node as first drawn ([method drawn_report])
+## WHILE AN ACT IS CHECKED ([method check]), a part the work picks up is where the acts put it, never where the physics
+## stopped it: what the puppeteer is told passes through something is what its acts would put through it.
+var _planned := false
 var _steady := false          # while that is found: nothing drifts
 var _air = null               # the acts' cue bursts (Effects.Air), or null
 var _cues: Array = []         # [{act, at, every, where, name}]
@@ -301,12 +319,24 @@ func build(raw: Variant, beats: int, sound: Dictionary = {}) -> void:
 			kept.append(tr)
 		a["tracks"] = kept
 	acts = acts.filter(func(a: Dictionary) -> bool: return not (a["tracks"] as Array).is_empty())
-	# EACH MOVE ITS OWN HAND ([Hands]): a seed a track, from the episode's and the act's - a tool's two ends share theirs
+	# EACH MOVE ITS OWN HAND ([Hands]): a seed a track, from the episode's and the act's - a tool's two ends share theirs, and
+	# so do tracks of one act that make the same move, as one hand carries what it moves together (841899's frankincense jar
+	# and its cork, fetched by one path: each swayed its own way, the cork wandered through the jar's neck, and let go it fell in)
 	for a in acts:
 		var tracks: Array = a["tracks"]
+		var by_move := {}
 		for k in tracks.size():
 			var tr: Dictionary = tracks[k]
-			var hs := hash([medium._plan.seed_value, String(a["name"]), k])
+			var move := tr.duplicate()
+			for key in ["thing", "part", "_wi", "_ch", "_ti", "_hand", "_with", "about"]:
+				move.erase(key)
+			# ...and the second rides the first: turned about its own pivot by the same lean and sway, a stopper 13 cm up its jar
+			# still swung 1.7 mm about in it
+			if by_move.has(hash(move)):
+				tr["_with"] = int((by_move[hash(move)] as Array)[1])
+			var hs := int((by_move.get(hash(move), [hash([medium._plan.seed_value, String(a["name"]), k])]) as Array)[0])
+			if not by_move.has(hash(move)):
+				by_move[hash(move)] = [hs, k]
 			tr["_hand"] = hs
 			for end in ["tip", "grip"]:
 				if tr.get(end) is Dictionary:
@@ -539,10 +569,15 @@ func _part_label(wi: int) -> String:
 ## change: the-quiet-crucible 707668's slip, carried over the cauldron, "poofed" back to the middle of the table where the
 ## bake had last set it down, and the mortar was set down on it.
 func _outran(wi: int, t: float) -> bool:
+	return _outran_ch(["w%d:pose" % wi, "g%d:pose" % int(_group_of.get(wi, -1))], t)
+
+
+## ...of whatever channels [param chans] move: a part's, its group's, a whole thing's.
+func _outran_ch(chans: Array, t: float) -> bool:
 	var baked := physics.baked_to()
 	if t <= baked:
 		return false
-	for ch in ["w%d:pose" % wi, "g%d:pose" % int(_group_of.get(wi, -1))]:
+	for ch in chans:
 		for e in _chan.get(ch, []):
 			if float((e as Dictionary)["s1"]) >= baked and float((e as Dictionary)["s0"]) <= t:
 				return true
@@ -651,8 +686,11 @@ func work_spot() -> Vector3:
 
 
 ## THING [param ti] WHERE IT IS AT SHOW TIME [param T], in the table's space: moved by the work, or as it stood
-## (for NAN, or a thing nothing moves). A pure function of the schedule - never the node as it was last posed.
+## (for NAN, or a thing nothing moves). A pure function of the schedule - never the node as it was last posed. On the
+## bake's twin, a thing an act moves is where the bake has it, a rigid body ([member posed_things]).
 func _thing_world(ti: int, T: float) -> Transform3D:
+	if not is_nan(T) and posed_things.has(ti):
+		return posed_things[ti]
 	var ch := "t%d:pose" % ti
 	if is_nan(T) or not _chan.has(ch) or _depth > PLACE_DEPTH:
 		return _world_rest_thing(ti)
@@ -663,8 +701,15 @@ func _thing_world(ti: int, T: float) -> Transform3D:
 
 
 ## WORK [param wi] WHERE IT IS AT SHOW TIME [param T]: a free part moved by the work where it was moved (riding
-## its thing when it was left in it, [method _ridden]), any other part where its thing has it.
+## its thing when it was left in it, [method _ridden]), any other part where the part it is a part of has it - or its
+## thing - turned on its own joint ([method _joint]): a balance's pan where its beam has tipped it. (Each part had stood
+## where its thing had it, its joint and the part it hangs from never asked: the beam tipped and its pan dipped on the
+## table, and in the physics neither moved - a lump laid on the pan stayed in the air where the pan had been, the
+## user, 2026-10-29: "It still floats above it, the weight never transfers to the scale".) A part the physics moves as a
+## rigid body is where the bake has it, on the bake's twin ([member posed]).
 func _work_world(wi: int, T: float) -> Transform3D:
+	if not is_nan(T) and posed.has(wi):
+		return posed[wi]
 	var wk: Dictionary = works[wi]
 	var ti := int(wk["thing"])
 	if not is_nan(T) and _depth <= PLACE_DEPTH and String(wk["kind"]) == "free":
@@ -678,8 +723,60 @@ func _work_world(wi: int, T: float) -> Transform3D:
 			x = _ridden(wi, x, T)
 			_depth -= 1
 			return x
+	return _base_world(wi, T) if is_nan(T) else _base_world(wi, T) * _joint(wi, T)
+
+
+## Work [param wi] where the part it is a part of (or its thing) has it at show time [param T], before its own joint.
+func _base_world(wi: int, T: float) -> Transform3D:
+	var wk: Dictionary = works[wi]
 	var at_rest: Transform3D = _rest["w%d:pose" % wi] if _rest.has("w%d:pose" % wi) else _world_of(wk["node"])
+	var pw := int(_parent_work.get(wi, -1))
+	if pw >= 0 and _rest.has("w%d:pose" % pw):
+		return _work_world(pw, T) * (_rest["w%d:pose" % pw] as Transform3D).affine_inverse() * at_rest
+	var ti := int(wk["thing"])
 	return _thing_world(ti, T) * _world_rest_thing(ti).affine_inverse() * at_rest
+
+
+## WORK [param wi]'s JOINT at show time [param t], in its node's own space: a hinge turned about its pivot by its angle,
+## a slide moved along its axis - a hinge that swings free by its own weight where the physics has it - and a part hung
+## from a swinging hinge turned back about where it hangs, so it hangs level as the beam tips (a balance's pans).
+func _joint(wi: int, t: float) -> Transform3D:
+	var wk: Dictionary = works[wi]
+	var jt: Dictionary = (wk["w"] as Dictionary).get("joint", {}) if (wk["w"] as Dictionary).get("joint") is Dictionary else {}
+	match String(wk["kind"]):
+		"hinge":
+			var b := Basis(jt["axis"] as Vector3, deg_to_rad(_angle(wi, t)))
+			var pv: Vector3 = jt["pivot"]
+			return Transform3D(b, pv - b * pv)
+		"slide":
+			var o := float(value("w%d:offset" % wi, t)) * 0.01
+			var rg: Variant = jt.get("range")
+			if rg is Vector2:
+				o = clampf(o, (rg as Vector2).x * 0.01, (rg as Vector2).y * 0.01)
+			return Transform3D(Basis.IDENTITY, (jt["axis"] as Vector3) * o)
+	if hung.has(wi):
+		var h: Dictionary = hung[wi]
+		var b := Basis(h["axis"] as Vector3, -deg_to_rad(_angle(int(h["from"]), t)))
+		return Transform3D(b, (h["at"] as Vector3) - b * (h["at"] as Vector3))
+	return Transform3D.IDENTITY
+
+
+## Hinge [param wi]'s angle at show time [param t] (degrees), held to its range: where its acts turn it - or, one that
+## swings by its own weight ([member swings]), where the physics has swung it.
+func _angle(wi: int, t: float) -> float:
+	var a := 0.0
+	if swings.has(wi):
+		if physics != null:
+			var s: Variant = physics.swing_of(wi, t)
+			a = float(s) if s != null else float(swings[wi])
+		else:
+			a = float(swung.get(wi, swings[wi]))
+	else:
+		a = float(value("w%d:angle" % wi, t))
+	var rg: Variant = (((works[wi] as Dictionary)["w"] as Dictionary).get("joint", {}) as Dictionary).get("range")
+	if rg is Vector2:
+		a = clampf(a, (rg as Vector2).x, (rg as Vector2).y)
+	return a
 
 
 ## A LOOSE PART RIDES ITS THING: a free part let go IN its own thing (a pestle left in its mortar), or standing in it
@@ -1057,12 +1154,18 @@ func _timelines() -> void:
 		var t0 := float(r["t0"])
 		var t1 := float(r["t1"])
 		var order := 0
+		var mine := {}
 		for t in a["tracks"]:
 			var tr: Dictionary = t
 			var w := _window(tr)
 			if not String(tr.get("_ch", "")).is_empty():
-				items.append({"ch": String(tr["_ch"]), "track": tr, "t0": t0, "t1": t1, "i": int(r["i"]), "order": order,
-					"s0": t0 + w.x * (t1 - t0), "s1": t0 + w.y * (t1 - t0)})
+				var it := {"ch": String(tr["_ch"]), "track": tr, "t0": t0, "t1": t1, "i": int(r["i"]), "order": order,
+					"s0": t0 + w.x * (t1 - t0), "s1": t0 + w.y * (t1 - t0)}
+				# ...WHAT RIDES ANOTHER'S MOVE ([method build]): posed as that one is moved ([method _pose])
+				if mine.has(int(tr.get("_with", -1))):
+					it["_lead"] = mine[int(tr["_with"])]
+				mine[order] = it
+				items.append(it)
 			order += 1
 	items.sort_custom(func(x: Dictionary, y: Dictionary) -> bool:
 		return float(x["s0"]) < float(y["s0"]) or (float(x["s0"]) == float(y["s0"]) and (float(x["t0"]) < float(y["t0"]) or (float(x["t0"]) == float(y["t0"]) and int(x["order"]) < int(y["order"])))))
@@ -1217,7 +1320,8 @@ func value(ch: String, t: float) -> Variant:
 ## move still begins where it was sent. The user, 2026-10-29: "when the actor is holding the pestle in the air, it is
 ## perfectly still: but you would expect it to be gently bobbing/moving, since a hand cannot remain perfectly still".
 ## None for what was set `down` or rests on or against anything, or what the physics holds (a loose thing let go falls),
-## and none in the twin the physics bakes by (it touches nothing, so nothing it meets would tell).
+## and none in the twin the physics bakes by (it touches nothing, so nothing it meets would tell). The bake holds a rigid
+## part so too, swaying alike ([method TablePhysics._held_aloft]).
 func _held_up(ch: String, e: Dictionary, next: Dictionary, t: float) -> float:
 	if physics == null or _steady or bool((e["track"] as Dictionary).get("down", false)):
 		return 0.0
@@ -1317,6 +1421,11 @@ func _eval(e: Dictionary, tau: float, T: float) -> Variant:
 func _pose(e: Dictionary, tau: float, d: float, T: float) -> Transform3D:
 	var tr: Dictionary = e["track"]
 	var from: Transform3D = e["from"]
+	# ...ONE HAND CARRIES WHAT IT MOVES TOGETHER: a track of the same move as one before it in its act goes as that one goes,
+	# from where each began
+	if e.has("_lead"):
+		var le: Dictionary = e["_lead"]
+		return _pose(le, tau, d, T) * (le["from"] as Transform3D).affine_inverse() * from
 	var ch := String(tr["_ch"])
 	var x0: Transform3D = _rest.get(ch, Transform3D.IDENTITY)
 	var wi := int(tr.get("_wi", -1))
@@ -1485,7 +1594,18 @@ func _home_of(tr: Dictionary, T: float) -> Transform3D:
 	if wi < 0:
 		return Transform3D.IDENTITY
 	var ti := int((works[wi] as Dictionary)["thing"])
-	return _thing_world(ti, T) * _world_rest_thing(ti).affine_inverse()
+	var home := _thing_world(ti, T) * _world_rest_thing(ti).affine_inverse()
+	# ...ON THE BAKE'S TWIN, INTO THE PART IT IS A PART OF WHERE THAT PART REALLY IS: a rigid body the physics set down a
+	# centimeter from where the acts put it ([member posed]) takes its stopper back where it is - put back where the acts had
+	# the jar, the sulfur's cork stood on its rim and fell beside it when let go
+	var pw := int(_parent_work.get(wi, -1))
+	if pw >= 0 and posed.has(pw):
+		var real: Transform3D = posed[pw]
+		posed.erase(pw)
+		var planned := _work_world(pw, T)
+		posed[pw] = real
+		home = real * planned.affine_inverse() * home
+	return home
 
 
 ## HOW FAR A THING SET DOWN rises or falls to rest on what is under it (carry's `down`, [constant Motions.LAWS]):
@@ -1616,16 +1736,20 @@ static func _rebuilt(r: Basis, p: Vector3, q0: Vector3, x0: Transform3D) -> Tran
 func tick(t: float) -> void:
 	if things.is_empty():
 		return
+	# WHAT IS IN THINGS, baked as far as this moment - first, since a thing an act moves is drawn where the bake has it
+	if physics != null:
+		physics.tick(t)
 	for ti in things.size():
 		var ch := "t%d:pose" % ti
 		if not _moved.has(ch):
 			continue
 		var th: Dictionary = things[ti]
 		var node: Node3D = th["node"]
-		node.transform = _parent_world(node).affine_inverse() * (value(ch, t) as Transform3D)
-	# WHAT IS IN THINGS, baked as far as this moment: its loose parts posed by it ([method _pose_work])
-	if physics != null:
-		physics.tick(t)
+		# ...WHERE THE BAKE HAS IT, a rigid body ([method TablePhysics._make_rigid]) - the acts' own pose while an act is
+		# checked, or where the bake has not got to while the work moves it
+		var baked: Variant = physics.thing_pose_of(ti, t) if physics != null and not _planned and not _outran_ch([ch], t) else null
+		node.transform = _parent_world(node).affine_inverse() * ((baked as Transform3D) if baked != null else (value(ch, t) as Transform3D))
+	# ...and its loose parts and the parts it picks up posed by it ([method _pose_work])
 	for wi in works.size():
 		_pose_work(wi, t)
 	_tick_shades()
@@ -1635,6 +1759,46 @@ func tick(t: float) -> void:
 		_air.tick(t)
 	for m in _timed:
 		(m as ShaderMaterial).set_shader_parameter("show_time", t)
+	if _first_drawn.is_empty():
+		for wi in works.size():
+			_first_drawn[wi] = ((works[wi] as Dictionary)["node"] as Node3D).global_transform
+
+
+## EVERY PART DRAWN OFF WHERE IT FIRST STOOD at [param t], and how it is posed: whether an act holds it then, what the bake
+## has it as (a rigid body's held, asleep, host and touch; a loose thing's), and the bake's pose against the work's - a
+## feedback capture's record of what the live viewer drew (841899's lid, "matching the ladle", moved only live).
+func drawn_report(t: float) -> Array:
+	var out: Array = []
+	for wi in _first_drawn:
+		var wk: Dictionary = works[wi]
+		var x: Transform3D = (wk["node"] as Node3D).global_transform
+		var x0: Transform3D = _first_drawn[wi]
+		var d := x.origin.distance_to(x0.origin)
+		var turn := rad_to_deg(Quaternion(x0.basis.orthonormalized()).angle_to(Quaternion(x.basis.orthonormalized())))
+		if d < 0.005 and turn < 3.0:
+			continue
+		var ch := "w%d:pose" % wi
+		var acting := false
+		for e in _chan.get(ch, []):
+			acting = acting or (float((e as Dictionary)["s0"]) <= t and float((e as Dictionary)["s1"]) >= t)
+		var r := {"part": String(wk["name"]), "thing": String((things[int(wk["thing"])] as Dictionary)["name"]), "kind": String(wk["kind"]),
+			"moved_cm": snappedf(d * 100.0, 0.1), "turned_deg": snappedf(turn, 0.1), "act_now": acting, "outran": _outran(wi, t),
+			"planned": _planned}
+		if physics != null:
+			r["baked_to"] = physics.baked_to()
+			if physics._rigid_of.has(wi):
+				var bi := int(physics._rigid_of[wi])
+				var b: Dictionary = physics.rigid.bodies[bi]
+				var hs := int(b["host"])
+				var tc := int(b["touch"])
+				r["body"] = {"held": b["held"] != null, "asleep": bool(b["asleep"]), "host": physics._solid_label(hs) if hs >= 0 else str(hs),
+					"touch": physics._solid_label(tc) if tc >= 0 else str(tc)}
+			r["loose"] = physics._loose_of.has(wi)
+			var bp: Variant = physics.pose_of(wi, t)
+			if bp != null:
+				r["bake_off_work_cm"] = snappedf((bp as Transform3D).origin.distance_to(_work_world(wi, t).origin) * 100.0, 0.1)
+		out.append(r)
+	return out
 
 
 ## EACH THING'S SHADE ON THE CLOTH where the thing is now: gone while it is lifted or tipped, under it where it
@@ -1695,32 +1859,17 @@ func _pose_work(wi: int, t: float) -> void:
 		var k := maxf(grow, 0.0005)
 		s = Transform3D(Basis.from_scale(Vector3(k, k * maxf(fill, 0.0005), k)), base) * Transform3D(Basis.IDENTITY, -base)
 	var j := Transform3D.IDENTITY
-	var jt: Dictionary = w.get("joint", {})
-	match String(wk["kind"]):
-		"hinge":
-			var a := deg_to_rad(float(value("w%d:angle" % wi, t)))
-			var rg: Variant = jt.get("range")
-			if rg is Vector2:
-				a = clampf(a, deg_to_rad((rg as Vector2).x), deg_to_rad((rg as Vector2).y))
-			var axis: Vector3 = jt["axis"]
-			var pv: Vector3 = jt["pivot"]
-			var b := Basis(axis, a)
-			j = Transform3D(b, pv - b * pv)
-		"slide":
-			var o := float(value("w%d:offset" % wi, t)) * 0.01
-			var rg: Variant = jt.get("range")
-			if rg is Vector2:
-				o = clampf(o, (rg as Vector2).x * 0.01, (rg as Vector2).y * 0.01)
-			j = Transform3D(Basis.IDENTITY, (jt["axis"] as Vector3) * o)
-		"free":
-			# moved by the work where the work moved it - a copy as its set is moved, from where the set stood,
-			# and a part left in its thing riding it ([method _work_world]) - or, LOOSE, where the physics has it, held
-			# or let go ([TablePhysics])
-			var loose: Variant = physics.pose_of(wi, t) if physics != null and bool(w.get("loose", false)) and not _outran(wi, t) else null
-			if loose != null:
-				j = _parent_world(node).affine_inverse() * (loose as Transform3D)
-			elif _part_moves(wi):
-				j = _parent_world(node).affine_inverse() * _work_world(wi, t)
+	if String(wk["kind"]) == "free":
+		# moved by the work where the work moved it - a copy as its set is moved, from where the set stood, and a part
+		# left in its thing riding it ([method _work_world]) - or where the physics has it, held or let go: a LOOSE thing,
+		# or a part the work picks up, a rigid body ([TablePhysics])
+		var baked: Variant = physics.pose_of(wi, t) if physics != null and not _outran(wi, t) and not (_planned and not bool(w.get("loose", false))) else null
+		if baked != null:
+			j = _parent_world(node).affine_inverse() * (baked as Transform3D)
+		elif _part_moves(wi):
+			j = _parent_world(node).affine_inverse() * _work_world(wi, t)
+	else:
+		j = _joint(wi, t)
 	node.transform = j * s
 	node.visible = float(value("w%d:shown" % wi, t)) > 0.5 and grow > 0.001 and fill > 0.001
 	# a loose thing ground to pieces is drawn as its pieces
@@ -2115,7 +2264,9 @@ func parts_report() -> String:
 ## inside another thing, or through the table's top - with the moment it happens. `{text, through}`.
 func check(name: String) -> Dictionary:
 	var times := rehearsed()
+	_planned = true
 	if not times.has(name):
+		_planned = false
 		return {"text": "no act called \"%s\" could be played (%s)" % [name, "; ".join(notes) if not notes.is_empty() else "none was kept"], "through": 0}
 	var span: Array = times[name]
 	var t0 := float(span[0])
@@ -2157,6 +2308,7 @@ func check(name: String) -> Dictionary:
 		lines.append("Nothing in it moves from its place: it changes what things are (their fill, size, color, glow).")
 		lines.append_array(physics_said)
 		tick(t1)
+		_planned = false
 		return {"text": "\n".join(lines), "through": 0}
 	var still := TriangleMesh.new()
 	var faces := PackedVector3Array()
@@ -2262,9 +2414,64 @@ func check(name: String) -> Dictionary:
 			("PASSES THROUGH: %d of its points at the moments looked at - first %s. Fix it: move it clear, `press` it onto the surface, or lift it." % [hits + below, first_hit])
 				if hits + below > 0 else "Nothing passes through anything.",
 			(" It starts seated in something (%d of its points, as it was built or left): coming out of it is not counted." % seated_n) if seated_n > 0 else ""])
+	lines.append_array(_sprinkles_said(act, t0, t1))
 	lines.append_array(physics_said)
+	_planned = false
 	tick(t1)
 	return {"text": "\n".join(lines), "through": through}
+
+
+## EACH SPRINKLE OF [param act] (run [param t0] to [param t1]) NAMING A THING THE ACT MOVES, falling further than
+## [constant PINCH_NEAR] from it at the middle of its stretch: where it falls from, and how far off. (841899's puppeteer
+## tipped its mortar 30 degrees two centimeters short of the cauldron and under its rim, and let a pinch of the powder fall
+## from a point over the brew: the brew took it, and the user saw a mortar "to the side, tipping onto the table".)
+func _sprinkles_said(act: Dictionary, t0: float, t1: float) -> PackedStringArray:
+	var out := PackedStringArray()
+	for tr in act["tracks"]:
+		var d: Dictionary = tr
+		if String(d["law"]) != "sprinkle" or String(d.get("thing", "")).is_empty():
+			continue
+		var ti := _thing_named(String(d["thing"]))
+		if ti < 0:
+			continue
+		var w := _window(d)
+		var t := lerpf(t0, t1, (w.x + w.y) * 0.5)
+		# ...how far it falls from what the act moves of that thing, as it is then: the thing whole, or each moved part of it -
+		# each of its solids' own boxes, in its own space (the thing's box takes in what lay across it as built: a pestle over a
+		# mortar's mouth; and a field reads no further than its band)
+		var at := place_of(d.get("at", ""), place_of(String(d["thing"]) + ".top", Vector3.ZERO, t), t)
+		var off := INF
+		var moved_any := false
+		for other in act["tracks"]:
+			var ch := String((other as Dictionary).get("_ch", ""))
+			if not ch.ends_with(":pose"):
+				continue
+			var wi := int((other as Dictionary).get("_wi", -1))
+			var moved: Transform3D
+			if ch == "t%d:pose" % ti:
+				moved = _thing_world(ti, t) * _world_rest_thing(ti).affine_inverse()
+			elif wi >= 0 and int((works[wi] as Dictionary)["thing"]) == ti:
+				moved = _work_world(wi, t) * (_rest["w%d:pose" % wi] as Transform3D).affine_inverse()
+			else:
+				continue
+			moved_any = true
+			if physics == null:
+				continue
+			for sd in physics.solids:
+				var sdd: Dictionary = sd
+				if int(sdd["thing"]) != ti or (wi >= 0 and int(sdd["wi"]) != wi) or (wi < 0 and sdd.has("body")):
+					continue
+				var q: Vector3 = (moved * (sdd["rest"] as Transform3D)).affine_inverse() * at
+				var b: AABB = sdd["box"]
+				off = minf(off, Vector3(maxf(maxf(b.position.x - q.x, q.x - b.end.x), 0.0), maxf(maxf(b.position.y - q.y, q.y - b.end.y), 0.0),
+					maxf(maxf(b.position.z - q.z, q.z - b.end.z), 0.0)).length())
+		if not moved_any or off == INF:
+			continue
+		if off > PINCH_NEAR:
+			out.append("- THE SPRINKLE OF %s falls from [%.1f, %.1f, %.1f] cm, %.0f cm from \"%s\" as this act holds it then: what falls out of a thing falls from it. Bring \"%s\" over where it should go and tip it there - what is in it pours by itself - or let the pinch fall from a point of it." % [
+				String(d.get("material", "grains")), (at.x - Tables.ORIGIN.x) * 100.0, at.y * 100.0, (at.z - Tables.ORIGIN.y) * 100.0, off * 100.0,
+				String(d["thing"]), String(d["thing"])])
+	return out
 
 
 ## The things a mover [param mv] of [param act] is pressed onto (a law's `press`, its tip's or its grip's): `{tis: their

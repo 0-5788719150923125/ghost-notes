@@ -27,7 +27,9 @@ class_name LetterMedium
 ## paper, and if we gently picked it up at the beginning, after the intro-blur"): it lies beside the pad's right edge
 ## ([method DeskLook.pen_rest], nothing else on the desk set down there) through the intro and its focus pull, and
 ## over the page's blank moment is lifted, turned up into the hand and carried to the first stroke
-## ([method _pick_up_pose]).
+## ([method _pick_up_pose]). AND IT IS SET DOWN AGAIN (2026-10-30, the user: "can we set the pen down again, after
+## writing the final line of text?"): a beat after its last action, the same way back to its place
+## ([method _set_down_pose]).
 ##
 ## A THOUGHT IS NOT WRITTEN: while the writer thinks a passage in italics the pen is lifted.
 ##
@@ -134,6 +136,10 @@ const PICK_GRIP := 0.05
 const PICK_TURN := 0.45
 const PICK_CARRY := 0.25
 const PICK_ARC := 0.05
+## THE SET-DOWN ([method _set_down_pose]): how long after the pen's last action it begins (seconds) - the nib settles
+## beside where it stopped first, as it does after any line ([constant DeskMedium.REST_EASE]); the way back is the
+## pick-up's, [constant PICK_UP] long.
+const SET_DOWN_AFTER := 1.0
 ## POINTING AT THE CAMERA: the nib held this high (m) over where the camera looks, the pen turned this
 ## far off the lens's own line, how long it takes to get there and back, and how long it is held after the
 ## sentence. A camera looking all but straight down has the pen's body running down from the nib: at 11 cm
@@ -604,10 +610,15 @@ func _pictured(a: Dictionary) -> bool:
 
 ## WHEN A LINE WRITTEN AHEAD ENDS: as the voice ends the word [constant LetterScript.AHEAD_WORDS] before its last,
 ## never quicker than [constant LetterScript.QUICKEST] its ink's own time nor slower than the desk's slowest pen; a
-## sketch, as its words end, no quicker than [method LetterScript.draw_pace]; one under a picture, and anything else,
-## as the desk's. A LINE RUNS ON INTO THE VOICE'S PAUSE AFTER IT ([method _runs_on_to]).
+## sketch, as its words end, no quicker than [method LetterScript.draw_pace], and one drawn alone in [method
+## LetterScript.drawn_alone]; one under a picture, and anything else, as the desk's. A LINE RUNS ON INTO THE VOICE'S
+## PAUSE AFTER IT ([method _runs_on_to]).
 func _paced_end(i: int, start: float, end: float) -> float:
 	var a: Dictionary = _actions[i]
+	if String(a["kind"]) == "draw" and int(a.get("span", 0)) == 0:
+		# A SKETCH DRAWN ALONE, in the rest the voice waits for it - a dense one dashed off (35 s of the tree of dots at
+		# the hand's own pace had been 35 s of silence)
+		return start + LetterScript.drawn_alone(float(a.get("write", 0.0)))
 	if String(a["kind"]) == "draw" and int(a.get("span", 0)) > 0:
 		# A SKETCH DASHED OFF where its ink outruns its words ([method LetterScript.draw_pace], the pace the voice's rest
 		# after them was sized by); the desk then draws it as slowly as the next line leaves it time for
@@ -622,6 +633,12 @@ func _paced_end(i: int, start: float, end: float) -> float:
 	var times := _ahead_times(a, start)
 	var wanted: float = maxf((times[1] as PackedFloat32Array)[int(a["span"]) - 1], _runs_on_to(i))
 	return clampf(wanted, start + write / LetterScript.QUICKEST, start + write / DeskScript.MIN_PACE)
+
+
+## A SKETCH IS DRAWN UP TO [constant LetterScript.DRAW_QUICKEST] the hand's pace ([method LetterScript.draw_pace],
+## [method LetterScript.drawn_alone]): made again while one is under way, the plan keeps that pace.
+func _quickest(i: int) -> float:
+	return LetterScript.DRAW_QUICKEST if String((_actions[i] as Dictionary)["kind"]) == "draw" else super(i)
 
 
 ## WHEN LINE [param i] MAY END AT THE LATEST and the next still begin on time: as the nib must leave for it, where the
@@ -771,11 +788,13 @@ func _pen_during(a: Dictionary, i: int, start: float) -> Dictionary:
 	return super._pen_during(a, i, start)
 
 
-## THE PEN, as the desk places it - and then lying on the desk until it is picked up, turned over to tap, or
-## lifted to point at the lens.
+## THE PEN, as the desk places it - and then lying on the desk until it is picked up and once it is set down, turned
+## over to tap, or lifted to point at the lens.
 func _pen_xf() -> Transform3D:
 	var base := super._pen_xf()
 	var pose := _pick_up_pose(base)
+	if pose.is_empty():
+		pose = _set_down_pose(base)
 	if pose.is_empty():
 		pose = _swap_pose(base)
 	if pose.is_empty():
@@ -841,6 +860,44 @@ func _pick_up_pose(base: Transform3D) -> Dictionary:
 		return {}
 	var u := clampf((_now - w.x) / PICK_UP, 0.0, 1.0) if w.x < INF else 0.0
 	return {"xf": _lift(base, _first_pen, u), "f": 1.0}
+
+
+## The last action the pen does - a point at nothing on its page it leaves be, as [method _first_done]; -1 for none.
+func _last_done() -> int:
+	for i in range(_actions.size() - 1, -1, -1):
+		var a: Dictionary = _actions[i]
+		if not (String(a["kind"]) == "point" and target_box(a).size.x < 0.0):
+			return i
+	return -1
+
+
+## WHEN THE PEN IS SET DOWN: `(from, to)`, seconds - [constant SET_DOWN_AFTER] after its last action ends, or after a
+## point at the camera past it lets go, and [constant PICK_UP] long. INF while that action is not planned yet (a live
+## reading's last words not heard), and for a letter the pen never does anything in: it never left the desk.
+func _set_down() -> Vector2:
+	var i := _last_done()
+	if i < 0 or i >= _plan.size():
+		return Vector2(INF, INF)
+	var end := float(_plan[i]["end"])
+	if end == INF:
+		return Vector2(INF, INF)
+	for s in _spans:
+		var sp: Dictionary = s
+		if String(sp["kind"]) == "camera":
+			end = maxf(end, _camera_until(sp) + CAMERA_EASE)
+	if end == INF:
+		return Vector2(INF, INF)
+	return Vector2(end + SET_DOWN_AFTER, end + SET_DOWN_AFTER + PICK_UP)
+
+
+## THE PEN SET DOWN where it lies ([method DeskLook.pen_rest]) once the letter is written: `{xf, f}` as
+## [method _pick_up_pose] gives it, the pick-up's way back ([method _lift]) from the desk's own pose [param base] - the
+## pen in hand, at its own place - and lying there from then on; {} before [method _set_down] begins.
+func _set_down_pose(base: Transform3D) -> Dictionary:
+	var w := _set_down()
+	if w.x == INF or _now <= w.x:
+		return {}
+	return {"xf": _lift(base, _pen_in_hand(), 1.0 - clampf((_now - w.x) / PICK_UP, 0.0, 1.0)), "f": 1.0}
 
 
 ## PEN [param k] ON ITS WAY between its place and the hand: lying where it is at [param u] 0; held by its grip

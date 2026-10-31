@@ -171,6 +171,11 @@ var _conductor_owner: WeakRef = null
 ## on through a pause - so a pause inside a bookend still moved the picture. The Director, the
 ## scenes, the media and the karaoke all advance by this clock, so they stop with it.
 var paused := false
+## WAITING, NOT PAUSED ([method set_waiting]): show time held where it is while something the picture draws catches up - a table's
+## physics, baked on a thread of its own, behind a live reading (2026-10-30, the user: "Go ahead and do #1"; 841899 had drawn what
+## an export never would while its bake was behind). The player and the bookends stop as for a pause; the transport still says
+## playing, and a pause and a wait are each let go on their own. who -> true.
+var _waits := {}
 
 var _hold := 0.0                # counts up through the lead-in
 var _held := false              # lead-in running: the player has NOT been started yet
@@ -470,7 +475,25 @@ func replay() -> void:
 func set_paused(on: bool) -> void:
 	paused = on
 	if _player != null:
-		_player.stream_paused = on
+		_player.stream_paused = on or not _waits.is_empty()
+
+
+## SHOW TIME HELD FOR [param who] while [param on] - what the picture needs and has not got yet ([member _waits]). Never in a
+## render, whose clock is its own and whose parts wait on the caller's thread.
+func set_waiting(who: String, on: bool) -> void:
+	if on == _waits.has(who) or (on and render_clock):
+		return
+	if on:
+		_waits[who] = true
+	else:
+		_waits.erase(who)
+	if _player != null:
+		_player.stream_paused = paused or not _waits.is_empty()
+
+
+## Whether show time is held for something that is catching up ([method set_waiting]).
+func waiting() -> bool:
+	return not _waits.is_empty()
 
 
 ## The panels' name for the same pause, from before it held the bookends too.
@@ -526,8 +549,8 @@ func transport_playing() -> bool:
 	if not conductor().is_empty():
 		return false
 	# NOT `_player.playing` alone: setting stream_paused turns that false at once (4.7), and the
-	# held bookends play with the player stopped.
-	return _has_audio and not paused and (_player.playing or _held or _tailing)
+	# held bookends play with the player stopped - and a wait is playing, held ([method set_waiting])
+	return _has_audio and not paused and (_player.playing or _held or _tailing or not _waits.is_empty())
 
 
 ## Can Play do anything now? A reading with no voice loaded cannot start.
@@ -590,6 +613,7 @@ func transport_toggle() -> void:
 ## fresh. Called when a session ends (the song finished, or we returned home).
 func stop() -> void:
 	paused = false
+	_waits = {}
 	if _player != null:
 		_player.stream_paused = false
 		_player.stop()
@@ -841,13 +865,13 @@ func _process(delta: float) -> void:
 	# cut trigger sits under its silence floor and holds one shot, and nothing lurches.
 	# A pause holds it where it is, like the player (see `paused`).
 	if _held:
-		if not paused:
+		if not paused and _waits.is_empty():
 			_hold += delta
 		if _hold >= lead_in:
 			_player.play()
 			_held = false
 	elif _tailing:
-		if not paused:
+		if not paused and _waits.is_empty():
 			_tail_t += delta
 		if _tail_t >= tail:
 			_tailing = false

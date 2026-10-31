@@ -159,6 +159,9 @@ func _open_console() -> void:
 	# the scene that wrongly ended up in early screenshots).
 	_shot_img = get_viewport().get_texture().get_image()
 	_shot_desc = describe.call() if describe.is_valid() else Director.current_descriptor()
+	# ...and what a table draws off where it stood, and why ([method TableWork.drawn_report]): a live-only report names its part
+	if Director._medium != null and Director._medium.has_method("work_report"):
+		_shot_desc["table"] = Director._medium.call("work_report")
 	_open = true
 	_ui.visible = true
 	# The panels above the bottom-right row draw over every scene, this console included: opening

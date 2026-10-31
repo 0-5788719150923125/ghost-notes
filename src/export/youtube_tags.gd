@@ -12,6 +12,13 @@ class_name YouTubeTags
 ## title and description - and the note's tags, keeps those that fit and leaves out the rest
 ## (rules/youtube/tags.yaml).
 ##
+## NOTHING THE TITLE OR DESCRIPTION SAYS ALREADY (the user, 2026-10-30: "The tag-writer keeps choosing
+## keywords that already exist in the title and description ... YouTube tags are for relevant, similar
+## themes and ideas, or things that might be in the video but not in text/metadata"): the show's name, the
+## title and the description go up with the video and are searched already, so the writer is told to leave
+## their words out, and a tag whose every word is in them is dropped as it lands ([method land]) - said on
+## its row ([method summary]). Its own words, in another order or with one more, are a tag still.
+##
 ## THE ANSWER REPLACES THE NOTE'S TAGS (the user, 2026-10-19: "it's confusing, because I never know which
 ## tags are truly going to be applied ... I'd prefer to see just one, unified list"): written over the
 ## note's `tags:` line as it lands ([method EpisodeFeed.replace_tags]), the one list the YouTube card
@@ -59,7 +66,7 @@ static func prompt(show: String, title: String, description: String, given: Pack
 
 ## The writer's answer, landed, and written over the note's tags; why not, when it cannot be.
 func _land(text: String, feed: EpisodeFeed) -> Variant:
-	var got: Variant = land(TextGen.extract_json(text))
+	var got: Variant = land(TextGen.extract_json(text), "\n".join([feed.show_title(), feed.episode_title(), feed.description()]))
 	if got is Dictionary:
 		var err := feed.replace_tags(DataPath.strings((got as Dictionary)["tags"]))
 		if not err.is_empty():
@@ -67,24 +74,49 @@ func _land(text: String, feed: EpisodeFeed) -> Variant:
 	return got
 
 
-## The writer's answer [param d] as kept: `{tags}`, each cleaned (a hashtag sign dropped), each once -
-## or why it cannot be kept. Static and pure for the gate.
-static func land(d: Variant) -> Variant:
+## The writer's answer [param d] as kept: `{tags, said}`, each tag cleaned (a hashtag sign dropped), each
+## once, and none whose every word is in [param already] (the show's name, the title and the description:
+## those left out are `said`) - or why it cannot be kept. Static and pure for the gate.
+static func land(d: Variant, already := "") -> Variant:
 	var raw: Variant = (d as Dictionary).get("tags") if d is Dictionary else d
 	if not (raw is Array):
 		return "the answer held no list of tags"
+	var known := {}
+	for w in words_of(already):
+		known[w] = true
 	var clean: Array = []
+	var said: Array = []
 	var seen := {}
 	for t in DataPath.strings(raw):
 		var c := YouTube.clean_tag(String(t).trim_prefix("#"))
-		if not c.is_empty() and not seen.has(c.to_lower()):
-			seen[c.to_lower()] = true
+		if c.is_empty() or seen.has(c.to_lower()):
+			continue
+		seen[c.to_lower()] = true
+		var ws := Array(words_of(c))
+		if not ws.is_empty() and ws.all(func(w: String) -> bool: return known.has(w)):
+			said.append(c)
+		else:
 			clean.append(c)
 	if clean.size() < FEWEST:
-		return "the answer held %d usable tag%s" % [clean.size(), "" if clean.size() == 1 else "s"]
-	return {"tags": clean}
+		return "the answer held %d usable tag%s%s" % [clean.size(), "" if clean.size() == 1 else "s",
+			(" - %d more only said what the title or description says" % said.size()) if not said.is_empty() else ""]
+	return {"tags": clean, "said": said}
+
+
+static var _rx_word: RegEx
+
+## The words of [param text], lowercased: its runs of letters and digits.
+static func words_of(text: String) -> PackedStringArray:
+	if _rx_word == null:
+		_rx_word = RegEx.create_from_string("[\\p{L}\\p{N}]+")
+	var out := PackedStringArray()
+	for m in _rx_word.search_all(text.to_lower()):
+		out.append(m.get_string())
+	return out
 
 
 func summary(m: Dictionary) -> String:
 	var t := DataPath.strings(m.get("tags", []))
-	return "%d tag%s: %s" % [t.size(), "" if t.size() == 1 else "s", ", ".join(t)]
+	var said := DataPath.strings(m.get("said", []))
+	return "%d tag%s: %s%s" % [t.size(), "" if t.size() == 1 else "s", ", ".join(t),
+		(" - left out, as the title or description says them: " + ", ".join(said)) if not said.is_empty() else ""]

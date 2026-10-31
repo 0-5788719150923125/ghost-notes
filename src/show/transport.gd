@@ -165,6 +165,9 @@ func _process(delta: float) -> void:
 	var t := Spectrum.scrub_position()
 	var total := maxf(0.0, Spectrum.scrub_length())
 	_label.text = "%s / %s" % [Clock.text(t), Clock.text(total)] if total > 0.0 else Clock.text(t)
+	# ...and while the show waits for what it draws to catch up ([method Spectrum.set_waiting]), says so: it is not paused
+	if playing and Spectrum.waiting():
+		_label.text += "  · catching up"
 	_label.position = Vector2(r.position.x, r.position.y - 20.0)
 	_label.modulate.a = _shown
 	_painter.queue_redraw()

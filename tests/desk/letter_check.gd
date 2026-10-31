@@ -86,7 +86,16 @@ extends SceneTree
 ##   "sort of gets frozen for a few seconds ... with the pen not moving" - the voice had waited 7.5 s for it): a
 ##   drawing of far more ink than its two words leave time for is done soon after them, the voice resting only that
 ##   long - the control, the desk's quickest pen, would have rested it several times as long - and the pen goes
-##   from its last mark to the next line with no pause; one with room is drawn no quicker than before.
+##   from its last mark to the next line with no pause; one with room is drawn no quicker than before. DRAWN ALONE
+##   ([method LetterScript.drawn_alone]; 2026-10-29, the user, of the same tree drawn where its mark is: "a solid 30 or
+##   45 seconds to draw"), with no words over it, the voice waits [constant LetterScript.DRAW_ALONE] for it and the desk
+##   draws it in that - its ink at the hand's pace, the control, is several times as long - and the plan made again
+##   while it is under way keeps its pace (held to the desk's quickest, the control, it ends seconds later).
+## - THE PEN IS SET DOWN AGAIN ([method LetterMedium._set_down_pose]; 2026-10-30, the user: "can we set the pen down
+##   again, after writing the final line of text?"): it is in hand through the last stroke and until
+##   [constant LetterMedium.SET_DOWN_AFTER] past it - the control, that it has not lain down early - is then put down at
+##   its place a frame at a time, no further than a hand would move it and never into the desk or the pad, and lies there,
+##   exactly as it did before it was picked up, to the show's end.
 ## - THE PEN IS PICKED UP FROM THE DESK ([method LetterMedium._pick_up_pose]; 2026-10-28, the user: "the pen starts
 ##   floating in the air already ... started from a resting place upon the table, to the right of the paper, and ...
 ##   gently picked it up at the beginning, after the intro-blur"): through the intro and its focus pull it lies level on
@@ -316,6 +325,7 @@ func _run() -> void:
 	_struck()
 	_pens()
 	_pick_up()
+	_set_down()
 	_turn_waits()
 	_line_breaks()
 	_let_go()
@@ -463,7 +473,8 @@ func _format() -> void:
 	var after_y := ((after[0] as Dictionary)["at"] as Vector2).y if after.size() == 1 else 0.0
 	_check(draws.size() == 1 and int(dr["span"]) == 0 and spoken[int(dr["after"])] == "a" and after.size() == 1
 		and int(after[0]["span"]) == 5 and acts.find(after[0]) > acts.find(dr)
-		and rest_before.call(d, "A cross") - no_wait >= float(dr["write"]) - 0.01 and is_equal_approx(after_y, was_y + DeskScript.RULE),
+		and rest_before.call(d, "A cross") - no_wait >= LetterScript.drawn_alone(float(dr["write"])) - 0.01
+		and is_equal_approx(after_y, was_y + DeskScript.RULE),
 		"a sketch is drawn where its mark is: the paragraph after it written and said after it, the voice waiting %.1f s more for the drawing, a rule left empty under it (the first rule clear of it, the control, %.0f px up)"
 		% [rest_before.call(d, "A cross") - no_wait, after_y - was_y])
 	# A THOUGHT RIGHT AFTER IT IS THOUGHT WHILE IT IS DRAWN, never written; one pointing at it waits for the drawing (the
@@ -482,7 +493,8 @@ func _format() -> void:
 	var w_rest: float = rest_before.call(as_written, "A cross")
 	_check(int(m_draw["span"]) == 5 and (mused["spoken"] as PackedStringArray)[int(m_draw["after"])] == "a"
 		and not m_written.contains("A cross") and m_rest < ink * 0.5
-		and int(_of(pointing, "draw")[0]["span"]) == 0 and _of(pointing, "point").size() == 1 and p_rest >= ink and w_rest >= ink,
+		and int(_of(pointing, "draw")[0]["span"]) == 0 and _of(pointing, "point").size() == 1
+		and p_rest >= LetterScript.drawn_alone(ink) and w_rest >= LetterScript.drawn_alone(ink),
 		"a thought right after a sketch is thought while its %.1f s are drawn, never written, the voice resting %.2f s first - one pointing at it waits for the drawing (%.2f s), and points, as the paragraph written after it does (%.2f s; the controls)"
 		% [ink, m_rest, p_rest, w_rest])
 	var as_said := _of(bare, "pad-text").filter(func(l: Dictionary) -> bool: return String(l["text"]).begins_with("A cross"))
@@ -1340,6 +1352,67 @@ func _hesitant_picture() -> void:
 	_check(float(h["live"]) == 0.0 and float(c["live"]) > 0.5,
 		"a live reading that has not heard the words after a hesitation keeps the desk; with no hesitation the picture is up from the word before (the control: %.2f)"
 		% float(c["live"]))
+
+
+## THE PEN IS SET DOWN AGAIN once the letter is written, the pick-up's way back.
+func _set_down() -> void:
+	print("-- the pen set down")
+	var feed := ShowFeed.new()
+	feed.outro_hold = 4.0
+	feed.intro_hold = 1.0
+	var svgs := {Manuscript.image_key("a cross and a dot on one line"): DOT_SVG}
+	var id := String(DeskScript.item("draw", DOT_SVG)["id"])
+	var m := LetterMedium.new()
+	m.feed = feed
+	m._pad = LegalPad.new()
+	m.load_letter(LETTER, {"seed": 3, "svgs": svgs, "ink": {"items": [_dot_record(id)]}})
+	var records := {id: _dot_record(id)}
+	var parsed := LetterScript.parse(LETTER, 3, svgs, LetterScript.lengths_of(records, 3), records)
+	m._now = 0.0
+	m.take_words(DeskScript.rehearsal(parsed, 0.42, 0.35, 1.0))
+	var last := m._last_done()
+	var end := float(m._plan[last]["end"])
+	var w := m._set_down()
+	var hand := m._pen_in_hand()
+	_check(last >= 0 and w.x >= end + LetterMedium.SET_DOWN_AFTER - 0.001 and absf(w.y - w.x - LetterMedium.PICK_UP) < 0.001,
+		"the pen is set down %.1f s after its last stroke ends, over %.1f s" % [w.x - end, w.y - w.x])
+	# IN HAND until then (the control: it has not lain down early)
+	var held := true
+	for t in [end - 0.05, end + 0.5, w.x - 0.02]:
+		m._now = t
+		held = held and m._pen_xf().origin.distance_to(m._lying(hand).origin) > 0.03
+	_check(held, "through the last stroke and the beat after it the pen is in hand, off the desk")
+	# THE WAY: on, a frame at a time, and never into the desk or the pad
+	var dt := 1.0 / 60.0
+	var worst := 0.0
+	var lowest := INF
+	var prev := Transform3D()
+	var t := w.x - 0.2
+	var k := 0
+	while t <= w.y + 0.2:
+		m._now = t
+		var xf := m._pen_xf()
+		if k > 0:
+			worst = maxf(worst, maxf(xf.origin.distance_to(prev.origin),
+				(xf.origin + xf.basis.y * LetterMedium.PEN_TOP).distance_to(prev.origin + prev.basis.y * LetterMedium.PEN_TOP)))
+		for along in [0.0, 0.02, 0.06, 0.1, LetterMedium.PEN_TOP]:
+			var q: Vector3 = xf.origin + xf.basis.y * float(along)
+			var on_pad := absf(q.x) <= LegalPad.W * 0.5 + DeskMedium.PEN_R and absf(q.z) <= LegalPad.H * 0.5 + DeskMedium.PEN_R
+			var over: float = q.y - (0.0003 if on_pad else LegalPad.DESK_Y) - (0.0 if float(along) == 0.0 else DeskMedium.PEN_R * 0.9)
+			lowest = minf(lowest, over)
+		prev = xf
+		t += dt
+		k += 1
+	_check(worst < 0.005, "on the way down it moves at most %.1f mm a frame" % (worst * 1000.0))
+	_check(lowest > -0.0002, "and it never goes into the desk or the pad (%.1f mm clear at the least)" % (lowest * 1000.0))
+	# LYING THERE to the end, as it lay before it was picked up
+	var lies := true
+	for u in [w.y + 0.01, w.y + 2.0, w.y + 60.0]:
+		m._now = u
+		lies = lies and m._pen_xf().is_equal_approx(m._lying(hand))
+	m._now = 0.0
+	_check(lies and m._pen_xf().is_equal_approx(m._lying(hand)),
+		"and from then on it lies at its place, exactly as it lay before it was picked up")
 
 
 ## THE PEN IS PICKED UP FROM THE DESK, and nothing else lies where it does.
@@ -2517,4 +2590,40 @@ func _dense_sketch() -> void:
 		"at the desk it is drawn in %.1f s (at the desk's quickest, %.1f - the control), the pen on the next line %.2f s after its last mark"
 		% [done - begun, ink / DeskScript.MAX_PACE, gap])
 	md.free()
+	# DRAWN ALONE, no words over it: the voice waits DRAW_ALONE, not its ink at the hand's pace (the control)
+	var alone_text := text.replace("*One, two.*\n\n", "")
+	var alone := LetterScript.parse(alone_text, 3, {key: svg}, lengths, records)
+	var am := RegEx.create_from_string("action-hold: ([0-9.]+) -->\\s*And that").search(String(alone["speakable"]))
+	var alone_rest := float(am.get_string(1)) if am != null else 0.0
+	var alone_draw: Array = _of(alone, "draw")
+	_check(alone_draw.size() == 1 and int(alone_draw[0]["span"]) == 0
+		and is_equal_approx(LetterScript.drawn_alone(ink), LetterScript.DRAW_ALONE)
+		and alone_rest >= LetterScript.DRAW_ALONE and alone_rest < LetterScript.DRAW_ALONE + LetterScript.LEAD + 1.5
+		and ink > alone_rest + 10.0 and is_equal_approx(LetterScript.drawn_alone(2.0), 2.0),
+		"a sketch of %.0f s of ink drawn alone: the voice waits %.1f s for it; at the hand's pace, %.0f (the control) - a small one at the hand's pace, as before"
+		% [ink, alone_rest, ink])
+	var heard_alone := DeskScript.rehearsal(alone, 0.42, 0.35, 1.0)
+	var ma := LetterMedium.new()
+	ma.feed = feed
+	ma._pad = LegalPad.new()
+	ma.load_letter(alone_text, {"seed": 3, "svgs": {key: svg}, "ink": {"items": [_dense_record(id, 80)]}})
+	var ai := -1
+	for i in ma._actions.size():
+		if String((ma._actions[i] as Dictionary)["kind"]) == "draw":
+			ai = i
+	var before_it := int((ma._actions[ai] as Dictionary)["after"])
+	# a live reading: the words up to the drawing first, the rest arriving while it is drawn
+	ma.take_words(heard_alone.slice(0, before_it))
+	var a_begun := float(ma._plan[ai]["start"])
+	var a_done := float(ma._plan[ai]["end"])
+	ma._now = a_begun + (a_done - a_begun) * 0.25
+	var u_mid := ma._written(ai)
+	ma.take_words(heard_alone)
+	var a_again := float(ma._plan[ai]["end"])
+	var floor_was := ma._now + (1.0 - u_mid) * ink / DeskScript.MAX_PACE
+	_check(absf(a_done - a_begun - LetterScript.DRAW_ALONE) < 0.05 and absf(a_again - a_done) < 0.05
+		and floor_was > a_done + 0.8,
+		"at the desk it is drawn alone in %.1f s (its ink at the hand's pace, %.0f - the control); the plan made again a quarter of the way in, it ends %.2f s later (held to the desk's quickest, %.1f - the control)"
+		% [a_done - a_begun, ink, a_again - a_done, floor_was - a_done])
+	ma.free()
 

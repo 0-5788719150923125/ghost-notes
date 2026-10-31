@@ -37,13 +37,34 @@ const CHECKS_KEPT := 40
 const CHECKS_NEAR := 24
 ## How long after an act its report looks (seconds): what it set falling has landed ([method report]).
 const REPORT_AFTER := 1.0
+## A part let go further than this from where its act left it (meters) is said so ([method report]).
+const LET_GO_OFF := 0.01
+## ...and one held back further than this from where its hand has it (meters, [method report]).
+const HELD_BACK := 0.01
 ## A bake carried to another table is taken up to this long before the first moment the plans differ (seconds): a
 ## solid may move a frame or two either side of its stretch ([method _may_move], [method _moves_at]).
 const CARRY_MARGIN := 0.25
 ## How far past the last frame baked a live show may run before the log says what is in things is behind (seconds).
 const OUTRUN := 0.5
-## A frame's word for a loose thing yet to be a body ([method _wake_loose]), where 1 is one whole and 0 one broken.
+## A LIVE SHOW WAITS FOR THE BAKE ([method behind]): from when the bake is less than WAIT_UNDER ahead of it until it is
+## WAIT_AHEAD ahead again (seconds) - a stall that bakes a stretch, never one a frame.
+const WAIT_UNDER := 0.05
+## A PART'S SEAT ([method _seat]): what of its thing it touches as built, this near (meters); held this near it and this little
+## turned from how it sat, it never meets it; let go this near and this little turned, it sits as built.
+const SEAT_TOUCH := 0.003
+const SEAT_REACH := 0.03
+const SEAT_TURN := 0.6
+const SEAT_NEAR := 0.015
+const SEAT_TILT := 0.35
+const WAIT_AHEAD := 3.0
+## Two holds of a thing less than this apart (seconds) are one: a hand never lets go between one move and the next.
+const HOLD_GAP := 0.25
+## A frame's word for a loose thing yet to be a body ([method _wake_loose]), where 1 is one whole and 0 one broken - and for
+## one LYING AGAIN where it came to rest ([method _rest_loose]).
 const LYING := 2
+const RESTED := 3
+## A LOOSE THING ASLEEP this long (seconds), whole and held by nothing, lies again where it came to rest, its spheres freed.
+const RELEASE_AFTER := 2.0
 ## WHAT A BLADE CUTS: loose things of these kinds of material ([constant Props.MATERIALS]) - a root, a candle, a sheet of
 ## paper, cloth, leather ([method Particles._cut_through]).
 const CUTS := ["plant", "wax", "paper", "leather", "fabric"]
@@ -55,7 +76,7 @@ const PACKED := 0.52
 ## THE LIQUIDS: the most vessels a table's are reckoned in; the first sloshing mode's root (an upright cylinder's,
 ## w0^2 = g xi / R tanh(xi h / R)), how much of a slosh a period loses, how long a swirl lasts (seconds), how hard a tool
 ## turns it; how long a stream's parcel may fall (seconds).
-const LIQUID_MOST := 24
+const LIQUID_MOST := 40
 const XI := 1.8412
 const SLOSH_DAMP := 0.05
 const SWIRL_LIFE := 3.0
@@ -91,6 +112,17 @@ const DENT := 0.8
 ## A grain drawn: how much larger than its sphere its lump is, so a heap reads whole.
 const LUMP := 1.25
 const GRAVITY := 9.81
+## A HINGE THAT HANGS SWINGS ([method _find_swings]): its weight hangs below its pivot at least this far (meters), no
+## further to the side than below; its pivot's own drag (a share of its swing lost a second), how much of its speed it
+## keeps off a stop, its substeps a frame; still below this (radians a second, and radians a second squared of what
+## pulls it) for this long (seconds), it rests - and how fine a part's mass is sampled at most (cells along a side).
+const SWING_HANG := 0.0005
+const SWING_DAMP := 0.8
+const SWING_BOUNCE := 0.25
+const SWING_STEPS := 4
+const SWING_STILL := Vector2(0.004, 0.02)
+const SWING_REST := 0.5
+const MASS_CELLS := 24
 
 const _LIQUID := preload("res://shaders/prop_liquid.gdshader")
 
@@ -105,6 +137,9 @@ var work: TableWork:
 var twin: TableWork
 var _work_ref: WeakRef = null
 var sim := Particles.new()
+## THE PARTS THE WORK PICKS UP, as rigid bodies ([method _make_rigid]), and each one's work -> its body.
+var rigid := RigidParts.new()
+var _rigid_of := {}
 
 var solids: Array = []        # [{field, owner ("t"/"w"), oi, local (the owner's node -> the part's space), box, thing, wi, shown (a work whose `shown` says it is there)}]
 var liquids: Array = []       # [{solid, vessel, wi, node, mat, name, thing, color, built_v, full_v, plugs, made}]
@@ -115,6 +150,7 @@ var _vessel_of := {}          # solid -> its liquid
 var _loose_of := {}           # work -> its loose entry
 var _lying_at := {}           # a cell of Particles.AWAKE_CELL -> the loose entries that lie near it, as built
 var _hold_spans := {}         # loose work -> the stretches the work holds it, this plan ([method _held_at])
+var _moves_after := {}        # "channel|act" -> whether a later act moves that channel ([method _moved_after])
 
 var frames: Array = []        # {x, r, alive, bp, bi, liq, hit} a frame
 var parcels: Array = []       # [{t0, p, v, vol, from, t1, into}]
@@ -125,10 +161,13 @@ var _piece_nodes := {}        # a piece's key -> its node, made the first time i
 var splashes: Array = []      # [{t, at, color, size, k}]
 var breaks: Array = []        # [{t, at, size}]: each piece broken off, as it breaks ([WorkSounds] hears it)
 var _liq: Array = []          # the liquids' own state as it is baked
-var _held := {}               # a held loose thing's entry -> it re-based on where the physics had it
+var _held := {}               # a held move (a loose thing's, a rigid part's) -> it re-based on where the physics had it as it began
+var _swing: Array = []        # [{wi, pivot, axis, c, m, i0, hung: [{wi, at, m}], own: {solid: true}, under: {solid: hung k}, a, w, ...}]
+var _swing_at := {}           # a swinging hinge's work -> its place in [member _swing]
 var _ck: Array = []           # checkpoints
 var _k := 0                   # frames baked
 var _runs_seen: Array = []    # the plan last baked
+var _chan_seen := {}          # ...its channels ([method replan])
 var _owner_pose := {}         # "t3"/"w7" -> [last t, its pose]
 var _intervals := {}          # "t3"/"w7" -> [[s0, s1], ...] when it may move
 var _spans: Variant = null    # every stretch anything on the table may move in, in order (Vector2s), once a plan
@@ -148,7 +187,8 @@ var _clear_at := 0.0          # where the bake was restarted from
 var _layout := 0              # what this table's physics is made of, as a number ([method _layout_of])
 var _carried: Variant = null  # a bake from a table stood before, until the first plan is taken ([method adopt])
 var _halt := false
-var _outrun := false            # a live show past the last frame baked, as last said            # a bake given up ([method halt])
+var _outrun := false            # a live show past the last frame baked, as last said
+var _behind := false            # a live show waiting for the bake ([method behind])            # a bake given up ([method halt])
 var notes := PackedStringArray()
 
 
@@ -257,6 +297,8 @@ func build() -> void:
 	_make_liquids(liquid_parts)
 	_make_grains()
 	_make_loose(loose_parts)
+	_find_swings()
+	_make_rigid()
 	_find_sprinkles()
 	_frames_reset()
 	_layout = _layout_of()
@@ -301,6 +343,8 @@ func _make_twin() -> void:
 	twin.runs = work.runs
 	twin.materials = work.materials
 	twin._parent_work = work._parent_work
+	twin.swings = work.swings
+	twin.hung = work.hung
 
 
 ## The pose of the node solid [param sd] hangs from at show time [param t], by the twin.
@@ -330,6 +374,13 @@ func _make_liquids(parts: Array) -> void:
 		for g in grains:
 			if int((g as Dictionary)["thing"]) == int(sd["thing"]):
 				holds = maxi(holds, 2)
+		# ...or loose things: a jar's lumps ride it only as its inside (one left out of the vessels reckoned had its lumps
+		# left behind as it was carried)
+		if int(sd["wi"]) >= 0:
+			for c in work.works.size():
+				if int(work._parent_work.get(c, -1)) == int(sd["wi"]) and bool(((work.works[c] as Dictionary)["w"] as Dictionary).get("loose", false)):
+					holds = 2
+					break
 		if String(sd["owner"]) == "w" or work._moved.has("t%d:pose" % int(sd["thing"])):
 			holds = maxi(holds, 1)
 		return holds
@@ -401,7 +452,7 @@ func _add_liquid(si: int, vs: Vessel, ld: Dictionary, mats: Dictionary) -> void:
 			var mat := mesh.material_override as ShaderMaterial
 			if mat != null:
 				mat.shader = _LIQUID
-				_cavity_uniforms(mat, vs, mesh, sd["rest"])
+				_cavity_uniforms(mat, vs, mesh, sd)
 				(entry["mats"] as Array).append(mat)
 			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			(entry["nodes"] as Array).append(mesh)
@@ -434,10 +485,10 @@ func _add_liquid(si: int, vs: Vessel, ld: Dictionary, mats: Dictionary) -> void:
 
 
 ## THE INSIDE HANDED TO A LIQUID'S SHADER ([method Vessel.shader_tables]): [param mesh]'s space carried into vessel
-## [param vs]'s own (the vessel standing at [param rest] as the mesh is made - they move together after), its tables.
-func _cavity_uniforms(mat: ShaderMaterial, vs: Vessel, mesh: MeshInstance3D, rest: Transform3D) -> void:
+## [param vs]'s own (solid [param sd]'s part space, [method _mesh_in_vessel]), its tables.
+func _cavity_uniforms(mat: ShaderMaterial, vs: Vessel, mesh: MeshInstance3D, sd: Dictionary) -> void:
 	var tb := vs.shader_tables()
-	var to_vessel := rest.affine_inverse() * work._world_of(mesh)
+	var to_vessel := _mesh_in_vessel(mesh, sd)
 	mat.set_shader_parameter("cavity_xf", Projection(to_vessel))
 	mat.set_shader_parameter("cavity_scale", tb["scale"])
 	mat.set_shader_parameter("cavity_pivot", tb["pivot"])
@@ -446,6 +497,16 @@ func _cavity_uniforms(mat: ShaderMaterial, vs: Vessel, mesh: MeshInstance3D, res
 	mat.set_shader_parameter("cavity_r", tb["r"])
 	mat.set_shader_parameter("cavity_a", tb["a"])
 	mat.set_shader_parameter("cavity_known", true)
+
+
+## [param mesh]'s space in vessel solid [param sd]'s part space - the two move together, so it is taken through the node the
+## solid hangs from as it stands now, never against the solid as built: an inside made as a vessel is first filled, away from
+## where it was built (841899's ladle, first dipped in its pot), had been built and drawn that whole way off, a ghost of the
+## ladle's bowl over the balance going round with every stir.
+func _mesh_in_vessel(mesh: MeshInstance3D, sd: Dictionary) -> Transform3D:
+	var on: Node3D = (work.things[int(sd["oi"])] as Dictionary)["node"] if String(sd["owner"]) == "t" \
+		else (work.works[int(sd["oi"])] as Dictionary)["node"]
+	return (sd["local"] as Transform3D).affine_inverse() * work._world_of(on).affine_inverse() * work._world_of(mesh)
 
 
 ## The inside of [param vs] as a mesh in [param mesh]'s own space (the vessel [param sd]'s part space carried there).
@@ -459,8 +520,8 @@ func _inside_mesh(vs: Vessel, mesh: MeshInstance3D, sd: Dictionary) -> ArrayMesh
 	var g: Props.Tris = (geos[0] as Dictionary)["geo"]
 	if vs.field.kind == "extrude":
 		g.lift(vs.floor_y)
-	# the vessel's part space -> this mesh's space, both as they stand
-	var to := work._world_of(mesh).affine_inverse() * (sd["rest"] as Transform3D)
+	# the vessel's part space -> this mesh's space
+	var to := _mesh_in_vessel(mesh, sd).affine_inverse()
 	var nb := to.basis.inverse().transposed()
 	for i in g.v.size():
 		g.v[i] = to * vs.warp_point(g.v[i])
@@ -621,8 +682,15 @@ func _make_loose(parts: Dictionary) -> void:
 			"name": work._part_label(int(wi)), "mm": _lumps(Particles.BODY_MOST * 6, m if m is Dictionary else {}, 500 + li, true),
 			"rad": rad})
 		_loose_of[int(wi)] = li
-		# ...and the cells of what is awake it would be near ([method _wake_near_loose])
-		var near := box.grow(rad + Particles.AWAKE_CELL)
+	_lying_cells()
+
+
+## The cells of what is awake each loose thing lying would be near ([method _wake_near_loose]), where it lies.
+func _lying_cells() -> void:
+	_lying_at = {}
+	for li in loose.size():
+		var L: Dictionary = loose[li]
+		var near := (L["box"] as AABB).grow(float(L["rad"]) + Particles.AWAKE_CELL)
 		var lo := Particles._cell(near.position, Particles.AWAKE_CELL)
 		var hi := Particles._cell(near.end, Particles.AWAKE_CELL)
 		for cx in range(lo.x, hi.x + 1):
@@ -644,14 +712,19 @@ func _wake_loose(li: int, t: float) -> bool:
 	var L: Dictionary = loose[li]
 	if int(L["body"]) >= 0:
 		return true
-	if bool(L["full"]):
-		return false
 	var spheres: PackedVector3Array = L["spheres"]
-	if sim.n + spheres.size() > Particles.MOST:
+	# ...ROOM FOR IT, now: what has come to rest gives its spheres back ([method _rest_loose]), so one turned away is asked again
+	if sim.room() < spheres.size():
+		if not bool(L["full"]):
+			print("ghost: %s lies as it was built: the physics holds no more" % String(L["name"]))
 		L["full"] = true
-		print("ghost: %s lies as it was built: the physics holds no more" % String(L["name"]))
 		return false
+	L["full"] = false
+	# ...from where it came to rest, as what holds it stands now - or where the work has it
 	var now := twin._work_world(int(L["wi"]), t)
+	if L.get("rest") != null:
+		var hs := int(L["rest_host"])
+		now = ((solids[hs] as Dictionary)["xf"] as Transform3D) * (L["rest_hrel"] as Transform3D) if hs >= 0 and hs < solids.size() else L["rest"]
 	var moved := now * (L["built"] as Transform3D).affine_inverse()
 	var at := PackedVector3Array()
 	var mid := Vector3.ZERO
@@ -667,6 +740,8 @@ func _wake_loose(li: int, t: float) -> bool:
 		return false
 	L["body"] = bi
 	L["n0"] = now
+	L["rest"] = null
+	L["calm"] = 0.0
 	return true
 
 
@@ -675,28 +750,104 @@ func _wake_loose(li: int, t: float) -> bool:
 func _wake_near_loose(t: float) -> void:
 	# what moves, and the lying things in the cells of what is awake ([member _lying_at]): the rest are never looked at
 	var moving: Array = []
-	for sd in solids:
-		if bool((sd as Dictionary)["moving"]):
-			moving.append(((sd as Dictionary)["wbox"] as AABB).grow(0.01))
+	var any_moving := false
+	for si in solids.size():
+		var sd: Dictionary = solids[si]
+		if not bool(sd["moving"]):
+			continue
+		any_moving = true
+		# ...a part the work picks up only held, or going somewhere: settling, it stirs nothing ([constant RigidParts.STIRS])
+		if sd.has("body"):
+			var b: Dictionary = rigid.bodies[int(sd["body"])]
+			if b["held"] == null and float(b.get("stir", 0.0)) < RigidParts.STIRS:
+				continue
+		moving.append([si, (sd["wbox"] as AABB).grow(0.01)])
 	var near_awake := {}
 	for cell in sim.awake_cells:
 		for li in _lying_at.get(cell, []):
 			near_awake[li] = true
-	if moving.is_empty() and near_awake.is_empty():
+	if not any_moving and near_awake.is_empty():
 		return
 	for li in loose.size():
 		var L: Dictionary = loose[li]
-		if int(L["body"]) >= 0 or bool(L["full"]):
+		if int(L["body"]) >= 0:
 			continue
 		var box: AABB = L["box"]
+		# ONE LYING AGAIN goes where what holds it goes, unwoken - unless it tips or jolts under it ([method _rest_loose])
+		var hs := int(L.get("rest_host", -1)) if L.get("rest") != null else -1
+		if hs >= 0 and hs < solids.size():
+			var hd: Dictionary = solids[hs]
+			box = ((hd["xf"] as Transform3D) * (L["rest_hxf"] as Transform3D).affine_inverse()) * box
+			if bool(hd["moving"]) and ((hd["xf"] as Transform3D).basis.y.normalized().angle_to(L["rest_up"] as Vector3) > Particles.WAKE_TILT \
+					or float(hd.get("jolt", 0.0)) > Particles.WAKE_JOLT):
+				_wake_loose(li, t)
+				continue
 		var near := near_awake.has(li) and sim.awake_in(box)
 		if not near:
-			for wb in moving:
-				if (wb as AABB).intersects(box):
+			for e in moving:
+				if int((e as Array)[0]) != hs and ((e as Array)[1] as AABB).intersects(box):
 					near = true
 					break
 		if near:
 			_wake_loose(li, t)
+
+
+## A LOOSE THING AT REST LIES AGAIN (841899, replayed: every loose thing anything had come near stayed a body to the end of
+## the show, the solver was full by its middle - "lies as it was built: the physics holds no more" - and a jar's lumps, never
+## made bodies, were left where they lay as their jar was carried off): a body asleep [constant RELEASE_AFTER] seconds, whole,
+## held by nothing and in no liquid, gives its spheres back, its place kept where it came to rest as what it rests on holds it
+## - and anything coming to it makes it a body again there ([method _wake_loose]).
+func _rest_loose(dt: float) -> void:
+	var moved := false
+	for li in loose.size():
+		var L: Dictionary = loose[li]
+		var bi := int(L["body"])
+		if bi < 0:
+			continue
+		var b: Dictionary = sim.bodies[bi]
+		var ids: PackedInt32Array = b["ids"]
+		if not bool(b["intact"]) or b["held"] != null or _piece_at.has(bi) or ids.is_empty() or not sim.body_asleep(bi) \
+				or sim.wet[ids[0]] >= 0:
+			L["calm"] = 0.0
+			continue
+		L["calm"] = float(L.get("calm", 0.0)) + dt
+		if float(L["calm"]) < RELEASE_AFTER:
+			continue
+		var pose := sim.body_pose(bi) * (L["n0"] as Transform3D)
+		var hs := sim.host[ids[0]]
+		# ...held by what it is AT: a sleeper's host found through its neighbors can be a jar carried off without it
+		if hs >= 0 and hs < solids.size():
+			var hd: Dictionary = solids[hs]
+			if (hd["field"] as ShapeField).sample((hd["inv"] as Transform3D) * (sim.bodies[bi] as Dictionary)["c"]).x > float(L["rad"]) * 2.0 + 0.01:
+				hs = -1
+		var hxf: Transform3D = (solids[hs] as Dictionary)["xf"] if hs >= 0 and hs < solids.size() else Transform3D.IDENTITY
+		L["rest"] = pose
+		L["rest_host"] = hs if hs < solids.size() else -1
+		L["rest_hxf"] = hxf
+		L["rest_hrel"] = hxf.affine_inverse() * pose
+		L["rest_up"] = hxf.basis.y.normalized()
+		L["mass"] = _body_mass(bi)
+		var box := AABB()
+		var first := true
+		var moved_by := pose * (L["built"] as Transform3D).affine_inverse()
+		for p in (L["spheres"] as PackedVector3Array):
+			box = AABB(moved_by * p, Vector3.ZERO) if first else box.expand(moved_by * p)
+			first = false
+		L["box"] = box.grow(float(L["rad"]))
+		for i in ids:
+			if sim.alive[i] == 1:
+				sim.alive[i] = 0
+				sim.asleep[i] = 0
+		# ...AND ITS BODY LETS GO OF THEM: the solver gives a dead sphere's place to the next made, and a body still naming the
+		# spheres it gave back had shape-matched the next thing made in them toward its own old shape - a resin tear let go
+		# over its mortar flew off the table at the solver's fastest, and a lump laid on a balance's pan leapt 33 cm
+		b["ids"] = PackedInt32Array()
+		b["rest"] = PackedVector3Array()
+		L["body"] = -1
+		L["calm"] = 0.0
+		moved = true
+	if moved:
+		_lying_cells()
 
 
 ## The solid a thing at [param p] (the table's space) rests on or in, where the solids are now: a vessel's inside that
@@ -783,27 +934,95 @@ func _find_sprinkles() -> void:
 
 # --- the plan ---------------------------------------------------------------------------------------------
 
-## A NEW PLAN ([method TableWork._timelines]): handed to the twin, and baked again from the first act it moved.
+## Whether the bake reads channel [param ch]: a pose, a joint's angle or offset, whether a part is there, a fill.
+static func _bakes(ch: String) -> bool:
+	return ch.ends_with(":pose") or ch.ends_with(":angle") or ch.ends_with(":offset") or ch.ends_with(":shown") or ch.ends_with(":fill")
+
+
+## THE FIRST MOMENT a channel's moves [param b] differ from what they were, [param a] ([method replan]): where the first move
+## that is not the same begins - or, the same move from the same place and the same start whose place goes by its time alone
+## ([method _length_free]), ending elsewhere, where the sooner end is. INF: nothing differs.
+func _changed_from(a: Array, b: Array) -> float:
+	for k in maxi(a.size(), b.size()):
+		if k >= a.size():
+			return float((b[k] as Dictionary)["s0"])
+		if k >= b.size():
+			return float((a[k] as Dictionary)["s0"])
+		var ea: Dictionary = a[k]
+		var eb: Dictionary = b[k]
+		var s0 := minf(float(ea["s0"]), float(eb["s0"]))
+		if int(ea["i"]) != int(eb["i"]) or int(ea.get("order", -1)) != int(eb.get("order", -1)) \
+				or not is_equal_approx(float(ea["s0"]), float(eb["s0"])) or not is_equal_approx(float(ea["t0"]), float(eb["t0"])) \
+				or not _same_value(ea.get("from"), eb.get("from")):
+			return s0
+		var slopes_same: bool = ea.get("_m", PackedVector3Array()) == eb.get("_m", PackedVector3Array())
+		if is_equal_approx(float(ea["s1"]), float(eb["s1"])) and is_equal_approx(float(ea["t1"]), float(eb["t1"])) and slopes_same:
+			continue
+		if slopes_same and _length_free(ea["track"]):
+			return minf(float(ea["s1"]), float(eb["s1"]))
+		return s0
+	return INF
+
+
+## Whether two values a channel starts a move from are the same: a pose, a number or a color.
+static func _same_value(x: Variant, y: Variant) -> bool:
+	if x is Transform3D and y is Transform3D:
+		return (x as Transform3D).is_equal_approx(y)
+	if (x is float or x is int) and (y is float or y is int):
+		return is_equal_approx(float(x), float(y))
+	return x == y
+
+
+## WHETHER A MOVE'S PLACE GOES BY ITS TIME ALONE, never by how long its act is: a round or an aim gone round by its period, a
+## swing, a turn, a clock - over its whole act, with no formula that might read its length.
+static func _length_free(tr: Dictionary) -> bool:
+	if not String(tr.get("law", "")) in ["circle", "aim", "swing", "turn", "clock"]:
+		return false
+	var w: Variant = tr.get("between")
+	if w is Vector2 and not (w as Vector2).is_equal_approx(Vector2(0.0, 1.0)):
+		return false
+	for part in [tr, tr.get("tip", {}), tr.get("grip", {})]:
+		var d: Dictionary = part
+		if d.has("keys"):
+			return false
+		for key in ["period", "lift", "radius", "amount", "rate", "start", "roll"]:
+			if d.get(key) is String:
+				return false
+	return true
+
+## A NEW PLAN ([method TableWork._timelines]): handed to the twin, and baked again from THE FIRST MOMENT IT CHANGES WHAT IS
+## BAKED - never from where an act it moved began. A live reading hands one over with each sentence, and a stir that runs as
+## long as its words leave it has a new end every time: baked again from its start, the bake fell further behind each sentence
+## and a live show waited 37 s at a time for it (841899, 2026-10-30). Only the channels the bake reads count (where things and
+## parts are, their joints, whether a solid is there, a fill - never a brew's boil or a tint), entry by entry, and a move whose
+## place goes by its time alone (a round, a swing) and only ends elsewhere is changed from where the sooner end is.
 func replan() -> void:
 	var from := INF
+	var old: Dictionary = _chan_seen
+	var now_chan: Dictionary = work._chan
+	for ch in now_chan:
+		if _bakes(String(ch)):
+			from = minf(from, _changed_from(old.get(ch, []), now_chan[ch]))
+	for ch in old:
+		if not now_chan.has(ch) and _bakes(String(ch)):
+			from = minf(from, _changed_from(old[ch], []))
+	# ...and when each sprinkle falls, by its act's own place in the plan
 	var seen := {}
 	for r in _runs_seen:
 		seen[int((r as Dictionary)["i"])] = r
 	var now := {}
 	for r in work.runs:
 		now[int((r as Dictionary)["i"])] = r
-	for i in seen:
-		if not now.has(i):
-			from = minf(from, float((seen[i] as Dictionary)["t0"]))
-	for i in now:
-		var b: Dictionary = now[i]
-		if not seen.has(i):
-			from = minf(from, float(b["t0"]))
+	for sp in _sprinkles:
+		var ai := int((sp as Dictionary)["act"])
+		var a: Variant = seen.get(ai)
+		var b: Variant = now.get(ai)
+		if a == null and b == null:
 			continue
-		var a: Dictionary = seen[i]
-		if not is_equal_approx(float(a["t0"]), float(b["t0"])) or not is_equal_approx(float(a["t1"]), float(b["t1"])):
-			from = minf(from, minf(float(a["t0"]), float(b["t0"])))
+		if a == null or b == null or not is_equal_approx(float(a["t0"]), float(b["t0"])) or not is_equal_approx(float(a["t1"]), float(b["t1"])):
+			from = minf(from, minf(float(a["t0"]) if a != null else INF, float(b["t0"]) if b != null else INF))
 	_runs_seen = (work.runs as Array).duplicate(true)
+	_chan_seen = now_chan
 	var job := {"chan": work._chan, "runs": work.runs, "from": from}
 	_lock.lock()
 	if _pending != null and float((_pending as Dictionary)["from"]) < from:
@@ -814,7 +1033,11 @@ func replan() -> void:
 		_sem.post()
 
 
-## The plan handed over taken up: the twin's, and the bake gone back to the last checkpoint before what it moved.
+## The plan handed over taken up: the twin's, and the bake gone back to the last checkpoint before what it moved. WHERE
+## EACH HELD MOVE BEGAN ([member _held]) IS KEPT: what the plan changed lies past the bake, or the bake goes back to a
+## checkpoint, which holds its own. (841899 played live: a plan made again as a sentence's words came, the bake half way
+## through the ladle's way to the pot, began that move again from where the ladle was by then - its way and its turn
+## taken twice, it went over the pot and came down upside-down past it.)
 func _take_plan() -> void:
 	_lock.lock()
 	var job: Variant = _pending
@@ -826,7 +1049,6 @@ func _take_plan() -> void:
 	twin.runs = (job as Dictionary)["runs"]
 	_intervals = {}
 	_owner_pose = {}
-	_held = {}
 	_hold_spans = {}
 	_spans = null
 	if _carried != null:
@@ -835,13 +1057,22 @@ func _take_plan() -> void:
 		if _take_carried(c):
 			return
 	var from := float((job as Dictionary)["from"])
-	if from == INF or float(_k) / float(FPS) <= from:
+	if from == INF:
 		return
-	var ck: Dictionary = _ck[0]
-	for c in _ck:
-		if float((c as Dictionary)["k"]) / float(FPS) <= from:
-			ck = c
-	_restore(ck)
+	if float(_k) / float(FPS) > from:
+		var ck: Dictionary = _ck[0]
+		for c in _ck:
+			if float((c as Dictionary)["k"]) / float(FPS) <= from:
+				ck = c
+		_restore(ck)
+	# ...AND WHAT WAS BAKED PAST THE CHANGE IS GONE: kept, it was the last plan's, drawn as this one's and counted as baked -
+	# the live viewer showed what the export never would, and said it was caught up (what lies between the checkpoint and the
+	# change is baked again the same)
+	_lock.lock()
+	var keep := maxi(_k, int(floor(from * float(FPS))))
+	if frames.size() > keep:
+		frames.resize(keep)
+	_lock.unlock()
 
 
 func _frames_reset() -> void:
@@ -855,6 +1086,7 @@ func _frames_reset() -> void:
 	pieces = []
 	_piece_at = {}
 	_runs_seen = (work.runs as Array).duplicate(true)
+	_chan_seen = work._chan
 	_checkpoint()
 
 
@@ -865,7 +1097,10 @@ func _checkpoint() -> void:
 	_ck.append({"k": _k, "sim": sim.snapshot(), "liq": liq, "np": parcels.size(), "nr": ripples.size(), "ns": splashes.size(), "npc": pieces.size(),
 		"sprinkled": _sprinkles.map(func(s: Dictionary) -> int: return int(s.get("done", 0))),
 		"sprinkled_ids": _sprinkles.map(func(s: Dictionary) -> PackedInt32Array: return (grains[int(s["grains"])] as Dictionary)["ids"]),
-		"held": _held.duplicate(true), "loose": loose.map(func(L: Dictionary) -> Array: return [L["body"], L["n0"], L["full"]])})
+		"held": _held.duplicate(true), "loose": loose.map(func(L: Dictionary) -> Array: return [L["body"], L["n0"], L["full"], L.get("rest"),
+			L.get("rest_host", -1), L.get("rest_hrel"), L["box"], L.get("calm", 0.0), L.get("rest_hxf"), L.get("rest_up"), L.get("mass", 0.0)]),
+		"swing": _swing.map(func(s: Dictionary) -> Array: return [s["a"], s["w"], s["rest"], s["still"], s["sig"], s.get("b1"), s.get("b2")]),
+		"rigid": rigid.snapshot(), "body_solids": _body_solids()})
 	if _ck.size() > CHECKS_KEPT + 1:
 		# THINNED: of all but the first and the latest few, the one whose going leaves the shortest gap goes, the older on a tie
 		var drop := 1
@@ -878,9 +1113,36 @@ func _checkpoint() -> void:
 		_ck.remove_at(drop)
 
 
+## Each rigid body's solids as they stand: solid -> [xf, xf0, xf00, moving, jolt, stirs, presses] ([method _restore]).
+func _body_solids() -> Dictionary:
+	var out := {}
+	for si in solids.size():
+		var d: Dictionary = solids[si]
+		if d.has("body"):
+			out[si] = [d["xf"], d["xf0"], d["xf00"], d["moving"], d["jolt"], d.get("stirs", false), d.get("presses", false)]
+	return out
+
+
 func _restore(ck: Dictionary) -> void:
 	_k = int(ck["k"])
 	sim.restore(ck["sim"])
+	# ...each swinging hinge as it was, before its solids are put where it had them
+	var sw: Array = ck.get("swing", [])
+	for k in mini(sw.size(), _swing.size()):
+		var s: Dictionary = _swing[k]
+		var was: Array = sw[k]
+		s["a"] = was[0]
+		s["w"] = was[1]
+		s["rest"] = was[2]
+		s["still"] = was[3]
+		s["sig"] = was[4]
+		s["b1"] = was[5]
+		s["b2"] = was[6]
+		s["moved"] = false
+		twin.swung[int(s["wi"])] = rad_to_deg(float(s["a"]))
+	# ...and each rigid body where it was
+	rigid.restore(ck.get("rigid", []))
+	_posed_now()
 	_liq = []
 	for s in ck["liq"]:
 		_liq.append((s as Dictionary).duplicate(true))
@@ -917,11 +1179,38 @@ func _restore(ck: Dictionary) -> void:
 		L["body"] = int(was[0])
 		L["n0"] = was[1]
 		L["full"] = bool(was[2])
+		if was.size() > 10:
+			L["rest"] = was[3]
+			L["rest_host"] = was[4]
+			L["rest_hrel"] = was[5]
+			L["box"] = was[6]
+			L["calm"] = was[7]
+			L["rest_hxf"] = was[8]
+			L["rest_up"] = was[9]
+			L["mass"] = was[10]
+	_lying_cells()
 	_ck = _ck.filter(func(c: Dictionary) -> bool: return int(c["k"]) <= _k)
 	# THE SOLIDS WHERE THEY WERE two frames and one before - the next frame moves them on to this one, as a bake from the
 	# start would have - and what each is to meet there (a solid at rest is never reckoned again until it moves)
-	for sd in solids:
-		var d: Dictionary = sd
+	# ...A BODY'S OWN as they were, and the two frames before: begun again with them standing still, what rode a carried jar
+	# was carried on otherwise than a bake from the start carries it, and its snow fell elsewhere
+	var kept: Dictionary = ck.get("body_solids", {})
+	for si in solids.size():
+		var d: Dictionary = solids[si]
+		if d.has("body"):
+			var bx := rigid.motion(int(d["body"])) * (d["rest"] as Transform3D)
+			var was: Array = kept.get(si, [bx, bx, bx, false, 0.0, false, false])
+			d["xf"] = was[0]
+			d["xf0"] = was[1]
+			d["xf00"] = was[2]
+			d["inv"] = (d["xf"] as Transform3D).affine_inverse()
+			d["wbox"] = ((d["xf"] as Transform3D) * (d["box"] as AABB)).grow(0.001)
+			d["moving"] = was[3]
+			d["jolt"] = was[4]
+			d["stirs"] = was[5]
+			d["presses"] = was[6]
+			d["on"] = _shown(d, t)
+			continue
 		d["xf0"] = _pose_owner(d, maxf(t - 2.0 / float(FPS), 0.0)) * (d["local"] as Transform3D)
 		d["xf"] = _pose_owner(d, maxf(t - 1.0 / float(FPS), 0.0)) * (d["local"] as Transform3D)
 		d["xf00"] = d["xf0"]
@@ -1059,7 +1348,8 @@ func _layout_of() -> int:
 	var spr: Array = []
 	for s in _sprinkles:
 		spr.append((s as Dictionary)["track"])
-	return hash([sol, liq, gr, lo, spr, sim.snapshot(), sim.matter, _liq, twin._rest, twin._runs_of, twin._spot, twin.since, FPS])
+	return hash([sol, liq, gr, lo, spr, sim.snapshot(), sim.matter, _liq, twin._rest, twin._runs_of, twin._spot, twin.since, FPS,
+		_rigid_of.keys(), _swing_at.keys()])
 
 
 # --- the bake ---------------------------------------------------------------------------------------------
@@ -1124,19 +1414,29 @@ func _frame(k: int) -> Dictionary:
 		# ...and its surface still moving
 		if bool(((s as Dictionary)["w"] as Dictionary)["on"]):
 			busy = true
-	busy = busy or _sprinkling(t) or _liquid_fills(t)
+	busy = busy or _sprinkling(t) or _liquid_fills(t) or _swinging() or rigid.busy()
 	# NOTHING MOVES AND NOTHING IS MOVING: the frame before, with nothing reckoned
 	if not busy and not _may_move(t) and k > 0 and k - 1 < frames.size():
 		return frames[k - 1]
+	# ...what swings by its weight first: where it has swung to is where its solids are
+	_swings_step(t, dt)
 	busy = _solids_at(t) or busy
-	# ...or what the work holds of the loose things: carried, it moves though nothing else does
+	# ...or what the work holds of the loose things and of the parts it picks up: carried, it moves though nothing else does
 	if not busy:
 		for L in loose:
 			if _held_at(int((L as Dictionary)["wi"]), t):
 				busy = true
 				break
+	if not busy:
+		for b in rigid.bodies:
+			if _held_at(int((b as Dictionary)["wi"]), t):
+				busy = true
+				break
 	if not busy and k > 0 and k - 1 < frames.size():
 		return frames[k - 1]
+	# ...and what the work picks up, held or let go, among the solids where they are now
+	if not rigid.bodies.is_empty():
+		_rigid_step(t, dt)
 	_parcels_step(t, dt)
 	var world := _liquids_step(t, dt)
 	_wake_near_loose(t)
@@ -1144,6 +1444,7 @@ func _frame(k: int) -> Dictionary:
 	_sprinkle_step(t, dt)
 	sim.step(dt, world)
 	_events(t)
+	_rest_loose(dt)
 	return _record(t)
 
 
@@ -1166,13 +1467,15 @@ func _recent(t: float) -> int:
 
 
 ## Whether anything on the table may move at [param t]: within a stretch of any act that carries, turns or takes away a
-## thing or a part (or a frame either side of one).
+## thing or a part (or a frame either side of one) - or while a hinge swings.
 func _may_move(t: float) -> bool:
+	if _swinging() or rigid.busy():
+		return true
 	if _spans == null:
 		var all: Array = []
 		for ch in twin._chan:
 			var c := String(ch)
-			if not (c.ends_with(":pose") or c.ends_with(":shown")):
+			if not (c.ends_with(":pose") or c.ends_with(":shown") or c.ends_with(":angle") or c.ends_with(":offset")):
 				continue
 			for e in twin._chan[ch]:
 				all.append(Vector2(float((e as Dictionary)["s0"]) - 0.1, float((e as Dictionary)["s1"]) + 0.1))
@@ -1198,6 +1501,10 @@ func _solids_at(t: float) -> bool:
 	var dt := 1.0 / float(FPS)
 	for sd in solids:
 		var d: Dictionary = sd
+		# A RIGID BODY'S OWN are where it is ([method _rigid_step])
+		if d.has("body"):
+			d["on"] = _shown(d, t)
+			continue
 		var key := ("t%d" if String(d["owner"]) == "t" else "w%d") % int(d["oi"])
 		var pose: Transform3D
 		if _moves_at(key, d, t):
@@ -1215,7 +1522,7 @@ func _solids_at(t: float) -> bool:
 			d["inv"] = xf.affine_inverse()
 			d["wbox"] = (xf * (d["box"] as AABB)).grow(0.001)
 			var a := (xf.origin - 2.0 * (d["xf0"] as Transform3D).origin + (d["xf00"] as Transform3D).origin) / (dt * dt)
-			d["jolt"] = a.length()
+			d["jolt"] = Particles.jolt_of(a)
 		else:
 			d["jolt"] = 0.0
 		d["on"] = _shown(d, t)
@@ -1229,15 +1536,26 @@ func _shown(d: Dictionary, t: float) -> bool:
 	return ch.is_empty() or not twin._chan.has(ch) or float(twin.value(ch, t)) > 0.5
 
 
-## Whether the node [param key] may move at [param t]: within a stretch of its own channels', or its thing's.
+## Whether the node [param key] may move at [param t]: within a stretch of its own channels' - its pose, its joint's - or
+## those of each part it is a part of, or its thing's; or as a hinge it hangs from swings. (Its own pose and its thing's
+## alone had been asked: a beam turned on its hinge, and its pan with it, stood still in the physics.)
 func _moves_at(key: String, d: Dictionary, t: float) -> bool:
+	for k in d.get("swings", []):
+		if bool((_swing[int(k)] as Dictionary)["moved"]):
+			return true
+	for k in d.get("bodies", []):
+		if bool((rigid.bodies[int(k)] as Dictionary)["moved"]):
+			return true
 	if not _intervals.has(key):
 		var chs: Array = []
 		if String(d["owner"]) == "t":
 			chs = ["t%d:pose" % int(d["oi"])]
 		else:
-			var wi := int(d["oi"])
-			chs = ["w%d:pose" % wi, "g%d:pose" % int(twin._group_of.get(wi, -1)), "t%d:pose" % int((twin.works[wi] as Dictionary)["thing"])]
+			var c := int(d["oi"])
+			while c >= 0:
+				chs.append_array(["w%d:pose" % c, "w%d:angle" % c, "w%d:offset" % c, "g%d:pose" % int(twin._group_of.get(c, -1))])
+				c = int(twin._parent_work.get(c, -1))
+			chs.append("t%d:pose" % int((twin.works[int(d["oi"])] as Dictionary)["thing"]))
 		var spans: Array = []
 		for ch in chs:
 			for e in twin._chan.get(ch, []):
@@ -1355,11 +1673,13 @@ func _liquids_step(t: float, dt: float) -> Dictionary:
 			var of := vs.overflow(n_l, c_l.dot(n_l))
 			var q := float(of["q"]) * scale
 			var out := minf(q * dt, float(S["v"]))
-			if out > 1e-12:
+			var k := int(of["at"])
+			var lip := xf * vs.lip[k] if k >= 0 else xf.origin
+			# ...UNLESS ITS LIP IS UNDER ANOTHER LIQUID: sunk in it, it is that liquid, full, and nothing pours (a ladle stood in
+			# its pot had poured sixty parcels a second out of its lip at the pot's floor, every one back into the pot)
+			if out > 1e-12 and _under_liquid(lip, li) < 0:
 				S["v"] = float(S["v"]) - out
 				S["q"] = out / dt
-				var k := int(of["at"])
-				var lip := xf * vs.lip[k]
 				var way := (xf.basis * (vs.lip[k] - vs.rim[k])).normalized()
 				way = Vector3(way.x, minf(way.y, 0.0), way.z).normalized()
 				var head := maxf(float(of["head"]), 0.0) * pow(scale, 1.0 / 3.0)
@@ -1577,6 +1897,20 @@ static func _parcel_at(p: Dictionary, tau: float) -> Vector3:
 	return (p["p"] as Vector3) + (p["v"] as Vector3) * tau + Vector3.DOWN * (0.5 * GRAVITY * tau * tau)
 
 
+## The liquid whose surface stands over [param p] (the table's space) in its own inside, other than [param skip]; or -1.
+func _under_liquid(p: Vector3, skip: int) -> int:
+	for li in liquids.size():
+		var S: Dictionary = _liq[li]
+		if li == skip or float(S["v"]) <= 1e-9 or not S.has("c"):
+			continue
+		var sd: Dictionary = solids[int((liquids[li] as Dictionary)["solid"])]
+		if not (sd["wbox"] as AABB).has_point(p) or not ((liquids[li] as Dictionary)["vessel"] as Vessel).contains((sd["inv"] as Transform3D) * p):
+			continue
+		if (p - (S["c"] as Vector3)).dot(S["n"] as Vector3) < 0.0:
+			return li
+	return -1
+
+
 func _in_solid(p: Vector3, skip := -1) -> bool:
 	for si in solids.size():
 		if si == skip:
@@ -1600,27 +1934,47 @@ func _held_step(t: float, dt: float) -> void:
 			continue
 		var b: Dictionary = sim.bodies[int(L["body"])]
 		var n0: Transform3D = L["n0"]
-		var held: Variant = _held_pose(wi, t, n0, int(L["body"]))
+		var now := sim.body_pose(int(L["body"])) * n0
+		var held: Variant = _held_pose(wi, t, now)
 		if held == null:
 			b["held"] = null
 			continue
-		var was: Variant = _held_pose(wi, t - dt, n0, int(L["body"]))
+		var was: Variant = _held_pose(wi, t - dt, now)
 		b["held"] = (held as Transform3D) * n0.affine_inverse()
 		b["held_from"] = (was as Transform3D) * n0.affine_inverse() if was != null else sim.body_pose(int(L["body"]))
 
 
+## The channel a hand moves [param wi] by: a part's pose - or, less than 0, a whole thing's, -1 less its number ([method
+## _make_rigid]: a thing an act moves is a body too).
+func _ch_of(wi: int) -> String:
+	return "w%d:pose" % wi if wi >= 0 else "t%d:pose" % (-1 - wi)
+
+
+## ...and where its node stood as built (the table's space).
+func _rest_of(wi: int) -> Transform3D:
+	return work._rest[_ch_of(wi)]
+
+
 ## Whether the work holds loose work [param wi] at [param t] - by itself or with its group: its stretches found once a
-## plan ([member _hold_spans]).
+## plan ([member _hold_spans]), those less than [constant HOLD_GAP] apart one hold - a hand never lets go between one move
+## and the next (a stopper had dropped 2 cm in the 65 ms between two of its tracks). A whole thing is [method _ch_of]'s.
 func _held_at(wi: int, t: float) -> bool:
 	if not _hold_spans.has(wi):
-		var spans := PackedVector2Array()
-		var chans: Array = ["w%d:pose" % wi]
+		var all: Array = []
+		var chans: Array = [_ch_of(wi)]
 		var gi := int(twin._group_of.get(wi, -1))
 		if gi >= 0:
 			chans.append("g%d:pose" % gi)
 		for ch in chans:
 			for e in twin._chan.get(ch, []):
-				spans.append(Vector2(float((e as Dictionary)["s0"]), float((e as Dictionary)["s1"])))
+				all.append(Vector2(float((e as Dictionary)["s0"]), float((e as Dictionary)["s1"])))
+		all.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
+		var spans := PackedVector2Array()
+		for v in all:
+			if not spans.is_empty() and (v as Vector2).x - spans[spans.size() - 1].y < HOLD_GAP:
+				spans[spans.size() - 1] = Vector2(spans[spans.size() - 1].x, maxf(spans[spans.size() - 1].y, (v as Vector2).y))
+			else:
+				spans.append(v)
 		_hold_spans[wi] = spans
 	for sp in (_hold_spans[wi] as PackedVector2Array):
 		if t >= sp.x and t < sp.y:
@@ -1629,9 +1983,9 @@ func _held_at(wi: int, t: float) -> bool:
 
 
 ## Where the work holds loose work [param wi] at [param t] (its node's pose, the table's space), or null when nothing
-## does.
-func _held_pose(wi: int, t: float, n0: Transform3D, bi: int) -> Variant:
-	var own := "w%d:pose" % wi
+## does - each move begun from where the physics has it, [param now].
+func _held_pose(wi: int, t: float, now: Transform3D) -> Variant:
+	var own := _ch_of(wi)
 	for e in twin._chan.get(own, []):
 		var ed: Dictionary = e
 		if t < float(ed["s0"]) or t >= float(ed["s1"]):
@@ -1639,11 +1993,24 @@ func _held_pose(wi: int, t: float, n0: Transform3D, bi: int) -> Variant:
 		var key := str(ed.get("t0")) + "|" + own + "|" + str(ed.get("s0"))
 		if not _held.has(key):
 			var e2 := ed.duplicate()
-			e2["from"] = sim.body_pose(bi) * n0
+			e2["from"] = now
+			# ...one riding another's move rides it as the bake has that one going ([method TableWork._pose])
+			if e2.has("_lead"):
+				var le: Dictionary = e2["_lead"]
+				var lk := str(le.get("t0")) + "|" + String(le["ch"]) + "|" + str(le.get("s0"))
+				if _held.get(lk) is Dictionary:
+					e2["_lead"] = _held[lk]
 			_held[key] = e2
 		var e3: Dictionary = _held[key]
 		return twin._eval(e3, t - float(e3["t0"]), t)
 	var gi := int(twin._group_of.get(wi, -1))
+	# ...BETWEEN TWO MOVES a hand holds it where the last one left it ([method _held_at])
+	var last := -1.0
+	for e in twin._chan.get(own, []):
+		if float((e as Dictionary)["s1"]) <= t and float((e as Dictionary)["s1"]) > t - HOLD_GAP:
+			last = float((e as Dictionary)["s1"])
+	if last >= 0.0 and gi < 0:
+		return _held_pose(wi, last - 1e-4, now)
 	if gi >= 0:
 		var gch := "g%d:pose" % gi
 		for e in twin._chan.get(gch, []):
@@ -1652,11 +2019,655 @@ func _held_pose(wi: int, t: float, n0: Transform3D, bi: int) -> Variant:
 				continue
 			var key := str(ed.get("t0")) + "|" + gch + "|" + str(ed.get("s0")) + "|" + str(wi)
 			if not _held.has(key):
-				_held[key] = [twin.value(gch, float(ed["s0"])), sim.body_pose(bi) * n0]
+				_held[key] = [twin.value(gch, float(ed["s0"])), now]
 			var g0: Transform3D = (_held[key] as Array)[0]
 			var p0: Transform3D = (_held[key] as Array)[1]
 			return (twin.value(gch, t) as Transform3D) * g0.affine_inverse() * p0
 	return null
+
+
+## Whether an act after act [param i] - in the order the show plays them, the intro's, each beat's and the close's, each as
+## written - moves channel [param own]: from the acts alone, never from what the reading has placed so far.
+func _moved_after(own: String, i: int) -> bool:
+	var key := own + "|" + str(i)
+	if not _moves_after.has(key):
+		var found := false
+		if i >= 0 and i < twin.acts.size():
+			var mine := _play_rank(i)
+			for j in twin.acts.size():
+				if _play_rank(j) <= mine:
+					continue
+				for tr in (twin.acts[j] as Dictionary)["tracks"]:
+					found = found or String((tr as Dictionary).get("_ch", "")) == own
+		_moves_after[key] = found
+	return bool(_moves_after[key])
+
+
+## Act [param i]'s place in the order the show plays the acts: its beat's (the intro first, the close last), then its own.
+func _play_rank(i: int) -> float:
+	var beat := String((twin.acts[i] as Dictionary).get("beat", ""))
+	var b := 0.0 if beat == "intro" else (1e6 if beat == "close" else beat.to_float())
+	return b * 10000.0 + float(i)
+
+
+# --- what the work picks up -------------------------------------------------------------------------------
+
+## WHAT THE WORK PICKS UP, each a rigid body ([RigidParts]): a free part some act moves that is not loose - its own solids
+## and those of every part of it with no joint of its own, their mass, middle and inertia, and their surfaces - asleep as
+## it was built on what holds it. (Each had gone exactly where its acts said, through whatever was there: a pestle put back
+## into its mortar's wall, a stopper laid sideways, a lid that never settled.) AND EVERY WHOLE THING AN ACT MOVES, of its
+## own solids and those of every part of it that moves only as it does ([method _rides_thing]) - the user, 2026-10-30, of
+## 841899's mortar tipped through the cauldron: "why can we not just add collision to most if not all objects, so that they
+## naturally respect physical boundaries?": a thing carried had gone where its act said, through whatever was there, and
+## the act's check, a few hundred of its corners at 25 moments, never saw a thin rim go into it.
+func _make_rigid() -> void:
+	for wi in work.works.size():
+		var wk: Dictionary = work.works[wi]
+		if String(wk["kind"]) != "free" or bool((wk["w"] as Dictionary).get("loose", false)) or not work._part_moves(wi) \
+				or not work._rest.has("w%d:pose" % wi):
+			continue
+		_add_body(wi, _solids_of(_unjointed([wi])))
+	for ti in work.things.size():
+		if not work._moved.has("t%d:pose" % ti) or not work._rest.has("t%d:pose" % ti):
+			continue
+		var own := PackedInt32Array()
+		for si in solids.size():
+			var sd: Dictionary = solids[si]
+			if int(sd["thing"]) == ti and not sd.has("body") and (String(sd["owner"]) == "t" or _rides_thing(int(sd["wi"]))):
+				own.append(si)
+		_add_body(-1 - ti, own)
+	_posed_now()
+	# ...and which of them moves each solid: the body of a part it is a part of, or of the thing it is a part of
+	for sd in solids:
+		var d: Dictionary = sd
+		var on: Array = []
+		var c := int(work._parent_work.get(int(d["wi"]), -1)) if int(d["wi"]) >= 0 else -1
+		while c >= 0:
+			if _rigid_of.has(c):
+				on.append(int(_rigid_of[c]))
+			c = int(work._parent_work.get(c, -1))
+		if not d.has("body") and _rigid_of.has(-1 - int(d["thing"])):
+			on.append(int(_rigid_of[-1 - int(d["thing"])]))
+		d["bodies"] = on
+
+
+## Whether part [param wi] moves only as its thing does: neither it nor any part it hangs from has a joint of its own (a
+## free part no act moves stands where it was built in it) or is a body of its own.
+func _rides_thing(wi: int) -> bool:
+	var c := wi
+	while c >= 0:
+		var k := String((work.works[c] as Dictionary)["kind"])
+		if _rigid_of.has(c) or not (k == "" or k == "free"):
+			return false
+		c = int(work._parent_work.get(c, -1))
+	return true
+
+
+## A RIGID BODY of solids [param own], keyed [param key] (a part's work, or a whole thing's, [method _ch_of]): their mass,
+## middle and inertia, their surfaces, asleep as built on what holds them - its number, or -1 when there is nothing to it.
+func _add_body(key: int, own: PackedInt32Array) -> int:
+	if own.is_empty():
+		return -1
+	var m := 0.0
+	var c := Vector3.ZERO
+	var masses: Array = []
+	for si in own:
+		var ms := _mass_of(si)
+		masses.append(ms)
+		m += float(ms["m"])
+		c += (ms["c"] as Vector3) * float(ms["m"])
+	if m <= 0.0:
+		return -1
+	c /= m
+	# its inertia about its own middle: each solid's about its own, moved there
+	var ix := Vector3.ZERO
+	var iy := Vector3.ZERO
+	var iz := Vector3.ZERO
+	for ms in masses:
+		var ib: Basis = (ms as Dictionary)["i"]
+		var r: Vector3 = ((ms as Dictionary)["c"] as Vector3) - c
+		var mk := float((ms as Dictionary)["m"])
+		var r2 := r.length_squared()
+		ix += ib.x + Vector3(r2 - r.x * r.x, -r.x * r.y, -r.x * r.z) * mk
+		iy += ib.y + Vector3(-r.y * r.x, r2 - r.y * r.y, -r.y * r.z) * mk
+		iz += ib.z + Vector3(-r.z * r.x, -r.z * r.y, r2 - r.z * r.z) * mk
+	var pts := PackedVector3Array()
+	var rests: Array = []
+	for si in own:
+		var sd: Dictionary = solids[si]
+		rests.append(sd["rest"])
+		for q in (sd["field"] as ShapeField).surface_points():
+			pts.append((sd["rest"] as Transform3D) * q)
+	var host := _rigid_host(own, c, pts)
+	var mu := _surface_friction(String(((solids[own[0]] as Dictionary)["part"] as Dictionary).get("material", "")))
+	var bi := rigid.add(key, own, rests, m, Basis(ix, iy, iz), c, pts, mu, host,
+		(solids[host] as Dictionary)["rest"] if host >= 0 else Transform3D.IDENTITY)
+	_rigid_of[key] = bi
+	for si in own:
+		(solids[si] as Dictionary)["body"] = bi
+	# ...ITS SEAT: what of its own thing a part was built touching (a cork, its jar's neck), [constant SEAT_TOUCH] near
+	var seat := PackedInt32Array()
+	if key >= 0:
+		var ti := int((solids[own[0]] as Dictionary)["thing"])
+		for si in solids.size():
+			var sd: Dictionary = solids[si]
+			if int(sd["thing"]) != ti or own.has(si):
+				continue
+			var inv := (sd["rest"] as Transform3D).affine_inverse()
+			for q in pts:
+				if (sd["field"] as ShapeField).sample(inv * q).x < SEAT_TOUCH:
+					seat.append(si)
+					break
+	(rigid.bodies[bi] as Dictionary)["seat"] = seat
+	return bi
+
+
+## What a body of solids [param own] (its middle [param c], its surface [param pts], the table's space as built) rests on as
+## built: an inside it stands in, not its own; else the solid nearest under its lowest point, within a few millimeters;
+## else the table's top (-1).
+func _rigid_host(own: PackedInt32Array, c: Vector3, pts: PackedVector3Array) -> int:
+	for li in liquids.size():
+		var ls := int((liquids[li] as Dictionary)["solid"])
+		if own.has(ls):
+			continue
+		if ((liquids[li] as Dictionary)["vessel"] as Vessel).contains(((solids[ls] as Dictionary)["rest"] as Transform3D).affine_inverse() * c):
+			return ls
+	var low := c
+	for p in pts:
+		if p.y < low.y:
+			low = p
+	var best := -1
+	var bd := 0.004
+	for si in solids.size():
+		if own.has(si):
+			continue
+		var sd: Dictionary = solids[si]
+		if not (sd["wbox"] as AABB).grow(bd).has_point(low):
+			continue
+		var d := (sd["field"] as ShapeField).sample((sd["inv"] as Transform3D) * low).x
+		if d < bd:
+			bd = d
+			best = si
+	return best
+
+
+## EACH RIGID BODY A FRAME ON, at show time [param t]: where the work holds each now (each move begun where the bake has
+## it, or held up between its moves, [method _held_aloft]), then their steps among the solids - and the twin told where
+## they went.
+func _rigid_step(t: float, dt: float) -> void:
+	for bi in rigid.bodies.size():
+		var b: Dictionary = rigid.bodies[bi]
+		var wi := int(b["wi"])
+		var n0 := _rest_of(wi)
+		var now := rigid.motion(bi) * n0
+		var held: Variant = _held_pose(wi, t, now) if _held_at(wi, t) else _held_aloft(bi, wi, t)
+		b["seat_skip"] = PackedInt32Array()
+		if held == null:
+			if b["held"] != null:
+				b["held"] = null
+				_seat(bi, b, now)
+			continue
+		# ...EASED INTO ITS SEAT OR OUT OF IT BY A HAND, it never meets its seat: the hand knows a fit the set dresser made to
+		# the millimeter, which the solver's points are coarser than ([method _seat])
+		var skip := PackedInt32Array()
+		for si in b.get("seat", PackedInt32Array()):
+			if not _off_seat(si, wi, now, SEAT_REACH, SEAT_TURN):
+				skip.append(si)
+		b["seat_skip"] = skip
+		var was: Variant = null
+		if b["held"] != null:
+			was = _held_pose(wi, t - dt, now) if _held_at(wi, t - dt) else _held_aloft(bi, wi, t - dt)
+		b["held"] = (held as Transform3D) * n0.affine_inverse()
+		b["held_from"] = (was as Transform3D) * n0.affine_inverse() if was != null else rigid.motion(bi)
+	rigid.step(dt, {"solids": solids, "top": 0.0, "spheres": {"x": sim.x, "r": sim.r, "alive": sim.alive, "n": sim.n, "touch": sim.touch,
+		"host": sim.host, "asleep": sim.asleep}})
+	_posed_now()
+
+
+## LET GO NEAR ITS SEAT - a stopper back in its jar's neck, a lid on its crock, within [constant SEAT_NEAR] and [constant SEAT_TILT]
+## of how it sat there as built - rigid part body [param bi] (its node at [param now]) SITS THERE as built, asleep on what holds
+## it: a fit the set dresser made is a rest, and the solver's points are coarser than a cork's cap on a lip 5 mm wide. (841899:
+## the frankincense cork, set down in its jar, fell through the neck into it and kept the frankincense in; the brimstone's cork,
+## put back by a hand a few millimeters off its seat, went in sideways and stuck there.)
+func _seat(bi: int, b: Dictionary, now: Transform3D) -> void:
+	var wi := int(b["wi"])
+	var built := _rest_of(wi)
+	var best := -1
+	var least := INF
+	for si in b.get("seat", PackedInt32Array()):
+		var sd: Dictionary = solids[si]
+		if not bool(sd.get("on", true)) or _off_seat(si, wi, now, SEAT_NEAR, SEAT_TILT):
+			continue
+		var d := ((sd["xf"] as Transform3D).affine_inverse() * now).origin.distance_to(((sd["rest"] as Transform3D).affine_inverse() * built).origin)
+		if d < least:
+			least = d
+			best = si
+	if best < 0:
+		return
+	var sd: Dictionary = solids[best]
+	# ...moved from as built as what holds it has been
+	RigidParts._set_motion(b, (sd["xf"] as Transform3D) * (sd["rest"] as Transform3D).affine_inverse())
+	b["touch"] = best
+	rigid._sleep(b)
+
+
+## Whether rigid part [param wi], its node at [param now], is further than [param near] meters or [param turn] radians from how it
+## sat on solid [param si] as built.
+func _off_seat(si: int, wi: int, now: Transform3D, near: float, turn: float) -> bool:
+	var sd: Dictionary = solids[si]
+	var was := (sd["rest"] as Transform3D).affine_inverse() * _rest_of(wi)
+	var is_now := (sd["xf"] as Transform3D).affine_inverse() * now
+	return is_now.origin.distance_to(was.origin) > near \
+		or Quaternion(is_now.basis.orthonormalized()).angle_to(Quaternion(was.basis.orthonormalized())) > turn
+
+
+## HELD UP BETWEEN ITS MOVES ([method TableWork._held_up]): where the hand holds rigid part [param wi] (body [param bi]) at
+## [param t], between two of its moves, when the first left it touching nothing - where that move left it, swaying as the
+## work sways it - or null: it rests on or against something, or no move takes it up again, and the hand lets it go. Asked
+## once a move, as it ends. (841899 played live: the ladle stood down into its pot, the words before the stir longer than the
+## puppeteer's rehearsal, was let go a quarter second after its move and fell into the pot - where the work, the act's check
+## and the rehearsal all had the hand holding it until the stir.)
+func _held_aloft(bi: int, wi: int, t: float) -> Variant:
+	if twin._group_of.has(wi):
+		return null
+	var own := _ch_of(wi)
+	var last: Dictionary = {}
+	var next: Dictionary = {}
+	for e in twin._chan.get(own, []):
+		var ed: Dictionary = e
+		if float(ed["s1"]) <= t:
+			last = ed
+		elif float(ed["s0"]) > t:
+			next = ed
+			break
+	# ...A LATER ACT TAKES IT UP AGAIN, placed yet or not: a live reading places an act only once its word is heard, and a
+	# ladle stood down into its pot was let go there live, where an export, every act placed from the start, held it
+	if last.is_empty() or bool((last["track"] as Dictionary).get("down", false)) \
+			or (next.is_empty() and not _moved_after(own, int(last.get("i", -1)))):
+		return null
+	var key := str(last.get("t0")) + "|" + own + "|" + str(last.get("s0"))
+	if not _held.has("aloft|" + key):
+		_held["aloft|" + key] = not rigid.touching(bi, TableWork.TOUCHING)
+	if not bool(_held["aloft|" + key]):
+		return null
+	# ...where the move left it, as the bake had the move go ([method _held_pose])
+	var s1 := float(last["s1"]) - 1e-4
+	var end: Transform3D = twin._eval(_held[key], s1 - float(last["t0"]), s1) if _held.has(key) else last["end"]
+	var up := smoothstep(0.0, TableWork.HOLD_IN, t - float(last["s1"])) * (smoothstep(0.0, TableWork.HOLD_IN, float(next["s0"]) - t) if not next.is_empty() else 1.0)
+	var dr: Array = Hands.drift(t, int((last["track"] as Dictionary).get("_hand", 0)), up * Hands.HOLD_SWAY)
+	return Transform3D((dr[1] as Basis) * end.basis, end.origin + (dr[0] as Vector3))
+
+
+## The twin told where each rigid body is now: its node's pose, which every part of it hangs from ([member TableWork.posed],
+## a whole thing's [member TableWork.posed_things]).
+func _posed_now() -> void:
+	for bi in rigid.bodies.size():
+		var wi := int((rigid.bodies[bi] as Dictionary)["wi"])
+		if wi >= 0:
+			twin.posed[wi] = rigid.motion(bi) * _rest_of(wi)
+		else:
+			twin.posed_things[-1 - wi] = rigid.motion(bi) * _rest_of(wi)
+
+
+# --- what swings ------------------------------------------------------------------------------------------
+
+## THE HINGES THAT HANG FREE, and what hangs from them (the user, 2026-10-29, of a balance whose beam the puppeteer tipped
+## while the lump laid on its pan stayed where it was: "the weight never transfers to the scale. So we definitely need
+## physics there"): a hinge on a level axis whose own weight hangs below its pivot - a balance's beam, a pendulum, a sign
+## on its hook - swings by that weight and by what lies on it, and no act turns it. A part of it with no joint of its own
+## whose middle hangs below the pivot hangs from its top, level, as a balance's pans hang from the beam's ends: its weight
+## and what lies in it pull at where it hangs, wherever in it they lie. Empty, each rests as it was built.
+func _find_swings() -> void:
+	for wi in work.works.size():
+		var wk: Dictionary = work.works[wi]
+		if String(wk["kind"]) != "hinge" or work._runs_of.has("w%d:angle" % wi) or not work._rest.has("w%d:pose" % wi):
+			continue
+		var jt: Dictionary = (wk["w"] as Dictionary)["joint"]
+		var rest: Transform3D = work._rest["w%d:pose" % wi]
+		var axis := (rest.basis * (jt["axis"] as Vector3)).normalized()
+		if absf(axis.y) > 0.5:
+			continue
+		var pivot := rest * (jt["pivot"] as Vector3)
+		# its own: itself and every part of it with no joint, but those that hang
+		var mine: Array = [wi]
+		var hangs: Array = []
+		for c in work.works.size():
+			if int(work._parent_work.get(c, -1)) != wi or String((work.works[c] as Dictionary)["kind"]) != "":
+				continue
+			var cb := _box_of(_unjointed([c]))
+			if cb.size == Vector3.ZERO:
+				continue
+			# ...from its top, never higher than the pivot: a pan's strands meet the beam's end at the beam's own height (a
+			# strand's own thickness above it had hung both pans over the pivot, and the empty balance fell to its stop)
+			if cb.get_center().y < pivot.y:
+				hangs.append([c, Vector3(cb.get_center().x, minf(cb.end.y, pivot.y), cb.get_center().z)])
+			else:
+				mine.append(c)
+		var own := {}
+		var m := 0.0
+		var c_sum := Vector3.ZERO
+		var i0 := 0.0
+		var away: Array = hangs.map(func(h: Array) -> int: return int(h[0]))
+		for si in _solids_of(_unjointed(mine, away)):
+			own[si] = true
+			var ms := _mass_of(si)
+			var arm := (ms["c"] as Vector3) - pivot
+			m += float(ms["m"])
+			c_sum += (ms["c"] as Vector3) * float(ms["m"])
+			i0 += axis.dot((ms["i"] as Basis) * axis) + float(ms["m"]) * (arm - axis * arm.dot(axis)).length_squared()
+		if m <= 0.0:
+			continue
+		var d := c_sum / m - pivot
+		d -= axis * d.dot(axis)
+		var drop := -d.y
+		if drop < SWING_HANG or drop < sqrt(maxf(d.length_squared() - drop * drop, 0.0)):
+			continue
+		var inv := rest.affine_inverse()
+		var under := {}
+		var hung: Array = []
+		for k in hangs.size():
+			var c := int(hangs[k][0])
+			var top: Vector3 = hangs[k][1]
+			var mk := 0.0
+			for si in _solids_of(_unjointed([c])):
+				under[si] = k
+				mk += float(_mass_of(si)["m"])
+			hung.append({"wi": c, "at": inv * top, "m": mk})
+			var crest: Transform3D = work._rest["w%d:pose" % c]
+			work.hung[c] = {"from": wi, "at": crest.affine_inverse() * top, "axis": (crest.basis.inverse() * axis).normalized()}
+		var rg: Variant = jt.get("range")
+		var s := {"wi": wi, "pivot": jt["pivot"], "axis": (jt["axis"] as Vector3).normalized(), "c": inv * (c_sum / m), "m": m, "i0": i0,
+			"hung": hung, "own": own, "under": under, "a": 0.0, "w": 0.0, "rest": false, "still": 0.0, "sig": 0, "moved": false,
+			"range": Vector2(deg_to_rad((rg as Vector2).x), deg_to_rad((rg as Vector2).y)) if rg is Vector2 else Vector2(-PI, PI) * 0.95}
+		# TRUED AS BUILT: empty, it rests where it was built, as a balance's nut sets it level - whatever its making leaves
+		# it leaning by (two pans a tenth of a millimeter apart in their arms had tipped an empty balance to its stop)
+		var none := PackedFloat32Array()
+		none.resize(hung.size())
+		s["tare"] = -_swing_pull(s, twin._base_world(wi, 0.0), Vector3(0.0, -GRAVITY, 0.0), [[], none], 0.0).x
+		s["rest"] = true
+		_swing_at[wi] = _swing.size()
+		_swing.append(s)
+		work.swings[wi] = rad_to_deg(float(s["a"]))
+		twin.swung[wi] = rad_to_deg(float(s["a"]))
+		for a in work.acts:
+			for tr in (a as Dictionary)["tracks"]:
+				if String((tr as Dictionary).get("_ch", "")) == "w%d:angle" % wi:
+					notes.append("%s: %s swings by its own weight and what is laid on it - no act turns it" % [String((a as Dictionary)["name"]), work._part_label(wi)])
+	# ...and which of them moves each solid
+	for sd in solids:
+		var d: Dictionary = sd
+		var on: Array = []
+		var c := int(d["wi"])
+		while c >= 0:
+			if _swing_at.has(c):
+				on.append(int(_swing_at[c]))
+			if work.hung.has(c):
+				on.append(int(_swing_at[int((work.hung[c] as Dictionary)["from"])]))
+			c = int(work._parent_work.get(c, -1))
+		d["swings"] = on
+
+
+## [param list]'s works and every part of them with no joint of its own, all the way down - but [param away]'s.
+func _unjointed(list: Array, away: Array = []) -> Array:
+	var out: Array = list.duplicate()
+	var k := 0
+	while k < out.size():
+		for c in work.works.size():
+			if int(work._parent_work.get(c, -1)) == int(out[k]) and String((work.works[c] as Dictionary)["kind"]) == "" and not out.has(c) \
+					and not away.has(c):
+				out.append(c)
+		k += 1
+	return out
+
+
+## The solids of the works [param list].
+func _solids_of(list: Array) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for si in solids.size():
+		if list.has(int((solids[si] as Dictionary)["wi"])):
+			out.append(si)
+	return out
+
+
+## The box the solids of works [param list] fill as built (the table's space).
+func _box_of(list: Array) -> AABB:
+	var box := AABB()
+	var first := true
+	for si in _solids_of(list):
+		var b: AABB = ((solids[si] as Dictionary)["rest"] as Transform3D) * ((solids[si] as Dictionary)["box"] as AABB)
+		box = b if first else box.merge(b)
+		first = false
+	return box
+
+
+## SOLID [param si]'s MASS as built: `{m}` kilograms, its middle `c` (the table's space), its inertia `i` about that middle (a
+## Basis, the table's space, kilogram square meters) - its field sampled over its box, each cell inside a share of its
+## material's density. Too thin for the cells, it is its box a third full.
+func _mass_of(si: int) -> Dictionary:
+	var sd: Dictionary = solids[si]
+	if sd.has("mass"):
+		return sd["mass"]
+	var f: ShapeField = sd["field"]
+	var box: AABB = sd["box"]
+	var xf: Transform3D = sd["rest"]
+	var mat: Variant = work.materials.get(String((sd["part"] as Dictionary).get("material", "")))
+	var md: Dictionary = mat if mat is Dictionary else {}
+	var rho := float(md.get("density", (Props.MATERIALS.get(String(md.get("kind", "painted")), Props.MATERIALS["painted"]) as Dictionary)["density"])) * 1000.0
+	var cell := maxf(minf(box.size.x, minf(box.size.y, box.size.z)) / 3.0, 0.0008)
+	var n := Vector3i(clampi(int(ceil(box.size.x / cell)), 2, MASS_CELLS), clampi(int(ceil(box.size.y / cell)), 2, MASS_CELLS),
+		clampi(int(ceil(box.size.z / cell)), 2, MASS_CELLS))
+	var step := box.size / Vector3(n)
+	var pts := PackedVector3Array()
+	for i in n.x:
+		for j in n.y:
+			for k in n.z:
+				var q := box.position + step * Vector3(i + 0.5, j + 0.5, k + 0.5)
+				if f.sample(q).x < 0.0:
+					pts.append(xf * q)
+	var dv := absf(xf.basis.determinant()) * step.x * step.y * step.z
+	var out := {}
+	if pts.is_empty():
+		var size: Vector3 = box.size * xf.basis.get_scale()
+		var m := rho * size.x * size.y * size.z / 3.0
+		out = {"m": m, "c": xf * box.get_center(), "i": Basis.from_scale(Vector3(size.y * size.y + size.z * size.z,
+			size.x * size.x + size.z * size.z, size.x * size.x + size.y * size.y) * (m / 12.0))}
+	else:
+		var c := Vector3.ZERO
+		for p in pts:
+			c += p
+		c /= float(pts.size())
+		var mi := rho * dv
+		var ix := Vector3.ZERO
+		var iy := Vector3.ZERO
+		var iz := Vector3.ZERO
+		for p in pts:
+			var r := p - c
+			var r2 := r.length_squared()
+			ix += Vector3(r2 - r.x * r.x, -r.x * r.y, -r.x * r.z) * mi
+			iy += Vector3(-r.y * r.x, r2 - r.y * r.y, -r.y * r.z) * mi
+			iz += Vector3(-r.z * r.x, -r.z * r.y, r2 - r.z * r.z) * mi
+		out = {"m": mi * float(pts.size()), "c": c, "i": Basis(ix, iy, iz)}
+	sd["mass"] = out
+	return out
+
+
+## What pulls swinging hinge [param s] at angle [param a] (radians): its frame where its thing has it, before its joint
+## [param b]; the pull of weight there [param g] (gravity, less the frame's own acceleration as it is carried); what lies on
+## it [param loads] ([method _loads_on]) - its torque about its axis and its inertia about it, `(torque, inertia)`.
+func _swing_pull(s: Dictionary, b: Transform3D, g: Vector3, loads: Array, a: float) -> Vector2:
+	var r := Basis(s["axis"] as Vector3, a)
+	var p0: Vector3 = s["pivot"]
+	var pv := b * p0
+	var ax := (b.basis * (s["axis"] as Vector3)).normalized()
+	var cw := b * (p0 + r * ((s["c"] as Vector3) - p0))
+	var tq := ax.dot((cw - pv).cross(g * float(s["m"]))) + float(s.get("tare", 0.0)) * g.length() / GRAVITY
+	var inertia := float(s["i0"])
+	var hung: Array = s["hung"]
+	var on_hung: PackedFloat32Array = loads[1]
+	for k in hung.size():
+		var arm := b * (p0 + r * (((hung[k] as Dictionary)["at"] as Vector3) - p0)) - pv
+		var mk := float((hung[k] as Dictionary)["m"]) + on_hung[k]
+		tq += ax.dot(arm.cross(g * mk))
+		inertia += mk * (arm - ax * arm.dot(ax)).length_squared()
+	for l in loads[0]:
+		var arm: Vector3 = ((l as Array)[0] as Vector3) - pv
+		tq += ax.dot(arm.cross(g * float((l as Array)[1])))
+		inertia += float((l as Array)[1]) * (arm - ax * arm.dot(ax)).length_squared()
+	return Vector2(tq, inertia)
+
+
+## Swinging hinge [param s] on [param h] seconds, pulled [param pull] (`(torque, inertia)`): its speed, its pivot's drag, its
+## angle and its stops. Returns how hard it is pulled to turn (radians a second squared) - none against a stop it is
+## pressed onto and still at.
+func _swing_on(s: Dictionary, pull: Vector2, h: float) -> float:
+	var acc := pull.x / maxf(pull.y, 1e-9)
+	var w := (float(s["w"]) + acc * h) * exp(-SWING_DAMP * h)
+	var a := float(s["a"]) + w * h
+	var rg: Vector2 = s["range"]
+	if a <= rg.x:
+		a = rg.x
+		w = -w * SWING_BOUNCE if w < 0.0 else w
+		if acc < 0.0 and absf(w) < SWING_STILL.x:
+			acc = 0.0
+	elif a >= rg.y:
+		a = rg.y
+		w = -w * SWING_BOUNCE if w > 0.0 else w
+		if acc > 0.0 and absf(w) < SWING_STILL.x:
+			acc = 0.0
+	s["a"] = a
+	s["w"] = w
+	return acc
+
+
+## EACH SWINGING HINGE A FRAME ON, at show time [param t]: pulled by its weight, by what lies on it now and by its frame's
+## own carrying - at rest, it stays so until what lies on it changes or it is carried.
+func _swings_step(t: float, dt: float) -> void:
+	for s in _swing:
+		var sd: Dictionary = s
+		var wi := int(sd["wi"])
+		var b := twin._base_world(wi, t)
+		var b1: Variant = sd.get("b1")
+		var acc := Vector3.ZERO
+		if b1 != null and sd.get("b2") != null:
+			acc = ((b.origin - 2.0 * (b1 as Transform3D).origin + (sd["b2"] as Transform3D).origin) / (dt * dt)).limit_length(30.0)
+		var carried := b1 != null and not b.is_equal_approx(b1)
+		sd["b2"] = b1 if b1 != null else b
+		sd["b1"] = b
+		var loads := _loads_on(sd)
+		var sig := hash([roundi(_load_mass(loads[0]) * 1e4), Array(loads[1]).map(func(x: float) -> int: return roundi(x * 1e4))])
+		sd["moved"] = false
+		if bool(sd["rest"]) and not carried and sig == int(sd["sig"]):
+			continue
+		sd["rest"] = false
+		sd["sig"] = sig
+		var was := float(sd["a"])
+		var g := Vector3(0.0, -GRAVITY, 0.0) - acc
+		var turn := 0.0
+		for k in SWING_STEPS:
+			turn = _swing_on(sd, _swing_pull(sd, b, g, loads, float(sd["a"])), dt / float(SWING_STEPS))
+		sd["moved"] = absf(float(sd["a"]) - was) > 1e-7
+		if absf(float(sd["w"])) < SWING_STILL.x and absf(turn) < SWING_STILL.y and not carried:
+			sd["still"] = float(sd["still"]) + dt
+			if float(sd["still"]) >= SWING_REST:
+				sd["rest"] = true
+				sd["w"] = 0.0
+		else:
+			sd["still"] = 0.0
+		twin.swung[wi] = rad_to_deg(float(sd["a"]))
+
+
+## WHAT LIES ON SWINGING HINGE [param s] now: `[[[where, kilograms] on its own solids], [kilograms in each part hung from
+## it]]` - a sleeper on what it sleeps on, one awake on what holds it up, a loose thing whole by any sphere of it, and a
+## liquid in it.
+func _loads_on(s: Dictionary) -> Array:
+	var own: Array = []
+	var hung := PackedFloat32Array()
+	hung.resize((s["hung"] as Array).size())
+	var on_own: Dictionary = s["own"]
+	var on_hung: Dictionary = s["under"]
+	var by_body := {}
+	for i in sim.n:
+		if sim.alive[i] == 0:
+			continue
+		var si := sim.host[i] if sim.asleep[i] == 1 else sim.touch[i]
+		if si < 0 or (not on_own.has(si) and not on_hung.has(si)):
+			continue
+		if sim.body[i] >= 0:
+			if not by_body.has(sim.body[i]):
+				by_body[sim.body[i]] = si
+			continue
+		var m := 1.0 / maxf(sim.w[i], 1e-12)
+		if on_hung.has(si):
+			hung[int(on_hung[si])] += m
+		else:
+			own.append([sim.x[i], m])
+	for bi in by_body:
+		var si := int(by_body[bi])
+		if on_hung.has(si):
+			hung[int(on_hung[si])] += _body_mass(int(bi))
+		else:
+			own.append([(sim.bodies[int(bi)] as Dictionary)["c"], _body_mass(int(bi))])
+	# ...a loose thing lying again on it ([method _rest_loose])
+	for L in loose:
+		var ld: Dictionary = L
+		if int(ld["body"]) >= 0 or ld.get("rest") == null:
+			continue
+		var rh := int(ld.get("rest_host", -1))
+		if not on_own.has(rh) and not on_hung.has(rh):
+			continue
+		if on_hung.has(rh):
+			hung[int(on_hung[rh])] += float(ld.get("mass", 0.0))
+		else:
+			own.append([(((solids[rh] as Dictionary)["xf"] as Transform3D) * (ld["rest_hrel"] as Transform3D)).origin, float(ld.get("mass", 0.0))])
+	# ...a part the work picks up, let go on it
+	for b in rigid.bodies:
+		var bd: Dictionary = b
+		var si := int(bd["host"]) if bool(bd["asleep"]) else int(bd["touch"])
+		if bd["held"] != null or si < 0 or (not on_own.has(si) and not on_hung.has(si)):
+			continue
+		if on_hung.has(si):
+			hung[int(on_hung[si])] += float(bd["m"])
+		else:
+			own.append([bd["c"], float(bd["m"])])
+	for li in liquids.size():
+		var ls := int((liquids[li] as Dictionary)["solid"])
+		if li >= _liq.size() or (not on_own.has(ls) and not on_hung.has(ls)):
+			continue
+		var m := float((_liq[li] as Dictionary)["v"]) * 1000.0
+		if m <= 0.0:
+			continue
+		if on_hung.has(ls):
+			hung[int(on_hung[ls])] += m
+		else:
+			own.append([((solids[ls] as Dictionary)["xf"] as Transform3D) * ((solids[ls] as Dictionary)["box"] as AABB).get_center(), m])
+	return [own, hung]
+
+
+static func _load_mass(own: Array) -> float:
+	var m := 0.0
+	for l in own:
+		m += float((l as Array)[1])
+	return m
+
+
+## Whether any hinge is swinging.
+func _swinging() -> bool:
+	for s in _swing:
+		if not bool((s as Dictionary)["rest"]):
+			return true
+	return false
+
+
+## SWINGING HINGE [param wi]'s ANGLE at show time [param t] as baked (degrees), or null - not one, or nothing baked yet.
+func swing_of(wi: int, t: float) -> Variant:
+	var k := int(_swing_at.get(wi, -1))
+	if k < 0:
+		return null
+	var f: Variant = frame_at(t)
+	if f == null:
+		return null
+	var sw: PackedFloat32Array = (f as Dictionary).get("sw", PackedFloat32Array())
+	return sw[k] if k < sw.size() else null
 
 
 ## Whether a sprinkle is letting grains fall at [param t].
@@ -1821,9 +2832,13 @@ func _record(_t: float) -> Dictionary:
 	for L in loose:
 		var lb := int((L as Dictionary)["body"])
 		# one yet to be a body lies as it was built ([method pose_of]: none)
-		var pose: Transform3D = sim.body_pose(lb) * ((L as Dictionary)["n0"] as Transform3D) if lb >= 0 else (L as Dictionary)["built"]
+		var rested: Variant = (L as Dictionary).get("rest")
+		var rh := int((L as Dictionary).get("rest_host", -1))
+		if rested != null and rh >= 0 and rh < solids.size():
+			rested = ((solids[rh] as Dictionary)["xf"] as Transform3D) * ((L as Dictionary)["rest_hrel"] as Transform3D)
+		var pose: Transform3D = sim.body_pose(lb) * ((L as Dictionary)["n0"] as Transform3D) if lb >= 0 else (rested if rested != null else (L as Dictionary)["built"])
 		bp.append_array([pose.basis.x, pose.basis.y, pose.basis.z, pose.origin])
-		bi.append(LYING if lb < 0 else (1 if bool((sim.bodies[lb] as Dictionary)["intact"]) else 0))
+		bi.append((RESTED if rested != null else LYING) if lb < 0 else (1 if bool((sim.bodies[lb] as Dictionary)["intact"]) else 0))
 	var liq := PackedFloat32Array()
 	var waves: Array = []
 	var dips := PackedVector2Array()
@@ -1851,7 +2866,21 @@ func _record(_t: float) -> Dictionary:
 	var same := not sim.moved and not last.is_empty() and sprinkled_none(_t)
 	# ...and what did not change since the last frame is the last frame's, whatever moved: a size, whether it is, what made
 	# it and the body it is in change only as things break, dissolve or come to be
-	return {"x": last["x"] if same else sim.x.duplicate(), "r": _kept(last, "r", sim.r), "alive": _kept(last, "alive", sim.alive),
+	var sw := PackedFloat32Array()
+	for s in _swing:
+		sw.append(rad_to_deg(float((s as Dictionary)["a"])))
+	var rp := PackedVector3Array()
+	for rb in rigid.bodies.size():
+		var pose := rigid.motion(rb) * _rest_of(int((rigid.bodies[rb] as Dictionary)["wi"]))
+		rp.append_array([pose.basis.x, pose.basis.y, pose.basis.z, pose.origin])
+	# ...and how far each held one is from where its hand has it, and what it last met: one held back ([method report])
+	var rd := PackedFloat32Array()
+	var rt := PackedInt32Array()
+	for rb in rigid.bodies.size():
+		var b: Dictionary = rigid.bodies[rb]
+		rd.append(RigidParts._span(b, rigid.motion(rb), b["held"]) if b["held"] != null else 0.0)
+		rt.append(int(b.get("by", -1)))
+	return {"sw": sw, "rp": rp, "rd": rd, "rt": rt, "x": last["x"] if same else sim.x.duplicate(), "r": _kept(last, "r", sim.r), "alive": _kept(last, "alive", sim.alive),
 		"owner": _kept(last, "owner", sim.owner), "body": _kept(last, "body", sim.body), "bp": bp, "bi": bi, "liq": liq,
 		"streams": _streams_at(_t), "rings": _rings_at(_t), "drops": _drops_at(_t), "cut": _cuts_now(), "waves": waves, "dips": dips}
 
@@ -2021,8 +3050,18 @@ func baked_to() -> float:
 	return float(n - 1) / float(FPS)
 
 
-## Where loose work [param wi]'s node is at [param t] (the table's space), or null - and whether it is whole.
+## Where loose work [param wi]'s node is at [param t] (the table's space) - or a part the work picks up, a rigid body - or
+## null.
 func pose_of(wi: int, t: float) -> Variant:
+	if _rigid_of.has(wi):
+		var fr: Variant = frame_at(t)
+		if fr == null:
+			return null
+		var rp: PackedVector3Array = (fr as Dictionary).get("rp", PackedVector3Array())
+		var k := int(_rigid_of[wi])
+		if k * 4 + 3 >= rp.size():
+			return null
+		return Transform3D(Basis(rp[k * 4], rp[k * 4 + 1], rp[k * 4 + 2]), rp[k * 4 + 3])
 	if not _loose_of.has(wi):
 		return null
 	var f: Variant = frame_at(t)
@@ -2032,7 +3071,25 @@ func pose_of(wi: int, t: float) -> Variant:
 	var bp: PackedVector3Array = (f as Dictionary)["bp"]
 	if li * 4 + 3 >= bp.size() or ((f as Dictionary)["bi"] as PackedByteArray)[li] == LYING:
 		return null
+	# (one lying again where it came to rest, RESTED, is there)
 	return Transform3D(Basis(bp[li * 4], bp[li * 4 + 1], bp[li * 4 + 2]), bp[li * 4 + 3])
+
+
+## WHETHER A LIVE SHOW AT [param t] WAITS FOR THE BAKE: its thread is less than [constant WAIT_UNDER] ahead, until it is
+## [constant WAIT_AHEAD] ahead again. Drawn behind its bake, a thing an act moves was where its act sends it, through whatever
+## was there, and the rest stood where the bake had last got to, and slid on as it caught up - "even when the video is paused"
+## (841899, 2026-10-30). Never on the caller's thread (a render, a preview, a gate), which bakes to the moment it asks.
+func behind(t: float) -> bool:
+	if _sync:
+		return false
+	var ahead := baked_to() - t
+	_behind = ahead < (WAIT_AHEAD if _behind else WAIT_UNDER)
+	return _behind
+
+
+## Where whole thing [param ti]'s node is at [param t] (the table's space), a rigid body - or null: no act moves it.
+func thing_pose_of(ti: int, t: float) -> Variant:
+	return pose_of(-1 - ti, t) if _rigid_of.has(-1 - ti) else null
 
 
 ## Whether loose work [param wi] is still whole at [param t] (broken, it is drawn as its pieces).
@@ -2185,10 +3242,10 @@ func _make_inside_node(li: int) -> void:
 	var mesh := MeshInstance3D.new()
 	holder.add_child(mesh)
 	mesh.transform = L["xform"]
-	mesh.mesh = _inside_mesh(L["vessel"], mesh, L)
+	mesh.mesh = _inside_mesh(L["vessel"], mesh, solids[int(L["solid"])])
 	var mat := Props.material(Props.sanitize_material({"kind": "liquid", "color": "#" + (L["color"] as Color).to_html(false)}, "#5060a0"), {}, 10.0, 5.0, li)
 	mat.shader = _LIQUID
-	_cavity_uniforms(mat, L["vessel"], mesh, L["rest"])
+	_cavity_uniforms(mat, L["vessel"], mesh, solids[int(L["solid"])])
 	mesh.material_override = mat
 	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	(L["nodes"] as Array).append(mesh)
@@ -2438,8 +3495,11 @@ func report(t0: float, t1: float) -> PackedStringArray:
 		var L: Dictionary = loose[li]
 		var bp0: PackedVector3Array = (f0 as Dictionary)["bp"]
 		var bp1: PackedVector3Array = (f1 as Dictionary)["bp"]
-		var p0 := bp0[li * 4 + 3]
-		var p1 := bp1[li * 4 + 3]
+		# ...WHERE ITS MIDDLE IS, never its node's origin: a heap's copy has it where the heap was built, centimeters off and swung
+		# wherever the thing turns
+		var mid: Vector3 = (((work.works[int(L["wi"])] as Dictionary)["w"] as Dictionary).get("box", AABB()) as AABB).get_center()
+		var p0 := Transform3D(Basis(bp0[li * 4], bp0[li * 4 + 1], bp0[li * 4 + 2]), bp0[li * 4 + 3]) * mid
+		var p1 := Transform3D(Basis(bp1[li * 4], bp1[li * 4 + 1], bp1[li * 4 + 2]), bp1[li * 4 + 3]) * mid
 		var broke := ((f1 as Dictionary)["bi"] as PackedByteArray)[li] == 0 and ((f0 as Dictionary)["bi"] as PackedByteArray)[li] != 0
 		var pieces := 0
 		var fine := 0
@@ -2469,12 +3529,94 @@ func report(t0: float, t1: float) -> PackedStringArray:
 				bits.append("%d %s" % [int(lie[w]), w])
 			out.append("- %s: CUT into %d pieces - %s." % [String(L["name"]), cut1, ", ".join(bits)])
 			continue
-		if p0.distance_to(p1) > 0.01 or broke:
-			out.append("- %s: %s%s." % [String(L["name"]), "now " + _where(p1) if p0.distance_to(p1) > 0.01 else "where it was",
-				(" - BROKEN into %d pieces, %d of them ground to powder" % [pieces, fine]) if ((f1 as Dictionary)["bi"] as PackedByteArray)[li] == 0 else ""])
+		# ...BROKEN, WHERE ITS PIECES ARE: the body it was is left where it broke (841899's puppeteer was told its ground
+		# frankincense was "on the table" while every piece lay in the cauldron, and the act that put it there went in as it was)
+		if ((f1 as Dictionary)["bi"] as PackedByteArray)[li] == 0:
+			var x0: PackedVector3Array = (f0 as Dictionary)["x"]
+			var x1: PackedVector3Array = (f1 as Dictionary)["x"]
+			var owner0: PackedInt32Array = (f0 as Dictionary)["owner"]
+			var moved_n := 0
+			var lie_p := {}
+			for i in owner1.size():
+				if owner1[i] != 1000 + li or al1[i] != 1:
+					continue
+				var w := _where(x1[i])
+				lie_p[w] = int(lie_p.get(w, 0)) + 1
+				if i >= x0.size() or owner0[i] != owner1[i] or x0[i].distance_to(x1[i]) > 0.01:
+					moved_n += 1
+			if broke or moved_n > 0:
+				var bits := PackedStringArray()
+				for w in lie_p:
+					bits.append("%d %s" % [int(lie_p[w]), w])
+				out.append("- %s: %s into %d pieces, %d of them ground to powder - %s." % [String(L["name"]), "BROKEN" if broke else "broken",
+					pieces, fine, ", ".join(bits)])
+			continue
+		if p0.distance_to(p1) > 0.01:
+			out.append("- %s: now %s." % [String(L["name"]), _where(p1)])
+	# PARTS A HAND LET GO: where each came to rest, against where its act left it (841899's stopper, put back on its side, fell
+	# into its jar - and the act's check said nothing)
+	for bi in rigid.bodies.size():
+		var b: Dictionary = rigid.bodies[bi]
+		var wi := int(b["wi"])
+		var ch := _ch_of(wi)
+		var end := -INF
+		for e in twin._chan.get(ch, []):
+			var s1 := float((e as Dictionary)["s1"])
+			if s1 >= t0 and s1 <= t1 + 0.05:
+				end = maxf(end, s1)
+		if end == -INF or _held_at(wi, t1 + REPORT_AFTER):
+			continue
+		var now: Variant = pose_of(wi, t1 + REPORT_AFTER)
+		if now == null:
+			continue
+		var mid: Vector3 = (work._rest[ch] as Transform3D).affine_inverse() * (b["c0"] as Vector3)
+		var meant: Transform3D = twin.value(ch, end - 1e-4)
+		var off := (meant * mid).distance_to((now as Transform3D) * mid)
+		if off > LET_GO_OFF:
+			out.append("- %s: let go, it came to rest %.1f cm from where the act left it - now %s. Set it `down` where it can rest, turned the way it stands there." % [
+				_body_label(bi), off * 100.0, _where((now as Transform3D) * mid)])
+	# WHAT A HAND COULD NOT TAKE WHERE ITS ACT SENDS IT: nothing an act moves goes through anything ([method _make_rigid]), so
+	# a move that would is held back by what is in its way - said, with what stopped it, as far short as it came the most
+	var fps := float(FPS)
+	for bi in rigid.bodies.size():
+		var most := 0.0
+		var at := 0.0
+		var by := -1
+		for k in range(int(floor(t0 * fps)), int(ceil(t1 * fps)) + 1):
+			var fr: Variant = frame_at(float(k) / fps)
+			if fr == null:
+				continue
+			var rd: PackedFloat32Array = (fr as Dictionary).get("rd", PackedFloat32Array())
+			if bi < rd.size() and rd[bi] > most:
+				most = rd[bi]
+				at = float(k) / fps
+				var rt: PackedInt32Array = (fr as Dictionary).get("rt", PackedInt32Array())
+				by = rt[bi] if bi < rt.size() else -1
+		if most > HELD_BACK:
+			out.append("- %s: HELD BACK by %s - it stopped %.1f cm short of where the act takes it, %.1f s in. Nothing an act moves passes through anything: lift it over what is in its way, or bring it round." % [
+				_body_label(bi), _solid_label(by), most * 100.0, at - t0])
 	if not out.is_empty():
 		out.insert(0, "WHAT THE PHYSICS DID (liquids pour where they stand above a rim, loose things fall and tumble, a pestle pressed into them crushes them):")
 	return out
+
+
+## Rigid body [param bi] as the puppeteer knows it: a whole thing, or a thing's part.
+func _body_label(bi: int) -> String:
+	var wi := int((rigid.bodies[bi] as Dictionary)["wi"])
+	if wi < 0:
+		return String((work.things[-1 - wi] as Dictionary)["name"])
+	return "%s's %s" % [String((work.things[int((work.works[wi] as Dictionary)["thing"])] as Dictionary)["name"]), work._part_label(wi)]
+
+
+## Solid [param si] as the puppeteer knows it - or the table's top, or the loose things under a body.
+func _solid_label(si: int) -> String:
+	if si == RigidParts.LOOSE:
+		return "the loose things under it"
+	if si < 0 or si >= solids.size():
+		return "the table's top"
+	var sd: Dictionary = solids[si]
+	var thing := String((work.things[int(sd["thing"])] as Dictionary)["name"])
+	return thing if int(sd["wi"]) < 0 else "%s's %s" % [thing, work._part_label(int(sd["wi"]))]
 
 
 func _liquid_label(li: int) -> String:
@@ -2508,9 +3650,19 @@ func _most_tip(li: int, t0: float, t1: float) -> float:
 	var most := 0.0
 	for k in 25:
 		var t := lerpf(t0, t1, float(k) / 24.0)
-		var xf := _pose_owner(sd, t) * (sd["local"] as Transform3D)
-		most = maxf(most, xf.basis.y.normalized().angle_to(Vector3.UP))
+		most = maxf(most, _solid_at(sd, t).basis.y.normalized().angle_to(Vector3.UP))
 	return most
+
+
+## Solid [param sd] at show time [param t] as baked: a rigid body's from the frame then - the twin has a body only where the
+## bake is now (a flask tipped and set back was told it had never tipped) - anything else where the twin has it then.
+func _solid_at(sd: Dictionary, t: float) -> Transform3D:
+	if sd.has("body"):
+		var key := int((rigid.bodies[int(sd["body"])] as Dictionary)["wi"])
+		var pose: Variant = pose_of(key, t)
+		if pose != null:
+			return (pose as Transform3D) * _rest_of(key).affine_inverse() * (sd["rest"] as Transform3D)
+	return _pose_owner(sd, t) * (sd["local"] as Transform3D)
 
 
 ## How far liquid [param li]'s vessel must be tipped before [param v] cubic meters of it reach its rim (radians; PI or more:

@@ -171,6 +171,13 @@ exactly that.
   above its mark ("the text should have been written first"); the tree's line stays after it, written once it is
   drawn. A rule is left empty under every drawing (`LetterScript.UNDER_SKETCH`; the user: "Both sketches are too
   squished today, with text that is too close to them") - the text had gone on the first rule clear of it.
+  **A drawing alone is dashed off** (the same night, the user: the tree "felt like it took a solid 30 or 45 seconds to
+  draw. It never used to do that"): with no words over it, a drawing had taken its ink's time at the hand's own pace -
+  the tree's 35 s, where paced across its narration it had taken about 7. Now it is drawn in `DRAW_ALONE` (5 s), or at
+  the hand's pace if that is sooner (the cross and dot's 3.3 s, as watched), never quicker than `DRAW_QUICKEST`
+  (`LetterScript.drawn_alone`: the voice's rest and the desk's end both read it). A live reading made the plan again
+  as each sentence's words arrived, and held a drawing under way to the desk's quickest (4 times the hand's pace) -
+  that would have slowed it mid-stroke; the letter's own quickest holds now (`DeskMedium._quickest`).
 - **The camera catches on a drawing** (2026-10-29, the user: "it might work if the camera could sort of 'catch'
   on the sketch, making drifting further from it more difficult ... a bias to linger on doodles for a bit longer,
   before panning away from them"). The cross and dot, kept with its point (`_keep_with`), had begun a page: the

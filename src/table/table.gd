@@ -53,6 +53,8 @@ const STAGE := {"msaa_3d": Viewport.MSAA_4X, "use_debanding": true, "positional_
 	"positional_shadow_atlas_quad_3": Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_4}
 
 ## A card is 70 x 120 mm. World units are meters: the table is a table.
+## What the show's time waits for while the work's physics is behind a live show ([method ShowFeed.wait_for]).
+const WAIT_FOR := "table physics"
 const CARD := TablePositions.CARD
 const CARD_R := 0.0045
 const CARD_T := 0.0007
@@ -251,6 +253,7 @@ void fragment() {
 """
 
 var _subs = null
+var _waiting := false               # this table has the show's time waiting for its bake ([constant WAIT_FOR])
 ## WHAT THE EPISODE DECIDED ([TablePlan]): written when it loads, read by everything after.
 var _plan := TablePlan.new()
 var _source := ""                   # the reading's script
@@ -610,6 +613,10 @@ func release() -> void:
 func _exit_tree() -> void:
 	if _sounds != null:
 		_sounds.stop()
+	# ...and the show's time never left waiting on a table that is gone (only on this one's: a preview's never waited)
+	if _waiting and feed != null:
+		_waiting = false
+		feed.wait_for(WAIT_FOR, false)
 	# the physics' own thread stopped with it (what is asked after bakes on the caller's thread: [method TablePhysics.clear])
 	if _work != null and _work.physics != null:
 		_work.physics.clear()
@@ -623,6 +630,11 @@ func on_stage_resized(_size: Vector2) -> void:
 		_blur.queue_redraw()
 	if _title != null:
 		_title.queue_redraw()
+
+
+## What the work draws off where it first stood, and why, for a feedback capture ([method TableWork.drawn_report]).
+func work_report() -> Array:
+	return _work.drawn_report(_now) if _work != null else []
 
 
 func advance(_features, delta: float, _bookend: float) -> void:
@@ -648,6 +660,12 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_tick_camera(_now)
 	_tick_ride(_now)
 	_work.tick(_now)
+	# A LIVE SHOW WAITS FOR WHAT IS IN THINGS ([method TablePhysics.behind]): drawn behind its bake, it showed what an export never
+	# would - a thing an act moves where its act sends it, through whatever was there
+	var behind := _work.physics != null and feed != null and _work.physics.behind(_now)
+	if behind != _waiting:
+		_waiting = behind
+		feed.wait_for(WAIT_FOR, behind)
 	# THE WORK, HEARD ([WorkSounds]): the table on the stage only - a preview stands one and never advances it
 	if _sounds == null or _sounds.work != _work:
 		if _sounds != null:

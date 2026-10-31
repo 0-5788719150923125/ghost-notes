@@ -30,8 +30,12 @@ const MOST := 1600
 const SUBSTEPS := 4
 const GRAVITY := Vector3(0.0, -9.81, 0.0)
 const V_MOST := 2.5
-## SLEEP: slower than this (meters a second) for this long (seconds), touching something, and it sleeps on its host.
+## SLEEP: slower than this (meters a second) for this long (seconds), touching something, and it sleeps on its host - or, a
+## body, none of it further than SLEEP_DRIFT (meters) from where it was that long ago: TREMBLING IN PLACE IS AT REST (841899:
+## a jar's seven lumps, woken as it was set down, trembled a tenth of a millimeter each way in it for seconds, never slower
+## than SLEEP_SPEED, and kept the bake reckoning every frame).
 const SLEEP_SPEED := 0.008
+const SLEEP_DRIFT := 0.0005
 const SLEEP_AFTER := 0.25
 ## WAKING: a host tipped this far since its sleepers slept (radians), or jolted this hard (meters a second, squared);
 ## a moving solid this near (meters); struck this hard (a share of its radius pushed in a substep).
@@ -154,6 +158,7 @@ var _nb: Array = []
 var _nid := PackedInt32Array()
 var _ne := PackedByteArray()          # this substep: which of the near solids is a blade ([method _cut_through])
 var _nmu := PackedVector2Array()      # ...and each one's surface friction, static and kinetic
+var _np := PackedByteArray()          # ...and whether each one, moving, presses what it meets (driven, never settling)
 var _pi := PackedInt32Array()         # the pairs that may meet this frame ([method _find_pairs])
 var _ride := PackedInt32Array()       # this frame: the moving solid whose inside each awake one is in, which carries it, or -1
 var _any_moving := false              # this frame: whether any solid moves
@@ -282,6 +287,14 @@ func add_body(at: PackedVector3Array, radius: float, m: int, made_by: int, on: i
 func body_pose(bi: int) -> Transform3D:
 	var b: Dictionary = bodies[bi]
 	return Transform3D(Basis(b["q"] as Quaternion), b["c"] as Vector3) * Transform3D(Basis.IDENTITY, -(b["c0"] as Vector3))
+
+
+## How many more particles there is room for: the most, less those alive (a dead one's place is taken first, [method add]).
+func room() -> int:
+	var live := 0
+	for i in n:
+		live += alive[i]
+	return MOST - live
 
 
 ## Whether body [param bi] sleeps (all its spheres do).
@@ -443,6 +456,13 @@ func follow(end := false) -> void:
 			b["q"] = t.basis.get_rotation_quaternion()
 
 
+## HOW HARD A HOST JOLTS what lies on or in it, from its acceleration [param a] (meters a second, squared): along the
+## table, and downward past falling. Set down or lifted, what lies in it is only pressed into it - a frame's stop as a jar
+## lands a millimeter reads twice [constant WAKE_JOLT], and woke what lay in it.
+static func jolt_of(a: Vector3) -> float:
+	return Vector2(a.x, a.z).length() + maxf(-a.y + GRAVITY.y, 0.0)
+
+
 ## A SLEEPER WAKES as its host tips or jolts: tipped past [constant WAKE_TILT] since it fell asleep, or moved harder than
 ## [constant WAKE_JOLT] (its `jolt`, the bake's).
 func wake_host(_dt: float) -> void:
@@ -461,7 +481,8 @@ func wake_host(_dt: float) -> void:
 func wake_near() -> void:
 	for si in _solids.size():
 		var s: Dictionary = _solids[si]
-		if not bool(s.get("moving", false)):
+		# ...one moving enough to: a part the work let go, settling, wakes nothing ([constant RigidParts.STIRS])
+		if not bool(s.get("stirs", s.get("moving", false))):
 			continue
 		var box: AABB = (s["wbox"] as AABB).grow(SPHERE.y + WAKE_NEAR)
 		var inv: Transform3D = s["inv"]
@@ -555,11 +576,13 @@ func _substep(h: float, a: float, act: PackedInt32Array, _world: Dictionary) -> 
 	_nid = PackedInt32Array()
 	_ne = PackedByteArray()
 	_nmu = PackedVector2Array()
+	_np = PackedByteArray()
 	for si in _near:
 		var sd: Dictionary = _solids[si]
 		_nid.append(si)
 		_ne.append(1 if bool(sd.get("edge", false)) else 0)
 		_nmu.append(sd.get("mu", TABLE_FRICTION))
+		_np.append(1 if bool(sd.get("presses", true)) else 0)
 		_nf.append(sd["field"])
 		_nb.append((sd["wbox"] as AABB).grow(SPHERE.y))
 		if bool(sd.get("moving", false)):
@@ -845,9 +868,12 @@ func _solid_pass(i: int) -> void:
 		# the solid's own motion at that point over the substep - none, to what rides in it
 		var sv := Vector3.ZERO if (i < _ride.size() and _ride[i] == _nid[c]) else xf * local - (_n0[c] as Transform3D) * local
 		# PRESSED by a moving solid on its side or over it (a pestle); one under it carries it (a board carried and tipped:
-		# taken as squeezing, a carrot's cut pieces were crushed to lumps on the way to the pot)
+		# taken as squeezing, a carrot's cut pieces were crushed to lumps on the way to the pot) - and one let go, settling
+		# by its own weight, only rests on it (841899: a stopper let go in its jar's mouth as the jar was set down crushed the
+		# tears under it, and their pieces flew out onto the table and the saucer beside it)
 		if sv.length_squared() > 1e-10 and nn.dot(Vector3.UP) < CARRIED:
-			_pressed[i] += pen
+			if _np[c] == 1:
+				_pressed[i] += pen
 		else:
 			_held_by[i] = 1
 		var d := (p - from) - sv
@@ -858,6 +884,28 @@ func _solid_pass(i: int) -> void:
 		var ck := sqrt(mk * smu.y)
 		if lt > 1e-9:
 			p -= t if lt < cs * pen else t * minf(ck * pen / lt, 1.0)
+	# A WALL AT REST IS NEVER CROSSED: a center outside a still solid as the substep began is never left inside it - pushed
+	# out of a moving one into a thin wall, past the wall's middle, the wall's own way out is through its far side (841899:
+	# the ladle stirring the brew pressed crushed frankincense through the cauldron's floor into the brazier). It goes back
+	# to where its way first came into the wall, and out of it on the side it came from.
+	for c in _nid.size():
+		if not (_nb[c] as AABB).has_point(p) or (soft and _ne[c] == 1) or not (_nx[c] as Transform3D).is_equal_approx(_n0[c]):
+			continue
+		var inv: Transform3D = _ni[c]
+		var field: ShapeField = _nf[c]
+		if field.sample(inv * p).x >= 0.0 or field.sample(inv * from).x < 0.0:
+			continue
+		var lo := 0.0
+		var hi := 1.0
+		for _k in 10:
+			var mid := (lo + hi) * 0.5
+			if field.sample(inv * from.lerp(p, mid)).x >= 0.0:
+				lo = mid
+			else:
+				hi = mid
+		var q := from.lerp(p, lo)
+		var fq := field.sample(inv * q)
+		p = q + ((_nx[c] as Transform3D).basis * Vector3(fq.y, fq.z, fq.w)).normalized() * maxf(rad - fq.x, 0.0)
 	if p.y < _top + rad:
 		var pen := _top + rad - p.y
 		p.y = _top + rad
@@ -1097,13 +1145,33 @@ func _settle(dt: float, act: PackedInt32Array) -> void:
 	for i in act:
 		if body[i] >= 0 and (_held_by[i] == 1 or _afloat(i)):
 			borne[body[i]] = true
+	# ...AND ONE TREMBLING IN PLACE: none of it further than SLEEP_DRIFT from where it was when it last went further
+	var in_place := {}
+	for i in act:
+		var bi := body[i]
+		if bi < 0 or in_place.has(bi):
+			continue
+		var b: Dictionary = bodies[bi]
+		var c: Vector3 = b["c"]
+		var q: Quaternion = b["q"]
+		if not b.has("span"):
+			var span := 0.0
+			for p in (b["rest"] as PackedVector3Array):
+				span = maxf(span, p.length())
+			b["span"] = span + r[i]
+		if b.has("anchor_c") and c.distance_to(b["anchor_c"]) + q.angle_to(b["anchor_q"]) * float(b["span"]) < SLEEP_DRIFT:
+			in_place[bi] = true
+		else:
+			b["anchor_c"] = c
+			b["anchor_q"] = q
+			in_place[bi] = false
 	var calm := PackedInt32Array()
 	var ripe := {}
 	for i in act:
 		if alive[i] == 0 or _is_held(i):
 			continue
 		var heap := body[i] < 0 and resting.has(owner[i])
-		if (v[i].length() < SLEEP_SPEED and (_held_by[i] == 1 or borne.has(body[i]) or _afloat(i))) or heap:
+		if ((v[i].length() < SLEEP_SPEED or bool(in_place.get(body[i], false))) and (_held_by[i] == 1 or borne.has(body[i]) or _afloat(i))) or heap:
 			still[i] = maxf(still[i], 0.0) + dt
 		else:
 			still[i] = 0.0
@@ -1132,7 +1200,10 @@ func _settle(dt: float, act: PackedInt32Array) -> void:
 			if not all:
 				continue
 		keep.append(i)
+	var fell := {}
 	for i in keep:
+		if body[i] >= 0:
+			fell[body[i]] = true
 		# ...what floats, on what holds its liquid
 		var hs := int((_liquids[wet[i]] as Dictionary).get("solid", -1)) if touch[i] < 0 and _afloat(i) else _host_of(i)
 		asleep[i] = 1
@@ -1141,9 +1212,12 @@ func _settle(dt: float, act: PackedInt32Array) -> void:
 		var hx: Transform3D = (_solids[hs] as Dictionary)["xf"] if hs >= 0 else Transform3D.IDENTITY
 		hloc[i] = hx.affine_inverse() * x[i]
 		hup[i] = hx.basis.y.normalized()
+	# ...and EACH BODY THAT FELL ASLEEP NOW, never one asleep already: hosted again where it lies each frame, a sleeping body's
+	# pose stayed where it had been as its host was carried off, its spheres riding with the host unseen - the-quiet-crucible
+	# 841899's jar of sulfur went home and its lumps "remain on the table", whenever anything else on the table was awake
 	for bi in bodies.size():
 		var b: Dictionary = bodies[bi]
-		if b["held"] != null or not body_asleep(bi):
+		if b["held"] != null or not fell.has(bi) or not body_asleep(bi):
 			continue
 		var ids: PackedInt32Array = b["ids"]
 		# its spheres share one host: the inside its middle is in, else what holds up its lowest sphere - never one over the
