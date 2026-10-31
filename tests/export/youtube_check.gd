@@ -105,7 +105,8 @@ extends SceneTree
 ##   never in a read-only process (the control) - until the step writes over it.
 ## - A NOTE READ AS IT IS WRITTEN IS ITS OWN EPISODE (2026-10-23, of an actor's note: "I don't see anywhere
 ##   it would be possible to write a description ... be sure that the auto-tagging mechanism should work as
-##   well"): its YouTube card shows a description box (hidden on a card whose show describes its episodes -
+##   well"): ITS EXPORT IS NAMED AFTER IT (2026-10-31: it had been "ghost_notes_1080p.mp4") - its Title, its Episode
+##   once it has one, and with neither (and no file) the exporter's own (the control); its YouTube card shows a description box (hidden on a card whose show describes its episodes -
 ##   the control - and nothing of it going up while hidden), kept in its block lines and all, and the note's
 ##   tags as one list; the upload takes the description first, then the component's (an actor's says how
 ##   they were made - splats for Gaussian, their pixels bent for 2D), and the note's tags with any of its own.
@@ -140,7 +141,9 @@ extends SceneTree
 ##   the control); the next painting has files of its own, is kept beside the first and goes up; the card
 ##   steps between them (‹ chooses the first, which goes up again; nothing before the first - the control);
 ##   ✕ pressed once only asks, pressed again deletes the one shown with its painting; the last deleted
-##   leaves none; and a record kept before there were versions is one, its files named in it. A CLICK ON
+##   leaves none; NOTHING PAINTS OVER A CHOICE (2026-10-31: an export had painted again "I already had painted
+##   one"): one painted before the words were written again is kept, and Generate or an export paints none over
+##   it - with none left, they paint one (the control); and a record kept before there were versions is one, its files named in it. A CLICK ON
 ##   IT OPENS IT FULL SIZE: the window holds the one chosen, its words and brief, and which version it is,
 ##   ‹ there choosing the one before; with none left it holds nothing (the control).
 ## - THE TITLE SCREEN'S MOMENT and ffmpeg's arguments for taking a frame.
@@ -825,8 +828,15 @@ func _note_steps() -> bool:
 	_ok(m.get("description") == "What this video is.\n\nA second paragraph.\n\nA likeness of Someone, said."
 		and m.get("tags") == ["readings", "voice", "theirs"] and m.get("title") == "A Reading",
 		"the upload goes with the description written there, then the component's, and the note's tags with its own (%s)" % str(m))
+	_ok(ed.export_name() == "A Reading", "its export is named after the note's Title (%s), never the exporter's own" % ed.export_name())
 	ed._doc._fields["episode"] = "Part One"
 	_ok(ed.upload_meta("").get("title") == "A Reading: Part One", "its Episode, on the Script card, is the %episode% it goes up with")
+	_ok(ed.export_name() == "Part One", "...and names the export, as a show's episode does (%s)" % ed.export_name())
+	ed._doc._fields.erase("episode")
+	ed._doc._fields.erase("title")
+	_ok(ed.export_name() == "", "control: a note with no Title, kept in no file, leaves the exporter its own name")
+	ed._doc._fields["title"] = "A Reading"
+	ed._doc._fields["episode"] = "Part One"
 	ed._youtube._title.text = "%title% #%seed%"
 	_ok(ed.upload_meta("").has("refused") and ed._youtube.why_not().contains("%seed%"),
 		"control: %seed%, which a note read as it is written does not have, stops the upload, saying why")
@@ -1451,6 +1461,12 @@ func _thumbnails() -> bool:
 	_ok(card._thumb_note.text.contains("before the episode's words were written again")
 		and card.meta({"tags": [], "folder": dir}, titled).get("thumbnail") == made,
 		"words written again: it says so, and goes up as it is until another is painted")
+	# NOTHING PAINTS OVER A CHOICE (2026-10-31, the user, of an export that painted again: "That definitely shouldn't
+	# happen. I already had painted one.")
+	_ok(step.generate(feed) and not step.busy(feed) and step.state(feed) == "missing" and not step.owed(feed)
+		and not step.to_make(feed) and step.said(feed).contains("and kept")
+		and not card._thumb_note.text.contains("an export") and not card._thumb_note.text.contains("making the episode"),
+		"...and Generate, or an export that goes up, paints none over it - only its ⟳ paints another (%s)" % step.said(feed))
 	var video := files.path_join("v.mp4")
 	_ok(Ex._beside(made, video) == files.path_join("v.thumbnail.jpg") and FileAccess.file_exists(files.path_join("v.thumbnail.jpg")),
 		"the exporter puts a painted thumbnail beside the video it goes up with")
@@ -1501,8 +1517,9 @@ func _thumbnails() -> bool:
 		and not FileAccess.file_exists(made) and not FileAccess.file_exists(painted) and not card._thumb_back.visible
 		and card._thumb_del.text == "✕", "pressed again, the one shown is deleted with its painting, and the other goes up")
 	_ok(step.delete(feed, 0).is_empty() and step.versions(feed).is_empty() and Thumb.image_in(dir).is_empty()
-		and not FileAccess.file_exists(dir.path_join("youtube_thumbnail.json")) and step.state(feed) == "missing",
-		"the last one deleted, the episode has none")
+		and not FileAccess.file_exists(dir.path_join("youtube_thumbnail.json")) and step.state(feed) == "missing"
+		and step.owed(feed) and step.to_make(feed),
+		"the last one deleted, the episode has none - and Generate, or an export, paints one (the control)")
 	card._fill_thumb_window()
 	_ok(card._thumb_window.get_child_count() == 0, "the control: with none left the window holds nothing")
 	img.save_jpg(dir.path_join("youtube_thumbnail.jpg"))

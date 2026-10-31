@@ -14,7 +14,8 @@ class_name NoteUpload
 ## now, it's buried at the bottom of the YouTube card"; [method ReadingPanel.hand_publish]). With no such
 ## card - a Voice alone - the rows are here ([EpisodeSteps], [EpisodeStepRows]).
 ##
-## AN EXPORT THAT GOES UP MAKES THEM, when they are not made from the words as they are: started as the
+## AN EXPORT THAT GOES UP MAKES THEM, when they are not made from the words as they are (a painted thumbnail only
+## while none is - [method YouTubeThumbnail.owed]): started as the
 ## take starts rendering ([method start]) and waited for once it is rendered ([method settled], at most
 ## [constant SETTLE_MOST]), so the upload takes the tags and the thumbnail they made. What a step makes is kept in the note's
 ## own folder ([method folder_of]).

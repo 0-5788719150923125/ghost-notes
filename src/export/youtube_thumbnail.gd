@@ -19,7 +19,9 @@ class_name YouTubeThumbnail
 ## through"): `youtube_thumbnail.json` holds the versions, oldest first - each the writer's answer, the
 ## fingerprint of the words it was written from and its thumbnail - and the one CHOSEN ([method choose]),
 ## what goes up ([method image_in]) and what the step says is made ([method made]), so an earlier one
-## chosen from words since rewritten shows as stale. A version's painting whole is `youtube_thumbnail_N.png`
+## chosen from words since rewritten shows as stale - AND STILL GOES UP: NOTHING PAINTS OVER A CHOICE (2026-10-31, the
+## user, of an export that painted again: "That definitely shouldn't happen. I already had painted one."). Generate
+## and an export that goes up paint one only for an episode with none ([method owed]); another is the ⟳'s. A version's painting whole is `youtube_thumbnail_N.png`
 ## and the thumbnail cut from it `youtube_thumbnail_N.jpg` (a record kept before there were versions is one,
 ## its files named in it). The YouTube card steps between them and deletes one ([method delete]). Deleting
 ## the episode takes them along, and another episode starts without one.
@@ -126,6 +128,11 @@ func made(feed: EpisodeFeed) -> Dictionary:
 	var d := super.made(feed)
 	var vs := versions_of(d)
 	return vs[chosen_of(d)] if not vs.is_empty() else {}
+
+
+## OWED ONLY WHILE NONE IS PAINTED: words written since leave the one chosen going up, said older than them.
+func owed(feed: EpisodeFeed) -> bool:
+	return made(feed).is_empty()
 
 
 ## The versions kept for [param feed]'s episode, oldest first.

@@ -18,7 +18,9 @@ class_name EpisodeStep
 ## landed ([method _land]), is KEPT IN THE EPISODE'S FOLDER - `<key>.json`, its job under `jobs/<key>` -
 ## so deleting the episode takes it along. It is kept with the fingerprint of the words it was made
 ## from: WORDS WRITTEN AGAIN MAKE IT STALE ([method fresh]), so a maker that rewrites its reading need
-## not know what was made from it - the step shows as not made, and Generate makes it again.
+## not know what was made from it - the step shows as not made, and Generate makes it again - UNLESS WHAT IT
+## MADE IS A CHOICE KEPT ([method owed]; [YouTubeThumbnail]): then it says it is older than the words, and only
+## its ⟳ makes another.
 ##
 ## A step of another kind sets its names and overrides [method _prompt], [method _land] and
 ## [method summary] - and, where the writer's answer is a brief for another agent (a painter's), [method
@@ -104,6 +106,20 @@ func fresh(feed: EpisodeFeed) -> bool:
 	return not m.is_empty() and not now.is_empty() and String(m.get("from", "")) == now
 
 
+## WHETHER GENERATE, OR AN EXPORT THAT GOES UP, MAKES IT for [param feed]'s episode: while it is not made from
+## the words as they are ([method fresh]). A step whose making is a choice answers for itself ([YouTubeThumbnail]:
+## only while none is painted - words written since leave the one chosen as it is, until its ⟳).
+func owed(feed: EpisodeFeed) -> bool:
+	return not fresh(feed)
+
+
+## Is it still to make for [param feed]'s episode - being made, failed, or [method owed]? What a card's Generate
+## and its line wait on ([method EpisodeSteps.missing]).
+func to_make(feed: EpisodeFeed) -> bool:
+	var st := state(feed)
+	return st != "ready" and (st != "missing" or owed(feed))
+
+
 ## "ready", "running", "queued", "failed" or "missing" - the states a maker's own steps are in.
 func state(feed: EpisodeFeed) -> String:
 	var dir := feed.folder() if feed != null else ""
@@ -129,7 +145,8 @@ func said(feed: EpisodeFeed) -> String:
 	if feed.words().is_empty():
 		return waits
 	if not made(feed).is_empty():
-		return "made from the words before they were written again - ⟳ makes it again, and so does %s" % host_makes
+		return ("made from the words before they were written again - ⟳ makes it again, and so does %s" % host_makes) \
+			if owed(feed) else "made from the words before they were written again, and kept - ⟳ makes another"
 	return unmade
 
 
@@ -143,7 +160,7 @@ func busy(feed: EpisodeFeed) -> bool:
 func generate(feed: EpisodeFeed) -> bool:
 	if feed == null or feed.words().is_empty():
 		return false
-	if wanted() and not busy(feed) and not fresh(feed):
+	if wanted() and not busy(feed) and owed(feed):
 		_errors.erase(feed.folder())
 		_tries.erase(feed.folder())
 		_start(feed)

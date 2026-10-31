@@ -956,9 +956,17 @@ func _on_synthesized(id: int, result: Dictionary) -> void:
 
 
 ## What an export of this reading is called, without an extension; "" keeps the exporter's own
-## name (see [member Exporter.name_provider]). The reading's [member publish] says.
+## name (see [member Exporter.name_provider]). The reading's [member publish] says - and A NOTE READ AS IT IS
+## WRITTEN IS NAMED AFTER ITSELF (2026-10-31, the user, of a letter's export: "the saved file is named
+## 'ghost_notes_1080p.mp4' ... in other episodes, like the cards modes, the file actually is named after the
+## project"): its Episode, as a show's file is its episode's, else its Title, else the file it is kept in.
 func export_name() -> String:
-	return publish.name()
+	var named := publish.name()
+	if named.is_empty() and publish.note_is_episode() and _writer != null:
+		named = _writer.field_value("episode")
+		if named.is_empty():
+			named = _writer.title_or_name()
+	return named
 
 
 ## What an upload of the take at [param take] says (see [member Exporter.upload_provider]): the

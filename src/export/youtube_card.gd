@@ -861,7 +861,7 @@ func _refresh_thumbnail() -> void:
 					_thumb.said(feed), row]
 			elif not img.is_empty() and stale:
 				t = ("This thumbnail was painted before the episode's words were written again: it goes up as it is until "
-					+ "%s paints another, or %s does.") % [row, _thumb.host_makes]
+					+ "%s paints another.") % row
 			elif not img.is_empty() and n > 1:
 				t = "The thumbnail shown goes up with this episode - ‹ › picks another of the %d painted. %s paints one more." % [n, row]
 			elif not img.is_empty():

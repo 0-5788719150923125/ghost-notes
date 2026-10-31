@@ -6,14 +6,14 @@ class_name ReadingPublish
 ##
 ## HANDED, NOT OVERRIDDEN (next/structure.md, step 12). A [ReadingPanel] renders the take, writes
 ## its sidecar and holds the YouTube card; the component whose show it is says the rest. This one
-## is a note read aloud: the exporter's own name, the note's title on the upload, and the note as its
-## own episode - its description and tags on the YouTube card ([NoteUpload]).
+## is a note read aloud: named after the note ([method ReadingPanel.export_name]), the note's title on the
+## upload, and the note as its own episode - its description and tags on the YouTube card ([NoteUpload]).
 ## Cards hands an [EpisodePublish]: an episode's title for a name, the episode pinned through the
 ## minutes of a render, upload notes and a chapter per card.
 
 
-## What an export is called, without an extension; "" keeps the exporter's own name (see
-## [member Exporter.name_provider]).
+## What an export is called, without an extension; "" names it after the note when the note is its own episode
+## ([method ReadingPanel.export_name]), else keeps the exporter's own name (see [member Exporter.name_provider]).
 func name() -> String:
 	return ""
 

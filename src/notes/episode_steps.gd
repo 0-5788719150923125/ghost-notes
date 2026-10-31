@@ -57,7 +57,7 @@ func key(feed: EpisodeFeed) -> String:
 func names(feed: EpisodeFeed, unmade := false) -> PackedStringArray:
 	var out := PackedStringArray()
 	for s in listed(feed):
-		if not unmade or (s as EpisodeStep).state(feed) != "ready":
+		if not unmade or (s as EpisodeStep).to_make(feed):
 			out.append((s as EpisodeStep).label.to_lower())
 	return out
 
@@ -102,9 +102,9 @@ func busy(feed: EpisodeFeed) -> bool:
 	return false
 
 
-## Is a listed step not made for [param feed]'s episode, as its words are now?
+## Is a listed step still to make for [param feed]'s episode ([method EpisodeStep.to_make])?
 func missing(feed: EpisodeFeed) -> bool:
 	for s in listed(feed):
-		if (s as EpisodeStep).state(feed) != "ready":
+		if (s as EpisodeStep).to_make(feed):
 			return true
 	return false
