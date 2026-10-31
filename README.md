@@ -81,7 +81,6 @@ Top-level layout; every script is in [docs/index.md](docs/index.md).
 - **[`tests/`](tests/)** - The gates (`*_check.gd`) and probes (`*_probe.gd`), in folders that mirror `src/` (a gate lives with what it holds), and their runners and fixtures at the top; `scripts/check.sh` runs them all, and `--for` the ones a change can reach.
 - **[`docs/`](docs/)** - Generated documentation. Regenerate with `python docs.py`; do not edit by hand.
 - **[`next/`](next/)** - Design notes and plans, one per subsystem: [notes.md](next/notes.md) is the notes refactor, step by step, and [roadmap.md](next/roadmap.md) is what comes next.
-- **[`reference/`](reference/)** - Reference imagery scenes were prototyped from.
 - **`masks/`** - Saved Masking sessions, one directory per source video (runtime, git-ignored).
 - **`feedback/`** - Feedback console output: `NNNN.json` + `NNNN.png` per report (runtime, git-ignored).
 - **`dist/`** - Build artifacts and the gates' logs (runtime, git-ignored).

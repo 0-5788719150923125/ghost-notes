@@ -16,6 +16,10 @@ extends Node
 ## built again lists it under its new title and opens it with its words. Import… and Export… copy a
 ## note in and out, and Delete… (once asked) sends the open note away and shows the list.
 ##
+## BACK IS THE SHELL'S (2026-10-31, the user: "When I click back ... the app immediately crashes"): Godot quits
+## on every back press by default - the control, read before the shell is up - and the shell turns that off;
+## back in a note shows the list, and back on the list leaves (its seam, here).
+##
 ## THE SETTINGS A PHONE DEPENDS ON ARE THERE - Godot drops a value equal to its default when it
 ## rewrites project.godot, which is how monotone's first APK came up sideways: portrait orientation, a
 ## portrait canvas for mobile; and the Android preset leaves out the hosts, masks, feedback, build,
@@ -33,6 +37,7 @@ func _run() -> void:
 	_clean()
 	NoteStore.root = ROOT
 	Boot.handheld_for_test = true
+	var godot_quits := get_tree().quit_on_go_back
 	var main := await _boot()
 	var shell: PhoneShell = _shell(main)
 	_ok(shell != null, "the phone shell is up")
@@ -84,6 +89,16 @@ func _run() -> void:
 	NoteStore.discard = Callable()
 	_ok(not FileAccess.file_exists(copy) and shell._note.is_empty() and shell._list_view.visible,
 		"Delete… sends the open note away and shows the list")
+	# BACK
+	_ok(godot_quits, "CONTROL: Godot quits on back by default - else the shell's taking it proves nothing")
+	_ok(not get_tree().quit_on_go_back, "the shell takes back from Godot, which would quit on every one")
+	shell.open_note(path)
+	var left := [false]
+	shell.leave_for_test = func() -> void: left[0] = true
+	shell.notification(Node.NOTIFICATION_WM_GO_BACK_REQUEST)
+	_ok(shell._note.is_empty() and shell._list_view.visible and not left[0], "back in a note shows the list")
+	shell.notification(Node.NOTIFICATION_WM_GO_BACK_REQUEST)
+	_ok(left[0], "back on the list leaves the app")
 	main.queue_free()
 	await _frames(4)
 	Boot.handheld_for_test = false

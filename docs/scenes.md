@@ -662,7 +662,7 @@ Each spire is a lofted PROFILE, not a stack of jittered boxes: its radius-as-a-f
 
 Spires are lofted ring by ring from the GROUND UP and grow in over the intro (from the center outward), so the city assembles itself rather than starting fully formed. The key light gives each face directional + vertical-ambient shading, drops a contact shadow on the ground, and distance fog dissolves the far skyline into haze.
 
-Prototyped from a photograph of ornate towered architecture (`reference/arcbot.webp`): the recursive tiering, the repeating turret motif and the way height and ornament scale together, read off one building and turned into a rule that makes endless variations of it.
+Prototyped from a photograph of ornate towered architecture: the recursive tiering, the repeating turret motif and the way height and ornament scale together, read off one building and turned into a rule that makes endless variations of it.
 
 RENDERING follows the `FrameForge` contract: update() snapshots the frame's inputs into a `SpireJob` (a plain RefCounted - the worker's Callable keeps it alive, and it never touches the scene node), the job builds the whole frame - shadow pass, terrain merge, loft, sort, batch - off the main thread, and _draw() only submits the finished packet. The UI cannot block on this scene, whatever the city costs.
 

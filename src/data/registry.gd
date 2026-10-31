@@ -8,7 +8,7 @@ class_name Registry
 ##
 ## ONE ROW A THING, never parallel tables keyed alike (`LABELS`, `BLURBS`, `DEFAULTS`...): adding a
 ## thing is one row, and a key cannot be in one table and missing from the next. docs.py reads the
-## same rows (`_rows`), so a field added to a row is in the docs without a regex of its own
+## same rows (`const`), so a field added to a row is in the docs without a regex of its own
 ## (next/structure.md, step 6).
 
 ## The label of [param key] in [param registry] - the key itself when there is none.

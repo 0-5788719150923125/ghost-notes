@@ -54,8 +54,8 @@ What monetizing adds is Steam's own rule that in-game transactions go through St
    keep it in the source build. Keeping it is **ASK** (a lawyer).
 2. **What a default export would pack.** Godot's export ignores `.gitignore`. `masks/` holds 27
    imported files (audio and waveforms from the clips stored there, YouTube downloads included),
-   `feedback/` its screenshots, and `reference/arcbot.webp` is a photograph of unknown provenance
-   that nothing uses (the spires scene's doc cites it). Exclude all three, plus `build/` and `tests/`, in the preset.
+   `feedback/` its screenshots. Exclude both, plus `build/` and `tests/`, in the preset. (`reference/arcbot.webp`, a
+   photograph of unknown provenance that nothing used, was deleted 2026-10-31.)
 3. **The Linux FFmpeg source.** Martin Riedl's Linux build is configured `--enable-nonfree`
    (DeckLink), which FFmpeg's license calls unredistributable - confirmed on the provisioned 9.0.2
    with `ffmpeg -version`. ghost is not the one redistributing it, but there is no reason to send

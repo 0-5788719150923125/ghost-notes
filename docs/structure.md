@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 491 references inside a folder, 955 down the stack, 0 up it.
+Between scripts today: 492 references inside a folder, 955 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -25,7 +25,7 @@ Between scripts today: 491 references inside a folder, 955 down the stack, 0 up 
 | `show/` | The show | 9 | `media`, `ui`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `media/` | Media | 20 | `voice`, `ui`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `voice/` | Synthesis (voice) | 14 | `audio`, `platform`, `data` |
-| `ui/` | The panel kit | 16 | `notes`, `agents`, `platform`, `data` |
+| `ui/` | The panel kit | 17 | `notes`, `agents`, `platform`, `data` |
 | `notes/` | Notes | 8 | `agents`, `stage`, `platform`, `data` |
 | `agents/` | Agents | 6 | `platform`, `data` |
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
@@ -108,7 +108,7 @@ The note as a file: where notes live, a document kept in step with its file, the
 
 What every note's panel is built from, and what it asks of the window it is in: a side panel that cannot outgrow the window and its "+", a component's folding card in its family's color and the chips over the cards, the cards a note's components bring (built from the registry's rows, attached and detached), the Script card every note has (its editor window and highlighter), rows drawn from a table of fields, two small controls, and `Shell` - the bottom-right row, room along the bottom edge, the way back to the notes. Above `notes/` because it is a kit for a note's components.
 
-[`agent_pick`](../src/ui/agent_pick.gd), [`card`](../src/ui/card.gd), [`card_row`](../src/ui/card_row.gd), [`episode_step_rows`](../src/ui/episode_step_rows.gd), [`icons`](../src/ui/icons.gd), [`note_cards`](../src/ui/note_cards.gd), [`note_editor`](../src/ui/note_editor.gd), [`note_grid`](../src/ui/note_grid.gd), [`note_tile`](../src/ui/note_tile.gd), [`schema_form`](../src/ui/schema_form.gd), [`script_highlighter`](../src/ui/script_highlighter.gd), [`script_writer`](../src/ui/script_writer.gd), [`shell`](../src/ui/shell.gd), [`side_panel`](../src/ui/side_panel.gd), [`tag_field`](../src/ui/tag_field.gd), [`volume_knob`](../src/ui/volume_knob.gd)
+[`agent_pick`](../src/ui/agent_pick.gd), [`card`](../src/ui/card.gd), [`card_row`](../src/ui/card_row.gd), [`episode_step_rows`](../src/ui/episode_step_rows.gd), [`icons`](../src/ui/icons.gd), [`note_cards`](../src/ui/note_cards.gd), [`note_editor`](../src/ui/note_editor.gd), [`note_grid`](../src/ui/note_grid.gd), [`note_tile`](../src/ui/note_tile.gd), [`schema_form`](../src/ui/schema_form.gd), [`script_highlighter`](../src/ui/script_highlighter.gd), [`script_writer`](../src/ui/script_writer.gd), [`shell`](../src/ui/shell.gd), [`side_panel`](../src/ui/side_panel.gd), [`tag_field`](../src/ui/tag_field.gd), [`touch_text`](../src/ui/touch_text.gd), [`volume_knob`](../src/ui/volume_knob.gd)
 
 ### `voice/` - Synthesis (voice)
 

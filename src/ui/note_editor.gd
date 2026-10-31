@@ -42,7 +42,8 @@ var whole := false
 ## The note open in it, "" when none is.
 var path := ""
 var title_edit: LineEdit
-var body: TextEdit
+## The words: on a phone a [TouchText] driven by a finger - a drag scrolls, a long press selects.
+var body: TouchText
 ## Where the owner puts its buttons: in the bar, left of Close.
 var actions: HBoxContainer
 ## The note's color ([method NoteTile.color_of]).
@@ -139,10 +140,12 @@ func _build() -> void:
 	title_edit.text_changed.connect(func(_t: String) -> void:
 		_title_dirty = true
 		_dirty_ms = Time.get_ticks_msec())
-	title_edit.text_submitted.connect(func(_t: String) -> void: body.grab_focus())
+	title_edit.text_submitted.connect(func(_t: String) -> void: body.take_focus())
 	_band.add_child(title_edit)
 
-	body = TextEdit.new()
+	body = TouchText.new()
+	body.s = s
+	body.touch = whole
 	body.placeholder_text = "Take a note…"
 	body.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL if whole else Control.SIZE_FILL
@@ -286,4 +289,5 @@ func _style() -> void:
 	band.content_margin_bottom = roundf(8 * s)
 	_band.add_theme_stylebox_override("panel", band)
 	title_edit.add_theme_color_override("font_color", c.lightened(0.45))
+	body.accent = c.lightened(0.3)
 	title_edit.add_theme_color_override("font_placeholder_color", Color(c.lightened(0.3), 0.45))

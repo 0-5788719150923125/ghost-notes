@@ -162,7 +162,7 @@ second is clean.
 **2. The gate and the map.** *Status, 2026-10-13: done.* `FOLDERS` and `UPWARD` in `docs.py`
 replaced `SCRIPT_GROUPS` and its 162 file names: a script's group is its folder, so a new script
 is in the docs by being in one. `check_structure` holds the stack; `docs/structure.md` is written
-from it; `docs.py` finds a script by its file name alone (`_script_path`), so a script that moves
+from it; `docs.py` finds a script by its file name alone (`find`), so a script that moves
 folders needs no edit there.
 
 **3. The small ones, 4. the shell's contract, 5. the show handed down.** *Status, 2026-10-13:
@@ -194,7 +194,7 @@ Look's filters (`uniform`, `default`), the media (`script`, `uses`, `frames`, `n
 `bare`) and the agent backends (`backend`) were four or seven parallel tables keyed alike and are
 one table of rows each now, with each field's reason written beside the field instead of above a
 table of its own. `Registry` (`data/`) reads a label, a blurb or a field of any of them; docs.py's
-`_rows` reads any of them as data, so the docs need no regex per table. `data/` moved to the bottom
+`const` reads any of them as data, so the docs need no regex per table. `data/` moved to the bottom
 of the stack for it: plain-data helpers name nothing, and the platform reads them.
 `SceneRoster` (`scenes/roster.gd`) holds the rotation and the atmospheric list, read by the
 Director, the storyboard's editor, docs.py and the gates; the order and names are unchanged, so

@@ -248,7 +248,7 @@ so an unflushed change lands within a couple of seconds whatever the control is 
 `_read_only` so a render or a test probe can never write the user's file.
 `Settings.bind(control, section, key, default, keys)` is the part that answers "by default" -
 it loads the stored value, connects the signal and writes on change, so a control cannot be
-added without being saved. Two checks keep it that way: `docs.py check_settings_owner` and
+added without being saved. Two checks keep it that way: docs.py's rule "settings owner" (`RULES`) and
 `tests/platform/settings_check.gd`, which also proves the kill case rather than assuming it.
 
 Two things this turned up on the way:

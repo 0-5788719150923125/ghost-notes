@@ -71,7 +71,6 @@ core. The commitments:
 - **[`tests/`](../tests/)** - The gates (`*_check.gd`) and probes (`*_probe.gd`), in folders that mirror `src/` (a gate lives with what it holds), and their runners and fixtures at the top; `scripts/check.sh` runs them all, and `--for` the ones a change can reach.
 - **[`docs/`](../docs/)** - Generated documentation. Regenerate with `python docs.py`; do not edit by hand.
 - **[`next/`](../next/)** - Design notes and plans, one per subsystem: [notes.md](../next/notes.md) is the notes refactor, step by step, and [roadmap.md](../next/roadmap.md) is what comes next.
-- **[`reference/`](../reference/)** - Reference imagery scenes were prototyped from.
 - **`masks/`** - Saved Masking sessions, one directory per source video (runtime, git-ignored).
 - **`feedback/`** - Feedback console output: `NNNN.json` + `NNNN.png` per report (runtime, git-ignored).
 - **`dist/`** - Build artifacts and the gates' logs (runtime, git-ignored).
@@ -238,6 +237,7 @@ What every note's panel is built from, and what it asks of the window it is in: 
 - [`shell.gd`](../src/ui/shell.gd) **Shell** - what a panel asks of the window it is in.
 - [`side_panel.gd`](../src/ui/side_panel.gd) **SidePanel** - a mode's control panel, which CANNOT outgrow the window.
 - [`tag_field.gd`](../src/ui/tag_field.gd) **tag_field** - TagField - tags as chips, the way YouTube Studio shows them: every tag visible, wrapping onto as many lines as it needs, each with an × that removes it, and a box at the end where a comma (or Enter, or leaving the box, or pasting "a, b, c") turns what was typed into chips. Backspace in the empty ...
+- [`touch_text.gd`](../src/ui/touch_text.gd) **TouchText** - a TextEdit a finger can use (2026-10-31, the user on a phone: "the note is unscrollable because clicking and swiping selects/highlights the text, instead of scrolling the body"). Godot 4.7's TextEdit knows only a mouse: Android hands it a finger as one ...
 - [`volume_knob.gd`](../src/ui/volume_knob.gd) **VolumeKnob** - A pull-rope volume control. Click-and-HOLD the knob, then drag AWAY from it: a rope stretches from the knob (the anchor) to your cursor, and the farther you pull the louder it gets - but the ceiling is ASYMPTOTIC (v = 1 - e^(-d/D0)), so "max" is approached, never reached. Let go and the level is ...
 
 ### `voice/` - Synthesis (voice)

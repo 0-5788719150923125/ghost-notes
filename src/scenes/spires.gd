@@ -13,7 +13,7 @@ extends Scene3D
 ## face directional + vertical-ambient shading, drops a contact shadow on the ground, and distance fog
 ## dissolves the far skyline into haze.
 ##
-## Prototyped from a photograph of ornate towered architecture (`reference/arcbot.webp`): the
+## Prototyped from a photograph of ornate towered architecture: the
 ## recursive tiering, the repeating turret motif and the way height and ornament scale together,
 ## read off one building and turned into a rule that makes endless variations of it.
 ##

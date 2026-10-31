@@ -34,10 +34,16 @@ var _note: String:
 	get:
 		return _editor.path if _editor != null else ""
 var _picker_mode := ""          # "import" or "export" while a picker is up
+## What back does on the list ([method leave]); a gate's seam, so a back there does not end the gate.
+var leave_for_test := Callable()
 
 
 func _ready() -> void:
 	layer = 100
+	# BACK IS OURS (2026-10-31, the user: "When I click back ... the app immediately crashes"): Godot quits on
+	# every back press unless told not to (`quit_on_go_back`, on by default), whatever a script does with it -
+	# a back meant to close a note killed the app, and the next open was a cold launch.
+	get_tree().quit_on_go_back = false
 	var bg := ColorRect.new()
 	bg.color = Color(0.05, 0.05, 0.07)
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -54,12 +60,35 @@ func _ready() -> void:
 	show_list()
 
 
-## ANDROID'S BACK goes from a note to the list; on the list it leaves the app, as back does.
+## ANDROID'S BACK goes from a note to the list; on the list it leaves the app ([method leave]).
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_GO_BACK_REQUEST and not _note.is_empty():
-		show_list()
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		if not _note.is_empty():
+			show_list()
+		else:
+			leave()
 	elif what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_WM_CLOSE_REQUEST:
 		save()           # a phone may stop the app at any moment: what was typed is kept
+
+
+## LEAVE AS ANDROID'S OWN APPS DO: the app goes behind the others, still running, so coming back to it is not a
+## launch (`Activity.moveTaskToBack`, through Godot's AndroidRuntime - Android's calls from a script, since 4.4).
+## Where that cannot be asked, it quits.
+func leave() -> void:
+	save()
+	if leave_for_test.is_valid():
+		leave_for_test.call()
+		return
+	if not Engine.has_singleton("AndroidRuntime"):
+		get_tree().quit()
+		return
+	var android: Object = Engine.get_singleton("AndroidRuntime")
+	var activity: Object = android.call("getActivity")
+	if activity == null:
+		get_tree().quit()
+		return
+	var back := func() -> void: activity.call("moveTaskToBack", true)
+	activity.call("runOnUiThread", android.call("createRunnableFromGodotCallable", back))
 
 
 func _build_list(stack: VBoxContainer) -> void:
