@@ -467,7 +467,7 @@ func _voice(_song: String) -> void:
 	_ok(reading != null and is_instance_valid(reading), "it opens as a reading")
 	if reading != null:
 		var titles: Array = (reading._panel as SidePanel).cards().map(func(c: Node) -> String: return (c as Card).title)
-		_ok(titles == ["Script", "Voice", "Picture", "Storyboard"], "its cards are the note's: %s" % str(titles))
+		_ok(titles == ["Body", "Voice", "Picture", "Storyboard"], "its cards are the note's: %s" % str(titles))
 		var plan: Dictionary = reading.show_plan()
 		_ok(bool(plan["picture"]) and ((plan["board"] as Dictionary).get("sequence", []) as Array).size() == 2,
 			"the plan it hands main is a song's: a picture, and the storyboard to walk")
