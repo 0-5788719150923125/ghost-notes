@@ -358,6 +358,14 @@ const REGISTRY := {
 		"modes": ["generative"],
 		"pattern": "<!--\\s*unspoken\\s*:[^>]*-->",
 	},
+	"sketch_timed": {
+		"label": "Timed sketch",
+		"group": "letter",
+		"blurb": "Letter: a sketch drawn in at most this many seconds, the pen paced to take that long - without a time a big one is dashed off in about 5. One with less ink is drawn at the hand's own pace.",
+		"before": "<!-- sketch (10s): ", "fill": "a tree of small dots", "after": " -->", "line": "own",
+		"modes": ["generative"],
+		"pattern": Manuscript.IMAGE,
+	},
 	"point": {
 		"label": "Point",
 		"group": "letter",

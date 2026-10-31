@@ -45,6 +45,9 @@ class_name LetterScript
 ##                                             UNDER_SKETCH]). A thought right after it (no
 ##                                             point in it) is thought while it is drawn. Not drawn yet,
 ##                                             nothing is.
+##     <!-- sketch (10s): what it shows -->    the same, drawn in at most that many seconds - the pen
+##                                             paced to take that long where it has more ink, its own
+##                                             pace where less ([method drawn_in_of]).
 ##     <!-- point: sketch -->, <!-- point: sketch, the dot on its own -->
 ##                                             INSIDE SPEECH: at the next word the pen points at the
 ##                                             last sketch, or at the part of it so described (the
@@ -155,8 +158,12 @@ const DRAW_TAIL := 1.5
 ## A SKETCH DRAWN ALONE, the voice waiting it out (2026-10-29, the user, of the chapter's tree of dots once it was
 ## drawn where its mark is: it "felt like it took a solid 30 or 45 seconds to draw" - 35 s of ink at the hand's own
 ## pace, where dashed off over its words it had taken 7): done in this long (seconds), or at the hand's pace if that
-## is sooner ([method drawn_alone]).
+## is sooner ([method drawn_alone]) - unless its mark says how long, `<!-- sketch (10s): ... -->` (2026-10-31, the user,
+## of the same tree done in 5: "drawn too quickly ... I'd like to be able to control how long we linger on a sketch, on
+## a per-sketch basis"), which it then takes, the words over it or not ([method drawn_in_of]).
 const DRAW_ALONE := 5.0
+## A sketch's own time in its mark's brackets: group 1 the seconds (as a timed hesitation writes them).
+const DRAWN_IN := "^([0-9]*\\.?[0-9]+)\\s*(?:s|secs?|seconds)?$"
 ## The pen at its quickest, against the hand's own pace ([constant LetterHand.PACE]): past a quick voice's 180 words
 ## a minute, so the pen keeps with the voice it has (at 2.0 a voice of 0.36 s a word left it 18 words behind).
 const QUICKEST := 2.5
@@ -252,7 +259,7 @@ static func sketches(body: String) -> Array:
 ## painted wide - a book's full page is painted tall), and no sketch (the pen's, never painted). A
 ## picture's key is its words', so the medium finds the painting whatever it was pinned to.
 static func pictures_only(body: String) -> String:
-	var out := _rx("<!--\\s*sketch\\s*:[\\s\\S]*?-->").sub(body, "", true)
+	var out := _rx("<!--\\s*sketch\\s*(?:\\([^)]*\\))?\\s*:[\\s\\S]*?-->").sub(body, "", true)
 	return _rx("<!--\\s*image\\s*(?:\\(\\s*\\w+\\s*\\))?\\s*:").sub(out, "<!-- image (screen):", true)
 
 
@@ -266,12 +273,13 @@ static func _target(arg: String) -> Dictionary:
 
 
 ## THE LETTER IN BLOCKS: each own-line mark `{kind, arg}` (kind one of strike, tap, still, page,
-## image_end, unspoken, sketch, image) and each paragraph `{kind: "para", text}` - a comment over several
-## lines read as one line, any other own-line comment a note that ends the paragraph and is dropped.
+## image_end, unspoken, sketch, image; an image's and a sketch's `placement` what its brackets say, a sketch's its
+## time) and each paragraph `{kind: "para", text}` - a comment over several lines read as one line, any other
+## own-line comment a note that ends the paragraph and is dropped.
 static func blocks(body: String) -> Array:
 	var src := Manuscript.strip_frontmatter(body)
 	var mark := _rx(MARK)
-	var pic := _rx("^\\s*<!--\\s*(image|sketch)\\s*(?:\\(\\s*(\\w+)\\s*\\))?\\s*:\\s*([\\s\\S]*?)\\s*-->\\s*$")
+	var pic := _rx("^\\s*<!--\\s*(image|sketch)\\s*(?:\\(\\s*([^)]*?)\\s*\\))?\\s*:\\s*([\\s\\S]*?)\\s*-->\\s*$")
 	var voice := _rx("^\\s*(?:<!--\\s*(?:hesitation|delivery|speaker|point)\\b[\\s\\S]*?-->\\s*)+$")
 	var note := _rx("^\\s*<!--[\\s\\S]*?-->\\s*$")
 	var out: Array = []
@@ -408,8 +416,8 @@ static func _written(text: String) -> Array:
 ## its drawing time and typeset record, as [method DeskScript.parse] takes them. Returns:
 ##   actions   - the pen's, in [DeskMedium]'s shape (each with an `id`, "" for what puts no ink down)
 ##               and the words' order: a line `pad-text` (its
-##               `strokes` the hand's schedule, `span` its spoken words, `k` 1), a sketch `draw`, a
-##               `strike` per struck line, a `point` (in a paragraph the pen is not busy with), a `tap`
+##               `strokes` the hand's schedule, `span` its spoken words, `k` 1), a sketch `draw` (`drawn_in`
+##               its mark's own time, when it says one), a `strike` per struck line, a `point` (in a paragraph the pen is not busy with), a `tap`
 ##               (`target` desk or pad)
 ##   spans     - what the camera and the screen follow, by spoken word (`from` to `to`, exclusive):
 ##               `image` (`key`, `prompt`, `blend` when it comes up over the picture before it,
@@ -470,7 +478,7 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 		# pen - the voice silent while it draws - but a thought, which needs no pen, is thought while it draws (one with a
 		# point in it needs the pen, and waits)
 		if pending >= 0 and not (kind == "para" and is_thought(text) and point.search(text) == null):
-			var w := drawn_alone(float((actions[pending] as Dictionary)["write"]))
+			var w := _drawn(actions[pending])
 			voice.append({"hold": w, "act": -1, "pen": w})
 			pending = -1
 		match kind:
@@ -526,7 +534,10 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 					"after": spoken.size(), "page_break": new_page}
 				act.merge(DeskScript.item("draw", svg), true)
 				act["write"] = float(lengths.get(String(act["id"]), DeskScript.estimate(svg)))
-				act["dur"] = LEAD + drawn_alone(float(act["write"]))
+				var told := drawn_in_of(String(blk.get("placement", "")))
+				if told > 0.0:
+					act["drawn_in"] = told
+				act["dur"] = LEAD + _drawn(act)
 				new_page = false
 				held = _hold_pen(actions, voice, held, pens.find(ink), spoken.size())
 				act["ink"] = pens[held]
@@ -560,6 +571,8 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 					s["after"] = base
 					s["span"] = said.size()
 					voice.append({"para": text, "base": base, "pen": float(s["write"]), "sync": true})
+					if s.has("drawn_in"):
+						voice.back()["drawn_in"] = s["drawn_in"]
 					pending = -1
 				elif is_thought(text):
 					spans.append({"kind": "thought", "from": base, "to": base + said.size()})
@@ -657,7 +670,7 @@ static func parse(body: String, seed := 1, svgs: Dictionary = {}, lengths: Dicti
 				spoken.append_array(said)
 				ink = ink_to
 	if pending >= 0:
-		var w := drawn_alone(float((actions[pending] as Dictionary)["write"]))
+		var w := _drawn(actions[pending])
 		voice.append({"hold": w, "act": -1, "pen": w})
 	for s in spans:
 		if int((s as Dictionary)["to"]) < 0:
@@ -843,7 +856,10 @@ static func _voice_text(voice: Array, actions: Array, spans: Array) -> String:
 				tv += float(n) * READ_WORD + resting
 				var work := float(e.get("pen", 0.0))
 				if work > 0.0:
-					tp = maxf(maxf(tp, said_from) + work / draw_pace(work, float(n) * READ_WORD), tv)
+					# a sketch drawn as a thought is said: dashed off to be done soon after it, or in its own time
+					var takes := drawn_alone(work, float(e["drawn_in"])) if e.has("drawn_in") \
+						else work / draw_pace(work, float(n) * READ_WORD)
+					tp = maxf(maxf(tp, said_from) + takes, tv)
 				elif n > 0 and is_thought(text):
 					# a thought: the writer stops and thinks it, the pen waits
 					gated = true
@@ -879,10 +895,24 @@ static func draw_pace(work: float, said: float) -> float:
 
 
 ## HOW LONG A SKETCH DRAWN ALONE TAKES, the voice waiting it out: its [param work] seconds of ink at the hand's own
-## pace while that is done within [constant DRAW_ALONE], else that long, never quicker than [constant DRAW_QUICKEST]
-## the hand's pace - the rest the voice is given, and what [LetterMedium] draws it in.
-static func drawn_alone(work: float) -> float:
-	return work / clampf(work / DRAW_ALONE, 1.0, DRAW_QUICKEST)
+## pace while that is done within [param most] (its mark's own time, else [constant DRAW_ALONE]), else that long, never
+## quicker than [constant DRAW_QUICKEST] the hand's pace - the rest the voice is given, and what [LetterMedium] draws
+## it in.
+static func drawn_alone(work: float, most := DRAW_ALONE) -> float:
+	return work / clampf(work / maxf(most, 0.01), 1.0, DRAW_QUICKEST)
+
+
+## How long sketch action [param act] takes drawn alone ([method drawn_alone]), told its time or not.
+static func _drawn(act: Dictionary) -> float:
+	return drawn_alone(float(act["write"]), float(act.get("drawn_in", DRAW_ALONE)))
+
+
+## A SKETCH'S OWN TIME from what its mark's brackets say ([param arg]: `10s` of `<!-- sketch (10s): ... -->`, also
+## `10`, `12.5 seconds`) - the most it takes to draw, its words over it or not ([method drawn_alone]) - else 0.0, the
+## sketch then drawn alone in [constant DRAW_ALONE] at the most, or dashed off over its words ([method draw_pace]).
+static func drawn_in_of(arg: String) -> float:
+	var m := _rx(DRAWN_IN).search(arg.strip_edges().to_lower())
+	return maxf(m.get_string(1).to_float(), 0.0) if m != null else 0.0
 
 
 ## Is the paragraph whose first spoken word is [param base] read under a picture ([param spans]' images)?

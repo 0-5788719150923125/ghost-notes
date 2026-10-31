@@ -90,7 +90,10 @@ extends SceneTree
 ##   ([method LetterScript.drawn_alone]; 2026-10-29, the user, of the same tree drawn where its mark is: "a solid 30 or
 ##   45 seconds to draw"), with no words over it, the voice waits [constant LetterScript.DRAW_ALONE] for it and the desk
 ##   draws it in that - its ink at the hand's pace, the control, is several times as long - and the plan made again
-##   while it is under way keeps its pace (held to the desk's quickest, the control, it ends seconds later).
+##   while it is under way keeps its pace (held to the desk's quickest, the control, it ends seconds later). TOLD ITS
+##   TIME ([method LetterScript.drawn_in_of]; 2026-10-31, the user, of the tree done in 5: "drawn too quickly"),
+##   `<!-- sketch (10s): ... -->` is drawn in 10 at the desk and the voice waits it out - alone, or past a thought said
+##   over it - where untimed (the control) it had been 5, or dashed off soon after the thought.
 ## - THE PEN IS SET DOWN AGAIN ([method LetterMedium._set_down_pose]; 2026-10-30, the user: "can we set the pen down
 ##   again, after writing the final line of text?"): it is in hand through the last stroke and until
 ##   [constant LetterMedium.SET_DOWN_AFTER] past it - the control, that it has not lain down early - is then put down at
@@ -2626,4 +2629,36 @@ func _dense_sketch() -> void:
 		"at the desk it is drawn alone in %.1f s (its ink at the hand's pace, %.0f - the control); the plan made again a quarter of the way in, it ends %.2f s later (held to the desk's quickest, %.1f - the control)"
 		% [a_done - a_begun, ink, a_again - a_done, floor_was - a_done])
 	ma.free()
+	# TOLD ITS TIME (2026-10-31, the user, of the tree done in 5: "drawn too quickly"): `<!-- sketch (10s): ... -->` is
+	# drawn in that, the voice waiting it out - drawn alone, or over a thought, which then rests up to it
+	var told := 10.0
+	var timed_text := alone_text.replace("<!-- sketch:", "<!-- sketch (10s):")
+	var timed := LetterScript.parse(timed_text, 3, {key: svg}, lengths, records)
+	var tm := RegEx.create_from_string("action-hold: ([0-9.]+) -->\\s*And that").search(String(timed["speakable"]))
+	var timed_rest := float(tm.get_string(1)) if tm != null else 0.0
+	var over_text := text.replace("<!-- sketch:", "<!-- sketch (10s):")
+	var over := LetterScript.parse(over_text, 3, {key: svg}, lengths, records)
+	var om := RegEx.create_from_string("action-hold: ([0-9.]+) -->\\s*And that").search(String(over["speakable"]))
+	var over_rest := float(om.get_string(1)) if om != null else 0.0
+	_check(is_equal_approx(LetterScript.drawn_alone(ink, told), told) and is_equal_approx(LetterScript.drawn_alone(2.0, told), 2.0)
+		and timed_rest >= told and timed_rest < told + LetterScript.LEAD + 1.5 and alone_rest < told - 3.0
+		and over_rest >= told - words - 0.1 and over_rest > rest + 3.0,
+		"told 10 s, a sketch of %.0f s of ink drawn alone: the voice waits %.1f s (untimed, %.1f - the control); over a thought, %.1f after it (untimed, %.1f - the control); a small one at the hand's pace"
+		% [ink, timed_rest, alone_rest, over_rest, rest])
+	for t in [timed_text, over_text]:
+		var tp := LetterScript.parse(t, 3, {key: svg}, lengths, records)
+		var mt := LetterMedium.new()
+		mt.feed = feed
+		mt._pad = LegalPad.new()
+		mt.load_letter(t, {"seed": 3, "svgs": {key: svg}, "ink": {"items": [_dense_record(id, 80)]}})
+		mt.take_words(DeskScript.rehearsal(tp, 0.42, 0.35, 1.0))
+		var ti := -1
+		for i in mt._actions.size():
+			if String((mt._actions[i] as Dictionary)["kind"]) == "draw":
+				ti = i
+		var took := float(mt._plan[ti]["end"]) - float(mt._plan[ti]["start"])
+		_check(absf(took - told) < 0.6,
+			"at the desk a sketch told 10 s is drawn in %.1f s%s (untimed alone, %.1f - the control)"
+			% [took, " over a thought" if t == over_text else "", a_done - a_begun])
+		mt.free()
 

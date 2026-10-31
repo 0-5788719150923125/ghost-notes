@@ -273,7 +273,7 @@ func _parsers_agree() -> void:
 				for blk in b:
 					shown += String((blk as Dictionary).get("text", ""))
 				_ok(not shown.contains("quicker"), "a delivery mark reached the page")
-			"thought", "strike", "struck", "color", "unspoken", "point", "tap", "image_end", "still", "new_page":
+			"thought", "strike", "struck", "color", "unspoken", "sketch_timed", "point", "tap", "image_end", "still", "new_page":
 				_letter_mark(k, ex)
 			_:
 				_ok(false, "%s has no check in script_marks_check - prove it before shipping it" % k)
@@ -492,6 +492,22 @@ func _letter_mark(k: String, ex: String) -> void:
 			var inline := LetterScript.parse("I said %s goodbye.\n" % ex)
 			_ok(String(inline["actions"][0]["text"]) == "I said Dear Ink, goodbye." and not String(inline["speakable"]).contains("Dear")
 				and String(inline["speakable"]).contains("goodbye"), "unspoken words inside a line are said, or not written")
+		"sketch_timed":
+			# its time told, its key its words' (the drawing made untimed is kept), seen by a page and painted by nobody
+			var prompt := "a tree of small dots"
+			var tree := {Manuscript.image_key(prompt): dot}
+			var timed := LetterScript.parse("%s\n\nAfter it.\n" % ex, 1, tree)
+			var plain := LetterScript.parse("<!-- sketch: %s -->\n\nAfter it.\n" % prompt, 1, tree)
+			var t_draw: Dictionary = timed["actions"][0]
+			var p_draw: Dictionary = plain["actions"][0]
+			_ok(String(t_draw["kind"]) == "draw" and is_equal_approx(float(t_draw.get("drawn_in", 0.0)), 10.0)
+				and String(p_draw["kind"]) == "draw" and not p_draw.has("drawn_in")
+				and String(t_draw["key"]) == String(p_draw["key"]) and not String(timed["speakable"]).contains("10"),
+				"a timed sketch is not drawn, not told its time, or is read aloud")
+			var imgs := Manuscript.images("Prose.\n\n%s\n\nMore prose.\n" % ex)
+			_ok(imgs.size() == 1 and String(imgs[0]["placement"]) == "sketch" and String(imgs[0]["prompt"]) == prompt
+				and not LetterScript.pictures_only(ex).contains("sketch"),
+				"a timed sketch is not a page's sketch, or is handed to the painter")
 		"point":
 			var d := LetterScript.parse("<!-- sketch: a dot -->\n\nA dot.\n\n%s *That one.*\n" % ex, 1, svgs)
 			var pt: Dictionary = d["actions"].back()

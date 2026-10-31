@@ -33,8 +33,10 @@ const HESITATION := "<!--\\s*hesitation\\s*(?::\\s*([0-9]*\\.?[0-9]+)\\s*(?:s|se
 ## A SKETCH is the same marker with `sketch` for `image`: not a picture put into the book but a
 ## drawing made on the page - black ink on white, generated without the book's style or its
 ## references, and drawn with the white taken out so it lies on the paper like the writing.
+## A sketch's pin may instead be a time, `(10s)`: how long a letter takes to draw it at the most ([method
+## LetterScript.drawn_in_of]) - a page leaves it be, and on an image it is no pin.
 ## Group 1 is which of the two, 2 the pin, 3 the description.
-const IMAGE := "<!--\\s*(image|sketch)\\s*(?:\\(\\s*(full|inline|left|right|screen)\\s*\\))?\\s*:\\s*([\\s\\S]*?)\\s*-->"
+const IMAGE := "<!--\\s*(image|sketch)\\s*(?:\\(\\s*(full|inline|left|right|screen|[0-9]*\\.?[0-9]+\\s*(?:s|secs?|seconds)?)\\s*\\))?\\s*:\\s*([\\s\\S]*?)\\s*-->"
 ## A TIME THAT OPENS A PARAGRAPH - a log entry, "21:40 The subject has been moved..." - is
 ## followed by a hesitation, as if the author had written `<!-- hesitation -->` after it: read
 ## straight into the sentence, the time sounds like its first words rather than its heading.
@@ -365,6 +367,8 @@ static func _place_images(blocks_out: Array) -> void:
 			b.erase("pin")
 			continue
 		var pin := String(b.get("pin", ""))
+		if not pin.is_empty() and "0123456789.".contains(pin[0]):
+			pin = ""                         # a time is a sketch's, never an image's pin
 		# A PICTURE OVER THE WHOLE SCREEN, for a medium that shows one so (a letter's, LetterScript)
 		if pin == "screen":
 			b["placement"] = "screen"

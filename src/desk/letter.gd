@@ -610,15 +610,16 @@ func _pictured(a: Dictionary) -> bool:
 
 ## WHEN A LINE WRITTEN AHEAD ENDS: as the voice ends the word [constant LetterScript.AHEAD_WORDS] before its last,
 ## never quicker than [constant LetterScript.QUICKEST] its ink's own time nor slower than the desk's slowest pen; a
-## sketch, as its words end, no quicker than [method LetterScript.draw_pace], and one drawn alone in [method
-## LetterScript.drawn_alone]; one under a picture, and anything else, as the desk's. A LINE RUNS ON INTO THE VOICE'S
-## PAUSE AFTER IT ([method _runs_on_to]).
+## sketch, as its words end, no quicker than [method LetterScript.draw_pace], and one drawn alone, or one its mark
+## gives a time, in [method LetterScript.drawn_alone]; one under a picture, and anything else, as the desk's. A LINE
+## RUNS ON INTO THE VOICE'S PAUSE AFTER IT ([method _runs_on_to]).
 func _paced_end(i: int, start: float, end: float) -> float:
 	var a: Dictionary = _actions[i]
-	if String(a["kind"]) == "draw" and int(a.get("span", 0)) == 0:
+	if String(a["kind"]) == "draw" and (int(a.get("span", 0)) == 0 or a.has("drawn_in")):
 		# A SKETCH DRAWN ALONE, in the rest the voice waits for it - a dense one dashed off (35 s of the tree of dots at
-		# the hand's own pace had been 35 s of silence)
-		return start + LetterScript.drawn_alone(float(a.get("write", 0.0)))
+		# the hand's own pace had been 35 s of silence) - or in its mark's own time ([method LetterScript.drawn_in_of])
+		return start + LetterScript.drawn_alone(float(a.get("write", 0.0)),
+			float(a.get("drawn_in", LetterScript.DRAW_ALONE)))
 	if String(a["kind"]) == "draw" and int(a.get("span", 0)) > 0:
 		# A SKETCH DASHED OFF where its ink outruns its words ([method LetterScript.draw_pace], the pace the voice's rest
 		# after them was sized by); the desk then draws it as slowly as the next line leaves it time for
