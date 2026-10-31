@@ -1,8 +1,10 @@
 extends VBoxContainer
 class_name ScriptWriter
 
-## ScriptWriter - where a voice panel's script is written: a card in the panel, and an editor
-## window it opens.
+## ScriptWriter - where a note's words are written: the BODY card on its panel (2026-10-31, "Script" until the
+## user: "the word script only makes sense in some contexts" - a show's Brief and a Proof's Problem keep their
+## own words, [constant WORDING]), and an editor window it opens. Its fields name the note: a Title edited
+## here renames a file named after its title ([method NoteStore.follows]).
 ##
 ## THE TEXT BOX OUTGREW THE PANEL. A script carries speaker cues, hesitations, picture
 ## markers, pronunciations, macros and emphasis, and a 380-pixel box with a tooltip was the
@@ -71,6 +73,8 @@ const WORDING := {
 
 ## How long typing must pause before the card's summary is recounted.
 const SUMMARY_MS := 0.4
+## How many lines of the words the card shows.
+const PREVIEW_LINES := 6
 
 ## Where the words come from (the file they are saved in, or none), built into the window's top bar.
 var doc: DocSource
@@ -81,6 +85,7 @@ var _mode := "generative"
 var _window: Window
 var _name: Label
 var _summary: Label
+var _preview: Label
 var _note: Label
 var _help: Label
 var _speakers: HFlowContainer
@@ -160,6 +165,7 @@ func setup(section: String, blocks: PackedStringArray, mode: String) -> void:
 	_summary.modulate = Color(1, 1, 1, 0.65)
 	add_child(_summary)
 	_build_fields()
+	_build_preview()
 	_note = Label.new()
 	_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_note.add_theme_font_size_override("font_size", 11)
@@ -257,6 +263,33 @@ func _build_fields() -> void:
 		grid.visible = grid.visible or l.visible
 
 
+## THE WORDS' FIRST LINES, A CLICK FROM THE EDITOR (2026-10-31, the user: "on desktop, where projects are going to
+## be a lot more complex, I don't think we want to render a giant script text like that ... the body should be more
+## like a preview on desktop"): the body as it reads, its marks left out ([method NoteStore.preview_of]), a few
+## lines of it; clicked, the editor opens, as Edit opens it. A note of words alone is written in its own card on
+## the notes list ([NoteEditor]), the phone's every note too - this is the card of a note that is more than that.
+func _build_preview() -> void:
+	_preview = Label.new()
+	_preview.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_preview.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_preview.max_lines_visible = PREVIEW_LINES
+	_preview.add_theme_font_size_override("font_size", 12)
+	_preview.add_theme_color_override("font_color", Color(0.78, 0.8, 0.84))
+	_preview.mouse_filter = Control.MOUSE_FILTER_STOP
+	_preview.mouse_default_cursor_shape = Control.CURSOR_IBEAM
+	_preview.tooltip_text = "Click to edit."
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color(1, 1, 1, 0.035)
+	box.set_corner_radius_all(3)
+	box.set_content_margin_all(6)
+	_preview.add_theme_stylebox_override("normal", box)
+	_preview.gui_input.connect(func(e: InputEvent) -> void:
+		var mb := e as InputEventMouseButton
+		if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			open_editor())
+	add_child(_preview)
+
+
 ## THE FIELD [param key] IS SHOWN from now on, whatever the mode: something reads it (a YouTube card, the
 ## Title, Episode, Author and Book its title is made of).
 func show_field(key: String) -> void:
@@ -310,8 +343,13 @@ func _commit_field(key: String) -> void:
 		var now: Variant = (_handed[key]["read"] as Callable).call()
 		e.text = str(now) if now != null else ""
 		return
+	# A NOTE NAMED AFTER ITS TITLE IS RENAMED WITH IT ([method NoteStore.follows]): its name read before the
+	# title changes, and the move told as Save…'s is ([method DocSource.rename_to])
+	var follow := key == "title" and _in_note and doc.is_sync() and NoteStore.follows(doc.doc_path(), title_or_name())
 	doc.set_field(key, e.text)
 	e.text = doc.field(key)
+	if follow and not e.text.strip_edges().is_empty():
+		doc.rename_to(NoteStore.path_for(doc.doc_path(), e.text))
 
 
 ## WHETHER A PART STILL KEEPS THE FIELD [param key]: one freed before this card (a panel taken down, its
@@ -373,7 +411,7 @@ func open_editor() -> void:
 
 func _build_window(section: String, blocks: PackedStringArray) -> void:
 	_window = Window.new()
-	_window.title = _wording("window", "Script")
+	_window.title = _wording("window", "Body")
 	_window.visible = false
 	_window.transient = true
 	_window.min_size = Vector2i(760, 440)
@@ -485,7 +523,7 @@ func _build_palette() -> Control:
 			box.add_child(_mark_button(String(k), color))
 		if g == "voices":
 			_speakers_head = Label.new()
-			_speakers_head.text = _wording("speakers", "Speakers in this script")
+			_speakers_head.text = _wording("speakers", "Speakers")
 			_speakers_head.add_theme_font_size_override("font_size", 11)
 			_speakers_head.modulate = Color(1, 1, 1, 0.6)
 			box.add_child(_speakers_head)
@@ -538,11 +576,11 @@ func _refresh() -> void:
 		return
 	var text := text_edit.text
 	var source := doc.doc_path().get_file() if doc.is_sync() \
-		else "Unsaved %s" % _wording("window", "Script").to_lower()
+		else "Unsaved %s" % _wording("window", "Body").to_lower()
 	_name.text = source
 	_name.tooltip_text = ("Saved in " + doc.doc_path()) if doc.is_sync() else \
 		"Kept by Ghost Notes alone, in no file. Save… writes it into one."
-	_window.title = "%s - %s" % [_wording("window", "Script"), source]
+	_window.title = "%s - %s" % [_wording("window", "Body"), source]
 	for k in _field_edits:
 		var e: LineEdit = _field_edits[k]
 		if not e.has_focus() and not _handed.has(k):
@@ -560,6 +598,9 @@ func _refresh() -> void:
 			_speaker_names = names
 			_rebuild_speakers()
 	_summary.text = " · ".join(parts)
+	var shown := NoteStore.preview_of(NoteStore.plain_of(text), 480)
+	_preview.text = shown if not shown.is_empty() else _wording("placeholder", "Take a note…")
+	_preview.modulate = Color(1, 1, 1, 1.0 if not shown.is_empty() else 0.5)
 
 
 func _rebuild_speakers() -> void:

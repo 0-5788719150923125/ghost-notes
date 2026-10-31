@@ -43,6 +43,7 @@ func _run() -> void:
 	_shot("list")
 	# a new note, and what "+" offers it
 	_main._list.new_note()
+	_main._list.open_whole()
 	await _frames(20)
 	var panel: NotePanel = _main._note_panel
 	panel._panel.plus.show_popup()

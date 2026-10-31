@@ -11,24 +11,28 @@ class_name PhoneShell
 ## back a `content://` address, which [FileAccess] reads and writes since Godot 4.6). No permission is
 ## asked for. On the desktop (`--handheld`) the picker is the in-window dialog.
 ##
+## THE LIST IS THE DESKTOP'S (2026-10-31, the user: "the mobile view is important"): the same [NoteGrid]
+## of square notes, at [constant SCALE] - two columns on a phone's width, the search above them, and
+## icons for New and Import… (an [Icons] "+" and a folder, no words). A tap opens a note; a drag scrolls.
+##
 ## A NOTE CAN BE DELETED from its editor (Delete…), asked first ([DeleteDialog]) - to the trash.
 ##
-## THE NOTE IS WRITTEN AS YOU TYPE, on a quiet period ([constant SAVE_MS]), body and title apart:
-## the body through [method FrontMatter.write_body], which keeps every byte of the frontmatter, and the
-## title as the note's own `title:` line - the same file a desktop opens, components and all.
+## THE NOTE IS WRITTEN IN ITS CARD (2026-10-31), the desktop's [NoteEditor] filling the screen: its title and
+## its words in place, written as they are typed on a quiet period - the frontmatter kept byte for byte, the
+## file renamed with its title while its name follows it ([method NoteStore.retitle]).
 
-## How long the typing must stop before the note is written, in ms.
-const SAVE_MS := 800
+## Everything on the list is this much bigger than on a desktop: a phone's canvas is 1080 wide and held
+## closer, and a finger is wider than a pointer.
+const SCALE := 1.8
 
-var _list_view: VBoxContainer
-var _rows: VBoxContainer
-var _editor_view: VBoxContainer
+var _list_view: NoteGrid
+var _editor: NoteEditor
 var _title: LineEdit
 var _body: TextEdit
-var _note := ""                 # the note open in the editor, "" on the list
-var _saved_body := ""           # the body as last read or written: what write_body expects
-var _dirty_ms := -1             # when the typing stopped, -1 when nothing waits
-var _title_dirty := false
+## The note open in the card, "" on the list.
+var _note: String:
+	get:
+		return _editor.path if _editor != null else ""
 var _picker_mode := ""          # "import" or "export" while a picker is up
 
 
@@ -50,11 +54,6 @@ func _ready() -> void:
 	show_list()
 
 
-func _process(_delta: float) -> void:
-	if _dirty_ms >= 0 and Time.get_ticks_msec() - _dirty_ms >= SAVE_MS:
-		save()
-
-
 ## ANDROID'S BACK goes from a note to the list; on the list it leaves the app, as back does.
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_GO_BACK_REQUEST and not _note.is_empty():
@@ -64,145 +63,73 @@ func _notification(what: int) -> void:
 
 
 func _build_list(stack: VBoxContainer) -> void:
-	_list_view = VBoxContainer.new()
-	_list_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_list_view.add_theme_constant_override("separation", 14)
+	_list_view = NoteGrid.new(SCALE, false)
+	_list_view.opened.connect(open_note)
 	stack.add_child(_list_view)
-	var name := Label.new()
-	name.text = Boot.NAME
-	name.add_theme_font_size_override("font_size", 40)
-	_list_view.add_child(name)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	_list_view.add_child(row)
-	row.add_child(_button("New", new_note))
-	row.add_child(_button("Import…", func() -> void: _pick("import")))
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_list_view.add_child(scroll)
-	_rows = VBoxContainer.new()
-	_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_rows.add_theme_constant_override("separation", 6)
-	scroll.add_child(_rows)
+	var make := Icons.button("new", roundi(24 * SCALE), "New note")
+	make.pressed.connect(new_note)
+	_list_view.actions.add_child(make)
+	var bring := Icons.button("existing", roundi(24 * SCALE), "Import a note from anywhere the phone can reach")
+	bring.pressed.connect(func() -> void: _pick("import"))
+	_list_view.actions.add_child(bring)
 
 
 func _build_editor(stack: VBoxContainer) -> void:
-	_editor_view = VBoxContainer.new()
-	_editor_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_editor_view.add_theme_constant_override("separation", 10)
-	stack.add_child(_editor_view)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	_editor_view.add_child(row)
-	row.add_child(_button("‹ Notes", show_list))
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(spacer)
-	row.add_child(_button("Export…", func() -> void: _pick("export")))
-	row.add_child(_button("Delete…", func() -> void:
+	_editor = NoteEditor.new(SCALE, true)
+	_editor.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_editor.closed.connect(func(_p: String) -> void: show_list())
+	stack.add_child(_editor)
+	_title = _editor.title_edit
+	_body = _editor.body
+	var out := Icons.button("export", roundi(24 * SCALE), "Export this note to a file")
+	out.pressed.connect(func() -> void: _pick("export"))
+	_editor.actions.add_child(out)
+	var bin := Icons.button("delete", roundi(24 * SCALE), "Delete this note")
+	bin.pressed.connect(func() -> void:
 		if not _note.is_empty():
-			DeleteDialog.ask(self, _note, delete_note)))
-	_title = LineEdit.new()
-	_title.placeholder_text = "Title"
-	_title.add_theme_font_size_override("font_size", 30)
-	_title.text_changed.connect(func(_t: String) -> void:
-		_title_dirty = true
-		_dirty_ms = Time.get_ticks_msec())
-	_editor_view.add_child(_title)
-	# the system keyboard comes up by itself for a TextEdit; no code of ours asks for it
-	_body = TextEdit.new()
-	_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_body.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
-	_body.add_theme_font_size_override("font_size", 24)
-	_body.text_changed.connect(func() -> void: _dirty_ms = Time.get_ticks_msec())
-	_editor_view.add_child(_body)
+			DeleteDialog.ask(self, _note, delete_note))
+	_editor.actions.add_child(bin)
 
 
-func _button(text: String, action: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size = Vector2(0, 64)
-	b.add_theme_font_size_override("font_size", 24)
-	b.pressed.connect(action)
-	return b
-
-
-## The list, rebuilt: every note in the folder, newest first.
+## The list, read again: every note in the folder, newest first ([NoteGrid]) - the note in the card closed first.
 func show_list() -> void:
-	save()
-	_note = ""
-	_editor_view.visible = false
+	if _editor.visible:
+		_editor.close()          # closing it comes back here
+		return
 	_list_view.visible = true
-	for c in _rows.get_children():
-		c.queue_free()
-	var notes := NoteStore.list()
-	if notes.is_empty():
-		var none := Label.new()
-		none.text = "No notes yet. New makes one."
-		none.add_theme_font_size_override("font_size", 22)
-		none.modulate = Color(1, 1, 1, 0.6)
-		_rows.add_child(none)
-	for n in notes:
-		var b := _button(String(n["title"]), open_note.bind(String(n["path"])))
-		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.flat = true
-		b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		b.clip_text = true
-		_rows.add_child(b)
+	_list_view.refresh(true)
 
 
-## A new, empty note, open in the editor.
+## A new, empty note, open in its card.
 func new_note() -> void:
-	var path := NoteStore.create("Untitled")
+	var path := NoteStore.create()
 	if not path.is_empty():
-		open_note(path)
+		_list_view.visible = false
+		_editor.open(path, true)
 
 
 func open_note(path: String) -> void:
-	save()
 	if not FileAccess.file_exists(path):
 		return
-	_note = path
-	var raw := FileAccess.get_file_as_string(path)
-	_saved_body = FrontMatter.lf(String(FrontMatter.split(raw).body))
-	_title.text = NoteStore.title_of(path)
-	_body.text = _saved_body
-	_dirty_ms = -1
-	_title_dirty = false
 	_list_view.visible = false
-	_editor_view.visible = true
+	_editor.open(path)
 
 
-## Write what is waiting: the body, keeping the frontmatter byte for byte, and the title as its line.
+## Write what is waiting in the card.
 func save() -> void:
-	if _note.is_empty() or _dirty_ms < 0:
-		return
-	_dirty_ms = -1
-	if _body.text != _saved_body:
-		var err := FrontMatter.write_body(_note, _body.text, _saved_body)
-		if err.is_empty():
-			_saved_body = _body.text
-		else:
-			push_warning("ghost: %s was not saved - %s" % [_note.get_file(), err])
-	if _title_dirty:
-		_title_dirty = false
-		var t := _title.text.strip_edges()
-		FrontMatter.write_block(_note, t if not t.is_empty() else null, "title")
+	_editor.save()
 
 
-## DELETE THE OPEN NOTE (once asked): what was typed is written first, then the note is trashed and
-## the list comes back without it. [param answer] is the dialog's ("trash"; "forget" cannot arise
-## here - every note on a phone is in its own folder).
+## DELETE THE OPEN NOTE (once asked): the note is trashed and the list comes back without it. [param answer]
+## is the dialog's ("trash"; "forget" cannot arise here - every note on a phone is in its own folder).
 func delete_note(answer: String) -> void:
 	if _note.is_empty() or answer != "trash":
 		return
-	save()
-	var err := NoteStore.trash(_note)
+	var path := _note
+	_editor.drop()
+	var err := NoteStore.trash(path)
 	if not err.is_empty():
 		push_warning("ghost: " + err)
-		return
-	_note = ""
 	show_list()
 
 

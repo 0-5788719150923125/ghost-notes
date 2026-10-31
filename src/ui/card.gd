@@ -55,10 +55,23 @@ func _init(p_key := "", p_title := "", p_family: StringName = &"paper") -> void:
 func _ready() -> void:
 	if not key.is_empty():
 		# Assigned, not fold()ed: putting the stored fold back must not write it again.
-		folded = bool(Settings.read(SECTION, key, false))
+		folded = bool(Settings.read(SECTION, key, Settings.read(SECTION, was_key(key), false)))
 	folding_changed.connect(func(is_folded: bool) -> void:
 		if not key.is_empty():
 			Settings.write(SECTION, key, is_folded))
+
+
+## A CARD RENAMED KEEPS ITS FOLD: the key it was stored under before, read when the new one holds nothing yet
+## (the new one is written at the next fold). The card's key on the right, its old one on the left.
+const RENAMED := {"body": "script"}     # 2026-10-31: the Script card became Body
+
+
+## [param k] ("<panel>.<card>") as it was stored before its card was renamed, or itself.
+static func was_key(k: String) -> String:
+	var card := k.get_slice(".", k.get_slice_count(".") - 1)
+	if not RENAMED.has(card):
+		return k
+	return k.substr(0, k.length() - card.length()) + String(RENAMED[card])
 
 
 ## This card's color: the note's tint when it set one, else the family's.

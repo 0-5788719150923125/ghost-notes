@@ -107,7 +107,7 @@ const REGISTRY := {
 	"text": {"label": "Text", "family": &"paper",
 		"blurb": "The note's own words: what a voice reads, the brief an agent works from, or just a note.",
 		"needs": [], "provides": ["text"], "requires": [], "slots": [], "workspace": "", "capabilities": [],
-		"marks": [], "block": "", "card": "script"},
+		"marks": [], "block": "", "card": "body"},
 	"song": {"label": "Song", "family": &"sound",
 		"blurb": "A song the show is cut on: its beat and its spectrum drive the scenes.",
 		"needs": [], "provides": ["audio"], "requires": [], "slots": ["clock"], "workspace": "", "capabilities": ["stage"],

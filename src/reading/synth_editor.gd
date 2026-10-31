@@ -306,7 +306,7 @@ func _build_panel() -> void:
 	_panel.add_component_row(_has, _attach)
 	# THE SCRIPT: a card here, the writing in the editor window it opens. Its source is a
 	# draft or a file on disk re-read at every cast; see ScriptWriter and DocSource.
-	box = _panel.add_card("script", "Script", &"paper")
+	box = _panel.add_card("body", "Body", &"paper")
 	_writer = preload("res://src/ui/script_writer.gd").new()
 	_writer.setup("synth", PackedStringArray(_doc_blocks()), Components.script_mode("lab"))
 	if not note_path.is_empty():

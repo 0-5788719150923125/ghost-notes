@@ -10,8 +10,9 @@ extends Node
 ## notes list of the desktop's; the Provisioner did not start and no program is running - a phone
 ## downloads nothing.
 ##
-## MAKES, EDITS AND KEEPS A NOTE ACROSS RESTARTS: New makes a note in the folder; its title and body,
-## typed, are written on the quiet period (the frontmatter kept byte for byte); the shell torn down and
+## MAKES, EDITS AND KEEPS A NOTE ACROSS RESTARTS: New makes a note in the folder and opens it in its card
+## ([NoteEditor], the desktop's, filling the screen); its title and body, typed, are written on the quiet period
+## (the frontmatter kept byte for byte), and its file renamed after its title; the shell torn down and
 ## built again lists it under its new title and opens it with its words. Import… and Export… copy a
 ## note in and out, and Delete… (once asked) sends the open note away and shows the list.
 ##
@@ -45,15 +46,21 @@ func _run() -> void:
 	shell.new_note()
 	var path: String = shell._note
 	_ok(not path.is_empty() and FileAccess.file_exists(path), "New makes a note in the folder")
+	_ok(shell._editor.visible and not shell._list_view.visible and shell._title.text.is_empty(),
+		"it opens in its card, filling the screen, its title box empty for a new note")
 	shell._title.text = "Groceries"
 	shell._title.text_changed.emit("Groceries")
 	shell._body.text = "Milk, eggs, and the good bread.\n"
 	shell._body.text_changed.emit()
-	await _wait(PhoneShell.SAVE_MS + 400)
+	await _wait(NoteEditor.SAVE_MS + 400)
+	var was := path
+	path = shell._note
 	var raw := FileAccess.get_file_as_string(path)
 	_ok(raw.contains("Milk, eggs, and the good bread.") and raw.contains("title: Groceries"),
 		"the title and the words are written as they are typed:\n%s" % raw)
 	_ok(raw.begins_with("---\n"), "the frontmatter stays at the top")
+	_ok(path.get_file() == "Groceries.md" and not FileAccess.file_exists(was),
+		"its file is renamed after its title (%s, from %s)" % [path.get_file(), was.get_file()])
 	# export and import
 	var out := ProjectSettings.globalize_path(ROOT).path_join("exported.md")
 	_ok(shell.export_to(out) and FileAccess.get_file_as_string(out) == raw, "Export… writes the note out as it is")

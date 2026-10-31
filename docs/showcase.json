@@ -1,5 +1,5 @@
 {
-	"digest": "08e1949bc9f1f5f49ee77e4ee85f1b10c530d06a585a3d054e2ef1d743062af1",
+	"digest": "131d7122e50cabc0bb17de2d44d16bf6d242613a77e386c4ff13bd67073081ef",
 	"files": [
 		"res://project.godot",
 		"res://scenes/main.tscn",
@@ -254,7 +254,10 @@
 		"res://src/ui/card.gd",
 		"res://src/ui/card_row.gd",
 		"res://src/ui/episode_step_rows.gd",
+		"res://src/ui/icons.gd",
 		"res://src/ui/note_cards.gd",
+		"res://src/ui/note_grid.gd",
+		"res://src/ui/note_tile.gd",
 		"res://src/ui/schema_form.gd",
 		"res://src/ui/script_highlighter.gd",
 		"res://src/ui/script_writer.gd",

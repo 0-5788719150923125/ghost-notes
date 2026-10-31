@@ -7,12 +7,15 @@ extends Node
 ##   tests/run_boot_probe.sh tests/app/notes_list_check.gd 300
 ##
 ## THE LIST MAKES NOTES AND NOTHING ELSE (2026-10-06, the user: "the launch screen should be clean"):
-## no path or URL field, no Open…, and the name and tagline once - in the panel, not again in large
-## type over the main area. "Existing note…" stands beside New, and asks for markdown alone.
+## no path or URL field - its one field the search (2026-10-31) - no Open…, and the name once, over the
+## search. New and "Existing note…" stand side by side as icons with no words (2026-10-31: "just replace
+## them plain icons, no text"), each saying what it does in its tooltip, and the folder asks for markdown
+## alone. The grid itself is note_grid_check's.
 ##
 ## NEW HAS NO OPTIONS (2026-10-12, the user: "'New' has no options at all. Every note would open in
 ## exactly the same way"): it is a button, not a menu; it makes a note with nothing attached - no
-## `ghost:` key in its file - and that note opens in the note's own panel, whatever is installed.
+## `ghost:` key in its file - and that note opens in its card on the list (2026-10-31, [NoteEditor]), whose
+## open icon takes it to the note's own panel, whatever is installed.
 ##
 ## THE APP STARTS ON THE LIST: the list is up, no home screen, the ⌂ hidden, the ⤓ export not there
 ## at all and no claim on the bottom of the frame (the row sits where it sits in every note), nothing
@@ -96,6 +99,7 @@ func _run() -> void:
 	await _check_round_trip()
 	await _check_new_card_starter()
 	await _check_save_moves_the_note()
+	await _check_title_renames()
 	NoteStore.discard = Callable()
 	LetterSketches.root = LetterSketches.ROOT
 	NoteUpload.root = NoteUpload.ROOT
@@ -103,29 +107,81 @@ func _run() -> void:
 	_report()
 
 
+# --- a title names the file ----------------------------------------------------------------------
+
+## THE BODY CARD (2026-10-31, the Script card renamed): its words' first lines, a click from the editor, and a
+## Title that renames a file named after it - the note followed everywhere, as Save… is followed. THE CONTROL: a
+## file under a name of its own keeps it when its title changes.
+func _check_title_renames() -> void:
+	print("-- the Body card, and a title that names its file")
+	var named := NoteStore.create("Plan", "Words for the plan.\n")
+	_main._list._open(named)
+	await _frames(12)
+	var panel: NotePanel = _main._note_panel
+	if panel == null:
+		_ok(false, "the note opens on its panel")
+		return
+	var body: Array = panel._panel.cards().filter(func(c: Card) -> bool: return c.key.ends_with(".body"))
+	_ok(body.size() == 1 and (body[0] as Card).title == "Body", "its words are on a card called Body")
+	panel._writer._refresh()        # (recounted 0.4 s after the words change, as the card does)
+	_ok(panel._writer._preview.text.begins_with("Words for the plan."), "which shows their first lines (%s)" % JSON.stringify(panel._writer._preview.text))
+	var e: LineEdit = panel._writer._field_edits["title"]
+	e.text = "Plan for Sunday"
+	panel._writer._commit_field("title")
+	await _frames(4)
+	var now: String = _main._note
+	_ok(now.get_file() == "Plan for Sunday.md" and FileAccess.file_exists(now) and not FileAccess.file_exists(named),
+		"a title typed on it renames the file named after it (%s)" % now.get_file())
+	_ok(panel._writer.doc.doc_path() == now and FileAccess.get_file_as_string(now).contains("title: Plan for Sunday"),
+		"...and the note is that file, its title in it")
+	_main._chrome._home_button.pressed.emit()
+	await _frames(12)
+	var own := ProjectSettings.globalize_path(ROOT).path_join("my own name.md")
+	FrontMatter.create(own, null, "Words.\n", "", FrontMatter.KEY, {"title": "Other"})
+	_main._list._open(own)
+	await _frames(12)
+	panel = _main._note_panel
+	if panel != null:
+		var f: LineEdit = panel._writer._field_edits["title"]
+		f.text = "Another"
+		panel._writer._commit_field("title")
+		await _frames(4)
+	_ok(String(_main._note) == own and FileAccess.get_file_as_string(own).contains("title: Another"),
+		"THE CONTROL: a file under a name of its own keeps it, its title changed")
+	_main._chrome._home_button.pressed.emit()
+	await _frames(12)
+
+
 # --- the list itself -----------------------------------------------------------------------------
 
 func _check_clean(list: NotesList) -> void:
 	print("-- the list makes notes and nothing else")
 	# (a PopupMenu carries a search field of its own - Godot's, not ours)
-	var fields := list._panel.find_children("*", "LineEdit", true, false).filter(func(f: Node) -> bool:
+	# (the card a note opens in has a Title of its own, unseen until a note is opened in it)
+	var fields := list.find_children("*", "LineEdit", true, false).filter(func(f: Node) -> bool:
+		if not (f as Control).is_visible_in_tree():
+			return false
 		var n := f.get_parent()
 		while n != null and n != list:
 			if n is PopupMenu:
 				return false
 			n = n.get_parent()
 		return true)
-	_ok(fields.is_empty(), "there is no path or URL field (%s)" % str(fields.map(func(f: Node) -> String: return str(f.get_path()))))
+	_ok(fields.size() == 1 and fields[0] == list._grid.search and list._grid.search.placeholder_text.begins_with("Search"),
+		"its one field is the search - no path or URL field (%s)" % str(fields.map(func(f: Node) -> String: return str(f.get_path()))))
 	var opens := list.find_children("*", "Button", true, false).filter(
 		func(b: Node) -> bool: return (b as Button).text.begins_with("Open"))
 	_ok(opens.is_empty(), "there is no Open… button")
 	var names := list.find_children("*", "Label", true, false).filter(
 		func(l: Node) -> bool: return (l as Label).text == Boot.NAME)
-	_ok(names.size() == 1 and list._panel.is_ancestor_of(names[0]), "the name is shown once, in the panel")
-	_ok(list._new is Button and not (list._new is MenuButton) and list._new.text == "New",
-		"New has no options: it is a button, not a menu")
+	_ok(names.size() == 1 and list._grid._header.is_ancestor_of(names[0]), "the name is shown once, over the search")
+	_ok(list._new is Button and not (list._new is MenuButton) and list._new.text.is_empty() and list._new.icon != null
+		and list._new.tooltip_text.begins_with("New note"),
+		"New has no options: an icon and no words, a button and not a menu, its tooltip saying what it does")
 	_ok(list.find_children("*", "MenuButton", true, false).is_empty(), "nothing on the list is a menu of kinds of note")
-	_ok(list._existing != null and list._existing.text.begins_with("Existing note"), "Existing note… stands beside New")
+	_ok(list._existing != null and list._existing.text.is_empty() and list._existing.icon != null
+		and list._existing.tooltip_text.begins_with("Existing note") and list._existing.get_parent() == list._new.get_parent(),
+		"Existing note… stands beside New, an icon too")
 	list._existing.pressed.emit()
 	var dlg: FileDialog = list._dialog
 	_ok(dlg != null and Array(dlg.filters).size() == 1 and String(dlg.filters[0]).contains("*.md"),
@@ -158,8 +214,10 @@ func _check_furniture(list: NotesList) -> void:
 		if (b as Control).visible:
 			_ok(absf((b as Control).get_global_rect().end.y - (floor_y - Shell.ROW_MARGIN)) < 0.5,
 				"%s sits on the row every note uses" % (b as Button).text)
-		_ok(not (b as Control).get_global_rect().intersects(list._panel.get_global_rect()),
-			"%s is not over the list" % (b as Button).text)
+		var notes := list._grid._header.get_global_rect().merge(
+			list._grid._column.get_global_rect().intersection(list._grid._scroll.get_global_rect()))
+		_ok(not (b as Control).get_global_rect().intersects(notes),
+			"%s is not over the notes" % (b as Button).text)
 	ch.set_environment_open(false, false)
 	# THE HANDOVER: a note opens FIRST and the list leaves SECOND - the note's claims must stand.
 	# Stood up as a note does, then the real list freed, as its own handler frees it.
@@ -189,10 +247,13 @@ func _check_gating() -> void:
 	var list: NotesList = _main._list
 	var before := NoteStore.list().size()
 	list.new_note()
+	await _frames(4)
+	_ok(NoteStore.list().size() == before + 1 and list._editor.visible and not is_instance_valid(_main._note_panel),
+		"with no agent installed, New still makes a note, and opens it in its card on the list")
+	list.open_whole()
 	await _frames(12)
 	var panel: NotePanel = _main._note_panel
-	_ok(NoteStore.list().size() == before + 1 and panel != null and is_instance_valid(panel),
-		"with no agent installed, New still makes a note and opens it")
+	_ok(panel != null and is_instance_valid(panel), "...and the card's open icon opens it on its own panel")
 	if panel == null:
 		Deps._resolved = keep
 		return
@@ -274,11 +335,7 @@ func _check_delete() -> void:
 
 
 func _row_of(list: NotesList, path: String) -> bool:
-	for r in list._rows.get_children():
-		for b in (r as Node).find_children("*", "Button", true, false):
-			if (b as Button).tooltip_text == path:
-				return true
-	return false
+	return list._grid.visible_paths().has(path)
 
 
 func _dialog_in(n: Node) -> DeleteDialog:
@@ -296,6 +353,7 @@ func _check_round_trip() -> void:
 	var home := _measure()
 	var list: NotesList = _main._list
 	list.new_note()
+	list.open_whole()
 	await _frames(12)
 	var panel: NotePanel = _main._note_panel
 	_ok(panel != null and is_instance_valid(panel), "New opens the note's own panel")
@@ -348,7 +406,7 @@ func _check_round_trip() -> void:
 		var words := String(FrontMatter.split(FileAccess.get_file_as_string(note)).body)
 		var x := _detach_button(panel, "Song")
 		_ok(x != null and not x.disabled, "the Song card has an ×")
-		_ok(_detach_button(panel, "Script") == null, "...and the Script has none: the words are the note")
+		_ok(_detach_button(panel, "Body") == null, "...and the Body has none: the words are the note")
 		if x != null:
 			x.pressed.emit()
 			await _frames(3)
@@ -376,6 +434,7 @@ func _check_round_trip() -> void:
 	# a plain note: New, then "+" -> Voice
 	list = _main._list
 	list.new_note()
+	list.open_whole()
 	await _frames(12)
 	panel = _main._note_panel
 	_ok(panel != null and is_instance_valid(panel), "New opens a plain note")
@@ -394,7 +453,7 @@ func _check_round_trip() -> void:
 				"...and the note reopened as a reading of itself")
 			if reading != null:
 				var titles: Array = (reading._panel as SidePanel).cards().map(func(c: Node) -> String: return (c as Card).title)
-				_ok(titles == ["Script", "Voice"], "a voice alone: its words and its voice, and no picture until one is attached (%s)" % str(titles))
+				_ok(titles == ["Body", "Voice"], "a voice alone: its words and its voice, and no picture until one is attached (%s)" % str(titles))
 				_ok(not bool(reading.show_plan()["picture"]), "...so its reading puts no stage up")
 			ch._home_button.pressed.emit()
 			await _frames(12)
@@ -464,6 +523,7 @@ func _check_new_card_starter() -> void:
 	print("-- + Cards starts a note with no words on the bundled brief")
 	var list: NotesList = _main._list
 	list.new_note()
+	list.open_whole()
 	await _frames(12)
 	var panel: NotePanel = _main._note_panel
 	if panel == null:

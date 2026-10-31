@@ -249,6 +249,27 @@ if ! git diff --quiet || ! git diff --cached --quiet; then build_dirty=true; fi
 printf '{"commit":"%s","dirty":%s}\n' "$build_sha" "$build_dirty" > "$build_info"
 trap 'rm -f "$build_info"' EXIT
 
+# THE PACKAGE'S ICONS ARE THE BUILD'S OWN (src/platform/app_icon.gd). A phone reads its launcher icon
+# out of the package and an app cannot draw a new one there, so each build draws a ghost of its own,
+# seeded by the commit it was built from (a dirty tree's by the moment too): every update ships a new
+# one. GHOST_ICON_SEED (any text) picks one outright. The export presets name these files, and with
+# none Godot's exporter falls back to an icon the project no longer has - an error, so no build.
+# A desktop window draws its machine's ghost at launch instead.
+icon_seed="${GHOST_ICON_SEED:-$build_sha}"
+if [ -z "${GHOST_ICON_SEED:-}" ] && [ "$build_dirty" = true ]; then
+	icon_seed="$icon_seed-dirty-$(date -u +%Y%m%dT%H%M%SZ)"
+fi
+icon_log=$(mktemp)
+if ! "$GODOT" --headless --log-file "$icon_log" --path . --script res://src/platform/app_icon_tool.gd \
+		-- dist/icons "$icon_seed" >/dev/null 2>&1; then
+	bad "could not draw the build's icons. Log:"
+	sed 's/^/    /' "$icon_log" >&2
+	rm -f "$icon_log"
+	exit 1
+fi
+rm -f "$icon_log"
+say "the build's icons drawn into dist/icons (seed $icon_seed)"
+
 # An Android target with setup on builds against its own minimal SDK, JDK-checked keystore and
 # Godot config (build/tools/android), never the developer's Android Studio. --no-setup keeps the
 # machine's own SDK and editor settings, as before.

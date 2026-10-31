@@ -394,6 +394,9 @@ func note_moved(from: String, to: String) -> String:
 		if not String(why).is_empty():
 			push_warning("ghost: " + String(why))
 			kept += " " + String(why)
+	# RENAMED, NOT COPIED (a note following its title, [method DocSource.rename_to]): nothing is left behind
+	if not FileAccess.file_exists(from):
+		return kept.strip_edges()
 	if NoteStore.is_own(from):
 		var err := NoteStore.trash(from)
 		if not err.is_empty():

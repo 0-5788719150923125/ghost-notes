@@ -360,8 +360,10 @@ static func _verify(before: String, after: String, key: String) -> String:
 	if a.has and (String(a.fence) != String(b.fence) \
 			or String(a.open_fence) != String(b.open_fence)):
 		return "the edit would have changed a frontmatter fence - refusing to write"
-	var old_head := _lines(String(a.head)) if a.has else []
-	var new_head := _lines(String(b.head))
+	# AN EMPTY HEAD HAS NO LINES: the only key taken out (a note's title emptied) left "---" over "---", which read
+	# as one blank line where there had been none, and the write was refused as changing another key
+	var old_head := _lines(String(a.head)) if a.has and not String(a.head).is_empty() else []
+	var new_head := _lines(String(b.head)) if not String(b.head).is_empty() else []
 	var kept_old := _without(old_head, _span_of(old_head, key))
 	var kept_new := _without(new_head, _span_of(new_head, key))
 	if kept_old != kept_new:

@@ -298,7 +298,7 @@ func _build_panel() -> void:
 	# the picture, the Look - read top to bottom, the panel says what happens to the note.
 	_panel.card_prefix = _section
 	_panel.add_component_row(_has, _attach)
-	_build_source(_panel.add_card("script", "Script", &"paper"))
+	_build_source(_panel.add_card("body", "Body", &"paper"))
 	# the transport's rail seeks by sentence, once a drag settles (see ReadingStream.seek)
 	_seek_timer = Timer.new()
 	_seek_timer.one_shot = true

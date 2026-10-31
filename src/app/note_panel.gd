@@ -72,7 +72,7 @@ func _ready() -> void:
 	_build_header(box)
 	_panel.add_component_row(func() -> Array: return _attached, _attach)
 	_panel.card_prefix = SECTION
-	var script_card: VBoxContainer = _panel.add_card("script", "Script", &"paper")
+	var script_card: VBoxContainer = _panel.add_card("body", "Body", &"paper")
 	# THE NOTE'S OWN FILE, from the first frame: the source is pointed at it before it is bound
 	Settings.write(SECTION, "doc_path", path)
 	Settings.write(SECTION, "sync", not path.is_empty())

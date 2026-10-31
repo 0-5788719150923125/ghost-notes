@@ -91,8 +91,9 @@ FOLDERS: List[Tuple[str, str, str]] = [
         "platform",
         "The machine",
         "The machine under Ghost Notes: the one owner of its settings file, the earliest hook "
-        "of a launch, every child program in one place, what ghost installs for itself and "
-        "keeps current, the app's own update, and what this platform can do.",
+        "of a launch, the icon drawn for the machine (and for a build's package), every child "
+        "program in one place, what ghost installs for itself and keeps current, the app's own "
+        "update, and what this platform can do.",
     ),
     (
         "audio",

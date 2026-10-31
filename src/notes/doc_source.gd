@@ -82,7 +82,7 @@ const AUTOSAVE_MS := 1200
 ## How often the snapshot is taken. Comparing it is cheap, but not free enough to do per frame.
 const POLL_MS := 250
 ## Clear's tooltip; the button is on the [ScriptWriter] card.
-const CLEAR_TIP := ("Start an empty script that is saved nowhere, and forget the file it was "
+const CLEAR_TIP := ("Start an empty body that is saved nowhere, and forget the file it was "
 	+ "saved in. The file itself is left exactly as it is. Text that was saved nowhere "
 	+ "can be brought back with Ctrl+Z in the editor.")
 ## Open…'s tooltip; the button is on the [ScriptWriter] card.
@@ -831,7 +831,7 @@ func open() -> void:
 	if not is_sync() and _text != null and not _text.text.strip_edges().is_empty():
 		var ask := ConfirmationDialog.new()
 		ask.title = "Open a document"
-		ask.dialog_text = ("This script is saved nowhere, and opening a file replaces it.\n"
+		ask.dialog_text = ("These words are saved nowhere, and opening a file replaces them.\n"
 			+ "Use Save… first to keep it.")
 		ask.ok_button_text = "Open anyway"
 		ask.confirmed.connect(func() -> void:
@@ -983,6 +983,27 @@ func save_to(path: String) -> bool:
 	return true
 
 
+## THE FILE RENAMED TO [param to] - its words and frontmatter as they are, nothing copied ([method
+## NoteStore.rename]): what waits here is written first, and [signal moved] says so, for a note to follow as
+## it follows Save…. A note retitled is renamed this way when its name follows its title ([method
+## NoteStore.follows]). False when it did not move.
+func rename_to(to: String) -> bool:
+	if not is_sync() or to.simplify_path() == _path.simplify_path():
+		return false
+	if not settle():
+		return false
+	var was := _path
+	var now := NoteStore.rename(was, to)
+	if now == was:
+		return false
+	_path = now
+	Settings.write(_section, "doc_path", _path)
+	_refresh_row()
+	opened.emit(_path)
+	moved.emit(was, _path)
+	return true
+
+
 ## A SCRIPT SAVED NOWHERE, AND NO FILE REMEMBERED - and no title, author or book either. Synced, the file is left exactly as it is
 ## (edits still waiting are written first, and a clash must be settled before the link is
 ## dropped); not synced, the text is deleted as an EDIT, so Ctrl+Z brings it back.
@@ -996,7 +1017,7 @@ func clear() -> void:
 		_sync = false
 		Settings.write(_section, "text", "")
 		_show("")
-		_note("No longer saved in %s, which is unchanged. This script is saved nowhere until "
+		_note("No longer saved in %s, which is unchanged. These words are saved nowhere until "
 			% was + "you Save… it into a file.")
 	else:
 		_text.begin_complex_operation()

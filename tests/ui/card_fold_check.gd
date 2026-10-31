@@ -170,7 +170,7 @@ func _note_panel() -> void:
 	await get_tree().process_frame
 	var cards: Array = np._panel.cards()
 	var titles: Array = cards.map(func(c: Node) -> String: return (c as Card).title)
-	_ok(titles == ["Script", "Song", "Picture", "Storyboard"], "a note with a song, a picture and a storyboard: its components are cards (%s)" % str(titles))
+	_ok(titles == ["Body", "Song", "Picture", "Storyboard"], "a note with a song, a picture and a storyboard: its components are cards (%s)" % str(titles))
 	_ok(cards.all(func(c: Node) -> bool: return (c as Card).key.begins_with("note.")), "...each keyed by the note's panel")
 	_ok(np._panel.card_row.get_child_count() == cards.size(), "...with a chip each")
 	if not cards.is_empty():

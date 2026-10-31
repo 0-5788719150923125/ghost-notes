@@ -2,10 +2,19 @@ extends CanvasLayer
 class_name NotesList
 
 ## NotesList - where Ghost Notes opens (next/notes.md step 8, "No home screen"): a notes app opens on
-## its notes. The left panel lists them - the default folder and every folder or file the user added
-## ([NoteStore]), newest first - under the name and the tagline, with New, and "Existing note…" for a
-## markdown file brought into the list. Each note has an × that deletes it, asked first
-## ([DeleteDialog]).
+## its notes - the default folder and every folder or file the user added ([NoteStore]), newest first.
+##
+## THEY ARE NOTES ON THE SCREEN, NOT A LIST IN A PANEL (2026-10-31, the user: "the home screen certainly
+## doesn't give us the feeling of a notes app. It gives us a list of unlabeled projects"): a [NoteGrid]
+## fills the window - the name, a search, and each note a square [NoteTile] bearing its title, its first
+## words and its components, in a color its components make. Beside the search, two [Icons] and no words
+## ("just replace them plain icons, no text"): "+" is New, the folder "Existing note…" for a markdown file
+## brought into the list. Each tile has an × that deletes its note, asked first ([DeleteDialog]). The
+## phone's [PhoneShell] shows the same grid.
+##
+## A NOTE OF WORDS ALONE IS WRITTEN IN ITS CARD (2026-10-31): New, or a click on a note with nothing attached,
+## opens it in a [NoteEditor] over the grid - title and words, in place - and its "open" icon takes it to its
+## own panel, where "+" attaches what it becomes. A note with something attached opens on its panel at once.
 ##
 ## NEW MAKES A NOTE, AND THERE IS ONE KIND (2026-10-12, the user: "'New' has no options at all.
 ## Every note would open in exactly the same way"): its words and nothing else. What it becomes is
@@ -15,7 +24,8 @@ class_name NotesList
 ##
 ## IT MAKES NOTES AND NOTHING ELSE (2026-10-06, the user: "the launch screen should be clean, and a
 ## URL input panel causes immediate confusion"): a song or a video is a component of a note - the
-## Song card's Choose…, the Clip card's file or link - never a button here. The main area is empty.
+## Song card's Choose…, the Clip card's file or link - never a button here. Its one field is the
+## search, which finds notes and nothing else.
 ##
 ## THE ⤓ EXPORT BUTTON HAS NO BUSINESS HERE: nothing is playing, so there is nothing to render.
 ## Suppressed on the way in and released on the way out - KEYED, because main opens the note FIRST
@@ -24,15 +34,11 @@ class_name NotesList
 ## Set by main: open_note.call(path).
 var open_note: Callable
 
-const COL_DATE := Color(0.5, 0.56, 0.66)
-
-var _panel: SidePanel
+var _grid: NoteGrid
+var _editor: NoteEditor
 var _new: Button
 var _existing: Button
-var _rows: VBoxContainer
 var _dialog: FileDialog
-var _seen := ""            # the list as last drawn, so it is rebuilt only when it changed
-var _poll_t := 0.0
 
 
 func _ready() -> void:
@@ -41,7 +47,6 @@ func _ready() -> void:
 	var ch := Chrome.of(self)
 	if ch != null:
 		ch.suppress_export(&"notes")
-	refresh()
 
 
 func _exit_tree() -> void:
@@ -50,122 +55,77 @@ func _exit_tree() -> void:
 		ch.release_export(&"notes")
 
 
-func _process(delta: float) -> void:
-	# a note saved, made or deleted elsewhere shows up within a second or two
-	_poll_t -= delta
-	if _poll_t <= 0.0:
-		_poll_t = 1.5
-		refresh()
-
-
 func _build() -> void:
 	var bg := ColorRect.new()
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.color = Color(0.03, 0.03, 0.05, 1.0)
 	add_child(bg)
-	_panel = preload("res://src/ui/side_panel.gd").new(380.0)
-	_panel.title = "Notes"
-	add_child(_panel)
-	var box: VBoxContainer = _panel.body
-	box.add_theme_constant_override("separation", 10)
-	var name := Label.new()
-	name.text = Boot.NAME
-	name.add_theme_font_size_override("font_size", 20)
-	box.add_child(name)
-	var sub := Label.new()
-	sub.text = Boot.TAGLINE
-	sub.add_theme_font_size_override("font_size", 12)
-	sub.modulate = Color(1, 1, 1, 0.6)
-	box.add_child(sub)
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	box.add_child(row)
-	_new = Button.new()
-	_new.text = "New"
-	_new.focus_mode = Control.FOCUS_NONE
-	_new.tooltip_text = ("A new note: its words, and nothing else yet. Inside it, + attaches what it "
-		+ "should become - a song, a picture, a voice, a show of cards.")
+	var top := MarginContainer.new()
+	top.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	top.add_theme_constant_override("margin_top", 36)
+	add_child(top)
+	_grid = NoteGrid.new()
+	_grid.opened.connect(_pick)
+	_grid.delete_asked.connect(_ask_delete)
+	top.add_child(_grid)
+	_new = Icons.button("new", 22, ("New note: its words, and nothing else yet. Inside it, + attaches what "
+		+ "it should become - a song, a picture, a voice, a show of cards."))
 	_new.pressed.connect(new_note)
-	row.add_child(_new)
-	_existing = Button.new()
-	_existing.text = "Existing note…"
-	_existing.flat = true
-	_existing.focus_mode = Control.FOCUS_NONE
-	_existing.tooltip_text = ("Keep a markdown note from anywhere in this list - a chapter in another "
-		+ "project, a git repository. The file stays where it is.")
+	_grid.actions.add_child(_new)
+	_existing = Icons.button("existing", 22, ("Existing note: keep a markdown note from anywhere in this "
+		+ "list - a chapter in another project, a git repository. The file stays where it is."))
 	_existing.pressed.connect(_open_dialog)
-	row.add_child(_existing)
+	_grid.actions.add_child(_existing)
+	_editor = NoteEditor.new()
+	_editor.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_editor.closed.connect(func(_p: String) -> void: _grid.refresh(true))
+	add_child(_editor)
+	var whole := Icons.button("open", 20, ("Open the whole note: its own panel, where + attaches what it "
+		+ "should become - a voice, a picture, a show - and Edit lists every mark it understands."))
+	whole.pressed.connect(open_whole)
+	_editor.actions.add_child(whole)
+	var bin := Icons.button("delete", 20, "Delete this note")
+	bin.pressed.connect(func() -> void: _ask_delete(_editor.path))
+	_editor.actions.add_child(bin)
 
-	_rows = VBoxContainer.new()
-	_rows.add_theme_constant_override("separation", 2)
-	box.add_child(_rows)
 
-
-## NEW: a note with nothing attached, made in the default folder and opened.
+## NEW: a note with nothing attached, made in the default folder and opened in its card, its title and words
+## written there ([NoteEditor]).
 func new_note() -> void:
 	var path := NoteStore.create()
 	if not path.is_empty():
+		_editor.open(path, true)
+
+
+## A NOTE CLICKED: one of words alone opens in its card; one with something attached, on its own panel.
+func _pick(path: String) -> void:
+	if Components.attached_of(NoteStore.blocks_of(path)).size() > 1:
 		_open(path)
+	else:
+		_editor.open(path)
 
 
-## Rebuild the rows when the notes changed: each a note's title and when it last changed.
+## THE CARD'S "OPEN": the note in it, what waits written, on its own panel.
+func open_whole() -> void:
+	var path := _editor.path
+	if path.is_empty():
+		return
+	_editor.save()
+	_editor.drop()
+	_open(path)
+
+
+## Read the notes again now, rather than at the grid's next look ([NoteGrid]).
 func refresh() -> void:
-	var notes := NoteStore.list()
-	var sig := JSON.stringify(notes)
-	if sig == _seen:
-		return
-	_seen = sig
-	for c in _rows.get_children():
-		c.queue_free()
-	if notes.is_empty():
-		var none := Label.new()
-		none.text = "No notes yet - New makes one."
-		none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		none.add_theme_font_size_override("font_size", 12)
-		none.modulate = Color(1, 1, 1, 0.55)
-		_rows.add_child(none)
-		return
-	for n in notes:
-		_rows.add_child(_row(n))
-
-
-func _row(n: Dictionary) -> Control:
-	var path := String(n["path"])
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
-	var b := Button.new()
-	b.flat = true
-	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	b.clip_text = true
-	b.text = String(n["title"])
-	b.tooltip_text = path
-	b.custom_minimum_size = Vector2(0, 30)
-	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	b.pressed.connect(_open.bind(path))
-	row.add_child(b)
-	var date := Label.new()
-	date.text = when(int(n["mtime"]))
-	date.add_theme_font_size_override("font_size", 11)
-	date.add_theme_color_override("font_color", COL_DATE)
-	date.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(date)
-	var x := Button.new()
-	x.text = "×"
-	x.flat = true
-	x.focus_mode = Control.FOCUS_NONE
-	x.tooltip_text = "Delete this note"
-	x.add_theme_color_override("font_color", COL_DATE)
-	x.pressed.connect(_ask_delete.bind(path))
-	row.add_child(x)
-	return row
+	_grid.refresh()
 
 
 ## The ×: asked first, then gone ([DeleteDialog]) - to the trash, or out of the list with its file kept.
 func _ask_delete(path: String) -> void:
 	DeleteDialog.ask(self, path, func(answer: String) -> void:
 		var err := ""
+		if answer in ["trash", "forget"] and _editor.path == path:
+			_editor.drop()
 		if answer == "trash":
 			err = NoteStore.trash(path)
 		elif answer == "forget":
@@ -173,26 +133,6 @@ func _ask_delete(path: String) -> void:
 		if not err.is_empty():
 			push_warning("ghost: " + err)
 		refresh())
-
-
-## When a note last changed, as a list says it: "today", "yesterday", "Oct 3", "2025-12-01".
-static func when(mtime: int) -> String:
-	if mtime <= 0:
-		return ""
-	var now := int(Time.get_unix_time_from_system())
-	var today := Time.get_datetime_dict_from_unix_time(now)
-	var then := Time.get_datetime_dict_from_unix_time(mtime)
-	var day := func(d: Dictionary) -> int:
-		return int(Time.get_unix_time_from_datetime_dict({"year": d["year"], "month": d["month"], "day": d["day"]}) / 86400)
-	var ago: int = int(day.call(today)) - int(day.call(then))
-	if ago <= 0:
-		return "today"
-	if ago == 1:
-		return "yesterday"
-	var months := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-	if int(then["year"]) == int(today["year"]):
-		return "%s %d" % [months[int(then["month"]) - 1], int(then["day"])]
-	return "%04d-%02d-%02d" % [int(then["year"]), int(then["month"]), int(then["day"])]
 
 
 func _open(path: String) -> void:

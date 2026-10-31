@@ -136,6 +136,9 @@ func _ready() -> void:
 	elif not OS.get_cmdline_user_args().has("--export"):
 		fit_window()
 	get_window().title = TITLE
+	# THE WINDOW'S ICON IS THIS MACHINE'S GHOST, drawn here ([AppIcon]); project.godot names none.
+	# Godot sets its own at startup and an autoload's ready comes after it, so this one stays.
+	AppIcon.apply()
 	get_tree().node_added.connect(_hook_tooltip)
 
 
