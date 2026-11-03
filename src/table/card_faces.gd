@@ -16,6 +16,8 @@ class_name CardFaces
 ## A tarot card's proportions: 70 x 120 mm.
 const ASPECT := 70.0 / 120.0
 const FACE_PX := Vector2i(560, 960)
+## The canvas a card's picture and back are painted on (rules/table/painter.yaml's FORMAT): 2:3, which no card is.
+const PAINTED := Vector2i(1024, 1536)
 
 ## A face's pixels: its SHORT side [constant FACE_PX]'s width - a card held sideways as sharp across its height as a
 ## tall one across its width - or, for a written card's lines of writing, [constant WRITTEN_PX].
@@ -66,18 +68,32 @@ static func _box(ci: CanvasItem, r: Rect2, col: Color, radius: float, fill := tr
 	ci.draw_style_box(sb, r)
 
 
-## [param tex] drawn into [param dst] cropped to cover it - the picture's center kept.
-static func _cover(ci: CanvasItem, tex: Texture2D, dst: Rect2, flip := false) -> void:
-	var ts := Vector2(tex.get_size())
-	var want := dst.size.x / dst.size.y
-	var have := ts.x / ts.y
+## What of a picture [param ts] across is seen when it covers a place [param dst] across: the whole of it one way,
+## and the other way cut evenly off both ends - the picture's center kept.
+static func _cover_src(ts: Vector2, dst: Vector2) -> Rect2:
+	var want := dst.x / dst.y
 	var src := Rect2(Vector2.ZERO, ts)
-	if have > want:
+	if ts.x / ts.y > want:
 		src.size.x = ts.y * want
 		src.position.x = (ts.x - src.size.x) * 0.5
 	else:
 		src.size.y = ts.x / want
 		src.position.y = (ts.y - src.size.y) * 0.5
+	return src
+
+
+## WHAT A BACK'S WINDOW CUTS OFF ITS CANVAS, in the canvas's pixels: x off each side, y off each end, one of them
+## nothing. Worked out as the back is drawn ([method _cover_src], [method window]), so the painter is told what is
+## really cut ([method TablePrompts.back_image]).
+static func back_cut(look: Dictionary) -> Vector2i:
+	var src := _cover_src(Vector2(PAINTED), window(true, look).size)
+	return Vector2i(roundi(src.position.x), roundi(src.position.y))
+
+
+## [param tex] drawn into [param dst] cropped to cover it - the picture's center kept.
+static func _cover(ci: CanvasItem, tex: Texture2D, dst: Rect2, flip := false) -> void:
+	var ts := Vector2(tex.get_size())
+	var src := _cover_src(ts, dst.size)
 	if flip:
 		ci.draw_set_transform(dst.get_center(), PI, Vector2.ONE)
 		ci.draw_texture_rect_region(tex, Rect2(-dst.size * 0.5, dst.size), src)
@@ -91,15 +107,7 @@ static func _cover(ci: CanvasItem, tex: Texture2D, dst: Rect2, flip := false) ->
 ## of that picture drawn (`{crop, mirror, tint}`, [method stand_in]) - all of it, as it is, when empty.
 static func _cover_shape(ci: CanvasItem, tex: Texture2D, dst: Rect2, hole: PackedVector2Array, part := {}) -> void:
 	var ts := Vector2(tex.get_size())
-	var want := dst.size.x / dst.size.y
-	var have := ts.x / ts.y
-	var src := Rect2(Vector2.ZERO, ts)
-	if have > want:
-		src.size.x = ts.y * want
-		src.position.x = (ts.x - src.size.x) * 0.5
-	else:
-		src.size.y = ts.x / want
-		src.position.y = (ts.y - src.size.y) * 0.5
+	var src := _cover_src(ts, dst.size)
 	var crop: Rect2 = part.get("crop", Rect2(0.0, 0.0, 1.0, 1.0))
 	src = Rect2(src.position + crop.position * src.size, crop.size * src.size)
 	var uvs := PackedVector2Array()

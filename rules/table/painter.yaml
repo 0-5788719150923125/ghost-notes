@@ -109,10 +109,24 @@ back:
           - a border, a band, corner ornaments, a printer's mark.
   - ""
   - include: style
+  # "No outer border" here once met a design that named one (true-tarot 279427): the painter went with the design
   - >-
-      FORMAT: PORTRAIT 2:3 (1024x1536). The design runs to every edge: no outer border or frame
-      ({{^borderless}}the card's frame is printed separately{{/borderless}}{{#borderless}}the card is
-      printed to its edge, with no border{{/borderless}}), no text, no numbers, no watermark, no signature.
+      FORMAT: PORTRAIT 2:3 (1024x1536). The ground runs to every edge of the canvas, with no border or
+      frame the design above does not name ({{^borderless}}the card's frame is printed separately{{/borderless}}{{#borderless}}the
+      card is printed to its edge{{/borderless}}), no text, no numbers, no watermark, no signature.
+  # A BACK IS CUT TO THE CARD'S SHAPE, and the painter is told how much (TablePrompts.back_image,
+  # CardFaces.back_cut): the canvas is 2:3 and no card is. Told nothing, a border and corner marks ran past the cut
+  # (true-tarot 279427, 64 pixels off each side of a 70 x 120 card: no border left or right, its corner discs
+  # sliced, the top and bottom whole). A shaped window has its own rule below, which keeps further in than this.
+  - when: cut
+    say: >-
+          THE CARD IS NOT THE SHAPE OF THIS CANVAS: the engine cuts {{cut_px}} pixels (about
+          {{cut_percent}}%) off the canvas's {{cut_where}} and nothing off its {{whole_where}}, so only
+          the middle {{seen}} is ever seen. The ground runs on past the cut to the canvas's edge, but
+          every mark of the design stays inside what is seen: a border, a rule, a corner ornament, the
+          tip of a flourish. A border or corner ornament stands the same distance from the card's
+          final edge all the way round, so it stands further in from the canvas's {{cut_where}} than
+          from its {{whole_where}}.
   - when: shaped
     say: >-
           THE ENGINE CUTS THE BACK TO THE CARD'S WINDOW ({{window}}), and the frame's rules are printed

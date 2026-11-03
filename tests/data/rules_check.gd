@@ -277,6 +277,29 @@ func _prompts() -> bool:
 		"a back cut to an arch is told the window and to keep its marks inside it")
 	_ok(not TablePrompts.back_image(look, "/x.png", true).contains("outer sixth"),
 		"control: a back with a plain rectangle window is not told to keep clear of its edge")
+	# A BACK IS TOLD WHAT THE CARD'S SHAPE CUTS OFF IT (true-tarot 279427: a 2:3 back on a 70 x 120 card lost 64
+	# pixels a side, and with them its side borders and a slice of its corner discs). Numbers worked by hand from
+	# the card's size and window, so a change to how a back is drawn cannot carry the prompt along with it
+	var told := func(card_size: String, frame: Dictionary) -> String:
+		var cut_look := look.duplicate(true)
+		cut_look["card_size"] = card_size
+		cut_look["frame"] = frame
+		return TablePrompts.back_image(cut_look, "/x.png", true)
+	var bare_tall: String = told.call("large", {"style": "borderless"})
+	_ok(bare_tall.contains("cuts 64 pixels (about 7%) off the canvas's left and right and nothing off its top and bottom") and bare_tall.contains("the middle 896 x 1536 is ever seen"),
+		"a borderless 70 x 120 back is told 64 pixels come off each side: %s" % str(CardFaces.back_cut({"card_size": "large", "frame": {"style": "borderless"}})))
+	var bare_short: String = told.call("trading", {"style": "borderless"})
+	_ok(bare_short.contains("cuts 51 pixels (about 4%) off the canvas's top and bottom and nothing off its left and right"),
+		"a borderless trading card's back is told 51 pixels come off each end, not its sides")
+	_ok((told.call("large", {"style": "line"}) as String).contains("cuts 88 pixels (about 9%) off the canvas's left and right"),
+		"a framed back is told what its narrower window cuts: 88 pixels a side")
+	# ...and never told one thing by the design and another by the format
+	_ok(not bare_tall.contains("no outer border") and bare_tall.contains("no border or frame the design above does not name"),
+		"a back whose design names a border is not told it may have none")
+	# the controls: a shaped window keeps its own, wider rule; a picture the place's own shape is cut by nothing
+	_ok(not shaped_back.contains("THE CARD IS NOT THE SHAPE"), "control: a back cut to an arch keeps to the arch's rule alone")
+	_ok(CardFaces._cover_src(Vector2(1024.0, 1536.0), Vector2(560.0, 840.0)) == Rect2(0.0, 0.0, 1024.0, 1536.0),
+		"control: a card the canvas's own shape would cut nothing")
 	texts.append(TablePrompts.surface_image(look, "/x.png"))
 	texts.append(TablePrompts.height_image(look, "/x.png"))
 	texts.append(TablePrompts.backdrop_image(look, "/x.png"))

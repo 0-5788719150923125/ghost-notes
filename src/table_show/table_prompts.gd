@@ -1061,8 +1061,17 @@ static func back_image(look: Dictionary, target: String, reversed := true, print
 	# the window cuts the back as it cuts a face: a shaped one slices what the painting runs to its edge with
 	var shape := CardFaces.window_of(look)
 	var borderless := CardFaces.borderless(look)
-	vars.merge({"reversed": reversed, "printed": printed, "shaped": shape != "rect" and CardTable.WINDOWS.has(shape) and not borderless,
-		"window": String(CardTable.WINDOWS.get(shape, "a plain rectangle")), "borderless": borderless}, true)
+	var shaped := shape != "rect" and CardTable.WINDOWS.has(shape) and not borderless
+	# ...and any window cuts it to the card's shape: told how much, its border and corners stay on the card
+	var cut := CardFaces.back_cut(look)
+	var canvas := CardFaces.PAINTED
+	var sides := cut.x > 0
+	var off := cut.x if sides else cut.y
+	vars.merge({"reversed": reversed, "printed": printed, "shaped": shaped,
+		"window": String(CardTable.WINDOWS.get(shape, "a plain rectangle")), "borderless": borderless,
+		"cut": off > 0 and not shaped, "cut_px": off, "cut_percent": ceili(100.0 * off / (canvas.x if sides else canvas.y)),
+		"cut_where": "left and right" if sides else "top and bottom", "whole_where": "top and bottom" if sides else "left and right",
+		"seen": "%d x %d" % [canvas.x - 2 * cut.x, canvas.y - 2 * cut.y]}, true)
 	return Rules.say("table/painter.back", vars)
 
 

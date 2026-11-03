@@ -245,6 +245,9 @@ const PLAYS := {
 const OUTLINES := ["leaf", "petal", "feather", "oval", "rect"]
 
 const _SHADER := preload("res://shaders/prop.gdshader")
+## A PANE ([method _pane]): how much of its surface is flat, and how square to its thinnest way that means (5 degrees)
+const PANE_FLAT := 0.85
+const PANE_SQUARE := 0.996
 const _GLASS := preload("res://shaders/prop_glass.gdshader")
 const _LENS := preload("res://shaders/prop_lens.gdshader")
 
@@ -1001,7 +1004,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 				if not held_meshes.has(hid):
 					held_meshes[hid] = []
 				(held_meshes[hid] as Array).append(mi)
-				var mat := material(m, part.get("ornament", {}), g.girth, g.height, hash([seed, salt, gi, nm]), _solid(part), not String(part.get("shape", "")) in ["lathe", "extrude"])
+				var mat := material(m, part.get("ornament", {}), g.girth, g.height, hash([seed, salt, gi, nm]), _solid(part), not String(part.get("shape", "")) in ["lathe", "extrude"], see_through(m) and _pane(g))
 				# a part's copies each glow their own way (prop.gdshader `apart`)
 				if xforms.size() > 1:
 					mat.set_shader_parameter("apart", 1.0)
@@ -1404,11 +1407,32 @@ static func _solid(part: Dictionary) -> bool:
 	return true
 
 
+## Whether a part is a PANE: flat faces with next to nothing between them, [constant PANE_FLAT] of its surface
+## square (within [constant PANE_SQUARE]) to its thinnest way. Parallel faces turn no line of sight, so a pane
+## bends nothing ([param pane] of [method material]). Read off the normals the shader would bend by, never the
+## part's thickness: a domed reading glass is as thin as a flat magnifying glass, and does bend. Told to bend, a
+## pane read the screen off to one side by its tilt, and the wire frame it sits in is on that screen (true-tarot
+## 279427, feedback 0014: half-moons in the spectacles and every trial lens).
+static func _pane(g: Tris) -> bool:
+	if g.v.is_empty() or g.n.size() != g.v.size():
+		return false
+	var way := Vector3.ZERO
+	way[_bounds_of(g).get_shortest_axis_index()] = 1.0
+	var square := 0.0
+	var whole := 0.0
+	for i in range(0, g.v.size() - 2, 3):
+		var size := (g.v[i + 1] - g.v[i]).cross(g.v[i + 2] - g.v[i]).length()
+		whole += size
+		if absf(g.n[i].dot(way)) >= PANE_SQUARE and absf(g.n[i + 1].dot(way)) >= PANE_SQUARE and absf(g.n[i + 2].dot(way)) >= PANE_SQUARE:
+			square += size
+	return whole > 0.0 and square >= PANE_FLAT * whole
+
+
 ## The material for one part: the named material's look with this part's ornament, laid out for
 ## its own girth and height (so a motif keeps its shape on a tall vase and a squat bowl alike).
 ## SEEN-THROUGH material is glass for a vessel - a flame inside it shows - and a lens for a solid
-## thing, which bends what is behind it.
-static func material(m: Dictionary, orn: Variant, girth: float, height: float, salt: int, solid := false, round_solid := true) -> ShaderMaterial:
+## thing, which bends what is behind it unless it is a [param pane].
+static func material(m: Dictionary, orn: Variant, girth: float, height: float, salt: int, solid := false, round_solid := true, pane := false) -> ShaderMaterial:
 	var kind := String(m.get("kind", "painted"))
 	var mat := ShaderMaterial.new()
 	# CLEAR CRYSTAL IS SEEN THROUGH: an opaque shader made a crystal ball a pearl
@@ -1422,6 +1446,7 @@ static func material(m: Dictionary, orn: Variant, girth: float, height: float, s
 		mat.set_shader_parameter(k, float(m.get(k, 0.5)))
 	if clear and solid:
 		mat.set_shader_parameter("bend_y", 1.0 if round_solid else 0.0)
+		mat.set_shader_parameter("bend", 0.0 if pane else 1.0)
 	mat.set_shader_parameter("seed", float(salt & 0xFFF) / 64.0)
 	mat.set_shader_parameter("dims", Vector2(maxf(girth, 0.5), maxf(height, 0.5)))
 	var play := String(m.get("play", ""))
